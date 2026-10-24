@@ -19,7 +19,7 @@
                                                             --agreement sends the upstream build whatever the commit changes
                                                             (a train that changes a guarantee elsewhere: `train.sh`);
                                                             a warning first when the commit can't land on REF as it is;
-                                                            --on auto (AUTO: vy-nebius-1, vy-nebius-2) or --on M1,M2 picks M
+                                                            --on auto (AUTO: vy-nebius-2) or --on M1,M2 picks M
                                                             from `--slots` (`choose`): the first where a check slot no window
                                                             blocks and a Lean `check` slot are free, else the one with the
                                                             fewest waiters ahead (priority ones only, with --priority), and
@@ -299,8 +299,9 @@ def twins(names: list[str], docs: dict[str, dict | str], home: str, priority: bo
     return out if len(out) > 1 else []
 
 
-#: the machines `--on auto` and `--slots` consider, in this order: the shared nodes' merge-check slots
-AUTO = ("vy-nebius-1", "vy-nebius-2")
+#: the machines `--on auto` and `--slots` consider, in this order: the shared nodes' merge-check slots (the CPU nodes' are
+#: only=trains, and vy-nebius-1's went with its draining, 23 Oct; CI-152)
+AUTO = ("vy-nebius-2",)
 #: how long reading one machine's slots may take, ssh included
 SLOTS_TIMEOUT_S = 60
 #: a full check's length: `--on auto` places none on a machine whose deadline (/etc/research/deadline) is nearer than this
@@ -422,6 +423,26 @@ def placement(doc: dict, priority: bool = False) -> tuple[bool, int, str]:
     return room and free_lean > len(p["waiters"]), ahead, why
 
 
+def spare(doc: dict, priority: bool = False) -> int:
+    """How many more checks could take a slot now on a machine whose `read_slots` documents are ``doc``: its free check slots no
+    window or memory gate blocks, less the live waiters ahead (`placement`), and no more than its free Lean `check` slots less
+    their waiters; 0 where none can run.  A machine without check slots counts one.  Drive moves a train still waiting in
+    another machine's line onto it (`research.drive.free_slots`)."""
+    try:
+        room, ahead, _ = placement(doc, priority)
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return 0
+    if not room:
+        return 0
+    check, lean = doc["check"], doc["lean"]
+    n = 1 if check["slots"] is None else len([s for s in check["slots"] if (priority or not s.get("trains"))
+                                                and s["holder"] is None and not s["blocked"]]) - ahead
+    if lean["pools"] is not None:
+        p = lean["pools"][next(k for k in ("check", "any") if k in lean["pools"])]
+        n = min(n, len([s for s in p["slots"] if s["holder"] is None and not s["past_n"]]) - len(p["waiters"]))
+    return max(n, 0)
+
+
 def choose(names: list[str], docs: dict[str, dict | str], priority: bool = False) -> tuple[str | None, str, list[str]]:
     """`--on auto`'s machine among ``names``, its reason, and each machine skipped with why. The first machine where a check slot
     with no window blocking it and a Lean `check` slot are free for this request (`placement`); else the one with the fewest
@@ -447,6 +468,49 @@ def choose(names: list[str], docs: dict[str, dict | str], priority: bool = False
     lead = ("a check slot and a Lean check slot are free" if room else
             "the fewest waiting ahead, as no machine has a check slot and a Lean check slot free")
     return name, f"{lead} ({why})", skipped
+
+
+#: the checks `--on auto` or `--on M1,M2` placed from this launcher and hasn't yet seen in their machine's check line, by commit:
+#: until one shows there (or PLACED_S passes: train.sh's wait for a launch), it counts as a priority waiter on its machine, so
+#: checks placed at once go to different machines (23 Oct 13:04Z: drive's four parallel launches all read cpu-1's one free
+#: slot as theirs, and three queued there for an hour while cpu-4's stood free)
+PLACED = Path(tempfile.gettempdir()) / "verity-check-placed.json"
+PLACED_S = 1800
+
+
+def _trees(doc: dict) -> set[str]:
+    """The shortened commits a machine's check slots hold or wait for."""
+    check = doc.get("check") or {}
+    who = [s["holder"] for s in check.get("slots") or [] if s.get("holder")] + list(check.get("waiters") or [])
+    return {Path(h["tree"]).name[:12] for h in who if h.get("tree")}
+
+
+def place(names: list[str], commit: str, priority: bool = False, read=None, path: Path | None = None,
+          now=time.time) -> tuple[dict[str, dict | str], str | None, str, list[str]]:
+    """`read_slots` and `choose` for ``commit``, one launcher process at a time, with the other checks this launcher placed and
+    no machine shows yet (PLACED) as waiters on theirs; ``commit`` is recorded on its pick."""
+    import fcntl
+
+    path = path or PLACED
+    with open(path.with_name(path.name + ".lock"), "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        docs = (read or read_slots)(names)
+        try:
+            placed = json.loads(path.read_text())
+        except (OSError, ValueError):
+            placed = {}
+        t = now()
+        placed = {c: p for c, p in placed.items() if c != commit and t - p["at"] < PLACED_S
+                  and not (isinstance(d := docs.get(p["on"]), dict) and c[:12] in _trees(d))}
+        for c, p in placed.items():
+            if isinstance(d := docs.get(p["on"]), dict) and isinstance((d.get("check") or {}).get("waiters"), list):
+                d["check"]["waiters"].append({"priority": True, "pid": 0, "since": time.strftime("%Y-%m-%dT%H:%MZ", time.gmtime(p["at"])),
+                                              "minutes": int((t - p["at"]) // 60), "tree": c, "by": "a launch placed here"})
+        got, why, skipped = choose(names, docs, priority)
+        if got:
+            placed[commit] = {"on": got, "at": t}
+            path.write_text(json.dumps(placed))
+    return docs, got, why, skipped
 
 
 def _who(h: dict) -> str:
@@ -835,8 +899,8 @@ def record(argv: list[str]) -> int:
     pair, both = None, []
     if on == "auto" or (on and "," in on):
         names = list(AUTO) if on == "auto" else on.split(",")
-        docs = read_slots(names)
-        got, why, skipped = choose(names, docs, priority)
+        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+        docs, got, why, skipped = place(names, head, priority)
         for s in skipped:
             print(f"check: --on {on}: skipping {s}", flush=True)
         if got is None:

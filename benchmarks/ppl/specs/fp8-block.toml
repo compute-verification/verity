@@ -1,0 +1,7 @@
+description = "a block-FP8 checkpoint as vLLM serves it (GLM-5.3's): the checkpoint's own E4M3 weights with their 128 x 128 scales, activations E4M3 per token and group of 128 (amax / 448), products in FP32; lm_head and attention bf16"
+
+[[linear]]
+step = "fp"
+fmt = "e4m3"
+scale = "g128"
+keep_weight = true

@@ -71,12 +71,12 @@ example : digits 2 (fun d => ([true, false] : List Bool).getD d false) 0x7FFFFFF
 example : digits 2 (fun d => ([false, false] : List Bool).getD d false) 0x80000000#32 = [0x0#8, 0x0#8] := by decide
 example : digits 2 (fun d => ([true, true] : List Bool).getD d false) 0x80000000#32 = [0x80#8, 0x1#8] := by decide
 example : digits 2 (fun d => ([true, false] : List Bool).getD d false) 0x80000000#32 = [0x80#8, 0x1#8] := by decide
-example : nDigitsOf 1 = 1 := by decide
-example : nDigitsOf 2 = 2 := by decide
-example : nDigitsOf 3 = 2 := by decide
-example : nDigitsOf 128 = 2 := by decide
-example : nDigitsOf 129 = 3 := by decide
-example : nDigitsOf 16384 = 3 := by decide
+example : nDigits 1 = 1 := by decide
+example : nDigits 2 = 2 := by decide
+example : nDigits 3 = 2 := by decide
+example : nDigits 128 = 2 := by decide
+example : nDigits 129 = 3 := by decide
+example : nDigits 16384 = 3 := by decide
 example : rowBlocks 32 = 1 ∧ colBlocks 32 = 1 := by decide
 example : rowBlocks 64 = 1 ∧ colBlocks 64 = 1 := by decide
 example : rowBlocks 4096 = 9 ∧ colBlocks 4096 = 9 := by decide

@@ -210,6 +210,17 @@ def _checked_c(tmp_path, monkeypatch, gh, repo):
     _git(repo, "checkout", "-q", "main")
 
 
+def test_a_merge_push_of_main_off_drive_is_refused_and_pushes_nothing(tmp_path, monkeypatch, capsys):
+    """23 Oct: GitHub's rulesets let only drive's App move `main`; a pure move lands from the control pod (`drive.sh merge`)."""
+    repo, gh, _tips, _merge = _world(tmp_path)
+    _checked_c(tmp_path, monkeypatch, gh, repo)
+    monkeypatch.delenv("RESEARCH_DRIVE")
+    before = _git(repo, "ls-remote", "origin", "refs/heads/main")
+    assert M.main(["C", "--push", "-m", "Merge train TC (c)"]) == 1
+    assert "/data/infra/drive.sh merge" in capsys.readouterr().err
+    assert _git(repo, "ls-remote", "origin", "refs/heads/main") == before
+
+
 def test_a_merge_with_push_lands_on_the_remote_then_sweeps(tmp_path, monkeypatch, capsys):
     """Trains landed through `research merge` and a push by hand, so the sweep ran before the push and closed nothing: with --push
     the merge is on the remote before the sweep reads it, and what the tool runs after a landing starts on the commit pushed."""
@@ -695,6 +706,14 @@ def test_the_sweep_deletes_the_head_branch_of_a_pr_github_marked_merged_itself(t
     log = []
     M.sweep(repo, gh=gh, log=log.append)                                  # A and B are gone: nothing to delete, nothing kept
     assert not [x for x in log if "branch A" in x or "branch B" in x or "kept" in x], log
+
+
+def test_main_line_is_the_checked_heads_newest_first(tmp_path, monkeypatch):
+    """`merge.main_line` is `checked_heads`' commits reversed, so position 0 is main's head: the verifier's `--main`
+    file lists the checked train heads newest first, and a pin's index is the checked trains it is behind."""
+    heads = [("c0", "run-0"), ("c1", "run-1"), ("c2", "run-2")]           # checked_heads is oldest first
+    monkeypatch.setattr(M, "checked_heads", lambda repo, tip, idx: heads)
+    assert M.main_line(tmp_path, "origin/main", object()) == ["c2", "c1", "c0"]
 
 
 def test_the_branch_sweep_deletes_what_is_on_main_and_archives_idle_unmerged_work(tmp_path):

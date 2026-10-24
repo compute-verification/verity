@@ -4,14 +4,16 @@ profile, and each way a link-window fails closed, on injected coins and an injec
 held to the in-the-clear oracle (`LinkWindows.stand_in`), which compares the Program's egress grid: the same verdict,
 except where only the frames differ from the Program's, which N2 leaves to N3."""
 
+import itertools
 import json
 from dataclasses import replace
 
 import pytest
 
-from verity.ml.circuits import codec
+from verity.ml.circuits import boolean as BL, codec
+from verity.ml.circuits.defs import bind
 from verity.ml.circuits.program import Program
-from verity.core.protocols.certifier import head_check as HC
+from verity.core.protocols.certifier import head_check as HC, service as SVC
 from verity.core.protocols.certifier.certificate import (CertifiedRecord, Direction, Issuer, LmsSigner,
                                                                           RecordHead, parameters_digest)
 from verity.core.protocols.certifier.grid import Certifier, GridParams, Record, occupancy
@@ -24,6 +26,7 @@ from verity.core.protocols.certifier.service import (HEADS, OUTPUTS, PUBLIC, SCH
                                                                       rows)
 from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
+from verity.core.protocols.sampled_proofs.one_stage.proofs import Finding
 
 from test_network_certifier_audit import FRAMES, P as PARAMS, SYNC_SET, SYNCS, honest_ready, ingress_run
 import signers
@@ -57,11 +60,13 @@ def honest_occupancy():
 
 class Run:
     """A link with its network certifier (an LMS signer on a small tree), the protocol's parameters, and the challenger's
-    stream. The link's occupancy profile is the honest run's on egress and none on ingress unless `occupancy` says."""
+    stream. The link's occupancy profile is the honest run's on egress and none on ingress unless `occupancy` says. The
+    certifier's coins give each record a fresh salt, the same in every run."""
 
     def __init__(self, tmp_path, *, proof_deadline=60.0, coins=b"\x07", occupancy=None) -> None:
         self.signer = signers.signer(tmp_path)
-        self.issuer = Issuer(self.signer, signers.SESSION)
+        drawn = itertools.count(0xc0)
+        self.issuer = Issuer(self.signer, signers.SESSION, coins=lambda n: bytes([next(drawn) % 256]) * n)
         self.lw = LinkWindows(LINK, PARAMS, SYNC_SET, self.signer.public_key(), "r-network-test", signers.SESSION,
                               proof_deadline=proof_deadline,
                               occupancy=occupancy or (honest_occupancy()[0], None))
@@ -141,7 +146,7 @@ def test_the_network_verdict_accepts_a_link_whose_every_window_accepted(tmp_path
 def test_one_rejected_window_rejects_the_link(tmp_path):
     run = Run(tmp_path)
     eg, ig = run.honest(1).records
-    forged = CertifiedRecord(eg.head, replace(eg.certificate, signature=bytes(len(eg.certificate.signature))))
+    forged = CertifiedRecord(eg.head, eg.salt, replace(eg.certificate, signature=bytes(len(eg.certificate.signature))))
     outs = [run.round(run.honest(0)), run.round(run.lw.commit(1, forged, ig, SALTS[1])), run.round(run.honest(2))]
     assert [o.accepted for o in outs] == [True, False, True]
     verdict = run.lw.network_verdict(run.stream)
@@ -285,24 +290,80 @@ def test_an_occupancy_row_is_t_counts_within_the_allocation(tmp_path):
 
 def test_the_unit_is_each_ends_head_check_beside_the_certificates(tmp_path):
     """N2's unit holds the certificates' check and each end's head check, at the link's size class: L the name's bytes,
-    T the end's buckets and COUNTS whether the end has a profile, each head check one gate that names its Definition. A
-    profile changes the unit, and so the spec's Program."""
+    T the end's buckets and COUNTS whether the end has a profile, each head check one gate that names its Definition and
+    reads the unit's signed digest for its end. A profile changes the unit, and so the spec's Program."""
     lw = replace(Run(tmp_path).lw, occupancy=(None, None))
     declared = replace(lw, occupancy=(honest_occupancy()[0], None))
-    assert lw.unit.id == "NetworkLinkWindow_v2{EGRESS=(9,4,0),INGRESS=(9,4,0)}"
-    assert declared.unit.id == "NetworkLinkWindow_v2{EGRESS=(9,4,1),INGRESS=(9,4,0)}"
+    assert lw.unit.id == "NetworkLinkWindow_v4{EGRESS=(9,4,0),INGRESS=(9,4,0)}"
+    assert declared.unit.id == "NetworkLinkWindow_v4{EGRESS=(9,4,1),INGRESS=(9,4,0)}"
     assert lw.spec.check.program != declared.spec.check.program and lw.spec.check.query != declared.spec.check.query
     defs = codec.encode_program(P.population_program(declared.unit, 1))["definitions"]
-    assert {"NetworkCertificatesCheck_v1", "Gate[NetworkHeadCheck_v1{L=9,T=4,COUNTS=1}]_v1",
-            "Gate[NetworkHeadCheck_v1{L=9,T=4,COUNTS=0}]_v1"} <= set(defs)
+    pins = json.loads(HC.PINS.read_text())["digests"]
+    assert {"NetworkCertificatesCheck_v2"} | {f"Gate[{fid}@{pins[fid]['sha512']}]_v2" for fid in (
+        "NetworkHeadCheck_v2{L=9,T=4,COUNTS=1}", "NetworkHeadCheck_v2{L=9,T=4,COUNTS=0}")} <= set(defs)
     assert not any(f.startswith(("NetworkHidingRead", "Hm96Sha512Leaf", "Sha512Compress")) for f in defs)
     params, _ = declared.unit.signature()
     gate = HC.gate(9, 4, True)
     assert gate.params == HC.unit(9, 4, True).signature()[0]
-    assert [n for n, _ in params] == ["egress", "ingress", *(f"egress_{n}" for n, _ in gate.params),
-                                      *(f"ingress_{n}" for n, _ in HC.gate(9, 4, False).params)]
+    assert [n for n, _ in params] == ["egress", "ingress",
+                                      *(f"egress_{n}" for n, _ in gate.params if n != "signed"),
+                                      *(f"ingress_{n}" for n, _ in HC.gate(9, 4, False).params if n != "signed")]
     wide = replace(lw, ingress=GridParams(8, 2, 1))
     assert wide.head_key(1) == (9, 8, 0) and wide.head_key(0) == (9, 4, 0)
+
+
+def _accepts_every_head(B, S_, *args):
+    return B.call(BL.constant(1))
+
+
+def _finding(program, accepted=True):
+    return Finding("session-0", accepted, "" if accepted else "rejected", program, {}, (0,) if accepted else ())
+
+
+def test_a_proof_of_another_circuit_with_the_same_interface_is_refused(tmp_path, monkeypatch):
+    """Each head-check gate names its Definition's pinned circuit digest, so the unit's Program, which the spec and each
+    registration bind, binds the head check's circuit. A head check with the same id and signature that accepts every
+    head has another circuit digest: the pinned gate doesn't expand to it, its own gate is another gate, and a unit
+    holding that gate is another Program, whose proof the verifier of record refuses while it accepts one of the
+    registered Program. A size class no sidecar pins names no digest, and no proof of its unit is accepted."""
+    run = Run(tmp_path)
+    lw = run.lw
+    key = lw.head_key(0)
+    honest, gate = HC.unit(*key), HC.gate(*key)
+    pinned = json.loads(HC.PINS.read_text())["digests"][honest.id]["sha512"]
+    assert key == (9, 4, 1) and gate.id == f"Gate[{honest.id}@{pinned}]_v2" and HC.pinned(gate)
+    forged = bind(replace(HC.NetworkHeadCheck, body=_accepts_every_head, register=False), L=9, T=4, COUNTS=1)
+    assert forged.id == honest.id and forged.signature() == honest.signature()
+    digest = HC.circuit_digest(forged)
+    assert digest != pinned
+    with pytest.raises(ValueError, match="another circuit"):
+        HC.expand(gate, forged)
+    swapped = HC.gate_of(forged, digest, "a head check that accepts every head")
+    assert swapped.id != gate.id and swapped.signature() == gate.signature() and HC.expand(swapped, forged) is forged
+
+    registered, query, gates = lw._partition["program"], lw.query, HC.gate
+    with monkeypatch.context() as m:
+        m.setattr(HC, "gate", lambda *k: swapped if k == key else gates(*k))
+        other = bind(replace(SVC._UNIT), EGRESS=key, INGRESS=lw.head_key(1))
+        program = P.partition(P.population_program(other, 1), query)["program"]
+    assert other.id == lw.unit.id and program != registered and lw._partition["program"] == registered
+    assert lw.proved([_finding(registered)])
+    assert not lw.proved([_finding(program)]) and not lw.proved([])
+    assert not lw.proved([_finding(registered), _finding(registered, accepted=False)])
+
+    outs = []
+    for w, proof in enumerate(([_finding(program)], [_finding(registered)])):
+        opening = run.honest(w)
+        draw = run.stream.select(run.register(opening))
+        assert run.stream.deliver(draw, [lw.session(opening, draw)]) is None
+        outs.append(lw.outcome(run.stream, draw, opening, SYNCS, proved=proof))
+    assert reject(outs[0]) and outs[1].accepted
+
+    wide = replace(lw, ingress=GridParams(8, 2, 1))
+    assert not HC.pinned(HC.gate(*wide.head_key(1))) and HC.gate(*wide.head_key(1)).id.endswith("@unpinned]_v2")
+    assert not wide.proved([_finding(wide._partition["program"])])
+    with pytest.raises(ValueError, match="no pinned circuit digest"):
+        HC.expand(HC.gate(*wide.head_key(1)), HC.unit(*wide.head_key(1)))
 
 
 def test_the_domain_is_one_stages_served_domain(tmp_path):
@@ -320,14 +381,14 @@ def test_the_challenger_never_holds_a_certificate_or_a_violation_kind(tmp_path):
     run = Run(tmp_path)
     honest = run.honest(0)
     eg, ig = run.honest(1).records
-    forged = CertifiedRecord(eg.head, replace(eg.certificate, signature=bytes(len(eg.certificate.signature))))
+    forged = CertifiedRecord(eg.head, eg.salt, replace(eg.certificate, signature=bytes(len(eg.certificate.signature))))
     assert run.round(honest).accepted
     assert reject(run.round(run.lw.commit(1, forged, ig, SALTS[1])))
     kept = json.dumps([run.stream.records, [e.registration.record for e in run.stream._entries],
                        [e.registration.receipt for e in run.stream._entries]])
     for rec in honest.records:
         for secret in (rec.certificate.signature[4:68].hex(), rec.certificate.digest.hex(), rec.head.root.hex(),
-                       rec.head.parameters.hex(), encode(rec)[:96].hex()):
+                       rec.head.parameters.hex(), rec.salt.hex(), encode(rec)[:96].hex()):
             assert secret not in kept
     for kind in ("signature", "no-verdict", "mismatch", "status:", "duplicate", "advice"):
         assert kind not in kept
@@ -379,7 +440,7 @@ def test_a_bad_signature_is_a_reject(tmp_path):
     run = Run(tmp_path)
     good = run.honest(0)
     eg, ig = good.records
-    zeros = CertifiedRecord(eg.head, replace(eg.certificate, signature=bytes(len(eg.certificate.signature))))
+    zeros = CertifiedRecord(eg.head, eg.salt, replace(eg.certificate, signature=bytes(len(eg.certificate.signature))))
     assert reject(run.round(run.lw.commit(0, zeros, ig, SALTS[0])))
     (tmp_path / "stranger").mkdir()
     stranger = Issuer(signers.signer(tmp_path / "stranger", seed=b"other"), signers.SESSION)
@@ -407,7 +468,7 @@ def test_a_digest_mismatch_is_a_reject(tmp_path):
     run = Run(tmp_path)
     eg, ig = run.honest(0).records
     counts = RecordHead(**{f: getattr(eg.head, f) for f in RecordHead.__slots__} | {"counts": (0,) * PARAMS.buckets})
-    assert reject(run.round(run.lw.commit(0, CertifiedRecord(counts, eg.certificate), ig, SALTS[0])))
+    assert reject(run.round(run.lw.commit(0, CertifiedRecord(counts, eg.salt, eg.certificate), ig, SALTS[0])))
     honest = egress_records()[1]
     rows = [list(row) for row in honest.grid]
     rows[0][0] = b"\xff"

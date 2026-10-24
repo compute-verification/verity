@@ -1,4 +1,5 @@
 import Definitions.Pouw.H1Zy.LaneChunk
+import Definitions.Pouw.H1Zy.Tile
 import Definitions.Pouw.PearlC.Sha512
 
 /-!
@@ -78,16 +79,8 @@ def streamVal (seed : List ℕ) (first β n : ℕ) : ℕ :=
 
 /-! ## The layout (`h1tile.Layout` at a 32 × 32 leaf) -/
 
-/-- H1's digit count `m` at `KS` segments (`segment.n_digits`): the least `m ≥ 1` with `KS ≤ 128^(m-1)`. -/
-def nDigitsOf (ks : ℕ) : ℕ := go ks 1 1
-where
-  /-- `p = 128^(m-1)`; the fuel bounds the search, since `m ≤ KS + 1`. -/
-  go : ℕ → ℕ → ℕ → ℕ
-    | 0, m, _ => m
-    | fuel + 1, m, p => if ks ≤ p then m else go fuel (m + 1) (128 * p)
-
 /-- `m` at contraction `K`. -/
-def digitsK (K : ℕ) : ℕ := nDigitsOf (K / 32)
+def digitsK (K : ℕ) : ℕ := nDigits (K / 32)
 
 /-- A row's stream blocks: `⌈(K + 32 (m - 1)) / 512⌉`. -/
 def rowBlocks (K : ℕ) : ℕ := (K + 32 * (digitsK K - 1) + 511) / 512
@@ -101,48 +94,10 @@ def rowFirst (K i : ℕ) : ℕ := i * rowBlocks K
 /-- Column `j`'s first block, past the 32 rows'. -/
 def colFirst (K j : ℕ) : ℕ := 32 * rowBlocks K + j * colBlocks K
 
-/-! ## The pieces' word views (`segment.py`, `h1tile.py`) -/
+/-! ## duo and fx1 (`segment.py`)
 
-/-- `PouwI8AddBit`: `b + d mod 2^8`. -/
-def i8AddBit (b : BitVec 8) (d : Bool) : BitVec 8 := b + (if d then 1 else 0)
-
-/-- `PouwI8Add`: `a + u mod 2^8`. -/
-def i8Add (a u : BitVec 8) : BitVec 8 := a + u
-
-/-- `PouwI8Neg`: `-x mod 2^8`. -/
-def i8Neg (x : BitVec 8) : BitVec 8 := -x
-
-/-- `PouwU129`: a noise byte as H1's keyed word, `-64 + x mod 129` as its int8 encoding. -/
-def u129 (x : ℕ) : BitVec 8 := BitVec.ofInt 8 (-64 + ((x % 256 % 129 : ℕ) : ℤ))
-
-/-- `PouwResAdd`: `acc + x mod 2^32`, `x` int8 (`PouwSx8` from 0). -/
-def resAdd (acc : BitVec 32) (x : BitVec 8) : BitVec 32 := acc + x.signExtend 32
-
-/-- `PouwSegDot`: `acc + Σ_k a_k b_k mod 2^32`, `a` and `b` int8 encodings (`PouwSegDot0` from 0). -/
-def segDot (acc : BitVec 32) (a b : Fin 32 → BitVec 8) : BitVec 32 :=
-  (List.ofFn fun k => (a k).signExtend 32 * (b k).signExtend 32).foldl (· + ·) acc
-
-/-- `PouwDigitLo`: a digit's int8 encoding, `(r mod 128) - 128 z`. -/
-def digitLo (r : BitVec 32) (z : Bool) : BitVec 8 := BitVec.ofNat 8 (r.toNat % 128 + if z then 128 else 0)
-
-/-- `PouwDigitHi`: the rest after a digit, `⌊r / 128⌋ + z mod 2^32`, `r` two's complement. -/
-def digitHi (r : BitVec 32) (z : Bool) : BitVec 32 := r.sshiftRight 7 + (if z then 1 else 0)
-
-/-- `PouwDigitZ`: the last coin digit's z, `0` where `⌊r / 128⌋ = 127`. -/
-def digitZ (r : BitVec 32) (z : Bool) : Bool := if r.sshiftRight 7 = 127 then false else z
-
-/-- `PouwLow8`: `r mod 2^8`. -/
-def low8 (r : BitVec 32) : BitVec 8 := r.setWidth 8
-
-/-- **A residue sum's `m` digits** (`h1tile._digits` per entry): `A_d = PouwDigitLo(R_d, z_d)`,
-`R_(d+1) = PouwDigitHi(R_d, z_d)` for `d < m - 1`, `z_(m-2)` through `PouwDigitZ`, and `A_(m-1) = PouwLow8(R_(m-1))`. -/
-def digits (m : ℕ) (z : ℕ → Bool) (y : BitVec 32) : List (BitVec 8) := go (m - 1) 0 y
-where
-  go : ℕ → ℕ → BitVec 32 → List (BitVec 8)
-    | 0, _, r => [low8 r]
-    | fuel + 1, d, r =>
-      let zd := if d + 2 = m then digitZ r (z d) else z d
-      digitLo r zd :: go fuel (d + 1) (digitHi r zd)
+The segment and digit pieces' word views (`i8AddBit`, `i8Add`, `i8Neg`, `u129`, `segDot`, `resAdd`, `digitLo`,
+`digitHi`, `digitZ`, `low8`, `digits`, `nDigits`) are `Tile`'s. -/
 
 /-- `segment.mix32`. -/
 def mix32 (x : BitVec 32) : BitVec 32 :=
@@ -204,7 +159,7 @@ def laneNoise (K : ℕ) (x : SeedIn) (l : Fin 32) : LaneNoise where
   dither s k := streamBit (seedJ x) (rowFirst K (laneRow l s)) k
   digit s d ρ := streamBit (seedJ x) (rowFirst K (laneRow l s)) (K + 32 * d + ρ.val)
   coin t k := streamBit (seedJ x) (colFirst K (laneCol l t)) k
-  u t j := u129 (streamVal (seedJ x) (colFirst K (laneCol l t)) (K + 8 * j.val) 8)
+  u t j := u129 (BitVec.ofNat 8 (streamVal (seedJ x) (colFirst K (laneCol l t)) (K + 8 * j.val) 8))
   key w := BitVec.ofNat 32 (streamVal (sigmaR x) l.val (32 * w.val) 32)
 
 /-- The chain's state after absorbing a set: the fx1 state, and the chain's two new words. -/
