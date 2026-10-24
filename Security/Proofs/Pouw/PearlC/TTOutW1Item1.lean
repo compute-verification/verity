@@ -115,72 +115,49 @@ section Run
 variable (dv : W1.W1Device) (sl : List ℕ) (t y : ℕ) (U : Workload) (act : ℕ → Codes) (σ : State)
 
 /-- The run reads the two constants, both pre-salt. -/
-theorem guess_fetched : (W1.final dv sl (guessProg t y) U act σ).fetched = [W1.constAt 0, W1.constAt 1] := by
-  first
-    | rfl
-    | simp [W1.final, guessProg, W1.exec, W1.Instr.reads, W1.preSalt, W1.constAt]
+theorem guess_fetched : (W1.final dv sl (guessProg t y) U act σ).fetched = [W1.constAt 0, W1.constAt 1] := rfl
 
 /-- A move is free. -/
 theorem price_mov (d a : W1.Addr) : W1.Instr.price dv false (.mov d a) = 0 := by
-  first
-    | simp [W1.Instr.price, W1.Instr.base, W1.Instr.dynamic]
-    | (unfold W1.Instr.price W1.Instr.base W1.Instr.dynamic; simp)
-    | (unfold W1.Instr.price W1.Instr.base W1.Instr.dynamic; norm_num)
+  simp [W1.Instr.price, W1.Instr.base, W1.Instr.dynamic]
 
 /-- The moves are free. -/
 theorem guess_cost0 : (W1.final dv sl (guessProg t y) U act σ).cost = 0 := by
-  first
-    | (show (0 : ℚ) + W1.Instr.price dv false (.mov (W1.ticketAt 0 0 0) (W1.constAt 0)) +
-          W1.Instr.price dv false (.mov (W1.usefulAt 0 0 0) (W1.constAt 1)) = 0
-       rw [price_mov, price_mov]; norm_num)
-    | simp [W1.final, guessProg, W1.exec, price_mov]
+  show (0 : ℚ) + W1.Instr.price dv false (.mov (W1.ticketAt 0 0 0) (W1.constAt 0)) +
+    W1.Instr.price dv false (.mov (W1.usefulAt 0 0 0) (W1.constAt 1)) = 0
+  rw [price_mov, price_mov]
+  norm_num
 
 /-- Two distinct words fetched. -/
 theorem guess_read : W1.w1Read dv sl (guessProg t y) U act σ = 2 := by
   rw [W1.w1Read, guess_fetched]
-  first
-    | decide
-    | rfl
-    | simp [W1.constAt]
-    | (rw [List.dedup_eq_self.2 (by simp [W1.constAt])]; rfl)
+  decide
 
 /-- **The program's W1 cost is exactly `2·fetch`.** -/
 theorem guess_cost (salt : S → List ℕ) (H : Q → R) (s : S) :
     (W1.w1Priced dv salt : CostModel Q R S).cost (guessProg t y) H U act σ s = 2 * (dv.prices.fetch : ℝ) := by
-  first
-    | (show (((W1.final dv (salt s) (guessProg t y) U act σ).cost +
-          dv.prices.fetch * (W1.w1Read dv (salt s) (guessProg t y) U act σ : ℚ) : ℚ) : ℝ) = _
-       rw [guess_cost0, guess_read]; push_cast; ring)
-    | (dsimp only [W1.w1Priced]; rw [guess_cost0, guess_read]; push_cast; ring)
-    | (simp only [W1.w1Priced, guess_cost0, guess_read]; push_cast; ring)
+  show (((W1.final dv (salt s) (guessProg t y) U act σ).cost +
+    dv.prices.fetch * (W1.w1Read dv (salt s) (guessProg t y) U act σ : ℚ) : ℚ) : ℝ) = _
+  rw [guess_cost0, guess_read]
+  push_cast
+  ring
 
 theorem guess_bounded (salt : S → List ℕ) (a : Codes) :
     (guessAdv (Q := Q) (R := R) dv salt a t y).Bounded U (2 * (dv.prices.fetch : ℝ)) 0 := by
   intro H s
   refine ⟨(guess_cost dv t y U _ _ salt H s).le, ?_⟩
-  first
-    | exact Nat.le_refl 0
-    | simp [guessAdv, QTree.calls, W1.w1Priced]
+  exact Nat.le_refl 0
 
 /-- The final memory: the two moves on the initial memory. -/
 theorem guess_mem : (W1.final dv sl (guessProg t y) U act σ).mem =
     Function.update (Function.update (W1.init sl (guessProg t y) U act σ) (W1.ticketAt 0 0 0)
         (W1.w32 (W1.init sl (guessProg t y) U act σ (W1.constAt 0)))) (W1.usefulAt 0 0 0)
       (W1.w32 (Function.update (W1.init sl (guessProg t y) U act σ) (W1.ticketAt 0 0 0)
-        (W1.w32 (W1.init sl (guessProg t y) U act σ (W1.constAt 0))) (W1.constAt 1))) := by
-  first
-    | rfl
-    | simp only [W1.final, guessProg, W1.exec, W1.Instr.exec]
+        (W1.w32 (W1.init sl (guessProg t y) U act σ (W1.constAt 0))) (W1.constAt 1))) := rfl
 
-theorem init_const0 : W1.init sl (guessProg t y) U act σ (W1.constAt 0) = W1.w32 t := by
-  first
-    | rfl
-    | simp [W1.init, W1.constAt, guessProg]
+theorem init_const0 : W1.init sl (guessProg t y) U act σ (W1.constAt 0) = W1.w32 t := rfl
 
-theorem init_const1 : W1.init sl (guessProg t y) U act σ (W1.constAt 1) = W1.w32 y := by
-  first
-    | rfl
-    | simp [W1.init, W1.constAt, guessProg]
+theorem init_const1 : W1.init sl (guessProg t y) U act σ (W1.constAt 1) = W1.w32 y := rfl
 
 theorem guess_mem_of_ne {z : W1.Addr} (h1 : z ≠ W1.ticketAt 0 0 0) (h2 : z ≠ W1.usefulAt 0 0 0) :
     (W1.final dv sl (guessProg t y) U act σ).mem z = W1.init sl (guessProg t y) U act σ z := by
@@ -188,35 +165,25 @@ theorem guess_mem_of_ne {z : W1.Addr} (h1 : z ≠ W1.ticketAt 0 0 0) (h2 : z ≠
 
 theorem guess_ticket : (W1.final dv sl (guessProg t y) U act σ).mem (W1.ticketAt 0 0 0) = W1.w32 t := by
   rw [guess_mem, Function.update_of_ne (tk_ne_us 0 0 0), Function.update_self, init_const0]
-  first
-    | simp only [W1.w32, Nat.mod_mod]
-    | simp [W1.w32]
+  simp only [W1.w32, Nat.mod_mod]
 
 theorem guess_useful : (W1.final dv sl (guessProg t y) U act σ).mem (W1.usefulAt 0 0 0) = W1.w32 y := by
   rw [guess_mem, Function.update_self, Function.update_of_ne c1_ne_tk, init_const1]
-  first
-    | simp only [W1.w32, Nat.mod_mod]
-    | simp [W1.w32]
+  simp only [W1.w32, Nat.mod_mod]
 
 theorem guess_ticket_zero {u i j : ℕ} (hj : j ≠ 0) :
     (W1.final dv sl (guessProg t y) U act σ).mem (W1.ticketAt u i j) = 0 := by
   rw [guess_mem_of_ne dv sl t y U act σ (ticketAt_ne hj) (tk_ne_us u i j)]
-  first
-    | rfl
-    | simp [W1.init, W1.ticketAt]
+  rfl
 
 theorem guess_useful_zero {u i j : ℕ} (hj : j ≠ 0) :
     (W1.final dv sl (guessProg t y) U act σ).mem (W1.usefulAt u i j) = 0 := by
   rw [guess_mem_of_ne dv sl t y U act σ (us_ne_tk u i j) (usefulAt_ne hj)]
-  first
-    | rfl
-    | simp [W1.init, W1.usefulAt]
+  rfl
 
 theorem init_act (a : Codes) (u i l : ℕ) :
     W1.init sl (guessProg t y) U (fun _ => a) σ (W1.actAt u i l) = W1.w32 (a i l) := by
-  first
-    | simp [W1.init, W1.actAt]
-    | simp [W1.init, W1.actAt, Nat.unpair_pair]
+  simp [W1.init, W1.actAt]
 
 /-- The activations stay as supplied when they are 32-bit words. -/
 theorem guess_act (a : Codes) (ha : ∀ i l, a i l < 2 ^ 32) (u i l : ℕ) :
@@ -232,10 +199,7 @@ theorem guess_transcript (salt : S → List ℕ) (a : Codes) (H : Q → R) (s : 
         fun i j => (W1.final dv (salt s) (guessProg t y) U (fun _ => a) []).mem (W1.ticketAt u i j),
         fun i j => (W1.final dv (salt s) (guessProg t y) U (fun _ => a) []).mem (W1.usefulAt u i j)⟩ := by
   show W1.readout U (fun _ => a) (W1.final dv (salt s) (guessProg t y) U (fun _ => a) []).mem u = _
-  first
-    | exact if_pos hu
-    | (simp only [W1.readout]; exact if_pos hu)
-    | simp [W1.readout, hu]
+  exact if_pos hu
 
 end Run
 
@@ -274,13 +238,9 @@ theorem wins_of_event {dv : W1.W1Device} {salt : S → List ℕ} {P : Protocol Q
       some ⟨a, fun i j => (W1.final dv (salt s) (guessProg t y) (oneUnit k w) (fun _ => a) []).mem (W1.ticketAt 0 i j),
         fun i j => (W1.final dv (salt s) (guessProg t y) (oneUnit k w) (fun _ => a) []).mem (W1.usefulAt 0 i j)⟩ := by
     rw [guess_transcript dv t y (oneUnit k w) salt a H s Nat.one_pos]
-    first
-      | (congr 2
-         funext i l
-         split_ifs <;> first | rfl | exact guess_act dv (salt s) t y (oneUnit k w) [] a ha 0 i l)
-      | (simp only [Option.some.injEq, Commit.mk.injEq, eq_self_iff_true, and_true, and_self]
-         funext i l
-         split_ifs <;> first | rfl | exact guess_act dv (salt s) t y (oneUnit k w) [] a ha 0 i l)
+    congr 2
+    funext i l
+    split_ifs <;> first | rfl | exact guess_act dv (salt s) t y (oneUnit k w) [] a ha 0 i l
   have hC : Correct P (oneUnit k w) H s 0
       ⟨a, fun i j => (W1.final dv (salt s) (guessProg t y) (oneUnit k w) (fun _ => a) []).mem (W1.ticketAt 0 i j),
         fun i j => (W1.final dv (salt s) (guessProg t y) (oneUnit k w) (fun _ => a) []).mem (W1.usefulAt 0 i j)⟩ := by
@@ -302,25 +262,28 @@ theorem wins_of_event {dv : W1.W1Device} {salt : S → List ℕ} {P : Protocol Q
     · rintro rfl
       exact ⟨Nat.one_pos, _, hτ, hC⟩
   have hA : actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript (oneUnit k w) H s) 0 = a := by
-    first
-      | simp only [actOf, hτ]
-      | (unfold actOf; rw [hτ])
-      | simp [actOf, hτ]
+    simp only [actOf, hτ]
   show θ < ∑ u ∈ correctSet P (oneUnit k w) H s ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript (oneUnit k w) H s),
     P.credit H s (oneUnit k w) u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript (oneUnit k w) H s) u)
-  first
-    | (rw [hK, Finset.sum_singleton, hA]; exact hθ)
-    | (simp only [hK, Finset.sum_singleton, hA]; exact hθ)
+  rw [hK, Finset.sum_singleton, hA]
+  exact hθ
 
-/-- On the event, one of the `2^64` constant pairs wins. -/
-theorem event_mem {dv : W1.W1Device} {salt : S → List ℕ} {P : Protocol Q R S} {k : ℕ} {w a : Codes} {θ : ℝ}
-    (ha : ∀ i l, a i l < 2 ^ 32) {x : (Q → R) × S} (hx : GuessEvent P k w a θ x) :
-    ∃ p ∈ range (2 ^ 32) ×ˢ range (2 ^ 32), GuessWins dv salt P k w a θ p.1 p.2 x := by
+theorem w32_lt (v : ℕ) : W1.w32 v < 2 ^ 32 := by
+  unfold W1.w32
+  exact Nat.mod_lt _ (by norm_num)
+
+/-- The counting below runs over `range N ×ˢ range N` for an abstract `N` and is used at `N = 2^32`: reducing a
+membership in a literal `range (2^32)` unfolds `List.range` and exceeds the recursion limit. -/
+theorem mem_range_prod {N t y : ℕ} (ht : t < N) (hy : y < N) : (t, y) ∈ range N ×ˢ range N :=
+  Finset.mem_product.2 ⟨Finset.mem_range.2 ht, Finset.mem_range.2 hy⟩
+
+/-- On the event, one of the constant pairs below `N` wins. -/
+theorem event_mem {N : ℕ} (hN : ∀ v, W1.w32 v < N) {dv : W1.W1Device} {salt : S → List ℕ} {P : Protocol Q R S}
+    {k : ℕ} {w a : Codes} {θ : ℝ} (ha : ∀ i l, a i l < 2 ^ 32) {x : (Q → R) × S} (hx : GuessEvent P k w a θ x) :
+    ∃ p ∈ range N ×ˢ range N, GuessWins dv salt P k w a θ p.1 p.2 x := by
   obtain ⟨H, s⟩ := x
   obtain ⟨hact, hcap, hwt, ⟨t, ht⟩, ⟨y, hy⟩, hθ⟩ := hx
-  exact ⟨(W1.w32 t, W1.w32 y),
-    Finset.mem_product.2 ⟨Finset.mem_range.2 (show W1.w32 t < 2 ^ 32 from Nat.mod_lt _ (by norm_num)),
-      Finset.mem_range.2 (show W1.w32 y < 2 ^ 32 from Nat.mod_lt _ (by norm_num))⟩,
+  exact ⟨(W1.w32 t, W1.w32 y), mem_range_prod (hN t) (hN y),
     wins_of_event ha hact hcap hwt ((wordQ_w32 t).trans ht) ((wordQ_w32 y).trans hy) hθ⟩
 
 /-- At a step `⟨[32], wd, z⟩` with `wd ≥ 24`, the event is the rules, the cap and the credit bound: the reference words
@@ -371,34 +334,42 @@ section Prob
 
 variable [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
 
-theorem pr_event_le_sum (dv : W1.W1Device) (salt : S → List ℕ) (P : Protocol Q R S) (k : ℕ) (w a : Codes) (θ : ℝ)
-    (ha : ∀ i l, a i l < 2 ^ 32) :
-    pr (GuessEvent P k w a θ) ≤ ∑ p ∈ range (2 ^ 32) ×ˢ range (2 ^ 32), pr (GuessWins dv salt P k w a θ p.1 p.2) :=
+theorem pr_event_le_sum {N : ℕ} (hN : ∀ v, W1.w32 v < N) (dv : W1.W1Device) (salt : S → List ℕ)
+    (P : Protocol Q R S) (k : ℕ) (w a : Codes) (θ : ℝ) (ha : ∀ i l, a i l < 2 ^ 32) :
+    pr (GuessEvent P k w a θ) ≤ ∑ p ∈ range N ×ˢ range N, pr (GuessWins dv salt P k w a θ p.1 p.2) :=
   calc pr (GuessEvent P k w a θ)
-      ≤ pr (fun x => ∃ p ∈ range (2 ^ 32) ×ˢ range (2 ^ 32), GuessWins dv salt P k w a θ p.1 p.2 x) :=
-        pr_mono fun _ hx => event_mem ha hx
+      ≤ pr (fun x => ∃ p ∈ range N ×ˢ range N, GuessWins dv salt P k w a θ p.1 p.2 x) :=
+        pr_mono fun _ hx => event_mem hN ha hx
     _ ≤ _ := Pouw.Proofs.pr_exists_le_sum _ _
+
+theorem exists_guess_ge_of {N : ℕ} (hN : ∀ v, W1.w32 v < N) (dv : W1.W1Device) (salt : S → List ℕ)
+    (P : Protocol Q R S) (k : ℕ) (w a : Codes) (θ : ℝ) (ha : ∀ i l, a i l < 2 ^ 32) :
+    ∃ t < N, ∃ y < N, pr (GuessEvent P k w a θ) / ((N : ℝ) * N) ≤ pr (GuessWins dv salt P k w a θ t y) := by
+  have hN0 : 0 < N := lt_of_le_of_lt (Nat.zero_le _) (hN 0)
+  have hN' : (N : ℝ) ≠ 0 := Nat.cast_ne_zero.2 hN0.ne'
+  have hM : (N : ℝ) * N ≠ 0 := mul_ne_zero hN' hN'
+  have h3 : ∑ _p ∈ range N ×ˢ range N, pr (GuessEvent P k w a θ) / ((N : ℝ) * N) = pr (GuessEvent P k w a θ) := by
+    rw [Finset.sum_const, Finset.card_product, Finset.card_range, nsmul_eq_mul, Nat.cast_mul]
+    first
+      | rw [mul_comm, div_mul_eq_mul_div, mul_div_assoc, div_self hM, mul_one]
+      | (field_simp; done)
+      | (field_simp; ring1)
+  have hS : (range N ×ˢ range N).Nonempty := ⟨(0, 0), mem_range_prod hN0 hN0⟩
+  obtain ⟨p, hp, h⟩ := Finset.exists_le_of_sum_le hS (h3.trans_le (pr_event_le_sum hN dv salt P k w a θ ha))
+  rw [Finset.mem_product, Finset.mem_range, Finset.mem_range] at hp
+  exact ⟨p.1, hp.1, p.2, hp.2, h⟩
 
 /-- **The success probability**: some constants `t, y < 2^32` win with probability at least `Pr[GuessEvent]/2^64`. -/
 theorem exists_guess_ge (dv : W1.W1Device) (salt : S → List ℕ) (P : Protocol Q R S) (k : ℕ) (w a : Codes) (θ : ℝ)
     (ha : ∀ i l, a i l < 2 ^ 32) :
     ∃ t < 2 ^ 32, ∃ y < 2 ^ 32, pr (GuessEvent P k w a θ) / 2 ^ 64 ≤ pr (GuessWins dv salt P k w a θ t y) := by
-  by_contra hne
-  push_neg at hne
-  have h1 := pr_event_le_sum dv salt P k w a θ ha
-  have h2 : ∑ p ∈ range (2 ^ 32) ×ˢ range (2 ^ 32), pr (GuessWins dv salt P k w a θ p.1 p.2) <
-      ∑ _p ∈ range (2 ^ 32) ×ˢ range (2 ^ 32), pr (GuessEvent P k w a θ) / 2 ^ 64 :=
-    Finset.sum_lt_sum_of_nonempty ⟨(0, 0), by simp⟩ fun p hp => by
-      rw [Finset.mem_product, Finset.mem_range, Finset.mem_range] at hp
-      exact hne p.1 hp.1 p.2 hp.2
-  have h3 : ∑ _p ∈ range (2 ^ 32) ×ˢ range (2 ^ 32), pr (GuessEvent P k w a θ) / 2 ^ 64 =
-      pr (GuessEvent P k w a θ) := by
-    rw [Finset.sum_const, Finset.card_product, Finset.card_range, nsmul_eq_mul]
-    push_cast
+  obtain ⟨t, ht, y, hy, h⟩ := exists_guess_ge_of w32_lt dv salt P k w a θ ha
+  have e : ((2 ^ 32 : ℕ) : ℝ) * ((2 ^ 32 : ℕ) : ℝ) = 2 ^ 64 := by
     first
-      | ring
-      | (field_simp; ring)
-  linarith
+      | norm_num
+      | (push_cast; norm_num)
+  rw [e] at h
+  exact ⟨t, ht, y, hy, h⟩
 
 /-- **The program beats `εPearlC`**: when `Pr[GuessEvent] > 2^−64`, some constants win with probability above
 `εPearlC 0 1 = 2^−128`. -/
@@ -430,7 +401,7 @@ theorem pr_guessEvent_le {dv : W1.W1Device} {salt : S → List ℕ} {P : Protoco
   calc pr (GuessEvent P k w a (2 * (dv.prices.fetch : ℝ) / (1 - γ₀)))
       ≤ ∑ p ∈ range (2 ^ 32) ×ˢ range (2 ^ 32),
           pr (GuessWins dv salt P k w a (2 * (dv.prices.fetch : ℝ) / (1 - γ₀)) p.1 p.2) :=
-        pr_event_le_sum dv salt P k w a _ ha
+        pr_event_le_sum w32_lt dv salt P k w a _ ha
     _ ≤ ∑ _p ∈ range (2 ^ 32) ×ˢ range (2 ^ 32), ε 0 1 := Finset.sum_le_sum hW
     _ = 2 ^ 64 * ε 0 1 := by
         rw [Finset.sum_const, Finset.card_product, Finset.card_range, nsmul_eq_mul]
@@ -443,7 +414,7 @@ theorem not_ttOutW1_of_guess {dv : W1.W1Device} {salt : S → List ℕ} {P : Pro
     {γ₀ : ℝ} {ε : ℕ → ℕ → ℝ} {k : ℕ} {w a : Codes} (hD : D (oneUnit k w).layout) (hf : 0 ≤ dv.prices.fetch)
     (ha : ∀ i l, a i l < 2 ^ 32) (hE : 2 ^ 64 * ε 0 1 < pr (GuessEvent P k w a (2 * (dv.prices.fetch : ℝ) / (1 - γ₀)))) :
     ¬ TTOutW1 dv salt P D γ₀ ε :=
-  fun h => (pr_guessEvent_le hD hf ha h).not_lt hE
+  fun h => not_le.2 hE (pr_guessEvent_le hD hf ha h)
 
 /-! ## (a) Pearl-C on the old domain -/
 
@@ -524,7 +495,15 @@ theorem guess_cost_lt {f ρ c : ℚ} (hf : f ≤ 2000) (hρ : ρ ≤ 1 / 2) (hc 
   have h : 2 * f / (1 - 1 / 400) < (1 - ρ) * c := by
     rw [e]
     linarith
-  exact_mod_cast h
+  have h' : ((2 * f / (1 - 1 / 400) : ℚ) : ℝ) < (((1 - ρ) * c : ℚ) : ℝ) := Rat.cast_lt.2 h
+  have e' : ((2 * f / (1 - 1 / 400) : ℚ) : ℝ) = 2 * (f : ℝ) / (1 - 1 / 400) := by
+    first
+      | (push_cast; ring1)
+      | (push_cast; done)
+      | (norm_num; done)
+  first
+    | exact e'.symm.trans_lt h'
+    | linarith [h', e']
 
 /-- **sm_120 v1 at `Prices.sm120`, `k = 128`**: the old-domain TT_OUT at W1 fails for any fetch price up to 2,000, any
 cap `ρ ≤ 1/2`, activations and a weight row that pass the rules, and a cap that holds with probability above `2^−64`. -/
@@ -621,10 +600,7 @@ theorem guess_zero_words {dv : W1.W1Device} {salt : S → List ℕ} {P : Protoco
   obtain ⟨-, -, -, hw⟩ := hC
   have hc' := Option.some.inj (hc.symm.trans (guess_transcript dv t y U salt a H s huN))
   have hA : actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s) u = c.act := by
-    first
-      | simp only [actOf, hc]
-      | (unfold actOf; rw [hc])
-      | simp [actOf, hc]
+    simp only [actOf, hc]
   rw [hA]
   have ht0 : c.ticket i j = 0 := by
     rw [hc']
