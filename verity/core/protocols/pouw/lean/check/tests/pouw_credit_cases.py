@@ -166,14 +166,21 @@ TWO_CALLS = ("a-call-off", "a-call-missing")
 #: window opens: round 0's request root the bare request table's (``ids0-outside``) or over another ids@0 root
 #: (``ids0-root-off``), and ids@0's domain binding another session (``ids0-other-session``, the Commit registering it so)
 IDS0_NAMES = ["ids0-outside", "ids0-root-off", "ids0-other-session"]
+#: each way the window's request table ``…/requests@0`` (`credit.is_requests`, the live unit's ``req``) is not round
+#: 0's under the window's session: at another root than ``request_table`` (``req0-root-off``), registered twice
+#: (``req0-twice``) or under another PREFIX (``req0-other-prefix``), and its domain binding another session
+#: (``req0-other-session``) or the window's open root, which contains it (``req0-window``)
+REQ0_NAMES = ["req0-root-off", "req0-twice", "req0-other-prefix", "req0-other-session", "req0-window"]
 #: the served Commit's words of a step's input token id (an int32)
 IDS_WORDS = 2
+#: a request table's words a row (`circuit.live.HEADER_WORDS`: five u32 headers as u16 words)
+REQUEST_WORDS = 10
 
 
 def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: str | Callable[[str | None], str],
            other: str | None = None, calls: list[int] | None = None, prefix: str | None = None,
-           weights: list[dict] | None = None, off: str | None = None, sid: str = "s-1", m: int = 1
-           ) -> tuple[list[dict], list[dict], dict[str, dict]]:
+           weights: list[dict] | None = None, off: str | None = None, sid: str = "s-1", m: int = 1,
+           requests: str | None = None) -> tuple[list[dict], list[dict], dict[str, dict]]:
     """A window's registered entries under its registration (the circuit whose descriptor's SHA-512 is `program`, and the
     window's open root `window`, or `window` of round 0's registered input-ids table's root when it is a function, since
     that root is inside the open root), each value under `prefix` (a random ``h1/w-<i>/`` when None), its round log over
@@ -190,7 +197,9 @@ def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: 
     tables under another window's open root and ids@0 under another session (``window``), another circuit
     (``program``) or no window root nor session (``unbound``, main's h1_prove form). `off` (`AROW_NAMES`') registers an
     A table or an ids table over other rows than its true ones, an A table one call short (its true rows too), or no ids
-    table of a round, and ``ids0-other-session`` binds ids@0's domain to another session."""
+    table of a round, and ``ids0-other-session`` binds ids@0's domain to another session. With `calls` and round 0's
+    request table's root `requests`, it registers (at random, always under `REQ0_NAMES`) the request table
+    ``…/requests@0`` at that root, its domain binding the session as ids@0's does, which `REQ0_NAMES` break."""
     prefix = f"h1/w-{rng.randrange(100)}/" if prefix is None else prefix
     values, entries, true = {}, [], {}
     prog = _hex(rng) if other == "program" else program
@@ -251,6 +260,14 @@ def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: 
         entries.append({**zy, "domain": G.domain(prog, zy["value"], 3, zy["leaves"], window=own).domain_id.hex()})
     for s in range(1, steps if calls else 0):
         a(f"{prefix}ids@{s}", IDS_WORDS, leaves, s)
+    if calls and requests is not None and (off in REQ0_NAMES or rng.random() < 0.5):
+        v = f"x/{prefix}requests@0" if off == "req0-other-prefix" else f"{prefix}requests@0"
+        dom = (G.domain(prog, v, REQUEST_WORDS, leaves, window=own) if off == "req0-window" else
+               G.domain(prog, v, REQUEST_WORDS, leaves, session=f"{sid}-other" if off == "req0-other-session"
+                        else sid if off == "ids0-other-session" else session))
+        e = {"value": v, "root": _hex(rng) if off == "req0-root-off" else requests, "leaves": leaves,
+             "words": REQUEST_WORDS, "domain": dom.domain_id.hex()}
+        entries += [e, dict(e)] if off == "req0-twice" else [e]
     if rng.random() < 0.5:
         entries.append({"value": f"{prefix}z/{rng.choice([64, 4096])}", "root": _hex(rng), "leaves": 3,
                         "domain": _hex(rng)})
@@ -369,7 +386,7 @@ def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = N
 
     ks = rng.sample([64, 4096, 14336], rng.randint(1, 2)) if ks is None else ks
     entries, log, true = _a_log(rng, rounds, ks, _hex(rng) if program is None else program, open_root, other,
-                                calls, prefix, weights, off, sid, m)
+                                calls, prefix, weights, off, sid, m, table)
     window = opened["window"]
     log[0]["requests"], log[0]["request_table"] = opened["requests"], table
     d = {"salt": _hex(rng), "calls": [_row(rng, i) for i in range(rng.randint(1, 5) if rows is None else rows)],
@@ -998,7 +1015,7 @@ def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", le
     d, s = honest_credit(rng, name if name in [*CREDIT_NAMES, "never-received"] else "honest", rows=len(lay["calls"]),
                          sid=sid, leaf=leaf, ks=sorted(set(k_of.values())), program=program, other=other,
                          calls=[k_of[lin] for lin, _blk in lay["calls"]], prefix=prefix, weights=weights,
-                         off=name if name in [*AROW_NAMES, *IDS0_NAMES] else None, m=lay["m"],
+                         off=name if name in [*AROW_NAMES, *IDS0_NAMES, *REQ0_NAMES] else None, m=lay["m"],
                          rounds=steps, served=served_rows(rng, t, len(lins), steps, name))
     d["layout"], d["k"], d["descriptor"], d["weights"], d["rows"] = lay, _k(rng, lay), desc, weights, t
     d["proofs"] = _window_proofs(rng, d, _served_units(d))
@@ -1031,7 +1048,7 @@ def window_instance(rng: random.Random, name: str = "honest") -> dict:
     match name:
         case "honest":
             pass
-        case _ if name in AROW_NAMES or name in IDS0_NAMES or name in ROWS_NAMES:
+        case _ if name in AROW_NAMES or name in IDS0_NAMES or name in REQ0_NAMES or name in ROWS_NAMES:
             pass
         case "commit-unbound":
             rec = json.loads(bytes.fromhex(d["commit"]))
@@ -1159,7 +1176,7 @@ REGISTRATION_NAMES = ["other-registration", "a-call-unbound", "proof-other-regis
 WINDOW_NAMES = ["manifest-count", "chosen", "failed", "missing", "descriptor-hex", *DESC_NAMES,
                 "credit-changed", "credit-no-draw", "credit-forged-ledger", "credit-branch-pin", "k-form", "k-past-units",
                 "never-received", "round-coin", "a-untied", "no-a", *REGISTRATION_NAMES, *WINDOW_WEIGHTS_NAMES,
-                *AROW_NAMES, *IDS0_NAMES, "commit-unbound", "credit-commit-form", *ROWS_NAMES, "t-other", "t-form"]
+                *AROW_NAMES, *IDS0_NAMES, *REQ0_NAMES, "commit-unbound", "credit-commit-form", *ROWS_NAMES, "t-other", "t-form"]
 WINDOW_KEYS = ("key", "ledger", "pins", "main", *Cr.PROVED_KEYS, "k", "rows")
 #: `credit.window`'s arguments, in order
 WINDOW_ARGS = ("key", "ledger", "pins", "main", "window", "session", "salt", "calls", "served", "commit", "rounds",

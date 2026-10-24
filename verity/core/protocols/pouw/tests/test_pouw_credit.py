@@ -116,6 +116,10 @@ WINDOW_EXPECT = {
     "commit-missing": ("arow", "the Commit record registers "), "commit-twice": ("arow", "the Commit record registers "),
     "ids0-outside": ("arow", Cr.IDS_OUTSIDE), "ids0-root-off": ("arow", Cr.IDS_OUTSIDE),
     "ids0-other-session": ("registration", "ids@0" + OTHER_REGISTRATION),
+    "req0-root-off": ("arow", Cr.REQUESTS_OUTSIDE), "req0-twice": ("arow", Cr.REQUESTS_OUTSIDE),
+    "req0-other-prefix": ("arow", "the window registers request table x/"),
+    "req0-other-session": ("registration", "requests@0" + OTHER_REGISTRATION),
+    "req0-window": ("registration", "requests@0" + OTHER_REGISTRATION),
     "a-call-off": ("arow", NOT_COMMITS + "row-table/"), "a-call-missing": ("arow", "rows, not "),
     "commit-unbound": ("draw", Cr.DRAW_ROOT), "credit-commit-form": ("commit", Cr.COMMIT_FORM),
     "rows-past": ("manifest", NO_SERVED), "rows-form": ("manifest", NO_SERVED), "rows-other": ("manifest", OTHER_SERVED),
@@ -560,6 +564,38 @@ def test_round_0s_input_ids_are_inside_its_request_table(seed):
         got, refused = Cr._window_outcomes(*cases.window_args(cases.window_instance(random.Random(f"{name}/{seed}"),
                                                                                     name)))
         assert got is None and refused[0] == ("registration" if name == "ids0-other-session" else "arow"), (name, refused)
+
+
+def test_round_0s_request_table_is_its_request_table_under_the_session():
+    """The live unit's ``req`` reads ``<prefix>requests@0`` (`circuit.live`), whose root is round 0's ``request_table``,
+    inside round 0's request root and so inside the window's open root: its domain binds the window's session, as
+    ids@0's does, not the open root that contains it (`domain_of`). A window registering it at another root, twice,
+    under another PREFIX, or bound to another session or to the open root is refused (`REQ0_NAMES`); one registering
+    none is accepted, as nothing reads it then."""
+    found = 0
+    for seed in range(12):
+        d = cases.window_instance(random.Random(f"honest/{seed}"))
+        prefix = Cr._prefix(bytes.fromhex(d["descriptor"]))
+        req = [e for e in d["entries"] if Cr.is_requests(e["value"])]
+        assert Cr._window_outcomes(*cases.window_args(d))[1] is None, seed
+        if not req:
+            continue
+        found += 1
+        (e,) = req
+        assert e["value"] == f"{prefix}{Cr.REQUESTS_TABLE}" and e["root"] == d["rounds"][0]["request_table"]
+        program = hashlib.sha512(bytes.fromhex(d["descriptor"])).hexdigest()
+        sid = Ch.audited_session(d["ledger"], d["window"], Ch.ChallengerKey.from_json(d["key"]), rc.lms_verify).session
+        assert e["domain"] == Cr.domain_of(program, d["window"]["root"], e, sid) == G.domain(
+            program, e["value"], e["words"], e["leaves"], session=sid).domain_id.hex()
+        assert e["domain"] != G.domain(program, e["value"], e["words"], e["leaves"],
+                                       window=d["window"]["root"]).domain_id.hex()
+    assert found
+    assert [Cr.is_requests(v) for v in ("h1/requests@0", "requests@0", "h1/requests@1", "h1/requests@00", "h1/x", 3)] \
+        == [True, True, False, False, False, False]
+    for name in cases.REQ0_NAMES:
+        got, refused = Cr._window_outcomes(*cases.window_args(cases.window_instance(random.Random(f"{name}/0"), name)))
+        assert got is None and refused == (WINDOW_EXPECT[name][0], refused[1]) and WINDOW_EXPECT[name][1] in refused[1], \
+            (name, refused)
 
 
 def test_the_commit_record_is_bound_under_calls_root():

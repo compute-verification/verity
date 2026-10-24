@@ -728,6 +728,12 @@ def idsStep? (v : Json) : Option Nat :=
   let s := String.ofList (last.toList.drop 4)
   if last.startsWith "ids@" && (s == "0" || canonicalK s) then some s.toNat! else none
 
+/-- `credit.REQUESTS_TABLE`: round 0's request table's name's last part (`<prefix>requests@0`, the live unit's `req`). -/
+def REQUESTS_TABLE : String := "requests@0"
+
+/-- `credit.is_requests`: a request table, a name whose last part is `requests@0` (`REQUESTS_TABLE`). -/
+def isRequests (v : Json) : Bool := (str? v).any fun v => (v.splitOn "/").getLastD "" == REQUESTS_TABLE
+
 /-- `credit.receipt_call`: a receipt table's call, a name whose last part is `receipt@<c>` (`<prefix>receipt@<c>`, row t
 call c's t-th unit's receipt, c a canonical decimal). -/
 def receiptCall? (v : Json) : Option Nat :=
@@ -877,15 +883,16 @@ def entryOk (e : Json) : Bool :=
 /-- `credit.domain_of`: the domain (hex) one-stage's registration gives the registered value `e` (an entry `entryOk`
 holds) of the window whose open root is `window`, under the circuit whose descriptor's SHA-512 is `program`
 (`SampledProofs.Registered.domainAt`): the weights' (`…/b/<K>`, `isHeld`) are held across windows and bind none;
-round 0's input-ids table (`…/ids@0`, `idsStep?` 0), whose root the window's open root contains (`requestsRoot`,
-`Internal.arow`), binds the window's session `session` in that root's place (`domainBound` at `"session"`); every
+round 0's input-ids table (`…/ids@0`, `idsStep?` 0) and request table (`…/requests@0`, `isRequests`), whose roots the
+window's open root contains (`requestsRoot`, `Internal.arow`), bind the window's session `session` in that root's place
+(`domainBound` at `"session"`); every
 other value's rows are the window's own, its A rows and its calls' A and z tables among them, and its domain binds the
 window's open root (PRF-127). -/
 def domainOf (program window session : String) (e : Json) : R String := do
   let v := (str? (get e "value")).getD ""
   let (words, leaves, bits) := ((nat? (get e "words")).getD 0, (nat? (get e "leaves")).getD 0,
     (nat? (get e "word_bits")).getD 16)
-  let d ← (if idsStep? (.str v) == some 0 then
+  let d ← (if idsStep? (.str v) == some 0 || isRequests (.str v) then
       SampledProofs.Registered.domainBound program v words leaves bits "session" session
     else SampledProofs.Registered.domainAt program v words leaves bits
       (if isHeld (.str v) then none else some window)).mapError fun why => ("registration", why)
@@ -894,9 +901,9 @@ def domainOf (program window session : String) (e : Json) : R String := do
 def otherRegistration (v : String) : String :=
   s!"registered value {v}'s domain is not the one the window's registration gives it (the registered domain of " ++
   s!"{v} under the circuit the window's proofs were verified against, the SHA-512 of its descriptor, and, for a " ++
-  "value other than the weights' …/b/<K> and round 0's …/ids@0, the window's open root, the root the " ++
-  "auditor's ledger opened its session for, for …/ids@0 that session): the entry is another registration's, " ++
-  "another window's or another circuit's"
+  "value other than the weights' …/b/<K> and round 0's …/ids@0 and …/requests@0, the window's open root, the " ++
+  "root the auditor's ledger opened its session for, for those two that session): the entry is another " ++
+  "registration's, another window's or another circuit's"
 
 /-- How deep `leavesOf` reads a type: deeper than Python's recursion limit reads. -/
 def TYPE_DEPTH : Nat := 1000
@@ -1216,7 +1223,8 @@ where
 
 /-- `credit._registration`: none when the window's registered `entries` are its own registration's and each drawn unit's
 proof (`proofs`, one accepted outcome a unit, as `proved` holds them) is a session verified against it, else the
-refusal (`registration`). Each A value's and input-ids table's domain, and each other value's a proof opened, is
+refusal (`registration`). Each A value's, input-ids table's and request table's (`isRequests`) domain, and each other
+value's a proof opened, is
 `domainOf` the window's open root `window`, its session `session` and the descriptor's SHA-512 `program`; each proof
 was verified against
 `program`; every registered port its session opened (its `registered` finding) is of a value the window registers once,
@@ -1233,7 +1241,7 @@ def Internal.registration (window program prefix_ : String) (entries proofs : Js
     | .arr a => a.toList
     | _ => []
   for e in es do
-    if isTied (get e "value") then
+    if isTied (get e "value") || isRequests (get e "value") then
       if let some why ← held program window session ((str? (get e "value")).getD "") e then registrationRefuse why
   let names := es.map fun e => str? (get e "value")
   let ps := (match proofs with
@@ -1292,6 +1300,10 @@ def IDS_OUTSIDE : String :=
   "round 0's request root (requests, the one the window's open root binds) is not requests_root of its request " ++
   "table's root (request_table) and its input-ids table's root, so round 0's input ids are not fixed before the " ++
   "salt: commit round 0's input-ids table inside round 0's request table, under the window's open root"
+def REQUESTS_OUTSIDE : String :=
+  "the window's request table's root is not round 0's request_table, the one round 0's request root (requests) " ++
+  "binds under the window's open root, so its rows are not the requests admitted before the salt: register round " ++
+  "0's request table at its request_table root, once"
 
 /-- `credit.requests_root`: `tagged` of `REQUESTS_IDS_TAG`, round 0's request table's root `table` and its input-ids
 table's root `ids`. So the window's open root contains ids@0's root, and its rows are fixed before the salt coin. -/
@@ -1311,7 +1323,9 @@ rows for each of the round's calls of K, call after call, and is the Commit's `c
 call's units read are its linear's input as the served Commit commits it, and the input token ids under each round's
 root are its step's (ROOTS1). The window registers no other input-ids table, and round 0's request root (`requests`,
 the one its open root binds) is `requestsRoot` of its request table's root (`request_table`) and `<prefix>ids@0`'s, so
-round 0's input ids are fixed before the salt coin. A step of `window`, after `Internal.aLink` has held each to the
+round 0's input ids are fixed before the salt coin. The window registers at most one request table (`isRequests`),
+`<prefix>requests@0`, at root `request_table`, so the live unit's `req` rows are round 0's admitted requests;
+`Internal.registration` holds its domain to the session. A step of `window`, after `Internal.aLink` has held each to the
 segments the round roots commit, `periodWeights` round 0's request root to the open root, and the manifest to the
 layout's calls. Its cost is the calls and the records' entries. -/
 def Internal.arow (rounds : Array Json) (entries : Json) (registered : Array Json) (layout : Json) (prefix_ : String) :
@@ -1363,6 +1377,14 @@ def Internal.arow (rounds : Array Json) (entries : Json) (registered : Array Jso
   let (some table, some ids) := (digest? (get r0 "request_table"),
       (ours.get? s!"{prefix_}ids@0").bind fun e => digest? (get e "root")) | arowRefuse IDS_OUTSIDE
   unless get r0 "requests" == .str (Flock.hexOf (requestsRoot table ids)) do arowRefuse IDS_OUTSIDE
+  let tables := es.filter fun e => isRequests (get e "value")
+  for e in tables do
+    let v := (str? (get e "value")).getD ""
+    unless v == prefix_ ++ REQUESTS_TABLE do
+      arowRefuse (s!"the window registers request table {v}, which is not {prefix_}{REQUESTS_TABLE}: it registers " ++
+        "round 0's request table once, under its descriptor's PREFIX")
+  if tables.length > 1 || tables.any (fun e => get e "root" != .str (Flock.hexOf table)) then
+    arowRefuse REQUESTS_OUTSIDE
 
 def WEIGHTS_TAG : String := "verity/pouw/h1/weights/v1"
 def WINDOW_ROOT_FORM : String := "the window is not {root}, its open root a SHA-512 digest (128 lowercase hex)"
