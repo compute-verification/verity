@@ -97,9 +97,13 @@ def main():
     print()
     print("| run | N | state | S/H | analyzed questions / tokens | knowledge about those people (bits, trained phrasing) | "
           "fresh bits/token, counted values, best estimator: FP8 / NVFP4 / bf16 | fresh bits per learned bit: "
-          "FP8 / NVFP4 / bf16 | FP8 fresh bits per bit of S | mean r99 of the gate_proj output delta |")
-    print("|---|---|---|---|---|---|---|---|---|---|")
+          "FP8 / NVFP4 / bf16 | FP8 fresh bits above the format-only control, per learned bit | "
+          "FP8 fresh bits per bit of S | gate_proj output delta: mean relative norm, mean r99 |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|")
     g = lambda v: "inf" if not v else f"{v:.3g}"
+    # sub10kbit learns the answer format and the value prior (loss falls) but recalls no fact: the control
+    control = {(line["model"], line["n"]): line["fresh"]["totals"]["fp8t"]["best_counted"] for line in out
+               if line["group"] == "sub10kbit" and line["fresh"]}
     for line in out:
         s = line["fresh"]
         if not s:
@@ -109,13 +113,17 @@ def main():
         pt, tot = s["fresh_per_token"], s["totals"]
         per = {f: (tot[f]["best_counted"] / learned if learned > 0 else None) for f in tot}
         per_s = tot["fp8t"]["best_counted"] / line["S_bits"]
+        c = control.get((line["model"], line["n"]))
+        excess = (tot["fp8t"]["best_counted"] - c) / learned if c is not None and learned >= 1 else None
+        gate = s["by_map"].get("gate_proj", {})
         line["fresh_summary"] = {"people": people, "learned_bits": learned, "per_token": pt, "per_learned_bit": per,
-                                 "fp8_per_state_bit": per_s}
-        r99 = s["by_map"].get("gate_proj", {}).get("r99")
+                                 "fp8_per_state_bit": per_s, "fp8_excess_over_control_per_learned_bit": excess,
+                                 "gate_rel_dnorm": gate.get("rel_dnorm"), "gate_r99": gate.get("r99")}
         print(f"| {s['name']} | {s['n']} | {line['group']} | {line['S_over_H']:.3g} | {s['questions']} / {s['tokens']} | "
               f"{learned:.0f} | {pt['fp8t']['best_counted']:.0f} / {pt['nvfp4']['best_counted']:.0f} / "
               f"{pt['bf16']['best_counted']:.0f} | {g(per['fp8t'])} / {g(per['nvfp4'])} / {g(per['bf16'])} | "
-              f"{per_s:.3g} | {r99 if r99 is None else round(r99)} |")
+              f"{'n/a' if excess is None else f'{excess:.3g}'} | {per_s:.3g} | "
+              f"{gate.get('rel_dnorm', 0):.2f}, {round(gate.get('r99') or 0)} |")
     json.dump(out, open(os.path.join(dirs[0], "summary.json"), "w"), indent=1)
 
 
