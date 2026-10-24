@@ -23,7 +23,8 @@ old path that names something outside the tree ([rewrite] keep: the frozen evide
 and neither is a dotted name that only looks like a module ([rewrite] keep_dotted: a torch op's qualified name).
 A string literal in Rust or Lean is protocol text (a domain tag, a statement's field, a JSON key) where only a path changes:
 no dotted name and no lone quoted word in one is rewritten. A tracked file that a `.gitignore` matches stays tracked where
-it moves. It appends [paths] to research's `moves.json` (once), whose recorded moves it never rewrites.
+it moves. It appends [paths] to research's `moves.json` (once), each row whose path the tree has, and never rewrites the
+moves recorded there.
 
 It fails on a rewritten reference to a directory the map splits across destinations (`backends/flock/` to `verity/ml/flock/`
 with its `verifier/lean/` to `verity/core/service/flock/`): the rewrite follows the larger part, so a gate that named the
@@ -523,9 +524,11 @@ class Run:
                 token = m.group("p")
                 stripped = token.rstrip("/.,")
                 first = stripped.split("/")[0]
-                if first in {"packages", "protocols", "backends", "benchmarks", "census", "fixtures", "tests", "tools",
+                if first in {"packages", "protocols", "backends", "benchmarks", "census", "fixtures", "tools",
                              "integrations", "verity", "catalog", "kernels", "experimental", "archive", "infra"}:
                     return token
+                if first == "tests" and self._member_of(old) is None:
+                    return token                        # the root's tests/; a distribution's own is relative to it
                 new = self._map_relative(stripped, path, old, plain=True)
                 if new is None or new == stripped:
                     return token
@@ -1144,7 +1147,12 @@ class Run:
         path = self.L.file(MOVES) or MOVES
         if (text := self._read(path)) is None:
             raise SystemExit(f"{path}: research's record of the layout moves is missing")
-        doc, entry = json.loads(text), {"paths": dict(self.L.data["paths"])}
+        def here(old: str, new: str) -> bool:
+            if old.endswith("/"):
+                return any(p.startswith(old) for p in self.tracked_old) or any(p.startswith(new) for p in self.new_files)
+            return old in self.tracked_old or new in self.new_files
+        # a row for a file an open branch adds (its restack needs the row) names a path this tree lacks until it lands
+        doc, entry = json.loads(text), {"paths": {o: n for o, n in self.L.data["paths"].items() if here(o, n)}}
         if entry not in doc["moves"]:
             doc["moves"].append(entry)
             self.texts[path] = json.dumps(doc, indent=2) + "\n"

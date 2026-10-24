@@ -160,6 +160,18 @@ paths = []
 "verity_vllm.protocol_options.sampled_proofs" = "verity_vllm.protocols.sampled_proofs"
 "verity_vllm.store" = "verity_vllm.protocols.remote_bandwidth"
 
+[aliases]
+# the integration's tests import each other as `tests.*` (pytest runs from `integrations/vllm/`); no other `tests` package
+# imports these names
+"tests.collectives" = "tests.engine.collectives"
+"tests.linear" = "tests.protocols.linear"
+"tests.predict" = "tests.program.predict"
+"tests.protocol_options" = "tests.protocols"
+"tests.store" = "tests.protocols.remote_bandwidth"
+"tests.store.int8_store_gpu" = "tests.engine.int8_store_gpu"
+# p09's allowlist names a module below `verity_vllm.` (`_imports.LAYER`'s short form); nothing else writes this one so
+"collectives.embedding_shard" = "engine.collectives.embedding_shard"
+
 [rewrite]
 # Never rewritten: records of what was, and files whose bytes a digest pins.
 exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
@@ -176,4 +188,4 @@ keep_dotted = ["verity_pouw.ncp_linear"]
 # registered.py's docstring names the kernel as `pouw_cuda/registered_rows.cu`; moved a level deeper, the file-relative
 # rewrite (`../pouw_cuda/...`) is not one move_check reads in prose, so the name stays as written
 keep_in = { "integrations/vllm/verity_vllm/proto*/**registered.py" = ["integrations/vllm/verity_vllm/protocol_options/pouw_cuda/registered_rows.cu"] }
-include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/lake-manifest.json"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
