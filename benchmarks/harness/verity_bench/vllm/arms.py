@@ -30,6 +30,9 @@ class Arm:
     #: built at vLLM's serving defaults, eager or compiled, whatever the spec's `eager` and the preset's
     #: `serving_defaults`; None builds it as they say
     execution: str | None = None
+    #: a served variant's own checkpoint (`presets.ArmSettings`), `model` at `revision`; None loads the preset's
+    model: str | None = None
+    revision: str | None = None
 
     def to_json(self) -> dict[str, Any]:
         return asdict(self)
@@ -152,7 +155,7 @@ def _protocol_arm(name: str, settings: ArmSettings | None = None) -> Arm:
 def served_variant(name: str, settings: ArmSettings | None = None) -> Arm:
     """``BUILTIN@LABEL``: the built-in arm's engine at vLLM's serving defaults in execution LABEL (`SERVED_EXECUTIONS`),
     so one spec times one engine in two executions (`stock-fp8` eager against `stock-fp8@compiled`). Its control is the
-    built-in unless its `ArmSettings` say otherwise."""
+    built-in, and its checkpoint the preset's, unless its `ArmSettings` say otherwise."""
 
     base, _, label = name.partition("@")
     if base not in BUILTINS or label not in SERVED_EXECUTIONS:
@@ -160,7 +163,8 @@ def served_variant(name: str, settings: ArmSettings | None = None) -> Arm:
                          f"LABEL one of {list(SERVED_EXECUTIONS)}")
     s = settings or ArmSettings()
     control = base if s.control is None else None if s.control == NO_CONTROL else s.control
-    return Arm(**{**BUILTINS[base].to_json(), "id": name, "control": control, "execution": label})
+    return Arm(**{**BUILTINS[base].to_json(), "id": name, "control": control, "execution": label, "model": s.model,
+                  "revision": s.revision})
 
 
 def protocols_config(arm: Arm, environ: Mapping[str, str]) -> dict[str, dict[str, Any]]:
