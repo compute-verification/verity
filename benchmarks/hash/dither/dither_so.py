@@ -207,7 +207,9 @@ TAIL_ENV = "DITHER_SO_TAIL"
 # "1" (a diagnostic): the host's progress as events on an idle stream, so a step's phases place it against the GPU's:
 # h_tail_ms (the tail's launch after the units' end), h_read_ms (the root read after the tail), h_ret_ms (the root
 # read's return after the tail), h_udone_ms (the units' end to the serving stream past its wait) and h_flag_ms (the
-# units' flag set to their start, the step before's)
+# units' flag set to their start, the step before's); on the host, h_spin_ms (TAIL=2's spin on the root's word past the
+# units' event), h_wall_ms and h_cpu_ms (the root's return to the units' flag, wall and main's thread CPU), h_salt_ms
+# (dispatch_units' salt) and h_side_ms (SoSide.dispatch)
 HMARK_ENV = "DITHER_SO_HMARK"
 # "1": a capture's copies go to host memory, not the device (a prefill capture at T = 2048 is ~30 GB); `DA.check` moves
 # each call's tensors to the device as it reads them
@@ -312,6 +314,8 @@ class SoWindow(DO.Window):
             # 0 the tail's launch, 1 the root read, 2 + s % 2 step s's units' flag, 4 the root read's return
             self.ev_h = [torch.cuda.Event(enable_timing=True) for _ in range(5)]
             self.h_flagged: set[int] = set()
+            # perf_counter at dispatch_units' salt and at its SoSide.dispatch call
+            self.h_t = [0.0, 0.0]
         self.root_lag = int(os.environ.get(ROOT_LAG_ENV) or 0)
         if self.root_lag not in (0, 1, 2):
             raise RuntimeError(f"${ROOT_LAG_ENV}={self.root_lag}: 0, 1 or 2")
@@ -453,6 +457,8 @@ class SoWindow(DO.Window):
             salt = self.HT.live_salt(self.coins.commitment, held.coin, held.index, self.pipe.roots[i - 1])
         else:
             salt = self.HT.live_salt(self.coins.commitment, opening.coin, opening.index, self.pipe.roots[i])
+        if self.hmark:
+            self.h_t[0] = time.perf_counter()
         g = self.caps.get(name) if name is not None else None
         if g is not None:
             g.update(opening=opening, salt_used=salt, coin_got_at=self.pipe.got_at.get(i), dispatched_at=time.monotonic())
@@ -462,6 +468,8 @@ class SoWindow(DO.Window):
         self.salt_of[j] = salt
         self.disp_at[j] = time.monotonic()
         self.phase("units_dispatch")
+        if self.hmark:
+            self.h_t[1] = time.perf_counter()
         DA.SIDE[0].dispatch(j, salt, m, g)
         return t_coin
 
@@ -833,7 +841,7 @@ class SoWindow(DO.Window):
         prev = self.cap_of.get(s - 1)
         late = self.cap_of.pop(j, None) if j >= self.s0 else None
         held = (cap in self.caps) or (late in self.caps) or (prev == "fault_zlate" and prev in self.caps)
-        lag = None
+        lag = h_sync = c_root = c_disp = None
         if self.root_lag and not held and s != self.end_at:
             self.phase("root_lag")
             if self.lag_ybad is None:
@@ -858,12 +866,16 @@ class SoWindow(DO.Window):
                 # the stream past its wait on the units, then a spin on the tail's own word: the wake-up's latency
                 # rides the tail's launch
                 (self.ev_w[1] if waited else self.ev_w[2]).synchronize()
+                if self.hmark:
+                    h_sync = time.perf_counter()
                 root = self.tail.root(0)
             else:
                 root = unwords(pre["round"].root(0))
             if self.hmark:
                 self.ev_h[4].record(self.hm_stream)
             t_root = time.perf_counter()
+            if self.hmark:
+                c_root = time.thread_time()
             self.phase("record_host")
             i = self.pipe.send(root)
             if i != self.ix(s):
@@ -900,6 +912,7 @@ class SoWindow(DO.Window):
                 t_coin = self.dispatch_units(ju)
                 t_disp = time.perf_counter()
                 if self.hmark:
+                    c_disp = time.thread_time()
                     self.ev_h[2 + s % 2].record(self.hm_stream)
                     self.h_flagged = {s - 1, s} & (self.h_flagged | {s})
         if lag is None and not held:
@@ -925,6 +938,15 @@ class SoWindow(DO.Window):
                 ph["h_udone_ms"] = sd.ev_u[p][1].elapsed_time(self.ev_w[1])
                 if s - 1 in self.h_flagged:
                     ph["h_flag_ms"] = self.ev_h[2 + (s - 1) % 2].elapsed_time(sd.ev_u[p][0])
+                if h_sync is not None:
+                    ph["h_spin_ms"] = 1e3 * (t_root - h_sync)
+                if c_disp is not None and c_root is not None:
+                    # main's CPU time against its wall time from the root's return to the units' flag: less CPU than
+                    # wall is a wait (the GIL, the scheduler), not code
+                    ph["h_cpu_ms"] = 1e3 * (c_disp - c_root)
+                    ph["h_wall_ms"] = 1e3 * (t_disp - t_root)
+                    ph["h_salt_ms"] = 1e3 * (self.h_t[0] - t_coin)
+                    ph["h_side_ms"] = 1e3 * (t_disp - self.h_t[1])
             ph["units_gpu_ms"] = sd.ev_u[p][0].elapsed_time(sd.ev_u[p][1])
             q = sd.prev_of.get(p)
             if q is not None:
