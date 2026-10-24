@@ -32,9 +32,11 @@ makes that source the certifier's signed record.
 - **The verifier of record** is `LinkWindows(clock_certificates=…)`, whose `clock_source` is `advised.SignedClocks`
   under the link's own certifier key and session. Window w's sync is the sync of the certificates that name the link,
   egress and window w and verify, and the windows run from 0 to the first one without exactly one such sync. A window
-  is then refused, with every advised window after it, when it is unsigned, signed under another key, session, link,
-  window or direction, signed for another sync than the one its certificate carries, or signed for two syncs. The
-  certificates are public, so whoever delivers them, the prover included, can't change what they say.
+  is refused, with every window after it, when it is unsigned, signed under another key, session, link, window or
+  direction, signed for another sync than the one its certificate carries, or signed for two syncs; once a frame is
+  released in one of those windows no floor is under a signed sync, and every window of the link is refused. The
+  link's verdict is the AND over its windows, so the link is refused either way. The certificates are public, so
+  whoever delivers them, the prover included, can't change what they say.
   `LinkWindows(clocks=…)` takes a stand-in source in their place, never beside them: the tests' (`StandInClocks` in
   `tests/advised_traffic.py`), or a run's proxy log for a run from before the certifier signed its syncs, each
   labelled as one.
