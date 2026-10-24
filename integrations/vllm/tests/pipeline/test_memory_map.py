@@ -294,8 +294,9 @@ def test_a_warm_requests_map_takes_its_cached_page_from_its_producer(tmp_path, m
     assert doc["requests"]["r1"] == {"arrive": 1, "steps": 5, "positions": 12, "layers": 2, "row_bytes": 1024, "pages": [1, 4, 5],
                                      "program_digest": dig1, "cached": 4, "producers": ["r0"]}
     assert "cached" not in doc["requests"]["r0"] and doc["requests"]["r0"]["pages"] == [1, 2, 3]
-    # pages 1 (r0's, which r1 reads as its prefix), 2 and 4 complete, each 2 blocks a layer; r0's page 3 and r1's page 5 never do
-    assert (doc["written"], doc["engine"]) == (12, {"compared": 12, "equal": 12})
+    # a packed page is 2 blocks a layer: pages 1 (r0's, which r1 reads as its prefix), 2 and 4 whole, and the half of r1's page 5
+    # holding positions 8 and 9, which its last two steps read; r0's page 3 fills no block
+    assert (doc["written"], doc["engine"]) == (14, {"compared": 14, "equal": 14})
 
 
 #: GLM-5.3's MLA at TP2 in small: the DSA stand-in's KV layers, its latent rows (64 bytes) in pages of 64 slots, one block a page
