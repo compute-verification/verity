@@ -32,14 +32,16 @@ A spec-level reference for network accounting's timing channel:
   link"). The proxy's admission rule (`Proxy(served=…)`) admits a request only while its window still ends idle, so
   an honest served link is accepted. An egress end with neither profile gets no verdict (`ValueError`, failing
   closed);
-- the I/O tie (`io_tie`), a design (`PROTOCOL.md`, "The I/O tie") and its prototype on a fake upstream, in no Spec:
-  every cell of an egress link-window is opened, each a pad or the canonical event of one token id on the stream the
-  warden set, and each is the output the advice's map names at its place (`window_map`, from the advice's outputs,
-  release buckets and advice v1's order permutation, each request on its ingress ordinal's stream from 1, accepted on
-  TRACE-CORPUS's heavy trace; the verifier computes it in the clear from the opened advice, the named gap, until the
-  map is read in the proof under the advice's hiding root), with the id the Commit sampled for it (the port: one
-  hiding row of ids a step, opened under the Commit's root). The warden commits each bucket's cells as one hiding
-  row. It has the reference and the unit's Boolean Definition (`IoTieWindow`: the cells' root by `NetworkRowsRoot`, the port's rows by
+- the I/O tie (`io_tie`), a design (`PROTOCOL.md`, "The I/O tie") and its prototype on the warden's egress, in no Spec:
+  every cell of an egress link-window is opened, each a pad, the canonical event of one token id or the response's end
+  on the stream the warden set, and each is the cell the advice's map names at its place (`window_map`, from the
+  advice's outputs, release buckets and advice v1's order permutation, each request on its ingress ordinal's stream from
+  1, accepted on TRACE-CORPUS's heavy trace; the verifier computes it in the clear from the opened advice, the named
+  gap, until the map is read in the proof under the advice's hiding root), with the id the Commit sampled for it (the
+  port: one hiding row of ids a step, opened under the Commit's root). The cells are the warden's (`warden`): a
+  connection's r slots a bucket, a `PAD` on its stream before its first cell and after its `END`, one id event a `DATA`
+  cell. The warden commits each bucket's cells as one hiding row. It has the reference and the unit's Boolean
+  Definition, one a bucket row (`IoTieBucket`: the row read as the warden's registered row, the port's rows by
   `IoTiePort`, then `IoTieContent`: `IoTieCell` on every cell, the prover's Beneš routing of the port's entries
   `IoTieRoute`, `IoTieMatch`);
 - the ingress tie (`io_request`, `PROTOCOL.md`, "The ingress tie") on a fake upstream: an ingress link-window's
