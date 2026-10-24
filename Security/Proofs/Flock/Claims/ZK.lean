@@ -152,6 +152,8 @@ import Proofs.Flock.Claims.ZK.L0PinCoins
 import Proofs.Flock.Claims.ZK.L0PinFrame
 import Proofs.Flock.Claims.ZK.L0PinQuiet
 import Proofs.Flock.Claims.ZK.L0PinFlags
+import Proofs.Flock.Claims.ZK.L0PinSwitch
+import Proofs.Flock.Claims.ZK.L0PinBind
 import Proofs.Flock.Claims.ZK.FinishSwInner
 import Proofs.Flock.Claims.ZK.FinishSwTau
 import Proofs.Flock.Claims.ZK.FinishSwRows
@@ -708,6 +710,14 @@ import Proofs.Flock.Claims.ZK.CutPrefix
 * `L0PinFlags`: the frame's flags along a rep's scheduled rounds. Quiet rounds and their coins keep them, and the
   opening's first round (its label, `LABEL_PCS`) ends the algebraic phase at `c.nPiop` (`Flags.roundFree_pcs`). So
   past it, at the coins, the frame is outside every masked phase at `c.nPiop`, owing nothing (**`Flags.sched_opened`**).
+* `L0PinSwitch`: the cut ring switch with room for its asks returns, having sent each claim's round and `γ`'s squeeze
+  after the pending bytes, and leaves nothing pending (**`Switch.ringSwitchCut_bodies`**); a rep's PIOP ends with nothing
+  pending (`Switch.endE_repPiop`); from empty pending bytes the switch's first round is the opening's (`Flags.PcsRound`)
+  and its later rounds and `γ`'s are quiet (`Switch.pcsRound_rs`, `Switch.qRound_rs`, `Switch.qRound_gamma`).
+* `L0PinBind`: the frame at a rep's binding. Past the algebraic phase a rep's schedule is what its opening, fed, sent
+  (`Bind.schedSoFar_sentQ`, `Bind.feed_part`); cut at `γ`, its first rounds are the ring switch's
+  (`Bind.openStep_switch`), squeezing `7` a claim and then the claims' count (`Bind.sched_count`), so at `γ`'s coins the
+  loop's state is outside every masked phase at `c.nPiop`, before level 0, owing nothing (**`Bind.repState_opened`**).
 * `FinishSwInner`: `repCut_fw`'s `hinner` at that source. The switched view keeps `ρ_in`, `σ_in` (`padShift` moves
   `h_tx`, `h_ty` against the exposed pads; `Table.innerMsg_padShift`) and `Y₂`, and where the rows hold `Y₁`, so the
   switched source's `ρ_in`, `σ_in` and `Y` are the honest source's (`Masked.swSrcE_inner`, `Masked.swSrcE_y`). The
