@@ -304,22 +304,24 @@ def verifier_negatives(stream_of: Callable[[Callable[[int], bytes]], S.Stream],
         if isinstance(replay, Replay):
             row["python"] = CC.coins_reason(evidence, window, after, read, lms_verify)
         neg[name] = {"refused": accepted is False and at == SELECT_COINS and row.get("python", "") is not None, **row}
-
-    def refused(call: Callable[[], Any], code: str, read_count: Callable[[], int]) -> dict:
-        before = read_count()
-        try:
-            call()
-            codes = None
-        except S.Refused as e:
-            codes = list(e.verdict.codes)
-        read_now = read_count() - before
-        return {"refused": codes == [code] and read_now == 0, "stream": codes, "coins_read": read_now}
-
-    neg["verifier-coins-redraw"] = refused(lambda: honest.select(draw.registration), "drawn", lambda: len(coins.read))
+    neg["verifier-coins-redraw"] = stream_refusal(lambda: honest.select(draw.registration), "drawn",
+                                                  lambda: len(coins.read))
     fresh = OwnReplay(read)
-    neg["verifier-coins-before-the-registration"] = refused(lambda: stream_of(fresh).select(draw.registration), "unknown",
-                                                            lambda: fresh.at)
+    neg["verifier-coins-before-the-registration"] = stream_refusal(lambda: stream_of(fresh).select(draw.registration),
+                                                                   "unknown", lambda: fresh.at)
     return neg
+
+
+def stream_refusal(call: Callable[[], Any], code: str, read_count: Callable[[], int]) -> dict:
+    """`call()`, a stream's select, refused for `code` alone with no coin read (`read_count()` unchanged)."""
+    before = read_count()
+    try:
+        call()
+        codes = None
+    except S.Refused as e:
+        codes = list(e.verdict.codes)
+    read_now = read_count() - before
+    return {"refused": codes == [code] and read_now == 0, "stream": codes, "coins_read": read_now}
 
 
 def _refusal(e: Exception) -> dict:

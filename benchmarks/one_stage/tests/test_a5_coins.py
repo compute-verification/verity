@@ -152,6 +152,40 @@ def test_a_negative_the_stream_accepts_is_not_counted_refused(monkeypatch):
         assert neg[name]["accepted"] is True and neg[name]["source"] == "verifier" and not neg[name]["refused"], neg[name]
 
 
+def test_an_outcome_negative_counts_refused_only_where_its_own_check_refuses(monkeypatch):
+    """A rejected outcome is not enough: a negative the Lean's run refuses elsewhere than its select's `coins` is not
+    refused, nor one passed off as the challenger's whose evidence Python's `coins_reason` would take."""
+    stream, coins, draw, _, _ = honest()
+    monkeypatch.setattr(AC, "SELECT_COINS", ("outcome", ["coins"]))
+    neg = AC.verifier_negatives(stream_of, register, stream, coins, draw, outcome, ROOT)
+    for name in ("verifier-coins-claimed-as-challenger", "verifier-coins-with-evidence"):
+        assert neg[name]["accepted"] is False and not neg[name]["refused"], neg[name]
+    monkeypatch.undo()
+    stream, coins, draw, _, _ = honest()
+    monkeypatch.setattr(CC, "coins_reason", lambda *_: None)
+    neg = AC.verifier_negatives(stream_of, register, stream, coins, draw, outcome, ROOT)
+    assert neg["verifier-coins-claimed-as-challenger"]["python"] is None
+    assert not neg["verifier-coins-claimed-as-challenger"]["refused"]
+    assert neg["verifier-coins-with-evidence"]["refused"]
+
+
+def test_a_select_counts_refused_only_for_its_own_code_with_no_coin_read():
+    def refuse(code):
+        raise S.Refused(S.Verdict(False, (code,), {code: None}))
+
+    read = [0]
+
+    def reads_then_refuses():
+        read[0] += 1
+        refuse("drawn")
+
+    assert AC.stream_refusal(lambda: refuse("drawn"), "drawn", lambda: read[0])["refused"]
+    assert not AC.stream_refusal(lambda: refuse("unknown"), "drawn", lambda: read[0])["refused"]
+    assert AC.stream_refusal(reads_then_refuses, "drawn", lambda: read[0]) == {"refused": False, "stream": ["drawn"],
+                                                                             "coins_read": 1}
+    assert AC.stream_refusal(lambda: None, "drawn", lambda: read[0]) == {"refused": False, "stream": None, "coins_read": 0}
+
+
 def test_the_replay_reads_no_more_than_the_honest_draw():
     replay = AC.OwnReplay(b"\x01\x02\x03")
     assert replay(2) == b"\x01\x02" and replay.at == 2
