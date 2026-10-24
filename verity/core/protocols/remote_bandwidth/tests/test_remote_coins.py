@@ -66,10 +66,11 @@ class Service:
     to `directory` before it serves (`remote.open_session`), served on a thread over a socket pair whose other end is
     `client`, the verifier's `remote.RemoteChallenger`."""
 
-    def __init__(self, directory, sign, sid: str, epoch: int, windows: int, label: bytes, appends: int = APPENDS) -> None:
+    def __init__(self, directory, sign, sid: str, epoch: int, windows: int, label: bytes, appends: int = APPENDS,
+                 per_coin: int = 1) -> None:
         directory.mkdir()
         self.directory, self.id, self.reason = directory, sid, None
-        challenger = C.LiveChallenger(coins.SCHEME, epoch, coins.families(windows, appends), Entropy(label))
+        challenger = C.LiveChallenger(coins.SCHEME, epoch, coins.families(windows, appends, per_coin), Entropy(label))
         self.session = R.open_session(challenger, key(), f"{HOST}.{sid}", sign, directory, sid)
         (directory / R.HELLOS).write_text("")
         ours, theirs = socket.socketpair()
@@ -81,8 +82,9 @@ class Service:
         with sock:
             self.reason = R.serve(sock, self.session, itertools.count().__next__)
 
-    def coins(self, store, session: int, windows: int) -> coins.Coins:
-        return coins.Coins(self.client, store.registration.digest, session, windows, clock=itertools.count().__next__)
+    def coins(self, store, session: int, windows: int, per_coin: int = 1) -> coins.Coins:
+        return coins.Coins(self.client, store.registration.digest, session, windows, per_coin=per_coin,
+                           clock=itertools.count().__next__)
 
     def close(self) -> str | None:
         self.client.close()
