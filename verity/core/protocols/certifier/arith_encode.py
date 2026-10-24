@@ -1,5 +1,5 @@
 """Advice v1's arithmetic encoder as Boolean Definitions, run forward inside the compile unit alongside the replay scan:
-counting the bits it would write, which is what the composition charges, or checking them against a committed segment.
+counting the bits it would write, which is what the composition charges, or checking them against a segment.
 
     ArithCountStep_v1{K, BIN, CW}  (tally, en, symbol) -> tally'
     ArithCountFinish_v1{CW, NB}    (tally, pool[NB], c) -> (ok, bits)
@@ -35,6 +35,12 @@ in, and high 1 followed by its shifted up with 1s in, a log shifter of bitlen(K)
 which the segment check needs. The count is CW bits (`CW` = 20, a window's charge below 2^20), and a count past it is
 refused.
 
+**What the circuit computes, never witness.** A decision's context is the replay's position (under `code_v1`
+min(run, 2), with run the decisions since the last arrival), carried in the circuit. Its (f0, f1) are the model's, from
+counts that start at the registered book's public priors and that each coded decision raises in the circuit. An
+integer's (cum, freq, total) are read from the book's public tables at the value's bin. A context or a frequency the
+prover supplied would pick the code per value and charge any decisions next to nothing.
+
 **The bit-checking variant** (`ArithEncodeStep_v1`, `ArithEncodeFinish_v1`) is the alternative composition, where the
 advice is the coded segments: the encoder's output must be the window's committed segment. `code.ArithDecoder.finish`
 takes a segment only when it is the encoder's codeword for what it decodes to, so there the forward encoding is
@@ -49,7 +55,7 @@ code.py's (a symbol of frequency below its total was coded), and `ok` is 0 once 
 
 **The step** codes one symbol when `en` is 1 (when 0, it passes the state through and consumes nothing):
 - *The symbol.* With BIN = 1 it is a decision bit with its model's frequencies f0, f1 ≥ 1, f0 + f1 ≤ 2^16, coded as
-  code.py's `encode(f0 if bit else 0, f1 if bit else f0, f0 + f1)` (advice v1's `_segment`). One product and one
+  code.py's `encode(f0 if bit else 0, f1 if bit else f0, f0 + f1)` (`code_v1.Encoder.bit`). One product and one
   division serve both ends: with r = high − low + 1 and q = ⌊r·f0 / (f0 + f1)⌋, a 1 sets low to low + q and a 0 sets
   high to low + q − 1. With BIN = 0 it is code.py's general (cum, freq, total), with two products and two divisions;
   freq = total leaves the interval and `used` as they are, as code.py's early return does.
@@ -83,8 +89,9 @@ composition keeps as a 2-bit counter (C = 3). Async's lag bits take one context 
 variant. C contexts each count their 0s and 1s (`replay._KT`, from the registered priors). Context ctx gives f = 2n + 1
 for each count, halved with rounding up while f0 + f1 > 2^16 (`scaled`), and the decision then adds to its count.
 After h ≥ 1 halvings f is ⌊n / 2^(h−1)⌋ + 1, so the circuit takes the first h whose two candidates fit. With `en` = 0 it
-passes the counts through. It refuses a context ≥ C and a count that would overflow NW bits. The context index is
-the replay's (plain: min(passes, 2), C = 3).
+passes the counts through. It refuses a context ≥ C and a count that would overflow NW bits. In the compile unit
+the counts start public, at the registered priors, and pass from model to model, and the context index is the
+replay's (plain: min(passes, 2), C = 3): neither is witness.
 
 **Statics** (public): K, the scalings a symbol may take (18 covers every symbol); BIN, binary (1) or general (0)
 symbols; CW, the count's width; NB, the header's pool width (0: no header); C, the contexts; and NW, a count's width in
@@ -210,7 +217,7 @@ def reference_finish(st: Coder, seg: Sequence[int]) -> tuple[int, int]:
 
 
 def scaled(f0: int, f1: int) -> tuple[int, int]:
-    """Advice v1's `_scaled`: ENC-REPLAY's estimate halved, rounding up, into the coder's total."""
+    """ENC-REPLAY's estimate (`replay._KT`) halved, rounding up, into the coder's total."""
     while f0 + f1 > MAX_TOTAL:
         f0, f1 = (f0 + 1) >> 1, (f1 + 1) >> 1
     return f0, f1
@@ -718,7 +725,8 @@ def _sig_book_kt(S):
 ArithEncodeStep = _part(
     "ArithEncodeStep", ("K", "BIN"), _sig_step, _build_step,
     "one symbol through ENC-CODE's 32-bit WNC arithmetic encoder, its output bits checked in the decoder's order against "
-    "the window's next K committed segment bits; the next coder state and the bits consumed (`arith_encode.reference_step`)")
+    "the window's next K segment bits; the next coder state and the bits consumed, the symbol's charge "
+    "(`arith_encode.reference_step`)")
 
 ArithEncodeFinish = _part(
     "ArithEncodeFinish", (), _sig_finish, _build_finish,
@@ -727,8 +735,8 @@ ArithEncodeFinish = _part(
 
 KTContext = _part(
     "KTContext", ("C", "NW"), _sig_kt, _build_kt,
-    "ENC-REPLAY's adaptive KT estimate for one decision's context, scaled into the coder's total as advice v1 does, and "
-    "its counts updated (`arith_encode.reference_kt`)")
+    "ENC-REPLAY's adaptive KT estimate for one decision's context, scaled into the coder's total as advice v1 did "
+    "before code_v1, and its counts updated (`arith_encode.reference_kt`)")
 
 ArithCountStep = _part(
     "ArithCountStep", ("K", "BIN", "CW"), _sig_count, _build_count_step,
