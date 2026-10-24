@@ -1106,8 +1106,25 @@ constexpr u32 SMQ_DEN_MAX = 256;
 // (next[1 + smid]); off them only the grid's last CTA while no unit has been taken. ONE: thread 0 decides for the CTA,
 // for one whose warps take units together: the last CTA's warps reading next apart could see a unit taken between their
 // reads, and those that stayed would claim units for those that had left
+// PROBE (experiment only): H1U_KPROBE = C staggers the last CTA's warps on a dropped SM C cycles a warp before they
+// read next; H1U_KDELAY = D holds every kept CTA D cycles before its first claim (h1umj_sm); H1U_KONE = 0 drops ONE
+#ifndef H1U_KPROBE
+#define H1U_KPROBE 0
+#endif
+#ifndef H1U_KDELAY
+#define H1U_KDELAY 0
+#endif
+#ifndef H1U_KONE
+#define H1U_KONE 1
+#endif
+__device__ __forceinline__ void k_spin(long long c) {
+  const long long c0 = clock64();
+  while (clock64() - c0 < c) {
+  }
+}
 template <bool CAP, bool ONE = false>
 __device__ __forceinline__ bool sm_keep(u32 smid, u32 q, u32 den, u32 cap, u32* next) {
+  if (H1U_KPROBE && smid % den >= q && blockIdx.x + 1 == gridDim.x) k_spin((long long)H1U_KPROBE * (threadIdx.x >> 5));
   if constexpr (CAP) {
     __shared__ u32 keep;
     if (threadIdx.x == 0)
@@ -2464,7 +2481,8 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj_sm(const UCallR* _
                                                        u32* __restrict__ next, u32 cap) {
   u32 smid;
   asm volatile("mov.u32 %0, %%smid;" : "=r"(smid));
-  if (!sm_keep<CAP, H1U_JCTA != 0>(smid, q, den, cap, next)) return;
+  if (!sm_keep<CAP, H1U_KONE != 0 && H1U_JCTA != 0>(smid, q, den, cap, next)) return;
+  if (H1U_KDELAY && smid % den < q) k_spin(H1U_KDELAY);
   __shared__ WarpSmem smem[WARPS];
   const u32 wp = threadIdx.x >> 5, lane = threadIdx.x & 31, total = calls[ncalls].u0;
   if constexpr (H1U_JCTA) {
