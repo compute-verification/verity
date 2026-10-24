@@ -100,9 +100,16 @@ verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic 
   bits only where it committed a hiding root (from 01ea29e10f on, whose opening is the prover's). That isn't these runs':
   the prove path is `bound` to them only once the file is their advice and the Commit it proves is held to theirs, which
   no input carries yet (`bound_why`), and only a bound prove path's verdict counts in the OK. Beside the endpoint's own
-  advice there is no file to hold an arm to: its arms prove their own fixed workload, not this run. Each rank's time
-  is reported per drawn unit, its prover's and Lean's seconds over the units its statement proves (PROVE-PATH's
-  `per_unit`, 92e4e50ca5).
+  advice there is no file to hold an arm to: a fixed workload's arms prove their own Commit, not this run's. An arm of
+  `prove_path.py audit --serve-run` names the served run's Commit window it proves (`chain.served_commit`, the arm named
+  `w<k> <arm>`), and `--prove-path` may be given once for each such audit. The prove path is then bound to these runs
+  when every arm's Commit is the endpoint's (its `windows.jsonl` has that window's run id and root), its root the one
+  sealed while serving (the audit's `serve` check), and an honest arm's Commit is one of the honest run's own windows.
+  That arm's committed advice must be the report's registration of its window, by root or, registered apart under its
+  own salt and compiler, by its v0 bits. `--prove-path-registered FILE` says, by window, who registered each audited
+  window's advice and when (`{K: {by, at_serve_time, at, first_draw, ref}}`); the report shows it, and `stubbed` lists
+  a window registered after serving. Each rank's time is reported per drawn unit, its prover's and Lean's seconds over
+  the units its statement proves (PROVE-PATH's `per_unit`, 92e4e50ca5).
 - NEG's registry (`benchmarks/network_traces/negatives.py`'s `suite`) runs on the runs unless `--no-negatives`. Each row
   that ran must be refused by the code it names; the rest say what they wait on. It doesn't run on the advice profile.
   With `--advice` and `--ids FILE` (each request's sampled ids by its advice id, ADVICE-SRC's `requests.jsonl`: `user`,
