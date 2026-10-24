@@ -100,8 +100,14 @@ theorem finSrc_leaf0 (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Non
         (vs x w ν (finCoins x ops)) (Masked.UE.tape x t).1
         (swExeOf (Masked.tabC Masked.PE x) (Masked.czExe Masked.PE x (finCoins x ops)) (Masked.wtOf Masked.PE x w)
           (vs x w ν (finCoins x ops)) (Masked.UE.tape x t).1 (Masked.UE.tape x t).2.1) ⟨i, hi⟩).leaves0 := h0
-  unfold Masked.leafAt
-  rw [h]
+  have hc : ∀ c₁ c₂ : ∀ j, ((Masked.tabC Masked.PE x j).T (Masked.czExe Masked.PE x (finCoins x ops) j)).tab.Cut,
+      (c₁ ⟨i, hi⟩).leaves0 = (c₂ ⟨i, hi⟩).leaves0 →
+        Masked.leafAt Masked.PE x (Masked.czExe Masked.PE x (finCoins x ops)) c₁ ⟨i, hi⟩ =
+          Masked.leafAt Masked.PE x (Masked.czExe Masked.PE x (finCoins x ops)) c₂ ⟨i, hi⟩ := by
+    intro c₁ c₂ e
+    unfold Masked.leafAt
+    rw [e]
+  exact hc _ _ h
 
 variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
