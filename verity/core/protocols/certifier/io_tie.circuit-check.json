@@ -5,18 +5,6 @@
   },
   "IoTieCell_v1{B=4096}": {
    "and": 34398
-  },
-  "IoTieContent_v1{B=256,T=3,R=4}": {
-   "and": 54252
-  },
-  "IoTieMatch_v1{D=4,DB=2}": {
-   "and": 6183
-  },
-  "IoTieOrder_v1{T=3,R=4}": {
-   "and": 332
-  },
-  "IoTieRoute_v1{W=71,D=4}": {
-   "and": 3976
   }
  }
 }
