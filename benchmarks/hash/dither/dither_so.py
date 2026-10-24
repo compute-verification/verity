@@ -57,7 +57,8 @@ serving stream as forward s + 1 starts, before round s's tables: refused on roun
 
 $DITHER_SO_ROUND_STREAM=1 (`RS_ENV`, without -ov) keeps that order and those buffers and moves only where the GPU builds
 round s: on a tree stream of its own once forward s is done, beside step s's sampling (the engine's lm_head and
-sampler, which read none of round s's inputs and write none of them), and the serving stream waits for the round before
+sampler, which read none of round s's inputs and write none of them, ahead of the trees by priority: `RS_PRIO_ENV`),
+and the serving stream waits for the round before
 step s + 1's inputs and forward, so forward s + 1 overwrites nothing round s reads, as without it.  The host goes back
 to the engine as soon as the round is launched: a thread sends round s's root once the GPU has it, still before coin s
 (the challenger opens it after the root alone), and step s's units still wait for coin s; `before` writes the step's
@@ -169,6 +170,9 @@ SPILL_MAX_GB = 128
 # goes back to the engine without waiting on forward s or the trees.  The same round order and the same buffers
 RS_ENV = "DITHER_SO_ROUND_STREAM"
 RS_EV = 4       # its per-step events and pinned roots, a ring of this many steps (the sender is never further behind)
+# the tree stream's priority (default 0, the units'): below the serving stream's, so step s's lm_head and sampler, which
+# the host waits on before step s + 1, take the SMs ahead of round s's trees
+RS_PRIO_ENV = "DITHER_SO_ROUND_PRIO"
 
 
 def end_steps(depth: int) -> int:
@@ -261,7 +265,7 @@ class SoWindow(DO.Window):
         """RS_ENV's tree stream, its events (a ring of RS_EV steps: "b" forward s's start and "f" its end on the
         serving stream, "w0"/"w1" around the receipt leaf's wait and "t" the round's end on the tree stream), pinned
         roots and served-y refusals, and the sender thread (`_rs_send`)."""
-        self.rs_stream = torch.cuda.Stream(device=self.dev, priority=-1)
+        self.rs_stream = torch.cuda.Stream(device=self.dev, priority=int(os.environ.get(RS_PRIO_ENV, "0")))
         self.rs_ev = {k: [torch.cuda.Event(enable_timing=True) for _ in range(RS_EV)]
                       for k in ("b", "f", "w0", "w1", "t")}
         self.rs_waited = [False] * RS_EV
@@ -949,6 +953,7 @@ class SoWindow(DO.Window):
                      # the challenger's log holds these round roots in this order (its published session's record)
                      "roots_sha512": hashlib.sha512(b"".join(sent)).hexdigest(),
                      "window_end": self.end_stats(), "round_stream": self.rs,
+                     "round_stream_priority": self.rs_stream.priority if self.rs else None,
                      "serving_stream_priority": torch.cuda.current_stream().priority,
                      "units_stream_priority": DA.SIDE[0].side.priority if DA.SIDE else None}
         if ov is not None:
