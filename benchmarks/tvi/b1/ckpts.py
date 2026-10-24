@@ -7,7 +7,7 @@ TEXT is the eval text of the checkpoint's task: gsm8k.txt or math.txt for A2, ci
 import argparse, json, os, subprocess
 
 LIST = r"""for d in /workspace/jobs/tvi/ckpt/A2/*/step*/ /workspace/jobs/tvi/ckpt/A3/*/step*/; do
-  [ -f "$d/DONE" ] && printf '%s\t%s\n' "$d" "$(tr -d '\n' < "$d/meta.json" 2>/dev/null)"; done"""
+  [ -f "$d/DONE" ] && printf '%s\t%s\n' "$d" "$(tr -d '\n' < "$d/meta.json" 2>/dev/null)"; done; true"""
 
 
 def ssh(host, cmd):
