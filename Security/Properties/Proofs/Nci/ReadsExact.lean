@@ -25,7 +25,11 @@ gates of one width) and an index, and holds each of `Desc`'s operations on them 
   (`norm_mem`), and `Desc.Ivs.covers` checks every leaf is in an interval (`covers_mem`);
 * a segment's gates (`Width.segGates`) are its gate positions (`segGates_pos`);
 * on the circuit's side, a gate's operands are its node's references resolved (`operands_mem`), and a gate of a
-  primitive root node reads its member's operands in the root activation (`reads_rootPrim`).
+  primitive root node reads its member's operands in the root activation (`reads_rootPrim`);
+* toward the core of the open statements, that `down` keeps the gate each position names in an activation (`den`): its
+  base cases, a gate's or parameter's piece (`down_gate`, `down_param`), a primitive node's (`down_prim`, `den_prim`)
+  and a batch of a primitive's (`down_batchPrim`, `den_batchPrim`), and resolution through a step (`resolve_inl`,
+  `resolve_inr`).
 
 So `ReadsExact` holds wherever one statement about the segments `Desc.nodeReads` gives each root node does
 (`readsExact_of_rootReads`): `RootReads`. That holds wherever two smaller ones do (`rootReads_of`), named `Prop`s here,
@@ -2336,6 +2340,182 @@ theorem reads_rootPrim (P : Prog) (c : Circuit) (hc : circuitOf P = .ok c) (hl :
     rw [hops] at hgate
     simp only [bind, Except.bind, pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hgate
     rw [hgate.2.1]
+
+
+/-! ## Toward the core: `down` keeps the gate every position names
+
+What a position names in an activation `sc` of the body `down` reads (`den`): a gate position's gate, `sc.off` past it,
+else its reference resolved there. The core of `RootSegs` and `RootSet` is that `down` keeps every position's gate,
+`(segsPos segs).map (den P sc) = (pos q).map (den P sc)`, by induction on its fuel with `fromCallee` and `throughArg`,
+from the callees' summaries'. Its base cases hold here: a gate's or a parameter's piece comes back as it is
+(`down_gate`, `down_param`), a primitive node's names its gate (`down_prim`, `den_prim`), and a batch of a primitive's
+its members' gates (`down_batchPrim`, `den_batchPrim`). Resolution ends with a step's gate and goes on from a step's
+state (`resolve_inl`, `resolve_inr`). Lean generates no equations for `down` (its match on `.tuple #[carry, y]`), so
+each case unfolds it by `delta` and `whnf`. -/
+
+/-- The gate position `x` names in activation `sc`. -/
+def den (P : Prog) (sc : Flock.Program.Scope) : Tgt × Int → Except String Nat
+  | (.gate _, p) => if p < 0 then .error "negative" else .ok (sc.off + p.toNat)
+  | (.ref b i, j) => if j < 0 then .error "negative" else Flock.Program.resolve P sc ⟨b, i, j.toNat⟩
+
+theorem fuel_succ : ∃ n, Flock.Steps.FUEL = n + 1 := ⟨Flock.Steps.FUEL - 1, by unfold Flock.Steps.FUEL; omega⟩
+
+theorem run_inr {α β : Type} {what : String} {step : α → Flock.V (β ⊕ α)} {n : Nat} {a a' : α} {b : β}
+    (hs : step a = .ok (.inr a')) (h : Flock.Steps.run what step (n + 1) a = .ok b) :
+    Flock.Steps.run what step n a' = .ok b := by
+  rw [Flock.Steps.run.eq_2, hs] at h
+  exact h
+
+/-- Resolution ending at a step's gate. -/
+theorem resolve_inl (P : Prog) (sc : Flock.Program.Scope) (r : Ref) (g : Nat)
+    (h : Flock.Program.resolveStep P (sc, r) = .ok (.inl g)) : Flock.Program.resolve P sc r = .ok g := by
+  obtain ⟨n, hn⟩ := fuel_succ
+  unfold Flock.Program.resolve
+  rw [hn, Flock.Steps.run.eq_2, h]
+  rfl
+
+/-- Resolution going on from a step's state, to the same gate. -/
+theorem resolve_inr (P : Prog) (sc : Flock.Program.Scope) (r : Ref) (s : Flock.Program.Scope × Ref)
+    (h : Flock.Program.resolveStep P (sc, r) = .ok (.inr s)) {g : Nat} (hr : Flock.Program.resolve P sc r = .ok g) :
+    Flock.Program.resolve P s.1 s.2 = .ok g := by
+  obtain ⟨n, hn⟩ := fuel_succ
+  unfold Flock.Program.resolve at hr ⊢
+  rw [hn] at hr ⊢
+  exact Flock.Steps.run_mono (Nat.le_succ n) (run_inr h hr)
+
+theorem down_gate (c : Desc.Ctx) (fuel : Nat) (q : Piece) {w : Nat} (ht : q.tgt = .gate w) :
+    Desc.down c (fuel + 1) q = .ok #[Seg.one q] := by
+  delta Desc.down
+  conv => lhs; whnf
+  rw [ht]
+  rfl
+
+theorem down_param (c : Desc.Ctx) (fuel : Nat) (q : Piece) {i : Nat} (ht : q.tgt = .ref true i) :
+    Desc.down c (fuel + 1) q = .ok #[Seg.one q] := by
+  delta Desc.down
+  conv => lhs; whnf
+  rw [ht]
+  rfl
+
+theorem segsPos_single (q : Piece) : segsPos #[Seg.one q] = pos q := by
+  simp [segsPos, segPos_one]
+
+theorem node_get {c : Desc.Ctx} {k : Nat} {node : Flock.Program.Node} (hn : c.node k = .ok node) :
+    c.body.nodes[k]! = node := by
+  unfold Desc.Ctx.node at hn
+  rcases h : c.body.nodes[k]? with _ | n
+  · rw [h] at hn; cases hn
+  · rw [h] at hn
+    simp only [pure, Except.pure, Except.ok.injEq] at hn
+    subst hn
+    obtain ⟨hk, rfl⟩ := Array.getElem?_eq_some_iff.1 h
+    exact getElem!_pos c.body.nodes k hk
+
+/-- A primitive node's piece: none of no count, else one piece naming the node's gate at each position. -/
+theorem down_prim (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
+    {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .prim) {w : Nat}
+    (hret : (c.P.defs[node.fn]!).ret = .value w) :
+    Desc.down c (fuel + 1) q = .ok (if q.count = 0 then #[] else
+      #[Seg.one { tgt := .gate w, base := (c.body.offsets[k]! : Int), stride := 0, len := q.count }]) := by
+  delta Desc.down
+  conv => lhs; whnf
+  rw [ht]
+  dsimp only
+  by_cases h0 : q.count = 0
+  · rw [if_pos (show (q.count == 0) = true by simpa using h0), if_pos h0]
+    rfl
+  · rw [if_neg (show ¬ ((q.count == 0) = true) by simpa using h0), if_neg h0, hn]
+    dsimp only [bind, Except.bind]
+    rw [hform]
+    dsimp only
+    rw [hret]
+    rfl
+
+/-- What a primitive node's piece names: its gate at each position, as resolution finds it. -/
+theorem den_prim (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (q : Piece) {k : Nat}
+    (ht : q.tgt = .ref false k) {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .prim)
+    (hq : ∀ x ∈ pos q, 0 ≤ x.2) (w : Nat) :
+    (segsPos (if q.count = 0 then #[] else
+      #[Seg.one { tgt := .gate w, base := (c.body.offsets[k]! : Int), stride := 0, len := q.count }])).map
+        (den c.P sc) = (pos q).map (den c.P sc) := by
+  have hnode : ((c.P.defs[sc.d]!).body.nodes[k]!) = node := by rw [hd]; exact node_get hn
+  have hres : ∀ j : Nat, Flock.Program.resolve c.P sc ⟨false, k, j⟩ = .ok (sc.off + c.body.offsets[k]!) := by
+    intro j
+    apply resolve_inl
+    rw [Resolve.rs_prim c.P sc k j (by rw [hnode]; exact hform), hd]
+    rfl
+  by_cases h0 : q.count = 0
+  · rw [if_pos h0]
+    have : pos q = [] := List.eq_nil_of_length_eq_zero (by rw [pos_length, h0])
+    simp [this, segsPos]
+  · rw [if_neg h0, segsPos_single, pos_eq_map, pos_eq_map, List.map_map, List.map_map]
+    have hc : ({ tgt := .gate w, base := (c.body.offsets[k]! : Int), stride := 0, len := q.count } : Piece).count =
+      q.count := by simp [Desc.Piece.count]
+    rw [hc]
+    apply List.map_congr_left
+    intro t ht'
+    have hpt : 0 ≤ ppt q t := by
+      have := hq (q.tgt, ppt q t) (by rw [pos_eq_map]; exact List.mem_map.2 ⟨t, ht', rfl⟩)
+      exact this
+    simp only [Function.comp, den, ppt, ht]
+    simp only [Int.mul_zero, Int.add_zero, Int.natCast_nonneg, not_lt.2, ite_false, Int.toNat_natCast]
+    rw [if_neg (by unfold ppt at hpt; omega), hres]
+
+/-- A batch of a primitive's piece: none of no count, else the piece moved onto the members' gates. -/
+theorem down_batchPrim (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
+    {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .batch)
+    (hp : (c.P.defs[node.fn]!).prim = true) {w : Nat} (hret : (c.P.defs[node.fn]!).ret = .value w) :
+    Desc.down c (fuel + 1) q = .ok (if q.count = 0 then #[] else
+      #[Seg.one { q with tgt := .gate w, base := (c.body.offsets[k]! : Int) + q.base }]) := by
+  delta Desc.down
+  conv => lhs; whnf
+  rw [ht]
+  dsimp only
+  by_cases h0 : q.count = 0
+  · rw [if_pos (show (q.count == 0) = true by simpa using h0), if_pos h0]
+    rfl
+  · rw [if_neg (show ¬ ((q.count == 0) = true) by simpa using h0), if_neg h0, hn]
+    dsimp only [bind, Except.bind]
+    rw [hform]
+    dsimp only
+    rw [if_pos hp]
+    rw [hret]
+    rfl
+
+/-- What a batch of a primitive's piece names: member `j`'s gate at position `j`, as resolution finds it, the
+primitive returning one leaf. -/
+theorem den_batchPrim (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (q : Piece) {k : Nat}
+    (ht : q.tgt = .ref false k) {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .batch)
+    (hp : (c.P.defs[node.fn]!).prim = true) (hL : (c.P.defs[node.fn]!).outLeaves = 1)
+    (hq : ∀ x ∈ pos q, 0 ≤ x.2) (w : Nat) :
+    (segsPos (if q.count = 0 then #[] else
+      #[Seg.one { q with tgt := .gate w, base := (c.body.offsets[k]! : Int) + q.base }])).map (den c.P sc) =
+      (pos q).map (den c.P sc) := by
+  have hnode : ((c.P.defs[c.d]!).body.nodes[k]!) = node := node_get hn
+  have hres : ∀ j : Nat, Flock.Program.resolve c.P sc ⟨false, k, j⟩ = .ok (sc.off + c.body.offsets[k]! + j) := by
+    intro j
+    apply resolve_inl
+    rw [Resolve.rs_batch c.P sc k j (by rw [hd, hnode]; exact hform)]
+    simp only [hd, hnode, hp, ite_true, hL, Nat.div_one]
+    rfl
+  by_cases h0 : q.count = 0
+  · rw [if_pos h0]
+    have : pos q = [] := List.eq_nil_of_length_eq_zero (by rw [pos_length, h0])
+    simp [this, segsPos]
+  · rw [if_neg h0, segsPos_single, pos_eq_map, pos_eq_map, List.map_map, List.map_map]
+    have hc : ({ q with tgt := .gate w, base := (c.body.offsets[k]! : Int) + q.base } : Piece).count = q.count := rfl
+    rw [hc]
+    apply List.map_congr_left
+    intro t ht'
+    have hpt : 0 ≤ ppt q t := by
+      have := hq (q.tgt, ppt q t) (by rw [pos_eq_map]; exact List.mem_map.2 ⟨t, ht', rfl⟩)
+      exact this
+    simp only [Function.comp, den, ht]
+    unfold ppt at hpt ⊢
+    simp only
+    rw [if_neg (by omega), if_neg (by omega), hres]
+    congr 1
+    omega
 
 
 /-- **A batch member's spans** (`Desc.argSpans`) are its used parameter leaves' indices into the argument. -/
