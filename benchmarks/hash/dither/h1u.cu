@@ -908,15 +908,19 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
       }
     }
   };
-  if constexpr (CS) cs_hash(0);
 #pragma unroll 1
   for (u32 it = 0; it <= chunks; ++it) {
     const u32 blk = it == 0 ? chunks : it - 1;
     const u32(*cw32)[17];
     if constexpr (CS) {
+      // set 0 at it = 0 in the same loop as the sets ahead, so the unit inlines one SHA-512
       if ((it & ((1u << js.lr) - 1)) == 0) {
-        js_sync(js);
-        if (it + (1u << js.lr) <= chunks) cs_hash((it >> js.lr) + 1);
+#pragma unroll 1
+        for (u32 h = it == 0 ? 0 : 1; h < 2; ++h) {
+          if (h) js_sync(js);
+          const u32 st = (it >> js.lr) + h;
+          if ((st << js.lr) <= chunks) cs_hash(st);
+        }
       }
       cw32 = js.buf[(((it >> js.lr) & 1) << js.lr) + (it & ((1u << js.lr) - 1))];
     } else {
