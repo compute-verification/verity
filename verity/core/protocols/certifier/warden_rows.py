@@ -79,6 +79,7 @@ REGISTRATION = "verity-network-warden/registration/v1"
 WORD_BITS = 16
 OWNER = -1
 _INST = hm96.SHA512
+SALT_BYTES = _INST.salt_bytes
 
 
 def rows_of(grid: GridParams) -> int:
