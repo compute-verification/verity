@@ -514,10 +514,13 @@ def _cell(x) -> str:
 
 def markdown(r: dict) -> str:
     """The report as Markdown: the verdicts, one row per link-window, the negatives and the claim."""
-    p = r.get("proofs") or {}
+    p, v = r.get("proofs") or {}, r.get("varied")
+    traffic = (f"varied traffic: {_cell(v.get('requests'))} requests, max_tokens drawn per request up to "
+               f"{_cell(v.get('max_tokens'))}, prompts of {'–'.join(map(str, v.get('prompt_tokens') or ())) or '—'} "
+               f"tokens, EOS {_cell(v.get('eos_token_ids'))}" if v else
+               f"{_cell(r.get('tokens'))} tokens a response, {_cell(r.get('requests'))} requests")
     lines = [f"# Network accounting end to end: {'OK' if r['ok'] else 'NOT OK'}", "",
-             f"Source {', '.join(r['from'])}; model {_cell(r.get('model'))} (as the plan names it), "
-             f"{_cell(r.get('tokens'))} tokens a response, {_cell(r.get('requests'))} requests; endpoint "
+             f"Source {', '.join(r['from'])}; model {_cell(r.get('model'))} (as the plan names it), {traffic}; endpoint "
              f"{_cell(r.get('upstream'))}, {_cell(r.get('where'))}; N2's profile {_cell(r.get('profile'))}; "
              f"{_cell(r.get('windows'))} link-windows planned; commit {_cell(r.get('commit'))}; "
              f"proofs {'run' if p.get('ran') else 'not run'}.", "",
