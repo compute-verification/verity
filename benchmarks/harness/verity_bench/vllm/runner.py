@@ -13,7 +13,7 @@ import tempfile
 import time
 import traceback
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Protocol
@@ -1176,6 +1176,17 @@ class _ProcessEngine:
             raise RuntimeError(f"benchmark engine process exited with code {self.process.exitcode} while closing")
 
 
+def arm_execution(arm: Arm, preset: Preset, eager: bool) -> tuple[Preset, bool]:
+    """The preset and eagerness the arm's engine is built with: the spec's, or for a served variant
+    (`arms.served_variant`) vLLM's serving defaults in the variant's execution (`engine_args`)."""
+
+    if arm.execution is None:
+        return preset, eager
+    eager = arm.execution == "eager"
+    settings = {**preset.engine_settings, "serving_defaults": True, "cuda_graphs": not eager, "enforce_eager": eager}
+    return replace(preset, engine_settings=settings), eager
+
+
 class ProcessEngineFactory:
     """Spawn-isolated engines, allowing several arms to remain resident on one GPU."""
 
@@ -1184,7 +1195,8 @@ class ProcessEngineFactory:
         self.context = mp.get_context("spawn")
 
     def create(self, arm: Arm, preset: Preset, *, resident: bool) -> BenchEngine:
-        if not self.eager:
+        preset, eager = arm_execution(arm, preset, self.eager)
+        if not eager:
             bound = build_bound(arm, preset.gpu_count)
             if bound:
                 raise ValueError(
@@ -1199,7 +1211,7 @@ class ProcessEngineFactory:
             os.environ["TORCHINDUCTOR_CACHE_DIR"] = tempfile.mkdtemp(prefix="verity_bench_inductor_")
             os.environ[INDUCTOR_DIR_MARK] = "1"
         parent, child = self.context.Pipe()
-        process = self.context.Process(target=_worker, args=(child, arm, preset, resident, self.eager))
+        process = self.context.Process(target=_worker, args=(child, arm, preset, resident, eager))
         process.start()
         child.close()
         try:
