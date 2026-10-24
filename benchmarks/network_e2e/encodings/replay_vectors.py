@@ -15,18 +15,31 @@ checks `replay_step.reference` on every step that fits the size class (the rest 
 candidates whose `_KV.hit` it called), which is what v1 sends a shortfall for past the pool bound; `--fixture N` writes each trace's N consecutive fitting steps with the most
 preemptions, cache hits, admissions and stops (`window`) as the vectors the certifier's test reads
 (`verity/core/protocols/certifier/tests/fixtures/replay_step_vectors.json`).
+
+**A served window as the compile slice's input.** `served_window` cuts one window out of a served run's step trace (the
+server's `window` open and close records, `verity_vllm.engine.step_trace`), renumbered from its first step, and
+refuses a window that doesn't open on a drained engine, since the slice's replay starts from the empty one.
+`slice_inputs` gives `compile_slice.CompileSlice_v1`'s inputs for such a window in `compile_slice_smallkv.json`'s
+layout: the statics, the certified arrivals (id, P, O), the decisions in the scan's order, the executed step count and
+each step's rows (slot, request, kind, start, n). The slice's ReplayStep_v1 is sync, so it refuses a window whose sync
+schedule isn't the served one.
+
+    python3 replay_vectors.py --slice TRACE --window N [--max-model-len L] [--served SEAL] --out FIXTURE.json
 """
 from __future__ import annotations
 
+import dataclasses
 import json
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import replay as RP  # noqa: E402
+
+REPO = Path(__file__).resolve().parents[3]
 
 from verity.core.protocols.certifier import replay_step as RS  # noqa: E402
 
@@ -222,6 +235,78 @@ def check(st: dict, cases: Sequence[tuple[RS.State, RS.Inputs, RS.Out]], *, circ
     return out
 
 
+def served_window(records: Sequence[Mapping[str, Any]], window: int) -> tuple[list[dict[str, Any]], int]:
+    """Window `window` of a served step trace as a trace of its own: the header, then the arrivals the engine core added
+    before the window's steps and the steps themselves, each renumbered from its first step; and the session index of
+    its first arrival. Refuses a window the trace doesn't open and close, and one that opens on an engine still holding a
+    request (one that arrived before it and no step before it finished)."""
+    recs = list(records)
+    marks = {(r["window"], r["event"]): int(r["before_step"]) for r in recs if r.get("kind") == "window"}
+    if (window, "open") not in marks or (window, "close") not in marks:
+        raise ValueError(f"window {window}: the trace doesn't open and close it")
+    lo, hi = marks[window, "open"], marks[window, "close"]
+    arrivals = [r for r in recs if r.get("kind") == "arrive"]
+    finished = {a for r in recs if r.get("kind") == "step" and r["step"] < lo for a in r.get("finished") or {}}
+    held = [r["request"] for r in arrivals if r["before_step"] < lo and r["request"] not in finished]
+    if held:
+        raise ValueError(f"window {window} opens at step {lo} with {len(held)} requests unfinished, {held[0]} first")
+    out = [dict(recs[0])]
+    for r in recs[1:]:
+        if r.get("kind") == "arrive" and lo <= r["before_step"] < hi:
+            out.append({**r, "before_step": r["before_step"] - lo})
+        elif r.get("kind") == "step" and lo <= r["step"] < hi:
+            out.append({**r, "step": r["step"] - lo})
+    return out, sum(1 for r in arrivals if r["before_step"] < lo)
+
+
+def slice_inputs(trace: RP.Trace, *, R: int, W: int, A: int, SEG: int, base: int = 0,
+                 session: int | None = None) -> dict[str, Any]:
+    """CompileSlice_v1's inputs for `trace`, one window from the empty engine (`served_window`'s), at size class
+    (R, W, A) and codeword cap SEG, in `compile_slice_smallkv.json`'s layout. A request's id is `base` plus its index in
+    the trace (with `served_window`'s base, its index in the session), and IW holds the ids of a session of `session`
+    requests (default the window's last). Q and K are the window's arrivals, D its decisions and P its executed steps.
+    The slice's ReplayStep_v1 is sync, so the window is replayed under sync scheduling and refused if that schedule
+    isn't the trace's (`vectors`) or a step is outside the class."""
+    e = dataclasses.replace(trace.engine, async_scheduling=False)
+    st, vs = vectors(dataclasses.replace(trace, engine=e), R=R, W=W, A=A)
+    while vs and not vs[-1][2].rows and vs[-1][2].state == vs[-1][0]:
+        vs.pop()                                   # the engine loop's last schedule, on the drained engine
+    out_of_class = [k for k, v in enumerate(vs) if not fits(st, *v)]
+    if out_of_class:
+        raise ValueError(f"steps {out_of_class[:5]} are outside (R, W, A) = ({R}, {W}, {A})")
+    reqs = trace.requests
+    decisions = [b for _s, inp, out in vs for b in inp.bits[:out.used]]
+    engine = {k: v for k, v in dataclasses.asdict(e).items() if k not in ("async_scheduling", "policy")}
+    return {"engine": engine, "R": R, "W": W, "A": A,
+            "IW": max((session if session is not None else base + len(reqs)) - 1, 1).bit_length(),
+            "Q": len(reqs), "D": len(decisions), "P": len(vs), "K": len(reqs), "SEG": SEG,
+            "arrivals": [[base + i, r.prompt_len, r.output_len] for i, r in enumerate(reqs)], "decisions": decisions,
+            "steps": len(vs),
+            "rows": [[[slot, base + i, kind, start, n] for slot, i, kind, start, n in out.rows] for _s, _i, out in vs]}
+
+
+def served_record(seal: Sequence[Mapping[str, Any]], window: int, requests: Sequence[str],
+                  base: int = 0) -> tuple[list[list[list[Any]]], dict[str, int]]:
+    """Window `window`'s served rows as the Commit's seal recorded them, each step's `rows` in
+    `SamplerInputsSource.rows`' form (the runner's request id, its token rows [lo, hi) of the batch, its first position
+    and its prefill length), and the map from a runner's request id to its arrival id: `base` plus the index in
+    `requests` (the engine's ids, which the runner's extend by one suffix) of the request it serves."""
+    steps = sorted((r for r in seal if r.get("window") == window), key=lambda r: r["step"])
+    if [r["step"] for r in steps] != list(range(len(steps))):
+        raise ValueError(f"window {window}'s sealed steps are not 0..S-1 each once")
+    index = {rid: base + k for k, rid in enumerate(requests)}
+    ids: dict[str, int] = {}
+    for r in steps:
+        for req, *_ in r["rows"]:
+            engine_id = req.rsplit("-", 1)[0]
+            if engine_id not in index:
+                raise ValueError(f"window {window}: the runner's {req} serves no request of the window")
+            ids[req] = index[engine_id]
+    if len(set(ids.values())) != len(ids):
+        raise ValueError(f"window {window}: two runner ids serve one request")
+    return [[list(row) for row in r["rows"]] for r in steps], ids
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     import argparse
     ap = argparse.ArgumentParser(description="The replay step circuit's difftest against the replay, step for step.")
@@ -232,8 +317,29 @@ def main(argv: Sequence[str] | None = None) -> None:
     ap.add_argument("--EW", type=int, default=0, help="walk entries of this width, and `looked` checked against `_KV.hit`")
     ap.add_argument("--circuit", action="store_true", help="evaluate the Definition on the fitting steps too")
     ap.add_argument("--fixture", type=int, default=0, help="keep the first N fitting steps of each trace")
+    ap.add_argument("--slice", type=int, metavar="WINDOW", help="write CompileSlice_v1's inputs for this served window of "
+                    "the one trace (`served_window`, `slice_inputs`)")
+    ap.add_argument("--served", type=Path, help="with --slice: the Commit's seal, whose rows for the window go in `served`")
+    ap.add_argument("--max-model-len", type=int, help="with --slice: the engine's, where the trace's header lacks it")
+    ap.add_argument("--SEG", type=int, default=64, help="with --slice: the codeword's cap in bits")
     ap.add_argument("--out", type=Path)
     a = ap.parse_args(argv)
+    if a.slice is not None:
+        (p,) = a.traces
+        recs = RP.records(p)
+        if a.max_model_len:
+            recs[0]["config"]["max_model_len"] = a.max_model_len
+        sub, base = served_window(recs, a.slice)
+        tr = RP.load_step_trace(sub)
+        name = p.resolve().relative_to(REPO) if p.resolve().is_relative_to(REPO) else p
+        fx = {"source": f"{name} window {a.slice} (replay_vectors.py --slice {a.slice} at R {a.R}, W {a.W}, A {a.A})",
+              **slice_inputs(tr, R=a.R, W=a.W, A=a.A, SEG=a.SEG, base=base,
+                             session=sum(r.get("kind") == "arrive" for r in recs))}
+        if a.served:
+            fx["served"], fx["ids"] = served_record(RP.records(a.served), a.slice, tr.ids, base)
+        text = json.dumps(fx, indent=1) + "\n"
+        a.out.write_text(text) if a.out else print(text, end="")
+        return
     report: dict[str, Any] = {"R": a.R, "W": a.W, "A": a.A, "traces": {}}
     fixture = []
     for p in a.traces:
