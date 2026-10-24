@@ -432,10 +432,26 @@ records, `cr/sha-512`, the signature's unforgeability and an honest network cert
 | Accepted runs, with clock-sync advice | `A_c + W·log2 #Σ_sync + n·log2 D` bits | `SecurityProofs.EncardAccSeqsLeSync`; for the shipped schedule, `SecurityProofs.EncardAccSeqsLeConstantRate` |
 | The shipped schedule, over the first m windows | `A_c + min(W, m)·log2 #Σ_sync + n·log2 D` bits, for n ≤ min(W, m)·T steps | `SecurityProofs.EncardAccSeqsLeConstantRateWindows`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRate` |
 | The shipped schedule, per window | `A_c` once, then `log2 #Σ_sync + T·log2 D` bits per window over the run's first m whole windows (n = m·T ≤ W·T): 7 bits per window at 16 × 8 sync values under J. Cumulative: a later window may carry more, since content advice and an earlier window's sync can first show in it | `SecurityProofs.EncardAccSeqsLeConstantRatePerWindow`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRatePerWindow` |
+| The advice string, with a precommitted, deterministic compiler | `Σ_w b_w + min(W, m)·log2 #Σ_sync + n·log2 D` bits, where `b_w` is the public cap on the advice charged to window w (I1's `bits(advice, w)`), fixed before the run. Over all W windows (n = W·T), `b_w + log2 #Σ_sync + T·log2 D` bits per window, cumulative as above | `SecurityProofs.EncardAccSeqsWithinLeConstantRate`; for a decoder of the wire, under W2, J and the compiler's two assumptions, `SecurityProofs.EncardDecodableWithinLeCompiled` and `SecurityProofs.EncardDecodableWithinLeCompiledPerWindow` |
 | A fixed clock, under J (D = 1) | 0 bits of timing | `SecurityProofs.EncardAccSeqsLeFixedClock`; for the shipped schedule, `SecurityProofs.EncardAccSeqsLeConstantRateFixedClock` |
 | Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link, under J (D = 1), statuses complete | `SecurityProofs.EncardIngressDecodableLe`, `SecurityProofs.EncardIngressObsDecodableLe` |
 | Ingress, content plus timing | `log2 #Cs` bits plus the ingress timing | `SecurityProofs.EncardIngressDecodableLeContents`, `SecurityProofs.EncardIngressObsDecodableLeContents` |
 | Ingress, per link-window (the K charge's unit) | `T·log2(r_in + 1)` bits per link-window over the first m whole windows, plus `T·log2 D` of jitter per window, statuses complete. Unlike egress, each step's bound does not depend on what came before | `SecurityProofs.EncardIngressObsDecodableLePerWindow`; content plus timing, `SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow`; for a decoder of the wire, W2 and `SecurityProofs.EncardIngressDecodableLe` at n = m·T |
+
+**The advice string's row.** The advice string is the constant-rate Program's content advice, so its charge is `A_c`.
+The Lean statement keeps the charge abstract (`Security/Definitions/NetworkCertifier/AdviceString.lean`): a function
+`bits(advice, w)` to ℕ, the bits charged to window w. I1's `bits` must meet one named assumption, `BitsCount`, which
+its tests mirror: at most `2^c` advice strings are charged `c` bits or fewer over all windows. Lean proves two ways to
+meet it: the charges sum to at least the length of a prefix-free encoding of the advice (`bitsCount_of_prefixFree`),
+or to at least one more than the length of any injective encoding, one with `decode(encode(a)) == a`
+(`bitsCount_of_lengthSucc`). The per-window charges need not be self-delimiting on their own; only their sum is
+counted.
+
+The bound charges the caps `b_w`, not the realized lengths, since a run counts if any advice within the caps explains
+it. The compiler must be registered before the run (`CompilerPrecommitted`), and its frames must read only the advice
+and the certified ingress (`CompilerDeterministic`). Each run's egress must equal the compiled Program's, which needs
+every egress frame tied. Charging a window only for the windows up to it would need a causality assumption about the
+compiler, which the statement doesn't take.
 
 The inference-only policy charges an isolation unit the ingress covert capacity from the last wipe before it starts,
 plus what survived that wipe. `capacity.k_share` expresses bits as a share of K, which the caller passes in bits
@@ -1304,6 +1320,18 @@ and seven lemmas, and three more proved lemmas:
   direction, window, parameters digest or status: the fields; another profile row or edited counts: the counts; another
   root, salt or path: the opening), and the deadline byte and frames root are left free; the whole Definition equals its
   reference (slow);
+- **`test_network_certifier_warden.py`:** the active warden on an injected clock, with in-memory clients and a server
+  whose bytes the test schedules:
+  - honest traffic goes out exactly on its schedule, both directions' bytes pass unchanged, the records are the wire,
+    and the audit accepts them;
+  - each of these fails its connection closed at its egress cell, and the audit refuses the window: a late byte, a
+    server that never answers or whose connection is refused, a response past `egress_cells`, a client cell of another
+    kind, and ingress past its bounds. A response's bytes past its last cell never reach the client. A late tick
+    faults both windows;
+  - a server slow to accept its connection moves nothing, and the wire is identical whatever the server's timing,
+    chunking or content at the same n;
+  - past the lanes, connections queue FIFO, then get one `REFUSED` cell;
+  - every cell is B bytes, and `read_cell` refuses anything the warden wouldn't make;
 - **`test_network_certifier_calibration.py`:** the calibration tool, and the honest prover's choice against its rule by
   brute force, on one link and on several under one clock;
 - **`test_network_certifier_advice.py`:** advice v0, which no Lean statement names yet:
@@ -1370,3 +1398,69 @@ audit runs `lean/NetworkCertifier/DifftestMain.lean` on them (`runs` in `lean/le
 definitions are List forms of `NetTiming`'s `Finset` ones, and four guarantees prove them equal on everything the
 difftest compares (`NetTiming.SecurityProofs.Code`): `CodeExpectedRow`, `CodeAcceptedConstantRate`,
 `CodeStatusComplete` and `CodeSyncSet`.
+
+## The active warden (`warden`)
+
+Daniel (23 Oct, 10:08 PM PDT) wants client ↔ warden ↔ server, with the warden "just responsible for limiting network
+steganography and certifying exactly the bits it sees". So the warden knows bytes only: nothing in it belongs to vLLM
+or to any workload. `warden.py`'s docstring has its cells, admission, schedule and failures. This section says what
+its wire can carry.
+
+**The schedule's public parameters** are `WardenParams`, fixed before the run:
+- B (`cell_bytes`), r (`slots`), τ (`bucket_ms`), D (`delay`), the lanes, the queue and the window T;
+- the bounds `ingress_cells`, `ingress_buckets` and `egress_cells`.
+
+`WardenParams.digest` binds them, and every record head's `parameters` is that digest. The ticker's slack is the active
+certifier's.
+
+**What the wire is a function of.** On connection q the warden sends r cells of B bytes each way in every bucket, from
+q's admission s to its last bucket. The kinds and buckets of those cells are a function of the parameters and four
+numbers:
+- s: of the arrivals, which are the client's, and of the admission rule. The rule is FIFO over the lanes, and a lane
+  frees when an earlier connection ends, so s also depends on the earlier connections' n and f below.
+- a: the bucket ingress ends in. It depends on the client's bytes and when they arrived. It never depends on the server:
+  ingress is released whether or not the server's connection has opened.
+- n: q's egress cells, max(1, ⌈L/P⌉) for a response of L bytes.
+- f: the egress cell at which q failed, if it did.
+
+Every `DATA` and `END` cell's content is the bytes, cut at fixed offsets (byte k is in cell ⌊k/P⌋), never by when or
+how they were read.
+
+**The leak bound** is what a server can signal on the wire beyond the response it sends:
+- **0 size bits.** Every cell is B bytes, whatever its kind (`PAD`, `DATA`, `END`, `FAIL` or `REFUSED`).
+- **0 timing bits, at bucket resolution.**
+  - Given n, every cell's bucket is fixed. When the server writes and how it chunks its bytes reach the wire only by
+    failing the connection.
+  - Within a bucket the jitter is the ticker's, bounded by the slack as for the active certifier (its J). A tick past
+    the slack faults both windows.
+- **The advice is not on the wire.** The warden sends no advice. Whatever the proofs need beyond the committed values
+  travels on the proof side and is charged there (`A_c`).
+- **log2 of the schedule's public parameters**, once per deployment: log2 of the number of parameter sets it may
+  choose from, which is 0 when one set is registered.
+- **log2(cells + 1) per failed connection.**
+  - A server that fails connection q picks the egress cell it fails at, or not to fail: at most n + 1 ≤
+    `egress_cells` + 1 outcomes.
+  - A missed deadline, a stream that hasn't ended by the last cell and a broken server connection all send the same
+    `FAIL` cell (code `server`). The reason stays in the warden's log.
+  - A failure the client causes (`ingress`, `malformed`) only returns the client's own bits to it.
+
+n is content, not transport: it is the length of the protocol's output, which the proofs bind. It is charged with the
+content, at ε times the output bits of unproved units at δ. So on a run in which no connection failed, the transport
+leaks log2 of the schedule's parameters, and each failed connection adds log2(cells + 1). This is an argument over
+`warden.py`'s schedule, not a Lean statement.
+
+**What it attests.** Each direction's records hold exactly the cells sent that way, padding included, so |T| is the
+wire's bits.
+- Each window's records are certified as the certifier's are (record v2 and `certificate.Issuer`), with the warden's
+  parameters digest in the head.
+- `audit` reads the records in the clear and refuses a window whose cells aren't the schedule's, or in which a
+  connection failed.
+- `benchmarks/network_traces/warden_serve.py` runs the warden live and checks that each client got exactly its egress
+  record's cells, each in its bucket.
+
+**Named gaps:**
+- TLS isn't terminated: both legs are plain TCP.
+- The warden runs on the server's host, and the server gets the ingress bytes over loopback, with no shim on its side.
+- A record's leaves are certificate v2's SHA-512 frame leaves, one per cell, not v3's hm96 row per cell (8·B transfer
+  gates).
+- No Lean statement states the bound yet.
