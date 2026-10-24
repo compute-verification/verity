@@ -77,7 +77,52 @@ run_item() {  # task:method:seed:steps[:est_min[:extra]]
   grep -h '^{' "$OUT/log-$task-$method-seed$seed.txt" | tail -2
 }
 
-if [ -n "${QDIR:-}" ]; then
+if [ -n "${ITEMS_FILE:-}" ]; then
+  # Worker over a shared items file, re-read before every claim so items can be added while jobs hold their leases. A line
+  # is `NAME EST_MIN grpo|eval ARGS...` (ARGS go to grpo.py or evalckpts.py verbatim); claims are atomic mkdirs in QDIR, an
+  # item whose estimate would run past DEADLINE is skipped, and every item is killed at DEADLINE. When CODE_FROM/READY
+  # exists the scripts are refreshed from CODE_FROM before each item, and the copy an item ran is kept in $OUT/code/NAME.
+  mkdir -p "$QDIR"
+  cp "$IN"/evalckpts.py "$S"/
+  idle_since=$(date +%s)
+  while :; do
+    if [ -f "${CODE_FROM:-/nonexistent}/READY" ]; then cp "$CODE_FROM"/grpo.py "$CODE_FROM"/evalckpts.py "$S"/; fi
+    picked=""
+    while read -r name est kind rest; do
+      case "$name" in ""|"#"*) continue ;; esac
+      [ -e "$QDIR/$name" ] && continue
+      [ $(( $(date +%s) + est * 60 )) -gt "$DEADLINE" ] && continue
+      if mkdir "$QDIR/$name" 2>/dev/null; then
+        echo "${RESEARCH_RUN_ID:-} $(date -u +%H:%MZ)" > "$QDIR/$name/claimed"
+        picked="$name"; pkind="$kind"; pargs="$rest"
+        break
+      fi
+    done < "$ITEMS_FILE"
+    if [ -z "$picked" ]; then
+      [ $(( $(date +%s) - idle_since )) -gt $(( ${IDLE_MAX_MIN:-12} * 60 )) ] && break
+      [ $(( $(date +%s) + 300 )) -gt "$DEADLINE" ] && break
+      sleep 30
+      continue
+    fi
+    mkdir -p "$OUT/code/$picked" && cp "$S"/grpo.py "$S"/evalckpts.py "$OUT/code/$picked/"
+    left=$(( DEADLINE - $(date +%s) ))
+    script=grpo.py; [ "$pkind" = eval ] && script=evalckpts.py
+    set -f
+    # shellcheck disable=SC2086
+    if [ "$pkind" = eval ]; then
+      timeout "$left" "$PY" evalckpts.py --root "$CKPT_ROOT" --data "$S/data" --out "$OUT" $pargs > "$OUT/log-$picked.txt" 2>&1
+    else
+      timeout "$left" "$PY" grpo.py --data "$S/data" --out "$OUT" --ckpt-root "$CKPT_ROOT" --deadline "$DEADLINE" $pargs \
+        > "$OUT/log-$picked.txt" 2>&1
+    fi
+    rc=$?
+    set +f
+    echo "$(date -u +%H:%MZ) $picked ($script) rc=$rc"
+    grep -h '^{' "$OUT/log-$picked.txt" | tail -2
+    echo "$rc $(date -u +%H:%MZ)" > "$QDIR/$picked/finished"
+    idle_since=$(date +%s)
+  done
+elif [ -n "${QDIR:-}" ]; then
   # Shared queue: every GPU job walks ITEMS in order and claims the first unclaimed one (mkdir is atomic), skipping an item
   # whose estimate would run past DEADLINE (epoch seconds).
   mkdir -p "$QDIR"
