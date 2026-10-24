@@ -261,6 +261,16 @@ def _loaded(commit_dir: str | os.PathLike, rank: int, compiler: Any, requests: S
     return rec, compiler.load(rank, int(rec["world"]), requests)
 
 
+def gates_of(compiler: Any) -> tuple[str, ...]:
+    """``compiler``'s transfer-gate templates: its own ``transfer_gates``, else those of the compiler it wraps (``inner``, as
+    PROVE-PATH's `Capped`, whose digest names the inner's), else none."""
+    for c in (compiler, getattr(compiler, "inner", None)):
+        gates = getattr(c, "transfer_gates", None)
+        if gates is not None:
+            return tuple(gates)
+    return ()
+
+
 def window_of_advice(commit_dir: str | os.PathLike, rank: int, partition_file: str | os.PathLike, compiler: Any,
                      requests: Sequence[Mapping[str, Any]], bound: Mapping[str, Any]) -> tuple[Any, dict[str, Any]]:
     """The verifier's own window of rank ``rank`` of the TP Commit ``commit_dir``: the population over ``compiler``'s Programs for the
@@ -268,7 +278,7 @@ def window_of_advice(commit_dir: str | os.PathLike, rank: int, partition_file: s
     from verity_vllm.pipeline.tp import serving_rows as SRT
 
     rec, p = _loaded(commit_dir, rank, compiler, requests)
-    return SRT.window_of(rec, rank, partition_file, p, dict(bound), compiler.transfer_gates)
+    return SRT.window_of(rec, rank, partition_file, p, dict(bound), gates_of(compiler))
 
 
 def commit_window(commit_dir: str | os.PathLike, rank: int, partition_file: str | os.PathLike, out_dir: str | os.PathLike, compiler: Any,
@@ -279,7 +289,7 @@ def commit_window(commit_dir: str | os.PathLike, rank: int, partition_file: str 
 
     _rec, p = _loaded(commit_dir, rank, compiler, requests)
     return SRT.from_bundle(commit_dir, rank, partition_file, out_dir, programs=p, binding=dict(bound),
-                           transfer_gates=compiler.transfer_gates, **kw)
+                           transfer_gates=gates_of(compiler), **kw)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
