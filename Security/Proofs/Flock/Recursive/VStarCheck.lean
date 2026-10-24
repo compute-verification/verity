@@ -487,8 +487,10 @@ file the verifier refuses; `VStarParses` gives it (`vstarParsesScoped_of`).
 Assumption record. No claim: an obligation, a fact about our code, open until gap 4 builds `Vs` from the partition. It
 assumes that the V* statement files `vstar stage` writes parse to the circuits the guarantee names, which is a
 deterministic computation on public inputs. It follows from `VStarParses` (`vstarParsesScoped_of`), which the lock
-already lists, and it asks less. It is no hash premise and no premise about the world: a proof that evaluates the parse
-discharges it. -/
+already lists, and it asks less: `VStarParses` also asks every listed file to parse. At every inner shape and binding,
+`FlockC3.VStarList.vstarParsesScoped_of_list` builds a family `Vs` that satisfies it. So it fixes which `Vs` the
+guarantee speaks of, and taking `VStarParses` instead would weaken the guarantee. It is no hash premise and no premise
+about the world. -/
 def VStarParsesScoped {S : ℕ} (t₀ : Flock.Tags) (i : RecVStar.Inner) (bind : Fin S → VStar.Bindings)
     (Vs : Fin S → VStmt) : Prop :=
   ∀ (j : Fin S) (ss : Array VStar.Stmt) (s : VStar.Stmt) (cf : ByteArray) (c : Flock.Circuit),
