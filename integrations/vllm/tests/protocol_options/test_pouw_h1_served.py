@@ -106,12 +106,13 @@ def _period(ws, shapes=SHAPES):
 
 
 def _window(key: bytes, seed: int = 0, served_key: bytes | None = None, shapes=SHAPES, blocks=BLOCKS, steps=STEPS,
-            served=1, changed=None, modules=MODULES, tile=TILE, rows=T, no_z=False, ws=None, weights=None, receipts=None):
+            served=1, changed=None, modules=MODULES, tile=TILE, rows=T, no_z=False, ws=None, weights=None, receipts=None,
+            order=None):
     """A window: its first ``served`` steps serve 5 rows each, q and k on one input x, o on another, every step with the
     same weights ``ws`` (`_weights` of ``seed`` by default; step 1's q on ``changed`` when given), each call's z/y records
-    `scaled_mm_zy`'s over its T slots; the later steps are empty. With ``weights`` (`_period`) its ``b/<K>`` are the
-    period's. Returns the run, each linear's weight and scales, and each served call's (a, s_a, z, y) by its index, z its
-    exact product and y its served y."""
+    `scaled_mm_zy`'s over its T slots, its linears called in ``order`` (module order by default); the later steps are
+    empty. With ``weights`` (`_period`) its ``b/<K>`` are the period's. Returns the run, each linear's weight and scales,
+    and each served call's (a, s_a, z, y) by its index, z its exact product and y its served y."""
     rng = np.random.default_rng(seed)
     run = PH.H1Run("t", SALT, modules, shapes, rows, steps, key=bytes([seed + 1]) * 32,
                    served=SV.Served(tile, _unit(tile), blocks, window=served_key or key, weights=weights,
@@ -121,7 +122,8 @@ def _window(key: bytes, seed: int = 0, served_key: bytes | None = None, shapes=S
     for s in range(served):
         x = _codes(rng, SERVED, shapes[0][1])
         inputs = [x, x] + [_codes(rng, SERVED, k) for _n, k in shapes[2:]]
-        for w, (a, (wt, sw)) in enumerate(zip(inputs, ws)):
+        for w in range(len(inputs)) if order is None else order:
+            a, (wt, sw) = inputs[w], ws[w]
             wt = changed if (s, w) == (1, 0) and changed is not None else wt
             n = wt.shape[0]
             s_a = torch.rand(SERVED) + 0.5
@@ -712,6 +714,32 @@ def test_a_producer_with_prepare_is_handed_each_steps_calls_of_one_k_before_it_i
                                       SV.RECEIPT_NONCE + c.index)
     refused = _window(W1, receipts=_Prepared(fail="no launch"))[0].served.refused
     assert any(r.startswith("calls [") and r.endswith("]: no launch") for r in refused), refused
+
+
+def test_a_forward_out_of_module_order_lays_out_each_step_table_and_its_receipts_in_call_order():
+    """VLLM-81: GLM-5.3's DSA attention runs a step's linears out of module order. Here each step calls k before q, which
+    share K = 16, then o: each step's A table of K is still its calls' rows in call order, registered at the call that
+    completes it (q's, the last of K to come, not k's, the last in call order), and the producer is handed, then asked,
+    that step's calls of K in call order there, each receipt table after the roots its units' seeds take."""
+    made = _Prepared()
+    run, _ws, got = _window(W1, served=2, receipts=made, order=(1, 0, 2))
+    served, prog = run.served, run.served.program
+    assert not served.refused and run.order_ok and run.static()
+    tables = CR.step_tables({"calls": served.calls, "linears": served.linears, "m": served.m}, STEPS)
+    assert tables == [(0, 16, [0, 1]), (0, 32, [2]), (1, 16, [3, 4]), (1, 32, [5])]
+    for _s, k, cs in tables:
+        ra = served.registered[HW.table(prog, "a", cs[0], STEPS)]
+        rows = [row for c in cs for row in _a_rows(*_served_call(got, c, 0, k)[:2], T, k)]
+        assert ra.root.hex() == _tree(ra, rows, run._key, SV.nonce(cs[0], "a"))
+        assert [c.index for c in run.calls if ra.value in run.tables[c.index]["registered"]] == [cs[0]]
+    assert [[args[0].index for args in batch] for _n, batch in made.batches] == [cs for _s, _k, cs in tables]
+    assert made.order == list(range(len(run.calls)))
+    names = list(served.registered)
+    for c in run.calls:
+        rc = served.registered[SV.PREFIX + f"receipt@{c.index}"]
+        assert names.index(rc.value) > names.index(served.a_table(c.index))
+        assert rc.root.hex() == _tree(rc, [w.tobytes() for w in made[c.index].astype("<u2")], run._key,
+                                      SV.RECEIPT_NONCE + c.index)
 
 
 def test_receipts_off_the_units_receipt_width_are_refused():

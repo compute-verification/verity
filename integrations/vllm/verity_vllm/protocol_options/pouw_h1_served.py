@@ -80,7 +80,6 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
@@ -90,8 +89,7 @@ from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G, registration as R
-from verity.core.protocols.sampled_proofs.one_stage.served import ServedTree
+from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G
 from verity.ml.circuits.codec import canonical_json, encode_program
 from verity.ml.circuits.program import Program
 
@@ -100,6 +98,7 @@ from verity_vllm.protocol_options import pouw_h1_live as LV
 from verity_vllm.protocol_options import pouw_h1_records as ZR
 from verity_vllm.protocol_options import pouw_h1_registered as NR
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
+from verity_vllm.protocol_options.pouw_h1_served_files import Registration, reads_file, register, trees
 
 #: the rows' format: the tile's port rows
 V2 = G.SCHEMA_V2
@@ -361,8 +360,8 @@ class Served:
     _ids_words: dict[int, np.ndarray] = field(default_factory=dict)
     #: with the tap, the live unit's tables by value (`pouw_h1_live`): requests@0, then each round's slots@<s>
     live: dict[str, G.Registered] = field(default_factory=dict)
-    #: each open step A table's words so far, one block a call recorded, in call order
-    _a: dict[str, list[np.ndarray]] = field(default_factory=dict)
+    #: each open step A table's words so far, one block a call recorded, by call (they may come out of call order)
+    _a: dict[str, dict[int, np.ndarray]] = field(default_factory=dict)
     #: each linear's weight, the tensor and its codes, taken once, and its scales
     _weights: dict[int, tuple[Any, np.ndarray]] = field(default_factory=dict)
     _scales: dict[int, np.ndarray] = field(default_factory=dict)
@@ -547,8 +546,9 @@ class Served:
                records: np.ndarray | None) -> dict[str, str]:
         """Register call ``call``'s z table (its z/y ``records`` over its T slots, `pouw_h1_records`', split back to z and
         y and laid out in the Program's tile), add its A rows (its served rows ``a`` [m, K] and scales ``s_a`` [m]) to its
-        step's A table of K, registered whole at the step's last call of K, and take ``b/<K>`` once K's linears' weights
-        are all held (`_take_b`); with ``receipts``, at the step's last call of K, each of the step's calls of K's receipt
+        step's A table of K at its rows in call order, registered whole once the step's calls of K are all in (in
+        whichever order its forward ran them: its last call of K), and take ``b/<K>`` once K's linears' weights are all
+        held (`_take_b`); with ``receipts``, at the step's last call of K, each of the step's calls of K's receipt
         table, in call order (`_receipts` of the call's own codes and s_a): ``{value: root}``, what the call's manifest
         row commits under its round's root. Nothing once the window is refused."""
         if self.root is None and not self.refused:
@@ -568,11 +568,11 @@ class Served:
             codes, scales = PH.numpy_of(a).reshape(call.m, call.k), PH.numpy_of(s_a).reshape(-1)
             zv, yv = ZR.split(records, call.rows, call.n)
         out, value, mine = {}, self.a_table(call.index), self.step_calls(call.index)
-        rows = self._a.setdefault(value, [])
-        rows.append(self.a_words(call, codes, scales))
+        rows = self._a.setdefault(value, {})
+        rows[call.index] = self.a_words(call, codes, scales)
         whole = None
-        if call.index == mine[-1]:
-            whole = np.concatenate(self._a.pop(value))
+        if len(rows) == len(mine):
+            whole = np.concatenate([b for _c, b in sorted(self._a.pop(value).items())])
             out[value] = self._register(run, value, whole, nonce(mine[0], "a"), self.root)
         zy = HW.table(self.program, "zy", call.index)
         out[zy] = self._register(run, zy, record_words(zv, yv, self.m, self.tile), nonce(call.index, "zy"), self.root)
@@ -586,7 +586,7 @@ class Served:
         if self.receipts is not None:
             self._held.setdefault(value, []).append((call, codes, scales))
             if whole is not None:
-                held = self._held.pop(value)
+                held = sorted(self._held.pop(value), key=lambda x: x[0].index)
                 if not self._prepare(held):
                     return {}
                 for c, cc, sc in held:
@@ -741,69 +741,6 @@ class Served:
 def digest_of(entries: Sequence[Mapping[str, Any]], refused: Sequence[str]) -> bytes:
     """`Served.digest` of the trees' `entries` and `refused`, as a record carries them (the commitment's ``served``)."""
     return hashlib.sha512(DIGEST_TAG + canonical_json({"entries": list(entries), "refused": list(refused)})).digest()
-
-
-def _served(run: Any) -> Served:
-    served = getattr(run, "served", None)
-    if not isinstance(served, Served):
-        raise ValueError(f"{run.entry}: the window's rows aren't registered values (the run has no `Served`)")
-    if not run.closed:
-        raise ValueError(f"{run.entry}: the window isn't closed, so its tables aren't all committed")
-    if served.refused or not served.registered:
-        raise ValueError(f"{run.entry}: the window's trees were refused: {'; '.join(served.refused) or 'none committed'}")
-    return served
-
-
-def trees(run: Any) -> list[ServedTree]:
-    """The window's registered trees, in registration order: refused unless `run` committed them as `Served` values."""
-    return [ServedTree.of(r) for r in _served(run).registered.values()]
-
-
-def reads_file(run: Any, call: int, ports: Mapping[str, str] | None = None, tp: Any = None) -> dict[str, Any]:
-    """The verifier's ``--registered`` file of a statement over call ``call``'s units: `h1window.table_reads_file` over the
-    window's Program (``tp`` its template partition, `partition.evaluate`'s, when the caller holds it) and its trees'
-    roots, under the circuit ports ``ports`` (default `Served.ports`), each call table's domain bound to the window's open
-    root and the weights' to none, as their trees' are. With ``receipts``, the file reads its units' receipts at the
-    call's receipt table as its output row o0 (`h1window.RECEIPT_PORT`), unit u0 + t at row t. Its public row
-    (`h1window.PUB_PORT`) is the call's public table at its known content, under the window's Program salt."""
-    served = _served(run)
-    prog = served.program
-    tp = tp if tp is not None else P.evaluate(prog, served.query())
-    return HW.table_reads_file(prog, tp, int(call), served.roots(), served.ports() if ports is None else dict(ports),
-                               prog=served.program_digest, window=served.root, steps=served.steps,
-                               salt=run._salt.hex())
-
-
-@dataclass(frozen=True)
-class Registration:
-    """What `register` returns: the record's ``registered`` entries (every tree of the window), the window's open root, and
-    each call's ``--registered`` file."""
-
-    registered: list[dict[str, Any]]
-    window_root: str
-    files: dict[int, dict[str, Any]]
-
-
-def register(run: Any, calls: Sequence[int] | None = None, log: Sequence[Mapping[str, Any]] = (),
-             directory: str | Path | None = None, ports: Mapping[str, str] | None = None) -> Registration:
-    """The window's trees as one record's ``registered`` entries, held to this prover's earlier records ``log`` (R7-held:
-    a value an earlier record registered under the same domain with another root is refused), and the ``--registered``
-    file of each of ``calls`` (default every call; `reads_file`), written as `file_name` in ``directory`` (default the
-    run's ``transcript_dir``)."""
-    got, served = trees(run), run.served
-    held = R.held_roots(log)
-    for t in got:
-        if held.get((t.value, t.domain), t.root) != t.root:
-            raise ValueError(f"served tree {t.value!r}: an earlier record of the log registered it under this domain with "
-                             f"root {held[(t.value, t.domain)][:16]}..., and a value is committed once a domain (R7-held)")
-    tp = P.evaluate(served.program, served.query())
-    files = {int(c): reads_file(run, c, ports, tp) for c in (range(len(served.calls)) if calls is None else calls)}
-    d = directory if directory is not None else run.transcript_dir
-    if d is not None:
-        Path(d).mkdir(parents=True, exist_ok=True)
-        for c, doc in files.items():
-            (Path(d) / file_name(c)).write_bytes(canonical_json(doc))
-    return Registration([t.entry() for t in got], served.root, files)
 
 
 __all__ = ["B_NONCE", "EMPTY_ID", "FILE", "IDS_NONCE", "LOCAL_SESSION", "ModelKey", "NONCE", "PREFIX", "Registration", "Served",
