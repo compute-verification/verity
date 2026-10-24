@@ -46,6 +46,8 @@ template as the partition names it.  The rows commit u16 words: a template's eve
 Boolean element's bit j is bit j of its word, `boolean.elements`), or, for a row or coordinate template, elements of ``PACKED`` widths with each
 port whole u16 words (``Template.packed``): a port's words are then its elements' little-endian bytes, two to a word, which are
 the port's bits in M0's row order (an 8-bit element is half a word, a 32-bit one two words, low half first); refused otherwise.
+A committed member of a wider signed integer dtype than its output port (``BY_VALUE``: the sampler's i64 token under
+`TokenSelect`'s i32) is read by value, as the replay links tokens, each element below 2^bits or refused.
 Each member's ports, by the family of the template's word (``LAYOUTS``):
 
   ``RoPEHead_v1{D=..}``            every head of every ``RoPE_v1`` row: ``x``, ``cs`` -> ``out`` (D words each)
@@ -113,6 +115,8 @@ from verity_vllm.program.compact import runs_from_file_items
 
 #: the layouts whose units are bit rows as C-Flock's `UnitStager` stages them (`chunk_rows`), in chunks of at most a chunk cap
 CHUNKED = ("s8", "coord", "cols", "slice")
+#: the committed signed integer dtypes a narrower packed port reads by value (`_packed`): torch's int64 indices
+BY_VALUE = frozenset(("i64", "int64"))
 PARTITION_FORMAT = "verity-vllm/serving-rows/partition/v1"
 TEMPLATE_QUERIES = (PO.Q_TEMPLATE_INSTANCE[0], PO.Q_TEMPLATE_INSTANCES[0])
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
@@ -435,7 +439,7 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
             w, why = store.words(rid, arrive + d["step"], d["op_path"], member, d["row"] * int(width), (d["row"] + 1) * int(width))
             if w is None:
                 raise LookupError(f"row {r['i']} output {member}: {why}")
-            outs.append(_packed([w], tp.packed[len(r["args"]) + j], f"row {r['i']} output {member}") if tp.packed
+            outs.append(_packed([w], tp.packed[len(r["args"]) + j], f"row {r['i']} output {member}", _dt) if tp.packed
                         else np.asarray(w, dtype=np.uint16))
         mine = list(range(len(outs)))
         if (p := part(tp.word, r["spec"])) is not None:
@@ -675,9 +679,13 @@ def read_all(ms: Sequence[CS.Member], rows: Sequence[list[Row]], store: Any, wei
     return out
 
 
-def _packed(parts: Sequence[np.ndarray], bits: int, what: str) -> np.ndarray:
+def _packed(parts: Sequence[np.ndarray], bits: int, what: str, dtype: str | None = None) -> np.ndarray:
     """A packed port's u16 words: its elements' little-endian bytes in order, each part's elements ``bits`` wide as read
-    (`CommittedStore.words`' element dtypes, a registered weight's own)."""
+    (`CommittedStore.words`' element dtypes, a registered weight's own).  A committed member of a wider signed integer ``dtype``
+    (``BY_VALUE``: the sampler's i64 token under `TokenSelect`'s i32) is read by value, as the replay links it: each element
+    in [0, 2^bits), refused otherwise."""
+    if dtype in BY_VALUE:
+        parts = [_by_value(np.asarray(a), bits, what) if np.asarray(a).dtype.itemsize * 8 > bits else a for a in parts]
     for a in parts:
         if np.asarray(a).dtype.itemsize * 8 != bits:
             raise ValueError(f"{what}: {np.asarray(a).dtype} elements, the template's port is {bits}-bit elements")
@@ -685,6 +693,16 @@ def _packed(parts: Sequence[np.ndarray], bits: int, what: str) -> np.ndarray:
     if len(raw) % 2:
         raise ValueError(f"{what}: {len(raw)} bytes, not whole u16 words")
     return np.frombuffer(raw, dtype="<u2").astype(np.uint16)
+
+
+def _by_value(a: np.ndarray, bits: int, what: str) -> np.ndarray:
+    """``a``'s elements (a signed integer member's words as the store reads them, unsigned) as ``bits``-bit words."""
+    u = a.reshape(-1).astype(np.uint64)
+    if (u >> np.uint64(bits)).any():
+        k = int(np.flatnonzero(u >> np.uint64(bits))[0])
+        raise ValueError(f"{what}: element {k} of a {a.dtype} member is {int(u[k].astype(np.int64))}, not in a {bits}-bit port's "
+                         f"[0, 2^{bits})")
+    return u.astype(np.dtype(f"<u{bits // 8}"))
 
 
 def _operand(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, group: Sequence) -> np.ndarray:

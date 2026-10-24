@@ -10,7 +10,9 @@ TP stand-in (integrations/vllm's `tests.pipeline.served_tp`, deferred), without 
   opening, the advice's negatives are refused by name, and a forged unit is committed consistently (one bit of its rows
   changed, every check before the draw passing), so only the proof can refuse it.
 * A single-GPU run's pieces without its Commit: I2's adapter (its requests, its refusal by name, its Program bodies by digest),
-  the requests' bodies from the record, the stand-in window's link and `source1`'s codes, and the CLI's one committed run."""
+  the requests' bodies from the record, the stand-in window's link and `source1`'s codes, and the CLI's one committed run.
+* a5's R2 negative registers another population, one instance over where a template has a single one, so a one-unit window
+  (the forged TP1 case at step 24) is audited through its negatives."""
 from __future__ import annotations
 
 import argparse
@@ -26,8 +28,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
 from verity.ml.circuits.codec import canonical_json
+from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.ml.circuits.types import Array, Value as Bits
 from verity_vllm.commit import serving_rows as CS
 from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline.tp import serving_rows as SRT
@@ -463,3 +467,16 @@ def test_per_unit_timing_is_over_the_members_drawn_units_not_c_flocks_virtual_un
                                                               "proof_bytes": [830330, 830330]}}}}
     assert PP.per_unit(s) == {"T": {"units": 2, "k_log": 26, "proof_bytes": 1660660, "prove_s_per_unit": 214.45,
                                     "session_s_per_unit": 250.6, "verify_s_per_unit": 3.1, "lean_verify_s_per_unit": 23.5}}
+
+
+def test_a5s_r2_partition_is_another_population_even_of_a_one_unit_window():
+    xor8 = PrimitiveDefinition("ProvePathTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
+                               register=False)
+    pair = bind(CompositeDefinition("ProvePathTestPair", 0, (), lambda S_: ((("x", Array(2, Bits(8))),), Bits(8)),
+                                    lambda B, S_, x: B.call(xor8, x[0], x[1]), register=False))
+    triple = bind(CompositeDefinition("ProvePathTestTriple", 0, (), lambda S_: ((("x", Array(3, Bits(8))),), Bits(8)),
+                                      lambda B, S_, x: B.call(xor8, B.call(xor8, x[0], x[1]), x[2]), register=False))
+    for defs, want in (([(pair, 1)], P.population_program(pair, 2)), ([(pair, 4)], P.population_program(pair, 3)),
+                       ([(pair, 1), (triple, 1)], P.mixed_population_program([(pair, 2), (triple, 1)])),
+                       ([(pair, 3), (triple, 1)], P.mixed_population_program([(pair, 2), (triple, 1)]))):
+        assert P.program_digest(A5.resized_program(defs)) == P.program_digest(want)
