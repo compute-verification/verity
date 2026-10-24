@@ -88,8 +88,11 @@ reads requests from outside).
   writes the logs and prints `{"served": ...}`, then serves reveals until every window's salt is revealed or the last
   window's reveal deadline has passed. `--tamper` makes the shim an adversary of `active_replay.adversary_plan`: `late`
   holds one session of window 0 past every sync, which the certifier's own audit faults; `extra` writes one event more
-  at the end of the first session's response, after its padding (F + 1 in all), on time and logged, so the records are
-  complete and only N2's counts against the profile refuse it. The key's directory may not be inside `--out`.
+  at the end of the first session's response, after its padding (F + 1 in all), and `drop` leaves out its first event
+  (F − 1), each on time and logged, so the records are complete and only N2's counts against the profile refuse them;
+  `token` writes the first session's first event carrying other bytes (`active_replay.other_token`), so its frame
+  counts are honest's and `check` accepts it: only the I/O tie, which `check` doesn't run, refuses a certified token
+  that isn't the committed sampled one. The key's directory may not be inside `--out`.
 - `client` sends the plan's requests on the link as `active_replay.Peer` does, at the deployment's origin, and reads
   the wire to its end (`peer.json`).
 - `check` is the auditor's offline check of a served run (`check`): per link-window, the certifier's audit of the raw
@@ -98,9 +101,10 @@ reads requests from outside).
   challenger's key (window 0's asked twice: the second is refused), then `network_verdict` and the salt audit
   (`active_replay.audit_salt`: the salt frames, and that the shim received each revealed salt). It must run while
   `serve` serves reveals.
-- `rehearse` makes both keys in a scratch directory outside `--out`, plans, and for each of `--strategies` (honest, late, extra)
-  runs `serve` and `client` as processes and `check`; `summary.json` holds each run's verdicts. With `--vllm MODEL` it
-  starts vLLM on this host's GPU first (`active_replay.start_vllm`).
+- `rehearse` makes both keys in a scratch directory outside `--out`, plans, and for each of `--strategies` (honest, late,
+  extra by default, or any of `--tamper`'s) runs `serve` and `client` as processes and `check`; `summary.json` holds
+  each run's verdicts, and it exits 0 when `check` accepts honest and token and refuses the rest. With `--vllm MODEL`
+  it starts vLLM on this host's GPU first (`active_replay.start_vllm`).
 
 **Outputs** in a run's directory: `plan.json`, `calibration.json`, `deployment.json`, the proxy's records
 (`requests.records`, `responses.records`, `committed.jsonl`) and `certified.jsonl` (each record's head, the
@@ -155,6 +159,9 @@ REVEAL_MARGIN_S = 300.0
 PROOF_DEADLINE_S = 600.0
 DELTA = 2.0 ** -40
 STRATEGIES = ("honest", "late", "extra")
+TAMPERS = ("late", *ar.LIVE_TAMPERS)
+# `check`'s verdict on each run it expects to accept: honest, and token, whose frames only the I/O tie reads
+ACCEPTED = ("honest", "token")
 PROFILES = ("planned", "served")
 
 
@@ -793,8 +800,7 @@ def rehearse(args) -> int:
                                        for row in r["rows"]]}
                         for s, r in results.items()}}
     (out / "summary.json").write_text(json.dumps(summary, indent=1))
-    expected = {"honest": "accepted"}
-    ok = all(r["verdict"] == expected.get(s, "refused") for s, r in results.items())
+    ok = all(r["verdict"] == ("accepted" if s in ACCEPTED else "refused") for s, r in results.items())
     print(f"rehearsal {'as expected' if ok else 'NOT as expected'}: "
           f"{ {s: r['verdict'] for s, r in results.items()} }", flush=True)
     return 0 if ok else 1
@@ -841,8 +847,9 @@ def main(argv=None) -> int:
     s.add_argument("--reveal-deadline", type=float, help="seconds past a window's end (default: the run's + 300)")
     for q in (s, r):
         q.add_argument("--start-in", type=float, default=10.0, help="the origin, seconds after the proxy is up")
-    s.add_argument("--tamper", choices=STRATEGIES[1:],
-                   help="late: the shim holds a window-0 session past every sync; extra: it writes one event more")
+    s.add_argument("--tamper", choices=TAMPERS,
+                   help="late: the shim holds a window-0 session past every sync; extra: it writes one event more; "
+                        "drop: one fewer; token: the first event's bytes changed")
     c.add_argument("--deployment", required=True, type=Path)
     c.add_argument("--link", type=_address, help="HOST:PORT of the link, if not the deployment's")
     x.add_argument("--run", required=True, type=Path)
