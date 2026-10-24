@@ -48,6 +48,8 @@ theorem defComputes_of_layout {t : Tmpl} {d : ℕ} (hd : d < t.defs.size)
       rw [hrows]
       exact hz
     rw [hg o ho, layout_sound hdc hj ht z hsat (by rw [hconst]; exact h1) F hF o ho]
-    exact congrArg (fun l => l.getD o false) (evalT_congr types words F ty fun i hi => by rw [hin i hi])
+    exact congrArg (fun l => l.getD o false) (evalT_congr types words F ty
+      (x := fun i => z ((done.getD j default).inCols.getD i 0)) (y := fun i => z ((t.defs.getD d default).cols + i))
+      fun i hi => congrArg z (hin i hi))
 
 end FlockSoundness.TmplValue
