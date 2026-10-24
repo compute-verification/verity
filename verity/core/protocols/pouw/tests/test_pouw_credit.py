@@ -60,6 +60,8 @@ CREDIT_EXPECT = {
 #: a session pinned to a logged commit off main's first-parent line
 OFF_MAIN = "which the host's pins log records but which is not on main's first-parent line"
 NOT_DRAWN = "has a proof outcome and was not drawn"
+NO_SERVED = "states no served rows m_s at most the period's T = "
+OTHER_SERVED = "every dense call of a step serves the step's m_s rows"
 UNTIED = "whose rows each round's root committed"
 NOT_COMMITS = "is not the Commit's "
 NOT_RECEIVED = "the round roots are not the roots the challenger's log shows it received, in order"
@@ -69,10 +71,8 @@ OTHER_REGISTRATION = "'s domain is not the one the window's registration gives i
 OTHER_ROOT = "against another root than the one the window registered for"
 OTHER_PERIOD_WEIGHTS = "open signed: a B row's codes or s_w differ from the ones the period registered"
 UNSIGNED = "open signs no weights' root (weights_root, a SHA-512 digest"
-NO_SERVED = "states no served rows m_s at most the period's T = "
 NO_ROWS = "'s open commits no table rows T (rows, a positive integer"
 OTHER_SLOT = "the period's T = "
-OTHER_SERVED = "every dense call of a step serves the step's m_s rows"
 #: a tile at a K its proof doesn't cover (`credit.tile_k`), between its K and its fix
 TILE_K = "is outside the K its proof covers, multiples of 32 below 131072 (the K its GemmAccumulatorS8 binds): "
 SPLIT = ("split its linears' k range into linears of at most K = 131040 each, each padded with zero codes to a "
