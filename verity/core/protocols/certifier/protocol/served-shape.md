@@ -11,21 +11,23 @@ once a window.
   header, the arrivals the engine core added before the window's first step, and its steps, renumbered from that step.
   It also returns the session index of the window's first arrival. It refuses a window the trace doesn't open and
   close, and one that opens on an engine still holding a request.
-- `slice_inputs(trace, R=, W=, A=, base=, session=, Q=, D=, P=, K=)` replays that window from the empty engine
-  under sync scheduling (the slice's `ReplayStep_v1` is sync) and refuses it if that schedule isn't the trace's or a
-  step falls outside (R, W, A). It returns the slice's statics and its `Slice` (arrivals, decisions, executed steps),
+- `slice_inputs(trace, R=, W=, A=, base=, session=, Q=, D=, P=, K=, AS=0)` replays that window from the empty engine
+  under sync scheduling, or at `AS=1` under the trace's async scheduling, and refuses it if that schedule isn't the
+  trace's or a step falls outside (R, W, A). It returns the slice's statics and its `Slice` (arrivals, decisions, executed steps),
   the ids being session indices, and each step's rows, in `compile_slice_smallkv.json`'s layout. Q, D, P and K
   default to the window's own counts; a larger public class pads the window into it, and a smaller one is refused.
 - `served_record(seal, w, requests, base)` gives window w's served rows as the Commit's seal recorded them
   (`SamplerInputsSource.rows`), with the map from a runner's request id to its arrival id, the input of
   `served_rows.step_rows`.
 - `python3 replay_vectors.py TRACE --slice W [--served SEAL] [--max-model-len L] [--R R --W W --A A] [--Q Q --D D
-  --P P --K K] --out FIXTURE.json` writes all three as one fixture.
+  --P P --K K] [--AS 1] --out FIXTURE.json` writes all three as one fixture. At AS = 1 a unit is a `schedule()` and
+  the update of the step before it, an arrival is (id, P, O, cap), and the seal's steps are placed at the units that
+  ran rows (`by_unit`).
 
 **vLLM run r20261024-141912-8eb1** (Llama-3.2-1B under vLLM's AsyncScheduler: max_num_seqs 8, max_num_batched_tokens
 2048, max_model_len 512, chunked prefill, no prefix caching, 101,626 KV blocks) served 480 requests in 6,169 steps and
 339 windows. Its records are `benchmarks/network_e2e/encodings/tests/fixtures/vllm-8eb1/`: the scheduler trace, and
-window 212's seal.
+windows 212's and 1's seals.
 - The async replay reproduces all 6,169 steps (6,624 decisions, 466 requests arrived on an ask).
 - Every window opens on a drained engine, so each is a slice from the empty engine.
 - 314 of the 339 windows have the served schedule under sync scheduling too, so today's sync slice proves them as
@@ -127,11 +129,36 @@ linked by its rows:
   `ChargeLink_v1{D}` over window row 1's decisions, and its carry crosses windows in `charge_chain`'s rows
   ([charge-chain.md](charge-chain.md)).
 
-**For the 25 async windows.** At AS = 1 the step also reads `run_fin R×1 | run_cap R×1 | wait_cap W×1` after
-`free` and `arr_cap A×1` after `arr_O`. `replay_chain`'s rows carry them at its AS (PROTOCOL.md, "The rows'"), with
-an arrival's cap as `q_cap` in the window row and `a_cap` in the warden's slots. The slice takes its chain's shape
-from its statics (`compile_slice.chain`), so at an async engine its rows widen and its circuit hands the step these
-fields. Its reference is still sync: its scan replays under sync scheduling and refuses the window there, and its
-entries (`_row`, `_state`, the `cert` and `arr` decoding) are sync tuples where at AS = 1 they are
-`replay_chain.running_names`', `waiting_names`' and `arrival_names`'. With those, `slice_inputs` takes the engine's mode
-as it is. The walk entries (`run_pfx`, `row_pfx`) come only with prefix caching, which 8eb1 doesn't serve.
+**For the 25 async windows.** Their sync replay isn't the served schedule, so `slice_inputs` refuses them at AS = 0.
+At AS = 1 the step also reads `run_fin R×1 | run_cap R×1 | wait_cap W×1` after `free` and `arr_cap A×1` after
+`arr_O`. `replay_chain`'s rows carry them at its AS (PROTOCOL.md, "The rows'"), with an arrival's cap as `q_cap` in the
+window row and `a_cap` in the warden's slots. The slice takes its chain's shape from its statics
+(`compile_slice.chain`), so at an async engine its rows widen and its circuit hands the step these fields.
+**w1** is the smallest of them with more than one request: window 1, requests 4–7 of the session, decisions
+`[1, 1, 1]`, 38 steps; its sync replay diverges from the trace at step 2.
+- At 8eb1's engine class under its async scheduling it is
+  `verity/core/protocols/certifier/tests/fixtures/compile_slice_w1_class.json` (`--slice 1 --served SEAL --R 8 --W 1
+  --A 9 --Q 4 --D 32 --P 54 --K 4 --AS 1`, the seal's records being `seal-w1.jsonl`): AS = 1, EW = 0 (no prefix
+  caching), 38 units, the last schedule on the drained engine dropped. Its charge is from the session's carry after
+  window 0, whose decisions `[1, 1, 1]` charge 24 bits; w1's then charge 21.
+- `ReplayStep_v1` at AS = 1 and the class is w1's served scheduler on all 39 of its async units, circuit and reference
+  (`benchmarks/network_e2e/encodings/tests/test_served_window.py`).
+- `CompileSlice_v1` doesn't take it yet. Two parts are missing:
+  - **The reference at AS = 1.** Its entries are sync tuples (`_state`, `_row`, `_inputs`, and `check`'s decoding of
+    `cert` and `arr`) where at AS = 1 its rows' are `replay_chain.running_names`', `waiting_names`' and
+    `arrival_names`', so on w1 `case` raises `MalformedRow` (`run: an entry is (id, P, O, out, comp, cap, fin) at this
+    shape`). The build feeds the step by name, so it needs nothing more.
+  - **The served rows matched by request.** `served_rows.step_rows` gives a row the slot of its position in the
+    runner's batch, and ``rows`` compares it with the scheduler's running slot. At w1 they differ at two units: at unit
+    0 the batch is requests 4, 6, 5, 7, and at unit 5 request 5 holds slot 0 while its last output is in flight, so
+    request 6, in slot 1, is the batch's first row. The rows are the replay's at every unit as (request, kind, start, n)
+    (`verity/core/protocols/certifier/tests/test_network_certifier_compile_slice_w1.py`), so the check needs a
+    witnessed injective map from batch positions to slots, or rows keyed by request.
+- With both (the reference reading the chain's entries by name, and the seal's rows put at the replay's slot for
+  their request; a scratch patch on this tree, run r20261024-205551-716a), the slice accepts w1 (0x3F, 21 bits), the
+  four negatives fail as at w212 (late admission 0x2E, `load` and `rows`; charge 0x37; longer prompt 0x2F; dropped
+  row 0x2F), and the circuit is its reference on all five. It is 898,182 ANDs, built in 19 s at 3.0 GB (6.9 GB with
+  the five evaluations): AS = 1 adds 40,316 to sync w212 at the same class on the same tree (857,866 ANDs, run
+  r20261024-205722-af0a). With the reference fixed alone, the honest window fails only ``rows`` (0x2F). The test of
+  what the slice must do on w1 is a strict xfail in that test file.
+- The walk entries (`run_pfx`, `row_pfx`) come only with prefix caching, which 8eb1 doesn't serve.
