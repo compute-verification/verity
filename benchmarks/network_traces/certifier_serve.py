@@ -1201,7 +1201,7 @@ def plan_of(args, url: str, clock=time.monotonic, sleep=time.sleep) -> tuple[dic
                                    max_tokens=args.tokens, seed=args.seed, name=name, api_key_env=args.api_key_env)
         probed = probe_varied(url, model, requests[:args.probes], args.api_key_env, clock, sleep)
         eos = [int(t) for t in args.eos_ids.split(",")] if args.eos_ids else None
-        report, plan = varied_plan(probed, requests, name=name, seed=args.seed, eos=eos)
+        report, plan = varied_plan(probed, requests, seed=args.seed, eos=eos)
         return probed, report, plan
     prompt = prompt_tokens(url, model, args.prompt_tokens, args.api_key_env) if args.prompt_tokens else PROMPT
     probed = probe(url, request_body(model, args.tokens, prompt, args.temperature, args.top_p), args.probes,
@@ -1302,11 +1302,11 @@ def parser() -> argparse.ArgumentParser:
                             "profile)")
         q.add_argument("--rate", type=float, default=2.0, help="varied: arrivals a second")
         q.add_argument("--prompt-range", default="16:1024", help="varied: LO:HI, the prompts' lengths in tokens")
+        q.add_argument("--name", default="varied",
+                       help="varied: the users' prefix: request j's user, its session, is NAME.j (j five digits)")
         q.add_argument("--seed", type=int, default=0, help="varied: the traffic's seed")
         q.add_argument("--eos-ids", help="varied: the model's EOS token ids, comma-separated (default: the last ids "
                                          "of the probe's responses that stopped)")
-        q.add_argument("--name", default="varied",
-                       help="varied: the plan's name; request j's user, its session, is NAME.j (j five digits)")
     for q in (p, s, c, r):
         q.add_argument("--out", required=True, type=Path)
     for q in (s, c):

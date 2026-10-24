@@ -1269,7 +1269,6 @@ def test_the_gates_varied_rehearsal_names_its_requests_for_its_run_and_the_endpo
         a, plan = g["args"], g["plan"]
         assert (a.traffic, a.name, a.tokens, a.seed, a.requests, a.strategies) == \
             ("varied", run, 16, 3, 16, tamper or "honest")
-        assert plan["name"] == run
         assert [q["session"] for q in plan["requests"]] == [f"{run}.{j:05d}" for j in range(16)]
         assert g["check"]["verdict"] == "accepted", cs.table(g["check"])
         io = {r["user"]: r for r in json.loads((g["out"] / strategy / "io.json").read_text())["requests"]}
