@@ -148,13 +148,18 @@ files = ["benchmarks/pous/band_gpu/harness.py", "benchmarks/pous/p2_v1/harness.p
 [rewrite]
 # Never rewritten: records of what was (the rulings, changelogs, the earlier moves and this one's own map), the frozen
 # backends, files whose bytes a digest pins, and the research harness, whose label values are keys in the store
-# (`replay_set=warden/re-verify`).
+# (`replay_set=warden/re-verify`). Nor the active warden's files: design v3 (Daniel, 24 Oct 05:12Z) names a new device
+# the warden, the bytes-only re-framer in front of the certifiers, not this move's old network warden, whose files all
+# moved on 5 Oct.
 exclude = ["tools/move/**", "archive/**", "tools/research/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md",
            "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "*.patch", "**/TRUSTED.sha256",
            "uv.lock", "**/*.lock", "**/price_twins.json",
            "benchmarks/numerical/reports/**", "benchmarks/numerical/tests/bench/data/**",
            "catalog/verity_catalog/silicon/captures/**", "catalog/verity_catalog/silicon/hawkeye/**",
-           "tools/tc_probe_fp4/fp4_emulation_1ad1aaa2.py"]
+           "tools/tc_probe_fp4/fp4_emulation_1ad1aaa2.py",
+           "verity/core/protocols/certifier/*warden*", "benchmarks/network_traces/*warden*",
+           "benchmarks/network_e2e/*warden*", "benchmarks/live_challenger/*warden*",
+           "Security/*/NetworkCertifier/*Warden.lean"]
 
 [keep]
 # Never rewritten wherever they stand: a domain tag or format id (anything shaped `a/b/v1`), a note, artifact or branch
