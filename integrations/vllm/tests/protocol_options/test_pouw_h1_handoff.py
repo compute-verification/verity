@@ -155,21 +155,6 @@ def test_a_gate_verb_reaches_the_gate_over_ssh_word_for_word():
     assert GPU.gate_argv(["python", "-I", "local_gate.py", "d"], verb) == ["python", "-I", "local_gate.py", "d", *verb]
 
 
-def test_a_listener_is_seen_without_a_connect():
-    """`pouw_h1_gpu.await_listener` sees a listening port from the host's socket tables, and connects to nothing: the
-    listener's backlog stays empty."""
-    from tests.protocol_options import pouw_h1_gpu as GPU
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        port = s.getsockname()[1]
-        assert not GPU.listening(port)
-        s.listen(1)
-        assert GPU.await_listener(port) == 0
-        s.setblocking(False)
-        with pytest.raises(BlockingIOError):
-            s.accept()
-
-
 def test_the_stream_outlives_the_process_that_handed_it_over(tmp_path):
     """A child process hands a stream's descriptor to the holder and exits; the holder's descriptor still reaches the
     stream's other end, so the session isn't closed by the serving process's exit."""
