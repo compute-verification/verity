@@ -60,17 +60,21 @@ def main() -> None:
     gold = [r["answer"] for r in ds]
     t0 = C.now()
     res = {"args": vars(args), "versions": C.versions(), "n_problems": len(ds)}
-    sp = SamplingParams(n=args.samples, temperature=args.temperature, max_tokens=args.max_tokens, seed=args.seed)
-    outs = llm.chat(msgs, sp, lora_request=lora_req)
-    correct = [sum(C.is_correct(o.text, g) for o in out.outputs) for out, g in zip(outs, gold)]
-    for k in ks:
-        if k <= args.samples:
-            res[f"pass@{k}"] = sum(pass_at_k(args.samples, c, k) for c in correct) / len(correct)
-    res["mean_correct_frac"] = sum(correct) / (len(correct) * args.samples)
-    res["mean_len_tokens"] = sum(len(o.token_ids) for out in outs for o in out.outputs) / (len(outs) * args.samples)
+    correct = []
+    if args.samples:
+        sp = SamplingParams(n=args.samples, temperature=args.temperature, max_tokens=args.max_tokens, seed=args.seed)
+        outs = llm.chat(msgs, sp, lora_request=lora_req)
+        correct = [sum(C.is_correct(o.text, g) for o in out.outputs) for out, g in zip(outs, gold)]
+        for k in ks:
+            if k <= args.samples:
+                res[f"pass@{k}"] = sum(pass_at_k(args.samples, c, k) for c in correct) / len(correct)
+        res["mean_correct_frac"] = sum(correct) / (len(correct) * args.samples)
+        res["mean_len_tokens"] = sum(len(o.token_ids) for out in outs for o in out.outputs) / (len(outs) * args.samples)
     if args.greedy:
         g_outs = llm.chat(msgs, SamplingParams(n=1, temperature=0.0, max_tokens=args.max_tokens), lora_request=lora_req)
-        res["greedy_acc"] = sum(C.is_correct(o.outputs[0].text, g) for o, g in zip(g_outs, gold)) / len(gold)
+        g_ok = [C.is_correct(o.outputs[0].text, g) for o, g in zip(g_outs, gold)]
+        res["greedy_acc"] = sum(g_ok) / len(gold)
+        res["greedy_correct"] = [int(v) for v in g_ok]
     res["eval_s"] = C.now() - t0
     res["per_problem_correct"] = correct
     with open(os.path.join(args.out, "eval.json"), "w") as f:

@@ -35,6 +35,9 @@ def main() -> None:
     p.add_argument("--beta", type=float, default=0.0, help="KL coefficient")
     p.add_argument("--vllm-mem", type=float, default=0.3, help="vLLM's share of the GPU in colocate mode")
     p.add_argument("--extra", default="{}", help="JSON of further GRPOConfig fields")
+    p.add_argument("--precision", default="none", help="none (bf16 parameters, as before) or a precision.py recipe: "
+                   "bf16 fp8 mxfp8 nvfp4 (fp32 master weights, emulated low-precision GEMMs) or store_bf16 store_mxfp8 "
+                   "store_mxfp8_sr store_nvfp4_sr (weights kept on the format's grid)")
     args = p.parse_args()
     if not args.lr:
         args.lr = DEFAULT_LR[args.adapter]
@@ -49,7 +52,12 @@ def main() -> None:
 
     torch.manual_seed(args.seed)
     tok = AutoTokenizer.from_pretrained(args.model)
-    model = AutoModelForCausalLM.from_pretrained(args.model, dtype=torch.bfloat16).to("cuda")
+    import precision as Pr
+
+    fp32 = args.precision not in ("none", "store_bf16")
+    model = AutoModelForCausalLM.from_pretrained(args.model, dtype=torch.float32 if fp32 else torch.bfloat16).to("cuda")
+    if args.precision != "none":
+        Pr.apply_precision(model, args.precision)
     model, peft_cfg, tl = C.apply_adapter(model, args)
 
     ds = C.load_task(args.dataset, "train", args.train_n or None, args.seed).remove_columns(["completion"])
@@ -92,6 +100,8 @@ def main() -> None:
                           processing_class=tok, peft_config=peft_cfg)
     if tl is not None and args.gen == "vllm":
         C.patch_vllm_sync(trainer, tl)
+    if args.precision in Pr.STORAGE and args.precision != "store_bf16":
+        trainer.add_callback(Pr.storage_callback(args.precision))
     n_train = C.trainable_count(trainer.model)
     print(f"trainable params {n_train} ({n_train * 32} bits fp32)", flush=True)
     t1 = C.now()
@@ -109,6 +119,7 @@ def main() -> None:
         "versions": C.versions(),
         "grpo_config": {k_: getattr(cfg, k_) for k_ in sorted(want) if k_ in fields},
         "dropped_config": dropped,
+        "grpo_config_full": cfg.to_dict(),
         "trainable_params": n_train,
         "state_bits_fp32": n_train * 32,
         "state_bits_bf16": n_train * 16,
