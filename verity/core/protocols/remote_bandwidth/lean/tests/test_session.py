@@ -48,6 +48,16 @@ def test_a_session_that_defers_residency_at_a_lifetime_of_one_is_refused_by_both
     assert D.replay(PORT, case, server)[0] == "output"
 
 
+@pytest.mark.parametrize("key", ["samples", "min_passes"])
+def test_a_session_that_could_draw_nothing_is_refused_by_both(server, key) -> None:
+    """A window draws `min(samples, U)` of its U ≥ `min_passes` receipts (a plan reads at least one block), so with
+    both positive it draws at least one. Both sides refuse either at 0, so no session has a window with no draws, which
+    both would reject `malformed` whatever its openings (`test_appends`, `test_opening`)."""
+    case = copy.deepcopy(M.recorded("honest")[0])
+    case["params"][key] = 0
+    assert D.replay(PORT, case, server)[0] == "reject"
+
+
 def test_a_registration_that_binds_tiles_is_refused_by_both(server) -> None:
     case = copy.deepcopy(M.recorded("honest")[0])
     case["registration"]["bind"] = True

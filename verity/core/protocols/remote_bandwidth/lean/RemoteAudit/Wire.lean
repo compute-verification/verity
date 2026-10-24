@@ -69,7 +69,8 @@ def decodeOpenings (body : ByteArray) : Option (Array Opening) := Id.run do
   return if c.pos == body.size then some out else none
 
 /-- A window's openings from its frames, in the order they came: every frame's openings in turn, or none at all when
-any frame doesn't decode, so that `checkWindow` rejects the window as malformed. The verifier's process reads a
+any frame doesn't decode, so that the window is rejected as malformed (`checkWindow` on a window with draws,
+`Session.verify` on one without). The verifier's process reads a
 window's frames so (`Verifier.windowCheck`), and the difftest a transcript's (`Difftest.eventOf`'s `frames`), as
 `wire.openings_of` does. -/
 def openingsOf (frames : Array ByteArray) : Array Opening :=

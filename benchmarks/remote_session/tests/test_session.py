@@ -414,6 +414,32 @@ def test_kv_pages_are_checked_by_worker_processes_under_seeds_that_bind_the_appe
     assert r["accepted"] and p["accepted"] and r["failure"] is None and r["appended"] > 0
 
 
+def test_a_frame_that_doesnt_decode_is_malformed_on_a_window_with_no_draws():
+    """A batch whose frame doesn't decode is `malformed` to the check (`checks.check`), and a window with no draws (none
+    a session makes) settles `malformed` whatever its batches, as `Session.verify` and the Lean's settle give it."""
+    import pickle
+    from types import SimpleNamespace
+
+    from checks import Checks, check
+
+    snap = pickle.dumps(SimpleNamespace(registration=SimpleNamespace(key=None)))
+    result = check(snap, 0, [], [(1).to_bytes(4, "big")])
+    assert (result["failure"], result["at"], result["n"]) == ("malformed", None, 0)
+
+    class Books:
+        _fail = audit.Session._fail
+
+        def __init__(self) -> None:
+            self.windows, self.failed = [SimpleNamespace(draws=(), verdict=None)], None
+
+        def _live(self) -> None:
+            pass
+
+    for results in ([], [result]):
+        books = Books()
+        assert Checks.settle(books, 0, results, 0) == audit.Verdict(0, False, "malformed") == books.windows[0].verdict
+
+
 def test_the_check_workers_bound_each_windows_wrong_receipts_as_its_profile_does():
     from checks import Checks
 

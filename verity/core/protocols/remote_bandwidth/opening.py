@@ -115,12 +115,12 @@ class Session(audit.Session):
 
     def decide(self, t: int, failures: Sequence[str | None]) -> audit.Verdict:
         """Window t's verdict from check 3's outcome on each of its draws, in the order drawn: the first failure (one of
-        `audit.FAILURES`) rejects it."""
+        `audit.FAILURES`) rejects it, and a window with no draws is `malformed`, as `verify` has it."""
         self._live()
         w = self.windows[t] if 0 <= t < len(self.windows) else None
         if w is None or w.draws is None or w.verdict is not None:
             raise audit.SessionError(f"window {t} has no draws awaiting check 3")
-        if len(failures) != len(w.draws):
+        if not w.draws or len(failures) != len(w.draws):
             return self._fail(t, "malformed")
         for at, f in zip(w.draws, failures):
             if f is not None:

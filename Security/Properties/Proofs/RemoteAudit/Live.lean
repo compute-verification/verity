@@ -527,6 +527,8 @@ theorem verifyBy_congr {s : State} {t : Int} {f g : Array (Nat × Nat) → Verdi
     split
     · rfl
     rename_i hv
+    split
+    · rfl
     have hf : s.failed = none := by
       cases hs : s.failed with
       | none => rfl

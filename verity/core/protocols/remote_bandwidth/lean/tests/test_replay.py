@@ -110,6 +110,22 @@ def test_a_transcript_reads_a_windows_frames_as_the_live_verifiers_do(server, tm
     assert row["agree"] and row["lean"]["rejected"] == {"failure": "malformed", "window": first, "at": None}, row
 
 
+@pytest.mark.parametrize("key", ["samples", "min_passes"])
+def test_a_transcript_whose_windows_could_draw_nothing_is_refused_by_both(server, tmp_path, key) -> None:
+    """Both verifiers reject a window with no draws `malformed` whatever its frames (`Session.verify`), and no session
+    has one: with `samples` or `min_passes` at 0, the transcript, a frame neither can read beside each window's
+    openings, is refused by both before its first event."""
+    case = copy.deepcopy(M.recorded("honest")[0])
+    case["params"][key] = 0
+    for e in case["events"]:
+        if e["kind"] == "verify":
+            e["frames"] = [wire.encode_openings([M.opening_of(o) for o in e.pop("openings")]).hex(), "00"]
+    path = tmp_path / "case.json"
+    path.write_text(json.dumps(case))
+    row, = R.replay_transcript(path, server)
+    assert row["agree"] and row["held"] is False and "reject" in row["lean"] and "reject" in row["python"], row
+
+
 def test_a_transcript_that_names_no_pace_replays_only_with_the_pace_its_verifier_json_gives(server, tmp_path) -> None:
     """A transcript written before it named its session's pace: replayed unpaced, a paced session's windows would be
     held to no cap on their roots, so it replays only with the pace its `verifier.json` recorded, and its bytes the
