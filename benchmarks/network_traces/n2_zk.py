@@ -36,8 +36,9 @@ decides nothing.
   outcome record. Its own: the circuit file's SHA-512 (its lowering, which prover and verifier share here), the Program's
   descriptor and the partition object. Never the opening (records, heads, leaf salts, siblings, the certifier's salt)
   nor the ``wit`` row's salt. Every file there is scanned for every piece of every head, leaf salt, sibling and
-  certifier salt of the member (`a8.received`) but the pieces the public circuit holds (`public_pieces`); the prover's
-  instance files, which hold the heads, are the control.
+  certifier salt of the member (`a8.received`) but the pieces the public circuit or a window's ``pub`` row holds
+  (`public_pieces`), which the verifier has whatever the witness; the prover's instance files, which hold the heads,
+  are the control.
 """
 from __future__ import annotations
 
@@ -144,7 +145,7 @@ def link_windows(run: Path, edit=None) -> SimpleNamespace:
             failed={e: None if i is None else [k for k, ok in HC.reference_parts(i).items() if not ok]
                     for e, i in zip(ENDS, insts)},
             expect=int(word == 0b11 and others), statement=None))
-    return SimpleNamespace(lw=lw, plan=plan, syncs=syncs, windows=out, issuer_refused=refused)
+    return SimpleNamespace(lw=lw, plan=plan, syncs=syncs, windows=out, issuer_refused=refused, advice=None)
 
 
 def one_count(lw: LinkWindows, w: int, pair: tuple[CertifiedRecord, CertifiedRecord]):
@@ -382,7 +383,7 @@ def stage(M, sg: SimpleNamespace, members: dict[str, SimpleNamespace], secret: b
         (d / "tables").mkdir(exist_ok=True)
         os.link(sg.circuit, d / "circuit.txt")
         bcs = SVC._commitments(d / "pub-1.bin", 0)
-        mine = lw.public_arguments(x.window, x.root, x.certificates, members[name].syncs)
+        mine = lw.public_arguments(x.window, x.root, x.certificates, members[name].syncs, members[name].advice)
         if not (bcs and mine is not None and lw.row(mine, "pub") == lw.row(x.args, "pub")
                 and SVC._opens(lw.row(mine, "pub"), lw.bits("pub"), salts["pub"][0], bcs["pub"])
                 and SVC._opens(SVC.output_row(words[k]), SVC.OUT_BITS, salts["o0"][0], bcs["o0"])):
@@ -435,12 +436,13 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
         late = stream.deliver(draw, delivered.sessions())
         t = time.time()
         outcome = late or lw.outcome(stream, draw, x.certificates, rd.syncs, delivered,
-                                     circuit_sha512=sg.circuit_sha512, opening=x.opening if a.debug_clear else None)
+                                     circuit_sha512=sg.circuit_sha512, opening=x.opening if a.debug_clear else None,
+                                     advice=rd.advice)
         verify_s = round(time.time() - t, 1)
         body = stream.records[-1]
         verdict = (body.get("audit") or {}).get("verdicts", {}).get(SVC.VERIFIER) or {}
         findings, refused = LEAN_RUNS.get(str(delivered.proof.public), (None, "no Lean run"))
-        args = lw.public_arguments(x.window, x.root, x.certificates, rd.syncs)
+        args = lw.public_arguments(x.window, x.root, x.certificates, rd.syncs, rd.advice)
         proof = {"lean_accepted": refused is None and bool(findings) and all(f.accepted for f in findings),
                  "refused": refused, "proved": refused is None and lw.proved(findings or [])
                  and all(list(f.units) == [0] for f in findings),
@@ -470,7 +472,8 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
                **({"clear": verdict["clear"]} if "clear" in verdict else {})}
         row["as_expected"] = (row["accepted"] == bool(x.expect) and not row["late"] and row["decided_by"] == "proof"
                               and proof["proved"] and proof["opened_word"] == x.word and proof["certified"]
-                              and row["public"] == {"verdict": x.expect, "deadline": x.word >> 1 & 1})
+                              and row["public"] == {"verdict": x.expect, "deadline": x.word >> 1 & 1}
+                              | lw._advice_output(rd.advice))
         rows.append(row)
         log(f"{name} window {x.window}: {'accept' if outcome.accepted else 'reject'} public {row['public']}"
             f"{' LATE' if late else ''}, Lean {'proved' if proof['proved'] else 'NOT proved'}, output word "
@@ -482,7 +485,8 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
 
 
 def _member_scan(M, sg, rd, out: Path) -> dict:
-    blobs, held, public = public_pieces(M.a8, *blobs_of(rd), sg.circuit.read_bytes())
+    rows = b"".join(rd.lw.row(x.args, "pub") for x in rd.windows if x.args is not None)
+    blobs, held, public = public_pieces(M.a8, *blobs_of(rd), sg.circuit.read_bytes() + rows)
     control = out / "prover-instances.bin"
     with open(control, "wb") as f:
         for x in rd.windows:

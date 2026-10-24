@@ -7,8 +7,8 @@
 #     env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py --by LANE -- \
 #     bash benchmarks/network_traces/n2_advised_zk.sh
 # env: N2_MEM_GB (what job.sh's stages may take, within the slot's)  N2_SEED (the advised tests' session, 7 by default)
-#      N2_POINTS (--points, 1 by default)  N2_PORT (--port)  N2_CACHE (the build cache, kept across runs where writable)
-#      N2_DRY=1 (the instances, host verdicts and references only)
+#      N2_JOBS (--jobs, members proved at once, 2 by default)  N2_PORT (--port)  N2_CACHE (the build cache, kept across
+#      runs where writable)  N2_DEBUG_CLEAR=1 (--debug-clear)  N2_DRY=1 (the instances and references only)
 # Kept in $OUT/n2adv: the driver's records and logs, the public files and everything the verifier received; never a
 # prover's file (inst-*) nor a circuit (its pin is kept), nor a session's archive.
 set -uo pipefail
@@ -28,9 +28,10 @@ export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
   > "$OUT/build-firewall.log" 2>&1
 [ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "n2adv: no firewall frame"; exit 7; }
 
-log "n2adv: proving, seed ${N2_SEED:-7}, points ${N2_POINTS:-1}${N2_DRY:+, dry}"
+log "n2adv: proving, seed ${N2_SEED:-7}, jobs ${N2_JOBS:-2}${N2_DRY:+, dry}"
 "$PY" benchmarks/network_traces/n2_advised_zk.py prove --seed "${N2_SEED:-7}" --bin "$BIN" --lean "$LEAN" --out "$W/n2adv" \
-  --points "${N2_POINTS:-1}" ${N2_PORT:+--port "$N2_PORT"} ${N2_DRY:+--dry} 2>&1 | tee -a "$OUT/n2adv.log" | cut -c1-4000
+  --jobs "${N2_JOBS:-2}" ${N2_PORT:+--port "$N2_PORT"} ${N2_DEBUG_CLEAR:+--debug-clear} ${N2_DRY:+--dry} 2>&1 \
+  | tee -a "$OUT/n2adv.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/n2adv"
 (cd "$W/n2adv" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/n2adv/")
