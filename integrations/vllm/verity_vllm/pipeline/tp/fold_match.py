@@ -99,7 +99,7 @@ def fold_rank(py: str, log: Path, profile: str, out: Path, timeout: int | None, 
     fs = _load(out / "fold_summary.json") or {}
     ok = rc == 0 and (out / "program.json").exists() and (out / "instances.jsonl").exists() and int(fs.get("errors") or 0) == 0 and \
         int(fs.get("unresolved") or 0) == 0
-    return {"rc": rc, "seconds": round(time.time() - t0, 1), "ok": ok, "errors": fs.get("errors"), "unresolved": fs.get("unresolved"),
+    return {"rc": rc, "seconds": round(time.time() - t0, 1), "ok": ok, "kept": done, "errors": fs.get("errors"), "unresolved": fs.get("unresolved"),
             "unsupported": fs.get("unsupported"), "n_instances": fs.get("n_instances"), "n_steps": fs.get("n_steps"), "digest": fs.get("digest"),
             "tp": (fs.get("fold") or {}).get("tp"), "collectives": len((fs.get("fold") or {}).get("collectives") or []),
             "collectives_by_kind": (fs.get("fold") or {}).get("collectives_by_kind"), "error_examples": (fs.get("error_examples") or [])[:3],
@@ -225,24 +225,27 @@ class Options:
                               help="keep a rank's persisted fold (fold_summary.json, program.json, instances.jsonl under --out), if it was folded under the rank Build's "
                                    "construction, and run only its compare and GM-01 legs")
     reuse_legs: bool = option("--reuse-legs", action="store_true", default=False,
-                              help="also keep a rank's written compare (X-09 at B>1) / DAG / GM-01 documents under --out, so only the missing legs and the cross-rank leg run")
+                              help="also keep a rank's written compare (X-09 at B>1) / DAG / GM-01 documents under --out, where its fold was kept, so only the "
+                                   "missing legs and the cross-rank leg run")
     shared_x09: bool = option("--shared-x09", action="store_true", default=False,
                               help="B>1: a rank's X-09 is the one its GM-01 computes and writes (global-match --decomp-out, row_pod's MATCH_PIPELINE=shared), "
                                    "not a second batch-decomp process over the same fold under the audit checker's operations (past 800 GB on a "
                                    "GLM-5.3 B8 rank)")
 
 
-def _rank_legs(a: Options, r: int, rd: Path, build: Path, derived: list[str], gprog: str | None, pr: dict[str, Any], problems: list[str]) -> None:
-    """The legs of folded rank `r` after its fold, into its record `pr` and `problems`: the compare (X-09 at B>1) and GM-01."""
+def _rank_legs(a: Options, r: int, rd: Path, build: Path, derived: list[str], gprog: str | None, pr: dict[str, Any], problems: list[str],
+               reuse_legs: bool = False) -> None:
+    """The legs of folded rank `r` after its fold, into its record `pr` and `problems`: the compare (X-09 at B>1) and GM-01.  `reuse_legs`
+    keeps their written documents (--reuse-legs), only for a rank whose fold was kept: a refolded rank's legs read the new fold."""
     def gm01(x09: list[str] | None = None) -> dict:
-        g = global_match_rank(a.python, rd, Path(gprog), Path(a.workload), a.within_step, a.timeout, a.reuse_legs, x09)
+        g = global_match_rank(a.python, rd, Path(gprog), Path(a.workload), a.within_step, a.timeout, reuse_legs, x09)
         print(f"[tp2foldmatch] rank {r} GM-01: {g['verdict']} failed={g['failed_checks']} concurrency={g['achieved_concurrency']} {g['seconds']}s", flush=True)
         return g
 
     shared = a.shared_x09 and bool(derived) and bool(gprog) and bool(a.workload)
     if shared:     # GM-01 first: its X-09 document is the compare's
         pr["global_match"] = gm01([str(build), *derived])
-    pr["compare"] = compare_rank(a.python, rd, build, derived, a.within_step, a.timeout, a.reuse_legs, shared)
+    pr["compare"] = compare_rank(a.python, rd, build, derived, a.within_step, a.timeout, reuse_legs, shared)
     print(f"[tp2foldmatch] rank {r} compare ({pr['compare']['comparator']}): {pr['compare']['verdict']} {pr['compare']['seconds']}s", flush=True)
     if pr["compare"]["verdict"] != "PASS":
         problems.append(f"rank {r}: compare {pr['compare']['verdict']}")
@@ -321,7 +324,7 @@ def main(a: Options) -> int:
         if int(tp.get("rank", -1)) != r or int(tp.get("world", 0)) != a.world:
             problems.append(f"rank {r}: the log's RunHeader.notes.tp2 states rank {tp.get('rank')} / world {tp.get('world')} (swapped or mislabelled rank)")
         with leg_slots:
-            _rank_legs(a, r, rd, builds[r], derived[r], gprog[r], pr, problems)
+            _rank_legs(a, r, rd, builds[r], derived[r], gprog[r], pr, problems, reuse_legs=a.reuse_legs and bool(pr["fold"].get("kept")))
         return pr, problems
 
     workers = max(1, min(a.rank_workers or len(ranks), len(ranks)))
