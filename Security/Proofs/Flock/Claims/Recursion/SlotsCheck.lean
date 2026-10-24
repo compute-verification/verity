@@ -771,13 +771,13 @@ open Flock
 open Claims (Msg Out)
 open FlockDeploy (Coin)
 
-/-- **`KSLin2` at the coin server's record, with the slots' commit strings proved**: `ksLin2_deployed_slots` with
-`HmSlotsCommit` from `hmSlotsCommit_of_full`. -/
+/-- **`KSLin2` at the model of the coin server's record (`recTr`), with the slots' commit strings proved**:
+`ksLin2_deployed_slots` with `HmSlotsCommit` from `hmSlotsCommit_of_full`. -/
 theorem ksLin2_deployed_full (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
-    (rest : Msg → List (Msg × Out) → List UInt8)
+    (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
     (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
-    let bR : Brings := { b with tr := recTr aux nOf rest }
+    let bR : Brings := { b with tr := recTr aux nOf hd rest }
     let L := layoutBTops (finOpen fin)
     let Bd := bdDeployed _root_.Flock.Readable.relation (FlockDeploy.V false).next
       (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE join rowInDeployed final w
@@ -786,24 +786,22 @@ theorem ksLin2_deployed_full (b : Brings) (aux : Msg → ℕ → Flock.RecRecord
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
         (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
-          L shape (showsTr recRead) chk s) ∧
+          L shape (showsPart recRead bR) chk s) ∧
         (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
-          L shape (showsTr recRead) (cmtTr recRead) s) ∧
+          L shape (showsPart recRead bR) (cmtTr recRead) s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
-    ReadersLogColl FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
-  intro bR L Bd D bL hP hRL hRP
-  exact ksLin2_deployed_slots b aux nOf rest fin wE join final w hP hmSlotsCommit_of_full hRL hRP
+  intro bR L Bd D bL hP
+  exact ksLin2_deployed_slots b aux nOf hd rest fin wE join final w hP hmSlotsCommit_of_full
 
-/-- **`BitsLin2` at the coin server's record, with the slots' commit strings proved**: `bitsLin2_deployed_slots` with
-`HmSlotsCommit` from `hmSlotsCommit_of_full`. -/
+/-- **`BitsLin2` at the model of the coin server's record (`recTr`), with the slots' commit strings proved**:
+`bitsLin2_deployed_slots` with `HmSlotsCommit` from `hmSlotsCommit_of_full`. -/
 theorem bitsLin2_deployed_full (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
-    (rest : Msg → List (Msg × Out) → List UInt8)
+    (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
     (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
-    let bR : Brings := { b with tr := recTr aux nOf rest }
+    let bR : Brings := { b with tr := recTr aux nOf hd rest }
     let L := layoutBTops (finOpen fin)
     let Bd := bdDeployed _root_.Flock.Readable.relation (FlockDeploy.V false).next
       (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE join rowInDeployed final w
@@ -812,16 +810,14 @@ theorem bitsLin2_deployed_full (b : Brings) (aux : Msg → ℕ → Flock.RecReco
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
         (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
-          L shape (showsTr recRead) chk s) ∧
+          L shape (showsPart recRead bR) chk s) ∧
         (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
-          L shape (showsTr recRead) (cmtTr recRead) s) ∧
+          L shape (showsPart recRead bR) (cmtTr recRead) s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
-    ReadersLogColl FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.BitsLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
-  intro bR L Bd D bL hP hRL hRP
-  exact bitsLin2_deployed_slots b aux nOf rest fin wE join final w hP hmSlotsCommit_of_full hRL hRP
+  intro bR L Bd D bL hP
+  exact bitsLin2_deployed_slots b aux nOf hd rest fin wE join final w hP hmSlotsCommit_of_full
 
 end Corollaries
 

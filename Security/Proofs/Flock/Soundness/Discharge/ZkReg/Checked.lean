@@ -87,7 +87,7 @@ theorem checkPort_at {c : Circuit} {pub : Public} {t : Tables} {indices : Array 
                 Classical.not_not] at hi'
               obtain ⟨hr, hreads⟩ := hi'
               have ho := List.find?_eq_none.mp hrow _ (List.mem_range.mpr hr)
-              exact ⟨hr, hreads, by simpa using ho⟩
+              exact ⟨hr, (reg.readAt_eq _).symm.trans hreads, by simpa using ho⟩
             · split at h
               · exact absurd (Registered.except_bind_ok h) fun ⟨_, h1, _⟩ => Registered.throw_ne_ok _ _ h1
               · split at h <;> exact absurd h (Registered.throw_ne_ok _ _)

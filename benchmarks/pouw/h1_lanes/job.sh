@@ -8,7 +8,8 @@
 #   2. run.py prepare: the statements' Programs, the leaf's registered values and partials, every statement staged (WORK/plan.tsv)
 #   3. one loopback --zk session per statement, H1L_PAR at a time, each drawing its one instance
 #   4. the plan's Lean checks, each with its statement's own Program, partition, public file and registered reads, and
-#      pouw-leaf-own's check of those reads against the registration and produced record the verifier holds
+#      pouw-leaf-own's check of those reads against the registration and produced record the verifier holds, and of each
+#      session's draw against the draw policy (every unit)
 #   5. run.py summarize: out/summary.json
 # env: H1L_MEM_GB (the job's --mem-gb)  H1L_K (448; h1zy.combine takes K >= 384)  H1L_JOBS (8: prepare's stagers)  H1L_PAR (3: sessions at a time)
 #      H1L_LPAR (8: Lean checks at a time)  H1_TILE (v1 or v3)  HZ_CACHE: hidden_zk's
@@ -62,9 +63,9 @@ log "proved: $(ls -d "$WK"/st/*/sessions/*/ 2>/dev/null | wc -l) sessions"
 cap=$(( STAGE_GB / LPAR ))
 while IFS=$'\t' read -r kind tag D pub reg prog part _expect regrec prodrec r c k stmt; do
   [ "$kind" = C ] || continue
-  "$OWN" "$regrec" "$prodrec" "$reg" "$r" "$c" "$k" "$stmt" > "$OUT/lean/$tag.own" 2>&1
   s=$(ls -d "$D"/sessions/*/ 2>/dev/null | tr '\n' ' ')
   [ -n "$s" ] || { echo "no session under $D" > "$OUT/lean/$tag.err"; continue; }
+  "$OWN" "$regrec" "$prodrec" "$reg" "$r" "$c" "$k" "$stmt" $s > "$OUT/lean/$tag.own" 2>&1
   while [ "$(jobs -rp | wc -l)" -ge "$LPAR" ]; do wait -n; done
   $TIME "$OUT/lean/$tag.time" bash -c "$(vlimit $cap) exec $LEAN verify --zk --circuit $D/circuit.txt \
     --statement verity/flock-circuit --public $pub --partition $part --program $prog --registered $reg --session $s" \
