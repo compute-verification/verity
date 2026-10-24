@@ -16,6 +16,11 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("SparseMlaSplitEnd_v2", lambda: bind(BX.SparseMlaSplitEndV2, DV=16, INV=inv, SCALE=0.0625)),
         # a split of two blocks (T = 17 at BN = 16: the partial block visited first, then the full one)
         ("SparseMlaSplitPart_v2", lambda: bind(BX.SparseMlaSplitPartV2, T=17, DR=16, DV=16, BN=16, DOT=dot, INV=inv, SCALE=0.0625)),
+        # a split of 24 keys at BN = 32 cut at 16: the first span (every score) and the last (8 keys, zero-padded, and the end)
+        ("SparseMlaSplitSpan_v2:K0=0", lambda: bind(BX.SparseMlaSplitSpanV2, T=24, K0=0, K1=16, DR=16, DV=16, BN=32, DOT=dot, INV=inv,
+                                                    SCALE=0.0625)),
+        ("SparseMlaSplitSpan_v2:K0=16", lambda: bind(BX.SparseMlaSplitSpanV2, T=24, K0=16, K1=32, DR=16, DV=16, BN=32, DOT=dot,
+                                                     INV=inv, SCALE=0.0625)),
         ("SparseMlaCombine_v2", lambda: bind(BX.SparseMlaCombineV2, NSPLIT=3, DV=16, INV=inv)),
         # two splits of one block each (T = 17 at BN = 16: a full block, then the partial one)
         ("SparseMlaHeadSplit_v2", lambda: bind(BX.SparseMlaHeadSplitV2, T=17, NS=2, DR=16, DV=16, BN=16, DOT=dot, INV=inv,

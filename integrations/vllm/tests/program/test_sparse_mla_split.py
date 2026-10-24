@@ -400,6 +400,43 @@ def test_a_part_has_keys() -> None:
         bind(W.SparseMlaSplitPart, T=0, DR=16, DV=16, BN=16, SCALE=0.0625, **FA3).body
 
 
+def _spans(T, cuts, DR, DV, BN, scale, qn, qr, kv) -> np.ndarray:
+    """A one-block split's `SparseMlaSplitSpan_v1`s cut at the k-steps ``cuts``, the first on all T keys and each later one on
+    its own keys and the (m, l, o) the one before it returned: the last one's (o_partial, lse)."""
+    ks = [0, *cuts, -(-T // 16) * 16]
+    out: list = []
+    for K0, K1 in zip(ks, ks[1:]):
+        span = bind(W.SparseMlaSplitSpan, T=T, K0=K0, K1=K1, DR=DR, DV=DV, BN=BN, SCALE=scale, **FA3)
+        state = [out[0], out[1:5], out[5:]] if K0 else []
+        out = evaluate(span, qn.tolist(), qr.tolist(), (kv if K0 == 0 else kv[K0:K1]).reshape(-1).tolist(), *state)
+    return np.asarray(out, dtype=U32)
+
+
+@pytest.mark.parametrize("T,cuts", [(64, [32]), (64, [16, 48]), (50, [16, 32, 48]), (40, [16]), (33, [32]), (20, [])])
+def test_a_split_is_its_spans(T: int, cuts: list[int]) -> None:
+    """A one-block split cut at k-steps (all 64 keys or fewer, a middle span, a last span of one key, no cut) is its part word for
+    word: each span continues the lanes' ordered sums and the k-step chain from the (m, l, o) committed before it."""
+    DR, DV, BN = 16, 16, 64
+    rng = np.random.default_rng(T * 5 + len(cuts))
+    qn, qr, kv = _bf16(rng, (DV,)), _bf16(rng, (DR,)), _bf16(rng, (T, DV + DR), 0.5)
+    assert np.array_equal(_spans(T, cuts, DR, DV, BN, 0.0625, qn, qr, kv), _part(T, DR, DV, BN, 0.0625, qn, qr, kv))
+
+
+def test_a_split_is_its_spans_at_the_served_statics() -> None:
+    """Step 16's full split, 64 keys at DR = 64, DV = 512, BN = 64, as its two units (cut at 32) is its part."""
+    T, DR, DV, BN = 64, GLM["DR"], GLM["DV"], GLM["BN"]
+    rng = np.random.default_rng(64)
+    qn, qr, kv = _bf16(rng, (DV,)), _bf16(rng, (DR,)), _bf16(rng, (T, DV + DR), 0.5)
+    assert np.array_equal(_spans(T, [32], DR, DV, BN, GLM["SCALE"], qn, qr, kv), _part(T, DR, DV, BN, GLM["SCALE"], qn, qr, kv))
+
+
+@pytest.mark.parametrize("T,K0,K1,BN", [(65, 0, 32, 64), (0, 0, 16, 64), (64, 8, 32, 64), (64, 0, 40, 64), (64, 32, 32, 64),
+                                         (40, 0, 64, 64), (16, 16, 32, 64)])
+def test_span_statics_are_checked(T: int, K0: int, K1: int, BN: int) -> None:
+    with pytest.raises(ValueError, match="SparseMlaSplitSpan: keys"):
+        bind(W.SparseMlaSplitSpan, T=T, K0=K0, K1=K1, DR=16, DV=16, BN=BN, SCALE=0.0625, **FA3).body
+
+
 def test_one_split_combines_to_its_bf16() -> None:
     rng = np.random.default_rng(9)
     o = rng.standard_normal((1, 16)).astype(np.float32)
@@ -423,15 +460,18 @@ BOOL = {"DOT": BX.SPARSE_MLA_GLM53["DOT"], "INV": BX.SPARSE_MLA_GLM53["INV"]}
 AGREEMENT = [bind(BX.SparseMlaSplitEndV2, DV=16, INV=BOOL["INV"], SCALE=0.0625),
              bind(BX.SparseMlaCombineV2, NSPLIT=3, DV=16, INV=BOOL["INV"]),
              bind(BX.SparseMlaSplitPartV2, T=17, DR=16, DV=16, BN=16, SCALE=0.0625, **BOOL),
+             bind(BX.SparseMlaSplitSpanV2, T=24, K0=0, K1=16, DR=16, DV=16, BN=32, SCALE=0.0625, **BOOL),
+             bind(BX.SparseMlaSplitSpanV2, T=24, K0=16, K1=32, DR=16, DV=16, BN=32, SCALE=0.0625, **BOOL),
              bind(BX.SparseMlaHeadSplitV2, T=17, NS=2, DR=16, DV=16, BN=16, SCALE=0.0625, **BOOL)]
 
 
 @pytest.mark.slow
 @pytest.mark.parametrize("target", AGREEMENT, ids=lambda t: t.id)
 def test_boolean_agrees_with_its_word_view(target) -> None:
-    """5 s for the end, 20 s for the combine, minutes for a part (two blocks and an end traced) and for the head (two blocks,
-    two ends and a combine): what the word-level tests can't see is the Boolean pieces' agreement on special words (zeros,
-    infinities, NaNs, subnormals) through a split's blocks, its end and the combine."""
+    """5 s for the end, 20 s for the combine, minutes for a part (two blocks and an end traced), a span (24 scores, or 8 keys
+    and an end) and the head (two blocks, two ends and a combine): what the word-level tests can't see is the Boolean pieces'
+    agreement on special words (zeros, infinities, NaNs, subnormals) through a split's blocks, its spans, its end and the
+    combine."""
     word = TR.word_of(target)
     lifted = {k: (TR.word_of(x) if k in ("DOT", "INV") else x) for k, x in target.bindings.items()}
     assert (word.defn.name, word.defn.version, word.bindings) == (target.defn.name, 1, lifted)
