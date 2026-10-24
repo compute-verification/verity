@@ -701,32 +701,40 @@ def tie_outputs(advice, ids: dict[str, list[int]], ordinals: dict[str, int]):
     return outputs, list(advice.release), out_ids
 
 
-def tie_cells(IT, shape, window: int, outputs, release, ids) -> list[bytes]:
-    """The warden's cells of egress window `window`: each output it releases a data cell on its request's stream in
-    its release bucket's cells, in the advice's order, pads elsewhere."""
-    cells, used = [IT.pad_cell(shape.B)] * shape.N, [0] * shape.T
-    for (q, _), b, x in zip(outputs, release, ids):
-        t = b - window * shape.T
-        if not 0 <= t < shape.T:
-            continue
-        if used[t] == shape.R:
-            raise NotApplicable(f"bucket {b} releases more than R = {shape.R} outputs")
-        cells[t * shape.R + used[t]] = IT.data_cell(x, q, shape.B)
-        used[t] += 1
+def _packed(IT, shape, buckets: list[list[tuple[int, bytes]]]) -> list[bytes]:
+    """Each bucket's data cells in the tie's canonical order (left-packed, streams non-decreasing, a stream's cells in
+    schedule order), pads after them."""
+    cells = []
+    for b in buckets:
+        if len(b) > shape.R:
+            raise NotApplicable(f"a bucket releases {len(b)} outputs, more than R = {shape.R}")
+        cells += [c for _, c in sorted(b, key=lambda sc: sc[0])] + [IT.pad_cell(shape.B)] * (shape.R - len(b))
     return cells
 
 
+def tie_cells(IT, shape, window: int, outputs, release, ids) -> list[bytes]:
+    """The warden's cells of egress window `window`: each output it releases a data cell on its request's stream in
+    its release bucket, in the tie's canonical order, pads after them."""
+    buckets: list[list[tuple[int, bytes]]] = [[] for _ in range(shape.T)]
+    for (q, _), b, x in zip(outputs, release, ids):
+        t = b - window * shape.T
+        if 0 <= t < shape.T:
+            buckets[t].append((q, IT.data_cell(x, q, shape.B)))
+    return _packed(IT, shape, buckets)
+
+
 def tie_instance(IT, shape, window: int, cells, outputs, release, ids, seed: bytes = b"negatives"):
-    """Window `window`'s tie: `cells` committed as the warden commits them, and the table of the outputs as the prover
-    commits it, each under fake salts (a prover draws fresh ones)."""
-    rows = IT.table_rows(IT.window_slots(outputs, release, ids, window, shape.T), shape.M)
+    """Window `window`'s tie: `cells` committed as the warden commits them (a row a bucket), and the table of the
+    outputs as the prover commits it, each under fake salts (a prover draws fresh ones)."""
+    rows = IT.table_rows(IT.window_slots(outputs, release, ids, window, shape.T), shape)
     tag = seed + window.to_bytes(4, "big")
-    cd = IT.domain(hashlib.sha512(b"cells" + tag).digest(), shape.N)
+    cd = IT.domain(hashlib.sha512(b"cells" + tag).digest(), shape.T)
     td = IT.domain(hashlib.sha512(b"table" + tag).digest(), len(rows))
-    c_salts = [IT.fake_salt(tag + b"c", i) for i in range(len(cells))]
+    c_salts = [IT.fake_salt(tag + b"c", i) for i in range(shape.T)]
     t_salts = [IT.fake_salt(tag + b"t", i) for i in range(len(rows))]
-    return IT.Instance(shape, window * shape.T, tuple(cells), tuple(c_salts), IT.rows_root(cd.domain_id, cells, c_salts),
-                       cd.domain_id, tuple(rows), tuple(t_salts), IT.rows_root(td.domain_id, rows, t_salts), td.domain_id)
+    return IT.Instance(shape, window * shape.T, tuple(cells), tuple(c_salts),
+                       IT.rows_root(cd.domain_id, IT.bucket_rows(shape, cells), c_salts), cd.domain_id, tuple(rows),
+                       tuple(t_salts), IT.rows_root(td.domain_id, rows, t_salts), td.domain_id)
 
 
 def _first_data(IT, cells) -> int:
@@ -753,9 +761,12 @@ def cell_token(IT, inst) -> list[bytes]:
 
 
 def cell_dropped(IT, inst) -> list[bytes]:
-    """`drop` on the tie: the cells with the first data cell a pad, as the warden sees a dropped event (to recommit)."""
-    k, cells = _first_data(IT, inst.cells), list(inst.cells)
-    cells[k] = IT.pad_cell(inst.shape.B)
+    """`drop` on the tie: the cells without the first data cell, its bucket packed again, as the warden releases the
+    window when that event never came (to recommit)."""
+    sh, k = inst.shape, _first_data(IT, inst.cells)
+    t, cells = sh.bucket(k), list(inst.cells)
+    rest = [cells[i] for i in range(t * sh.R, (t + 1) * sh.R) if i != k and IT.parse_cell(cells[i]).data]
+    cells[t * sh.R:(t + 1) * sh.R] = _packed(IT, sh, [[(IT.parse_cell(c).stream, c) for c in rest]])
     return cells
 
 
@@ -766,7 +777,7 @@ def table_token(IT, inst):
     if not full:
         raise NotApplicable("the window's table has no output")
     full[0] = full[0]._replace(id=(full[0].id + 1) % (1 << 32))
-    return replace(inst, rows=tuple(IT.table_rows(full, inst.shape.M)))
+    return replace(inst, rows=tuple(IT.table_rows(full, inst.shape)))
 
 
 def tie_suite(advice, ids: dict[str, list[int]], *, T: int, R: int | None = None, B: int = 256) -> dict[str, dict]:
