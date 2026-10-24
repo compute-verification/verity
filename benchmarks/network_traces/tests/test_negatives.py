@@ -685,6 +685,20 @@ def test_the_suite_carries_the_ties_verdict_on_each_negative_it_reads(runs, tmp_
     assert not rows["frame"]["ran"] and not rows["wrong-token"]["ran"]
 
 
+def test_the_tie_on_a_fixed_plans_runs_has_no_verdict_and_names_what_they_lack(runs):
+    """A fixed plan's run keeps its frames, each window's held to its certified head at both ends, but they are text
+    events, none an id event, and the run keeps no Commit: honest and token alike have no verdict from the tie, which
+    names the id events and the Commit's rows as missing (and itself, on a tree without IO-TIE)."""
+    rs, _ = runs["planned"]
+    W = json.loads((rs["honest"] / "plan.json").read_text())["windows"]
+    lacks = ["id-events", "commit"] if NG.io_tie_module() else ["io-tie", "id-events", "commit"]
+    for s in ("honest", "token"):
+        row = NG.tie_run(rs[s], None)
+        assert row["verdict"] == NG.NOT_APPLICABLE and row["codes"] == [] and row["id_events"] == 0
+        assert row["held"] == {"egress": W, "ingress": W} and list(row["missing"]) == lacks
+        assert NG.tie_ok(s, row) is None
+
+
 # --- the Commit record: a stand-in of I3 as drafted --------------------------------------------------------------------
 
 def test_wrong_token_changes_one_committed_sampled_id_and_keeps_the_registered_root(tmp_path):
