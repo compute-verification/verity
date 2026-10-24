@@ -2,6 +2,7 @@
 
   python served_step.py run --spec SPEC --arm ID [--point b8-p512-mixed] [--warmups 2] [--reps 3] --out DIR
   python served_step.py analyze REPORT.sqlite --steps DIR/steps.json --out DIR/step-profile.json
+  python served_step.py table ARM_DIR... [--base stock-fp8_compiled] --out breakdown.json
 
 ``run`` builds the arm's engine as verity-bench's worker does (`runner._VllmEngine` with the spec's preset, arm settings and
 the arm's execution), runs its own gate, then ``--warmups`` and ``--reps`` runs of the point (`_VllmEngine.measure`: the
@@ -14,9 +15,14 @@ cudaProfilerStart and cudaProfilerStop, for ``nsys profile --capture-range=cudaP
 
 ``analyze`` reads nsys's SQLite export.  A decode step is an engine step whose every scheduled request takes one token; its
 window runs from its start to the next step's.  Per window: the GPU's busy time (the union of kernel intervals, every
-stream), the kernels by category (`served_profile.CATEGORIES`), the CUDA API time and launches on the engine thread, and the
-host ranges' sums.  The medians are over the timed reps' decode steps at the point's full batch (``full``) and over every
-decode step (``decode``), with the host records' medians beside them.
+stream), the kernels by category (`served_profile.CATEGORIES`) and by the host range that launched them (`SOURCES`, through
+the runtime call's correlation id), the CUDA API time and launches on the engine thread, and the host ranges' sums with
+the API calls inside them.  The medians are over the timed reps' decode steps at the point's full batch (``full``) and over
+every decode step (``decode``), with the host records' medians beside them.
+
+``table`` puts arms' profiles side by side as the breakdown (`breakdown`): the step cycle, the GPU's busy time and the host
+gap; GPU time as vLLM's own kernels, Pearl-C's GEMM, forming and hashing kernels and the pass end's; host time in the
+runner, the Pearl-C calls (their Python and their CUDA API) and the pass end; and the harness's metrics, each over a base arm.
 """
 from __future__ import annotations
 
@@ -170,6 +176,8 @@ def run(a) -> int:
 # ---- the host records -------------------------------------------------------------------------------------------------
 
 HOST_KEYS = ("exec", "sample", "pc", "pend", "wr", "wrd")
+#: the host ranges a kernel's launch is credited to (`analyze`); a launch inside none of them is vLLM's own forward's
+SOURCES = ("pc", "pend", "wr", "wrd")
 
 
 def decode_steps(steps: list[dict], batch: int | None = None) -> list[dict]:
@@ -220,12 +228,33 @@ def analyze(db: Path, batch: int | None) -> dict:
     execs = ranges.get("exec", [])
     kcols = {r[1] for r in con.execute("PRAGMA table_info(CUPTI_ACTIVITY_KIND_KERNEL)")}
     name_col = "shortName" if "shortName" in kcols else "demangledName"
-    kernels = _folds(sorted((s, e, strings.get(n, str(n)), st) for s, e, n, st in con.execute(
-        f"SELECT start, end, {name_col}, streamId FROM CUPTI_ACTIVITY_KIND_KERNEL")))
-    api = []
+    krows = list(con.execute(f"SELECT start, end, {name_col}, streamId, correlationId FROM CUPTI_ACTIVITY_KIND_KERNEL"))
+    kernels = _folds(sorted((s, e, strings.get(n, str(n)), st) for s, e, n, st, _ in krows))
+    api, launched = [], {}
     if "CUPTI_ACTIVITY_KIND_RUNTIME" in tables:
-        api = sorted((s, e, strings.get(n, str(n))) for s, e, n, g in con.execute(
-            "SELECT start, end, nameId, globalTid FROM CUPTI_ACTIVITY_KIND_RUNTIME") if g == thread)
+        for s, e, n, g, corr in con.execute(
+                "SELECT start, end, nameId, globalTid, correlationId FROM CUPTI_ACTIVITY_KIND_RUNTIME"):
+            if g == thread:
+                api.append((s, e, strings.get(n, str(n))))
+                launched[corr] = s
+        api.sort()
+    # each kernel's source: the innermost host range of SOURCES open on the engine thread when its launch was issued
+    opened = sorted((s, e, k) for k in SOURCES for s, e, _, tid in ranges.get(k, []) if tid == thread)
+    starts = [r[0] for r in opened]
+
+    def source(at: int | None) -> str:
+        if at is None:
+            return "unattributed"
+        i = bisect.bisect_right(starts, at)
+        while i > 0:
+            s, e, k = opened[i - 1]
+            if e >= at:
+                return k
+            i -= 1
+            if at - s > 10**9:
+                break
+        return "vllm"
+    src_of = {(s, e, st): source(launched.get(corr)) for s, e, _, st, corr in krows}
     copies = []
     if "CUPTI_ACTIVITY_KIND_MEMCPY" in tables:
         copies = sorted((s, e, b) for s, e, b in con.execute("SELECT start, end, bytes FROM CUPTI_ACTIVITY_KIND_MEMCPY"))
@@ -246,13 +275,16 @@ def analyze(db: Path, batch: int | None) -> dict:
         tokens, reqs = int(tokens), int(reqs)
         ks = window(kernels, s, nxt)
         cats: dict = defaultdict(float)
-        for ks_, ke, _, _, c in ks:
+        by_src: dict = defaultdict(lambda: defaultdict(float))
+        for ks_, ke, _, st, c in ks:
             cats[c] += (ke - ks_) / 1e6
+            by_src[src_of.get((ks_, ke, st), "unattributed")][c] += (ke - ks_) / 1e6
         calls = window(api, s, nxt)
         cp = window(copies, s, nxt)
         row = {"tokens": tokens, "reqs": reqs, "cycle_ms": (nxt - s) / 1e6, "step_ms": (e - s) / 1e6,
                "gpu_busy_ms": _union([(a, b) for a, b, *_ in ks]) / 1e6, "kernel_sum_ms": sum(cats.values()),
                "kernels": len(ks), "streams": len({x[3] for x in ks}), "by_category_ms": dict(cats),
+               "by_source_ms": {k: dict(v) for k, v in by_src.items()},
                "launches": sum(1 for c in calls if "aunch" in c[2]), "api_ms": sum(b - a for a, b, _ in calls) / 1e6,
                "sync_ms": sum(b - a for a, b, n in calls if "ynchronize" in n) / 1e6,
                "memcpy": len(cp), "memcpy_ms": sum(b - a for a, b, _ in cp) / 1e6}
@@ -260,6 +292,10 @@ def analyze(db: Path, batch: int | None) -> dict:
             rs = inside(k, s, e) if k != "exec" else [ex]
             row[f"{k}_ms"] = sum(b - a for a, b, *_ in rs) / 1e6
             row[f"{k}_n"] = len(rs)
+            inner = [c for a, b, *_ in rs for c in window(api, a, b) if c[1] <= b]
+            row[f"{k}_api_ms"] = sum(b - a for a, b, _ in inner) / 1e6
+            row[f"{k}_launches"] = sum(1 for c in inner if "aunch" in c[2])
+            row[f"{k}_sync_ms"] = sum(b - a for a, b, n in inner if "ynchronize" in n or "emcpy" in n) / 1e6
         row["_kernels"] = ks
         rows.append(row)
     med = lambda xs: statistics.median(xs) if xs else None  # noqa: E731
@@ -271,6 +307,9 @@ def analyze(db: Path, batch: int | None) -> dict:
         out = {k: med([r.get(k, 0) for r in rs]) for k in keys}
         cats = sorted({c for r in rs for c in r["by_category_ms"]})
         out["by_category_ms"] = {c: med([r["by_category_ms"].get(c, 0.0) for r in rs]) for c in cats}
+        srcs = sorted({k for r in rs for k in r["by_source_ms"]})
+        out["by_source_ms"] = {k: {c: med([r["by_source_ms"].get(k, {}).get(c, 0.0) for r in rs])
+                                   for c in sorted({c for r in rs for c in r["by_source_ms"].get(k, {})})} for k in srcs}
         out["n"] = len(rs)
         return out
 
@@ -292,6 +331,80 @@ def analyze(db: Path, batch: int | None) -> dict:
                                  for n, v in sorted(top.items(), key=lambda kv: -kv[1][0])[:40]]}
 
 
+# ---- the breakdown ----------------------------------------------------------------------------------------------------
+
+#: Pearl-C's kernel categories by the breakdown's rows (`served_profile.CATEGORIES`); a pass end's are its own row
+KERNEL_ROWS = (("Pearl-C GEMM kernels", ("pearlc:gemm",)),
+               ("Pearl-C forming kernels", ("pearlc:forming", "pearlc:lines_a", "pearlc:screen")),
+               ("hashing and A's trees", ("pearlc:a_commit", "pearlc:tile_hash", "pearlc:row_digests", "pearlc:seeds",
+                                          "pearlc:a_tree", "pearlc:setup", "pearlc:folds")))
+HARNESS_METRICS = ("inter_token_latency_p50_s", "decode_time_per_token_s", "time_per_output_token_s")
+
+
+def breakdown(prof: dict, reps: dict | None) -> dict:
+    """One arm's full-batch decode step (medians, ms) split into the breakdown's rows: GPU time by whose kernels, the
+    host's per-call work and pass end, and the host gap the GPU waits through; with the harness's metrics (means)."""
+    f = prof.get("full", {})
+    src = f.get("by_source_ms", {})
+    pend_k = sum(src.get("pend", {}).values())
+    cats = f.get("by_category_ms", {})
+    pearl = {label: sum(v for c, v in cats.items() if c in cs) for label, cs in KERNEL_ROWS}
+    pearl["hashing and A's trees"] -= sum(v for c, v in src.get("pend", {}).items() if c in KERNEL_ROWS[2][1])
+    stock = sum(v for c, v in cats.items() if not c.startswith("pearlc:"))
+    cycle, busy = f.get("cycle_ms") or 0.0, f.get("gpu_busy_ms") or 0.0
+    out = {"n": f.get("n", 0), "cycle_ms": cycle, "gpu_busy_ms": busy, "host_gap_ms": cycle - busy,
+           "kernels": {"stock forward (vLLM's kernels)": stock, **pearl, "pass end (transcript tree, coins)": pend_k},
+           "host": {"execute_model": f.get("exec_ms"), "sample_tokens": f.get("sample_ms"),
+                    "outside the runner (scheduler, outputs)": cycle - (f.get("exec_ms") or 0) - (f.get("sample_ms") or 0),
+                    "Pearl-C calls": f.get("pc_ms"), "Pearl-C calls' CUDA API": f.get("pc_api_ms"),
+                    "Pearl-C calls' Python": (f.get("pc_ms") or 0) - (f.get("pc_api_ms") or 0),
+                    "pass end": f.get("pend_ms"), "pass end's waits": f.get("pend_sync_ms"),
+                    "whole replay upload": f.get("wr_ms"), "whole replay records": f.get("wrd_ms")},
+           "calls": f.get("pc_n"), "launches": f.get("launches"), "pc_launches": f.get("pc_launches")}
+    if reps:
+        ms = [r.get("metrics") or {} for r in reps.get("reps", [])]
+        out["harness_ms"] = {m: round(1e3 * statistics.mean(x[m] for x in ms), 3) for m in HARNESS_METRICS
+                             if ms and all(x.get(m) is not None for x in ms)}
+        out["gate"] = bool((reps.get("gate") or {}).get("passed"))
+    return out
+
+
+def table(dirs: list[Path], base: str) -> tuple[dict, str]:
+    """Each arm directory's breakdown (`breakdown`), and a Markdown table of them with each arm's cycle and harness
+    metrics over `base`'s (the arm id, as its directory's name)."""
+    arms = {}
+    for d in dirs:
+        p = d / "step-profile.json"
+        if p.is_file():
+            r = d / "reps.json"
+            arms[d.name] = breakdown(json.loads(p.read_text()), json.loads(r.read_text()) if r.is_file() else None)
+    names = list(arms)
+    fmt = lambda v: "—" if v is None else f"{v:.2f}"  # noqa: E731
+    lines = ["| per full-batch decode step (median, ms) | " + " | ".join(names) + " |",
+             "|---|" + "---:|" * len(names)]
+
+    def row(label, get):
+        lines.append(f"| {label} | " + " | ".join(fmt(get(arms[n])) for n in names) + " |")
+    row("step cycle (step start to next)", lambda a: a["cycle_ms"])
+    row("GPU busy (kernel union)", lambda a: a["gpu_busy_ms"])
+    row("host gap (cycle − GPU busy)", lambda a: a["host_gap_ms"])
+    for k in next(iter(arms.values()))["kernels"] if arms else ():
+        row(f"kernels: {k}", lambda a, k=k: a["kernels"].get(k))
+    for k in next(iter(arms.values()))["host"] if arms else ():
+        row(f"host: {k}", lambda a, k=k: a["host"].get(k))
+    row("launches (engine thread)", lambda a: a.get("launches"))
+    row("Pearl-C calls", lambda a: a.get("calls"))
+    for m in HARNESS_METRICS:
+        row(f"harness {m} (ms, mean of reps)", lambda a, m=m: (a.get("harness_ms") or {}).get(m))
+    if base in arms:
+        b = arms[base]
+        row(f"cycle / {base}", lambda a: a["cycle_ms"] / b["cycle_ms"] if b["cycle_ms"] else None)
+        for m in HARNESS_METRICS:
+            bm = (b.get("harness_ms") or {}).get(m)
+            row(f"{m} / {base}", lambda a, m=m, bm=bm: (a.get("harness_ms") or {}).get(m, 0) / bm if bm else None)
+    return {"schema": "verity-pouw/served-step-table/v1", "base": base, "arms": arms}, "\n".join(lines) + "\n"
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -307,9 +420,19 @@ def main(argv: list[str] | None = None) -> int:
     z.add_argument("--steps", type=Path, default=None, help="the run's steps.json: its host records beside the profile's")
     z.add_argument("--batch", type=int, default=None)
     z.add_argument("--out", type=Path, required=True)
+    t = sub.add_parser("table")
+    t.add_argument("dirs", type=Path, nargs="+", help="arm directories, each with step-profile.json (and reps.json)")
+    t.add_argument("--base", default="stock-fp8_compiled", help="the arm directory every ratio is over")
+    t.add_argument("--out", type=Path, required=True, help="the breakdown's JSON; its Markdown beside it (.md)")
     a = ap.parse_args(argv)
     if a.cmd == "run":
         return run(a)
+    if a.cmd == "table":
+        doc, md = table(a.dirs, a.base)
+        a.out.write_text(json.dumps(doc, indent=1))
+        a.out.with_suffix(".md").write_text(md)
+        print(md)
+        return 0
     doc = analyze(a.db, a.batch)
     if a.steps is not None and a.steps.is_file():
         doc["host"] = summarize_host(json.loads(a.steps.read_text()), doc.get("batch") or 0)

@@ -2098,17 +2098,24 @@ def test_the_modes_are_arms_and_the_negative_control_is_a_pass_control(device_ru
 
 def _served_step_profile(path: Path) -> Path:
     """An nsys SQLite export's tables as `served_step.analyze` reads them: a prefill step and three decode steps of 8
-    requests, each with three Pearl-C calls (pd_commit, the GEMM, and the tile leaves on a stream of their own), an
-    attention kernel and a pass end whose transcript tree is ``s512_nodes``; 10 ms cycles, each step 9 ms."""
+    requests, each with three Pearl-C calls (pd_commit, the GEMM, and the tile leaves on a stream of their own, each its
+    own launch inside the call), an attention kernel launched between calls and a pass end whose transcript tree is
+    ``s512_nodes``; 10 ms cycles, each step 9 ms."""
     import sqlite3
     con = sqlite3.connect(path)
     con.execute("CREATE TABLE StringIds (id INTEGER, value TEXT)")
     con.execute("CREATE TABLE NVTX_EVENTS (start INT, end INT, text TEXT, globalTid INT, textId INT)")
-    con.execute("CREATE TABLE CUPTI_ACTIVITY_KIND_KERNEL (start INT, end INT, shortName INT, globalPid INT, streamId INT)")
-    con.execute("CREATE TABLE CUPTI_ACTIVITY_KIND_RUNTIME (start INT, end INT, nameId INT, globalTid INT)")
+    con.execute("CREATE TABLE CUPTI_ACTIVITY_KIND_KERNEL (start INT, end INT, shortName INT, globalPid INT, streamId INT, "
+                "correlationId INT)")
+    con.execute("CREATE TABLE CUPTI_ACTIVITY_KIND_RUNTIME (start INT, end INT, nameId INT, globalTid INT, correlationId INT)")
     names = {1: "pd_commit_851", 2: "gemm_pearlc_d", 3: "flash_fwd", 4: "cudaLaunchKernel", 5: "pd_tiles_851", 6: "s512_nodes"}
     con.executemany("INSERT INTO StringIds VALUES (?, ?)", names.items())
-    tid, ms = 7, 1_000_000
+    tid, ms, corr = 7, 1_000_000, iter(range(1, 1000))
+
+    def kernel(at, start, end, name, stream=7):
+        k = next(corr)
+        con.execute("INSERT INTO CUPTI_ACTIVITY_KIND_RUNTIME VALUES (?, ?, 4, ?, ?)", (at, at + 10_000, tid, k))
+        con.execute("INSERT INTO CUPTI_ACTIVITY_KIND_KERNEL VALUES (?, ?, ?, 0, ?, ?)", (start, end, name, stream, k))
     for i in range(4):
         s = i * 10 * ms
         con.execute("INSERT INTO NVTX_EVENTS VALUES (?, ?, 'step', ?, NULL)", (s, s + 9 * ms, tid))
@@ -2116,12 +2123,12 @@ def _served_step_profile(path: Path) -> Path:
         for j in range(3):
             c = s + ms + j * 2 * ms
             con.execute("INSERT INTO NVTX_EVENTS VALUES (?, ?, 'pc', ?, NULL)", (c, c + ms, tid))
-            con.execute("INSERT INTO CUPTI_ACTIVITY_KIND_RUNTIME VALUES (?, ?, 4, ?)", (c, c + 10_000, tid))
-            con.executemany("INSERT INTO CUPTI_ACTIVITY_KIND_KERNEL VALUES (?, ?, ?, 0, ?)",
-                            [(c + 100_000, c + 400_000, 1, 7), (c + 400_000, c + 500_000, 2, 7), (c + 450_000, c + 600_000, 5, 9)])
-        con.execute("INSERT INTO CUPTI_ACTIVITY_KIND_KERNEL VALUES (?, ?, 3, 0, 7)", (s + 7 * ms, s + 7 * ms + 200_000))
+            kernel(c, c + 100_000, c + 400_000, 1)
+            kernel(c + 20_000, c + 400_000, c + 500_000, 2)
+            kernel(c + 40_000, c + 450_000, c + 600_000, 5, 9)
+        kernel(s + 6_500_000, s + 7 * ms, s + 7 * ms + 200_000, 3)
         con.execute("INSERT INTO NVTX_EVENTS VALUES (?, ?, 'pend', ?, NULL)", (s + 7 * ms, s + 8 * ms, tid))
-        con.execute("INSERT INTO CUPTI_ACTIVITY_KIND_KERNEL VALUES (?, ?, 6, 0, 7)", (s + 7_500_000, s + 7_600_000))
+        kernel(s + 7_100_000, s + 7_500_000, s + 7_600_000, 6)
     con.commit()
     return path
 
@@ -2132,12 +2139,41 @@ def test_the_served_step_profile_splits_each_decode_step_into_kernels_and_host_r
     assert (doc["batch"], doc["steps"], doc["decode_steps"], doc["full"]["n"], doc["other"]["n"]) == (8, 4, 3, 3, 1)
     f = doc["full"]
     got = {k: round(f[k], 6) for k in ("cycle_ms", "step_ms", "gpu_busy_ms", "kernel_sum_ms", "pc_ms", "pc_n", "pend_ms",
-                                        "exec_ms", "launches", "api_ms", "streams")}
+                                        "exec_ms", "launches", "api_ms", "streams", "pc_api_ms", "pc_launches",
+                                        "pend_launches")}
     assert got == {"cycle_ms": 10.0, "step_ms": 9.0, "gpu_busy_ms": 1.8, "kernel_sum_ms": 1.95, "pc_ms": 3.0, "pc_n": 3,
-                   "pend_ms": 1.0, "exec_ms": 7.0, "launches": 3, "api_ms": 0.03, "streams": 2}
+                   "pend_ms": 1.0, "exec_ms": 7.0, "launches": 11, "api_ms": 0.11, "streams": 2, "pc_api_ms": 0.09,
+                   "pc_launches": 9, "pend_launches": 1}
     assert {c: round(v, 6) for c, v in f["by_category_ms"].items()} == {
         "pearlc:a_commit": 0.9, "pearlc:gemm": 0.3, "pearlc:tile_hash": 0.45, "attention": 0.2, "pearlc:a_tree": 0.1}
+    assert {k: {c: round(v, 6) for c, v in cs.items()} for k, cs in f["by_source_ms"].items()} == {
+        "pc": {"pearlc:a_commit": 0.9, "pearlc:gemm": 0.3, "pearlc:tile_hash": 0.45}, "vllm": {"attention": 0.2},
+        "pend": {"pearlc:a_tree": 0.1}}
     assert [(k["kernel"], k["per_step"]) for k in doc["top_kernels_full"][:2]] == [("pd_commit_851", 3), ("pd_tiles_851", 3)]
+
+
+def test_the_served_steps_breakdown_puts_each_arms_kernels_and_host_time_in_its_rows(tmp_path):
+    S = load("pearl_c_vllm_served_step", KERNEL.parent / "pearl_c_vllm" / "served_step.py")
+    pearl, base = tmp_path / "pouw_pearl-c-sm120-v1-h3", tmp_path / "stock-fp8_compiled"
+    for d in (pearl, base):
+        d.mkdir()
+    (pearl / "step-profile.json").write_text(json.dumps(S.analyze(_served_step_profile(tmp_path / "served.sqlite"), 8)))
+    (pearl / "reps.json").write_text(json.dumps({"gate": {"passed": True}, "reps": [
+        {"metrics": {"inter_token_latency_p50_s": 0.010}}, {"metrics": {"inter_token_latency_p50_s": 0.012}}]}))
+    (base / "step-profile.json").write_text(json.dumps({"full": {"n": 3, "cycle_ms": 2.0, "gpu_busy_ms": 1.5,
+                                                                 "by_category_ms": {"gemm": 1.0, "attention": 0.4}}}))
+    (base / "reps.json").write_text(json.dumps({"gate": {"passed": True}, "reps": [
+        {"metrics": {"inter_token_latency_p50_s": 0.002}}]}))
+    doc, md = S.table([pearl, base], "stock-fp8_compiled")
+    p = doc["arms"][pearl.name]
+    assert {k: round(v, 6) for k, v in p["kernels"].items()} == {
+        "stock forward (vLLM's kernels)": 0.2, "Pearl-C GEMM kernels": 0.3, "Pearl-C forming kernels": 0.0,
+        "hashing and A's trees": 1.35, "pass end (transcript tree, coins)": 0.1}
+    assert (round(p["host_gap_ms"], 6), round(p["host"]["Pearl-C calls' Python"], 6), p["gate"]) == (8.2, 2.91, True)
+    assert p["harness_ms"] == {"inter_token_latency_p50_s": 11.0}
+    assert doc["arms"][base.name]["kernels"]["stock forward (vLLM's kernels)"] == 1.4
+    assert "| cycle / stock-fp8_compiled | 5.00 | 1.00 |" in md
+    assert "| inter_token_latency_p50_s / stock-fp8_compiled | 5.50 | 1.00 |" in md
 
 
 def test_the_served_steps_host_records_are_the_timed_reps_decode_steps():
