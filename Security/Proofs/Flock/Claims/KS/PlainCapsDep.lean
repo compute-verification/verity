@@ -208,8 +208,8 @@ theorem mem_rdAtK (keepV : Bool → Bool) {Ω A : Type} {P : Claims.Prover Ω} {
   · rw [if_neg hacc]
     simp only [Finset.notMem_empty, false_iff, not_and]
     intro hk hr
-    exact hacc ((Claims.Recursion.abortRun_acc_iff (H := sha512) (P := P) (V := VK keepV) (x := x)
-      (keep := keep) (ω := ω) (d := d)).2 ⟨hk, hr⟩)
+    exact absurd ((Claims.Recursion.abortRun_acc_iff (H := sha512) (P := P) (V := VK keepV) (x := x)
+      (keep := keep) (ω := ω) (d := d)).2 ⟨hk, hr⟩) hacc
 
 /-- `mem_rdAtK` at the deployed plain verifier (`keep := id`). -/
 theorem mem_rdAt {Ω A : Type} {P : Claims.Prover Ω} {x : Claims.Msg}
