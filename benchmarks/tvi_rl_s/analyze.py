@@ -55,7 +55,7 @@ def table(by, rng):
         point = sum(r["acc"] for r in rs) / len(rs)
         row = {"method": m, "S_bits": rs[0]["S_bits"], "n_params": rs[0].get("n_params", 0),
                "seeds": [r.get("seed", 0) for r in rs], "acc_per_seed": [r["acc"] for r in rs], "acc": point,
-               "acc_ci": list(ci(accs[m])), "steps": rs[0].get("steps", 0)}
+               "acc_ci": list(ci(accs[m])), "steps": rs[0].get("steps", 0), "modes": sorted({r.get("mode", "merged") for r in rs})}
         if m != "base":
             row["gain"] = point - base_acc
             row["gain_ci"] = list(ci([accs[m][b] - accs["base"][b] for b in range(B)]))
@@ -99,7 +99,7 @@ def load(dirs):
             if "passk" in r:
                 passk[f"{r['task']} {r['method']} seed{r['seed']} step{r['step']}"] = r["passk"]
             run = {"seed": r["seed"], "S_bits": r["S_bits"], "n_params": r["n_params"], "steps": r["step"], "step": r["step"],
-                   "prio": 1 if r.get("mode") == "vllm-lora" else 0}
+                   "prio": 1 if r.get("mode") == "vllm-lora" else 0, "mode": r.get("mode", "merged")}
             s = dict(run, acc=r["sampled"]["acc"], per_problem=r["sampled"]["per_problem"], T=r["sampled"]["temperature"],
                      n=r["sampled"]["n"])
             g = dict(run, acc=r["greedy_acc"], per_problem=r["greedy_per_problem"])
@@ -225,7 +225,8 @@ def render(out):
                 if r.get("frac_full_gain") is not None:
                     f = f"{r['frac_full_gain']:.2f}"
                     f += f" [{r['frac_ci'][0]:.2f}, {r['frac_ci'][1]:.2f}]" if r.get("frac_ci") else " [unbounded]"
-                lines.append(f"| {r['method']} | {fmt_bits(r['S_bits'])} ({r['S_bits']:.3g}) | {r['n_params']:,} | {r['steps']} | {accs} | {a} | {g} | {f} |")
+                name = r["method"] + (" (unmerged, vLLM LoRA)" if "vllm-lora" in r.get("modes", []) else "")
+                lines.append(f"| {name} | {fmt_bits(r['S_bits'])} ({r['S_bits']:.3g}) | {r['n_params']:,} | {r['steps']} | {accs} | {a} | {g} | {f} |")
     for task, t in out["online"].items():
         b = t["base_T1"]
         lines.append(f"\n### {task}: online accuracy at T = 1 (mean training reward over the last {t['window']} steps, fresh prompts; "
