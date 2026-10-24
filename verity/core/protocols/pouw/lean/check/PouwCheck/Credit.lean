@@ -1058,25 +1058,28 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
   let (some ra, some rb) := (digest? (.str ((root.lookup a).getD "")), digest? (.str ((root.lookup bv).getD "")))
     | throw ("registration", s!"call {call}'s seed reads the roots of {a} and {bv}, which are not both SHA-512 " ++
         "digests (128 lowercase hex): register each table at its tree's root")
-  let param := fun (name : String) (rows i : Nat) =>
-    [(Flock.Registered.PARAM_KEY, Json.str (if rows == 1 then name else s!"{name}[{i}]"))]
-  let ports : List (String × String × (Nat → Nat) × List (String × Json)) :=
-    (List.range r).map (fun i => (s!"a_k{k}_{i}", a, fun t => at_ + r * (t / per) + i, param s!"a_k{k}" r i)) ++
-    (List.range c).map (fun j => (s!"b_k{k}_{j}", bv, fun t => b0 + c * (t % per) + j, param s!"b_k{k}" c j)) ++
-    [("zy", zy, fun t => t, [])] ++ (if receipted then [(RECEIPT_PORT, rc, fun t => t, [])] else [])
+  let ports : List (String × String × (Nat → Nat)) :=
+    (List.range r).map (fun i => (s!"a_k{k}_{i}", a, fun t => at_ + r * (t / per) + i)) ++
+    (List.range c).map (fun j => (s!"b_k{k}_{j}", bv, fun t => b0 + c * (t % per) + j)) ++
+    [("zy", zy, fun t => t)] ++ (if receipted then [(RECEIPT_PORT, rc, fun t => t)] else [])
   let mut out : List (String × Json) := []
-  for (port, v, row, named) in ports do
+  for (port, v, row) in ports do
     let reads := (List.range (u0 + size)).map fun u =>
       if u0 ≤ u && u < u0 + size then Lean.toJson (row (u - u0)) else Json.null
     let lw : Nat × Nat := ((shapes.find? (·.1 == v)).map (·.2)).getD (0, 0)
     let (leaves, words) := lw
     let d ← (SampledProofs.Registered.domainAt program v words leaves 16
       (if isHeld (.str v) then none else some window)).mapError fun why => ("registration", why)
-    out := out ++ [(port, Json.mkObj ([("value", Json.str v), ("root", Json.str ((root.lookup v).getD "")),
+    out := out ++ [(port, Json.mkObj [("value", Json.str v), ("root", Json.str ((root.lookup v).getD "")),
       ("leaves", Lean.toJson leaves), ("words", Lean.toJson words), ("word_bits", Lean.toJson (16 : Nat)),
       ("domain", Json.str (Flock.hexOf d)), (SCHEMA_KEY, Json.str Flock.HmRow.ROW_SCHEMA_V2),
-      ("reads", Json.arr reads.toArray)] ++ named))]
+      ("reads", Json.arr reads.toArray)])]
   let pv := s!"{shape.pre}pub@{call}"
+  let params : List (String × String) := [("a", r), ("b", c)].flatMap fun (x, n) =>
+    (List.range n).map fun i => (s!"{x}_k{k}_{i}", if n == 1 then s!"{x}_k{k}" else s!"{x}_k{k}[{i}]")
+  out := out.map fun (p, j) => (p, match params.lookup p, j with
+    | some n, .obj kvs => .obj (kvs.insert compare Flock.Registered.PARAM_KEY (.str n))
+    | _, _ => j)
   let words := PouwCheck.PUBLIC_ROW_BITS / 16
   let sb := (hex? (.str salt)).getD ByteArray.empty
   let ks : Array (Array Nat × ByteArray) := (Array.range size).map fun t =>
