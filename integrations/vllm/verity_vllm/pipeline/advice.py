@@ -17,12 +17,20 @@ from the Commit record's token ids.  Each kept output's `release` bucket is the 
 the first step, in which the engine emitted it (the step's clock reading): with no certifier on the path, the earliest bucket
 its frame could be released in.  A trace without a clock takes the step index as the bucket.
 
-    advice.bin    the advice, I1's canonical encoding
-    advice.json   the same advice, I1's `to_json`
-    report.json   the bits I1 charges each egress window of `--T` buckets, the round trip (`decode(encode(a)) == a`), the run's
-                  counts, and the digests of what it read
+The advice is not published (Daniel, 24 Oct): its canonical encoding is committed as hiding rows (`advice_windows.commit_advice`:
+hm96-sha512 rows under `verity.ml.commitments.advice`, the tree's domain bound to the registered compiler), and only the root and
+the advice's length go public, as the binding a window's registration carries (`advice_windows.binding`, the window provenance's
+``binding``, which `serving_rows.after_commit(binding=…)` takes).  Under ``--out``:
 
-    verity-vllm advice RUN [--trace FILE] [--io FILE] [--out DIR] [--T 600] [--tau 0.1]
+    registration.json     public: the binding (the compiler's name and digest, the advice's root and ``total_bits``), and the bits
+                          I1 charges each egress window of `--T` buckets (``bits_by_window``)
+    private/advice.bin    the prover's: the advice, I1's canonical encoding
+    private/advice.json   the same advice, I1's `to_json`
+    private/opening.json  the advice's opening (`advice_windows.opening`: its encoding and every row's salt)
+    private/report.json   the round trip (`decode(encode(a)) == a`), the run's counts (they describe the advice), and the digests of
+                          what it read
+
+    verity-vllm advice RUN [--trace FILE] [--io FILE] [--out DIR] [--T 600] [--tau 0.1] [--compiler-name N --compiler-digest D]
 """
 from __future__ import annotations
 
@@ -34,10 +42,31 @@ from pathlib import Path
 from typing import Any
 
 from verity.core.protocols.certifier import advice as I1
+from verity.ml.circuits.codec import canonical_json
 from verity_vllm.config import UsageError, option
 from verity_vllm.engine import step_trace as ST
 
-SCHEMA = "verity-vllm/advice-report/v2"
+from . import advice_windows as AW
+
+SCHEMA = "verity-vllm/advice-report/v3"
+REGISTRATION = "verity-vllm/advice-registration/v1"
+COMPILER = "verity_vllm.predict.steps.compile_steps"
+
+
+@dataclass(frozen=True)
+class Compiler:
+    """The registered compiler as the binding names it: ``name`` and ``digest`` (128 hex digits)."""
+    name: str
+    digest: str
+
+
+def registered_compiler(name: str = COMPILER, digest: str | None = None) -> Compiler:
+    """The compiler the advice is bound to; without ``digest``, the SHA-512 of `name` and the predictor's code version."""
+    if digest is None:
+        # TODO: COMPILER's own registered digest once compile_steps lands with one (score.code_version() is 16 hex digits)
+        from verity_vllm.predict.score import code_version
+        digest = hashlib.sha512(canonical_json({"name": name, "code": code_version()})).hexdigest()
+    return Compiler(name, digest)
 
 
 def finish_of(rid: str, rec: dict[str, Any] | None) -> str:
@@ -240,8 +269,23 @@ def _sha(p: Path) -> str:
     return hashlib.sha256(p.read_bytes()).hexdigest()
 
 
+def registration(compiler: Any, a: I1.Advice, root: bytes, rows: int, T: int) -> dict[str, Any]:
+    """What goes public of the advice: the binding (the compiler, the root of the advice's hiding commitment and its length in
+    bits) and the bits I1 charges each egress window of ``T`` buckets.  Nothing of the advice itself."""
+    return {"schema": REGISTRATION, "scheme": AW.SCHEME, "binding": AW.binding(compiler, root.hex(), int(I1.total_bits(a))),
+            "rows": rows, "row_bits": AW.ROW_BITS, "T": int(T),
+            "bits_by_window": {str(w): int(n) for w, n in sorted(I1.bits_by_window(a, int(T)).items())}}
+
+
+def commit(compiler: Any, a: I1.Advice, T: int = 600, salts: list[bytes] | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The advice committed: its public registration (`registration`) and its private opening (`advice_windows.opening`)."""
+    data = I1.encode(a)
+    reg = AW.commit_advice(compiler, data, salts)
+    return registration(compiler, a, reg.root, len(reg.rows), T), AW.opening(data, reg)
+
+
 def write(run: str | Path, out: str | Path | None = None, *, trace: str | Path | None = None, io: str | Path | None = None,
-          T: int = 600, tau: float = 0.1) -> dict[str, Any]:
+          T: int = 600, tau: float = 0.1, compiler: Any = None) -> dict[str, Any]:
     run = Path(run)
     trace = Path(trace) if trace else run / "step_trace.jsonl"
     if io is None:
@@ -251,10 +295,15 @@ def write(run: str | Path, out: str | Path | None = None, *, trace: str | Path |
     a = b.advice
     data = I1.encode(a)
     back = I1.decode(data)
+    compiler = compiler if compiler is not None else registered_compiler()
+    public, opened = commit(compiler, a, T)
     out = Path(out) if out else run / "advice"
-    out.mkdir(parents=True, exist_ok=True)
-    (out / "advice.bin").write_bytes(data)
-    (out / "advice.json").write_text(json.dumps(I1.to_json(a), separators=(",", ":")) + "\n")
+    private = out / "private"
+    private.mkdir(parents=True, exist_ok=True)
+    (out / "registration.json").write_text(json.dumps(public, indent=1) + "\n")
+    (private / "advice.bin").write_bytes(data)
+    (private / "advice.json").write_text(json.dumps(I1.to_json(a), separators=(",", ":")) + "\n")
+    (private / "opening.json").write_text(json.dumps(opened) + "\n")
     steps = ST.steps(recs)
     charged = I1.bits_by_window(a, T)
     outputs = I1.outputs(a)
@@ -267,7 +316,7 @@ def write(run: str | Path, out: str | Path | None = None, *, trace: str | Path |
               "commit_record": {"path": str(io), "sha256": _sha(Path(io))} if io else None, "config": recs[0]["config"],
               "advice": {"bytes": len(data), "bits": I1.total_bits(a), "sha256": hashlib.sha256(data).hexdigest(),
                          "sha512": hashlib.sha512(data).hexdigest()},
-              "roundtrip": back == a, "T": T, "release": b.release_rule, "windows": per,
+              "roundtrip": back == a, "T": T, "release": b.release_rule, "windows": per, "registration": public,
               "counts": {"requests": len(a.requests), "steps": len(a.steps), "rows": len(rows), "outputs": len(a.release),
                          "chunked_prefill_rows": sum(1 for r in rows if r.kind == "prefill" and r.start + r.n < a.requests[r.request].prompt_len),
                          "prefill_rows": sum(1 for r in rows if r.kind == "prefill"), "decode_rows": sum(1 for r in rows if r.kind == "decode"),
@@ -276,29 +325,35 @@ def write(run: str | Path, out: str | Path | None = None, *, trace: str | Path |
                          "arrivals_during_decode": sum(1 for r in recs if r["kind"] == "arrive" and 0 < r["before_step"] < len(steps)),
                          "finishes": {f: sum(1 for q in a.requests if q.finish == f) for f in sorted({q.finish for q in a.requests})},
                          "row_order": sorted({s["order"] for s in steps})}}
-    (out / "report.json").write_text(json.dumps(report, indent=1) + "\n")
+    (private / "report.json").write_text(json.dumps(report, indent=1) + "\n")
     return report
 
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
-    """Write a served run's advice (I1) from its step trace and Commit record; exit 0 iff it round-trips."""
+    """Write a served run's advice (I1) from its step trace and Commit record, committed: registration.json public, the advice and
+    its opening under private/; exit 0 iff it round-trips."""
     run: str = option("run", help="the run directory (step_trace.jsonl, and requests.jsonl or windows.jsonl)")
     trace: str | None = option("--trace", default=None, help="the step trace (default RUN/step_trace.jsonl)")
     io: str | None = option("--io", default=None, help="the Commit record's requests (default RUN/requests.jsonl or RUN/windows.jsonl)")
-    out: str | None = option("--out", default=None, help="where advice.bin, advice.json and report.json go (default RUN/advice)")
+    out: str | None = option("--out", default=None, help="where registration.json and private/ go (default RUN/advice)")
+    compiler_name: str = option("--compiler-name", default=COMPILER, help="the registered compiler the advice is bound to")
+    compiler_digest: str | None = option("--compiler-digest", default=None,
+                                         help="its digest, 128 hex digits (default: SHA-512 of the name and the predictor's code version)")
     T: int = option("--T", type=int, default=600, help="egress buckets per window, for the bits I1 charges each window")
     tau: float = option("--tau", type=float, default=0.1, help="the egress bucket's width in seconds, for each output's release bucket")
 
 
 def main(a: Options) -> int:
     try:
-        rep = write(a.run, a.out, trace=a.trace, io=a.io, T=a.T, tau=a.tau)
+        rep = write(a.run, a.out, trace=a.trace, io=a.io, T=a.T, tau=a.tau,
+                    compiler=registered_compiler(a.compiler_name, a.compiler_digest))
     except ValueError as e:
         raise UsageError(f"{a.run}: {e}") from e
-    for w in rep["windows"]:
-        print(f"[advice] window {w['window']} (buckets {w['buckets'][0]}-{w['buckets'][1] - 1}): {w['outputs']} outputs from "
-              f"{w['steps']} steps, {w['bits']} bits", flush=True)
-    print(f"[advice] {rep['counts']['requests']} requests, {rep['counts']['steps']} steps, {rep['advice']['bits']} bits at T={rep['T']}; "
+    reg = rep["registration"]
+    for w, bits in reg["bits_by_window"].items():
+        print(f"[advice] window {w} (buckets {int(w) * reg['T']}-{(int(w) + 1) * reg['T'] - 1}): {bits} bits", flush=True)
+    bound = reg["binding"]["advice"]
+    print(f"[advice] {bound['bits']} bits at T={reg['T']}, committed as {reg['rows']} hiding rows, root {bound['root'][:16]}…; "
           f"round trip {'equal' if rep['roundtrip'] else 'NOT EQUAL'} ({rep['i1']['module']})", flush=True)
     return 0 if rep["roundtrip"] else 1

@@ -16,6 +16,8 @@ from verity_vllm.config import UsageError
 from verity_vllm.engine import step_trace as ST
 from verity_vllm.pipeline import advice as ADV
 
+C = ADV.Compiler("test-compiler", "ab" * 64)
+
 
 def _served(tmp_path, *, seed: int = 0, n: int = 12, gap: bool = True, **sched_kw):
     """A run of `n` requests with varied prompt and output lengths, some ending at EOS, arriving while others decode, with an idle
@@ -49,12 +51,12 @@ def _run(tmp_path, arrivals: dict[int, list[FakeRequest]], *, abort_at=None, clo
 
 
 def _advice(tmp_path) -> I1.Advice:
-    return I1.decode((tmp_path / "advice" / "advice.bin").read_bytes())
+    return I1.decode((tmp_path / "advice" / "private" / "advice.bin").read_bytes())
 
 
 def test_a_varied_run_gives_i1_advice_that_round_trips_with_its_bits_charged_to_windows(tmp_path):
     reqs = _served(tmp_path)
-    rep = ADV.write(tmp_path, T=5)
+    rep = ADV.write(tmp_path, T=5, compiler=C)
     assert rep["roundtrip"] is True
     a = _advice(tmp_path)
     by_id = {f"user-{r.request_id}": r for r in reqs}
@@ -78,7 +80,7 @@ def test_a_varied_run_gives_i1_advice_that_round_trips_with_its_bits_charged_to_
 
 def test_a_preempted_request_resumes_on_a_row_marked_preempted_from_position_zero(tmp_path):
     _run(tmp_path, {0: [FakeRequest("e0", [5] * 4, [6] * 6, 6), FakeRequest("e1", [5] * 4, [6] * 6, 6)]}, preempt_at={2: "e0"})
-    rep = ADV.write(tmp_path)
+    rep = ADV.write(tmp_path, compiler=C)
     a = _advice(tmp_path)
     pre = [r for st in a.steps for r in st.rows if r.preempted]
     assert rep["roundtrip"] and rep["counts"]["preempted_rows"] == 1
@@ -89,7 +91,7 @@ def test_a_prefix_cache_hit_names_the_request_whose_kv_it_reuses(tmp_path):
     shared = [7, 8, 9, 10, 11, 12, 13, 14]
     _run(tmp_path, {0: [FakeRequest("e0", shared + [3, 4], [6] * 3, 3)], 5: [FakeRequest("e1", shared + [5], [6] * 3, 3)]},
          prefix_block=4)
-    rep = ADV.write(tmp_path)
+    rep = ADV.write(tmp_path, compiler=C)
     a = _advice(tmp_path)
     first = next(r for st in a.steps for r in st.rows if r.request == 1)
     assert rep["roundtrip"] and rep["counts"]["cache_hit_rows"] == 1
@@ -99,7 +101,7 @@ def test_a_prefix_cache_hit_names_the_request_whose_kv_it_reuses(tmp_path):
 def test_a_resume_under_prefix_caching_reuses_its_own_kv(tmp_path):
     _run(tmp_path, {0: [FakeRequest("e0", list(range(3, 13)), [6] * 8, 8), FakeRequest("e1", [5] * 4, [6] * 8, 8)]},
          preempt_at={3: "e0"}, prefix_block=4)
-    rep = ADV.write(tmp_path)
+    rep = ADV.write(tmp_path, compiler=C)
     a = _advice(tmp_path)
     pre = next(r for st in a.steps for r in st.rows if r.preempted)
     assert rep["roundtrip"] and a.requests[pre.request].id == "user-e0" and pre.start == pre.cache_hit > 0
@@ -109,12 +111,12 @@ def test_a_resume_under_prefix_caching_reuses_its_own_kv(tmp_path):
 @pytest.mark.parametrize("seed", range(4))
 def test_the_round_trip_holds_over_seeds_with_prefix_caching_and_a_preemption(tmp_path, seed):
     _served(tmp_path, seed=seed, n=16, prefix_block=4, preempt_at={6: "e1"})
-    assert ADV.write(tmp_path)["roundtrip"] is True
+    assert ADV.write(tmp_path, compiler=C)["roundtrip"] is True
 
 
 def test_a_trace_without_a_clock_releases_each_output_at_its_step(tmp_path):
     _served(tmp_path, n=4, gap=False, clock=False)
-    rep = ADV.write(tmp_path)
+    rep = ADV.write(tmp_path, compiler=C)
     a = _advice(tmp_path)
     assert rep["release"] == {"rule": "step index"}
     assert list(a.release) == [o.step for o in I1.outputs(a)]
@@ -123,7 +125,7 @@ def test_a_trace_without_a_clock_releases_each_output_at_its_step(tmp_path):
 def test_an_aborted_request_is_refused_since_advice_v0_has_no_abort(tmp_path):
     _run(tmp_path, {0: [FakeRequest("e0", [5] * 4, [6] * 9, 9), FakeRequest("e1", [5] * 4, [6] * 3, 3)]}, abort_at={3: "e0"})
     with pytest.raises(ValueError, match="request e0 finished by abort, which advice v0 can't say"):
-        ADV.write(tmp_path)
+        ADV.write(tmp_path, compiler=C)
 
 
 def test_a_commit_record_whose_output_disagrees_with_the_trace_is_refused(tmp_path):
@@ -134,7 +136,7 @@ def test_a_commit_record_whose_output_disagrees_with_the_trace_is_refused(tmp_pa
     lines[1] = json.dumps(doc)
     (tmp_path / "requests.jsonl").write_text("\n".join(lines) + "\n")
     with pytest.raises(ValueError, match="request e1: the trace emitted .* the Commit record holds"):
-        ADV.write(tmp_path)
+        ADV.write(tmp_path, compiler=C)
 
 
 def test_a_commit_record_missing_a_request_is_refused(tmp_path):
@@ -142,7 +144,7 @@ def test_a_commit_record_missing_a_request_is_refused(tmp_path):
     lines = (tmp_path / "requests.jsonl").read_text().splitlines()
     (tmp_path / "requests.jsonl").write_text("\n".join(lines[:-1]) + "\n")
     with pytest.raises(ValueError, match="request e3 is in the trace but not in the Commit record"):
-        ADV.write(tmp_path)
+        ADV.write(tmp_path, compiler=C)
 
 
 def test_a_row_that_skips_or_repeats_positions_is_refused(tmp_path):
@@ -158,16 +160,21 @@ def test_a_row_that_skips_or_repeats_positions_is_refused(tmp_path):
 def test_the_command_writes_the_advice_and_exits_zero(tmp_path, capsys):
     from verity_vllm.pipeline import cli
     _served(tmp_path, n=6)
-    assert cli.main(["advice", str(tmp_path), "--out", str(tmp_path / "out"), "--T", "50", "--tau", "0.2"]) == 0
+    out = tmp_path / "out"
+    assert cli.main(["advice", str(tmp_path), "--out", str(out), "--T", "50", "--tau", "0.2", "--compiler-digest", "ab" * 64]) == 0
     assert "round trip equal" in capsys.readouterr().out
-    assert {p.name for p in (tmp_path / "out").iterdir()} == {"advice.bin", "advice.json", "report.json"}
-    rep = json.loads((tmp_path / "out" / "report.json").read_text())
+    assert {p.name for p in out.iterdir()} == {"registration.json", "private"}
+    assert {p.name for p in (out / "private").iterdir()} == {"advice.bin", "advice.json", "opening.json", "report.json"}
+    rep = json.loads((out / "private" / "report.json").read_text())
     assert rep["T"] == 50 and rep["release"]["tau_s"] == 0.2
-    assert I1.from_json(json.loads((tmp_path / "out" / "advice.json").read_text())) == I1.decode((tmp_path / "out" / "advice.bin").read_bytes())
+    assert rep["registration"] == json.loads((out / "registration.json").read_text())
+    assert rep["registration"]["binding"]["compiler"] == {"name": ADV.COMPILER, "digest": "ab" * 64}
+    private = out / "private"
+    assert I1.from_json(json.loads((private / "advice.json").read_text())) == I1.decode((private / "advice.bin").read_bytes())
 
 
 def test_the_command_reports_a_disagreeing_run_as_a_usage_error(tmp_path):
     _served(tmp_path, n=4)
     (tmp_path / "requests.jsonl").write_text("")
     with pytest.raises(UsageError, match="the trace but not in the Commit record"):
-        ADV.main(ADV.Options(run=str(tmp_path)))
+        ADV.main(ADV.Options(run=str(tmp_path), compiler_digest="ab" * 64))
