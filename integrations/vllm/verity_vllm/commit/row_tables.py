@@ -35,8 +35,8 @@ from verity.ml.commitments.merkle import CommitmentDomain
 
 from . import serving_rows as CS
 
-__all__ = ["StepRoots", "Table", "check_row_tables", "find", "of_dir", "of_registration", "opening", "registered_reads", "step_roots",
-           "verify", "witness"]
+__all__ = ["StepRoots", "Table", "check_row_tables", "find", "of_dir", "of_registration", "opening", "registered_reads", "reported_reads",
+           "step_roots", "verify", "witness"]
 
 
 @dataclass(frozen=True)
@@ -192,6 +192,19 @@ def registered_reads(window: CS.Window, publics: Mapping[str, bytes]) -> dict[st
                 "reads": [m.links[j][1] for j in m.link_refs], REG.READS_FROM: m.base}
         out[m.key] = {"format": REG.READS_V1, "ports": {CS.LINKED: port}}
     return out
+
+
+def reported_reads(reads: Mapping[str, Mapping[str, Any]], verdicts: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
+    """The audit record's ``row_table_reads``: for each drawn linked chunk (``verdicts[key]``, its Lean verifier of record's
+    verdict), the row table its ``x`` port reads and the root the verifier's own ``--registered`` file named (``reads[key]``,
+    ``registered_reads``), beside the ``registered`` finding the verdict reports opening the chunk's rows against.  ``ok``
+    when every chunk's verdict accepted it and reports exactly its file's ports, values and roots."""
+    chunks = {}
+    for key, v in verdicts.items():
+        want = {p: {"value": e["value"], "root": e["root"]} for p, e in (reads.get(key) or {}).get("ports", {}).items()}
+        got = v.get("registered")
+        chunks[key] = {"reads": want, "reported": got, "ok": bool(want) and v.get("accepted") is True and got == want}
+    return {"ok": all(c["ok"] for c in chunks.values()), "chunks": chunks}
 
 
 def _linked_strings(window: CS.Window, publics: Mapping[str, bytes]) -> tuple[list[list[bytes | None]], dict[str, str]]:

@@ -278,6 +278,28 @@ def test_the_registration_holds_the_tree_over_the_step_roots_and_the_verifier_ti
                                  leaf_layer=CS.leaf_layer(publics)).codes
 
 
+def test_the_audit_record_carries_each_drawn_chunks_reads_beside_the_roots_lean_reports(monkeypatch, tmp_path):
+    """`reported_reads`: each drawn chunk's table and root from the verifier's own reads file beside Lean's `registered`
+    finding, held only when every verdict accepted and reports exactly its file's port, value and root."""
+    c, _s, got = committed(monkeypatch)
+    CS.write(c, tmp_path, {"row": 101}, CS.index_doc(c.window.members, [g[1] for g in got], RUN))
+    mine, _, _ = window()
+    reads = RTB.registered_reads(mine, {m.key: (tmp_path / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)})
+    k0, k4 = mine.members[0].key, mine.members[4].key
+    lean = lambda key: {"accepted": True, "of_record": True,  # noqa: E731
+                        "registered": {p: {"value": e["value"], "root": e["root"]} for p, e in reads[key]["ports"].items()}}
+    rec = RTB.reported_reads(reads, {k0: lean(k0), k4: lean(k4)})
+    t1 = mine.row_tables[1]
+    assert rec["ok"] and rec["chunks"][k0] == {"reads": {CS.LINKED: {"value": t1.port, "root": c.table_roots[t1.port].hex()}},
+                                               "reported": lean(k0)["registered"], "ok": True}
+    assert json.loads(json.dumps(rec)) == rec
+    another_root = {CS.LINKED: {**lean(k0)["registered"][CS.LINKED], "root": "00" * 64}}
+    for bad in ({**lean(k0), "registered": another_root}, {**lean(k0), "registered": lean(k4)["registered"]},
+                {k: v for k, v in lean(k0).items() if k != "registered"}, {**lean(k0), "accepted": False}):
+        assert not RTB.reported_reads(reads, {k0: bad, k4: lean(k4)})["ok"]
+    assert not RTB.reported_reads({k4: reads[k4]}, {k0: lean(k0), k4: lean(k4)})["ok"]
+
+
 def test_pouws_interface_finds_a_table_and_its_step_openings_verify_and_tampered_rows_fail(monkeypatch, tmp_path):
     c, s, got = committed(monkeypatch)
     CS.write(c, tmp_path, {"row": 101}, CS.index_doc(c.window.members, [g[1] for g in got], RUN))
