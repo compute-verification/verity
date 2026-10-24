@@ -53,6 +53,7 @@ KNOWN = {
     ("verity/ml/flock/tests/test_class_statement.py", "verity_vllm.program.registry"),
     ("verity/ml/flock/tests/test_derive.py", "verity_vllm.program.registry.prims"),
     ("verity/ml/flock/tests/test_flock_rows.py", "verity_vllm.program.registry.prims"),
+    ("verity/ml/flock/tests/test_ir_lowering.py", "verity_vllm.program.registry"),
     ("verity/ml/flock/tests/test_ir_lowering.py", "verity_vllm.program.registry.prims"),
     ("verity/ml/flock/tests/test_ir_lowering.py", "verity_vllm.program.registry.sampling"),
     ("verity/ml/flock/tests/test_ir_sampling.py", "verity_vllm.program.registry"),

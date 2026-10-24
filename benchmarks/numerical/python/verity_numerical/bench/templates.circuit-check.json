@@ -24,6 +24,16 @@
    "type": "c1533ec5356bfef1b4d47b558a47faa50a14cd520199b49593e31a28dd23a29fca3aa5076f7f9fda1fc40cd87e23e90cd51ea74821a9068e5f2110d24907e393",
    "xor": 44455
   },
+  "ingress-prompt/m-lp3-v1000/v0": {
+   "and": 2033,
+   "not": 953,
+   "xor": 16200
+  },
+  "ingress-prompt/served-model-lp16-v128256/v0": {
+   "and": 11898,
+   "not": 3075,
+   "xor": 201824
+  },
   "rmsnorm-cuda-vec8/n6144-b256-eps1e-05/bf16": {
    "and": 3568261,
    "not": 541086,
@@ -83,6 +93,21 @@
    "not": 172,
    "type": "048c70fee63cce665e48f25d777294126b9abba6a6bf7fc63d8cdc126721742a19cc2995ed272981a8a736f9f74b547e95ba1ee689b0330491edaf4569847a2e",
    "xor": 54087
+  },
+  "token-select-chunk/c64/bf16": {
+   "and": 7347,
+   "not": 8524,
+   "xor": 60581
+  },
+  "token-select-combine/v128256-c64/bf16": {
+   "and": 332633,
+   "not": 281304,
+   "xor": 3209215
+  },
+  "token-select-combine/v200-c64/bf16": {
+   "and": 627,
+   "not": 526,
+   "xor": 5788
   }
  }
 }

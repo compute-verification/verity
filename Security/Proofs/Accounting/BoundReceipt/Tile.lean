@@ -34,8 +34,8 @@ theorem TileUnpredictableOfTT : Accounting.Guarantees.TileUnpredictableOfTT :=
 
 /-- **`TT_NCP_U` gives `TileUnpredictable` at `3·m·k·n`** (`Accounting.Guarantees.TileUnpredictableOfNCPU`). -/
 theorem TileUnpredictableOfNCPU : Accounting.Guarantees.TileUnpredictableOfNCPU :=
-  fun β _ _ _ _ _ _ _ CM P D γ₀ ε hTT =>
-    tileUnpredictable_of_total CM (P.toProtocolU β) _ (fun _ => by positivity) D γ₀ ε hTT.2
+  fun β _ _ _ _ _ _ _ CM P D γ₀ ε hside hTT =>
+    tileUnpredictable_of_total CM (P.toProtocolU β) _ (fun _ => by positivity) D γ₀ ε (hTT hside).2
 
 /-- **More compared entries and less credit keep `TileUnpredictable`** (`Accounting.Guarantees.TileUnpredictableMono`):
 a unit whose checked values are right on `P'`'s entries is right on `P`'s. -/
