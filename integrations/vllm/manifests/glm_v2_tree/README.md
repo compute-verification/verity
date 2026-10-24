@@ -223,6 +223,26 @@ at its declared step.
 | Commit | waits for a GPU node: vy-glm53-eu is out of eu-north1 H200 capacity since 10:35Z (it holds this row's Build and legs; the 87 files of `match_cpu.sha256` go there from cpu-2 while B8 greedy's attempt 3 runs), or vy-glm53-h8 after its preflight and the whole row (~580 GB) from cpu-2; `MATCH_RUN` r20261022-041131-656c | vy-glm53-eu | |
 | replay and publish | | vy-glm53-cpu-2 | |
 
+B8 stochastic attempt 3 (circuits, 11:40Z 24 Oct) rebuilds the row on #3652's registered top-p splits (S = 32 on H200), merged
+into this tree as d3a094a398. #3652 moves every step and request Program, so a trace comes first: r20261024-114706-e589
+(EQUAL on every rank), then the re-pin 0b241a11a1, the row's tree. The Match GPU legs and the Commit run on RunPod
+vy-glm53-h200-1, whose CUDA toolkit is 12.9.1 (installed by r20261024-150302-044c: vLLM's DeepGEMM JIT compiles with
+`/usr/local/cuda`'s nvcc, and the pod's own 12.4 refuses `ld_st.cuh`'s 128-bit `q` operand); the Build pins cc 9.0 and 132 SMs,
+not the toolkit or the driver (595.91.07 there).
+
+Named gap: at S = 32, GLM-5.3's sampler, `GumbelTopPTokenSelect_v2{V=154880,S=32}`, is over Q_word_v1's default gate limit (24M),
+and the Build of record runs with the row's allowance `VERITY_QWORD_MAX_GATES=GumbelTopPTokenSelect_v2=140000000` (and
+`VERITY_QWORD_MAX_GATES_ALLOWED` the same, which the strict word check before the Commit reads). Its source: the 30 Sep option-3
+ruling (raise the sampler's limit per row) and circuits' confirmation for this row at 15:10Z 24 Oct. 140M scales the 151936
+vocabulary's 136M to V = 154880. The sampler call stays one unit, not provable in practice, until a chunked GumbelTopP split exists.
+
+| step | run | node | state |
+|---|---|---|---|
+| Build of record | r20261024-130454-422b at 0b241a11a1 (`vllm.build` r20261024-130513-3a11) | vy-glm53-cpu-2 | FAIL rc 10 at 14:08Z: all 72 derives passed (rank 0's step 0801afbcf2b8b218), then the manifest's word check refused the sampler as too-large |
+| Build of record, resumed | r20261024-145656-e91b at 0b241a11a1, `RESUME=1` (derives and composed workloads kept) with the allowance above | vy-glm53-cpu-2 | |
+| Match GPU legs | r20261024-131914-76bd at 0b241a11a1 | vy-glm53-h200-1 | FAIL at 13:52Z, both legs at engine warm-up (the DeepGEMM JIT under nvcc 12.4); no capture, no coins; its row dir moved aside to `<row>.legs-cuda124-r20261024-131914-76bd` |
+| Match GPU legs | r20261024-150302-044c at 0b241a11a1, after the toolkit and a tap rebuild with it | vy-glm53-h200-1 | |
+
 DeepSeek-V4-Pro B1's Commit holds more host memory than `commit.sh`'s `--mem-gb 600` reserves: its cgroup's anonymous memory
 rose through warm-up at up to 1.6 GiB/s and levelled off at about 800 GiB (about 100 GiB a rank) by 04:37Z, beside B8
 stochastic's Match CPU phase (7676, about 300 GiB then), leaving eu about 450 GB. So nothing else is placed on eu beside it,
