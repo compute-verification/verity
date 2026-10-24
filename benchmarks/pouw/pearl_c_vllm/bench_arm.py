@@ -192,23 +192,26 @@ class PearlCWholeArm(PearlCArm):
     r20261024-130722-5c44) and its A scales beside its A commitment (`whole_fork_stats`), so a decode step launches one
     graph after one slot upload and runs no call's Python. Prefill and mixed steps run eagerly, each call of at most
     `pouw_pearl_c_graphs.GRAPH_ROWS` rows as its own graph. The serial schedule (the graph path's), one pass per engine
-    step as `PearlCArm`'s, and its gate is `PearlCArm`'s call check with the calls graphed, then `e2e.whole_check`: a
-    forward's calls captured whole and replayed, bit for bit the eager calls' commitment.
+    step as `PearlCArm`'s, each pass's commitment read back at the next pass's end (`lag_ends`), so the host prepares the
+    next step while the GPU runs this one; its gate is `PearlCArm`'s call check with the calls graphed, then
+    `e2e.whole_check`: a forward's calls captured whole and replayed, bit for bit the eager calls' commitment.
 
     The PoUW option refuses this engine (`pouw.refusals`: compiled execution), so the arm installs as `PearlCArm` does;
     the protocol arm reaching it is vllm's change. ``PEARLC_WHOLE_EXECUTION`` is the engine's execution label:
     ``compiled`` (default, vLLM's kernels without batch invariance, as `stock-fp8@compiled` runs) or ``bi-compiled``;
     ``PEARLC_CAPTURE_SIZES`` overrides the preset's capture sizes (each at most 256 rows); ``PEARLC_WHOLE_DEFER_A=0``
-    keeps each call's A tree on the capturing stream (a kernel whose pipeline doesn't split A's commitment needs it), and
-    ``PEARLC_WHOLE_FORK_STATS=0`` each call's A scales (`whole_fork_stats`: by default they run beside its A commitment).
+    keeps each call's A tree on the capturing stream (a kernel whose pipeline doesn't split A's commitment needs it),
+    ``PEARLC_WHOLE_FORK_STATS=0`` each call's A scales (`whole_fork_stats`: by default they run beside its A commitment),
+    and ``PEARLC_LAG_ENDS=0`` reads each pass's commitment back at its own end.
     A retained pass's whole capture keeps a stage for each weight and m₁₆, and the whole check runs at the largest size."""
 
     id = "pouw-pearl-c-whole"
-    run_options = {"graphs": True, "whole_defer": True, "whole_defer_a": True, "whole_fork_stats": True}
+    run_options = {"graphs": True, "whole_defer": True, "whole_defer_a": True, "whole_fork_stats": True, "lag_ends": True}
 
     def __init__(self) -> None:
         super().__init__()
-        for option, env in (("whole_defer_a", "PEARLC_WHOLE_DEFER_A"), ("whole_fork_stats", "PEARLC_WHOLE_FORK_STATS")):
+        for option, env in (("whole_defer_a", "PEARLC_WHOLE_DEFER_A"), ("whole_fork_stats", "PEARLC_WHOLE_FORK_STATS"),
+                            ("lag_ends", "PEARLC_LAG_ENDS")):
             if os.environ.get(env) == "0":
                 self.run_options = {k: v for k, v in self.run_options.items() if k != option}
         self.schedule = "serial"

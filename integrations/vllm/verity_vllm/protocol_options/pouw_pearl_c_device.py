@@ -299,12 +299,14 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
                  coins: CoinCommitment, opening: CoinOpening, hashing: bool = True, capacity: int = LEAF_CAPACITY,
                  time_gemm: bool = False, schedule: str | Schedule = SERIAL, graphs: bool = False, whole_defer: bool = False,
                  flag_rows: int = FLAG_ROWS, salt_key: bytes | None = None, whole_defer_a: bool = False,
-                 whole_fork_stats: bool = False):
+                 whole_fork_stats: bool = False, lag_ends: bool = False):
         """`coins` is the challenger's coin commitment of the epoch and `opening` its salt coin, opened after the weights'
         root (`Epoch.start`, which raises `DomainError` for any other coin): the epoch's salt is the coin's.
         `whole_defer_a` (with `whole_defer`, on a kernel whose pipeline splits A's commitment) also defers each call's A
         tree within a whole capture (`pouw_pearl_c_graphs`), and `whole_fork_stats` (with `whole_defer`) runs each call's A
-        scales there beside its A commitment."""
+        scales there beside its A commitment.  `lag_ends`: an engine step's pass end (`_ExecutorPass.end`, `end_pass` with
+        ``step``) leaves its commitment's readback in flight (`end` with ``lag``), so the host goes on to the next step while
+        the GPU finishes this one."""
         if whole_defer_a and not (whole_defer and splits(kernel)):
             raise ValueError(f"{entry}: whole_defer_a defers A's tree within a deferred whole capture (whole_defer), on a kernel "
                              f"whose pipeline splits A's commitment (`Pipeline.FUSED` tree_seed_a)")
@@ -314,6 +316,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
         self.nb, self.salt_key = kernel.run.NB, salt_key
         self.graphs = graphs and next(iter(weights.values())).device.type == "cuda"
         self.whole_defer, self.whole_defer_a, self.whole_fork_stats = whole_defer, whole_defer_a, whole_fork_stats
+        self.lag_ends, self._lagged = lag_ends, None
         self._graphs: dict[tuple, _Graph] = {}
         self.variant = scheme.device.name
         self.time_gemm, self.events, self.omit = time_gemm, [], frozenset()
@@ -371,6 +374,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
                        + (", a whole capture's tile hashing beside the next call" if whole_defer else "")
                        + (" and its A tree beside its forming and GEMM" if whole_defer_a else "")
                        + (", its A scales beside its A commitment" if whole_fork_stats else "")) if self.graphs else None,
+            "pass_end": "an engine step's commitment read back at the next end" if lag_ends else "read back at its end",
             "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound (red team F4)"}
         self.cur: _Pass | None = None
         self.begin()
@@ -674,10 +678,13 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
             for t in self._graph_buffers():
                 t.fill_(value)
 
-    def end(self) -> dict[str, Any]:
+    def end(self, lag: bool = False) -> dict[str, Any]:
         """Close the pass: its tile tree on the device, every A root, and with `retain` the manifest.  Returns the pass's
-        commitment (also in `commits` and `details["passes"]`)."""
+        commitment (also in `commits` and `details["passes"]`).  With `lag` (on CUDA, without `retain`) the root, A's roots
+        and the flag counts are copied out behind the pass's work and the host doesn't wait for them: the returned dict gets
+        them, and `commits` its root, when the next end, `settle` or `finish` completes the readback."""
         import torch
+        self.settle()
         cur, K = self.cur, self.kernel
         out: dict[str, Any] = {"units": len(cur.matmuls), "tiles": cur.tiles, "hashing": self.hashing, "schedule": self.schedule.name}
         if self.hashing and cur.matmuls:
@@ -696,17 +703,36 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
                 R.Pipeline.levels(ns, "t", count)
             finally:
                 K.dev.stream = None
-            roots_a = _bytes(self.roots_buf[:nb * len(cur.matmuls)])
-            flags = self.flag_buf[:cur.flag_rows].to(torch.int64).sum(0).tolist() if cur.flag_rows else [0, 0]
-            out.update(transcript_root=_bytes(tree[-nb:]).hex(),
-                       activation_roots=hashlib.sha512(roots_a).hexdigest(),
-                       screened_rows=cur.flag_rows, failing_rows=int(flags[0]), unsure_rows=int(flags[1]),
+            units = len(cur.matmuls)
+            out.update(screened_rows=cur.flag_rows,
                        excluded_rows=sum(len(r.excluded_a) for r in cur.records) if cur.retain is not None else None)
-            if cur.retain is not None:
-                out["manifest"] = str(self._write_retained(cur, epoch, roots_a, tree, count))
-            self.commits.update(transcript_root=out["transcript_root"], units=len(cur.matmuls), tiles=count)
+            flags = self.flag_buf[:cur.flag_rows].to(torch.int64).sum(0) if cur.flag_rows else torch.zeros(2, dtype=torch.int64)
+            if lag and cur.retain is None and self.device.type == "cuda":
+                got = [torch.empty(t.shape, dtype=t.dtype, pin_memory=True).copy_(t, non_blocking=True)
+                       for t in (self.roots_buf[:nb * units], tree[-nb:], flags)]
+                done = torch.cuda.Event()
+                done.record()
+                self._lagged = (out, done, got, units, count)
+            else:
+                roots_a = _bytes(self.roots_buf[:nb * units])
+                self._ended(out, roots_a, _bytes(tree[-nb:]), flags.tolist(), units, count)
+                if cur.retain is not None:
+                    out["manifest"] = str(self._write_retained(cur, epoch, roots_a, tree, count))
         self.details["passes"].append(out)
         return out
+
+    def settle(self) -> None:
+        """Complete a lagged end's readback (`end` with ``lag``), waiting for its copies: its commitment, in place."""
+        if self._lagged is None:
+            return
+        (out, done, (roots_a, root, flags), units, count), self._lagged = self._lagged, None
+        done.synchronize()
+        self._ended(out, roots_a.numpy().tobytes(), root.numpy().tobytes(), flags.tolist(), units, count)
+
+    def _ended(self, out: dict[str, Any], roots_a: bytes, root: bytes, flags: list[int], units: int, count: int) -> None:
+        out.update(transcript_root=root.hex(), activation_roots=hashlib.sha512(roots_a).hexdigest(),
+                   failing_rows=int(flags[0]), unsure_rows=int(flags[1]))
+        self.commits.update(transcript_root=out["transcript_root"], units=units, tiles=count)
 
     def end_pass(self, retain: str | None = None, run: str | None = None, schedule: str | Schedule | None = None, *,
                  step: bool = False) -> dict[str, Any]:
@@ -718,7 +744,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
             if retain or run or schedule:
                 self.begin(retain, run, schedule, stepped=True)
             return self.details["passes"][-1]
-        out = self.end()
+        out = self.end(lag=step and self.lag_ends)
         self.begin(retain, run, schedule, stepped=step)
         return out
 
@@ -755,6 +781,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
         if self.cur is not None and self.cur.matmuls:
             self.end()
             self.cur = _Pass(None)
+        self.settle()
 
 
 class PearlCExecutor:
@@ -805,6 +832,6 @@ class _ExecutorPass:
 
     def end(self) -> dict[str, Any]:
         try:
-            return self.run.end()
+            return self.run.end(lag=self.run.lag_ends)
         finally:
             self.run.omit = frozenset()

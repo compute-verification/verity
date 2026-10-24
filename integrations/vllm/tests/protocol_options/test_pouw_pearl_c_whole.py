@@ -753,3 +753,49 @@ def test_forking_a_scales_needs_a_deferred_whole_capture():
     k = SimpleNamespace(run=SimpleNamespace(Pipeline=SimpleNamespace(FUSED={"tree_seed_a": ()})))
     with pytest.raises(ValueError, match="whole_fork_stats"):
         PPD.PearlCDeviceRun(None, "test", k, {}, {}, None, None, whole_defer=False, whole_fork_stats=True)
+
+
+def test_a_lagged_end_gets_its_commitment_in_place_at_the_next_end_and_only_an_engine_steps_end_lags():
+    """A lagged end's readback (its copies behind an event) completes at `settle`: the next end's first step, and
+    `finish`'s.  It waits for the event once and fills the ended pass's own dict, the one `details["passes"]` and the
+    stack hold, and `commits`.  The executor's pass end and `end_pass` with ``step`` lag where the run's `lag_ends` is
+    set; `end_pass` without it (a caller's) never does."""
+    import hashlib
+
+    import torch
+
+    run = PPD.PearlCDeviceRun.__new__(PPD.PearlCDeviceRun)
+    run.commits, run._lagged, waited = {"transcript_root": None}, None, []
+    run.cur, run.hashing, run.schedule, run.details = PPD._Pass(None), False, SimpleNamespace(name="serial"), {"passes": []}
+    run.kernel = None
+    roots_a, root = bytes(range(128)), bytes(range(64, 128))
+
+    def lagged(units, tiles):
+        out = {"units": units, "screened_rows": 3}
+        got = [torch.frombuffer(bytearray(roots_a), dtype=torch.uint8), torch.frombuffer(bytearray(root), dtype=torch.uint8),
+               torch.tensor([1, 2], dtype=torch.int64)]
+        run._lagged = (out, SimpleNamespace(synchronize=lambda: waited.append(units)), got, units, tiles)
+        return out
+
+    out = lagged(2, 7)
+    assert "transcript_root" not in out
+    ended = run.end()                                        # nothing this pass: it reads back nothing, the last one settles
+    assert waited == [2] and run._lagged is None and ended == {"units": 0, "tiles": 0, "hashing": False, "schedule": "serial"}
+    assert out == {"units": 2, "screened_rows": 3, "transcript_root": root.hex(),
+                   "activation_roots": hashlib.sha512(roots_a).hexdigest(), "failing_rows": 1, "unsure_rows": 2}
+    assert run.commits == {"transcript_root": root.hex(), "units": 2, "tiles": 7}
+    run.settle()
+    assert waited == [2]
+    out = lagged(4, 9)
+    run.finish()
+    assert waited == [2, 4] and out["transcript_root"] == root.hex() and run.commits["tiles"] == 9
+
+    lags = []
+    run.end, run.begin = (lambda lag=False: lags.append(lag) or {}), (lambda *a, **kw: None)
+    run.cur = PPD._Pass(None, matmuls=[None])
+    for flag in (False, True):
+        run.lag_ends = flag
+        PPD.PearlCDeviceRun.end_pass(run, step=True)
+        PPD.PearlCDeviceRun.end_pass(run)
+        PPD._ExecutorPass.end(SimpleNamespace(run=SimpleNamespace(end=run.end, lag_ends=flag, omit=None)))
+    assert lags == [False, False, False, True, False, True]
