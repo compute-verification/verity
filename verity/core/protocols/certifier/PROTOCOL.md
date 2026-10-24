@@ -1374,19 +1374,20 @@ Two of phase 9's findings aren't expressible on the slice. A fabricated cache ta
 needs a table input, and free returns (ReplayStep_v1's finding 2) need a stopping request. The window boundary and the
 C-carry were closed in the pieces.
 
-**In zero knowledge** (`benchmarks/network_traces/compile_slice_zk.py`, N2-ZK's audit path; run r20261024-110210-eb8f,
-CPU prover): one template of four units, the honest one and the three negatives.
+**In zero knowledge** (`benchmarks/network_traces/compile_slice_zk.py`, N2-ZK's audit path; run r20261024-140227-8995,
+CPU prover): one template of nine units, the honest one, the three negatives and phase 9's five.
 - The proof: every unit drawn by Lean, proved `prove --zk` behind the Lean firewall and held by Lean `verify --zk`.
   The audit accepts, complete, with no wrong unit. The verifier opens ``pub`` and the verdict only.
 - The verdicts: the honest unit opens to 0x1F, its ``adv`` b‖c is the advice registration's leaf and its ``cert`` b‖c
-  the certified record's. Each negative opens to its refusal, and the arrival's ``cert`` b‖c is refused too.
-- The scan: no piece of any witness row, row salt or digest salt is in what the verifier received (148 pieces, 161.6
+  the certified record's. Each other unit opens to its refusal (0x0C, 0x17, 0x0F, 0x13, 0x13, 0x0D, 0x0D, 0x0D), and
+  the arrival's ``cert`` b‖c is refused too.
+- The scan: no piece of any witness row, row salt or digest salt is in what the verifier received (310 pieces, 161.7
   MB received). The prover's instance file holds every witness row.
 - The adv row is one word and the cert row seven, below the scan's 16-byte pieces, so only their salts are scanned.
-- The cost: the unit is k_log 22 and one unit a block, so the statement is `--zk`'s smallest shape (m = 25). One
-  window alone (the verifier draws one unit) proves in 27.4 s (36.4 s end to end) and Lean verifies in 15.8 s. Its
-  proof is two repetitions of 873,386 bytes. The four-unit session costs the same, 27.6 s and 15.8 s, because the
-  shape, not the units, sets the cost.
+- The cost: the unit is k_log 22 and one unit a block. The nine-unit session is m = 26: it proves in 40.4 s (48.9 s
+  end to end), its proof is two repetitions of 844,498 bytes, and Lean verifies it in 15.4 s. One window alone (the
+  verifier draws one unit) is `--zk`'s smallest shape, m = 25: it proves in 27.1 s (35.5 s end to end), and Lean
+  verifies it in 15.2 s. The shape, not the units, sets the cost.
 
 ## The active certifier (`active`)
 
