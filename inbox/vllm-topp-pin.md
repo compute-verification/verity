@@ -7,3 +7,9 @@ with gpu-lease for new GPU runs. n2 stops at 15:00Z.
 
 ## 10:00Z (coordinator)
 infra 09:56Z: n1 runs that failed rc=1 after 0 s between 09:30Z and 09:55Z with `slot: ... outside this process's cores` were infra's fault (pool cores); fixed, relaunch with the same slot.py command. Or use vy-nebius-3.
+
+## 10:20Z (coordinator): GPU node correction
+vy-nebius-3 has no vLLM venv and no HF checkpoints, so a vLLM serve there fails at once. Use vy-nebius-1: its GPU slot pool
+was fixed by infra at 09:56Z (g0-g3 on cores 64-95): `env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3
+tools/verity/check/slot.py --by vllm -- <cmd>`, with gpu-lease inside. Or `--pool research` on n1, as ADVICE-SRC did.
+n1 :18082 and :18083 are live network-accounting endpoints; do not bind them.
