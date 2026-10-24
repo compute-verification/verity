@@ -46,6 +46,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import bisect
+import fcntl
 import gc
 import gzip
 import hashlib
@@ -120,12 +121,17 @@ WARDEN = {"warden-heavy": ("heavy", 300), "warden-smallkv": ("smallkv", 1200)}
 WARDEN_WHERE = "warden beside the server, not on the auditor host"
 #: a stall of the client's event loop it records (`drive_warden`), in seconds: a fifth of a bucket
 LOOP_LAG_S = 0.02
+#: the descriptors the client holds beside its connections' (the server's and warden's pipes, the loop's, the logs')
+FD_MARGIN = 256
 #: the warden's schedule less D: lanes and queue hold every request of a 1000-request plan at once, so the warden never
 #: throttles the load nor refuses; one 1 KiB cell a bucket each way keeps the padding of a thousand connections' D in memory
 WARDEN_SCHEDULE = {"cell_bytes": 1024, "slots": 1, "bucket_ms": 100, "lanes": 1024, "queue": 1024, "window": 600,
                    "ingress_cells": 64, "ingress_buckets": 50, "egress_cells": 4096}
 #: seconds the warden runs past the last arrival's D, for the last responses' egress cells
 WARDEN_TAIL_S = 60.0
+#: seconds the trace waits for the warden past its last window: a spawned publisher may still be committing the last
+#: windows' records (`warden_probe`'s `publisher`)
+WARDEN_END_S = 900.0
 TRACES |= {name: (TRACES[base][0], f"{TRACES[base][1]}; through the active warden, D = {d} buckets of 100 ms "
                                    f"({WARDEN_WHERE})")
            for name, (base, d) in WARDEN.items()}
@@ -400,9 +406,11 @@ async def drive_warden(deployment: dict, served: str, requests: list[dict], arri
     warden/client.json the shim's record of every connection in `warden_serve.connection_log`'s form, for its `check`.
 
     The shim times each cell when the event loop reads it, so the loop must not stall: on `cpus` when given (`cpu_plan`),
-    with the garbage collector off and every object made before the drive frozen out of its reach (in art:d5380875's heavy
-    trace, stalls every connection shared put 6,820 cell reads 135-255 ms late). warden/client_loop.json records what the
-    loop did: every stall of `LOOP_LAG_S` or more ([seconds after the origin, ms]) and every collection that still ran."""
+    every thread of the process with it (numpy's among them), with the garbage collector off and every object made
+    before the drive frozen out of its reach (in art:d5380875's heavy trace, stalls every connection shared put 6,820 cell
+    reads 135-255 ms late), and the descriptor table grown to hold every connection before the first is opened
+    (`reserve_fds`). warden/client_loop.json records what the loop did: every stall of `LOOP_LAG_S` or more ([seconds
+    after the origin, ms]), every collection that still ran, and the table's size."""
     from warden_probe import Collections
 
     warden, ws = warden_modules()
@@ -412,7 +420,8 @@ async def drive_warden(deployment: dict, served: str, requests: list[dict], arri
     loop = asyncio.get_running_loop()
     affinity = os.sched_getaffinity(0)
     if cpus:
-        os.sched_setaffinity(0, cpus)
+        pin_threads(cpus)
+    fds = reserve_fds(len(requests) + FD_MARGIN)
     gc.collect()
     gc.freeze()
     gc.disable()
@@ -482,15 +491,39 @@ async def drive_warden(deployment: dict, served: str, requests: list[dict], arri
         gc.callbacks.remove(collections)
         gc.enable()
         gc.unfreeze()
-        os.sched_setaffinity(0, affinity)
+        if cpus:
+            pin_threads(affinity)
         (out.parent / "warden" / "client_loop.json").write_text(json.dumps(
             {"cpus": cpus, "gc": "off, everything before the drive frozen", "watch_ms": 10, "lag_ms_at_least": LOOP_LAG_S * 1000,
-             "lags": lags, "max_lag_ms": max((ms for _, ms in lags), default=None), **collections.doc(origin)}))
+             "fds": fds, "lags": lags, "max_lag_ms": max((ms for _, ms in lags), default=None), **collections.doc(origin)}))
+
+
+def reserve_fds(n: int) -> int:
+    """Grow the process's descriptor table to hold `n` descriptors (at most RLIMIT_NOFILE's soft limit) now; returns its
+    size. The kernel grows it as descriptors pass 64, 128, 256 …, and in a process of more than one thread each growth
+    waits for an RCU grace period (`expand_fdtable`), the growing thread asleep in D: on a loaded node, every connection's
+    cell read a bucket late (`warden_serve.reserve_fds`, #3919). The table never shrinks."""
+    n = min(n, resource.getrlimit(resource.RLIMIT_NOFILE)[0])
+    fd = os.open(os.devnull, os.O_RDONLY)
+    try:
+        os.close(fcntl.fcntl(fd, fcntl.F_DUPFD, n - 1))
+    finally:
+        os.close(fd)
+    return n
+
+
+def pin_threads(cpus) -> None:
+    """Every thread of this process on `cpus` (`sched_setaffinity` of pid 0 moves only the calling thread)."""
+    for tid in os.listdir("/proc/self/task"):
+        try:
+            os.sched_setaffinity(int(tid), cpus)
+        except ProcessLookupError:
+            pass
 
 
 def cpu_plan(cpus: list[int]) -> dict | None:
     """The job's cores split for a warden trace, so that nothing else runs on the warden's or the client's: the warden the
-    last one (the last two from 8 cores, its publisher's signing thread beside its ticker), the client the one before, and
+    last one (the last two from 8 cores, its publisher beside its ticker), the client the one before, and
     the server, its engine core and the host sampler the rest. None under 4 cores (nothing is pinned)."""
     cpus = sorted(cpus)
     if len(cpus) < 4:
@@ -597,17 +630,20 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
                               "listen": dep["listen"], "slack_s": dep.get("slack"),
                               "key": "a scratch LMS key made for this trace and deleted after it (its public half is in "
                                      "warden/deployment.json)"}
+            pid = d / "warden" / "publisher.pid"
             sampler = subprocess.Popen([*taskset(cpus and cpus["server"]), sys.executable, str(HERE / "host_sample.py"),
                                         str(d / "warden" / "host.jsonl"), ",".join(map(str, sorted(os.sched_getaffinity(0)))),
-                                        f"warden:{warden.pid}", f"client:{os.getpid()}", f"server={server.pid}"])
+                                        f"warden:{warden.pid}", f"client:{os.getpid()}", f"server={server.pid}",
+                                        *([f"publisher:{pid.read_text()}"] if pid.exists() else [])])
             print(f"[corpus] {name}: warden ({WARDEN_WHERE}) on {dep['listen']}, D {delay} from the "
                   f"{meta['warden']['egress_base'].split(':')[0]}, {dep['windows']} windows; cores {meta['cpus']}", flush=True)
             meta |= asyncio.run(drive_warden(dep, model.served, requests, arr, ids, d / "client.jsonl", args.drain_s,
                                              sampling, cpus and cpus["client"]))
             try:
-                meta["warden"]["rc"] = warden.wait(max(0.0, end - time.time()) + 120)
+                meta["warden"]["rc"] = warden.wait(max(0.0, end - time.time()) + WARDEN_END_S)
             except subprocess.TimeoutExpired:
-                meta["warden"]["rc"] = "still running 2 minutes past its last window"
+                meta["warden"]["rc"] = f"still running {WARDEN_END_S:g} s past its last window"
+            meta["warden"]["ended_past_last_window_s"] = round(time.time() - end, 3)
     finally:
         if warden is not None and warden.poll() is None:
             warden.terminate()
