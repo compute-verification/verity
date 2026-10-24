@@ -32,6 +32,25 @@ A spec-level reference for network accounting's timing channel:
   link"). The proxy's admission rule (`Proxy(served=…)`) admits a request only while its window still ends idle, so
   an honest served link is accepted. An egress end with neither profile gets no verdict (`ValueError`, failing
   closed);
+- the I/O tie (`io_tie`), a design (`PROTOCOL.md`, "The I/O tie") and its prototype on a fake upstream, in no Spec:
+  served through the warden's egress, every cell of an egress link-window is opened, each a pad, the canonical event of
+  one token id or the response's end on the stream the warden set, and each is the cell the advice's map names at its
+  place (`window_map`, from the advice's outputs, release buckets and advice v1's order permutation, each request on its
+  ingress ordinal's stream from 1, accepted on TRACE-CORPUS's heavy trace; the verifier computes it in the clear from
+  the opened advice, the named gap, until the map is read in the proof under the advice's hiding root), with the id the
+  Commit sampled for it (the port: one hiding row of ids a step, opened under the Commit's root). The cells are the
+  warden's (`warden`): a connection's r slots a bucket, a `PAD` on its stream before its first cell and after its `END`,
+  one id event a `DATA` cell. The warden commits each bucket's cells as one hiding row. It has the reference and the
+  unit's Boolean Definition, one a bucket row (`IoTieBucket`: the row read as the warden's registered row, the port's
+  rows by `IoTiePort`, then `IoTieContent`: `IoTieCell` on every cell, the prover's Beneš routing of the port's entries
+  `IoTieRoute`, `IoTieMatch`);
+- the ingress tie (`io_request`, `PROTOCOL.md`, "The ingress tie") on a fake upstream: an ingress link-window's
+  cells cut into CERT-VARLEN's id requests, each request's count of prompt fields held to the advice's prompt_len and
+  its ordinal to its place in the cut, which N2-ADVICE's advised verdict (`advised.IoTieVerdict`) is built from. It
+  has the reference, the verifier's per-window statements, chained from window 0 by each window's carry-out
+  (`statements`, `chained`), and the unit's Boolean Definition (`IoTieRequest`: the cells' root by
+  `NetworkRowsRoot`, the own frame by `IoTieRequestOwn`, one `IoTieRequestFrame` and `IoTieRequestStep` a cell, the
+  prover's routing of the view's prompt lengths by `IoTieRoute`, the totals and the carry-out by `IoTieRequestEnd`);
 - the capacity counts;
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
@@ -50,10 +69,12 @@ A spec-level reference for network accounting's timing channel:
   bucket s + D + ⌊i/r⌋ from its admission s. A miss fails the connection closed with a `FAIL` cell that carries no
   reason. It records and certifies exactly the cells it sends, and each failure's reason in a third record, `fails`.
   `PROTOCOL.md`'s "The active warden" has its leak bound, and `benchmarks/network_traces/warden_serve.py` runs it;
-- the warden's cells as rows (`warden_rows`): each link-window's cells committed one `hm96-sha512/row/v2` row a cell,
-  padding and empty slots included, under a frame-v3-sha512 root the warden signs with the certifier's signer. The
-  registration is what a proof unit's `--registered` port reads, so the sender's unit opens a cell as its output and
-  the receiver's as its input (`PROTOCOL.md`, "The warden's cells as rows"; `benchmarks/network_traces/warden_zk.py`);
+- the warden's cells as rows (`warden_rows`): each link-window's cells committed one `hm96-sha512/row/v2` row a
+  bucket, padding and empty slots included, under a frame-v3-sha512 root the warden signs with the certifier's signer,
+  beside a salted digest of the window's wiring. The registration is what a proof unit's `--registered` port reads, so
+  the sender's unit opens a cell's row as its output and the receiver's as its input, and the verifier places each
+  read, the (connection, cell) the Program's units' wiring pins (`Units`, whose digest the port's value names), with
+  the warden's wiring (`PROTOCOL.md`, "The warden's cells as rows"; `benchmarks/network_traces/warden_zk.py`);
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
   With its salt on (`Proxy(salt=active.fresh_salt)`, off by default), each PoUW window (`pouw_window` certifier
   windows) gets one salt of `salt_bits` bits (512 by default), carried into the block only. The ingress record holds a
