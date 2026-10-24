@@ -93,8 +93,11 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   verifier's own layout, and before the draw the tables are held to the chunks' public ``x`` strings, the registered root
   and the step roots serving recorded before each step's coin (`row_tables.check_row_tables`). Lean's verifier of record
   covers a shared-row public file only where it holds its own registered reads (``--registered``, `Flock.ProvedScope.
-  sharedRowsOk`), which a5 doesn't give it for a chunk's ``x`` table, so it refuses each drawn chunk's session and the
-  outcome is a reject. No TP window of record has row tables yet (`tp.serving_rows.window_of_record` names no serve-time
+  sharedRowsOk`): each chunk reads one table, so a5 gives each linked chunk's verify the reads of its ``x`` port
+  (`row_tables.registered_reads`: its table's root as the members' strings recompute it, which the check above tied to the
+  registration and the step roots, and the row each unit reads), and the chunk's header gives each ``x`` row a path to that
+  root. Negatives on one drawn chunk: no registered reads, another root, and its units reading another row
+  (`registered_negatives`). No TP window of record has row tables yet (`tp.serving_rows.window_of_record` names no serve-time
   context); `a5_row_tables.py` is their stand-in.
 """
 from __future__ import annotations
@@ -313,6 +316,29 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
     return result, neg, record
 
 
+def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path) -> dict[str, dict]:
+    """A drawn row-table chunk's honest session re-verified by Lean against registered reads it must refuse: none (its header
+    names registered reads the verifier holds no root for), its table's root replaced, and (a table of more than one row)
+    every unit reading the next row."""
+    st, n = mm["st"], mm["m"].n
+    honest = json.loads(st["registered_file"].read_text())
+    port = next(iter(honest["ports"]))
+    p = honest["ports"][port]
+    cases = {"row-table-chunk-without-registered-reads": (None, "holds no registered roots"),
+             "row-table-read-against-another-root": ({"root": "00" * 64}, "does not open")}
+    if p["leaves"] > 1:
+        cases["row-table-reads-another-row"] = ({"reads": [(r + 1) % p["leaves"] for r in p["reads"]]}, "the verifier's program reads")
+    out = {}
+    for name, (change, why) in cases.items():
+        alt = {x: y for x, y in st.items() if x != "registered_file"}
+        if change is not None:
+            alt["registered_file"] = sdir / f"{name}.json"
+            alt["registered_file"].write_text(json.dumps({**honest, "ports": {port: {**honest["ports"][port], **change}}}, sort_keys=True))
+        v = a0.lean_verify(a.lean, alt, n, sdir, zk=True, log=name)
+        out[name] = {"refused": a0.lean_refused(v, why), "why": v.get("why")}
+    return out
+
+
 def stage(served: Path, mm: dict, files: tuple[dict, dict]) -> None:
     """A drawn member's prover's file and its circuit, under the header its public file was held to before the draw."""
     m, st_dir = mm["m"], mm["st"]["dir"]
@@ -427,6 +453,12 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
         print("A5 " + json.dumps({"refused_before_draw": summary["checks_before_draw"], "checks": checks}, default=str))
         return summary, False
+    # each row-table chunk's Lean verify reads its x rows against its table's root, which the checks above tied to the registration
+    reads = RTB.registered_reads(mine, publics) if mine.row_tables else {}
+    for mm in members:
+        if mm["m"].key in reads:
+            mm["st"]["registered_file"] = mm["st"]["dir"] / "registered.json"
+            mm["st"]["registered_file"].write_text(json.dumps(reads[mm["m"].key], sort_keys=True))
 
     # one draw over the whole population; each member serves its share under --zk
     if not streamed(a):
@@ -446,6 +478,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     (out / "draw.json").write_text(json.dumps(union_draw, sort_keys=True))
     served_units, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}
+    linked = None       # the first drawn chunk that reads a row table: its session, for the registered-reads negatives
     for mm in members:
         m, k = mm["m"], mm["k"]
         local = sorted(u - m.base for u in union_draw["units"] if m.base <= u < m.base + m.n)
@@ -477,6 +510,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
                                          "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}
         verdicts[f"lean-draw/m{k}"] = {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u}
         verdicts[f"lean-verify/m{k}"] = {**a0.lean_verify(a.lean, mm["st"], m.n, sdir, zk=True), "tool": "flock-verify verify --zk --archive"}
+        if linked is None and mm["st"].get("registered_file"):
+            linked = (mm, sdir)
         statement[m.key] = {"session_s": session_s, **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
                             "timing": {x: (live or {}).get(x) for x in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")},
                             "verify_s": ((record or {}).get("verdict") or {}).get("verify_s"),
@@ -534,6 +569,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         neg["proved-set-short-of-the-draw"] = {"refused": not v.ok, "codes": list(v.codes)}
     neg.update(a0.audit_negatives(result, drawn_law, a.delta, session_roots, served=sorted(served_units)))
     neg.update(coin_neg)
+    if linked is not None:
+        neg.update(registered_negatives(a, *linked))
     (out / "negatives.json").write_text(json.dumps(neg, indent=1, sort_keys=True))
 
     summary["audit"] = {x: result.get(x) for x in ("accepted", "complete", "wrong_units")}
