@@ -13,7 +13,8 @@ So L_g = max(A_g, s_(g+1)) − s_g on the challenger's clock holds group g's rea
 they take, and before its last root, which chains them.
 
 Beside the times the line reads the verifier's record of the session (`verifier.json`): its verdict, each group's
-passes and held bytes (`ledger.memory`) and its pooled wrong receipts. The verifier runs on the audit's machine, not
+passes and held bytes (`ledger.memory`), and its windows' receipts and draws, whose pooled bound
+(`remote_bandwidth.pooled`) is its wrong receipts. The verifier runs on the audit's machine, not
 the auditor's host, so these rest on its verdict, which the session's transcript (`verifier.py --transcript`) lets the
 auditor replay offline (the remote audit's `lean/tests/replay.py transcript`). The verifier's stamps are read only to
 cross-check the challenger's: each coin interval on both clocks, their rates, and each group's L on both.

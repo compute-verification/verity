@@ -385,7 +385,10 @@ def of_json(j: Mapping) -> dict:
     if not isinstance(gs, list):
         raise Malformed("groups: not a list")
     r = _field(j, "rates")
-    windows, delta = pooled.of_json({k: _field(j, k) for k in ("windows", "delta")})
+    try:
+        windows, delta = pooled.of_json({k: _field(j, k) for k in ("windows", "delta")})
+    except pooled.Malformed as e:
+        raise Malformed(str(e)) from None
     return {"groups": [Group(*(_nat(x, k) for k in GROUP)) for x in gs],
             "per": _nat(j, "per"), "blocks": _nat(j, "blocks"), "block_bytes": _nat(j, "block_bytes"),
             "chip_bytes": _nat(j, "chip_bytes"), "node_bytes": _nat(j, "node_bytes"), "windows": windows,
