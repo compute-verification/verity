@@ -781,6 +781,72 @@ def test_a_lowering_count_off_its_pin_is_named():
     assert any(f["name"].startswith("lowering/pin-mismatch F32Mul_v1 [F32Mul_v1]: and 1 -> ") for f in e["failures"])
 
 
+def _lowering_pin(e: dict) -> dict:
+    (r,) = [r for r in e["correspondence"]["realizations"] if r["via"] == "c-flock:ir_lower"]
+    return r["pin"]
+
+
+def test_a_lowering_type_is_its_flat_circuit_type():
+    """A pin's ``type`` (`checks.lowering_type`) is `circuit_types.from_gf2`'s digest of the lowering: its named inputs and
+    outputs as ports, its assertions as one more port, its tables by their SHA-512; an assertion and a table read each enter it."""
+    from verity_flock import circuit_types as CT
+    from verity_flock import gf2
+    from verity_flock import tail_pieces as TP
+    from verity_flock import type_trace as TT
+
+    def build(asserted: bool):
+        C = gf2.Circuit()
+        a, b = C.input("a", 2), C.input("b", TP.TABLE_BITS["ex2"])
+        x = C.AND(a[0], a[1])
+        v = C.lookup("ex2", [x ^ b[0], *b[1:]], TP.VALUE_BITS)
+        C.output("o", [x, v[0] ^ a[0]])
+        if asserted:
+            C.assert_zero("z", v[1] ^ b[2])
+        return C
+
+    C = build(True)
+    ins, outs = [*C.inputs["a"], *C.inputs["b"]], [*C.outputs["o"], C.asserts[0][1]]
+    t = CT.from_gf2(C, ins, outs, [(1, 2), (1, len(C.inputs["b"]))], [(1, 2), (1, 1)], "program",
+                    {"ex2": (TT.table_sha512("ex2"), TP.TABLE_BITS["ex2"], TP.VALUE_BITS)})
+    assert [it[0] for it in t.items] == [CT.AND, CT.READ] and CK.lowering_type(C) == t.digest()
+    assert CK.lowering_type(build(False)) != t.digest()
+
+
+def test_a_lowering_with_its_pinned_and_count_but_another_circuit_is_refused_on_its_type(monkeypatch):
+    """The same ANDs computing the same function, but built another way (every AND's operands swapped), match the pin's AND count
+    and every correspondence check: only the pin's ``type`` refuses it."""
+    from verity.ml.circuits.boolean import forms
+    from verity_vllm.program.registry import prims as P
+
+    pin = _lowering_pin(CK.check_definition(P.F32Mul, OPTS, pins={"pieces": {}, "units": {}}))
+    pins = {"pieces": {"F32Mul_v1": pin["counts"]}, "units": {}}
+    assert not CK.check_definition(P.F32Mul, OPTS, pins=pins)["failures"]
+    AND = forms.Circuit.AND
+    monkeypatch.setattr(forms.Circuit, "AND", lambda self, a, b: AND(self, b, a))
+    e = CK.check_definition(P.F32Mul, OPTS, pins=pins)
+    assert _lowering_pin(e)["counts"]["and"] == pin["counts"]["and"]
+    assert [f["name"].split(" (")[0] for f in e["failures"]] == [
+        f"lowering/pin-mismatch F32Mul_v1 [F32Mul_v1]: type {pin['counts']['type'][:16]}... -> {_lowering_pin(e)['counts']['type'][:16]}..."]
+
+
+def test_a_pin_without_a_type_is_named_as_untyped_and_update_pins_types_it(monkeypatch):
+    """A pin with the lowering's AND count and no ``type`` (a branch written before ``type``) passes with an ``untyped``
+    warning, and `--update-pins` writes the lowering's ``type`` into it."""
+    from circuit_check import cli
+    from circuit_check import sidecars as SC
+    from verity_vllm.program.registry import prims as P
+
+    pin = _lowering_pin(CK.check_definition(P.F32Mul, OPTS, pins={"pieces": {}, "units": {}}))
+    e = CK.check_definition(P.F32Mul, OPTS, pins={"pieces": {"F32Mul_v1": {"and": pin["counts"]["and"]}}, "units": {}})
+    assert not e["failures"] and _lowering_pin(e)["status"] == "untyped"
+    assert [w["name"].split(" (")[0] for w in e["warnings"] if w["code"] == "untyped"] == [
+        "lowering/untyped F32Mul_v1: 1 [F32Mul_v1]: no type"]
+    written = {}
+    monkeypatch.setattr(SC, "write_pins", written.update)
+    cli.update_pins({"targets": [e]})
+    assert written == {("pieces", "F32Mul_v1"): pin["counts"]}
+
+
 def test_a_gated_definitions_circuit_digest_is_held_to_its_pin():
     """A Definition a Program holds as one gate naming its circuit digest (``gated``: N2's served counts here) has that
     digest, core's `program_digest` of its Program, checked against its ``digests`` pin, which a verifier reads in its

@@ -4,7 +4,7 @@
 # CPU feature set a pod builds: the class sweep's proving build (sha512), 60-circuit's (sha512, glue), and the selftests'
 # (sha512, glue, seed-injection). A proving build never has seed-injection, so code only that feature defines must stay behind it.
 # `check_build.sh test` (check's flock-rust-tests step) runs the Rust tests on the same checkout instead, in release as upstream's
-# CI does: flock-live's unit tests in the proving build's and the selftests' feature sets, and every test of the five crates the
+# CI does: flock-live's unit tests in the proving build's and the selftests' feature sets, and every test of the six crates the
 # patches change (the live crate's features don't reach them, so one run).
 # env: FLOCK_CHECKOUT (default $HOME/.cache/verity/flock-b684b12, cloned when missing; its target/ is kept between runs),
 # RUST_TOOLCHAIN (default the pin below, installed through rustup when missing: a machine's default toolchain doesn't decide it,
@@ -36,8 +36,8 @@ if [ "${1:-}" = test ]; then
     echo "check_build: cargo test --release flock-live --lib --features $features"
     cargo test --release -q -p flock-live --lib --features "$features"
   done
-  echo "check_build: cargo test --release flock-core flock-prover flock-merkle flock-transcript flock-hash"
-  cargo test --release -q -p flock-core -p flock-prover -p flock-merkle -p flock-transcript -p flock-hash
+  echo "check_build: cargo test --release flock-core flock-parallel flock-prover flock-merkle flock-transcript flock-hash"
+  cargo test --release -q -p flock-core -p flock-parallel -p flock-prover -p flock-merkle -p flock-transcript -p flock-hash
   exit
 fi
 for features in sha512 sha512,glue sha512,glue,seed-injection; do

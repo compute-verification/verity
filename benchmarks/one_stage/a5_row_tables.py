@@ -70,6 +70,7 @@ def main() -> int:
     ap.add_argument("--delta", type=float, default=0.5)
     ap.add_argument("--port", type=int, default=7551)
     ap.add_argument("--session-timeout", type=float, default=3600)
+    ap.add_argument("--compose-cache", help="a5.py's: this machine's composed circuits (`compose_circuit.py --cache`)")
     a = ap.parse_args()
     out = Path(a.out)
     mine, live = commit(out / "window")
