@@ -89,7 +89,7 @@ I2 = "verity/prove-path/i2-compile-steps/v0"
 #: bits a row)
 CAP_BITS = 1 << 23
 #: the checkpoint config I2's φ reads when none is given: unsloth/Llama-3.2-1B's (I2's test fixture)
-LLAMA32_1B_CONFIG = HERE.parents[1] / "integrations/vllm/tests/predict/fixtures/llama32-1b.config.json"
+LLAMA32_1B_CONFIG = HERE.parents[1] / "integrations/vllm/tests/program/predict/fixtures/llama32-1b.config.json"
 ROWS1 = "prove_path.py commit: a single-GPU Commit's sealed replay bundle -> rows over the registered compiler's Programs"
 #: the sampling parameters a request's body carries to I2 (vLLM's `SamplingParams` names the record holds)
 BODY_SAMPLING = ("temperature", "top_p", "top_k", "seed", "n")
@@ -144,7 +144,7 @@ class I2Compiler:
 
     @functools.cached_property
     def digest(self) -> str:
-        from verity_vllm.predict.score import code_version
+        from verity_vllm.program.predict.score import code_version
 
         r = self.registered
         return hashlib.sha512(canonical_json({"name": self.name, "code": code_version(), "phi": r.phi.to_json(),
@@ -154,8 +154,8 @@ class I2Compiler:
     def requests(self, data: bytes) -> list[dict]:
         """I2's requests for the advice ``data``: each request's id, first step, prompt length, ``max_tokens`` (its kept outputs)
         and the digest of the Program I2 compiled for it; I2's refusal (`Unexpressible`) is a ValueError naming it."""
-        from verity_vllm.predict.build import Unexpressible
-        from verity_vllm.predict.steps import compile_steps
+        from verity_vllm.program.predict.build import Unexpressible
+        from verity_vllm.program.predict.steps import compile_steps
 
         if data not in self.compiled:
             try:
@@ -220,8 +220,8 @@ def i2_of_record(bundle: str, row_dir: str, workload: str, hf_config: str | None
     """I2 over a single-GPU Commit: φ from the row's declared inputs (`score.phi_of`: its row id, the workload file the record
     served, refused unless its digest is the record's, and the checkpoint's ``config.json``), the bodies from the record, listing
     ``transfer_gates``."""
-    from verity_vllm.predict.score import phi_of
-    from verity_vllm.predict.steps import Registered
+    from verity_vllm.program.predict.score import phi_of
+    from verity_vllm.program.predict.steps import Registered
 
     r = record1(str(bundle), str(row_dir))
     doc = json.loads(Path(workload).read_text())

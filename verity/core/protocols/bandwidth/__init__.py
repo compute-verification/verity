@@ -11,5 +11,5 @@ against the block and its path to `vk`'s root.  `PROTOCOL.md` is the protocol an
 
 It reuses PoUS's store, setup and `vk` as they are (`verity.core.protocols.pous`).  The GPU tagger is
 `benchmarks/bandwidth`.  The bandwidth audit on the served path is `verity.core.protocols.remote_bandwidth`; this v0
-stays while `verity_vllm.store`'s tag receipt reads `tags`.
+stays while `verity_vllm.protocols.remote_bandwidth`'s tag receipt reads `tags`.
 """

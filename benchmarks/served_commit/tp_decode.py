@@ -245,7 +245,7 @@ def main() -> None:
     prof.apply_env()
     from vllm import LLM
 
-    from verity_vllm import protocol_options as PO
+    from verity_vllm import protocols as PO
     from verity_vllm.engine import served as SV
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.engine.rank_worker import EXTENSION

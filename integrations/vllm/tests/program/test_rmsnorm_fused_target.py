@@ -16,8 +16,8 @@ from verity.ml.circuits.defs import bind
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.fold.resolver import StepContext, Unsupported, resolve_step
 from verity_vllm.observe.fold.tree import step_events
-from verity_vllm.predict.build import Unexpressible, build_program
-from verity_vllm.predict.phi import Phi
+from verity_vllm.program.predict.build import Unexpressible, build_program
+from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, observe_target_profile
