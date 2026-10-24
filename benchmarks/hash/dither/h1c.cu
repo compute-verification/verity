@@ -39,6 +39,8 @@
 // (frame, "node", the table's domain, uint(lv) and seven of uint(idx)'s length's eight bytes) are its (table, level)'s,
 // so h1c_levels' block takes each level's Snap once (a thread a level, before its first level) and h1c_level's block
 // its level's, and every node resumes from it: two compressions a node rather than three, as h1c_a_* already do.
+// H1C_LVA = N (H1C_LVF): a level whose widest table has more than N LT nodes goes through an h1c_level launch rather than
+// h1c_levels, so a build of a few deep tables (the A step's, a table a K) doesn't run its wide levels a block a table.
 #include <cstdint>
 #include <cuda_runtime.h>
 
@@ -74,6 +76,9 @@
 #endif
 #ifndef H1C_NMID
 #define H1C_NMID 0
+#endif
+#ifndef H1C_LVA
+#define H1C_LVA 0
 #endif
 // unset, h1c_segs' bounds name no blocks an SM: __launch_bounds__(HT, 1) lets it take 136 registers on sm_90a, not 96
 #ifdef H1C_SMINB
@@ -2035,7 +2040,10 @@ extern "C" int h1c_build(const H1Tab* tabs, H1Tab* tabs_dev, int ntab, const int
 #else
   const int lv0 = 0;
 #endif
-  const int lvf = H1C_LVF < 0 ? max_depth : max(lv0, min(H1C_LVF, max_depth));
+  int lvf = H1C_LVF < 0 ? max_depth : max(lv0, min(H1C_LVF, max_depth));
+#if H1C_HB && H1C_LVA
+  while (lvf < max_depth && (max_width >> (lvf + 1)) > (long long)H1C_LVA * LT) ++lvf;
+#endif
   for (int lv = lv0; lv < lvf; ++lv) {
     const long long nodes = max_width >> (lv + 1);
     h1c_level<<<dim3((unsigned)((nodes + 127) / 128), ntab), 128, 0, stream>>>(tabs_dev, ntab, lv);
