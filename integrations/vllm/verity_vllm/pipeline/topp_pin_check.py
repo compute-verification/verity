@@ -1,7 +1,7 @@
 """GPU check of the top-p split pin (`engine.topp_pin`): one nucleus whatever the batch.
 
-  kernel (GPU, torch venv):  python -m verity_vllm.pipeline.topp_pin_check kernel --out DIR
-  served (GPU, torch venv):  python -m verity_vllm.pipeline.topp_pin_check served --workload W --out DIR
+  kernel (GPU, torch venv):  verity-vllm topp-pin-check kernel --out DIR
+  served (GPU, torch venv):  verity-vllm topp-pin-check served --workload W --out DIR
 
 `kernel` runs vLLM's real `_apply_topp_split` on the drain's `ties` rows (`topp_split_probe.gen_ties`, whose top-p boundary falls
 inside a plateau of identical logits, so the kernel's duplicate budget decides which tied lanes stay) at every drain batch size of
@@ -16,9 +16,12 @@ from __future__ import annotations
 
 import json
 import sys
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
+
+from verity_vllm.config import option
 
 
 def kernel(out: Path) -> dict:
@@ -113,13 +116,24 @@ def served(workload: str, out: Path) -> dict:
     return doc
 
 
-def main(argv: list[str]) -> int:
-    mode = argv[0]
-    out = Path(argv[argv.index("--out") + 1])
+@dataclass(frozen=True, kw_only=True)
+class KernelOptions:
+    out: str = option("--out")
+    cmd: str = field(default="kernel", init=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class ServedOptions:
+    workload: str = option("--workload")
+    out: str = option("--out")
+    cmd: str = field(default="served", init=False)
+
+
+COMMANDS = {"kernel": KernelOptions, "served": ServedOptions}
+
+
+def main(args: KernelOptions | ServedOptions) -> None:
+    out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    doc = kernel(out) if mode == "kernel" else served(argv[argv.index("--workload") + 1], out)
-    return 0 if doc["ok"] else 1
-
-
-if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    doc = kernel(out) if args.cmd == "kernel" else served(args.workload, out)
+    sys.exit(0 if doc["ok"] else 1)

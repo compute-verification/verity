@@ -44,8 +44,8 @@ export VERITY_QWORD_MAX_GATES=${VERITY_QWORD_MAX_GATES:-$G} VERITY_QWORD_MAX_GAT
 
 rc=0
 if [ "${CHECKS:-1}" = 1 ]; then
-  step kernel lease 15 "$PY" -m verity_vllm.pipeline.topp_pin_check kernel --out "$OUT" || rc=1
-  step served lease 20 "$PY" -m verity_vllm.pipeline.topp_pin_check served --out "$OUT" \
+  step kernel lease 15 "$PY" -m verity_vllm.pipeline.cli topp-pin-check kernel --out "$OUT" || rc=1
+  step served lease 20 "$PY" -m verity_vllm.pipeline.cli topp-pin-check served --out "$OUT" \
     --workload "workloads/${ROWS%% *}.json" || rc=1
 fi
 for ROW in $ROWS; do
