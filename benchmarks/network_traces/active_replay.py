@@ -829,7 +829,9 @@ async def _http_body(reader: asyncio.StreamReader, head: bytes):
 
 class LiveServer:
     """A live OpenAI endpoint inside the boundary, behind a shim: `handle` serves one stream's connection by sending its
-    request (less its padding and `user`, which names the session) to the endpoint at `upstream`, and writing back the
+    request (less its padding, and less `user`, which names the session, but on a varied plan, so that an endpoint
+    that records it, as serve-openai's ``requests.jsonl`` does, names each request as the certified I/O does and
+    `verity-vllm advice` takes it as the advice's request id) to the endpoint at `upstream`, and writing back the
     text of each completion chunk of the response as canonical events (`canonical_events`), each with `id:` its
     position in write order, the HTTP head with the first. Every event
     written is logged as (position, session, k, the bucket it was written in, its bytes). From 1.5 buckets before the
@@ -862,6 +864,7 @@ class LiveServer:
         self.token_ids, self.upstream_fields = bool(plan.get("token_ids")), plan.get("upstream_fields") or {}
         self.drop, self.token = plan.get("drop"), frozenset(plan.get("token") or ())
         self.eos = frozenset((plan.get("varied") or {}).get("eos_token_ids") or ())
+        self.forward_user = bool(plan.get("varied"))
         self.held: Counter = Counter()
         self.windows = plan["windows"]
         self.position, self.origin, self.open = 0, None, 0
@@ -964,7 +967,8 @@ class LiveServer:
         self.log["requests"] += 1
         self.log["receipt_late_ms"].append(round((received % self.tau) * 1000, 3))
         name = body.pop("user")
-        raw = json.dumps(body | self.upstream_fields, separators=(",", ":")).encode()
+        raw = json.dumps(body | ({"user": name} if self.forward_user else {}) | self.upstream_fields,
+                         separators=(",", ":")).encode()
         up_reader, up_writer = await asyncio.open_connection(*self.upstream[:2], limit=1 << 22, ssl=self.tls)
         try:
             up_writer.write(b"POST " + self.path + b" HTTP/1.1\r\nhost: %s:%d\r\ncontent-type: application/json\r\n"
