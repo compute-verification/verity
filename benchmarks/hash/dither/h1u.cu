@@ -185,14 +185,34 @@ __host__ __device__ constexpr int n_digits(int ks) {
   return 0;
 }
 
+// H1U_JPAIR = 1 (RW without RC; WARPS even, and h1umj_sm's H1U_JCTA): warps 2k and 2k + 1 of a CTA take the two row
+// blocks of one column block (jpair_unit's order) and share its column blocks, two iterations' at a time: at each even
+// iteration it, lane l of warp w hashes column 16 w + l % 16's block of iteration it + l / 16 into warp
+// (it + l / 16) % 2's colbits (it % 4 < 2) or colbits2, then the pair's named barrier; so each warp hashes half of RW's
+// column blocks.  At an M of odd row blocks, or a partner row block not live, a unit hashes its own, as RW
+#ifndef H1U_JPAIR
+#define H1U_JPAIR 0
+#endif
 struct alignas(16) WarpSmem {
   NoiseMid nm;          // seed_j's stream
   u32 rowbits[32][17];  // row i's block: 16 halves (one segment's 32 dither bits each), padded against bank conflicts
   u32 colbits[32][17];
+#if H1U_JPAIR
+  u32 colbits2[32][17];
+#endif
   u32 coin[32][2];      // row i's digit coins: half d's bit rho is z_d(i, rho)
   u32 utab[32][9];      // column j's U + 128 bytes, rho = 0..31
   u32 ring[32][33];     // [2 j + (0 y | 1 z)][lane], a chunk's 16 sets
 };
+// H1U_JPAIR: iteration it's column blocks in its pair warp's P (it % 2)
+__device__ __forceinline__ u32 (*jpair_cols(WarpSmem& P, u32 it))[17] {
+#if H1U_JPAIR
+  return (it & 2) ? P.colbits2 : P.colbits;
+#else
+  (void)it;
+  return P.colbits;
+#endif
+}
 
 __device__ __forceinline__ u32 expand4(u32 n) { return (n * 0x00204081u) & 0x01010101u; }
 // bytewise a + bb mod 2^8 for bb's bytes in {0, 1}
@@ -574,6 +594,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
   static_assert(!DG || !(WS || OS || J10 || PL), "a gathered diagonal is the fused receipts-only form");
   static_assert(!RW || !(WS || OS || J10 || PL || DG), "J10-R's units are the fused receipts-only form");
   static_assert(!RC || RW, "RC is J10-R's units with their column blocks read");
+  constexpr bool JP = RW && !RC && H1U_JPAIR;
   constexpr bool PF = WS || H1U_PF;
   constexpr bool RING = RW ? H1U_JRING : H1U_RING;
   constexpr int PD = RW ? H1U_JPD : H1U_PD, NS = PD + RING;
@@ -651,6 +672,11 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
     if (lane == 0) S.nm = nm;
   }
   __syncwarp();
+  // JP: this warp's half of the pair, the pair's shared memory and named barrier, and whether it runs paired: M whole
+  // pairs (jpair_unit's order) and its partner row block live (both warps decide alike)
+  const u32 wp1 = (threadIdx.x >> 5) & 1, pbar = 1 + (threadIdx.x >> 6);
+  WarpSmem* const PS = &S - wp1;
+  const bool pair = JP && !(M % 64) && (!live || live[ri ^ 1]);
   const u32* wsu = WS ? (J10 ? ws : ws + 16ull * 32 * (rb + cb) * u) : nullptr;
   const u32* wsr = WS && !J10 ? ws + 16ull * 32 * (rb + cb) * (ri * ncb + cj / oo.band * oo.band) : wsu;
 
@@ -726,6 +752,28 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
           S.colbits[lane][4 * w + 2] = cv[w].z;
           S.colbits[lane][4 * w + 3] = cv[w].w;
         }
+      } else if (pair) {
+        if (!(it & 1)) {
+          const u32 e = lane >> 4, itn = it + e;
+          if (itn <= chunks) {
+            const u32 c = 16 * wp1 + (lane & 15);
+            u64 s[8];
+            noise_block(S.nm, (u64)M * rb + (u64)(32 * cj + c) * cb + (itn == 0 ? chunks : itn - 1), s);
+            u32(*dst)[17] = jpair_cols(PS[e], it);
+#pragma unroll
+            for (int j = 0; j < 8; ++j) {
+              dst[c][2 * j] = (u32)(s[j] >> 32);
+              dst[c][2 * j + 1] = (u32)s[j];
+            }
+          }
+        }
+#pragma unroll
+        for (int w = 0; w < 4; ++w) {
+          S.rowbits[lane][4 * w] = rv[w].x;
+          S.rowbits[lane][4 * w + 1] = rv[w].y;
+          S.rowbits[lane][4 * w + 2] = rv[w].z;
+          S.rowbits[lane][4 * w + 3] = rv[w].w;
+        }
       } else {
         u64 s[8];
         if constexpr (H1U_JPROBE) {
@@ -794,13 +842,15 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
         prefetch_l2(wsu + 16 * (32ull * rb + (u64)lane * cb + it));
       }
     }
-    __syncwarp();
+    if (pair && !(it & 1)) asm volatile("bar.sync %0, 64;" ::"r"(pbar) : "memory");
+    else __syncwarp();
+    const u32(*colr)[17] = pair ? jpair_cols(PS[it & 1], it) : S.colbits;
     if (it == 0) {
 #pragma unroll
       for (int d = 0; d < MD - 1; ++d) S.coin[lane][d] = S.rowbits[lane][d];
 #pragma unroll
       for (int h = 0; h < 8; ++h) {
-        const u32 hv = S.colbits[lane][h];
+        const u32 hv = colr[lane][h];
         u32 w = 0;
 #pragma unroll
         for (int b = 0; b < 4; ++b) {
@@ -818,7 +868,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
       continue;
     }
     const uint8_t* rbits = reinterpret_cast<const uint8_t*>(&S.rowbits[0][0]);
-    const uint8_t* cbits = reinterpret_cast<const uint8_t*>(&S.colbits[0][0]);
+    const uint8_t* cbits = reinterpret_cast<const uint8_t*>(&colr[0][0]);
 #pragma unroll 1
     for (u32 j0 = 0; j0 < 16; j0 += NS) {
 #pragma unroll
@@ -2425,6 +2475,16 @@ __global__ void __launch_bounds__(256) h1jr_rows(const UCallR* __restrict__ call
   }
 }
 
+static_assert(!H1U_JPAIR || WARPS % 2 == 0, "H1U_JPAIR's pairs are a CTA's warps 2k and 2k + 1");
+// H1U_JPAIR: a call's unit w in pair order, units 2p and 2p + 1 the row blocks 2 (p / ncb) and 2 (p / ncb) + 1 of
+// column block p % ncb, at an M of whole pairs (then a call's units, and every u0, are even); else the launch's order,
+// unpaired (h1u_unit's pair)
+__device__ __forceinline__ u32 jpair_unit(const UCallR& c, u32 w, u32 M) {
+  if (!H1U_JPAIR || M % 64) return w;
+  const u32 ncb = c.N / 32, p = w >> 1;
+  return (2 * (p / ncb) + (w & 1)) * ncb + p % ncb;
+}
+
 __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
                                                     const uint8_t* __restrict__ live) {
   __shared__ WarpSmem smem[WARPS];
@@ -2438,12 +2498,13 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj(const UCallR* __re
     else hi = mid;
   }
   const UCallR c = calls[lo];
+  const u32 u = jpair_unit(c, gu - c.u0, M);
   if (c.md == 3)
     h1u_unit<3, false, false, false, false, false, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{},
-                                                         gu - c.u0, smem[wp]);
+                                                         u, smem[wp]);
   else
     h1u_unit<2, false, false, false, false, false, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{},
-                                                         gu - c.u0, smem[wp]);
+                                                         u, smem[wp]);
 }
 
 // h1umj's unit gu, for h1umj_sm (h1umj keeps its own copy, as h1um does of h1um_one)
@@ -2456,12 +2517,13 @@ __device__ __forceinline__ void h1umj_one(const UCallR* __restrict__ calls, u32 
     else hi = mid;
   }
   const UCallR c = calls[lo];
+  const u32 u = jpair_unit(c, gu - c.u0, M);
   if (c.md == 3)
     h1u_unit<3, false, false, false, false, false, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{},
-                                                         gu - c.u0, S);
+                                                         u, S);
   else
     h1u_unit<2, false, false, false, false, false, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{},
-                                                         gu - c.u0, S);
+                                                         u, S);
 }
 
 // H1U_JCTA = 1 (h1umj_sm): a CTA's warps take WARPS units in turn together, warp w the w-th, as h1umj's grid places them,
@@ -2470,6 +2532,7 @@ __device__ __forceinline__ void h1umj_one(const UCallR* __restrict__ calls, u32 
 #ifndef H1U_JCTA
 #define H1U_JCTA 0
 #endif
+static_assert(!H1U_JPAIR || H1U_JCTA, "H1U_JPAIR's pairs claim their units together (H1U_JCTA)");
 // h1umj on the SMs whose %smid % den < q alone, its warps taking units from *next in turn (h1um_sm's partition, its last
 // CTA's fallback and its CAP too)
 template <bool CAP>
