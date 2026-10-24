@@ -39,7 +39,9 @@ per word, not `k/(32·G)`), and any later one debited (`laterZeroPromos`). The g
   word. Under per-word pricing, per-word joint skip sets would count: 10–16% of a word just inside v2's cap, 2.8–9.4%
   inside v1's (`repair-rows-rev1-and-v2-cap.md`). This assumption would then be a different one, which those sets
   falsify. Every other instruction is charged its class price per instruction. `CostModel` is abstract, so this rule is
-  part of which `CM` the assumption is stated at, not a property Lean checks.
+  part of which `CM` the assumption is stated at, not a property Lean checks. At W1 (`TTOutPearlCDevRev1W1`,
+  `Definitions.Pouw.Assumptions.PearlC.TTOutW1`) `CM` is the term `W1.w1Priced dv salt`, which charges each fragment
+  whole by its definition.
 - **The prices are the cheapest bit-exact implementation's** (C3's charging rule). On sm_120 an FP32 add is 8.00 per word
   issue-bound, 8.376 per FADD in the measured loop (`r20260930-063213-c94a`). sm_120a has no packed FP32 add (no FADD2):
   `add.rn.f32x2` compiles to two scalar FADDs (`r20260930-081301-747b`), so it does not halve the add. -/
