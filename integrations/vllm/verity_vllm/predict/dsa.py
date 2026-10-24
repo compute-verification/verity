@@ -51,8 +51,8 @@ class Net:
         from verity_vllm.program import model as analytic
         from verity_vllm.program.frontend import targets as TG
         from verity_vllm.program.frontend.rules.vllm_dsa import FA3_SPARSE_GEOMETRY
-        from verity_vllm.program.registry import dsa
-        from verity_vllm.program.registry.tp_allreduce import settings_of
+        from verity.ml.definitions.registry import dsa
+        from verity.ml.definitions.registry.tp_allreduce import settings_of
         hf = phi.hf_config
         self.world, self.rank = int(phi.tp["world"]), int(phi.tp.get("rank", 0))
         try:
@@ -175,7 +175,7 @@ class _Model:
         """One all-reduce over the rows on the route vLLM takes at the launch's tokens (`tp_allreduce.served_route`), the captured one
         -> each row's sum."""
         from verity_vllm.program.frontend.rules.vllm_bindings.collectives import _ROUTE_KINDS
-        from verity_vllm.program.registry import tp_allreduce as AR
+        from verity.ml.definitions.registry import tp_allreduce as AR
         n, N = len(rows), rows[0].count
         M = self.launch.tokens(n)
         setting, route = AR.served_route(self.net.settings, M, N)
@@ -192,7 +192,7 @@ class _Model:
     def reduce_norm(self, parts: list[Refs], res: list[Refs], w: Coll) -> tuple[list[Refs], list[Refs]]:
         """The all-reduce of the rows' partials, the residual add and the RMSNorm -> (normed rows, residual rows): FlashInfer's fused
         kernel where vLLM fuses (its FlashInfer all-reduce on and M within `fused_max_tokens`), else the all-reduce then the fused norm."""
-        from verity_vllm.program.registry import tp_allreduce as AR
+        from verity.ml.definitions.registry import tp_allreduce as AR
         M, N, W, s = self.launch.tokens(len(parts)), parts[0].count, self.net.world, self.net.settings
         if s["flashinfer"] and M <= AR.fused_max_tokens(N, W):
             setting, _ = AR.served_route(s, M, N)
@@ -221,7 +221,7 @@ class _Model:
         """An unbiased bf16 GEMM on cuBLAS's captured route at the launch's tokens (its sequences for the `sampled` rows): bf16 out
         (`CublasLinearRule`), or f32 (`CublasRouterRule`: the router family's route, or a direct call's where the shape has its own)."""
         from verity_vllm.program.frontend.rules.vllm_bindings.bf16_gemm import _f32out_phase
-        from verity_vllm.program.registry.bf16_gemm_check import default_cublas_route
+        from verity.ml.definitions.registry.bf16_gemm_check import default_cublas_route
         M, (N, K) = self.launch.tokens(len(xs), sampled), _arr_shape(w.type)
         phase = _f32out_phase(K, N) if f32 else "linear"
         route = default_cublas_route(phase, M, K, N)
@@ -234,7 +234,7 @@ class _Model:
 
     def router(self, xs: list[Refs], w: Coll) -> list[Refs]:
         """`GateLinear`'s f32 logits on the tier vLLM dispatches (`LlBf16GemmRule`, `CublasRouterRule`)."""
-        from verity_vllm.program.registry.bf16_gemm_check import DEFAULT_LL_BF16_FMA, dispatch_sm90
+        from verity.ml.definitions.registry.bf16_gemm_check import DEFAULT_LL_BF16_FMA, dispatch_sm90
         M, (N, K) = self.launch.tokens(len(xs)), _arr_shape(w.type)
         tier, st = dispatch_sm90(M, K, N)
         if tier == "cublas":
@@ -262,7 +262,7 @@ class _Model:
         """One layer's attention over the rows x at positions pos0.. (`DsaNormRopeRule`, `DsaQRule`, `DsaIndexerAttnRule`, op-major
         over the rows) -> the o projection's partials."""
         from verity_vllm.program.frontend.rules.vllm_dsa import DECODE_THRESHOLD, DECODE_THRESHOLD_DEFAULT, FA3_SPARSE_GEOMETRY
-        from verity_vllm.program.registry.sparse_mla_split import launch_num_splits
+        from verity.ml.definitions.registry.sparse_mla_split import launch_num_splits
         C, M = self.C, len(x)
         QL, KVL, R, NOPE, VH, NH = (int(C[k]) for k in ("Q_LORA", "KV_LORA", "QK_ROPE", "QK_NOPE", "V_HEAD", "NH"))
         IH, ID, TOPK = int(C["INDEX_HEADS"]), int(C["INDEX_HEAD_DIM"]), int(C["INDEX_TOPK"])
@@ -322,7 +322,7 @@ class _Model:
         and the routed w2 GEMM; each row's sum of its TOPK down rows, plus the shared expert's."""
         from verity_vllm.engine.profiles.devices import fused_moe_config
         from verity_vllm.program.frontend import targets as TG
-        from verity_vllm.program.registry.moe import router_kernel
+        from verity.ml.definitions.registry.moe import router_kernel
         C, M, H, G = self.C, len(x), self.H, self.G
         E, TOPK, I = int(C["NUM_EXPERTS"]), int(C["TOPK"]), int(C["I"])
         w = lambda f: self.w[(L, f)]  # noqa: E731

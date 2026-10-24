@@ -14,7 +14,7 @@ from verity.ml.circuits import evaluation as E  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
 from verity_vllm.check.match import xrank_collectives as XC  # noqa: E402
 from verity_vllm.pipeline.tp import xrank_dump as XD  # noqa: E402
-from verity_vllm.program.registry import tp_allreduce as TA  # noqa: E402
+from verity.ml.definitions.registry import tp_allreduce as TA  # noqa: E402
 
 W = 8
 M, NC = 6, 24                       # 144 words: multimem's 32-word owner slices and custom's 2-stage packs cross the rows

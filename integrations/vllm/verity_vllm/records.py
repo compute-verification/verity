@@ -149,7 +149,7 @@ def programs(row: str, ranks: list[int] | None = None, *, part: list[str] | None
     """The row's Programs, {rank: {part: DecodedProgram}} (only `ranks` and the parts `part` names, when given), fetched from its Build
     (`evidence.build`, only the descriptors asked for) or read from a `bundle` (`records fetch`), and decoded through the registry
     (`program.boolean.load_program`).  A descriptor whose digest is not the record's is refused."""
-    from verity_vllm.program.boolean import load_program
+    from verity.ml.definitions.boolean import load_program
     rec = record(row, bundle)
     want = selected(rec, ranks, part)
     paths = [descriptor(rec, r, p) for r, ps in want.items() for p in ps]

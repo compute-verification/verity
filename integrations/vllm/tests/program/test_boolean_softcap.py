@@ -26,9 +26,9 @@ from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.boolean import mufu as BM
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import NOT, const_bits, sub
-from verity_vllm.program.registry import boolean_softcap as BSC
-from verity_vllm.program.registry import fa2_softcap as FS
-from verity_vllm.program.registry import prims as P
+from verity.ml.definitions.registry import boolean_softcap as BSC
+from verity.ml.definitions.registry import fa2_softcap as FS
+from verity.ml.definitions.registry import prims as P
 
 F32 = Array(32, BL.BIT)
 
@@ -160,9 +160,9 @@ def test_the_word_views_and_word_statics() -> None:
 
 @pytest.mark.slow
 def test_the_switch_binds_tanh_and_ex2_to_mufus_boolean_versions() -> None:
-    """The switch (`verity_vllm.program.boolean`) takes the word chain to these: ``TANH`` and ``EX2`` bound through
+    """The switch (`verity.ml.definitions.boolean`) takes the word chain to these: ``TANH`` and ``EX2`` bound through
     ``word_statics`` to `MufuTanh_v2` and `MufuEx2Ftz_v2`, and nothing left on words."""
-    from verity_vllm.program import boolean as BB
+    from verity.ml.definitions import boolean as BB
     for target in PINNED:
         bits = BB.boolean_version(TR.word_of(target))
         assert bits.id == target.id and BL.is_boolean(bits)

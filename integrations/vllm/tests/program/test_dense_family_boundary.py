@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-REGISTRY = "verity_vllm.program.registry"
-REGISTRY_DIR = Path(__file__).resolve().parents[2] / "verity_vllm" / "program" / "registry"
+REGISTRY = "verity.ml.definitions.registry"
+REGISTRY_DIR = Path(__file__).resolve().parents[4] / "verity" / "ml" / "definitions" / "registry"
 FAMILY = ("dense", "act", "boolean_dense", "boolean_dense_norm", "boolean_norms", "boolean_activation", "boolean_silu",
           "boolean_rope", "boolean_tanh", "cuda_rmsnorm", "gemm_bias", "layer_norm", "gelu_erf_table", "traced_parts")
 #: other families' Definition modules the family reads: the primitives, the b1 composites, `sampling.bit_at` (`UnpackF32_v1`),
@@ -22,7 +22,7 @@ THIRD_PARTY = ("numpy",)
 #: the catalog, where the layout move put core's Definitions and silicon models
 CATALOG = "verity.ml.circuits"
 MOVED = {"rope_difftest": "verity_vllm.properties.difftests", "rope_gptj_difftest": "verity_vllm.properties.difftests",
-         "rmsnorm_fused_sweep": "verity_vllm.program.kernels", "gemm_targets": "verity_vllm.program.frontend"}
+         "rmsnorm_fused_sweep": "verity.ml.definitions.kernels", "gemm_targets": "verity_vllm.program.frontend"}
 
 
 def _imports(path: Path) -> list[tuple[int, str, tuple[str, ...]]]:

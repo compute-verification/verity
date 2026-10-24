@@ -63,8 +63,8 @@ from verity_vllm.acquire import served_moe as SM
 from verity_vllm.acquire.inductor_templates import Unmodelled, bound
 from verity_vllm.acquire.sources.inductor_hooks import FLUSH
 from verity_vllm.config import UsageError, option
-from verity_vllm.program.registry import b1, cublas_bf16, cublas_gemv
-from verity_vllm.program.registry import inductor as IR
+from verity.ml.definitions.registry import b1, cublas_bf16, cublas_gemv
+from verity.ml.definitions.registry import inductor as IR
 from verity_vllm.query.manifest.bind import split_name
 from verity_vllm.query.manifest.format import SCHEMA, manifest_digest
 from verity_vllm.query.manifest.format import SERVED_FAMILY, SERVED_IDS as IDS, SERVED_LOGITS as LOGITS
@@ -683,7 +683,7 @@ def probe_routes(shapes: list[list[int]]) -> dict[str, Any]:
     import torch
 
     from verity_vllm.commit import challenge as CH
-    from verity_vllm.program.registry import bf16_gemm_check as BC
+    from verity.ml.definitions.registry import bf16_gemm_check as BC
 
     to = lambda a: torch.from_numpy(a.view(np.int16)).view(torch.bfloat16).cuda()
 
