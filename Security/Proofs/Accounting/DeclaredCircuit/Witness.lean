@@ -676,7 +676,7 @@ theorem property (caps : Gates.Caps)
   have e3 : c.gather = 0 := hu .gather
   have e4 : c.fold = 0 := hu .fold
   have e5 : c.neutral = 0 := hu .neutral
-  have e6 : c.runBits = 0 := hc0 _
+  have e6 : c.runBits = 0 := hc0 (Gates.Gate.inputBits .run)
   rw [e1, e2, e3, e4, e5, e6, Nat.cast_zero]
   exact ⟨mul_nonneg h1 (Nat.cast_nonneg _), mul_nonneg h2 (Nat.cast_nonneg _), mul_nonneg h3 (Nat.cast_nonneg _),
     mul_nonneg h4 (Nat.cast_nonneg _), rfl, Nat.zero_le _⟩
@@ -988,7 +988,9 @@ theorem bounds_8b {N ρ S Lr τ Xr k L P E : ℕ} (caps : Gates.Caps) (Aud : Gat
     let γ := RateSketch.gammaSketch N 128 ρ S (Lr * τ) (Xr * τ + C + k * 32768)
     0.0015 + γ < 1 ∧ 0.01 + γ < 1 := by
   intro RL C γ
-  have hc₀' : (caps.total : ℝ) ≤ 221 / 500 := by exact_mod_cast hc₀
+  have hc₀' : (caps.total : ℝ) ≤ 221 / 500 := by
+    have h : ((caps.total : ℚ) : ℝ) ≤ ((221 / 500 : ℚ) : ℝ) := Rat.cast_le.2 hc₀
+    rwa [show ((221 / 500 : ℚ) : ℝ) = 221 / 500 by norm_num] at h
   have hγ : γ ≤ _ := gamma_bound (L₀ := 6) (P₀ := 984) (E₀ := 364497) (N₀ := 16777216) (R₀ := 6000000) caps Aud
     0.00835 (221 / 500) (by norm_num) hN hL hP (by norm_num) hE hc hc₀' hR h₀
   norm_num at hγ
@@ -1006,7 +1008,9 @@ theorem bounds_70b {N ρ S Lr τ Xr k L P E : ℕ} (caps : Gates.Caps) (Aud : Ga
     let γ := RateSketch.gammaSketch N 128 ρ S (Lr * τ) (Xr * τ + C + k * 32768)
     (L ≤ 31 → 0.0015 + γ < 1) ∧ (L ≤ 30 → 0.01 + γ < 1) := by
   intro RL C γ
-  have hc₀' : (caps.total : ℝ) ≤ 459 / 5000 := by exact_mod_cast hc₀
+  have hc₀' : (caps.total : ℝ) ≤ 459 / 5000 := by
+    have h : ((caps.total : ℚ) : ℝ) ≤ ((459 / 5000 : ℚ) : ℝ) := Rat.cast_le.2 hc₀
+    rwa [show ((459 / 5000 : ℚ) : ℝ) = 459 / 5000 by norm_num] at h
   refine ⟨fun hL => ?_, fun hL => ?_⟩
   · have hγ : γ ≤ _ := gamma_bound (L₀ := 31) (P₀ := 984) (E₀ := 364497) (N₀ := 16777216) (R₀ := 6000000) caps Aud
       0.00835 (459 / 5000) (by norm_num) hN hL hP (by norm_num) hE hc hc₀' hR h₀
