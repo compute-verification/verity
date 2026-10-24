@@ -6,15 +6,21 @@
 # match_rank.sh puts, waited for), into the row dir's match/fold_match; the legs checked against match_gpu.sh's list (LEGS);
 # match_cpu.sh's full run with MATCH_REUSE=legs, which keeps every rank's documents and runs the cross-rank leg; and, when the
 # Match passes, commit.sh over its vllm.match run.  Each step's records are under $OUT/<step>.
-#   research run --on vy-glm53-h200-1 --mem-gb 1300 --mem-wait 28800 --timeout 30h --custody-ttl 36h --source . --cwd source --project verity -- env ROW=... BUILD_RUN=... BUILD_PARTS=RUN:build LEGS=/workspace/research/runs/RUN/out/match.sha256 RANKS=0,1,2,3 RANK_SETS="RUN:ranks-4 RUN:ranks-5 ..." NODE=vy-glm53-h200-1 VERITY_QWORD_MAX_GATES=... VERITY_QWORD_MAX_GATES_ALLOWED=... bash integrations/vllm/manifests/glm_v2_tree/jobs/pod_chain.sh
-# env: ROW, BUILD_RUN, BUILD_PARTS, LEGS (a path, else $RESEARCH_RUN_DIR/inputs/LEGS), RANKS, RANK_SETS, [NODE], [SIDE=$SW-side],
-# [FOLD_WORKERS], [COMMIT=1], store_tar.sh's [WAIT_MIN], [EVICT_FREE_GB].
+#   research run --on vy-glm53-h200-1 --mem-gb 1300 --mem-wait 28800 --timeout 30h --custody-ttl 36h --source . --cwd source --project verity -- env ROW=... BUILD_RUN=... BUILD_PARTS=RUN:build LEGS_RUN=RUN RANKS=0,1,2,3 RANK_SETS="RUN:ranks-4 RUN:ranks-5 ..." NODE=vy-glm53-h200-1 VERITY_QWORD_MAX_GATES=... VERITY_QWORD_MAX_GATES_ALLOWED=... bash integrations/vllm/manifests/glm_v2_tree/jobs/pod_chain.sh
+# env: ROW, BUILD_RUN, BUILD_PARTS, LEGS (a path, else $RESEARCH_RUN_DIR/inputs/LEGS) or LEGS_RUN (match_gpu.sh's run on this
+# node, waited for, its out/match.sha256), RANKS, RANK_SETS, [NODE], [SIDE=$SW-side], [FOLD_WORKERS], [COMMIT=1], store_tar.sh's
+# [WAIT_MIN], [EVICT_FREE_GB].
 set -uo pipefail
-: "${ROW:?ROW}" "${BUILD_RUN:?BUILD_RUN}" "${BUILD_PARTS:?BUILD_PARTS}" "${LEGS:?LEGS}" "${RANKS:?RANKS}" "${RANK_SETS:?RANK_SETS}"
+: "${ROW:?ROW}" "${BUILD_RUN:?BUILD_RUN}" "${BUILD_PARTS:?BUILD_PARTS}" "${RANKS:?RANKS}" "${RANK_SETS:?RANK_SETS}"
 [[ $RANKS =~ ^[0-9](,[0-9])*$ ]] || { echo "RANKS=$RANKS: single-digit ranks separated by commas"; exit 3; }
 TREE=$PWD J=$PWD/integrations/vllm/manifests/glm_v2_tree/jobs
 source "$J/model.sh"
 D=$SW/$ROW SIDE=${SIDE:-$SW-side} O=$OUT
+if [ -n "${LEGS_RUN:-}" ]; then
+  bash "$J/wait_run.sh" "$LEGS_RUN" || exit
+  LEGS=${LEGS:-$(dirname "$RESEARCH_RUN_DIR")/$LEGS_RUN/out/match.sha256}
+fi
+: "${LEGS:?LEGS or LEGS_RUN}"
 [ -f "$LEGS" ] || LEGS=$RESEARCH_RUN_DIR/inputs/$LEGS
 [ -s "$LEGS" ] || { echo "no legs list $LEGS (match_gpu.sh's match.sha256)"; exit 3; }
 step() { echo "$(date -u +%FT%TZ) [chain] $*"; }
