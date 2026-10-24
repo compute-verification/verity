@@ -591,6 +591,15 @@ static_assert(H1U_JPD >= 1 && (H1U_JRING == 0 || H1U_JRING == 1) && 16 % (H1U_JP
 #ifndef H1U_JN2
 #define H1U_JN2 0
 #endif
+// H1U_JXS = 1 (with JX): h1jr_x stores a row block's X in A-fragment order, segment sg's row tile mt at byte
+// 1024 sg + 512 mt of the block, lane (g, q)'s 16 bytes {rows g, g + 8} x {k 8 q .., 8 q + 4 ..} in mma_s8's register
+// order, so the unit loads each fragment as one 16-byte load into the registers the MMA reads; the same bytes
+#ifndef H1U_JXS
+#define H1U_JXS 0
+#endif
+#if H1U_JXS && !H1U_JX
+#error "H1U_JXS swizzles JX's X, so it needs H1U_JX = 1"
+#endif
 constexpr u32 JX_AD_WORDS = 3 * 8 * 32;
 __host__ __device__ __forceinline__ u64 jx_x_off(u32 M, u32 K) { return 64ull * M * (K / 512 + 1); }
 __host__ __device__ __forceinline__ u64 jx_ad_off(u32 M, u32 K) { return jx_x_off(M, K) + (u64)M * K; }
@@ -637,6 +646,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
   static_assert(!JX || (RW && !RC), "JX is J10-R's units reading their row block's X and A_d");
   constexpr bool BW = RW && H1U_JBW;
   constexpr bool N2 = JX && H1U_JN2;
+  constexpr bool XS = JX && H1U_JXS;
   constexpr bool PF = WS || H1U_PF;
   constexpr bool RING = RW ? H1U_JRING : H1U_RING;
   constexpr int PD = RW ? H1U_JPD : H1U_PD, NS = PD + RING;
@@ -754,7 +764,15 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
     const u32 kofs = 32 * sg + 8 * q;
 #pragma unroll
     for (int r = 0; r < 4; ++r) {
-      a[r] = ld2<H1U_L2HINT>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs);
+      if constexpr (XS) {
+        if (r % 2 == 0) {
+          const uint4 v = ld4<H1U_L2HINT>(Ab + 1024ull * sg + 256 * r + 16 * lane);
+          a[r] = make_uint2(v.x, v.z);
+          a[r + 1] = make_uint2(v.y, v.w);
+        }
+      } else {
+        a[r] = ld2<H1U_L2HINT>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs);
+      }
       b[r] = ld2e<H1U_L2HINT, H1U_EVF && H1U_EVFU>(Bb + (u64)(8 * r + g) * K + kofs);
     }
   };
@@ -918,7 +936,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
         const u32 j = j0 + jj, sg = 16 * blk + j;
         uint2 ca[4], cw[4];
         if (H1U_L2PF && sg % 4 == 0 && sg + 16 < ks) {
-          prefetch_l2(Ab + (u64)lane * K + 32 * (sg + 16));
+          prefetch_l2(XS ? Ab + 1024ull * (sg + 16) + 128 * lane : Ab + (u64)lane * K + 32 * (sg + 16));
           prefetch_l2(Bb + (u64)lane * K + 32 * (sg + 16));
         }
         if (PF && RING) {
@@ -936,12 +954,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
           }
           if (sg + PD < ks) load_seg(sg + PD, pa[jj], pb[jj]);
         } else {
-          const u32 kofs = 32 * sg + 8 * q;
-#pragma unroll
-          for (int r = 0; r < 4; ++r) {
-            ca[r] = ld2<H1U_L2HINT>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs);
-            cw[r] = ld2e<H1U_L2HINT, H1U_EVF && H1U_EVFU>(Bb + (u64)(8 * r + g) * K + kofs);
-          }
+          load_seg(sg, ca, cw);
         }
         u32 af[2][4], bf[4][2];
         u32 bb[PL ? 2 : 1][4], xa[PL ? 2 : 1][4], xany = 0;  // PL: b and xa as 0/1 A fragments
@@ -2546,7 +2559,7 @@ __global__ void __launch_bounds__(512) h1jr_x(const UCallR* __restrict__ calls, 
   const u32 K = c.K, rb = K / 512 + 1, r = threadIdx.x >> 4, sub = threadIdx.x & 15, row = 32 * ri + r;
   const u32* bits = c.rws + 16ull * row * rb;
   const int8_t* a = c.A + (u64)row * K;
-  int8_t* x = reinterpret_cast<int8_t*>(c.rws) + jx_x_off(M, K) + (u64)row * K;
+  int8_t* x = reinterpret_cast<int8_t*>(c.rws) + jx_x_off(M, K) + (H1U_JXS ? (u64)(32 * ri) * K : (u64)row * K);
   int acc[16];
 #pragma unroll
   for (int i = 0; i < 16; ++i) acc[i] = 0;
@@ -2557,7 +2570,17 @@ __global__ void __launch_bounds__(512) h1jr_x(const UCallR* __restrict__ calls, 
     const u32 w = __ldg(bits + 16 * (k0 / 512) + (k0 / 32) % 16) >> (k0 % 32);
     const u32 xw[4] = {add01(av.x, expand4(w & 15u)), add01(av.y, expand4((w >> 4) & 15u)),
                        add01(av.z, expand4((w >> 8) & 15u)), add01(av.w, expand4((w >> 12) & 15u))};
-    *reinterpret_cast<uint4*>(x + k0) = make_uint4(xw[0], xw[1], xw[2], xw[3]);
+    if constexpr (H1U_JXS) {
+      // bytes 8 q' + 4 hf .. of row r (mt = r / 16, g = r % 8, h = r / 8 % 2) are word h + 2 hf of lane 4 g + q'
+      u32* xo = reinterpret_cast<u32*>(x + 512ull * (2 * (gi / 2) + r / 16) + 16 * (4 * (r % 8) + 2 * (gi % 2))) +
+                (r / 8) % 2;
+      xo[0] = xw[0];
+      xo[2] = xw[1];
+      xo[4] = xw[2];
+      xo[6] = xw[3];
+    } else {
+      *reinterpret_cast<uint4*>(x + k0) = make_uint4(xw[0], xw[1], xw[2], xw[3]);
+    }
 #pragma unroll
     for (int i = 0; i < 16; ++i) acc[i] += (int)(int8_t)(xw[i >> 2] >> (8 * (i & 3)));
   }
