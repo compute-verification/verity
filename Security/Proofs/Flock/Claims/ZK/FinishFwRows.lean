@@ -153,6 +153,7 @@ theorem tauFw_vals {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK
        obtain ⟨⟨rfl, -⟩, -⟩ := hp
        exact ⟨rfl, rfl⟩)
   rw [hpl.1, hpl.2] at hV
+  rw [hpl.2] at hTP
   have hrp' : Zk.replay st (layOf Tz stm)
       { cap := cm0.cap, params := pcsParams st.merkle sch, zerocheck := zp, lincheck := lp, ringSwitches := ss,
         ligerito := lg } ic.root (Flock.Transcript.init t₄.rounds dom) = .ok (rp, tt) := by
