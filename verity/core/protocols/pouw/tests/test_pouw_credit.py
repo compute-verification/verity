@@ -29,6 +29,9 @@ from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.circuits import codec
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.ops.boolean import gemm as BG
+from verity.ml.circuits.ops.gemm import S8_K_LIMIT
 
 PKG = Path(__file__).resolve().parents[1] / "lean/check/tests"
 for _name, _dir in (("pouw_rounds_cases", PKG), ("pouw_credit_cases", PKG), ("test_circuit_h1window", Path(__file__).parent)):
@@ -66,6 +69,10 @@ OTHER_REGISTRATION = "'s domain is not the one the window's registration gives i
 OTHER_ROOT = "against another root than the one the window registered for"
 OTHER_PERIOD_WEIGHTS = "open signed: a B row's codes or s_w differ from the ones the period registered"
 UNSIGNED = "open signs no weights' root (weights_root, a SHA-512 digest"
+#: a tile at a K its proof doesn't cover (`credit.tile_k`), between its K and its fix
+TILE_K = "is outside the K its proof covers, multiples of 32 below 131072 (the K its GemmAccumulatorS8 binds): "
+SPLIT = ("split its linears' k range into linears of at most K = 131040 each, each padded with zero codes to a "
+         "multiple of 32")
 DRAWN_EXPECT = {
     "coin-form": ("draw", Cr.COIN_FORM), "args-form": ("draw", Cr.DRAW_ARGS), "layout-form": ("layout", Cr.LAYOUT_FORM),
     "named-twice": ("layout", "is named twice"), "unknown-linear": ("layout", "which is no linear of the window"),
@@ -85,7 +92,7 @@ WINDOW_EXPECT = {
     "not-window": ("layout", Cr.NOT_WINDOW), "template": ("layout", "is not h1window's"),
     "tile-ks": ("layout", "h1window binds one template per K"), "body": ("layout", Cr.BODY),
     "layout-form": ("layout", Cr.LAYOUT_FORM), "record-layout": ("layout", "which is no linear of the window"),
-    "alt-layout": ("layout", Cr.BODY),
+    "alt-layout": ("layout", Cr.BODY), "tile-k": ("tile-k", TILE_K),
     "credit-changed": ("draw", Cr.CHANGED), "credit-no-draw": ("draw", Cr.NO_DRAW),
     "credit-forged-ledger": ("coin", "the challenger's session is not trusted"),
     "credit-branch-pin": ("coin", OFF_MAIN),
@@ -130,6 +137,7 @@ PERIOD_EXPECT = {
     "other-k": ("window", "so the period earns nothing"),
     "alt-layout": ("circuit", "prove the period's declared circuit"),
     "bad-circuit": ("window", "so the period earns nothing: layout: "),
+    "tile-k": ("window", "so the period earns nothing: tile-k: the window's tile at K = "),
     "never-received": ("window", "so the period earns nothing: rounds: " + NOT_RECEIVED),
     "proof-other-registration": ("window", "so the period earns nothing: registration: drawn unit "),
     "branch-pin": ("circuit", "doesn't count toward it, so the period earns nothing: session s-"),
@@ -378,6 +386,29 @@ def test_the_layout_is_the_committed_circuits():
         q = h1.HW.query(prog)
         ids = dict(zip(sorted({k for _n, k, _c in linears}), q["params"]["templates"]))
         assert [(ids[int(s["template"][1:])], s["units"]) for s in Cr.strata(lay)[0]] == h1.P.strata(prog, q)
+
+
+def test_a_tile_at_a_k_its_proof_does_not_cover_refuses():
+    """The tile's proof covers 32 | K and K < 2^17, the K its ``GemmAccumulatorS8`` binds: `credit.layout_of` on the
+    compiled `h1window.program`'s descriptor accepts a tile at K = 64, 4096 or 2^17 − 32, and refuses one at K = 2^17
+    or past or at a K no multiple of 32 (``tile-k``), the why naming the K to pad its linears to or the split. The
+    descriptors are the stand-in tile's (`test_circuit_h1window.unit`), which binds any K, and `credit.strata`, which
+    reads no tile, accepts their layouts."""
+    assert (Cr.TILE_K_STEP, Cr.TILE_K_LIMIT) == (32, S8_K_LIMIT) == (32, 1 << 17)
+    pad = "pad its linears' A and B rows with zero codes to K = {}".format
+    for k, fix in ((64, None), (4096, None), ((1 << 17) - 32, None), (1 << 17, SPLIT), ((1 << 17) + 32, SPLIT),
+                   ((1 << 17) - 22, SPLIT), (48, pad(64)), (100, pad(128)), (4097, pad(4128))):
+        linears, calls = (("q_proj", 32, 16), ("o_proj", k, 8)), (("q_proj", 0), ("o_proj", 0))
+        lay = {"calls": [list(c) for c in calls], "linears": [list(x) for x in linears], "m": 8, "tile": list(h1.TILE)}
+        assert Cr.strata(lay)[1] is None, k
+        got = Cr.layout_of(_compiled(linears, calls, 8))
+        if fix is None:
+            assert got == (lay, None), k
+            bind(BG.GemmAccumulatorS8, K=k, **BG.GEMM_SM120_S8)
+        else:
+            assert got == (None, ("tile-k", f"the window's tile at K = {k} {TILE_K}{fix}")), k
+            with pytest.raises(ValueError, match="refuses this binding"):
+                bind(BG.GemmAccumulatorS8, K=k, **BG.GEMM_SM120_S8)
 
 
 @pytest.mark.parametrize("prefix", ["", "h1/w-3/"])

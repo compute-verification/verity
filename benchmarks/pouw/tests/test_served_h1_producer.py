@@ -6,7 +6,8 @@ builds it (`credit.public_table`), which the references are seeded from. A row b
 noise-derived receipt, not zero, unless the producer skips dead tiles (``skip_dead``, ``H1_SKIP_DEAD=1``): then it has v4's
 zero receipt and a row block holding a served row its full one. Through `Served` (slow: the window Program's real tile
 unit takes half a minute to declare) every call's ``receipt@<c>`` is those receipts' words; and on a GPU with h1u.cu's
--hbc build named by `VERITY_POUW_H1U_SO` the units kernel gives the same words at Llama-3.1-8B's four linear shapes."""
+-hbc build named by `VERITY_POUW_H1U_SO` the units kernel gives the same words at Llama-3.1-8B's four linear shapes, a
+call at a time or a step's calls of one K in one launch (`Receipts.prepare`)."""
 from __future__ import annotations
 
 import hashlib
@@ -315,3 +316,58 @@ def test_skipping_dead_tiles_the_units_kernel_is_h1tile_reference_v4_at_llama_8b
             for v in checked.values():
                 seen["live" if v["live"] else "dead"] += 1
     assert seen == {"live": 24, "dead": 24}
+
+
+class _AtEach(_At):
+    """The producer with each call's first unit given, without a window Program."""
+
+    def __init__(self, starts, *args, **kw):
+        super().__init__(0, *args, **kw)
+        self.starts = starts
+
+    def start(self, call):
+        return self.starts[call.index]
+
+
+def test_a_steps_calls_of_one_k_in_one_units_kernel_launch_are_each_calls_own_receipts_at_llama_8b_shapes():
+    """On the GPU, `prepare` of a step's calls of one K (qkv, o, gate_up and qkv again at K = 4096, down twice at
+    K = 14336, each on its own codes, roots and first unit) and then each call's ask give, over steps of 64, 20 and 0
+    served rows with dead tiles computed and skipped, in one launch, a launch a call or two launches, every call's
+    receipts as its ask alone gives them, word for word, each ready before its ask and gone after it; and at 20 rows
+    `check` holds the first and last unit of each row block of every call to `h1tile.reference` (v1's, and v4's with the
+    skip)."""
+    units = _kernel()
+    rng = np.random.default_rng(20261025)
+    ws = [torch.from_numpy(rng.integers(-127, 128, (n, k), dtype=np.int8)).cuda() for n, k in LLAMA]
+    checked = {"live": 0, "dead": 0}
+    for k, linears in ((4096, [0, 1, 2, 0]), (14336, [3, 3])):
+        calls, starts, u0 = [], {}, 1000
+        for i, w in enumerate(linears):
+            n = LLAMA[w][0]
+            calls.append(SimpleNamespace(index=10 + i, step=0, layer=w, module=str(w), m=0, k=k, n=n))
+            starts[10 + i] = (u0, 2 * (n // 32))
+            u0 += 2 * (n // 32) + 7
+        for m in (64, 20, 0):
+            batch = [(c, rng.integers(-127, 128, (m, k), dtype=np.int8), None, None, None) for c in calls]
+            for skip in (False, True):
+                def made(keep=None, launches=1, skip=skip, starts=starts):
+                    return _AtEach(starts, SimpleNamespace(m=64), SimpleNamespace(salt=SALT), units=units,
+                                   weight=lambda x: ws[x.layer], keep=keep, skip_dead=skip, launches=launches,
+                                   roots=lambda x: (hashlib.sha512(bytes([x.index])).digest(), RB))
+
+                want = [made()(*args) for args in batch]
+                for launch in (1, len(calls), 2):
+                    together = made(keep=lambda c: True, launches=launch)
+                    together.prepare(batch)
+                    assert sorted(together._ready) == [c.index for c in calls], (k, m, skip, launch)
+                    for args, w in zip(batch, want):
+                        assert np.array_equal(together(*args), w), (k, m, skip, launch, args[0].index)
+                        assert args[0].index not in together._ready
+                if m == 20:
+                    for c in calls:
+                        cb = c.n // 32
+                        got = PR.check(together.kept[c.index], [0, cb - 1, cb, 2 * cb - 1])
+                        assert all(v["ok"] and v["pub"] for v in got.values()), (k, skip, c.index, got)
+                        for v in got.values():
+                            checked["live" if v["live"] else "dead"] += 1
+    assert checked == {"live": 24, "dead": 24}
