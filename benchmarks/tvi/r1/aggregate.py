@@ -7,11 +7,14 @@ import numpy as np
 
 def cp(k, n, a=0.05):
     """Clopper-Pearson interval for k successes in n, by bisection on the binomial tail (no scipy)."""
+    def pmf(i, p):
+        return math.exp(math.lgamma(n + 1) - math.lgamma(i + 1) - math.lgamma(n - i + 1) + i * math.log(p) + (n - i) * math.log1p(-p))
+
     def tail_ge(p):
-        return sum(math.comb(n, i) * p ** i * (1 - p) ** (n - i) for i in range(k, n + 1))
+        return sum(pmf(i, p) for i in range(k, n + 1))
 
     def tail_le(p):
-        return sum(math.comb(n, i) * p ** i * (1 - p) ** (n - i) for i in range(0, k + 1))
+        return sum(pmf(i, p) for i in range(0, k + 1))
 
     def solve(f, target, lo, hi, increasing):
         for _ in range(60):
@@ -73,6 +76,7 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--which", default="best", choices=["best", "final"])
     ap.add_argument("--a3", nargs="*", default=[], help="A3's run dirs (each with out/results/*.json)")
+    ap.add_argument("--procs-per-gpu", type=int, default=2, help="arms that shared one GPU; GPU-h is training wall time over this")
     a = ap.parse_args()
     rows = []
     for d in a.runs:
@@ -87,7 +91,10 @@ def main():
                    "seqs_per_iter": r.get("seqs_per_iter"), "procs_per_gpu": None}
             for w in ("best", "final"):
                 row[w] = metrics(r[w])
-            row["to_reach"] = to_reach(os.path.join(os.path.dirname(f), "log.json"))
+            log = os.path.join(os.path.dirname(f), "log.json")
+            if not os.path.exists(log) and r.get("args", {}).get("prev_log"):
+                log = r["args"]["prev_log"].replace("/workspace/research/runs", os.path.dirname(os.path.abspath(d.rstrip("/"))))
+            row["to_reach"] = to_reach(log)
             rows.append(row)
     rows.sort(key=lambda r: (r["task"], {"base": 0, "es": 1, "grpo": 2}[r["arm"]], r["reward"], r["S_bytes"], r["name"]))
     lines = ["| arm | task | S | reward | iters | best it | pass@1 greedy % | pass@1 sampled % | pass@64 % | letters right, greedy % "
@@ -99,7 +106,7 @@ def main():
         c = r["counter"]
         lines.append(f"| {r['name']} | {r['task']} | {S} | {r['reward']} | {r['iters']} | {r['best_it']} | {fmt(m, 'pass1_greedy')} "
                      f"| {fmt(m, 'pass1_sampled')} | {fmt(m, 'pass64')} | {fmt(m, 'pos_greedy')} | {fmt(m, 'pos_sampled')} "
-                     f"| {r['train_sec'] / 3600:.2f} | {c.get('flops', 0):.2e} | {c.get('info_pass_bits', 0):.3g} "
+                     f"| {r['train_sec'] / 3600 / a.procs_per_gpu:.2f} | {c.get('flops', 0):.2e} | {c.get('info_pass_bits', 0):.3g} "
                      f"| {c.get('info_dense_bits', 0):.3g} |")
     lines += ["", "FLOPs (and wall seconds) to first reach a greedy validation letter accuracy:", "",
               "| arm | task | S | " + " | ".join(f"{int(100 * t)}%" for t in THRESHOLDS) + " |",
