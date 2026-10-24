@@ -17,6 +17,7 @@ import Proofs.Nci.FitRate
 import Proofs.Nci.FitWitness
 import Proofs.Nci.Dampener
 import Proofs.Nci.Info
+import Proofs.Nci.Transfers
 import Proofs.Nci.Fmt
 import Proofs.Nci.Fmt2
 import Proofs.Nci.Training
@@ -31,6 +32,7 @@ import Proofs.Nci.CoveringTwoCosts
 import Proofs.Nci.CoveringTwoCostsWitness
 import Proofs.Nci.CoveringPriced
 import Proofs.Nci.CoveringPricedWitness
+import Proofs.Nci.Cover
 
 /-!
 # Proofs of NCI's guarantees
