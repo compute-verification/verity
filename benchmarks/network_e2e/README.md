@@ -125,10 +125,17 @@ verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic 
   `w<k> <arm>`), and `--prove-path` may be given once for each such audit. The prove path is then bound to these runs
   when every arm's Commit is the endpoint's (its `windows.jsonl` has that window's run id and root), its root the one
   sealed while serving (the audit's `serve` check), and an honest arm's Commit is one of the honest run's own windows.
-  That arm's committed advice must be the report's registration of its window, by root or, registered apart under its
-  own salt and compiler, by its v0 bits. `--prove-path-registered FILE` says, by window, who registered each audited
-  window's advice and when (`{K: {by, at_serve_time, at, first_draw, ref}}`); the report shows it, and `stubbed` lists
-  a window registered after serving. Each rank's time is reported per drawn unit, its prover's and Lean's seconds over
+  Every arm's committed advice must be the report's advice of its window by content (`chain.held_to`). Its root is the
+  one registered under that window's Commit: in the report's own advice, or, registered apart under its own salt and
+  compiler, in the `verity-vllm advice` directory `--prove-path-registered` names. That registration's opening must
+  open the root to the report's advice of the window (`chain.opens`). The v0 bit count is never enough, and an arm not
+  held so makes the report NOT OK, whether its prove path binds or not. `--prove-path-registered FILE` says, by window,
+  who registered each audited window's advice, where when it isn't the report's own, and the arm's first draw
+  (`{K: {by, registration, first_draw, ref}}`). When it was registered is read off the registration itself, never the
+  job: its file's time (a registration has no time field) against the window's close in the endpoint's trace (the
+  first clocked record after the close event, `chain.closes`). A registration after the close reads "after serving".
+  The report shows it, and `stubbed` lists a window registered after serving. Each rank's time is reported per drawn
+  unit, its prover's and Lean's seconds over
   the units its statement proves (PROVE-PATH's `per_unit`, 92e4e50ca5).
 - NEG's registry (`benchmarks/network_traces/negatives.py`'s `suite`) runs on the runs unless `--no-negatives`. Each row
   that ran must be refused by the code it names; the rest say what they wait on. It doesn't run on the advice profile.
