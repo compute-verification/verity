@@ -146,12 +146,15 @@ class StandIn:
                 return f"unit {u}'s {name} row does not open {port['value']} at the file's root"
         if bytes.fromhex(opened[CR.PUB_PORT][0]) != bc_of(pub["known"]["rows"][t], bytes.fromhex(pub["known"]["salts"][t])):
             return f"unit {u}'s public row is not credit's"
-        salt, position, roots = _fields(pub["known"]["rows"][t])
+        salt, position, roots, j10r = _fields(pub["known"]["rows"][t])
         a, b = self.operands(c)
         r, cc = self.w.layout["tile"]
         i, j = divmod(t, b.shape[0] // cc)
-        _z, receipt = HT.reference((a[r * i:r * (i + 1)].view(np.uint8)).tolist(),
-                                   (b[cc * j:cc * (j + 1)].view(np.uint8)).tolist(), salt, position, roots, pairs=[(0, 0)])
+        ta, tb = (a[r * i:r * (i + 1)].view(np.uint8)).tolist(), (b[cc * j:cc * (j + 1)].view(np.uint8)).tolist()
+        if j10r is None:
+            _z, receipt = HT.reference(ta, tb, salt, position, roots, pairs=[(0, 0)])
+        else:
+            _z, receipt = HT.j10r_reference(ta, tb, salt, position, roots, *j10r, pairs=[(0, 0)])
         want = SV.receipt_words(np.array([receipt], np.uint32))[0]
         if bytes.fromhex(opened[CR.RECEIPT_PORT][0]) != bc_of(want, bytes.fromhex(opened[CR.RECEIPT_PORT][2])):
             return f"unit {u}'s o0 row is not the receipt it computes"
@@ -178,14 +181,17 @@ class StandIn:
         return out, None
 
 
-def _fields(words: Any) -> tuple[bytes, int, tuple[bytes, bytes]]:
-    """A public row's salt, position and (root(A), root(B)) (`core_check.public_words` inverted; a J10-R row's call and
-    blocks after them dropped)."""
+def _fields(words: Any) -> tuple[bytes, int, tuple[bytes, bytes], tuple[int, tuple[int, int]] | None]:
+    """A public row's salt, position, (root(A), root(B)) and a J10-R row's (call, blocks), None for a v1 row
+    (`core_check.public_words` inverted)."""
     x = b"".join(int(v).to_bytes(2, "little") for v in words)
     x = b"".join(x[i:i + 4][::-1] for i in range(0, len(x), 4))
-    x = x[:CC.PUBLIC_ROW_BITS // 8]
-    s = len(x) - 8 - 128
-    return x[:s], int.from_bytes(x[s:s + 8], "big"), (x[s + 8:s + 72], x[s + 72:])
+    v1, s = x[:CC.PUBLIC_ROW_BITS // 8], CC.PUBLIC_ROW_BITS // 8 - 8 - 128
+    j10r = None
+    if len(x) * 8 == CC.PUBLIC_ROW_J10R_BITS:
+        call, b0, b1 = (int.from_bytes(x[len(v1) + 8 * i:len(v1) + 8 * (i + 1)], "big") for i in range(3))
+        j10r = call, (b0, b1)
+    return v1[:s], int.from_bytes(v1[s:s + 8], "big"), (v1[s + 8:s + 72], v1[s + 72:]), j10r
 
 
 def statements(w: Window, units: list[int], to: Path) -> tuple[list[dict], dict[str, str]]:
