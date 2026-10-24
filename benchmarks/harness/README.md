@@ -70,6 +70,10 @@ that `run_point.sh` sources before the point's Python starts (to build the arm's
 export their paths, say), are part of the resolved spec and so of every point's identity. The dispatcher forwards both
 (`--env`, the setup as `VERITY_BENCH_SETUP`), and a point refuses to run under any other.
 
+A served variant's `[arm_settings."ARM"]` may also name its own checkpoint, `model` at `revision`, when its precision
+can't load the preset's: in `llama31-8b-1gpu-pouw-h1-served`, H1's served ratio, `stock-fp8@compiled` loads the int8
+pin's BF16 base.
+
 ## How a point is timed
 
 1. **Gates before timing.** Every arm runs every point, with the point's sampling, before anything is timed:
