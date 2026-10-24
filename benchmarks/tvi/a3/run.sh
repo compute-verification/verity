@@ -8,6 +8,7 @@ S=$(mktemp -d "${SCRATCH_ROOT:-/tmp}/a3.XXXXXX")
 trap 'rm -rf "$S"' EXIT
 trap 'exit 143' TERM INT
 cp "$IN"/newskill.py "$IN"/aggregate.py "$S"/
+[ -f "$IN"/perpos.py ] && cp "$IN"/perpos.py "$S"/
 cd "$S"
 
 PY=
@@ -51,6 +52,7 @@ for seed in sorted({int(s) for t in tasks for s in t[4].split("/")}):
             elif seed > 0 and "0" in seeds.split("/"):
                 j["lr_from"] = jid(name, spec, 0)
             jobs.append(j)
+jobs += json.loads(os.environ.get("EXTRA_JOBS", "[]"))
 json.dump(jobs, open("jobs.json", "w"), indent=1)
 print(len(jobs), "jobs")
 EOF
@@ -89,6 +91,10 @@ done
 rc=0
 for p in "${pids[@]}"; do wait "$p" || rc=$?; done
 echo "workers done rc=$rc"
+if [ "${PERPOS:-0}" = 1 ]; then
+  CUDA_VISIBLE_DEVICES="${GPUS[0]}" "$PY" perpos.py --root "$CKPT" --glob "${PERPOS_GLOB:-*-seed0}" --out "$OUT/perpos.json" \
+    > "$OUT/perpos.log" 2>&1 || echo "perpos failed"
+fi
 "$PY" aggregate.py --results "$COORD/results" --base "$COORD/base_pass64.json" --out "$OUT" --node "${NODE_NAME:-vy-nebius-3}" || true
 ls -la "$OUT" | head -40
 df -h /workspace | tail -1

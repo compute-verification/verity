@@ -31,7 +31,9 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--node", default="vy-nebius-3")
     a = ap.parse_args()
-    recs = [json.load(open(f)) for f in sorted(glob.glob(os.path.join(a.results, "*.json"))) if not f.endswith(".error.json")]
+    allrecs = [json.load(open(f)) for f in sorted(glob.glob(os.path.join(a.results, "*.json"))) if not f.endswith(".error.json")]
+    recs = [r for r in allrecs if not r["job"].get("init")]
+    sweeps = [r for r in allrecs if r["job"].get("init")]
     errs = sorted(glob.glob(os.path.join(a.results, "*.error.json")))
     base = json.load(open(a.base)) if a.base and os.path.exists(a.base) else {}
     model = recs[0]["model"] if recs else "Qwen/Qwen2.5-0.5B-Instruct"
@@ -64,6 +66,8 @@ def main():
         for ph in ["sft", "rl"]:
             key = f"{ph}_test_exact"
             full = bs.get((row["task"], "full", key))
+            if full is None:  # a long-budget rerun (CL) is measured against its task's (C) full run
+                full = bs.get((row["task"][0], "full", key))
             if full is None:
                 continue
             num = bs[(row["task"], row["spec"], key)] - row["base_greedy_exact"]
@@ -94,6 +98,17 @@ def main():
             continue
         cell = lambda th: next((f"{r['S_label']} ({r['S_bits']:.3g} bit, {r['rl_frac_full']:.2f})" for r in rs if r["rl_frac_full"] >= th), "none")
         lines.append(f"| {task} | {rs[0]['H_bits']:.0f} | {cell(0.3)} | {cell(0.8)} | {cell(0.95)} |")
+    if sweeps:
+        lines += ["", "RL learning-rate sweep from saved SFT checkpoints (seed 0; reported = best validation step, step 0 = SFT):", "",
+                  "| task | S | S bits | RL lr (x SFT lr) | SFT exact | RL exact [95% CI] | RL best step | RL final exact | SFT pos | RL pos | RL final pos |",
+                  "|---|---|---|---|---|---|---|---|---|---|---|"]
+        for r in sorted(sweeps, key=lambda r: (r["job"]["task"], ORDER.index(r["job"]["spec"]) if r["job"]["spec"] in ORDER else 99, r["job"]["rl_lr_mult"])):
+            j = r["job"]
+            m = lambda k: float(np.mean(r[k]))
+            b = boot([np.array(r["rl_test_exact"], dtype=float)], rng=rng)
+            lines.append(f"| {j['task']} | {LABEL.get(j['spec'], j['spec'])} | {r['bits']:.3g} | {r['rl_lr']:.3g} ({j['rl_lr_mult']}) | "
+                         f"{m('sft_test_exact'):.3f} | {f(m('rl_test_exact'), ci(b))} | {r['rl_best_step']} | {m('rl_final_test_exact'):.3f} | "
+                         f"{m('sft_test_pos'):.3f} | {m('rl_test_pos'):.3f} | {m('rl_final_test_pos'):.3f} |")
     blines = ["| model | task | H bits | strings | k | pass@k | 95% upper (0 hits) | greedy exact | pos-acc (sampled) |", "|---|---|---|---|---|---|---|---|---|"]
     for k, v in base.items():
         up = 1 - 0.05 ** (1 / v["n_strings"]) if v["n_pass"] == 0 else float("nan")

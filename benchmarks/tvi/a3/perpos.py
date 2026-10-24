@@ -73,16 +73,7 @@ def main():
             model = AutoModelForCausalLM.from_pretrained(d, dtype=torch.bfloat16).to("cuda")
             st = None
         else:
-            tr = torch.load(os.path.join(d, "trainable.pt"))
-            model = ns.load_model(meta["base_model"], tr["spec"], "cuda")
-            st = ns.State(model, tr["spec"], tr["seed"], "cuda")
-            with torch.no_grad():
-                if tr["spec"] == "lora16":
-                    for n, w in st.wrapped:
-                        w.A.copy_(tr["state"][f"{n}.A"])
-                        w.B.copy_(tr["state"][f"{n}.B"])
-                else:
-                    st.shared.z.copy_(tr["state"]["z"])
+            model, st, _ = ns.load_state(d, "cuda")
         acc, exact = per_position(model, st, task, test, False)
         r = {"path": d, "task": meta["task"], "order": meta["order"], "spec": meta["spec"], "S_label": meta["S_label"],
              "S_bits": meta["S_bits"], "H_bits": meta["H_bits"], "phase": meta["phase"], "seed": meta["seed"],

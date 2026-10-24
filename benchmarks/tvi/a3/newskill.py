@@ -481,7 +481,58 @@ def merge(a):
     print("merged", a.ckpt, "->", a.out)
 
 
+def load_state(d, device):
+    """Model and trainable state of an adapter checkpoint, as trained (bf16 base, adapter path unmerged)."""
+    meta = json.load(open(os.path.join(d, "meta.json")))
+    tr = torch.load(os.path.join(d, "trainable.pt"))
+    model = load_model(meta["base_model"], tr["spec"], device)
+    st = State(model, tr["spec"], tr["seed"], device)
+    with torch.no_grad():
+        if tr["spec"] == "lora16":
+            for n, w in st.wrapped:
+                w.A.copy_(tr["state"][f"{n}.A"])
+                w.B.copy_(tr["state"][f"{n}.B"])
+        else:
+            st.shared.z.copy_(tr["state"]["z"])
+    return model, st, meta
+
+
+def rl_only(job, a, tok, device):
+    """GRPO at a chosen learning rate from a saved SFT checkpoint (job['init']: a glob under --ckpt)."""
+    import glob as _glob
+    task = Task(job["order"], tok, device)
+    seed = job["seed"]
+    val = task.plains(256, 900 + job["order"])
+    test = task.plains(512, 800 + job["order"])
+    torch.manual_seed(seed)
+    d = sorted(_glob.glob(os.path.join(a.ckpt, job["init"])))[-1]
+    model, st, meta = load_state(d, device)
+    lr = meta["lr"]
+    rec = {"job": job, "H_bits": task.H, "model": a.model, "init": d, "bits": st.bits, "sft_lr": lr,
+           "sft_steps": meta["steps"], "sft_budget": meta["steps"], "rl_steps": job["rl_steps"], "trials": []}
+    rec["sft_test_exact"], rec["sft_test_pos"] = evaluate(model, st, task, test, False)
+    rl_lr = lr * job["rl_lr_mult"]
+    log = []
+    t0 = time.time()
+    snap, bstep, bval = grpo(model, st, task, job["rl_steps"], rl_lr, seed, False, val=val, log=log)
+    rec["rl_lr"], rec["rl_log"], rec["rl_sec"] = rl_lr, log, round(time.time() - t0, 1)
+    st.round_to_stored()
+    rec["rl_final_test_exact"], rec["rl_final_test_pos"] = evaluate(model, st, task, test, False)
+    st.restore(snap)
+    st.round_to_stored()
+    rec["rl_test_exact"], rec["rl_test_pos"] = evaluate(model, st, task, test, False)
+    rec["rl_best_step"], rec["rl_best_val"] = bstep, bval
+    print(f"[{job['id']}] RL-only lr={rl_lr:g} best step={bstep} test_exact={sum(rec['rl_test_exact'])/512:.3f} "
+          f"final={sum(rec['rl_final_test_exact'])/512:.3f} pos={sum(rec['rl_test_pos'])/512:.3f} "
+          f"final_pos={sum(rec['rl_final_test_pos'])/512:.3f} {time.time()-t0:.0f}s", flush=True)
+    del model, st
+    torch.cuda.empty_cache()
+    return rec
+
+
 def run_job(job, a, tok, device):
+    if job.get("init"):
+        return rl_only(job, a, tok, device)
     task = Task(job["order"], tok, device)
     spec, seed = job["spec"], job["seed"]
     amp = spec == "full"
