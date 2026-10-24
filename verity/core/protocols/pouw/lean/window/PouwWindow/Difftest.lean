@@ -7,6 +7,7 @@ import PouwWindow.Rounds
 import PouwWindow.Lanes
 import PouwWindow.KnownRows
 import PouwWindow.RegFile
+import PouwWindow.FullDraw
 
 /-!
 # The difftest's functions: the window's Lean behind `Difftest.serve`
@@ -44,7 +45,9 @@ to Python.
 * a drawn leaf's registered files (`PouwWindow.RegFile`, held to `leaf_lanes.registered_file` at
   `leaf_lanes.verifier_entries` by `tests/test_reg_file.py`): `registered_file` (`registration` and `produced` records,
   `r`, `c`, `k`, `lane` or null, `known` an object of ports, `complete`); `leaf_own` (those records, the tile and
-  statement, and the `file`): `true` where `pouw-leaf-own` accepts the file, a reject where it refuses.
+  statement, and the `file`): `true` where `pouw-leaf-own` accepts the file, a reject where it refuses; `full_draw`
+  (`record`, a session record's text): `true` where `PouwWindow.Lanes.checkFull` accepts its draw, a reject where it
+  refuses.
 
 A domain `{binding, count}` is `CommitmentDomain(binding, OWNER, RangeIndexedDomain(0, count), hash="sha512")`; bytes are
 hex, read as `bytes.fromhex` reads them.
@@ -176,15 +179,30 @@ def leafStmt (j : Json) : Except String (Option Nat) :=
   | none | some .null => pure none
   | some _ => some <$> nat j "lane"
 
-/-- `registered_file`: statement `lane`'s `--registered` file at the roots of `registration` and `produced`, every
-value's rows `hm96-sha512/row/v2`, with the known ports `known` and `complete`. -/
+/-- The unit's placement: `place`'s `{value: [table, base]}`, each value it doesn't name its own table from row 0
+(`Lanes.selfPlace`), every value so where `place` is absent or null. -/
+def leafPlace (j : Json) : Except String (String → String × Nat) := do
+  match field? j "place" with
+  | none | some .null => pure Lanes.selfPlace
+  | some (.obj kvs) =>
+    let ps ← kvs.toArray.toList.mapM fun (v, e) => match e with
+      | .arr #[.str t, b] => do
+        let some b := (b.getNat?).toOption | throw s!"value {v}'s base row is not a natural number"
+        pure (v, t, b)
+      | _ => throw s!"value {v}'s placement is not [table, base]"
+    pure fun v => (ps.lookup v).getD (Lanes.selfPlace v)
+  | some _ => throw "the input's place is not an object"
+
+/-- `registered_file`: statement `lane`'s `--registered` file at the roots of `registration` and `produced` and the
+placement `place` (`leafPlace`), every value's rows `hm96-sha512/row/v2`, with the known ports `known` and
+`complete`. -/
 def registeredFileJson (j : Json) : Except String Json := do
   let T ← leafTile j
   let _ ← leafPorts j
   let rs ← Lanes.roots? (← get j "registration") (← get j "produced") T.lanes (2 * T.nw) Flock.HmRow.ROW_SCHEMA_V2
   let .obj known ← get j "known" | throw "the input's known is not an object"
   let .bool complete ← get j "complete" | throw "the input's complete is not a boolean"
-  Lanes.fileOf? rs T (← leafStmt j) known.toArray.toList complete
+  Lanes.fileOf? rs (← leafPlace j) T (← leafStmt j) known.toArray.toList complete
 
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("on_grid", fun j => do pure (toJson (onGridInt (← nat j "bits") (← int j "n")))),
@@ -267,8 +285,11 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("known_rows", knownRowsJson),
   ("registered_file", registeredFileJson),
   ("leaf_own", fun j => do
-    Lanes.leafOwn? (← get j "registration") (← get j "produced") (← get j "file") (← leafTile j) (← leafStmt j)
-      Flock.HmRow.ROW_SCHEMA_V2
+    Lanes.leafOwn? (← get j "registration") (← get j "produced") (← get j "file") (← leafPlace j) (← leafTile j)
+      (← leafStmt j) Flock.HmRow.ROW_SCHEMA_V2
+    pure (Json.bool true)),
+  ("full_draw", fun j => do
+    Lanes.checkFull (← str j "record")
     pure (Json.bool true)),
   ("lane_ports", fun j => do
     pure (Json.arr ((← Lanes.lane? (← leafTile j) (← nat j "lane")).map leafPortJson).toArray)),

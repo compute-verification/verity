@@ -10,21 +10,22 @@ loop serves (`Loop.Serves`: its `Hello` leaves at `x`'s setup, which it refuses 
 frames', `Session.sizesOk`), and at the hiding gap of hm96-sha512's pinned key (`hidingGap My saltHash`, with no hiding
 premise). It concludes that the deployed frame's state is the loop's but for `stopped` (`ProgChecks`) and the bound.
 
-What it takes of the loop beyond the code is named, each an obligation:
+Each rep's table is the loop's own (`Loop.realOf`: `tabOfLevel0` at the level 0 `Level0.ofDraws` draws), at every
+level-0 source `src` (the host's packed witness, the bytes drawn for level 0 and the salts for levels ≥ 1). What it
+takes of the loop beyond the code is named, each an obligation:
 
-* `LoopTabsReal`: the tables `real` answers are the session loop's own (`Count.RealTabs`: `Finish`'s `level0` request,
-  `tabOfLevel0` at a level 0 `Level0.ofDraws` drew).
 * `LoopInnerRound0`: `L₀`'s round at the inner proof's round 0 is the firewall's own at some 16-byte `final_c'` (Rust's
   firewall sends that round, `check_self`, at the inner proof's label).
-* `TablesAdmitUnrefused`, on the tables `T` alone: where no coin fault shows (`Masked.Refused`), every table admits the
-  coins. `SessionLoopZK` takes it; at the deployed tables it is proved (`LeanRelease.tablesAdmitUnrefused_dataE`), so
-  `SessionLoopZKDeployed` (`SessionLoopZKAt Masked.dataE`) does not.
+* `TablesAdmitUnrefused`, on the tables `T` alone: where, at a `Live` statement, no coin fault shows (`Masked.Refused`),
+  every table admits the coins. `SessionLoopZK` takes it; at the deployed tables it is proved
+  (`LeanRelease.tablesAdmitUnrefused_dataE`), so `SessionLoopZKDeployed` (`SessionLoopZKAt Masked.dataE`) does not.
 
-The transport's other trusts (`LeanRelease.LinkRoundEq`, `FinishIs`, `FrameUnrefused`, `LiveRoundEq`, `FillRoundEq`) and
-the tables' side (`CoinLayer` `Tables`, `Complete`, `DummyReg`, `Causal`, `SwCausal`, `TapeOK`) are the statement's
-premises, with `FinishIs` and `FrameUnrefused` in place of the `FinalRoundEq` `Flock.zk_server_lean_loop` takes
-(`LeanRelease.finalRoundEq_ofLoop`). The proofs are `Flock.SecurityProofs.SessionLoopZK` and `SessionLoopZKDeployed`
-(`Proofs.Flock.SessionLoop`), `Flock.zk_server_lean_ofLoop` at the gap.
+The transport's other trusts (`LeanRelease.LinkRoundEq`, `FinishIs`, `LiveRoundEq`, `FillRoundEq`) and the tables' side
+(`CoinLayer` `Tables`, `Complete`, `DummyReg`, `Causal`, `SwCausal`, `TapeOK`) are the statement's premises, with
+`FinishIs` in place of the `FinalRoundEq` `Flock.zk_server_lean_loop` takes (`LeanRelease.finalRoundEq_ofLoop`, with the
+loop's frames refusing every coin fault, `LeanRelease.frameUnrefused_ofLoop`). The proofs are
+`Flock.SecurityProofs.SessionLoopZK` and `SessionLoopZKDeployed` (`Proofs.Flock.SessionLoop`),
+`Flock.zk_server_lean_ofLoop` at the gap.
 -/
 
 namespace Claims.ZKServer
@@ -38,17 +39,19 @@ open FlockSoundness.Discharge
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
 
-/-- Obligation (the loop's tables): at every tape `ρ`, the tables `real` answers at `x` and the witness `w` are the
-session loop's own at `x`'s setup (`Count.RealTabs`: `Finish`'s `level0` request, `tabOfLevel0` at a level 0
-`Level0.ofDraws` drew). -/
-def _root_.Flock.Guarantees.LoopTabsReal (T : CoinLayer.TableData)
-    (real : Msg → Flock.Wit →
-      (CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
-    (x : Msg) (w : Flock.Wit) : Prop :=
-  ∀ (ρ : (CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand)
-    (s0 : _) (spec : SessionSpec) (sts : Array Stmt),
-    FlockDeploy.setupOf true x = some (s0, spec, sts) → Count.RealTabs sts (real x w ρ)
+/-- **The session loop's own tables** at the level-0 source `src`: rep stream `k`'s table is table `k / 2`'s
+`tabOfLevel0` at the level 0 `Level0.ofDraws` draws at its `m` from `src`'s packed witness and drawn bytes, with `src`'s
+salts for levels ≥ 1 (`Frames.placeOf` on the loop's `Level0`, which `Level0.draw` drew on the host's packed witness and
+the operating system's bytes, and `Level0.commit` binds at the table's `m`; `Finish.serveLoop`'s salts). -/
+def Loop.realOf {R : Type} (src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (x : Msg) (w : Flock.Wit) (ρ : R) (k : ℕ) : V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray) :=
+  match FlockDeploy.setupOf true x with
+  | some (_, _, sts) => do
+    let (g, d, hi) ← src x w ρ k
+    let l ← _root_.Flock.Firewall.Level0.ofDraws sts[k / 2]!.m g d
+    let t ← _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit sts[k / 2]!) l
+    pure (t, hi)
+  | none => .error "no session"
 
 /-- Obligation (the inner proof's round 0): where history `h` stands at a rep stream `k`'s first round past its
 scheduled rounds `rsched` (the opening's, on `real`'s table and salts), `L₀`'s round there is the firewall's own at some
@@ -77,9 +80,10 @@ def _root_.Flock.Guarantees.LoopInnerRound0 (T : CoinLayer.TableData)
 
 /-- **C-Flock's zero knowledge at the session loop's own frames, at the tables `T`.** At the deployed relation, where
 `T`'s session meets the tables' side (`Tables`, `Complete` at the relation, `DummyReg`, `Causal`, `SwCausal` at `vs`,
-`TapeOK`), at every repetition count `0 < t`, every `L₀` and `real` (the release's inner rounds and the rep's tables) and
-worker `wk`, at every statement `x` the loop serves (`Loop.Serves`) with a witness `w` under the relation, where the
-loop's obligations (`LoopTabsReal`, `LoopInnerRound0`) and the transport's round trusts hold: the deployed frame's state
+`TapeOK`), at every repetition count `0 < t`, every `L₀` (the release's inner rounds), every level-0 source `src` (the
+rep's tables `real` are the loop's own, `Loop.realOf src`) and worker `wk`, at every statement `x` the loop serves
+(`Loop.Serves`) with a witness `w` under the relation, where the loop's obligation (`LoopInnerRound0`) and the
+transport's round trusts hold: the deployed frame's state
 is the loop's but for `stopped` (`ProgChecks`), and against every `V*` of one more round than the verifier, the
 probability of any event of the real view at `ofLoop` is at most twice the simulator's, plus
 $$8\,n_L(x)\,\delta_1 + 8\,t\,n_L(x)\,\delta_1 + 2 \cdot 3^{-t}$$
@@ -94,15 +98,18 @@ def _root_.Flock.Guarantees.SessionLoopZKAt (T : CoinLayer.TableData) : Prop :=
     (CoinLayer.session Loop.loopNr T).SwCausal vs → (CoinLayer.session Loop.loopNr T).TapeOK →
     ∀ (L₀ : LeanRelease Flock.Wit
         ((CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand))
+      (src : Msg → Flock.Wit →
+        (CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand →
+        ℕ → V (Array F128 × ByteArray × Array ByteArray))
       (real : Msg → Flock.Wit →
         (CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand →
-        ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
-      (wk : (LeanRelease.ofLoop T L₀ real).toSrv.Worker) (x : Msg) (w : Flock.Wit),
+        ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)),
+    real = Loop.realOf src →
+    ∀ (wk : (LeanRelease.ofLoop T L₀ real).toSrv.Worker) (x : Msg) (w : Flock.Wit),
     Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w → Loop.Serves x →
-    _root_.Flock.Guarantees.LoopTabsReal T real x w → _root_.Flock.Guarantees.LoopInnerRound0 T L₀ real x w →
+    _root_.Flock.Guarantees.LoopInnerRound0 T L₀ real x w →
     LeanRelease.LinkRoundEq (CoinLayer.session Loop.loopNr T) vs (LeanRelease.ofLoop T L₀ real) x w →
     LeanRelease.FinishIs (CoinLayer.session Loop.loopNr T) vs (LeanRelease.ofLoop T L₀ real) CoinOpen.shaH wk x w →
-    LeanRelease.FrameUnrefused Loop.loopNr T (LeanRelease.ofLoop T L₀ real) CoinOpen.shaH wk x w →
     LeanRelease.LiveRoundEq (CoinLayer.session Loop.loopNr T) vs (LeanRelease.ofLoop T L₀ real) CoinOpen.shaH wk x w →
     LeanRelease.FillRoundEq (CoinLayer.session Loop.loopNr T) vs (LeanRelease.ofLoop T L₀ real) CoinOpen.shaH wk x w →
     ∀ {Θ : Type} (Vs : VStar Θ) (θ : Θ),

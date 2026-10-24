@@ -10,11 +10,12 @@ import Proofs.Flock.Claims.ZK.LinkRecheck
 the coin faults some rep frame refuses at its round:
 
 * `Flock.Guarantees.TablesAdmitUnrefused T`: an obligation on the tables `T`, that where no fault shows by the session's
-  last coin every table admits the coins. At the deployed tables it is proved (**`tablesAdmitUnrefused_dataE`**,
-  `Masked.admits_of_not_refused_refK`).
-* `LeanRelease.FrameUnrefused`: on a live history of `refK x` openings whose checks pass and whose last coins the frame
-  takes, no fault shows: the rep frames refuse each fault at its round. A named hypothesis, one of the transport's
-  trusts, narrower than `FrameAdmits`: it reads no table.
+  last coin at a `Live` statement every table admits the coins. At the deployed tables it is proved
+  (**`tablesAdmitUnrefused_dataE`**, `Masked.admits_of_not_refused_refK`; off `Live` they have none).
+* `LeanRelease.FrameUnrefused`: at a `Live` statement, on a live history of `refK x` openings whose checks pass and
+  whose last coins the frame takes, no fault shows: the rep frames refuse each fault at its round. Narrower than
+  `FrameAdmits`: it reads no table. At the session loop's own frames it is proved
+  (`LeanRelease.frameUnrefused_ofLoop`).
 * **`LeanRelease.frameAdmits_of_unrefused`**: `FrameAdmits` from the two, and **`LeanRelease.finalRoundEq_ofLoop`**:
   `FinalRoundEq` at `ofLoop` from them and `FinishIs` (`finalRoundEq_of_finishIs`, `loop_last`).
 -/
@@ -23,11 +24,12 @@ namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
 
-/-- Obligation (the tables admit unrefused coins): at every statement `x`, coins `c` at which no coin fault shows by
-the session's last coin (`Masked.Refused`: an outer coin `1`, `ρ_0, ρ_1` dependent, a rank-deficient mask slot, `β = 0`)
-are coins every table of `T` admits. The deployed tables meet it (`LeanRelease.tablesAdmitUnrefused_dataE`). -/
+/-- Obligation (the tables admit unrefused coins): at every statement `x`, coins `c` at which, where `x` is `Live`, no
+coin fault shows by the session's last coin (`Masked.Refused`: an outer coin `1`, `ρ_0, ρ_1` dependent, a rank-deficient
+mask slot, `β = 0`) are coins every table of `T` admits. The deployed tables meet it
+(`LeanRelease.tablesAdmitUnrefused_dataE`). -/
 def _root_.Flock.Guarantees.TablesAdmitUnrefused (T : CoinLayer.TableData) : Prop :=
-  ∀ (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin), ¬ Masked.Refused x c (refK x) →
+  ∀ (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin), (Masked.Live x → ¬ Masked.Refused x c (refK x)) →
     ∀ j, (T.C x j).Admits (T.cz x c j)
 
 namespace LeanRelease
@@ -37,22 +39,22 @@ other the deployed session has no table). -/
 theorem tablesAdmitUnrefused_dataE : _root_.Flock.Guarantees.TablesAdmitUnrefused Masked.dataE := by
   intro x c hn j
   by_cases hx : Masked.Live x
-  · exact Masked.admits_of_not_refused_refK Masked.PE hx hn j
+  · exact Masked.admits_of_not_refused_refK Masked.PE hx (hn hx) j
   · have h0 : Masked.jOf x = 0 := by unfold Masked.jOf; simp [hx]
     exact absurd j.isLt (by
       show ¬ j.val < Masked.jOf x
       rw [h0]
       exact Nat.not_lt_zero _)
 
-/-- **The frames refuse every coin fault**: after every live history of `refK x` openings whose openings pass and whose
-last coins the frame takes, no coin fault shows at the coins the openings open (`Masked.Refused` by `refK x`). A named
-hypothesis, one of the transport's trusts: each rep frame refuses each fault at its round (`Frame.Masker.answer`,
+/-- **The frames refuse every coin fault**: at a `Live` statement, after every live history of `refK x` openings
+whose openings pass and whose last coins the frame takes, no coin fault shows at the coins the openings open
+(`Masked.Refused` by `refK x`): each rep frame refuses each fault at its round (`Frame.Masker.answer`,
 `Frame.maskRank`), on the state and coins the transport hands it (`prog`, `coinsOf`). -/
 def FrameUnrefused (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     (L : LeanRelease Flock.Wit ((CoinLayer.session nr T).refP.Nonce × (CoinLayer.session nr T).refP.Rand))
     (H : Msg → Msg) (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) : Prop :=
-  ∀ (ν : (CoinLayer.session nr T).Nonce) (t : (CoinLayer.session nr T).Tape) (κ : L.toSrv.Chk) (m₀ ρ₀ : Msg)
-    (ops : List (Msg × Msg)),
+  Masked.Live x → ∀ (ν : (CoinLayer.session nr T).Nonce) (t : (CoinLayer.session nr T).Tape) (κ : L.toSrv.Chk)
+    (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)),
     ops.length = refK x → L.toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = true →
     ((allOk ((CoinLayer.session nr T).refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval H).1 = true →
     L.refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) = false →
@@ -64,7 +66,7 @@ theorem frameAdmits_of_unrefused (nr : Msg → ℕ → ℕ) (T : CoinLayer.Table
     (H : Msg → Msg) (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit)
     (hT : _root_.Flock.Guarantees.TablesAdmitUnrefused T) (hU : FrameUnrefused nr T L H wk x w) :
     FrameAdmits (CoinLayer.session nr T) L H wk x w :=
-  fun ν t κ m₀ ρ₀ ops hl hlive hok hr => hT x _ (hU ν t κ m₀ ρ₀ ops hl hlive hok hr)
+  fun ν t κ m₀ ρ₀ ops hl hlive hok hr => hT x _ fun hx => hU hx ν t κ m₀ ρ₀ ops hl hlive hok hr
 
 /-- **`FinalRoundEq` at the session loop's own frames** from the tables admitting unrefused coins, the frames refusing
 every fault and the firewall's `Finish` being the session's (`finalRoundEq_of_finishIs`, at `loop_last`). -/

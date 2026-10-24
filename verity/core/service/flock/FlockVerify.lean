@@ -529,8 +529,9 @@ def recCoinsCmd (args : List String) : IO UInt32 := do
 session's transcript (`RecVStar.innerCommits`), as one `RECTRANSCRIPT` line: each rep's message rounds, and each stream's
 message rounds and its tops' node counts by level; the circuit table's tops and the link points, the record's held to the
 coin server's (`RecVStar.innerLink`); with `--rec-inner`, that the verifier's inner shape covers it
-(`RecVStar.checkCovers`), puts the circuit table's tops at its schedule's (`RecVStar.checkLinkRounds`) and holds the
-record to its schedule (`RecVStar.checkSchedule`), as `verify` checks them; exit 1 when the transcript is refused. -/
+(`RecVStar.checkCovers`), puts the circuit table's tops at its schedule's (`RecVStar.checkLinkRounds`), holds the
+record to its schedule (`RecVStar.checkSchedule`) and reads it in its own format as its JSON readers read it
+(`RecSetup.checkReads`), as `verify` checks them; exit 1 when the transcript is refused. -/
 def recTranscriptOfSession (args : List String) (bound : Except String (Option String × Option RecVStar.StackedShape))
     (inner : Option RecVStar.Inner) : IO (Except String (Option RecVStar.InnerCommits)) := do
   let some dir := argOf args "--rec-inner-session"
@@ -549,7 +550,10 @@ def recLinkOfSession (args : List String) : IO (Except String (Option RecVStar.I
 /-- `rec-record FILE`: the coin server's record read in its own format (`RecRecord.readRecord`, the reader
 `Proofs.Flock.Claims.Recursion.RecRecord` reads back): `RECRECORD` and its rounds (stream, index, tops, level-0 count,
 commit strings, coin count and coins, in the record's hex) as JSON, and whether `recordW` writes the file's bytes up
-to the rounds' end (`writes`). Exit 1 where the file is not in the record's format. -/
+to the rounds' end (`writes`). Under `full`, the record read up to its link points (`RecRecord.readFull`): the inner
+rounds before the last as it shows them (`Record.msgs`: each message and its coins), and whether `recordFullW` writes
+the file's bytes up to the link points (`writes`); `null` where it doesn't read. Exit 1 where the file is not in the
+record's format. -/
 def recRecordCmd (args : List String) : IO UInt32 := do
   let [f] := args | IO.eprintln "usage: flock-verify rec-record FILE"; return 2
   let bs := (← IO.FS.readBinFile f).data.toList
@@ -561,7 +565,11 @@ def recRecordCmd (args : List String) : IO UInt32 := do
     ("k", Lean.toJson r.k), ("tops", arr (arr hex) r.tops), ("level0", Lean.toJson r.level0),
     ("commits", arr hex r.commits), ("n", Lean.toJson r.n), ("coins", arr (hex ∘ RecRecord.coinB) r.coins)]
   let writes := (RecRecord.recordW xs []).isPrefixOf bs
-  IO.println ("RECRECORD " ++ (Lean.Json.mkObj [("rounds", arr id js), ("writes", .bool writes)]).compress)
+  let full := ((RecRecord.readFull bs).map fun r => Lean.Json.mkObj [
+    ("msgs", arr (fun (m, cs) => Lean.Json.mkObj [("msg", hex m), ("coins", arr (hex ∘ RecRecord.coinB) cs)]) r.msgs),
+    ("writes", .bool ((RecRecord.recordFullW r []).isPrefixOf bs))]).getD .null
+  IO.println ("RECRECORD " ++
+    (Lean.Json.mkObj [("rounds", arr id js), ("writes", .bool writes), ("full", full)]).compress)
   return 0
 
 def recTranscriptCmd (args : List String) : IO UInt32 := do
@@ -582,9 +590,14 @@ def recTranscriptCmd (args : List String) : IO UInt32 := do
         if let .error e := RecVStar.checkLinkRounds i lk then IO.eprintln e; return 1
     | .ok none => pure ()
     | .error e => IO.eprintln e; return 1
-    if let (some i, some f) := (inner, argOf args "--rec-inner-transcript") then
-      match Lean.Json.parse (← IO.FS.readFile f) with
-      | .ok j => if let .error e := RecVStar.checkSchedule i j then IO.eprintln e; return 1
+    let session := argOf args "--rec-inner-session"
+    if let (some i, some f, some dir) := (inner, argOf args "--rec-inner-transcript", session) then
+      let tt ← IO.FS.readFile f
+      match Lean.Json.parse tt with
+      | .ok j =>
+        if let .error e := RecVStar.checkSchedule i j then IO.eprintln e; return 1
+        if let .error e := RecSetup.checkReads i tt j (← IO.FS.readFile (dir ++ "/session.json")) ic then
+          IO.eprintln e; return 1
       | .error e => IO.eprintln s!"rec inner transcript: not JSON: {e}"; return 1
     let n := fun (xs : Array (Nat × ByteArray)) => Lean.toJson xs.size
     IO.println s!"RECTRANSCRIPT {(Lean.Json.mkObj [("reps", .arr (ic.reps.map n)),

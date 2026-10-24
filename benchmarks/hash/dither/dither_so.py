@@ -28,7 +28,9 @@ after it, beside a later step's forward; their receipts go under a later round. 
 
 So D is the ring's depth: the A slots of D steps live at once (the forward's own, and D - 1 steps' whose units are pending
 or running), and the units of a step wait D - 2 steps for their coin.  In process (``coins: in-process (not certified)``)
-a coin is back once its root is sent; off the node a round trip of R ms needs D - 2 >= R / step.
+a coin is back once its root is sent; off the node round s + D - 1 waits for step s's units unless (D - 1) * step >= R +
+their span (R the round trip, the span about 10 ms), so the served T64 row on the RTX PRO 6000 (R about 100 ms) is -so8,
+at 54.6 MB of GPU memory a slot past -so6 (T * sum K bytes of A codes, and their scales).
 
 `check` holds a capture to dither_a's checks with its own round s for the A, admit, z and y leaves (the receipt-step leaf
 there an earlier step's, read as recorded) and round s + D - 1 for its receipts (dither_a.check's `r_round`), every
