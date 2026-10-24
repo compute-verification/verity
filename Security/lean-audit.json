@@ -1290,6 +1290,10 @@
    "owner": "@network-accounting",
    "digest": "e76c46b0a2f8b619b953aeb4331cd813ba0128cec464f244821bd9c6d4ea7f06"
   },
+  "NetTiming.WithinCaps": {
+   "owner": "@network-accounting",
+   "digest": "6a9ebd9ac66db9b9c032d0c22baed96b8c3e7bfc0d8476d0136f3b440bdc363b"
+  },
   "Pous.AuditSecure": {
    "owner": "@memory-accounting",
    "digest": "ef3659099abbe356183c134990bd1edac4d9933a8197ba7cce6d9a98e3e8616a"
@@ -1680,6 +1684,10 @@
   "Verity.Assumptions.StepInputs": {
    "owner": "@proofs",
    "digest": "5fda9d81977beec15d1c065e80343e09939aaa17ea6a91b79ee8765188e9a36d"
+  },
+  "Verity.Assumptions.TrustedNebiusHost": {
+   "owner": "@network-accounting",
+   "digest": "569bbee988e0e2575ef74370bda4650cfe18814bac8fc43aa7329cade6b5b23a"
   },
   "Verity.Circuit.InputsAgree": {
    "owner": "@proofs",
@@ -2194,6 +2202,7 @@
     "Mathlib",
     "Definitions.NetworkCertifier",
     "Models.NetworkCertifier.Assumptions",
+    "Models.Core.Assumptions",
     "Models.NetworkCertifier.Guarantees"
    ],
    "except": [],
@@ -8149,6 +8158,18 @@
    "assumptions": [],
    "type_hash": "13ea83921034e1ee1dc0cb725f2a74c0c928d20fccf7e71f6d962b726f735fa1"
   },
+  "NetTiming.SecurityProofs.EncardWardenDecodableLe": {
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.EncardWardenDecodableLe : NetTiming.Guarantees.EncardWardenDecodableLe"],
+   "assumptions": [],
+   "type_hash": "f652ef6d0e0b6ac58e33d5ba4f7f26d4ccb5c9db7156cb9ca7c5b50b8bff4bb3"
+  },
+  "NetTiming.SecurityProofs.EncardWardenViewsLe": {
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.EncardWardenViewsLe : NetTiming.Guarantees.EncardWardenViewsLe"],
+   "assumptions": [],
+   "type_hash": "d6974fee407458e73267a6a10bb63f96db93ba6a1694f632f3d133c831879026"
+  },
   "NetTiming.SecurityProofs.ExpectedRowCausal": {
    "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.ExpectedRowCausal : NetTiming.Guarantees.ExpectedRowCausal"],
@@ -8160,6 +8181,12 @@
    "signature": ["NetTiming.SecurityProofs.SampledAuditAcceptedStated : NetTiming.Guarantees.SampledAuditAcceptedStated"],
    "assumptions": [],
    "type_hash": "1fb09f103876fc19dab84dfdb55ad0b09ba815c3e67ccee7e53e04ad6ea9eb3f"
+  },
+  "NetTiming.SecurityProofs.WardenViewEqClientView": {
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.WardenViewEqClientView : NetTiming.Guarantees.WardenViewEqClientView"],
+   "assumptions": [],
+   "type_hash": "b6f79294b8555ef604979d0178cb818abc5d0cc785b14c56841ad73ce13321f6"
   },
   "Pous.SecurityProofs.BandMultiMeetsFamily": {
    "owner": "@memory-accounting",
@@ -10828,7 +10855,10 @@
    "Nci.Cover.SecurityProofs.PartialSumKeyedCoverBound": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and a matrix cube and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean, Security/Definitions/Nci/CoverPartialSum.lean), under the named UpdateHardness and ColumnsIncompressible (Security/Models/Nci/Assumptions/Cover.lean, Security/Models/Nci/Assumptions/CoverFanOut.lean) and the structural Wide, not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
    "Nci.Cover.SecurityProofs.CoveringBoundAdditive": "frozen (no-function): CoveringBoundTwoCosts's additive form: it is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ConditionalParameterHardAt (Security/Models/Nci/Assumptions/CoverAdditive.lean) and with ActivationChainedAt read in its statement (Security/Models/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "NetTiming.Guarantees.SampledAuditAccepted": "unstated: the sampled audit implies Accepted (PRF-144), stated and not yet proved: where Claims.Sampling.KS holds, KSAccepted holds, Pr[acc and not RAcc delta] <= delta + eps_ks + eps_bind; its text is in the lock through SampledAuditAcceptedStated, and a theorem proving it, listed under guarantees, replaces this entry",
-   "NetTiming.SecurityProofs.SampledAuditAcceptedStated": "frozen (no-function): It states no property of the verifier: it reads NetTiming.Guarantees.SampledAuditAccepted, so the lock records its text and every definition it reads, and it leaves when a theorem proves that statement."
+   "NetTiming.SecurityProofs.SampledAuditAcceptedStated": "frozen (no-function): It states no property of the verifier: it reads NetTiming.Guarantees.SampledAuditAccepted, so the lock records its text and every definition it reads, and it leaves when a theorem proves that statement.",
+   "NetTiming.SecurityProofs.WardenViewEqClientView": "frozen (no-function,world-unlisted): It is stated over the warden's code as Definitions.NetworkCertifier.Warden states it (wardenCode), run by an arbitrary device on arbitrary server behaviors, and takes trusted-nebius-host (TrustedNebiusHost) for the device; no compiled warden program implements that code yet, so no function names it under shape.properties, and such a program with a proof that it equals wardenCode is the restatement path.",
+   "NetTiming.SecurityProofs.EncardWardenViewsLe": "frozen (no-function,world-unlisted): It is stated over the warden's code as Definitions.NetworkCertifier.Warden states it (wardenCode), run by an arbitrary device on arbitrary server behaviors, and takes trusted-nebius-host (TrustedNebiusHost) for the device, a cap on the schedules' cells and the set the data lies in; no compiled warden program implements that code yet, so no function names it under shape.properties, and such a program with a proof that it equals wardenCode is the restatement path.",
+   "NetTiming.SecurityProofs.EncardWardenDecodableLe": "frozen (no-function,world-unlisted): It is stated over the warden's code as Definitions.NetworkCertifier.Warden states it (wardenCode), run by an arbitrary device on arbitrary server behaviors, and takes trusted-nebius-host (TrustedNebiusHost) for the device, a cap on the schedules' cells, BitsCount about an abstract charge and the content premise about the data; no compiled warden program implements that code yet, so no function names it under shape.properties, and such a program with a proof that it equals wardenCode is the restatement path."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -16390,7 +16420,8 @@
    "guarantees": [
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow"
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow",
+    "NetTiming.SecurityProofs.EncardWardenDecodableLe"
    ]
   },
   "Definitions.NetworkCertifier.Grid": {
@@ -16579,6 +16610,35 @@
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow",
     "NetTiming.SecurityProofs.ExpectedRowCausal"
+   ]
+  },
+  "Definitions.NetworkCertifier.Warden": {
+   "digest": "44483d6d7b90ee894c8893c859b277c18696789fc671a62a68405cfb2d0a9a17",
+   "definitions": {
+    "NetTiming.Arrivals": "a9855f1bf335813d6e9e14389bc8ab6a12f280930f67aa9b05a90a5a61349651",
+    "NetTiming.Arrivals.ready": "9072fe2fb441f0c20173208efd9171d9488df5c1e74d998285fa06303bda783a",
+    "NetTiming.Arrivals.stream": "90546fb93b6d8fc796e2cee2d1a1a9cd0f1e6facb321853afa41ebbc51c1a909",
+    "NetTiming.CellView": "3a34aa0796a8f300a192ccfcccdf919b49d79e9b5f84677f63b2b6df7f32165d",
+    "NetTiming.CellView.data": "18a876d450ecca9b40059bf145040aaf84898393b339fd2c0d3531a0f865866c",
+    "NetTiming.CellView.fail": "515a3655259e4d93419efd8142ce0f4c535df44a77a2519c13539e0172cb650b",
+    "NetTiming.CellView.pad": "97f36790f87b13e6d3933331f3fd77a067668562d8a8e939dc6e367f4ed6e1ae",
+    "NetTiming.WardenSchedule": "0594721fc552a82a6bed7582412823279ec82a1909ddbb414c6c4fdccded6959",
+    "NetTiming.WardenSchedule.D": "a218dd7a11661b14d49161b2ffe854f147b79b40769719ae73cbf0c3e752373c",
+    "NetTiming.WardenSchedule.adm": "5a30fe3ffcae51310b781b92592b4c917b3a884e1f3b3c0e4454698599f465ed",
+    "NetTiming.WardenSchedule.bucket": "e0ce0ff6f053a2e4387e402d84e7a74bf9ea9602b7b00d476186ed8e2fc8820d",
+    "NetTiming.WardenSchedule.cells": "f2d947c4b4976dc66943a86b6225976ddc342fbc55ca6ce51caa06937c74aa68",
+    "NetTiming.WardenSchedule.r": "945a3aa14d2585cf9cfcdd40e7a5c7699431cb29efe7115d4943315d0b7b8e2f",
+    "NetTiming.cellView": "ad3d6ac110b9552babae7054a6bccf9254038a208b06ec5ab49cc8ccd3c37dbe",
+    "NetTiming.clientView": "3f296e1831810a4a6dfe6346d75fea4f7321da3ce8c1597912aeb08acba7821c",
+    "NetTiming.failCell": "097fda151d174bc94cf33e7ba03e552958cfb91184001f9a4a2d1f95ccc5a664",
+    "NetTiming.streamCell": "5099c8817f9762186ef5b7b163aeb9d09fbbd6106b964dacc1f3d757cdfbdd21",
+    "NetTiming.wardenCode": "5e86c0bb2c509e1a3cfb9bfa856d1d78a8cb7848d92efa2c0ee0e078bc20cef8",
+    "NetTiming.wardenLane": "589292a58aa331c6b10ec7993a4d55215213036b1b0a7f560deac23b35bc65c6"
+   },
+   "guarantees": [
+    "NetTiming.SecurityProofs.EncardWardenDecodableLe",
+    "NetTiming.SecurityProofs.EncardWardenViewsLe",
+    "NetTiming.SecurityProofs.WardenViewEqClientView"
    ]
   },
   "Definitions.Pous.Accounting.Params": {
@@ -28788,13 +28848,17 @@
    ]
   },
   "Models.Core.Assumptions": {
-   "digest": "a6739d40dc9177f1fbddf58f8eeb5b6bbc3e48309f13f5d8cff87633d60dff15",
+   "digest": "ffc6b1380e0c28f358863d5c8a6aae982abbac2437bd44b7f518850e33f86e5e",
    "definitions": {
     "Verity.Assumptions.GemmAmpereStep": "02e4cb87864bcee487dafdb2047e70b7e521b0c0e9d0d8cb824ff3854abe00e1",
     "Verity.Assumptions.GemmHopperStep": "8c5e183ae15ce48fd0744893ce9708c38d0c9d88fd0d109ffb68ec4226ff323e",
-    "Verity.Assumptions.StepInputs": "5fda9d81977beec15d1c065e80343e09939aaa17ea6a91b79ee8765188e9a36d"
+    "Verity.Assumptions.StepInputs": "5fda9d81977beec15d1c065e80343e09939aaa17ea6a91b79ee8765188e9a36d",
+    "Verity.Assumptions.TrustedNebiusHost": "569bbee988e0e2575ef74370bda4650cfe18814bac8fc43aa7329cade6b5b23a"
    },
    "guarantees": [
+    "NetTiming.SecurityProofs.EncardWardenDecodableLe",
+    "NetTiming.SecurityProofs.EncardWardenViewsLe",
+    "NetTiming.SecurityProofs.WardenViewEqClientView",
     "Verity.SecurityProofs.AmpereStepComplete",
     "Verity.SecurityProofs.AmpereStepHw",
     "Verity.SecurityProofs.AmpereStepIff",
@@ -29536,7 +29600,8 @@
    "guarantees": [
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow"
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow",
+    "NetTiming.SecurityProofs.EncardWardenDecodableLe"
    ]
   },
   "Models.NetworkCertifier.Guarantees": {
@@ -29601,6 +29666,19 @@
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow"
+   ]
+  },
+  "Models.NetworkCertifier.Guarantees.Warden": {
+   "digest": "46625366a15801feb0a95444017b294af2e8540511ee7e414aae0cba11ae2a5f",
+   "definitions": {
+    "NetTiming.Guarantees.EncardWardenDecodableLe": "499d1254ccb1a7b0b0dd2c8ea713698023b0358e8ca5eb6e07ce0cfdecf87429",
+    "NetTiming.Guarantees.EncardWardenViewsLe": "1cf76130c401d8a182befc4f1d0923988bd5a64edebc4e18d4e36ca276183ba7",
+    "NetTiming.Guarantees.WardenViewEqClientView": "4c48a9ac12c5e2dfd6c67d490ae6164407e56e7d9d96085fb086c7aa828e09ec"
+   },
+   "guarantees": [
+    "NetTiming.SecurityProofs.EncardWardenDecodableLe",
+    "NetTiming.SecurityProofs.EncardWardenViewsLe",
+    "NetTiming.SecurityProofs.WardenViewEqClientView"
    ]
   },
   "Models.Pous.Assumptions.P2": {
