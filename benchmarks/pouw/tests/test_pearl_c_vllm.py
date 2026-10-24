@@ -209,8 +209,9 @@ def device_run():
     return make, kernel, weights, roots, salt
 
 
-#: a decode call's launches (m₁₆ = 32 of 64 rows: run.pd_variant's 851): A's commitment and E_A's lines in one, the tile leaves
-PER_CALL = ["pd_commit_851", "stats_s5", "eprime", "form_s5", "words", "pa", "gemm_pearlc_d", "pd_tiles_851"]
+#: a decode call's launches (m₁₆ = 32 of 64 rows: run.pd_variant's 851): A's commitment and E_A's lines in one, decode's split
+#: stats and words kernels, the tile leaves
+PER_CALL = ["pd_commit_851", "stats_r", "eprime", "form_s5", "words_k", "pa", "gemm_pearlc_d", "pd_tiles_851"]
 
 
 def test_each_call_runs_the_pipelines_call_steps_at_its_offset_and_keys(device_run):
@@ -261,7 +262,7 @@ def test_nohash_forms_and_multiplies_without_hashing(device_run):
     run = make(hashing=False)
     kernel.dev.log.clear()
     run.gemm(0, torch.randn(16, 1024).to(torch.bfloat16), weights[0], None)
-    assert [n for n, *_ in kernel.dev.log if not n.endswith("_smem")] == ["stats_s5", "eprime", "form_s5", "words", "pa",
+    assert [n for n, *_ in kernel.dev.log if not n.endswith("_smem")] == ["stats_r", "eprime", "form_s5", "words_k", "pa",
                                                                           "gemm_pearlc_d"]
     assert run.end() == {"units": 1, "tiles": 0, "hashing": False, "schedule": "serial"}
 
@@ -1614,13 +1615,28 @@ def test_the_smoke_starts_both_engines_and_records_a_failure_to_stay_resident(tm
     assert not got["resident"] and "OutOfMemoryError" in got["error"] and len(got["steps"]) == 2 and not Fake.live
 
 
+def test_the_whole_step_arm_captures_vllms_graphs_at_the_decode_batch_or_captures_sizes(monkeypatch):
+    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    monkeypatch.setitem(sys.modules, "vllm", types.SimpleNamespace(LLM=lambda **kw: kw))
+    args = types.SimpleNamespace(model="m", revision=None, mem_base=0.2, mem_arm=0.3, whole_step=True, capture=None)
+    got = E2E.engine(args, "arm")
+    assert not got["enforce_eager"] and got["compilation_config"] == {"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY",
+                                                                      "cudagraph_capture_sizes": [E2E.BATCH]}
+    args.capture = [8, 32]
+    assert E2E.engine(args, "arm")["compilation_config"]["cudagraph_capture_sizes"] == [8, 32]
+    args.whole_step = False
+    assert E2E.engine(args, "arm")["compilation_config"] == {"mode": 0}
+
+
 # ---- the decode profile -------------------------------------------------------------------------------------------
 
 def test_the_profile_maps_gpu_1s_kernels_to_their_categories(tmp_path):
     PF = load("pearl_c_vllm_profile", KERNEL.parent / "pearl_c_vllm" / "profile_decode.py")
-    assert [PF.kernel_category(k) for k in ("gemm_pearlc", "gemm_pearlc_d", "form_s5", "stats_s5", "gemm_words", "s512_rows",
-                                            "hm_leaves", "pd_commit_851", "pd_tiles_979", "flash_fwd_kernel", "paged_attention")] == [
-        "gemm", "gemm", "forming", "forming", "forming", "hashing", "hashing", "hashing", "hashing", "other", "other"]
+    assert [PF.kernel_category(k) for k in ("gemm_pearlc", "gemm_pearlc_d", "form_s5", "stats_s5", "stats_r", "words_k", "gemm_words",
+                                            "s512_rows", "hm_leaves", "pd_commit_851", "pd_tiles_979", "flash_fwd_kernel",
+                                            "paged_attention")] == [
+        "gemm", "gemm", "forming", "forming", "forming", "forming", "forming", "hashing", "hashing", "hashing", "hashing", "other",
+        "other"]
     csvf = tmp_path / "k.csv"
     csvf.write_text('"Time (%)","Total Time (ns)","Instances","Avg (ns)","Name"\n'
                     '50,2000000,10,200000,"gemm_pearlc"\n30,1200000,40,30000,"s512_tile_leaves"\n20,800000,5,160000,"flash_fwd"\n')
@@ -1632,9 +1648,9 @@ def test_the_served_profile_counts_stock_fp8s_cutlass_3_kernel_as_gemm(monkeypat
     """vLLM's FP8 linear on sm_120 is CUTLASS 3's `device_kernel`, the stock arm's matmul, not `other`."""
     monkeypatch.setenv("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
     SP = load("pearl_c_vllm_served_profile", KERNEL.parent / "pearl_c_vllm" / "served_profile.py")
-    assert [SP.category(k) for k in ("device_kernel", "Kernel2", "gemm_pearlc_d", "words", "s512_tile_leaves", "flash_fwd_splitkv_kernel",
-                                     "some_device_kernel_x")] == [
-        "gemm", "gemm", "pearlc:gemm", "pearlc:forming", "pearlc:tile_hash", "attention", "other"]
+    assert [SP.category(k) for k in ("device_kernel", "Kernel2", "gemm_pearlc_d", "words", "words_k", "stats_r", "s512_tile_leaves",
+                                     "flash_fwd_splitkv_kernel", "some_device_kernel_x")] == [
+        "gemm", "gemm", "pearlc:gemm", "pearlc:forming", "pearlc:forming", "pearlc:forming", "pearlc:tile_hash", "attention", "other"]
 
 
 def test_the_served_profile_names_hash_fasts_kernels_and_gives_a_fold_its_segment_launchs_step(monkeypatch):
@@ -2092,3 +2108,118 @@ def test_the_modes_are_arms_and_the_negative_control_is_a_pass_control(device_ru
     assert not names & {"s512_tile_segs", "s512_row_segs", "s512_tile_leaves", "s512_rows", "pd_commit_851", "pd_tiles_851"}
     assert run.omit == frozenset()
     assert all(c <= set(PPD.CALL_STEPS) for c in E2E.CONTROLS.values())
+
+
+# ---- the served step's breakdown ----------------------------------------------------------------------------------
+
+def _served_step_profile(path: Path) -> Path:
+    """An nsys SQLite export's tables as `served_step.analyze` reads them: a prefill step and three decode steps of 8
+    requests, each with three Pearl-C calls (pd_commit, the GEMM, and the tile leaves on a stream of their own, each its
+    own launch inside the call), an attention kernel launched between calls and a pass end whose transcript tree is
+    ``s512_nodes``; 10 ms cycles, each step 9 ms."""
+    import sqlite3
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE StringIds (id INTEGER, value TEXT)")
+    con.execute("CREATE TABLE NVTX_EVENTS (start INT, end INT, text TEXT, globalTid INT, textId INT)")
+    con.execute("CREATE TABLE CUPTI_ACTIVITY_KIND_KERNEL (start INT, end INT, shortName INT, globalPid INT, streamId INT, "
+                "correlationId INT)")
+    con.execute("CREATE TABLE CUPTI_ACTIVITY_KIND_RUNTIME (start INT, end INT, nameId INT, globalTid INT, correlationId INT)")
+    names = {1: "pd_commit_851", 2: "gemm_pearlc_d", 3: "flash_fwd", 4: "cudaLaunchKernel", 5: "pd_tiles_851", 6: "s512_nodes"}
+    con.executemany("INSERT INTO StringIds VALUES (?, ?)", names.items())
+    tid, ms, corr = 7, 1_000_000, iter(range(1, 1000))
+
+    def kernel(at, start, end, name, stream=7):
+        k = next(corr)
+        con.execute("INSERT INTO CUPTI_ACTIVITY_KIND_RUNTIME VALUES (?, ?, 4, ?, ?)", (at, at + 10_000, tid, k))
+        con.execute("INSERT INTO CUPTI_ACTIVITY_KIND_KERNEL VALUES (?, ?, ?, 0, ?, ?)", (start, end, name, stream, k))
+    for i in range(4):
+        s = i * 10 * ms
+        con.execute("INSERT INTO NVTX_EVENTS VALUES (?, ?, 'step', ?, NULL)", (s, s + 9 * ms, tid))
+        con.execute("INSERT INTO NVTX_EVENTS VALUES (?, ?, ?, ?, NULL)", (s + ms, s + 8 * ms, f"exec|{8 if i else 40}|8", tid))
+        for j in range(3):
+            c = s + ms + j * 2 * ms
+            con.execute("INSERT INTO NVTX_EVENTS VALUES (?, ?, 'pc', ?, NULL)", (c, c + ms, tid))
+            kernel(c, c + 100_000, c + 400_000, 1)
+            kernel(c + 20_000, c + 400_000, c + 500_000, 2)
+            kernel(c + 40_000, c + 450_000, c + 600_000, 5, 9)
+        kernel(s + 6_500_000, s + 7 * ms, s + 7 * ms + 200_000, 3)
+        con.execute("INSERT INTO NVTX_EVENTS VALUES (?, ?, 'pend', ?, NULL)", (s + 7 * ms, s + 8 * ms, tid))
+        kernel(s + 7_100_000, s + 7_500_000, s + 7_600_000, 6)
+    con.commit()
+    return path
+
+
+def test_the_served_step_profile_splits_each_decode_step_into_kernels_and_host_ranges(tmp_path):
+    S = load("pearl_c_vllm_served_step", KERNEL.parent / "pearl_c_vllm" / "served_step.py")
+    doc = S.analyze(_served_step_profile(tmp_path / "served.sqlite"), 8)
+    assert (doc["batch"], doc["steps"], doc["decode_steps"], doc["full"]["n"], doc["other"]["n"]) == (8, 4, 3, 3, 1)
+    f = doc["full"]
+    got = {k: round(f[k], 6) for k in ("cycle_ms", "step_ms", "gpu_busy_ms", "kernel_sum_ms", "pc_ms", "pc_n", "pend_ms",
+                                        "exec_ms", "launches", "api_ms", "streams", "pc_api_ms", "pc_launches",
+                                        "pend_launches")}
+    assert got == {"cycle_ms": 10.0, "step_ms": 9.0, "gpu_busy_ms": 1.8, "kernel_sum_ms": 1.95, "pc_ms": 3.0, "pc_n": 3,
+                   "pend_ms": 1.0, "exec_ms": 7.0, "launches": 11, "api_ms": 0.11, "streams": 2, "pc_api_ms": 0.09,
+                   "pc_launches": 9, "pend_launches": 1}
+    assert {c: round(v, 6) for c, v in f["by_category_ms"].items()} == {
+        "pearlc:a_commit": 0.9, "pearlc:gemm": 0.3, "pearlc:tile_hash": 0.45, "attention": 0.2, "pearlc:a_tree": 0.1}
+    assert {k: {c: round(v, 6) for c, v in cs.items()} for k, cs in f["by_source_ms"].items()} == {
+        "pc": {"pearlc:a_commit": 0.9, "pearlc:gemm": 0.3, "pearlc:tile_hash": 0.45}, "vllm": {"attention": 0.2},
+        "pend": {"pearlc:a_tree": 0.1}}
+    assert [(k["kernel"], k["per_step"]) for k in doc["top_kernels_full"][:2]] == [("pd_commit_851", 3), ("pd_tiles_851", 3)]
+
+
+def test_the_served_steps_breakdown_puts_each_arms_kernels_and_host_time_in_its_rows(tmp_path):
+    S = load("pearl_c_vllm_served_step", KERNEL.parent / "pearl_c_vllm" / "served_step.py")
+    pearl, base = tmp_path / "pouw_pearl-c-sm120-v1-h3", tmp_path / "stock-fp8_compiled"
+    for d in (pearl, base):
+        d.mkdir()
+    (pearl / "step-profile.json").write_text(json.dumps(S.analyze(_served_step_profile(tmp_path / "served.sqlite"), 8)))
+    (pearl / "reps.json").write_text(json.dumps({"gate": {"passed": True}, "reps": [
+        {"metrics": {"inter_token_latency_p50_s": 0.010}}, {"metrics": {"inter_token_latency_p50_s": 0.012}}]}))
+    (base / "step-profile.json").write_text(json.dumps({"full": {"n": 3, "cycle_ms": 2.0, "gpu_busy_ms": 1.5,
+                                                                 "by_category_ms": {"gemm": 1.0, "attention": 0.4}}}))
+    (base / "reps.json").write_text(json.dumps({"gate": {"passed": True}, "reps": [
+        {"metrics": {"inter_token_latency_p50_s": 0.002}}]}))
+    doc, md = S.table([pearl, base], "stock-fp8_compiled")
+    p = doc["arms"][pearl.name]
+    assert {k: round(v, 6) for k, v in p["kernels"].items()} == {
+        "stock forward (vLLM's kernels)": 0.2, "Pearl-C GEMM kernels": 0.3, "Pearl-C forming kernels": 0.0,
+        "hashing and A's trees": 1.35, "pass end (transcript tree, coins)": 0.1}
+    assert (round(p["host_gap_ms"], 6), round(p["host"]["Pearl-C calls' Python"], 6), p["gate"]) == (8.2, 2.91, True)
+    assert p["harness_ms"] == {"inter_token_latency_p50_s": 11.0}
+    assert doc["arms"][base.name]["kernels"]["stock forward (vLLM's kernels)"] == 1.4
+    assert "| cycle / stock-fp8_compiled | 5.00 | 1.00 |" in md
+    assert "| inter_token_latency_p50_s / stock-fp8_compiled | 5.50 | 1.00 |" in md
+
+
+def test_an_arm_whose_profile_has_no_nvtx_ranges_is_listed_as_missing_not_tabled(tmp_path):
+    import sqlite3
+    S = load("pearl_c_vllm_served_step", KERNEL.parent / "pearl_c_vllm" / "served_step.py")
+    db = tmp_path / "eager.sqlite"
+    con = sqlite3.connect(db)
+    con.execute("CREATE TABLE StringIds (id INTEGER, value TEXT)")
+    con.commit()
+    bare = S.analyze(db, 8)
+    assert bare["error"] == "no NVTX ranges in the profile" and "full" not in bare
+    pearl, eager = tmp_path / "pouw_pearl-c-sm120-v1-h3", tmp_path / "stock-fp8_eager"
+    for d in (pearl, eager):
+        d.mkdir()
+    (pearl / "step-profile.json").write_text(json.dumps(S.analyze(_served_step_profile(tmp_path / "served.sqlite"), 8)))
+    (eager / "step-profile.json").write_text(json.dumps(bare))
+    doc, md = S.table([pearl, eager], pearl.name)
+    assert list(doc["arms"]) == [pearl.name]
+    assert doc["missing"] == {eager.name: "no NVTX ranges in the profile"}
+    assert f"{eager.name}: no NVTX ranges in the profile" in md
+
+
+def test_the_served_steps_host_records_are_the_timed_reps_decode_steps():
+    S = load("pearl_c_vllm_served_step", KERNEL.parent / "pearl_c_vllm" / "served_step.py")
+    ms = 1_000_000
+    steps = [{"phase": "measure", "rep": 0, "t0": 0, "t1": 9 * ms, "tokens": 8, "reqs": 8, "pc_ns": 3 * ms, "pc_n": 3},
+             {"phase": "measure", "rep": 0, "t0": 0, "t1": 4 * ms, "tokens": 5, "reqs": 5, "pc_ns": ms, "pc_n": 3},
+             {"phase": "measure", "rep": 0, "t0": 0, "t1": 20 * ms, "tokens": 40, "reqs": 8},
+             {"phase": "warmup", "rep": 0, "t0": 0, "t1": 9 * ms, "tokens": 8, "reqs": 8}]
+    got = S.summarize_host(steps, 8)
+    assert got["full"] == {"n": 1, "step_ms": 9.0, "pc_ms": 3.0, "pc_n": 3}
+    assert got["decode"]["n"] == 2 and got["decode"]["pc_ms"] == 2.0
+    assert got["steps"] == {"measured": 3, "decode": 2, "total_ms": 33.0, "decode_ms": 13.0}

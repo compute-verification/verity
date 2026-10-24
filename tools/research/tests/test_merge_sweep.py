@@ -708,6 +708,14 @@ def test_the_sweep_deletes_the_head_branch_of_a_pr_github_marked_merged_itself(t
     assert not [x for x in log if "branch A" in x or "branch B" in x or "kept" in x], log
 
 
+def test_main_line_is_the_checked_heads_newest_first(tmp_path, monkeypatch):
+    """`merge.main_line` is `checked_heads`' commits reversed, so position 0 is main's head: the verifier's `--main`
+    file lists the checked train heads newest first, and a pin's index is the checked trains it is behind."""
+    heads = [("c0", "run-0"), ("c1", "run-1"), ("c2", "run-2")]           # checked_heads is oldest first
+    monkeypatch.setattr(M, "checked_heads", lambda repo, tip, idx: heads)
+    assert M.main_line(tmp_path, "origin/main", object()) == ["c2", "c1", "c0"]
+
+
 def test_the_branch_sweep_deletes_what_is_on_main_and_archives_idle_unmerged_work(tmp_path):
     now = 1_800_000_000                                                   # the sweep's clock, injected
 
