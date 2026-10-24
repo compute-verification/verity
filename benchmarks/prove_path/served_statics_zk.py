@@ -366,7 +366,9 @@ def prove(a) -> int:
         blobs, held, public = N2.public_pieces(M.a8, *blobs_of(units, m["salts"]), (m["dir"] / "circuit.txt").read_bytes())
         res["received"] = {**M.a8.received(out / name / "verifier", m["dir"] / f"inst-{m['n']}.bin", blobs, held),
                            "public_pieces": len(public)}
-        res["received"]["leaked"], res["received"]["structured"] = STZ.classify(res["received"], blobs)
+        vdir = out / name / "verifier"
+        res["received"]["leaked"], res["received"]["structured"] = STZ.classify(res["received"], blobs, vdir)
+        res["received"]["placed"] = STZ.placements(res["received"], blobs, vdir)
         res["staged"] = {"n": m["n"], "ands": m["ands"], "k_log": meta["k_log"], "nbl": m["nbl"], "pin": m["pin"],
                          "lower_s": sg.lower_s, "stage_s": m["stage_s"], "registered": registered}
         res["as_expected"] = (expected(name, registered, res, units) and not res["received"]["leaked"]
