@@ -20,9 +20,9 @@ decision (`nextE_decide`), by `V false`'s proof at the element-level verdict:
   `k ≥ 8` (`kE_range`);
 * an accepted run opens columns of the zero column's width (`plainE_colsOk`).
 
-So (P1) at `VE` (`plainE_KSAbortR`, and at the bound record `RecDeploy.plainKSAbort_bdE`) rests on two premises at
-`deployPlainE rel`, both proved at `deployPlain rel` and not yet at `VE`: conflicts tied to collisions
-(`plain_conflictTied`'s) and the table bound counted per round on accepted first runs (`plain_tableBoundθOnAccR`'s).
+So (P1) at `VE` (`plainE_KSAbortR`) rests on two premises at `deployPlainE rel`: conflicts tied to collisions, proved
+at `VE` in `ConflictTiedE` (`plainE_conflictTied`, which also states (P1) at the bound record), and the table bound
+counted per round on accepted first runs, proved at `deployPlain rel` (`plain_tableBoundθOnAccR`'s) and not yet at `VE`.
 -/
 
 namespace FlockDeploy
@@ -317,18 +317,5 @@ theorem deE_VE_trim (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readabl
     deE rel FlockDeploy.VE.next (FlockDeploy.deployPlainTrim rel).cols (FlockDeploy.deployPlainTrim rel).weight =
       (FlockDeploy.deployPlainE rel).mapCols FlockDeploy.trimCol :=
   rfl
-
-/-- **(P1) at the bound record at `VE`'s steps** (option (b)), from conflicts tied to collisions and the table bound
-counted per round at the plain record at `VE` (`FlockDeploy.KS.plainE_KSAbortR`), whatever the bound record's other
-choices. -/
-theorem plainKSAbort_bdE (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
-    (hconf : Claims.Flock.ConflictTied FlockDeploy.sha512 (FlockDeploy.deployPlainE rel) (FlockDeploy.KS.wordLen false))
-    (htab : Claims.Recursion.TableBoundθOnAccR FlockDeploy.sha512 (FlockDeploy.deployPlainE rel)
-      (FlockDeploy.KS.wordLen false) (FlockDeploy.KS.wide false))
-    (join : List Msg → Msg) (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
-    (w : Msg → ℝ) :
-    (bdDeployed rel FlockDeploy.VE.next (FlockDeploy.deployPlainTrim rel).cols
-      (FlockDeploy.deployPlainTrim rel).weight join rowIn final w).PlainKSAbort FlockDeploy.sha512 :=
-  fun decI hdec => FlockDeploy.KS.plainE_KSAbortR rel hconf htab decI hdec
 
 end RecDeploy
