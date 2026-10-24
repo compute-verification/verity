@@ -1822,14 +1822,18 @@ def spec_reads(policy: dict, facts: dict, home: dict[str, list[str]]) -> list[st
                         f"without a module prefix and a reason")]
     bad: dict[tuple[str, str], tuple[set[str], set[str]]] = {}
     used: set[str] = set()
+    verdicts: dict[str, tuple[str | None, set[str]]] = {}
     for g, f in sorted(facts["pins"].items()):
         if f.get("kind") != "theorem":
             continue
         for name, m in [*((r["name"], r["module"]) for r in f.get("reads", [])), *map(tuple, f.get("outside", []))]:
             if m not in home:
                 continue
-            why = "spec" if not under(home[m], m) else "meaning" if not under(meaning, m) else None
-            if why == "spec" and (hit := {p for p in exempt if under([p], m)}):
+            if m not in verdicts:
+                why = "spec" if not under(home[m], m) else "meaning" if not under(meaning, m) else None
+                verdicts[m] = why, {p for p in exempt if under([p], m)} if why == "spec" else set()
+            why, hit = verdicts[m]
+            if why == "spec" and hit:
                 used |= hit
                 continue
             if why:
@@ -1970,8 +1974,8 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
         qf = facts_of(q, {"roots": qpol["roots"], "meaning": policy.get("meaning", policy["roots"]),
                           "axioms": policy.get("axioms", STANDARD), "guarantees": policy.get("guarantees", {})}, qwork, moved)
         lib = (q / ".lake" / "build" / "lib" / "lean").resolve()
-        loaded = {".".join(Path(o).resolve().relative_to(lib).with_suffix("").parts) for o in qf["oleans"]
-                  if Path(o).resolve().is_relative_to(lib)}
+        loaded = {".".join(r.relative_to(lib).with_suffix("").parts) for r in (Path(o).resolve() for o in qf["oleans"])
+                  if r.parts[:len(lib.parts)] == lib.parts}
         if unaudited := sorted(loaded - set(qf["modules"])):
             fails.append(Failure("proved_in.unaudited", entry, f"proved_in: {entry}'s roots ({', '.join(qpol['roots'])}) "
                                  f"import its {', '.join(unaudited)}, which are not under them, so its replay does not check "
