@@ -436,6 +436,13 @@ def test_the_served_bandwidth_spec_is_the_bandwidth_spec_with_compiled_stock_bes
     assert {b["kv_cache_memory_bytes"] for b in built} == {60129542144}
 
 
+def test_the_six_rep_served_bandwidth_spec_is_the_served_spec_at_an_even_rep_count():
+    served, r6 = resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served"), resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served-r6")
+    assert r6.reps == 6
+    same = dict(id=r6.id, reps=r6.reps, preset=replace(served.preset, id=r6.preset.id))
+    assert replace(served, **same) == r6
+
+
 def test_a_queued_point_records_its_identity_as_the_key_param_resume_matches():
     from verity_bench.tool import VLLM_BENCH_POINT
 

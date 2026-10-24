@@ -65,6 +65,9 @@ arms, so one spec times one engine in two executions (`llama31-8b-fp8-1gpu-compi
 unless its `[arm_settings."ARM"]` names another arm or `"none"`, and its `execution` is in the arm's identity. An
 experimental arm may name its own `execution` the same way: `commit@compiled` (`verity_bench.vllm.commit_arm`) is the
 Commit on vLLM's compiled serving, token-controlled by `stock-fp8@compiled` (`llama31-8b-fp8-1gpu-commit-served`).
+`verity_bench.vllm.bandwidth_ablation` holds PoUS's bandwidth-audit arm with one part changed or removed (its KV receipts,
+codec rounds or filler), each token-controlled by `bandwidth-plain`, so `llama31-8b-fp8-1gpu-bandwidth-ablation` times
+where the audit's time goes.
 
 An experimental arm (`arm_modules`, `pkg.mod:NAME`) may need its own environment. The spec's `[env]` table (upper-case
 names, string values, none of the dispatcher's, queue's or launcher's own) and its `setup`, a script in the source tree
