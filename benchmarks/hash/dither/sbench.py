@@ -131,6 +131,18 @@ a decode step are the two ranges' difference over PROF_N[1] - PROF_N[0] (`exactl
 arm's step by part, its between-step phases by their NVTX ranges).  nsys's capture range ends at the first profiler stop,
 so a run profiles one arm: under DITHER_NSYS=prof the gate runs unprofiled, so a gated run's prof op is the capture.
 
+--prefill: every request a T-token prompt (`prefill_prompts`, token ids cycled from the prompts) with one output token, so
+at max_num_batched_tokens = T each request is one step of m = T, a whole prompt in one chunk (max_model_len T + 64).
+`prefill` (an op): PF[0] and then PF[1] requests a generate, prefill_step_ms their difference over PF[1] - PF[0] (each
+generate's own overhead and, in process, its window's end cancel), and ttft_ms the median of PF_TTFT one-request
+generates (llm.generate alone; ttft_end_ms with an in-process -we window's end after it).  `prof` takes PF's counts of
+requests in place of PROF_N's tokens.  The gate arms PF_CAPTURES at m = T (the decode gate's faults are not armed) in a
+generate of len(PF_CAPTURES) + gate_extra requests, each capture copied to host memory (dither_so.CAP_HOST_ENV) and its
+leaves hashed in a pool (dither_a.CHECK_WORKERS_ENV, default PF_CHECK_WORKERS); its verdict `prefill_verdict`, and the
+token gate a generation of GATE_TOKENS tokens for PF_GATE_REQS prefill requests (chunked prefill, then decode), equal to
+the reference arm's.  Under -we the end gate is not run.  A Dither window at T = 2048 needs most of a 96 GB GPU, so a
+prefill row runs --serial: each arm's engine alone, built, gated, timed and stopped before the next (its reference first).
+
 Coins: a dither arm's window takes its round coins from the challenger off the node when its worker has a session
 (DITHER_CHALLENGERS' entry for the arm, ``{"ARM": {"session": ID, "address": "127.0.0.1:PORT", "secret_file": F,
 "commitment": HEX, "rounds": R}}``, each its own from infra's gate, `coins.py open` (R its --rounds, the layout a
@@ -147,9 +159,11 @@ the engines built and gated before it; sbench.sh's SBENCH_TIMED=1 takes the leas
 
 --bw-passes GIB runs the remote bandwidth audit's passes beside the arms on their GPU once every arm is built, warm and
 gated (`dbw.py`: an idle session, each rep an off block of every arm's ops and an on block inside a session's passes, and
-a tampered session beside each dither arm; summary.json's "bw", per_arm's TPOT the off blocks' alone).
+a tampered session beside each dither arm; summary.json's "bw", per_arm's TPOT the off blocks' alone).  Not with
+--serial, whose arms are never up together.
 
     python sbench.py --out OUT [--arms stock,exact,dither] [--reps 3] [--t 64] [--ops decode] [--gate] [--bw-passes GIB]
+    python sbench.py --out OUT --prefill --serial --t 2048 --arms exact,exact-fused,ARM --ops prefill --gate
 """
 from __future__ import annotations
 
@@ -185,6 +199,37 @@ def prompts(n: int) -> list[str]:
     return [PROMPTS[i % len(PROMPTS)] for i in range(n)]
 
 
+PREFILL_ENV = "SBENCH_PREFILL"
+PF = (8, 24)
+PF_TTFT = 3
+PF_GATE_REQS = 8
+PF_CAPTURES = ("gate", "control")
+PF_CHECK_WORKERS = 32
+
+
+def prefill() -> bool:
+    return os.environ.get(PREFILL_ENV) == "1"
+
+
+def prefill_prompts(tok, n: int, t: int) -> list[dict]:
+    """n prompts of t token ids each, request i's from offset 61 i of the prompts' ids cycled (no two alike)."""
+    ids = tok.encode(" ".join(prompts(64)))
+    need = t + 61 * n
+    ids = (ids * (need // len(ids) + 1))[:need]
+    return [{"prompt_token_ids": ids[61 * i:61 * i + t]} for i in range(n)]
+
+
+def prefill_verdict(gate: dict, control: dict) -> dict:
+    """The prefill gate's verdict: the gate step passes (its order included) and its no-write control is refused on z
+    and on the receipts, as `dither_a.gate_verdict` holds them."""
+    refused = bool(control.get("complete") and not control.get("ok") and control.get("z_vs_int_mm_bad")
+                   and control.get("receipts_vs_h1r_bad"))
+    return {"ok": bool(gate.get("ok")) and refused, "gate_ok": bool(gate.get("ok")), "control_refused": refused,
+            "order_ok": bool(gate.get("order", {}).get("ok")), "faults": "the decode gate's, not armed at prefill",
+            "control_bad": {k: len(control.get(k) or []) for k in ("z_vs_int_mm_bad", "receipts_vs_h1r_bad",
+                                                                    "a_roots_bad", "z_roots_bad")}}
+
+
 def stock_checkpoint(pin: str, scratch: Path) -> Path:
     """The pin's files linked into SCRATCH, its config's quantization_config replaced by compressed-tensors W8A8's."""
     d = scratch / "stock-ckpt"
@@ -205,7 +250,7 @@ def engine_args(gpu_mem: float, own_batch: bool = False) -> dict:
     t = int(os.environ.get("SBENCH_T", MAX_TOKENS_STEP))
     a = {"max_num_seqs": min(MAX_SEQS, t), "max_num_batched_tokens": t,
          "gpu_memory_utilization": gpu_mem,
-         "enable_prefix_caching": False, "max_model_len": 2048, "seed": 0,
+         "enable_prefix_caching": False, "max_model_len": max(2048, t + 64) if prefill() else 2048, "seed": 0,
          "kernel_config": {"enable_flashinfer_autotune": False}}
     if own_batch:
         del a["max_num_seqs"], a["max_num_batched_tokens"]
@@ -552,14 +597,23 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                "disabled": os.environ.get("VLLM_DISABLED_KERNELS"), "scheduler": scheduler_of(llm),
                "arm_env": arm_env or None})
     ps = prompts(B)
+    pf = prefill()
+    pp = prefill_prompts(llm.get_tokenizer(), max(PF[1], PF_GATE_REQS, 64), int(os.environ["SBENCH_T"])) if pf else None
+    if pf and base_arm(arm) in DITHER_SO:
+        import dither_a as DA
+        import dither_so as SO
+        os.environ[SO.CAP_HOST_ENV] = "1"
+        os.environ.setdefault(DA.CHECK_WORKERS_ENV, str(PF_CHECK_WORKERS))
+    last: dict = {}
 
-    def gen(reqs: list[str], n: int):
+    def gen(reqs: list, n: int):
         # a -we arm's in-process window ends with each generate, inside its time; the next one's challenger is made after
         sp = SamplingParams(temperature=0.0, max_tokens=n, ignore_eos=True, seed=0)
         win = getattr(llm, "dither_win", None)
         we = win is not None and getattr(win, "end_each", False)
         t = time.perf_counter()
         outs = llm.generate(reqs, sp, use_tqdm=False)
+        last["generate_s"] = time.perf_counter() - t
         if we:
             with torch.inference_mode():
                 win.end()
@@ -569,7 +623,12 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
         return dt, outs
 
     def serve(cmd: dict) -> None:
-        if cmd["op"] == "warm":
+        if cmd["op"] == "warm" and pf:
+            # every step of m = T, a -we arm's spill pool grown to a timed window's (PF[1] steps)
+            gen(pp[:4], 1)
+            gen(pp[:PF[1]], 1)
+            conn.send({"warm": True})
+        elif cmd["op"] == "warm":
             gen(ps, 8)
             gen(prompts(64), 16)
             win = getattr(llm, "dither_win", None)
@@ -577,6 +636,18 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                 # a -we arm's spill pool grown here to a timed window's size (N2 steps), not inside rep 0
                 gen(ps, N2)
             conn.send({"warm": True})
+        elif cmd["op"] == "prefill":
+            t1, _ = gen(pp[:PF[0]], 1)
+            t2, outs = gen(pp[:PF[1]], 1)
+            tt, te = [], []
+            for _ in range(PF_TTFT):
+                te.append(gen(pp[:1], 1)[0])
+                tt.append(last["generate_s"])
+            conn.send({"prefill_step_ms": round(1e3 * (t2 - t1) / (PF[1] - PF[0]), 4), "t_pf0_s": round(t1, 4),
+                       "t_pf1_s": round(t2, 4), "ttft_ms": round(1e3 * statistics.median(tt), 4),
+                       "ttft_all_ms": [round(1e3 * x, 4) for x in tt],
+                       "ttft_end_ms": round(1e3 * statistics.median(te), 4),
+                       "tokens": [list(o.outputs[0].token_ids) for o in outs]})
         elif cmd["op"] == "decode":
             m0 = time.monotonic_ns()
             t1, _ = gen(ps, N1)
@@ -588,13 +659,17 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             win = getattr(llm, "dither_win", None)
             mod = getattr(llm, "dither_mod", None) or (DF if win is not None else None)
             we = win is not None and getattr(win, "end_each", False)
+            if pf and win is not None and mod is DF:
+                raise ValueError(f"{arm}: --prefill gates dither_one's windows (dither-a, dither-1s), not dither_fused's")
             if win is not None:
                 if mod is DF:
                     win.arm(B)
                     win.price_y = True
+                elif pf:
+                    win.arm(int(os.environ["SBENCH_T"]), PF_CAPTURES)
                 else:
                     win.arm(B)
-                if we:
+                if we and not pf:
                     win.arm_end("end_gate")
             prof = os.environ.get("DITHER_NSYS") == "1" and win is not None
             if prof:
@@ -602,7 +677,12 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                 torch.cuda.profiler.start()
                 torch.cuda.nvtx.range_push(f"{GATE_RANGE}/{arm}")
             # a window whose captures' receipts go under later rounds (dither_so) runs that many steps more
-            t, outs = gen(ps, GATE_TOKENS + getattr(win, "gate_extra", 0))
+            if pf and win is not None:
+                t, outs = gen(pp[:len(PF_CAPTURES) + getattr(win, "gate_extra", 0)], 1)
+            elif pf:
+                t, outs = gen(pp[:PF_GATE_REQS], GATE_TOKENS)
+            else:
+                t, outs = gen(ps, GATE_TOKENS + getattr(win, "gate_extra", 0))
             if prof:
                 torch.cuda.synchronize()
                 torch.cuda.nvtx.range_pop()
@@ -618,14 +698,16 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                     res["verdict"] = DF.gate_verdict(res["check"], res["control"])
                 else:
                     lib = os.environ[mod.LIB_ENV]
+                    names = PF_CAPTURES if pf else win.captures
                     with torch.inference_mode():
-                        caps = {n: mod.check(win, lib, n) for n in win.captures}
+                        caps = {n: mod.check(win, lib, n) for n in names}
                     res["check"] = caps.pop("gate")
                     res.update(caps)
-                    res["verdict"] = mod.gate_verdict(res["check"], *(caps[n] for n in win.captures[1:]))
+                    res["verdict"] = (prefill_verdict(res["check"], caps["control"]) if pf else
+                                      mod.gate_verdict(res["check"], *(caps[n] for n in win.captures[1:])))
                     if getattr(mod, "CG", None) is not None:
                         res["credit_2684"] = mod.credit_doc()
-                    if we:
+                    if we and not pf:
                         # the gate's window ended with its generate; the end faults each in a window of their own
                         mod.end_gate(win, lambda n: gen(ps, n))
                         res["end"] = mod.end_checks(win, lib)
@@ -637,7 +719,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                 torch.cuda.empty_cache()
                 # the fault steps move served values on purpose, so the token gate reads a generation with none armed
                 res["tokens_capture"] = res["tokens"]
-                _, outs = gen(ps, GATE_TOKENS)
+                _, outs = gen(pp[:PF_GATE_REQS], GATE_TOKENS) if pf else gen(ps, GATE_TOKENS)
                 res["tokens"] = [list(o.outputs[0].token_ids) for o in outs]
             conn.send(res)
         elif cmd["op"] == "prof":
@@ -645,18 +727,20 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             torch.cuda.synchronize()
             if prof:
                 torch.cuda.profiler.start()
-            res = {"prof_n": list(PROF_N), "profiled": prof}
-            for n in PROF_N:
+            counts = PF if pf else PROF_N
+            res = {"prof_n": list(counts), "profiled": prof, "prefill": pf}
+            for n in counts:
                 if prof:
                     torch.cuda.nvtx.range_push(f"{PROF_RANGE}/{arm}/n{n}")
-                t, outs = gen(ps, n)
+                t, outs = gen(pp[:n], 1) if pf else gen(ps, n)
                 torch.cuda.synchronize()
                 if prof:
                     torch.cuda.nvtx.range_pop()
                 res[f"gen_n{n}_s"] = round(t, 4)
             if prof:
                 torch.cuda.profiler.stop()
-            res["tpot_b32_ms"] = round(1e3 * (res[f"gen_n{PROF_N[1]}_s"] - res[f"gen_n{PROF_N[0]}_s"]) / (PROF_N[1] - PROF_N[0]), 4)
+            step = round(1e3 * (res[f"gen_n{counts[1]}_s"] - res[f"gen_n{counts[0]}_s"]) / (counts[1] - counts[0]), 4)
+            res["prefill_step_ms" if pf else "tpot_b32_ms"] = step
             conn.send(res)
         elif cmd["op"] == "sat":
             t, outs = gen(prompts(SAT_REQS), SAT_TOKENS)
@@ -700,6 +784,16 @@ def recv(arm: str, conn, op: str, keep: bool = False) -> dict:
     return msg
 
 
+def mem_peak_gib() -> float | None:
+    """This process's cgroup's memory.peak in GiB: inside gpu-lease, its scope's, so every arm's worker and the gate check's
+    pool, page cache included (what --mem-gb has to cover); None where cgroup v2 doesn't say."""
+    try:
+        rel = Path("/proc/self/cgroup").read_text().split("::", 1)[1].strip()
+        return round(int(Path(f"/sys/fs/cgroup{rel}/memory.peak").read_text()) / 2**30, 2)
+    except (OSError, IndexError, ValueError):
+        return None
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
@@ -716,6 +810,12 @@ def main() -> int:
                     help="ARM=F,...: those arms' gpu_memory_utilization (a stock arm's own batch needs KV room for it)")
     ap.add_argument("--time-passed", action="store_true",
                     help="on a failed gate, stop the failed arms and time the rest (the exit is 4 still)")
+    ap.add_argument("--prefill", action="store_true",
+                    help="every request a T-token prompt with one output token: a step of m = T (the docstring's --prefill)")
+    ap.add_argument("--serial", action="store_true",
+                    help="one engine on the GPU at a time: each arm built, warmed, gated, timed and stopped before the next "
+                         "comes up, in --arms order (its reference arm first); for an arm that needs most of the GPU, as "
+                         "Dither's window does at --prefill's T = 2048")
     ap.add_argument("--bw-passes", type=float, default=0.0, metavar="GIB",
                     help="the remote bandwidth audit's passes beside the arms on their GPU, over a store of GIB GiB "
                          "(`dbw.py`: an idle session, each rep an off block and an on block, a tampered session)")
@@ -730,7 +830,11 @@ def main() -> int:
     a = ap.parse_args()
     if a.bw_passes and not (os.environ.get("BW_LIB") and os.environ.get("BW_KV")):
         ap.error("--bw-passes needs BW_LIB and BW_KV: session.so and kv.so (sbench.sh builds both)")
+    if a.bw_passes and a.serial:
+        ap.error("--bw-passes runs beside every arm at once, which --serial never brings up")
     os.environ["SBENCH_T"] = str(a.t)
+    if a.prefill:
+        os.environ[PREFILL_ENV] = "1"
     if a.stock_own_batch:
         os.environ[OWN_BATCH_ENV] = "1"
     out = Path(a.out)
@@ -751,14 +855,6 @@ def main() -> int:
         ap.error(f"a tokens-only arm's gate is its reference's tokens: add {','.join(missing)} to --arms")
     ctx = mp.get_context("spawn")
     conns, procs, info = {}, {}, {}
-    for arm in arms:      # one engine at a time comes up, so their memory profiling doesn't race
-        here, there = ctx.Pipe()
-        p = ctx.Process(target=worker, args=(arm, there, str(scratch), a.arm_mem.get(arm, a.gpu_mem)), daemon=True)
-        p.start()
-        there.close()   # the worker's end, closed here so a dead worker's pipe reads EOF, not a wait
-        msg = recv(arm, here, "build")
-        conns[arm], procs[arm], info[arm] = here, p, msg
-        print(json.dumps({"arm": arm, **msg}), flush=True)
     reps: list[dict] = []
     rc = 0
     ref_tokens: dict = {}
@@ -766,66 +862,12 @@ def main() -> int:
     vs_ref: dict = {}
     vs_rep0: dict = {}
     gate_doc: dict = {}
-    for arm in arms:
-        conns[arm].send({"op": "warm"})
-        res = recv(arm, conns[arm], "warm", a.time_passed)
-        if "error" not in res:
-            res = recv(arm, conns[arm], "warm", a.time_passed)
-        if "error" in res:
-            gate_doc[arm], rc = {"error": res["error"]}, 5
-    arms = [x for x in arms if x not in gate_doc]
-    if a.gate:
-        for arm in list(arms):
-            conns[arm].send({"op": "gate"})
-            res = recv(arm, conns[arm], "gate", a.time_passed)
-            if "error" in res:
-                gate_doc[arm], rc = {"error": res["error"]}, 5
-                arms.remove(arm)
-                continue
-            msg = recv(arm, conns[arm], "gate")
-            res["stats"], res["picks_summary"] = msg["stats"], msg.get("picks")
-            gate_doc[arm] = res
-            (out / "gate.json").write_text(json.dumps(gate_doc, indent=1) + "\n")
-        for arm in arms:
-            ref = REF_OF.get(arm, arms[0])
-            if "tokens" in gate_doc.get(ref, {}) and ref != arm:
-                gate_doc[arm]["tokens_equal_" + ref] = gate_doc[arm]["tokens"] == gate_doc[ref]["tokens"]
-                if "tokens_capture" in gate_doc[arm]:
-                    gate_doc[arm]["tokens_capture_requests_equal_" + ref] = sum(
-                        x == y for x, y in zip(gate_doc[arm]["tokens_capture"], gate_doc[ref]["tokens"]))
-            if "tokens" in gate_doc.get("stock", {}) and arm != "stock":
-                gate_doc[arm]["tokens_equal_stock"] = gate_doc[arm]["tokens"] == gate_doc["stock"]["tokens"]
-                gate_doc[arm]["tokens_requests_equal_stock"] = sum(
-                    x == y for x, y in zip(gate_doc[arm]["tokens"], gate_doc["stock"]["tokens"]))
-        for arm in arms:
-            print(json.dumps({"gate": arm, **{k: v for k, v in gate_doc[arm].items()
-                                               if k not in ("tokens", "tokens_capture", "picks")}}), flush=True)
-        (out / "gate.json").write_text(json.dumps(gate_doc, indent=1) + "\n")
-        failed = [arm for arm in arms if "verdict" in gate_doc[arm] and not (
-            gate_doc[arm]["verdict"]["ok"] and (gate_doc[arm].get("tokens_equal_" + REF_OF.get(arm, arms[0]))
-                                                or not TOKENS_GATED.get(arm, True)))]
-        failed += [arm for arm in arms if arm in TOKENS_ONLY and gate_doc[arm].get("tokens_equal_" + REF_OF[arm]) is not True]
-        if failed:
-            timed_picks = [arm for arm in failed if gate_doc[arm].get("verdict", {}).get("ok") and pick_of(arm) is None]
-            hint = {"hint": f"{timed_picks}: verdict ok, tokens not exact's, under timed picks: the node's shared "
-                            "Inductor cache can hand an arm a reduction config exact never ran (VLLM-48); rerun with "
-                            f"{PICK_ENV}=first {PICK_ARMS_ENV}=exact,dither"} if timed_picks else {}
-            print(json.dumps({"gate_failed": failed, "timed": a.time_passed, **hint}), flush=True)
-            for arm in failed if a.time_passed else arms:
-                conns[arm].send({"op": "stop"})
-            if not a.time_passed:
-                return 4
-            arms = [x for x in arms if x not in failed]
-            rc = rc or 4
-    if not arms:
-        return rc
-    time_at = wait_time_at()
-    if time_at:
-        print(json.dumps({"time_at": time_at}), flush=True)
+    stops = {}
+    first, timed = arms[0], []
     bw_tokens: dict = {}
 
     def block(r: int, phase: str | None = None, side: int | None = None, only: list[str] | None = None) -> dict:
-        """Rep r's ops on every arm (or `only`'s), arm order rotated by r; under --bw-passes its phase (off, on or
+        """Rep r's ops on every arm up (or `only`'s), arm order rotated by r; under --bw-passes its phase (off, on or
         tamper) and side on each row, an off block's tokens the gate's and the others' kept apart."""
         these, lo = only or arms, time.monotonic_ns()
         for op in a.ops.split(","):
@@ -847,7 +889,7 @@ def main() -> int:
         if phase in (None, "off"):
             for arm in these:
                 if (r, arm) in ref_tokens:
-                    ref = REF_OF.get(arm, arms[0])
+                    ref = REF_OF.get(arm, first)
                     gate.setdefault(arm, []).append(None if ref == arm else ref_tokens[(r, arm)] == ref_tokens.get((r, ref)))
                     if ref != arm and (r, ref) in ref_tokens:
                         vs_ref.setdefault(arm, []).append(token_diff(ref_tokens[(r, arm)], ref_tokens[(r, ref)]))
@@ -856,67 +898,151 @@ def main() -> int:
         return {"rep": r, "phase": phase, "lo": lo, "hi": time.monotonic_ns()}
 
     bw_sides: list[dict] = []
-    if not a.bw_passes:
-        for r in range(a.reps):
-            block(r)
-    else:
-        import shlex
+    # --serial: a group an arm, its engine stopped before the next one's comes up; else one group of every arm
+    groups = [[x] for x in arms] if a.serial else [arms]
+    for arms in groups:
+        for arm in arms:      # one engine at a time comes up, so their memory profiling doesn't race
+            here, there = ctx.Pipe()
+            p = ctx.Process(target=worker, args=(arm, there, str(scratch), a.arm_mem.get(arm, a.gpu_mem)), daemon=True)
+            p.start()
+            there.close()   # the worker's end, closed here so a dead worker's pipe reads EOF, not a wait
+            msg = recv(arm, here, "build")
+            conns[arm], procs[arm], info[arm] = here, p, msg
+            print(json.dumps({"arm": arm, **msg}), flush=True)
+        for arm in arms:
+            conns[arm].send({"op": "warm"})
+            res = recv(arm, conns[arm], "warm", a.time_passed)
+            if "error" not in res:
+                res = recv(arm, conns[arm], "warm", a.time_passed)
+            if "error" in res:
+                gate_doc[arm], rc = {"error": res["error"]}, 5
+                procs[arm].join()   # it exits on an error: gone before the next arm's engine comes up
+        arms = [x for x in arms if x not in gate_doc]
+        if a.gate:
+            for arm in list(arms):
+                conns[arm].send({"op": "gate"})
+                res = recv(arm, conns[arm], "gate", a.time_passed)
+                if "error" in res:
+                    gate_doc[arm], rc = {"error": res["error"]}, 5
+                    procs[arm].join()
+                    arms.remove(arm)
+                    continue
+                msg = recv(arm, conns[arm], "gate")
+                res["stats"], res["picks_summary"] = msg["stats"], msg.get("picks")
+                gate_doc[arm] = res
+                (out / "gate.json").write_text(json.dumps(gate_doc, indent=1) + "\n")
+            for arm in arms:
+                ref = REF_OF.get(arm, first)
+                if "tokens" in gate_doc.get(ref, {}) and ref != arm:
+                    gate_doc[arm]["tokens_equal_" + ref] = gate_doc[arm]["tokens"] == gate_doc[ref]["tokens"]
+                    if "tokens_capture" in gate_doc[arm] and a.prefill:
+                        # the capture run's one token a request against the reference's first, request by request
+                        gate_doc[arm]["tokens_capture_first_equal_" + ref] = sum(
+                            x[:1] == y[:1] for x, y in zip(gate_doc[arm]["tokens_capture"], gate_doc[ref]["tokens"]))
+                    elif "tokens_capture" in gate_doc[arm]:
+                        gate_doc[arm]["tokens_capture_requests_equal_" + ref] = sum(
+                            x == y for x, y in zip(gate_doc[arm]["tokens_capture"], gate_doc[ref]["tokens"]))
+                if "tokens" in gate_doc.get("stock", {}) and arm != "stock":
+                    gate_doc[arm]["tokens_equal_stock"] = gate_doc[arm]["tokens"] == gate_doc["stock"]["tokens"]
+                    gate_doc[arm]["tokens_requests_equal_stock"] = sum(
+                        x == y for x, y in zip(gate_doc[arm]["tokens"], gate_doc["stock"]["tokens"]))
+            for arm in arms:
+                print(json.dumps({"gate": arm, **{k: v for k, v in gate_doc[arm].items()
+                                                   if k not in ("tokens", "tokens_capture", "picks")}}), flush=True)
+            (out / "gate.json").write_text(json.dumps(gate_doc, indent=1) + "\n")
+            failed = [arm for arm in arms if "verdict" in gate_doc[arm] and not (
+                gate_doc[arm]["verdict"]["ok"] and (gate_doc[arm].get("tokens_equal_" + REF_OF.get(arm, first))
+                                                    or not TOKENS_GATED.get(arm, True)))]
+            failed += [arm for arm in arms if arm in TOKENS_ONLY and gate_doc[arm].get("tokens_equal_" + REF_OF[arm]) is not True]
+            if failed:
+                timed_picks = [arm for arm in failed if gate_doc[arm].get("verdict", {}).get("ok") and pick_of(arm) is None]
+                hint = {"hint": f"{timed_picks}: verdict ok, tokens not exact's, under timed picks: the node's shared "
+                                "Inductor cache can hand an arm a reduction config exact never ran (VLLM-48); rerun with "
+                                f"{PICK_ENV}=first {PICK_ARMS_ENV}=exact,dither"} if timed_picks else {}
+                print(json.dumps({"gate_failed": failed, "timed": a.time_passed, **hint}), flush=True)
+                for arm in failed if a.time_passed else arms:
+                    conns[arm].send({"op": "stop"})
+                if not a.time_passed:
+                    return 4
+                arms = [x for x in arms if x not in failed]
+                rc = rc or 4
+                for arm in failed if a.serial else ():   # gone before the next arm's engine comes up
+                    try:
+                        stops[arm] = conns[arm].recv()
+                    except EOFError:
+                        stops[arm] = {"error": "stop: the worker exited"}
+                    procs[arm].join()
+        if not arms:
+            continue
+        time_at = wait_time_at()
+        if time_at:
+            print(json.dumps({"time_at": time_at}), flush=True)
+        if not a.bw_passes:
+            for r in range(a.reps):
+                block(r)
+        else:
+            import shlex
 
-        import dbw
-        aff = ",".join(map(str, sorted(os.sched_getaffinity(0))))
-        for i, pargs in enumerate(a.bw_prover_args or [""]):
-            doc = {"i": i, "prover_args": pargs, "plan": dbw.plan(a.reps), "blocks": [], "sessions": {}}
-            bw_sides.append(doc)
-            side = dbw.Side(out / f"bw{i}", plan=doc["plan"], gib=a.bw_passes, py=os.environ.get("BW_PY", sys.executable),
-                            lib=os.environ["BW_LIB"], kv=os.environ["BW_KV"], lean_exe=os.environ.get("BW_LEAN_EXE"),
-                            prover_cpus=os.environ.get("BW_PROVER_CPUS") or aff,
-                            verifier_cpus=os.environ.get("BW_VERIFIER_CPUS"),
-                            side_args=shlex.split(os.environ.get("BW_SIDE_ARGS", "")), prover_args=shlex.split(pargs))
+            import dbw
+            aff = ",".join(map(str, sorted(os.sched_getaffinity(0))))
+            for i, pargs in enumerate(a.bw_prover_args or [""]):
+                doc = {"i": i, "prover_args": pargs, "plan": dbw.plan(a.reps), "blocks": [], "sessions": {}}
+                bw_sides.append(doc)
+                side = dbw.Side(out / f"bw{i}", plan=doc["plan"], gib=a.bw_passes, py=os.environ.get("BW_PY", sys.executable),
+                                lib=os.environ["BW_LIB"], kv=os.environ["BW_KV"], lean_exe=os.environ.get("BW_LEAN_EXE"),
+                                prover_cpus=os.environ.get("BW_PROVER_CPUS") or aff,
+                                verifier_cpus=os.environ.get("BW_VERIFIER_CPUS"),
+                                side_args=shlex.split(os.environ.get("BW_SIDE_ARGS", "")), prover_args=shlex.split(pargs))
+                try:
+                    doc["ready"] = side.expect("ready")
+                    print(json.dumps({"bw": i, "ready": {k: v for k, v in doc["ready"].items() if k != "calibration"}}),
+                          flush=True)
+                    side.start(0, dbw.paced(a.bw_idle_s, 1.0))
+                    doc["sessions"][0] = side.end(0)
+                    stretch_s, longest = dbw.window_s(doc["sessions"][0]), 0.0
+                    for r in range(a.reps):
+                        rr = i * a.reps + r
+                        off = block(rr, "off", i)
+                        doc["blocks"].append(off | {"k": None})
+                        side.start(1 + r, dbw.paced(1.5 * longest or a.bw_cover * (off["hi"] - off["lo"]) / 1e9, 1.0,
+                                                    stretch_s))
+                        on = block(rr, "on", i)
+                        doc["blocks"].append(on | {"k": 1 + r})
+                        longest = max(longest, (on["hi"] - on["lo"]) / 1e9)
+                        doc["sessions"][1 + r] = side.end(1 + r)
+                        stretch_s = dbw.beside_s(doc["sessions"][1 + r], on["lo"], on["hi"]) or stretch_s
+                        print(json.dumps({"bw": i, "session": 1 + r, "accepted": doc["sessions"][1 + r]["accepted"],
+                                          "failure": doc["sessions"][1 + r]["failure"]}), flush=True)
+                    k, dither = 1 + a.reps, [x for x in arms if x.startswith("dither")] or arms
+                    est = sum((x["spans_ns"][-1] - x["spans_ns"][0]) / 1e9 for x in reps if x.get("side") == i
+                              and x.get("bw") == "on" and x["rep"] == i * a.reps + a.reps - 1 and x["arm"] in dither
+                              and "spans_ns" in x)
+                    side.start(k, dbw.paced(est, 2.0, stretch_s))
+                    doc["blocks"].append(block(i * a.reps + a.reps - 1, "tamper", i, only=dither) | {"k": k})
+                    doc["sessions"][k] = side.end(k)
+                    doc["stopped"] = side.stop()
+                except dbw.SideError as e:
+                    doc["error"] = str(e)
+                    print(json.dumps({"bw": i, "error": str(e)}), flush=True)
+                    side.p.kill()
+                    rc = rc or 6
+                    break
+        for arm in arms:
+            conns[arm].send({"op": "stop"})
+        # each worker's stop: a -we arm's off-node window served to its end and checked, its session closed
+        for arm in arms:
             try:
-                doc["ready"] = side.expect("ready")
-                print(json.dumps({"bw": i, "ready": {k: v for k, v in doc["ready"].items() if k != "calibration"}}),
-                      flush=True)
-                side.start(0, dbw.paced(a.bw_idle_s, 1.0))
-                doc["sessions"][0] = side.end(0)
-                stretch_s, longest = dbw.window_s(doc["sessions"][0]), 0.0
-                for r in range(a.reps):
-                    rr = i * a.reps + r
-                    off = block(rr, "off", i)
-                    doc["blocks"].append(off | {"k": None})
-                    side.start(1 + r, dbw.paced(1.5 * longest or a.bw_cover * (off["hi"] - off["lo"]) / 1e9, 1.0,
-                                                stretch_s))
-                    on = block(rr, "on", i)
-                    doc["blocks"].append(on | {"k": 1 + r})
-                    longest = max(longest, (on["hi"] - on["lo"]) / 1e9)
-                    doc["sessions"][1 + r] = side.end(1 + r)
-                    stretch_s = dbw.beside_s(doc["sessions"][1 + r], on["lo"], on["hi"]) or stretch_s
-                    print(json.dumps({"bw": i, "session": 1 + r, "accepted": doc["sessions"][1 + r]["accepted"],
-                                      "failure": doc["sessions"][1 + r]["failure"]}), flush=True)
-                k, dither = 1 + a.reps, [x for x in arms if x.startswith("dither")] or arms
-                est = sum((x["spans_ns"][-1] - x["spans_ns"][0]) / 1e9 for x in reps if x.get("side") == i
-                          and x.get("bw") == "on" and x["rep"] == i * a.reps + a.reps - 1 and x["arm"] in dither
-                          and "spans_ns" in x)
-                side.start(k, dbw.paced(est, 2.0, stretch_s))
-                doc["blocks"].append(block(i * a.reps + a.reps - 1, "tamper", i, only=dither) | {"k": k})
-                doc["sessions"][k] = side.end(k)
-                doc["stopped"] = side.stop()
-            except dbw.SideError as e:
-                doc["error"] = str(e)
-                print(json.dumps({"bw": i, "error": str(e)}), flush=True)
-                side.p.kill()
-                rc = rc or 6
-                break
-    for arm in arms:
-        conns[arm].send({"op": "stop"})
-    # each worker's stop: a -we arm's off-node window served to its end and checked, its session closed
-    stops = {}
-    for arm in arms:
-        try:
-            stops[arm] = conns[arm].recv()
-        except EOFError:
-            stops[arm] = {"error": "stop: the worker exited"}
-        print(json.dumps({"stop": arm, **{k: v for k, v in stops[arm].items() if k != "stats"}}), flush=True)
+                stops[arm] = conns[arm].recv()
+            except EOFError:
+                stops[arm] = {"error": "stop: the worker exited"}
+            print(json.dumps({"stop": arm, **{k: v for k, v in stops[arm].items() if k != "stats"}}), flush=True)
+            if a.serial:
+                procs[arm].join()   # its device memory free before the next engine's profiling reads what is
+        timed += arms
+    arms = timed
     (out / "stop.json").write_text(json.dumps(stops, indent=1, default=str) + "\n")
+    if not arms:
+        return rc
     summary = {"arms": arms, "info": info, "numa": json.loads(os.environ.get("DITHER_NUMA_RECORD") or "null"),
                "gate_tokens_equal_ref_arm": gate, "decode_tokens_vs_ref": vs_ref,
                "decode_tokens_vs_rep0": vs_rep0, "ref_of": REF_OF, "n1": N1, "n2": N2, "b": B,
@@ -925,12 +1051,29 @@ def main() -> int:
                "saturation": {"requests": SAT_REQS, "tokens": SAT_TOKENS, "max_num_seqs": min(MAX_SEQS, a.t),
                               "max_num_batched_tokens": a.t, "stock_own_batch": a.stock_own_batch,
                               "scheduler_by_arm": {arm: info[arm].get("scheduler") for arm in arms}}, "per_arm": {}}
+    if a.prefill:
+        summary["prefill"] = {"t": a.t, "requests": list(PF), "ttft_requests": PF_TTFT, "gate_requests": PF_GATE_REQS,
+                              "captures": list(PF_CAPTURES), "step": "one request of T prompt tokens, one output token"}
     plain = [x for x in reps if x.get("bw") in (None, "off")]
     for arm in arms:
         tp = [x["tpot_b32_ms"] for x in plain if x["arm"] == arm and x["op"] == "decode"]
         th = [x["tokens_per_s"] for x in plain if x["arm"] == arm and x["op"] == "sat"]
         summary["per_arm"][arm] = {"tpot_b32_ms": statistics.median(tp) if tp else None, "tpot_all": tp,
                                    "tokens_per_s": statistics.median(th) if th else None, "tokens_per_s_all": th}
+        if a.prefill:
+            pr = [x for x in plain if x["arm"] == arm and x["op"] == "prefill"]
+            st = [x["prefill_step_ms"] for x in pr]
+            ft = [x["ttft_ms"] for x in pr]
+            summary["per_arm"][arm].update(
+                prefill_step_ms=statistics.median(st) if st else None, prefill_step_all=st,
+                ttft_ms=statistics.median(ft) if ft else None, ttft_all=ft,
+                ttft_end_ms=statistics.median(x["ttft_end_ms"] for x in pr) if pr else None)
+    ef = summary["per_arm"].get("exact-fused", {})
+    for arm in arms:
+        p = summary["per_arm"][arm]
+        for k in ("tpot_b32_ms", "prefill_step_ms", "ttft_ms"):
+            if p.get(k) and ef.get(k):
+                p[f"gamma_{k}_vs_exact_fused"] = round(p[k] / ef[k], 4)
     base = summary["per_arm"][arms[0]]
     for arm in arms[1:]:
         p = summary["per_arm"][arm]
@@ -941,6 +1084,7 @@ def main() -> int:
     summary["gate_failed"] = [x for x in gate_doc if x not in arms]
     summary["stop"] = {arm: {"error": x.get("error"), "close_error": x.get("close_error"), "fill_steps": x.get("fill_steps"),
                              "end_verdict": (x.get("end") or {}).get("verdict")} for arm, x in stops.items()}
+    summary["host_mem_peak_gib"] = mem_peak_gib()
     if a.bw_passes:
         import dbw
         bw = dbw.report(reps, bw_sides, arms)
