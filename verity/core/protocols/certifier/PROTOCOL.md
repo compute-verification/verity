@@ -1555,8 +1555,6 @@ to the served rows the Commit side registers before the draw (`served_rows`), so
 refused. `benchmarks/network_traces/compile_slice_zk.py` proves eleven units of corpus-smallkv's first seven steps
 `--zk`, held by Lean `verify --zk` (run r20261024-153220-c97c): the honest one, three negatives, phase 9's five and the six passes
 with the served row and with its own, each opening to its verdict, with no witness piece in what the verifier received.
-The tie (`served_tie`) holds the served rows to the steps' committed positions, so rows registered at serve time are
-the batch that ran; every unit is proved, and its port and cost are its docstring.
 
 ## The active certifier (`active`)
 
