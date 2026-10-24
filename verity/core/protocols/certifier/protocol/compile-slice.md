@@ -84,20 +84,20 @@ held to its request's slot through ``map``.
 proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify --zk`. The verifier opens only ``pub``
 and the verdict, and runs the bindings, the carry chain's among them, on the units' b‖c. What the verifier received
 holds no witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the ``cin`` and ``cout`` rows whole.
-- A flagged witness piece or carry row is left out of that scan only for one of three reasons (network-accounting's
-  rule of 24 Oct, which replaces REDTEAM's phase-18 one, note:network-accounting/20261024T0558Z-finding-redteam-v3). No
-  piece is left out for its byte count.
-  - Its value occurs in what the statement determines and the prover doesn't choose: ``pub``'s rows (`pub-*.bin`),
-    the statement or the circuit's definition.
-  - It sits on a field the verifier's reader fixes to a constant: format framing, a nonce required to be 0, a length.
-  - The same bytes sit at the same place in a proof of a different witness (different witness values, not only a
-    fresh salt).
-
-  The proof streams (`circuit.rep*.bin`, which `session.json`'s `proof_sha512` hashes) and the round messages
-  (`rounds[*].msg`) are never a reason by themselves.
+- The scan's rule is PROVE-PATH's field-aligned one (`served_tie_zk.classify` in #3933 at b3a3fee76a). It replaces REDTEAM's phase-18 rule (note:network-accounting/20261024T0558Z-finding-redteam-v3).
+  - A find of a witness piece or carry row counts only if it lies inside one field: one read C-Flock's proof format
+    makes of a repetition's stream (`circuit.rep*.bin`, `redigest.layout`), or one record of a round message
+    (`rounds[*].msg`, as `transcript_check.T` frames them). A match across two fields doesn't count, and neither does
+    hex a nibble off.
+  - A counted find is excused only if its bytes are in what the statement fixes: ``pub``'s rows (`pub-*.bin`), the
+    statement or the circuit's definition, the streams' integer fields (lengths and parameters, not nonces), and the
+    round messages' headers, domain and labels.
+  - No piece is excused for its byte count or its witness class. A differential against a proof of a different witness
+    is evidence for a manual analysis only.
+  - The rule misses a leak written at a byte shift across fields.
 - The driver still leaves out, by byte count, the pieces with at most one nonzero byte (`sparse_pieces`) and a carry row
-  with at most one (`carry_rows.sparse`), until the shared helper (#3916) puts the rule in their place. A run's
-  left-out pieces are checked under the rule after it.
+  with at most one (`carry_rows.sparse`), until the shared scan module (PROVE-PATH's, stacked on #3933) puts the rule in
+  their place. A run's left-out pieces are checked under the rule after it, by `classify`.
 
 **The proof of record is run r20261024-232954-639e** (7546f4249f: #3922 at d70e44292b, which carries #3886's
 6e29d34e7c, with #3972's record; the w212 slice at the class). It proves w212's ten units of 1,021,302 ANDs at the
@@ -116,8 +116,10 @@ audit and the scan of its left-out pieces under the rule go here when it ends.
   made-up table is refused by ``cache`` alone (0x1f), and restart by ``CH-first``.
 - The verifier received 347,887,598 bytes at w212 and 103,356,161 at the demonstration class. They hold none of the
   837 and 654 witness pieces scanned, and no ``cin`` or ``cout`` row.
-- The left-out pieces are clean (art:c8f215f4e454914b21e339fff69d533f04c11e1958a95e6e09d69b4481384973, the check under
-  REDTEAM's phase-18 rule and its logs), and the rule above leaves each out.
+- The left-out pieces are clean under REDTEAM's phase-18 rule
+  (art:c8f215f4e454914b21e339fff69d533f04c11e1958a95e6e09d69b4481384973, the check and its logs). Under the
+  field-aligned rule the `s_hat_v` match below is no find: it straddles fields, 15 bytes on the length 128 and the
+  required-zero nonce plus one byte of a field element.
   - Of w212's 44 sparse pieces, 38 occur nowhere in what the verifier received. The other six occur only in the proof
     streams and round messages.
   - The demonstration class's restart starts from the zero carry. Its row occurs in the same files' zero padding.
@@ -128,7 +130,7 @@ audit and the scan of its left-out pieces under the rule go here when it ends.
     that the verifier's reader requires to be 0. The `s_hat_v` window's one other byte is the last byte of the
     previous field element, 0 there (0x92 in the demonstration class's proof).
 - Each message hit is the same 16 bytes at the paired round of the demonstration class's proof, whose circuit and
-  witness differ.
+  witness differ: under the field-aligned rule, evidence for the manual analysis only.
 - Run r20261024-202836-67d7, at #3886's head before #3887's copies (852,357 ANDs), has the same verdicts. Its six
   flagged pieces are the same framing (REDTEAM's differential, run r20261024-211716-ae3b).
 
