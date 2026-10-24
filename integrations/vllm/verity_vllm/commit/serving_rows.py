@@ -250,6 +250,7 @@ class Member:
     tables: tuple[tuple[str, int], ...] = ()     # a shared-row member: each row port's table size (rows are referenced by refs)
     name: str = ""
     schemas: tuple[tuple[str, str], ...] = ()
+    link_units: tuple[int, ...] = ()             # a row-table member: per link, how many of its units (consecutive, in order) read it
     links: tuple[tuple[int, int], ...] = ()      # a row-table member: per row of its x table, the window's row table and rank it is
 
     def __post_init__(self) -> None:
@@ -258,6 +259,17 @@ class Member:
             raise ValueError(f"{self.key}: a bit-row member names one of {BIT_ROW_SCHEMAS} for each port, not {dict(self.schemas)}")
         if self.links and dict(self.tables).get(LINKED) != len(self.links):
             raise ValueError(f"{self.key}: {len(self.links)} links, one per row of its {LINKED!r} table {dict(self.tables)}")
+        if self.links and len({t for t, _ in self.links}) != 1:
+            raise ValueError(f"{self.key}: links {self.links} name several row tables; a linked member's {LINKED!r} rows are one "
+                             "table's, the one root its registered reads open against")
+        if (len(self.link_units) != len(self.links) or any(type(c) is not int or c < 1 for c in self.link_units)
+                or (self.links and sum(self.link_units) != self.n)):
+            raise ValueError(f"{self.key}: link units {self.link_units} are not one positive count per link summing to its {self.n} units")
+
+    @property
+    def link_refs(self) -> tuple[int, ...]:
+        """A linked member's refs into its ``x`` table: each unit's link, in order."""
+        return tuple(j for j, c in enumerate(self.link_units) for _ in range(c))
 
     @property
     def key(self) -> str:
@@ -707,6 +719,20 @@ def index_bytes(doc: dict[str, Any]) -> bytes:
     return (json.dumps(doc, separators=(",", ":")) + "\n").encode()
 
 
+def registered_entry(c: Committed, m: Member, trees: dict[int, RT.RowTable] | None = None) -> dict[str, Any]:
+    """Linked member ``m``'s public header ``registered`` entry: its ``x`` table's rows are rows of its row table (the value,
+    named by the table's port), each at its rank with its path to the table's root (``RT.RowTable.path``), which the Lean
+    verifier opens against the root its own ``--registered`` file names (``row_tables.registered_reads``).  ``trees``
+    caches each table's tree by its index."""
+    t, trees = m.links[0][0], {} if trees is None else trees
+    tab = c.window.row_tables[t]
+    if t not in trees:
+        bc = c.bc[tab.port]
+        trees[t] = RT.RowTable(c.window.table_domain(t), [bc[i * BC_BYTES:(i + 1) * BC_BYTES] for i in range(tab.n)])
+    return {LINKED: {"value": tab.port, "positions": [r for _, r in m.links],
+                     "paths": [trees[t].path(r).hex() for _, r in m.links]}}
+
+
 def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: dict[str, Any], extra: dict[str, Any] | None = None, *,
           kind: str = "served") -> dict[str, Any]:
     """The window's files, its registration's window of ``kind`` (`registration`); the window's provenance gets the index's SHA-512
@@ -717,6 +743,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
     (d / "index.json").write_bytes(ib)
     rec = registration(c, {**provenance, "index": hashlib.sha512(ib).hexdigest(), "order": ORDER}, kind=kind)
     (d / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True) + "\n")
+    trees: dict[int, RT.RowTable] = {}
     members = []
     for k, m in enumerate(c.window.members):
         pub = c.public_body(k)
@@ -731,6 +758,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
                         "public_sha512": hashlib.sha512(pub).hexdigest(), "units": f"m{k}-units.json",
                         "units_sha512": hashlib.sha512(ub).hexdigest(),
                         **({"row_schemas": m.row_schemas} if m.schemas else {}),
+                        **({"registered": registered_entry(c, m, trees)} if m.links else {}),
                         **({"shared_rows": {**dict(m.tables), **{p: m.n for p, _ in m.out_rows}}} if m.tables else {}),
                         **({"row_links": [list(x) for x in m.links]} if m.links else {})})
     tables = []
