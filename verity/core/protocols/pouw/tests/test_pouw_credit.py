@@ -57,6 +57,8 @@ CREDIT_EXPECT = {
 #: a session pinned to a logged commit off main's first-parent line
 OFF_MAIN = "which the host's pins log records but which is not on main's first-parent line"
 NOT_DRAWN = "has a proof outcome and was not drawn"
+NO_SERVED = "states no served rows m_s at most the window's A slot M = "
+OTHER_SERVED = "every dense call of a step serves the step's m_s rows"
 UNTIED = "whose rows each round's root committed"
 NOT_COMMITS = "is not the Commit's "
 NOT_RECEIVED = "the round roots are not the roots the challenger's log shows it received, in order"
@@ -66,8 +68,6 @@ OTHER_REGISTRATION = "'s domain is not the one the window's registration gives i
 OTHER_ROOT = "against another root than the one the window registered for"
 OTHER_PERIOD_WEIGHTS = "open signed: a B row's codes or s_w differ from the ones the period registered"
 UNSIGNED = "open signs no weights' root (weights_root, a SHA-512 digest"
-NO_SERVED = "states no served rows m_s at most the window's A slot M = "
-OTHER_SERVED = "every dense call of a step serves the step's m_s rows"
 DRAWN_EXPECT = {
     "coin-form": ("draw", Cr.COIN_FORM), "args-form": ("draw", Cr.DRAW_ARGS), "layout-form": ("layout", Cr.LAYOUT_FORM),
     "named-twice": ("layout", "is named twice"), "unknown-linear": ("layout", "which is no linear of the window"),
