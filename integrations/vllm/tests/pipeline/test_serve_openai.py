@@ -419,6 +419,21 @@ def test_a_later_turn_read_from_the_prefix_cache_is_checked_against_the_turns_th
     assert got["passed"] and (got["cache_hits"], got["cached_positions"]) == (2, 28), got
 
 
+def test_the_gpu_arms_client_serves_shared_prefix_turns_that_the_server_checks(tmp_path):
+    from tests.pipeline import serve_prefix_gpu as client
+
+    sent = tmp_path / "client.jsonl"
+    with Serving(tmp_path, block=4) as s:
+        assert client.main(["--url", s.url, "--out", str(sent), "--requests", "6", "--prompt-range", "8:32", "--tokens", "4",
+                            "--system-prompts", "2", "--system-tokens", "24", "--turns", "2", "--max-model-len", "512"]) == 0
+    got = client.compare(records(tmp_path, "client.jsonl"), records(tmp_path, "requests.jsonl"))
+    assert got["passed"] and got["later_turns"] > 0 and got["cache_hits"] >= got["later_turns"], got
+    assert s.windows.summary()["passed"]
+    bad = records(tmp_path, "client.jsonl")
+    bad[0]["streamed_ids"] = bad[0]["streamed_ids"][:-1]
+    assert not client.compare(bad, records(tmp_path, "requests.jsonl"))["passed"]
+
+
 @pytest.mark.parametrize("idle_close_steps, windows", [(1, 3), (100, 1)])
 def test_a_window_closes_at_idle_once_it_holds_idle_close_steps(tmp_path, idle_close_steps, windows):
     with Serving(tmp_path, idle_close_steps=idle_close_steps) as s:
