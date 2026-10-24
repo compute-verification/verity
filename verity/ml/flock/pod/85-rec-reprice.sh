@@ -50,11 +50,11 @@
 #      LEVELS= (comma-separated statement names, default every one: L3,alg; oprove and lean also forged-sum-L6, alg-p1,
 #              ..; a name without its part, alg, names every part)
 #      FORGE="message sum comb top top-salt coef dirs" (vstage)  JOBS=4 (vstage, lean)  INNER_LOOPBACK=1 (inner)
-#      OPROVE_JOBS=4 OPROVE_MEM_GB=48 (oprove: proofs at once, and the GB their estimated peaks may sum to)
 #      GPU_MAX_MIN=10 GPU_MEM_GB=32 (each prove's lease)  GPU_PREEMPTIBLE=1 (empty: not preemptible)  GPU_TRIES=3
 #      GPU_LEASE= (the lease command; default the queue's for this node)
 #      WARM_FROM=/workspace/jobs/proofs-vllm-moe/flock-gpu-link (a checkout whose cargo target starts the build warm)
 #      MODES=dev  REPLAY=1  CONTROLS= (oprove)  LOOPBACK_DRAW=all (a --zk loopback's draw: every unit; none: no draw)
+#      OPROVE_JOBS=4 OPROVE_MEM_GB=48 (oprove: proofs at once, and the GB their estimated peaks may sum to)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 STEP=${STEP:?STEP=build|inner|icheck|vstage|vcap|oprove|oreplay|lean}
