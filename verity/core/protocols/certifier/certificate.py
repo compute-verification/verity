@@ -50,6 +50,16 @@ issues to the certifier; the audit takes it from its parameters, as it takes the
 certificate's encoding don't carry it. The tag is the message's own, distinct from the ids of the checks that read it
 (`verity/network-certificate/v4`, `verity/network-records/v3`).
 
+**The clock certificate** (`ClockCertificate`, `Issuer.clock`): beside each egress record the certifier signs the sync
+its shaper ran the window under (`schedule.ClockSync`, δ and ρ = p/q in lowest terms), under the same message, so it
+names the same key, session and link-window:
+
+    clock digest = tagged_sha512("verity-network-certifier/clock/v1", u64be δ ‖ u64be p ‖ u64be q)   (`clock_digest`)
+
+A window's sync is public (each window's declared sync is), so its digest is unsalted. The record certificate of the
+same link-window signs a salted record digest instead, so neither verifies as the other (each would need a SHA-512
+preimage). N2's advised verifier takes each window's sync from these alone (`advised.SignedClocks`).
+
 The scheme is LMS over SHA-512 (`lms.DEPLOYED`: n = 64, w = 1, h = 20, the whole SHA-512 output, not truncated), whose
 unforgeability is ``euf-cma/lms-sha512-n64``. The certifier's signing step (`Issuer`) is handed it as a `Signer`
 (`LmsSigner`), and the audit as a `PublicKey` (`LmsKey`). A signer whose leaf state is missing, behind or held by another
@@ -73,10 +83,11 @@ from typing import Protocol
 from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier.grid import Grid, GridParams, Reason, Record, Status, row_left_packed
-from verity.core.protocols.certifier.schedule import SyncSet
+from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 
 RECORD_TAG = "verity-network-certifier/record/v2"
 PARAMETERS_TAG = "verity-network-certifier/parameters/v1"
+CLOCK_TAG = "verity-network-certifier/clock/v1"
 FRAME_TAG = b"verity-network-certifier/frame/v2\0"
 EMPTY_TAG = b"verity-network-certifier/empty/v2\0"
 NODE_TAG = b"verity-network-certifier/node/v2\0"
@@ -277,6 +288,15 @@ def certificate_message(key_id: bytes, session: bytes, link: str, direction: Dir
     return lms.certificate_message(key_id, session, link, direction.value, window, digest)
 
 
+def clock_digest(sync: ClockSync) -> bytes:
+    """The digest a clock certificate signs: tagged_sha512("verity-network-certifier/clock/v1", u64be δ ‖ u64be p ‖
+    u64be q) of the sync (δ, ρ = p/q in lowest terms)."""
+    if type(sync) is not ClockSync:
+        raise ValueError(f"a clock digest is of a schedule.ClockSync, not a {type(sync).__name__}")
+    return tagged_sha512(CLOCK_TAG, _u(sync.delta, 8, "δ") + _u(sync.rho.numerator, 8, "p")
+                         + _u(sync.rho.denominator, 8, "q"))
+
+
 class SignerRefused(Exception):
     """The signer's one-time-key state is missing, behind or held by another signer, so it signs nothing rather than risk
     reusing a key; or the session it is asked to start is already started."""
@@ -440,6 +460,35 @@ class CertifiedRecord:
         return c.digest == certificate_digest(self.salt, record) and c.verify(key, session)
 
 
+@dataclass(frozen=True, slots=True)
+class ClockCertificate:
+    """The certifier's signed record of the sync its shaper ran one egress link-window under: the sync, public, and the
+    certificate of its clock digest (`clock_digest`)."""
+
+    sync: ClockSync
+    certificate: Certificate
+
+    @property
+    def link(self) -> str:
+        return self.certificate.link
+
+    @property
+    def window(self) -> int:
+        return self.certificate.window
+
+    def verify(self, key: PublicKey, session: bytes) -> bool:
+        """The certificate is an egress one, signs this sync's clock digest, and verifies under `key` in certifier
+        session `session` (`Certificate.verify`)."""
+        c = self.certificate
+        if type(c) is not Certificate or c.direction is not Direction.EGRESS:
+            return False
+        try:
+            digest = clock_digest(self.sync)
+        except ValueError:
+            return False
+        return c.digest == digest and c.verify(key, session)
+
+
 @dataclass
 class Issuer:
     """The network certifier's signing step, beside its grid (`grid.Certifier`): one certificate per closed link-window,
@@ -462,15 +511,27 @@ class Issuer:
             raise ValueError(f"the certifier's coins gave {len(salt)} bytes for a {SALT_BYTES}-byte salt")
         head = record_head(record.link, direction, record.window, record.grid, record.status, params, parameters,
                            deadline=deadline)
-        digest = certificate_digest(salt, head.digest())
+        certificate = self.sign(record.link, direction, record.window, certificate_digest(salt, head.digest()))
+        return None if certificate is None else CertifiedRecord(head, salt, certificate)
+
+    def clock(self, link: str, window: int, sync: ClockSync) -> ClockCertificate | None:
+        """The clock certificate of the egress link-window, `sync` being the one the certifier's shaper ran it under,
+        or None when the signer refuses."""
+        certificate = self.sign(link, Direction.EGRESS, window, clock_digest(sync))
+        return None if certificate is None else ClockCertificate(sync, certificate)
+
+    def sign(self, link: str, direction: Direction, window: int, digest: bytes) -> Certificate | None:
+        """A certificate of the 64-byte `digest` for the link-window in this session, or None when the signer refuses
+        (the link-window is then listed in `refused`). `certify` signs a record's salted digest with it, `clock` a
+        window's sync, and the warden's cell rows their head's digest (`warden_rows`)."""
         key_id = self.signer.key_id
-        message = certificate_message(key_id, self.session, record.link, direction, record.window, digest)
+        message = certificate_message(key_id, self.session, link, direction, window, digest)
         try:
             if not self.started:
                 self.signer.start(self.session)
                 self.started = True
             signature = self.signer.sign(message)
         except SignerRefused:
-            self.refused.append((record.link, direction, record.window))
+            self.refused.append((link, direction, window))
             return None
-        return CertifiedRecord(head, salt, Certificate(key_id, record.link, direction, record.window, digest, signature))
+        return Certificate(key_id, link, direction, window, digest, signature)

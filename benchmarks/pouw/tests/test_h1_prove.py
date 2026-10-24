@@ -211,15 +211,15 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
         assert sorted(reads["ports"]) == sorted([*U.Shape(K).in_rows, "o1"])
         for p, e in reads["ports"].items():
             v = U.unit_reads(win.program, win.tp, first)[p][0]
-            assert {x: e[x] for x in e if x not in ("reads", "known")} == {
+            assert {x: e[x] for x in e if x not in ("reads", G.READS_FROM, "known")} == {
                 "value": v, "root": roots[v], "leaves": leaves[v], "words": U.value_words(v), "word_bits": 16,
                 "domain": G.domain(win.obj["program"], v, U.value_words(v), leaves[v],
                                    window=None if v == f"b/{K}" else wr).domain_id.hex(), "row_schema": U.V2}
-            assert e["reads"] == [U.unit_reads(win.program, win.tp, u)[p][1] if first <= u < first + n else None
-                                  for u in range(T if p == "o1" else first + n)]
+            assert (e[G.READS_FROM], e["reads"]) == (first, [U.unit_reads(win.program, win.tp, u)[p][1]
+                                                              for u in range(first, first + n)])
         assert reads["ports"]["zy"]["words"] == 3 * RC and reads["ports"]["a0"]["words"] == K // 2 + 2
         assert reads["ports"]["o1"]["value"] == "ok" and reads["ports"]["o1"]["words"] == 1
-        assert reads["ports"]["o1"]["reads"] == [u if first <= u < first + n else None for u in range(T)]
+        assert reads["format"] == G.READS_V1 and reads["ports"]["o1"]["reads"] == list(range(first, first + n))
         assert [p for p, e in reads["ports"].items() if "known" in e] == ["o1"]
         assert reads["ports"]["o1"]["known"] == U.known_ok("w", T) == {
             "rows": [[1]] * T, "salts": [U.ok_salt("w", u).hex() for u in range(T)]}
@@ -245,7 +245,7 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
 
     # window credit's registration step takes the window's evidence: one drawn unit of each call, its finding its call's
     # --registered ports, under the descriptor whose SHA-512 is the Program's; and refuses each per-window value without
-    # the window root, ok among them, and another window's root
+    # the window root, and another window's root
     desc, calls = RN.credit_descriptor(win), U.HW.call_units(win.program)
     assert hashlib.sha512(desc).hexdigest() == win.obj["program"]
     drawn = [calls[0][0] + 1, calls[1][0]]
@@ -254,9 +254,11 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
     entries = [*com["registered"], okr.entry()]
     assert RN.credit_registration(desc, drawn, entries, found, wr) is None
     okd = G.domain(win.obj["program"], "ok", 1, T).domain_id.hex()
+    assert RN.credit_registration(desc, drawn, [*com["registered"], dict(okr.entry(), domain=okd)], found, wr) is None, (
+        "the ok rows are the verifier's own, which credit builds and `_verified` holds each session to: registration "
+        "reads no entry of them")
     for bad_entries, root, why in (
             ([*RN.unrooted(com)["registered"], okr.entry()], wr, f"registered value a/{K}@0's domain is not"),
-            ([*com["registered"], dict(okr.entry(), domain=okd)], wr, "registered value ok's domain is not"),
             (entries, U.open_root("v", bytes(64)), f"registered value a/{K}@0's domain is not"),
             (entries[1:], wr, f"against b/{K}, which the window registers not")):
         got = RN.credit_registration(desc, drawn, bad_entries, found, root)

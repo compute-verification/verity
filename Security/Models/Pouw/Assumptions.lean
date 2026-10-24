@@ -24,7 +24,6 @@ import Models.Pouw.Assumptions.Dimension.PipeModel
 import Models.Pouw.Assumptions.Dimension.RouteU
 import Models.Pouw.Assumptions.Dimension.RouteUPipe
 import Models.Pouw.Assumptions.Dimension.RouteUPipeAssumptions
-import Models.Pouw.Assumptions.FiatShamir
 import Models.Pouw.Assumptions.Fp8Atom.H1TAssumptions
 import Models.Pouw.Assumptions.Fp8Atom.H1TGamma
 import Models.Pouw.Assumptions.Fp8Atom.H1TRunningAssumptions
@@ -54,7 +53,6 @@ import Models.Pouw.Assumptions.PearlC.TTOutTileUOnly
 import Models.Pouw.Assumptions.PearlC.TTOutUOnly
 import Models.Pouw.Assumptions.Pinned
 import Models.Pouw.Assumptions.RelativeSecurity
-
 /-!
 # PoUW's named assumptions, and the definitions and statements over them (trusted)
 
