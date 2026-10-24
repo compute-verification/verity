@@ -910,3 +910,30 @@ def test_a_slot_with_mem_holds_a_research_mem_reservation_that_research_mem_coun
     with pytest.raises(Exec, match="b"):
         SLOT.main(["--", "check.py"], now=lambda: NOW, sleep=lambda _s: pytest.fail("slot b is free"))
     assert [f.name for f in (tmp_path / "ramlock").glob("*.json")] == ["check-a.json"]
+
+
+def test_a_slot_with_mem_counts_what_live_reservations_hold_but_dont_use_yet(tmp_path, monkeypatch):
+    """23 Oct 23:16Z (top): when a check ended on cpu-4, proofs' waiting 345 GB shares and a train's twins raced for the freed
+    memory, and a twin admitted beside a lowering share read well over 560 GB free: that share's reservation wasn't counted."""
+    proc = tmp_path / "proc"
+    for pid, ppid, kb in ((100, 1, 50 << 20), (101, 100, 20 << 20), (200, 1, 1 << 20)):
+        (proc / str(pid)).mkdir(parents=True)
+        (proc / str(pid) / "stat").write_text(f"{pid} (python) S {ppid} 0 0\n")
+        (proc / str(pid) / "status").write_text(f"Name:\tpython\nVmRSS:\t{kb} kB\n")
+    ended = tmp_path / "run-ended"
+    ended.mkdir()
+    (ended / "status.json").write_text('{"state": "done"}')
+    SLOT.RAMLOCK.mkdir(parents=True)
+    for name, doc in (("share-a.json", {"gb": 345.0, "pid": 100, "run_id": "r-a"}),     # 345 GB, its tree holds 70 GiB
+                      ("share-a2.json", {"gb": 100.0, "pid": 100, "run_id": "r-a"}),    # the same run: its larger counts
+                      ("gone.json", {"gb": 500.0, "pid": 999}),                         # its pid is gone
+                      ("ended.json", {"gb": 500.0, "pid": 200, "run_dir": str(ended)})):  # its run ended
+        (SLOT.RAMLOCK / name).write_text(json.dumps(doc))
+    held = SLOT.reserved_gb(proc)
+    assert held == int(345e9 - (70 << 30)) >> 30
+    monkeypatch.setattr(SLOT, "reserved_gb", lambda: held)
+    monkeypatch.setattr(SLOT, "memory_gb", lambda: 700)
+    why = SLOT.blocked(SLOT.parse("b 0 mem=560")[0], NOW)
+    assert why and why.startswith(f"{700 - held} GB of memory free ({held} GB more is reserved") and "560 GB" in why
+    monkeypatch.setattr(SLOT, "reserved_gb", lambda: 0)
+    assert SLOT.blocked(SLOT.parse("b 0 mem=560")[0], NOW) is None
