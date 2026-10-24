@@ -210,10 +210,6 @@
    "owner": "@compute-accounting",
    "digest": "3a5cf6fec99a82206ca55ce1040805252587d207a2fad7f3d74e9cabf33b83e7"
   },
-  "Accounting.Assumptions.TS.TileChecks": {
-   "owner": "@compute-accounting",
-   "digest": "4ee126e92aa445a839ff4112ed600367a6c97e4f2871773597a0a2157143d9e5"
-  },
   "Accounting.Assumptions.TS.UnitFixed": {
    "owner": "@compute-accounting",
    "digest": "61adf5931691beff6fc2262a15fbc3222265629e661c621c463c73d1d9857ad2"
@@ -1499,6 +1495,10 @@
   "Verity.Declaration.Contains": {
    "owner": "@lean",
    "digest": "6c8b0ffd3222a58091c7755158d171c1f1f37b959832b0ad5b40c4452c431481"
+  },
+  "Accounting.TS.Tile.TileComputes": {
+   "owner": "@compute-accounting",
+   "digest": "d36460995eb7ebfb27b4153f8af96c75657bd0c2ef88a1732731c523c5c970c1"
   }
  },
  "meaning": [
@@ -16933,7 +16933,7 @@
     "Pouw.H1Zy.tree": "677732f45717b00fb99123b40db4956dd7150408066b58550b373adcde48ec1a",
     "Pouw.H1Zy.xor32": "d6ce246ad57b6fede7f8c1aca995c8419e158fa2541ae15ae7182d05e1611e50"
    },
-   "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
+   "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound", "Accounting.SecurityProofs.TS.TileSessionSound"]
   },
   "Definitions.Pouw.H1Zy.Lane": {
    "digest": "2611d48c7279c19121d11c957a2f044bfab85b509f4aed2945a30bdaae0e09cc",
@@ -16967,7 +16967,63 @@
     "Pouw.H1Zy.zyCell": "aa45e90d76d815de7693174a5f2fa6d949c180ff8a6157cafca061d41a214697",
     "Pouw.H1Zy.zyCheck": "8fda4c533dd9dfe16eafc42121c97bfa8336608d9ed4d5d7ad952b2763426411"
    },
-   "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
+   "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound", "Accounting.SecurityProofs.TS.TileSessionSound"]
+  },
+  "Definitions.Pouw.H1Zy.Tile": {
+   "digest": "92d9fd160cff81752f255afa89f39ec3f1dd1e8629ad11b168acdeb5af5e8d0f",
+   "definitions": {
+    "Pouw.H1Zy.TileForm": "958887ed86444d1a4f0be6a3e61ff113ea062815edc24890ea0a81f5ff5275ba",
+    "Pouw.H1Zy.TileForm.casesOn": "c12f6d406a1d0b4a02d3c72b07c7aa4f33d8ab774a7bdb39289f258d7437306e",
+    "Pouw.H1Zy.TileForm.exact": "a9cbcb4c8ee9e42806a6721c9affdaa00f5e6a39a0c619c8b81df76e3740a510",
+    "Pouw.H1Zy.TileForm.rec": "5680b57f17926100fa1654b1cbb2fe9bc48fa9fb57d3b6ec5709a10b1010cf91",
+    "Pouw.H1Zy.TileForm.stream": "71c82730b99a081286ab57dee1266eff673a34fa3ad4ea182acd0ffd95983934",
+    "Pouw.H1Zy.TileForm.z": "b65b9d00b200c65aaac89b0e86d14b8c691618f81a5c1d66340a07d38783c6ca",
+    "Pouw.H1Zy.TileIn": "a268bee3978cf840e6a1c1cb51116c35c49e38fa85531c35e7b05ee60247f360",
+    "Pouw.H1Zy.TileIn.a": "285e099f995df0d5fea6ecb1ff85f53c096085ea63ff5a83153da64bf2b572be",
+    "Pouw.H1Zy.TileIn.b": "2bf7b4bc108d218b197855461b6bd699e25a1d49bb959d63d6de430fe7f0d020",
+    "Pouw.H1Zy.TileIn.pub": "20e3b515860008c4da45183d5c271105d6281a102963b118935469367e0f45fe",
+    "Pouw.H1Zy.TileIn.sa": "489523a1b4ae8433b107c646f70efe0d121c36db16455b4fc50555633fa3fce0",
+    "Pouw.H1Zy.TileIn.sw": "f8da4ff76cb26d0e6f9ce3e3050633faa747f24a4a53b931b178e95f2ac9f2e6",
+    "Pouw.H1Zy.TileIn.yr": "b4660a4ac55911f435812eff2a08cda46a3844d16285f1d1dca4c4f75ad09947",
+    "Pouw.H1Zy.TileIn.zr": "80729c7a50c1ddd3786a7977db78389f58e68a48b24a42a7c13d9ff25cb70054",
+    "Pouw.H1Zy.TileNoise": "49cc8f1f96c58f411857f49fa9da773e325c467ab58d37c6bebf52a3b7fc5014",
+    "Pouw.H1Zy.TileNoise.bd": "8dd35edb165035970a3ccf4c157dbf7b3dc6be2945b37d58430cd853eda3d7c7",
+    "Pouw.H1Zy.TileNoise.cc": "a9e570372c76969d8df0d686b86909db820ee9ec45a643ebb7e1f91435952427",
+    "Pouw.H1Zy.TileNoise.ub": "8350a15f1f3df6b5ad36daad42844a2129284806290929a12e761cd8fd3b0f76",
+    "Pouw.H1Zy.TileNoise.zc": "81ad56260a6766d8d43f52b01c04e01a4f61fd8da4b2a312517c922515649dd2",
+    "Pouw.H1Zy.bitAt": "cb7967d8dc103d94f0845d1adba4b945195fe98bcc5a3244c97fe900cf6efddb",
+    "Pouw.H1Zy.digitHi": "1c006af7a8e51ec82c6a6b593e533e78c6f65c389c7731d7fb35efe893f1189f",
+    "Pouw.H1Zy.digitLo": "e1d5b9c16fde24547d543fe9e93970f7a4a861b212884725971a3157775986df",
+    "Pouw.H1Zy.digitOf": "0efbf1eb3bc501d800972492d5f262488e06831c2672be5f5b688118345d6f8d",
+    "Pouw.H1Zy.digitZ": "a2cbacc56da0880f90c88f0470478de1cc987fefd0cd0d1fbbcdc2faebe00a34",
+    "Pouw.H1Zy.digits": "1b2f555adf6c53d4bf759c64f42cffbcf2afdd335f8be197932066df3d77e258",
+    "Pouw.H1Zy.digitsFrom": "4fe4b5daf7763143e46af1e5e9867146855b0ad2e4d419d489ece75e34147672",
+    "Pouw.H1Zy.i8Add": "7205fe99ddbf19cc5b14dd14819937dab48bf82dbeb35271e4f1574f86c0f635",
+    "Pouw.H1Zy.i8AddBit": "4af0815754bc58a98905f328a7890b70a226ca0426b8178a4272ffb144acff8a",
+    "Pouw.H1Zy.i8Neg": "8db464d589d34c7899dceecbad742c49aac887ad2e2b5bf402d650b5e23c1e53",
+    "Pouw.H1Zy.low8": "93f75142ed32ccebf620001ccab9b3eccfc83d71a30bfeaca226ee00f7078f8a",
+    "Pouw.H1Zy.nDigits": "e03d6753a6641aae39ba0c28b9a70c20871640c3ab1bc33bdc06a547d3efbba2",
+    "Pouw.H1Zy.nDigits.go": "5032443ac49312c4f7765fef118b76bd40d14be72c7e0acbe56ae842c251149a",
+    "Pouw.H1Zy.oneStream": "20523aeb6959b5b4187bc9912ffddf55742f882ce67c64184a1eca6f08361378",
+    "Pouw.H1Zy.peelSeg": "c74ec393209d42cf49896431da00de3150714ed6f08e03864385ec2c97d2c33c",
+    "Pouw.H1Zy.resAdd": "4cb341b00813201ccaf678cc0f272963936070d589f77f54254788dde92e78ef",
+    "Pouw.H1Zy.resSum": "05e6316e4edb058cbed086b4c99fa6044e8d41811d8b7c8a90a53c30c1470b9b",
+    "Pouw.H1Zy.seg": "739d4118d1f7621ed67c7e0fec13e27627951e2c07a2167db1f20a6c79f8b8a4",
+    "Pouw.H1Zy.segDot": "196b5d9a2a96b6a42eee81437047a28d79f80a3aa991db288a9a51f4a1f5b53a",
+    "Pouw.H1Zy.segDot0": "f63549ee0a54514c456242acedf18c33fcf37ec63fac72d96d2728c798bd78aa",
+    "Pouw.H1Zy.segFold": "062d8c308bf636f60144f6bb541fb218f58c56563b968998c5e9eb93df6f00a6",
+    "Pouw.H1Zy.streamZ": "496aeac40f5594c512884d6b6c7ae28ed0a399411301282b7e30f3f9ac105783",
+    "Pouw.H1Zy.sx8": "592e3d43ae86ae7bd85893843461fc5b35b2aa6c4b8322940ee73b8abfcb1dcb",
+    "Pouw.H1Zy.tileOk": "e88dc4c61c132bf4b6d67f8c93f7858703be294ac6dba8b6e6ab1a86a8145e29",
+    "Pouw.H1Zy.u129": "32e05e0ed34f8ff93e8c6b5828b547696d78efb56ebf7130dd2640daf566ead2",
+    "Pouw.H1Zy.uOf": "b308f52b0bd3be084fb6da21dd7b23ce9c7642ea014f54012ea1cf372001feb0",
+    "Pouw.H1Zy.wOf": "5f97baa06e03407ae5e6a1d5cb8bdc73ffad7068c41a0599f0d1490cdcb09553",
+    "Pouw.H1Zy.wrapBits": "1bb6a0150a43986b7d54542fb47592bde0504a14e2f6710d473553bed36acbfc",
+    "Pouw.H1Zy.wrapSeg": "ab6ba95b83c5a7f4ee7748a42b0118913535d5cf93480447bc34f0b1fd656a26",
+    "Pouw.H1Zy.xOf": "e218adcb55a40baab4aacc12ae3b8e6ebcccb02155ebc2400d8af520b8ac1111",
+    "Pouw.H1Zy.xWrap": "3e29d2d43392e51bad516f5a0e7218fff20c6bbb408530a9aba7b9d92e51188c"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
   },
   "Definitions.Pouw.NCP.Defs": {
    "digest": "fd33ddeafe6707fe1d42440a3e4fff7af45690182c74f2fa36ff449c685c262a",
@@ -28341,7 +28397,7 @@
     "Accounting.TS.Lanes.laneIn": "decf805e2852beb6535b10f4298068ddb72b1de367ecd8bb79a4b48f578f8876",
     "Accounting.TS.Lanes.partOf": "46eebd844cc82479ab23747b04997d5dc6a99f66f4b75efbc2b433d091846d98"
    },
-   "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
+   "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound", "Accounting.SecurityProofs.TS.TileSessionSound"]
   },
   "Proofs.Accounting.TS.Session.Lanes.Layer": {
    "digest": "04f23ae085c2a8e3b794e67367d91bd73926102fe1b1320a43b1f701933c2aca",
@@ -28388,17 +28444,18 @@
    },
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
-  "Proofs.Accounting.TS.Session.Tile.Assumptions": {
-   "digest": "e25748d622db2603a44112158e86897111711e197e1dfa5c2dea5460d9cb6786",
+  "Proofs.Accounting.TS.Session.Tile.Computes": {
+   "digest": "4d8e4585efb817246a78e81ac00b79355580e5554be069776c6c337bb12835d0",
    "definitions": {
-    "Accounting.Assumptions.TS.TileChecks": "4ee126e92aa445a839ff4112ed600367a6c97e4f2871773597a0a2157143d9e5"
+    "Accounting.TS.Tile.TileComputes": "d36460995eb7ebfb27b4153f8af96c75657bd0c2ef88a1732731c523c5c970c1",
+    "Accounting.TS.Tile.tileView": "8be75a43a7028341d860d9a20816c23b346eb9df52bfba44e9181f7ada9bf3dc"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
   },
   "Proofs.Accounting.TS.Session.Tile.Guarantees": {
-   "digest": "ecb0213094d72459c7d014ab6acc6e67f95b3e8b32031fa90d3bd6b57926419d",
+   "digest": "2b3c9227f8851a32689115d7d059ec34f7810e45e34faad9a52225a009265ad5",
    "definitions": {
-    "Accounting.Guarantees.TS.TileSessionSound": "c64e2962ad9ea6f9a2c2e76102901e6549cbc3a0de263c90732036b3143aea6b"
+    "Accounting.Guarantees.TS.TileSessionSound": "7f9178e66e7a823a3acd4480720a3102a9bed253dfdf46901464d7694d937f80"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
   },
