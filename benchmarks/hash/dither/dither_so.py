@@ -355,7 +355,7 @@ class SoWindow(DO.Window):
         if self.rs_waited[e]:
             ph["units_wait_ms"] = ev["w0"][e].elapsed_time(ev["w1"][e])
         p = (s - 1) % RS_EV
-        if self.rs_h_of[p] == s - 1:
+        if s > 0 and self.rs_h_of[p] == s - 1:
             # step s's join: forward s - 1's end to the serving stream at step s (step s - 1's sampling and the host's
             # step s up to its inputs), and round s - 1's end to forward s's start
             ph["serve_ready_ms"] = ev["f"][p].elapsed_time(ev["h"][p])
