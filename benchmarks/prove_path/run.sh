@@ -46,10 +46,12 @@ from verity_proof_throughput.store import store_env
 os.execvpe(sys.executable, [sys.executable, "-m", "research", *sys.argv[1:]], store_env())' "$@"; }
 if [ -n "${PP_LLAMA:-}" ]; then   # the row dir: the sealed bundle, the Commit's records, the Build's Programs and manifest
   D=${PP_CACHE:-$HOME/.cache/verity-prove-path}/${PP_LLAMA:4:16}
-  if [ ! -e $D.done ]; then
-    ( rm -rf $D && mkdir -p $D && R data fetch $PP_LLAMA --to $D --path commit/replay_bundle_p0 --path commit/verdict.json \
-        --path commit/runs.jsonl --path commit/versions.json --path commit/binding_map_p0.json --path commit/sampled_replay_p0.json \
-        --path commit/steps.jsonl --path 'build_*' --path manifest.json --path config_record.json && touch $D.done ) > $O/fetch.log 2>&1 &
+  if [ ! -e $D.done ]; then   # under the node's lock on $D: two runs fetching at once would remove each other's files
+    mkdir -p ${D%/*}
+    ( flock 9 && { [ -e $D.done ] || { rm -rf $D && mkdir -p $D && R data fetch $PP_LLAMA --to $D --path commit/replay_bundle_p0 \
+        --path commit/verdict.json --path commit/runs.jsonl --path commit/versions.json --path commit/binding_map_p0.json \
+        --path commit/sampled_replay_p0.json --path commit/steps.jsonl --path 'build_*' --path manifest.json \
+        --path config_record.json && touch $D.done; }; } ) 9>$D.lock > $O/fetch.log 2>&1 &
     FETCH=$!
   fi
 fi
