@@ -75,19 +75,26 @@ A spec-level reference for network accounting's timing channel:
   windows join by equal openings and the session starts from the empty rows under public salts (`check_chain`). Its
   cost at a shape is `size`;
 - the compile slice (`compile_slice`): `CompileSlice_v1`, a Boolean Definition with `check` its reference, composes
-  `ReplayLoad`, `ReplayStep_v1` and `ReplayAdvance` on shared wires, and the encoder over the scan's asks, for one
-  window. It holds the coded length to the declared charge and the step rows to its committed ``srv`` row, the served
-  rows. The cache counts are a stand-in held at 0 (`PROTOCOL.md`, "The compile slice"), and
+  `ReplayLoad`, `ReplayStep_v1` and `ReplayAdvance` on shared wires, `CacheStep_v1`'s calls on the certified tokens
+  checking the hits `ReplayStep_v1` reads, and the encoder over the scan's asks, for one window. It holds the coded
+  length to the declared charge and the step rows to its committed ``srv`` row, the served rows. The evictable and
+  returned counts are a stand-in held at 0 (`PROTOCOL.md`, "The compile slice"), and
   `benchmarks/network_traces/compile_slice_zk.py` proves it in zero knowledge. It takes the circuits and their
   evaluator from `verity`;
 - the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
   draw under the run root as an hm96 row registration, a window's row the slice's ``srv`` row. `leaf_ok` holds a unit's
   ``srv`` b‖c to its registered leaf, as the advice's ``adv`` row is held. It takes the advice registration's hm96 rows
   from `verity`;
+- the served rows' tie (`served_tie`): `ServedRowsTie_v1`, a Boolean Definition with `check` its reference, holds a
+  window's served rows to the positions its steps' Commit holds (the step-input port, `port_chunks`: each step's ids and
+  then its positions at the head of its stream), so the rows registered at serve time are the batch the server ran. Every
+  unit is proved, and its port, selection and cost are its docstring. It takes the circuits, their evaluator and the
+  hm96 leaves from `verity`;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
   buckets before;
 - the prefix cache (`cache_step`): `CacheStep_v1`, a Boolean Definition of one scheduled row's pass over a table of
-  whole cached units, which checks the row's hit (the longest cached prefix while no block can have been evicted, a
+  whole cached units (an engine step's calls are `scan_step` and, as a circuit, `build_scan_step`), which checks the
+  row's hit (the longest cached prefix while no block can have been evicted, a
   cached prefix past that) and owns or appends the units the row computes (`PROTOCOL.md`, "Advice v1"). It takes the
   circuits and their evaluator from `verity`;
 - advice v1's arithmetic encoder (`arith_encode`), Boolean Definitions each with its reference as spec. The counting

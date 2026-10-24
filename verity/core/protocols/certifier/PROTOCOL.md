@@ -1760,13 +1760,16 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
 
 ## The compile slice (`compile_slice`)
 
-`CompileSlice_v1` is the compile unit's pieces ("Advice v1" above) composed whole for one window. Its circuit, verdict
-flags, reference (`check`), stand-ins (the cache counts held at 0 among them) and REDTEAM's phase 9 cases (`phase9`)
-are `compile_slice`'s docstring. Its step rows are held to the committed ``srv`` row, which the verifier holds by b‖c
-to the served rows the Commit side registers before the draw (`served_rows`), so REDTEAM phase 10's six passes are
-refused. `benchmarks/network_traces/compile_slice_zk.py` proves eleven units of corpus-smallkv's first seven steps
-`--zk`, held by Lean `verify --zk` (run r20261024-153220-c97c): the honest one, three negatives, phase 9's five and the six passes
-with the served row and with its own, each opening to its verdict, with no witness piece in what the verifier received.
+`CompileSlice_v1` is the compile unit's pieces ("Advice v1" above) composed whole for one window, each hit
+ReplayStep_v1 reads derived by `CacheStep_v1`'s calls on the certified tokens from the empty cache. Its circuit, verdict
+flags, reference (`check`), stand-ins and REDTEAM's phase 9 cases (`phase9`) are `compile_slice`'s docstring. Its step
+rows are held to the committed ``srv`` row, which the verifier holds by b‖c to the served rows the Commit side
+registers before the draw (`served_rows`), so REDTEAM phase 10's six passes are refused.
+`benchmarks/network_traces/compile_slice_zk.py` proves it `--zk`, held by Lean `verify --zk`, each unit opening to its
+verdict with no witness piece in what the verifier received: at the demonstration class (`compile_slice.demo`, 49,113
+ANDs a unit), the honest unit and ten negatives, the made-up table refused by ``cache`` alone (run
+r20261024-162328-03c7); before the cache was wired, eleven units of corpus-smallkv's first seven steps, the six passes
+with the served row and with its own among them (run r20261024-153220-c97c).
 
 ## The active certifier (`active`)
 
@@ -2258,11 +2261,12 @@ and seven lemmas, and three more proved lemmas:
     `check_chain` accepts it, and refuses a short window, the empty state or window under a fresh salt or another
     program's, the carried state or window under a fresh salt, and another row of the last window;
   - `size` is the parts' AND counts, which circuit-check pins at the tests' shape and at the sync KV-pressure trace's;
-- **`test_network_certifier_compile_slice.py`:** the compile slice's scan is the replay's, and the circuit's verdict
-  is `check`'s on the honest rows, four negatives and REDTEAM's phase 9 choices, each refused by exactly the checks
-  `check` names; `codeword` is the encoder's, and `size` is pinned;
+- **`test_network_certifier_compile_slice.py`:** the corpus slice's scan is the replay's (every hit 0), and its
+  negatives, a made-up table and tokens among them, fail exactly `check`'s checks; the circuit is `check` on the
+  demonstration slice with real hits; `codeword` is the encoder's, and `size` is pinned;
 - **`test_network_certifier_served_rows.py`:** the runner's rows are the slice's ``srv`` row, REDTEAM phase 10's six
   passes are refused at ``rows`` with the registered row and their own row isn't its leaf, and the record is public only;
+- **`test_network_certifier_cache_step_phase9.py`:** REDTEAM's: `CacheStep_v1` alone leaves the table and tokens free;
 - **`test_network_certifier_active.py`:** the active certifier over localhost sockets on an injected clock:
   - `Shaper` is `run_shaper`'s rule on random instances;
   - an honest run's records, hand times and wire are the Program's, accepted raw and committed;
