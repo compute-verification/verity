@@ -174,7 +174,7 @@ theorem deployCols_runR (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
     rw [← Claims.Recursion.take_eq_range_getD _ hol.ge, List.take_of_length_le hol.le]
   have hans : (bdR rel rd wE join rowIn final w).ansAt x r ((FlockDeploy.V false).k x - 1) = .acc := by
     unfold Claims.Recursion.Bound.ansAt
-    rw [hDk, if_neg (show ¬ ((FlockDeploy.V false).k x - 1 + 1 < (FlockDeploy.V false).k x) by omega)]
+    rw [hDk, ite_eq_right (show ¬ ((FlockDeploy.V false).k x - 1 + 1 < (FlockDeploy.V false).k x) by omega)]
   have hacc' := (hstep ((FlockDeploy.V false).k x - 1) (by omega)).1
   rw [Nat.sub_add_cancel (by omega : 1 ≤ (FlockDeploy.V false).k x), hms, hans] at hacc'
   refine ⟨os, last, hf, hacc', ?_⟩
@@ -191,11 +191,11 @@ theorem deployCols_runR (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
     congr 1
     · refine List.map_congr_left fun i hi => ?_
       rw [List.mem_range] at hi
+      have hc : outCoin (.msg (Claims.coinSeq r i).bytes) = Claims.coinSeq r i := RecDeploy.coinOf_bytes _
       simp only [Function.comp_apply, Claims.Recursion.Bound.ansAt, hDk,
-        show i + 1 < (FlockDeploy.V false).k x by omega, ↓reduceIte]
-      exact RecDeploy.coinOf_bytes _
-    · simp only [Function.comp_apply, Claims.Recursion.Bound.ansAt, hDk,
-        show ¬ (n + 1 < (FlockDeploy.V false).k x) by omega, ↓reduceIte, hacc0]
+        show i + 1 < (FlockDeploy.V false).k x by omega, ↓reduceIte, RecDeploy.bdDeployed_ans, hc]
+    · simp only [Claims.Recursion.Bound.ansAt, hDk, show ¬ (n + 1 < (FlockDeploy.V false).k x) by omega, ↓reduceIte,
+        hacc0]
 
 /-- **An accepted run of the deployment gives the verdict at the draw, at its deployed columns**: on a run `IVStar` of
 `bdR` accepts at SHA-512, at any prover, `nextR rd` decides on the opened messages at the run's coins, and wherever the
