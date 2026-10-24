@@ -20,8 +20,10 @@ its finish gives v1's charge), and the book's model (`BookKT_v1`) at each bit. `
 replay's step traces in `tests/fixtures` (`test_v1`'s, at T = 20, so they span windows) and the TRACE-CORPUS fixture's
 fields, and `--fixture PATH` writes them as the vectors the certifier's test reads
 (`verity/core/protocols/certifier/tests/fixtures/arith_encode_vectors.json`). LABEL=DIR are TRACE-CORPUS traces
-(`replay.read_corpus_trace`, the warden's ingress; `derived.load_corpus_trace`). The report has each stream's shape:
-symbols, segment bits and scalings per window, which is what the circuit's cost reads.
+(`replay.read_corpus_trace`; `derived.load_corpus_trace`), each read twice: with the warden's ingress, where the
+arrivals are in release order, and with the client's send standing for the release, as v1's own table reads them,
+where they deviate and v1 sends order entries. The fixtures' arrivals never deviate. The report has each stream's
+shape: symbols, segment bits and scalings per window, which is what the circuit's cost reads.
 """
 from __future__ import annotations
 
@@ -286,7 +288,9 @@ def sources(corpus: Sequence[str], steps: bool, stops: Sequence[int], T: int) ->
             FIXTURES / "corpus-smallkv", eos_token_id=128009, stop_token_ids=(128001, 128008)))
     for spec in corpus:
         label, d = spec.split("=", 1)
-        yield f"{label} (decisions, T={T})", lambda d=d: decisions(R.read_corpus_trace(d, ingress="warden"), stops, T=T)
+        for ingress in ("warden", "client"):
+            yield f"{label} (decisions, T={T}, {ingress})", lambda d=d, ingress=ingress: decisions(
+                R.read_corpus_trace(d, ingress=ingress), stops, T=T)
         yield f"{label} (fields)", lambda d=d: fields(D.load_corpus_trace(d, eos_token_id=stops[0],
                                                                           stop_token_ids=tuple(stops[1:])))
 
