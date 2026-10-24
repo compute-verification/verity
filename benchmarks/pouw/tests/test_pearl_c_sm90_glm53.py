@@ -39,27 +39,32 @@ def test_linears_are_one_tp8_ranks():
 
 
 def test_domain_refuses_the_short_k_and_narrow_n():
-    """k = 256 and 512 are under the record's k ≥ 1,024; n = 160 is not a multiple of 64.  Every other linear is in, with γ
-    at both FADD readings, the data sheet's (cheaper add) a little above the record's, and γ falling with n."""
+    """k = 256 and 512 are under the record's k ≥ 1,024; n = 512 is under the domain's n ≥ 1,024 (Lean's
+    `pearlCDomainDev`); n = 160 is not a multiple of 64.  Every other linear is in, with γ at both FADD readings, the data
+    sheet's (cheaper add) a little above the record's, and γ falling with n."""
     rows = {r["name"]: r for r in G.table()}
     refused = {name for name, r in rows.items() if r["refused"]}
+    narrow = {"mlp.shared_experts.gate_up_proj", "mlp.experts.w13"}
     assert refused == {"self_attn.kv_b_proj", "self_attn.indexer.wk_weights_proj", "mlp.shared_experts.down_proj",
-                       "mlp.experts.w2"}
-    assert all("1024 <= k" in rows[x]["refused"][0] for x in refused - {"self_attn.indexer.wk_weights_proj"})
+                       "mlp.experts.w2"} | narrow
+    assert all("1024 <= k" in rows[x]["refused"][0] for x in refused - narrow - {"self_attn.indexer.wk_weights_proj"})
+    assert all("n < 1024" in rows[x]["refused"][0] for x in narrow)
     assert "n of 64" in rows["self_attn.indexer.wk_weights_proj"]["refused"][0]
     for name, r in rows.items():
         if name not in refused:
             assert 0 < r["gamma"]["record"] < r["gamma"]["sheet"] < 0.011, name
-    assert rows["mlp.experts.w13"]["gamma"]["record"] > rows["self_attn.o_proj"]["gamma"]["record"]
+    assert rows["self_attn.indexer.wq_b"]["gamma"]["record"] > rows["self_attn.o_proj"]["gamma"]["record"]
 
 
 def test_expert_parallel_brings_the_experts_into_the_domain():
     """With the routed experts expert-parallel (EP = TP = 8) a rank holds 32 whole experts, w13 (4096, 6144) and w2
-    (6144, 2048), both in the domain; the shared expert stays sharded, its down at k = 256 refused."""
+    (6144, 2048), both in the domain; the shared expert stays sharded, its gate-up at n = 512 and its down at k = 256
+    refused."""
     rows = {r["name"]: r for r in G.table(ep=True)}
     assert {x: (rows[x]["n"], rows[x]["k"]) for x in ("mlp.experts.w13", "mlp.experts.w2")} == {
         "mlp.experts.w13": (4096, 6144), "mlp.experts.w2": (6144, 2048)}
     assert {x for x, r in rows.items() if r["refused"]} == {"self_attn.kv_b_proj", "self_attn.indexer.wk_weights_proj",
+                                                            "mlp.shared_experts.gate_up_proj",
                                                             "mlp.shared_experts.down_proj"}
     shapes = G.in_domain()
     assert (4096, 6144) in shapes and shapes[(4096, 6144)]["ep"] and not shapes[(6144, 2048)]["ep"]
