@@ -5,8 +5,13 @@ the shared harness (`benchmarks/harness`): throughput, time to first token, and 
 and batch, under continuous batching with staggered arrivals, greedy and seeded stochastic.
 
 - `arm.py`: the two Commit arms, `served-commit` (values retained in host memory, each run's linkage checked) and
-  `served-commit-noretain` (authentication state only; openings by replay), both on the collector's default staging. Its
-  docstring has what a run does, and which runs its gate accepts without a root (declared warm-ups, named in the verdict).
+  `served-commit-noretain` (authentication state only; openings by replay), both on the collector's default staging and
+  committing `vllm-v1` by name, the record before the Commit's default became `rows-sha512` (which `prof_arm.py`'s rows arms
+  and the harness's `commit` arms measure). Its docstring has what a run does, and which runs its gate accepts without a root
+  (declared warm-ups, named in the verdict).
+- `served_arm.py` and `served_arm.sh`: G2's served arm, the Commit at 4 KiB rows against compiled and eager stock in one run
+  (the specs `*-rtx-served-arm`), which `benchmarks/g2/served.py` renders. With `PIN_BUILD` (a Build of record's
+  `build.json`) every arm compiles the Build's kernels and `out/pin_check.txt` says so, which a counted compiled ratio needs.
 - `run.sh`: `verity bench served_commit`, one spec's sweep in one process. Its header has the recorded form.
 - Measurement: `prof.sh` runs a sweep with the arms of `prof_arm.py` (roots and plans per run, native drain, rows-sha512,
   serving on a high-priority stream over the worker's hashing, the finalize profile, NVTX ranges; `-base` and `-batch`

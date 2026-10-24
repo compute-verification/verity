@@ -1196,6 +1196,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                         st = getattr(so, "sampled_token_ids", None)
                         if isinstance(st, torch.Tensor) and st.device.type == "cuda":
                             me._acquire("runner.sampler/sampled_token_ids", st, job)
+                            for s in (s for s in me.sources if hasattr(s, "on_sample")):   # a source of the draw's inputs (served_record)
+                                s.on_sample(a[1] if len(a) > 1 else kw.get("input_batch"), int(st.shape[0]), job)
                     except Exception as e:  # noqa: BLE001
                         me.errors.append(f"sampler acquire: {e!r}"[:200])
                     me._end_step()
