@@ -181,6 +181,9 @@ DEAD_ONCE_ENV = "DITHER_DEAD_ONCE"
 # leaves them each step) take their x from one hash of such a row and hash no segments, against the step's live flags
 # repeated a call (`a_live`, set in `before`); the same leaves and roots (dither_a's DITHER_ZDEAD for the A tables)
 ADEAD_ENV = "DITHER_SO_ADEAD"
+# "1": a step's inputs written from pinned host memory without a wait (`_put`), as under RS_ENV: the serving stream
+# orders them after step s - 1's trees, lm_head and sampler, so the host launches forward s while the sampler runs
+PUT_ASYNC_ENV = "DITHER_SO_PUT_ASYNC"
 
 
 def end_steps(depth: int) -> int:
@@ -246,6 +249,7 @@ class SoWindow(DO.Window):
         if self.dead_once and self.overlap:
             raise RuntimeError(f"{DEAD_ONCE_ENV}=1 serves an -so arm without -ov")
         self.clean_from: int | None = None
+        self.put_async = os.environ.get(PUT_ASYNC_ENV) == "1"
         self.a_live: torch.Tensor | None = None
         if os.environ.get(ADEAD_ENV) == "1" and not self.a_step:
             raise RuntimeError(f"{ADEAD_ENV}=1 needs {DO.A_STEP_ENV}=1")
@@ -363,7 +367,7 @@ class SoWindow(DO.Window):
             self.rs_cv.notify_all()
 
     def _put(self, dst: torch.Tensor, src: torch.Tensor) -> None:
-        if self.rs:
+        if self.rs or self.put_async:
             dst.copy_(src.pin_memory(), non_blocking=True)
         else:
             super()._put(dst, src)
@@ -1004,6 +1008,7 @@ class SoWindow(DO.Window):
                      "window_end": self.end_stats(), "round_stream": self.rs,
                      "round_stream_priority": self.rs_stream.priority if self.rs else None,
                      "dead_once": self.dead_once, "a_dead_rows_x_once": self.a_live is not None,
+                     "put_async": self.put_async,
                      "serving_stream_priority": torch.cuda.current_stream().priority,
                      "units_stream_priority": DA.SIDE[0].side.priority if DA.SIDE else None}
         if ov is not None:
