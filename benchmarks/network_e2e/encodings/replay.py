@@ -844,20 +844,26 @@ class Trace:
             return self.output_t
         return [[self.release_t[s] for s in ks] for ks in self.kept_steps()]  # type: ignore[misc]
 
+    def origin(self, bucket_s: float) -> int:
+        """The session's first bucket, its earliest ingress's, which the certified record's buckets count from (ADV-SPEC's
+        session-global buckets); 0 without a clock."""
+        return min(bucket(t, bucket_s) for t in self.ingress_t) if self.clocked() else 0  # type: ignore[arg-type]
+
     def certified(self, bucket_s: float = 0.1) -> Certified:
         """What the verifier holds of this run without advice (`Certified`)."""
         if not self.clocked():
             return Certified(self.engine, list(self.requests), bucket_s, None, None)
+        o = self.origin(bucket_s)
         return Certified(self.engine, list(self.requests), bucket_s,
-                         [bucket(t, bucket_s) for t in self.ingress_t],                                  # type: ignore[arg-type]
-                         [[bucket(t, bucket_s) for t in ts] for ts in self.output_times()])
+                         [bucket(t, bucket_s) - o for t in self.ingress_t],                              # type: ignore[arg-type]
+                         [[bucket(t, bucket_s) - o for t in ts] for ts in self.output_times()])
 
 
 @dataclass(frozen=True)
 class Certified:
     """What the verifier holds without advice: the registered engine, each request's certified I/O in the order it reached
-    the engine, and, with a clock, each request's ingress bucket and the bucket each of its kept outputs left in. The
-    decoder reads nothing else."""
+    the engine, and, with a clock, each request's ingress bucket and the bucket each of its kept outputs left in, counted
+    from the session's first (`Trace.origin`). The decoder reads nothing else."""
 
     engine: Engine
     requests: list[RequestIO]
@@ -1262,8 +1268,9 @@ def windows(trace: Trace, *, bucket_s: float, window_buckets: int) -> tuple[list
     clock."""
     if not trace.clocked():
         return [0] * len(trace.requests), [0] * len(trace.steps)
-    return ([bucket(t, bucket_s) // window_buckets for t in trace.ingress_t],         # type: ignore[arg-type]
-            [bucket(t, bucket_s) // window_buckets for t in trace.release_t])         # type: ignore[arg-type]
+    o = trace.origin(bucket_s)
+    return ([(bucket(t, bucket_s) - o) // window_buckets for t in trace.ingress_t],   # type: ignore[arg-type]
+            [(bucket(t, bucket_s) - o) // window_buckets for t in trace.release_t])   # type: ignore[arg-type]
 
 
 @dataclass
@@ -1395,7 +1402,7 @@ def v0_advice(trace: Trace, v0: Any, *, bucket_s: float = 0.1) -> Any:
     reqs = tuple(v0.RequestAdvice(id=trace.ids[i], prompt_len=trace.requests[i].prompt_len,
                                   output_len=trace.requests[i].output_len, finish="eos" if trace.requests[i].eos else "length")
                  for i in order)
-    kept, times = trace.kept_steps(), trace.output_times()
+    kept, times, o = trace.kept_steps(), trace.output_times(), trace.origin(bucket_s)
     steps, release, at = [], [], [0] * len(reqs)
     for s, (st, mine) in enumerate(zip(trace.steps, rp.steps)):
         rows = []
@@ -1407,9 +1414,26 @@ def v0_advice(trace: Trace, v0: Any, *, bucket_s: float = 0.1) -> Any:
             if at[i] < len(kept[i]) and kept[i][at[i]] == s:
                 t = times[i][at[i]]
                 at[i] += 1
-                release.append(0 if t is None else bucket(t, bucket_s))
+                release.append(0 if t is None else bucket(t, bucket_s) - o)
         steps.append(v0.StepAdvice(rows=tuple(rows)))
     return v0.Advice(requests=reqs, steps=tuple(steps), release=tuple(release))
+
+
+def v0_parts(v0: Any, adv: Any) -> dict[str, int] | None:
+    """I1 v0's bits by record (`header`, `requests`, `steps`, `release`), from ADV-SPEC's layout (`_layout`, None without
+    one). The residual advice replaces only the step records: the verifier reads the rest from the certified record."""
+    layout = getattr(v0, "_layout", None)
+    if layout is None:
+        return None
+    lay = layout(adv)
+    return {"header": lay.header, "requests": sum(lay.requests), "steps": sum(lay.steps),
+            "release": lay.release * len(adv.release)}
+
+
+def framed_bits(n: int) -> int:
+    """A window's residual of `n` bits with ADV-SPEC's `uvar` length prefix (a u6 width, then the length), for a transport
+    that doesn't frame windows."""
+    return n + 6 + n.bit_length()
 
 
 def table(trace: Trace, *, bucket_s: float = 0.1, window_buckets: int = 600, v0: Any = None) -> dict[str, Any]:
@@ -1417,7 +1441,8 @@ def table(trace: Trace, *, bucket_s: float = 0.1, window_buckets: int = 600, v0:
     `v0_widths`), the steps the replay matched, and the residual advice's bits under each code (Elias gamma; the adaptive
     code, unclocked and clocked), each code checked by decoding it back to the trace's steps."""
     truth = replay(trace.engine, trace.requests, admit=trace.before_step)
-    charge = v0.bits_by_window(v0_advice(trace, v0, bucket_s=bucket_s), window_buckets) if v0 is not None else None
+    adv = v0_advice(trace, v0, bucket_s=bucket_s) if v0 is not None else None
+    charge = v0.bits_by_window(adv, window_buckets) if adv is not None else None
     ds, rp = decisions(trace)
     g = gamma_values(rp)
     codes = {"adaptive" if c == "plain" else f"adaptive_{c}": encode(trace, contexts=c, bucket_s=bucket_s,
@@ -1443,7 +1468,8 @@ def table(trace: Trace, *, bucket_s: float = 0.1, window_buckets: int = 600, v0:
         rows.append(row)
     return {"engine": dict(trace.engine.__dict__), "requests": len(trace.requests), "steps": len(trace.steps),
             "match_before_step": compare(truth.steps, trace.steps).__dict__, "decoded": decoded,
-            "v0": "advice.bits_by_window" if charge is not None else {"widths": v0w}, "bucket_s": bucket_s,
+            "v0": "advice.bits_by_window" if charge is not None else {"widths": v0w},
+            "v0_parts": v0_parts(v0, adv) if adv is not None else None, "bucket_s": bucket_s,
             "window_buckets": window_buckets, "windows": rows, "order_bits": round(order_bits(trace), 2),
             "passed": [x for x in g if x is not None]}
 
@@ -1491,8 +1517,9 @@ def main(argv: Sequence[str] | None = None) -> None:
     a = ap.parse_args(argv)
     v0 = load_v0(a.v0)
     out: dict[str, Any] = {}
-    print("| trace | requests | steps | replay matched | I1 v0 bits | gamma | adaptive | adaptive clocked | adaptive egress "
-          "| best bits/request | order bits |\n|---|---|---|---|---|---|---|---|---|---|---|")
+    per_window = []
+    print("| trace | requests | steps | replay matched | I1 v0 bits | v0 step records | gamma | adaptive | adaptive clocked "
+          "| adaptive egress | best bits/request | order bits |\n|---|---|---|---|---|---|---|---|---|---|---|---|")
     for p in a.traces:
         name = p.stem if p.is_file() else f"{p.resolve().parent.name}/{p.name}"
         tr = read_any(p, egress=a.egress)
@@ -1506,14 +1533,22 @@ def main(argv: Sequence[str] | None = None) -> None:
             except (ValueError, RuntimeError) as e2:
                 where, match = f"replay refused: {e2}", {"error": str(e2)}
             out[name] = {"error": str(e), "requests": len(tr.requests), "steps": len(tr.steps), "match_before_step": match}
-            print(f"| {name} | {len(tr.requests)} | {len(tr.steps)} | {where} | {e} |" + " |" * 6, flush=True)
+            print(f"| {name} | {len(tr.requests)} | {len(tr.steps)} | {where} | {e} |" + " |" * 7, flush=True)
             continue
         s = {k: sum(w[k] for w in tb["windows"] if w.get(k) is not None) for k in tb["windows"][0]}
         m = tb["match_before_step"]
         best = min(s[k] for k in ("adaptive_bits", "adaptive_clocked_bits", "adaptive_egress_bits") if k in s)
+        steps = tb["v0_parts"]["steps"] if tb["v0_parts"] else "-"
         print(f"| {name} | {tb['requests']} | {tb['steps']} | {m['matched']}/{m['steps']} | "
-              f"{s['v0_bits']} | {s['gamma_bits']} | {s['adaptive_bits']} | {s.get('adaptive_clocked_bits', '-')} | "
+              f"{s['v0_bits']} | {steps} | {s['gamma_bits']} | {s['adaptive_bits']} | {s.get('adaptive_clocked_bits', '-')} | "
               f"{s.get('adaptive_egress_bits', '-')} | {best / max(tb['requests'], 1):.2f} | {tb['order_bits']} |", flush=True)
+        code = "adaptive_egress_bits" if "adaptive_egress_bits" in s else "adaptive_bits"
+        for w in tb["windows"]:
+            per_window.append(f"| {name} | {w['window']} | {w['requests']} | {w['steps']} | {w['matched']}/{w['steps']} | "
+                              f"{w['decisions']} | {w['forced']} | {w['v0_bits']} | {w[code]} | {framed_bits(w[code])} |")
+    print("\n| trace | window | requests | steps | replay matched | decisions | forced | I1 v0 bits | residual bits "
+          "| residual framed |\n|---|---|---|---|---|---|---|---|---|---|")
+    print("\n".join(per_window))
     if a.out:
         a.out.write_text(json.dumps(out, indent=1))
 

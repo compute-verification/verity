@@ -168,6 +168,7 @@ def test_reads_a_trace_corpus_trace(tmp_path):
     d = corpus_dir(t, tmp_path)
     c = R.read_corpus_trace(d)
     assert c.engine == t.engine and c.ids == t.ids and len(c.steps) == len(t.steps)
+    assert min(c.certified().ingress) == 0
     rp = R.replay(c.engine, c.requests, admit=c.before_step)
     assert R.compare(rp.steps, c.steps).ordered == len(t.steps)
     client = R.read_corpus_trace(d, egress="client")
@@ -186,7 +187,7 @@ def test_order_bits_charge_only_reordering():
     assert R.order_bits(t) > 0.5 * R.math.log2(n) + 1 + R.gamma_bits(n - 1)
 
 
-def test_v0_advice_is_valid_advice_v0():
+def test_v0_advice_is_valid_advice_v0(tmp_path):
     v0 = R.load_v0(os.environ.get("VERITY_ENCODINGS_ADVICE_V0"))
     if v0 is None:
         pytest.skip(f"ADV-SPEC's advice v0 isn't at {R.V0_PATH} (VERITY_ENCODINGS_ADVICE_V0: a path to its advice.py)")
@@ -194,6 +195,9 @@ def test_v0_advice_is_valid_advice_v0():
         t = trace(name)
         adv = R.v0_advice(t, v0)
         assert len(adv.steps) == len(t.steps) and len(adv.release) == sum(r.output_len for r in t.requests)
+        assert sum(R.v0_parts(v0, adv).values()) == v0.total_bits(adv)
+    c = R.read_corpus_trace(corpus_dir(trace("sync-kv-pressure"), tmp_path))
+    assert sorted(R.v0_advice(c, v0).release) == sorted(b for bs in c.certified().release for b in bs)
 
 
 def test_arrivals_into_a_quiet_engine_cost_nothing():
