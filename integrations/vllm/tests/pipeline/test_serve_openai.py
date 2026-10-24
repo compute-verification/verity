@@ -15,6 +15,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.pipeline import cli
+from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
 
 CERTIFIER_BODY = {"model": "m", "prompt": [128000, 791, 4062], "max_tokens": 4, "min_tokens": 4, "stream": True,
@@ -89,8 +90,13 @@ def test_plain_frames_agree_with_vllm():
 
 
 def test_command_is_registered():
-    opts = cli.parse("serve-openai", ["--out", "/tmp/x", "--no-commit", "--port", "0"], environ={})
+    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", "/tmp/x", "--no-commit", "--port", "0"], environ={})
     assert (opts.port, opts.commit, opts.precision, opts.window_steps) == (0, False, "int8_exact", 64)
+    assert (opts.protocol, opts.run_id, opts.hf_home) == ("vllm", "local", None)
+    env = cli.parse("serve-openai", ["--model", "m", "--revision", "r"], environ={"RESEARCH_RUN_ID": "r1", "HF_HOME": "/h"})
+    assert (env.run_id, env.hf_home) == ("r1", "/h")
+    with pytest.raises(SystemExit):
+        cli.parse("serve-openai", ["--out", "/tmp/x"], environ={})
     assert so.engine_options(opts)["quantization"] == "verity_int8" and so.engine_options(opts)["attention_backend"] == "CUSTOM"
 
 
@@ -182,7 +188,7 @@ class Committer:
             if self.flip and self.flip[0] == self._step_index - 1:
                 vals[self.flip[1]] += 1
                 self.flip = None
-            self._commit(so.SAMPLED_NAME, vals, "int32")
+            self._commit(sc.SAMPLED_NAME, vals, "int32")
             return orig_sample(sampled)
 
         self.runner.execute_model, self.runner.sample = execute_model, sample
@@ -209,7 +215,7 @@ class Serving:
     def __init__(self, out: Path, *, commit: bool = True, flip: tuple[int, int] | None = None, window_steps: int = 64,
                  force_include_usage: bool = True) -> None:
         self.runner = Runner()
-        self.windows = so.CommitWindows(Committer(self.runner, flip), self.runner, out, run_id="t", window_steps=window_steps) if commit else None
+        self.windows = sc.CommitWindows(Committer(self.runner, flip), self.runner, out, run_id="t", window_steps=window_steps) if commit else None
         self.loop = so.EngineLoop(Engine(self.runner), self.windows)
         self.server = so.Server(proto=so.PlainProtocol(force_include_usage), served_name="m", max_model_len=512, tokenizer=Tokenizer(),
                                 defaults={"temperature": 1.0}, submit=self.loop.submit, abort=self.loop.abort, clock=lambda: 7)
@@ -338,16 +344,16 @@ def test_check_fails_on_a_committed_id_that_was_not_served(tmp_path):
 
 
 def test_check_request_rule():
-    led = so.Ledger("cmpl-a", "cmpl-a-0", [1, 2, 3], streamed=[7, 8, 9], inputs=[1, 2, 3, 7, 8], sampled=[7, 8, 9], finished=True)
-    assert so.check_request(led)["passed"]
+    led = sc.Ledger("cmpl-a", "cmpl-a-0", [1, 2, 3], streamed=[7, 8, 9], inputs=[1, 2, 3, 7, 8], sampled=[7, 8, 9], finished=True)
+    assert sc.check_request(led)["passed"]
     led.inputs = [1, 2, 3, 7, 9]
-    got = so.check_request(led)
+    got = sc.check_request(led)
     assert not got["passed"] and got["first_mismatch"] == {"what": "inputs", "at": 4, "committed": [9], "served": [8], "lengths": [5, 5]}
-    assert not so.check_request(so.Ledger("b", "b-0", [1], finished=True))["passed"]
+    assert not sc.check_request(sc.Ledger("b", "b-0", [1], finished=True))["passed"]
 
 
 def test_runner_ids_map_back():
     known = {"cmpl-ab-0": 1}
-    assert so.known_id("cmpl-ab-0-0123abcd", known) == "cmpl-ab-0"
-    assert so.known_id("cmpl-ab-0", known) == "cmpl-ab-0"
-    assert so.known_id("cmpl-zz-0-0123abcd", known) is None
+    assert sc.known_id("cmpl-ab-0-0123abcd", known) == "cmpl-ab-0"
+    assert sc.known_id("cmpl-ab-0", known) == "cmpl-ab-0"
+    assert sc.known_id("cmpl-zz-0-0123abcd", known) is None
