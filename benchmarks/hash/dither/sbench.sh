@@ -59,7 +59,9 @@ case " $* " in *dither-a-hbr*)
   grep -B1 -A2 "h1k" "$OUT/build-h1u_kr.log" | grep -i "registers\|spill" | head -6
   export HB_H1U_KRONLY=$S/h1u_kr.so ;;
 esac
-# dither-a-hbc's: that build with HB_KC_FLAGS too (h1u.cu's knobs, space-separated), as a job.sh kr* variant (HB_H1U_KC)
+# dither-a-hbc's: that build with HB_KC_FLAGS too (h1u.cu's knobs, space-separated), as a job.sh kr* variant (HB_H1U_KC);
+# J10-R's units on part of the SMs (sbench.py's ARM-smqQoD) take -DH1U_JCTA=1 -DH1U_WARPS=4 in it, after any other
+# H1U_WARPS (the last -D holds)
 case " $* " in *dither-a-hbc*)
   read -r -a kc <<< "${HB_KC_FLAGS:-}"
   nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode arch=compute_120a,code=sm_120a -Xptxas -v -Xcompiler -fPIC -shared \
