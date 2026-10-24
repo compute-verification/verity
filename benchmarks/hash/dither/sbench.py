@@ -153,7 +153,8 @@ warm or gate is dropped, its error in gate.json, and the rest timed (exit 5 stil
 checked, so N arms need N engines' memory plus one arm's captures.
 
 `prof` (an op, for any arm; under DITHER_NSYS=1 or prof): generates PROF_N[0] and then PROF_N[1] tokens for the 32 requests
-($SBENCH_PROF_REQS of them if set: T for decode steps of m = T, a saturation step) inside one CUDA profiler range, each generation in its own NVTX range PROF_RANGE/<arm>/n<N>, so a kernel's launches and time
+($SBENCH_PROF_REQS of them if set: T for decode steps of m = T, a saturation step; its step is then step_m<N>_ms) inside
+one CUDA profiler range, each generation in its own NVTX range PROF_RANGE/<arm>/n<N>, so a kernel's launches and time
 a decode step are the two ranges' difference over PROF_N[1] - PROF_N[0] (`exactlin/steps.py`; `stepprof.py` splits a dither
 arm's step by part, its between-step phases by their NVTX ranges).  nsys's capture range ends at the first profiler stop,
 so a run profiles one arm: under DITHER_NSYS=prof the gate runs unprofiled, so a gated run's prof op is the capture.
