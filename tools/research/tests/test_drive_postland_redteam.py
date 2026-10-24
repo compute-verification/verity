@@ -319,7 +319,7 @@ def test_9a_a_drive_restarted_while_its_post_landing_run_runs_reads_it_back_and_
 
 
 def test_9b_a_drive_killed_after_a_deferred_landing_pushed_still_runs_that_landing_after_restart(world, monkeypatch, tmp_path):
-    """The landing is pushed, then the tick dies before it saves state.json (a restart, a VM suspended, `caught_up` raising):
+    """The landing is pushed, then the tick dies before it saves state.json (a restart, a VM suspended, the sweep raising):
     the landing must still await its post-landing run, or the next landing's `verified` takes it in unchecked."""
     h = Postland(world, monkeypatch, tmp_path)
     base = _git(world.origin, "rev-parse", "main")
@@ -331,11 +331,12 @@ def test_9b_a_drive_killed_after_a_deferred_landing_pushed_still_runs_that_landi
     def killed(*a, **k):
         raise KeyboardInterrupt("the drive is killed")
 
-    monkeypatch.setattr(merge, "caught_up", killed)
+    monkeypatch.setattr(merge, "_sweep_after", killed)
     with pytest.raises(KeyboardInterrupt):
         h.tick()
     tip = _git(world.origin, "rev-parse", "main")
     assert tip != base
+    monkeypatch.setattr(merge, "_sweep_after", lambda *a: None)
     again = Postland(world, monkeypatch, tmp_path)
     again.run_state, again.evidence = h.run_state, h.evidence
     again.tick()
