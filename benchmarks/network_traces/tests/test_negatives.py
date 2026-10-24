@@ -451,9 +451,9 @@ def test_advice_chunk_serves_the_same_positions_in_other_step_shapes():
 FRAMING = (1, 1, 2, 2, 2)  # the link's request frames by prompt length: r0's prompt of 5 two, r1's of 2 one
 
 
-def _n2(b, received=(3,)):
+def _n2(b, received=(3,), tie=None):
     """`b` as N2-ADVICE reads it (`n2_advice`), under `FRAMING`."""
-    return NG.n2_advice(b, FRAMING, list(received))
+    return NG.n2_advice(b, FRAMING, list(received), tie)
 
 
 def test_the_declared_received_is_the_advices_requests_frames_under_the_links_framing():
@@ -467,10 +467,10 @@ def test_the_declared_received_is_the_advices_requests_frames_under_the_links_fr
 
 def test_n2s_advised_counts_refuse_the_advice_negatives_and_accept_the_step_units():
     """Against N2-ADVICE's `advised` (skipped until it lands), on heads an honest run of the advice certifies: the
-    honest advice is accepted; length, missing, extra and release are refused by the advised counts, each well formed;
-    start and chunk are accepted, their frames honest's, so only the step unit can refuse them; a `received` that
-    isn't the requests' frames, and an extra request whose frames pass the egress allocation R in a bucket, are
-    refused by the view."""
+    honest advice is accepted; length and release are refused by the advised counts, missing and extra (each under the
+    honest run's tie to the certified ingress) by the view; start and chunk are accepted, their frames honest's, so
+    only the step unit can refuse them; a link without the tie is refused by the view, an extra request under its own
+    tie by the counts, or by the view once its frames pass the egress allocation R in a bucket."""
     AD = pytest.importorskip(NG.ADVISED_MODULE)
     from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 
@@ -486,8 +486,10 @@ def test_n2s_advised_counts_refuse_the_advice_negatives_and_accept_the_step_unit
     assert codes(_n2(a)) == []
     for name, n in NG.NEGATIVES.items():
         if n.tampers == "advice":
-            assert codes(_n2(n.make.edit(a))) == ([] if n.code.startswith("StepUnit") else [n.code]), name
-    assert codes(AD.LinkAdvice(a, (4,))) == [f"{NG.ADVISED}.view"]
+            want = [] if n.code.startswith("StepUnit") else [n.code]
+            assert codes(_n2(n.make.edit(a), tie=NG.prompt_tie(a))) == want, name
+    assert codes(AD.LinkAdvice(a, (3,))) == [f"{NG.ADVISED}.view"]
+    assert codes(_n2(NG.extra_request(a))) == [NG.ADVISED]
     assert NG.advised_codes(_n2(NG.extra_request(a)), 0, syncs, sigma, FRAMING, T, 4, RIN, OWN,
                             *heads[0]) == [f"{NG.ADVISED}.view"]
 
@@ -603,6 +605,9 @@ def test_the_tie_reads_each_requests_sampled_ids_by_its_advice_id(tmp_path):
     (tmp_path / "requests.jsonl").write_text(
         "".join(json.dumps({"request": f"q{k}", "user": u, "output_ids": x}) + "\n" for k, (u, x) in enumerate(IDS.items())))
     assert NG.read_ids(tmp_path / "requests.jsonl") == IDS
+    (tmp_path / "served.jsonl").write_text("".join(json.dumps({"http_id": f"cmpl-{k}", "user": u, "streamed_ids": x})
+                                                   + "\n" for k, (u, x) in enumerate([(None, [7]), *IDS.items()])))
+    assert NG.read_ids(tmp_path / "served.jsonl") == {"cmpl-0": [7]} | IDS
 
 
 def test_the_ties_view_of_the_advice_is_each_kept_outputs_step_row_request_index_bucket_and_id():

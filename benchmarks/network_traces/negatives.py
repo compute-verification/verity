@@ -33,8 +33,8 @@ verifier); the code is what the verifier of record establishes, which `n2` reads
 - ``audit.VIOLATION``: N2's audit of both records (`audit.Audit`, the Python reference of the Lean check of record);
 - pending checks, by the names their drafts give them: ``NetworkAdvisedCounts_v1`` (N2-ADVICE's advised counts on an
   advised link, `LinkWindows.advised_check`: the egress head's counts the release of the advice's frames, the ingress
-  head's the request frames the advice needs; ``.view`` when the advice is malformed or doesn't cover the window, which
-  refuses every window), ``IoTieWindow.{cells_root,port,content}`` (IO-TIE's I/O tie, a unit at selection All over
+  head's the request frames the advice needs; ``.view`` when the advice is malformed, doesn't cover the window or
+  isn't tied to the certified ingress's requests (`advised.PromptTie`), which refuses every window), ``IoTieWindow.{cells_root,port,content}`` (IO-TIE's I/O tie, a unit at selection All over
   one egress link-window, `io_tie.reference_parts`: the warden's cells open under their root, the Commit's port rows
   of sampled ids open at the map's steps under the Commit's root, and every cell is the verifier's map's, computed from
   advice v0: a pad, or a data cell on the request's stream whose id is the port entry the map names; ``.map`` when the
@@ -524,11 +524,11 @@ NEGATIVES = {n.name: n for n in [
              "its next row keeping the sample", "N2's advised counts", ADVISED, advice_edit(output_length),
              waits=("ADV-SPEC", "N2-ADVICE"), also=(f"{TIE}.content",)),
     Negative("advice-missing", "advice", "advice", "a certified request missing from the advice, with its rows",
-             "N2's advised counts", ADVISED, advice_edit(missing_request), waits=("ADV-SPEC", "N2-ADVICE"),
-             also=(f"{TIE}.content",)),
+             "N2's advised view (its tie to the certified ingress, advised.PromptTie)", f"{ADVISED}.view",
+             advice_edit(missing_request), waits=("ADV-SPEC", "N2-ADVICE"), also=(f"{TIE}.content",)),
     Negative("advice-extra", "advice", "advice", "a request in the advice that the ingress didn't certify",
-             "N2's advised counts", ADVISED, advice_edit(extra_request), waits=("ADV-SPEC", "N2-ADVICE"),
-             also=(f"{TIE}.content",)),
+             "N2's advised view (its tie to the certified ingress, advised.PromptTie)", f"{ADVISED}.view",
+             advice_edit(extra_request), waits=("ADV-SPEC", "N2-ADVICE"), also=(f"{TIE}.content",)),
     Negative("advice-release", "advice", "advice", "a kept output released one bucket later than certified",
              "N2's advised counts", ADVISED, advice_edit(release_moved), waits=("ADV-SPEC", "N2-ADVICE"),
              also=(f"{TIE}.content",)),
@@ -608,8 +608,9 @@ def codes(lw: LinkWindows, opening, root: bytes, syncs: list[ClockSync]) -> list
 def link_received(advice, request_frames, received: list[int]) -> list[int]:
     """`received` as a prover declares it beside `advice`: the request frames the advice's requests take under the
     link's framing (`request_frames[prompt_len − 1]` each) that `received` doesn't sum to go to its first window that
-    receives any, as a prover that serves other requests than were received would declare them, so the advice stays
-    well formed (`advised.ends`) and only the counts can refuse it."""
+    receives any, as a prover that serves other requests than were received would declare them, so the advice's frames
+    are the windows' (`advised.ends`) and only its tie to the certified ingress (`prompt_tie`) or the counts can refuse
+    it."""
     got = list(received)
     w = next((w for w, g in enumerate(got) if g > 0), 0)
     got[w] += sum(request_frames[q.prompt_len - 1] for q in advice.requests
@@ -617,11 +618,20 @@ def link_received(advice, request_frames, received: list[int]) -> list[int]:
     return got
 
 
-def n2_advice(advice, request_frames, received: list[int]):
-    """I1 v0 advice as N2-ADVICE's `advised` reads it (`advised.LinkAdvice`: the advice and each window's `received`,
-    `link_received`'s). Raises ModuleNotFoundError until N2-ADVICE lands."""
+def prompt_tie(advice):
+    """The tie of an honest run's advice to its certified ingress (`advised.PromptTie`): each certified request's
+    prompt length in arrival order, and advice request i the i-th of them. A tampered advice keeps its honest run's,
+    which the host derives from the certified I/O. Raises ModuleNotFoundError until N2-ADVICE lands."""
     AD = importlib.import_module(ADVISED_MODULE)
-    return AD.LinkAdvice(advice, tuple(link_received(advice, request_frames, received)))
+    return AD.PromptTie(tuple(q.prompt_len for q in advice.requests), tuple(range(len(advice.requests))))
+
+
+def n2_advice(advice, request_frames, received: list[int], tie=None):
+    """I1 v0 advice as N2-ADVICE's `advised` reads it (`advised.LinkAdvice`: the advice, each window's `received`,
+    `link_received`'s, and the tie to the certified ingress, `prompt_tie` of the honest advice, by default this one).
+    Raises ModuleNotFoundError until N2-ADVICE lands."""
+    AD = importlib.import_module(ADVISED_MODULE)
+    return AD.LinkAdvice(advice, tuple(link_received(advice, request_frames, received)), tie or prompt_tie(advice))
 
 
 def advised_codes(link, window: int, syncs, sync_set, request_frames, T: int, R: int, RIN: int, OWN: int, ingress,
@@ -695,7 +705,7 @@ def advice_suite(advice, *, T: int, R: int, syncs, request_frames, received: lis
         except NotApplicable as err:
             out[name] = row | {"ran": False, "why": str(err)}
             continue
-        got = codes(n2_advice(b, request_frames, received))
+        got = codes(n2_advice(b, request_frames, received, prompt_tie(advice)))
         want = [] if n.code.startswith("StepUnit") else [n.code]
         out[name] = row | {"ran": True, "valid": mod.decode(mod.encode(b)) == b, "bits": mod.total_bits(b),
                            "steps": len(b.steps), "outputs": len(b.release), "codes": got, "ok": got == want}
@@ -747,9 +757,11 @@ def io_tie_module():
 
 
 def read_ids(path: Path) -> dict[str, list[int]]:
-    """Each request's sampled ids by the advice's request id: ADVICE-SRC's `requests.jsonl` (`user`, `output_ids`)."""
+    """Each request's sampled ids by the advice's request id: ADVICE-SRC's `requests.jsonl` (`user`, `output_ids`), or
+    serve-openai's (`user`, `streamed_ids`; a request without a `user` by its `http_id`, as its advice names it)."""
     rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
-    return {r["user"]: list(r["output_ids"]) for r in rows}
+    return {r.get("user") or r["http_id"]: list(r["output_ids"] if "output_ids" in r else r["streamed_ids"])
+            for r in rows}
 
 
 def tie_outputs(IT, advice, ids: dict[str, list[int]]):
