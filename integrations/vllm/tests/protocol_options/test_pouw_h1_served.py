@@ -484,7 +484,7 @@ def test_the_periods_weights_are_registered_once_and_every_window_registers_them
     period = _period(ws)
     assert sorted(period.registered) == list(KS)
     for k, r in period.registered.items():
-        assert (r.value, r.words) == (SV.PREFIX + f"b/{k}", CR.b_words(k))
+        assert (r.value, r.words) == (SV.PREFIX + f"b/{k}", CR.leaf_words(k))
         assert r.domain.domain_id == G.domain(period.circuit, r.value, r.words, r.leaves).domain_id
     rows = [w[j].numpy().tobytes() + np.float32(s[j, 0]).tobytes() for w, s in ws[:2] for j in range(len(w))]
     assert period.registered[16].root.hex() == _tree(period.registered[16], rows, WKEY, SV.B_NONCE)
