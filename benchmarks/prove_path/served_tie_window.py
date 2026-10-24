@@ -42,7 +42,7 @@ from types import SimpleNamespace
 from verity.core.protocols.certifier import served_rows as SR, served_tie as ST
 
 PORT_NAMES = ("step.input/ids", "step.input/positions")
-RECORD_KEYS = ("schema", "binding", "root", "count", "n_bits", "digests")
+RECORD_KEYS = ("schema", "binding", "root", "count", "n_bits")
 
 
 def load(run_dir: Path, w: int) -> SimpleNamespace:
@@ -54,6 +54,12 @@ def load(run_dir: Path, w: int) -> SimpleNamespace:
     return SimpleNamespace(ctx=json.loads((bundle / "context.json").read_text()), rec=rec, store=store, run=run,
                            priv=json.loads((run_dir / "served_rows" / f"w{w}.json").read_text()),
                            reqs=[json.loads(l) for l in (run_dir / "requests.jsonl").read_text().splitlines() if l.strip()])
+
+
+def statics_of(x: SimpleNamespace) -> SimpleNamespace:
+    """The run's compile-slice statics. A run sealed before the cache's statics served without prefix caching, so its CN,
+    CTW and CU are 0."""
+    return SimpleNamespace(**{"CN": 0, "CTW": 0, "CU": 0, **x.priv["statics"]})
 
 
 def _session(priv: dict) -> list[list[tuple | None]]:
@@ -77,8 +83,7 @@ def bindings(x: SimpleNamespace, S, St) -> tuple[dict, list[SimpleNamespace], di
           "step_roots": [s.root.hex() for s in x.run.steps] == x.rec["step_roots"],
           "record": all(record[k] == sw["served_rows"][k] for k in RECORD_KEYS),
           "binding": record["binding"] == SR.binding(run_root).hex()}
-    served = SR.register(S, _session(x.priv), run_root, salts=[bytes.fromhex(s) for s in x.priv["salts"]],
-                         digest_salts=[bytes.fromhex(s) for s in x.priv["digest_salts"]])
+    served = SR.register(S, _session(x.priv), run_root, salts=[bytes.fromhex(s) for s in x.priv["salts"]])
     ok["registered"] = all(served.record()[k] == record[k] for k in RECORD_KEYS)
     layout = opened = embed_equal = padded = True
     roots: dict[int, bytes] = {}
@@ -176,7 +181,7 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     t0 = time.monotonic()
     x = load(a.serve_run, a.window)
-    S = SimpleNamespace(**x.priv["statics"])
+    S = statics_of(x)
     st = ST.statics(S, IB=x.ctx["served_window"]["step_input_port"]["IB"], PB=x.ctx["served_window"]["step_input_port"]["PB"])
     St = SimpleNamespace(**st)
     ok, steps, native = bindings(x, S, St)

@@ -154,7 +154,7 @@ def build(a) -> int:
 def units_of(a) -> SimpleNamespace:
     """The window, its steps, each case's registration, and both statements' units: kind, block j, rows, reference."""
     x = STW.load(a.serve_run, a.window)
-    S = SimpleNamespace(**x.priv["statics"])
+    S = STW.statics_of(x)
     port = x.ctx["served_window"]["step_input_port"]
     st = ST.statics(S, IB=port["IB"], PB=port["PB"], G=a.g)
     St = SimpleNamespace(**st)
@@ -168,8 +168,7 @@ def units_of(a) -> SimpleNamespace:
     regs, units = {}, {"window": [], "cases": []}
     for name, (win, by) in table.items():
         if name == "honest":
-            reg = SR.register(S, STW._session(x.priv), run_root, salts=[bytes.fromhex(s) for s in x.priv["salts"]],
-                              digest_salts=[bytes.fromhex(s) for s in x.priv["digest_salts"]])
+            reg = SR.register(S, STW._session(x.priv), run_root, salts=[bytes.fromhex(s) for s in x.priv["salts"]])
         else:
             reg = SR.register(S, [win], run_root)
         regs[name] = reg
