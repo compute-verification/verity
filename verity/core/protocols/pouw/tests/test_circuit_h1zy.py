@@ -395,6 +395,66 @@ def _row_bits(rows, scales):
     return [x for row, s in zip(rows, scales) for x in [y for v in row for y in _bits(v, 8)] + _bits(s, 32)]
 
 
+def test_the_chunked_unit_reads_n_chunk_rows_a_row_and_has_the_units_return_and_ports():
+    u = Z.unit(_tile())
+    w = Z.chunk_unit(u, 4)
+    params, ret = w.signature()
+    assert [(n, t.n) for n, t in params[:2]] == [("a", 16), ("b", 32)]
+    assert params[0][1].elem == params[1][1].elem == Z.ROW(16)
+    assert params[2:] == u.signature()[0][2:] and ret == u.signature()[1]
+    assert {n: p.kind for n, p in w.defn.ports(w.S()).params.items()} == {"salt": "coin", "position": "position"}
+    assert w.defn.ports(w.S()).ret["receipt"].sink
+
+
+@pytest.mark.parametrize("unit,n,why", [
+    (lambda: Z.unit(_tile(H.PouwH1Tile3)), 2, "over PouwH1Tile_v1"),
+    (lambda: _tile(), 2, "over PouwH1Tile_v1"),
+    (lambda: Z.unit(_tile()), 1, "n >= 2"),
+    (lambda: Z.unit(_tile()), 3, "dividing"),
+    (lambda: Z.unit(_tile()), True, "integer"),
+])
+def test_a_chunked_unit_over_another_unit_or_a_chunking_that_doesnt_divide_k_is_refused(unit, n, why):
+    with pytest.raises(ValueError, match=why):
+        Z.chunk_unit(unit(), n).signature()
+
+
+@pytest.mark.slow
+def test_the_chunked_unit_on_bits_is_the_unit_on_its_rebuilt_rows_and_holds_every_chunks_scale():
+    """`PouwH1TileZyChunks{UNIT, 2}` over the 4 × 8 unit at K = 64 on bits, every case at once, about 40 s: on the honest
+    chunk rows (row i's codes cut in two, its scale on both) it returns the unit's (receipt, 1) on the whole rows; with one
+    A or one B chunk row's scale off its chunk 0's, the same receipt and ok 0; with an A row's two chunks swapped, the
+    unit's receipt on the swapped row. It is the only test that the wrapper rebuilds row i from chunk rows 2i, 2i + 1 in
+    order and reads every chunk's scale."""
+    rng = random.Random(46)
+    a, b, sa, sw = _unit_rows(rng)
+    salt, roots = bytes(range(64)), (bytes(64), bytes([7]) * 64)
+    zy = Z.records(a, b, sa, sw)
+
+    def chunked(rows, scales):
+        return [r[32 * c:32 * c + 32] for r in rows for c in range(2)], [s for s in scales for _c in range(2)]
+
+    ca, csa = chunked(a, sa)
+    cb, csw = chunked(b, sw)
+    off_a, off_b = list(csa), list(csw)
+    off_a[3] ^= 1
+    off_b[9] ^= 1 << 20
+    swapped = [ca[1], ca[0], *ca[2:]]
+    whole_swapped = [a[0][32:] + a[0][:32], *a[1:]]
+    cases = [(ca, csa, cb, csw), (ca, off_a, cb, csw), (ca, csa, cb, off_b), (swapped, csa, cb, csw)]
+    want = [Z.reference(a, b, sa, sw, zy, salt, 5, roots), (Z.reference(a, b, sa, sw, zy, salt, 5, roots)[0], 0),
+            (Z.reference(a, b, sa, sw, zy, salt, 5, roots)[0], 0),
+            Z.reference(whole_swapped, b, sa, sw, zy, salt, 5, roots)]
+    rows = [[_row_bits(xa, xs), _row_bits(xb, xw), _word_bits(zy[0]) + [x for v in zy[1] for x in _bits(v, 16)],
+             SD.leaves(salt, True), SD.position_leaves(5, True), SD.leaves(roots[0], True) + SD.leaves(roots[1], True)]
+            for xa, xs, xb, xw in cases]
+    args = [np.array([r[p] for r in rows], np.uint8) for p in range(6)]
+    got = evaluate_bits(Z.chunk_unit(Z.unit(_tile()), 2), *args).reshape(len(cases), -1)
+    words = len(want[0][0])
+    out = [([_int(g[32 * t:32 * t + 32]) for t in range(words)], int(g[32 * words])) for g in got]
+    assert [o for _r, o in want] == [1, 0, 0, 0], "a swapped row's record isn't its z"
+    assert out == want and want[3][0] != want[0][0]
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize("defn", [H.PouwH1Tile, H.PouwH1Tile3], ids=["v1", "v3"])
 def test_a_lane_on_bits_is_its_word_reference(defn):

@@ -55,6 +55,7 @@ import pouw_rounds_cases as rounds_cases
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import verifier as V
+from verity.core.protocols.pouw import weights as Wt
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -273,7 +274,7 @@ def period(case: dict) -> dict:
 
 
 def a_link(case: dict) -> dict | None:
-    refused = Cr._a_link(case["rounds"], case["entries"], case["calls"])
+    refused = Cr._a_link(case["rounds"], case["entries"], case["calls"], case.get("rows"))
     _counted(refused, "a-link")
     return None if refused is None else {"refused": list(refused)}
 
@@ -289,7 +290,8 @@ def registered_file(case: dict) -> dict:
     lay, refused = Cr.layout_of(raw)
     if refused is None:
         program, shape = hashlib.sha512(raw).hexdigest(), Cr.shape_of(raw)
-        got, refused = Cr.registered_file(program, lay, shape, case["call"], case["roots"], case["window"])
+        got, refused = Cr.registered_file(program, lay, shape, case["call"], case["roots"], case["window"],
+                                          case["steps"], case["salt"])
     _counted(refused, "registered-file")
     return {"refused": list(refused)} if refused is not None else {"file": got,
                                                                    "partition": Cr.partition_of(program, shape)}
@@ -320,8 +322,9 @@ def test_credit(pass_server):
     registration than the window's or an entry whose root is not its sessions', B rows other than the ones a window's
     open root binds or registered under another domain, name or rows, a window whose B rows (one row's s_w, or every
     code zeroed) are not the ones its period's open signed, a period whose open signs no weights' root or names no
-    model `models.json` pins (none, malformed, another checkpoint, another role), a call's A table or a round's
-    input-ids table other than the served Commit's or a Commit record the draw root doesn't bind, round 0's input-ids
+    model `models.json` pins (none, malformed, another checkpoint, another role), a round's A table of a K (a row off,
+    its calls' rows offset by one call, a call missing) or a round's input-ids table other than the served Commit's or a
+    Commit record the draw root doesn't bind, round 0's input-ids
     table outside round 0's request table or bound to another session, and every other
     refusal of `credit.window`, `credit.period_credit` and the steps they run."""
     CREDITED.clear()
@@ -380,7 +383,7 @@ def test_credit(pass_server):
                  "window registration: drawn unit #'s proof opened port ",
                  "against another root than the one the window registered for",
                  "window registration: drawn unit #'s proof was verified against another circuit",
-                 "opened no A value …/a/# or …/a/#@# (its call's) of the window", "'s proof opened no weights ",
+                 "opened no A value …/a/# or …/a/#@# (its call's round's) of the window", "'s proof opened no weights ",
                  "which the window registers not",
                  "which the window registers twice", "'s entry is not one-stage's {value, root, leaves, words, domain}",
                  "so the period earns nothing: registration: drawn unit #",
@@ -401,14 +404,42 @@ def test_credit(pass_server):
                  "credit commit: the window's Commit record is not the bytes in lowercase hex",
                  "window commit: the window's Commit record is not the bytes in lowercase hex",
                  "window draw: the window's draw root is not over its manifest (each call's credit bit among it), its "
-                 "Commit record", "window arow: call #'s A table ", "is not the Commit's row-table/#/",
+                 "Commit record", "window arow: round #'s A table of K = # ", "is not the Commit's row-table/#/k#",
+                 "the window's layout gives it (credit.table_rows", "(the verifier hashes its pads)",
                  "window arow: round #'s input-ids table ", "is not the Commit's input-ids/#",
                  "window arow: the window registers no round #'s input-ids table",
-                 "window arow: the Commit record registers row-table/#/", "twice, so the Commit's row-table/#/",
+                 "window arow: the Commit record registers row-table/#/k#",
                  "which only round # commits",
                  "window arow: round #'s request root (requests, the one the window's open root binds) is not",
-                 "window registration: registered value ", "ids@#'s domain is not the one the window's registration"):
+                 "window registration: registered value ", "ids@#'s domain is not the one the window's registration",
+                 "or receipt table of the window", "'s receipt table, its round #'s, which only round # commits",
+                 "a-link a-link: registered receipt table ", "registered-file registration: the window registers ",
+                 "'s template returns no receipt of whole #-bit words", "'s seed reads the roots of ",
+                 "its units' ok rows, which are the verifier's own"):
         assert any(part in k for k in CREDITED), part
+    assert any(k.startswith("window a-link: ") and "the window's layout gives it" in k for k in CREDITED)
+
+
+def chunks(case: dict) -> dict:
+    try:
+        return {"chunks": Wt.chunks(case["k"]), "leaf_words": Wt.leaf_words(case["k"])}
+    except ValueError:
+        return {"chunks": None}
+
+
+CHUNKS = D.Port("pouw-check-difftest", "chunks", chunks, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
+                inputs=st.builds(lambda k: {"k": k}, st.integers(-2, 1 << 20)))
+
+
+def test_chunks(pass_server):
+    """`weights.chunks` and `weights.leaf_words` (an A or B row's leaves at K, and a leaf's words) against
+    `Credit.chunks?` and `Credit.leafWords` at every K to 4096 + 64, every multiple of 32 below 2^17 (the models' K, the
+    ones with no chunks among them) and drawn K to 2^20."""
+    stats = D.run(CHUNKS, examples=500, server=pass_server)
+    got = Counter(D.replay(CHUNKS, {"k": k}, pass_server)[1] == '{"chunks":null}'
+                  for k in sorted({*range(-1, 4096 + 65), *range(32, 1 << 17, 32)}))
+    print(f"pouw-check-difftest chunks: {stats}; swept {dict(got)} (True: no chunks)")
+    assert got[True] and got[False]
 
 
 ROUNDED: Counter[str] = Counter()
