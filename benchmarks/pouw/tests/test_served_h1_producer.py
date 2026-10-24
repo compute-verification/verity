@@ -3,9 +3,10 @@ word: a call's receipts are (units, 2 (KS + m)) u32, unit u of the call row bloc
 u % (N / 32) of its M slot rows (the served codes, then zero rows) and its weight, at position u0 + u, seeded from the
 run's salt and the call's registered roots, root(a/<K>@<s>) and root(b/<K>): the unit's public row as the verifier
 builds it (`credit.public_table`), which the references are seeded from. A row block past the served rows has v1's
-noise-derived receipt, not zero. Through `Served` (slow: the window Program's real tile unit takes half a minute to
-declare) every call's ``receipt@<c>`` is those receipts' words; and on a GPU with h1u.cu's -hbc build named by
-`VERITY_POUW_H1U_SO` the units kernel gives the same words at Llama-3.1-8B's four linear shapes."""
+noise-derived receipt, not zero, unless the producer skips dead tiles (``skip_dead``, ``H1_SKIP_DEAD=1``): then it has v4's
+zero receipt and a row block holding a served row its full one. Through `Served` (slow: the window Program's real tile
+unit takes half a minute to declare) every call's ``receipt@<c>`` is those receipts' words; and on a GPU with h1u.cu's
+-hbc build named by `VERITY_POUW_H1U_SO` the units kernel gives the same words at Llama-3.1-8B's four linear shapes."""
 from __future__ import annotations
 
 import hashlib
@@ -38,15 +39,18 @@ def _producer():
 PR = _producer()
 
 
-def _ref(a: np.ndarray, b: np.ndarray, u: int, position: int, roots=(RA, RB), salt=SALT) -> list[int]:
-    """`h1tile.reference`'s receipt of unit u of A [M, K] and B [N, K] s8 at ``position``."""
+def _ref(a: np.ndarray, b: np.ndarray, u: int, position: int, roots=(RA, RB), salt=SALT, served=None) -> list[int]:
+    """`h1tile.reference`'s receipt of unit u of A [M, K] and B [N, K] s8 at ``position``; with ``served``, v4's under the
+    admit bits of A's first ``served`` rows."""
     i, j = divmod(u, len(b) // 32)
+    gated = None if served is None else [int(32 * i + r < served) for r in range(32)]
     return HT.reference((a[32 * i:32 * i + 32].view(np.uint8)).tolist(), (b[32 * j:32 * j + 32].view(np.uint8)).tolist(),
-                        salt, position, roots, pairs=[(0, 0)])[1]
+                        salt, position, roots, pairs=[(0, 0)], gated=gated)[1]
 
 
 class _At(PR.Receipts):
-    """The producer at a given first unit, without a window Program."""
+    """The producer at a given first unit, without a window Program: unit u0 + t's public row is `core_check`'s row of the
+    run's salt, u0 + t and the call's roots."""
 
     def __init__(self, u0: int, *args, **kw):
         super().__init__(*args, **kw)
@@ -54,6 +58,11 @@ class _At(PR.Receipts):
 
     def start(self, call):
         return self.u0, (self.served.m // 32) * (call.n // 32)
+
+    def public(self, call):
+        from verity.core.protocols.pouw import core_check as CC
+        u0, n = self.start(call)
+        return [CC.public_words(self.run.salt, u0 + t, self.roots(call)) for t in range(n)]
 
 
 def _call(index=3, n=64, k=64, m=20, layer=1):
@@ -75,6 +84,41 @@ def test_a_calls_receipts_are_h1tile_reference_in_tile_order_at_its_positions():
         assert got[u].tolist() == _ref(a, w, u, u0 + u), f"unit {u}"
     assert got[2:].any(), "a dead row block's v1 receipt is its noise's"
     assert _ref(a, w, 2, u0 + 2) != _ref(a, w, 2, u0 + 3), "a unit's receipt is at its position"
+
+
+@pytest.mark.parametrize("m", [64, 20, 0])
+def test_skipping_dead_tiles_gives_h1tile_reference_v4_on_a_step_of_64_20_or_0_served_rows(m):
+    """With ``skip_dead`` at a 64-row slot, every unit's receipt is `h1tile.reference`'s v4 under the served rows' admit
+    bits, one row a unit in tile order: a row block holding a served row (the straddling one at 20) computed in full, the
+    ungated producer's words, and a row block past them zero words. `check` holds every kept unit to that reference, so a
+    dead tile's v1 receipt in its place is refused."""
+    rng = np.random.default_rng(20261024 + m)
+    n, k, u0 = 64, 64, 10
+    codes, w = rng.integers(-127, 128, (m, k), dtype=np.int8), rng.integers(-127, 128, (n, k), dtype=np.int8)
+    call, args = _call(n=n, k=k, m=m), (codes, np.ones(m, np.float32), w, np.ones(n, np.float32))
+    v1 = _At(u0, SimpleNamespace(m=64), SimpleNamespace(salt=SALT), roots=lambda c: (RA, RB), skip_dead=False)(call, *args)
+    made = _At(u0, SimpleNamespace(m=64), SimpleNamespace(salt=SALT), roots=lambda c: (RA, RB), keep=lambda c: True,
+               skip_dead=True)
+    got = made(call, *args)
+    assert got.dtype == np.uint32 and got.shape == v1.shape == (4, 2 * (k // 32 + 2))
+    a = np.zeros((64, k), np.int8)
+    a[:m] = codes
+    live = [32 * (u // 2) < m for u in range(4)]
+    for u in range(4):
+        assert got[u].tolist() == _ref(a, w, u, u0 + u, served=m), f"unit {u}"
+        assert got[u].tolist() == (v1[u].tolist() if live[u] else [0] * got.shape[1]), f"unit {u}"
+    assert all(v1[u].any() for u in range(4)), "v1's dead tile has its noise's receipt"
+    seen = PR.check(made.kept[call.index], list(range(4)))
+    assert all(v["ok"] and v["pub"] for v in seen.values()) and [v["live"] for v in seen.values()] == live
+    unskipped = PR.check(dict(made.kept[call.index], receipts=v1), list(range(4)))
+    assert [v["ok"] for v in unskipped.values()] == live
+
+
+def test_skipping_dead_tiles_is_off_unless_h1_skip_dead_is_1(monkeypatch):
+    monkeypatch.delenv("H1_SKIP_DEAD", raising=False)
+    assert not PR.Receipts(None).skip_dead and PR.Receipts(None, skip_dead=True).skip_dead
+    monkeypatch.setenv("H1_SKIP_DEAD", "1")
+    assert PR.Receipts(None).skip_dead and not PR.Receipts(None, skip_dead=False).skip_dead
 
 
 def test_a_public_row_gives_back_the_salt_position_and_roots_it_carries():
@@ -242,3 +286,32 @@ def test_the_units_kernel_is_h1tile_reference_at_llama_8b_shapes_through_served(
         return sorted({u for i in range(n // cb) for u in (i * cb, (i + 1) * cb - 1)})
 
     assert _held_to_reference(run, codes, ws, made_by, ends) == {"live": 24, "dead": 24}
+
+
+def test_skipping_dead_tiles_the_units_kernel_is_h1tile_reference_v4_at_llama_8b_shapes():
+    """On the GPU at Llama-3.1-8B's four linear shapes, a 64-row slot, over steps of 64, 20 and 0 served rows: with
+    ``skip_dead`` (`kh_unit`'s live mask) every unit of a row block holding a served row is the ungated kernel's words and
+    every unit of a dead one zero words, and `check` holds the first and last unit of each row block to
+    `h1tile.reference`'s v4 under the served rows' admit bits, word for word."""
+    units = _kernel()
+    rng = np.random.default_rng(20261024)
+    seen = {"live": 0, "dead": 0}
+    for n, k in LLAMA:
+        b = torch.from_numpy(rng.integers(-127, 128, (n, k), dtype=np.int8)).cuda()
+        ncb = n // 32
+        for m in (64, 20, 0):
+            codes, call = rng.integers(-127, 128, (m, k), dtype=np.int8), _call(n=n, k=k, m=m)
+
+            def made(skip, keep=None, b=b):
+                return _At(1000, SimpleNamespace(m=64), SimpleNamespace(salt=SALT), units=units, weight=lambda c: b,
+                           roots=lambda c: (RA, RB), keep=keep, skip_dead=skip)
+
+            v1, on = made(False)(call, codes, None, None, None), made(True, keep=lambda c: True)
+            got = on(call, codes, None, None, None)
+            live = np.repeat(np.arange(2) * 32 < m, ncb)
+            assert np.array_equal(got[live], v1[live]) and not got[~live].any(), (n, k, m)
+            checked = PR.check(on.kept[call.index], [0, ncb - 1, ncb, 2 * ncb - 1])
+            assert all(v["ok"] and v["pub"] for v in checked.values()), (n, k, m, checked)
+            for v in checked.values():
+                seen["live" if v["live"] else "dead"] += 1
+    assert seen == {"live": 24, "dead": 24}

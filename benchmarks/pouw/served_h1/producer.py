@@ -18,6 +18,12 @@ Call c of the window (`pouw_h1.Call`) at contraction K, as the Program's units r
 * the unit is v1's (`h1tile.PouwH1Tile`, `h1window.tile_unit`'s): no admit gating, so a row block past the served rows
   has the receipt its zero codes and its noise give it, not v4's zero receipt.
 
+With ``skip_dead`` (``H1_SKIP_DEAD=1``; off by default) the units of a row block wholly past the call's served rows are
+skipped: such a tile's admit bits are all 0, and its row is `h1tile.PouwH1Tile_v4`'s dead-tile receipt, zero words with no
+noise derived (`kh_unit`'s ``live`` mask, receipts.py's `gated_receipts`). A row block holding a served row is computed in
+full, and the receipts keep one row a unit in tile order. It stays off while the window Program's unit is v1, whose dead
+tile has its noise's receipt, not zero.
+
 It returns (units, 2 (KS + m)) uint32 (KS = K / 32, m = `segment.n_digits(KS)`: 260 words at K = 4096, 902 at 14336), the
 input of `pouw_h1_served.receipt_words`, which `Served` refuses at any other shape. It takes no coin: the noise is the
 salt's and the unit's position's. The kernel needs 512 | K (`kh_unit`); the torch chain any 32 | K, K >= 64.
@@ -25,6 +31,7 @@ salt's and the unit's position's. The kernel needs 512 | K (`kh_unit`); the torc
 from __future__ import annotations
 
 import ctypes as C
+import os
 import sys
 from pathlib import Path
 from typing import Any, Callable
@@ -74,7 +81,7 @@ def _stream(t: torch.Tensor) -> int:
 
 class Units:
     """h1u.cu's `kh_seeds` and `kh_unit` from an -hbc build: a call's units' seeds and receipts, on torch's current stream,
-    every unit live (``live`` NULL: v1's ungated unit)."""
+    every unit live (``live`` NULL: v1's ungated unit) unless `receipts` is given a row block's live bits."""
 
     def __init__(self, lib: str | Path | C.CDLL):
         h = lib if isinstance(lib, C.CDLL) else C.CDLL(str(lib))
@@ -101,19 +108,25 @@ class Units:
             raise RuntimeError(f"kh_seeds returned {rc} (U = {units})")
         return out
 
-    def receipts(self, a: torch.Tensor, b: torch.Tensor, seeds: torch.Tensor) -> torch.Tensor:
+    def receipts(self, a: torch.Tensor, b: torch.Tensor, seeds: torch.Tensor,
+                 live: torch.Tensor | None = None) -> torch.Tensor:
         """A [M, K] and B [N, K] s8 on the device and the units' seeds (`seeds`) -> receipts (units, kh_words(K)) int32,
-        unit u row block u // (N / 32) and column block u % (N / 32). ValueError on operands no call's or a K the kernel
-        has no instance of (512 | K and n_digits(K / 32) 2 or 3)."""
+        unit u row block u // (N / 32) and column block u % (N / 32). ``live``: (M / 32,) uint8 on the device, a row
+        block's units zero words, no noise derived, where its bit is 0 (v4's dead tile). ValueError on operands no call's
+        or a K the kernel has no instance of (512 | K and n_digits(K / 32) 2 or 3)."""
         (m, k), (n, kb) = a.shape, b.shape
         units = (m // RC.R) * (n // RC.C_)
         if (a.dtype, b.dtype) != (torch.int8, torch.int8) or kb != k or m % RC.R or n % RC.C_ or not (a.is_cuda and b.is_cuda) \
                 or tuple(seeds.shape) != (units, 16) or not (a.is_contiguous() and b.is_contiguous()):
             raise ValueError(f"kh_unit: A {a.dtype} {tuple(a.shape)}, B {b.dtype} {tuple(b.shape)}, seeds {tuple(seeds.shape)}: "
                              "contiguous s8 rows on the device, 32 | M, N, and a unit's seeds each")
+        if live is not None and (live.dtype != torch.uint8 or tuple(live.shape) != (m // RC.R,) or live.device != a.device
+                                 or not live.is_contiguous()):
+            raise ValueError(f"kh_unit: live is {live.dtype} {tuple(live.shape)} on {live.device}, not a contiguous uint8 "
+                             f"bit a row block, {m // RC.R}, on {a.device}")
         out = torch.empty(units, self.words(k), dtype=torch.int32, device=a.device)
-        rc = self.h.kh_unit(a.data_ptr(), b.data_ptr(), m, n, k, seeds.contiguous().data_ptr(), None, out.data_ptr(),
-                            _stream(a))
+        rc = self.h.kh_unit(a.data_ptr(), b.data_ptr(), m, n, k, seeds.contiguous().data_ptr(),
+                            None if live is None else live.data_ptr(), out.data_ptr(), _stream(a))
         if rc == 2:
             raise ValueError(f"kh_unit: no units kernel at K = {k} (512 | K, n_digits(K / 32) 2 or 3)")
         if rc:
@@ -130,12 +143,15 @@ class Receipts:
     ``weight(call)``: the call's B [N, K] s8 on ``device`` (the serving engine's own int8 weight, so the GPU holds no second
     copy); by default the weight codes `Served` hands over, copied to ``device`` once a linear. ``roots(call)``: the call's
     (root(A), root(B)), by default `Receipts.roots`. ``keep(call)``: keep that call's operands, roots and receipts in
-    ``kept`` (by call index) for a check against `h1tile.reference` (`check`)."""
+    ``kept`` (by call index) for a check against `h1tile.reference` (`check`). ``skip_dead``: skip the units of row blocks
+    wholly past the served rows (the module docstring), by default ``H1_SKIP_DEAD=1`` in the environment."""
 
     def __init__(self, served: Any, run: Any = None, units: Units | None = None, device: Any = None,
                  weight: Callable[[Any], torch.Tensor] | None = None,
-                 roots: Callable[[Any], tuple[bytes, bytes]] | None = None, keep: Callable[[Any], bool] | None = None):
+                 roots: Callable[[Any], tuple[bytes, bytes]] | None = None, keep: Callable[[Any], bool] | None = None,
+                 skip_dead: bool | None = None):
         self.served, self.run, self.units = served, run, units
+        self.skip_dead = os.environ.get("H1_SKIP_DEAD") == "1" if skip_dead is None else bool(skip_dead)
         d = torch.device(device if device is not None else ("cuda" if units is not None else "cpu"))
         self.device = torch.device("cuda", torch.cuda.current_device()) if d.type == "cuda" and d.index is None else d
         self._weight, self._roots, self._keep = weight, roots, keep
@@ -213,28 +229,36 @@ class Receipts:
         a, b = self.operands(call, codes, w)
         if (a.shape[0] // RC.R) * (b.shape[0] // RC.C_) != n:
             raise ValueError(f"call {call.index}: {n} units in the window Program, not its {a.shape[0]} × {b.shape[0]} tiles")
+        m = len(codes)
         if self.units is not None:
             seeds = self.units.seeds(torch.from_numpy(seed_record(salt, ra, rb)).to(self.device), u0, n)
-            out = self.units.receipts(a, b, seeds).cpu().numpy().view(np.uint32)
+            live = None
+            if self.skip_dead:
+                live = (torch.arange(a.shape[0] // RC.R, device=self.device) * RC.R < m).to(torch.uint8)
+            out = self.units.receipts(a, b, seeds, live).cpu().numpy().view(np.uint32)
+        elif self.skip_dead:
+            out = RC.gated_receipts(RC.Call(a, b), np.arange(a.shape[0]) < m, salt, u0, ra, rb)[0]
         else:
             out = RC.call_receipts(RC.Call(a, b), salt, u0, ra, rb)
         if self._keep is not None and self._keep(call):
             self.kept[call.index] = {"a": a.cpu(), "b": b.cpu(), "salt": salt, "base": u0, "roots": (ra, rb),
-                                     "receipts": out.copy(), "m": len(codes), "pub": self.public(call)}
+                                     "receipts": out.copy(), "m": m, "pub": self.public(call), "skip": self.skip_dead}
         return out
 
 
 def check(kept: dict[str, Any], units: list[int]) -> dict[str, Any]:
     """A kept call's (`Receipts.kept`) receipts of ``units`` against `h1tile.reference` on the same operands, seeded from
-    each unit's public row as the verifier builds it (``pub``, `public_fields`), word for word: ``{unit: {"live": its row
-    block holds a served row, "pub": the row is the producer's salt, position and roots, "ok": bool}}``."""
+    each unit's public row as the verifier builds it (``pub``, `public_fields`), word for word, v4's under the served rows'
+    admit bits where the producer skipped dead tiles (``skip``): ``{unit: {"live": its row block holds a served row, "pub":
+    the row is the producer's salt, position and roots, "ok": bool}}``."""
     ncb, out = kept["b"].shape[0] // RC.C_, {}
     for u in units:
         i, j = divmod(u, ncb)
         a = (kept["a"][RC.R * i:RC.R * (i + 1)].to(torch.int64) & 0xFF).tolist()
         b = (kept["b"][RC.C_ * j:RC.C_ * (j + 1)].to(torch.int64) & 0xFF).tolist()
         salt, position, roots = public_fields(kept["pub"][u])
-        _z, want = HT.reference(a, b, salt, position, roots, pairs=[(0, 0)])
+        gated = [int(RC.R * i + r < kept["m"]) for r in range(RC.R)] if kept.get("skip") else None
+        _z, want = HT.reference(a, b, salt, position, roots, pairs=[(0, 0)], gated=gated)
         out[u] = {"live": RC.R * i < kept["m"],
                   "pub": (salt, position, roots) == (kept["salt"], kept["base"] + u, kept["roots"]),
                   "ok": kept["receipts"][u].tolist() == want}
