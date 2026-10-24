@@ -117,7 +117,7 @@ def main() -> int:
     from vllm import LLM, SamplingParams
     from vllm.inputs import TokensPrompt
 
-    from verity_vllm.engine.engine_profile import get_scheduler
+    from verity_vllm.engine import handle
 
     t = time.perf_counter()
     convs = conversations(a.sharegpt)
@@ -137,7 +137,7 @@ def main() -> int:
     llm = LLM(**kw)
     log(f"engine up in {time.perf_counter() - t:.1f} s")
     eng = llm.llm_engine
-    sched = get_scheduler(llm)
+    sched = handle.scheduler(llm)
     pool = sched.kv_cache_manager.block_pool
     cache = eng.vllm_config.cache_config
     hf = eng.vllm_config.model_config.hf_config

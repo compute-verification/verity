@@ -465,7 +465,7 @@ def _vocabulary_bindings() -> list[tuple[str, Any]]:
     `_served_kind_statics`' when no small table binds it: (label, the bound Definition, or the error)."""
     from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32
     from verity_vllm.program.frontend.rules import vocab as V
-    from verity_vllm.program.frontend.target_profile import TargetProfile
+    from verity_vllm import TargetProfile
     from verity_vllm.program.registry import prims as P
 
     small = {"K": 32, "N": 16, "V": 16, "H": 16, "T": 5, "NH": 2, "KVH": 1, "D": 16, "NHEADS": 2, "I": 16, "EPS": 1e-5, "C": 0.5,

@@ -662,9 +662,9 @@ class _DirectLLM:
     """The subset of ``verity_vllm.LLM`` needed for a content-bound local checkpoint."""
 
     def __init__(self, llm: Any, engine_overrides: Mapping[str, Any]) -> None:
-        from verity_vllm.engine.engine_profile import get_model_runner
+        from verity_vllm.engine import handle
 
-        runner = get_model_runner(llm)
+        runner = handle.model_runner(llm)
         self.vllm, self.model = llm, runner.get_model()
         # commit_arm.py still reads verity_vllm.LLM's private `_engine`: its committer takes the whole engine.
         self._engine = SimpleNamespace(llm=llm, model=self.model)
@@ -685,7 +685,7 @@ def _pearl_c_run(llm: Any) -> Any | None:
     a pass each time the model runner's ``execute_model`` returns (`pouw.install`), so the harness only reads the passes
     (`_pass_totals`) and gates the run (`_pearl_c_gate`)."""
 
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
 
     option = llm.protocols.get("pouw") if llm.protocols is not None else None
     run = getattr(getattr(option, "end_pass", None), "__self__", None)
@@ -824,7 +824,7 @@ class _VllmEngine:
         import vllm
 
         from verity_vllm.engine.hooks import Hooks, live
-        from verity_vllm.pipeline.llm import LLM
+        from verity_vllm import LLM
 
         self.arm, self.obj, self.installed, self.pearl_c, self.h1 = arm, plugin(arm), None, None, None
         self.target = Target(arm, None, None, Hooks(tag=f"bench:{arm.id}"))
@@ -948,11 +948,11 @@ class _VllmEngine:
     def _open_window(self, point: SweepPoint) -> None:
         """H1's window for one run of `point`: S its steps' bound (`window_steps`), and the epoch the window's index."""
 
-        from verity_vllm import protocol_options as PO
-        from verity_vllm.engine.engine_profile import get_model_runner
+        from verity_vllm import protocols as PO
+        from verity_vllm.engine import handle
 
         steps = window_steps(point, self.h1["rows"])
-        config = h1_window(self.h1["config"], get_model_runner(self.llm.vllm), steps, len(self.h1["windows"]))
+        config = h1_window(self.h1["config"], handle.model_runner(self.llm.vllm), steps, len(self.h1["windows"]))
         ctx = PO.Context(stage="serve", enabled=self.arm.protocols, world=1, enforce_eager=True,
                          settings=PO.load_settings(config))
         start = time.perf_counter()
@@ -960,7 +960,7 @@ class _VllmEngine:
         self.h1["install_s"] = time.perf_counter() - start
 
     def _close_window(self, point: SweepPoint, phase: str) -> dict[str, Any]:
-        from verity_vllm.protocol_options import pouw
+        from verity_vllm.protocols import pouw
 
         run = pouw.h1_run(H1)
         start = time.perf_counter()

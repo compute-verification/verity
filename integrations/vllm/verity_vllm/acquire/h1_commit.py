@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any, Sequence
 
 from verity_vllm.acquire.sources.int8_source import Int8Source
-from verity_vllm.protocol_options.pouw_h1_commit import CommitTap, Sites, _EveryStep, site
+from verity_vllm.protocols.pouw.h1.commit import CommitTap, Sites, _EveryStep, site
 
 
 class H1Source(Int8Source):
@@ -59,7 +59,7 @@ def source(com: Any, model: Any, layers: Sequence[Any]) -> Any:
     """The int8 source (`H1Source`) on committer ``com``, at the Int8RowQuant_v1 site of each of ``layers`` (H1's
     linears, `pouw_h1_hooks.layers`) at every engine step: a linear by its name in ``model``, as `pouw.install` names it,
     and a routed expert by its H1 name (`pouw_h1_hooks.expert_names`)."""
-    from verity_vllm.protocol_options.pouw_h1_hooks import expert_names
+    from verity_vllm.protocols.pouw.h1.hooks import expert_names
     names = expert_names(list(layers))
     experts = {n: layers[w] for w, n in names.items()}
     ids = {id(m) for w, m in enumerate(layers) if w not in names}

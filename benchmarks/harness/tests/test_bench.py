@@ -893,8 +893,8 @@ def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_s
 
     from verity.core.protocols.pouw import verifier
     from verity.core.protocols.pouw.coins import CoinCommitment
-    from verity_vllm.protocol_options import pouw
-    from verity_vllm.protocol_options.interface import Context
+    from verity_vllm.protocols import pouw
+    from verity_vllm.protocols.interface import Context
 
     from verity_bench.vllm.arms import protocols_config
 
@@ -946,7 +946,7 @@ def test_a_pearl_c_protocol_arms_passes_are_the_adapters_and_the_harness_only_re
     """The adapter ends a Pearl-C pass at each ``execute_model`` (`pouw.install`); the harness wraps nothing, finds the
     device run through the option's ``end_pass`` and reports the running totals of the passes it ended."""
 
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
 
     from verity_bench.vllm import runner
 
@@ -1052,9 +1052,9 @@ def test_an_h1_arm_is_gated_against_exact_int8_and_each_run_gets_a_window_the_ad
     which the adapter's refusals accept; a spec can't supply them, and T is the engine's step budget."""
 
     from verity.core.protocols.pouw import verifier
-    from verity_vllm.protocol_options import pouw
-    from verity_vllm.protocol_options import pouw_h1 as PH
-    from verity_vllm.protocol_options.interface import Context
+    from verity_vllm.protocols import pouw
+    from verity_vllm.protocols.pouw import h1 as PH
+    from verity_vllm.protocols.interface import Context
 
     from verity_bench.vllm.arms import H1, h1_window, protocols_config, window_steps
     from verity_bench.vllm.runner import engine_args
@@ -1122,7 +1122,7 @@ def test_pearl_cs_whole_step_arm_builds_vllms_full_decode_graphs_beside_the_serv
 
     from verity_bench.vllm import runner
     from verity_bench.vllm.arms import plugin
-    from verity_vllm.pipeline.llm import resolve_options
+    from verity_vllm.llm import resolve_options
 
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
     spec = resolve_spec("llama31-8b-1gpu-pearl-c-whole-served")

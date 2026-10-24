@@ -156,7 +156,7 @@ def build(opts: Options) -> tuple[Any, Any]:
     if opts.precision != "pin":
         from verity_vllm.engine import int8_ranks
         int8_ranks.register(("linears", "attention") if opts.precision == "int8_exact" else ("linears",))
-    from verity_vllm.pipeline.llm import LLM
+    from verity_vllm.llm import LLM
 
     llm = LLM(opts.model, revision=opts.revision, **engine_options(opts))
     if opts.precision == "int8_exact":
@@ -164,9 +164,9 @@ def build(opts: Options) -> tuple[Any, Any]:
         if (got := int8_exact_of(llm.model)) != "all":
             raise RuntimeError(f"an int8_exact engine whose layers run int8 scope {got!r}, not 'all'")
     from verity_vllm.commit.committer.native_host import NativeHostCommitter
-    from verity_vllm.engine.engine_profile import get_model_runner
+    from verity_vllm.engine.handle import model_runner
 
-    eng = SimpleNamespace(llm=llm.vllm, runner=get_model_runner(llm.vllm), model=llm.model,
+    eng = SimpleNamespace(llm=llm.vllm, runner=model_runner(llm.vllm), model=llm.model,
                           cp={"repo": llm.pin.model, "revision": llm.pin.revision})
     from verity_vllm.commit.served_record import SamplerInputsSource
 

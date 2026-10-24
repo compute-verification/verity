@@ -72,7 +72,7 @@ def _timed(fn, key: str):
 
 def _patch_pearl() -> None:
     """`PEARL_PHASES` on the class that defines each, before any run exists."""
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
     for name, key in PEARL_PHASES:
         owner = next((c for c in PPD.PearlCDeviceRun.__mro__ if name in c.__dict__), None)
         if owner is not None:
@@ -84,7 +84,7 @@ def _patch_engine(llm) -> None:
     ``exec|TOKENS|REQUESTS`` and ``sample_tokens`` a range ``sample``, both on the runner instance, so outside the PoUW
     option's class-level hook (`pouw_pass.hook_steps`)."""
     import torch
-    from verity_vllm.engine.engine_profile import get_model_runner
+    from verity_vllm.engine import handle
     eng = llm.llm_engine
     step = eng.step
 
@@ -102,7 +102,7 @@ def _patch_engine(llm) -> None:
             _STEPS.append(rec)
 
     eng.step = stepped
-    runner = get_model_runner(llm)
+    runner = handle.model_runner(llm)
     execute = runner.execute_model
 
     def execute_model(so, *a, **kw):

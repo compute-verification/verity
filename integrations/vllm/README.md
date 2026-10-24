@@ -17,7 +17,7 @@ Imports point down the layer order `pipeline` > `check` | `properties` > `acquir
 ~~~text
 verity_vllm/
   pipeline/           stage drivers      build.py match.py commit.py row*.py report.py hot.py layout.py cli.py llm.py research_tools.py tp/
-  engine/             the vLLM engine    build.py capture.py pinned.py run_facts.py code_identity.py vllm_adapter.py engine_driver.py engine_profile.py arrivals.py static_schedule.py served_seed.py rank_worker.py profiles/
+  engine/             the vLLM engine    build.py capture.py pinned.py run_facts.py code_identity.py vllm_adapter.py engine_driver.py engine_profile.py handle.py arrivals.py static_schedule.py served_seed.py rank_worker.py profiles/
   program/            Program            registry/ frontend/ lifting/ verity/ml/kernels/ model.py workload.py compact.py dtypes.py
   query/              verification query module_body.py word.py cross_call.py required.py program_view.py manifest/ compare.py
   correspondence/     runtime corresp.   runtime.py reader_for_*.py resolve*.py capture_identities.py
@@ -50,7 +50,7 @@ lives here is misfiled.
 **`engine/`** is the vLLM engine we attach to: `build.py` (the engine under κ and what it reads back), `capture.py` (the
 step observer and run header; `pinned.py` its host buffers), `run_facts.py` (profile manifest, versions), `code_identity.py` (executed code objects),
 `vllm_adapter.py` (workloads and request driving; the stages import the engine's names from it), `engine_driver.py`,
-`engine_profile.py`, `arrivals.py`, `static_schedule.py` (a `sampling.ignore_eos` run held to the schedule its declaration alone
+`engine_profile.py`, `handle.py` (a built engine's scheduler and model runner: the module that knows vLLM's object graph), `arrivals.py`, `static_schedule.py` (a `sampling.ignore_eos` run held to the schedule its declaration alone
 decides), `served_seed.py` (the public default seed a served request without one is sampled under), `rank_worker.py` (the TP rank worker extension), and `profiles/` (kappa: capture profiles and workload JSON; one generic
 constructor + a facts table).  Never: commit, decide what is required.
 
@@ -194,6 +194,13 @@ regression: the current tree's checks against the frozen v1 records (`expected/<
 `fixtures.toml` are the recorded reasons the two differ).
 
 ## Python API
+
+Outside this distribution, code imports `verity_vllm` only through its public modules, and from each only the names its
+`__all__` lists (`tests/test_vllm_public_api.py`, whose allowlist of the other modules still imported only shrinks):
+
+- `verity_vllm`: `LLM`, `EnginePin` (the checkpoint pin it runs), `EngineSpec` and `TargetProfile` (the declared target);
+- `verity_vllm.engine.spec`: engine spec documents (`EngineSpec`, `Engine`, `load`, `from_mapping`, `SCHEMA`);
+- `verity_vllm.engine.handle`: a built engine's `scheduler` and `model_runner`.
 
 `verity_vllm.LLM` is a pinned vLLM engine, constructed and called like `vllm.LLM`:
 
@@ -397,11 +404,11 @@ sends it (`research run --send FILE`, which lands it in `$RESEARCH_RUN_DIR/input
 (`records.programs(row, ..., bundle=PATH)`, or `records programs ROW --bundle PATH`), each digest checked against the record.
 
 A TP row's Build is the trace unless the row is switched.  `verity-vllm predict compare ROW_DIR` predicts every Program of a traced
-Build from the row's declared inputs (`verity_vllm/predict/`) and compares digests rank by rank; `records switch ROW --comparison
+Build from the row's declared inputs (`verity_vllm/program/predict/`) and compares digests rank by rank; `records switch ROW --comparison
 comparison.json --run RUN --trace art:…` records, where every one is equal, the comparison run and that traced Build as the row's
 `aot` in `manifests/records.json`, and pins the predicted Programs (a row whose file is not done only at its public cap is
 refused).  A switched row's Build (`--build-construction record`, the
-default) derives each Program with `predict emit` (`verity_vllm/predict/aot.py`): the predicted Program, under the trace's annotations (the
+default) derives each Program with `predict emit` (`verity_vllm/program/predict/aot.py`): the predicted Program, under the trace's annotations (the
 runtime correspondence: per Call, the fx occurrence, module, views and slots, which only the trace yields) and with its other
 files, refused unless the predicted Program and descriptor are the trace's, byte for byte.  `records publish` refuses a switched
 row's Build that traced any Program.  Neutrality's rebuild traces every row (`--build-construction trace`), so it checks a switched

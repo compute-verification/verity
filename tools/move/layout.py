@@ -918,7 +918,7 @@ class Run:
                 return ("." * node.level + (node.module or ""), next(iter(groups)))
             return [f"from {mod} import {', '.join(ns)}" for mod, ns in groups.items()]
         names = [a.name + (f" as {a.asname}" if a.asname else "") for a in node.names]
-        if list(groups) == [m_old]:
+        if list(groups) == [m_old] and groups[m_old] == names:
             return None
         if len(groups) == 1 and next(iter(groups.values())) == names:
             return (m_old, next(iter(groups)))
@@ -941,9 +941,9 @@ class Run:
         """`from M import n` written in a string or a document: each name to the module it now lives in."""
         def fix(m: re.Match) -> str:
             mod = m.group("m")
-            if not self.L.renamed_prefix(mod):
-                return m.group(0)
             items = [x.strip() for x in m.group("n").split(",")]
+            if not any(self.L.renamed_prefix(n) for n in (mod, *(f"{mod}.{it.partition(' as ')[0].strip()}" for it in items))):
+                return m.group(0)
             groups: dict[str, list[str]] = {}
             for it in items:
                 name, _, alias = it.partition(" as ")

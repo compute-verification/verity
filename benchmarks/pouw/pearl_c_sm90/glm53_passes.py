@@ -56,7 +56,7 @@ def capture(a) -> int:
     import e2e
     import torch
     from verity.core.protocols.pouw.audit import weights_root
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
 
     out, dev = Path(a.out), torch.device("cuda")
     shapes = [tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes else sorted(glm53.in_domain(a.scheme))
@@ -183,7 +183,7 @@ def full_pass(d: Path, coins, jobs: int, every: int, without_y: bool = False) ->
     import numpy as np
     from clear_audit import Transcript, Verifier
     from verity.ml.commitments import Commitment
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PD
+    from verity_vllm.protocols.pouw import pearl_c as PD
 
     class Seen(CW._TileRuleView):
         """`verify_run`'s view of the scheme, keeping the operands and checked words of the digest it last took."""

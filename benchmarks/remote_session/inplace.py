@@ -1,5 +1,5 @@
 """The prover's pass over a store where its tensors hold it, on one GPU and with no copy of the store: vLLM's weight
-tensors and KV pages as its binder registers them (`verity_vllm.store.binder`'s `TorchBacking` and `PagedBacking`).
+tensors and KV pages as its binder registers them (`verity_vllm.protocols.remote_bandwidth.binder`'s `TorchBacking` and `PagedBacking`).
 
 ~~~text
 region     store blocks first … first + blocks − 1 (`Region`): a weight tensor's storage, block b at addr + 4096 b,

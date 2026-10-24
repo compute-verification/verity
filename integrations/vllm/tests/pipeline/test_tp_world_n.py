@@ -401,7 +401,7 @@ def test_a_fused_norm_recorder_row_is_the_collective_its_path_folds_to_and_the_u
     the fold's `all_reduce` over the [M, N] partial, on its fused path the fold's fused collective.  The provenance leg leaves the unfused
     calls to the Commit's replay, so they count with the checked ones."""
     from verity_vllm.check.match import rank_match as RMx
-    from verity_vllm.collectives import fused_norm as FN
+    from verity_vllm.engine.collectives import fused_norm as FN
     W, steps = 3, 2
     colls = {r: _colls(r, W, steps=steps) for r in range(W)}
 

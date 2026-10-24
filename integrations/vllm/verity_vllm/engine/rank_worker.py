@@ -3,7 +3,7 @@
 With `tensor_parallel_size > 1` the pinned vLLM (V1 engine, `d9105ea80`) runs one worker process per rank under the
 multiprocess executor; `VLLM_ENABLE_V1_MULTIPROCESSING=0` keeps the *engine core* in the driver process but the model,
 its parameters, the KV caches and every dispatcher call live in the rank processes.  `vllm_adapter.build_engine` +
-`Capture` (installed in-process on `get_model_runner(llm)`) therefore observe nothing: `get_model_runner` finds no
+`Capture` (installed in-process on `handle.model_runner(llm)`) therefore observe nothing: `handle.model_runner` finds no
 `driver_worker` (the executor is `MultiprocExecutor`), and a `TorchDispatchMode` entered in the driver would not see
 the workers' dispatcher calls.
 
@@ -35,8 +35,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from verity_vllm.collectives.collective_sites import MOE_COLLECTIVE_CLASSES, MOE_COLLECTIVE_MODULES
-from verity_vllm.collectives import fused_norm as FN
+from verity_vllm.engine.collectives.collective_sites import MOE_COLLECTIVE_CLASSES, MOE_COLLECTIVE_MODULES
+from verity_vllm.engine.collectives import fused_norm as FN
 from verity_vllm.engine import hooks, sparse_mla  # noqa: F401  (arms the serving switches before vLLM builds this rank's model)
 from verity_vllm.engine import int8_ranks  # noqa: F401  (registers the int8 parts the driver exported, before this rank builds its model)
 
@@ -440,7 +440,7 @@ class TP2CaptureWorkerExtension:
         # from inside its forward (OlmoeAttention._apply_qk_norm: q and k all-gathered, twice per layer) is invisible to the wrappers
         # above -- R17 row #70 recorded 34 collectives per step against the Build's 66 links (structure FAIL).  The one census shared
         # with the committer's TPPartialSource names the modules (hooked below) and the python modules to patch, a ruled-out call's too.
-        from verity_vllm.collectives.collective_sites import mid_module_site_census, patch_targets
+        from verity_vllm.engine.collectives.collective_sites import mid_module_site_census, patch_targets
         census = mid_module_site_census(model, world)
         st["mid_sites"] = {s["name"]: s for s in census["sites"]}
         sites += patch_targets(census["sites"] + census["ruled_out"])

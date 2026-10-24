@@ -653,7 +653,7 @@ def build(opts: Options) -> tuple[Any, Any]:
     if parts:
         from verity_vllm.engine import int8_ranks
         int8_ranks.register(parts)
-    from verity_vllm.pipeline.llm import LLM
+    from verity_vllm.llm import LLM
 
     llm = LLM(opts.model, revision=opts.revision, **engine_options(opts))
     if scope is not None:
@@ -665,9 +665,9 @@ def build(opts: Options) -> tuple[Any, Any]:
     from types import SimpleNamespace
 
     from verity_vllm.commit.committer.native_host import NativeHostCommitter
-    from verity_vllm.engine.engine_profile import get_model_runner
+    from verity_vllm.engine.handle import model_runner
 
-    eng = SimpleNamespace(llm=llm.vllm, runner=get_model_runner(llm.vllm), model=llm.model,
+    eng = SimpleNamespace(llm=llm.vllm, runner=model_runner(llm.vllm), model=llm.model,
                           cp={"repo": llm.pin.model, "revision": llm.pin.revision})
     com = NativeHostCommitter(eng, run_id=f"serve-openai:{opts.run_id}", arena_bytes=None, chunk=opts.chunk, hash_threads=opts.hash_threads,
                               gpu_tree=opts.gpu_tree, fast_copy=opts.cudart_copy)
