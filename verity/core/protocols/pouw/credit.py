@@ -34,7 +34,9 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   (`core_check.work_units`), over the window's own units. The window's layout is its Program's,
   ``h1window.program(linears, calls, m, tile)``, and its units are in that Program's order: call by call, each call's
   tiles row block major. There is one stratum per template, that is per K (`strata`), each unit's work its tile's
-  R·C·K served MACs, at the K its period's open committed (`law`). The served window's arguments are fixed (`window`):
+  R·C·K served MACs, at the K its period's open committed (`law`). Each linear's K is one the tile's proof covers, a
+  multiple of 32 below 2^17 (`TILE_K_STEP`, `TILE_K_LIMIT`: the K its ``GemmAccumulatorS8`` binds), else the window is
+  refused (``tile-k``, `tile_k`, its fix the K to pad to). The served window's arguments are fixed (`window`):
   the stream is the window's root, the registration its draw root, and the receipt ``{"receipts": …}``, its last
   round's receipts.
 * **The layout is the committed circuit's** (`layout_of`): `window` reads it from the descriptor whose SHA-512 the
@@ -197,6 +199,10 @@ LAYOUT_KEYS = ("calls", "linears", "m", "tile")
 LAYOUT_FORM = ("the window's layout is not {calls, linears, m, tile}, h1window.program's arguments: its calls "
                "[[linear, A block], ...] in order, its linears [[name, K, n], ...] each once, its A slot m and its tile "
                "[R, C], every number a natural number and R, C at least one")
+#: a linear's K is one the tile's proof covers, a multiple of `TILE_K_STEP` below `TILE_K_LIMIT`: the K the tile's
+#: `GemmAccumulatorS8` binds (its 32-wide step, and `S8_K_LIMIT`, where an s8 sum can leave s32)
+TILE_K_STEP = 32
+TILE_K_LIMIT = 1 << 17
 COIN_FORM = "the draw coin is not a SHA-512 digest (128 lowercase hex)"
 DRAW_ARGS = ("the draw's stream is not a string, its registration not a SHA-512 digest, or its receipt not an object of "
              "printable ASCII strings")
@@ -435,13 +441,26 @@ def _credited(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session:
     return out, None
 
 
+def tile_k(name: str, k: int) -> str:
+    """Why `strata` refuses linear `name` at a K = `k` of at least one that the tile's proof doesn't cover (``tile-k``),
+    with its fix: the K to pad its rows to, or past `TILE_K_LIMIT` the split."""
+    up = (k + TILE_K_STEP - 1) // TILE_K_STEP * TILE_K_STEP
+    fix = (f"pad its A and B rows with zero codes to K = {up}" if up < TILE_K_LIMIT else
+           f"split its k range into linears of at most K = {TILE_K_LIMIT - TILE_K_STEP} each, each padded with zero "
+           f"codes to a multiple of {TILE_K_STEP}")
+    return (f"linear {name}: K = {k} is not a multiple of {TILE_K_STEP} below {TILE_K_LIMIT}, the K the tile's proof "
+            f"covers and its GemmAccumulatorS8 binds: {fix}")
+
+
 def strata(layout: Any) -> tuple[list[dict] | None, tuple[str, str] | None]:
     """The work strata of the served H1 window whose Program is ``h1window.program(linears, calls, m, tile)`` (`layout`,
-    ``{calls, linears, m, tile}``), and None; or None and the refusal (``layout``, and why). Its units are the Program's,
-    in its order: call by call, each call's (m/R)·(n/C) tiles row block major. K's stratum is every unit of the calls of
-    K's linears, template ``k<K>``, as ``[lo, hi)`` ranges in order (adjacent ones merged), the strata in the order of
-    their first unit; a unit's work is its tile's served MACs, R·C·K, and every floor is one. Refused as h1window refuses
-    the layout. Its cost is the layout's calls, never its units."""
+    ``{calls, linears, m, tile}``), and None; or None and the refusal (``layout`` or ``tile-k``, and why). Its units are
+    the Program's, in its order: call by call, each call's (m/R)·(n/C) tiles row block major. K's stratum is every unit
+    of the calls of K's linears, template ``k<K>``, as ``[lo, hi)`` ranges in order (adjacent ones merged), the strata in
+    the order of their first unit; a unit's work is its tile's served MACs, R·C·K, and every floor is one. Refused as
+    h1window refuses the layout (``layout``), and (``tile-k``, `tile_k`) a linear whose K is no multiple of
+    `TILE_K_STEP` below `TILE_K_LIMIT`, the K the tile's proof covers, which its ``GemmAccumulatorS8`` refuses at bind.
+    Its cost is the layout's calls, never its units."""
     def no(why: str) -> tuple[None, tuple[str, str]]:
         return None, ("layout", why)
 
@@ -472,6 +491,9 @@ def strata(layout: Any) -> tuple[list[dict] | None, tuple[str, str] | None]:
     for name, (k, n) in ks.items():
         if k < 1 or n < c or n % c:
             return no(f"linear {name}: K = {k} and n = {n} are not K >= 1 and n whole blocks of the tile's {c} columns")
+    for name, (k, _n) in ks.items():
+        if k % TILE_K_STEP or k >= TILE_K_LIMIT:
+            return None, ("tile-k", tile_k(name, k))
     for k in sorted({k for k, _n in ks.values()}):
         used = sorted({blk for lin, blk in calls if ks[lin][0] == k})
         if used != list(range(len(used))):
@@ -580,11 +602,12 @@ def _runs(xs: Any) -> list[list]:
 def layout_of(descriptor: Any) -> tuple[dict | None, tuple[str, str] | None]:
     """The layout (``{calls, linears, m, tile}``, `strata`'s) of the H1 window whose circuit's descriptor is
     `descriptor` (its bytes, canonical JSON without annotations, the bytes the period's ``circuit`` is the SHA-512 of),
-    and None; or None and the refusal (``layout``, and why). The calls, linears and slot are its program function's
-    record (`WINDOW_FN`'s ``CALLS``, ``LINEARS`` and ``M``), each K's template (``TILES``) is `h1window.template`'s,
-    whose A and B rows give R and C, and the root's nodes other than inputs are each call's (M/R)·(n/C) instances of
-    its K's template, in the calls' order: a call one instance and a batch its members, as the template query counts
-    units (`Q_template_instances`). Its cost is the descriptor's bytes, never the gates its nodes unroll to."""
+    and None; or None and the refusal (``layout``, or `strata`'s ``tile-k``, and why). The calls, linears and slot are
+    its program function's record (`WINDOW_FN`'s ``CALLS``, ``LINEARS`` and ``M``), each K's template (``TILES``) is
+    `h1window.template`'s, whose A and B rows give R and C, and the root's nodes other than inputs are each call's
+    (M/R)·(n/C) instances of its K's template, in the calls' order: a call one instance and a batch its members, as the
+    template query counts units (`Q_template_instances`). Its cost is the descriptor's bytes, never the gates its nodes
+    unroll to."""
     def no(why: str) -> tuple[None, tuple[str, str]]:
         return None, ("layout", why)
 
