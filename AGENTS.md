@@ -301,6 +301,11 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
     in a trusted module (a definition's proof field) may; the Lean check replays it like any proof. C-Flock has no
     `Definitions/` area yet: its guarantees are `Models/Flock/Guarantees`, and the rest of its analysis is in `Proofs/Flock`
     until its spec is extracted.
+  - `Security/` is three trees (Daniel, 24 Oct): definitions (what Daniel reads: vocabulary, named assumptions,
+    guarantee statements), properties (statements about the code, reading only the definitions and that code) and
+    proofs (every proof, lemma and proof-only definition). The Lean check refuses a guarantee or property whose
+    statement reads a definition of the proofs tree, and a module of the definitions or properties tree that imports
+    one (`trees` in `Security/lean-audit.json` names the trees; its `except`, one reason each, is the cleanup's to-do).
   - All packages share one toolchain and one Mathlib revision (`tests/test_lean_packages.py`). Bump them together, in a
     PR of their own.
 - **The Lean check.** Every Lake package has a lock, `lean-audit.json`, and `check` runs the Lean check on every declaration

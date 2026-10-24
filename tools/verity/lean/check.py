@@ -56,7 +56,12 @@ environment extension loaded, so none of the package's code runs), and replays t
     reads        a definition a guarantee's statement reads lies outside the spec (the `layers` prefixes) of its package
                  and of the packages it requires by path, and outside a pinned dependency, unless a `reads_exempt`
                  prefix lists its module with a reason (an entry that exempts nothing fails too); or it lies in a spec
-                 module outside `meaning`, which the record therefore does not hold
+                 module outside `meaning`, which the record therefore does not hold; a module of the proofs tree is
+                 the trees check's
+    trees        (`trees`: which module prefixes are the definitions, properties and proofs trees, its own and those of
+                 the packages it requires by path) a guarantee's statement reads a definition of a module of the proofs
+                 tree, or an audited module of the definitions or properties tree imports one, unless a prefix of `trees`'
+                 `except` lists the read module or the importing one with a reason (an entry that excepts nothing fails)
     proved_in    (a spec package whose guarantees another package proves) a package `proved_in` names does not require this
                  one by path, holds guarantees in its own policy, shares a module root with a package it requires, or
                  imports modules of its own outside its roots; or a guarantee is proved by none of this package and those, or
@@ -190,7 +195,7 @@ FIXTURES = HERE / "tests" / "fixtures"
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
 ORDER = ("roots", "proved_in", "exempt", "runs", "axioms", "assumptions", "meaning", "escapes", "verifier", "claims", "compile_time",
-         "dependency_unchecked", "layers", "reads_exempt", "upstream", "four_names", "guarantees", "shape", "reads", "dependencies")
+         "dependency_unchecked", "layers", "reads_exempt", "trees", "upstream", "four_names", "guarantees", "shape", "reads", "dependencies")
 #: a guarantee's `owner`: the handle of the lane that answers for it (`@proofs`)
 OWNER = re.compile(r"@[a-z0-9][a-z0-9-]*")
 
@@ -1789,13 +1794,15 @@ def reads_home(pkg: Path, policy: dict) -> dict[str, list[str]]:
     return home
 
 
-def spec_reads(policy: dict, facts: dict, home: dict[str, list[str]]) -> list[str]:
+def spec_reads(policy: dict, facts: dict, home: dict[str, list[str]], roles: dict[str, str] | None = None) -> list[str]:
     """The reads check: every definition a guarantee's statement reads (`reads` under `meaning`, and `outside` it where the
     walk stops) lies in a spec module of its package or of a package it requires by path (``home``, `homes`), and the record
     holds it (its module is under `meaning`), or it is a pinned dependency's.  Theorems are not read: a statement means
     what it means whatever proves the propositions inside it.  A module outside the spec under a `reads_exempt` prefix
     ({prefix: the reason}) is exempt; an entry that exempts no such read fails, and an exemption never covers a spec module
-    outside `meaning` (the record would hold nothing of it)."""
+    outside `meaning` (the record would hold nothing of it).  A read outside the spec of a module of the proofs tree
+    (``roles``, `tree_roles`) is the trees check's (`tree_failures`), and `reads_exempt` covers none."""
+    roles = roles or {}
     exempt, meaning = policy.get("reads_exempt", {}), policy.get("meaning", policy["roots"])
     if not isinstance(exempt, dict):
         return [Failure("reads.exempt-form", None, f"reads: `reads_exempt` is {json.dumps(exempt)}; it is an object "
@@ -1812,6 +1819,8 @@ def spec_reads(policy: dict, facts: dict, home: dict[str, list[str]]) -> list[st
             if m not in home:
                 continue
             why = "spec" if not under(home[m], m) else "meaning" if not under(meaning, m) else None
+            if why == "spec" and tree_of(roles, m) == "proofs":
+                continue
             if why == "spec" and (hit := {p for p in exempt if under([p], m)}):
                 used |= hit
                 continue
@@ -1838,7 +1847,100 @@ def spec_reads(policy: dict, facts: dict, home: dict[str, list[str]]) -> list[st
                                  f"`check.py --update`"))
     for p in sorted(set(exempt) - used):
         fails.append(Failure("reads.exempt-stale", p, f"reads: `reads_exempt` lists {p}, under which no guarantee reads "
-                             f"outside the spec; remove the entry"))
+                             f"outside the spec; remove the entry" if tree_of(roles, p) != "proofs" else
+                             f"reads: `reads_exempt` lists {p}, in the proofs tree, whose reads the trees check judges: "
+                             f"remove the entry (an exception to the trees rule is listed under `trees`' `except`)"))
+    return fails
+
+
+#: the trees a `trees` entry names, each a list of module prefixes; `except` lists the exceptions, each with its reason
+TREES = ("definitions", "properties", "proofs")
+
+
+def tree_roles(pkg: Path, policy: dict) -> dict[str, str]:
+    """{module prefix: its tree} that ``policy``'s `trees` and those of the packages ``pkg`` requires by path name, so a
+    package's trees reach those that require it (a dependency's `except` stays its own)."""
+    out: dict[str, str] = {}
+    rules = []
+    for d in path_deps(pkg):
+        try:
+            rules.append(load(d).get("trees") if (d / POLICY).is_file() else None)
+        except ValueError:
+            continue
+    for rule in [*rules, policy.get("trees")]:
+        for tree in TREES:
+            for p in (rule or {}).get(tree, []) if isinstance(rule, dict) else []:
+                if isinstance(p, str):
+                    out[p] = tree
+    return out
+
+
+def tree_of(roles: dict[str, str], module: str) -> str | None:
+    """The tree of ``module``: that of the longest prefix ``roles`` names it under (`Properties.Proofs` before
+    `Properties`), or None."""
+    hits = [p for p in roles if under([p], module)]
+    return roles[max(hits, key=len)] if hits else None
+
+
+def tree_failures(policy: dict, facts: dict, roles: dict[str, str]) -> list[str]:
+    """The trees check: the definitions tree is what a reader reads (vocabulary, named assumptions, guarantee statements),
+    the properties tree states what the code does, and the proofs tree is every proof, lemma and proof-only definition.  So
+    no guarantee's or property's statement reads a definition (`reads` and `outside`, as `spec_reads` walks them) of a
+    module of the proofs tree, and no audited module of the definitions or properties tree imports one.  The trees are
+    ``roles`` (`tree_roles`); a module under a prefix of `trees`' `except` ({prefix: the reason}) is excepted (the read
+    module, or the importing one), and an entry that excepts nothing fails."""
+    rule = policy.get("trees", {})
+    if not isinstance(rule, dict) or set(rule) - {*TREES, "except"} or not all(
+            isinstance(rule.get(t, []), list) and all(isinstance(p, str) and p for p in rule.get(t, [])) for t in TREES):
+        return [Failure("trees.form", None, f"trees: `trees` is {json.dumps(rule)}; it is an object whose "
+                        f"{', '.join(TREES)} are lists of module prefixes and whose `except` is {{module prefix: the reason}}")]
+    excepted = rule.get("except", {})
+    if not isinstance(excepted, dict) or any(not p or not isinstance(why, str) or not why.strip()
+                                             for p, why in excepted.items()):
+        return [Failure("trees.except-form", None, f"trees: `except` is {json.dumps(excepted)}; each entry is a module "
+                        f"prefix with the reason it is excepted")]
+    if not roles:
+        return [Failure("trees.stale-except", p, f"trees: `except` lists {p}, but no tree is named; remove the entry")
+                for p in sorted(excepted)]
+    named = {t: ", ".join(sorted(p for p, r in roles.items() if r == t)) or "none" for t in TREES}
+    used: set[str] = set()
+
+    def exception(m: str) -> bool:
+        hit = {p for p in excepted if under([p], m)}
+        used.update(hit)
+        return bool(hit)
+
+    def few(xs: set[str]) -> str:
+        xs = sorted(xs)
+        return ", ".join(xs[:4]) + (f" and {len(xs) - 4} more" if len(xs) > 4 else "")
+
+    bad: dict[str, tuple[set[str], set[str]]] = {}
+    for g, f in sorted(facts["pins"].items()):
+        if f.get("kind") != "theorem":
+            continue
+        for name, m in [*((r["name"], r["module"]) for r in f.get("reads", [])), *map(tuple, f.get("outside", []))]:
+            if tree_of(roles, m) == "proofs" and not exception(m):
+                defs, by = bad.setdefault(m, (set(), set()))
+                defs.add(parent(name))
+                by.add(g)
+    fails = [Failure("trees.reads", m, f"trees: {few(by)} read {few(defs)} in {m}, a module of the proofs tree "
+                     f"({named['proofs']}): a guarantee's or property's statement reads only the definitions tree "
+                     f"({named['definitions']}), the code it is about and pinned dependencies. Move the definitions into "
+                     f"the definitions tree (Definitions/<Area>/), or take the statement off the lock's guarantees: one "
+                     f"over proof-only definitions is a lemma of the proofs tree")
+             for m, (defs, by) in sorted(bad.items())]
+    for m in sorted(facts["modules"]):
+        if (tree := tree_of(roles, m)) not in ("definitions", "properties"):
+            continue
+        for i in facts["imports"].get(m, []):
+            if tree_of(roles, i) == "proofs" and not exception(m):
+                fails.append(Failure("trees.imports", m, f"trees: {m}, of the {tree} tree, imports {i}, of the proofs tree "
+                                     f"({named['proofs']}): what the definitions and the properties say never rests on a "
+                                     f"proof. Move what {m} uses from {i} into the definitions tree (Definitions/<Area>/), "
+                                     f"or move {m} into the proofs tree"))
+    for p in sorted(set(excepted) - used):
+        fails.append(Failure("trees.stale-except", p, f"trees: `except` lists {p}, under which no statement reads the "
+                             f"proofs tree and no module of the definitions or properties tree imports it; remove the entry"))
     return fails
 
 
@@ -2593,8 +2695,9 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             rep["failures"].append(Failure("lift", None, f"lift: {e}"))
         return reported(rep)
     fails, new = judge(current, facts, files, update, owner)
-    fails = cross + fails + dropped(pkg, files, facts) + spec_reads(current, facts, reads_home(pkg, current)) + \
-        shape(current, facts)
+    roles = tree_roles(pkg, current)
+    fails = cross + fails + dropped(pkg, files, facts) + spec_reads(current, facts, reads_home(pkg, current), roles) + \
+        tree_failures(current, facts, roles) + shape(current, facts)
     rep["unread_spec"] = unread_spec(facts, read_by_dependents(pkg, repo))
     (missed, rep["dependency_sources"]), rep["seconds"]["dependency-sources"] = \
         scanned.result() if scanned else timed(dependency_scans, pkg, facts["oleans"], policy)
