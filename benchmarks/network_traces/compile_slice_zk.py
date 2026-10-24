@@ -136,8 +136,8 @@ def stager(M, x: SimpleNamespace, n: int, out: Path) -> SimpleNamespace:
 
 def population(meta: dict) -> int:
     """The fewest units whose statement fits `--zk`'s shape (k_log + nbl ≥ 25, `n2_zk.stage`), at least the four kinds."""
-    nbl = max(3, 25 - meta["k_log"])
-    return max(len(KINDS), meta["vus_per_block"] * (1 << (nbl - 1)) + 1)
+    b = 25 - meta["k_log"]
+    return len(KINDS) if b <= 3 else max(len(KINDS), meta["vus_per_block"] * ((1 << (b - 1)) + 1))
 
 
 def certified(M, port, words: list[int], salt: bytes) -> bytes:
