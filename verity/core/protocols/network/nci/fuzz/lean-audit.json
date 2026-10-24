@@ -1,0 +1,10 @@
+{
+ "roots": ["NciFuzz.Check"],
+ "exempt": {
+  "NciFuzz.Main": "the nci-desc-fuzz exe: reads Programs from a file and writes NciCheck.Fuzz.check on each, in parallel tasks; IO around the search, which no proof reads"
+ },
+ "escapes": {
+  "NciCheck.Fuzz.visit": "a partial def: the walk over the activations Prog.gate visits, bounded by Caps.work; compiled search code that no proof reads"
+ },
+ "guarantees": {}
+}

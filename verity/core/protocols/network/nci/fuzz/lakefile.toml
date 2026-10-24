@@ -1,0 +1,22 @@
+# A falsification search for the open statements behind `NciCheck.Properties.DescAgrees`
+# (`Security/Properties/Proofs/Nci/`: `Walk.OperandsResolve`, `Resolve.BodiesOk`, `Novel.ReadsExact`). Scratch: it requires
+# the NCI check by path and is no part of it, so the check's lock is untouched. `NciFuzz.Check`'s docstring says what it
+# checks; `gen/` writes the Programs it reads.
+name = "nci_fuzz"
+defaultTargets = ["nci-desc-fuzz"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "nci_check"
+path = "../lean"
+
+[[lean_lib]]
+name = "NciFuzz"
+roots = ["NciFuzz.Check"]
+
+[[lean_exe]]
+name = "nci-desc-fuzz"
+root = "NciFuzz.Main"
