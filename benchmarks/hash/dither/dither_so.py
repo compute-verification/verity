@@ -182,9 +182,10 @@ ZSIDE_ENV = "DITHER_SO_ZSIDE"
 # that commit to have read the stage, run beside the trees; a capture's step keeps them on the units stream; the same
 # receipts and roots
 RTSIDE_ENV = "DITHER_SO_RTSIDE"
-# "k" (1 <= k <= D - 2, without -ov, $DITHER_SO_ROOT_LAG or $DITHER_SO_COIN_ASYNC): step s's `after` dispatches step
-# s + k - (D - 1)'s units, k steps before round s + k takes their receipts (1, the default: the next step's round), under
-# a coin k - 1 steps younger; the same order (`check`: coin, units, receipts' round)
+# "k" (1 <= k <= D - 2, without -ov or $DITHER_SO_ROOT_LAG): step s's `after` dispatches step s + k - (D - 1)'s units
+# (under $DITHER_SO_COIN_ASYNC deferred as there, still by the next step's receipt leaf), k steps before round s + k takes
+# their receipts (1, the default: the next step's round), under a coin k - 1 steps younger; the same order (`check`:
+# coin, units, receipts' round)
 UNITS_LEAD_ENV = "DITHER_SO_UNITS_LEAD"
 ROUNDS_ENV = "DITHER_ROUNDS"            # the window's layout (its round coins), the session's when off the node
 MF_CHUNK = 64                           # manifest rows a pinned host chunk
