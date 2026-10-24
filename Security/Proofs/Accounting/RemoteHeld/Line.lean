@@ -266,7 +266,6 @@ theorem reached_of_run {node : Node} {r : Record} {rs : Array RemoteAudit.Sessio
       .ok s := reach_of_fold _ _ _ h
   unfold Record.reached
   rw [← Array.foldlM_toList, hk]
-  all_goals rfl
 
 /-- Each window's receipts in a state's summary are its window's. -/
 theorem summary_receipts {s : RemoteAudit.Session.State} {sm : RemoteAudit.Session.Summary}
@@ -333,7 +332,8 @@ theorem receipts_of_verified {node : Node} {r : Record} (hv : Verified node r) :
 /-- `m < 2^448`: each draw's sampler word lies in its stream's first SHA-512 block. -/
 theorem receiptMax_lt : receiptMax < 2 ^ 448 := by
   unfold receiptMax RemoteAudit.Session.RECEIPT_LIMIT
-  norm_num
+  exact Nat.lt_of_lt_of_le (Nat.sub_lt (Nat.two_pow_pos 64) Nat.one_pos)
+    (Nat.pow_le_pow_right (by norm_num) (by norm_num))
 
 /-- On an accepted record, the trace's wrong receipts below the record's draw's pooled bound at the line's `δ` are
 below the W every line of the record reads (`LineCoversSession`): the line reads each window's receipts and draws off
