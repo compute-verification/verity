@@ -208,6 +208,27 @@ def test_a_running_lean_check_holds_a_rebuilt_next_with_the_same_prs_heads_and_t
     assert _main(world) == new and len(h.launched) == 1
 
 
+def test_a_moved_lean_check_that_regenerated_locks_runs_again_on_the_rebuilt_commit(world, monkeypatch):
+    """`_land` builds the regenerated locks on the commit the check covers, and its lock gate takes only a run of that very
+    commit: a moved check that regenerated locks would cover the rebuilt `next` and be refused at every tick."""
+    h = Review(world, monkeypatch)
+    h.d.regenerate_locks = True
+    h.d._regenerated = lambda drive, run: True
+    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
+    world.gh.put(2, world.change({"a.txt": "2\n"}))
+    for n in (1, 2):
+        h.review(n)
+    h.tick()
+    _rebuild_next(world, monkeypatch)
+    new = _tip(world)
+    h.tick()
+    h.run_state[h.lean_ids()[0]] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, h.lean_ids()[0], {LEAN_STEP: "passed"})]
+    assert not h.tick().startswith("landed")
+    assert len(h.launched) == 2 and h.launched[1][0] == new, h.launched
+    assert h.d.q.load_state()["drive"]["lean"][new]["state"] is None
+
+
 def test_the_lean_check_stops_below_a_member_that_came_onto_next_within_the_settle_ticks(world, monkeypatch):
     """A PR marked moments ago is the one most likely to be re-marked: a check of the prefix's top through it would leave `next`
     at its next push, so the check stops below it."""
@@ -251,11 +272,27 @@ def test_an_ejection_during_a_lean_check_of_its_prefix_waits_to_rebuild_next_and
     assert research_main(["queue", "eject", "3", "--reason", "x", "--by", "ci", "--workdir", str(h.q.workdir), "--remote",
                           str(world.origin), "--repo", "o/verity", "--store", str(world.tmp / "store")]) == 0
     assert "the tick after that check ends" in capsys.readouterr().out and _tip(world) == top
+    world.gh.ready.discard((3, world.gh.prs[3].head))                    # the store's `ready = false`, as drive's `ready` reads it
     h.run_state[h.lean_ids()[0]] = ("done", 0, None)
     h.evidence = [_steps_run(world.tmp, h.lean_ids()[0], {LEAN_STEP: "passed"})]
     out = h.tick()
     assert out.startswith("landed #2"), out
     assert h.cancelled == [] and _subject(world, "main").startswith("Queue: #2")
+
+
+def test_a_pr_re_marked_at_its_ejected_head_lands(world, monkeypatch):
+    """The queue's record of an ejection outlives a re-mark at the same head (`Queue._marked_again` re-admits it): read as
+    withdrawn, it held the PR, and every PR above it, off `main` for good."""
+    h = Review(world, monkeypatch)
+    world.gh.put(1, head := world.change({"a.txt": "1\n"}))
+    h.review(1)
+    h.q.sync()
+    h.q.eject(1, "x", "ci")
+    world.gh.ready.discard((1, head))
+    assert not h.tick().startswith("landed")
+    world.gh.ready.add((1, head))                                           # its owner marks it again at that head
+    h.q.marked_at = lambda n, hd: "2099-01-01T00:00:00Z"
+    assert h.tick().startswith("landed #1"), world.logs
 
 
 def test_a_lean_check_covers_only_while_its_commit_is_on_next(world, monkeypatch):

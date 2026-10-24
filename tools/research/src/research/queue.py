@@ -766,6 +766,7 @@ class Queue:
         return (_who(p.owner or "") == who
                 or (ejected.get("head") == a.pr.head and _who(ejected.get("by") or "") == who)
                 or (self.marked_by is not None and not self.ready(a.pr.number, a.pr.head)
+                    and not (self.before_cutoff and self.before_cutoff(a.pr.number, a.pr.head))    # then it's a `true`
                     and _who(self.marked_by(a.pr.number, a.pr.head) or "") == who))
 
     def order(self, chain: list[Member], entries: dict[int, Entry]) -> list[int]:

@@ -301,7 +301,9 @@ def test_a_pr_carries_a_contained_unmarked_pr_of_its_own_owner_or_one_whose_owne
     assert members == [] and entries[4].why == "contains #5, which isn't admitted"
     q.marked_by = lambda n, h: "lane-5" if n == 5 else None                 # #5's owner wrote its `ready = false`
     assert [m.pr for m in q.sync()[0]] == [4]
-    q.marked_by = None
+    q.before_cutoff = lambda n, h: "2026-10-01T00:00Z" if n == 5 else None   # its owner's `ready = true`, but before cutoff
+    assert q.sync()[0] == []
+    q.marked_by = q.before_cutoff = None
     assert q.sync()[0] == []
     world.gh.put(5, parent)
     q.eject(5, "superseded by #4", "lane-5")

@@ -2384,9 +2384,8 @@ class Driver:
         running = {c for c, rec in drive["lean"].items() if rec.get("state") is None}
         # an ejection from a Lean check's prefix (`queue.lean_running`) rebuilds `next` only the tick after that check ends, so
         # the landing uses the check before the rebuild takes its commit off `next`
-        ejected = q.load_state().get("ejected", {})
         waits = next((c for c, rec in drive["lean"].items() if c in running or rec.get("ended") == drive["tick"]
-                      if any((ejected.get(str(n)) or {}).get("head") == h for n, h in rec.get("members") or ())), None)
+                      if any(not q.ready(n, h) for n, h in rec.get("members") or ())), None)
         if why := hold(self.repo, q.branch, lambda c, base: c in running):
             what.append(why)
         elif waits:
@@ -2526,10 +2525,9 @@ class Driver:
         if main != base:
             return None, f"`main` {main[:12]} moved off `{q.branch}`'s base {base[:12]}: it lands once a sync rebuilds `{q.branch}`"
         self._note_marks(drive, chain)
-        ejected = q.load_state().get("ejected", {})
         k, why = 0, None
         for m in chain:
-            if (ejected.get(str(m.pr)) or {}).get("head") == m.head or not q.ready(m.pr, m.head):
+            if not q.ready(m.pr, m.head):                # an eject writes `ready = false`; a re-mark at that head is newer
                 why = "its ready mark is withdrawn: it leaves `next` at the next rebuild"
                 break
             if (why := unreviewed(self.reviews(m.pr, m.head), self._owners(m))) is not None:
@@ -2589,6 +2587,11 @@ class Driver:
                 return min(i - 1, t), rid
             commit, run = got
             if (regen := self._regenerated(drive, run)) is None:
+                return min(i - 1, t), rid
+            if regen and lean.get(commit, {}).get("rekeyed_from"):
+                # `_land` builds the locks on ``commit``, and its lock gate takes only a run of that very commit
+                del lean[commit]
+                self._lean_check(drive, chain, k, i, dry_run)
                 return min(i - 1, t), rid
             if regen:
                 if pos[commit] > t:
@@ -2703,7 +2706,7 @@ class Driver:
                 continue
             new = chain[n - 1].commit
             if new not in lean and (tree := rec.get("tree") or self._tree(c)) and tree == self._tree(new):
-                lean[new] = {**lean.pop(c), "tree": tree}
+                lean[new] = {**lean.pop(c), "tree": tree, "rekeyed_from": c}
                 self.q.log(f"research queue drive: the Lean check {' '.join(rec['ids'])} of {c[:12]} holds {new[:12]} of the "
                            f"rebuilt `{self.q.branch}`: the same PRs at the same heads, the same tree")
 
