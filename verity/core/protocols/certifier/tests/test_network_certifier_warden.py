@@ -33,19 +33,27 @@ class Server:
     newline, with `answers[k]`, a list of (buckets after the request's bucket, bytes or EOF); `release(t)` feeds what is
     due by bucket t. `refuse` fails the connects listed."""
 
-    def __init__(self, answers: list[list], refuse: tuple[int, ...] = ()) -> None:
-        self.answers, self.refuse = answers, refuse
+    def __init__(self, answers: list[list], refuse: tuple[int, ...] = (), hold: dict[int, int] | None = None) -> None:
+        self.answers, self.refuse, self.hold = answers, refuse, hold or {}
         self.conns: list[ServerConn] = []
+        self.held: dict[int, asyncio.Event] = {}
 
     async def connect(self):
         k = len(self.conns)
         conn = ServerConn(self.answers[k] if k < len(self.answers) else [])
         self.conns.append(conn)
+        if k in self.hold:
+            self.held[k] = asyncio.Event()
+            await self.held[k].wait()
         if k in self.refuse:
             raise ConnectionRefusedError("refused")
         return conn.reader, conn
 
     def release(self, t: int) -> None:
+        for k, opened in list(self.held.items()):
+            if t >= self.hold[k]:
+                opened.set()
+                del self.held[k]
         for conn in self.conns:
             conn.release(t)
 
@@ -127,9 +135,9 @@ class Client:
 
 def settled(warden: Warden, server: Server) -> bool:
     cap = PARAMS.egress_cells * P
+    if sum(c.server is None and c.upstream is None for c in warden.active) != len(server.held):
+        return False
     for c in warden.active:
-        if c.server is None and c.upstream is None:
-            return False
         if c.problem is None and not c.ingress_ended and c.reader._buffer:
             return False
         if c.server is not None:
@@ -198,7 +206,7 @@ def test_honest_traffic_is_released_exactly_on_schedule_passes_bytes_unchanged_a
         assert (bytes(shim.data), shim.outcome) == (resps[k], "end")
         n = max(1, -(-len(resps[k]) // P))
         assert [(t, kind) for t, kind, _ in client.cells()] == expected_egress(e["admitted"], e["ingress_end"], n)
-        # nothing is released at admission, before the server's connection opens
+        # nothing is released at admission: the client's cells are read from then on
         assert e["ingress_end"] - e["admitted"] == 1 + (-(-len(reqs[k]) // P) - 1) // R
     # FIFO: 2 takes the first lane to free (1's), 3 the next (0's)
     assert [log[k]["admitted"] for k in range(4)] == [1, 2, log[1]["ended"] + 1, log[0]["ended"] + 1]
@@ -237,29 +245,49 @@ def test_a_late_byte_fails_its_connection_closed_at_its_cell():
     (e,) = warden.log
     assert (e["failed"], e["failed_at"]) == ("late", 2)
     shim = client.shim()
-    assert (bytes(shim.data), shim.outcome) == (b"a" * (2 * P), "late")
+    assert (bytes(shim.data), shim.outcome) == (b"a" * (2 * P), "server")
     assert [(t, k) for t, k, _ in client.cells()] == expected_egress(1, e["ingress_end"], 3, FAIL)
     verdict = audit(PARAMS, *records(warden))
     assert not verdict["accepted"]
-    assert verdict["windows"][0]["problems"] == ["connection 0 failed late at egress cell 2"]
-    assert verdict["connections"][0]["failed"] == "late"
+    assert verdict["windows"][0]["problems"] == ["connection 0 failed closed (server) at egress cell 2"]
+    assert verdict["connections"][0]["failed"] == "server"
 
 
 def test_a_server_that_never_answers_fails_at_the_first_egress_slot():
     warden, (client,), _ = run([[]], {0: [cells(request(5), B)]})
     (e,) = warden.log
     assert (e["failed"], e["failed_at"], e["ended"]) == ("late", 0, e["ingress_end"] + D)
-    assert client.shim().outcome == "late"
+    assert client.shim().outcome == "server"
 
 
 def test_a_server_failure_shows_only_at_an_egress_slot():
     """A server whose connection is refused fails the connection at a + D, slot 0, like a server that is late there:
-    the server chooses whether and at which egress cell a connection fails, and nothing else."""
+    the server chooses whether and at which egress cell a connection fails, and nothing else: the FAIL cell is the
+    same bytes whatever the server's reason, which only the warden's log keeps."""
     server = Server([[]], refuse=(0,))
     warden, (client,), _ = run(server, {0: [cells(request(5), B)]})
     (e,) = warden.log
     assert (e["failed"], e["failed_at"], e["ended"]) == ("upstream", 0, e["ingress_end"] + D)
     assert [(t, k) for t, k, _ in client.cells()] == expected_egress(0, e["ingress_end"], 1, FAIL)
+    _, (silent,), _ = run([[]], {0: [cells(request(5), B)]})
+    assert client.writes == silent.writes and client.shim().outcome == "server"
+
+
+def test_a_server_slow_to_accept_its_connection_moves_nothing():
+    """Ingress is released on schedule whether or not the server's connection has opened, and what was released
+    before it opened is written once it does: a server that accepts late, before a + D, leaves the wire as it was, and
+    one that accepts past a + D fails at egress cell 0."""
+    req, resp = request(3 * P + 5), b"r" * (2 * P + 3)
+    wires = []
+    for hold in ({}, {0: 5}):
+        warden, (client,), server = run(Server([[(0, resp), (0, EOF)]], hold=hold), {1: [cells(req, B)]})
+        assert server.conns[0].received == req and client.shim().data == resp
+        assert (warden.log[0]["admitted"], warden.log[0]["ingress_end"]) == (1, 3)
+        wires.append(client.writes)
+    assert wires[0] == wires[1]
+    warden, (client,), _ = run(Server([[(0, resp), (0, EOF)]], hold={0: 3 + D + 1}), {1: [cells(req, B)]})
+    assert (warden.log[0]["failed"], warden.log[0]["failed_at"]) == ("late", 0)
+    assert client.shim().outcome == "server"
 
 
 def test_egress_past_its_cells_fails_at_the_last_and_the_rest_never_reaches_the_client():
