@@ -793,7 +793,7 @@ def test_pouw_serve_and_ncp_v2_take_the_auditor_hosts_challenger():
     remote = {"pouw": {"challenger": T.AUDITOR, "session": T.SESSION}}
     assert not any("challenger" in r or "session" in r for r in refused("pouw:ncp-v2", remote))
     assert any("needs 'session'" in r for r in refused("pouw:ncp-v2", {"pouw": {"challenger": T.AUDITOR}}))
-    assert any("'challenger' is eps1-sm120-h1fx1 and ncp-v2's" in r for r in refused("pouw:ncp-v1", remote))
+    assert any("'challenger' is for eps1-sm120-h1fx1, ncp-v2," in r for r in refused("pouw:ncp-v1", remote))
 
 
 class _NcpLinear:
