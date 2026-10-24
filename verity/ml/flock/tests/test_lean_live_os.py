@@ -16,6 +16,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from verity_flock.record_text import session_text
 
 FLOCK = Path(__file__).resolve().parents[1]
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
@@ -172,7 +173,7 @@ def edited(sessions, tmp_path_factory):
         shutil.copytree(seed, d)
         record = json.loads((seed / "session.json").read_text())
         edit(record)
-        (d / "session.json").write_text(json.dumps(record))
+        (d / "session.json").write_text(session_text(record))
         dirs.append(str(d))
     p = subprocess.run([str(BIN), "verify", "--statement", STATEMENT, "--circuit", str(circuit),
                         "--public", str(root / "stage" / "pub-4.bin"), "--coins", "seed", "--session", *dirs],
