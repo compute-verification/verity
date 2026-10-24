@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.ZK.FinishSwLig
 import Proofs.Flock.Claims.ZK.FrameOpenCut
 import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckMasked
+import Proofs.Flock.Claims.ZK.FinExe
 
 /-!
 # Level 0's bodies pin the source's masked values
@@ -15,6 +16,8 @@ and the cut opening from a source sends the session's bodies at the pads that ma
   first `j + 1` bodies at the pads `padsL0` (the source's masked values plus `l0Clear`), at any table.
 * **`masked_of_cutL0`**: so where those bodies are a run's at pads `h`, the source's masked values on `[zp 64, h_ab)`
   are `l0Clear` plus `h`.
+* **`repCut_cutL0`**: a rep from a source whose PIOP returns, cut in level 0's opening, stops having sent those bodies,
+  at the PIOP's target and basis (`cutStop_of_eraseZ` carries it across level 0's erased rows and salts).
 -/
 
 namespace FlockComplete.LigLock
@@ -149,5 +152,50 @@ theorem masked_of_cutL0 {coin : ℕ → ℕ → F128} {p0 : ℕ} {P P' : List UI
   rw [padsL0, FlockSoundness.Discharge.Composed.Zerocheck.get_map_range _ hhi] at e
   rw [← e]
   exact f128_eq_add_add _ _
+
+/-! ## The rep's level 0 bodies -/
+
+/-- A stop survives `eraseZ`: runs equal up to `eraseZ` stop at the same log. -/
+theorem cutStop_of_eraseZ {Q : Array Claims.Msg → Prop} {m m' : TMW PS Zk.ZkProof} (he : eraseZ <$> m = eraseZ <$> m')
+    {t : Transcript} {l : Array Claims.Msg} (h : CutStop Q ((m.run t).go l)) : CutStop Q ((m'.run t).go l) := by
+  obtain ⟨L, hm, hQ⟩ := h
+  refine ⟨L, ?_, hQ⟩
+  have e := congrArg (fun z => (z.run t).go l) he
+  simp only [StateT.run_map, go_map', hm] at e
+  rcases h' : (m'.run t).go l with ⟨r, l''⟩
+  rw [h'] at e
+  cases r with
+  | error err =>
+    simp only [Except.map, Prod.mk.injEq, Except.error.injEq] at e
+    obtain ⟨h1, h2⟩ := e
+    subst h1 h2
+    rfl
+  | ok q => simp [Except.map] at e
+
+/-- **A rep from a source, cut in level 0's opening**: where the rep's PIOP from the source, answered by `asksCut`
+cut `j < k₀ + 4` rounds past its end, returns at the log `l₁`, the rep stops past the openings having sent level 0's
+first `j + 1` bodies after `l₁`, at the coins from round `l₁.size`, the PIOP's target and basis, any table `t` and the
+pads `padsL0`. -/
+theorem repCut_cutL0 (coin : ℕ → ℕ → F128) (hs : Hashes PS) (st : Setup) (sch : Schedule) (rep : ℕ) (dom : ByteArray)
+    (cm0 : Commit) (extras : Array Claim) (ic : InnerCommit) (src : RepSrc) (prior : Array (List F128))
+    (words : List ℕ) (t : Array F128) (rp : ℕ) (extra : ℕ → ℕ → F128) (tr : Transcript) (l : Array Claims.Msg)
+    {j : ℕ} (hj : j < sch.k0 + 4) (hk : 1 ≤ sch.k0) (hn : sch.n ≠ 0) (hlv : 2 ≤ sch.levels.size)
+    {res} {tr₁ : Transcript} {l₁ : Array Claims.Msg}
+    (hp : ((piopCut (asksCut coin (l₁.size + j)) st (Zk.PadLayout.new st.m st.kLog sch.k0) src (flat cm0.cap) ic.root
+      extras prior words).run tr).go l = (.ok (res, tr₁), l₁)) :
+    CutStop (fun L => L.toList = l₁.toList ++ (List.range (j + 1)).map
+        (l0BodyAt coin l₁.size tr₁.pending.data.toList res.2.2.2.1 (flat cm0.cap) sch t
+          (basisVals res.2.2.2.2 (st.m - 7)) (Zk.PadLayout.new st.m st.kLog sch.k0)
+          (padsL0 coin l₁.size sch t (basisVals res.2.2.2.2 (st.m - 7)) (Zk.PadLayout.new st.m st.kLog sch.k0) extra
+            rp src) rp extra fun _ _ => 0))
+      (((repCut (asksCut coin (l₁.size + j)) hs st sch rep dom cm0 extras ic src prior words).run tr).go l) := by
+  refine cutStop_of_eraseZ (m := repCut (asksCut coin (l₁.size + j)) hs st sch rep dom (eraseC cm0) extras ic src prior
+    words) (Claims.ZKMal.Masked.FinRep.repCut_eraseC _ hs st sch rep dom rfl rfl extras ic src prior words) ?_
+  obtain ⟨zp, lp, ss, T, sws⟩ := res
+  unfold repCut
+  dsimp only
+  rw [show flat (eraseC cm0).cap = flat cm0.cap from rfl, bind_go hp]
+  dsimp only
+  exact cutStop_bind (ligeritoCut_cutL0 coin hs st.merkle sch T cm0 t _ _ rp extra src tr₁ l₁ hj hk hn hlv rfl rfl)
 
 end FlockComplete.LigLock
