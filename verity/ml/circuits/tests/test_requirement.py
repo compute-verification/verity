@@ -1,6 +1,6 @@
 """`requirement`: a toy decoder's live and read bits per step, held to `boundary.py`'s exact in(S) and out(S), and the link
 to the audit's store and plans (`StoreMatches`, `PlanMatches`) with the transfer bounds of
-`Security/Models/Accounting/Guarantees/Requirement.lean` checked on every held set."""
+`Security/Definitions/Accounting/Guarantees/Requirement.lean` checked on every held set."""
 
 from __future__ import annotations
 

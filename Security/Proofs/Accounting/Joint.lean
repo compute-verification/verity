@@ -1,4 +1,4 @@
-import Models.Accounting.Guarantees.Joint
+import Definitions.Accounting.Guarantees.Joint
 import Proofs.Accounting.Device
 import Proofs.Accounting.Prob
 import Mathlib.Tactic.Linarith

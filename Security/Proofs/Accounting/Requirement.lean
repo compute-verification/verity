@@ -1,6 +1,6 @@
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Order.Interval.Finset.Nat
-import Models.Accounting.Guarantees.Requirement
+import Definitions.Accounting.Guarantees.Requirement
 
 /-!
 # A declared circuit's requirement, from what the audit credits

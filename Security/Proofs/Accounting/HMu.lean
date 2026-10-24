@@ -5,7 +5,7 @@ import Proofs.Accounting.HMu.Gaps
 /-!
 # (H-μ⁺)'s guarantees
 
-Each statement of `Models/Accounting/Guarantees/HMu.lean`, proved:
+Each statement of `Definitions/Accounting/Guarantees/HMu.lean`, proved:
 
 * `HMu/Luck.lean`: Lemma B, the point mass of fresh coins (Erdős's bound over any finite index, and `1/2` in any
   additive group), and the receipt luck of a round whose cheater doesn't read them;

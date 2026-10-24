@@ -1,6 +1,6 @@
 import Proofs.Accounting.Memory.Counting
 import Proofs.Pous.Thm1.Theorem1iiSeq
-import Models.Accounting.Guarantees.Memory
+import Definitions.Accounting.Guarantees.Memory
 
 /-!
 # Memory adds: the composition with PoUS's guarantee

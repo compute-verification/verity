@@ -306,8 +306,8 @@ path = "../../pouw/window"
 
 [[lean_lib]]
 name = "Properties"
-roots = ["Properties.Pouw", "Properties.Proofs.Pouw",
-  "Properties.Nci", "Properties.Proofs.Nci"]
+roots = ["Properties.Pouw", "Proofs.Properties.Pouw",
+  "Properties.Nci", "Proofs.Properties.Nci"]
 '''
 
 
@@ -325,21 +325,21 @@ def test_a_lakefile_whose_sides_each_require_a_package_and_add_roots_merges():
     tmp = Path(tempfile.mkdtemp())
     req = lambda n: f'\n[[require]]\nname = "{n}"\npath = "../../{n}"\n'
     anchor = 'path = "../../pouw/window"\n'
-    tail = '"Properties.Proofs.Nci"]'
-    ours = LAKEFILE.replace(anchor, anchor + req("pous_check")).replace(tail, '"Properties.Proofs.Nci", "Properties.Pous"]')
+    tail = '"Proofs.Properties.Nci"]'
+    ours = LAKEFILE.replace(anchor, anchor + req("pous_check")).replace(tail, '"Proofs.Properties.Nci", "Properties.Pous"]')
     theirs = LAKEFILE.replace(anchor, anchor + req("network_check")).replace(
-        tail, '"Properties.Proofs.Nci", "Properties.Network"]')
+        tail, '"Proofs.Properties.Nci", "Properties.Network"]')
     text, left = _lakefile(tmp, LAKEFILE, ours, theirs)
     assert left == 0, text
     doc = tomllib.loads(text)
     assert [r["name"] for r in doc["require"]] == ["security", "pouw_window", "pous_check", "network_check"]
-    assert doc["lean_lib"][0]["roots"] == ["Properties.Pouw", "Properties.Proofs.Pouw", "Properties.Nci",
-                                           "Properties.Proofs.Nci", "Properties.Network", "Properties.Pous"]
+    assert doc["lean_lib"][0]["roots"] == ["Properties.Pouw", "Proofs.Properties.Pouw", "Properties.Nci",
+                                           "Proofs.Properties.Nci", "Properties.Network", "Properties.Pous"]
     assert text.startswith("# Properties: the code's properties.\n") and all(len(s) <= M.WIDTH for s in text.splitlines())
-    gone = LAKEFILE.replace(', "Properties.Proofs.Pouw"', "")
-    text, left = _lakefile(tmp, LAKEFILE, gone.replace(tail, '"Properties.Proofs.Nci", "Properties.Pous"]'), theirs)
+    gone = LAKEFILE.replace(', "Proofs.Properties.Pouw"', "")
+    text, left = _lakefile(tmp, LAKEFILE, gone.replace(tail, '"Proofs.Properties.Nci", "Properties.Pous"]'), theirs)
     assert left == 0 and tomllib.loads(text)["lean_lib"][0]["roots"] == [
-        "Properties.Pouw", "Properties.Nci", "Properties.Proofs.Nci", "Properties.Network", "Properties.Pous"], text
+        "Properties.Pouw", "Properties.Nci", "Proofs.Properties.Nci", "Properties.Network", "Properties.Pous"], text
     comment = lambda s: LAKEFILE.replace("the code's properties.", s)
     text, left = _lakefile(tmp, LAKEFILE, comment("ours."), comment("theirs."))
     assert left == 1 and "<<<<<<< ours" in text, "a comment both sides changed stays git's"

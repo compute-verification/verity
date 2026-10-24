@@ -1,4 +1,4 @@
-import Models.Nci.Guarantees.CoveringTwoCosts
+import Definitions.Nci.Guarantees.CoveringTwoCosts
 import Proofs.Nci.Covering
 
 /-!

@@ -1,4 +1,4 @@
-import Models.Pouw.Assumptions.Dimension.Fp8Mma
+import Definitions.Pouw.Assumptions.Dimension.Fp8Mma
 import Proofs.Pouw.Dimension.EmbedProofs
 
 /-!

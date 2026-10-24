@@ -2,7 +2,7 @@ import Mathlib.Tactic.IntervalCases
 import Proofs.Pous.P3.Column.BandWeights
 import Proofs.Pous.P3.Column.TwoWay
 import Definitions.Pous
-import Models.Pous.Assumptions
+import Definitions.Pous.Assumptions
 import Proofs.Pous.Statements
 import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers

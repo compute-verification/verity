@@ -7,6 +7,6 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # falsification test (test_tiers.py) checks the parameters its Lean statements state against tiers.py's.
 inputs = [
   "Security/lean-audit.json",
-  "Security/Models/Nci/Assumptions/Layered.lean",
-  "Security/Models/Nci/Guarantees/Layered.lean",
+  "Security/Definitions/Nci/Assumptions/Layered.lean",
+  "Security/Definitions/Nci/Guarantees/Layered.lean",
 ]

@@ -3,7 +3,7 @@
 
 `line.py`'s line, the line of record a gate run publishes: the conclusions of
 `Accounting.Guarantees.Remote.HeldOverTime` (time-held) and `HeldOverTimeLinks` (link-charged),
-`Security/Models/Accounting/Guarantees/RemoteHeld.lean`, read over each stretch of a paced session's groups in exact
+`Security/Definitions/Accounting/Guarantees/RemoteHeld.lean`, read over each stretch of a paced session's groups in exact
 rationals, every refusal the Python's word for word. `line.py`'s docstring has the form; `tests/test_line.py` holds the
 two together through `RemoteAudit.Difftest`'s `line`. Code: Lean core only.
 -/

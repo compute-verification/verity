@@ -18,7 +18,7 @@ seed from the same inputs under its own tag (decision 121, `eps1_reference.recei
 it carries it in the stage's draw `N`. A prover can re-roll a root through its hiding salts and try again, so every try
 is a fresh draw. The hash is evaluated inside the prover's own proof (decision 105): the drawn unit's zero-knowledge
 proof derives its seed from the roots and position it witnesses, and the verifier never evaluates it. The statements
-over this vocabulary (`Models.Pouw.Guarantees.FiatShamir`, `Models.Pouw.Assumptions.FiatShamir`) read SHA-512 as a
+over this vocabulary (`Definitions.Pouw.Guarantees.FiatShamir`, `Definitions.Pouw.Assumptions.FiatShamir`) read SHA-512 as a
 random oracle, gap (4)'s `H` (`Pouw.WindowWork.StraightLineExtraction`, #2592, not on main) at the seed's domain: a
 uniform function `H : Q → N` from the seed's inputs to a stage's draws, which the prover reaches only through counted
 queries (`QTree`, as PoUW's game does). The named premise `Pouw.Assumptions.SeedExtraction` ties it to the seeds the proofs derive. Every other

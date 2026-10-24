@@ -1,4 +1,4 @@
-import Models.Accounting.Guarantees.RemoteHeld
+import Definitions.Accounting.Guarantees.RemoteHeld
 import Proofs.Pouw.Prob
 import Mathlib.Algebra.BigOperators.Intervals
 import Mathlib.Algebra.Order.BigOperators.Group.Finset

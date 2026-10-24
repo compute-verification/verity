@@ -5,7 +5,7 @@ import Mathlib.Data.Fintype.Option
 import Mathlib.Data.Fintype.Sum
 import Mathlib.Tactic.GCongr
 import Definitions.Pous
-import Models.Pous.Assumptions
+import Definitions.Pous.Assumptions
 import Proofs.Pous.Statements
 import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers

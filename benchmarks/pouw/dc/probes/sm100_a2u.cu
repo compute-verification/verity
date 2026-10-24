@@ -2,7 +2,7 @@
 // could fail on sm_100a (B200): every SMSP's issue saturated by lane instructions while warp 0 keeps the tensor pipe
 // saturated with tcgen05.mma and issues K warp-uniform chain instructions an iteration.
 //
-// A2/A2u (Security/Models/Accounting/Assumptions/Sheet.lean) say an SMSP issues at most one warp instruction a cycle,
+// A2/A2u (Security/Definitions/Accounting/Assumptions/Sheet.lean) say an SMSP issues at most one warp instruction a cycle,
 // uniform ones included. RT-ISA r2's utc_ (sm100_async.cu) found the chain flat in K beside the async op, but its one
 // warp leaves the SMSP's issue ~3/4 idle (4 UTCIMMA hold it ~512 cycles), so the chain only filled idle slots: that
 // can't tell a free uniform slot from an idle one. Here nothing is idle. If the uniform instructions cost no slot, the

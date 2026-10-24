@@ -1,4 +1,4 @@
-import Models.Hash.Guarantees
+import Definitions.Hash.Guarantees
 
 /-! `Hash.SecurityProofs.Stated : Hash.Guarantees.Stated`, by reflexivity: the guarantee is there for its record, which
 holds the hash area's statements' text. -/

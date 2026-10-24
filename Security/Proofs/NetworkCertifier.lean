@@ -1,5 +1,5 @@
-import Models.NetworkCertifier.Guarantees
-import Models.NetworkCertifier.Guarantees.AdviceString
+import Definitions.NetworkCertifier.Guarantees
+import Definitions.NetworkCertifier.Guarantees.AdviceString
 import Proofs.NetworkCertifier.Lemmas
 import Proofs.NetworkCertifier.Occupancy
 import Proofs.NetworkCertifier.Counting

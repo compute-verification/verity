@@ -3,7 +3,7 @@ import Proofs.Accounting.CoinFlow.Flow
 /-!
 # The coin rules' guarantees
 
-Each statement of `Models/Accounting/Guarantees/CoinFlow.lean`, proved in `CoinFlow/Flow.lean`: a noise injection's
+Each statement of `Definitions/Accounting/Guarantees/CoinFlow.lean`, proved in `CoinFlow/Flow.lean`: a noise injection's
 fresh coins reach only its forward cone (rule (b)), a non-sink value reads the coins only through noise injections
 (rule (a)), the forward cone is the one reader's, and so `CoinPointMass` holds of every view built from the rest of an
 admitted Program.

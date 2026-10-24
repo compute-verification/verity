@@ -1,6 +1,6 @@
 import Proofs.Pouw.PearlC.DeviceSm120KernelGamma
 import Proofs.Pouw.PearlC.UOnlyGamma
-import Models.Pouw.Guarantees.PearlC
+import Definitions.Pouw.Guarantees.PearlC
 
 /-!
 # v1 under rev1 at a stricter cap, and γ there (FP8 security's file)

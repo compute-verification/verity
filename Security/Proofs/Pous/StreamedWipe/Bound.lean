@@ -1,5 +1,5 @@
 import Proofs.Pous.StreamedWipe.Count
-import Models.Pous.Guarantees.StreamedWipe
+import Definitions.Pous.Guarantees.StreamedWipe
 
 /-!
 # The streamed-label wipe: the bound

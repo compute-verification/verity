@@ -6,7 +6,7 @@ import Definitions.Pouw.Window
 /-!
 # PoUW as a compile pass over an arbitrary declared circuit (trusted)
 
-The vocabulary of `Models.Accounting.Guarantees.Compose`
+The vocabulary of `Definitions.Accounting.Guarantees.Compose`
 (note:compute-accounting/20261018T1600Z-draft-theorem-compose-r5), restated after RT-COMPOSE r4
 (note:compute-accounting/20261018T1522Z-draft-rt-compose-r4) under decisions 107, 109–114, 117, 119 and 122. The
 compile pass `C → C′` replaces each credited product of a declared circuit by its kind's template, with its noise drawn

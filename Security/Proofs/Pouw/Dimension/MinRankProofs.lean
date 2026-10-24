@@ -1,4 +1,4 @@
-import Models.Pouw.Assumptions.Dimension.Mixing
+import Definitions.Pouw.Assumptions.Dimension.Mixing
 import Proofs.Pouw.NCP.RelationWitness
 
 /-!

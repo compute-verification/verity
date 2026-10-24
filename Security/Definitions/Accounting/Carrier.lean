@@ -12,7 +12,7 @@ taking it over the side link or rebuilding it. Stacking is a way to rebuild: a c
 were chosen after the seed (a KV page the audit credits, say), holds other blocks' encodings, and the device decodes
 them from it instead of reading them. In the verbatim class a sector obtained by computing rather than by reading it at
 its position is a `rebuild`, so a carrier's sectors count in a pass's rebuilds. This file is a carrier's vocabulary;
-`Models/Accounting/Guarantees/Stacking.lean` bounds what carriers hold and charges it in every pass.
+`Definitions/Accounting/Guarantees/Stacking.lean` bounds what carriers hold and charges it in every pass.
 
 **Provenance.** A carrier's contents are values of a circuit (the served model as an exact-integer Program). In the
 ideal encoding model the store's sectors are uniform, they are the blocks' encodings, and the circuit's values depend

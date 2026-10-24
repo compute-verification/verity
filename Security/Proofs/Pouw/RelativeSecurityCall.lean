@@ -1,5 +1,5 @@
 import Proofs.Pouw.RelativeSecurityGuarantees
-import Models.Pouw.Guarantees.RelativeSecurityCall
+import Definitions.Pouw.Guarantees.RelativeSecurityCall
 
 /-!
 # Relative security's floors at J10-R's call scope

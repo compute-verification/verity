@@ -3,7 +3,7 @@
     stock(L) = 128 R_cap L / E + R_in L        bytes
     f        = stock(L) / M_dyn
 
-This is `Security/Models/Accounting/Guarantees/Stacking.lean`'s C = 8 R_in life + 1024 (c_rho reads) life / E in bits, read in
+This is `Security/Definitions/Accounting/Guarantees/Stacking.lean`'s C = 8 R_in life + 1024 (c_rho reads) life / E in bits, read in
 bytes: c_rho reads, the budgeted units the audit allows a second, is the honest Program's rate R_cap; E is the units an encode of
 one 1024-bit word costs (E / 128 a byte); L is a carrier's lifetime in seconds and R_in the node's run-input bytes a second. f
 past 1 means the stock outgrows the pool: no KV is credited.

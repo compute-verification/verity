@@ -428,7 +428,7 @@ auditor's own PRF outputs, so a label the server didn't keep is a label it can't
 prior content through the wipe had no room for the labels. The reference is `streamed_wipe.py`, its tests
 `tests/test_pous_streamed_wipe.py`, its verdict's Lean port `MemoryChallenger.StreamedWipe`
 (`verity/core/devices/memory_challenger/lean/`), its timing `benchmarks/pous/streamed_wipe/`, and its guarantees
-`Pous.Guarantees.StreamedWipe` and `StreamedWipeMeets2600GB` (`Security/Models/Pous/Guarantees/StreamedWipe.lean`, the
+`Pous.Guarantees.StreamedWipe` and `StreamedWipeMeets2600GB` (`Security/Definitions/Pous/Guarantees/StreamedWipe.lean`, the
 game in `Security/Definitions/Pous/Model/StreamedWipe.lean`), both proved (`Security/Proofs/Pous/StreamedWipe/`), where
 `PousStreamedWipe.honest_accepts` shows the server that keeps every label accepted on every run.
 
@@ -708,8 +708,8 @@ the timed audit and the simulator with the dense codec as default.
 
 - **Trusted without proof:** `Security/Definitions/Pous/Game` (bits, uniform probability, parallel oracle programs `Prog`),
   `Security/Definitions/Pous/Model` (schemes, the audit game `AuditSecure`, `INC`/`TimedINC`, and the models below),
-  `Security/Definitions/Pous/Accounting/{Params,LemmaA}.lean` (`ρ`, `δ`, `Meets`), `Security/Models/Pous/Assumptions.lean`,
-  `Security/Models/Pous/Guarantees.lean` and, for the lemmas, `Security/Proofs/Pous/Statements.lean`.
+  `Security/Definitions/Pous/Accounting/{Params,LemmaA}.lean` (`ρ`, `δ`, `Meets`), `Security/Definitions/Pous/Assumptions.lean`,
+  `Security/Definitions/Pous/Guarantees.lean` and, for the lemmas, `Security/Proofs/Pous/Statements.lean`.
 - **`Meets sch reveal D Q k ε`:** `ε ≤ 2^-128`, `sch` is correct, `|C| ≥ |W|`, the space bound holds, and
   `AuditSecure` holds at a state of `⌊ρ|C|⌋` bits with bound `δ + ε`.
 - **Proofs:** `Security/Proofs/Pous/`, checked by Verity's `tools/verity/lean/check.py` against `lean-audit.json`.
@@ -828,7 +828,7 @@ not reach; it is re-pinned at `k = 111`, four challenges more.
 ## Guarantees and lemmas
 
 The frozen statements (claims about a model, an ideal primitive or the model's memory challenger, which no Lean function
-computes) are in `Security/Models/Pous/Guarantees.lean` and its `Guarantees/` modules, each docstring ending with its
+computes) are in `Security/Definitions/Pous/Guarantees.lean` and its `Guarantees/` modules, each docstring ending with its
 category. The lemmas (`KFloor`, Theorem 1, Track A, the pebbling and sampled-audit results, the tagged keying's
 transfer, the column game's rows, the secure-erasure digest, `PerAnswer`, `ContinuousTimeAverage`, and the falsified
 `InvExPostFactoTwoLayer` beside `N10Refuted`) are stated under the same `Pous.Guarantees` names in
@@ -960,7 +960,7 @@ Two gaps stood between these statements and the deployed verifier:
   verifier's own list (`TRUSTED.json`, never the run's record). `check/tests/test_run.py` holds the two
   to one another, and `Accepted` is now setup's acceptance and this check's.
 
-## Named assumptions (`Security/Models/Pous/Assumptions.lean`)
+## Named assumptions (`Security/Definitions/Pous/Assumptions.lean`)
 
 Each is a `Prop` taken as a hypothesis, never an `axiom`.
 
