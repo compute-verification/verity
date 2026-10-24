@@ -773,6 +773,8 @@ def build(opts: Options) -> tuple[Any, Any]:
     tokens = int(opts.max_num_batched_tokens)
     com.arena_sizing_record = com.size_arena({"batch": opts.max_num_seqs, "max_prompt": tokens, "max_new": 1,
                                               "max_num_batched_tokens": tokens, "max_model_len": opts.max_model_len})
+    if getattr(com, "windowed", False):
+        com.window_ring = com.enable_windows(com.arena_sizing_record)     # windowed staging's ring replaces the per-step blocks
     if opts.seal:
         com.register_weights()           # the weights tree every sealed window's bundle carries (hashed as VERITY_WEIGHTS_HASH says)
     return llm, com
