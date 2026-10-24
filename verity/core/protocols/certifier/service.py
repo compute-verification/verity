@@ -117,17 +117,19 @@ only (timing at the profile) until N3 is a proof-service unit with Selection `Al
 from __future__ import annotations
 
 import hashlib
+import json
 import struct
 from dataclasses import dataclass
-from functools import cached_property
+from functools import cached_property, lru_cache
+from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.codec import canonical_json
+from verity.ml.circuits.codec import canonical_json, encode_program
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, concat
-from verity.ml.circuits.types import Array, Value as Bits
+from verity.ml.circuits.types import Array
 from verity.ml.commitments import hm96
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
@@ -135,11 +137,11 @@ from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
 from verity.core.protocols.certifier import audit as host_audit, head_check as HC, served as SV
 from verity.core.protocols.certifier.lean_audit import Audit
-from verity.core.protocols.certifier.certificate import CertifiedRecord, PublicKey, parameters_digest
+from verity.core.protocols.certifier.certificate import Certificate, CertifiedRecord, PublicKey, parameters_digest
 from verity.core.protocols.certifier.grid import GridParams
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet
 from verity.core.protocols.sampled_proofs import service as S
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
+from verity.core.protocols.sampled_proofs.one_stage import partition as P, proofs as PF, registration as R
 from verity.core.protocols.sampled_proofs.one_stage.proofs import Finding
 from verity.core.protocols.sampled_proofs.one_stage.verdict import Verdict
 
@@ -154,43 +156,58 @@ VERIFIER = "network-audit"
 _INST = hm96.SHA512
 
 
-def _host_only(egress: int, ingress: int) -> int:
-    raise NotImplementedError("the certificates' check has no gates: its verifier of record is LinkWindows.verify")
-
-
 _SIGNED = (("egress", HC.DIGEST), ("ingress", HC.DIGEST))
 LEAVES = 4
 #: the leaf of the head of the record at leaf i (0 egress, 1 ingress) is HEADS + i
 HEADS = HC.HEADS
-_CERTIFICATES = PrimitiveDefinition(
-    "NetworkCertificatesCheck", 2, _SIGNED, Bits(1), _host_only,
-    doc="the link-window's two network certificates over their signed digests, the ones each end's head check reads: "
-        "each certificate verifies in the certifier session and names the link-window, and its head is settled by the "
-        "deadline; no gates, checked on the host",
-    register=False)
 _ENDS = ("egress", "ingress")
+#: the unit's output, two bits in this order (`Check.public_outputs`)
+OUTPUTS = ("verdict", "deadline")
+#: the statement's rows: ``pub`` the unit's public parameters, ``wit`` its witness (`LinkWindows.layout`), then its one
+#: output row ``o0``, the two output bits; each instance's commitments are in this order in a statement's public file
+ROWS = ("pub", "wit")
+PORTS = ROWS + ("o0",)
+#: a head check's witness parameters; the rest of the unit's parameters are public
+_WITNESS = ("head", "salt", "path", "salt_c")
+#: a head check's parameters the unit fixes rather than takes: each end's direction is its own (egress 0, ingress 1)
+_FIXED = ("signed", "direction")
 
 
 def _heads(S_) -> tuple[tuple[str, Any], ...]:
-    """Each end's head check's parameters but its signed digest, which is the unit's `egress` or `ingress`."""
+    """Each end's head check's parameters but its signed digest, which is the unit's `egress` or `ingress`, and its
+    direction, which the unit fixes."""
     return tuple((f"{end}_{name}", t) for end, key in zip(_ENDS, (S_.EGRESS, S_.INGRESS))
-                 for name, t in HC.gate(*key).params if name != "signed")
+                 for name, t in HC.gate(*key).params if name not in _FIXED)
 
 
-def _checks(B, S_, args) -> tuple[list[Coll], list[Coll]]:
-    """The certificates' check and each end's head check, each over its end's signed digest (the unit's `egress` or
-    `ingress`), and each end's head counts as the head check reads them."""
-    oks, counts, rest = [B.call(_CERTIFICATES, *args[:2])], [], list(args[2:])
+@lru_cache(maxsize=None)
+def _head_expanded(L: int, T: int, counts: bool):
+    return HC.expand(HC.gate(L, T, counts), HC.unit(L, T, counts))
+
+
+@lru_cache(maxsize=None)
+def _served_expanded(*key: int):
+    return HC.expand(SV.gate(*key), SV.unit(*key))
+
+
+def _checks(B, S_, args, check=HC.gate) -> tuple[list[Coll], list[Coll], list[Any]]:
+    """Each end's head check (`check`'s for its size class) over its end's signed digest (the unit's `egress` or
+    `ingress`) and its own direction, a constant; each end's head counts and its deadline byte's low bit, as the head
+    check reads the head."""
+    K = HC._Consts(B)
+    oks, counts, deadline, rest = [], [], [], list(args[2:])
     for d, key in enumerate((S_.EGRESS, S_.INGRESS)):
-        g = HC.gate(*key)
-        names = [name for name, _ in g.params]
-        ends, rest = rest[:len(names) - 1], rest[len(names) - 1:]
+        g = check(*key)
+        names = [name for name, _ in g.signature()[0]]
+        ends, rest = rest[:len(names) - len(_FIXED)], rest[len(names) - len(_FIXED):]
+        ends.insert(names.index("direction"), HC._coll(Array(1, BL.BIT), K.bits(d, 1)))
         ends.insert(names.index("signed"), args[d])
         oks.append(B.call(g, *ends))
         sh = HC.Shape(*key[:2])
         head = HC._refs(ends[names.index("head")])
         counts.append(HC._coll(Array(sh.T, Array(4, HC.BYTE)), head[8 * sh.CNT:8 * sh.ROOT]))
-    return oks, counts
+        deadline.append(head[8 * sh.DL])
+    return oks, counts, deadline
 
 
 def _all(B, oks: list[Coll]) -> Coll:
@@ -198,34 +215,57 @@ def _all(B, oks: list[Coll]) -> Coll:
     return B.call(BL.and_gate(bits.count), Coll(Array(bits.count, BL.BIT), bits))
 
 
-def _body(B, S_, *args):
-    return _all(B, _checks(B, S_, args)[0])
+def _outputs(B, oks: list[Coll], deadline: list[Any]) -> Coll:
+    """The unit's two output bits: the AND of its checks, then the AND of both heads' deadline bits."""
+    settled = B.call(BL.and_gate(2), HC._coll(Array(2, BL.BIT), deadline))
+    return Coll(_OUT, concat([_all(B, oks).refs, settled.refs]))
 
 
-def _body_served(B, S_, *args):
-    oks, (egress, ingress) = _checks(B, S_, args[:-1])
-    return _all(B, oks + [B.call(SV.gate(*S_.SERVED), ingress, egress, args[-1])])
-
-
-_UNIT = CompositeDefinition(
-    "NetworkLinkWindow", 4, ("EGRESS", "INGRESS"), lambda S_: (_SIGNED + _heads(S_), Bits(1)), _body,
-    doc="the proof unit of network accounting: one link-window, both directions, over the two certificates' signed "
-        "digests; EGRESS and INGRESS are each end's head check's (L, T, COUNTS)", register=False)
+_OUT = Array(len(OUTPUTS), BL.BIT)
 _SYNC = ("sync", Array(3, Array(SV.SYNC_BITS, BL.BIT)))
-_SERVED_UNIT = CompositeDefinition(
-    "NetworkServedLinkWindow", 3, ("EGRESS", "INGRESS", "SERVED"),
-    lambda S_: (_SIGNED + _heads(S_) + (_SYNC,), Bits(1)), _body_served,
-    doc="the proof unit of network accounting on a served link: `NetworkLinkWindow`'s checks, and the egress head's "
-        "counts derived from the ingress head's under the declared sync (`served.NetworkServedCounts`, SERVED its "
-        "(T, FOUT, FIN, R, RIN))", register=False)
 
 
-def unit(egress: tuple[int, int, int], ingress: tuple[int, int, int], served: tuple[int, ...] | None = None):
+def _units(check, served) -> tuple[CompositeDefinition, CompositeDefinition]:
+    """N2's unit and its served link's, each head check called as `check` and the served counts as `served` give it
+    for its size class."""
+
+    def body(B, S_, *args):
+        oks, _, deadline = _checks(B, S_, args, check)
+        return _outputs(B, oks, deadline)
+
+    def body_served(B, S_, *args):
+        oks, (egress, ingress), deadline = _checks(B, S_, args[:-1], check)
+        return _outputs(B, oks + [B.call(served(*S_.SERVED), ingress, egress, args[-1])], deadline)
+
+    return (CompositeDefinition(
+        "NetworkLinkWindow", 5, ("EGRESS", "INGRESS"), lambda S_: (_SIGNED + _heads(S_), _OUT), body,
+        doc="the proof unit of network accounting: one link-window, both directions, over the two certificates' signed "
+            "digests; EGRESS and INGRESS are each end's head check's (L, T, COUNTS). Its two output bits are the "
+            "verdict, both head checks, and the deadline, both heads' deadline bits", register=False),
+        CompositeDefinition(
+        "NetworkServedLinkWindow", 4, ("EGRESS", "INGRESS", "SERVED"),
+        lambda S_: (_SIGNED + _heads(S_) + (_SYNC,), _OUT), body_served,
+        doc="the proof unit of network accounting on a served link: `NetworkLinkWindow`'s checks, and the egress "
+            "head's counts derived from the ingress head's under the declared sync (`served.NetworkServedCounts`, "
+            "SERVED its (T, FOUT, FIN, R, RIN)), in its verdict bit", register=False))
+
+
+_UNIT, _SERVED_UNIT = _units(HC.gate, SV.gate)
+#: the same units with each gate replaced by the Definition it names, as a proof's circuit lowers them
+_PROOF_UNIT, _PROOF_SERVED_UNIT = _units(_head_expanded, _served_expanded)
+
+
+def unit(egress: tuple[int, int, int], ingress: tuple[int, int, int], served: tuple[int, ...] | None = None, *,
+         proof: bool = False):
     """N2's proof unit for heads of the size classes `egress` and `ingress`, each (L, T, COUNTS) (`head_check.unit`),
-    and on a served link the served counts' size class `served`, (T, FOUT, FIN, R, RIN, OWN) (`served.unit`)."""
+    and on a served link the served counts' size class `served`, (T, FOUT, FIN, R, RIN, OWN) (`served.unit`). With
+    `proof`, the unit a proof's circuit lowers: the same id and signature, so the template the registered query names,
+    with each gate the Definition it names once that Definition's circuit digest is the gate's pin (`head_check.expand`,
+    which traces it: minutes a head check, and a `ValueError` for an unpinned size class)."""
+    plain, served_ = (_PROOF_UNIT, _PROOF_SERVED_UNIT) if proof else (_UNIT, _SERVED_UNIT)
     if served is None:
-        return bind(_UNIT, EGRESS=tuple(egress), INGRESS=tuple(ingress))
-    return bind(_SERVED_UNIT, EGRESS=tuple(egress), INGRESS=tuple(ingress), SERVED=tuple(served))
+        return bind(plain, EGRESS=tuple(egress), INGRESS=tuple(ingress))
+    return bind(served_, EGRESS=tuple(egress), INGRESS=tuple(ingress), SERVED=tuple(served))
 
 PUBLIC = (
     S.Public("population", "structure", "one proof unit per registration: the link-window"),
@@ -249,7 +289,6 @@ PUBLIC_SERVED = tuple(p for p in PUBLIC if p.item != "occupancy") + (
     S.Public("sync", "output", "the window's declared clock sync, one of Σ_sync (fixed before the run): the advice "
              "`charge` already counts, which the served counts read"),
 )
-OUTPUTS = ("verdict", "deadline")
 
 
 def encode(record: CertifiedRecord) -> bytes:
@@ -279,6 +318,63 @@ _NO_PROFILE = ("N2 compares no egress grid, so a link whose egress end has no oc
 
 def _accepts(egress: Sequence[Any], ingress: Sequence[Any], window: int) -> bool:
     return len(egress) > window and egress[window].accepted and ingress[window].accepted
+
+
+@dataclass(frozen=True)
+class Delivered:
+    """A link-window's proof as the verifier receives it: the statement's proof files (`proofs.Proof`, its circuit file
+    the auditor's own lowering of the unit), and for the drawn unit the salts of its public row and its output row
+    (``pub``, ``o0``) and its output word, which the verifier opens against the public file's commitments to those rows.
+    Never the witness row's salt."""
+
+    proof: PF.Proof
+    salts: Mapping[str, bytes]
+    output: int
+
+    def sessions(self) -> list[str]:
+        """The delivered sessions' SHA-512s, their `session.json`s', in order."""
+        return [PF.file_sha512(Path(s) / "session.json") for s in self.proof.sessions]
+
+
+#: a row commitment's bytes in a statement's public file, ``b || c`` (`hm96.SHA512.commit_string`)
+BC_BYTES = 128
+
+
+def _commitments(public: Path, unit: int) -> dict[str, bytes] | None:
+    """The row commitments a statement's public file holds for its one instance whose unit index is `unit`, by port
+    (`PORTS`, in their order after the header line, instance-major); None when no one instance is, or the file is
+    short."""
+    try:
+        with open(public, "rb") as f:
+            indices = list(json.loads(f.readline())["units"]["indices"])
+            if indices.count(unit) != 1:
+                return None
+            f.seek(f.tell() + indices.index(unit) * len(PORTS) * BC_BYTES)
+            data = f.read(len(PORTS) * BC_BYTES)
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    if len(data) != len(PORTS) * BC_BYTES:
+        return None
+    return {p: data[k * BC_BYTES:(k + 1) * BC_BYTES] for k, p in enumerate(PORTS)}
+
+
+def _opens(data: bytes, bits: int, salt: Any, bc: bytes) -> bool:
+    """Whether `bc` commits to the `bits`-bit row `data` under `salt`: hm96 over its sha512/row/v2 digest."""
+    if not isinstance(salt, bytes) or len(salt) != _INST.salt_bytes:
+        return False
+    return _INST.commit_string(_INST.default_key, sha512_row_v2_digest(data, bits), salt) == bc
+
+
+def _opened(delivered: Delivered, unit: int, public: bytes | None, bits: int) -> int | None:
+    """The unit's output word, once the proof's public file holds the unit's public row as `public` (the verifier's own
+    copy, `bits` long) and its output row as the word delivered, each under the salt delivered; else None."""
+    bcs, word, salts = _commitments(delivered.proof.public, unit), delivered.output, delivered.salts
+    if public is None or bcs is None or type(word) is not int or not 0 <= word < 1 << len(OUTPUTS):
+        return None
+    if not (_opens(public, bits, salts.get("pub"), bcs["pub"])
+            and _opens(bytes([word]), len(OUTPUTS), salts.get("o0"), bcs["o0"])):
+        return None
+    return word
 
 
 @dataclass(frozen=True)
@@ -367,6 +463,13 @@ class LinkWindows:
         return unit(self.head_key(0), self.head_key(1), self.served_key())
 
     @cached_property
+    def proof_unit(self):
+        """The unit a proof's circuit lowers: `unit` with each gate the Definition it names (`unit(proof=True)`), the
+        template of the registered query under the same id. The prover's and the auditor's lowering, never the
+        registered Program, which holds the gates."""
+        return unit(self.head_key(0), self.head_key(1), self.served_key(), proof=True)
+
+    @cached_property
     def query(self) -> dict[str, Any]:
         return P.template_instance_query(self.unit)
 
@@ -377,6 +480,11 @@ class LinkWindows:
     @cached_property
     def _partition(self) -> dict[str, Any]:
         return P.partition(self._program, self.query)
+
+    @property
+    def partition(self) -> dict[str, Any]:
+        """The registered partition object, which a statement proving the unit binds (its digest and its ``program``)."""
+        return self._partition
 
     @cached_property
     def spec(self) -> S.Spec:
@@ -459,7 +567,7 @@ class LinkWindows:
             raise S.Refused(Verdict(False, ("window",), {"window": {"expected": self.provenance(window)}}))
         return stream.register(record, self.ports(window))
 
-    # the verifier of record, on the host until `unit` is proved
+    # the prover's side: the unit's arguments and outputs on the opening
 
     def head_checks(self, opening: Opening, root: bytes) -> list[HC.Instance | None]:
         """Each end's head check on the opening under `root`, the registered root: the link-window's public inputs with
@@ -480,6 +588,92 @@ class LinkWindows:
                                    opening.salts[i], tuple(level[(i >> k) ^ 1] for k, level in enumerate(levels[:-1])),
                                    record.salt, T))
         return out
+
+    @cached_property
+    def layout(self) -> dict[str, tuple[str, ...]]:
+        """The statement's two input rows (`ROWS`), each its parameters in the unit's signature's order: ``pub`` the
+        public ones, ``wit`` each end's head, its leaf's salt, its two siblings and the certifier's salt. A row is the
+        little-endian concatenation of its parameters' bits, in whole u16 words, which each row fills exactly: every
+        parameter is a multiple of 16 bits but each end's head, of 157 + L + 4T bytes, and the two heads together are.
+        Raises `ValueError` for a unit whose rows aren't whole words."""
+        params, _ = self.unit.signature()
+        out = {r: tuple(n for n, _ in params if ("_" in n and n.split("_", 1)[1] in _WITNESS) == (r == "wit"))
+               for r in ROWS}
+        for r, names in out.items():
+            bits = sum(t.leaves for n, t in params if n in names)
+            if bits % 16:
+                raise ValueError(f"the unit's {r} row is {bits} bits, not whole u16 words")
+        return out
+
+    def bits(self, row: str) -> int:
+        """A row's length in bits: `layout`'s, or the output row's (``o0``)."""
+        if row == "o0":
+            return len(OUTPUTS)
+        params, _ = self.unit.signature()
+        return sum(t.leaves for n, t in params if n in self.layout[row])
+
+    def _arguments(self, insts: Sequence[HC.Instance], sync: tuple[int, int, int] | None) -> dict[str, list[int]]:
+        out = {end: HC._digest_bits(inst.signed) for end, inst in zip(_ENDS, insts)}
+        for end, inst in zip(_ENDS, insts):
+            for (name, _), bits in zip(inst.unit.signature()[0], HC.arguments(inst)):
+                if name not in _FIXED:
+                    out[f"{end}_{name}"] = bits
+        if self.served is not None:
+            out["sync"] = SV.arguments((), (), sync)[2]
+        return out
+
+    def _sync(self, window: int, syncs: Sequence[ClockSync]) -> tuple[int, int, int] | None:
+        if self.served is None:
+            return None
+        try:
+            return SV.sync_words(syncs[window]) if window < len(syncs) else None
+        except ValueError:
+            return None
+
+    def arguments(self, opening: Opening, root: bytes, syncs: Sequence[ClockSync] = ()) -> dict[str, list[int]] | None:
+        """The unit's arguments on the opening under `root`, the registered root, by parameter, each its leaves' bits
+        (each end's `head_check.arguments`, and on a served link the window's declared sync): the prover's side. None
+        where the unit takes no instance (`head_checks`), or on a served link no sync its input can hold."""
+        insts = self.head_checks(opening, root)
+        sync = self._sync(opening.window, syncs)
+        if None in insts or (self.served is not None and sync is None):
+            return None
+        return self._arguments(insts, sync)
+
+    def public_arguments(self, window: int, root: bytes, certificates: Sequence[Certificate],
+                         syncs: Sequence[ClockSync] = ()) -> dict[str, list[int]] | None:
+        """The unit's public arguments (`layout`'s ``pub``) as the verifier derives them from public fields alone: the
+        registered `root`, the link-window's domain, the link, the window, each end's grid and its profile's row, each
+        end's certificate's signed digest, and on a served link the window's declared sync. None where the unit takes
+        no instance: a window past an end's profile, a signed digest of another length, or no sync."""
+        sync = self._sync(window, syncs)
+        if len(certificates) != 2 or (self.served is not None and sync is None):
+            return None
+        insts = []
+        for d, c in enumerate(certificates):
+            L, T, _ = self.head_key(d)
+            profile = self.occupancy[d]
+            if (profile is not None and window >= len(profile)) or len(getattr(c, "digest", b"")) != HC.DIGEST_BYTES:
+                return None
+            insts.append(HC.Instance(root, self.domain(window).domain_id, self.link.encode("utf-8"), d, window,
+                                     self.grid(d), None if profile is None else tuple(profile[window]), c.digest,
+                                     bytes(HC.Shape(L, T).HL), bytes(_INST.salt_bytes), (bytes(64), bytes(64)),
+                                     bytes(64), T))
+        args = self._arguments(insts, sync)
+        return {n: args[n] for n in self.layout["pub"]}
+
+    def row(self, args: Mapping[str, Sequence[int]], row: str) -> bytes:
+        """A row's bytes (`layout`): its parameters' bits in order, least significant first."""
+        bits = [b for n in self.layout[row] for b in args[n]]
+        return bytes(sum(b << j for j, b in enumerate(bits[k:k + 8])) for k in range(0, len(bits), 8))
+
+    def outputs(self, opening: Opening, root: bytes, syncs: Sequence[ClockSync] = ()) -> int:
+        """The unit's output word on the opening under `root` by each gate's reference (`head_check.reference`, and on a
+        served link `served_check`), which the tests hold to the circuits: bit 0 the verdict, bit 1 the deadline. What
+        the prover claims, and the debug comparison's."""
+        verdict = all(i is not None and HC.reference(i) for i in self.head_checks(opening, root))
+        verdict = verdict and (self.served is None or self.served_check(opening, syncs))
+        return int(verdict) | int(all(r.head.deadline for r in opening.records)) << 1
 
     def _audit(self, audit: Any, opening: Opening, syncs: Sequence[ClockSync],
                frames: Sequence[LogicalFrame] | None = None) -> tuple[list[Any], list[Any]]:
@@ -513,14 +707,64 @@ class LinkWindows:
         return all(HC.pinned(g) for g in self.gates()) and bool(findings) \
             and all(f.accepted and f.program == want for f in findings)
 
-    def verify(self, opening: Opening, draw: S.Draw, syncs: Sequence[ClockSync],
-               proved: Sequence[Finding] | None = None) -> dict[str, Any]:
-        """The verdict of record on the delivered opening: accepted when it reproduces the registered root under the
+    @cached_property
+    def program(self) -> bytes:
+        """The registered Program's descriptor, the verifier's own copy, whose SHA-512 the partition object names."""
+        return canonical_json(encode_program(self._program))
+
+    def certified(self, window: int, certificates: Sequence[Certificate]) -> bool:
+        """The certificates' check, on the host from their public fields alone: two certificates, each the certifier's
+        and verifying in its session over its fields and its signed digest (`Certificate.verify`), and each naming this
+        link, its end (egress first) and the window. Each signed digest is the one its end's head check reads
+        (`public_arguments`), which a proof holds to the head it opens."""
+        return len(certificates) == 2 and all(
+            isinstance(c, Certificate) and (c.link, c.direction.code, c.window) == (self.link, d, window)
+            and c.verify(self.key, self.certifier_session) for d, c in enumerate(certificates))
+
+    def verify(self, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
+               delivered: Delivered, *, circuit_sha512: str, opening: Opening | None = None) -> dict[str, Any]:
+        """The verdict of record on the link-window's delivered proof, from public inputs and the proof alone: accepted
+        when
+        - the verifier's own run of C-Flock's Lean verifier (`proofs.verify`, on the circuit file the auditor built,
+          `circuit_sha512`) accepts every session, and they prove this link's registered unit (`proved`) and the drawn
+          unit;
+        - the proof's public row opens, under the salt delivered, to the verifier's own copy (`public_arguments`: the
+          registered root, the public fields and both certificates' signed digests), and its output row to the word
+          delivered (`_opened`), whose verdict bit and deadline bit are both 1;
+        - the certificates' check accepts (`certified`), and the window's declared sync is one of Σ_sync.
+        The verdict reports the public outputs, the proved deadline bit among them, and never a violation's kind.
+        `opening` (the witness) is for a debug comparison only, off by default: given, the verdict also carries the
+        in-the-clear check's accept bit (`clear`), which decides nothing. Raises `ValueError` on a link with neither an
+        egress occupancy profile nor a served profile."""
+        if self.occupancy[0] is None and self.served is None:
+            raise ValueError(_NO_PROFILE)
+        reg = draw.registration.record
+        w, root = reg["window"]["window"], bytes.fromhex(reg["roots"][0]["root"])
+        findings, refused = PF.verify(delivered.proof, circuit_sha512=circuit_sha512, program=self.program,
+                                      partition=self._partition)
+        proved = refused is None and self.proved(findings) and all(list(f.units) == list(draw.units) for f in findings)
+        args = self.public_arguments(w, root, certificates, syncs)
+        opened = _opened(delivered, draw.units[0], self.row(args, "pub") if args is not None else None,
+                         self.bits("pub")) if proved else None
+        word = opened if opened is not None else 0
+        accepted = (proved and opened is not None and word == 0b11 and self.certified(w, certificates)
+                    and w < len(syncs) and syncs[w] in self.sync_set)
+        public = {"verdict": int(accepted), "deadline": word >> 1 & 1}
+        sessions = delivered.sessions()
+        digest = _sha512({"format": VERDICT, "registration": draw.registration.digest, "sessions": sessions,
+                          "accepted": accepted, "public": public})
+        verdict = {"of_record": True, "decided_by": "proof", "accepted": accepted, "digest": digest, "sessions": sessions,
+                   "public": public}
+        if opening is not None:
+            verdict["clear"] = {"accepted": self.clear(opening, draw, syncs)["accepted"]}
+        return verdict
+
+    def clear(self, opening: Opening, draw: S.Draw, syncs: Sequence[ClockSync]) -> dict[str, Any]:
+        """The in-the-clear check on the opening, the witness: the debug comparison `verify` makes on request and the
+        tests' reference, never a verdict of record. Accepted when the opening reproduces the registered root under the
         link-window's domain, both head checks accept, and the audit accepts both records, comparing no grid (the module
-        docstring). `syncs` are the declared clock syncs of windows 0 … w. The verdict reports the public outputs and
-        never the violation's kind. On a served link it also runs the served counts' check (`served_check`). Given
-        `proved`, the findings of a proof of the unit, it accepts only when they prove this link's unit (`proved`).
-        Raises `ValueError` on a link with neither an egress occupancy profile nor a served profile."""
+        docstring). `syncs` are the declared clock syncs of windows 0 … w. On a served link it also runs the served
+        counts' check (`served_check`)."""
         if self.occupancy[0] is None and self.served is None:
             raise ValueError(_NO_PROFILE)
         root = self._registered(opening, draw)
@@ -528,15 +772,11 @@ class LinkWindows:
         sealed = self.root(opening) == root
         headed = all(i is not None and HC.reference(i) for i in self.head_checks(opening, bytes.fromhex(root)))
         headed = headed and (self.served is None or self.served_check(opening, syncs))
-        headed = headed and (proved is None or self.proved(proved))
         audit = Audit()
         out, inn = self._audit(audit, opening, syncs)
         accepted = sealed and headed and _accepts(out, inn, w)
         public = {"verdict": int(accepted), "deadline": int(egress.head.deadline and ingress.head.deadline)}
-        sessions = [self.session(opening, draw)]
-        digest = _sha512({"format": VERDICT, "registration": draw.registration.digest, "sessions": sessions,
-                          "accepted": accepted, "public": public})
-        verdict = {"of_record": True, "accepted": accepted, "digest": digest, "sessions": sessions, "public": public}
+        verdict = {"of_record": False, "accepted": accepted, "public": public}
         reference = getattr(audit, "reference", None)
         if reference is not None:
             verdict |= {"by": "lean",
@@ -567,16 +807,31 @@ class LinkWindows:
         counted = all(self.declares(d, opening.window, r.head.counts) for d, r in enumerate(opening.records))
         return self.root(opening) == root and counted and _accepts(out, inn, opening.window)
 
-    def statement(self, opening: Opening) -> dict[str, Any]:
-        return {"format": STATEMENT, "check": self.spec.check.program, "link": self.link, "window": opening.window,
-                "root": self.root(opening)}
+    def statement(self, draw: S.Draw) -> dict[str, Any]:
+        reg = draw.registration.record
+        return {"format": STATEMENT, "check": self.spec.check.program, "link": self.link,
+                "window": reg["window"]["window"], "root": reg["roots"][0]["root"]}
 
-    def outcome(self, stream: S.Stream, draw: S.Draw, opening: Opening, syncs: Sequence[ClockSync],
-                proved: Sequence[Finding] | None = None) -> S.Outcome:
-        """`stream.outcome` on the verifier of record's verdict (`verify`, with `proved` when a proof of the unit was
-        delivered), with the root the opening reproduces as the session's, which one-stage's audit holds to the
-        registered root."""
-        return stream.outcome(draw, {VERIFIER: self.verify(opening, draw, syncs, proved)}, self.statement(opening),
+    def outcome(self, stream: S.Stream, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
+                delivered: Delivered, *, circuit_sha512: str, opening: Opening | None = None) -> S.Outcome:
+        """`stream.outcome` on the verifier of record's verdict (`verify`), with the registered root as the session's:
+        the root the proof's public row names, which it opens only to the verifier's own copy."""
+        verdict = self.verify(draw, certificates, syncs, delivered, circuit_sha512=circuit_sha512, opening=opening)
+        return stream.outcome(draw, {VERIFIER: verdict}, self.statement(draw),
+                              session_roots={VALUE: draw.registration.record["roots"][0]["root"]})
+
+    def unproved_outcome(self, stream: S.Stream, draw: S.Draw, opening: Opening,
+                         syncs: Sequence[ClockSync]) -> S.Outcome:
+        """`stream.outcome` for a run that proves nothing (a rehearsal, the simulator): on the in-the-clear check
+        (`clear`), which reads the opening, so it is never zero-knowledge, and its verdict says ``"decided_by": "clear"``.
+        The delivered session is the opening's (`session`), and its root the one the opening reproduces, which
+        one-stage's audit holds to the registered root."""
+        v = self.clear(opening, draw, syncs)
+        sessions = [self.session(opening, draw)]
+        digest = _sha512({"format": VERDICT, "registration": draw.registration.digest, "sessions": sessions,
+                          "accepted": v["accepted"], "public": v["public"], "decided_by": "clear"})
+        verdict = {**v, "of_record": True, "decided_by": "clear", "digest": digest, "sessions": sessions}
+        return stream.outcome(draw, {VERIFIER: verdict}, self.statement(draw),
                               session_roots={VALUE: self.root(opening)})
 
     def network_verdict(self, stream: S.Stream, windows: int | None = None) -> dict[str, Any]:
@@ -612,5 +867,5 @@ class LinkWindows:
         return {"accepted": accepted, "windows": n, "refused": refused, "records": records, "digest": digest}
 
 
-__all__ = ["HEADS", "LEAVES", "LinkWindows", "OUTPUTS", "Opening", "PUBLIC", "PUBLIC_SERVED", "SCHEMA", "VALUE",
-           "encode", "rows", "unit"]
+__all__ = ["BC_BYTES", "Delivered", "HEADS", "LEAVES", "LinkWindows", "OUTPUTS", "Opening", "PORTS", "PUBLIC",
+           "PUBLIC_SERVED", "ROWS", "SCHEMA", "VALUE", "encode", "rows", "unit"]
