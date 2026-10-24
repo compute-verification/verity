@@ -10,7 +10,8 @@ import Mathlib.Algebra.BigOperators.Fin
 The advice string is the constant-rate Program's content advice, so the accepted-runs bound
 `A_c + W·log2 #Σ_sync + n·log2 D` holds with `A_c = Σ_w b w`: the public per-window caps on the advice string's
 charge, fixed before the run. These guarantees state it, for any charge `bits` that meets `BitsCount` and any compiler
-that is precommitted and deterministic. Acceptance is existential (`AcceptedWithin`): a run counts
+that is precommitted and deterministic. With advice v1's charge they hold with no assumption on the charge
+(`Guarantees/AdviceV1` here and in `Definitions`). Acceptance is existential (`AcceptedWithin`): a run counts
 if some advice within the caps explains it, so no premise holds only of an honest run. Each run's egress must equal the
 compiled Program's (`Accepted`). The all-frames egress tie backs that only when no step unit can be faulty: every step
 unit drawn `all`, or a sampled audit at `δ ≥ miss(1)`. At a smaller `δ` an accepted sampled audit gives `Accepted` only
