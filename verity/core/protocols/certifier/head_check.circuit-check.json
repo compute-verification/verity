@@ -1,13 +1,16 @@
 {
  "definitions": {
   "NetworkHeadCounts_v1{T=4}": {
-   "and": 127
+   "and": 127,
+   "type": "45bf4203121efd7d4e2232915d22e92000209a9a9abbdf9ba996caf9f5d4f39c6d2cafb17b9a602a9f26e3b118192ebbef1d5344b745c650f31fe1a690850dc5"
   },
   "NetworkHeadCounts_v1{T=600}": {
-   "and": 19199
+   "and": 19199,
+   "type": "44118ba97c476559c2936af1f5b8909821b5b9cb8d349ad752bef9000e0197922837303076a73ebea4a1a71606d63344535b1f96caad73a99a75ccfff0b8492c"
   },
   "NetworkHeadFields_v1{L=9}": {
-   "and": 807
+   "and": 807,
+   "type": "26188f67266ff87ec7b29fbb01618c6f9bf7f6ec85718ee6012dc8afe59ca81130c1c5ae3bff7cb9758a7275cc2700732bc94e387b38f274f36e0e11f073fc74"
   }
  },
  "digests": {

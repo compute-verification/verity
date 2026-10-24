@@ -327,6 +327,8 @@ def test_boolean_tf32_prenorm_split() -> None:
     _agree(bind(BM.MhcPrenormTf32SplitV2, K=64, OUT=1), a, b)
 
 
+@pytest.mark.slow
+@pytest.mark.boolean_sweep
 def test_boolean_post_and_sinkhorn() -> None:
     rng = np.random.default_rng(12)
     x, residual, post, comb = _post_operands(rng, 16, 2, 2)
@@ -339,6 +341,7 @@ def test_boolean_residual_broadcast() -> None:
     _agree(bind(BM.MhcResidualBroadcastV2, HC=4, H=8), bf16(rng, (16, 8)))
 
 
+@pytest.mark.boolean_sweep
 @pytest.mark.slow
 def test_boolean_tf32_compositions() -> None:
     """The multi-launch TF32 Definitions are Calls of their Boolean pieces and have the `_v1` word views."""
