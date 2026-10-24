@@ -254,7 +254,7 @@ def window_of(rec: dict[str, Any], rank: int, partition_file: str | os.PathLike,
               binding: dict[str, Any] | None = None) -> tuple[Any, dict[str, Any]]:
     """The verifier's own window of rank ``rank`` of the record ``rec`` (`record`) over the rank's loaded Programs ``p`` (a
     `rank_replay.Loaded`: of record, `window_of_record`, or a registered compiler's from advice, `pipeline.advice_windows`), and what
-    `source` holds the rank's registration to (``binding``: the compiler's and the advice's digests the window must name)."""
+    `source` holds the rank's registration to (``binding``: the compiler's digest and the advice's hiding root the window must name)."""
     from verity_vllm.pipeline import serving_rows as SRW
 
     rank, world = int(rank), int(rec["world"])
