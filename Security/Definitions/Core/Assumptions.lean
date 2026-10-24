@@ -5,7 +5,7 @@ import Definitions.Core.TC.Spec
 
 The hardware semantics and the deployment Verity's theorems take without proof, each a `Prop` taken as a hypothesis (no
 `axiom`). The moniker in each docstring is the entry of the overnight assumptions table that the red team rates; a
-deployment assumption's moniker is its `verity.claims` id. An area's `Models/<Area>/Assumptions` cites these rather than
+deployment assumption's moniker is its `verity.claims` id. An area's `Definitions/<Area>/Assumptions` cites these rather than
 restating them.
 -/
 
