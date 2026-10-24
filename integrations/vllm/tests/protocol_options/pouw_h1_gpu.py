@@ -606,6 +606,9 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                 if tap is not None:
                     out["roots1"] = h1.details["roots1"]
                     out["ok"] = bool(out["ok"] and out["roots1"]["tied"])
+                    if a.live_dump and out["requests"].get("live"):
+                        from verity_vllm.protocol_options import pouw_h1_live as LV
+                        out["live_dump"] = LV.dump(h1, Path(a.live_dump) / name)
         finally:
             lie.uninstall()
             comp.close()
@@ -1234,6 +1237,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--handoff-state", metavar="DIR", help="with --handoff: the prover's scratch the window is saved in")
     ap.add_argument("--prover-dir", metavar="DIR", help="fill with --served: the prover's private directory, kept past the "
                                                        "close, outside --out (pouw_h1_prover: its salt key and values)")
+    ap.add_argument("--live-dump", metavar="DIR", help="with --commit: each Commit window's live@<s> statements, the "
+                                                       "prover's rows and openings (pouw_h1_live.dump), into DIR/<window>, "
+                                                       "outside --out, for benchmarks/pouw/h1_prove/live.sh")
     ap.add_argument("--close-from", metavar="DIR", help="no GPU: close and release the window a --handoff run saved in DIR, "
                                                         "on the session's stream --stream-fd, completing --out's record")
     ap.add_argument("--stream-fd", type=int, metavar="FD", help="with --close-from: the session's stream, as the holder "
