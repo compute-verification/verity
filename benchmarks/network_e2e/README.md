@@ -97,6 +97,20 @@ Each `--from` source is one of these, or a gzipped tar of one:
   of each file of `out/` the tarball must match. The report's source line names the gate's host, each gate run and the
   main commit the gate was pinned to.
 
+The auditor-host runs of record: infra's gate rehearsals on vy-challenger-1 (INF-199), pinned to main 11ce5fe77c,
+against vllm's Llama-3.1-8B INT8 on vy-nebius-1:18080 (10 minutes, 40 requests, 16 tokens, 11 link-windows), each
+tarball's 21 files matching its `end.json`. Report run r20261024-081948-55d8 (a3e7433969, vy-nebius-cpu-1's network slot n1):
+
+| gate run | strategy | gate | N2 | proved (Lean) |
+|---|---|---|---|---|
+| c20261024T080200Z-0c53 | honest, planned | accepted | accepted, 11/11 | both ends, every link-window accepted |
+| c20261024T080333Z-9cf5 | late | refused | refused at windows 0-1 | not proved (late isn't an `n2_zk` member) |
+| c20261024T080506Z-7590 | extra | refused | refused at window 0 | egress, refused at window 0 |
+| c20261024T080639Z-3c48 | honest, served | accepted | accepted, 11/11 | not proved (`NetworkServedCounts_v1`) |
+
+The first three are one report, OK, with the tampered head made from 0c53 refused at window 0, proved; 3c48 is its own
+report (`out/served`), since a report takes one honest run, and is NOT OK only for having no late or extra run.
+
 An honest run is required, because the tampered head is made from it. Two runs of the same strategy are refused.
 
 ## The report
@@ -113,7 +127,8 @@ An honest run is required, because the tampered head is made from it. Two runs o
 
 `report.md` renders the same thing as tables. OK means: the honest run was accepted on every link-window by N2 and, where
 proofs ran, by every proved head check held by Lean; each negative was refused by everything that checked it; and every
-chain stage that ran passed. On the advice profile the rehearsal's own check stands in for N2.
+chain stage that ran passed. On the advice profile the rehearsal's own check stands in for N2. When it isn't OK,
+`why_not` (and the line under `report.md`'s title) says which of these failed, a missing negative's run among them.
 
 ## What it proves, and what it doesn't
 
