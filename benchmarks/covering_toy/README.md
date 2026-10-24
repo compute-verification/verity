@@ -32,6 +32,12 @@ Lean's vocabulary, word for word (`Security/Definitions/Nci/Covering.lean`):
 `G.values` are the production bound's counted values: every forward pre-activation (the toy's maps are square, so
 `min(d_in, d_out)` per token per map is all of them).
 
+`toygraph.inference(dims, tokens)` is the baseline: the same model's forward pass alone, every weight registered, so a
+training covering's `rho` can be read against inference's at the same `k` and `s`.
+
+The graph is word level only. A bit-level variant (each word a fixed-point adder and multiplier circuit) is 30-50 times
+larger, past what the exact solvers close; build it with `Graph.add` as for splitting attacks below.
+
 ## Solvers (`cover.py`)
 
 - `greedy`, `lns`: heuristics with recomputation; `partition_topo`, `partition_bisect` (recursive Kernighan-Lin, a
@@ -43,6 +49,10 @@ Lean's vocabulary, word for word (`Security/Definitions/Nci/Covering.lean`):
 
 Every solver's output goes through `validate`. Each takes `targets` to cover only a subset (the counted values, `M*`).
 
+The bounds (`bounds.py`): `lean_two_costs` (`CoveringBoundTwoCosts`: `|M*| / ((k / c_w)(k / c_a) + k)`),
+`lean_additive` (`CoveringBoundAdditive`: `(k / c_w)(k / c_a) / 4 + k` per block), `production` (`beta |V| / k`) and
+`trivial` (`|inner| / s`).
+
 ## Running
 
 ~~~sh
@@ -53,8 +63,16 @@ uv run --no-project --with ortools --with scipy --with numpy --with networkx \
 `sweep.INSTANCES` names the instances. Per instance, `k` and gate budget (`eta1`: matched to honest inference on `k`
 words; `eta2`: twice that; `inf`: none), it solves the whole covering, the covering of `V` and of `M*`, and writes
 `OUT/<instance>.json` (each solution's blocks as `[computed, inputs]` gate lists, so a covering can be reloaded) and
-`OUT/table.md`. On a pod: `research run --on vy-nebius-cpu-5 --pool research --as LANE --project verity --source .
---cwd source -- bash -c 'cd benchmarks/covering_toy && uv run ... sweep.py --out "$OUT"'`.
+`OUT/table.md`. `M_ONLY` instances (the deep, wide one, where the Lean bound isn't vacuous) solve only `M*`. `--ks`,
+`--modes` and `--problems full,V,M` narrow a sweep; `--merge DIR ...` combines several sweeps' outputs into `OUT`, each
+bracket tightened only by sound arguments (`sweep.merge`); `--caps` runs only the per-block cap test (`sweep.caps`). On a
+pod: `research run --on vy-nebius-cpu-5 --pool research --as LANE --project verity --source . --cwd source -- bash -c
+'cd benchmarks/covering_toy && uv run ... sweep.py --out "$OUT"'`.
+
+The table's flags name the section-4 assumption a covering breaks: `P-total` (fewer blocks than `|V| / k`), `P-block`
+(one block computes more than `k` values), `L-c_w=1` (fewer `M*` blocks than the Lean bound with `c_w = 1`, which only a
+`c_w < 1` may do), `L-measured` (fewer than the Lean bound at the measured `c_w(s)`: a solver or statement bug).
+`sweep.why` reads the densest such block's gates and says which assumption it breaks.
 
 ## For splitting attacks (C3)
 
