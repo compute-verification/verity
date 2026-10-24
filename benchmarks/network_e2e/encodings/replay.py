@@ -1058,8 +1058,9 @@ class _Egress:
     before the next step and nothing after it. Under FCFS that run is the served one for i and every request ahead of
     it: a later arrival goes behind them in the running order, so takes none of their budget, and is preempted before
     them. So under the true hypothesis each of i's outputs leaves in the bucket of an earlier request's output from the
-    same step, which the certified egress shows. They are compared up to i's first change of bucket, where the earlier
-    request's must change too (2: no earlier request's output to compare with)."""
+    same step, which the certified egress shows; of any of them, since a frontend streams one step's outputs over some
+    milliseconds. They are compared up to i's first change of bucket, where some earlier request's must change too (2: no
+    earlier request's output to compare with)."""
 
     def __init__(self, cert: Certified) -> None:
         _, self.out = _clocked(cert)
@@ -1070,10 +1071,9 @@ class _Egress:
             t = e.get(i)
             if t is None:
                 continue
-            ref = min((j for j in e if j < i and e[j] < len(self.out[j])), default=None)
-            if ref is not None:
-                b = self.out[ref][e[ref]]
-                if (b != a[t]) if edge is None or t < edge else (b == a[0]):
+            bs = {self.out[j][m] for j, m in e.items() if j < i and m < len(self.out[j])}
+            if bs:
+                if (a[t] not in bs) if edge is None or t < edge else (bs == {a[0]}):
                     return 0
                 checked += 1
         return 1 if checked else 2
@@ -1093,8 +1093,10 @@ _FULL, _HALF, _QTR = 1 << 32, 1 << 31, 1 << 30
 
 
 class _KT:
-    def __init__(self) -> None:
-        self.n: dict[Any, tuple[int, int]] = {}
+    """Krichevsky-Trofimov counts per context, from `prior`'s where given (pseudo-observations of 0s and 1s)."""
+
+    def __init__(self, prior: dict[Any, tuple[int, int]] | None = None) -> None:
+        self.n: dict[Any, tuple[int, int]] = dict(prior or {})
 
     def freqs(self, ctx: Any) -> tuple[int, int]:
         n0, n1 = self.n.get(ctx, (0, 0))
@@ -1204,7 +1206,14 @@ class Code:
 #: bucket against the release buckets around the step (`_Clock`); `egress`, whether its release buckets line up with
 #: the replay's forks where it arrived now or a step later (`_Egress`), and the clock's where those can't tell
 CONTEXTS = ("plain", "clocked", "egress")
-_TELLS = {(1, 0), (0, 1), (0, 0)}
+#: the egress verdicts that tell the decision (`_Egress.context`: lines up now, a step later), each a prior of `_PRIOR`
+#: observations of its decision in the adaptive code
+_TELLS = {(1, 0): True, (0, 1): False, (0, 0): False}
+_PRIOR = 8
+
+
+def _model(contexts: str) -> _KT:
+    return _KT({c: (0, _PRIOR) if v else (_PRIOR, 0) for c, v in _TELLS.items()} if contexts == "egress" else None)
 
 
 def _coder(cert: Certified, contexts: str) -> Callable[[int, int, Open], tuple[int, ...]]:
@@ -1233,7 +1242,7 @@ def encode(trace: Trace, *, contexts: str = "egress", bucket_s: float = 0.1, win
     cert = trace.certified(bucket_s)
     context = _coder(cert, contexts)
     rw = cert.windows(window_buckets)
-    model, enc, ideal = _KT(), {}, {}
+    model, enc, ideal = _model(contexts), {}, {}
     passed = [0] * len(trace.requests)
 
     def decide(i: int, k: int, o: Open) -> bool:
@@ -1259,7 +1268,7 @@ def decode(cert: Certified, code: Code) -> Replay:
         raise ValueError(f"the code is in {code.bucket_s} s buckets, the certified record in {cert.bucket_s} s")
     context = _coder(cert, code.contexts)
     rw = cert.windows(code.window_buckets)
-    model, dec = _KT(), {}
+    model, dec = _model(code.contexts), {}
     passed = [0] * len(cert.requests)
 
     def decide(i: int, k: int, o: Open) -> bool:
