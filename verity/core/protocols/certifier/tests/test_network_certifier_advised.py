@@ -41,6 +41,28 @@ SEEDS = (1, 2, 3, 5, 7, 8)
 
 
 @dataclass(frozen=True)
+class Shape:
+    """A simulated link's sizes: T buckets a window, its windows, each end's grid, and the buckets requests arrive in
+    (`benchmarks/network_traces/n2_advised_zk.py` runs the tests' traffic at T = 512)."""
+
+    T: int
+    windows: int
+    egress: GridParams
+    ingress: GridParams
+    arrive: range
+
+
+SHAPE = Shape(T, WINDOWS, P, PIN, range(2 * T))
+
+
+class SaltFirst(Certifier):
+    """CERT-VARLEN's FIFO change: the certifier's own frame goes to the head of the queue, ahead of carried frames."""
+
+    def enqueue_first(self, frame: bytes) -> None:
+        self._queue.appendleft(bytes(frame))
+
+
+@dataclass(frozen=True)
 class Session:
     """A simulated session on the link: its advice, each end's records, each request's ingress arrival bucket (in
     arrival order), each advice request's place in that order, each kept output's hand bucket (in `advice.outputs`
@@ -56,32 +78,33 @@ class Session:
     ends: tuple[int, ...]
 
 
-def ingress_records(arrive, frames_in, own):
+def ingress_records(arrive, frames_in, own, shape=SHAPE, salt_first=False):
     """The ingress certifier's records, with its own frame queued first in each window (behind any carried request
-    frames, as `active.Bucketer` queues it), and each request's anchor, the bucket that releases its last frame."""
-    cert, records, anchor, got = Certifier(LINK, PIN), [], [None] * len(arrive), 0
+    frames, as `active.Bucketer` queues it, or with `salt_first` ahead of them), and each request's anchor, the bucket
+    that releases its last frame."""
+    cert, records, anchor, got = SaltFirst(LINK, shape.ingress), [], [None] * len(arrive), 0
     need = list(itertools.accumulate(frames_in))
-    for t in range(WINDOWS * T):
-        if own and t % T == 0:
-            cert.enqueue(b"s")
+    for t in range(shape.windows * shape.T):
+        if own and t % shape.T == 0:
+            (cert.enqueue_first if salt_first else cert.enqueue)(b"s")
         for j, a in enumerate(arrive):
             if a == t:
                 for _ in range(frames_in[j]):
                     cert.enqueue(b"q")
         got += cert.tick().count(b"q")
         anchor = [t if a is None and need[j] <= got else a for j, a in enumerate(anchor)]
-        if (t + 1) % T == 0:
+        if (t + 1) % shape.T == 0:
             records.append(cert.close_window())
     return records, anchor
 
 
-def egress_records(handed):
-    cert, records = Certifier(LINK, P), []
-    for t in range(WINDOWS * T):
+def egress_records(handed, shape=SHAPE):
+    cert, records = Certifier(LINK, shape.egress), []
+    for t in range(shape.windows * shape.T):
         for _ in range(handed[t]):
             cert.enqueue(b"e")
         cert.tick()
-        if (t + 1) % T == 0:
+        if (t + 1) % shape.T == 0:
             records.append(cert.close_window())
     assert cert.queued == 0, "the egress queue drains by the link's last window"
     return records
@@ -106,26 +129,28 @@ def _hit(made, j, want, resume):
     return sum(n for _, n in runs), [tuple(r) for r in runs]
 
 
-def serve(seed: int, own: int = 0) -> Session:
+def serve(seed: int, own: int = 0, shape: Shape = SHAPE, salt_first: bool = False) -> Session:
     """A vLLM-like session: 5 … 8 requests of 2 … 9 prompt tokens, each in the framing's 1 … 3 ingress frames, arriving
-    over the first two windows, and a scheduler of two steps a bucket, a token budget of 6 and 4 sequences, which
-    admits a request (FCFS) the bucket after its last ingress frame is released, prefills it in chunks (from a
-    prefix-cache hit on another request's KV, where one is wanted and computed), decodes it, preempts one running
-    request and recomputes it on resume (from a hit on its own and others' KV), and runs the async row past some
-    finishes. A step's rows are the running requests' in Model Runner V2's order (n = 1 first), then those it first
-    schedules, in arrival order, so v0's first-row order is the arrival order (the canonical map). Each step's kept
-    outputs are handed to the egress certifier the bucket after the step runs, one frame each, and released FIFO at
-    R, so frames released after they're handed carry across windows; `release` is the certified egress record's."""
+    in `shape.arrive` (by default over the first two windows), and a scheduler of two steps a bucket, a token budget of
+    6 and 4 sequences, which admits a request (FCFS) the bucket after its last ingress frame is released, prefills it in
+    chunks (from a prefix-cache hit on another request's KV, where one is wanted and computed), decodes it, preempts
+    one running request and recomputes it on resume (from a hit on its own and others' KV), and runs the async row past
+    some finishes. A step's rows are the running requests' in Model Runner V2's order (n = 1 first), then those it
+    first schedules, in arrival order, so v0's first-row order is the arrival order (the canonical map). Each step's
+    kept outputs are handed to the egress certifier the bucket after the step runs, one frame each, and released FIFO
+    at R, so frames released after they're handed carry across windows; `release` is the certified egress record's.
+    With `salt_first`, the ingress certifier queues its own frame as CERT-VARLEN's FIFO change does."""
     rng = random.Random(seed)
     n = rng.randint(5, 8)
-    arrive = sorted(rng.randrange(2 * T) for _ in range(n))
+    arrive = sorted(rng.choice(shape.arrive) for _ in range(n))
     prompt = [rng.randint(2, 9) for _ in range(n)]
     frames_in = [FRAMING[p - 1] for p in prompt]
     out = [rng.randint(1, 10) for _ in range(n)]
     want = [rng.randrange(p) if rng.random() < 0.5 else 0 for p in prompt]
     trailing = [rng.random() < 0.4 for _ in range(n)]
     finish = [rng.choice(ADV.FINISHES) for _ in range(n)]
-    ingress, anchor = ingress_records(arrive, frames_in, own)
+    ingress, anchor = ingress_records(arrive, frames_in, own, shape, salt_first)
+    last = shape.windows * shape.T
 
     c, sampled, made, admit = [0] * n, [0] * n, [set() for _ in range(n)], [None] * n
     admitted, waiting, running, done = set(), deque(), [], set()
@@ -135,7 +160,7 @@ def serve(seed: int, own: int = 0) -> Session:
         if len(done) == n:
             break
         b = s // 2
-        assert b + 1 < WINDOWS * T, "the session outlasts the link's windows"
+        assert b + 1 < last, "the session outlasts the link's windows"
         for j in range(n):
             if j not in admitted and anchor[j] < b:
                 admitted.add(j)
@@ -178,10 +203,10 @@ def serve(seed: int, own: int = 0) -> Session:
         steps.append(rows)
     first = list(dict.fromkeys(r[0] for rows in steps for r in rows))
     new = {j: i for i, j in enumerate(first)}
-    handed = [0] * (WINDOWS * T)
+    handed = [0] * last
     for h in hand:
         handed[h] += 1
-    egress = egress_records(handed)
+    egress = egress_records(handed, shape)
     release = tuple(t for t, k in enumerate(c for row in counts(egress) for c in row) for _ in range(k))
     advice = ADV.Advice(
         tuple(ADV.RequestAdvice(f"u{j}", prompt[j], out[j], finish[j]) for j in first),
@@ -400,6 +425,41 @@ def test_the_ingress_ends_are_derived_from_v0s_prompt_lengths():
             _view(more, w)
         with pytest.raises(ValueError, match="past the link's framing"):
             AD.view(link, w, T, R, SYNCS, SYNC_SET, FRAMING[:1])
+
+
+def _signed_end(counts, own, end):
+    """CERT-VARLEN's rule: the first bucket where the ingress head's signed counts, less one own frame a window, reach
+    `end` request frames."""
+    total = 0
+    for t, n in enumerate(counts):
+        total += n - (own if t % T == 0 else 0)
+        if total >= end:
+            return t
+    return None
+
+
+@pytest.mark.parametrize("own", [0, 1])
+def test_the_ingress_ends_are_where_the_signed_counts_put_them(own):
+    """CERT-VARLEN's rule: request k ends in the first bucket where the ingress head's signed counts, less one own frame
+    a window, reach `advised.ends`'s k-th, Σ_{i ≤ k} request_frames[prompt_len_i − 1]. In every session that is the
+    bucket that releases request k's last frame: under today's queueing wherever each window's own frame leaves in its
+    first bucket (and never earlier elsewhere), and always once the own frame goes to the head of each window's queue
+    (CERT-VARLEN's FIFO change), under which every window is accepted. Salted, today's queueing puts some end late."""
+    late = 0
+    for salt_first in (False, True):
+        for seed in SEEDS:
+            s = serve(seed, own, salt_first=salt_first)
+            sizes = [e - p for p, e in zip((0,) + s.ends, s.ends)]
+            records, anchor = ingress_records(s.arrive, sizes, own, salt_first=salt_first)
+            assert counts(records) == counts(s.ingress)
+            got = [_signed_end([n for row in counts(records) for n in row], own, e) for e in AD.ends(s.link, FRAMING)]
+            assert all(g >= a for g, a in zip(got, anchor))
+            if salt_first or all(not own or b"s" in r.grid[0] for r in records):
+                assert got == anchor
+            if salt_first:
+                assert check(s, own=own) == [True] * WINDOWS
+            late += got != anchor
+    assert bool(late) is bool(own)
 
 
 def test_every_window_is_held_to_one_advice(tmp_path):
