@@ -1178,9 +1178,25 @@
    "owner": "@network-accounting",
    "digest": "310f208fce13c24995d809d75f36e717d519a690cb6ca0f056a8064689056666"
   },
+  "NetTiming.AcceptedWithin": {
+   "owner": "@network-accounting",
+   "digest": "61264f5cd461a948f1f6b64479ce28fb69e6e225329d812866525ab659ac8aa7"
+  },
   "NetTiming.Allocated": {
    "owner": "@network-accounting",
    "digest": "a414edcfc0295b87863d6548e751f60b429bf55d55cdcd9791ef92d93c02ea94"
+  },
+  "NetTiming.BitsCount": {
+   "owner": "@network-accounting",
+   "digest": "d4e0da6a318e51d835db13cda094605ffcd9569955bbc4a27f01e021375f1f5b"
+  },
+  "NetTiming.CompilerDeterministic": {
+   "owner": "@network-accounting",
+   "digest": "a3885e87bc70035c2b57e25c218870889da0a4197bfc059a90a23d1122bfe6ba"
+  },
+  "NetTiming.CompilerPrecommitted": {
+   "owner": "@network-accounting",
+   "digest": "789f1bc116d4abd0f277dc8273cc6b357d59f49e5b918ffc734aeec3bd4acef2"
   },
   "NetTiming.FramesReadNoTimingAdvice": {
    "owner": "@network-accounting",
@@ -3364,12 +3380,6 @@
    "assumptions": [],
    "type_hash": "0e6e35df262547cab6588bbbcc02c230fc6691525a67f2aecb6cc5d3a62e60d4"
   },
-  "Accounting.SecurityProofs.Remote.SketchBoundSession": {
-   "owner": "@memory-accounting"
-  },
-  "Accounting.SecurityProofs.Remote.SketchBoundDeployed": {
-   "owner": "@memory-accounting"
-  },
   "Accounting.SecurityProofs.Remote.LiveCoinsDrawn": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Remote.LiveCoinsDrawn : Accounting.Guarantees.Remote.LiveCoinsDrawn"],
@@ -3381,6 +3391,12 @@
    "signature": ["Accounting.SecurityProofs.Remote.PooledDraw : Accounting.Guarantees.Remote.PooledDraw"],
    "assumptions": [],
    "type_hash": "e11bd8f0d7411ecef278283d438e8bb82499aa76458b00817ae5109a7008ad97"
+  },
+  "Accounting.SecurityProofs.Remote.SketchBoundDeployed": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Remote.SketchBoundSession": {
+   "owner": "@memory-accounting"
   },
   "Accounting.SecurityProofs.RemoteSessionConservation": {
    "owner": "@memory-accounting",
@@ -7814,6 +7830,14 @@
    "assumptions": [],
    "type_hash": "1564cbcbef1db36b50e4f1da0cc1c7b6691134430a5d88f497954467812a4ada"
   },
+  "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate : NetTiming.Guarantees.EncardAccSeqsWithinLeConstantRate"
+   ],
+   "assumptions": [],
+   "type_hash": "74ecb898b782ea54232a47453d3d84b864debb5e3aab20c6944a0d5b8446106e"
+  },
   "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": {
    "owner": "@network-accounting",
    "signature": [
@@ -7830,6 +7854,23 @@
    ],
    "assumptions": [],
    "type_hash": "2b88be87e58fe0688ef1e94ad5860bf98c293951ab6fe4bafc6f32b45c155816"
+  },
+  "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled : NetTiming.Guarantees.EncardDecodableWithinLeCompiled"
+   ],
+   "assumptions": [],
+   "type_hash": "657c317522e5a4e8cb952c9be17bd49ad0133334cd5b944fe4c6809862fe943f"
+  },
+  "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow :",
+    "  NetTiming.Guarantees.EncardDecodableWithinLeCompiledPerWindow"
+   ],
+   "assumptions": [],
+   "type_hash": "1f6fae37b38a9fb93b51665c9c08523c8e03a5ec15ac11f07ae0a3d736096581"
   },
   "NetTiming.SecurityProofs.EncardFifoGrids": {
    "owner": "@network-accounting",
@@ -10358,7 +10399,10 @@
    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedJ10R": "frozen (no-function,world-unlisted,scope): StagedFloorKOneSided at call scope under J10-R (RT-ALGO-17, card bbf40543), each stage a call (JStage), its run one straight-line program over the call's bits, both sides shared across the call and each segment's coin x coin part one <n, L, n'> product. It is stated over an arbitrary Machine and Service and an analysis map (JRunMap), not the service's code, and takes three premises about that map: ServiceSoundStagedJ10R (ServiceSoundStaged with the seed identified with the window's call coins), KScopeOneSidedJ10R (Theorem K's one-sided scope on the call: products one-sided of any form between the rows' dither bits and the columns' coin and U bits, the error the call's int8-wrapped prefix product, and charging purity mod 2 at every segment's row and column frame, which no check of the service refuses a run outside of) and ChargeVF3j16J10R (the active vector VF3j-16's prices with B_theta complete, kappa a product of the call's program). Its floor and luck are StagedFloorKOneSided's: c = 1 on the call's one-sided scope; K1 is not claimed outside it, and the verifier can't observe which case applies.",
    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10R": "frozen (no-function,world-unlisted,scope): OverlapFloorKOneSided at call scope under J10-R (RT-ALGO-17, card bbf40543), each draw a call of any shape (OJSpot), the round's run one straight-line program over every call's bits, both sides shared across each call and each segment's coin x coin part one <n, L, n'> product. It is stated over an arbitrary Machine and Service and an analysis map (JORunMap), not the service's code, and takes three premises about that map: ServiceSoundOverlapJ10R (ServiceSoundOverlap with the seed identified with the overlapped window's call coins), KScopeOverlapOneSidedJ10R (Theorem K's scope across calls: products one-sided per call at every bit point of the other calls' (OneSidedAtJ), the error each call's int8-wrapped prefix product, and charging purity across calls mod 2 at every segment's frame, which no check of the service refuses a run outside of) and ChargeVF3j16OverlapJ10R (the active vector VF3j-16's prices with B_theta complete, each product counted once). Its floor and luck are OverlapFloorKOneSided's: c = 1 on the calls' one-sided scope; K1 is not claimed outside it, and the verifier can't observe which case applies.",
    "Pouw.Guarantees.RelativeSecurity.StagedFloorKOneSidedJ10RPerProver": "unstated: StagedFloorKOneSidedJ10R restated on ServiceSoundStagedJ10RPerProver, each adversary's error its own (breakBound, ecr/sha-512 at its collision finders within budgets computed from its time); the per-prover form at call scope under J10-R (RT-ALGO-17), stated beside StagedFloorKOneSidedPerProver and open like it (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover)",
-   "Pouw.Guarantees.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver": "unstated: OverlapFloorKOneSidedJ10R restated on ServiceSoundOverlapJ10RPerProver, each adversary's error its own (breakBound, ecr/sha-512 at its collision finders within budgets computed from its time); the per-prover form at call scope under J10-R (RT-ALGO-17), stated beside OverlapFloorKOneSidedPerProver and open like it (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover)"
+   "Pouw.Guarantees.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver": "unstated: OverlapFloorKOneSidedJ10R restated on ServiceSoundOverlapJ10RPerProver, each adversary's error its own (breakBound, ecr/sha-512 at its collision finders within budgets computed from its time); the per-prover form at call scope under J10-R (RT-ALGO-17), stated beside OverlapFloorKOneSidedPerProver and open like it (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover)",
+   "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate": "frozen (no-function): It bounds AccSeqsWithin, the observation sequences an abstract Program accepts with advice within the caps, not runs of the network check's code, and takes BitsCount about an abstract charge; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, an abstract charge and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, BitsCount about the charge, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, an abstract charge and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, BitsCount about the charge, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -15397,6 +15441,21 @@
     "Nci.SecurityProofs.ThreadedReadsInfoFmt2"
    ]
   },
+  "Definitions.NetworkCertifier.AdviceString": {
+   "digest": "715d45241077f1878ee1d6b352fb24efa6941b6d5be1ed84ec185327824fcdc3",
+   "definitions": {
+    "NetTiming.AccSeqsWithin": "1709241caae7fc9d6d72eaa5b60250b4ba01eec1c180a1dcf49adb246b2bf4df",
+    "NetTiming.AcceptedWithin": "61264f5cd461a948f1f6b64479ce28fb69e6e225329d812866525ab659ac8aa7",
+    "NetTiming.Compiler": "ce5c3600feaccf98acc88db3827f8278d5c587928327b689bad624a646028b55",
+    "NetTiming.WithinCaps": "6a9ebd9ac66db9b9c032d0c22baed96b8c3e7bfc0d8476d0136f3b440bdc363b",
+    "NetTiming.compiledProgram": "fb8c7bd7d7e587e849fd42d3240be6e969d31115ec34ae91e48fee77022b7ea7"
+   },
+   "guarantees": [
+    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow"
+   ]
+  },
   "Definitions.NetworkCertifier.Grid": {
    "digest": "c7ed6edeeae9117352e16647ec33b99c24c886b9fb8833bad5989949fd0516fc",
    "definitions": {
@@ -15423,8 +15482,11 @@
     "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows",
     "NetTiming.SecurityProofs.EncardAccSeqsLeFixedClock",
     "NetTiming.SecurityProofs.EncardAccSeqsLeSync",
+    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow",
     "NetTiming.SecurityProofs.EncardFifoGrids",
     "NetTiming.SecurityProofs.EncardFifoGridsLeOfAvailable",
     "NetTiming.SecurityProofs.EncardIngressDecodableLe",
@@ -15495,8 +15557,11 @@
     "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows",
     "NetTiming.SecurityProofs.EncardAccSeqsLeFixedClock",
     "NetTiming.SecurityProofs.EncardAccSeqsLeSync",
+    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow",
     "NetTiming.SecurityProofs.EncardIngressDecodableLe",
     "NetTiming.SecurityProofs.EncardIngressDecodableLeContents",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe",
@@ -15534,8 +15599,11 @@
     "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock",
     "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerWindow",
     "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows",
+    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow",
     "NetTiming.SecurityProofs.ExpectedRowCausal"
    ]
   },
@@ -28258,12 +28326,27 @@
     "NetTiming.SecurityProofs.EncardAccSeqsLeBlocksCounts",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow",
     "NetTiming.SecurityProofs.EncardIngressDecodableLe",
     "NetTiming.SecurityProofs.EncardIngressDecodableLeContents",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow"
+   ]
+  },
+  "Models.NetworkCertifier.Assumptions.AdviceString": {
+   "digest": "69ff3fec887ffbc591be1e0640840835cd3835d52978d52268fa4404e3ece931",
+   "definitions": {
+    "NetTiming.BitsCount": "d4e0da6a318e51d835db13cda094605ffcd9569955bbc4a27f01e021375f1f5b",
+    "NetTiming.CompilerDeterministic": "a3885e87bc70035c2b57e25c218870889da0a4197bfc059a90a23d1122bfe6ba",
+    "NetTiming.CompilerPrecommitted": "789f1bc116d4abd0f277dc8273cc6b357d59f49e5b918ffc734aeec3bd4acef2"
+   },
+   "guarantees": [
+    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow"
    ]
   },
   "Models.NetworkCertifier.Guarantees": {
@@ -28315,6 +28398,19 @@
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow",
     "NetTiming.SecurityProofs.ExpectedRowCausal"
+   ]
+  },
+  "Models.NetworkCertifier.Guarantees.AdviceString": {
+   "digest": "8ee8e56d6716a7302c09227acba9d7126ed9d6f940691ec5a43a67e6a920295c",
+   "definitions": {
+    "NetTiming.Guarantees.EncardAccSeqsWithinLeConstantRate": "f395985c0eb6adb125fe409447bc070875e5ed1d88331a16cf51f86daad22da8",
+    "NetTiming.Guarantees.EncardDecodableWithinLeCompiled": "f17f694bef9176aa275748204d9c87ccfc5e80d019b1622a00f1259180ec34f4",
+    "NetTiming.Guarantees.EncardDecodableWithinLeCompiledPerWindow": "74b05e9c47489ab309f3bb44db9d57d2fea89a6d8f5299aaed65723151be1dc7"
+   },
+   "guarantees": [
+    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow"
    ]
   },
   "Models.Pous.Assumptions.P2": {
