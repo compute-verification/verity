@@ -73,12 +73,20 @@ structure Session where
   sts : Array Stmt
   link : Option (Array F128) := none
 
-/-- **The loop's frames**: the sessions, each rep's frame, and each rep's salts for levels ≥ 1 by its table's level-0
-root, the loop's finish's (`Finish.serve`'s `keep`). -/
+/-- **The loop's frames**: the sessions, each rep's frame, and each rep's salts for levels ≥ 1 and its proof file by its
+table's level-0 root, the loop's finish's (`Finish.serve`'s `keep` and `file`). -/
 structure Registry where
   sessions : Array Session := #[]
   reps : Array Rep := #[]
   salts : Array (ByteArray × Nat × Array ByteArray) := #[]
+  files : Array (ByteArray × Nat × ByteArray) := #[]
+
+/-- Rep `r`'s proof file `b` on the table of level-0 root `root`, as the loop's finish computed it; a rep's file is kept
+once, and asking again is refused. -/
+def Registry.file (R : Registry) (root : ByteArray) (r : Nat) (b : ByteArray) : Except String Registry :=
+  if R.files.any fun (x, q, _) => x == root && q == r then
+    .error s!"rep {r}'s proof file of its table was computed already"
+  else .ok { R with files := R.files.push (root, r, b) }
 
 /-- Session `sid`, set up on `spec` and `sts` at its `Hello`. -/
 def Registry.begin (R : Registry) (sid : Nat) (spec : SessionSpec) (sts : Array Stmt) : Registry :=
@@ -319,10 +327,12 @@ def ask (ch : Frame.Chan) (reg : IO.Ref Registry) (l0s : IO.Ref Level0.Registry)
       | _ => say "own"
   | _ => err s!"a request `{line.trim}`"
 
-/-- Session `sid` ended: its frames, their openings and the salts of its tables' level 0 (`roots`) are gone. -/
+/-- Session `sid` ended: its frames, their openings and the salts and proof files of its tables' level 0 (`roots`) are
+gone. -/
 def close (reg : IO.Ref Registry) (sid : Nat) (roots : Array ByteArray) : IO Unit :=
   reg.modify fun R =>
     { sessions := R.sessions.filter (·.sid != sid), reps := R.reps.filter (·.sid != sid),
-      salts := R.salts.filter fun (root, _, _) => !roots.contains root }
+      salts := R.salts.filter fun (root, _, _) => !roots.contains root,
+      files := R.files.filter fun (root, _, _) => !roots.contains root }
 
 end Flock.Firewall.Frames

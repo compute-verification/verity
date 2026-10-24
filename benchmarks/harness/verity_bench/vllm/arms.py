@@ -9,7 +9,7 @@ from typing import Any, Mapping
 
 from verity_vllm.engine.hooks import Hooks
 
-from verity_bench.vllm.presets import NO_CONTROL, ArmSettings
+from verity_bench.vllm.presets import NO_CONTROL, SERVED_EXECUTIONS, ArmSettings
 
 
 @dataclass(frozen=True)
@@ -26,6 +26,9 @@ class Arm:
     resident: bool = True
     #: a protocol arm's protocols config for `verity_vllm.LLM` (`presets.ArmSettings`), "$NAME" values unexpanded
     protocols_config: Mapping[str, Mapping[str, Any]] | None = None
+    #: a served variant's execution (`served_variant`): its engine is built at vLLM's serving defaults, eager or
+    #: compiled, whatever the spec's `eager` and the preset's `serving_defaults`; None builds it as they say
+    execution: str | None = None
 
     def to_json(self) -> dict[str, Any]:
         return asdict(self)
@@ -141,6 +144,20 @@ def _protocol_arm(name: str, settings: ArmSettings | None = None) -> Arm:
     return Arm(name, protocols=entries, precision=s.precision, control=control, protocols_config=config)
 
 
+def served_variant(name: str, settings: ArmSettings | None = None) -> Arm:
+    """``BUILTIN@LABEL``: the built-in arm's engine at vLLM's serving defaults in execution LABEL (`SERVED_EXECUTIONS`),
+    so one spec times one engine in two executions (`stock-fp8` eager against `stock-fp8@compiled`). Its control is the
+    built-in unless its `ArmSettings` say otherwise."""
+
+    base, _, label = name.partition("@")
+    if base not in BUILTINS or label not in SERVED_EXECUTIONS:
+        raise ValueError(f"served variant {name!r}: expected BUILTIN@LABEL with BUILTIN one of {sorted(BUILTINS)} and "
+                         f"LABEL one of {list(SERVED_EXECUTIONS)}")
+    s = settings or ArmSettings()
+    control = base if s.control is None else None if s.control == NO_CONTROL else s.control
+    return Arm(**{**BUILTINS[base].to_json(), "id": name, "control": control, "execution": label})
+
+
 def protocols_config(arm: Arm, environ: Mapping[str, str]) -> dict[str, dict[str, Any]]:
     """The arm's protocols config as `verity_vllm.LLM` takes it: each ``"$NAME"`` value read from `environ` (a missing
     one raises, naming it), and PoUW's ``coins`` an in-process challenger of epoch 0 (`pouw.challenged`) when PoUW is
@@ -211,9 +228,11 @@ def resolve_arms(names: str | list[str] | tuple[str, ...], module_specs: tuple[s
     stray = sorted(set(settings) - set(requested))
     if stray:
         raise ValueError(f"arm settings name arms not in --arms: {stray}")
-    out = [custom.get(name) or BUILTINS.get(name) or _protocol_arm(name, settings.get(name)) for name in requested]
+    out = [custom.get(name) or BUILTINS.get(name)
+           or (served_variant if "@" in name else _protocol_arm)(name, settings.get(name)) for name in requested]
     if any(name in settings and (name in custom or name in BUILTINS) for name in requested):
-        raise ValueError("arm settings are a protocol arm's; built-in and experimental arms carry their own")
+        raise ValueError("arm settings are a protocol arm's or a served variant's; built-in and experimental arms carry "
+                         "their own")
     if len({a.id for a in out}) != len(out):
         raise ValueError("benchmark arm ids must be unique")
     unused = sorted(set(custom) - {a.id for a in out})
