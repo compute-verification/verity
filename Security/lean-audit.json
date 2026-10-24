@@ -1538,29 +1538,13 @@
    "owner": "@compute-accounting",
    "digest": "96dea3f6b5f0cc46e55936c6af3a6229d890637b0889102ba08a484c41dad081"
   },
-  "Pouw.PearlC.Assumptions.TTOutPearlCDevChainCap": {
-   "owner": "@compute-accounting",
-   "digest": "b55a88e3f3be9a980861d2a1244b219f3b72854f49272ee148c7efd169ce636d"
-  },
-  "Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnly": {
-   "owner": "@compute-accounting",
-   "digest": "96cbcffa2dd79ef186ad3b81562d208b86e8c02e0ca3621312f964d61e6044f2"
-  },
   "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1": {
    "owner": "@compute-accounting",
    "digest": "55403e10d07aa1c93855ae008a8d009efe16daa715b460bfe7504ca04158c295"
   },
-  "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnly": {
-   "owner": "@compute-accounting",
-   "digest": "c0403faf7a90ffd6979dd16c4ff4d6d676e6e40daa6f43e63929936de3067657"
-  },
   "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1": {
    "owner": "@compute-accounting",
    "digest": "2b3befb21b399d6d3616069d02531a6a819f4359d1df30c6e12de2c26c9eaa00"
-  },
-  "Pouw.PearlC.Assumptions.TTOutPearlCDevUOnly": {
-   "owner": "@compute-accounting",
-   "digest": "1ee654da67496d20a07fd1cb1e56995d9cc84d373d2081b1cf4e0d393c985409"
   },
   "Pouw.PearlC.Assumptions.TTOutPearlCDevW1": {
    "owner": "@compute-accounting",
@@ -1582,10 +1566,6 @@
    "owner": "@compute-accounting",
    "digest": "410262a867ac04e096d90bdb8406bdc13624af07dbdd3214940169548662e033"
   },
-  "Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainCap": {
-   "owner": "@compute-accounting",
-   "digest": "20cfd44bf0a2df63d67e2390dba4ca9352eddedc0e7da56e716fcd352f2ba5be"
-  },
   "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1": {
    "owner": "@compute-accounting",
    "digest": "986751020ed75289c24caeb2cd903f4ecba561c9c00de96fd5d500df1d945046"
@@ -1605,10 +1585,6 @@
   "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1W1": {
    "owner": "@compute-accounting",
    "digest": "9df58bce6b2a066570e29c40d9ef15f15ad7434557aeb3f2202bc6af2e3fb801"
-  },
-  "Pouw.PearlC.Assumptions.TTOutU": {
-   "owner": "@compute-accounting",
-   "digest": "7a543d8cfb0ef693a1c889f901a9946bceaa170cab43447d4897ed7e92da385f"
   },
   "Pouw.PearlC.Assumptions.TileProofSound": {
    "owner": "@compute-accounting",
@@ -1768,6 +1744,30 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
+  },
+  "Pouw.PearlC.Assumptions.TTOutPearlCDevChainCapW1": {
+   "owner": "@compute-accounting",
+   "digest": "72b34e446c00f62344af9d27de395857280e7444db34a385e5b63804f7b48515"
+  },
+  "Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnlyW1": {
+   "owner": "@compute-accounting",
+   "digest": "776d403cfff4d73c824ddda801c0c3e7826e9a1acc9b05544ed48bcafcf16690"
+  },
+  "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnlyW1": {
+   "owner": "@compute-accounting",
+   "digest": "ffbb12bffae03325fa90b3a803eedc50cccd019e1460a91ceb6db606851ccb0c"
+  },
+  "Pouw.PearlC.Assumptions.TTOutPearlCDevUOnlyW1": {
+   "owner": "@compute-accounting",
+   "digest": "5b522a3a0d187ee4b63c8a0d613ce1b00c191dc2d52ff6e9fb108d204b750f88"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainCapW1": {
+   "owner": "@compute-accounting",
+   "digest": "11b0df76ee505ea115448540bad130def9ee3e11023f5c2d8e9804b0affabb5d"
+  },
+  "Pouw.PearlC.Assumptions.TTOutW1": {
+   "owner": "@memory-accounting",
+   "digest": "c4d6029e62d5d84b450dbb229c099b1d1325caa30091b6c283108c853fbb3a7c"
   }
  },
  "meaning": [
@@ -2347,6 +2347,46 @@
  },
  "reads_exempt": {
   "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+ },
+ "trees": {
+  "definitions": ["Definitions", "Models"],
+  "properties": ["Properties"],
+  "proofs": ["Proofs", "Properties.Proofs"],
+  "except": {
+   "Proofs.Flock.Verifier": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Level3": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Soundness": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.VBridge": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Recursive": "the recursive audit's model, on C-Flock's; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.EndToEnd": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.EndToEndDrawn": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.EndToEndHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.EndToEndRegistered": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.ZeroKnowledgeHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Pouw.PearlC.FlockTile": "the PoUW × C-Flock statement reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT); lean's Q3 ruling, 6 Oct",
+   "Proofs.Flock.Claims": "the claims' witnesses (LEAN-26) read C-Flock's deployed records (FlockDeploy, the radius decoders, the readable relation) and the toy records a claim fails at, which are in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Deploy": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.DeployCode": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.DeployPlainCode": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.GS.RadiusDeploy": "the deployed plain record's radius decoder (`Claims.GS.plainDecodeRD`), at which the claims' `meets` witnesses (LEAN-26) state the list-decoding spec; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.GS.RadiusFamily": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Scope.Readable": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.ZkDecodeFlock": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Witnesses.Flock": "a toy outer Flock record (`Claims.Witness.Flock.ksD`), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Witnesses.Recursion": "the toy recursion records and inner protocols (`ksR`, `compR`, `effR`, `accI`, `noI`, ...), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Witnesses.Shared": "a toy oracle (`Claims.Witness.constH`), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Witnesses.RecursionMeets": "the toy statements of each inner shape (`denseStmt`, `sparseStmt`), at which the claims' `meets` witnesses (LEAN-26) show the readable scope non-empty; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.DeployInputs": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.NumbersDeploy": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Recursion.Deploy": "the claims' meets witnesses state antecedents at the recursion's deployed record (`RecDeploy.deployRec`, `Brings`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Recursion.DeployInputs": "the claims' meets witnesses state antecedents at the recursion's deployed record's inputs (`RecDeploy.RecIns`, `setupO`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Complete.Ready": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Masked": "the masked guarantees state Flock's claims at its deployed masked records (`deployZk`, `zkDeployed`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.EndToEndRegisteredRows": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.SoundAtBridge": "the bridge from C-Flock's rows link to the proof layer reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Accounting.TS.Session": "the named premises and the statement of #2855's proof layer read through its C-Flock sessions (Accounting.Guarantees.TS.SessionSoundAt) read #2909's RowsSession, which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.SessionLoop": "the session loop's guarantee states Flock's zero knowledge at the loop's release (`LeanRelease.ofLoop`) and the deployed masked record (`deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+  }
  },
  "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
  "guarantees": {
@@ -8494,11 +8534,11 @@
    "owner": "@compute-accounting",
    "signature": [
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R]",
-    "  [Fintype S] (CM : Pouw.PearlC.CostModel Q R S) (sem : Pouw.PearlC.PearlCSem Q R S)",
+    "  [Fintype S] (sha fetch : Rat) (salt : S → List Nat) (sem : Pouw.PearlC.PearlCSem Q R S)",
     "  (HA : Pouw.PearlC.HiddenAudit Q R S) (ηzk : Nat → Real)",
     "  (hTT :",
-    "    Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1 CM (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem",
-    "      (1 / 1000))",
+    "    Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt",
+    "      (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000))",
     "  (hzk :",
     "    Pouw.PearlC.Assumptions.TileProofSoundAll",
     "      (Pouw.PearlC.pearlCProtocolDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000)",
@@ -8506,7 +8546,7 @@
     "      (Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000)",
     "        (instHSub.hSub (218 / 25) (8953 / 1000)))",
     "      (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192) HA ηzk) :",
-    "  Pouw.PearlC.GγHidden CM",
+    "  Pouw.PearlC.GγHidden (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt)",
     "    (Pouw.PearlC.pearlCProtocolDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000)",
     "      (instHSub.hSub (218 / 25) (8953 / 1000)))",
     "    (Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000)",
@@ -8515,7 +8555,7 @@
     "    (1648180439 / 446072750000).cast Pouw.PearlC.εPearlC ηzk"
    ],
    "assumptions": [],
-   "type_hash": "b276de57012d9589f560c1eb1b9aac07ced7f573e6730105ed0644faf931b819"
+   "type_hash": "7f2d668d96e1f5097f9e29147c9ec0ca635557fef356465ab6d8ca979a4dc3ab"
   },
   "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192": {
    "owner": "@compute-accounting",
@@ -17959,6 +17999,21 @@
    },
    "guarantees": ["Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure", "Pous.SecurityProofs.P2RingGradedOfRoundSecure"]
   },
+  "Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1": {
+   "digest": "c73cb662dd2272e95505450b132b40a954e28fab967af8b5503d57612d88c86c",
+   "definitions": {
+    "Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnlyW1": "776d403cfff4d73c824ddda801c0c3e7826e9a1acc9b05544ed48bcafcf16690",
+    "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnlyW1": "ffbb12bffae03325fa90b3a803eedc50cccd019e1460a91ceb6db606851ccb0c"
+   },
+   "guarantees": [
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06ChainOnlyRev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06ChainOnlyRev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72ChainOnlyRev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192"
+   ]
+  },
   "Definitions.Pouw.Assumptions.PearlC.TTOutW1": {
    "digest": "2800bf29e7c20c922a03248823d6cfdc1e65d75a6d9a72522c63c794143ee01a",
    "definitions": {
@@ -17972,10 +18027,14 @@
     "Pouw.PearlC.Assumptions.TTOutW1": "c4d6029e62d5d84b450dbb229c099b1d1325caa30091b6c283108c853fbb3a7c"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut",
+    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaH100Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast16Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
@@ -17986,8 +18045,10 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
@@ -18005,10 +18066,16 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast16Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_16384",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast16Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
@@ -18032,7 +18099,9 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_16384",
-    "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192"
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192"
    ]
   },
   "Definitions.Pouw.Barrier.Defs": {
@@ -18639,6 +18708,7 @@
     "Accounting.SecurityProofs.Sketch.Exact",
     "Accounting.SecurityProofs.Sketch.SmallCode",
     "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision",
+    "Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut",
     "Pouw.Fp8Atom.H1T.Proofs.h1tGamma",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
@@ -20011,6 +20081,8 @@
     "Pouw.PearlC.wrefFp4": "956e630ec94ddb752dcb1fa45f2de970df26fb8c99063b96faf581751b7f5309"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut",
+    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaFp4ChainOnlySm120IssueLut256_8192",
     "Pouw.SecurityProofs.PearlC.GammaFp4ChainOnlySm120LoopLut256_8192",
     "Pouw.SecurityProofs.PearlC.GammaFp4Sm120IssueLut256_16384",
@@ -20022,7 +20094,9 @@
     "Pouw.SecurityProofs.PearlC.GammaH100Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast16Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
@@ -20033,8 +20107,10 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
@@ -20052,10 +20128,18 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast16Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_16384",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast16Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUOnlySm120Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384",
@@ -20082,6 +20166,8 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore"
    ]
   },
@@ -20499,6 +20585,8 @@
     "Pouw.PearlC.Fp4.truncRZ": "9371ceea673ed9f3f4ffbe5edc635aeab8fc053aaa66799b5f7e4dfb68088156"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut",
+    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaFp4ChainOnlySm120IssueLut256_8192",
     "Pouw.SecurityProofs.PearlC.GammaFp4ChainOnlySm120LoopLut256_8192",
     "Pouw.SecurityProofs.PearlC.GammaFp4Sm120IssueLut256_16384",
@@ -20510,7 +20598,9 @@
     "Pouw.SecurityProofs.PearlC.GammaH100Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast16Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
@@ -20521,8 +20611,10 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
@@ -20540,10 +20632,18 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast16Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_16384",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast16Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUOnlySm120Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384",
@@ -20570,6 +20670,8 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
     "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
    ]
@@ -20956,6 +21058,7 @@
     "Pouw.PearlC.PeelExact.windowWord?": "614a46158508b90d7a00a69737e4d81e5570527e420dcb400cd70c0ba7b86e7a"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
@@ -21009,7 +21112,10 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUOnlySm120Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192",
@@ -21469,10 +21575,14 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut",
+    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaH100Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast16Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
@@ -21483,8 +21593,10 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
@@ -21502,10 +21614,18 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast16Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_16384",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast16Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUOnlySm120Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
@@ -21529,7 +21649,9 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_16384",
-    "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192"
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192"
    ]
   },
   "Definitions.Pouw.PearlC.Skip": {
@@ -21795,7 +21917,10 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUOnlySm120Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
@@ -22147,10 +22272,14 @@
     "Pouw.PearlC.W1.zig": "b2f8330c3dda8d3a9ee986b205a245253650df162efef6eef6040f4853af91ef"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut",
+    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaH100Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast16Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
@@ -22161,8 +22290,10 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
@@ -22180,10 +22311,18 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast16Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_16384",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast16Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUOnlySm120Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
@@ -22207,7 +22346,9 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_16384",
-    "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192"
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192"
    ]
   },
   "Definitions.Pouw.PearlC.W1Stop": {
@@ -29445,7 +29586,7 @@
    "guarantees": ["Accounting.SecurityProofs.BandwidthOfAudit"]
   },
   "Models.Accounting.Guarantees.BoundReceipt": {
-   "digest": "8d772a25bc4628d4eb1807365d6509ae367b36baed228035079aa9a683a59fb7",
+   "digest": "6ff32dadc8540ae57c6ac99771f93e7543318ca05580b6886a07a81f7e4d9f6a",
    "definitions": {
     "Accounting.Guarantees.BoundReceiptLink": "8af8cf34ac0c51cf351be6a8a8cfbb18eac7745e7e5fad766f3d1ad84abd2f2f",
     "Accounting.Guarantees.BoundReceiptLinkInteractive": "228d2b8ff7fab32eea69415e24f5b2be094f7b7b147c8ffd3fd8d21355001c6b",
@@ -29456,7 +29597,7 @@
     "Accounting.Guarantees.TileUnpredictableOfNCPU": "9631831a6703ad58d57314d8eef6219f3647cfc12772faeb65b23c607a432927",
     "Accounting.Guarantees.TileUnpredictableOfTT": "91df48861310d961344ba8740e89a033669f8585a967cba17707b99d18f4c25f",
     "Accounting.Guarantees.TileUnpredictablePearlC": "a5a5ae33f1fb918e6c0c037d44ab82dd9820f80465232a1e2ddc42a7cb086482",
-    "Accounting.Guarantees.TileUnpredictablePearlCOfTTOut": "ad839c2df0f60442d1a0989db18c0c085ae21f47c9e564c321682299dbbe41f8"
+    "Accounting.Guarantees.TileUnpredictablePearlCOfTTOut": "0b84ef293f2f22cffa67533f8ddfd5605e0c7bae141d9d34b44a637d9d23f460"
    },
    "guarantees": [
     "Accounting.SecurityProofs.BoundReceiptLink",
@@ -31495,10 +31636,10 @@
    ]
   },
   "Models.Pouw.Assumptions.PearlC.DeviceChainCap": {
-   "digest": "33873a3bc226aee36c7497fef72010c7a84de8fa977e7a868ec33cc03295b1bc",
+   "digest": "8e741a68e3b2d2a91dcf22fb4409d4693a5fd42438f7d24fc23ab031ba5ff639",
    "definitions": {
-    "Pouw.PearlC.Assumptions.TTOutPearlCDevChainCap": "b55a88e3f3be9a980861d2a1244b219f3b72854f49272ee148c7efd169ce636d",
-    "Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainCap": "20cfd44bf0a2df63d67e2390dba4ca9352eddedc0e7da56e716fcd352f2ba5be",
+    "Pouw.PearlC.Assumptions.TTOutPearlCDevChainCapW1": "72b34e446c00f62344af9d27de395857280e7444db34a385e5b63804f7b48515",
+    "Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainCapW1": "11b0df76ee505ea115448540bad130def9ee3e11023f5c2d8e9804b0affabb5d",
     "Pouw.PearlC.chainCreditDev": "6e4d7c50189df577e5e4a060c20f50516332d4dda5d497288e0d52b91a58e362",
     "Pouw.PearlC.pearlCProtocolDevChainCap": "693866e02c5d1ba3a3156bdd97c55c599ccc7e22210d39e9eaef0ec3b9b49083",
     "Pouw.PearlC.pearlCTilesDevChainCap": "2170dd5823cfd9a6272b9ce11cf29f7de11dce337c0926e307ab60d0f8dd34b6"
@@ -31530,8 +31671,6 @@
     "Pouw.PearlC.Assumptions.TTOutTile": "953f75b038ef12f1ca8e035102cd694d2a82f97ea079f1ebbd54fa365fefab88"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut",
-    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
     "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256",
@@ -31540,40 +31679,13 @@
     "Pouw.PearlC.pearlCSampledSm120v2RowSeedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.GammaFp4Sm120_8192",
-    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06ChainOnlyRev1_8192",
-    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
-    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06ChainOnlyRev1_8192",
-    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72ChainOnlyRev1_8192",
-    "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72ChainOnlyCap1000_8192",
-    "Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_16384",
-    "Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_8192",
-    "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192",
-    "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192",
-    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192",
-    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
-    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
     "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
     "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
     "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
     "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
-   ]
-  },
-  "Models.Pouw.Assumptions.PearlC.TTOutChainOnly": {
-   "digest": "cf36ed9f4c004a1e7b3ce2471c40f2f0bd6c79daf077832a6252be103ecf03b2",
-   "definitions": {
-    "Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnly": "96cbcffa2dd79ef186ad3b81562d208b86e8c02e0ca3621312f964d61e6044f2",
-    "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnly": "c0403faf7a90ffd6979dd16c4ff4d6d676e6e40daa6f43e63929936de3067657"
-   },
-   "guarantees": [
-    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06ChainOnlyRev1_8192",
-    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
-    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06ChainOnlyRev1_8192",
-    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72ChainOnlyRev1_8192",
-    "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72ChainOnlyCap1000_8192",
-    "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192"
    ]
   },
   "Models.Pouw.Assumptions.PearlC.TTOutFp4": {
@@ -31599,14 +31711,12 @@
     "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1": "3c0b6df708354f428a46f68dd5d38dfa7d4a22ddb5e35a3047fe915fd1d56103"
    },
    "guarantees": [
-    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
     "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256",
     "Pouw.PearlC.pearlCSampledH100v1RowSeedRowCap100_6144x256",
     "Pouw.PearlC.pearlCSampledSm120v1RowSeed_8192",
     "Pouw.PearlC.pearlCSampledSm120v2RowSeedCap1000_8192",
-    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
     "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
     "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
@@ -31661,10 +31771,10 @@
    ]
   },
   "Models.Pouw.Assumptions.PearlC.TTOutUOnly": {
-   "digest": "b0780d9b9fcc31da076fa9c4d9809dbe443f4eee21b8b04dfdd2adf3aaf709b4",
+   "digest": "1069230ad44d00b7da91f1438f7cb0a6c8533a59f9a397e524e17478ad2d884c",
    "definitions": {
-    "Pouw.PearlC.Assumptions.TTOutPearlCDevUOnly": "1ee654da67496d20a07fd1cb1e56995d9cc84d373d2081b1cf4e0d393c985409",
-    "Pouw.PearlC.Assumptions.TTOutU": "7a543d8cfb0ef693a1c889f901a9946bceaa170cab43447d4897ed7e92da385f",
+    "Pouw.PearlC.Assumptions.TTOutPearlCDevUOnlyW1": "5b522a3a0d187ee4b63c8a0d613ce1b00c191dc2d52ff6e9fb108d204b750f88",
+    "Pouw.PearlC.Assumptions.TTOutUW1": "1f20fa7ea9307baf031d9e7b47fa80d1cee52020582980de83356f4fcfdcc6b7",
     "Pouw.PearlC.CorrectU": "d3ce7dce232fed50bc654fb85ceaee5f1f56045d7b1afc7bcd56b2c2f2b3978f",
     "Pouw.PearlC.GγU": "1deb508aa34e8e69400b9c7081082f29536f378222faaa3808787383dd6c7d59",
     "Pouw.PearlC.WinsU": "2d6a53fb682ba4e3aae06aa2223195b8414c5864167c317a09b9d6931436462c",
@@ -31822,7 +31932,7 @@
    ]
   },
   "Models.Pouw.Guarantees.PearlC": {
-   "digest": "f28b732c9eca564a136bd0a80c16cacc3b0f6bec9a1bc0bb38ca3a99ef734ee3",
+   "digest": "3d908d466d9831d66f31982c0a0a183b1089bb1451e4c755978bb2977d623ff8",
    "definitions": {
     "Pouw.Guarantees.PearlC.GammaFp4ChainOnlySm120IssueLut256_8192": "24bab8a60bd37f1419bed2a8f2cb96a48d1477976413a0d86f5e431ed188876b",
     "Pouw.Guarantees.PearlC.GammaFp4ChainOnlySm120LoopLut256_8192": "1a736a9e4f153f255fff5be1a3504d81be9ce273d97f4e94089f3e1f0aff541b",
@@ -31835,9 +31945,9 @@
     "Pouw.Guarantees.PearlC.GammaH100Rev1_16384": "b8ce8bd7c6ba4f8a121963ad5bbcb7a043065b7c716969994a208b82c4550a6b",
     "Pouw.Guarantees.PearlC.GammaH100Rev1_8192": "80a86ad9ada289a0c8674bfd0612eba7b8c0825728397a862b8bcf6e2adf9f43",
     "Pouw.Guarantees.PearlC.GammaSm120v1Cast16Rev1_8192": "07db178320256171809e82e070e7860642eaf52752eb68db42c134bef7022e73",
-    "Pouw.Guarantees.PearlC.GammaSm120v1Cast32p06ChainOnlyRev1_8192": "848ab9404cca7dbf9aaa16457fee836db65b48eeaf451554117eb1117c7b8407",
+    "Pouw.Guarantees.PearlC.GammaSm120v1Cast32p06ChainOnlyRev1_8192": "794de9026bf491f43bc30284bbccd080f9c011b5063cea6ca53785021c6be265",
     "Pouw.Guarantees.PearlC.GammaSm120v1Cast32p06Rev1_8192": "c9ea2884c4d46b7496cd43cccc440ee029242506363a2d8b420efb8b35b730f4",
-    "Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192": "1ae16c944c1bc57c26164646ae527e5b8e4c6993dec28bbdc87adbfe24637936",
+    "Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192": "48a99b6b1c419e82e3046c148910a3f3f376ed9eeb4d61f448123b75b92b90d2",
     "Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384": "a56f24fe1f071cb68cbe71d2b5b6b9c1cbd248c5cde5838bf02dd3e647ed9686",
     "Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192": "6e8cf8f793e8c565c0a679fe9ca78426b778868ea0b019612a4ce24b793bf28e",
     "Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b": "f8241d676f2e6e55e5a1642d98eaba1cc6b1ee324a0ed42eb3b9419e28ea94d1",
@@ -31848,10 +31958,10 @@
     "Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1_16384": "fa55436b780842cf631065204bc97e94492d8463e456fe1669751b63cff0b950",
     "Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1_8192": "1ac32598c1e5312086671a9c574893ad2630023b00c8f2570c01d36231c7c84c",
     "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast16Rev1_8192": "7a312a19f5aec3b95dba162d86a101aa8bd869e8fe3ad79eda6c7a0e5144e1f8",
-    "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast32p06ChainOnlyRev1_8192": "5e5f67787298d76df2dbb686d662f13fbc6f3058f796b8906c9676321a07467a",
+    "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast32p06ChainOnlyRev1_8192": "0e172e00f97c9d848e258877aa2248b47caf6f40a22f08a4c68afdee6a86ca3a",
     "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast32p06Rev1_8192": "d4595e01090c94002e914e81e4dab11e29df35eba12380be997710e0fb3e3322",
     "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8Rev1_8192": "7631b76d206e8c3cbdcd8501f5460f9ce496895d0207cc123492c2a099702b55",
-    "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72ChainOnlyRev1_8192": "091cef473ab83cc556cfd0b172af31d9604d7755da42c17fa9b1e46a6fbb8b14",
+    "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72ChainOnlyRev1_8192": "5b8ca1b8acf21bcc3b5ba68d5619a76ba6229e8bad8a76c345f463144a8fedca",
     "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384": "2161859080622a9bfc05268276ece56fb83edcf878c4105faed5c278a009bd1e",
     "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400": "628b9bc2821b2d643f2e18e20a51ebbdd58c98ed206b21621436de5fe52141ec",
     "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192": "561192852886a2d602b604fea7e1c606bbdd557d479c52a2d393f628e4c40bad",
@@ -31869,17 +31979,17 @@
     "Pouw.Guarantees.PearlC.GammaSm120v2Cap1000_8192": "463773ea778b5f0385c0c5fc3cb8ee2f39964dee98a796377883aa52b6880564",
     "Pouw.Guarantees.PearlC.GammaSm120v2Cast16Cap1000_8192": "2cdaa5be290e6421a3621c38a7b13fdf5546fdb97f254a43ded47cfccc3f757a",
     "Pouw.Guarantees.PearlC.GammaSm120v2Cast8p72Cap1000_8192": "fbbabd15d82b2a0d7814ac1812f6d8f28569f9241edcab94aef997d1dc72e33e",
-    "Pouw.Guarantees.PearlC.GammaSm120v2Cast8p72ChainOnlyCap1000_8192": "7b34a941a04c10d96d9a13222ef9878a7379b4f696de3c27a019d50ec66d257a",
-    "Pouw.Guarantees.PearlC.GammaSm120v2ChainCap1000_16384": "9ce2756554685ab31ada3e3d2510ce06aa0b3c487aabee99245e2f89d285e5f8",
-    "Pouw.Guarantees.PearlC.GammaSm120v2ChainCap1000_8192": "4100d89fb2693ea108877497dc6d2b41aa1550061aafbcc7f8276cf6699d6a04",
+    "Pouw.Guarantees.PearlC.GammaSm120v2Cast8p72ChainOnlyCap1000_8192": "a1f9bcd238c7a15cde003075cf040ee11c4d1eeb383ac810f7fb6e5a0dc42c3c",
+    "Pouw.Guarantees.PearlC.GammaSm120v2ChainCap1000_16384": "4a51400970e37d5faceff462de90077118670efeb7ccf9463a1e98abebda63a2",
+    "Pouw.Guarantees.PearlC.GammaSm120v2ChainCap1000_8192": "7f12a124ff653d19f945a9d13a0671a4c8d774839bc67c5f3df2bdb6e6cf0da1",
     "Pouw.Guarantees.PearlC.GammaSm120v2LoopCast16Cap1000_8192": "3a2120a4bbd5cc824a8e385f205be06d46fd127ac2017e983f03860624f9f78a",
     "Pouw.Guarantees.PearlC.GammaSm120v2LoopCast8Cap1000_8192": "ee62e8a0a043462c15934c35dfb099a345b5cfc0f0865615240d65d268f458dd",
     "Pouw.Guarantees.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192": "9e1d40d3558ecbac1742cb2448e94c86e487724e4dcd168675efe729fabec56a",
-    "Pouw.Guarantees.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192": "47cc0d5690ffea307f2f9579addfc261535366880b6b6419363d433d53c2ead6",
-    "Pouw.Guarantees.PearlC.GammaUOnlySm120Rev1_8192": "19e5ecd5a8b8ea0f4e57306429327950d959d277c21038a598a1ae2a86ed5c42",
-    "Pouw.Guarantees.PearlC.GammaUOnlyUnpromotedCap1000_8192": "d80817bbab674b46e7a9fd545c025c52c1229253d8f4f4ecf3000c2c9bfb040d",
+    "Pouw.Guarantees.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192": "292a524207f8aa6c1d9ba195ba94a9e6b84a83bc49a3c6af8b1dfd2107f1a401",
+    "Pouw.Guarantees.PearlC.GammaUOnlySm120Rev1_8192": "107af2d33dcd73498d524ab1dfa3e7f09290ec003747080c608e0e29ca82d926",
+    "Pouw.Guarantees.PearlC.GammaUOnlyUnpromotedCap1000_8192": "590ba9483eaf0b7eed40ca310273ab770e9299ed9853e44e102e56fb73d7cfa5",
     "Pouw.Guarantees.PearlC.GammaUnpromotedCap1000_8192": "4a16c5d49aac399db5fe12743876f59e9ea47ab2e99064f626d99b8cbe41ed38",
-    "Pouw.Guarantees.PearlC.GammaUnpromotedChainCap1000_8192": "2be769ab69c4eb5ba24f0ab1a12b9fa1d69cfe42c79dc3514576909c33c75ec7",
+    "Pouw.Guarantees.PearlC.GammaUnpromotedChainCap1000_8192": "c51e0f641fcb04d59f22745ea2cb6c59d80d25b242961efe0b29dc304351a9eb",
     "Pouw.Guarantees.PearlC.SampledFp4Sm120_16384": "b3051608cdac7ac57a79577d7cc1e26dccf9a1a8137b5f66f9e381def62a0d1f",
     "Pouw.Guarantees.PearlC.SampledFp4Sm120_8192": "2067e331e953fb4b150f6ba20f178e87a17e99b5dba853a3f27afd6896c158f8",
     "Pouw.Guarantees.PearlC.SampledH100Rev1_16384": "dc2e7ec94a13c9c45714c3ec7cf3c44a59e048fd473bf7679f0c7548b922a38a",
@@ -31906,8 +32016,8 @@
     "Pouw.Guarantees.PearlC.SampledSm120v1Rev1_8192": "352c49b77b80cc7ff5782d19e591edc4fd3334cae5ef41ad3f1a23f72f97cf93",
     "Pouw.Guarantees.PearlC.SampledSm120v2Cap1000_16384": "98b92d7dbe5ecf73388924189d6d9bc1b263312aa46ae6afd5c40787447f4734",
     "Pouw.Guarantees.PearlC.SampledSm120v2Cap1000_8192": "98282179980a8a463abb194ff7b0611e893db2081ddbbdbd0001aeb2c15390d8",
-    "Pouw.Guarantees.PearlC.SampledSm120v2ChainCap1000_16384": "f9cafb4a05713ae64bbaef92b460217a80140e862ceb4dabf980835606df3c16",
-    "Pouw.Guarantees.PearlC.SampledSm120v2ChainCap1000_8192": "b81fefeaf056eaee3869c987a4c8ffb7f8e7226979becb107731432331d610dd",
+    "Pouw.Guarantees.PearlC.SampledSm120v2ChainCap1000_16384": "58a5ee81398bc90bd0c7d29b3f566fd30787a5bb7c3d5c2f5d62d3fe03d1c273",
+    "Pouw.Guarantees.PearlC.SampledSm120v2ChainCap1000_8192": "f326061212d627b92fd1e661fa71a214cbab8ac3b772001d84fac50fbbf2e996",
     "Pouw.Guarantees.PearlC.TTOutRowSeedOfTTOut": "c302df776cd74fb27fbc745c5dc3391fdb0ac49ee0072e298e51af4f87ff09c0"
    },
    "guarantees": [
@@ -41308,9 +41418,9 @@
    "guarantees": ["Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192"]
   },
   "Proofs.Pouw.PearlC.FlockTile.Statement": {
-   "digest": "c8fc0fe9b0f428303c8efd9f8209f8fa1247988af5fe66202a038f1647f0015b",
+   "digest": "465f5655deb1bcd97a1eeb02d07f26aa53a6a8db3b9f91d54e2dbbd0ee083284",
    "definitions": {
-    "Pouw.Guarantees.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192": "facd7a05e330da424281c2d025ee7c9c42998148e2e4e0f115231b36279d1c02"
+    "Pouw.Guarantees.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192": "e6e7094d949ae08c4d2d27d03cc844cdb92cab1a89752f6479547017446e67fb"
    },
    "guarantees": ["Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192"]
   },
@@ -41749,45 +41859,5 @@
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
- },
- "trees": {
-  "definitions": ["Definitions", "Models"],
-  "properties": ["Properties"],
-  "proofs": ["Proofs", "Properties.Proofs"],
-  "except": {
-   "Proofs.Flock.Verifier": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Level3": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Soundness": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.VBridge": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Recursive": "the recursive audit's model, on C-Flock's; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.EndToEnd": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.EndToEndDrawn": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.EndToEndHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.EndToEndRegistered": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.ZeroKnowledgeHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Pouw.PearlC.FlockTile": "the PoUW × C-Flock statement reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT); lean's Q3 ruling, 6 Oct",
-   "Proofs.Flock.Claims": "the claims' witnesses (LEAN-26) read C-Flock's deployed records (FlockDeploy, the radius decoders, the readable relation) and the toy records a claim fails at, which are in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Deploy": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.DeployCode": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.DeployPlainCode": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.GS.RadiusDeploy": "the deployed plain record's radius decoder (`Claims.GS.plainDecodeRD`), at which the claims' `meets` witnesses (LEAN-26) state the list-decoding spec; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.GS.RadiusFamily": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Scope.Readable": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.ZkDecodeFlock": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Witnesses.Flock": "a toy outer Flock record (`Claims.Witness.Flock.ksD`), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Witnesses.Recursion": "the toy recursion records and inner protocols (`ksR`, `compR`, `effR`, `accI`, `noI`, ...), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Witnesses.Shared": "a toy oracle (`Claims.Witness.constH`), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Witnesses.RecursionMeets": "the toy statements of each inner shape (`denseStmt`, `sparseStmt`), at which the claims' `meets` witnesses (LEAN-26) show the readable scope non-empty; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.DeployInputs": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.NumbersDeploy": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Recursion.Deploy": "the claims' meets witnesses state antecedents at the recursion's deployed record (`RecDeploy.deployRec`, `Brings`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Recursion.DeployInputs": "the claims' meets witnesses state antecedents at the recursion's deployed record's inputs (`RecDeploy.RecIns`, `setupO`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Complete.Ready": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Masked": "the masked guarantees state Flock's claims at its deployed masked records (`deployZk`, `zkDeployed`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.EndToEndRegisteredRows": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.SoundAtBridge": "the bridge from C-Flock's rows link to the proof layer reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Accounting.TS.Session": "the named premises and the statement of #2855's proof layer read through its C-Flock sessions (Accounting.Guarantees.TS.SessionSoundAt) read #2909's RowsSession, which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.SessionLoop": "the session loop's guarantee states Flock's zero knowledge at the loop's release (`LeanRelease.ofLoop`) and the deployed masked record (`deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
-  }
  }
 }
