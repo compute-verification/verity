@@ -107,6 +107,37 @@ def test_only_recipe_changes_and_lossy_corrections_carry_their_own_broken_assump
     assert res["best_exact"].strategy in ra.EXACT
 
 
+def test_a_rank_r_correction_under_the_measured_G_breaks_an_assumption_even_above_F():
+    c = K * QWEN.phi()
+    kn = ra.Knobs(ranks=(64,), grad_factor=28.0)
+    a = ra.lowrank_pipeline(QWEN, 2 * K, 203.0, K, c, NVFP4, kn, "sft")
+    assert 64 * kn.b_coef > 203.0
+    assert a.breaks.startswith("E or D") and "gradient" in a.breaks
+
+
+def test_from_b1_takes_medians_with_G_the_backward_part():
+    sys.path.insert(0, str(HERE / "inputs"))
+    import from_b1
+
+    def entry(s_bits, ff, ffb, bv, gx):
+        row = [bv, gx, 0.0, 4.0, 0.1, 0.1, ff, ff, ffb - ff, ffb]
+        return {"fam": "A2", "S_bits": s_bits, "d": 1536, "model": "Qwen2.5-1.5B-Instruct", "fp8t": row,
+                "nvfp4": [x / 2 for x in row]}
+
+    doc = {"schema": "tvi-b1/F_beta/v2", "entries": [entry(272, 3000, 12000, 9.0, 0.4), entry(272, 4000, 14000, 8.0, 0.3),
+                                                      entry(24699428864, 1000, 11000, 7.0, 0.5),
+                                                      {"fam": "B3", "S_bits": 272, "fp8t": [0.0] * 10}]}
+    out = from_b1.convert(doc)
+    assert out["F"]["A2-34B"]["fp8"] == 3500 and out["G"]["A2-34B"]["fp8"] == 9500
+    assert out["S_bits"] == {"A2-34B": 272} and "full" in out["F"]
+    inp = ra.Inputs.from_json(out)
+    assert inp.grad_factor("A2-34B", "fp8", ra.Knobs()) == pytest.approx(9500 / 3500)
+    assert inp.beta_for("A2-34B", "fp8").gx == pytest.approx(0.35)
+    assert inp.F_for("full", "nvfp4", configs.get("kimi-k2")) == pytest.approx(500 * 7168 / 1536)
+    with pytest.raises(ValueError, match="schema"):
+        from_b1.convert({"schema": "v1", "entries": []})
+
+
 def test_s_labels():
     kn = ra.Knobs()
     assert ra.resolve_S("10kB", QWEN, NVFP4, kn) == 80_000

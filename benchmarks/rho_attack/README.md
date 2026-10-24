@@ -28,15 +28,29 @@ one input file).
 ~~~
 
 - `precisions`: per precision, `beta_v` (fresh bits per counted value), `beta_x` (per input coordinate) and `beta_w` (per
-  weight of the update). Optional: `beta_g` (per interior output gradient, default `beta_v`), `raw_bits` (per coordinate
-  sent with no theta baseline, default `2 * beta_x`), `b_acc` (per weight of a gradient accumulator, default `beta_w`).
-- `F`: fresh bits per token crossing a block boundary, per S label, a number or one per precision. `F_scaling: per_dim`
-  scales it by `d / measured_on.d_model` on each config; `absolute` doesn't.
+  weight of the update). Optional: `beta_gx` (per counted value, or its gradient, sent to a block that recomputes
+  theta's: the correction given theta, default `beta_v`), `beta_g` (per interior output gradient, default `beta_v`),
+  `raw_bits` (per coordinate sent with no theta baseline, default `2 * beta_x`), `b_acc` (per weight of a gradient
+  accumulator, default `beta_w`). Blocks that recompute theta's activations pay `beta_gx`; the bound and raw sends pay
+  `beta_v` (the bound's row also reports `full_gx`, its full-training count at `beta_gx`).
+- `F`: fresh bits per token crossing a block boundary forward, per S label, a number or one per precision. `G` (optional,
+  same shape): the backward crossing's fresh bits; without it `G = grad_factor * F`. `F_scaling: per_dim` scales F and G
+  by `d / measured_on.d_model` on each config (x 4.67 for DeepSeek-V4-Pro and Kimi K2 from d = 1536); `absolute` doesn't.
 - S labels: a size (`10kB`, `10kbit`, `1MB`), `tinylora` (26 bytes), `rankR` (a rank-R LoRA on every map at
   `lora_bits`), `full` (every weight at `beta_w`), or a name given in `S_bits`. `beta_by_S` overrides betas per label.
 
 `inputs/in_hand_*.json` hold the in-hand numbers (the pythia-160m table, F full rank about 14 kbit per token at
-d = 7168, or rank 64 at 4 bits per coefficient) until measured F(S) and beta(S) replace them.
+d = 7168, or rank 64 at 4 bits per coefficient). `inputs/measured_b1.json` holds B1's measurement on Qwen2.5-1.5B
+(d = 1536), written by `inputs/from_b1.py F_beta.json --out inputs/measured_b1.json` from its `tvi-b1/F_beta/v2` table:
+medians over the A2 adapters' entries of the betas, `F = Ff_min` and `G = Ffb_min - Ff_min` (so `F + G` is the cheapest
+boundary's forward-and-backward), per precision and per S label.
+
+## The figure
+
+`figure.py RUN.json --out OUT --precision fp8` draws capability against S for each training goal (A2 RL elicitation,
+A3 cipher, B3 facts; the data are in `GOALS`) above `rho_attack(S)` and the bound's `rho(S)` for DeepSeek-V4-Pro and
+Kimi K2 at matched c on the same S axis, with k = 10 kB and 1 MB marked; RL is priced as GRPO, the others as SFT.
+Capability sits at S as each experiment counts its state; "full" at the larger target's full fine-tune.
 
 ## Strategies
 
@@ -51,7 +65,8 @@ The fixed recipe (exact layouts, `attack_exact`):
 
 Recipe changes and approximations (`attack`, with the assumption of the finding's section 4 each breaks):
 
-- `lowrank_pipeline`: rank-r corrections at each crossing; below F it is lossy (E) or beats the measured compressor (D).
+- `lowrank_pipeline`: rank-r corrections at each crossing, forward and backward; below F (or G) it is lossy (E) or
+  beats the measured compressor (D).
 - `linearized_tiling`: training linearized at theta, so every input is theta's own activation (C, cheap inputs).
 - `frozen_prefix_tiling`: only the top layers train (C, cheap inputs).
 - `hybrid`: a state under k carried whole for a share of the compute, then split; reported beside the bound averaged

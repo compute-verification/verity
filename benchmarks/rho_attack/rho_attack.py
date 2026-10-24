@@ -53,12 +53,18 @@ class Beta:
     beta_x: float
     beta_w: float
     beta_g: float | None = None  # per interior output-gradient value; default beta_v
+    beta_gx: float | None = None  # per counted value given theta's weights on theta's input; default beta_v
     raw_bits: float | None = None  # per coordinate sent without a theta baseline; default 2 * beta_x
     b_acc: float | None = None  # per weight of a gradient accumulator passed between token tiles; default beta_w
 
     @property
     def g(self) -> float:
         return self.beta_v if self.beta_g is None else self.beta_g
+
+    @property
+    def gx(self) -> float:
+        """A counted value (or its gradient) sent to a block that recomputes theta's: the correction's fresh bits."""
+        return self.beta_v if self.beta_gx is None else self.beta_gx
 
     @property
     def raw(self) -> float:
@@ -109,6 +115,7 @@ class Inputs:
     S_bits: dict[str, float] = field(default_factory=dict)
     beta_by_S: dict[str, dict[str, Beta]] = field(default_factory=dict)
     source: str = ""
+    G: dict[str, float | dict[str, float]] = field(default_factory=dict)  # backward crossing per S label; default F
 
     @classmethod
     def load(cls, path: str | Path) -> "Inputs":
@@ -123,7 +130,7 @@ class Inputs:
                              f"'F': {{S label: bits per token}}, 'measured_on': {{'d_model': D}}}}")
         betas = {}
         for p, b in doc["precisions"].items():
-            keys = {k: b[k] for k in ("beta_v", "beta_x", "beta_w", "beta_g", "raw_bits", "b_acc") if k in b}
+            keys = {k: b[k] for k in ("beta_v", "beta_x", "beta_w", "beta_g", "beta_gx", "raw_bits", "b_acc") if k in b}
             for need in ("beta_v", "beta_x", "beta_w"):
                 if need not in keys:
                     raise ValueError(f"precision {p!r} lacks {need}")
@@ -133,13 +140,23 @@ class Inputs:
         scaling = doc.get("F_scaling", "per_dim")
         if scaling == "per_dim" and d_model <= 0:
             raise ValueError("F_scaling 'per_dim' needs measured_on.d_model, the width F was measured at")
-        return cls(betas, doc["F"], d_model, scaling, dict(doc.get("S_bits", {})), by_s, doc.get("source", ""))
+        return cls(betas, doc["F"], d_model, scaling, dict(doc.get("S_bits", {})), by_s, doc.get("source", ""),
+                   dict(doc.get("G", {})))
 
     def F_for(self, label: str, precision: str, cfg: Config) -> float:
         v = self.F[label]
         if isinstance(v, dict):
             v = v[precision]
         return float(v) * (cfg.d / self.d_model if self.F_scaling == "per_dim" else 1.0)
+
+    def grad_factor(self, label: str, precision: str, kn: "Knobs") -> float:
+        """G / F for a label: measured when the inputs give G, else the knob."""
+        if label not in self.G:
+            return kn.grad_factor
+        g, f = self.G[label], self.F[label]
+        g = g[precision] if isinstance(g, dict) else g
+        f = f[precision] if isinstance(f, dict) else f
+        return float(g) / float(f)
 
     def beta_for(self, label: str, precision: str) -> Beta:
         return self.beta_by_S.get(label, {}).get(precision, self.precisions[precision])
@@ -162,7 +179,8 @@ def resolve_S(label: str, cfg: Config, beta: Beta, kn: Knobs, explicit: dict[str
     if low == "tinylora":
         return 26 * 8
     if m := re.match(r"^(?:rank|lora)(\d+)$", low):
-        return lora_params(cfg, int(m.group(1))) * kn.lora_bits
+        # the factors at lora_bits, or the dense delta they make at beta_w per weight, whichever is smaller
+        return min(lora_params(cfg, int(m.group(1))) * kn.lora_bits, cfg.layers * cfg.layer_params * beta.beta_w)
     if explicit and label in explicit:
         return float(explicit[label])
     if m := _SIZE.match(low):
@@ -260,7 +278,7 @@ def _stage_costs(cfg: Config, f_stage: np.ndarray, F: float, G: float, beta: Bet
     fixed = has_in * basis
     rec = has_in * f_pre  # theta's activations at entry, to decode the forward correction
     if grad_mode == "corr":
-        bits = bits + has_grad * (kn.grad_factor * cross if rank else G)
+        bits = bits + has_grad * (cross if rank else G)
         fixed = fixed + has_grad * basis
         rec = np.where(has_grad, f + 2 * f_suf, rec)  # theta's forward to the loss and backward to the exit
     else:
@@ -320,14 +338,19 @@ def pipeline(cfg: Config, S: float, F: float, k: float, c: float, beta: Beta, kn
 def lowrank_pipeline(cfg: Config, S: float, F: float, k: float, c: float, beta: Beta, kn: Knobs,
                      workload: str) -> Attack | None:
     """Recompute theta's activations from tokens and send rank-r corrections at each crossing. Exact only when the
-    fresh part has rank <= r; when r * b_coef < F, the attack approximates (E) or beats the measurement's compressor (D)."""
+    fresh part has rank <= r; when r * b_coef < F (forward) or < G (backward), the attack approximates (E) or beats the
+    measurement's compressor (D)."""
     best = None
     for r in kn.ranks:
         a = pipeline(cfg, S, F, k, c, beta, kn, workload, rank=r)
         if a is not None and (best is None or a.rho < best.rho):
             best = a
-    if best is not None and best.params["rank"] * kn.b_coef < F:
-        best.breaks = "E or D: a rank-r correction cheaper than the measured fresh part F"
+    if best is not None:
+        r_bits = best.params["rank"] * kn.b_coef
+        if r_bits < F:
+            best.breaks = "E or D: a rank-r forward correction cheaper than the measured fresh part F"
+        elif r_bits < kn.grad_factor * F:
+            best.breaks = "E or D: a rank-r gradient correction cheaper than the measured fresh part G"
     return best
 
 
@@ -378,9 +401,11 @@ def _map_blocks(cfg: Config, m: Map, layer, S_per_param: float, F: float, k: flo
             c_in = 0.0 if cheap_in else min(m.d_in * beta.beta_x, F)
             c_g = R * beta.g if train else 0 * R
             options.append((b_tok + c_in + c_g, f_pre * ctx, 0 * R))
+            if train:  # recompute theta's backward too, and take the output gradient as a correction
+                options.append((b_tok + c_in + R * beta.gx, (f + 2 * f_suf) * ctx, 0 * R))
         else:
             c_in = m.d_in * beta.beta_x
-            c_g = np.minimum(R * beta.beta_v, G) if train else 0 * R
+            c_g = np.minimum(R * beta.gx, G) if train else 0 * R
             rec = ((f + 2 * f_suf) if train else f_pre) * ctx
             options.append((b_tok + c_in + c_g, rec, 0 * R))
         # without a theta baseline: the raw input, and the raw output gradient per value
@@ -403,7 +428,7 @@ def _map_blocks(cfg: Config, m: Map, layer, S_per_param: float, F: float, k: flo
     total = float(np.sum(per_layer))
     if mode == "exact" and m.resid_out and train:
         # the counted outputs, assembled where the next map's F is formed
-        total += lay.shape[0] * m.active * min(m.d_in, m.d_out) * beta.beta_v / k
+        total += lay.shape[0] * m.active * min(m.d_in, m.d_out) * beta.gx / k
     return total, {"rows": int(rows[-1]), "tokens": float(toks[-1])}
 
 
@@ -527,13 +552,14 @@ def bound(cfg: Config, S: float, F: float, k: float, c: float, beta: Beta, kn: K
         floor = c * cfg.h / (k * u)
     cliff = eta * (3 * f / u) * (2 / 3) * 2 * F / cfg.h
     full_rho = c * beta.beta_v * cfg.values_per_token / (k * u)
+    full_gx = c * beta.gx * cfg.values_per_token / (k * u)
     if S < k:
         rho = max(1.0, floor)
     elif full:
         rho = max(1.0, floor, full_rho)
     else:
         rho = max(1.0, floor, cliff)
-    return {"rho": rho, "eta": eta, "cliff": cliff, "full": full_rho, "floor": floor,
+    return {"rho": rho, "eta": eta, "cliff": cliff, "full": full_rho, "full_gx": full_gx, "floor": floor,
             "regime": "S<k" if S < k else ("full" if full else "cliff")}
 
 
@@ -586,7 +612,10 @@ def _breaks(best: Attack, b: dict, full: bool) -> str | None:
     if best.breaks:
         return best.breaks
     if best.strategy in ("tiling", "expert_local"):
-        return "C (cap): a tile's inputs (F per token, or cheap) carry fewer fresh bits than its counted outputs"
+        if best.rho < BELOW * b["rho"] * b["full_gx"] / b["full"] and full:
+            return "C (cap): a tile's inputs (F per token, or cheap) carry fewer fresh bits than its counted outputs"
+        return ("D (decoding): counted values reach blocks that recompute theta's at beta_gx; the bound charges "
+                "beta_v" if full else "C (cap): a tile's inputs carry fewer fresh bits than its counted outputs")
     if best.strategy == "layer_pipeline":
         if full:
             return ("C (cap, subnetwork clause): a stage's update fits in k and its counted outputs carry more fresh bits "
@@ -605,11 +634,13 @@ def evaluate(cfg: Config, inputs: Inputs, kn: Knobs, labels: list[str], k: float
         S = resolve_S(lab, cfg, beta, kn, inputs.S_bits)
         F = inputs.F_for(lab, precision, cfg)
         full = lab.lower() == "full"
-        res = rho_attack(cfg, S, F, k, c, beta, kn, workload)
-        b = bound(cfg, S, F, k, c, beta, kn, full, workload)
+        kl = replace(kn, grad_factor=inputs.grad_factor(lab, precision, kn))
+        res = rho_attack(cfg, S, F, k, c, beta, kl, workload)
+        b = bound(cfg, S, F, k, c, beta, kl, full, workload)
         best, ex, hyb = res["best"], res["best_exact"], res["hybrid"]
         rows.append({
-            "config": cfg.name, "S_label": lab, "S_bits": S, "F": F, "k_bits": k, "c": c, "precision": precision,
+            "config": cfg.name, "S_label": lab, "S_bits": S, "F": F, "G": F * kl.grad_factor, "beta": asdict(beta),
+            "k_bits": k, "c": c, "precision": precision,
             "workload": workload, "bound": b,
             "attack": best.to_json() if best else None,
             "attack_exact": ex.to_json() if ex else None,
@@ -623,32 +654,44 @@ def evaluate(cfg: Config, inputs: Inputs, kn: Knobs, labels: list[str], k: float
     return rows
 
 
-def F_curve(inputs: Inputs, cfg: Config, precision: str, kn: Knobs) -> tuple[np.ndarray, np.ndarray]:
-    """F against S on cfg, interpolated in log S between the labeled points (constant past the ends)."""
-    pts = sorted((resolve_S(lab, cfg, inputs.beta_for(lab, precision), kn, inputs.S_bits),
-                  inputs.F_for(lab, precision, cfg)) for lab in inputs.F)
-    return np.array([p[0] for p in pts]), np.array([p[1] for p in pts])
+_INTERP = ("beta_v", "beta_x", "beta_w", "beta_gx")
+
+
+def F_curve(inputs: Inputs, cfg: Config, precision: str, kn: Knobs) -> tuple[np.ndarray, dict[str, np.ndarray]]:
+    """F, G / F and the betas against S on cfg at the labeled points, sorted by S, for interpolation in log S
+    (constant past the ends)."""
+    pts = []
+    for lab in inputs.F:
+        b = inputs.beta_for(lab, precision)
+        pts.append((resolve_S(lab, cfg, b, kn, inputs.S_bits),
+                    {"F": inputs.F_for(lab, precision, cfg), "gf": inputs.grad_factor(lab, precision, kn),
+                     **{f: getattr(b, f) if f != "beta_gx" else b.gx for f in _INTERP}}))
+    pts.sort(key=lambda p: p[0])
+    return np.array([p[0] for p in pts]), {key: np.array([p[1][key] for p in pts]) for key in pts[0][1]}
 
 
 def curve(cfg: Config, inputs: Inputs, kn: Knobs, k: float, c: float, precision: str, workload: str,
-          n: int = 36) -> dict:
-    beta = inputs.precisions[precision]
-    s_full = cfg.params * beta.beta_w
-    Ss = np.geomspace(1e3, s_full, n)
-    sx, fy = F_curve(inputs, cfg, precision, kn)
+          n: int = 36, s_min: float = 1e2) -> dict:
+    base = inputs.beta_for("full", precision) if "full" in inputs.F else inputs.precisions[precision]
+    s_full = cfg.params * base.beta_w
+    Ss = np.geomspace(s_min, s_full, n)
+    sx, ys = F_curve(inputs, cfg, precision, kn)
+    at = lambda key, S: float(np.interp(np.log(S), np.log(sx), ys[key]))  # noqa: E731
     out = {"S": [], "attack": [], "strategy": [], "attack_exact": [], "strategy_exact": [], "bound": [], "cliff": [],
            "full": None}
     for S in Ss:
-        F = float(np.interp(np.log(S), np.log(sx), fy))
-        res = rho_attack(cfg, float(S), F, k, c, beta, kn, workload)
-        b = bound(cfg, float(S), F, k, c, beta, kn, False, workload)
+        F = at("F", S)
+        beta = replace(base, **{f: at(f, S) for f in _INTERP})
+        kl = replace(kn, grad_factor=at("gf", S))
+        res = rho_attack(cfg, float(S), F, k, c, beta, kl, workload)
+        b = bound(cfg, float(S), F, k, c, beta, kl, False, workload)
         out["S"].append(float(S))
         for key, a in (("", res["best"]), ("_exact", res["best_exact"])):
             out["attack" + key].append(a.rho if a else None)
             out["strategy" + key].append(a.strategy if a else None)
         out["bound"].append(b["rho"])
         out["cliff"].append(b["cliff"])
-    out["full"] = bound(cfg, s_full, float(fy[-1]), k, c, beta, kn, True, workload)["rho"]
+    out["full"] = bound(cfg, s_full, float(ys["F"][-1]), k, c, base, kn, True, workload)["rho"]
     return out
 
 
@@ -660,14 +703,16 @@ def c_modes(cfg: Config, k: float, kn: Knobs) -> dict[str, float]:
 
 
 def plot(curves: list[dict], path: Path, precision: str) -> None:
-    """One panel per config (rows) and c mode (columns), for one precision: the exact attack (thick), the attack with
-    recipe changes (dashed), the bound's rho(S) (thin), the full-training bound (star) and k (dotted)."""
+    """One panel per config (rows) and c mode (columns), for one precision and the first workload: the exact attack
+    (thick), the attack with recipe changes (dashed), the bound's rho(S) (thin), the full-training bound (star) and k
+    (dotted)."""
     import matplotlib
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    curves = [cv for cv in curves if cv["precision"] == precision]
+    wl = curves[0].get("workload") if curves else None
+    curves = [cv for cv in curves if cv["precision"] == precision and cv.get("workload") == wl]
     cfgs = list(dict.fromkeys(cv["config"] for cv in curves))
     cmodes = sorted({cv["c_mode"] for cv in curves}, reverse=True)
     fig, axes = plt.subplots(len(cfgs), len(cmodes), figsize=(6.5 * len(cmodes), 3.6 * len(cfgs)), squeeze=False)
@@ -688,7 +733,7 @@ def plot(curves: list[dict], path: Path, precision: str) -> None:
                 ax.axvline(cv["k"], color=col, lw=0.6, ls=":")
             ax.set_xscale("log")
             ax.set_yscale("log")
-            ax.set_title(f"{name}, c {cm}, {precision}", fontsize=9)
+            ax.set_title(f"{name}, c {cm}, {precision}, {wl or 'sft'}", fontsize=9)
             ax.set_xlabel("S (bits of unregistered state)")
             ax.set_ylabel("rho")
             ax.grid(alpha=0.3, which="both", lw=0.3)
@@ -763,9 +808,9 @@ def main(argv: list[str] | None = None) -> int:
                             for r in evaluate(cfg, inputs, kn, labels, k, c, prec, wl):
                                 r.update(c_mode=c_mode, k_label=k_label)
                                 rows.append(r)
-                        cv = curve(cfg, inputs, kn, k, c, prec, "sft", args.curve_points)
-                        cv.update(config=name, c_mode=c_mode, k_label=k_label, k=k, precision=prec)
-                        curves.append(cv)
+                            cv = curve(cfg, inputs, kn, k, c, prec, wl, args.curve_points)
+                            cv.update(config=name, c_mode=c_mode, k_label=k_label, k=k, precision=prec, workload=wl)
+                            curves.append(cv)
         doc = {"inputs": path, "source": inputs.source, "knobs": asdict(kn), "rows": rows, "curves": curves}
         (out / f"rho_attack_{tag}.json").write_text(json.dumps(doc, indent=1, default=str))
         (out / f"rho_attack_{tag}.md").write_text(summarize(rows))
