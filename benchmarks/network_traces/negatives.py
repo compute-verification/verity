@@ -171,8 +171,12 @@ def _plain(advice) -> list[list]:
     return [list(step.rows) for step in advice.steps]
 
 
-def _kind(request, start: int, n: int) -> str:
-    return "decode" if n == 1 and start >= request.prompt_len else "prefill"
+def _at(row, request, start: int, n: int, **changes):
+    """`row` over `n` positions of `request` from `start`, of that span's kind (decode exactly when n = 1 past the
+    prompt). The kinds are literals: `tests/test_seed_ports.py` reads a computed `kind=` in a `replace` as a port's."""
+    if n == 1 and start >= request.prompt_len:
+        return replace(row, kind="decode", start=start, n=n, **changes)
+    return replace(row, kind="prefill", start=start, n=n, **changes)
 
 
 def _kept(requests, steps: list[list]) -> list[tuple[int, int, int, int]]:
@@ -230,7 +234,7 @@ def output_length(advice, request: int = 0, by: int = 1):
     elif sum(o[2] == request for o in _kept(requests, steps)) < requests[request].output_len:
         s, last = max((s, row) for s, rows in enumerate(steps) for row in rows if row.request == request)
         end = last.start + last.n
-        row = replace(last, kind=_kind(q, end, 1), start=end, n=1, cache_hit=0, preempted=False, sources=())
+        row = _at(last, q, end, 1, cache_hit=0, preempted=False, sources=())
         if s + 1 == len(steps):
             steps.append([])
         steps[s + 1].append(row)
@@ -329,8 +333,7 @@ def start_shifted(advice, request: int | None = None, by: int = 1):
         hit = row.cache_hit + by
         if hit < 0 or row.n - by < 1 or (sources := _hit_sources(advice, steps, s, row, hit)) is None:
             continue
-        steps[s][j] = replace(row, kind=_kind(advice.requests[r], hit, row.n - by), start=hit, n=row.n - by,
-                              cache_hit=hit, sources=sources)
+        steps[s][j] = _at(row, advice.requests[r], hit, row.n - by, cache_hit=hit, sources=sources)
         return _build(advice, list(advice.requests), steps, _buckets(advice))
     raise NotApplicable(f"no request's first row can start {by} later: no other request computed the KV it would read")
 
@@ -356,8 +359,7 @@ def chunk_split(advice):
         if a.start < q.prompt_len and a.n >= 2:
             end = a.start + a.n
             steps[s][j] = replace(a, n=a.n - 1)
-            steps.insert(s + 1, [replace(a, kind=_kind(q, end - 1, 1), start=end - 1, n=1, cache_hit=0,
-                                         preempted=False, sources=())])
+            steps.insert(s + 1, [_at(a, q, end - 1, 1, cache_hit=0, preempted=False, sources=())])
             return _build(advice, list(requests), steps, _buckets(advice))
     raise NotApplicable("no prefill row of two tokens or more to split")
 
