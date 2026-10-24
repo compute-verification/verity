@@ -42,7 +42,7 @@ PD = 851
 #: SMs with the next call's pd_commit_g on
 TILES_PD = 979
 #: PROBE: the older forms, "+"-joined, for an A/B in one session: tiles851 (the tile leaves at PD's), treewhole (pd_tree_g at
-#: a whole SM's shared memory)
+#: a whole SM's shared memory), hashzero (pd_commit_g hashes the filler rows: no zero row digest in the records)
 PLACE = frozenset(os.environ.get("PEARLC_GROUPED_PLACE", "").split("+")) - {"", "base"}
 #: a unit's segment rows divide by it: the grouped GEMMs' tile rows (run.BM_D) and the tile leaves' (run.TILE)
 SEG = 64
@@ -223,7 +223,7 @@ class Grouped:
             commit["p"][j, :13] = (b["xa"] + 4 * k * u.row, b["rowdig_a"] + 64 * u.row, b["tree_a"] + tree_bytes(R) * j,
                                    b["seeds_a"] + 32 * u.row, b["lkeys_a"] + 32 * u.row, key + 64, key, kk["salt_key"], kk["hm"],
                                    b["pd_count"] + 16 * j, b["seed_a"] + 32 * j, b["line_a"] + 32 * j, b["ea_codes"] + 32 * u.row)
-            commit["p"][j, 14] = self.zero
+            commit["p"][j, 14] = 0 if "hashzero" in PLACE else self.zero
             commit["i"][j, :5] = (u.m16, k, int(split), u.seg, u.m)
             tiles["p"][j, :3] = (b["c"] + 4 * n * u.row, b["u"] + 4 * n * u.row, leaves + NB * u.tile)
             tiles["i"][j, :2] = (u.m16, n)
