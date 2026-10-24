@@ -181,11 +181,13 @@ def test_whatever_decodes_is_what_its_residual_encodes_to(seed):
 
 
 class _Plain(V.Decoder):
-    """The WNC decoder without the canonical check: what `code.ArithDecoder` accepts."""
+    """The WNC decoder without `code.ArithDecoder.finish`'s canonical check: the segment's length, and nothing compared."""
 
     def _close(self) -> None:
         if self.seg is not None:
-            self.lens.append(self.seg.finish())
+            n = self.seg.shifts + 2 if self.seg.used else 0
+            self.seg.inp.pos = self.seg.start + n
+            self.lens.append(n)
             self.seg = None
 
 

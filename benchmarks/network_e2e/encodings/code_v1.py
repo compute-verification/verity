@@ -31,8 +31,9 @@ of a prefix-free encoding.
   Kraft's sum over them is at most 1. A run's string is its windows' segments in order, each prefix-free given the earlier
   ones, so the whole string is too.
 - The WNC decoder alone takes 2 to 4 strings for one message (the certifier PROTOCOL's attack 10): any whose interval
-  meets the final interval, after reading 32 bits past the segment. `Decoder` makes it canonical. It re-encodes each
-  segment's decoded intervals and refuses the segment unless the bits are the encoder's, bit for bit. It also refuses:
+  meets the final interval, after reading 32 bits past the segment. `code.ArithDecoder.finish` makes it canonical. It
+  re-encodes each segment's decoded intervals and refuses the segment unless the bits are the encoder's, bit for bit.
+  `Decoder` also refuses:
   - a decoded value outside its range (the uniform coder's top chunk can name one);
   - a segment that runs past the end of the string;
   - bits after the last window, and nonzero padding in the last byte.
@@ -256,21 +257,9 @@ class Encoder:
     _flag = bit
 
 
-class _Recording(C.ArithDecoder):
-    """The WNC decoder, keeping each interval it consumes so that its segment can be re-encoded."""
-
-    def __init__(self, inp: C.BitReader) -> None:
-        super().__init__(inp)
-        self.log: list[tuple[int, int, int]] = []
-
-    def consume(self, cum: int, freq: int, total: int) -> None:
-        self.log.append((cum, freq, total))
-        super().consume(cum, freq, total)
-
-
 class Decoder:
     """The encoder's mirror. Each window's segment ends where its decoder says, and `window()` and `finish()` refuse it
-    unless re-encoding what it decoded gives its bits exactly (the module's docstring)."""
+    unless re-encoding what it decoded gives its bits exactly (`code.ArithDecoder.finish`)."""
 
     def __init__(self, bits: bytes, nbits: int, book: Book) -> None:
         if nbits < 0 or len(bits) != (nbits + 7) // 8:
@@ -279,30 +268,23 @@ class Decoder:
             raise ValueError("nonzero padding after the last bit")
         self.book, self.kt, self.nbits = book, KT(book.priors), nbits
         self.r = C.BitReader.from_bytes(bits, nbits)
-        self.seg: _Recording | None = None
+        self.seg: C.ArithDecoder | None = None
         self.lens: list[int] = []
 
     def window(self) -> None:
         self._close()
-        self.seg = _Recording(self.r)
+        self.seg = C.ArithDecoder(self.r)
 
     def _close(self) -> None:
         if self.seg is None:
             return
-        start, n = self.seg.start, self.seg.finish()
-        if start + n > self.nbits:
-            raise ValueError(f"window {len(self.lens)}: the advice ends inside its segment")
-        w = C.BitWriter()
-        e = C.ArithEncoder(w)
-        for t in self.seg.log:
-            e.encode(*t)
-        e.finish()
-        if w.bits != self.r.bits[start:start + n]:
-            raise ValueError(f"window {len(self.lens)}: not the encoder's codeword for what it decodes to")
-        self.lens.append(n)
+        try:
+            self.lens.append(self.seg.finish())
+        except ValueError as e:
+            raise ValueError(f"window {len(self.lens)}: {e}") from None
         self.seg = None
 
-    def _open(self) -> _Recording:
+    def _open(self) -> C.ArithDecoder:
         if self.seg is None:
             raise ValueError("a symbol outside any window: call window() first")
         return self.seg
