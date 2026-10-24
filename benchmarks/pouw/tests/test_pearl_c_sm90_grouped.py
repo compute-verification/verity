@@ -25,7 +25,7 @@ from verity_vllm.protocol_options import pouw_pearl_c_grouped as PG  # noqa: E40
 HERE = Path(__file__).resolve().parents[1] / "pearl_c_sm90"
 SCHEME = "pearl-c-h100-v1-h3"
 SALT_KEY = bytes(range(100, 132))
-STEPS = ["pd_commit_g_851", "stats_s5", "eprime", "form_s5_g", "gemm_words_g_d", "pa", "gemm_pearlc_g_d", "pd_tiles_g_979"]
+STEPS = ["pd_commit_gm_851", "stats_s5", "eprime", "form_s5_g", "gemm_words_g_d", "pa", "gemm_pearlc_g_d", "pd_tiles_g_979"]
 
 
 def load(name: str, path: Path):
@@ -91,6 +91,18 @@ def test_units_cut_each_experts_rows_into_blocks():
     assert G.units([0, 0], 128, 256) == []
 
 
+def test_rows_order_puts_the_units_rows_apart_on_the_sms_and_filler_rows_past_them():
+    """pd_commit_gm's CTAs at decode's 8 experts (77 rows, 176 committed with their filler rows) on 132 SMs: every unit's row
+    once; the 77 rows on CTAs below 132, and the 44 CTAs past 132 and the 44 they share SMs with (x and x + 132) filler rows.
+    While the rows fit the SMs, the rows come first."""
+    us = G.units([3, 1, 17, 1, 40, 8, 2, 5], 6144, R.PD_MAX_ROWS)
+    order = G.rows_order(us, 132)
+    assert sorted(order) == [(j, r) for j, u in enumerate(us) for r in range(u.m16)] and len(order) == 176
+    real = [x for x, (j, r) in enumerate(order) if r < us[j].m]
+    assert len(real) == 77 and max(real) < 132 and not {*range(44), *range(132, 176)} & set(real)
+    small = G.units([3, 1], 6144, R.PD_MAX_ROWS)
+    assert G.rows_order(small, 132) == [(0, 0), (0, 1), (0, 2), (1, 0), *((0, r) for r in range(3, 16)), *((1, r) for r in range(1, 16))]
+
 def grouped(n=128, k=1024, experts=4, rows=1024, count=16):
     dev = RecordingDev()
     sizes = {**G.sizes(R, rows, count, n, k), **{x: 1 << 30 for x in G.STACKED}}
@@ -152,14 +164,16 @@ def test_each_units_record_is_its_own_calls_launches(split):
     assert rows.tolist() == [*range(3), *range(64, 320), *range(320, 364), *range(384, 448)]
     nodes = np.frombuffer(meta, "<i8", len(us), at + 8 * 367)
     assert nodes.tolist() == [(G.tree_bytes(R) * j) // 64 + 2 * R.pow2(u.m16) - 2 for j, u in enumerate(us)]
-    assert len(meta) == at + 8 * (367 + len(us)) <= G.sizes(R, 1024, 16, n, k)["meta"]
+    ctas = np.frombuffer(meta, "<u4", sum(u.m16 for u in us), G.Grouped.map_at(us))
+    assert G.Grouped.map_at(us) == at + 8 * (367 + len(us)) and ctas.tolist() == [j << 16 | r for j, r in G.rows_order(us, 132)]
+    assert len(meta) == G.Grouped.map_at(us) + 4 * len(ctas) <= G.sizes(R, 1024, 16, n, k)["meta"]
     with pytest.raises(ValueError, match="past the call's"):
         g.meta(G.units([1100], n, R.PD_MAX_ROWS), bytes(G.KEY_BYTES * 5), leaves)
 
 
 @pytest.mark.parametrize("counts", [[40], [3, 0, 300, 64, 17, 1]])
 def test_a_call_is_eight_launches_whatever_its_experts(counts):
-    """One launch a step, in `grouped.STEPS`' order: pd_commit_g on (max m₁₆, units) CTAs, each an SM's whole shared memory
+    """One launch a step, in `grouped.STEPS`' order: pd_commit_gm on Σ m₁₆ CTAs, each an SM's whole shared memory
     while the units' Σ m₁₆ rows fit the 132 SMs ([40]) and its least past them ([3, 0, 300, 64, 17, 1]), and pd_tiles_g_979 on
     (max row blocks x groups of PD_G tiles a row, units) of PD_G warps, each reading its records from the table; stats, E', P_A over all of A's rows; form_s5_g and both
     GEMMs with the expert map, the GEMMs persistent at the H100's 132 SMs on A's rows and their map set."""
@@ -175,8 +189,8 @@ def test_a_call_is_eight_launches_whatever_its_experts(counts):
     by = {x[0]: x for x in got}
     smem = dev.pd_smem_g if sum(u.m16 for u in us) <= 132 else R.PD_PAIR_SMEM
     assert (smem == dev.pd_smem_g) == (counts == [40]) and dev.pd_smem_g > R.PD_PAIR_SMEM
-    assert by["pd_commit_g_851"][1:4] == ((max(u.m16 for u in us), len(us)), 32 * 4, smem)
-    assert by["pd_commit_g_851"][5:] == ((b["meta"],), (G.REC,))
+    assert by["pd_commit_gm_851"][1:4] == (sum(u.m16 for u in us), 32 * 4, smem)
+    assert by["pd_commit_gm_851"][5:] == ((b["meta"], b["meta"] + G.Grouped.map_at(us)), (G.REC,))
     groups = max(R.cdiv(u.m16, 64) * R.cdiv(n // 64, R.PD_G) for u in us)
     assert by["pd_tiles_g_979"][1:4] == ((groups, len(us)), 32 * R.PD_G, R.PD_PAIR_SMEM // 2)
     assert by["pd_tiles_g_979"][5:] == ((b["meta"] + G.TILES_AT,), (G.REC,))
@@ -190,7 +204,7 @@ def test_a_call_is_eight_launches_whatever_its_experts(counts):
 
 
 def test_a_split_call_runs_as_tree_from_its_record_after_the_per_row_keying():
-    """With `split` a call is `grouped.SPLIT_STEPS`: pd_commit_g as unsplit (its records then in mode 1), pd_tree_g on one
+    """With `split` a call is `grouped.SPLIT_STEPS`: pd_commit_gm as unsplit (its records then in mode 1), pd_tree_g on one
     CTA of 128 threads a unit, reading its record's pd_tree Args, at PD_PAIR_SMEM (not a whole SM: a GEMM CTA fits beside
     it), then the rest as unsplit."""
     n, k = 128, 1024
@@ -212,10 +226,10 @@ def test_a_split_call_runs_as_tree_from_its_record_after_the_per_row_keying():
 
 
 class OldCubinDev(RecordingDev):
-    """A cubin built before pd_tree_g and pd_tiles_g_979: looking them up fails as `run.Dev.fn`'s does."""
+    """A cubin built before pd_tree_g, pd_tiles_g_979 and pd_commit_gm: looking them up fails as `run.Dev.fn`'s does."""
 
     def fn(self, name):
-        if name.startswith("pd_tree_g_") or name == "pd_tiles_g_979":
+        if name.startswith("pd_tree_g_") or name in ("pd_tiles_g_979", "pd_commit_gm_851"):
             raise RuntimeError("cuModuleGetFunction returned CUresult 500 (named symbol not found)")
         return name
 
@@ -280,7 +294,7 @@ def test_the_vllm_call_commits_each_unit_as_its_call_alone(tmp_path, schedule):
 def test_the_vllm_call_runs_on_the_schedules_lanes_from_rotating_sets(schedule):
     """A grouped call's main lane (the recording stand-in's handle 2, or the caller's 0 under ``deferred-caller``) runs every
     step but the side ones, which run on the run's side lanes in turn (1, then 3): the tile leaves, and under ``deferred-a``
-    first A's tree, pd_commit_g then in mode 1.  Calls take the ring's sets in turn (C~, U, the table and A's tree), and A's
+    first A's tree, pd_commit_gm then in mode 1.  Calls take the ring's sets in turn (C~, U, the table and A's tree), and A's
     roots are gathered into the pass from the call's set."""
     ws, counts, n, k = (1, 3, 0), [3, 300, 20], 128, 1024
     run, _ = device_run(4, n, k, schedule=schedule)
@@ -300,7 +314,8 @@ def test_the_vllm_call_runs_on_the_schedules_lanes_from_rotating_sets(schedule):
     by = {name: [x[5] for x in log if x[0] == name] for name in lane_steps(True)}
     ptr = lambda j, x: g.sets[j][x].data_ptr()
     for c, j in enumerate((0, 1, 0)):
-        assert by["pd_commit_g_851"][c] == (ptr(j, "meta"),) and by["pd_tiles_g_979"][c] == (ptr(j, "meta") + G.TILES_AT,)
+        assert by["pd_commit_gm_851"][c] == (ptr(j, "meta"), ptr(j, "meta") + G.Grouped.map_at(us))
+        assert by["pd_tiles_g_979"][c] == (ptr(j, "meta") + G.TILES_AT,)
         assert by["gemm_pearlc_g_d"][c][2:4] == (ptr(j, "c"), ptr(j, "u"))
         assert by["pd_tree_g_851"][c:c + 1] == ([(ptr(j, "meta") + G.TREE_AT,)] if split else [])
     for j in (0, 1):
@@ -358,15 +373,17 @@ def test_grouped_checks_pass_diff_counts_what_is_committed_not_the_schedule(tmp_
 
 def test_the_vllm_call_runs_unsplit_on_a_cubin_without_pd_tree_g():
     """A ship built before pd_tree_g (`grouped.has_tree` false) runs ``deferred-a``'s grouped calls as ``deferred``'s: A's
-    whole commitment in pd_commit_g's mode 0 on the main lane, the tile leaves on the side lane, a CTA a tile (pd_tiles_g_851,
-    since it has no pd_tiles_g_979)."""
+    whole commitment in pd_commit_g's mode 0 (a unit's rows on its CTA row, since it has no pd_commit_gm) on the main lane,
+    the tile leaves on the side lane, a CTA a tile (pd_tiles_g_851, since it has no pd_tiles_g_979)."""
     run, _ = device_run(4, schedule="deferred-a", dev=OldCubinDev())
     dev = run.kernel.dev
     dev.log.clear()
     PG.gemm_grouped(run, (1, 3), torch.randn(40, 1024).to(torch.bfloat16), [30, 10])
-    old = [*STEPS[:-1], "pd_tiles_g_851"]
+    old = ["pd_commit_g_851", *STEPS[1:-1], "pd_tiles_g_851"]
     assert [(x[0], x[4]) for x in launches(dev)] == [(x, 1 if x == "pd_tiles_g_851" else 2) for x in old]
-    assert launches(dev)[-1][1:4] == ((max(u.tiles for u in G.units([30, 10], 128, R.PD_MAX_ROWS)), 2), 32, 0)
+    us = G.units([30, 10], 128, R.PD_MAX_ROWS)
+    assert launches(dev)[-1][1:4] == ((max(u.tiles for u in us), 2), 32, 0)
+    assert launches(dev)[0][1] == (max(u.m16 for u in us), 2) and launches(dev)[0][5] == (run._groups[(1, 3)].b["meta"].data_ptr(),)
     assert not G.has_tree(dev) and G.has_tree(RecordingDev())
     assert (G.tiles_pd(dev), G.tiles_pd(RecordingDev())) == (G.PD, G.TILES_PD)
     rec = np.frombuffer(PPD._bytes(run._groups[(1, 3)].b["meta"])[:2 * G.REC], np.uint8).reshape(2, G.REC)

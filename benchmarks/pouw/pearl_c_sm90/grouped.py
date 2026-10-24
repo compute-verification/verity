@@ -8,11 +8,12 @@ its expert's weight, with its own index, keys, A tree and tile leaves, as `run.P
 units lie one after another in one A, each in a segment of its m₁₆ rounded up to SEG = 64 rows (the grouped GEMMs' tile), and
 each 64-row block of A names its expert (``ex``).  The steps, one launch each (`Grouped.steps`):
 
-* ``commit_a``: pd_commit_g, unit u's pd_commit (A's commitment and E_A's lines) on CTA row u, from its record (`Grouped.meta`),
-  each CTA with an SM to itself (`run.pd_setup`'s PD_WHOLE) while the units' rows, a CTA each, fit the SMs, and past that at
-  its least shared memory (PD_PAIR_SMEM), so the rows past the SMs share them rather than wait a whole chain for one (the
-  launch's alone: the code, grid and bytes are the same); a unit's filler rows (m to m₁₆, zero) take a zero row's digest
-  (`zero_state`, a function of k alone) rather than hash their rows, the same bytes;
+* ``commit_a``: pd_commit_gm, unit u's pd_commit (A's commitment and E_A's lines) on the CTAs `rows_order` gives its rows,
+  from its record (`Grouped.meta`), each CTA with an SM to itself (`run.pd_setup`'s PD_WHOLE) while the units' rows, a CTA
+  each, fit the SMs, and past that at its least shared memory (PD_PAIR_SMEM), so the rows past the SMs share them rather than
+  wait a whole chain for one (the launch's alone: the code and bytes are the same); a unit's filler rows (m to m₁₆, zero)
+  take a zero row's digest (`zero_state`, a function of k alone) rather than hash their rows, the same bytes.  A cubin
+  without pd_commit_gm runs pd_commit_g, unit u's rows on CTA row u;
 * ``stats_a``, ``eprime_a``, ``pa``: stats_s5, eprime and pa over all of A's rows (a row at a time, no keys);
 * ``form_a``: form_s5_g, each 64-row block's F_A its expert's;
 * ``af``, ``gemm_pearlc``: gemm_words_g_d and gemm_pearlc_g_d over A, each 64-row block's B side its expert's;
@@ -20,11 +21,11 @@ each 64-row block of A names its expert (``ex``).  The steps, one launch each (`
   block a CTA (`TILES_PD`).
 
 With ``split`` (`SPLIT_STEPS`, as `run.Pipeline`'s ``split_a`` without ``fillers``), A's commitment is two launches of the same
-bytes: ``rows_a``, pd_commit_g in mode 1 (each unit's pads, row digests, leaves, seeds, line keys and E_A lines), then
+bytes: ``rows_a``, pd_commit_gm in mode 1 (each unit's pads, row digests, leaves, seeds, line keys and E_A lines), then
 ``tree_seed_a``, pd_tree_g, unit u's pd_tree on CTA u (A's levels, seed_A and line_a), which writes nothing the forming reads:
 a unit's padding rows (m₁₆ to its segment's end, outside its matmul) keep the E_A lines the buffer holds.
 
-pd_commit_g, pd_tree_g and pd_tiles_g run hash_decode.cuh's bodies on each unit's Args, and the rest compute each row, and
+pd_commit_gm, pd_tree_g and pd_tiles_g run hash_decode.cuh's bodies on each unit's Args, and the rest compute each row, and
 each output, as the ungrouped kernels do, so a unit's bytes are its own call's."""
 
 from __future__ import annotations
@@ -39,10 +40,11 @@ import numpy as np
 PD = 851
 #: the tile leaves' variant where the cubin has it (PD_GROUPED_TILES): PD_GROUP's, PD_G tiles of a row block a CTA, their folds
 #: side by side on one warp, about a third of PD's issue at decode's partial row blocks, which a call's tile leaves share the
-#: SMs with the next call's pd_commit_g on
+#: SMs with the next call's pd_commit_gm on
 TILES_PD = 979
 #: PROBE: the older forms, "+"-joined, for an A/B in one session: tiles851 (the tile leaves at PD's), treewhole (pd_tree_g at
-#: a whole SM's shared memory), hashzero (pd_commit_g hashes the filler rows: no zero row digest in the records)
+#: a whole SM's shared memory), hashzero (pd_commit_gm hashes the filler rows: no zero row digest in the records), rows2d
+#: (pd_commit_g's grid, a unit's rows on its CTA row, rather than pd_commit_gm's)
 PLACE = frozenset(os.environ.get("PEARLC_GROUPED_PLACE", "").split("+")) - {"", "base"}
 #: a unit's segment rows divide by it: the grouped GEMMs' tile rows (run.BM_D) and the tile leaves' (run.TILE)
 SEG = 64
@@ -90,6 +92,17 @@ def tree_bytes(R) -> int:
     return NB * (2 * R.PD_MAX_ROWS - 1)
 
 
+def rows_order(us: list[Unit], sms: int) -> list[tuple[int, int]]:
+    """pd_commit_gm's CTAs in launch order, each (unit, row): the units' rows on CTAs of their own below `sms`, where a whole
+    row's chain (about 87 µs at decode) runs alone on its SM, and their zero filler rows (a short chain, `zero_state`) on the
+    rest.  Past `sms`, the CTAs x and x + sms share an SM as the launch places them on an idle GPU, so the first CTAs past
+    it and the CTAs that share their SMs are filler rows while there are enough."""
+    rows = [(j, r) for j, u in enumerate(us) for r in range(u.m)]
+    fill = [(j, r) for j, u in enumerate(us) for r in range(u.m, u.m16)]
+    head = min(max(len(rows) + len(fill) - sms, 0), len(fill))
+    return fill[:head] + rows + fill[head:]
+
+
 def root_at(R, j: int, u: Unit) -> int:
     """Unit j's A root's byte offset in ``tree_a``: its slot's node 2 pow2(m₁₆) - 2."""
     return tree_bytes(R) * j + NB * (2 * R.pow2(u.m16) - 2)
@@ -97,12 +110,13 @@ def root_at(R, j: int, u: Unit) -> int:
 
 def sizes(R, rows: int, count: int, n: int, k: int) -> dict[str, int]:
     """The grouped call's own buffers at A of at most `rows` rows in at most `count` units (the experts' stacked side aside):
-    ``meta`` holds a call's unit records, its expert map (``ex``, int32 a 64-row block) and its gathered rows' rows of A (int64)."""
+    ``meta`` holds a call's unit records, its expert map (``ex``, int32 a 64-row block), its gathered rows' rows of A and its
+    units' root nodes (int64), and pd_commit_gm's map (u32 a row)."""
     return {"xa": 4 * rows * k, "alpha_a": 4 * rows, "beta_a": 4 * rows, "ia_a": 4 * rows, "aux_a": 8 * rows,
             "epa_codes": 32 * rows, "ea_codes": 32 * rows, "at": rows * k, "af": 4 * 32 * rows, "pa_t": 128 * rows,
             "c": 4 * rows * n, "u": 4 * rows * n, "y": 2 * rows * n, "rowdig_a": 64 * rows, "seeds_a": 32 * rows,
             "lkeys_a": 32 * rows, "tree_a": tree_bytes(R) * count, "seed_a": 32 * count, "line_a": 32 * count,
-            "pd_count": 16 * count, "meta": REC * count + 4 * (rows // SEG) + 8 + 8 * rows + 8 * count}
+            "pd_count": 16 * count, "meta": REC * count + 4 * (rows // SEG) + 8 + 8 * rows + 8 * count + 4 * rows}
 
 
 def pd_smem(R, dev, name: str) -> int:
@@ -117,10 +131,11 @@ def pd_smem(R, dev, name: str) -> int:
 
 
 def setup(R, dev) -> None:
-    """`run.pd_setup`, and pd_commit_g's dynamic shared memory (`pd_smem`)."""
+    """`run.pd_setup`, and pd_commit_g's and pd_commit_gm's dynamic shared memory (`pd_smem`)."""
     R.pd_setup(dev)
     if getattr(dev, "pd_smem_g", None) is None:
-        dev.pd_smem_g = pd_smem(R, dev, f"pd_commit_g_{PD}")
+        names = [f"pd_commit_g_{PD}", *([f"pd_commit_gm_{PD}"] if has(dev, f"pd_commit_gm_{PD}") else [])]
+        dev.pd_smem_g = min(pd_smem(R, dev, name) for name in names)
 
 
 def has(dev, name: str) -> bool:
@@ -142,6 +157,11 @@ def has_tree(dev) -> bool:
     return has(dev, f"pd_tree_g_{PD}")
 
 
+def has_rows(dev) -> bool:
+    """Whether the call's commitment runs as pd_commit_gm (`rows_order`'s CTAs): where the cubin has it."""
+    return "rows2d" not in PLACE and has(dev, f"pd_commit_gm_{PD}")
+
+
 def tiles_pd(dev) -> int:
     """pd_tiles_g's variant: TILES_PD where the cubin has it, else PD."""
     return PD if "tiles851" in PLACE or not has(dev, f"pd_tiles_g_{TILES_PD}") else TILES_PD
@@ -160,7 +180,7 @@ def tree_setup(R, dev) -> None:
 
 
 def zero_state(k: int) -> bytes:
-    """The row digest of k zero FP32 words (`pearl_c.row_digest`) as pd_commit_g reads it for a unit's filler rows: its eight
+    """The row digest of k zero FP32 words (`pearl_c.row_digest`) as pd_commit_gm reads it for a unit's filler rows: its eight
     state words, each from eight of the digest's bytes big-endian."""
     from verity.core.protocols.pouw.schemes.pearl_c import row_digest
     return np.frombuffer(row_digest(bytes(4 * k)), ">u8").astype("<u8").tobytes()
@@ -209,9 +229,9 @@ class Grouped:
     def meta(self, us: list[Unit], keys: bytes, leaves: int, split: bool = False) -> bytes:
         """A call's ``meta``: each unit's record (its pd_commit Args, with ``zero`` and its rows past which A's rows are its
         zero filler rows at p14 and i4, its pd_tiles Args, its 168 key bytes from `keys`, the units' in order, and with `split`
-        its pd_tree Args, pd_commit's then in mode 1), the expert map, each gathered row's row of A and
-        each unit's A root as a node of ``tree_a`` (int64s, for the caller's gathers); `leaves` the address of the call's
-        first tile leaf."""
+        its pd_tree Args, pd_commit's then in mode 1), the expert map, each gathered row's row of A and each unit's A root as a
+        node of ``tree_a`` (int64s, for the caller's gathers), then pd_commit_gm's map (`rows_order`, unit << 16 | row a CTA,
+        at `map_at`); `leaves` the address of the call's first tile leaf."""
         if len(us) > self.count or sum(u.seg for u in us) > self.rows or len(keys) != KEY_BYTES * len(us):
             raise ValueError(f"{len(us)} units of {sum(u.seg for u in us)} rows, {len(keys)} key bytes: past the call's "
                              f"{self.count} units and {self.rows} rows, or not {KEY_BYTES} key bytes a unit")
@@ -238,13 +258,19 @@ class Grouped:
         ex = np.repeat(np.array([u.pos for u in us], "<i4"), [u.seg // SEG for u in us])
         rows = np.concatenate([np.arange(u.row, u.row + u.m, dtype="<i8") for u in us])
         nodes = np.array([root_at(R, j, u) // NB for j, u in enumerate(us)], "<i8")
-        return rec.tobytes() + ex.tobytes() + bytes(-len(ex) * 4 % 8) + rows.tobytes() + nodes.tobytes()
+        ctas = np.array([j << 16 | r for j, r in rows_order(us, self.dev.sms)], "<u4")
+        return rec.tobytes() + ex.tobytes() + bytes(-len(ex) * 4 % 8) + rows.tobytes() + nodes.tobytes() + ctas.tobytes()
 
     @staticmethod
     def rows_at(us: list[Unit]) -> int:
         """The byte offset in ``meta`` of the gathered rows' rows of A; the units' root nodes follow them."""
         ex = sum(u.seg for u in us) // SEG
         return REC * len(us) + 4 * ex + (-ex * 4 % 8)
+
+    @staticmethod
+    def map_at(us: list[Unit]) -> int:
+        """The byte offset in ``meta`` of pd_commit_gm's map, after the units' root nodes."""
+        return Grouped.rows_at(us) + 8 * (sum(u.m for u in us) + len(us))
 
     def steps(self, us: list[Unit], split: bool = False) -> list[tuple[str, object]]:
         """A call's launches (`STEPS`, or with `split` `SPLIT_STEPS`), its `meta` (`meta`'s, at the same `split`) uploaded."""
@@ -254,8 +280,11 @@ class Grouped:
         smem = d.pd_smem_g if sum(u.m16 for u in us) <= d.sms else R.PD_PAIR_SMEM
 
         def commit():
-            d.launch(f"pd_commit_g_{PD}", (max(u.m16 for u in us), count), 32 * (R.cdiv(s, 32) * 2 + 2), smem, p=(meta,),
-                     i=(REC,))
+            block = 32 * (R.cdiv(s, 32) * 2 + 2)
+            if has_rows(d):
+                d.launch(f"pd_commit_gm_{PD}", sum(u.m16 for u in us), block, smem, p=(meta, meta + self.map_at(us)), i=(REC,))
+            else:
+                d.launch(f"pd_commit_g_{PD}", (max(u.m16 for u in us), count), block, smem, p=(meta,), i=(REC,))
 
         def tree():
             d.launch(f"pd_tree_g_{PD}", (1, count), 128, d.pd_tree_smem_g, p=(meta + TREE_AT,), i=(REC,))

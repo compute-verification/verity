@@ -839,8 +839,9 @@ extern "C" __global__ void __launch_bounds__(32) pd_heads(const Args) {
   }
 }
 
-// pd_commit_V: a CTA a row r < i0, 32 (cw + 2) threads, cw = ceil(s / 32) (s = k / 256), or with PD_PAIR 32 (2 cw + 2) and
-// PD_PAIR_SMEM bytes of dynamic shared memory (s <= 64).  The segments' warps (cw, or with PD_PAIR cw consumers then cw
+// pd_commit_V: a CTA a row r < i0 (its blockIdx.x, or pearl_c_sm90.cu's pd_commit_gm's from its map), 32 (cw + 2) threads,
+// cw = ceil(s / 32) (s = k / 256), or with PD_PAIR 32 (2 cw + 2) and PD_PAIR_SMEM bytes of dynamic shared memory (s <= 64).
+// The segments' warps (cw, or with PD_PAIR cw consumers then cw
 // producers), the salt's, then the templates', frame leaf's and pads'.  With PD_PAIR the row's leaf chain is pair 0's (warps
 // 0 and cw) and its seed chain pair 1's (warps 1 and cw + 1, or at cw = 1 warps 2 and 3); with PD_LATE the salt, the
 // templates and the frame leaf run while warp 0 folds, on warps 1, 2 and 3.  p0 A's rows (FP32, k words each), p1 row
@@ -849,9 +850,10 @@ extern "C" __global__ void __launch_bounds__(32) pd_heads(const Args) {
 // p9 scratch (a u32 counter, zero before the first launch and left zero), p10 seed_A out, p11 line_a out, p12 E_A's codes
 // out (32 B a line: row r's line under its own line key, then the filler lines under line_a) or 0; i0 rows (at most
 // PD_MAX_ROWS), i1 k, i2 mode (0: the tree, seed_A and the filler lines too, 1: level 0 and the rows' lines only), i3 E_A's
-// lines (rows and filler rows); PD_STAMP: p13 the stamps or 0.  Z (pearl_c_sm90.cu's pd_commit_g): p14 the digest state of
-// a row of k zero words or 0, and rows r >= i4 zero, whose CTAs take that state for their row digest rather than hash the row
-template <int V, bool Z = false> DEV void pd_commit_t(const Args a) {
+// lines (rows and filler rows); PD_STAMP: p13 the stamps or 0.  Z (pearl_c_sm90.cu's pd_commit_g and pd_commit_gm): p14 the
+// digest state of a row of k zero words or 0, and rows r >= i4 zero, whose CTAs take that state for their row digest rather
+// than hash the row
+template <int V, bool Z = false> DEV void pd_commit_t(const Args a, const int r) {
   __shared__ uint64_t dig[RS_MAX_SEGS * 8], xr[8], mk[8], cc[8], ftm[8], ftw[32], hbuf[48], root[8];
   __shared__ uint64_t tm[PD_MAX_LEVELS * PD_TM];
   __shared__ uint64_t kw[PD_KW_BLOCKS * 80];   // the fold's schedules; before it the templates' builders, after it the levels
@@ -863,7 +865,7 @@ template <int V, bool Z = false> DEV void pd_commit_t(const Args a) {
   static_assert(!LATE || PD_PAIR_WORDS >= 96 * PD_MAX_LEVELS, "PD_LATE's builders fit in pair 0's buffer");
   const int count = a.i[0], k = a.i[1], s = k / 256, cw = (s + 31) / 32, sw = PAIR ? 2 * cw : cw;
   const int c1 = cw >= 2 ? 1 : 2, p1 = cw >= 2 ? cw + 1 : 3;
-  const int r = blockIdx.x, tid = threadIdx.x, warp = tid / 32, lane = tid % 32;
+  const int tid = threadIdx.x, warp = tid / 32, lane = tid % 32;
   const int width = count <= 1 ? 1 : 1 << (32 - __clz(count - 1)), levels = 31 - __clz(width);
   const bool zero = Z && a.p[14] != 0 && r >= a.i[4];
   if (count > PD_MAX_ROWS || ((V & PD_ROUNDS) && s / 2 + 1 > PD_KW_BLOCKS)) __trap();
@@ -1182,7 +1184,7 @@ template <int V> DEV void pd_probe_t(const Args a) {
 }
 
 #define PD_INSTANCE(V)                                                                                                    \
-  extern "C" __global__ void __launch_bounds__(192) pd_commit_##V(const Args a) { pd_commit_t<V>(a); }                  \
+  extern "C" __global__ void __launch_bounds__(192) pd_commit_##V(const Args a) { pd_commit_t<V>(a, blockIdx.x); }      \
   extern "C" __global__ void __launch_bounds__(128) pd_tree_##V(const Args a) { pd_tree_t<V>(a); }                      \
   extern "C" __global__ void __launch_bounds__((V & PD_GROUP) ? 32 * PD_G : 32) pd_tiles_##V(const Args a) {            \
     pd_tiles_t<V>(a);                                                                                                     \

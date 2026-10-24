@@ -96,7 +96,7 @@ static uint8_t pd_e4m3(float f) {   // __nv_cvt_float_to_fp8(f, __NV_SATFINITE, 
 
 #include "hash_decode.cuh"
 // pd_commit_t's Z form, which pearl_c_sm90.cu's pd_commit_g takes: pd_commit_zero_V
-#define PD_ZERO_INSTANCE(V) static void pd_commit_zero_##V(const Args a) { pd_commit_t<V, true>(a); }
+#define PD_ZERO_INSTANCE(V) static void pd_commit_zero_##V(const Args a) { pd_commit_t<V, true>(a, blockIdx.x); }
 PD_VARIANT_LIST(PD_ZERO_INSTANCE)
 // another file's kernels beside these (pearl_c_sm90/hash_prefill_host.cpp): PD_HOST_EXTRA the file, PD_HOST_EXTRA_INSTANCES
 // their definitions, PD_HOST_EXTRA_KERNELS their KERNELS entries
