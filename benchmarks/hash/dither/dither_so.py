@@ -182,6 +182,10 @@ ZSIDE_ENV = "DITHER_SO_ZSIDE"
 # that commit to have read the stage, run beside the trees; a capture's step keeps them on the units stream; the same
 # receipts and roots
 RTSIDE_ENV = "DITHER_SO_RTSIDE"
+# "k" (1 <= k <= D - 2, without -ov, $DITHER_SO_ROOT_LAG or $DITHER_SO_COIN_ASYNC): step s's `after` dispatches step
+# s + k - (D - 1)'s units, k steps before round s + k takes their receipts (1, the default: the next step's round), under
+# a coin k - 1 steps younger; the same order (`check`: coin, units, receipts' round)
+UNITS_LEAD_ENV = "DITHER_SO_UNITS_LEAD"
 ROUNDS_ENV = "DITHER_ROUNDS"            # the window's layout (its round coins), the session's when off the node
 MF_CHUNK = 64                           # manifest rows a pinned host chunk
 # -we's spill (`Spill`): what each step keeps past the ring until its window's draw, so the prover can open a drawn unit
@@ -283,6 +287,11 @@ class SoWindow(DO.Window):
         if self.root_lag and (self.overlap or self.depth < 3):
             raise RuntimeError(f"${ROOT_LAG_ENV}=1 serves -so<D> with D >= 3 and without -ov (its units read coin s "
                                f"D - 2 steps on, and -ov sends its rounds from a thread of its own)")
+        self.units_lead = int(os.environ.get(UNITS_LEAD_ENV) or 1)
+        if not 1 <= self.units_lead <= max(1, self.depth - 2) or (
+                self.units_lead > 1 and (self.overlap or self.root_lag or self.coin_async)):
+            raise RuntimeError(f"${UNITS_LEAD_ENV}={self.units_lead}: 1 <= k <= D - 2 = {self.depth - 2}, and k > 1 "
+                               f"without -ov, ${ROOT_LAG_ENV} or ${COIN_ASYNC_ENV}")
         self.lag: dict | None = None
         self.lag_root = torch.empty(8, dtype=torch.int64).pin_memory() if self.root_lag else None
         self.lag_ybad: torch.Tensor | None = None
@@ -824,7 +833,7 @@ class SoWindow(DO.Window):
                 self.caps[prev].update(next_leaves=leaves)
         units_wait = self.ev_w[0].elapsed_time(self.ev_w[1]) if waited and lag is None else None
         self.phase("coin_wait")
-        ju = s + 1 - d
+        ju = s + self.units_lead - d
         t_wait = t_coin = t_disp = time.perf_counter()
         if ju in self.stashed:
             if self.coin_async and s != self.end_at and self.pipe.opening(self.ix(ju), wait=False) is None:
@@ -938,7 +947,8 @@ class SoWindow(DO.Window):
         lagn, self.lag_n = self.lag_n, 0
         sent = list(pipe.roots)
         doc["salt"] = "round (the step's own coin)"
-        doc["so"] = {"order": ORDER, "depth": self.depth, "units_lag_steps": self.depth - 2,
+        doc["so"] = {"order": ORDER, "depth": self.depth, "units_lag_steps": self.depth - 1 - self.units_lead,
+                     "units_lead_steps": self.units_lead,
                      "receipts_round_lag": self.depth - 1, "a_tables": "once a step (not ruled in)" if self.a_once
                      else ("a/<K>@<s> once a step after the forward (DITHER_A_STEP: CA's 23 Oct ruling, core's form "
                            "pending)" if self.a_step else "per call, in the forward"),
