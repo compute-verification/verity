@@ -6,6 +6,7 @@
 #
 #   benchmarks/remote_session/gate_run.sh [--dry-run] PERIOD    # check, probe, launch the prover, fire
 #   benchmarks/remote_session/gate_run.sh probe PERIOD          # step 2 alone, for real: are the hosts pinned at COMMIT?
+#   benchmarks/remote_session/gate_run.sh prover PERIOD         # step 3 alone, ahead of a repin; then fire uses it
 #   benchmarks/remote_session/gate_run.sh whatif PERIOD         # once fire has ended: gate_whatif.sh over its records
 #
 #   1. checkpoint  checkpoint.sh with CHECK_ONLY=1 on PROVER_NODE: the pinned checkpoint's files against core's pin.
@@ -31,7 +32,9 @@
 # memory (default 32 GB an engine). LEASE_BY (a UTC time) is when the prover must hold its GPUs, or nothing runs: the
 # prover asks through gate_lease.sh (sent beside) from LEASE_FROM (default now) and gives up a minute before LEASE_BY,
 # and fire opens no period for a lease that began after it. PROVER_RUN names a prover already launched for PERIOD,
-# which step 4 fires against (step 3 launches none). A dry run's ids go to PERIOD.dry.env. --dry-run runs steps 1 and 2
+# which step 4 fires against (step 3 launches none); default the one `prover` recorded in PERIOD.env, which launches
+# step 3 alone, so the prover can take its slot before the hosts are pinned at COMMIT and the probe passes (its tree is
+# recorded as prover_commit). A dry run's ids go to PERIOD.dry.env. --dry-run runs steps 1 and 2
 # (with DRY=1: no request reaches a gate, and GATE_KEY need not exist), prints step 3, and runs step 4 with DRY=1
 # against PROVER_RUN, any run id (default none), whose lease it reads.
 #
@@ -47,8 +50,8 @@ ROOT=$(git -C "$HERE" rev-parse --show-toplevel)
 DRY=
 [ "${1:-}" = --dry-run ] && { DRY=1; shift; }
 VERB=fire
-case ${1:-} in whatif | probe) VERB=$1; shift ;; esac
-PERIOD=${1:?usage: gate_run.sh [--dry-run] PERIOD | gate_run.sh probe PERIOD | gate_run.sh whatif PERIOD}
+case ${1:-} in whatif | probe | prover) VERB=$1; shift ;; esac
+PERIOD=${1:?usage: gate_run.sh [--dry-run] PERIOD | gate_run.sh probe|prover|whatif PERIOD}
 PIN=${PIN:-27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc}
 GATE_ON=${GATE_ON:-vy-nebius-cpu-5}
 PROVER_NODE=${PROVER_NODE:-vy-nebius-2}
@@ -152,8 +155,17 @@ if [ "$VERB" = probe ]; then
 fi
 
 [ -z "${fire:-}" ] || [ -n "$DRY" ] || { echo "$STATE already has fire $fire: name a new PERIOD"; exit 3; }
-[ "$(grep '^COMMIT=' "$STATE" | tail -n 1)" = "COMMIT=$COMMIT" ] || record COMMIT "$COMMIT"
-if [ "$CHECKPOINT" = 0 ]; then
+if [ "$VERB" = prover ]; then
+  [ -z "${prover:-}" ] || { echo "$STATE already has prover $prover: fire uses it, or name a new PERIOD"; exit 3; }
+  [ -z "$DRY" ] || { echo "prover runs for real only"; exit 3; }
+  record prover_commit "$COMMIT"
+elif [ "$(grep '^COMMIT=' "$STATE" | tail -n 1)" != "COMMIT=$COMMIT" ]; then
+  record COMMIT "$COMMIT"
+fi
+[ "$VERB" = prover ] || [ -n "$DRY" ] || PROVER_RUN=${PROVER_RUN:-${prover:-}}
+if [ "$VERB" = prover ]; then
+  :
+elif [ "$CHECKPOINT" = 0 ]; then
   echo "== 1. checkpoint skipped (CHECKPOINT=0): the host's binding still refuses a store that isn't the pin's"
 else
   echo "== 1. checkpoint on $PROVER_NODE"
@@ -161,14 +173,17 @@ else
   launch checkpoint --on "$PROVER_NODE" --cwd source --send "$HERE/checkpoint.sh" \
     --timeout "$((CHECKPOINT_WAIT_S / 60 + 20))m" --wait --env CHECK_ONLY=1 --env "ROLE=$ROLE" -- "${NODE_CMD[@]}" || exit 3
 fi
-echo "== 2. probe on $GATE_ON"
-gate_step probe probe 4 --timeout 10m --wait || exit 3
+if [ "$VERB" != prover ]; then
+  echo "== 2. probe on $GATE_ON"
+  gate_step probe probe 4 --timeout 10m --wait || exit 3
+fi
 echo "== 3. prover on $PROVER_NODE"
 PROVER=(--on "$PROVER_NODE" --cwd source --custody-ttl 12h
   --env ROLE=prover --env "PORT=$PORT" --env SERVE=node --env "PLAN=$PLAN" --env "MODEL=$SNAP"
   --env ENGINE_CPUS=0-23 --env PROVER_CPUS=24-47 --env "ENGINE_ARGS=--step-hz 2 --align-steps --arena-gib 62 --util 0.8"
   --env "NODE_ARGS=--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir $SNAP"
-  --env "VERIFIER_SSH=$VERIFIER_SSH" --env TUNNEL_WAIT_S=1800 --env "GPU_LEASE_WHO=memory-accounting-$PERIOD")
+  --env "VERIFIER_SSH=$VERIFIER_SSH" --env TUNNEL_WAIT_S=1800 --env "GPU_LEASE_WHO=memory-accounting-$PERIOD"
+  --env VLLM_NO_USAGE_STATS=1 --env DO_NOT_TRACK=1)
 LEASE_ARGS=(${LEASE_ON:+--on "$LEASE_ON"} --max-min "$MAXMIN" --mem-gb "$LEASE_MEM_GB")
 if [ -n "$LEASE_BY" ]; then
   by=$(date -u -d "$LEASE_BY" +%s) || { echo "LEASE_BY $LEASE_BY isn't a time"; exit 3; }
@@ -193,6 +208,10 @@ elif [ -n "${PROVER_RUN:-}" ]; then
 else
   launch prover "${PROVER[@]}" || exit 3
   PROVER_RUN=$prover
+fi
+if [ "$VERB" = prover ]; then
+  echo "state: $STATE; once the hosts are pinned at COMMIT: benchmarks/remote_session/gate_run.sh $PERIOD fires against $prover"
+  exit 0
 fi
 echo "== 4. fire on $GATE_ON"
 gate_step fire fire 16 --timeout 8h --custody-ttl 12h --store-read --env "PROVER_RUN=$PROVER_RUN" ${DRY:+--wait} || {
