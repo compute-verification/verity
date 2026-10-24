@@ -15,8 +15,14 @@
 #     --env GPU_LEASE_WHO=kernels-dither-rtx -- bash benchmarks/hash/dither/sbench.sh
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT"
-mkdir -p /workspace/pouw
-S=$(mktemp -d /workspace/pouw/tmp-dither-sbench.XXXXXX); trap 'rm -rf "$S"' EXIT
+# the run's scratch, under SBENCH_SCRATCH_ROOT (/workspace/pouw, else, where that can't be made, as on the CPU nodes,
+# the system's temporary directory)
+SR=${SBENCH_SCRATCH_ROOT:-/workspace/pouw}
+if ! { mkdir -p "$SR" && S=$(mktemp -d "$SR/tmp-dither-sbench.XXXXXX"); } 2>/dev/null; then
+  [ -n "${SBENCH_SCRATCH_ROOT:-}" ] && { echo "sbench: NO_SCRATCH under $SBENCH_SCRATCH_ROOT"; exit 2; }
+  S=$(mktemp -d -t tmp-dither-sbench.XXXXXX) || { echo "sbench: NO_SCRATCH"; exit 2; }
+fi
+trap 'rm -rf "$S"' EXIT
 ROOT=$PWD
 git rev-parse HEAD | tee "$OUT/commit.txt"
 CUDA=${CUDA:-/usr/local/cuda-13.0}
