@@ -23,7 +23,7 @@ from verity_vllm.program.frontend.rules.vllm_dsa import (_DENSE, BF16, DECODE_TH
                                                          _observed_sparse_mla, _open_history, _positions, _rows, _static_float,
                                                          _value)
 from verity_vllm.program.frontend.rules.vllm_iface import iface
-from verity_vllm.program.registry import fa3_split
+from verity.ml.definitions.registry import fa3_split
 
 PREFILL_BACKEND = "vllm.v1.attention.backends.mla.prefill.flash_attn.FlashAttnPrefillBackend"
 
@@ -223,7 +223,7 @@ def _dense_splits(tp, T: int, NH: int, D: int) -> int:
     raises (`fa3_split.check_combine_bound`)."""
     if tp.batch_invariant:
         return 1
-    from verity_vllm.program.kernels import fa3_model
+    from verity.ml.definitions.numerics import fa3_model
     static, dyn = fa3_model.split_plan([T], NH, NH, D, num_sms=int(tp.num_sms), Dv=D)
     if dyn[0] > 1:
         fa3_split.check_combine_bound(static)

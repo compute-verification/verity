@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import ast
+import importlib.util
 import json
 import re
 import subprocess
@@ -22,10 +23,10 @@ import pytest
 
 VLLM = Path(__file__).resolve().parents[2]
 REPO = VLLM.parents[1]
-REG = VLLM / "verity_vllm" / "program" / "registry"
+REG = Path(importlib.util.find_spec("verity.ml.definitions.registry").origin).parent
 FIXTURE = Path(__file__).resolve().parent / "data" / "sampling_split_digests.json"
 TASKS = REPO / "tools" / "verity" / "circuit_check" / "tests" / "data" / "sampling_split_tasks.json"
-PKG = "verity_vllm.program.registry"
+PKG = "verity.ml.definitions.registry"
 #: the catalog, where the layout move put core's Definitions and silicon models
 CATALOG = "verity.ml.circuits"
 
@@ -71,7 +72,7 @@ def family_definitions() -> dict[str, object]:
     import importlib
 
     from verity.ml.circuits.defs import FunctionDefinition
-    from verity_vllm.program.registry.catalog import load
+    from verity.ml.definitions.registry.catalog import load
 
     load()
     mods = {f"{PKG}.{m}" for m in FAMILY_MODULES}
@@ -97,7 +98,7 @@ def _statics(body: str) -> dict:
 
 def resolve(key: str, defs: dict[str, object]):
     """The Definition a spec id names: the registry's binding (`query.call_scope.specialization`), else a family module's own."""
-    from verity_vllm.query.call_scope import specialization
+    from verity.ml.definitions.call_scope import specialization
 
     m = re.fullmatch(r"([^{]+)(?:\{(.*)\})?", key)
     fam, statics = m[1], _statics(m[2] or "")
@@ -112,7 +113,7 @@ def resolve(key: str, defs: dict[str, object]):
 
 
 def pin(key: str, defs: dict[str, object]) -> dict:
-    from verity_vllm.query.word import definition_digest
+    from verity.ml.definitions.word import definition_digest
 
     fn = resolve(key, defs)
     return {"id": fn.id, "digest": definition_digest(fn)}

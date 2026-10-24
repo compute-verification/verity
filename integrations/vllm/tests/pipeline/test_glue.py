@@ -27,7 +27,7 @@ def test_every_marker_names_a_pinned_model_and_both_seeds_are_marked(marks):
     pinned = G.known()
     assert {m for ms in marks.values() for m in ms} <= pinned
     assert {GLM, DSV4} <= {m for ms in marks.values() for m in ms}
-    assert marks["verity_vllm/program/registry/dsa.circuit-check.py"] == marks["verity_vllm/program/registry/dsa.py"] == (GLM,)
+    assert marks["verity/ml/definitions/registry/dsa.circuit-check.py"] == marks["verity/ml/definitions/registry/dsa.py"] == (GLM,)
 
 
 def test_a_models_inventory_joins_its_marked_modules(marks, tmp_path, monkeypatch):
@@ -43,7 +43,7 @@ def test_a_models_inventory_joins_its_marked_modules(marks, tmp_path, monkeypatc
 
     monkeypatch.setenv("HF_HOME", str(tmp_path))
     dsv4 = G.inventory(DSV4, marks, sql=None, fetch=None)
-    assert "verity_vllm/program/registry/mhc.py" in {f["path"] for f in dsv4["files"]}
+    assert "verity/ml/definitions/registry/mhc.py" in {f["path"] for f in dsv4["files"]}
     assert "deepseek-v4-eager-hopper-tp8-v0" in {m["id"] for m in dsv4["capture_maps"]}
     assert dsv4["model_type"] == "deepseek_v4"
     assert generic.structural_refusal(json.loads(DSV4_CONFIG.read_text())) is None

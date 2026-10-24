@@ -36,11 +36,11 @@ from verity_vllm.observe.fold.resolver import (
     Unsupported,
 )
 from verity_vllm.observe.fold.tree import TreeNode
-from verity_vllm.program.registry import dsa
-from verity_vllm.program.registry.boolean_rope import RoPEHeadGptJV2
-from verity_vllm.program.registry.dsa_norm import DsaRMSNorm
-from verity_vllm.program.registry.sparse_mla import SPARSE_MLA_GLM53
-from verity_vllm.program.registry.sparse_mla_split import SparseMlaSplit, launch_num_splits
+from verity.ml.definitions.registry import dsa
+from verity.ml.definitions.registry.boolean_rope import RoPEHeadGptJV2
+from verity.ml.definitions.registry.dsa_norm import DsaRMSNorm
+from verity.ml.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
+from verity.ml.definitions.registry.sparse_mla_split import SparseMlaSplit, launch_num_splits
 
 NORM_KERNEL = "_fused_norm_rope_kernel"
 Q_KERNEL = "_fused_q_kernel"

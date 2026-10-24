@@ -8,7 +8,7 @@ P16[c] * v[c]` in fp32, epilogue `total = (l0 + l2) + (l1 + l3)`, `inv = 1 / tot
 
 NOT claimed: bit-exactness with the FA2 kernel.  The exact model (MUFU.EX2 / MUFU.RCP tables, FTZ on every op, the
 `mma.sync` accumulation model, the FFMA contraction of the rescale with the first lane add) is the numerics lane's
-`fa2_model.cpp` (`verity_vllm/program/kernels/fa2_model.py`) and lane B-sem's `tests/acquire/fa2_attn_oracle.py`; this
+`fa2_model.cpp` (`verity/ml/definitions/numerics/fa2_model.py`) and lane B-sem's `tests/acquire/fa2_attn_oracle.py`; this
 module is a deterministic stand-in with the same VALUE IDENTITIES so that the commitment mechanics can be tested on a laptop.  The stream it produces
 is deterministic on one host (fixed reduction order via `cumsum`), which is all replay-to-open needs here.
 """
@@ -47,7 +47,7 @@ def f32_bit(x: np.floating | float) -> int:
 
 
 def scale_log2(D: int) -> np.float32:
-    """FA2 `set_params_fprop`: `float(softmax_scale) * M_LOG2E` in double, narrowed to fp32 (`b1._scale_log2_bits`)."""
+    """FA2 `set_params_fprop`: `float(softmax_scale) * M_LOG2E` in double, narrowed to fp32 (`b1.scale_log2_bits`)."""
     s = float(np.float32(D ** -0.5))
     return np.float32(s * M_LOG2E)
 

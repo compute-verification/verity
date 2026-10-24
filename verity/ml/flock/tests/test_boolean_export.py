@@ -14,7 +14,7 @@ from verity_flock import gf2
 from verity_flock import ir_lower as IL
 from verity_flock import tail_pieces as TP
 
-pytest.importorskip("verity_vllm.program.registry.prims")
+pytest.importorskip("verity.ml.definitions.registry.prims")
 
 
 def _types(build, name="root", label=None):
@@ -175,7 +175,7 @@ def test_the_modules_file_round_trips():
 
 
 def test_the_gather_matches_the_ir_primitive():
-    from verity_vllm.program.registry import prims as RP
+    from verity.ml.definitions.registry import prims as RP
 
     rng = random.Random(2)
     for V in (1, 2, 3, 64, 128, 1000):

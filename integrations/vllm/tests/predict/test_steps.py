@@ -26,8 +26,8 @@ from verity_vllm.predict.steps import (
     trace_commands,
     trace_dir,
 )
-from verity_vllm.program.registry import io_shell as IO
-from verity_vllm.program.registry.topp_geometry import registered_splits
+from verity.ml.definitions.registry import io_shell as IO
+from verity.ml.definitions.registry.topp_geometry import registered_splits
 
 from verity.core.protocols.certifier import advice as I1
 from verity.ml.circuits.defs import bind

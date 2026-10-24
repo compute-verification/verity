@@ -66,9 +66,9 @@ def const_value(spec: str) -> tuple[int, int] | None:
 
 
 def _registry():
-    """The registry every module loaded (`verity_vllm.program.registry.load`); a module that fails to import is named on stderr (its
+    """The registry every module loaded (`verity.ml.definitions.registry.load`); a module that fails to import is named on stderr (its
     Programs, e.g. Hopper's under Python < 3.12, then fail to decode with that reason)."""
-    from verity_vllm.program.registry.catalog import load
+    from verity.ml.definitions.registry.catalog import load
     reg, errors = load()
     for e in errors:
         print(f"[compare] registry module unavailable ({e}): Programs naming its Definitions will not decode", file=sys.stderr)
@@ -419,7 +419,7 @@ class Prog(PeerReads, PX.PrefixInput):
 
 def load_derived(d: str, label: str, cls: type[Prog] = Prog, compact: bool = False) -> Prog:
     """Derive dir ``d``'s Program as the Match reads it, in word units: a Boolean derive's word Program (`program.boolean.word_descriptor`)."""
-    from verity_vllm.program.boolean import word_descriptor
+    from verity.ml.definitions.boolean import word_descriptor
     desc = json.load(gzip.open(word_descriptor(d)))
     rep = json.load(open(os.path.join(d, "derive-report.json")))
     prov = rep.get("provenance", rep)

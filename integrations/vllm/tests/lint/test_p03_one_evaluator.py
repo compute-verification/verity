@@ -25,7 +25,11 @@ from . import _ratchet as R
 NAME = "p03_one_evaluator"
 RULE = "P3 (one evaluator interface, one challenge derivation)"
 LADDER_MIN = 4
-LADDER_HOMES = ("verity_vllm/program/kernels/",)
+#: program/kernels/, and by name the modules of it that stay in the package when its Definitions move to `verity.ml.definitions`
+LADDER_HOMES = ("verity/ml/definitions/numerics/", "verity_vllm/program/relations.py", "verity_vllm/program/sampling_rng.py",
+                "verity_vllm/program/libdevice_sampling.py", "verity_vllm/program/rmsnorm_fused_sweep.py",
+                "verity_vllm/program/gemm_target_correspondence.py", "verity_vllm/program/compiled_relations.py",
+                "verity_vllm/program/compiled_norm_literal.py")
 FAMILY = re.compile(r"^[A-Z][A-Za-z0-9]*(?:_v[0-9]+)?$")
 RNG_OWNERS: frozenset[str] = frozenset({"verity_vllm/commit/challenge.py"})
 RNG_CALLS = frozenset({"random.Random", "random.SystemRandom", "numpy.random.default_rng", "numpy.random.RandomState",
@@ -146,8 +150,8 @@ def test_detectors_on_examples() -> None:
     )
     got = {(v.kind, v.detail) for v in file_violations(bad, "verity_vllm/check/x.py")}
     assert got == {("if-ladder", "fam"), ("rng", "numpy.random.default_rng"), ("rng", "random.Random")}, got
-    assert file_violations(bad, "verity_vllm/program/kernels/x.py") == [
-        v for v in file_violations(bad, "verity_vllm/program/kernels/x.py") if v.kind == "rng"]
+    assert file_violations(bad, "verity_vllm/program/relations.py") == [
+        v for v in file_violations(bad, "verity_vllm/program/relations.py") if v.kind == "rng"]
     siblings = "def g(family):\n" + "".join(f"    if family == 'F{i}_v1':\n        return {i}\n" for i in range(LADDER_MIN))
     assert [(v.kind, v.symbol, v.detail) for v in file_violations(siblings, "verity_vllm/check/x.py")] == [
         ("if-ladder", "g", "family")]

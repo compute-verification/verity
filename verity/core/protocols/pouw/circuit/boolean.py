@@ -32,9 +32,7 @@ builder itself (``.build``), for the word primitive's piece and for an activatio
   every AND that doesn't read F's sign: on sm_120 2,493 ANDs where two atom calls and casts are 20,062 (1,806 against
   15,230 on the H100).
 
-* `f32_sqrt_rn`: the significand normalized, the exponent made even by doubling it, and a digit-by-digit root (`isqrt`) of
-  the 50-bit radicand to 25 bits; the last bit rounds, since no square root of a float lies halfway between two (the
-  radicand is even, so its root is no odd integer).  Every root of a positive finite word is a normal word.
+* `f32_sqrt_rn`: `verity.ml.circuits.ops.boolean.sqrt`'s (a digit-by-digit root of the normalized significand).
 * `e_tilde`: the significands' 2 x 4-bit product, normalized, and the exponent fields' sum; the product's sign or-ed with E's.
 * `sq_acc`, `sq_ge`: m² (a squarer, every cross product once) shifted by 2 · max(e, 1) (`words.sq300`).  `sq_ge` never
   builds the 558-bit square: m² has 48 bits, so its `up48` encoding is exact, m² shifted left by min(2 · max(e, 1), its
@@ -57,7 +55,8 @@ from verity.ml.circuits.types import Array
 from verity.ml.circuits.silicon import fp
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.boolean import scalar as BS
-from verity.ml.circuits.boolean.forms import (NOT, ONE, OR, ZERO, add, and_reduce, compress_columns, const_bits, lzc, multiply, mux,
+from verity.ml.circuits.ops.boolean.sqrt import f32_sqrt_rn, isqrt
+from verity.ml.circuits.boolean.forms import (NOT, OR, ZERO, add, and_reduce, compress_columns, const_bits, lzc, multiply, mux,
                                      or_reduce, shl_window, sub)
 from verity.ml.circuits.boolean.trace import definition
 
@@ -73,37 +72,6 @@ F32 = U32 = Array(32, BIT)
 BF16, E2M1, U8 = Array(16, BIT), Array(4, BIT), Array(8, BIT)
 SQ, SQ48 = Array(576, BIT), Array(64, BIT)
 U4, CODES, MASKED = Array(4, BIT), Array(W.WINDOW, U8), Array(W.MASKED.w, BIT)
-_NAN_PTX = 0x7FFFFFFF
-
-
-def isqrt(C, n):
-    """⌊√n⌋ of an unsigned word of even width (LSB first), half as wide: one trial subtraction per root bit."""
-    rem, root = [], []
-    for i in range(len(n) // 2 - 1, -1, -1):
-        rem = [n[2 * i], n[2 * i + 1]] + rem
-        trial = [ONE, ZERO] + root
-        w = max(len(rem), len(trial))
-        d, borrow = sub(C, rem, trial, w)
-        bit = NOT(borrow)
-        rem = mux(C, bit, d, rem + [ZERO] * (w - len(rem)))[:len(root) + 2]
-        root = [bit] + root
-    return root
-
-
-def f32_sqrt_rn(C, a):
-    """``PouwF32SqrtRn_v1``: sqrt.rn.f32, √±0 = ±0, √+inf = +inf, a NaN or a negative nonzero operand 0x7FFFFFFF."""
-    A = fp.unpack(C, a)
-    _az, lz = lzc(C, [ZERO] * 8 + A.sig)
-    sig = fp.shl(C, A.sig, lz)                                          # 1.f, the top bit set
-    x = sub(C, add(C, A.e_eff, const_bits(127, 9), width=9), lz, 9)[0]  # e + 254 for the unbiased exponent e
-    m = mux(C, x[0], [ZERO] + sig, sig + [ZERO])                        # e odd: 2 · 1.f and e - 1
-    r = isqrt(C, [ZERO] * 25 + m)                                       # 25 bits, the top one set
-    word = add(C, r[1:24] + x[1:9], [r[0]], width=31) + [ZERO]          # exponent field ⌊e / 2⌋ + 127
-    keep = OR(C, A.zero, C.AND(A.inf, NOT(A.s)))
-    nan = C.AND(NOT(keep), OR(C, A.e_max, A.s))
-    return mux(C, nan, const_bits(_NAN_PTX, 32), mux(C, keep, list(a), word))
-
-
 def e_tilde(C, e, ae):
     """``PouwETilde_v1``: bf16(E · a_E · 2^-4) exactly, its sign or-ed with E's; 0x7FFF for an E4M3 NaN a_E."""
     ee_nz = OR(C, e[1], e[2])

@@ -23,7 +23,7 @@ def check_definition(fn, opts, *, memo, pins, as_call=None, **kw):
     return {"failures": F.failures, "warnings": F.warnings, "realizations": corr["realizations"]}
 """
 
-#: a kernel module of the kind `verity_vllm.program.kernels.rows` is: imported with the registries (`load_registries`), before
+#: a kernel module of the kind `verity.ml.definitions.numerics.rows` is: imported with the registries (`load_registries`), before
 #: any check, registering kernels for Definitions defined elsewhere
 KERN = """
 import numpy as np

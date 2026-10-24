@@ -1,5 +1,5 @@
 """The exact-int8 profile's numerics on bits: builders over `forms` for the f32 / f64 steps of vLLM's int8-exact linear and LUT
-attention (`verity_vllm.program.registry.int8_exact`).  Their Boolean Definitions are `verity_vllm.program.registry.boolean_int8`'s,
+attention (`verity.ml.definitions.registry.int8_exact`).  Their Boolean Definitions are `verity.ml.definitions.registry.boolean_int8`'s,
 since their word primitives are vLLM's and a Boolean Definition holds its word.
 
     f32_rint(C, x)              `F32Rint_v1` (np.rint on f32): ties to even, the sign kept, an sNaN quieted, inf and a qNaN

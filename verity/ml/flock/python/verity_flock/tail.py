@@ -326,7 +326,7 @@ class Tail:
 def _fold_constant_mufu(prog: list) -> list:
     """A MUFU operation on constants is a constant (its value from the IR primitive's own evaluator, as the lowering does for
     every constant gate): no lookup slot for it."""
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
 
     const: dict[int, int] = {}
     out = []

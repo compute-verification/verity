@@ -11,7 +11,7 @@ from collections import Counter
 import pytest
 
 from verity_vllm.pipeline import serving_view as SV
-from verity_vllm.query import word as W
+from verity.ml.definitions import word as W
 from verity_vllm.query.program_view import spec_base, spec_statics
 from tests.check.test_sampled_replay import H, T, _program
 

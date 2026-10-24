@@ -65,6 +65,8 @@ LEAF_MODULES = frozenset(p.removesuffix(".py").replace("/", ".") for p in PATCH_
 def _package(m: str) -> str:
     if m in LEAF_MODULES:
         return _short(m)          # imports nothing from the package (test_leaf_modules_import_nothing): closes no cycle
+    if I.in_group(m, ("verity.ml.definitions",)):
+        return "program"          # moved from program/, and held to its package cycles as they stood
     parts = m.split(".")
     return parts[1] if len(parts) > 1 else parts[0]
 

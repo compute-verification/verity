@@ -3,7 +3,7 @@ items) rows, the comparator's input, streamed to a gzip file.  The rows and the 
 `json.dumps({**head, "rows": list(_instance_rows(program))})`, and the Build writes a word Program's from its logs
 (`write_program_instances`), not row dict by row dict.
 
-A Boolean Program that names its word Program (`program.boolean.derived`: σ-checked node by node, so every Call, node index and
+A Boolean Program that names its word Program (`program.frontend.boolean.derived`: σ-checked node by node, so every Call, node index and
 word leaf is the word Program's) is written through that link: row k is word node k -- the word Definition its Boolean Definition
 computes (`verity.ml.circuits.boolean.trace.word_of`, checked against the word node), its operand runs over word leaves, the word
 parameters -- with ``bits``, the Boolean Definition the Call is of.  The header says so (``ir: "boolean"``) and keeps the Boolean

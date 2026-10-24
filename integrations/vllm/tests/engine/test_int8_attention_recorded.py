@@ -28,7 +28,7 @@ from verity_vllm.observe.events import Note, RunHeader, ViewDesc
 from verity_vllm.observe.fold.resolve_log import collect_roots
 from verity_vllm.observe.fold.resolver import Compute, Const, Group, spec_label
 from verity_vllm.observe.log import read_log, split_steps
-from verity_vllm.program.kernels.int8_rows import ROWS
+from verity.ml.definitions.numerics.int8_rows import ROWS
 from verity_vllm.query.manifest import format as RM
 
 FIXTURE = Path(__file__).parent / "fixtures" / "llama31_8b_int8_attn_l0.jsonl.gz"

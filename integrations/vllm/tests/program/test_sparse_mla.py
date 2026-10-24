@@ -14,11 +14,11 @@ from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation.reference import evaluate
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.boolean import trace as TR
-from verity_vllm.program import boolean as SW
-from verity_vllm.program.registry import b1, hopper
-from verity_vllm.program.registry import boolean_sparse_mla as BM
-from verity_vllm.program.registry import fa3_check_inf as F3
-from verity_vllm.program.registry import sparse_mla as M
+from verity.ml.definitions import boolean as SW
+from verity.ml.definitions.registry import b1, hopper
+from verity.ml.definitions.registry import boolean_sparse_mla as BM
+from verity.ml.definitions.registry import fa3_check_inf as F3
+from verity.ml.definitions.registry import sparse_mla as M
 from tests.program.test_boolean_fp8 import _flat, _inputs
 
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
@@ -59,7 +59,7 @@ def test_the_head_is_fa3s_decode_head_where_it_reduces(T: int) -> None:
     """At the scale (DR + DV)^-0.5 the sparse head is `AttentionHead_v4` over the rotated rows, word for word: one block or
     several, the first visited one partial and zero-padded or full."""
     DR, DV, BN = 16, 16, 16
-    assert M.scale_log2_bits((DR + DV) ** -0.5) == b1._scale_log2_bits(DR + DV)
+    assert M.scale_log2_bits((DR + DV) ** -0.5) == b1.scale_log2_bits(DR + DV)
     qn, qr, kv = _case(T, T, DR, DV)
     assert np.array_equal(_run_head(T, DR, DV, BN, (DR + DV) ** -0.5, qn, qr, kv), _dense_fa3(T, DR, DV, BN, qn, qr, kv))
 

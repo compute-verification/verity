@@ -30,11 +30,11 @@ from verity_vllm.program.frontend.rules.common import call_args, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile, launch_sequences_of
 from verity_vllm.program.frontend.rules.vllm_dsa import _missing, _positions, _rows, _static_float, _table, _value
 from verity_vllm.program.frontend.rules.vllm_iface import iface, targets_for
-from verity_vllm.program.kernels.flashmla_twin import num_sm_parts, request_splits, sched_meta
-from verity_vllm.program.registry import dsv4_compressor as C
-from verity_vllm.program.registry import dsv4_indexer as I
-from verity_vllm.program.registry import dsv4_qnorm_insert as Q
-from verity_vllm.program.registry.flashmla import FLASHMLA_DSV4
+from verity.ml.definitions.numerics.flashmla_twin import num_sm_parts, request_splits, sched_meta
+from verity.ml.definitions.registry import dsv4_compressor as C
+from verity.ml.definitions.registry import dsv4_indexer as I
+from verity.ml.definitions.registry import dsv4_qnorm_insert as Q
+from verity.ml.definitions.registry.flashmla import FLASHMLA_DSV4
 
 __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 

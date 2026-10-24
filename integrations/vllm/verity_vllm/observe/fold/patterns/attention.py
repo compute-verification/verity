@@ -7,7 +7,7 @@ import dataclasses
 import math
 from dataclasses import dataclass
 
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import GeometryError, as_slot_rows, rows_operand
@@ -187,7 +187,7 @@ class AttentionScope:
                                                  scale_input=registered)
             except _targets().UnregisteredTarget as e:
                 return unsupported(node, f"target has no registered attention binding: {e}")
-            scale = (Supplied("registration", f"scale_log2_d{D}", 32, b1._scale_log2_bits(D)),) if registered else ()
+            scale = (Supplied("registration", f"scale_log2_d{D}", 32, b1.scale_log2_bits(D)),) if registered else ()
             computes.append(Compute(spec, len(rows),
                                     (rows_operand(q, rows), GatherMany(kcs, slots), GatherMany(vcs, slots)) + scale,
                                     (rows_operand(out, rows),), (), hint=hint_of(node, str(layer) if isinstance(layer, str) else "attn"),

@@ -1,6 +1,6 @@
 """A Boolean Program's manifest is its word Program's, apart from the Program digest it records.
 
-`TargetProfile.ir = "boolean"` derives the word Program and lifts it to bits (`program.boolean.derived`), which keeps every Call,
+`TargetProfile.ir = "boolean"` derives the word Program and lifts it to bits (`program.frontend.boolean.derived`), which keeps every Call,
 node index and word leaf.  The Build writes the Boolean Program's instance sequence through each Call's word link
 (`pipeline.build_instances`: the word Definition `trace.word_of` names, checked against the word node, with the Boolean Definition
 as the row's `bits`), so `ProgramView`, the population, the protocol declarations (`SAMPLING_EVENTS`, ...) and the word check read
@@ -26,8 +26,8 @@ from verity_vllm.check.match import program_compare as PC  # noqa: E402
 from verity_vllm.pipeline import components as CO, manifest as MF  # noqa: E402
 from verity_vllm.pipeline.build import _spec_histogram  # noqa: E402
 from verity_vllm.pipeline.build_instances import write_instances  # noqa: E402
-from verity_vllm.program import boolean as BB  # noqa: E402
-from verity_vllm.program.registry import b1  # noqa: E402
+from verity.ml.definitions import boolean as BB  # noqa: E402
+from verity.ml.definitions.registry import b1  # noqa: E402
 from verity_vllm.query.program_view import from_instances  # noqa: E402
 from verity_vllm.query.required import SAMPLING_EVENTS, request_manifest  # noqa: E402
 
@@ -55,6 +55,7 @@ def _write(d: Path, rep) -> str:
 @pytest.fixture(scope="module")
 def row(tmp_path_factory):
     from verity_vllm.program.frontend import derive_examples as ex
+    from verity_vllm.program.frontend.boolean import derived
     from verity_vllm.program.frontend.derive import derive_report
 
     with torch.device("meta"):
@@ -62,7 +63,7 @@ def row(tmp_path_factory):
     word = derive_report(m, (torch.empty(3, dtype=torch.int32, device="meta"),), mode="profile", profile="b1-eager", config=C,
                          name="Serve", registered_values=True)
     assert word.ok, word.unsupported
-    bits = BB.derived(word)
+    bits = derived(word)
     assert bits.ok, bits.unsupported
     dirs, digests = {}, {}
     for ir, rep in (("word", word), ("boolean", bits)):
