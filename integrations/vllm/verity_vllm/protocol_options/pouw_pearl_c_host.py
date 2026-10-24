@@ -13,7 +13,7 @@ from typing import Any
 
 from verity.ml.commitments import RangeIndexedDomain
 from verity.ml.commitments.merkle import domain_message
-from verity.core.protocols.pouw.audit import HM96, activation_binding, rows_domain
+from verity.core.protocols.pouw.audit import HM96, activation_binding, hm96_kernel_constants, rows_domain
 
 #: the pinned ring's key slots (each call's dom_a ‖ unit, 168 bytes)
 UPLOAD_SLOTS = 1024
@@ -40,6 +40,22 @@ def _put(t: Any, data: bytes) -> None:
     import torch
     host = torch.frombuffer(bytearray(data), dtype=torch.uint8)
     t[:len(data)].copy_(host.pin_memory() if t.is_cuda else host, non_blocking=t.is_cuda)
+
+
+def _constants(scheme: Any, device: Any, salt_key: bytes | None) -> Any:
+    """The pipeline's constant keys on the device: the prover's hm96 salt key and, from byte 256,
+    `audit.hm96_kernel_constants`."""
+    if salt_key is None or len(salt_key) != 32:
+        raise ValueError(f"{scheme.name}: -h3's trees take the prover's 32-byte hm96 salt key")
+    consts = hm96_kernel_constants()
+    t = _zeros(256 + len(consts), device)
+    _put(t, salt_key.ljust(256, b"\0") + consts)
+    return t
+
+
+def _constant_keys(t: Any) -> dict[str, int]:
+    p = t.data_ptr()
+    return {"salt_key": p, "hm": p + 256}
 
 
 class _TorchStream:

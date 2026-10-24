@@ -45,9 +45,8 @@ The per-call host work is kept small (the decode profile, research store ``inter
 the keys by native SHA-512 (`_Keys`, byte for byte `call_keys`), their upload through a pinned ring (`_Uploads`), and after a
 call's first step a device-to-device copy from the key table (`_KeyTable`); the records' screen as one fused kernel
 (`screen_into`, Triton, its compiled kernel launched directly after the first launch; `screen` where Triton can't run); A's
-roots copied into a pass buffer by one driver copy; a shape's filler rows zeroed only where an earlier call wrote them; and
-the stream read from torch's raw accessor.  The key table and the filler rows' bookkeeping hold only while no call has run
-under graphs (`eager_only`): a captured forward's replays write a shape's rows and keys without this host seeing them.
+roots copied into a pass buffer by one driver copy; filler rows zeroed only where an earlier call wrote them; the stream from
+torch's raw accessor.  The key table and filler bookkeeping hold while no call has run under graphs (`eager_only`).
 
 The schedule (`verity.core.protocols.pouw.serving.Schedule`, by name from `SCHEDULES`; the decode plan's step 2,
 bc-b139c29c's) places each call's step groups (`STEP_GROUPS`) on lanes.  Under ``deferred``, the measured one, the call's tile
@@ -72,7 +71,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.pouw.audit import Epoch, Workload, hm96_kernel_constants, rows_domain, transcript_domain
+from verity.core.protocols.pouw.audit import Epoch, Workload, rows_domain, transcript_domain
 from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening
 from verity.core.protocols.pouw.protocol import Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c as C
@@ -91,6 +90,8 @@ from verity.core.protocols.pouw.serving import (
 from .pouw_pearl_c_graphs import GRAPH_ROWS, SLOT_BYTES, GraphCalls, _Graph
 from .pouw_pearl_c_host import (
     _bytes,
+    _constant_keys,
+    _constants,
     _Keys,
     _KeyTable,
     _Lane,
@@ -285,22 +286,6 @@ def _weight_binding(w: int) -> bytes:
     return weight_binding(w)
 
 
-def _constants(scheme: C.PearlC, device: Any, salt_key: bytes | None) -> Any:
-    """The pipeline's constant keys on the device: the prover's hm96 salt key and, from byte 256,
-    `audit.hm96_kernel_constants`."""
-    if salt_key is None or len(salt_key) != 32:
-        raise ValueError(f"{scheme.name}: -h3's trees take the prover's 32-byte hm96 salt key")
-    consts = hm96_kernel_constants()
-    t = _zeros(256 + len(consts), device)
-    _put(t, salt_key.ljust(256, b"\0") + consts)
-    return t
-
-
-def _constant_keys(t: Any) -> dict[str, int]:
-    p = t.data_ptr()
-    return {"salt_key": p, "hm": p + 256}
-
-
 def _pipeline(kernel: Kernel, m: int, n: int, k: int, bufs: dict[str, int], xb: int, keys: dict[str, int], xa: int = 0,
               m_real: int | None = None, *, variant: str, weight: int = 0) -> Any:
     full = {"dom_a": 0, "dom_b": 0, "dom_t": 0, "line_b": 0, "unit": 0, "salt_key": 0, "hm": 0, **keys}
@@ -363,9 +348,7 @@ class PearlCDeviceRun(GraphCalls):
         self.keys, self.uploads = _Keys(kernel.fixture, salt, self.tree_hash), _Uploads(self.device)
         self.copy = kernel.dev.copy_async if self.device.type == "cuda" else memmove
         self.key_table = _KeyTable(self.keys, self.uploads, self.device, self.copy)
-        #: no call has run under graphs yet, so no captured forward replays writes this host doesn't see: until one does, each
-        #: shape's filler rows are zeroed only where an earlier call wrote (`_Shape.dirty`), and keys come from the key table
-        self.eager_only = True
+        self.eager_only = True              # no call has run under graphs, whose replays write rows and keys unseen
         self.fused_screen = self.device.type == "cuda"
         self.weights = {w: self._weight_side(w, t) for w, t in weights.items()}
         if self.graphs:
