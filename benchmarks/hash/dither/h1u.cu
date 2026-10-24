@@ -2729,13 +2729,13 @@ __device__ __forceinline__ u32 jswz_unit(const UCallR& c, u32 w, u32 M) {
   if (!H1U_JSWZ) return w;
   const u32 ncb = c.N / 32, band = (u32)H1U_JSWZ * ncb, r0 = w / band * (u32)H1U_JSWZ, r = w % band;
   const u32 rn = min((u32)H1U_JSWZ, M / 32 - r0);
-  if constexpr (H1U_JSWZQ != 0) {
-    constexpr u32 W = WARPS, PR = H1U_JSWZQ, PC = W / PR;
-    if (rn % PR == 0 && ncb % PC == 0) {
-      const u32 q = r % W, p = r / W, hp = rn / PR;
-      return (r0 + PR * (p % hp) + q % PR) * ncb + PC * (p / hp) + q / PR;
-    }
+#if H1U_JSWZQ
+  constexpr u32 W = WARPS, PR = H1U_JSWZQ, PC = W / PR;
+  if (rn % PR == 0 && ncb % PC == 0) {
+    const u32 q = r % W, p = r / W, hp = rn / PR;
+    return (r0 + PR * (p % hp) + q % PR) * ncb + PC * (p / hp) + q / PR;
   }
+#endif
   return (r0 + r % rn) * ncb + r / rn;
 }
 
