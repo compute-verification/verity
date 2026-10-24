@@ -940,8 +940,11 @@ def main(argv=None) -> int:
                          "(each --serve-run audit one of the served run's Commit windows)")
     ap.add_argument("--prove-path-registered", metavar="FILE",
                     help="who registered each --serve-run audit's window advice, by window: {K: {by, registration, "
-                         "first_draw, ref}}, registration the verity-vllm advice directory it was registered in when "
-                         "not the report's own, first_draw ISO 8601 UTC; when is read off the registration")
+                         "record, first_draw, ref}}, registration the verity-vllm advice directory it was registered in "
+                         "when not the report's own, record the serving run's own run directory, first_draw ISO 8601 "
+                         "UTC; when is read off the record's out/advice_windows.jsonl stamp, else the registration's "
+                         "file time: at serve time if before its draw and no later than the next window's close (the "
+                         "session's end, per the record, for its last window)")
     ap.add_argument("--ids", metavar="FILE", help="each request's sampled ids by its advice id (ADVICE-SRC's "
                                                   "requests.jsonl: user, output_ids), for the I/O tie's verdict on the "
                                                   "negatives it reads, and on the advice profile on every run in place "

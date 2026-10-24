@@ -44,12 +44,37 @@ GPU) instead of `--from`. Every option `e2e.py` doesn't take goes to `certifier_
 
 ## The chain: varied traffic, the advice, the prove path and the negatives
 
-**G-A's report of record: r20261024-190804-7e4c.** It is OK with nothing pending, and every row is from vllm's sealed
-Llama-3.2-1B serving run r20261024-141912-8eb1. It re-makes GA-CLOSER's closer r20261024-150521-0551 (ded16ce22b,
-`--probes 40`, against vy-nebius-1:18084) from that run's outputs, on this tree (ac3067386b) with #3566's `io_tie`
-merged, as r20261024-163242-7e60 did on #3778's tree before the report held its prove path's advice by content. It
-reads 8eb1's records, whose sha256 equal 0551's copy, from a copy of the inputs on the node that holds them
-(r20261024-190732-a08f, each file checked against its sha256 there), and drives no endpoint.
+**G-A's live report of record: r20261024-201847-5246.** It is OK with nothing pending, and every row is from vllm's
+live Llama-3.2-1B serving run r20261024-191722-ddad, driven while it served: the live run r20261024-192612-4460
+(honest, late, extra, drop and token, `--probes 40`, on vy-nebius-cpu-1's network slot n3, against vy-nebius-1:18084
+through the nodes' ssh forward). It re-makes 4460's report from 4460's outputs on 4460's tree with this PR merged
+(42bd54226a), its prove path the `--serve-run` audits of two of the honest run's own Commit windows.
+r20261024-205806-6408 rebuilt it from the same records at `next` (250fa54c2b), and every verdict is 5246's. N2's
+advised verifier refuses this run's honest traffic: vLLM admitted two prefill pairs out of certified release order
+(VLLM-89); a release-order rerun follows. 5246 lists N2's verdicts as not run, so its OK claims nothing about them.
+
+- e2e: honest accepted (40 requests, 597 tokens, 38 ending at max_tokens and 2 at EOS); late, extra, drop and token
+  refused by their own codes. The advice is ddad's Commit windows w37-w66: 30 windows, 40 requests, 528 steps, every
+  window opened, bound and rebuilt; 23,800 v0 bits (3,953 derived, 2,406 shaped, 332 forced).
+- I/O tie: honest accepted (597 outputs placed, frames held on all 17 windows at both ends); late, drop and token
+  refused; extra not applicable, refused by its own code.
+- prove path: r20261024-201458-07b3's `--serve-run` audits of ddad's w46 and w54, each on vllm's own registration of
+  the window (its advice loop, `verity-vllm advice --window K`), adopted in place of the fixed workload. Each honest
+  arm was accepted (2 of 4 units drawn) and each forged arm refused by Lean; each arm's root is the registered one,
+  names the endpoint's Commit of its window and opens to the report's advice of it (`chain.held_to`). The
+  registrations' file times, kept to the nanosecond by the lane's copy of ddad
+  (art:17021c17419213ef07eb9de8ac3af3c71187f9a8fa2fccafbac47cf523b8baad), put w46 3.5 s after its window closed and
+  2.3 s before the next closed, and w54 2.8 s after and 0.4 s before, both before their draws: at serve time. ddad's
+  own record stamps them to the second (its `out/advice_windows.jsonl`, `record` below): w46 then still reads at
+  serve time (no later than 3.9 s after its close, at least 1.9 s before the next), and w54 unknown, since its stamp
+  19:38:16Z puts it up to 0.3 s after the next window's close at 19:38:16.746Z.
+
+**The earlier report of record: r20261024-163242-7e60**, from vllm's sealed Llama-3.2-1B serving run
+r20261024-141912-8eb1, rebuilt as r20261024-190804-7e4c, OK with nothing pending. 7e4c re-makes GA-CLOSER's closer
+r20261024-150521-0551 (ded16ce22b, `--probes 40`, against vy-nebius-1:18084) from that run's outputs, on #3841's tree
+(ac3067386b) with #3566's `io_tie` merged, as 7e60 did on #3778's tree before the report held its prove path's advice
+by content. It reads 8eb1's records, whose sha256 equal 0551's copy, from a copy of the inputs on the node that holds
+them (r20261024-190732-a08f, each file checked against its sha256 there), and drives no endpoint.
 
 - e2e: honest accepted (40 requests, 597 tokens, 38 ending at max_tokens and 2 at EOS); late, extra and drop refused
   by their own codes. The advice is 8eb1's Commit windows w191-w220: 30 windows, 40 requests, 527 steps, every window
@@ -69,8 +94,10 @@ reads 8eb1's records, whose sha256 equal 0551's copy, from a copy of the inputs 
   the content check apart in its `out/advice-check.json`). Read off the registrations' own times, both were
   registered after serving: w212's by the lane from the run's records (r20261024-153328-5776), 25.1 min after its
   Commit window closed and 14.2 min before the first draw, and w5's by vllm during the run, 11.3 s after its Commit
-  window closed, which 7e60's job stated as at serve time (r20261024-173746-1bb0, on the files in place; 7e4c's copies
-  kept their times to the second, so it reads 25.0 min and 10.4 s).
+  window closed and 8.1 s after the next one (w6) closed, which 7e60's job stated as at serve time
+  (r20261024-173746-1bb0, on the files in place; 7e4c's copies kept their times to the second, so it reads 25.0 min
+  and 10.4 s). Both are after serving under the rule below as well, since each was registered after the next window
+  closed.
 
 The plan's target (G-A) is one command from serving to the Lean verdict: serve, certify, advice, compile, sampled ZKPs,
 Lean, with the advice's bits per link-window. `chain.py` holds the stages after N2 and the proofs, each on what exists now:
@@ -140,11 +167,21 @@ verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic 
   compiler, in the `verity-vllm advice` directory `--prove-path-registered` names. That registration's opening must
   open the root to the report's advice of the window (`chain.opens`). The v0 bit count is never enough, and an arm not
   held so makes the report NOT OK, whether its prove path binds or not. `--prove-path-registered FILE` says, by window,
-  who registered each audited window's advice, where when it isn't the report's own, and the arm's first draw
-  (`{K: {by, registration, first_draw, ref}}`). When it was registered is read off the registration itself, never the
-  job: its file's time (a registration has no time field) against the window's close in the endpoint's trace (the
-  first clocked record after the close event, `chain.closes`). A registration after the close reads "after serving".
-  The report shows it, and `stubbed` lists a window registered after serving. Each rank's time is reported per drawn
+  who registered each audited window's advice, where when it isn't the report's own, the serving run's own record (its
+  `research run` directory) and the arm's first draw (`{K: {by, registration, record, first_draw, ref}}`). When it was
+  registered is never the job's to say. It is read off the serving run's record when `record` is given and its advice
+  loop's `out/advice_windows.jsonl` stamps that window's registered root (UTC to the second, written once the
+  registration is in place, so the registration was no later than a second past the stamp, `chain.serve_record`), and
+  otherwise off the registration's file time (a registration has no time field), always against the endpoint's trace
+  (each window's close is the first clocked record after its close event, `chain.closes`). A registration was at
+  serve time when it was registered before its window's draw (every rank's `advice_before_draw`, the verifier's
+  receipt of it before any coin) and no later than the next window's close (the lead's ruling, 24 Oct). The last
+  window in the endpoint's records has no next close there. It is bounded by the session's end (the record's
+  `status.json` `ended_utc`) when the record says the session ended with that window the last its loop logged.
+  A registration reads "after serving" when its draw came first or when both its record's time and its file's are
+  past its bound, and unknown otherwise: no receipt, no bound, or a stamp whose second straddles the bound while the
+  file's time is before it. The report always prints the lag in seconds after its own window's close, and `stubbed`
+  lists every window not read as at serve time. Each rank's time is reported per drawn
   unit, its prover's and Lean's seconds over
   the units its statement proves (PROVE-PATH's `per_unit`, 92e4e50ca5).
 - NEG's registry (`benchmarks/network_traces/negatives.py`'s `suite`) runs on the runs unless `--no-negatives`. Each row
