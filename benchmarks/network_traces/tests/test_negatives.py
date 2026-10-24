@@ -440,22 +440,6 @@ def test_n2_reads_one_release_bucket_a_step_and_the_ingress_frames_beside_the_ad
     assert _n2(a, (0, 3)).received == [0, 3]
 
 
-def _honest_heads(AD, a, T: int, R: int, syncs, own: int = 0) -> list[tuple[list[int], list[int]]]:
-    """Each window's (ingress, egress) counts an honest advised run of `a` (as N2 reads it) certifies: the egress the
-    release of the advice's frames, the ingress the request frames its floor needs by each bucket and the rest in its
-    last."""
-    out = []
-    for w in range(len(a.received)):
-        v = AD.view(a, w, T, R, syncs)
-        ingress, prev = [], 0
-        for t, f in enumerate(v.floor):
-            ingress.append(f - prev + (own if t == 0 else 0))
-            prev = f
-        ingress[-1] += v.received - prev
-        out.append((ingress, AD.derive(v.handed, v.queued, R)))
-    return out
-
-
 def test_n2s_advised_counts_refuse_the_advice_negatives_and_accept_the_step_units():
     """Against N2-ADVICE's `advised` (skipped until it lands), on heads an honest run of the advice certifies: the
     honest advice is accepted; length, missing, extra and release are refused by the advised counts, each well formed;
@@ -465,7 +449,7 @@ def test_n2s_advised_counts_refuse_the_advice_negatives_and_accept_the_step_unit
 
     T, R, RIN, OWN, syncs = 8, 4, 8, 0, [ClockSync(1, Fraction(1))]
     a = _advice()
-    heads = _honest_heads(AD, _n2(a), T, R, syncs)
+    heads = NG.honest_heads(_n2(a), T, R, syncs)
 
     def codes(v) -> list[str]:
         return sorted({c for w, (i, e) in enumerate(heads) for c in NG.advised_codes(v, w, syncs, T, R, RIN, OWN, i, e)})
@@ -477,6 +461,25 @@ def test_n2s_advised_counts_refuse_the_advice_negatives_and_accept_the_step_unit
     v = _n2(a)
     v.release = v.release[:-1]
     assert codes(v) == [f"{NG.ADVISED}.view"]
+
+
+def test_the_advice_suite_makes_each_advice_negative_and_names_n2s_codes_on_it():
+    """`negatives.py advice` on a run's advice, here the stand-in's through I1's own codec (skipped until both I1 and
+    N2-ADVICE are importable): honest accepted, each advice negative valid advice that round-trips, refused by the code
+    it names or, a step-unit negative, accepted by N2."""
+    pytest.importorskip(NG.ADVISED_MODULE)
+    if V is sys.modules[__name__]:
+        pytest.skip(f"{NG.ADVICE_MODULE} (I1) isn't importable")
+    from verity.core.protocols.certifier.schedule import ClockSync
+
+    rows = NG.advice_suite(_advice(), T=8, R=4, syncs=[ClockSync(1, Fraction(1))], ingress_frames={"r0": 2, "r1": 1},
+                           received=[3])
+    assert rows["honest"] == {"bits": V.total_bits(_advice()), "codes": [], "ok": True}
+    made = {k: r for k, r in rows.items() if k != "honest"}
+    assert set(made) == {k for k, n in NG.NEGATIVES.items() if n.tampers == "advice"}
+    assert all(r["ran"] and r["valid"] and r["ok"] for r in made.values()), made
+    assert {k for k, r in made.items() if r["codes"]} == {"advice-length", "advice-missing", "advice-extra",
+                                                           "advice-release"}
 
 
 def test_an_advice_negative_waits_for_its_codec(tmp_path, monkeypatch):

@@ -64,6 +64,7 @@ from verity.core.protocols.certifier.service import LinkWindows  # noqa: E402
 
 FORMAT = "verity-network-negatives/v1"
 ADVICE_MODULE = "verity.core.protocols.certifier.advice"
+ADVISED_MODULE = "verity.core.protocols.certifier.advised"
 SAMPLED = "runner.sampler/sampled_token_ids"
 HEAD = "NetworkHeadCheck_v2"
 SERVED = "NetworkServedCounts_v1"
@@ -539,13 +540,66 @@ def advised_codes(advice, window: int, syncs, T: int, R: int, RIN: int, OWN: int
     `LinkWindows.advised_check` decides it (`advised.view`, then `advised.reference`), on the advice as N2 reads it
     (`n2_advice`): ``.view`` when the advice is malformed or doesn't cover the window, the advised counts' when they
     refuse, else none. Raises ModuleNotFoundError until N2-ADVICE lands."""
-    AD = importlib.import_module("verity.core.protocols.certifier.advised")
+    AD = importlib.import_module(ADVISED_MODULE)
     try:
         v = AD.view(advice, window, T, R, syncs)
     except ValueError:
         return [f"{ADVISED}.view"]
     ok = AD.reference(T, R, RIN, OWN, ingress, egress, v.handed, v.floor, v.queued, v.received)
     return [] if ok else [ADVISED]
+
+
+def honest_heads(view, T: int, R: int, syncs, own: int = 0) -> list[tuple[list[int], list[int]]]:
+    """Each window's (ingress, egress) head counts that an honest advised run of `view` (`n2_advice`) certifies under
+    N2-ADVICE's rule: the egress the FIFO release of the advice's frames at R a bucket, the ingress the request frames
+    its floor needs by each bucket, the rest of the window's in its last bucket."""
+    AD = importlib.import_module(ADVISED_MODULE)
+    out = []
+    for w in range(len(view.received)):
+        v = AD.view(view, w, T, R, syncs)
+        ingress, prev = [], 0
+        for t, f in enumerate(v.floor):
+            ingress.append(f - prev + (own if t == 0 else 0))
+            prev = f
+        ingress[-1] += v.received - prev
+        out.append((ingress, AD.derive(v.handed, v.queued, R)))
+    return out
+
+
+def advice_suite(advice, *, T: int, R: int, syncs, ingress_frames: dict[str, int], received: list[int],
+                 RIN: int | None = None) -> dict[str, dict]:
+    """Every advice negative made from a run's `advice` (I1's): whether it applies to it, whether it's valid advice that
+    round-trips through I1's codec, its bits, and N2-ADVICE's codes (`advised_codes`) on the heads an honest run of the
+    advice certifies (`honest_heads`, with each request's `ingress_frames` and each window's `received`; `RIN` by
+    default their largest ingress count). `ok`: the codes are exactly the one it names, or none for a step-unit
+    negative, which N2 must accept (its check is pending)."""
+    mod = advice_module()
+    if mod is None:
+        raise NotApplicable(f"no advice codec yet: {ADVICE_MODULE} (I1, ADV-SPEC) hasn't landed")
+
+    def codes(view) -> list[str]:
+        return sorted({c for w, (i, e) in enumerate(heads)
+                       for c in advised_codes(view, w, syncs, T, R, RIN, 0, i, e)})
+
+    heads = honest_heads(n2_advice(advice, ingress_frames, received), T, R, syncs)
+    RIN = RIN or max(1, *(c for i, _ in heads for c in i))
+    copies = {f"{k}~extra": v for k, v in ingress_frames.items()}
+    out = {"honest": {"bits": mod.total_bits(advice), "codes": codes(n2_advice(advice, ingress_frames, received))}}
+    out["honest"]["ok"] = out["honest"]["codes"] == []
+    for name, n in NEGATIVES.items():
+        if n.tampers != "advice":
+            continue
+        row: dict[str, Any] = {"code": n.code, "check": n.check, "waits": list(n.waits)}
+        try:
+            b = n.make.edit(advice)
+        except NotApplicable as err:
+            out[name] = row | {"ran": False, "why": str(err)}
+            continue
+        got = codes(n2_advice(b, ingress_frames | copies, received))
+        want = [] if n.code.startswith("StepUnit") else [n.code]
+        out[name] = row | {"ran": True, "valid": mod.decode(mod.encode(b)) == b, "bits": mod.total_bits(b),
+                           "steps": len(b.steps), "outputs": len(b.release), "codes": got, "ok": got == want}
+    return out
 
 
 def n2(run: Path, clock=time.monotonic) -> dict:
@@ -637,7 +691,27 @@ def main(argv=None) -> int:
     j.add_argument("name", choices=list(NEGATIVES))
     for q in (m, x, j):
         q.add_argument("--run", required=True, type=Path)
+    a = sub.add_parser("advice", help="every advice negative of a run's advice, and N2-ADVICE's codes on it (`advice_suite`)")
+    a.add_argument("--advice", required=True, type=Path, help="the run's advice (I1's encode bytes)")
+    a.add_argument("--T", type=int, default=50, help="buckets a window (the advice's release buckets')")
+    a.add_argument("--R", type=int, default=32, help="egress frames a bucket")
+    a.add_argument("--frames", type=int, default=1, help="ingress frames a request")
+    a.add_argument("--delta", type=int, default=0, help="each window's declared sync: δ buckets ...")
+    a.add_argument("--rho", type=int, default=1000, help="... and ρ frames a bucket")
     args = ap.parse_args(argv)
+    if args.command == "advice":
+        mod = advice_module()
+        if mod is None:
+            raise SystemExit(f"no advice codec yet: {ADVICE_MODULE} (I1, ADV-SPEC) hasn't landed")
+        adv = mod.decode(args.advice.read_bytes())
+        windows = max(adv.release, default=0) // args.T + 1
+        frames = {q.id: args.frames for q in adv.requests}
+        rows = advice_suite(adv, T=args.T, R=args.R, syncs=[ClockSync(args.delta, Fraction(args.rho))] * windows,
+                            ingress_frames=frames, received=[sum(frames.values())] + [0] * (windows - 1))
+        print(json.dumps({"format": FORMAT, "advice": str(args.advice), "requests": len(adv.requests),
+                          "steps": len(adv.steps), "outputs": len(adv.release), "windows": windows, "T": args.T,
+                          "R": args.R, "negatives": rows}, indent=1))
+        return 0 if all(r.get("ok") is not False for r in rows.values()) else 1
     if args.command == "table":
         print(table(args.markdown))
         return 0
