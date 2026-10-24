@@ -68,7 +68,8 @@ auditor's registration), and reused by the later windows. Each
 Commit window is also held to core's ROOTS1 steps over its own evidence (`core_verdict`: `pouw_h1_challenger.manifest_reason`,
 `credit._a_link`, `credit._arow`), which it saves for ``--core-from DIR`` on a CPU node. ``--negatives`` then serves the
 window twice more with an honest Commit, H1 handed all-zero A codes or one A row off (`NEGATIVES`), each to be refused at
-``arow``. ``--declare SLOTS,CAP,T,S`` shrinks the fill workload (`declared_of`) so the pure-Python registration fits a run.
+``arow``, and on a MoE (``--role OLMOE_INT8 --int8-exact linears``) once more with one routed expert call's codes zero
+(`EXPERT_NEGATIVE`): the Commit acquires each expert call's rows under its H1 name (`acquire.h1_commit.H1Source`). ``--declare SLOTS,CAP,T,S`` shrinks the fill workload (`declared_of`) so the pure-Python registration fits a run.
 
 ``--handoff SOCK --handoff-state DIR`` (fill, with ``--challenger``) splits the window at its last served step, so the
 GPU is held only while it serves: the serving process records what only it sees (`served_measures`), saves the window,
@@ -528,7 +529,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         print(f"[fill] {name} installed install_s={out['install_s']} rss_gib={rss_gib()}", flush=True)
         if served is not None and served.weights is not None:
             shared[0] = served.weights
-        lie = Hooks(f"roots1-{edit}")
+        lie, ed = Hooks(f"roots1-{edit}"), None
         if edit is not None:
             out["edit"], ed = edit, editor(edit)
             for m in layers:
@@ -557,6 +558,8 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             got = generate_static(eng.llm, prompts[:len(want)], cap)
             end = time.monotonic()
             serving[0] = False
+            if ed is not None and ed.at is not None:
+                out["edited"] = ed.at
             out["gpu"] = gpu_peak()
             out.update(served_measures(got, want, cap, served_steps, t0, end, stamps))
             if served is not None and not a.handoff:
@@ -607,7 +610,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
         if a.negatives:
             doc["negatives"] = {}
-            for edit in NEGATIVES:
+            for edit in negatives_of(layers):
                 got = window(f"commit-{edit}", plain, outdir / f"commit-{edit}", commit=True, edit=edit)
                 doc["negatives"][edit] = {**negative_verdict(got), "window": got}
                 gc.collect()
@@ -618,7 +621,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     if a.commit:
         doc["h1_solo"] = {"skipped": "--commit measures the fill window with and without the Commit"}
         h, c = doc["h1"], doc["h1_commit"]
-        negs = {k: {x: v[x] for x in ("refused", "arow", "roots1")} for k, v in (doc.get("negatives") or {}).items()}
+        negs = {k: {x: v[x] for x in ("refused", "arow", "roots1", "edited")} for k, v in (doc.get("negatives") or {}).items()}
         doc["host"] = host_memory()
         doc["commit"] = {"step_s": {"plain_mean": doc["plain"]["fill"]["step_s"], "h1_decode_median": h["decode_step_s_median"],
                                     "h1_commit_decode_median": c["decode_step_s_median"], "h1_mean": h["serve"]["step_s"],
@@ -629,7 +632,8 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                          "roots1": c.get("roots1"), "core": c.get("core"), "negatives": negs,
                          "committer": c.get("committer"),
                          "ok": bool(c["ok"] and (c.get("core") or {}).get("tied")
-                                    and all(v["refused"] for v in negs.values()) and len(negs) == len(NEGATIVES) * a.negatives)}
+                                    and all(v["refused"] for v in negs.values())
+                                    and len(negs) == len(negatives_of(layers)) * a.negatives)}
         print(f"[fill] commit {json.dumps(doc['commit'], default=str)[:3000]}", flush=True)
     elif a.challenger:
         doc["h1_solo"] = {"skipped": "the challenger serves one session, the 64's window"}
@@ -810,30 +814,48 @@ def local_weights(model: Any, layers: list[Any], rows: int, steps: int, period: 
 #: the windows ``--negatives`` serves with the Commit in the engine, each handing H1 A codes other than the ones the
 #: Commit acquires (`test_pouw_h1_commit`'s edits, here on the served engine)
 NEGATIVES = ("a-zero", "a-row-off")
+#: the window ``--negatives`` adds on a model with routed experts: one expert call's codes all zero
+EXPERT_NEGATIVE = "a-zero-expert"
 #: a window's core evidence for ``--core-from`` (`core_tie`)
 CORE_EVIDENCE = "core_evidence.json.gz"
 
 
+def negatives_of(layers: list[Any]) -> tuple[str, ...]:
+    """The windows ``--negatives`` serves over H1's linears ``layers``: `NEGATIVES`, and `EXPERT_NEGATIVE` when some are
+    routed experts (`pouw_h1_hooks.expert_names`)."""
+    from verity_vllm.protocol_options import pouw_h1_hooks as PHK
+    return NEGATIVES + ((EXPERT_NEGATIVE,) if PHK.expert_names(layers) else ())
+
+
 def editor(kind: str) -> Any:
-    """The codes H1 is handed of the ones the arm quantized: every call's all zero (``a-zero``, the RT4 A = 0 probe), or
-    row 1's first code moved off by one in the first call of two rows or more (``a-row-off``)."""
+    """The codes H1 is handed of the ones the arm quantized: every call's all zero (``a-zero``, the RT4 A = 0 probe),
+    row 1's first code moved off by one in the first call of two rows or more (``a-row-off``), or the first routed
+    expert down call with rows all zero (``a-zero-expert``: its K, the intermediate width, is the experts' alone). The
+    edit's ``at`` names the expert site it zeroed."""
+    from verity_vllm.engine import int8_experts as X
     done = [False]
 
-    def edit(xq: Any) -> Any:
+    def edit(layer: Any, xq: Any) -> Any:
         if kind == "a-zero":
+            return torch.zeros_like(xq)
+        if kind == EXPERT_NEGATIVE:
+            if done[0] or not xq.shape[0] or not isinstance(layer, X.ExpertSite) or layer.projection != X.DOWN:
+                return xq
+            done[0], edit.at = True, layer.name
             return torch.zeros_like(xq)
         if done[0] or xq.shape[0] < 2:
             return xq
         done[0], xq = True, xq.clone()
         xq[1, 0] = 1 if int(xq[1, 0]) != 1 else 2
         return xq
+    edit.at = None
     return edit
 
 
 def edited(orig: Any, edit: Any) -> Any:
     """A layer's ``observe`` (H1's) handed ``edit`` of the arm's codes; the served y and z/y records are the arm's own."""
     def observe(layer: Any, xq: Any, s_a: Any, y: Any, z: Any = None) -> Any:
-        return orig(layer, edit(xq), s_a, y, z)
+        return orig(layer, edit(layer, xq), s_a, y, z)
     return observe
 
 
@@ -896,6 +918,7 @@ def negative_verdict(out: dict[str, Any]) -> dict[str, Any]:
     refused = bool(arow and arow[0] == "arow" and "is not the Commit's" in arow[1] and core.get("manifest") is None
                    and core.get("a_link") is None and r1.get("reason") and r1.get("own_trees"))
     return {"refused": refused, "arow": arow, "roots1": r1.get("reason"), "own_trees": r1.get("own_trees"),
+            "edited": out.get("edited"),
             "manifest": core.get("manifest"), "a_link": core.get("a_link"), "same_tokens": out.get("same_tokens")}
 
 
