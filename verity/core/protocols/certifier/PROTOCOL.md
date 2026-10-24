@@ -829,6 +829,18 @@ D + A·DW, and about 2·width for the idle select and the equality. It also cost
 window costs P steps and one `ReplayLoad`, P + 2 state rows and two window rows, and 3P + 4 reads, each a frame-v3
 path of depth ⌈log2(P + 2)⌉, or 1 for a window row.
 
+**On the corpus** (run `r20261024-091809-297f`): TRACE-CORPUS's 15 sync traces of 1000 requests each, from Llama 3.2
+1B (greedy and seeded) and Llama 3.1 8B int8, each in five engine configurations, cut into the certifier's 60 s
+windows. Each trace is replayed with ENC-REPLAY's scheduler, and `load` and `advance` are walked from the empty rows.
+- On all 15 traces, every state row is the replay's, every front's arrivals are the replay's next, and its bits are
+  the replay's asks. Both circuits match their specifications on the sampled units.
+- A step costs 16,569 ANDs (8B light: R = 19, A = 4, Q = 145) to 80,959 (heavy: R = 256, A = 35, Q = 1000). The
+  queue's front is more than half of that at Q = 1000, which those traces reach because their 1000 requests arrive
+  within one window. A load costs 0.1M to 0.8M ANDs, and a window 3.5e7 to 1.9e8.
+- For scale, ReplayStep_v1 itself is 521,358 ANDs at R = 256.
+- Moving the queue and the decisions in every state row, instead of reading them at heads, cost 2.3 to 4 times as much
+  a step (run `r20261024-085627-c66d`).
+
 ## The active certifier (`active`)
 
 `active.Proxy` runs the certifiers on one boundary link of a live byte stream. It is an asyncio TCP proxy, the I/O shell

@@ -64,6 +64,7 @@ dropped (`ReplayAdvance`'s `active` = 0).
 **Cost** (`size`). Per step: `ReplayAdvance`'s ANDs (the two fronts, about (Q + A·QW)·(1 + IW + 2·LW) and D + A·DW, and
 about 2·width for the idle select and the equality), three reads and one state row. Per window: P steps, one
 `ReplayLoad`, P + 2 state rows and two window rows, and 3P + 4 reads, each a frame-v3 path of depth ⌈log2(P + 2)⌉ or 1.
+On TRACE-CORPUS's 15 sync traces a step is 16,569 to 80,959 ANDs and a window 3.5e7 to 1.9e8 (PROTOCOL.md).
 """
 
 from __future__ import annotations
