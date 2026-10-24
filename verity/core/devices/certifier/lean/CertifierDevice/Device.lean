@@ -44,8 +44,9 @@ proxy event by event:
   window that declares it is faulted `monitor-unavailable` at its first tick, as a late tick is, and its sync is the
   choice made on the frames read.
 * **The salt** (`Config.salt`, off by default). At PoUW window p's first ingress tick (its first certifier window of
-  `pouwWindow`) the bucketer enqueues the certifier's own frame, `saltFrame p placeholder`, ahead of that bucket's
-  arrivals, and follows it by its place in the queue. When the ingress certifier releases it, the proxy queues p's salt
+  `pouwWindow`) the bucketer enqueues the certifier's own frame, `saltFrame p placeholder`, at the head of the queue,
+  ahead of that bucket's arrivals and of any queue carried over, so it leaves in that bucket's slot 0. When the ingress
+  certifier releases it, the proxy queues p's salt
   (`values[p]`, the certifier's coins, drawn outside the device) in that frame in place of the placeholder for a server
   connection of its own: the first opens it (`connectSalt`, answered `saltConnected` or `saltRefused`, which is
   `delivery-refused` on ingress), and each frame is written (`writeSalt`) once the one before it is drained
@@ -55,6 +56,12 @@ proxy event by event:
 * **A served link** (`Config.served`, off by default): the bucketer enqueues arrived frames only as whole requests of
   the profile's F_in frames that the admission rule admits (`Served.admits`) under the window's declared sync; the rest
   wait, in order, for the next window.
+* **Ordinals and compact records** (`Config.ordinals`, `Config.compact`, each off by default). Under `ordinals` a
+  stream's server connection opens with `ordinalHeader s`, written as it opens, before its request's bytes. Under
+  `compact` (which takes `ordinals`, and egress frames of at least `compactRecordSize` bytes) the server's bytes are an
+  HTTP response head, then (position, record) units (`CompactUnits.feed`), and each unit's frame is its record
+  zero-filled to B (`compactCell`) at its position: a record that isn't one (`compactOrdinal`) or names another request
+  than its stream's is `malformed`, as are bytes left uncut at the stream's end, an unfinished head included.
 * **Ticks due together.** `step` takes one tick at a time, so a world whose ticks of both grids fall due at one
   boundary orders them; the proxy runs the ingress tick first (`active.TICK_ORDER`), as `Driver.run` does.
 
@@ -145,6 +152,8 @@ structure Config where
   ingressLink : String := "requests"
   salt : Option SaltSource := none
   served : Option ServedProfile := none
+  ordinals : Bool := false
+  compact : Bool := false
 
 /-- The slowest of Σ_sync: its largest δ and smallest ρ. -/
 def Config.slowest (c : Config) : ClockSync :=
@@ -159,7 +168,8 @@ def Config.admission (c : Config) (p : ServedProfile) : Admission :=
     slowest := c.slowest }
 
 /-- `Proxy.__init__`'s checks, and what the frames need, for a proxy that starts at window `start`: positive parameters,
-frames of at least a header, the two grids' windows of one length, an online prover declaring every window's sync, with
+frames of at least a header (compact egress frames of at least a record, under `ordinals`), the two grids' windows of
+one length, an online prover declaring every window's sync, with
 a lag of 1 … T − 1 buckets, from window 0 on; a salt frame that fits an ingress frame, a salt of a positive whole number
 of bytes for every PoUW window of the run, of a positive number of certifier windows; and a served link's profile, of
 grids that share T and τ_b, counting the salt frame exactly when the salt is on (then at every window), whose window at
@@ -168,7 +178,12 @@ def Config.check (c : Config) (start : Nat := 0) : Except String Unit := do
   for p in [c.egress, c.ingress] do
     if [p.buckets, p.allocation, p.frameBytes, p.bucketMs, p.queueCapacity].any (· = 0) then
       throw "grid parameters must be positive"
-    if p.frameBytes < headerSize then throw s!"a frame holds its {headerSize}-byte header"
+  if c.compact then
+    if !c.ordinals || c.egress.frameBytes < compactRecordSize then
+      throw s!"compact records name their request by its ingress ordinal (ordinals) and fill egress frames of at \
+        least {compactRecordSize} bytes"
+  else if c.egress.frameBytes < headerSize then throw s!"a frame holds its {headerSize}-byte header"
+  if c.ingress.frameBytes < headerSize then throw s!"a frame holds its {headerSize}-byte header"
   if c.egress.buckets * c.egress.bucketMs ≠ c.ingress.buckets * c.ingress.bucketMs then
     throw "the egress and ingress grids have windows of the same length"
   if let some p := c.prover then
@@ -205,7 +220,7 @@ inductive Phase where
   deriving BEq, DecidableEq
 
 /-- `active._Stream`: its request's anchor, ingress window and forwarding deadline, its frames read so far, the frames
-waiting to be written, its event cutter, and when its request was delivered and its ready bucket at its end. -/
+waiting to be written, its event or unit cutter, and when its request was delivered and its ready bucket at its end. -/
 structure Stream where
   phase : Phase := .connecting
   anchor : Option Nat := none
@@ -213,6 +228,7 @@ structure Stream where
   out : Array (ByteArray × Bool) := #[]
   draining : Bool := false
   events : Events := {}
+  units : CompactUnits := {}
   window : Option Nat := none
   deadline : Option Nat := none
   delivered : Option Nat := none
@@ -447,33 +463,56 @@ def linkRead (st : State) (now : Nat) (data : ByteArray) : State := Id.run do
   return { st with bucketer := b, linkBuffer := buffer.extract whole buffer.size,
                    linkFramesRead := st.linkFramesRead + whole / size }
 
-/-- `_egress_event`: an event at its position, its body framed on `canonicalStream` with its stream's anchor and its
-index there. -/
-def egressEvent (st : State) (s : Nat) (event : ByteArray) (ready : Int) : State :=
+/-- `_egress_frame`: a frame at its position, with its stream's anchor and its index there; malformed on a stream with
+no released request. -/
+def egressFrame (st : State) (s position : Nat) (bytes : ByteArray) (ready : Int) : State :=
   let x := st.stream s
-  let B := st.config.egress.frameBytes
-  match eventPosition event, x.anchor, encodeFrame kindData canonicalStream (eventBody event) B with
-  | some position, some anchor, some bytes =>
+  match x.anchor with
+  | some anchor =>
     let st := st.setStream s { x with count := x.count + 1 }
     { st with frames := st.frames.push (position, s, x.count, anchor, ready),
               shaper := st.shaper.arrive position ⟨bytes, anchor, x.count⟩ ready }
-  | _, _, _ => { st with shaper := st.shaper.fault .malformed }
+  | none => { st with shaper := st.shaper.fault .malformed }
 
-/-- The end of stream `s`'s server connection: bytes left unframed are malformed; the stream's end is its ready bucket. -/
+/-- `_egress_event`: an event at its position, its body framed on `canonicalStream`. -/
+def egressEvent (st : State) (s : Nat) (event : ByteArray) (ready : Int) : State :=
+  match eventPosition event, encodeFrame kindData canonicalStream (eventBody event) st.config.egress.frameBytes with
+  | some position, some bytes => st.egressFrame s position bytes ready
+  | _, _ => { st with shaper := st.shaper.fault .malformed }
+
+/-- `_egress_record`: a compact record at its position, zero-filled to a frame; one that isn't a record or names another
+request than stream `s` is malformed. -/
+def egressRecord (st : State) (s position : Nat) (record : ByteArray) (ready : Int) : State :=
+  match compactOrdinal record == some s, compactCell record st.config.egress.frameBytes with
+  | true, some bytes => st.egressFrame s position bytes ready
+  | _, _ => { st with shaper := st.shaper.fault .malformed }
+
+/-- The end of stream `s`'s server connection: bytes left uncut are malformed; the stream's end is its ready bucket. -/
 def upstreamEnd (st : State) (s : Nat) (now : Nat) : State :=
   let x := st.stream s
-  let st := if x.events.buffer.isEmpty then st else { st with shaper := st.shaper.fault .malformed }
+  let st := if x.events.buffer.isEmpty && x.units.buffer.isEmpty then st
+    else { st with shaper := st.shaper.fault .malformed }
   st.setStream s { x with phase := .closed, draining := false, ended := some (st.bucketReady now) }
 
-/-- One read of stream `s`'s server connection. -/
+/-- One read of stream `s`'s server connection: cut into events, or into compact units under `compact`. -/
 def upstreamRead (st : State) (s : Nat) (now : Nat) (data : ByteArray) : State := Id.run do
   if data.isEmpty then return st.upstreamEnd s now
   let ready := st.bucketReady now
   let x := st.stream s
+  if st.config.compact then
+    let (units, cut) := x.units.feed data
+    let mut st := st.setStream s { x with units }
+    for (position, record) in cut do st := st.egressRecord s position record ready
+    return st
   let (events, cut) := x.events.feed data
   let mut st := st.setStream s { x with events }
   for event in cut do st := st.egressEvent s event ready
   return st
+
+/-- Stream `s`'s server connection opened: its ordinal header first, under `ordinals`, then what `pump` writes. -/
+def opened (st : State) (s : Nat) : State × Array Action :=
+  let (st', acts) := (st.setStream s { st.stream s with phase := .open }).pump s
+  (st', if st.config.ordinals then #[.writeUpstream s (ordinalHeader s) false] ++ acts else acts)
 
 end State
 
@@ -488,9 +527,7 @@ def step (st : State) (ev : Event) : State × List Action :=
       if st.bucketer.t < st.ticks st.config.ingress then st.ingressTick now else (st, #[])
     | .link now bytes => if st.linkOpen then (st.linkRead now bytes, #[]) else (st, #[])
     | .connected s _ =>
-      if st.streams.contains s && (st.stream s).phase == .connecting then
-        (st.setStream s { st.stream s with phase := .open }).pump s
-      else (st, #[])
+      if st.streams.contains s && (st.stream s).phase == .connecting then st.opened s else (st, #[])
     | .refused s now =>
       if st.streams.contains s && (st.stream s).phase == .connecting then
         let st := { st with bucketer := { st.bucketer with

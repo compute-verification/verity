@@ -646,7 +646,7 @@ def n2_verdicts(lab: L.Lab, setup: ar.Setup, plans: dict[str, dict], published: 
             reg = lw.register(stream, lw.registration(opening, previous))
             previous, draw = reg.digest, stream.select(reg)
             stream.deliver(draw, [lw.session(opening, draw)])
-            lw.outcome(stream, draw, opening, syncs)
+            lw.unproved_outcome(stream, draw, opening, syncs)
             counts.append(lw.served_check(opening, syncs))
         verdict = lw.network_verdict(stream)
         out[b] = {"accepted": verdict["accepted"], "windows": verdict["windows"], "refused": verdict["refused"],
