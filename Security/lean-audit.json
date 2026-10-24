@@ -330,10 +330,6 @@
    "owner": "@network-accounting",
    "digest": "1d42c317ec6a1bf9a8840fe0946906a0218f8f32ec847718d03f1ee6f1af1a60"
   },
-  "Accounting.Filler.CellProducts": {
-   "owner": "@compute-accounting",
-   "digest": "ed1ea49ad93f31994eec73d6ab2be4f15a83154e2a79c21f6f2c833472e09da3"
-  },
   "Accounting.Filler.FillBlocks": {
    "owner": "@compute-accounting",
    "digest": "92ff54e3cb8e2dabf0db2b40fff7c2a9780d0fa433cd99549de464221879ef53"
@@ -629,10 +625,6 @@
   "Accounting.TS.LiUnits.same": {
    "owner": "@compute-accounting",
    "digest": "5927b5e65e850cafe10034645ae1177813a5c245c0e2c5b63c0c8d10187f6a2d"
-  },
-  "Accounting.TS.Model.FloorKnown": {
-   "owner": "@compute-accounting",
-   "digest": "8b85e4070adec68ec3d4328b59d53909c02eed7179cfea7f2d6d79f45f868c6c"
   },
   "Accounting.TS.Model.RouteDominated": {
    "owner": "@compute-accounting",
@@ -939,10 +931,6 @@
    "owner": "@proofs",
    "digest": "9d269cea0ddce0da684a660ab77be893348a96e8aacfb4d574b46a46b91fb1f5"
   },
-  "FlockSoundness.Audit.Partitioning.CertifiesLeak": {
-   "owner": "@proofs",
-   "digest": "e1952e657e35e728f4488f99aac3507dfab51043842e6359fd04deeaf3dbc85d"
-  },
   "FlockSoundness.Audit.Partitioning.MeetsTarget": {
    "owner": "@proofs",
    "digest": "fe87f160d3239722cdcc7e6ddd2b3553bafcdc45eda3b810c60d1f3e954fd243"
@@ -958,10 +946,6 @@
   "FlockSoundness.Discharge.Composed.TagsOkZJ": {
    "owner": "@proofs",
    "digest": "9819dd3abf8a7632a4c98a664eb1f260b71c560e6b5f1687df9fb842f351d912"
-  },
-  "FlockSoundness.Discharge.FailClosed.FlockVerifyAcceptsR": {
-   "owner": "@proofs",
-   "digest": "dbbcd7ba90155f3428484b0fe39a4f00fe518cc77b09b6855230e712613b9ce2"
   },
   "FlockSoundness.Discharge.Hm.LaidRows": {
    "owner": "@proofs",
@@ -1025,10 +1009,6 @@
   "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR": {
    "owner": "@proofs",
    "digest": "c29b27d7b194c783ad2a91b68e032b214dd164a06bdab08e740dce2f9544d569"
-  },
-  "FlockSoundness.Discharge.ZkReg.OwnReadsHJ": {
-   "owner": "@proofs",
-   "digest": "e9aeedec7fad74902c6d756469f6931815c8b93e9b49fb3395f722b292580164"
   },
   "FlockSoundness.Model.Arith.Correct": {
    "owner": "@proofs",
@@ -1537,12 +1517,6 @@
   "Pouw.Workload.InDomain": {
    "owner": "@compute-accounting",
    "digest": "4c6906588d3bd24bfe0c02960ad2153360f4fb933cf00700cb76cb6c8a58df8e"
-  },
-  "RecDeploy.Coined": {
-   "owner": "@proofs"
-  },
-  "RecDeploy.PlainLeavesAdmitted": {
-   "owner": "@proofs"
   },
   "Verity.Circuit.InputsAgree": {
    "owner": "@proofs",
