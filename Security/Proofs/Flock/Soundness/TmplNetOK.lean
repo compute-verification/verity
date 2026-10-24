@@ -45,12 +45,14 @@ theorem ofRowsAt_netOK {name : String} {useful constPos : ℕ} {ig og : Array Gr
     · rw [sparseEntry_ofRows ha, ofRows_row ha hw, hcp, hpa]
       by_cases hj : j = pos.getD constPos 0
       · subst hj; simp
-      · simp [hj, Ne.symm hj]
+      · rw [Array.getD_eq_getD_getElem?] at hj
+        simp [hj, Ne.symm hj]
     · rw [sparseEntry_ofRows hb, ofRows_row hb hw, hcp, hpb, hlk, hlk0]
       show _ + 0 = _
       by_cases hj : j = pos.getD constPos 0
       · subst hj; simp
-      · simp [hj, Ne.symm hj]
+      · rw [Array.getD_eq_getD_getElem?] at hj
+        simp [hj, Ne.symm hj]
 
 /-- **A template's committed net fits its slot and its constant row reads itself.** -/
 theorem unrollAt_netOK {t : Tmpl} {lays : Array Lay} {net : Net} (h : Tmpl.unrollAt t lays = .ok net) :
