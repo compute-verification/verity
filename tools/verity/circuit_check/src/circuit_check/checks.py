@@ -564,7 +564,7 @@ def _topp_word(t: Any, arrays: Sequence[np.ndarray], ref: list, F: Findings) -> 
 def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: list, opts: Options, F: Findings, pins: dict,
                    memo: dict | None = None) -> dict:
     """The C-Flock lowering of the whole Definition (a primitive's piece, or a small composite piece by piece) against the
-    reference on the correspondence vectors; its redundant ANDs; a primitive's AND count against the piece pins.  A composite's
+    reference on the correspondence vectors; its redundant ANDs; a primitive's AND count and digest against the piece pins.  A composite's
     mismatch names the pieces that already differ from their own primitive (``memo["pieces"]``: piece -> mismatching vectors)."""
     from verity_flock import gf2
     from verity_flock import ir_lower as IL
