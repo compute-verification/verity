@@ -56,6 +56,11 @@ GPU_SHA512_PER_S = 7.0e9
 (#1916, art:dea3a309)."""
 SHA512_PER_S = GPUS * GPU_SHA512_PER_S
 """The node's SHA-512 compressions a second, its GPUs'.  The host's cores' rate is not measured and not in it."""
+SKETCH_OUTSIDE = 1
+"""F, the outside-compute factor: the SHA-512 compressions a prover makes over a session are at most F times the node's
+own over its span, Q = F·C (`sketch_failure`'s `outside`).  Grinding a sketch-sha512 key reads no block, so it can run
+on any hardware the prover reaches, not only the node's GPUs; F = 1 counts the node's alone (RD-5,
+note:20261024T1350Z-report-sketch-named)."""
 GPU_READ_BYTES_PER_S = 1.539e12
 """One RTX PRO 6000's measured HBM read rate: the fastest bare read of an encoded store measured on it, 1,539.26 GB/s
 in the honest session of 14 Oct (prover r20261014-193057-8fec), rounded down.  ra-word-codec's 1.488e12 (#1840,
@@ -257,18 +262,22 @@ def sketch_reading(rows: int = SKETCH_ROWS) -> tuple[int, Fraction]:
 
 
 def sketch_failure(compressions: int, passes: int, rows: int = SKETCH_ROWS, r: int | None = None,
-                   blocks: int = 0) -> Fraction:
+                   blocks: int = 0, outside: int = SKETCH_OUTSIDE) -> Fraction:
     """A session's chance that some sketch-sha512 receipt is right without its block's sectors, read at rank r (r* by
-    default), against a prover of `compressions` SHA-512 compressions over a session of `passes` passes of `blocks`
-    blocks.  Every key the prover sees is a seed it computed or one of the session's, so it sees at most
-    `compressions + passes`, ground or not, and every guess is a compression:
-    `C · 2^-8r + (C + P) · (SECTORS · sign_rank_at_most(rows, r − 1) + N · 2^-512)`, the last term a key's 512-bit
+    default), over a session of `passes` passes of `blocks` blocks, against a prover of `Q = outside · compressions`
+    SHA-512 compressions: `compressions` the node's own over the span (C), and `outside` the outside-compute factor F
+    (`SKETCH_OUTSIDE`).  Every key the prover sees is a seed it computed or one of the session's, so it sees at most
+    `Q + passes`, ground or not, and every guess is a compression:
+    `Q · 2^-8r + (Q + P) · (SECTORS · sign_rank_at_most(rows, r − 1) + N · 2^-512)`, the last term a key's 512-bit
     receipt of a block right without its hash.  At 16 rows and r = 12 it is the δ at which
     `Accounting.Guarantees.Remote.SketchBoundDeployed` derives `SketchBound`."""
+    if type(outside) is not int or outside < 1:
+        raise ValueError("the outside-compute factor F is a positive integer")
     if r is None:
         r = sketch_reading(rows)[0]
-    return (compressions * Fraction(1, 2 ** (8 * r))
-            + (compressions + passes) * (SECTORS * sign_rank_at_most(rows, r - 1) + Fraction(blocks, 2 ** 512)))
+    q = outside * compressions
+    return (q * Fraction(1, 2 ** (8 * r))
+            + (q + passes) * (SECTORS * sign_rank_at_most(rows, r - 1) + Fraction(blocks, 2 ** 512)))
 
 
 def grind_compressions(leaves: int) -> int:

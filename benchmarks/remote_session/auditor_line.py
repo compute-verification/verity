@@ -57,9 +57,13 @@ tier, `line`'s `filler`), which the line doesn't count as weights. Each form cha
 their bursts (`rates_at`; `--bursts none` for the reading of gate runs up to 7). What every accepted paced session
 measured, credited or not, is `measured`. `--table` writes each session's five checks and the line as Markdown.
 
+The line records the outside-compute factor F it reads the sketch at (`sketch_outside`, `--outside`, default
+`timing.SKETCH_OUTSIDE`): each session's `sketch` is SketchBound's δ against a prover of F times the SHA-512
+compressions its verifier charged the node over the span (`sketch_at`), and the line's error there.
+
     python auditor_line.py OUT --host-bytes B [--pin SHA512 --period P --commit SHA [--pins LOG --main FILE]]
         [--ledger HEAD ...] [--peer NAME] [--model-pin FILE] [--disk-bytes-per-s B/S] [--link-bytes-per-s B/S]
-        [--bursts stated|none] [--table FILE]
+        [--bursts stated|none] [--outside F] [--table FILE]
 """
 from __future__ import annotations
 
@@ -78,7 +82,7 @@ sys.path.insert(0, str(HERE.parents[1]))
 
 import challengers as CH  # noqa: E402
 import verifier as V  # noqa: E402
-from verity.core.protocols.remote_bandwidth import audit, coins, ledger, line  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit, coins, ledger, line, timing  # noqa: E402
 from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
 from verity.core.protocols.sampled_proofs import challenger as Ch  # noqa: E402
 from verity.core.protocols.sampled_proofs import remote  # noqa: E402
@@ -421,12 +425,14 @@ def signed_lines(d: Path, kind: str, R: str, heads: list[Path], key: Ch.Challeng
 def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, heads: list[Path] | None,
             lane: str = LANE, peer: str | None = None, rates: dict | None = None,
             desc: bytes | None = None, commit: str | None = None, pins: list[str] | None = None,
-            main: list[str] | None = None, model: dict | None = None) -> dict:
+            main: list[str] | None = None, model: dict | None = None,
+            outside: int = timing.SKETCH_OUTSIDE) -> dict:
     """The run's line: `desc` is the descriptor of the verifier that ran it (`descriptor` of `commit`'s tree), `pins`
     the challenger host's pins log, its lines (None: the gate served none), `main` the auditor's first-parent list of
     main (None: none given), `model` the model the store must be bound to ({name, checkpoint_sha512},
     `--model-pin`'s) when the audit's period signs none, `peer` the gate sessions' peer (None: the record's,
-    `peer_of`), and `rates` the node's (`rates_at`; None: its defaults)."""
+    `peer_of`), `rates` the node's (`rates_at`; None: its defaults), and `outside` the outside-compute factor F the
+    sketch is read at (`sketch_at`)."""
     rates = rates_at() if rates is None else rates
     v = json.loads((out / "verifier.json").read_text())
     reg = v["registration"]
@@ -435,7 +441,7 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
     kinds = {(s.get("challenger") or {}).get("challenger") for s in v["sessions"]}
     key = windows = periods = None
     lines: list[str] = []
-    doc: dict = {"registration": reg["digest"], "host_bytes": host_bytes, "rates": rates,
+    doc: dict = {"registration": reg["digest"], "host_bytes": host_bytes, "rates": rates, "sketch_outside": outside,
                  "commit": commit, "descriptor": None if desc is None else desc.decode(),
                  "pins": None if pins is None else {"lines": len(pins), "sha512": Ch.log_digest(pins)},
                  "verifier_rtt_ms": {k: x / 1e6 for k, x in v.get("rtt", {}).items() if k.endswith("_ns")}}
@@ -465,7 +471,7 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
         R = coins.window(D, k)["root"]
         row = {"k": k, "accepted": s["accepted"], "failure": s.get("failure"), "pace": s.get("pace"),
                "challenger": c.get("challenger"), "challenger_session": c.get("session"),
-               "verifier_coin_check": c.get("reason")}
+               "verifier_coin_check": c.get("reason"), "sketch": sketch_at(s, reg, outside)}
         rows.append(row)
         if c.get("challenger") == "gate":
             row["ledger"] = session_check(s, k, R, windows, periods, period=period, lane=lane, peer=peer, pin=pin)
@@ -516,6 +522,22 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
     doc["sessions"], doc["measured"] = rows, measured
     doc["line"], doc["credit"] = credited_line(rows)
     return doc
+
+
+def sketch_at(session: dict, registration: dict, outside: int) -> dict | None:
+    """A session's SketchBound δ at the outside-compute factor F (`timing.sketch_failure`'s `outside`), against Q = F·C
+    queries, C the compressions its verifier charged the node over the span (verifier.json's `sketch_failure`), and the
+    line's error there: the horizon's (δ and AuditRO's 2^-slack a pass) plus it, `verifier.memory_error` at F.  None
+    for a session whose record has no sketch term."""
+    lg = session.get("ledger") or {}
+    sf, inputs = lg.get("sketch_failure"), lg.get("inputs") or {}
+    if not sf or not inputs.get("rows"):
+        return None
+    c = sf["compressions"]
+    d = timing.sketch_failure(c, inputs["passes"], inputs["rows"], blocks=registration["blocks"], outside=outside)
+    horizon = next((lg[n]["error"]["horizon"] for n in ("spec", "measured") if "error" in lg.get(n, {})), None)
+    return {"outside": outside, "compressions": c, "queries": outside * c, "log2": timing.log2(d),
+            "error": None if horizon is None else horizon + float(d)}
 
 
 def no_credit(why: str, bound: dict | None = None) -> dict:
@@ -606,6 +628,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="the ceiling into node memory both forms charge (default: the NICs', `RATES`)")
     ap.add_argument("--link-bytes-per-s", type=float, default=RATES["link_bytes_per_s"], metavar="B/S",
                     help="the boundary links' ceiling the link-charged form adds (default: 400 Gb/s, `RATES`)")
+    ap.add_argument("--outside", type=int, default=timing.SKETCH_OUTSIDE, metavar="F",
+                    help="the outside-compute factor the sketch is read at: the prover's SHA-512 compressions over a "
+                         "session at most F times the node's (default: `timing.SKETCH_OUTSIDE`)")
     ap.add_argument("--bursts", choices=BURSTS, default="stated",
                     help="charge `ledger.Node.stated`'s bursts beyond the rates (the line of record) or none (gate runs "
                          "up to 7)")
@@ -622,7 +647,7 @@ def main(argv: list[str] | None = None) -> int:
         model = {"name": p["name"], "checkpoint_sha512": p["checkpoint_sha512"]}
     doc = analyse(a.out, host_bytes=a.host_bytes, pin=a.pin, period=a.period, heads=a.ledger, lane=a.lane, peer=a.peer,
                   rates=rates_at(a.disk_bytes_per_s, a.link_bytes_per_s, a.bursts), desc=desc, commit=a.commit,
-                  pins=pins, main=first_parent, model=model)
+                  pins=pins, main=first_parent, model=model, outside=a.outside)
     print(json.dumps(doc, indent=1, default=str))
     if a.table is not None:
         a.table.write_text(table(doc))

@@ -576,12 +576,12 @@ and \(3 \times 5\). At 16 rows it is loose at full rank: \(2^{-16}\), where two 
 about \(\binom{16}{2} 2^{-31} = 2^{-24.1}\). Where it is read, it costs under one bit (next).
 
 **Grinding, and \(r^*\).** Every key is a fresh oracle output, the derive of a fresh seed, so its signs are uniform
-whatever the prover did to reach it. A prover of \(C\) SHA-512 compressions over a session sees at most \(C + P\)
-keys, \(P\) the session's passes, and makes at most \(C\) guesses. Read at rank \(r\), by the union bound over keys,
-guesses and the block's 128 sectors,
+whatever the prover did to reach it. A prover of \(Q\) SHA-512 compressions over a session sees at most \(Q + P\)
+keys, \(P\) the session's passes, and makes at most \(Q\) guesses. Read at rank \(r\), by the union bound over keys,
+guesses and the block's 128 sectors, the session's failure is
 
 \[
-F(r) \;\le\; C \cdot 2^{-8r} + (C + P) \cdot 128 \cdot \Pr[\text{rank} \le r - 1] ,
+\delta_s(r) \;\le\; Q \cdot 2^{-8r} + (Q + P) \cdot 128 \cdot \Pr[\text{rank} \le r - 1] ,
 \]
 
 so its cost a compression is \(\rho(r) = 2^{-8r} + 128 \Pr[\text{rank} \le r - 1]\), and \(r^*\) minimizes it. At 16
@@ -589,16 +589,20 @@ rows \(r^* = 12\): the guess's \(2^{-96}\) beside \(128 \cdot 2^{-103.25} = 2^{-
 2^{-95.12}\). At \(r = 11\), \(\rho = 2^{-88}\); at 13, \(2^{-71.30}\). At 64 rows \(r^* = 27\) and \(\rho(r^*) =
 2^{-215.85}\).
 
-| rows | \(r^*\) | \(\rho(r^*)\) | \(C\) at \(F = 2^{-40}\) | \(C\) at \(F = 2^{-64}\) |
+| rows | \(r^*\) | \(\rho(r^*)\) | \(Q\) at \(\delta_s = 2^{-40}\) | \(Q\) at \(\delta_s = 2^{-64}\) |
 | --- | --- | --- | --- | --- |
 | 16 | 12 | \(2^{-95.12}\) | \(2^{55.12}\): 8.1 days of 8 GPUs | \(2^{31.12}\): 42 ms of 8 GPUs |
 | 64 | 27 | \(2^{-215.85}\) | \(2^{175.85}\) | \(2^{151.85}\) |
 
 The GPUs are RTX PRO 6000s at \(7.0 \cdot 10^9\) SHA-512 compressions a second each, block-sha512's measured rate
-(#1916, below). \(C\) counts every compression the prover makes, on any hardware: the grinding needs no access to the
-store. So at 16 rows a session stays below \(2^{-40}\) up to \(2^{55.12}\) compressions: \(2^{-50.19}\) for one node's
-10-minute session, \(2^{-43.02}\) for a node-day, and \(2^{-40}\) for about 9,400 such GPUs grinding through a
-10-minute session. \(2^{-64}\) is out of reach at 16 rows (42 ms of one node's hashing) and needs 64 rows, a
+(#1916, below). \(Q\) counts every compression the prover makes, on any hardware: the grinding needs no access to the
+store, so it can run off the node. The ledger charges \(Q = F \cdot C\): \(C\) the node's own compressions over the
+session's span, at its GPUs' rate, and \(F\) the outside-compute factor (`timing.SKETCH_OUTSIDE`, 1 by default:
+the node's alone), which the auditor's line records (`auditor_line.py --outside`). So at 16 rows and \(F = 1\) a
+session stays below \(2^{-40}\) up to \(2^{55.12}\) compressions: \(2^{-50.19}\) for one node's 10-minute session,
+\(2^{-43.02}\) for a node-day, and \(2^{-40}\) for about 9,400 such GPUs grinding through a 10-minute session. Each
+factor of 2 in \(F\) costs a bit: gate run 8's 227 s session reads \(2^{-51.59}\) at \(F = 1\), \(2^{-41.59}\) at
+\(2^{10}\) and \(2^{-31.59}\) at \(2^{20}\), and below \(2^{-50}\) at \(F = 2^{20}\) only at 64 rows. \(2^{-64}\) is out of reach at 16 rows (42 ms of one node's hashing) and needs 64 rows, a
 registration's other row count, at τ 1.226 a pass on the reader; the fused GEMM's cost at 64 rows isn't measured yet.
 
 A grinding try is not a pass's commitment. It reads no block: re-salting one receipt leaf changes the root without
@@ -611,11 +615,11 @@ root's last, and the seed's and the key's 2 each, whose first blocks hold the ro
 \(2^{33.4}\) tries a second on that node, \(2^{39.3}\) in a window. Seeing one sector's \(16 \times 32\) signs takes 16 more, one stream block a row. The bound doesn't rest on
 any of these counts: it charges a key to every compression.
 
-None of this moves γ: \(F\) adds to the failure probability, not to the reads certified, so Daniel's claim at
-\(2^{-40}\) (§10) reads as before. For one node's 10-minute horizon, \(F = 2^{-50.19}\), so
+None of this moves γ: \(\delta_s\) adds to the failure probability, not to the reads certified, so Daniel's claim at
+\(2^{-40}\) (§10) reads as before. For one node's 10-minute horizon at \(F = 1\), \(\delta_s = 2^{-50.19}\), so
 keeping the total at \(2^{-40}\) takes the openings' δ to \(2^{-40} - 2^{-50.19}\), and their count up by about
-0.003%. It breaks only past \(2^{55.12}\) compressions in a session, where \(F\) alone reaches \(2^{-40}\). The
-ledger doesn't compute \(F\): it is a failure term, not a term of γ (`ledger`).
+0.003%. It breaks only past \(2^{55.12}\) compressions in a session, where \(\delta_s\) alone reaches \(2^{-40}\). The
+ledger adds \(\delta_s\) to the memory line's δ and to γ's error (`ledger.sketch`), not to a term of γ.
 
 What each costs on the GPU (#1916): one RTX PRO 6000 (sm_120, 2,092 MHz), an 8 GiB pass of 2,097,152 blocks, best of
 3, run r20261012-224926-17ce at 5b8decfc5 (art:dea3a309). τ is a pass's time over one plain read of the same

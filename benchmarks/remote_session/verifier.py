@@ -1462,11 +1462,11 @@ class Verifier:
                                            ledger.memory(record, stated)).to_json()
                            if len(readings) == 2 else {"refused": next(out[n]["refused"] for n in ("spec", "measured")
                                                                        if n not in readings)})
-        # SketchBound's δ: every compression the node's GPUs could make over the span a guess or a key.
-        compressions = math.ceil(timing.SHA512_PER_S * record.span_ns / 1e9)
-        out["sketch_failure"] = {"compressions": compressions,
+        # SketchBound's δ: every compression the prover could make over the span a guess or a key, Q = F·C.
+        compressions, outside = ledger.compressions(record, stated), stated.sketch_outside
+        out["sketch_failure"] = {"compressions": compressions, "outside": outside,
                                  "log2": timing.log2(timing.sketch_failure(compressions, record.passes, record.rows,
-                                                                           blocks=record.blocks))}
+                                                                           blocks=record.blocks, outside=outside))}
         if plans is not None:
             out["memory"] = memory(record, plans, self.regions, hbm_bytes=self.hbm_bytes, rebuild=rebuild,
                                    chip_bytes=timing.CHIP_BYTES)
