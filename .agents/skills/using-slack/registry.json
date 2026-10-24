@@ -419,7 +419,8 @@
         "Security/Proofs/NetworkCertifier/",
         "benchmarks/network_traces/",
         "benchmarks/datacenter/",
-        "benchmarks/network_sim/"
+        "benchmarks/network_sim/",
+        "benchmarks/prove_path/"
       ],
       "branch_suffixes": [
         "728f",
