@@ -24,6 +24,7 @@ import Models.Nci.Guarantees.CoverFanOut
 import Models.Nci.Guarantees.CoverFanOutValue
 import Models.Nci.Guarantees.CoverPartialSum
 import Models.Nci.Guarantees.CoverTraining
+import Models.Nci.Guarantees.CoverChained
 import Models.Pous.Assumptions
 import Models.Pous.Guarantees
 import Models.Pouw.Assumptions

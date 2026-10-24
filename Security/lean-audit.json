@@ -7598,6 +7598,12 @@
    "assumptions": [],
    "type_hash": "29c9c2c38c76177811ea5bcb0c6f42fe547c4cfcdc9c46e78b9415d13b34cf35"
   },
+  "Nci.Cover.SecurityProofs.CoverTrainingChained": {
+   "owner": "@training",
+   "signature": ["Nci.Cover.SecurityProofs.CoverTrainingChained : Nci.Cover.Guarantees.CoverTrainingChained"],
+   "assumptions": [],
+   "type_hash": "9a1943883ad405f64f840a9b45038f151f41e7326de41401e2ab942670210f83"
+  },
   "Nci.Cover.SecurityProofs.CoveringBoundAdditive": {
    "owner": "@training",
    "signature": ["Nci.Cover.SecurityProofs.CoveringBoundAdditive : Nci.Cover.Guarantees.CoveringBoundAdditive"],
@@ -11261,7 +11267,8 @@
    "NetTiming.SecurityProofs.EncardChargedLe": "frozen (no-function): It counts the decision streams by AdviceV1.charges, the definitions' mirror of arith_encode.py's reference_charge (ChargeCount_v1{N}'s charge), not a compiled program's code: circuit-check holds ChargeCount_v1's circuit to that reference, and no Lean program of the network check computes the charge yet, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1": "frozen (no-function): It bounds AccSeqsWithin with advice v1's charge (AdviceV1.bits, the mirror of arith_encode.py's reference_charge), the observation sequences an abstract Program accepts with advice within the caps, not runs of the network check's code, and takes no assumption about the charge; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, advice v1's charge (AdviceV1.bits, the mirror of arith_encode.py's reference_charge) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
-   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, advice v1's charge (AdviceV1.bits, the mirror of arith_encode.py's reference_charge) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path."
+   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, advice v1's charge (AdviceV1.bits, the mirror of arith_encode.py's reference_charge) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "Nci.Cover.SecurityProofs.CoverTrainingChained": "frozen (no-function): Like CoverTraining, it is about an arbitrary reference training circuit, here as its bits made a declaration (bitDecl, Security/Definitions/Nci/BitDecl.lean) with its multiplication blocks and token computations (Nci.Covering.MulBlocks), and a declaration that contains it with its baseline registered (the named BaselineRegistered, Security/Models/Nci/Assumptions/Baseline.lean), under the named ParameterHardAt on those bits and with ActivationChainedAt read in its statement (Security/Models/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; Security/Proofs/Nci/Cover/CheckedChained.lean joins it to a verdict (coverTrainedChained, from NciCheck.Properties.Witnesses), and stating that join among the properties is what would give it an acceptance."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -15566,6 +15573,7 @@
     "Bandwidth.SecurityProofs.MbwCapacity",
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
+    "Nci.Cover.SecurityProofs.CoverTrainingChained",
     "Nci.Cover.SecurityProofs.CoveringBoundAdditive",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsChain",
@@ -15659,6 +15667,7 @@
     "Accounting.SecurityProofs.Actual.WindowsAt",
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
+    "Nci.Cover.SecurityProofs.CoverTrainingChained",
     "Nci.Cover.SecurityProofs.CoveringBoundAdditive",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsChain",
@@ -15808,6 +15817,7 @@
     "Accounting.SecurityProofs.Actual.WindowsAt",
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
+    "Nci.Cover.SecurityProofs.CoverTrainingChained",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsTrainingOn",
     "Nci.SecurityProofs.ContainedFanOutOn",
@@ -16348,6 +16358,7 @@
     "Accounting.SecurityProofs.Actual.Windows",
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
+    "Nci.Cover.SecurityProofs.CoverTrainingChained",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsChain",
     "Nci.SecurityProofs.ActivationsReads",
@@ -16395,6 +16406,15 @@
     "Nci.SecurityProofs.UpdatedMatMulReads"
    ]
   },
+  "Definitions.Nci.BitDecl": {
+   "digest": "1631316d761ef2760e21237c80d1a599f238b79c292ec59c023695bef985e30e",
+   "definitions": {
+    "Nci.Cover.BitView.bitOp": "5d0762ea4452a2076be2921fb0f8b1b9b2b6eddc0f7a6eb4ffcd249a8cfcf991",
+    "Nci.Cover.BitView.word": "d28a3365fa9f9d1357e42b23a1209c41076a32536fe19c6bebf6cf2c49dd1f49",
+    "Nci.Cover.bitDecl": "bc3fd7b77c472f997fb30196dcd73e53e065fddd40843ddf260171dd137e3d62"
+   },
+   "guarantees": ["Nci.Cover.SecurityProofs.CoverTrainingChained"]
+  },
   "Definitions.Nci.BitView": {
    "digest": "8edbc5d8b8b0082729a659ccbf984ffed9cda63f3a0b684bbf8d63a6c9c29efe",
    "definitions": {
@@ -16407,7 +16427,11 @@
     "Nci.Cover.Circuit.ofDecl": "224803c8fb29aa0e82c3527b9a2e7acccd82a02cfb0643d1aefe8cb2342e14a4",
     "Nci.Cover.wordBits": "e23d023ad86ce9c28bfd0db52cc849bade668fb6a5d9015b008232352af25648"
    },
-   "guarantees": ["Nci.Cover.SecurityProofs.CoverTraining", "Nci.Cover.SecurityProofs.CoverTrainingAligned"]
+   "guarantees": [
+    "Nci.Cover.SecurityProofs.CoverTraining",
+    "Nci.Cover.SecurityProofs.CoverTrainingAligned",
+    "Nci.Cover.SecurityProofs.CoverTrainingChained"
+   ]
   },
   "Definitions.Nci.Cover": {
    "digest": "97e5ed9a6da9e826e070285b6cf2daabc9f0f46f9cc7f6ca3212c801c9b6ef7d",
@@ -16436,6 +16460,7 @@
    "guarantees": [
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
+    "Nci.Cover.SecurityProofs.CoverTrainingChained",
     "Nci.Cover.SecurityProofs.FanOutCoverBound",
     "Nci.Cover.SecurityProofs.FanOutIntensity",
     "Nci.Cover.SecurityProofs.FanOutReadCoverBound",
@@ -16543,6 +16568,7 @@
     "Nci.Covering.sources": "44f69afea9a52095487a6242bfebd1c0237a99e37f99a1f5e336340b697cf353"
    },
    "guarantees": [
+    "Nci.Cover.SecurityProofs.CoverTrainingChained",
     "Nci.Cover.SecurityProofs.CoveringBoundAdditive",
     "Nci.SecurityProofs.CoveringBound",
     "Nci.SecurityProofs.CoveringBoundTwoCosts"
@@ -16583,6 +16609,7 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots",
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
+    "Nci.Cover.SecurityProofs.CoverTrainingChained",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsTrainingOn",
     "Nci.SecurityProofs.ContainedFanOutOn",
@@ -30476,6 +30503,7 @@
    "guarantees": [
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
+    "Nci.Cover.SecurityProofs.CoverTrainingChained",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsTrainingOn",
     "Nci.SecurityProofs.ContainedFanOutOn",
@@ -30576,7 +30604,11 @@
     "Nci.Assumptions.ParameterHardAt": "d777f337d5fdcbc5d7ea6d48f614a284b764038886ca18ec4b5a0f892056c342",
     "Nci.Assumptions.chainedBlocksAt": "3b0afb53886322999c7c5f243a6a134c42c4c8831e2249a577ffaf92f1ff962b"
    },
-   "guarantees": ["Nci.Cover.SecurityProofs.CoveringBoundAdditive", "Nci.SecurityProofs.CoveringBoundTwoCosts"]
+   "guarantees": [
+    "Nci.Cover.SecurityProofs.CoverTrainingChained",
+    "Nci.Cover.SecurityProofs.CoveringBoundAdditive",
+    "Nci.SecurityProofs.CoveringBoundTwoCosts"
+   ]
   },
   "Models.Nci.Assumptions.Fit": {
    "digest": "ae61196a0d5e168b94fb5aebf54519f2cec0fb925e5ce7e396f1f02a82637eaa",
@@ -30762,6 +30794,13 @@
     "Nci.Cover.Guarantees.CoveringBoundAdditive": "09dc1d6cac36528af72b1aa769b64dc1b46ec8c196f568db6a333a1c4502a240"
    },
    "guarantees": ["Nci.Cover.SecurityProofs.CoveringBoundAdditive"]
+  },
+  "Models.Nci.Guarantees.CoverChained": {
+   "digest": "663833161ded1f990f9271cc4e50fc6e974e6779e5bffef870e2148259293c30",
+   "definitions": {
+    "Nci.Cover.Guarantees.CoverTrainingChained": "c760783a87ed55cb53c26f76a7b64a604ebdabec6d1e25a32b216afb341212c8"
+   },
+   "guarantees": ["Nci.Cover.SecurityProofs.CoverTrainingChained"]
   },
   "Models.Nci.Guarantees.CoverFanOut": {
    "digest": "ac8c76d33a1a0e92360642e40ce0f70560bd65f02ecf5cfdf4d659cedd4eca98",
