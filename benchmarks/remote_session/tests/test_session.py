@@ -1474,19 +1474,6 @@ def test_a_kv_plan_needs_its_pages_a_step():
             prover.parse_plan(bad)
 
 
-def test_openings_round_trip_on_the_wire_and_a_short_body_is_none():
-    o = audit.Opening(3, 17, bytes(range(256)) * 16, b"\1" * 1024, b"\2" * 192, (b"\3" * 64,) * 5, b"\4" * 192,
-                      (b"\5" * 64,) * 9, b"")
-    appended = audit.Opening(4, 18, bytes(range(256)) * 16, b"\1" * 1024, b"\2" * 192, (b"\3" * 64,) * 5, b"\4" * 192,
-                             (b"\5" * 64,) * 3, b"", b"\6" * 64)
-    body = wire.encode_openings([o, appended, o])
-    assert wire.decode_openings(body) == [o, appended, o]
-    assert wire.decode_openings(body[:-1]) is None and wire.decode_openings(b"") is None
-    with pytest.raises(ValueError):
-        wire.encode_openings([audit.Opening(3, 17, o.block, o.leaf, o.leaf_salt, o.receipt_path, o.payload_salt,
-                                            o.payload_path, b"", b"\6" * 63)])
-
-
 def test_a_reader_apart_hands_on_each_frame_in_order_and_ends_with_the_stream_or_the_prover():
     """The prover's reader in its own process: frames come through its pipe as sent, each with its stamp; a frame over
     the limits is refused as on a reader thread; the stream's close is `Closed`; and the reader exits once the

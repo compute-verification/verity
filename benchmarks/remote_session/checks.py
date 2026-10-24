@@ -26,8 +26,8 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
 from verity.core.protocols.remote_bandwidth import audit  # noqa: E402
+from verity.core.protocols.remote_bandwidth import wire  # noqa: E402
 
-import wire  # noqa: E402
 
 _views: dict[bytes, tuple[audit.Session, object]] = {}
 

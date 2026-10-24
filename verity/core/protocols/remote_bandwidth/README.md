@@ -95,6 +95,8 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
   log records the session's pin, on the verifier's own first-parent list of main (`trusted`).
 - `receipts.py`: seeds, plans, receipts and their trees.
 - `codec.py`: the store's encoding (kv/v0).
+- `wire.py`: the openings frame a prover sends a window's openings in, and a window's openings from its frames
+  (`openings_of`), beside `lean/RemoteAudit/Wire.lean`'s.
 - `memory_map.py`: memory-map/v1, serving's record of the KV blocks it wrote and freed, as the audit's appends,
   releases and plan changes.
 - `store.py`: a registered store bound to a pinned model. It reads and checks the pin (`read_pin`, `pin_of`, `check`),
