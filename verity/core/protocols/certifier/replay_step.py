@@ -456,7 +456,10 @@ def _split(fields, elements) -> dict:
     return out
 
 
-def _build(C, S, *elements):
+def _build(C, S, *elements, tap: dict | None = None):
+    """The step's circuit; `tap`, when given, receives the wires a composition reads beside the step's outputs: the
+    candidates as the scan read them with their reach, admission, start and n, the running slots with their n, kept and
+    popped bits, the forced arrival, the running count before the step and each output slot's stop."""
     Z = widths(S)
     LW, TW, BW, HW, RC, AC, LB = Z.LW, Z.TW, Z.BW, Z.HW, Z.RC, Z.AC, Z.LB
     NW = max(LW, TW) + 1
@@ -524,6 +527,8 @@ def _build(C, S, *elements):
         upto = _add(C, upto, needs[i], SW)
         kept.append(C.AND(run[i]["valid"], _lt(C, _add(C, room, after[i], SW), upto).inv()))
     popped = [C.AND(run[j]["valid"], kept[j].inv()) for j in range(R)]
+    if tap is not None:
+        tap.update(forced=forced, run=run, kept=kept, popped=popped)
     budget = const_bits(S.T, TW)
     run_n = []
     for j in range(R):
@@ -534,6 +539,8 @@ def _build(C, S, *elements):
         run_n.append(_sel(C, kept[j], ns[j]))
         budget = _sub(C, budget, run_n[j], TW)
     preempted = or_reduce(C, popped)
+    if tap is not None:
+        tap["run_n"] = run_n
 
     # the waiting loop: W waiting slots, then A arrivals
     stage("waiting")
@@ -544,7 +551,7 @@ def _build(C, S, *elements):
     used = [ZERO] * AC
     taken = [ZERO] * AC
     taken[0] = forced
-    adm = []
+    adm, cands = [], []
     for c in range(W + A):
         is_arr = c >= W
         r = arr[c - W] if is_arr else wait[c]
@@ -584,7 +591,10 @@ def _build(C, S, *elements):
         free = _sub(C, free, _sel(C, admit, _add(C, new, ev, BW)), BW)
         budget = _sub(C, budget, _sel(C, admit, _pad(n, TW)), TW)
         adm.append((admit, hb, _pad(n, TW)))
+        cands.append({"rec": r, "reach": reach, "admit": admit, "hb": hb, "n": _pad(n, TW)})
     bad.append(going)
+    if tap is not None:
+        tap.update(cands=cands, cnt0=cnt0, k_wait=k_wait)
 
     # the admitted after the running list
     stage("place")
@@ -614,7 +624,7 @@ def _build(C, S, *elements):
     # close and update
     stage("update")
     O = {k: [] for k in ("row_valid", "row_id", "row_kind", "row_start", "row_n")}
-    keep, nxt = [], []
+    keep, nxt, stops = [], [], []
     for p, s in enumerate(slots):
         n = s["n"]
         on = C.AND(s["valid"][0], or_reduce(C, n))
@@ -632,9 +642,12 @@ def _build(C, S, *elements):
         if S.PC:
             bad.append(C.AND(stop, _lt(C, held, back)))
         free = _add(C, free, _sel(C, stop, back), BW)
+        stops.append(stop)
         keep.append(C.AND(s["valid"][0], stop.inv()))
         nxt.append(s["valid"] + s["id"] + s["P"] + s["O"] + out + comp)
 
+    if tap is not None:
+        tap["stops"] = stops
     stage("compact")
     rw = 1 + S.IW + 4 * LW
     run_next = _compact(C, nxt, keep, RC + 1)
