@@ -145,7 +145,7 @@ class _Call:
         def gather():
             torch.index_select(tree, 0, nodes, out=roots)
             scatter(0, roots.view(-1))
-        if split and "rows_a" in on_main:              # stats_s5 and the screen read A's rows and nothing the keying writes
+        if split and "rows_a" in on_main and "nofork" not in G.PLACE:   # stats_s5 and the screen read nothing the keying writes
             aside = [*([by["stats_a"]] if "stats_a" in on_main else []), screen]
             body = [by[x] for x in on_main if x not in ("rows_a", "stats_a")]
             self.main, self.cut = [rows_a, g.forked(run, aside), by["rows_a"], g.joined, *body], 3
