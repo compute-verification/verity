@@ -955,6 +955,21 @@ request's own encoding as `noncanonical`:
 | `proof-worker` | each `Proof` one byte of junk | dropped: the same, the proofs the loop's |
 | `unknown` | a frame of tag 99 before `Finish` | `PROVER-STOPPED: a request the session loop does not serve`; the verifier gets the honest session's requests up to its proofs, then nothing |
 
+The loop's finish computes each rep's proof file on what its frames hold, not on what the host's request carries: an
+`open`, `inner` or `rep` request whose draws (the pads, `τ`'s salt, the pads tree's salts), passed values, extra claims or
+coins are not the rep's frame's (the draws it took at the rep's start, the values it took, `Drive.extras` at the
+session's link points, the coins the stream answered) is refused, and the finish ends (`Finish.RepIn.differs`,
+`Frames.ownOf`). `final_c`'s slot is the request's: the passed values fix it, and any other fails the rep's
+`zerocheck c_eval` constraint on the frame's pads, which stops the rep. `FC_FINISH_TAMPER` doctors the session's last rep
+request in time, and the selftest's `zk_worker_finish` holds each mode to that, beside an honest firewalled session:
+
+| `FC_FINISH_TAMPER` | the last rep request | outcome |
+|---|---|---|
+| `pads-zero` | the pads `h` all zero | `finish: table T rep R's request: its pads are not the frame's draws`; no proof leaves, and the verifier gets the honest session's every request but its proofs, `Finish` included, and does not accept |
+| `vals-chosen` | the first passed value plus one | `… its passed values are not the ones the frame took`; the same |
+| `coins` | the first round's first coin plus one | `… its coins are not the ones the stream answered`; the same |
+| `final-c` | `final_c` plus one | `the constraints zerocheck c_eval … fail on the rep's pads`; the same |
+
 The outer phase's rounds are the loop's own, so it has no transcript for the contract (`flock-firewall contract`)
 to decide after the fact.
 
