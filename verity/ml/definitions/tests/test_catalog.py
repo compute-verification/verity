@@ -1,0 +1,25 @@
+"""`catalog.load()` registers exactly the Definitions and primitives the registry held when it moved into
+`verity.ml.definitions` (circuits' condition on the move, CIR-93): a module that stops importing or registering, or one
+that registers more, changes the count and fails here.  Change `COUNT` in the change that adds or removes a Definition.
+
+The count is the registry's own: 1,287 on main before the move less PoUW's circuit (the 47 `Ncp*` and `Pouw*` Definitions
+`verity.core.protocols.pouw.circuit` registers), which `pouw_rows` stopped importing once `NcpDequant` moved to
+`verity.ml.circuits.ops.ncp`."""
+from __future__ import annotations
+
+import sys
+
+from verity_vllm.program.registry import catalog
+
+COUNT = 1240
+
+
+def test_the_catalog_loads_every_definition_and_no_other():
+    registry, errors = catalog.load()
+    assert not errors, errors
+    assert len(registry.defs) == COUNT, f"catalog.load() registers {len(registry.defs)} Definitions, not {COUNT}"
+
+
+def test_the_catalog_reads_no_protocol():
+    catalog.load()
+    assert not [m for m in sys.modules if m.startswith("verity.core")], "a registry module imports verity.core"

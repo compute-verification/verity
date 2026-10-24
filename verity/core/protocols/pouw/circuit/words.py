@@ -19,6 +19,7 @@ from verity.ml.circuits.defs import primitive
 from verity.ml.circuits.types import Array, Value
 from verity.ml.circuits.ops import prims as _prims
 from verity.ml.circuits.ops.sqrt import PouwF32SqrtRn  # noqa: F401  (Pearl-C4's root, registered in ops)
+from verity.ml.circuits.ops.ncp import PouwI32ToF32Rn, i32_to_f32_rn  # noqa: F401  (ncp-v2's dequantization, registered in ops)
 from verity.ml.circuits.silicon import cast as _cast
 
 U32, U8, I7, F32, BF16, E2M1 = Value(32), Value(8), Value(7), Value(32), Value(16), Value(4)
@@ -176,37 +177,6 @@ def PouwDot16U8S8(acc: int, *xy: int) -> int:
     """One 16-deep route-U step: acc + Σ (X + β)·Y over 16 u8 × s8 products, mod 2^32 (Lean `mmWU`)."""
     x, y = xy[:16], xy[16:]
     return (acc + sum((a & 0xFF) * sx(b, 8) for a, b in zip(x, y))) & M32
-
-
-# ---- dequantization ----------------------------------------------------------------------------------------------------
-
-def i32_to_f32_rn(z: int) -> int:
-    """cvt.rn.f32.s32: an int32 as the nearest FP32, ties to even, as its encoding."""
-    v = sx(z, 32)
-    if v == 0:
-        return 0
-    sign = 0x80000000 if v < 0 else 0
-    m = -v if v < 0 else v
-    e = m.bit_length() - 1                                  # m = 1.f × 2^e, e <= 31
-    if e > 23:
-        shift = e - 23
-        q, r = m >> shift, m & ((1 << shift) - 1)
-        half = 1 << (shift - 1)
-        if r > half or (r == half and q & 1):
-            q += 1
-        if q >> 24:                                         # rounding carried into a new binade
-            q >>= 1
-            e += 1
-        mant = q & 0x7FFFFF
-    else:
-        mant = (m << (23 - e)) & 0x7FFFFF
-    return sign | ((e + 127) << 23) | mant
-
-
-@primitive("PouwI32ToF32Rn", 1, [("z", U32)], F32, conformance="protocol-defined")
-def PouwI32ToF32Rn(z: int) -> int:
-    """cvt.rn.f32.s32: Z as FP32, round to nearest even."""
-    return i32_to_f32_rn(z)
 
 
 # ---- Pearl-C4 (`pc4`) ----------------------------------------------------------------------------------------------------

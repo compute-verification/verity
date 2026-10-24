@@ -7,6 +7,8 @@
     verity.ml.circuits.ops.fp32    IR primitives: FP32 add / mul / fma / div (RN-even), the FTZ family, FA2 max and -inf guard, BF16
                       element-wise add / mul
     verity.ml.circuits.ops.sqrt    IR primitive: PouwF32SqrtRn, sqrt.rn.f32 with the GPU's NaN word (PoUW's and a served kernel's root)
+    verity.ml.circuits.ops.ncp     IR primitive and composite: PouwI32ToF32Rn (cvt.rn.f32.s32) and NcpDequant, ncp-v2's dequantization
+                      (PoUW's linear and a served PoUW linear's row)
     verity.ml.circuits.ops.mufu    IR primitives: the MUFU ex2 / rcp / sqrt / rsqrt / tanh approximations over their measured sm_89 tables
                       (package data), FA2's inverse sum, div.full's range scaling; numpy kernels for all but tanh
     verity.ml.circuits.ops.gemm    IR composites: DotBf16 / GemmCoordinate / Gemm parameterised by the step; GEMM_AMPERE, GEMM_HOPPER;

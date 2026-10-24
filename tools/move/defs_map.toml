@@ -4,14 +4,14 @@
 #
 # Whole packages and modules move; nothing is split, edited or deleted, and no file is added:
 # - `verity.ml.definitions`, a unit off `SOUNDNESS_PATH` (`tests/test_boundaries.py`'s `ALLOWED`), takes the kernel
-#   Definitions (`program/registry/`, with their circuit-check sidecars and pins) and their row kernels and twins
-#   (`program/kernels/`), and the machinery that reads them: the Boolean versions (`boolean`), the replayer (`replay`),
+#   Definitions (`program/registry/`, with their circuit-check sidecars and pins) and the numerics layer, their row kernels
+#   and twins (`program/kernels/`, as `numerics/`, since `verity.ml.kernels` is the GPU kernels), and the machinery that
+#   reads them: the Boolean versions (`boolean`), the replayer (`replay`),
 #   the dtypes, the Definition encoding and digest (`encoding`), and the query's word, call scope and cross-call check.
 #   Each imports only `verity.ml` and numpy; the machinery stays beside the Definitions, since `boolean` and `call_scope`
 #   load the registry, and `verity.ml.circuits` imports no other unit.
 # - What builds on vLLM, torch or a protocol stays in the integration, out of the two retired directories into `program/`:
-#   `registry/quarantine/` (torch, vLLM), `pouw_rows` (PoUW's `NcpDequant`; the catalog loads it through the
-#   `verity.definitions` entry point), the capture and difftest adapters, and the relation layer and sweeps of
+#   `registry/quarantine/` (torch, vLLM), the capture and difftest adapters, and the relation layer and sweeps of
 #   `program/kernels/` that read `verity_vllm`.
 # - The tests stay in `integrations/vllm/tests/`, which imports `verity` (its suite's inputs have all of it).
 # The format is `layout_map.toml`'s.
@@ -23,7 +23,7 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 [paths]
 # --- verity.ml.definitions: the Definitions, their row kernels, and the machinery that reads them
 "integrations/vllm/verity_vllm/program/registry/" = "verity/ml/definitions/registry/"
-"integrations/vllm/verity_vllm/program/kernels/" = "verity/ml/definitions/kernels/"
+"integrations/vllm/verity_vllm/program/kernels/" = "verity/ml/definitions/numerics/"
 "integrations/vllm/verity_vllm/program/boolean.py" = "verity/ml/definitions/boolean.py"
 "integrations/vllm/verity_vllm/program/replay.py" = "verity/ml/definitions/replay.py"
 "integrations/vllm/verity_vllm/program/dtypes.py" = "verity/ml/definitions/dtypes.py"
@@ -34,8 +34,6 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 
 # --- what stays in the integration: out of the retired registry/ and kernels/ into program/
 "integrations/vllm/verity_vllm/program/registry/quarantine/" = "integrations/vllm/verity_vllm/program/quarantine/"
-"integrations/vllm/verity_vllm/program/registry/pouw_rows.py" = "integrations/vllm/verity_vllm/program/pouw_rows.py"
-"integrations/vllm/verity_vllm/program/registry/pouw_rows.circuit-check.py" = "integrations/vllm/verity_vllm/program/pouw_rows.circuit-check.py"
 "integrations/vllm/verity_vllm/program/registry/mla_capture.py" = "integrations/vllm/verity_vllm/program/mla_capture.py"
 "integrations/vllm/verity_vllm/program/registry/moe_difftest.py" = "integrations/vllm/verity_vllm/program/moe_difftest.py"
 "integrations/vllm/verity_vllm/program/registry/layer_norm_difftest.py" = "integrations/vllm/verity_vllm/program/layer_norm_difftest.py"
@@ -56,7 +54,7 @@ paths = []
 [split]
 "benchmarks/property_redteam/pyproject.toml: integrations/vllm/verity_vllm/program/kernels" = "the suite's inputs also name each staying kernels module by file, which follows it"
 "benchmarks/property_redteam/pyproject.toml: integrations/vllm/verity_vllm/program/registry" = "the suite's inputs also name each staying registry module and quarantine/, which follow them"
-"verity/core/primitives/evaluate/pyproject.toml: integrations/vllm/verity_vllm/program/registry" = "the suite's inputs also name pouw_rows.py, the one staying module its tests import"
+"verity/core/primitives/evaluate/pyproject.toml: integrations/vllm/verity_vllm/program/registry" = "its tests import registry modules that move (pouw_rows among them), none that stays"
 "integrations/vllm/README.md: integrations/vllm/verity_vllm/program/registry" = "names where the registered Definitions live, which is the larger part"
 "integrations/vllm/tests/lint/test_p03_one_evaluator.py: integrations/vllm/verity_vllm/program/kernels" = "LADDER_HOMES also names each staying kernels module by file"
 "integrations/vllm/verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager.py: integrations/vllm/verity_vllm/program/kernels" = "a comment naming W11's model, which moves"
@@ -69,7 +67,7 @@ paths = []
 "verity_vllm.program.boolean" = "verity.ml.definitions.boolean"
 "verity_vllm.program.dtypes" = "verity.ml.definitions.dtypes"
 "verity_vllm.program.encoding" = "verity.ml.definitions.encoding"
-"verity_vllm.program.kernels" = "verity.ml.definitions.kernels"
+"verity_vllm.program.kernels" = "verity.ml.definitions.numerics"
 "verity_vllm.program.kernels.compiled_norm_literal" = "verity_vllm.program.compiled_norm_literal"
 "verity_vllm.program.kernels.compiled_relations" = "verity_vllm.program.compiled_relations"
 "verity_vllm.program.kernels.gemm_target_correspondence" = "verity_vllm.program.gemm_target_correspondence"
@@ -81,7 +79,6 @@ paths = []
 "verity_vllm.program.registry.layer_norm_difftest" = "verity_vllm.program.layer_norm_difftest"
 "verity_vllm.program.registry.mla_capture" = "verity_vllm.program.mla_capture"
 "verity_vllm.program.registry.moe_difftest" = "verity_vllm.program.moe_difftest"
-"verity_vllm.program.registry.pouw_rows" = "verity_vllm.program.pouw_rows"
 "verity_vllm.program.registry.quarantine" = "verity_vllm.program.quarantine"
 "verity_vllm.program.replay" = "verity.ml.definitions.replay"
 "verity_vllm.query.call_scope" = "verity.ml.definitions.call_scope"

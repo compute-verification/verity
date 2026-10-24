@@ -27,7 +27,6 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "ve
           "integrations/vllm/verity_vllm/program/kernels", "integrations/vllm/verity_vllm/commit/__init__.py",
           "integrations/vllm/verity_vllm/commit/challenge.py",
           "integrations/vllm/verity_vllm/program/registry/quarantine",
-          "integrations/vllm/verity_vllm/program/registry/pouw_rows.py",
           "integrations/vllm/verity_vllm/program/registry/mla_capture.py",
           "integrations/vllm/verity_vllm/program/registry/moe_difftest.py",
           "integrations/vllm/verity_vllm/program/registry/layer_norm_difftest.py",

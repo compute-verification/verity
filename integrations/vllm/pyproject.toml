@@ -13,10 +13,6 @@ dependencies = [
 [project.scripts]
 verity-vllm = "verity_vllm.pipeline.cli:main"
 
-# the modules whose Definitions the registry's `catalog.load` loads beside its own package's
-[project.entry-points."verity.definitions"]
-pouw_rows = "verity_vllm.program.registry.pouw_rows"
-
 [project.optional-dependencies]
 # The CPU half (compare / replay / gates / derivation tests) needs torch; the pod runtime adds vLLM through pod_bootstrap.sh.
 torch = ["torch>=2.4"]
