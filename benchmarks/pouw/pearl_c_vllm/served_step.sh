@@ -10,7 +10,8 @@
 # An ARMS entry ID+VAR=VALUE[+VAR=VALUE] runs arm ID with those variables set, in its own directory (ID_VAR_VALUE): A/B
 # rows in one lease, e.g. pouw-pearl-c-whole,pouw-pearl-c-whole+PEARLC_SPLIT=0.
 # GPUS: the GPUs the lease may take (gpu-lease --on), SPEC (default llama31-8b-1gpu-pearl-c-whole-served), POINT,
-# WARMUPS (2), REPS (3), MAX_MIN (the lease, 20); GPU_LEASE_TIMED=1 for rows taken inside a booked clean window
+# WARMUPS (2), REPS (3), MAX_MIN (the lease, 20), MEM_GB (the lease's host memory, 16);
+# GPU_LEASE_TIMED=1 for rows taken inside a booked clean window
 # (gpu-lease --timed). The node's pinned-vLLM Python is env.sh's VENV. numabind.py is #3395's
 # (benchmarks/hash/dither/numabind.py); NUMABIND names another copy, and without one the arms run unbound. The node's load
 # (loadavg and the leases) before and after each arm is OUT/load.txt. Scratch goes to one mktemp -d directory (TMPDIR),
@@ -60,7 +61,7 @@ if [ "${1:-}" != gpu ]; then
   BIND=(); [ -f "$NUMABIND" ] && BIND=("$VENV/bin/python" "$NUMABIND" "$OUT/numa.json")
   ON=(); [ -n "${GPUS:-}" ] && ON=(--on "$GPUS")
   rc=0
-  "$LEASE" 1 --wait "${ON[@]}" --max-min "${MAX_MIN:-20}" --mem-gb 64 -- "${BIND[@]}" bash "$0" gpu || rc=$?
+  "$LEASE" 1 --wait "${ON[@]}" --max-min "${MAX_MIN:-20}" --mem-gb "${MEM_GB:-16}" -- "${BIND[@]}" bash "$0" gpu || rc=$?
   if [ "$NSYS" = 1 ] && [ "${ANALYZE:-1}" = 1 ]; then
     a=0; analyze_all "$OUT" || a=$?; [ "$rc" != 0 ] || rc=$a
   fi
