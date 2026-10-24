@@ -261,14 +261,14 @@ theorem unitServed_of {K nw : ℕ} {Pub : Type} {dq : List ℤ → ℤ}
     {sess : Option (Fin 32) → RowsSession} {decL : RowsSession → (ℕ → ℕ → Option Bool) → LaneView K nw Pub}
     {decC : RowsSession → (ℕ → ℕ → Option Bool) → CombineView nw} {pub : Pub}
     {parts : Fin 32 → Fin nw → BitVec 32} {receipt : Fin nw → BitVec 32} {L : Leaf K}
-    (hK : 32 ∣ K) (hK₀ : 64 ≤ K) (hK₁ : K < 2 ^ 17)
+    (hK32 : 32 ∣ K) (hK64 : 64 ≤ K) (hK17 : K < 2 ^ 17)
     (hC : Accounting.Assumptions.TS.LeafChecks dq part sess decL decC)
     (hL : ∀ l, LaneAgrees (decL (sess (some l)) (openedReg (sess (some l)))) L pub (parts l) l)
     (hCb : decC (sess none) (openedReg (sess none)) = ⟨parts, receipt, true⟩)
     (hV : ∀ k, ∃ vals : Fin (sess k).Circ.N → Bool,
       openedReg (sess k) = portRead (sess k) vals ∧ ∀ u, ∀ g ∈ (sess k).P.io u, (sess k).Circ.eval vals g = vals g) :
     UnitServed dq part pub receipt L := by
-  have hC := hC hK hK₀ hK₁
+  have hC := hC hK32 hK64 hK17
   have hlane : ∀ l, LaneOk dq part (laneView L pub (parts l) l) := by
     intro l
     obtain ⟨vals, hv, he⟩ := hV (some l)
@@ -316,7 +316,7 @@ theorem Accounting.TS.Lanes.leafLanes_soundAt {Ω : Type} [Fintype Ω] {S nπ K 
       ∀ u, (sess x w i k).ServedRegistered u)
     (hO : ∀ x w i k, ∃ ks, (ok, ks) ∈ known x w i k)
     (hδ : ∀ x w i k, ((sess x w i k).n : ℝ≥0∞) * (sess x w i k).bound ≤ ENNReal.ofReal δ) (hδ0 : 0 ≤ δ)
-    (hK : 32 ∣ K) (hK₀ : 64 ≤ K) (hK₁ : K < 2 ^ 17)
+    (hK32 : 32 ∣ K) (hK64 : 64 ≤ K) (hK17 : K < 2 ^ 17)
     (hC : ∀ x w i, Accounting.Assumptions.TS.LeafChecks dq part (sess x w i) decL decC)
     (hSh : ∀ x w i, (∀ k, Flock.Registered.checkComplete (sess x w i k).c (sess x w i k).own = .ok () ∧
         Flock.KnownRead.check (sess x w i k).c
@@ -361,7 +361,7 @@ theorem Accounting.TS.Lanes.leafLanes_soundAt {Ω : Type} [Fintype Ω] {S nπ K 
         RowsSession.readsOwnRow_of (sess x w i k) (hacc k).1 (hno k (Finset.mem_univ _)).2 (hfull k).1 (hSr k)
       obtain ⟨parts, hL, hCb⟩ := hSh x w i (fun k => ⟨(hacc k).2.2.1, (hacc k).2.2.2.1, (hacc k).2.2.2.2.1⟩)
         hSr (fun k => (hfull k).2.2) hRo hA hK
-      refine Or.inl (unitServed_of hK hK₀ hK₁ (hC x w i) hL hCb fun k => ?_)
+      refine Or.inl (unitServed_of hK32 hK64 hK17 (hC x w i) hL hCb fun k => ?_)
       have hk1 := (hno k (Finset.mem_univ _)).1
       have hP : PortsOk ok (sess x w i k) := by
         obtain ⟨ks, hm⟩ := hO x w i k
@@ -466,7 +466,7 @@ open Accounting.TS.Lanes in
 served tile, and the leaf and receipt the committed rows decode to (`leafOf`, `receiptOf`), whose agreement with the
 decodes `decodes_of_checks` gives from acceptance. -/
 theorem Accounting.SecurityProofs.TS.LeafLanesSound : Accounting.Guarantees.TS.LeafLanesSound := by
-  intro Ω _ S nπ K nw sess₀ op sess out salts dq part pub roots place right δ hCR hLaw hδ hδ0 hK hK₀ hK₁ hC
+  intro Ω _ S nπ K nw sess₀ op sess out salts dq part pub roots place right δ hCR hLaw hδ hδ0 hK32 hK64 hK17 hC
   exact leafLanes_soundAt sess out (fun x w i k => knownOf (pub x w i) (salts x w i k) k)
     (fun _ _ _ k => PouwWindow.Lanes.readFull (servedTile K) (k.map Fin.val))
     (fun x w i k => PouwWindow.Lanes.ownOf (roots x w i) (place x w i) (servedTile K) (k.map Fin.val)) "o0" dq part
@@ -474,5 +474,5 @@ theorem Accounting.SecurityProofs.TS.LeafLanesSound : Accounting.Guarantees.TS.L
     (fun x w i => leafOf K (servedTile K) (sess x w i)) right δ hCR hLaw
     (fun x w i k h => (sess₀ x w i k).servedRegistered_canon (op x w i k) (PouwWindow.Lanes.checkOneRead_ok h))
     (fun x w i k => ⟨#[(PouwWindow.Lanes.okRow, salts x w i k "o0")], by
-      cases k <;> simp [knownOf, PouwWindow.Lanes.knownRows]⟩) hδ hδ0 hK hK₀ hK₁ hC
+      cases k <;> simp [knownOf, PouwWindow.Lanes.knownRows]⟩) hδ hδ0 hK32 hK64 hK17 hC
     (decodes_of_checks (roots := roots) (place := place))

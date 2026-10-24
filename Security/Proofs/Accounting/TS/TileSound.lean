@@ -25,7 +25,7 @@ theorem tile_of_checked {R C K : ℕ} (s : RowsSession) (o : s.Out) (ok : String
     {dec : (ℕ → ℕ → Option Bool) → ℕ → TileView R C K}
     (hk : Flock.Registered.checkKnownAll s.own known = .ok ()) (hm : (ok, ks) ∈ known)
     (hks : ∀ r ∈ ks, r.1 = okRow) (hS : ∀ u, s.ServedRegistered u)
-    (hK : 32 ∣ K) (hK₀ : 64 ≤ K) (hK₁ : K < 2 ^ 17)
+    (hK32 : 32 ∣ K) (hK64 : 64 ≤ K) (hK17 : K < 2 ^ 17)
     (hT : Accounting.Assumptions.TS.TileChecks dq s ok dec)
     (hc : CheckedRel s o ok (openedReg s)) : TileRel s o ok dq dec known (openedReg s) := by
   refine ⟨hc, ?_⟩
@@ -34,7 +34,7 @@ theorem tile_of_checked {R C K : ℕ} (s : RowsSession) (o : s.Out) (ok : String
   obtain ⟨-, vals, hv, hagree⟩ := hc
   refine Or.inl fun u hu => ?_
   rw [hv]
-  refine hT hK hK₀ hK₁ vals u (hagree u hu) fun g hw => ⟨_, tie_ok s ok hk hm hks hS hcol hw, ?_⟩
+  refine hT hK32 hK64 hK17 vals u (hagree u hu) fun g hw => ⟨_, tie_ok s ok hk hm hks hS hcol hw, ?_⟩
   obtain ⟨hg, hr, -⟩ := hw
   have e := congrFun (congrFun hv u.val) g.val
   simp only [openedReg, rowsReg] at e
@@ -45,7 +45,7 @@ end Accounting.TS.Tile
 
 open Accounting.TS Accounting.TS.Checked Accounting.TS.Tile in
 theorem Accounting.SecurityProofs.TS.TileSessionSound : Accounting.Guarantees.TS.TileSessionSound := by
-  intro Ω _ S nπ R C K sess out ok known dq dec right δ hCR hLaw hk hN hS hok _hComplete hKn hK hK₀ hK₁ hT hδ hδ0
+  intro Ω _ S nπ R C K sess out ok known dq dec right δ hCR hLaw hk hN hS hok _hComplete hKn hK32 hK64 hK17 hT hδ hδ0
   refine ⟨fun _ _ _ h => h.1, fun w i => ?_⟩
   have hC := (Accounting.SecurityProofs.TS.CheckedSessionSound sess out ok right δ hCR hLaw hk hN hS hok hδ
     hδ0).2.2.2
@@ -55,5 +55,5 @@ theorem Accounting.SecurityProofs.TS.TileSessionSound : Accounting.Guarantees.TS
     obtain ⟨⟨hacc, hkn⟩, hnot⟩ := hx
     refine ⟨hacc, fun hc => hnot ?_⟩
     obtain ⟨ks, hm, hks⟩ := hKn x w i
-    exact tile_of_checked (sess x w i) (out x w i) ok (known x w i) hkn hm hks (hS x w i) hK hK₀ hK₁ (hT x w i) hc
+    exact tile_of_checked (sess x w i) (out x w i) ok (known x w i) hkn hm hks (hS x w i) hK32 hK64 hK17 (hT x w i) hc
   exact le_trans (Pouw.RelativeSecurity.prob_mono hsub) (hC w i)
