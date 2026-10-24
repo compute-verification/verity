@@ -59,7 +59,9 @@ its own generation config to a request that omits them.
   each thread's episodes and page faults (`stalls`).
 - `client` sends each request of the traffic at its time after the origin on a connection of its own, reads the cells
   to the warden's close, and writes `client.json`: per connection its ordinal, outcome, every cell's kind and arrival,
-  the SHA-256 of what it sent and of the bytes it got, and the HTTP response read from them.
+  the SHA-256 of what it sent and of the bytes it got, and the HTTP response read from them. Its descriptor table holds
+  every connection before it sends (`reserve_fds`): its process has numpy's threads too, and a table grown mid-run
+  put cells that left the warden on time a bucket late (168 ms, every connection open as the client passed 256).
 - `check` (`check`): every window of the three records has a certificate that verifies and whose head is the
   record's, every window of the wire's two has a registration that verifies whose root is its record's rows under
   their salts (`check_cells`), the audit (`warden.audit`) accepts the records, and every connection's client got
@@ -118,6 +120,9 @@ RESERVE_PER_LANE, RESERVE_MIN = 256 << 10, 64 << 20
 FD_MARGIN = 256
 #: in the environment of a `serve` that re-executed itself on the C allocator, so that it does so once
 C_ALLOCATOR = "WARDEN_SERVE_C_ALLOCATOR"
+#: what a finite RLIMIT_MEMLOCK must leave beyond the process's mapping for `_memlock` to lock it: the warden's heap
+#: grows tens of MB in a run
+LOCK_HEADROOM = 4 << 30
 M_TRIM_THRESHOLD, M_MMAP_THRESHOLD, MCL_CURRENT, MCL_FUTURE, CAP_IPC_LOCK = -1, -3, 1, 2, 14
 #: the schedule's defaults here, where they differ from `WardenParams`'s: r·P = 494 bytes a bucket each way stays
 #: under what vLLM streams a request even with its tokens merged into fewer events, and D = 3 s from admission covers
@@ -480,16 +485,19 @@ def deployment_record(params: WardenParams, key: LmsKey, session: bytes, *, orig
 
 
 def _memlock(libc) -> str:
-    """mlockall(MCL_CURRENT | MCL_FUTURE) where nothing can then fail for it: RLIMIT_MEMLOCK is unlimited (its soft
-    limit raised to its hard one) or the process has CAP_IPC_LOCK; else what kept it."""
+    """mlockall(MCL_CURRENT | MCL_FUTURE) where the kernel permits it and the run can still grow under it: the process
+    has CAP_IPC_LOCK, or RLIMIT_MEMLOCK (its soft limit raised to its hard one) is unlimited or holds the whole of what
+    the process maps (VmSize, which MCL_CURRENT counts) and `LOCK_HEADROOM` more, since MCL_FUTURE then refuses any
+    mapping past it; else what kept it."""
     soft, hard = resource.getrlimit(resource.RLIMIT_MEMLOCK)
-    if soft != resource.RLIM_INFINITY and hard == resource.RLIM_INFINITY:
+    if soft != hard:
         resource.setrlimit(resource.RLIMIT_MEMLOCK, (hard, hard))
         soft = hard
-    status = Path("/proc/self/status").read_text()
-    caps = int(next((x.split()[1] for x in status.splitlines() if x.startswith("CapEff:")), "0"), 16)
-    if soft != resource.RLIM_INFINITY and not caps >> CAP_IPC_LOCK & 1:
-        return f"not locked: RLIMIT_MEMLOCK is {soft} bytes and the process lacks CAP_IPC_LOCK"
+    status = dict(x.split(":", 1) for x in Path("/proc/self/status").read_text().splitlines() if ":" in x)
+    caps, mapped = int(status["CapEff"], 16), int(status["VmSize"].split()[0]) << 10
+    if not caps >> CAP_IPC_LOCK & 1 and soft != resource.RLIM_INFINITY and soft < mapped + LOCK_HEADROOM:
+        return (f"not locked: RLIMIT_MEMLOCK is {soft} bytes, under the {mapped} the process maps and "
+                f"{LOCK_HEADROOM} to grow, and the process lacks CAP_IPC_LOCK")
     if libc.mlockall(MCL_CURRENT | MCL_FUTURE) != 0:
         return f"not locked: mlockall: {os.strerror(ctypes.get_errno())}"
     return "locked, current and future"
@@ -960,7 +968,9 @@ def main(argv=None) -> int:
         return 0
     if args.command == "client":
         ar._quiet_runtime()
-        asyncio.run(client(json.loads(args.deployment.read_text()), json.loads(args.traffic.read_text()), args.out))
+        traffic = json.loads(args.traffic.read_text())
+        reserve_fds(len(traffic) + FD_MARGIN)
+        asyncio.run(client(json.loads(args.deployment.read_text()), traffic, args.out))
         return 0
     if args.command == "check":
         result = check(args.run)
