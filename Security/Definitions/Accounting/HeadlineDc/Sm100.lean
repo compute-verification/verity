@@ -10,8 +10,8 @@ this file. `Accounting.Guarantees.TS.Sm100SheetHeadline` reads it.
 * `classes`: the 52 instruction classes of the DS-100 census, in the order `Fin 52` indexes them. `NOROW` is A2's
   catch-all: every warp instruction no other class names counts there, at its issue slot alone.
 * `ds100`, `sheet`: the B200's data sheet (DS-100), `benchmarks/pouw/machine_model/data/devices/sm_100/sheet.toml` as
-  `Security/Proofs/Accounting/Sheets/B200.lean` states it: f_max 1965 MHz (the driver's reported maximum (the data
-  sheet gives no clock)); each tensor class's dense MACs a warp instruction (sm_100's tcgen05 MMA whole (`m·n·k`), a 2:4
+  `Security/Proofs/Accounting/Sheets/B200.lean` states it: f_max 1965 MHz (the driver's reported maximum (the data sheet
+  gives no clock)); each tensor class's dense MACs a warp instruction (sm_100's tcgen05 MMA whole (`m·n·k`), a 2:4
   sparse form at its dense twin's, its mma.sync whole, DMMA's at the f64 peak) and its operand type's dense MACs an SM
   clock; the Nsight Compute pipes ALU, IMAD, SHFL and UNIFORM, each at its width (the Programming Guide's, and the
   uniform datapath's the census's measured UP line, which no document states); no shared-memory row (DS-100 prices
