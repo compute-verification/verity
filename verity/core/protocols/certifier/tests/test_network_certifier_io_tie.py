@@ -150,6 +150,11 @@ def small(**kw) -> Link:
                  6, **kw)
 
 
+def busiest(link: Link, shape: IT.Shape = BIG) -> int:
+    """The window of the link with the most data cells."""
+    return max(range(len(link.rows) // shape.T), key=lambda w: sum(not _marker(m) for m in commit(shape, link, w).map))
+
+
 @pytest.fixture(scope="module")
 def link():
     return busy(1)
@@ -157,8 +162,7 @@ def link():
 
 @pytest.fixture(scope="module")
 def big(link):
-    """The window of the busy link with the most data cells."""
-    return max((commit(BIG, link, w) for w in range(6)), key=lambda i: sum(not _marker(m) for m in i.map))
+    return commit(BIG, link, busiest(link))
 
 
 def _marker(m: IT.MapEntry) -> bool:
@@ -290,7 +294,8 @@ def _cell_tampers(inst):
 
     same = first((a, b) for a in data for b in data if a < b and m[a].q == m[b].q and parsed[a].id != parsed[b].id)
     other = first((i, m[j].q) for i in data for j in range(i // R * R, i // R * R + R) if m[j].q not in (0, m[i].q))
-    dup = first((i, j) for i in data for j in pads if m[j].q == m[i].q)
+    dup = first((i, j) for i in data for j in [*pads, *ends, *data]
+                if m[j].q == m[i].q and inst.cells[j] != inst.cells[i])
     early = first((i - 1, i) for i in ends if i % R and not _marker(m[i - 1]) and m[i - 1].q == m[i].q)
     later = first((i, i + 1) for i in ends if (i + 1) % R and m[i + 1] == (m[i].q, IT.EMPTY))
     r = 2
@@ -313,9 +318,9 @@ def _cell_tampers(inst):
             inst.cells, other[0], IT.data_cell(parsed[other[0]].id, other[1], B)),
         "a cell on a stream with no request": _set(inst.cells, d, IT.data_cell(parsed[d].id, 77_777, B)),
         "a wrong id": _set(inst.cells, data[1], IT.data_cell((parsed[data[1]].id + 1) % V, m[data[1]].q, B)),
-        "a covert byte in a pad": _set(inst.cells, pads[1], inst.cells[pads[1]][:-1] + b"\x01"),
-        "a covert byte in a data cell's padding": _set(inst.cells, data[2], inst.cells[data[2]][:-3] + b"!\n\n"),
-        "a pad on another stream": _set(inst.cells, pads[0], IT.pad_cell(B, m[pads[0]].q + 1)),
+        "a covert byte in a pad": None if not pads else _set(inst.cells, pads[-1], inst.cells[pads[-1]][:-1] + b"\x01"),
+        "a covert byte in a data cell's padding": _set(inst.cells, data[-2], inst.cells[data[-2]][:-3] + b"!\n\n"),
+        "a pad on another stream": None if not pads else _set(inst.cells, pads[0], IT.pad_cell(B, m[pads[0]].q + 1)),
         "a stream in an unheld slot": None if not unheld else _set(inst.cells, unheld[0], IT.pad_cell(B, m[data[0]].q)),
         "a dropped END": None if not ends else _set(inst.cells, ends[0], IT.pad_cell(B, m[ends[0]].q)),
         "an early END": None if early is None else early_end(*early),
