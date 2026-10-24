@@ -136,9 +136,10 @@ first coin.
   `warden_minutes` of its requests is refused, with the least that fits. Its request carries `device: warden`; it
   shares the certifier rehearsal's directory, run names, unit, `status` and `fetch`, and one of either runs at a time.
   The warden writes to `witness/` (0700): its three records, `certified.jsonl` (each record's head and certifier salt
-  with its certificate), the cells' salts, the traffic, the client's log and the check, all the prover's. Its unit
-  publishes to `out/` only what isn't: `deployment.json` (the warden's key, session and schedule), `cells.jsonl` (each
-  link-window's registration, `warden_rows`, and its cost) and `certificates.jsonl` (the certificates alone).
+  with its certificate), the cells' salts (each link-window's rows' and wiring's), the traffic, the client's log and
+  the check, all the prover's. Its unit publishes to `out/` only what isn't: `deployment.json` (the warden's key,
+  session and schedule), `cells.jsonl` (each link-window's registration, `warden_rows`, and its cost) and
+  `certificates.jsonl` (the certificates alone).
   `end.json` adds `device`, the check's verdict (`warden_outcome`: accepted, the number of problems and the counts
   `WARDEN_COUNTS` names), each registration's root by value and each witness file by name and size. `fetch RUN` gives
   `witness/` only to the run's own lane key (the request's `by`) and to vy-admin.
