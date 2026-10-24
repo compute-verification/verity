@@ -1,5 +1,6 @@
 import Proofs.Accounting.TS.Session.Lanes.Lane
 import Proofs.Pouw.H1Zy.Stream
+import Definitions.Pouw.H1Zy.Dequant
 
 /-!
 # `LeafChecks` at the Definition's own chain and dequant, and at lanes over `PouwH1Tile_v3`
@@ -48,7 +49,7 @@ theorem laneComputes_of_3 {K nw : ℕ} (T : Tile)
     (chain : LanePub → Fin 32 → (Fin 4 → Fin K → BitVec 8) → (Fin 8 → Fin K → BitVec 8) → Fin nw → BitVec 32)
     (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16) (sess : Option (Fin 32) → RowsSession) (hK32 : 32 ∣ K)
     (hK : K < 2 ^ 17) (h : LaneComputes3 T chain dqW sess) : LaneComputes T chain dqW sess := fun l vals hv =>
-  (h l vals hv).trans (Pouw.H1Zy.laneOkZ_eq_laneOk _ _ _ _ fun P l a b s t =>
+  (h l vals hv).trans (Pouw.H1Zy.laneOkZ_eq_laneOk _ _ _ _ fun _ l a b s t =>
     Pouw.H1Zy.laneZ3_eq _ l a b s t hK32 hK)
 
 /-- **`LeafChecks` from lanes over `PouwH1Tile_v3`**: at a `K` the tile binds at, `LaneComputes3` and
