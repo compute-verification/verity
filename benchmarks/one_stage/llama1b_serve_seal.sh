@@ -30,6 +30,9 @@ export PATH=/workspace/jobs/venv312/bin:$CUDA_HOME/bin:$PATH
 export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
 export TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=host
 export HIDDEN_GPU_BUILD=$ROOT/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
+# A learning step's transient host copy: a 1,984-token prefill step stages over 16 GiB (r20261024-222401-5a22), past the
+# collector's 4096 MiB default, and isn't committed; lease --mem-gb 256 with it.
+[ "$MAX_MODEL_LEN" -gt 512 ] && export VERITY_LEARN_HOST_BUDGET_MB=${VERITY_LEARN_HOST_BUDGET_MB:-65536}
 rs() { "$PY" -m research "$@" 2>&1 || research "$@" 2>&1; }
 { id; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; echo "serve dir $D port $PORT until $UNTIL"; nvidia-smi -L; } | tee "$OUT/machine.txt"
 rs keep "$ROOT" --owner @vllm --expires 7d --priority high \
