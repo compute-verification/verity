@@ -473,9 +473,10 @@ def _sha(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
 
 
-def _worded(tmp_path: Path, base_pins: str | None = None, **over: str) -> dict:
+def _worded(tmp_path: Path, base_pins: str | None = None, base_extra: dict | None = None, **over: str) -> dict:
     """`Models/Core/` moved to `Definitions/Core/` with the map's words applied, as `tools/move/rename.py` does it."""
-    base_files = {**WORD_BASE, "p/TRUSTED.sha256": base_pins or f"{_sha(WORD_BASE['S/Models/Core/A.lean'])}  ../S/Models/Core/A.lean\n"}
+    base_files = {**WORD_BASE, **(base_extra or {}),
+                  "p/TRUSTED.sha256": base_pins or f"{_sha(WORD_BASE['S/Models/Core/A.lean'])}  ../S/Models/Core/A.lean\n"}
     repo, base = _repo(tmp_path, base_files)
     for m in ("A", "B"):
         _move(repo, f"S/Models/Core/{m}.lean", f"S/Definitions/Core/{m}.lean")
@@ -505,6 +506,19 @@ def test_a_word_map_move_is_certified(tmp_path):
     kinds = {e["path"]: e["kind"] for e in r["edits"]}
     assert kinds["notes.md"] == kinds["more.md"] == kinds["S/Definitions/Core/A.lean"] == kinds["t.py"] == "words"
     assert kinds["p/TRUSTED.sha256"] is None
+
+
+def test_a_list_entry_the_words_repeat_may_go(tmp_path):
+    """Two directories the range merged, both listed: the words list the one twice, and the repeat may go; any other entry
+    stays."""
+    old = '{\n  "owns": [\n    "S/Definitions/Core/",\n    "S/Models/Core/",\n    "S/Proofs/"\n  ]\n}\n'
+    once = '{\n  "owns": [\n    "S/Definitions/Core/",\n    "S/Proofs/"\n  ]\n}\n'
+    (tmp_path / "ok").mkdir()
+    r = _worded(tmp_path / "ok", base_extra={"owners.json": old}, **{"owners.json": once})
+    assert r["certified"], r["refusals"]
+    (tmp_path / "dropped").mkdir()
+    dropped = '{\n  "owns": [\n    "S/Definitions/Core/",\n    "S/Definitions/Core/"\n  ]\n}\n'
+    assert not _worded(tmp_path / "dropped", base_extra={"owners.json": old}, **{"owners.json": dropped})["certified"]
 
 
 def test_a_chain_or_regex_spelling_is_kept_only_with_the_word_it_spells(tmp_path):

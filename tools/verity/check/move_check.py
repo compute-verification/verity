@@ -39,7 +39,8 @@ Every path git sees changed must be one of:
 - any of these after the move scripts' word maps (`tools/move/*.toml` with `[words]`, read at BASE) are applied, as
   `tools/move/rename.py` applies them, with only the words that rename what the range moved: a path the map moves to
   where the range moved it, or a Lean module likewise (`word_maps`). A text file the words alone rewrite into its new
-  text is an edit of that kind, whatever the file.
+  text is an edit of that kind, whatever the file, and so is one that also drops each list entry the words made a
+  repeat of the one before it (`merged`).
 Anything else is refused, with what differed and its first offending hunk. Exit 0 certified, 1 refused, 2 on a usage or
 git error.
 
@@ -655,6 +656,19 @@ def word_maps(base: Tree, renamed: list[tuple[str, str]], lmods: dict[str, str],
     return out
 
 
+ENTRY = re.compile(r'\s*"[^"\n]*",?\s*')
+
+
+def merged(old: str, new: str) -> str:
+    """``new`` (``old`` worded line for line) without each list entry the words made a repeat of the entry before it: two
+    directories the range merged into one, both listed."""
+    o, w = old.splitlines(keepends=True), new.splitlines(keepends=True)
+    if len(o) != len(w):
+        return new
+    return "".join(w[i] for i in range(len(w))
+                   if not (i and w[i] == w[i - 1] and o[i] != o[i - 1] and ENTRY.fullmatch(w[i])))
+
+
 def worded(text: str, path: str, maps: list, lock: bool = False) -> str:
     """``text`` with each word map applied as `tools/move/rename.py` applies it: not to a file the map excludes, and in a
     lock, not to the records."""
@@ -811,8 +825,8 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             continue
         same, pins = a == b, name == PINS and posixpath.basename(old) == PINS
         if not same and not pins and old != MOVES:
-            a = worded(a, old, maps, lock=k == "lock")
-            if a == b:
+            a, unworded = worded(a, old, maps, lock=k == "lock"), a
+            if b in (a, merged(unworded, a)):
                 report["edits"].append({"path": new, **({"old": old} if old != new else {}), "kind": "words"})
                 continue
         al, bl = a.splitlines(), b.splitlines()
