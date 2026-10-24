@@ -1,14 +1,15 @@
-"""The line of record as the Lean verifier computes it (`auditor_line.line_of_record`: `remote-audit-verifier`'s `line`
-request), held exactly to `line.py`'s on the same inputs: a disagreement refuses the line, naming both values, whether
+"""The line of record as the Lean verifier computes it (`auditor_line.line_of_record`: `remote-audit-verifier`'s
+`line_record` request off the record, or its `line` of groups and windows given), held exactly to `line.py`'s on the
+same inputs: a disagreement refuses the line, naming both values, whether
 the Lean's answer or line.py's is the one that moved, and on gate runs 5-7's credited sessions the Lean's line gives
 the line at each T the recorded `auditor_line.json` holds, every share bit for bit once the half block the chips'
 whole blocks add to the record's S is given back (gate run 7's all of them) but for four of gate runs 5 and 6's
 (`ULP`), where the record's float arithmetic is a float off the exact share's nearest.
 
-`fixtures/gate_run_<G>.json.gz` holds each credited session's line inputs on the auditor's clock, as this tree's
-`verifier.recorded_inputs` reads them from the run's record with no bursts (the reading of gate runs up to 7), its
-groups as rows in `line.GROUP`'s order, beside the recorded shares and line (r20261024-090248-249f, which reran each
-run's `auditor_line.analyse` through the Lean)."""
+`fixtures/gate_run_<G>.json.gz` holds each credited session's line inputs on the auditor's clock, of groups and windows
+given (`line`), as `verifier.recorded_inputs` read them from the run's record before the line read the Lean's record,
+with no bursts (the reading of gate runs up to 7), its groups as rows in `line.GROUP`'s order, beside the recorded
+shares and line (r20261024-090248-249f, which reran each run's `auditor_line.analyse` through the Lean)."""
 from __future__ import annotations
 
 import copy
@@ -39,6 +40,17 @@ INPUTS = {"groups": GROUPS, "per": 2, "blocks": 1000, "block_bytes": 4096, "chip
                     "link_bytes_per_s": "40960", "rebuild_burst_bytes": "4096", "disk_burst_bytes": "0",
                     "link_burst_bytes": "8192"}}
 """A paced session of seven groups whose line credits weights and filler in both forms, with wrong receipts."""
+RECORD = {**{k: INPUTS[k] for k in ("per", "block_bytes", "chip_bytes", "node_bytes", "delta", "rates")},
+          "samples": 1500, "seen": [{k: g[k] for k in line.SEEN} for g in GROUPS],
+          "record": {"windows": [{"lengths": [1000, 1000], "steps": [2 * t, 2 * t + 1], "post_seed": [0, 0],
+                                  "heads": [None, "ab" * 64], "stale": [1000, 1000],
+                                  "arrived_ns": [g["last_ns"] - 1, g["last_ns"]], "released_ns": g["released_ns"],
+                                  "deadline_ns": g["last_ns"] + 5, "opened_ns": g["last_ns"] + 1, "drawn": 1500}
+                                 for t, g in enumerate(GROUPS)],
+                     "blocks": 1000, "appended": 0, "released": 0, "lifetime": 2, "pace": {"k": 2, "window_ns": 10 ** 9},
+                     "appends": None, "registration": "00" * 64}}
+"""`INPUTS`' session read off its record: window t group t, two passes over the 1000 blocks, 1500 of its 2000 receipts
+drawn (`line.record_inputs_json`'s form)."""
 
 
 @pytest.fixture(scope="module")
@@ -49,14 +61,15 @@ def lean():
 
 
 class Answers:
-    """A Lean verifier whose `line` answers what `change` makes of line.py's line of the request's inputs."""
+    """A Lean verifier whose `line` and `line_record` answer what `change` makes of line.py's line of the request's
+    inputs."""
 
     def __init__(self, change):
         self.change = change
 
     def call(self, request: dict, body: bytes = b"") -> dict:
-        assert request["op"] == "line"
-        return self.change(line.run_json({k: v for k, v in request.items() if k != "op"}))
+        run = {"line": line.run_json, "line_record": line.record_run_json}[request["op"]]
+        return self.change(run({k: v for k, v in request.items() if k != "op"}))
 
 
 def moved(answer: dict) -> dict:
@@ -76,6 +89,21 @@ def test_the_lean_computes_the_line_line_py_computes(lean):
     bad = {**INPUTS, "windows": []}
     with pytest.raises(line.Refused, match=f"^{re.escape(line.run_json(bad)['refused'])}$"):
         al.line_of_record(bad, lean)
+
+
+def test_the_lean_reads_the_line_off_the_record_as_line_py_does(lean):
+    """Read off the record (`line_record`), the Lean's line is line.py's, and both are the line of the record's groups
+    and windows given; the record's own refusals are both's, word for word, and a moved answer is a disagreement."""
+    got = al.line_of_record(RECORD, lean)
+    assert got == line.record_run_json(RECORD) == al.line_of_record(RECORD, None)
+    assert got == line.run_json({**INPUTS, "windows": [[2000, 1500]] * len(GROUPS)})
+    assert all(0 < al.shares_of(got)[f]["time"] < 1 for f in line.FORMS)
+    for bad, why in (({**RECORD, "seen": RECORD["seen"][:-1]}, "the auditor saw 6 windows, not the record's 7"),
+                     ({**RECORD, "samples": 1499}, "window 0 drew 1500 of its 2000 receipts, not min(1499, 2000)")):
+        with pytest.raises(line.Refused, match=f"^{re.escape(why)}$"):
+            al.line_of_record(bad, lean)
+    with pytest.raises(al.Disagree, match=f"disagree at .{line.TIME_HELD}.time.weights_share"):
+        al.line_of_record(RECORD, Answers(moved))
 
 
 @pytest.mark.parametrize("side", ["lean", "python"])
