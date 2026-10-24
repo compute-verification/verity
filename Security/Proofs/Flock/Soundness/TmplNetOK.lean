@@ -116,10 +116,10 @@ theorem nets_widthPre {tags : Flock.Tags} {pre : Array (String × Net)} {c : Flo
       (portBits (c.nets.getD i default).2.inGroups).Nodup := by
   rcases P.nets _ (getD_mem_toList hi) with hp | hp | ⟨_, _, _, _, _, hl⟩
   · obtain ⟨ha, hb, hlk, hn⟩ := hpre _ hp
-    exact ⟨ha, hb, fun lk h => by rw [hlk] at h; cases h, hn⟩
+    exact ⟨ha, hb, (fun lk h => by rw [hlk] at h; cases h), hn⟩
   · obtain ⟨hlk, -, -, -, -, _, _, -, -, ha, hb⟩ := built_spec hp
     exact ⟨Discharge.Integrate.ofRows_width ha, Discharge.Integrate.ofRows_width hb,
-      fun lk h => by rw [hlk] at h; cases h, Discharge.Aliased.portBits_nodup hp⟩
+      (fun lk h => by rw [hlk] at h; cases h), Discharge.Aliased.portBits_nodup hp⟩
   · obtain ⟨h1, h2, h3⟩ := Discharge.Integrate.build_width hl
     refine ⟨h1, h2, h3, ?_⟩
     rw [(build_facts hl).2.1, Discharge.Aliased.portBits_eq]
