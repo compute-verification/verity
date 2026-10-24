@@ -319,6 +319,17 @@ theorem topRow_zero {lk : RecVStar.InnerLink} {n : ℕ} {wh : String} {c : ByteA
 
 /-! ## RecCap's slots are the coin server's tops -/
 
+theorem findIdx_of_find_range {α : Type} [Inhabited α] {a : Array α} {f : α → Bool} {p : ℕ}
+    (hp : (List.range a.size).find? (fun j => f a[j]!) = some p) : a.findIdx? f = some p := by
+  rw [List.find?_range_eq_some] at hp
+  obtain ⟨hfp, hpm, hlt⟩ := hp
+  have hps : p < a.size := List.mem_range.1 hpm
+  rw [Array.findIdx?_eq_some_iff_getElem]
+  refine ⟨hps, by rwa [getElem!_pos a p hps] at hfp, fun j hj => ?_⟩
+  have := hlt j hj
+  rw [getElem!_pos a j (by omega)] at this
+  simpa using this
+
 /-- **RecCap's slot at instance `n` is row `n` of its level's tops**: at a staged RecCap part `.cap l N` the witness
 checks against, port `top`'s hm96 slot at instance `n < N`, read off the witness (`hmCommit`), is `topRow lk l n`, the
 coin server's node `n` of `root_B` at level 0 (where `root_B` has the cap's `N` nodes) or of the reps' level-`l` tops.
@@ -329,8 +340,8 @@ theorem capRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
     (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true) {r : XR} {c : Circuit}
     (hr : readX x = some r) (hpc : r.w.parts[s]?.bind partCircuit = some c) {l N : ℕ}
     (hsv : (RecVStar.statements r.shape).toOption.bind (·[s]?) = some (.cap l N)) {i : RecIns}
-    {lk : RecVStar.InnerLink} (hi : insO xO = some i) (hlk : i.link = some lk) {q : ℕ} (hq : capPort c = some q) :
-    (l = 0 → lk.root.size = N) ∧ ∀ n < N, ∃ wh cc, RecVStar.topRow lk l n = .ok (wh, cc) ∧
+    {lk : RecVStar.InnerLink} (hi : insO xO = some i) (hlk : i.link = some lk) :
+    ∃ q, capPort c = some q ∧ (l = 0 → lk.root.size = N) ∧ ∀ n < N, ∃ wh cc, RecVStar.topRow lk l n = .ok (wh, cc) ∧
       Claims.Recursion.VStarB.readForms w (hmCommit c q n) = cc.toList := by
   obtain ⟨p, r', sv, hx, ht, hpi, hr', ⟨ss, hss, hsv'⟩, h0, htab⟩ := stagedTables hS
   rw [hr] at hr'
@@ -396,19 +407,19 @@ theorem capRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
   rw [hent] at hent' hent''
   cases hent'
   cases hent''
-  refine ⟨fun hl0 => ?_, fun n hn => ?_⟩
+  rw [hname] at hpp
+  have hq2 : p.sts[0].c.ports.findIdx? (·.name == "top") = some pp :=
+    findIdx_of_find_range (f := fun (x : Port) => x.name == "top") hpp
+  refine ⟨pp, hq2, fun hl0 => ?_, fun n hn => ?_⟩
   · subst hl0
     exact root_of_checkLink hlnk hcp
   have hNn := capFull_staged hS hsu hr hsv h0'
   rw [← e0] at hNn
   have hnn : n < p.sts[0].n := by omega
   have hnp : n < p.sts[0].pub.n := by rw [← setupOne_n hd]; exact hnn
-  have hq2 : p.sts[0].c.ports.findIdx? (·.name == "top") = some q := hq
   obtain ⟨hq', -⟩ := Array.findIdx?_eq_some_iff_getElem.1 hq2
   have hsl := slotPub_table ht' hd (by omega) hv1 L hz1 hq' hnp (div_lt_blocks hg0 hnn hnbl)
   rw [digest_tables htt] at hsl
-  rw [hname] at hpp
-  obtain rfl : pp = q := find_range_findIdx (f := fun (x : Port) => x.name == "top") hpp hq2
   obtain ⟨hlt, hrd, -⟩ := hall' n hnp
   have hrn : ((Array.range N).map some)[n]? = some (some n) := by simp [hn]
   rw [hreads, range_getD hnp, hrn] at hrd
@@ -516,7 +527,8 @@ theorem cap_cmt (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) {st 
   · rename_i hsi
     obtain ⟨c, hpc, hseg⟩ := Option.bind_eq_some_iff.1 hseg
     obtain ⟨q, hq, rfl⟩ := Option.map_eq_some_iff.1 hseg
-    obtain ⟨hroot, hbytes⟩ := capRow_bytes hS hck hr hpc (capAt_stmt hcap hsi) hi hil hq
+    obtain ⟨q', hq', hroot, hbytes⟩ := capRow_bytes hS hck hr hpc (capAt_stmt hcap hsi) hi hil
+    obtain rfl : q = q' := Option.some.inj (hq.symm.trans hq')
     have hN := hroot rfl
     unfold Claims.Recursion.VStarB.readSegs
     rw [List.flatMap_map, ← hN]
