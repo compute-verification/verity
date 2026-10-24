@@ -16,6 +16,7 @@ from __future__ import annotations
 import ctypes
 import os
 import shutil
+import warnings
 from functools import cache
 from pathlib import Path
 from typing import Any
@@ -168,14 +169,19 @@ def _device(torch: Any) -> _Device:
 
 @cache
 def available() -> bool:
-    """Whether this process can hash on the GPU: torch with CUDA, and the kernels built for its current device."""
+    """Whether this process can hash on the GPU: torch with CUDA, and the kernels built for its current device (a warning
+    says why not when CUDA is there)."""
     try:
         import torch
-
-        if not torch.cuda.is_available():
-            return False
+    except ImportError:
+        return False
+    if not torch.cuda.is_available():
+        return False
+    try:
         _device(torch)
-    except Exception:  # noqa: BLE001 - any missing piece (torch, CUDA, nvcc, a build) leaves the NumPy path
+    except Exception as e:  # noqa: BLE001 - nvcc missing or a failed build leaves the NumPy path, said once
+        warnings.warn(f"H1's registered values hash with NumPy: the GPU path doesn't build here ({type(e).__name__}: {e})",
+                      RuntimeWarning, stacklevel=2)
         return False
     return True
 
