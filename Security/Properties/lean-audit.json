@@ -6388,7 +6388,7 @@
    ]
   },
   "PouwCheck.Credit": {
-   "digest": "d7f6cc706881e9fa1c471c447c9e82d29e1127508b8777f41e48d768911b182e",
+   "digest": "d3385d5a624ca6c5fef2354062a55d5f857b5e7fe83d0f0b828aefedc5ae9784",
    "definitions": {
     "PouwCheck.Credit.DELTA": "7f25f6dfa4468aa37ff60109df9adcb1b985976a25b622ea09d3a6f339df33e1",
     "PouwCheck.Credit.Internal.credited._sparseCasesOn_11": "c761395d7fd9a1aacee6e78fbf660be44df3eb53ad0fda9be3ebfc71d763aa36",
@@ -6400,10 +6400,12 @@
     "PouwCheck.Credit.LAYOUT_KEYS": "0fea3f4d96797533d3a6ecd237921927ec3f0dbedfd70b6e3a0d21e5f86cb752",
     "PouwCheck.Credit.MAX_K": "2a9154d7f728f2d801f02430b30f6dcd8f3531e80d5bb2c1da169c8f35f0cea6",
     "PouwCheck.Credit.callWork": "889bdd65ce27e0c21431d2e8a260ea3ca737d3ba579d1dbe921a658c608ee268",
-    "PouwCheck.Credit.established": "532303a7f8926c65632e1e4d4578afe95bd19ca6a2a92204dc2777a0fef28328",
+    "PouwCheck.Credit.creditedWork.match_1": "5eb3a80be149e9bc1ea896cb18f11a58e19ef3878b7b30db6a905c7645496159",
+    "PouwCheck.Credit.established": "ed6ee67e59ffdb08881fd749bfdb0164a1894c7fcade7f80252afd9bff53011e",
     "PouwCheck.Credit.law": "652c16e7758813e0e4dddd45940ed7a9a92daf8ba15c5315d27fe25182f163ab",
     "PouwCheck.Credit.layoutRefuse": "4a415164f4295a282b8f97dcdb41a093d0fcebc94e4d4b2cdcfd5012294eb2c0",
     "PouwCheck.Credit.listStr": "aadf6d2e3aaa03a76c3cb4a42842ec7351c0f4865dea0a48a4ebf8539472c683",
+    "PouwCheck.Credit.servedWork": "d285aab7ee369f956aa79f6ec075f131d9316a1c024f64c2f05e2ebc261621f7",
     "PouwCheck.Credit.strata": "e2d329d03e95d7da9358ab66cb13176a27836f47336714b9ae853c1fd46f9a87",
     "PouwCheck.Credit.strata._sparseCasesOn_13": "07b66b6c87de5f757f2f0c4a8369b81b9c1a396833b84a70ec80ad4a64355ce6",
     "PouwCheck.Credit.strata._sparseCasesOn_14": "409f0b54512ca9d98b1ca54c52974f3a7b4e829206bfd0aca7adda99b207b24d",
@@ -7700,12 +7702,12 @@
    ]
   },
   "Properties.Pouw.Credit": {
-   "digest": "6eccc729019975ca71045feb3bc8f0f9e3c7d7a56b9a7d1d5cea65e711d2de74",
+   "digest": "1aedaa0e6453c1fdcb9f8beed5d9efd94ae9268e72df335ad636976f309ba0bc",
    "definitions": {
     "Properties.Pouw.Credit.EpsAtSound": "3caafbe985add6486d8909250ef51f8a50b8bcb8a8ac14694f9881c6cd0e1a6b",
-    "Properties.Pouw.Credit.EstablishedSound": "ecbe52e69e9e3754ebaab5f5f746ad6867cd44f5bb3660b419fee03efaddbb74",
+    "Properties.Pouw.Credit.EstablishedSound": "1d815e5771c3fe064a93018caec486eb526d4fda385bdd49ea43b75494b3058f",
     "Properties.Pouw.Credit.WorkDrawMisses": "e6c933f9295cb759719c165f019d895fea0a0ab121b8d17f518e3aaac425761f",
-    "Properties.Pouw.Credit.creditedWork": "f5b5e379542af0a5e40b41c6da62e5c38c185e7f07c4065b7a233032f396c7a9",
+    "Properties.Pouw.Credit.creditedWork": "a22b8f2c576c22410c362913d19a734ee4731a5ec3d907535822c3c160ff9499",
     "Properties.Pouw.Credit.drawnOn": "c780159f9e3c5c48a9a2c6a1d04ffa2e8908e5eb3096d128bdf3cae888d6c512"
    },
    "guarantees": [
