@@ -8,8 +8,8 @@
 # env: RS_PROVE, RS_BUILD (';'-separated)  RS_MEM_GB=64 (the job's --mem-gb)  RS_CACHE
 set -uo pipefail
 ROUTER='MoeRouterSigmoidBias_v1{E=%d,TOPK=%d,SCALE={"f64":"0x1.4000000000000p+1"},KERNEL="block"}'
-RS_PROVE=${RS_PROVE-$(printf "$ROUTER" 8 2)}
-RS_BUILD=${RS_BUILD-inline $(printf "$ROUTER" 8 2);slots $(printf "$ROUTER" 256 8)}
+RS_PROVE=${RS_PROVE-$(printf "$ROUTER" 64 8)}
+RS_BUILD=${RS_BUILD-slots $(printf "$ROUTER" 256 8)}
 export HZ_CONFIGS=m1-reads HZ_MEM_GB=${RS_MEM_GB:-64}
 [ -n "${RS_CACHE:-}" ] && export HZ_CACHE=$RS_CACHE
 source benchmarks/pouw/hidden_zk/job.sh
