@@ -48,7 +48,7 @@ def _same(a: Path, b: Path) -> list[str]:
 def check_shape(a, n: int, k: int) -> dict:
     import torch
     import glm53_timing as T
-    from verity_vllm.protocol_options import pouw_pearl_c_grouped as PG
+    from verity_vllm.protocols.pouw.pearl_c import grouped as PG
 
     run, weights, kernel, gen = T.device_run([(n, k)] * EXPERTS, a.scheme, a.cubin)
     R, G = run.kernel.run, PG.module(run)

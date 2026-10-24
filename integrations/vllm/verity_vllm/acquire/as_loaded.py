@@ -19,7 +19,7 @@ import numpy as np
 import torch
 
 from verity_vllm.program.frontend.marlin_moe_leaf import mxfp4_marlin_layers
-from verity_vllm.protocol_options import WeightsView
+from verity_vllm.protocols import WeightsView
 
 _MARLIN_FP4 = "vllm.model_executor.layers.quantization.utils.marlin_utils_fp4"
 
