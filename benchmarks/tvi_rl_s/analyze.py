@@ -150,7 +150,7 @@ def online(dirs, window=25):
             if prev and prev["last"] >= last:
                 continue
             runs[task][method][seed] = {"last": last, "w": w, "acc": sum(w) / len(w), "S_bits": meta["S_bits"],
-                                        "n_params": meta["n_params"], "first": steps.get(1)}
+                                        "n_params": meta["n_params"], "first": steps.get(1), "prompts": meta.get("prompts", 32)}
     rng = random.Random(1)
     out = {}
     for task, by in sorted(runs.items()):
@@ -190,8 +190,8 @@ def main(dirs):
             firsts.update({s: x for s, x in r["step1"].items() if x is not None})
         base = sum(firsts.values()) / len(firsts) if firsts else None
         base_boot = [base] * B
-        t["base_source"] = (f"step-1 training reward, before any update ({len(firsts)} seeds x 32 prompts x 8 samples; "
-                            "its noise is not in the CIs)")
+        t["base_source"] = (f"step-1 training reward, before any update ({len(firsts)} seeds x {t['prompts']} prompts x 8 "
+                            "samples; its noise is not in the CIs)")
         full = [r for r in t["rows"] if r["method"] == "full"]
         for r in t["rows"]:
             if base is None:
