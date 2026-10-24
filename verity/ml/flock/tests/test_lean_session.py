@@ -1,9 +1,10 @@
 """The firewall's session loop in Lean (`Flock/Firewall/Session.lean`, `flock-firewall session`), which owns the auditor's
 connection: a prover connects to it as it would to the auditor, and each connection is one session it relays on its own
 connection to the auditor. Here a scripted auditor stands on the far side. What crosses is held to the loop's rules:
-`Register` and other frames relayed as they are, the `Hello` that leaves the Lean one at the auditor's draw (at the
-fixture's statement, `test_lean_hello.py`'s recorded `Hello` at the loop's nonce) and never the prover's, `Hello`'s
-answer and every coin checked, and every coin after a refusal refused. The loop starts the reps' frames on a port of its
+every frame that leaves the loop's own encoding (a `Proof` dropped, a frame it does not serve refused), the `Hello`
+that leaves the Lean one at the auditor's draw (at the fixture's statement, `test_lean_hello.py`'s recorded `Hello` at
+the loop's nonce) and never the prover's, `Hello`'s answer and every coin checked, and every coin after a refusal
+refused. The loop starts the reps' frames on a port of its
 own and drives each itself, every coin a frame takes the loop's own opening. `flock-circuit`'s firewalled sessions through it
 are the end-to-end check (live PROTOCOL.md §10.4)."""
 from __future__ import annotations
@@ -163,13 +164,51 @@ def test_usage(junk):
     assert p.returncode == 2 and p.stderr.decode().startswith("usage: flock-firewall session")
 
 
-def test_register_and_other_frames_are_relayed(loop):
+PING = ping(b"\0" * 64)
+
+
+def test_every_frame_leaves_as_the_loops_own(loop):
+    """`Register` and `Ping` leave as the loop's own frames (the prover's probe, 64 zero bytes), whatever bytes the prover
+    put in or after them."""
     auditor, lp = loop
     s = lp.connect()
-    assert call(s, REGISTER) == draw("null")
-    assert call(s, ping(b"abc")) == b"\x01"
+    assert call(s, REGISTER + b"trailing") == draw("null")
+    assert call(s, ping(b"abc") + b"trailing") == b"\x01"
     s.close()
-    assert auditor.got[0] == [REGISTER, ping(b"abc")]
+    assert auditor.got[0] == [REGISTER, PING]
+
+
+def test_a_provers_proof_never_leaves(loop):
+    """A `Proof` the prover sends is answered `Ok` and dropped: the proofs that leave are the loop's finish's."""
+    auditor, lp = loop
+    s = lp.connect()
+    call(s, REGISTER)
+    proof = b"\x05" + _bytes(b"t") + struct.pack("<I", 0) + _bytes(b"junk")
+    assert call(s, proof) == b"\x01"
+    s.close()
+    assert auditor.got[0] == [REGISTER]
+
+
+@pytest.mark.parametrize("frame, why", [
+    (b"\x63\x01\x02", "a request the session loop does not serve"),
+    (b"\x08" + _bytes(b"state") + struct.pack("<I", 2), "a request the session loop does not serve"),
+    (b"\x02" + _bytes(b"\0" * 32), "a Link before the session's Hello"),
+    (b"\x03" + _bytes(b"rep0") + _bytes(b"") + _bytes(b"label") + b"\0" * 8,
+     "an Open of rep0, which is none of the session's rep streams"),
+    (b"\x03", "an Open frame without its stream"),
+])
+def test_a_frame_the_loop_does_not_serve_never_leaves(loop, frame, why):
+    """An unknown tag, `Prime`, a `Link` before the `Hello` and an `Open` of a stream that is none of the session's rep
+    streams are refused, and every coin after: none reaches the auditor."""
+    auditor, lp = loop
+    s = lp.connect()
+    call(s, REGISTER)
+    got = reason(call(s, frame))
+    assert got == STOP + why, got
+    if frame != b"\x03":
+        assert reason(call(s, round_("rep0", b"r", 2))) == got
+    s.close()
+    assert auditor.got[0] == [REGISTER]
 
 
 def test_the_provers_hello_never_leaves(loop):
@@ -184,7 +223,7 @@ def test_the_provers_hello_never_leaves(loop):
     assert reason(call(s, COMMIT)) == why
     assert call(s, ping(b"p")) == b"\x01"
     s.close()
-    assert auditor.got[0] == [REGISTER, ping(b"p")]
+    assert auditor.got[0] == [REGISTER, PING]
 
 
 def test_coins_before_the_commitment(loop):
@@ -398,7 +437,8 @@ def test_a_commit_leaves_only_with_the_loops_level_0(zk):
     """The loop draws a table's level-0 hiding and salts itself, fresh for each table: two draws over one witness differ,
     in the hiding and the root. A `Commit` leaves only when each root it carries is one the loop drew for its own session
     at its table's `m`: a root drawn for another session, or at another `m`, is refused, never reaching the auditor, and
-    one at the statement's leaves, its opening then checked (zero words refused)."""
+    one at the statement's leaves, its opening then checked (zero words refused). The `Commit` that leaves is the loop's
+    own, whatever the prover's carried beside its roots: `root_F` the session's Σ, no public words, nothing after."""
     S = Sessions(_args(zk, "pub-16.bin"))
     s, name = S.session()
     why = reason(call(s, COMMIT))
@@ -413,19 +453,28 @@ def test_a_commit_leaves_only_with_the_loops_level_0(zk):
     s2.close()
     s, name = S.session()
     _, _, r = level0(S.lp, other, _zeros(other), name)
-    why = reason(call(s, commit([(table, r)])))
+    why = reason(call(s, doctored([(table, r)])))
     s.close()
     if "drawn at m" in why:
         m = int(re.search(r"its statement's is (\d+)$", why)[1])
         assert why == STOP + f"a Commit whose root of {table} was drawn at m = {other}, where its statement's is {m}"
         s, name = S.session()
         _, _, r = level0(S.lp, m, _zeros(m), name)
-        why = reason(call(s, commit([(table, r)])))
+        why = reason(call(s, doctored([(table, r)])))
         s.close()
     assert why.startswith(STOP + "coin opening of session round 0: 0 words"), why
     S.lp.close()
     assert [[f[0] for f in c] for c in S.auditor.got][-1] == [10, 1, 7]
     assert all([f[0] for f in c] == [10, 1] for c in S.auditor.got[:-1])
+    _, sent, left = S.auditor.got[-1]
+    sigma = bytes.fromhex(json.loads(sent[5:])["link"]["sigma"])
+    assert left == b"\x07" + _bytes(sigma) + commit([(table, r)])[5:]
+
+
+def doctored(roots: list[tuple[str, bytes]]) -> bytes:
+    """A `Commit` of `roots` with a `root_F` that is not Σ, a public word, and bytes after it."""
+    return (b"\x07" + _bytes(b"\xab" * 63) + commit(roots)[5:-4] + struct.pack("<I", 1) + _bytes(b"x") + _bytes(b"\1" * 16)
+            + b"trailing")
 
 
 @pytest.mark.slow

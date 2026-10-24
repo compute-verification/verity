@@ -733,6 +733,75 @@ def test_serving_defaults_give_every_arm_process_one_inductor_cache(monkeypatch)
     assert all(e[runner.INDUCTOR_DIR_MARK] == "1" for e in spawned)
 
 
+def test_a_served_variant_times_a_builtin_engine_in_its_own_execution_under_an_eager_spec(monkeypatch):
+    """Every protocol row times eager against eager while vLLM serves compiled: `llama31-8b-fp8-1gpu-compiled` times
+    the eager rows' stock FP8 engine against itself at vLLM's serving defaults, eager and compiled, in one spec."""
+
+    from verity_bench.vllm import runner
+
+    spec = resolve_spec("llama31-8b-fp8-1gpu-compiled")
+    assert spec.eager and "serving_defaults" not in spec.preset.engine_settings
+    base, served_eager, compiled = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
+    assert [(a.id, a.precision, a.control, a.execution) for a in (base, served_eager, compiled)] == [
+        ("stock-fp8", "fp8", None, None),
+        ("stock-fp8@eager", "fp8", None, "eager"),
+        ("stock-fp8@compiled", "fp8", None, "compiled"),
+    ]
+    assert compiled.to_json()["execution"] == "compiled"
+    assert resolve_arms("stock-fp8,stock-fp8@compiled")[1].control == "stock-fp8"
+    for bad in ("stock-fp8@bi-eager", "nope@compiled"):
+        with pytest.raises(ValueError, match="BUILTIN@LABEL"):
+            resolve_arms(f"stock-fp8,{bad}")
+
+    spawned = []
+
+    class Context:
+        def Pipe(self):
+            class End:
+                def recv(self):
+                    return {"ready": {}}
+
+                def close(self):
+                    pass
+            return End(), End()
+
+        def Process(self, target, args):
+            spawned.append(args)
+            return SimpleNamespace(start=lambda: None, join=lambda: None)
+
+    monkeypatch.setenv(runner.INDUCTOR_DIR_MARK, "")
+    monkeypatch.delenv("TORCHINDUCTOR_CACHE_DIR", raising=False)
+    monkeypatch.setattr(runner.tempfile, "mkdtemp", lambda prefix: f"/tmp/{prefix}x")
+    factory = runner.ProcessEngineFactory(eager=True)
+    factory.context = Context()
+    preset, _ = served(spec.preset, spec.eager)
+    for arm in (base, served_eager, compiled):
+        factory.create(arm, preset, resident=True)
+    built = [runner.engine_args(p, a.precision, resident=True, eager=e) for _, a, p, _, e in spawned]
+    assert [(b["enforce_eager"], b.get("execution"), "compilation_config" in b) for b in built] == [
+        (True, None, False), (True, "eager", False), (False, "compiled", False)]
+    assert {b["kv_cache_memory_bytes"] for b in built} == {8 << 30}
+    assert {b["max_num_batched_tokens"] for b in built} == {4096}
+    assert runner.os.environ["TORCHINDUCTOR_CACHE_DIR"] == "/tmp/verity_bench_inductor_x"
+
+
+def test_a_served_variants_arm_settings_take_only_its_control(tmp_path):
+    source = (SPEC_ROOT / "llama31-8b-fp8-1gpu-compiled.toml").read_text()
+    path = tmp_path / "spec.toml"
+    section = '[arm_settings."stock-fp8@compiled"]\ncontrol = "none"'
+    assert section in source
+    path.write_text(source.replace(section, '[arm_settings."stock-fp8@compiled"]\ncontrol = "stock-fp8@eager"'))
+    spec = load_spec(path)
+    assert resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)[2].control == "stock-fp8@eager"
+    for old, new, why in ((section, '[arm_settings."stock-fp8@compiled"]\nprecision = "bfloat16"', "takes only its control"),
+                          (section, '[arm_settings."stock-fp8@compiled"]\ncontrol = "stock"', "control must be another arm"),
+                          ('[arm_settings."stock-fp8@compiled"]', '[arm_settings."stock-fp8"]', "must name a protocol arm")):
+        assert old in source
+        path.write_text(source.replace(old, new))
+        with pytest.raises(ValueError, match=why):
+            load_spec(path)
+
+
 def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_spec(monkeypatch):
     """BENCH-17: `pouw:pearl-c-sm120-v1-h3` was refused before any engine started (r20261018-193211-a10c): the harness
     gave every protocol arm the preset's FP8 and no pouw settings. Its spec's `arm_settings` give it the BF16 checkpoint,
