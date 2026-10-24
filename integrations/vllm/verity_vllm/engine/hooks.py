@@ -16,6 +16,8 @@ import time, so every layer may use it.
 """
 from __future__ import annotations
 
+import importlib.abc
+import importlib.machinery
 from collections.abc import Callable, Iterator, MutableSequence
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -142,6 +144,31 @@ def patch(owner: Any, name: str, value: Any) -> Patch:
 def wrap(owner: Any, name: str, make: Callable[[Any], Any]) -> Patch:
     """Replace ``owner.name`` with ``make(original)``, where ``original`` is ``getattr(owner, name)`` now."""
     return patch(owner, name, make(getattr(owner, name)))
+
+
+class OnImport(importlib.abc.MetaPathFinder):
+    """Finds ``site`` as the path finder would and runs ``then(module)`` once the module's own code has run, so a pin on a
+    module global is in place before anything calls it, and nothing is imported for it."""
+
+    def __init__(self, site: str, then: Callable[[Any], Any]) -> None:
+        self.site, self.then = site, then
+
+    def find_spec(self, name: str, path: Any = None, target: Any = None) -> Any:
+        if name != self.site:
+            return None
+        spec = importlib.machinery.PathFinder.find_spec(name, path)
+        if spec is None or spec.loader is None or not hasattr(spec.loader, "exec_module"):
+            return spec
+        then = self.then
+
+        def exec_module(run: Any) -> Any:
+            def exec_then_pin(module: Any) -> None:
+                run(module)
+                then(module)
+            return exec_then_pin
+
+        wrap(spec.loader, "exec_module", exec_module)
+        return spec
 
 
 def append(seq: MutableSequence[Any], item: Any) -> Appended:

@@ -74,8 +74,8 @@ COMMANDS = {"build": BuildOptions, "node": NodeOptions, "node-registration": NR.
 
 
 def node_main(a: NodeOptions) -> int:
-    """`node_descriptor.json.gz` and `node.json`: the summary, θ's parameters and which rank emitted each run of the program
-    function's body (`spans`; the root's nodes are its input nodes, one per parameter's lowering, then the body's)."""
+    """`node_descriptor.json.gz` and `node.json`: the summary, θ's parameters and which rank emitted each run of the body
+    Definition's nodes (`spans`; the root's nodes are its input nodes, one per parameter's lowering, then one Call of the body)."""
     from verity.ml.circuits.codec import canonical_json
     from .node import build_node_program, check_ranks
     if os.path.exists(os.path.join(a.out, "build_summary.json")) or os.path.basename(os.path.normpath(a.out)).startswith("build_"):

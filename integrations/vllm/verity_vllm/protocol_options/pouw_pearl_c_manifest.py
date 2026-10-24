@@ -7,6 +7,10 @@ from __future__ import annotations
 from verity.core.protocols.pouw.audit import Epoch, Workload
 from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
+from verity.core.protocols.pouw.window import LIVE_SCHEME
+from verity.core.protocols.sampled_proofs.challenger import LiveCommitment, LiveOpening
+
+from .pouw_pearl_c_host import epoch_of
 
 MANIFEST_SCHEMA = "verity-vllm/pouw-pearl-c-run/v2"
 #: a pass recorded before epoch coins, salted from a beacon: only a replay of a recorded pass reads it (`manifest_epoch`)
@@ -26,11 +30,11 @@ def manifest_schema(man: dict, recorded: bool = False) -> str:
     return schema
 
 
-def manifest_epoch(man: dict, coins: CoinCommitment | None, recorded: bool = False) -> tuple[Epoch, str]:
+def manifest_epoch(man: dict, coins: CoinCommitment | LiveCommitment | None, recorded: bool = False) -> tuple[Epoch, str]:
     """A retained pass's epoch, as its verifier re-starts it, and how its salt was had.  A `MANIFEST_SCHEMA` pass carries
     the epoch's coin commitment and its salt coin's opening: the commitment must be `coins`, the one the challenger published
-    (the verifier's copy, not the pass's), and the opening the salt coin's against it, opened after every weight's root
-    (`Epoch.start`).  A pass recorded before epoch coins (`MANIFEST_SCHEMA_RECORDED`) carries a beacon instead, which only a
+    (the verifier's copy, not the pass's; a live session's when the pass's coins are `LIVE_SCHEME`'s), and the opening the
+    salt coin's against it, opened after every weight's root (`epoch_of`).  A pass recorded before epoch coins (`MANIFEST_SCHEMA_RECORDED`) carries a beacon instead, which only a
     replay of a recorded pass reads (`recorded`: `Epoch.unverified`, a salt that claims nothing).  Either way the pass's salt
     must be the epoch's.  Raises `DomainError` naming what doesn't hold."""
     schema = manifest_schema(man, recorded)
@@ -41,14 +45,15 @@ def manifest_epoch(man: dict, coins: CoinCommitment | None, recorded: bool = Fal
             raise DomainError("the pass has no salt coin")
         if coins is None:
             raise DomainError("the pass's salt coin opens against the epoch's published coin commitment, which the verifier holds")
+        live = isinstance(man.get("coins"), dict) and man["coins"].get("scheme") == LIVE_SCHEME
         try:
-            opening = CoinOpening.from_json(man["salt_opening"])
-            claimed = CoinCommitment.from_json(man["coins"])
+            opening = (LiveOpening if live else CoinOpening).from_json(man["salt_opening"])
+            claimed = (LiveCommitment if live else CoinCommitment).from_json(man["coins"])
         except (KeyError, TypeError, ValueError) as e:
             raise DomainError(f"the pass's coins are malformed: {e}") from None
         if claimed != coins:
             raise DomainError("the pass's coin commitment is not the epoch's")
-        epoch, how = Epoch.start(Workload(matmuls), roots, coins, opening), "coin"
+        epoch, how = epoch_of(Workload(matmuls), roots, coins, opening), "coin"
     elif "beacon" in man:
         epoch, how = Epoch.unverified(Workload(matmuls), roots, bytes.fromhex(man["beacon"])), "recorded beacon"
     else:

@@ -92,6 +92,7 @@ def _entry():
     return f"pouw:{PH.SCHEME}"
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("k,n,m", SHAPES, ids=["decode-1", "partial-5", "rows-33-cols-40"])
 def test_every_served_shape_compiles_to_full_warp_tiles(k, n, m):
     """Decode's one row, a partial block and a column count off the tile: every unit is a full 32 x 32 grid, the call one
@@ -104,6 +105,7 @@ def test_every_served_shape_compiles_to_full_warp_tiles(k, n, m):
     assert {u.defn.base_id for u in c.units} == {"PouwH1Tile_v1"}
 
 
+@pytest.mark.slow
 def test_the_site_rows_are_the_tap_rows_then_distinct_pad_rows():
     """A's first m rows are the call's s8 rows (parameter x) in order and its B rows the weight's (parameter w); each pad row
     reads a constant of its own, so the 32 rows are distinct and the tile a grid."""
@@ -134,6 +136,7 @@ def _run(steps=3, rows=32):
     return PH.H1Run("t", SALT, {0: "q", 1: "o"}, [(32, K), (40, K)], rows, steps)
 
 
+@pytest.mark.slow
 def test_calls_sit_at_public_positions_and_empty_steps_close_the_window():
     """Call (s, w) is at s U + off(w) whatever its served rows; the steps past the last served one are empty calls, so the
     window is every (step, linear) in order; given each call's (root(A), root(B)), every unit's seed is its own."""
@@ -162,10 +165,39 @@ def test_a_call_past_the_window_or_its_rows_is_refused_and_the_window_is_not_sta
     assert run.record(0, *_tap(rng, 1, 32)) is None
     run.close()
     assert run.refused == [{"step": 0, "linear": 0, "m": 33}, {"step": 1, "linear": 0, "m": 1}] and not run.static()
-    out_of_order = _run(steps=1)
-    out_of_order.record(1, *_tap(rng, 1, 40))
-    out_of_order.close()
-    assert not out_of_order.order_ok and not out_of_order.static()
+    partial = _run(steps=1)
+    partial.record(1, *_tap(rng, 1, 40))
+    partial.close()
+    assert partial.order_ok and not partial.details["last_step_complete"] and not partial.static()
+
+
+def test_a_forward_out_of_module_order_sits_each_call_at_its_step_and_linear():
+    """GLM-5.3's DSA attention runs fused_qkv_a_proj and q_b_proj before its indexer's wq_b, which module order puts
+    first; counting steps at linear 0 put each forward's first two calls in the step before (step -1, refused, for the
+    first) and past their round's root (r20261023-224227-ea5a). A step starts at the window's first call and at a linear
+    the step already holds: each call sits at (s, w)'s index and position, and round s closes once all of step s's calls
+    are in. A step whose order departs from the first step's isn't static."""
+    rng = np.random.default_rng(5)
+    shapes, forward = [(32, K), (40, K), (32, K)], (1, 2, 0)
+
+    def run_of(orders):
+        run = PH.H1Run("t", SALT, {0: "wq_b", 1: "qkv_a", 2: "q_b"}, shapes, 32, 3)
+        closed = []
+        for m, order in zip((3, 2), orders):
+            for w in order:
+                assert run.record(w, *_tap(rng, m, shapes[w][0])) is not None
+                closed.append(len(run.round_log))
+        run.close()
+        return run, closed
+
+    run, closed = run_of([forward, forward])
+    assert closed == [0, 0, 1, 1, 1, 2] and run.refused == [] and run.order_ok and run.static()
+    assert [(c.index, c.step, c.layer, c.base) for c in run.calls] == [
+        (3 * s + w, s, w, s * run.u_step + run.offs[w]) for s in range(3) for w in range(3)]
+    assert run.step_rows() == [3, 2, 0] and run.details["last_step_complete"]
+    assert run.call(4).module == "qkv_a" and run.call(4).step == 1
+    swapped, _ = run_of([forward, (2, 1, 0)])
+    assert not swapped.order_ok and not swapped.static()
 
 
 def test_credit_is_the_served_rows_and_the_padding_is_shown_beside_it():
@@ -266,6 +298,7 @@ def test_listeners_get_the_served_tensors_and_bind_the_calls_roots():
     assert run.calls_root() != before
 
 
+@pytest.mark.slow
 def test_units_are_in_row_block_then_column_block_order():
     """Unit u of a call covers row block u // (N' / 32) and column block u % (N' / 32), so position base + u names a tile."""
     c = PH.compiled(K, 40, 33)
@@ -274,6 +307,7 @@ def test_units_are_in_row_block_then_column_block_order():
     assert all(list(u.rows) == list(range(u.rows[0], u.rows[0] + 32)) for u in c.units)
 
 
+@pytest.mark.slow
 def test_z_is_the_exact_product_on_each_units_cells():
     rng = np.random.default_rng(5)
     xq = rng.integers(-127, 128, (33, K), dtype=np.int8)
@@ -349,6 +383,7 @@ def test_h1_is_admitted_beside_sampled_proofs_and_executes_nowhere():
         pouw.Settings.of({"runner": SimpleNamespace(execute_model=lambda so: None)})
 
 
+@pytest.mark.slow
 def test_the_option_serves_the_arms_y_and_records_each_call(tmp_path):
     """Installed on int8_exact layers, each apply serves the arm's own y bit for bit and the option's observe records the call
     at its public position, its exact Y retained; closing the window adds the empty step, and the record compiles at T."""
@@ -412,6 +447,102 @@ def test_the_window_connects_on_the_port_the_gate_answers():
     assert PHW.at_port("127.0.0.1:7811", 7812) == "127.0.0.1:7812" and PHW.at_port("h:1", None) == "h:1"
     with pytest.raises(ValueError, match="not a TCP port"):
         PHW.at_port("h:1", "7811")
+
+
+def _vllm_with(runner):
+    """A stand-in for the built ``vllm.LLM``: its in-process engine core down to the model runner
+    (`engine_profile.get_model_runner`)."""
+    worker = SimpleNamespace(worker=SimpleNamespace(model_runner=runner))
+    core = SimpleNamespace(engine_core=SimpleNamespace(model_executor=SimpleNamespace(driver_worker=worker)))
+    return SimpleNamespace(llm_engine=SimpleNamespace(engine_core=core))
+
+
+@pytest.fixture
+def engine(monkeypatch):
+    """`verity_vllm.LLM`'s engine build replaced by a toy int8_exact model and a stand-in vLLM whose model runner is
+    ``engine["runner"]``; the in-process coins' entropy is seeded."""
+    from verity.core.protocols.pouw import verifier
+    from verity_vllm.engine import vllm_adapter as va
+    rng = random.Random(1)
+    monkeypatch.setattr(verifier, "coins", rng.randbytes)
+    got = {"runner": Runner(), "model": Model(Linear(32, 1), Linear(40, 2)), "builds": 0}
+
+    def build_engine(checkpoints, **kw):
+        got["builds"] += 1
+        return SimpleNamespace(llm=got.get("vllm") or _vllm_with(got["runner"]), model=got["model"], kwargs={},
+                               env_flags={}, execution=kw["execution"], effective={}, build_s=0.0)
+
+    monkeypatch.setattr(va, "build_engine", build_engine)
+    return got
+
+
+LLAMA = ("unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da")
+PUBLIC = {"rows": 64, "steps": 3, "admission": "per-round"}
+
+
+def test_llm_installs_h1_from_its_public_parameters_with_its_engines_runner(engine):
+    """`verity_vllm.LLM` with H1 and only its public parameters (T, S) installs it after the build with the engine's own
+    model runner and in-process coins: each step's admissions reach the window through that runner, the window's coins
+    are recorded as in-process (they credit nothing), `reinstall` opens the next window with the next epoch's coins, and
+    `close` restores the runner."""
+    from verity_vllm.pipeline import llm as L
+    llm = L.LLM(LLAMA[0], revision=LLAMA[1], protocols=_entry(), protocols_config={"pouw": dict(PUBLIC)})
+    runner, model = engine["runner"], engine["model"]
+    assert getattr(runner.execute_model, "__func__", None) is not Runner.execute_model and hooks.live(_entry())
+    run = pouw.h1_run(_entry())
+    assert (run.rows, run.steps, run.coin_source) == (64, 3, "in-process")
+    runner.execute_model(_so(("a", [5], 4)))
+    x = (torch.randn(1, K, generator=torch.Generator().manual_seed(3)) * 3).bfloat16()
+    model.layers[0].quant_method.apply(model.layers[0], x)
+    assert runner.steps == 1 and [(e.index, e.round) for e in run.requests] == [(0, 0)] and len(run.calls) == 1
+    first = llm.engine_record["protocols"]["protocols"][0]["commitment"]
+    assert first["coin_source"] == "in-process" and first["round_coins"] and first["coins"] != {}
+
+    again = llm.reinstall({"pouw": {**PUBLIC, "steps": 2}})
+    assert again is llm.protocols and llm.protocols.entries == (_entry(),)
+    second = pouw.h1_run(_entry())
+    assert second is not run and second.steps == 2 and second.calls == [] and "draw" in run.commits
+    assert llm.protocols.installed[0].commitment()["coins"] != first["coins"]
+    runner.execute_model(_so(("b", [7], 2)))
+    assert [(e.index, e.round) for e in second.requests] == [(0, 0)]
+    llm.close()
+    assert hooks.live(_entry()) == () and runner.execute_model.__func__ is Runner.execute_model
+
+
+def test_llm_refuses_h1_by_name_when_its_engine_cant_supply_the_runner(engine, monkeypatch):
+    """Fail-closed: H1 without its public parameters is refused before any engine is built; an engine without an
+    in-process model runner is refused naming the entry and the settings it couldn't supply; and an adapter that names a
+    setting it then doesn't fill is refused by the install's own refusals.  None leaves a hook behind."""
+    from verity_vllm import protocol_options as PO
+    from verity_vllm.pipeline import llm as L
+    with pytest.raises(PO.Refused, match=r"'rows' \(T"):
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols=_entry(), protocols_config={"pouw": {"admission": "per-round"}})
+    assert engine["builds"] == 0
+    engine["vllm"] = SimpleNamespace(llm_engine=SimpleNamespace(engine_core=None))
+    with pytest.raises(PO.Refused, match=rf"{_entry()}: its settings \['runner', 'coins', 'rounds'\] come from the built "
+                                         r"engine.*in-process model runner"):
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols=_entry(), protocols_config={"pouw": dict(PUBLIC)})
+    assert engine["builds"] == 1 and hooks.live(_entry()) == ()
+    engine.pop("vllm")
+    monkeypatch.setattr(pouw, "from_engine", lambda scheme, settings, llm, epoch=0: {})
+    with pytest.raises(PO.Refused, match="the pouw settings 'runner'"):
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols=_entry(), protocols_config={"pouw": dict(PUBLIC)})
+    assert hooks.live(_entry()) == ()
+
+
+def test_h1s_engine_settings_are_named_before_the_build_and_never_override_the_callers():
+    """`pouw.fills`: H1's runner, and without a challenger its coins and (once S is set) its rounds; a setting the caller
+    gives is never filled, nor anything for another scheme; the refusals before the build read the named ones as set."""
+    from verity_vllm import protocol_options as PO
+    assert pouw.fills(PH.SCHEME, PUBLIC) == ("runner", "coins", "rounds")
+    assert pouw.fills(PH.SCHEME, {"rows": 64}) == ("runner", "coins")
+    assert pouw.fills(PH.SCHEME, {**PUBLIC, "challenger": "h:1"}) == ("runner",)
+    assert pouw.fills(PH.SCHEME, _settings()["pouw"]) == ()
+    assert pouw.fills("ncp-v2", {}) == ()
+    ctx = PO.Context(stage="serve", enabled=(_entry(),), settings={"pouw": dict(PUBLIC)})
+    assert any("the pouw settings 'runner'" in r for r in PO.refusals(ctx))
+    assert PO.engine_fills(ctx) == {"pouw": ("runner", "coins", "rounds")}
+    assert PO.refusals(dataclasses.replace(ctx, filled=PO.engine_fills(ctx))) == ()
 
 
 def test_a_layer_off_the_int8_arm_is_refused_at_install():
@@ -971,6 +1102,43 @@ def test_a_windows_salt_opens_only_after_its_own_window_open_root(tmp_path, monk
         "round 0's request table is not the one the window's open root is over (its requests_root)")
 
 
+def test_a_reserved_session_opens_on_the_weights_root_and_its_salt_coin_after_it(tmp_path, monkeypatch):
+    """`pouw_h1_window.open_session`, Pearl-C's device run's live coins (VLLM-95): the gate opens the reserved session on
+    the weights' root, its commitment read from ``status`` when the open answers none, the challenger is reached on the
+    answer's port once it accepts connections (`wait` between refusals), and its salt coin opens after that root; the run
+    carries the answer without its secret. An answer naming another root or another session is refused before any coin."""
+    from verity.core.protocols.pouw.audit import salt_of
+    from verity_vllm.protocol_options import pouw_h1_window as PHW
+
+    host = _host(tmp_path, monkeypatch, rounds=1)
+    sid, root, calls, waits = CH.session_id(1), bytes(range(64)), [], []
+
+    def gate(*words):
+        calls.append(words)
+        if words[0] == "open":
+            return {**host.open(words[2], words[4]), "commitment": None, "port": 7811, "secret": "ab" * 32}
+        return {"commitment": host.challenger.commitment.root.hex()}
+    reached, refusals = R.RemoteChallenger.connect, iter((True, True))
+
+    def connect(cls, at, secret=None):
+        if next(refusals, False):
+            raise ConnectionRefusedError(at)
+        return reached(at, secret)
+    monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(connect))
+    client, c, opening, _, salt, carried = PHW.open_session("pouw:test", gate, sid, root, at="vy-challenger-1:1",
+                                                            wait=waits.append)
+    client.close()
+    assert host.ended() is None and c == host.challenger.commitment
+    assert calls == [("open", "--session", sid, "--root", root.hex()), ("status", sid)] and waits == [1.0, 1.0]
+    assert LC.live_reason(c, opening, Wd.SALT, 0, root) is None and salt == salt_of(c, opening.coin, root)
+    assert R.released_roots(host.directory / R.RELEASES, c)[Wd.SALT] == (root,)
+    assert "secret" not in carried and (carried["session"], carried["root"], carried["port"]) == (sid, root.hex(), 7811)
+    for answer in ({"session": sid, "seq": 0, "root": "ee" * 64, "commitment": "c0" * 64},
+                   {"session": CH.session_id(2), "seq": 0, "root": root.hex(), "commitment": "c0" * 64}):
+        with pytest.raises(ValueError, match=f"not session {sid} opened on the weights' root"):
+            PHW.open_session("pouw:test", lambda *w, a=answer: a, sid, root, wait=waits.append)
+
+
 def test_a_session_the_ledger_opened_without_a_reserve_salts_no_window(tmp_path, monkeypatch):
     """VLLM-60: a window's open root binds the session the auditor's signed reserve entry names (S, `core_check.salt`), so
     a session the ledger opened on the window's own open root without reserving it first is refused, its salt and every
@@ -1084,6 +1252,7 @@ def test_a_second_session_under_the_same_key_for_one_window_is_refused(tmp_path,
             f"{w['root'][:16]}… or session s-3")
 
 
+@pytest.mark.slow
 def test_the_challenger_setting_is_h1s_one_coin_source(tmp_path, monkeypatch):
     """``challenger`` is HOST:PORT, H1's only, never beside in-process ``coins`` or ``rounds`` and never at capture; a pipeline
     that is its own auditor adds no in-process coins beside it; a challenger whose layout isn't a live window of at least S

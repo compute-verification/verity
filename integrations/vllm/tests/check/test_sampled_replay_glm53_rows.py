@@ -80,6 +80,7 @@ def test_every_family_the_tp8_b1_and_b8_rule_named_has_a_row_evaluator():
     assert not missing, f"no replay row evaluator for {missing}"
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("spec", ['LlBf16SplitKGemm_v1{N=256,K=6144,SPLIT_K=6,TILE_K=256,WARPS=4,DOT=HopperBF16WgmmaDot16_v1}',
                                   'LlBf16SplitKGemm_v1{N=256,K=6144,SPLIT_K=8,TILE_K=256,WARPS=4,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'],
                          ids=["split-k-6", "split-k-8"])
