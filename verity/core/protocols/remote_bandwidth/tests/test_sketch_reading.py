@@ -121,6 +121,10 @@ def test_the_readings_and_thresholds_the_protocol_states() -> None:
     assert timing.sketch_failure(node_day, passes) == timing.sketch_failure(node_day, passes, r=12)
     assert lg(timing.sketch_failure(node_day, passes)) == -43.02
     assert timing.sketch_failure(30 * node_day, 30 * passes) > Fraction(1, 2 ** 40)
+    blocks = 1 << 30
+    guess = timing.sketch_failure(node_day, passes, blocks=blocks) - timing.sketch_failure(node_day, passes)
+    assert guess == (node_day + passes) * Fraction(blocks, 2 ** 512)
+    assert lg(timing.sketch_failure(node_day, passes, blocks=blocks)) == -43.02
 
 
 class Counting:

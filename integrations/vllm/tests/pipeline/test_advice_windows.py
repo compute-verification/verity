@@ -437,3 +437,14 @@ def test_a_partition_that_leaves_out_or_samples_a_transfer_gate_template_is_refu
 def test_a_binding_is_a_compiler_digest_an_advice_root_and_a_length(advice_tp, root, bits, why):
     with pytest.raises(ValueError, match=why):
         AW.binding(advice_tp["compiler"], root, bits)
+
+
+def test_a_compiler_without_transfer_gates_lists_none():
+    class Bare:
+        name, digest = "bare", "ab" * 64
+
+    class Listing(Bare):
+        transfer_gates = ["RoPEHead_v1{D=64}"]
+
+    assert AW.transfer_gates_of(Bare()) == ()
+    assert AW.transfer_gates_of(Listing()) == ("RoPEHead_v1{D=64}",)
