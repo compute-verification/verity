@@ -118,6 +118,7 @@ def run(*, seed: int = 0, rate: float = 3.0, seconds: float = 150.0, num_blocks:
                       async_scheduling=async_scheduling, enable_prefix_caching=enable_prefix_caching)
     objs: dict[str, Request] = {}
     produced = [0] * len(reqs)                    # samples the runner has returned (or will) for each request
+    owner: dict[int, int] = {}                    # each KV block's computing request: rows run in scheduling order
     outputs: list[list[int]] = [[] for _ in reqs]
     steps: list[dict] = []
     clock, admitted, idle = 0.0, 0, 0
@@ -154,10 +155,21 @@ def run(*, seed: int = 0, rate: float = 3.0, seconds: float = 150.0, num_blocks:
         sampled = []
         for rid, n in so.num_scheduled_tokens.items():
             i = index[rid]
-            start = new[rid].num_computed_tokens if rid in new else cached_start[rid]
+            start = int(new[rid].num_computed_tokens if rid in new else cached_start[rid])
             samples = not objs[rid].is_prefill_chunk
-            rows.append({"request": i, "start": int(start), "n": int(n), "samples": samples, "new": rid in new,
-                         "resumed": rid in resumed})
+            blocks = sched.kv_cache_manager.get_block_ids(rid)[0]
+            row = {"request": i, "start": start, "n": int(n), "samples": samples, "new": rid in new, "resumed": rid in resumed}
+            if (rid in new or rid in resumed) and start:
+                runs: list[list[int]] = []
+                for b in blocks[:start // block_size]:
+                    if runs and runs[-1][0] == owner[b]:
+                        runs[-1][1] += block_size
+                    else:
+                        runs.append([owner[b], block_size])
+                row["sources"] = runs
+            for j in range(start // block_size, -(-(start + n) // block_size)):
+                owner[blocks[j]] = i
+            rows.append(row)
             if samples:
                 tok = sampled_id(seed, i, produced[i], stop_rate)
                 produced[i] += 1
@@ -201,7 +213,7 @@ def run(*, seed: int = 0, rate: float = 3.0, seconds: float = 150.0, num_blocks:
               "eos_token_id": EOS, "stop_token_ids": STOP_IDS, "rows_in_scheduling_order": True}
     workload_desc = {"seed": seed, "rate_per_s": rate, "seconds": seconds, "stop_rate": stop_rate, "base_ms": base_ms,
                      "per_token_ms": per_token_ms, "system_prompts": list(SYSTEM_PROMPTS)}
-    return {"kind": "enc-derived/sched-trace/v1", "config": config, "workload": workload_desc, "requests": reqs, "steps": steps}
+    return {"kind": "enc-derived/sched-trace/v2", "config": config, "workload": workload_desc, "requests": reqs, "steps": steps}
 
 
 def main(argv: list[str] | None = None) -> None:
