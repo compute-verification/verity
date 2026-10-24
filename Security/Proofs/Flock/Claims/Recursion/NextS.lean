@@ -86,11 +86,6 @@ theorem decisionSF_eval (H : Claims.Msg → Claims.Msg) (s : Ins) (x : Claims.Ms
       (setupWith (Claims.hOf H) s.read >>= fun v => ((decisionAtS s v.1 v.2 x link c₁ mids f).run.eval H).1) := by
   unfold decisionSF
   rw [evRun_bind, (setupM_eval H s.read).1]
-  first
-  | rfl
-  | (refine bind_congr_ok fun v _ => ?_
-     obtain ⟨_, _⟩ := v
-     rfl)
 
 /-- **A decision of `nextS` accepts exactly where the setup at `hOf H` returns a session at which `decisionAtS`
 returns.** -/
