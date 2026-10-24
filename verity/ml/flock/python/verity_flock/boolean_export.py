@@ -789,7 +789,7 @@ class Commitments:
         from verity.ml.circuits.codec import _spec_id
         from verity.ml.circuits.cut import separable
         from verity.ml.circuits.defs import PrimitiveDefinition
-        from verity_vllm.query import word as WQ
+        import verity_vllm.query.word as WQ
 
         fid = _spec_id(fn)
         if fid in self.records:

@@ -33,7 +33,6 @@ IMPORT_CALLS = {"import_module", "__import__", "importorskip"}
 KNOWN = {
     ("verity/ml/flock/python/verity_flock/boolean_export.py", "verity_vllm.program.encoding"),
     ("verity/ml/flock/python/verity_flock/boolean_export.py", "verity_vllm.program.registry"),
-    ("verity/ml/flock/python/verity_flock/boolean_export.py", "verity_vllm.query"),
     ("verity/ml/flock/python/verity_flock/boolean_export.py", "verity_vllm.query.word"),
     ("verity/ml/flock/python/verity_flock/class_statement.py", "verity_vllm.program.encoding"),
     ("verity/ml/flock/python/verity_flock/ir_lower.py", "verity_vllm.program.kernels"),
