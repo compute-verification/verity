@@ -63,9 +63,12 @@
   "PouwCheck.Credit": {
    "imports": [
     "Std.Data.HashMap",
+    "Flock.Keccak",
     "Flock.Program",
+    "Flock.RegKnown",
     "PouwCommit.Frame",
     "PouwCheck.Json",
+    "PouwCheck.Opening",
     "PouwCheck.Pass",
     "PouwCheck.Rounds",
     "PouwWindow.Draw",

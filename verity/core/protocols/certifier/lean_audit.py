@@ -10,8 +10,9 @@ and a call that one answers and the other raises on raises. Each call is one uni
 - `check_link`: egress links `["", link]` (`"clock"` when `link` is empty) over windows 0 … len(syncs) − 1, the first
   link carrying no frames and the spatial unit's clock as its syncs (`Audit.syncs`, each window's set by the first call
   that checked it, as `audit.Audit` sets it), since the Lean check reads the unit's sync from the first egress link; the
-  commitment holds this call's records of `link`, a certified one only if it is egress. With `grid` False (N2's head
-  check holds the grid) the Lean check's `mismatch` is an accept;
+  commitment holds this call's records of `link`, a certified one only if it is egress. With `grid` True it is the
+  Lean's `verdicts`; with `grid` False (N2's head check holds the grid) `verdicts-no-grid`, every test of `verdicts`
+  but the egress grid comparison (`Records.evaluateNoGrid`);
 - `check_ingress_link`: the ingress link `[link]` alone, with this call's records of `link`, a certified one only if it is
   ingress.
 
@@ -174,9 +175,9 @@ class Server:
                 self._proc.stdout.close()
             self._pid, self._proc, self._lock = os.getpid(), None, threading.Lock()
 
-    def verdicts(self, case: dict) -> list[dict]:
-        """Every link-window's verdict on `case` (`{"direction", "link", "verdict", "window"}`, in the audit's order);
-        `ValueError` when the Lean check refuses the case."""
+    def verdicts(self, case: dict, fn: str = "verdicts") -> list[dict]:
+        """Every link-window's verdict on `case` (`{"direction", "link", "verdict", "window"}`, in the audit's order) by
+        `fn`, `verdicts` or `verdicts-no-grid`; `ValueError` when the Lean check refuses the case."""
         self._own()
         with self._lock:
             if self._proc is None or self._proc.poll() is not None:
@@ -189,7 +190,7 @@ class Server:
                                               stdout=subprocess.PIPE, text=True, encoding="utf-8")
             proc = self._proc
             try:
-                proc.stdin.write(json.dumps({"fn": "verdicts", "input": case}, separators=(",", ":")) + "\n")
+                proc.stdin.write(json.dumps({"fn": fn, "input": case}, separators=(",", ":")) + "\n")
                 proc.stdin.flush()
                 line = proc.stdout.readline()
             except BrokenPipeError:
@@ -273,8 +274,9 @@ class Audit:
     def check_link(self, link: str, records: Sequence[Published], frames: Sequence[LogicalFrame],
                    syncs: Sequence[ClockSync], sync_set: SyncSet, params: GridParams,
                    key: PublicKey | None = None, session: bytes | None = None, grid: bool = True) -> list[Verdict]:
-        """`audit.Audit.check_link`. With `grid` False the Lean check still compares the grid, over whatever `frames`
-        are given (N2 gives none), after every other check of a link-window, so its `mismatch` there is an accept."""
+        """`audit.Audit.check_link`. With `grid` False it is the Lean's `verdicts-no-grid`, which computes no Program
+        grid (N2 gives no `frames`); a raw or committed record of `link` then raises `ValueError` here, with or without
+        windows, as `audit.Audit` raises and `verdicts-no-grid` refuses."""
         _need_key(records, key, session)
         frames, syncs = list(frames), list(syncs)
         mine = _mine(link, records, Direction.EGRESS)
@@ -285,9 +287,9 @@ class Audit:
             clock = [self.syncs.get(w, s) for w, s in enumerate(syncs)]
             unit = "clock" if link == "" else ""
             out = self.server.verdicts(case([(unit, [], clock), (link, frames, syncs)], [], len(syncs), params, params,
-                                            sync_set, *_lean_key(mine, key, session), mine))
-            lean = [v if grid or v.violation != "mismatch" else Verdict(v.link, v.window, None)
-                    for v in _verdicts(out, Direction.EGRESS, link, len(syncs))]
+                                            sync_set, *_lean_key(mine, key, session), mine),
+                                       "verdicts" if grid else "verdicts-no-grid")
+            lean = _verdicts(out, Direction.EGRESS, link, len(syncs))
         vs = self._beside(lean, lambda: self.python.check_link(link, records, frames, syncs, sync_set, params, key,
                                                                session, grid))
         for w, s in enumerate(syncs):

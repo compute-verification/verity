@@ -825,7 +825,8 @@ structure InnerCommits where
 
 def InnerCommits.stream? (ic : InnerCommits) (name : String) : Option InnerStream := ic.streams.find? (·.name == name)
 
-private def hexList (ctx : String) (xs : Array String) : V (Array ByteArray) :=
+/-- Nodes `b ‖ c` in hex, each refused unless 128 bytes. -/
+def hexList (ctx : String) (xs : Array String) : V (Array ByteArray) :=
   xs.mapM fun x => do
     let b ← (unhex x).mapError (s!"rec inner transcript: {ctx}: " ++ ·)
     if b.size != 128 then throw s!"rec inner transcript: {ctx}: a b ‖ c of {b.size} bytes, not 128"
@@ -1365,7 +1366,9 @@ registered position `x` it opens, is that value's row `x` in `innerCommits`: for
 `c_i`; for `rec-claim`, `claimRow`. `sparse` is the verifier's RecSparse shape (`rec-inner --sparse`), a rec-sparse unit's
 own. A rec-sparse unit's `claim` port and an R opening unit's `claim<k>` ports read `rec-claim` in the verifier's reads.
 `Registered.check` puts each instance's row at the position its unit reads. An R opening unit
-(`rec-opening/m<m>-c<claims>-p<j>`) is R's at the shape R's stream was held to (`InnerCommits.stacked`, META's). -/
+(`rec-opening/m<m>-c<claims>-p<j>`) is R's at the shape R's stream was held to (`InnerCommits.stacked`, META's). A table
+with a port reading the reps' `c_k` (`rec-c<i>`) labels its instances `0` to `n - 1` in order
+(`Registered.unitIndices`), as a V* session's full draw of its two reps does, so instance `x` reads rep `x`'s row. -/
 def checkPubRows (st : Stmt) (registered : Option (Array Registered.Port))
     (commits : Option InnerCommits) (sparse : Option RecSparse.Shape := none) : V Unit := do
   let unit := st.c.unit.name
@@ -1384,6 +1387,10 @@ def checkPubRows (st : Stmt) (registered : Option (Array Registered.Port))
   let some cs := commits
     | throw s!"rec-pub: {unit}: the verifier holds no inner transcript (--rec-inner-transcript with --rec-inner-session), so no c_k to check port {reg0.name}'s rows of {reg0.value} against"
   checkOpeningShape unit cs
+  let idx ← Registered.unitIndices st.pub
+  if regs.any (fun reg => (cIndex reg.value).isSome) && idx != Array.range st.pub.n then
+    throw (s!"rec-pub: {unit}: it reads the reps' c_k, and its instances are labelled {idx}, not the units below " ++
+      s!"{st.pub.n} in order as a V* session's full draw labels them, so an instance would read another rep's row")
   let some t := st.pub.tables | throw s!"rec-pub: {unit}: {reg0.name} is not a table of a shared-row file"
   for reg in regs do
     let some p := (List.range st.c.ports.size).find? (fun p => st.c.ports[p]!.name == reg.name)
