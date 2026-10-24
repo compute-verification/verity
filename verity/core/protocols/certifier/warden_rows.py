@@ -64,7 +64,8 @@ root, leaves, words, word bits, domain and row schema, and `reads`: unit `reads_
 and the schedule's (ordinals and first rows in admission order, r cells a row, at most `lanes` connections a row), and
 refuses a read of a connection it doesn't hold, of a cell past the connection's, or of a cell another read opens. So a
 read opens its own connection's cell and no other: never an empty slot, a foreign connection's cell or a cell twice.
-The unit's cell is at its slot's words of the row (`Wiring.place`).
+The unit's cell is at its slot's words of the row (`Wiring.place`). A population of one unit a bucket (IO-TIE's)
+reads whole rows instead (`bucket_port`): unit `reads_from + t` opens row t, every slot held or not, and no wiring.
 
 **The units' wiring is the Program's** (`Units`): which cell each unit reads is pinned with the Program, from public
 structure alone (the schedule, the ordinals and the signed wiring, never the cells' bytes), so it is never the
@@ -72,7 +73,8 @@ prover's. The port's value names its digest, `<link>/<direction>/<window>/units/
 refuses a statement whose header names another value (`Flock.Registered.entry`), so a statement made for any other
 units' wiring is refused even where its rows are the same: a pad opened where the Program reads a data cell of the
 same row, say. A bare sequence of reads binds nothing (the value is the head's alone): it is a5_warden's form until
-it states `Units`.
+it states `Units`. `bucket_port` names the head's value too, and needs no `Units`: its unit t reads row t whole, so a
+statement's positions are all it can vary, and Lean's registered reads hold each to its unit's row.
 
 **The wiring is opened to the verifier tonight** (the named gap, whose plan is in PROTOCOL.md): it gives away each
 connection's first row and cells. q is the cells' stream field, the warden's ordinal: the k-th connection to reach it,
@@ -469,6 +471,19 @@ def check_registration(doc: Mapping[str, Any], key: PublicKey, session: bytes, p
     return head, dom
 
 
+def _schedules(head: CellsHead, params: WardenParams) -> None:
+    if (head.parameters, head.cell_bytes, head.slots, head.rows) != \
+            (params.digest, params.cell_bytes, params.grid.allocation, rows_of(params)):
+        raise ValueError("the head isn't of the schedule's rows")
+
+
+def _port(head: CellsHead, value: str, rows: Sequence[int], reads_from: int) -> dict[str, Any]:
+    e = {"leaves": head.rows, "words": head.slots * head.cell_bytes // 2, "word_bits": WORD_BITS,
+         "domain": head.domain.hex()}
+    return produced.port(value, e, head.root.hex(), rows, SCHEMA) | \
+        ({G.READS_FROM: int(reads_from)} if reads_from else {})
+
+
 def port(head: CellsHead, wiring_: Wiring, params: WardenParams, reads: Units | Sequence[tuple[int, int]],
          reads_from: int = 0) -> dict[str, Any]:
     """The verifier's own `--registered` port of a unit population that opens the head's rows: unit `reads_from + i`
@@ -477,17 +492,21 @@ def port(head: CellsHead, wiring_: Wiring, params: WardenParams, reads: Units | 
     (`Units.value`) the port names, so a statement must name it too; a bare sequence of reads binds nothing, and the
     port names the head's value (a5_warden's form until it states `Units`). ValueError for a wiring the head doesn't
     name."""
-    if (head.parameters, head.cell_bytes, head.slots, head.rows) != \
-            (params.digest, params.cell_bytes, params.grid.allocation, rows_of(params)):
-        raise ValueError("the head isn't of the schedule's rows")
+    _schedules(head, params)
     if wiring_.digest() != head.wiring:
         raise ValueError("the wiring isn't the one the warden signed")
     units = reads if isinstance(reads, Units) else None
     rows = [t for t, _ in wiring_.place(params, reads if units is None else units.cells)]
-    e = {"leaves": head.rows, "words": head.slots * head.cell_bytes // 2, "word_bits": WORD_BITS,
-         "domain": head.domain.hex()}
-    return produced.port(head.value if units is None else units.value(head), e, head.root.hex(), rows, SCHEMA) | \
-        ({G.READS_FROM: int(reads_from)} if reads_from else {})
+    return _port(head, head.value if units is None else units.value(head), rows, reads_from)
+
+
+def bucket_port(head: CellsHead, params: WardenParams, reads_from: int = 0) -> dict[str, Any]:
+    """The verifier's own `--registered` port of a population of one unit a bucket (IO-TIE's `IoTieBucket`): unit
+    `reads_from + t` opens row t, its bucket's every slot, held or not. It names no connection, so it reads no
+    wiring, and the head's rows alone fix its reads, so there is no units' wiring to name: the port names the head's
+    value."""
+    _schedules(head, params)
+    return _port(head, head.value, list(range(head.rows)), reads_from)
 
 
 def refusal(port_: Mapping[str, Any], dom: CommitmentDomain, entry: Mapping[str, Any],

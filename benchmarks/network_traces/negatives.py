@@ -44,17 +44,21 @@ verifier); the code is what the verifier of record establishes, which `n2` reads
   digest, is the tie N2's advised view needs),
   ``IoTieWindow.{cells_root,port,content}`` (IO-TIE's I/O tie, a unit at selection All over one egress link-window,
   `io_tie.reference_parts`: the warden's cells open under their root, the Commit's port rows of sampled ids open at
-  the map's steps under the Commit's root, and every cell is the verifier's map's, computed from advice v0: a pad, or
-  a data cell on the request's stream whose id is the port entry the map names; ``.map`` when the verifier can't
-  compute the map from the advice, which refuses every window); and, until their owners name them,
+  each bucket's steps under the Commit's root, and every cell is the verifier's map's, computed from advice v0 and
+  the warden's admissions: a `PAD` or the `END` on its request's stream, B zero bytes in a slot no connection holds,
+  or a data cell on the request's stream whose id is the port entry the map names; ``.map`` when the verifier can't
+  compute the map, an advice whose release isn't the warden's schedule or whose requests aren't its connections,
+  which refuses every window); and, until their owners name them,
   ``StepUnit`` (PROVE-PATH: the
   compiled step Program's digest against the committed trace's, and the committed values passing it) and ``Commit``
   (the Commit's opening under its registered root).
 
-**The tie on a fake upstream** (`tie_suite`): the warden's cells of a run of the advice, each kept output a data cell
-in its release bucket carrying its sampled id (`--ids`, ADVICE-SRC's `requests.jsonl`), and the Commit's port, a row
-of sampled ids a step, both committed; each negative it reads is the tampered cells, port or advice (whose map the
-verifier computes), and `io_tie.reference_parts` names the part that refuses it (`TIE_PARTS`).
+**The tie on a fake upstream** (`tie_suite`): the warden's cells of a run of the advice served through a warden of r
+slots a connection (`tie_schedule`, `tie_served`: each request admitted at its first release, its outputs released on
+the warden's schedule), each kept output a data cell carrying its sampled id (`--ids`, ADVICE-SRC's `requests.jsonl`),
+and the Commit's port, a row of sampled ids a step, both committed; each negative it reads is the tampered cells, port
+or advice (whose map the verifier computes), and `io_tie.reference_parts` names the part that refuses it
+(`TIE_PARTS`).
 
 **The tie on a certifier run** (`tie-run`, `tie_runs`): the I/O tie on each run of a gate run's tarball (or of a
 directory of runs), each egress window's certified frames held to its certified head, as one JSON document
@@ -124,7 +128,7 @@ WARDEN_READ = "Flock.Registered.checkPort"
 #: the part of the I/O tie (`TIE`) that refuses each negative it reads; None: one it must accept while its outputs are
 #: honest's (each one's step, batch row, request, index and bucket), which content refuses once the edit moves them
 TIE_PARTS = {"drop": "content", "token": "content", "frame": "cells_root", "advice-length": "content",
-             "advice-missing": "content", "advice-extra": "content", "advice-release": "content", "advice-start": None,
+             "advice-missing": "content", "advice-extra": "map", "advice-release": "map", "advice-start": None,
              "wrong-token": "port", "advice-chunk": None, "prompt-split": None}
 CHECKS_TODAY = (HEAD, SERVED, "audit")  # the checks `n2` runs; every other code's check is pending
 ENDS = ("egress", "ingress")
@@ -990,9 +994,11 @@ def advice_run(path: Path, *, T: int = 50, R: int = 32, frame_bytes: int = cs.FR
 
 # --- the I/O tie on a fake upstream (IO-TIE) ---------------------------------------------------------------------------
 # No warden writes cells into a run's directory yet, and no Commit's port is laid out as the tie reads it, so the tie's
-# negatives run on what a fake upstream makes of a run's advice and sampled ids, as IO-TIE's own tests make them: each
-# kept output a data cell on its request's stream in its release bucket, pads elsewhere, and the Commit's port, a row of
-# sampled ids a step, both committed under fake salts. The map is the verifier's, from the advice.
+# negatives run on what a fake upstream makes of a run's advice and sampled ids, as IO-TIE's own tests make them: a
+# warden of r slots a connection (`tie_schedule`), whose cells are the ones the map admits (each kept output a data cell
+# on its request's stream, a PAD or the END on its stream elsewhere in its lane, B zero bytes in a slot no connection
+# holds), and the Commit's port, a row of sampled ids a step, both committed under fake salts. The map is the
+# verifier's, from the advice and the warden's admissions.
 
 def io_tie_module():
     """IO-TIE's module, or None until it lands."""
@@ -1022,21 +1028,72 @@ def tie_outputs(IT, advice, ids: dict[str, list[int]]):
     return outputs, list(advice.release), out_ids
 
 
-def tie_shape(IT, advices, *, T: int, R: int | None = None, B: int = 256):
+def tie_schedule(advice, slots: int | None = None) -> tuple[list[int], int]:
+    """The fake upstream's warden for `advice`: each request's admission bucket and r, the slots a connection holds a
+    bucket (`slots`, or by default the most outputs a request releases in its first release bucket), with no delay:
+    request i is admitted at its first kept output's release bucket, a request that keeps none at the one before it
+    (bucket 0 for the first). The admissions are the warden's wiring, which the verifier takes from the certified
+    record, so every tampering of the advice is read against the honest advice's."""
+    first: dict[int, int] = {}
+    there: dict[int, int] = {}
+    for (_, _, q, _), b in zip(_kept(advice.requests, _plain(advice)), advice.release):
+        first.setdefault(q, b)
+        there[q] = there.get(q, 0) + (b == first[q])
+    admitted, last = [], 0
+    for i in range(len(advice.requests)):
+        last = first.get(i, last)
+        admitted.append(last)
+    return admitted, slots or max([1, *there.values()])
+
+
+def tie_served(advice, schedule):
+    """`advice` as the fake upstream's warden serves it (`tie_schedule`'s): each kept output k of request i released at
+    admitted[i] + ⌊k / r⌋, the bucket the warden sends its cell in. An advice's release is the warden's schedule, which
+    the verifier's map holds it to, so an advice no warden served is read as this one's."""
+    admitted, r = schedule
+    return replace(advice, release=tuple(admitted[q] + k // r for _, _, q, k in _kept(advice.requests, _plain(advice))))
+
+
+def tie_negative(edited, served, schedule):
+    """An advice negative of the `served` advice as the fake upstream's warden reads it: an output the served advice
+    doesn't keep (by its request's id and index) released where the warden would send it, admitted[i] + ⌊k / r⌋ for
+    its request i (a request past the warden's connections where the negative releases it); every other output where
+    the negative releases it, so a moved release stays moved."""
+    admitted, r = schedule
+    honest = _buckets(served)
+    kept = _kept(edited.requests, _plain(edited))
+    return replace(edited, release=tuple(
+        b if (edited.requests[q].id, k) in honest or q >= len(admitted) else admitted[q] + k // r
+        for (_, _, q, k), b in zip(kept, edited.release)))
+
+
+def _ends(advice, schedule) -> list[int]:
+    """Each request's `END` bucket under the warden's schedule: its admission plus ⌊n / r⌋, n its kept outputs."""
+    admitted, r = schedule
+    n = [0] * len(advice.requests)
+    for _, _, q, _ in _kept(advice.requests, _plain(advice)):
+        n[q] += 1
+    return [a + k // r for a, k in zip(admitted, n)]
+
+
+def tie_shape(IT, advices, schedule, *, T: int, R: int | None = None, B: int = 256):
     """One shape for the tie of every advice in `advices` (the honest one and its tamperings), so that each reaches the
-    unit's parts: R (unless given) the most outputs any of them releases in a bucket, P its widest step's batch, S the
-    most steps a window's outputs were sampled in, and DS the depth of a port over the longest session."""
-    most_r, most_s, P, steps = 1, 1, 1, 2
+    unit's parts: R (unless given) r slots for each of the most connections live in a bucket under the warden's
+    `schedule` (`tie_schedule`; a connection live from its admission to its `END`'s bucket), P its widest step's
+    batch, S the most steps a bucket's outputs were sampled in, and DS the depth of a port over the longest session."""
+    admitted, r = schedule
+    live, most_s, P, steps = 1, 1, 1, 2
     for a in advices:
-        buckets: dict[int, int] = {}
-        windows: dict[int, set[int]] = {}
+        buckets: dict[int, set[int]] = {}
         for (s, *_), b in zip(_kept(a.requests, _plain(a)), a.release):
-            buckets[b] = buckets.get(b, 0) + 1
-            windows.setdefault(b // T, set()).add(s)
-        most_r = max([most_r, *buckets.values()])
-        most_s = max([most_s, *map(len, windows.values())])
+            buckets.setdefault(b, set()).add(s)
+        most_s = max([most_s, *map(len, buckets.values())])
+        if len(a.requests) == len(admitted):
+            ends = _ends(a, schedule)
+            live = max([live, *(sum(x <= b <= y for x, y in zip(admitted, ends))
+                                for b in range(max(ends, default=0) + 1))])
         P, steps = max([P, *(len(st.rows) for st in a.steps)]), max(steps, len(a.steps))
-    return IT.Shape(B, T, R or most_r, P=P, S=most_s, DS=(steps - 1).bit_length())
+    return IT.Shape(B, T, R or r * live, P=P, S=most_s, DS=(steps - 1).bit_length())
 
 
 def tie_port(IT, shape, advice, outputs, ids, seed: bytes = b"negatives"):
@@ -1051,25 +1108,32 @@ def tie_port(IT, shape, advice, outputs, ids, seed: bytes = b"negatives"):
     return rows, salts, IT.rows_levels(pd.domain_id, rows, salts), pd.domain_id
 
 
-def tie_cells(IT, shape, window: int, outputs, release, ids) -> list[bytes]:
-    """The warden's cells of egress window `window`: each bucket's outputs sorted by (request, index), as the warden
-    releases a bucket, each a data cell on its request's stream carrying its id, pads after them. Advice request i's
-    stream is its ingress ordinal, i + 1 (`io_tie.window_map` under v0's order, the identity)."""
+def tie_map(IT, shape, window: int, outputs, release, schedule):
+    """The map and each bucket's steps the verifier computes for egress window `window` from the advice's `outputs` and
+    `release` and the warden's admissions and r (`schedule`, no delay; `io_tie.window_map`, a ValueError when it
+    can't). Advice request i is on stream i + 1, v0's order."""
+    admitted, r = schedule
+    return IT.window_map(shape, outputs, release, window, admitted, 0, r)
+
+
+def tie_cells(IT, shape, cmap, steps, port) -> list[bytes]:
+    """The warden's cells of an egress window on the fake upstream: each slot the one cell its record admits
+    (`io_tie.expected_cell`), a data cell the Commit's id at its entry (`port`, `tie_port`'s, opened at its bucket's
+    steps), a `PAD` or the `END` on its stream, B zero bytes in a slot no connection holds."""
+    rows, salts, levels, _ = port
     cells = []
-    for t in range(shape.T):
-        here = sorted((o.request, o.index, x) for o, b, x in zip(outputs, release, ids) if b == window * shape.T + t)
-        if len(here) > shape.R:
-            raise NotApplicable(f"bucket {window * shape.T + t} releases {len(here)} outputs, more than R = {shape.R}")
-        cells += [IT.data_cell(x, i + 1, shape.B) for i, _, x in here] + [IT.pad_cell(shape.B)] * (shape.R - len(here))
+    for t, st in enumerate(steps):
+        opened = IT.open_port(levels, rows, salts, st)[0]
+        cells += [IT.expected_cell(m, shape.B, IT.port_id(shape, opened, m.e) if 0 <= m.e < shape.E else None)
+                  for m in cmap[t * shape.R:(t + 1) * shape.R]]
     return cells
 
 
-def tie_instance(IT, shape, window: int, cells, outputs, release, port, seed: bytes = b"negatives"):
+def tie_instance(IT, shape, window: int, cells, outputs, release, schedule, port, seed: bytes = b"negatives"):
     """Window `window`'s tie: `cells` committed as the warden commits them (a row a bucket, under fake salts), the map
-    and steps the verifier computes from the advice's `outputs` and `release` (`io_tie.window_map`, a ValueError when
-    it can't), and the port opened at those steps from the Commit's (`port`, `tie_port`'s)."""
-    cmap, steps = IT.window_map(shape, outputs, release, window)
-    return _instance(IT, shape, window, cells, cmap, steps, port, seed)
+    and each bucket's steps from the advice (`tie_map`), and each bucket's port rows opened at its steps from the
+    Commit's (`port`, `tie_port`'s)."""
+    return _instance(IT, shape, window, cells, *tie_map(IT, shape, window, outputs, release, schedule), port, seed)
 
 
 def _instance(IT, shape, window: int, cells, cmap, steps, port, seed: bytes):
@@ -1077,10 +1141,11 @@ def _instance(IT, shape, window: int, cells, cmap, steps, port, seed: bytes):
     tag = seed + window.to_bytes(4, "big")
     cd = IT.domain(hashlib.sha512(b"cells" + tag).digest(), shape.T)
     c_salts = [IT.fake_salt(tag + b"c", t) for t in range(shape.T)]
-    opened, o_salts, paths = IT.open_port(levels, rows, salts, steps)
+    opened = [IT.open_port(levels, rows, salts, st) for st in steps]
     return IT.Instance(shape, tuple(cells), tuple(c_salts),
-                       IT.rows_root(cd.domain_id, IT.bucket_rows(shape, cells), c_salts), cd.domain_id, cmap, steps,
-                       opened, o_salts, paths, levels[-1][0], port_domain)
+                       IT.rows_root(cd.domain_id, IT.bucket_rows(shape, cells), c_salts), cd.domain_id, tuple(cmap),
+                       tuple(steps), tuple(o[0] for o in opened), tuple(o[1] for o in opened),
+                       tuple(o[2] for o in opened), levels[-1][0], port_domain)
 
 
 def _first_data(IT, cells) -> int:
@@ -1107,47 +1172,59 @@ def cell_token(IT, inst) -> list[bytes]:
 
 
 def cell_dropped(IT, inst) -> list[bytes]:
-    """`drop` on the tie: the cells without the first data cell, the rest of its bucket moved up and a pad after them,
-    as the warden releases the window when that event never came (to recommit)."""
-    sh, k = inst.shape, _first_data(IT, inst.cells)
-    t, cells = sh.bucket(k), list(inst.cells)
-    cells[t * sh.R:(t + 1) * sh.R] = [cells[i] for i in range(t * sh.R, (t + 1) * sh.R) if i != k] + [IT.pad_cell(sh.B)]
+    """`drop` on the tie: the cells with a `PAD` on its stream in place of the first data cell, as the warden releases
+    that slot when the event never came (to recommit)."""
+    k, cells = _first_data(IT, inst.cells), list(inst.cells)
+    cells[k] = IT.pad_cell(inst.shape.B, IT.parse_cell(cells[k]).stream)
     return cells
 
 
 def port_token(IT, inst):
     """`wrong-token` on the tie: the Commit's sampled id at the first data cell's port entry changed after the run, the
     Commit's root kept."""
-    s, r = divmod(inst.map[_first_data(IT, inst.cells)].e, inst.shape.P)
-    row = bytearray(inst.port[s])
+    k = _first_data(IT, inst.cells)
+    t, (s, r) = inst.shape.bucket(k), divmod(inst.map[k].e, inst.shape.P)
+    row = bytearray(inst.port[t][s])
     row[4 * r:4 * r + 4] = ((int.from_bytes(row[4 * r:4 * r + 4], "big") + 1) % (1 << 32)).to_bytes(4, "big")
-    return replace(inst, port=inst.port[:s] + (bytes(row),) + inst.port[s + 1:])
+    bucket = inst.port[t][:s] + (bytes(row),) + inst.port[t][s + 1:]
+    return replace(inst, port=inst.port[:t] + (bucket,) + inst.port[t + 1:])
 
 
-def tie_suite(advice, ids: dict[str, list[int]], *, T: int, R: int | None = None, B: int = 256) -> dict[str, dict]:
+def tie_suite(advice, ids: dict[str, list[int]], *, T: int, R: int | None = None, B: int = 256,
+              slots: int | None = None) -> dict[str, dict]:
     """Every negative the I/O tie reads (`TIE_PARTS`), on a fake upstream's run of `advice` whose requests sampled `ids`
-    (by request id): each egress window's cells and the Commit's port, honest and as each negative makes them (a cell or
-    port negative in the first window with a data cell; an advice negative the map the verifier computes from its
-    advice, over the honest cells and port), with the parts of `io_tie.reference_parts` that fail, by window (``map``,
-    at window −1, when the verifier can't compute the map, with `why`). One shape serves them all (`tie_shape`). `ok`:
+    (by request id), served through a warden of r = `slots` slots a connection (`tie_schedule`, `tie_served`): each
+    egress window's cells and the Commit's port, honest and as each negative makes them (a cell or port negative in
+    the first window with a data cell; an advice negative the map the verifier computes from its advice and the
+    warden's admissions, over the honest cells and port), with the parts of `io_tie.reference_parts` that fail, by
+    window (``map``, at window −1, when the verifier can't compute the map, with `why`: an advice whose release isn't
+    the warden's schedule, or whose requests aren't its connections). One shape serves them all (`tie_shape`). `ok`:
     the part it names fails; for one it must accept, none does while its outputs are honest's, and content does once
-    the edit moved them (`moved`)."""
+    the edit moved them (`moved`). NotApplicable when the warden can't serve the advice in R slots."""
     IT = io_tie_module()
     if IT is None:
         raise NotApplicable(f"no I/O tie yet: {IO_TIE_MODULE} (IO-TIE) hasn't landed")
+    schedule = tie_schedule(advice, slots)
+    advice = tie_served(advice, schedule)
     edited: dict[str, Any] = {}
     for name in TIE_PARTS:
         if NEGATIVES[name].tampers == "advice":
             try:
-                edited[name] = NEGATIVES[name].make.edit(advice)
+                edited[name] = tie_negative(NEGATIVES[name].make.edit(advice), advice, schedule)
             except NotApplicable as err:
                 edited[name] = err
-    shape = tie_shape(IT, [advice, *(b for b in edited.values() if not isinstance(b, NotApplicable))], T=T, R=R, B=B)
+    shape = tie_shape(IT, [advice, *(b for b in edited.values() if not isinstance(b, NotApplicable))], schedule,
+                      T=T, R=R, B=B)
     outputs, release, out_ids = tie_outputs(IT, advice, ids)
     port = tie_port(IT, shape, advice, outputs, out_ids)
-    windows = max(release, default=0) // T + 1
-    cells = {w: tie_cells(IT, shape, w, outputs, release, out_ids) for w in range(windows)}
-    honest = {w: tie_instance(IT, shape, w, cells[w], outputs, release, port) for w in range(windows)}
+    windows = max([*release, *_ends(advice, schedule)], default=0) // T + 1
+    try:
+        maps = {w: tie_map(IT, shape, w, outputs, release, schedule) for w in range(windows)}
+    except ValueError as err:
+        raise NotApplicable(f"the advice isn't served through a warden of r = {schedule[1]} slots a connection in "
+                            f"R = {shape.R}: {err}") from err
+    cells = {w: tie_cells(IT, shape, *maps[w], port) for w in range(windows)}
+    honest = {w: _instance(IT, shape, w, cells[w], *maps[w], port, b"negatives") for w in range(windows)}
 
     def failing(insts: dict) -> dict[int, list[str]]:
         out = {}
@@ -1160,8 +1237,8 @@ def tie_suite(advice, ids: dict[str, list[int]], *, T: int, R: int | None = None
     first = next((w for w in range(windows) if any(IT.parse_cell(c).data for c in cells[w])), 0)
     h = honest[first]
     cell_made = {"frame": lambda: cell_byte(IT, h),
-                 "token": lambda: tie_instance(IT, shape, first, cell_token(IT, h), outputs, release, port),
-                 "drop": lambda: tie_instance(IT, shape, first, cell_dropped(IT, h), outputs, release, port),
+                 "token": lambda: tie_instance(IT, shape, first, cell_token(IT, h), outputs, release, schedule, port),
+                 "drop": lambda: tie_instance(IT, shape, first, cell_dropped(IT, h), outputs, release, schedule, port),
                  "wrong-token": lambda: port_token(IT, h)}
     got = failing(honest)
     out: dict[str, dict] = {"honest": {"shape": {k: getattr(shape, k) for k in ("B", "T", "R", "P", "S", "DS", "N", "M")},
@@ -1180,7 +1257,8 @@ def tie_suite(advice, ids: dict[str, list[int]], *, T: int, R: int | None = None
                 span = max(windows, max(r, default=0) // T + 1)
                 empty = [IT.pad_cell(shape.B)] * shape.N
                 try:
-                    bad = failing({w: tie_instance(IT, shape, w, cells.get(w, empty), o, r, port) for w in range(span)})
+                    bad = failing({w: tie_instance(IT, shape, w, cells.get(w, empty), o, r, schedule, port)
+                                   for w in range(span)})
                 except NotApplicable:
                     raise
                 except ValueError as err:
@@ -1220,10 +1298,11 @@ TIE_STAND_INS = {
              "compact record (`active.compact_record_data`) as the data cell of its id, in an id event's frame "
              "(`certifier_serve.FRAME_BYTES`); any other frame as it is",
     "port": "the Commit's port from --ids: one row a certified request's output, in (stream, index) order, under fake "
-            "salts",
+            "salts, each bucket opening the rows of its own data cells",
     "map": "the certified placement, each data cell its stream's next output, since no advice says where an output "
-           "goes; a committed output no cell carries (`unplaced`), which the advice's map would place in its release "
-           "window, fails content at window -1",
+           "goes, and any other slot held to B zero bytes (`io_tie.UNHELD`, the certifier's padding); a committed "
+           "output no cell carries (`unplaced`), which the advice's map would place in its release window, fails "
+           "content at window -1",
 }
 #: the tie's parts in the order a run's `failing` lists them; ``map`` on every window when the certified ingress, which
 #: names each stream's request, doesn't hold
@@ -1331,15 +1410,23 @@ def tie_run(run: Path, ids: dict[str, list[int]] | None, seed: bytes = b"tie-run
             else:
                 at.append(None)
         placed[w] = cells, at
-    S = max([1, *(len({x[1] for x in at if x and x[1] is not None}) for _, at in placed.values())])
-    shape = IT.Shape(B, e.buckets, e.allocation, P=1, S=S, DS=DS)
+    R = e.allocation
+
+    def bucket_steps(at: list, t: int) -> list[int]:
+        return sorted({x[1] for x in at[t * R:(t + 1) * R] if x and x[1] is not None})
+
+    S = max([1, *(len(bucket_steps(at, t)) for _, at in placed.values() for t in range(e.buckets))])
+    shape = IT.Shape(B, e.buckets, R, P=1, S=S, DS=DS)
     ingress_held = len(held[Direction.INGRESS.value]) == windows
     for w, (cells, at) in placed.items():
-        steps = sorted({x[1] for x in at if x and x[1] is not None})
-        sigma = {s: n for n, s in enumerate(steps)}
-        cmap = tuple(IT.MapEntry(x[0], sigma[x[1]]) if x and x[1] is not None else None for x in at)
-        steps += [steps[-1] if steps else 0] * (S - len(steps))
-        inst = _instance(IT, shape, w, cells, cmap, tuple(steps), port, seed)
+        cmap, steps = [], []
+        for t in range(e.buckets):
+            mine = bucket_steps(at, t)
+            sigma = {s: n for n, s in enumerate(mine)}
+            cmap += [IT.MapEntry(x[0], sigma[x[1]]) if x and x[1] is not None else IT.UNHELD
+                     for x in at[t * R:(t + 1) * R]]
+            steps.append(tuple(mine + [mine[-1] if mine else 0] * (S - len(mine))))
+        inst = _instance(IT, shape, w, cells, cmap, steps, port, seed)
         bad = {p for p, ok in IT.reference_parts(inst).items() if not ok}
         bad |= {"cells_root"} if w not in held[Direction.EGRESS.value] else set()
         bad |= {"map"} if not ingress_held else set()

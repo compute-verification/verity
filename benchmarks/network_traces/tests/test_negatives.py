@@ -746,28 +746,32 @@ def test_the_ties_view_of_the_advice_is_each_kept_outputs_step_row_request_index
 
 def test_the_io_tie_refuses_each_negative_it_reads_by_its_part():
     """IO-TIE's reference (`io_tie.reference_parts`, skipped until it's importable) on a fake upstream's cells and
-    Commit port of the advice, one shape for every advice: the honest window passes; the changed cell under the kept
-    root fails the cells' root, the changed port id under the Commit's kept root the port's; a certified cell of
-    another id, a dropped cell, and the map of every advice negative that disagrees with the I/O fail the content;
-    start and chunk, whose outputs and buckets are honest's, pass, leaving them to the step unit."""
+    Commit port of the advice served through a warden of r = 2 slots a connection (r0's last output released at
+    bucket 4, the warden's, not 5), one shape for every advice: the honest window passes; the changed cell under the
+    kept root fails the cells' root, the changed port id under the Commit's kept root the port's; a certified cell of
+    another id, a dropped cell, and the map of a length or missing advice negative fail the content; an extra
+    request, which no connection carries, and a release the warden didn't make fail the map; start and chunk, whose
+    outputs and buckets are honest's, pass, leaving them to the step unit. Two lanes of r = 2 slots hold r0 and r1
+    live together; one lane can't."""
     pytest.importorskip(NG.IO_TIE_MODULE)
     rows = NG.tie_suite(_advice(), IDS, T=8)
-    assert rows["honest"]["ok"] and rows["honest"]["shape"] == {"B": 256, "T": 8, "R": 6, "P": 3, "S": 4, "DS": 3,
-                                                                 "N": 48, "M": 64}
+    assert rows["honest"]["ok"] and rows["honest"]["shape"] == {"B": 256, "T": 8, "R": 4, "P": 3, "S": 3, "DS": 3,
+                                                                 "N": 32, "M": 16}
     assert set(rows) == {"honest", *NG.TIE_PARTS}
     assert all(r["ran"] and r["ok"] and "moved" not in r for k, r in rows.items() if k != "honest"), rows
     want = {k: [f"{NG.TIE}.{p}"] if p else [] for k, p in NG.TIE_PARTS.items()}
     want["frame"] = [f"{NG.TIE}.cells_root", f"{NG.TIE}.content"]
     want["wrong-token"] = [f"{NG.TIE}.content", f"{NG.TIE}.port"]
     assert {k: r["codes"] for k, r in rows.items() if k != "honest"} == want
-    with pytest.raises(NG.NotApplicable, match="more than R = 2"):
+    with pytest.raises(NG.NotApplicable, match="more than R / r = 1 lanes"):
         NG.tie_suite(_advice(), IDS, T=8, R=2)
 
 
 def test_a_chunk_split_that_moves_outputs_to_later_steps_is_refused_by_the_ties_content():
     """With no chunked prefill, chunk splits a prefill row in two, so every later step moves one on: the map the
     verifier computes from that advice names port entries of other steps than the Commit sampled each output in, and the
-    content refuses it; a map the verifier can't compute (a bucket past R) refuses every window, by `map`."""
+    content refuses it; a map the verifier can't compute (a request no connection carries) refuses every window, by
+    `map`, and an advice the warden can't serve in R slots (two connections live in one lane) has no tie at all."""
     pytest.importorskip(NG.IO_TIE_MODULE)
     a = _advice([[(0, "prefill", 0, 5), (1, "prefill", 0, 2)], [(0, "decode", 5, 1), (1, "decode", 2, 1)],
                  [(0, "decode", 6, 1)]])
@@ -775,9 +779,10 @@ def test_a_chunk_split_that_moves_outputs_to_later_steps_is_refused_by_the_ties_
     assert rows["honest"]["ok"] and rows["advice-start"]["ran"] and rows["advice-start"]["codes"] == []
     assert rows["advice-chunk"] | {"failing": None} == {"code": f"{NG.TIE}.content", "moved": True, "ran": True,
                                                        "failing": None, "codes": [f"{NG.TIE}.content"], "ok": True}
-    rows = NG.tie_suite(a, IDS, T=8, R=4)
-    assert rows["advice-extra"]["codes"] == [f"{NG.TIE}.map"] and "R = 4" in rows["advice-extra"]["why"]
-    assert not rows["advice-extra"]["ok"]
+    assert rows["advice-extra"]["codes"] == [f"{NG.TIE}.map"] and "permutation" in rows["advice-extra"]["why"]
+    assert rows["advice-extra"]["ok"]
+    with pytest.raises(NG.NotApplicable, match="2 live requests, more than R / r = 1 lanes"):
+        NG.tie_suite(a, IDS, T=8, R=2)
 
 
 def test_the_suite_carries_the_ties_verdict_on_each_negative_it_reads(runs, tmp_path, monkeypatch):

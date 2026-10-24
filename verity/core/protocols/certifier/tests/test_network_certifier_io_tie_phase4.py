@@ -11,8 +11,9 @@ Commit registered. These cases forge everything the prover controls together and
   prover's map isn't the verifier's, and its rows open only under their own tree's root.
 - A fabricated response, with a matching map and port, or with port rows of its ids: the verifier's map has no output
   there, whatever the port says.
-- The in-bucket order channel ADV-SPEC flagged (log2 n_t!): the map fixes each cell's place, so the only orders left
-  free are byte-identical cells (a request's repeated token id), which commit to one value: zero bits."""
+- The in-bucket order channel ADV-SPEC flagged (log2 n_t!): the map fixes each slot's stream and kind and each data
+  cell's entry, so the only orders left free are byte-identical cells (a connection's pads, or a response's repeated
+  token id in one bucket), which commit to one value: zero bits."""
 
 from __future__ import annotations
 
@@ -21,27 +22,30 @@ from dataclasses import replace
 
 from verity.core.protocols.certifier import io_tie as IT
 
-from test_network_certifier_io_tie import BIG, _cell_tampers, commit, serve, served_honestly, with_cells
+from test_network_certifier_io_tie import BIG, _cell_tampers, busiest, busy, commit, serve, wardens, with_cells
 
 
 def _witness_matching(inst: IT.Instance, cells) -> IT.Instance:
-    """v3's matching table carried over: a map and a port the prover builds from its own cells, each data cell mapped
-    in order to its stream and the next entry of a port whose rows carry the cells' ids, under the prover's own tree.
-    `reference` is 1 on it for any cells the prover can parse; the verifier's map and the Commit's root refuse it."""
+    """v3's matching table carried over: a map and a port the prover builds from its own cells, each slot mapped to its
+    cell's stream and kind and each data cell to the next entry of its bucket's port, whose rows (steps t·S … t·S +
+    S − 1 of a tree of the prover's own) carry the bucket's ids. `reference` is 1 on it for any cells the prover can
+    parse; the verifier's map and the Commit's root refuse it."""
     sh = inst.shape
-    cmap, ids = [], []
-    for c in cells:
-        p = IT.parse_cell(c)
-        cmap.append(IT.MapEntry(p.stream, len(ids)) if p is not None and p.data else None)
-        if cmap[-1] is not None:
-            ids.append(p.id)
-    rows = [IT.port_row(ids[s * sh.P:(s + 1) * sh.P], sh.P) for s in range(1 << sh.DS)]
+    cmap, rows = [], [bytes(4 * sh.P)] * (1 << sh.DS)
+    for t in range(sh.T):
+        ids = []
+        for c in cells[inst.bucket(t)]:
+            p = IT.parse_cell(c)
+            cmap.append(IT.MapEntry(p.stream, len(ids) if p.data else IT.END_ENTRY if p.kind == IT.END else IT.EMPTY))
+            ids += [p.id] if p.data else []
+        for s in range(sh.S):
+            rows[t * sh.S + s] = IT.port_row(ids[s * sh.P:(s + 1) * sh.P], sh.P)
     salts = [IT.fake_salt(b"prover", s) for s in range(len(rows))]
     levels = IT.rows_levels(inst.port_domain, rows, salts)
-    steps = tuple(range(sh.S))
-    port, port_salts, paths = IT.open_port(levels, rows, salts, steps)
-    return replace(with_cells(inst, cells), map=tuple(cmap), steps=steps, port=port, port_salts=port_salts, paths=paths,
-                   port_root=levels[-1][0])
+    steps = tuple(tuple(range(t * sh.S, (t + 1) * sh.S)) for t in range(sh.T))
+    opened = [IT.open_port(levels, rows, salts, st) for st in steps]
+    return replace(with_cells(inst, cells), map=tuple(cmap), steps=steps, port=tuple(o[0] for o in opened),
+                   port_salts=tuple(o[1] for o in opened), paths=tuple(o[2] for o in opened), port_root=levels[-1][0])
 
 
 def _verifiers(forged: IT.Instance, inst: IT.Instance) -> IT.Instance:
@@ -54,8 +58,9 @@ def test_a_wrong_id_with_a_witness_forged_to_match_is_refused() -> None:
     """v3 accepted a wrong id once the table was forged to match. Its analogue now, the prover's own map and port, passes
     only against itself; and the prover's best port under the verifier's map, the Commit's rows with the wrong id in
     its entry, opens only under its own tree's root, not the Commit's."""
-    served = served_honestly(BIG, 11)
-    inst = commit(BIG, served)
+    link = busy(11)
+    w = busiest(link)
+    inst = commit(BIG, link, w)
     assert IT.reference(inst)
 
     wrong = _cell_tampers(inst)["a wrong id"]
@@ -65,11 +70,11 @@ def test_a_wrong_id_with_a_witness_forged_to_match_is_refused() -> None:
     assert not IT.reference(_verifiers(forged, inst))
 
     (i,) = [k for k, (a, b) in enumerate(zip(wrong, inst.cells)) if a != b]
-    e = inst.map[i].e
-    step, r = inst.steps[e // BIG.P], e % BIG.P
-    rows = list(served.rows)
+    t, e = BIG.bucket(i), inst.map[i].e
+    step, r = inst.steps[t][e // BIG.P], e % BIG.P
+    rows = list(link.port)
     rows[step] = rows[step][:4 * r] + IT.parse_cell(wrong[i]).id.to_bytes(4, "big") + rows[step][4 * r + 4:]
-    spliced = commit(BIG, served._replace(cells=wrong, rows=rows))
+    spliced = with_cells(commit(BIG, link._replace(port=rows), w), wrong)
     assert IT.reference_parts(spliced) == {"cells_root": True, "port": True, "content": True}
     assert spliced.port_root != inst.port_root
     assert IT.reference_parts(replace(spliced, port_root=inst.port_root)) == {
@@ -80,8 +85,9 @@ def test_a_fabricated_response_with_a_witness_forged_to_match_is_refused() -> No
     """v3 accepted cells from a request that never served with their matching table. The verifier's map has pads where
     nothing was released, so they are refused under it with the prover's own port, with port rows of their ids, or with
     the Commit's."""
-    served = served_honestly(BIG, 11)
-    inst = commit(BIG, served)
+    link = busy(11)
+    w = busiest(link)
+    inst = commit(BIG, link, w)
     fabricated = [IT.pad_cell(BIG.B)] * BIG.N
     fabricated[0] = IT.data_cell(123_456, 424_242, BIG.B)
     fabricated[1] = IT.data_cell(222, 424_242, BIG.B)
@@ -90,33 +96,28 @@ def test_a_fabricated_response_with_a_witness_forged_to_match_is_refused() -> No
     assert not IT.reference(_verifiers(forged, inst))
     assert IT.reference_parts(with_cells(inst, fabricated))["content"] is False
 
-    pads = [k for k, m in enumerate(inst.map) if m is None]
-    beside = list(served.cells)
-    for k, stream in zip(pads[:2], (424_242, next(m.q for m in inst.map if m is not None))):
+    pads = [k for k, m in enumerate(inst.map) if m.e == IT.EMPTY]
+    beside = list(inst.cells)
+    for k, stream in zip(pads[:2], (424_242, next(m.q for m in inst.map if m.q))):
         beside[k] = IT.data_cell(123_456, stream, BIG.B)
-    rows = [IT.port_row([123_456] * BIG.P, BIG.P)] * len(served.rows)
-    for name, s in {"beside the honest cells": served._replace(cells=beside),
-                    "and a port of their ids": served._replace(cells=beside, rows=rows)}.items():
-        assert IT.reference_parts(commit(BIG, s))["content"] is False, name
+    rows = [IT.port_row([123_456] * BIG.P, BIG.P)] * len(link.port)
+    for name, s in {"beside the honest cells": link, "and a port of their ids": link._replace(port=rows)}.items():
+        assert IT.reference_parts(with_cells(commit(BIG, s, w), beside))["content"] is False, name
 
 
 def test_the_only_free_in_bucket_order_is_byte_identical_cells() -> None:
-    """ADV-SPEC's log2 n_t! channel: the map puts bucket t's outputs in (request, index) order, so a cell's place names
-    its output. With distinct ids every other order is refused (the author's case: exactly one order accepted). With a
-    repeated id the two cells swap freely, but they are byte-identical, so they commit to one value: zero
-    distinguishable strings, not one canonical among several."""
-    # request 3 emits the same id twice in bucket 0; request 8 two distinct ids; request 20 one
-    one = IT.Shape(BIG.B, 2, 8, P=8, S=8, DS=4)
-    served = serve(one, {3: (0, [10, 10]), 8: (4, [12, 13]), 20: (0, [14])}, 14, [5, 0])
-    inst = commit(one, served)
+    """ADV-SPEC's log2 n_t! channel: the map fixes each slot's stream and kind and each data cell's entry, so a cell's
+    place names its output. With r = 2, connection 1 emits the same id twice in bucket 1 and connection 2 two distinct
+    ids: the two cells of connection 1 swap freely, but they are byte-identical, so they commit to one value; so do
+    each connection's two pads in bucket 0. Every other order is refused."""
+    one = IT.Shape(BIG.B, 2, 4, P=4, S=4, DS=4)
+    link = serve(one, wardens(one, 2, 1), [0, 0], [[10, 10], [12, 13]], 2 * one.T)
+    inst = commit(one, link, 0)
     assert IT.reference(inst)
-    assert [IT.parse_cell(c).stream for c in served.cells[:5]] == [4, 4, 9, 9, 21]
-
-    accepted, distinct = 0, set()
-    for order in itertools.permutations(range(5)):
-        cells = [served.cells[k] for k in order] + list(inst.cells[5:])
-        if IT.cells_match(one, cells, inst.map, inst.port):
-            accepted += 1
-            distinct.add(tuple(cells))
-    # the two cells of request 3, stream 4 (same id), swap freely; every other swap is refused by the map
-    assert accepted == 2 and len(distinct) == 1
+    assert [(p.stream, p.id) for p in map(IT.parse_cell, inst.cells[one.R:2 * one.R])] == [(1, 10), (1, 10), (2, 12),
+                                                                                         (2, 13)]
+    for t, want in ((0, 4), (1, 2)):
+        honest = inst.cells[inst.bucket(t)]
+        accepted = [order for order in itertools.permutations(range(one.R)) if IT.cells_match(
+            one, [honest[k] for k in order], inst.map[inst.bucket(t)], inst.port[t])]
+        assert len(accepted) == want and {tuple(honest[k] for k in order) for order in accepted} == {honest}, t
