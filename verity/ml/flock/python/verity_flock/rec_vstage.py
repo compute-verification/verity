@@ -67,6 +67,8 @@ refused before anything is staged (`rec_shape.check`, exit 2).
 from __future__ import annotations
 
 import dataclasses
+import functools
+import gc
 import json
 import os
 import shutil
@@ -88,6 +90,22 @@ from . import rec_vstar as V
 TABLE = "circuit"
 FORGERIES = ("message", "sum", "comb", "top", "top-salt", "coef", "dirs", "filler")
 VERIFIER_FILES = ("circuit.txt", "pub.bin", "program.json", "partition.json", "registered.json")
+
+
+def _without_gc(f):
+    """``f`` with CPython's cyclic collector paused: staging holds tens of millions of acyclic forms (`forms.L`), and the
+    collector's passes over them were about a third of the algebra's and L0's staging at K = N = 64, at the same peak memory
+    (run r20261024-062524-9b83)."""
+    @functools.wraps(f)
+    def run(*args, **kwargs):
+        was = gc.isenabled()
+        gc.disable()
+        try:
+            return f(*args, **kwargs)
+        finally:
+            if was:
+                gc.enable()
+    return run
 
 
 def meta(circuit: Path) -> dict:
@@ -337,6 +355,7 @@ def shared_rows(algebra, stacked=(), tops=()) -> dict:
     return {"format": "verity/registered-reads/v0", "ports": ports}
 
 
+@_without_gc
 def stage_cap(inner: Path, out: Path, evaluate: bool = True, levels: list[int] | None = None) -> dict:
     """RecCap alone at every level (or at ``levels``) over the inner session ``inner`` (`rec_cap.stage`: level 0 under
     ``out``, a later level ``l`` under ``out/L<l>``): each level's tops rebuilt from the recorded ``b || c`` and the salts
@@ -465,6 +484,7 @@ def _copy_verifier(src: Path, dst: Path) -> None:
         shutil.copyfile(src / f, dst / f)
 
 
+@_without_gc
 def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, algebra: bool = True, forge: str | None = None,
           evaluate: bool = True, pts: dict | None = None, salts: Path | None = None, cap=None, sparse: tuple | None = None,
           version: int = 1, part_jobs: int = 1) -> dict:
