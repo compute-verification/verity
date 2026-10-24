@@ -10,10 +10,12 @@
    "and": 234767
   },
   "FrameV3Pick_v1{D=1}": {
-   "and": 1044
+   "and": 1044,
+   "type": "05e8264088d1f66f10aac0aea0e462fe47f6b4c9d1dc223d93cb3d2b9478fe05ae11d797727b041b4d6317c9f5e4155f300111be789b00cb873d523b6a24bdd8"
   },
   "FrameV3Pick_v1{D=2}": {
-   "and": 1561
+   "and": 1561,
+   "type": "967f91125395a8da8536559fdb42ef3814677cc3b92861a4099ce0eacc6eae0f00343f010f89fb355b23115331b82babdb82a2aeb9f322b27ad0695a42f8553e"
   },
   "FrameV3ReadAt_v1{D=1,B=4,SCHEMA='hm96-sha512/row/v2'}": {
    "and": 393142

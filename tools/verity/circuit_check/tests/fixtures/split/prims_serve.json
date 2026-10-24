@@ -523,25 +523,32 @@
   "definitions": {},
   "pieces": {
    "DivFullScaleA_v2": {
-    "and": 1542
+    "and": 1542,
+    "type": "7237a173c3537996123e9d64fec6477b2e3be824bf686bc5d531479c8516b69d39b8adaf578941224933549fcfa6e8d149d60292a3647838e8ef0986220adf14"
    },
    "F32GtStrict_v1": {
-    "and": 191
+    "and": 191,
+    "type": "d6aa4eba3e002e9160c290d9557f4b744e3349584de716fafbd11c24f0dee2a285a362dc74a7ecd3ea4f5f61edf8a0d493443abb8af82d99eab43b99ca76a933"
    },
    "F32Sub_v1": {
-    "and": 823
+    "and": 823,
+    "type": "c765a3d490ab9bb2557a4372a22c6d103bac8fe65ef561b9e44a85915390749774cf21884f81d18c4261ad85269dc4004a1edb15bc0c0521393f90e9a6c8298f"
    },
    "F32Sub_v2": {
-    "and": 823
+    "and": 823,
+    "type": "e8ade1930353104d13477b46a319e50103defbf50ccb413d0e3e626b6987fbfaac9a49f6f6ed473831d479806e68af0ad42cf89ca2aa41ecec7f8cf0b0dd6ea6"
    },
    "RopeOutAdd_v1": {
-    "and": 2998
+    "and": 2998,
+    "type": "d74dcb4594de14abb971b475283597ad6112dbaffc39d6dd1e711a7dadbb4413c1a85eeb00f3c1804694620a0c2c047b1d9868df95811964d22c7a1cda0ca34e"
    },
    "RopeOut_v1": {
-    "and": 2998
+    "and": 2998,
+    "type": "d0214a5ced4a04d2ae5c0f51a92093b82e869a1e1e5f841247c2904a252736dd70316cc60c4bfb91a58f1dc75577c7e26df064c7e10f1fda7f6c5c3716b28040"
    },
    "SiluMulBf16_v1": {
-    "and": 2699
+    "and": 2699,
+    "type": "8e2e6cce9b6d6ae53b8a87c5014777b7c77045053fc4d0004a8c1d40ac6c700b74a194404b5736370859bff62e4d3d8c22f9f8ba15ed2fbaaa4774de9c7ce0ec"
    }
   },
   "units": {}
