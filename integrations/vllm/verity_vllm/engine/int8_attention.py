@@ -4,7 +4,7 @@ vLLM; ``TargetProfile.int8_exact`` declares it).
 
 A window is a request's tokens 0..s-1 (its KV cache: K after RoPE and V, both bf16); a call computes the window's last n query
 rows (positions s-n..s-1).  A whole-prompt prefill is n = s; a decode step is n = 1, the last row of the window over every token
-so far.  For every KV group g (its `rep` query heads; RN32 / RN64 = float32 / float64 round to nearest even, one rounding per
+so far; a chunked prefill's chunk is the n rows it brings, over the s tokens cached by its end.  For every KV group g (its `rep` query heads; RN32 / RN64 = float32 / float64 round to nearest even, one rounding per
 operation; every division a true IEEE division):
 
 * Q [rep, n, d], one scale per (head, token): s_q = RN32(max(max |q|, RN32(1e-30)) / 127), Q' = clamp(round(RN32(q / s_q)),
@@ -25,8 +25,8 @@ operation; every division a true IEEE division):
   s_ch) with no dither, where O + 64 S is P V' over keys 1..pos and X(0) is V' at key 0.
 
 Every step is integer or one IEEE operation, so a CPU and a GPU compute the same bits.  V's scale reads every key of the window,
-so a row's output depends on the window's later tokens: a prefill split into chunks would be another window, and is refused.
-Nothing reads another request.
+so a row's output depends on the window's later tokens: each chunk of a chunked prefill is its own window, and its rows are the
+same rows of the whole prompt of its s tokens, not of the whole prompt the request ends with.  Nothing reads another request.
 """
 from __future__ import annotations
 

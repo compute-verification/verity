@@ -346,10 +346,12 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
             print(f"research run: --pool {ns.pool}: --timeout {timeout:g} s counts from taking a slot (slot.py --run-max); it waits "
                   f"up to {wait_s / 60:g} min for one (--pool-wait), then exits 75 without running", file=sys.stderr)
         if ns.mem_gb is not None:
-            # the slot's mem= admits and reserves the run; a launch-time reservation too was held through the wait for a slot,
-            # beside the slot's once it ran (INF-61, cpu-3 18 Oct: two waiting runs held 128 GB, admission sat at -89 GB)
-            print(f"research run: --pool {ns.pool}: --mem-gb {ns.mem_gb:g} is dropped; the slot's own mem= admits and reserves the run",
-                  file=sys.stderr)
+            # the slot admits and reserves the run, not a launch-time reservation, which was held through the wait for a slot
+            # beside the slot's once it ran (INF-61, cpu-3 18 Oct: two waiting runs held 128 GB, admission sat at -89 GB); the
+            # slot takes the larger of its mem= and this (24 Oct: a 450 GB run in proofs' 193 GB slot p5 reserved 193)
+            ns.env = [*ns.env, f"CHECK_RUN_MEM_GB={ns.mem_gb:g}"]
+            print(f"research run: --pool {ns.pool}: --mem-gb {ns.mem_gb:g} goes to the slot, which waits for and reserves the larger of "
+                  "its own mem= and that", file=sys.stderr)
             ns.mem_gb = None
         if cwd is None:
             harness_opts = [*harness_opts, "--cwd", "source"]

@@ -112,7 +112,7 @@ def test_gemms_fit_sm120_shared_memory():
     assert ML_SMEM == 98352 and gemm_smem("M_PEARLC", 64, 64) == 49152
     assert form_kernels() == ["form_s5", "form_s5_r144", "form_s5_scalar", "form_rate", "form_rate_r144", "form_rate_scalar",
                               "form_rate_nocast", "form_rate_nocast_r144", "form_rate_atoms"]
-    assert set(S.WANT) - {"words", "words_u", *form_kernels()} == names
+    assert set(S.WANT) - {"words", "words_u", "words_k", *form_kernels()} == names
     assert set(RUN.FORM_RATES) == set(form_rates()) and set(RUN.FORM_ALTS) == {"form_s5_scalar", "form_s5_r144"}
 
 
@@ -154,6 +154,8 @@ def test_kernel_constants_match_the_reference():
     assert {k: int(v) for k, v in variants.items()} == {SM120.name: SM120.g, SM120_UNPROMOTED.name: 0}
     promoted = {g for *_, g in gemms() if g}
     assert promoted == {SM120.g} and SM120.window % const("BK") == 0 and SM120_UNPROMOTED.g is None
+    assert const("WK_G") == SM120.g and const("WK_WARPS") == RUN.WK_WARPS and const("SR_MAX_K") == RUN.SR_MAX_K
+    assert RUN.SR_ROWS >= RUN.BM_D
 
 
 SASS_OK = "\n".join([
@@ -263,7 +265,7 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
     if name == "lines":
         count = i[2]
         return {0: 32, 1: 32 * count, 2: 32 * count, 3: 128 * count, 4: 32 * i[4]}
-    if name == "stats_s5":
+    if name in ("stats_s5", "stats_r"):
         rows, k = i[:2]
         return {0: 4 * rows * k, 1: 4 * rows, 2: 4 * rows, 3: 4 * rows, 4: 8 * rows}
     if name == "eprime":
@@ -288,7 +290,7 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         if gemm_tile(name) == (128, 128):
             need[10] = 4 * 128                        # ml::Maps: A, B, P_A, P_B
         return need
-    if name in ("words", "words_u"):
+    if name in ("words", "words_u", "words_k"):
         M, N, K = i[:3]
         assert N == 32 and M % 16 == 0 and K % 128 == 0
         return {0: M * K, 1: N * K, 2: 4 * M * N}
@@ -353,6 +355,7 @@ def threads(name: str, i: list[int]) -> int:
     return {"lines": lambda: i[2], "stats_s5": lambda: 32 * i[0], "eprime": lambda: i[0], "pa": lambda: 64 * i[0],
             "pb": lambda: 32 * i[0], "gen_f32": lambda: i[0] * i[1], "diff_words": lambda: i[0],
             "words": lambda: i[0] // 16 * (i[1] // 8) * 32, "words_u": lambda: i[0] // 16 * (i[1] // 8) * 32,
+            "words_k": lambda: i[0] // 16 * (i[1] // 8) * 32 * RUN.WK_WARPS, "stats_r": lambda: 256 * i[0],
             "s512_rows": lambda: i[0], "s512_seeds": lambda: i[0], "s512_tile_leaves": lambda: -(-i[0] // 64) * (i[1] // 64),
             "s512_row_segs": lambda: i[0] * (i[1] // 256), "s512_tile_segs": lambda: tile_segs(i), "s512_folds": lambda: i[0],
             "s512_heads": lambda: segs,
@@ -462,6 +465,41 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     lines_ea = [ev for ev in launched if ev["name"] == "lines" and ev["i"][4]]
     assert lines_ea and all(ev["i"][2] == 1024 and ev["i"][4] == 1008 for ev in lines_ea)
 
+    # decode's 64 rows: words_k and stats_r, timed beside the kernels they replace and held to their words
+    log = tmp_path / "launches_decode.jsonl"
+    r = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")],
+                       env=dry_env(ship, log, PEARLC_ANY_GPU="1", PEARLC_UNGATED="1", SHAPES="16x1024x3072", VARIANTS="sm120"),
+                       capture_output=True, text=True)
+    assert r.returncode == 4, r.stderr
+    (t,) = [x for x in map(json.loads, r.stdout.splitlines()) if x["kind"] == "timing"]
+    assert t["shape"] == [64, 1024, 3072] and {"af", "af_warps", "stats_a", "stats_a_warps"} <= set(t["ms"])
+    assert {f"{o}_{step}_vs_{ref}_words_differing" for step, ref, outs in RUN.SPLITS for o in outs} <= set(t["consistency"])
+    allocs, launched, timed = {}, [], False
+    for ev in map(json.loads, log.read_text().splitlines()):
+        track(ev, allocs)
+        if ev["op"] == "launch":
+            timed = timed or ev["name"] == "gen_f32"
+            if timed:
+                launched.append(ev)
+    rows = {(ev["name"], ev["i"][0]) for ev in launched}
+    assert {("words_k", 64), ("words", 64), ("stats_r", 64), ("stats_s5", 64), ("stats_s5", 1024)} <= rows
+    assert ("stats_r", 1024) not in rows
+
+    # PEARLC_SPLIT=0 (the A/B rows' before): decode on the kernels words_k and stats_r replace, and no split timed beside them
+    log = tmp_path / "launches_unsplit.jsonl"
+    r = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")],
+                       env=dry_env(ship, log, PEARLC_ANY_GPU="1", PEARLC_UNGATED="1", SHAPES="16x1024x3072", VARIANTS="sm120",
+                                   PEARLC_SPLIT="0"), capture_output=True, text=True)
+    assert r.returncode == 4, r.stderr
+    (t,) = [x for x in map(json.loads, r.stdout.splitlines()) if x["kind"] == "timing"]
+    assert {"af", "stats_a"} <= set(t["ms"]) and not {"af_warps", "stats_a_warps"} & set(t["ms"])
+    launched, timed = [], False
+    for ev in map(json.loads, log.read_text().splitlines()):
+        timed = timed or ev.get("name") == "gen_f32"
+        if timed and ev["op"] == "launch":
+            launched.append((ev["name"], ev["i"][0]))
+    assert {("words", 64), ("stats_s5", 64)} <= set(launched) and not {n for n, _ in launched} & {"words_k", "stats_r"}
+
 
 def room(allocs: dict[int, int], ptr: int) -> int:
     """Bytes from ptr to the end of the live allocation holding it (0 if none): a tree's root is its buffer's last node."""
@@ -478,7 +516,7 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
         allocs.pop(ev["ptr"])
     elif ev["op"] == "copy":
         for end in ("dst", "src"):
-            assert allocs.get(ev[end], 0) >= ev["bytes"], ev
+            assert room(allocs, ev[end]) >= ev["bytes"], ev
     elif ev["op"] == "tmap":
         assert room(allocs, ev["ptr"]) >= ev["depth"] * ev["rows"] and ev["box"] == [128, 128], ev
         if maps is not None:
@@ -510,6 +548,10 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
                 assert not p[5] or {(p[5], 128, M), (p[6], 128, N)} <= maps, name
         if name in ("words", "words_u"):
             assert g[0] == i[0] // 16 and ev["block"] == 128
+        if name == "words_k":
+            assert g[0] == i[0] // 16 * (i[1] // 8) and ev["block"] == 32 * RUN.WK_WARPS and i[2] % 128 == 0
+        if name == "stats_r":
+            assert g[0] == i[0] <= RUN.SR_ROWS and ev["block"] == 256 and i[1] <= RUN.SR_MAX_K and i[1] % 256 == 0
         if name == "s512_rows":
             assert g[0] == i[0] and i[1] % 256 == 0 and i[1] <= 256 * RUN.RS_MAX_SEGS
         if name == "s512_tile_leaves":

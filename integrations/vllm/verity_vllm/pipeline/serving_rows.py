@@ -3,15 +3,15 @@ through an opened reader, registered weights for weight slices), committed in M0
 :mod:`verity_vllm.commit.serving_rows`, with core's one-stage registration over them.  Three ways in, one window, two kinds:
 
 * **In the Commit** (opt-in, ``commit --serving-rows``): the row stage writes a request ``{"dir", "partition", "run",
-  "committer"}``, and the in-process C2 replay commits the window after the vllm-v1 roots are final and before its seed (``readers``).
+  "committer"}``, and the in-process C2 replay commits the window after the Commit's roots are final and before its seed (``readers``).
   The window is ``served``: its roots are serving's own commitment, made before any draw.  The profile makes no claim that they
-  hold the values under the vllm-v1 roots.
+  hold the values under the Commit's roots.
 * **In a TP Commit** (``tp-commit --serving-rows``, `pipeline.tp.serving_rows`): one ``served`` window per rank, committed in the
   rank's process once every rank's root is final and the TP run root fixed, before the challenge; its run is the TP run root and
   the rank.
 * **From a deferred Commit's bundle** (``verity-vllm serving-rows BUNDLE --row-dir D --partition F --out O``,
   `pipeline.deferred_rows`): the sealed replay bundle opened against the Commit's record as the CPU replay opens it, and the same
-  window written into ``O`` as a ``stand-in``: serving's commitment is the vllm-v1 roots, and these rows are committed afterwards
+  window written into ``O`` as a ``stand-in``: serving's commitment is the record's roots, and these rows are committed afterwards
   from the bundle, so their link to those roots is provenance (``deferred_rows.stand_in``).
 
 The partition file is the verifier's: ``{"templates": [<descriptor id>, ...], "law": "subset:K" | "stratified:K" | {...},
@@ -44,6 +44,8 @@ template as the partition names it.  The rows commit u16 words: a template's eve
 Boolean element's bit j is bit j of its word, `boolean.elements`), or, for a row or coordinate template, elements of ``PACKED`` widths with each
 port whole u16 words (``Template.packed``): a port's words are then its elements' little-endian bytes, two to a word, which are
 the port's bits in M0's row order (an 8-bit element is half a word, a 32-bit one two words, low half first); refused otherwise.
+A committed member of a wider signed integer dtype than its output port (``BY_VALUE``: the sampler's i64 token under
+`TokenSelect`'s i32) is read by value, as the replay links tokens, each element below 2^bits or refused.
 Each member's ports, by the family of the template's word (``LAYOUTS``):
 
   ``RoPEHead_v1{D=..}``            every head of every ``RoPE_v1`` row: ``x``, ``cs`` -> ``out`` (D words each)
@@ -111,6 +113,8 @@ from verity_vllm.program.compact import runs_from_file_items
 
 #: the layouts whose units are bit rows as C-Flock's `UnitStager` stages them (`chunk_rows`), in chunks of at most a chunk cap
 CHUNKED = ("s8", "coord", "cols", "slice")
+#: the committed signed integer dtypes a narrower packed port reads by value (`_packed`): torch's int64 indices
+BY_VALUE = frozenset(("i64", "int64"))
 PARTITION_FORMAT = "verity-vllm/serving-rows/partition/v1"
 TEMPLATE_QUERIES = (PO.Q_TEMPLATE_INSTANCE[0], PO.Q_TEMPLATE_INSTANCES[0])
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
@@ -268,12 +272,33 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
     return out
 
 
+def _one_table_chunks(first: CS.Member, segs: Sequence[tuple[int, int, int, int]]) -> list[CS.Member]:
+    """A template's linked chunks over its units ``segs`` (each token row's units ``[a, b)``, its row table and rank, in
+    unit order), from its first chunk ``first``: at most ``first.n`` units each, every one reading one row table."""
+    chunks: list[tuple[int, list[tuple[int, int]], list[int]]] = []
+    for a, b, k, rank in segs:
+        at = a
+        while at < b:
+            if not chunks or chunks[-1][1][-1][0] != k or sum(chunks[-1][2]) == first.n:
+                chunks.append((at, [], []))
+            take = min(b - at, first.n - sum(chunks[-1][2]))
+            chunks[-1][1].append((k, rank))
+            chunks[-1][2].append(take)
+            at += take
+    return [replace(first, name=f"{first.template}/c{j}", base=base, n=sum(units), tables=((CS.LINKED, len(links)), ("w", sum(units))),
+                    links=tuple(links), link_units=tuple(units))
+            for j, (base, links, units) in enumerate(chunks)]
+
+
 def with_row_tables(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]],
                     arrivals: Mapping[str, int] | None = None) -> tuple[list[CS.Member], tuple[CS.RowTable, ...]]:
     """The row-table layout of ``members``' ``ScaledMmS8Coordinate`` chunks: one row table per (engine step, op_path) of their
     ``ScaledMmS8_v1`` rows in the canonical order serving commits them in (``RowTable.key``; each table's token rows by request,
-    then token row), and each chunk a shared-row member whose ``x`` table is the distinct token rows its units read (``links``:
-    each one's row table and rank, in the units' order) and whose ``w`` table is its own rows."""
+    then token row), and each template's units cut again into chunks of at most its chunk cap (its first chunk's size in
+    ``members``) that each read one row table: a chunk ends at its cap or where its units' next token row is another
+    table's.  Each chunk is a shared-row member whose ``x`` table is the distinct token rows its units read (``links``: each
+    one's row table and rank, in the units' order; ``link_units``: how many of its units read each), all rows of one table
+    (the one root a statement's registered reads open against), and whose ``w`` table is its own rows."""
     tables: dict[tuple[int, str], int] = {}
     specs: list[tuple[int, str, str, int, list[tuple[str, int, int]]]] = []
     segs: dict[str, list[tuple[int, int, int, int]]] = {}
@@ -293,13 +318,12 @@ def with_row_tables(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequenc
     ranks = [sorted(range(len(s[4])), key=lambda j, rs=s[4]: rs[j][:2]) for s in specs]
     new_k = {k: i for i, k in enumerate(order)}
     new_rank = [{j: i for i, j in enumerate(r)} for r in ranks]
-    out = []
+    out: list[CS.Member] = []
     for m in ms:
         if m.template not in segs:
             out.append(m)
-            continue
-        links = tuple((new_k[k], new_rank[k][rank]) for a, b, k, rank in segs[m.template] if a < m.base + m.n and b > m.base)
-        out.append(replace(m, tables=((CS.LINKED, len(links)), ("w", m.n)), links=links))
+        elif m.base == next(x.base for x in ms if x.template == m.template):
+            out += _one_table_chunks(m, [(a, b, new_k[k], new_rank[k][rank]) for a, b, k, rank in segs[m.template]])
     return out, tuple(CS.RowTable(specs[k][0], specs[k][1], specs[k][2], specs[k][3], tuple(specs[k][4][j] for j in ranks[k]))
                       for k in order)
 
@@ -385,7 +409,7 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
             w, why = store.words(rid, arrive + d["step"], d["op_path"], member, d["row"] * int(width), (d["row"] + 1) * int(width))
             if w is None:
                 raise LookupError(f"row {r['i']} output {member}: {why}")
-            outs.append(_packed([w], tp.packed[len(r["args"]) + j], f"row {r['i']} output {member}") if tp.packed
+            outs.append(_packed([w], tp.packed[len(r["args"]) + j], f"row {r['i']} output {member}", _dt) if tp.packed
                         else np.asarray(w, dtype=np.uint16))
         mine = list(range(len(outs)))
         if (p := part(tp.word, r["spec"])) is not None:
@@ -596,6 +620,8 @@ def _read_s8(ms: Sequence[CS.Member], rows: list[Row], store: Any, weights: Call
             if len(mine) != len(m.links):
                 raise ValueError(f"{m.key}: reads {len(mine)} token rows, links {len(m.links)}")
             at = np.repeat(np.arange(len(mine)), [min(entries[j][1], m.base + m.n) - max(entries[j][0], m.base) for j in mine])
+            if tuple(at.tolist()) != m.link_refs:
+                raise ValueError(f"{m.key}: its units read its token rows {at.tolist()}, its layout {list(m.link_refs)}")
             got = {"rows": {"x": np.stack([xrows[j] for j in mine]), "w": Wr[a:b]}, "outs": {"o0": Y[a:b]},
                    "refs": np.stack([at, np.arange(m.n)], axis=1)}
         else:
@@ -623,9 +649,13 @@ def read_all(ms: Sequence[CS.Member], rows: Sequence[list[Row]], store: Any, wei
     return out
 
 
-def _packed(parts: Sequence[np.ndarray], bits: int, what: str) -> np.ndarray:
+def _packed(parts: Sequence[np.ndarray], bits: int, what: str, dtype: str | None = None) -> np.ndarray:
     """A packed port's u16 words: its elements' little-endian bytes in order, each part's elements ``bits`` wide as read
-    (`CommittedStore.words`' element dtypes, a registered weight's own)."""
+    (`CommittedStore.words`' element dtypes, a registered weight's own).  A committed member of a wider signed integer ``dtype``
+    (``BY_VALUE``: the sampler's i64 token under `TokenSelect`'s i32) is read by value, as the replay links it: each element
+    in [0, 2^bits), refused otherwise."""
+    if dtype in BY_VALUE:
+        parts = [_by_value(np.asarray(a), bits, what) if np.asarray(a).dtype.itemsize * 8 > bits else a for a in parts]
     for a in parts:
         if np.asarray(a).dtype.itemsize * 8 != bits:
             raise ValueError(f"{what}: {np.asarray(a).dtype} elements, the template's port is {bits}-bit elements")
@@ -633,6 +663,16 @@ def _packed(parts: Sequence[np.ndarray], bits: int, what: str) -> np.ndarray:
     if len(raw) % 2:
         raise ValueError(f"{what}: {len(raw)} bytes, not whole u16 words")
     return np.frombuffer(raw, dtype="<u2").astype(np.uint16)
+
+
+def _by_value(a: np.ndarray, bits: int, what: str) -> np.ndarray:
+    """``a``'s elements (a signed integer member's words as the store reads them, unsigned) as ``bits``-bit words."""
+    u = a.reshape(-1).astype(np.uint64)
+    if (u >> np.uint64(bits)).any():
+        k = int(np.flatnonzero(u >> np.uint64(bits))[0])
+        raise ValueError(f"{what}: element {k} of a {a.dtype} member is {int(u[k].astype(np.int64))}, not in a {bits}-bit port's "
+                         f"[0, 2^{bits})")
+    return u.astype(np.dtype(f"<u{bits // 8}"))
 
 
 def _operand(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, group: Sequence) -> np.ndarray:
@@ -675,17 +715,18 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
                  digests: Mapping[str, str] | None = None, committer: dict[str, Any] | None = None,
                  workers: int | None = None, stand_in: Mapping[str, Any] | None = None, tp: Mapping[str, Any] | None = None,
                  index: Mapping[str, Any] | None = None, row_tables: Mapping[str, Any] | None = None,
-                 reuse: Sequence[ProgramIndex] = ()) -> dict[str, Any]:
+                 reuse: Sequence[ProgramIndex] = (), binding: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Commit the verifier's partition's units of a run whose roots are final and write the window's files into ``out_dir``:
     the registration (core's v1 record, its window the run root ``run_root`` and the provenance: the scheme the values were read
-    under (``commitment``: the reader's committer's, vllm-v1 or a TP rank's rows-sha512), the research run ``run``, the row, the
+    under (``commitment``: the reader's committer's, rows-sha512 by default or vllm-v1 by name), the research run ``run``, the row, the
     committer and the served Programs' ``digests``), ``partition.json``, the index and M0's bodies.  The window is ``served``;
     with ``stand_in`` (its ``of`` and ``link``), a ``stand-in`` with them in its provenance.  A TP rank's window (`pipeline.tp.
     serving_rows`) gives its run as a string, its world and roots as ``tp``, its ProgramIndex arguments as ``index`` and the index it
     loaded its Programs with as ``reuse``.  A
     row-table layout takes the serving loop's ``row_tables``: ``{"context": <hex>, "key": <the run's row key>, "step_roots":
     {engine step: root}}`` (`commit.row_tables.step_roots`), which the window's step roots must be.  It reads the committed values
-    and writes only ``out_dir``."""
+    and writes only ``out_dir``.  For Programs a registered compiler made from advice, the provenance also carries ``binding``: the
+    compiler's digest and the advice's hiding root (`pipeline.advice_windows.binding`)."""
     t0 = time.perf_counter()
     dirs = {str(k): v for k, v in (program_dirs or {}).items()}
     pf = json.loads(Path(partition_file).read_text())
@@ -700,7 +741,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
                   workers=workers or min(16, os.cpu_count() or 1))
     prov = {"commitment": "vllm-v1", "row": row, "research_run": run, "committer": dict(committer or {}, module=CS.__name__),
             "served_programs": {str(k): str(v) for k, v in sorted((digests or {}).items())}, "scope": pf.get("scope"),
-            **({"tp": dict(tp)} if tp else {}), **(stand_in or {})}
+            **({"tp": dict(tp)} if tp else {}), **(stand_in or {}), **(binding or {})}
     prov["commitment"] = getattr(getattr(committed, "com", None), "commit_scheme", prov["commitment"])
     c.seconds["read_s"] = round(t_read - t0, 3)
     Path(out_dir).mkdir(parents=True, exist_ok=True)

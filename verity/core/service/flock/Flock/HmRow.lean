@@ -61,6 +61,27 @@ def classOf (bytes : ByteArray) (head : String) (mj : Json) : V ByteArray := do
     | .obj kvs => Json.mkObj (kvs.toArray.filter (fun kv => !BINDING_KEYS.contains kv.1)).toList
     | j => j
   return Sha512.hash (head.toUTF8 ++ "\nMETA ".toUTF8 ++ (← canon m).toUTF8 ++ "\n".toUTF8 ++ bytes.extract (n2 + 1) bytes.size)
+
+/-- `classOf` with its hash in a task (`classOf_eq_task`), for `parseFastFrom`. Not inlined, for `parseFastFrom`'s
+reason. -/
+@[noinline] def classOfTask (bytes : ByteArray) (head : String) (mj : Json) : V (Task ByteArray) := do
+  let some n1 := findByte bytes 10 | throw "circuit: no META line"
+  let some n2 := findByte bytes 10 (n1 + 1) | throw "circuit: no section after META"
+  let m := match mj with
+    | .obj kvs => Json.mkObj (kvs.toArray.filter (fun kv => !BINDING_KEYS.contains kv.1)).toList
+    | j => j
+  let c ← canon m
+  return Task.spawn fun _ => Sha512.hash (head.toUTF8 ++ "\nMETA ".toUTF8 ++ c.toUTF8 ++ "\n".toUTF8 ++ bytes.extract (n2 + 1) bytes.size)
+
+theorem classOf_eq_task (bytes : ByteArray) (head : String) (mj : Json) :
+    classOf bytes head mj = Task.get <$> classOfTask bytes head mj := by
+  unfold classOf classOfTask
+  split
+  · split
+    · dsimp only; cases canon _ <;> rfl
+    · rfl
+  · rfl
+
 def SALT_BYTES : Nat := 192
 def BC_BYTES : Nat := 128
 
@@ -756,8 +777,8 @@ compiler sinks a `Task.spawn` bound in a body down to the branch that reads it, 
       let rule := (part.getObjValAs? String "rule").toOption.getD ""
       if !(rule == PARTITION_V1 || rule == PARTITION_PROVISIONAL) || !isSha512Hex ((part.getObjValAs? String "digest").toOption.getD "") then
         throw s!"META: the partition is not a {PARTITION_V1} (or the provisional {PARTITION_PROVISIONAL}) SHA-512 digest"
-      classOf bytes head mj
-    else pure ByteArray.empty
+      classOfTask bytes head mj
+    else pure (Task.pure ByteArray.empty)
   let mut nets : Array (String × Net) := match tmpl with
     | some t => #[("root", t.root)] ++ t.layouts.map fun (d, n, _) => (d, n)
     | none => pre
@@ -877,7 +898,7 @@ compiler sinks a `Task.spawn` bound in a body down to the branch that reads it, 
   if leafId != tags.merkleLeaf then throw s!"leaf-commitment scheme {leafId} is not one this verifier implements"
   let c : Circuit := { name, sha := sha.get, nets, ranges, ports, outPorts, outRowPorts, g, kLog := ← kLogOf mj, upv, unitNet,
                        leavesIn, leavesOut, key := ByteArray.empty, dummyDigests, dummyOutputs, leafScheme := leafId, perVu, wires,
-                       shaNet, hmNet, classSha, metaJ := mj, outNet, outNetPorts := onp.1, outNetSlots := onp.2, leafCuts,
+                       shaNet, hmNet, classSha := classSha.get, metaJ := mj, outNet, outNetPorts := onp.1, outNetSlots := onp.2, leafCuts,
                        typed := ← tmpl.mapM fun t => pure (blockOf t) }
   check c tags leafScheme
   HmNets.check c
@@ -900,7 +921,7 @@ set_option maxHeartbeats 1000000 in
 theorem parse_eq_fast : @parse = @parseFast := by
   funext tags bytes tables tmpl pre
   unfold parse parseFast parseFastFrom
-  simp -zeta only [Net.parsePar_eq]
+  simp -zeta only [Net.parsePar_eq, classOf_eq_task, bind_map_left]
   try rfl
 
 /-- A typed statement (item 1e), its rows derived once through `deriveChecked` (`Typed.read`), every net built from them.

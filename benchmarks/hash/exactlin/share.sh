@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # exactlin's uncovered share of a served step (share.py) on one leased GPU for at most SHARE_MAX_MIN (40) minutes: each arm
 # of SHARE_ARMS (exact-fused,exact) in its own process under nsys, its capture exported to SQLite and split by
-# `share.py --analyse`, then `share.py --summary` over the arms; the clocks read before and after.
+# `share.py --analyse`, then `share.py --summary` over the arms; the clocks read before and after.  The leased half runs on
+# the leased GPU's NUMA node, as dither's sbench.sh runs (benchmarks/hash/dither/numabind.py, DITHER_NUMA=0 unbound;
+# env/numa.json says which).
 #   research run --on vy-nebius-2 --project verity --campaign exactlin --source . --cwd source \
 #     --env GPU_LEASE_WHO=kernels-exactlin -- bash benchmarks/hash/exactlin/share.sh
 set -uo pipefail
@@ -17,7 +19,9 @@ if [ "${1:-}" != --leased ]; then
   [ -x "$NSYS" ] || { echo "share.sh: no nsys on $(hostname) (looked for NSYS, \$CUDA/bin, PATH, /opt/nvidia/nsight-systems)" >&2; exit 3; }
   echo "share: nsys $NSYS; asking for one GPU at $(date -u +%H:%M:%SZ)"
   pre=(); [ "${SHARE_PREEMPTIBLE:-0}" = 1 ] && pre=(--preemptible)   # a preempted trace is lost whole
-  NSYS=$NSYS SHARE_ROOT=$ROOT SHARE_S=$S gpu-lease 1 --wait "${pre[@]}" --max-min "${SHARE_MAX_MIN:-40}" -- bash "$ROOT/benchmarks/hash/exactlin/share.sh" --leased
+  numa=(python3 "$(cd "$(dirname "$0")/../dither" && pwd)/numabind.py" "$OUT/env/numa.json")
+  NSYS=$NSYS SHARE_ROOT=$ROOT SHARE_S=$S gpu-lease 1 --wait "${pre[@]}" --max-min "${SHARE_MAX_MIN:-40}" -- "${numa[@]}" \
+    bash "$ROOT/benchmarks/hash/exactlin/share.sh" --leased
   rc=$?
   echo "share: exited $rc at $(date -u +%H:%M:%SZ)"
   exit "$rc"

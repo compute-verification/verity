@@ -207,8 +207,8 @@ SHA512("verity/remote-session/payload-salts/v0") ‖ u64be j)` (`store_salt`), s
 the store's shape and the key (`expected_root`). A hello is refused before the registry draws when its store is shorter
 than the arenas, its layout isn't the store's regions, or its payload root isn't that root (`Binding.hold`). The
 verifier's record keeps the binding: the model's name and `checkpoint_sha512`, the store's shape, both roots and
-`bound`. A period's circuit is this tree's git hash, so the circuit a period signs commits to this code. The binding has
-no Lean yet (§8).
+`bound`. A period's circuit is this tree's git hash, so the circuit a period signs commits to this code. The binding's
+decision is also Lean (`lean/RemoteAudit/Store.lean`), and reading the files is Python only (§8).
 
 **The codec** is Sloth over \(p = 2^{1024} - 105\), with the mask \(\sigma_K\) between rounds, at \(k = 3\): `p1024/k3/masked`,
 `codec.DEFAULT` (Daniel, 12 Oct, #1884). The fallback is \(k = 2\) at the same width, `p1024/k2/masked` (`codec.FALLBACK`).
@@ -438,16 +438,17 @@ drawn), an append after the last window's roots are final (no root can follow it
 window's close, an append no root followed (`Session.close`). A block the prover stops holding is released
 (`Session.release`, runs of the store), and a plan received after its release that holds it rejects with `plan`; its
 receipts from earlier passes can still be drawn, so the prover keeps it until its windows are drawn. A block freed
-before its encode lands is *withdrawn*: its values' last read is at or before the step its write would be recorded
-at, so it gets no write, no free and no credit. It was never resident encoded, and a block no step reads while it's
-resident is in no record, so the line its write would be in lists its index in `withdrawn` instead (memory-map/v1's
-per-step list, optional and empty by default, so a map without withdrawals reads as before). A line's writes and
-withdrawals take the store's next fresh indices together, and a withdrawn index is never written. The prover's
-release covers the index and names it withdrawn (`Session.release(runs, withdrawn)`), and the verifier checks it was
-never written: an appended block, inside the release's runs, that no plan received before held. An append that is
-malformed or would take the store past its codec's `max_blocks` rejects with `append`, and a release of a block
-outside the store or released already, or one naming withdrawn a block that is registered, outside its runs or held
-by a plan, with `release`. Appends are a session's: the next session over the store starts again from \(N\) (§8).
+before its encode lands is *withdrawn*: its values' last structural reader (§8, "The pass and its step") is at or
+before the step its write would be recorded at, so it gets no write, no free and no credit. It was never resident
+encoded, and a block no step reads while it's resident is in no record, so the line its write would be in lists its
+index in `withdrawn` instead (memory-map/v1's per-step list, optional and empty by default, so a map without withdrawals
+reads as before). A line's writes and withdrawals take the store's next fresh indices together, and a withdrawn index is
+never written. The prover's release covers the index and names it withdrawn (`Session.release(runs, withdrawn)`), and
+the verifier checks it was never written: an appended block, inside the release's runs, that no plan received before
+held. An append that is malformed or would take the store past its codec's `max_blocks` rejects with `append`, and a
+release of a block outside the store or released already, or one naming withdrawn a block that is registered, outside
+its runs or held by a plan, with `release`. Appends are a session's: the next session over the store starts again from
+\(N\) (§8).
 
 **No block appended after a pass's seed is in that pass's plan.** A pass's seed binds every append received before
 its root (`prev_(t,i)` above), so every block its plan can hold, which must be appended before its root, was
@@ -469,16 +470,16 @@ rejects with `lifetime`. So every post-seed block leaves the credited store with
 stock the carrier term charges is the input rate times \(L\) (§1, §8). A block the prover keeps longer, a prefix
 cache's for instance, is re-keyed: released, and its payload appended again at the store's next fresh index, which
 draws a fresh coin and so gives it a fresh bound key (§3), so its encoding is computed anew. A re-key's free is the
-one exception to a free at its values' last read (§8, "The pass and its step"). The re-key's step frees the old
-index, and the new index is written when its encode lands (deferred residency, above), so the value is uncredited in
-between, and withdrawn if its last read comes first. A re-key is only at the cap (§8, "The memory map's choices"),
-so its time is the map's, not a choice made after the coin. Under deferred residency a block appended in window
-\(w\), the one its append joined, is resident from \(w\) or \(w + 1\). Its re-key, recorded at a step before the
-first pass of window \(w + L\), therefore falls at age \(L - 1\) at the latest. At \(L = 1\) that is the window it was
-appended in, before it may be resident, and a block whose encode lands after the boundary is never credited. So a
-session that defers residency has \(L \ge 2\) (`Params.deferred`; the verifier refuses one at \(L = 1\)). Counting
-the lifetime from residency instead of from the append would allow \(L = 1\); that is a later decision, and it would
-change the Lean port's lifetime check and the property `LifetimeCapped`. The record names \(L\) (`lifetime`), and
+one exception to a free at its values' last structural reader (§8, "The pass and its step"). The re-key's step frees
+the old index, and the new index is written when its encode lands (deferred residency, above), so the value is
+uncredited in between, and withdrawn if its last structural reader comes first. A re-key is only at the cap (§8,
+"The memory map's choices"), so its time is the map's, not a choice made after the coin. Under deferred residency a
+block appended in window \(w\), the one its append joined, is resident from \(w\) or \(w + 1\). Its re-key, recorded at
+a step before the first pass of window \(w + L\), therefore falls at age \(L - 1\) at the latest. At \(L = 1\) that is
+the window it was appended in, before it may be resident, and a block whose encode lands after the boundary is never
+credited. So a session that defers residency has \(L \ge 2\) (`Params.deferred`; the verifier refuses one at \(L = 1\)).
+Counting the lifetime from residency instead of from the append would allow \(L = 1\); that is a later decision, and it
+would change the Lean port's lifetime check and the property `LifetimeCapped`. The record names \(L\) (`lifetime`), and
 the remote session sends it with the session, so the prover re-keys in time.
 
 **Fiat–Shamir, and what grinding buys.** A seed after the first depends on the prover's own root, so the prover can
@@ -998,10 +999,29 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
   begins (`Store.resident s`, which holds them under `StoreMatches`): the blocks
   registered or written at a step before \(s\), less those freed or overwritten at one. So a step's memory-map record
   takes effect after the step's reads: its writes are of blocks the step completed, or an earlier step did and the
-  device has since encoded (deferred residency, §4), and its frees are of blocks whose values the step read last. A
-  writer therefore records a free at the step of its values' last read, not at the next write's. The prover's audit
-  side gives each pass its plan's change at its step (`Replay.take(s)`). It refuses a pass at a step whose record it
-  has applied, or before the last pass's, and a record of a step before the last pass's (`memory_map.py`). The step
+  device has since encoded (deferred residency, §4), and its frees are of blocks whose values' last structural reader
+  the step is. A writer therefore records a free there, not at the next write's.
+
+  A value's *last structural reader* is the last step of the schedule that runs a gate with the value as an operand, a
+  gather that may select it included, whichever request the gate is in, so a page requests share is freed once, after
+  the last of them reads it. That is where the Lean module's `live` ends, so the resident set holds every block
+  `StoreMatches` asks for (`requirement.Requirement.last` over the census, in Python). It reads the circuit, its
+  schedule and the registration, never a committed value, so residency comes from the public schedule. A free at a
+  value's last *use*, the last step whose gather selected it, would read residency off committed values.
+  `StoreMatches` would fail for every candidate no later step selects, and one wrong unit upstream of the selection
+  would move the free. In FMT-R678's counterexample (note:20261019T0021Z-report-format-r6-r8, run
+  r20261019-001741-3fc1), one flipped bit of a length unit keeps \(L - 1\) dead pages of \(L\) resident to the last
+  step, \((L - 1)(S - 1) \cdot 32\) bits more, while the structural residency is the same in both runs. The
+  structural free holds more instead: each candidate page stays resident to the last step that may select it, \(L\)
+  times the honest run's use there with no wrong unit. The prover does hold those pages, so the audit's own claim is
+  sound, but they are memory the circuit may not need. That is why registered weights, which `W` must hold whatever
+  the router or the tokens select, are creditable in every format, and KV only where no selection reads it. Each
+  request's arrival step and executed extent are part of the schedule. They are host- or value-derived until the
+  padded static circuit makes them public, so until then the extent rests on one unit (FMT-R678's finding 4).
+
+  The prover's audit side gives each pass its plan's change at its step (`Replay.take(s)`). It refuses a pass at a
+  step whose record it has applied, or before the last pass's, and a record of a step before the last pass's
+  (`memory_map.py`). The step
   is public structure, and the map and the plan are witness. Because the steps strictly increase, a step has at most
   one pass, so its reads are credited at most once; a step with no pass is credited nothing. Open:
   - *The plan's check.* That a pass's plan holds every complete block the circuit reads at its step is the plan's
@@ -1055,11 +1075,14 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
     planned block need carry any of the circuit's bits, and a wrong receipt, a planned block outside \(M\), is what
     the sampling term charges a whole block for. `PlanMatches` packs the reads into the planned blocks (`Packs`), so
     \(r_s\) is at most \(L B\), and the ledger refuses a link reading more.
-  - *Registered blocks past their last read.* memory-map/v1 frees a registered block like a written one: a free of a
-    slot below \(N\) releases it, and no later plan may hold it (`Session.release`). The writer records the free at
-    the step that reads the block's values for the last time. That each free is at its values' last read is the
-    memory-map unit's to prove (I4). Until it does, a dense decoder's weights, which every step reads, need no free,
-    and the census must show it.
+  - *Registered blocks past their last structural reader.* memory-map/v1 frees a registered block like a written one:
+    a free of a slot below \(N\) releases it, and no later plan may hold it (`Session.release`). The writer records
+    the free at its values' last structural reader ("The pass and its step"), so a gathered table, an embedding or
+    the experts a router indexes, stays resident until the last step whose gather may select any of its rows,
+    whichever rows the run selected, and its residency reads no token or routing decision. That each free is at its
+    values' last structural reader is the memory-map unit's to prove (I4: `MemoryMapStep` holds each registered
+    block's free to `requirement_units.registered_frees`, from the public schedule and the registered layout). Until
+    it does, a dense decoder's weights, which every step reads, need no free, and the census must show it.
   - *The memory map's choices* (the red team's KB-2, note:20261017T1859Z-report-property-redteam §R4.2). Between a
     pass's seed and its reads, the writers could choose which pages to free, when to re-key a block, the order of a
     batch of appends, and dummy appends that shift every later \(j\). Each choice moves the bound keys or the live
@@ -1081,15 +1104,17 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
        append is bound into a seed at or before its step's;
     2. the appends are in the map's order, each at the index the verifier gave it (the store's next fresh one), and
        the map has no write the session doesn't append and no appended block it neither writes nor withdraws, a
-       withdrawn one being a block it completed whose values' last read came at or before its encode landed (§4), so
-       there are no dummy appends;
+       withdrawn one being a block it completed whose values' last structural reader came at or before its encode
+       landed (§4), so there are no dummy appends;
     3. a re-key (a release and the payload appended again, §4's lifetime cap) is the map's, at the cap, of the same
        payload, so \(d_j\) is unchanged and only its index, its coin and its key are fresh (KB-6), its free at the
        re-key's step and its new index's write when that encode lands; at the cap means its old index is below the
        stale bound of the first pass after its step (`WindowRecord.stale`, which the unit recomputes from the
        committed appends, §7), so the old block may be in no plan from that pass on, and no earlier re-key is taken:
        which blocks are re-keyed or freed stays witness;
-    4. every free but a re-key's is at its values' last read, of a registered block or a written one (above);
+    4. every free but a re-key's is at its values' last structural reader, of a registered block or a written one
+       ("The pass and its step"), a step of the public schedule that the unit's public row names (its `last`, which
+       is `requirement.Requirement.last`), never a step read off the circuit's values;
     5. the map is the one the plan unit's plans are of (`PlanMatches` reads the same map).
 
     The unit's public input is the record's `appends`, the chain \(a\) over the session's appends (§4, §7), and each
@@ -1130,7 +1155,9 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
     residency), with its slot, the index it gave it and its \(d_j\), each slot it frees, and each appended block it
     withdrew, freed before its encode landed, step by step
     (memory-map/v1, the program's I3, `memory_map.py`; a write releases the block its slot held, and vLLM's `kv_free`
-    is a free, recorded at its values' last read, so the store's filler plan leaves the released blocks out), and the
+    is a free, recorded in the line of the step whose forward ran last, which bounds its values' last structural
+    reader from above and is that reader for a request that ran at that step and whose attention reads every row it
+    holds, so the store's filler plan leaves the released blocks out), and the
     prover's audit side turns the record into appends, releases and plan changes (`Replay`; deferred, a step's
     appended blocks are those of appends already sent). The record is the prover's: \(d_j\) is witness, and the
     verifier sees only the append roots, the releases and the plans; `benchmarks/remote_session` carries them over
@@ -1180,13 +1207,23 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
   the horizon and every window at once, both from `HorizonSampling`, the causal horizon bound. They take windows of
   one size, \(M = P \cdot N\), and draws with replacement. The record's windows differ in \(U_t\), and its draws are
   distinct, which only lowers the chance that they all pass. `pooled` applies the same argument at each window's own
-  size, which the Lean doesn't state yet. What this code supplies is the schedule (each window's challenge released
+  size: `Accounting.Guarantees.Remote.PooledDraw` states it, on a model of the draw (`Accounting.Remote.Draw`, each
+  window's openings a uniform subset at its own size from a coin released after its roots), for windows the prover
+  sizes after the earlier windows' openings; that `pooled`'s greedy order reaches the bound's supremum is not in the
+  Lean. What this code supplies is the schedule (each window's challenge released
   at \(b_{t-1}\), its roots due by \(D_t\)), the chain, the plan's distinctness, one tile a receipt under a
   registration that binds \(z\), the sketch's bound read at \(r^*\) (`timing.sketch_reading`), and the profile at δ.
   The chain's ordering is a random-oracle argument over a prover of bounded queries, which the statements must say.
-- **The binding's Lean.** The store binding (`store.py`, §3) is Python only. Its pin checks, the arena layout, the
-  expected payload root and `Binding.hold`'s decision have no port in `lean/` (`RemoteAudit`) and no difftest yet, so
-  `bound` rests on this Python until they do.
+- **The binding's Lean.** The store binding's decision (`store.py`, §3) is ported to `lean/RemoteAudit/Store.lean`
+  and held to the Python by a difftest (`lean/tests/test_binding.py`), refusals compared word for word: the pin from
+  its file's bytes (`pinOf`, `modelPin`), `checkpoint_sha512`, the payload salts, the expected payload root from the
+  weights blocks' digests (`expectedRoot`) and `Binding.hold`'s decision (`hold`). Reading the files stays Python only:
+  the pin's bytes, every pinned file's SHA-512 (`check`), the safetensors headers and config.json, the arena's layout
+  from them (`tensors`, `arena`) and the weights blocks' digests (`weight_digests`). The verifier's Lean process
+  decides `bound`: it takes the pin's bytes and role and the weights digests at startup (`bind`: `modelPin`, then the
+  store's shape) and decides each hello (`hold`), `Binding` beside it as the reference, a disagreement refusing the
+  hello as the registry's does; the gate line credits `bound` only where the Lean held the root. The Lean's root is
+  per subtree of 2^16 leaves, the subtrees on `--layout-workers` threads, as `expected_root`'s are over processes.
 
 ## 9. Why the passes are chained
 

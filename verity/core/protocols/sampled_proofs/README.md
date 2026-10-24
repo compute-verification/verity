@@ -61,7 +61,7 @@ captured from serving, and says so (`window.kind = "stand-in"`). Run A5 (`benchm
 too: a deferred Commit's serving rows, written after serving from its sealed replay bundle opened against the run's record
 (`verity-vllm serving-rows`), whose `of` names the record's vllm-v1 run root and the bundle's manifest digest; the link from
 those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the in-Commit hook writes before any draw are
-`served`: serving's own commitment, with no claim that they hold the values under the vllm-v1 roots. A deferred window becomes
+`served`: serving's own commitment, with no claim that they hold the values under the Commit's roots. A deferred window becomes
 `served` once serving's record is frame-v3-sha512 / hm96-sha512 itself, or once the circuit opens the vllm-v1 SHA-256 leaves.
 
 ## Where things are

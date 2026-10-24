@@ -132,8 +132,8 @@ theorem swSrcE_hinner {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : 
     (hq : q.draws = Lr.drawsAt x ρ (frep j.val r.val)) (hlayR : Lr.lay x (frep j.val r.val) = layE x j)
     (hz : (Lr.draws ρ (frep j.val r.val)).size =
       _root_.Flock.Firewall.Frame.drawBytes (Lr.lay x (frep j.val r.val)))
-    (htape : (UE.tapeZk τ).h j.val r.val =
-      (Claims.ZKServer.tapeOfDraws tz (Lr.lay x) (Lr.draws ρ) frep).h j.val r.val)
+    (htape : ∀ k < (layE x j).hab, (UE.tapeZk τ).h j.val r.val k =
+      (Claims.ZKServer.tapeOfDraws tz (Lr.lay x) (Lr.draws ρ) frep).h j.val r.val k)
     (hpads : FlockComplete.padsOf (UE.tapeZk τ) j.val r.val (layE x j) =
       FlockComplete.padsOf (Claims.ZKServer.tapeOfDraws tz (Lr.lay x) (Lr.draws ρ) frep) j.val r.val (layE x j))
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, valsFw x c A B j)
@@ -410,8 +410,8 @@ theorem swSrcE_hinner_sv {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ
     (hq : q.draws = Lr.drawsAt x ρ (frep j.val r.val)) (hlayR : Lr.lay x (frep j.val r.val) = layE x j)
     (hz : (Lr.draws ρ (frep j.val r.val)).size =
       _root_.Flock.Firewall.Frame.drawBytes (Lr.lay x (frep j.val r.val)))
-    (htape : (UE.tapeZk τ).h j.val r.val =
-      (Claims.ZKServer.tapeOfDraws tz (Lr.lay x) (Lr.draws ρ) frep).h j.val r.val)
+    (htape : ∀ k < (layE x j).hab, (UE.tapeZk τ).h j.val r.val k =
+      (Claims.ZKServer.tapeOfDraws tz (Lr.lay x) (Lr.draws ρ) frep).h j.val r.val k)
     (hpads : FlockComplete.padsOf (UE.tapeZk τ) j.val r.val (layE x j) =
       FlockComplete.padsOf (Claims.ZKServer.tapeOfDraws tz (Lr.lay x) (Lr.draws ρ) frep) j.val r.val (layE x j))
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, valsFw x c A B j)

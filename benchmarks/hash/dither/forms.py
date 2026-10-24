@@ -25,7 +25,9 @@ OUT_OF_ORDER = ("receipts beside the served GEMM; outside the statement's order 
 # a -so arm's parts that no ruling has taken in, each making the arm unadopted
 UNADOPTED_PARTS = {"ab": "-ab/-abn: every call's A table built once a step (h1agate's batch), a per-step A commitment CA "
                          "has not ruled in",
-                   "ov": "-ov/-ov1/-ovp: round s built beside forward s + 1 from ring copies, a round order not ruled in"}
+                   "ov": "-ov/-ov1/-ovp: round s built beside forward s + 1 from ring copies, a round order not ruled in",
+                   "j10r": ("DITHER_SO_UNITS=j10r: the units under J10-R's call-scale noise (J10R's Definition, "
+                            "PouwH1Tile_v5's receipt), a form the verifier doesn't take yet; measured only")}
 # the arms of the other two families, which aren't ASK-71 A's form at all
 FAMILIES = {"dither-1s": ("dither_one: the served product is H1V3's noised mainloop and z the window's row tables, its "
                           "noise from a coin drawn before its own A and z went under a round (outside RT4-INT-12's "

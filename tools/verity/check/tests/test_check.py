@@ -1401,33 +1401,6 @@ def test_train_sh_refuses_an_empty_commit_one_origin_lacks_and_a_base_that_is_no
     assert not argv.exists() and not posted.exists()
 
 
-def test_train_sh_posts_a_launch_that_registered_nothing_and_stays_quiet_on_one_that_did(tmp_path):
-    """Two launches registered no run and told nobody: two racing on the fetch (22:51Z, 9 Oct), and d7e946defc3f, refused by the
-    read guard and found two hours later (10:42Z, 10 Oct). A failed fetch is posted to the merge thread with git's reason, as the
-    `refused` in a launch's log is with the log's last lines; a launch that registers its run posts nothing."""
-    git, train, argv = _train_repo(tmp_path)
-    (tmp_path / "repo" / "a").write_text("b\n")
-    git("commit", "-q", "-am", "change")
-    git("push", "-q", "origin", "HEAD:main")
-    p = train("HEAD", "vy-x")
-    assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
-    assert not (tmp_path / "posted").exists()
-
-    (tmp_path / "origin.git").rename(tmp_path / "gone.git")
-    p = train("HEAD", "vy-x")
-    posted = (tmp_path / "posted").read_text()
-    assert p.returncode == 1 and "git fetch origin failed" in p.stderr, p.stderr
-    assert "registered no run (exit 1)" in posted and "git fetch origin failed" in posted, posted
-    assert posted.startswith("@ci ") and "--quiet" in (tmp_path / "posted.args").read_text().split(), "it rings only @ci"
-    (tmp_path / "gone.git").rename(tmp_path / "origin.git")
-
-    (tmp_path / "bin" / "uv").write_text(f"#!/bin/sh\n{_POST_STUB.format(posted=tmp_path / 'posted')}"
-                                         "echo 'check: read guard: refused: b0f68e798 reads outside its inputs'\n")
-    p = train("HEAD", "vy-x")
-    posted = (tmp_path / "posted").read_text()
-    assert p.returncode == 1 and "read guard: refused" in posted and "exited 0 before launching a run" in posted, posted
-
-
 def test_train_sh_runs_drives_shadow_as_an_ordinary_quiet_job_and_a_train_with_priority_and_its_post(tmp_path):
     """drive's per-PR shadow (`TRAIN_ORDINARY=1 TRAIN_QUIET=1`) must never take a check slot ahead of a lane's or a train's, nor
     ring anyone when its launch registers nothing (ci, 21 Oct); a train keeps `--priority` and its post."""

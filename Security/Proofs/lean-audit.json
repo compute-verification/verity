@@ -205,7 +205,7 @@
    "pad-nonvanishing": {
     "about": "Assumptions.PadNonvanishing (zero knowledge): X_L + κ ≠ 0 on the level-0 domain, since Ŵ_cols(ω_q) is bit cols of q",
     "mentions": ["AdditiveNTT.normalizedW", "Polynomial.eval"],
-    "ack": []
+    "ack": ["AdditiveNTT.computableNormalizedWValuesArray_getD", "AdditiveNTT.evalNormalizedWAt_eq_normalizedW", "AdditiveNTT.eval_normalizedW_succ_at_beta_prev", "AdditiveNTT.evaluationPointω_eq_twiddleFactor_of_div_2", "AdditiveNTT.get_sDomain_basis", "AdditiveNTT.normalizedW_is_additive", "AdditiveNTT.normalizedWᵢ_eval_βᵢ_eq_1", "AdditiveNTT.normalizedWᵢ_vanishing"]
    },
    "hm-row-computes": {
     "about": "HmRowComputes (circuit/hm96-sha512-row): the sha512x3 and hm96 slots compute SHA-512 and hm96's commit string, the value binding's circuit side (phase 2i)",

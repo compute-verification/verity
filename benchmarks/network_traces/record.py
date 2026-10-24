@@ -199,7 +199,7 @@ class Collections:
 
 def request_body(model: str, q: dict) -> bytes:
     return json.dumps({"model": model, "prompt": q["prompt"], "max_tokens": q["max_tokens"], "temperature": 0.0,
-                       "ignore_eos": True, "stream": True, "return_token_ids": True}).encode()
+                       "top_p": 1.0, "ignore_eos": True, "stream": True, "return_token_ids": True}).encode()
 
 
 def request_record(q: dict, body: bytes) -> dict:

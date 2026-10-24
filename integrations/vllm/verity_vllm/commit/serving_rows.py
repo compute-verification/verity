@@ -1,13 +1,13 @@
 """Serving rows: the opt-in ``frame-v3-sha512`` + ``hm96-sha512/v1`` commitment of a run's units in M0's serving row leaf format
 (``verity_flock.circuit``'s statement rows, PR #83), with the registration, M0's public and prover files and the unit index the
-one-stage audit reads (``verity.core.protocols.sampled_proofs.one_stage``).  Off by default: ``vllm-v1`` stays the record, and this commits beside it without
-touching any root of record, until the re-baseline switches the record.
+one-stage audit reads (``verity.core.protocols.sampled_proofs.one_stage``).  Off by default: the Commit's own commitment stays the record
+(``rows-sha512`` by default, ``vllm-v1`` by name), and this commits beside it without touching any root of record.
 
 The population is the verifier's: its program is ``TemplateInstances`` / ``TemplatePopulations`` over the members' templates and
 counts (``population_program``, core's ``partition.population_program`` / ``mixed_population_program``), its query the template
 query over them, so the partition (``verity/partition/v1``) and its digest are core's over that program, and the registration is
-core's ``verity/registration/v1`` record (``registration.record``) with ``window = {"kind": "served" | "stand-in", "run": <vllm-v1
-run root>, ...provenance}`` (``registration``).  The served Programs' digests are provenance in the window: no query of core's selects
+core's ``verity/registration/v1`` record (``registration.record``) with ``window = {"kind": "served" | "stand-in", "run": <the
+record's run root>, ...provenance}`` (``registration``).  The served Programs' digests are provenance in the window: no query of core's selects
 template instances inside a served Program (the template queries need every root node to be an instance).
 
 A population is a sequence of members (:class:`Member`), one per template in the partition's order, or a template's units in
@@ -28,7 +28,7 @@ blocks, committed under its own salt like an input row (an output is a value: no
 
 Each port ``<member>/<port>`` is one tree under ``CommitmentDomain(binding, -1, [0, leaves), "sha512")``, with core's
 served-domain rule (``registration.served_domain``): ``binding = identity_digest_sha512(DOMAIN_TAG, {program, partition, port,
-schema, leaves, run})``, every field a registration field and ``run`` the vllm-v1 run root, so the verifier recomputes every domain
+schema, leaves, run})``, every field a registration field and ``run`` the record's run root, so the verifier recomputes every domain
 from the registration and the Commit's record (``expected_ports``).  The leaf layer is the SHA-512 of the canonical map from each
 member (its template, or its chunk's name) to the SHA-512 of its public body (``leaf_layer``).  ``write`` puts into a window
 directory ``registration.json``, ``index.json`` (unit -> served identity, its SHA-512 in the window's provenance), per member
@@ -250,6 +250,7 @@ class Member:
     tables: tuple[tuple[str, int], ...] = ()     # a shared-row member: each row port's table size (rows are referenced by refs)
     name: str = ""
     schemas: tuple[tuple[str, str], ...] = ()
+    link_units: tuple[int, ...] = ()             # a row-table member: per link, how many of its units (consecutive, in order) read it
     links: tuple[tuple[int, int], ...] = ()      # a row-table member: per row of its x table, the window's row table and rank it is
 
     def __post_init__(self) -> None:
@@ -258,6 +259,17 @@ class Member:
             raise ValueError(f"{self.key}: a bit-row member names one of {BIT_ROW_SCHEMAS} for each port, not {dict(self.schemas)}")
         if self.links and dict(self.tables).get(LINKED) != len(self.links):
             raise ValueError(f"{self.key}: {len(self.links)} links, one per row of its {LINKED!r} table {dict(self.tables)}")
+        if self.links and len({t for t, _ in self.links}) != 1:
+            raise ValueError(f"{self.key}: links {self.links} name several row tables; a linked member's {LINKED!r} rows are one "
+                             "table's, the one root its registered reads open against")
+        if (len(self.link_units) != len(self.links) or any(type(c) is not int or c < 1 for c in self.link_units)
+                or (self.links and sum(self.link_units) != self.n)):
+            raise ValueError(f"{self.key}: link units {self.link_units} are not one positive count per link summing to its {self.n} units")
+
+    @property
+    def link_refs(self) -> tuple[int, ...]:
+        """A linked member's refs into its ``x`` table: each unit's link, in order."""
+        return tuple(j for j, c in enumerate(self.link_units) for _ in range(c))
 
     @property
     def key(self) -> str:
@@ -344,7 +356,7 @@ class RowTable:
 @dataclass(frozen=True)
 class Window:
     """What the roots are bound to: the verifier's population program and query (the partition over them), the law it draws by, the
-    run (the vllm-v1 run root, hex), and the members the population is made of, in the partition's order (refused otherwise); and
+    run (the record's run root, hex), and the members the population is made of, in the partition's order (refused otherwise); and
     its row tables in the canonical order (``RowTable.key``), every rank of each the row of at least one linked member's ``x``
     table, under ``context`` (hex, 64 bytes serving knew before its first step: the live coin commitment's root)."""
     program: Any
@@ -676,9 +688,9 @@ def leaf_layer(publics: Mapping[str, bytes]) -> str:
 
 def registration(c: Committed, provenance: Mapping[str, Any], previous: str | None = None, *, kind: str = "served") -> dict[str, Any]:
     """Core's ``verity/registration/v1`` record of the window: its program, query and law, the scheme, every port's root, leaves and
-    served domain, the leaf layer, and ``window = {"kind": kind, "run": <vllm-v1 run root>, **provenance}``.  ``served``: these
+    served domain, the leaf layer, and ``window = {"kind": kind, "run": <the record's run root>, **provenance}``.  ``served``: these
     roots are serving's own commitment, made before any draw (the in-Commit hook); ``stand-in``: a fresh commitment to values
-    opened from serving's record afterwards, whose link to the vllm-v1 roots is provenance (``pipeline.deferred_rows``)."""
+    opened from serving's record afterwards, whose link to the record's roots is provenance (``pipeline.deferred_rows``)."""
     if kind not in R.KINDS:
         raise ValueError(f"window kind {kind!r} is not one of {R.KINDS}")
     w = c.window
@@ -707,6 +719,20 @@ def index_bytes(doc: dict[str, Any]) -> bytes:
     return (json.dumps(doc, separators=(",", ":")) + "\n").encode()
 
 
+def registered_entry(c: Committed, m: Member, trees: dict[int, RT.RowTable] | None = None) -> dict[str, Any]:
+    """Linked member ``m``'s public header ``registered`` entry: its ``x`` table's rows are rows of its row table (the value,
+    named by the table's port), each at its rank with its path to the table's root (``RT.RowTable.path``), which the Lean
+    verifier opens against the root its own ``--registered`` file names (``row_tables.registered_reads``).  ``trees``
+    caches each table's tree by its index."""
+    t, trees = m.links[0][0], {} if trees is None else trees
+    tab = c.window.row_tables[t]
+    if t not in trees:
+        bc = c.bc[tab.port]
+        trees[t] = RT.RowTable(c.window.table_domain(t), [bc[i * BC_BYTES:(i + 1) * BC_BYTES] for i in range(tab.n)])
+    return {LINKED: {"value": tab.port, "positions": [r for _, r in m.links],
+                     "paths": [trees[t].path(r).hex() for _, r in m.links]}}
+
+
 def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: dict[str, Any], extra: dict[str, Any] | None = None, *,
           kind: str = "served") -> dict[str, Any]:
     """The window's files, its registration's window of ``kind`` (`registration`); the window's provenance gets the index's SHA-512
@@ -717,6 +743,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
     (d / "index.json").write_bytes(ib)
     rec = registration(c, {**provenance, "index": hashlib.sha512(ib).hexdigest(), "order": ORDER}, kind=kind)
     (d / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True) + "\n")
+    trees: dict[int, RT.RowTable] = {}
     members = []
     for k, m in enumerate(c.window.members):
         pub = c.public_body(k)
@@ -731,6 +758,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
                         "public_sha512": hashlib.sha512(pub).hexdigest(), "units": f"m{k}-units.json",
                         "units_sha512": hashlib.sha512(ub).hexdigest(),
                         **({"row_schemas": m.row_schemas} if m.schemas else {}),
+                        **({"registered": registered_entry(c, m, trees)} if m.links else {}),
                         **({"shared_rows": {**dict(m.tables), **{p: m.n for p, _ in m.out_rows}}} if m.tables else {}),
                         **({"row_links": [list(x) for x in m.links]} if m.links else {})})
     tables = []

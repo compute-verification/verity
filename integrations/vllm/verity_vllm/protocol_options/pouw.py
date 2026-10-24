@@ -72,6 +72,7 @@ from verity_vllm.protocol_options import pouw_h1 as PH
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC
 from verity_vllm.protocol_options import pouw_h1_hooks as PHK
 from verity_vllm.protocol_options import pouw_h1_settings as PHS
+from verity_vllm.protocol_options.pouw_h1_settings import fills, from_engine  # noqa: F401  (the adapter's hooks)
 from verity_vllm.protocol_options import pouw_h1_window as PHW
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
 from verity_vllm.protocol_options import pouw_native as PN
@@ -243,7 +244,7 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
                 out.append(str(e))
         elif settings.schedule != "serial":
             out.append(f"{scheme}: the pouw setting 'schedule' is Pearl-C's; this executor runs serially")
-        out += PHS.refusals(scheme, settings, ctx.stage)
+        out += PHS.refusals(scheme, settings, ctx.stage, ctx.filled_of(NAME))
         if settings.start_forward and scheme not in pouw_circuit.SCHEMES:
             out.append(f"{scheme}: the pouw setting 'start_forward' anchors the circuit-backed executor's forward indices "
                        f"({', '.join(pouw_circuit.SCHEMES)}); this executor counts its own from 0")
@@ -252,7 +253,6 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
 
 def requires_build(scheme: str, ctx: Context) -> bool:
     """The circuit-backed executor is lowered into the row's Build."""
-
     return scheme in pouw_circuit.SCHEMES
 
 

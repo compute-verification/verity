@@ -999,8 +999,9 @@ def _checked(ledger: Any, key: ChallengerKey, verify: Verify) -> tuple[dict[str,
 
 class Audited(NamedTuple):
     """The window's session as the auditor's ledger names it: its id, the host its open names, its prover, the SHA-512 of
-    each file its end sealed, the leaf its record was signed at, its commitment's root, how many hellos it refused, and
-    the period holding the window with the cap and circuit its open committed (all None when no period holds it)."""
+    each file its end sealed, the leaf its record was signed at, its commitment's root, how many hellos it refused, the
+    commit its open pinned the host's tree to (`pinned_session` holds it to the pins log and main), and the period
+    holding the window with the cap and circuit its open committed (all None when no period holds it)."""
     session: str
     host: str
     prover: str
@@ -1008,6 +1009,7 @@ class Audited(NamedTuple):
     record_leaf: int
     commitment: str
     refused_hellos: int
+    pinned: str = ""
     period: str | None = None
     cap: int | None = None
     circuit: str | None = None
@@ -1051,7 +1053,7 @@ def _audited(ledger: Any, window: Any, key: ChallengerKey, verify: Verify) -> tu
     if name is not None and (p["cap"] is None or p["circuit"] is None):
         raise CoinError(f"the auditor's ledger's period {name}, which holds session {s}, commits no cap or circuit")
     return Audited(s, o["body"]["host"], lane_of(o), dict(b["files"]), b["record_leaf"], b["commitment"],
-                   b["refused_hellos"], name, p["cap"], p["circuit"]), o["body"]
+                   b["refused_hellos"], o["body"]["pinned"], name, p["cap"], p["circuit"]), o["body"]
 
 
 def ledger_head(heads: Any, key: ChallengerKey, verify: Verify) -> list[str]:
@@ -1149,7 +1151,9 @@ def credited_session(ledger: Any, window: Any, key: ChallengerKey, pins: Any, ma
     commit the host's pins log `pins` records on main's first-parent line `main`, when `descriptor`, the descriptor of
     the circuit the window's sessions prove, hashes to the circuit its period committed (`circuit_reason`).  The pin
     first, then the circuit; raises `CoinError` naming why, so a window whose session ran another tree, or that proves
-    another circuit, counts toward no period."""
+    another circuit, counts toward no period.  This is PoUW's per-window credit gate; the period-level pin hygiene over
+    the whole period (every window no older than the period's open pin, and none past the freshness floor) is
+    `pouw.credit`'s, which reads the pin this returns (`Audited.pinned`)."""
     audited = pinned_session(ledger, window, key, pins, main, verify)
     why = circuit_reason(audited.period, audited.circuit, descriptor)
     if why is not None:
@@ -1242,8 +1246,13 @@ def pinned_session(ledger: Any, window: Any, key: ChallengerKey, pins: Any, main
     """`audited_session`, from main's code: the window's session as the auditor's ledger names it, when the host's pins
     log `pins` (its lines; infra's published one) records the open's pin (`pins_reason`) and the verifier's own copy of
     main's first-parent history `main` holds it (`first_parent_reason`).  Raises `CoinError` naming why, so a session
-    the host ran from any other tree fails closed.  Every path that credits a session reads it here (`credited_session`,
-    `trusted_session_of`); `audited_session` alone checks no pin and credits nothing."""
+    the host ran from any other tree fails closed.  For PoUW this is what makes a credited window's coins come from a
+    session the auditor opened on a commit main's check passed; `pouw.credit` layers on it that the pin is recent and no
+    older than its period's open (the freshness floor and the period pin), which this function doesn't check.  Every path
+    that credits a session reads it here: PoUW's `credited_session` and `trusted_session_of`, and memory-accounting's
+    remote bandwidth audit (`remote_bandwidth.coins`, #3361, theirs).  `audited_session` alone checks no pin and credits
+    nothing.  Only the open's pin is held: a repin of the host after the open neither helps nor harms the session, which
+    is credited by the commit its open sealed, the pins log only growing past it."""
     audited, opened = _audited(ledger, window, key, verify)
     why = (pins_reason(audited.session, opened, pins)
            or first_parent_reason(audited.session, opened.get("pinned"), main))

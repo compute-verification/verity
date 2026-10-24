@@ -236,7 +236,7 @@ def paged(req: R.Requirement, B: int) -> tuple[R.Layout, R.Store]:
     """A KV pool's honest layout and store, one sequence's: the registered values as `pack` places them, then every
     other value that is ever live in order of birth, filling blocks of `B` bits in turn, so that a block later steps
     fill credits nothing until it is complete; each block written in the record of its last value's step, the one that
-    completes it, and freed in that of its values' last read."""
+    completes it, and freed in that of its values' last structural reader."""
     layout, store = R.pack(req, B)
     block = {v: j for v, j in layout.block.items() if v in req.registered}
     offset = {v: layout.offset[v] for v in block}

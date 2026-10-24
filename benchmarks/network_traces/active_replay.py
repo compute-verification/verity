@@ -111,6 +111,7 @@ from verity.core.protocols.certifier.active import (
     CANONICAL_STREAM,
     DATA,
     HEADER,
+    ORDINAL,
     SALT,
     TOKEN_BYTES,
     Events,
@@ -123,8 +124,12 @@ from verity.core.protocols.certifier.active import (
     encode_frame,
     event,
     event_body,
+    event_data,
     events,
     fresh_salt,
+    id_event,
+    id_event_data,
+    id_request,
     request_frame_count,
     request_frames,
     wait_until,
@@ -424,17 +429,18 @@ def plan_configuration(cfg: dict, setup: Setup, live_model: str | None = None, s
 
 
 def model_releases(requests: Sequence[dict], params: GridParams, windows: int, egress_bucket_ms: int,
-                   admission: Admission | None = None) -> dict[int, int]:
+                   admission: Admission | None = None, salt: bool = False) -> dict[int, int]:
     """Each request's release as the ingress certifier's rule gives it: its frames enqueued at their bucket, in send
-    order, and released r_in per bucket; the egress bucket of its last frame's release. With `admission`, a served
-    link's admission rule (`active.Bucketer(served=…)`): a request is enqueued only while its window, with it, still
-    ends idle (`served.admits`), behind the certifier's own frame where the profile counts one."""
+    order, and released r_in per bucket; the egress bucket of its last frame's release. With `salt`, each window's
+    first bucket enqueues the certifier's salt frame ahead of its arrivals. With `admission`, a served link's admission
+    rule (`active.Bucketer(served=…)`): a request is enqueued only while its window, with it, still ends idle
+    (`served.admits`), behind the certifier's own frame where the profile counts one."""
     pending = sorted((q["enqueue"], q["send_ms"], q["stream"], q["frames"]) for q in requests)
     out, queue, k, counts, T = {}, [], 0, [], params.buckets
     for t in range(windows * T):
         if t % T == 0:
             counts = []
-            if admission is not None and admission.profile.own:
+            if salt or (admission is not None and admission.profile.own):
                 queue.append((None, False))
         while k < len(pending) and pending[k][0] <= t:
             _, _, s, n = pending[k]
@@ -484,14 +490,27 @@ def program_streams(plan: dict, release: dict[int, int], params: GridParams) -> 
 
 
 STRATEGIES = ("honest", "burst", "spread", "bits", "late", "covert")
+LIVE_TAMPERS = ("extra", "drop", "token")
+
+
+def other_token(data: bytes) -> bytes:
+    """Bytes of a canonical event's length other than `data`, which isn't empty: its first byte's low bit flipped."""
+    return bytes([data[0] ^ 1]) + data[1:]
+
+
+def other_id(token_id: int, eos: frozenset) -> int:
+    """A token id other than `token_id` and none of `eos`: the first of `token_id` XOR 1, 2, … that isn't one."""
+    return next(t for k in itertools.count(1) if (t := token_id ^ k) not in eos)
 
 
 def adversary_writes(plan: dict, sync_set: SyncSet, buckets: int, strategy: str, seed: int = 0) -> dict[str, list]:
     """A server inside the boundary that signals by its write times: each frame's write bucket and position, over the
     model's releases. `burst` writes a session's frames in the bucket its request reaches it, `spread` frame k in the
     bucket before its logical hand time, `bits` one or the other per session by a random bit, and `late` is honest
-    but holds one session in window 0, from its first frame on, until the hand time of the most lenient sync. A stream's
-    writes keep their order, and nothing is written in the last bucket or after."""
+    but holds one session in window 0, from its first frame on, until the hand time of the most lenient sync. On a live
+    plan that isn't request-major the canonical order is the order the shim writes, so a session written behind frames
+    due later than it is ready is on time: `late` holds it on, to the first bucket by which every other frame written
+    is due. A stream's writes keep their order, and nothing is written in the last bucket or after."""
     windows = plan["windows"]
     horizon = windows * buckets
     release = {int(k): v for k, v in plan["model_release"].items()}
@@ -505,7 +524,12 @@ def adversary_writes(plan: dict, sync_set: SyncSet, buckets: int, strategy: str,
     if strategy == "late":
         lenient = handing_buckets(frames, [ClockSync(max(sync_set.deltas), min(sync_set.rhos))] * windows, buckets)
         p = next(p for p, (_, a, _, k) in enumerate(keys) if k == 0 and a < buckets and lenient[p] < horizon - 2)
-        held = (keys[p][2], lenient[p])
+        b = lenient[p]
+        if "live_model" in plan and not plan.get("request_major"):
+            others = [(ready - 1, h) for (ready, _, rank, _), h in zip(keys, hands) if rank != keys[p][2]]
+            while any(w <= b < h for w, h in others):
+                b += 1
+        held = (keys[p][2], b)
     out: dict[str, list] = defaultdict(list)
     for p, (ready, anchor, rank, _) in enumerate(keys):
         if strategy == "burst" or (strategy == "bits" and bits[names[rank]]):
@@ -530,11 +554,20 @@ def adversary_plan(plan: dict, setup: Setup, strategy: str, seed: int = 0) -> di
     sender that steers the online prover's declared sync with a random message), with the symbols it sent kept for
     the audit's `covert` measurement. Under syncs fixed before the run (`envelope`, `model`) the covert sender steers
     nothing: the control. On a live server the plan carries the sender's parameters, and the shim's
-    `covert.LiveSender` draws the symbols as it serves. `extra`, on a live shim only, writes one event more at the end
-    of the first session's response, after what the endpoint sent and the shim's padding (`pad_to`), on time and
-    logged."""
-    if strategy == "extra":
-        return plan | {"strategy": strategy, "seed": seed, "extra": plan["sessions"][0][0]}
+    `covert.LiveSender` draws the symbols as it serves. On a live shim only, on time and logged: `extra` writes one
+    event more at the end of the first session's response, after what the endpoint sent and the shim's padding
+    (`pad_to`); `drop` writes that response's first event not at all, counted as written so the padding doesn't make
+    it up; and `token` writes every event that carries bytes, of every response to a request enqueued in window 0,
+    with other bytes (`other_token`), so the frame counts are honest's and only a check of the frames' tokens against
+    the committed sampled ids (the I/O tie) refuses it. The tie draws positions in each window, so a window whose every
+    token is wrong is refused at any number of draws, where one wrong frame among N would be refused only at the share
+    1/N a draw."""
+    if strategy == "token":
+        T = setup.egress_params.buckets
+        window0 = [q["session"] for q in plan.get("requests", ()) if "enqueue" in q and q["enqueue"] // T == 0]
+        return plan | {"strategy": strategy, "seed": seed, "token": window0 or [plan["sessions"][0][0]]}
+    if strategy in LIVE_TAMPERS:
+        return plan | {"strategy": strategy, "seed": seed, strategy: plan["sessions"][0][0]}
     if strategy != "covert":
         return plan | {"strategy": strategy, "seed": seed,
                        "writes": adversary_writes(plan, setup.sync_set, setup.egress_params.buckets, strategy, seed)}
@@ -757,6 +790,32 @@ def canonical_events(sse: bytes) -> list[bytes]:
     return []
 
 
+def chunk_tokens(sse: bytes) -> list[int] | None:
+    """A vLLM server-sent event's sampled token ids: each choice's `token_ids` (vLLM's `return_token_ids`, or the
+    committing server's), else its logprobs' `token_id:N` tokens (`return_tokens_as_token_ids`); None for `[DONE]` or
+    a line that isn't a chunk."""
+    for line in sse.split(b"\n"):
+        if line.startswith(b"data:") and (data := line[5:].strip()) != b"[DONE]":
+            try:
+                chunk = json.loads(data)
+            except ValueError:
+                return None
+            ids = []
+            for c in chunk.get("choices") or []:
+                got = c.get("token_ids")
+                if got is None:
+                    got = [int(t.removeprefix("token_id:")) for t in (c.get("logprobs") or {}).get("tokens") or ()]
+                ids += got
+            return ids
+    return None
+
+
+def id_events(sse: bytes, request: int) -> list[bytes]:
+    """A vLLM server-sent event as id events (`active.id_event`) of request `request`: one a sampled token
+    (`chunk_tokens`), and none for a chunk of none, so neither the endpoint's chunking nor its text reaches the wire."""
+    return [id_event(request, t) for t in chunk_tokens(sse) or ()]
+
+
 async def _http_body(reader: asyncio.StreamReader, head: bytes):
     """A response's body as it arrives: de-chunked under `transfer-encoding: chunked`, else read to its end."""
     if re.search(rb"transfer-encoding:\s*chunked", head, re.IGNORECASE):
@@ -770,7 +829,9 @@ async def _http_body(reader: asyncio.StreamReader, head: bytes):
 
 class LiveServer:
     """A live OpenAI endpoint inside the boundary, behind a shim: `handle` serves one stream's connection by sending its
-    request (less its padding and `user`, which names the session) to the endpoint at `upstream`, and writing back the
+    request (less its padding, and less `user`, which names the session, but on a varied plan, so that an endpoint
+    that records it, as serve-openai's ``requests.jsonl`` does, names each request as the certified I/O does and
+    `verity-vllm advice` takes it as the advice's request id) to the endpoint at `upstream`, and writing back the
     text of each completion chunk of the response as canonical events (`canonical_events`), each with `id:` its
     position in write order, the HTTP head with the first. Every event
     written is logged as (position, session, k, the bucket it was written in, its bytes). From 1.5 buckets before the
@@ -786,7 +847,10 @@ class LiveServer:
     canonical order is request-major however the endpoint interleaves its responses. With `plan["pad_to"]` = F (a
     served plan's, F its body's tokens) a response the endpoint ends after fewer than F canonical events, having sent
     some tokens together in one chunk, gets empty canonical events after its last, up to F, written and logged as the
-    endpoint's are, so every response is F events long; one of more than F isn't cut."""
+    endpoint's are, so every response is F events long; one of more than F isn't cut. With `plan["token_ids"]` (a
+    varied plan's, `certifier_serve.varied_plan`, whose proxy has `ordinals`) the shim reads each request's ingress
+    ordinal from the header that opens its connection, asks the endpoint for each chunk's token ids (the plan's
+    `upstream_fields`, merged into every body it forwards) and writes one id event a sampled token (`id_events`)."""
 
     def __init__(self, plan: dict, params: dict, clock=time.monotonic, sleep=asyncio.sleep, notify=lambda: None):
         self.clock, self.sleep, self.notify = clock, sleep, notify
@@ -797,6 +861,10 @@ class LiveServer:
         self.authorization = b"" if key is None else b"authorization: Bearer %s\r\n" % key.encode()
         self.tau, self.horizon = params["bucket_ms"] / 1000, plan["windows"] * params["buckets"]
         self.writes, self.extra, self.pad_to = plan.get("writes"), plan.get("extra"), plan.get("pad_to")
+        self.token_ids, self.upstream_fields = bool(plan.get("token_ids")), plan.get("upstream_fields") or {}
+        self.drop, self.token = plan.get("drop"), frozenset(plan.get("token") or ())
+        self.eos = frozenset((plan.get("varied") or {}).get("eos_token_ids") or ())
+        self.forward_user = bool(plan.get("varied"))
         self.held: Counter = Counter()
         self.windows = plan["windows"]
         self.position, self.origin, self.open = 0, None, 0
@@ -815,13 +883,19 @@ class LiveServer:
 
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         self.writers.add(writer)
+        ordinal = None
         try:
             first = await reader.readexactly(1)
             if first[0] == SALT:
                 await read_salts(first, reader, self.log, self.notify)
                 return
+            if first[0] == ORDINAL:
+                ordinal = HEADER.unpack(first + await reader.readexactly(HEADER.size - 1))[1]
+                first = await reader.readexactly(1)
+            if self.token_ids and ordinal is None:
+                raise ValueError("a request without its ingress ordinal, on a plan of id events")
             head = first + await reader.readuntil(b"\r\n\r\n")
-            length = int(re.search(rb"content-length: (\d+)", head, re.IGNORECASE).group(1))
+            length = int(re.search(rb"content-length:\s*(\d+)", head, re.IGNORECASE).group(1))
             body = json.loads(await reader.readexactly(length))
         except (asyncio.IncompleteReadError, ConnectionError, ValueError) as e:
             self.log["failed"].append(repr(e)[:200])
@@ -830,7 +904,7 @@ class LiveServer:
         self.open += 1
         ticket, self.tickets = self.tickets, self.tickets + 1
         try:
-            await self._serve(body, writer, ticket)
+            await self._serve(body, writer, ticket, ordinal)
         except (asyncio.IncompleteReadError, ConnectionError, OSError, ValueError) as e:
             self.log["failed"].append(repr(e)[:200])
         finally:
@@ -852,27 +926,49 @@ class LiveServer:
         finally:
             self.open += 1
 
-    async def _response_events(self, chunks, name: str):
+    async def _response_events(self, chunks, name: str, ordinal: int | None = None):
         """A response's canonical events, one list per chunk of its body as it arrives; under `pad_to`, empty events
         (`active.event(b"")`, what a chunk of no text gives) after its last, up to `pad_to`, counted in `padded`; for
-        the `extra` session, one event more after those."""
+        the `extra` session, one event more after those; for the `drop` session, its first left out; for a `token`
+        session, each that carries bytes carrying `other_token` of them. `tampered` logs each event changed or left
+        out, as (session, its index in the response). Under `token_ids`, id events of request `ordinal` (`id_events`);
+        a `token` session's carry other ids (`other_id`), its EOS ids left as they are, so each response keeps its
+        length and finish."""
         cutter, n = Events(), 0
         async for data in chunks:
-            bodies = [b for e in cutter.feed(data) for b in canonical_events(e)]
+            bodies = [b for e in cutter.feed(data)
+                      for b in (canonical_events(e) if not self.token_ids else id_events(e, ordinal))]
+            if bodies and n == 0 and name == self.drop:
+                self.log.setdefault("tampered", []).append([name, 0])
+                n, bodies = len(bodies), bodies[1:]
+                yield bodies
+                continue
+            if name in self.token:
+                for k, b in enumerate(bodies):
+                    if self.token_ids and (d := id_event_data(b)) is not None:
+                        if d[1] not in self.eos:
+                            self.log.setdefault("tampered", []).append([name, n + k])
+                            bodies[k] = id_event(d[0], other_id(d[1], self.eos))
+                    elif text := event_data(b):
+                        self.log.setdefault("tampered", []).append([name, n + k])
+                        bodies[k] = event(other_token(text))
             n += len(bodies)
             yield bodies
         if self.pad_to is not None and n < self.pad_to:
             self.log["padded"].append([name, self.pad_to - n])
             yield [event(b"")] * (self.pad_to - n)
         if name == self.extra:
-            yield canonical_events(b'data: {"choices":[{"text":" extra"}]}\n\n')
+            yield ([id_event(ordinal, 0)] if self.token_ids
+                   else canonical_events(b'data: {"choices":[{"text":" extra"}]}\n\n'))
 
-    async def _serve(self, body: dict, writer: asyncio.StreamWriter, ticket: int = 0) -> None:
+    async def _serve(self, body: dict, writer: asyncio.StreamWriter, ticket: int = 0,
+                     ordinal: int | None = None) -> None:
         received = self.clock() - self.origin
         self.log["requests"] += 1
         self.log["receipt_late_ms"].append(round((received % self.tau) * 1000, 3))
         name = body.pop("user")
-        raw = json.dumps(body, separators=(",", ":")).encode()
+        raw = json.dumps(body | ({"user": name} if self.forward_user else {}) | self.upstream_fields,
+                         separators=(",", ":")).encode()
         up_reader, up_writer = await asyncio.open_connection(*self.upstream[:2], limit=1 << 22, ssl=self.tls)
         try:
             up_writer.write(b"POST " + self.path + b" HTTP/1.1\r\nhost: %s:%d\r\ncontent-type: application/json\r\n"
@@ -886,7 +982,7 @@ class LiveServer:
             planned = None if self.writes is None else [b for b, _ in self.writes.get(name, [])]
             hold = -1
             anchor = math.floor(received / self.tau)
-            async for bodies in self._response_events(_http_body(up_reader, up_head), name):
+            async for bodies in self._response_events(_http_body(up_reader, up_head), name, ordinal):
                 for body in bodies:
                     if k == 0:
                         await self._await_turn(ticket)
@@ -950,8 +1046,9 @@ def read_events(path: Path) -> list[tuple[int, str, int, int, bytes]]:
 class Peer:
     """The client outside the boundary: `send` writes each request's link frames at its send time, `read` reads the wire
     to its end, keeping a SHA-256 per window and each bucket's arrival after its tick. For an outage plan it connects
-    once for each run of windows the certifier serves (`phases`). A live plan's request is `record.py`'s for its session
-    (`live_body`), or the plan's `body` for every session (a served plan's, `certifier_serve.served_plan`)."""
+    once for each run of windows the certifier serves (`phases`). A live plan's request is its own `body` (a varied
+    plan's, `certifier_serve.varied_plan`), the plan's `body` for every session (a served plan's,
+    `certifier_serve.served_plan`), or `record.py`'s for its session (`live_body`)."""
 
     def __init__(self, plan: dict, params: dict, clock=time.monotonic, sleep=asyncio.sleep, notify=lambda: None):
         self.clock, self.sleep, self.notify = clock, sleep, notify
@@ -997,6 +1094,8 @@ class Peer:
 
     def request(self, q: dict) -> bytes:
         name = q["session"] or f"none-{q['stream']}"
+        if (fields := q.get("id_request")) is not None:
+            return id_request(**fields, user=name, frame_bytes=self.B)
         if self.live_model is None:
             return request_bytes(name, q["frames"], self.B)
         body = self.body if self.body is not None else live_body(q["session"], self.live_model)
@@ -1234,7 +1333,8 @@ async def _proxy(plan: dict, setup: Setup, upstream: tuple[str, int], conn, out:
             return Proxy(upstream, setup.egress_params, setup.ingress_params, setup.sync_set, syncs, origin=origin,
                          publish=publish, egress_link=setup.egress_link, ingress_link=setup.ingress_link,
                          salt=fresh_salt if salt else None, reveal_deadline=reveal_deadline(plan, window_s),
-                         **advice, **phase_args(plan, start, end), **served_args(plan, salt))
+                         ordinals=bool(plan.get("token_ids")), **advice, **phase_args(plan, start, end),
+                         **served_args(plan, salt))
 
         if k == 0:
             listening = await asyncio.start_server(on_link, host, port)
@@ -1404,7 +1504,7 @@ async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int
     async def connect(k: int) -> tuple:
         """The proxy of the k-th run of served windows, the peer's link to it, and the run and the peer's tasks."""
         (start, end), (_, enqueued) = runs[k], phases[k]
-        args = {"salt": fresh_salt if salt else None,
+        args = {"salt": fresh_salt if salt else None, "ordinals": bool(plan.get("token_ids")),
                 "reveal_deadline": reveal_deadline(plan, e.buckets * e.bucket_ms / 1000)} | proxy_args
         proxy = Proxy(listening.sockets[0].getsockname()[:2], e, i, setup.sync_set, syncs, origin=0.0, clock=clock,
                       sleep=clock.sleep, publish=publish, egress_link=setup.egress_link,
