@@ -11,6 +11,7 @@ import random
 import shutil
 import sys
 import types
+from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
 from typing import ClassVar
@@ -45,7 +46,7 @@ from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Sh
 from verity.core.protocols.pouw.schemes import pearl_c as C
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 from verity.core.protocols.pouw.schemes import pearl_kw as P
-from verity.core.protocols.pouw.serving import SchemeId
+from verity.core.protocols.pouw.serving import SCHEDULES, SchemeId
 from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
 # the work law and the clear audit are a reference tool's (benchmarks/pouw/clear), imported by name
@@ -2409,31 +2410,34 @@ def test_deferred_a_commits_what_the_serial_one_commits_and_leaves_the_padding_l
 @pytest.mark.slow
 @pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")
 def test_deferred_a_at_a_prefills_rows_commits_what_the_serial_one_commits(tmp_path):
-    """Past pd's rows (a prefill's: A's commitment split over the generic kernels, `run.Pipeline.FUSED_GENERIC`), two calls
-    of each shape in a pass under ``deferred-a`` take the ring's two sets, each call's A tree under its own set's keys, and
-    the pass commits what the serial one commits (`TwinDev`: the trees computed on the host): the records root, the
-    commitment and each call's A root, beside a pd call."""
+    """Past pd's rows (a prefill's: A's commitment split over the generic kernels, `run.Pipeline.FUSED_GENERIC`), two or
+    three calls of each shape in a pass under ``deferred-a`` take the ring's sets in turn (its two, or three at the whole
+    arm's eager ring), each call's A tree under its own set's keys, and the pass commits what the serial one commits
+    (`TwinDev`: the trees computed on the host): the records root, the commitment and each call's A root, beside a pd
+    call."""
     pd = HD.build(tmp_path)
     rng = np.random.default_rng(29)
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
     xs = [(w, torch.from_numpy(bf16_words(rng, m, 1024).view(np.float32).copy()).to(torch.bfloat16))
-          for w, m in ((0, 300), (1, 290), (0, 300), (1, 20), (1, 290))]
+          for w, m in ((0, 300), (1, 290), (0, 300), (1, 20), (1, 290), (0, 300))]
     kernel = PPD.Kernel(R, F, TwinDev(pd), "0" * 64)
     roots = PPD.weight_roots(kernel, weights, SCHEME, salt_key=SALT_KEY)
+    schedules = {"serial": "serial", "deferred-a": "deferred-a", "ring-3": replace(SCHEDULES["deferred-a"], ring=3)}
     got = {}
-    for schedule in ("serial", "deferred-a"):
+    for name, schedule in schedules.items():
         run = PPD.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, *salt_coin(roots),
                                   capacity=1 << 12, schedule=schedule, salt_key=SALT_KEY)
-        run.begin(retain=str(tmp_path / schedule), run=RUN)
+        run.begin(retain=str(tmp_path / name), run=RUN)
         for w, x in xs:
             run.gemm(w, x, weights[w], None)
-        if schedule == "deferred-a":
-            assert [run.shapes[(304, 256, 1024)].turn, run.shapes[(304, 128, 1024)].turn] == [2, 2]
+        if name != "serial":
+            big, small = run.shapes[(304, 256, 1024)], run.shapes[(304, 128, 1024)]
+            assert [big.turn, small.turn] == [3, 2] and len(big.sets) == len(small.sets) == run.schedule.ring
         man = json.loads(Path(run.end()["manifest"]).read_text())
-        got[schedule] = ({k: man[k] for k in ("records_root", "commitment", "salt")},
-                         [{k: u[k] for k in ("root_a", "excluded_a", "real_rows", "m", "n")} for u in man["matmuls"]])
-    assert got["deferred-a"] == got["serial"] and len({u["root_a"] for u in got["serial"][1]}) == len(xs)
+        got[name] = ({k: man[k] for k in ("records_root", "commitment", "salt")},
+                     [{k: u[k] for k in ("root_a", "excluded_a", "real_rows", "m", "n")} for u in man["matmuls"]])
+    assert got["deferred-a"] == got["serial"] == got["ring-3"] and len({u["root_a"] for u in got["serial"][1]}) == len(xs)
 
 
 def test_a_lane_graphs_replay_makes_the_eager_calls_driver_calls_in_its_order(sm90_run, monkeypatch):

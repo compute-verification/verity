@@ -1001,8 +1001,9 @@ def test_pearl_cs_whole_step_arm_builds_vllms_full_decode_graphs_beside_the_serv
     """`llama31-8b-1gpu-pearl-c-whole-served` times the whole-step arm beside the protocol arm as served (its settings the
     protocol row's) and the compiled engine. Under the eager spec, the arm's overrides build vLLM's FULL decode graphs at
     the preset's capture sizes without torch.compile, at the `compiled` label, which `verity_vllm.LLM` accepts, and its
-    run takes the graph path's options and serial schedule."""
+    run takes the graph path's options and serial schedule, an eager step's side-lane schedule at the arm's ring."""
 
+    from verity.core.protocols.pouw.serving import SCHEDULES
     from verity_bench.vllm import runner
     from verity_bench.vllm.arms import plugin
     from verity_vllm.pipeline.llm import resolve_options
@@ -1023,13 +1024,21 @@ def test_pearl_cs_whole_step_arm_builds_vllms_full_decode_graphs_beside_the_serv
                                            "cudagraph_capture_sizes": list(spec.preset.engine_settings["capture_sizes"])}
     opts = resolve_options(built)
     assert opts["enforce_eager"] is False and opts["execution"] == "compiled"
+    deferred_a = SCHEDULES["deferred-a"]
     assert whole.run_options == {"graphs": True, "whole_defer": True, "whole_defer_a": True, "late_ends": True,
-                                 "whole_stats_a": True, "whole_prefetch_b": True, "whole_eager": "deferred-a"}
+                                 "whole_stats_a": True, "whole_prefetch_b": True,
+                                 "whole_eager": replace(deferred_a, ring=3)}
     assert whole.schedule == "serial"
     monkeypatch.setenv("PEARLC_WHOLE_PREFETCH_B", "0")
     assert "whole_prefetch_b" not in type(whole)().run_options
+    monkeypatch.setenv("PEARLC_WHOLE_EAGER_RING", "0")
+    assert type(whole)().run_options["whole_eager"] == "deferred-a"
+    monkeypatch.setenv("PEARLC_WHOLE_EAGER_RING", "4")
+    assert type(whole)().run_options["whole_eager"] == replace(deferred_a, ring=4)
     monkeypatch.setenv("PEARLC_WHOLE_EAGER", "deferred")
-    assert type(whole)().run_options["whole_eager"] == "deferred"
+    assert type(whole)().run_options["whole_eager"] == replace(SCHEDULES["deferred"], ring=4)
+    monkeypatch.setenv("PEARLC_WHOLE_EAGER", "serial")
+    assert type(whole)().run_options["whole_eager"] == "serial"
     monkeypatch.setenv("PEARLC_WHOLE_EAGER", "0")
     assert "whole_eager" not in type(whole)().run_options
 

@@ -205,12 +205,17 @@ class PearlCWholeArm(PearlCArm):
     ``PEARLC_WHOLE_EAGER`` names the schedule a step that runs eagerly (a prefill or mixed step) takes in place of the serial
     one (`PearlCDeviceRun.eager_forward`), 0 none: by default ``deferred-a``, its calls' tile hashing and A trees on side
     lanes (served b8, TPOT 3.05x compiled stock against 3.43x on the serial one, TTFT 157.7 ms against 253.1, ITL p50
-    unchanged, r20261024-191449-82e7).
+    unchanged, r20261024-191449-82e7). ``PEARLC_WHOLE_EAGER_RING`` (default 3, 0 the schedule's own 2) gives that schedule
+    a third ring set and side lane: a served prefill step's Pearl-C work (32 layers at 646 rows) runs in 79.6-80.0 ms
+    against 81.4-84.4 at deferred-a's 2, with no gain at 4 (r20261024-210637-1c04, bound to node 1).
     A retained pass's whole capture keeps a stage for each weight and m₁₆, and the whole check runs at the largest size."""
 
     id = "pouw-pearl-c-whole"
     run_options = {"graphs": True, "whole_defer": True, "whole_defer_a": True, "late_ends": True, "whole_stats_a": True,
                    "whole_prefetch_b": True, "whole_eager": "deferred-a"}
+    #: the ring an eager step's schedule with side lanes runs at (PEARLC_WHOLE_EAGER_RING, 0 the schedule's own): its sets of
+    #: per-call buffers a shape and its side lanes
+    EAGER_RING = 3
     #: the run options the environment turns off (0) or on (1)
     TOGGLES = {"whole_defer_a": "PEARLC_WHOLE_DEFER_A", "late_ends": "PEARLC_LATE_ENDS", "whole_stats_a": "PEARLC_WHOLE_STATS_A",
                "whole_prefetch_b": "PEARLC_WHOLE_PREFETCH_B"}
@@ -228,6 +233,14 @@ class PearlCWholeArm(PearlCArm):
             opts.pop("whole_eager", None)
         elif eager:
             opts["whole_eager"] = eager
+        ring = int(os.environ.get("PEARLC_WHOLE_EAGER_RING", self.EAGER_RING))
+        if ring and isinstance(opts.get("whole_eager"), str):
+            from dataclasses import replace
+
+            from verity.core.protocols.pouw.serving import SCHEDULES
+
+            if SCHEDULES[opts["whole_eager"]].side:
+                opts["whole_eager"] = replace(SCHEDULES[opts["whole_eager"]], ring=ring)
         self.run_options = opts
         self.schedule = "serial"
         self.execution = os.environ.get("PEARLC_WHOLE_EXECUTION", "compiled")
