@@ -15,6 +15,11 @@
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
+  "PouwCheck.Chunks": {
+   "imports": [],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
   "PouwCheck.Inputs": {
    "imports": [
     "CoreProtocol.Protocol",
@@ -67,6 +72,7 @@
     "Flock.Program",
     "Flock.RegKnown",
     "PouwCommit.Frame",
+    "PouwCheck.Chunks",
     "PouwCheck.Json",
     "PouwCheck.Opening",
     "PouwCheck.Pass",

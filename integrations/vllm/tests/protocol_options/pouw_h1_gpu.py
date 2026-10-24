@@ -966,14 +966,16 @@ def core_verdict(ev: dict[str, Any]) -> dict[str, Any]:
     """Core credit's ROOTS1 steps over a window's evidence, as `credit.window` runs them once its challenger steps pass
     (a window under in-process coins has none to pass): the record one manifest under calls_root with the Commit's record
     (`record_reason`), each A table and input-ids table committed whole by its round's root (`credit._a_link`), and each
-    the Commit's value of its rows (`credit._arow`). ``tied`` when none refuses."""
+    the Commit's value of its rows (`credit._arow`), each at the rows the layout gives it (`credit.table_rows`: n chunk
+    leaves a row past K = 4096). ``tied`` when none refuses."""
     from verity.core.protocols.pouw import credit as CR
     c, raw = ev["commitment"], bytes.fromhex(ev["descriptor"])
     entries, rounds = (c.get("served") or {}).get("entries") or [], c.get("rounds")
     layout, why = CR.layout_of(raw)
     got, cwhy = CR.commit_of(c.get("commit"))
+    rows = CR.table_rows(layout, len(rounds), CR._prefix(raw)) if why is None and isinstance(rounds, list) else None
     out: dict[str, Any] = {"manifest": record_reason({"commitment": c, "calls": ev["calls"]}),
-                           "a_link": CR._a_link(rounds, entries, len(ev["calls"])), "layout": why, "commit": cwhy}
+                           "a_link": CR._a_link(rounds, entries, len(ev["calls"]), rows), "layout": why, "commit": cwhy}
     out["arow"] = None if why or cwhy else CR._arow(rounds, entries, got[1], layout, CR._prefix(raw))
     out["tied"] = all(v is None for v in out.values())
     out["commit_values"] = len(got[1]) if got else None
