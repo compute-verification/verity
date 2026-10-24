@@ -282,8 +282,8 @@ theorem decisionAtJ_eval (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : Sessi
   rw [hv] at he
   simp only at he
   subst he
-  cases verifyJWithM (Hashes.ofSha512 (Claims.hOf H)) spec (tabsOf sts) (coinSubJ spec c₁ mids f.j) f.proofs <;>
-    rfl
+  cases verifyJWithM (M := Flock.V) (Hashes.ofSha512 (Claims.hOf H)) spec (tabsOf sts) (coinSubJ spec c₁ mids f.j)
+    f.proofs <;> rfl
 
 /-- The decision at a parsed value against `H`: the setup with `hOf H`, then at its session `decisionAtJ_eval`'s
 verdict and checks (`decisionK_eval` at a parsed value). -/
