@@ -57,8 +57,11 @@ LARGE = {"mlp333-b1-t2", "mlp444-b2-t2", "mlp4444-b1-t2", "mlp4444-b4-t2"}
 M_ONLY = {"mlp4444-b4-t2"}
 
 
+MODE_OVERRIDE: dict[str, tuple[str, ...]] = {}
+
+
 def modes(name: str) -> tuple[str, ...]:
-    return ("eta1", "inf") if name in LARGE else MODES
+    return MODE_OVERRIDE.get(name) or (("eta1", "inf") if name in LARGE else MODES)
 
 
 def build(name: str) -> TG.Graph:
@@ -303,9 +306,16 @@ def main() -> None:
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--budget", type=float, default=120.0, help="column generation's seconds per covering problem")
     ap.add_argument("--cw", action="append", default=None, help="instances whose c_w(s) to measure (default: the smallest)")
+    ap.add_argument("--ks", type=lambda t: [int(x) for x in t.split(",")], help="override every instance's k grid")
+    ap.add_argument("--modes", type=lambda t: tuple(t.split(",")), help="override the gate budgets (eta1,eta2,inf)")
     ap.add_argument("--caps", action="store_true", help="only the per-block cap test (`caps`), from OUT's meta files")
     a = ap.parse_args()
     names = a.instance or list(INSTANCES)
+    for name in names:
+        if a.ks:
+            KS[name] = a.ks
+        if a.modes:
+            MODE_OVERRIDE[name] = a.modes
     if a.caps:
         out = []
         for name in names:
