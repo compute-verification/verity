@@ -12,7 +12,9 @@ At `g ≤ 1`, `Shared.step g` is `Session.step` (`step_le_one`), and the session
 each event keeps the invariant, the coins and every draw, and `DP`: a drawn window is below `W`, and so is drawn
 each window below `W` of its draw or an earlier one (`sstep`). With draw `c`'s first window undrawn, no window of
 draw `c` or later is drawn, so no close has read `coins[W + c]` or above, and the run is the same on coins that
-agree below it (`sclose_coins`, `sfold_coins`, `openingsUnreadUntilDrawn`).
+agree below it (`sclose_coins`, `sfold_coins`, `openingsUnreadUntilDrawn`). And `Frozen`'s argument goes through
+with `Shared.close` (`frz_sclose`): under `DP` the windows a draw draws are undrawn before it, and it makes them final;
+it draws windows in order (`sclose_prefix`), so a drawn window's record is kept (`recordKeptAfterDraw`).
 
 `*_one`: each statement at `g = 1` is today's (`Shared.run 1` is `Session.run`, `RemoteAudit.Shared.run_one`).
 -/
@@ -598,6 +600,159 @@ theorem openingsUnreadUntilDrawn : OpeningsUnreadUntilDrawn := by
     rw [← Array.foldlM_toList] at hrun ⊢
     exact sfold_coins hg c coins' _ (#[], Session.State.init params reg coins appendCoins notBeforeNs) (rs, s) hrun
       (inv_init ..) hW hag hlt
+
+/-! ## A drawn window's record is kept -/
+
+theorem keepsF_finalize (first m : Nat) (ws : Array Win) :
+    KeepsF ws (finalize ((List.range m).map (first + ·)) ws) := by
+  intro v
+  rw [finalize_range]
+  split
+  · exact keepW_of ⟨rfl, rfl, rfl, rfl, rfl⟩ (fun _ => rfl)
+  · exact keepW_refl _
+
+/-- `Shared.close` keeps each window's `KeepW`: under `DP` the windows it draws are undrawn, and it makes them final. -/
+theorem frz_sclose {g : Nat} (hg : 0 < g) {s : State} {t : Int} {now : Nat} {r : Result} {s' : State}
+    (hD : DP g s.params.windows s.windows) (he : Shared.close g s t now = .ok (r, s')) : Frz s s' := by
+  rcases sclose_spec he with ⟨-, rfl⟩ | ⟨u, f, -, rfl⟩ | ⟨d, -, ht0, hts, hund, hm, hpre, hfew, hdraws, rfl⟩
+  · exact frz_refl _
+  · have h1 : Frz s { s with windows := finalize (grp g t.toNat) s.windows } :=
+      frz_of (by unfold grp; exact keepsF_finalize _ _ _) rfl rfl
+    exact frz_trans h1 (frz_fail { s with windows := finalize (grp g t.toNat) s.windows } u f none)
+  · refine frz_of ?_ rfl rfl
+    show KeepsF s.windows ((grp g t.toNat).foldl (drawStep d now) (finalize (grp g t.toNat) s.windows, 0)).1
+    unfold grp
+    refine keepsF_trans (keepsF_finalize (t.toNat / g * g) (t.toNat + 1 - t.toNat / g * g) _) ?_
+    intro v
+    obtain ⟨-, -, h3⟩ := drawFold_range d now (t.toNat / g * g) 0
+      (finalize ((List.range (t.toNat + 1 - t.toNat / g * g)).map (t.toNat / g * g + ·)) s.windows)
+      (t.toNat + 1 - t.toNat / g * g)
+    rw [h3 v]
+    split
+    · rename_i hv
+      have hle : t.toNat / g * g ≤ t.toNat := Nat.div_mul_le_self _ _
+      rw [size_finalize_range] at hv
+      have hfin := finalize_range (t.toNat / g * g) (t.toNat + 1 - t.toNat / g * g) s.windows v
+      rw [ite_eq_left ⟨hv.1, by omega, hv.2.2⟩] at hfin
+      rw [hfin]
+      refine keepW_draw ?_ rfl
+      show s.windows[v]!.drawn = none
+      cases e : s.windows[v]!.drawn with
+      | none => rfl
+      | some _ =>
+        exfalso
+        have hdv : (dr s.windows v).isSome := by rw [dr_eq, e]; rfl
+        have hr := (range_of_div hg (j := t.toNat)).2
+        have hvc : v / g = t.toNat / g := div_of_range hv.1 (by omega)
+        have ht := hD.2 v t.toNat hdv (by omega) (by omega)
+        rw [dr_eq, hund] at ht
+        cases ht
+    · exact keepW_refl _
+
+/-- `Frz`'s invariant at `g ≥ 2` windows a draw: `FInv`, and `DP`. -/
+def SF (g : Nat) (s : State) : Prop := FInv s ∧ DP g s.params.windows s.windows
+
+theorem sf_step {g : Nat} (hg : 2 ≤ g) {s : State} {e : Event} {r : Result} {s' : State} (h : SF g s)
+    (he : Shared.step g s e = .ok (r, s')) : SF g s' ∧ Frz s s' := by
+  obtain ⟨⟨hi, hdf, hm⟩, hD⟩ := h
+  obtain ⟨hi', ⟨hp, -, -⟩, -, -, hD'⟩ := sstep hg hi he
+  have hf : Frz s s' := by
+    rcases sstep_of hg he with ⟨t, now, rfl, hc⟩ | ⟨-, hs⟩
+    · exact frz_sclose (by omega) hD hc
+    · exact frz_step hi hdf hm hs
+  refine ⟨⟨⟨hi', df_keepsF hdf hf.1, by rw [hp]; exact hm⟩, ?_⟩, hf⟩
+  rw [hp]; exact hD' hD
+
+theorem srun_frz {g : Nat} (hg : 2 ≤ g) (s₀ : State) (events : Array Event) (rs : Array Result) (s : State)
+    (h : SF g s₀) (hr : Shared.run g s₀ events = .ok (rs, s)) : SF g s ∧ Frz s₀ s :=
+  srun_inv g (fun s => SF g s ∧ Frz s₀ s) (fun _ _ _ _ hs he => by
+    obtain ⟨hs, hf⟩ := hs
+    obtain ⟨hs', hf'⟩ := sf_step hg hs he
+    exact ⟨hs', frz_trans hf hf'⟩) s₀ events rs s ⟨h, frz_refl _⟩ hr
+
+theorem sclose_prefix {g : Nat} {s : State} {t : Int} {now : Nat} {r : Result} {s₁ : State}
+    (hp : Prefix s.windows) (he : Shared.close g s t now = .ok (r, s₁)) : Prefix s₁.windows := by
+  rcases sclose_spec he with ⟨-, rfl⟩ | ⟨u, f, -, rfl⟩ | ⟨d, -, ht0, hts, hund, hm, hpre, hfew, hdraws, rfl⟩
+  · exact hp
+  · intro a j hj ha
+    rw [dr_fail] at ha ⊢
+    unfold grp at ha ⊢
+    dsimp only at ha ⊢
+    rw [dr_finalize] at ha ⊢
+    exact hp a j hj ha
+  · intro a j hj ha
+    change (dr ((grp g t.toNat).foldl (drawStep d now) (finalize (grp g t.toNat) s.windows, 0)).1 a).isSome at ha
+    show (dr ((grp g t.toNat).foldl (drawStep d now) (finalize (grp g t.toNat) s.windows, 0)).1 j).isSome
+    rw [dr_drawn] at ha ⊢
+    split at ha
+    · split
+      · rfl
+      · exact hpre j (by omega)
+    · split
+      · rfl
+      · exact hp a j hj ha
+
+theorem sstep_prefix {g : Nat} (hg : 2 ≤ g) {s : State} {e : Event} {r : Result} {s' : State}
+    (hp : Prefix s.windows) (he : Shared.step g s e = .ok (r, s')) : Prefix s'.windows := by
+  rcases sstep_of hg he with ⟨t, now, rfl, hc⟩ | ⟨-, hs⟩
+  · exact sclose_prefix hp hc
+  · exact prefix_step hp (adv_step hs)
+
+theorem recordKeptAfterDraw : RecordKeptAfterDraw := by
+  intro g params reg coins appendCoins notBeforeNs events events' rs rs' s s' h₁ h₂ t d hm hd
+  rcases Nat.lt_or_ge g 2 with hg | hg
+  · rw [run_le_one (by omega)] at h₁ h₂
+    exact Properties.RemoteAudit.recordKeptAfterDraw params reg coins appendCoins notBeforeNs events events' rs rs'
+      s s' h₁ h₂ t d hm hd
+  have hSF0 : SF g (State.init params reg coins appendCoins notBeforeNs) :=
+    ⟨finv_init params reg coins appendCoins notBeforeNs hm, fun u h => by simp [dr, State.init] at h,
+      fun u j h => by simp [dr, State.init] at h⟩
+  obtain ⟨hF₁, -⟩ := srun_frz hg _ _ _ _ hSF0 h₁
+  obtain ⟨hF, hk, hdig, more, happ⟩ := srun_frz hg _ _ _ _ hF₁ h₂
+  have hI₁ : Inv s := hF₁.1.1
+  have hI : Inv s' := hF.1.1
+  have hr : s'.reg = s.reg := (srun_inv g (fun x => Inv x ∧ x.reg = s.reg)
+    (fun _ _ _ _ hx he => by
+      obtain ⟨hx, e⟩ := hx
+      obtain ⟨hx', f, -⟩ := sstep hg hx he
+      exact ⟨hx', f.2.1.trans e⟩) _ _ _ _ ⟨hI₁, rfl⟩ h₂).2
+  have hpre : Prefix s.windows :=
+    srun_inv g (fun s => Prefix s.windows) (fun _ _ _ _ hs he => sstep_prefix hg hs he) _ _ _ _
+      (fun t j _ ht => by simp [dr, State.init] at ht) h₁
+  have hd' : s.windows[t]!.drawn = some d := by rw [← dr_eq]; exact hd
+  have ht : t < s.windows.size := by
+    rcases Nat.lt_or_ge t s.windows.size with h | h
+    · exact h
+    · rw [getElem!_neg _ _ (by omega)] at hd'; cases hd'
+  obtain ⟨e1, e2, e3, e4, e5⟩ := (hk t).1 (by rw [hd']; rfl)
+  have hrec : s'.record t = s.record t := by
+    have hprev : (if t > 0 then s'.windows[t - 1]!.roots.back?.getD ByteArray.empty else s'.digest) =
+        (if t > 0 then s.windows[t - 1]!.roots.back?.getD ByteArray.empty else s.digest) := by
+      by_cases htp : t > 0
+      · have hs : (dr s.windows (t - 1)).isSome :=
+          hpre t (t - 1) (by omega) (by show (drawnOf s t).isSome; rw [hd]; rfl)
+        rw [dr_eq] at hs
+        rw [ite_eq_left htp, ite_eq_left htp, ((hk (t - 1)).1 hs).2.2.1]
+      · rw [ite_eq_right htp, ite_eq_right htp, hdig]
+    unfold State.record
+    simp only [e2, e3, e4, e5]
+    rw [hprev]
+  refine ⟨by rw [show drawnOf s' t = s'.windows[t]!.drawn from dr_eq _ _, e1, hd'], hrec, fun u => ?_⟩
+  rw [hrec, happ]
+  have key : ∀ i p o, i < (s.record t).passes.size → p < (s.record t).passes[i]!.plan.length →
+      checkOpening reg reg.digest (s.appends ++ more) (s.record t) (receipterOf reg (s.record t) i) i p o =
+      checkOpening reg reg.digest s.appends (s.record t) (receipterOf reg (s.record t) i) i p o := by
+    intro i p o hi hp
+    apply checkOpening_congr
+    apply appendOf_extend
+    · rw [← happ]; exact firsts_mono hI
+    · intro k hk hk'
+      have := firsts_big hI₁ hI more happ hr k hk (by rw [happ]; exact hk')
+      have hb := record_reads hI₁ t ht i p hi hp
+      rw [← happ]; omega
+  constructor
+  · rintro ⟨i, p, o, hi, hp, hu, hc⟩; exact ⟨i, p, o, hi, hp, hu, (key i p o hi hp) ▸ hc⟩
+  · rintro ⟨i, p, o, hi, hp, hu, hc⟩; exact ⟨i, p, o, hi, hp, hu, (key i p o hi hp).symm ▸ hc⟩
 
 /-! ## At `g = 1`: today's statements -/
 
