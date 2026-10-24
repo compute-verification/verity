@@ -7,6 +7,8 @@
 # clients of a private MPS daemon on the leased GPU (pipe and logs in this run's scratch, started and quit inside the
 # lease); mpsE.P, the same with CUDA_MPS_ACTIVE_THREAD_PERCENTAGE E for the engine stand-in and P for the store. Each
 # configuration's passes are checked against the configuration's before it too (fused_beside.py --reference).
+# SESSION_PATCH builds session.so from session.cu with that patch applied (pass_sm.patch: kernels' %smid placement), and
+# a configuration's suffix @Q.D (mps@1.4) runs the store with PASS_SM=Q/D, its pass leaving the SMs whose %smid % D < Q.
 #
 #   research run --on vy-nebius-2 --project verity --source . --cwd source --declared-output 'out/*' \
 #     --env GPU_LEASE_WHO=memory-accounting-fused -- bash benchmarks/remote_session/fused.sh
@@ -34,7 +36,12 @@ nvcc "${FLAGS[@]}" "${KV[@]}" -o "$B/kv.so" benchmarks/word_codec/kv.cu > "$O/kv
 nvcc "${FLAGS[@]}" "${KV[@]}" -DKV_FOLD6=1 -o "$B/kv6.so" benchmarks/word_codec/kv.cu > "$O/kv6.ptxas" 2>&1 & P+=($!)
 nvcc "${FLAGS[@]}" "${KV[@]}" -o "$B/fused.so" $RS/fused.cu > "$O/fused.ptxas" 2>&1 & P+=($!)
 nvcc "${FLAGS[@]}" "${KV[@]}" -DKV_FOLD6=1 -o "$B/fused6.so" $RS/fused.cu > "$O/fused6.ptxas" 2>&1 & P+=($!)
-nvcc "${FLAGS[@]}" -o "$B/session.so" $RS/session.cu > "$O/session.ptxas" 2>&1 & P+=($!)
+SESSION=$RS/session.cu
+if [ -n "${SESSION_PATCH:-}" ]; then
+  patch -s -o "$B/session.cu" "$SESSION" < "$SESSION_PATCH" || exit 4
+  SESSION=$B/session.cu
+fi
+nvcc "${FLAGS[@]}" -I $RS -o "$B/session.so" "$SESSION" > "$O/session.ptxas" 2>&1 & P+=($!)
 for p in "${P[@]}"; do wait "$p" || { tail -30 "$O"/*.ptxas; exit 4; }; done
 sha256sum "$B"/*.so > "$O/libs.sha256"
 # shellcheck disable=SC2016
@@ -77,16 +84,19 @@ sha256sum "$B"/*.so > "$O/libs.sha256"
   if [[ ,$SECTIONS, == *,beside,* ]]; then
     REF=
     for CFG in ${BESIDE//,/ }; do
-      case $CFG in
+      SM=; C=$CFG
+      case $CFG in *@*) SM=${CFG#*@}; SM=${SM/./\/}; C=${CFG%@*} ;; esac
+      case $C in
         nomps) mps_stop; EP=; PP= ;;
         mps*) [ -n "$(mps_pids)" ] || nvidia-cuda-mps-control -d || { R=6; break; }
-              P=${CFG#mps}; EP=${P%.*}; PP=${P#*.} ;;
-        *) echo "BESIDE: $CFG is not nomps, mps or mpsE.P"; R=6; break ;;
+              P=${C#mps}; EP=${P%.*}; PP=${P#*.} ;;
+        *) echo "BESIDE: $CFG is not nomps, mps or mpsE.P, each optionally @Q.D"; R=6; break ;;
       esac
       D=$O/beside-$CFG; mkdir -p "$D" "$B/serve-$CFG"; cp "$O/fused_bench.json" "$D/"
       env -u PYTORCH_CUDA_ALLOC_CONF ${EP:+CUDA_MPS_ACTIVE_THREAD_PERCENTAGE=$EP} "${BENCH[@]}" --out "$D" \
         --mode serve --serve-dir "$B/serve-$CFG" > "$D/serve.log" 2>&1 & S=$!
-      env PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True ${PP:+CUDA_MPS_ACTIVE_THREAD_PERCENTAGE=$PP} "${PPIN[@]}" \
+      env PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True ${PP:+CUDA_MPS_ACTIVE_THREAD_PERCENTAGE=$PP} \
+        ${SM:+PASS_SM=$SM} "${PPIN[@]}" \
         "$PY" $RS/fused_beside.py --dir "$B/serve-$CFG" --lib "$B/session.so" --kv "$B/kv.so" --out "$D" --wait-s 300 \
         ${PHASES:+--phases "$PHASES"} ${REF:+--reference "$REF"} --engine-pid $S > "$D/beside.log" 2>&1; RC=$?
       tail -3 "$D/beside.log"
