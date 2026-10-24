@@ -1895,8 +1895,8 @@ def tree_failures(policy: dict, facts: dict, roles: dict[str, str]) -> list[str]
         return [Failure("trees.form", None, f"trees: `trees` is {json.dumps(rule)}; it is an object whose "
                         f"{', '.join(TREES)} are lists of module prefixes and whose `except` is {{module prefix: the reason}}")]
     excepted = rule.get("except", {})
-    if not isinstance(excepted, dict) or (unreasoned := sorted(
-            p for p, why in excepted.items() if not p or not isinstance(why, str) or not why.strip())):
+    if not isinstance(excepted, dict) or any(not p or not isinstance(why, str) or not why.strip()
+                                             for p, why in excepted.items()):
         return [Failure("trees.except-form", None, f"trees: `except` is {json.dumps(excepted)}; each entry is a module "
                         f"prefix with the reason it is excepted")]
     if not roles:
