@@ -6,6 +6,7 @@ the same statics with the Boolean ``DOT`` and ``INV`` read as their word views.
     F32NeZeroFtz_v2, F32GtZeroFtz_v2  (x: Array<32, Value<1>>) -> Value<1>             word view: their _v1
     SparseMlaSplitEnd_v2{DV,INV,SCALE}                    INV: `boolean_attention.Fa3InvSum_v2`
     SparseMlaSplitPart_v2{T,DR,DV,BN,DOT,INV,SCALE}       a split's `boolean_sparse_mla` blocks and SparseMlaSplitEnd_v2
+    SparseMlaSplitSpan_v2{T,K0,K1,DR,DV,BN,DOT,INV,SCALE} `DotBf16_v3{K = DR + DV, DOT}`, DOT and SparseMlaSplitEnd_v2
     SparseMlaCombine_v2{NSPLIT,DV,INV}
     SparseMlaHeadSplit_v2{T,NS,DR,DV,BN,DOT,INV,SCALE}    DOT: `gemm.HopperBF16WgmmaDot16_v2`; the blocks and the NS = 1 head are
     SparseMlaSplit_v2{T,NS,NH,DR,DV,BN,DOT,INV,SCALE}     `boolean_sparse_mla`'s
@@ -29,6 +30,7 @@ from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, compress_columns, const_bits, lzc, mux, or_reduce, shl_window, sub
 from verity.ml.circuits.boolean.trace import definition
 from verity.ml.circuits.defs import bind
+from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.boolean import mufu as BM
 from verity.ml.circuits.ops.boolean import scalar as BSC
 from verity_vllm.program.registry import boolean_sparse_mla as BSM
@@ -187,6 +189,17 @@ SparseMlaSplitPartV2 = flat("SparseMlaSplitPart", 2, ["T", "DR", "DV", "BN", "DO
                             lambda S: W._part_type(S, BF16, F32), _part, W.SparseMlaSplitPart, lifted=("DOT", "INV"))
 
 
+def _span(B, S, q_nope, q_rope, kv, m=None, l=None, o=None):
+    """`SparseMlaSplitSpan_v1`'s body on bits: the S chain `DotBf16_v3{K = DR + DV, DOT}`, the P V step `DOT`, the end
+    `SparseMlaSplitEnd_v2`."""
+    return W.span(bit_steps(B), S, bind(BG.DotBf16, K=S.DR + S.DV, DOT=S.DOT), S.DOT,
+                  bind(SparseMlaSplitEndV2, DV=S.DV, INV=S.INV, SCALE=S.SCALE), q_nope, q_rope, kv, m, l, o)
+
+
+SparseMlaSplitSpanV2 = flat("SparseMlaSplitSpan", 2, ["T", "K0", "K1", "DR", "DV", "BN", "DOT", "INV", "SCALE"],
+                            lambda S: W._span_type(S, BF16, F32), _span, W.SparseMlaSplitSpan, lifted=("DOT", "INV"))
+
+
 def _combine(B, S, lse, o):
     """`SparseMlaCombine_v1`'s body on bits."""
     return W.combine(bit_steps(B), S, S.INV, lse, o)
@@ -220,5 +233,5 @@ def _split(B, S, q_nope, q_rope, kv):
 SparseMlaSplitV2 = flat("SparseMlaSplit", 2, ["T", "NS", "NH", "DR", "DV", "BN", "DOT", "INV", "SCALE"],
                         lambda S: M._mla_type(S, BF16), _split, W.SparseMlaSplit, lifted=("DOT", "INV"))
 
-BOOLEAN_SPARSE_MLA_SPLIT = [MufuLg2Ftz, F32NeZeroFtz, F32GtZeroFtz, SparseMlaSplitEndV2, SparseMlaSplitPartV2, SparseMlaCombineV2,
-                            SparseMlaHeadSplitV2, SparseMlaSplitV2]
+BOOLEAN_SPARSE_MLA_SPLIT = [MufuLg2Ftz, F32NeZeroFtz, F32GtZeroFtz, SparseMlaSplitEndV2, SparseMlaSplitPartV2, SparseMlaSplitSpanV2,
+                            SparseMlaCombineV2, SparseMlaHeadSplitV2, SparseMlaSplitV2]

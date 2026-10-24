@@ -41,6 +41,8 @@ Registered functions (all `Name_v1`):
   F32NeZeroFtz, F32GtZeroFtz                    (x: f32) -> Value<1>   x != 0 (false on NaN), x > 0, a subnormal x read as 0
   SparseMlaSplitEnd{DV,INV,SCALE}               (m, l[4], o[DV]) -> (o_partial[DV], lse)
   SparseMlaSplitPart{T,DR,DV,BN,DOT,INV,SCALE}  (q_nope: DV bf16, q_rope: DR bf16, kv: T x (DV+DR) bf16) -> (o_partial[DV], lse)
+  SparseMlaSplitSpan{T,K0,K1,DR,DV,BN,DOT,INV,SCALE}  (q_nope, q_rope, kv: T keys at K0 = 0, else K1 - K0 and m, l[4], o[DV])
+                                                -> (m, l[4], o[DV]) below T, (o_partial[DV], lse) at its end
   SparseMlaCombine{NSPLIT,DV,INV}               (lse: NSPLIT f32, o: NSPLIT x DV f32) -> DV bf16
   SparseMlaHeadSplit{T,NS,DR,DV,BN,DOT,INV,SCALE}  (q_nope: DV bf16, q_rope: DR bf16, kv: T x (DV+DR) bf16) -> DV bf16
   SparseMlaSplit{T,NS,NH,DR,DV,BN,DOT,INV,SCALE}   (q_nope: NH x DV, q_rope: NH x DR, kv: T x (DV+DR)) -> NH x DV bf16
@@ -49,6 +51,13 @@ NS is the token's split count (`launch_num_splits`), the boundaries `split_block
 of `SparseMlaHeadSplit` on its own T keys (the split's blocks and its end, `split_part`, the loop the head runs per split): its
 (o_partial, lse) is what FA3's split kernel writes to HBM for the combine kernel to read, so a head at NS > 1 is its splits' parts
 and `SparseMlaCombine` over them.
+
+`SparseMlaSplitSpan` cuts a split of one block (T <= BN) at 16-key k-steps, for a unit whose prover matrix must stay under 2^32
+entries (each key's MUFU.EX2 is one table read): keys [K0, K1) of the split's part.  The first span (K0 = 0) takes all T keys, since
+the block's row max covers them before any exponent, and gives P, the lanes' sums and O over its own keys; a later one takes the
+running (m, l, o) and its own keys, continuing each lane's ordered sum and the k-step chain; the span reaching T ends the split.
+Chained, they are the part word for word.  Two `SparseMlaBlock_v1`s of half the keys are not: each would take its own max and
+rescale.
 """
 from __future__ import annotations
 
@@ -65,10 +74,11 @@ from verity.ml.circuits.ops import scalar as SC
 from verity.ml.circuits.ops.boolean.mufu import Fit
 from verity.ml.circuits.ops.mufu import DivFullRcp
 from verity.ml.circuits.ops.prims import const
-from verity.ml.circuits.refs import Coll, array_of, concat, tuple_of
+from verity.ml.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
 from verity.ml.circuits.types import Array, Tuple
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry import sparse_mla as M
+from verity_vllm.program.registry.b1 import _lane
 from verity_vllm.program.registry.prims import BF16, F32
 
 BIT = SC.BIT
@@ -358,6 +368,54 @@ def part(st: M.Steps, S, block_of, end, q_nope, q_rope, kv):
     return split_part(st, S.T, S.BN, KW, block_of, end, _q(st, KW, q_nope, q_rope), kv, 0, -(-S.T // S.BN))
 
 
+def check_span_statics(T: int, K0: int, K1: int, BN: int) -> None:
+    if not (1 <= T <= BN and K0 % 16 == 0 and K1 % 16 == 0 and 0 <= K0 < K1 and K0 < T and K1 - 16 < T):
+        raise ValueError(f"SparseMlaSplitSpan: keys [K0={K0}, K1={K1}) of a one-block split of T={T} keys at BN={BN} (K0 and K1 "
+                         f"multiples of 16, K0 < T, K1 at most T rounded up to 16)")
+
+
+def span(st: M.Steps, S, dot, DOT, end, q_nope, q_rope, kv, m=None, l=None, o=None):
+    """`SparseMlaSplitSpan`'s body: `sparse_mla.block`'s steps (FIRST) on keys [K0, K1), ``dot`` the S chain, ``DOT`` the P V
+    step, ``end`` the split's end; ``kv``'s row r is key K0 + r."""
+    B, T, K0, K1, DR, DV = st.B, S.T, S.K0, S.K1, S.DR, S.DV
+    check_span_statics(T, K0, K1, S.BN)
+    KW, L, hi = DR + DV, st.leaf, min(K1, T)
+    q = _q(st, KW, q_nope, q_rope)
+    s = {c: B.call(dot, q, Coll(Array(KW, st.bf16), concat([kv[c - K0][DV:KW].refs, kv[c - K0][0:DV].refs])))
+         for c in range(K0, T if K0 == 0 else hi)}
+    if K0 == 0:
+        m = s[0]
+        for c in range(1, T):
+            m = st.max(m, s[c])
+    scale_log2 = st.word(M.scale_log2_bits(S.SCALE))
+    max_scaled = st.mul(st.guard(m), scale_log2)
+    p = {c: st.ex2(st.fmasub(s[c], scale_log2, max_scaled)) for c in range(K0, hi)}
+    lanes = []
+    for ln in range(4):
+        cols = [c for c in range(K0, hi) if _lane(c) == ln]
+        if K0:
+            acc = l[ln]
+        else:
+            acc, cols = (p[cols[0]], cols[1:]) if cols else (st.word(0), cols)
+        for c in cols:
+            acc = st.add(acc, p[c])
+        lanes.append(acc)
+    pb = {c: st.cvt(p[c]) for c in range(K0, hi)}
+    acc_o = [st.word(0) for _ in range(DV)] if K0 == 0 else [o[d] for d in range(DV)]
+    rows = T if K0 == 0 else hi - K0
+    if rows < K1 - K0:  # FA3 clears the out-of-bounds rows; their columns are masked and never read
+        zero = Coll(Array(KW, st.bf16), concat([st.zero16().refs] * KW))
+        kv = Coll(Array(K1 - K0, Array(KW, st.bf16)), concat([kv.refs] + [zero.refs] * (K1 - K0 - rows)))
+    for k0 in range(K0, K1, 16):
+        prow = Coll(Array(16, st.bf16), concat([(pb[k0 + j] if k0 + j < hi else st.zero16()).refs for j in range(16)]))
+        vt = Coll(Array(DV, Array(16, st.bf16)), concat([strided_view(kv, (((k0 - K0) * KW) + d) * L, L, KW * L, 1, 16 * L)
+                                                          for d in range(DV)]))
+        acc_o = list(B.batch(DOT, array_of(acc_o), prow, vt, axes=(0, None, 0)))
+    if K1 >= T:
+        return B.call(end, m, array_of(lanes), array_of(acc_o))
+    return tuple_of(m, array_of(lanes), array_of(acc_o))
+
+
 # --- the Definitions --------------------------------------------------------------------------------------------------------
 
 def _end_type(S, f32=F32):
@@ -388,6 +446,24 @@ def SparseMlaSplitPart(B, S, q_nope, q_rope, kv):
     for the combine kernel."""
     return part(word_steps(B), S, part_blocks(S, M.SparseMlaBlock), bind(SparseMlaSplitEnd, DV=S.DV, INV=S.INV, SCALE=S.SCALE),
                 q_nope, q_rope, kv)
+
+
+def _span_type(S, bf16=BF16, f32=F32):
+    check_span_statics(S.T, S.K0, S.K1, S.BN)
+    state = (("m", f32), ("l", Array(4, f32)), ("o", Array(S.DV, f32)))
+    keys = S.T if S.K0 == 0 else min(S.K1, S.T) - S.K0
+    ins = (("q_nope", Array(S.DV, bf16)), ("q_rope", Array(S.DR, bf16)), ("kv", Array(keys, Array(S.DR + S.DV, bf16))))
+    out = Tuple(Array(S.DV, f32), f32) if S.K1 >= S.T else Tuple(*(t for _, t in state))
+    return ins + (state if S.K0 else ()), out
+
+
+@composite("SparseMlaSplitSpan", 1, ["T", "K0", "K1", "DR", "DV", "BN", "DOT", "INV", "SCALE"], _span_type, conformance=_CONF)
+def SparseMlaSplitSpan(B, S, q_nope, q_rope, kv, m=None, l=None, o=None):
+    """Keys [K0, K1) of `SparseMlaSplitPart_v1` on a one-block split of T keys: the S chain `DotBf16_v2{K = DR + DV}` of every key
+    (K0 = 0, then the row max) or of its own (K0 > 0, the running max m given), P = `ex2(s * scale - guard(m) * scale)` and bf16(P)
+    kv_c over its k-steps (`DOT`), each lane's sum continued in key order; (m, l, o) below T, else `SparseMlaSplitEnd_v1`."""
+    return span(word_steps(B), S, bind(M.DotBf16V2, K=S.DR + S.DV, DOT=S.DOT), S.DOT,
+                bind(SparseMlaSplitEnd, DV=S.DV, INV=S.INV, SCALE=S.SCALE), q_nope, q_rope, kv, m, l, o)
 
 
 def _combine_type(S, bf16=BF16, f32=F32):
@@ -430,4 +506,5 @@ def SparseMlaSplit(B, S, q_nope, q_rope, kv):
     return B.batch(hd, q_nope, q_rope, kv, axes=(0, 0, None))
 
 
-SPARSE_MLA_SPLIT_COMPOSITES = [SparseMlaSplitEnd, SparseMlaSplitPart, SparseMlaCombine, SparseMlaHeadSplit, SparseMlaSplit]
+SPARSE_MLA_SPLIT_COMPOSITES = [SparseMlaSplitEnd, SparseMlaSplitPart, SparseMlaSplitSpan, SparseMlaCombine, SparseMlaHeadSplit,
+                               SparseMlaSplit]
