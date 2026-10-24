@@ -143,10 +143,11 @@ def test_every_verifier_coin_negative_is_refused_for_its_own_reason():
 
 def test_a_negative_the_stream_accepts_is_not_counted_refused(monkeypatch):
     """The refusal is the stream's, not the label's: where the replayed draw is the verifier's own with no evidence (the
-    honest run again), neither outcome negative counts as refused."""
+    honest run again), neither outcome negative counts as refused, even with the Lean's side read as refusing at select."""
     stream, coins, draw, _, _ = honest()
     monkeypatch.setattr(AC, "FOREIGN_EVIDENCE", None)
     monkeypatch.setattr(AC, "Replay", AC.OwnReplay)
+    monkeypatch.setattr(AC, "lean_side", lambda audit: {"step": AC.SELECT_COINS[0], "codes": AC.SELECT_COINS[1]})
     neg = AC.verifier_negatives(stream_of, register, stream, coins, draw, outcome, ROOT)
     for name in ("verifier-coins-claimed-as-challenger", "verifier-coins-with-evidence"):
         assert neg[name]["accepted"] is True and neg[name]["source"] == "verifier" and not neg[name]["refused"], neg[name]
