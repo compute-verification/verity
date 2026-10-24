@@ -26,7 +26,9 @@
 #      H1L_SESSION_GB, H1L_STAGGER (60): admit a firewalled session only with that much free in the cgroup
 #      H1L_K (4096)  H1L_PAR (8: sessions at a time)  H1L_LPAR (8: Lean checks at a time)  H1L_JOBS (8: prepare's stagers)
 #      H1L_VERIFY_EACH (1)
-#      H1L_LANES (all, or 0,5,...)  H1S_FIREWALL (1)  H1S_UNFIREWALLED ("tampered-zy other-call-a")  H1S_KEEP (tags whose sessions out/ keeps: "lane0 tampered-zy")
+#      H1L_LANES (all, or 0,5,...)  H1S_FIREWALL (1)  H1S_UNFIREWALLED ("tampered-zy other-call-a")  H1S_KEEP (tags whose sessions out/ keeps: "lane0 tampered-zy", or all;
+#      each as soon as its session ends)  H1S_KEEP_CIRCUIT (a node directory each lowered circuit is kept in after prepare,
+#      as SHA512.txt, a hard link where it can be: the scratch, the circuit's other name, goes at exit)
 #      H1S_FIREWALL_TGZ (`git archive --format=tar.gz REV verity/core/service/flock`: the firewall frame built from REV's
 #      Lean, which must speak this tree's prover protocol; the verifier stays this tree's)
 #      H1S_FIREWALL_TGZ_DIR (a node directory of such tarballs, read again before each firewalled session: the session runs
@@ -116,6 +118,20 @@ cp "$WK/plan.json" "$WK/prepare.json" "$OUT/" 2>/dev/null
 [ $rc = 0 ] || { log "prepare FAILED (exit $rc): $(tail -5 "$OUT/prepare.err")"; exit 1; }
 log "prepare: $(cat "$OUT/prepare.time")"
 mkdir -p "$OUT/verifier" && cp "$WK"/verifier/* "$OUT/verifier/"
+if [ -n "${H1S_KEEP_CIRCUIT:-}" ]; then
+  mkdir -p "$H1S_KEEP_CIRCUIT"
+  "$PY" -c "import json, sys; [print(c['circuit_sha512'], c['dir']) for c in json.load(open(sys.argv[1]))['checks'].values()]" \
+    "$WK/plan.json" | sort -u -k1,1 | while read -r sha d; do
+    k=$H1S_KEEP_CIRCUIT/$sha.txt c=$(readlink -f "$d/circuit.txt")
+    if [ ! -e "$k" ] && ! ln "$c" "$k" 2>/dev/null; then cp "$c" "$k.tmp.$$" && mv -n "$k.tmp.$$" "$k"; rm -f "$k.tmp.$$"; fi
+    log "circuit $sha kept at $k ($(stat -c %s "$k" 2>/dev/null) B)"
+  done
+fi
+keep() {   # keep TAG: TAG's sessions and pin into out/, if H1S_KEEP names it (or is all)
+  case " ${H1S_KEEP:-lane0 tampered-zy} " in *" $1 "*|" all ") ;; *) return 0 ;; esac
+  [ -d "$WK/st/$1/sessions" ] && [ ! -e "$OUT/$1/sessions" ] && cp -r "$WK/st/$1/sessions" "$OUT/$1/" \
+    && cp "$WK/st/$1/pin.txt" "$OUT/$1/"
+}
 
 # ---- proofs: one --zk session per statement ------------------------------------------------------------------------------
 VLIMIT=$(declare -f vlimit)
@@ -188,6 +204,7 @@ while IFS=$'\t' read -r kind tag D; do
   ( [ "$fw" = 1 ] || unset FC_FIREWALL FC_HOST_WITNESS FC_FIREWALL_STATEMENT FC_FIREWALL_HELLO_ARGS
     if session "$D" "$OUT/$tag"; then
       log "proved $tag: $(cat "$OUT/$tag/prove.time")"
+      keep "$tag"
       if [ "$EACH" = 1 ]; then
         lean_check "$tag" $(( STAGE_GB / PAR ))
         log "lean $tag: $(tail -1 "$OUT/lean/$tag.out" 2>/dev/null | cut -c1-300) $(cat "$OUT/lean/$tag.time" 2>/dev/null)"
@@ -213,9 +230,7 @@ while IFS=$'\t' read -r kind tag D pub reg prog part _expect; do
     > "$OUT/lean/$tag.out" 2> "$OUT/lean/$tag.err" &
 done < "$WK/plan.tsv"
 wait
-for tag in ${H1S_KEEP:-lane0 tampered-zy}; do
-  [ -d "$WK/st/$tag/sessions" ] && cp -r "$WK/st/$tag/sessions" "$OUT/$tag/" && cp "$WK/st/$tag/pin.txt" "$OUT/$tag/"
-done
+for tag in $(awk -F'\t' '$1 == "S" {print $2}' "$WK/plan.tsv"); do keep "$tag"; done
 
 "$PY" "$H/served.py" summarize --work "$WK" --out "$OUT" 2>&1 | tee -a "$OUT/job.log"
 rc=${PIPESTATUS[0]}
