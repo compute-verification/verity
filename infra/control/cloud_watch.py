@@ -25,7 +25,7 @@ The checks (cloud_watch.toml holds every threshold, price and path):
 - **neon**: database size, connections against max_connections, the store index's last write (max `listed_at`), and how many
   tables each of `report_schemas` has (`store_public` is built only once the export's credential is on the pod).
 - **spend**: the budgets guard's state (RunPod balance, rate and each line's spend) against budgets.toml's live lines, the
-  RunPod runway to the guard's balance floor, R2's month at Cloudflare's list price, and, when Nebius credentials and an
+  RunPod balance under its auto top-up (a failed top-up), R2's month at Cloudflare's list price, and, when Nebius credentials and an
   instance list are available, each running VM's line: one on no line, on an expired line, or burning past its line is an anomaly.
 - **github**: the token's core rate limit; **jobs**: Control's Job queue, where a job queued past `stale_queued_h` (from its
   `not_before`) means no worker claims its kind; **http**: the public endpoints (Vercel's site, the Slack broker) answer below 500.
@@ -451,9 +451,11 @@ def spend_runpod(ctx: Ctx, rep: Report, lines: dict) -> None:
     rep.lines.append(f"RunPod: balance {usd(balance)} (floor {usd(floor)}), {usd(rate)}/h for the account; this month about "
                      f"{usd(mtd)} ({usd(pods)} of guarded pods, the rest this pod and the volumes), {usd(mtd + rate * left)} "
                      f"projected to month end")
-    if runway < cfg["runpod_runway_alert_h"]:
-        rep.findings.append(Finding("spend|runpod|runway", f"*RunPod balance {usd(balance)} reaches the guard's {usd(floor)} floor in "
-                                                           f"{runway:.0f} h* at {usd(rate)}/h; at the floor the guard stops creating pods."))
+    if balance < cfg["runpod_topup_below_usd"]:
+        rep.findings.append(Finding("spend|runpod|runway", f"*RunPod balance {usd(balance)} is under its {usd(cfg['runpod_topup_below_usd'])} "
+                                                           f"auto top-up: the top-up failed*, and the balance reaches the guard's "
+                                                           f"{usd(floor)} floor in {runway:.0f} h at {usd(rate)}/h, where the guard "
+                                                           f"terminates every pod in scope."))
     for prefix, st in (g.get("lines") or {}).items():
         line = lines.get(prefix)
         if not line or epoch(str(line.get("expires", "1970-01-01T00:00Z"))) < ctx.now:
