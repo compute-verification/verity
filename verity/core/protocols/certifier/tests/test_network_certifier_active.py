@@ -3,6 +3,7 @@ over real localhost sockets, on an injected clock, an honest run is accepted raw
 while a sender that times its writes to signal either leaves the wire byte-identical or is rejected by the audit."""
 
 import asyncio
+import base64
 import dataclasses
 import itertools
 import json
@@ -69,6 +70,26 @@ def test_a_token_is_events_of_one_length_each_its_template(n):
     with pytest.raises(ValueError):
         active.event(bytes(active.TOKEN_BYTES + 1))
     assert active.event_data(evs[0][:-1]) is None and active.event_data(evs[0].replace(b"verity", b"Verity")) is None
+
+
+def test_an_id_carrying_event_is_an_event_of_the_template_its_id_and_tag_first():
+    """An id-carrying event is `EVENT_BYTES` long on the egress template like any event; its first 16 base64 characters
+    are the token id and its request's tag, whatever text follows, and `token_event_data` gives back all three."""
+    tag = active.request_tag("varied.00007")
+    assert len(tag) == active.TAG_BYTES and tag != active.request_tag("varied.00008")
+    assert active.TOKEN_TEXT_BYTES == active.TOKEN_BYTES - 12
+    p, s, prefix, suffix = active.event_placement(B)
+    for token_id, text in ((0, b""), (128009, b" Paris"), (active.NO_TOKEN, b"x" * active.TOKEN_TEXT_BYTES)):
+        e = active.token_event(token_id, tag, text)
+        frame = active.encode_frame(DATA, active.CANONICAL_STREAM, e, B)
+        assert len(e) == active.EVENT_BYTES and frame[:p] == prefix and frame[s : s + len(suffix)] == suffix
+        assert base64.b64decode(frame[p : p + 16]) == token_id.to_bytes(4, "big") + tag
+        assert active.token_event_data(e) == (token_id, tag, text)
+    for bad in ((-1, tag, b""), (active.NO_TOKEN + 1, tag, b""), (True, tag, b""), (1, tag[:-1], b""),
+                (1, tag, bytes(active.TOKEN_TEXT_BYTES + 1))):
+        with pytest.raises(ValueError):
+            active.token_event(*bad)
+    assert active.token_event_data(active.event(b"a token")) is None and active.token_event_data(b"x") is None
 
 
 @pytest.mark.parametrize("length", [0, 1, 499, 500, 503, 1536])  # B = 512: a frame holds 503 bytes after its header

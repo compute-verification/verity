@@ -428,17 +428,18 @@ def plan_configuration(cfg: dict, setup: Setup, live_model: str | None = None, s
 
 
 def model_releases(requests: Sequence[dict], params: GridParams, windows: int, egress_bucket_ms: int,
-                   admission: Admission | None = None) -> dict[int, int]:
+                   admission: Admission | None = None, salt: bool = False) -> dict[int, int]:
     """Each request's release as the ingress certifier's rule gives it: its frames enqueued at their bucket, in send
-    order, and released r_in per bucket; the egress bucket of its last frame's release. With `admission`, a served
-    link's admission rule (`active.Bucketer(served=…)`): a request is enqueued only while its window, with it, still
-    ends idle (`served.admits`), behind the certifier's own frame where the profile counts one."""
+    order, and released r_in per bucket; the egress bucket of its last frame's release. With `salt`, each window's
+    first bucket enqueues the certifier's salt frame ahead of its arrivals. With `admission`, a served link's admission
+    rule (`active.Bucketer(served=…)`): a request is enqueued only while its window, with it, still ends idle
+    (`served.admits`), behind the certifier's own frame where the profile counts one."""
     pending = sorted((q["enqueue"], q["send_ms"], q["stream"], q["frames"]) for q in requests)
     out, queue, k, counts, T = {}, [], 0, [], params.buckets
     for t in range(windows * T):
         if t % T == 0:
             counts = []
-            if admission is not None and admission.profile.own:
+            if salt or (admission is not None and admission.profile.own):
                 queue.append((None, False))
         while k < len(pending) and pending[k][0] <= t:
             _, _, s, n = pending[k]
@@ -494,8 +495,10 @@ def adversary_writes(plan: dict, sync_set: SyncSet, buckets: int, strategy: str,
     """A server inside the boundary that signals by its write times: each frame's write bucket and position, over the
     model's releases. `burst` writes a session's frames in the bucket its request reaches it, `spread` frame k in the
     bucket before its logical hand time, `bits` one or the other per session by a random bit, and `late` is honest
-    but holds one session in window 0, from its first frame on, until the hand time of the most lenient sync. A stream's
-    writes keep their order, and nothing is written in the last bucket or after."""
+    but holds one session in window 0, from its first frame on, until the hand time of the most lenient sync. On a live
+    plan that isn't request-major the canonical order is the order the shim writes, so a session written behind frames
+    due later than it is ready is on time: `late` holds it on, to the first bucket by which every other frame written
+    is due. A stream's writes keep their order, and nothing is written in the last bucket or after."""
     windows = plan["windows"]
     horizon = windows * buckets
     release = {int(k): v for k, v in plan["model_release"].items()}
@@ -509,7 +512,12 @@ def adversary_writes(plan: dict, sync_set: SyncSet, buckets: int, strategy: str,
     if strategy == "late":
         lenient = handing_buckets(frames, [ClockSync(max(sync_set.deltas), min(sync_set.rhos))] * windows, buckets)
         p = next(p for p, (_, a, _, k) in enumerate(keys) if k == 0 and a < buckets and lenient[p] < horizon - 2)
-        held = (keys[p][2], lenient[p])
+        b = lenient[p]
+        if "live_model" in plan and not plan.get("request_major"):
+            others = [(ready - 1, h) for (ready, _, rank, _), h in zip(keys, hands) if rank != keys[p][2]]
+            while any(w <= b < h for w, h in others):
+                b += 1
+        held = (keys[p][2], b)
     out: dict[str, list] = defaultdict(list)
     for p, (ready, anchor, rank, _) in enumerate(keys):
         if strategy == "burst" or (strategy == "bits" and bits[names[rank]]):

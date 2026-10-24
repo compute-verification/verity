@@ -118,9 +118,10 @@ certified, the I/O, the audit and the salt accept.
   deadline. It takes one link connection, which must come before the origin. Once the link has ended it stops the shim,
   writes the logs and prints `{"served": ...}`, then serves reveals until every window's salt is revealed or the last
   window's reveal deadline has passed. `--tamper` makes the shim an adversary of `active_replay.adversary_plan`: `late`
-  holds one session of   window 0 past every sync, which the certifier's own audit faults; `extra` writes one event more
-  at the end of the first session's response, after its padding (F + 1 in all), on time and logged, so the records are
-  complete and only N2's counts against the profile refuse it (on a varied plan, the certified I/O's finish rule). The key's directory may not be inside `--out`.
+  holds one session of window 0 past every sync (on a varied plan, past every frame written before it is due), which
+  the certifier's own audit faults; `extra` writes one event more at the end of the first session's response, after
+  its padding (F + 1 in all), on time and logged, so the records are complete and only N2's counts against the profile
+  refuse it (on a varied plan, the certified I/O's finish rule). The key's directory may not be inside `--out`.
 - `client` sends the plan's requests on the link as `active_replay.Peer` does, at the deployment's origin, and reads
   the wire to its end (`peer.json`).
 - `check` is the auditor's offline check of a served run (`check`): per link-window, the certifier's audit of the raw
@@ -657,7 +658,7 @@ def varied_plan(probed: dict, requests: list[dict], *, name: str = "varied", see
             for j, (s, q, n, a, t) in enumerate(zip(names, requests, frames_in, anchors, sends))]
     frames_total, windows = sum(len(ds) for _, _, ds in sessions), anchors[-1] // T + 2
     while True:
-        release = ar.model_releases(peer, i, windows, e.bucket_ms)
+        release = ar.model_releases(peer, i, windows, e.bucket_ms, salt=True)
         frames, ready = ar.model_frames(sessions, release, windows * T)
         hands = handing_buckets(frames, [envelope] * windows, T)
         if len(release) == len(peer) and len(frames) == frames_total and max(hands) < (windows - 1) * T:
