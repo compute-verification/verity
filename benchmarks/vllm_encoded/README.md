@@ -15,15 +15,16 @@ dispatched commit.
 | `PLAIN_NO_TOPUP`, `AUDIT_NO_TOPUP` | `bandwidth-plain-no-topup`, `bandwidth-audit-no-topup` | the same, the top-up never started |
 | `PLAIN_SPANS`, `AUDIT_SPANS` | `bandwidth-plain-spans`, `bandwidth-audit-spans` | the same with the top-up, each step timed by part |
 
-The top-up is the fill-sk16 filler (`benchmarks/kv_filler/topup.cu`) over the paged KV pool on a low-priority stream.
+The top-up is the fill-sk16 filler (`benchmarks/kv_filler/topup.cu`) over the paged KV pool on a low-priority stream,
+on every SM or on a partition of its own (`topup_sms`, below).
 `bandwidth-plain` and `bandwidth-audit` are the credited lines (`bench_arm.CREDITED`): a table cites them as the audit's
 cost. Every other arm is an ablation and measures cost only.
 
 ## Settings
 
-`BandwidthArm(id, encoded=..., control=..., topup=None, spans=None, kv_receipts=None, codec_rounds=None)` builds an arm.
-A setting left None is read from the environment when the arm installs, so a spec's `[env]` sets it for every arm that
-leaves it open:
+`BandwidthArm(id, encoded=..., control=..., topup=None, spans=None, kv_receipts=None, codec_rounds=None,
+topup_sms=None)` builds an arm. A setting left None is read from the environment when the arm installs, so a spec's
+`[env]` sets it for every arm that leaves it open:
 
 | argument | variable | default | |
 |---|---|---|---|
@@ -31,8 +32,17 @@ leaves it open:
 | `spans` | `VERITY_VLLM_BENCH_SPANS` | `off` | on: per-part timing spans (below) |
 | `kv_receipts` | `VERITY_VLLM_BENCH_KV_RECEIPTS` | `on` | off: the step commits the weights' receipts only |
 | `codec_rounds` | `VERITY_VLLM_BENCH_CODEC_ROUNDS` | `3` | the codec's rounds k |
+| `topup_sms` | `VERITY_VLLM_BENCH_TOPUP_SMS` | `0` | F > 0: the top-up on F SMs of its own, the engine on the rest |
 
 `VERITY_VLLM_BENCH_FILLER_CTAS` (32) and `VERITY_VLLM_BENCH_SELECT_TRIALS` (5) are environment-only.
+
+**Partition.** With `topup_sms` F > 0 the arm splits the SMs before vLLM starts (`benchmarks/kv_filler/green.py`,
+`topup.cu`'s `sq_green`, green contexts): the top-up's stream is on the filler's F, and the step's stream, the stack's
+side streams and every CUDA graph's capture are on the rest, whose count the device's SM count then reads as (it sizes
+the stack's grids, and the attention's splits with them). The gate fails unless every stream of the step's ran within
+its SMs (`partition.spread`) and every run's current stream was the step's. Set F for the token control too (the
+environment does both): the splits change the attention's rounding, so a partitioned audit is gated against a
+partitioned plain run.
 
 **Credit.** The arm's gate carries `credit`: `credited` is true only for a credited id with the top-up on, the top-up
 having read bytes in every measured run, and spans off; `refused` lists why not. A credited id refused fails its gate,
