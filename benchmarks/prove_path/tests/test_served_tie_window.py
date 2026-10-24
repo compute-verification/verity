@@ -33,7 +33,7 @@ def _steps(St, window, seqs):
 def test_real_window_cases_on_a_small_window():
     fx = json.loads(FIXTURE.read_text())
     S = SimpleNamespace(**CS.statics(fx["R"], fx["W"], fx["A"], fx["engine"], fx["IW"], Q=fx["Q"], D=fx["D"], P=fx["P"],
-                                     K=fx["K"], SEG=fx["SEG"], CN=fx["CN"], CTW=fx["CTW"], CU=fx["CU"]))
+                                     K=fx["K"], CN=fx["CN"], CTW=fx["CTW"], CU=fx["CU"]))
     st = ST.statics(S)
     run = STW.run_cases(S, st, list(WINDOW), _steps(SimpleNamespace(**st), WINDOW, SEQS), SEQS)
     assert run.verdicts == {"honest": "accepted", "start": "refused by tie and ids", "short": "refused by tie and ids",
@@ -47,7 +47,7 @@ def test_a_run_sealed_before_the_async_and_cache_statics_reads_them_as_0():
     """A seal's record from before AS, EW and the cache's statics, its engine async or not, reads them as 0, which
     `compile_slice.step_statics` needs; a record that has them keeps its own."""
     old = {"R": 8, "W": 1, "A": 1, "M": 8, "T": 2048, "L": 512, "B": 16, "H": 0, "CH": 1, "WM": 0, "FULL": 1, "PC": 0,
-           "NB": 101626, "IW": 16, "Q": 1, "D": 1, "P": 256, "K": 1, "SEG": 1}
+           "NB": 101626, "IW": 16, "Q": 1, "D": 1, "P": 256, "K": 1}
     S = STW.statics_of(SimpleNamespace(priv={"statics": old}))
     assert CS.step_statics(S).AS == 0 and S.EW == 0 and (S.CN, S.CTW, S.CU) == (0, 0, 0)
     assert all(hasattr(S, k) for k in CS.STATICS)

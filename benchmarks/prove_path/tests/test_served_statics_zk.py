@@ -26,7 +26,7 @@ COUNT, POS = 1 << SS.FLAGS.index("count"), 1 << SS.FLAGS.index("pos")
 def _S():
     fx = json.loads(FIXTURE.read_text())
     return SimpleNamespace(**CS.statics(fx["R"], fx["W"], fx["A"], fx["engine"], fx["IW"], Q=fx["Q"], D=fx["D"], P=fx["P"],
-                                        K=fx["K"], SEG=fx["SEG"], CN=fx["CN"], CTW=fx["CTW"], CU=fx["CU"]))
+                                        K=fx["K"], CN=fx["CN"], CTW=fx["CTW"], CU=fx["CU"]))
 
 
 def test_the_units_read_their_leaves_and_get_their_verdicts():
