@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Accounting.Bound
+import Definitions.Flock.Accounting.Bound
 import Mathlib.Tactic.NormNum
 import Mathlib.Tactic.Positivity
 import Mathlib.Tactic.Linarith

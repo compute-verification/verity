@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Model.Basic
+import Definitions.Flock.Arith
 import Mathlib.Data.Matrix.Mul
 import Mathlib.Basic.Real.Basic
 import Mathlib.Data.Fintype.Card
