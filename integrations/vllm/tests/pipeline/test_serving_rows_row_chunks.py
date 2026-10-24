@@ -17,7 +17,8 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 
-#: one plain row template, and one packed with two return fields; each row's committed members and their element dtypes
+#: one plain row template, and one packed with two return fields (a whole ``PARTS`` part, DeepGEMM's linear's quantisation, here
+#: on rows of its own family); each row's committed members and their element dtypes
 ROWS = {"ResidualAdd_v1": (B1.ResidualAdd, {"N": 8}, [("out", "bf16")]),
         "Fp8GroupQuantUe8m0_v1": (DG.Fp8GroupQuantUe8m0, {"K": 256, "G": 128}, [("q", "fp8"), ("s", "f32")])}
 OPS = ["model.layers.3.mlp.experts", "moe/L3", "model.layers.4.mlp.experts", "moe/L4", "model.layers.3.mlp.experts"]
@@ -79,7 +80,7 @@ def test_a_row_template_the_caps_name_is_chunks_of_the_stager_s_bit_rows_on_its_
     tp = SRW.template(T)
     params, _ret = tp.fn.signature()
     fields = CR.fields(tp)
-    assert tp.layout == "row" and len(fields) == len(ROWS[family][2])
+    assert tp.layout == ("part" if family in SRW.PART_OF else "row") and len(fields) == len(ROWS[family][2])
     assert not SRW.chunked(T, None) and not SRW.chunked(T, {}) and SRW.chunked(T, {T: CAP})
     in_rows, out_rows = CR.unit_rows(tp)
     assert in_rows == [(f"in{g}", V2, sum(ty.leaf_widths()), [nm]) for g, (nm, ty) in enumerate(params)]
