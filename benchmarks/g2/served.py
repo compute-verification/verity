@@ -142,7 +142,7 @@ def run_facts(doc: dict) -> dict:
         if g.get("passed"):
             continue
         div = g.get("first_divergence") or {}
-        why = (f", {g['divergent_requests']} requests diverge (first {div.get('request')} at token {div.get('position')})"
+        why = (f", divergent requests {g['divergent_requests']} (first {div.get('request')} at token {div.get('position')})"
                if g.get("divergent_requests") else "")
         failed.append(f"{g['arm']} {g.get('kind')} {g.get('point') or ''} against {g.get('control') or g.get('against')}{why}")
     return {"model": model_label(doc["identity"]["preset"]), "points": len(doc["points"]),
@@ -237,8 +237,13 @@ def plot(ms: list[Measure], png: Path) -> None:
                 ax.errorbar(xs, ys, yerr=err, ls=ls, marker=mk, color=colors[model], capsize=3,
                             label=f"{model}: {TITLES[ratio]}")
         ax.axhline(1.0, color="black", lw=0.5)
+        ax.set_yscale("log")
+        lo, hi = ax.get_ylim()
+        ticks = [t for t in (0.8, 1, 1.25, 1.5, 2, 3, 4, 6, 8) if lo <= t <= hi]
+        ax.set_yticks(ticks, [f"{t:g}×" for t in ticks])
+        ax.minorticks_off()
         ax.set_xticks(range(len(batches)), [f"B{b}" for b in batches])
-        ax.set_ylabel("Commit / stock")
+        ax.set_ylabel("Commit / stock (log)")
         ax.set_title(f"{phase} {metric}")
         ax.grid(alpha=0.3)
     legend: dict[str, object] = {}

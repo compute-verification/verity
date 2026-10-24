@@ -64,7 +64,7 @@ def test_a_run_without_timed_points_still_reports_why_and_its_hosts_load():
         rep["host"] = {"loadavg_1m": 62.8}
     f = S.run_facts(d)
     assert f["load"] == (62.8, 62.8) and f["model"] == "Llama-3.1-8B FP8"
-    assert f["failed"] == [("served-commit-rows-4k tokens b32-p512-mixed against stock-fp8@compiled, 17 requests diverge "
+    assert f["failed"] == [("served-commit-rows-4k tokens b32-p512-mixed against stock-fp8@compiled, divergent requests 17 "
                             "(first b32-p512-mixed-10 at token 2)")]
     d["points"] = []
     md = S.report([], {}, {"r-gated": S.run_facts(d)})
