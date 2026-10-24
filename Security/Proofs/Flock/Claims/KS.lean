@@ -70,6 +70,8 @@ import Proofs.Flock.Claims.KS.PlainDrawAccK
 import Proofs.Flock.Claims.KS.PlainDrawDecK
 import Proofs.Flock.Claims.KS.PlainLeafDecK
 import Proofs.Flock.Claims.KS.PlainClashLaterK
+import Proofs.Flock.Claims.KS.PlainClash0K
+import Proofs.Flock.Claims.KS.PlainLeafClashK
 import Proofs.Flock.Claims.KS.PlainSlackFit
 import Proofs.Flock.Claims.KS.PlainSim
 import Proofs.Flock.Claims.KS.PlainLock
@@ -349,7 +351,9 @@ not the record's, so an accepting run gives it at its live outcome whatever draw
 (`PlainDrawAccK`, `PlainDrawDecK`: `FlockDeploy.KS.plain_hdecAtK`, `FlockDeploy.KS.plain_hdecHAtK`), the rep's run
 reading no round's digest (`FlockSoundness.Discharge.PlaysCoin.repRun_of_erase`), and so do the decoders at plain
 SHA-512 leaves and the later entries (`PlainLeafDecK`: `FlockDeploy.KS.plain_hdecHUAtK`; `PlainClashLaterK`:
-`FlockDeploy.KS.plain_laterClashAtK`, `FlockDeploy.KS.plain_laterClashHAtK`). The acceptance lemmas the plain
+`FlockDeploy.KS.plain_laterClashAtK`, `FlockDeploy.KS.plain_laterClashHAtK`) and the level-0 clashes
+(`PlainClash0K`, `PlainLeafClashK`: `FlockDeploy.KS.plain_clash₀AtK`, `FlockDeploy.KS.plain_clash₀HUAtK`,
+`FlockDeploy.KS.plain_laterClashHUAtK`). The acceptance lemmas the plain
 decoders read hold at a draw value by their proofs (`PlainDrawAcc`: `FlockSoundness.Discharge.AtDraw.accepts_oneAnyD`,
 `FlockSoundness.Discharge.AtDraw.tableAt_of_acceptsD`), so the plain decoders decode the verdict at the draw
 (`PlainDrawDec`: `Claims.Bridge.PlainDraw.decodesTable_wrPD_sc`, `FlockDeploy.KS.plain_hdecAt`,
