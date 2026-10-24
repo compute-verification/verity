@@ -287,6 +287,12 @@ def tokens_of(jobs: Sequence[Job], recs: Sequence[dict[str, Any]]) -> dict[str, 
 #: small workloads that exercise the served paths: chunked prefill, decode batching, KV pressure with preemption, async
 #: scheduling, and prefix caching (name -> (engine, workload kwargs))
 CASES: dict[str, tuple[Engine, dict[str, Any]]] = {
+    "sync-light": (Engine(max_num_seqs=8, max_num_batched_tokens=256, max_model_len=1024, num_gpu_blocks=2048),
+                   dict(n=40, rate=4.0, prompt=(8, 600), output=(1, 120))),
+    "async-light": (Engine(max_num_seqs=8, max_num_batched_tokens=256, max_model_len=1024, num_gpu_blocks=2048,
+                           async_scheduling=True), dict(n=40, rate=4.0, prompt=(8, 600), output=(1, 120))),
+    "async-mid": (Engine(max_num_seqs=16, max_num_batched_tokens=512, max_model_len=2048, num_gpu_blocks=2048,
+                         async_scheduling=True), dict(n=60, rate=12.0, prompt=(8, 1500), output=(1, 200))),
     "sync-roomy": (Engine(max_num_seqs=8, max_num_batched_tokens=256, max_model_len=1024, num_gpu_blocks=2048),
                    dict(n=60, rate=40.0, prompt=(8, 600), output=(1, 120))),
     "sync-kv-pressure": (Engine(max_num_seqs=16, max_num_batched_tokens=256, max_model_len=1024, num_gpu_blocks=96),

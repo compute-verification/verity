@@ -698,25 +698,30 @@ def bucket(t: float, bucket_s: float) -> int:
     return math.floor(t / bucket_s + 1e-9)
 
 
-class _Clock:
-    """The public timing context: request i's ingress bucket against the release bucket of the newest step whose output
-    the engine had processed before scheduling step k (step k-1, or k-2 under async scheduling, where step k is
-    scheduled before step k-1's output is). An open step is *early* for i when that step's tokens left before i's ingress
-    bucket began: the engine had then very likely not seen i yet."""
+@dataclass(frozen=True)
+class Decision:
+    """One open step's question for the next request: had it arrived (`arrived`)? `passed` counts the request's earlier
+    open steps, at which it hadn't."""
 
-    def __init__(self, trace: Trace, bucket_s: float) -> None:
-        self.lag = 2 if trace.engine.async_scheduling else 1
-        self.b_in = [bucket(t, bucket_s) for t in trace.ingress_t]          # type: ignore[arg-type]
-        rel, last = [], None
-        for t, emits in zip(trace.release_t, trace.emits):
-            if emits:
-                last = bucket(t, bucket_s)                                    # type: ignore[arg-type]
-            rel.append(last)
-        self.rel = rel
+    request: int
+    step: int
+    arrived: bool
+    passed: int
 
-    def early(self, i: int, k: int) -> bool:
-        j = k - self.lag
-        return j < 0 or self.rel[j] is None or self.rel[j] < self.b_in[i]
+
+def decisions(trace: Trace) -> tuple[list[Decision], Replay]:
+    """The trace's decisions in the order the replay asks them (by step, then request), from each request's first
+    scheduled step. Refuses a trace the replay doesn't reproduce."""
+    first = trace.first_scheduled()
+    if any(f < 0 for f in first):
+        raise ValueError(f"requests never scheduled: {[trace.ids[i] for i, f in enumerate(first) if f < 0][:8]}")
+    rp = replay(trace.engine, trace.requests, decide=lambda i, k: k >= first[i])
+    m = compare(rp.steps, trace.steps)
+    if m.first_mismatch is not None:
+        raise ValueError(f"the replay diverges from the trace at step {m.first_mismatch} ({m.matched}/{m.steps} steps match)")
+    out = [Decision(i, k, not forced and p == len(asked) - 1, p)
+           for i, (asked, forced) in enumerate(zip(rp.asked, rp.forced)) for p, k in enumerate(asked)]
+    return sorted(out, key=lambda d: (d.step, d.request)), rp
 
 
 def gamma_bits(v: int) -> int:
@@ -724,66 +729,194 @@ def gamma_bits(v: int) -> int:
     return 2 * v.bit_length() - 1
 
 
-@dataclass
-class Residual:
-    """The residual advice: per request, None when it arrived into a quiet engine (0 bits), else the code value v,
-    sent as Elias gamma of v + 1."""
-
-    values: list[int | None]
-    clocked: bool
-
-    def bits(self, i: int) -> int:
-        v = self.values[i]
-        return 0 if v is None else gamma_bits(v + 1)
+def gamma_values(rp: Replay) -> list[int | None]:
+    """The plainest residual: per request, the open steps it was passed over, sent as Elias gamma of v + 1. A request the
+    engine took because it went quiet was passed over at every open step it was asked at (v = their count), and None
+    when there were none (0 bits)."""
+    return [None if f and not a else len(a) - (0 if f else 1) for a, f in zip(rp.asked, rp.forced)]
 
 
-def encode(trace: Trace, *, clocked: bool, bucket_s: float = 0.1) -> tuple[Residual, Replay]:
-    """Replay the trace admitting each request at the step it was first scheduled, and code what that took: unclocked, v
-    is the open steps the request was passed over; clocked, v = 2j when it was admitted at its j-th late open step and
-    2e + 1 when at its e-th early one (`_Clock`)."""
-    first = trace.first_scheduled()
-    if any(f < 0 for f in first):
-        raise ValueError(f"requests never scheduled: {[trace.ids[i] for i, f in enumerate(first) if f < 0][:8]}")
-    rp = replay(trace.engine, trace.requests, decide=lambda i, k: k >= first[i])
-    clock = _Clock(trace, bucket_s) if clocked else None
-    values: list[int | None] = []
-    for i in range(len(trace.requests)):
-        if rp.forced[i]:
-            values.append(None)
-            continue
-        asked = rp.asked[i]
-        if clock is None:
-            values.append(len(asked) - 1)
-            continue
-        early = [clock.early(i, k) for k in asked]
-        if early[-1]:
-            values.append(2 * (sum(early) - 1) + 1)
+class _Clock:
+    """The certified timing a decision is coded in: request i's ingress bucket against the release buckets around step k.
+    The engine core scheduled step k after processing step k - lag's output (lag 1, or 2 under async scheduling) and
+    before any step from k on had emitted, so the newest step at or before k - lag that emitted a token left at about
+    when k was scheduled or before (`prev`), and the first step from k on that emitted left after it (`next`)."""
+
+    def __init__(self, trace: Trace, bucket_s: float) -> None:
+        if not trace.clocked():
+            raise ValueError("the trace has no certifier clock (ingress_t and release_t)")
+        self.lag = 2 if trace.engine.async_scheduling else 1
+        self.b_in = [bucket(t, bucket_s) for t in trace.ingress_t]                          # type: ignore[arg-type]
+        rel = [bucket(t, bucket_s) if e else None for t, e in zip(trace.release_t, trace.emits)]  # type: ignore[arg-type]
+        self.prev: list[int | None] = []
+        last = None
+        for b in rel:
+            last = b if b is not None else last
+            self.prev.append(last)
+        self.next: list[int | None] = [None] * len(rel)
+        nxt = None
+        for k in range(len(rel) - 1, -1, -1):
+            nxt = rel[k] if rel[k] is not None else nxt
+            self.next[k] = nxt
+
+    def context(self, i: int, k: int) -> tuple[int, int]:
+        j = k - self.lag
+        p = self.prev[j] if 0 <= j < len(self.prev) else None
+        n = self.next[k] if k < len(self.next) else None
+        return (2 if p is None else max(-1, min(1, self.b_in[i] - p)), 2 if n is None else int(self.b_in[i] > n))
+
+
+# --- an adaptive binary arithmetic code for the decisions (Witten, Neal and Cleary's coder, KT estimates per context) --
+
+_FULL, _HALF, _QTR = 1 << 32, 1 << 31, 1 << 30
+
+
+class _KT:
+    def __init__(self) -> None:
+        self.n: dict[Any, tuple[int, int]] = {}
+
+    def freqs(self, ctx: Any) -> tuple[int, int]:
+        n0, n1 = self.n.get(ctx, (0, 0))
+        return 2 * n0 + 1, 2 * n1 + 1
+
+    def update(self, ctx: Any, bit: bool) -> None:
+        n0, n1 = self.n.get(ctx, (0, 0))
+        self.n[ctx] = (n0 + (not bit), n1 + bool(bit))
+
+
+class _Encoder:
+    def __init__(self) -> None:
+        self.lo, self.hi, self.pending, self.count = 0, _FULL - 1, 0, 0
+        self.bits: list[int] = []
+
+    def put(self, bit: bool, f0: int, f1: int) -> None:
+        split = self.lo + (self.hi - self.lo + 1) * f0 // (f0 + f1)
+        if bit:
+            self.lo = split
         else:
-            values.append(2 * (len(early) - sum(early) - 1))
-    return Residual(values, clocked), rp
+            self.hi = split - 1
+        self.count += 1
+        while True:
+            if self.hi < _HALF:
+                self._emit(0)
+            elif self.lo >= _HALF:
+                self._emit(1)
+                self.lo -= _HALF
+                self.hi -= _HALF
+            elif self.lo >= _QTR and self.hi < 3 * _QTR:
+                self.pending += 1
+                self.lo -= _QTR
+                self.hi -= _QTR
+            else:
+                break
+            self.lo, self.hi = 2 * self.lo, 2 * self.hi + 1
+
+    def _emit(self, b: int) -> None:
+        self.bits.append(b)
+        self.bits.extend([1 - b] * self.pending)
+        self.pending = 0
+
+    def finish(self) -> list[int]:
+        if self.count:
+            self.pending += 1
+            self._emit(0 if self.lo < _QTR else 1)
+        return self.bits
 
 
-def decode(trace: Trace, residual: Residual, *, bucket_s: float = 0.1) -> Replay:
-    """Replay from the residual advice and the public context alone (the inverse of `encode`)."""
-    clock = _Clock(trace, bucket_s) if residual.clocked else None
-    seen: dict[int, list[int]] = {}
+class _Decoder:
+    def __init__(self, bits: Sequence[int]) -> None:
+        self.bits, self.pos, self.lo, self.hi, self.code = bits, 0, 0, _FULL - 1, 0
+        for _ in range(32):
+            self.code = 2 * self.code + self._next()
+
+    def _next(self) -> int:
+        b = self.bits[self.pos] if self.pos < len(self.bits) else 0
+        self.pos += 1
+        return b
+
+    def get(self, f0: int, f1: int) -> bool:
+        split = self.lo + (self.hi - self.lo + 1) * f0 // (f0 + f1)
+        bit = self.code >= split
+        if bit:
+            self.lo = split
+        else:
+            self.hi = split - 1
+        while True:
+            if self.hi < _HALF:
+                pass
+            elif self.lo >= _HALF:
+                self.lo -= _HALF
+                self.hi -= _HALF
+                self.code -= _HALF
+            elif self.lo >= _QTR and self.hi < 3 * _QTR:
+                self.lo -= _QTR
+                self.hi -= _QTR
+                self.code -= _QTR
+            else:
+                break
+            self.lo, self.hi, self.code = 2 * self.lo, 2 * self.hi + 1, 2 * self.code + self._next()
+        return bit
+
+
+def windows(trace: Trace, *, bucket_s: float, window_buckets: int) -> tuple[list[int], list[int]]:
+    """Each request's certifier window (its ingress bucket's) and each step's (its release bucket's); one window without a
+    clock."""
+    if not trace.clocked():
+        return [0] * len(trace.requests), [0] * len(trace.steps)
+    return ([bucket(t, bucket_s) // window_buckets for t in trace.ingress_t],         # type: ignore[arg-type]
+            [bucket(t, bucket_s) // window_buckets for t in trace.release_t])         # type: ignore[arg-type]
+
+
+@dataclass
+class Code:
+    """The residual advice under the adaptive code: one bit string per certifier window (a request's decisions go in its
+    ingress window's), and what an ideal coder would spend (`ideal`, bits)."""
+
+    clocked: bool
+    bucket_s: float
+    window_buckets: int
+    bits: dict[int, list[int]]
+    ideal: dict[int, float]
+
+
+def _context(clock: _Clock | None, i: int, k: int, passed: int) -> tuple[int, ...]:
+    return (min(passed, 2),) + (clock.context(i, k) if clock is not None else ())
+
+
+def encode(trace: Trace, *, clocked: bool, bucket_s: float = 0.1, window_buckets: int = 600) -> Code:
+    """Code each decision with the adaptive binary code, its context the request's passes so far (`min(passed, 2)`) and,
+    clocked, `_Clock.context`."""
+    ds, _ = decisions(trace)
+    clock = _Clock(trace, bucket_s) if clocked else None
+    rw, _ = windows(trace, bucket_s=bucket_s, window_buckets=window_buckets)
+    model, enc, ideal = _KT(), {}, {}
+    for d in ds:
+        ctx = _context(clock, d.request, d.step, d.passed)
+        f0, f1 = model.freqs(ctx)
+        w = rw[d.request]
+        enc.setdefault(w, _Encoder()).put(d.arrived, f0, f1)
+        ideal[w] = ideal.get(w, 0.0) - math.log2((f1 if d.arrived else f0) / (f0 + f1))
+        model.update(ctx, d.arrived)
+    return Code(clocked, bucket_s, window_buckets, {w: e.finish() for w, e in enc.items()}, ideal)
+
+
+def decode(trace: Trace, code: Code) -> Replay:
+    """Replay from the residual advice: the trace's certified I/O and clock only (its steps are not read)."""
+    clock = _Clock(trace, code.bucket_s) if code.clocked else None
+    rw, _ = windows(trace, bucket_s=code.bucket_s, window_buckets=code.window_buckets)
+    model, dec = _KT(), {}
+    passed = [0] * len(trace.requests)
 
     def decide(i: int, k: int) -> bool:
-        v = residual.values[i]
-        if v is None:
-            raise ValueError(f"request {i}: asked at step {k} but its advice says it arrived into a quiet engine")
-        e_l = seen.setdefault(i, [0, 0])
-        if clock is None:
-            if e_l[0] == v:
-                return True
-            e_l[0] += 1
-            return False
-        early = clock.early(i, k)
-        want_early, idx = v % 2 == 1, v // 2
-        if early == want_early and e_l[early] == idx:
-            return True
-        e_l[early] += 1
-        return False
+        ctx = _context(clock, i, k, passed[i])
+        f0, f1 = model.freqs(ctx)
+        w = rw[i]
+        if w not in dec:
+            dec[w] = _Decoder(code.bits.get(w, []))
+        bit = dec[w].get(f0, f1)
+        model.update(ctx, bit)
+        passed[i] += 1
+        return bit
 
     return replay(trace.engine, trace.requests, decide=decide)
 
@@ -809,36 +942,32 @@ def v0_widths(trace: Trace, *, window_buckets: int) -> dict[str, int]:
 
 
 def table(trace: Trace, *, bucket_s: float = 0.1, window_buckets: int = 600) -> dict[str, Any]:
-    """Per certifier window: I1 v0's bits, the steps the replay matched, and the residual advice's bits, clocked and not.
-    A request belongs to the window of its ingress, a step to the window of its release; without a clock, one window."""
+    """Per certifier window: I1 v0's bits, the steps the replay matched, and the residual advice's bits under each code
+    (Elias gamma; the adaptive code, unclocked and clocked), each code checked by decoding it back to the trace's steps."""
     truth = replay(trace.engine, trace.requests, admit=trace.before_step)
-    m_truth = compare(truth.steps, trace.steps)
-    res_u, rp_u = encode(trace, clocked=False)
-    m_u = compare(decode(trace, res_u).steps, trace.steps)
-    res_c = m_c = None
+    ds, rp = decisions(trace)
+    g = gamma_values(rp)
+    codes = {"adaptive": encode(trace, clocked=False, bucket_s=bucket_s, window_buckets=window_buckets)}
     if trace.clocked():
-        res_c, _ = encode(trace, clocked=True, bucket_s=bucket_s)
-        m_c = compare(decode(trace, res_c, bucket_s=bucket_s).steps, trace.steps)
-    if trace.clocked():
-        t0 = min(min(trace.ingress_t), min(trace.release_t))          # type: ignore[type-var]
-        rw = [bucket(t - t0, bucket_s) // window_buckets for t in trace.ingress_t]      # type: ignore[operator]
-        sw = [bucket(t - t0, bucket_s) // window_buckets for t in trace.release_t]      # type: ignore[operator]
-    else:
-        rw, sw = [0] * len(trace.requests), [0] * len(trace.steps)
+        codes["adaptive_clocked"] = encode(trace, clocked=True, bucket_s=bucket_s, window_buckets=window_buckets)
+    decoded = {name: compare(decode(trace, c).steps, trace.steps).__dict__ for name, c in codes.items()}
+    rw, sw = windows(trace, bucket_s=bucket_s, window_buckets=window_buckets)
     v0 = v0_widths(trace, window_buckets=window_buckets)
     rows = []
     for w in sorted(set(rw) | set(sw)):
         ks = [k for k, x in enumerate(sw) if x == w]
         rs = [i for i, x in enumerate(rw) if x == w]
-        rows.append({"window": w, "requests": len(rs), "steps": len(ks),
-                     "rows": sum(len(trace.steps[k].rows) for k in ks),
-                     "matched": sum(1 for k in ks if k < len(truth.steps) and truth.steps[k].key() == trace.steps[k].key()),
-                     "v0_bits": len(rs) * v0["request"] + sum(v0["step"] + len(trace.steps[k].rows) * v0["row"] for k in ks),
-                     "replay_bits": sum(res_c.bits(i) for i in rs) if res_c else None,
-                     "replay_bits_unclocked": sum(res_u.bits(i) for i in rs),
-                     "forced": sum(1 for i in rs if res_u.values[i] is None)})
+        row = {"window": w, "requests": len(rs), "steps": len(ks), "rows": sum(len(trace.steps[k].rows) for k in ks),
+               "matched": sum(1 for k in ks if k < len(truth.steps) and truth.steps[k].key() == trace.steps[k].key()),
+               "forced": sum(1 for i in rs if rp.forced[i]), "decisions": sum(1 for d in ds if rw[d.request] == w),
+               "v0_bits": len(rs) * v0["request"] + sum(v0["step"] + len(trace.steps[k].rows) * v0["row"] for k in ks),
+               "gamma_bits": sum(gamma_bits(g[i] + 1) for i in rs if g[i] is not None)}
+        for name, c in codes.items():
+            row[f"{name}_bits"] = len(c.bits.get(w, []))
+            row[f"{name}_ideal"] = round(c.ideal.get(w, 0.0), 2)
+        rows.append(row)
     return {"engine": dict(trace.engine.__dict__), "requests": len(trace.requests), "steps": len(trace.steps),
-            "match_before_step": m_truth.__dict__, "match_unclocked": m_u.__dict__,
-            "match_clocked": m_c.__dict__ if m_c else None, "v0_widths": v0, "bucket_s": bucket_s,
-            "window_buckets": window_buckets, "windows": rows,
-            "open_steps_passed": [len(a) - 1 for a, f in zip(rp_u.asked, rp_u.forced) if not f]}
+            "match_before_step": compare(truth.steps, trace.steps).__dict__, "decoded": decoded, "v0_widths": v0,
+            "bucket_s": bucket_s, "window_buckets": window_buckets, "windows": rows,
+            "passed": [x for x in g if x is not None]}
+
