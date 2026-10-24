@@ -544,7 +544,13 @@ theorem linkEv_le_psiZC (k Rw : ℕ) {ω : L.Ω} {u : Fin n} (hu : u ∈ L.draw 
 /-- **A2 for one prover's link finders** (`Assumptions.SHA512CRExpected`): at the registration `R` and the
 prover's continuation `τ`, for the finder built for each commit string a draw can read. A2 is a hypothesis about one
 finder, since some finder outputs a collision after no evaluations: a prover that hard-codes two openings of one commit
-string has link finders that find one. So the link theorem asks A2 only of the finders of the prover it bounds. -/
+string has link finders that find one. So the link theorem asks A2 only of the finders of the prover it bounds.
+
+Assumption record. Claim: `ecr/sha-512` (`Claims.ExpectedCR`). It assumes that no link finder built from this prover
+finds a SHA-512 collision with probability above its expected SHA-512 evaluations over `2^256`. That is the generic
+bound for a hash with 512-bit outputs, and no SHA-512 collision is known. A hash premise: it is
+`Assumptions.SHA512CRExpected` at each commit string's finder, so it reduces to `ExpectedCR` and asks nothing of the
+verifier. -/
 def LinkCRZC (k Rw M : ℕ) (t' : ℝ) : Prop :=
   ∀ (c : vb.Pos) (_ : Nonempty (ΩcZ A P planZ tab vb L c)), Assumptions.SHA512CRExpected Hc
     (finderG (trialGZC A Hs P planZ tab vb R τ c k Rw) M)
