@@ -1909,8 +1909,60 @@ side's:
 
 Under it, the six passes are refused at ``rows`` (0x0F). A slice that reads the window as a committed row, its b‖c held
 to the registration's leaf (`served_rows.leaf_ok`, as ``adv`` is held), would need no SHA-512 in the circuit. That the
-served rows are the ones the served compute ran is the step tree's to bind: each row's start and n against the step's
-committed positions and input ids. That tie isn't built yet.
+served rows are the ones the served compute ran is the step tree's to bind, by the tie below.
+
+## The served rows' tie (`served_tie`)
+
+`ServedRowsTie_v1{R, P, IW, L, T, IB, PB}` holds a window's served rows to the positions its steps' Commit holds. Without
+it, a prover can register the six passes at serve time while running the honest batch.
+
+**The step-input port** is the Commit's layout that the tie reads, and the Commit (vllm's) is to adopt it:
+- Each step's stream starts with its input ids, then its positions. Each is T little-endian elements of IB and PB bytes,
+  zero past the step's N tokens, where T is the engine's token budget. So the positions are fixed chunks of the step's
+  rows-sha512 tree (`geometry`).
+- The binding map's entries for the ids and the positions (``c00.input/ids`` and ``c00.input/positions``; on the eager
+  path ``model.embed_tokens/in`` and the rotary's positions) name those ranges, and the Programs read the members from
+  there.
+- IO-TIE's ingress tie, ``IoTieRequest``, reads the ids from the same chunks through the same layout (`ids`, beside the
+  tie's `positions`). It is one read of one port, not a second commitment of the ids.
+
+**The rows** are three kinds, each zero-padded to whole 16-bit words:
+- ``pub``: each step's token count N, the binding map's element count;
+- ``srv``: the window's served-rows row;
+- ``pos_<u>_<j>``: step u's positions chunks, each a leaf of the step's tree.
+
+The verifier checks ``srv``'s b‖c against the served-rows registration (`served_rows.leaf_ok`), and each chunk's b‖c
+against its leaf at its public index (`chunk_ok`), then the tree's root through the step root to the run root. No gate
+hashes them.
+
+**The circuit.** Per step, the slots cover the step's tokens in batch order: slot k's run is [lo_k, lo_k + n_k), with lo_k
+the sum of the earlier valid slots' n. The verdict's bits:
+- ``count``: every step's runs end at its N;
+- ``pos``: each token t < N lies in a run, and its committed position is start_k + (t − lo_k), with the position's high
+  bits zero.
+
+``ACCEPT`` is 0x3. Tokens from N on are padding and unread. The request ids aren't the positions' to show.
+``IoTieRequest`` holds a prefill slot's ids, at its tokens, to its certified request's prompt ids at those positions, and
+the egress tie holds a decode slot's input to the request's last sample.
+
+**Selection: every unit is proved,** as a transfer-gate unit is. The tie is a binding, not a check on work. A step left
+untied makes that step's served rows the prover's word, and one such step can lower a window's charge (the six passes
+are one). The charge feeds the network verdict, an AND over every window with no ε, so a tie sampled at ε would leave
+each untied step's charge free with probability 1 − ε.
+
+**The cost** at the slice's class (R 2, P 7, L 4096, T 256, i64 ids and positions): 193,156 ANDs, pinned by
+circuit-check. It is about P·T·(29·R + 8·PB − W) ANDs, where W = max(LW, TW + bitlen R) + 2: one comparison of a token
+against each slot's run, and the position's high bits. At a served class (T 8192, R 256), the slot-by-token term is
+about 6 × 10^7 a step. A routed form (the slots' runs routed to their tokens, as `IoTieRoute` routes the port's entries)
+is the served class's.
+
+**What is public:** N, as the Commit's binding map and leaf counts publish it today, and the chunks' indices, which are
+the port's fixed layout.
+
+**The six passes through the tie.** The prover registers the six-pass rows consistently: their digest is the
+registered one, so the slice accepts them at 0x1F. The batch the server ran admitted user-1 at step 6, 29 prefill
+tokens beside user-0's decode, and their positions are committed. The cheap rows end step 6 at 1 token of its 30 and
+leave 29 uncovered, so ``count`` and ``pos`` both refuse (0x0).
 
 ## The active certifier (`active`)
 
@@ -2333,6 +2385,17 @@ and seven lemmas, and three more proved lemmas:
     refused at ``rows``, under the Commit's salt or another;
   - a row's b‖c is its leaf's only at its index and its run root, and the cheap rows' b‖c isn't;
   - the record holds no row or salt, and a row wider than its field, over R or of an unknown request is refused;
+- **`test_network_certifier_served_tie.py`:** the served rows' tie on the same window:
+  - the honest rows against the honest batch's positions are accepted;
+  - REDTEAM's six passes, accepted by the slice under their own registered digest, are refused against the batch the
+    server ran (``count`` and ``pos``);
+  - a start one on, a run cut short, two slots swapped and a run one too long are each refused by exactly the checks
+    `check` names, padding past N is unread, a position's high bit is refused, and on random edits the circuit's
+    verdict is `check`'s;
+  - the port's shared read gives back the ids and the positions;
+  - a positions chunk, committed as a proof commits a row, has its leaf's b‖c and is held to the step tree's root at
+    its index only;
+  - the unit's size is circuit-check's pin;
 - **`test_network_certifier_active.py`:** the active certifier over localhost sockets on an injected clock:
   - `Shaper` is `run_shaper`'s rule on random instances;
   - an honest run's records, hand times and wire are the Program's, accepted raw and committed;

@@ -73,6 +73,11 @@ A spec-level reference for network accounting's timing channel:
   draw under the run root (each window's salted digest and an hm96 row registration). The verifier's ``pub`` for the
   slice is the declared charge and the published digest (`served_rows.pub`), never the prover's words, and `leaf_ok`
   holds a committed row's b‖c to its registered leaf. It takes the advice registration's hm96 rows from `verity`;
+- the served rows' tie (`served_tie`): `ServedRowsTie_v1`, a Boolean Definition with `check` its reference, holds a
+  window's served rows to the positions its steps' Commit holds (the step-input port, `port_chunks`: each step's ids and
+  then its positions at the head of its stream), so the rows registered at serve time are the batch the server ran. Every
+  unit is proved (`PROTOCOL.md`, "The served rows' tie"). It takes the circuits, their evaluator and the hm96 leaves from
+  `verity`;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
   buckets before;
 - the prefix cache (`cache_step`): `CacheStep_v1`, a Boolean Definition of one scheduled row's pass over a table of
