@@ -77,7 +77,8 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    `split_rows`): a part ``in0``, ``in1``, ``in2`` (the head's q_nope and q_rope, the split's kv
                                    rows) -> ``o0``, ``o1`` (the twin's partial and lse); a combine ``in0.<s>``, ``in1.<s>`` (wired
                                    to split s's part's ``o1`` and ``o0``) -> ``o0`` (the served head); always chunked, v2 bit
-                                   rows, MUFU reads in lookup slots (`chunk_rows.reads`); one index entry per row
+                                   rows, a whole-block part's MUFU reads in lookup slots (`chunk_rows.reads`); one index
+                                   entry per row
   ``MoeSum_v1{H=w,..}``, ``AllReduceMnnvl_v1{N=w,..}``  every block j of w columns of the rows of that Definition W wide, W / w
                                    a power of two (``COLS``): ``in<g>`` per argument group, each of its rows' columns [jw, jw + w)
                                    in order -> ``out.<member>``, the row's output columns [jw, jw + w); one index entry per row;

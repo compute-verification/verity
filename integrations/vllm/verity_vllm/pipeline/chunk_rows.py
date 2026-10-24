@@ -28,10 +28,17 @@ def fields(tp: Any) -> list[Any]:
 
 
 def reads(tp: Any) -> str:
-    """How `UnitStager` lays out chunked template ``tp``'s MUFU table reads: in lookup slots for a ``SPLITS`` part or combine
-    (`read_slots`, each table folded once per statement; inline, an EX2 read is about 1e8 matrix entries, and step 16's
-    64-key part's reads 4.5 times its other nonzeros), else inline."""
-    return "slots" if tp.layout == "split" else "inline"
+    """How `UnitStager` lays out chunked template ``tp``'s MUFU table reads: in lookup slots (`read_slots`, each table folded
+    once per statement) for a ``SPLITS`` part of at least one whole block (T >= BN: inline, step 16's 64-key part's reads are
+    4.5 times its other nonzeros, a 322 GB build against 75.6 GB in slots), else inline, as step 16's 16-key part and
+    five-split combine were proved (in slots the combine's build passes 60 GB, against 68 GB inline)."""
+    from verity_vllm.pipeline import split_rows as SP
+    from verity_vllm.query.program_view import spec_statics
+
+    if tp.layout != "split" or SP.combine(tp):
+        return "inline"
+    S = spec_statics(tp.word)
+    return "slots" if int(S["T"]) >= int(S["BN"]) else "inline"
 
 
 def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tuple[str, tuple[int, ...]]]]:
