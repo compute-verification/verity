@@ -502,7 +502,7 @@ class Run:
     clock moves one tick an event unless a call needs more. Every receipt is drawn unless `samples` says fewer."""
 
     def __init__(self, world: World = World(), *, windows: int = 2, samples: int = 10**6, min_passes: int = 1,
-                 lifetime: int = audit.LIFETIME, deferred: bool = False, deadline_ns: int = 100, window_ns: int = 10,
+                 lifetime: int | None = None, deferred: bool = False, deadline_ns: int = 100, window_ns: int = 10,
                  not_before_ns: int = 0, cheat: Callable[[audit.Store], audit.Store] | None = None,
                  pace: audit.Pace | None = None) -> None:
         self.store = store(world)

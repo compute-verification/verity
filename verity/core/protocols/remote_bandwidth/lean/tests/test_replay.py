@@ -238,7 +238,7 @@ def test_case_of_keeps_the_recorded_parameters_and_clock() -> None:
     assert case["params"] == {
         "deadline_ns": s["allowance_ns"], "deferred": False, "lifetime": s["record"]["public"]["lifetime"],
         "min_passes": 1, "pace": None, "samples": s["samples"], "window_ns": s["window_ns"], "windows": s["windows"]}
-    assert s["record"]["public"]["lifetime"] == audit.LIFETIME
+    assert s["record"]["public"]["lifetime"] == s["lifetime"] == audit.lifetime_windows(s["window_ns"])
     receives = [e for e in case["events"] if e["kind"] == "receive"]
     assert [e["now"] for e in receives] == [x for w in s["windows_seen"] for x in w["arrivals_ns"]]
     assert [e["step"] for e in receives] == [x for w in s["record"]["profile"]["windows"] for x in w["steps"]]
