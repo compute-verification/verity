@@ -14,9 +14,11 @@ and counters zero again), and the last copy's after the timing's replays; the se
 (`dequantize(int_mm(...))`) bit for bit.  Writes sweep.jsonl and best.json ({"n,k": [m, best, us, served, us,
 scaled_mm us]}, and the step's sum over 32 layers each way: what $DITHER_MM_CFG would take).  --block Q/D times every
 item with the SMs whose %smid % D < Q held (`Blocker`: the SMs $DITHER_SO_UNITS_SMQ=Q/D gives a step's units, which
-hold them through most of the next forward), so the configs are ranked on the SMs a served forward gets.
+hold them through most of the next forward), so the configs are ranked on the SMs a served forward gets.  --grid
+prefill starts from `prefill_grid` (prefill's M = T = 2048: 64- and 128-row tiles), and --groups G,.. adds a phase after
+refine: the best `top` at each tile group G (dither_a's ":gG", `_tile`), so a config's text may end in ":gG".
 
-    python dmmsweep.py --out OUT [--m 32] [--t 64] [--top 3] [--reps 9] [--block Q/D]
+    python dmmsweep.py --out OUT [--m 32] [--t 64] [--top 3] [--reps 9] [--block Q/D] [--grid prefill] [--groups 1,8]
 """
 from __future__ import annotations
 
@@ -128,11 +130,39 @@ def coarse_grid() -> list[X.Cfg]:
     return grid + [X.Cfg(32, bn, bk, 4, 3, 1, t) for bn in (32, 64, 128) for bk in (128, 256) for t in (1, 2)]
 
 
+def prefill_grid() -> list[X.Cfg]:
+    """64- and 128-row tiles at 3 stages whose A and B stages fit 99 KiB of shared memory, 8 warps past 128 x 128."""
+    return [X.Cfg(bm, bn, bk, 8 if bm * bn > 128 * 128 else 4, 3, 1, t) for bm in (64, 128) for bn in (64, 128, 256)
+            for bk in (64, 128, 256) for t in (0, 1, 2) if 3 * (bm + bn) * bk <= 99 * 1024]
+
+
+class GCfg(X.Cfg):
+    """An exactlin Cfg and its tile group g (dither_a's ":gG"); equal tuples of other groups are other configs, so
+    lists of them are deduplicated by text (`uniq`)."""
+
+    def __new__(cls, *a, g: int = 1):
+        self = super().__new__(cls, *a)
+        self.g = g
+        return self
+
+    @classmethod
+    def parse(cls, text: str) -> GCfg:
+        return cls(*X.Cfg.parse(text), g=DA.mm_group(text))
+
+    def __str__(self) -> str:
+        return super().__str__() + (f":g{self.g}" if self.g > 1 else "")
+
+
+def uniq(cfgs) -> list:
+    return list({str(c): c for c in cfgs}.values())
+
+
 def gemm(cfg: X.Cfg, xq, sa, w, sw, y, zy, S, T: int, work) -> None:
     """dither_a's `gemm` for one call at `cfg` (ZL 2, no dump: flags 0)."""
     M, k = xq.shape
     n = w.shape[0]
     bm, bn, bk, warps, stages, split, tma = cfg
+    group = getattr(cfg, "g", 1)
     z, yl = zy.view(torch.int32), zy.view(torch.int16)
     tiles = triton.cdiv(T, bm) * triton.cdiv(n, bn)
     if tma:
@@ -140,7 +170,7 @@ def gemm(cfg: X.Cfg, xq, sa, w, sw, y, zy, S, T: int, work) -> None:
         a_desc, b_desc = TensorDescriptor.from_tensor(xq, [bm, bk]), TensorDescriptor.from_tensor(w, [bn, bk])
         DA.dithera_mm_tma[(tiles,)](a_desc, b_desc, sa, sw, y, z, yl, y, S, M, n, k, T, y.stride(0), BLOCK_M=bm,
                                     BLOCK_N=bn, BLOCK_K=bk, WARP_SPECIALIZE=tma == 2, ZL=2, UR=UR, UC=UC,
-                                    num_warps=warps, num_stages=stages, **X.OPTS)
+                                    GROUP_M=group, num_warps=warps, num_stages=stages, **X.OPTS)
         return
     if split > 1:
         assert M * n <= work.ws.numel() and tiles <= work.cnt.numel(), (M, n, tiles)
@@ -149,7 +179,7 @@ def gemm(cfg: X.Cfg, xq, sa, w, sw, y, zy, S, T: int, work) -> None:
         ws, cnt = y, y
     DA.dithera_mm[(tiles, split)](xq, w, sa, sw, y, z, yl, y, S, ws, cnt, M, n, k, T, xq.stride(0), w.stride(0),
                                   y.stride(0), BLOCK_M=bm, BLOCK_N=bn, BLOCK_K=bk, SPLIT_K=split, ZL=2, UR=UR, UC=UC,
-                                  num_warps=warps, num_stages=stages, **X.OPTS)
+                                  GROUP_M=group, num_warps=warps, num_stages=stages, **X.OPTS)
 
 
 class Shape:
@@ -252,7 +282,7 @@ def mmax_of(n: int, k: int, m: int) -> int | None:
 
 def best(med: dict, top: int, skip=()) -> list[X.Cfg]:
     ranked = sorted(((c, u) for c, u in med.items() if c not in skip), key=lambda cu: cu[1])
-    return [X.Cfg.parse(c) for c, _ in ranked[:top]]
+    return [GCfg.parse(c) for c, _ in ranked[:top]]
 
 
 def main() -> int:
@@ -264,6 +294,8 @@ def main() -> int:
     ap.add_argument("--reps", type=int, default=9)
     ap.add_argument("--shapes", default=",".join(SHAPES))
     ap.add_argument("--block", default="", help="Q/D: time with the SMs whose %%smid %% D < Q held (`Blocker`)")
+    ap.add_argument("--grid", choices=("decode", "prefill"), default="decode")
+    ap.add_argument("--groups", default="1", help="G,..: the tile groups the best `top` are timed at after refine")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -275,16 +307,20 @@ def main() -> int:
             ap.error(f"--block {a.block}: Q/D with 0 < Q < D")
         blocker = Blocker(q, d)
     around = blocker.item if blocker else None
+    groups = [int(g) for g in a.groups.split(",")]
     table, step = {}, {"served_us": 0.0, "best_us": 0.0, "scaled_mm_us": 0.0}
     for name in a.shapes.split(","):
         n, k = SHAPES[name]
         shape = Shape(n, k, a.m, a.t)
         if shape.served_y_diff:
             raise SystemExit(f"{name}: the served config's y differs from int8_exact's in {shape.served_y_diff} places")
-        med = stage(out, shape, coarse_grid(), 3, clock, "coarse", around=around)
+        med = stage(out, shape, coarse_grid() if a.grid == "decode" else prefill_grid(), 3, clock, "coarse", around=around)
         refine = [X.Cfg(*c[:3], w, st, *c[5:]) for c in best(med, a.top) for w in WARPS for st in STAGES]
-        med = stage(out, shape, list(dict.fromkeys(refine)), 3, clock, "refine", around=around)
-        final = list(dict.fromkeys(best(med, a.top) + [shape.served]))
+        med = stage(out, shape, uniq(refine), 3, clock, "refine", around=around)
+        if groups != [1]:
+            grouped = [GCfg(*c, g=g) for c in best(med, a.top) for g in groups]
+            med = stage(out, shape, uniq(grouped), 3, clock, "group", around=around)
+        final = uniq(best(med, a.top) + [shape.served])
         med = stage(out, shape, final, a.reps, clock, "final", {"scaled_mm": shape.scaled_mm()}, around)
         win = best(med, 1, skip=("scaled_mm",))[0]
         row = [a.m, str(win), med[str(win)], str(shape.served), med.get(str(shape.served)), med.get("scaled_mm")]

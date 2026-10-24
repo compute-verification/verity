@@ -121,7 +121,9 @@ Arms:
     ARM-kcb      a dither-a-hbc arm on a second h1u_kc build ($HB_H1U_KC_B, e.g. hb_served.sh's HB_KC_FLAGS_B), timed beside
                  ARM on $HB_H1U_KC's
     ARM-cgp      a dither-a-so arm serving at priority (DITHER_SO_PRIO=1) with vLLM's graphs captured at it too
-                 (DITHER_SO_CAPTURE_PRIO=1, `dither_so.capture_at`)
+                 (DITHER_SO_CAPTURE_PRIO=1, `dither_so.capture_at`).  Under SMQ units it keeps every step in the fast
+                 regime: without it, a step whose units drain before the next dispatch lets them refill their SMs ahead
+                 of lm_head, which then runs on the forward's SMs alone (2.9 ms, not 0.7) and the next steps stay slow
     ARM-mc32     a dither arm whose worker has 32 hardware queues (CUDA_DEVICE_MAX_CONNECTIONS=32, set before its engine
                  makes the CUDA context)
     ARM-skip, ARM-rd0  a dither-a-so J10-R arm whose dead row blocks are the zero receipt (DITHER_UNITS_SKIP_DEAD=1), or
@@ -130,6 +132,11 @@ Arms:
     ARM-ug0      a dither-a-so arm whose units are launched each step, not replayed as a CUDA graph (DITHER_SO_GRAPH=0)
     ARM-zs       a dither-a-so arm whose z tables build on a tree stream beside its A tables (DITHER_SO_ZSIDE=1)
     ARM-mmc      a dither-a arm whose GEMMs take $SBENCH_MM_CFG's configs ($DITHER_MM_CFG, dmmsweep.py's best.json)
+    ARM-mmq      a dither-a-so arm whose GEMMs take the configs tuned at its own SMQ (MM_CFGS at $DITHER_SO_UNITS_SMQ's
+                 Q/D, however its suffixes or SBENCH_ARM_ENV set it), refused at an SMQ MM_CFGS has none for.  J10-R
+                 at 47/64: dither-a-hbc-zy-aomn-pt-so8-wea-rd0-smq47o64-mmq with DITHER_SO_UNITS=j10r and HB_KC_FLAGS
+                 ending -DH1U_JCTA=1 -DH1U_WARPS=4 (sbench.sh's dither-a-hbc build); at 45/64 under ARM-cgp:
+                 dither-a-hbc-zy-aomn-pt-so8-wea-rd0-smq45o64-cgp-mmq, the same build
 
 `gate` (--gate, before the reps): exact and dither each generate GATE_TOKENS tokens for the 32 requests; dither's window
 checks one B32 decode step (`dither_fused.check`, its transcript buffers 0xA5 before the kernels wrote them) and refuses
@@ -354,12 +361,38 @@ def mm_cfg() -> None:
     os.environ["DITHER_MM_CFG"] = os.environ["SBENCH_MM_CFG"]
 
 
+# ARM-mmq's $DITHER_MM_CFG by the units' "Q/D" ($DITHER_SO_UNITS_SMQ's): dmmsweep.py --block Q/D's best.json
+# dither_mm_cfg, the m=64 entries the 11/16 sweep's.  The forward's GEMMs run on the SMs the units leave them, so a config
+# holds at the SMQ it was tuned at alone (at 47/64, 11/16's configs cost 1.7 ms a step).  45/64 takes 47/64's: dmmsweep
+# --block 45/64's own best, timed with the units beside it, slowed both the forward and the units (18.25 ms, not 16.8)
+MM_CFGS = {"47/64": "6144,4096,32=32x32x128:w4:s3:k1+4096,4096,32=32x32x256:w4:s3:k1:t1+28672,4096,32=32x64x128:w4:s2:k1"
+                    "+4096,14336,32=32x32x256:w4:s3:k1+4096,4096,64=32x64x256:w8:s4:k3+4096,14336,64=32x64x512:w8:s3:k3"}
+MM_CFGS["45/64"] = MM_CFGS["47/64"]
+MMQ = {"on": False}
+
+
+def mm_smq() -> None:
+    MMQ["on"] = True
+
+
+def smq_mm_cfg() -> None:
+    """An ARM-mmq arm's $DITHER_MM_CFG, MM_CFGS' at its SMQ, once its suffixes and SBENCH_ARM_ENV have set that."""
+    if not MMQ["on"]:
+        return
+    q, _, rest = os.environ.get("DITHER_SO_UNITS_SMQ", "").partition("/")
+    smq = f"{q}/{rest.partition('/')[0] or 8}" if q and q != "0" else "every SM"
+    if smq not in MM_CFGS:
+        raise ValueError(f"an ARM-mmq arm has no MM_CFGS entry at its SMQ ({smq}): tune one with dmmsweep.py --block Q/D "
+                         f"at that SMQ and add its best.json's dither_mm_cfg to sbench.MM_CFGS")
+    os.environ["DITHER_MM_CFG"] = MM_CFGS[smq]
+
+
 SUFFIXES = {"-xl": install_exactlin, "-a2": a_form(2), "-a3": a_form(3), "-j10r": env_of("DITHER_SO_UNITS", "j10r"),
             "-kcb": kc_b, "-zy1": env_of("DITHER_ZY1_KC", "1"), "-cgp": env_of("DITHER_SO_CAPTURE_PRIO", "1"),
             "-mc32": env_of("CUDA_DEVICE_MAX_CONNECTIONS", "32"), "-skip": env_of("DITHER_UNITS_SKIP_DEAD", "1"),
             "-rd0": env_of("DITHER_SO_RDEAD", "0"), "-lag1": env_of("DITHER_SO_ROOT_LAG", "1"),
             "-lag2": env_of("DITHER_SO_ROOT_LAG", "2"), "-ug0": env_of("DITHER_SO_GRAPH", "0"),
-            "-zs": env_of("DITHER_SO_ZSIDE", "1"), "-mmc": mm_cfg}
+            "-zs": env_of("DITHER_SO_ZSIDE", "1"), "-mmc": mm_cfg, "-mmq": mm_smq}
 # -smqQ / -smqQoD / -smqQoDcC: a dither-a-so arm's units on the SMs whose id % D < Q, at most C CTAs on each
 # ($DITHER_SO_UNITS_SMQ=Q/D/C, D 8 and no cap without them; -smq0 every SM, whatever the run's environment says)
 SMQ_SUFFIX = re.compile(r"-smq(\d+)(?:o(\d+))?(?:c(\d+))?$")
@@ -395,6 +428,7 @@ def build(arm: str, scratch: Path, gpu_mem: float):
     if s:
         suffix_env(s)()
         return build(arm[:-len(s)], scratch, gpu_mem)
+    smq_mm_cfg()
     if arm in DISABLED:
         os.environ["VLLM_DISABLED_KERNELS"] = DISABLED[arm]
     if arm == "stock-cutlass":
@@ -560,9 +594,9 @@ TOKENS_GATED = {"dither-1s": False, "dither-1s-credit": False, "dither-1s-warp":
 # names start with one are pinned (exact,dither: the arms held to exact's tokens), the rest keep their timed picks
 PICK_ENV = "SBENCH_PICK"
 PICK_ARMS_ENV = "SBENCH_PICK_ARMS"
-# SBENCH_SMQ_SWEEP=V[,V]: after the gate, each dither-a-so arm's decode TPOT and phases at each units SM share V (q,
-# q/den or q/den/cap, 0 every SM; `dither_so.SoSide.set_units_smq`), in one engine, then back to its own share for the
-# reps: a screen (smq_sweep.json), never a row
+# SBENCH_SMQ_SWEEP=V[,V]: after the gate, each dither-a-so arm's decode TPOT (--prefill: its prefill op's step) and
+# phases at each units SM share V (q, q/den or q/den/cap, 0 every SM; `dither_so.SoSide.set_units_smq`), in one engine,
+# then back to its own share for the reps: a screen (smq_sweep.json), never a row
 SMQ_SWEEP_ENV = "SBENCH_SMQ_SWEEP"
 
 
@@ -811,14 +845,25 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             rows = []
             for v in cmd["values"]:
                 sd.set_units_smq(*smq_of(v))
-                gen(ps, 8)
-                llm.dither_stats()
-                t1, _ = gen(ps, N1)
-                t2, _ = gen(ps, N2)
-                rows.append({"smq": v, "tpot_b32_ms": round(1e3 * (t2 - t1) / (N2 - N1), 4),
-                             "phases_by_m": llm.dither_stats().get("phases_by_m")})
+                if pf:
+                    # the warm op's, every ring slot's graph captured again at m = T before the prefill op's two
+                    gen(pp[:4], 1)
+                    llm.dither_stats()
+                    t1, _ = gen(pp[:PF[0]], 1)
+                    t2, _ = gen(pp[:PF[1]], 1)
+                    step = {"prefill_step_ms": round(1e3 * (t2 - t1) / (PF[1] - PF[0]), 4)}
+                else:
+                    gen(ps, 8)
+                    llm.dither_stats()
+                    t1, _ = gen(ps, N1)
+                    t2, _ = gen(ps, N2)
+                    step = {"tpot_b32_ms": round(1e3 * (t2 - t1) / (N2 - N1), 4)}
+                rows.append({"smq": v, **step, "phases_by_m": llm.dither_stats().get("phases_by_m")})
             sd.set_units_smq(q0, d0, c0)
-            gen(ps, 8)
+            if pf:
+                gen(pp[:4], 1)
+            else:
+                gen(ps, 8)
             conn.send({"sweep": rows})
         elif cmd["op"] == "sat":
             t, outs = gen(prompts(SAT_REQS), SAT_TOKENS)
@@ -1062,8 +1107,8 @@ def main() -> int:
                 conns[arm].send({"op": "smq_sweep", "values": smq_sweep})
                 sweep[arm] = recv(arm, conns[arm], "smq_sweep")["sweep"]
                 recv(arm, conns[arm], "smq_sweep")
-                print(json.dumps({"smq_sweep": arm, "tpot_b32_ms": {x["smq"]: x["tpot_b32_ms"] for x in sweep[arm]}}),
-                      flush=True)
+                sk = "prefill_step_ms" if a.prefill else "tpot_b32_ms"
+                print(json.dumps({"smq_sweep": arm, sk: {x["smq"]: x[sk] for x in sweep[arm]}}), flush=True)
                 (out / "smq_sweep.json").write_text(json.dumps(sweep, indent=1) + "\n")
         time_at = wait_time_at()
         if time_at:
@@ -1176,7 +1221,8 @@ def main() -> int:
             p["throughput_overhead_pct"] = round(100 * (1 - p["tokens_per_s"] / base["tokens_per_s"]), 3)
     summary["gate_failed"] = [x for x in gate_doc if x not in arms]
     if sweep:
-        summary["smq_sweep"] = {arm: {x["smq"]: x["tpot_b32_ms"] for x in rows} for arm, rows in sweep.items()}
+        sk = "prefill_step_ms" if a.prefill else "tpot_b32_ms"
+        summary["smq_sweep"] = {arm: {x["smq"]: x[sk] for x in rows} for arm, rows in sweep.items()}
     summary["stop"] = {arm: {"error": x.get("error"), "close_error": x.get("close_error"), "fill_steps": x.get("fill_steps"),
                              "end_verdict": (x.get("end") or {}).get("verdict")} for arm, x in stops.items()}
     summary["host_mem_peak_gib"] = mem_peak_gib()
