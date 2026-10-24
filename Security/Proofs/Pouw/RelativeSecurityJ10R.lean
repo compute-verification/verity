@@ -61,14 +61,10 @@ theorem OneSided.splitProdJ {Ar : Type} [CommRing Ar] (φ : Ar →+* ZMod 2) (c 
 theorem jFrame_blind_u (c : DCells n n' B) (g : (Fin 8 → ZMod (2 ^ 32)) → ZMod 2) (l : Fin n') (j : Fin L) :
     XBlind (jFrame c) (fun S => g fun p => bitInd S (.inr (.inr (l, j, p)) : JBits n L B n')) ∧
       YBlind (jFrame c) (fun S => g fun p => bitInd S (.inr (.inr (l, j, p)) : JBits n L B n')) := by
-  refine ⟨fun S S' hS => ?_, fun S S' hS => ?_⟩
-  · congr 1
-    funext p
-    unfold bitInd
+  refine ⟨fun S S' hS => congrArg g (funext fun p => ?_), fun S S' hS => congrArg g (funext fun p => ?_)⟩
+  · unfold bitInd
     rw [if_congr (hS _ fun j' => by simp [jFrame]) rfl rfl]
-  · congr 1
-    funext p
-    unfold bitInd
+  · unfold bitInd
     rw [if_congr (hS _ fun j' => by simp [jFrame]) rfl rfl]
 
 /-- **The call's target is `⟨x, y⟩` plus junk at its cell-block's frame**, mod 2 through any `φ`: segment `t`'s
