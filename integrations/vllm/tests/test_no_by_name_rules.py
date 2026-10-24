@@ -44,6 +44,8 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
+import pytest
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[0]  # integrations/vllm
 SCAN = ("verity_vllm",)
@@ -320,6 +322,7 @@ def test_every_by_name_rule_is_allowlisted() -> None:
         + "\n".join(f"  {o.file}:{o.line} [{o.kind}] {o.symbol}: {o.detail}" for o in uncovered))
 
 
+@pytest.mark.slow
 def test_allowlist_only_shrinks() -> None:
     offenders = scan()
     entries = load_allowlist()

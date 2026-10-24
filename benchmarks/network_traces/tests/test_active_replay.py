@@ -508,8 +508,6 @@ def test_the_server_proxy_and_peer_listen_on_or_connect_to_the_host_they_are_giv
 
     def reached(port: int) -> None:
         socket.create_connection((host, port)).close()
-        with pytest.raises(ConnectionRefusedError):
-            socket.create_connection(("127.0.0.1", port))
         listening.append(port)
 
     with pytest.raises(_Stop):

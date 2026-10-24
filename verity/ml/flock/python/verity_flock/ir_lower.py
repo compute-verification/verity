@@ -493,6 +493,21 @@ def units(target, cut: Callable | None = None, group: int = 1) -> Units:
     return Units(target, in_widths, [width[g] for g in ret_gates], ins, outs, sigs[0], first, arg_gates, ret_gates, K, tail)
 
 
+def whole(target) -> Units:
+    """``target``'s one-call Program as ONE unit: its live gates, every input leaf a port and every output leaf a return, for a
+    template whose gate graph is not identical components (a parse whose fields read different bytes of one body)."""
+    _prog, call = standalone(target)
+    args, rets = list(call.args), list(call.returns)
+    gates = live_gates(call)
+    local = {g.index: k for k, g in enumerate(gates)}
+    port = {a: j for j, a in enumerate(args)}
+    sig = tuple((g.prim.id, tuple(("g", local[o]) if o in local else ("in", port[o]) for o in g.operands)) for g in gates)
+    in_widths = [_leaf_width(target, p) for p in range(len(args))]
+    width = {**dict(zip(args, in_widths)), **{g.index: g.prim.ret.w for g in gates}}
+    return Units(target, in_widths, [width[r] for r in rets], [[("leaf", p) for p in range(len(args))]],
+                 [[("ret", p) for p in range(len(rets))]], sig, gates, args, rets)
+
+
 #: tensor-core k-step primitive -> fp.tc_dot16's (groups, W, F): verity.ml.circuits.silicon.models AMPERE_BF16_M16N8K16 / HOPPER_BF16_WGMMA_K16.
 #: The Ampere step has two ids, the vLLM registry's _v1 and core's _v2 (verity.ml.circuits.ops.prims): one measured total function.
 TC_STEPS = {"AmpereBF16TcDot16_v1": ((8, 8), 25, -132), "AmpereBF16TcDot16_v2": ((8, 8), 25, -132), "HopperBF16WgmmaDot16_v1": ((16,), 26, -133)}

@@ -85,10 +85,12 @@ def colOf (T : Tile) (l t : Nat) : Nat := 2 * (l % T.q) + 2 * T.q * (t / 2) + t 
 private def pow2 (n : Nat) : Bool := n != 0 && n &&& (n - 1) == 0
 
 /-- `h1zy`'s refusal of a leaf's tile (`_refuse_lane`), and its s8 accumulator's (`gemm._refuse_k`) of a `K` past whole
-32-wide steps or at or past `S8_K_LIMIT = 2^17`, from which a step can clamp and `z` is not the exact dot: `R / 4` and
-`C / 8` powers of two, at least 2 lanes and at most `2^16`. -/
+32-wide steps or at or past `S8_K_LIMIT = 2^17`, from which a step can clamp and `z` is not the exact dot: `K` at least
+64 (`KS ≥ 2`, a digit word, as `h1tile`'s scheme asks), `R / 4` and `C / 8` powers of two, at least 2 lanes and at most
+`2^16`. -/
 def check (T : Tile) : Except String Unit := do
   if T.k % 32 != 0 then throw s!"K = {T.k} is not a multiple of the 32-wide step"
+  if T.k < 64 then throw s!"K = {T.k} is under 64: H1's lanes need KS = K / 32 >= 2 (a digit word)"
   if 2 ^ 17 ≤ T.k then throw s!"K = {T.k} is at or past 2^17, from which the s8 accumulator can clamp"
   if T.r % 4 != 0 || T.c % 8 != 0 || T.lanes < 2 || !pow2 T.g || !pow2 T.q || T.lanes > 2 ^ 16 then
     throw s!"a leaf's lanes are a public index of whole bits: R / 4 and C / 8 powers of two, at least two lanes and at \
