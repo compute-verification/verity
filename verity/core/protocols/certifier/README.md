@@ -69,6 +69,14 @@ A spec-level reference for network accounting's timing channel:
   whole cached units, which checks the row's hit (the longest cached prefix while no block can have been evicted, a
   cached prefix past that) and owns or appends the units the row computes (`PROTOCOL.md`, "Advice v1"). It takes the
   circuits and their evaluator from `verity`;
+- advice v1's arithmetic encoder (`arith_encode`): `ArithEncodeStep_v1{K, BIN}`, `ArithEncodeFinish_v1` and
+  `KTContext_v1{C, NW}`, Boolean Definitions with `reference_step`, `reference_finish` and `reference_kt` their specs.
+  They run ENC-CODE's 32-bit coder forward one symbol at a time, checking each output bit against a segment in the
+  decoder's order, and return the bits it takes: a window's total is its charge, at most its declared c_w, and no
+  codeword is committed. The context and the frequencies are the circuit's, from the replay's position and the
+  registered book's counts, never witness. It is held symbol for symbol to `code.py` and `code_v1` on advice v1's
+  windows and on ENC-DERIVED's still-sent fields (`benchmarks/network_e2e/encodings/arith_vectors.py`), and it is in no
+  proof-service Spec yet (`PROTOCOL.md`, "Advice v1"). It takes the circuits and their evaluator from `verity`;
 - the active warden (`warden`): a relay that knows bytes only, between any client and any server. It forwards each
   direction's bytes unchanged, in B-byte cells, r a bucket each way per connection, and egress cell i goes out in
   bucket s + D + ⌊i/r⌋ from its admission s. A miss fails the connection closed with a `FAIL` cell that carries no
