@@ -16,7 +16,7 @@
 # The serve dir D (row dirs, bundles) stays on the node under `research keep`; $OUT keeps the records and logs.
 set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
-PORT=${PORT:-18084} UNTIL=${UNTIL:-13:30} BURSTS=${BURSTS:-8} PER_BURST=${PER_BURST:-4} CAP=${CAP:-8388608}
+PORT=${PORT:-18084} UNTIL=${UNTIL:-13:30} ADMIT=${ADMIT:-arrival} BURSTS=${BURSTS:-8} PER_BURST=${PER_BURST:-4} CAP=${CAP:-8388608}
 REPO=unsloth/Llama-3.2-1B REV=9535bd9b1d1dea6acafbdc4813b728796aeb28da
 ROW=${ROW:-/workspace/research/vllm-llama1b-commit/r20261024-055630-5377/llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager}
 HIDDEN_SO=${HIDDEN_SO:-/workspace/cp/fa2/build/matReqG/verity_fa2_matReqG.so} NORM_TAP_SO=${NORM_TAP_SO:-/workspace/cp/norm_tap/build/verity_norm_tap.so}
@@ -48,7 +48,7 @@ fi
 
 vv serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" --precision pin --run-id "${RESEARCH_RUN_ID:-local}" \
   --scheme rows-sha512 --seal --gpu-tree --window-steps 256 --required-manifest "$ROW/manifest.json" --hidden-so "$HIDDEN_SO" \
-  --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 > "$OUT/serve.log" 2>&1 &
+  --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 --admit "$ADMIT" > "$OUT/serve.log" 2>&1 &
 SRV=$!
 echo "$SRV" > "$D/serve.pid"
 for _ in $(seq 1 600); do
@@ -86,6 +86,40 @@ EOF
 }
 ( while kill -0 "$SRV" 2>/dev/null; do advice_pass; sleep 10; done; advice_pass ) &
 ADV=$!
+
+if [ "$ADMIT" = release-order ]; then   # releases 1 then 0 of a fresh warden run, a second apart: 0 must reach the engine first
+  "$PY" - "$PORT" "$REPO" "$D" <<'EOF2' 2>&1 | tee "$OUT/admit_smoke.txt"
+import json, sys, threading, time, urllib.request, uuid
+from pathlib import Path
+port, model, d = sys.argv[1], sys.argv[2], Path(sys.argv[3])
+run = uuid.uuid4().hex[:16]
+sent = {}
+def post(n):
+    body = {"model": model, "user": f"admit-smoke-{n}", "prompt": [128000] + list(range(2000 + 50 * n, 2040 + 50 * n)),
+            "max_tokens": 8, "temperature": 0, "top_p": 1.0, "return_token_ids": True}
+    rq = urllib.request.Request(f"http://127.0.0.1:{port}/v1/completions", json.dumps(body).encode(),
+                                {"content-type": "application/json", "x-verity-release": str(n), "x-verity-release-run": run})
+    sent[n] = time.time()
+    with urllib.request.urlopen(rq, timeout=120) as r:
+        r.read()
+t1 = threading.Thread(target=post, args=(1,)); t1.start(); time.sleep(1.0)
+t0 = threading.Thread(target=post, args=(0,)); t0.start(); t0.join(); t1.join()
+recs = {}
+for _ in range(120):
+    recs = {r["user"]: r for r in map(json.loads, (d / "requests.jsonl").read_text().splitlines()) if r.get("user", "").startswith("admit-smoke-")} \
+        if (d / "requests.jsonl").exists() else {}
+    if len(recs) == 2:
+        break
+    time.sleep(1)
+a, b = recs.get("admit-smoke-0", {}), recs.get("admit-smoke-1", {})
+ok = bool(a and b) and sent[1] < sent[0] and a["admitted"] < b["admitted"]
+print(json.dumps({"run": run, "http_sent": {"release 1": sent[1], "release 0": sent[0]},
+                  "release 0": {k: a.get(k) for k in ("release", "admitted", "arrival", "windows")},
+                  "release 1": {k: b.get(k) for k in ("release", "admitted", "arrival", "windows")}, "reordered": ok}))
+sys.exit(0 if ok else 1)
+EOF2
+  [ "${PIPESTATUS[0]}" = 0 ] || { echo "ADMIT SMOKE FAILED"; kill -TERM "$SRV"; wait "$SRV"; exit 12; }
+fi
 
 "$PY" tools/serve_load.py --port "$PORT" --model "$REPO" --bursts "$BURSTS" --per-burst "$PER_BURST" --out "$D/load.jsonl" \
   2>&1 | tee "$OUT/load.log"
@@ -159,7 +193,7 @@ EOF
 done
 echo "READY $D" | tee -a "$OUT/steps.txt"
 
-end=$(date -u -d "today $UNTIL" +%s)
+end=$(date -u -d "today $UNTIL" +%s); [ "$end" -lt "$(date -u +%s)" ] && end=$((end + 86400))   # UNTIL past midnight
 while [ "$(date -u +%s)" -lt "$end" ] && [ ! -e "$D/stop" ] && kill -0 "$SRV" 2>/dev/null; do sleep 30; done
 kill -TERM "$SRV" 2>/dev/null; wait "$SRV"; rc=$?
 wait "$ADV"
