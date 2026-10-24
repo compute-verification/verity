@@ -128,7 +128,7 @@ def credit(d: dict, statements, files=None):
 
 
 def _credited(d: dict) -> list[int]:
-    return [i for i, row in enumerate(d["calls"]) if row[Cr.CREDIT]]
+    return [i for i, row in enumerate(d["calls"]) if row[Cr.CREDIT] and row[Cr.SERVED_ROWS] > 0]
 
 
 @pytest.mark.parametrize("seed", SEEDS)

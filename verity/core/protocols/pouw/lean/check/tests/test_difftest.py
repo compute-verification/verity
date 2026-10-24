@@ -322,7 +322,8 @@ def test_credit(pass_server):
     code zeroed) are not the ones its period's open signed, a period whose open signs no weights' root or names no
     model `models.json` pins (none, malformed, another checkpoint, another role), a call's A table or a round's
     input-ids table other than the served Commit's or a Commit record the draw root doesn't bind, round 0's input-ids
-    table outside round 0's request table or bound to another session, and every other
+    table outside round 0's request table or bound to another session, a call's served rows m_s past the A slot M,
+    other than its step's or malformed (an honest window's empty step credits none of its calls), and every other
     refusal of `credit.window`, `credit.period_credit` and the steps they run."""
     CREDITED.clear()
     stats = {p.fn: D.run(p, examples=n, server=pass_server)
@@ -352,6 +353,8 @@ def test_credit(pass_server):
                  "drawn layout: linear ", "drawn layout: the A slot #", "drawn layout: the A blocks of K = #",
                  "drawn layout: a call of lm_head", "drawn draw: the draw coin is not", "drawn draw: the draw's stream",
                  "window manifest: the manifest's # rows", "window outcome: unit # has a proof outcome and was not",
+                 "window manifest: manifest row # states no served rows m_s at most the window's A slot M = #",
+                 "window manifest: call # states # served rows and call # #, both of step #",
                  "period period: period ", "period missing: window #", "period order: window #",
                  "period period: the windows presented run past", "period period: window ", "period window: window #",
                  "period coin: the auditor's ledger is not trusted", "period circuit: window # of period ",
