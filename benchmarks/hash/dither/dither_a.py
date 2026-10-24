@@ -448,9 +448,9 @@ class Side:
                 self.ycmp = torch.zeros(win.L, dtype=torch.int32, device=dev)
                 if self.zy1:
                     # a step no capture reads builds the union without the units' y tables
-                    full, lite, build = win.pre["z"], win.c.union([self.zyset, self.ysset]), win.c.build
-                    win.c.build = lambda st, step, domains=True: build(lite if st is full and win.cap is None else st,
-                                                                       step, domains)
+                    full, lite, zbuild = win.pre["z"], win.c.union([self.zyset, self.ysset]), win.c.build
+                    win.c.build = lambda st, step, domains=True: zbuild(lite if st is full and win.cap is None else st,
+                                                                        step, domains)
             win.before_mid.append(self.y_leaves)
         if unit in ("kh",) + KONE:
             if not h1u:
