@@ -190,12 +190,13 @@ def fits(st: dict, state: RS.State, inp: RS.Inputs, want: RS.Out) -> bool:
 
 
 def window(cases: Sequence[tuple[RS.State, RS.Inputs, RS.Out]], n: int) -> list:
-    """The n consecutive cases with the most events: a preemption counts 4, a cache hit 2, an admission or a stop 1."""
+    """The n consecutive cases with the most events: a preemption counts 4, a cache hit or an async lag step 2, an
+    admission or a stop 1."""
     def score(c) -> int:
         s, i, w = c
         before = {r.id for r in s.running}
-        return (4 * any(r.id in before for r in w.state.waiting) + 2 * any(i.hit) + (w.taken > 0)
-                + (len(w.state.running) < len(s.running) + w.taken))
+        return (4 * any(r.id in before for r in w.state.waiting) + 2 * any(i.hit) + 2 * any(r.fin for r in s.running)
+                + (w.taken > 0) + (len(w.state.running) < len(s.running) + w.taken))
     sc = [score(c) for c in cases]
     if len(cases) <= n:
         return list(cases)

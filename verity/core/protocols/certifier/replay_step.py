@@ -247,6 +247,7 @@ def reference(S, st: State, inp: Inputs) -> Out:
         wait, shift, taken = [as_req(a)], 1, 1
     sched: dict[int, int] = {}
     victims: list[dict] = []
+    preempted = False
     i = 0
     while i < len(run) and budget > 0:
         r = run[i]
@@ -267,6 +268,7 @@ def reference(S, st: State, inp: Inputs) -> Out:
             if back is None:
                 return Out(False)
             free += back
+            preempted = True
             if not v["fin"]:
                 victims.insert(0, {**v, "comp": 0, "pfx": 0})
             if j == i:
@@ -279,7 +281,7 @@ def reference(S, st: State, inp: Inputs) -> Out:
         i += 1
 
     k = 0
-    if not victims:
+    if not preempted:
         def admit(r: dict, c: int, ask: bool) -> int:
             """0: the loop ends here; 1: r is admitted; 2: refused (ok = 0). Reads bit `ask`'s index when asked."""
             nonlocal free, budget, used
