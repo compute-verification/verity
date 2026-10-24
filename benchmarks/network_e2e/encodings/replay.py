@@ -23,11 +23,12 @@ connectors, multimodal, LoRA, structured output, aborts and stop strings) rather
 **The residual advice** is the timing input, coded online inside the replay. A request's visibility matters only at an
 *open* step: one whose waiting loop reached the queue's end with room to admit it. At every other step it would be blocked
 whether it had arrived or not, and when the engine is quiet (nothing running or waiting) the next arrival is what starts
-the next step, so neither costs a bit. At its open steps the request was passed over until it was admitted, so its
-advice is one count: Elias gamma of the open steps it was passed over (`encode(..., clocked=False)`), or, with the
-certifier's buckets as public context (`clocked=True`), that count relative to the first open step whose preceding output
-was released no earlier than the request's ingress bucket (`_Clock`). `decode` replays from the advice, and `table`
-counts the bits per certifier window against I1 v0's fields (`v0_bits`).
+the next step, so neither costs a bit. So the advice is one binary decision per open step, whether the next request had
+arrived (`decisions`): `gamma_values` sends each request's count of open steps passed over as Elias gamma, and `encode`
+codes the decisions with an adaptive binary arithmetic code, its contexts the request's passes so far and, clocked, its
+certified ingress bucket against the release buckets around the step (`_Clock`), one bit string per certifier window.
+`decode` replays from that advice and the certified I/O alone, and `table` counts the bits per certifier window against
+I1 v0's fields (`v0_widths`).
 """
 
 from __future__ import annotations

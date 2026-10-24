@@ -162,7 +162,7 @@ def run(engine: Engine, jobs: Sequence[Job], *, model: str, timing: StepTime = S
                                       arrival_time=job.arrival, block_hasher=hasher))
             recs.append({"kind": "arrive", "request": rid, "before_step": scheduled, "prompt_len": job.prompt_len,
                          "eos_token_id": EOS, "sampling": {"max_tokens": job.max_tokens, "stop": [], "ignore_eos": False},
-                         "t": job.arrival, "ingress_t": job.arrival - job.ingress_delay})
+                         "t": round(job.arrival, 6), "ingress_t": round(job.arrival - job.ingress_delay, 6)})
             nxt += 1
 
     def schedule() -> tuple[Any, dict[str, int | None], int | None]:
@@ -216,7 +216,7 @@ def run(engine: Engine, jobs: Sequence[Job], *, model: str, timing: StepTime = S
                      "resumed": sorted(getattr(cached, "resumed_req_ids", None) or ()),
                      "cache_hit": {r.req_id: int(r.num_computed_tokens) for r in so.scheduled_new_reqs if r.num_computed_tokens},
                      "preempted": sorted(getattr(so, "preempted_req_ids", None) or ()), "emitted": emitted,
-                     "finished": finished, "t": t, "release_t": t + timing.release})
+                     "finished": finished, "t": round(t, 6), "release_t": round(t + timing.release, 6)})
 
     while nxt < len(jobs) or sched.has_requests() or queue:
         if not sched.has_requests() and not queue:
@@ -317,11 +317,12 @@ def main(argv: Sequence[str] | None = None) -> None:
     ap.add_argument("--model", default="facebook/opt-125m")
     ap.add_argument("--case", action="append", choices=sorted(CASES))
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--requests", type=int, help="override each case's request count")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
     for name in a.case or sorted(CASES):
         engine, kw = CASES[name]
-        jobs = workload(seed=a.seed, **kw)
+        jobs = workload(seed=a.seed, **(kw | ({"n": a.requests} if a.requests else {})))
         recs = run(engine, jobs, model=a.model)
         (a.out / f"{name}.jsonl").write_text("".join(json.dumps(r, separators=(",", ":")) + "\n" for r in recs))
         if engine.enable_prefix_caching:
