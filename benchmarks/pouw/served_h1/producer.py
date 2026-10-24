@@ -25,10 +25,10 @@ full, and the receipts keep one row a unit in tile order. It stays off while the
 tile has its noise's receipt, not zero.
 
 `Served` hands a step's calls of one K to `Receipts.prepare` before it asks each of them. With the units kernel, the
-producer computes all of their units in one `kh_units_multi` launch (or launches of ``launch_units``), with one copy of
-their codes to the device and one of their receipts back a launch, on a stream of its own, so a call's ask returns its
-rows with no launch of its own once its launch's copy is done. A call asked without `prepare` is computed on its own, to
-the same words.
+producer computes all of their units in a few `kh_units_multi` launches (``launches``), with one copy of a launch's codes
+to the device and one of its receipts back, each on a stream of its own and beside the launches before and after, so a
+call's ask returns its rows with no launch of its own once its launch's copy is done. A call asked without `prepare` is
+computed on its own, to the same words.
 
 It returns (units, 2 (KS + m)) uint32 (KS = K / 32, m = `segment.n_digits(KS)`: 260 words at K = 4096, 902 at 14336), the
 input of `pouw_h1_served.receipt_words`, which `Served` refuses at any other shape. It takes no coin: the noise is the
@@ -39,6 +39,7 @@ from __future__ import annotations
 import ctypes as C
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Callable
 
@@ -206,14 +207,19 @@ class Receipts:
     (root(A), root(B)), by default `Receipts.roots`. ``keep(call)``: keep that call's operands, roots and receipts in
     ``kept`` (by call index) for a check against `h1tile.reference` (`check`). ``skip_dead``: skip the units of row blocks
     wholly past the served rows (the module docstring), by default ``H1_SKIP_DEAD=1`` in the environment.
-    ``launch_units``: `prepare` launches whole calls of at least that many units at a time, each launch's receipts copied
-    back on a stream of their own while the next computes (by default one launch)."""
+    ``launches``: `prepare` splits a batch into that many launches of whole calls, about equal in units, each one's codes
+    staged by ``stage_threads`` threads and copied to the device while the one before computes, and its receipts copied
+    back while the one after does."""
 
     def __init__(self, served: Any, run: Any = None, units: Units | None = None, device: Any = None,
                  weight: Callable[[Any], torch.Tensor] | None = None,
                  roots: Callable[[Any], tuple[bytes, bytes]] | None = None, keep: Callable[[Any], bool] | None = None,
-                 skip_dead: bool | None = None, launch_units: int | None = None):
-        self.served, self.run, self.units, self.launch_units = served, run, units, launch_units
+                 skip_dead: bool | None = None, launches: int = 4, stage_threads: int = 4):
+        if launches < 1 or stage_threads < 1:
+            raise ValueError(f"a batch takes at least one launch and one staging thread, not {launches} and "
+                             f"{stage_threads}")
+        self.served, self.run, self.units = served, run, units
+        self.launches, self.stage_threads = launches, stage_threads
         self.skip_dead = os.environ.get("H1_SKIP_DEAD") == "1" if skip_dead is None else bool(skip_dead)
         d = torch.device(device if device is not None else ("cuda" if units is not None else "cpu"))
         self.device = torch.device("cuda", torch.cuda.current_device()) if d.type == "cuda" and d.index is None else d
@@ -223,6 +229,8 @@ class Receipts:
         self._records: dict[tuple[bytes, bytes, bytes], torch.Tensor] = {}
         self._ready: dict[int, tuple[Any, np.ndarray, Any]] = {}
         self._copy: Any = None
+        self._up: Any = None
+        self._pool: ThreadPoolExecutor | None = None
         self.kept: dict[int, dict[str, Any]] = {}
 
     def bind(self, run: Any) -> "Receipts":
@@ -297,13 +305,30 @@ class Receipts:
             return None
         return (torch.arange(int(self.served.m) // RC.R, device=self.device) * RC.R < m).to(torch.uint8)
 
+    def _stage(self, hn: np.ndarray, xs: list[np.ndarray], lo: int, hi: int) -> None:
+        """Calls lo .. hi - 1's codes into the pinned rows ``hn``, a run of calls a thread (numpy's copy drops the GIL)."""
+        t = min(self.stage_threads, hi - lo)
+        if t == 1:
+            for i in range(lo, hi):
+                hn[i] = xs[i]
+            return
+        if self._pool is None:
+            self._pool = ThreadPoolExecutor(self.stage_threads, thread_name_prefix="receipts-stage")
+        b = np.linspace(lo, hi, t + 1).astype(int)
+
+        def run(j: int) -> None:
+            for i in range(b[j], b[j + 1]):
+                hn[i] = xs[i]
+
+        list(self._pool.map(run, range(t)))
+
     def prepare(self, batch: list[tuple[Any, Any, Any, Any, Any]]) -> None:
         """`Served`'s hook before it asks a step's calls of one K, ``batch`` their ``(call, codes, s_a, weight codes, s_w)``
-        in the order it asks them: with the units kernel, every unit of them in one launch (`Units.multi`, or launches of
-        ``launch_units``) and their receipts copied to the host on a stream of their own, so each call's ask returns its
-        rows (the same words) with no launch of its own, once its launch's copy is done. Their codes go to the device in
-        one copy a launch. Nothing with the torch chain, or unless every call of the batch serves the same rows at one K:
-        each is then asked on its own."""
+        in the order it asks them: with the units kernel, every unit of them in `launches` launches (`Units.multi`) and
+        their receipts copied to the host on a stream of their own, so each call's ask returns its rows (the same words)
+        with no launch of its own, once its launch's copy is done. A launch's codes are staged in pinned memory by
+        `stage_threads` threads and go to the device in one copy on a stream of their own. Nothing with the torch chain,
+        or unless every call of the batch serves the same rows at one K: each is then asked on its own."""
         self._ready = {}
         if self.units is None or self.run is None or len(batch) < 2:
             return
@@ -320,26 +345,32 @@ class Receipts:
             if (slot // RC.R) * (b.shape[0] // RC.C_) != n:
                 raise ValueError(f"call {call.index}: {n} units in the window Program, not its {slot} × {b.shape[0]} tiles")
         offs = [int(x) for x in np.cumsum([0] + [n for _u0, n in spans])]
-        a = torch.zeros(len(batch), slot, k, dtype=torch.int8, device=self.device)
+        n = min(self.launches, len(batch))
+        cuts = sorted({0, len(batch)} | {int(np.searchsorted(offs, offs[-1] * j / n)) for j in range(1, n)})
+        recs = [self._record(self.run.salt, *self.roots(call)) for call, *_rest in batch]
+        main = torch.cuda.current_stream(self.device)
+        if self._copy is None:
+            self._copy, self._up = torch.cuda.Stream(device=self.device), torch.cuda.Stream(device=self.device)
+        a = (torch.empty if m == slot else torch.zeros)(len(batch), slot, k, dtype=torch.int8, device=self.device)
+        self._up.wait_stream(main)
+        a.record_stream(self._up)
         host = torch.empty(len(batch), m, k, dtype=torch.int8, pin_memory=True) if m else None
-        hn = None if host is None else host.numpy()
         seeds = torch.empty(offs[-1], 16, dtype=torch.int64, device=self.device)
         got = torch.empty(offs[-1], self.units.words(k), dtype=torch.int32, pin_memory=True)
-        words, live, main = got.numpy().view(np.uint32), self._live(m), torch.cuda.current_stream(self.device)
-        if self._copy is None:
-            self._copy = torch.cuda.Stream(device=self.device)
-        ready, lo = {}, 0
-        while lo < len(batch):
-            hi = lo + 1
-            while hi < len(batch) and (not self.launch_units or offs[hi] - offs[lo] < self.launch_units):
-                hi += 1
+        words, live, ready = got.numpy().view(np.uint32), self._live(m), {}
+        for lo, hi in zip(cuts[:-1], cuts[1:]):
             if host is not None:
-                for i in range(lo, hi):
-                    hn[i] = xs[i]
-                a[lo:hi, :m].copy_(host[lo:hi], non_blocking=True)
-            for i in range(lo, hi):
-                self.units.seeds(self._record(self.run.salt, *self.roots(batch[i][0])), spans[i][0], spans[i][1],
-                                 out=seeds[offs[i]:offs[i + 1]])
+                self._stage(host.numpy(), xs, lo, hi)
+                with torch.cuda.stream(self._up):
+                    a[lo:hi, :m].copy_(host[lo:hi], non_blocking=True)
+                main.wait_stream(self._up)
+            i = lo
+            while i < hi:
+                j = i + 1
+                while j < hi and recs[j] is recs[i] and spans[j][0] == spans[j - 1][0] + spans[j - 1][1]:
+                    j += 1
+                self.units.seeds(recs[i], spans[i][0], offs[j] - offs[i], out=seeds[offs[i]:offs[j]])
+                i = j
             out = self.units.multi([(a[i], bs[i], seeds[offs[i]:offs[i + 1]]) for i in range(lo, hi)], live)
             self._copy.wait_stream(main)
             with torch.cuda.stream(self._copy):
@@ -349,7 +380,6 @@ class Receipts:
             copied.record(self._copy)
             for i in range(lo, hi):
                 ready[batch[i][0].index] = (batch[i][1], words[offs[i]:offs[i + 1]], copied)
-            lo = hi
         self._ready = ready
 
     def __call__(self, call: Any, codes: Any, s_a: Any, w: Any, s_w: Any) -> np.ndarray:

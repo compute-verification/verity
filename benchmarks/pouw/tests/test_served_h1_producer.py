@@ -332,10 +332,10 @@ class _AtEach(_At):
 def test_a_steps_calls_of_one_k_in_one_units_kernel_launch_are_each_calls_own_receipts_at_llama_8b_shapes():
     """On the GPU, `prepare` of a step's calls of one K (qkv, o, gate_up and qkv again at K = 4096, down twice at
     K = 14336, each on its own codes, roots and first unit) and then each call's ask give, over steps of 64, 20 and 0
-    served rows with dead tiles computed and skipped, in one launch, a launch a call or launches of 2000 units, every
-    call's receipts as its ask alone gives them, word for word, each ready before its ask and gone after it; and at 20
-    rows `check` holds the first and last unit of each row block of every call to `h1tile.reference` (v1's, and v4's
-    with the skip)."""
+    served rows with dead tiles computed and skipped, in one launch, a launch a call or two launches staged by three
+    threads, every call's receipts as its ask alone gives them, word for word, each ready before its ask and gone after it;
+    and at 20 rows `check` holds the first and last unit of each row block of every call to `h1tile.reference` (v1's,
+    and v4's with the skip)."""
     units = _kernel()
     rng = np.random.default_rng(20261025)
     ws = [torch.from_numpy(rng.integers(-127, 128, (n, k), dtype=np.int8)).cuda() for n, k in LLAMA]
@@ -350,13 +350,13 @@ def test_a_steps_calls_of_one_k_in_one_units_kernel_launch_are_each_calls_own_re
         for m in (64, 20, 0):
             batch = [(c, rng.integers(-127, 128, (m, k), dtype=np.int8), None, None, None) for c in calls]
             for skip in (False, True):
-                def made(keep=None, launch=None, skip=skip, starts=starts):
+                def made(keep=None, launch=(1, 1), skip=skip, starts=starts):
                     return _AtEach(starts, SimpleNamespace(m=64), SimpleNamespace(salt=SALT), units=units,
-                                   weight=lambda x: ws[x.layer], keep=keep, skip_dead=skip, launch_units=launch,
-                                   roots=lambda x: (hashlib.sha512(bytes([x.index])).digest(), RB))
+                                   weight=lambda x: ws[x.layer], keep=keep, skip_dead=skip, launches=launch[0],
+                                   stage_threads=launch[1], roots=lambda x: (hashlib.sha512(bytes([x.index])).digest(), RB))
 
                 want = [made()(*args) for args in batch]
-                for launch in (None, 1, 2000):
+                for launch in ((1, 1), (len(calls), 1), (2, 3)):
                     together = made(keep=lambda c: True, launch=launch)
                     together.prepare(batch)
                     assert sorted(together._ready) == [c.index for c in calls], (k, m, skip, launch)
