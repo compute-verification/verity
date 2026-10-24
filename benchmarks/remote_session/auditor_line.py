@@ -67,6 +67,8 @@ reasons; beside each share of weights held is the same session's share of filler
 tier, `line`'s `filler`), which the line doesn't count as weights. Each form charges the node's rates (`RATES`) and
 their bursts (`rates_at`; `--bursts none` for the reading of gate runs up to 7). What every accepted paced session
 measured, credited or not, is `measured`. `--table` writes each session's five checks and the line as Markdown.
+Each session's `sketch` is its δs at the outside-compute factor F its verifier charged, Q = F·C (`verifier.sketch_at`),
+and `sketch_outside` every F the run's sessions were charged at.
 
 **Error.** Each accepted paced session's line fails, crediting more than the node held, with probability at most its
 `error`'s total (`session_error`): δ, the pooled bound's, plus δs, the sketch's, each exact. The line at each T, and the
@@ -600,7 +602,7 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
         R = coins.window(D, k)["root"]
         row = {"k": k, "accepted": s["accepted"], "failure": s.get("failure"), "pace": s.get("pace"),
                "challenger": c.get("challenger"), "challenger_session": c.get("session"),
-               "verifier_coin_check": c.get("reason")}
+               "verifier_coin_check": c.get("reason"), "sketch": V.sketch_at(s, reg)}
         rows.append(row)
         if c.get("challenger") == "gate":
             row["ledger"] = session_check(s, k, R, windows, periods, period=period, lane=lane, peer=peer, pin=pin)
@@ -651,6 +653,7 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
                                              "of_record": row["of_record"], "credited": row["credit"]["ok"]}
     doc["sessions"], doc["measured"] = rows, measured
     doc["line"], doc["credit"] = credited_line(rows)
+    doc["sketch_outside"] = sorted({r["sketch"]["outside"] for r in rows if r["sketch"]})
     return doc
 
 
