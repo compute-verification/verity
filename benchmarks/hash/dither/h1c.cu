@@ -120,7 +120,13 @@ struct H1Tab {
   u64* level;  // 2 width - 1 digests: level 0, then each level up; the root last
   u64* segs;   // count * nseg digests
   u64* root;   // 8 words
+  // xd non-null: row i of a block whose rlive[i / rbw] is 0 holds the bytes the caller's dead row i % rbw does, so its x
+  // is xd + 8 (i % rbw) and its segments are not hashed (their digests left unwritten); its salt and leaf as any row's
+  const u64* xd;
+  const uint8_t* rlive;
+  int rbw;
 };
+__device__ __forceinline__ bool row_dead(const H1Tab& T, long long i) { return T.xd && !T.rlive[i / T.rbw]; }
 
 // -- SHA-512 over a byte stream ----------------------------------------------------------------------------------------
 struct Hs {
@@ -277,6 +283,7 @@ extern "C" __global__ void h1c_segs(const H1Tab* __restrict__ tabs, int ntab) {
   const long long t = (long long)blockIdx.x * blockDim.x + threadIdx.x;
   if (t >= (long long)T.count * ns) return;
   const long long i = t / ns;
+  if (row_dead(T, i)) return;
   const int j = (int)(t % ns), off = 1024 * j, m = min(1024, T.len - off);
   Hs s;
   hs_init(s);
@@ -308,14 +315,19 @@ extern "C" __global__ void h1c_leaves(const H1Tab* __restrict__ tabs, int ntab, 
     if (!T.data) return;
     const int ns = nseg_of(T.len);
     u64 x[8], y[24], mk[8], c[8], h[8];
-    hs_init(s);
-    hs_bytes(s, HC.qtag, HC.qtag_len);
-    hs_be(s, 8ull * T.len, 8);
-    hs_be(s, (u64)ns, 8);
-    hs_be(s, 1024, 4);
-    hs_zeros(s, 128 - HC.qtag_len - 20);
-    hs_words(s, T.segs + i * ns * 8, 8 * ns);
-    hs_final(s, x);
+    if (row_dead(T, i)) {
+#pragma unroll
+      for (int k = 0; k < 8; ++k) x[k] = T.xd[8 * (i % T.rbw) + k];
+    } else {
+      hs_init(s);
+      hs_bytes(s, HC.qtag, HC.qtag_len);
+      hs_be(s, 8ull * T.len, 8);
+      hs_be(s, (u64)ns, 8);
+      hs_be(s, 1024, 4);
+      hs_zeros(s, 128 - HC.qtag_len - 20);
+      hs_words(s, T.segs + i * ns * 8, 8 * ns);
+      hs_final(s, x);
+    }
     uint8_t d[20];
     int dl = 0;
     if (T.labs) dl = dec((u64)(long long)*step, d);
@@ -834,6 +846,7 @@ extern "C" __global__ void H1C_SEGS_BOUNDS h1c_segs(H1Tab* __restrict__ tabs, in
 #endif
   if (t >= (long long)T.count * ns) return;
   const long long i = t / ns;
+  if (row_dead(T, i)) return;
   const int j = (int)(t % ns), off = 1024 * j, m = min(1024, T.len - off);
   Hb s;
   hb_init(s, bf + threadIdx.x * HB);
@@ -922,6 +935,11 @@ __device__ __forceinline__ void leaf_head(const H1Tab& T, int k, uint8_t* b, u64
   hb_save(s, o);
 }
 __device__ __forceinline__ void leaf_x(const H1Tab& T, long long i, uint8_t* b, u64 x[8], const u64* sn = nullptr) {
+  if (row_dead(T, i)) {
+#pragma unroll
+    for (int k = 0; k < 8; ++k) x[k] = T.xd[8 * (i % T.rbw) + k];
+    return;
+  }
   const int ns = nseg_of(T.len);
   Hb s;
   if (sn) {

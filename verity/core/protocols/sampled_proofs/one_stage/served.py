@@ -15,14 +15,17 @@ verifier's own (`registration.check(..., registered=values, outputs=outputs, sch
 the verifier's
 `--registered` file as one port per circuit port that reads it (`registered.reads_file`: the value, root, leaves, words,
 word_bits, domain, and the row each unit of the population reads, from the verifier's own program and query). Its domain
-is one of two, and no other:
+is one of three, and no other:
 
 * the registered-value domain of `value` in the verifier's own program (`registered.registered_entries`), when serving
   committed the tree as a registered value (`Registered.commit`): under the window's open root R (`window_root`, from
   the challenger's signed open of the window) for a per-window value, and without it for a value held across windows
   (`held`, the weights), so a window-independent program registers each window's values under the same names;
 * an earlier record's port's domain, when the tree is that port (`output`: `(record digest, port)`, #2929's output values):
-  the log's record with that digest names the port, its root and its leaf count, and the tree is that port's.
+  the log's record with that digest names the port, its root and its leaf count, and the tree is that port's;
+* an earlier record's registered value's domain, when the tree is that value (`reused`: `(record digest, value)`): the
+  log's record with that digest registered the value with its root, domain, rows, words and word bits, and the tree is
+  that entry, registered under no domain of its own (H1's `a/<K>@<s>` as a Commit's AROW, say).
 
 Each tree names its row format (`row_schema`, the `--registered` port's key for it, one of `SCHEMAS`): the
 frame-v3-sha512 leaf schema its leaves were hashed under, which must be the format of the circuit port that reads it
@@ -43,8 +46,9 @@ so the positions are a function of the unit index alone, and the layout is proto
 `register_served` refuses (ValueError) a served tree whose value is not a parameter the program reads in whole rows, a
 value twice, a root or domain that is not lowercase hex of 64 bytes, no rows or no leaves to a row, a width other than 16
 or 32, a row format not in `SCHEMAS`, a bit row whose `words * word_bits` bits are no whole number of the parameter's
-leaves or whose rows are not the parameter's, a domain that is neither of the two above, an output whose record or port the log does
-not hold or whose root, domain or rows are not the port's, a root other than the one an earlier record of the log
+leaves or whose rows are not the parameter's, a domain that is none of the three above, an output whose record or port the log does
+not hold or whose root, domain or rows are not the port's, a reused tree whose record or value the log does not hold or
+whose root, domain, rows, words or word bits are not that entry's, a tree that is both an output and reused, a root other than the one an earlier record of the log
 registered under the same domain (R7-held), without `window_root` a tree it doesn't hold that the log registered under
 the same domain (`registration.unwindowed`: a fixed name served again needs the window's root), and a tree no unit of the
 population reads, which no proof would open.
@@ -70,7 +74,8 @@ SCHEMAS = G.SCHEMAS
 class ServedTree:
     """One served tree: the program parameter whose rows it commits (`value`), its root and domain (lowercase hex, 64 bytes
     each), its rows (`leaves`), each `words` leaves of `word_bits` bits, its rows' format (`row_schema`, one of `SCHEMAS`), and,
-    for an earlier run's output, `(record digest, port)`."""
+    for an earlier run's output, `(record digest, port)`, or for an earlier record's registered value it reuses, `reused`:
+    `(record digest, value)`."""
 
     value: str
     root: str
@@ -80,6 +85,7 @@ class ServedTree:
     word_bits: int = G.WORD_BITS
     output: tuple[str, str] | None = None
     row_schema: str = G.SCHEMA
+    reused: tuple[str, str] | None = None
 
     @classmethod
     def of(cls, reg: G.Registered) -> "ServedTree":
@@ -147,10 +153,12 @@ def _check_form(t: Any) -> None:
                          f"{' or '.join(map(str, G.WIDTHS))}")
     if t.row_schema not in SCHEMAS:
         raise ValueError(f"served tree {t.value!r}: rows of {t.row_schema!r}, not one of {SCHEMAS}")
-    o = t.output
-    if o is not None and not (isinstance(o, tuple) and len(o) == 2 and isinstance(o[0], str) and _HEX64.fullmatch(o[0])
-                              and isinstance(o[1], str) and o[1]):
-        raise ValueError(f"served tree {t.value!r}: an output is (record digest, port), not {o!r}")
+    for o, what in ((t.output, "an output is (record digest, port)"), (t.reused, "reused is (record digest, value)")):
+        if o is not None and not (isinstance(o, tuple) and len(o) == 2 and isinstance(o[0], str)
+                                  and _HEX64.fullmatch(o[0]) and isinstance(o[1], str) and o[1]):
+            raise ValueError(f"served tree {t.value!r}: {what}, not {o!r}")
+    if t.output is not None and t.reused is not None:
+        raise ValueError(f"served tree {t.value!r}: an earlier port or an earlier registered value, not both")
 
 
 def register_served(program: Program, query: Mapping[str, Any], served: Sequence[ServedTree],
@@ -158,9 +166,9 @@ def register_served(program: Program, query: Mapping[str, Any], served: Sequence
                     window_root: str | None = None, held: Sequence[str] | None = None) -> ServedRegistration:
     """Register each served tree as a port of the verifier's own `--registered` file, in the module's port form: the record's
     `registered` entries, R7's copies, and the file, from the verifier's own program and query. `log`: this prover's earlier
-    records, which an output tree's `(record digest, port)` names. `ports`: a template parameter's circuit port, where
+    records, which an output tree's `(record digest, port)` and a reused tree's `(record digest, value)` name. `ports`: a template parameter's circuit port, where
     they differ (`registered.reads_file`). `window_root`: the window's open root, which every tree's registered-value
-    domain binds but `held`'s, the values held across windows, and the outputs'. ValueError on anything the module's
+    domain binds but `held`'s, the values held across windows, and the outputs' and reused trees'. ValueError on anything the module's
     docstring refuses."""
     if not served:
         raise ValueError("no served tree: a registration with registered values registers at least one")
@@ -173,7 +181,7 @@ def register_served(program: Program, query: Mapping[str, Any], served: Sequence
         raise ValueError(f"held values are served trees' values: {held!r}")
     values = {t.value: t.words for t in served}
     schemas = {t.value: t.row_schema for t in served if t.row_schema != G.SCHEMA}
-    fixed = [*(held or ()), *(t.value for t in served if t.output is not None)]
+    fixed = [*(held or ()), *(t.value for t in served if t.output is not None or t.reused is not None)]
     mine = G.registered_entries(program, values, schemas, G.window_root(window_root), fixed)
     log = list(log)
     again = R.unwindowed(program, values, schemas, window_root, fixed, log)
@@ -185,6 +193,18 @@ def register_served(program: Program, query: Mapping[str, Any], served: Sequence
         if t.leaves != want["leaves"] or t.word_bits != want["word_bits"]:
             raise ValueError(f"served tree {t.value!r}: {t.leaves} rows of {t.words} {t.word_bits}-bit leaves, and the "
                              f"program's parameter is {want['leaves']} rows of {want['words']} {want['word_bits']}-bit leaves")
+        if t.reused is not None:
+            record, value = t.reused
+            got = R._earlier(log, record, "value", value, want)
+            if got is None:
+                raise ValueError(f"served tree {t.value!r}: the log holds no record {record[:16]}... registering {value!r} "
+                                 f"with {t.leaves} rows of {t.words} {t.word_bits}-bit leaves")
+            if (got["root"], got["domain"]) != (t.root, t.domain):
+                raise ValueError(f"served tree {t.value!r}: root and domain are not value {value!r}'s of record "
+                                 f"{record[:16]}...: {got!r}")
+            outputs[t.value] = {"record": record, "value": value}
+            domains[t.value] = t.domain
+            continue
         if t.output is None:
             if t.domain != want["domain"]:
                 raise ValueError(f"served tree {t.value!r}: domain {t.domain} is not {t.value!r}'s registered-value domain "
