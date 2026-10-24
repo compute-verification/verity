@@ -1,8 +1,9 @@
 """The compiler's verdict on a served run's advice: `predict.steps.compile_steps` (I2) over the advice `verity-vllm advice` wrote,
 its request Programs traced by the Build, and the digests compared.
 
-Reads a run of `tools/advice_run.py`: `advice/advice.bin` (I1), `step_trace.jsonl` (each request's sampling parameters, which
-advice v0 doesn't carry: they come with the request's certified I/O), `requests.jsonl` (engine id to `user`) and `run.json` (the
+Reads a run of `tools/advice_run.py`: `advice/private/advice.bin` (I1, the prover's), `step_trace.jsonl` (each request's
+sampling parameters, which advice v0 doesn't carry: they come with the request's certified I/O; a stand-in, see the TODO in
+`main`), `requests.jsonl` (engine id to `user`) and `run.json` (the
 model pin, the device's target profile, the execution label and the server's default seed).  The registration is φ of that
 model on that target at that execution, without workload.  Writes, under `--out`:
 
@@ -30,7 +31,7 @@ def main() -> int:
     ap.add_argument("run")
     ap.add_argument("--out", required=True)
     ap.add_argument("--max-model-len", type=int, default=2048)
-    ap.add_argument("--advice", default=None, help="the advice (default RUN/advice/advice.bin)")
+    ap.add_argument("--advice", default=None, help="the advice (default RUN/advice/private/advice.bin)")
     ap.add_argument("--partial", action="store_true",
                     help="refuse request by request (a measurement over served traffic) rather than the whole advice")
     a = ap.parse_args()
@@ -44,9 +45,11 @@ def main() -> int:
     from verity_vllm.predict.phi import Phi
     from verity_vllm.predict.steps import Registered, compare, compile_steps, trace_commands
 
-    advice = I1.decode(Path(a.advice or run / "advice" / "advice.bin").read_bytes())
+    advice = I1.decode(Path(a.advice or run / "advice" / "private" / "advice.bin").read_bytes())
     meta = json.loads((run / "run.json").read_text())
     user = {d["request"]: d["user"] for d in map(json.loads, (run / "requests.jsonl").read_text().splitlines()) if d}
+    # TODO: read each request's sampling from the Commit's ingress record (the request's committed ingress values) once
+    # serve-openai records them; the step trace's arrive records stand in tonight
     sampling = {user[r["request"]]: r["sampling"] for r in ST.load(run / "step_trace.jsonl") if r["kind"] == "arrive"}
     requests = [SimpleNamespace(id=q.id, prompt_len=q.prompt_len, output_len=q.output_len, finish=q.finish, sampling=sampling[q.id])
                 for q in advice.requests]
