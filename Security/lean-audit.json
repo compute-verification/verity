@@ -1641,6 +1641,7 @@
   "Proofs.Flock.Claims.Recursion.VStarBound",
   "Proofs.Flock.Claims.Recursion.PartAccepts",
   "Proofs.Flock.Claims.Recursion.RecRecord",
+  "Proofs.Flock.Claims.Recursion.VStarCross",
   "Proofs.Pouw.PearlC.FlockTile",
   "PouwWindow.Lanes",
   "PouwWindow.KnownRows",

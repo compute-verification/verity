@@ -1,15 +1,12 @@
 import Proofs.Flock.RecursiveKS.Statement
-import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Claims.Witnesses.RecursionMeets
 
 /-!
 # The proof of the recursion's knowledge soundness at the compiled V\*
 
-* `Flock.SecurityProofs.RecursiveKS : Flock.Guarantees.RecursiveKS` is `RecDeploy.ksLin2_deployed_partAccepts` at the
-  brings whose transcript is the coin server's record (`recTr`): its `ReadsBackB` premise from `readsBack_recTr`, its
-  `ReadersTrue` premise from `readersTrue_layoutBTops` at `hmSlotsCommit_of_full` (premise-free: the verifier's setup
-  refuses a staged part that is not one table holding its whole population, `RecSetup.oneFull`), and its `DecompB`
-  premise at the one shape it lists (`Form.Dense`) being `Flock.Assumptions.RecKSDecomp`.
+* `Flock.SecurityProofs.RecursiveKS : Flock.Guarantees.RecursiveKS` is `RecDeploy.ksLin2_deployed_partAccepts` (which
+  proves `ReadsBackB` at the coin server's record and `ReadersTrue` at `hmSlotsCommit_of_full`), its one premise,
+  `DecompB` at `PartAccepts` at the one shape it lists (`Form.Dense`), being `Flock.Assumptions.RecKSDecomp`.
 
 What the statement is not vacuous on:
 
@@ -29,10 +26,7 @@ open Claims (Msg Out)
 /-- **The recursion is knowledge sound at the compiled V\*, at its dense statements**, under its named obligation. -/
 theorem _root_.Flock.SecurityProofs.RecursiveKS : Flock.Guarantees.RecursiveKS := by
   intro b aux nOf hd rest fin wE join final w hD
-  refine ksLin2_deployed_partAccepts { b with tr := recTr aux nOf hd rest } fin wE join final w
-    (readsBack_recTr _ _ _ _ aux nOf hd rest rfl) (fun shape hs => ?_)
-    (readersTrue_layoutBTops (finOpen fin) _ { b with tr := recTr aux nOf hd rest }
-      (deployZkRec _root_.Flock.Readable.relation) hmSlotsCommit_of_full)
+  refine ksLin2_deployed_partAccepts b aux nOf hd rest fin wE join final w (fun shape hs => ?_)
   rw [List.mem_singleton] at hs
   subst hs
   exact hD

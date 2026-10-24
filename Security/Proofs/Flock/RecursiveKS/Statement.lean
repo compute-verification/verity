@@ -11,9 +11,10 @@ recursive verifier, at SHA-512, wherever the brings' transcript is the coin serv
 
 It takes one open obligation, a named `Prop` of this module that the lock lists under `assumptions`: V\*'s parts
 decompose the inner verifier (`Flock.Assumptions.RecKSDecomp`), a fact about our own code (V\*'s circuits), so an
-obligation, not an assumption about the world. The dense corollary's other two premises are proved at these records:
-the record reads back (`readsBack_recTr`) and V\*'s witnesses record only true evaluations (`readersTrue_layoutBTops`
-from `hmSlotsCommit_of_full`).
+obligation, not an assumption about the world. It is the one premise of the dense corollary
+`RecDeploy.ksLin2_deployed_partAccepts`, which proves the others at these records: the record reads back
+(`readsBack_recTr`) and V\*'s witnesses record only true evaluations (`readersTrue_layoutBTops` from
+`hmSlotsCommit_of_full`).
 
 The compiled verifier, its bound layout and the deployed records (`RecDeploy.bdDeployed`, `recBoundAt`, `deployZkRec`,
 `layoutBTops`, `recTr`, `recRead`) are still in C-Flock's proofs package, so this module imports them from
@@ -35,9 +36,10 @@ record (`recTr aux nOf hd rest`), the compiled record `recBound` on V\*'s bound 
 and the deployed bound record's `IVStar` (`bdDeployed` at the deployed relation `Flock.Readable.relation`, the deployed
 plain verifier's steps and columns, `rowInDeployed`, and the code side's `wE`, `join`, `final`, `w`), at every dense
 compiled statement (`Form.Dense`: neither Holo nor sparse): wherever every part's circuit accepts at a witness that
-agrees with the readers' messages (`VStarB.PartAccepts`, at the deployed outer `--zk` record `deployZkRec` and the coins
-the staged V\* statements show through the record's reader, `showsPart recRead`), `IVStar` accepts those messages at
-those coins, or two of the parts' recorded calls collide (`VStarB.DecompB`). It is the pair `PartChecksB` and `DecompB`
+agrees with the readers' messages and whose commit strings are theirs at the rounds read whole off the run
+(`VStarB.PartAccepts`, at the deployed outer `--zk` record `deployZkRec`, the coins the staged V\* statements show
+through the record's reader, `showsPart recRead`, and the commit strings it reads, `cmtTr recRead`), `IVStar` accepts
+those messages at those coins, or two of the parts' recorded calls collide (`VStarB.DecompB`). It is the pair `PartChecksB` and `DecompB`
 at its least inner check (`VStarB.exists_chk_iff`). -/
 def _root_.Flock.Assumptions.RecKSDecomp (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
@@ -55,7 +57,7 @@ def _root_.Flock.Assumptions.RecKSDecomp (b : Brings) (aux : Msg → ℕ → Flo
         (bdDeployed _root_.Flock.Readable.relation (FlockDeploy.V false).next
           (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE join rowInDeployed final w).IVStar)
       (deployZkRec _root_.Flock.Readable.relation) (layoutBTops (finOpen fin)) Claims.Recursion.Form.Dense
-      (showsPart recRead { b with tr := recTr aux nOf hd rest }))
+      (showsPart recRead { b with tr := recTr aux nOf hd rest }) (cmtTr recRead))
 
 /-- **The recursion is knowledge sound at the compiled V\*, at its dense statements** (route 2C, `KSLin2`), at SHA-512.
 For every brings `b` (the stager, the reference prover's pieces) whose transcript is the coin server's record
