@@ -1522,6 +1522,9 @@
    "owner": "@compute-accounting",
    "digest": "4c6906588d3bd24bfe0c02960ad2153360f4fb933cf00700cb76cb6c8a58df8e"
   },
+  "RecDeploy.PartIn": {
+   "owner": "@proofs"
+  },
   "Verity.Circuit.InputsAgree": {
    "owner": "@proofs",
    "digest": "cf654f484182486a9c4bded7e33bb67077ec7112c33fd7f3bff30edeb0bd1492"
