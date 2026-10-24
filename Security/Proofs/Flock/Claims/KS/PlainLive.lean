@@ -176,7 +176,7 @@ theorem schedK_plainK (rootB : Array ByteArray) (pts : Fin 2 → Fin spec.mPts �
           ite_eq_left (show (plainRepNs spec st).length - k = 0 by omega)]
         rfl
     · rw [show (plainRepNs spec st).length - k - 1 = (plainRepNs spec st).length - (k + 1) by omega]
-      exact schedK_plainK keep rootB pts hR n _ _ (k + 1) (by simp [hl]) (by omega)
+      exact schedK_plainK rootB pts hR n _ _ (k + 1) (by simp [hl]) (by omega)
 
 /-- `schedK_plainK` at the deployed plain verifier (`keep := id`). -/
 theorem schedK_plain (rootB : Array ByteArray) (pts : Fin 2 → Fin spec.mPts → 𝔽)

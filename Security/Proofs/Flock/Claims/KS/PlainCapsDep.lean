@@ -175,6 +175,7 @@ noncomputable def rdAt {Ω A : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
       fun e => e.1 = q).map fun e => rowFin lanes e.2).toFinset
   else ∅
 
+open Classical in
 /-- **What an aborting run reads at rep `r`'s level `ℓ + 1` position `q`**, as rows of `lanes` lanes: where it
 accepts, the rows its level columns hold at `q`; nothing elsewhere. -/
 noncomputable def rdAtK (keepV : Bool → Bool) {Ω A : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
@@ -185,15 +186,15 @@ noncomputable def rdAtK (keepV : Bool → Bool) {Ω A : Type} (P : Claims.Prover
       fun e => e.1 = q).map fun e => rowFin lanes e.2).toFinset
   else ∅
 
-theorem mem_rdAt {Ω A : Type} {P : Claims.Prover Ω} {x : Claims.Msg}
+theorem mem_rdAtK (keepV : Bool → Bool) {Ω A : Type} {P : Claims.Prover Ω} {x : Claims.Msg}
     {keep : Ω → (Fin ((V false).k x) → Coin) → A → Bool} {r ℓ q lanes : ℕ} {ω : Ω}
     {d : (Fin ((V false).k x) → Coin) × A} {u : Fin (2 ^ lanes) → 𝔽} :
-    u ∈ rdAt P x keep r ℓ q lanes ω d ↔ keep ω d.1 d.2 = true ∧
-      (Claims.run sha512 P (V false) x ω d.1).out = .acc ∧
-      ∃ a, (q, a) ∈ plainRawLevelCols (Claims.run sha512 P (V false) x ω d.1).seen r (ℓ + 1) ∧
+    u ∈ rdAtK keepV P x keep r ℓ q lanes ω d ↔ keep ω d.1 d.2 = true ∧
+      (Claims.run sha512 P (VK keepV) x ω d.1).out = .acc ∧
+      ∃ a, (q, a) ∈ plainRawLevelCols (Claims.run sha512 P (VK keepV) x ω d.1).seen r (ℓ + 1) ∧
         rowFin lanes a = u := by
-  unfold rdAt
-  by_cases hacc : (Claims.Recursion.abortRun sha512 P (V false) x keep ω d).out = .acc
+  unfold rdAtK
+  by_cases hacc : (Claims.Recursion.abortRun sha512 P (VK keepV) x keep ω d).out = .acc
   · obtain ⟨hk, hr⟩ := Claims.Recursion.abortRun_acc_iff.1 hacc
     rw [if_pos hacc, Claims.Recursion.abortRun_of_keep hk]
     simp only [List.mem_toFinset, List.mem_map, List.mem_filter, decide_eq_true_eq]
@@ -206,6 +207,16 @@ theorem mem_rdAt {Ω A : Type} {P : Claims.Prover Ω} {x : Claims.Msg}
     simp only [Finset.notMem_empty, false_iff, not_and]
     intro hk hr
     exact absurd (Claims.Recursion.abortRun_acc_iff.2 ⟨hk, hr⟩) hacc
+
+/-- `mem_rdAtK` at the deployed plain verifier (`keep := id`). -/
+theorem mem_rdAt {Ω A : Type} {P : Claims.Prover Ω} {x : Claims.Msg}
+    {keep : Ω → (Fin ((V false).k x) → Coin) → A → Bool} {r ℓ q lanes : ℕ} {ω : Ω}
+    {d : (Fin ((V false).k x) → Coin) × A} {u : Fin (2 ^ lanes) → 𝔽} :
+    u ∈ rdAt P x keep r ℓ q lanes ω d ↔ keep ω d.1 d.2 = true ∧
+      (Claims.run sha512 P (V false) x ω d.1).out = .acc ∧
+      ∃ a, (q, a) ∈ plainRawLevelCols (Claims.run sha512 P (V false) x ω d.1).seen r (ℓ + 1) ∧
+        rowFin lanes a = u :=
+  mem_rdAtK id (Ω := Ω) (A := A) (P := P) (x := x) (keep := keep) (r := r) (ℓ := ℓ) (q := q) (lanes := lanes) (ω := ω) (d := d) (u := u)
 
 /-- **`CpDep`'s position `i` at a statement with a plain table-0 schedule**: its round and query coins are its
 decoded rep, slot and position's. -/
@@ -272,7 +283,7 @@ theorem Pr_rdAt_le_capHitK (keepV : Bool → Bool) {Ω A : Type} [Fintype Ω] [N
     (fun d d' u u' hc hu hu' hne => ?_)
   · constructor
     · rintro ⟨u, hu⟩
-      obtain ⟨hk, hr, a, ha, -⟩ := mem_rdAt.1 hu
+      obtain ⟨hk, hr, a, ha, -⟩ := (mem_rdAtK keepV).1 hu
       refine ⟨Claims.Recursion.abortRun_acc_iff.2 ⟨hk, hr⟩, ?_⟩
       rw [hopens, decide_eq_true_eq]
       exact (plain_levelCols_queriedK keepV hr hs hst hsch j.1.isLt (by omega) hℓ _).1 ⟨a, ha⟩
@@ -280,9 +291,9 @@ theorem Pr_rdAt_le_capHitK (keepV : Bool → Bool) {Ω A : Type} [Fintype Ω] [N
       obtain ⟨hk, hr⟩ := Claims.Recursion.abortRun_acc_iff.1 hacc
       rw [hopens, decide_eq_true_eq] at hq
       obtain ⟨a, ha⟩ := (plain_levelCols_queriedK keepV hr hs hst hsch j.1.isLt (by omega) hℓ _).2 hq
-      exact ⟨_, mem_rdAt.2 ⟨hk, hr, a, ha, rfl⟩⟩
-  · obtain ⟨hk, hr, a, ha, rfl⟩ := mem_rdAt.1 hu
-    obtain ⟨hk', hr', a', ha', rfl⟩ := mem_rdAt.1 hu'
+      exact ⟨_, (mem_rdAtK keepV).2 ⟨hk, hr, a, ha, rfl⟩⟩
+  · obtain ⟨hk, hr, a, ha, rfl⟩ := (mem_rdAtK keepV).1 hu
+    obtain ⟨hk', hr', a', ha', rfl⟩ := (mem_rdAtK keepV).1 hu'
     rw [Claims.Recursion.abortRun_of_keep hk, Claims.Recursion.abortRun_of_keep hk']
     rw [hround] at hc
     exact plain_levelTieK keepV hr hr' hs hst hsch j.1.isLt hℓ hc ha ha' fun he => hne (by rw [he])

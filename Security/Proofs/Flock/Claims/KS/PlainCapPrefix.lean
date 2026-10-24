@@ -73,7 +73,7 @@ theorem plain_acc_midsK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω
   rw [List.length_map] at hlen
   rw [hlen] at has
   rw [has, List.length_map, List.length_range, range_map_ends _ (by omega),
-    range_map_ends (Claims.coinSeq c) (by omega)] at hact
+    range_map_ends (Claims.coinSeq (k := (VK keep).k x) c) (by omega)] at hact
   obtain ⟨a₁, rest, crest, h1, h2, h3⟩ := act_decide_mids hact
   injection h1 with _ h1
   injection h2 with _ h2
