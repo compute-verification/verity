@@ -239,9 +239,22 @@ vocabulary's 136M to V = 154880. The sampler call stays one unit, not provable i
 | step | run | node | state |
 |---|---|---|---|
 | Build of record | r20261024-130454-422b at 0b241a11a1 (`vllm.build` r20261024-130513-3a11) | vy-glm53-cpu-2 | FAIL rc 10 at 14:08Z: all 72 derives passed (rank 0's step 0801afbcf2b8b218), then the manifest's word check refused the sampler as too-large |
-| Build of record, resumed | r20261024-145656-e91b at 0b241a11a1, `RESUME=1` (derives and composed workloads kept) with the allowance above | vy-glm53-cpu-2 | |
+| Build of record, resumed | r20261024-145656-e91b at 0b241a11a1, `RESUME=1` (derives and composed workloads kept) with the allowance above | vy-glm53-cpu-2 | PASS at 15:33Z: `vllm.build` r20261024-145707-7573 (art:f187eb912167ba6625f542ddb47531b88a47bf8f01035cfdb16c2f47c6c6576e), manifest digest 6e1d2cfd…, complete; the allowance is a `qword.allowance` label on both runs and the art |
 | Match GPU legs | r20261024-131914-76bd at 0b241a11a1 | vy-glm53-h200-1 | FAIL at 13:52Z, both legs at engine warm-up (the DeepGEMM JIT under nvcc 12.4); no capture, no coins; its row dir moved aside to `<row>.legs-cuda124-r20261024-131914-76bd` |
 | Match GPU legs | r20261024-150302-044c at 0b241a11a1, after the toolkit and a tap rebuild with it | vy-glm53-h200-1 | |
+| the Build into the store | r20261024-154123-3460 (`store_tar.sh put`, NAME=build) | vy-glm53-cpu-2 | PASS at 15:50Z: 774 files, 2 parts, 25.3 GiB, parts art:8e0b581e8faaccff2984b17f2dad07f5f44a989c5ecf077f1403b0e490d210b1, every file checked against e91b's `rowdir.sha256` |
+| the legs into the store | r20261024-154133-f0d3 (waits for 044c; `legs-small`, the files but the tensors, then `legs-full`) | vy-glm53-h200-1 | |
+| Match CPU phase, rank 4 | r20261024-154212-ddfc (`match_rank.sh`, the Build in place) | vy-glm53-cpu-2 (450 GB) | |
+| Match CPU phase, rank 5 | r20261024-154712-05a2 (`match_rank.sh`; attempt 2's row dir moved aside) | vy-nebius-cpu-3 (400 GB) | |
+| Match CPU phase, rank 6 | r20261024-154534-a841 (`match_rank.sh`) | vy-nebius-cpu-4 (380 GB, infra 15:25Z) | |
+| Match CPU phase, rank 7 | r20261024-154554-7297 (`match_rank.sh`) | vy-nebius-cpu-5 (380 GB, infra 15:25Z) | |
+| ranks 0-3, the full Match, the Commit | r20261024-154813-da02 (`pod_chain.sh`: waits for 044c, ranks 0-3 in `rows-side` three GM-01 at once, ranks 4-7's documents from the store, `MATCH_REUSE=legs`, then `commit.sh`) | vy-glm53-h200-1 (1300 GB) | |
+
+The CPU phase is split over five nodes (circuits, 14:46Z and 15:10Z; vy-glm53-cpu-3 couldn't be created, so infra offered
+vy-nebius-cpu-4 and -5 at 15:25Z), carried through the store rather than through an agent's VM: each node's inputs and outputs
+are `store_tar.sh` sets, and each consumer waits for its producer's `store_tar.parts.<set>` label. A failed rank labels its set
+failed, and the chain stops there with no Commit. Seven GM-01 legs run at once (the pod three, each other node one), so ranks
+0-3 on the pod set the length: a fold 2.1 h, then two rounds of GM-01 at 1.6 h.
 
 DeepSeek-V4-Pro B1's Commit holds more host memory than `commit.sh`'s `--mem-gb 600` reserves: its cgroup's anonymous memory
 rose through warm-up at up to 1.6 GiB/s and levelled off at about 800 GiB (about 100 GiB a rank) by 04:37Z, beside B8
@@ -350,7 +363,12 @@ Every script is in `jobs/` and runs from this tree's pushed head, `--cwd source`
 `/workspace/cp/circuits/glm-v2/rows/<row>` on each node it visits, because the Commit's replay reads its Build and required
 manifest at the paths the Commit recorded. `/workspace/fs` is not shared between vy-glm53-eu and the CPU nodes, so row dirs move
 with `copy_rowdir.sh SRC DST LIST.sha256`: tar streams through the VM, every file then checked against the list the source job
-wrote (T1's B1 legs: 104 GB, 1.1M files, about 11 min). The GPU jobs are submitted by `gpu_batch.sh a [NODE]` and `gpu_batch.sh b ROWS.env [NODE]`;
+wrote (T1's B1 legs: 104 GB, 1.1M files, about 11 min). Between nodes that can't reach each other, or off a node that may go
+away, `store_tar.sh put|get` carries the same lists through the evidence store instead, in checked tar parts, with each
+consumer waiting for its producer run's `store_tar.parts.<set>` label (B8 stochastic attempt 3: the Build at 25.3 GiB in about
+6 min). A split Match CPU phase runs `match_rank.sh` on each CPU node and `pod_chain.sh` on the GPU node that holds the legs,
+which joins the ranks' documents, runs the full Match and then the Commit; `wait_run.sh` lets a job launch before the run it
+consumes on the same node ends. The GPU jobs are submitted by `gpu_batch.sh a [NODE]` and `gpu_batch.sh b ROWS.env [NODE]`;
 each waits for its GPUs on its node's lease, so a window runs back to back. eu is held only for a window: the lease, and the node, are
 released where a CPU phase sits between (CIR-51).
 
