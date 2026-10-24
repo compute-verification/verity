@@ -149,7 +149,8 @@ def test_a_split_row_holds_a_part_at_each_split_s_keys_and_a_combine():
     assert SRW.unit_templates(SERVED) == ((SERVED, 1), (part(64, GLM, False), 32), (part(16, GLM, False), 8), (comb(5, GLM, False), 8))
     assert SRW.unit_templates(row(NS=1)) == ((row(NS=1), 1),)
     assert [(SRW.template(t).layout, SRW.template(t).word, CR.reads(SRW.template(t))) for t in TMPLS] == [
-        ("split", part(16, boolean=False), "slots"), ("split", part(8, boolean=False), "slots"), ("split", comb(3, boolean=False), "slots")]
+        ("split", part(16, boolean=False), "slots"), ("split", part(8, boolean=False), "inline"), ("split", comb(3, boolean=False), "inline")]
+    assert [CR.reads(SRW.template(t)) for t in (part(64, GLM), part(16, GLM), comb(5, GLM))] == ["slots", "inline", "inline"]
     DV, DR = TOY["DV"], TOY["DR"]
     assert CR.unit_rows(SRW.template(P16)) == ([("in0", V2, 16 * DV, ["q_nope"]), ("in1", V2, 16 * DR, ["q_rope"]),
                                                 ("in2", V2, 16 * 16 * (DV + DR), ["kv"])], [(V2, (0,)), (V2, (1,))])
