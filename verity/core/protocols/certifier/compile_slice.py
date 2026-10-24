@@ -100,9 +100,10 @@ past the count (en 0) and idle steps.
 ANDs (`cache_step`'s cost; a lookup, which writes nothing, about half), and each step's three lookups walk min(CN + 1, CU)
 units and its two computes ⌊(B − 1 + T) / B⌋. On corpus-smallkv's class (CN 24, CU 25, B 16) a step's calls are 1.06M
 ANDs and the unit about 7.6M, past circuit-check's lowering: its circuit = reference tests, sidecar and ZK run
-(`benchmarks/network_traces/compile_slice_zk.py`) are at the demonstration class (`demo`, 58,521 ANDs) and at vLLM
-8eb1's engine class (no prefix caching: 852,357 ANDs, about 97,000 of them ChargeLink_v1{32}), and at the corpus class
-the run's staged verdict words are the reference's.
+(`benchmarks/network_traces/compile_slice_zk.py`) are at the demonstration class (`demo`, 59,341 ANDs) and at vLLM
+8eb1's engine class (no prefix caching: 857,866 ANDs, ChargeLink_v1{32}'s 97,159 and its 5,509 copies of the words it
+carries among them, `charge_chain.size`'s ``carry``), and at the corpus class the run's staged verdict words are the
+reference's.
 """
 from __future__ import annotations
 
