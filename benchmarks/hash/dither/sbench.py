@@ -139,7 +139,9 @@ hello's commitment held to HEX) and closed at the arm's stop; without one they a
 ``coins: in-process (not certified)``.
 
 SBENCH_ARM_ENV (``{"ARM": {"NAME": "VALUE"}}``) sets an arm's own environment in its worker, so the arms of one lease can
-differ in a knob the worker reads; each arm's ready line says what it set (``arm_env``).
+differ in a knob the worker reads; each arm's ready line says what it set (``arm_env``).  ``ARM@TAG`` in --arms is ARM
+built and timed under its own name (its own SBENCH_ARM_ENV, --arm-mem and DITHER_CHALLENGERS entries), so one arm is
+timed beside itself with a knob set.
 
     python sbench.py --out OUT [--arms stock,exact,dither] [--reps 3] [--t 64] [--ops decode] [--gate]
 """
@@ -272,12 +274,14 @@ def suffix_of(arm: str) -> str | None:
 
 
 def base_arm(arm: str) -> str:
+    arm = arm.split("@")[0]
     s = suffix_of(arm)
     return base_arm(arm[:-len(s)]) if s else arm
 
 
 def build(arm: str, scratch: Path, gpu_mem: float):
     from vllm import LLM
+    arm = arm.split("@")[0]
     s = suffix_of(arm)
     if s:
         SUFFIXES[s]()
