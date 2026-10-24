@@ -170,14 +170,27 @@ def worst_admit_arrival(cb, T: int, family: str) -> float:
                for gh in (0, 1, 4, 16, 64, 1024, cap // 2)) + C.OVERHEAD_PER_SYMBOL
 
 
+def _worst_source(cb, family: str) -> float:
+    """The most bits one source request costs (a keyed one: a pick among the earlier sources, or a step), without the
+    segment's tail."""
+    Q, tail = cb.caps.requests_max, 2 if family not in ("fixed", "gamma") else 0
+    if family == "fixed":
+        return C.worst_bits([("source", 0, 0, Q - 1)], cb, family)
+    step = C.worst_bits([("source_delta", 0, -Q, Q)], cb, family) - tail
+    if family in ("gamma", "static"):
+        return step
+    return C.worst_bits([("source_seen", 0, 0, 1)], cb, family) - tail + max(
+        step, C.worst_bits([("source_rank", 0, 0, Q - 1)], cb, family) - tail)
+
+
 def _worst_hit(cb, family: str, name: str, known_max: int) -> float:
     """The most bits a cache hit below `known_max` tokens costs with its most sources, without the segment's tail."""
     caps = cb.caps
-    H, Q = caps.sources_max, caps.requests_max
-    src = [("source", 0, 0, Q - 1)] if family == "fixed" else [("source_delta", 0, -Q, Q)]
-    syms = [(name, 0, 0, (known_max - 1) // caps.block_size), ("sources_more", 0, 0, H - 1)]
-    syms += H * (src + [("source_n", 0, 0, caps.prompt_max - 1)])
-    return C.worst_bits(syms, cb, family) - (2 if family not in ("fixed", "gamma") else 0)
+    H, top = caps.sources_max, (known_max - 1) // caps.block_size
+    syms = [(name, 0, 0, top), ("sources_more", 0, 0, H - 1)] + H * [("source_n", 0, 0, caps.prompt_max - 1)]
+    if family.startswith("cond"):
+        syms += [(f"{name}_any", 0, 0, 1), ("source_hit_same", 0, 0, 1)]
+    return C.worst_bits(syms, cb, family) - (2 if family not in ("fixed", "gamma") else 0) + H * _worst_source(cb, family)
 
 
 def worst_residual_window(cb, T: int, family: str, arrivals: int, resumes: int) -> float:
@@ -216,10 +229,14 @@ def worst_v0_window(cb, T: int, family: str, arrivals: int) -> float:
         sources = seg([("sources_more", 0, 0, G - 1)]) + G * seg([("source_delta", 0, -Q, Q), ("source_n", 0, 0, H - 1)])
         if fam == "cond":
             per_step = seg([("canon", 0, 0, 1), ("rows", 0, 0, R)])
-            new = [("new_rows_0", 0, 0, R), ("new_request", 0, 0, Q), ("chunk_new", 0, -caps.tokens_max, 0)]
+            new = [("new_rows_0", 0, 0, R), ("new_request", 0, 0, Q), ("chunk_new", 0, -caps.tokens_max, 0),
+                   ("source_hit_same", 0, 0, 1)]
+            sources = max(sources, seg([("sources_more", 0, 0, G - 1)]) + G * (seg([("source_n", 0, 0, H - 1)])
+                                                                               + _worst_source(cb, fam)))
             per_row = max(per_row, seg([("cont_prefill", 0, 0, 1), ("chunk_cont", 0, -caps.tokens_max, 0)]),
-                          seg(new + [("cache_hit_new", 0, 0, H)]),
-                          seg(new + [("resumed", 0, 0, 1), ("rehit_new", 0, 0, span // caps.block_size)])) + sources
+                          seg(new + [("cache_hit_new_any", 0, 0, 1), ("cache_hit_new", 0, 0, H // caps.block_size)]),
+                          seg(new + [("resumed", 0, 0, 1), ("rehit_new_any", 0, 0, 1),
+                                     ("rehit_new", 0, 0, span // caps.block_size)])) + sources
             per_row += max(seg([(name, 0, -g, rel - g)]) for name in [f"release_res_{q}" for q in range(C.PHASES + 1)]
                            + ["release_same"] for g in (0, rel // 2, rel))
         else:

@@ -232,7 +232,7 @@ PINNED = {
     "v0/fixed": [1086277, 818008, 25654],
     "v0/gamma": [174887, 134474, 3928],
     "v0/static": [32982, 25695, 480],
-    "v0/cond": [2515, 2220, 47],
+    "v0/cond": [2450, 2141, 47],
     "admit/fixed": [2450, 2075, 0],
     "admit/gamma": [992, 947, 0],
     "admit/static": [724, 661, 0],
@@ -241,8 +241,8 @@ PINNED = {
     "residual/fixed": [4792, 4075, 0],
     "residual/gamma": [3969, 3408, 0],
     "residual/static": [2340, 2031, 0],
-    "residual/cond": [1918, 1628, 0],
-    "residual/cond+adapt": [1932, 1628, 0],
+    "residual/cond": [1908, 1608, 0],
+    "residual/cond+adapt": [1921, 1608, 0],
 }
 
 
@@ -300,6 +300,21 @@ def test_the_table_counts_each_coded_symbol(corpus):
     md = M.render(M.summarize(result, cb, 600), {"corpus": "test", "codebook_digest": cb.digest(), "train": [], "test": [],
                                                   "T": 600, "tau_us": 100_000, "steptime": {}, "steps_per_bucket": 32})
     assert md.count("\n| v0 |") == len(C.FAMILIES) + ("reference" in result["traces"][0])
+
+
+def test_a_shared_prefix_is_coded_by_its_source(corpus):
+    """Under the conditional codes a hit names its first source among the earlier ones and reuses that source's latest
+    hit length, so a shared prefix's later hits cost a pick and a flag rather than a step and a length."""
+    cb, t = corpus
+    pub, rep = t["public"], C.TraceReplay(t["advice"], t["public"])
+    res = C.residual_of(t["advice"], t["admit"])
+
+    def hits(fam: str) -> list:
+        return [x for win in C.symbols_residual(res, pub, cb, fam, rep) for x in win if x[0].startswith(("hit", "source"))]
+
+    cond = hits("cond")
+    assert ("source_seen", 1) in {x[:2] for x in cond} and ("source_hit_same", 1) in {x[:2] for x in cond}
+    assert C.model_bits(cond, cb, "cond") < C.model_bits(hits("static"), cb, "static")
 
 
 def _general_advice():
