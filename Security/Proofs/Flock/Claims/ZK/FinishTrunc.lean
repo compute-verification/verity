@@ -190,6 +190,8 @@ theorem squeezeP_br (kind : UInt8) {m : ℕ} (hm : m < 2 ^ 64) :
       first
       | (rw [Array.size_push, hl])
       | (simp only [Array.size_push, hl]; omega)
+      | (simp [hl]; omega)
+      | omega
 
 theorem sampleP_br :
     ((bridge base).st Transcript).R (FlockComplete.sampleP (asksOf coins).toC)
@@ -233,7 +235,7 @@ theorem queryP_br (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Lev
   sim_walk [liftT_rel (bridge base), squeezeP_br coins base N coin hn hc _ (lt64 hq),
     squeezeP_br coins base N coin hn hc _ (lt64 hl), powP_rel (bridge base)]
 
-theorem queryP_br_lv (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (sch : Schedule)
+theorem queryP_br_lv (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (sch : Flock.Schedule)
     (hq : ∀ j, (sch.levels.getD j default).q + 1 ≤ 65536) (j : ℕ) (cm : FlockComplete.Commit) :
     (((bridge base).st Transcript).st FlockComplete.LigState).R
       (FlockComplete.queryP (asksOf coins).toC nonce ms (sch.levels.getD j default) cm)
@@ -242,7 +244,7 @@ theorem queryP_br_lv (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (sch :
     (by have := hq j; have := Nat.log2_le_self ((sch.levels.getD j default).q - 1); omega)
 
 /-- **The masked Ligerito is related**, given `n + 1` and every level's `q + 1` at most `65536`. -/
-theorem ligeritoPZk_br (ms : MerkleScheme) (sch : Schedule) (T : F128) (cm0 : FlockComplete.Commit)
+theorem ligeritoPZk_br (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cm0 : FlockComplete.Commit)
     (t b : Array F128) (lay : Zk.PadLayout) (hp : Array F128) (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128)
     (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (hN : sch.n + 1 ≤ 65536)
     (hq : ∀ j, (sch.levels.getD j default).q + 1 ≤ 65536) :
@@ -263,25 +265,19 @@ theorem ligeritoPZk_br (ms : MerkleScheme) (sch : Schedule) (T : F128) (cm0 : Fl
     oodIntroP_br_loop coins base N coin hn hc nonce (sch.n + 1) hN,
     loopG_bridge (fun s : ℕ × FlockComplete.Commit × Array (Array ByteArray) × Array LevelProof × FinalProof =>
       s.1 ≤ sch.n + 1)]
-  case hfg =>
-    intro i b hb
-    sim_walk [liftT_rel (bridge base), sampleP_br coins base N coin hn hc, sampleKP_br coins base N coin hn hc,
-      sendMsg_rel (bridge base), powP_rel (bridge base), challengeP_br coins base N coin hn hc,
-      queryP_br_lv coins base N coin hn hc nonce ms sch hq, commitP_rel (bridge base) h5,
-      pure_st (bridge base), pure_st ((bridge base).st Transcript),
-      oodIntroP_br_loop coins base N coin hn hc nonce (sch.n + 1) hN _ b hb]
   all_goals first
     | exact fun _ => ((bridge base).st Transcript).pure _
     | (simp (config := { zetaDelta := true }) only []
        omega)
-    | (intro i b hb
-       repeat (first
+    | (repeat (first
          | extract_lets
          | (refine PRet.bind fun _ => ?_)
          | (refine PRet.pure ?_
             simp (config := { zetaDelta := true }) only [ForInStep.value]
             omega)
-         | split))
+         | split
+         | (intro _))
+       done)
 
 theorem zerocheckCut_br (m : ℕ) (digest cap root : ByteArray) (lay : Zk.PadLayout) (mk : ℕ → F128)
     (hm : m - 13 ≤ 65536) :
@@ -347,10 +343,13 @@ theorem repFwC_br (st : Setup) (sch : Flock.Schedule) (tPad rep : ℕ) (dom : By
   have h3 := FlockSoundness.Discharge.ZkExec.replay_cons_size _ _ _ _ hrp
   have h2 := FlockSoundness.Discharge.ZkExec.ligeritoConstraints_size hlgc
   sim_walk [innerP_br coins base N coin hn hc]
-  all_goals
-    simp (config := { zetaDelta := true }) only [Array.size_append, List.size_toArray, List.length_cons,
-      List.length_nil, h3, h2]
-    omega
+  all_goals first
+    | omega
+    | (simp (config := { zetaDelta := true }) only [Array.size_append, List.size_toArray, List.length_cons,
+        List.length_nil, h3, h2]
+       omega)
+    | (simp (config := { zetaDelta := true }) [h3, h2]
+       omega)
 
 end
 
