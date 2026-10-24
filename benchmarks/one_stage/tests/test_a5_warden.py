@@ -1,9 +1,11 @@
 """a5_warden's window on a warden run driven tick by tick (`test_warden_serve._run`), before anything is lowered or proved
-(`a5_warden.main` does, through `a5.audit`, on a node): each transfer-gate chunk's registered port's rows, committed under
-the warden's salts, open the warden's signed root at the rows the verifier's own reads name, and the header names the same
-rows; the registration passes the verifier's check with every transfer-gate unit proved (work 0, floor all of them); the
+(`a5_warden.main` does, through `a5.audit`, on a node): each transfer-gate chunk's registered port's rows, the warden's
+bucket rows committed under its salts, open the warden's signed root at the rows the verifier's own reads name, each
+unit's read (q, k) placed by the wiring the warden signed on connection q's own cell, and the header names the same rows;
+the registration passes the verifier's check with every transfer-gate unit proved (work 0, floor all of them); the
 window's provenance is the verifier's read of the warden's registrations; the prover's own root under the warden's
-certificate and provenance naming another root are refused; and the altered window's unit 0 doesn't open."""
+certificate, provenance naming another root, and a foreign, a duplicate, a padding-slot and a past-the-cells read are
+refused by name; and the altered window's unit 0 doesn't open."""
 
 from __future__ import annotations
 
@@ -15,6 +17,7 @@ import numpy as np
 import pytest
 
 from verity.core.protocols.certifier import warden_rows as WR
+from verity.core.protocols.certifier.active import HEADER
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, verifier as V
 
 HERE = Path(__file__).resolve().parents[1]
@@ -50,28 +53,34 @@ def bcs(c, m, port: str) -> list[bytes]:
 def test_each_chunk_opens_one_connections_cells_under_the_wardens_root(run):
     tmp, at = run
     assert {x.head.value for x in at.values()} == {"warden/ingress/0", "warden/egress/0"}
-    assert len({x.connection for x in at.values()}) == 1 and all(len(x.positions) == N for x in at.values())
+    assert len({x.connection for x in at.values()}) == 1 and all(len(x.reads) == N for x in at.values())
     mine, c, _rec, win = committed(tmp, at, "honest")
     reads = AW.reads(mine, at)
     for name, m in AW.chunks(mine).items():
         x, port = at[name], AW.LINKS[name][1]
+        B, S = x.params.cell_bytes, x.params.lanes * x.params.slots
+        assert dict(m.rows)["row"] == S * B // 2 and x.registration["words"] == S * B // 2
         file = reads[m.key]["ports"][port]
-        assert file == WR.port(x.head, x.positions, m.base) and file.get("reads_from", 0) == m.base
+        assert file == WR.port(x.head, x.opening.wiring, x.params, x.reads, m.base) and file.get("reads_from", 0) == m.base
+        assert [(t, j) for t, j in zip(x.positions, x.slots)] == x.opening.wiring.place(x.params, x.reads)
+        assert len(set(x.positions)) < N
+        for (q, _k), t, j in zip(x.reads, x.positions, x.slots):
+            assert q == x.connection and HEADER.unpack_from(x.opening.rows[t][j * B:(j + 1) * B])[1] == q
         header = next(e for e in win["members"] if e["name"] == m.key)["registered"][port]
-        assert header["value"] == file["value"] == x.head.value and header["positions"] == file["reads"]
+        assert header["value"] == file["value"] == x.head.value and header["positions"] == file["reads"] == x.positions
         assert [WR.opens(x.dom, x.head.root, p, bc, bytes.fromhex(path))
                 for p, bc, path in zip(x.positions, bcs(c, m, port), header["paths"])] == [True] * N
         assert bcs(c, m, port) == [WR.bc(x.opening.rows[p], x.opening.salts[p]) for p in x.positions]
     rest = mine.members[-1]
-    assert "registered" not in win["members"][-1] and not set(c.salts[rest.port("cell")]) & {s for x in at.values()
-                                                                                              for s in x.opening.salts}
+    assert "registered" not in win["members"][-1] and not set(c.salts[rest.port("row")]) & {s for x in at.values()
+                                                                                             for s in x.opening.salts}
 
 
 def test_the_registration_proves_every_transfer_gate_unit_beside_the_drawn_rest(run):
     tmp, at = run
     mine, c, rec, _win = committed(tmp, at, "law")
     tg, rid = mine.members[0].template, mine.members[-1].template
-    assert mine.work_table == {tg: {"work": 0, "floor": 2 * N}, rid: {"work": 1, "floor": 1}}
+    assert tg != rid and mine.work_table == {tg: {"work": 0, "floor": 2 * N}, rid: {"work": 1, "floor": 1}}
     publics = {m.key: c.public_body(k) for k, m in enumerate(mine.members)}
     v = V.check(rec, mine.program, mine.query, mine.law, AW.CS.SCHEME, AW.CS.expected_ports(mine),
                 leaf_layer=AW.CS.leaf_layer(publics), work_table=mine.work_table)
@@ -80,7 +89,7 @@ def test_the_registration_proves_every_transfer_gate_unit_beside_the_drawn_rest(
     assert strata[tg]["units"] == [[0, 2 * N]] and strata[tg]["k"] == 2 * N
 
 
-def test_the_provenance_is_the_verifiers_read_and_the_negatives_are_refused(run):
+def test_the_provenance_is_the_verifiers_read_and_the_negatives_are_refused_by_name(run):
     tmp, at = run
     mine, _c, rec, _win = committed(tmp, at, "source")
     source = AW.source_of(mine, at)
@@ -89,28 +98,56 @@ def test_the_provenance_is_the_verifiers_read_and_the_negatives_are_refused(run)
     neg = AW.negatives(at, source, rec)
     assert all(x["refused"] for x in neg.values()), neg
     assert "doesn't sign its head" in neg["prover-root-under-the-wardens-certificate (check_registration)"]["why"]
+    x = at[AW.ws.INGRESS]
+    foreign = neg["foreign-read-under-a-crossed-wiring (port)"]
+    assert foreign["cell_of"] == foreign["opens"][0] != foreign["read"][0]
+    assert "isn't the one the warden signed" in foreign["why"]
+    assert "is read twice" in neg["duplicate-read (port)"]["why"]
+    assert "holds no slot" in neg["padding-slot-read-of-a-connection-holding-no-slot (port)"]["why"]
+    padded = neg["padding-slot-read-under-a-padded-wiring (port)"]
+    assert padded["empty"] and "isn't the one the warden signed" in padded["why"]
+    assert f"connection {x.connection} has" in neg["read-past-the-connections-cells (port)"]["why"]
     gates = AW.gate_rows(at[AW.ws.EGRESS])
-    lay = at[AW.ws.EGRESS].registration["layout"]
-    assert [(g["bucket"] - lay["first_bucket"]) * lay["slots"] + g["slot"] for g in gates] == at[AW.ws.EGRESS].positions
+    lay, B = at[AW.ws.EGRESS].registration["layout"], at[AW.ws.EGRESS].params.cell_bytes
+    assert [g["bucket"] - lay["first_bucket"] for g in gates] == at[AW.ws.EGRESS].positions
+    assert [g["words"] for g in gates] == [[j * B // 2, (j + 1) * B // 2] for j in at[AW.ws.EGRESS].slots]
+
+
+def test_the_crossed_and_padded_wirings_would_open_a_foreign_cell_and_an_empty_slot(run):
+    """What the two forged wirings would have the verifier read, had `port` placed them: connection q2's read on q1's
+    cell, and a connection the warden never served on B zero bytes."""
+    _tmp, at = run
+    x = at[AW.ws.INGRESS]
+    B, w = x.params.cell_bytes, x.opening.wiring
+    forged, (q2, k2), (q1, k1), (t, j) = AW.crossed(x)
+    assert forged.digest() != x.head.wiring and q1 != q2
+    assert forged.place(x.params, [(q2, k2)]) == w.place(x.params, [(q1, k1)]) == [(t, j)]
+    assert HEADER.unpack_from(x.opening.rows[t][j * B:(j + 1) * B])[1] == q1
+    pad, (g, k), (tp, jp) = AW.padded(x)
+    assert pad.digest() != x.head.wiring and g not in {c for c, _, _ in w.connections}
+    assert pad.place(x.params, [(g, k)]) == [(tp, jp)] and x.opening.rows[tp][jp * B:(jp + 1) * B] == bytes(B)
 
 
 def test_the_altered_cell_is_committed_under_the_wardens_salt_and_doesnt_open(run):
     tmp, at = run
     mine, c, _rec, win = committed(tmp, at, "altered", altered=True)
     m, x = AW.chunks(mine)[AW.ws.INGRESS], at[AW.ws.INGRESS]
-    paths = next(e for e in win["members"] if e["name"] == m.key)["registered"]["cell"]["paths"]
+    paths = next(e for e in win["members"] if e["name"] == m.key)["registered"]["row"]["paths"]
     assert [WR.opens(x.dom, x.head.root, p, bc, bytes.fromhex(path))
-            for p, bc, path in zip(x.positions, bcs(c, m, "cell"), paths)] == [False] + [True] * (N - 1)
-    assert c.salts[m.port("cell")] == b"".join(x.opening.salts[p] for p in x.positions)
-    assert (c.rows[m.port("o0")] == c.rows[m.port("cell")]).all()
+            for p, bc, path in zip(x.positions, bcs(c, m, "row"), paths)] == [False] + [True] * (N - 1)
+    assert c.salts[m.port("row")] == b"".join(x.opening.salts[p] for p in x.positions)
+    assert (c.rows[m.port("o0")] == c.rows[m.port("row")]).all()
+    B, j = x.params.cell_bytes, x.slots[0]
+    got, want = bytes(c.rows[m.port("row")][0].astype("<u2").tobytes()), x.opening.rows[x.positions[0]]
+    assert [i for i in range(len(want)) if got[i] != want[i]] == [(j + 1) * B - 1]
 
 
 def test_salts_of_names_one_salt_for_each_row_of_a_port_of_the_window(run):
     _tmp, at = run
     mine = AW.window(at, N, REST)
-    data = [{"rows": {"cell": np.zeros((k.n, w), np.uint16)}, "outs": {"o0": np.zeros((k.n, w), np.uint16)},
-             **({"refs": np.arange(k.n)[:, None]} if k.tables else {})} for k in mine.members for w in [dict(k.rows)["cell"]]]
+    data = [{"rows": {"row": np.zeros((k.n, w), np.uint16)}, "outs": {"o0": np.zeros((k.n, w), np.uint16)},
+             **({"refs": np.arange(k.n)[:, None]} if k.tables else {})} for k in mine.members for w in [dict(k.rows)["row"]]]
     with pytest.raises(ValueError, match="one 192-byte salt for each row"):
-        AW.CS.commit(mine, data, salts_of={mine.members[0].port("cell"): bytes(AW.CS.SALT_BYTES)})
+        AW.CS.commit(mine, data, salts_of={mine.members[0].port("row"): bytes(AW.CS.SALT_BYTES)})
     with pytest.raises(ValueError, match="one 192-byte salt for each row"):
-        AW.CS.commit(mine, data, salts_of={"no-such/cell": bytes(AW.CS.SALT_BYTES * N)})
+        AW.CS.commit(mine, data, salts_of={"no-such/row": bytes(AW.CS.SALT_BYTES * N)})

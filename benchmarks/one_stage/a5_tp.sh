@@ -15,8 +15,8 @@
 #     rows, its partition's law); with A5_WINDOWS=bundles it is served_tp --deferred and its windows come from its bundles.
 #     The STANDIN entry row-tables is a5_row_tables.py: test_row_tables' window (ScaledMmS8Coordinate chunks whose x rows link
 #     its row tables) as rank 0 of a one-rank step, on a local challenger's coins (it needs A5_CHALLENGER for --main).
-#     The STANDIN entries warden and warden:altered are a5_warden.py: transfer-gate chunks whose ports open one connection's
-#     cells under the warden's signed roots, beside a drawn rest, on a warden run rehearsed here first (warden_serve.py
+#     The STANDIN entries warden and warden:altered are a5_warden.py: transfer-gate chunks whose ports open the bucket rows of
+#     one connection's cells under the warden's signed roots, beside a drawn rest, on a warden run rehearsed here first (warden_serve.py
 #     rehearse --fake, about a minute, its prompts up to 2048 tokens so that seed 0's traffic has a connection of more than
 #     a5_warden.py's 16 cells each way; only its public deployment.json, cells.jsonl and check.json are kept), on a local
 #     challenger's coins (A5_CHALLENGER=local) or the verifier's own (A5_COINS=verifier); warden:altered reads one cell a bit
