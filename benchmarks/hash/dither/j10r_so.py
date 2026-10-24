@@ -62,6 +62,7 @@ class Refs:
     def __init__(self, win, g: dict, M: int):
         self.win, self.g, self.M, self.s = win, g, M, g["s"]
         self.cache: dict[tuple, np.ndarray] = {}
+        self.itself0 = DO.h1v3_itself
 
     def where(self, pos: int) -> tuple[int, int]:
         win = self.win
@@ -100,7 +101,7 @@ class Refs:
         saved = {k: os.environ.get(k) for k in ("DITHER_H1V3_TREE", "DITHER_H1V3_SHA")}
         os.environ.update(DITHER_H1V3_TREE=tree, DITHER_H1V3_SHA=os.environ.get("DITHER_J10R_SHA") or J10R_SHA)
         try:
-            return DO.h1v3_itself(ins)
+            return self.itself0(ins)
         finally:
             for k, v in saved.items():
                 if v is None:
@@ -112,6 +113,7 @@ class Refs:
     def swapped(self):
         RefH1R.M = self.M
         h1r0, unit0, itself0 = DA.H1R, DO.h1v3_unit, DO.h1v3_itself
+        self.itself0 = itself0
         DA.H1R, DO.h1v3_unit, DO.h1v3_itself = RefH1R, self.unit, self.itself
         try:
             yield self
