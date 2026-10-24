@@ -138,7 +138,7 @@ def shaped(draw, shared: bool = False) -> dict:
 BASES = ("honest", "honest-appends", "honest-by-root", "honest-rekey", "honest-subset", "honest-block-sha512",
          "drop-appended", "stale-append-coin", "lifetime", "refusals", "release-adjacent", "plan-change-removes-missing",
          "honest-withdraw", "honest-deferred-rekey", "withdraw-planned", "honest-paced", "honest-shared-4",
-         "honest-shared-paced-uneven")
+         "honest-shared-paced-uneven", "honest-paced-one-flight", "after-boundary")
 
 
 def test_drawn_honest_sessions_agree(server) -> None:

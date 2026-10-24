@@ -189,7 +189,7 @@ def recorded(name: str, cut: int | None = None) -> dict:
 
 
 @pytest.mark.parametrize("name", ["honest", "honest-appends", "honest-block-sha512", "few", "late", "receipt-path-leaf",
-                                  "codec-block", "refusals"])
+                                  "codec-block", "refusals", "honest-paced-one-flight", "after-boundary-one-flight"])
 def test_a_recorded_session_is_counted_at_close_as_the_lean_ends_it(server, name) -> None:
     case, _ = M.recorded(name)
     reg = M.registration_of(case["registration"])
