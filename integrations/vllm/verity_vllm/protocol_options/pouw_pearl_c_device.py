@@ -326,7 +326,6 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
         self.schedule = schedule_of(schedule, scheme, kernel)
         self.main: _Lane | None = None      # the main lane, when the schedule runs it above the caller's priority
         self.sides: list[_Lane] = []         # the side lanes, as many as the schedule's ring, which calls take in turn
-        self.trees: list[_Lane] = []         # A's tree's lane beside each side lane, where the schedule moves A's tree
         self.fork: _Lane | None = None      # the lane graphs' fork beside the main lane's per-row keying, made at first use
         self.driver = _Driver(kernel.dev.cu) if self.graphs else None   # a lane graph's replay's driver calls
         self._side_turn = 0
@@ -385,8 +384,6 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
             self.main = _Lane(self.device, "greatest", 2)
         while schedule.side and len(self.sides) < schedule.ring:    # stand-ins 1, then 3, 4, … past the main lane's 2
             self.sides.append(_Lane(self.device, schedule.side_priority, 1 if not self.sides else 2 + len(self.sides)))
-        while "a_tree" in schedule.side and len(self.trees) < schedule.ring:  # stand-ins -3, -4, …
-            self.trees.append(_Lane(self.device, schedule.side_priority, -3 - len(self.trees)))
         self.details["schedule"] = {
             "name": schedule.name, "side": sorted(schedule.side), "ring": schedule.ring,
             "main": self.main.priority if schedule.main_priority == "greatest" else "the caller's",

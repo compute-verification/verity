@@ -1841,7 +1841,7 @@ def test_the_deferred_schedule_hashes_tiles_on_the_side_stream_from_rotating_set
     log = [(n, st, p) for n, st, p, _ in kernel.dev.log if not n.endswith("_smem")]
     sides = [lane.raw for lane in run.sides]
     assert [(n, st) for n, st, _ in log if st in sides] == [("pd_tiles_851", 1), ("pd_tiles_851", 3), ("pd_tiles_851", 1)]
-    assert sides == [1, 3] and run.trees == [] and {st for n, st, _ in log if st not in sides} == {main}
+    assert sides == [1, 3] and {st for n, st, _ in log if st not in sides} == {main}
     sets = run.shapes[(32, 256, 1024)].sets
     ptr = lambda j: (sets[j]["c"].data_ptr(), sets[j]["u"].data_ptr())
     gemms = [p[2:4] for n, _, p in log if n == "gemm_pearlc_d"]
@@ -1976,12 +1976,12 @@ def test_a_schedule_this_path_the_kernel_or_the_format_cannot_run_is_refused(dev
 
 def test_deferred_a_builds_as_tree_beside_the_tile_hashing_from_rotating_sets(sm90_run):
     """Under ``deferred-a`` a decode call's main lane (the recording stand-in's handle 2) runs pd_commit in mode 1 (``rows_a``:
-    each real row's digest, leaf, seed, line key and E_A line), the forming and the GEMMs; the side lane's tree lane (-3)
-    runs pd_tree (A's levels, seed_A and line_a, and no padding rows' E_A lines, though m₁₆ = 32 has them) and the side
-    lane (1) the tile leaves, on the run's side lanes and their tree lanes in turn (1 and -3, then 3 and -4).  The lanes
-    use the ring's set for the call: A's tree, seed_A, line_a, the keys, C~ and U; E_A's lines are the shape's own, which
-    only the main lane touches.  The call's keys are uploaded into its set's, and A's root is copied to the pass from its
-    set."""
+    each real row's digest, leaf, seed, line key and E_A line), the forming and the GEMMs; the call's side lane (1) runs
+    the tile leaves and the side lane after it (3) pd_tree (A's levels, seed_A and line_a, and no padding rows' E_A
+    lines, though m₁₆ = 32 has them), on the run's side lanes in turn (tiles on 1, then 3; the tree on 3, then 1), no
+    further stream.  The lanes use the ring's set for the call: A's tree, seed_A, line_a, the keys, C~ and U; E_A's
+    lines are the shape's own, which only the main lane touches.  The call's keys are uploaded into its set's, and A's
+    root is copied to the pass from its set."""
     make, kernel, weights, roots = sm90_run
     run = make()
     sh = run._shape(32, 256, 1024)
@@ -1992,10 +1992,10 @@ def test_deferred_a_builds_as_tree_beside_the_tile_hashing_from_rotating_sets(sm
     for _ in range(3):
         run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
     log = [(n, st, p, i) for n, st, p, i in kernel.dev.log if not n.endswith("_smem")]
-    sides, trees = [lane.raw for lane in run.sides], [lane.raw for lane in run.trees]
-    assert [(n, st) for n, st, _, _ in log if st in sides] == [("pd_tiles_851", st) for st in (1, 3, 1)]
-    assert [(n, st) for n, st, _, _ in log if st in trees] == [("pd_tree_851", st) for st in (-3, -4, -3)]
-    assert {st for _, st, _, _ in log if st not in sides + trees} == {2}
+    sides = [lane.raw for lane in run.sides]
+    assert [(n, st) for n, st, _, _ in log if st in sides] == [(n, st) for tree, tiles in ((3, 1), (1, 3), (3, 1))
+                                                               for n, st in (("pd_tree_851", tree), ("pd_tiles_851", tiles))]
+    assert sides == [1, 3] and {st for _, st, _, _ in log if st not in sides} == {2}
     by = {name: [(p, i) for n, _, p, i in log if n == name] for name in ("pd_commit_851", "pd_tree_851", "eprime",
                                                                           "gemm_pearlc_d", "pd_tiles_851")}
     ptr = lambda j, x: (sh.keys if j == 0 and x == "keys" else sh.sets[j][x]).data_ptr()
@@ -2017,7 +2017,7 @@ def test_deferred_a_builds_as_tree_beside_the_tile_hashing_from_rotating_sets(sm
 
 def test_deferred_a_runs_as_tree_aside_in_a_retained_pass_too_and_writes_no_padding_lines(sm90_run, tmp_path):
     """A retained pass's record reads A's tree once the side lane is done with it, so there too pd_commit runs in mode 1 on
-    the main lane and pd_tree on the tree lane, and the record keeps the tree of the call's set.  pd_tree writes no padding
+    the main lane and pd_tree on a side lane, and the record keeps the tree of the call's set.  pd_tree writes no padding
     rows' lines, at m₁₆ = 32 (which has them) as at 64, the kernels' tile."""
     make, kernel, weights, _ = sm90_run
     run = make()
@@ -2027,7 +2027,7 @@ def test_deferred_a_runs_as_tree_aside_in_a_retained_pass_too_and_writes_no_padd
     kernel.dev.log.clear()
     run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
     pd = [(n, st, p, i) for n, st, p, i in kernel.dev.log if n.startswith("pd_") and not n.endswith("_smem")]
-    assert [(n, st) for n, st, _, _ in pd] == [("pd_commit_851", 2), ("pd_tree_851", -3), ("pd_tiles_851", 1)]
+    assert [(n, st) for n, st, _, _ in pd] == [("pd_commit_851", 2), ("pd_tree_851", 3), ("pd_tiles_851", 1)]
     assert pd[0][3][2] == 1 and kept == [pd[1][2][2]] and pd[1][2][12] == 0
     run.begin()
     kernel.dev.log.clear()
@@ -2123,10 +2123,10 @@ def test_deferred_a_commits_what_the_serial_one_commits_and_leaves_the_padding_l
 
 def test_a_lane_graphs_replay_makes_the_eager_calls_driver_calls_in_its_order(sm90_run, monkeypatch):
     """A replayed call (`_replay_lanes`) keeps `_lanes`'s order and events: the caller waits for the side steps of its set's
-    last call, uploads the slot and hands over to the main lane, which replays its graph; the side lane's tree lane replays
-    A's tree behind the main graph's own event (where A's tree is aside), and the side lane the rest behind the main lane's
-    end, then waits for the tree lane; the caller waits for the main lane.  A set's first call waits for nothing, and its
-    side lane's end becomes the set's event."""
+    last call, uploads the slot and hands over to the main lane, which replays its graph; the side lane after the call's
+    replays A's tree behind the main graph's own event (where A's tree is aside), and the call's side lane the rest behind
+    the main lane's end, then waits for the tree; the caller waits for the main lane.  A set's first call waits for
+    nothing, and its side lane's end becomes the set's event."""
     from verity_vllm.protocol_options import pouw_pearl_c_host as PPH
     from verity_vllm.protocol_options import pouw_pearl_c_lanes as PPL
     make, *_ = sm90_run
@@ -2142,19 +2142,18 @@ def test_a_lane_graphs_replay_makes_the_eager_calls_driver_calls_in_its_order(sm
     run.driver = Driver()
     side0, side1 = (types.SimpleNamespace(raw=raw, event=f"side{raw // 2}", tree_event=f"tree{raw // 2}") for raw in (1, 3))
     main, sh = types.SimpleNamespace(raw=2, event="main"), types.SimpleNamespace(done=[None, "done1"])
-    tree1 = types.SimpleNamespace(raw=-4)
     up, i = run.uploads, run.uploads.i
 
     def src(k):
         return up.host_ptr + (i + k) % up.slots * up.width
-    run._replay_lanes(types.SimpleNamespace(execs=(10, 11, 12), slot_ptr=4096, ev_tree="cut"), sh, 1, side1, tree1, 0, main,
+    run._replay_lanes(types.SimpleNamespace(execs=(10, 11, 12), slot_ptr=4096, ev_tree="cut"), sh, 1, side1, side0, 0, main,
                       b"k" * 200)
     run._replay_lanes(types.SimpleNamespace(execs=(20, 0, 22), slot_ptr=8192, ev_tree=None), sh, 0, side0, None, 0, None,
                       b"k" * 200)
     assert calls == [
         ("wait", 0, "done1"), ("copy_in", 4096, src(0), 200, 0), ("record", "slot", 0), ("record", "main", 0),
-        ("wait", 2, "main"), ("launch", 10, 2), ("record", "side1", 2), ("wait", -4, "cut"), ("launch", 11, -4),
-        ("record", "tree1", -4), ("wait", 3, "side1"), ("launch", 12, 3), ("wait", 3, "tree1"), ("record", "done1", 3),
+        ("wait", 2, "main"), ("launch", 10, 2), ("record", "side1", 2), ("wait", 1, "cut"), ("launch", 11, 1),
+        ("record", "tree1", 1), ("wait", 3, "side1"), ("launch", 12, 3), ("wait", 3, "tree1"), ("record", "done1", 3),
         ("record", "main", 2), ("wait", 0, "main"),
         ("copy_in", 8192, src(1), 200, 0), ("record", "slot", 0), ("launch", 20, 0), ("record", "side0", 0),
         ("wait", 1, "side0"), ("launch", 22, 1), ("record", "done0", 1)]
