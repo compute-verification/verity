@@ -150,6 +150,8 @@ import Proofs.Flock.Claims.ZK.FinishSwLigE
 import Proofs.Flock.Claims.ZK.L0Pin
 import Proofs.Flock.Claims.ZK.L0PinCoins
 import Proofs.Flock.Claims.ZK.L0PinFrame
+import Proofs.Flock.Claims.ZK.L0PinQuiet
+import Proofs.Flock.Claims.ZK.L0PinFlags
 import Proofs.Flock.Claims.ZK.FinishSwInner
 import Proofs.Flock.Claims.ZK.FinishSwTau
 import Proofs.Flock.Claims.ZK.FinishSwRows
@@ -701,6 +703,11 @@ import Proofs.Flock.Claims.ZK.CutPrefix
   is (`Fed.asksRel_feed`, `Fed.repOpening_feed`), and past its ring switch it sends level 0's bodies
   (`Fed.repOpening_cutL0`). Where `openStep` sends anything its PIOP returned, and its level-0 rounds are `l0BodyAt`
   at zero pads (**`Fed.openStep_l0`**), which reads only its rounds' coins (`Fed.l0BodyAt_congr`).
+* `L0PinQuiet`: the algebraic phase's rounds after the first are quiet. Each is plain frames (no label that moves the
+  frame's phase) and then a squeeze (**`Quiet.rounds_quiet`**).
+* `L0PinFlags`: the frame's flags along a rep's scheduled rounds. Quiet rounds and their coins keep them, and the
+  opening's first round (its label, `LABEL_PCS`) ends the algebraic phase at `c.nPiop` (`Flags.roundFree_pcs`). So
+  past it, at the coins, the frame is outside every masked phase at `c.nPiop`, owing nothing (**`Flags.sched_opened`**).
 * `FinishSwInner`: `repCut_fw`'s `hinner` at that source. The switched view keeps `ρ_in`, `σ_in` (`padShift` moves
   `h_tx`, `h_ty` against the exposed pads; `Table.innerMsg_padShift`) and `Y₂`, and where the rows hold `Y₁`, so the
   switched source's `ρ_in`, `σ_in` and `Y` are the honest source's (`Masked.swSrcE_inner`, `Masked.swSrcE_y`). The
