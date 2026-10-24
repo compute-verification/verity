@@ -32,11 +32,11 @@ theorem check_true {b : Bool} {why : String} {u : Unit} (h : Record.check b why 
   · assumption
   · cases h
 
-/-- **The verifier's decoder reads only rounds of `1` to `65536` coins** (S12). -/
-theorem decodeWith_n (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} {sess : Session}
-    (h : Record.decodeWith hs spec text = .ok sess) :
+/-- **The verifier's decoder reads only rounds of `1` to `65536` coins** (S12), at any `keep`. -/
+theorem decodeWithK_n (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
+    {sess : Session} (h : Record.decodeWithK keep hs spec text = .ok sess) :
     ∀ x ∈ sess.streams.toList, ∀ rd ∈ x.rounds.toList, 1 ≤ rd.n ∧ rd.n ≤ 65536 := by
-  unfold Record.decodeWith at h
+  unfold Record.decodeWithK at h
   dsimp only at h
   split at h
   rotate_left
@@ -73,14 +73,19 @@ theorem decodeWith_n (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} 
       cases hr
       exact ⟨hb.1.1.1, hb.1.1.2⟩
 
+theorem decodeWith_n (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} {sess : Session}
+    (h : Record.decodeWith hs spec text = .ok sess) :
+    ∀ x ∈ sess.streams.toList, ∀ rd ∈ x.rounds.toList, 1 ≤ rd.n ∧ rd.n ≤ 65536 :=
+  decodeWithK_n id hs h
+
 /-- **An accepted record's live rounds have `1` to `65536` coins**: `liveOf`'s rounds are the decoder's, by coin
-count (`liveOf_decodeWith`). -/
-theorem liveOf_n (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Array Setup} {record : String}
-    {proofs : Array ByteArray} {lv : Live} (hv : verifyWithM hs spec tabs record proofs = .ok ())
+count (`liveOf_decodeWithK`). At any `keep` (`verifyWithMK`). -/
+theorem liveOf_nK (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Array Setup}
+    {record : String} {proofs : Array ByteArray} {lv : Live} (hv : verifyWithMK keep hs spec tabs record proofs = .ok ())
     (hl : liveOf spec record = .ok lv) (k : ℕ) (hk : k < lv.streams.size) :
     ∀ rd ∈ lv.streams[k].toList, 1 ≤ rd.n ∧ rd.n ≤ 65536 := by
-  obtain ⟨sess, -, hdec, -⟩ := verifyWithM_tables hs hv
-  obtain ⟨-, -, hsz, hall⟩ := liveOf_decodeWith hs hl hdec
+  obtain ⟨sess, -, hdec, -⟩ := verifyWithMK_tables keep hs hv
+  obtain ⟨-, -, hsz, hall⟩ := liveOf_decodeWithK keep hs hl hdec
   obtain ⟨stream, hfind, hfa⟩ := hall k (hsz ▸ hk) hk
   have hmem : stream ∈ sess.streams.toList := Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hfind)
   have hn := map_n_of_forall₂ (hfa.imp fun _ _ h => ⟨h.1, h.2⟩)
@@ -88,7 +93,13 @@ theorem liveOf_n (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Array Setup}
   have : rd.n ∈ stream.rounds.toList.map Round.n := hn ▸ List.mem_map_of_mem hrd
   obtain ⟨rd', hrd', e⟩ := List.mem_map.1 this
   rw [← e]
-  exact decodeWith_n hs hdec stream hmem rd' hrd'
+  exact decodeWithK_n keep hs hdec stream hmem rd' hrd'
+
+theorem liveOf_n (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Array Setup} {record : String}
+    {proofs : Array ByteArray} {lv : Live} (hv : verifyWithM hs spec tabs record proofs = .ok ())
+    (hl : liveOf spec record = .ok lv) (k : ℕ) (hk : k < lv.streams.size) :
+    ∀ rd ∈ lv.streams[k].toList, 1 ≤ rd.n ∧ rd.n ≤ 65536 :=
+  liveOf_nK id hs hv hl k hk
 
 /-! ## A decision's messages -/
 
@@ -252,22 +263,17 @@ theorem plain_decides_recordK (keep : Bool → Bool) {Ω : Type} {P : Claims.Pro
   have hs := act_decide hact
   rw [hset] at hs
   cases hs
-  have hn := (nextK_decide_sha512 keep hact).1 (run_acc_next sha512 P (VK keep) x ω (Φ (u, r')) hacc)
-  simp only [Bool.false_eq_true, ite_false] at hn
-  obtain ⟨hv, hc⟩ := hn
+  obtain ⟨hv, hc⟩ := (nextK_decide_sha512 keep hact).1 (run_acc_next sha512 P (VK keep) x ω (Φ (u, r')) hacc)
   obtain ⟨-, lv, hl, hcus⟩ := Claims.Bridge.Custody.checks_ok hc
-  have hv' : verifyWithM (Hashes.ofSha512 (Claims.hOf sha512) : Hashes Flock.V) spec (tabsOf sts) f.record f.proofs =
-      .ok () := by
-    have e := verdictWith_sha512 hset f.record f.proofs
-    simp only [Bool.false_eq_true, ite_false] at e
-    rw [← e] at hv
-    exact hv
+  have hv' : verifyWithMK keep (Hashes.ofSha512 (Claims.hOf sha512) : Hashes Flock.V) spec (tabsOf sts) f.record
+      f.proofs = .ok () := hv
   have hD : Claims.Bridge.Custody.liveD spec f.record = lv := by simp [Claims.Bridge.Custody.liveD, hl]
-  obtain ⟨hsz, hns⟩ := streams_ns_plain _ hv' hl
+  obtain ⟨hsz, hns⟩ := streams_ns_plainK keep _ hv' hl
   have h1 := sts_of_tables hset h
   subst h1
   rw [hD]
-  refine ⟨rfl, rfl, rfl, hsz, fun q hq => ⟨?_, liveOf_n _ hv' hl q hq⟩, (Claims.Bridge.Custody.custody_ok hcus).2.2.2⟩
+  refine ⟨rfl, rfl, rfl, hsz, fun q hq => ⟨?_, liveOf_nK keep _ hv' hl q hq⟩,
+    (Claims.Bridge.Custody.custody_ok hcus).2.2.2⟩
   rw [hns q hq]
   have : q / 2 = 0 := by simp at hsz; omega
   simp [this]
