@@ -60,13 +60,6 @@ SALT_KEY = bytes(range(100, 132))
 RUN = "r20260930-120000-test"
 
 
-@pytest.fixture(autouse=True)
-def _narrow_toy_model(monkeypatch):
-    """The toy model's linears (n = 256 and 128) are narrower than the domain's n ≥ 1,024 (`C.N_MIN`); these tests hold the
-    serving and verifying plumbing, which the floor doesn't touch, so the schemes they build take every multiple of 64."""
-    monkeypatch.setattr(C, "N_MIN", C.TILE)
-
-
 def salt_coin(roots: dict[int, bytes], epoch: int = 0, entropy: int = 7):
     """An epoch's coin commitment and its salt coin, opened after `roots`' weights root, from a seeded challenger."""
     ch = Challenger(epoch, random.Random(entropy).randbytes)

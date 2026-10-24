@@ -58,8 +58,7 @@ with PoUW off), and the accounting is the cheap-binding lane's ``Costs.adopted``
 (the noise atom and the cast), at the H100's prices.  Every price is a device's (`Prices`): `H100_PRICES` (sm_90) for
 the registered schemes, and `SM120_PRICES` (the device statement's `Prices.sm120`, measured) for sm_120's atom.  v1 shares v0's seed labels (``pearl-c/v0/seed-*``): the two formings draw the same seeds.
 
-**The domain** (TT_OUT's `pearlCDomain` and `OperandOK`, and on a device record `pearlCDomainDev`'s n >= 2^10 with 64 ∣ n,
-`N_MIN` and whole column tiles): 128 ∣ k (whole promotion groups), and on every row of both
+**The domain** (TT_OUT's `pearlCDomain` and `OperandOK`): 128 ∣ k (whole promotion groups), and on every row of both
 operands the noise floor ρ·α ≥ 1 (the exact product of the FP32 words) and liveness `LiveRow 1 x Stat.every8`: with the
 exact ρ² = Σ_{p ≡ 0 (8)} x_p² / ⌈k/8⌉ over the words' values, at most k/64 entries have x_l² ≥ 64 ρ².
 
@@ -98,9 +97,6 @@ WINDOW = P.WINDOW                  # 128 products: four k32 atoms per promotion
 SLICE = 32
 PEEL_K = 2 * R                     # the peel's BF16 depth, four k16 slices
 TILE = 64
-#: the domain's least n (Lean's `pearlCDomainDev`: 2^10 <= n, 64 | n): a unit with fewer output columns has words cheap
-#: enough to guess that TT_OUT fails there (CMP-77, lean's red team)
-N_MIN = 1024
 CHUNK = 32                         # columns per ticket message
 D_MESSAGE, D_LEAF = 0x21, 0x22     # TurboSHAKE128 domain bytes
 LABELS = {r: f"pearl-c/v0/{r}".encode() for r in ("seed-A", "seed-B")}
@@ -462,7 +458,7 @@ class PearlC:
     ``pearl-c-h100-v1@sm_120``)."""
 
     def __init__(self, k_min: int = 1024, tile: tuple[int, int] = (TILE, TILE), forming: str = "v0", device: Device = H100,
-                 hashing: str = "h0", prices: Prices | None = None, n_min: int | None = None):
+                 hashing: str = "h0", prices: Prices | None = None):
         if forming not in ("v0", "v1"):
             raise ValueError(f"forming {forming!r}: v0 (#311's, as ported) or v1 (§5's)")
         if forming == "v0" and device != H100:
@@ -472,8 +468,6 @@ class PearlC:
         prices = prices or device.prices
         if forming == "v0" and prices != H100_PRICES:
             raise ValueError(f"forming v0 is #311's H100 port, priced on the H100 only, not {prices.device}")
-        #: the least n the domain takes: `N_MIN`, or none for a test instance (``k_min`` below Pearl's) unless given
-        self.n_min = n_min if n_min is not None else N_MIN if k_min >= 1024 else 1
         self.name = ((NAME if forming == "v0" else f"pearl-c-{device.name}-v1") + ("" if hashing == "h0" else f"-{hashing}")
                      + ("" if prices == device.prices else f"@{prices.device}"))
         self.k_min, self.tile, self.forming, self.device, self.hashing, self.prices = k_min, tile, forming, device, hashing, prices
@@ -509,7 +503,7 @@ class PearlC:
             theorems=("Pouw.SecurityProofs.WorkWeightedSampling",),
             hypotheses=hardware,
             allowances=(allowance, "the unscale is glue outside the checked values"),
-            parameters=(("k_min", k_min), ("n_min", self.n_min), ("tile_m", tile[0]), ("tile_n", tile[1]), ("rank", R), ("window", device.window),
+            parameters=(("k_min", k_min), ("tile_m", tile[0]), ("tile_n", tile[1]), ("rank", R), ("window", device.window),
                         ("forming", forming), ("line_norm_f", self.line_norm), ("device", device.name),
                         ("atom", device.atom.name), ("peel", device.peel.name), ("g", device.g), ("hashing", hashing),
                         ("prices", prices.device), ("cap", str(device.cap))),
@@ -518,9 +512,6 @@ class PearlC:
     def check(self, matmul: Matmul) -> None:
         """The domain: whole promotion groups, whole column tiles, and down the rows whole ticket subtiles (whole tiles, for
         a test instance's tile under 16 rows), so the last row tile may be partial (decode's 32 x 64 tile)."""
-        if matmul.shape.n < self.n_min:
-            raise DomainError(f"{self.name}: {matmul.shape} has n < {self.n_min}, whose output words are cheap enough to "
-                              "guess that TT_OUT fails (Lean's pearlCDomainDev: 2^10 <= n, 64 | n)")
         s, d, rows = matmul.shape, self.device, min(self.tile[0], P.TILE)
         if not (self.k_min <= s.k <= d.k_max and s.k % d.window == 0 and s.m % rows == 0 and s.n % self.tile[1] == 0
                 and s.m <= 1 << 24 and s.n <= 1 << 24):

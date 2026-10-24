@@ -369,7 +369,7 @@ def test_an_unregistered_served_fp8_checkpoint_is_served_and_its_commitment_clai
 
     class Run:
         def __init__(self, s, entry, kernel, weights, roots, coins, opening, **kw):
-            started.append(Epoch.start(Workload((Matmul(0, Shape(16, 1024, 1024), 0),)), roots, coins, opening))
+            started.append(Epoch.start(Workload((Matmul(0, Shape(16, 1024, 128), 0),)), roots, coins, opening))
             self.commits = {"scheme": s.name, "salt": started[-1].salt.hex(), "coins": coins.to_json(),
                             "salt_opening": opening.to_json()}
             self.details = {}
@@ -386,7 +386,7 @@ def test_an_unregistered_served_fp8_checkpoint_is_served_and_its_commitment_clai
     monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: None))
     monkeypatch.setattr(PPD, "weight_roots", lambda kernel, weights, scheme, salt_key=None: roots)
     monkeypatch.setattr(PPD, "PearlCDeviceRun", Run)
-    model, coins = Model(_rng().standard_normal((1024, 1024), np.float32)), _coins()
+    model, coins = Model(_rng().standard_normal((128, 1024), np.float32)), _coins()
     settings = {"pouw": {"coins": coins, "device": "cuda", "kernel": "k"}}
     with PO.install(model, _serve(f"pouw:{scheme}", settings=settings)) as comp:
         c = comp.get("pouw").commitment()
