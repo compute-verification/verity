@@ -1053,13 +1053,15 @@ __device__ __forceinline__ void h1um_one(const UCall* __restrict__ calls, u32 nc
 
 // h1um on the SMs whose %smid % den < q alone: a CTA on any other SM exits at once, and the warps of the rest take units
 // from *next in turn (a unit's receipts are its own, whichever warp takes it), so every other SM stays whole to the
-// streams beside it (the next forward's kernels, which a freed h1um slot is too small for)
+// streams beside it (the next forward's kernels, which a freed h1um slot is too small for). The grid's last CTA exits
+// only once a unit has been taken, and takes them itself otherwise: if the kept SMs were full until every other CTA had
+// drained through the rest, the units still all run
 __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1um_sm(const UCall* __restrict__ calls, u32 ncalls, u32 M,
                                                       const uint8_t* __restrict__ live, u32 q, u32 den,
                                                       u32* __restrict__ next) {
   u32 smid;
   asm volatile("mov.u32 %0, %%smid;" : "=r"(smid));
-  if (smid % den >= q) return;
+  if (smid % den >= q && (blockIdx.x + 1 < gridDim.x || *(volatile u32*)next)) return;
   __shared__ WarpSmem smem[WARPS];
   const u32 wp = threadIdx.x >> 5, lane = threadIdx.x & 31, total = calls[ncalls].u0;
   for (;;) {
@@ -2350,13 +2352,14 @@ __device__ __forceinline__ void h1umj_one(const UCallR* __restrict__ calls, u32 
                                                          gu - c.u0, S);
 }
 
-// h1umj on the SMs whose %smid % den < q alone, its warps taking units from *next in turn (h1um_sm's partition)
+// h1umj on the SMs whose %smid % den < q alone, its warps taking units from *next in turn (h1um_sm's partition, its last
+// CTA's fallback too)
 __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj_sm(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
                                                        const uint8_t* __restrict__ live, u32 q, u32 den,
                                                        u32* __restrict__ next) {
   u32 smid;
   asm volatile("mov.u32 %0, %%smid;" : "=r"(smid));
-  if (smid % den >= q) return;
+  if (smid % den >= q && (blockIdx.x + 1 < gridDim.x || *(volatile u32*)next)) return;
   __shared__ WarpSmem smem[WARPS];
   const u32 wp = threadIdx.x >> 5, lane = threadIdx.x & 31, total = calls[ncalls].u0;
   for (;;) {
