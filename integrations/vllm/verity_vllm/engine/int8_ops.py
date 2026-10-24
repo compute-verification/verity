@@ -25,8 +25,7 @@ serve every other device and stay the reference.
     verity_int8::window_rows_batch(Tensor query, Tensor kq, Tensor vq, Tensor sv, Tensor v0, Tensor k_scales, int[] qsl, int[] lens,
             float scale) -> Tensor out
         every query row of the step, query bf16 [T, H, d], request r's rows qsl[r] .. qsl[r+1] - 1 the last of its lens[r]-token
-        window, over kv_quant_batch's results (`registry.int8_exact.Int8LutAttentionRow_v1{d,pos+1,scale}` per (row, head)); on
-        CUDA its integer part is one Triton launch (`engine.int8_attention_triton`)
+        window, over kv_quant_batch's results (`registry.int8_exact.Int8LutAttentionRow_v1{d,pos+1,scale}` per (row, head))
     verity_int8::kv_quant_window_batch(Tensor keys, Tensor values, int[] starts, int[] lens, Tensor k_scales)
             -> (Tensor kq, Tensor vq, Tensor sv, Tensor v0)
         kv_quant_batch of windows already read, request r's at rows starts[r] .. starts[r] + lens[r] - 1 of keys and values bf16
@@ -34,7 +33,8 @@ serve every other device and stay the reference.
 
 No Python loop runs over requests or KV heads: the ops take the step's offsets and lengths as host lists (read once a step,
 `host_lists`) and compute every window at once, padded to the step's longest, each value bit for bit the per-request form's
-(`int8_attention.reference_paged`, `kv_quant` and `window_rows`, the tests' reference).
+(`int8_attention.reference_paged`, `kv_quant` and `window_rows`, the tests' reference).  On CUDA each of the three is one
+Triton launch (`engine.int8_attention_triton`), bit for bit its torch body, which serves every other device.
     verity_int8::credited_step(Tensor seq_lens, int batch, int kv_heads, int head_dim, int read) -> (Tensor lens, Tensor wo,
             Tensor k, Tensor v)
         a credited read's step (`int8_window.CreditedRead.buffers`): request r's window at rows wo[r] .. wo[r + 1] - 1 of the
@@ -165,6 +165,22 @@ def _kv_quant_window_batch_fake(keys, values, starts, lens, k_scales):
     return _kv_fake(keys, len(lens), keys.shape[1], max(lens, default=0), keys.shape[2])
 
 
+@kv_quant_batch.register_kernel("cuda")
+def _kv_quant_batch_cuda(key_cache: torch.Tensor, value_cache: torch.Tensor, block_table: torch.Tensor, lens: list[int],
+                         k_scales: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    from verity_vllm.engine import int8_attention_triton
+    return int8_attention_triton.kv_quant_paged(key_cache, value_cache, block_table, lens, k_scales)
+
+
+@kv_quant_window_batch.register_kernel("cuda")
+def _kv_quant_window_batch_cuda(keys: torch.Tensor, values: torch.Tensor, starts: list[int], lens: list[int],
+                                k_scales: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    from verity_vllm.engine import int8_attention_triton
+    if len(starts) != len(lens) or any(o < 0 or o + s > keys.shape[0] for o, s in zip(starts, lens) if s):
+        raise ValueError(f"int8 attention: windows at rows {starts[:8]} of lengths {lens[:8]} past the {keys.shape[0]} rows read")
+    return int8_attention_triton.kv_quant_packed(keys, values, starts, lens, k_scales)
+
+
 @torch.library.custom_op(f"{LIBRARY}::window_rows_batch", mutates_args=())
 def window_rows_batch(query: torch.Tensor, kq: torch.Tensor, vq: torch.Tensor, sv: torch.Tensor, v0: torch.Tensor, k_scales: torch.Tensor,
                       qsl: list[int], lens: list[int], scale: float) -> torch.Tensor:
@@ -180,7 +196,7 @@ def _window_rows_batch_fake(query, kq, vq, sv, v0, k_scales, qsl, lens, scale) -
 def _window_rows_batch_cuda(query: torch.Tensor, kq: torch.Tensor, vq: torch.Tensor, sv: torch.Tensor, v0: torch.Tensor,
                             k_scales: torch.Tensor, qsl: list[int], lens: list[int], scale: float) -> torch.Tensor:
     from verity_vllm.engine import int8_attention_triton
-    return A.batch_rows(query, kq, vq, sv, v0, k_scales, *_rows_of_step(query, qsl, lens), scale, core=int8_attention_triton.lut_core)
+    return int8_attention_triton.batch_rows(query, kq, vq, sv, v0, k_scales, *_rows_of_step(query, qsl, lens), scale)
 
 
 def _rows_of_step(query: torch.Tensor, qsl: list[int], lens: list[int]) -> tuple[torch.Tensor, torch.Tensor]:

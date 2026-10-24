@@ -1,9 +1,12 @@
-"""VLLM-87's conformance on one GPU: `engine.int8_ops.paged_attention` (one kv_quant_batch and one window_rows_batch, the
-integer part `int8_attention_triton.lut_core`) against `int8_attention.reference_paged` (the per-request, per-KV-head
-reference) on random batches, word for word: the served output on the GPU against the reference on the GPU and on the CPU,
-and kv_quant_batch's per-request slices against `kv_quant` on the CPU.  Batches mix decode rows, chunked-prefill chunks and
-whole prompts over varied windows, at the test shapes (H 8 / G 2 / d 64, H 4 / G 1 / d 32, H 12 / G 4 / d 16) and Llama-3.1-8B's
-(H 32 / G 8 / d 128) up to windows of 8192 keys; logit scales from 1e-3 to 300 (A saturating past 2^32 at the top).
+"""VLLM-87's conformance on one GPU: `engine.int8_ops.paged_attention` and `window_attention` (one kv_quant_batch or
+kv_quant_window_batch and one window_rows_batch, on CUDA the Triton kernels of `int8_attention_triton`) against
+`int8_attention.reference_paged` (the per-request, per-KV-head reference) on random batches, word for word: the served output
+on the GPU (from the paged caches, and from a credited read's packed rows) against the reference on the GPU and on the CPU,
+and the kv ops' results byte for byte against the CPU torch body (padding included) and their per-request slices against
+`kv_quant` on the CPU.  Batches mix decode rows, chunked-prefill chunks and whole prompts over varied windows, at the test
+shapes (H 8 / G 2 / d 64, H 4 / G 1 / d 32, H 12 / G 4 / d 16, H 6 / G 3 / d 80) and Llama-3.1-8B's (H 32 / G 8 / d 128) up
+to windows of 8192 keys; logit scales from 1e-3 to 300 (A saturating past 2^32 at the top), and values from float32-subnormal
+(2^-130) to 2^100 in magnitude.
 
 Writes ``<out>/int8_batch_gpu.json``: per case its shape, rows, windows and mismatched words (every count must be 0).
 
@@ -24,13 +27,15 @@ from verity_vllm.engine import int8_attention as A
 from verity_vllm.engine import int8_ops
 
 SCHEMA = "verity-vllm/int8-batch-gpu/v1"
-#: (H, G, d, requests, longest window, block size, logit spread)
+#: (H, G, d, requests, longest window, block size, logit spread[, amplitude: q, k and v times it, a power of two])
 CASES = [(8, 2, 64, 6, 200, 16, 1.0), (4, 1, 32, 9, 70, 8, 300.0), (12, 4, 16, 5, 40, 16, 1e-3), (32, 8, 128, 8, 600, 16, 1.0),
-         (32, 8, 128, 8, 2100, 16, 1.0), (32, 8, 128, 4, 8192, 16, 1.0), (32, 8, 128, 32, 300, 16, 2.0), (8, 2, 64, 1, 1, 16, 1.0)]
+         (32, 8, 128, 8, 2100, 16, 1.0), (32, 8, 128, 4, 8192, 16, 1.0), (32, 8, 128, 32, 300, 16, 2.0), (8, 2, 64, 1, 1, 16, 1.0),
+         (8, 2, 64, 6, 90, 16, 1.0, 2.0 ** -130), (8, 2, 64, 6, 90, 16, 1.0, 2.0 ** 100), (6, 3, 80, 7, 150, 32, 1.0)]
 
 
-def batch(gen: torch.Generator, h: int, g: int, d: int, n_req: int, s_hi: int, bs: int, spread: float):
-    """A paged batch: each request a decode row, a chunk or a whole prompt over a random window, under a shuffled block table."""
+def batch(gen: torch.Generator, h: int, g: int, d: int, n_req: int, s_hi: int, bs: int, spread: float, amp: float = 1.0):
+    """A paged batch: each request a decode row, a chunk or a whole prompt over a random window, under a shuffled block table;
+    q, k and v are N(0, 4) times `amp` (2^-130: subnormal in float32, scales too)."""
     lens, rows = [], []
     for r in range(n_req):
         s = int(torch.randint(1, s_hi + 1, (1,), generator=gen)) if r else s_hi
@@ -46,15 +51,15 @@ def batch(gen: torch.Generator, h: int, g: int, d: int, n_req: int, s_hi: int, b
     table = torch.full((n_req, max(per) + 2), -1, dtype=torch.int32)
     at = 0
     for r, s in enumerate(lens):
-        k = (torch.randn(s, g, d, generator=gen) * 2).bfloat16()
-        v = (torch.randn(s, g, d, generator=gen) * 2).bfloat16()
+        k = (torch.randn(s, g, d, generator=gen) * 2 * amp).bfloat16()
+        v = (torch.randn(s, g, d, generator=gen) * 2 * amp).bfloat16()
         for b in range(per[r]):
             blk = int(order[at])
             at += 1
             table[r, b] = blk
             lo, hi = b * bs, min((b + 1) * bs, s)
             kc[blk, :hi - lo], vc[blk, :hi - lo] = k[lo:hi], v[lo:hi]
-    query = (torch.randn(sum(rows), h, d, generator=gen) * 2).bfloat16()
+    query = (torch.randn(sum(rows), h, d, generator=gen) * 2 * amp).bfloat16()
     qsl = torch.tensor([0, *torch.tensor(rows).cumsum(0).tolist()], dtype=torch.int32)
     kamax = torch.stack([kc[:, :, j].float().abs().amax() for j in range(g)])
     ks = (kamax * torch.rand(g, generator=gen).clamp(min=0.3) / torch.tensor(127.0)).float()
@@ -77,16 +82,32 @@ def run_case(seed: int, case: tuple) -> dict[str, Any]:
     torch.cuda.synchronize()
     ls = lens.tolist()
     kv = int8_ops.kv_quant_batch(dev[1], dev[2], dev[5], ls, dev[6])
-    kv_bad = 0
+    kv_bad = _bytes_differ(kv, int8_ops.kv_quant_batch(kc, vc, table, ls, ks))
     for r, s in enumerate(ls):
         want = A.kv_quant(*A.window_of(kc, vc, table[r], s), ks)
-        got = (kv[0][r, :, :s], kv[1][r, :, :s], kv[2][r], kv[3][r])
-        kv_bad += sum(int((x.cpu().contiguous().view(torch.uint8) != y.contiguous().view(torch.uint8)).sum()) for x, y in zip(got, want))
+        kv_bad += _bytes_differ((kv[0][r, :, :s], kv[1][r, :, :s], kv[2][r], kv[3][r]), want)
+    wins = [A.window_of(kc, vc, table[r], s) for r, s in enumerate(ls)]
+    starts = [0, *torch.tensor(ls).cumsum(0).tolist()[:-1]]
+    keys, values = (torch.cat([w[j] for w in wins]).cuda() for j in (0, 1))
+    credited = torch.full_like(dev[0], float("nan"))
+    int8_ops.window_attention(dev[0], keys, values, starts, dev[3], dev[4], dev[6], scale, credited)
+    kvw = int8_ops.kv_quant_window_batch(keys, values, starts, ls, dev[6])
+    kv_bad += _bytes_differ(kvw, kv)
     sw = words(served)
     return {"seed": seed, "H": case[0], "G": case[1], "d": case[2], "requests": case[3], "rows": int(qsl[-1]), "windows": ls,
             "row_counts": (qsl[1:] - qsl[:-1]).tolist(), "scale": scale, "words": int(sw.numel()),
             "vs_gpu_reference": int((sw != words(gpu_ref)).sum()), "vs_cpu_reference": int((sw != words(cpu_ref)).sum()),
-            "gpu_vs_cpu_reference": int((words(gpu_ref) != words(cpu_ref)).sum()), "kv_mismatch": kv_bad}
+            "gpu_vs_cpu_reference": int((words(gpu_ref) != words(cpu_ref)).sum()),
+            "credited_vs_cpu_reference": int((words(credited) != words(cpu_ref)).sum()), "kv_mismatch": kv_bad}
+
+
+def _bytes_differ(got, want) -> int:
+    """Bytes that differ between two tuples of tensors (shapes equal, else every byte)."""
+    bad = 0
+    for x, y in zip(got, want, strict=True):
+        x, y = x.cpu().contiguous().view(torch.uint8), y.cpu().contiguous().view(torch.uint8)
+        bad += int((x != y).sum()) if x.shape == y.shape else max(x.numel(), y.numel(), 1)
+    return bad
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -100,8 +121,10 @@ def main(argv: list[str] | None = None) -> int:
             rows.append(run_case(1000 * i + seed, case))
             r = rows[-1]
             print(f"[batch] H={r['H']} G={r['G']} d={r['d']} reqs={r['requests']} rows={r['rows']} max_s={max(r['windows'])} "
-                  f"words={r['words']} vs_gpu_ref={r['vs_gpu_reference']} vs_cpu_ref={r['vs_cpu_reference']} kv={r['kv_mismatch']}", flush=True)
-    bad = sum(r["vs_gpu_reference"] + r["vs_cpu_reference"] + r["gpu_vs_cpu_reference"] + r["kv_mismatch"] for r in rows)
+                  f"words={r['words']} vs_gpu_ref={r['vs_gpu_reference']} vs_cpu_ref={r['vs_cpu_reference']} "
+                  f"credited={r['credited_vs_cpu_reference']} kv={r['kv_mismatch']}", flush=True)
+    bad = sum(r["vs_gpu_reference"] + r["vs_cpu_reference"] + r["gpu_vs_cpu_reference"] + r["credited_vs_cpu_reference"] + r["kv_mismatch"]
+              for r in rows)
     doc = {"schema": SCHEMA, "argv": sys.argv, "torch": torch.__version__, "device": torch.cuda.get_device_name(0), "cases": rows,
            "words": sum(r["words"] for r in rows), "mismatch": bad, "ok": bad == 0}
     Path(a.out).mkdir(parents=True, exist_ok=True)

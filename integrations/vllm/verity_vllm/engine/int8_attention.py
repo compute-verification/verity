@@ -216,7 +216,7 @@ def lut_core(qi: torch.Tensor, kq: torch.Tensor, vq: torch.Tensor, req: torch.Te
     """The integer heart of `window_rows` for every query row of a step at once: (Y [T, H, d], L [T, H], e(0) [T, H]), int64, of
     Q' qi [T, H, d] (integers in [-127, 127]) over the K' and V' [B, G, s_max, d] of each row's request req [T] at its position
     pos [T], under A a [T, H]: S = Q' K'^T, e = LUT[min(((m - S) A) >> 32, 255)] at keys 0..pos (0 past it), L = sum e, Y = P V'
-    with P = e at keys 1..pos.  Integer products and sums (exact in any order); `int8_attention_triton.lut_core` is the CUDA body."""
+    with P = e at keys 1..pos.  Integer products and sums (exact in any order); `int8_attention_triton.lut_rows` computes it on CUDA inside the row."""
     t, h, d = qi.shape
     g_heads, s_max = kq.shape[1], kq.shape[2]
     rep = h // g_heads
