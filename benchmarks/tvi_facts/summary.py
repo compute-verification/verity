@@ -18,7 +18,8 @@ import sys
 
 import facts
 
-ORDER = ["sub10kbit", "sub10kB", "tlora10kB", "sub100kB", "tlora100kB", "sub1MB", "tlora1MB", "lora16", "full"]
+ORDER = ["sub10kbit", "sub3kB", "tlora3kB", "sub10kB", "tlora10kB", "sub30kB", "sub100kB", "tlora100kB", "sub1MB",
+         "tlora1MB", "lora16", "full"]
 HELD4 = ["city", "year", "employer", "university"]
 
 
@@ -64,19 +65,29 @@ def main():
             k = (r.get("model"), r["group"])
             cand = (r["trainq"]["bits"], r["held"]["bits"], r["lr"])
             best_lr[k] = max(best_lr.get(k, cand), cand)
-    rows = {}
+    rows, long = {}, []
     for r in res:
         k = (r.get("model"), r["group"])
+        if r["name"].startswith("e_"):
+            long.append(r)
+            continue
         if "_lr" in r["name"] and (k not in best_lr or r["lr"] != best_lr[k][2]):
             continue
         rows.setdefault((r.get("model"), r["n"], r["group"]), []).append(r)
+    order = lambda r: (r.get("model") or "", r["n"], ORDER.index(r["group"]) if r["group"] in ORDER else 99,
+                       r["epochs"], r["lr"], r.get("seed", 0))
+    tables = [("the sweep's learning rate", sorted((r for v in rows.values() for r in v), key=order)),
+              ("long training, every learning rate (plan e)", sorted(long, key=order))]
     out = []
-    print("| model | N | H | state | S | S/H | lr | seed | held-out acc (4 attr) | held-out bits [95%] | "
-          "recall of H4 [95%] | trained-phrasing acc (6 attr) | trained-phrasing bits [95%] | recall of H [95%] | "
-          "bits per bit of S |")
-    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
-    for key in sorted(rows, key=lambda k: (k[0] or "", k[1], ORDER.index(k[2]) if k[2] in ORDER else 9)):
-        for r in sorted(rows[key], key=lambda r: r.get("seed", 0)):
+    for title, table in tables:
+        if not table:
+            continue
+        print(f"\n{title}\n")
+        print("| model | N | H | state | S | S/H | lr | epochs | seed | held-out acc (4 attr) | held-out bits [95%] | "
+              "recall of H4 [95%] | trained-phrasing acc (6 attr) | trained-phrasing bits [95%] | recall of H [95%] | "
+              "bits per bit of S |")
+        print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+        for r in table:
             n = r["n"]
             hb, hlo, hhi, H4 = bits(r["held"]["acc"], HELD4, n)
             tb, tlo, thi, H = bits(r["trainq"]["acc"], facts.ATTR_NAMES, n)
@@ -91,7 +102,8 @@ def main():
                     "tokens": r["tokens"], "fresh": fresh.get(r["name"])}
             out.append(line)
             print(f"| {(r.get('model') or '').split('/')[-1]} | {n} | {kib(H)} | {r['group']} | {kib(r['S_bits'])} | "
-                  f"{r['S_bits'] / H:.3g} | {r['lr']:g} | {line['seed']} | {hacc:.3f} | {hb:.0f} [{hlo:.0f}, {hhi:.0f}] | "
+                  f"{r['S_bits'] / H:.3g} | {r['lr']:g} | {r['epochs']} | {line['seed']} | {hacc:.3f} | "
+                  f"{hb:.0f} [{hlo:.0f}, {hhi:.0f}] | "
                   f"{hb / H4:.3f} [{hlo / H4:.3f}, {hhi / H4:.3f}] | {tacc:.3f} | {tb:.0f} [{tlo:.0f}, {thi:.0f}] | "
                   f"{tb / H:.3f} [{tlo / H:.3f}, {thi / H:.3f}] | {tb / r['S_bits']:.2g} |")
     print()

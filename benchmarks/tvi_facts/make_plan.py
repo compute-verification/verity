@@ -6,7 +6,8 @@ N_SMALL trains longer because its epochs are only a few steps.
 import json
 import sys
 
-S_GRID = {"sub10kbit": 10_000, "sub10kB": 80_000, "sub100kB": 800_000, "sub1MB": 8_000_000}
+S_GRID = {"sub10kbit": 10_000, "sub3kB": 24_000, "sub10kB": 80_000, "sub30kB": 240_000, "sub100kB": 800_000,
+          "sub1MB": 8_000_000}
 SWEEP_LR = {"full": [2e-5, 1e-4], "lora16": [5e-4, 2e-3], "sub": [3e-4, 1e-3, 3e-3]}
 N_SMALL, N_MID, N_BIG = 200, 2000, 20000
 E_SMALL, E_MID, E_BIG = 30, 12, 12
@@ -19,7 +20,8 @@ BIG_LAST = {"sub10kB", "sub10kbit"}
 ALL_MAPS = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
 MLP = ["gate_proj", "up_proj", "down_proj"]
 # tiny LoRA sized to S: rank 1 on chosen maps, trained directly (S = 16 bits x parameters)
-TLORA = {"tlora10kB": {"layers": [12], "maps": ["down_proj"], "rank": 1},              # 5,760 params, 11.5 kB
+TLORA = {"tlora3kB": {"layers": [12], "maps": ["o_proj"], "rank": 1},                  # 1,792 params, 3.6 kB
+         "tlora10kB": {"layers": [12], "maps": ["down_proj"], "rank": 1},              # 5,760 params, 11.5 kB
          "tlora100kB": {"layers": [8, 12, 16], "maps": MLP, "rank": 1},                # 51,840 params, 104 kB
          "tlora1MB": {"layers": list(range(24)), "maps": ALL_MAPS, "rank": 1}}         # 549,888 params, 1.1 MB
 SWEEP_LR["tlora"] = [5e-4, 1.5e-3]  # S far below H at N_BIG: they only confirm the ceiling
@@ -57,9 +59,26 @@ def plan(mid, big):
     return {"slots": 3, "tasks": tasks}
 
 
+def long_plan():
+    """e.json: the small states trained to convergence. The 12-epoch sweeps pick the top lr for every subspace and
+    tiny-LoRA state, so these go higher and longer: N_MID for 30 epochs at S/H ~ 100, N_SMALL for 90 epochs over
+    S/H = 1 to 1000."""
+    tasks = []
+    for g, lr in (("sub1MB", 3e-3), ("sub1MB", 1e-2), ("tlora1MB", 5e-3), ("tlora1MB", 1.5e-2)):
+        tasks.append(task(g, N_MID, lr, 30))
+    for g in ("sub10kbit", "sub3kB", "sub10kB", "sub30kB", "sub100kB", "tlora3kB", "tlora10kB", "tlora100kB",
+              "tlora1MB"):
+        for lr in ((3e-3, 1e-2) if g.startswith("sub") else (5e-3, 1.5e-2)):
+            tasks.append(task(g, N_SMALL, lr, 90, bs=16))
+    for t in tasks:
+        t["name"] = f"e_{t['name']}_E{t['epochs']}"
+    return {"slots": 3, "tasks": tasks}
+
+
 if __name__ == "__main__":
     for k, (mid, big) in SPLIT.items():
         json.dump(plan(mid, big), open(f"{k}.json", "w"), indent=1)
+    json.dump(long_plan(), open("e.json", "w"), indent=1)
     if len(sys.argv) > 1:
         # a second model at N_MID: `make_plan.py PREFIX GROUP=LR ...` -> PREFIX.json, one seed per group
         prefix, tasks = sys.argv[1], []
