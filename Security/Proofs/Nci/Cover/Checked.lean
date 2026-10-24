@@ -1,7 +1,6 @@
 import Properties.NciDesc.Cover
+import Properties.Proofs.Nci.Agrees
 import Properties.Proofs.Nci.DescVerdict
-import Properties.Proofs.Nci.Novel
-import Properties.Proofs.Nci.OperandsResolve
 import Proofs.Nci.Cover.Training
 
 /-!
@@ -14,9 +13,8 @@ of every verdict of the gate-level check `NciCheck.evaluate`, from the verdict's
 The check of record is `NciCheck.Baseline.evaluate`: `Desc.evaluate`, θ and the owners by root node, then θ's provenance.
 Its verdict is `Desc.evaluate`'s (`baseline_desc`), and `Properties.DescAgrees` makes that the gate-level check's on every
 expansion of the instance, gate by gate, so `checkedCoverTraining_of_descAgrees` proves `CheckedCoverTraining` from it.
-It is not yet a guarantee: `DescAgrees` rests on two open statements, `Resolve.BodiesOk` and `Novel.ReadsExact`
-(`descAgrees_of_open`, with `operandsResolve_of` for `Walk.OperandsResolve`), and `checkedCoverTraining_of` proves
-`CheckedCoverTraining` from them.
+It is not yet a guarantee: `DescAgrees` rests on one open statement, `Novel.ReadsExact` (`descAgrees_of_readsExact`),
+and `checkedCoverTraining_of` proves `CheckedCoverTraining` from it.
 -/
 
 namespace NciCheck.Properties.SecurityProofs
@@ -44,9 +42,8 @@ theorem baseline_desc {j tr out : Json} (h : Baseline.evaluate j tr = .ok out) :
 theorem checkedCoverTraining_of_descAgrees (h : Properties.DescAgrees) : Properties.CheckedCoverTraining :=
   fun _ _ _ hev => onExpansions_of h (fun _ _ => coverTrained) (baseline_desc hev)
 
-/-- **A verdict of compliance of the check of record carries the cover theorem's factor, given `DescAgrees`'s open
-statements.** -/
-theorem checkedCoverTraining_of (hB : Resolve.BodiesOk) (hR : Novel.ReadsExact) : Properties.CheckedCoverTraining :=
-  checkedCoverTraining_of_descAgrees (Novel.descAgrees_of_open (OperandsResolve.operandsResolve_of hB) hB hR)
+/-- **A verdict of compliance of the check of record carries the cover theorem's factor, given `ReadsExact`.** -/
+theorem checkedCoverTraining_of (hR : Novel.ReadsExact) : Properties.CheckedCoverTraining :=
+  checkedCoverTraining_of_descAgrees (Novel.descAgrees_of_readsExact hR)
 
 end NciCheck.Properties.SecurityProofs

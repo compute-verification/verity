@@ -18,11 +18,11 @@ resolve in the activations it visits (`Reach`; `gate_ok_of`, `depth_lt_fuel`).
 input node called with no arguments (`Desc.bodiesLaidOut`, `bodiesLaidOut_spec`), so the primitive the walk locates
 returns one value and an input's gate reads nothing (`gate_reads_of`).
 
-So `GatesLocated` holds wherever two smaller statements do, each a named `Prop` here, open (`gatesLocated_of`):
+So `GatesLocated` holds wherever two smaller statements do, each a named `Prop` here (`gatesLocated_of`):
 `OperandsResolve` (operands resolve in every activation the walk visits; `OperandsResolve.operandsResolve_of` proves it
 from `Resolve.BodiesOk`) and `OperandsEarlier` (every operand the walk locates is an earlier gate;
-`Resolve.operandsEarlier_of` proves it from `Resolve.BodiesOk`). `descAgrees_of_gaps` gives
-`DescAgrees` from those two and `NovelExact`.
+`Resolve.operandsEarlier_of` proves it from `Resolve.BodiesOk`), and `Resolve.bodiesOk` proves `Resolve.BodiesOk`.
+`descAgrees_of_gaps` gives `DescAgrees` from those two and `NovelExact`.
 -/
 
 namespace NciCheck.Properties.SecurityProofs.Walk
@@ -1015,7 +1015,7 @@ theorem gatesLocated_of (hO : OperandsResolve) (hE : OperandsEarlier) : GatesLoc
   obtain ⟨⟨w, hw⟩, hinp⟩ := gate_reads_of P hb hx
   exact ⟨p, ops, w, ⟨⟨sc, hx⟩, hw, hinp⟩, hE bytes P hdec hov hlo hin hwk han g hg p ops sc hx⟩
 
-/-- **`DescAgrees`, from the three open statements**: `GatesLocated` through `gatesLocated_of`, and `NovelExact`. -/
+/-- **`DescAgrees`, from three statements**: `GatesLocated` through `gatesLocated_of`, and `NovelExact`. -/
 theorem descAgrees_of_gaps (hO : OperandsResolve) (hE : OperandsEarlier) (hN : NovelExact) :
     Properties.DescAgrees :=
   descAgrees_of (gatesLocated_of hO hE) hN

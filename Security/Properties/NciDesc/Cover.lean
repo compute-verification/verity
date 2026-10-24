@@ -17,8 +17,8 @@ provenance, its verdict `Desc.evaluate`'s. `CheckedCoverTraining` states the cov
 the check of record, on every expansion of the instance gate by gate (`OnExpansions`), of which there is one.
 
 It is not a guarantee yet: `checkedCoverTraining_of_descAgrees` (`Proofs.Nci.Cover.Checked`, package `security_proofs`,
-whose proof needs `Nci.Cover.SecurityProofs.CoverTraining`) proves it from `DescAgrees`, whose proof rests on open
-statements (`descAgrees_of_open`, `Properties.Proofs.Nci.Novel`).
+whose proof needs `Nci.Cover.SecurityProofs.CoverTraining`) proves it from `DescAgrees`, whose proof rests on one open
+statement, `Novel.ReadsExact` (`descAgrees_of_readsExact`, `Properties.Proofs.Nci.Agrees`).
 -/
 
 namespace NciCheck.Properties

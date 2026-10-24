@@ -6,7 +6,8 @@ import Properties.Proofs.Nci.DescVerdict
 
 Each thread bound of `Properties.NciDesc.Verdict`, from `DescAgrees` and the bound of a verdict of `NciCheck.evaluate`
 (`Throttles` and its forms, `Proofs.Nci.Verdict`), through `Properties.Proofs.Nci.DescVerdict`. They take `DescAgrees` as
-a hypothesis while its proof is open (`descAgrees_of_open`, `Properties.Proofs.Nci.Novel`).
+a hypothesis while its proof rests on one open statement, `Novel.ReadsExact` (`descAgrees_of_readsExact`,
+`Properties.Proofs.Nci.Agrees`).
 -/
 
 namespace NciCheck.Properties.SecurityProofs
