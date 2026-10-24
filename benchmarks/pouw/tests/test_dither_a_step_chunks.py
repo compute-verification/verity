@@ -11,6 +11,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+
 from verity.core.protocols.pouw.circuit import h1zy as Z
 
 DITHER = Path(__file__).resolve().parents[2] / "hash" / "dither"
