@@ -1,7 +1,7 @@
 {
  "dsa-indexer-indexshare-h200": {
-  "digest": "37e68a1eaf764a950018412b46084c448a8825e8b9b5d91074e1cf859afeba0fa7d989b93872c33717e07fa3ac4bf0d70cb811a0ea3fb1cf1363770b7db5fc1d",
-  "gates": 24798,
+  "digest": "707b717f36c0e998209f6748111a77be65805e19e60bd098f64edaefae54fba66f4e066aebc09f5b899d2a869f3163456c0318de4ba63334cb34092ce9d8c2a7",
+  "gates": 18606,
   "nodes": 63
  },
  "moe-experts-fp8-ue8m0-h200": {
