@@ -142,7 +142,7 @@ theorem foldlM_stepAt_vals (c : Cfg) (hc : ∀ p, p < c.order.size → c.order[p
       simp only [nAbs] at hb
       have hd1 : L.drop (q + 16) = colBytes [v] ++ (encs fs ++ post) := by
         rw [← List.drop_drop, hd, enc_one, List.append_assoc,
-          List.drop_left' (FlockSoundness.Refine.header_length 3 1 1)]
+          List.drop_left' (FlockSoundness.Refine.Frame.header_length 3 1 1)]
         simp [colBytes]
       obtain ⟨r₁, hr₁, h1₁, h2₁⟩ := foldlM_absorb1_vals c hc hN L [v] s (o ++ header 3 1 1) fr (q + 16) _ hon
         (by simp; omega) hd1
@@ -159,7 +159,7 @@ theorem foldlM_stepAt_vals (c : Cfg) (hc : ∀ p, p < c.order.size → c.order[p
       simp only [nAbs] at hb
       have hd1 : L.drop (q + 16) = colBytes vs ++ (encs fs ++ post) := by
         rw [← List.drop_drop, hd, enc_vec, List.append_assoc,
-          List.drop_left' (FlockSoundness.Refine.header_length 3 2 vs.length)]
+          List.drop_left' (FlockSoundness.Refine.Frame.header_length 3 2 vs.length)]
       obtain ⟨r₁, hr₁, h1₁, h2₁⟩ := foldlM_absorb1_vals c hc hN L vs s (o ++ header 3 2 vs.length) fr (q + 16) _
         hon (by omega) hd1
       have hs : stepAt c (s, o, fr, q) (.vec vs) = .ok r₁ := hr₁
@@ -188,7 +188,7 @@ theorem roundFree_vals (c : Cfg) (s : Masker) (fs : List Frame) (k : UInt8) (n :
         .ok (out, { s with pos := s.pos + nAbs fs, owed := some n }, fr) ∧
       fr.toList.map (wd (encs fs ++ (Frame.sq k n).enc)) = fvals fs := by
   obtain ⟨r, hr, h1, h2⟩ := foldlM_stepAt_vals c hc hN (encs fs ++ (Frame.sq k n).enc) fs s ByteArray.empty #[] 0 _
-    hon hp hb (List.drop_zero _)
+    hon hp hb List.drop_zero
   rw [roundFree_encs c s fs k n (by rw [hi]; simp) hm hk h0 hn, hr]
   obtain ⟨m, o, fr, q⟩ := r
   simp only at h1 h2
@@ -219,7 +219,7 @@ theorem roundFree_zcFree (c : Cfg) (s : Masker) (pre post : List Frame) (k : UIn
       .ok ({ m with on := true },
         o₁ ++ (labelFrame LABEL_ZC.toUTF8 ++ labelFrame _root_.Flock.Zk.LABEL_PADS.toUTF8 ++ bytesFrame c.root), #[],
         0 + (encs pre).length + 16 + (LABEL_ZC.toUTF8.size + 15) / 16 * 16) := by
-    simp only [stepAt, label_zc c m hon hd] <;> rfl
+    simp only [stepAt, label_zc c m hon hd]; rfl
   have hp₂ := stepAt_pos c _ _ _ hs₂
   simp only at hp₂
   have he : encs (pre ++ Frame.label LABEL_ZC.toUTF8 :: post) ++ (Frame.sq k n).enc =
@@ -297,26 +297,26 @@ theorem set!_hit {α : Type} [Inhabited α] (v : Array α) {j : ℕ} (a : α) (h
   simp [h]
 
 theorem foldl_set_size {α β : Type} (f : Array α → β → Array α) (hf : ∀ v e, (f v e).size = v.size) :
-    ∀ (Z : List β) (v : Array α), (Z.foldl f v).size = v.size
+    ∀ (zs : List β) (v : Array α), (zs.foldl f v).size = v.size
   | [], _ => rfl
-  | e :: Z, v => by rw [List.foldl_cons, foldl_set_size f hf Z, hf]
+  | e :: zs, v => by rw [List.foldl_cons, foldl_set_size f hf zs, hf]
 
 theorem foldl_set_miss {α : Type} [Inhabited α] (g : ℕ → α → α) (f : Array α → ℕ × α → Array α)
     (hf : ∀ v e, f v e = v.set! e.1 (g e.1 e.2)) :
-    ∀ (Z : List (ℕ × α)) (v : Array α) (i : ℕ), (∀ e ∈ Z, e.1 ≠ i) → (Z.foldl f v)[i]! = v[i]!
+    ∀ (zs : List (ℕ × α)) (v : Array α) (i : ℕ), (∀ e ∈ zs, e.1 ≠ i) → (zs.foldl f v)[i]! = v[i]!
   | [], _, _, _ => rfl
-  | e :: Z, v, i, h => by
-    rw [List.foldl_cons, foldl_set_miss g f hf Z _ i (fun e' he' => h e' (List.mem_cons_of_mem _ he')), hf]
+  | e :: zs, v, i, h => by
+    rw [List.foldl_cons, foldl_set_miss g f hf zs _ i (fun e' he' => h e' (List.mem_cons_of_mem _ he')), hf]
     exact set!_ne v _ (h e List.mem_cons_self)
 
 /-- **The fold that sets each pair's place, at a place pair `p` alone names**, holds `g` of pair `p`. -/
 theorem foldl_set_at {α : Type} [Inhabited α] (g : ℕ → α → α) (f : Array α → ℕ × α → Array α)
-    (hf : ∀ v e, f v e = v.set! e.1 (g e.1 e.2)) (Z : List (ℕ × α)) (v : Array α) {i p : ℕ}
-    (hp : p < Z.length) (hi : Z[p].1 = i) (hu : ∀ q (hq : q < Z.length), Z[q].1 = i → q = p) (hv : i < v.size) :
-    (Z.foldl f v)[i]! = g i Z[p].2 := by
-  have hZ : Z = Z.take p ++ Z[p] :: Z.drop (p + 1) := by
+    (hf : ∀ v e, f v e = v.set! e.1 (g e.1 e.2)) (zs : List (ℕ × α)) (v : Array α) {i p : ℕ}
+    (hp : p < zs.length) (hi : zs[p].1 = i) (hu : ∀ q (hq : q < zs.length), zs[q].1 = i → q = p) (hv : i < v.size) :
+    (zs.foldl f v)[i]! = g i zs[p].2 := by
+  have hZ : zs = zs.take p ++ zs[p] :: zs.drop (p + 1) := by
     rw [← List.drop_eq_getElem_cons hp, List.take_append_drop]
-  generalize hZp : Z[p] = zp at hi ⊢
+  generalize hZp : zs[p] = zp at hi ⊢
   rw [hZp] at hZ
   rw [hZ, List.foldl_append, List.foldl_cons]
   rw [foldl_set_miss g f hf _ _ i ?_, hf, hi]
