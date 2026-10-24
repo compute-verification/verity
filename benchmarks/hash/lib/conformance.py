@@ -832,7 +832,7 @@ def case_splitk(d: Dev, rng: random.Random, quick: bool) -> None:
         got_dig = chunks(d.down(dig, 64 * N), 64)
         want_dig = [G.row_digest(w, G.WORD_BITS, G.SCHEMA_V2) for w in reg.rows]
         dig_ok = got_dig == want_dig and (v is None or [x.hex() for x in got_dig] == [e["row_digest"] for e in v["leaf"]])
-        report("splitk/leaves", pinned and packed_ok and words_ok and dig_ok, case=name, k=k, chunks=n, leaves=N,
+        report("splitk/leaves", pinned and packed_ok and words_ok and dig_ok, vector=name, k=k, chunks=n, leaves=N,
                leaf_bytes=lb, reference_pinned=pinned, packed=packed_ok, words=words_ok, row_digests=dig_ok,
                dig_diff=first_diff(got_dig, want_dig))
         width, size = d.lib.tree_width(N), d.lib.tree_bytes(N)
@@ -846,7 +846,7 @@ def case_splitk(d: Dev, rng: random.Random, quick: bool) -> None:
             frames_ok = v is None or [x.hex() for x in levels[0][:N]] == [e["frame_leaf"] for e in v["leaf"]]
             got_bc = chunks(d.down(bc, 128 * N), 128)
             report("splitk/commit", ok and frames_ok and got_bc == list(reg.bcs) and root == reg.root.hex()
-                   and (v is None or root == v["root"]), case=name, form=fname, root=root,
+                   and (v is None or root == v["root"]), vector=name, form=fname, root=root,
                    want=v["root"] if v else reg.root.hex(), where=where, frame_leaves=frames_ok,
                    bc_diff=first_diff(got_bc, list(reg.bcs)))
         if v is None:
@@ -873,7 +873,7 @@ def case_splitk(d: Dev, rng: random.Random, quick: bool) -> None:
                 d.lib.chunk_rows_launch(cp, k, sp, R, bad[0], bad[1], out, st, d.s)
             except vclib.LaunchError:
                 refused.append(bad)
-        report("splitk/controls-rejected", wroot != v["root"] and len(refused) == 3, case=name, whole_root=wroot,
+        report("splitk/controls-rejected", wroot != v["root"] and len(refused) == 3, vector=name, whole_root=wroot,
                refused=[list(b) for b in refused])
 
 
