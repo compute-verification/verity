@@ -8,7 +8,7 @@ import json
 
 import pytest
 
-from research.drive import CHECK_STEPS, launch_vars
+from research.drive import CHECK_STEPS, Driver, launch_vars
 from test_queue import World, _git
 from test_queue_drive import Harness, _check, _failed_run, _killed_run, _steps_run, _tip
 
@@ -251,3 +251,11 @@ def test_a_deferred_record_from_before_the_post_landing_run_still_finishes_under
     h.tick()
     assert _git(world.origin, "diff", "--stat", base, "main") == "" and any("reverted on `main`" in x for x in h.posts), h.posts
     assert not h.q.load_state()["drive"]["deferred"]
+
+
+def test_the_lean_checks_steps_are_never_deferred_but_its_suites_may_be(world, monkeypatch, tmp_path):
+    """Daniel, 11 Oct: a part whose cold run takes over ~10 minutes runs after its train lands, and the Lean check stays before.
+    lean-suites, the pytest suites on the Lean build, took 28-65 min before landing (24 Oct), after lean-audit had passed."""
+    h = Postland(world, monkeypatch, tmp_path)
+    d = Driver(h.q, on="m1", launch=h.launch, defer=frozenset({"lean-audit", "lean-build", "lean-suites", "pytest"}))
+    assert d.defer == {"lean-suites", "pytest"}

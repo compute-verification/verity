@@ -614,8 +614,9 @@ class Driver:
         self.regenerate_locks = regenerate_locks
         #: steps a train lands without (Daniel through top, 17 Oct; CI-30): the post-landing run checks them on `main`
         #: (`postland`), and one that fails reverts the PR it implicates, else every landing since the last verified tip (none
-        #: when no landing touches what failed).  The Lean check's steps are never deferred.
-        defer = {x for x in defer if not x.startswith("lean")}
+        #: when no landing touches what failed).  The Lean check's steps are never deferred; lean-suites, the pytest suites that use
+        #: its build, may be (Daniel, 11 Oct: a part whose cold run is over ~10 min; lean-suites takes 28-65 min, top 24 Oct 04:46Z).
+        defer = {x for x in defer if not x.startswith("lean") or x == "lean-suites"}
         self.defer = frozenset(defer | ({"flock-rust-tests"} if "circuit-check" in defer else set()))  # it runs after it
         #: the post-landing run of the deferred steps on `main`'s tip (`postland`): `train.sh COMMIT MACHINE --deferred STEPS`; an
         #: injected `launch` launches it too
