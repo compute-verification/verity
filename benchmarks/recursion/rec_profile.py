@@ -85,14 +85,21 @@ def timev(p: Path) -> dict[str, float] | None:
     return {"wall_s": wall_seconds(m.group(1)), "peak_rss_gb": int(rss.group(1)) / 2**20 if rss else None, "cpu_s": cpu}
 
 
-def live_lines(p: Path) -> list[dict[str, Any]]:
-    """The prover's ``LIVE`` records in ``prove.tsv`` (85's stamped stdout: ``time<TAB>LIVE {json}``) or a plain stdout."""
+def live_lines(p: Path) -> list[tuple[float | None, dict[str, Any]]]:
+    """The prover's ``LIVE`` records with the time each arrived: ``prove.tsv`` is 85's stamped stdout
+    (``time<TAB>LIVE<TAB>{json}``, printed when the session's verdict is in); a plain stdout has no times."""
     out = []
     for ln in text(p).splitlines():
-        ln = ln.split("\t", 1)[1] if "\t" in ln and ln.split("\t", 1)[1].startswith("LIVE") else ln
+        t = None
+        head, _, rest = ln.partition("\t")
+        if rest.startswith("LIVE"):
+            try:
+                t, ln = float(head), rest
+            except ValueError:
+                pass
         if ln.startswith("LIVE"):
             try:
-                out.append(json.loads(ln[5:]))
+                out.append((t, json.loads(ln[5:])))
             except ValueError:
                 pass
     return out
@@ -142,38 +149,65 @@ def _bucket_sums(buckets: list[dict[str, Any]] | None) -> dict[str, float]:
     return sums
 
 
-def dominant(buckets: list[dict[str, Any]] | None, total: float | None) -> dict[str, Any] | None:
-    sums = {k: v for k, v in _bucket_sums(buckets).items() if k in PHASES}
-    if not sums:
+def dominant(v: dict[str, Any]) -> dict[str, Any] | None:
+    """The largest part of one session's ``e2e_s``: a prover phase (both reps' bucket summed), the host witness
+    (``witness_s``), or what is left, ``wait.verifier`` (the session waiting on its verifier's coins and verdict, and on
+    whatever else the prover's buckets don't time); its share of ``e2e_s`` (of ``prove_total_s`` without one)."""
+    parts = {k: x for k, x in _bucket_sums(v.get("buckets")).items() if k in PHASES}
+    if not parts:
         return None
-    k = max(sums, key=sums.get)
-    return {"phase": k, "s": round(sums[k], 4), "share": round(sums[k] / total, 3) if total else None,
-            "phases": {p: round(v, 4) for p, v in sorted(sums.items(), key=lambda kv: -kv[1])}}
+    total, e2e = v.get("prove_total_s"), v.get("e2e_s")
+    if e2e and total is not None:
+        parts["h.witness"] = v.get("witness_s") or 0.0
+        parts["wait.verifier"] = max(0.0, e2e - total - parts["h.witness"])
+    k = max(parts, key=parts.get)
+    whole = e2e or total
+    return {"phase": k, "s": round(parts[k], 4), "share": round(parts[k] / whole, 3) if whole else None,
+            "of": "e2e_s" if e2e else "prove_total_s",
+            "phases": {p: round(x, 4) for p, x in sorted(parts.items(), key=lambda kv: -kv[1])}}
+
+
+def _num(x: Any) -> float | None:
+    """A per-session number; a per-rep list (``prove_s``) summed."""
+    if isinstance(x, list):
+        return sum(float(y) for y in x) if x else None
+    return x
 
 
 def prover_row(d: Path, stage: str, step: str, what: str) -> Row:
     """One prove_live directory: the timed sessions (warm ones left out), the invocation's peak RSS, the GPU's peak."""
-    rows = live_lines(d / "prove.tsv") or live_lines(d / "prove.txt")
+    stamped = live_lines(d / "prove.tsv") or live_lines(d / "prove.txt")
+    rows = [v for _, v in stamped]
     timed = [v for v in rows if not v.get("warm")]
     r = Row(stage, step, what, "gpu")
     if not timed:
         r.ok, r.note = False, ("no timed session: " + text(d / "prove.err")[-300:].strip().replace("\n", " ")) if d.exists() else "not run"
         return r
-    r.wall_s = Stat.of(v.get("prove_total_s") for v in timed)
+    r.wall_s = Stat.of(_num(v.get("prove_total_s", v.get("prove_s"))) for v in timed)
     r.e2e_s = Stat.of(v.get("e2e_s") for v in timed)
     tv = timev(d / "time-prove.txt")
     r.peak_rss_gb = tv["peak_rss_gb"] if tv else None
     r.gpu_peak_mib = gpu_peak(d / "gpu-mib.txt")
-    med = sorted(timed, key=lambda v: v.get("prove_total_s") or 0)[len(timed) // 2]
+    med = sorted(timed, key=lambda v: _num(v.get("prove_total_s", v.get("prove_s"))) or 0)[len(timed) // 2]
     pb = med.get("proof_bytes")
     r.proof_bytes = sum(pb) if isinstance(pb, list) else pb
     if med.get("wire_sent") is not None:
         r.wire_bytes = {"sent": med.get("wire_sent"), "recv": med.get("wire_recv")}
-    r.dominant = dominant(med.get("buckets"), med.get("prove_total_s"))
+    r.dominant = dominant(med)
     served = tagged(d / "serve.log", "SESSION")
-    r.ok = all(v.get("accepted") is True for v in rows) and all(v.get("accepted") is True for v in served)
+    verdicts = [v.get("accepted") for v in rows] + [v.get("accepted") for v in served]
+    if all(x is None for x in verdicts):
+        r.note = str(timed[-1].get("why") or "no verdict")[:200]
+    else:
+        r.ok = all(x is True for x in verdicts)
+    # 85's session time: from the last warm session's verdict to the last timed one's, over the timed sessions (sessions
+    # overlap up to FC_VERIFY_AHEAD, so this, not e2e_s, is the stage's pace)
+    t_warm = [t for t, v in stamped if v.get("warm") and t is not None]
+    t_timed = [t for t, v in stamped if not v.get("warm") and t is not None]
+    session_s = (t_timed[-1] - t_warm[-1]) / len(t_timed) if t_warm and t_timed else None
     r.extra = {"sessions": len(rows), "timed": len(timed), "k_log": med.get("k_log"), "dense_m": med.get("dense_m"),
-               "instances": med.get("instances"), "prove_s": Stat.of(v.get("prove_s") for v in timed),
+               "instances": med.get("instances"), "session_s": session_s, "verify_ahead": med.get("verify_ahead"),
+               "witness_s": Stat.of(v.get("witness_s") for v in timed), "tp_s": Stat.of(v.get("tp_s") for v in timed),
                "serve_verify_s": Stat.of(v.get("verify_s") for v in served[-len(timed):]) if served else None,
                "invocation_wall_s": tv["wall_s"] if tv else None, "prover_cpu_s": tv["cpu_s"] if tv else None,
                "cores_busy_before": text(d / "bgload.txt").strip() or None, "sizes": text(d / "sizes.txt").strip() or None,
@@ -366,16 +400,19 @@ def markdown(doc: dict[str, Any]) -> str:
     lines = [f"Recursion profile: K = {p.get('K')}, N = {p.get('N')}, commit {str(p.get('commit'))[:12]}, "
              f"{p.get('RUNS')} timed sessions after {p.get('WARM')} warm per GPU step, {p.get('REPEAT')} repeats per CPU step. "
              "Seconds: median [min–max] (n).", "",
-             "| stage | step | what | time s | session e2e s | peak RSS GB | GPU peak MiB | proof | dominant phase | ok |",
-             "|---|---|---|---|---|---:|---:|---:|---|---|"]
+             "| stage | step | what | time s | session e2e s | pace s | peak RSS GB | GPU peak MiB | proof | dominant phase | ok |",
+             "|---|---|---|---|---|---:|---:|---:|---:|---|---|"]
     for r in doc["rows"]:
         dom = r.get("dominant")
-        dom_s = f"{dom['phase'][2:]} {dom['s']:.3g} s" + (f" ({dom['share']:.0%})" if dom.get("share") else "") if dom else "—"
+        dom_s = (f"{dom['phase']} {dom['s']:.3g} s" + (f" ({dom['share']:.0%} of {dom.get('of', 'prove_total_s')})"
+                                                       if dom.get("share") else "")) if dom else "—"
+        pace = r.get("extra", {}).get("session_s")
+        pace_s = f"{pace:.3g}" if isinstance(pace, (int, float)) else "—"
         ok = {True: "yes", False: "**no**", None: "—"}[r.get("ok")]
         note = f" {r['note'][:120]}".replace("|", "/") if r.get("note") else ""
         rss = f"{r['peak_rss_gb']:.3g}" if r.get("peak_rss_gb") is not None else "—"
         gpu = f"{r['gpu_peak_mib']:.0f}" if r.get("gpu_peak_mib") else "—"
-        lines.append(f"| {r['stage']} | {r['step']} | {r['what']} | {_fmt(r.get('wall_s'))} | {_fmt(r.get('e2e_s'))} | {rss} | "
+        lines.append(f"| {r['stage']} | {r['step']} | {r['what']} | {_fmt(r.get('wall_s'))} | {_fmt(r.get('e2e_s'))} | {pace_s} | {rss} | "
                      f"{gpu} | {_bytes(r.get('proof_bytes'))} | {dom_s} | {ok}{note} |")
     s = doc["summary"]
     lines += ["", "Outer (V*'s statements, sum of each statement's median): " + "; ".join(

@@ -17,17 +17,21 @@ def timev(wall: str, rss_kb: int = 2 * 2**20, user: float = 1.5, sys_: float = 0
             f"\tElapsed (wall clock) time (h:mm:ss or m:ss): {wall}\n\tMaximum resident set size (kbytes): {rss_kb}\n")
 
 
-def live(warm: bool, prove: float, e2e: float, buckets=None, accepted=True, proof=1000) -> str:
-    rec = {"warm": warm, "accepted": accepted, "prove_s": prove * 0.9, "prove_total_s": prove, "e2e_s": e2e,
+def live(t: float, warm: bool, prove: float, e2e: float, accepted=True, proof=1000, witness=0.1) -> str:
+    """One stamped LIVE line as 85's `stamp` writes flock-circuit prove's record: time, LIVE, the JSON."""
+    rec = {"warm": warm, "accepted": accepted, "prove_s": [prove / 2, prove / 2], "prove_total_s": prove, "e2e_s": e2e,
+           "witness_s": witness, "tp_s": prove + 0.05, "verify_ahead": 4,
            "proof_bytes": [proof, proof], "wire_sent": 10, "wire_recv": 20, "k_log": 23, "dense_m": 27, "instances": 2,
-           "buckets": buckets or [{"t.zerocheck": prove * 0.1, "t.ligerito": prove * 0.3, "t.arithmetic": prove * 0.9},
-                                  {"t.zerocheck": prove * 0.1, "t.ligerito": prove * 0.3, "t.arithmetic": prove * 0.9}]}
-    return "1700000000.0\tLIVE " + json.dumps(rec) + "\n"
+           "why": None if accepted else "rec/inner-transcript/v1: nothing verified here",
+           "buckets": [{"t.zerocheck": prove * 0.1, "t.ligerito": prove * 0.3, "t.arithmetic": prove * 0.9, "h.setup": 5.0},
+                       {"t.zerocheck": prove * 0.1, "t.ligerito": prove * 0.3, "t.arithmetic": prove * 0.9}]}
+    return f"{t}\tLIVE\t" + json.dumps(rec) + "\n"
 
 
 def prover_dir(d: Path, proves=(2.0, 1.0, 3.0), accepted=True) -> None:
     d.mkdir(parents=True, exist_ok=True)
-    (d / "prove.tsv").write_text(live(True, 9.0, 9.5) + "".join(live(False, p, p + 0.5, accepted=accepted) for p in proves))
+    (d / "prove.tsv").write_text(live(100.0, True, 9.0, 9.5) + "".join(
+        live(110.0 + 2 * i, False, p, p + 0.5, accepted=accepted) for i, p in enumerate(proves)))
     (d / "time-prove.txt").write_text(timev("0:20.50", 3 * 2**20))
     (d / "gpu-mib.txt").write_text("100\n4000\n2500\n")
     (d / "serve.log").write_text("".join("SESSION\t" + json.dumps({"accepted": True, "verify_s": 0.2}) + "\n" for _ in range(4)))
@@ -100,8 +104,28 @@ def test_prover_row_counts_timed_sessions_only(tmp_path: Path) -> None:
     assert r["wall_s"]["median"] == 2.0 and r["e2e_s"]["median"] == 2.5
     assert r["peak_rss_gb"] == 3.0 and r["gpu_peak_mib"] == 4000.0
     assert r["proof_bytes"] == 2000 and r["ok"] is True
-    assert r["dominant"]["phase"] == "t.ligerito" and r["dominant"]["share"] == 0.6   # both reps' 0.3, aggregates excluded
+    d = r["dominant"]                                     # the median session: prove 2.0, e2e 2.5, witness 0.1
+    assert d["phase"] == "t.ligerito" and d["s"] == 1.2 and d["share"] == 0.48 and d["of"] == "e2e_s"
+    assert d["phases"]["wait.verifier"] == 0.4 and "t.arithmetic" not in d["phases"] and "h.setup" not in d["phases"]
     assert r["extra"]["serve_verify_s"]["values"] == [0.2, 0.2, 0.2]
+    assert r["extra"]["session_s"] == pytest.approx(14.0 / 3)   # last warm verdict at 100, last timed at 114
+    assert r["extra"]["witness_s"]["median"] == 0.1
+
+
+def test_a_session_waiting_on_its_verifier_is_dominated_by_the_wait(tmp_path: Path) -> None:
+    d = tmp_path / "p"
+    d.mkdir()
+    (d / "prove.tsv").write_text(live(1.0, True, 0.3, 6.0) + live(5.0, False, 0.25, 4.0))
+    r = RP.prover_row(d, "inner M0", "inner", "x").to_json()
+    assert r["dominant"]["phase"] == "wait.verifier" and r["dominant"]["s"] == pytest.approx(3.65)
+
+
+def test_a_proxy_session_with_no_verdict_is_neither_accepted_nor_refused(tmp_path: Path) -> None:
+    d = tmp_path / "p"
+    d.mkdir()
+    (d / "prove.tsv").write_text(live(1.0, True, 1.0, 2.0, accepted=None) + live(3.0, False, 1.0, 2.0, accepted=None))
+    r = RP.prover_row(d, "inner M0", "inner", "x").to_json()
+    assert r["ok"] is None and "nothing verified here" in r["note"]
 
 
 def test_outer_rows_by_mode_and_the_summary(tmp_path: Path) -> None:
@@ -154,7 +178,8 @@ def test_markdown_has_one_line_per_row(tmp_path: Path) -> None:
     md = RP.markdown(doc)
     table = [ln for ln in md.splitlines() if ln.startswith("| ") and not ln.startswith("| stage | step |")]
     assert len(table) == len(doc["rows"])
-    assert "| inner M0 | inner |" in md and "2 [1–3] (n=3)" in md and "ligerito" in md
+    assert "| inner M0 | inner |" in md and "2 [1–3] (n=3)" in md and "t.ligerito 1.2 s (48% of e2e_s)" in md
+    assert "| 4.67 |" in md
     assert "Slowest repeated stage: lean L0" in md
 
 
