@@ -4,11 +4,13 @@ reads each session's verdict from that run, never from a verdict record the prov
 
 `verify` takes a statement's files as the prover delivered them (`Proof`: the circuit file, the public file and the
 sessions' directories, each its `session.json` and its rep files) and the verifier's own inputs: the SHA-512 its auditor
-committed for the circuit file, the program's descriptor, the partition object and the `--registered` file. It refuses
+committed for the circuit file, the program's descriptor, the partition object and, for a statement that reads
+registered values, the `--registered` file. It refuses
 a circuit file that doesn't hash to the committed digest before anything runs, so each verdict is over the circuit the
 auditor's own lowering built. The circuit file's tie to the program's Definitions rests on that lowering: the verifier
 holds the file to the program only as far as its META names it, until it derives the circuit from the descriptor
-(PRF-133). Then one `flock-verify verify --zk --registered` over every session, and one `Finding` a session, in order:
+(PRF-133). Then one `flock-verify verify --zk` over every session (`--registered` when the statement reads registered
+values), and one `Finding` a session, in order:
 whether it was accepted and why not, the program its verdict names (`program_sha512`, the digest of the canonical
 descriptor without annotations, which an accepted verdict must give as the partition object's `program`),
 its registered finding (each port's value and opened root) and the units it proved, the public file's global unit
@@ -108,12 +110,13 @@ def proved_units(public: Path, session: Path) -> tuple[int, ...]:
 
 
 def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapping[str, Any],
-           registered: Mapping[str, Any]) -> tuple[list[Finding] | None, tuple[str, str] | None]:
+           registered: Mapping[str, Any] | None = None) -> tuple[list[Finding] | None, tuple[str, str] | None]:
     """Each of `proof`'s sessions verified by the verifier of record against the verifier's own `program` (its
-    descriptor's bytes), `partition` and `registered` file, on the circuit file the auditor committed as `circuit_sha512`;
-    the findings in session order and None, or None and the refusal (``circuit``: the circuit file is not the committed
-    one; ``proof``: a file is missing or the verifier's answer is not one verdict a session naming the partition
-    object's program). A session the verifier rejects is a finding, not a refusal."""
+    descriptor's bytes), `partition` and `registered` file (None for a statement that reads no registered value, such as
+    N2's, whose unit opens the committed value inside its circuit), on the circuit file the auditor committed as
+    `circuit_sha512`; the findings in session order and None, or None and the refusal (``circuit``: the circuit file
+    is not the committed one; ``proof``: a file is missing or the verifier's answer is not one verdict a session
+    naming the partition object's program). A session the verifier rejects is a finding, not a refusal."""
     if not (isinstance(circuit_sha512, str) and _DIGEST.fullmatch(circuit_sha512)):
         return None, ("circuit", "the committed circuit file's digest is not a SHA-512 digest (128 lowercase hex)")
     if not (proof.circuit.is_file() and proof.public.is_file() and proof.sessions
@@ -128,10 +131,13 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
                  "registered": Path(d, "registered.json")}
         files["program"].write_bytes(program)
         files["partition"].write_text(json.dumps(partition))
-        files["registered"].write_text(json.dumps(registered))
+        reads = []
+        if registered is not None:
+            files["registered"].write_text(json.dumps(registered))
+            reads = ["--registered", str(files["registered"])]
         p = subprocess.run([str(executable()), "verify", "--zk", "--statement", STATEMENT, "--circuit", str(proof.circuit),
                             "--public", str(proof.public), "--partition", str(files["partition"]),
-                            "--program", str(files["program"]), "--registered", str(files["registered"]),
+                            "--program", str(files["program"]), *reads,
                             "--session", *map(str, proof.sessions)], capture_output=True, text=True)
     lines = [json.loads(x[len("VERDICT "):]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
     if [v.get("session") for v in lines] != [str(s) for s in proof.sessions]:

@@ -17,14 +17,16 @@ import pytest
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import bind
-from verity.core.protocols.certifier import advice as ADV, advised as AD, head_check as HC, served as SV
+from verity.core.protocols.certifier import advice as ADV, advised as AD, head_check as HC, served as SV, \
+    service as SVC
 from verity.core.protocols.certifier.certificate import Direction, Issuer, parameters_digest
 from verity.core.protocols.certifier.grid import GridParams
 from verity.core.protocols.certifier.schedule import ClockSync
-from verity.core.protocols.certifier.service import OUTPUTS_ADVISED, PUBLIC_ADVISED, LinkWindows
+from verity.core.protocols.certifier.service import ADVICE, OUTPUTS_ADVISED, PUBLIC_ADVISED, LinkWindows
 from verity.core.protocols.sampled_proofs import service as S
 
 import signers
+import standin
 from advised_traffic import (FRAMING, LINK, P, PIN, R, RIN, SYNC_SET, SYNCS, T, WINDOWS, Session, counts,
                              egress_records, feeds_a_hit, ingress_records, moved, serve, tie_of, with_output_len,
                              without_request)
@@ -51,10 +53,17 @@ def check(session: Session, link=None, own=0, egress=None, ingress=None) -> list
     return out
 
 
+@pytest.fixture(autouse=True)
+def lean(monkeypatch):
+    monkeypatch.setattr(SVC.PF, "verify", standin.lean)
+
+
 class Run:
-    """An advised link with its certifier's signer and the challenger's stream, on injected coins and clock."""
+    """An advised link with its certifier's signer and the challenger's stream, on injected coins and clock, each
+    window decided by the verifier of record on a stand-in proof (`standin`), the in-the-clear check beside it."""
 
     def __init__(self, tmp_path, own=0) -> None:
+        self.tmp = tmp_path
         self.signer = signers.signer(tmp_path)
         self.issuer = Issuer(self.signer, signers.SESSION)
         self.lw = LinkWindows(LINK, P, SYNC_SET, self.signer.public_key(), "r-advised-test", signers.SESSION,
@@ -63,15 +72,19 @@ class Run:
                                      coins=lambda n: b"\x07" * n, clock=lambda: 0.0)
         self.previous = None
 
-    def round(self, w, egress, ingress, link) -> S.Outcome:
+    def draw(self, w, egress, ingress):
+        """Window w's opening on certificates of `egress` and `ingress`, registered, and its draw."""
         opening = self.lw.commit(w, self.issuer.certify(egress, Direction.EGRESS, P, parameters_digest(P, SYNC_SET)),
                                  self.issuer.certify(ingress, Direction.INGRESS, PIN, parameters_digest(PIN)),
                                  SALTS[w])
         reg = self.lw.register(self.stream, self.lw.registration(opening, self.previous))
         self.previous = reg.digest
-        draw = self.stream.select(reg)
-        assert self.stream.deliver(draw, [self.lw.session(opening, draw)]) is None
-        return self.lw.outcome(self.stream, draw, opening, SYNCS, advice=link)
+        return opening, self.stream.select(reg)
+
+    def round(self, w, egress, ingress, link) -> S.Outcome:
+        opening, draw = self.draw(w, egress, ingress)
+        return standin.decide(self.lw, self.stream, draw, opening, SYNCS,
+                              self.tmp / f"proof-{draw.registration.order}", advice=link)
 
     def link(self, session: Session, link=None, egress=None, ingress=None) -> list[bool]:
         """Every window's outcome of record, in order, and the network verdict's agreement with their AND."""
@@ -210,6 +223,16 @@ def test_the_ingress_ends_are_where_the_signed_counts_put_them(own):
     assert bool(late) is bool(own)
 
 
+def _one_more(link):
+    """The link's advice with one more request, released and received in the last window: a view of every other
+    window the same."""
+    a = link.advice
+    b = next(t for t in range(WINDOWS * T - 1, (WINDOWS - 1) * T + 1, -1) if Counter(a.release)[t] < R)
+    more = ADV.Advice(a.requests + (ADV.RequestAdvice("u-extra", 2, 1, "eos"),),
+                      a.steps + (ADV.StepAdvice((ADV.Row(len(a.requests), "prefill", 0, 2),)),), a.release + (b,))
+    return AD.LinkAdvice(more, link.received[:-1] + (link.received[-1] + 1,), tie_of(more))
+
+
 def test_every_window_is_held_to_one_advice(tmp_path):
     """Each window reports the advice it read (`advised.digest`, its `advice` output, of the whole advice's encoding):
     a window checked against another advice that agrees with the link's on that window's view (one more request,
@@ -217,10 +240,7 @@ def test_every_window_is_held_to_one_advice(tmp_path):
     counts are one advice's."""
     session = serve(SEEDS[0])
     link, a = session.link, session.link.advice
-    b = next(t for t in range(WINDOWS * T - 1, (WINDOWS - 1) * T + 1, -1) if Counter(a.release)[t] < R)
-    more = ADV.Advice(a.requests + (ADV.RequestAdvice("u-extra", 2, 1, "eos"),),
-                      a.steps + (ADV.StepAdvice((ADV.Row(len(a.requests), "prefill", 0, 2),)),), a.release + (b,))
-    other = AD.LinkAdvice(more, link.received[:-1] + (link.received[-1] + 1,), tie_of(more))
+    other = _one_more(link)
     assert AD.digest(other) != AD.digest(link)
     assert [_view(other, w) == _view(link, w) for w in range(WINDOWS)] == \
         [True] * (WINDOWS - 1) + [False]
@@ -232,6 +252,27 @@ def test_every_window_is_held_to_one_advice(tmp_path):
     assert [o.accepted for o in outs] == [True] * WINDOWS
     verdict = run.lw.network_verdict(run.stream)
     assert not verdict["accepted"] and verdict["refused"] == [2] and verdict["advice"] == AD.digest(link)
+
+
+def test_the_proof_opens_only_to_the_verifiers_view_of_the_advice(tmp_path):
+    """The verifier of record opens the proof's public row to its own view of the advice it is given: a proof made on
+    the link's advice, whose unit accepts every window, is accepted against another advice where that advice's view of
+    the window is the same, and refused in the last window, whose view differs; the clear check beside it, which reads
+    the other advice, agrees."""
+    session = serve(SEEDS[0])
+    link, other = session.link, _one_more(session.link)
+    run = Run(tmp_path)
+    got = []
+    for w in range(WINDOWS):
+        opening, draw = run.draw(w, session.egress[w], session.ingress[w])
+        delivered = standin.prove(run.lw, opening, draw, SYNCS, tmp_path / f"proof-{w}", advice=link)
+        assert delivered.output == 0b11 and run.stream.deliver(draw, delivered.sessions()) is None
+        out = run.lw.outcome(run.stream, draw, [r.certificate for r in opening.records], SYNCS, delivered,
+                             circuit_sha512=standin.circuit_sha512(delivered), opening=opening, advice=other)
+        verdict = run.stream.records[-1]["audit"]["verdicts"][SVC.VERIFIER]
+        assert verdict["clear"]["accepted"] == out.accepted and verdict["public"]["advice"] == AD.digest(other)
+        got.append(out.accepted)
+    assert got == [True] * (WINDOWS - 1) + [False]
 
 
 def test_a_salted_session_under_an_unsalted_profile_is_refused(tmp_path):
@@ -367,7 +408,8 @@ def test_extra_egress_is_refused(tmp_path, where):
 
 
 def test_no_advice_or_a_malformed_one_is_refused(tmp_path):
-    """An advised window with no advice, I1's advice alone, or a `LinkAdvice` without the tie, is refused; a
+    """An advised window with no advice, I1's advice alone, or a `LinkAdvice` without the tie, is refused, in the clear
+    and by the verifier of record on the proof; a
     `received` or a tie that isn't u32s can't be built; and every window refuses an advice that releases more than R
     frames in a bucket (all in the last), a frame before its request could be (the first in bucket 0), or one in a
     window with no declared sync (the last past the link's), and a declared sync outside Σ_sync in any window the
@@ -395,6 +437,10 @@ def test_no_advice_or_a_malformed_one_is_refused(tmp_path):
         with pytest.raises(ValueError, match="without the prompt-length tie"):
             _view(untied, w)
     assert not run.lw.advised_check(opening, SYNCS, untied)
+    for k, bad in enumerate((None, a, untied)):
+        (tmp_path / f"run-{k}").mkdir()
+        out = Run(tmp_path / f"run-{k}").round(0, session.egress[0], session.ingress[0], bad)
+        assert not out.accepted
     over, early, late = (WINDOWS * T - 1,) * len(a.release), (0,) + a.release[1:], a.release[:-1] + (WINDOWS * T,)
     for release, why in ((over, "past the allocation"), (early, "before its request"), (late, "declares no sync")):
         bad = AD.LinkAdvice(replace(a, release=release), got, link.tie)
@@ -466,7 +512,9 @@ def test_the_advised_unit_is_n2s_beside_the_advised_counts(tmp_path):
     advised sizes public and binds the framing, an advised link has no egress occupancy profile or served profile, and
     one T and τ_b on both ends, and a framing is a positive frame count for each prompt length from 1 on."""
     lw = Run(tmp_path).lw
-    assert lw.unit.id == "NetworkAdvisedLinkWindow_v1{EGRESS=(9,8,0),INGRESS=(9,8,0),ADVISED=(8,2,0)}"
+    assert lw.unit.id == "NetworkAdvisedLinkWindow_v2{EGRESS=(9,8,0),INGRESS=(9,8,0),ADVISED=(8,2,0)}"
+    assert lw.proof_unit.id == lw.unit.id and lw.proof_unit.signature() == lw.unit.signature()
+    assert set(ADVICE) <= set(lw.layout["pub"]) and lw.bits("pub") % 16 == 0
     assert lw.spec.public == PUBLIC_ADVISED and {"advice", "advised", "sync"} <= {p.item for p in lw.spec.public}
     assert lw.spec.check.public_outputs == OUTPUTS_ADVISED == ("verdict", "deadline", "advice")
     assert "served" not in {p.item for p in lw.spec.public} and lw.windows == WINDOWS
