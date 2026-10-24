@@ -364,17 +364,20 @@ def _utc(t: float) -> str:
 
 
 def held_to(w: int, root: str | None, given: str | None, adv_dir: Path | None, commit: dict | None,
-            closed: float | None) -> dict:
+            closed: float | None, next_closed: float | None = None, before_draw: bool | None = None) -> dict:
     """A ``--serve-run`` arm's committed advice (its ``root``) held by content to the report's advice of its Commit
     window ``w`` (`verity-vllm advice` over the endpoint's records, ``adv_dir/w<w>``): the registration it was committed
     under (``given``, a `verity-vllm advice` directory's ``registration.json`` and ``private/opening.json``, else the
     report's own) has that root and names the window's Commit (``commit``, the endpoint's ``windows.jsonl``), and its
     opening opens the root to the report's advice (`opens`). Its v0 bit count is never enough. When it was registered
-    is the registration's own record, its file's time (it has no time field), against the window's close in the
-    endpoint's trace (``closed``, `closes`): at serve time only when not after the close."""
+    is the registration's own record, its file's time (it has no time field), read against the endpoint's trace
+    (`closes`): its lag after its own window's close (``closed``) is always reported, and it was at serve time when it
+    was registered before its window's draw (``before_draw``, the arm's own `advice_before_draw`) and no later than the
+    next window's close (``next_closed``); unknown (None) while either is."""
     out = {"registration": None, "the_registered_root": None, "names_the_commit": None, "opens": None, "tied": False,
            "tied_why": None, "at": None, "closed": None if closed is None else _utc(closed), "after_close_s": None,
-           "at_serve_time": None}
+           "next_closed": None if next_closed is None else _utc(next_closed), "before_next_close_s": None,
+           "before_draw": before_draw, "at_serve_time": None}
     report = None if adv_dir is None else adv_dir / f"w{w}"
     src = Path(given) if given else report
     if report is None or not (report / "private" / "advice.json").exists():
@@ -392,7 +395,13 @@ def held_to(w: int, root: str | None, given: str | None, adv_dir: Path | None, c
         return out
     out["at"] = _utc(t)
     if closed is not None:
-        out["after_close_s"], out["at_serve_time"] = round(t - closed, 1), t <= closed
+        out["after_close_s"] = round(t - closed, 1)
+    if next_closed is not None:
+        out["before_next_close_s"] = round(next_closed - t, 1)
+    if before_draw is False or (next_closed is not None and t > next_closed):
+        out["at_serve_time"] = False
+    elif before_draw is True and next_closed is not None:
+        out["at_serve_time"] = True
     why = ([] if out["the_registered_root"] else [f"its advice root isn't the one registered at {src}"]) \
         + ([] if out["names_the_commit"] else [f"the registration at {src} doesn't name Commit window {w}'s Commit "
                                                 "(the endpoint's windows.jsonl)"]) \
@@ -411,7 +420,8 @@ def served_commit(s: dict, bits: dict, commits: dict[int, dict], registered: dic
     report's advice directory ``adv_dir``, each window's close ``closed``), whether registered by the report's own run
     or apart. ``registered`` is, by window, who registered its advice (``by``, ``ref``), the registration's directory
     when it isn't the report's (``registration``) and the arm's first draw (``first_draw``), as the job states them
-    (``--prove-path-registered``); whether it was at serve time is never the job's to say."""
+    (``--prove-path-registered``); whether it was at serve time is never the job's to say: its draw followed the
+    registration when every rank's `advice_before_draw` (the verifier's receipt of it before any coin) says so."""
     serve = s["serve"]
     d = serve.get("detail") or {}
     w = d.get("window", serve.get("window"))
@@ -419,8 +429,11 @@ def served_commit(s: dict, bits: dict, commits: dict[int, dict], registered: dic
     row = next((x for x in bits.get("commit_windows") or () if x.get("window") == w and "refused" not in x), None)
     adv = d.get("advice") or s.get("advice") or {}
     g = registered.get(str(w)) or {}
+    order = [(x.get("advice_before_draw") or {}).get("ok") for x in (s.get("ranks") or {}).values()]
     held = held_to(w, adv.get("root"), g.get("registration"), adv_dir,
-                   {"run_id": rec["run_id"], "run_root": rec["run_root"]} if rec else None, (closed or {}).get(w))
+                   {"run_id": rec["run_id"], "run_root": rec["run_root"]} if rec else None, (closed or {}).get(w),
+                   (closed or {}).get(w + 1) if isinstance(w, int) else None,
+                   None if not order or None in order else all(x is True for x in order))
     return {"window": w, "run_id": d.get("run_id"), "run_root": s.get("run_root"),
             "sealed_while_serving": serve.get("ok") is True and not serve.get("codes"),
             "the_endpoints": bool(rec) and rec.get("run_id") == d.get("run_id")
@@ -430,7 +443,8 @@ def served_commit(s: dict, bits: dict, commits: dict[int, dict], registered: dic
             **{k: held[k] for k in ("registration", "the_registered_root", "names_the_commit", "opens", "tied",
                                     "tied_why")},
             "registered": {k: g.get(k) for k in ("by", "ref", "first_draw")}
-            | {k: held[k] for k in ("at", "closed", "after_close_s", "at_serve_time")}}
+            | {k: held[k] for k in ("at", "closed", "after_close_s", "next_closed", "before_next_close_s", "before_draw",
+                                    "at_serve_time")}}
 
 
 def prove_path(src: Path | list[Path], info: dict | None, advice_bound: bool | None = None, bits: dict | None = None,
@@ -708,7 +722,9 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
         out.append("Prove path: not given (--prove-path, a prove_path.py run's output).")
     elif served and p.get("bound"):
         cs = {a["commit"]["window"]: a["commit"] for a in p["arms"].values()}
-        late = [f"w{w}'s advice was registered {_registered(x['registered'])}, not by the endpoint while serving"
+        late = [f"w{w}'s advice was registered {_registered(x['registered'])}"
+                + (", not by the endpoint while serving" if (x.get("registered") or {}).get("at_serve_time") is False
+                   else "")
                 for w, x in sorted(cs.items()) if (x.get("registered") or {}).get("at_serve_time") is not True]
         apart = [f"w{w}" for w, x in sorted(cs.items()) if x["of_the_honest_run"] and not x["the_reports_root"]]
         out.append(f"Prove path: the served run's own Commit windows ({', '.join(f'w{w}' for w in sorted(cs))}), "
@@ -760,27 +776,36 @@ def _cell(x) -> str:
     return "—" if x is None else str(x)
 
 
-def _span(s: float) -> str:
-    return f"{abs(s)} s" if abs(s) < 120 else f"{round(abs(s) / 60, 1)} min"
+def _lag(s: float | None) -> str:
+    if s is None:
+        return "its Commit window's close not in the endpoint's records"
+    return f"{abs(s)} s {'after' if s >= 0 else 'before'} its Commit window closed"
 
 
 def _registered(g: dict | None) -> str:
     """Who registered a Commit window's advice and when (`served_commit`'s ``registered``): ``by`` and the arm's
-    ``first_draw`` as the job states them, and ``at_serve_time`` from the registration's own time ``at`` against the
-    window's close in the endpoint's records (``after_close_s``), ISO 8601 UTC."""
+    ``first_draw`` as the job states them; the registration's own time ``at``, always with its lag in seconds after the
+    window's close in the endpoint's records (``after_close_s``); and ``at_serve_time``: before its draw
+    (``before_draw``) and no later than the next window's close (``before_next_close_s``)."""
     if not g:
         return "—"
     by, ref = g.get("by") or "whom the job doesn't say", f" ({g['ref']})" if g.get("ref") else ""
     if g.get("at") is None:
         return f"by {by}{ref}, when unknown: no registration read"
+    lag, nxt = _lag(g.get("after_close_s")), g.get("before_next_close_s")
+    if g.get("at_serve_time"):
+        return f"by {by} at serve time{ref}, {lag}, before its draw and {nxt} s before the next window closed"
     if g.get("at_serve_time") is None:
-        return f"by {by}{ref} at {g['at']}, its Commit window's close not in the endpoint's records"
-    if g["at_serve_time"]:
-        return f"by {by} at serve time{ref}, {_span(-g['after_close_s'])} before its Commit window closed"
+        unknown = ([] if nxt is not None else ["the next window's close isn't in the endpoint's records"]) \
+            + ([] if g.get("before_draw") is not None else ["no draw receipt orders it against its draw"])
+        return f"by {by}{ref} at {g['at']}, {lag}; whether at serve time is unknown: {' and '.join(unknown)}"
     lead = None if not g.get("first_draw") else round(
-        (datetime.fromisoformat(g["first_draw"]) - datetime.fromisoformat(g["at"])).total_seconds() / 60, 1)
-    return (f"after serving, by {by}{ref}, {_span(g['after_close_s'])} after its Commit window closed"
-            + (f", {lead} min before the first draw" if lead is not None else ""))
+        (datetime.fromisoformat(g["first_draw"]) - datetime.fromisoformat(g["at"])).total_seconds(), 1)
+    late = ([] if g.get("before_draw") is not False else ["after its draw"]) \
+        + ([f"{abs(nxt)} s after the next window closed"]
+           if nxt is not None and (nxt < 0 or g.get("before_draw") is not False) else [])
+    return (f"after serving, by {by}{ref}, {lag}, {' and '.join(late)}"
+            + (f", {lead} s before the first draw" if lead is not None and lead >= 0 else ""))
 
 
 def markdown(c: dict) -> list[str]:
