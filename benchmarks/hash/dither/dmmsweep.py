@@ -1,16 +1,16 @@
 """dithera_mm's GEMM configs at Llama-3.1-8B's decode shapes, its z/y records epilogue included (dither_a's -zy form: M
 live rows of T slots, one record a 32 x 32 unit), each gated against the served config's outputs before it is timed.
 
-Per shape (n, k), with kgate's activations quantized by int8_exact and `kbench.copies_for` weight copies (each with its own
-y and records, so the weights stream from DRAM), timed kbench's way (a CUDA graph an arm, interleaved items):
+Per shape (n, k), with kgate's activations quantized by int8_exact and `kbench.copies_for` weight copies (each with its
+own y and records, so the weights stream from DRAM), timed kbench's way (a CUDA graph an arm, interleaved items):
 
     coarse   `coarse_grid`: BLOCK_N x BLOCK_K x SPLIT_K at BLOCK_M 32, 4 warps, 3 stages, and the TMA kernel's
     refine   the best `top` across warps x stages
     final    the best `top`, the served config (exactlin.pick, as dither_a's gemm takes it) and exactlin's scaled_mm at
              the served config (the same product without the z/y epilogue), `reps` items each
 
-A config's gate: y and the records (z and y halves) equal the served config's into 0xA5, twice (a split K's workspace and
-counters zero again), and the last copy's after the timing's replays; the served config's y is int8_exact's
+A config's gate: y and the records (z and y halves) equal the served config's into 0xA5, twice (a split K's workspace
+and counters zero again), and the last copy's after the timing's replays; the served config's y is int8_exact's
 (`dequantize(int_mm(...))`) bit for bit.  Writes sweep.jsonl and best.json ({"n,k": [m, best, us, served, us,
 scaled_mm us]}, and the step's sum over 32 layers each way: what $DITHER_MM_CFG would take).
 
@@ -55,10 +55,10 @@ def gemm(cfg: X.Cfg, xq, sa, w, sw, y, zy, S, T: int, work) -> None:
     tiles = triton.cdiv(T, bm) * triton.cdiv(n, bn)
     if tma:
         from triton.tools.tensor_descriptor import TensorDescriptor
-        DA.dithera_mm_tma[(tiles,)](TensorDescriptor.from_tensor(xq, [bm, bk]), TensorDescriptor.from_tensor(w, [bn, bk]),
-                                    sa, sw, y, z, yl, y, S, M, n, k, T, y.stride(0), BLOCK_M=bm, BLOCK_N=bn, BLOCK_K=bk,
-                                    WARP_SPECIALIZE=tma == 2, ZL=2, UR=UR, UC=UC, num_warps=warps, num_stages=stages,
-                                    **X.OPTS)
+        a_desc, b_desc = TensorDescriptor.from_tensor(xq, [bm, bk]), TensorDescriptor.from_tensor(w, [bn, bk])
+        DA.dithera_mm_tma[(tiles,)](a_desc, b_desc, sa, sw, y, z, yl, y, S, M, n, k, T, y.stride(0), BLOCK_M=bm,
+                                    BLOCK_N=bn, BLOCK_K=bk, WARP_SPECIALIZE=tma == 2, ZL=2, UR=UR, UC=UC,
+                                    num_warps=warps, num_stages=stages, **X.OPTS)
         return
     if split > 1:
         assert M * n <= work.ws.numel() and tiles <= work.cnt.numel(), (M, n, tiles)
@@ -168,7 +168,8 @@ def mmax_of(n: int, k: int, m: int) -> int | None:
 
 
 def best(med: dict, top: int, skip=()) -> list[X.Cfg]:
-    return [X.Cfg.parse(c) for c, _ in sorted(((c, u) for c, u in med.items() if c not in skip), key=lambda cu: cu[1])[:top]]
+    ranked = sorted(((c, u) for c, u in med.items() if c not in skip), key=lambda cu: cu[1])
+    return [X.Cfg.parse(c) for c, _ in ranked[:top]]
 
 
 def main() -> int:
