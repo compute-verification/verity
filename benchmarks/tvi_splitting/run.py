@@ -2,9 +2,10 @@
 
     python run.py --out DIR [--workers N] [--budget S] [--bits-budget S] [--k 12,16,24,32]
 
-Writes `DIR/results.jsonl` (one line per run) and `DIR/summary.md` (blocks per variant and k, with lower bounds and the
-gain against `mono`, the unsplit optimum). `local` runs add the locality rule: every counted value's pieces (its shares
-or planes) held by one block.
+Writes `DIR/results.jsonl` (one line per run) and `DIR/summary.md` (blocks per variant and k, `lb-ub` where the covering
+isn't certified, and the gain against `mono`'s certified optimum, a range `mono/ub-mono/lb` where it isn't). `local` runs
+add the locality rule: every counted value's pieces (its shares or planes) held by one block. `--resummarize` rewrites
+`summary.md` from an existing `results.jsonl`.
 """
 
 from __future__ import annotations
@@ -50,8 +51,13 @@ def main():
     ap.add_argument("--bits-budget", type=float, default=2400.0)
     ap.add_argument("--k", default="12,16,24,32")
     ap.add_argument("--models", default="norm,linear")
+    ap.add_argument("--resummarize", action="store_true", help="rewrite DIR/summary.md from DIR/results.jsonl")
     args = ap.parse_args()
     out = Path(args.out)
+    if args.resummarize:
+        results = [json.loads(line) for line in open(out / "results.jsonl")]
+        (out / "summary.md").write_text(summary(results))
+        return
     out.mkdir(parents=True, exist_ok=True)
     ks = [int(x) for x in args.k.split(",")]
     for model in args.models.split(","):
@@ -77,6 +83,11 @@ def main():
     (out / "summary.md").write_text(summary(results))
 
 
+def bounds(r) -> tuple[int, int]:
+    """The certified range of a covering's cheapest block count: (lower bound, blocks found)."""
+    return (r["blocks"] if r.get("optimal") else max(r.get("lp_bound") or 1, 1)), r["blocks"]
+
+
 def summary(results) -> str:
     by = {(r["model"], r["variant"], r["local"], r["k"]): r for r in results}
     ks = sorted({r["k"] for r in results})
@@ -96,11 +107,13 @@ def summary(results) -> str:
                 elif r.get("blocks") is None:
                     cells.append("infeasible")
                 else:
-                    base = by.get((model, "mono", False, k), {}).get("blocks")
-                    lb = r.get("lp_bound")
-                    cell = f"{r['blocks']}" if r.get("optimal") else f"{lb}-{r['blocks']}"
-                    if base:
-                        cell += f" ({base / r['blocks']:.2f}x)"
+                    lb, ub = bounds(r)
+                    cell = f"{ub}" if lb == ub else f"{lb}-{ub}"
+                    mono = by.get((model, "mono", False, k))
+                    if mono and mono.get("blocks"):
+                        mlb, mub = bounds(mono)
+                        lo, hi = mlb / ub, mub / lb
+                        cell += f" ({lo:.2f}x)" if lo == hi else f" ({lo:.2f}-{hi:.2f}x)"
                     cells.append(cell)
             lines.append(f"| {variant}{' (local)' if local else ''} | " + " | ".join(cells) + " |")
     return "\n".join(lines) + "\n"
