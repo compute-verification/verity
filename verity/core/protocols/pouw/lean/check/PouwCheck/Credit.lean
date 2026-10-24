@@ -31,14 +31,14 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
   refused.
 * `drawn` is `credit.drawn`: the units the draw coin draws from the window's own layout, `drawCheck`'s rule under the
   law `work:k` (`workUnits`), one stratum per K (`strata`, over `h1window.program`'s unit order) at the K the period's
-  open committed (`law`; `committedK`). Each linear's K is one the tile's proof covers, a multiple of 32 below 2^17
-  (`TILE_K_STEP`, `TILE_K_LIMIT`), else the window is refused (`tile-k`, `tileK`). Never a list the prover hands in.
-  `established` is the ε that draw established over the window's credited work at `DELTA` (`PouwWindow.epsAt` at the
-  window's inputs), which `periodCredit` reports.
+  open committed (`law`; `committedK`). Never a list the prover hands in. `established` is the ε that draw established
+  over the window's credited work at `DELTA` (`PouwWindow.epsAt` at the window's inputs), which `periodCredit` reports.
 * `layoutOf` is `credit.layout_of`: the window's layout is its committed circuit's, read from the descriptor whose
   SHA-512 the period's open committed: its program function's record (`TILES`, `LINEARS`, `CALLS`, `M`), each K's
   template's A and B rows (R and C), and its root's nodes other than inputs, which must be each call's (M/R)·(n/C)
-  instances of K's template in order. Never a layout the window's evidence hands in.
+  instances of K's template in order. Never a layout the window's evidence hands in. Each K of its `TILES` is one the
+  tile's proof covers, a multiple of 32 below 2^17 (`TILE_K_STEP`, `TILE_K_LIMIT`), else the window is refused
+  (`tile-k`, `tileK`).
 * `Internal.outcome` is `credit._outcome`: every unit `drawn` draws has exactly one proof outcome and it is an accept,
   else the whole window is refused (no partial credit). `window` is `credit.window`: `Internal.credited`, `roundsCheck`
   on the round log's roots and coins, `Internal.aLink` on that log and the window's registered entries, `layoutOf` of
@@ -121,10 +121,6 @@ def LAYOUT_FORM : String :=
   "the window's layout is not {calls, linears, m, tile}, h1window.program's arguments: its calls " ++
   "[[linear, A block], ...] in order, its linears [[name, K, n], ...] each once, its A slot m and its tile " ++
   "[R, C], every number a natural number and R, C at least one"
-/-- A linear's K is one the tile's proof covers, a multiple of `TILE_K_STEP` below `TILE_K_LIMIT`: the K the tile's
-`GemmAccumulatorS8` binds (its 32-wide step, and `S8_K_LIMIT`, where an s8 sum can leave s32). -/
-def TILE_K_STEP : Nat := 32
-def TILE_K_LIMIT : Nat := 2 ^ 17
 def COIN_FORM : String := "the draw coin is not a SHA-512 digest (128 lowercase hex)"
 def DRAW_ARGS : String :=
   "the draw's stream is not a string, its registration not a SHA-512 digest, or its receipt not an object of " ++
@@ -286,22 +282,11 @@ def layoutRefuse {α : Type} (why : String) : R α := throw ("layout", why)
 /-- `[a, b, …]`, as Python writes a list of integers. -/
 def listStr (xs : List Nat) : String := "[" ++ ", ".intercalate (xs.map toString) ++ "]"
 
-/-- `credit.tile_k`: why `strata` refuses linear `name` at a K = `k` of at least one that the tile's proof doesn't cover
-(`tile-k`), with its fix: the K to pad its rows to, or past `TILE_K_LIMIT` the split. -/
-def tileK (name : String) (k : Nat) : String :=
-  let up := (k + TILE_K_STEP - 1) / TILE_K_STEP * TILE_K_STEP
-  let fix := if up < TILE_K_LIMIT then s!"pad its A and B rows with zero codes to K = {up}"
-    else s!"split its k range into linears of at most K = {TILE_K_LIMIT - TILE_K_STEP} each, each padded with zero " ++
-      s!"codes to a multiple of {TILE_K_STEP}"
-  s!"linear {name}: K = {k} is not a multiple of {TILE_K_STEP} below {TILE_K_LIMIT}, the K the tile's proof " ++
-    s!"covers and its GemmAccumulatorS8 binds: {fix}"
-
 /-- `credit.strata`: the work strata of the served H1 window whose Program is `h1window.program` of `layout`
-(`{calls, linears, m, tile}`), else the refusal (`layout`, or `tile-k`: a linear whose K is no multiple of
-`TILE_K_STEP` below `TILE_K_LIMIT`, the K the tile's proof covers, `tileK`). Its units are the Program's, call by call,
-each call's (m/R)·(n/C) tiles row block major; K's stratum is the units of the calls of K's linears, template `k<K>`, its
-ranges in order (adjacent ones merged), the strata in the order of their first unit, each unit's work R·C·K and every
-floor one. Its cost is the layout's calls, never its units. -/
+(`{calls, linears, m, tile}`), else the refusal. Its units are the Program's, call by call, each call's (m/R)·(n/C)
+tiles row block major; K's stratum is the units of the calls of K's linears, template `k<K>`, its ranges in order
+(adjacent ones merged), the strata in the order of their first unit, each unit's work R·C·K and every floor one. Its cost
+is the layout's calls, never its units. -/
 def strata (layout : Json) : R (Array Flock.Draw.WorkStratum) := do
   unless keys layout == some LAYOUT_KEYS do layoutRefuse LAYOUT_FORM
   let (.arr tile, some m, .arr linears, .arr calls) :=
@@ -334,8 +319,6 @@ def strata (layout : Json) : R (Array Flock.Draw.WorkStratum) := do
   for (name, k, n) in ks do
     if k < 1 || n < c || n % c != 0 then
       layoutRefuse s!"linear {name}: K = {k} and n = {n} are not K >= 1 and n whole blocks of the tile's {c} columns"
-  for (name, k, _) in ks do
-    if k % TILE_K_STEP != 0 || TILE_K_LIMIT ≤ k then throw ("tile-k", tileK name k)
   let kOf : String → Nat := fun lin => ((ks.find? (·.1 == lin)).map (·.2.1)).getD 0
   for k in (ks.toList.map (·.2.1)).eraseDups.mergeSort (· ≤ ·) do
     let used := ((cs.toList.filter fun (lin, _) => kOf lin == k).map (·.2)).eraseDups.mergeSort (· ≤ ·)
@@ -375,6 +358,10 @@ def WINDOW_FN : String := "PouwH1Window_v3"
 def RECORD : List String := ["TILES", "LINEARS", "CALLS", "M", "PREFIX"]
 def TILE_FN : String := "PouwH1WindowTile_v1"
 def SHARED : List String := ["zy", "salt", "position", "roots"]
+/-- A window's tile is at a K its proof covers, a multiple of `TILE_K_STEP` below `TILE_K_LIMIT`: the K the tile's
+`GemmAccumulatorS8` binds (its 32-wide step, and `S8_K_LIMIT`, where an s8 sum can leave s32). -/
+def TILE_K_STEP : Nat := 32
+def TILE_K_LIMIT : Nat := 2 ^ 17
 def DESCRIPTOR_FORM : String :=
   "the window's descriptor is not a verity-ir/descriptor/v1 descriptor in canonical JSON (keys sorted, compact, " ++
   "ASCII: the bytes program_digest hashes) with its callees, definitions, program function and root"
@@ -391,6 +378,16 @@ def noTemplate (k : Nat) : String :=
   s!"the window's template at K = {k} is not h1window's: a composite {TILE_FN} bound to its UNIT and K = {k}, " ++
   s!"its id {TILE_FN}\{UNIT=…,K={k}}, whose parameters are a_k{k} and b_k{k}, the tile's R and C rows, then " ++
   ", ".intercalate SHARED ++ ", at the same R × C at every K"
+
+/-- `credit.tile_k`: why `layoutOf` refuses the window's tile at a K = `k` of at least one that its proof doesn't cover
+(`tile-k`), with its fix: the K to pad its linears' rows to, or past `TILE_K_LIMIT` the split. -/
+def tileK (k : Nat) : String :=
+  let up := (k + TILE_K_STEP - 1) / TILE_K_STEP * TILE_K_STEP
+  let fix := if up < TILE_K_LIMIT then s!"pad its linears' A and B rows with zero codes to K = {up}"
+    else s!"split its linears' k range into linears of at most K = {TILE_K_LIMIT - TILE_K_STEP} each, each padded " ++
+      s!"with zero codes to a multiple of {TILE_K_STEP}"
+  s!"the window's tile at K = {k} is outside the K its proof covers, multiples of {TILE_K_STEP} below " ++
+    s!"{TILE_K_LIMIT} (the K its GemmAccumulatorS8 binds): {fix}"
 
 /-- `credit._loads`: `text` read as JSON, when it is that value's canonical JSON (`SampledProofs.PyJson.canonical`,
 Python's `canonical_json`), so every reading of it is the same. -/
@@ -434,11 +431,12 @@ def runs (xs : List (String × Nat)) : List (String × Nat) :=
 
 /-- `credit.layout_of`: the layout (`{calls, linears, m, tile}`, `strata`'s) of the H1 window whose circuit's
 descriptor is `descriptor` (its bytes, canonical JSON without annotations, the bytes the period's `circuit` is the
-SHA-512 of), else the refusal (`layout`, or `strata`'s `tile-k`). The calls, linears and slot are its program
-function's record (`WINDOW_FN`'s `CALLS`, `LINEARS` and `M`), each K's template (`TILES`) is `h1window.template`'s,
-whose A and B rows give R and C, and the root's nodes other than inputs are each call's (M/R)·(n/C) instances of its K's
-template, in the calls' order: a call one instance and a batch its members, as the template query counts units. Its
-cost is the descriptor's bytes, never the gates its nodes unroll to. -/
+SHA-512 of), else the refusal (`layout` or `tile-k`). The calls, linears and slot are its program function's record
+(`WINDOW_FN`'s `CALLS`, `LINEARS` and `M`), each K's template (`TILES`) is `h1window.template`'s, whose A and B rows
+give R and C, at a K its tile's proof covers (else `tile-k`, `tileK`: a multiple of `TILE_K_STEP` below
+`TILE_K_LIMIT`), and the root's nodes other than inputs are each call's (M/R)·(n/C) instances of its K's template, in
+the calls' order: a call one instance and a batch its members, as the template query counts units. Its cost is the
+descriptor's bytes, never the gates its nodes unroll to. -/
 def layoutOf (descriptor : ByteArray) : R Json := do
   let some d := (String.fromUTF8? descriptor).bind loads? | layoutRefuse DESCRIPTOR_FORM
   let defs := get d "definitions"
@@ -467,6 +465,7 @@ def layoutOf (descriptor : ByteArray) : R Json := do
   for (k, tid) in ts do
     let some got := tileOf (get defs tid) tid k | layoutRefuse (noTemplate k)
     if rc.any (· != got) then layoutRefuse (noTemplate k)
+    if k % TILE_K_STEP != 0 || TILE_K_LIMIT ≤ k then throw ("tile-k", tileK k)
     rc := some got
   let some (r, c) := rc | layoutRefuse NOT_WINDOW
   let layout := Json.mkObj [("calls", calls), ("linears", linears), ("m", m),

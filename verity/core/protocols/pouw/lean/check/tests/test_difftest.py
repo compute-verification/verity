@@ -322,8 +322,9 @@ def test_credit(pass_server):
     code zeroed) are not the ones its period's open signed, a period whose open signs no weights' root or names no
     model `models.json` pins (none, malformed, another checkpoint, another role), a call's A table or a round's
     input-ids table other than the served Commit's or a Commit record the draw root doesn't bind, round 0's input-ids
-    table outside round 0's request table or bound to another session, and every other
-    refusal of `credit.window`, `credit.period_credit` and the steps they run."""
+    table outside round 0's request table or bound to another session, a window's tile at a K its proof doesn't cover
+    (2^17 or past, or no multiple of 32), and every other refusal of `credit.window`, `credit.period_credit` and the
+    steps they run."""
     CREDITED.clear()
     stats = {p.fn: D.run(p, examples=n, server=pass_server)
              for p, n in ((CREDIT, 300), (DRAWN, 300), (OUTCOME, 300), (WINDOW, 150), (PERIOD, 100), (A_LINK, 400),
@@ -351,6 +352,10 @@ def test_credit(pass_server):
                  "outcome outcome: unit # has two", "outcome outcome: unit # has a proof outcome and was not drawn",
                  "drawn layout: linear ", "drawn layout: the A slot #", "drawn layout: the A blocks of K = #",
                  "drawn layout: a call of lm_head", "drawn draw: the draw coin is not", "drawn draw: the draw's stream",
+                 "window tile-k: the window's tile at K = # is outside the K its proof covers, multiples of # below #",
+                 "so the period earns nothing: tile-k: the window's tile at K = #",
+                 "pad its linears' A and B rows with zero codes to K = #",
+                 "split its linears' k range into linears of at most K = # each",
                  "window manifest: the manifest's # rows", "window outcome: unit # has a proof outcome and was not",
                  "period period: period ", "period missing: window #", "period order: window #",
                  "period period: the windows presented run past", "period period: window ", "period window: window #",
