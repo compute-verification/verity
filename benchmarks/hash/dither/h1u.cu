@@ -575,6 +575,21 @@ static_assert(H1U_JPD >= 1 && (H1U_JRING == 0 || H1U_JRING == 1) && 16 % (H1U_JP
 #define H1U_JAP 0
 #endif
 static_assert(!(H1U_JAP && H1U_JPROBE), "the probe's column blocks are its row blocks, which H1U_JAP's units don't read");
+// H1U_JAY = 1 (with H1U_JAP): Y, A' times P (row i's rho-th sum over the segments, sum_sg A'[i][32 sg + rho]), is a
+// row's alone, so h1jr_y sums it once a row into the workspace after A' (jay_words) and the units read it at the tail
+// instead of accumulating it a segment: 8 of a segment's 16 MMAs and Y's 32 registers gone
+#ifndef H1U_JAY
+#define H1U_JAY 0
+#endif
+static_assert(!H1U_JAY || H1U_JAP, "H1U_JAY sums A', which H1U_JAP writes");
+// a call's A' (H1U_JAP: M rows of K bytes) in its workspace, in words: after its row blocks (h1umj's) or its row and
+// column blocks (rc, h1umjc's); then its Y (H1U_JAY: M rows of 32 int32)
+__host__ __device__ __forceinline__ u64 jap_words(u32 M, u32 N, u32 K, bool rc) {
+  return 16 * ((u64)M + (rc ? N : 0)) * (K / 512 + 1);
+}
+__host__ __device__ __forceinline__ u64 jay_words(u32 M, u32 N, u32 K, bool rc) {
+  return jap_words(M, N, K, rc) + (u64)M * K / 4;
+}
 template <int MD, bool WS, bool OS, bool J10 = false, bool PL = false, bool DG = false, bool RW = false, bool RC = false>
 __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int8_t* __restrict__ B, u32 M, u32 N, u32 K,
                                          const u64* __restrict__ seeds, const uint8_t* __restrict__ live,
@@ -585,6 +600,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
   static_assert(!RC || RW, "RC is J10-R's units with their column blocks read");
   constexpr bool PF = WS || H1U_PF;
   constexpr bool AP = RW && H1U_JAP;  // A is the call's A' (H1U_JAP)
+  constexpr bool AY = RW && H1U_JAY;  // Y comes from the workspace (H1U_JAY)
   constexpr bool RING = RW ? H1U_JRING : H1U_RING;
   constexpr int PD = RW ? H1U_JPD : H1U_PD, NS = PD + RING;
   const u32 lane = threadIdx.x & 31;
@@ -930,7 +946,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
 #pragma unroll
           for (int nt = 0; nt < 4; ++nt) {
             mma_s8(T[4 * mt + nt], af[mt], bf[nt]);
-            mma_s8(Y[4 * mt + nt], af[mt], idr[nt]);
+            if constexpr (!AY) mma_s8(Y[4 * mt + nt], af[mt], idr[nt]);
             if constexpr (OS) mma_s8(Cw[4 * mt + nt], af[mt], wbf[nt]);
             if constexpr (PL) {
               mma_s8(Pz[4 * mt + nt], af[mt], cf[nt]);
@@ -958,6 +974,14 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
     __syncwarp();
   }
 
+  if constexpr (AY) {
+    const int* ys = reinterpret_cast<const int*>(ws + jay_words(M, N, K, RC)) + 32ull * 32 * ri;
+#pragma unroll
+    for (int t = 0; t < 8; ++t)
+#pragma unroll
+      for (int e = 0; e < 4; ++e)
+        Y[t][e] = __ldg(ys + 32 * (16 * (t >> 2) + g + 8 * (e >> 1)) + 8 * (t & 3) + 2 * q + (e & 1));
+  }
   // the tail: A_d packed as A fragments in the accumulators' column order (fragment k 4 q' .. of rows g / g + 8 is
   // columns 2 q', 2 q' + 1, 8 + 2 q', 9 + 2 q' of n-tiles 0, 1; k 16 + 4 q' .. those of n-tiles 2, 3)
   u32 ad[MD][2][4];
@@ -2423,11 +2447,6 @@ __global__ void __launch_bounds__(128) h1_seeds_c(const u64* __restrict__ data, 
   }
 }
 
-// a call's A' (H1U_JAP: M rows of K bytes) in its workspace, in words: after its row blocks (h1umj's) or its row and
-// column blocks (rc, h1umjc's)
-__host__ __device__ __forceinline__ u64 jap_words(u32 M, u32 N, u32 K, bool rc) {
-  return 16 * ((u64)M + (rc ? N : 0)) * (K / 512 + 1);
-}
 __device__ __forceinline__ const int8_t* jap_a(const UCallR& c, u32 M, bool rc) {
   return H1U_JAP ? reinterpret_cast<const int8_t*>(c.rws + jap_words(M, c.N, c.K, rc)) : c.A;
 }
@@ -2487,6 +2506,49 @@ __global__ void __launch_bounds__(256) h1jr_rows(const UCallR* __restrict__ call
     __syncwarp();
 #endif
   }
+}
+
+#if H1U_JAY
+// call blockIdx.y's Y (H1U_JAY) at jay_words(rc): a warp a live row i = 8 blockIdx.x + warp, Y[i][rho] =
+// sum_sg A'[i][32 sg + rho]; lane l's 16-byte pieces are k = 512 j + 16 l .., so rho 16 (l % 2) + b
+__global__ void __launch_bounds__(256) h1jr_y(const UCallR* __restrict__ calls, u32 M, const uint8_t* __restrict__ live,
+                                              int rc) {
+  const UCallR c = calls[blockIdx.y];
+  const u32 w = threadIdx.x >> 5, lane = threadIdx.x & 31, row = 8 * blockIdx.x + w;
+  __shared__ int part[8][32][17];
+  const bool on = row < M && (!live || live[row / 32]);
+  if (on) {
+    const int8_t* ap = reinterpret_cast<const int8_t*>(c.rws + jap_words(M, c.N, c.K, rc)) + (u64)row * c.K;
+    int s[16];
+#pragma unroll
+    for (int b = 0; b < 16; ++b) s[b] = 0;
+#pragma unroll 1
+    for (u32 k = 16 * lane; k < c.K; k += 512) {
+      const uint4 v = __ldg(reinterpret_cast<const uint4*>(ap + k));
+      const u32 x[4] = {v.x, v.y, v.z, v.w};
+#pragma unroll
+      for (int b = 0; b < 16; ++b) s[b] += (int)(int8_t)(x[b >> 2] >> (8 * (b & 3)));
+    }
+#pragma unroll
+    for (int b = 0; b < 16; ++b) part[w][lane][b] = s[b];
+  }
+  __syncwarp();
+  if (on) {
+    int y = 0;
+#pragma unroll
+    for (u32 l = lane >> 4; l < 32; l += 2) y += part[w][l][lane & 15];
+    reinterpret_cast<int*>(c.rws + jay_words(M, c.N, c.K, rc))[32ull * row + lane] = y;
+  }
+}
+#endif
+
+// a units launch's blocks before its units: h1jr_rows (with H1U_JAY, then h1jr_y); rc: the units are h1umjc's
+static void jr_rows(const void* calls, unsigned ncalls, unsigned M, const void* live, int rc, cudaStream_t s) {
+  // a thread a block up to K = 16384 (33 blocks a row), past it the threads stride
+  h1jr_rows<<<dim3((M * 33 + 255) / 256, ncalls), 256, 0, s>>>((const UCallR*)calls, M, (const uint8_t*)live, rc);
+#if H1U_JAY
+  h1jr_y<<<dim3((M + 7) / 8, ncalls), 256, 0, s>>>((const UCallR*)calls, M, (const uint8_t*)live, rc);
+#endif
 }
 
 __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
@@ -2653,7 +2715,7 @@ extern "C" int kh_seeds_j10r(const void* data, unsigned long long call, unsigned
 
 extern "C" unsigned kh_ucallr_bytes() { return sizeof(UCallR); }
 extern "C" unsigned long long kh_j10r_rows_bytes(unsigned M, unsigned K) {
-  return 64ull * M * (K / 512 + 1) + (H1U_JAP ? (unsigned long long)M * K : 0);
+  return 64ull * M * (K / 512 + 1) + (H1U_JAP ? (unsigned long long)M * K : 0) + (H1U_JAY ? 128ull * M : 0);
 }
 // the row workspace's int32 word whose bit 0 unitsbench's row fault flips (after the rows, before the units): row 0's
 // first block, or with H1U_JAP its A' bytes A'[0][0 .. 3], which the units read instead
@@ -2666,8 +2728,7 @@ extern "C" int kh_units_multi_j10r(const void* calls, unsigned ncalls, unsigned 
   if (!ncalls || ncalls > 65535 || M % 32 || mode < 0 || mode > 2) return 2;
   if (!units) return 0;
   cudaStream_t s = (cudaStream_t)stream;
-  if (mode != 2)  // a thread a block up to K = 16384 (33 blocks a row), past it the threads stride
-    h1jr_rows<<<dim3((M * 33 + 255) / 256, ncalls), 256, 0, s>>>((const UCallR*)calls, M, (const uint8_t*)live, 0);
+  if (mode != 2) jr_rows(calls, ncalls, M, live, 0, s);
   if (mode != 1) {
     carve<h1umj>();
     h1umj<<<(units + WARPS - 1) / WARPS, 32 * WARPS, 0, s>>>((const UCallR*)calls, ncalls, M, (const uint8_t*)live);
@@ -2686,7 +2747,7 @@ extern "C" int kh_units_multi_j10r_sm(const void* calls, unsigned ncalls, unsign
       cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, h1umj_sm<false>, 32 * WARPS, 0) != cudaSuccess || per < 1)
     return 3;
   cudaStream_t s = (cudaStream_t)stream;
-  h1jr_rows<<<dim3((M * 33 + 255) / 256, ncalls), 256, 0, s>>>((const UCallR*)calls, M, (const uint8_t*)live, 0);
+  jr_rows(calls, ncalls, M, live, 0, s);
   if (cudaMemsetAsync(next, 0, sizeof(u32), s) != cudaSuccess) return 3;
   h1umj_sm<false><<<2u * (unsigned)per * (unsigned)sms, 32 * WARPS, 0, s>>>((const UCallR*)calls, ncalls, M,
                                                                            (const uint8_t*)live, q, den, (u32*)next, 0);
@@ -2705,7 +2766,7 @@ extern "C" int kh_units_multi_j10r_smc(const void* calls, unsigned ncalls, unsig
       cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, h1umj_sm<true>, 32 * WARPS, 0) != cudaSuccess || per < 1)
     return 3;
   cudaStream_t s = (cudaStream_t)stream;
-  h1jr_rows<<<dim3((M * 33 + 255) / 256, ncalls), 256, 0, s>>>((const UCallR*)calls, M, (const uint8_t*)live, 0);
+  jr_rows(calls, ncalls, M, live, 0, s);
   if (cudaMemsetAsync(next, 0, sizeof(u32) * (1 + SMC_SLOTS), s) != cudaSuccess) return 3;
   h1umj_sm<true><<<2u * (unsigned)per * (unsigned)sms, 32 * WARPS, 0, s>>>((const UCallR*)calls, ncalls, M,
                                                                           (const uint8_t*)live, q, den, (u32*)next, cap);
@@ -2839,7 +2900,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umjc(const UCallR* __r
 
 // a call's workspace under kh_units_multi_j10rc: its M RB row blocks, then its N CB column blocks, 16 words each
 extern "C" unsigned long long kh_j10r_ws_bytes(unsigned M, unsigned N, unsigned K) {
-  return 64ull * ((unsigned long long)M + N) * (K / 512 + 1) + (H1U_JAP ? (unsigned long long)M * K : 0);
+  return 64ull * ((unsigned long long)M + N) * (K / 512 + 1) + (H1U_JAP ? (unsigned long long)M * K : 0) + (H1U_JAY ? 128ull * M : 0);
 }
 
 // kh_units_multi_j10r with each call's column blocks hashed once a call (h1jr_cols) beside its rows (h1jr_rows), and the
@@ -2851,7 +2912,7 @@ extern "C" int kh_units_multi_j10rc(const void* calls, unsigned ncalls, unsigned
   if (!units) return 0;
   cudaStream_t s = (cudaStream_t)stream;
   if (mode != 2) {
-    h1jr_rows<<<dim3((M * 33 + 255) / 256, ncalls), 256, 0, s>>>((const UCallR*)calls, M, (const uint8_t*)live, 1);
+    jr_rows(calls, ncalls, M, live, 1, s);
     h1jr_cols<<<dim3(H1U_JCOLX, ncalls), 256, 0, s>>>((const UCallR*)calls, M);
   }
   if (mode != 1) {
@@ -2873,7 +2934,7 @@ extern "C" int kh_units_multi_j10rc_sm(const void* calls, unsigned ncalls, unsig
       cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, h1umjc_sm<false>, 32 * WARPS, 0) != cudaSuccess || per < 1)
     return 3;
   cudaStream_t s = (cudaStream_t)stream;
-  h1jr_rows<<<dim3((M * 33 + 255) / 256, ncalls), 256, 0, s>>>((const UCallR*)calls, M, (const uint8_t*)live, 1);
+  jr_rows(calls, ncalls, M, live, 1, s);
   h1jr_cols<<<dim3(H1U_JCOLX, ncalls), 256, 0, s>>>((const UCallR*)calls, M);
   if (cudaMemsetAsync(next, 0, sizeof(u32), s) != cudaSuccess) return 3;
   h1umjc_sm<false><<<2u * (unsigned)per * (unsigned)sms, 32 * WARPS, 0, s>>>((const UCallR*)calls, ncalls, M,
