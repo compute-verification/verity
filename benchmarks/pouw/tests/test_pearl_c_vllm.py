@@ -897,6 +897,29 @@ def test_verify_run_rejects_a_wrong_weight_row_and_undeclared_exclusions(honest_
 
 
 @pytest.mark.slow
+def test_served_passes_verify_accepts_only_when_every_pass_with_calls_is_accepted(honest_pass, tmp_path):
+    """``served_passes.py verify`` replays each pass with calls that the serve's served.json names, skipping the empty one
+    the run left open: it accepts an honest pass, and the same pass with a weight row flipped fails the whole run."""
+    path, *_ = honest_pass
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    served = {"run": RUN, "passes": [{"pass": 0, "units": 2, "tiles": 4, "manifest": str(path)},
+                                     {"pass": 1, "units": 0, "tiles": 0}]}
+    (path.parent / "served.json").write_text(json.dumps(served))
+    out = tmp_path / "verify.json"
+    assert SP.main(["verify", "--passes", str(path.parent), "--out", str(out), "--jobs", "1"]) == 0
+    doc = json.loads(out.read_text())
+    assert (doc["verified"], doc["accepted"], doc["ok"]) == (1, 1, True) and doc["verdicts"][0]["line"].startswith("ACCEPT")
+    man = json.loads(path.read_text())
+    rows = path.parent / man["weights"]["0"]["rows"]["path"]
+    bad = bytearray(rows.read_bytes())
+    bad[1] ^= 0x01
+    rows.write_bytes(bytes(bad))
+    assert SP.main(["verify", "--passes", str(path.parent), "--out", str(out), "--jobs", "1"]) == 1
+    doc = json.loads(out.read_text())
+    assert (doc["accepted"], doc["ok"]) == (0, False) and doc["verdicts"][0]["line"].startswith("REJECT")
+
+
+@pytest.mark.slow
 def test_h3_screens_check_holds_a_pass_to_the_reference(honest_pass):
     """h3_screen's check on a pass the reference proved: every tile's leaf is the reference's, and a call's dumped row digests,
     row seeds, seed_A and E_A lines (16 padding rows under seed_A) are; a wrong line or row digest is caught."""
