@@ -51,6 +51,8 @@
   "Properties.Proofs.RemoteAudit.Coins",
   "Properties.Proofs.RemoteAudit.Frozen",
   "Properties.Proofs.RemoteAudit.Order",
+  "Properties.RemoteAudit.Shared",
+  "Properties.Proofs.RemoteAudit.Shared",
   "Properties.RemoteAudit.Pooled",
   "Properties.Proofs.RemoteAudit.Pooled",
   "Properties.Accounting.Compose",
@@ -1506,6 +1508,12 @@
    "assumptions": [],
    "type_hash": "00e2f065edf6e116f146ffde18cb1f3059766d17bf24b38880c6ca480be91680"
   },
+  "Properties.RemoteAudit.Shared.drawIsSubset": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn": {
+   "owner": "@memory-accounting"
+  },
   "Properties.RemoteAudit.acceptChecksOpenings": {
    "owner": "@memory-accounting",
    "signature": ["Properties.RemoteAudit.acceptChecksOpenings : Properties.RemoteAudit.AcceptChecksOpenings"],
@@ -2780,6 +2788,14 @@
    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity": {
     "function": "RemoteAudit.Session.run",
     "outcome": "accept"
+   },
+   "Properties.RemoteAudit.Shared.drawIsSubset": {
+    "function": "RemoteAudit.Shared.close",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn": {
+    "function": "RemoteAudit.Shared.run",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -2793,7 +2809,9 @@
    "Pous.EndToEnd.RunCertifies": "unstated: it joins the composed check's runCheckAccepts, proved, with the setup check's AcceptsDecodes and PublishesRoot, which are open; runCertifies_of proves it from those two",
    "Properties.Served.DrawMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.drawMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
-   "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it"
+   "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
+   "Properties.RemoteAudit.Shared.RecordKeptAfterDraw": "unstated: open: Frozen's KeepW/DF argument, ported to Shared.close (its draw keeps a group's windows only while none is drawn, which DP gives), and Prefix at g windows a draw",
+   "Properties.RemoteAudit.Shared.AcceptDrawsOpenable": "unstated: open: it needs an invariant that an accepted window's share passed checkWindow, openable in the window's own numbering (Session.verify), and the arithmetic from a draw's receipt numbering to a window's (drawLengths is its windows' lengths concatenated; receiptsBefore, passesBefore)"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
