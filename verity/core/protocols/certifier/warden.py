@@ -126,7 +126,8 @@ def read_cell(data: bytes, cell_bytes: int) -> tuple[int, int, bytes]:
         raise ValueError(f"a cell is {cell_bytes} bytes, not {len(data)}")
     kind, ordinal, payload = decode_frame(data)
     size = len(payload)
-    if kind not in KIND_NAMES or HEADER.unpack_from(data)[2] != size or cell(kind, ordinal, payload, cell_bytes) != data:
+    if kind not in KIND_NAMES or HEADER.unpack_from(data)[2] != size or \
+            cell(kind, ordinal, payload, cell_bytes) != data:
         raise ValueError("not a warden cell")
     if (kind == DATA and size != cell_bytes - HEADER.size) or (kind in (PAD, REFUSED) and size) or \
             (kind == FAIL and (size != 1 or payload[0] not in FAIL_NAMES)):
@@ -206,8 +207,8 @@ class _Connection:
 
 
 class Warden:
-    """The active warden (the module docstring): `handle(reader, writer)` serves one client connection, `run()` ticks the
-    schedule from `origin`, the clock's time of bucket 0, for `windows` record windows, then cuts whatever is still
+    """The active warden (the module docstring): `handle(reader, writer)` serves one client connection, `run()` ticks
+    the schedule from `origin`, the clock's time of bucket 0, for `windows` record windows, then cuts whatever is still
     served or queued. `connect()` opens a server connection, a (reader, writer) pair.
 
     - `publish(record, params)` receives each window's records, ingress then egress, as they close (by default they
