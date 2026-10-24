@@ -68,11 +68,12 @@ open NetTiming
 #print axioms constantRate_not_windowBlocks
 #print axioms constantRate_joint_witness
 
--- The certifier program agrees with these definitions (`Code`, four guarantees in `lean-audit.json`).
+-- The certifier program agrees with these definitions (`Code`, five theorems, proved and audited, not guarantees).
 #print axioms SecurityProofs.CodeExpectedRow
 #print axioms SecurityProofs.CodeAcceptedConstantRate
 #print axioms SecurityProofs.CodeStatusComplete
 #print axioms SecurityProofs.CodeSyncSet
+#print axioms SecurityProofs.CodeChargesV1
 
 -- Proved and audited, not guarantees: no record in `lean-audit.json`, so not citable as guarantees.
 #print axioms occ_fill

@@ -24,8 +24,9 @@ never sampled, so `en` is pinned by that slice's scan. The carry across windows 
 
 **What is left, the one hypothesis.** That `ChargeCount_v1`'s circuit computes `AdviceV1.window`. It is not proved in
 Lean: circuit-check holds the circuit to the Python reference (`arith_encode.py`'s `reference_charge`), and the Lean
-functions are that reference one for one, held to it by a comparison on random cases (1,200 windows and 400 sessions,
-accepted and refused, with no mismatch).
+functions are that reference one for one, held to it by the charge difftest (the certifier program's
+`NetworkCertifier.AdviceV1`, proved equal to these by `CodeChargesV1`, against `reference_charge` on 4,000 random
+instances, accepted and refused).
 -/
 
 namespace NetTiming.Guarantees
