@@ -235,6 +235,7 @@ def test_the_c128a_row_is_the_kernels_stores_on_edge_tokens(st):
     assert np.array_equal(_reference(bind(X.Dsv4C128aGlobalTopk, **st), args), _c128a_want(st, args))
 
 
+@pytest.mark.slow
 def test_the_c128a_row_at_the_served_statics():
     """Width 8192 (the widest `active_topk_width` at max_model_len 1,048,576), ratio 128, block 2, the compressed group's row of
     4096 blocks: the last position (1,048,575) makes every lane valid and its last lane reads block 4095; position 4095 makes 32
