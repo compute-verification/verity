@@ -317,6 +317,7 @@ def _member(m: dict) -> dict:
             "lean_verify_s": m.get("lean_verify_s"), "per_unit": m.get("per_unit"),
             "peak_child_rss_gb": (t.get("process") or {}).get("max_child_rss_gb"),
             "verifier_bytes": rec.get("verifier_bytes"), "witness_found_at_verifier": rec.get("verifier_found"),
+            "public_pieces_left_out": None if rec.get("public_pieces") is None else len(rec["public_pieces"]),
             "control_holds_all": (rec.get("control") or {}).get("holds_all")}
 
 
@@ -442,6 +443,15 @@ def markdown(r: dict) -> str:
     for name, n in r["negatives"].items():
         lines.append(f"- **{name}**: {'refused' if n['refused'] else 'NOT refused'} by "
                      f"{'; '.join(n['by']) or 'nothing'}{'' if n['proved'] else ' (not proved: N2 only)'}")
+    scanned = [(name, e, m) for name, x in r["runs"].items() for e, m in (x.get("proofs") or {}).items()]
+    if scanned:
+        lines += ["", "## What the verifier received", "",
+                  "Each member's verifier directory, scanned for every piece of every head, head salt, sibling and "
+                  "certifier salt but the pieces the public circuit holds (n2_zk's `public_pieces`); the prover's "
+                  "instance file is the control.", ""]
+        lines += [f"- {name} {e}: {_cell(m['verifier_bytes'])} bytes; witness pieces found: "
+                  f"{m['witness_found_at_verifier'] or 'none'}; left out as public: {_cell(m['public_pieces_left_out'])}; "
+                  f"control holds all: {_cell(m['control_holds_all'])}" for name, e, m in scanned]
     c = p.get("cost_per_link_window")
     if c:
         lines += ["", "## Cost per link-window (honest, both ends)", "",

@@ -163,7 +163,8 @@ def test_proofs_of_these_runs_are_adopted_and_another_runs_refused(rehearsal, tm
     r = e2e.run(args, [], clock=lambda: 0.0)
     assert r["ok"] is True and r["proofs"]["adopted"] == str(kept) and r["proofs"]["cost_per_link_window"]
     assert r["negatives"]["tampered"]["proved_refused_windows"] == [0] and r["negatives"]["extra"]["proofs_held"]
-    assert "Proofs: adopted from" in (tmp_path / "out" / "report.md").read_text()
+    md = (tmp_path / "out" / "report.md").read_text()
+    assert "Proofs: adopted from" in md and "- honest ingress: 10 bytes; witness pieces found: none" in md
     with tarfile.open(tmp_path / "n2zk.tgz", "w:gz") as tar:
         tar.add(kept, arcname="n2zk")
     args.proofs, args.out = str(tmp_path / "n2zk.tgz"), str(tmp_path / "out2")
