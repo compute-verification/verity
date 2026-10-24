@@ -353,6 +353,17 @@ __device__ __forceinline__ void mma_s8(int (&d)[4], const u32 (&a)[4], const u32
       : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]));
 }
 
+// H1U_FROT = 1: the fold's rotation on the FMA pipe, rotl(uu, r) + y as the two halves of uu 2^r (one mul.wide.u32,
+// 2^r read from constant memory so ptxas can't turn it back into a shift) and y summed (one IADD3), where 0 takes a
+// funnel shift and an add on the ALU pipe; the same words
+#ifndef H1U_FROT
+#define H1U_FROT 0
+#endif
+#if H1U_FROT
+__constant__ u32 FOLD_P2[8] = {1u << KeysT{}.rot[0], 1u << KeysT{}.rot[1], 1u << KeysT{}.rot[2], 1u << KeysT{}.rot[3],
+                               1u << KeysT{}.rot[4], 1u << KeysT{}.rot[5], 1u << KeysT{}.rot[6], 1u << KeysT{}.rot[7]};
+#endif
+
 // one set: the lane's entry q = 4 t + e is acc[t][e]; chain c absorbs entry 8 i + c at step i, key t = 2 i + (c >= 4)
 __device__ __forceinline__ void fold(const int (&acc)[8][4], u32 (&y)[8], u32 (&z)[8]) {
 #pragma unroll
@@ -363,7 +374,13 @@ __device__ __forceinline__ void fold(const int (&acc)[8][4], u32 (&y)[8], u32 (&
       const u32 p = (u32)acc[t][e] * KEYS.fx1[8 * i + c];
       const u32 uu = y[c] ^ p ^ KEYS.kk[t];
       y[c] = uu * KEYS.ka[t] + z[c];
+#if H1U_FROT
+      u64 w;
+      asm("mul.wide.u32 %0, %1, %2;" : "=l"(w) : "r"(uu), "r"(FOLD_P2[t]));
+      z[c] = (u32)w + (u32)(w >> 32) + y[c];
+#else
       z[c] = __funnelshift_l(uu, uu, KEYS.rot[t]) + y[c];
+#endif
     }
   }
 }
@@ -568,6 +585,21 @@ static_assert(H1U_JPD >= 1 && (H1U_JRING == 0 || H1U_JRING == 1) && 16 % (H1U_JP
 #ifndef H1U_JBW
 #define H1U_JBW 0
 #endif
+// H1U_JN2 = 1 (with JX, which leaves rowbits free): two column blocks a pass (noise_block2, two independent SHA-512 chains
+// for a scheduler with two warps), the coins' block with block 0 and odd block b with b + 1, b + 1 into rowbits for the
+// next pass's segments; the same blocks
+#ifndef H1U_JN2
+#define H1U_JN2 0
+#endif
+// H1U_JXS = 1 (with JX): h1jr_x stores a row block's X in A-fragment order, segment sg's row tile mt at byte
+// 1024 sg + 512 mt of the block, lane (g, q)'s 16 bytes {rows g, g + 8} x {k 8 q .., 8 q + 4 ..} in mma_s8's register
+// order, so the unit loads each fragment as one 16-byte load into the registers the MMA reads; the same bytes
+#ifndef H1U_JXS
+#define H1U_JXS 0
+#endif
+#if H1U_JXS && !H1U_JX
+#error "H1U_JXS swizzles JX's X, so it needs H1U_JX = 1"
+#endif
 constexpr u32 JX_AD_WORDS = 3 * 8 * 32;
 __host__ __device__ __forceinline__ u64 jx_x_off(u32 M, u32 K) { return 64ull * M * (K / 512 + 1); }
 __host__ __device__ __forceinline__ u64 jx_ad_off(u32 M, u32 K) { return jx_x_off(M, K) + (u64)M * K; }
@@ -613,6 +645,8 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
   static_assert(!RC || RW, "RC is J10-R's units with their column blocks read");
   static_assert(!JX || (RW && !RC), "JX is J10-R's units reading their row block's X and A_d");
   constexpr bool BW = RW && H1U_JBW;
+  constexpr bool N2 = JX && H1U_JN2;
+  constexpr bool XS = JX && H1U_JXS;
   constexpr bool PF = WS || H1U_PF;
   constexpr bool RING = RW ? H1U_JRING : H1U_RING;
   constexpr int PD = RW ? H1U_JPD : H1U_PD, NS = PD + RING;
@@ -730,7 +764,15 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
     const u32 kofs = 32 * sg + 8 * q;
 #pragma unroll
     for (int r = 0; r < 4; ++r) {
-      a[r] = ld2<H1U_L2HINT>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs);
+      if constexpr (XS) {
+        if (r % 2 == 0) {
+          const uint4 v = ld4<H1U_L2HINT>(Ab + 1024ull * sg + 256 * r + 16 * lane);
+          a[r] = make_uint2(v.x, v.z);
+          a[r + 1] = make_uint2(v.y, v.w);
+        }
+      } else {
+        a[r] = ld2<H1U_L2HINT>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs);
+      }
       b[r] = ld2e<H1U_L2HINT, H1U_EVF && H1U_EVFU>(Bb + (u64)(8 * r + g) * K + kofs);
     }
   };
@@ -741,7 +783,28 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
 #pragma unroll 1
   for (u32 it = 0; it <= chunks; ++it) {
     const u32 blk = it == 0 ? chunks : it - 1;
-    if constexpr (JX) {
+    if constexpr (N2) {
+      const u64 t0 = (u64)M * rb + (u64)(32 * cj + lane) * cb;
+      if (it == 0 || (blk % 2 == 1 && blk + 1 < chunks)) {
+        u64 sa[8], sb[8];
+        noise_block2(S.nm, t0 + blk, t0 + (it == 0 ? 0 : blk + 1), sa, sb);
+#pragma unroll
+        for (int j = 0; j < 8; ++j) {
+          S.colbits[lane][2 * j] = (u32)(sa[j] >> 32);
+          S.colbits[lane][2 * j + 1] = (u32)sa[j];
+          S.rowbits[lane][2 * j] = (u32)(sb[j] >> 32);
+          S.rowbits[lane][2 * j + 1] = (u32)sb[j];
+        }
+      } else if (blk % 2 == 1) {
+        u64 s[8];
+        noise_block(S.nm, t0 + blk, s);
+#pragma unroll
+        for (int j = 0; j < 8; ++j) {
+          S.colbits[lane][2 * j] = (u32)(s[j] >> 32);
+          S.colbits[lane][2 * j + 1] = (u32)s[j];
+        }
+      }
+    } else if constexpr (JX) {
       u64 s[8];
       noise_block(S.nm, (u64)M * rb + (u64)(32 * cj + lane) * cb + blk, s);
 #pragma unroll
@@ -865,7 +928,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
       continue;
     }
     const uint8_t* rbits = reinterpret_cast<const uint8_t*>(&S.rowbits[0][0]);
-    const uint8_t* cbits = reinterpret_cast<const uint8_t*>(&S.colbits[0][0]);
+    const uint8_t* cbits = reinterpret_cast<const uint8_t*>(N2 && blk % 2 == 0 ? &S.rowbits[0][0] : &S.colbits[0][0]);
 #pragma unroll 1
     for (u32 j0 = 0; j0 < 16; j0 += NS) {
 #pragma unroll
@@ -873,7 +936,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
         const u32 j = j0 + jj, sg = 16 * blk + j;
         uint2 ca[4], cw[4];
         if (H1U_L2PF && sg % 4 == 0 && sg + 16 < ks) {
-          prefetch_l2(Ab + (u64)lane * K + 32 * (sg + 16));
+          prefetch_l2(XS ? Ab + 1024ull * (sg + 16) + 128 * lane : Ab + (u64)lane * K + 32 * (sg + 16));
           prefetch_l2(Bb + (u64)lane * K + 32 * (sg + 16));
         }
         if (PF && RING) {
@@ -891,12 +954,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
           }
           if (sg + PD < ks) load_seg(sg + PD, pa[jj], pb[jj]);
         } else {
-          const u32 kofs = 32 * sg + 8 * q;
-#pragma unroll
-          for (int r = 0; r < 4; ++r) {
-            ca[r] = ld2<H1U_L2HINT>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs);
-            cw[r] = ld2e<H1U_L2HINT, H1U_EVF && H1U_EVFU>(Bb + (u64)(8 * r + g) * K + kofs);
-          }
+          load_seg(sg, ca, cw);
         }
         u32 af[2][4], bf[4][2];
         u32 bb[PL ? 2 : 1][4], xa[PL ? 2 : 1][4], xany = 0;  // PL: b and xa as 0/1 A fragments
@@ -2501,7 +2559,7 @@ __global__ void __launch_bounds__(512) h1jr_x(const UCallR* __restrict__ calls, 
   const u32 K = c.K, rb = K / 512 + 1, r = threadIdx.x >> 4, sub = threadIdx.x & 15, row = 32 * ri + r;
   const u32* bits = c.rws + 16ull * row * rb;
   const int8_t* a = c.A + (u64)row * K;
-  int8_t* x = reinterpret_cast<int8_t*>(c.rws) + jx_x_off(M, K) + (u64)row * K;
+  int8_t* x = reinterpret_cast<int8_t*>(c.rws) + jx_x_off(M, K) + (H1U_JXS ? (u64)(32 * ri) * K : (u64)row * K);
   int acc[16];
 #pragma unroll
   for (int i = 0; i < 16; ++i) acc[i] = 0;
@@ -2512,7 +2570,17 @@ __global__ void __launch_bounds__(512) h1jr_x(const UCallR* __restrict__ calls, 
     const u32 w = __ldg(bits + 16 * (k0 / 512) + (k0 / 32) % 16) >> (k0 % 32);
     const u32 xw[4] = {add01(av.x, expand4(w & 15u)), add01(av.y, expand4((w >> 4) & 15u)),
                        add01(av.z, expand4((w >> 8) & 15u)), add01(av.w, expand4((w >> 12) & 15u))};
-    *reinterpret_cast<uint4*>(x + k0) = make_uint4(xw[0], xw[1], xw[2], xw[3]);
+    if constexpr (H1U_JXS) {
+      // bytes 8 q' + 4 hf .. of row r (mt = r / 16, g = r % 8, h = r / 8 % 2) are word h + 2 hf of lane 4 g + q'
+      u32* xo = reinterpret_cast<u32*>(x + 512ull * (2 * (gi / 2) + r / 16) + 16 * (4 * (r % 8) + 2 * (gi % 2))) +
+                (r / 8) % 2;
+      xo[0] = xw[0];
+      xo[2] = xw[1];
+      xo[4] = xw[2];
+      xo[6] = xw[3];
+    } else {
+      *reinterpret_cast<uint4*>(x + k0) = make_uint4(xw[0], xw[1], xw[2], xw[3]);
+    }
 #pragma unroll
     for (int i = 0; i < 16; ++i) acc[i] += (int)(int8_t)(xw[i >> 2] >> (8 * (i & 3)));
   }
@@ -2825,9 +2893,13 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umjc(const UCallR* __r
                                                                OneOut{}, u, smem[wp]);
 }
 
-// a call's workspace under kh_units_multi_j10rc: its M RB row blocks, then its N CB column blocks, 16 words each
+// a call's workspace under kh_units_multi_j10rc: its M RB row blocks, then its N CB column blocks, 16 words each, and
+// never less than kh_j10r_rows_bytes (H1U_JX's X and A_d), since dither_so runs kh_units_multi_j10r on the same
+// workspace below its J10-RC t
 extern "C" unsigned long long kh_j10r_ws_bytes(unsigned M, unsigned N, unsigned K) {
-  return 64ull * ((unsigned long long)M + N) * (K / 512 + 1);
+  const unsigned long long rc = 64ull * ((unsigned long long)M + N) * (K / 512 + 1);
+  const unsigned long long rows = kh_j10r_rows_bytes(M, K);
+  return rows > rc ? rows : rc;
 }
 
 // kh_units_multi_j10r with each call's column blocks hashed once a call (h1jr_cols) beside its rows (h1jr_rows), and the
