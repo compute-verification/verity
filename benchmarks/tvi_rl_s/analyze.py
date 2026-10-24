@@ -1,6 +1,7 @@
-"""Tables for crux 1: score and fraction of full RL's gain against S, with two-sided 95% CIs, and base pass@k.
+"""Tables for crux 1: score and fraction of full RL's gain against S, with two-sided 95% CIs, and pass@k.
 
-`python analyze.py OUT_DIR... > table.md` reads every result-*.json under the given run out dirs (grpo.py's results).
+`python analyze.py OUT_DIR... > table.md` reads every result-*.json (grpo.py: greedy accuracy at the end of training) and
+ckpteval-*.json (evalckpts.py: greedy and sampled accuracy of saved checkpoints) under the given dirs.
 
 CIs: a paired bootstrap over eval problems (one resample of problem indices shared by base, the method and full), with the
 seeds of each method also resampled with replacement (hierarchical), so the interval carries problem and seed noise.
@@ -30,102 +31,129 @@ def ci(xs):
     return xs[int(0.025 * len(xs))], xs[int(0.975 * len(xs)) - 1]
 
 
-def main(dirs):
-    res = defaultdict(lambda: defaultdict(list))
+def table(by, rng):
+    """by: method -> list of runs {seed, S_bits, n_params, steps, acc, per_problem}. Returns rows with CIs."""
+    if "base" not in by:
+        return None
+    n = len(by["base"][0]["per_problem"])
+    boots = {m: rs for m, rs in by.items() if rs and all(len(r["per_problem"]) == n for r in rs)}
+    idx_sets = [[rng.randrange(n) for _ in range(n)] for _ in range(B)]
+    seed_picks = {m: [[rng.randrange(len(rs)) for _ in rs] for _ in range(B)] for m, rs in boots.items()}
+
+    def acc_of(m, b):
+        rs, idx, picks = boots[m], idx_sets[b], seed_picks[m][b]
+        return sum(sum(rs[s]["per_problem"][i] for i in idx) / n for s in picks) / len(picks)
+
+    accs = {m: [acc_of(m, b) for b in range(B)] for m in boots}
+    base_acc = boots["base"][0]["acc"]
+    full = boots.get("full", [])
+    rows = []
+    for m in ORDER:
+        if m not in boots:
+            continue
+        rs = boots[m]
+        point = sum(r["acc"] for r in rs) / len(rs)
+        row = {"method": m, "S_bits": rs[0]["S_bits"], "n_params": rs[0].get("n_params", 0),
+               "seeds": [r.get("seed", 0) for r in rs], "acc_per_seed": [r["acc"] for r in rs], "acc": point,
+               "acc_ci": list(ci(accs[m])), "steps": rs[0].get("steps", 0)}
+        if m != "base":
+            row["gain"] = point - base_acc
+            row["gain_ci"] = list(ci([accs[m][b] - accs["base"][b] for b in range(B)]))
+            if full:
+                full_acc = sum(r["acc"] for r in full) / len(full)
+                g = full_acc - base_acc
+                row["frac_full_gain"] = (point - base_acc) / g if g else None
+                fr = []
+                for b in range(B):
+                    gb = accs["full"][b] - accs["base"][b]
+                    if gb > 1e-9:
+                        fr.append((accs[m][b] - accs["base"][b]) / gb)
+                row["frac_ci"] = list(ci(fr)) if len(fr) > B // 2 else None
+                row["frac_boot_valid"] = len(fr) / B
+        rows.append(row)
+    return {"n_problems": n, "rows": rows}
+
+
+def load(dirs):
+    greedy = defaultdict(lambda: defaultdict(list))
+    sampled = defaultdict(lambda: defaultdict(list))
+    ck_greedy = defaultdict(lambda: defaultdict(list))
     passk = {}
-    meta = {}
     for d in dirs:
         for p in sorted(glob.glob(f"{d}/**/result-*.json", recursive=True)):
             r = json.load(open(p))
-            key = (r["task"], r["method"])
             if r.get("ckpt"):
                 if "passk" in r:
-                    passk[f"{r['task']} {r['method']} step{r['steps']} ({r['label']})"] = r["passk"]
+                    passk[f"{r['task']} {r['method']} step{r['steps']}"] = r["passk"]
                 continue
             if r["method"] == "base":
-                res[r["task"]]["base"] = [r]
+                greedy[r["task"]]["base"] = [r]
                 if "passk" in r:
                     passk[f"{r['task']} base"] = r["passk"]
                 continue
-            if any(x.get("seed") == r.get("seed") for x in res[r["task"]][r["method"]]):
+            if any(x.get("seed") == r.get("seed") for x in greedy[r["task"]][r["method"]]):
                 continue
-            res[r["task"]][r["method"]].append(r)
-            meta[key] = r
-    out = {"tasks": {}}
+            greedy[r["task"]][r["method"]].append(r)
+        for p in sorted(glob.glob(f"{d}/**/ckpteval-*.json", recursive=True)):
+            r = json.load(open(p))
+            if "passk" in r:
+                passk[f"{r['task']} {r['method']} seed{r['seed']} step{r['step']}"] = r["passk"]
+            run = {"seed": r["seed"], "S_bits": r["S_bits"], "n_params": r["n_params"], "steps": r["step"], "step": r["step"]}
+            s = dict(run, acc=r["sampled"]["acc"], per_problem=r["sampled"]["per_problem"], T=r["sampled"]["temperature"],
+                     n=r["sampled"]["n"])
+            g = dict(run, acc=r["greedy_acc"], per_problem=r["greedy_per_problem"])
+            for store, x in ((sampled, s), (ck_greedy, g)):
+                lst = store[r["task"]][r["method"]]
+                old = [y for y in lst if y["seed"] == x["seed"]]
+                if old and old[0]["step"] >= x["step"]:
+                    continue
+                lst[:] = [y for y in lst if y["seed"] != x["seed"]] + [x]
+    return greedy, sampled, ck_greedy, passk
+
+
+def main(dirs):
+    greedy, sampled, ck_greedy, passk = load(dirs)
     rng = random.Random(0)
-    for task, by in sorted(res.items()):
-        if "base" not in by:
-            continue
-        n = len(by["base"][0]["per_problem"])
-        base = by["base"][0]["per_problem"]
-        full = by.get("full", [])
-        rows = []
-        boots = {}
-        for m in ORDER:
-            runs = by.get(m, [])
-            if not runs or any(len(r["per_problem"]) != n for r in runs):
-                continue
-            boots[m] = runs
-        idx_sets = [[rng.randrange(n) for _ in range(n)] for _ in range(B)]
-        seed_picks = {m: [[rng.randrange(len(rs)) for _ in rs] for _ in range(B)] for m, rs in boots.items()}
-
-        def acc_of(m, b):
-            rs = boots[m]
-            idx = idx_sets[b]
-            picks = seed_picks[m][b]
-            return sum(sum(rs[s]["per_problem"][i] for i in idx) / n for s in picks) / len(picks)
-
-        accs = {m: [acc_of(m, b) for b in range(B)] for m in boots}
-        for m in ORDER:
-            if m not in boots:
-                continue
-            rs = boots[m]
-            point = sum(r["acc"] for r in rs) / len(rs)
-            lo, hi = ci(accs[m])
-            row = {"method": m, "S_bits": rs[0]["S_bits"], "n_params": rs[0].get("n_params", 0), "seeds": [r.get("seed", 0) for r in rs],
-                   "acc_per_seed": [r["acc"] for r in rs], "acc": point, "acc_ci": [lo, hi], "steps": rs[0]["steps"],
-                   "lr": rs[0].get("lr")}
-            if full and m != "base":
-                base_acc = rs and by["base"][0]["acc"]
-                full_acc = sum(r["acc"] for r in full) / len(full)
-                gain = full_acc - base_acc
-                row["gain"] = point - base_acc
-                row["frac_full_gain"] = (point - base_acc) / gain if gain else None
-                fr = []
-                for b in range(B):
-                    g = accs["full"][b] - accs["base"][b]
-                    fr.append((accs[m][b] - accs["base"][b]) / g if g > 1e-9 else float("nan"))
-                fr = [x for x in fr if x == x]
-                row["frac_ci"] = list(ci(fr)) if fr else None
-                gd = [accs[m][b] - accs["base"][b] for b in range(B)]
-                row["gain_ci"] = list(ci(gd))
-            rows.append(row)
-        out["tasks"][task] = {"n_problems": n, "rows": rows}
-    out["passk"] = passk
+    out = {"greedy": {}, "sampled": {}, "passk": passk}
+    for task, by in sorted(greedy.items()):
+        t = table(by, rng)
+        if t:
+            out["greedy"][task] = t
+    for task, by in sorted(sampled.items()):
+        t = table(by, rng)
+        if t:
+            out["sampled"][task] = t
+            out["sampled"][task]["T"] = by["base"][0].get("T")
+            out["sampled"][task]["n"] = by["base"][0].get("n")
     return out
 
 
 def render(out):
     lines = []
-    for task, t in out["tasks"].items():
-        lines.append(f"\n### {task} (n = {t['n_problems']} eval problems, greedy)\n")
-        lines.append("| S label | S (bits) | trainable values | steps | acc per seed | acc (95% CI) | gain (95% CI) | fraction of full gain (95% CI) |")
-        lines.append("|---|---|---|---|---|---|---|---|")
-        for r in t["rows"]:
-            accs = ", ".join(f"{a:.3f}" for a in r["acc_per_seed"])
-            a = f"{r['acc']:.3f} [{r['acc_ci'][0]:.3f}, {r['acc_ci'][1]:.3f}]"
-            g = f"{r['gain']:+.3f} [{r['gain_ci'][0]:+.3f}, {r['gain_ci'][1]:+.3f}]" if "gain_ci" in r else ""
-            f = (f"{r['frac_full_gain']:.2f} [{r['frac_ci'][0]:.2f}, {r['frac_ci'][1]:.2f}]"
-                 if r.get("frac_ci") and r.get("frac_full_gain") is not None else "")
-            lines.append(f"| {r['method']} | {fmt_bits(r['S_bits'])} ({r['S_bits']:.3g}) | {r['n_params']:,} | {r['steps']} | {accs} | {a} | {g} | {f} |")
-    for task, pk in out["passk"].items():
-        lines.append(f"\n### pass@k, {task} ({pk['problems']} problems, n = {pk['n']}, T = {pk['temperature']}, top-p = {pk['top_p']})\n")
+    for kind, title in (("greedy", "greedy accuracy at the end of training"),
+                        ("sampled", "sampled accuracy (mean over n samples at T, the GRPO objective), final checkpoints")):
+        for task, t in out[kind].items():
+            extra = f", n = {t.get('n')}, T = {t.get('T')}" if kind == "sampled" else ""
+            lines.append(f"\n### {task}: {title} ({t['n_problems']} eval problems{extra})\n")
+            lines.append("| S label | S (bits) | trainable values | steps | acc per seed | acc (95% CI) | gain over base (95% CI) | fraction of full gain (95% CI) |")
+            lines.append("|---|---|---|---|---|---|---|---|")
+            for r in t["rows"]:
+                accs = ", ".join(f"{a:.3f}" for a in r["acc_per_seed"])
+                a = f"{r['acc']:.3f} [{r['acc_ci'][0]:.3f}, {r['acc_ci'][1]:.3f}]"
+                g = f"{r['gain']:+.3f} [{r['gain_ci'][0]:+.3f}, {r['gain_ci'][1]:+.3f}]" if "gain_ci" in r else ""
+                f = ""
+                if r.get("frac_full_gain") is not None:
+                    f = f"{r['frac_full_gain']:.2f}"
+                    f += f" [{r['frac_ci'][0]:.2f}, {r['frac_ci'][1]:.2f}]" if r.get("frac_ci") else " [unbounded]"
+                lines.append(f"| {r['method']} | {fmt_bits(r['S_bits'])} ({r['S_bits']:.3g}) | {r['n_params']:,} | {r['steps']} | {accs} | {a} | {g} | {f} |")
+    for name, pk in out["passk"].items():
+        lines.append(f"\n### pass@k, {name} ({pk['problems']} problems, n = {pk['n']}, T = {pk['temperature']}, top-p = {pk['top_p']})\n")
         ks = sorted(pk["pass_at"], key=int)
         lines.append("| " + " | ".join(f"pass@{k}" for k in ks) + " |")
         lines.append("|" + "---|" * len(ks))
         lines.append("| " + " | ".join(f"{pk['pass_at'][k]:.3f}" for k in ks) + " |")
         z = sum(1 for c in pk["counts"] if c == 0)
-        lines.append(f"\nProblems never solved in {pk['n']} samples: {z} of {pk['problems']} ({z / pk['problems']:.1%}).")
+        lines.append(f"\nNever solved in {pk['n']} samples: {z} of {pk['problems']} ({z / pk['problems']:.1%}).")
     return "\n".join(lines)
 
 
