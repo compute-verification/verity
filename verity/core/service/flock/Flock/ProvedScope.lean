@@ -293,4 +293,20 @@ def drawLaw (zk : Bool) : Option Lean.Json → Except String Unit
       | some why => .error s!"refused: {why}: no soundness claim draws by this law"
       | none => .ok ()
 
+/-- The refusal of a session verified without the verifier's own program (`--program`), which `verify` reaches only when
+every check has passed. -/
+def NO_PROGRAM : String :=
+  "refused: a session without the verifier's program (--program): a verifier that cannot read the Program cannot know what the statement computes, nor which of its values are registered"
+
+/-- **The verifier holds its own program**: a session verified without it (`--program`) is refused (`NO_PROGRAM`),
+whatever else it passes. -/
+def programHeld (program : Option ByteArray) : Except String Unit :=
+  if program.isSome then .ok () else .error NO_PROGRAM
+
+theorem programHeld_ok {program : Option ByteArray} (h : programHeld program = .ok ()) : program.isSome = true := by
+  unfold programHeld at h
+  split at h
+  · assumption
+  · cases h
+
 end Flock.ProvedScope

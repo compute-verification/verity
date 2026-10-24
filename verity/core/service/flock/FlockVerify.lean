@@ -702,21 +702,6 @@ def coinTreeCmd (path : String) : IO UInt32 := do
     IO.println s!"COINTREE {line.compress}"
   return (if all then 0 else 1)
 
-/-- The refusal of a session verified without the verifier's own program (`--program`), which `verify` reaches only when
-every check has passed. -/
-def NO_PROGRAM : String :=
-  "refused: a session without the verifier's program (--program): a verifier that cannot read the Program cannot know what the statement computes, nor which of its values are registered"
-
-/-- `verify` holds the verifier's own program: a session without it is refused (`NO_PROGRAM`), whatever else it passes. -/
-def programHeld (program : Option ByteArray) : Except String Unit :=
-  if program.isSome then .ok () else .error NO_PROGRAM
-
-theorem programHeld_ok {program : Option ByteArray} (h : programHeld program = .ok ()) : program.isSome = true := by
-  unfold programHeld at h
-  split at h
-  · assumption
-  · cases h
-
 /-- `verify --statement ID --circuit F --comp F --public F [--coins seed|os] [--session-tables J] --session DIR...`: `ID`
 names the statement's tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`); `--comp` is the row leaf's
 pinned compression circuit; `J` (default 1) is the tables of every session (§16.12). A session with a work draw needs the
@@ -757,7 +742,7 @@ statement whose form the soundness proof does not cover (`ProvedScope.check`, th
 so is a session without a draw, under `--rec-inner` a session whose draw is not every unit of its population, a
 session with `--rec-part`, `--rec-bindings` or `--rec-rows` but no `--rec-inner` (`RecSetup.fullDraw`), and a session
 over an inner session whose record (`--rec-inner-session`) holds no draw (`RecSetup.innerDrawn`), and a session
-verified without the verifier's own `--program` (`programHeld`, `NO_PROGRAM`: a verifier that cannot read the Program
+verified without the verifier's own `--program` (`ProvedScope.programHeld`, `ProvedScope.NO_PROGRAM`: a verifier that cannot read the Program
 cannot know what it verifies), all after every check has passed (so the reason is the refusal only when nothing else
 fails; the form's first). Exit 0 iff every
 session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
@@ -931,7 +916,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
       if draw.isNone then ProvedScope.drawLaw zk draw
       RecSetup.fullDraw recInner (recPart.isSome || recBindings.isSome || recRows.isSome) draw record
       RecSetup.innerDrawn recCoins
-      programHeld program
+      ProvedScope.programHeld program
     if let some k := coinKey then coinKeys := coinKeys.push k
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok

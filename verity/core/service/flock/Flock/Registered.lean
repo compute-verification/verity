@@ -392,7 +392,7 @@ each root node that calls `t` (a template query's instance of it), each paramete
 template instance reads a registered value exactly through these arguments. It reads the root's nodes and their argument
 parts, the descriptor, never the unrolled circuit. -/
 def regParams (P : Program.Prog) (t : String) : Array (String × Program.Ty) :=
-  ((rootNodes P).filter fun x => (P.defs[x.fn]?).any fun f => !f.prim && f.key == t).flatMap fun x =>
+  ((rootNodes P).filter fun x => (P.defs[x.fn]?).any (·.key == t)).flatMap fun x =>
     ((Array.range x.args.size).filter fun i => (x.args[i]?).any (argReads P)).filterMap fun i =>
       (P.defs[x.fn]?).bind (·.params[i]?)
 
@@ -471,10 +471,12 @@ theorem checkCover_ok {c : Circuit} {b : ByteArray} {partition : Option Json} {o
       obtain ⟨t, x⟩ := tx
       intro h
       refine ⟨rfl, t, x, rfl, coverMiss_none ?_⟩
-      revert h
-      cases coverMiss P t params with
-      | none => intro _; rfl
-      | some y => intro h; simp at h
+      cases hm : coverMiss P t params with
+      | none => rfl
+      | some y =>
+        obtain ⟨n, ty⟩ := y
+        rw [hm] at h
+        simp at h
 
 /-- The registered values that are a round's commitment by an index, `<prefix><i>`: round `i`'s commitment `rec-c<i>`,
 which V*'s algebra reads; level `l`'s committed tops `rec-top-L<l>`, which its opening statement reads; R's registered

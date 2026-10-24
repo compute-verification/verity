@@ -513,11 +513,12 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
     out = {}
     for key, r in reads.items():
         leaves, words = shape[r["value"]]
-        out[{OUTPUTS[0]: RECEIPT_PORT, **(ports or {})}.get(key, key)] = {
+        port = {OUTPUTS[0]: RECEIPT_PORT, **(ports or {})}.get(key, key)
+        out[port] = {
             "value": r["value"], "root": roots[r["value"]], "leaves": leaves, "words": words, "word_bits": G.WORD_BITS,
             "domain": G.domain(prog, r["value"], words, leaves, window=None if r["value"] == b else window).domain_id.hex(),
             **G.schema_entry(G.SCHEMA_V2),
-            "reads": r["rows"]}
+            "reads": r["rows"], **({G.PARAM_KEY: key} if port != key else {})}
     if salt is not None:
         if window is None:
             raise ValueError("a call's public rows are committed under salts of the window's open root: give window")
