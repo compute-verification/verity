@@ -1389,8 +1389,8 @@ constexpr u32 SMQ_DEN_MAX = 256;
 
 // whether this CTA takes units: on a kept SM (smid % den < q), and under CAP only the first cap CTAs to reach it
 // (next[1 + smid]); off them only the grid's last CTA while no unit has been taken. ONE: thread 0 decides for the CTA,
-// for one whose warps meet: the last CTA's warps reading next apart could see a unit taken between their reads, and
-// those that stayed would wait on those that left
+// for one whose warps take units together: the last CTA's warps reading next apart could see a unit taken between their
+// reads, and those that stayed would claim units for those that had left
 template <bool CAP, bool ONE = false>
 __device__ __forceinline__ bool sm_keep(u32 smid, u32 q, u32 den, u32 cap, u32* next) {
   if constexpr (CAP) {
@@ -2879,7 +2879,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj_sm(const UCallR* _
                                                        u32* __restrict__ next, u32 cap) {
   u32 smid;
   asm volatile("mov.u32 %0, %%smid;" : "=r"(smid));
-  if (!sm_keep<CAP, H1U_JCS != 0>(smid, q, den, cap, next)) return;
+  if (!sm_keep<CAP, H1U_JCTA != 0>(smid, q, den, cap, next)) return;
 #if H1U_JCS
   __shared__ WarpSmemJC smem[WARPS];
   __shared__ u32 jcb[2 * WARPS][32][17];
