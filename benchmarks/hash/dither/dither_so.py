@@ -1122,7 +1122,7 @@ class SoSide(DA.Side):
             for f in ("kh_units_multi_sm", "kh_units_multi_j10r_sm"):
                 if hasattr(self.h, f):
                     getattr(self.h, f).argtypes = [vp, u32, u32, u32, vp, u32, u32, vp, vp]
-            for f in ("kh_units_multi_smc", "kh_units_multi_j10r_smc"):
+            for f in ("kh_units_multi_smc", "kh_units_multi_j10r_smc", "kh_units_multi_j10rc_sm"):
                 if hasattr(self.h, f):
                     getattr(self.h, f).argtypes = [vp, u32, u32, u32, vp, u32, u32, u32, vp, vp]
             words = int(self.h.kh_smc_words()) if hasattr(self.h, "kh_smc_words") else 1
