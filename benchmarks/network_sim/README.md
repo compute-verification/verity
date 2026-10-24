@@ -48,16 +48,8 @@ vy-nebius-cpu-2 (its system `python3` has numpy), not on an agent VM. Every comm
 python3 benchmarks/network_sim/mockdc.py up       # create the namespaces, then `status`
 python3 benchmarks/network_sim/mockdc.py status   # list them, and check what reaches what, with each round trip
 python3 benchmarks/network_sim/mockdc.py run --out DIR [--salt] [--block b1=late ...]
-python3 benchmarks/network_sim/mockdc.py seal --out DIR   # what a sealed pair link costs, per core (below)
 python3 benchmarks/network_sim/mockdc.py down     # stop their processes, and delete every na-* namespace and veth
 ~~~
-
-`seal` measures the certifier's sealed pair links (`Proxy(pair=…)`, the certifier's `PROTOCOL.md`, "Sealed pair
-links") in bytes of frames per second per core, at frames of 512 and 4,096 bytes, into `DIR/seal.json`: the Python
-halves in one process; the first block's certifier sealing to the second's across the fabric, each in its namespace;
-`seal_fast.c`, the construction in C over OpenSSL's SHA-512, once its units are the Python's byte for byte; and
-`openssl speed`'s SHA-512, with the CPU's SHA flags. Each figure comes with the cores one 400 Gb/s uplink takes at it.
-It needs the lab up, and a C compiler for the C path.
 
 As a recorded run, which leaves the lab up:
 
