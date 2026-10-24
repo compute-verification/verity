@@ -252,7 +252,8 @@ def tool_rows(outs: list[Path], step: str, rel: dict[str, tuple[str, str]], verd
         if not got:
             r.note = "not run"
         if verdict:
-            vs = [v for o in outs if (o / path).exists() if (v := verdict(o, name)) is not None]
+            # only repeats whose tool finished (``time -v`` opens its file at the start and writes it at the end)
+            vs = [v for o in outs if timev(o / path) if (v := verdict(o, name)) is not None]
             r.ok = all(v is True for v in vs) if vs else None
         rows.append(r)
     return rows
@@ -347,10 +348,19 @@ def read(root: Path) -> dict[str, Any]:
         for r in lrows:
             name = r.stage[len("lean "):]
             splits = [lean_split(o / "lean" / f"{name}.err") for o in ln]
+            parts = {}
             for k in ("inputs_s", "setup_s", "session_s"):
                 s = Stat.of(x.get(k) for x in splits)
                 if s:
                     r.extra[k] = asdict(s)
+                    parts[k] = s.median
+            # flock-verify's own split: its inputs read, the session's setup, and the session's checks after it
+            if parts and r.wall_s:
+                parts = {"lean.inputs": parts.get("inputs_s", 0.0), "lean.setup": parts.get("setup_s", 0.0),
+                         "lean.checks": max(0.0, parts.get("session_s", 0.0))}
+                k = max(parts, key=parts.get)
+                r.dominant = {"phase": k, "s": round(parts[k], 4), "share": round(parts[k] / r.wall_s.median, 3), "of": "wall_s",
+                              "phases": {p: round(x, 4) for p, x in sorted(parts.items(), key=lambda kv: -kv[1])}}
             why = [str((lean_verdict(o / "lean" / f"{name}.log") or {}).get("why"))[:200] for o in ln]
             if r.ok is False:
                 r.note = next((w for w in why if w and w != "None"), text(ln[0] / "lean" / f"{name}.log")[-200:].strip())

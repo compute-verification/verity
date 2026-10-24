@@ -153,9 +153,20 @@ def test_cpu_steps_over_their_repeats(tmp_path: Path) -> None:
     lean = row(doc, "lean L0")
     assert lean["ok"] is True and lean["peak_rss_gb"] == 9.0
     assert lean["extra"]["setup_s"]["median"] == 4.0 and lean["extra"]["session_s"]["median"] == 60.0
+    assert lean["dominant"]["phase"] == "lean.checks" and lean["dominant"]["share"] == round(60 / 61.5, 3)
     refused = row(doc, "lean alg-p0")
     assert refused["ok"] is False and refused["note"].startswith("refused: the batched constraint fails")
     assert row(doc, "lean step")["wall_s"]["values"] == [70.0, 80.0]
+
+
+def test_a_repeat_still_running_is_no_refusal(tmp_path: Path) -> None:
+    o = job(tmp_path)
+    r3 = o / "steps" / "lean" / "r3" / "out" / "lean"
+    r3.mkdir(parents=True)
+    (r3 / "time-L0.txt").write_text("")
+    (r3 / "L0.log").write_text("reading inputs\n")
+    lean = row(RP.read(o), "lean L0")
+    assert lean["ok"] is True and lean["wall_s"]["values"] == [61.0, 62.0]
 
 
 def test_build_is_once_and_steps_report_exit_codes(tmp_path: Path) -> None:
