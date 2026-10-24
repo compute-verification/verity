@@ -315,7 +315,7 @@ theorem decodeWithK_parts (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : S
         | .error _ => .error "record: a link point is not a list" : Flock.V (Array F128))) = .ok sess.points ∧
       sess.points.size = spec.points ∧
       Record.arr j "streams" = .ok recs ∧ recs.mapM SF = .ok sess.streams ∧ ∀ s x, SF s = .ok x → StreamR s x := by
-  unfold Record.decodeWithK at h
+  unfold Record.decodeWithK Record.decodeJWithK at h
   dsimp only at h
   split at h
   rotate_left

@@ -40,7 +40,12 @@
 #      H1_QUANT (h1: H1's ±110/[-126, 125] quantizers; vllm: vLLM's per-row absmax → ±127, over the first H1_K entries
 #      below K = 4096, so a smoke's tiles hold A = 127)
 set -uo pipefail
-[ -z "${H1_TMPL:-}" ] || { echo "H1_TMPL: the prover proves only the flat statement; stage.py alone writes the templated one" >&2; exit 2; }
+# its checks expect the Lean verifier's ACCEPT, which a templated statement never gets until its proof lands
+# (h1unit.layout), so this job stages only the flat statement; h1_lanes/job.sh proves the structural one end to end
+case "${H1_TMPL:-flat}" in
+  flat) ;;
+  *) echo "H1_TMPL=$H1_TMPL: this job's checks expect ACCEPT, so it proves only the flat statement (H1_TMPL unset or flat); h1_lanes/job.sh proves the structural one" >&2; exit 2 ;;
+esac
 export HZ_CONFIGS=h1 HZ_MEM_GB=${H1_MEM_GB:?} HZ_RUNS=${HZ_RUNS:-1} HZ_WARM=${HZ_WARM:-0}
 export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
 # shellcheck source=../hidden_zk/job.sh

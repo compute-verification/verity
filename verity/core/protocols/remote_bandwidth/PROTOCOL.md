@@ -836,8 +836,9 @@ commitment's root, \(N\), \(b\), the receipt kind, whether its receipts bind \(z
 (`post_seed`), the blocks the session appended and released (`appended`, `released`), the lifetime cap \(L\) it held
 the appended blocks to (`lifetime`, §4), the chain \(a\) over its appends in the order received (`appends`, §4's
 `a_(t,i)` after the last append, null without one: a hash over hiding roots and their indices, which the memory-map
-unit's verdict is on, §8), the draws each window requested (`samples`, the session's \(s\): window \(t\) drew
-\(\min(s, U_t)\), and the memory line's δ charges the draw's rejection at \(s\) a window), and the session's span. The
+unit's verdict is on, §8), the receipts each draw requested (`samples`, the session's \(s\): a draw of \(U\) receipts
+drew \(\min(s, U)\), and the memory line's δ charges the draw's rejection at \(s\) a draw, one draw a window unless
+`groups_per_coin` draws several from one coin), and the session's span. The
 digest binds the kind, `bind`, the
 codec, the layout and the rows already, but the record names them as well: what its receipts rest on depends on the
 kind, `bind` and the rows (§4), and `ledger` takes a link term only from a record that binds \(z\);
@@ -931,7 +932,7 @@ its structure, its outputs, the verifier's coins and draws, and hiding commitmen
   (`ledger.Node`: a maximal rebuild batch, \(S_{\text{chip}}\), and a maximal disk read, a second at the ceiling;
   link-charged, one link window as well), and its on-chip storage \(S_{\text{chip}}\). δ is the horizon's error plus
   the sketch's (`timing.sketch_failure`) plus the draw's rejection \(\sum_t k_t / 2^{64}\) (`ledger.rejection`), at
-  the draws each window requested, \(k_t\) the record's `samples`, not the \(\min(k_t, U_t)\) it made: a window that
+  the receipts each draw requested, \(k_t\) the record's `samples`, not the \(\min(k_t, U_t)\) it drew: a draw that
   opens all its receipts is charged \(k_t\) too, as `LineHeld`'s error is. `LineHeld`'s error also carries the
   windows' PRF advantages, \(\sum_t \mathrm{Adv}(\mathrm{prf}\,t)\), which have no numeric value: the ledger names
   them by their claim (prf/sha-512, `ledger.PRF_CLAIM`) and puts them in no δ.

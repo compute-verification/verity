@@ -10,6 +10,7 @@ import Definitions.Pous
 import Definitions.Pouw
 import Definitions.NetworkCertifier
 import Definitions.NetworkCertifier.Guarantees.SampledAudit
+import Definitions.NetworkCertifier.Guarantees.SampledCharge
 import Definitions.NetworkCertifier.AdviceString
 import Definitions.NetworkCertifier.Warden
 import Definitions.Accounting.Sheets
