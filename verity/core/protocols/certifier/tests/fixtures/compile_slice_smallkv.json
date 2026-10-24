@@ -1,0 +1,123 @@
+{
+ "source": "benchmarks/network_e2e/encodings/tests/fixtures/corpus-smallkv: its first 7 engine steps (replay_vectors.vectors at R 2, W 1, A 2)",
+ "engine": {
+  "max_num_seqs": 256,
+  "max_num_batched_tokens": 256,
+  "max_model_len": 4096,
+  "num_gpu_blocks": 100,
+  "block_size": 16,
+  "long_prefill_token_threshold": 0,
+  "enable_chunked_prefill": true,
+  "enable_prefix_caching": true,
+  "watermark": 0.0,
+  "scheduler_reserve_full_isl": true
+ },
+ "R": 2,
+ "W": 1,
+ "A": 2,
+ "IW": 6,
+ "Q": 3,
+ "D": 7,
+ "P": 7,
+ "K": 3,
+ "SEG": 32,
+ "arrivals": [
+  [
+   0,
+   372,
+   66
+  ],
+  [
+   1,
+   29,
+   16
+  ],
+  [
+   2,
+   938,
+   226
+  ]
+ ],
+ "decisions": [
+  0,
+  0,
+  0,
+  0,
+  0,
+  1,
+  0
+ ],
+ "steps": 7,
+ "rows": [
+  [
+   [
+    0,
+    0,
+    0,
+    0,
+    256
+   ]
+  ],
+  [
+   [
+    0,
+    0,
+    0,
+    256,
+    116
+   ]
+  ],
+  [
+   [
+    0,
+    0,
+    1,
+    372,
+    1
+   ]
+  ],
+  [
+   [
+    0,
+    0,
+    1,
+    373,
+    1
+   ]
+  ],
+  [
+   [
+    0,
+    0,
+    1,
+    374,
+    1
+   ]
+  ],
+  [
+   [
+    0,
+    0,
+    1,
+    375,
+    1
+   ]
+  ],
+  [
+   [
+    0,
+    0,
+    1,
+    376,
+    1
+   ],
+   [
+    1,
+    1,
+    0,
+    0,
+    29
+   ]
+  ]
+ ]
+}
