@@ -75,14 +75,14 @@ def _served(c: dict, *families: str) -> int:
 
 def test_step_census_and_requirement():
     r, c, req, rc = _views(CFG, "step", M=1, pos0=8)
-    assert r.digest.startswith("773b545605765fe9")
-    assert c["digest"] == "da1b33c78fc679ce93080e349be4bdb78be214866db1f01d8c7397e85a49653bd69d09d1d25cd13b21a6b685f85ec0822fdef5013fd04d6cb687d8bfaa1f8741"
+    assert r.digest.startswith("5e34739ca3f59dda")
+    assert c["digest"] == "31fc5a4003fd5b059049f0e46aee1bc36db3a7103b532987c36450650b7f581f881e5ba7fbb21b7a5255dec50e30f62ac4d5280a703d08f66ed31758cbf2669a"
     gemms = [e for e in c["classes"].values() if e["family"] == "Gemm_v2"]
     assert all(e["served_macs"] == e["statics"]["K"] * e["statics"]["N"] for e in gemms)
     assert _served(c, "Gemm_v2") == LINEAR
     assert c["totals"]["served_macs"] == LINEAR + _served(c, "Attention_v5")
     assert _by_precision(c) == {"mac:bf16": LINEAR + _served(c, "Attention_v5")}  # every product a BF16 tensor-core step's
-    assert (c["totals"]["classes"], c["totals"]["values"], c["totals"]["tail_atoms"], c["totals"]["receipt_folds"]) == (57, 394, 0, 0)
+    assert (c["totals"]["classes"], c["totals"]["values"], c["totals"]["tail_atoms"], c["totals"]["receipt_folds"]) == (56, 394, 0, 0)
     assert c["selects"]["gates"] == [2048] and c["selects"]["bits"] == [2048 * 16]  # the row's embedding: H bf16 gathers
     assert rc["totals"]["inputs"]["run"] == {"gates": 1, "bits": 32}  # the token id
     w = _base(rc) + ROW

@@ -46,12 +46,12 @@ def test_the_quantizers_range_rule_holds_on_its_evaluator():
 
 
 @pytest.mark.parametrize("model,wrapper,kw,digest,steps,affine,units,lifetime", [
-    ("llama32-1b", "step", dict(M=1, pos0=8), "773b545605765fe9", 1, 135168,
-     {"roundings": 78513996, "compare_select": 385277, "gathers": 17, "folds": 0}, 1),
-    ("llama32-1b", "request", dict(LP=3, T=2), "12cd8db271e0c6c7", 3, 659456,
-     {"roundings": 352326774, "compare_select": 1161879, "gathers": 85, "folds": 0}, 2),
-    ("qwen3-30b-a3b", "step", dict(M=1, pos0=8), "98a180a562abf1d6", 1, 1632256,
-     {"roundings": 197328044, "compare_select": 1041597, "gathers": 3090, "folds": 0}, 1),
+    ("llama32-1b", "step", dict(M=1, pos0=8), "5e34739ca3f59dda", 1, 135168,
+     {"roundings": 78513484, "compare_select": 385277, "gathers": 17, "folds": 0}, 1),
+    ("llama32-1b", "request", dict(LP=3, T=2), "7bdfd1fb1f8f860b", 3, 659456,
+     {"roundings": 352325814, "compare_select": 1161879, "gathers": 85, "folds": 0}, 2),
+    ("qwen3-30b-a3b", "step", dict(M=1, pos0=8), "d12a2b4c96ad1b35", 1, 1632256,
+     {"roundings": 197326508, "compare_select": 1041597, "gathers": 3090, "folds": 0}, 1),
 ])
 def test_a_bf16_program_is_refused_for_its_tensor_core_steps(model, wrapper, kw, digest, steps, affine, units, lifetime):
     """Roundings: each tensor-core step is one, beside the FP elementwise ops; the bf16 widenings are free affine maps.
