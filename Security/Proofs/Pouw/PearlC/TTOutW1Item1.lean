@@ -349,11 +349,8 @@ theorem exists_guess_ge_of {N : ℕ} (hN : ∀ v, W1.w32 v < N) (dv : W1.W1Devic
   have hN' : (N : ℝ) ≠ 0 := Nat.cast_ne_zero.2 hN0.ne'
   have hM : (N : ℝ) * N ≠ 0 := mul_ne_zero hN' hN'
   have h3 : ∑ _p ∈ range N ×ˢ range N, pr (GuessEvent P k w a θ) / ((N : ℝ) * N) = pr (GuessEvent P k w a θ) := by
-    rw [Finset.sum_const, Finset.card_product, Finset.card_range, nsmul_eq_mul, Nat.cast_mul]
-    first
-      | rw [mul_comm, div_mul_eq_mul_div, mul_div_assoc, div_self hM, mul_one]
-      | (field_simp; done)
-      | (field_simp; ring1)
+    rw [Finset.sum_const, Finset.card_product, Finset.card_range, nsmul_eq_mul, Nat.cast_mul, mul_comm,
+      div_mul_eq_mul_div, mul_div_assoc, div_self hM, mul_one]
   have hS : (range N ×ˢ range N).Nonempty := ⟨(0, 0), mem_range_prod hN0 hN0⟩
   obtain ⟨p, hp, h⟩ := Finset.exists_le_of_sum_le hS (h3.trans_le (pr_event_le_sum hN dv salt P k w a θ ha))
   rw [Finset.mem_product, Finset.mem_range, Finset.mem_range] at hp
@@ -364,10 +361,7 @@ theorem exists_guess_ge (dv : W1.W1Device) (salt : S → List ℕ) (P : Protocol
     (ha : ∀ i l, a i l < 2 ^ 32) :
     ∃ t < 2 ^ 32, ∃ y < 2 ^ 32, pr (GuessEvent P k w a θ) / 2 ^ 64 ≤ pr (GuessWins dv salt P k w a θ t y) := by
   obtain ⟨t, ht, y, hy, h⟩ := exists_guess_ge_of w32_lt dv salt P k w a θ ha
-  have e : ((2 ^ 32 : ℕ) : ℝ) * ((2 ^ 32 : ℕ) : ℝ) = 2 ^ 64 := by
-    first
-      | norm_num
-      | (push_cast; norm_num)
+  have e : ((2 ^ 32 : ℕ) : ℝ) * ((2 ^ 32 : ℕ) : ℝ) = 2 ^ 64 := by norm_num
   rw [e] at h
   exact ⟨t, ht, y, hy, h⟩
 
@@ -380,9 +374,7 @@ theorem exists_guess_gt_eps (dv : W1.W1Device) (salt : S → List ℕ) (P : Prot
   refine ⟨t, ht, y, hy, lt_of_lt_of_le ?_ h⟩
   have e : εPearlC 0 1 = 1 / 2 ^ 64 / 2 ^ 64 := by norm_num [εPearlC]
   rw [e]
-  first
-    | exact div_lt_div_of_pos_right hE (by positivity)
-    | linarith
+  exact div_lt_div_of_pos_right hE (by positivity)
 
 /-- **TT_OUT at W1 bounds the event**: on any domain containing the unit, `Pr[GuessEvent at 2·fetch/(1−γ₀)]` is at most
 `2^64·ε(0, 1)`. -/
@@ -487,23 +479,16 @@ theorem creditRev1_sm120v2 : creditDevRev1 (devSm120v2 Prices.sm120) ⟨1, 1, 12
 `(1 − ρ)·credit ≥ 4,736`. -/
 theorem guess_cost_lt {f ρ c : ℚ} (hf : f ≤ 2000) (hρ : ρ ≤ 1 / 2) (hc : 9472 ≤ c) :
     2 * (f : ℝ) / (1 - 1 / 400) < (((1 - ρ) * c : ℚ) : ℝ) := by
-  have e : 2 * f / (1 - 1 / 400) = 800 / 399 * f := by
-    first
-      | ring
-      | (field_simp; ring)
+  have e : 2 * f / (1 - 1 / 400) = 800 / 399 * f := by ring
   have h1 : 4736 ≤ (1 - ρ) * c := by nlinarith
   have h : 2 * f / (1 - 1 / 400) < (1 - ρ) * c := by
     rw [e]
     linarith
   have h' : ((2 * f / (1 - 1 / 400) : ℚ) : ℝ) < (((1 - ρ) * c : ℚ) : ℝ) := Rat.cast_lt.2 h
   have e' : ((2 * f / (1 - 1 / 400) : ℚ) : ℝ) = 2 * (f : ℝ) / (1 - 1 / 400) := by
-    first
-      | (push_cast; ring1)
-      | (push_cast; done)
-      | (norm_num; done)
-  first
-    | exact e'.symm.trans_lt h'
-    | linarith [h', e']
+    push_cast
+    ring1
+  exact e'.symm.trans_lt h'
 
 /-- **sm_120 v1 at `Prices.sm120`, `k = 128`**: the old-domain TT_OUT at W1 fails for any fetch price up to 2,000, any
 cap `ρ ≤ 1/2`, activations and a weight row that pass the rules, and a cap that holds with probability above `2^−64`. -/
