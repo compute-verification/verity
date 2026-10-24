@@ -61,6 +61,54 @@
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
+  "Accounting.Remote.Draw.Assumptions.Counted": {
+   "owner": "@memory-accounting",
+   "digest": "a19f5130ba8a9bf73218b9ea3135acbdb8df3d7d2259c6bde1db14e8ad65480a"
+  },
+  "Accounting.Remote.Draw.Assumptions.Live": {
+   "owner": "@memory-accounting",
+   "digest": "ceea8ba161dd0632c33464693131d92143d0d8b805621e536a14ca5ff356a56f"
+  },
+  "Accounting.Remote.Draw.Assumptions.Refused": {
+   "owner": "@memory-accounting",
+   "digest": "e0b9ba0564a6e3b8c9ac2fe4e31b5af599109fd9258506cf68cd5d1292a48f97"
+  },
+  "Accounting.Remote.Held.Assumptions.ChipCeiling": {
+   "owner": "@memory-accounting",
+   "digest": "e127ae65fbdc438b47177e01b9ac74b58f7ea758327288ae293137cb8b6d8fae"
+  },
+  "Accounting.Remote.Held.Assumptions.Covers": {
+   "owner": "@memory-accounting",
+   "digest": "d438bfd7ed2af2553dfa811e2c17840502eab877926ee4d89aea953fba5cb040"
+  },
+  "Accounting.Remote.Held.Assumptions.Disks": {
+   "owner": "@memory-accounting",
+   "digest": "44674bd7d2f65c33576c0959754230e2c263738482a6424b37ebd0911c8a25ca"
+  },
+  "Accounting.Remote.Held.Assumptions.Identity": {
+   "owner": "@memory-accounting",
+   "digest": "22630221fb29250610dca86a4897d9f39909a8e8ca1c425fcb62e8dcf192a236"
+  },
+  "Accounting.Remote.Held.Assumptions.Links": {
+   "owner": "@memory-accounting",
+   "digest": "5eb7c975f82ed1718aea5d790325eb4b28c07b0d1fdbf2d2265375db54787a2a"
+  },
+  "Accounting.Remote.Held.Assumptions.Paced": {
+   "owner": "@memory-accounting",
+   "digest": "6e7b12b8bd7f835f54c0380b95c243db645f3cb1a6ae795f3645926f9dd9b62e"
+  },
+  "Accounting.Remote.Held.Assumptions.Routed": {
+   "owner": "@memory-accounting",
+   "digest": "0c27bd1201f655e0bb779bc6b347727d6d0072e9aab93ae409391e18670eca7c"
+  },
+  "Accounting.Remote.Held.Assumptions.SketchBound": {
+   "owner": "@memory-accounting",
+   "digest": "193fa80d7712162f27061c4a392ad4c4703e5ce2a95a7877a8c553b6fce258b4"
+  },
+  "Accounting.Remote.Held.Assumptions.SquaringCeiling": {
+   "owner": "@memory-accounting",
+   "digest": "ec84a74dad72a577c60f568cc9665016654feb62fad1857aef5f2f8a4bb9f098"
+  },
   "Nci.Assumptions.BaselineRegistered": {
    "owner": "@compute-accounting",
    "digest": "1e726c0b0d96e66c67519b7726cfdb3ca6faf901f7773d1faa4283870690966c"
@@ -7961,14 +8009,14 @@
    ]
   },
   "Properties.RemoteAudit.Line": {
-   "digest": "a6cf10dcc00e6d25f3ead42bd16be4466d8dda0f03f91db3689c0c568fff7746",
+   "digest": "efbdca334c6c8706e687be6c4de07eb0ee7ea866d3789e29319d11f77bc20e64",
    "definitions": {
     "Properties.RemoteAudit.Line.Credits": "9eec9eb1330187d597bef59966923e5ccf2461e6b517b9ffe07fbd35fba6844d",
     "Properties.RemoteAudit.Line.HeldAt": "5af243528466ee1f818da31f0b9632e466c6bef20c824495d5d167eff2579285",
     "Properties.RemoteAudit.Line.LineChecked": "1c5505e0b300c71854bafd0ede4feac0aea5016477e28030deb3bc4f7989742a",
     "Properties.RemoteAudit.Line.LineHeld": "672bf3e6ea93d043247153f5130d84743328d5ea739b08e6fcd4e24f022dd5e4",
     "Properties.RemoteAudit.Line.LineHeldIdentity": "bb311b9c0524354f52339c1c789c4217ff460381e37fcfcf5e6b967bc2c323c4",
-    "Properties.RemoteAudit.Line.StretchBound": "d2fd1511c22acab992d17179d4063bc8e30948b86d21f2b7efb8275a13b59b95"
+    "Properties.RemoteAudit.Line.StretchBound": "81d15d41252aa8d919aeb78bacb4b616b3eadb2ce5f86146d0fad010ac89cc97"
    },
    "guarantees": [
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
@@ -7990,12 +8038,12 @@
    ]
   },
   "Properties.RemoteAudit.Line.Record": {
-   "digest": "fee1ef9dee9b15229043c102b8131e6aa07e395893ccac0721407a2c76fb8727",
+   "digest": "e9fa28c8eb4d34661c7e0dd72c92fe9625a8ea0f5ce23850e8708ad408a8b611",
    "definitions": {
     "Properties.RemoteAudit.Line.Node": "1194f476391df9c66961bc505f6761e1842c167954355786c66cfbcc396f0c1a",
     "Properties.RemoteAudit.Line.Node.blockBytes": "f524d416457d24d143e21fc21c677bc42d3e688063d80b20b2964a5998ad2701",
     "Properties.RemoteAudit.Line.Node.blocks": "930c8ca95cdf231c0fbd59e7444ef48cae87674262d9a9ae9d66918f83e2a1f6",
-    "Properties.RemoteAudit.Line.Node.chipBlocks": "8e365e636bfc9c0ac102c9952fb9605035dc2e5c0cd8f10ffd28c57a81fdc341",
+    "Properties.RemoteAudit.Line.Node.chipBlocks": "157e01e47887fcd890013d827f0c2ec9057ab05a2826fe6408976a66519a2ef9",
     "Properties.RemoteAudit.Line.Node.chipBytes": "58375f92761184373d1bf107a344f6c36d50c30a7a01df938da99ea3f7624e66",
     "Properties.RemoteAudit.Line.Node.delta": "7283e36705e42d27aadcc75e295f5e8b18e93ffad5f16fa7b01e969eab9063dd",
     "Properties.RemoteAudit.Line.Node.disk": "42bf6c5f5fa13bcb5789610d468b1551a2662d617b11612210b64adbb8bf3437",
@@ -8250,7 +8298,7 @@
    ]
   },
   "RemoteAudit.Line": {
-   "digest": "0930c7a7561b62fa019205ea538e49f0c3e1d13aa8a184e3d57226ffd87be8fe",
+   "digest": "1fb65e18ea9dca27829cc749554f0d84d9e1a529ea63d53ab435b3f3dc9efccc",
    "definitions": {
     "RemoteAudit.Line.Charge": "2bcde4b3e9c1cc9f6a10fbcb2d3141d900357936104076dab8b40f0e27a57ae0",
     "RemoteAudit.Line.Charge.burst": "f45f377b3b0a2c566ed9379eb9de121bbeb69d0e052f5449aa4ba10beb838e48",
@@ -8292,7 +8340,7 @@
     "RemoteAudit.Line.instInhabitedGroup.default": "355fe76f6fb2bf99238a7393aea3bd8f90ccbee4e2b13bd278b848ee7370adce",
     "RemoteAudit.Line.line": "3bf36406d1e77ec6783089c744c791eb98b495fdcf13c156d1f455f92b5d77bd",
     "RemoteAudit.Line.ns": "fce23a2b5cc24d02c2e050a671217ac3aa6723fc0b8ebff3f575540027c57232",
-    "RemoteAudit.Line.stretches": "22c8e8c2eaeef189a8ef5ee5e25a69260a11bbe10e9cbc6cd3e393f618517abb",
+    "RemoteAudit.Line.stretches": "5e0506d7a49e27f8709311b3f7a445895485369792e5004c063a5f0154d35766",
     "_private.RemoteAudit.Line.0.RemoteAudit.Line.sumOver": "941d996d904d366b6c613155ea1809f0b4c9f3ff622c696dde0822d56d33a6b7"
    },
    "guarantees": [

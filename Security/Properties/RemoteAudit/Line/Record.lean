@@ -93,8 +93,9 @@ noncomputable def Node.diskBurst (n : Node) : ℝ := (n.rates.diskBurstBytes : �
 /-- `B_l`, one link window in blocks. -/
 noncomputable def Node.linkBurst (n : Node) : ℝ := (n.rates.linkBurstBytes : ℝ) / n.blockBytes
 
-/-- `S`, the whole registered blocks the node's chips can hold. -/
-def Node.chipBlocks (n : Node) : ℕ := n.chipBytes / n.blockBytes
+/-- `S`, the registered blocks the node's chips can hold any byte of: `chipBytes / blockBytes` rounded up, so a block
+split between a chip and memory is one of them. -/
+def Node.chipBlocks (n : Node) : ℕ := (n.chipBytes + n.blockBytes - 1) / n.blockBytes
 
 /-- `e_g`, group `g`'s end as `stretches` reads it: the later of its last root and group `g + 1`'s coin, the last
 group's last root. -/

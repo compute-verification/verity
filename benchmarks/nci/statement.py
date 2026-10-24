@@ -30,8 +30,9 @@ import tiers as T  # noqa: E402
 
 MB = 8e6
 TODAY = {"residual": 1.0}
-ATTESTED = {"residual": 0.217, "clock_share": 0.0, "host_share": 0.0021}
-BEST = {"residual": 0.01, "host_share": 0.0021, "clock_share": 0.0}
+ATTESTED = {"residual": 0.213, "clock_share": 0.0, "host_share": 0.0021}
+#: the C7 dossier's eight conditions for a 1% residual include PoUW's deficit at most 0.25%
+BEST = {"residual": 0.01, "host_share": 0.0021, "clock_share": 0.0, "eps_w": 0.0025}
 STREAMED = {"pous_rounds": 74000.0, "pous_floor": 0.0}
 
 
@@ -210,7 +211,12 @@ def symbols() -> list[dict]:
         ("r̂ GPU", "the GPUs' residual at the locked clock", p["residual"]),
         ("r̂ clock", "GPU capacity above the credited clock", p["clock_share"]),
         ("r̂ host", "host CPUs at INT8 AMX peak", p["host_share"]),
-        ("ε′", "aggregation slack, in r = r̂ + ε′ (δ_win / ε′ = 2.7e-8 at δ_win = 3·2^-40)", p["eps_agg"]),
+        ("ε_W", "PoUW's deficit, a share of certified work (CircuitCredit)", p["eps_w"]),
+        ("ε_W W_cert/C", "the deficit's share of capacity under the floor credit, ε_W (1 − r̂)", p["eps_w"] * (1 - r)),
+        ("ε_W", "at the best plausible PoUW design", (p | BEST)["eps_w"]),
+        ("ε′", "aggregation slack (δ_win / ε′ = 2.7e-8 at δ_win = 3·2^-40)", p["eps_agg"]),
+        ("r = r̂ + ε_W W_cert/C + ε′", "the residual DampenerRemote bounds (#3646), under the floor credit",
+         T.residual_share(p)),
         ("GPU / r̂", "share of r̂", p["residual"] / r),
         ("clock / r̂", "share of r̂", p["clock_share"] / r),
         ("host / r̂", "share of r̂", p["host_share"] / r),
@@ -289,14 +295,17 @@ def substitutes() -> list[dict]:
 
 
 def floor() -> list[dict]:
-    """The floor's limits as the verdict lag goes to 0, with ε′ and as ε′ goes to 0 too, and what evaluate would give at
-    zero lag and ε′ if the partial-sum law held, where with no residual to relay through it binds below nu."""
+    """The floor's limits as the verdict lag goes to 0, with ε_W and ε′ (at r̂ = 0 all of C is certified, so the deficit
+    is ε_W C) and as they go to 0 too, and what evaluate would give at zero lag, ε_W and ε′ if the partial-sum law held,
+    where with no residual to relay through it binds below nu."""
     p = T.DEFAULTS
+    eps_w = (p | FLOOR)["eps_w"]
     return rows([
-        ("MFU_0 / (ν + ε′), the floor's limit as the verdict lag goes to 0", p["mfu"] / (X.nu(p) + p["eps_agg"])),
-        ("MFU_0 / ν, the same as ε′ goes to 0 too (δ_win / ε′ then needs δ_win → 0)", p["mfu"] / X.nu(p)),
-        ("D at zero lag and ε′, r̂ = 0, T3, if the partial-sum law held (its support premises are falsified)",
-         dampener(p | FLOOR | {"lag_s": 0.0, "eps_agg": 0.0, "kappa_chain": 0.0695}, "T3")),
+        ("MFU_0 / (ν + ε_W + ε′), the floor's limit as the verdict lag goes to 0",
+         p["mfu"] / (X.nu(p) + eps_w + p["eps_agg"])),
+        ("MFU_0 / ν, the same as ε_W and ε′ go to 0 too (δ_win / ε′ then needs δ_win → 0)", p["mfu"] / X.nu(p)),
+        ("D at zero lag, ε_W and ε′, r̂ = 0, T3, if the partial-sum law held (its support premises are falsified)",
+         dampener(p | FLOOR | {"lag_s": 0.0, "eps_w": 0.0, "eps_agg": 0.0, "kappa_chain": 0.0695}, "T3")),
     ])
 
 

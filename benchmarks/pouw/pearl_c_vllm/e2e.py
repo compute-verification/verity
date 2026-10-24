@@ -40,7 +40,8 @@ replays its own capture, which also keeps each call's A words and tree.  Its gat
 replayed whole to the eager calls, and a retained pass replayed whole to an eager one, bit for bit; the decode response
 counts the steps replayed and run eagerly.  vLLM's eager decode isn't its graph's bit for bit, so the verify pass's eager
 check compares Pearl-C's graphed calls with its eager ones both under vLLM's eager decode.  ``--whole-defer`` (with
-``--whole-step``) captures each call's tile hashing beside the next call (`pouw_pearl_c_graphs`), under the same gate.
+``--whole-step``) captures each call's tile hashing beside the next call (`pouw_pearl_c_graphs`), and ``--whole-defer-a``
+(with ``--whole-defer``) each call's A tree beside its own forming and GEMM, under the same gate.
 
 ``--statement CUBIN`` (with ``--whole-step``; hm96_rows.cu built for sm_120a) adds the mode ``pearlc-zk``: ``pearlc`` with
 each decode forward replayed whole also committing its calls' A rows and its tile rows in the ZK statement's format,
@@ -209,7 +210,8 @@ def install(model, args, coins):
     opening = coins.open("salt", weights_root(roots))
     run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, coins.commitment, opening, time_gemm=True,
                               schedule=getattr(args, "schedule", "serial"), graphs=getattr(args, "graphs", False),
-                              whole_defer=getattr(args, "whole_defer", False), capacity=tiles, flag_rows=rows, salt_key=salt_key)
+                              whole_defer=getattr(args, "whole_defer", False), capacity=tiles, flag_rows=rows, salt_key=salt_key,
+                              whole_defer_a=getattr(args, "whole_defer_a", False))
     if getattr(args, "statement", None):
         import importlib.util
         spec = importlib.util.spec_from_file_location("served_zk_statement", HERE.parent / "served_zk" / "statement.py")
@@ -869,6 +871,7 @@ def smoke(args) -> None:
     out: dict = {"schema": "verity-pouw/pearl-c-vllm-smoke/v1", "coins": coins.commitment.to_json(), "scheme": getattr(args, "scheme", SCHEME),
                  "schedule": getattr(args, "schedule", "serial"),
                  "whole_step": getattr(args, "whole_step", False), "whole_defer": getattr(args, "whole_defer", False),
+                 "whole_defer_a": getattr(args, "whole_defer_a", False),
                  "capture": getattr(args, "capture", None), "statement": getattr(args, "statement", None), "run": os.environ.get("RESEARCH_RUN_ID"), "steps": [], "resident": False}
 
     def step(name, f):
@@ -1023,6 +1026,9 @@ def main() -> None:
                     help="(with --whole-step) the arm engine's CUDA-graph batch sizes, comma-separated (default the decode batch)")
     ap.add_argument("--whole-defer", action="store_true",
                     help="(with --whole-step) a whole capture runs each call's tile hashing beside the next call's A tree")
+    ap.add_argument("--whole-defer-a", action="store_true",
+                    help="(with --whole-defer) and each call's A tree beside its own forming and GEMM, on a kernel whose "
+                         "pipeline splits A's commitment")
     ap.add_argument("--statement", metavar="CUBIN",
                     help="(with --whole-step) hm96_rows.cu's cubin: adds pearlc-zk, each decode forward's rows committed in the "
                          "ZK statement's format too, once after the forward (served_zk/statement.py)")
@@ -1043,6 +1049,8 @@ def main() -> None:
     args.graphs = args.graphs or args.whole_step
     if args.whole_defer and not args.whole_step:
         ap.error("--whole-defer defers within a whole capture: it needs --whole-step")
+    if args.whole_defer_a and not args.whole_defer:
+        ap.error("--whole-defer-a defers A's trees beside the deferred tile hashing: it needs --whole-defer")
     if args.statement and not args.whole_step:
         ap.error("--statement commits the forwards vLLM replays whole: it needs --whole-step")
     if args.smoke:
@@ -1054,7 +1062,8 @@ def main() -> None:
     records: list[dict] = []
     out: dict = {"schema": "verity-pouw/pearl-c-vllm-e2e/v2", "scheme": args.scheme, "schedule": args.schedule, "graphs": args.graphs, "fp8_graphs": args.fp8_graphs,
                  "decode": {"batch": BATCH, "prompt": PROMPT, "steps": STEPS, "key": decode_key()},
-                 "whole_step": args.whole_step, "whole_defer": args.whole_defer, "capture": args.capture,
+                 "whole_step": args.whole_step, "whole_defer": args.whole_defer, "whole_defer_a": args.whole_defer_a,
+                 "capture": args.capture,
                  "statement": args.statement, "run": os.environ.get("RESEARCH_RUN_ID"),
                  "coins": coins.commitment.to_json(), "interleave": args.interleave, "resident_failure": None}
     ready, tokens, verify = {}, {}, {}
