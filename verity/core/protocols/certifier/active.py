@@ -18,7 +18,10 @@ frames against that template, and nothing else of a frame is free). On egress a 
 `TOKEN_BYTES` bytes padded with NUL to `EVENT_TEXT` characters, and `EVENT_TAIL`, so a token is one frame, or one per
 `TOKEN_BYTES` of it (`events`). An id event (`id_event`, `ID_EVENT_BYTES`) is that object with no text: its request's
 ingress ordinal and one sampled token's id, each in `ID_DIGITS` decimal characters, so a response is one event a token
-and its frames name their request whatever order the responses interleave in. On ingress a request is its length
+and its frames name their request whatever order the responses interleave in. A compact record (`compact_record`,
+`COMPACT_RECORD`, 8 bytes) carries the same two fields in binary, with the response's finish in reserved token fields
+(`COMPACT_LAST`, `COMPACT_EOS`), and its frame is the record zero-filled to B with no header (`compact_cell`,
+`compact_placement`), so B can be 8 (`Proxy(compact=True)`). On ingress a request is its length
 (u32be) and its bytes, cut into `DATA` frames of B − 9 bytes on `CANONICAL_STREAM`, the last zero-filled
 (`request_frames`): it ends where its length says, so every frame's header is the same. An id request (`id_request`) is
 a token-id prompt's `/v1/completions` request whose every field is at a place its prompt's length fixes, and its frames
@@ -40,7 +43,9 @@ takes one event, and the trace orders a shared boundary's two ticks either way.
 **Egress.** The server's bytes on a stream are cut after every `\\n\\n`, the end of a server-sent event, so a frame's
 content is fixed by the bytes and never by how they were read. The event's `id:` field is its position in the
 Program's canonical order on the link, and the frame is what follows that line (`event_body`): neither the position
-nor an HTTP response head before it is recorded. A frame's anchor is the egress bucket in which the ingress certifier
+nor an HTTP response head before it is recorded. Under `compact` the server's bytes are an HTTP response head, then
+units of `COMPACT_UNIT_BYTES` (`CompactUnits`): the position (u32be) and a compact record of the connection's own
+request, and the frame is the record (`compact_cell`). A frame's anchor is the egress bucket in which the ingress certifier
 released its stream's request's last frame (the request is recorded there), and its logical index
 is its position in its stream. A frame read at time s is ready at bucket ⌊s/τ_b⌋ + 1, the first that starts after it.
 At bucket t the shaper hands, in canonical order, each frame whose `max(h(k), ready(k), last)` is at most t, where
@@ -149,7 +154,8 @@ closes faulted while its queue would still hold frames faults the next one too, 
   certifier could: the window of bucket t is faulted, and the frame is dropped with the queue. A window closed before
   the frame was handed can't be faulted any more; its record is the Program's on the frames handed by its close;
 - a malformed frame (`malformed`): an event whose body is longer than a frame, without a position or with one already
-  seen, on a stream with no released request, or bytes left unframed at the stream's end; on a sealed pair link, a
+  seen, on a stream with no released request, or bytes left unframed at the stream's end; under `compact`, a unit
+  whose record isn't one or names another request than its connection's; on a sealed pair link, a
   unit that doesn't open at its slot's nonce, and every window after it.
 """
 
@@ -375,6 +381,72 @@ def id_event_data(body: bytes) -> tuple[int, int] | None:
         return (request, token_id) if id_event(request, token_id) == body else None
     except ValueError:
         return None
+
+
+#: a compact record (`compact_record`): its request's ingress ordinal, then its token field, each u32be
+COMPACT_RECORD = struct.Struct(">II")
+#: the token field's flag on a response's last output when it ends at `max_tokens` (finish `length`)
+COMPACT_LAST = 1 << 31
+#: the token field of a sampled stop token (finish `stop`), whichever of the model's EOS ids it is
+COMPACT_EOS = 0xFFFF_FFFF
+#: what the server writes the proxy for each record under `Proxy(compact=True)`: its canonical position, u32be
+COMPACT_POSITION = struct.Struct(">I")
+COMPACT_UNIT_BYTES = COMPACT_POSITION.size + COMPACT_RECORD.size
+COMPACT_FINISHES = (None, "length", "stop")
+
+
+def compact_record(request: int, token_id: int | None, finish: str | None = None) -> bytes:
+    """One sampled token as a compact record, `COMPACT_RECORD.size` bytes: its request's ingress ordinal (≥ 1, so no
+    record is all zero) and its token field. The field is the token's id (below `COMPACT_LAST` − 1) while more outputs
+    follow, the id with `COMPACT_LAST` set for the response's last output at `max_tokens` (`finish` "length"), and
+    `COMPACT_EOS` for a sampled stop token (`finish` "stop", `token_id` None)."""
+    if type(request) is not int or not 1 <= request < 1 << 32:
+        raise ValueError(f"a request's ordinal is a u32 ≥ 1, not {request!r}")
+    if finish not in COMPACT_FINISHES:
+        raise ValueError(f"a compact record's finish is one of {COMPACT_FINISHES}, not {finish!r}")
+    if finish == "stop":
+        if token_id is not None:
+            raise ValueError("a stop record carries no id: EOS is one reserved id")
+        return COMPACT_RECORD.pack(request, COMPACT_EOS)
+    if type(token_id) is not int or not 0 <= token_id < COMPACT_LAST - 1:
+        raise ValueError(f"a compact token id is below {COMPACT_LAST - 1}, not {token_id!r}")
+    return COMPACT_RECORD.pack(request, token_id | (COMPACT_LAST if finish == "length" else 0))
+
+
+def compact_cell(record: bytes, frame_bytes: int) -> bytes:
+    """A compact record's egress frame: the record, zero-filled to B; padding, B zero bytes, is never one."""
+    if len(record) != COMPACT_RECORD.size or frame_bytes < COMPACT_RECORD.size:
+        raise ValueError(f"a compact cell is a {COMPACT_RECORD.size}-byte record in a frame of at least its size")
+    return record + bytes(frame_bytes - COMPACT_RECORD.size)
+
+
+def compact_record_data(cell: bytes) -> tuple[int, int | None, str | None] | None:
+    """(request ordinal, token id, finish) of a compact cell or record (`compact_record`), the id None at EOS; None for
+    bytes that aren't one."""
+    if len(cell) < COMPACT_RECORD.size or any(cell[COMPACT_RECORD.size :]):
+        return None
+    request, field = COMPACT_RECORD.unpack_from(cell)
+    got = (request, None, "stop") if field == COMPACT_EOS else \
+        (request, field & ~COMPACT_LAST, "length" if field & COMPACT_LAST else None)
+    try:
+        return got if compact_record(*got) == bytes(cell[: COMPACT_RECORD.size]) else None
+    except ValueError:
+        return None
+
+
+def compact_unit(position: int, record: bytes) -> bytes:
+    """What the server writes the proxy for one record: its canonical position (`COMPACT_POSITION`), then the record."""
+    if len(record) != COMPACT_RECORD.size:
+        raise ValueError(f"a compact record is {COMPACT_RECORD.size} bytes")
+    return COMPACT_POSITION.pack(position) + record
+
+
+def compact_placement(frame_bytes: int) -> tuple[int, int, bytes, bytes]:
+    """The compact egress template's (p, s, prefix, suffix): the record at 0 … `COMPACT_RECORD.size`, zero fill after
+    it, and nothing else."""
+    if frame_bytes < COMPACT_RECORD.size:
+        raise ValueError(f"a {frame_bytes}-byte frame has no room for a compact record")
+    return 0, COMPACT_RECORD.size, b"", b""
 
 
 #: an id request's HTTP head, up to its length (`id_request`)
@@ -635,6 +707,29 @@ class Events:
         while (i := self.buffer.find(EVENT_END)) >= 0:
             out.append(bytes(self.buffer[: i + len(EVENT_END)]))
             del self.buffer[: i + len(EVENT_END)]
+        return out
+
+
+class CompactUnits:
+    """Cuts a server connection under `Proxy(compact=True)`: an HTTP response head, through its first `\\r\\n\\r\\n`,
+    then `COMPACT_UNIT_BYTES`-byte units, each (position, record). The cuts depend only on the bytes, not on how they
+    were read; `buffer` holds what is left uncut."""
+
+    def __init__(self) -> None:
+        self.buffer, self.head = bytearray(), False
+
+    def feed(self, data: bytes) -> list[tuple[int, bytes]]:
+        self.buffer += data
+        if not self.head:
+            if (i := self.buffer.find(b"\r\n\r\n")) < 0:
+                return []
+            del self.buffer[: i + 4]
+            self.head = True
+        n = len(self.buffer) - len(self.buffer) % COMPACT_UNIT_BYTES
+        out = [(COMPACT_POSITION.unpack_from(self.buffer, k)[0],
+                bytes(self.buffer[k + COMPACT_POSITION.size : k + COMPACT_UNIT_BYTES]))
+               for k in range(0, n, COMPACT_UNIT_BYTES)]
+        del self.buffer[:n]
         return out
 
 
@@ -924,6 +1019,7 @@ class _Stream:
     count: int = 0
     out: asyncio.Queue = field(default_factory=asyncio.Queue)
     events: Events = field(default_factory=Events)
+    units: CompactUnits = field(default_factory=CompactUnits)
     task: asyncio.Task | None = None
     window: int | None = None  # the ingress window of its release
     deadline: float | None = None  # when its request must be written upstream
@@ -971,6 +1067,10 @@ class Proxy:
     - with `ordinals`, each stream's server connection opens with a header (`HEADER`, 9 bytes) of kind `ORDINAL`
       whose stream is the stream's, the request's ingress ordinal, before the request's bytes, so that the server
       can name the request in its response's id events (`id_event`);
+    - with `compact` (which takes `ordinals`), each server connection is compact records (`CompactUnits`: an HTTP
+      response head, then (position, record) units, `compact_unit`), and each egress frame is a record zero-filled to
+      B (`compact_cell`), B ≥ 8: a record that isn't one (`compact_record_data`) or names another request than its
+      connection's is malformed;
     - with `pair` (off by default), the link is a sealed pair link to another of the auditor's certifiers: each egress
       slot, frame or padding, is written sealed (`Pair.sealer`) after the egress certifier records it, and each unit
       read is opened (`Pair.opener`) before the ingress certifier takes it, so every record is the unsealed run's. A
@@ -990,10 +1090,13 @@ class Proxy:
                  position: int = 0, reveal_deadline: float | None = None, prover_key: PublicKey | None = None,
                  prover_context: bytes = b"", challenger_key: PublicKey | None = None,
                  signer: Signer | None = None, run_nonce: Callable[[int], bytes] = secrets.token_bytes,
-                 served: ServedProfile | None = None, ordinals: bool = False,
+                 served: ServedProfile | None = None, ordinals: bool = False, compact: bool = False,
                  pair: Pair | None = None) -> None:
         if (egress.buckets * egress.bucket_ms) != (ingress.buckets * ingress.bucket_ms):
             raise ValueError("the egress and ingress grids have windows of the same length")
+        if compact and not (ordinals and egress.frame_bytes >= COMPACT_RECORD.size):
+            raise ValueError(f"compact records name their request by its ingress ordinal (ordinals) and fill egress "
+                             f"frames of at least {COMPACT_RECORD.size} bytes")
         if pair is not None and (pair.sealer.params != egress or pair.opener.params.frame_bytes != ingress.frame_bytes):
             raise ValueError("a pair link seals this certifier's egress grid and opens frames of its ingress size")
         if prover is not None and syncs:
@@ -1010,6 +1113,7 @@ class Proxy:
         if not (type(pouw_window) is int and pouw_window >= 1):
             raise ValueError(f"a PoUW window is a positive number of certifier windows, not {pouw_window!r}")
         self.upstream, self.egress, self.ingress, self.ordinals = upstream, egress, ingress, ordinals
+        self.compact = compact
         self.origin, self.slack, self.clock, self.sleep = origin, slack, clock, sleep
         self.windows = len(syncs) if windows is None else windows
         if not 0 <= start <= self.windows or position < 0:
@@ -1399,10 +1503,14 @@ class Proxy:
         try:
             while data := await reader.read(1 << 16):
                 ready = self._bucket_ready(self.clock())
-                for event in st.events.feed(data):
-                    self._egress_event(s, st, event, ready)
+                if self.compact:
+                    for position, record in st.units.feed(data):
+                        self._egress_record(s, st, position, record, ready)
+                else:
+                    for event in st.events.feed(data):
+                        self._egress_event(s, st, event, ready)
                 self._changed.set()
-            if st.events.buffer:
+            if st.events.buffer or st.units.buffer:
                 self.shaper.certifier.fault(Reason.MALFORMED)
         finally:
             st.ended = self._bucket_ready(self.clock())
@@ -1411,10 +1519,23 @@ class Proxy:
 
     def _egress_event(self, s: int, st: _Stream, event: bytes, ready: int) -> None:
         position, body = event_position(event), event_body(event)
-        if position is None or st.anchor is None or HEADER.size + len(body) > self.egress.frame_bytes:
+        if position is None or HEADER.size + len(body) > self.egress.frame_bytes:
             self.shaper.certifier.fault(Reason.MALFORMED)
             return
-        frame = LogicalFrame(encode_frame(DATA, CANONICAL_STREAM, body, self.egress.frame_bytes), st.anchor, st.count)
+        self._egress_frame(s, st, position, encode_frame(DATA, CANONICAL_STREAM, body, self.egress.frame_bytes), ready)
+
+    def _egress_record(self, s: int, st: _Stream, position: int, record: bytes, ready: int) -> None:
+        got = compact_record_data(record)
+        if got is None or got[0] != s:
+            self.shaper.certifier.fault(Reason.MALFORMED)
+            return
+        self._egress_frame(s, st, position, compact_cell(record, self.egress.frame_bytes), ready)
+
+    def _egress_frame(self, s: int, st: _Stream, position: int, payload: bytes, ready: int) -> None:
+        if st.anchor is None:
+            self.shaper.certifier.fault(Reason.MALFORMED)
+            return
+        frame = LogicalFrame(payload, st.anchor, st.count)
         self.frames.append((position, s, st.count, st.anchor, ready))
         st.count += 1
         self.shaper.arrive(position, frame, ready)
