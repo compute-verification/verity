@@ -59,7 +59,7 @@ class Repo:
         return self.git("rev-parse", "HEAD")
 
     def queue(self, pr: int, title: str, head: str) -> str:
-        """drive's landing of ``head`` onto the current branch (`research.queue._message`)."""
+        """the queue's merge of ``head`` onto the current branch (`research.queue._message`)."""
         self.git("merge", "-q", "--no-ff", "-m", f"Queue: #{pr} {title}\n\nPR: #{pr}\nHead: {head}\nOwner: lane\n", head)
         return self.git("rev-parse", "HEAD")
 

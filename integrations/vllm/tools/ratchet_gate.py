@@ -3,7 +3,7 @@
 
     python3 integrations/vllm/tools/ratchet_gate.py BASE TOP [--json]
 
-The changes are those on TOP's first-parent chain above its merge base with BASE: each `Queue: #N` merge (drive's landing of
+The changes are those on TOP's first-parent chain above its merge base with BASE: each `Queue: #N` merge (the queue's merge of
 one PR, `research.queue._message`) against its first parent, and the other commits there, together, against the commit below
 them (a branch's own commits against its merge base).  A change is judged when it touches a file under
 ``integrations/vllm/verity_vllm/`` that is not a test (``test_*.py``, ``conftest.py``, a ``tests/`` directory) or a ``*.md``.
@@ -13,9 +13,11 @@ holding an ``entries`` list), known by its file's name, so a moved allowlist is 
 its own count and is not compared.  Exempt: a revert (each commit's subject ``Revert "``, or a queue merge whose PR title
 starts ``Revert``) and a pure move that BASE's ``tools/verity/check/move_check.py`` certifies.
 
-It reads only git, in the repository of the current directory, so a lander can run `main`'s copy of it on `main` and the
-commit it would land, which a change can't weaken.  Exit 0 when every change passes, 1 when one fails (with the fix), 2 on a
-usage or git error.  ``--json`` prints `KIND`, whose ``failures`` name each failing change's top ``commit``.
+It reads only git, in the repository of the current directory, so the merge queue runs `main`'s copy of it, which a PR can't
+weaken, on `main` and a PR's head as it admits the PR (a landing gate in drive.toml's ``landing_gates``: `research queue ready`'s
+preflight refuses the mark, and the sync onto `next` leaves the PR out).  Before marking a branch, run
+``python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD``.  Exit 0 when every change passes, 1 when one fails (with
+the fix), 2 on a usage or git error.  ``--json`` prints `KIND`, whose ``failures`` name each failing change's top ``commit``.
 """
 from __future__ import annotations
 
