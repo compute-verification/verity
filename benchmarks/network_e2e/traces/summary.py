@@ -125,6 +125,8 @@ def summarize_trace(d: Path, steps: list[dict], reqs: list[dict], client: dict) 
                   "rows_per_step": stats([len(s["new"]) + len(s["cached"]) for s in work]),
                   "tokens_per_step": stats([s["total_num_scheduled_tokens"] for s in work]),
                   "running": stats([s["running"] for s in work]), "waiting": stats([s["waiting"] for s in work]),
+                  "with_partial_chunk": sum(1 for s in work if any(r["kind"] == "prefill" and not r["final"]
+                                                                   for r in s["new"] + s["cached"])),
                   "mixed_prefill_decode": sum(1 for k in kinds if k == {"prefill", "decode"}),
                   "prefill_only": sum(1 for k in kinds if k == {"prefill"}),
                   "decode_only": sum(1 for k in kinds if k == {"decode"})},
@@ -161,7 +163,8 @@ def summarize(root: Path) -> dict:
             traces[name] = join_trace(d, plan)
         if m.get("error") or name not in traces:
             traces.setdefault(name, {"trace": name})["error"] = m.get("error", "no records")
-    out = {"model": meta.get("model"), "versions": meta.get("versions"), "host": meta.get("host"), "env": meta.get("env"),
+    out = {"model_id": meta.get("model_id"), "model": meta.get("model"), "model_what": meta.get("model_what"),
+           "versions": meta.get("versions"), "host": meta.get("host"), "env": meta.get("env"),
            "requests_per_trace": meta.get("requests"), "seed": meta.get("seed"), "traffic": meta.get("traffic"),
            "traces": traces}
     (root / "summary.json").write_text(json.dumps(out, indent=1))
@@ -210,31 +213,33 @@ FIELDS = """\
 def readme(s: dict) -> str:
     v = s.get("versions") or {}
     lines = [
-        "# vLLM V1 scheduler traces under varied traffic: Llama-3.1-8B INT8 (int8_exact linears)", "",
-        f"Model `{s.get('model')}` on {s.get('host')}, GPU `{(s.get('env') or {}).get('CUDA_VISIBLE_DEVICES')}` "
-        f"(`{(s.get('env') or {}).get('GPU_LEASE_UUID')}`); vLLM "
+        f"# vLLM V1 scheduler traces under varied traffic: {s.get('model_what')}", "",
+        f"Model `{s.get('model')}` (`{s.get('model_id')}`) on {s.get('host')}, GPU "
+        f"`{(s.get('env') or {}).get('CUDA_VISIBLE_DEVICES')}` (`{(s.get('env') or {}).get('GPU_LEASE_UUID')}`); vLLM "
         f"{v.get('vllm')}, torch {v.get('torch')}. Made by `benchmarks/network_e2e/traces/corpus.py` (its docstring and "
-        "`traffic.py`'s say how): plain vLLM's OpenAI server, `--quantization verity_int8`, batch-invariant eager, async "
-        "scheduling off, Model Runner V2, prefix caching on, vLLM's own attention; a scheduler hook "
+        "`traffic.py`'s say how): plain vLLM's OpenAI server, batch-invariant eager (the integration's bi-eager engine), "
+        "async scheduling off, Model Runner V2, prefix caching on, at most 256 sequences; a scheduler hook "
         "(`vllm_trace_plugin.py`) records each step; an async client streams each request at its Poisson arrival, "
         "temperature 0, `max_tokens` 64 or 256, no stop strings.", "",
         f"Every trace serves the same {s.get('requests_per_trace')} requests (`plan.jsonl`, seed {s.get('seed')}) on a "
         "fresh server, so each starts with a cold prefix cache.", "",
-        "| trace | rate (req/s) | what | requests freed | steps | rows/step p50 / p90 / max | tokens/step p50 / max | running p50 / max | waiting p90 / max | EOS | length | prefix-hit requests | hit tokens (of prompt tokens) | preemptions (requests) | partial prefill chunks | mixed steps |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+        "| trace | rate (req/s) | what | requests freed | steps | rows | rows/step p50 / p90 / max | tokens/step p50 / max | running p50 / max | waiting p90 / max | EOS (share) | length | prefix-hit requests | hit tokens (of prompt tokens) | preemptions (requests) | partial prefill chunks (steps with one) | mixed steps |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for name, t in s["traces"].items():
         if "steps" not in t:
-            lines.append(f"| {name} | {t.get('rate')} | {t.get('why')} | failed: {t.get('error')} |" + " |" * 12)
+            lines.append(f"| {name} | {t.get('rate')} | {t.get('why')} | failed: {t.get('error')} |" + " |" * 13)
             continue
         st, rq, rw, pc, pe = t["steps"], t["requests"], t["rows"], t["prefix_cache"], t["preemption"]
         r, k, run, wait = st["rows_per_step"], st["tokens_per_step"], st["running"], st["waiting"]
         lines.append(
             f"| {name} | {t['rate']} | {t['why']}{' (failed: ' + t['error'] + ')' if t.get('error') else ''} | "
-            f"{rq['freed_by_engine']} of {rq['sent']} | {st['with_tokens']} | "
+            f"{rq['freed_by_engine']} of {rq['sent']} | {st['with_tokens']} | {rw['total']} | "
             f"{r.get('p50')} / {r.get('p90')} / {r.get('max')} | {k.get('p50')} / {k.get('max')} | "
-            f"{run.get('p50')} / {run.get('max')} | {wait.get('p90')} / {wait.get('max')} | {rq['finish'].get('eos', 0)} | "
-            f"{rq['finish'].get('length', 0)} | {pc['requests_with_hit']} | {pc['hit_tokens']} ({pc['hit_fraction']:.1%}) | "
-            f"{pe['events']} ({pe['requests_preempted']}) | {rw['partial_prefill_chunks']} | {st['mixed_prefill_decode']} |")
+            f"{run.get('p50')} / {run.get('max')} | {wait.get('p90')} / {wait.get('max')} | "
+            f"{rq['finish'].get('eos', 0)} ({rq['eos_fraction'] or 0:.1%}) | {rq['finish'].get('length', 0)} | "
+            f"{pc['requests_with_hit']} | {pc['hit_tokens']} ({pc['hit_fraction'] or 0:.1%}) | "
+            f"{pe['events']} ({pe['requests_preempted']}) | {rw['partial_prefill_chunks']} ({st['with_partial_chunk']}) | "
+            f"{st['mixed_prefill_decode']} |")
     lines += ["", "## Lengths", ""]
     for name, t in s["traces"].items():
         if "lengths" not in t:
