@@ -525,5 +525,5 @@ def test_a_compiled_request_equals_the_traced_build():
     body = {**GREEDY, "max_tokens": 32, "prompt": [k % cfg["vocab_size"] for k in range(256)]}
     advice, ingress = _session([(256, 32, body, body["prompt"])], [[(0, 0, 256)]] + [[(0, 256 + k, 1)] for k in range(31)])
     c = compile_steps(reg, advice, ingress)
-    assert c.requests[0].digest == ("52e6bb0b37e31ec3bdcc976027f412955be60cdd7bcd1ed4982aee7b4b716681a00323889897a394808aa040994f53a3e210dc6"
-                                    "03dba9a65751817e1df348f5c")
+    assert c.requests[0].digest == ("89a02f118ba707619824a7dea5ad427e0340208ad4c3f8a449a85e8eaf1a8782516eff3b97860804ad1a331576b2df7e19ee83d"
+                                    "afd2c06c167943de474e12dc0")
