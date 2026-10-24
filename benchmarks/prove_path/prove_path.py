@@ -67,7 +67,7 @@ import multiprocessing
 import os
 import sys
 import time
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -93,6 +93,9 @@ LLAMA32_1B_CONFIG = HERE.parents[1] / "integrations/vllm/tests/predict/fixtures/
 ROWS1 = "prove_path.py commit: a single-GPU Commit's sealed replay bundle -> rows over the registered compiler's Programs"
 #: the sampling parameters a request's body carries to I2 (vLLM's `SamplingParams` names the record holds)
 BODY_SAMPLING = ("temperature", "top_p", "top_k", "seed", "n")
+#: where an audit's ports start when ``--port`` isn't given (`free_ports`): below Linux's ephemeral range (32768-60999), from
+#: which outbound connections take theirs
+PORTS = range(10000, 32000)
 
 
 @dataclass(frozen=True)
@@ -425,6 +428,27 @@ def in_processes(fn, jobs: int, items: list) -> Iterator[tuple[Any, Any]]:
             yield futures[f], f.result()
 
 
+def free_ports(span: int, bases: Iterable[int] | None = None) -> int:
+    """A base port whose ``span`` loopback ports are all free now, the first of ``bases`` (default every base of `PORTS` in
+    random order). An audit's sessions listen at fixed offsets from it (``a5.RANK_PORTS`` a rank); a fixed default made two
+    audits on one node collide, the second's verifier failing to bind and its prover reaching the first's, which refused it."""
+    import random
+    import socket
+
+    if bases is None:
+        bases = list(range(PORTS.start, PORTS.stop - span + 1, span))
+        random.SystemRandom().shuffle(bases)
+    for base in bases:
+        try:
+            with contextlib.ExitStack() as held:
+                for port in range(base, base + span):
+                    held.enter_context(socket.socket()).bind(("127.0.0.1", port))
+            return base
+        except OSError:
+            continue
+    raise SystemExit(f"no {span} free loopback ports in a row to listen on; give --port")
+
+
 def commit_rank(job: tuple[argparse.Namespace, int, list[dict], dict]) -> dict:
     a, r, requests, bound = job
     compiler = compiler_of_args(a)
@@ -605,9 +629,12 @@ def coins_of(a: argparse.Namespace) -> dict[str, Any]:
 
 
 def audit(a: argparse.Namespace) -> int:
+    import a5 as A5
     import a5_coins as AC
 
     world, ranks = ranks_of(a)
+    if a.port is None:
+        a.port = free_ports(A5.RANK_PORTS * world)
     root = run_root_of(a)
     a.coins, a.verifier_coins, a.window_root = None, not a.challenger, root
     a.rule = json.loads(Path(a.partition).read_text()).get("law")
@@ -694,7 +721,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--lean", required=True)
     p.add_argument("--firewall", required=True)
     p.add_argument("--delta", type=float, default=0.5)
-    p.add_argument("--port", type=int, default=7651)
+    p.add_argument("--port", type=int, default=None, help="the sessions' base port, rank r's from base + a5.RANK_PORTS·r "
+                   "(default a base whose ports are free now, `free_ports`)")
     p.add_argument("--session-timeout", type=float, default=14400)
     p.add_argument("--forged", action="store_true", help="the windows hold a forged unit (commit --forge): every window must be refused")
     p.add_argument("--challenger", choices=["local"], help="draw each window on the auditor's challenger's coins, the run root's one "

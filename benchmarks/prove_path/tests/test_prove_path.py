@@ -17,6 +17,7 @@ import argparse
 import hashlib
 import json
 import random
+import socket
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -232,6 +233,19 @@ def test_the_challengers_coins_need_main():
         PP.main(["audit", *run, "--challenger", "local"])
     with pytest.raises(SystemExit):
         PP.main(["audit", *run, "--challenger", "gate:research@vy-challenger-1", "--main", "m.txt"])
+
+
+def test_an_audit_listens_on_ports_no_other_audit_holds():
+    with socket.socket() as held, socket.socket() as spare:
+        held.bind(("127.0.0.1", 0))
+        spare.bind(("127.0.0.1", 0))
+        taken, free = held.getsockname()[1], spare.getsockname()[1]
+        spare.close()
+        assert PP.free_ports(1, [taken, free]) == free
+        with pytest.raises(SystemExit):
+            PP.free_ports(1, [taken])
+    base = PP.free_ports(2 * A5.RANK_PORTS)
+    assert PP.PORTS.start <= base and base + 2 * A5.RANK_PORTS <= PP.PORTS.stop
 
 
 def _summary(drawn: list[int], accepted: bool | None, lean: bool, before: bool = True) -> dict:
