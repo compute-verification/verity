@@ -56,7 +56,8 @@ tables with no window root (``a-call-unbound``) and point a proof at another rou
 over its true rows under the Commit's names; its mutations (`AROW_NAMES`, made before the draw) register one A table
 with every row other (``a-zero``), one row other (``a-row-off``) or its calls' rows offset by one call
 (``a-call-off``), one with a call missing that the Commit registers so too (``a-call-missing``), one ids table with a
-row other (``ids-off``) or none (``ids-missing``), drop one of the Commit's values or register one twice, present
+row other (``ids-off``) or none (``ids-missing``), drop one of the Commit's values or register one twice, drop a MoE
+window's (`expert_layout`) round's A table of its routed experts' downs (``commit-missing-expert``), present
 another Commit record than the one its draw root
 binds (``commit-unbound``) and break the record's form (``credit-commit-form``). Round 0's ids table ``…/ids@0`` binds
 the window's session, not its open root, which contains it: round 0's ``requests`` is `credit.requests_root` of its
@@ -152,9 +153,11 @@ def _draw_root(d: dict) -> str:
 #: each way a window's A tables or input-ids tables are not the served Commit's, made before its draw: one round's A
 #: table of a K every row other (``a-zero``), one row (``a-row-off``) or its calls' rows offset by one call
 #: (``a-call-off``), one missing a call (``a-call-missing``, the Commit's too), one round's ids table one row other
-#: (``ids-off``) or unregistered (``ids-missing``), and a Commit record lacking a table's value or registering it twice
+#: (``ids-off``) or unregistered (``ids-missing``), and a Commit record lacking a table's value or registering it twice;
+#: on a MoE window (`expert_layout`), a Commit record lacking a round's A table of the experts' downs
+#: (``commit-missing-expert``, VLLM-80: their K is the experts' alone, so its calls are expert calls only)
 AROW_NAMES = ["a-zero", "a-row-off", "a-call-off", "a-call-missing", "ids-off", "ids-missing", "commit-missing",
-              "commit-twice"]
+              "commit-twice", "commit-missing-expert"]
 #: the `AROW_NAMES` that need a round's A table of two calls or more
 TWO_CALLS = ("a-call-off", "a-call-missing")
 #: each way round 0's input-ids table is not inside round 0's request table under the window's session, made before the
@@ -268,6 +271,9 @@ def commit_record(rng: random.Random, true: dict[str, dict], steps: int, off: st
     reg = [{**e, "value": names[v]} for v, e in sorted(true.items()) if v in names]
     if reg and off == "commit-missing":
         del reg[rng.randrange(len(reg))]
+    elif reg and off == "commit-missing-expert":
+        gone = rng.choice(sorted(n for n in names.values() if n.endswith(f"/k{EXPERT_K}")))
+        reg = [e for e in reg if e["value"] != gone]
     elif reg and off == "commit-twice":
         reg.append(dict(rng.choice(reg)))
     reg += [{"value": f"{name}/{s}", "root": _hex(rng), "leaves": rng.randint(1, 64), "words": rng.choice([1, 8]),
@@ -453,6 +459,25 @@ def layout(rng: random.Random, big: bool = False) -> dict:
     rng.shuffle(calls)
     m = r << (rng.randint(0, 2) if not big else 9)
     return {"calls": calls, "linears": linears, "m": m, "tile": [r, c]}
+
+
+#: a MoE layer's routed experts, as H1 names each projection (vllm's `pouw_h1_hooks.expert_names`:
+#: ``prefix.expert.projection``), and their downs' K, the intermediate width, which no other linear of `expert_layout` has
+EXPERTS_PREFIX, EXPERT_K = "model.layers.1.mlp.experts", 32
+
+
+def expert_layout(rng: random.Random) -> dict:
+    """A served MoE window's layout, as vllm's H1 lays one out: a dense linear at K = H, then a MoE layer's two to four
+    routed experts, each its gate_up at H then its down at `EXPERT_K`, every one called once a step in that static
+    order (an idle expert's call is its empty slots) over one to three steps."""
+    r, c = rng.choice([(1, 1), (2, 4), (4, 8)])
+    h = rng.choice([64, 4096])
+    linears = [["model.layers.0.self_attn.qkv_proj", h, c * rng.randint(1, 4)]]
+    for e in range(rng.randint(2, 4)):
+        linears += [[f"{EXPERTS_PREFIX}.{e}.gate_up", h, c * rng.randint(1, 4)],
+                    [f"{EXPERTS_PREFIX}.{e}.down", EXPERT_K, c * rng.randint(1, 4)]]
+    calls = [[name, step] for step in range(rng.randint(1, 3)) for name, _k, _n in linears]
+    return {"calls": calls, "linears": linears, "m": r << rng.randint(0, 2), "tile": [r, c]}
 
 
 def _canon(x: object) -> str:
@@ -942,10 +967,9 @@ def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", le
     return d, s
 
 
-def window_instance(rng: random.Random, name: str = "honest") -> dict:
-    """One `window` case: an honest window, then mutation `name`."""
+def window_instance(rng: random.Random, name: str = "honest", lay: dict | None = None) -> dict:
+    """One `window` case: an honest window (of layout `lay` when given), then mutation `name`."""
     credit = name.removeprefix("credit-")
-    lay = None
 
     def call_ks(lay: dict) -> list[int]:
         ks = {lin: k for lin, k, _n in lay["linears"]}
@@ -959,6 +983,8 @@ def window_instance(rng: random.Random, name: str = "honest") -> dict:
         lay = layout(rng)
         while len(set(call_ks(lay))) == len(lay["calls"]):
             lay = layout(rng)
+    elif name == "commit-missing-expert":
+        lay = expert_layout(rng)
     d, s = honest_window(rng, credit, lay=lay)
     signed: dict | None = {}
     match name:
