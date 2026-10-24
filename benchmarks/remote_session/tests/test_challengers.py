@@ -389,9 +389,14 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
                           for x in ("time", "filler_time"))
         assert (f"| 0 | {t} | yes | yes | yes | yes | yes | credited: weights {shares}, filler {filler} |"
                 in al.table(doc).splitlines())
-        assert honest["error"] == al.session_error(sessions[0], reg) and "error" not in dropper
+        assert honest["error"] == al.session_error(sessions[0]) and "error" not in dropper
+        lg = sessions[0]["ledger"]
+        assert honest["error"]["total"] == lg["declared"]["memory"][al.ledger.SNAPSHOT]["delta"]
+        assert [honest["error"][f"delta_{n}"] for n in ("profile", "slack", "sketch")] == [
+            lg["delta"][n] for n in ("profile", "slack", "sketch")]
         assert doc["line"][t]["error"] == doc["credit"]["error"] == al.union_error([honest])
-        assert al.table(doc).splitlines()[-2].endswith("): δ + δs summed over the credited sessions")
+        assert al.table(doc).splitlines()[-2].endswith(
+            "): the ledger's δ (profile δ + P·2^-41 + δs) summed over the credited sessions")
         by = al.lv.Lean(al.lv.build(), lambda _: None)
         try:
             assert doc["line_by"] == "python" and analysed(out, host, sessions, reg, desc, line_by=by) == {
@@ -584,34 +589,70 @@ def test_the_clock_rate_beside_the_line_doesnt_read_the_first_coins_round_trip()
     assert al.clock_rate_ppm(Rv[:3], Ra[:3]) is None
 
 
-def test_the_line_records_delta_the_sketchs_delta_and_their_sum_over_its_credited_sessions():
-    """Each accepted paced session's error is the pooled bound's δ (its record's float, exactly) plus the sketch's δs
-    (`timing.sketch_failure` of the compressions the verifier charged over the record's passes, rows and store blocks,
-    as `ledger.sketch` reads it, and 0 for a block-sha512 record), exactly; the line at each T, and over every T, fails
-    with at most the sum over its credited sessions, and a T that credits none has error 0."""
-    def session(delta: float, compressions: int) -> dict:
-        return {"record": {"public": {"blocks": 1 << 20},
-                           "profile": {"windows": [{"lengths": [8], "profile": {"delta": delta,
-                                                                                "drawn": {"receipt": 2}}}]}},
-                "ledger": {"inputs": {"passes": 700, "rows": 16}, "sketch_failure": {"compressions": compressions}}}
+def test_the_line_records_the_ledgers_delta_in_its_parts_and_their_sum_over_its_credited_sessions():
+    """Each accepted paced session's error is the memory line's δ as the ledger computed it (its record's `declared`
+    forms', exactly; a refused form records none), beside its three parts (verifier.json's `delta`,
+    `ledger.delta_parts`), which must sum to it as the ledger adds them: forms that record two δ, or parts that don't
+    sum to it, give no line. The line at each T, and over every T, fails with at most the sum over its credited
+    sessions, and a T that credits none has error 0."""
+    def session(profile: float, passes: int, sketch: float) -> dict:
+        d = {"profile": profile, "slack": passes * 2.0 ** -41, "sketch": sketch}
+        total = d["profile"] + d["slack"] + d["sketch"]
+        memory = {f: {"delta": total} for f in al.ledger.FORMS} | {al.ledger.TIME_HELD: {"refused": "unpaced"}}
+        return {"k": 0, "ledger": {"delta": d, "inputs": {"passes": passes}, "declared": {"memory": memory}}}
 
-    sketch = {"receipt": al.receipts.SKETCH_SHA512}
-    ds = al.timing.sketch_failure(10 ** 12, 700, 16, blocks=1 << 20)
-    assert ds > al.timing.sketch_failure(10 ** 12, 700, 16)
-    a, b = al.session_error(session(2.0 ** -40, 10 ** 12), sketch), al.session_error(session(2.0 ** -30, 0), sketch)
-    total = Fraction(1, 2 ** 40) + ds
-    assert a["exact"] == {"delta": "1/1099511627776", "delta_sketch": str(ds), "total": str(total)}
-    assert a["total"] == float(total) and a["log2_total"] == al.timing.log2(total)
-    blocks = al.session_error(session(2.0 ** -40, 10 ** 12), {"receipt": al.receipts.BLOCK_SHA512})
-    assert blocks["exact"] == {"delta": "1/1099511627776", "delta_sketch": "0", "total": "1/1099511627776"}
+    a, b = session(2.0 ** -40, 700, 2.0 ** -60), session(2.0 ** -30, 96, 0.0)
+    e = al.session_error(a)
+    total = Fraction(a["ledger"]["declared"]["memory"][al.ledger.SNAPSHOT]["delta"])
+    parts = {"delta_profile": Fraction(1, 2 ** 40), "delta_slack": Fraction(700, 2 ** 41),
+             "delta_sketch": Fraction(1, 2 ** 60)}
+    assert e["exact"] == {**{k: str(x) for k, x in parts.items()}, "total": str(total)}
+    assert e["total"] == float(total) and e["log2_total"] == al.timing.log2(total)
+    assert sum(parts.values()) == total and e["delta_slack"] > 300 * e["delta_profile"]
+    bad = json.loads(json.dumps(a))
+    bad["ledger"]["delta"]["sketch"] = 2.0 ** -31
+    with pytest.raises(al.Disagree, match="don't sum to its memory line's δ"):
+        al.session_error(bad)
+    two = json.loads(json.dumps(a))
+    two["ledger"]["declared"]["memory"][al.ledger.SNAPSHOT]["delta"] *= 2
+    with pytest.raises(al.Disagree, match="the ledger computes one"):
+        al.session_error(two)
     held = {f: {**dict.fromkeys(al.SHARES, 0.5), "exact": dict.fromkeys(al.SHARES, "1/2")} for f in al.line.FORMS}
 
     def row(k: int, t: str, ok: bool, error: dict) -> dict:
         return {"k": k, "T": t, "shares_auditor_clock": held, "error": error,
                 "credit": {"ok": ok, "zero": [] if ok else ["not accepted: the Lean refused it (receipt)"]}}
 
-    out, credit = al.credited_line([row(0, "T=1s", True, a), row(1, "T=1s", True, b), row(2, "T=60s", False, a)])
-    both = total + Fraction(1, 2 ** 30) + al.timing.sketch_failure(0, 700, 16, blocks=1 << 20)
+    out, credit = al.credited_line([row(0, "T=1s", True, e), row(1, "T=1s", True, al.session_error(b)),
+                                    row(2, "T=60s", False, e)])
+    both = total + Fraction(b["ledger"]["declared"]["memory"][al.ledger.SNAPSHOT]["delta"])
     assert out["T=1s"]["error"] == credit["error"] == {"sessions": [0, 1], "total": float(both), "exact": str(both),
                                                        "log2": al.timing.log2(both)}
     assert out["T=60s"]["error"] == {"sessions": [], "total": 0.0, "exact": "0", "log2": None}
+
+
+# Gate runs 8 and 9's accepted sessions (fire runs r20261024-090758-3b8a and r20261024-112611-902d, their
+# verifier.json): (passes, the memory line's δ every form records, the sketch's log2 its `sketch_failure` records).
+GATE_RUNS = {(8, 0): (2118, 9.640646787142758e-10, -51.59094185809943),
+             (8, 2): (96, 4.4565254207300316e-11, -56.00597544028051),
+             (9, 0): (2118, 9.6406468008027e-10, -51.58427317163358),
+             (9, 2): (96, 4.4565254698432485e-11, -55.95559677531685)}
+
+
+@pytest.mark.parametrize("run,k", GATE_RUNS)
+def test_the_lines_error_is_the_ledgers_delta_on_gate_runs_8_and_9(run, k):
+    """On gate runs 8 and 9's records, written before verifier.json carried δ's parts, a session's error is the
+    memory line's δ its ledger recorded, bit for bit: 2^-40 of profile δ, AuditRO's 2^-41 a pass, which dominates
+    (2^-29.95 over a 60 s session's 2118 passes, 2^-34.39 over a 1 s session's 96), and δs, the rest, which is the
+    sketch the record charged."""
+    passes, delta, sketch_log2 = GATE_RUNS[run, k]
+    window = {"lengths": [passes], "profile": {"delta": 2.0 ** -40, "drawn": {"receipt": 0}}}
+    memory = {f: {"delta": delta} for f in al.ledger.FORMS}
+    s = {"k": k, "record": {"profile": {"windows": [window]}},
+         "ledger": {"inputs": {"passes": passes}, "declared": {"memory": memory}}}
+    e = al.session_error(s)
+    parts = {n: al.line.number(e["exact"][n]) for n in ("delta_profile", "delta_slack", "delta_sketch")}
+    assert e["total"] == delta and al.line.number(e["exact"]["total"]) == Fraction(delta) == sum(parts.values())
+    assert parts["delta_profile"] == Fraction(1, 2 ** 40) and parts["delta_slack"] == Fraction(passes, 2 ** 41)
+    assert al.timing.log2(parts["delta_sketch"]) == pytest.approx(sketch_log2, abs=1e-6)
+    assert e["log2_total"] == pytest.approx(-29.950 if passes == 2118 else -34.385, abs=1e-3)

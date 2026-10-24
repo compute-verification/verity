@@ -280,11 +280,19 @@ def _paced(record: audit.Record) -> str | None:
     return None
 
 
+def delta_parts(record: audit.Record, node: Node) -> dict[str, float]:
+    """The memory line's δ (`memory`'s `Line.delta`, profile + slack + sketch in that order) in its three parts: the
+    windows' profile δ, AuditRO's 2^-SLACK_LOG2 a pass over the record's passes, and SketchBound's δs (`sketch`)."""
+    return {"profile": record.windows[0].profile.delta, "slack": record.passes * 2.0 ** -audit.SLACK_LOG2,
+            "sketch": sketch(record, node)}
+
+
 def memory(record: audit.Record, node: Node) -> tuple[Line, Line, Line]:
     """The memory line's three forms (`FORMS`)."""
     N, b, P = record.blocks, record.block_bytes, record.passes
     W = audit.pooled(record)[0]
-    delta = record.windows[0].profile.delta + P * 2.0 ** -audit.SLACK_LOG2 + sketch(record, node)
+    d = delta_parts(record, node)
+    delta = d["profile"] + d["slack"] + d["sketch"]
     S = node.chip_bytes / b
     rebuild = node.rebuild(record.codec)
     X = rebuild.squarings_per_s / record.codec.encode_squarings / 1e9 + node.disk_bytes_per_s / b / 1e9

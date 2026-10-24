@@ -1424,6 +1424,7 @@ class Verifier:
         (`timing_parts`) when the calibration has a bare read of each tier covering the registered store and a window
         had two roots.  A reading the ledger refuses carries why, and the session then declares nothing.  With the
         session's plans, `memory` is the node's HBM it shows held by kind (`memory`), KV credited on no verdict yet.
+        `delta` is the memory line's δ in its three parts (`ledger.delta_parts`), whose sum `declared`'s forms carry.
         Each window's bound on wrong receipts is computed once for both readings, exactly, in the check workers when
         there are some (`checks.Checks.bounds`)."""
         cal = self.calibration
@@ -1473,6 +1474,7 @@ class Verifier:
                          "certified_bytes_horizon": (1 - g.gamma_horizon) * whole}
             if parts:
                 out[name]["timing_parts"] = timing_parts(capacity_bytes_per_s=r, **parts)
+        out["delta"] = ledger.delta_parts(record, stated)
         out["declared"] = (ledger.Declared(len(record.windows), readings["spec"], readings["measured"],
                                            ledger.memory(record, stated)).to_json()
                            if len(readings) == 2 else {"refused": next(out[n]["refused"] for n in ("spec", "measured")

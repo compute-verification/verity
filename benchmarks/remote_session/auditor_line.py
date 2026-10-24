@@ -69,9 +69,11 @@ their bursts (`rates_at`; `--bursts none` for the reading of gate runs up to 7).
 measured, credited or not, is `measured`. `--table` writes each session's five checks and the line as Markdown.
 
 **Error.** Each accepted paced session's line fails, crediting more than the node held, with probability at most its
-`error`'s total (`session_error`): δ, the pooled bound's, plus δs, the sketch's, each exact. The line at each T, and the
-line of record over every T (`credit`'s `error`), fail with at most the sum of their credited sessions' totals: the
-least share is read off whichever session the run made least, so the union bound holds where a maximum wouldn't.
+`error`'s total (`session_error`): the memory line's δ as the ledger computed it, read from the record, with its three
+parts beside it: the windows' profile δ, AuditRO's 2^-41 a pass (which dominates: 2^-29.95 over a 60 s session's 2118
+passes) and δs, the sketch's. The line at each T, and the line of record over every T (`credit`'s `error`), fail with
+at most the sum of their credited sessions' totals: the least share is read off whichever session the run made least,
+so the union bound holds where a maximum wouldn't.
 
     python auditor_line.py OUT --host-bytes B [--pin SHA512 --period P --commit SHA [--pins LOG --main FILE]]
         [--ledger HEAD ...] [--peer NAME] [--model-pin FILE] [--disk-bytes-per-s B/S] [--link-bytes-per-s B/S]
@@ -96,7 +98,7 @@ sys.path.insert(0, str(HERE.parents[1]))
 import challengers as CH  # noqa: E402
 import lean_verifier as lv  # noqa: E402
 import verifier as V  # noqa: E402
-from verity.core.protocols.remote_bandwidth import audit, coins, ledger, line, pooled, receipts, timing  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit, coins, ledger, line, pooled, timing  # noqa: E402
 from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
 from verity.core.protocols.sampled_proofs import challenger as Ch  # noqa: E402
 from verity.core.protocols.sampled_proofs import remote  # noqa: E402
@@ -316,20 +318,29 @@ def shares_of(got: dict) -> dict:
     return row
 
 
-def session_error(session: dict, registration: dict) -> dict:
-    """An accepted session's failure probability, the chance its line credits more than the node held: `delta`, the
-    pooled bound's δ (`recorded_windows`', the float's exact value as the line reads it), plus `delta_sketch`, δs,
-    `SketchBoundDeployed`'s for a sketch-sha512 record (`ledger.sketch` exactly: `timing.sketch_failure` of the
-    compressions the verifier charged, `ledger.sketch_failure`'s, over the record's passes, rows and store blocks; 0
-    for another receipt kind), and their `total`; each in floats and exact beside them (`exact`), and the total's
-    log2."""
-    delta = pooled.number(V.recorded_windows(session)[1])
-    sketch = Fraction(0)
-    if registration["receipt"] == receipts.SKETCH_SHA512:
-        inputs = session["ledger"]["inputs"]
-        sketch = timing.sketch_failure(session["ledger"]["sketch_failure"]["compressions"], inputs["passes"],
-                                       inputs["rows"], blocks=session["record"]["public"]["blocks"])
-    exact = {"delta": delta, "delta_sketch": sketch, "total": delta + sketch}
+def session_error(session: dict) -> dict:
+    """An accepted session's failure probability, the chance its line credits more than the node held: `total`, the
+    memory line's δ as the ledger computed it (`ledger.memory`'s `Line.delta`, every form's in the record's
+    `declared`), read and never recomputed, so it charges whatever the ledger does (the F the node states among it);
+    beside it its three parts (`ledger.delta_parts`): `delta_profile`, the windows' profile δ, `delta_slack`, AuditRO's
+    2^-SLACK_LOG2 a pass, and `delta_sketch`, δs. A record that carries the parts (verifier.json's `delta`) must sum to
+    the total as the ledger adds them, or there is no line (`Disagree`); one written before them gives the profile δ
+    from its windows (`recorded_windows`) and the slack from its passes, both exact, and δs as the rest. Each in floats
+    and exact beside them (`exact`), and the total's log2."""
+    lg = session["ledger"]
+    totals = {m["delta"] for m in lg["declared"]["memory"].values() if "delta" in m}
+    if len(totals) != 1:
+        raise Disagree(f"session {session['k']}'s memory line forms record δ {sorted(totals)}: the ledger computes one")
+    total = Fraction(totals.pop())
+    if (d := lg.get("delta")) is not None:
+        if d["profile"] + d["slack"] + d["sketch"] != float(total):
+            raise Disagree(f"session {session['k']}'s δ parts {d} don't sum to its memory line's δ {float(total)!r}")
+        profile, slack, sketch = (Fraction(d[n]) for n in ("profile", "slack", "sketch"))
+    else:
+        profile = pooled.number(V.recorded_windows(session)[1])
+        slack = Fraction(lg["inputs"]["passes"], 2 ** audit.SLACK_LOG2)
+        sketch = total - profile - slack
+    exact = {"delta_profile": profile, "delta_slack": slack, "delta_sketch": sketch, "total": total}
     return {**{k: float(x) for k, x in exact.items()}, "exact": {k: line.text(x) for k, x in exact.items()},
             "log2_total": timing.log2(exact["total"])}
 
@@ -641,7 +652,7 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
         row["groups"] = len(seen)
         row["shares_auditor_clock"] = shares(a, reg, host_bytes, rates, lean)
         row["shares_verifier_clock"] = shares(s, reg, host_bytes, rates, lean)
-        row["error"] = session_error(s, reg)
+        row["error"] = session_error(s)
         row["cross_check"] = cross_check(s["windows_seen"], seen)
         for clock in ("auditor", "verifier"):
             for f, x in row[f"shares_{clock}_clock"].items():
@@ -714,8 +725,9 @@ def table(doc: dict) -> str:
                    + " / ".join(f"{row[x]['filler_time']:.4%}" for x in b) + " (snapshot weights "
                    + " / ".join(f"{row[x]['snapshot']:.4%}" for x in b) + ", filler "
                    + " / ".join(f"{row[x]['filler_snapshot']:.4%}" for x in b) + ")"
-                   + (f", error {row['error']['total']:.3g} (2^{row['error']['log2']:.2f}): δ + δs summed over the "
-                      "credited sessions" if row["error"]["sessions"] else ""))
+                   + (f", error {row['error']['total']:.3g} (2^{row['error']['log2']:.2f}): the ledger's δ "
+                      "(profile δ + P·2^-41 + δs) summed over the credited sessions"
+                      if row["error"]["sessions"] else ""))
     out.append(f"line by {doc['line_by']}; {doc['credit']['summary']}")
     return "\n".join(out) + "\n"
 

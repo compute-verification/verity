@@ -196,6 +196,9 @@ def test_the_snapshot_is_helds_conclusion(store) -> None:
     assert snap.lost_blocks == pytest.approx(W / P + (X * r.span_ns + 3 + 5) / P + 2, rel=1e-12)
     assert snap.epsilon == min(1, snap.lost_blocks / N) and snap.held_bytes == (1 - snap.epsilon) * N * B
     assert snap.delta == r.windows[0].profile.delta + P * 2.0 ** -audit.SLACK_LOG2 + ledger.sketch(r, n)
+    d = ledger.delta_parts(r, n)
+    assert d == {"profile": r.windows[0].profile.delta, "slack": P * 2.0 ** -audit.SLACK_LOG2,
+                 "sketch": ledger.sketch(r, n)} and snap.delta == d["profile"] + d["slack"] + d["sketch"]
     assert "unpaced" in held.refused and links.refused == held.refused and held.epsilon is None
 
 
