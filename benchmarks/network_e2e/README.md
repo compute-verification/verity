@@ -81,10 +81,12 @@ verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic 
 - NEG's live tampers (`--strategies ...,drop,token`): drop is a negative, refused by N2's counts on the planned and
   served profiles and by the rehearsal's own check on the advice profile. There the certified I/O's finish rule refuses
   it when the response it cuts ran to its max_tokens (short of it without EOS); one that ended at EOS stays well formed
-  one token shorter, which only N2-ADVICE's counts will refuse. Token is refused only by the I/O tie (IO-TIE). Where
-  the tie ran (below), token is a negative it must refuse by content at exactly the link-windows its changed ids fall
-  in. Elsewhere it's a row pending the tie, with the verdicts it got and why the tie didn't run. A tamper whose shim
-  received no request, or with no `server.json` to say it did, is reported as not run, never as refused.
+  one token shorter, which only N2-ADVICE's counts will refuse. Token is refused only by the I/O tie (IO-TIE). On the
+  advice profile, where the tie is required (below), token is a negative it must refuse by content at exactly the
+  link-windows its changed ids fall in, and the tie's refusal is its verdict whatever the tie gave the honest run. On
+  the planned and served profiles, where the tie doesn't run, it's a row pending the tie, with the verdicts it got. A
+  tamper whose shim received no request, or with no `server.json` to say it did, is reported as not run, never as
+  refused.
 - On the advice profile a negative is refused only when the rehearsal's own check names its own violation
   (`e2e.OWN_CODE`, as NEG's `judge` requires its code): late's window's coverage fault
   (`audit.status:coverage-never-established`), extra's response longer than its max_tokens, drop's short of it without
@@ -139,10 +141,15 @@ verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic 
   committed under fake salts in place of the warden's cells. The sampled ids stand in for the Commit's port, one map
   for every run from `--ids`, or else from the `--endpoint-run` records (`chain.served_ids`). Every strategy sends the
   same users, so a run's ids are those of the requests whose `arrive` falls in its own link-windows, matched to
-  `requests.jsonl` by engine id. The tie must accept honest (else the report isn't OK) and refuse token by content at
-  exactly the link-windows its changed ids fall in (`chain.changed_windows`, from its `server.json`'s `tampered`).
-  Drop's refusal by content is listed beside its own code. Without IO-TIE in the tree (`io_tie.py`, #3566), or without
-  the ids, the report says why and token stays pending.
+  `requests.jsonl` by engine id. The ids must cover each run's certified requests (its `io.json`'s users,
+  `chain.uncovered`), or the run gets no verdict. The tie must refuse token by content at exactly the link-windows its
+  changed ids fall in (`chain.changed_windows`, from its `server.json`'s `tampered`). Drop's refusal by content is
+  listed beside its own code. The tie is the only check of the served content on the advice profile, so it's a required
+  gate there (`chain.tie_gate`, REDTEAM phase 12 target 2): the report isn't OK, and says why, when the tie didn't run
+  (no IO-TIE in the tree, `io_tie.py` in #3566, or no ids), gave the honest run no verdict (its tie raised, or its ids
+  don't cover its requests) or didn't accept it. A part the tie must establish beside its verdict goes in
+  `chain.TIE_REQUIRED` and fails the report the same way: CERT-VARLEN's compact finish (REDTEAM phase 12 target 3), if
+  the tie reports it as a key of its own.
 
 The report's `stubbed` list says what each run still stood on that isn't the chain's own: the advice of another run, a
 given serving config, a prove path of a declared workload, pending negatives, the certifier off the gate. Before the
