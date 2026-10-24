@@ -68,9 +68,10 @@ A spec-level reference for network accounting's timing channel:
   cost at a shape is `size`;
 - the compile slice (`compile_slice`): `CompileSlice_v1`, a Boolean Definition with `check` its reference, composes
   `ReplayLoad`, `ReplayStep_v1` and `ReplayAdvance` on shared wires, `CacheStep_v1`'s calls on the certified tokens
-  checking the hits `ReplayStep_v1` reads, and the encoder over the scan's asks, for one window. It holds the coded
-  length to the declared charge and the step rows to its committed ``srv`` row, the served rows. The evictable and
-  returned counts are a stand-in held at 0 (`PROTOCOL.md`, "The compile slice"), and
+  checking the hits `ReplayStep_v1` reads, and `ChargeLink_v1` over the decisions the window commits, from its
+  carry-in to its carry-out, for one window. It holds the charge to the declared one and the step rows to its committed
+  ``srv`` row, the served rows. The evictable and returned counts are a stand-in held at 0
+  (`protocol/compile-slice.md`), and
   `benchmarks/network_traces/compile_slice_zk.py` proves it in zero knowledge. It takes the circuits and their
   evaluator from `verity`;
 - the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
@@ -84,14 +85,20 @@ A spec-level reference for network accounting's timing channel:
   row's hit (the longest cached prefix while no block can have been evicted, a
   cached prefix past that) and owns or appends the units the row computes (`PROTOCOL.md`, "Advice v1"). It takes the
   circuits and their evaluator from `verity`;
-- advice v1's arithmetic encoder (`arith_encode`): `ArithEncodeStep_v1{K, BIN}`, `ArithEncodeFinish_v1` and
-  `KTContext_v1{C, NW}`, Boolean Definitions with `reference_step`, `reference_finish` and `reference_kt` their specs.
-  They run ENC-CODE's 32-bit coder forward one symbol at a time, checking each output bit against a segment in the
-  decoder's order, and return the bits it takes: a window's total is its charge, at most its declared c_w, and no
-  codeword is committed. The context and the frequencies are the circuit's, from the replay's position and the
-  registered book's counts, never witness. It is held symbol for symbol to `code.py` and `code_v1` on advice v1's
-  windows and on ENC-DERIVED's still-sent fields (`benchmarks/network_e2e/encodings/arith_vectors.py`), and it is in no
-  proof-service Spec yet (`PROTOCOL.md`, "Advice v1"). It takes the circuits and their evaluator from `verity`;
+- advice v1's arithmetic encoder (`arith_encode`), Boolean Definitions each with its reference as spec. The counting
+  variant, which the composition takes: `ArithCountStep_v1{K, BIN, CW}` runs ENC-CODE's 32-bit coder forward on one
+  symbol and counts the bits it puts in the window's segment, `ArithCountFinish_v1{CW}` adds the termination and
+  holds the window to its declared charge, and `BookKT_v1{C}` is `code_v1`'s KT estimate for a bit's context. `ChargeCount_v1{N}` composes them into one window's charge from its decisions, the compile
+  unit's one call a window. The context and the frequencies are the circuit's, from the replay's position and the
+  registered book's counts, never witness. The bit-checking variant, the alternative: `ArithEncodeStep_v1{K, BIN}` and
+  `ArithEncodeFinish_v1` check each output bit against a committed segment in the decoder's order, with
+  `KTContext_v1{C, NW}` ENC-REPLAY's scaled estimate. It is held symbol for symbol to `code.py` and `code_v1` on advice
+  v1's windows and on ENC-DERIVED's still-sent fields (`benchmarks/network_e2e/encodings/arith_vectors.py`), and it is
+  in no proof-service Spec yet (`PROTOCOL.md`, "Advice v1"). It takes the circuits and their evaluator from `verity`;
+- the charge's carry chain (`charge_chain`): `ChargeCount_v1`'s carry committed from window to window as hm96 rows,
+  window 0's the book's priors under a public salt, with the verifier's check of how the windows join (`check_chain`)
+  and `ChargeLink_v1{N}`, the charge from the carry-in row held to the carry-out row (`protocol/charge-chain.md`). It
+  takes the circuits, their evaluator and hm96 from `verity` and the produced rows from sampled proofs;
 - the active warden (`warden`): a relay that knows bytes only, between any client and any server. It forwards each
   direction's bytes unchanged, in B-byte cells, r a bucket each way per connection, and egress cell i goes out in
   bucket s + D + ⌊i/r⌋ from its admission s. A miss fails the connection closed with a `FAIL` cell that carries no

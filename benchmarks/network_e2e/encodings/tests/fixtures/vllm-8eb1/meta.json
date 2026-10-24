@@ -13,6 +13,11 @@
    "from": "step_trace.jsonl",
    "sha256": "37226a2e93a5363177beca0d95ba1c73b371be54f25f3fb40bf2d09c7b61d27e",
    "kept": "window 212's 20 records: window, step, run_id, run_root and rows (SamplerInputsSource.rows: runner id, lo, hi, start, prefill length)"
+  },
+  "seal-w1.jsonl": {
+   "from": "step_trace.jsonl",
+   "sha256": "37226a2e93a5363177beca0d95ba1c73b371be54f25f3fb40bf2d09c7b61d27e",
+   "kept": "window 1's 38 records, as seal-w212.jsonl keeps window 212's (extracted by run r20261024-203738-df34)"
   }
  },
  "serve.json": "7f16ed41ed691fd597544d41cdbaf7e1069bf6486899afa6c12c1288b3c4c36c"

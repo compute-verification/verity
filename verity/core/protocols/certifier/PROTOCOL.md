@@ -1061,7 +1061,9 @@ Each assumption, and what breaks without it:
 
   `compile` refuses a read with no writer. Without A2, a value nobody checks feeds the circuits, and every draw passes
   (attacks 4 and 6).
-- **A3, the tie and the step units are drawn at ε at δ, not all.** N2's units are `All`. The step units add I_ε at
+- **A3, the tie and the step units are drawn at ε at δ, not all.** N2's units are `All`, and so is the compile slice
+  on every advised window, never sampled: its carry chain binds only proved units and its scan pins `en`
+  ([protocol/compile-slice.md](protocol/compile-slice.md)). The step units add I_ε at
   probability δ_audit. A wrong tie unit adds 8·B bits unless the tie is `All` too (attack 8). The bound holds on
   accepted audits only, as every capacity bound here does: a rejected window may already have carried up to its unbound
   capacity.
@@ -1142,11 +1144,13 @@ cursor. So:
   log shifter that computes only the A entries it returns: about Q + A·bitlen(Q) muxes an element bit, where moving
   the whole queue would take Q·bitlen(A).
 
-**The rows'** layouts are `replay_chain`'s (`row_fields`, `window_fields`). The state row's first twelve fields are
-ReplayStep_v1's state input and next-state output, bit for bit; it adds the heads `qh` and `dh` and `steps`, the
-window's executed steps still to come. The window row is the queue (at most Q) and the decisions ``dec`` (at most D)
-with ``left``. In every row the valid elements of each group are a prefix and the rest are zero bits, and `decode`
-and `decode_window` refuse any other row.
+**The rows'** layouts are `replay_chain`'s (`row_fields`, `window_fields`). The state row's state group is
+ReplayStep_v1's state input and next-state output, bit for bit, at the shape's AS and EW (`Shape`'s two statics):
+with EW, `run_pfx R×EW` after `run_comp`; with AS, `run_fin R×1 | run_cap R×1 | wait_cap W×1` after `free`. It adds
+the heads `qh` and `dh` and `steps`, the window's executed steps still to come. The window row is the queue (at most
+Q) and the decisions ``dec`` (at most D) with ``left``. With AS an arrival carries its cap (O = max_tokens): `q_cap
+Q×1` after `q_O`, as the step's `arr_cap` and the warden slots' `a_cap`. In every row the valid elements of each
+group are a prefix and the rest are zero bits, and `decode` and `decode_window` refuse any other row.
 
 **A window** is the state rows S_0 … S_{P+1}, with P the public cap on its steps, and two window rows: the last
 window's and its own. Unit 0, `ReplayLoad`, reads state rows 0 and 1 and both window rows. Unit u ≥ 1 is step u:
@@ -1164,9 +1168,10 @@ checking state row u + 1. Steps past the window's executed count are idle: the n
   async-kv-pressure's 17 decisions and 5 of sync-kv-pressure's 15, which the chain carries from window 0 to their
   steps in windows 1 and 2 (`benchmarks/network_e2e/encodings/tests/test_v1.py`).
 - **The end.** `ReplayClose` reads the session's last state row and window row and refuses a session that ends with a
-  step to run or a decision unread (`close`). The compile unit codes each decision at the step that reads it, so a
-  carried decision is coded in the window that reads it, not in the one A5 charges it to; which window's segment codes
-  it is the coder's to settle when the chain composes it.
+  step to run or a decision unread (`close`). The compile unit charges each decision in the window that commits it,
+  A5's, in commit order, which is the order the scan reads them in. So a carried decision is charged where it is
+  committed and read where its step is, and none is left uncharged or unread
+  ([protocol/compile-slice.md](protocol/compile-slice.md)).
 - **The start.** The session's first rows are the empty engine (`empty`, with NB − 1 free blocks) and the empty
   window, under the public salts `empty_salts`, whose openings the verifier computes (`C-first`).
 
@@ -1400,58 +1405,47 @@ composition below): what the bound counts is the charge, not the committed lengt
 6. `compile_steps(registered, advice, ingress)` (#3504) turns the advice into the Programs, with `ingress` the certified
    bodies by id.
 
-**The encoder in the circuit** (`arith_encode`: `ArithEncodeStep_v1{K, BIN}`, `ArithEncodeFinish_v1` and
-`KTContext_v1{C, NW}`, with `reference_step`, `reference_finish` and `reference_kt` their specs).
-- *The charge is the coded length.* The committed advice is each window's raw decision bits, which the scan reads
-  (item 2), with its order entries and sent shortfalls. The encoder runs `code_v1`'s code forward over the same values,
-  once a window in `code_v1`'s order (`code_v1._window`), from `fresh()`. It counts the bits the window's segment would
-  hold: one per scaling (a resolved bit, or a pending one a later resolution writes) and the termination's two (none
-  when nothing was used, as code.py's `shifts + 2`). The total must be at most c_w.
-  - No codeword is committed and no segment is compared, so nothing reads a segment at a data-dependent cursor.
-  - The charge is the length of the string `encode` would write, which is prefix-free, and `encode` is injective on
-    the values (`decode` inverts it). So at most 2^c value lists, and so at most that many advices, are accepted at a
-    charge of c or less, as "The bound" above has it.
-  - Any refusal clears the coder's `ok`, and the unit fails: a symbol code.py refuses, more than K scalings or a total
-    past c_w. After the update a symbol's interval keeps at least 2^14 values, so K = 18 never refuses one.
-  - `ArithEncodeStep_v1`'s n, the scalings it takes, is that count: a symbol's scalings depend only on the interval,
-    never on the segment. ADV-SPEC's slice (`compile_slice`, #3661) charges this way, running the step against a
-    witness codeword and reading the position after the finish. ENC-CODE's counting form (`ArithCountStep_v1` and
-    `ArithCountFinish_v1{CW, NB}`, #3660) takes a symbol's scalings at once, with no segment, and holds the total to
-    c_w in the finish.
-- *The context and the frequencies are the circuit's, never witness.*
-  - A decision's context comes from the replay's position. Under `code_v1` it is min(run, 2), with run the decisions
-    since the last arrival: a 2-bit counter the circuit carries, which a 1 (an arrival) resets and a 0 raises,
-    saturating.
-  - Its (f0, f1) are the model's estimate for that context, from counts that start at the registered book's priors
-    (public, fit on history before the run) and that each coded decision raises in the circuit. The counts carry
-    across windows.
-  - An integer's (cum, freq, total) come from the book's public bin tables at the value's bin.
-  - The prover supplies none of them. "The bound" counts the strings of one registered code; a context or a frequency
-    of the prover's choosing would pick the code per value and charge any decisions next to nothing.
-  - ADV-SPEC's slice computes both in the circuit: the context from the queue head's passes, and `KTContext_v1`'s
-    counts from zero.
-- *Per decision*, as built here: `ArithEncodeStep_v1{18, 1}` codes (bit, f0, f1) as code.py does, and with BIN = 0 the
-  step codes `code_v1`'s general (cum, freq, total) symbols. `KTContext_v1{3, 24}` is ENC-REPLAY's scaled estimate,
-  which v1 coded with before `code_v1`. `code_v1.KT` halves its counts in place instead, and its circuit is ENC-CODE's
-  `BookKT_v1{C}` (#3660).
-- *Held to the coders* (`benchmarks/network_e2e/encodings/arith_vectors.py`). It runs `code_v1` over advice v1's
-  windows (`v1.residual`: the decisions, the order entries and the sent hits, under a book fit to them at v1's
-  registered caps, `v1.TABLE_CAPS`) and over ENC-DERIVED's still-sent fields, each symbol tagged a bit or an integer's.
-  - After every symbol, low and high are code.py's, a pending run is open exactly when code.py has pending bits, and
-    `used` is code.py's. Each step's n is the segment bits code.py consumed, each window's finish ends at its segment's
-    end, and every flipped or cut segment is refused.
-  - Each bit symbol is one the book's model coded, and each decision's context is min(run, 2) of the decisions before
-    it, a function of the bits.
-  - On ENC-REPLAY's step traces and the TRACE-CORPUS fixture (the certifier's vectors): 0 mismatches. On all 14
-    corpus traces at T = 600, and the 6 of them that send ENC-DERIVED's fields, under v1 before its order entries
-    (#3642's): 0 mismatches (art:ff4b26d8b4f6a796af9a33734c0a47fae8b50e15c2dee26525d51fece681a2c0, #3660's check,
-    which adds its counting form's cases to these).
-- *Cost* (`arith_encode.size`, ANDs, pinned in its circuit-check sidecar).
-  - `ArithEncodeStep_v1{18, 1}` costs 3,244: the interval 1,855 (one 33 × 16-bit product and one division to 32
-    quotient bits), the scalings 1,188 and the segment check 201. `ArithEncodeStep_v1{18, 0}` costs 4,964,
-    `ArithEncodeFinish_v1` 6 and `KTContext_v1{3, 24}` 1,202.
-  - The counting form (#3660) costs 2,580 a decision, the step's 2,243 and `BookKT_v1{3}`'s 337: 2.8% of a
-    `ReplayStep_v1{16,64,16}` step's 92,146.
+**The encoder in the circuit** (`arith_encode`: `ArithCountStep_v1{K, BIN, CW}`, `ArithCountFinish_v1{CW}` and
+`BookKT_v1{C}`, with their references as specs; its docstring has the mechanics).
+- *The charge is the coded length.* The scan reads the committed values (item 2). The encoder runs `code_v1`'s code
+  forward over them, once a window from `Tally()`, and counts the bits the window's segment would hold: each symbol's
+  scalings, taken at once, and the termination's 2 when used. The total must be at most c_w. No codeword is committed
+  and no segment is compared. `encode` is injective on the values and its strings are prefix-free, so at most 2^c value
+  lists are accepted at a charge of c or less ("The bound" above).
+- *A window's run*, in `code_v1._window`'s order: n_arrived = `left`; each decision slot j < D at context min(run, 2),
+  its (f0, f1) from `BookKT_v1{3}`, coded by `ArithCountStep_v1{18, 1, 20}`; n_hits = `hleft` and each shortfall;
+  n_resumes (0 under v1); n_order and each order entry's position gap and rank step; n_lag (0 under v1); then
+  `ArithCountFinish_v1{20}`. Slots past a count run with en = 0. A refusal (a symbol
+  code.py refuses, more than K scalings, a count past 2^20, a charge past c_w) fails the unit, and K = 18 never refuses
+  a symbol.
+- *The context and the frequencies are the circuit's, never witness.* The context is a 2-bit run counter carried from
+  the replay's position: an arrival resets it, and a 0 raises it, saturating. (f0, f1) come from counts that start at
+  the registered book's public priors and that each coded decision raises in the circuit, across windows. An integer's
+  (cum, freq, total) come from the book's public bin tables. A context or a frequency of the prover's choosing would
+  pick the code per value and charge any decisions next to nothing. ADV-SPEC's slice (#3661) computes both in the
+  circuit too, at its own model (Open), and charges the position after `ArithEncodeFinish_v1`, which counts the same
+  bits.
+- *Integers.* `code_v1` codes an integer as `code.Binned` does: a bin symbol from the book's table (or the escape and a
+  uniform one), then a uniform offset, each a general (cum, freq, total) that `ArithCountStep_v1{18, 0, 20}` counts.
+  `ChargeCount_v1{N}` lowers a decisions-only window's counts, the slice's one call (docstring); the rest is Open.
+- *Held to the coders* (`benchmarks/network_e2e/encodings/arith_vectors.py`): `code_v1` over v1's windows
+  (`v1.residual`, a book fit at `v1.TABLE_CAPS`) and ENC-DERIVED's still-sent fields. After every symbol the count's
+  interval and `used` are code.py's and its count is the bits consumed. Each window's finish gives v1's charge and
+  refuses one bit less, each bit's estimate is the book's model's at context min(run, 2), and the bit-checking variant
+  refuses every flipped or cut segment. On the 14 corpus traces at T = 600, read with the warden's ingress and with the
+  client's send as the release (order entries sent), and 6 traces' fields: 0 mismatches in 1,103,746 circuit cases
+  (art:903980ba78e15721babf9fd51b65befe7e298f4cc671052604dbad9599166040). The certifier's vectors (ENC-REPLAY's step
+  traces, the TRACE-CORPUS fixture) hold no order entry.
+- *Cost* (ANDs, pinned): a decision 2,580 (the step's 2,243 and `BookKT_v1{3}`'s 337), 2.8% of a
+  `ReplayStep_v1{16,64,16}` step's 92,146; an integer's symbol 3,963; a window's finish 41. A window pays for all its
+  fixed-width slots. The corpus's largest (the art's `shapes.json`): light's, 4,396 decisions, 11.4M; smallkv's, 1,466
+  decisions and 5,686 integer symbols, 26.3M before the integers' lowering; async heavy's with the client's send, 1,000
+  decisions and 1,761 integer symbols, 9.6M.
+- *The bit-checking variant* (`ArithEncodeStep_v1{K, BIN}`, `ArithEncodeFinish_v1`, `KTContext_v1{C, NW}`) is the
+  alternative, where the committed advice is the segments and the encoder's output must equal each, bit for bit. Its
+  decision step costs 3,244, and it needs a reader at a data-dependent cursor, which isn't built.
+
+**The charge's carry across windows** (`charge_chain`, `ChargeLink_v1{N}`): [protocol/charge-chain.md](protocol/charge-chain.md).
 
 **The prefix cache in the scan.** `CacheStep_v1` (`cache_step`) is ENC-DERIVED's prefix rules (`Prefixes`) as a Boolean
 Definition: one row's pass over a table of at most N cached units (a unit's U tokens, its parent entry and its owner,
@@ -1572,19 +1566,6 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
   - ENC-CODE: the counting form and `code_v1`'s model (`ArithCountStep_v1`, `ArithCountFinish_v1` and `BookKT_v1`,
     #3660). Lowering an integer (the window's counts, each order entry and each shortfall) to its `Binned` symbols in
     the book's public tables isn't built, so the circuit charges the decisions only.
-  - ADV-SPEC's slice codes its asks at ENC-REPLAY's plain contexts with `KTContext_v1` from zero counts, where
-    `code_v1` codes the arrived bits at min(run, 2) with `code_v1.KT` from the book's priors. The plain context,
-    min(passes, 2) with passes the asks so far about the request, is the run except after an arrival taken unasked,
-    which resets passes but not the run.
-- *The chain's carry* (ADV-SPEC). `replay_chain`'s load refuses a window that left decisions unread, but A5's
-  ingress rule ("The windows") can charge a decision or an order entry up to 2 windows before its step's: at T = 20,
-  5 of async-kv-pressure's 17 decisions and 5 of sync-kv-pressure's 15 (none on the other fixtures). So the load has
-  to append each window's values after the unread ones, as it does the queue's arrivals and the shortfalls ("The
-  rows"), and refuse only a session that ends with any unread. A value is then read after its window's row loads, so
-  it is charged no later than A5 allows.
-- `replay_chain`'s rows don't yet carry `ReplayStep_v1`'s walk entries (EW) or AS: the state group needs
-  `run_pfx R×EW` after `run_comp` and, with AS, `run_fin R×1 | run_cap R×1 | wait_cap W×1` after `free`; an arrival
-  carries its cap (O = max_tokens), so the queue needs `q_cap Q×1` after `q_O`.
 - `ReplayStep_v1` takes the prefix layer (each hit, its evictable blocks, each slot's returns) as witness it bounds.
   The hits are fixed: `CacheStep_v1` derives them while the no-eviction bound holds, and past it each is the longest
   cached prefix less v1's sent, charged shortfall. The evictable counts and the returns stay bounded witness. A
@@ -1604,23 +1585,11 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
 ReplayStep_v1 reads derived by `CacheStep_v1`'s calls on the certified tokens from the empty cache. Its circuit, verdict
 flags, reference (`check`), stand-ins and REDTEAM's phase 9 cases (`phase9`) are `compile_slice`'s docstring. Its step
 rows are held to the committed ``srv`` row, which the verifier holds by b‖c to the served rows the Commit side
-registers before the draw (`served_rows`), so REDTEAM phase 10's six passes are refused.
-`benchmarks/network_traces/compile_slice_zk.py` proves it `--zk`, held by Lean `verify --zk`, each unit opening to its
-verdict, and scans what the verifier received for every witness piece (`zk_scan`, every ZK driver's scan: a piece found
-is excluded only when its value occurs, raw or as nibble-aligned hex, in the bytes the statement fixes, which are the
-committed circuit, the public rows, the transcript's framing and the proof container's own fields; any other piece
-found is leaked, whatever its content, since a decision bit or a hit can look like padding): at the demonstration class
-(`compile_slice.demo`, 49,113 ANDs a unit), the honest unit and ten negatives, the made-up table refused by ``cache``
-alone (run r20261024-162328-03c7); at corpus-smallkv's first seven steps (7,562,498 ANDs a unit, m = 29), the honest
-unit and twelve negatives, the made-up table refused by ``cache`` alone and the six passes with their own served row by
-the native ``srv`` check among them (run r20261024-175616-105c). Both runs' scans, rerun under `zk_scan`
-(art:b3ef4d952b0e87880b00ac874a6ea567c06448c8947d0a700f729bdb19a9fe32), find witness pieces in the proof streams and
-the transcript. At the demonstration class the one piece found, all zero, is held by the circuit and the container's
-fields, and none is leaked. At the corpus class two of the four found are leaked, so that run fails the scan. One is a
-cache table's token, ``05`` and fifteen zeros, found where each stream holds a Ligerito nonce list's length (5) and its
-first nonce: the query and consistency nonces are messages the verifier never checks
-([C-Flock's §8.3](../../../ml/flock/verifier/PROTOCOL.md)), which Verity's prover sets to 0. The other is a walk entry,
-fifteen zeros and ``c0``: the tail of an all-zero element and the next element's first byte, a one-in-256 match.
+registers before the draw (`served_rows`), so REDTEAM phase 10's six passes are refused. Its charge is
+`ChargeLink_v1{D}` over the decisions the window commits, from its carry-in to its carry-out in the session's carry
+chain. In [protocol/compile-slice.md](protocol/compile-slice.md): the charge and what binds its inputs, why every
+advised window is proved, the proof of record at vLLM 8eb1's engine class (w212, 857,866 ANDs), `--zk` through
+`benchmarks/network_traces/compile_slice_zk.py`, and the slice's earlier ZK runs with its coder.
 
 ## The replay at the served shape
 
@@ -2089,8 +2058,10 @@ and seven lemmas, and three more proved lemmas:
   - the pruned sort sorts every 0-1 input up to 12 events, `comparators` counts it, and `size` is the unit's count,
     pinned at L = 240 and at the 60 s window;
 - **`test_network_certifier_replay_chain.py`:** the replay's state chain:
-  - both rows' layouts are pinned field by field. The state row's state part is ReplayStep_v1's fields and bits, and
-    the front is its `arr_*` and `bits` (once `replay_step` is in the tree). The empty rows and random rows round-trip.
+  - both rows' layouts are pinned field by field, sync and with AS and EW. At each shape (8eb1's engine class at
+    AS = 1 among them) the state row's state part is ReplayStep_v1's `_state_fields` and its bits are `arguments`',
+    its circuit's next-state bits are the row's state of the next state it decodes, and the front is its `arr_*` and
+    `bits`. The empty rows and random rows round-trip, and an entry with the wrong fields for the shape is refused.
     `decode` refuses a gap, an empty slot with a bit set, a head past Q or D, steps past P, nonzero padding, a short row
     and a non-bit, and `decode_window` refuses a gap, an empty slot with a bit set, a decision past `left`, `left` past
     D, nonzero padding and a short row;
@@ -2106,10 +2077,16 @@ and seven lemmas, and three more proved lemmas:
   - a two-window session runs through all three parts, with every unit's reads opened under the window's roots.
     `check_chain` accepts it, and refuses a short window, the empty state or window under a fresh salt or another
     program's, the carried state or window under a fresh salt, and another row of the last window;
-  - `size` is the parts' AND counts, which circuit-check pins at the tests' shape and at the sync KV-pressure trace's;
+  - with AS and EW the load writes the arrivals' caps into `q_cap`, the step's arrivals carry them, and the next
+    state's `fin`, `cap` and `pfx` are the next row's, each refusal the circuit's too;
+  - `size` is the parts' AND counts, which circuit-check pins at the tests' shape, at the sync KV-pressure trace's,
+    and at 8eb1's engine class at AS = 1 with and without walk entries;
 - **`test_network_certifier_compile_slice.py`:** the corpus slice's scan is the replay's (every hit 0), and its
   negatives, a made-up table and tokens among them, fail exactly `check`'s checks; the circuit is `check` on the
-  demonstration slice with real hits; `codeword` is the encoder's, and `size` is pinned;
+  demonstration slice with real hits, a cleared enable and a forged carry among the negatives; `size` is pinned;
+- **`test_network_certifier_compile_slice_w212.py`** and **`…_phase14.py`:** the slice on vLLM 8eb1's w212 at its own
+  statics and at the engine class, and REDTEAM phase 14 at the slice
+  ([protocol/compile-slice.md](protocol/compile-slice.md));
 - **`test_network_certifier_served_rows.py`:** the runner's rows are the slice's ``srv`` row, REDTEAM phase 10's six
   passes are refused at ``rows`` with the registered row and their own row isn't its leaf, and the record is public only;
 - **`test_network_certifier_cache_step_phase9.py`:** REDTEAM's: `CacheStep_v1` alone leaves the table and tokens free;
