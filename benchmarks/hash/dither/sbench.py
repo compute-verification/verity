@@ -141,7 +141,8 @@ hello's commitment held to HEX) and closed at the arm's stop; without one they a
 SBENCH_ARM_ENV (``{"ARM": {"NAME": "VALUE"}}``) sets an arm's own environment in its worker, so the arms of one lease can
 differ in a knob the worker reads; each arm's ready line says what it set (``arm_env``).  ``ARM@TAG`` in --arms is ARM
 built and timed under its own name (its own SBENCH_ARM_ENV, --arm-mem and DITHER_CHALLENGERS entries), so one arm is
-timed beside itself with a knob set.
+timed beside itself with a knob set.  SBENCH_TIME_AT=HH:MM (UTC) holds the reps until then (a booked window's start),
+the engines built and gated before it; sbench.sh's SBENCH_TIMED=1 takes the lease such a window grants (gpu-lease --timed).
 
     python sbench.py --out OUT [--arms stock,exact,dither] [--reps 3] [--t 64] [--ops decode] [--gate]
 """
@@ -464,7 +465,28 @@ CHALLENGERS_ENV = "DITHER_CHALLENGERS"
 # {arm: {NAME: VALUE}}: an arm's own environment, set in its worker before its engine is built, so one lease times arms
 # that differ in a knob the worker reads (not sbench.sh's builds, which read the run's)
 ARM_ENV_ENV = "SBENCH_ARM_ENV"
+# "HH:MM" (UTC): the reps start no earlier than then, at most TIME_AT_MAX_MIN minutes after the gates end, so the engines
+# build and gate before a booked window and only the reps run in it
+TIME_AT_ENV = "SBENCH_TIME_AT"
+TIME_AT_MAX_MIN = 20
 GATE_RANGE = "verity/dither/gate"   # GATE_RANGE/<arm>: kernels.py reads each dither worker's kernels inside its own
+
+
+def wait_time_at() -> dict | None:
+    """$SBENCH_TIME_AT's wait before the reps: until that UTC time when it is at most TIME_AT_MAX_MIN minutes ahead."""
+    at = os.environ.get(TIME_AT_ENV)
+    if not at:
+        return None
+    import datetime as dt
+    now = dt.datetime.now(dt.timezone.utc)
+    h, m = (int(x) for x in at.split(":"))
+    wait = (now.replace(hour=h, minute=m, second=0, microsecond=0) - now).total_seconds()
+    if wait < -43200:
+        wait += 86400
+    waited = wait if 0 < wait <= 60 * TIME_AT_MAX_MIN else 0.0
+    time.sleep(waited)
+    return {"at": at, "ahead_s": round(wait, 1), "waited_s": round(waited, 1),
+            "reps_start_utc": dt.datetime.now(dt.timezone.utc).strftime("%H:%M:%SZ")}
 
 
 def close_coins() -> None:
@@ -764,6 +786,9 @@ def main() -> int:
                 return 4
             arms = [x for x in arms if x not in failed]
             rc = 4
+    time_at = wait_time_at()
+    if time_at:
+        print(json.dumps({"time_at": time_at}), flush=True)
     for r in range(a.reps):
         for op in a.ops.split(","):
             for j in range(len(arms)):
