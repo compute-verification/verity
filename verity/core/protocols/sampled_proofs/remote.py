@@ -440,8 +440,12 @@ def ledger_lines(path: str | os.PathLike) -> list[str]:
 
 
 def main_lines(path: str | os.PathLike) -> list[str]:
-    """The verifier's copy of main's first-parent history at `path`, one commit a line (the auditor's own ``git rev-list
-    --first-parent origin/main``), without their newlines; a missing or unreadable file raises `CoinError`."""
+    """The verifier's copy of main's first-parent history at `path`, one commit a line, newest first, without their
+    newlines; a missing or unreadable file raises `CoinError`.  The file is the checked train heads
+    (``research queue checked-heads --out``, `merge.main_line`): the commits on main's first-parent line whose own
+    ``check`` passed and landed them, less a reverted train's.  The raw ``git rev-list --first-parent origin/main`` is
+    not equivalent, since it also lists a reverted train's commits and the in-flight commits whose check hasn't landed
+    them, none a tree main's check passed."""
     text = _read(Path(path), "copy of main's history")
     if text is None:
         raise CoinError(f"{Ch.NO_MAIN} (none at {path})")

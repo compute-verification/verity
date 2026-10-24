@@ -48,11 +48,12 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
     research queue stats (--log FILE | --per-pr) [--hours H] [--until TS] [--json]
                                                    where landed PRs' time went, from drive's log (`research.queue_stats`); --per-pr,
                                                    the per-PR shadow's would-land times from drive's state file instead
-    research queue checked-heads [--tip REV] [--json]
+    research queue checked-heads [--tip REV] [--json] [--out FILE]
                                                    the commits on REV's first-parent line (default origin/main) whose own `check`
                                                    passed and landed them, oldest first, one a line: each train's head, by drive's
                                                    `landed` labels in the store index (`merge.checked_heads`), less a head whose
-                                                   train a later `git revert` names; what an auditor passes as main's line
+                                                   train a later `git revert` names; what an auditor passes as main's line. --out
+                                                   FILE writes them newest first (the verifier's --main file, `merge.main_line`)
     common flags: [--shadow] [--workdir DIR] [--rules FILE] [--repo OWNER/NAME] [--remote URL]
 
 Admission.  A PR is admitted while it is open against `main`, has an owner, carries no hold label, and is marked ready at its head;
@@ -2026,6 +2027,11 @@ def _checked_heads(a: argparse.Namespace) -> int:
     except (QueueError, Refused, RuntimeError) as e:
         print(f"research queue checked-heads: {e}", file=sys.stderr)
         return 1
+    if a.out is not None:
+        a.out.write_text("".join(c + "\n" for c, _ in reversed(heads)))
+        print(f"research queue checked-heads: wrote {len(heads)} checked train heads (newest first) to {a.out}, the "
+              "verifier's main line for --main", file=sys.stderr)
+        return 0
     print(json.dumps([{"commit": c, "run": r} for c, r in heads], indent=1) if a.json else "\n".join(c for c, _ in heads))
     return 0
 
@@ -2096,6 +2102,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--body-file", type=Path, help="open: the PR's body, verbatim (its first line `Lane NAME` names the owner)")
     ap.add_argument("--base", default="main", help="open: the base branch (default main)")
     ap.add_argument("--tip", default="origin/main", help="checked-heads: whose first-parent line (default origin/main)")
+    ap.add_argument("--out", type=Path, metavar="FILE", help="checked-heads: write the verifier's main-line file (the "
+                    "checked train heads newest first, for `--main`) to FILE instead of listing them on stdout")
     ap.add_argument("--draft", action="store_true", help="open: as a draft (default: ready for review)")
     ap.add_argument("--log", type=Path, help="stats: drive's log (its stdout, every tick's)")
     ap.add_argument("--hours", type=float, default=24.0, help="stats: the window's length (default 24)")

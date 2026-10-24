@@ -1822,6 +1822,15 @@ def checked_heads(repo: Path, tip: str, idx) -> list[tuple[str, str]]:
     return [(h, found[h]) for h in heads if h not in bad]
 
 
+def main_line(repo: Path, tip: str, idx) -> list[str]:
+    """The verifier's copy of main's first-parent history for `--main` (`sampled_proofs.remote.main_lines`): the checked
+    train heads `checked_heads` returns, newest first, so position 0 is main's head and a pin's index is the number of
+    checked trains it is behind, which `pouw.credit`'s freshness floor measures against. The raw
+    `git rev-list --first-parent origin/main` is not equivalent: it also lists the commits of a train a later revert
+    undid and the in-flight commits whose own check hasn't landed them, none of which is a tree main's check passed."""
+    return [c for c, _ in reversed(checked_heads(repo, tip, idx))]
+
+
 def report_landings(repo: Path, start: str, tip: str, *, api=None, reg: dict | None = None, gh=None, log=print,
                     runs: dict[str, str] | None = None) -> bool:
     """Post `landing_lines` over ``start``..``tip`` to the merge thread, one line per landing, so every landing is reported
