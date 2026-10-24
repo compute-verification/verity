@@ -177,12 +177,13 @@ import struct
 import threading
 import time
 from collections import defaultdict, deque
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from concurrent.futures import Executor, Future, ProcessPoolExecutor
 from dataclasses import dataclass, field
 
 from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.crypto import aead
+from verity.core.protocols.certifier.advice import RequestAdvice
 from verity.core.protocols.certifier.audit import Audit, Verdict
 from verity.core.protocols.certifier.certificate import PublicKey, Signer, SignerRefused
 from verity.core.protocols.certifier.grid import (
@@ -432,6 +433,41 @@ def compact_record_data(cell: bytes) -> tuple[int, int | None, str | None] | Non
         return got if compact_record(*got) == bytes(cell[: COMPACT_RECORD.size]) else None
     except ValueError:
         return None
+
+
+#: the finish a compact response's last record carries for each of advice v0's (`advice.FINISHES`)
+COMPACT_ADVISED_FINISH = {"eos": "stop", "length": "length"}
+
+
+def compact_finish_violations(requests: Sequence[RequestAdvice], cells: Iterable[bytes]) -> list[tuple[int, str]]:
+    """The finishes compact cells carry, held to advice v0's (`advice.Advice.requests`): request q is ordinal q + 1,
+    and its cells, in canonical order, are its `output_len` outputs, every one unmarked but the last, which carries
+    `COMPACT_ADVISED_FINISH`'s finish for the advice's. `cells` are a link's frames in canonical order, padding left
+    out. A violation is (ordinal, why), at most one an ordinal, 0 for a cell that isn't a record. The certifier commits
+    whatever finish the server writes, about a trit at each response's end; this is the rule the I/O tie holds the
+    token field's finish to."""
+    marks: dict[int, list[str | None]] = defaultdict(list)
+    out: list[tuple[int, str]] = []
+    for cell in cells:
+        if (got := compact_record_data(cell)) is None:
+            out.append((0, "a cell that isn't a compact record"))
+        else:
+            marks[got[0]].append(got[2])
+    for o in sorted(set(marks) | set(range(1, len(requests) + 1))):
+        got = marks.get(o, [])
+        if not 1 <= o <= len(requests):
+            out.append((o, "no request of the advice is this ordinal"))
+            continue
+        q = requests[o - 1]
+        want = [None] * (q.output_len - 1) + [COMPACT_ADVISED_FINISH[q.finish]]
+        k = next((k for k, (g, w) in enumerate(zip(got, want)) if g != w), None)
+        if k is not None and k < q.output_len - 1:
+            out.append((o, f"a {got[k]} finish on output {k}, before the advice's last ({q.output_len - 1})"))
+        elif k is not None:
+            out.append((o, f"finish {got[k] or 'none'} where the advice's is {q.finish}"))
+        elif len(got) != q.output_len:
+            out.append((o, f"{len(got)} records where the advice has {q.output_len} outputs"))
+    return out
 
 
 def compact_unit(position: int, record: bytes) -> bytes:
@@ -1070,7 +1106,8 @@ class Proxy:
     - with `compact` (which takes `ordinals`), each server connection is compact records (`CompactUnits`: an HTTP
       response head, then (position, record) units, `compact_unit`), and each egress frame is a record zero-filled to
       B (`compact_cell`), B ≥ 8: a record that isn't one (`compact_record_data`) or names another request than its
-      connection's is malformed;
+      connection's is malformed. Experimental: the Lean certifier device (`CertifierDevice`) and the head model don't
+      cover compact cells yet, so no verdict of record runs on it (the gate's rehearsal takes no such option);
     - with `pair` (off by default), the link is a sealed pair link to another of the auditor's certifiers: each egress
       slot, frame or padding, is written sealed (`Pair.sealer`) after the egress certifier records it, and each unit
       read is opened (`Pair.opener`) before the ingress certifier takes it, so every record is the unsealed run's. A
@@ -1686,9 +1723,11 @@ def check_salts(audit: Audit, link: str, records: Sequence[Record], windows: int
     """The audit's read of the salt on ingress link `link` for certifier windows 0 … windows − 1, given the salts
     `reveal` gave by PoUW window of `pouw_window` certifier windows: PoUW window p, at its first certifier window
     w = p·`pouw_window`, is accepted if w has exactly one raw record, which holds exactly one salt frame of p, carrying
-    `PLACEHOLDER`, and p's revealed salt has `salt_bits` bits. Anything else, a missing salt included, is a `salt`
-    violation at w. The verdicts join `audit`'s. A committed or certified record doesn't show its frames, so a proof
-    opens the salt frame there."""
+    `PLACEHOLDER`, as the first frame of its bucket 0 (slot 0, where `Bucketer` releases it), and p's revealed salt has
+    `salt_bits` bits. Anything else, a missing or moved salt included, is a `salt` violation at w. The place is pinned
+    because the served counts (`served.derive`) take bucket 0's first `own` frames for the salt: the same counts with
+    the salt in a later bucket would derive other request ends. The verdicts join `audit`'s. A committed or certified
+    record doesn't show its frames, so a proof opens the salt frame there, at bucket 0 slot 0."""
     by_window: dict[int, list[Record]] = defaultdict(list)
     for r in records:
         if not isinstance(r, Record):
@@ -1701,9 +1740,11 @@ def check_salts(audit: Audit, link: str, records: Sequence[Record], windows: int
         found, salt, prefix = by_window.get(w, []), salts.get(p), p.to_bytes(8, "big")
         accepted = False
         if len(found) == 1 and salt is not None and 8 * len(salt) == salt_bits:
-            held = [x for row in found[0].grid for k, s, x in map(decode_frame, row[: row_count(row)])
+            grid = found[0].grid
+            held = [x for row in grid for k, s, x in map(decode_frame, row[: row_count(row)])
                     if k == SALT and s == SALT_STREAM and x[:8] == prefix]
-            accepted = held == [prefix + PLACEHOLDER]
+            first = decode_frame(grid[0][0]) if grid and row_count(grid[0]) else None
+            accepted = held == [prefix + PLACEHOLDER] and first == (SALT, SALT_STREAM, prefix + PLACEHOLDER)
         out.append(Verdict(link, w, None if accepted else "salt"))
     audit.verdicts.extend(out)
     return out

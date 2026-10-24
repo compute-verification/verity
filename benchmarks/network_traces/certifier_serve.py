@@ -1353,7 +1353,8 @@ def parser() -> argparse.ArgumentParser:
                                          "of the probe's responses that stopped)")
         q.add_argument("--compact", type=int, metavar="B",
                        help="varied: compact egress records (`active.compact_record`) in cells of B >= 8 bytes, "
-                            "the shim writing each token's record (default: id events in 4096-byte frames)")
+                            "the shim writing each token's record (default: id events in 4096-byte frames); "
+                            "experimental, never a verdict of record until the Lean certifier covers compact cells")
         q.add_argument("--margin", type=float, default=2.0,
                        help="varied: the plan's margin over the probed rates and latencies (an endpoint that slows "
                             "under load the probes didn't meet needs more)")

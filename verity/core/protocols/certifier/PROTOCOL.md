@@ -342,8 +342,8 @@ What this establishes: on every accepted link-window of a served link, the egres
 ingress head's counts under the declared sync, whatever the frames hold. So the egress timing adds nothing to what
 the ingress counts and the charged advice carry, and under the premises it is the Program's. The ingress counts are
 the record's own, at most r_in a bucket, as on any end without a profile. What it doesn't establish: the frames
-(N3's, the salt frame's place among them included: the counts see only that bucket 0 holds OWN frames more), and the
-premises, which nothing checks.
+(N3's; the salt frame's place among them is the salt audit's, which takes it only first in bucket 0, `check_salts`),
+and the premises, which nothing checks.
 
 ## The Program's logical schedule and the clock-sync advice (`schedule`)
 
@@ -1354,8 +1354,22 @@ them.
     unchecked cell carries at most 32 bits, against the 247 bytes after the header of a 256-byte event frame. The
     certifier still sees only bytes. The client renders OpenAI's completions SSE from the cells with the registered
     tokenizer (`benchmarks/network_traces/compact_render.py`: vLLM V1's incremental detokenization, byte-equal to
-    vLLM's stream text), and the certified I/O reads the finish from the records' marks (`certifier_serve.certified_io`).
-    Neither the Lean device port (`CertifierDevice`) nor N3's templates model compact cells yet.
+    vLLM's stream text).
+    - **Numbering.** The ordinal is at least 1 on the wire, and the I/O tie reads advice v0's request q as ordinal
+      q + 1.
+    - **The finish is in band.** `COMPACT_LAST` and `COMPACT_EOS` are well-formed records, and the certifier commits
+      whatever finish the server writes: one of three states (none, `length`, `stop`) at each response's end, where an
+      id event marks the end out of band. The check that refuses a wrong finish is the I/O tie's, against the advice:
+      request q's cells are its `output_len` outputs, none marked but the last, which is `stop` where the advice's
+      `finish` is `eos` and `length` where it is `length` (`compact_finish_violations`). A stop record stands for the
+      advice's EOS output, whose id it doesn't carry. IO-TIE's egress tie holds each compact cell's token field to
+      this rule as well as to its id. The rehearsal's certified I/O (`certifier_serve.certified_io`) has no advice and
+      checks the marks against `max_tokens` and EOS alone, so it can't tell a stop on the last token at `max_tokens`
+      from a `length` finish.
+    - **Not of record.** Neither the Lean device port (`CertifierDevice`), the head model nor N3's templates model
+      compact cells yet, and the verifier takes no form its proof doesn't cover, so no verdict of record runs on
+      compact framing: the gate's rehearsal takes no such option, and gains none before the Lean certifier covers
+      compact cells.
   - **Anchor, index and ready bucket.** A frame is anchored at the egress bucket in which ingress released its
     request's last frame. Its logical index is its position in its stream. Read at time s, it is ready at ⌊s/τ_b⌋ + 1.
   - **Handing.** `Shaper` hands it at `max(h(k), ready(k), last)`, `run_shaper`'s rule under the declared sync of its
@@ -1469,6 +1483,11 @@ them.
     salt included, is a `salt` violation at w, recorded with the audit's verdicts. No record binds the salt: the
     revealed salt is the certifier's word, under `trusted-nebius-host`. A committed or certified record doesn't show
     its frames, so there a proof opens the salt frame.
+  - **Its place, pinned.** The audit takes the salt frame only as the first frame of w's bucket 0, slot 0, where the
+    proxy releases it ("Into the block only"); anywhere else it is a `salt` violation at w. The served counts
+    (`served.derive`, `NetworkServedCounts_v1`) take bucket 0's first OWN frames for the salt, so the same counts with
+    the salt in a later bucket would derive other request ends and still pass the circuit; the audit's pin is what
+    ties that premise to the record. A proof that opens the salt frame of a committed record opens it at that slot.
   - **What it costs.** The protocol fixes the salt frame's place in the queue and its bytes, so it adds nothing to the
     ingress count `(r_in + 1)^T`. Its release into the block carries the certifier's coins, which no outside party
     chooses and nothing X sends can change, so it costs 0 bits by the argument the trusted text makes for the
