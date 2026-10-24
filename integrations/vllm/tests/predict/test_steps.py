@@ -27,7 +27,7 @@ from verity_vllm.predict.steps import (
     trace_dir,
 )
 from verity_vllm.program.registry import io_shell as IO
-from verity_vllm.program.registry.topp_geometry import splits_for_v1
+from verity_vllm.program.registry.topp_geometry import registered_splits
 
 from verity.core.protocols.certifier import advice as I1
 from verity.ml.circuits.defs import bind
@@ -40,7 +40,7 @@ TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_si
         "max_position_embeddings": 64, "hidden_act": "silu"}
 GREEDY = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "seed": None, "max_tokens": 4}
 STOCH = {"temperature": 0.8, "top_p": 1.0, "top_k": 0, "seed": None, "max_tokens": 3, "min_p": 0.0, "repetition_penalty": 1.0}
-STOCH_POLICY = {"kind": "stochastic", "temperature": 0.8, "top_p": 1.0, "top_k": 0, "seeded": True, "splits": splits_for_v1(1, 188)}
+STOCH_POLICY = {"kind": "stochastic", "temperature": 0.8, "top_p": 1.0, "top_k": 0, "seeded": True, "splits": registered_splits(188)}
 SERVED = "served-model"
 
 
@@ -95,7 +95,7 @@ def test_byte_ingress_compiles_to_the_same_programs_with_a_parse_unit_each():
     parse = bind(IO.IngressPrompt, MODEL=SERVED, LP=8, V=256)
     assert [u.parse for u in wired.requests] == [parse, None, parse]
     assert [u["parse"] for u in json.loads(json.dumps(wired.summary()))["requests"]] == [parse.id, None, parse.id]
-    selects = (f"GumbelTopPTokenSelect_v2{{V=256,S={splits_for_v1(1, reg.phi.target_profile().num_sms)}}}", "TokenSelect_v1{V=256}")
+    selects = (f"GumbelTopPTokenSelect_v2{{V=256,S={registered_splits(reg.phi.target_profile().num_sms)}}}", "TokenSelect_v1{V=256}")
     assert plain.transfer_gates == selects and wired.transfer_gates == tuple(sorted((parse.id, *selects)))
     assert wired.summary()["transfer_gates"] == list(wired.transfer_gates)
 
@@ -137,9 +137,11 @@ def test_a_plan_is_the_compilation_before_its_programs_are_built():
 
 
 def test_the_bodys_seed_is_the_seed_input_and_the_policy_reads_temperature_and_top_p():
-    """Top-p at top_p = 1 takes the constant split count SplitsFor_v1(1, num_SMs) (`predict.batch`'s R3): its keep set is every lane
-    for any S, so the batch's S changes nothing; a greedy body's top_p is never read."""
+    """Top-p takes the registered split count registered_splits(num_SMs) at any top_p, the S serving pins (`engine.topp_pin`), never
+    the batch's; a greedy body's top_p is never read."""
     assert policy_of(0, {**STOCH, "seed": 123}, 7, 188) == (STOCH_POLICY, 123)
+    assert policy_of(0, {**STOCH, "top_p": 0.95}, 7, 188) == ({**STOCH_POLICY, "top_p": 0.95}, 7)
+    assert registered_splits(188) == 32
     assert policy_of(0, {**STOCH, "top_k": -1, "top_p": None}, 7, 188) == (STOCH_POLICY, 7)
     assert policy_of(0, {**GREEDY, "top_p": 0.5, "stop": ["\n"], "ignore_eos": False}, 7, None) == ({"kind": "greedy"}, None)
     with pytest.raises(Unexpressible, match="top-p on a target that declares no num_sms"):
@@ -159,8 +161,6 @@ def test_the_bodys_seed_is_the_seed_input_and_the_policy_reads_temperature_and_t
     ({"top_p": 1.0}, "no temperature"),
     ({**STOCH, "temperature": "0.8"}, "temperature '0.8', top_p 1.0 and seed None aren't"),
     ({**STOCH, "top_p": 0.0}, "top_p 0.0"),
-    ({**STOCH, "top_p": 0.95}, "top_p 0.95 below 1 (a named gap: there the top-p split count S = SplitsFor_v1(live rows, num_SMs) "
-                               "is the batch's, until serving pins S as a registered constant)"),
     ({**STOCH, "seed": -1}, "seed -1"),
     (["temperature"], "aren't an object of named values"),
 ])
