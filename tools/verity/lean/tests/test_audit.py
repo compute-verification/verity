@@ -1877,6 +1877,33 @@ def test_a_package_proving_anothers_guarantees_is_audited_beside_it(tmp_path, mo
     assert [r["package"] for r in doc["packages"]] == [str(s), str(p)]
 
 
+def test_a_spec_never_reads_a_proving_package_whose_build_did_not_pass(tmp_path, monkeypatch):
+    """`p`'s build fails (killed for memory, say): `s`'s `ready` says so, and `proved` refuses to read `p`'s `.lake`, which
+    holds whatever an earlier or interrupted build left, rather than report a module it lacks as a missing import."""
+    s, p = tmp_path / "s", tmp_path / "p"
+    for d, rel in ((s, "S/Defs.lean"), (p, "SP/Thms.lean")):
+        (d / rel).parent.mkdir(parents=True)
+        (d / rel).write_text("")
+    (s / A.POLICY).write_text(json.dumps({"roots": ["S"], "proved_in": ["../p"]}))
+    (p / A.POLICY).write_text(json.dumps({"roots": ["SP"]}))
+    (p / "lake-manifest.json").write_text(json.dumps({"packages": [{"type": "path", "name": "s", "dir": "../s"}]}))
+    seen = {}
+
+    def fake(pkg, out, build, update, replay, fresh, log=print, built=lambda: None, ready=lambda q: None, **kw):
+        if pkg.name == "s":
+            built()
+            seen["ready"] = ready(p.resolve())
+            return {"package": str(pkg), "seconds": {}, "failures": []}
+        return {"package": str(pkg), "seconds": {}, "failures": ["build: exit 137"]}
+
+    monkeypatch.setattr(A, "audit", fake)
+    assert A.main([str(s), "--out", str(tmp_path / "out")]) == 1
+    assert seen["ready"] is False
+    with pytest.raises(RuntimeError, match=r"\.\./p's build did not pass"):
+        A.proved(s, json.loads((s / A.POLICY).read_text()), facts(modules=[], pins={}), tmp_path / "work",
+                 ready=lambda q: False)
+
+
 CORE = {"Core/Protocol.lean": "namespace Core\ndef double (n : Nat) : Nat := 2 * n\nend Core\n",
         "Core/Assumptions.lean": "namespace Core\ndef Hyp : Prop := ∀ n : Nat, n + 0 = n\nend Core\n",
         "Core/Guarantees.lean": "import Core.Protocol\nimport Core.Assumptions\nnamespace Core.Guarantees\n"

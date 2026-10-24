@@ -76,7 +76,9 @@ python tools/verity/lean/check.py PKG  once, before pushing
   tools/verity/lean/lean_changed.py --records PKG --update` (4 slots; the rest wait in slot.py's line). The
   record is in `lean-audit/audit-*/` and, when it changed, `lean-audit/record/` (with `review.txt`); commit it. It then checks every package whose
   guarantees read PKG's build (`lean-audit/requirer-<path>/`); when one fails, run `--records --update` on it too. Its
-  result is `lean-fast/v1`, which no merge check accepts.
+  result is `lean-fast/v1`, which no merge check accepts. A slot tree another run left mid-way (cancelled, timed out,
+  killed for memory) is repaired before the build, with the reason printed, so don't delete or copy a slot tree by hand.
+  A spec's failure `proved_in: P's build did not pass` points at P's own report, where its build failed.
 - **A full record on a pod**: `research run --on POD --project verity --source . --cwd clone -- python3
   tools/verity/lean/check.py --build --update PKG`, with no wrapper (vy-nebius-1 has no `python`). It exits 0 when the
   check passes; the record is at `lean-audit/audit-TAG/lean-audit.json`. Use `--cwd clone`: runs of one commit share

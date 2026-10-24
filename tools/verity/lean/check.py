@@ -2015,9 +2015,9 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
            ready=lambda q: None) -> tuple[list[str], dict, dict[str, list[str]]]:
     """(failures, ``facts`` with each guarantee's facts taken from the package that proves it, {package: the guarantees it
     proves}) for a policy whose `proved_in` names the packages that prove its guarantees. Each must require ``pkg`` by path
-    and hold a policy of its own without guarantees; ``ready`` (one) returns once its build has ended. `Facts.lean` reads its
-    roots with this policy's `meaning`, `axioms` and guarantees, so the judgment is the one of guarantees proved in ``pkg``.
-    Raises RuntimeError when a package's facts cannot be read."""
+    and hold a policy of its own without guarantees; ``ready`` (one) returns once its build has ended, False when it did not
+    pass. `Facts.lean` reads its roots with this policy's `meaning`, `axioms` and guarantees, so the judgment is the one of
+    guarantees proved in ``pkg``. Raises RuntimeError when a package's build did not pass or its facts cannot be read."""
     fails, sources, conflicts = [], [("this package", facts, lean_modules(pkg))], list(facts.get("moved_conflicts", []))
     if not isinstance(named := policy["proved_in"], list) or not all(isinstance(p, str) for p in named):
         fails.append(Failure("proved_in.form", None, "proved_in: a list of paths, each relative to this package"))
@@ -2049,7 +2049,10 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
                                  f"first package on its path holding its root, so `lake env lean` cannot load both; put its "
                                  f"modules under a root of their own (declarations keep their names)"))
             continue
-        ready(q)
+        if ready(q) is False:
+            raise RuntimeError(f"proved_in: {entry}'s build did not pass (its report says why), so its facts are not read: "
+                               f"its .lake holds whatever an earlier or interrupted build left, and a module it lacks would "
+                               f"read as a missing import here")
         qwork = work / f"proved-in-{re.sub(r'[^A-Za-z0-9]+', '_', entry)}"
         qwork.mkdir(parents=True, exist_ok=True)
         qf = facts_of(q, {"roots": qpol["roots"], "meaning": policy.get("meaning", policy["roots"]),
@@ -2603,7 +2606,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
           replay_cache: Path | None = None, closure: bool = False) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes). ``built`` is called once its build has
     passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
-    ended (`proved`). ``runs`` runs the package's tests (`tests`), ``repo`` the checkout their data's
+    ended, False when it did not pass (`proved`). ``runs`` runs the package's tests (`tests`), ``repo`` the checkout their data's
     `generate` reads. ``moved`` ({old name: new name}, with ``update``) renames the record's guarantees, and the review compares
     the build with the records under the old names (`review`). An update's report holds the review, whether it changes what a
     guarantee says (`statement_changes`), and the guarantees and reads it compared with (`before`) beside those it wrote.
@@ -3016,6 +3019,7 @@ def main(argv: list[str]) -> int:
     if a.build or a.all:
         sandboxed()                                     # probed once, before anything runs beside the probe
     built = {p: threading.Event() for p in pkgs}
+    passed: set[Path] = set()
     needs = {p: [d for d in path_deps(p) if d in built and d != p] for p in pkgs}
     by_controls: list[str] = []
     reports: dict[Path, dict] = {}
@@ -3044,9 +3048,10 @@ def main(argv: list[str]) -> int:
             built[d].wait()
         try:
             mine = pkg in named
-            rep = audit(pkg, out, a.build, a.update and mine, not a.no_replay, a.fresh, built=lambda: seal(pkg),
-                        runs=not a.no_runs, repo=a.repo.resolve(), moved=moved if mine else None,
-                        ready=lambda q: built[q].wait() if q in built else None, owner=a.owner,
+            rep = audit(pkg, out, a.build, a.update and mine, not a.no_replay, a.fresh,
+                        built=lambda: (passed.add(pkg), seal(pkg)), runs=not a.no_runs, repo=a.repo.resolve(),
+                        moved=moved if mine else None,
+                        ready=lambda q: (built[q].wait(), q in passed)[1] if q in built else None, owner=a.owner,
                         name=a.name_instances and mine, lifts=lifts if mine else None, replay_cache=a.replay_cache,
                         closure=a.closure)
         finally:
