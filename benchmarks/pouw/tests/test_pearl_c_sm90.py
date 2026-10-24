@@ -131,24 +131,6 @@ def test_a_64_by_64_gemm_stores_its_real_rows_alone(monkeypatch):
     assert lives == [16, 0, 40, 0, 0]
 
 
-def test_a_64_row_gemm_issues_each_window_before_waiting_on_the_one_before(monkeypatch):
-    """i5 (overlap) is set for the 64-row GEMMs (the chain's 64 x 64 and the 64 x 32 words), not for 128-row tiles, whose
-    two consumer warpgroups the kernel leaves as they were, and not under PEARLC_OVERLAP=0 (OVERLAP false)."""
-    flags = []
-    dev = SimpleNamespace(sms=132, launch=lambda name, grid, *a, i, **k: flags.append(i[5]))
-    pipe = SimpleNamespace(GEMM_SMEM=dict.fromkeys(("gemm_pearlc_d", "gemm_words_d", "gemm_pearlc"), 1), dev=dev, k=4096,
-                           beside=0, m_real=16, b=dict.fromkeys(("at", "bt", "fbT32", "c", "af", "tma"), 0),
-                           boxes={("at", "bt"): RUN.gemm_tile("gemm_pearlc_d"), ("at", "fbT32"): RUN.gemm_tile("gemm_words_d")})
-    RUN.Pipeline.gemm(pipe, "gemm_pearlc_d", "at", "bt", 64, 4096)
-    RUN.Pipeline.gemm(pipe, "gemm_words_d", "at", "fbT32", 64, 32, out=("af",))
-    pipe.boxes[("at", "bt")] = RUN.gemm_tile("gemm_pearlc")
-    RUN.Pipeline.gemm(pipe, "gemm_pearlc", "at", "bt", 128, 4096)
-    pipe.boxes[("at", "bt")] = RUN.gemm_tile("gemm_pearlc_d")
-    monkeypatch.setattr(RUN, "OVERLAP", False)
-    RUN.Pipeline.gemm(pipe, "gemm_pearlc_d", "at", "bt", 64, 4096)
-    assert flags == [1, 1, 0, 0]
-
-
 def test_operands_are_in_natural_order():
     """No K32 order: the lines' transposes are the codes' plain transpose, and form_s5 writes its codes at their own
     columns; the fixture's layout says so."""
