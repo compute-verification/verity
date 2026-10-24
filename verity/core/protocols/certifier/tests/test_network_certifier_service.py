@@ -710,3 +710,28 @@ def test_a_head_leaf_that_isnt_its_records_head_is_a_reject(tmp_path):
     reg = run.lw.register(run.stream, rec)
     draw = run.stream.select(reg)
     assert reject(run.decide(draw, opening))
+
+
+def test_the_commitments_of_a_shared_row_file_are_its_instances_refs_rows(tmp_path):
+    """A shared-row public file (`verity_flock.circuit.write`'s ``shared_rows``): each port's table port-major, then
+    every instance's refs into them. An instance's commitments are its refs' rows, an instance two of whose ports share
+    a row reads that row on each, and a ref past its table, a short file or a header naming other ports reads none."""
+    bc = {(p, k): bytes([j * 16 + k]) * SVC.BC_BYTES for j, p in enumerate(SVC.PORTS) for k in range(3)}
+    counts = {"pub": 1, "wit": 3, "o0": 2}
+    refs = {7: {"pub": 0, "wit": 2, "o0": 1}, 9: {"pub": 0, "wit": 0, "o0": 0}}
+
+    def write(name, header=None, refs_=refs, cut=0):
+        head = {"units": {"indices": list(refs_)}, "shared_rows": counts, **(header or {})}
+        body = b"".join(bc[p, k] for p in SVC.PORTS for k in range(counts[p]))
+        body += b"".join(r[p].to_bytes(4, "little") for r in refs_.values() for p in SVC.PORTS)
+        path = tmp_path / name
+        path.write_bytes(json.dumps(head).encode() + b"\n" + body[:len(body) - cut])
+        return path
+
+    public = write("pub.bin")
+    for u, r in refs.items():
+        assert SVC._commitments(public, u) == {p: bc[p, r[p]] for p in SVC.PORTS}
+    assert SVC._commitments(public, 8) is None
+    assert SVC._commitments(write("past.bin", refs_={7: {"pub": 1, "wit": 0, "o0": 0}}), 7) is None
+    assert SVC._commitments(write("short.bin", cut=1), 7) is None
+    assert SVC._commitments(write("ports.bin", {"shared_rows": {"pub": 1, "wit": 3}}), 7) is None
