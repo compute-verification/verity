@@ -127,10 +127,6 @@ ZDEAD_ENV = "DITHER_ZDEAD"
 # the gate step's option A partials against SERVE-REG's gated lane (served_h1/lane_refs.py): 1 checks them in the gate
 # (one process: the arm's worker is a daemon); a path saves their records there for `lane_refs.py PATH` after serving
 LANE_REFS_ENV = "DITHER_LANE_REFS"
-# N > 0: `check` hashes a table's leaves in a spawned pool of N processes once it has POOL_MIN rows or more (a prefill
-# capture's 2.75M z/y units take ~4 min on one core); unset or 0, in this process
-CHECK_WORKERS_ENV = "DITHER_CHECK_WORKERS"
-POOL_MIN = 4096
 UNIT = (32, 32)     # (UR, UC): the receipts' units; a narrower down_proj unit changes only this
 H1R_BLOCK, H1R_SPLIT = 3, 4     # h1r_launch's versions: a unit a block, a unit six warps
 M32 = DO.M32
@@ -802,6 +798,10 @@ def stats(win: DO.Window):
 
 # -- the gate ----------------------------------------------------------------------------------------------------------------
 
+# N > 0: `check` hashes a table's leaves in a spawned pool of N processes once it has POOL_MIN rows or more (a prefill
+# capture's 2.75M z/y units take ~4 min on one core); unset or 0, in this process
+CHECK_WORKERS_ENV = "DITHER_CHECK_WORKERS"
+POOL_MIN = 4096
 _POOL: list = []
 
 

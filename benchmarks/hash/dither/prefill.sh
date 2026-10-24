@@ -5,13 +5,14 @@
 # unit reads is L2's already, and the prefetches cost h1um 2.3 % (unitsbench --multi, step_multi 397.6 -> 388.6 ms;
 # at decode's m = 32 6.425 -> 6.414 ms).  KCX and KHX append to the two builds' flags, EXTRA to sbench.py's arguments.
 #   research run --on vy-nebius-2 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE --env SBENCH_ON=4,5,6,7 \
-#     --env NUMA=1 --env SPLIT=1 --env SBENCH_LEASE_AT=2026-10-24T05:15:30Z --env GPU_LEASE_TIMED=1 \
+#     --env NUMA=0 --env SPLIT=1 --env SBENCH_LEASE_AT=2026-10-24T05:15:30Z --env GPU_LEASE_TIMED=1 \
 #     -- bash benchmarks/hash/dither/prefill.sh
 # SPLIT=1 runs two passes over the same arms and flags: out/gate, every arm gated and none timed, under an untimed lease
 # of GATE_MAX_MIN (15) minutes asked at once, so it ends before a clean window opens; then out/time, every arm timed REPS
 # (3) times and none gated, under the lease SBENCH_LEASE_AT and GPU_LEASE_TIMED ask for (the window's).  Without it, one
 # pass into out/ (--gate unless GATE=0, REPS 1).  NUMA=n binds every process to node n's CPUs and memory (n2's GPUs 4-7
-# are node 1's); out/load.csv samples the node's load every 10 s.
+# are node 1's, but merge trains may hold node 1's cores 64-119, so timed rows take node 0); out/load.csv samples the
+# node's load every 10 s.
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}
 mkdir -p "$D/out"

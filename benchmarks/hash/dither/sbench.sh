@@ -147,14 +147,16 @@ if [ -n "${SBENCH_LEASE_AT:-}" ]; then
   now=$(date -u +%s)
   [ "$at" -gt "$now" ] && { echo "sbench: holding the lease request until $SBENCH_LEASE_AT"; sleep $((at - now)); }
 fi
-ON=(); [ -n "${SBENCH_ON:-}" ] && ON=(--on "$SBENCH_ON")
+if [ -n "${SBENCH_ON:-}" ]; then
+  gpu-lease() { command gpu-lease "$1" --on "$SBENCH_ON" "${@:2}"; }
+fi
 echo "sbench: asking for one GPU at $(date -u +%H:%M:%SZ)${SBENCH_ON:+ on $SBENCH_ON}${GPU_LEASE_TIMED:+ (timed)}"
 nvidia-smi --query-gpu=index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu --format=csv -l 2 > "$OUT/smi.csv" 2>/dev/null &
 SMI=$!
 MAX_MIN=${SBENCH_MAX_MIN:-40}
 # SBENCH_PREEMPTIBLE=1: the lease may be taken back by a non-preemptible one (which ends the run unfinished)
 PRE=(); [ "${SBENCH_PREEMPTIBLE:-}" = 1 ] && PRE=(--preemptible)
-gpu-lease 1 --wait "${ON[@]}" "${PRE[@]}" --max-min "$MAX_MIN" -- bash -c '
+gpu-lease 1 --wait "${PRE[@]}" --max-min "$MAX_MIN" -- bash -c '
   if [ "$KGATE" = 1 ]; then
     timeout 900 "$KGATE_PY" "$KGATE_SCRIPT" --out "$0/kgate" --shapes all --models llama-3.1-8b,qwen3-8b --no-stock \
       > "$0/kgate.log" 2>&1
