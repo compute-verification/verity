@@ -292,14 +292,18 @@ verifier's own program (`program`, `--program`), a statement whose program has a
 the statement's files say. The public file's header `registered` is the prover's, and the circuit marks no port
 registered, so neither can tell the verifier its rows of a registered value must open a registered root: a statement that
 names none would commit them afresh. With the registered reads, `check` opens every port of them, header or not. -/
-def checkProgram (program : Option ByteArray) (registered : Bool) : V Unit := do
-  let some b := program | pure ()
-  if registered then return
-  let P ← Program.decode b
-  match (programInputs P)[0]? with
-  | none => pure ()
-  | some (k, id) =>
-    throw s!"registered reads: the verifier's program reads a registered value (root node {k}, {id}), and the verifier holds no registered roots (--registered): its rows would be committed afresh, whatever the statement's public file names"
+def checkProgram (program : Option ByteArray) (registered : Bool) : V Unit :=
+  match program, registered with
+  | none, _ => .ok ()
+  | some _, true => .ok ()
+  | some b, false =>
+    match Program.decode b with
+    | .error e => .error e
+    | .ok P =>
+      match (programInputs P)[0]? with
+      | none => .ok ()
+      | some (k, id) =>
+        .error s!"registered reads: the verifier's program reads a registered value (root node {k}, {id}), and the verifier holds no registered roots (--registered): its rows would be committed afresh, whatever the statement's public file names"
 
 /-- `checkProgram` accepts the verifier's program `b` only with its registered reads, or when `b` decodes to a program
 with no registered input. -/
@@ -309,16 +313,16 @@ theorem checkProgram_ok {b : ByteArray} {registered : Bool} (h : checkProgram (s
   | true => exact .inl rfl
   | false =>
     refine .inr ?_
-    unfold checkProgram at h
-    cases hd : Program.decode b with
-    | error e => simp [hd] at h <;> cases h
-    | ok P =>
-      refine ⟨P, rfl, ?_⟩
-      cases hi : (programInputs P)[0]? with
-      | none =>
-        have : (programInputs P).size ≤ 0 := Array.getElem?_eq_none_iff.mp hi
+    simp only [checkProgram] at h
+    split at h
+    · cases h
+    · next P hd =>
+      refine ⟨P, hd, ?_⟩
+      split at h
+      · next hn =>
+        have : (programInputs P).size ≤ 0 := Array.getElem?_eq_none_iff.mp hn
         exact Array.eq_empty_of_size_eq_zero (by omega)
-      | some x => simp [hd, hi] at h <;> cases h
+      · cases h
 
 /-- The file's `complete` (`COMPLETE_KEY`), false when absent. -/
 def completeOf (j : Json) : V Bool :=
