@@ -327,7 +327,9 @@ def test_credit(pass_server):
     another session, round 0's request table at another root than request_table, twice, under another PREFIX or bound
     to another session or to the open root, a call's served rows m_s past the period's T table rows, other than its step's or malformed (an
     honest window's empty step credits none of its calls), a T whose slot is not the window's M or that is no positive
-    integer, a period whose open commits no T or a malformed one, and every other
+    integer, a period whose open commits no T or a malformed one, a window's live evidence whose live Program is not
+    at its T, S and PREFIX or whose round's live@<s> outcome is missing, rejected, twice, of another circuit or opened
+    another m@<s> than the manifest's m_s, other slot or request tables or other ok rows, and every other
     refusal of `credit.window`, `credit.period_credit` and the steps they run."""
     CREDITED.clear()
     stats = {p.fn: D.run(p, examples=n, server=pass_server)
@@ -426,7 +428,23 @@ def test_credit(pass_server):
                  "or receipt table of the window", "'s receipt table, its round #'s, which only round # commits",
                  "a-link a-link: registered receipt table ", "registered-file registration: the window registers ",
                  "'s template returns no receipt of whole #-bit words", "'s seed reads the roots of ",
-                 "its units' ok rows, which are the verifier's own"):
+                 "its units' ok rows, which are the verifier's own",
+                 "window live: the window registers h#/w#/slots@# not", "window live: the window registers h#/w#/requests@# not",
+                 "rows of # #-bit words its live unit reads",
+                 "window live: the window's live evidence is not {descriptor, proofs}",
+                 "window live: the window's live descriptor is not a verity-ir/descriptor/v#",
+                 "window live: the window's live circuit is not a live Program",
+                 "window live: the window's live circuit's units are not its rounds",
+                 "window live: the window's live Program is at T = #", "rounds, not the window's #: every round's",
+                 "window live: the window's live Program's PREFIX is not its circuit's",
+                 "has no proof outcome: every round's served rows m_s is proved",
+                 "has two proof outcomes: each round's is proved and verified once",
+                 "window live: live unit # has a proof outcome and the window has # rounds",
+                 "proof was rejected: its served rows m_s = # are not proved",
+                 "proof was verified against another circuit than the window's live Program",
+                 "proof opened other ports, values or roots than its statement reads",
+                 "window live: the window's live proof outcomes are not a list",
+                 "so the period earns nothing: live: round #"):
         assert any(part in k for k in CREDITED), part
 
 
