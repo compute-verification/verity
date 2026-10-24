@@ -190,7 +190,9 @@ class PearlCWholeArm(PearlCArm):
     The PoUW option refuses this engine (`pouw.refusals`: compiled execution), so the arm installs as `PearlCArm` does;
     the protocol arm reaching it is vllm's change. ``PEARLC_WHOLE_EXECUTION`` is the engine's execution label:
     ``compiled`` (default, vLLM's kernels without batch invariance, as `stock-fp8@compiled` runs) or ``bi-compiled``;
-    ``PEARLC_CAPTURE_SIZES`` overrides the preset's capture sizes (each at most 256 rows)."""
+    ``PEARLC_CAPTURE_SIZES`` overrides the preset's capture sizes (each at most 256 rows). A retained pass's whole capture
+    keeps one stage a weight, sized at the first capture, so until vllm keys them by m₁₆ the arm starts at one size only
+    (the point's batch), and its whole check runs at the largest size."""
 
     id = "pouw-pearl-c-whole"
     run_options = {"graphs": True, "whole_defer": True}
@@ -199,13 +201,14 @@ class PearlCWholeArm(PearlCArm):
         super().__init__()
         self.schedule = "serial"
         self.execution = os.environ.get("PEARLC_WHOLE_EXECUTION", "compiled")
-        self.whole, self.totals = None, {}
+        self.whole, self.totals, self.capture = None, {}, [1, 8, 32, 128]
 
     def engine_overrides(self, target: Any) -> dict[str, Any]:
         sizes = os.environ.get("PEARLC_CAPTURE_SIZES")
-        capture = [int(x) for x in sizes.split(",")] if sizes else [1, 8, 32, 128]
+        self.capture = [int(x) for x in sizes.split(",")] if sizes else [1, 8, 32, 128]
         return {**super().engine_overrides(target), "enforce_eager": False, "execution": self.execution,
-                "compilation_config": {"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY", "cudagraph_capture_sizes": capture}}
+                "compilation_config": {"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY",
+                                       "cudagraph_capture_sizes": self.capture}}
 
     def ready(self, target: Any) -> None:
         from verity_vllm.engine.engine_profile import get_model_runner
@@ -223,7 +226,7 @@ class PearlCWholeArm(PearlCArm):
         spec = importlib.util.spec_from_file_location("pearl_c_e2e", HERE / "e2e.py")
         e2e = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(e2e)
-        whole = e2e.whole_check(self.run, self.weights)
+        whole = e2e.whole_check(self.run, self.weights, m=max(self.capture))
         self.run.details["passes"].clear()
         return {**got, "passed": bool(got["passed"] and whole.get("ok")), "whole": whole}
 
