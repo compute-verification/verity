@@ -17,11 +17,14 @@ role's launch statics are held to (b) across the launch shapes the registration 
 
 - R3: a derived split count. The served engine runs every top-p launch at the registered split count, so the compiler emits the
   constant form ("splits": registered_splits(num_SMs) = SplitsFor_v1(1, num_SMs)) at any top_p.
-- R2: a request whose unit (LP, T, policy, seed, id), rows or discarded rows differ when its advice is compiled alone (its rows
-  renumbered, its own release buckets): planning reads no batch-mate, whatever path a later change adds.
+- R2: a request whose unit (LP, T, policy, seed, id, C), rows or discarded rows differ when its advice is compiled alone (its rows
+  renumbered, its own release buckets): planning reads no batch-mate, whatever path a later change adds. A prefix-cache hit on
+  another request's KV is kept when its tokens are checked equal (through each run, the source's certified prompt equals the
+  request's), since that KV is then a function of the request's own prompt, given (a) and (b) on the units that computed it.
+  Alone, a stand-in computes it from the request's own tokens. Any other hit on another request's KV is refused.
 - R1: GP-01 wiring: a RowRef or a component naming another request's Program, or a request's outputs whose cone (`check.batch.
   separable` over `workload_labels`) reads another request's Inputs or a batch-provenance one (a `prefix` behind no checked
-  source included).
+  hit included).
 """
 
 from __future__ import annotations
@@ -64,16 +67,17 @@ def registered_phi(role: str, target: str, execution: str = "bi-eager") -> Phi:
                execution=execution)
 
 
-def workload_labels(wl: Any) -> tuple[tuple[Any, ...], Fields]:
-    """GP-01's parameters by holder: its shared Input batches `SHARED`; each request's own groups (`OWN_GROUPS`) held by its index;
-    any other request-local group (`splits`, `prefix`, `schedule`, `peers_*`, or one unknown here) `BATCH`. Its return: each
-    request's outputs held by its index."""
+def workload_labels(wl: Any, checked: frozenset[int] = frozenset()) -> tuple[tuple[Any, ...], Fields]:
+    """GP-01's parameters by holder: its shared Input batches `SHARED`; each request's own groups (`OWN_GROUPS`) held by its index,
+    and its `prefix` too when its hit's tokens are checked equal (``checked``, R2); any other request-local group (`splits`, an
+    unchecked `prefix`, `schedule`, `peers_*`, or one unknown here) `BATCH`. Its return: each request's outputs held by its index."""
     labels: list[Any] = [SHARED] * len(wl.shared_by_request[0])
     for r, sh in zip(wl.requests, wl.shared_by_request):
         groups = r.component.groups
         if len(groups) != len(r.component.params):
             raise BatchDependent(f"request {r.index}: its component names no group for some Input (provenance unknown)")
-        labels += [own(r.index) if g in OWN_GROUPS else BATCH for j, g in enumerate(groups) if j not in set(sh)]
+        mine = OWN_GROUPS + ("prefix",) * (r.index in checked)
+        labels += [own(r.index) if g in mine else BATCH for j, g in enumerate(groups) if j not in set(sh)]
     return tuple(labels), Fields(tuple(own(r.index) for r in wl.requests))
 
 
@@ -173,24 +177,57 @@ def templates(phi: Phi, *, max_tokens: int = 2048, max_seqs: int = 64, max_model
 # --- the compile-unit rule -------------------------------------------------------------------------------------------------------
 
 
-def _solo(advice: Any, r: int) -> Any:
-    """``advice`` with request ``r`` alone: its record, its rows renumbered to request 0 in their steps (steps without it dropped),
-    and its own release buckets in order. A cache hit sourced from another request has no solo form."""
+def _prompt(body: Any) -> tuple[int, ...] | None:
+    """A certified body's prompt as token ids; None for a body that carries none (ingress v0's bytes)."""
+    p = body.get("prompt") if isinstance(body, Mapping) else None
+    return tuple(p) if isinstance(p, (list, tuple)) and all(type(t) is int for t in p) else None
+
+
+def _check_hit(advice: Any, ingress: Mapping[str, Any], s: int, row: Any) -> None:
+    """Refuse ``row``'s cache hit unless each run on another request's KV holds the request's own tokens: through the run, the
+    source's certified prompt equals the hitting request's (the KV at a position reads every token up to it)."""
+    r, at = row.request, 0
+    mine = _prompt(ingress.get(advice.requests[r].id))
+    for src in row.sources:
+        end = at + src.n
+        if src.request != r:
+            theirs = _prompt(ingress.get(advice.requests[src.request].id))
+            if mine is None or theirs is None:
+                raise BatchDependent(f"request {r}: step {s}'s cache hit reads request {src.request}'s KV, and their tokens can't be "
+                                     f"checked equal: this rule reads a certified prompt as token ids, and one of the two bodies has none")
+            if end > min(len(mine), len(theirs)) or mine[:end] != theirs[:end]:
+                raise BatchDependent(f"request {r}: step {s}'s cache hit reads request {src.request}'s KV at positions {at} … {end - 1}, "
+                                     f"and their tokens aren't its own (the certified prompts differ there, or one ends first)")
+        at = end
+
+
+def _solo(advice: Any, ingress: Mapping[str, Any], r: int) -> tuple[Any, dict, int]:
+    """``advice`` and ``ingress`` with request ``r`` alone, and r's index there: its record and body, each of its rows in a step of
+    its own, its own release buckets in order. A hit on another request's KV (`_check_hit`) holds the KV of r's first C tokens, so
+    alone a stand-in computes it: a greedy request of those C tokens with one output, admitted just before r in r's first step.
+    Such a hit on a later row (a resume) has no solo form."""
     I1 = sys.modules[type(advice).__module__]
+    q = advice.requests[r]
+    rows = [(s, row) for s, step in enumerate(advice.steps) for row in step.rows if row.request == r]
+    for j, (s, row) in enumerate(rows):
+        if any(src.request != r for src in row.sources):
+            if j:
+                raise BatchDependent(f"request {r}: step {s} resumes it on KV another request computed (v0 has no solo form for it)")
+            _check_hit(advice, ingress, s, row)
+    k = int(any(src.request != r for src in rows[0][1].sources))
     release = tuple(b for o, b in zip(I1.outputs(advice), advice.release) if o.request == r)
-    steps = []
-    for s, step in enumerate(advice.steps):
-        for row in step.rows:
-            if row.request != r:
-                continue
-            if any(src.request != r for src in row.sources):
-                raise BatchDependent(f"request {r}: step {s}'s cache hit reads KV another request computed (v0 has no solo form for it)")
-            steps.append(type(step)((replace(row, request=0, sources=tuple(replace(src, request=0) for src in row.sources)),)))
-    return type(advice)((advice.requests[r],), tuple(steps), release)
+    steps = [I1.StepAdvice((replace(row, request=k, sources=tuple(replace(src, request=k) for src in row.sources)),)) for _, row in rows]
+    requests, bodies = (q,), {q.id: ingress[q.id]}
+    if k:
+        C, stand = rows[0][1].cache_hit, f"{q.id} (prefix)"
+        requests, release = (I1.RequestAdvice(stand, C, 1, "length"), q), (0, *release)
+        bodies[stand] = {"prompt": list(_prompt(ingress[q.id])[:C]), "max_tokens": 1, "temperature": 0}
+        steps[0] = I1.StepAdvice((I1.Row(0, "prefill", 0, C), replace(rows[0][1], request=1, sources=(I1.Source(0, C),))))
+    return I1.Advice(requests, tuple(steps), release), bodies, k
 
 
 def _unit(u: Any) -> tuple:
-    return (u.LP, u.T, u.policy, u.seed, u.id)
+    return (u.LP, u.T, u.policy, u.seed, u.id, u.C)
 
 
 def check_compiled(registered: Any, advice: Any, ingress: Mapping[str, Any], compiled: Any,
@@ -209,25 +246,28 @@ def check_compiled(registered: Any, advice: Any, ingress: Mapping[str, Any], com
             u = units[rr.request]
             if u is None or rr.digest != u.digest:
                 raise BatchDependent(f"step {s}: a row of request {rr.request} names Program {rr.digest[:16]}…, not its own")
+    checked: set[int] = set()
     for r, u in enumerate(units):
         if u is None:
             continue
-        q = advice.requests[r]
         try:
-            alone = plan(registered, _solo(advice, r), {q.id: ingress[q.id]})
+            solo, bodies, k = _solo(advice, ingress, r)
+            alone = plan(registered, solo, bodies)
         except BatchDependent:
             raise
         except Unexpressible as e:
             raise BatchDependent(f"request {r} compiles in its batch, and alone it's refused: {e}") from None
-        a = alone.requests[0]
+        if k:
+            checked.add(r)
+        a = alone.requests[k]
         if _unit(a) != _unit(u):
-            raise BatchDependent(f"request {r}: compiled alone it's (LP, T, policy, seed, id) = {_unit(a)}, in its batch {_unit(u)}")
+            raise BatchDependent(f"request {r}: compiled alone it's (LP, T, policy, seed, id, C) = {_unit(a)}, in its batch {_unit(u)}")
         mine = [(rr.start, rr.n, rr.samples) for rows in compiled.steps for rr in rows if rr.request == r]
-        theirs = [(start, n, k) for rows in alone.steps for _, start, n, k in rows]
+        theirs = [(start, n, m) for rows in alone.steps for req, start, n, m in rows if req == k]
         if mine != theirs:
             raise BatchDependent(f"request {r}: its rows (start, n, samples) are {theirs} alone, {mine} in its batch")
         mine = [(start, n) for _, req, start, n in compiled.discarded if req == r]
-        theirs = [(start, n) for _, _, start, n in alone.discarded]
+        theirs = [(start, n) for _, req, start, n in alone.discarded if req == k]
         if mine != theirs:
             raise BatchDependent(f"request {r}: its discarded rows are {theirs} alone, {mine} in its batch")
     wl = compiled.workload
@@ -235,6 +275,6 @@ def check_compiled(registered: Any, advice: Any, ingress: Mapping[str, Any], com
         u = units[w.index]
         if u is None or w.component.program_digest != u.digest:
             raise BatchDependent(f"GP-01's request {w.index} calls Program {w.component.program_digest[:16]}…, not its own")
-    labels, ret = workload_labels(wl)
+    labels, ret = workload_labels(wl, frozenset(checked))
     if crossings := separable(wl.fn, labels, ret):
         raise BatchDependent(f"GP-01: {crossings[0]}" + (f" (+{len(crossings) - 1} more)" if len(crossings) > 1 else ""))
