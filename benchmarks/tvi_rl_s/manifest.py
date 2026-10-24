@@ -47,9 +47,10 @@ def main(nodemap_path, root):
                              "steps_total": r["steps"], "model": r["model"], "lr": r["lr"],
                              "score_greedy": evals.get(s), "score_online_T1": sum(w) / len(w) if w else None})
                 e = ck.get((r["task"], r["method"], r["seed"], s), {})
-                if "merged" in e:
-                    rows[-1]["score_test_sampled"] = e["merged"]["sampled"]["acc"]
-                    rows[-1]["sampled_T"] = e["merged"]["sampled"]["temperature"]
+                for mode in ("merged", "in-job"):
+                    if mode in e:
+                        rows[-1]["score_test_sampled"] = e[mode]["sampled"]["acc"]
+                        rows[-1]["sampled_T"] = e[mode]["sampled"]["temperature"]
                 if "vllm-lora" in e:
                     rows[-1]["score_greedy_unmerged"] = e["vllm-lora"]["greedy_acc"]
                     rows[-1]["score_test_sampled_unmerged"] = e["vllm-lora"]["sampled"]["acc"]
