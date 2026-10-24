@@ -70,6 +70,12 @@ registered roots of the call's step's ``a/<K>@<s>`` and ``b/<K>``. The first blo
 window's last step are kept, and their first unit of each row block is held to `h1tile.reference` word for word
 (`receipts_check`: live row blocks at step 0, dead at the last step).
 
+``--credit`` (with ``--commit`` and ``--receipts``) runs core credit's statement steps over the honest Commit window
+(`credit_check`, `pouw_h1_credit`): `credit.registered_file`, `credit._verified` on a stand-in verifier of record that
+opens each drawn unit's pub, o0 and o1 rows against that file's roots and recomputes its receipt, `credit._proved` and
+`credit._registration`, the drawn units the first and last of each kept call; then a receipt word flipped (with and
+without its round's root re-listed), a public table under another step's A root and an ok row 0, each to be refused.
+
 ``--commit`` (fill, ``--served``) serves the 64's window again with the Commit in the engine
 (`acquire.h1_commit.attach`: the committer, the int8 source at each linear's Int8RowQuant_v1 site and its tap) into
 ``<out>/commit/``, each call's A table held to the Commit's AROW and each round over its input ids (``roots1``), and
@@ -698,6 +704,9 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                 if tap is not None:
                     out["roots1"] = h1.details["roots1"]
                     out["ok"] = bool(out["ok"] and out["roots1"]["tied"])
+                    if a.live_dump and out["requests"].get("live"):
+                        from verity_vllm.protocol_options import pouw_h1_live as LV
+                        out["live_dump"] = LV.dump(h1, Path(a.live_dump) / name)
         finally:
             SV.NR.commit = nr_commit
             lie.uninstall()
@@ -715,6 +724,9 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             print(f"[fill] {name} session {json.dumps(out['session'])}", flush=True)
         if tap is not None:
             out["core"] = core_tie({"commitment": dict(h1.commits), "calls": h1.manifest()}, h1.served.program, tdir)
+        if a.credit and edit is None and tap is not None and made is not None:
+            out["credit"] = credit_check(h1, served, made)
+            out["ok"] = bool(out["ok"] and out["credit"]["ok"])
         out["host"] = {"install": out["host"], "end": host_memory()}
         print(f"[fill] {name} core {json.dumps(out.get('core'), default=str)[:2000]} host {json.dumps(out['host'])}",
               flush=True)
@@ -749,7 +761,8 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                          "host": doc["host"], "window": doc["public"],
                          "layout_static": c.get("layout_static"), "same_tokens": c["same_tokens"],
                          "roots1": c.get("roots1"), "core": c.get("core"), "negatives": negs,
-                         "committer": c.get("committer"), "coins": coins_summary(doc, bool(a.challenger)),
+                         "committer": c.get("committer"), "coins": coins_summary(doc, bool(a.challenger)), "receipts": c.get("receipts"),
+                         "credit": {k: (c.get("credit") or {}).get(k) for k in ("ok", "lines", "units", "s")},
                          "ok": bool(c["ok"] and (c.get("core") or {}).get("tied")
                                     and all(v["refused"] for v in negs.values())
                                     and len(negs) == len(negatives_of(layers)) * a.negatives
@@ -1200,6 +1213,30 @@ def receipts_check(made: Any) -> dict[str, Any]:
             "ok": bool(rows) and all(r[3] for r in rows) and 0 < live < len(rows)}
 
 
+def credit_check(h1: Any, served: Any, made: Any) -> dict[str, Any]:
+    """``--credit``: core credit's statement steps (`pouw_h1_credit.check`) over the honest Commit window with receipts
+    on, the drawn units the first and last of each kept call (`receipts_producer`'s: the first block's linears at step 0
+    and the last step), their operands and receipts the producer's on the serving GPU; then each prover-side negative
+    (`pouw_h1_credit.NEGATIVES`) at the first of them."""
+    from tests.protocol_options import pouw_h1_credit as PC
+    from verity.core.protocols.pouw import credit as CR
+    from verity_vllm.protocol_options import pouw_h1_served as SV
+    t0 = time.monotonic()
+    w = PC.of_run(h1, served)
+    units = [u for c in sorted(made.kept) for u in (w.u0(c), w.u0(c) + CR.call_work(w.layout)[c][0] - 1)]
+    got = PC.check(w, units, lambda c: (made.kept[c]["a"].numpy(), made.kept[c]["b"].numpy()),
+                   lambda c: SV.receipt_words(made.kept[c]["receipts"]), h1._key)
+    got["s"], got["lines"] = round(time.monotonic() - t0, 1), PC.lines(got)
+    got["weights"] = [{x: e[x] for x in ("value", "leaves", "words")} for e in w.entries
+                      if e["value"].startswith(f"{w.prefix}b/")]
+    got["kept"] = [{"call": c, "k": w.k_of(c), "units": CR.call_work(w.layout)[c][0]} for c in sorted(made.kept)]
+    print(f"[fill] credit weights {json.dumps(got['weights'])} kept {json.dumps(got['kept'])}", flush=True)
+    for line in got["lines"]:
+        print(f"[fill] {line}", flush=True)
+    print(f"POUW-H1-CREDIT {'OK' if got['ok'] else 'FAIL'} units={len(units)} s={got['s']}", flush=True)
+    return got
+
+
 def _check(h1: Any) -> tuple[dict[str, Any], bool]:
     try:
         out = h1.check()
@@ -1389,6 +1426,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--handoff-state", metavar="DIR", help="with --handoff: the prover's scratch the window is saved in")
     ap.add_argument("--prover-dir", metavar="DIR", help="fill with --served: the prover's private directory, kept past the "
                                                        "close, outside --out (pouw_h1_prover: its salt key and values)")
+    ap.add_argument("--live-dump", metavar="DIR", help="with --commit: each Commit window's live@<s> statements, the "
+                                                       "prover's rows and openings (pouw_h1_live.dump), into DIR/<window>, "
+                                                       "outside --out, for benchmarks/pouw/h1_prove/live.sh")
     ap.add_argument("--close-from", metavar="DIR", help="no GPU: close and release the window a --handoff run saved in DIR, "
                                                         "on the session's stream --stream-fd, completing --out's record")
     ap.add_argument("--stream-fd", type=int, metavar="FD", help="with --close-from: the session's stream, as the holder "
@@ -1409,6 +1449,11 @@ def main(argv: list[str] | None = None) -> int:
                     help="with --commit: after the honest window, serve one whose A codes H1 is handed are all zero and "
                          "one with a row off, each with the Commit in the engine (NEGATIVES), and hold each to core's "
                          "ROOTS1 steps (core_verdict)")
+    ap.add_argument("--credit", action="store_true",
+                    help="with --commit and --receipts: core credit's statement steps over the honest Commit window "
+                         "(pouw_h1_credit: registered_file, _verified on a stand-in verifier of record, _proved, "
+                         "_registration), accepting it, and refusing a receipt word flipped, a public table under another "
+                         "step's A root and an ok row 0")
     ap.add_argument("--profile-register", action="store_true",
                     help="fill with --served: profile each served window's registration (Served.commit) and write its "
                          "functions by cumulative time to <window out>/register-profile.txt")
@@ -1432,6 +1477,8 @@ def main(argv: list[str] | None = None) -> int:
                  "reserves its own session)")
     if a.negatives and not a.commit:
         ap.error("--negatives is --commit's")
+    if a.credit and not (a.commit and a.receipts):
+        ap.error("--credit is --commit's, with --receipts (a window's receipt tables are what its statements' o0 reads)")
     if a.declare and (a.workload != "fill" or len(a.declare) != 4):
         ap.error("--declare is the fill workload's, SLOTS,CAP,T,S")
     if a.close_from:
