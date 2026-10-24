@@ -6,11 +6,11 @@ the size of the circuit that description unrolls to (README.md).
       IU per Call), checked by `nci-check --policy` (`NciCheck.Desc`) and, where the unrolled circuit has at most GATES
       gates, by `nci-check --policy --unrolled` (`NciCheck.check`) on the instance expanded gate by gate;
       DIR/results.json.
-  partition --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES] [--exe PATH]
+  partition --out DIR [--config NAME ...] [--ir word|boolean ...] [--exe PATH]
       the one-stage verifier's partition (`sampled-proofs-difftest`'s `partition`: `Partition.units`, `strata`, the law
-      and the digest) on Serve_v1 under the template query of its Calls, and under `Q_word` v1 and `Q_call` v1 at X = 16
-      where its Calls' distinct Definitions have at most GATES gates in all; and on the served shape, the population
-      program of Serve_v1's largest Definition at N instances (`Q_template_instance`); DIR/partition.json.
+      and the digest) on Serve_v1 under the template query of its Calls, and on the served shape, the population
+      program of Serve_v1's largest Definition at N instances (`Q_template_instance`); DIR/partition.json. One-stage
+      applies only the template queries (`Q_word` and `Q_call` are retired from the verifier of record).
   store RUN [--runs-dir DIR]
       a `job.sh` run's results.json or partition.json (`research fetch RUN --all`) as one evidence/v1 record, naming
       the run and its commit; prints its art: id. From a VM with the store's keys: a node's shell has none.
@@ -249,21 +249,13 @@ def partition(args) -> int:
                 add(head | {"shape": "serve", "query": "template", "n": None}
                     | _partition_row(args.exe, tmp, prog, PO.template_instances_query(list(distinct.values())),
                                      args.repeat))
-                for label, q in (("Q_word v1", PO.query(16, 32)), ("Q_call v1", PO.call_query(16))):
-                    row = head | {"shape": "serve", "query": label, "n": None}
-                    walked = sum(fn.gates for fn in distinct.values())
-                    if walked > args.unrolled_max:
-                        add(row | {"call_definition_gates": walked, "unrolled_gates": prog.root.gates,
-                                   "skipped": f"more than --unrolled-max {args.unrolled_max} gates in its Calls' Definitions"})
-                        continue
-                    add(row | _partition_row(args.exe, tmp, prog, q, args.repeat))
                 largest = max(distinct.values(), key=lambda fn: fn.gates)
                 for n in POPULATION:
                     add(head | {"shape": "population", "query": "template", "n": n, "template": largest.id}
                         | _partition_row(args.exe, tmp, P.population_program(largest, n),
                                          PO.template_instance_query(largest), args.repeat))
     result = {"schema": PARTITION_SCHEMA, "verifier": "sampled-proofs partition", "workload": "Serve_v1",
-              "repeat": args.repeat, "unrolled_max": args.unrolled_max, "rows": rows}
+              "repeat": args.repeat, "rows": rows}
     (out / "partition.json").write_text(json.dumps(result, indent=1) + "\n")
     bad = [f"{r['config']}/{r['ir']}/{r['shape']}/{r['n']}" for r in rows
            if r["query"] == "template" and (r.get("rc") != 0 or r.get("refused"))]
@@ -303,8 +295,7 @@ def plot(args) -> int:
     for ax, x, label in ((axes[0], "description_bytes", "description (bytes)"), (axes[1], "unrolled_gates", "unrolled circuit (gates)")):
         for ir, marker in (("word", "o"), ("boolean", "s")):
             if not nci:
-                for shape, query, style in (("serve", "template", "-"), ("population", "template", ":"),
-                                            ("serve", "Q_word v1", "--"), ("serve", "Q_call v1", "-.")):
+                for shape, query, style in (("serve", "template", "-"), ("population", "template", ":")):
                     rs = sorted((r for r in res["rows"] if r["ir"] == ir and r["shape"] == shape and r["query"] == query
                                  and "seconds" in r), key=lambda r: r[x])
                     if rs:
@@ -344,7 +335,6 @@ def main(argv: list[str] | None = None) -> int:
     q.add_argument("--out", required=True)
     q.add_argument("--config", action="append", choices=list(CONFIGS))
     q.add_argument("--ir", action="append", choices=("word", "boolean"))
-    q.add_argument("--unrolled-max", type=int, default=5_000_000)
     q.add_argument("--repeat", type=int, default=3)
     q.add_argument("--exe", type=Path, default=PIECES)
     s = sub.add_parser("store")

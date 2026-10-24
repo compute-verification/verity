@@ -15,13 +15,13 @@ the way down (`ir="boolean"` can't derive Serve_v1; `lift.py`'s docstring says w
   `nci-check --policy --unrolled` (`NciCheck.check`, the gate-by-gate reference), and the two verdicts must agree.
 * `partition`, the one-stage verifier's partition: `sampled-proofs-difftest`'s `partition` (`Partition.units`, `strata`,
   the expanded law and the digest, as the verifier of record computes them) on Serve_v1 under the template query of its
-  Calls (`Q_template_instances`), under `Q_word` v1 and `Q_call` v1 at `X = 16` where its Calls' distinct Definitions are
-  small enough (`--unrolled-max`), and on the served shape: the population program of Serve_v1's largest Definition at
-  1 to 10⁶ instances under `Q_template_instance`, as a served window registers one. A template query must apply.
+  Calls (`Q_template_instances`), and on the served shape: the population program of Serve_v1's largest Definition at
+  1 to 10⁶ instances under `Q_template_instance`, as a served window registers one. A template query must apply; the
+  verifier applies no other (`Q_word` and `Q_call` are retired from the verifier of record).
 
 ~~~sh
 verity bench verifier_cost measure --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES]
-verity bench verifier_cost partition --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES]
+verity bench verifier_cost partition --out DIR [--config NAME ...] [--ir word|boolean ...]
 research run --as proofs --project verity --on vy-nebius-cpu-2 --source . --pool proofs --cwd clone -- \
   bash benchmarks/verifier_cost/job.sh measure|partition --unrolled-max 40000000   # every config, on a node
 verity bench verifier_cost store RUN                     # its results.json or partition.json to the store; prints the art: id
@@ -59,8 +59,7 @@ unroll-K.jsonl (every PHASE line, with its step) and each step's `/usr/bin/time 
 `results.json` (`verity/verifier-cost/v1`) has one row per config and IR: the description's bytes, Definitions and body
 nodes, the unrolled circuit's gates, and per check its wall seconds (the best of `--repeat`), peak RSS and the verdict.
 `partition.json` (`verity/verifier-cost-partition/v1`) has one row per config, IR, shape and query: the description's
-bytes, the unrolled gates, the gates of the Calls' distinct Definitions (what `Q_word` and `Q_call` lay out), the wall
-seconds, peak RSS and the population (null where the verifier refuses the query). `store` puts either in the store as
+bytes, the unrolled gates, the wall seconds, peak RSS and the population (null where the verifier refuses the query). `store` puts either in the store as
 an `evidence/v1` record naming the run and its commit; it runs where the store's keys are (a VM), since a node's shell
 has none.
 

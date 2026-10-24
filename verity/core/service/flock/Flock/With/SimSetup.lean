@@ -161,21 +161,13 @@ theorem deriveQwordUnitsWith_sim (S : Sim M N) (tM : Throws M) (tN : Throws N) {
   sim_walk [programDecodeWith_sim S tM tN hh]
   iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [programDecodeWith_sim S tM tN hh])
 
-theorem deriveQcallUnitsWith_sim (S : Sim M N) (tM : Throws M) (tN : Throws N) {hs : Flock.Hashes M}
-    {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) :
-    S.R (HmRow.deriveQcallUnitsWith hs c obj program indices) (HmRow.deriveQcallUnitsWith hs' c obj program indices) := by
-  unfold HmRow.deriveQcallUnitsWith
-  simp -zeta only [tM.bind, tN.bind]
-  sim_walk [programDecodeWith_sim S tM tN hh]
-  iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [programDecodeWith_sim S tM tN hh])
-
 theorem qwordFindingWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
     {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (c : Circuit) (pub : Public) (obj : Json)
     (program : ByteArray) (f : HmRow.PartitionFinding) :
     S.R (HmRow.qwordFindingWith hs c pub obj program f) (HmRow.qwordFindingWith hs' c pub obj program f) := by
   unfold HmRow.qwordFindingWith
-  sim_walk [deriveQwordUnitsWith_sim S tM tN hh, deriveQcallUnitsWith_sim S tM tN hh]
-  iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [deriveQwordUnitsWith_sim S tM tN hh, deriveQcallUnitsWith_sim S tM tN hh])
+  sim_walk [deriveQwordUnitsWith_sim S tM tN hh]
+  iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [deriveQwordUnitsWith_sim S tM tN hh])
 
 theorem checkPartitionWith_sim (S : Sim M N) (tM : Throws M) (tN : Throws N) {hs : Flock.Hashes M}
     {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (c : Circuit) (obj : Option Json) :

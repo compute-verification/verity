@@ -26,13 +26,11 @@ ALLOWED: dict[str, str] = {
     "verity/core/service/flock/Flock/Extract.lean":
         "open (PRF-72): Q_word v1 owns every computing gate, so its CallGraph lays out one activation of each distinct "
         "Call's Definition, batch members and scan iterations unrolled; no served window names Q_word (they name "
-        "template queries, which read the root body only)",
+        "template queries, which read the root body only), but V*'s inner statement at the F1 gate does, so C-Flock "
+        "derives its units here",
     "verity/core/service/flock/Flock/Qcall.lean":
-        "open (PRF-72): Q_call v1 owns every computing gate, so its Gates lays out one activation of each distinct "
-        "Call's Definition, batch members and scan iterations unrolled; no served window names Q_call",
-    "verity/core/service/sampled_proofs/SampledProofs/Partition.lean":
-        "open (PRF-72): committedBits is Q_call's width rule on one activation of a unit's Definition, as "
-        "Flock.Qcall.gates lays it out; served windows name template queries, which never reach it",
+        "conformance only: Q_call v1 is retired from the verifier of record (HmRow.checkPartition refuses it); its "
+        "only users are flock-verify's qcall-program and input-ids, run for the Python's agreement, and Fuel.cutIn_mono",
     "verity/core/service/flock/Flock/NetAt.lean":
         "Tmpl.unrollAt, a templated unit's rows at their committed positions: the reference Tmpl.unitNet is proved "
         "equal to (FlockSoundness.TmplFold.unitNet_eq) and Flock.Test.NetAt compares it with; Tmpl.unitFull, its rows "
