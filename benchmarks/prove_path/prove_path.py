@@ -32,7 +32,7 @@ C-Flock `--zk` behind the Lean firewall on the drawn units, Lean's verdicts, and
   refused the outcome (`forged_row`).
 
 The compiler is `Capped` over `advice_windows.Traced` (the Build's Programs of record, refused unless of record), until the
-ahead-of-time compiler (`verity_vllm.predict.steps.compile_steps`) makes a TP rank's Programs. `Capped` adds the public cap ℓ on
+ahead-of-time compiler (`verity_vllm.program.predict.steps.compile_steps`) makes a TP rank's Programs. `Capped` adds the public cap ℓ on
 the advice's length to the compiler's registered digest, and `compile_advice` is total on every byte string: the requests, or
 a `ValueError` naming why, the same one on every run.
 """
