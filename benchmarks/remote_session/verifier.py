@@ -487,7 +487,7 @@ def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks
                 "hbm_bytes": float(r.hbm), "hbm_share": float(r.hbm / node_bytes), "filler_bytes": float(r.filler),
                 "filler_share": float(r.filler / node_bytes)}
 
-    return {"groups": groups, "wrong": wrong, "chip_blocks": chip_bytes / b, "burst_blocks": float(burst),
+    return {"groups": groups, "wrong": wrong, "chip_blocks": -(-chip_bytes // b), "burst_blocks": float(burst),
             "node_bytes": node_bytes, "stretches": stretches, "snapshot": worst(AVERAGE), "time": worst(TIME_HELD)}
 
 
