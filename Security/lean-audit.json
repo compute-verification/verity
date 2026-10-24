@@ -16923,6 +16923,69 @@
     "Pouw.SecurityProofs.NCP.TTNCPUWitness"
    ]
   },
+  "Definitions.Pouw.H1Zy.Chain": {
+   "digest": "5ca72735111a110355dff79d3690b56203b6c65b40bfa022bf8803bf2958ae40",
+   "definitions": {
+    "Pouw.H1Zy.LaneNoise": "a5afb702cc555caf1ec84c56f007a74b386f50c02ab5bf152ca4ce88842bafa9",
+    "Pouw.H1Zy.LaneNoise.coin": "0f427104cbbddb953e049ab237b6212d8937bb7ad24e9fc4aff52db7504526c8",
+    "Pouw.H1Zy.LaneNoise.digit": "4093b7f8aa60153cb545d770713a8c0b5cb0afee8d84e0fdbc2ec577e5c1b8da",
+    "Pouw.H1Zy.LaneNoise.dither": "ead95df1e0ed27955ebac3192b18fc49f161dd3b4320f575c2b452fd3f399d7f",
+    "Pouw.H1Zy.LaneNoise.key": "f6f60e54664fc326aae0bcaccbaa56703af83fde31a065642e87c2f6588ac907",
+    "Pouw.H1Zy.LaneNoise.u": "804ad7dadbcfdd41665ceb1b57edbbcf558ed76dd23c3f548dd21c22edc89f3e",
+    "Pouw.H1Zy.SeedIn": "44f860fa03060e3a00167e30c4ee02288c00e1ac4a57f92176beb57a5d80ad2f",
+    "Pouw.H1Zy.SeedIn.position": "4e5065cfacc018730ba69aabfee0e49e1556ca6a64e8e984a46cbc6752a36413",
+    "Pouw.H1Zy.SeedIn.roots": "e29720bdd06a9449b684b7004fbe84c85ca870e782411e3b9ede28d859a219b6",
+    "Pouw.H1Zy.SeedIn.salt": "228fccb53239f969d54d4a6b9ce9c736c1e05a4f3b10f133ffe1fc46f76e4db9",
+    "Pouw.H1Zy.absorbSet": "240d498f6b5f66896616ea45f51589d499ee4e3e503a5401063506807531d1f5",
+    "Pouw.H1Zy.blockBit": "78f1fbfe7152ee3958556e59de4e2c4f54b5fd510270eacb76b2902400ac0b04",
+    "Pouw.H1Zy.colBlocks": "3656b081d5135f64c05bd106a2a52c4937bf56cd4a239d9e5a5fdfb54b82992c",
+    "Pouw.H1Zy.colFirst": "281e8f88f2e4def1569a75e20abbd0d24128015cea852a146fef8807a0d095e0",
+    "Pouw.H1Zy.colSlot": "ec30372ab923ce4721e4c355414000436257d6d7d3e4162c4eee07d1012741fd",
+    "Pouw.H1Zy.digitHi": "1c006af7a8e51ec82c6a6b593e533e78c6f65c389c7731d7fb35efe893f1189f",
+    "Pouw.H1Zy.digitLo": "e1d5b9c16fde24547d543fe9e93970f7a4a861b212884725971a3157775986df",
+    "Pouw.H1Zy.digitZ": "a2cbacc56da0880f90c88f0470478de1cc987fefd0cd0d1fbbcdc2faebe00a34",
+    "Pouw.H1Zy.digits": "a136eb8b26b094f4bb3b33ee46bee10d2391e4283db95fd8e193f42abf1b6b46",
+    "Pouw.H1Zy.digits.go": "b2a7c60bf7edbde8dea25b2da3aa25421dec3421178748a87602f54116e774a4",
+    "Pouw.H1Zy.digitsK": "35f7fbcd26f9824bf014f75631b5773c3a63ffa026d2bebe190c250845ee88b9",
+    "Pouw.H1Zy.duoAbsorb": "fbb8bba7e6aaaf3c89a0c8fc91949461c82c020ced867cbec98a818edfed40c4",
+    "Pouw.H1Zy.duoKa": "fd0b7b8ebd8d140b7079a1d113dbd30a9d1a4aa1f118776223f83f71c8f9e1ca",
+    "Pouw.H1Zy.duoKk": "249aebf00d9e02b04a26ea7a3ceb7df374f7c69bcb057f7a8761eece5d8823e0",
+    "Pouw.H1Zy.duoRot": "d9bb8b4c4e87fba24cd9a3e3e09c2d8266561a67c6d5c8d2fe94d0d0677630ac",
+    "Pouw.H1Zy.duoStep": "6eaa5cd52fbf793e831f96e6969d353e321a0b4dbc8953e5bdd35d54c3ed6440",
+    "Pouw.H1Zy.finSets": "ab7d95bc5878ecde5b92c5b37c50856783431f808c468478cb9641b2b9cd5753",
+    "Pouw.H1Zy.fx1Absorb": "632ae0c94433df143b1dd0b8417d50f012c9ef6ce8761bc1eef370f48c421600",
+    "Pouw.H1Zy.fx1Key": "d54175ce6d8f8921a884e2ad5f5035ea03a6fa40430a5f094314f2c24af75ffc",
+    "Pouw.H1Zy.h1Chain": "18564522595186cdf3422e54d1aa3da5b6b4d579d0a3f82b5157fc5c9b7a459d",
+    "Pouw.H1Zy.halvesBytes": "293e8aec8b4c3fc7ccdd508fb94851948f607db7e67c35c21125821abb1d2e30",
+    "Pouw.H1Zy.i8Add": "7205fe99ddbf19cc5b14dd14819937dab48bf82dbeb35271e4f1574f86c0f635",
+    "Pouw.H1Zy.i8AddBit": "4af0815754bc58a98905f328a7890b70a226ca0426b8178a4272ffb144acff8a",
+    "Pouw.H1Zy.i8Neg": "8db464d589d34c7899dceecbad742c49aac887ad2e2b5bf402d650b5e23c1e53",
+    "Pouw.H1Zy.laneNoise": "532282837445456a8b95b351b6b1a1cac932ac530eb81922c22a4d38aaa9f240",
+    "Pouw.H1Zy.low8": "93f75142ed32ccebf620001ccab9b3eccfc83d71a30bfeaca226ee00f7078f8a",
+    "Pouw.H1Zy.mix32": "56fc88abf2290aa66b27aa30715d7598f63858c8fe28a797a56fc8504d74975c",
+    "Pouw.H1Zy.nDigitsOf": "9869ddd03dec2de31a24b26580e85852e58691268871155db00b73e06fdf9e0e",
+    "Pouw.H1Zy.nDigitsOf.go": "917dcd2b181ce5e817c923b9f31c294c5226250dfcd0d9574c975262e64ea9fd",
+    "Pouw.H1Zy.noiseBlock": "8e7097ae29f549496bd5791981111fce93388dc437433caf79113b6bbd191ab3",
+    "Pouw.H1Zy.noiseChain": "0270f1c4e409807adae24f839cd8652d1ac5366e6ae41e7a45fdbf30813cac5c",
+    "Pouw.H1Zy.noiseTag": "6b51fbcbd1e1b5fd8c797f91161b7717f308f00dfb1776252a83607506b061ba",
+    "Pouw.H1Zy.receiptTag": "7c969714eaa3e9deb6e19382b6050a28fef31a001c018d46e9936ccc228e69f8",
+    "Pouw.H1Zy.resAdd": "5c8e772ecae18a1af655ca17e587f43c2c5c52933b13210f27f5945a2154d6d4",
+    "Pouw.H1Zy.rowBlocks": "913fad74c8fec650d3bc121a3deab1f03406099bd46e79f8082922cd07d3ee31",
+    "Pouw.H1Zy.rowFirst": "95e3b65e8b3f72aaf97fb8b845f679fe55e714969ae662df3c8278fa8be0bf68",
+    "Pouw.H1Zy.rowSlot": "7e948a45daa665ab3eb7bb3f53428db0b23894d760bfdfc0b829d9b3e4cf8f1c",
+    "Pouw.H1Zy.seedJ": "64784a8364d19b842eefbaf846289540d85439419aa6a09dce53987b8dee7a9a",
+    "Pouw.H1Zy.seedTag": "fbb506e5c5631331caaea6495701708d27a20592119ff27dddf0d48e890aaf98",
+    "Pouw.H1Zy.segDot": "f81f70433efef0197e3f67dfe10d66e403af26abf4041eee45f1973e0a013f67",
+    "Pouw.H1Zy.segStep": "aab36d8ff1a0c5f41985aa93c545aca70bce7938d65c91f3d0432c36c899d34c",
+    "Pouw.H1Zy.sigmaR": "145b2cc459c1f247a18cb072c8d6cdcac09bce908f35e325f8426ca0a0d97711",
+    "Pouw.H1Zy.streamBit": "ad9a6172e9dc8ee31ec9fbd71cb9a10dc7ed182c2eb20e977f59f62af657d0f3",
+    "Pouw.H1Zy.streamVal": "64ae133e775c2c23463675f99736e9be723fa613d6af352b6da2951599df5365",
+    "Pouw.H1Zy.tagged": "24e762e8307b8c07a6e18613ac902c45d307b7f68c34fcd9bda108138e0f8a3e",
+    "Pouw.H1Zy.u129": "1eb85f908b761723dc12ed29f65a30d87e3ff4c478baa525413deb9c2e286e6a",
+    "Pouw.H1Zy.xinFinal": "07e497f894b718adf7a786568e9e8fc1028ad2d84343acb6877a619292edf788"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
+  },
   "Definitions.Pouw.H1Zy.Combine": {
    "digest": "21a1a26fd8cb8a756f8d60fb927663f01d672c80ae0dd6a93cf3e84c9d3b5644",
    "definitions": {
@@ -16966,7 +17029,7 @@
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "Definitions.Pouw.H1Zy.Lane": {
-   "digest": "84da35836e5b85e509886c522948375707a41154d1b8346aa72cd517a3d697f0",
+   "digest": "491695af3d0ed7f5121cdf48e0512415f0918c59c96622440969ae34ccf7f742",
    "definitions": {
     "Pouw.H1Zy.LaneIn": "ef4dc3d4eb6f50272a505c673be29de6319e2fa5dd831e6a7a2f57bc67255a00",
     "Pouw.H1Zy.LaneIn.a": "944b954d2bf35fa360bf062b41dcd80f1ab2c4cdea8b3e29e8f778c353866d27",
@@ -16980,6 +17043,7 @@
     "Pouw.H1Zy.LaneIn.yr": "25dd1af6feff1601badb393ce82460054f681fda6d76e63bb37acedd0c60b490",
     "Pouw.H1Zy.LaneIn.zr": "285e881b63955aa13834d3ac9e3df7fddc20dae345c9720fcae7fd2c07d5d3a1",
     "Pouw.H1Zy.bitsVal": "54aeabe8ad08d70fca476c994afb4ec9ae63a62d2e0990703d8fb7e8c3f2ebe6",
+    "Pouw.H1Zy.codeAt": "9ae505de468a92a68a17587dd346488e043099543cfd0a599c294dfba7bdfcb7",
     "Pouw.H1Zy.laneCol": "b1130b4a99c6a853609854e201000a1a820d4034f92b642a4fd620ead6830c0a",
     "Pouw.H1Zy.laneRow": "5fad2f81a58fbcfc56f7807be8b09e05720b6a16c2fef0e8f8978a48bab59fa3",
     "Pouw.H1Zy.mask32": "28c0954707c87c79d12cfb87d5f9993ecd50cb2c2bbf93514559e5623eee2c2c",
@@ -17021,6 +17085,24 @@
     "Pouw.H1Zy.stepColSum": "f2d65589f17204bc882f93950fbd4b92967f0c4a8c148859e5bbbd24dd643210",
     "Pouw.H1Zy.zyCellBits": "fd3e79787f40697201bf61a72d5f034a27cfedc405d17b6bb13c2e3747bba2eb",
     "Pouw.H1Zy.zyCheckBits": "b5e7e84924406d9a593798a9276df65537f408cb2c7db8032311515479067cbb"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
+  },
+  "Definitions.Pouw.H1Zy.LaneChunk": {
+   "digest": "60598e684f30dc9f14438a54ae4b8173d730ba4b1fa33d480be6e282ad83e50c",
+   "definitions": {
+    "Pouw.H1Zy.ChainSt": "fcbb227a072838746f90729368c282ac81875657d6ecadd42f124615efd27fda",
+    "Pouw.H1Zy.ChainSt.res": "0bafae8f636b62ebfe297984dce2d7dcd8223ec2efb739ad0ea2e12cbeac8d25",
+    "Pouw.H1Zy.ChainSt.state": "e42134bdc6f515ce769b9662601f9266ccd0d231d0450da7d18b01618c874930",
+    "Pouw.H1Zy.ChainSt.t": "09e9df7545ad780790fafc7baf1ace2749e41cdf5ef7dc1d975417f4e8b5062d",
+    "Pouw.H1Zy.ChainSt.words": "836803d9b4aee506ddba6d8e73738f6465d60be7103b0e1d8cd86d61c1aaf8b3",
+    "Pouw.H1Zy.ChainSteps": "b9c640f23f5f5296ae5f8e8d844956005920b4242770039acf6ca4f2125eb844",
+    "Pouw.H1Zy.ChainSteps.fin": "6fd0796e73696b040e1a1b75c132de019498218b270cd7e0d0b37054266c16e1",
+    "Pouw.H1Zy.ChainSteps.init": "d26920e1b7297f69ea728db75ab9ff12ca4f962ff2a09aa6f34067889ed26674",
+    "Pouw.H1Zy.ChainSteps.run": "d23f8cfefd67830799644d075b976dbe70152f77160376f050c44d6db8e9097f",
+    "Pouw.H1Zy.ChainSteps.seg": "9028057e820d530b9876c613254eea7d4313011b638dbc5772e6e487202d1f01",
+    "Pouw.H1Zy.chainOf": "b00a388f1c656a80b43f16a5d675670f045114265ce2d2b3d301db7665b0e33b",
+    "Pouw.H1Zy.segOf": "11f541a9affa6140cf4d39d7c5d5ef94e37dfe50d6f9f18b2506a05d63f82d51"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
@@ -18907,6 +18989,44 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
    ]
+  },
+  "Definitions.Pouw.PearlC.Sha512": {
+   "digest": "c3621a8977ea4284c4b8fa2c37c5de9738421a48bdc752468f5c9d89ed2f101c",
+   "definitions": {
+    "Pouw.PearlC.Sha512.IV": "93e747f83d3dd44161bb1cdaaeccc7f503b638d327434dc8a9aa126465ec0b9e",
+    "Pouw.PearlC.Sha512.K": "6e21fb598815038e3c7ae44dd9fde56d671ac8e63e9a864bb7d5abe3f72eaae6",
+    "Pouw.PearlC.Sha512.Regs": "0aa9cddfe6c5eb7491597ba80ba5a83a43ed9d12daebf9901185109f98d449bc",
+    "Pouw.PearlC.Sha512.Regs.a": "0498618d34594fd5903e880c82b1d54bfc58f4c381c7dfe5db5caee8c0694a8b",
+    "Pouw.PearlC.Sha512.Regs.b": "d1d4b71d193325e8ea425801745454f84f87af14720266dd66e9f7abb57ccf3c",
+    "Pouw.PearlC.Sha512.Regs.c": "0011e31af8b8129c56c122c6df0a3b414e2e73a690977101c0b8e51f976f2826",
+    "Pouw.PearlC.Sha512.Regs.d": "35aa64cb0ea7a3afa5305c8cb3b3fc377b4dd7a52bed8ae8360831de794aae01",
+    "Pouw.PearlC.Sha512.Regs.e": "a3f45bb20e06466bc63ab1beabae6c8d5ee761e31331fad80a81519e9c89a499",
+    "Pouw.PearlC.Sha512.Regs.f": "78be7231bbaa508fa7bc62b16baf674d245988dda8fb9a80d48fbed27c4b1331",
+    "Pouw.PearlC.Sha512.Regs.g": "5583e56db868703df6583b05a949ec5d8d21b27be5d432887ffe96d70c448663",
+    "Pouw.PearlC.Sha512.Regs.h": "993a48457de01dee4bc2bb69ab7ca7706f1c7d855197d0c698a443204ffba449",
+    "Pouw.PearlC.Sha512.add": "fdb76dba8b0e780a11d451b8a9ec8405233a9d3beb7c852c77c4c0302fb251d1",
+    "Pouw.PearlC.Sha512.ascii": "807514082ab9fdc1151612c61e9623c8993f71281e5b33e830df3174ba3f18cf",
+    "Pouw.PearlC.Sha512.beBytes": "98ecba9042be90fab131f6498b7d38927929eceef71d832b627facceca2d5455",
+    "Pouw.PearlC.Sha512.beNat": "a16d90ac2c25c894ac182402eae0273c7a09685b051f2bda3eda84310572e0e4",
+    "Pouw.PearlC.Sha512.blockWords": "f67041d019dbcd0a8a301e9d47e31026ecc53bc91c379fb41c21c07e22eb0d56",
+    "Pouw.PearlC.Sha512.blocks": "e44df7a27d717633db54ce7a848721eaf1879fb138052f937c79f2d07b9d82e0",
+    "Pouw.PearlC.Sha512.bsig0": "233747ce56526e112d0ffbb715a94b6e4f6152a926d6b534f09a975486f8c8fd",
+    "Pouw.PearlC.Sha512.bsig1": "acf990e395ea7bb37982b47b5b90c0bce98462b3894f6ecf694af7ad02d9b982",
+    "Pouw.PearlC.Sha512.ch": "dde5d81fb3ce9e451f071a1946b977e5e20d57598c929b401775885f9583d126",
+    "Pouw.PearlC.Sha512.chunks": "97b7eb1f651049e2eb41d69a2a084f520f68bb18e1ffae241698bacdba556a24",
+    "Pouw.PearlC.Sha512.compl": "a6ee31f98e90cac73416a58bb78c4b617a4f42d7b58053988d6323f6199044d5",
+    "Pouw.PearlC.Sha512.compress": "13e04134178da8789df44b7646af7cbdfb6a8cf1ac3284690dc888f00e1fe92e",
+    "Pouw.PearlC.Sha512.digest": "ec3cf409c94f412a906e130ccdaabe29be2ee61e717298c462dfc631b3dbb9c9",
+    "Pouw.PearlC.Sha512.maj": "2473a4d47bcaf3e23c7de354a5c80e5264d9e71975cada1de6cba6f0a7639350",
+    "Pouw.PearlC.Sha512.pad": "e4f5df15d705902375ee1e49f5a9254c4bee56a059a30b8329b822f9e59865ed",
+    "Pouw.PearlC.Sha512.padTo": "504608fcfbc60bc3da59e2491b0bbf881cd6c39bc68c9b1e33649894435e9844",
+    "Pouw.PearlC.Sha512.rotr": "bf0f4ec487b9dee5cb9cd889cc7acd35a54d467961611f7fb0fc9ce28ebcef2c",
+    "Pouw.PearlC.Sha512.round": "63841b23ecf0b18f932f434c1f3fac1e740874a3bf9ba4e23bb4f21c62a1e617",
+    "Pouw.PearlC.Sha512.schedule": "0af829ddce84ac65b160c8632aef75cbb1f06b77a11e9d9eef4f49036f92e854",
+    "Pouw.PearlC.Sha512.ssig0": "0bf48aa35b6f2c55c3c0ff981d8c614c8325442bbd60d88299dcb36ba0baafce",
+    "Pouw.PearlC.Sha512.ssig1": "83559e2ac05eda653e1c0059e5939d92fb58105db8b7676f36c02405157f2226"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "Definitions.Pouw.PearlC.Skip": {
    "digest": "4257c8d128cf301d8637ba0f0738eeea3eadc8e25db7197090339cba6dc73fe0",
@@ -28373,9 +28493,9 @@
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "Proofs.Accounting.TS.Session.Lanes.Guarantees": {
-   "digest": "af968b0a59d9fa70bd81df03af3090dd67462dbca7a48cff54ed1315dac74ea4",
+   "digest": "6c23df2ae7af9bcdfc950b379a79e630bba5ebd07f9e67a3b0c4e72fdbcaa339",
    "definitions": {
-    "Accounting.Guarantees.TS.LeafLanesSound": "cde934c9a491016073d46dbcd9e51471ec6ebe03ff8692bb9decdb493e523af6"
+    "Accounting.Guarantees.TS.LeafLanesSound": "b00fdffc80fbce2c0ad6326d9663a0bf4bc72dfd7fd67ce812343f9fe3b43ef0"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
@@ -28387,12 +28507,13 @@
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "Proofs.Accounting.TS.Session.Lanes.Lane": {
-   "digest": "bd6ff7b73a87e3d0216177ccd2d8aea0adc15e89b0dedcd7016cf90364165908",
+   "digest": "5cca8bffc791f4ca72e10bd7c6f96811e9b7dbb3b126abff0b63f2e86c988f8a",
    "definitions": {
     "Accounting.TS.Lanes.LaneLowers": "c271726066ad27311cf03104d975be1a52eb712094a34313071bb2e9f062385a",
     "Accounting.TS.Lanes.dqOf": "37bb13b06dcf62b41708572ee4391b3e097e9c422506590562836dd3bb0c92e3",
     "Accounting.TS.Lanes.dqOf._sparseCasesOn_1": "e1c9afe0e684b261efdfd9e3de2648015380c3f5b1f57fe3fe0e7648ac534ac0",
     "Accounting.TS.Lanes.dqOf._sparseCasesOn_2": "555dfcd6d92d551e2c97de9184c086f740841ccc067d6e2c8f2b51f4e23a9eba",
+    "Accounting.TS.Lanes.laneChain": "85495baa98f038d021751f99101c13036cf96614432ed184cc3c9d200374abfa",
     "Accounting.TS.Lanes.laneIn": "decf805e2852beb6535b10f4298068ddb72b1de367ecd8bb79a4b48f578f8876",
     "Accounting.TS.Lanes.partOf": "46eebd844cc82479ab23747b04997d5dc6a99f66f4b75efbc2b433d091846d98"
    },
