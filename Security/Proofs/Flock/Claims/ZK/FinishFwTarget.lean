@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.ZK.FinishFwRep
+import Flock.Firewall.Drive
 
 /-!
 # A deployed rep's ring-switch target is the opening's
@@ -125,6 +126,7 @@ theorem driveExtras_get (st : _root_.Flock.Stmt) (p0 p1 : Array _root_.Flock.F12
   rw [← Array.getElem!_toList, hl]
   exact h
 
+set_option maxHeartbeats 1000000 in
 /-- **A deployed rep's ring-switch target is the opening's**: where `repFwC`'s zerocheck, lincheck and ring switch on
 table `j`'s rep `r`, answered by the opened coins from the rep's base at the packed table of the witness's trace (`hg`),
 return with extra claims at the region points of the link (`Drive.extras`, `hxsz`, `hxs`), the ring switch's `T` is
