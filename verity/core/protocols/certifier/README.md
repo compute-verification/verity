@@ -37,7 +37,8 @@ A spec-level reference for network accounting's timing channel:
   `advice.Advice` and N2's ingress part, each request's end on the ingress link and each window's request frames), and
   the ingress head's counts to the advice: each release eligible under the declared sync after its request's frames,
   and each window's ingress total the advice's. Carry-over between windows is the advice's. With the advice fixed the
-  counts are determined, so the egress timing carries at most the advice's bits (`PROTOCOL.md`, "An advised link").
+  counts are determined, so the egress timing carries at most the advice's bits (`advised.bits`: v0's, and each
+  request's ingress end until IO-TIE ties it; `PROTOCOL.md`, "An advised link").
   An egress end with no profile that is neither served nor advised gets no verdict (`ValueError`, failing closed);
 - the capacity counts;
 - the calibration of honest runs;

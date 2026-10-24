@@ -362,7 +362,7 @@ public in v0 and charged by `advice.bits`) and N2's ingress part, which v0 leave
   - of N2's ingress part: `ingress_end[j]`, the request frames on the ingress link up to and including request j's
     last (v0 lists requests in order of their first row, not their arrival), and `received[w]`, the request frames
     the ingress certifier releases in window w. Construction refuses ends that aren't one distinct positive u32 a
-    request, or whose last isn't Σ `received`.
+    request, or whose last isn't Σ `received`. `advised.bits` charges the ends ("The charge" below).
 - **The window's view** (`advised.view`), computed by the verifier in the clear from the advice and the declared
   syncs, is the unit's public input:
   - `released[t]`, the frames the advice releases in bucket t, at most R (more refuses the advice);
@@ -398,13 +398,18 @@ public in v0 and charged by `advice.bits`) and N2's ingress part, which v0 leave
 - **Soundness: with the advice fixed, the counts are determined.** On an accepted window w the egress counts are
   `view(A, w).released`, a function of A's `release` alone: the ingress counts, the ingress part and the syncs only
   accept or refuse and change no count. So on a link whose every window is accepted, all naming one advice, the egress
-  timing of accepted runs carries at most `advice.bits` (the accepted-runs bound's A_c) beside the log2 #Σ_sync bits a
-  window the sync charge counts, and nothing else is left free: not the frames' timing within the counts, not the
-  ingress timing, not when the server wrote. The ingress part is determined, `received` by the unit itself and
-  `ingress_end` by the tie of each request's body to its ingress frames (IO-TIE's); until that tie lands,
-  `ingress_end` is the prover's, at most bitlen(Σ `received`) bits a request, which `advice.bits` doesn't charge. The
-  advice is held to the ingress head: no frame is released before the ingress certifier released its request's
-  frames, δ + ⌊λ/ρ⌋ earlier, under the declared sync.
+  timing of accepted runs carries at most the advised link's advice bits (`advised.bits`, the accepted-runs bound's
+  A_c) beside the log2 #Σ_sync bits a window the sync charge counts, and nothing else is left free: not the frames'
+  timing within the counts, not the ingress timing, not when the server wrote. The advice is held to the ingress head:
+  no frame is released before the ingress certifier released its request's frames, δ + ⌊λ/ρ⌋ earlier, under the
+  declared sync.
+- **The charge** (`advised.bits_by_window`, summing to `advised.total_bits`): v0's (`advice.bits_by_window`), and the
+  ingress part's. The unit holds `received` to the certified ingress head, so it costs nothing. `ingress_end` is the
+  prover's until IO-TIE ties each request's body to its ingress frames, so it is charged bitlen(Σ `received`) bits a
+  request (`advised.ingress_bits`), to the earliest window whose floor reads it: the window of the earliest of its
+  outputs' floor buckets, which may be before its first release's. Deriving the ends from the certified ingress record
+  instead (CERT-VARLEN's client framing marks a request's last frame, which the certifier signs) would charge them
+  nothing, but the floor would then be computed inside the unit from those marks, which are witness.
 - **Premises** of "an honest advised link is accepted", on which N2's claim doesn't rest:
   - `release` is the certified egress record's: each kept output is one egress frame, in the link's canonical order,
     which IO-TIE fixes (within a bucket the order doesn't change the counts);

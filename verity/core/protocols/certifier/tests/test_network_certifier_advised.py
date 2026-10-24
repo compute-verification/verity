@@ -4,7 +4,7 @@ prefill, prefix-cache hits and their sources, a preemption and its resume, the a
 scheduled out of their arrival order, frames released after they're handed and responses spanning windows): honest
 traffic accepted in every window, salted or not, and an advice whose output length is one off, which misses a request
 or moves a release bucket, a response released before its request, a window's ingress total off, and extra egress
-each refused."""
+each refused; and the advice's charge, v0's bits and the ingress ends'."""
 
 import itertools
 import json
@@ -373,6 +373,28 @@ def test_the_row_past_a_stop_is_accepted_and_hands_no_frame():
     for t in range(T):
         extra = [n + (u == t) for u, n in enumerate(v.released)]
         assert not AD.reference(T, RIN, 0, ingress, extra, v.released, v.floor, v.received)
+
+
+def test_the_ingress_ends_are_charged_beside_advice_v0s_bits():
+    """`advised.bits` charges v0's bits and bitlen(Σ received) bits for each request's ingress end, and nothing for
+    `received`, which the unit holds to the ingress head; the windows' charges sum to `total_bits`. An end goes to the
+    earliest window whose floor reads it, which may precede its request's first release: here a release at bucket T
+    with δ = 1 needs the request's frames by bucket T − 1, so window 0 reads its end, while v0 charges window 1."""
+    for seed in SEEDS:
+        link = serve(seed).link
+        width = sum(link.received).bit_length()
+        assert AD.ingress_bits(link) == len(link.advice.requests) * width > 0
+        assert AD.total_bits(link) == ADV.total_bits(link.advice) + AD.ingress_bits(link)
+        by, v0 = AD.bits_by_window(link, T, SYNCS), ADV.bits_by_window(link.advice, T)
+        assert sum(by.values()) == AD.total_bits(link)
+        assert all(by.get(w, 0) >= n for w, n in v0.items())
+        assert sum(by.values()) - sum(v0.values()) == AD.ingress_bits(link)
+        assert [AD.bits(link, w, T, SYNCS) for w in range(WINDOWS)] == [by.get(w, 0) for w in range(WINDOWS)]
+    a = ADV.Advice((ADV.RequestAdvice("a", 4, 1, "eos"),), (ADV.StepAdvice((ADV.Row(0, "prefill", 0, 4),)),), (T,))
+    link = AD.LinkAdvice(a, (2,), (2, 0))
+    assert ADV.bits_by_window(a, T) == {1: ADV.total_bits(a)}
+    assert AD.bits_by_window(link, T, [ClockSync(1, 1)] * 2) == {0: 2, 1: ADV.total_bits(a)}
+    assert AD.view(link, 0, T, R, [ClockSync(1, 1)] * 2).floor[T - 1] == 2
 
 
 def test_every_window_is_held_to_one_advice(tmp_path):

@@ -53,13 +53,14 @@ certifier released before window w.
 or refuse, and change no count. Each window reports the advice it read (`digest`, of the advice's canonical encoding
 and the ingress part: its `advice` output), and the network verdict refuses a window that names another than the first
 accepted window's. So on a link whose every window is accepted, the egress counts of all its windows are a function of
-one advice, and the egress timing channel of accepted runs carries at most the advice's bits (`advice.bits`, the
-accepted-runs bound's A_c), beside the log2 #Σ_sync bits a window the sync charge already counts. Nothing else is left
-free: not the frames, not the ingress timing, not when the server actually wrote. The ingress part is determined, by
-the unit itself (`received`) and by the tie of each request's body to its ingress frames (`ingress_end`, IO-TIE's);
-until that tie lands, `ingress_end` is the prover's, at most bitlen(Σ received) bits a request, which `advice.bits`
-doesn't charge. And the advice is held to the ingress head: no frame is released before its request's frames were
-released by the ingress certifier, δ + ⌊λ/ρ⌋ earlier.
+one advice, and the egress timing channel of accepted runs carries at most the advised link's advice bits (`bits`, the
+accepted-runs bound's A_c: `advice.bits` and the ingress part's), beside the log2 #Σ_sync bits a window the sync charge
+already counts. Nothing else is left free: not the frames, not the ingress timing, not when the server actually wrote.
+Of the ingress part, the unit holds `received` to the certified ingress head, so it is charged nothing, and
+`ingress_end` is the prover's until IO-TIE ties each request's body to its ingress frames, so `bits` charges it:
+bitlen(Σ received) bits a request (`ingress_bits`), to the earliest window whose floor reads it. And the advice is held
+to the ingress head: no frame is released before its request's frames were released by the ingress certifier,
+δ + ⌊λ/ρ⌋ earlier.
 
 **Premises** of "an honest advised link is accepted", which N2's claim doesn't rest on: `release` is the certified
 egress record's (each kept output one egress frame, in the link's canonical order, which IO-TIE fixes); the releases
@@ -88,6 +89,7 @@ from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.types import Array, Tuple
+from verity.core.protocols.certifier import advice as ADV
 from verity.core.protocols.certifier.advice import Advice, MalformedAdvice, encode, outputs
 from verity.core.protocols.certifier.head_check import (BIT, BYTE, _coll, _Consts, _part, _refs, ands, gate_of,
                                                         pinned_digest)
@@ -155,6 +157,23 @@ class WindowView:
 
 # --- the reference ----------------------------------------------------------------------------------------------------
 
+def _floor_buckets(link: LinkAdvice, T: int, syncs: Sequence[ClockSync]) -> list[tuple[int, int]]:
+    """(request j, bucket) for each kept output: the bucket by which the link's ingress must have released
+    `ingress_end[j]` request frames, b − δ − ⌊λ·q/p⌋ under the sync of the window that releases it at b."""
+    out = []
+    for o, b in zip(outputs(link.advice), link.advice.release):
+        v = b // T
+        if v >= len(syncs):
+            raise ValueError(f"request {o.request}'s output {o.index} is released in window {v}, which declares no "
+                             "sync")
+        sync = syncs[v]
+        a = b - sync.delta - o.index * sync.rho.denominator // sync.rho.numerator
+        if a < 0:
+            raise ValueError(f"request {o.request}'s output {o.index} is released in bucket {b}, before its request")
+        out.append((o.request, a))
+    return out
+
+
 def view(link: LinkAdvice, window: int, T: int, R: int, syncs: Sequence[ClockSync]) -> WindowView:
     """The unit's public inputs for `window` (the module docstring) at T buckets a window and egress allocation R, from
     the advice and every window's declared sync. Raises `ValueError` on an advice that isn't a `LinkAdvice`, a window
@@ -172,17 +191,9 @@ def view(link: LinkAdvice, window: int, T: int, R: int, syncs: Sequence[ClockSyn
         raise ValueError(f"the advice releases {per[over[0]]} frames in bucket {over[0]}, past the allocation {R}")
     lo, hi = window * T, (window + 1) * T
     floor_at: dict[int, int] = {}
-    for o, b in zip(outputs(link.advice), link.advice.release):
-        v = b // T
-        if v >= len(syncs):
-            raise ValueError(f"request {o.request}'s output {o.index} is released in window {v}, which declares no "
-                             "sync")
-        sync = syncs[v]
-        a = b - sync.delta - o.index * sync.rho.denominator // sync.rho.numerator
-        if a < 0:
-            raise ValueError(f"request {o.request}'s output {o.index} is released in bucket {b}, before its request")
+    for j, a in _floor_buckets(link, T, syncs):
         if a < hi:
-            floor_at[a] = max(floor_at.get(a, 0), link.ingress_end[o.request])
+            floor_at[a] = max(floor_at.get(a, 0), link.ingress_end[j])
     base = sum(link.received[:window])
     g, floor = max((n for a, n in floor_at.items() if a < lo), default=0), []
     for t in range(lo, hi):
@@ -198,6 +209,38 @@ def digest(link: LinkAdvice) -> str:
     body = {"format": DIGEST, "advice": encode(link.advice).hex(), "ingress_end": list(link.ingress_end),
             "received": list(link.received)}
     return hashlib.sha512(canonical_json(body)).hexdigest()
+
+
+def ingress_bits(link: LinkAdvice) -> int:
+    """The bits of N2's ingress part the prover chooses: bitlen(Σ received) for each request's `ingress_end`, until
+    IO-TIE's tie puts the ends in the certified ingress record; none for `received`, which the unit holds to the
+    certified ingress head."""
+    return len(link.ingress_end) * sum(link.received).bit_length()
+
+
+def total_bits(link: LinkAdvice) -> int:
+    """An advised link's advice in bits, its `A_c`: I1's (`advice.total_bits`) and the ingress part's
+    (`ingress_bits`)."""
+    return ADV.total_bits(link.advice) + ingress_bits(link)
+
+
+def bits_by_window(link: LinkAdvice, T: int, syncs: Sequence[ClockSync]) -> dict[int, int]:
+    """The bits charged to each window of T buckets that is charged any: `advice.bits_by_window`'s, and each request's
+    `ingress_end`, bitlen(Σ received) bits, to the earliest window whose floor reads it, the one holding the earliest of
+    its outputs' floor buckets (`view`), which may precede its first release's. The values sum to `total_bits`. Raises
+    `ValueError` where `view` does, on a release in a window with no declared sync or before its request."""
+    charge = dict(ADV.bits_by_window(link.advice, T))
+    width, first = sum(link.received).bit_length(), {}
+    for j, a in _floor_buckets(link, T, syncs):
+        first[j] = min(first.get(j, a), a)
+    for a in first.values():
+        charge[a // T] = charge.get(a // T, 0) + width
+    return dict(sorted(charge.items()))
+
+
+def bits(link: LinkAdvice, window: int, T: int, syncs: Sequence[ClockSync]) -> int:
+    """The advised link's advice bits charged to window `window` of T buckets (`bits_by_window`)."""
+    return bits_by_window(link, T, syncs).get(window, 0)
 
 
 def reference(T: int, RIN: int, OWN: int, ingress: Sequence[int], egress: Sequence[int], released: Sequence[int],
@@ -349,5 +392,6 @@ def size(T: int, RIN: int, OWN: int) -> int:
     return ands(unit(T, RIN, OWN))
 
 
-__all__ = ["AdvisedProfile", "LinkAdvice", "NetworkAdvisedCounts", "PINS", "WindowView", "arguments", "digest",
-           "evaluate", "gate", "reference", "size", "unit", "view"]
+__all__ = ["AdvisedProfile", "LinkAdvice", "NetworkAdvisedCounts", "PINS", "WindowView", "arguments", "bits",
+           "bits_by_window", "digest", "evaluate", "gate", "ingress_bits", "reference", "size", "total_bits", "unit",
+           "view"]
