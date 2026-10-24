@@ -934,8 +934,9 @@ its structure, its outputs, the verifier's coins and draws, and hiding commitmen
   Every form, the link-charged one included, is conditional on `NoOutsideCompute`, statement C in full: no device
   outside the node computes on a registered block or a receipt during the session. Identity is only its links clause:
   a relay prover, a thin node forwarding each coin to a helper that holds the store and computes the receipts, sends no
-  block over the links, so neither Identity nor the links' charge sees it, and only C excludes it. The line's statement takes C as a premise (`LineHeld`, `LineHeldIdentity`, beside `SketchBoundAt`, the
-  receipts' sketch wherever computed), and the line of record says it is conditional on it (`auditor_line.json`'s
+  block over the links, so neither Identity nor the links' charge sees it, and only C excludes it. The line's statement
+  takes C as a premise (`LineHeld`, `LineHeldIdentity`, beside `SketchBoundAt`, the receipts' sketch wherever
+  computed), and the line of record says it is conditional on it (`auditor_line.json`'s
   `conditional_on`, `credit.md`; the `memory-line-of-record` label requires the field) until certifiers cover the gate
   node's boundary (`certifier-coverage`) and certify that nothing but the verifier's messages entered the node over the
   credited span. `auditor_line.py --boundary`, off by default, refuses a session's credit when the certifiers' records
