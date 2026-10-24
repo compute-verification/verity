@@ -28,8 +28,8 @@ from typing import Any
 import numpy as np
 
 from tests.properties import glm53_tp8_allreduce_capture_gpu as X
-from verity_vllm.program.registry import tp_allreduce as T
-from verity_vllm.program.registry import tp_allreduce_check as K
+from verity.ml.definitions.registry import tp_allreduce as T
+from verity.ml.definitions.registry import tp_allreduce_check as K
 
 OUT = "glm53_multimem_replay.json"
 #: vectors per Boolean evaluation, so a vector's every wire over them stays a few hundred MB
@@ -90,7 +90,7 @@ def boolean_rows(parts: np.ndarray, trees, ftz: bool) -> np.ndarray:
     """(WORLD, SIZE) words through `AllReduceMultimemVector_v2`, one instance per vector of each run of one tree."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation import bits as BS
-    from verity_vllm.program.registry import boolean_tp_allreduce as BA
+    from verity.ml.definitions.registry import boolean_tp_allreduce as BA
 
     W, size = parts.shape
     V = T.MULTIMEM_VECTOR

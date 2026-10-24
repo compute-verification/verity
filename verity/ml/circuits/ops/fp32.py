@@ -11,7 +11,7 @@ on x86-64 (an operand's NaN quieted, `0xFFC00000` for an invalid operation) and 
 with every NaN result the GPU's `F32_NAN_PTX`, and equal to it on every other word.  A registered id denotes one function, so
 the GPU's NaN came as new ids (as `verity.ml.circuits.ops.prims.AmpereBF16TcDot16_v2` did); Programs move to `_v2` at a re-baseline.
 
-Provenance.  The `_v1` primitives are the definitions the vLLM integration registered in `verity_vllm.program.registry.prims`
+Provenance.  The `_v1` primitives are the definitions the vLLM integration registered in `verity.ml.definitions.registry.prims`
 (same ids, signatures, conformance statuses and evaluators), which re-exports them from here.  Its stored Programs cite these
 ids.
 """

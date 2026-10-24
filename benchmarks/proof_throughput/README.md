@@ -101,7 +101,7 @@ busy.
 | `bf16-k6144` | `GemmCoordinate_v2{K=6144,DOT=HopperBF16WgmmaDot16_v1}` | lm_head, indexer `wk_weights_proj`, MoE router | 1024 |
 | `fp8-coord-k6144`, `-k2048`, `-k256` | `ScaledMmFp8BlockCoordinate_v2{K,G=128}` | the block-scaled FP8 GEMMs | declared |
 
-The bf16 sites are those of `integrations/vllm/verity_vllm/program/registry/bf16_gemm_check.py`. The cap is the largest
+The bf16 sites are those of `verity/ml/definitions/registry/bf16_gemm_check.py`. The cap is the largest
 power of two of coordinates one statement holds at the hill-climb's 2^35 witness bits (each coordinate one 2^25-bit block
 at K = 6144). The FP8 coordinates are declared with their profile; the point job stages class-statement workloads only, and
 staging them through `benchmarks/served_units/stage.py` is the next workload's work.

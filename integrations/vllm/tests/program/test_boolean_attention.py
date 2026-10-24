@@ -20,8 +20,8 @@ from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple
-from verity_vllm.program import boolean as SW
-from verity_vllm.program.registry import boolean_attention as BAt
+from verity.ml.definitions import boolean as SW
+from verity.ml.definitions.registry import boolean_attention as BAt
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {

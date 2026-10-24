@@ -242,7 +242,7 @@ def test_generated_reads_are_lean_buildv2():
 
 
 def test_flat_units_are_ir_lowers_netlists():
-    pytest.importorskip("verity_vllm.program.registry.prims")
+    pytest.importorskip("verity.ml.definitions.registry.prims")
     from verity_flock import ir_lower as IL
     from verity_numerical.bench import lowerings, templates as TM
 

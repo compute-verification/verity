@@ -675,7 +675,7 @@ def _bf16_inputs(program: Program, seed: int, tokens: dict[int, int] | None = No
 def serve() -> tuple[Program, R.Schedule, dict[int, int]]:
     """`b1.Serve` at TINY: a prompt of three tokens, prefilled at step 0 (the root's first 22 Calls: three embeddings, two
     layers and the final norm and pick), then two decode steps of 8 Calls each, the weights registered."""
-    from verity_vllm.program.registry import b1
+    from verity.ml.definitions.registry import b1
 
     program = Program(bind(b1.Serve, C=TINY, LP=3, STEPS=2), registered=("weights",))
     return program, R.Schedule.by_calls(program, [0, 22, 30]), _bf16_inputs(program, 0, {0: 5, 1: 17, 2: 42})
@@ -683,7 +683,7 @@ def serve() -> tuple[Program, R.Schedule, dict[int, int]]:
 
 def rmsnorm() -> tuple[Program, R.Schedule, dict[int, int]]:
     """`b1.RMSNormFusedCudaV1` at N = 64 with its weight registered, its 138 Calls in three steps."""
-    from verity_vllm.program.registry import b1
+    from verity.ml.definitions.registry import b1
 
     program = Program(bind(b1.RMSNormFusedCudaV1, N=64, EPS=1e-5), registered=("w",))
     return program, R.Schedule.by_calls(program, [0, 46, 92]), _bf16_inputs(program, 1)
