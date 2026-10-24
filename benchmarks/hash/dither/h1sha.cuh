@@ -19,10 +19,69 @@ __device__ constexpr u64 IVC[8] = WT_SHA512_IV;
 
 __device__ __forceinline__ u64 rotr(u64 x, int n) { return (x >> n) | (x << (64 - n)); }
 
+// H1S_ROT (a mask) takes SHA-512's rotations off the funnel shifter (SHF.W, the ALU's quarter-rate heavy pipe on
+// sm_120, which the noise blocks' rounds keep busy): bit 0 sigma0's rotation by 8 as two byte permutes; bit 1 the
+// schedule's sigma0 and sigma1 (rotations and shifts) as 32 x 32 -> 64-bit multiplies by powers of two on the FMA pipe
+// (x 2^m is {x << m, x >> (32 - m)}: each half's two pieces of a rotation in one IMAD.WIDE); bit 2 Sigma1's, bit 3
+// Sigma0's. Every form is the same function.
+#ifndef H1S_ROT
+#define H1S_ROT 0
+#endif
+template <int M>
+__device__ __forceinline__ void mulw(u32 x, u32& lo, u32& hi) {
+  asm("{\n\t.reg .u64 t;\n\tmul.wide.u32 t, %2, %3;\n\tmov.b64 {%0, %1}, t;\n\t}" : "=r"(lo), "=r"(hi) : "r"(x), "n"(1u << M));
+}
+template <int N>
+__device__ __forceinline__ u64 rotr_m(u64 x) {
+  static_assert(N % 32 != 0, "a rotation by 32 is the halves' swap");
+  u32 lo = (u32)x, hi = (u32)(x >> 32);
+  if constexpr (N > 32) {
+    const u32 t = lo;
+    lo = hi;
+    hi = t;
+  }
+  u32 al, ah, bl, bh;
+  mulw<32 - N % 32>(lo, al, ah);
+  mulw<32 - N % 32>(hi, bl, bh);
+  return ((u64)(bh | al) << 32) | (ah | bl);
+}
+template <int N>
+__device__ __forceinline__ u64 shr_m(u64 x) {
+  static_assert(N > 0 && N < 32, "a shift below 32");
+  u32 al, ah, bl, bh;
+  mulw<32 - N>((u32)x, al, ah);
+  mulw<32 - N>((u32)(x >> 32), bl, bh);
+  return ((u64)bh << 32) | (ah | bl);
+}
+__device__ __forceinline__ u64 rotr8_p(u64 x) {
+  const u32 lo = (u32)x, hi = (u32)(x >> 32);
+  return ((u64)__byte_perm(hi, lo, 0x4321) << 32) | __byte_perm(lo, hi, 0x4321);
+}
+
+#if H1S_ROT & 8
+__device__ __forceinline__ u64 S0(u64 a) { return rotr_m<28>(a) ^ rotr_m<34>(a) ^ rotr_m<39>(a); }
+#else
 __device__ __forceinline__ u64 S0(u64 a) { return rotr(a, 28) ^ rotr(a, 34) ^ rotr(a, 39); }
+#endif
+#if H1S_ROT & 4
+__device__ __forceinline__ u64 S1(u64 e) { return rotr_m<14>(e) ^ rotr_m<18>(e) ^ rotr_m<41>(e); }
+#else
 __device__ __forceinline__ u64 S1(u64 e) { return rotr(e, 14) ^ rotr(e, 18) ^ rotr(e, 41); }
-__device__ __forceinline__ u64 s0(u64 w) { return rotr(w, 1) ^ rotr(w, 8) ^ (w >> 7); }
+#endif
+#if H1S_ROT & 1
+#define H1S_ROT8(w) rotr8_p(w)
+#elif H1S_ROT & 2
+#define H1S_ROT8(w) rotr_m<8>(w)
+#else
+#define H1S_ROT8(w) rotr(w, 8)
+#endif
+#if H1S_ROT & 2
+__device__ __forceinline__ u64 s0(u64 w) { return rotr_m<1>(w) ^ H1S_ROT8(w) ^ shr_m<7>(w); }
+__device__ __forceinline__ u64 s1(u64 w) { return rotr_m<19>(w) ^ rotr_m<61>(w) ^ shr_m<6>(w); }
+#else
+__device__ __forceinline__ u64 s0(u64 w) { return rotr(w, 1) ^ H1S_ROT8(w) ^ (w >> 7); }
 __device__ __forceinline__ u64 s1(u64 w) { return rotr(w, 19) ^ rotr(w, 61) ^ (w >> 6); }
+#endif
 __device__ __forceinline__ u64 chf(u64 e, u64 f, u64 g) { return g ^ (e & (f ^ g)); }
 __device__ __forceinline__ u64 maj(u64 a, u64 b, u64 c) { return (a & b) | (c & (a | b)); }
 
