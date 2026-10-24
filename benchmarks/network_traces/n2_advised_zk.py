@@ -16,7 +16,9 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
   tie is IoTieRequest's verdict, from the verifier's own tie source (`service.LinkWindows.ties`), which the proof
   service doesn't have yet, so the verifier of record refuses every advised link (`advised`, fail closed); here the
   link's tie source is the tests' stand-in (`advised_traffic.StandInTie`) on the link's certified prompts, the
-  verifier's own and never the prover's, so this prices the unit and its proof, not IoTieRequest's.
+  verifier's own and never the prover's, so this prices the unit and its proof, not IoTieRequest's. Its clock
+  source (`service.LinkWindows.clocks`) is the stand-in `advised_traffic.StandInClocks`, the declared syncs as an
+  honest certifier runs them.
 * **A served run's link** (`e2e`, ``--e2e RUN``): network-e2e's output directory of a run on the advice profile
   (``report.json``, the honest rehearsal's records under ``rehearsal/honest``, the endpoint's advice under
   ``endpoint/advice``), N2's link of its honest rehearsal (``served``: T = 60 on both ends, the egress allocation the
@@ -24,10 +26,12 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
   id-request framing (`active.id_request_frames`). Its advice is the Commit windows' I1 advice that the report bound to
   the run and rebuilt from its certified I/O, joined into one (`joined`), its requests in the certified arrival order,
   each kept output released in the bucket the certified I/O says its frame went out, and ``received`` the certified
-  ingress heads' request frames; the tie the same stand-in, on the certified prompts. The link's first ``--windows``
-  windows are proved, by default every one.
+  ingress heads' request frames; the tie the same stand-in, on the certified prompts. Its clock source is the run's
+  certifier's own record of the syncs its shaper ran each window under (`CertifierClocks`, ``proxy.json.gz``'s
+  ``syncs``), never the plan the prover declared; a run without that record is refused. The link's first
+  ``--windows`` windows are proved, by default every one.
 * **The tie** on either link is the stand-in, and the summary says so (``tie``): IoTieRequest is pinned at one size
-  class, `TIE_PINNED`, and neither link's ingress is in it.
+  class, `TIE_PINNED`, and neither link's ingress is in it. The summary's ``clocks`` names the clock source.
 * **Members.** One stream each, over the link's windows (``--members``: some of them): ``honest``, the session's
   advice and records; ``moved``, one kept output's release bucket one later (`advised_traffic.moved`); ``short``, one
   request's output length one short (`advised_traffic.with_output_len`); on the simulated link ``extra``, one frame
@@ -53,6 +57,7 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
 from __future__ import annotations
 
 import argparse
+import gzip
 import importlib.util
 import json
 import os
@@ -62,7 +67,7 @@ import sys
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict, replace
+from dataclasses import asdict, dataclass, replace
 from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
@@ -125,6 +130,31 @@ def advised_refs(lw: LinkWindows, link: AD.LinkAdvice, egress, ingress, syncs=AT
         v = lw._view(w, syncs, link)
         out.append(None if v is None else AD.reference(*lw.advised_key(), i, e, v.released, v.floor, v.received))
     return out
+
+
+@dataclass(frozen=True)
+class CertifierClocks:
+    """The verifier's clock source on a served run (`advised.ClockSource`): the syncs the run's certifier ran its
+    windows under, as its proxy logged them (``proxy.json.gz``'s ``syncs``, its shaper's), for `link` alone. It reads
+    nothing the prover declares (the plan's ``syncs``)."""
+
+    link: str
+    ran: tuple[ClockSync, ...]
+
+    @classmethod
+    def of(cls, run: Path, link: str) -> CertifierClocks:
+        f = run / "proxy.json.gz"
+        if not f.is_file():
+            raise SystemExit(f"{run}: no proxy.json.gz, the certifier's record of the syncs it ran, so no clock source")
+        with gzip.open(f, "rt") as fh:
+            return cls(link, tuple(ClockSync(d, Fraction(r)) for d, r in json.load(fh)["syncs"]))
+
+    def syncs(self, link: str) -> tuple[ClockSync, ...]:
+        return self.ran if link == self.link else ()
+
+    def label(self, declared) -> dict:
+        return {"source": "the certifier's proxy log (proxy.json.gz's syncs, its shaper's)",
+                "ran": [[s.delta, str(s.rho)] for s in self.ran], "as_declared": list(self.ran) == list(declared)}
 
 
 def standin_tie(ingress: GridParams, own: int) -> dict:
@@ -213,7 +243,8 @@ def simulated(seed: int = SEED, shape=SHAPE, own: int = OWN, height: int = 6) ->
             lw = LinkWindows(AT.LINK, shape.egress, AT.SYNC_SET, certifier.public_key(), "n2-advised-zk", session,
                              ingress=shape.ingress, proof_deadline=cs.PROOF_DEADLINE_S,
                              advised=AD.AdvisedProfile(shape.windows, AT.FRAMING, own),
-                             ties=AT.StandInTie(s.certified, AT.LINK, shape.windows))
+                             ties=AT.StandInTie(s.certified, AT.LINK, shape.windows),
+                             clocks=AT.StandInClocks(tuple(AT.SYNCS)))
             ingress = [issuer.certify(r, Direction.INGRESS, shape.ingress, parameters_digest(shape.ingress))
                        for r in s.ingress]
 
@@ -233,7 +264,8 @@ def simulated(seed: int = SEED, shape=SHAPE, own: int = OWN, height: int = 6) ->
     traffic = {"seed": seed, "requests": len(a.requests), "outputs": len(a.release), "steps": len(a.steps),
                "arrive": s.arrive, "received": list(s.link.received), "own": own}
     return SimpleNamespace(lw=lw, session=s, members=members, traffic=traffic, syncs=AT.SYNCS, windows=shape.windows,
-                           egress=shape.egress, ingress=shape.ingress, tie=standin_tie(shape.ingress, own))
+                           egress=shape.egress, ingress=shape.ingress, tie=standin_tie(shape.ingress, own),
+                           clocks={"source": "stand-in", "by": "advised_traffic.StandInClocks: the declared syncs"})
 
 
 def joined(advices: list[ADV.Advice], frames: dict[str, list[int]]) -> ADV.Advice:
@@ -279,10 +311,11 @@ def e2e(run: Path, windows: int = 0) -> SimpleNamespace:
     syncs = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
     framing = tuple(id_request_frames(p, B) for p in range(1, plan["varied"]["prompt_tokens"][1] + 1))
     link_name = dep["links"]["n2"]
+    clocks = CertifierClocks.of(honest, link_name)
     lw = LinkWindows(link_name, setup.egress_params, setup.sync_set, cs.read_public(dep["certifier_key"]),
                      dep["run_id"], bytes.fromhex(dep["session"]), ingress=setup.ingress_params,
                      proof_deadline=cs.PROOF_DEADLINE_S, advised=AD.AdvisedProfile(n, framing, own),
-                     ties=AT.StandInTie(tuple(len(r["prompt"]) for r in io), link_name, n))
+                     ties=AT.StandInTie(tuple(len(r["prompt"]) for r in io), link_name, n), clocks=clocks)
     certified, _ = cs.read_certified(honest / "certified.jsonl")
     pairs = [(certified[(Direction.EGRESS, w)], certified[(Direction.INGRESS, w)]) for w in range(n)]
     egress, ingress = ([list(p[d].head.counts) for p in pairs] for d in (0, 1))
@@ -306,7 +339,7 @@ def e2e(run: Path, windows: int = 0) -> SimpleNamespace:
                "received": list(link.received), "own": own, "max_released": max(max(c) for c in egress)}
     return SimpleNamespace(lw=lw, session=None, members=members, traffic=traffic, syncs=syncs, windows=windows,
                            egress=setup.egress_params, ingress=setup.ingress_params,
-                           tie=standin_tie(setup.ingress_params, own))
+                           tie=standin_tie(setup.ingress_params, own), clocks=clocks.label(syncs))
 
 
 def link_windows(lw: LinkWindows, link: AD.LinkAdvice, pairs, syncs=AT.SYNCS) -> SimpleNamespace:
@@ -364,8 +397,8 @@ def prove(a) -> int:
         raise SystemExit(f"--members {a.members}: the link's members are {list(sim.members)}")
     sim.members = {k: v for k, v in sim.members.items() if k in chosen}
     rounds = {name: link_windows(lw, link, pairs, sim.syncs) for name, (link, pairs, _) in sim.members.items()}
-    log(f"tie: {sim.tie}")
-    summary: dict = {"tie": sim.tie,
+    log(f"tie: {sim.tie}; clocks: {sim.clocks}")
+    summary: dict = {"tie": sim.tie, "clocks": sim.clocks,
                      "link": {"name": lw.link, "windows": sim.windows, "unit": lw.unit.id, "advised": lw.advised_key(),
                               "keys": {e: lw.head_key(d) for d, e in enumerate(ENDS)},
                               "program": lw.partition["program"], "partition": P.digest(lw.partition),

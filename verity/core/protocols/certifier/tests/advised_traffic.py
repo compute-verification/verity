@@ -236,6 +236,18 @@ class StandInTie:
         return AD.IoTieVerdict(self.link, self.registrations(link), AD.digest(advice), (ok,) * self.windows)
 
 
+@dataclass(frozen=True)
+class StandInClocks:
+    """A stand-in of the verifier's own clock source (`advised.ClockSource`, `service.LinkWindows(clocks=…)`): the
+    syncs the certifier ran the link's windows under, `ran`, by default the declared `SYNCS`, as an honest certifier
+    runs them. Nothing the prover delivers reaches it."""
+
+    ran: tuple[ClockSync, ...] = tuple(SYNCS)
+
+    def syncs(self, link: str) -> tuple[ClockSync, ...]:
+        return self.ran
+
+
 def held(link, certified=None, windows=None) -> dict:
     """`advised.view`'s and `advised.ends`'s tie arguments for `link` on the link `LINK`: the stand-in source's verdict
     (`StandInTie(certified)`, by default over `link`'s windows) and the link and registrations the verifier holds."""
