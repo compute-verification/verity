@@ -33,12 +33,15 @@ The compiler is total: it compiles its input or refuses it by name (`Unexpressib
 - what v0 doesn't compile: a chunked prefill (no chunked request wrapper on either side); a prefix-cache hit on a stochastic
   request (the cached stochastic wrapper isn't ported); a preemption (whose resume's sources go unchecked, as the request compiles
   to nothing), or decode rows that aren't one position a step in consecutive steps; positions past the model's; sampling other
-  than greedy or seeded top-p with top_k 0 (min_p, the penalties, logit_bias, min_tokens, n > 1, or a parameter this compiler
-  doesn't know).
+  than greedy or seeded top-p at top_p = 1 with top_k 0 (top_p < 1, whose split count serving doesn't pin; min_p, the penalties,
+  logit_bias, min_tokens, n > 1, or a parameter this compiler doesn't know);
+- a compilation `predict.batch.check_compiled` refuses (`BatchDependent`): one where a request's outputs could read its
+  batch-mates (R3 a derived split count; R2 a request planned differently alone, which v0 holds every cache hit another request
+  computed to, as such a hit has no solo form; R1 GP-01's wiring and cones).
 
 A refusal refuses the session. `partial=True` (a measurement over served traffic, never a registration) refuses request by
 request instead: a refused request's rows and Program leave the compilation, and so does every request whose cache hit reads its
-KV; `refused` names why.
+KV; `refused` names why. It records `check_compiled`'s refusal (`batch_rule`) rather than raising it.
 
 The compiler digest is `score.code_version()`, with ℓ beside it. `trace_commands` lists the Build traces (`verity-vllm build
 --wrapper request`) of a compilation's Programs, and `compare` holds the compiled digests to them.
@@ -57,6 +60,7 @@ from verity.core.protocols.certifier import advice as I1
 from verity.ml.circuits.defs import bind
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program.registry import io_shell as IO
+from verity_vllm.program.registry.topp_geometry import splits_for_v1
 
 from .build import Unexpressible, build_program, model_shape
 from .phi import Phi
@@ -143,6 +147,7 @@ class Compiled:
     discarded: list[tuple[int, int, int, int]] = field(default_factory=list)  # (step, request, start, n) of rows no Program holds
     refused: dict[int, str] = field(default_factory=dict)                     # request -> why (partial=True only)
     cap_bits: int = CAP_BITS
+    batch_rule: str | None = None         # partial=True only: `predict.batch`'s refusal of this compilation, which it doesn't raise
 
     def summary(self) -> dict:
         from .score import code_version
@@ -152,16 +157,19 @@ class Compiled:
                                                      "policy": u.policy, "seed": u.seed, "first_step": u.first_step,
                                                      "parse": u.parse and u.parse.id} for u in self.requests],
                 "steps": [[[r.request, r.start, r.n, r.samples] for r in rows] for rows in self.steps],
-                "discarded": [list(d) for d in self.discarded], "refused": {str(i): why for i, why in sorted(self.refused.items())}}
+                "discarded": [list(d) for d in self.discarded], "refused": {str(i): why for i, why in sorted(self.refused.items())},
+                "batch_rule": self.batch_rule}
 
 
 def _number(x: Any) -> bool:
     return type(x) in (int, float) and math.isfinite(x)
 
 
-def policy_of(i: int, sampling: Any, default_seed: int) -> tuple[dict, int | None]:
+def policy_of(i: int, sampling: Any, default_seed: int, num_sms: int | None) -> tuple[dict, int | None]:
     """Request `i`'s sampling policy as φ.sampling takes it, and its seed Input's value (the body's, else `default_seed`; None when
-    greedy), from the parameters its body carries (`SamplingParams` names), refused where its Program wouldn't be the Build's."""
+    greedy), from the parameters its body carries (`SamplingParams` names), refused where its Program wouldn't be the Build's. Top-p
+    takes the constant split count S = SplitsFor_v1(1, num_SMs): at top_p = 1 the mask keeps every lane for every S, and below 1
+    the served S is the batch's (`predict.batch`, R3), so top_p < 1 is refused until serving pins S."""
     if not isinstance(sampling, Mapping) or any(type(k) is not str for k in sampling):
         raise Unexpressible(f"request {i}: its sampling parameters aren't an object of named values")
     s = dict(sampling)
@@ -175,12 +183,17 @@ def policy_of(i: int, sampling: Any, default_seed: int) -> tuple[dict, int | Non
     facts += [f"{k} (a parameter this compiler doesn't know)" for k in sorted(s) if s[k] is not None and k not in (*_INERT, *_FINISH, *_READ)]
     if 0 < t < SAMPLING_EPS:
         facts.append(f"temperature {t!r} (vLLM samples it greedily, the Build's policy is greedy at 0 only)")
+    if t > 0 and p < 1:
+        facts.append(f"top_p {p!r} below 1 (the top-p split count S = SplitsFor_v1(live rows, num_SMs) is the batch's there, and "
+                     f"serving doesn't pin it)")
+    if t > 0 and num_sms is None:
+        facts.append("top-p on a target that declares no num_sms (its constant split count SplitsFor_v1(1, num_SMs))")
     if facts:
         raise Unexpressible(f"request {i}: sampling the vocabulary can't express: {'; '.join(facts)}")
     if t == 0:
         return {"kind": "greedy"}, None
-    return ({"kind": "stochastic", "temperature": float(t), "top_p": float(p), "top_k": 0, "seeded": True, "splits": "derived"},
-            int(default_seed if seed is None else seed))
+    return ({"kind": "stochastic", "temperature": float(t), "top_p": float(p), "top_k": 0, "seeded": True,
+             "splits": splits_for_v1(1, int(num_sms))}, int(default_seed if seed is None else seed))
 
 
 def advice_of(registered: Registered, advice: Any) -> I1.Advice:
@@ -340,8 +353,16 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial:
                                               prefix={"rows": u.C, "producers": list(u.producers)} if u.C else None)
                             for u in units if u is not None], manifest_digest=None, lag=int(registered.phi.target_profile().lag()))
     steps = [[RowRef(r, units[r].digest, start, n, k) for r, start, n, k in rows] for rows in plan.steps]
-    return Compiled(programs=programs, requests=units, workload=wl, steps=steps, discarded=plan.discarded, refused=plan.refused,
-                    cap_bits=registered.cap_bits)
+    compiled = Compiled(programs=programs, requests=units, workload=wl, steps=steps, discarded=plan.discarded, refused=plan.refused,
+                        cap_bits=registered.cap_bits)
+    from .batch import BatchDependent, check_compiled
+    try:
+        check_compiled(registered, advice_of(registered, advice), ingress, compiled, plan_steps)
+    except BatchDependent as e:
+        if not partial:
+            raise
+        compiled.batch_rule = str(e)
+    return compiled
 
 
 def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bool = False) -> Plan:
@@ -394,7 +415,7 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
                 LP, T, s0, C = shape_of(i, q.prompt_len, rows[i], q.output_len)
                 if LP + T > shape.max_pos:
                     raise Unexpressible(f"request {i}: positions to {LP + T - 1}, past the model's {shape.max_pos} positions")
-                policy, seed = policy_of(i, params[i], registered.default_seed)
+                policy, seed = policy_of(i, params[i], registered.default_seed, phi0.target_profile().num_sms)
                 if C and policy["kind"] != "greedy":
                     raise Unexpressible(f"request {i}: a prefix-cache hit of {C} tokens on a stochastic request (the cached stochastic "
                                         f"request wrapper isn't ported)")
