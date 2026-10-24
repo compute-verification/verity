@@ -20,6 +20,7 @@ only ones with a reservation: reading it walks the process's page tables (12 s a
 
   over (use > reservation, or no reservation)   OVER + round(SPAN * (use - reservation) / MemTotal), at most 1000
   within                                         WITHIN (0)
+  either, under a "priority" reservation         PRIORITY (500) lower, at least -999
 
 so a run over its reservation, or without one, is killed before a run within it, and the further over the sooner. WITHIN is 0, the
 value each run's processes start at from its ssh login and could set again themselves: a root write also sets the process's floor
@@ -44,6 +45,9 @@ LOG = Path("/workspace/monitoring/oom-order.jsonl")
 PROC = Path("/proc")
 GB = 1e9                          # research.mem's GB
 OVER, SPAN, WITHIN, MAX = 500, 500, 0, 1000
+#: a run under a reservation marked "priority": true (a train check's slot, #3486) ranks this much lower, so a research job
+#: growing back into its reservation is killed before a train (ci 24 Oct 05:47Z, Daniel's landing mandate)
+PRIORITY = 500
 DISABLED = -1000
 #: a run's runner (`python3 -m research run`), in its run's scope but never one of its processes (nor its session's sshd)
 RUNNER = b"-m\0research\0run\0"
@@ -82,7 +86,8 @@ def reservations(ramlock: Path) -> list[dict]:
             gb = float(d["gb"])
         except (KeyError, TypeError, ValueError):
             continue
-        out.append({"file": f.name, "gb": gb, "run_id": d.get("run_id"), "pid": d.get("pid") if isinstance(d.get("pid"), int) else None})
+        out.append({"file": f.name, "gb": gb, "run_id": d.get("run_id"), "pid": d.get("pid") if isinstance(d.get("pid"), int) else None,
+                    "priority": d.get("priority") is True})
     return out
 
 
@@ -136,10 +141,12 @@ def _runner(pid: int, proc: Path = PROC) -> bool:
     return RUNNER in cmd or cmd.startswith(b"sshd")
 
 
-def target(use: int, reserved: float, limit: int) -> int:
+def target(use: int, reserved: float, limit: int, priority: bool = False) -> int:
     if reserved > 0 and use <= reserved:
-        return WITHIN
-    return min(MAX, OVER + round(SPAN * (use - reserved) / limit)) if limit > 0 else OVER
+        adj = WITHIN
+    else:
+        adj = min(MAX, OVER + round(SPAN * (use - reserved) / limit)) if limit > 0 else OVER
+    return max(-999, adj - PRIORITY) if priority else adj
 
 
 def plan(runs: dict[str, dict], res: list[dict], procs: dict[int, dict], limit: int, proc: Path = PROC) -> list[dict]:
@@ -160,10 +167,12 @@ def plan(runs: dict[str, dict], res: list[dict], procs: dict[int, dict], limit: 
         if not pids:
             continue
         use = sum(procs[p]["bytes"] for p in pids)
-        reserved = max([x["gb"] * GB for x in res if x["run_id"] == r["run"] or x["pid"] in pids], default=0.0)
+        mine = [x for x in res if x["run_id"] == r["run"] or x["pid"] in pids]
+        reserved = max([x["gb"] * GB for x in mine], default=0.0)
+        priority = any(x.get("priority") for x in mine)
         if len(pids) > 1 and 0 < reserved < use:
             use = sum(v if (v := pss(p, proc)) is not None else procs[p]["bytes"] for p in pids)
-        out.append({"run": r["run"], "pids": sorted(pids), "use": use, "reserved": reserved, "adj": target(use, reserved, limit)})
+        out.append({"run": r["run"], "pids": sorted(pids), "use": use, "reserved": reserved, "adj": target(use, reserved, limit, priority)})
     return out
 
 
