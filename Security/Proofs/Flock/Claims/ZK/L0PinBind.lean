@@ -351,6 +351,12 @@ theorem repState_opened {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[
 
 /-! ## Level 0's binding in the schedule -/
 
+theorem coinAt_getD (cs : List (Array F128)) :
+    CoinAt (fun j i => (cs.getD j #[])[i]!) (#[] : Array Claims.Msg).size cs := by
+  intro j hj
+  funext i
+  simp [List.getD_eq_getElem?_getD, hj]
+
 /-- **A rep's schedule holds level 0's binding**: fed the coins of the algebraic phase's rounds, the ring switch's and
 `γ`'s, a rep's schedule asks next for level 0's binding, at the switch's target `T` and the level-0 cap, with `z`'s
 squeeze of `n` coins. -/
@@ -365,7 +371,7 @@ theorem sched_binding {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : 
     (hn0 : t.sch.n ≠ 0) (hcr : cr.size = alg.size + (xs.size + 2) + 1) :
     alg.size + (xs.size + 2) + 1 < sched.size ∧
       ∃ T, (sched.getD (alg.size + (xs.size + 2) + 1) (.empty, 0)).1.data.toList =
-          encs (openBind T (_root_.Flock.Firewall.Finish.flat t.cm0.toC.cap)) ++ (Frame.sq 2 t.sch.n).enc ∧
+          encs (openBind T (FlockComplete.flat t.cm0.toC.cap)) ++ (Frame.sq 2 t.sch.n).enc ∧
         (sched.getD (alg.size + (xs.size + 2) + 1) (.empty, 0)).2 = t.sch.n := by
   obtain ⟨rest, hrest⟩ := schedSoFar_pre hal hs
   have hAle : alg.size ≤ sched.size := by rw [hrest, Array.size_append]; omega
@@ -385,11 +391,7 @@ theorem sched_binding {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : 
   rw [show alg.size + (xs.size + 2) + 1 = alg.size + (xs.size + 2 + 1) by omega]
   have hcnt := sched_count hal hs hdom hdg hcn hm hx hk hn hq (i := xs.size + 2 + 1) (by omega)
   rw [(openList_bind t.sch (by omega) hn0).2] at hcnt
-  have hc : CoinAt (fun j i => ((cr.extract alg.size cr.size).toList.getD j #[])[i]!) (#[] : Array Claims.Msg).size
-      (cr.extract alg.size cr.size).toList := by
-    intro j hj
-    funext i
-    simp [List.getD_eq_getElem?_getD, hj]
+  have hc := coinAt_getD (cr.extract alg.size cr.size).toList
   obtain ⟨r, hp, -, hL0⟩ := FlockComplete.LigLock.Fed.openStep_l0 t rep dom xs hi (cr.extract 0 alg.size) hdom hdg
     hcn hm hmk (cr.extract alg.size cr.size).toList
     (fun j i => ((cr.extract alg.size cr.size).toList.getD j #[])[i]!) #[] hc
@@ -410,7 +412,7 @@ theorem sched_binding {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : 
       hna] at this
     exact this
   have key := hL0 (j := 0) (ss := ss) (T := T) (sws := sws) (tr₂ := t') (l₂ := L') (by omega) hk hn0 (by simp)
-    (by rw [hLs]; exact hL) (by rw [hLs]; simp only [Array.size_empty, Nat.zero_add]; omega)
+    (by rw [hLs, Nat.add_zero]; exact hL) (by rw [hLs]; simp only [Array.size_empty, Nat.zero_add]; omega)
   rw [hLl, hLs] at key
   simp only [Array.toList_empty, List.nil_append, Array.size_empty, Nat.sub_zero, Nat.add_zero, hna] at key
   have hk2 := List.getElem_of_eq key (i := xs.size + 2 + 1)
@@ -421,6 +423,6 @@ theorem sched_binding {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : 
   rw [FlockComplete.LigLock.l0BodyAt_zero, ht', empty_toList, List.nil_append] at hk2
   refine ⟨T, ?_, hcnt⟩
   rw [sched_entry hdrop (by omega)]
-  exact hk2
+  simpa only [Claims.toMsg, openBind] using hk2
 
 end Claims.ZKServer.Bind
