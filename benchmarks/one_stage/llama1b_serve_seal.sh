@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # A LLAMA32_1B committing OpenAI endpoint whose Commit windows are sealed as deferred Commits' row dirs, for PROVE-PATH's served
-# windows (`--serve-run DIR --window K`): `verity-vllm serve-openai --scheme rows-sha512 --seal` (the declared Commit's committer,
-# hm96-sha512 rows in frame-v3-sha512 trees) on one leased RTX PRO 6000, a short varied load in bursts (each burst one window,
-# closed at the engine's idle), `verity-vllm advice` per closed window under a registered cap (--cap), then each window's request
-# Programs and manifest.json into its row dir (`tools/advice_compile.py RUN --window K`). The endpoint serves until UNTIL (UTC
-# HH:MM) or `touch $D/stop`.
-#   research run --on vy-nebius-1 --project verity --source TREE --cwd source --gpus 1 --mem-gb 64 --timeout 200m \
-#     --env PORT=18084 --env UNTIL=13:30 -- bash benchmarks/one_stage/llama1b_serve_seal.sh
+# windows (`--serve-run DIR --window K`): `verity-vllm serve-openai --scheme rows-sha512 --seal` (the bench row's Commit of record's
+# committer and acquire sources, built from its manifest ROW/manifest.json and taps HIDDEN_SO, NORM_TAP_SO: hm96-sha512 rows in
+# frame-v3-sha512 trees) on one leased RTX PRO 6000, a short varied load in bursts (each burst one window, closed at the engine's
+# idle), `verity-vllm advice` per closed window under a registered cap (--cap), then each window's request Programs and
+# manifest.json into its row dir (`tools/advice_compile.py RUN --window K`), and the row dir opened as PROVE-PATH opens it
+# (`deferred_rows.of_record`, `opening.CommittedStore`) with what the row's Programs read looked up (identities.txt). The
+# endpoint serves until UNTIL (UTC HH:MM) or `touch $D/stop`.
+#   research run --on vy-nebius-1 --project verity --source TREE --cwd source --timeout 200m --env PORT=18084 --env UNTIL=13:30 -- \
+#     env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/verity/check/slot.py --by vllm -- \
+#     gpu-lease 1 --wait --mem-gb 64 -- bash benchmarks/one_stage/llama1b_serve_seal.sh
 # READVICE=DIR (WINDOW=K, default 5) serves nothing: DIR's advice again under this tree's registered compiler, and window K's
 # request Programs and manifest.json.
 # Needs on the node: vLLM's venv (/workspace/jobs/venv312), the checkpoint in /workspace/hf and CUDA (the collector's JIT build).
@@ -15,6 +18,8 @@ set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 PORT=${PORT:-18084} UNTIL=${UNTIL:-13:30} BURSTS=${BURSTS:-8} PER_BURST=${PER_BURST:-4} CAP=${CAP:-8388608}
 REPO=unsloth/Llama-3.2-1B REV=9535bd9b1d1dea6acafbdc4813b728796aeb28da
+ROW=${ROW:-/workspace/research/vllm-llama1b-commit/r20261024-055630-5377/llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager}
+HIDDEN_SO=${HIDDEN_SO:-/workspace/cp/fa2/build/matReqG/verity_fa2_matReqG.so} NORM_TAP_SO=${NORM_TAP_SO:-/workspace/cp/norm_tap/build/verity_norm_tap.so}
 TREE=$PWD
 ROOT=${SERVE_ROOT:-/workspace/research/vllm-serve-seal}
 D=$ROOT/${RESEARCH_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}
@@ -42,7 +47,8 @@ if [ -n "${READVICE:-}" ]; then     # a served dir's advice again (every closed 
 fi
 
 vv serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" --precision pin --run-id "${RESEARCH_RUN_ID:-local}" \
-  --scheme rows-sha512 --seal --gpu-tree --window-steps 256 > "$OUT/serve.log" 2>&1 &
+  --scheme rows-sha512 --seal --gpu-tree --window-steps 256 --required-manifest "$ROW/manifest.json" --hidden-so "$HIDDEN_SO" \
+  --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 > "$OUT/serve.log" 2>&1 &
 SRV=$!
 echo "$SRV" > "$D/serve.pid"
 for _ in $(seq 1 600); do
@@ -81,6 +87,36 @@ print(json.dumps({"window": int(k), "row_dir": str(w), "bundle": str(w / "commit
                   "commit_scheme": v.get("commit_scheme"), "manifest_sha256": v["replay_deferred"]["bundles"][0]["manifest_sha256"],
                   "registration": str(d / "advice" / f"w{k}" / "registration.json"), "programs": len(m.get("requests") or {}),
                   "builds": sorted(p.name for p in w.glob("build_request*"))}))
+EOF
+  "$PY" - "$D" "$k" <<'EOF' | tee -a "$OUT/identities.txt"
+import json, sys
+from collections import Counter
+from pathlib import Path
+from verity_vllm.check.replay.opening import CommittedStore
+from verity_vllm.pipeline import deferred_rows as DR
+d, k = Path(sys.argv[1]), sys.argv[2]
+w = d / "windows" / f"w{k}"
+v = json.loads((w / "commit" / "verdict.json").read_text())
+r = DR.of_record(v["replay_deferred"]["bundles"][0]["path"], str(w))
+bmap = json.loads((w / "commit" / "binding_map_p0.json").read_text())
+store = CommittedStore.of_record(bmap, lambda *_a: None, r.manifest)
+pairs = sorted({(e["identity"]["request_id"], int(e["identity"]["step"])) for e in bmap["entries"] if e.get("kind") == "leaf"})
+reads = {"gemm_out": ("model.layers.0.mlp.gate_up_proj", "out"), "rope_l0_query": ("model.layers.0.self_attn.rotary_emb", "query"),
+         "rope_l15_key": ("model.layers.15.self_attn.rotary_emb", "key"), "norm_scale": ("model.layers.3.input_layernorm", "norm_scale"),
+         "rmsnorm_residual": ("model.layers.3.post_attention_layernorm", "1")}
+have = {name: sum(store.has(q, s, op, m) for q, s in pairs) for name, (op, m) in reads.items()}
+fa2 = sum(any(e["identity"]["op_path"].startswith("fa2.m1/") and e["identity"]["request_id"] == q and e["identity"]["step"] == s
+              for e in bmap["entries"]) for q, s in pairs[:8])
+how = Counter(e.get("observation", "label/slot") for e in bmap["entries"] if e.get("kind") == "leaf")
+raw = sorted({e["identity"]["op_path"] + "/" + e["identity"]["output_member"] for e in bmap["entries"]
+              if e.get("kind") == "leaf" and e["identity"]["output_member"] in ("0", "1") and not e["identity"]["op_path"].endswith("layernorm")})
+first = pairs[0] if pairs else None
+print(json.dumps({"window": int(k), "committer": json.loads((w / "commit" / "runs.jsonl").read_text())["commit"]["committer"],
+                  "aliases": len((r.manifest or {}).get("op_path_aliases") or {}), "request_steps": len(pairs), "found": have,
+                  "fa2_in_first_8": fa2, "observation": dict(how), "raw_slot_members": raw[:6],
+                  "lookup": None if first is None else {"request": first[0], "step": first[1] + 1,
+                                                       "gate_up_proj/out": store.words(first[0], first[1] + 1, *reads["gemm_out"], 0, 1)[1]
+                                                       if not store.has(first[0], first[1] + 1, *reads["gemm_out"]) else "bound"}}))
 EOF
 done
 echo "READY $D" | tee -a "$OUT/steps.txt"
