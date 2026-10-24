@@ -518,7 +518,7 @@ theorem sched_l0 {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteA
     rw [show alg.size + (xs.size + 2) + 1 + i = alg.size + (xs.size + 2 + 1 + i) by omega,
       sched_entry hdrop (by omega)]
     unfold Claims.toMsg at hk2
-    exact hk2
+    rw [hk2]
   · rw [show alg.size + (xs.size + 2) + 1 + i = alg.size + (xs.size + 2 + 1 + i) by omega]
     exact sched_count hal hs hdom hdg hcn hm hx hk hn hq (by omega)
 
