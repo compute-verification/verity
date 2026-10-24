@@ -8,7 +8,10 @@ its expert's weight, with its own index, keys, A tree and tile leaves, as `run.P
 units lie one after another in one A, each in a segment of its m₁₆ rounded up to SEG = 64 rows (the grouped GEMMs' tile), and
 each 64-row block of A names its expert (``ex``).  The steps, one launch each (`Grouped.steps`):
 
-* ``commit_a``: pd_commit_g, unit u's pd_commit (A's commitment and E_A's lines) on CTA row u, from its record (`Grouped.meta`);
+* ``commit_a``: pd_commit_g, unit u's pd_commit (A's commitment and E_A's lines) on CTA row u, from its record (`Grouped.meta`),
+  each CTA with an SM to itself (`run.pd_setup`'s PD_WHOLE) while the units' rows, a CTA each, fit the SMs, and past that at
+  its least shared memory (PD_PAIR_SMEM), so the rows past the SMs share them rather than wait a whole chain for one (the
+  launch's alone: the code, grid and bytes are the same);
 * ``stats_a``, ``eprime_a``, ``pa``: stats_s5, eprime and pa over all of A's rows (a row at a time, no keys);
 * ``form_a``: form_s5_g, each 64-row block's F_A its expert's;
 * ``af``, ``gemm_pearlc``: gemm_words_g_d and gemm_pearlc_g_d over A, each 64-row block's B side its expert's;
@@ -208,9 +211,10 @@ class Grouped:
         d, b, k, n, R = self.dev, self.b, self.k, self.n, self.R
         rows, count, meta = sum(u.seg for u in us), len(us), b["meta"]
         ex, s = meta + REC * count, k // 256
+        smem = d.pd_smem_g if sum(u.m16 for u in us) <= d.sms else R.PD_PAIR_SMEM
 
         def commit():
-            d.launch(f"pd_commit_g_{PD}", (max(u.m16 for u in us), count), 32 * (R.cdiv(s, 32) * 2 + 2), d.pd_smem_g, p=(meta,),
+            d.launch(f"pd_commit_g_{PD}", (max(u.m16 for u in us), count), 32 * (R.cdiv(s, 32) * 2 + 2), smem, p=(meta,),
                      i=(REC,))
 
         def tree():

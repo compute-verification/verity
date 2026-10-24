@@ -156,9 +156,10 @@ def test_each_units_record_is_its_own_calls_launches(split):
 
 @pytest.mark.parametrize("counts", [[40], [3, 0, 300, 64, 17, 1]])
 def test_a_call_is_eight_launches_whatever_its_experts(counts):
-    """One launch a step, in `grouped.STEPS`' order: pd_commit_g on (max m₁₆, units) CTAs and pd_tiles_g on (max tiles,
-    units), each reading its records from the table; stats, E', P_A over all of A's rows; form_s5_g and both GEMMs with the
-    expert map, the GEMMs persistent at the H100's 132 SMs on A's rows and their map set."""
+    """One launch a step, in `grouped.STEPS`' order: pd_commit_g on (max m₁₆, units) CTAs, each an SM's whole shared memory
+    while the units' Σ m₁₆ rows fit the 132 SMs ([40]) and its least past them ([3, 0, 300, 64, 17, 1]), and pd_tiles_g on
+    (max tiles, units), each reading its records from the table; stats, E', P_A over all of A's rows; form_s5_g and both
+    GEMMs with the expert map, the GEMMs persistent at the H100's 132 SMs on A's rows and their map set."""
     n, k = 128, 1024
     g, dev, b, _ = grouped(n, k, experts=len(counts))
     us = G.units(counts, n, R.PD_MAX_ROWS)
@@ -169,7 +170,9 @@ def test_a_call_is_eight_launches_whatever_its_experts(counts):
     got = launches(dev)
     assert [x[0] for x in got] == STEPS
     by = {x[0]: x for x in got}
-    assert by["pd_commit_g_851"][1:4] == ((max(u.m16 for u in us), len(us)), 32 * 4, dev.pd_smem_g)
+    smem = dev.pd_smem_g if sum(u.m16 for u in us) <= 132 else R.PD_PAIR_SMEM
+    assert (smem == dev.pd_smem_g) == (counts == [40]) and dev.pd_smem_g > R.PD_PAIR_SMEM
+    assert by["pd_commit_g_851"][1:4] == ((max(u.m16 for u in us), len(us)), 32 * 4, smem)
     assert by["pd_commit_g_851"][5:] == ((b["meta"],), (G.REC,))
     assert by["pd_tiles_g_851"][1:3] == ((max(u.tiles for u in us), len(us)), 32)
     assert by["pd_tiles_g_851"][5:] == ((b["meta"] + G.TILES_AT,), (G.REC,))
