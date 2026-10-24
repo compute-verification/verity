@@ -182,6 +182,8 @@ class ArithEncoder:
     def encode(self, cum: int, freq: int, total: int) -> None:
         if not (0 <= cum and freq >= 1 and cum + freq <= total <= MAX_TOTAL):
             raise ValueError(f"bad interval {cum}+{freq}/{total}")
+        if freq == total:  # the only possible symbol: the interval is unchanged
+            return
         self.used = True
         r = self.high - self.low + 1
         self.high = self.low + (r * (cum + freq)) // total - 1
@@ -225,6 +227,8 @@ class ArithDecoder:
         return ((self.value - self.low + 1) * total - 1) // r
 
     def consume(self, cum: int, freq: int, total: int) -> None:
+        if freq == total:
+            return
         self.used = True
         r = self.high - self.low + 1
         self.high = self.low + (r * (cum + freq)) // total - 1

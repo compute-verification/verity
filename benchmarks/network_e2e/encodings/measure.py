@@ -240,16 +240,19 @@ def run(train: list[dict], test: list[dict], caps, T: int, tau_us: int, out: Pat
     return {"meta": meta, "summary": summary}
 
 
-def synth_corpus(rates: list[float], windows: int, seeds: list[int]) -> list[dict]:
+def synth_corpus_params(params: list) -> list[dict]:
     S = _load("synth")
     out = []
-    for rate in rates:
-        for seed in seeds:
-            p = S.Params(rate=rate, windows=windows, seed=seed)
-            adv, pub, admit, dur = S.generate(p, C)
-            out.append({"name": f"synth-r{rate:g}-s{seed}", "advice": adv, "public": pub, "admit": admit,
-                        "durations": dur, "tau_us": p.tau_us})
+    for p in params:
+        adv, pub, admit, dur = S.generate(p, C)
+        out.append({"name": f"synth-r{p.rate:g}-s{p.seed}", "advice": adv, "public": pub, "admit": admit,
+                    "durations": dur, "tau_us": p.tau_us})
     return out
+
+
+def synth_corpus(rates: list[float], windows: int, seeds: list[int]) -> list[dict]:
+    S = _load("synth")
+    return synth_corpus_params([S.Params(rate=r, windows=windows, seed=s) for r in rates for s in seeds])
 
 
 def main(argv: list[str] | None = None) -> int:
