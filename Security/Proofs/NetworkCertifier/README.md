@@ -172,7 +172,7 @@ The other 24 are the rest of the Capacity table's bounds and the schedule's caus
 - **The leak bound** (`NetTiming.SecurityProofs.AdviceString`): `EncardAccSeqsWithinLeConstantRate`,
   `EncardDecodableWithinLeCompiled`, `EncardDecodableWithinLeCompiledPerWindow`.
 - **The warden's channel bound** (`NetTiming.SecurityProofs.Warden`): `WardenViewEqClientView`, `EncardWardenViewsLe`,
-  `EncardWardenDecodableLe`, under `trusted-nebius-host` (`Verity.Assumptions.TrustedNebiusHost`).
+  `EncardWardenDecodableLe`, under `trusted-host` (`Verity.Assumptions.TrustedHost`).
 
 **The program's agreements, proved and audited, not guarantees.** Four theorems tie the difftest to these definitions
 (`NetTiming.SecurityProofs.Code`): the difftest holds the Python audit
