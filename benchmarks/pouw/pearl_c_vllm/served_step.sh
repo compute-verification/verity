@@ -8,9 +8,11 @@
 #     --env GPU_LEASE_WHO=<id> [--env GPUS=2,3] [--env ARMS=...] [--env POINT=b8-p512-mixed] [--env NSYS=0] \
 #     --send numabind.py --send pearl_c_sm120.cubin -- bash benchmarks/pouw/pearl_c_vllm/served_step.sh
 # GPUS: the GPUs the lease may take (gpu-lease --on), SPEC (default llama31-8b-1gpu-pearl-c-whole-served), POINT,
-# WARMUPS (2), REPS (3), MAX_MIN (the lease, 20). The node's pinned-vLLM Python is env.sh's VENV. numabind.py is
-# #3395's (benchmarks/hash/dither/numabind.py); NUMABIND names another copy, and without one the arms run unbound. Scratch
-# goes to one mktemp -d directory (TMPDIR), removed at the end; everything kept is under OUT.
+# WARMUPS (2), REPS (3), MAX_MIN (the lease, 20); GPU_LEASE_TIMED=1 for rows taken inside a booked clean window
+# (gpu-lease --timed). The node's pinned-vLLM Python is env.sh's VENV. numabind.py is #3395's
+# (benchmarks/hash/dither/numabind.py); NUMABIND names another copy, and without one the arms run unbound. The node's load
+# (loadavg and the leases) before and after each arm is OUT/load.txt. Scratch goes to one mktemp -d directory (TMPDIR),
+# removed at the end; everything kept is under OUT.
 # `served_step.sh post DIR` (no GPU) analyzes another run's OUT again with this tree's code, into this run's OUT.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -21,6 +23,8 @@ export PEARLC_CUBIN=${PEARLC_CUBIN:-$IN/pearl_c_sm120.cubin}
 ARMS=${ARMS:-stock-fp8@compiled,stock-fp8,pouw:pearl-c-sm120-v1-h3}
 SPEC=${SPEC:-llama31-8b-1gpu-pearl-c-whole-served}; POINT=${POINT:-b8-p512-mixed}; NSYS=${NSYS:-1}
 export ARMS SPEC POINT NSYS
+LEASE=$(command -v gpu-lease || echo /workspace/pouw/infra/bin/gpu-lease)
+load() { { echo "== $1 $(date -u +%FT%TZ) loadavg $(cat /proc/loadavg)"; "$LEASE" status 2>&1 || true; } >> "$OUT/load.txt"; }
 
 analyze_all() {   # SRC's arm profiles analyzed into OUT's arm directories, then the table; returns the first failure
   local src=$1 r=0 d a
@@ -51,7 +55,6 @@ if [ "${1:-}" != gpu ]; then
     benchmarks/pouw/pearl_c_sm120/run.py > "$OUT/cubin.sha256"
   NUMABIND=${NUMABIND:-$IN/numabind.py}
   BIND=(); [ -f "$NUMABIND" ] && BIND=("$VENV/bin/python" "$NUMABIND" "$OUT/numa.json")
-  LEASE=$(command -v gpu-lease || echo /workspace/pouw/infra/bin/gpu-lease)
   ON=(); [ -n "${GPUS:-}" ] && ON=(--on "$GPUS")
   rc=0
   "$LEASE" 1 --wait "${ON[@]}" --max-min "${MAX_MIN:-20}" --mem-gb 64 -- "${BIND[@]}" bash "$0" gpu || rc=$?
@@ -66,7 +69,7 @@ nvidia-smi --query-gpu=uuid,name,compute_cap,clocks.sm,clocks.mem,driver_version
 grep -q "RTX PRO 6000 Blackwell" "$OUT/identity.csv" && grep -q ", 12.0," "$OUT/identity.csv" || { echo "identity" >&2; exit 3; }
 rc=0
 for arm in ${ARMS//,/ }; do
-  d=$OUT/${arm//[:@]/_}; mkdir -p "$d"
+  d=$OUT/${arm//[:@]/_}; mkdir -p "$d"; load "$arm"
   RUN=("$VENV/bin/python" "$HERE/served_step.py" run --spec "$SPEC" --arm "$arm" --point "$POINT"
        --warmups "${WARMUPS:-2}" --reps "${REPS:-3}" --out "$d")
   if [ "$NSYS" = 1 ]; then
@@ -77,4 +80,5 @@ for arm in ${ARMS//,/ }; do
   fi
   tail -n 1 "$d/log.txt"
 done
+load end
 exit "$rc"
