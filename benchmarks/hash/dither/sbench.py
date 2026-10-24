@@ -998,6 +998,7 @@ def main() -> int:
                 res = recv(arm, conns[arm], "warm", a.time_passed)
             if "error" in res:
                 gate_doc[arm], rc = {"error": res["error"]}, 5
+                procs[arm].join()   # it exits on an error: gone before the next arm's engine comes up
         arms = [x for x in arms if x not in gate_doc]
         if a.gate:
             for arm in list(arms):
@@ -1005,6 +1006,7 @@ def main() -> int:
                 res = recv(arm, conns[arm], "gate", a.time_passed)
                 if "error" in res:
                     gate_doc[arm], rc = {"error": res["error"]}, 5
+                    procs[arm].join()
                     arms.remove(arm)
                     continue
                 msg = recv(arm, conns[arm], "gate")
@@ -1129,6 +1131,8 @@ def main() -> int:
         timed += arms
     arms = timed
     (out / "stop.json").write_text(json.dumps(stops, indent=1, default=str) + "\n")
+    if not arms:
+        return rc
     summary = {"arms": arms, "info": info, "numa": json.loads(os.environ.get("DITHER_NUMA_RECORD") or "null"),
                "gate_tokens_equal_ref_arm": gate, "decode_tokens_vs_ref": vs_ref,
                "decode_tokens_vs_rep0": vs_rep0, "ref_of": REF_OF, "n1": N1, "n2": N2, "b": B,
