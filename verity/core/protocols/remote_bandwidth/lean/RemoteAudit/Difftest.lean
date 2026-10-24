@@ -508,7 +508,7 @@ def lineFn (j : Json) : V Json := do
   pure (refusedOr ((fun (l : Line.Line) => Json.mkObj ((l.forms.toList.map fun (f : Line.Form) =>
     (f.name, formJ l.nodeBytes f)) ++ [("wrong", ratJ l.wrong)])) <$> got))
 
-private def natsOf (j : Json) (n : Nat) (ctx : String) : V (Array Nat) := do
+private def natsOfN (j : Json) (n : Nat) (ctx : String) : V (Array Nat) := do
   let xs ← J.asArr j ctx
   if xs.size ≠ n then throw s!"{ctx}: {n} integers"
   xs.mapM (J.asNat · ctx)
@@ -529,7 +529,7 @@ private def blockOf (j : Json) : V Schedule.Block := do
 def scheduleFn (j : Json) : V Json := do
   let s ← J.get j "schedule" "input"
   let registered ← (← J.arr s "registered" "schedule").mapM fun r => do
-    let xs ← natsOf r 3 "registered"
+    let xs ← natsOfN r 3 "registered"
     pure (xs[0]!, xs[1]!, xs[2]!)
   let appends ← (← J.arr s "appends" "schedule").mapM fun a => do (← J.asArr a "append").mapM blockOf
   let steps ← (← J.arr s "steps" "schedule").mapM (J.asNat · "steps")
@@ -537,11 +537,11 @@ def scheduleFn (j : Json) : V Json := do
     let xs ← J.asArr p "pass"
     if xs.size ≠ 2 then throw "a pass is [step, runs]"
     let runs ← (← J.asArr xs[1]! "runs").mapM fun r => do
-      let ys ← natsOf r 2 "run"
+      let ys ← natsOfN r 2 "run"
       pure (ys[0]!, ys[1]!)
     pure (← J.asNat xs[0]! "step", runs)
   let made ← (← J.arr j "appends" "input").mapM fun a => do
-    let ys ← natsOf a 2 "append"
+    let ys ← natsOfN a 2 "append"
     pure (ys[0]!, ys[1]!)
   let got := Schedule.check ⟨registered, appends, steps⟩ (← nat j "blocks") passes made
   pure (refusedOr ((fun b => Json.mkObj [("bits", toJson b)]) <$> got))
