@@ -176,6 +176,9 @@ SKIP_DEAD_ENV = "DITHER_UNITS_SKIP_DEAD"
 # is already out, else at the next `after`'s start (after forward s + 1), so the trees also run while `before` and the
 # engine's input preparation do; round s then waits up to a forward longer for its coin (a deeper ring: -so10)
 ROOT_LAG_ENV = "DITHER_SO_ROOT_LAG"
+# "1" (without -ov): step s + 1 - (D - 1)'s units dispatched at the start of step s's `after` (its coin long back), so
+# they run beside step s's trees, not after them; the same units, salts and rounds (round s + 1 still after them)
+UNITS_EARLY_ENV = "DITHER_SO_UNITS_EARLY"
 ROUNDS_ENV = "DITHER_ROUNDS"            # the window's layout (its round coins), the session's when off the node
 MF_CHUNK = 64                           # manifest rows a pinned host chunk
 # -we's spill (`Spill`): what each step keeps past the ring until its window's draw, so the prover can open a drawn unit
@@ -244,6 +247,10 @@ class SoWindow(DO.Window):
             raise RuntimeError(f"{COIN_ASYNC_ENV}={self.coin_async}: 0, 1 or 2")
         self.deferred: int | None = None
         self.deferrals = {"deferred": 0, "in_forward": 0, "in_after": 0, "after_forward": 0}
+        self.units_early = os.environ.get(UNITS_EARLY_ENV) == "1"
+        if self.units_early and (self.overlap or self.depth < 3):
+            raise RuntimeError(f"{UNITS_EARLY_ENV}=1 serves without -ov (whose units have their own schedule) and at "
+                               f"depth 3 or more (at 2 the step it dispatches is the one `after` stashes)")
         self.late_waits: list[float] = []
         self.a_step = os.environ.get(DO.A_STEP_ENV) == "1"
         if self.a_step and (self.a_once or self.overlap):
@@ -662,6 +669,7 @@ class SoWindow(DO.Window):
         if self.deferred is not None and self.coin_async == 1:
             t_late = self._late_dispatch()
         s, m, cap, pre, ev, kinds = self.s, self.m, self.cap, self.pre, self.ev, self.round_kinds
+        early = self._dispatch_next(s, d) if self.units_early and self.deferred is None else None
         if self.a_once or self.a_step:
             self.phase("a_tables")
             if not self.flags & DO.F_NW_TILES:
@@ -696,7 +704,7 @@ class SoWindow(DO.Window):
         self.c.build(pre["z"], self.stepv[0:1])
         for f in self.before_mid:
             f()
-        if self.deferred is not None:
+        if self.deferred is not None and self.deferred <= s - d:
             t_late = self._late_dispatch()
         self.phase("receipt_leaf")
         o = pre["mid"].level_off[kinds.index("receipt-step")]
@@ -772,21 +780,12 @@ class SoWindow(DO.Window):
             if prev == "fault_zlate" and prev in self.caps:
                 self.caps[prev].update(next_leaves=leaves)
         units_wait = self.ev_w[0].elapsed_time(self.ev_w[1]) if waited and lag is None else None
-        self.phase("coin_wait")
-        ju = s + 1 - d
-        t_wait = t_coin = t_disp = time.perf_counter()
-        if ju in self.stashed:
-            if self.coin_async and s != self.end_at and self.pipe.opening(self.ix(ju), wait=False) is None:
-                self.deferred = ju
-                self.deferrals["deferred"] += 1
-            else:
-                self.stashed.discard(ju)
-                t_coin = self.dispatch_units(ju)
-                t_disp = time.perf_counter()
+        t_capd = time.perf_counter()
+        t_wait, t_coin, t_disp = early if early is not None else self._dispatch_next(s, d)
         t_end = time.perf_counter()
         self.phase(None)
         ph = {"m": m, "forward_ms": 1e3 * (t_fwd - self.t_before), "trees_ms": 1e3 * (t_root - t_fwd),
-              "record_host_ms": 1e3 * (t_sent - t_root), "captures_ms": 1e3 * (t_wait - t_sent),
+              "record_host_ms": 1e3 * (t_sent - t_root), "captures_ms": 1e3 * (t_capd - t_sent),
               "coin_wait_ms": 1e3 * (t_coin - t_wait),
               "dispatch_ms": 1e3 * (t_disp - t_coin), "between_ms": 1e3 * (t_end - t_fwd),
               "coin_late_ms": 1e3 * t_late}
@@ -801,6 +800,22 @@ class SoWindow(DO.Window):
         self.s += 1
         self.steps += 1
         self._step_end(s)
+
+    def _dispatch_next(self, s: int, d: int) -> tuple[float, float, float]:
+        """Step s + 1 - d's units, whose receipts round s + 1 commits: dispatched if their coin is back (or step s ends
+        the window), else deferred under $DITHER_SO_COIN_ASYNC; (wait start, coin back, dispatched) on perf_counter."""
+        self.phase("coin_wait")
+        ju = s + 1 - d
+        t_wait = t_coin = t_disp = time.perf_counter()
+        if ju in self.stashed:
+            if self.coin_async and s != self.end_at and self.pipe.opening(self.ix(ju), wait=False) is None:
+                self.deferred = ju
+                self.deferrals["deferred"] += 1
+            else:
+                self.stashed.discard(ju)
+                t_coin = self.dispatch_units(ju)
+                t_disp = time.perf_counter()
+        return t_wait, t_coin, t_disp
 
     def _step_end(self, s: int) -> None:
         if s == self.end_at:
@@ -892,6 +907,7 @@ class SoWindow(DO.Window):
                      "coin_wait_ms": {"n": len(waits), "p50": _q(waits, 0.5), "p90": _q(waits, 0.9), "max": _q(waits, 1.0)},
                      "coin_async": {"on": self.coin_async, **deferrals,
                                     "late_wait_ms": {"n": len(late), "p50": _q(late, 0.5), "max": _q(late, 1.0)}},
+                     "units_early": self.units_early,
                      "root_lag": {"on": self.root_lag, "steps": lagn,
                                   "wait_ms": {"p50": _q(lagw, 0.5), "p90": _q(lagw, 0.9), "max": _q(lagw, 1.0)}},
                      "order_reason": self.order_why, "windows": self.k + 1, "window_open": self.open,
