@@ -45,6 +45,14 @@ fixes is a code fact about the layout and `final`; no part computes `final`'s re
 The checks are exactly `IVStar`'s acceptance at the step split (`ivstar_acc_iff_checks`): where every check holds,
 `IVStar` accepts (`ivstar_acc_of_checks`, the one fact about `IVStar` the composition reads), and where it accepts,
 every check holds. So no inventory asks a part for more than `IVStar`'s acceptance needs.
+
+`StmtFixes` asks a check the statement keeps to hold at every coin sequence, so no inventory moves a coin-dependent
+check into it: giving every check to the statement asks for `IVStar`'s acceptance at every coin, which no sound
+deployment has. A coin-dependent check (custody's comparison of the record's coins with the live ones, the replay)
+must be some part's, and that part's lowering fact must read every coin bit the check reads; where no part does, the
+premises are unsatisfiable, not the conclusion unsound. Likewise a part's lowering fact concludes `PC s` at the
+readers' messages, so a part not tied to the round it reads (its own commit strings, not the readers') can't
+discharge it.
 -/
 
 namespace Claims.Recursion.VStarB
