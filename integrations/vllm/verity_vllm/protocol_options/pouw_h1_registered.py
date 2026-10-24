@@ -18,7 +18,8 @@ salts, ``b || c`` strings, tree and entry, computed from the rows' NumPy words i
 
 * **On the GPU** (VLLM-79): where this process has CUDA, `commit` hashes the same strings, leaves and levels on the device
   (`pouw_h1_registered_device`, `pouw_cuda/registered_rows.cu`), a thread a row and a node, and only the domain id and
-  the result's bytes touch the host (`path`, `MODE`). The NumPy path above is the reference the device is held to
+  the result's bytes touch the host (`path`, `MODE`), and `public_salts` derives a public table's salts there. The
+  NumPy path above is the reference the device is held to
   (``tests/protocol_options/test_pouw_h1_registered_device.py``) and the fallback everywhere else.
 
 `commit` returns a `registered.Registered` whose ``rows`` and ``salts`` are those sequences; everything `Served`,
@@ -191,6 +192,20 @@ def commit(program: str, value: str, words: np.ndarray, key: bytes, nonce: int, 
                         bcs=bcs, levels=levels, schema=G.SCHEMA_V2, **binding)
 
 
+def public_salts(head: bytes, first: int, n: int) -> bytes:
+    """Positions ``first`` .. ``first + n - 1``'s public row salts concatenated, each ``SHA-512(head || u64be(position) ||
+    u8(i))`` for i = 0, 1, 2 (`core_check.public_row_salt`, ``head`` its domain, context length and context), on the
+    device where `path` says, else with `hashlib`."""
+    if n < 1 or first < 0 or first + n > 1 << 64:
+        raise ValueError(f"{n} public salts from position {first}: at least one, every position a u64")
+    if path() == "gpu":
+        from verity_vllm.protocol_options import pouw_h1_registered_device as D
+
+        return D.device_public_salts(head, first, n)
+    return b"".join(hashlib.sha512(head + u.to_bytes(8, "big") + bytes([i])).digest()
+                    for u in range(first, first + n) for i in range(_INST.salt_bytes // 64))
+
+
 def _numpy(words: np.ndarray, key: bytes, nonce: int, given: bytes | None,
            domain_id: bytes) -> tuple[tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
     """`commit`'s ``b || c`` strings and tree levels from NumPy and `hashlib`: the reference."""
@@ -212,4 +227,4 @@ def _numpy(words: np.ndarray, key: bytes, nonce: int, given: bytes | None,
     return tuple(bcs), frame.levels(leaves)
 
 
-__all__ = ["MODE", "Rows", "Salts", "commit", "path", "row_digests", "salts"]
+__all__ = ["MODE", "Rows", "Salts", "commit", "path", "public_salts", "row_digests", "salts"]

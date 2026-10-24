@@ -90,6 +90,30 @@ HD void row_leaf(const Table& t, uint32_t j, const uint8_t* row, const uint64_t*
   frame_leaf(t.did, j, REGROWS_SCHEMA, tl, leaf);
 }
 
+// A public table's salt head as the host lays it out (`pouw_h1_registered_device.Pub`): `core_check.public_row_salt`'s
+// domain, u64be context length and context, as big-endian words, the bytes past ``len`` zero.
+constexpr int PUB_WORDS = 40;
+struct Pub {
+  uint64_t w[PUB_WORDS];
+  uint32_t len, n;  // the head's bytes (at most 8 PUB_WORDS) and the salts a launch derives
+  uint64_t first;   // the first salt's position
+};
+static_assert(sizeof(Pub) == 8 * PUB_WORDS + 16, "Pub is 42 words");
+
+// Position ``pos``'s public salt, SHA-512(head || u64be pos || u8 i) for i = 0, 1, 2, into ``out`` as its 192 bytes.
+HD void public_salt(const Pub& p, uint64_t pos, uint64_t out[24]) {
+  for (int c = 0; c < 3; ++c) {
+    Frame f;
+    for (int i = 0; i < FRAME_WORDS; ++i) f.w[i] = i < PUB_WORDS ? p.w[i] : 0;
+    f.p = p.len;
+    frame_be(f, pos, 8);
+    frame_be(f, (uint64_t)c, 1);
+    uint64_t h[8];
+    frame_hash(f, h);
+    for (int i = 0; i < 8; ++i) out[8 * c + i] = bswap64(h[i]);
+  }
+}
+
 // Level l of a tree of width W starts at node 2 W - 2 (W >> l) in its levels (level 0 the W leaves and pads, then each
 // level above, the root last: 2 W - 1 nodes).
 HD uint64_t level_off(uint32_t W, uint32_t l) { return 2ull * W - 2ull * (W >> l); }
