@@ -23,7 +23,7 @@ import torch
 
 from verity.ml.circuits.refs import Affine, Coll, Concat, Strided, prefix_runs
 from verity.ml.circuits.types import Record
-from verity_vllm.program.frontend.torch_frontend import flat_types
+from verity_vllm.program.frontend.value_types import flat_types
 from verity_vllm.correspondence.runtime import NAMESPACE, SCHEMA
 
 _ROW_RE = re.compile(r"\[(\d+)\]")

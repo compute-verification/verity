@@ -29,7 +29,7 @@ Conventions (L2):
   one ends, so the result is the greedy maximal-run compression of the storage-element sequence.
 - `collapsed_dims(v)` (helper) is the geometry the memory model reads refs through: size-1 axes dropped and
   row-major-contiguous axes merged (the same normalisation the authored frontend applies in
-  `verity_vllm/program/frontend/torch_frontend.py:_strided_refs`), so a `Strided`/`Affine` produced from it has the same
+  `verity_vllm/program/frontend/strided_views.py:_strided_refs`), so a `Strided`/`Affine` produced from it has the same
   normal form as authored view refs.
 """
 

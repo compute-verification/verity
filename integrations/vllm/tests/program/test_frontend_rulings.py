@@ -306,7 +306,7 @@ def test_r5_inner_axis_select_and_permute_are_strided_views():
 
 
 def test_r5_permute_fallback_is_explicit_under_a_limit():
-    from verity_vllm.program.frontend import torch_frontend as tf
+    from verity_vllm.program.frontend import strided_views as tf
 
     @function(name="Perm5")
     def Perm(x: Arr[2, 3, 4, BF16]) -> Arr[4, 3, 2, BF16]:
@@ -334,7 +334,7 @@ def test_a_permute_of_the_leading_axes_past_the_explicit_limit_is_a_concat_of_ro
     """DeepSeek-V4's `fused_inv_rope_fp8_quant` output [G, T, d] read as [T, G, d]: past the Explicit limit, a permute that keeps the
     trailing axes in place reorders whole rows (one part each) where the leaf-by-leaf fallback refuses; under the Build's default
     meta device."""
-    from verity_vllm.program.frontend import torch_frontend as tf
+    from verity_vllm.program.frontend import strided_views as tf
     monkeypatch.setattr(tf, "_EXPLICIT_LIMIT", 8)
 
     @function(name="Perm5d")

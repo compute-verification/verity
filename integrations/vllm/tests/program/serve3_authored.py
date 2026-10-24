@@ -25,7 +25,8 @@ from verity_vllm.program.registry import pad_prims  # noqa: F401  — registers 
 from verity_vllm.program.registry.prims import BF16, BIT, I32
 from verity.ml.circuits.types import Array, Tuple as TupleT
 from tests.program.b1_authored import FinalV2, _forward_positions_v2
-from verity_vllm.program.frontend.torch_frontend import Arr, Dep, Tup, batch, function, ops
+from verity_vllm.program.frontend.schemas import Arr, Dep, Tup
+from verity_vllm.program.frontend.torch_frontend import batch, function, ops
 
 
 @function(name="PadGuard", version=1, static=("EOS",))
