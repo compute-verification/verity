@@ -94,6 +94,7 @@ def test_with_the_manifest_alias_table_the_replay_reads_invocation_one_of_the_ca
     assert pop["query_checks"]["identities_without_rows"]["n"] == 0 and pop["query_checks"]["vus_outside_query"]["n"] == 0, pop["query_checks"]
 
 
+@pytest.mark.slow
 def test_a_wrong_invocation_in_the_alias_table_never_reads_a_neighbours_words():
     world, bmap, committed, manifest, attn = _aliased_world()
     # (a) the alias points at invocation 0 -- nothing of the shared module is bound there in this world: missing by name, not layer 1's words

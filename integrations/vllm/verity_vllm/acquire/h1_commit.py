@@ -69,10 +69,37 @@ def source(com: Any, model: Any, layers: Sequence[Any]) -> Any:
     return H1Source(com, model, modules, experts)
 
 
+def fused_embed(com: Any, model: Any, embed: str) -> Any:
+    """Where vLLM never calls embedding ``embed``, a forward pre-hook on its parent acquiring that forward's input ids as
+    ``<embed>/in``, the name the committer's pre-hook on the embedding would; None where it does call it. A model whose
+    table is whole on the rank (``replicated_embed``: vLLM's DeepseekV32Model, GLM-5.3's, at TP1) gathers it fused with
+    layer 0's norm (`fused_embed_norm`) from the embedding's weight, so the embedding's own pre-hook never runs. The parent
+    is called as ``(input_ids, positions, intermediate_tensors, inputs_embeds)``; with ``inputs_embeds`` it calls the
+    embedding itself, and the committer's pre-hook takes its ids."""
+    parent = model.get_submodule(embed.rpartition(".")[0])
+    if not getattr(parent, "replicated_embed", False):
+        return None
+
+    def pre(module: Any, args: tuple, kwargs: dict) -> None:
+        job = com._cur
+        got = dict(zip(("input_ids", "positions", "intermediate_tensors", "inputs_embeds"), args), **kwargs)
+        ids = got.get("input_ids")
+        if job is None or got.get("inputs_embeds") is not None or got.get("intermediate_tensors") is not None:
+            return
+        try:
+            if hasattr(ids, "shape"):
+                com._acquire(f"{embed}/in", ids, job)
+        except Exception as e:  # noqa: BLE001
+            com.errors.append(f"{embed}/in: {e!r}"[:300])
+
+    return parent.register_forward_pre_hook(pre, with_kwargs=True)
+
+
 def attach(engine: Any, layers: Sequence[Any], **committer: Any) -> tuple[Any, Any, CommitTap]:
     """The Commit on ``engine`` (`engine.build.build_engine`'s), installed: a `NativeHostCommitter` (``committer`` its
-    keywords), the int8 source (`source`) and its `CommitTap`. Returns the committer, the source and the tap;
-    ``committer.close()`` and ``tap.untap()`` remove them."""
+    keywords), the int8 source (`source`), its `CommitTap` and, on a model that gathers its embedding fused, the hook
+    that acquires the step's ids (`fused_embed`). Returns the committer, the source and the tap; ``committer.close()``
+    and ``tap.untap()`` remove them."""
     from verity_vllm.commit.committer.native_host import NativeHostCommitter
 
     com = NativeHostCommitter(engine, **committer)
@@ -83,7 +110,9 @@ def attach(engine: Any, layers: Sequence[Any], **committer: Any) -> tuple[Any, A
         raise ValueError("the committer acquires no module's input: no embedding gives the step's token ids")
     tap.tap(com)
     com.install()
+    if (h := fused_embed(com, com.model, tap.embed)) is not None:
+        com._handles.append(h)
     return com, src, tap
 
 
-__all__ = ["H1Source", "attach", "source"]
+__all__ = ["H1Source", "attach", "fused_embed", "source"]

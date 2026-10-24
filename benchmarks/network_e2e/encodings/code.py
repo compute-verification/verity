@@ -223,11 +223,17 @@ class ArithEncoder:
 
 class ArithDecoder:
     """The encoder's mirror. It tracks the encoder's interval, so it knows the segment's length (`shifts + 2`) without
-    reading it, and `finish` moves the reader to the next segment."""
+    reading it, and `finish` moves the reader to the next segment.
+
+    Alone it would take 2 to 4 strings for one message: any whose interval meets the final interval, after reading 32 bits
+    past the segment (the certifier PROTOCOL's attack 10). So `finish` re-encodes the intervals it consumed and refuses the
+    segment unless its bits are the encoder's, bit for bit, and lie inside the input. The segments it accepts are then
+    exactly the encoder's, and the bits read past an accepted segment decide nothing."""
 
     def __init__(self, inp: BitReader) -> None:
         self.inp, self.start = inp, inp.pos
         self.low, self.high, self.shifts, self.used = 0, _TOP, 0, False
+        self.log: list[tuple[int, int, int]] = []
         self.value = 0
         for i in range(_P):
             self.value = (self.value << 1) | inp.at(self.start + i)
@@ -241,6 +247,7 @@ class ArithDecoder:
         if freq == total:
             return
         self.used = True
+        self.log.append((cum, freq, total))
         r = self.high - self.low + 1
         self.high = self.low + (r * (cum + freq)) // total - 1
         self.low = self.low + (r * cum) // total
@@ -264,6 +271,15 @@ class ArithDecoder:
 
     def finish(self) -> int:
         n = self.shifts + 2 if self.used else 0
+        if self.start + n > len(self.inp.bits):
+            raise ValueError("advice ends inside an arithmetic segment")
+        w = BitWriter()
+        enc = ArithEncoder(w)
+        for t in self.log:
+            enc.encode(*t)
+        enc.finish()
+        if w.bits != self.inp.bits[self.start:self.start + n]:
+            raise ValueError("an arithmetic segment that isn't the encoder's codeword for what it decodes to")
         self.inp.pos = self.start + n
         return n
 

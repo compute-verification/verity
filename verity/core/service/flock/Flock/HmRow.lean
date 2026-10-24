@@ -1570,6 +1570,7 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
   let regions ← HmRow.regions c pub
   HmRow.checkRegionWords c da db regions
   checkInRange c.kLog regions.size (PT_LOCAL + nbl)
+  checkRegionBytes nbl regions
   let identity := if J.has c.metaJ "row_schemas" then Tags.rowV2Identity tags.identity else tags.identity
   let identity := if c.ports.any (·.segs.isSome) then Tags.rowSegIdentity identity else identity
   let v2Run := (List.range c.outRowPorts.size).any fun j =>
@@ -2170,6 +2171,7 @@ def Stmt.setupHidden (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
   let (da, db) := HmIn.delta c pi pin
   let regions := (← HmOut.regions c pub) ++ (← HmIn.regions c pi pub)
   checkInRange c.kLog regions.size (PT_LOCAL + nbl)
+  checkRegionBytes nbl regions
   let identity := if J.has c.metaJ "row_schemas" then Tags.rowV2Identity tags.identity else tags.identity
   let identity := if c.ports.any (·.segs.isSome) then Tags.rowSegIdentity identity else identity
   let v2Run := (List.range c.outRowPorts.size).any fun j =>
@@ -2319,6 +2321,7 @@ def Stmt.setupHiddenOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArra
   let (da, db) := HmIn.delta c pi pin
   let regions := (← HmOut.regions c pub) ++ (← HmIn.regions c pi pub)
   checkInRange c.kLog regions.size (PT_LOCAL + nbl)
+  checkRegionBytes nbl regions
   let identity := if J.has c.metaJ "row_schemas" then Tags.rowV2Identity tags.identity else tags.identity
   let identity := if c.ports.any (·.segs.isSome) then Tags.rowSegIdentity identity else identity
   let v2Run := (List.range c.outRowPorts.size).any fun j =>
