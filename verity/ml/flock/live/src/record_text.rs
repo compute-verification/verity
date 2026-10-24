@@ -113,23 +113,49 @@ fn lean_number(t: &str) -> String {
 mod tests {
     use super::*;
 
+    fn cases() -> Vec<Value> {
+        let doc: Value = serde_json::from_str(include_str!("record_text_vectors.json")).unwrap();
+        let cases = doc["cases"].as_array().unwrap().clone();
+        assert!(cases.iter().any(|c| c["name"] == "floats"));
+        cases
+    }
+
+    /// The numbers of the `floats` case's `{"f": [...]}` text, one per element. serde_json's default float parser is
+    /// not correctly rounded (it reads `-900821.3732204572` one ulp off) and refuses Lean's `0.0000000005e-314`, so
+    /// these tests read them with `str::parse`, which is; a writer holds `f64`s and never parses them.
+    fn numbers(text: &str) -> Vec<&str> {
+        let inner = text.trim().strip_prefix("{\"f\":").unwrap().trim();
+        let inner = inner.strip_prefix('[').unwrap().strip_suffix("]}").unwrap();
+        inner.split(',').map(str::trim).collect()
+    }
+
     #[test]
     fn matches_lean_on_the_shared_vectors() {
-        let doc: Value = serde_json::from_str(include_str!("record_text_vectors.json")).unwrap();
-        let cases = doc["cases"].as_array().unwrap();
-        assert!(!cases.is_empty());
-        for c in cases {
-            let v: Value = serde_json::from_str(c["input"].as_str().unwrap()).unwrap();
-            assert_eq!(canonical_json(&v), c["canonical"].as_str().unwrap(), "case {}", c["name"]);
+        for c in cases() {
+            let (input, canonical) = (c["input"].as_str().unwrap(), c["canonical"].as_str().unwrap());
+            let v: Value = if c["name"] == "floats" {
+                let xs = numbers(input).into_iter().map(|t| {
+                    Value::Number(serde_json::Number::from_f64(t.parse::<f64>().unwrap()).unwrap())
+                });
+                serde_json::json!({ "f": xs.collect::<Vec<_>>() })
+            } else {
+                serde_json::from_str(input).unwrap()
+            };
+            assert_eq!(canonical_json(&v), canonical, "case {}", c["name"]);
         }
     }
 
     #[test]
     fn reads_back_to_itself() {
-        let doc: Value = serde_json::from_str(include_str!("record_text_vectors.json")).unwrap();
-        for c in doc["cases"].as_array().unwrap() {
+        for c in cases() {
             let t = c["canonical"].as_str().unwrap();
-            assert_eq!(canonical_json(&serde_json::from_str(t).unwrap()), t, "case {}", c["name"]);
+            if c["name"] == "floats" {
+                for x in numbers(t) {
+                    assert_eq!(lean_number(x), x);
+                }
+            } else {
+                assert_eq!(canonical_json(&serde_json::from_str(t).unwrap()), t, "case {}", c["name"]);
+            }
         }
     }
 }
