@@ -25,7 +25,8 @@
 # worktree of it, with this file's gate.sh and checkpoint.sh sent beside. GATE_KEY is the key's path on GATE_ON (default
 # gate.sh's, under that machine's user's ~/.ssh), PROVER_SSH how GATE_ON reaches PROVER_NODE to read its lease (empty:
 # GATE_ON's /etc/vy/peers line), MAXMIN the prover's `gpu-lease --max-min` (a lease that would run into a booked window
-# of the node's waits it out), CHECKPOINT=0 skips step 1 and GATE_MEM=0 reserves no memory for the gate steps. A dry
+# of the node's waits it out), CHECKPOINT=0 skips step 1 and GATE_MEM=0 reserves no memory for the gate steps.
+# PROVER_RUN names a prover already launched for PERIOD, which step 4 fires against (step 3 launches none). A dry
 # run's ids go to PERIOD.dry.env. --dry-run runs steps 1 and 2
 # (with DRY=1: no request reaches a gate, and GATE_KEY need not exist), prints step 3, and runs step 4 with DRY=1
 # against PROVER_RUN, any run id (default none), whose lease it reads.
@@ -141,6 +142,9 @@ PROVER=(--on "$PROVER_NODE" --cwd source --timeout 6h --custody-ttl 12h
 if [ -n "$DRY" ]; then
   echo "DRY: research run --project verity --source <worktree of $COMMIT> ${PROVER[*]}"
   PROVER_RUN=${PROVER_RUN:-none}
+elif [ -n "${PROVER_RUN:-}" ]; then
+  echo "PROVER_RUN $PROVER_RUN is the prover: none launched"
+  record prover "$PROVER_RUN"
 else
   launch prover "${PROVER[@]}" || exit 3
   PROVER_RUN=$prover
