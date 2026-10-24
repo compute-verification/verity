@@ -58,8 +58,9 @@ A spec-level reference for network accounting's timing channel:
   buckets before;
 - the prefix cache (`cache_step`): `CacheStep_v1`, a Boolean Definition of one scheduled row's pass over a table of
   whole cached units, which checks the row's hit (the longest cached prefix while no block can have been evicted, a
-  cached prefix past that) and owns or appends the units the row computes (`PROTOCOL.md`, "Advice v1"). It takes the
-  circuits and their evaluator from `verity`;
+  cached prefix past that) and owns or appends the units the row computes (`PROTOCOL.md`, "Advice v1"); an engine
+  step's calls are `scan_step` and, as a circuit, `build_scan_step`. It takes the circuits and their evaluator from
+  `verity`;
 - the active warden (`warden`): a relay that knows bytes only, between any client and any server. It forwards each
   direction's bytes unchanged, in B-byte cells, r a bucket each way per connection, and egress cell i goes out in
   bucket a + D + ⌊i/r⌋. A miss fails the connection closed. It records and certifies exactly the cells it sends.
@@ -94,9 +95,10 @@ A spec-level reference for network accounting's timing channel:
   still-sent fields (`benchmarks/network_e2e/encodings/arith_vectors.py`), and it is in no proof-service Spec yet
   (`PROTOCOL.md`, "Advice v1");
 - the compile slice (`compile_slice`): `CompileSlice_v1`, a Boolean Definition with `check` its reference, composes
-  `ReplayLoad`, `ReplayStep_v1` and `ReplayAdvance` on shared wires, and the encoder over the scan's asks, for one
-  window. It holds the coded length to the declared charge and the step rows' salted SHA-512 to the public digest. The
-  cache counts are a stand-in held at 0 (`PROTOCOL.md`, "The compile slice"), and
+  `ReplayLoad`, `ReplayStep_v1` and `ReplayAdvance` on shared wires, `CacheStep_v1`'s calls on the certified tokens
+  checking the hits `ReplayStep_v1` reads, and the encoder over the scan's asks, for one window. It holds the coded
+  length to the declared charge and the step rows' salted SHA-512 to the public digest. The evictable and returned
+  counts are a stand-in held at 0 (`PROTOCOL.md`, "The compile slice"), and
   `benchmarks/network_traces/compile_slice_zk.py` proves it in zero knowledge.
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and

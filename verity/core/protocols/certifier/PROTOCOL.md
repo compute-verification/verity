@@ -1220,6 +1220,17 @@ in `ReplayStep_v1`'s scheduling order:
   remain. A static window would let a continuing row's call walk only the units its chunk touches, not all ⌈L / U⌉. And
   sorting each step's lookups and inserts into the table's order, offline memory checking as `advice_check` sorts its
   events, costs O(log² E) a unit for E units in all.
+- *In the compile slice* (`cache_step.scan_step`, `build_scan_step`; "The compile slice" below), the calls run on
+  ReplayStep_v1's output rows, slot by slot. A row at a slot no request ran in is an admission: its lookup from the
+  root checks the hit ReplayStep_v1 read for its candidate (matched by request id), and its compute walks from the
+  lookup's entry; any other row computes from its slot's entry. Then the first candidate left unadmitted gets a lookup
+  at the step's last table, so a hit understated to keep it out is refused. FCFS stops there, so no later candidate's
+  hit is read. The units are the request's tokens in ``cert``, picked by its id, never witness. The table rides in its
+  own witness rows C_0 … C_P beside the state rows, C_0 all zero; `sent` is 0 (a slice inside the bound). The token
+  windows are the slice's size class: a lookup walks min(N + 1, CU) units, exact since no walk from the root matches
+  more than N (every parent is an earlier entry), and a row reaching past CU units of its request is refused. On
+  corpus-smallkv's first seven steps (N 24, B 16) the calls are 1.06M ANDs a step: three lookups of 25 units and two
+  computes of 16.
 
 **The encoder in the circuit** (`arith_encode`: `ArithEncodeStep_v1{K, BIN}`, `ArithEncodeFinish_v1`,
 `KTContext_v1{C, NW}`, with `reference_step`, `reference_finish` and `reference_kt` their specs). They are held symbol
@@ -1292,22 +1303,28 @@ resumes and async's lag bits) on the 6 corpus traces that send any: 0 mismatches
 
 ## The compile slice (`compile_slice`)
 
-`CompileSlice_v1{R, W, A, M, T, L, B, H, CH, WM, FULL, PC, NB, IW, Q, D, P, K, SEG}` composes the compile unit's
-pieces (PRF-143's statement, "Advice v1" above) whole for one window of P steps, so the composition is proved end to
-end before the chain splits it into a unit a step. It takes four rows and returns one 16-bit verdict:
+`CompileSlice_v1{R, W, A, M, T, L, B, H, CH, WM, FULL, PC, NB, IW, Q, D, P, K, SEG, CN, CTW, CU}` composes the
+compile unit's pieces (PRF-143's statement, "Advice v1" above) whole for one window of P steps, so the composition is
+proved end to end before the chain splits it into a unit a step. It takes four rows and returns one 16-bit verdict:
 - ``pub``, public: the declared charge c and the step rows' hiding digest SHA-512(salt ‖ rows), which the clear
   recompile gives;
 - ``adv``, the committed advice: the window's raw decision bits, their count and the executed step count, one row of
   the advice's hiding registration (#3507);
-- ``cert``, the window's certified arrivals (`replay_chain.arrival_fields`), a row the verifier holds to the certified
-  record's commitment;
-- ``wit``: the state rows S_1 … S_{P+1} and the window row W_1, each step's arrivals and decision bits, the window's
-  codeword (SEG bits) and the digest's salt.
+- ``cert``, the window's certified arrivals (`replay_chain.arrival_fields`) and each one's first CU·B certified token
+  ids, a row the verifier holds to the certified record's commitment;
+- ``wit``: the state rows S_1 … S_{P+1} and the window row W_1, each step's arrivals, decision bits and prefix hits, the
+  cache rows C_0 … C_P (the table of CN entries and each running slot's walk entry), the window's codeword (SEG bits)
+  and the digest's salt.
 
 The circuit:
 1. `ReplayLoad` from the session's empty rows to S_1 and W_1, with ``cert``'s arrivals and ``adv``'s decisions.
-2. Per step, `ReplayStep_v1` on S_u's state, and `ReplayAdvance` on the same ``arr``/``bits`` wires. The advance holds
-   them to W_1 at S_u's heads, and S_{u+1} to the step's next state.
+2. Per step, `ReplayStep_v1` on S_u's state with the step's hits, and `ReplayAdvance` on the same ``arr``/``bits``
+   wires. The advance holds them to W_1 at S_u's heads, and S_{u+1} to the step's next state. The step's
+   `CacheStep_v1` calls run on C_u from the same wires ("The prefix cache in the scan" above): an admitting row's
+   lookup checks the hit ReplayStep_v1 read for that candidate, its compute appends the units the row completes, and a
+   lookup checks the hit of the first candidate left waiting. Every call's units are its request's tokens in ``cert``,
+   picked by the request's id. C_0 is all zero and C_{u+1} is the calls' output, so the table is the one the certified
+   tokens build from the empty cache.
 3. The step's asks, in the scan's order: per ask, `KTContext_v1{3, 24}` at the plain context, then
    `ArithEncodeStep_v1{18, 1}` against the codeword at the code's position. The position is a pruned log shifter
    (`replay_chain._front`) over the SEG codeword bits: the reader "Advice v1" leaves open, here at the slice's size.
@@ -1317,21 +1334,22 @@ The circuit:
 4. `ArithEncodeFinish_v1`. The position after it is the coded length, held to ≤ c.
 5. The step rows (valid, request, kind, start, n), zero on an idle step, hashed under the salt.
 
-The verdict's bits are ``load``, ``steps``, ``code``, ``charge`` and ``rows`` (`ACCEPT` = 0x1F), so a proof of a refused
-unit says which check refused it. The reference is `check`: the flags the pieces' references give any unit's rows
-(`replay_step.reference`, the chain's `load` and `advance`, `reference_kt` at the plain contexts, `reference_step` and
-`reference_finish` against the witness codeword, and SHA-512 over the rows). `case` builds the rows of a prover's run
-(`scan`, which takes the codeword, the prefix hits and the heads' moves as the prover's choices) and `check`'s verdict
-on them.
+The verdict's bits are ``load``, ``steps``, ``code``, ``charge``, ``rows`` and ``cache`` (`ACCEPT` = 0x3F), so a proof
+of a refused unit says which check refused it. The reference is `check`: the flags the pieces' references give any
+unit's rows (`replay_step.reference`, the chain's `load` and `advance`, `reference_kt` at the plain contexts,
+`reference_step` and `reference_finish` against the witness codeword, SHA-512 over the rows, and `cache_step.scan_step`
+on the cache rows). `case` builds the rows of a prover's run (`scan`, which takes the codeword, the prefix hits, the
+heads' moves, a made-up table and made-up tokens as the prover's choices, and derives each hit as the longest cached
+prefix otherwise) and `check`'s verdict on them.
 
-No witness field carries a context, a frequency, a cache count or a consumed count. The context is the plain counter's,
-the frequencies are KTContext_v1's outputs on the step's wires, and the heads move by ReplayStep_v1's own ``taken`` and
-``used``.
+No witness field carries a context, a frequency or a consumed count, and no hit is free. The context is the plain
+counter's, the frequencies are KTContext_v1's outputs on the step's wires, the heads move by ReplayStep_v1's own
+``taken`` and ``used``, and each hit ReplayStep_v1 reads is the one its lookup checks against the table the certified
+tokens built.
 
 **Stand-ins**, each a piece not yet ready:
-- *The cache counts.* ENC-DERIVED's hit, evictable and returned-block counts are held at 0. That is true of a slice
-  that hits no prefix and stops or preempts nothing. `CacheStep_v1` isn't wired, so a claimed hit is refused by the 0,
-  and an honest one can't be taken: on a slice that hits, the rows differ from the clear recompile's and ``rows``
+- *The evictable and returned counts.* ENC-DERIVED's evictable and returned-block counts are held at 0. That is true
+  of a slice that stops or preempts nothing; on one that does, the rows differ from the clear recompile's and ``rows``
   refuses.
 - *The model.* KT counts from a zero prior at each window's start, and the per-window counts aren't coded. Advice v1
   under the registered book (#3642) starts from the book's prior and codes them first.
@@ -1342,37 +1360,46 @@ the frequencies are KTContext_v1's outputs on the step's wires, and the heads mo
 - *The bindings.* ``adv`` and ``cert`` are bound by their rows' b‖c, which the verifier checks natively against the
   advice registration's leaf (its path to the root) and the certified record's commitment. No gate hashes them.
 
-**The slice** is corpus-smallkv's first seven steps at (R 2, W 1, A 2), with Q 3, D 7, P 7, K 3 and SEG 32
-(`tests/fixtures/compile_slice_smallkv.json`, which `compile_slice_zk.py` checks against the corpus).
+**The slice** is corpus-smallkv's first seven steps at (R 2, W 1, A 2), with Q 3, D 7, P 7, K 3, SEG 32, CN 24, CTW
+17 and CU 25 (`tests/fixtures/compile_slice_smallkv.json`, which `compile_slice_zk.py` checks against the corpus,
+tokens included: `cache_vectors`' `tokens_of`).
 - The steps: user-0 is forced in and prefilled over two steps, then decodes. User-1 is asked five times and passed
   over, then admitted at the sixth ask, and user-2 is asked once.
 - The decisions are 0, 0, 0, 0, 0, 1, 0, at contexts 0, 1, 2, 2, 2, 2, 0. They code to 8 bits.
-- The unit is 140,090 ANDs: 116,903 for the logic and 23,187 for SHA-512's committed words (circuit-check, pinned in
-  the sidecar). Its rows are 528, 16, 112 and 2,416 bits.
+- The cache: no request shares a block with another, so every hit is 0. The table holds user-0's units as its rows
+  complete them (16 entries after step 0, 23 after step 1, then 24 as its decode completes a unit), then user-1's first.
+- The unit is about 7.6M ANDs, of which 1.06M a step are the cache's calls, past what circuit-check lowers whole: the
+  circuit = reference tests and the sidecar's pin are at a synthetic class (127,800 ANDs; its slice takes real hits,
+  waiting, admitted and in the same step), and the corpus unit is held to its reference by the ZK run's staged
+  verdicts. Its rows are 528, 16, 20,512 and 57,216 bits.
 
 **The negatives.** Each one is the prover's own consistent run, and each is refused by the proved verdict:
-- decision 5 flipped in W_1, with ``adv`` still the registered row: ``load``, ``steps`` and ``rows`` fail (0x0C);
-- the charge one below the coded length: ``charge`` fails (0x17);
-- arrival 1's prompt one token longer in ``cert``: ``rows`` fails (0x0F), and its b‖c isn't the certified record's.
+- decision 5 flipped in W_1, with ``adv`` still the registered row: ``load``, ``steps`` and ``rows`` fail (0x2C);
+- the charge one below the coded length: ``charge`` fails (0x37);
+- arrival 1's prompt one token longer in ``cert``: ``rows`` fails (0x2F), and its b‖c isn't the certified record's;
+- a made-up first table (user-1's first block under the root), which gives user-1 a free 16-token hit at step 6: under
+  the digest of the schedule it serves, ``cache`` alone fails (0x1F), since the table chains from the empty row;
+- user-1's first block made user-0's in ``cert``, the same hit through a consistent table: ``rows`` fails (0x2F), and
+  its b‖c isn't the certified record's.
 
 **REDTEAM's phase 9 on the slice.** Phase 9 found five interfaces free in a piece alone, each the compile unit's to
 bind. Each case below is the prover's run with that interface chosen to lower its charge or its schedule:
 - *The context* (ENC-CODE's finding 1): each decision coded at the context that makes the code shortest, 4 bits
-  against the honest 8, with the charge at 4. ``code`` and ``charge`` fail (0x13). The unit's context is its own
+  against the honest 8, with the charge at 4. ``code`` and ``charge`` fail (0x33). The unit's context is its own
   counter's, so the codeword isn't its code, and the charge is below its count.
 - *The frequencies* (ENC-CODE's finding 2): each decision coded as near certain (2^16 − 1 to 1), 2 bits, with the
-  charge at 2. ``code`` and ``charge`` fail (0x13), since the frequencies are KTContext_v1's on the step's wires.
-- *The prefix hit* (ReplayStep_v1's finding 1): the forced arrival's step takes a 2-block
-  hit, so it schedules 32 tokens fewer. ``steps`` and ``rows`` fail (0x0D). This is refused by the stand-in, the hit
-  held at 0, and not yet by CacheStep_v1's derived hit.
+  charge at 2. ``code`` and ``charge`` fail (0x33), since the frequencies are KTContext_v1's on the step's wires.
+- *The prefix hit* (ReplayStep_v1's finding 1): the forced arrival's step takes a 2-block hit, so it schedules 32
+  tokens fewer. ReplayStep_v1 takes it, and ``cache`` and ``rows`` fail (0x0F): the hit's lookup finds no cached
+  prefix.
 - *A decision read again* (the chain's finding 3): step 2 leaves the decision head in place, so step 3 reads its
-  decision again. ``steps`` and ``rows`` fail (0x0D), since the heads move by ReplayStep_v1's own ``used``.
+  decision again. ``steps`` and ``rows`` fail (0x2D), since the heads move by ReplayStep_v1's own ``used``.
 - *An arrival left in the queue* (the chain's finding 3): step 0 leaves the arrival head in place, so the admitted
-  request is still queued. ``steps`` and ``rows`` fail (0x0D), since the heads move by its own ``taken``.
+  request is still queued. ``steps`` and ``rows`` fail (0x2D), since the heads move by its own ``taken``.
 
-Two of phase 9's findings aren't expressible on the slice. A fabricated cache table (CacheStep_v1's findings 1 and 2)
-needs a table input, and free returns (ReplayStep_v1's finding 2) need a stopping request. The window boundary and the
-C-carry were closed in the pieces.
+CacheStep_v1's findings 1 and 2 (phase 9 (4): a hit pinned only to the committed table, and the tokens free in the
+piece alone) are the made-up table and tokens above. Free returns (ReplayStep_v1's finding 2) aren't expressible on the
+slice: they need a stopping request. The window boundary and the C-carry were closed in the pieces.
 
 **In zero knowledge** (`benchmarks/network_traces/compile_slice_zk.py`, N2-ZK's audit path; run r20261024-140227-8995,
 CPU prover): one template of nine units, the honest one, the three negatives and phase 9's five.
@@ -1795,15 +1822,23 @@ and seven lemmas, and three more proved lemmas:
     `check_chain` accepts it, and refuses a short window, the empty state or window under a fresh salt or another
     program's, the carried state or window under a fresh salt, and another row of the last window;
   - `size` is the parts' AND counts, which circuit-check pins at the tests' shape and at the sync KV-pressure trace's;
-- **`test_network_certifier_compile_slice.py`:** the compile slice on corpus-smallkv's first seven steps:
-  - the reference's scan gives the replay's rows and the plain contexts' symbols, and its digest is the clear rows';
-  - the circuit's verdict is `check`'s on the honest rows and on each negative: a decision flipped in the window
-    row, the charge one below the coded length, an arrival not the certified one, a wrong digest and a wrong salt.
-    Each is refused by exactly the checks `check` names;
-  - REDTEAM's phase 9 choices (a context, frequencies, a prefix hit, a decision read again, an arrival left in the
-    queue) are refused by the circuit's verdict, `check`'s, and no witness field carries any of them;
+- **`test_network_certifier_compile_slice.py`:** the compile slice on corpus-smallkv's first seven steps, by its
+  reference, and on a synthetic slice whose candidates take real hits, by its circuit:
+  - the reference's scan gives the replay's rows and the plain contexts' symbols, its digest is the clear rows', every
+    hit is 0 and the table holds user-0's units, then user-1's first;
+  - each negative is refused by exactly the checks `check` names: a decision flipped in the window row, the charge
+    one below the coded length, an arrival not the certified one, and REDTEAM's phase 9 choices (a context,
+    frequencies, a prefix hit, a decision read again, an arrival left in the queue);
+  - the cache binds the hit: a made-up first table gives user-1 a free hit at step 6 and ``cache`` refuses it, and
+    made-up tokens give it through a consistent table and ``rows`` refuses them;
+  - on the synthetic slice (a hit looked up while waiting, taken at admission, and another in the same step), the
+    circuit's verdict is `check`'s on the honest rows and on every negative, the hits claimed shorter or made up by a
+    table or tokens and phase 9's choices among them;
   - `codeword` is the segment `arith_encode` accepts, and a flipped bit of it is refused;
-  - `size` is the unit's AND count, which circuit-check pins;
+  - `size` is the synthetic unit's AND count, which the sidecar pins, and the corpus unit's row widths;
+- **`test_network_certifier_cache_step_phase9.py`** (REDTEAM's phase 9 (4)): `CacheStep_v1` alone pins the hit only
+  to the table it's given, its tokens are free in the piece, and past the bound a shorter hit is accepted and charged;
+  the compile slice is what binds the table and the tokens;
 - **`test_network_certifier_active.py`:** the active certifier over localhost sockets on an injected clock:
   - `Shaper` is `run_shaper`'s rule on random instances;
   - an honest run's records, hand times and wire are the Program's, accepted raw and committed;
