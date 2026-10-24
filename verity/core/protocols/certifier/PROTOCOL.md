@@ -1015,8 +1015,8 @@ is (the named gap).
   root in the clear. The opening is the verifier's registered-read check, and no gate of the unit hashes.
 
 **Cost, per window** (`warden-serve`'s `cells.jsonl`). At the served schedule (T = 600, lanes = 8, r = 2, B = 256),
-N = 9,600 rows. The commitment, the tree included, takes about 0.3 s in Python on the publisher's thread, never the
-ticker's. The signature takes about 4 ms (LMS H = 10).
+N = 9,600 rows. The commitment, the tree included, takes 0.3 to 0.4 s in Python on the publisher's thread, never the
+ticker's. The signature takes 4 to 7 ms (LMS H = 10).
 
 **Demonstration** (`benchmarks/network_traces/warden_zk.py`). A toy unit, `WardenCellIdentity{B}`, takes one cell's
 8·B bits through two NOTs. Its port is registered against the warden's egress root of a warden-serve run, proved by
