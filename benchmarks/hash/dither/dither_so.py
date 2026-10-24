@@ -263,11 +263,13 @@ class SoWindow(DO.Window):
 
     def _rs_set(self) -> None:
         """RS_ENV's tree stream, its events (a ring of RS_EV steps: "b" forward s's start and "f" its end on the
-        serving stream, "w0"/"w1" around the receipt leaf's wait and "t" the round's end on the tree stream), pinned
+        serving stream, "w0"/"w1" around the receipt leaf's wait, "t" the round's end on the tree stream, and "h" the
+        serving stream at step s + 1, before it waits for round s, `rs_h_of` the step each "h" slot holds), pinned
         roots and served-y refusals, and the sender thread (`_rs_send`)."""
         self.rs_stream = torch.cuda.Stream(device=self.dev, priority=int(os.environ.get(RS_PRIO_ENV, "0")))
         self.rs_ev = {k: [torch.cuda.Event(enable_timing=True) for _ in range(RS_EV)]
-                      for k in ("b", "f", "w0", "w1", "t")}
+                      for k in ("b", "f", "w0", "w1", "t", "h")}
+        self.rs_h_of = [-1] * RS_EV
         self.rs_waited = [False] * RS_EV
         self.rs_root = [torch.empty(8, dtype=torch.int64).pin_memory() for _ in range(RS_EV)]
         self.rs_ybad = [torch.empty(self.L, dtype=torch.bool).pin_memory() for _ in range(RS_EV)]
@@ -325,6 +327,12 @@ class SoWindow(DO.Window):
         ph["trees_gpu_ms"] = ev["f"][e].elapsed_time(ev["t"][e])
         if self.rs_waited[e]:
             ph["units_wait_ms"] = ev["w0"][e].elapsed_time(ev["w1"][e])
+        p = (s - 1) % RS_EV
+        if self.rs_h_of[p] == s - 1:
+            # step s's join: forward s - 1's end to the serving stream at step s (step s - 1's sampling and the host's
+            # step s up to its inputs), and round s - 1's end to forward s's start
+            ph["serve_ready_ms"] = ev["f"][p].elapsed_time(ev["h"][p])
+            ph["join_gap_ms"] = ev["t"][p].elapsed_time(ev["b"][e])
         with self.rs_cv:
             if hold:
                 self.rs_held[s] = (i, root, bad)
@@ -642,9 +650,16 @@ class SoWindow(DO.Window):
 
     def before(self, m: int) -> None:
         self.t_b0 = time.perf_counter()
+        if self.rs:
+            s = self.s
+            # the sender done with step s - RS_EV + 1, the last to read the event slots this step records into
+            self._rs_wait(lambda: self.rs_sent_upto >= s - RS_EV + 1)
         if self.rs and self.rs_last is not None:
             # round s - 1 reads the step's inputs and what forward s writes: the serving stream waits for it first
-            torch.cuda.current_stream().wait_event(self.rs_ev["t"][self.rs_last % RS_EV])
+            e = self.rs_last % RS_EV
+            self.rs_ev["h"][e].record()
+            self.rs_h_of[e] = self.rs_last
+            torch.cuda.current_stream().wait_event(self.rs_ev["t"][e])
             self.rs_last = None
             if self.deferred is not None:
                 self._poll_deferred()
@@ -654,9 +669,7 @@ class SoWindow(DO.Window):
             DA.SIDE[0].spill.wait_z(0)
         super().before(m)
         if self.rs:
-            s = self.s
-            self._rs_wait(lambda: self.rs_sent_upto >= s - RS_EV)
-            self.rs_ev["b"][s % RS_EV].record()
+            self.rs_ev["b"][self.s % RS_EV].record()
         self.m_of[self.s] = self.m_last = m
         if self.cap is not None:
             self.cap_of[self.s] = self.cap_at[self.s] = self.cap
