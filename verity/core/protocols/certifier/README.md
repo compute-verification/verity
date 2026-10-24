@@ -36,10 +36,15 @@ A spec-level reference for network accounting's timing channel:
   every cell of an egress link-window is opened, each a pad or the canonical event of one token id on the stream the
   warden set, and each is the output the advice's map names at its place (`window_map`, from advice v0's outputs and
   release buckets; the verifier computes it in the clear from the opened advice, the named gap, until the map is read
-  in the proof under the advice's hiding root), with the id the Commit sampled for it (the port: one hiding row of ids a step, opened under the
-  Commit's root). The warden commits each bucket's cells as one hiding row. It has the reference and the unit's Boolean
-  Definition (`IoTieWindow`: the cells' root by `NetworkRowsRoot`, the port's rows by `IoTiePort`, then `IoTieContent`:
-  `IoTieCell` on every cell, the prover's Beneš routing of the port's entries `IoTieRoute`, `IoTieMatch`);
+  in the proof under the advice's hiding root), with the id the Commit sampled for it (the port: one hiding row of
+  ids a step, opened under the Commit's root). The warden commits each bucket's cells as one hiding row. It has the
+  reference and the unit's Boolean Definition (`IoTieWindow`: the cells' root by `NetworkRowsRoot`, the port's rows by
+  `IoTiePort`, then `IoTieContent`: `IoTieCell` on every cell, the prover's Beneš routing of the port's entries
+  `IoTieRoute`, `IoTieMatch`);
+- the ingress tie (`io_request`, `PROTOCOL.md`, "The ingress tie"), its reference on a fake upstream: an ingress
+  link-window's cells cut into CERT-VARLEN's id requests, each request's count of prompt fields held to the advice's
+  prompt_len and its ordinal to its place in the cut, which N2-ADVICE's advised verdict is to require. Its Boolean
+  Definition (`IoTieRequest`) isn't built;
 - the capacity counts;
 - the calibration of honest runs;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
