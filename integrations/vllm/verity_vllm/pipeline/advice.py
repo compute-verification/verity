@@ -56,7 +56,7 @@ from . import advice_windows as AW
 SCHEMA = "verity-vllm/advice-report/v3"
 REGISTRATION = "verity-vllm/advice-registration/v1"
 SERVED = "verity-vllm/advice-windows-index/v1"
-COMPILER = "verity_vllm.predict.steps.compile_steps"
+COMPILER = "verity_vllm.program.predict.steps.compile_steps"
 
 
 @dataclass(frozen=True)

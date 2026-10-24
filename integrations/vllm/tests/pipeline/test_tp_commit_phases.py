@@ -69,7 +69,7 @@ def test_a_tp_commit_writes_each_phase_around_its_gpu_steps_and_ends_the_one_a_f
     """The first instrumented run's finalize fails on a rank: every span before it ended ok, the run's span ended not ok with the
     error on its way out, and nothing is left open (the reader would run an open span on to `now`)."""
     pytest.importorskip("torch")
-    from verity_vllm import protocol_options as PO
+    from verity_vllm import protocols as PO
     from verity_vllm.engine import engine_profile as prof
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline import commit as PC

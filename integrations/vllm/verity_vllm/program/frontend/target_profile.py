@@ -138,7 +138,7 @@ class TargetProfile:
                            declared-and-bound, never attested).  `"shared-per-block"` (the default when None) binds
                            `ScaledMmFp8BlockSharedScale_v1`: each weight block's K/G products once, read by its G coordinates.
                            `"per-coordinate"` binds `ScaledMmFp8Block_v1`, whose every coordinate forms its own.  Omitted from `to_json()` when None.
-    protocols           -> the protocol set the run executes (`verity_vllm.protocol_options`; grammar `config.parse_protocols`).  None =
+    protocols           -> the protocol set the run executes (`verity_vllm.protocols`; grammar `config.parse_protocols`).  None =
                            sampled proofs alone (`config.DEFAULT_ROW_PROTOCOLS`), the Commit as it has always run.  Declared, it is the
                            whole set in its one spelling, sampled proofs included (a profile is the target of sampled proofs' Program);
                            the default spelled out is refused (declare None).  The Commit installs the other protocols beside its

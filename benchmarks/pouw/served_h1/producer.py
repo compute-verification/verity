@@ -1,5 +1,5 @@
 """Kernels' producer of vllm's `Served.receipts` (BRIDGE2) on the H1 served path
-(`integrations/vllm/verity_vllm/protocol_options/pouw_h1_served.py`): each call's receipts, one a unit of the call in the
+(`integrations/vllm/verity_vllm/protocols/pouw/h1/served.py`): each call's receipts, one a unit of the call in the
 window Program's tile order, computed by h1u.cu's units kernel (`Units`: `kh_seeds` and `kh_unit` of an -hbc build,
 `benchmarks/hash/dither/sbench.sh`'s h1u_kc.so) or, with no kernel, by receipts.py's torch chain (the reference the units
 kernels are gated against).

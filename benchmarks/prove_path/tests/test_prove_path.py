@@ -179,7 +179,7 @@ class Listing:
 def test_the_transfer_gates_are_in_the_compilers_registered_digest(monkeypatch):
     """I2's digest covers the templates it lists as holding transfer gates, and `Capped` passes the list and its digest on, so a
     registration under a compiler proving other units whole names another compiler."""
-    monkeypatch.setattr("verity_vllm.predict.score.code_version", lambda: "c0de")
+    monkeypatch.setattr("verity_vllm.program.predict.score.code_version", lambda: "c0de")
     r = SimpleNamespace(phi=SimpleNamespace(to_json=lambda: {"model": "m"}), default_seed=0, cap_bits=PP.CAP_BITS)
     bare, listing = (PP.I2Compiler(r, {}, "/nonexistent", transfer_gates=tg) for tg in ((), ("RoPEHead_v1{D=64}",)))
     assert bare.digest != listing.digest and len(listing.digest) == 128
@@ -381,8 +381,8 @@ def test_a_forged_unit_passes_every_check_before_the_draw_and_differs_in_one_bit
 
 
 def test_i2s_requests_are_its_compiled_units_once_per_advice_and_its_refusal_is_named(monkeypatch):
-    from verity_vllm.predict import steps as ST
-    from verity_vllm.predict.common import Unexpressible
+    from verity_vllm.program.predict import steps as ST
+    from verity_vllm.program.predict.common import Unexpressible
 
     calls = []
 

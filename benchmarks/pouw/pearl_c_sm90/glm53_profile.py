@@ -113,7 +113,7 @@ def _instrument(run, PPD) -> None:
 def run_mode(a) -> int:
     import torch
     import glm53_timing as T
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
 
     shapes = [tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes else list(SHAPES)
     schedule = (a.schedule or ["serial"])[0]
