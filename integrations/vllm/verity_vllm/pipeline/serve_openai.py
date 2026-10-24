@@ -7,8 +7,8 @@ It serves what network-accounting's certifier sends (`benchmarks/network_traces/
 ``/tokenize`` and ``/v1/completions``, the prompt as token ids or text, streamed as vLLM's own server streams it (one
 ``data: {...}`` event per engine output, the usage chunk, ``data: [DONE]``), or as one JSON response. vLLM's OpenAI server
 is the reference: with vLLM importable, a request is parsed by its ``CompletionRequest`` (defaults, validation,
-``to_sampling_params``, ``get_max_tokens``) and every chunk is its ``CompletionStreamResponse``, serialized the way its
-``completion_stream_generator`` does. `PlainProtocol` is the same framing without vLLM, for the CPU tests; where both
+``to_sampling_params``) and every chunk is its ``CompletionStreamResponse``, serialized the way its
+``completion_stream_generator`` does; ``max_tokens`` is bounded by its ``get_max_tokens`` rule. `PlainProtocol` is the same framing without vLLM, for the CPU tests; where both
 exist, `framing_agrees` holds them to each other and the server records the result at start.
 
 The engine is `verity_vllm.LLM` (in-process engine core, Model Runner V2), stepped by one thread, the process's main
@@ -177,6 +177,7 @@ class PlainProtocol:
                 "output_kind": "delta" if req.stream else "final_only"}
 
     def max_tokens(self, req: Completion, max_model_len: int, prompt_len: int, defaults: Mapping[str, Any]) -> int:
+        """vLLM's ``get_max_tokens`` without truncation or an override (and no platform limit, which CUDA hasn't)."""
         if max_model_len < prompt_len:
             raise ValueError(f"Input length ({prompt_len}) exceeds model's maximum context length ({max_model_len}).")
         asked = req.max_tokens if req.max_tokens is not None else defaults.get("max_tokens")
@@ -205,17 +206,16 @@ class PlainProtocol:
 
 
 class VllmProtocol(PlainProtocol):
-    """The reference itself: vLLM's ``CompletionRequest`` parses, its ``to_sampling_params`` and ``get_max_tokens`` decide,
-    its ``CompletionStreamResponse`` / ``CompletionResponse`` serialize."""
+    """The reference itself: vLLM's ``CompletionRequest`` parses and makes the ``SamplingParams``
+    (``to_sampling_params``), its ``CompletionStreamResponse`` / ``CompletionResponse`` serialize."""
 
     name = "vllm"
 
     def __init__(self, force_include_usage: bool = False) -> None:
         super().__init__(force_include_usage)
         from vllm.entrypoints.openai.completion import protocol as P
-        from vllm.entrypoints.serve.utils import api_utils
 
-        self.P, self.api = P, api_utils
+        self.P = P
 
     def parse(self, body: Any) -> Completion:
         if not isinstance(body, dict):
@@ -232,17 +232,13 @@ class VllmProtocol(PlainProtocol):
             prompt = prompt[0]
         if not (isinstance(prompt, str) or (isinstance(prompt, list) and prompt and all(isinstance(t, int) for t in prompt))):
             raise RequestError("prompt: one prompt, as token ids or a string", param="prompt")
-        include, continuous = self.api.should_include_usage(r.stream_options, self.force_include_usage)
+        include, continuous = should_include_usage(r.stream_options.model_dump() if r.stream_options else None, self.force_include_usage)
         return Completion(model=r.model, prompt=prompt, stream=bool(r.stream), max_tokens=r.max_tokens,
                           add_special_tokens=bool(r.add_special_tokens), include_usage=include, continuous_usage=continuous,
                           return_token_ids=bool(r.return_token_ids), raw=r)
 
     def sampling_params(self, req: Completion, max_tokens: int, defaults: Mapping[str, Any]) -> Any:
         return req.raw.to_sampling_params(max_tokens, dict(defaults))
-
-    def max_tokens(self, req: Completion, max_model_len: int, prompt_len: int, defaults: Mapping[str, Any]) -> int:
-        return self.api.get_max_tokens(max_model_len, req.max_tokens, prompt_len, dict(defaults),
-                                       truncate_prompt_tokens=getattr(req.raw, "truncate_prompt_tokens", None))
 
     def chunk(self, *, request_id: str, created: int, model: str, text: str, finish_reason: str | None, stop_reason: Any,
               prompt_token_ids: list[int] | None, token_ids: list[int] | None, usage: dict[str, int] | None) -> str:
@@ -676,6 +672,7 @@ class Server:
         self.tokenizer, self.defaults, self.submit, self.abort = tokenizer, dict(defaults), submit, abort
         self.model_root, self.clock = model_root or served_name, clock
         self.served = 0
+        self.streaming: set[asyncio.StreamWriter] = set()      # responses whose head is written
 
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
@@ -719,6 +716,13 @@ class Server:
             raise RequestError(f"no route {method} {path}", 404, "NotFoundError")
         except RequestError as e:
             await self._json(writer, e.status, error_body(str(e), e.status, e.kind, e.param))
+        except (ConnectionError, asyncio.IncompleteReadError):
+            raise
+        except Exception as e:  # noqa: BLE001  (a fault of ours answers 500, before any byte of a stream is written)
+            if writer not in self.streaming:
+                await self._json(writer, 500, error_body(f"{type(e).__name__}: {e}", 500, "InternalServerError"))
+        finally:
+            self.streaming.discard(writer)
 
     @staticmethod
     def _body(body: bytes) -> Any:
@@ -783,6 +787,7 @@ class Server:
                                               token_ids=ids if req.return_token_ids else None, usage=_usage(n_prompt, len(ids)))
                 return await self._json(writer, 200, payload.encode())
             writer.write(self._head(200, "text/event-stream; charset=utf-8", None))
+            self.streaming.add(writer)
             first = True
             while not finished:
                 d = await deltas.get()
