@@ -61,7 +61,7 @@ captured from serving, and says so (`window.kind = "stand-in"`). Run A5 (`benchm
 too: a deferred Commit's serving rows, written after serving from its sealed replay bundle opened against the run's record
 (`verity-vllm serving-rows`), whose `of` names the record's vllm-v1 run root and the bundle's manifest digest; the link from
 those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the in-Commit hook writes before any draw are
-`served`: serving's own commitment, with no claim that they hold the values under the vllm-v1 roots. A deferred window becomes
+`served`: serving's own commitment, with no claim that they hold the values under the Commit's roots. A deferred window becomes
 `served` once serving's record is frame-v3-sha512 / hm96-sha512 itself, or once the circuit opens the vllm-v1 SHA-256 leaves.
 
 ## Where things are
@@ -139,7 +139,10 @@ from verity.core.protocols.sampled_proofs.costfit import fit
     `verifier.check_verdicts`).
   - `Stream(spec, unit, budget=, delta=, challenger=, rounds=1)` has the calls `register`, `select` (with a work
     sampling design's `closure=`), `session`, `deliver` and `outcome`, which
-    raise `Refused` (with its `Verdict`) or `Pending`; `halted` is its halt's cause once its fleet halted it.
+    raise `Refused` (with its `Verdict`) or `Pending`; `halted` is its halt's cause once its fleet halted it. Its `unit`
+    is one template, or a window's several in order (a TP rank's served window): the check's `program` is then their
+    digests and its query `Q_template_instances`, `register(counts=)` gives the challenger's own instances of each,
+    and the window is drawn once by `stratified:K`, a stratum per template.
   - `Fleet()` has `attach(stream, operator)`, before the stream's first registration; `halted` maps each halted
     operator to its halt's cause.
   - `selection_law` is the sampling design a rule names over N units, and `select_draw` the draw object from the
@@ -173,7 +176,7 @@ from verity.core.protocols.sampled_proofs.costfit import fit
 - `consumers`: `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
 - `coins`: `OwnRandomness`, the challenger's own randomness; `draw_first`, a one-stage sampling design's draw from it,
   with `closure_of` for a work design's closure; `ChallengerCoins`, a draw's coins from one family of the auditor's
-  challenger, and `challenger_stream` and `read_reason`, the verifier's replay of them from the record.
+  challenger, and `challenger_stream`, `read_reason` and `coins_reason`, the verifier's replay of them from the record.
 - `plan`: `VerificationPlan` of `GateClass`es with its `UnconditionalObligation`s, `Obligation.of_call`, and
   `weight_binding_plan`.
 - `optimize`: the untrusted planner. From `Candidate`s, a `CostModel` (per statement, per unit, commitment, serve-time
@@ -448,9 +451,17 @@ ceil(missing / 64) more of the family's coins after it in one round trip, checks
 commitment, and concatenates them, with no stretch. A rerun's extension opens only new indices, and a commitment is
 drawn once. The record is each `Segment` (family, first index, `after` and the openings). The verifier replays it with
 `read_reason` against the roots the challenger's signed release log shows (`remote.trusted_session`): the draw's coins
-are exactly those released after the commitment, every one read. The Lean verifier of record replays the draw from the
-bytes (`Run.run`, `Select.select` on `source`) but does not yet check them against the segment. Pinned by
-`tests/test_challenger_coins.py`.
+are exactly those released after the commitment, every one read. A stream over `ChallengerCoins` has `coin_source`
+`"challenger"` (its digest says so, and it takes no sampler); any other is `"verifier"`. Every outcome's run by the Lean
+verifier of record (`Run.run`, `SampledProofs.ChallengerCoins`) takes the `coin_source`. From the challenger, the check
+is mandatory: `Stream.outcome(coins=...)` hands the evidence (`coins_reason`'s `{key, ledger, main, pins, segment,
+session}`), and the run takes the commitment and the roots from the session the auditor's ledger opens for the
+registration's window (`register`'s `window_root`, never a window the evidence names), run from a commit the host's
+pins log records on the verifier's copy of main's first-parent line (`pinned_session`), and refuses the select step (code `coins`) unless the
+bytes the draw read are those coins, after the registration's digest. Missing evidence and a registration without its
+window root are refused the same way, as is evidence for a draw from the verifier's own coins: the outcome is a reject
+failing `run`. Pinned by `tests/test_challenger_coins.py` and the difftest's `challenger_read`,
+`challenger_draw_coins` and `run`.
 
 ### Verification plans
 

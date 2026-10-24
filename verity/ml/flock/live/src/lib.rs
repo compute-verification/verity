@@ -81,6 +81,27 @@ pub const KIND_SLICE: u8 = 0x02;
 pub const LABEL_MIXED: &[u8] = b"flock-mixed-v1";
 pub const LABEL_R1CS: &[u8] = b"flock-r1cs-v0";
 
+/// Every thread's stack, the prover's and the verifier's: Rust's 2 MiB default overflows on a large statement's proof
+/// (`RMSNormCudaVector8_v1{BLOCK=256}`, PRF-141).
+pub const THREAD_STACK: usize = 64 << 20;
+
+/// Rayon's global pool on [`THREAD_STACK`] stacks. First thing in a binary's `main`, before any parallel iterator builds the
+/// pool with the default stack; a second call does nothing.
+pub fn init_threads() {
+    let _ = rayon::ThreadPoolBuilder::new().stack_size(THREAD_STACK).build_global();
+}
+
+/// `std::thread::spawn` on a [`THREAD_STACK`] stack.
+pub fn spawn<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> std::thread::JoinHandle<T> {
+    std::thread::Builder::new().stack_size(THREAD_STACK).spawn(f).expect("a thread")
+}
+
+/// `Scope::spawn` on a [`THREAD_STACK`] stack.
+pub fn spawn_scoped<'s, 'e, T: Send + 's>(sc: &'s std::thread::Scope<'s, 'e>, f: impl FnOnce() -> T + Send + 's)
+                                          -> std::thread::ScopedJoinHandle<'s, T> {
+    std::thread::Builder::new().stack_size(THREAD_STACK).spawn_scoped(sc, f).expect("a thread")
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // Framing (transcript-v2: 16-byte header [op][kind][0;6][len u64 LE], payload zero-padded to 16).
 // ---------------------------------------------------------------------------------------------------------------
@@ -2540,5 +2561,20 @@ mod coin_server_tests {
         let mut s = Server::try_new(cfg(), Box::new(NoProofs)).unwrap();
         s.urandom = None;
         assert!(matches!(s.handle(Req::Hello(hello)), Resp::Refused(ref e) if e.contains("no OS random source")));
+    }
+}
+
+#[cfg(test)]
+mod thread_stack_tests {
+    /// About 1 KiB a frame: 16 Ki frames need some 16 MiB, past the 2 MiB default and inside `THREAD_STACK`.
+    fn deep(n: usize) -> usize {
+        let a = std::hint::black_box([n as u8; 1024]);
+        if n == 0 { 0 } else { deep(n - 1) + usize::from(a[0] == n as u8) }
+    }
+
+    #[test]
+    fn a_spawned_thread_takes_a_recursion_past_the_default_stack() {
+        assert_eq!(super::spawn(|| deep(16 << 10)).join().unwrap(), 16 << 10);
+        assert_eq!(std::thread::scope(|sc| super::spawn_scoped(sc, || deep(16 << 10)).join().unwrap()), 16 << 10);
     }
 }

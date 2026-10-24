@@ -3,17 +3,69 @@ What `verify` and `statement` check of V*'s statements at setup, beside their ow
 verifier holds it (`commits`, from the files `--rec-inner-transcript` and `--rec-inner-registration` and the inner
 circuit's META), candidate 3's check 5 inputs (`c3`), candidate 3's checks before the session's own setup
 (`checkInner`), and the V* checks both run on every statement (`checks`). Both call sites call these, so a statement
-about them is one about what either accepts. `verify` also refuses, last in each verdict, a recursive session without
+about them is one about what either accepts. `verify`'s setup also refuses a V* session that is not one table holding
+its whole population (`oneFull`). `verify` also refuses, last in each verdict, a recursive session without
 the verifier's inner shape, a V* session whose draw is not every unit of its population (`fullDraw`), and a session over
 an inner session whose record holds no draw (`innerDrawn`).
 -/
 import Flock.RecCoins
+import Flock.RecRecord
 import Flock.Witness
 
 namespace Flock
 namespace RecSetup
 
 open Lean
+
+/-- A round of the record read in its own format, counted as `RecVStar.schedOf` counts one: its coins, its tops' node
+counts, its copies of level 0's top, and whether it holds a commit string. -/
+def schedOfRound (x : RecRecord.Round) : RecVStar.SchedRound :=
+  (x.coins.length, (x.tops.map List.length).toArray, x.level0, !x.commits.isEmpty)
+
+/-- Stream `s`'s salted tops in the record read in its own format, in the record's order, each with its round. -/
+def repTops (r : RecRecord.Record) (s : List UInt8) : List (Nat × List (List UInt8)) :=
+  (r.rounds.filter (·.stream == s)).flatMap fun x => x.tops.map (x.k, ·)
+
+/-- Stream `s`'s commit strings in the record read in its own format, in the record's order: each round that holds any,
+with its round. -/
+def repCommits (r : RecRecord.Record) (s : List UInt8) : List (Nat × List (List UInt8)) :=
+  (r.rounds.filter (·.stream == s)).filterMap fun x => if x.commits.isEmpty then none else some (x.k, x.commits)
+
+/-- The refusal of a coin server's record that is not in its own format. -/
+def notOwnFormat : String :=
+  "rec inner transcript: the coin server's record does not read in its own format (RecRecord.readFull: " ++
+    "rec_live.record_bytes, its rounds first, then its kind, tops, Hello in its keys' order and the link's roots " ++
+    "and points, at json.dumps' indent=1)"
+
+/-- **The record read in its own format is the record its JSON readers read**: at the verifier's inner shape `i`, the
+inner transcript's bytes `tt` read in the coin server's format (`RecRecord.readFull`, the reader the recursion's
+transcript model reads back), and they hold what the JSON readers took of them (`tr`, its parse): Hello's one table, the
+table's `root_B` and the link points (`RecVStar.innerLink`), the rounds the schedule's in its order, each with its
+stream, round, coin count and counts (`RecVStar.checkSchedule`'s), and each rep's salted tops and `c_k` with their
+rounds (`innerLink`'s tops and `cs`, `RecVStar.innerCommits`). The JSON readers run first, so a record they refuse is
+refused as before. -/
+def checkReads (i : RecVStar.Inner) (tt : String) (tr : Json) (record : String) (cs : RecVStar.InnerCommits) :
+    V Unit := do
+  let lk ← RecVStar.innerLink tr record
+  let some r := RecRecord.readFull tt.toUTF8.toList | throw notOwnFormat
+  let t := lk.table
+  let tb := t.toUTF8.toList
+  let at_ := "rec inner transcript: the coin server's record read in its own format holds "
+  if r.hello.tables != [tb] then throw s!"{at_}Hello's tables other than {t} alone, as its JSON reads them"
+  if r.roots != [(tb, lk.root.toList.map (·.toList))] then
+    throw s!"{at_}a link.roots other than {t}'s root_B alone, as its JSON reads it"
+  if r.points != (lk.points.toList.map (·.toList)).flatten then
+    throw s!"{at_}link points other than its JSON's"
+  let some want := RecVStar.scheduleOf i t | throw s!"{at_}rounds, and the inner shape has no schedule"
+  let flat := want.toList.flatMap fun (s, _, _, rs) => rs.toList.mapIdx fun k w => (s.toUTF8.toList, k, w.1, w)
+  if r.rounds.map (fun x => (x.stream, x.k, x.n, schedOfRound x)) != flat then
+    throw s!"{at_}rounds other than its schedule's (stream, round, coin count, tops, level 0 and commits)"
+  for x in [0, 1] do
+    let s := s!"{t}/rep{x}".toUTF8.toList
+    if repTops r s != (lk.tops.getD x #[]).toList.map fun (k, top) => (k, top.toList.map (·.toList)) then
+      throw s!"{at_}rep {x}'s salted tops other than its JSON's"
+    if repCommits r s != (cs.reps.getD x #[]).toList.map fun (k, c) => (k, [c.toList]) then
+      throw s!"{at_}rep {x}'s c_k other than its JSON's"
 
 /-- META's `registration` (`inner_registered.REGISTRATION_KEY`): the digest of the circuit registration it binds
 (one-stage `registration.digest`), or none when META names none; and META's `stacked` (`RecVStar.stackedShapeOf`), the
@@ -28,8 +80,9 @@ def metaBound (m : Json) : V (Option String × Option RecVStar.StackedShape) := 
 /-- The inner transcript `t` (`rec/inner-transcript/v1`) held against the inner session's record `record`, the circuit
 registration `r` (`verity/registration/v2`) if the verifier holds one, and what the inner circuit's META binds (`bound`,
 `metaBound`): `RecVStar.innerCommits` on the files as read, and at the verifier's inner shape `inner` the transcript on
-its schedule (`RecVStar.checkSchedule`). At candidate 3's inner shape (`inner` naming a RecSparse shape) it needs the
-registration, which binds R before the coins. -/
+its schedule (`RecVStar.checkSchedule`) and read in its own format as its JSON readers read it (`checkReads`). At
+candidate 3's inner shape (`inner` naming a RecSparse shape) it needs the registration, which binds R before the
+coins. -/
 def commits (inner : Option RecVStar.Inner) (t : V String) (r : V (Option String))
     (bound : V (Option String × Option RecVStar.StackedShape)) (record : String) : V RecVStar.InnerCommits := do
   let rj ← match ← r with
@@ -42,10 +95,13 @@ def commits (inner : Option RecVStar.Inner) (t : V String) (r : V (Option String
       | .ok j => pure (some j)
       | .error e => throw s!"rec inner registration: not JSON: {e}"
   let (bound, shape) ← bound
-  match Json.parse (← t) with
+  let tt ← t
+  match Json.parse tt with
   | .ok j =>
     let cs ← RecVStar.innerCommits j record rj bound shape
-    if let some i := inner then RecVStar.checkSchedule i j
+    if let some i := inner then
+      RecVStar.checkSchedule i j
+      checkReads i tt j record cs
     pure cs
   | .error e => throw s!"rec inner transcript: not JSON: {e}"
 
@@ -132,6 +188,24 @@ def checks (inner : Option RecVStar.Inner) (commits : Option RecVStar.InnerCommi
       "--rec-inner-session), which its V* list and rows are checked against")
   sts.forM (RecVStar.checkStmt inner tags tables · circuitB partition program registered part bindings rows)
   if let (some i, some cs) := (inner, commits) then RecVStar.checkCovers i cs
+
+/-- **A V* session sets up one table holding its whole population**: under the verifier's inner shape (`inner`), the
+setup's statements `sts` must be one table (as an honest V* session's are), whose instances are its population's
+(`RecVStar.population`, which `checkStmt` makes V*'s count): a drawn table short of its population is refused here, at
+setup, as `fullDraw` refuses its draw in the verdict. The recursion's proof covers no other form: V*'s slots are read at
+the one table's addresses, and RecCap reads every instance's. Without an inner shape it passes. -/
+def oneFull (inner : Option RecVStar.Inner) (sts : Array Stmt) : V Unit :=
+  match inner with
+  | none => pure ()
+  | some _ =>
+    if sts.size != 1 then
+      throw (s!"refused: a V* session of {sts.size} tables: a V* session is one table, " ++
+        "the only form the recursion's proof covers")
+    else sts.forM fun st =>
+      if st.n < RecVStar.population st then
+        throw (s!"{st.c.unit.name}: refused: a table of {st.n} of its population's {RecVStar.population st} " ++
+          "instances: a V* session's table holds every instance, the only form the recursion's proof covers")
+      else pure ()
 
 /-- The refusal of a recursive session without the verifier's own inner shape. -/
 def noInner : String :=

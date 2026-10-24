@@ -107,11 +107,15 @@ def check_statics(K: int, G: int, KB: int) -> None:
         raise ValueError(f"fused_moe_kernel block FP8 needs KB % 32 == 0, G % KB == 0 and K % G == 0 (K={K}, G={G}, KB={KB})")
 
 
-def triton_block_acc(B, K: int, G: int, KB: int, SWAP: bool, xq, sx, wrow, sw, zero, dot, fmul, ffma):
+def triton_block_acc(B, K: int, G: int, KB: int, SWAP: bool, xq, sx, wrow, sw, zero, dot, fmul, ffma, acc=None):
     """The f32 accumulator of one coordinate: per K tile k (ascending), `d` = KB/32 `dot` steps from +0, then
-    `acc = ffma(fmul(d, first), second, acc)` from +0 with (first, second) = (sx[kb], sw[kb]), swapped under SWAP, kb = k*KB // G."""
+    `acc = ffma(fmul(d, first), second, acc)` from +0 with (first, second) = (sx[kb], sw[kb]), swapped under SWAP, kb = k*KB // G.
+    Given `acc`, the tiles continue that accumulator instead of +0: K's tiles of a longer coordinate, the earlier ones' sum in
+    `acc`, give that coordinate's accumulator, since each tile is one FFMA into it."""
     check_statics(K, G, KB)
-    acc = zero()
+    if not isinstance(SWAP, bool):
+        raise ValueError(f"SWAP is a boolean, not {SWAP!r} (an id's static is a Python literal: SWAP=False)")
+    acc = zero() if acc is None else acc
     for k in range(K // KB):
         d = zero()
         for st in range(KB // 32):
@@ -124,7 +128,7 @@ def triton_block_acc(B, K: int, G: int, KB: int, SWAP: bool, xq, sx, wrow, sw, z
 
 
 def _acc(B, S, xq, sx, wrow, sw, dot=HopperE4m3QgmmaDot32):
-    return triton_block_acc(B, S.K, S.G, S.KB, bool(S.SWAP), xq, sx, wrow, sw, lambda: B.call(b1.ZERO32), dot, P.F32Mul, P.F32Fma)
+    return triton_block_acc(B, S.K, S.G, S.KB, S.SWAP, xq, sx, wrow, sw, lambda: B.call(b1.ZERO32), dot, P.F32Mul, P.F32Fma)
 
 
 @composite("MoeExpertFp8BlockCoordinate", 1, ["K", "G", "KB", "SWAP"],

@@ -6,7 +6,9 @@ GPU, and judges them.
       -- python3 benchmarks/pouw/harness/ieee_pin.py [--toolkit NAME=CUDA_HOME ...]
 
 Toolkits: 12.9.1 from `jobs/toolkit.sh`, 13.0.1 at /usr/local/cuda, unless --toolkit names them; each must be a toolkit of
-`sass_pins.json`, and every one given is judged. Per toolkit, on the CPU:
+`sass_pins.json`, and every one given is judged. A toolkit's target is its name's suffix (13.0.1-sm_90a builds sm_90a and
+runs on an sm_90 card; no suffix, sm_120a), and one run's toolkits share one target, since one leased GPU runs every binary.
+`jobs/pin_target.sh` pins a new one and runs this on it. Per toolkit, on the CPU:
 - nvcc and ptxas ``--version``, and each build's full command, one build at a time: `PINNED` flag sets (the pins' arguments)
   and `CONTROLS` (--use_fast_math: .FTZ and div.full/sqrt.approx; -ftz=true: .FTZ alone; -prec-div=false
   -prec-sqrt=false: the approximations alone);
@@ -38,7 +40,21 @@ sys.path.insert(0, str(HERE))
 import sass_gate as SG  # noqa: E402
 
 SOURCE = HERE / "ieee_pin.cu"
-NVCC_ARGS = ["-O3", "-std=c++17", "-gencode", "arch=compute_120a,code=sm_120a", "--no-compress"]
+ARCHS = {"sm_120a": 120, "sm_90a": 90}
+
+
+def arch_of(toolkit: str) -> str:
+    arch = toolkit.rsplit("-", 1)[1] if "-sm_" in toolkit else "sm_120a"
+    if arch not in ARCHS:
+        raise PinFailed(f"toolkit {toolkit}: no target {arch} (one of {sorted(ARCHS)})")
+    return arch
+
+
+def nvcc_args(arch: str) -> list[str]:
+    return ["-O3", "-std=c++17", "-gencode", f"arch=compute_{arch[3:]},code={arch}", "--no-compress"]
+
+
+NVCC_ARGS = nvcc_args("sm_120a")
 PINNED = [[], ["-fmad=false"]]
 CONTROLS = [["--use_fast_math"], ["-ftz=true"], ["-prec-div=false", "-prec-sqrt=false"]]
 SEQUENCES = {"rcp-fast-path", "sqrt-fast-path", "div-fast-path", "int-seed"}
@@ -78,6 +94,8 @@ def homes(specs: list[str], pins: dict) -> dict[str, str]:
     unknown = sorted(set(out) - set(pins["toolkits"]))
     if unknown:
         raise PinFailed(f"no toolkit {unknown} in sass_pins.json")
+    if len({arch_of(tk) for tk in out}) > 1:
+        raise PinFailed(f"toolkits {sorted(out)} name more than one target; one GPU runs every binary of a run")
     return out
 
 
@@ -102,7 +120,7 @@ def build_toolkit(tk: str, home: str, work: Path, pins_path: Path, pending: Path
     rec["tools"] = tools
     for control, flags in [(False, f) for f in PINNED] + [(True, f) for f in CONTROLS]:
         out = work / f"{tk}{''.join(f.replace('=', '_') for f in flags) or '-default'}"
-        cmd = [str(bin_dir / "nvcc"), *NVCC_ARGS, *flags, str(SOURCE), "-o", str(out)]
+        cmd = [str(bin_dir / "nvcc"), *nvcc_args(arch_of(tk)), *flags, str(SOURCE), "-o", str(out)]
         _run(cmd, cwd=work)
         b = {"flags": flags, "control": control, "command": cmd, "binary": str(out),
              "sha256": hashlib.sha256(out.read_bytes()).hexdigest()}
@@ -142,8 +160,9 @@ def run_binaries(work: Path) -> None:
     (work / "runs.json").write_text(json.dumps(runs, indent=1))
 
 
-def judge_run(run: dict, control: bool) -> list[str]:
-    """What's wrong with one binary's run: [] when a pinned build is exact everywhere, or a control differs somewhere."""
+def judge_run(run: dict, control: bool, sm: int = ARCHS["sm_120a"]) -> list[str]:
+    """What's wrong with one binary's run: [] when a pinned build is exact everywhere on an sm_`sm` card, or a control
+    differs somewhere."""
     lines = run.get("lines", [])
     dev = next((ln for ln in lines if "device" in ln), None)
     if dev is None:
@@ -151,8 +170,8 @@ def judge_run(run: dict, control: bool) -> list[str]:
     problems = []
     if dev.get("uuid", "").lower() != run.get("lease_uuid", "").lower():
         problems.append(f"ran on {dev.get('uuid')}, not the leased {run.get('lease_uuid')}")
-    if dev.get("sm") != 120:
-        problems.append(f"ran on sm_{dev.get('sm')}, not sm_120")
+    if dev.get("sm") != sm:
+        problems.append(f"ran on sm_{dev.get('sm')}, not sm_{sm}")
     checks = {ln["check"]: ln for ln in lines if "check" in ln}
     if control:
         if not any(c.get("bad", 0) > 0 for c in checks.values()):
@@ -214,7 +233,7 @@ def main(argv: list[str] | None = None) -> int:
         for tk, t in result["toolkits"].items():
             for b in t["builds"]:
                 b["run"] = runs.get(b["binary"], {"exit": None, "lines": []})
-                b["problems"] = judge_run(b["run"], b["control"])
+                b["problems"] = judge_run(b["run"], b["control"], ARCHS[arch_of(tk)])
                 b["binary"] = Path(b["binary"]).name
             t["ok"] = not t["problems"] and not any(b["problems"] for b in t["builds"])
     result["ok"] = result["lease_exit"] == 0 and bool(result["toolkits"]) and all(t["ok"] for t in result["toolkits"].values())

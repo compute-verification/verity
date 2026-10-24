@@ -18,7 +18,7 @@ import re
 from typing import Any
 
 from . import router
-from .deps import DEAD, DEAD_TOPIC, LAST_SUCCESS, Deps, error
+from .deps import DEAD, DEAD_TOPIC, LAST_DONE, LAST_SUCCESS, Deps, error
 
 MAX_DELIVERIES = 5
 ASK_CHANNELS = ("ask-the-team", "resource-accounting")          # a registry channel by these keys routes as #ask-the-team
@@ -73,8 +73,10 @@ def consume(deps: Deps, payload: dict, delivery_count: int) -> str:
         if delivery_count < MAX_DELIVERIES:
             raise Retry(backoff(delivery_count), error(e)) from e
         dead_letter(deps, payload, delivery_count, e)
+        deps.write(LAST_DONE, deps.clock())
         return "dead-lettered"
     deps.write(LAST_SUCCESS, deps.clock())
+    deps.write(LAST_DONE, deps.clock())
     deps.log("done", event_id=eid, decision=decision)
     return decision
 

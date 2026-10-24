@@ -24,6 +24,9 @@ or no numeric run, and nothing is exempt:
 - integer division's seed (`match_int_seed`): I2F.RP d, MUFU.RCP, +2 ulp (IADD3 0xffffffe, or 0x1ffffffe at 64 bits), then
   F2I(.FTZ).U32/U64.TRUNC, each step the one reader of the last that only its value reaches; the F2I's input is a normal
   float, so .FTZ can't change it.
+ptxas for sm_90a writes the range checks' and the seed's add of an immediate as VIADD R, R, imm or IADD3 R, R, imm, RZ
+where sm_120a's writes IADD3 R, PT, PT, R, imm, RZ, and a constant numerator's move from a uniform register as IMAD.U32
+R, RZ, RZ, UR: each sequence takes every spelling of the same 32-bit integer operation, and nothing else.
 rsqrt has no entry: at default flags ptxas builds __frsqrt_rn from bare MUFU.RSQ, so it's refused.
 Every operand of a matched sequence is the one definition that reaches it on every path (a sequence may straddle blocks, as
 when ptxas hoists a loop's next range check and seed above the last iteration's tail), inputs unchanged between their
@@ -227,7 +230,11 @@ class Insn:
                 srcs = srcs[len(ws):]
             for arg in srcs:
                 reads |= _regs(arg, rw, address=mem)
-            maydef = set().union(*(_regs(arg, rw, brackets=False) for arg in outs)) if outs else set()
+            # F2F.<to>.<from> names its destination's type, so that type's width is all it writes (sm_90a's ptxas
+            # schedules an F2F.F32.F64 inside a div.rn fast path that reads the register after its destination)
+            types = [s for s in self.op[1:] if s in ("F16", "BF16", "F32", "F64")]
+            ow = (2 if types[0] == "F64" else 1) if o == "F2F" and len(types) == 2 else rw
+            maydef = set().union(*(_regs(arg, ow, brackets=False) for arg in outs)) if outs else set()
             maydef |= {r for arg in a[1:3] for r in _regs(arg, 1, brackets=False) if r in _PREDS or r.startswith("UP")}
         elif o in NODEST:
             for arg in a:
@@ -567,11 +574,14 @@ COPY = re.compile(r"MOV R\d+, R\d+|IMAD\.MOV\.U32 R\d+, RZ, RZ, R\d+")
 FAST = {
     "rcp": {"slowpath": "__cuda_sm20_rcp_rn_f32_slowpath", "negated": False,
             "check": [("ISETP.GT.U32.AND $P, PT, $m, 0x1ffffff, PT",), ("LOP3.LUT $m, $t, 0x7f800000, RZ, 0xc0, !PT",),
-                      ("IADD3 $t, PT, PT, $x, 0x1800000, RZ",)],
+                      ("IADD3 $t, PT, PT, $x, 0x1800000, RZ", "IADD3 $t, $x, 0x1800000, RZ",
+                       "VIADD $t, $x, 0x1800000")],
             "block": [("MUFU.RCP $y, $x",), ("FFMA $e, $x, $y, -1", "FFMA $e, $y, $x, -1"), ("FADD.FTZ $f, -$e, -RZ",),
                       ("FFMA $z, $y, $f, $y", "FFMA $z, $f, $y, $y")]},
     "sqrt": {"slowpath": "__cuda_sm20_sqrt_rn_f32_slowpath", "negated": True,
-             "check": [("ISETP.GT.U32.AND $P, PT, $t, 0x727fffff, PT",), ("IADD3 $t, PT, PT, $x, -0xd000000, RZ",)],
+             "check": [("ISETP.GT.U32.AND $P, PT, $t, 0x727fffff, PT",),
+                       ("IADD3 $t, PT, PT, $x, -0xd000000, RZ", "IADD3 $t, $x, -0xd000000, RZ",
+                        "VIADD $t, $x, 0xf3000000")],
              "seed": ("MUFU.RSQ $r, $x",),
              "block": [("FMUL.FTZ $y, $r, $x", "FMUL.FTZ $y, $x, $r"), ("FMUL.FTZ $h, $r, 0.5",), ("FFMA $e, -$y, $y, $x",),
                        ("FFMA $z, $e, $h, $y", "FFMA $z, $h, $e, $y")]},
@@ -750,6 +760,9 @@ def constant(fn: Function, k: int, reg: str) -> int | None:
     ins = fn.insns[d]
     if ins.name in ("MOV", "UMOV") and len(ins.args) == 2 and re.fullmatch(r"U?R\d+", ins.args[1]):
         return constant(fn, d, ins.args[1])
+    if ins.name == "IMAD.U32" and len(ins.args) == 4 and ins.args[1:3] == ["RZ", "RZ"] \
+            and re.fullmatch(r"UR\d+", ins.args[3]):
+        return constant(fn, d, ins.args[3])
     return _immediate(ins)
 
 
@@ -806,6 +819,18 @@ def match_div(fn: Function, k0: int, bodies: frozenset[str]) -> Match | str:
     return _escape(fn, m) or m
 
 
+def _add_immediate(ins: Insn) -> tuple[str, str] | None:
+    """(the register, the immediate) of a 32-bit add of the two, in any of its spellings: IADD3 R, PT, PT, R, imm, RZ
+    (or UIADD3 with UPT and URZ), and sm_90a's IADD3 R, R, imm, RZ and VIADD R, R, imm; else None."""
+    a = ins.args
+    pt, zero = ("UPT", "URZ") if ins.name == "UIADD3" else ("PT", "RZ")
+    if ins.name in ("IADD3", "UIADD3") and len(a) == 6 and a[1:3] == [pt, pt] and a[5] == zero:
+        return a[3], a[4]
+    if (ins.name == "IADD3" and len(a) == 4 and a[3] == "RZ") or (ins.name == "VIADD" and len(a) == 3):
+        return a[1], a[2]
+    return None
+
+
 def match_int_seed(fn: Function, k0: int) -> Match | str:
     """Integer division's reciprocal seed from its MUFU.RCP at k0: I2F.RP d -> MUFU.RCP -> +2 ulp -> F2I.TRUNC."""
     ins = fn.insns[k0]
@@ -838,9 +863,7 @@ def match_int_seed(fn: Function, k0: int) -> Match | str:
         if u is None:
             return "the uniform seed has no one next step"
         ui = fn.insns[u]
-    pt, zero = ("UPT", "URZ") if ui.name == "UIADD3" else ("PT", "RZ")
-    if ui.guard or ui.name not in ("IADD3", "UIADD3") or ui.args[1:3] != [pt, pt] or ui.args[3:] != [val, ui.args[4], zero] \
-            or ui.args[4] not in INT_ROUND_UP:
+    if ui.guard or (added := _add_immediate(ui)) is None or added[0] != val or added[1] not in INT_ROUND_UP:
         return "the seed isn't rounded up by IADD3 +2 ulp"
     s = ui.args[0]
     members.add(u)
@@ -948,18 +971,23 @@ def load_pins(path: Path = PINS) -> dict:
 
 
 def toolkit_of(notes: list[dict], pins: dict) -> tuple[str | None, str | None]:
-    """The pinned toolkit every ptxas (and nvlink) note of a cubin names, with pinned ptxas arguments; else (None, why)."""
+    """The pinned toolkit every ptxas (and nvlink) note of a cubin names, with pinned ptxas arguments; else (None, why).
+    One ptxas build may have an entry per target (13.0.1 for sm_120a, 13.0.1-sm_90a), each with its own arguments and run."""
     if not any(n["tool"] == "ptxas" for n in notes):
         return None, "no ptxas record (.note.nv.tkinfo)"
+    unpinned = None
     for tk, rec in pins["toolkits"].items():
         if all(n["version"] == rec["version"] and n["branch"] == rec["branch"] for n in notes):
             bad = [n["args"] for n in notes if n["tool"] == "ptxas"
                    and " ".join(a for a in n["args"].split() if a != "-v") not in rec["args"]]
             if bad:
-                return None, f"ptxas {rec['version']} with unpinned arguments {bad[0]!r}"
+                unpinned = unpinned or f"ptxas {rec['version']} with unpinned arguments {bad[0]!r}"
+                continue
             if not rec.get("numeric"):
                 return None, f"ptxas {rec['version']} is pinned without a numeric run"
             return tk, None
+    if unpinned:
+        return None, unpinned
     tools = sorted({f"{n['tool']} {n['version']!r} ({n['branch']})" for n in notes})
     return None, f"no pinned toolkit built it: {'; '.join(tools)}"
 
