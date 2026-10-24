@@ -975,6 +975,35 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     assert not wrong["passed"] and wrong["provided"]
 
 
+def test_pearl_cs_served_row_is_its_protocol_row_beside_the_compiled_engine():
+    """`llama31-8b-1gpu-pouw-protocol-served` measures Pearl-C over the compiled engine in one run, so its Pearl-C arm
+    and preset are the protocol row's and every arm's engine shares its step budget, sequence bound and KV pool."""
+
+    from verity_bench.vllm import runner
+
+    spec = resolve_spec("llama31-8b-1gpu-pouw-protocol-served")
+    protocol = resolve_spec("llama31-8b-1gpu-pouw-protocol")
+    pearl = "pouw:pearl-c-sm120-v1-h3"
+    assert spec.arm_settings[pearl] == protocol.arm_settings[pearl]
+    assert (spec.setup, spec.sweep, spec.reps, spec.eager) == (protocol.setup, protocol.sweep, protocol.reps, True)
+    assert {**protocol.preset.engine_settings, "max_num_seqs": 128} == spec.preset.engine_settings
+    arms = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
+    assert [(a.id, a.precision, a.control, a.execution) for a in arms] == [
+        ("stock-fp8", "fp8", None, None),
+        (pearl, "bfloat16", None, None),
+        ("stock-fp8@compiled", "fp8", None, "compiled"),
+    ]
+    preset, eager = served(spec.preset, spec.eager)
+    for resident in (True, False):
+        built = [runner.engine_args(p, a.precision or p.precision, resident=resident, eager=e)
+                 for a in arms for p, e in [runner.arm_execution(a, preset, eager)]]
+        assert [(b["enforce_eager"], b.get("execution")) for b in built] == [(True, None), (True, None), (False, "compiled")]
+        shared = ("max_num_batched_tokens", "max_num_seqs", "max_model_len", "gpu_memory_utilization",
+                  "kv_cache_memory_bytes")
+        assert len({tuple(b[k] for k in shared) for b in built}) == 1
+        assert built[0]["kv_cache_memory_bytes"] == 8 << 30 and built[0]["max_num_batched_tokens"] == 4096
+
+
 def test_an_h1_arm_is_gated_against_exact_int8_and_each_run_gets_a_window_the_adapter_accepts(monkeypatch):
     """`pouw:eps1-sm120-h1fx1` serves the int8_exact arm's own y, so its token control is that engine without PoUW
     (`stock-int8`). Its settings need the built engine's model runner, which `verity_vllm.LLM` validates before building,
