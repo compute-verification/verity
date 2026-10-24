@@ -8,7 +8,7 @@ row's required manifest (``--required-manifest``): the attention hidden tap (``-
 and a part the manifest names that did not attach is refused (`parts_missing`). Then `served_record.StepInputPort` (each step's
 stream starts with its input ids, then its positions, each padded to ``--max-num-batched-tokens``: the port the certifier's
 served-rows tie reads) and `served_record.SamplerInputsSource` are attached and the arena sized; under ``--seal`` it registers
-the weights.
+the weights. The port is the step's one copy of its ids (`single_ids`): the embedding's own input isn't committed beside it.
 
 With ``seal`` (`seal_window`, which `serve_commit.CommitWindows` calls at each close), each closed window is sealed as a
 deferred Commit's row dir, ``windows/w<k>/``, the way a declared Commit with ``--replay-deferred`` seals its run
@@ -16,7 +16,8 @@ deferred Commit's row dir, ``windows/w<k>/``, the way a declared Commit with ``-
 the manifest), and beside it the record that bundle is opened against (`deferred_rows.of_record`): ``commit/verdict.json``
 naming the bundle, ``commit/runs.jsonl`` with the window's run, and ``commit/binding_map_p0.json``. The binding map names
 each committed value as the row's Programs read it (`served_binder`: a Linear's ``out``, RoPE's ``query`` / ``key``, a norm's
-``norm_scale``, ``fa2.m1/*``), and the context carries the manifest's ``op_path_aliases``, which the opened store resolves a
+``norm_scale``, ``fa2.m1/*``, and the port's ids and positions as the identities the Programs read them under,
+`port_identities`), with no second tensor under an identity the port is (`copies_beside_port`), and the context carries the manifest's ``op_path_aliases``, which the opened store resolves a
 shared module's layer-N path through, the window's served-rows record (`serve_commit.CommitWindows`' ``served_rows``) and the
 step-input port (`port_of`; `port_layout` is where the window's streams put it). The window's requests are named by the body's ``user`` (the id the advice names them
 by), and the bundle names no Programs: a served window's Programs are the registered compiler's for its advice, made after
@@ -31,6 +32,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from verity_vllm.commit.served_record import PORT_NAMES
 from verity_vllm.config import UsageError
 
 SCHEMES = ("vllm-v1", "rows-sha512")
@@ -138,6 +140,8 @@ def committer(opts: Any, llm: Any) -> Any:
         com.attach_source(StepInputPort(com, tokens))
     except ValueError as e:
         raise UsageError(str(e)) from None
+    if manifest is not None:
+        single_ids(com, manifest)
     com.attach_source(SamplerInputsSource(com))
     com.arena_sizing_record = com.size_arena({"batch": opts.max_num_seqs, "max_prompt": tokens, "max_new": 1,
                                               "max_num_batched_tokens": tokens, "max_model_len": opts.max_model_len},
@@ -179,7 +183,9 @@ def served_binder(manifest: Mapping[str, Any], steps: Sequence[int], sources: Se
     Programs commits (its manifest's rows, weights aside, each (op_path, member, invocation) once, at its first row's place in
     the Program), at every step, with the committing sources' ports. A served step batches requests at any step of their own,
     and a module's output at a step is one identity whatever the requests in it; the binding map splits it between them
-    (`binding.build_binding_map`'s request rows)."""
+    (`binding.build_binding_map`'s request rows). With a `served_record.StepInputPort` among the sources, its tensors bind as
+    the identities the Programs read them under (`port_identities`), ahead of any other tensor of the step."""
+    from verity_vllm.commit.served_record import StepInputPort
     from verity_vllm.query.manifest.bind import Binder, source_ports
 
     one: dict[tuple[str, str, int], dict[str, Any]] = {}
@@ -188,7 +194,52 @@ def served_binder(manifest: Mapping[str, Any], steps: Sequence[int], sources: Se
         if r.get("family") != "weights" and r.get("op_path") != "weights":
             one.setdefault((str(r["op_path"]), str(r.get("output_member", "out")), int(r.get("invocation", 0))), r)
     placed = [{**r, "identity": None, "request_id": "*", "step": None, "engine_step": int(s), "rank": 0} for s in steps for r in one.values()]
-    return Binder.of_manifest({**manifest, "identities": placed, "requests_declared": []}, rank=0, ports=source_ports(sources))
+    binder = Binder.of_manifest({**manifest, "identities": placed, "requests_declared": []}, rank=0, ports=source_ports(sources))
+    if any(isinstance(s, StepInputPort) for s in sources):
+        binder.rebind.update(port_identities(manifest))
+    return binder
+
+
+def port_identities(manifest: Mapping[str, Any]) -> dict[str, tuple[str, str]]:
+    """The identities the row's Programs read that the step-input port's tensors bind as, (op_path, member) by port name: its
+    ids the manifest's one input-ids identity (``c00.input/ids`` on the compiled path, the embedding's ``<module>/in`` on the
+    eager one), its positions ``c00.input/positions`` where the manifest has it. An eager row's Programs read no committed
+    positions: RoPE's are static structure of the Program (`rules.profile.RotaryEmbeddingRule` refuses a computed one), compiled
+    from the advice's rows, and the served-rows tie holds the port's positions to the window's served rows. A manifest naming
+    two ids identities is refused."""
+    from verity_vllm.query.manifest.format import SERVED_IDS, SERVED_POSITIONS
+
+    fam: dict[tuple[str, str], str] = {}
+    for row in manifest.get("identities") or []:
+        r = {**row, **(row.get("identity") or {})}
+        if r.get("family") != "weights" and r.get("op_path") != "weights":
+            fam.setdefault((str(r["op_path"]), str(r.get("output_member", "out"))), str(r.get("family")))
+    compiled_ids, compiled_pos = (tuple(n.rsplit("/", 1)) for n in (SERVED_IDS, SERVED_POSITIONS))
+    ids = sorted({k for k, f in fam.items() if f == "input_token_ids"} | ({compiled_ids} & set(fam)))
+    if len(ids) > 1:
+        raise ValueError(f"the row's manifest names {len(ids)} input-ids identities, {ids}: the step-input port's ids can be one of them only")
+    return ({PORT_NAMES[0]: ids[0]} if ids else {}) | ({PORT_NAMES[1]: compiled_pos} if compiled_pos in fam else {})
+
+
+def single_ids(com: Any, manifest: Mapping[str, Any]) -> None:
+    """The port's ids as the step's one copy: the module whose ``<module>/in`` they bind as (`port_identities`) is dropped from the
+    acquisition plan's input sites, so its own input isn't committed beside them."""
+    op, member = port_identities(manifest).get(PORT_NAMES[0], (None, None))
+    if member == "in" and getattr(com, "plan_inputs", None) is not None:
+        com.plan_inputs.discard(op)
+
+
+def copies_beside_port(bmap: Mapping[str, Any], aliased: Mapping[str, tuple[str, str]]) -> list[str]:
+    """The tensors the binding map binds, beside the port, to an identity the port's tensors are (`port_identities`): each a second
+    copy of a step's ids or positions, which the row's Programs could read in place of the port's. As ``step <s>: <name>``."""
+    port_as = {tuple(v): k for k, v in aliased.items()}
+    out = set()
+    for e in bmap.get("entries") or ():
+        i = e.get("identity") or {}
+        want = port_as.get((i.get("op_path"), i.get("output_member")))
+        if want is not None and e.get("name") != want:
+            out.add(f"step {i.get('step')}: {e.get('name')}")
+    return sorted(out)
 
 
 def seal_window(com: Any, rc: Any, d: Path, *, rec: Mapping[str, Any], reqs: list[dict[str, Any]],
@@ -207,9 +258,14 @@ def seal_window(com: Any, rc: Any, d: Path, *, rec: Mapping[str, Any], reqs: lis
     out.mkdir(parents=True, exist_ok=True)
     pd = bytes(com.program_digest).hex()
     manifest = getattr(com, "required_manifest", None)
+    port = port_of(com)
     binder = served_binder(manifest, sorted(com._layouts), getattr(com, "sources", None) or ()) if manifest is not None else None
     bmap = B.build_binding_map(com._layouts, rc.steps, rc.run_root, pd, request_rows=request_rows, chunk=com.chunk,
-                               weight_registration=rc.weight_registration, binder=binder)
+                               weight_registration=rc.weight_registration, binder=binder, padded=PORT_NAMES if port is not None else ())
+    aliased = port_identities(manifest) if binder is not None and port is not None else {}
+    if twice := copies_beside_port(bmap, aliased):
+        raise ValueError(f"the step-input port is the window's one copy of {sorted(aliased.values())}, and {len(twice)} other "
+                         f"tensor(s) bind as them too ({twice[:3]}): the row's Programs would read one of two copies")
     of_record = {} if manifest is None else {
         "required_manifest": {"path": getattr(com, "required_manifest_path", None), "program_digest": manifest.get("program_digest"),
                               "digest": manifest.get("digest")},
@@ -226,7 +282,6 @@ def seal_window(com: Any, rc: Any, d: Path, *, rec: Mapping[str, Any], reqs: lis
                       "steps": rec.get("steps"), "committer": com.name, "passed": rec.get("passed"),
                       "binding": {"map_digest": bmap["digest"], "map_entries_n": bmap["entries_n"], "program_digest": pd},
                       "commit_pass": None, "commit_fail_reason": None, "sampled_replay": sr, "boundary_linkage": bl}}
-    port = port_of(com)
     layout = port_layout(com, port) if port is not None else None
     args = {k: None for k in RB.ARGS} | {"label": label, "retain": getattr(com, "retain", None)}
     ctx = {"pair": 0, "arm": "instrumented", "committer": com.name, "run_root": rc.run_root.hex(), "code": code, "args": args,
@@ -235,7 +290,8 @@ def seal_window(com: Any, rc: Any, d: Path, *, rec: Mapping[str, Any], reqs: lis
            "required_classes": [], "min_openings": 0, "vc_result": None, "engine_of_record": dict(engine_of_record or {}), "slim": None,
            "served_window": {"schema": SERVED_WINDOW, "window": rec.get("window"), "run_id": rec.get("run_id"), "commit_scheme": scheme,
                              "programs": "none sealed: the registered compiler's Programs for the window's advice",
-                             "served_rows": rec.get("served_rows"), "step_input_port": port, **of_record},
+                             "served_rows": rec.get("served_rows"), "step_input_port": port if port is None or binder is None else
+                             {**port, "binds_as": {k: list(v) for k, v in aliased.items()}}, **of_record},
            RB.HASHED: hashed}
     verdict: dict[str, Any] = {"schema": SERVED_WINDOW, "run_id": rec.get("run_id"), "window": rec.get("window"), "commit_pass": None,
                                "commit_scheme": scheme, "run_root": rc.run_root.hex()}
