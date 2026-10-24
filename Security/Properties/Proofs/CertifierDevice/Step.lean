@@ -251,12 +251,43 @@ theorem EnqRel.foldl (c : Certifier) (l : Array (Int × ByteArray)) :
     rcases x with ⟨_, f⟩
     exact h.trans (EnqRel.enqueue c' f))
 
+theorem enqueue_first_eq (c : Certifier) (frame : ByteArray) :
+    c.enqueue frame true = c ∨ (∃ r, c.enqueue frame true = c.doFault r) ∨
+      (c.fault = none ∧ frame.size = c.params.frameBytes ∧
+        c.enqueue frame true = { c with queue := #[frame] ++ c.queue }) := by
+  unfold Certifier.enqueue
+  by_cases h1 : c.fault.isSome
+  · simp [h1]
+  · simp only [h1, Bool.false_eq_true, ite_false]
+    by_cases h2 : frame.size ≠ c.params.frameBytes
+    · exact Or.inr (Or.inl ⟨.malformed, by simp [h2]⟩)
+    · by_cases h3 : c.queue.size ≥ c.params.queueCapacity
+      · exact Or.inr (Or.inl ⟨.overflow, by simp [h2, h3]⟩)
+      · exact Or.inr (Or.inr ⟨by simpa using h1, by simpa using h2, by simp [h2, h3]⟩)
+
+theorem Shape.enqueueFirst {c : Certifier} {link : String} {p : Params} (h : Shape c link p) (f : ByteArray) :
+    Shape (c.enqueue f true) link p := by
+  rcases enqueue_first_eq c f with he | ⟨r, he⟩ | ⟨hn, hsz, he⟩ <;> rw [he]
+  · exact h
+  · exact h.doFault r
+  · refine ⟨h.link, h.params, ?_, ?_⟩
+    · intro g hg
+      rcases Array.mem_append.1 hg with hg | hg
+      · rw [Array.mem_singleton.1 hg, hsz, h.params]
+      · exact h.sizes g hg
+    · simp [hn]
+
+theorem EnqRel.enqueueFirst (c : Certifier) (f : ByteArray) : EnqRel c (c.enqueue f true) := by
+  refine ⟨?_, ?_, ?_, ?_, fun _ _ h => h.enqueueFirst f⟩ <;>
+    rcases enqueue_first_eq c f with he | ⟨r, he⟩ | ⟨-, -, he⟩ <;> rw [he] <;>
+    simp [doFault_link, doFault_params, doFault_rows, doFault_window]
+
 theorem takeOwn_rel (b : Bucketer) : b.takeOwn.t = b.t ∧ EnqRel b.certifier b.takeOwn.certifier := by
   unfold Bucketer.takeOwn
   dsimp only
   split
   · split
-    · exact ⟨rfl, EnqRel.enqueue _ _⟩
+    · exact ⟨rfl, EnqRel.enqueueFirst _ _⟩
     · exact ⟨rfl, EnqRel.refl _⟩
   · exact ⟨rfl, EnqRel.refl _⟩
 
@@ -290,10 +321,10 @@ theorem enter_rel (b : Bucketer) : b.enter.t = b.t ∧ EnqRel b.certifier b.ente
 theorem pre_rel (b : Bucketer) : b.takeOwn.enter.t = b.t ∧ EnqRel b.certifier b.takeOwn.enter.certifier :=
   ⟨(enter_rel _).1.trans (takeOwn_rel b).1, (takeOwn_rel b).2.trans (enter_rel _).2⟩
 
-theorem follow_certifier (b : Bucketer) (n : Nat) : (b.follow n).certifier = b.certifier := by
+theorem follow_certifier (b : Bucketer) (row : Slots) : (b.follow row).certifier = b.certifier := by
   unfold Bucketer.follow; split <;> rfl
 
-theorem follow_t (b : Bucketer) (n : Nat) : (b.follow n).t = b.t := by
+theorem follow_t (b : Bucketer) (row : Slots) : (b.follow row).t = b.t := by
   unfold Bucketer.follow; split <;> rfl
 
 theorem bucketer_tick (b : Bucketer) :
