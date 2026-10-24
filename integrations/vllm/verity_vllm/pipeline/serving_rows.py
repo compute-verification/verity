@@ -3,15 +3,15 @@ through an opened reader, registered weights for weight slices), committed in M0
 :mod:`verity_vllm.commit.serving_rows`, with core's one-stage registration over them.  Three ways in, one window, two kinds:
 
 * **In the Commit** (opt-in, ``commit --serving-rows``): the row stage writes a request ``{"dir", "partition", "run",
-  "committer"}``, and the in-process C2 replay commits the window after the vllm-v1 roots are final and before its seed (``readers``).
+  "committer"}``, and the in-process C2 replay commits the window after the Commit's roots are final and before its seed (``readers``).
   The window is ``served``: its roots are serving's own commitment, made before any draw.  The profile makes no claim that they
-  hold the values under the vllm-v1 roots.
+  hold the values under the Commit's roots.
 * **In a TP Commit** (``tp-commit --serving-rows``, `pipeline.tp.serving_rows`): one ``served`` window per rank, committed in the
   rank's process once every rank's root is final and the TP run root fixed, before the challenge; its run is the TP run root and
   the rank.
 * **From a deferred Commit's bundle** (``verity-vllm serving-rows BUNDLE --row-dir D --partition F --out O``,
   `pipeline.deferred_rows`): the sealed replay bundle opened against the Commit's record as the CPU replay opens it, and the same
-  window written into ``O`` as a ``stand-in``: serving's commitment is the vllm-v1 roots, and these rows are committed afterwards
+  window written into ``O`` as a ``stand-in``: serving's commitment is the record's roots, and these rows are committed afterwards
   from the bundle, so their link to those roots is provenance (``deferred_rows.stand_in``).
 
 The partition file is the verifier's: ``{"templates": [<descriptor id>, ...], "law": "subset:K" | "stratified:K" | {...},
@@ -678,7 +678,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
                  reuse: Sequence[ProgramIndex] = ()) -> dict[str, Any]:
     """Commit the verifier's partition's units of a run whose roots are final and write the window's files into ``out_dir``:
     the registration (core's v1 record, its window the run root ``run_root`` and the provenance: the scheme the values were read
-    under (``commitment``: the reader's committer's, vllm-v1 or a TP rank's rows-sha512), the research run ``run``, the row, the
+    under (``commitment``: the reader's committer's, rows-sha512 by default or vllm-v1 by name), the research run ``run``, the row, the
     committer and the served Programs' ``digests``), ``partition.json``, the index and M0's bodies.  The window is ``served``;
     with ``stand_in`` (its ``of`` and ``link``), a ``stand-in`` with them in its provenance.  A TP rank's window (`pipeline.tp.
     serving_rows`) gives its run as a string, its world and roots as ``tp``, its ProgramIndex arguments as ``index`` and the index it

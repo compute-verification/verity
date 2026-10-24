@@ -1,13 +1,13 @@
 """Serving rows: the opt-in ``frame-v3-sha512`` + ``hm96-sha512/v1`` commitment of a run's units in M0's serving row leaf format
 (``verity_flock.circuit``'s statement rows, PR #83), with the registration, M0's public and prover files and the unit index the
-one-stage audit reads (``verity.core.protocols.sampled_proofs.one_stage``).  Off by default: ``vllm-v1`` stays the record, and this commits beside it without
-touching any root of record, until the re-baseline switches the record.
+one-stage audit reads (``verity.core.protocols.sampled_proofs.one_stage``).  Off by default: the Commit's own commitment stays the record
+(``rows-sha512`` by default, ``vllm-v1`` by name), and this commits beside it without touching any root of record.
 
 The population is the verifier's: its program is ``TemplateInstances`` / ``TemplatePopulations`` over the members' templates and
 counts (``population_program``, core's ``partition.population_program`` / ``mixed_population_program``), its query the template
 query over them, so the partition (``verity/partition/v1``) and its digest are core's over that program, and the registration is
-core's ``verity/registration/v1`` record (``registration.record``) with ``window = {"kind": "served" | "stand-in", "run": <vllm-v1
-run root>, ...provenance}`` (``registration``).  The served Programs' digests are provenance in the window: no query of core's selects
+core's ``verity/registration/v1`` record (``registration.record``) with ``window = {"kind": "served" | "stand-in", "run": <the
+record's run root>, ...provenance}`` (``registration``).  The served Programs' digests are provenance in the window: no query of core's selects
 template instances inside a served Program (the template queries need every root node to be an instance).
 
 A population is a sequence of members (:class:`Member`), one per template in the partition's order, or a template's units in
@@ -28,7 +28,7 @@ blocks, committed under its own salt like an input row (an output is a value: no
 
 Each port ``<member>/<port>`` is one tree under ``CommitmentDomain(binding, -1, [0, leaves), "sha512")``, with core's
 served-domain rule (``registration.served_domain``): ``binding = identity_digest_sha512(DOMAIN_TAG, {program, partition, port,
-schema, leaves, run})``, every field a registration field and ``run`` the vllm-v1 run root, so the verifier recomputes every domain
+schema, leaves, run})``, every field a registration field and ``run`` the record's run root, so the verifier recomputes every domain
 from the registration and the Commit's record (``expected_ports``).  The leaf layer is the SHA-512 of the canonical map from each
 member (its template, or its chunk's name) to the SHA-512 of its public body (``leaf_layer``).  ``write`` puts into a window
 directory ``registration.json``, ``index.json`` (unit -> served identity, its SHA-512 in the window's provenance), per member
@@ -346,7 +346,7 @@ class RowTable:
 @dataclass(frozen=True)
 class Window:
     """What the roots are bound to: the verifier's population program and query (the partition over them), the law it draws by, the
-    run (the vllm-v1 run root, hex), and the members the population is made of, in the partition's order (refused otherwise); and
+    run (the record's run root, hex), and the members the population is made of, in the partition's order (refused otherwise); and
     its row tables in the canonical order (``RowTable.key``), every rank of each the row of at least one linked member's ``x``
     table, under ``context`` (hex, 64 bytes serving knew before its first step: the live coin commitment's root)."""
     program: Any
@@ -678,9 +678,9 @@ def leaf_layer(publics: Mapping[str, bytes]) -> str:
 
 def registration(c: Committed, provenance: Mapping[str, Any], previous: str | None = None, *, kind: str = "served") -> dict[str, Any]:
     """Core's ``verity/registration/v1`` record of the window: its program, query and law, the scheme, every port's root, leaves and
-    served domain, the leaf layer, and ``window = {"kind": kind, "run": <vllm-v1 run root>, **provenance}``.  ``served``: these
+    served domain, the leaf layer, and ``window = {"kind": kind, "run": <the record's run root>, **provenance}``.  ``served``: these
     roots are serving's own commitment, made before any draw (the in-Commit hook); ``stand-in``: a fresh commitment to values
-    opened from serving's record afterwards, whose link to the vllm-v1 roots is provenance (``pipeline.deferred_rows``)."""
+    opened from serving's record afterwards, whose link to the record's roots is provenance (``pipeline.deferred_rows``)."""
     if kind not in R.KINDS:
         raise ValueError(f"window kind {kind!r} is not one of {R.KINDS}")
     w = c.window
