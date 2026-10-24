@@ -26,8 +26,8 @@ templates, or for one when the file names ``Q_template_instances``) is the one t
 is the derived file, digest and members included.  ``scope.op_path_prefix`` restricts the population to one module
 (``model.layers.0.``, or a MoE layer's ``moe/L40``), or to the rows under any of a list of them, ``scope.steps`` (``[lo, hi)``)
 to those steps of each request.  A chunked template's units (``CHUNKED``: a ``ScaledMmS8Coordinate``, a ``COORDS`` coordinate,
-a ``COLS`` column block, a ``SLICES`` slice or a ``KCHUNKS`` K-chunk; and a row template the file's ``chunk_cap`` names, its
-rows its Definition's own ports, `chunked`) are split
+a ``COLS`` column block, a ``SLICES`` slice or a ``KCHUNKS`` K-chunk; and a row or ``part`` template the file's ``chunk_cap``
+names, its rows its Definition's own ports, `chunked`) are split
 into consecutive chunks of at most its ``chunk_cap`` (flock-circuit's spec shape, as ``benchmarks/one_stage/a6.py`` computes
 it; ``chunk_caps`` writes the entry), each chunk a member on C-Flock's bit rows (`chunk_rows.unit_rows`) with its public file of global unit indices;
 ``row_tables`` puts the ``ScaledMmS8Coordinate`` chunks in the row-table layout (``with_row_tables``).
@@ -226,9 +226,10 @@ def chunk_caps(tmpls: Sequence[str]) -> dict[str, int]:
 
 def chunked(t: str, caps: Mapping[str, int] | None) -> bool:
     """Whether template ``t``'s units are chunks on bit rows (`chunk_rows.unit_rows`): a ``CHUNKED`` layout's (a window names the
-    caps), or a row template's when ``caps`` names it, its rows staged as the Definition's own ports (no input set read)."""
+    caps), or a row template's or a ``part`` template's (a part read whole, on rows it is a part of or of its own family) when
+    ``caps`` names it, its rows staged as the Definition's own ports (no input set read)."""
     layout = template(t).layout
-    return (layout in CHUNKED and (layout in ("s8", "kchunk") or caps is not None)) or (layout == "row" and t in (caps or {}))
+    return (layout in CHUNKED and (layout in ("s8", "kchunk") or caps is not None)) or (layout in ("row", "part") and t in (caps or {}))
 
 
 def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[int] | None = None,
@@ -253,7 +254,7 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
             n = sum(KC.units(template(t), x[3]["statics"]) for x in rs)
         elif layout in CHUNKED:
             n = sum(int(x[3]["statics"]["N"]) for x in rs)
-        elif layout == "row":
+        elif layout in ("row", "part"):
             n = len(rs)
         if chunked(t, caps):
             cap = (caps or {}).get(t)
