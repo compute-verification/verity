@@ -26,6 +26,7 @@ from verity_vllm.predict.steps import (
     trace_commands,
     trace_dir,
 )
+from verity_vllm.program.prune import dead_free_versions
 from verity_vllm.program.registry import io_shell as IO
 from verity_vllm.program.registry.topp_geometry import registered_splits
 
@@ -312,7 +313,8 @@ def test_a_decodes_attention_guard_is_chosen_from_the_request_alone():
     alone = compile_steps(reg, *_session([(BN, 3, body, _prompt(0, BN))], [[(0, 0, BN)], [(0, BN, 1)], [(0, BN + 1, 1)]]))
     assert c.requests[0].digest == alone.requests[0].digest
     ids = {fn.id for _, fn in calls(c.programs[c.requests[0].digest])}
-    assert alone_fn.id in ids and beside_fn.id not in ids
+    alone_id, beside_id = (bind(dead_free_versions()[fn.base_id], **fn.bindings).id for fn in (alone_fn, beside_fn))
+    assert alone_id in ids and beside_id not in ids
 
 
 def test_compile_steps_raises_the_batch_rules_refusal_and_partial_records_it(monkeypatch):
