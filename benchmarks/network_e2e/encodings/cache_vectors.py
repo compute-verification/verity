@@ -10,7 +10,8 @@ the same rows and holds the two to each other:
 - at the step's end, each hit's sources (its trail's owners) are `Prefixes.sources`, and the advice's own;
 - the lookup and the computed units in one call give the same table as the two calls.
 
-    python cache_vectors.py --corpus fixtures/corpus-smallkv --steps 6 --N 32 --out VECTORS.json
+    python cache_vectors.py --trace tests/fixtures/corpus-smallkv --trace tests/fixtures/sync-crush.json.gz \\
+        --out ../../../verity/core/protocols/certifier/tests/fixtures/cache_step_vectors.json
 """
 from __future__ import annotations
 
@@ -152,46 +153,66 @@ def load(corpus: Path) -> dict:
     return D.load_corpus_trace(corpus, eos_token_id=128009, stop_token_ids=(128001, 128008), row_order="scheduling")
 
 
-def to_json(c: Call) -> list:
-    t = [[e.parent, list(e.tokens), e.owner] for e in c.table]
-    r = c.row
-    row = [r.r, [list(u) for u in r.units], int(r.admit), int(r.sent), r.K, r.wh, r.nins, r.pfx]
-    o = c.out
-    return [t, row, [int(o.ok), [[e.parent, list(e.tokens), e.owner] for e in o.table], o.pfx, list(o.trail)]]
-
-
 def vectors(adv, tokens, cfg, sent_from: int, st: dict, steps: int) -> list[Call]:
     """The calls of the first `steps` steps, up to the first whose table outgrows the statics' N."""
-    calls = drive(adv, tokens, cfg, sent_from, {**st, "N": 1 << 20}, steps=steps, record=True)["calls"]
+    big, N = 1 << 20, st["N"]
+    calls = drive(adv, tokens, cfg, sent_from, {**st, "N": big}, steps=steps, record=True)["calls"]
+
+    def root(e: int) -> int:
+        return N if e == big else e
+
+    def table(t: Sequence[CS.Entry]) -> tuple[CS.Entry, ...]:
+        return tuple(replace(x, parent=root(x.parent)) for x in t)
+
     out = []
     for c in calls:
-        if len(c.table) > st["N"] or len(c.out.table) > st["N"]:
+        if len(c.table) > N or len(c.out.table) > N:
             break
-        out.append(c)
+        row = replace(c.row, pfx=root(c.row.pfx))
+        mine = CS.reference(SimpleNamespace(**st), table(c.table), row)
+        assert mine == (replace(c.out, table=table(c.out.table), pfx=root(c.out.pfx), trail=tuple(map(root, c.out.trail)))
+                        if c.out.ok else c.out)
+        out.append(Call(c.step, table(c.table), row, mine))
     return out
 
 
-def main(argv: Sequence[str] | None = None) -> None:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--corpus", type=Path, required=True)
-    ap.add_argument("--steps", type=int, default=6)
-    ap.add_argument("--N", type=int, default=32)
-    ap.add_argument("--L", type=int, default=0, help="max_model_len for the size class (default: the trace's)")
-    ap.add_argument("--out", type=Path, required=True)
-    a = ap.parse_args(argv)
-    tr = load(a.corpus)
+def slice_of(tr: dict, N: int, steps: int) -> dict:
+    """A trace's first `steps` steps as difftest vectors at N entries, in the smallest L (whole units) that holds the
+    requests they reach: each request's tokens once, and each call's row and what the cache gives (its trail up to the
+    last unit it touches)."""
     cfg = D.config_of(tr)
     adv, order = D.advice_of(tr)
     held = D.holdings_of(tr)
     tokens = D.tokens_of(held, order, [q.prompt_len for q in adv.requests])
-    st = statics_for(adv, tokens, cfg, a.N)
-    if a.L:
-        st["L"] = a.L
     sent_from = first_sent(adv, cfg, held, order)
-    calls = vectors(adv, tokens, cfg, sent_from, st, a.steps)
-    a.out.write_text(json.dumps({"statics": st, "source": str(a.corpus.name), "steps": a.steps,
-                                 "vectors": [to_json(c) for c in calls]}, separators=(",", ":")) + "\n")
-    print(json.dumps({"statics": st, "vectors": len(calls), "accepted": sum(c.out.ok for c in calls)}))
+    st = statics_for(adv, tokens, cfg, N)
+    reached = {c.row.r for c in vectors(adv, tokens, cfg, sent_from, st, steps)}
+    st["L"] = -(-max(len(tokens[r]) for r in reached) // cfg.unit) * cfg.unit
+    calls = vectors(adv, tokens, cfg, sent_from, st, steps)
+    rows = []
+    for c in calls:
+        r, o = c.row, c.out
+        u0 = 0 if r.admit else next(u for u in range(len(tokens[r.r]) // cfg.unit + 1)
+                                     if window(tokens[r.r], u, SimpleNamespace(**st)) == r.units)
+        touched = max(r.wh, r.nins, 1)
+        rows.append([r.r, u0, int(r.admit), int(r.sent), r.K, r.wh, r.nins, r.pfx, int(o.ok), o.pfx,
+                     list(o.trail[:touched]), len(o.table)])
+    return {"statics": st, "steps": steps, "tokens": {str(r): list(tokens[r]) for r in sorted({c.row.r for c in calls})},
+            "calls": rows}
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--trace", type=Path, action="append", required=True,
+                    help="a TRACE-CORPUS directory or a sched_trace JSON, each a slice")
+    ap.add_argument("--steps", type=int, default=200)
+    ap.add_argument("--N", type=int, default=128)
+    ap.add_argument("--out", type=Path, required=True)
+    a = ap.parse_args(argv)
+    slices = {p.name: slice_of(load(p) if p.is_dir() else D.load_trace(p), a.N, a.steps) for p in a.trace}
+    a.out.write_text(json.dumps({"kind": "cache-step-vectors/v1", "slices": slices}, separators=(",", ":")) + "\n")
+    print(json.dumps({k: {"statics": v["statics"], "calls": len(v["calls"]), "refused": sum(not c[8] for c in v["calls"])}
+                      for k, v in slices.items()}))
 
 
 if __name__ == "__main__":
