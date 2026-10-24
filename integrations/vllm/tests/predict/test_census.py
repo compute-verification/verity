@@ -95,9 +95,9 @@ def test_request_census_and_requirement():
     """The row's request Program, about 30 s: the only test of a Program with values across steps (each layer's K and V rows a
     step's attention produces and every later step's reads), which the step and the toys in `ml/circuits` cannot show at scale."""
     r, c, req, rc = _views(CFG, "request", LP=256, T=31)
-    assert r.digest.startswith("2d98d37bd481d2a0")
-    assert c["digest"] == "27716ab911c7bfd8ab2290a9de9750eb6a41de86c543565549614ff9753dfebbbd073f4ca35a9ed9652f05327dc4701cc516900f645001dec62444614c25a086"
-    assert len(c["steps"]["ends"]) == 32 and c["totals"]["classes"] == 761
+    assert r.digest.startswith("75bc73454ecef006")
+    assert c["digest"] == "2ac27a9737b421c94af70be908c03d697f338a892606675b97ef3069461999ed81e88c20131c7364259647fad124abd88cec9b7587c420a3e724b8cf051b788b"
+    assert len(c["steps"]["ends"]) == 32 and c["totals"]["classes"] == 2769
     assert _by_precision(c) == {"mac:bf16": c["totals"]["served_macs"]}
     base, got = _base(rc), req.to_json()
     # prefill reads rotary rows 0-255 and decode step t row 255 + t; a step holds the rows of its own and later positions,

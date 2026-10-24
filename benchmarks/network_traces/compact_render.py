@@ -2,10 +2,12 @@
 registered tokenizer, so that a stock OpenAI client reads the text vLLM would have streamed.
 
 Under `active.Proxy(compact=True)` the server sends each sampled token as a compact record (`active.compact_record`:
-the request's ingress ordinal and its token field, the finish in reserved fields), and the link carries each as a
+the request's ingress ordinal and its token field, the finish in the field's flags), and the link carries each as a
 B-byte cell. The client knows each request's prompt ids (it sent them) and the registered tokenizer, and renders the
 records back (`Renderer`): one completion chunk a record, its text the token's, `finish_reason` "length" on a record
-marked `COMPACT_LAST` and "stop" with no text on `COMPACT_EOS`, then `data: [DONE]`.
+marked `COMPACT_LAST` alone and "stop" with no text on one marked `COMPACT_STOP` too (its id the stop token's), then
+`data: [DONE]`. It refuses, with ValueError, a record of another request, one after the finish, an id outside the
+vocab, and an end before the finish.
 
 **Detokenization** is vLLM V1's (`FastIncrementalDetokenizer`, `Detokenizer`), so each chunk's text is the bytes vLLM
 streams for that token: a stream (`tokenizers.decoders.DecodeStream`) primed with the prompt's shortest suffix of 4 …
@@ -118,22 +120,26 @@ class Detokenizer:
 
 class Renderer:
     """One request's completion stream rendered from its compact records (the module docstring): `chunk(cell)` gives
-    the SSE event of one record, a stock OpenAI completions chunk, and `done()` the stream's end. `id` and `created`
-    are the client's own (a deployment's shim draws the id as vLLM does)."""
+    the SSE event of one record, a stock OpenAI completions chunk, and `done()` the stream's end. `request` is the
+    request's ingress ordinal, which every record must name. `id` and `created` are the client's own (a deployment's
+    shim draws the id as vLLM does)."""
 
-    def __init__(self, vocab: Vocab, prompt: Sequence[int], model: str, *, request: int | None = None,
-                 id: str = "cmpl-compact", created: int = 0) -> None:
+    def __init__(self, vocab: Vocab, prompt: Sequence[int], model: str, *, request: int, id: str = "cmpl-compact",
+                 created: int = 0) -> None:
         self.detokenizer, self.model, self.request = Detokenizer(vocab, prompt), model, request
         self.id, self.created, self.finished = id, created, None
 
     def text(self, cell: bytes) -> tuple[str, str | None]:
-        """(text, finish) of one record or cell of this request."""
+        """(text, finish) of one record or cell of this request. ValueError, with nothing rendered, on a cell that
+        isn't a record of this request, a record after the finish, or an id outside the vocab."""
         got = compact_record_data(cell)
-        if got is None or self.request is not None and got[0] != self.request:
+        if got is None or got[0] != self.request:
             raise ValueError("a cell that isn't a compact record of this request")
         if self.finished is not None:
             raise ValueError(f"a record after the response's finish ({self.finished})")
         _, token_id, finish = got
+        if token_id not in self.detokenizer.vocab.bytes:
+            raise ValueError(f"a token id outside the vocab: {token_id}")
         self.finished = finish
         return ("" if finish == "stop" else self.detokenizer.step(token_id)), finish
 
@@ -145,4 +151,7 @@ class Renderer:
         return b"data: " + json.dumps(doc, ensure_ascii=False, separators=(",", ":")).encode() + b"\n\n"
 
     def done(self) -> bytes:
+        """`data: [DONE]`, once a record marked `COMPACT_LAST` has been rendered; ValueError before."""
+        if self.finished is None:
+            raise ValueError("the stream ends before its finish: no record marked COMPACT_LAST")
         return DONE

@@ -585,7 +585,7 @@ def credit_reason(record: Mapping[str, Any], directory: str | Path, heads: Seque
     its period committed, and its drawn calls' `statements`), under the ledger at `heads` and `key`, its session run
     from a commit the pins log at `pins` records (`pins_head`) on the verifier's own first-parent history of main `main`
     (`challenger.pinned_session`), the circuit files its period's open committed (`credit.committed_files`) and its K
-    (`credit.committed_k`, or `k`). `run` is the
+    (`credit.committed_k`, or `k`) and table rows T (`credit.committed_rows`). `run` is the
     verifier of record (default credit's own, `proofs.verify`). The refusal (or None) of ``manifest``
     (`manifest_reason`) and ``window`` (core's: each credit bit fixed before the draw coin, the round log the
     challenger's, every A table the tree its round root commits, each K's ``b/<K>`` the weights its period's open
@@ -607,9 +607,11 @@ def credit_reason(record: Mapping[str, Any], directory: str | Path, heads: Seque
         why = None if audited.period is not None else (
             "budget", f"the window is in no period of the auditor's ledger, so no period-open committed the K it is drawn "
                       f"with ({CR.K_FIELD}): reserve its session inside a period")
-        files = None
+        files = rows = None
         if why is None and out["k"] is None:
             out["k"], why = CR.committed_k(lines, audited.period)
+        if why is None:
+            rows, why = CR.committed_rows(lines, audited.period)
         if why is None:
             out["drawn"] = drawn_of(record, window, out["k"], descriptor)[0]
             files, why = CR.committed_files(lines, audited.period)
@@ -617,7 +619,7 @@ def credit_reason(record: Mapping[str, Any], directory: str | Path, heads: Seque
             out["calls"], why = CR.window(key.to_json(), lines, log, main, ev["window"], ev["session"],
                                           ev["salt"], ev["calls"], ev["served"], ev["commit"], ev["rounds"],
                                           ev["draw"], ev["descriptor"], ev["entries"], ev["statements"], files,
-                                          out["k"], verify, **({} if run is None else {"run": run}))
+                                          out["k"], rows, verify, **({} if run is None else {"run": run}))
         out["window"] = why
     ok = out["manifest"] is None and out["window"] is None
     if ok:

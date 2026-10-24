@@ -32,6 +32,20 @@ A spec-level reference for network accounting's timing channel:
   link"). The proxy's admission rule (`Proxy(served=…)`) admits a request only while its window still ends idle, so
   an honest served link is accepted. An egress end with neither profile gets no verdict (`ValueError`, failing
   closed);
+- one vLLM v1 scheduler step (`replay_step`): `ReplayStep_v1`, a Boolean Definition with `reference` its spec, takes the
+  committed queue state, the certified arrivals and the residual's decision bits to the step's rows (request, kind,
+  start, n) and the next state, and refuses what its size class or the prefix layer's counts can't express. It is the
+  compile unit's core, between advice validity and `compile_steps`' Programs, and is held step for step to the replay
+  (`benchmarks/network_e2e/encodings/replay_vectors.py`); it is in no proof-service Spec yet;
+- the I/O tie (`io_tie`), a design (`PROTOCOL.md`, "The I/O tie") and its prototype on a fake upstream, in no Spec:
+  every cell of an egress link-window is opened, each a pad or the canonical event of one token id on the stream the
+  warden set, and each is the output the advice's map names at its place (`window_map`, from advice v0's outputs and
+  release buckets; the verifier computes it in the clear from the opened advice, the named gap, until the map is read
+  in the proof under the advice's hiding root), with the id the Commit sampled for it (the port: one hiding row of
+  ids a step, opened under the Commit's root). The warden commits each bucket's cells as one hiding row. It has the
+  reference and the unit's Boolean Definition (`IoTieWindow`: the cells' root by `NetworkRowsRoot`, the port's rows by
+  `IoTiePort`, then `IoTieContent`: `IoTieCell` on every cell, the prover's Beneš routing of the port's entries
+  `IoTieRoute`, `IoTieMatch`);
 - the capacity counts;
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
@@ -60,10 +74,12 @@ A spec-level reference for network accounting's timing channel:
   bucket s + D + ⌊i/r⌋ from its admission s. A miss fails the connection closed with a `FAIL` cell that carries no
   reason. It records and certifies exactly the cells it sends, and each failure's reason in a third record, `fails`.
   `PROTOCOL.md`'s "The active warden" has its leak bound, and `benchmarks/network_traces/warden_serve.py` runs it;
-- the warden's cells as rows (`warden_rows`): each link-window's cells committed one `hm96-sha512/row/v2` row a cell,
-  padding and empty slots included, under a frame-v3-sha512 root the warden signs with the certifier's signer. The
-  registration is what a proof unit's `--registered` port reads, so the sender's unit opens a cell as its output and
-  the receiver's as its input (`PROTOCOL.md`, "The warden's cells as rows"; `benchmarks/network_traces/warden_zk.py`);
+- the warden's cells as rows (`warden_rows`): each link-window's cells committed one `hm96-sha512/row/v2` row a
+  bucket, padding and empty slots included, under a frame-v3-sha512 root the warden signs with the certifier's signer,
+  beside a salted digest of the window's wiring. The registration is what a proof unit's `--registered` port reads, so
+  the sender's unit opens a cell's row as its output and the receiver's as its input, and the verifier places each
+  read, the (connection, cell) the Program's units' wiring pins (`Units`, whose digest the port's value names), with
+  the warden's wiring (`PROTOCOL.md`, "The warden's cells as rows"; `benchmarks/network_traces/warden_zk.py`);
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
   With its salt on (`Proxy(salt=active.fresh_salt)`, off by default), each PoUW window (`pouw_window` certifier
   windows) gets one salt of `salt_bits` bits (512 by default), carried into the block only. The ingress record holds a
@@ -92,8 +108,8 @@ It is pure Python. It imports only the standard library and `verity`: for the re
 Definition, and in `active` the proof service's registration and receipt, which `reveal` reads, and the pair link's
 AEAD (`verity.ml.crypto.aead`). The certificate's signature scheme is a parameter: the certifier's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
-From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` the circuits
-and their evaluator.
+From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` and
+`replay_step` the circuits and their evaluator.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`Security/`, area `NetworkCertifier`).
 `lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's
 definitions, proved equal to them in `Security/Proofs/NetworkCertifier/Code.lean`, and the difftest that holds this

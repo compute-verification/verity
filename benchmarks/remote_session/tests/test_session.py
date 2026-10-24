@@ -737,6 +737,7 @@ def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot
     assert lg["memory"]["error"] == verifier.memory_error(lg) == pytest.approx(
         reading["error"]["horizon"] + 2.0 ** lg["sketch_failure"]["log2"])
     assert lg["memory"]["error"] > lg["memory"]["delta"] + record.passes * 2.0 ** -audit.SLACK_LOG2 * 0.99
+    assert lg["inputs"]["slack_log2"] == audit.SLACK_LOG2
 
     def same(x, y) -> bool:
         if isinstance(x, dict):

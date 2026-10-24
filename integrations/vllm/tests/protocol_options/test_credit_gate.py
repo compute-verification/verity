@@ -264,7 +264,7 @@ def periodic(tmp_path, monkeypatch):
     def make(draw_k, model=True, files=None, registry=None):
         leaves = itertools.count()
         ledger = CH.Ledger(tmp_path / "auditor.jsonl", 1, leaves, registry=registry or _registry())
-        ledger.period_open(PERIOD, circuit=_circuit(), draw_k=draw_k, circuit_files=files,
+        ledger.period_open(PERIOD, circuit=_circuit(), draw_k=draw_k, rows=ROWS, circuit_files=files,
                            model=CH.MODEL if model else None)
         host = CH.Host(tmp_path / "auditor", Wd.live_challenger(0, 1, CH.entropy(1)), 1, leaves=leaves, ledger=ledger,
                        gated=True)
@@ -284,12 +284,13 @@ def _commit(tap, x, ids):
     tap.take(f"{CT.site('q')}/1", s_a, 0)
 
 
-def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True, served=None, ids=None):
+def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True, served=None, ids=None, pad=0, graphs=()):
     """One small call (m rows of K, N = `n`) through `arm` with H1 installed (T = `ROWS`), its request admitted with an
     m-token prompt (with none: prompt embeddings, so no entry); the run closed and its y and run returned, the served y
     the plain linear's when `exact`. Its coins are the auditor host's challenger's with `remote` (the `auditor` fixture),
     else held in this process; with `served` (`pouw_h1_served.Served`) its rows are the window Program's values and the
-    Commit is in its engine (`_commit`, its input ids `ids`, else the prompt's)."""
+    Commit is in its engine (`_commit`, its input ids `ids`, else the prompt's). With `pad` the call runs `pad` rows past
+    the m scheduled, as a CUDA graph of the engine's capture sizes `graphs` pads it, its padded input ids 0."""
     layer = Linear(n, 1, arm)
     if served is not None:
         served.tap = CT.CommitTap("embed")
@@ -300,7 +301,7 @@ def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True, serv
         coins = {"coins": Challenger(0, random.Random(0).randbytes),
                  "rounds": LiveRecord(Wd.live_challenger(0, 1, random.Random(1).randbytes), Wd.ROUND, clock=lambda: 0.0)}
     ctx = PO.Context(stage="serve", enabled=(ENTRY,), settings={"pouw": {"rows": ROWS, "steps": 1, "retain_steps": retain,
-                                                                         "runner": runner, **coins,
+                                                                         "runner": runner, **coins, "graphs": graphs,
                                                                          **({"served": served} if served else {})}})
     comp = PO.install(Model(layer), ctx)
     try:
@@ -308,9 +309,9 @@ def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True, serv
                               sampling_params=SimpleNamespace(max_tokens=1))
         runner.execute_model(SimpleNamespace(scheduled_new_reqs=[req], num_scheduled_tokens={"r": m},
                                              total_num_scheduled_tokens=m))
-        x = (torch.randn(m, K, generator=torch.Generator().manual_seed(9)) * 3).bfloat16()
+        x = (torch.randn(m + pad, K, generator=torch.Generator().manual_seed(9)) * 3).bfloat16()
         if served is not None:
-            _commit(served.tap, x, list(range(m)) if ids is None else ids)
+            _commit(served.tap, x, (list(range(m)) if ids is None else ids) + [0] * pad)
         y = layer.quant_method.apply(layer, x)
         run = pouw.h1_run(ENTRY)
         run.close()

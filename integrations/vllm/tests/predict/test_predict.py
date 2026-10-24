@@ -79,9 +79,9 @@ def test_request_and_workload_programs_equal_the_traced_build():
     phi = _phi(json.loads((FIX / "smollm2-135m.config.json").read_text()),
                [{"request_id": "u0", "index": 0, "prompt_len": 256, "max_tokens": 32, "arrive_step": 0}])
     r = build_program(phi, "request", LP=256, T=31)
-    assert r.digest == "52e6bb0b37e31ec3bdcc976027f412955be60cdd7bcd1ed4982aee7b4b716681a00323889897a394808aa040994f53a3e210dc603dba9a65751817e1df348f5c"
-    assert r.n_root_nodes == 86738
-    assert S.predict_workload(phi)["digest"] == "345798f4dc27339a239f17acd3232b758b4b242092d87e9c558ea9d02ec202f08b14212f8c68a7e6dbc5413e4f235a7085fcd15a66b021cd51d8e3755e7e2f06"
+    assert r.digest == "7a96a646f3ded690fb6fbf33b1e31318e26570803b588f7560868390b1131d692f103828d10bd2351d1b9ac4bc368c9884531efaae96342bcc6763a27c154bb7"
+    assert r.n_root_nodes == 84698
+    assert S.predict_workload(phi)["digest"] == "096daff1fc02d8c967e8c0582d5bcffcecca9644bf6262b03cdad286c8d071ebba048664f1ac198319dd6a229d840f372e250e374f9cffe7d3d17f184e87b6d2"
 
 
 @pytest.mark.parametrize("model,function,rank,digest", [
@@ -316,12 +316,14 @@ def test_the_record_path_reaches_the_predictor_only_through_a_switched_rows_aot_
     row's AOT Build (`row_tp.TpRow.derive`, under `config_record.aot_of`; `tests/pipeline/test_tp_build_width.py`), and the trace
     that checks it lists the package as a forbidden input."""
     from verity_vllm.program.frontend import inputs_trace
-    pkg = Path(S.__file__).resolve().parents[1]
-    pat = re.compile(r"^\s*(from|import)\s+(verity_vllm\.predict|\.+predict)\b|import_module\([^)]*predict", re.M)
-    hits = [str(p.relative_to(pkg)) for p in pkg.rglob("*.py") if "predict" not in p.relative_to(pkg).parts[:1] and pat.search(p.read_text())]
+    here, name = Path(S.__file__).resolve().parent, S.__name__.rpartition(".")[0]
+    pkg = here.parents[name.count(".") - 1]
+    inside = here.relative_to(pkg).parts
+    pat = re.compile(rf"^\s*(from|import)\s+({re.escape(name)}|\.+{here.name})\b|import_module\([^)]*{here.name}", re.M)
+    outside = [p for p in pkg.rglob("*.py") if p.relative_to(pkg).parts[:len(inside)] != inside]
+    hits = [str(p.relative_to(pkg)) for p in outside if pat.search(p.read_text())]
     assert hits == []
-    runs = [str(p.relative_to(pkg)) for p in pkg.rglob("*.py") if "predict" not in p.relative_to(pkg).parts[:1]
-            and re.search(r"""cli\(\s*["']predict["']""", p.read_text())]
+    runs = [str(p.relative_to(pkg)) for p in outside if re.search(r"""cli\(\s*["']predict["']""", p.read_text())]
     assert runs == ["pipeline/row_tp.py"]
     assert any(m in str(Path(S.__file__).resolve()) for m in inputs_trace._FORBIDDEN_MARKERS)
 

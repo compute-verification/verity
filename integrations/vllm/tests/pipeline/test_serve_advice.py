@@ -25,7 +25,7 @@ from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.predict.phi import Phi
 from verity_vllm.predict.steps import Registered, compile_steps
 
-C = ADV.Compiler("test-compiler", "ab" * 64)
+C = ADV.registered_compiler("test-compiler", "ab" * 64)
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
         "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5, "tie_word_embeddings": True,
         "max_position_embeddings": 64, "hidden_act": "silu"}

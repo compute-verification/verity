@@ -414,7 +414,7 @@ fn serve_loop(make: impl Fn() -> Server) {
         let rec = s.record_json();
         let d = out.join(&id);
         std::fs::create_dir_all(&d).unwrap();
-        std::fs::write(d.join("session.json"), serde_json::to_string_pretty(&rec).unwrap()).unwrap();
+        std::fs::write(d.join("session.json"), flock_live::record_text::canonical_json(&rec)).unwrap();
         let line = json!({"session": id, "accepted": rec["verdict"]["accepted"], "aborted": rec["aborted"],
                           "rounds": rec["verdict"]["rounds"], "streams": rec["verdict"]["streams"]});
         use std::io::Write;

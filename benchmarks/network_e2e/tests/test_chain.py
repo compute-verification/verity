@@ -3,8 +3,9 @@ stand-in's from before v0, upgraded with each kept output released in its step's
 summing to I1's total and the residual's giving back every step from the config alone, and with the certified I/O the
 whole advice (bound), or nothing when the I/O certifies other requests; a prove path's output adopted, held to the given
 advice, with a forged arm that passes only when Lean refused its unit; and the report on certifier-serve's virtual runs with
-every stage (NEG's registry among them), then on a varied rehearsal's advice profile, where N2 gives no verdict and the
-rehearsal's own check is the verdict."""
+every stage (NEG's registry among them, with the I/O tie's verdict given the sampled ids), then on a varied rehearsal's
+advice profile, where N2 gives no verdict and the rehearsal's own check is the verdict, and the I/O tie on each run,
+required there, decides token and holds the honest run."""
 
 from __future__ import annotations
 
@@ -166,6 +167,77 @@ def _endpoint(tmp_path: Path) -> Path:
     return tmp_path / "ep"
 
 
+def _serve_arm(d: Path, name: str, w: int, bits: int, *, forged=False, root=None, codes=()) -> None:
+    """A `prove_path.py audit --serve-run` arm of the endpoint fixture's Commit window ``w``: its summary's ``serve``
+    names the window, its run id and the root it found sealed while serving (``codes`` its refusals)."""
+    c = next(x for x in chain._jsonl(EP / "windows.jsonl") if int(x["window"]) == w)
+    _arm(d, name, {}, forged=forged)
+    s = json.loads((d / name / "summary.json").read_text())
+    adv = {"root": "f" * 128, "bits": bits}
+    s |= {"run_root": root or c["run_root"], "advice": adv,
+          "serve": {"ok": not codes, "codes": list(codes), "window": w,
+                    "detail": {"window": w, "run_id": c["run_id"], "published_root": root or c["run_root"],
+                               "advice": adv}}}
+    (d / name / "summary.json").write_text(json.dumps(s))
+
+
+def test_a_serve_run_audit_is_bound_to_the_runs_by_the_endpoints_commit_window_it_proves(tmp_path):
+    """PROVE-PATH's `--serve-run` audits of the endpoint's own Commit windows (as r20261024-154338-7679's of 8eb1's
+    w212, one of the honest run's, and r20261024-143655-ccc8's of its w5): bound to these runs when every arm's Commit
+    is the endpoint's (its windows.jsonl's run id and root) and sealed while serving, and an honest arm proves one of
+    the honest run's windows, its advice the report's registration of it by root or, registered apart, by v0 bits. Not
+    bound otherwise, each reason named; who registered each window's advice is the job's to say, and is shown."""
+    io = json.loads((EP / "io.json").read_text())["requests"]
+    first = chain._first_steps(chain._jsonl(EP / "advice_trace.jsonl"))
+    info, b = chain.served_advice(EP, EP / "advice", {"origin_unix": first[0] + 1.2, "windows": 2, "window_s": 6.0},
+                                  io, 60, [128001])
+    row = {x["window"]: x for x in b["commit_windows"]}
+    commits = {int(x["window"]): x for x in chain._jsonl(EP / "windows.jsonl")}
+    assert sorted(row) == [1, 2]
+    w1, w0 = tmp_path / "w1", tmp_path / "w0"
+    for d, w in ((w1, 1), (w0, 0)):
+        _serve_arm(d, "served", w, row[1]["v0_bits"] if w == 1 else 7)
+        _serve_arm(d, "served-forged", w, row[1]["v0_bits"] if w == 1 else 7, forged=True)
+    registered = {"1": {"by": "the lane", "at_serve_time": False, "at": "2026-10-24T15:33:57.704Z",
+                        "first_draw": "2026-10-24T15:48:10.322Z", "ref": "r-reg"},
+                  "0": {"by": "vllm", "at_serve_time": True}}
+    got = chain.prove_path([w1, w0], info, b["bound"], b, EP, registered)
+    assert got["bound"] is True and got["bound_why"] is None and got["ok"] is True
+    assert sorted(got["arms"]) == ["w0 served", "w0 served-forged", "w1 served", "w1 served-forged"]
+    assert got["arms"]["w1 served"]["commit"] == {
+        "window": 1, "run_id": commits[1]["run_id"], "run_root": commits[1]["run_root"], "sealed_while_serving": True,
+        "the_endpoints": True, "of_the_honest_run": True, "advice_root": "f" * 128, "advice_bits": row[1]["v0_bits"],
+        "the_reports_root": False, "the_reports_bits": True, "registered": registered["1"]}
+    w0c = got["arms"]["w0 served"]["commit"]
+    assert w0c["the_endpoints"] is True and w0c["of_the_honest_run"] is False and w0c["the_reports_bits"] is None
+    md = "\n".join(chain.markdown({"advice": info, "bits": b, "prove_path": got}))
+    assert "\n## Prove path\n" in md and "fixed workload" not in md and "Bound to these runs: True (every arm's" in md
+    assert (f"| w1 served | 1 | {commits[1]['run_id']} | {commits[1]['run_root'][:16]}… | True | True | True | "
+            f"{'f' * 16}… | {row[1]['v0_bits']} | False | True | after serving, by the lane (r-reg), 14.2 min before "
+            "the first draw |") in md
+    assert f"| w0 served | 0 | {commits[0]['run_id']} |" in md and md.count("| by vllm at serve time |") == 2
+    stub = [x for x in chain.stubs({"chain": {"advice": info, "bits": b, "prove_path": got}}, True)
+            if x.startswith("Prove path")]
+    assert stub == [f"Prove path: the served run's own Commit windows (w0, w1), adopted from {w1}, {w0}; w1's advice "
+                    "was registered after serving, by the lane (r-reg), 14.2 min before the first draw, not by the "
+                    "endpoint while serving; the advice w1's arms committed is a registration of its own, held to the "
+                    "report's by its v0 bits only (each root hides it)."]
+
+    def why(*dirs) -> str | None:
+        p = chain.prove_path(list(dirs), info, b["bound"], b, EP, registered)
+        assert p["bound"] is (p["bound_why"] is None)
+        return p["bound_why"]
+    assert why(w0) == "no honest arm proves one of the honest run's Commit windows"
+    _serve_arm(tmp_path / "other", "served", 1, row[1]["v0_bits"], root="0" * 128)
+    assert why(tmp_path / "other") == "w1 served: Commit window 1 isn't the endpoint's (its windows.jsonl)"
+    _serve_arm(tmp_path / "unsealed", "served", 1, row[1]["v0_bits"], codes=["published-root-of-another-commit"])
+    assert why(tmp_path / "unsealed") == "w1 served: its run root isn't the one sealed while serving"
+    _serve_arm(tmp_path / "short", "served", 1, row[1]["v0_bits"] - 1)
+    assert why(tmp_path / "short") == "w1 served: its advice isn't held to the report's registration of Commit window 1"
+    _arm(tmp_path / "fixed", "llama", {"root": "r", "bits": 2695})
+    assert why(w1, tmp_path / "fixed").startswith("from the fixed workload, not this run")
+
+
 def test_the_endpoints_own_advice_is_the_runs_by_its_commit_windows_each_opened_and_rebuilt(tmp_path):
     """vllm's own-advice endpoint's first three Commit windows (r20261024-094558-6d6a's records, trimmed: its scheduler
     trace, its windows.jsonl and `verity-vllm advice`'s registrations and openings, as the endpoint committed them
@@ -219,7 +291,8 @@ def test_the_endpoints_own_advice_is_the_runs_by_its_commit_windows_each_opened_
 def _args(src, out, **kw) -> SimpleNamespace:
     return SimpleNamespace(**{"sources": [str(src)], "upstream": None, "vllm": None, "out": str(out), "work": None,
                               "bin": None, "lean": None, "delta": 2.0 ** -20, "no_prove": True, "proofs": None,
-                              "advice": None, "serving_config": None, "prove_path": None, "no_negatives": False, **kw})
+                              "advice": None, "serving_config": None, "prove_path": None, "ids": None,
+                              "no_negatives": False, **kw})
 
 
 @pytest.fixture(scope="module")
@@ -240,7 +313,7 @@ def test_the_report_carries_every_stage_on_the_planned_profile(virtual, tmp_path
         tar.add(pp, arcname="out")
     out = tmp_path / "out"
     r = e2e.run(_args(virtual, out, advice=str(tmp_path / "s.json"), serving_config=str(tmp_path / "config.json"),
-                      prove_path=str(tmp_path / "pp.tgz")), [], clock=lambda: 0.0)
+                      prove_path=[str(tmp_path / "pp.tgz")]), [], clock=lambda: 0.0)
     assert r["format"] == e2e.FORMAT and r["claim"] == e2e.CLAIM
     assert r["ok"] is False and r["why_not"] == ["the advice isn't these runs'",
                                                  "the advice wasn't rebuilt from the certified I/O"]
@@ -259,10 +332,38 @@ def test_the_report_carries_every_stage_on_the_planned_profile(virtual, tmp_path
     assert any(x.startswith("Auditor host") for x in r["stubbed"])
     summary = pp / "glm" / "summary.json"
     summary.write_text(json.dumps(json.loads(summary.read_text()) | {"ok": False}))
-    r = e2e.run(_args(virtual, tmp_path / "out2", advice=str(tmp_path / "s.json"), prove_path=str(pp)), [],
+    r = e2e.run(_args(virtual, tmp_path / "out2", advice=str(tmp_path / "s.json"), prove_path=[str(pp)]), [],
                 clock=lambda: 0.0)
     assert r["chain"]["prove_path"]["ok"] is False and r["chain"]["bits"]["config"] is None
     assert "the prove path failed" not in r["why_not"]
+
+
+def test_given_the_sampled_ids_each_negative_the_tie_reads_carries_its_verdict(virtual, tmp_path):
+    """With --advice and --ids, every negative the I/O tie reads carries the tie's verdict, in the report's table and
+    in `stubbed`; a row the tie ran on passes only when the tie refuses it by its part. Without --ids no row has one,
+    and `stubbed` says so. Until IO-TIE lands, each such row says why it didn't run."""
+    NG = chain.NG
+    (tmp_path / "a.json").write_text(json.dumps(I1.to_json(_advice())))
+    (tmp_path / "ids.jsonl").write_text("".join(json.dumps({"user": u, "output_ids": x}) + "\n"
+                                                for u, x in (("q0", [5, 6]), ("q1", [9]))))
+    r = e2e.run(_args(virtual, tmp_path / "out", advice=str(tmp_path / "a.json"), ids=str(tmp_path / "ids.jsonl")), [],
+                clock=lambda: 0.0)
+    rows = r["chain"]["negatives"]["rows"]
+    tied = {k: x["tie"] for k, x in rows.items() if "tie" in x}
+    assert set(tied) == set(NG.TIE_PARTS)
+    md = (tmp_path / "out" / "report.md").read_text()
+    assert "| I/O tie |" in md
+    if NG.io_tie_module() is None:
+        assert all(not t["ran"] and "IO-TIE" in t["why"] for t in tied.values())
+        assert any(x.startswith("I/O tie: no I/O tie yet") for x in r["stubbed"])
+    else:
+        ran = {k: t for k, t in tied.items() if t["ran"]}
+        assert {"frame", "token", "drop", "wrong-token"} <= set(ran) and all(t["ok"] for t in ran.values()), tied
+        assert all(rows[k]["ok"] is True for k in ran)
+        assert f"`{NG.TIE}.content`" in md and any(x.startswith("I/O tie: IO-TIE's reference") for x in r["stubbed"])
+    r = e2e.run(_args(virtual, tmp_path / "out2", advice=str(tmp_path / "a.json")), [], clock=lambda: 0.0)
+    assert all("tie" not in x for x in r["chain"]["negatives"]["rows"].values())
+    assert any(x.startswith("I/O tie: no sampled ids given") for x in r["stubbed"])
 
 
 #: what the check finds of each negative on the advice profile: late's window faulted (the audit's status), extra's and
@@ -274,7 +375,8 @@ OWN = {"late": {"audit": "status:coverage-never-established"}, "extra": {"io": "
 def _varied(d: Path, virtual: Path, verdicts: dict, found: dict | None = None) -> Path:
     """A varied rehearsal's runs as certifier-serve's check leaves them on the advice profile: its plan, the
     calibration (the virtual run's), the check's verdict with its certified I/O and what it found of a refused run
-    (``found``, by default `OWN`'s), the shim's request count, and honest's ``io.json``."""
+    (``found``, by default `OWN`'s), the shim's request count, and the certified I/O (``io.json``), the same users in
+    every run."""
     found = OWN | (found or {})
     for s, v in verdicts.items():
         (d / s).mkdir(parents=True)
@@ -290,7 +392,7 @@ def _varied(d: Path, virtual: Path, verdicts: dict, found: dict | None = None) -
             "rows": [{"window": 0, "audit": {"egress": {"raw": f.get("audit"), "committed": f.get("audit")}}}],
             "io": {"accepted": "io" not in f, "requests": 2, "tokens": 3, "finish": {"eos": 1, "length": 1},
                    "violations": [[1, f["io"]]] if "io" in f else []}}))
-    (d / "honest" / "io.json").write_text(json.dumps({"windows": 3, "requests": _io()}))
+        (d / s / "io.json").write_text(json.dumps({"windows": 3, "requests": _io()}))
     return d
 
 
@@ -303,12 +405,16 @@ def test_on_the_advice_profile_the_rehearsals_check_is_the_verdict_and_the_advic
     args = _args(runs, tmp_path / "out", no_prove=False, advice=str(tmp_path / "a.json"),
                  serving_config=str(tmp_path / "config.json"))
     r = e2e.run(args, [], clock=lambda: 0.0)
-    assert r["ok"] is True and r["profile"] == "advice" and r["claim"] == e2e.CLAIM_ADVICE
+    tie_why = r["chain"]["tie"]["why"]
+    assert r["ok"] is False and r["profile"] == "advice" and r["claim"] == e2e.CLAIM_ADVICE
+    assert r["why_not"] == [f"the I/O tie didn't run, and the advice profile requires it: {tie_why}",
+                            "token not refused"]
     assert list(r["runs"]) == ["honest", "late", "extra", "drop", "token"] and r["link_windows"] == []
-    assert r["pending"] == {"token": {"waits": "IO-TIE", "check": "accepted", "n2": None, "ran": True}}
+    assert r["chain"]["tie"]["ran"] is False and r["pending"] == {}
+    assert r["negatives"]["token"]["refused"] is False and r["negatives"]["token"]["by"] == []
     assert r["runs"]["honest"]["network"]["accepted"] is None and r["proofs"]["ran"] is False
     assert "N2-ADVICE" in r["proofs"]["why"] and r["chain"]["negatives"]["ran"] is False
-    assert sorted(r["negatives"]) == ["drop", "extra", "late"]
+    assert sorted(r["negatives"]) == ["drop", "extra", "late", "token"]
     assert r["negatives"]["late"]["by"] == ["the rehearsal's own check (audit.status:coverage-never-established)"]
     assert r["negatives"]["drop"]["by"] == ["the rehearsal's own check (io:short of max_tokens without EOS)"]
     assert r["ran"] == ["the rehearsal's own check", "the advice, these runs' and rebuilt from their certified I/O"]
@@ -316,7 +422,8 @@ def test_on_the_advice_profile_the_rehearsals_check_is_the_verdict_and_the_advic
     assert b["bound"] is True and b["rebuilt"] is True and [x["window"] for x in b["windows"]] == [0, 1, 2]
     md = (tmp_path / "out" / "report.md").read_text()
     assert "| honest | accepted (I/O True) | — | — |" in md and "No N2 verdict on the advice profile" in md
-    assert "- **token** (NEG's, pending IO-TIE, which alone refuses it here): the rehearsal's check accepted, N2 —" in md
+    assert ("- **token**: NOT refused by nothing (not proved); the I/O tie, which alone refuses it, didn't run "
+            f"({tie_why})") in md
     assert any(x.startswith("N2 on the advice profile") for x in r["stubbed"])
     at = e2e.where({"honest": {"dir": runs / "honest", "gate": None}}, "vy-nebius-1:18080")
     assert at["where"].startswith("off the prover's node: better than the loopback, though not yet the auditor host")
@@ -351,9 +458,20 @@ def test_on_the_advice_profile_the_endpoints_own_advice_for_the_runs_commit_wind
     plan = json.loads((honest / "plan.json").read_text())
     plan["varied"]["eos_token_ids"] = [128001]
     (honest / "plan.json").write_text(json.dumps(plan))
+    for o in ("out", "out0"):
+        shutil.copytree(EP / "advice", tmp_path / o / "endpoint" / "advice")
+    monkeypatch.setattr(chain.NG, "io_tie_module", lambda: object())
+    monkeypatch.setattr(chain.NG, "tie_run", lambda run, ids: _ties()[run.name])
+    # the endpoint recorded its first request, which its Commit window's advice holds, with no user: the endpoint's
+    # records give it no sampled ids, so the tie gives the honest run no verdict, and --ids stands in for them below
+    r = e2e.run(_args(runs, tmp_path / "out0", endpoint_run=str(EP)), [], clock=lambda: 0.0)
+    assert r["why_not"] == ["the I/O tie gave no verdict on the honest run: no sampled ids for 1 of its 9 certified "
+                            "requests"]
+    ids = tmp_path / "ids.jsonl"
+    ids.write_text("".join(json.dumps({"user": x["user"], "output_ids": x["output"]}) + "\n"
+                           for x in json.loads((EP / "io.json").read_text())["requests"]))
     out = tmp_path / "out"
-    shutil.copytree(EP / "advice", out / "endpoint" / "advice")
-    r = e2e.run(_args(runs, out, endpoint_run=str(EP)), [], clock=lambda: 0.0)
+    r = e2e.run(_args(runs, out, endpoint_run=str(EP), ids=str(ids)), [], clock=lambda: 0.0)
     assert r["ok"] is True, r["why_not"]
     assert "the advice, these runs' and rebuilt from their certified I/O" in r["ran"]
     assert sorted(p.name for p in (out / "endpoint").iterdir()) == sorted(["advice", *chain.ENDPOINT])
@@ -362,6 +480,27 @@ def test_on_the_advice_profile_the_endpoints_own_advice_for_the_runs_commit_wind
     md = (out / "report.md").read_text()
     assert "The endpoint's own (r20261024-094558-6d6a)" in md and "| 1 | r20261024-094558-6d6a/w1 |" in md
     assert any(x.startswith("Derived bits: the serving config is read off the endpoint's records") for x in r["stubbed"])
+    assert "the prove path, of these runs" in r["not_run"]
+    v0 = {x["window"]: x["v0_bits"] for x in b["commit_windows"]}
+    _serve_arm(tmp_path / "pp1", "served", 1, v0[1])
+    _serve_arm(tmp_path / "pp1", "served-forged", 1, v0[1], forged=True)
+    _serve_arm(tmp_path / "pp2", "served", 0, v0[0])
+    (tmp_path / "registered.json").write_text(json.dumps({"1": {"by": "the lane", "at_serve_time": False}}))
+    for o in ("outp", "outq"):
+        shutil.copytree(EP / "advice", tmp_path / o / "endpoint" / "advice")
+    r = e2e.run(_args(runs, tmp_path / "outp", endpoint_run=str(EP), prove_path=[str(tmp_path / d) for d in ("pp1", "pp2")],
+                      prove_path_registered=str(tmp_path / "registered.json"), ids=str(ids)), [], clock=lambda: 0.0)
+    p = r["chain"]["prove_path"]
+    assert r["ok"] is True and p["bound"] is True and "the prove path, of these runs" in r["ran"], r["why_not"]
+    assert p["dir"] == f"{tmp_path / 'pp1'}, {tmp_path / 'pp2'}" and sorted(p["arms"]) == [
+        "w0 served", "w1 served", "w1 served-forged"]
+    assert any(x.startswith("Prove path: the served run's own Commit windows (w0, w1)") and "after serving, by the lane"
+               in x for x in r["stubbed"])
+    summary = tmp_path / "pp1" / "served-forged" / "summary.json"
+    summary.write_text(json.dumps(json.loads(summary.read_text()) | {"ok": False}))
+    r = e2e.run(_args(runs, tmp_path / "outq", endpoint_run=str(EP), prove_path=[str(tmp_path / "pp1")], ids=str(ids)),
+                [], clock=lambda: 0.0)
+    assert r["ok"] is False and r["why_not"] == ["the prove path failed"]
     monkeypatch.setattr(e2e, "ADVICE", [sys.executable, "-c", "import sys; print('unknown command'); sys.exit(2)"])
     r = e2e.run(_args(runs, tmp_path / "out2", endpoint_run=str(EP)), [], clock=lambda: 0.0)
     assert r["ok"] is False and "the advice isn't these runs'" in r["why_not"]
@@ -369,3 +508,113 @@ def test_on_the_advice_profile_the_endpoints_own_advice_for_the_runs_commit_wind
     assert (tmp_path / "out2" / "endpoint" / "advice.log").read_text() == "unknown command\n"
     r = e2e.run(_args(runs, tmp_path / "out3", endpoint_run=str(tmp_path / "nowhere")), [], clock=lambda: 0.0)
     assert r["ok"] is False and "not copied" in r["chain"]["bits"]["bound_why"]
+
+
+def test_each_runs_sampled_ids_are_the_endpoints_for_the_requests_that_arrived_in_its_link_windows(tmp_path):
+    """Every strategy of a rehearsal sends the same users, so the I/O tie takes a run's sampled ids from the endpoint's
+    records for the requests that arrived in its own link-windows: each `arrive` of the scheduler trace in the run's
+    span (from `SLACK_S` before its origin), matched to requests.jsonl by engine id. A request with no user is no
+    run's, and a user arriving twice in one span is refused."""
+    arrive = {r["request"]: r["t"] for r in chain._jsonl(EP / "advice_trace.jsonl") if r["kind"] == "arrive"}
+    rows = {r["user"]: r for r in chain._jsonl(EP / "requests.jsonl")}
+    t0, last = arrive[rows["drive-0"]["engine_id"]], max(arrive.values())
+    first = chain.served_ids(EP, {"origin_unix": t0 - 0.2, "windows": 1, "window_s": 0.4})
+    assert sorted(first) == ["drive-0", "drive-1", "drive-2", "drive-3"] and min(arrive.values()) < t0 - 0.2
+    assert all(first[u] == rows[u]["streamed_ids"] and len(first[u]) == 16 for u in first)
+    every = chain.served_ids(EP, {"origin_unix": t0, "windows": 2, "window_s": 6.0})
+    assert sorted(every) == [f"drive-{i}" for i in range(8)]
+    assert chain.served_ids(EP, {"origin_unix": last + chain.SLACK_S + 0.5, "windows": 1, "window_s": 6.0}) == {}
+    ep = _endpoint(tmp_path)
+    lines = (ep / "requests.jsonl").read_text().splitlines()
+    (ep / "requests.jsonl").write_text("\n".join(x.replace('"drive-1"', '"drive-0"') for x in lines))
+    with pytest.raises(ValueError, match="drive-0 reached the endpoint twice"):
+        chain.served_ids(ep, {"origin_unix": t0, "windows": 2, "window_s": 6.0})
+
+
+TOKEN = HERE / "tests" / "data" / "token"
+
+
+def test_a_token_runs_changed_ids_fall_in_the_link_windows_its_certified_egress_carries_them(tmp_path):
+    """r20261024-111424-88c9's token run (its ingress and egress records, plan, calibration and the shim's server.json,
+    not its certified heads): the shim changed varied.00000's first three outputs and varied.00001's first twenty, which
+    its certified egress carries in link-windows 0 and 1, each output placed as the tie places it (its stream's next id
+    event). An output the egress doesn't carry falls in none, and a run whose shim logged no change has none."""
+    server = json.loads((TOKEN / "server.json").read_text())
+    assert sorted({u for u, _ in server["tampered"]}) == ["varied.00000", "varied.00001"]
+    assert len(server["tampered"]) == 23 and chain.changed_windows(TOKEN) == [0, 1]
+    run = tmp_path / "token"
+    shutil.copytree(TOKEN, run)
+    for changed, windows in (([["varied.00000", 0]], [0]), ([["varied.00001", 19]], [1]),
+                             ([["varied.00000", 999], ["nobody", 0]], [])):
+        (run / "server.json").write_text(json.dumps(server | {"tampered": changed}))
+        assert chain.changed_windows(run) == windows, changed
+    (run / "server.json").write_text(json.dumps({k: v for k, v in server.items() if k != "tampered"}))
+    assert chain.changed_windows(run) is None
+
+
+def _ties(**edits) -> dict:
+    """`negatives.tie_run`'s row on each run of `_varied`, as the tie gives it on 88c9's: honest accepted, token refused
+    by content at link-window 1, drop by content for the output it left out, late and extra accepted; ``edits`` by run."""
+    rows = {"honest": {}, "late": {}, "extra": {}, "token": {"failing": {1: ["content"]}},
+            "drop": {"failing": {-1: ["content"]}, "unplaced": 1}}
+    out = {}
+    for name, x in rows.items():
+        x = x | edits.get(name, {})
+        codes = sorted({f"IoTieWindow.{p}" for parts in x.get("failing", {}).values() for p in parts})
+        out[name] = {"verdict": "refused" if codes else "accepted", "codes": codes, "failing": {}, "unplaced": 0,
+                     "held": {"egress": 3, "ingress": 3}, "missing": {}, "outputs": 3, "placed": 3} | x
+    return out
+
+
+def test_on_the_advice_profile_the_ties_verdict_refuses_token_where_it_changed_ids_and_holds_the_honest_run(
+        virtual, tmp_path, monkeypatch):
+    """With IO-TIE in the tree and each request's sampled ids (here --ids), the I/O tie runs on every run of the
+    advice profile: token is a negative it alone refuses, by content at exactly the link-windows its changed ids fall
+    in (refused elsewhere, it isn't); drop's refusal by content is listed beside its own code; the honest run must be
+    accepted for the report to be OK. Without IO-TIE the report isn't OK and says why, and token isn't refused.
+    `negatives.tie_run` is stubbed: NEG's suite runs it on certifier-serve's varied runs."""
+    NG = chain.NG
+    runs = _varied(tmp_path / "varied", virtual, {"honest": "accepted", "late": "refused", "extra": "refused",
+                                                  "drop": "refused", "token": "accepted"})
+    (tmp_path / "ids.jsonl").write_text("".join(json.dumps({"user": u, "output_ids": [5]}) + "\n" for u in ("q0", "q1")))
+    ties, seen = _ties(), []
+    monkeypatch.setattr(NG, "io_tie_module", lambda: object())
+    monkeypatch.setattr(NG, "tie_run", lambda run, ids: seen.append(ids) or ties[run.name])
+    monkeypatch.setattr(chain, "changed_windows", lambda run: [1] if run.name == "token" else None)
+    r = e2e.run(_args(runs, tmp_path / "out", ids=str(tmp_path / "ids.jsonl")), [], clock=lambda: 0.0)
+    assert r["ok"] is True, r["why_not"]
+    assert seen == [{"q0": [5], "q1": [5]}] * 5 and r["pending"] == {}
+    assert "the I/O tie (IO-TIE's reference in the clear, on stand-ins)" in r["ran"]
+    token, drop = r["negatives"]["token"], r["negatives"]["drop"]
+    assert token["refused"] is True and token["by"] == [
+        "the I/O tie (IoTieWindow.content at link-windows [1], the link-windows its changed ids fall in)"]
+    assert drop["by"] == ["the rehearsal's own check (io:short of max_tokens without EOS)",
+                          "the I/O tie (IoTieWindow.content, 1 committed outputs no certified cell carries)"]
+    assert r["negatives"]["late"]["by"] == ["the rehearsal's own check (audit.status:coverage-never-established)"]
+    assert r["chain"]["tie"]["runs"]["late"]["ok"] is None
+    md = (tmp_path / "out" / "report.md").read_text()
+    assert "## I/O tie" in md and "| token | refused | True | `IoTieWindow.content` | 1: content | [1] | 2 |" in md
+    assert "| honest | accepted | True | — | — | — | 2 | 3 | 3 | 0 | 3/3 | — |" in md
+    assert "- **token**: refused by the I/O tie (IoTieWindow.content at link-windows [1]" in md
+    assert any(x.startswith("I/O tie: IO-TIE's reference in the clear on NEG's stand-ins") and str(tmp_path) in x
+               for x in r["stubbed"])
+
+    ties.update(_ties(token={"failing": {0: ["content"]}}))
+    r = e2e.run(_args(runs, tmp_path / "out2", ids=str(tmp_path / "ids.jsonl")), [], clock=lambda: 0.0)
+    assert r["ok"] is False and r["why_not"] == ["token not refused"] and r["negatives"]["token"]["by"] == []
+    assert ("- **token**: NOT refused by nothing (not proved); the I/O tie refused (IoTieWindow.content at link-windows "
+            "[0]), its changed ids in link-windows [1]") in (tmp_path / "out2" / "report.md").read_text()
+
+    ties.update(_ties(honest={"failing": {2: ["port"]}}))
+    r = e2e.run(_args(runs, tmp_path / "out3", ids=str(tmp_path / "ids.jsonl")), [], clock=lambda: 0.0)
+    assert r["ok"] is False and r["why_not"] == ["the I/O tie didn't accept the honest run"]
+
+    monkeypatch.setattr(NG, "io_tie_module", lambda: None)
+    r = e2e.run(_args(runs, tmp_path / "out4", ids=str(tmp_path / "ids.jsonl")), [], clock=lambda: 0.0)
+    assert r["ok"] is False and r["why_not"] == [
+        f"the I/O tie didn't run, and the advice profile requires it: {NG.TIE_MISSING['io-tie']}", "token not refused"]
+    assert r["pending"] == {} and r["negatives"]["token"]["refused"] is False
+    assert e2e.TIE_STAGE not in r["ran"] + r["not_run"]
+    md = (tmp_path / "out4" / "report.md").read_text()
+    assert f"; the I/O tie, which alone refuses it, didn't run ({NG.TIE_MISSING['io-tie']})" in md
+    assert "## I/O tie\n\nDidn't run: " in md and not any(x.startswith("I/O tie") for x in r["stubbed"])

@@ -1,13 +1,15 @@
 """`compose_circuit.py --cache`: the ranks a machine audits compose each template once. A circuit composed bound to one partition
 and program, kept, and taken bound to another (`restamp`) is byte for byte, with compose's line, the circuit composed bound to
-that one, its caller never composing, whatever the reads' chunks split; a cache key moves with the template and with any
-composing file, and with nothing else; and a kept circuit that changed, a binding not in the file once, or a binding that is
-not two SHA-512 digests is refused, writing nothing. A toy unit Definition."""
+that one, its caller never composing, whatever the reads' chunks split; a cache key moves with the template, the reads' layout
+and any composing file, compose_circuit's own among them, and with nothing else; a circuit whose reads are in slots gets its
+MUFU tables beside it whether composed or restamped; and a kept circuit that changed, a binding
+not in the file once, or a binding that is not two SHA-512 digests is refused, writing nothing. A toy unit Definition."""
 
 from __future__ import annotations
 
 import sys
 from pathlib import Path
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -63,22 +65,59 @@ def test_a_kept_circuit_taken_with_another_binding_is_the_circuit_composed_bound
 
 
 def test_a_cache_key_moves_with_the_template_and_with_any_composing_file(tmp_path, monkeypatch):
-    """The key is the template's and every ``.py`` file's of the packages: another template or a changed file moves it; a file
-    that is not Python, or one in ``__pycache__``, does not."""
+    """The key is the template's, the reads', compose_circuit's own bytes' and every ``.py`` file's of the packages: another
+    template, the reads in slots, a changed composer or a changed file moves it; a file that is not Python, or one in
+    ``__pycache__``, does not. ``--reads slots`` is refused without ``--template``."""
     pkg = tmp_path / "composecachekeypkg"
     (pkg / "sub").mkdir(parents=True)
     (pkg / "__pycache__").mkdir()
     (pkg / "__init__.py").write_text("")
     (pkg / "sub" / "lower.py").write_text("X = 1\n")
+    composer = tmp_path / "compose_circuit.py"
+    composer.write_bytes(Path(CC.__file__).read_bytes())
     monkeypatch.syspath_prepend(str(tmp_path))
-    key = lambda t="T{N=1}": CC.cache_key(t, ("composecachekeypkg",))  # noqa: E731
+    key = lambda t="T{N=1}", reads="inline": CC.cache_key(t, reads, ("composecachekeypkg",), composer)  # noqa: E731
     k = key()
-    assert key() == k != key("T{N=2}")
+    assert key() == k != key("T{N=2}") and key(reads="slots") not in (k, key("T{N=2}"))
     (pkg / "notes.txt").write_text("not code")
     (pkg / "__pycache__" / "lower.py").write_text("X = 3\n")
     assert key() == k
     (pkg / "sub" / "lower.py").write_text("X = 2\n")
-    assert key() != k
+    k2 = key()
+    assert k2 != k
+    composer.write_bytes(composer.read_bytes() + b"\n")
+    assert key() != k2
+    monkeypatch.setattr(sys, "argv", ["compose_circuit.py", "--input-set", str(tmp_path), "--out", str(tmp_path / "c.txt"),
+                                      "--reads", "slots"])
+    with pytest.raises(SystemExit) as e:
+        CC.main()
+    assert e.value.code == 2
+
+
+@pytest.mark.slow
+def test_a_slots_circuit_gets_its_tables_composed_or_restamped(tmp_path, monkeypatch, capsys):
+    """``--template --reads slots --cache`` writes the MUFU tables (`ir_lower.write_tables`) beside the circuit when it composes
+    and when it restamps a kept circuit, which copies circuit.txt alone; ``--reads inline`` writes none. The toy as the
+    template, through a stand-in for `verity_vllm`'s template lookup, which this suite doesn't read."""
+    pipeline = ModuleType("verity_vllm.pipeline")
+    pipeline.serving_rows = SimpleNamespace(template=lambda tid: SimpleNamespace(fn=TOY))
+    pipeline.chunk_rows = SimpleNamespace(unit_rows=lambda tp: (ROWS, [(V2, (0,))]))
+    monkeypatch.setitem(sys.modules, "verity_vllm", ModuleType("verity_vllm"))
+    monkeypatch.setitem(sys.modules, "verity_vllm.pipeline", pipeline)
+    monkeypatch.setattr(CC, "cache_key", lambda t, reads="inline": f"{t}-{reads}")
+    written: list[Path] = []
+    monkeypatch.setattr(CC.FC.IL, "write_tables", written.append)
+
+    def compose(out: Path, binding: dict, reads: str) -> None:
+        monkeypatch.setattr(sys, "argv", ["compose_circuit.py", "--template", "Toy", "--out", str(out), "--reads", reads,
+                                          "--cache", str(tmp_path / "cache"), *(f"--{k}={v}" for k, v in binding.items())])
+        assert CC.main() == 0
+
+    compose(tmp_path / "r0" / "circuit.txt", B1, "slots")
+    compose(tmp_path / "r1" / "circuit.txt", B2, "slots")
+    assert "restamped" in capsys.readouterr().err
+    compose(tmp_path / "r2" / "circuit.txt", B1, "inline")
+    assert written == [tmp_path / "r0" / "tables", tmp_path / "r1" / "tables"]
 
 
 @pytest.mark.slow
