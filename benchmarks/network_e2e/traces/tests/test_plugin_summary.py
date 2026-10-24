@@ -239,6 +239,9 @@ def test_compare_places_the_first_difference_in_every_trace(tmp_path, mod):
     assert (d["at"]["x"]["path"], y["path"], y["start"], y["n"], y["forced_before"]) == \
         ("decode, decode-only step", "prefill from 0", 0, 4, 0)
     assert c["same_as_first"] == {"x": 2, "y": 1} and c["bits_per_request"] == {"mean": 0.5, "max": 1.0}
+    # a's second token is a decode in a step of one row in y, not two; b's is y's resumed prefill from 0 at batch row 0
+    assert c["contexts"] == {"y": {"tokens": 4, "rows_differ": 2, "batch_row_differs": 1, "path_differs": 1,
+                                   "start_differs": 1, "any_differs": 2}}
     assert c["first"] == {"y": {**y, "i": 1, "index": 1}}
     text = "\n".join(summary.outputs_section(c))
     assert "| 1 | 1 | y (differs) | 9 | 3 | 1 | 4 | prefill (resumed) | prefill from 0 | 0 / 4 | 1 | 1 [0] | 2 (length) |" in text

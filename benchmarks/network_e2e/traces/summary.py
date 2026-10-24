@@ -269,6 +269,39 @@ def located(d: Path, wanted: dict[str, set[int]]) -> dict[tuple[str, int], dict]
     return out
 
 
+def contexts(d: Path) -> dict[tuple[int, int], tuple]:
+    """Where trace `d` sampled each output token, keyed by (plan index, output index): the step's rows, the row's place in
+    the model runner's batch, its attention `path` and its first position (the last sampling of a token sampled twice)."""
+    plan_index = {r["id"]: r["i"] for r in read_jsonl(d / "requests.jsonl")}
+    out = {}
+    for s in read_jsonl(d / "steps.jsonl"):
+        rows = s["new"] + s["cached"]
+        for row in rows:
+            classify(row)
+        kinds = {r["kind"] for r in rows}
+        batch = {rid: k for k, rid in enumerate(s.get("batch") or [])}
+        for row in rows:
+            if row["final"] and (i := plan_index.get(row["id"])) is not None:
+                out[(i, sampled_index(row))] = (len(rows), batch.get(row["id"]), path(row, kinds), row["num_computed_tokens"])
+    return out
+
+
+def context_changes(traces: dict[str, Path]) -> dict:
+    """Per trace after the first, how many of the output tokens both sampled it sampled in another context than the first
+    trace did: in a step of another size, at another batch row, on another attention path, or from another position."""
+    labels = list(traces)
+    if len(labels) < 2:
+        return {}
+    ref = contexts(traces[labels[0]])
+    out = {}
+    for lb in labels[1:]:
+        both = [(ref[k], c) for k, c in contexts(traces[lb]).items() if k in ref]
+        out[lb] = {"tokens": len(both), **{name: sum(1 for a, b in both if a[f] != b[f]) for f, name in
+                                           enumerate(("rows_differ", "batch_row_differs", "path_differs", "start_differs"))},
+                   "any_differs": sum(1 for a, b in both if a != b)}
+    return out
+
+
 def first_difference(a: list[int], b: list[int]) -> int:
     return next((j for j, (x, y) in enumerate(zip(a, b)) if x != y), min(len(a), len(b)))
 
@@ -281,7 +314,8 @@ def compare(traces: dict[str, Path]) -> dict:
     `bits_per_request` measures what the traces' schedules chose among: per request, log2 of the number of distinct
     output-id sequences across the traces (0 where all agree), its mean over the requests and its maximum. With the first
     trace honest and the rest hostile, that is how many bits a scheduler steered into a request's outputs here, a lower
-    bound on the covert channel's capacity (the traces tried only some schedules)."""
+    bound on the covert channel's capacity (the traces tried only some schedules). `contexts` says how far the schedules
+    were apart: per trace, the output tokens it sampled in another context than the first trace (`context_changes`)."""
     labels = list(traces)
     reqs = {lb: {r["i"]: r for r in read_jsonl(d / "requests.jsonl") if r.get("i") is not None} for lb, d in traces.items()}
     every = sorted(set().union(*(set(x) for x in reqs.values()))) if reqs else []
@@ -333,7 +367,7 @@ def compare(traces: dict[str, Path]) -> dict:
     return {"traces": labels, "requests": n, "identical": n - len(differ), "verdict": verdict, "missing": missing,
             "same_as_first": same, "pairs_identical": pairs,
             "bits_per_request": {"mean": round(sum(bits) / n, 6) if n else 0.0, "max": round(max(bits, default=0.0), 6)},
-            "first": first, "differ": differ}
+            "contexts": context_changes(traces), "first": first, "differ": differ}
 
 
 def corpus_spec(arg: str) -> tuple[Path, list[str] | None]:
@@ -379,6 +413,18 @@ def outputs_section(c: dict, limit: int = 20) -> list[str]:
         b = c["bits_per_request"]
         lines += [f"Bits per request (log2 of the distinct output-id sequences across the traces, 0 where they agree): mean "
                   f"{b['mean']}, max {b['max']}.", ""]
+    if c.get("contexts"):
+        def share(x: dict, k: str) -> str:
+            return f"{x[k] / x['tokens']:.1%}" if x["tokens"] else "-"
+
+        lines += [f"Where each output token was sampled, against `{c['traces'][0]}` (`contexts`): the share of tokens sampled "
+                  "in a step of another size / at another batch row / on another attention path / from another position / "
+                  "in any other context.", "",
+                  "| trace | tokens | step size | batch row | path | position | any |", "|---|---|---|---|---|---|---|"]
+        for lb, x in c["contexts"].items():
+            lines.append(f"| {lb} | {x['tokens']} | {share(x, 'rows_differ')} | {share(x, 'batch_row_differs')} | "
+                         f"{share(x, 'path_differs')} | {share(x, 'start_differs')} | {share(x, 'any_differs')} |")
+        lines.append("")
     if not c["differ"]:
         return lines
     for lb, a in (c.get("first") or {}).items():
