@@ -28,7 +28,8 @@ head-check units and the I/O tie's units all ride it.
 
 Negatives (`negatives`), each refused at the proof layer:
 
-    tampered-unit     a unit whose committed output word is wrong, proved with the prover's self-check skipped
+    tampered-unit     a unit whose committed output word is wrong, proved with the prover's self-check skipped: the
+                      firewall's Lean recheck stops it; unfirewalled, Lean `verify --zk` refuses the proof that reaches it
     tampered-public   a unit staged on a held row other than the verifier's copy: its proof verifies, its opening fails
     tampered-root     a registration whose first root is not the statement's: refused before the draw
     wrong-unit        a member's session checked against another member's circuit (that stratum's committed pin)
@@ -195,18 +196,53 @@ def _draw(coins, rec: dict, program_file: Path, partition_file: Path, k: int, le
     return {**rec["law"], "population": rec["population"], "units": units}
 
 
+def frame_ports(set_name: str, meta: dict, n: int, tables: Mapping[str, Any] | None = None) -> dict[str, dict]:
+    """Each port's frame-v3 tree as the verifier derives it: its binding names the set, the instance range, the port and its
+    schema; its leaves are the instances' rows, or a shared-row port's table rows (`circuit.statement`)."""
+    from verity.ml.commitments.identity import identity_digest_sha512
+    from verity.ml.commitments.indexed import RangeIndexedDomain
+    from verity.ml.commitments.merkle import CommitmentDomain
+
+    out = {}
+    for (port, _w, _c), (schema, _bits) in zip(meta["ports"], meta["row_schemas"], strict=True):
+        b = identity_digest_sha512(a0.STAND_IN_BINDING, {"set": set_name, "lo": 0, "hi": n, "port": port, "schema": schema})
+        k = len((tables or {}).get(port, range(n)))
+        out[port] = {"leaves": k, "domain": CommitmentDomain(b, -1, RangeIndexedDomain(0, k), hash="sha512").domain_id.hex()}
+    return out
+
+
+def public_bcs(path: Path, ports: list) -> tuple[dict[str, list[bytes]], dict[str, list[int]]]:
+    """A public file's ``b || c`` per port, one per row of the port's tree, and the row each instance reads: its own (rows
+    instance-major), or a shared-row file's ref into the port's table (tables port-major, then the refs; `circuit.write`)."""
+    from verity_flock import circuit as FC
+
+    head, body = Path(path).read_bytes().split(b"\n", 1)
+    h, w, q = json.loads(head), FC.BC_BYTES, len(ports)
+    n = h["instances"]
+    if "shared_rows" not in h:
+        return ({p.name: [body[(i * q + j) * w:(i * q + j + 1) * w] for i in range(n)] for j, p in enumerate(ports)},
+                {p.name: list(range(n)) for p in ports})
+    bcs, at = {}, 0
+    for p in ports:
+        k = h["shared_rows"][p.name]
+        bcs[p.name] = [body[(at + j) * w:(at + j + 1) * w] for j in range(k)]
+        at += k
+    refs = np.frombuffer(body[at * w:at * w + 4 * n * q], dtype="<u4").reshape(n, q)
+    return bcs, {p.name: [int(x) for x in refs[:, j]] for j, p in enumerate(ports)}
+
+
 def opened(s: dict, local: list[int], m: Member) -> dict:
     """Each drawn unit's held rows opened to the verifier's own copy and its expected output rows to the required words,
     under the salts the prover reveals for those rows alone: ``{unit: [failed row, ...]}``."""
     if not (m.held or m.expect):
         return {i: [] for i in local}
-    bcs = a7.public_bcs(s["dir"] / f"pub-{s['n']}.bin", s["ports"])
+    bcs, refs = public_bcs(s["dir"] / f"pub-{s['n']}.bin", s["ports"])
     port = {p.name: p for p in s["ports"]}
     out = {}
     for i in local:
-        bad = [r for r, want in {**m.held, **m.expect}.items()
-               if not a7.opens(port[r], [int(w) for w in np.asarray(want[i]).reshape(-1)], s["salts"][r][i], bcs[i][r])]
-        out[i] = bad
+        out[i] = [r for r, want in {**m.held, **m.expect}.items()
+                  if not a7.opens(port[r], [int(w) for w in np.asarray(want[i]).reshape(-1)], s["salts"][r][refs[r][i]],
+                                  bcs[r][refs[r][i]])]
     return out
 
 
@@ -259,9 +295,9 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
             f"pin {s['pin'][:16]}, {s['stage_s']} s")
 
     want, roots, publics = {}, [], {}
-    for s in staged:
+    for m, s in zip(members, staged):
         fv = s["header"]["frame_v3"]
-        for p_, w in a7.frame_ports(s["set"], s["meta"], s["n"]).items():
+        for p_, w in frame_ports(s["set"], s["meta"], s["n"], m.stage_kw.get("tables")).items():
             want[f"{s['name']}/{p_}"] = w
             roots.append({"port": f"{s['name']}/{p_}", "root": fv["roots"][p_], "leaves": w["leaves"],
                           "domain": fv["domain_ids"][p_]})
@@ -334,6 +370,7 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
                                                             None if lv["accepted"] else f"lean {lv.get('why')}",
                                                             f"opening {op[i]}" if op[i] else None) if x)} for i in local]
         ml.update(session_s=session_s, timing=statement[m.name]["timing"], m0=m0["accepted"], lean=lv["accepted"],
+                  prover_stopped=(live or {}).get("prover_stopped"),
                   lean_why=lv.get("why"), lean_verify_s=lv.get("verify_s"), openings=verdicts[f"openings/{m.name}"])
         log(f"{m.name}: drawn {local}, M0 {m0['accepted']}, Lean {lv['accepted']} ({lv.get('why')}), openings "
             f"{verdicts[f'openings/{m.name}']['accepted']}, session {session_s} s")
@@ -368,6 +405,8 @@ def wrong_unit(honest: dict, a: str, b: str, tools: Tools, out: Path) -> dict:
     """Member ``a``'s honest session checked as member ``b``'s: the auditor's committed circuit for ``b``'s stratum is
     ``b``'s pin, which ``a``'s circuit file doesn't hash to (the proof service's own check, `proofs.verify`'s
     ``circuit``), and Lean verifies ``a``'s session against ``b``'s circuit file."""
+    if "_staged" not in honest:
+        return {"refused": False, "skipped": "the honest leg has no session (refused before the draw)"}
     da, db = Path(honest["_staged"][a]), Path(honest["_staged"][b])
     n = honest["members"][a]["n"]
     stage_ = out / "stage"
@@ -380,12 +419,15 @@ def wrong_unit(honest: dict, a: str, b: str, tools: Tools, out: Path) -> dict:
     pin_ok = a0.sha512_file(da / "circuit.txt") == honest["members"][b]["pin"]
     lv = a0.lean_verify(tools.lean, {"dir": stage_, "partition_file": Path(honest["_out"]) / "partition.json",
                                      "program_file": Path(honest["_out"]) / "program.json"}, n, out, zk=True)
-    return {"refused": not pin_ok and a0.lean_refused(lv), "circuit_is_committed_pin": pin_ok, "lean": lv.get("accepted"),
+    return {"refused": not pin_ok and a0.lean_refused(lv, "staged for another circuit"), "circuit_is_committed_pin": pin_ok,
+            "lean": lv.get("accepted"),
             "lean_why": lv.get("why")}
 
 
 def tampered_registered_root(honest: dict, member: str, registered: Path, tools: Tools, out: Path) -> dict:
     """Member's honest session verified against the verifier's ``--registered`` file with its first port's root changed."""
+    if "_staged" not in honest:
+        return {"refused": False, "skipped": "the honest leg has no session (refused before the draw)"}
     reads = json.loads(Path(registered).read_text())
     port = next(iter(reads["ports"]))
     reads["ports"][port]["root"] = "00" * 64
@@ -398,7 +440,7 @@ def tampered_registered_root(honest: dict, member: str, registered: Path, tools:
     shutil.copytree(Path(honest["_out"]) / f"session-{member}" / "sessions", out / "sessions", copy_function=os.link)
     lv = a0.lean_verify(tools.lean, {"dir": d, "partition_file": Path(honest["_out"]) / "partition.json",
                                      "program_file": Path(honest["_out"]) / "program.json", "registered_file": f}, n, out, zk=True)
-    return {"refused": a0.lean_refused(lv), "port": port, "lean": lv.get("accepted"), "lean_why": lv.get("why")}
+    return {"refused": a0.lean_refused(lv, "registered"), "port": port, "lean": lv.get("accepted"), "lean_why": lv.get("why")}
 
 
 def negatives(members: list[Member], coins, registered: Path | None, tools: Tools, out: Path, honest: dict,
@@ -410,9 +452,13 @@ def negatives(members: list[Member], coins, registered: Path | None, tools: Tool
     neg: dict[str, dict] = {}
     kw = {"tools": tools, "program": program, "query": query}
 
-    leg = prove_units([replace(m, forge=(0,))], coins, registered, out=out / "tampered-unit", **kw)
-    neg["tampered-unit"] = {"refused": refused(leg, m.name), "units": leg["members"][m.name].get("units"),
-                            "lean_why": leg["members"][m.name].get("lean_why"), "audit": leg.get("audit")}
+    for name, t in (("tampered-unit", tools), ("tampered-unit-unfirewalled", replace(tools, firewall=None) if tools.firewall else None)):
+        if t is None:
+            continue
+        leg = prove_units([replace(m, forge=(0,))], coins, registered, out=out / name, **{**kw, "tools": t})
+        ml = leg["members"][m.name]
+        neg[name] = {"refused": refused(leg, m.name), "units": ml.get("units"), "lean_why": ml.get("lean_why"),
+                     "prover_stopped": ml.get("prover_stopped"), "audit": leg.get("audit")}
 
     if m.held:
         row = next(iter(m.held))
