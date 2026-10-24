@@ -168,14 +168,14 @@ class CommitTap:
         self._put(CR.commit_rows(call.step, call.k), reg, same,
                   {"round": call.step, **{f: [x[i] for x in at] for i, f in enumerate(("calls", "steps", "sites", "rows"))}})
 
-    def ids_at(self, r: int) -> list[int]:
+    def ids_at(self, r: int, pad: int = 0) -> list[int]:
         """Round r's input ids: the Commit's ids of the engine step H1's step r maps to (none for a step it acquired
-        nothing at)."""
+        nothing at), less the last ``pad``, the positions a CUDA graph padded the step with (`pouw_h1.Call.pad`)."""
         j = self._steps.get(r)
         got = self._ids.get(j) if j is not None else None
         if j is not None and got is None:
             self.refused.append(f"step {r}: the Commit acquired no input ids at engine step {j}")
-        self.round_ids[r] = [] if got is None else [int(t) for t in got]
+        self.round_ids[r] = [] if got is None else [int(t) for t in got][:len(got) - pad]
         return self.round_ids[r]
 
     def input_ids(self, run: Any, served: Any, r: int, ids: Sequence[int]) -> None:

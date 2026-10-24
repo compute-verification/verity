@@ -56,7 +56,9 @@
   is its prompts' tokens in step 0's batch order, registered before the window opens (`open_ids`), its root inside
   round 0's request root and its domain bound to the session (`ids_tree`); each later round's
   is the Commit's ids of its step (`close_round`). The Commit registers the window's own tree as its
-  value of the same rows when its rows are the same (`a_tree`, `ids_tree`, `pouw_h1_commit.CommitTap`).
+  value of the same rows when its rows are the same (`a_tree`, `ids_tree`, `pouw_h1_commit.CommitTap`). With the tap, the
+  window's round tables are the live unit's registered values too (`pouw_h1_live`, `live`, in `entries`): round 0's
+  request headers ``requests@0`` and each round's slot table ``slots@<s>``, listed whole under round s's root.
 * **Refused** (no table from then on, and `trees` raises the reason): a window with no key of 64 bytes, blocks that aren't
   one per linear, a call off the declared Program's order, a served call with no z/y record, a weight that isn't the
   linear's n × K int8 codes and n scales or that changes, an odd K, what `h1window.program` refuses, served weights that
@@ -90,6 +92,7 @@ from verity.ml.circuits.codec import canonical_json, encode_program
 from verity.ml.circuits.program import Program
 
 from verity_vllm.protocol_options import pouw_h1 as PH
+from verity_vllm.protocol_options import pouw_h1_live as LV
 from verity_vllm.protocol_options import pouw_h1_records as ZR
 from verity_vllm.protocol_options import pouw_h1_registered as NR
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
@@ -108,6 +111,8 @@ B_NONCE = Wt.B_NONCE
 IDS_NONCE = B_NONCE + (1 << 39)
 #: call c's receipt table's nonce is RECEIPT_NONCE + c, past every round's input-ids table's
 RECEIPT_NONCE = IDS_NONCE + (1 << 38)
+#: the live tables' nonces (`pouw_h1_live.nonce`): requests@0's LIVE_NONCE, round s's slots@<s>'s LIVE_NONCE + 1 + s
+LIVE_NONCE = RECEIPT_NONCE + (1 << 37)
 #: an input-ids slot past the step's rows: no token id is 2^32 - 1
 EMPTY_ID = 0xFFFFFFFF
 #: the session round 0's input-ids table binds under in-process coins, where no gate reserved one (such a window credits
@@ -346,6 +351,8 @@ class Served:
     #: each round's input-ids table and its words, with the tap
     ids: dict[int, G.Registered] = field(default_factory=dict)
     _ids_words: dict[int, np.ndarray] = field(default_factory=dict)
+    #: with the tap, the live unit's tables by value (`pouw_h1_live`): requests@0, then each round's slots@<s>
+    live: dict[str, G.Registered] = field(default_factory=dict)
     #: each open step A table's words so far, one block a call recorded, in call order
     _a: dict[str, list[np.ndarray]] = field(default_factory=dict)
     #: each linear's weight, the tensor and its codes, taken once, and its scales
@@ -503,7 +510,7 @@ class Served:
         of its step), and the Commit's value of it (`pouw_h1_commit.CommitTap.input_ids`)."""
         if self.tap is None or self.refused or self.program is None:
             return
-        ids = self.tap.ids_at(r)
+        ids = self.tap.ids_at(r, next((c.pad for c in run.calls if c.step == r and c.layer == 0), 0))
         if r:
             try:
                 self._register_ids(run, r, ids)
@@ -511,6 +518,10 @@ class Served:
                 self.refused.append(f"round {r}'s input ids: {e}")
                 return
         self.tap.input_ids(run, self, r, ids)
+
+    def live_table(self, run: Any, name: str, r: int) -> LV.Table | None:
+        """With the tap, round r's live request (round 0's) or slot table, registered now (`pouw_h1_live.table`)."""
+        return LV.table(self, run, name, r, LIVE_NONCE, run.session or LOCAL_SESSION)
 
     def _weight(self, call: Any, weight: Any, scale: Any) -> None:
         held = self._weights.get(call.layer)
@@ -627,7 +638,8 @@ class Served:
         """Round r's A segments (`credit.round_root`): step r's A table ``a/<K>@<r>`` of each K its calls have, whole, as
         the aligned subtrees (`credit.cover`, each ``(level, index, root)``) of its registered tree, so round r's root
         commits it before round r's coin and no other round lists it; with ``receipts``, each of step r's calls' receipt
-        table alike; and round r's input-ids table. Nothing once the window is refused."""
+        table alike; and round r's input-ids table and its live slot table ``slots@<r>`` (`pouw_h1_live`). Nothing once the
+        window is refused."""
         if self.refused or self.program is None:
             return {}
         per, out = len(self.linears), {}
@@ -636,7 +648,7 @@ class Served:
         if self.receipts is not None:
             values.update(dict.fromkeys(self.receipt_table(c) for c in mine))
         regs = [self.registered.get(v) for v in values]
-        for reg in [*regs, self.ids.get(r)]:
+        for reg in [*regs, self.ids.get(r), self.live.get(LV.value(self, LV.SLOTS, r))]:
             if reg is not None:
                 out[reg.value] = [(lv, ix, reg.levels[lv][ix]) for lv, ix in CR.cover(0, reg.leaves)]
         return out
@@ -682,8 +694,9 @@ class Served:
         return HW.window_ports(self.program)
 
     def entries(self) -> list[dict[str, Any]]:
-        """The Program's registered values' entries, then each round's input-ids table's."""
-        return [r.entry() for r in self.registered.values()] + [self.ids[s].entry() for s in sorted(self.ids)]
+        """The Program's registered values' entries, then each round's input-ids table's, then the live tables'."""
+        return ([r.entry() for r in self.registered.values()] + [self.ids[s].entry() for s in sorted(self.ids)]
+                + [r.entry() for r in self.live.values()])
 
     def digest(self) -> bytes:
         """SHA-512 over the trees' entries and what was refused, canonical JSON: what `calls_root` binds."""
