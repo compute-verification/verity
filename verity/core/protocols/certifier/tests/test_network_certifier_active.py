@@ -95,11 +95,14 @@ def test_an_id_event_is_one_template_its_ordinal_and_token_id_at_fixed_places():
     assert active.id_event_data(e.replace(b"         7", b"4294967296"[:10])) is None
 
 
+@pytest.mark.parametrize("frame_bytes", [512, 256])
 @pytest.mark.parametrize("length", [1, 2, 300, 371, 372, 1024, 2048])
-def test_an_id_requests_fields_are_at_places_its_prompts_length_fixes(length):
-    """Two id requests of one prompt length differ only inside their fields' places, every field but the prompt's
-    is in the first frame and no prompt id straddles a frame, `id_request_frames` is the frames `request_frames`
-    puts it in, and `id_request_fields` gives back its fields and refuses any other spelling of them."""
+def test_an_id_requests_fields_are_at_places_its_prompts_length_fixes(length, frame_bytes):
+    """Two id requests of one prompt length differ only inside their fields' places, no field straddles a frame (in
+    a frame of 512 bytes, every field but the prompt's is in the first), `id_request_frames` is the frames
+    `request_frames` puts it in, and `id_request_fields` gives back its fields and refuses any other spelling of
+    them."""
+    B = frame_bytes
     rng = random.Random(length)
     x = {"model": "llama-3.1-8b-instruct", "user": "varied.00007",
          "prompt": [rng.randrange(1 << 17) for _ in range(length)], "max_tokens": 64, "temperature": 0.0,
@@ -112,8 +115,7 @@ def test_an_id_requests_fields_are_at_places_its_prompts_length_fixes(length):
         len(active.request_frames(rx, B)) // B
     data = active.LENGTH.pack(len(rx)) + rx
     room = B - active.HEADER.size
-    prompt = data.index(b'"prompt":[') + len(b'"prompt":')
-    assert prompt + active.ID_FIELD_BYTES <= room
+    prompt = data.index(b'"prompt":') + len(b'"prompt":')
     fields = [(m.start(), m.end()) for m in re.finditer(rb"[\[,] *\d+", data[prompt:])]
     assert len(fields) == length and all((prompt + s) // room == (prompt + t - 1) // room for s, t in fields)
     assert all(t - s == active.ID_FIELD_BYTES for s, t in fields)
@@ -122,6 +124,9 @@ def test_an_id_requests_fields_are_at_places_its_prompts_length_fixes(length):
     places = [rx.index(k, head) + len(k) for k in (b'"max_tokens":', b'"temperature":', b'"top_p":', b'"seed":',
                                                    b'"model":', b'"user":')]
     widths = [active.ID_DIGITS, 8, 8, active.ID_DIGITS, active.ID_NAME_BYTES, active.ID_NAME_BYTES]
+    ends = [active.LENGTH.size + p + w for p, w in zip(places, widths)]
+    assert all((e - w) // room == (e - 1) // room for e, w in zip(ends, widths))
+    assert B < 512 or max(ends) <= room and prompt + fields[0][1] <= room
     allowed = {k for p, w in zip(places, widths) for k in range(p, p + w)}
     allowed |= {prompt - active.LENGTH.size + s + 1 + j for s, _ in fields for j in range(active.ID_DIGITS)}
     assert set(differ) <= allowed and active.id_request_fields(rx, B) == x and active.id_request_fields(ry, B) == y
@@ -136,15 +141,16 @@ def test_an_id_requests_fields_are_at_places_its_prompts_length_fixes(length):
 
 def test_an_id_request_refuses_what_has_no_fixed_place():
     """An empty prompt, a name past `ID_NAME_BYTES` as JSON, a number past its field or not a number, and a frame
-    with no room for the fields are refused."""
+    with no room for the request's head are refused."""
     ok = {"model": "m", "user": "u", "prompt": [1], "max_tokens": 1}
     for bad in ({"prompt": []}, {"prompt": "ab"}, {"user": "u" * 63}, {"model": 7}, {"max_tokens": 2**32},
                 {"max_tokens": True}, {"seed": -1}, {"temperature": 10.0}, {"temperature": 1e-7},
                 {"top_p": float("nan")}, {"prompt": [1, 2**32]}):
         with pytest.raises(ValueError):
             active.id_request(**ok | bad, frame_bytes=B)
-    with pytest.raises(ValueError):
-        active.id_request(**ok, frame_bytes=256)
+    for small in (64, 112):
+        with pytest.raises(ValueError):
+            active.id_request(**ok, frame_bytes=small)
 
 
 @pytest.mark.parametrize("length", [0, 1, 499, 500, 503, 1536])  # B = 512: a frame holds 503 bytes after its header
