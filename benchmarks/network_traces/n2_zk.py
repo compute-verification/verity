@@ -164,8 +164,8 @@ def expected(name: str, rd: SimpleNamespace) -> bool:
     """Whether the member's references are its round's: every unit takes an instance, and its verdict bit is 1 exactly
     where no part fails; honest, none fails and every window accepts; tampered, window 0's egress head fails its counts
     and its signed digest only; extra, egress heads fail their counts alone, on one window or more; late, egress heads
-    fail their fields and counts, on one window or more. The ingress heads fail nothing, and every negative member
-    refuses one window or more."""
+    fail their fields and counts on one window or more, and their counts alone where the late frames left a window
+    short (the window before). The ingress heads fail nothing, and every negative member refuses one window or more."""
     xs = rd.windows
     if not xs or any(x.word is None for x in xs) or any(bool(x.word & 1) != (not x.failed["egress"] and not
                                                                             x.failed["ingress"]) for x in xs):
@@ -177,8 +177,9 @@ def expected(name: str, rd: SimpleNamespace) -> bool:
         return all(x.expect for x in xs)
     if name == "tampered":
         return eg[0] == ["counts", "signed"] and not any(eg[1:])
-    allowed = {"extra": ([], ["counts"]), "late": ([], ["fields", "counts"])}[name]
-    return all(f in allowed for f in eg) and allowed[1] in eg
+    allowed, needed = {"extra": (([], ["counts"]), ["counts"]),
+                       "late": (([], ["counts"], ["fields", "counts"]), ["fields", "counts"])}[name]
+    return all(f in allowed for f in eg) and needed in eg
 
 
 def blobs_of(rd: SimpleNamespace) -> tuple[dict[str, bytes], set[str]]:
