@@ -50,6 +50,12 @@ def test_a_served_window_registers_round_0s_request_headers_and_each_rounds_slot
         assert e["domain"] == G.domain(served.program_digest, e["value"], e["words"], e["leaves"], **bound).domain_id.hex()
         assert e in served.entries()
     assert [e["words"] for e in (req.entry(), slots.entry())] == [LR.HEADER_WORDS, LR.SLOT_WORDS]
+    for reg, schema, other in ((req, G.SCHEMA_SEG, G.SCHEMA_V2), (slots, G.SCHEMA_V2, G.SCHEMA_SEG)):
+        assert reg.schema == schema
+        assert G.verify_read(reg.domain, reg.root, 1, reg.bcs[1], reg.path(1), schema)
+        assert not G.verify_read(reg.domain, reg.root, 1, reg.bcs[1], reg.path(1), other)
+    ports = LV.statement(run, 0)[1]["ports"]
+    assert ports["req_0"][G.SCHEMA_KEY] == G.SCHEMA_SEG and ports["slot_0"][G.SCHEMA_KEY] == G.SCHEMA_V2
     assert LV.verdicts(run) == [{"round": 0, "m": 3, "admitted": 3, "ok": True}]
     with pytest.raises(ValueError, match="live table"):
         run.open_request(0)

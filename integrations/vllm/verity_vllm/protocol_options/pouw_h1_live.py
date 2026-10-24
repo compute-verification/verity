@@ -9,7 +9,8 @@ the unit that makes each round's served rows m_s a proved value, one ``live@<s>`
     `live_reads.header_words`), then `EMPTY_REQUEST`'s zero header. It is registered as the window opens, after round 0's
     admissions, and its domain binds the window's session, since its root, round 0's ``request_table``, is inside round
     0's request root and so inside the open root (`credit.requests_root`), as ``ids@0``'s is. The prompts' tokens are
-    ``ids@0``'s, not its.
+    ``ids@0``'s, not its. Its rows are ``row-seg/v1`` rows (`live_reads.REQUEST_SCHEMA`), the live statement's one row
+    format whose commitment compresses before its last block.
   * round s's slot table ``<prefix>slots@<s>`` (`live_reads.SLOTS`): T rows, slot i's leaf (q + 1 for a row of request q, 0
     past the step's batch, `live_reads.slot_words`), registered at round s's close under the open root and listed whole among
     round s's segments (`Served.segments`), so round s's root commits it before its coin (`credit._a_link`).
@@ -32,10 +33,12 @@ import numpy as np
 
 from verity.core.protocols.pouw.circuit import live as L
 from verity.core.protocols.pouw.circuit import live_reads as LR
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.commitments import Commitment
 
+from verity_vllm.protocol_options import pouw_h1_registered as NR
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
 
 SLOTS, REQUESTS = LR.SLOTS, LR.REQUESTS
@@ -101,7 +104,13 @@ def table(served: Any, run: Any, name: str, r: int, base: int, session: str) -> 
     else:
         words, window, bound = slot_words(run.owners.get(r, []), run.rows), served.root, None
     v = value(served, name, r)
-    reg = served.live[v] = served._tree(run, v, words, nonce(base, name, r), window, bound)
+    if name == LR.REQUESTS:
+        ys = NR.salts(run._key, nonce(base, name, r), len(words))
+        reg = G.Registered.commit(served.program_digest, v, words.tolist(), [ys[192 * j:192 * (j + 1)] for j in range(len(words))],
+                                  G.WORD_BITS, LR.REQUEST_SCHEMA, session=bound)
+    else:
+        reg = served._tree(run, v, words, nonce(base, name, r), window, bound)
+    served.live[v] = reg
     return Table(reg)
 
 
