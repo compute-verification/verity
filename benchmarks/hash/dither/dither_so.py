@@ -185,6 +185,13 @@ SPILLS = {"azy": "A rows and scales, and the z/y records (live rows; the rest ar
 SPILL_CHUNK = 2 << 30                   # pinned host bytes a chunk of the spill's pool
 SPILL_MAX_ENV = "DITHER_SPILL_MAX_GB"   # the pool's bound, past which a window's spill refuses (default SPILL_MAX_GB)
 SPILL_MAX_GB = 128
+# "1": a step's GEMMs and y commits write a row past m's z/y records only where an earlier step left something else
+# (a live row, a captured step's poison, a control's unwritten records, a new window): the same bytes in every record,
+# without the dead rows' ~350 MB of stores a step at m = 32 of T = 64 (`dead_from`, S[2], dither_a._rows_written)
+DEAD_ONCE_ENV = "DITHER_DEAD_ONCE"
+# "1": a step's inputs written from pinned host memory without a wait (`_put`): the serving stream orders them after
+# step s - 1's trees, lm_head and sampler, so the host launches forward s while the sampler runs
+PUT_ASYNC_ENV = "DITHER_SO_PUT_ASYNC"
 
 
 def end_steps(depth: int) -> int:
@@ -252,6 +259,11 @@ class SoWindow(DO.Window):
         if self.a_step and (self.a_once or self.overlap):
             raise RuntimeError(f"{DO.A_STEP_ENV}=1 serves -aom/-aomn without -ov (its A tables after the forward, on "
                                f"the serving stream)")
+        self.dead_once = os.environ.get(DEAD_ONCE_ENV) == "1"
+        if self.dead_once and self.overlap:
+            raise RuntimeError(f"{DEAD_ONCE_ENV}=1 serves an -so arm without -ov")
+        self.clean_from: int | None = None
+        self.put_async = os.environ.get(PUT_ASYNC_ENV) == "1"
         super().__init__(*args, **kwargs)
         if self.a_step:
             self._a_step_set()
@@ -289,6 +301,12 @@ class SoWindow(DO.Window):
         o = self.pre["mid"].level_off[0]
         self.a_leaves = self.pre["mid"].level[o:o + 8 * self.L].view(self.L, 8)
 
+    def _put(self, dst: torch.Tensor, src: torch.Tensor) -> None:
+        if self.put_async:
+            dst.copy_(src.pin_memory(), non_blocking=True)
+        else:
+            super()._put(dst, src)
+
     def a_step_build(self) -> None:
         """On the current stream, after the forward: the step's K tables and each call's a-step leaf."""
         self.c.build(self.pre["ak"], self.stepv[0:1])
@@ -304,6 +322,7 @@ class SoWindow(DO.Window):
         from verity.core.protocols.pouw.circuit import h1tile as HT
         t0 = time.perf_counter()
         self.HT = HT
+        self.clean_from = None
         at = CO.session()
         if at is not None and self.k >= 0:
             raise RuntimeError(f"dither-a-so: session {at.id} served this process's one off-node window, which ended at "
@@ -615,6 +634,16 @@ class SoWindow(DO.Window):
             out += sd.zy + sd.ysv + [sd.zyset.level, sd.ysset.level, sd.yuset.level]
         return out
 
+    def dead_from(self, m: int) -> int:
+        """Under DEAD_ONCE_ENV the row from which every row already holds a row past m's z/y records (T after a capture,
+        a control's no-write step or a window's start), and from the next step on m, or T after a step that writes
+        none; else 0, every row past m written."""
+        if not self.dead_once:
+            return 0
+        c = self.t if self.cap is not None or self.clean_from is None else self.clean_from
+        self.clean_from = self.t if self.flags & DO.F_NW_TILES else m
+        return c
+
     def before(self, m: int) -> None:
         self.t_b0 = time.perf_counter()
         if self.root_lag == 1 or (self.lag is not None and self.ev_lag.query()):
@@ -916,7 +945,9 @@ class SoWindow(DO.Window):
                      "coins_back": len(pipe.openings), "rounds_sent": len(sent),
                      # the challenger's log holds these round roots in this order (its published session's record)
                      "roots_sha512": hashlib.sha512(b"".join(sent)).hexdigest(),
-                     "window_end": self.end_stats(), "serving_stream_priority": torch.cuda.current_stream().priority,
+                     "window_end": self.end_stats(),
+                     "dead_once": self.dead_once, "put_async": self.put_async,
+                     "serving_stream_priority": torch.cuda.current_stream().priority,
                      "units_stream_priority": DA.SIDE[0].side.priority if DA.SIDE else None,
                      "capture_stream_priority": getattr(torch.cuda.graph, "so_priority", None)}
         if ov is not None:

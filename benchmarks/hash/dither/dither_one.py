@@ -347,6 +347,10 @@ class Window:
         return (self.slot + self.scale + self.z + list(self.ydump or [])
                 + [self.plan.out, self.plan.seeds, self.pre["mid"].level, self.pre["a"].level])
 
+    def dead_from(self, m: int) -> int:
+        """The step's S[2] (after `before` sets its flags and capture): 0, every row past m's z/y records written."""
+        return 0
+
     def _a_step(self) -> None:
         a = self.pre["a"]
         rc = self.c.lib.h1c_a_step(a.dev.data_ptr(), self.L, self.apre.data_ptr(), self.awords, self.stepv.data_ptr(),
@@ -368,16 +372,20 @@ class Window:
             self.caps[name] = {"s": self.s, "m": m, "salt": self.salt_bytes}
         t, s = self.t, self.s
         bits = np.arange(t) < m
-        self._h2d(self.live, torch.from_numpy((np.arange(t // 32) * 32 < m).astype(np.uint8)))
-        self._h2d(self.admit, torch.frombuffer(bytearray(b"".join(CR.word_rows(CR.words(bits)))), dtype=torch.uint8))
-        self._h2d(self.stepv, torch.tensor([s, s], dtype=torch.int32))
+        self._put(self.live, torch.from_numpy((np.arange(t // 32) * 32 < m).astype(np.uint8)))
+        self._put(self.admit, torch.frombuffer(bytearray(b"".join(CR.word_rows(CR.words(bits)))), dtype=torch.uint8))
+        self._put(self.stepv, torch.tensor([s, s], dtype=torch.int32))
         self.step_base.fill_(s * self.u_step)
-        self._h2d(self.S, torch.tensor([0, m, 0, self.flags], dtype=torch.int32))
+        self._put(self.S, torch.tensor([0, m, self.dead_from(m), self.flags], dtype=torch.int32))
         self._a_step()
         if self.cap:
             self.cap_sync()
         self.phase(None)
         self.t_before = time.perf_counter()
+
+    def _put(self, dst: torch.Tensor, src: torch.Tensor) -> None:
+        """A step input from the host into `dst`, on the current stream (`_h2d`)."""
+        self._h2d(dst, src)
 
     def cap_sync(self) -> None:
         """A captured step's wait, after its poison and inputs, before its forward."""
