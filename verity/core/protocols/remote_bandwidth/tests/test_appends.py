@@ -12,7 +12,7 @@ import hashlib
 import pytest
 
 from verity.core.protocols.profile import IntegrityProfile, Subset
-from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
+from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, schedule
 from verity.core.protocols.remote_bandwidth.audit import Params, Session
 from verity.core.protocols.remote_bandwidth.receipts import Plan
 
@@ -169,6 +169,12 @@ def honest_session() -> Run:
     return r
 
 
+HONEST_SCHEDULE = schedule.Schedule(((2, 1, 1),), (((0, None), (0, 1), (0, None), (0, None)), ((2, None), (2, None))),
+                                    (0, 1, 2, 3, 4))
+"""`honest_session`'s schedule: registered block 2 freed at step 1; pages 8 … 11 written at step 0, page 9 freed at step
+1; pages 12 and 13 written at step 2; passes at steps 0 … 4."""
+
+
 @pytest.fixture(scope="module")
 def honest() -> tuple[Run, list[audit.Verdict]]:
     r = honest_session()
@@ -212,15 +218,19 @@ class Verdict:
 def test_the_ledger_credits_post_seed_receipts_only_on_the_property_s_verdict(honest) -> None:
     """Without a verdict (None), the session's 17 post-seed receipts are certified but not credited: μ_timing counts
     only the registered blocks' 37.  On a verdict that holds, all 54 are credited, and μ_carrier charges each pass the
-    least of the verdict's carrier bytes and its post-seed bytes.  A verdict that fails is refused."""
+    least of the verdict's carrier bytes and its post-seed bytes, with the session's schedule check beside it, whose
+    bits it reports.  A verdict that fails is refused."""
     rec = honest[0].s.record()
+    scheduled = honest[0].s.scheduled(HONEST_SCHEDULE)
     capacity = 4096 * 10**9 / 10
     common = dict(capacity_bytes_per_s=capacity, chip_bytes=0, rebuild=audit.Rebuild(P512, 0.0))
     whole = capacity * rec.span_ns / 1e9
     none = audit.ledger(rec, **common)
     assert none.timing == pytest.approx(1 - 37 * 4096 / whole) and none.carrier == 0
     assert set(none.to_json()["terms"]) == set(audit.LEDGER_SOURCES) and "carrier" in audit.LEDGER_SOURCES
-    held = audit.ledger(rec, **common, credit_post_seed=Verdict(True, 3 * 4096))
+    assert none.steering is None and none.to_json()["steering_bits"] is None
+    held = audit.ledger(rec, **common, credit_post_seed=Verdict(True, 3 * 4096), schedule=scheduled)
+    assert held.steering == scheduled.bits == HONEST_SCHEDULE.bits == 200 and held.to_json()["steering_bits"] == 200
     assert held.timing == pytest.approx(1 - 54 * 4096 / whole)
     assert held.carrier == pytest.approx((0 + 3 + 3 + 3 + 3) * 4096 / whole)
     assert held.sample == none.sample and held.counting == none.counting
@@ -229,9 +239,9 @@ def test_the_ledger_credits_post_seed_receipts_only_on_the_property_s_verdict(ho
     assert none.windows[0].timing - held.windows[0].timing == pytest.approx(7 * 4096 / whole_0)
     assert held.gamma == pytest.approx(none.gamma - 17 * 4096 / whole + 12 * 4096 / whole)
     with pytest.raises(ValueError, match="fails"):
-        audit.ledger(rec, **common, credit_post_seed=Verdict(False, 0.0))
+        audit.ledger(rec, **common, credit_post_seed=Verdict(False, 0.0), schedule=scheduled)
     with pytest.raises(ValueError, match="finite nonnegative"):
-        audit.ledger(rec, **common, credit_post_seed=Verdict(True, float("inf")))
+        audit.ledger(rec, **common, credit_post_seed=Verdict(True, float("inf")), schedule=scheduled)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -324,12 +334,13 @@ def test_on_a_requirement_link_a_pass_is_credited_the_circuit_s_reads_at_its_ste
     4 nothing.  A link that doesn't hold, reads past its plan's blocks or that aren't a count, or a record whose passes
     name no step are refused."""
     rec = honest[0].s.record()
+    scheduled = honest[0].s.scheduled(HONEST_SCHEDULE)
     assert [w.steps for w in rec.windows] == [(0, 1, 2), (3, 4)]
     assert [w.lengths for w in rec.windows] == [(8, 12, 10), (12, 12)]
     capacity, B = 4096 * 10**9 / 10, 8 * 4096
     common = dict(capacity_bytes_per_s=capacity, chip_bytes=0, rebuild=audit.Rebuild(P512, 0.0))
     whole, whole_0 = capacity * rec.span_ns / 1e9, capacity * rec.windows[0].span_ns / 1e9
-    for verdict in ({}, {"credit_post_seed": Verdict(True)}):
+    for verdict in ({}, {"credit_post_seed": Verdict(True), "schedule": scheduled}):
         store_ = audit.ledger(rec, **common, **verdict)
         full = audit.ledger(rec, **common, **verdict, requirement=Link(True, planned(rec)))
         assert full.timing == pytest.approx(store_.timing) and full.linked and not store_.linked
@@ -338,7 +349,7 @@ def test_on_a_requirement_link_a_pass_is_credited_the_circuit_s_reads_at_its_ste
     assert [audit.linked_bits(w, sparse, 4096, False) for w in rec.windows] == [(3 * B + 100, B, 0), (0, 0)]
     assert [audit.linked_bits(w, sparse, 4096, True) for w in rec.windows] == [(3 * B + 100, 5 * B, 20_000), (0, 0)]
     bare = audit.ledger(rec, **common, requirement=sparse)
-    held = audit.ledger(rec, **common, credit_post_seed=Verdict(True), requirement=sparse)
+    held = audit.ledger(rec, **common, credit_post_seed=Verdict(True), requirement=sparse, schedule=scheduled)
     assert bare.timing == pytest.approx(1 - (4 * B + 100) / 8 / whole)
     assert held.timing == pytest.approx(1 - (8 * B + 20_100) / 8 / whole)
     assert held.windows[0].timing == pytest.approx(1 - (8 * B + 20_100) / 8 / whole_0)
