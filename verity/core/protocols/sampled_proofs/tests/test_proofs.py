@@ -7,11 +7,14 @@ verifier's own program, partition and `--registered` file are the fixture's `sta
 Each verify sets up an m = 25 table (about 10 s), so the fixture's tests are slow. They are the one test that a protocol's
 verdict comes from core's own verifier run: the honest session is accepted with its program, registered finding and units
 read off that run, a circuit file other than the committed one is refused before the verifier runs, tampered proof bytes
-are rejected by the verifier itself, with the record's proof digests kept or rewritten to match, and the statement, which
-reads registered values, is refused without the verifier's own registered reads, by `verify` and by Lean.
+are rejected by the verifier itself, with the record's proof digests kept or rewritten to match, and the statement, whose
+``cs`` reads are registered by the verifier's own file, is refused by Lean without that file, whether its public file
+names them or not.
 
-Without registered reads (``registered`` None), `verify` refuses a program that reads registered values before Lean runs
-(fast tests, no fixture): Lean's own refusal reads the public file's ``registered``, which the prover writes."""
+Without registered reads (``registered`` None), `verify` refuses a program with an input bound at registration (a
+`RegisteredInput`) before Lean runs (fast tests, no fixture): Lean demands registered reads only where the public file's
+``registered``, which the prover writes, names them. The fixture's program binds ``cs`` as a run input, so that refusal
+doesn't apply to it."""
 from __future__ import annotations
 
 import hashlib
@@ -102,18 +105,6 @@ def test_the_honest_session_is_accepted_by_cores_own_verifier_run(fx):
     assert f.units == DRAWN
 
 
-@lean
-@pytest.mark.slow
-def test_without_the_verifiers_registered_reads_the_statement_is_refused_before_lean_runs(fx, monkeypatch):
-    """The statement reads its ``cs`` row from a registered tree, so its program reads registered values, and `verify`
-    without the verifier's own registered reads refuses it: the verifier, not the prover's public file, says what is
-    registered."""
-    monkeypatch.setattr(PF, "executable", _never)
-    assert PF.reads_registered((fx / "stage" / "program.json").read_bytes())
-    got, why = _verify(fx, fx / "session", own=False)
-    assert got is None and why[0] == "registered", why
-
-
 def _unnamed(fx: Path) -> str:
     """The fixture's public file with its header's ``registered`` taken out, as a prover that names no registered read
     would write it; its tables (the registered port's shared rows) kept."""
@@ -128,11 +119,12 @@ def _unnamed(fx: Path) -> str:
 @lean
 @pytest.mark.slow
 @pytest.mark.parametrize("unnamed", [False, True], ids=["public file names its reads", "public file names none"])
-def test_lean_without_registered_reads_refuses_the_statement_that_reads_them(fx, monkeypatch, unnamed):
-    """Lean's own run without ``--registered`` (`verify`'s refusal stood aside): the honest public file, which names the
-    ``cs`` read, is refused by `Registered.check`; with that name taken out and the shared rows kept, the session is
-    still not accepted. Neither finding proves a unit."""
-    monkeypatch.setattr(PF, "reads_registered", lambda program: False)
+def test_lean_without_registered_reads_refuses_the_statement_that_reads_them(fx, unnamed):
+    """The program binds ``cs`` as a run input (`Input16_v1`), registered only by the verifier's own file, so `verify`
+    without that file goes on to Lean: the honest public file, which names the ``cs`` read, is refused by
+    `Registered.check`; with that name taken out and the shared rows kept, the session is still not accepted. Neither
+    finding proves a unit."""
+    assert not PF.reads_registered((fx / "stage" / "program.json").read_bytes())
     got, why = _verify(fx, fx / "session", public=_unnamed(fx) if unnamed else "pub-32.bin", own=False)
     assert why is None, why
     (f,) = got

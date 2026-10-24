@@ -132,8 +132,11 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
     partition object's program). A session the verifier rejects is a finding, not a refusal.
 
     The ``registered`` refusal is the verifier's own: without ``--registered``, Lean refuses a statement's registered
-    reads only where its public file, which the prover writes, names them (`Registered.check`), so a prover that
-    commits a registered port's rows afresh and names none would be checked against no registered root."""
+    reads only where its public file, which the prover writes, names them (`Registered.check`), and doesn't read a
+    `RegisteredInput` as demanding them, so a prover that commits such a port's rows afresh and names none would be
+    checked against no registered root. A run input that only the caller's registered file reads registered (the
+    served RoPE statement's ``cs``) is the caller's to state: without the file, Lean holds it a run input, and refuses a
+    session whose public file names its reads or whose tables share its registered rows."""
     if registered is None and reads_registered(program):
         return None, ("registered", "the program reads registered values (a RegisteredInput among its definitions) and "
                                     "the verifier holds no registered reads: verify with its own registered file")
