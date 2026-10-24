@@ -46,8 +46,9 @@ def traffic(tok, n: int, rng: random.Random, max_prompt: int, gaps: int) -> list
         body = tok.decode(filler[:max(want - 24, 0)]) + "\n\n" + q
         if getattr(tok, "chat_template", None):
             # enable_thinking is Qwen3's switch (other templates ignore it): off, answers end at EOS within max_tokens
-            ids = tok.apply_chat_template([{"role": "user", "content": body}], add_generation_prompt=True, tokenize=True,
-                                          enable_thinking=False)
+            text = tok.apply_chat_template([{"role": "user", "content": body}], add_generation_prompt=True, tokenize=False,
+                                           enable_thinking=False)
+            ids = tok.encode(text, add_special_tokens=False)
         else:
             ids = tok.encode(body + "\nAnswer:")
         stoch = rng.random() < 0.3
