@@ -32,6 +32,9 @@ round coins, each opened after its recorded round root, read through the challen
 ledger opens and ends for the window, then one mutation each aimed at every refusal), compared output for output: null, or the same refusal.
 Its `salt` against `core_check.salt` likewise, over the live windows' salt coins the same module generates, read through
 the same session, reserved before it opened (opened after the session's open root, `salt.window_open_root`).
+
+Its `chunks` against `weights.chunks` (an H1 lane's chunks along K, the chunk rows a table at K commits a row as): every
+multiple of 32 below 2^17, then drawn integers and non-integers, compared output for output: the count, or the same refusal.
 """
 from __future__ import annotations
 
@@ -55,6 +58,7 @@ import pouw_rounds_cases as rounds_cases
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import verifier as V
+from verity.core.protocols.pouw import weights as W
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -424,6 +428,30 @@ def test_credit(pass_server):
                  "'s template returns no receipt of whole #-bit words", "'s seed reads the roots of ",
                  "its units' ok rows, which are the verifier's own"):
         assert any(part in k for k in CREDITED), part
+
+
+def chunks(k) -> dict:
+    if type(k) is not int or k < 0:
+        raise D.Reject("the input is not a natural number K")
+    try:
+        return {"chunks": W.chunks(k)}
+    except ValueError as e:
+        return {"refused": str(e)}
+
+
+CHUNKS = D.Port("pouw-check-difftest", "chunks", chunks, package=LEAN, of_record=V.RECORD_VERDICT,
+                inputs=st.one_of(st.integers(-64, 1 << 18), st.booleans(), st.text(max_size=2), st.none()))
+
+
+def test_chunks(pass_server):
+    """`PouwCheck.Chunks.chunks` is `weights.chunks` at every multiple of 32 below 2^17 (every served K, the whole lane up to
+    4096 and up to 256 chunks past it, each refusal's message included), then on drawn integers, negative ones a reject,
+    and non-integers."""
+    outs = [json.loads(D.replay(CHUNKS, k, pass_server)[1]) for k in range(0, 1 << 17, 32)]
+    stats = D.run(CHUNKS, examples=500, server=pass_server)
+    print(f"pouw-check-difftest chunks: 4096 Ks swept, then {stats}")
+    assert Counter(next(iter(o)) for o in outs) == {"chunks": 375, "refused": 3721}
+    assert [outs[k // 32] for k in (4096, 6144, 12288, 14336, 16384)] == [{"chunks": n} for n in (1, 2, 3, 4, 4)]
 
 
 ROUNDED: Counter[str] = Counter()
