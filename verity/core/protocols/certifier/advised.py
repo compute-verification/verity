@@ -45,12 +45,12 @@ declared syncs:
 - `released[t]`, the frames the advice releases in the window's bucket t, at most R, the egress allocation;
 - `floor[t]`, the request frames the window's ingress counts must have released by its bucket t: output λ of request j,
   released at b in window v, is eligible no earlier than j's anchor (the bucket that releases its last ingress frame)
-  + δ + ⌊λ·q/p⌋ under window v's declared sync (δ, p/q), which is `schedule.eligible` with v's sync, and ready no
-  earlier than the bucket after its anchor (the certifier's clock: the request reaches the server at its anchor's
-  tick, and a frame read in bucket t is ready at t + 1), and is released no earlier than either; so the link's ingress
-  must have released `ends[j]` request frames by bucket b − max(1, δ + ⌊λ·q/p⌋), and `floor` is the most of those that
-  fall in the window's buckets, less B_w = Σ_{v < w} received[v]. A declared sync outside Σ_sync is refused, so no
-  declaration moves the floor below the certifier's clock;
+  + δ + ⌊λ·q/p⌋ under window v's declared sync (δ, p/q), which is `schedule.eligible` with v's sync, and released no
+  earlier; so the link's ingress must have released `ends[j]` request frames by bucket b − δ − ⌊λ·q/p⌋, and `floor`
+  is the most of those that fall in the window's buckets, less B_w = Σ_{v < w} received[v]. A declared sync outside
+  Σ_sync is refused, and δ ≥ 0, so no declaration lets a frame out before the bucket that releases its request's last
+  frame. A release in that bucket is a served clock's (an engine's first output in its request's bucket); on a
+  certified path the proxy hands a frame read in bucket t on at t + 1, so its honest syncs have δ ≥ 1;
 - `received`, `received[w]`.
 
 **What 1 means.** Every ingress count is at most RIN and bucket 0's at least OWN; with bucket 0's OWN own frames taken
@@ -72,7 +72,7 @@ advice, and the egress timing channel of accepted runs carries at most `advice.b
 beside the log2 #Σ_sync bits a window the sync charge already counts. Nothing else is left free: not the frames, not
 the ingress timing, not when the server actually wrote, and not where a request ends, which `ends` derives from v0's
 prompt lengths. And the advice is held to the ingress head: no frame is released before the ingress certifier had
-released its request's `ends[j]` request frames, max(1, δ + ⌊λ/ρ⌋) buckets earlier, under a sync Σ_sync holds. Those
+released its request's `ends[j]` request frames, δ + ⌊λ/ρ⌋ buckets earlier, under a sync Σ_sync holds. Those
 are the link's first j + 1 requests whole because v0's prompt lengths are theirs, in arrival order: the tie,
 IoTieRequest's verdict for the same advice digest. Without it, a prover who splits the same request frames among the
 requests otherwise (a short prompt and a long one swapped) lowers an early request's end, and so the floor, on the
@@ -248,7 +248,7 @@ def ends(link: LinkAdvice, request_frames: Sequence[int]) -> tuple[int, ...]:
 
 def _floor_buckets(link: LinkAdvice, T: int, syncs: Sequence[ClockSync], sync_set: SyncSet) -> list[tuple[int, int]]:
     """(request j, bucket) for each kept output: the bucket by which the link's ingress must have released `ends[j]`
-    request frames, b − max(1, δ + ⌊λ·q/p⌋) under the sync of the window that releases it at b, one of Σ_sync."""
+    request frames, b − δ − ⌊λ·q/p⌋ under the sync of the window that releases it at b, one of Σ_sync."""
     out = []
     for o, b in zip(outputs(link.advice), link.advice.release):
         v = b // T
@@ -258,7 +258,7 @@ def _floor_buckets(link: LinkAdvice, T: int, syncs: Sequence[ClockSync], sync_se
         sync = syncs[v]
         if sync not in sync_set:
             raise ValueError(f"window {v} declares {sync!r}, which isn't one of Σ_sync")
-        a = b - max(1, sync.delta + o.index * sync.rho.denominator // sync.rho.numerator)
+        a = b - sync.delta - o.index * sync.rho.denominator // sync.rho.numerator
         if a < 0:
             raise ValueError(f"request {o.request}'s output {o.index} is released in bucket {b}, before its request")
         out.append((o.request, a))

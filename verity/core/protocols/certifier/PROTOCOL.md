@@ -417,11 +417,12 @@ requests, whose frames are a function of the prompt's length alone), for every p
   - `released[t]`, the frames the advice releases in bucket t, at most R (more refuses the advice);
   - `floor[t]`, the request frames the window's ingress must have released by bucket t, less B_w = Σ_{v<w}
     `received[v]`. Output λ of request j released at b is eligible no earlier than j's anchor + δ + ⌊λ/ρ⌋
-    (`schedule.eligible`) under the sync (δ, ρ) of the window that holds b, and ready no earlier than the bucket after
-    its anchor (the certifier's clock: the request reaches the server at its anchor's tick, and a frame read in
-    bucket t is ready at t + 1), and is released no earlier than either: so the first `ends[j]` request frames are
-    released by bucket b − max(1, δ + ⌊λ/ρ⌋). A frame for which that bucket is before 0, or released in a window
-    with no declared sync, refuses the advice. No declared sync moves the floor past the certifier's clock;
+    (`schedule.eligible`) under the sync (δ, ρ) of the window that holds b, and is released no earlier: so the first
+    `ends[j]` request frames are released by bucket b − δ − ⌊λ/ρ⌋. A frame for which that bucket is before 0, or
+    released in a window with no declared sync, refuses the advice. Since δ ≥ 0, no declared sync lets a frame out
+    before the bucket that releases its request's last frame. A release in that bucket is a served clock's, an
+    engine's first output in its request's bucket (a served run's advice, `test_network_certifier_advised_served.py`);
+    on a certified path the proxy hands a frame read in bucket t on at t + 1, so its honest syncs have δ ≥ 1;
   - `received`, `received[w]`.
 - **The unit** is `NetworkAdvisedLinkWindow` v2{EGRESS, INGRESS, ADVISED}: `NetworkLinkWindow`'s checks, and one gate
   (`advised.gate`) naming `advised.NetworkAdvisedCounts_v1{T, RIN, OWN}` and its circuit digest pinned in
@@ -456,8 +457,8 @@ requests, whose frames are a function of the prompt's length alone), for every p
   timing of accepted runs carries at most `advice.bits` (the accepted-runs bound's A_c) beside the log2 #Σ_sync bits
   a window the sync charge counts, and nothing else is left free: not the frames' timing within the counts, not the
   ingress timing, not when the server wrote, and not where a request ends. The advice is held to the ingress head: no
-  frame is released before the ingress certifier released `ends[j]` request frames, max(1, δ + ⌊λ/ρ⌋) buckets
-  earlier, under a sync in Σ_sync. Those are request j's and every earlier request's frames because v0's prompt
+  frame is released before the ingress certifier released `ends[j]` request frames, δ + ⌊λ/ρ⌋ buckets earlier,
+  under a sync in Σ_sync. Those are request j's and every earlier request's frames because v0's prompt
   lengths are the link's requests', in arrival order: the tie, below. Without it, a prover that splits the same
   request frames among the requests otherwise (a short and a long prompt swapped between an early and a later
   request) lowers the early request's end, and so the floor, and an output released before its request's frames were

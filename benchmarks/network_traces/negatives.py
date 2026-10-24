@@ -647,8 +647,9 @@ def advice_run(path: Path, *, T: int = 50, R: int = 32, frames: int = 1, delta: 
                shift: int = 0) -> dict:
     """`advice_suite` on the advice at `path` (I1's encode bytes), each request `frames` ingress frames whatever its
     prompt's length, all received in window 0, every window's sync (δ, ρ): its shape and the rows (`negatives`). With
-    `shift`, every release `shift` buckets later, for an advice whose clock put an output in its request's own bucket,
-    which N2-ADVICE's floor refuses."""
+    `shift`, every release `shift` buckets later, for an advice whose clock put an output earlier than a declared δ
+    allows, which N2-ADVICE's floor refuses. Under δ = 0 an output in its request's own bucket (a served first token,
+    the engine's clock with no certifier on the path) is accepted."""
     mod = advice_module()
     if mod is None:
         raise NotApplicable(f"no advice codec yet: {ADVICE_MODULE} (I1, ADV-SPEC) hasn't landed")
