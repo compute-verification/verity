@@ -48,7 +48,7 @@ FIXTURES = HERE / "tests" / "fixtures"
 VECTORS = HERE.parents[2] / "verity" / "core" / "protocols" / "certifier" / "tests" / "fixtures" / "cache_step_v2_vectors.json"
 
 #: each trace's slice for the certifier's vectors: its first calls, and the window (L) its requests fit in
-SLICES = {"async-prefix-cache.jsonl": {"calls": 400, "L": 368}, "async-crush.json.gz": {"calls": 48, "L": 1232}}
+SLICES = {"async-prefix-cache.jsonl": {"calls": 400, "L": 368}, "async-crush.json.gz": {"calls": 160, "L": 1232}}
 
 
 @dataclass
@@ -114,6 +114,13 @@ def threshold(pool: C2.Pool, new: int) -> int:
     return _queued(pool)[e - 1] if e else 0
 
 
+def _fits(S, op: C2.Op) -> bool:
+    """Whether each of the op's fields fits its width (a variant that doesn't has no arguments)."""
+    Z = C2.widths(S)
+    w = {"slot": Z.SL, "r": S.RW, "K": Z.LW, "tau": S.SW, **dict.fromkeys(("wh", "ev", "nins", "new", "held", "ret"), Z.HW)}
+    return all(0 <= getattr(op, f) < 1 << n for f, n in w.items())
+
+
 @dataclass
 class Call:
     """One call as `drive` made it: its kind, its op, the request's tokens it reads (unit u0 on, `known` of them) and the
@@ -149,6 +156,9 @@ class _Driver:
 
     def _call(self, kv, kind: str, op: C2.Op, u0: int, known: int, refused: list[tuple[str, C2.Op]]) -> C2.Out:
         S = self.S
+        if not _fits(S, op):
+            raise AssertionError(f"call {len(self.calls)} ({kind}, {op}): a field past its width")
+        refused = [(w, b) for w, b in refused if _fits(S, b)]
         out = C2.reference(S, self.pool, op)
         if not out.ok:
             raise AssertionError(f"call {len(self.calls)} ({kind}, {op}): the unit refuses vLLM's own operation")
@@ -173,7 +183,9 @@ class _Driver:
                    wh=wh, ev=ev, units=window(r.io.tokens[:r.num_tokens], 0, S))
         refused = [("a hit one unit longer", replace(op, wh=wh + 1)), ("the evictable count plus one", replace(op, ev=ev + 1))]
         if wh:
-            refused += [("a hit one unit shorter", replace(op, wh=wh - 1)), ("the evictable count less one", replace(op, ev=ev - 1))]
+            refused.append(("a hit one unit shorter", replace(op, wh=wh - 1)))
+        if ev:
+            refused.append(("the evictable count less one", replace(op, ev=ev - 1)))
         if never > wh:
             refused.append(("the hit of a cache that never evicts", replace(op, wh=never)))
             self.counts["hits shortened by eviction"] += 1
