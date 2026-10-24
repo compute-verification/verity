@@ -16,9 +16,8 @@ id = "llama31-8b-1gpu-pouw-h1"
 # steps and T rows, in order), the credit gate passing every served call, every request entered. One rep: a b32 run is
 # about 290 steps of commitments.
 #
-# int8_exact's attention takes a chunked prefill's chunks as its window's last rows
-# (`verity_vllm.engine.int8_ops._requests`), so at T = 64 every quick prompt is prefilled in 64-token steps. A T that
-# holds each whole prompt multiplies H1's per-step commitments with it.
+# At T = 64 every quick prompt is chunked: int8_exact's attention takes each chunk as the last rows of its window (#3387),
+# one batched call per layer step over the step's requests (`verity_vllm.engine.int8_ops.paged_attention`).
 arms = ["stock-int8", "pouw:eps1-sm120-h1fx1"]
 sweep = "quick"
 reps = 1

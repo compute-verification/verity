@@ -12,7 +12,11 @@ The advice string is the constant-rate Program's content advice, so the accepted
 charge, fixed before the run. These guarantees state it, for any charge `bits` that meets `BitsCount` and any compiler
 that is precommitted and deterministic. Acceptance is existential (`AcceptedWithin`): a run counts
 if some advice within the caps explains it, so no premise holds only of an honest run. Each run's egress must equal the
-compiled Program's (`Accepted`), which the all-frames egress tie backs.
+compiled Program's (`Accepted`). The all-frames egress tie backs that only when no step unit can be faulty: every step
+unit drawn `all`, or a sampled audit at `δ ≥ miss(1)`. At a smaller `δ` an accepted sampled audit gives `Accepted` only
+with the faulty units' committed gates held as advice (`SampledAuditAccepted`), so the charge adds their committed bits
+and `log2` of the number of possible faulty sets, except with probability `δ + ε_ks + ε_bind` over the selection
+(`EncardAccSeqsSampledLe`, `Definitions/NetworkCertifier/Guarantees/SampledCharge`).
 
 The caps are summed over the `W` windows with advice, whatever the horizon. Charging a window only for the windows up
 to it would need a causality assumption about the compiler, which these guarantees don't take.
