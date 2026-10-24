@@ -123,13 +123,13 @@ A spec-level reference for network accounting's timing channel:
   source (`LinkWindows.ties`), never beside the advice: the tie service's (below). The served size class isn't
   pinned, so there every advised link is refused (fail closed); and the certifier doesn't report its syncs to the
   verifier yet, so there is no clock source (`LinkWindows.clocks`) and every advised link is refused;
-- the ingress tie through the proof service (`tie_service`): `IngressTie`, `IoTieRequest` proved as
-  `NetworkIngressTieBucket` (one gate naming its pinned circuit digest, `io_request.circuit-check.json`), one unit a
-  bucket row of the warden's registered ingress cells, read off its root (`warden_rows.bucket_port`), decided by the
-  verifier of record on its own lanes from the advice and the warden's release, and `IngressTie.tie`, which builds
-  `advised.IoTieVerdict` on the link and the stream's registrations from the stream's outcomes of record alone;
-  `Ties`, the tie, its stream and the release as the `LinkWindows.ties` the advised link reads. A size class no
-  sidecar pins has no accepted proof.
+- the ingress tie through the proof service (`tie_service`): `IngressTie`, each ingress link-window's `IoTieRequest`
+  units, one a bucket row of the warden's registered ingress cells, proved as `NetworkIngressTieBucket` (one gate
+  naming its pinned circuit digest, `io_request.circuit-check.json`) with the row read off the warden's root
+  (`warden_rows.bucket_port`), decided by the verifier of record on its own lanes from the advice and the warden's
+  release, and `IngressTie.tie`, which builds `advised.IoTieVerdict` on the link and the stream's registrations from
+  the stream's outcomes of record alone; `Ties`, the tie, its stream and the release as the `LinkWindows.ties` the
+  advised link reads. A size class no sidecar pins has no accepted proof.
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's

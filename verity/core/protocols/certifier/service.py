@@ -134,14 +134,15 @@ premises). Its public inputs, in the ``pub`` row, are the window's view of the a
 declared syncs, each held to Σ_sync; the heads' counts stay witness. Its public items are `PUBLIC_ADVISED`. Its
 verifier of record takes the delivered advice (`verify(advice=…)`) and the tie only from its own tie source
 (`LinkWindows.ties`, `advised.TieSource`: `advised.IoTieVerdict`, IoTieRequest's verdict from proofs it verified,
-naming the link and its ingress registrations), never beside the advice: `tie_service.Ties`, which accepts no window of
-the served size class, whose IoTieRequest digest isn't pinned, so every advised link there is refused. Each window's
-declared sync must be the one the certifier ran it under, which the verifier takes only from its own clock source
-(`LinkWindows.clocks`, `advised.ClockSource`), since a δ below the traffic's loosens the floor (REDTEAM phase 11);
-without one, every advised link is refused too. It refuses a window without an advice or one whose view `advised.view`
-refuses, and reports the advice it read as a third public output, `advice` (`advised.digest`); the network verdict
-refuses a window that names another advice than the first accepted window's, so every window's counts are one
-advice's. The in-the-clear check runs `advised_check` too.
+naming the link and its ingress registrations), never beside the advice; nothing in this package is a source until
+IoTieRequest runs in the proof service, so every advised link is refused until then. Each window's declared sync must
+be the one the certifier ran it under, which the verifier takes only from its own clock source (`LinkWindows.clocks`,
+`advised.ClockSource`), since a δ below the traffic's loosens the floor (REDTEAM phase 11); without one, every advised
+link is refused too. It refuses a window without an
+advice or one whose view `advised.view` refuses, and reports the advice it read as a third public output, `advice`
+(`advised.digest`); the
+network verdict refuses a window that names another advice than the first accepted window's, so every window's counts
+are one advice's. The in-the-clear check runs `advised_check` too.
 
 A link whose egress end has no occupancy profile and is neither served nor advised has no verdict (`ValueError`,
 failing closed): nothing would hold its egress timing.
