@@ -156,6 +156,7 @@ import Proofs.Flock.Claims.ZK.L0PinSwitch
 import Proofs.Flock.Claims.ZK.L0PinBind
 import Proofs.Flock.Claims.ZK.L0PinLive
 import Proofs.Flock.Claims.ZK.L0PinChain
+import Proofs.Flock.Claims.ZK.L0PinLoop
 import Proofs.Flock.Claims.ZK.FinishSwInner
 import Proofs.Flock.Claims.ZK.FinishSwTau
 import Proofs.Flock.Claims.ZK.FinishSwRows
@@ -730,6 +731,10 @@ import Proofs.Flock.Claims.ZK.CutPrefix
   (`LigLock.l0Sent_at`). On a live history whose rounds from a binding on are masked, at one rep, scheduled as the
   binding and level 0's bodies at zero pads, the sent rounds are the binding and the bodies at the rep's draws
   (**`LeanRelease.l0_chain`**).
+* `L0PinLoop`: `l0_chain` at the loop's release. At a `Live` statement the loop serves, on a live history of `refK x`
+  openings whose tables are the loop's, a rep's binding round sends the binding at its table's cap and `z`'s squeeze
+  of `n`, and its level-0 rounds send level 0's bodies at its table, its draws' pads and the opened coins from the
+  binding's on (**`LeanRelease.ofLoop_l0`**). Every `--zk` schedule's `n` is under `64` (`Count.sched_n`).
 * `FinishSwInner`: `repCut_fw`'s `hinner` at that source. The switched view keeps `ρ_in`, `σ_in` (`padShift` moves
   `h_tx`, `h_ty` against the exposed pads; `Table.innerMsg_padShift`) and `Y₂`, and where the rows hold `Y₁`, so the
   switched source's `ρ_in`, `σ_in` and `Y` are the honest source's (`Masked.swSrcE_inner`, `Masked.swSrcE_y`). The
