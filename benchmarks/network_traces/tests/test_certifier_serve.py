@@ -1239,6 +1239,49 @@ def test_the_gates_varied_rehearsal_names_its_requests_for_its_run_and_the_endpo
             {p.name for p in (g["out"] / strategy).iterdir()}
 
 
+@pytest.fixture(scope="module")
+def gate_compact(tmp_path_factory):
+    """`GATE_RUNS` as `gate_varied`, each request with `compact` 8: the rehearsal the gate's command asks for, its plan
+    made, run and checked, against one `_Varied` endpoint whose every other response ends in a merged chunk."""
+    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    import auditor as A
+    tmp, endpoint, got = tmp_path_factory.mktemp("gate-compact"), _Varied(merges=lambda r: r % 2 == 1), {}
+    for strategy, (run, tamper) in GATE_RUNS.items():
+        req = {"run": run, "requests": 16, "tamper": tamper, "traffic": "varied", "temperature": 0.0, "top_p": 1.0,
+               "tokens": 16, "seed": 3, "compact": 8}
+        args = cs.parser().parse_args(A.certifier_command(req, tmp / run / "out", "http://127.0.0.1:40001")[2:])
+        runs_dir, _, _, plan, runs = _varied_runs(
+            tmp / f"{run}.runs", endpoint, lambda url, a=args: cs.plan_of(a, url, lambda: 0.0, _no_sleep),
+            args.strategies.split(","))
+        got[strategy] = {"args": args, "plan": plan, "check": runs[strategy]["check"], "io": _io(runs_dir / strategy)}
+    return got, endpoint
+
+
+def test_the_gates_compact_rehearsal_runs_compact_cells_and_its_check_reads_them_as_on_id_events(gate_compact):
+    """`certifier-rehearse --traffic varied --compact 8`'s command is a compact varied `rehearse` this parser takes,
+    named for its run, and the gate's bounds on B are a compact record's bytes and an id event's frame. Its runs are
+    on 8-byte cells: the honest run accepted, its certified I/O the endpoint's ids (a stop as `COMPACT_EOS`), and the
+    token run accepted by `check` too, its ids differing in window 0's alone, which only the I/O tie refuses."""
+    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    import auditor as A
+    assert A.CERTIFIER_COMPACT == (active.COMPACT_RECORD.size, cs.FRAME_BYTES)
+    got, endpoint = gate_compact
+    recorded = {r["user"]: [active.COMPACT_EOS if t == EOS else t for t in r["streamed_ids"]]
+                for r in endpoint.served if r["user"] is not None}
+    for strategy, (run, tamper) in GATE_RUNS.items():
+        g = got[strategy]
+        assert (g["args"].compact, g["args"].name, g["args"].strategies) == (8, run, tamper or "honest")
+        check = g["check"]
+        assert g["plan"]["compact"] == 8 and check["egress_bytes"]["frame_bytes"] == 8
+        assert check["verdict"] == "accepted" and check["io"]["violations"] == [], cs.table(check)
+        window0 = {q["session"] for q in g["plan"]["requests"] if q["enqueue"] // cs.WINDOW_BUCKETS == 0}
+        differs = {u for u, r in g["io"].items() if r["output"] != recorded[u]}
+        assert differs == (set() if tamper is None else window0) and (tamper is None or differs)
+    plain = cs.parser().parse_args(A.certifier_command(
+        {"run": "c20261024T120000Z-ab12", "requests": 16, "tamper": None, "traffic": "varied"}, Path("o"), "u")[2:])
+    assert plain.compact is None
+
+
 def test_tie_run_on_the_gates_varied_runs_with_the_endpoints_ids_accepts_honest_and_refuses_token(gate_varied,
                                                                                                     capsys):
     """`negatives.py tie-run --run TARBALL --ids REQUESTS.jsonl` on each gate run's tarball, the ids the endpoint's
