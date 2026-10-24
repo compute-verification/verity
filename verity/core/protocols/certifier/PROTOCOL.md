@@ -1895,8 +1895,10 @@ them.
       `finish` is `eos` and `length` where it is `length` (`compact_finish_violations`). A stop record stands for the
       advice's EOS output, whose id it doesn't carry. IO-TIE's egress tie holds each compact cell's token field to
       this rule as well as to its id. The rehearsal's certified I/O (`certifier_serve.certified_io`) has no advice and
-      checks the marks against `max_tokens` and EOS alone, so it can't tell a stop on the last token at `max_tokens`
-      from a `length` finish.
+      checks the marks against `max_tokens` alone, so it can't tell a stop on the last token at `max_tokens` from a
+      `length` finish. It refuses any cell that carries one of the model's EOS ids, marked or not, since an honest
+      server writes a stop only as `COMPACT_EOS`; read as a token with more to follow, such a cell would let the server
+      decide where the client's text ends.
     - **What covers it.** The Lean device port models ordinal headers and compact records (`CertifierDevice`'s
       `Config.ordinals` and `Config.compact`), and its difftest holds it to this proxy on honest, salted and restarted
       compact runs at B of 8, 12 and 48 and on each malformed form. The device's Lean properties are stated for every
