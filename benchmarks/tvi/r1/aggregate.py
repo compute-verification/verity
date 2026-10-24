@@ -46,6 +46,21 @@ def metrics(r):
             "pos_sampled": float(np.mean(r["sampled_pos"])), "pos_sampled_ci": boot(r["sampled_pos"])}
 
 
+THRESHOLDS = (0.1, 0.25, 0.5, 0.9)
+
+
+def to_reach(path):
+    """The first validation record at or above each letter-accuracy threshold: its FLOPs and seconds of training."""
+    if not os.path.exists(path):
+        return {}
+    ev = [x for x in json.load(open(path)) if "val_pos" in x]
+    out = {}
+    for t in THRESHOLDS:
+        hit = next((x for x in ev if x["val_pos"] >= t), None)
+        out[str(t)] = {"flops": hit["flops"], "t": hit["t"], "at": hit.get("it", hit.get("step"))} if hit else None
+    return out
+
+
 def fmt(m, key, pct=True):
     v, (lo, hi) = m[key], m[key + "_ci"]
     f = (lambda x: f"{100 * x:.1f}") if pct else (lambda x: f"{x:.3f}")
@@ -57,6 +72,7 @@ def main():
     ap.add_argument("--runs", nargs="+", required=True, help="run dirs (each with out/<arm>/result.json)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--which", default="best", choices=["best", "final"])
+    ap.add_argument("--a3", nargs="*", default=[], help="A3's run dirs (each with out/results/*.json)")
     a = ap.parse_args()
     rows = []
     for d in a.runs:
@@ -71,6 +87,7 @@ def main():
                    "seqs_per_iter": r.get("seqs_per_iter"), "procs_per_gpu": None}
             for w in ("best", "final"):
                 row[w] = metrics(r[w])
+            row["to_reach"] = to_reach(os.path.join(os.path.dirname(f), "log.json"))
             rows.append(row)
     rows.sort(key=lambda r: (r["task"], {"base": 0, "es": 1, "grpo": 2}[r["arm"]], r["reward"], r["S_bytes"], r["name"]))
     lines = ["| arm | task | S | reward | iters | best it | pass@1 greedy % | pass@1 sampled % | pass@64 % | letters right, greedy % "
@@ -84,11 +101,55 @@ def main():
                      f"| {fmt(m, 'pass1_sampled')} | {fmt(m, 'pass64')} | {fmt(m, 'pos_greedy')} | {fmt(m, 'pos_sampled')} "
                      f"| {r['train_sec'] / 3600:.2f} | {c.get('flops', 0):.2e} | {c.get('info_pass_bits', 0):.3g} "
                      f"| {c.get('info_dense_bits', 0):.3g} |")
+    lines += ["", "FLOPs (and wall seconds) to first reach a greedy validation letter accuracy:", "",
+              "| arm | task | S | " + " | ".join(f"{int(100 * t)}%" for t in THRESHOLDS) + " |",
+              "|---|---|---|" + "---|" * len(THRESHOLDS)]
+    for r in rows:
+        if r["arm"] == "base":
+            continue
+        S = f"{r['S_bytes'] / 1e3:g} kB" if r["arm"] == "es" else f"{r['S_bytes'] / 1e9:.2f} GB"
+        cells = [f"{v['flops']:.2e} ({v['t']:.0f} s)" if v else "not reached" for v in (r["to_reach"].get(str(t)) for t in THRESHOLDS)]
+        lines.append(f"| {r['name']} | {r['task']} | {S} | " + " | ".join(cells) + " |")
     table = "\n".join(lines)
     print(table)
     os.makedirs(a.out, exist_ok=True)
     open(os.path.join(a.out, f"table_{a.which}.md"), "w").write(table + "\n")
     json.dump(rows, open(os.path.join(a.out, "rows.json"), "w"), indent=1)
+    if a.a3:
+        a3_table(a.a3, a.out)
+
+
+def a3_table(dirs, out):
+    """A3's finished jobs (SFT over its LR grid, then GRPO from the best SFT state), pooled over seeds per (task, S)."""
+    groups = {}
+    for d in dirs:
+        for f in sorted(glob.glob(os.path.join(d, "out", "results", "*.json"))):
+            if f.endswith(".error.json"):
+                continue
+            r = json.load(open(f))
+            groups.setdefault((r["job"]["task"], r["job"]["spec"]), []).append((os.path.basename(d.rstrip("/")), r))
+    lines = ["| A3 arm | task | S | seeds | SFT pass@1 greedy % | SFT letters % | SFT+GRPO pass@1 greedy % | SFT+GRPO letters % | runs |",
+             "|---|---|---|---|---|---|---|---|---|"]
+    rows = []
+    for (task, spec), rs in sorted(groups.items(), key=lambda kv: (kv[0][0], kv[1][0][1]["bits"])):
+        row = {"task": task, "spec": spec, "S_bits": rs[0][1]["bits"], "seeds": [r["job"]["seed"] for _, r in rs],
+               "runs": sorted({run for run, _ in rs})}
+        cells = []
+        for ph in ("sft", "rl"):
+            ex = [x for _, r in rs for x in r[f"{ph}_test_exact"]]
+            pos = [x for _, r in rs for x in r[f"{ph}_test_pos"]]
+            k = int(sum(ex))
+            row[f"{ph}_exact"], row[f"{ph}_exact_ci"] = k / len(ex), cp(k, len(ex))
+            row[f"{ph}_pos"], row[f"{ph}_pos_ci"] = float(np.mean(pos)), boot(pos)
+            cells += [fmt(row, f"{ph}_exact"), fmt(row, f"{ph}_pos")]
+        S = row["S_bits"] / 8
+        S = f"{S / 1e3:.3g} kB" if S < 1e8 else f"{S / 1e9:.2f} GB"
+        lines.append(f"| {spec} | {task} | {S} | {len(rs)} | {' | '.join(cells)} | {', '.join(row['runs'])} |")
+        rows.append(row)
+    table = "\n".join(lines)
+    print(table)
+    open(os.path.join(out, "table_a3.md"), "w").write(table + "\n")
+    json.dump(rows, open(os.path.join(out, "rows_a3.json"), "w"), indent=1)
 
 
 if __name__ == "__main__":
