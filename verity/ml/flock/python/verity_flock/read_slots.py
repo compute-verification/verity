@@ -124,10 +124,12 @@ class ReadSlots(IL.Lowering):
 
 
 def split(C: gf2.Circuit, in_names: Sequence[str], out_names: Sequence[str], name: str, definition, units: IL.Units,
-          slots: Mapping[str, int] = SLOT_TABLES) -> ReadSlots | None:
+          slots: Mapping[str, int] = SLOT_TABLES, stage_ands: int | None = None) -> ReadSlots | None:
     """``C`` (a unit circuit on input ports ``in_names`` and 16-bit output ports ``out_names``, ``units`` its one unit's leaf
     ports) split at its slot reads (the module docstring), or None when it reads no table a slot holds (``slots``: table ->
-    index width; a read's value must be at most `tail.VALUE_BITS` wide). ``C`` is only read."""
+    index width; a read's value must be at most `tail.VALUE_BITS` wide). ``C`` is only read. ``stage_ands``: at most that many
+    ANDs a net, each AND in the first net at or after its operands' with room (more stages, each nearer a power of two, since
+    every net's slot is one: a unit whose reads cut it into a few large nets can need a block twice the flat unit's)."""
     kind, data, lookups = C.kind, C.data, C.lookups
     slot = {g: t for g, (t, idx, w) in enumerate(lookups) if slots.get(t) == len(idx) and w <= TL.VALUE_BITS}
     live = C.live()
@@ -154,12 +156,21 @@ def split(C: gf2.Circuit, in_names: Sequence[str], out_names: Sequence[str], nam
             elif depth[u] < s:
                 need.setdefault(s, set()).add(u)
 
+    if stage_ands is not None and stage_ands < 1:
+        raise ValueError(f"{name}: stage_ands {stage_ands}: at least one AND a net")
+    fill: list[int] = []
     for v in range(len(kind)):
         if v not in live or kind[v] == "in":
             continue
         if kind[v] == "and":
             a, b = data[v]
-            depth[v] = s = max(fd(a), fd(b))
+            s = max(fd(a), fd(b))
+            if stage_ands is not None:
+                while s < len(fill) and fill[s] >= stage_ands:
+                    s += 1
+                fill.extend([0] * (s + 1 - len(fill)))
+                fill[s] += 1
+            depth[v] = s
             note(s, a)
             note(s, b)
             continue
@@ -177,7 +188,7 @@ def split(C: gf2.Circuit, in_names: Sequence[str], out_names: Sequence[str], nam
                 for f in idx:
                     note(inline[g], f)
             depth[v] = inline[g]
-    D = max(rd.values())
+    D = max(depth[v] for v in live)
     a_at = [(nm, f, fd(f)) for nm, f in C.asserts]
     for _nm, f, s in a_at:
         note(s, f)

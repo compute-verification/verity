@@ -1,8 +1,8 @@
 """`read_slots`: a unit's reads of the pinned MUFU tables split out to C-Flock lookup slots. On a unit reading EX2, then RCP of
 a sum over it (depth 2, a sigmoid's shape), with a depth-0 word returned by the last stage: the unit, the slots and the stages
 compute what the flat circuit does on every lane, and a flipped unit row fails its lane; the wires fill every stage and slot
-input once, each from a port of its width, each stage reading only earlier stages and slots; a unit reading no slot table
-isn't split. Through `UnitStager`, the composed statement names the slots and the last stage's returned outputs (slotted when
+input once, each from a port of its width, each stage reading only earlier stages and slots; a cap on a net's ANDs cuts the
+same unit into more stages, none past the cap, computing the same; a unit reading no slot table isn't split. Through `UnitStager`, the composed statement names the slots and the last stage's returned outputs (slotted when
 the output words aren't a power of two times 16 bits), and its staged outputs are the IR reference's."""
 from __future__ import annotations
 
@@ -78,7 +78,10 @@ def test_the_slots_and_stages_compute_the_flat_circuit(split):
 
 
 def test_the_wires_fill_every_input_once_from_a_port_of_its_width(split):
-    _C, low = split
+    _check_wires(split[1])
+
+
+def _check_wires(low) -> None:
     st = low.tail.stages
     outs = {"unit": low.layout.out_bits, **{f"stage{i}": s.layout.out_bits for i, s in enumerate(st)}}
     ins = {f"stage{i}": s.layout.in_bits for i, s in enumerate(st)}
@@ -95,6 +98,27 @@ def test_the_wires_fill_every_input_once_from_a_port_of_its_width(split):
     assert sorted(seen) == sorted((n, p) for n, ws in ins.items() for p in range(len(ws)))
     assert [t[0] for t in st[-1].outs] == ["ret"] * 3 and low.tail.slotted_rets
     assert low.units.tail_rets == [0, 1, 2] and low.units.cut and {k for k, _ in low.units.out_src[0]} == {"cut"}
+
+
+def test_a_cap_on_a_nets_ands_splits_it_into_more_stages_computing_the_same():
+    C = gf2.Circuit()
+    _sigmoid(C)
+    whole = RS.split(C, IN, OUT, "unit/read-slots-toy", SimpleNamespace(id="toy"), _units(4, 3))
+    cap = max(whole.layout.counts["ands"], *(st.layout.counts["ands"] for st in whole.tail.stages)) // 3
+    low = RS.split(C, IN, OUT, "unit/read-slots-capped", SimpleNamespace(id="toy"), _units(4, 3), stage_ands=cap)
+    nets = [low.layout, *(st.layout for st in low.tail.stages)]
+    assert len(nets) > 3 and all(0 < lay.counts["ands"] <= cap for lay in nets[:-1]) and nets[-1].counts["ands"] <= cap
+    assert sum(lay.counts["ands"] for lay in nets) == sum(lay.counts["ands"] for lay in [whole.layout, *(st.layout for st in whole.tail.stages)])
+    _check_wires(low)
+    rng = np.random.default_rng(11)
+    xs = EDGES + [int(v) for v in rng.integers(0, 1 << 32, 22, dtype=np.uint64)]
+    ys = EDGES[::-1] + [int(v) for v in rng.integers(0, 1 << 32, 22, dtype=np.uint64)]
+    flat = _flat(xs, ys)
+    got, _cut, ok = low.evaluate(flat)
+    want, _ = whole.evaluate(flat)[:2]
+    assert ok == (1 << len(xs)) - 1 and np.array_equal(got, want)
+    with pytest.raises(ValueError, match="stage_ands"):
+        RS.split(C, IN, OUT, "unit/read-slots-zero", SimpleNamespace(id="toy"), _units(4, 3), stage_ands=0)
 
 
 def test_a_unit_reading_no_slot_table_is_not_split():
