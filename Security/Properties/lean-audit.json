@@ -1072,10 +1072,16 @@
    "type_hash": "c5c91cdf640198af01ce5e2e90ba3ba4e42c21fc97c0610eb0ad09a01671615c"
   },
   "Properties.NetworkRecords.noGridAcceptsMore": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": ["Properties.NetworkRecords.noGridAcceptsMore : Properties.NetworkRecords.NoGridAcceptsMore"],
+   "assumptions": [],
+   "type_hash": "34f6be27c3079d33abff38adbc90f5aeb66dd7446e7a2efada385c63921aa1c3"
   },
   "Properties.NetworkRecords.noGridMeans": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": ["Properties.NetworkRecords.noGridMeans : Properties.NetworkRecords.NoGridMeans"],
+   "assumptions": [],
+   "type_hash": "9e643a105f5704513bd184fa62a05149067300421a23658f5650e0bfc18672ee"
   },
   "Properties.Pouw.Check.acceptMeans": {
    "owner": "@compute-accounting",
@@ -4343,6 +4349,8 @@
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
+    "Properties.NetworkRecords.noGridAcceptsMore",
+    "Properties.NetworkRecords.noGridMeans",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -4423,6 +4431,8 @@
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
+    "Properties.NetworkRecords.noGridAcceptsMore",
+    "Properties.NetworkRecords.noGridMeans",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -4590,6 +4600,8 @@
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
+    "Properties.NetworkRecords.noGridAcceptsMore",
+    "Properties.NetworkRecords.noGridMeans",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -5179,6 +5191,8 @@
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
+    "Properties.NetworkRecords.noGridAcceptsMore",
+    "Properties.NetworkRecords.noGridMeans",
     "Properties.Pouw.Commit.coinAccepts",
     "Properties.Pouw.Commit.coinBinding",
     "Properties.Pouw.Commit.coinNumbers",
@@ -5212,6 +5226,8 @@
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
+    "Properties.NetworkRecords.noGridAcceptsMore",
+    "Properties.NetworkRecords.noGridMeans",
     "Properties.Pouw.Commit.coinAccepts",
     "Properties.Pouw.Commit.coinBinding",
     "Properties.Pouw.Commit.coinNumbers",
@@ -5302,7 +5318,9 @@
     "Properties.NetworkCertifier.undecidedPending",
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkRecords.acceptMeans",
-    "Properties.NetworkRecords.answerAcceptMeans"
+    "Properties.NetworkRecords.answerAcceptMeans",
+    "Properties.NetworkRecords.noGridAcceptsMore",
+    "Properties.NetworkRecords.noGridMeans"
    ]
   },
   "MemoryChallenger.FrameV3": {
@@ -5683,7 +5701,9 @@
     "Properties.NetworkCertifier.undecidedPending",
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkRecords.acceptMeans",
-    "Properties.NetworkRecords.answerAcceptMeans"
+    "Properties.NetworkRecords.answerAcceptMeans",
+    "Properties.NetworkRecords.noGridAcceptsMore",
+    "Properties.NetworkRecords.noGridMeans"
    ]
   },
   "NetworkCheck.Certificate": {
@@ -5781,7 +5801,9 @@
     "Properties.NetworkCertifier.undecidedPending",
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkRecords.acceptMeans",
-    "Properties.NetworkRecords.answerAcceptMeans"
+    "Properties.NetworkRecords.answerAcceptMeans",
+    "Properties.NetworkRecords.noGridAcceptsMore",
+    "Properties.NetworkRecords.noGridMeans"
    ]
   },
   "NetworkCheck.Check": {
@@ -5879,11 +5901,13 @@
     "Properties.NetworkCertifier.undecidedPending",
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkRecords.acceptMeans",
-    "Properties.NetworkRecords.answerAcceptMeans"
+    "Properties.NetworkRecords.answerAcceptMeans",
+    "Properties.NetworkRecords.noGridAcceptsMore",
+    "Properties.NetworkRecords.noGridMeans"
    ]
   },
   "NetworkCheck.Records": {
-   "digest": "cf89144808b462e4da8d72e7308f43e096cfb13b32359beaef32bdcfcc189913",
+   "digest": "6860ab656070e758e8d3a9ead218cd46b82fd42b8d6bb0a6b8a18ae4103e76de",
    "definitions": {
     "NetworkCheck.Records.ByteEvidence": "aa580ff61f821fabe5e248a95383f2dd41c8feb9df229aa23b945432e9a56338",
     "NetworkCheck.Records.ByteEvidence.links": "b73e6b3cbefa0c40337c3be09433789a9542fdfc99d418eb20158be63520c062",
@@ -5917,8 +5941,10 @@
     "NetworkCheck.Records.egressVerdict": "d8daab298c85927bd4069a58944e274beb2fa549c67c49b643ffcafe330d16ba",
     "NetworkCheck.Records.egressVerdict._sparseCasesOn_1": "2f0aac85096c170d6cc63213b9abea5fcf33195959cb4b018110eb85e9814806",
     "NetworkCheck.Records.egressVerdict._sparseCasesOn_4": "edb070ed1d3452e98d6b9b6baeb1b6fcb2ff5fa785ed1fe0fafd88aac7513da9",
+    "NetworkCheck.Records.egressVerdictNoGrid": "f66400788592f9223d86c4f945b9cf439bb0c4f9ff2732f2f62784e4dae6fd48",
     "NetworkCheck.Records.enqueueCounts": "f93ce2c8694803daf1a089d881b7969bd87bac809122a2afe373fa0096ee4b66",
     "NetworkCheck.Records.evaluate": "65f46746457a564f725444720f12a8cca14e892233639314d2d48912eaf8efe1",
+    "NetworkCheck.Records.evaluateNoGrid": "eca0854882cc6b8d524e8deaeab34c23c5f470476c290e91693cfa99ae43ea87",
     "NetworkCheck.Records.evidenceOf": "1c7b4d0aa93d56b977ef99caa2d9e38c146c4155e9f3a84af1db4f57becf110c",
     "NetworkCheck.Records.expectedGridsOfBytes": "8f74648cb8761964d8896248caf4ea5b2ba58e3687ea239d3d701de56329c9b0",
     "NetworkCheck.Records.found": "fc17516692bbd5726408248ec529a33164e0c6275250790cb46d552f87e94e1c",
@@ -5932,11 +5958,13 @@
     "NetworkCheck.Records.single": "560486bd8b4951978ad0af3e4fcd4324751e3b30d883df3d960cb71055ca4f7f",
     "NetworkCheck.Records.statusViolation": "8d87030b1a9ddc3dfdc77bafd96d29e7a9a0bfcdd3c3da7a7a37db0b120c50d0",
     "NetworkCheck.Records.taggedSha256": "70afbe7bc6af0bce21f5412ff78660a0c28c78041c149f1703def3b035a7db1f",
+    "NetworkCheck.Records.uncertifiedEgress": "d5e9ad9e9cc81c37514fa2d12cd2ad5fb45b466926b7d13014f9b86b28b2b2ea",
     "NetworkCheck.Records.unhex": "6208d9f35c6b6ca3e1030618e0a9ca1f54ba5265a849233f8c711761470530cd",
     "NetworkCheck.Records.unhexChars": "d4859f71f162b192288e075f35895d06d1bb740654702b58938b5c64a1c3b9b5",
     "NetworkCheck.Records.unhexChars._sparseCasesOn_1": "6b11bc5abff59df46dbf88223d83e02779a22838d5bd8d75b3d872b759ff07a1",
     "NetworkCheck.Records.unitSync": "f7ff181ee12dd578ee4a1da78487650f7204997a582d8efd604744369147b387",
     "NetworkCheck.Records.verdicts": "1002afbebf47195a12e9c8d2c026dbedbfae4273ca105a004dfee78cdc4252d3",
+    "NetworkCheck.Records.verdictsNoGrid": "2b8c7a82d69b48f210b4f0ab214c2d12e5454bbffe9c16bfdaffaf01fa723f6d",
     "_private.NetworkCheck.Records.0.NetworkCheck.Records.be": "e9283418f97db50b54b9675ddf25cb3e269422c5e202858dffe091747adf74b0",
     "_private.NetworkCheck.Records.0.NetworkCheck.Records.committed": "d376f5fef3e45825e3a8b9ec9f57e86a51ef521e78dcde6bf5fa8d22b3556f80",
     "_private.NetworkCheck.Records.0.NetworkCheck.Records.many": "28cf0223fc18c4d5f9fe9f5122d58eb53a87090784b287235f4e7d38cf06da53",
@@ -5947,7 +5975,12 @@
     "_private.NetworkCheck.Records.0.NetworkCheck.Records.utf8": "a934f925d8e5ba929b99b347e590e9acdf4d93cbe5cb0c6a42dcc93876b74065",
     "_private.NetworkCheck.Records.0.NetworkCheck.Records.whole": "0fbbd7f9c659ecc4d039813c79aa5ca08e4858850a414626595d94584d69987b"
    },
-   "guarantees": ["Properties.NetworkRecords.acceptMeans", "Properties.NetworkRecords.answerAcceptMeans"]
+   "guarantees": [
+    "Properties.NetworkRecords.acceptMeans",
+    "Properties.NetworkRecords.answerAcceptMeans",
+    "Properties.NetworkRecords.noGridAcceptsMore",
+    "Properties.NetworkRecords.noGridMeans"
+   ]
   },
   "PousCheck.Certificate": {
    "digest": "60823f15802d0eb0a2e159b2f45adfffc1580587e706ffadbbc4d43e1e6387e5",
@@ -7214,9 +7247,10 @@
    ]
   },
   "Properties.NetworkRecords": {
-   "digest": "faf84e55bde9a4b766bc67d0c3fcd832bd2b579f3e3e131bb7cf2fb1ebb759c9",
+   "digest": "e387f31794a1ed7791dff190b54108342a3eaf58b615618ea998492149e8e674",
    "definitions": {
     "Properties.NetworkRecords.AcceptMeans": "09f03ac41811964e9d3cca97dafa0d499bd3ff375743778da2a7d36f42c3ae47",
+    "Properties.NetworkRecords.AllGridOnly": "46ba429846836d3a0c1924295436fe6ca3771079b94fa022f7670a867f0af207",
     "Properties.NetworkRecords.AnswerAcceptMeans": "3d1a48abc63114123680747312f00e0117ade30be3c4dc70c119b57fcfa3e7da",
     "Properties.NetworkRecords.CertificateVerifies": "2ef07cfd513e7bb68a8b1151eca5416b6e87d37fce98182dbc335a2a811e8f4f",
     "Properties.NetworkRecords.CertifiesProgram": "5730e98bc62b6bad5874223e0d5bb7308ed5399672a7a439ae107c25adebb08f",
@@ -7224,10 +7258,14 @@
     "Properties.NetworkRecords.Complete": "bf6ddc1dcb04f2db5ce33c9483dfe65bc4ff31d6c2648c37eb14cf53c1d9d2f2",
     "Properties.NetworkRecords.EgressRecord": "122ab96a9f0f059e3e8fda604896f3c12abc1baa2f1c4764f79565a8d914a89a",
     "Properties.NetworkRecords.FramesOf": "15939184318b9517079ed653af45cc40bfc707ff19a88343c31ce50a25ce0549",
+    "Properties.NetworkRecords.GridOnly": "b65cf9544799491224141ae8eb84a2bbe907897dc9f4d6151b5b6cd53584902c",
     "Properties.NetworkRecords.IngressHead": "99cddc40e9dca66239349a9bf880a11f53216342cb4008cd5ada0f59fb4a4404",
     "Properties.NetworkRecords.IngressRecord": "2438ab22aaf2fac577e4cf6607e310c9a986af777e4c3429f898e6bb727d29be",
+    "Properties.NetworkRecords.NoGridAcceptsMore": "b0ccdf23b4690da05b24f617110ab85a1f701296b37c069fa70dc8b2a1145fc0",
+    "Properties.NetworkRecords.NoGridMeans": "9b4ead9703ad435583e637a684f0ab28fc150385aaf5666e9f328b7f4b5bbb9c",
     "Properties.NetworkRecords.ProgramRecord": "5f35e95dd10e2b871cc331bcea68434ecd8c607f5d85ddc1e57864be1d135c99",
     "Properties.NetworkRecords.ProgramRecords": "4bce78a33b8b2422080bcb036f3e4251c9b1f0ee45db9081a07f7b968a9f25cc",
+    "Properties.NetworkRecords.UncertifiedEgress": "65581f0d33a6f6f2ed8f884d601aff4caf57f9c21fae5855e4ffea38313b60cf",
     "Properties.NetworkRecords.committedInputs": "96a7a4e12b06e33d6f229a23d2e4c06b6e2da0001f5d847fda51b2ddb2c2a003",
     "Properties.NetworkRecords.frames": "f0bb42cc11f8d376a5057eabb04fffd61c5bf86ea9a6fdaadcca57fea0a57abf",
     "Properties.NetworkRecords.header": "da3389e9690ec7ce0678ad70686c8b07d0c32d1cfd62673ad7d8837248e15fd1",
@@ -7236,7 +7274,12 @@
     "Properties.NetworkRecords.rowInput": "243fb8f306d2529ac2b31d6bc1352b5d7f4904644c0cea63f747cc2bd7a3cab0",
     "Properties.NetworkRecords.taggedInput": "1b0ac9e282529186b7f32fd0627fed38f1a3e793a389a0c900c96d265cdc7073"
    },
-   "guarantees": ["Properties.NetworkRecords.acceptMeans", "Properties.NetworkRecords.answerAcceptMeans"]
+   "guarantees": [
+    "Properties.NetworkRecords.acceptMeans",
+    "Properties.NetworkRecords.answerAcceptMeans",
+    "Properties.NetworkRecords.noGridAcceptsMore",
+    "Properties.NetworkRecords.noGridMeans"
+   ]
   },
   "Properties.Pous": {
    "digest": "0e1dfcc2e6138809505f273c26fba1a88545ffe14966f6ab660bd34b32fe9732",
