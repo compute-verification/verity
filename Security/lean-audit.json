@@ -7414,6 +7414,9 @@
    "assumptions": [],
    "type_hash": "29c9c2c38c76177811ea5bcb0c6f42fe547c4cfcdc9c46e78b9415d13b34cf35"
   },
+  "Nci.Cover.SecurityProofs.CoverTrainingChained": {
+   "owner": "@training"
+  },
   "Nci.Cover.SecurityProofs.CoveringBoundAdditive": {
    "owner": "@training",
    "signature": ["Nci.Cover.SecurityProofs.CoveringBoundAdditive : Nci.Cover.Guarantees.CoveringBoundAdditive"],
