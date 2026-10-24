@@ -62,7 +62,7 @@ theorem instr_frame (dv : W1.W1Device) (i : W1.Instr) (M : W1.Mem) {x : W1.Addr}
     Function.update_of_ne (by rintro rfl; omega) v M
   have fil : ∀ (d : W1.Addr) (n : ℕ) (g : ℕ → ℕ), d.2 + n ≤ x.2 → W1.Mem.fill M d n g x = M x := fun d n g hd => by
     show (if x.1 = d.1 ∧ d.2 ≤ x.2 ∧ x.2 < d.2 + n then W1.w32 (g (x.2 - d.2)) else M x) = M x
-    exact if_neg fun hc => absurd hc.2.2 (by omega)
+    exact ite_eq_right fun hc => absurd hc.2.2 (by omega)
   cases i with
   | mov d _ => exact upd d _ h
   | ld d _ _ _ => exact upd d _ h
@@ -80,9 +80,9 @@ theorem instr_frame (dv : W1.W1Device) (i : W1.Instr) (M : W1.Mem) {x : W1.Addr}
   | mma f d _ _ _ _ _ =>
     simp only [W1.Instr.exec]
     by_cases hh : dv.has f = true
-    · rw [if_pos hh]
+    · rw [ite_eq_left hh]
       exact fil d _ _ h
-    · rw [if_neg hh]
+    · rw [ite_eq_right hh]
   | sha d _ _ =>
     simp only [W1.Instr.exec]
     exact fil d 16 _ h
@@ -127,15 +127,12 @@ def ticketOne : W1.Prog := ⟨fun _ => [1], fun _ => .op (.mov (W1.ticketAt 0 0 
 
 theorem ticketOne_ticket (dv : W1.W1Device) (salt : List ℕ) (U : Workload) (act : ℕ → Codes) (σ : State) :
     (W1.final dv salt ticketOne U act σ).mem (W1.ticketAt 0 0 0) = 1 := by
-  first
-    | (simp [W1.final, ticketOne, W1.exec, W1.Instr.exec, W1.init, W1.constAt, W1.w32]; done)
-    | rfl
+  simp [W1.final, ticketOne, W1.exec, W1.Instr.exec, W1.init, W1.constAt, W1.w32]
 
 theorem readout_ticket (U : Workload) (act : ℕ → Codes) (M : W1.Mem) (hN : 0 < U.layout.N) (i j : ℕ) :
     (W1.readout U act M 0).map (fun c => c.ticket i j) = some (M (W1.ticketAt 0 i j)) := by
-  first
-    | (simp only [W1.readout, if_pos hN]; rfl)
-    | (simp [W1.readout, hN]; done)
+  simp only [W1.readout, ite_eq_left hN]
+  rfl
 
 /-- **W1 priced is not closed under splitting rows into units**, for every device and salt encoding, given an oracle
 `H` and a salt `s`. On `oneU`, `ticketOne` commits ticket word `(0, 0)` of 1; the split transcript gives the one
@@ -151,25 +148,18 @@ theorem w1Priced_not_splitClosed (dv : W1.W1Device) (salt : S → List ℕ) (H :
   have hsplit := splitTranscript_rowIdx
     (W1.readout oneU zeroAct (W1.final dv (salt s) ticketOne oneU zeroAct []).mem)
     (L := oneU.layout) (u := 0) (i := 0) (by decide) (by decide)
-  have h00 : rowIdx oneU.layout 0 0 = 0 := by
-    first
-      | rfl
-      | (simp [rowIdx, rowOffset]; done)
+  have h00 : rowIdx oneU.layout 0 0 = 0 := rfl
   rw [h00, ← hrun] at hsplit
   obtain ⟨B, hB⟩ : ∃ B, codeBound (W1.Prog.code prog' (splitWorkload oneU).layout) ≤ B := ⟨_, le_rfl⟩
-  have hN' : 0 < (splitWorkload oneU).layout.N := by
-    first
-      | decide
-      | (simp [splitWorkload, splitLayout, rowsOf, rowOffset, oneU]; done)
+  have hN' : 0 < (splitWorkload oneU).layout.N := by decide
   have hL := readout_ticket (splitWorkload oneU) act' (W1.final dv (salt s) prog' (splitWorkload oneU) act' []).mem
     hN' B 0
   have hR : Option.map (fun c : Commit => c.ticket B 0)
       (Option.map (fun c => rowCommit c 0)
         (W1.readout oneU zeroAct (W1.final dv (salt s) ticketOne oneU zeroAct []).mem 0)) =
       some ((W1.final dv (salt s) ticketOne oneU zeroAct []).mem (W1.ticketAt 0 0 0)) := by
-    first
-      | (rw [Option.map_map]; exact readout_ticket oneU zeroAct _ (by decide) 0 0)
-      | rfl
+    rw [Option.map_map]
+    exact readout_ticket oneU zeroAct _ (by decide) 0 0
   have key := Option.some.inj (hL.symm.trans ((congrArg (Option.map fun c : Commit => c.ticket B 0) hsplit).trans hR))
   rw [final_ticket_zero dv (salt s) prog' (splitWorkload oneU) act' [] 0 B 0 hB, ticketOne_ticket] at key
   omega
