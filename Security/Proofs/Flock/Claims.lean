@@ -43,6 +43,10 @@ import Proofs.Flock.Claims.Recursion.VStar
 import Proofs.Flock.Claims.Recursion.VStarBound
 import Proofs.Flock.Claims.Recursion.BoundDeploy
 import Proofs.Flock.Claims.Recursion.BoundDeployE
+import Proofs.Flock.Claims.Recursion.FlockKSDeployE
+import Proofs.Flock.Claims.Recursion.ConflictTiedE
+import Proofs.Flock.Claims.Recursion.RepErase
+import Proofs.Flock.Claims.Recursion.CallsBridgeE
 import Proofs.Flock.Claims.Recursion.PlainKSAbortFails
 import Proofs.Flock.Claims.Recursion.BoundRun
 import Proofs.Flock.Claims.Recursion.BoundForks
@@ -82,6 +86,8 @@ import Proofs.Flock.Claims.Recursion.LogWalk
 import Proofs.Flock.Claims.Recursion.DecodeLog
 import Proofs.Flock.Claims.Recursion.VerdictLog
 import Proofs.Flock.Claims.Recursion.CallsAgree
+import Proofs.Flock.Claims.Recursion.CallsAgreeE
+import Proofs.Flock.Claims.Recursion.LastColsE
 import Proofs.Flock.Claims.Recursion.CallsOfProofs
 import Proofs.Flock.Claims.Recursion.LastBindsClosed
 import Proofs.Flock.Claims.Recursion.KSLin2PlainClosed
@@ -117,6 +123,7 @@ import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Claims.Recursion.OpensReads
 import Proofs.Flock.Claims.Recursion.CapOpens
 import Proofs.Flock.Claims.Recursion.TopsOpens
+import Proofs.Flock.Claims.Recursion.KSLin2E
 import Proofs.Flock.Claims.Recursion.BoundDeployOuter
 import Proofs.Flock.Claims.Counted
 import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
