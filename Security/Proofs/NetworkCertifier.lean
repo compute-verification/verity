@@ -85,13 +85,13 @@ theorem EncardIngressObsDecodableLeContentsPerWindow :
   @NetTiming.encard_ingress_obsDecodable_le_contents_perWindow
 
 theorem EncardAccSeqsWithinLeConstantRate : NetTiming.Guarantees.EncardAccSeqsWithinLeConstantRate :=
-  fun code hseg hbits b T ss frames op n D m _ hm =>
-    NetTiming.encard_accSeqsWithin_le_constantRate code hseg hbits b T ss frames op n D m hm
+  fun bits hbits b T ss frames op n D m _ hm =>
+    NetTiming.encard_accSeqsWithin_le_constantRate bits hbits b T ss frames op n D m hm
 theorem EncardDecodableWithinLeCompiled : NetTiming.Guarantees.EncardDecodableWithinLeCompiled :=
-  fun I T ss code hseg hbits b compilerOf env hpre hdet n D m _ hm =>
-    NetTiming.encard_decodableWithin_le_compiled I T ss code hseg hbits b compilerOf env hpre hdet n D m hm
+  fun I T ss bits hbits b compilerOf env hpre hdet n D m _ hm =>
+    NetTiming.encard_decodableWithin_le_compiled I T ss bits hbits b compilerOf env hpre hdet n D m hm
 theorem EncardDecodableWithinLeCompiledPerWindow : NetTiming.Guarantees.EncardDecodableWithinLeCompiledPerWindow :=
-  fun I T ss code hseg hbits b compilerOf env hpre hdet D =>
-    NetTiming.encard_decodableWithin_le_compiled_perWindow I T ss code hseg hbits b compilerOf env hpre hdet D
+  fun I T ss bits hbits b compilerOf env hpre hdet D =>
+    NetTiming.encard_decodableWithin_le_compiled_perWindow I T ss bits hbits b compilerOf env hpre hdet D
 
 end NetTiming.SecurityProofs

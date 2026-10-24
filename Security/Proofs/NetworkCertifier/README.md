@@ -18,11 +18,11 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                dataflow conditions
 ../../Models/NetworkCertifier/Guarantees.lean      trusted: each guarantee as a `def G : Prop` (Proposition 2, Theorem 3, Theorem 3 for
                                the constant-rate Program, the ingress bound)
-../../Definitions/NetworkCertifier/AdviceString.lean  trusted: the advice string's codec per window (AdviceCodec: seg, bits), the
-                               compiler and the compiled Program, and acceptance within per-window caps (AcceptedWithin,
+../../Definitions/NetworkCertifier/AdviceString.lean  trusted: the per-window caps on the advice string's charge (WithinCaps),
+                               the compiler and the compiled Program, and acceptance within the caps (AcceptedWithin,
                                AccSeqsWithin)
-../../Models/NetworkCertifier/Assumptions/AdviceString.lean  trusted: the codec's two named assumptions (SegmentsDecode, BitsCount) and the
-                               compiler's (CompilerDeterministic, CompilerPrecommitted)
+../../Models/NetworkCertifier/Assumptions/AdviceString.lean  trusted: the charge's named assumption (BitsCount) and the
+                               compiler's two (CompilerDeterministic, CompilerPrecommitted)
 ../../Models/NetworkCertifier/Guarantees/AdviceString.lean   trusted: the leak bound, the advice string's charge in the accepted-runs bound
 Lemmas.lean     the statements that are only steps of the guarantees' proofs, Theorem 1(b) among them,
                                each a `def G : Prop` under the same namespace (`Guarantees.G`)
@@ -37,7 +37,7 @@ Ingress.lean    the ingress bound (the occupancy of the ingress grid, read from 
 PerWindow.lean  the last two over the run's first `m` whole windows: the factor per window and
                                          per link-window
 AdviceString.lean  the leak bound (the advice string's charge, through the wire, per window) and the two
-                                         codecs that meet `BitsCount`
+                                         encodings whose length meets `BitsCount`
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftest runs, equal to the
@@ -136,11 +136,12 @@ that bound exactly, below the 27 of `r = S` (`allocated_witness_tight`), so `All
 
 ## The records
 
-The lock (`lean-audit.json`'s `guarantees`) holds the 22 statements of `Guarantees.lean`, each listed as
-`NetTiming.SecurityProofs.G` and proved by the lemma of the same statement whose name it spells in UpperCamelCase. All 22
-are under `shape.frozen` as `frozen (no-function)`: each is stated over the model (an arbitrary `Interaction`, an abstract
-`Program`'s `AccSeqs`, `expectedRow`, or the grids themselves), not over the network check's code, and an accepted run
-reaches them through `AcceptedRunsAreProgramRuns`. Four are the theorems whose bounds the calibration reports
+The lock (`lean-audit.json`'s `guarantees`) holds the 22 statements of `Guarantees.lean` and the leak bound's three
+(`Guarantees/AdviceString.lean`), each listed as `NetTiming.SecurityProofs.G` and proved by the lemma of the same
+statement whose name it spells in UpperCamelCase. All 25 are under `shape.frozen` as `frozen (no-function)`: each is
+stated over the model (an arbitrary `Interaction`, an abstract `Program`'s `AccSeqs`, `expectedRow`, or the grids
+themselves; the leak bound also over an abstract charge and compiler), not over the network check's code, and an
+accepted run reaches them through `AcceptedRunsAreProgramRuns`. Four are the theorems whose bounds the calibration reports
 (`verity.core.protocols.certifier.calibration`, `PROTOCOL.md`'s "Capacity"):
 
 - egress, for the shipped schedule (`NetTiming.SecurityProofs.Schedule`, `NetTiming.SecurityProofs.PerWindow`):
@@ -148,7 +149,7 @@ reaches them through `AcceptedRunsAreProgramRuns`. Four are the theorems whose b
 - ingress, the K charge (`NetTiming.SecurityProofs.Ingress`, `NetTiming.SecurityProofs.PerWindow`):
   `EncardIngressObsDecodableLe` and `EncardIngressObsDecodableLePerWindow`.
 
-The other 18 are the rest of the Capacity table's bounds and the schedule's causality rule:
+The other 21 are the rest of the Capacity table's bounds and the schedule's causality rule:
 
 - **Proposition 2** (`NetTiming.SecurityProofs.Occupancy`): `CardFree`, `CardLeftPacked`, `CardCountsEqLe`,
   `EncardFifoGridsLeOfAvailable`, `EncardFifoGrids`.
@@ -160,6 +161,8 @@ The other 18 are the rest of the Capacity table's bounds and the schedule's caus
 - **The ingress bound** (`NetTiming.SecurityProofs.Ingress`, `NetTiming.SecurityProofs.PerWindow`):
   `EncardIngressDecodableLe`, `EncardIngressObsDecodableLeContents`, `EncardIngressDecodableLeContents`,
   `EncardIngressObsDecodableLeContentsPerWindow`.
+- **The leak bound** (`NetTiming.SecurityProofs.AdviceString`): `EncardAccSeqsWithinLeConstantRate`,
+  `EncardDecodableWithinLeCompiled`, `EncardDecodableWithinLeCompiledPerWindow`.
 
 **The program's agreements, proved and audited, not guarantees.** Four theorems tie the difftest to these definitions
 (`NetTiming.SecurityProofs.Code`): the difftest holds the Python audit

@@ -427,14 +427,13 @@ records, `cr/sha-512`, the signature's unforgeability and an honest network cert
 | Ingress, per link-window (the K charge's unit) | `T·log2(r_in + 1)` bits per link-window over the first m whole windows, plus `T·log2 D` of jitter per window, statuses complete. Unlike egress, each step's bound does not depend on what came before | `SecurityProofs.EncardIngressObsDecodableLePerWindow`; content plus timing, `SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow`; for a decoder of the wire, W2 and `SecurityProofs.EncardIngressDecodableLe` at n = m·T |
 
 **The advice string's row.** The advice string is the constant-rate Program's content advice, so its charge is `A_c`.
-The Lean statement keeps the codec abstract (`Security/Definitions/NetworkCertifier/AdviceString.lean`): window w's
-segment of `encode(advice)` and its charge `bits(advice, w)`. I1's codec must meet two named assumptions, which its
-tests mirror:
-
-- `SegmentsDecode`: the per-window segments determine the advice (`decode(encode(a)) == a`).
-- `BitsCount`: in each window, at most `2^c` segments are charged `c` bits or fewer. Two codecs meet it, as Lean proves:
-  self-delimiting segments charged at least their length (`bitsCount_of_prefixFree`), and any segments charged their
-  length plus one (`bitsCount_of_lengthSucc`).
+The Lean statement keeps the charge abstract (`Security/Definitions/NetworkCertifier/AdviceString.lean`): a function
+`bits(advice, w)` to ℕ, the bits charged to window w. I1's `bits` must meet one named assumption, `BitsCount`, which
+its tests mirror: at most `2^c` advice strings are charged `c` bits or fewer over all windows. Lean proves two ways to
+meet it: the charges sum to at least the length of a prefix-free encoding of the advice (`bitsCount_of_prefixFree`),
+or to at least one more than the length of any injective encoding, one with `decode(encode(a)) == a`
+(`bitsCount_of_lengthSucc`). The per-window charges need not be self-delimiting on their own; only their sum is
+counted.
 
 The bound charges the caps `b_w`, not the realized lengths, since a run counts if any advice within the caps explains
 it. The compiler must be registered before the run (`CompilerPrecommitted`), and its frames must read only the advice

@@ -9,8 +9,8 @@ import Mathlib.Algebra.BigOperators.Fin
 
 The advice string is the constant-rate Program's content advice, so the accepted-runs bound
 `A_c + W·log2 #Σ_sync + n·log2 D` holds with `A_c = Σ_w b w`: the public per-window caps on the advice string's
-charge, fixed before the run. These guarantees state it, for any codec that meets `SegmentsDecode` and `BitsCount`
-and any compiler that is precommitted and deterministic. Acceptance is existential (`AcceptedWithin`): a run counts
+charge, fixed before the run. These guarantees state it, for any charge `bits` that meets `BitsCount` and any compiler
+that is precommitted and deterministic. Acceptance is existential (`AcceptedWithin`): a run counts
 if some advice within the caps explains it, so no premise holds only of an honest run. Each run's egress must equal the
 compiled Program's (`Accepted`), which the all-frames egress tie backs.
 
@@ -26,15 +26,15 @@ open Finset
 set_option linter.unusedVariables false
 
 /-- **The leak bound, on accepted sequences.** Take the constant-rate Program whose content advice is an advice string,
-with a codec whose segments decode and whose `bits` counts. Its observation sequences of length `n` (within the `W`
+charged `bits a w` in window `w`, where `bits` counts. Its observation sequences of length `n` (within the `W`
 windows with advice, and the first `m` windows), with jitter below `D`, accepted with advice charged at most `b w` in
 every window `w`, number at most `2^(Σ_w b w) · #Σ_sync^min(W, m) · D^n`. That is
 `Σ_w b w + min(W, m)·log2 #Σ_sync + n·log2 D` bits. -/
 def EncardAccSeqsWithinLeConstantRate : Prop :=
-  ∀ {L K S W : ℕ} {In Adv : Type} (code : AdviceCodec Adv W) (hseg : SegmentsDecode code) (hbits : BitsCount code)
-    (b : Fin W → ℕ) (T : ℕ) (ss : SyncSet) (frames : List In → Adv → Fin L → List LogicalFrame)
-    (op : ℕ → List (Obs L K S) → In) (n D m : ℕ) (hn : n ≤ W * T) (hm : n ≤ m * T),
-    (AccSeqsWithin code b (constantRate (S := S) T W ss frames) op n D).encard ≤
+  ∀ {L K S W : ℕ} {In Adv : Type} (bits : Adv → Fin W → ℕ) (hbits : BitsCount bits) (b : Fin W → ℕ) (T : ℕ)
+    (ss : SyncSet) (frames : List In → Adv → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In)
+    (n D m : ℕ) (hn : n ≤ W * T) (hm : n ≤ m * T),
+    (AccSeqsWithin bits b (constantRate (S := S) T W ss frames) op n D).encard ≤
       ((2 ^ (∑ w, b w) * ss.size ^ min W m * D ^ n : ℕ) : ℕ∞)
 
 /-- **The leak bound, through the wire (W2 and J).** The compiler is precommitted (the same for every secret) and
@@ -46,14 +46,14 @@ together. -/
 def EncardDecodableWithinLeCompiled : Prop :=
   ∀ {L K S W : ℕ} {Z In Act Wire Adv Ω : Type}
     (I : Interaction L K S Z In Act Wire) (T : ℕ) (ss : SyncSet)
-    (code : AdviceCodec Adv W) (hseg : SegmentsDecode code) (hbits : BitsCount code) (b : Fin W → ℕ)
+    (bits : Adv → Fin W → ℕ) (hbits : BitsCount bits) (b : Fin W → ℕ)
     (compilerOf : Z → Compiler L In Adv Ω) (env : Z → Ω)
     (hpre : CompilerPrecommitted compilerOf) (hdet : ∀ z, CompilerDeterministic (compilerOf z))
     (n D m : ℕ) (hn : n ≤ W * T) (hm : n ≤ m * T)
     (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.certifier view) (hJ : JitterBounded I.certifier D)
     (Zs : Set Z)
     (hacc : ∀ z ∈ Zs,
-      AcceptedWithin code b (compiledProgram (S := S) T W ss (compilerOf z) (env z)) I.op n (I.obsRun z n))
+      AcceptedWithin bits b (compiledProgram (S := S) T W ss (compilerOf z) (env z)) I.op n (I.obsRun z n))
     (dec : List Wire → Z) (hdec : ∀ z ∈ Zs, dec (I.wireRun z n) = z),
     Zs.encard ≤ ((2 ^ (∑ w, b w) * ss.size ^ min W m * D ^ n : ℕ) : ℕ∞)
 
@@ -64,12 +64,12 @@ charged to one window can first show in a later one, so the bound is cumulative 
 def EncardDecodableWithinLeCompiledPerWindow : Prop :=
   ∀ {L K S W : ℕ} {Z In Act Wire Adv Ω : Type}
     (I : Interaction L K S Z In Act Wire) (T : ℕ) (ss : SyncSet)
-    (code : AdviceCodec Adv W) (hseg : SegmentsDecode code) (hbits : BitsCount code) (b : Fin W → ℕ)
+    (bits : Adv → Fin W → ℕ) (hbits : BitsCount bits) (b : Fin W → ℕ)
     (compilerOf : Z → Compiler L In Adv Ω) (env : Z → Ω)
     (hpre : CompilerPrecommitted compilerOf) (hdet : ∀ z, CompilerDeterministic (compilerOf z)) (D : ℕ)
     (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.certifier view) (hJ : JitterBounded I.certifier D)
     (Zs : Set Z)
-    (hacc : ∀ z ∈ Zs, AcceptedWithin code b (compiledProgram (S := S) T W ss (compilerOf z) (env z)) I.op (W * T)
+    (hacc : ∀ z ∈ Zs, AcceptedWithin bits b (compiledProgram (S := S) T W ss (compilerOf z) (env z)) I.op (W * T)
       (I.obsRun z (W * T)))
     (dec : List Wire → Z) (hdec : ∀ z ∈ Zs, dec (I.wireRun z (W * T)) = z),
     Zs.encard ≤ ((∏ w : Fin W, (2 ^ b w * ss.size * D ^ T) : ℕ) : ℕ∞)

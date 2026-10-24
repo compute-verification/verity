@@ -1,27 +1,24 @@
 import Definitions.NetworkCertifier.AdviceString
 import Mathlib.Data.Set.Card
+import Mathlib.Algebra.BigOperators.Fin
 
 /-!
-# The advice string's named assumptions: the codec, and the compiler
+# The advice string's named assumptions: the charge, and the compiler
 
-The leak bound (`Guarantees.AdviceString`) takes four named assumptions. Two are about the codec: Python's `encode`
-and `bits` must meet them. Two are about the registered compiler: it is precommitted, and the advice is its only free
+The leak bound (`Guarantees.AdviceString`) takes three named assumptions. One is about the charge, `bits`, which
+Python's `bits` must meet. Two are about the registered compiler: it is precommitted, and the advice is its only free
 input.
 -/
 
 namespace NetTiming
 
-variable {Adv : Type} {W : ℕ}
+variable {Adv : Type}
 
-/-- **The segments decode** (`decode(encode(a)) = a`): two advice values with the same segment in every window are
-equal. -/
-def SegmentsDecode (code : AdviceCodec Adv W) : Prop := Function.Injective code.seg
-
-/-- **`bits` counts.** In each window, at most `2^c` segments are charged `c` bits or fewer. A self-delimiting code
-charged at least its length meets it (`bitsCount_of_prefixFree`), and so does any code charged its length plus one
-(`bitsCount_of_lengthSucc`), which covers a public cap `ℓ` charged `ℓ + 1`. -/
-def BitsCount (code : AdviceCodec Adv W) : Prop :=
-  ∀ (w : Fin W) (c : ℕ), {s | ∃ a, code.seg a w = s ∧ code.bits a w ≤ c}.encard ≤ ((2 ^ c : ℕ) : ℕ∞)
+/-- **`bits` counts.** At most `2^c` advice values are charged `c` bits or fewer over all windows. It holds when the
+charges sum to at least the length of a prefix-free encoding of the advice (`bitsCount_of_prefixFree`), or to at least
+the length plus one of any injective encoding (`bitsCount_of_lengthSucc`). -/
+def BitsCount {W : ℕ} (bits : Adv → Fin W → ℕ) : Prop :=
+  ∀ c : ℕ, {a | ∑ w, bits a w ≤ c}.encard ≤ ((2 ^ c : ℕ) : ℕ∞)
 
 /-- **The compiler is deterministic, and the advice is its only free input**: its frames depend on the advice and the
 certified ingress, never on its other inputs `Ω` (a clock, coins, or state of the run inside X). -/
