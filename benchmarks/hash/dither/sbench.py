@@ -121,7 +121,11 @@ Arms:
     ARM-kcb      a dither-a-hbc arm on a second h1u_kc build ($HB_H1U_KC_B, e.g. hb_served.sh's HB_KC_FLAGS_B), timed beside
                  ARM on $HB_H1U_KC's
     ARM-cgp      a dither-a-so arm serving at priority (DITHER_SO_PRIO=1) with vLLM's graphs captured at it too
-                 (DITHER_SO_CAPTURE_PRIO=1, `dither_so.capture_at`)
+                 (DITHER_SO_CAPTURE_PRIO=1, `dither_so.capture_at`).  Under SMQ units it keeps every step in the fast
+                 regime while the units' span plus lm_head's 0.7 ms covers the step's cycle: without it, a step whose
+                 units drain before the next dispatch lets them refill their SMs ahead of lm_head, which then runs on
+                 the forward's SMs alone (2.9 ms, not 0.7) and the next steps stay slow; units that end sooner (h1u's
+                 H1U_JXS at 45/64) do that under it too
     ARM-mc32     a dither arm whose worker has 32 hardware queues (CUDA_DEVICE_MAX_CONNECTIONS=32, set before its engine
                  makes the CUDA context)
     ARM-skip, ARM-rd0  a dither-a-so J10-R arm whose dead row blocks are the zero receipt (DITHER_UNITS_SKIP_DEAD=1), or
@@ -133,7 +137,8 @@ Arms:
     ARM-mmq      a dither-a-so arm whose GEMMs take the configs tuned at its own SMQ (MM_CFGS at $DITHER_SO_UNITS_SMQ's
                  Q/D, however its suffixes or SBENCH_ARM_ENV set it), refused at an SMQ MM_CFGS has none for.  J10-R
                  at 47/64: dither-a-hbc-zy-aomn-pt-so8-wea-rd0-smq47o64-mmq with DITHER_SO_UNITS=j10r and HB_KC_FLAGS
-                 ending -DH1U_JCTA=1 -DH1U_WARPS=4 (sbench.sh's dither-a-hbc build)
+                 ending -DH1U_JCTA=1 -DH1U_WARPS=4 (sbench.sh's dither-a-hbc build); at 45/64 under ARM-cgp:
+                 dither-a-hbc-zy-aomn-pt-so8-wea-rd0-smq45o64-cgp-mmq, the same build
 
 `gate` (--gate, before the reps): exact and dither each generate GATE_TOKENS tokens for the 32 requests; dither's window
 checks one B32 decode step (`dither_fused.check`, its transcript buffers 0xA5 before the kernels wrote them) and refuses
@@ -360,9 +365,11 @@ def mm_cfg() -> None:
 
 # ARM-mmq's $DITHER_MM_CFG by the units' "Q/D" ($DITHER_SO_UNITS_SMQ's): dmmsweep.py --block Q/D's best.json
 # dither_mm_cfg, the m=64 entries the 11/16 sweep's.  The forward's GEMMs run on the SMs the units leave them, so a config
-# holds at the SMQ it was tuned at alone (at 47/64, 11/16's configs cost 1.7 ms a step)
+# holds at the SMQ it was tuned at alone (at 47/64, 11/16's configs cost 1.7 ms a step).  45/64 takes 47/64's: dmmsweep
+# --block 45/64's own best, timed with the units beside it, slowed both the forward and the units (18.25 ms, not 16.8)
 MM_CFGS = {"47/64": "6144,4096,32=32x32x128:w4:s3:k1+4096,4096,32=32x32x256:w4:s3:k1:t1+28672,4096,32=32x64x128:w4:s2:k1"
                     "+4096,14336,32=32x32x256:w4:s3:k1+4096,4096,64=32x64x256:w8:s4:k3+4096,14336,64=32x64x512:w8:s3:k3"}
+MM_CFGS["45/64"] = MM_CFGS["47/64"]
 MMQ = {"on": False}
 
 
