@@ -1,4 +1,5 @@
 import Proofs.Flock.SessionLoop.RepSrc
+import Proofs.Flock.Claims.ZK.FinishSwRep
 import Proofs.Flock.Claims.ZK.FinExe
 
 /-!
