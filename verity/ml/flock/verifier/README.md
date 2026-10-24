@@ -117,6 +117,11 @@ sets, both reps, `m` 25 to 34 (`art:430c513a`).
 digests and `proof_sha256` are rebuilt from the edited proof (with `transcript_check.py`'s spec transcript), keeping
 every coin. Only the check the edit breaks can then reject. `OUT_DIR/mutants.json` lists each mutant's expected verdict.
 
+`leak_scan.py` is the received-pieces leak scan every zero-knowledge driver runs (`scan`, and `rescan` of a finished
+run): a witness piece found in what the verifier received is leaked when the find lies inside one field of the proof
+format (`redigest.layout`) or one record of a round message, or in a file whose format isn't read, unless the statement
+fixes its bytes. Its docstring states the rule and its residual risk.
+
 ## Agreement with upstream
 
 The vectors patch of each version applies to its PR #83 commit (`git apply` in a checkout):

@@ -29,7 +29,8 @@ the cost.
   Each statement fills with honest blocks to `--zk`'s least shape. The verifier opens each unit's ``pub`` row to its own
   copy of the Programs' statics and its verdict ``o0``; Lean holds each ``srb`` row's b‖c to the leaf its own reads file
   names (`served_rows.reads_port`), and the host predicts the same read (`served_rows.leaf_ok`). A block passes when it is
-  proved and its verdict is ``ACCEPT``. The received-pieces scan is `served_tie_zk.classify`'s.
+  proved and its verdict is ``ACCEPT``. The received-pieces scan is `leak_scan.scan`
+  (``verity/ml/flock/verifier/leak_scan.py``), every zero-knowledge driver's.
 """
 from __future__ import annotations
 
@@ -44,8 +45,9 @@ from types import SimpleNamespace
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-sys.path[:0] = [str(HERE), str(REPO / "benchmarks/network_traces")]
+sys.path[:0] = [str(HERE), str(REPO / "benchmarks/network_traces"), str(REPO / "verity/ml/flock/verifier")]
 
+import leak_scan as LS  # noqa: E402
 import served_tie_window as STW  # noqa: E402
 import served_tie_zk as STZ  # noqa: E402
 from verity.core.protocols.certifier import served_rows as SR, served_statics as SS, served_tie as ST  # noqa: E402
@@ -366,9 +368,7 @@ def prove(a) -> int:
         blobs, held, public = N2.public_pieces(M.a8, *blobs_of(units, m["salts"]), (m["dir"] / "circuit.txt").read_bytes())
         res["received"] = {**M.a8.received(out / name / "verifier", m["dir"] / f"inst-{m['n']}.bin", blobs, held),
                            "public_pieces": len(public)}
-        vdir = out / name / "verifier"
-        res["received"]["leaked"], res["received"]["structured"] = STZ.classify(res["received"], blobs, vdir)
-        res["received"]["placed"] = STZ.placements(res["received"], blobs, vdir)
+        res["received"].update(LS.scan(res["received"], blobs, out / name / "verifier"))
         res["staged"] = {"n": m["n"], "ands": m["ands"], "k_log": meta["k_log"], "nbl": m["nbl"], "pin": m["pin"],
                          "lower_s": sg.lower_s, "stage_s": m["stage_s"], "registered": registered}
         res["as_expected"] = (expected(name, registered, res, units) and not res["received"]["leaked"]
