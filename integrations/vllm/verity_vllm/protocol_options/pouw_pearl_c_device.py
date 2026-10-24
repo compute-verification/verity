@@ -32,11 +32,12 @@ torch's current stream, in the device's primary context:
   (`clear_work.row_passes`).  The noise floor comes from the kernel's own ρ and α, whose product is exact as a double.
   The liveness is screened in FP32 with a 2⁻¹⁰ band (`screen`), and a row inside the band is decided exactly by
   `pearl_c.live_row` from its retained words.
-* **Each pass** (`begin`, `end`; `end_pass` ends one and begins the next, which the PoUW option's model runner hook does at
-  each engine step's end, since one pass's buffers hold a few prefill steps at most): the transcript is every call's A root
-  and one tile tree over every leaf, in call order, under `audit.transcript_domain` (the audit `Prover`'s layout).  With a
-  retain directory, the pass also writes what the prover opens from: A's rows (BF16, exact) and tree levels per call, B's
-  rows and tree levels per weight, the leaves, the tile tree and the manifest (`write_manifest`) that the reference verifier reads
+* **Each pass** (`begin`, `end`; `end_pass` ends one and begins the next, which the PoUW option does at each engine step's
+  end and, with `split_full`, before a call the open pass can't hold): the transcript is every call's A root and one tile
+  tree over every leaf, in call order, under `audit.transcript_domain` (the audit `Prover`'s layout).  With a retain
+  directory (`retain_dir`'s ``pass-NNNNN``, one a pass), the pass also writes what the prover opens from: A's rows (BF16,
+  exact) and tree levels per call, B's rows and tree levels per weight (hard links to the first retained pass's, `_linked`),
+  the leaves, the tile tree and the manifest (`write_manifest`) that the reference verifier reads
   (``benchmarks/pouw/pearl_c_vllm/verify_run.py``).  A retained pass starts from poisoned outputs (`poison`): a replay of an
   earlier pass's calls finds that pass's bytes still in the buffers, and they would be right for it, so a skipped write
   must not be able to pass as a repeat.  `omit` drops named steps, for the negative control.
@@ -91,6 +92,7 @@ from .pouw_pearl_c_host import (
     _Driver,
     _Keys,
     _Lane,
+    _linked,
     _put,
     _stream,
     _TorchStream,
@@ -307,10 +309,16 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
     def __init__(self, scheme: C.PearlC, entry: str, kernel: Kernel, weights: dict[int, Any], roots: dict[int, bytes],
                  coins: CoinCommitment, opening: CoinOpening, hashing: bool = True, capacity: int = LEAF_CAPACITY,
                  time_gemm: bool = False, schedule: str | Schedule = SERIAL, graphs: bool = False, whole_defer: bool = False,
-                 flag_rows: int = FLAG_ROWS, salt_key: bytes | None = None):
+                 flag_rows: int = FLAG_ROWS, salt_key: bytes | None = None, retain_dir: str | None = None,
+                 split_full: bool = False):
         """`coins` is the challenger's coin commitment of the epoch and `opening` its salt coin, opened after the weights'
-        root (`Epoch.start`, which raises `DomainError` for any other coin): the epoch's salt is the coin's."""
+        root (`Epoch.start`, which raises `DomainError` for any other coin): the epoch's salt is the coin's.  With
+        `retain_dir`, a pass begun with no retain directory of its own is retained in ``pass-NNNNN`` under it, numbered
+        in the order the passes begin.  With `split_full`, a call the open pass can't hold (`capacity` tiles, `CALL_CAPACITY`
+        calls, `flag_rows` screened rows) ends it and runs in the next (`end_pass`); without, it raises."""
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
+        self.retain_dir, self.retained, self.split_full = Path(retain_dir) if retain_dir else None, 0, split_full
+        self._weight_files: dict[str, tuple[Path, dict]] = {}
         self.nb, self.salt_key = kernel.run.NB, salt_key
         self.graphs = graphs and next(iter(weights.values())).device.type == "cuda"
         self.whole_defer = whole_defer
@@ -564,11 +572,15 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
         m = x2.shape[0]
         m16 = -(-m // ROW_ALIGN) * ROW_ALIGN
         sh = self._shape(m16, wt.n, k)
-        index = len(cur.matmuls)
         tiles = self.kernel.run.cdiv(m16, self.kernel.run.TILE) * (wt.n // self.kernel.run.TILE)
-        if self.hashing and (cur.tiles + tiles > self.capacity or index >= CALL_CAPACITY or cur.flag_rows + m > len(self.flag_buf)):
+        full = lambda p: p.tiles + tiles > self.capacity or len(p.matmuls) >= CALL_CAPACITY or p.flag_rows + m > len(self.flag_buf)
+        if self.hashing and full(cur) and self.split_full and cur.matmuls:
+            self.end_pass()
+            cur = self.cur
+        if self.hashing and full(cur):
             raise RuntimeError(f"{self.entry}: the pass is over its capacity ({self.capacity} tiles, {CALL_CAPACITY} calls, "
                                f"{len(self.flag_buf)} screened rows); end it and begin another")
+        index = len(cur.matmuls)
         self.join_before(sh)
         sh.xa[:m].copy_(x2)
         if m16 > m:
@@ -620,6 +632,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
         when None; a schedule changes only between passes).  With `retain`, the pass writes what the prover opens from into
         that directory, from poisoned outputs, and its manifest names `run`.  `stepped`: an engine step's end begins it."""
         self.join_sides()                   # the last pass's side lanes are done before anything new
+        if not retain and self.retain_dir is not None:
+            retain, self.retained = str(self.retain_dir / f"pass-{self.retained:05d}"), self.retained + 1
         self._use(self.schedule if schedule is None else schedule_of(schedule, self.scheme, self.kernel))
         self.cur = _Pass(Path(retain) if retain else None, run, stepped=stepped)
         if retain and self.hashing:
@@ -697,9 +711,9 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
             wt = self.weights[w]
             size = self.kernel.run.Pipeline.sizes(self.kernel.run.BM, wt.n, wt.k, self.kernel.run.BM)["tree_b"]
             weights[str(w)] = {"n": wt.n, "k": wt.k, "root": wt.root.hex(), "excluded_b": list(wt.excluded),
-                               "rows": _write(wd / f"{w}.rows.bf16", _bytes(wt.tensor.to(torch.bfloat16).contiguous().view(torch.uint8)),
-                                              digest=False),
-                               "tree": _write(wd / f"{w}.tree", _bytes(wt.b["tree_b"][:size]))}
+                               "rows": _linked(wd / f"{w}.rows.bf16", self._weight_files, digest=False,
+                                               data=lambda wt=wt: _bytes(wt.tensor.to(torch.bfloat16).contiguous().view(torch.uint8))),
+                               "tree": _linked(wd / f"{w}.tree", self._weight_files, data=lambda wt=wt, size=size: _bytes(wt.b["tree_b"][:size]))}
         matmuls = [{"index": u.index, "m": u.shape.m, "k": u.shape.k, "n": u.shape.n, "weight": u.weight,
                     "real_rows": r.real_rows, "k_kept": r.k_kept, "excluded_a": list(r.excluded_a),
                     "root_a": roots_a[self.nb * u.index:self.nb * (u.index + 1)].hex(), **f}

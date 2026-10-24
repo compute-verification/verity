@@ -20,8 +20,8 @@ layer's weight root); `commitment` is the scheme, the salt, the weights root the
 commitment and its salt coin's opening and, once closed,
 the transcript root with its unit and tile counts.  Pearl-C's also says what it claims of the weights (``registration``,
 `weights_claim`): the executor applies no keyed rotation and reads no curated list, so it claims nothing about which
-weights were served.  Pearl-C commits one pass per engine step: its option ends the pass when the model runner's
-``execute_model`` returns (`pouw_pass`), so serving needs no caller to end it.  The audit (drawing tiles, opening
+weights were served.  Pearl-C commits one pass per engine step, and more where a call won't fit (`pouw_pass`), each
+retained in its own directory under ``transcript_dir`` when given.  The audit (drawing tiles, opening
 them) is `verity.core.protocols.pouw.audit`'s, after the run.  Beside sampled proofs the composition asks
 `verity.core.protocols.pouw.circuit` (`protocol_options.CIRCUITS`), and only ``ncp-v2`` has a circuit.  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
 `NcpWeight_v1` Program call, once per run, and each call to its own `NcpLinear_v1` Program call reading it, their units
@@ -708,8 +708,8 @@ def install(scheme: str, target: Target) -> Option:
         salt = Epoch.start(declared, roots, commitment, opening).salt
     if scheme in PPD.SCHEMES:
         run = PPD.PearlCDeviceRun(s, entry, PPD.Kernel.load(settings.kernel, settings.cubin),
-                                  {w: m.weight for w, m in enumerate(layers)}, roots, commitment, opening,
-                                  schedule=settings.schedule, salt_key=_SALT_KEYS.get(entry))
+                                  {w: m.weight for w, m in enumerate(layers)}, roots, commitment, opening, schedule=settings.schedule,
+                                  salt_key=_SALT_KEYS.get(entry), retain_dir=settings.transcript_dir)
         run.commits["registration"] = weights_claim(s)
         h = target.hooks(entry)
         for w, layer in enumerate(layers):

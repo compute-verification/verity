@@ -1,12 +1,14 @@
 """The Pearl-C device path's host helpers (`pouw_pearl_c_device`): device byte buffers and their uploads, the current stream's
 handle, each call's keys by native SHA-512 (`_Keys`, byte for byte `call_keys`), the pinned upload ring (`_Uploads`), the
 streams a run owns (`_Lane`) and the driver calls a lane graph's replay makes on their handles (`_Driver`), and a retained
-pass's files (`_write`, `write_manifest`).
+pass's files (`_write`, `_linked`, `write_manifest`).
 """
 from __future__ import annotations
 
 import hashlib
 import json
+import os
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -214,6 +216,23 @@ def _write(path: Path, data: bytes, digest: bool = True) -> dict:
     out = {"path": f"{path.parent.name}/{path.name}" if nested else path.name, "bytes": len(data)}
     if digest:
         out["sha256"] = hashlib.sha256(data).hexdigest()
+    return out
+
+
+def _linked(path: Path, kept: dict[str, tuple[Path, dict]], data: Callable[[], bytes], digest: bool = True) -> dict:
+    """`_write`'s file for bytes that don't change within an install (a weight's rows and tree): a hard link to the copy an
+    earlier retained pass wrote (`kept`, by file name), so every pass's directory holds what it opens without writing it
+    again; written (and kept) where there is none or the link fails (another file system, the copy deleted)."""
+    first = kept.get(path.name)
+    if first is not None and first[0] != path:
+        try:
+            path.unlink(missing_ok=True)
+            os.link(first[0], path)
+            return dict(first[1])
+        except OSError:
+            pass
+    out = _write(path, data(), digest)
+    kept[path.name] = (path, out)
     return out
 
 

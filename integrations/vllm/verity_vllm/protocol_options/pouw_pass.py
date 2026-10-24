@@ -1,9 +1,13 @@
-"""Pearl-C's pass boundary under serving: the PoUW option ends its device run's pass when each engine step's forward returns.
+"""Pearl-C's pass boundaries under serving: the PoUW option ends its device run's pass when each engine step's forward
+returns, and before any call the open pass can't hold.
 
 `hook_steps` wraps ``execute_model`` on every vLLM ``GPUModelRunner`` class the process has imported (`model_runners`)
-through the option's tagged `Hooks`, so plain serving commits one pass per step with no caller ending it.  A caller that
-drives forwards outside a runner still ends its own passes (`Option.end_pass`, `PearlCDeviceRun.end_pass`), and one
-called right after a step ends nothing.
+through the option's tagged `Hooks`, so plain serving commits one pass per step with no caller ending it.  A step whose
+calls overflow one pass's buffers (`PearlCDeviceRun.capacity` tiles, `CALL_CAPACITY` calls, its screened rows; a prefill
+step over about 24K tokens of Llama-3.1-8B) is cut between two calls into as many passes as it needs
+(`PearlCDeviceRun.split_full`), each with its own transcript over its own calls, so no pass overflows and each is audited
+on its own.  A caller that drives forwards outside a runner still ends its own passes (`Option.end_pass`,
+`PearlCDeviceRun.end_pass`), and one called right after a step ends nothing.
 """
 
 from __future__ import annotations
@@ -47,9 +51,11 @@ def step_ends(run: Any):
 
 def hook_steps(hooks: Any, run: Any) -> None:
     """End ``run``'s pass at each engine step (`step_ends`) on every runner class `model_runners` finds, through ``hooks``,
-    and record in ``run.details["pass_ends"]`` which path ends its passes."""
+    and before a call the open pass can't hold (``run.split_full``), and record in ``run.details["pass_ends"]`` which
+    path ends its passes."""
     runners, make = model_runners(), step_ends(run)
     for cls in runners:
         hooks.wrap(cls, "execute_model", make)
+    run.split_full = True
     run.details["pass_ends"] = ("each engine step, at the model runner's execute_model" if runners else
-                                "the caller's end_pass (no model runner in this process)")
+                                "the caller's end_pass (no model runner in this process)") + "; and before a call the pass can't hold"

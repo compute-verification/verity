@@ -357,9 +357,10 @@ class _Engine:
         return []
 
 
-def _served(monkeypatch, kernel, weights, **run):
+def _served(monkeypatch, kernel, weights, more=None, **run):
     """`weights` served under the PoUW option as `verity_vllm.LLM` installs it (`protocol_options.install`), on `kernel`,
-    with the epoch's coins from a seeded challenger; `run` overrides the device run's buffer sizes."""
+    with the epoch's coins from a seeded challenger and the further pouw settings `more`; `run` overrides the device run's
+    buffer sizes."""
     import functools
 
     from verity_vllm import protocol_options as PO
@@ -369,7 +370,7 @@ def _served(monkeypatch, kernel, weights, **run):
     if run:
         monkeypatch.setattr(PPD, "PearlCDeviceRun", functools.partial(PPD.PearlCDeviceRun, **run))
     model = _Model(weights)
-    settings = {"pouw": {"coins": Challenger(0, random.Random(7).randbytes), "device": "cuda", "kernel": "k"}}
+    settings = {"pouw": {"coins": Challenger(0, random.Random(7).randbytes), "device": "cuda", "kernel": "k", **(more or {})}}
     comp = PO.install(model, PO.Context(stage="serve", enabled=(f"pouw:{SCHEME}",), settings=settings))
     return model, comp, comp.get("pouw")
 
@@ -450,8 +451,9 @@ def test_end_pass_commits_each_engine_step_as_the_per_step_reach_in_did(monkeypa
 
 def test_a_long_served_run_ending_a_pass_each_engine_step_never_overflows(monkeypatch):
     """A pass holds 32 tiles and 512 screened rows, and each step takes 24 tiles and 400 rows: with `end_pass` at each step's
-    end, 256 steps (6,144 tiles) each commit in a pass of their own; without it, the install's one pass overflows at the
-    second step, as served Pearl-C did within a few prefill steps (the default buffers hold 8M tiles and 4M rows)."""
+    end, 256 steps (6,144 tiles) each commit in a pass of their own; without it, the install still never overflows, since
+    the call that won't fit ends the pass and begins the next, where the install's one pass overflowed at the second step
+    (the default buffers hold 8M tiles and 4M rows).  A device run not made to cut its passes there still refuses that call."""
     rng = np.random.default_rng(17)
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
@@ -467,6 +469,13 @@ def test_a_long_served_run_ending_a_pass_each_engine_step_never_overflows(monkey
     assert [(p["units"], p["tiles"], p["screened_rows"]) for p in out] == [(2, 24, 400)] * len(steps)
     assert len(option.details["passes"]) == len(steps)
     model, comp, option = _served(monkeypatch, kernel, weights, capacity=32, flag_rows=512)
+    engine = _Engine(model, steps)
+    for _ in steps:
+        engine.step()
+    comp.close()
+    assert [(p["units"], p["tiles"], p["screened_rows"]) for p in option.details["passes"]] == [(2, 24, 400)] * len(steps)
+    model, comp, option = _served(monkeypatch, kernel, weights, capacity=32, flag_rows=512)
+    option.end_pass.__self__.split_full = False
     engine = _Engine(model, steps)
     engine.step()
     with pytest.raises(RuntimeError, match="over its capacity"):
@@ -596,6 +605,60 @@ def test_a_manual_end_pass_ends_only_what_no_engine_step_ended(monkeypatch):
     comp.close()
     assert [p["units"] for p in passes] == [1, 1, 1, 3]
     assert "execute_model" not in vars(v1) and "execute_model" not in vars(v2)
+
+
+def _retained_passes(root: Path) -> dict[str, dict[str, bytes]]:
+    """Every retained pass directory under `root`, by name: each file's bytes, by its path in the directory."""
+    return {d.name: {str(f.relative_to(d)): f.read_bytes() for f in sorted(d.rglob("*")) if f.is_file()}
+            for d in sorted(root.iterdir())}
+
+
+@pytest.mark.parametrize("dev", ["recording", pytest.param("twin", marks=[
+    pytest.mark.slow, pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")])])
+def test_a_step_over_one_pass_is_cut_between_calls_and_each_part_is_a_pass_of_its_own(monkeypatch, tmp_path, dev):
+    """Plain serving (a model runner, nothing else ending passes) under a pass of 32 tiles and 512 screened rows, one step
+    of six calls (72 tiles, 1,200 rows) and a decode step, retained under ``transcript_dir``: the step is cut before each
+    call that won't fit, into three passes within their caps, and each commits and retains, byte for byte, what a pass of
+    only its calls does (the same calls served a step to each pass): its transcript root, A roots, counts, manifest and
+    every file it opens from.  Each pass's directory is ``pass-NNNNN`` in the order the passes began, holding its own
+    weights' files, which are hard links to the first pass's; the pass left open and empty after the last step writes
+    nothing.  On ``twin`` the hash kernels run, so A's roots are real and differ pass to pass.  A call that alone
+    overflows a pass still raises."""
+    rng = np.random.default_rng(23)
+    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
+               for w, n in ((0, 256), (1, 128))}
+    big, decode = [(0, 200), (1, 200)], [(0, 3), (1, 3)]
+    got, pd = {}, HD.build(tmp_path) if dev == "twin" else None
+    for name, steps in (("cut", [big * 3, decode]), ("step-each", [big, big, big, decode])):
+        with monkeypatch.context() as mp:
+            kernel = PPD.Kernel(R, F, TwinDev(pd) if dev == "twin" else RecordingDev(), "0" * 64)
+            (runner,) = _runners(mp)
+            model, comp, option = _served(mp, kernel, weights, {"transcript_dir": str(tmp_path / name)}, capacity=32, flag_rows=512)
+            core = _Core(runner(), _Engine(model, steps))
+            for _ in steps:
+                core.step()
+            comp.close()
+        passes = [dict(p) for p in option.details["passes"]]
+        assert [Path(p.pop("manifest")) for p in passes] == [tmp_path / name / f"pass-{i:05d}" / "manifest.json" for i in range(4)]
+        got[name] = passes, _retained_passes(tmp_path / name)
+    (cut, cut_files), (each, each_files) = got["cut"], got["step-each"]
+    assert [(p["units"], p["tiles"], p["screened_rows"]) for p in cut] == [(2, 24, 400)] * 3 + [(2, 6, 6)]
+    assert cut == each and cut_files == each_files and sorted(cut_files) == [f"pass-{i:05d}" for i in range(4)]
+    for i in range(4):
+        man = json.loads(cut_files[f"pass-{i:05d}"]["manifest.json"])
+        assert [(u["index"], u["weight"], u["real_rows"]) for u in man["matmuls"]] == [
+            (0, 0, 3 if i == 3 else 200), (1, 1, 3 if i == 3 else 200)]
+        assert man["commitment"] == {"root": cut[i]["transcript_root"], "count": cut[i]["tiles"]}
+    for f in ("weights/0.rows.bf16", "weights/0.tree", "weights/1.rows.bf16", "weights/1.tree"):
+        stats = [(tmp_path / "cut" / f"pass-{i:05d}" / f).stat() for i in range(4)]
+        assert len({s.st_ino for s in stats}) == 1 and stats[0].st_nlink == 4, f
+    if dev == "twin":
+        assert len({p["activation_roots"] for p in cut}) == 4
+    model, comp, option = _served(monkeypatch, PPD.Kernel(R, F, RecordingDev(), "0" * 64), weights, capacity=32, flag_rows=512)
+    with pytest.raises(RuntimeError, match="over its capacity"):
+        _Engine(model, [[(0, 16), (0, 600)]]).step()
+    assert [p["units"] for p in option.details["passes"]] == [1]
+    comp.close()
 
 
 # ---- the trees, their hash kernels run on the host ----------------------------------------------------------------
