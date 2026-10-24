@@ -15,6 +15,8 @@ on an FA2 target whose family registers `fa2_construction = "check-inf-per-itera
 """
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from verity.ml.circuits.defs import bind, composite
 from verity.ml.circuits.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
 from verity.ml.circuits.types import Array, Tuple
@@ -88,8 +90,9 @@ def _check_inf_block(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2):
            conformance="not-yet-established")
 def AttentionHeadV5(B, S, q, k, v):
     """`AttentionHead_v2` over `AttnBlock_v5`: causal attention of one query at position T-1 over keys 0..T-1, ceil(T/BN) blocks visited
-    last -> first, block b with `CHECK = b >= MASKED_FROM` (FA2's masking iterations; `attention_vocab.fa2_masked_from`); epilogue
-    `sum = (l0 + l2) + (l1 + l3)`, `inv = INV(sum)`, `out = bf16(o * inv)`."""
+    last -> first, block b with `CHECK = b >= MASKED_FROM` (FA2's masking iterations; `attention_vocab.fa2_masked_from`), the first
+    visited block's steps (`AttnBlock_v5{FIRST=True}`'s) in this body; epilogue `sum = (l0 + l2) + (l1 + l3)`, `inv = INV(sum)`,
+    `out = bf16(o * inv)`."""
     return _check_inf_head(B, S, q, k, v, AttnBlockV5, ())
 
 
@@ -110,13 +113,11 @@ def _check_inf_head(B, S, q, k, v, block, extra):
             pad = [zero_row.refs] * (BN - nvis)
             kb = _Coll(Array(BN, Array(D, BF16)), concat([kb.refs] + pad))
             vb = _Coll(Array(BN, Array(D, BF16)), concat([vb.refs] + pad))
-        first = b == nb - 1
-        blk = bind(block, D=D, NVIS=nvis, FIRST=first, BN=BN, DOT=DOT, CHECK=b >= MF)
-        if first:
-            z = B.call(ZERO32)
-            st = B.call(blk, q, kb, vb, z, _Coll(Array(4, F32), concat([z.refs] * 4)), _Coll(Array(D, F32), concat([z.refs] * D)), *extra)
+        if b == nb - 1:  # a Call of AttnBlock{FIRST=True} would pass it a running state it ignores, so its steps are written here
+            first = SimpleNamespace(D=D, NVIS=nvis, FIRST=True, BN=BN, DOT=DOT, CHECK=True)
+            st = _check_inf_block(B, first, q, kb, vb, None, None, None, extra[0] if extra else None)
         else:
-            st = B.call(blk, q, kb, vb, m, l, o, *extra)
+            st = B.call(bind(block, D=D, NVIS=nvis, FIRST=False, BN=BN, DOT=DOT, CHECK=b >= MF), q, kb, vb, m, l, o, *extra)
         m, l, o = st[0], st[1], st[2]
     total = B.call(P.F32AddFtz, B.call(P.F32AddFtz, l[0], l[2]), B.call(P.F32AddFtz, l[1], l[3]))
     inv = B.call(INV, total)
