@@ -449,7 +449,9 @@ def test_runs_entry_duplicated_into_two_locks_is_refused(tmp_path):
 
 
 WORD_MAP = ('[words]\n"Models/Core" = "Definitions/Core"\n"Models.Core" = "Definitions.Core"\n"Trusted" = "Checked"\n'
-            '"S/Models/" = "S/Definitions/"\n\n[rewrite]\nexclude = []\n')
+            '"S/Models/" = "S/Definitions/"\n\'"Models" / "Core"\' = \'"Definitions" / "Core"\'\n'
+            "'Models\\.Core' = 'Definitions\\.Core'\n'\"Models\" / \"Hash\"' = '\"Definitions\" / \"Hash\"'\n"
+            '\n[rewrite]\nexclude = []\n')
 WORD_BASE = {
     "tools/move/demo_map.toml": WORD_MAP,
     "S/lakefile.toml": 'name = "s"\n\n[[lean_lib]]\nname = "Models"\n',
@@ -459,6 +461,7 @@ WORD_BASE = {
                                reads={"Models.Core.B": {"digest": "dd", "definitions": {"x": "ee"}}}, dependencies={"m": "1"}),
     "notes.md": "The core's statements are `S/Models/Core/` (`Models.Core`). Trusted.\n",
     "more.md": "`S/Models/` states them.\n",
+    "t.py": 'CORE = ROOT / "S" / "Models" / "Core"\nHASH = ROOT / "S" / "Models" / "Hash"\nB = r"Models\\.Core\\.B"\n',
     "p/TRUSTED.sha256": "",
     "tools/research/src/research/store/moves.json": json.dumps({"about": "x", "moves": [{"paths": {"S/Specs/": "S/Models/"}}]},
                                                                indent=2) + "\n",
@@ -484,6 +487,7 @@ def _worded(tmp_path: Path, **over: str) -> dict:
                                    dependencies={"m": "2"}),
         "notes.md": "The core's statements are `S/Definitions/Core/` (`Definitions.Core`). Trusted.\n",
         "more.md": "`S/Definitions/` states them.\n",
+        "t.py": 'CORE = ROOT / "S" / "Definitions" / "Core"\nHASH = ROOT / "S" / "Models" / "Hash"\nB = r"Definitions\\.Core\\.B"\n',
         "p/TRUSTED.sha256": f"{_sha(a)}  ../S/Definitions/Core/A.lean\n",
         "tools/research/src/research/store/moves.json": json.dumps(
             {"about": "x", "moves": [{"paths": {"S/Specs/": "S/Models/"}}, {"paths": {"S/Models/": "S/Definitions/"}}]},
@@ -499,8 +503,16 @@ def test_a_word_map_move_is_certified(tmp_path):
     r = _worded(tmp_path)
     assert r["certified"], r["refusals"]
     kinds = {e["path"]: e["kind"] for e in r["edits"]}
-    assert kinds["notes.md"] == kinds["more.md"] == kinds["S/Definitions/Core/A.lean"] == "words"
+    assert kinds["notes.md"] == kinds["more.md"] == kinds["S/Definitions/Core/A.lean"] == kinds["t.py"] == "words"
     assert kinds["p/TRUSTED.sha256"] is None
+
+
+def test_a_chain_or_regex_spelling_is_kept_only_with_the_word_it_spells(tmp_path):
+    """`"Models" / "Hash"` spells `Models/Hash`, which no kept word renames (nothing under `Models/Hash` moved), so the map
+    doesn't explain renaming it."""
+    t = 'CORE = ROOT / "S" / "Definitions" / "Core"\nHASH = ROOT / "S" / "Definitions" / "Hash"\nB = r"Definitions\\.Core\\.B"\n'
+    [f] = _worded(tmp_path, **{"t.py": t})["refusals"]
+    assert f["path"] == "t.py"
 
 
 def test_a_word_that_renames_nothing_the_range_moved_is_refused(tmp_path):

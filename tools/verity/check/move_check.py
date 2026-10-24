@@ -598,10 +598,19 @@ def _rename():
     return mod
 
 
+def spelled(word: str) -> str:
+    """The path or module ``word`` spells: a pathlib chain of string parts (`"a" / "b"`) as `a/b`, a regex's escaped dots
+    (`a\\.b`) as `a.b`."""
+    joined = join_chains(word)
+    if joined != word and joined.startswith('"') and joined.endswith('"'):
+        joined = joined[1:-1]
+    return joined.replace("\\.", ".")
+
+
 def word_maps(base: Tree, renamed: list[tuple[str, str]], lmods: dict[str, str], pmap: dict[str, str]) -> list:
     """The move scripts' word maps at BASE, each cut to the words that rename what the range moved: a word is kept when it
     renames a path, a directory the range moved whole (as `dir/`) or a Lean module that its map, applied whole, renames to
-    where the range moved it."""
+    where the range moved it, or when it spells a kept word's rename as a pathlib chain or a regex (`spelled`)."""
     R = _rename()
     names = [*renamed, *lmods.items(), *((o + "/", n + "/") for o, n in pmap.items())]
     out = []
@@ -618,6 +627,7 @@ def word_maps(base: Tree, renamed: list[tuple[str, str]], lmods: dict[str, str],
         moved = {a: b for a, b in names if whole.path(a) == b and a != b}
         kept = {o: n for o, n in data["words"].items()
                 if any(R.Words({"words": {o: n}}).path(a) != a for a in moved)}
+        kept |= {o: n for o, n in data["words"].items() if (spelled(o), spelled(n)) in kept.items()}
         if kept:
             out.append(R.Words({**data, "words": kept, "words_in": []}))
     return out
