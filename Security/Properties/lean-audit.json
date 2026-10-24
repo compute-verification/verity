@@ -49,7 +49,9 @@
   "Properties.Proofs.RemoteAudit",
   "Properties.Accounting.Compose",
   "Properties.Accounting.Served",
-  "Properties.Proofs.Accounting.Served"
+  "Properties.Proofs.Accounting.Served",
+  "Properties.RemoteAudit.Line",
+  "Properties.Proofs.RemoteAudit.Line"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -147,7 +149,9 @@
   "Properties.Accounting",
   "CircuitRequirement",
   "Definitions.Accounting",
-  "Definitions.Claims"
+  "Definitions.Claims",
+  "Definitions.Pouw.Basic",
+  "Models.Accounting"
  ],
  "layers": {
   "Properties.Pouw": {
@@ -242,7 +246,11 @@
   },
   "Properties.RemoteAudit": {
    "imports": ["RemoteAudit"],
-   "except": [],
+   "except": [
+    "Properties.RemoteAudit.Line",
+    "Properties.RemoteAudit.Line.Premises",
+    "Properties.RemoteAudit.Line.Record"
+   ],
    "why": "the properties are stated against the verifier's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.Accounting": {
@@ -274,6 +282,17 @@
    "imports": ["Definitions.Pouw.RelativeSecurity", "Properties.Pouw.Strata", "Properties.SampledProofs.Draw"],
    "except": [],
    "why": "the ε a credit reports is stated against the code's strata, law and epsAt (`Properties.Pouw.Strata`, on Lean core), its draw as `Properties.SampledProofs.bytesOf` reads uniform streams and its probability `Pouw.RelativeSecurity.prob` (`Definitions.Pouw.RelativeSecurity`), never a proof"
+  },
+  "Properties.RemoteAudit.Line": {
+   "imports": [
+    "Definitions.Pouw.Basic",
+    "Definitions.Accounting.Remote",
+    "Models.Accounting.Assumptions",
+    "RemoteAudit",
+    "Properties.RemoteAudit.Line"
+   ],
+   "except": [],
+   "why": "the memory line of record is stated against the line's and the verifier's own functions (RemoteAudit) and the memory model's trace, paced session, draw and premises (Definitions.Accounting.Remote, Models.Accounting.Assumptions), its probability `Pouw.pr` (Definitions.Pouw.Basic); never a proof"
   }
  },
  "reads_exempt": {
@@ -1664,10 +1683,20 @@
    "signature": ["Properties.SampledProofs.noAcceptAfterHalt : Properties.SampledProofs.NoAcceptAfterHalt"],
    "assumptions": [],
    "type_hash": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
+  },
+  "Properties.RemoteAudit.Line.lineChecked": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.Line.stretchBound": {
+   "owner": "@memory-accounting"
   }
  },
  "shape": {
-  "premises": ["Definitions.NetworkCertifier.Premises"],
+  "premises": [
+   "Definitions.NetworkCertifier.Premises",
+   "Models.Accounting.Assumptions",
+   "Properties.RemoteAudit.Line.Premises"
+  ],
   "statements": ["Properties"],
   "properties": {
    "MemoryChallenger.Properties.SecurityProofs.judgeAccepts": {
@@ -2575,6 +2604,14 @@
    "Properties.Pouw.Strata.strataTile": {
     "function": "PouwCheck.Credit.strata",
     "outcome": "accept"
+   },
+   "Properties.RemoteAudit.Line.lineChecked": {
+    "function": "RemoteAudit.Line.line",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.Line.stretchBound": {
+    "function": "RemoteAudit.Line.line",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -2588,7 +2625,9 @@
    "Pous.EndToEnd.RunCertifies": "unstated: it joins the composed check's runCheckAccepts, proved, with the setup check's AcceptsDecodes and PublishesRoot, which are open; runCertifies_of proves it from those two",
    "Properties.Served.DrawMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.drawMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
-   "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it"
+   "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
+   "Properties.RemoteAudit.Line.LineHeld": "unstated: the memory line of record over what the Lean verifier accepts, link-charged; its proof joins the arithmetic link (stretchBound, proved) with the model's argument for HeldOverTimeLinksDrawn from any start in [s_0, e_0], in security_proofs, under the code-to-model premises of Properties.RemoteAudit.Line.Premises",
+   "Properties.RemoteAudit.Line.LineHeldIdentity": "unstated: LineHeld for the time-held line under Identity; its proof is LineHeld's with no link charge"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -2597,7 +2636,7 @@
     "why": "P2 in the ring model at the deployed point accepts a rho-bounded, (D, Q, L)-bounded responder with probability at most 1% + 2^-129 + 2^-130; open, and, if p is prime, false at D >= 32,894 (Q >= 2, L >= 65,789) for every k (PousP2Ring.tight_p16448, Security/Proofs/Pous/P2/RingTight.lean), and at L >= 2^30 for k <= 88 (PousP2Ring.not_meetsOn_b19_k88, Security/Proofs/Pous/P2/RingTrunc.lean). Its test plays the ring-model audit at a scaled point (w = 184, 16 blocks, lambda = 9) with those two attacks and seeded bounded responders."
    }
   },
-  "events": ["Claims.Pr"]
+  "events": ["Claims.Pr", "Pouw.pr"]
  },
  "reads": {
   "CertifierDevice.Certifier": {
