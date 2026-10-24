@@ -12,7 +12,7 @@ registered tables at the rows the verifier reads them.
   ports (the unit's 32 A rows, its 32 B rows and its z/y record; ``pub`` and ``o1`` are the verifier's own rows, which no
   lane reads) the prover's opening of that row in the tree the window registered, each held to the entry's root and
   domain and opened by `registered.verify_read`. A tree that keeps no rows (`pouw_h1_registered.Rows`) has the row
-  rebuilt from the kept values (`pouw_h1_prover.kept_row`), and every row is held to the tree's ``b || c`` at its
+  rebuilt from the kept values (`pouw_h1_served.kept_row`), and every row is held to the tree's ``b || c`` at its
   position. The openings (rows and salts, private) go to ``--out``, never under the run's ``out/``; ``--public`` gets
   the unit, the entries and the checks.
 * **prepare** (hidden_zk's venv): the unit's leaf from those rows, the lane statement's Program (run.py's STAND-IN
@@ -97,6 +97,7 @@ def extract(a) -> None:
     from verity_vllm.protocol_options import pouw_h1_challenger as PHC
     from verity_vllm.protocol_options import pouw_h1_handoff as HO
     from verity_vllm.protocol_options import pouw_h1_prover as PV
+    from verity_vllm.protocol_options import pouw_h1_served as SV
 
     t0 = time.time()
     doc = json.loads(Path(a.calls).read_text())
@@ -157,7 +158,7 @@ def extract(a) -> None:
         try:
             words = list(tree.rows[row])
         except LookupError:
-            words = PV.kept_row(prover, st["state"], doc["calls"], p["value"], row)
+            words = SV.kept_row(prover, st["state"], doc["calls"], p["value"], row)
         ok = {"root": tree.root.hex() == p["root"], "domain": tree.domain.domain_id.hex() == p["domain"],
               "shape": (tree.leaves, tree.words) == (p["leaves"], p["words"]) and tree.schema == V2}
         path, bc = tree.path(row), tree.bcs[row]
