@@ -775,7 +775,6 @@ class SoWindow(DO.Window):
             rl[8 * yi:8 * yi + 8].copy_(self.zlate[1])
             self.zlate = None
         self.c.build(pre["round"], self.stepv[0:1])
-        self.put_row(s, pre["mid"], pre["round"])
         prev = self.cap_of.get(s - 1)
         late = self.cap_of.pop(j, None) if j >= self.s0 else None
         held = (cap in self.caps) or (late in self.caps) or (prev == "fault_zlate" and prev in self.caps)
@@ -834,6 +833,8 @@ class SoWindow(DO.Window):
                 self.stashed.discard(ju)
                 t_coin = self.dispatch_units(ju)
                 t_disp = time.perf_counter()
+        # the manifest row's copies queue behind the root read and the units' dispatch, off the step's critical path
+        self.put_row(s, pre["mid"], pre["round"])
         t_end = time.perf_counter()
         self.phase(None)
         ph = {"m": m, "forward_ms": 1e3 * (t_fwd - self.t_before), "trees_ms": 1e3 * (t_root - t_fwd),
