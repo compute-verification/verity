@@ -69,12 +69,14 @@ their bursts (`rates_at`; `--bursts none` for the reading of gate runs up to 7).
 measured, credited or not, is `measured`. `--table` writes each session's five checks and the line as Markdown.
 
 **Error.** Each accepted paced session's line fails, crediting more than the node held, with probability at most its
-`error`'s total (`session_error`): the memory line's δ as the ledger computed it, read from the record, with its three
+`error`'s total (`session_error`): the memory line's δ as the ledger computed it, read from the record, with its four
 parts beside it: the windows' profile δ, AuditRO's 2^-slack a pass (the slack its ledger was charged at: 67 bits, and
-41 in a record that doesn't say, where it dominates: 2^-29.95 over a 60 s session's 2118 passes) and δs, the
-sketch's. The line at each T, and the line of record over every T (`credit`'s `error`), fail with
-at most the sum of their credited sessions' totals: the least share is read off whichever session the run made least,
-so the union bound holds where a maximum wouldn't.
+41 in a record that doesn't say, where it dominates: 2^-29.95 over a 60 s session's 2118 passes), δs, the
+sketch's, and the draw's rejection Σ_t k_t/2^64 (added to the total of a record whose ledger didn't charge it), plus
+the windows' PRF advantages by name (`NAMED_TERMS`, claim prf/sha-512), which have no number and are in no total. The
+line at each T, and the line of record over every T (`credit`'s `error`), fail with at most the sum of their credited
+sessions' totals: the least share is read off whichever session the run made least, so the union bound holds where a
+maximum wouldn't.
 
     python auditor_line.py OUT --host-bytes B [--pin SHA512 --period P --commit SHA [--pins LOG --main FILE]]
         [--ledger HEAD ...] [--peer NAME] [--model-pin FILE] [--disk-bytes-per-s B/S] [--link-bytes-per-s B/S]
@@ -123,6 +125,10 @@ the same two readings."""
 LINE_BY = ("lean", "python")
 """Who computes the line (`line_of_record`): the Lean verifier, held exactly to `line.py` on the same inputs, which is
 of record, or `line.py` alone."""
+NAMED_TERMS = {"prf_advantage": {"claim": ledger.PRF_CLAIM, "term": "Σ_t Adv(prf t)", "value": None,
+                                 "in_total": False}}
+"""`LineHeld`'s error beyond δ: each window's PRF advantage, one oracle-access distinguisher a window, which its claim
+prices and no number here does. Every error records it by name, outside its total."""
 
 
 class Disagree(ValueError):
@@ -323,37 +329,51 @@ def session_error(session: dict) -> dict:
     """An accepted session's failure probability, the chance its line credits more than the node held: `total`, the
     memory line's δ as the ledger computed it (`ledger.memory`'s `Line.delta`, every form's in the record's
     `declared`), read and never recomputed, so it charges whatever the ledger does (the F the node states among it);
-    beside it its three parts (`ledger.delta_parts`): `delta_profile`, the windows' profile δ, `delta_slack`, AuditRO's
-    2^-slack a pass, and `delta_sketch`, δs. A record that carries the parts (verifier.json's `delta`) must sum to
-    the total as the ledger adds them, or there is no line (`Disagree`); one written before them gives the profile δ
-    from its windows (`recorded_windows`) and the slack from its passes at the slack its ledger was charged at (its
-    `inputs`' `slack_log2`, else `V.UNRECORDED_SLACK_LOG2`), both exact, and δs as the rest. Each in floats and exact
-    beside them (`exact`), and the total's log2."""
+    beside it its four parts (`ledger.delta_parts`): `delta_profile`, the windows' profile δ, `delta_slack`, AuditRO's
+    2^-slack a pass, `delta_sketch`, δs, and `delta_rejection`, the draw's Σ_t k_t/2^64. A record that carries the
+    parts (verifier.json's `delta`) must sum to the total as the ledger adds them, or there is no line (`Disagree`);
+    one written before them gives the profile δ from its windows (`recorded_windows`) and the slack from its passes at
+    the slack its ledger was charged at (its `inputs`' `slack_log2`, else `V.UNRECORDED_SLACK_LOG2`), both exact, and
+    δs as the rest. A ledger that didn't charge the rejection (no such part) has it added to its total, from its
+    windows' draws (`recorded_windows`, as `ledger.rejection` reads them). Each in floats and exact beside them
+    (`exact`), the total's log2, and `named_terms`, the error's terms with no numeric value (`NAMED_TERMS`), in no
+    total."""
     lg = session["ledger"]
     totals = {m["delta"] for m in lg["declared"]["memory"].values() if "delta" in m}
     if len(totals) != 1:
         raise Disagree(f"session {session['k']}'s memory line forms record δ {sorted(totals)}: the ledger computes one")
     total = Fraction(totals.pop())
+    rejection = None
     if (d := lg.get("delta")) is not None:
-        if d["profile"] + d["slack"] + d["sketch"] != float(total):
+        added = 0.0
+        for n in ledger.DELTA_PARTS:
+            added += d.get(n, 0.0)
+        if added != float(total):
             raise Disagree(f"session {session['k']}'s δ parts {d} don't sum to its memory line's δ {float(total)!r}")
         profile, slack, sketch = (Fraction(d[n]) for n in ("profile", "slack", "sketch"))
+        if "rejection" in d:
+            rejection = Fraction(d["rejection"])
     else:
         profile = pooled.number(V.recorded_windows(session)[1])
         slack = Fraction(lg["inputs"]["passes"], 2 ** lg["inputs"].get("slack_log2", V.UNRECORDED_SLACK_LOG2))
         sketch = total - profile - slack
-    exact = {"delta_profile": profile, "delta_slack": slack, "delta_sketch": sketch, "total": total}
+    if rejection is None:
+        rejection = Fraction(sum(s for _, s in V.recorded_windows(session)[0]), 2 ** ledger.REJECTION_LOG2)
+        total += rejection
+    exact = {"delta_profile": profile, "delta_slack": slack, "delta_sketch": sketch, "delta_rejection": rejection,
+             "total": total}
     return {**{k: float(x) for k, x in exact.items()}, "exact": {k: line.text(x) for k, x in exact.items()},
-            "log2_total": timing.log2(exact["total"])}
+            "log2_total": timing.log2(exact["total"]), "named_terms": NAMED_TERMS}
 
 
 def union_error(rows: list[dict]) -> dict:
     """The chance some session of `rows` fails (`session_error`), at most the sum of their totals: the sessions, the
-    sum and its exact value, and its log2 (None for none)."""
+    sum and its exact value, its log2 (None for none), and the terms they name with no numeric value
+    (`NAMED_TERMS`, none for no session), in no total."""
     rows = sorted(rows, key=lambda r: r["k"])
     total = sum((line.number(r["error"]["exact"]["total"]) for r in rows), Fraction(0))
     return {"sessions": [r["k"] for r in rows], "total": float(total), "exact": line.text(total),
-            "log2": timing.log2(total) if total else None}
+            "log2": timing.log2(total) if total else None, "named_terms": NAMED_TERMS if rows else {}}
 
 
 def bound_check(v: dict, model: dict | None, source: str | None) -> dict:
@@ -728,7 +748,8 @@ def table(doc: dict) -> str:
                    + " / ".join(f"{row[x]['snapshot']:.4%}" for x in b) + ", filler "
                    + " / ".join(f"{row[x]['filler_snapshot']:.4%}" for x in b) + ")"
                    + (f", error {row['error']['total']:.3g} (2^{row['error']['log2']:.2f}): the ledger's δ "
-                      "(profile δ + P·2^-slack + δs) summed over the credited sessions"
+                      "(profile δ + P·2^-slack + δs + Σ_t k_t/2^64) summed over the credited sessions, beside "
+                      "Σ_t Adv(prf t) (claim prf/sha-512), named and in no total"
                       if row["error"]["sessions"] else ""))
     out.append(f"line by {doc['line_by']}; {doc['credit']['summary']}")
     return "\n".join(out) + "\n"
