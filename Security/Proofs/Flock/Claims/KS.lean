@@ -65,6 +65,7 @@ import Proofs.Flock.Claims.KS.PlainDraw
 import Proofs.Flock.Claims.KS.PlainDrawAcc
 import Proofs.Flock.Claims.KS.PlainDrawDec
 import Proofs.Flock.Claims.KS.PlainDrawSim
+import Proofs.Flock.Claims.KS.PlainDrawKDefs
 import Proofs.Flock.Claims.KS.PlainDrawK
 import Proofs.Flock.Claims.KS.PlainDrawAccK
 import Proofs.Flock.Claims.KS.PlainDrawDecK
