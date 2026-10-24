@@ -265,7 +265,7 @@ class Serving:
         self.runner = Runner()
         self.windows = sc.CommitWindows(Committer(self.runner, flip), out, run_id="t", window_steps=window_steps,
                                        idle_close_steps=idle_close_steps, eos_ids=[Tokenizer.eos_token_id],
-                                       clock=lambda: 0.0) if commit else None
+                                       clock=lambda: 0.0, wall=lambda: 0.0) if commit else None
         self.loop = so.EngineLoop(Engine(self.runner, seed_override), self.windows)
         self.server = so.Server(proto=so.PlainProtocol(force_include_usage), served_name="m", max_model_len=512, tokenizer=Tokenizer(),
                                 defaults={"temperature": 1.0}, submit=self.loop.submit, abort=self.loop.abort, clock=lambda: 7)
@@ -381,6 +381,9 @@ def test_commit_record_maps_and_checks_every_request(tmp_path, window_steps):
     assert all(w["passed"] for w in wins)
     assert {e for w in wins for e in w["requests"]} == {r["engine_id"] for r in reqs.values()}
     assert all(w["ids_name"] == "model.embed_tokens/in" for w in wins if not w.get("empty"))
+    trace = records(tmp_path, "step_trace.jsonl")
+    assert [(t["window"], t["step_root"]) for t in trace] == [(w["window"], r) for w in wins for r in w.get("step_roots", [])]
+    assert all(t["rows"] and t["t_end"] is not None for t in trace)
     if window_steps == 2:
         assert len([w for w in wins if not w.get("empty")]) > 1 and any(len(r["windows"]) > 1 for r in reqs.values())
     assert s.windows.summary()["passed"]

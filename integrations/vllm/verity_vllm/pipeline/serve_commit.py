@@ -8,7 +8,8 @@ root. The record is the served path's and COMMIT-ARB's one record, `commit.serve
 the step's rows, and at each close `served_record.Record.absorb` reads the window back from the committed bytes into one
 `RequestRecord` per engine request. A finished request is checked by `Record.check` against what was streamed for it,
 the seed it carried into the engine (the client's, or the served default, `engine.served_seed`) and how its stream
-ended. Its ingress record, the sampling parameters it brought, is written beside it.
+ended. Its ingress record, the sampling parameters it brought, is written beside it. Each committed step gets a line of
+``step_trace.jsonl`` at its window's close: its root, when its engine step ended, its rows and the committer's trace.
 """
 from __future__ import annotations
 
@@ -19,7 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.commit.served_record import Record, window_commit
+from verity_vllm.commit.served_record import Record, served_rows, window_commit
 
 #: The request fields that are sampling inputs, recorded as each request brought them.
 SAMPLING_FIELDS = ("temperature", "top_p", "top_k", "min_p", "seed", "max_tokens", "min_tokens", "ignore_eos", "stop",
@@ -61,13 +62,14 @@ class CommitWindows:
 
     def __init__(self, committer: Any, out: Path, *, run_id: str, window_steps: int, idle_close_steps: int = 1,
                  eos_ids: Sequence[int] = (), decode: Callable[[Sequence[int]], str] | None = None,
-                 clock: Callable[[], float] = time.perf_counter) -> None:
-        self.com, self.out, self.clock = committer, Path(out), clock
+                 clock: Callable[[], float] = time.perf_counter, wall: Callable[[], float] = time.time) -> None:
+        self.com, self.out, self.clock, self.wall = committer, Path(out), clock, wall
         self.run_id, self.window_steps, self.idle_close_steps = run_id, int(window_steps), int(idle_close_steps)
         self.eos_ids, self.decode = [int(x) for x in eos_ids], decode
         self.known: dict[str, str] = {}                  # every admitted engine id -> its HTTP id; rows past a finish still map
         self.record = Record(known=self.known)
         self.window, self.open_s, self.is_open = -1, 0.0, False
+        self.step_t: dict[int, float] = {}               # the open window's committed steps -> when their engine step ended
         self.ledgers: dict[str, Ledger] = {}
         self.records: list[dict[str, Any]] = []
         self.checked: list[dict[str, Any]] = []
@@ -107,10 +109,17 @@ class CommitWindows:
     def open(self) -> None:
         t0 = self.clock()
         self.window += 1
+        self.step_t = {}
         self.com.reset()
         self.com.install()
         self.open_s = self.clock() - t0
         self.is_open = True
+
+    def stepped(self) -> None:
+        """An engine step has returned: its committed steps ended now."""
+        now = self.wall()
+        for s in range(len(self.step_t), int(self.com._step_index)):
+            self.step_t[s] = now
 
     def close(self) -> dict[str, Any]:
         t0 = self.clock()
@@ -132,6 +141,7 @@ class CommitWindows:
         self.records.append(rec)
         with open(self.out / "windows.jsonl", "a") as fh:
             fh.write(json.dumps(rec) + "\n")
+        self._write_step_trace(rec, rc)
         self._check_finished()
         return rec
 
@@ -147,6 +157,19 @@ class CommitWindows:
         if led.ingress.get("seed") is None:
             got = {**got, "passed": False, "problems": ["no seed carried into the engine", *got.get("problems", [])]}
         return got
+
+    def _write_step_trace(self, rec: dict[str, Any], rc: Any) -> None:
+        """One ``step_trace.jsonl`` line a committed step: its window, its root, when its engine step ended (unix seconds),
+        the request rows it ran (`served_record.served_rows`: runner id, lo, hi, start, prefill length), and the
+        committer's own trace of it (tensors, bytes, leaves, layout digest)."""
+        trace = {int(t["step"]): t for t in ((getattr(rc, "extra", None) or {}).get("step_trace") or [])} if rc is not None else {}
+        rows = served_rows(self.com)
+        with open(self.out / "step_trace.jsonl", "a") as fh:
+            for s, root in enumerate(rec.get("step_roots") or []):
+                own = {k: v for k, v in trace.get(s, {}).items() if k not in ("step", "root")}
+                fh.write(json.dumps({"window": rec["window"], "run_id": rec["run_id"], "run_root": rec.get("run_root"), "step": s,
+                                     "step_root": root, "t_end": self.step_t.get(s), "rows": [list(r) for r in rows.get(s, [])],
+                                     **own}) + "\n")
 
     def _check_finished(self) -> None:
         done = [e for e, led in self.ledgers.items() if led.finished]

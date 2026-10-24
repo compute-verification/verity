@@ -458,6 +458,8 @@ class EngineLoop:
                     self.commit.before_step()
                 for out in self.engine.step():
                     self._deliver(out)
+                if self.commit is not None:
+                    self.commit.stepped()
                 self.steps += 1
         except BaseException as e:
             self.error = f"{type(e).__name__}: {e}"
