@@ -67,7 +67,8 @@ theorem plain_acc_midsK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω
   rw [List.getLast?_map, Option.bind_map] at hl
   have hL := plainN_add (act_decide hact)
   refine ⟨s, spec, sts, link, c₁, mids, f, act_decide hact, hl, hc, verdictK_within keep hv, ?_⟩
-  have hlen := next_acc_length_sha512 false (by simp) (run_acc_next sha512 P (VK keep) x ω c h)
+  have hlen := (accLast_VK keep x _ _ (by simp) (run_acc_next sha512 P (VK keep) x ω c h)).trans
+    (congrFun (VK_k keep) x)
   have has := run_depK keep sha512 P x ω c
   rw [List.length_map] at hlen
   rw [hlen] at has
