@@ -152,7 +152,8 @@ verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic 
   for every run from `--ids`, or else from the `--endpoint-run` records (`chain.served_ids`). Every strategy sends the
   same users, so a run's ids are those of the requests whose `arrive` falls in its own link-windows, matched to
   `requests.jsonl` by engine id. The ids must cover each run's certified requests, an id for each output its `io.json`
-  says a request served (`chain.uncovered`, REDTEAM phase 14), or the run gets no verdict. The tie must refuse token by content at exactly the link-windows its
+  says a request served (`chain.uncovered`, REDTEAM phase 14), or the run gets no verdict. The tie must refuse token
+  by content at exactly the link-windows its
   changed ids fall in (`chain.changed_windows`, from its `server.json`'s `tampered`). Drop's refusal by content is
   listed beside its own code. The tie is the only check of the served content on the advice profile, so it's a required
   gate there (`chain.tie_gate`, REDTEAM phase 12 target 2): the report isn't OK, and says why, when the tie didn't run
