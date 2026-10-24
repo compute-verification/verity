@@ -29,6 +29,9 @@ What a gate run's memory line (`RemoteAudit.Line.lineOfRecord`) reads of one ses
   the state the record reaches at `ω`, at most `receiptMax` (`2^64 − 1`, the verifier's `RECEIPT_LIMIT` less one). It
   reads the reached state rather than the record's summary so that `Live`, a window's size fixed by the coins before
   it, can hold of a session whose acceptance turns on later coins.
+* `recordCommitted`: the prover's records read through the coin commitment (`Accounting.Remote.Draw.Committed`):
+  holding commitment `c` its record at `ω` is `recs c ω`, and the session it plays is that record's `recordDraw`;
+  `played` is the record of outcome `ω`, the prover's holding the deployed commitment `com ω`.
 * `ofRecord`: a trace with the Lean verifier's verdict on the record as its own, the trace the line's premises read.
 * `recordPace`: the record's groups as the model's paced session, group `g`'s first pass the passes before it, its coin
   and its end `e_g` the record's as `stretches` reads them (`ended`); past the last group its coin stands, so the coins
@@ -147,6 +150,18 @@ def recordDraw {κ : ℕ} {X : Type} (node : Node) (rec : Accounting.Remote.Draw
     Accounting.Remote.Draw.Session node.windows receiptMax (fun _ => node.params.samples) κ X where
   size t ω := ⟨min ((rec ω).receiptsAt node t) receiptMax, Nat.lt_succ_of_le (min_le_right _ _)⟩
   correct := correct
+
+/-- **The records' opening draw, read through the coin commitment**: holding commitment `c`, the prover's record at
+`ω` is `recs c ω`, and the session it plays is that record's opening draw (`recordDraw`), with the correct receipts
+`correct c`. -/
+def recordCommitted {κ : ℕ} {X Cm : Type} (node : Node)
+    (recs : Cm → Accounting.Remote.Draw.Coins node.windows κ X → Record)
+    (correct : Cm → Fin node.windows → Accounting.Remote.Draw.Coins node.windows κ X → Finset ℕ) :
+    Accounting.Remote.Draw.Committed node.windows receiptMax (fun _ => node.params.samples) κ X Cm where
+  view c := recordDraw node (recs c) (correct c)
+
+/-- The record of outcome `ω`: the prover's, holding the deployed commitment `com ω`. -/
+def played {Ω Cm : Type} (recs : Cm → Ω → Record) (com : Ω → Cm) (ω : Ω) : Record := recs (com ω) ω
 
 /-- `s`, the node's squarings a tick. -/
 noncomputable def Node.squarings (n : Node) : ℝ := (n.rates.squaringsPerS : ℝ) / (ns : ℝ)
