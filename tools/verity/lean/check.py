@@ -137,6 +137,7 @@ repository can copy it and use it with policies of its own (`README.md`).
 from __future__ import annotations
 
 import argparse
+import bisect
 import contextlib
 import difflib
 import gzip
@@ -539,11 +540,24 @@ def lean_modules(pkg: Path) -> dict[str, str]:
     return out
 
 
+_LEAN_SPECIAL, _TOML_SPECIAL = re.compile(r"/-|--|[\"']"), re.compile(r"[#\"]")
+_NESTING, _BLANK, _CHAR = re.compile(r"/-|-/"), re.compile(r"[^\n]"), re.compile(r"'(\\.[^']*|[^'\\])'")
+
+
 def strip_comments(src: str, toml: bool = False) -> str:
     """``src`` with its comments (Lean's `--` and nested `/- -/`, docstrings included; TOML's `#`) blanked out, string
     literals and line numbers kept."""
     out, i, n, depth = [], 0, len(src), 0
+    special = _TOML_SPECIAL if toml else _LEAN_SPECIAL
     while i < n:
+        # the characters up to the next one that can open or close a comment, a string or a character literal are kept
+        # (blanked, inside a comment) as they are
+        m = (_NESTING if depth else special).search(src, i)
+        j = n if m is None else m.start()
+        if j > i:
+            out.append(_BLANK.sub(" ", src[i:j]) if depth else src[i:j])
+            i = j
+            continue
         c = src[i]
         if depth:
             if src.startswith("/-", i):
@@ -570,7 +584,7 @@ def strip_comments(src: str, toml: bool = False) -> str:
             out.append(src[i:j + 1])
             i = j + 1
         elif not toml and c == "'" and (i == 0 or not (src[i - 1].isalnum() or src[i - 1] in "_'!?.")) and \
-                (m := re.match(r"'(\\.[^']*|[^'\\])'", src[i:])):
+                (m := _CHAR.match(src, i)):
             out.append(m.group(0))
             i += len(m.group(0))
         else:
@@ -1102,8 +1116,15 @@ def dropped(pkg: Path, files: dict[str, str], facts: dict, where: str = "") -> l
     for m, rel in sorted(files.items()):
         if (held := spans.get(m)) is None or not (pkg / rel).is_file():
             continue
+        starts, ends = [], []                           # the union of the ranges, as disjoint sorted intervals
+        for s, e in sorted((s, e) for s, e in held if s <= e):
+            if ends and s <= ends[-1] + 1:
+                ends[-1] = max(ends[-1], e)
+            else:
+                starts.append(s)
+                ends.append(e)
         for i, line in enumerate(strip_comments((pkg / rel).read_text(errors="replace")).split("\n"), 1):
-            if (k := DECLARES.match(line)) and not any(s <= i <= e for s, e in held):
+            if (k := DECLARES.match(line)) and not ((x := bisect.bisect_right(starts, i) - 1) >= 0 and i <= ends[x]):
                 found.append(f"{rel}:{i} ({k.group(1)})")
     if not found:
         return []
@@ -2497,7 +2518,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
           replay_cache: Path | None = None, closure: bool = False) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes). ``built`` is called once its build has
     passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
-    ended (`proved`). ``runs`` runs the package's tests (`tests`), ``repo`` the checkout their data's
+    ended (`proved`); the report's `seconds` holds that wait as `proved-in-wait`, apart from `audit`. ``runs`` runs the
+    package's tests (`tests`), ``repo`` the checkout their data's
     `generate` reads. ``moved`` ({old name: new name}, with ``update``) renames the record's guarantees, and the review compares
     the build with the records under the old names (`review`). An update's report holds the review, whether it changes what a
     guarantee says (`statement_changes`), and the guarantees and reads it compared with (`before`) beside those it wrote.
@@ -2563,7 +2585,13 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             if r or renamed(n, moved) not in renames:
                 renames[renamed(n, moved)] = r
         current = policy | {"guarantees": renames}
-    s = time.monotonic()
+    s, waited = time.monotonic(), []
+
+    def built_prover(q: Path) -> None:
+        w = time.monotonic()
+        ready(q)
+        waited.append(time.monotonic() - w)
+
     replayed = scanned = digested = None
     try:
         facts = facts_of(pkg, current, work, moved)
@@ -2574,12 +2602,14 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             digested = background.submit(timed, dependency_digests, pkg, rep["toolchain"], facts["oleans"])
         cross: list[str] = []
         if "proved_in" in policy:
-            cross, facts, rep["proved_in"] = proved(pkg, current, facts, work, moved, ready)
+            cross, facts, rep["proved_in"] = proved(pkg, current, facts, work, moved, built_prover)
     except RuntimeError as e:
         rep["failures"].append(Failure("lean", None, f"lean: {e}"))
         background.shutdown(cancel_futures=True)
         return reported(rep)
-    rep["seconds"]["audit"] = round(time.monotonic() - s, 1)
+    if waited:
+        rep["seconds"]["proved-in-wait"] = round(sum(waited), 1)
+    rep["seconds"]["audit"] = round(time.monotonic() - s - sum(waited), 1)
     if replay and not lifts and not early:
         replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache, closure)
     if lifts:
