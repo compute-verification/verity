@@ -78,15 +78,16 @@ def _i64(xs, T):
     return b"".join(int(x).to_bytes(8, "little") for x in [*xs, *[0] * (T - len(xs))])
 
 
-def _sealed_parts(tmp_path, with_manifest: bool, port=None, embed_ids=None, name=None):
+def _sealed_parts(tmp_path, with_manifest: bool, port=None, embed_ids=None, name=None, kept=None):
     """The record's committed tensors of steps 0 and 1 (shapes cut to the served window's 5 and 2 token rows) committed and sealed
     as a served window of two requests, by a committer that carries the row's manifest (as `serve_seal.committer` leaves it) or not.
     With ``port`` ({step: (ids, positions)}) each step's stream starts with the step-input port and, as `serve_seal.single_ids`
-    leaves the committer, the embedding's own ids aren't committed, unless ``embed_ids`` ({step: ids}) commits them beside it."""
+    leaves the committer, the embedding's own ids aren't committed, unless ``embed_ids`` ({step: ids}) commits them beside it;
+    its `served_record.SamplerInputsSource` kept the rows ``kept`` (`SERVED_ROWS` by default)."""
     torch = pytest.importorskip("torch")
     from tests.check.opened import commit_steps
     from verity_vllm.commit import step_rows
-    from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
+    from verity_vllm.commit.served_record import PORT_NAMES, SamplerInputsSource, StepInputPort
 
     fx = json.loads(PARTS.read_text())
     T = 4096 // 8
@@ -106,7 +107,8 @@ def _sealed_parts(tmp_path, with_manifest: bool, port=None, embed_ids=None, name
     com, rc = commit_steps(steps, commit_scheme=step_rows.NAME)
     com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
     if port:
-        com.sources = [StepInputPort(com, T)]
+        com.sources = [StepInputPort(com, T), SamplerInputsSource(com)]
+        com.sources[1].rows = SERVED_ROWS if kept is None else kept
     if with_manifest:
         com.required_manifest = {k: fx[k] for k in ("identities", "op_path_aliases", "program_digest", "populations")}
     leds = {"b0-1": sc.Ledger("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 2}}, "b0-1", streamed=[7, 9]),
@@ -214,6 +216,21 @@ def test_a_window_that_commits_the_models_ids_beside_the_port_is_refused(tmp_pat
         _sealed_parts(tmp_path, True, port=PORT, embed_ids=embed_ids)
 
 
+@pytest.mark.parametrize("port,kept,why", [
+    ({**PORT, 1: ([7, 8], [3, 3])}, None,
+     r"step 1: request b0-2's token row 1 \(its rows \[1, 2\) from position 2\) is at position 3, its row ran 2"),
+    ({**PORT, 0: ([1, 2, 3, 4, 5], [0, 1, 1, 0, 1])}, None,
+     r"step 0: request b0-1's token row 2 \(its rows \[0, 3\) from position 0\) is at position 1, its row ran 2"),
+    ({**PORT, 0: ([1, 2, 3, 4, 5], [0, 1, 2, 0, 1, 6])}, None, r"step 0: token 5, past the step's 5 tokens, is position 6, not 0"),
+    (PORT, {0: SERVED_ROWS[0]}, r"step 1: no rows to hold its positions to"),
+], ids=["decode-off-by-one", "prefill-off-by-one", "past-the-tokens", "no-rows"])
+def test_a_window_whose_port_positions_are_not_what_its_rows_ran_is_refused(tmp_path, port, kept, why):
+    """The eager Programs' RoPE positions are static, each request row's start..start+n-1 (the rows the window's served rows
+    register); a port position other than those, or other than 0 past the step's tokens, is refused at the seal, by request."""
+    with pytest.raises(ValueError, match=r"positions aren't the ones the window's rows ran at 1 step\(s\).*" + why):
+        _sealed_parts(tmp_path, True, port=port, kept=kept)
+
+
 def test_the_committer_commits_the_steps_ids_once_as_the_ports():
     """`single_ids` drops the embedding from the acquisition plan's input sites, so the committer acquires no ``model.embed_tokens/in``."""
     torch = pytest.importorskip("torch")
@@ -293,7 +310,7 @@ def test_a_sealed_windows_context_carries_its_served_rows_and_the_port_its_strea
     torch = pytest.importorskip("torch")
     from tests.check.opened import commit_steps
     from verity_vllm.commit import step_rows
-    from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
+    from verity_vllm.commit.served_record import PORT_NAMES, SamplerInputsSource, StepInputPort
     from verity_vllm.pipeline import deferred_rows as DR
 
     def i64(xs, T):
@@ -306,7 +323,8 @@ def test_a_sealed_windows_context_carries_its_served_rows_and_the_port_its_strea
              1: [(PORT_NAMES[0], i64([7, 8], T), 0, "int64", (T,)), (PORT_NAMES[1], i64([3, 2], T), 1, "int64", (T,))]}
     com, rc = commit_steps(steps, commit_scheme=step_rows.NAME)
     com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
-    com.sources = [StepInputPort(com, T)]
+    com.sources = [StepInputPort(com, T), SamplerInputsSource(com)]
+    com.sources[1].rows = SERVED_ROWS
     served = {"digest": "ab" * 64, "statics": {"R": 4, "P": 2}}
     leds = {"b0-1": sc.Ledger("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 2}}, "b0-1", streamed=[7, 9]),
             "b0-2": sc.Ledger("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, "b0-2", streamed=[8, 6])}

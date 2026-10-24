@@ -17,7 +17,8 @@ the manifest), and beside it the record that bundle is opened against (`deferred
 naming the bundle, ``commit/runs.jsonl`` with the window's run, and ``commit/binding_map_p0.json``. The binding map names
 each committed value as the row's Programs read it (`served_binder`: a Linear's ``out``, RoPE's ``query`` / ``key``, a norm's
 ``norm_scale``, ``fa2.m1/*``, and the port's ids and positions as the identities the Programs read them under,
-`port_identities`), with no second tensor under an identity the port is (`copies_beside_port`), and the context carries the manifest's ``op_path_aliases``, which the opened store resolves a
+`port_identities`), with no second tensor under an identity the port is (`copies_beside_port`) and no port position other
+than its rows ran (`positions_off`), and the context carries the manifest's ``op_path_aliases``, which the opened store resolves a
 shared module's layer-N path through, the window's served-rows record (`serve_commit.CommitWindows`' ``served_rows``) and the
 step-input port (`port_of`; `port_layout` is where the window's streams put it). The window's requests are named by the body's ``user`` (the id the advice names them
 by), and the bundle names no Programs: a served window's Programs are the registered compiler's for its advice, made after
@@ -242,6 +243,34 @@ def copies_beside_port(bmap: Mapping[str, Any], aliased: Mapping[str, tuple[str,
     return sorted(out)
 
 
+def positions_off(com: Any, request_rows: Mapping[int, Sequence[tuple]] | None = None) -> list[str]:
+    """Each committed step whose port positions (its stream's [8T, 16T)) aren't the ones its rows ran: start..start+n-1 at each
+    row's token rows [lo, hi), zero past the step's tokens. The rows are the committer's (`served_record.served_rows`), the ones
+    the window's served rows register and the eager Programs' static RoPE positions are compiled from. Each step's first
+    disagreement, by request (``request_rows``' name, else the runner's id)."""
+    from verity_vllm.commit.served_record import committed_ints, served_rows
+
+    rows, out = served_rows(com), []
+    for step in sorted(com._layouts):
+        got = committed_ints(com, step, PORT_NAMES[1])
+        if got is None or not rows.get(step):
+            out.append(f"step {step}: " + (f"no committed {PORT_NAMES[1]}" if got is None else "no rows to hold its positions to"))
+            continue
+        names = {int(lo): n for n, lo, _hi in (request_rows or {}).get(step, ())}
+        want, of = [0] * len(got), [None] * len(got)
+        for rid, lo, hi, start, _p in rows[step]:
+            want[lo:hi], of[lo:hi] = range(start, start + hi - lo), [(names.get(lo, rid), lo, hi, start)] * (hi - lo)
+        if (t := next((t for t, (g, w) in enumerate(zip(got, want)) if g != w), None)) is None:
+            continue
+        if of[t] is None:
+            out.append(f"step {step}: token {t}, past the step's {max(hi for _r, _lo, hi, *_ in rows[step])} tokens, is position {got[t]}, not 0")
+        else:
+            name, lo, hi, start = of[t]
+            out.append(f"step {step}: request {name}'s token row {t} (its rows [{lo}, {hi}) from position {start}) is at position "
+                       f"{got[t]}, its row ran {want[t]}")
+    return out
+
+
 def seal_window(com: Any, rc: Any, d: Path, *, rec: Mapping[str, Any], reqs: list[dict[str, Any]],
                 request_rows: dict[int, list[tuple[str, int, int]]], tokens: Mapping[str, list[int]], sampling: Mapping[str, Any],
                 label: str, code: str | None = None, engine_of_record: Mapping[str, Any] | None = None) -> dict[str, Any]:
@@ -266,6 +295,10 @@ def seal_window(com: Any, rc: Any, d: Path, *, rec: Mapping[str, Any], reqs: lis
     if twice := copies_beside_port(bmap, aliased):
         raise ValueError(f"the step-input port is the window's one copy of {sorted(aliased.values())}, and {len(twice)} other "
                          f"tensor(s) bind as them too ({twice[:3]}): the row's Programs would read one of two copies")
+    if port is not None and (off := positions_off(com, request_rows)):
+        raise ValueError(f"the step-input port's positions aren't the ones the window's rows ran at {len(off)} step(s) ({off[:3]}): "
+                         "the eager Programs' RoPE positions are those rows' start..start+n-1, so the window would commit positions "
+                         "they don't read")
     of_record = {} if manifest is None else {
         "required_manifest": {"path": getattr(com, "required_manifest_path", None), "program_digest": manifest.get("program_digest"),
                               "digest": manifest.get("digest")},
