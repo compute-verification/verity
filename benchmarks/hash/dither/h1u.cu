@@ -2717,10 +2717,25 @@ __global__ void __launch_bounds__(256) h1jr_cols(const UCallR* __restrict__ call
 #ifndef H1U_JSWZ
 #define H1U_JSWZ 0
 #endif
+// H1U_JSWZQ = PR (with H1U_JSWZ): a block's WARPS units a patch of PR row blocks by WARPS / PR column blocks, the band's
+// patches row by row down it, then across, so the block's warps share A's lines and B's through L1; a band whose row
+// blocks or a call whose column blocks the patch doesn't divide keeps H1U_JSWZ's order
+#ifndef H1U_JSWZQ
+#define H1U_JSWZQ 0
+#endif
+static_assert(!H1U_JSWZQ || (H1U_JSWZ && WARPS % H1U_JSWZQ == 0 && H1U_JSWZ % H1U_JSWZQ == 0),
+              "H1U_JSWZQ's patch is PR row blocks of H1U_JSWZ's band by WARPS / PR column blocks");
 __device__ __forceinline__ u32 jswz_unit(const UCallR& c, u32 w, u32 M) {
   if (!H1U_JSWZ) return w;
   const u32 ncb = c.N / 32, band = (u32)H1U_JSWZ * ncb, r0 = w / band * (u32)H1U_JSWZ, r = w % band;
   const u32 rn = min((u32)H1U_JSWZ, M / 32 - r0);
+  if constexpr (H1U_JSWZQ != 0) {
+    constexpr u32 W = WARPS, PR = H1U_JSWZQ, PC = W / PR;
+    if (rn % PR == 0 && ncb % PC == 0) {
+      const u32 q = r % W, p = r / W, hp = rn / PR;
+      return (r0 + PR * (p % hp) + q % PR) * ncb + PC * (p / hp) + q / PR;
+    }
+  }
   return (r0 + r % rn) * ncb + r / rn;
 }
 
