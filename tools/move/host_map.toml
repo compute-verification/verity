@@ -10,9 +10,10 @@
 
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
-# files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
+# files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself), lock files, and the test that refuses
+# a provider's name, whose toy files name them on purpose.
 exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**",
-           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock"]
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "tests/test_provider_names.py"]
 
 [keep]
 patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+']
