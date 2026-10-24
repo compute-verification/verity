@@ -79,7 +79,7 @@ theorem colsJ_plain {rd : Claims.Msg → Option FinalJ} {x : Claims.Msg} {as : L
   obtain ⟨h0, rfl⟩ := Array.getElem?_eq_some_iff.1 hst
   obtain ⟨sess, schs, hdec, -, -, -, hall⟩ := verifyJWithMK_tables_cap id With.std hv
   have h0' : 0 < (tabsOf sts).size := by simpa [tabsOf] using h0
-  obtain ⟨-, _, hf, hrep, -⟩ := hall 0 h0'
+  obtain ⟨_, _, hf, hrep, -⟩ := hall 0 h0'
   have ht0 : (tabsOf sts)[0] = Setup.ofCircuit sts[0] := tabsOf_getElem h0'
   simp only [ht0] at hf hrep
   obtain ⟨-, extras, -, -, hex, -⟩ := verifyRepWith_rounds With.std rfl hf hrep
