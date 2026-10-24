@@ -38,6 +38,15 @@ A spec-level reference for network accounting's timing channel:
   what its size class or the prefix layer's counts can't express. It is the compile unit's core, between the committed
   decisions and `compile_steps`' Programs, and is held step for step to the replay
   (`benchmarks/network_e2e/encodings/replay_vectors.py`); it is in no proof-service Spec yet;
+- the I/O tie (`io_tie`), a design (`PROTOCOL.md`, "The I/O tie") and its prototype on a fake upstream, in no Spec:
+  every cell of an egress link-window is opened, each a pad or the canonical event of one token id on the stream the
+  warden set, and each is the output the advice's map names at its place (`window_map`, from advice v0's outputs and
+  release buckets; the verifier computes it in the clear from the opened advice, the named gap, until the map is read
+  in the proof under the advice's hiding root), with the id the Commit sampled for it (the port: one hiding row of
+  ids a step, opened under the Commit's root). The warden commits each bucket's cells as one hiding row. It has the
+  reference and the unit's Boolean Definition (`IoTieWindow`: the cells' root by `NetworkRowsRoot`, the port's rows by
+  `IoTiePort`, then `IoTieContent`: `IoTieCell` on every cell, the prover's Beneš routing of the port's entries
+  `IoTieRoute`, `IoTieMatch`);
 - the capacity counts;
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
