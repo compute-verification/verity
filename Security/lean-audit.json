@@ -11283,12 +11283,12 @@
    "Nci.Assumptions.Reach": {
     "status": "open",
     "test": "benchmarks/nci/tests/test_fit.py::test_reach_at_sequence_threads_kimi_k2",
-    "why": "Reach is a predicate on the threading T: at token threads it is false for Kimi K2 (about 32B active, under N* = 87.6B); at sequence threads it is the per-sequence form, whose reuse cost is the T.reuse already in FitBound (FitBoundSlots for ReachSlots, Reach counted in parameter slots). Open at sequence threads, the instance the fit page uses (LEAN-35, F1); its test checks that N* is at most the weights one sequence reaches under kappa.py's MoE routing at Kimi K2's shapes, and more than one token reaches."
+    "why": "Reach is a predicate on the threading T (FitBoundSlots for ReachSlots, Reach counted in parameter slots). fit.py's rungs use it at token threads (reuse 2), where ASK-68 (19 Oct) adopts it for dense recipes, each of whose tokens uses all its weights; there it is false for a token-routed MoE, Kimi K2 (about 32B active) and GLM-5.3 (about 40B) being under N* = 87.6B. At sequence threads it is the per-sequence form, whose reuse cost is the T.reuse already in FitBound, twice the sequence length, which voids the rungs. Open over all recipes (LEAN-35, F1); its test checks that N* is at most the weights one sequence reaches under kappa.py's MoE routing at Kimi K2's shapes, and more than one token reaches."
    },
    "Nci.Assumptions.ReachSlots": {
     "status": "open",
     "test": "benchmarks/nci/tests/test_fit.py::test_reach_at_sequence_threads_kimi_k2",
-    "why": "Reach is a predicate on the threading T: at token threads it is false for Kimi K2 (about 32B active, under N* = 87.6B); at sequence threads it is the per-sequence form, whose reuse cost is the T.reuse already in FitBound (FitBoundSlots for ReachSlots, Reach counted in parameter slots). Open at sequence threads, the instance the fit page uses (LEAN-35, F1); its test checks that N* is at most the weights one sequence reaches under kappa.py's MoE routing at Kimi K2's shapes, and more than one token reaches."
+    "why": "Reach is a predicate on the threading T (FitBoundSlots for ReachSlots, Reach counted in parameter slots). fit.py's rungs use it at token threads (reuse 2), where ASK-68 (19 Oct) adopts it for dense recipes, each of whose tokens uses all its weights; there it is false for a token-routed MoE, Kimi K2 (about 32B active) and GLM-5.3 (about 40B) being under N* = 87.6B. At sequence threads it is the per-sequence form, whose reuse cost is the T.reuse already in FitBound, twice the sequence length, which voids the rungs. Open over all recipes (LEAN-35, F1); its test checks that N* is at most the weights one sequence reaches under kappa.py's MoE routing at Kimi K2's shapes, and more than one token reaches."
    },
    "Nci.Assumptions.WeightsSupportFmt": {
     "status": "falsified",

@@ -133,8 +133,7 @@ def save(fig, out: Path, name: str) -> list[str]:
 def fit_mu(p: dict, N: float = N_STAR, w_e: float = W_E, b: float | None = None) -> float:
     """The fit bound's cap on monitored efficiency at ``p``'s wipe residual (``statement.fit_mu`` with ``p``'s intake,
     period and kappa, and any N*, w_e or stored bits per weight); ``inf`` where it doesn't hold."""
-    rate, _ = F.fit_rate(p, X.wipe_residual(p), N, w_e, b)
-    return F.share(p, rate)
+    return F.fit_mu(p, X.wipe_residual(p), N, w_e, b)
 
 
 def parts(p: dict, tier: str, mu: float = math.inf) -> tuple[float, dict[str, float]]:
