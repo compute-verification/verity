@@ -237,6 +237,9 @@ def prover_row(d: Path, stage: str, step: str, what: str) -> Row:
         r.note = str(timed[-1].get("why") or "no verdict")[:200]
     else:
         r.ok = all(x is True for x in verdicts)
+        if not r.ok:
+            r.note = next((str(v.get("prover_stopped") or v.get("why")) for v in rows
+                           if v.get("accepted") is not True and (v.get("prover_stopped") or v.get("why"))), "")[:300]
     # 85's session time: from the last warm session's verdict to the last timed one's, over the timed sessions (sessions
     # overlap up to FC_VERIFY_AHEAD, so this, not e2e_s, is the stage's pace)
     t_warm = [t for t, v in stamped if v.get("warm") and t is not None]

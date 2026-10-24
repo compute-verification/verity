@@ -478,6 +478,10 @@ def test_forged_statements_are_ok_when_refused_and_forge_after_reads_each_case(t
     o = job(tmp_path)
     d = o / "steps" / "oprove" / "r1" / "out" / "oprove" / "forged-coef-L0-firewall"
     d.mkdir(parents=True)
+    stop = "FIREWALL-REFUSED: circuit: the constraints lincheck fails"
+    (d / "prove.tsv").write_text(f"1792871908.2\tLIVE\t{json.dumps({'accepted': False, 'prover_stopped': stop, 'prove_s': 1900.0})}\n")
+    d = d.parent / "forged-dirs-L0-firewall"
+    d.mkdir()
     (d / "prove.err").write_text("FIREWALL-REFUSED R7: the witness does not open the registered row; no proof\n")
     for n in (1, 2):
         lr = o / "steps" / "lean" / f"r{n}" / "out" / "lean"
@@ -493,14 +497,16 @@ def test_forged_statements_are_ok_when_refused_and_forge_after_reads_each_case(t
               "run/message-bc": {"rc": 0, "accepted": True, "why": "accepted"}}
     (fa / "out" / "forge-after.json").write_text(json.dumps({"verify": verify, "untouched": True}))
     doc = RP.read(o)
-    outer = row(doc, "outer forged-coef-L0")
+    coef = row(doc, "outer forged-coef-L0")
+    assert coef["ok"] is True and coef["note"].endswith(stop)        # the session the firewall stopped, from its LIVE record
+    outer = row(doc, "outer forged-dirs-L0")
     assert outer["ok"] is True and outer["note"].startswith("no session finished") and "FIREWALL-REFUSED" in outer["note"]
     assert doc["summary"]["outer"]["firewall"]["statements"] == 1      # a forged statement is no part of the session's cost
     assert row(doc, "lean forged-top-L1")["ok"] is True
     assert row(doc, "forge-after run/coef-honest")["ok"] is True and row(doc, "forge-after run/coef-value")["ok"] is True
     bad = row(doc, "forge-after run/message-bc")
     assert bad["ok"] is False and bad["note"].startswith("ACCEPTED")
-    assert doc["headline"]["forged_refused"] == {"coef": True, "top": True, "message": False}
+    assert doc["headline"]["forged_refused"] == {"coef": True, "dirs": True, "top": True, "message": False}
     assert "forge-after run/message-bc" in doc["summary"]["not_ok"] and doc["steps"]["forge-after"] == ["1"]
     md = RP.markdown(doc)
-    assert "forge-after run/message-bc" in md and "each refused: coef yes, top yes, message **no**." in md
+    assert "forge-after run/message-bc" in md and "each refused: coef yes, dirs yes, top yes, message **no**." in md
