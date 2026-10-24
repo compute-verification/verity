@@ -20,13 +20,16 @@
   s_w); and the weights' ``b/<K>``, K's linears' rows linear after linear, each its K weight codes then its f32 s_w (Σn
   rows every step's units read). With ``receipts`` (BRIDGE2), call c's receipt table ``receipt@<c>`` too: one row a unit
   of the call in its tile order, the unit's receipt, the statement's output row o0 (`receipt_words`: its nw = 2 (KS + m)
-  u32 words, each little-endian, so 2 nw u16 words), registered beside its z table, its domain bound to the open root
-  alike, and listed whole under round s's root (`segments`). Call c's public table ``pub@<c>`` holds its statement's
-  public row ``pub`` (`h1window.PUBS`): row t unit u0 + t's, `core_check.public_words` of the window's Program salt,
-  u0 + t and (root(``a/<K>@<s>``), root(``b/<K>``)), salted `core_check.public_row_salt` of the open root and u0 + t, so
-  anyone rebuilds it, as credit's `registered_file` and   Lean's ``registeredFile`` do; its rows are kept. At `close` the window commits its ok rows ``ok`` (`Served.ok`, the
-  statement's output row o1): row u `core_check.OK_ROW` under `core_check.ok_salt` of the open root and u, in no entry,
-  since credit registers them itself and refuses a window that does.
+  u32 words, each little-endian, so 2 nw u16 words), its domain bound to the open root alike, and listed whole under
+  round s's root (`segments`). A unit's seeds take its call's roots, root(A) its step's ``a/<K>@<s>`` and root(B)
+  ``b/<K>``, so a step's receipt tables of K are registered at its last call of K, once both are. Call c's public
+  table ``pub@<c>`` holds its statement's public row ``pub`` (`h1window.PUBS`): row t unit u0 + t's,
+  `core_check.public_words` of the window's Program salt, u0 + t and (root(``a/<K>@<s>``), root(``b/<K>``)), salted
+  `core_check.public_row_salt` of the open root and u0 + t, so anyone rebuilds it, as credit's `registered_file` and
+  Lean's ``registeredFile`` do; its rows are kept. Those are the salt, position and roots the unit's receipt is seeded
+  from. At `close` the window commits its ok rows ``ok`` (`Served.ok`, the statement's output row o1): row u
+  `core_check.OK_ROW` under `core_check.ok_salt` of the open root and u, in no entry, since credit registers them itself
+  and refuses a window that does.
 * **The weights are the period's** (`Weights`, VLLM-71): each K's ``b/<K>`` is registered once a period, before its first
   window's salt (`register_weights`), under the period's declared Program, binding no window, its salts fixed for the
   registration. `credit.weights_root` of their roots is the weights' root every window's open root binds and the
@@ -45,7 +48,8 @@
 * **When.** `Served.commit` registers call c's z table as `H1Run` records the call, step s's A table of K at its last
   call of K (salted from its first call's nonce), and puts the period's ``b/<K>`` in the call that completes K's weights
   (the last of K's linears in step 0), then, once both roots exist, each of the step's calls of K's ``pub@<c>``
-  (`Served._pubs`). Each root goes into that call's manifest row (``tables.registered``), so its
+  (`Served._pubs`) and, with ``receipts``, its receipt table. Each root goes into that call's manifest row
+  (``tables.registered``), so its
   round's root commits it before the round's coin, and round s's root also lists step s's A tables whole
   (`Served.segments`, `credit.round_root`). A weight is taken once, and one that changes within the window
   is refused. Without the period's `Weights` (an in-process window, which credits nothing) the window registers its own
@@ -154,7 +158,7 @@ def receipt_words(receipts: np.ndarray) -> np.ndarray:
     r = np.asarray(receipts)
     if r.ndim != 2 or r.dtype not in (np.uint16, np.uint32):
         raise ValueError(f"a call's receipts are (units, words) u32 or u16 words, not {r.dtype} {r.shape}")
-    return np.ascontiguousarray(r.astype("<u4" if r.dtype == np.uint32 else "<u2")).view("<u2").astype(np.uint16)
+    return np.array(np.ascontiguousarray(r, "<u4" if r.dtype == np.uint32 else "<u2").view("<u2"), np.uint16)
 
 
 def record_words(z: np.ndarray, y: np.ndarray, slots: int, tile: tuple[int, int]) -> np.ndarray:
@@ -339,8 +343,12 @@ class Served:
     #: the Commit's tap in the serving engine (`pouw_h1_commit.CommitTap`)
     tap: Any = None
     #: each call's receipts, one a unit in its tile order (`receipt_words`' input), from ``(call, codes, s_a, weight
-    #: codes, s_w)``: with it, each call's ``receipt@<c>`` is registered beside its z table (BRIDGE2)
+    #: codes, s_w)``: with it, each call's ``receipt@<c>`` is registered (BRIDGE2) at its step's last call of its K, once
+    #: the roots its units' seeds take, its step's ``a/<K>@<s>`` and ``b/<K>``, are registered; one with a ``prepare`` is
+    #: first handed those calls together (`_prepare`)
     receipts: Callable[[Any, np.ndarray, np.ndarray, np.ndarray, np.ndarray], np.ndarray] | None = None
+    #: with ``receipts``, each open step A table's calls, their served codes and s_a, until their step's last call of K
+    _held: dict[str, list[tuple[Any, np.ndarray, np.ndarray]]] = field(default_factory=dict)
     #: the window's ok rows ``<prefix>ok`` (`h1window.OK_PORT`'s, o1), from `close`: in no entry, as credit registers them
     ok: G.Registered | None = None
     #: each round's input-ids table and its words, with the tap
@@ -529,10 +537,10 @@ class Served:
         """Register call ``call``'s z table (its z/y ``records`` over its T slots, `pouw_h1_records`', split back to z and
         y and laid out in the Program's tile), add its A rows (its served rows ``a`` [m, K] and scales ``s_a`` [m]) to its
         step's A table of K at its rows in call order, registered whole once the step's calls of K are all in (in
-        whichever order its forward ran them), and take ``b/<K>`` once K's linears' weights
-        are all held, the period's (refused unless each linear's codes and s_w are its registered rows) or the window's
-        own: ``{value: root}``, what the call's manifest row commits under its round's root. Nothing once the window is
-        refused."""
+        whichever order its forward ran them: its last call of K), and take ``b/<K>`` once K's linears' weights are all
+        held (`_take_b`); with ``receipts``, at the step's last call of K, each of the step's calls of K's receipt
+        table, in call order (`_receipts` of the call's own codes and s_a): ``{value: root}``, what the call's manifest
+        row commits under its round's root. Nothing once the window is refused."""
         if self.root is None and not self.refused:
             self.open(run)
         if not self.refused:
@@ -558,12 +566,6 @@ class Served:
             out[value] = self._register(run, value, whole, nonce(mine[0], "a"), self.root)
         zy = HW.table(self.program, "zy", call.index)
         out[zy] = self._register(run, zy, record_words(zv, yv, self.m, self.tile), nonce(call.index, "zy"), self.root)
-        if self.receipts is not None:
-            got = self._receipts(call, codes, scales)
-            if got is None:
-                return {}
-            rc = self.receipt_table(call.index)
-            out[rc] = self._register(run, rc, got, RECEIPT_NONCE + call.index, self.root)
         if self.tap is not None:
             self.tap.arow(run, self, call, value, whole)
         b = self.program.fn.bindings["PREFIX"] + f"b/{call.k}"
@@ -571,6 +573,18 @@ class Served:
             return {}
         if whole is not None and b in self.registered:
             out.update(self._pubs(run, mine, value, b))
+        if self.receipts is not None:
+            self._held.setdefault(value, []).append((call, codes, scales))
+            if whole is not None:
+                held = sorted(self._held.pop(value), key=lambda x: x[0].index)
+                if not self._prepare(held):
+                    return {}
+                for c, cc, sc in held:
+                    got = self._receipts(c, cc, sc)
+                    if got is None:
+                        return {}
+                    rc = self.receipt_table(c.index)
+                    out[rc] = self._register(run, rc, got, RECEIPT_NONCE + c.index, self.root)
         return out
 
     def _take_b(self, run: Any, call: Any, b: str, out: dict[str, str]) -> bool:
@@ -609,12 +623,29 @@ class Served:
             out[v] = self._register(run, v, words, 0, self.root, salts)
         return out
 
+    def _weight_args(self, call: Any) -> tuple[np.ndarray | None, np.ndarray | None]:
+        w = self._weights.get(call.layer)
+        return None if w is None else w[1], self._scales.get(call.layer)
+
+    def _prepare(self, held: list[tuple[Any, np.ndarray, np.ndarray]]) -> bool:
+        """With a `receipts` that has a ``prepare``, hand it a step's calls of one K, each ``(call, codes, s_a, weight
+        codes, s_w)`` as `_receipts` then asks it, in that order (a producer computes them together); False when the
+        window is refused for it."""
+        prepare = getattr(self.receipts, "prepare", None)
+        if prepare is None:
+            return True
+        try:
+            prepare([(c, cc, sc, *self._weight_args(c)) for c, cc, sc in held])
+        except ValueError as e:
+            self.refused.append(f"calls {[c.index for c, _cc, _sc in held]}: {e}")
+            return False
+        return True
+
     def _receipts(self, call: Any, codes: np.ndarray, scales: np.ndarray) -> np.ndarray | None:
         """Call ``call``'s receipts' words (`receipts`, `receipt_words`), refused unless one row a unit of its tile
         unit's receipt width (`receipt_shape`)."""
-        w, s = self._weights.get(call.layer), self._scales.get(call.layer)
         try:
-            got = receipt_words(self.receipts(call, codes, scales, None if w is None else w[1], s))
+            got = receipt_words(self.receipts(call, codes, scales, *self._weight_args(call)))
         except ValueError as e:
             self.refused.append(f"call {call.index}: {e}")
             return None
