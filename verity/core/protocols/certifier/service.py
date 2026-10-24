@@ -34,7 +34,7 @@ the run and bound by the spec's context, and nothing declared at run time sets i
 pass N3's design from public occupancy, with no N3 unit: a head with frames where the profile says 0 fails N2's count
 check. An end without a profile has no such backing, since its occupancy is its record's own.
 
-**The check** is `LinkWindows.unit`, `NetworkLinkWindow` v3{EGRESS, INGRESS}, over the two certificates' signed digests
+**The check** is `LinkWindows.unit`, `NetworkLinkWindow` v4{EGRESS, INGRESS}, over the two certificates' signed digests
 (`certificate_digest`: each end's record digest hidden under the certifier's salt), the AND of three parts:
 - the certificates' check, one opaque primitive over the two signed digests with no gates, checked on the host: each
   certificate verifies under the network certifier's public key in its certifier session (`certifier_session`) over
@@ -46,9 +46,16 @@ check. An end without a profile has no such backing, since its occupancy is its 
   counts are the profile's row for the window; and its record digest under the certifier's salt is the signed digest,
   so the certificate signs the head the check opened. A window past the profile has no row to give, so it is rejected.
 
-In the unit's Program each head check is one gate that names the Definition (`head_check.gate`), because the commitment
-gadgets' Boolean bodies encode to about 140 MB and the proof service encodes the Program on every registration. The
-Program's digest names the check, so the spec, the stream and each registration bind to it.
+In the unit's Program each head check is one gate that names the Definition and its circuit digest (`head_check.gate`,
+`Gate[NetworkHeadCheck_v2{L,T,COUNTS}@<digest>]_v2`), because the commitment gadgets' Boolean bodies encode to about
+140 MB and the proof service encodes the Program on every registration. The digest is core's `program_digest` of the
+Definition's Program (`head_check.circuit_digest`), the one a C-Flock statement names a template by, pinned in
+`head_check.circuit-check.json` and held to the Definition by circuit-check. So the Program's digest binds the head
+check's circuit, and the spec, the stream and each registration bind to it: a proof of another circuit with the same
+interface names another Program, which the verifier of record refuses (`LinkWindows.proved`), and a proof's circuit
+puts the Definition where its gate stands only once the digest is the gate's (`head_check.expand`). The digest is read
+from the pin, never computed, since tracing the gadgets takes minutes: a size class no sidecar pins has a gate that
+names none (`@unpinned`), and no proof of its unit is accepted, while its verdict of record in the clear is unchanged.
 
 The count check is the part of the egress grid check that needs no frame's bytes, and the only grid check on ingress.
 It runs on every link-window, as a structural check must. In a proof it is an equality of each head's 32·T count bits
@@ -65,7 +72,10 @@ certifier's salts, and the four leaves' salts. It accepts when
 - each end's head check accepts (`head_check.reference`, which the tests hold to the circuit);
 - the audit (`audit.Audit`) accepts both records under the certifier's key and session, comparing no grid
   (`check_link(grid=False)`): the egress record on its status, its signature and the declared syncs, and the ingress
-  record on its status and parameters.
+  record on its status and parameters;
+- and, given the findings of a proof of the unit (`proved`, the verifier of record's run over the delivered proof,
+  `proofs.verify`), every gate of the unit names a pinned circuit digest and every session accepts and names this
+  link's registered Program (`LinkWindows.proved`).
 
 N2 compares no grid in the clear and takes no frames, so its claim is counts only: on every link-window the egress
 head's counts are the profile's (and the ingress head's, where that end declares one), which puts the link's timing at
@@ -74,8 +84,9 @@ digest binds both, so the frames are the rest of the grid, and N2 says nothing o
 unit with Selection `All`, nothing here holds the egress grid to the Program's.
 
 **A served link** (`LinkWindows(served=served.ServedProfile(…))`) has egress counts that follow its requests' arrivals
-and the run-time syncs, so no profile fixes them before the run. Its unit is `NetworkServedLinkWindow` v2{EGRESS,
-INGRESS, SERVED}: the checks above, and one gate naming `served.NetworkServedCounts_v1`, which holds the egress head's
+and the run-time syncs, so no profile fixes them before the run. Its unit is `NetworkServedLinkWindow` v3{EGRESS,
+INGRESS, SERVED}: the checks above, and one gate naming `served.NetworkServedCounts_v1` and its pinned circuit digest
+(`served.gate`, pinned in `served.circuit-check.json`), which holds the egress head's
 counts to the ones the ingress head's counts derive under the window's declared sync (`served`'s docstring has the
 derivation, its premises and the carry-over). Its public items are `PUBLIC_SERVED`: no egress profile, the served
 sizes, and the window's declared sync, the advice `charge` already counts, which the served counts read. Its verifier
@@ -129,6 +140,7 @@ from verity.core.protocols.certifier.grid import GridParams
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet
 from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
+from verity.core.protocols.sampled_proofs.one_stage.proofs import Finding
 from verity.core.protocols.sampled_proofs.one_stage.verdict import Verdict
 
 SPEC = "verity-network-certifier/service-spec/v0"
@@ -196,12 +208,12 @@ def _body_served(B, S_, *args):
 
 
 _UNIT = CompositeDefinition(
-    "NetworkLinkWindow", 3, ("EGRESS", "INGRESS"), lambda S_: (_SIGNED + _heads(S_), Bits(1)), _body,
+    "NetworkLinkWindow", 4, ("EGRESS", "INGRESS"), lambda S_: (_SIGNED + _heads(S_), Bits(1)), _body,
     doc="the proof unit of network accounting: one link-window, both directions, over the two certificates' signed "
         "digests; EGRESS and INGRESS are each end's head check's (L, T, COUNTS)", register=False)
 _SYNC = ("sync", Array(3, Array(SV.SYNC_BITS, BL.BIT)))
 _SERVED_UNIT = CompositeDefinition(
-    "NetworkServedLinkWindow", 2, ("EGRESS", "INGRESS", "SERVED"),
+    "NetworkServedLinkWindow", 3, ("EGRESS", "INGRESS", "SERVED"),
     lambda S_: (_SIGNED + _heads(S_) + (_SYNC,), Bits(1)), _body_served,
     doc="the proof unit of network accounting on a served link: `NetworkLinkWindow`'s checks, and the egress head's "
         "counts derived from the ingress head's under the declared sync (`served.NetworkServedCounts`, SERVED its "
@@ -485,12 +497,30 @@ class LinkWindows:
             raise ValueError("the opening is not the registered link-window's")
         return reg["roots"][0]["root"]
 
-    def verify(self, opening: Opening, draw: S.Draw, syncs: Sequence[ClockSync]) -> dict[str, Any]:
+    def gates(self) -> list[PrimitiveDefinition]:
+        """The unit's gates: each end's head check (`head_check.gate`), and on a served link the served counts'
+        (`served.gate`)."""
+        out = [HC.gate(*self.head_key(d)) for d in (0, 1)]
+        return out if self.served is None else out + [SV.gate(*self.served_key())]
+
+    def proved(self, findings: Sequence[Finding]) -> bool:
+        """Whether `findings`, the verifier of record's run over a delivered proof of the unit (`proofs.verify`), prove
+        this link's unit: every gate of it names its Definition's pinned circuit digest (`head_check.pinned`), and one or
+        more sessions each accepted and named the link's registered Program (the partition object's `program`), which
+        binds those digests. A proof of another circuit with the same interface names another Program, and a unit with
+        a size class no sidecar pins has no proof."""
+        want = self._partition["program"]
+        return all(HC.pinned(g) for g in self.gates()) and bool(findings) \
+            and all(f.accepted and f.program == want for f in findings)
+
+    def verify(self, opening: Opening, draw: S.Draw, syncs: Sequence[ClockSync],
+               proved: Sequence[Finding] | None = None) -> dict[str, Any]:
         """The verdict of record on the delivered opening: accepted when it reproduces the registered root under the
         link-window's domain, both head checks accept, and the audit accepts both records, comparing no grid (the module
         docstring). `syncs` are the declared clock syncs of windows 0 … w. The verdict reports the public outputs and
-        never the violation's kind. On a served link it also runs the served counts' check (`served_check`). Raises
-        `ValueError` on a link with neither an egress occupancy profile nor a served profile."""
+        never the violation's kind. On a served link it also runs the served counts' check (`served_check`). Given
+        `proved`, the findings of a proof of the unit, it accepts only when they prove this link's unit (`proved`).
+        Raises `ValueError` on a link with neither an egress occupancy profile nor a served profile."""
         if self.occupancy[0] is None and self.served is None:
             raise ValueError(_NO_PROFILE)
         root = self._registered(opening, draw)
@@ -498,6 +528,7 @@ class LinkWindows:
         sealed = self.root(opening) == root
         headed = all(i is not None and HC.reference(i) for i in self.head_checks(opening, bytes.fromhex(root)))
         headed = headed and (self.served is None or self.served_check(opening, syncs))
+        headed = headed and (proved is None or self.proved(proved))
         audit = Audit()
         out, inn = self._audit(audit, opening, syncs)
         accepted = sealed and headed and _accepts(out, inn, w)
@@ -540,10 +571,12 @@ class LinkWindows:
         return {"format": STATEMENT, "check": self.spec.check.program, "link": self.link, "window": opening.window,
                 "root": self.root(opening)}
 
-    def outcome(self, stream: S.Stream, draw: S.Draw, opening: Opening, syncs: Sequence[ClockSync]) -> S.Outcome:
-        """`stream.outcome` on the verifier of record's verdict, with the root the opening reproduces as the session's,
-        which one-stage's audit holds to the registered root."""
-        return stream.outcome(draw, {VERIFIER: self.verify(opening, draw, syncs)}, self.statement(opening),
+    def outcome(self, stream: S.Stream, draw: S.Draw, opening: Opening, syncs: Sequence[ClockSync],
+                proved: Sequence[Finding] | None = None) -> S.Outcome:
+        """`stream.outcome` on the verifier of record's verdict (`verify`, with `proved` when a proof of the unit was
+        delivered), with the root the opening reproduces as the session's, which one-stage's audit holds to the
+        registered root."""
+        return stream.outcome(draw, {VERIFIER: self.verify(opening, draw, syncs, proved)}, self.statement(opening),
                               session_roots={VALUE: self.root(opening)})
 
     def network_verdict(self, stream: S.Stream, windows: int | None = None) -> dict[str, Any]:

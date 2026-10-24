@@ -3,10 +3,13 @@ Build's workload Program of each TP rank, and on Programs derived from them for 
 express (README.md).
 
   measure --rank PATH ... --pins PINS --out DIR [--case NAME ...] [--gamma G] [--alpha NUM/DEN] [--jobs N]
-          [--scratch DIR] [--exe PATH]
+          [--scratch DIR] [--exe PATH] [--check-mem-gb G]
+  measure --case registered-node --node PATH --node-digest HEX [--node-trusted PATH --node-provenance PATH
+          [--node-registration PATH]] [--node-points POINT ...] --out DIR [...]
 
 `--rank` names each rank's workload descriptor (`build/rank<r>/build_workload/descriptor.json.gz` of the Build), in rank
-order, and `--pins` the Build's meta (`rank_workload_digests`), which each must match. The cases:
+order, and `--pins` the Build's meta (`rank_workload_digests`), which each must match. `--check-mem-gb` caps each
+`nci-check`'s address space, so one that outgrows its share fails rather than the node. The cases:
 
   registered  each rank's Program as registered, whose root is its inputs and one Call, the request: θ its weights
               (`annotations["theta"]`), then θ empty, one IU (the Call)
@@ -18,6 +21,16 @@ order, and `--pins` the Build's meta (`rank_workload_digests`), which each must 
   node        the eight ranks' requests joined into one Definition called once by a root of input nodes, each collective
               reading the other ranks' partials where it read its `peers_*` inputs (the TP exchange inside the node),
               the weights registered and θ: one IU, the node's session, at (Γ, α) and at its neighbours (α/2, 2α, Γ/2, 2Γ)
+  registered-node
+              the node Program `verity-vllm predict node` registered (`--node`), whose SHA-512 must be
+              `--node-digest`. One IU, every root node that isn't an input (the whole node's session), θ its
+              `RegisteredInput` root nodes (the descriptor's `annotations["theta"]` too, where it has them). `--policy`
+              at A (`GAMMA`, `ALPHA`), its neighbours and C (`ALPHA_C` at `GAMMA` and `GAMMA_C`). Given its
+              registration, the node is held to it before any check (it is the program of the record `--node-trusted`
+              cites as the run's own, `run`, and `--node-provenance` has one entry per θ node, each citing the log's
+              first record), and the check of record runs too, at A (`nci-check INSTANCE TRUSTED`,
+              `NciCheck.Baseline`: the policy check, then θ's provenance against the registration log).
+              `--node-points` picks some of `NODE_POINTS`
 
 A finer division of a whole session (per engine step, per layer, per Call) is not checked: `NciCheck.Desc` holds every
 read of a root node as pieces of gates, and on GLM-5.3 a Call's output is mostly one piece per leaf (the 6,144 outputs of
@@ -33,11 +46,12 @@ import argparse
 import gzip
 import hashlib
 import json
+import multiprocessing
 import re
 import sys
 import tempfile
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from fractions import Fraction
 from pathlib import Path
 
@@ -51,6 +65,20 @@ DESCRIPTOR = "verity-ir/descriptor/v1"
 #: the demo's policy (README.md): Γ gates per IU, α novel bits per gate
 GAMMA = 2 ** 44
 ALPHA = (1, 2 ** 25)
+#: the stricter point C: α = 2^-28, at Γ and at Γ = 2^52
+ALPHA_C = (1, 2 ** 28)
+GAMMA_C = 2 ** 52
+#: the registered node's checks, in the order they start: tag -> (Γ, α, the check of record or `--policy`)
+NODE_POINTS = {
+    "full": (GAMMA, ALPHA, True),
+    "A": (GAMMA, ALPHA, False),
+    "C": (GAMMA, ALPHA_C, False),
+    "C-2^52": (GAMMA_C, ALPHA_C, False),
+    "alpha/2": (GAMMA, (ALPHA[0], 2 * ALPHA[1]), False),
+    "2alpha": (GAMMA, (2 * ALPHA[0], ALPHA[1]), False),
+    "gamma/2": (GAMMA // 2, ALPHA, False),
+    "2gamma": (2 * GAMMA, ALPHA, False),
+}
 INPUT = re.compile(r"^(Registered)?Input[1-9][0-9]*_v1$")
 #: rank 0's Definitions checked gate by gate: the router, the fused all-reduce and norm, and an FP8 linear layer
 SLICES = ("MoeRouterSigmoidBias_v1{", "AllReduceRmsNormMnnvl_v1{", "DeepGemmFp8Linear_v1{K=6144,N=2624}")
@@ -401,8 +429,12 @@ class Runs:
         self.futures: list = []
         self.rows: list[dict] = []
 
-    def submit(self, path: Path, row: dict, unrolled: bool = False) -> None:
-        argv = [str(self.args.exe), "--policy", *(["--unrolled"] if unrolled else []), str(path)]
+    def submit(self, path: Path, row: dict, unrolled: bool = False, trusted: Path | None = None) -> None:
+        """`nci-check --policy` on the instance `path`, or with `trusted` the check of record against it."""
+        argv = [str(self.args.exe), *([str(path), str(trusted)] if trusted else
+                                      ["--policy", *(["--unrolled"] if unrolled else []), str(path)])]
+        if self.args.check_mem_gb:
+            argv = ["bash", "-c", 'ulimit -v "$0" && exec "$@"', str(self.args.check_mem_gb << 20), *argv]
         self.futures.append(self.pool.submit(self._run, argv, path, row))
 
     def _run(self, argv: list[str], path: Path, row: dict) -> dict:
@@ -413,8 +445,8 @@ class Runs:
         if v and "ius" in v:
             (self.out / "ius" / f"{row['case'].replace('/', '__')}.json").write_text(json.dumps(v["ius"], separators=(",", ":")))
         self.rows.append(row)
-        print(json.dumps({k: row.get(k) for k in ("case", "seconds", "max_rss_kb", "complies", "failure", "error",
-                                                  "ius", "max_size", "max_nci")}), flush=True)
+        print(json.dumps({k: row[k] for k in ("case", "rc", "seconds", "max_rss_kb", "complies", "failure", "error",
+                                              "ius", "max_size", "max_nci", "stderr") if k in row}), flush=True)
         return row
 
     def finish(self, meta: dict) -> list[dict]:
@@ -441,13 +473,17 @@ def summary(v: dict | None) -> dict:
             "worst_iu": ius[worst] if worst is not None else None}
 
 
-def write_instance(path: Path, ptext: str, theta: list, owner: list, gamma: int, alpha: tuple[int, int]) -> Path:
-    """`NciCheck.Desc`'s instance, `ptext` the program as a JSON string."""
+def write_instance(path: Path, ptext: str, theta: list, owner: list, gamma: int, alpha: tuple[int, int],
+                   provenance: list | None = None) -> Path:
+    """`NciCheck.Desc`'s instance, `ptext` the program as a JSON string; with `provenance`, `NciCheck.Baseline`'s."""
     with open(path, "w") as f:
         f.write(f'{{"alpha":[{alpha[0]},{alpha[1]}],"gamma":{gamma},"owner":')
         f.write(json.dumps(owner, separators=(",", ":")))
         f.write(',"program":')
         f.write(ptext)
+        if provenance is not None:
+            f.write(',"provenance":')
+            f.write(json.dumps(provenance, separators=(",", ":")))
         f.write(',"theta":')
         f.write(json.dumps(theta, separators=(",", ":")))
         f.write("}")
@@ -560,47 +596,89 @@ def slices(runs: Runs, scratch: Path, src: Source, body: dict, ref) -> None:
             runs.submit(upath, row | {"case": case + "/unrolled", "check": "unrolled"}, unrolled=True)
 
 
+def node_instances(args, scratch: Path) -> tuple[list[tuple], dict]:
+    """The registered node's instances, one per `--node-points` point, once its descriptor is its digest and, given its
+    registration, held to it (`registered-node`); run in a process of its own, as the decoded descriptor is tens of GB."""
+    from verity.core.protocols.sampled_proofs.one_stage import registration as REG
+
+    desc, ann = load(Path(args.node))
+    text, size = described(desc)
+    names = [desc["callees"][nd["fn"]] for nd in desc["definitions"][desc["root"]]["body"]["nodes"]]
+    del desc
+    theta = [k for k, n in enumerate(names) if n.startswith("RegisteredInput")]
+    owner = ["input" if INPUT.match(n) else 0 for n in names]
+    wrong = []
+    if size["sha512"] != args.node_digest:
+        wrong.append(f"its SHA-512 is {size['sha512'][:16]}, not --node-digest {args.node_digest[:16]}")
+    if not theta:
+        wrong.append("its root has no RegisteredInput node")
+    if "theta" in ann and list(ann["theta"]) != theta:
+        wrong.append(f"its annotations' θ ({len(ann['theta'])} nodes) isn't its RegisteredInput root nodes ({len(theta)})")
+    provenance = own = trusted = None
+    if args.node_trusted:
+        trusted = json.loads(Path(args.node_trusted).read_text())
+        provenance = json.loads(Path(args.node_provenance).read_text())
+        digests = [REG.digest(rec) for rec in trusted["log"]]
+        own = trusted["log"][digests.index(trusted["run"])] if trusted["run"] in digests else None
+        if own is None:
+            wrong.append(f"the trusted input's run {trusted['run'][:16]} is the digest of no record of its log")
+        elif own["program"] != size["sha512"]:
+            wrong.append(f"the run's record registers program {own['program'][:16]}, not this one")
+        if len(provenance) != len(theta):
+            wrong.append(f"{len(provenance)} provenance entries for {len(theta)} θ nodes")
+        elif any(p.get("registration") != digests[0] for p in provenance):
+            wrong.append("a provenance entry cites a record other than the log's first")
+        if args.node_registration:
+            reg = json.loads(Path(args.node_registration).read_text())
+            if (reg["program_digest"], reg["record_digest"]) != (size["sha512"], trusted["run"]):
+                wrong.append("the registration's summary names another program or record")
+    if wrong:
+        raise ValueError("the node is not the one named, or not its registration's: " + "; ".join(wrong))
+    info = {"root_calls": owner.count(0), "theta_nodes": len(theta), **size}
+    if own is not None:
+        info |= {"record": trusted["run"], "window": own["window"]}
+    ptext = json.dumps(text)
+    del text
+    made = []
+    for tag in args.node_points:
+        g, a, full = NODE_POINTS[tag]
+        case = "registered-node/full" if full else "registered-node/session" + ("" if tag == "A" else f"@{tag}")
+        path = write_instance(scratch / f"registered-node_{tag.replace('/', '_')}.json", ptext, theta, owner, g, a,
+                              provenance if full else None)
+        made.append((case, path, full, g, a))
+    return made, info
+
+
+def registered_node(runs: Runs, scratch: Path) -> dict:
+    with ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("spawn")) as ex:
+        made, info = ex.submit(node_instances, runs.args, scratch).result()
+    for case, path, full, g, a in made:
+        runs.submit(path, {"case": case, "program": "registered-node", "division": "session", "gamma": g,
+                           "alpha": list(a), "check": "baseline" if full else "desc", **info},
+                    trusted=Path(runs.args.node_trusted) if full else None)
+    return info
+
+
 def measure(args) -> int:
-    pins = json.loads(Path(args.pins).read_text())
-    digests = pins["rank_workload_digests"]
-    if len(args.rank) != len(digests):
-        raise SystemExit(f"--rank names {len(args.rank)} descriptors; the Build pins {len(digests)} ranks")
+    if "registered-node" in args.case:
+        if not (args.node and args.node_digest):
+            raise SystemExit("registered-node: give --node and --node-digest")
+        if bool(args.node_trusted) != bool(args.node_provenance):
+            raise SystemExit("registered-node: give both --node-trusted and --node-provenance (the registration), or neither")
+        record = {t for t, (_, _, full) in NODE_POINTS.items() if full}
+        args.node_points = args.node_points or [t for t in NODE_POINTS if args.node_trusted or t not in record]
+        if not args.node_trusted and record & set(args.node_points):
+            raise SystemExit("registered-node: the check of record (--node-points full) needs the registration: give "
+                             "--node-trusted and --node-provenance")
     runs = Runs(args)
     t0 = time.perf_counter()
+    meta: dict = {}
     with tempfile.TemporaryDirectory(dir=args.scratch) as tmp:
         scratch = Path(tmp)
-        descs: list[dict] = []
-        for r, path in enumerate(args.rank):
-            desc, ann = load(Path(path))
-            if r == 0:
-                ann0 = ann
-            if "registered" in args.case:
-                registered(runs, scratch, r, desc, ann, digests[r], with_theta=r == 0)
-            descs.append(desc)
-            if "node" not in args.case and r > 0:
-                descs[r] = None  # type: ignore[call-overload]
-        src = Source(descs[0])
-        key, body = request(descs[0])
-        ends, colls = structure(body)
-        meta = {"pins": pins, "rank0": {"request": key[:200], "body_nodes": len(body["nodes"]), "steps": len(ends),
-                                        "collectives": len(colls), "step_ends": ends}}
-        if "rank" in args.case:
-            reg = register(descs[0], ann0["theta"])
-            check_program(runs, scratch, "rank/r0", reg, ann0["theta"], {"rank": 0}, neighbours=False)
-            del reg
-        if "slice" in args.case:
-            slices(runs, scratch, src, body, _reference())
-        if "node" in args.case:
-            srcs = [Source(d) for d in descs]
-            bodies = [request(d)[1] for d in descs]
-            t = time.perf_counter()
-            desc = join(srcs, bodies, [structure(b)[1] for b in bodies])
-            meta["join_seconds"] = round(time.perf_counter() - t, 1)
-            del srcs, bodies, descs
-            nodes = desc["definitions"][desc["root"]]["body"]["nodes"]
-            theta = [k for k, nd in enumerate(nodes) if desc["callees"][nd["fn"]].startswith("RegisteredInput")]
-            check_program(runs, scratch, "node", desc, theta, {"ranks": len(args.rank)}, neighbours=True)
-            del desc, nodes
+        if "registered-node" in args.case:
+            meta["node"] = registered_node(runs, scratch)
+        if set(args.case) - {"registered-node"}:
+            meta |= ranks(runs, scratch, args)
         rows = runs.finish(meta | {"gamma": args.gamma, "alpha": list(args.alpha), "seconds": round(time.perf_counter() - t0, 1)})
     bad = [r["case"] for r in rows if r.get("rc") != 0 or ("error" in r and not r["case"].endswith("theta-weights"))]
     keys = ("gates", "ius", "complies", "failure", "computed", "novel", "max_size", "worst_iu")
@@ -615,19 +693,69 @@ def measure(args) -> int:
     return 0
 
 
+def ranks(runs: Runs, scratch: Path, args) -> dict:
+    """The cases on the Build's rank Programs (`registered`, `rank`, `slice`, `node`); their meta."""
+    if not (args.rank and args.pins):
+        raise SystemExit(f"{', '.join(c for c in args.case if c != 'registered-node')}: give --rank and --pins")
+    pins = json.loads(Path(args.pins).read_text())
+    digests = pins["rank_workload_digests"]
+    if len(args.rank) != len(digests):
+        raise SystemExit(f"--rank names {len(args.rank)} descriptors; the Build pins {len(digests)} ranks")
+    descs: list[dict] = []
+    for r, path in enumerate(args.rank):
+        desc, ann = load(Path(path))
+        if r == 0:
+            ann0 = ann
+        if "registered" in args.case:
+            registered(runs, scratch, r, desc, ann, digests[r], with_theta=r == 0)
+        descs.append(desc)
+        if "node" not in args.case and r > 0:
+            descs[r] = None  # type: ignore[call-overload]
+    src = Source(descs[0])
+    key, body = request(descs[0])
+    ends, colls = structure(body)
+    meta = {"pins": pins, "rank0": {"request": key[:200], "body_nodes": len(body["nodes"]), "steps": len(ends),
+                                    "collectives": len(colls), "step_ends": ends}}
+    if "rank" in args.case:
+        reg = register(descs[0], ann0["theta"])
+        check_program(runs, scratch, "rank/r0", reg, ann0["theta"], {"rank": 0}, neighbours=False)
+        del reg
+    if "slice" in args.case:
+        slices(runs, scratch, src, body, _reference())
+    if "node" in args.case:
+        srcs = [Source(d) for d in descs]
+        bodies = [request(d)[1] for d in descs]
+        t = time.perf_counter()
+        desc = join(srcs, bodies, [structure(b)[1] for b in bodies])
+        meta["join_seconds"] = round(time.perf_counter() - t, 1)
+        del srcs, bodies, descs
+        nodes = desc["definitions"][desc["root"]]["body"]["nodes"]
+        theta = [k for k, nd in enumerate(nodes) if desc["callees"][nd["fn"]].startswith("RegisteredInput")]
+        check_program(runs, scratch, "node", desc, theta, {"ranks": len(args.rank)}, neighbours=True)
+        del desc, nodes
+    return meta
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="nci_glm.py", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     m = sub.add_parser("measure")
-    m.add_argument("--rank", nargs="+", required=True)
-    m.add_argument("--pins", required=True)
+    m.add_argument("--rank", nargs="+")
+    m.add_argument("--pins")
     m.add_argument("--out", required=True)
-    m.add_argument("--case", action="append", choices=("registered", "rank", "slice", "node"))
+    m.add_argument("--case", action="append", choices=("registered", "rank", "slice", "node", "registered-node"))
     m.add_argument("--gamma", type=int, default=GAMMA)
     m.add_argument("--alpha", type=lambda s: tuple(map(int, s.split("/"))), default=ALPHA)
     m.add_argument("--jobs", type=int, default=4)
     m.add_argument("--scratch", default=None)
     m.add_argument("--exe", type=Path, default=EXE)
+    m.add_argument("--check-mem-gb", type=int, default=None)
+    m.add_argument("--node")
+    m.add_argument("--node-digest")
+    m.add_argument("--node-trusted")
+    m.add_argument("--node-provenance")
+    m.add_argument("--node-registration")
+    m.add_argument("--node-points", nargs="+", choices=tuple(NODE_POINTS), default=None)
     args = ap.parse_args(argv)
     args.case = args.case or ["registered", "rank", "slice", "node"]
     return measure(args)
