@@ -189,8 +189,11 @@ theorem repCut_cutL0 (coin : ℕ → ℕ → F128) (hs : Hashes PS) (st : Setup)
           (padsL0 coin l₁.size sch t (basisVals res.2.2.2.2 (st.m - 7)) (Zk.PadLayout.new st.m st.kLog sch.k0) extra
             rp src) rp extra fun _ _ => 0))
       (((repCut (asksCut coin (l₁.size + j)) hs st sch rep dom cm0 extras ic src prior words).run tr).go l) := by
-  refine cutStop_of_eraseZ (m := repCut (asksCut coin (l₁.size + j)) hs st sch rep dom (eraseC cm0) extras ic src prior
-    words) (Claims.ZKMal.Masked.FinRep.repCut_eraseC _ hs st sch rep dom rfl rfl extras ic src prior words) ?_
+  have hcap : (eraseC cm0).cap = cm0.cap := rfl
+  have hlay : (eraseC cm0).layers = cm0.layers := rfl
+  have he := Claims.ZKMal.Masked.FinRep.repCut_eraseC (asksCut coin (l₁.size + j)) hs st sch rep dom hcap hlay extras
+    ic src prior words
+  refine cutStop_of_eraseZ he ?_
   obtain ⟨zp, lp, ss, T, sws⟩ := res
   unfold repCut
   dsimp only
