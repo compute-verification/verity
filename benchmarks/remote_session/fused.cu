@@ -195,7 +195,7 @@ int launch(const void *w, uint64_t base, const void *x, void *part, void *dump, 
   gemm_kernel<NT, MT, DUMP><<<dim3(tiles, splits), TH, S::SMEM, s>>>(
       (const u32 *)w, base, (const uint16_t *)x, (float *)part, (uint16_t *)dump, M, N, K, k, per, steps);
   const int rc = (int)cudaPeekAtLastError();
-  return rc ? rc : splits;
+  return rc ? -1000 - rc : splits;
 }
 
 // NT 64 (KT 128) for every batch tile; NT 32 (KT 256, half the accumulators a thread) from MT 16.
@@ -279,7 +279,7 @@ int kv_gemm_occupancy(int M, int nt) {
 
 // y [M][N] bf16 = x [M][K] bf16 (contiguous, 16-byte aligned) times W^T, W's N K bf16 encoded at w from codec index
 // base, plus bias [N] (or none). part holds splits M N floats; part_bytes is its size. nt 0, 32 or 64 (0: 64); splits 0
-// picks them (kv_gemm_splits). Returns the splits used, or a negative or CUDA error.
+// picks them (kv_gemm_splits). Returns the splits used, or a negative error (-1000 - a CUDA error).
 int kv_gemm(const void *w, uint64_t base, const void *x, void *y, const void *bias, void *part, uint64_t part_bytes, int M,
             int N, int K, int k, int nt, int splits, cudaStream_t s) {
   if (k < 1 || k > kv::KMAX || M < 1 || M > kvg::MAX_M || ((uintptr_t)x & 15) || ((uintptr_t)w & 15)) return -1;
@@ -291,7 +291,7 @@ int kv_gemm(const void *w, uint64_t base, const void *x, void *y, const void *bi
   kvg::reduce_kernel<<<std::min<size_t>(((size_t)M * N + 255) / 256, 4096), 256, 0, s>>>(
       (const float *)part, (const uint16_t *)bias, (uint16_t *)y, M, N, got);
   const int rc = (int)cudaPeekAtLastError();
-  return rc ? rc : got;
+  return rc ? -1000 - rc : got;
 }
 
 // W decoded through kv_gemm's tiles at the batch tile of M rows (the shared rows its MMAs read) into out [N][K] bf16.
