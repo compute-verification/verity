@@ -3,8 +3,9 @@ service on simulated vLLM serving written as I1's advice v0 (varied prompt, requ
 prefill, prefix-cache hits and their sources, a preemption and its resume, the async row past a finish, a step's rows
 out of request order, frames released after they're handed and responses spanning windows): honest traffic accepted
 in every window, salted or not, and an advice whose output length is one off, which misses a request or moves a
-release bucket, a response released before its request, a window's ingress total off, a sync outside Σ_sync, and
-extra egress each refused; and the ingress ends, derived from v0's prompt lengths through the link's framing."""
+release bucket, a response released before its request or faster than its declared rate, a window's ingress total
+off, a sync outside Σ_sync, and extra egress each refused; and the ingress ends, derived from v0's prompt lengths
+through the link's framing."""
 
 import itertools
 import json
@@ -509,6 +510,25 @@ def test_a_response_released_before_its_request_is_refused(tmp_path):
     w = (first - SYNCS[first // T].delta) // T
     assert not check(session, link, ingress=late)[w]
     assert not Run(tmp_path).link(session, link, ingress=late)[w]
+
+
+def test_a_release_faster_than_the_declared_rate_is_refused():
+    """The floor holds each output to the declared rate, not only to its request: a request of one ingress frame,
+    released in bucket 1, whose 3 outputs are all released in bucket 2. Under δ = 1, ρ = 4 all three are eligible there
+    and the window is accepted; under ρ = 2 the third is eligible a bucket later, so the floor wants the request by
+    bucket 0 and the ingress counts refuse it, while the third released in bucket 3 is accepted."""
+    a = ADV.Advice((ADV.RequestAdvice("a", 1, 3, "length"),),
+                   (ADV.StepAdvice((ADV.Row(0, "prefill", 0, 1),)), ADV.StepAdvice((ADV.Row(0, "decode", 1, 1),)),
+                    ADV.StepAdvice((ADV.Row(0, "decode", 2, 1),))), (2, 2, 2))
+    ingress = [0, 1] + [0] * (T - 2)
+
+    def accepted(link, sync):
+        v = _view(link, 0, [sync])
+        return AD.reference(T, RIN, 0, ingress, v.released, v.released, v.floor, v.received)
+
+    link = AD.LinkAdvice(a, (1,))
+    assert accepted(link, ClockSync(1, 4)) and not accepted(link, ClockSync(1, 2))
+    assert accepted(AD.LinkAdvice(replace(a, release=(2, 2, 3)), (1,)), ClockSync(1, 2))
 
 
 def test_a_windows_ingress_total_off_is_refused(tmp_path):
