@@ -4,7 +4,9 @@ reference of the Lean `PouwCheck.Credit` (`lean/check`), held to it by the difft
 `window` and `period_credit` are they with each drawn unit's outcome from the verifier of record's own run, which the
 Lean `PouwCheck.Credit.window` takes as given. Those outcomes are the Lean's (`PouwCheck.Verified`, `_lean_verified`):
 the Lean decides which statements the verifier runs on, with which inputs, and what its answers credit; `_verified` is
-its Python reference, held to it by the difftest (`lean/check/tests/test_verified_difftest.py`).
+its Python reference, held to it by the difftest (`lean/check/tests/test_verified_difftest.py`). Each round's live
+outcome is the Lean's too (`PouwCheck.LiveVerified`, `_lean_live_verified`), with `_live_verified` its reference
+(`lean/check/tests/test_live_verified_difftest.py`).
 
 **`window` and `period_credit` are the only entries.** On one window's evidence and one round log, `window` runs every
 step and credits only when all of them accept: `_credited`, `core_check.rounds`, `_a_link`, `layout_of`, its period's
@@ -77,8 +79,9 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   draw's population stays the Program's units, padded slots included (`call_work`). Each step's m_s is proved (`_live`).
 * **Each step's served rows are the live Program's** (`_live`, `live_of`): the window's evidence carries its live
   Program (`circuit.live.program`, ``live``: its descriptor, and each round's live@<s> proof outcome, or in `window`
-  its proof files, `_live_verified`), whose record's T, S and PREFIX must be the period's committed T, the window's
-  round count and its circuit's PREFIX, its root's units S calls of `PouwLiveSlots_v1{T}`. Every round is proved, never
+  its proof files, `_live_verified`, whose verdict is the Lean's, `_lean_live_verified`), whose record's T, S and
+  PREFIX must be the period's committed T, the window's round count and its circuit's PREFIX, its root's units S calls
+  of `PouwLiveSlots_v1{T}`. Every round is proved, never
   sampled: round s's one accepted proof, verified against that descriptor, opened its slot ports at round s's slot table
   ``<prefix>slots@<s>`` and its header ports at round 0's request table ``<prefix>requests@0`` at their registered roots
   (each registered once with T rows; `_a_link` holds the slot table to round s's root and `_arow` the request table to
@@ -1716,34 +1719,21 @@ def _live_verified(files: Any, run: Run) -> Lived:
     `CIRCUIT_FILES`, else ``circuit``), against the live descriptor, its partition object (every instance of its
     template one unit) and the ``--registered`` file credit builds itself (`live_reads.reads_file`, under the window
     Program's digest, its open root and its session, at the step's m_s). A session the
-    verifier rejects refuses the window (``live``), and so does one that proved another unit than its round's."""
+    verifier rejects refuses the window (``live``), and so does one that proved another unit than its round's. The
+    Python reference of the Lean's `PouwCheck.LiveVerified` (`_lean_live_verified`), held to it by the difftest
+    (`lean/check/tests/test_live_verified_difftest.py`)."""
     def lived(live: dict, raw: bytes, got: dict, roots: dict, ms: list[int], program: str, window: str, session: str
               ) -> tuple[list | None, tuple[str, str] | None]:
         statements = live["statements"]
-        if not (isinstance(files, dict) and all(type(x) is str and _digest(v) is not None for x, v in files.items())):
-            return None, ("circuit", FILES_FORM)
-        if LIVE not in files:
-            return None, ("circuit", no_live_files())
-        if not (isinstance(statements, list)
-                and all(isinstance(s, dict) and sorted(s) == list(LIVE_STATEMENT_KEYS) and _nat(s["round"])
-                        and type(s["circuit"]) is str and type(s["public"]) is str and type(s["sessions"]) is list
-                        and s["sessions"] and all(type(x) is str for x in s["sessions"]) for s in statements)):
-            return None, (LIVE, LIVE_STATEMENTS_FORM)
-        digest = hashlib.sha512(raw).hexdigest()
-        partition = {"format": PARTITION_FORMAT, "program": digest,
-                     "query": {"name": QUERY[0], "version": QUERY[1], "params": {"templates": [got["unit"]]}}}
-        out, seen = [], set()
-        for st in statements:
+        asks, refused = _live_asks(files, statements, raw, got, roots, ms, program, window, session)
+        out: list[dict] = []
+        for a in asks:
+            st = statements[a["statement"]]
             s = st["round"]
-            if s >= got["S"] or s in seen:
-                return None, (LIVE, f"round {s} has {'two live statements' if s in seen else 'a live statement'} and "
-                                    f"the window has {got['S']} rounds: each round's live@<s> is one statement, "
-                                    "verified once")
-            seen.add(s)
-            reg = LR.reads_file(program, got["T"], got["S"], s, roots, window, session, ms[s], got["prefix"])
             try:
                 found, why = run(PF.Proof(Path(st["circuit"]), Path(st["public"]), tuple(map(Path, st["sessions"]))),
-                                 circuit_sha512=files[LIVE], program=raw, partition=partition, registered=reg)
+                                 circuit_sha512=a["circuit_sha512"], program=raw, partition=a["partition"],
+                                 registered=a["registered"])
             except (PF.LeanError, OSError, ValueError, KeyError, TypeError) as e:
                 return None, (LIVE, f"round {s}'s live@{s} could not be verified, so the window stays refused: {e}")
             if why is not None:
@@ -1756,8 +1746,68 @@ def _live_verified(files: Any, run: Run) -> Lived:
                     return None, (LIVE, f"round {s}'s live@{s} session {f.session} proved units {list(f.units)}, not "
                                         f"unit {s}: round s's statement proves its own round's unit")
                 out.append({"unit": s, "verdict": "accept", "program": f.program, "registered": f.registered})
-        return out, None
+        return (None, refused) if refused is not None else (out, None)
     return lived
+
+
+def _live_asks(files: Any, statements: Any, raw: bytes, got: dict, roots: dict, ms: list[int], program: str,
+               window: str, session: str) -> tuple[list[dict], tuple[str, str] | None]:
+    """The verifier runs `_live_verified` makes, in statement order, up to the first statement a check before the
+    verifier refuses, and that refusal (or None): each ``{statement, circuit_sha512, registered, partition}``, the
+    statement's index among `statements` and the verifier's inputs for it. The Python reference of the Lean's
+    `PouwCheck.LiveVerified.asks`, which `_lean_live_verified` runs the verifier on."""
+    if not (isinstance(files, dict) and all(type(x) is str and _digest(v) is not None for x, v in files.items())):
+        return [], ("circuit", FILES_FORM)
+    if LIVE not in files:
+        return [], ("circuit", no_live_files())
+    if not (isinstance(statements, list)
+            and all(isinstance(s, dict) and sorted(s) == list(LIVE_STATEMENT_KEYS) and _nat(s["round"])
+                    and type(s["circuit"]) is str and type(s["public"]) is str and type(s["sessions"]) is list
+                    and s["sessions"] and all(type(x) is str for x in s["sessions"]) for s in statements)):
+        return [], (LIVE, LIVE_STATEMENTS_FORM)
+    partition = {"format": PARTITION_FORMAT, "program": hashlib.sha512(raw).hexdigest(),
+                 "query": {"name": QUERY[0], "version": QUERY[1], "params": {"templates": [got["unit"]]}}}
+    out: list[dict] = []
+    seen: set[int] = set()
+    for i, st in enumerate(statements):
+        s = st["round"]
+        if s >= got["S"] or s in seen:
+            return out, (LIVE, f"round {s} has {'two live statements' if s in seen else 'a live statement'} and the "
+                               f"window has {got['S']} rounds: each round's live@<s> is one statement, verified once")
+        seen.add(s)
+        reg = LR.reads_file(program, got["T"], got["S"], s, roots, window, session, ms[s], got["prefix"])
+        out.append({"statement": i, "circuit_sha512": files[LIVE], "registered": reg, "partition": partition})
+    return out, None
+
+
+def _lean_live_verified(files: Any, entries: Any, run: Run) -> Lived:
+    """`_live_verified`'s `lived` from the Lean verifier of record (`PouwCheck.LiveVerified.liveVerified`,
+    `verifier.lean`), over the window's registered `entries`: the Lean names the verifier runs (`_live_asks`), this runs
+    `run` on each in order until an answer the Lean will refuse at (an error, a refusal or a rejected session), and the
+    Lean judges the answers. A Lean that can't run leaves the window refused (``live``)."""
+    def lived(live: dict, raw: bytes, _got: dict, _roots: dict, ms: list[int], program: str, window: str,
+              session: str) -> tuple[list | None, tuple[str, str] | None]:
+        statements = live["statements"]
+        q = {"files": files, "statements": statements, "descriptor": raw.hex(), "entries": entries, "ms": ms,
+             "program": program, "window": window, "session": session, "runs": None}
+        try:
+            got = V.lean("credit-live-verified", q)
+            if "run" in got:
+                runs = []
+                for a in got["run"]:
+                    runs.append(_answer(run, statements[a["statement"]], a, raw))
+                    if "findings" not in runs[-1] or not all(f["accepted"] for f in runs[-1]["findings"]):
+                        break
+                got = V.lean("credit-live-verified", {**q, "runs": runs})
+        except V.LeanError as e:
+            return None, (LIVE, f"the Lean verifier of record could not judge the window's live statements, so the "
+                                f"window stays refused: {e}")
+        return (None, tuple(got["refused"])) if "refused" in got else (got["outcomes"], None)
+    return lived
+
+
+def _live_runner(files: Any, entries: Any, run: Run) -> Lived:
+    return _lean_live_verified(files, entries, run) if V.RECORD_VERDICT == "lean" else _live_verified(files, run)
 
 
 Proved = Callable[[dict, bytes, list[int], int], tuple[Any, tuple[str, str] | None]]
@@ -1882,13 +1932,14 @@ def window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: An
     circuit file whose SHA-512 `circuit_files` gives its K, ``{k<K>: SHA-512}``, the period-open's `CIRCUIT_FILES`, and
     the ``--registered`` file credit builds from the descriptor and the window's entries). The evidence carries proof
     files, never verdicts, and so does its `live` evidence (`LIVE_STATEMENTS`: the live Program's descriptor and each
-    round's live@<s> proof files, `_live_verified`, on the circuit file `circuit_files`' ``live``). `run` is the
+    round's live@<s> proof files, `_live_verified`, on the circuit file `circuit_files`' ``live``). Both verdicts are
+    the Lean's when `verifier.RECORD_VERDICT` is ``"lean"`` (`_lean_verified`, `_lean_live_verified`). `run` is the
     verifier of record (`proofs.verify`), the verifier's own, never the evidence's.
 
     `period_credit` ties `descriptor` to the circuit the window's period committed; a window counts only there."""
     got, why = _window(key, ledger, pins, main, window, session, salt, calls, served, commit, rounds, draw, descriptor,
                        entries, _runner(statements, circuit_files, entries, window, salt, run), live,
-                       _live_verified(circuit_files, run), LIVE_STATEMENTS, k, rows, verify)
+                       _live_runner(circuit_files, entries, run), LIVE_STATEMENTS, k, rows, verify)
     return (None, why) if got is None else (got[0], None)
 
 
@@ -2181,7 +2232,8 @@ def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: 
             return None, why
         proved = ((lambda *_, p=w["proofs"]: (p, None)) if run is None
                   else _runner(w["statements"], files, w["entries"], w["window"], w["salt"], run))
-        lived, lk = (_live_outcomes, LIVE_KEYS) if run is None else (_live_verified(files, run), LIVE_STATEMENTS)
+        lived, lk = ((_live_outcomes, LIVE_KEYS) if run is None
+                     else (_live_runner(files, w["entries"], run), LIVE_STATEMENTS))
         got, why = _window(key, ledger, pins, main, w["window"], w["session"], w["salt"], w["calls"], w["served"],
                            w["commit"], w["rounds"], w["draw"], w["descriptor"], w["entries"], proved, w["live"], lived,
                            lk, big_k, t, verify)
