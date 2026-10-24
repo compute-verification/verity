@@ -1,3 +1,4 @@
+import Definitions.Pouw.H1Zy.Chain
 import Definitions.Pouw.H1Zy.Combine
 import Definitions.Pouw.H1Zy.CombineBits
 import Definitions.Pouw.H1Zy.Dequant
@@ -10,6 +11,11 @@ import Definitions.Pouw.H1Zy.LaneChunk
 
 `Combine`: `PouwH1Combine_v1{TILE}`'s body on its primitives' word views, the receipt check over a leaf's lanes'
 partials. Proved to be the XOR check in `Proofs.Pouw.H1Zy`.
+
+`Chain`: a lane's chain words (`h1tile._chain`), the fx1 chain over its rows' and columns' noise from seed_j, keyed from
+σ_R, as `LaneChunk`'s step machine (`h1Chain K`): the seeds and noise stream (SHA-512), the layout, and the segment and
+digit pieces' word views. `Accounting.Guarantees.TS.LeafLanesSound` reads its words as the lanes' (`laneChain`);
+`Proofs.Pouw.H1Zy.ChainVectors` holds it to the Python.
 
 `CombineBits`: the same body on bits, its pieces (`PouwXor32_v2`, `PouwEq32_v2`, `PouwAndBit_v2`) at their lowerings.
 Proved in `Proofs.Pouw.H1Zy` to compute `Combine`'s.

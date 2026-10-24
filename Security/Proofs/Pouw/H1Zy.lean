@@ -1,3 +1,4 @@
+import Proofs.Pouw.H1Zy.ChainVectors
 import Proofs.Pouw.H1Zy.Combine
 import Proofs.Pouw.H1Zy.CombineBits
 import Proofs.Pouw.H1Zy.DequantVectors
@@ -10,6 +11,9 @@ import Proofs.Pouw.H1Zy.LaneChunk
 
 `Combine`: `PouwH1Combine_v1`'s `ok` is `true` exactly when the lanes' partials XOR, in lane order, to the receipt
 (`Pouw.H1Zy.combineOk_iff`). `Proofs.Accounting.TS.Session.Lanes.Combine` reads it as `LeafChecks`' combine field.
+
+`ChainVectors`: `Pouw.H1Zy.h1Chain`'s pieces, seeds and noise stream, and its chain on a lane's noise, on values the
+Python computes, checked by the kernel.
 
 `CombineBits`: the combine's body on bits computes it on words (`Pouw.H1Zy.combineBits_bitsOf`), each piece's lowering
 its word view.
