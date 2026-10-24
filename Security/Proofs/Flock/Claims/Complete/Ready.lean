@@ -35,7 +35,7 @@ import Proofs.Flock.Claims.Complete.ZkTables.Honest
   bits at `i·2^m + a`, `tracesOf`, the relation's only at one table): `ZkTables.ready` at the masked session's run of
   `honestPZk` (`RecordFitsZkAt`), at one table.
 * `CompleteWith H D P δc`: `Claims.Flock.Complete`'s statement at `D` with a prover and an error of one's own, which
-  the masked proofs state `honestPZk`'s completeness at `δcZk` in, and `ZkTables.honestP`'s at `ZkTables.δc`, which is
+  the masked proofs state `honestPZk`'s completeness at `δcZk` in, and `ZkTables.honestPR`'s at `ZkTables.δc` is
   `Claims.Flock.Complete H (deployZk rel)`.
 -/
 

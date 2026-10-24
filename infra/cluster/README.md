@@ -10,8 +10,8 @@ On vy-nebius-2 the agent (`cluster agent`) runs beside today's tools. In shadow 
 through a lock), mirrors what it did into the ledger, and records what the planner would have done (`shadow.py`). In live
 mode it holds `/run/gpu-lease/agent.lock` and carries the plan out: it evicts by signal and grants by writing
 `grant.<pid>`, which `gpu-lease`'s agent mode (on `infra/nebius`, 49238797 in fixtures/) takes; a free `agent.lock` puts
-`gpu-lease` back on its own rules. The live agent runs as `vy-cluster-agent.service` (the unit file here, pinned to one
-shipped tree) with `--roll`: a new ledger segment under `live/` for each start and each UTC day, the segments one hash
+`gpu-lease` back on its own rules. The live agent runs as `vy-cluster-agent.service` (the unit file here, run from the
+copy of this directory that `research deploy` installs at `/workspace/verity-guest/cluster-agent`) with `--roll`: a new ledger segment under `live/` for each start and each UTC day, the segments one hash
 chain, which `cluster ledger ... live/` reads whole. `cluster shadow replay` runs the shadow over a day's copied logs, and `cluster shadow
 evaluate` is the pass bar. On vy-nebius-1, `nebius1` reads Kueue's pods and Workloads and DCGM's GPU-to-pod labels as
 allocations and a queue, and `python -m cluster.nebius1 DESCRIPTION [--save|--from SNAPSHOT]` prints what the planner would
@@ -54,8 +54,9 @@ src/cluster/
 │               SSH, logged in its override log and read back
 └── cli.py      cluster validate | plan | submit | ledger … | agent | shadow replay | shadow evaluate | status | policy
 descriptions/nebius.toml   vy-nebius-1 and vy-nebius-2 as their owners describe them on 30 Sep 2026, and their policy
+descriptions/nebius-after-n1.toml   node 2 alone, staged for node 1's retirement (INF-57): it replaces nebius.toml then
 kinds/<owner>.toml         each owner lane's job kinds, read from the tree a submitter ships (kinds.py's docstring)
-vy-cluster-agent.service   node 2's live agent as a systemd unit: install, pin, stop and restart in its header
+vy-cluster-agent.service   node 2's live agent as a systemd unit: install, stop and restart in its header
 tests/          one scenario per rule (test_plan.py), random workloads checked against every rule (test_simulation.py),
                 and node 2's own logs and gpu-lease (fixtures/: 30 Sep 07:20-07:58Z, the live gpu-lease 0d172cf3 and
                 the agent-mode gpu-lease 49238797 held for deploy)
@@ -73,6 +74,12 @@ runs with everything else on its node evicted (GPU work) or frozen (CPU work); t
 node and lower jobs backfill only around it; no job admitted past its node's admission end or its share's end, and frozen
 time not counted against `max_s`; equal jobs take turns by submitter; idle GPU leases named and reclaimed from `requeue`
 holders.
+
+A node's stop is machine state: its live `/etc/research/deadline`, which infra rewrites on each renewal. Node 2's agent
+reads it every tick (`agent --deadline-file`), and `research run --queue` reads each candidate node's over ssh and passes it
+as `cluster submit --stop NODE=EPOCH`, so a renewal places and plans without a new description. A node's `stops_at` is the
+fallback for when the file can't be read, and a refusal at the admission end names which of the two it used. A share whose
+`until = "stops_at"` lasts until its node's stop.
 
 A lease taken by hand over SSH (a kernel inner loop, a debugger) is a `session` allocation, so the same rules see it. A
 session may have no hard limit but an expected length (`gpu-lease` without `--max-min`), which plans backfill and is never

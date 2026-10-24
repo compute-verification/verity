@@ -61,7 +61,7 @@ def ybar_short(b, off):
 
 
 def trailing(b, off):
-    """Bytes after the inner proof (ignored, as after §8's pair)."""
+    """Bytes after the inner proof: refused by the Lean verifier (verifier PROTOCOL.md §17.1, D17), ignored by upstream."""
     b += b"\x00" * 16
 
 
@@ -101,7 +101,7 @@ PROOF = [
     ("zk-inner-opened", 0, flip("in.open", 7), reject("zk inner: column")),
     ("zk-inner-salt", 0, flip("in.salt", 2, 40), reject("zk inner: column")),
     ("zk-inner-path", 0, flip("in.path", 5, 1), reject("zk inner: column")),
-    ("zk-trailing-bytes", 0, trailing, ACCEPT),
+    ("zk-trailing-bytes", 0, trailing, reject("zk proof: the file has ", upstream_accepted=True)),
     ("zk-rep1-tau", 1, flip("in.tau"), TAU),
     ("zk-rep1-l0-e0", 1, flip("zk.e0"), reject("zk inner: the batched constraint fails")),
     ("zk-rep1-lane-message", 1, flip("lig.msg", 2), reject("zk inner: the batched constraint fails")),
@@ -158,7 +158,7 @@ def write(out, name, rec, src, files):
     """Case `name`: `rec`, every proof file of `src`, and `files` (`{file name: bytes}`) in their place."""
     d = out / name
     d.mkdir(parents=True, exist_ok=True)
-    (d / "session.json").write_text(json.dumps(rec))
+    (d / "session.json").write_text(rd.session_text(rec))
     for f in src.glob("*.rep*.bin"):
         if f.name not in files:
             shutil.copy(f, d / f.name)

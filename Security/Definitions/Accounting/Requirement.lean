@@ -44,17 +44,23 @@ never a device tick. The ticks a step spans on each device are the placement's (
   block is in `liveBlocks s` while it holds a live value, whatever wrote it.
 * **Store.** The registered store with the memory map beside it (I3, `memory-map/v1` of
   `verity/core/protocols/remote_bandwidth/memory_map.py`): `N` registered blocks, the fresh indices each serving step
-  wrote and those it freed, and each block's payload. A block is written once and complete, so its payload is a
-  function of its index. Step `s`'s record takes effect after step `s`'s reads: a block is freed in the record of the
-  step of its last read and written in the record of the step that completes it, readable from `s + 1`.
+  wrote and those it freed, and each block's payload. A block is written once, complete and encoded, so its payload is
+  a function of its index. Step `s`'s record takes effect after step `s`'s reads: a block is written in the record of
+  the step before its first encoded read (deferred residency: the step that completes it when its append's coin is back
+  before the next step's reads, a later one when not), readable from the step after, and freed in the record of a step
+  no earlier than its values' last structural reader.
 * **Credited.** A block is complete when step `s` begins once every value the layout places in it was produced before
-  `s` (`incomplete`); a block of registered values is complete from the start. A partly written block is in no record,
-  so a live value in an incomplete block (a sequence's KV page that later steps fill) is in no resident block, and the
-  audit credits only the live values in complete blocks (`credited`). The link is one-sided: every block holding a
-  credited value is resident (`StoreMatches`), and every complete block a step reads is in its pass's plan
-  (`PlanMatches`), but other blocks may be resident or planned too (filler, dead or another workload's), and they hold
-  none of `W`'s credited values. The share left out is a block per sequence, layer and plane when the layout fills each
-  one's pages in turn (`OneBlockEach`).
+  `s` and the device has encoded it under its append's coin, `s` being at or after its first encoded read
+  (`Layout.encoded`, `incomplete`); a block of registered values is complete from the start. An incomplete block is in
+  no record, so a live value in one (a sequence's KV page that later steps fill, or a filled page whose coin is still
+  out) is in no resident block, and the audit credits only the live values in complete blocks (`credited`). A block's
+  values are credited from its first encoded read to their last structural reader (`live`), so a block whose values'
+  last structural reader comes before its first encoded read is credited at no step, and memory-map/v1 withdraws it.
+  The link is one-sided: every block holding a credited value is resident (`StoreMatches`), and every complete block a
+  step reads is in its pass's plan (`PlanMatches`), but other blocks may be resident or planned too (filler, dead or
+  another workload's), and they hold none of `W`'s credited values. The share left out is a block per sequence, layer
+  and plane when the layout fills each one's pages in turn, and one more while the page it completed last waits for its
+  coin (`OneBlockEach`, the page's parity in the group).
 
 Bits, as `Device.lean` counts them: a value's bytes are its bits / 8, and the deployed store's block is `b = 32768` bits
 (4,096 bytes).
@@ -183,12 +189,19 @@ def work (π : G → ℕ) (R : Finset G) : ℕ := ∑ g ∈ R, π g
 
 end Placed
 
-/-- A layout of values in the store: each value's block, a store index, and its bit offset in the block. -/
+/-- A layout of values in the store: each value's block, a store index, its bit offset in the block, and each block's
+first encoded read. -/
 structure Layout (G : Type) where
   /-- the store index of the value's block -/
   block : G → ℕ
   /-- the value's first bit in its block -/
   offset : G → ℕ
+  /-- the engine step of block `j`'s first encoded read: the first step whose reads see it encoded under its append's
+  coin, one after the record that writes it, or would have for a block withdrawn first (memory-map/v1's deferred
+  residency). One past the step that completes it when the coin is back before the next step's reads; a block is
+  complete no earlier than every value in it is produced, whatever this says, and a block of registered values from
+  the start -/
+  encoded : ℕ → ℕ
 
 section Blocks
 
@@ -225,8 +238,10 @@ def Packs (b : ℕ) (S : Finset G) : Prop :=
       ℓ.offset u + W.width u ≤ ℓ.offset v ∨ ℓ.offset v + W.width v ≤ ℓ.offset u
 
 /-- **One block per group**: the values of `S` in each group `k` of `g` lie in one block at most. With `g` a KV value's
-sequence, layer and plane (K or V) and `S` the live values in incomplete blocks, it is a KV pool's page structure: a
-sequence fills its pages of each layer and plane one at a time, so only the block it is filling is incomplete. -/
+sequence, layer, plane (K or V) and its page's parity, and `S` the live values in incomplete blocks, it is a KV pool's
+page structure under deferred residency: a sequence fills its pages of each layer and plane one at a time, and each
+page's coin is back before the next page is complete, so only the block it is filling and the one it completed last,
+while that one's encode is out, are incomplete. -/
 def OneBlockEach {K : Type} [DecidableEq K] (g : G → K) (S : Finset G) : Prop :=
   ∀ k, ((S.filter fun v => g v = k).image ℓ.block).card ≤ 1
 
@@ -237,12 +252,16 @@ section Credited
 variable (W : Wiring G) (e : Execution G) (ℓ : Layout G)
 
 /-- **The blocks incomplete when step `s` begins**: those the layout places a value in that the execution produces at
-step `s` or later. A block is complete once every value in it is produced, so a block of registered values is complete
-from the start, and memory-map/v1 writes a block in the record of the step that completes it. -/
-def incomplete (s : ℕ) : Finset ℕ := (e.ran.filter fun v => v ∉ W.registered ∧ s ≤ e.step v).image ℓ.block
+step `s` or later, or a value it produces and whose first encoded read (`Layout.encoded`) is after `s`. A block is
+complete once every value in it is produced and the device has encoded it under its append's coin, so a block of
+registered values is complete from the start, and memory-map/v1 writes a block in the record of the step before its
+first encoded read (deferred residency): until then it is in no record, like a block still being filled. -/
+def incomplete (s : ℕ) : Finset ℕ :=
+  (e.ran.filter fun v => v ∉ W.registered ∧ (s ≤ e.step v ∨ s < ℓ.encoded (ℓ.block v))).image ℓ.block
 
 /-- **The live values the audit credits when step `s` begins**: those in complete blocks. A live value in a block that
-later steps fill is in no record yet, so no audit credits it. -/
+later steps fill, or whose encode hasn't landed, is in no record yet, so no audit credits it: a block's values are
+credited from its first encoded read to their last structural reader (`live`). -/
 def credited (s : ℕ) : Finset G := (live W e s).filter fun v => ℓ.block v ∉ incomplete W e ℓ s
 
 /-- The values step `s` reads from complete blocks. -/
@@ -285,7 +304,9 @@ def Carries (σ : Store) (S : Finset G) : Prop :=
 is resident, the layout packs the live values into blocks of `b` bits, and each credited value is in its block's
 payload. Other blocks may be resident too, and hold none of `W`'s credited values: the registered store's filler (a KV
 pool's pages, resident until a write first reaches them), a block whose values are all dead, or another workload's. A
-live value in an incomplete block is in no record, so no audit credits it. -/
+live value in an incomplete block is in no record, so no audit credits it. Liveness is structural (`ops`), so a block
+holding a credited value stays resident through its values' last structural reader, a later gather that may select it
+included, and a free at their last use before that breaks the link. -/
 def StoreMatches (σ : Store) (b s : ℕ) : Prop :=
   blocks ℓ (credited W e ℓ s) ⊆ σ.resident s ∧ Packs W ℓ b (live W e s) ∧ Carries W e ℓ σ (credited W e ℓ s)
 

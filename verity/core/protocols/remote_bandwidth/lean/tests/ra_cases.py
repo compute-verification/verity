@@ -3,9 +3,10 @@
 (`RemoteAudit.Difftest`), and the sessions the tests record. Where the two differ, the Python is what is wrong.
 
 The decoders mirror `RemoteAudit.Difftest`'s: byte strings lowercase hex, indices integers, a registration checked as
-`audit.register` checks one, and `bind` refused (the Lean covers receipts of blocks alone). Past decoding each side is
+`audit.register` checks one, and `bind` refused (the Lean covers receipts of blocks alone), as `audit.Registry.register`
+refuses a registration that would bind (counted, for a node with one live). Past decoding each side is
 the Python's own code on the decoded objects. A session's events run through `audit.Session` itself, on a clock each
-event sets, with a `coins.Challenger` whose generator replays the case's coins (`Tape`).
+event sets, its coins those of a challenger that replays the case's (`Replay`).
 
 A recorded session is one `Run` drives through a real `Session`, the prover's side computed by `audit.Prover` from a
 `Store`, honest or with one deviation, every call kept as an event with the clock it read. `SCENARIOS` are the recorded
@@ -28,10 +29,13 @@ from verity_difftest import protocol as P
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
 from verity.core.protocols.remote_bandwidth.audit import Params, Session, SessionError
 from verity.core.protocols.remote_bandwidth.receipts import Plan
+from verity.core.protocols.sampled_proofs.challenger import COIN_BYTES as LIVE_COIN_BYTES, HM96, LiveChallenger
 
 HERE = Path(__file__).resolve().parent
 PACKAGE = HERE.parent
 EXE = "remote-audit-difftest"
+#: The ports' side of record (`verity_difftest`): the Lean, as `benchmarks/remote_session/verifier.py`'s `VERDICT`.
+OF_RECORD = "lean"
 #: What the Python raises where the Lean refuses: a decoder's `Reject`, and the Python's own refusals, `ValueError`
 #: (`verity.errors.ProtocolError` and `InvalidArtifact` among them), `TypeError` and `IndexError`.
 REFUSALS = (D.Reject, ValueError, TypeError, IndexError)
@@ -214,20 +218,27 @@ class Clock:
         return self.now
 
 
-class Tape:
-    """The challenger's generator replaying a case's coins: each committed coin with a zero salt, then the append coins in
-    the order drawn. Past them it refuses the case, as the Lean does."""
+class Replay:
+    """Session k's challenger replaying a case's coins: a `LiveChallenger` of the session's layout whose coins are the
+    case's 2W, then its append coins in the order drawn, each the audit's 32 bytes padded to the challenger's 64 under a
+    zero salt. Past the case's append coins it refuses the case, as the Lean does."""
 
-    def __init__(self, committed: list[bytes], appends: list[bytes]) -> None:
-        self.out = [x for c in committed for x in (c, bytes(coins.HM96.salt_bytes))]
-        self.appends = list(appends)
+    def __init__(self, k: int, windows: int, committed: list[bytes], appends: list[bytes]) -> None:
+        a = max(coins.APPENDS, len(appends))
+        padded = [c + bytes(LIVE_COIN_BYTES - len(c)) for c in [*committed, *appends]]
+        out = iter(x for c in padded + [bytes(LIVE_COIN_BYTES)] * (a - len(appends))
+                   for x in (c, bytes(HM96.salt_bytes)))
+        self.live = LiveChallenger(coins.SCHEME, k, coins.families(windows, a), lambda n: next(out))
+        self.commitment, self.appends = self.live.commitment, len(appends)
 
-    def __call__(self, n: int) -> bytes:
-        if self.out:
-            return self.out.pop(0)
-        if self.appends:
-            return self.appends.pop(0)
-        raise D.Reject("the append coins ran out")
+    def open(self, label: str, index: int, after: bytes) -> coins.LiveOpening:
+        if label == coins.APPEND and index >= self.appends:
+            raise D.Reject("the append coins ran out")
+        return self.live.open(label, index, after)
+
+
+def replayed(reg: audit.Registration, k: int, windows: int, committed: list[bytes], appends: list[bytes]) -> coins.Coins:
+    return coins.Coins(Replay(k, windows, committed, appends), reg.digest, k, windows)
 
 
 def verdict_json(v: audit.Verdict) -> dict:
@@ -269,13 +280,17 @@ def apply(s: Session, clock: Clock, e: tuple) -> dict:
 
 
 def summary(s: Session) -> dict:
-    """`summaryJ`: what `Session.record` gives that the port computes."""
+    """`summaryJ`: what `Session.record` gives that the port computes, which is all of it but the coin commitment's
+    root, the block size and the registration's fields its digest binds, and of each window's profile its draws."""
     rec = s.record()
     return {"appended": rec.appended, "appends": None if rec.appends is None else rec.appends.hex(),
+            "blocks": rec.blocks, "lifetime": rec.lifetime, "pace": None if rec.pace is None else rec.pace.to_json(),
             "registration": rec.registration.hex(), "released": rec.released,
-            "windows": [{"deadline_ns": w.deadline_ns, "drawn": w.profile.drawn["receipt"], "lengths": list(w.lengths),
-                         "opened_ns": w.opened_ns, "post_seed": list(w.post_seed), "released_ns": w.released_ns,
-                         "steps": list(w.steps)} for w in rec.windows]}
+            "windows": [{"arrived_ns": list(w.arrived_ns), "deadline_ns": w.deadline_ns,
+                         "drawn": w.profile.drawn["receipt"], "heads": [None if h is None else h.hex() for h in w.heads],
+                         "lengths": list(w.lengths), "opened_ns": w.opened_ns, "post_seed": list(w.post_seed),
+                         "released_ns": w.released_ns, "stale": list(w.stale), "steps": list(w.steps)}
+                        for w in rec.windows]}
 
 
 def _positive(p: Any, k: str) -> int:
@@ -285,12 +300,18 @@ def _positive(p: Any, k: str) -> int:
     return n
 
 
+def pace_of(v: Any) -> audit.Pace | None:
+    """`sessionOf`'s pace: None, or `{"k", "window_ns"}`, each a positive integer."""
+    return None if v is None else audit.Pace(_positive(v, "k"), _positive(v, "window_ns"))
+
+
 def session_of(v: Any) -> tuple[dict, list[bytes], list[bytes], int]:
     """`sessionOf`: a session's parameters (`Params`' keywords less the registration's, refused as `Params` refuses
     them), its 2W coins, its append coins and its `not_before_ns`."""
     p = _get(v, "params")
     kw = {k: _positive(p, k) for k in ("deadline_ns", "windows", "samples", "min_passes", "window_ns", "lifetime")}
     kw["deferred"] = _bool(p, "deferred")
+    kw["pace"] = pace_of(_get(p, "pace"))
     Params(1, **kw)
     committed = hexes(v, "coins")
     if len(committed) != 2 * kw["windows"] or any(len(c) != coins.COIN_BYTES for c in committed):
@@ -313,8 +334,8 @@ def session(v: Any) -> dict:
         events = [event_of(e) for e in _list(v, "events")]
         params = params_of(reg, kw)
     clock = Clock()
-    s = Session(params, reg, None, coins.Challenger(reg.digest, 0, params.coins, Tape(committed, appends)),
-                not_before_ns=not_before, clock=clock)
+    s = Session(params, reg, None, replayed(reg, 0, params.windows, committed, appends), not_before_ns=not_before,
+                clock=clock)
     results = [apply(s, clock, e) for e in events]
     return {"outcome": s.outcome, "record": summary(s) if s.outcome == "accepted" else None, "results": results}
 
@@ -349,12 +370,10 @@ def registry_op(v: Any) -> tuple:
     in the case, or in full."""
     op = _str(v, "op")
     if op == "register":
-        if _bool(v, "bind"):
-            raise D.Reject("a registration that binds PoUW's tile outputs is not covered: the Lean refuses it")
-        kind = _str(v, "receipt")
+        bind, kind = _bool(v, "bind"), _str(v, "receipt")
         receipts.receipt_kind(kind)
         return (op, hex_(v, "node"), nat(v, "blocks"), hex_(v, "payload_root"), codec_of(_get(v, "codec")), kind,
-                _str(v, "layout"), nat(v, "rows"), hex_(v, "nonce"))
+                bind, _str(v, "layout"), nat(v, "rows"), hex_(v, "nonce"))
     if op == "session":
         which = _get(v, "registration")
         which = nat(v, "registration") if isinstance(which, int) and not isinstance(which, bool) else registration_of(which)
@@ -369,16 +388,16 @@ def registry_op(v: Any) -> tuple:
 
 def _registry_call(r: audit.Registry, source: bytes, drawn: list[audit.Registration], op: str, a: tuple) -> Any:
     if op == "register":
-        node, blocks, root, c, kind, layout, rows, nonce = a
-        reg = r.register(source, node, blocks, root, c, kind, layout=layout, rows=rows, nonce=nonce)
+        node, blocks, root, c, kind, bind, layout, rows, nonce = a
+        reg = r.register(source, node, blocks, root, c, kind, bind=bind, layout=layout, rows=rows, nonce=nonce)
         drawn.append(reg)
         return {"codec_seed": reg.codec_seed.hex(), "digest": reg.digest.hex()}
     if op == "session":
         which, kw, committed, appends, not_before, index = a
         reg = drawn[which] if isinstance(which, int) else which
-        s = r.session(params_of(reg, kw), reg, None, not_before_ns=not_before, clock=Clock(),
-                      entropy=Tape(committed, appends), index=index)
-        return {"session": s.commitment.session}
+        s = r.session(params_of(reg, kw), reg, None, not_before_ns=not_before, clock=Clock(), index=index,
+                      challenger=lambda k: Replay(k, kw["windows"], committed, appends))
+        return {"session": s.commitment.epoch}
     if op == "event":
         node, k, e = a
         x = r._live.get(audit._node(node))
@@ -484,22 +503,23 @@ class Run:
 
     def __init__(self, world: World = World(), *, windows: int = 2, samples: int = 10**6, min_passes: int = 1,
                  lifetime: int = audit.LIFETIME, deferred: bool = False, deadline_ns: int = 100, window_ns: int = 10,
-                 not_before_ns: int = 0, cheat: Callable[[audit.Store], audit.Store] | None = None) -> None:
+                 not_before_ns: int = 0, cheat: Callable[[audit.Store], audit.Store] | None = None,
+                 pace: audit.Pace | None = None) -> None:
         self.store = store(world)
         reg = self.store.registration
         self.params = Params(reg.blocks, deadline_ns, windows, samples=samples, min_passes=min_passes,
                              window_ns=window_ns, codec=reg.codec, receipt=reg.receipt, rows=reg.rows, lifetime=lifetime,
-                             deferred=deferred)
+                             deferred=deferred, pace=pace)
         self.clock = Clock()
         self.clock.now = not_before_ns
         self.not_before_ns = not_before_ns
-        self.challenger = coins.Challenger(reg.digest, 0, self.params.coins, entropy=Entropy(b"coins"))
-        self.s = Session(self.params, reg, None, self.challenger, not_before_ns=not_before_ns, clock=self.clock)
+        self.coins = coins.local(reg.digest, 0, windows, Entropy(b"coins"))
+        self.s = Session(self.params, reg, None, self.coins, not_before_ns=not_before_ns, clock=self.clock)
         self.prover = audit.Prover(cheat(self.store) if cheat else self.store, None, self.s.commitment,
                                    entropy=Entropy(b"receipt salts"))
         self.events: list[dict] = []
         self.append_coins: list[bytes] = []
-        self.challenges: dict[int, coins.CoinOpening] = {}
+        self.challenges: dict[int, coins.LiveOpening] = {}
         self.t, self.i, self.previous, self.plan, self.step = 0, 0, reg.digest, Plan.whole(reg.blocks), -1
         self.head: bytes | None = None
         self.passes: dict[tuple[int, int], audit.Pass] = {}
@@ -562,7 +582,7 @@ class Run:
         return self._call(event, lambda: self.s.receive(t, i, root, runs, change=change, step=step))
 
     def run(self, plan: Plan | None = None, change=None, *, step: int | None = None, send: dict | None = None,
-            challenge: coins.CoinOpening | None = None, previous: bytes | None = None, head=False,
+            challenge: coins.LiveOpening | None = None, previous: bytes | None = None, head=False,
             at: int | None = None) -> Any:
         """One honest pass of the current window, its plan sent whole (None: the registered store) or as its `change`,
         covering `step` (None: the one after the last). `send` replaces what is sent; `challenge`, `previous` and
@@ -612,11 +632,12 @@ class Run:
     def case(self) -> dict:
         p = self.params
         return {"append_coins": [c.hex() for c in self.append_coins],
-                "coins": [c.hex() for c, _ in self.challenger._coins], "events": self.events,
+                "coins": [c[:coins.COIN_BYTES].hex() for c, _ in self.coins.challenger._coins[:2 * p.windows]],
+                "events": self.events,
                 "not_before_ns": self.not_before_ns,
                 "params": {"deadline_ns": p.deadline_ns, "deferred": p.deferred, "lifetime": p.lifetime,
-                           "min_passes": p.min_passes, "samples": p.samples, "window_ns": p.window_ns,
-                           "windows": p.windows},
+                           "min_passes": p.min_passes, "pace": None if p.pace is None else p.pace.to_json(),
+                           "samples": p.samples, "window_ns": p.window_ns, "windows": p.windows},
                 "registration": registration_json(self.store.registration)}
 
 
@@ -993,6 +1014,37 @@ def few(r: Run) -> None:
     r.finish()
 
 
+def honest_paced(r: Run) -> None:
+    """A paced session (`audit.Pace`, k = 2): each window holds its k roots."""
+    r.start()
+    r.run()
+    r.run()
+    r.boundary()
+    r.run()
+    r.run(Plan(((1, 3), (0, 1)), r.store.extent))
+    r.boundary()
+    r.finish()
+
+
+def honest_paced_drawn_at_k(r: Run) -> None:
+    """A paced session (k = 2) drawn as each window's k-th root arrives once its boundary has left: a draw after one
+    root, or after k before the boundary, is refused; window 0 is drawn before window 1's first root, and the last
+    window before its deadline."""
+    r.start()
+    r.run()
+    r.close(0)
+    r.run()
+    r.close(0, at=r.clock.now + 1)
+    r.boundary()
+    r.close(0, at=r.clock.now + 1)
+    r.verify(0)
+    r.run()
+    r.run(Plan(((1, 3), (0, 1)), r.store.extent))
+    r.boundary()
+    r.close(1, at=r.clock.now + 1)
+    r.verify(1)
+
+
 def malformed_root(r: Run) -> None:
     r.start()
     r.receive(0, 0, bytes(32), step=0)
@@ -1054,6 +1106,7 @@ def refusals(r: Run) -> None:
 
 W1 = dict(windows=1)
 DEFERRED = dict(lifetime=2, deferred=True)
+PACED = dict(pace=audit.Pace(2, 10))
 P1024 = World(codec.DEFAULT, blocks=3)
 BLOCK = World(receipt=receipts.BLOCK_SHA512)
 ROWS64 = World(rows=64)
@@ -1103,6 +1156,9 @@ SCENARIOS: dict[str, tuple[World, dict, Callable[[Run], None], str | None]] = {
     "order-window": (World(), {}, lambda r: order(r, 1, 0), "order"),
     "order-negative": (World(), {}, lambda r: order(r, -1, 0), "order"),
     "order-after-final": (World(), {}, order_after_final, "order"),
+    "honest-paced": (World(), PACED, honest_paced, "accepted"),
+    "honest-paced-drawn-at-k": (World(), PACED, honest_paced_drawn_at_k, "accepted"),
+    "order-past-pace": (World(), PACED, lambda r: (r.start(), r.run(), r.run(), r.run()), "order"),
     "late": (World(), dict(deadline_ns=5), late, "late"),
     "plan-repeated-block": (World(), {}, lambda r: plan(r, ((0, 3), (2, 2))), "plan"),
     "plan-adjacent-runs": (World(), {}, lambda r: plan(r, ((0, 2), (2, 2))), "plan"),
@@ -1154,7 +1210,8 @@ SCENARIOS: dict[str, tuple[World, dict, Callable[[Run], None], str | None]] = {
 
 @functools.cache
 def recorded(name: str) -> tuple[dict, str | None]:
-    """Scenario `name`'s case and the outcome the recorded session reached."""
+    """Scenario `name`'s case and the outcome the recorded session reached. Cached and shared by every test in the
+    process: copy the case before editing it."""
     world, kw, build, _ = SCENARIOS[name]
     r = Run(world, **kw)
     build(r)

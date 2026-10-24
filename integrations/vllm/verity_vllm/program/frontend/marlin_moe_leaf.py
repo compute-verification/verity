@@ -26,6 +26,8 @@ import torch
 
 from verity_vllm.engine import hooks
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 _MXFP4 = "vllm.model_executor.layers.quantization.mxfp4"
 _MARLIN_MOE = "vllm.model_executor.layers.fused_moe.experts.marlin_moe"
 _ORACLE = "vllm.model_executor.layers.fused_moe.oracle.mxfp4"

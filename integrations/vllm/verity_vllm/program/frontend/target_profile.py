@@ -86,9 +86,9 @@ class TargetProfile:
                            kernel class back from the instantiated `Fp8LinearMethod.fp8_linear` and refuse a mismatch; a model without
                            FP8 linears makes a declared kernel a mismatch too (nothing to select — the declaration would be idle).
                            Omitted from `to_json()` when None so every pre-R15 profile digest is unchanged.
-    int8_exact          -> which layers run steps.py's plain int8 steps (`INT8_EXACT_SCOPES`): every linear (`engine.int8_exact`, an offline int8
-                           checkpoint, vLLM quantization `INT8_EXACT_QUANTIZATION`), every attention layer (`engine.int8_attention`, attention backend
-                           `INT8_EXACT_ATTENTION_BACKEND`), or both; read back from every layer (`int8_exact_of`).  Omitted from `to_json()` when None.
+    int8_exact          -> which layers run the plain exact-int8 arm (`INT8_EXACT_SCOPES`): every linear (`engine.int8_exact`, an offline int8
+                           checkpoint, vLLM quantization `INT8_EXACT_QUANTIZATION`), every attention layer (`engine.int8_attention`, the LUT
+                           softmax, attention backend `INT8_EXACT_ATTENTION_BACKEND`), or both; read back from every layer (`int8_exact_of`).  Omitted from `to_json()` when None.
     moe_backend         -> `EngineArgs.moe_backend`, the fused-MoE experts kernel (applied to `KernelConfig.moe_backend`; an explicit backend that
                            cannot run raises in vLLM's `select_*_moe_backend`, never falls back).  `"triton"` -> `TritonExperts` (`fused_moe_kernel`,
                            the launch `MoeExpertGemm_v1` and the block-FP8 `MoeExpertFp8Gemm_v1` state); None = vLLM's selection.  Builder and runtime
@@ -153,7 +153,8 @@ class TargetProfile:
                            Definitions, as constants.  True = the norms' eps and the attention scale are fields of the registered
                            `values` parameter, read by the Definitions that take them as inputs (`RMSNormTriton_v3`,
                            `RMSNormFusedCuda_v4`, `Attention_v10` / `Attention_v11`); a Definition that has no such version keeps
-                           its constants.  Declaring false is refused (declare None).  Omitted from `to_json()` when None.
+                           its constants.  Under `ir = "boolean"` each is its Boolean version, which reads the same field's bits.
+                           Declaring false is refused (declare None).  Omitted from `to_json()` when None.
 
     Derived (not fields; one rule each, `verity_vllm.program.frontend.targets` consumes them): `tensor_core_family` (the registered k16
     tensor-core step of the capability: `ampere` for sm_8x, `hopper` for sm_90, `blackwell_consumer` for sm_120) and `tuned_gemm_arch_family` (vLLM's tuned
@@ -321,8 +322,6 @@ class TargetProfile:
             raise ValueError(f"ir must be None (word) or one of {list(self.IRS)}; got {self.ir!r}")
         if self.registered_values is not None and self.registered_values is not True:
             raise ValueError(f"registered_values must be None (constants) or true; got {self.registered_values!r}")
-        if self.registered_values and self.ir == "boolean":
-            raise ValueError("registered_values has no Boolean Definitions yet: declare it on the word IR only")
 
     # -- derived facts (one rule each; no second table anywhere) ---------------------------------------------------------
     def effective_moe_construction(self) -> str:

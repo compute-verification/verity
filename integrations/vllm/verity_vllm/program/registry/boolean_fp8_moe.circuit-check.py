@@ -48,6 +48,11 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
                                                          DOT=BG.HopperE4m3MmaV2Dot32)),
         ("MoeExpertFp8GemmW_v2/mmav2", lambda: bind(boolean_fp8_moe.MoeExpertFp8GemmWV2, E=3, K=32, N=40, G=32, KB=32, SWAP=True,
                                                     DOT=BG.HopperE4m3MmaV2Dot32)),
+        # a w13 coordinate cut along K, over 3 experts: a middle chunk (an f32 in and out) and a last one (the bf16 word)
+        ("MoeExpertFp8CoordinateChunk_v2/mmav2", lambda: bind(boolean_fp8_moe.MoeExpertFp8CoordinateChunkV2, E=3, K=64, G=32, KB=32,
+                                                              SWAP=False, DOT=BG.HopperE4m3MmaV2Dot32, FIRST=False, LAST=False)),
+        ("MoeExpertFp8CoordinateChunk_v2/last", lambda: bind(boolean_fp8_moe.MoeExpertFp8CoordinateChunkV2, E=3, K=64, G=64, KB=32,
+                                                             SWAP=True, DOT=BG.HopperE4m3MmaV2Dot32, FIRST=False, LAST=True)),
         ("SiluMulFp8BlockQuantResult_v2", lambda: bind(boolean_fp8_moe.SiluMulFp8BlockQuantResultV2)),
         ("SiluMulFp8BlockQuantGroup_v2", lambda: bind(boolean_fp8_moe.SiluMulFp8BlockQuantGroupV2, G=4)),
         ("SiluMulFp8BlockQuant_v2", lambda: bind(boolean_fp8_moe.SiluMulFp8BlockQuantV2, I=8, G=4)),

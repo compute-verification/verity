@@ -12,7 +12,8 @@ and recording what trusted devices see.
     claims = audit(run(p, {"x": x}, plan), profile)
     print(account(claims, profile))
 """
-from .account import FLEET_CLOSED, SALT_CUSTODY, SERVED_PARTITION, Account, BlockAccount, Credit, Ledger, account, capacity, double_credit
+from .account import (DEDICATED_RACKS, FLEET_CLOSED, SALT_CUSTODY, SERVED_PARTITION, Account, BlockAccount, Credit, Custody,
+                      Ledger, account, capacity, double_credit)
 from .binding import Crossing, Placement, Profile, crossings, occupancy, place, route, traffic
 from .claims import Carried, Computed, Entered, Held, On, Read, Refused, Scheduled, audit, check_records
 from .logical import Registration, Value, commit, evaluate, names, read, register, values, work
@@ -24,8 +25,9 @@ from .plan import Maintenance, Plan
 from .time import Interval
 
 __all__ = [
-    "BLOCK_BITS", "FLEET_CLOSED", "SALT_CUSTODY", "SERVED_PARTITION", "Account", "Answer", "Append", "Assumption", "Block", "BlockAccount",
-    "Cadence", "Carried", "Challenge", "Computed", "Credit", "Crossing", "Datacenter", "Deviation", "Device", "Entered",
+    "BLOCK_BITS", "DEDICATED_RACKS", "FLEET_CLOSED", "SALT_CUSTODY", "SERVED_PARTITION", "Account", "Answer", "Append",
+    "Assumption", "Block", "BlockAccount", "Cadence", "Carried", "Challenge", "Computed", "Credit", "Crossing", "Custody",
+    "Datacenter", "Deviation", "Device", "Entered",
     "Fleet", "Held", "Interval", "Ledger", "Link", "Maintenance", "On", "Placement", "Plan", "Port", "Profile", "Read",
     "ReadWindow", "Record", "Refused", "Registration", "Rekey", "Release", "Scheduled", "Store", "Trace", "Value", "Wipe",
     "account", "answer_time", "audit", "capacity", "check_records", "commit", "crossings", "double_credit", "evaluate",

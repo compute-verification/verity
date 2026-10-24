@@ -139,17 +139,17 @@ theorem head_dominates (Z : Model K R T L U F X) (P : Labelled K) (A : Anatomy K
             ring
         _ ≤ Z.G.a r k * A.nword (.side u) k := mul_le_mul_of_nonneg_left (hU u k) (ha r k)
 
-/-- (RD) in price form from the parts (I2)–(I6), FOLD-OPT per word folded: at every certificate,
-`fixed·w* + (1 − μ_f)·folded·φ* + (1 − μ_x)χ* ≤ π·n(M)`. -/
+/-- (RD) in price form from the parts (I2)–(I6), FOLD-OPT per word folded at the certificate: at every certificate
+`π` where it holds, `fixed·w* + (1 − μ_f)·folded·φ* + (1 − μ_x)χ* ≤ π·n(M)`. -/
 theorem price_of_parts_folded [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (P : Labelled K)
     (A : Anatomy K T L U) (lam : R → ℝ) (folded : ℝ) (h : IsCert lam) (hZ : Z.Wf P) (hA : A.Split)
     (hW : WordsWritten Z A) (hS : ScalarRoute Z A) (hU : SideUnits Z A) (hN : NoSum A)
-    (hF : FoldOptFolded Z A folded) (hX : FillOpt Z A) :
+    (hF : FoldOptFoldedAt Z A folded lam) (hX : FillOpt Z A) :
     A.fixed * Z.wStar lam + (1 - Z.muF) * folded * Z.phiStar lam + (1 - Z.muX) * Z.chiStar lam ≤
       Z.G.price lam A.run.n := by
   obtain ⟨-, hw0, -, -⟩ := stars_nonneg Z P lam hZ h
   have hdom := head_dominates Z P A hZ hA hW hS hU
-  have hfold := hF lam h
+  have hfold : (1 - Z.muF) * folded * Z.phiStar lam ≤ Z.G.price lam A.nfold := hF
   have hfill := hX lam h
   obtain ⟨ha, -⟩ := hZ
   obtain ⟨hlam, -⟩ := h
@@ -184,7 +184,7 @@ theorem price_of_parts [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (P : 
     (hX : FillOpt Z A) :
     A.fixed * Z.wStar lam + (1 - Z.muF) * Z.Nw * Z.phiStar lam + (1 - Z.muX) * Z.chiStar lam ≤
       Z.G.price lam A.run.n :=
-  price_of_parts_folded Z P A lam Z.Nw h hZ hA hW hS hU hN hF hX
+  price_of_parts_folded Z P A lam Z.Nw h hZ hA hW hS hU hN (hF lam h) hX
 
 /-- (RD) in its per-facet form gives the same price bound (step 2 of Theorem D(a)). -/
 theorem price_of_rd [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (P : Labelled K) (n : K → ℝ)

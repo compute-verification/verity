@@ -77,6 +77,7 @@ from __future__ import annotations
 
 __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
+from verity.ml.circuits.census import silicon_step
 from verity.ml.circuits.defs import bind, composite, primitive
 from verity.ml.circuits.refs import Coll, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple
@@ -514,6 +515,9 @@ def HopperTf32WgmmaDot8(acc: int, *ab: int) -> int:
     step's 26-bit truncating adder with exponent floor -133 (`HOPPER_TF32_WGMMA_K8_CANDIDATE`); total on every encoding as that
     step (NaN 0x7FFFFFFF, sticky infinities, a zero +0)."""
     return tf32_dot_total(acc, ab[:8], ab[8:16])
+
+
+silicon_step(HopperTf32WgmmaDot8, HOPPER_TF32_WGMMA_K8_CANDIDATE)
 
 
 def _check_tf32(K: int) -> None:

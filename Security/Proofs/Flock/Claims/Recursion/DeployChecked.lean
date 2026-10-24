@@ -27,6 +27,10 @@ and proves what follows from it.
   statement whose error is below 1 gives an accepted run of its prover (`exists_of_pr_pos`), whose own messages replayed
   are accepted (`run_replay_out`), so `InnerAccSha` holds at some coins and messages (`innerAccSha_of_complete`). At
   `Readable.relation` that completeness is `FlockComplete.Replay.complete_plain` (`admitted_acc_plain`).
+* **The inner readiness the deployed stop reads** (`RecDeploy.stopsRec`): at a statement in scope, `FlockComplete.ready`
+  at SHA-512 is three facts of the inner session, its size, its regions and its honest record
+  (`FlockComplete.RecordFitsAt`), since the scope check already sets it up with a draw (`ready_inScope_iff`); at the
+  inner statement the Prop names, it holds (`ready_of_admitted`).
 -/
 
 namespace RecDeploy
@@ -199,6 +203,44 @@ theorem admitted_acc_plain (hA : PlainLeavesAdmitted Flock.Readable.relation)
         Flock.RecVStar.innerOf ri.circuit ri.publicFile partition ri.program = .ok dims ∧ innerOk inner = .ok () ∧
         ∃ (c : ℕ → Coin) (ms : List Msg), InnerAccSha inner c ms :=
   admitted_acc hA (FlockComplete.Replay.complete_plain FlockDeploy.sha512 S h64 hfin) h64
+
+/-! ## The inner readiness the deployed stop reads -/
+
+/-- **A statement in scope parses.** -/
+theorem parse_of_scopeCheck {ivScope : Msg → Bool} {x : Msg} (hs : scopeCheck ivScope x = true) :
+    ∃ st, parse x = some st := by
+  unfold scopeCheck Flock.RecScope.scopeCheckOf at hs
+  split at hs
+  · next r hr => exact ⟨Flock.RecScope.toStmt r, by simp [parse, Flock.RecScope.parseOf, hr]⟩
+  · cases hs
+
+/-- **In scope, the inner readiness is three facts of the inner session**: the scope check already has Flock's plain
+verifier set the inner statement up with a draw (`parse_innerOk`), so `FlockComplete.ready` at SHA-512, which the
+deployed stop reads (`stopsRec`), asks only that the inner statement be under `2^64` bytes, that its tables' regions
+fit, and that the honest record fit (`FlockComplete.RecordFitsAt`). -/
+theorem ready_inScope_iff {ivScope : Msg → Bool} {x : Msg} (hs : scopeCheck ivScope x = true) :
+    ∃ s spec sts, FlockDeploy.setupOf false (xIOf x) = some (s, spec, sts) ∧ s.read.draw.isSome = true ∧
+      (FlockComplete.ready FlockDeploy.sha512 (xIOf x) = true ↔
+        (xIOf x).length < 2 ^ 64 ∧ (∀ st ∈ sts, FlockComplete.RegionsFit st) ∧
+          FlockComplete.RecordFitsAt FlockDeploy.sha512 (xIOf x) spec sts) := by
+  obtain ⟨st, hst⟩ := parse_of_scopeCheck hs
+  obtain ⟨s, spec, sts, hset, -, hd⟩ := parse_innerOk hst
+  refine ⟨s, spec, sts, hset, hd, ?_⟩
+  rw [FlockComplete.ready_sha512, hset]
+  simp only [hd, Bool.true_and, Bool.and_eq_true, decide_eq_true_eq, and_assoc]
+
+/-- **At the inner statement Flock admits, the inner readiness holds**: under `PlainLeavesAdmitted`, some inner
+statement that Flock's plain verifier sets up with a draw (`innerOk`), in Flock's scope and true, is one
+`FlockComplete.ready` at SHA-512 takes. -/
+theorem ready_of_admitted {rel : Flock.Readable.Parsed → Flock.Readable.Relation} (hA : PlainLeavesAdmitted rel) :
+    ∃ inner : Msg, FlockComplete.ready FlockDeploy.sha512 inner = true ∧ innerOk inner = .ok () ∧
+      Claims.Flock.Scope (FlockDeploy.deployPlain rel) inner ∧
+        ∃ w, Claims.Flock.R (FlockDeploy.deployPlain rel).parse inner w := by
+  obtain ⟨inner, -, -, -, w, s, spec, sts, -, -, -, hs, hck, hd, hl, -, hreg, hrec, hS, hR⟩ := hA
+  refine ⟨inner, ?_, innerOk_iff.2 ⟨s, spec, sts, hs, hck, hd⟩, hS, w, hR⟩
+  rw [FlockComplete.ready_sha512, hs]
+  simp only [Bool.and_eq_true, decide_eq_true_eq]
+  exact ⟨⟨⟨hd, hl.trans (by norm_num)⟩, hreg⟩, hrec⟩
 
 /-! ## `Decomp` at the checked reader -/
 

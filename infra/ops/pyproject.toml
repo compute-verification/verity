@@ -36,5 +36,10 @@ inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/regist
           "tools/research/src/research/telemetry/procs.py", "tools/research/src/research/telemetry/pyspy.py",
           "tools/research/src/research/telemetry/run.py", "tools/research/src/research/flags.py",
           # the control pod's cloud watch, tested here: its code, its config and the boot script whose loops it watches
-          "infra/control/cloud_watch.py", "infra/control/cloud_watch.toml", "infra/control/post_start.sh"]
+          "infra/control/cloud_watch.py", "infra/control/cloud_watch.toml", "infra/control/post_start.sh",
+          # and the control disk relay's notes-sync rule
+          "infra/control/control_disk_alert.py",
+          # its watchers supervisor, VM stops and top's loops, with their configs, and the dead-man's switch that reads its heartbeat
+          "infra/control/watchers.py", "infra/control/watchers.toml", "infra/control/vm_stop.py", "infra/control/vm_stop.toml",
+          "infra/control/top_watch.py", "infra/control/deadman/api/deadman.py", "infra/control/deadman/vercel.json"]
 parallel = true

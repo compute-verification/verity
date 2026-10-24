@@ -57,7 +57,10 @@ class Refused(Exception):
     pass
 
 
-def job(*, run_id: str, project: str, submitter: str, priority: str = "work", gpus: int = 0, gpu_model: str | None = None,
+DEFAULT_CLASS = "work"
+
+
+def job(*, run_id: str, project: str, submitter: str, priority: str = DEFAULT_CLASS, gpus: int = 0, gpu_model: str | None = None,
         cpus: int = 1, memory_gib: int = 8, max_s: int, custody_s: int = 0, preempt: str = "requeue", quiet: bool = False,
         node: str | None = None, gpu_ids: tuple[int, ...] = (), submitted: int = 0) -> Job:
     return Job(id=f"rr-{run_id}", project=project, submitter=submitter, priority=priority, kind="batch", gpus=gpus,
@@ -105,7 +108,8 @@ def claims_cores(cluster: Cluster, j: Job, node: str) -> bool:
 
 def resolve(cluster: Cluster, j: Job, run_id: str, now: int, kind: str | None = None, gpu_host: bool = False) -> dict[str, Any]:
     """Where the job runs and under what: `{node, machine, why, job, wrap, workload_wrap}`, and `cores` (`{cpus, n}`: n CPUs of
-    the pin cpus, which the wrapper names) when the job claims whole cores on the machine. The router's node first, then any other node
+    the pin cpus, which the wrapper names, and `rank`, its class's priority less DEFAULT_CLASS's, when not 0: cpu-hold's line
+    takes higher ranks first) when the job claims whole cores on the machine. The router's node first, then any other node
     that could run it (only the pinned one when `j.node` is set); Refused with each node's reason when none can."""
     first = place(cluster, j, {}, now)
     if first.node is None:
@@ -122,8 +126,9 @@ def resolve(cluster: Cluster, j: Job, run_id: str, now: int, kind: str | None = 
         except Refused as e:
             reasons.append(f"{name}: {e}")
             continue
-        cores = {"cores": {"cpus": cpuset.format(allowed_cpus(cluster, cluster.nodes[name], pinned)), "n": pinned.cpus}} \
-            if claims_cores(cluster, pinned, name) else {}
+        rank = cluster.priorities[pinned.priority] - cluster.priorities.get(DEFAULT_CLASS, 0)
+        cores = {"cores": {"cpus": cpuset.format(allowed_cpus(cluster, cluster.nodes[name], pinned)), "n": pinned.cpus,
+                           **({"rank": rank} if rank else {})}} if claims_cores(cluster, pinned, name) else {}
         return {"node": name, "machine": name, "why": first.why if name == first.node else f"{reasons[-1]}; so {name}",
                 "job": job_to_dict(pinned), "wrap": wrap, "workload_wrap": workload_wrap, **cores}
     raise Refused("; ".join(reasons))

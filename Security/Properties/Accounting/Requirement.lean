@@ -38,6 +38,7 @@ def execution (i : Instance) : Accounting.Requirement.Execution ℕ where
 def layout (i : Instance) : Accounting.Requirement.Layout ℕ where
   block := i.blockOf
   offset := i.offsetOf
+  encoded := i.encodedOf
 
 /-- The store a code store denotes. -/
 def store (s : CircuitRequirement.Store) : Accounting.Requirement.Store where

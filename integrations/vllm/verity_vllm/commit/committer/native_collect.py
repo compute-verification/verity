@@ -161,6 +161,11 @@ MOE_FLUSH_PLANES = frozenset({"up"})
 
 
 WINDOW_MB, WINDOW_SLOTS = 256, 8
+# rows-sha512 (`rows_hold_bytes`): the most of a step's h (a learning step's, before its length is known) and, apart, of its leaves (a
+# step that keeps no levels, before its tree) the worker holds on the device.  Past it a learning step's later windows re-hash from
+# host, and the held leaves fold into their windows' top nodes, so a step holds at most 2 x this beyond the ring and one window's
+# transients, whatever its length.  A constant, not a share of the memory the engine leaves free.
+ROWS_HOLD_BYTES = 1 << 30
 
 
 def window_mb_default(windowed_worker: bool, retain: str) -> int:
@@ -179,7 +184,7 @@ class NativeCollectCommitter(NativeHostCommitter):
     def __init__(self, engine: Any, *, wrap: bool = True, profile: bool = False, build_dir: str | None = None, check_sizes: bool = True,
                  gather: bool = False, native_hooks: bool = False, auto_blocks: bool = False, native_worker: bool = False,
                  layout: str = "chunk-leaf-v1", retain_levels: bool | None = None, commit_scheme: str | None = None,
-                 rows_cap_blocks: int = 0, rows_cap_free: int = 2, **kw: Any) -> None:
+                 rows_cap_blocks: int = 0, rows_cap_free: int = 2, rows_hold_bytes: int = ROWS_HOLD_BYTES, **kw: Any) -> None:
         kw.setdefault("fast_copy", True)
         kw.setdefault("gpu_tree", True)
         super().__init__(engine, **kw)
@@ -206,6 +211,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         # slots are free (the serving thread is not waiting for one), leaving the other SMs to serving
         self.rows_cap_blocks = int(rows_cap_blocks)
         self.rows_cap_free = int(rows_cap_free)
+        self.rows_hold_bytes = int(rows_hold_bytes)
         self.windowed = self.win_bytes > 0 and self.native_worker and self.gather
         if self.win_bytes > 0 and not self.windowed:
             raise ValueError("windowed staging needs native_collect_v2b (native worker + gather)")
@@ -224,17 +230,20 @@ class NativeCollectCommitter(NativeHostCommitter):
         self.retain_levels = bool(retain_levels) if retain_levels is not None else not (self.windowed and self.retain == "none")
         if not self.retain_levels and not self.windowed:
             raise ValueError("retain_levels=False is implemented on the windowed path only (--window-mb > 0)")
-        # the commitment scheme (`commit_scheme`, unset = vllm-v1): vllm-v1 (the record), or rows-sha512 (`step_rows`: every
-        # 256 B chunk an hm96-sha512 hiding leaf in a frame-v3-sha512 tree, 64-byte roots), on the windowed worker under chunk-leaf-v1.
+        # the commitment scheme (`commit_scheme`, unset = rows-sha512): rows-sha512 (`step_rows`: every step_rows.ROW_BYTES (4 KiB)
+        # chunk an hm96-sha512 hiding leaf in a frame-v3-sha512 tree, 64-byte roots), on the windowed worker under chunk-leaf-v1, or
+        # vllm-v1 by name (a per-step-block collector, an old record's configuration).
         # Each step's salt key is fresh (`row_keys`); a replay that must reproduce a run's trees takes that run's keys
         # (`replay_row_keys`, set before the run and dropped by its finalize)
-        self.commit_scheme = commit_scheme or "vllm-v1"
+        self.commit_scheme = commit_scheme or step_rows.NAME
         if self.commit_scheme not in ("vllm-v1", step_rows.NAME):
             raise ValueError(f"unknown commit scheme {self.commit_scheme!r} (vllm-v1 | {step_rows.NAME})")
         self.rows = self.commit_scheme == step_rows.NAME
-        if self.rows and (not self.windowed or self.layout_v2 or self.hiding is not None or GPU_CHUNK_BYTES != step_rows.ROW_BYTES):
+        if self.rows and (not self.windowed or self.layout_v2 or self.hiding is not None):
             raise ValueError(f"{step_rows.NAME} is implemented on the windowed worker (native worker + gather + --window-mb > 0) under "
-                             "chunk-leaf-v1 position leaves only")
+                             "chunk-leaf-v1 position leaves only: name vllm-v1 for any other collector")
+        if self.rows:
+            self.chunk = step_rows.ROW_BYTES      # a row is a chunk of the step's stream: the layout's leaves, the windows' and the tree's
         self.row_keys: dict[int, bytes] = {}
         self.replay_row_keys: dict[int, bytes] | None = None
         self._row_tn: Any | None = None
@@ -267,10 +276,10 @@ class NativeCollectCommitter(NativeHostCommitter):
         self.transient_peak_bytes = 0                            # largest learning-step transient host copy (given back after the re-hash)
         self.excluded_bytes = 0                                  # retain=host + exclude: bytes NOT copied to host over the run
         self.plan_mismatches = 0
-        # execution-environment knob (candidate B variant, labelled): run the model step on a HIGH-priority CUDA stream so the worker's SHA
-        # kernels (side stream, default priority) yield SM slots to the serving kernels; fenced both ways with wait_stream at the step
-        # boundary (the FA2 tap, the gather flushes and the step event all follow the current stream, so nothing else changes)
-        self.hi_prio = bool(native_hooks) and os.environ.get("VERITY_HI_PRIO", "0") == "1"
+        # the model step runs on a HIGH-priority CUDA stream (VERITY_HI_PRIO, default on; 0 keeps the caller's) so the worker's SHA kernels
+        # (side stream, default priority) yield SM slots to the serving kernels and the gather; fenced both ways with wait_stream at the
+        # step boundary (the FA2 tap, the gather flushes and the step event all follow the current stream, so nothing else changes)
+        self.hi_prio = bool(native_hooks) and os.environ.get("VERITY_HI_PRIO", "1") == "1"
         self._hi = torch.cuda.Stream(priority=-1) if self.hi_prio else None
         # the serving thread's step end as one native call (`end_step_full`; no step event on the windowed path, whose worker waits on the
         # windows' own), and on the windowed path a snapshot of the step's row order that the worker expands into `step_rows` unless a
@@ -431,8 +440,13 @@ class NativeCollectCommitter(NativeHostCommitter):
                     try:
                         so = res[0] if isinstance(res, tuple) else res
                         st = getattr(so, "sampled_token_ids", None)
+                        ib = a[1] if len(a) > 1 else kw.get("input_batch")
+                        draw_srcs = [s for s in me.sources if hasattr(s, "on_sample")]      # a source of the draw's inputs (served_record)
+                        owned = {n for s in draw_srcs for n in getattr(s, "own_names", ())}
                         if isinstance(st, torch.Tensor) and st.device.type == "cuda":
                             me._acquire("runner.sampler/sampled_token_ids", st, job)
+                            for s in draw_srcs:
+                                s.on_sample(ib, int(st.shape[0]), job)
                             # launched S, or (a derived-S Program's step on which vLLM skipped top-p) the prescribed S -- once per sampled row
                             S, why, counter = step_splits(list(me._split_launches), int(st.shape[0]), me.prescribe_idle_splits, lambda: batch_top_p(runner, a, kw),
                                                           lambda: torch.cuda.get_device_properties(st.device).multi_processor_count)
@@ -447,9 +461,8 @@ class NativeCollectCommitter(NativeHostCommitter):
                         # `runner.sampler/seed`, one i64 per sequence): `sampling_states.seeds.gpu[input_batch.idx_mapping]` -- the very buffer
                         # `_gumbel_sample_kernel` reads (`seeds_ptr + req_state_idx`), gathered in the step's row order.  Bound only when the
                         # batch carries explicit seeds (a stochastic Program's registered runtime input); a greedy / unseeded step binds nothing.
-                        ib = a[1] if len(a) > 1 else kw.get("input_batch")
                         ss = getattr(getattr(runner, "sampler", None), "sampling_states", None)
-                        if ib is not None and ss is not None and hasattr(ss, "seeds") and hasattr(ib, "idx_mapping"):
+                        if "runner.sampler/seed" not in owned and ib is not None and ss is not None and hasattr(ss, "seeds") and hasattr(ib, "idx_mapping"):
                             idx_np = getattr(ib, "idx_mapping_np", None)
                             explicit = bool(ss.any_explicit_seed(idx_np)) if (idx_np is not None and hasattr(ss, "any_explicit_seed")) else False
                             if explicit:
@@ -880,11 +893,12 @@ class NativeCollectCommitter(NativeHostCommitter):
         the FA2-02 geometry bound that made B=32 a 52-slot / 14 GB ring and let the engine run 32 decode steps ahead of the worker.)  The
         largest-tensor bound (prefill hidden bound / layers) is still reported for the record."""
         W = self.win_bytes
-        if W % GPU_CHUNK_BYTES or (W // GPU_CHUNK_BYTES) & (W // GPU_CHUNK_BYTES - 1):
-            raise ValueError(f"--window-mb: the window must hold a power of two of {GPU_CHUNK_BYTES}-byte chunks (per-window subtrees == whole-step tree)")
+        C = self.chunk
+        if W % C or (W // C) & (W // C - 1):
+            raise ValueError(f"--window-mb: the window must hold a power of two of {C}-byte chunks (per-window subtrees == whole-step tree)")
         if self.retain == "device":
             raise ValueError("windowed staging retains on host or not at all (--retain host|none|sample); device retention is the footprint")
-        self.win_log2_chunks = (W // GPU_CHUNK_BYTES).bit_length() - 1
+        self.win_log2_chunks = (W // C).bit_length() - 1
         largest = 0
         if rec:
             layers = int((rec.get("model") or {}).get("layers") or 1)
@@ -921,7 +935,10 @@ class NativeCollectCommitter(NativeHostCommitter):
                 "backpressure": "block-until-slot-free (no drop)", "slot_wait_timeout_s": float(self._nc.win_wait_timeout_s),
                 "dead_watchdog": {"grace_s": grace, "marker": marker or None, "rc": 3},
                 "layout": "chunk-leaf-v2" if self.layout_v2 else "chunk-leaf-v1",
-                "in_place_hashing": "all steps (v2)" if self.layout_v2 else "hit-plan steps only (v1 binds the step length into every leaf); learning steps re-upload from host"}
+                "in_place_hashing": "all steps (v2)" if self.layout_v2 else
+                ("hit-plan steps whole; learning steps keeping no bytes to each row's h in place up to rows_hold_bytes of h, leaves from h at "
+                 "step end; their later windows and others re-upload from host" if self.rows else
+                 "hit-plan steps only (v1 binds the step length into every leaf); learning steps re-upload from host")}
         memtrace("window ring allocated")
         self.window_info = info
         return info
@@ -934,82 +951,14 @@ class NativeCollectCommitter(NativeHostCommitter):
             return [width >> L for L in range(min(j, width.bit_length() - 1) + 1)], step_rows.ROOT_BYTES
         return level_sizes(n, j), 32
 
-    def _row_key(self, step: int) -> bytes:
-        """Step `step`'s salt key: fresh from the OS generator, or the replayed run's."""
-        if self.replay_row_keys is None:
-            ks = os.urandom(step_rows.KEY_BYTES)
-        elif step in self.replay_row_keys:
-            ks = self.replay_row_keys[step]
-        else:
-            raise RuntimeError(f"{step_rows.NAME} replay: the replayed run has no salt key for step {step}")
-        self.row_keys[step] = ks
-        return ks
-
     def _row_table(self) -> Any:
         if self._row_tn is None:
             self._row_tn = torch.frombuffer(bytearray(step_rows.t_nibbles()), dtype=torch.uint8).cuda()
         return self._row_tn
 
-    def _row_domain(self, step: int, n: int) -> Any:
-        return step_rows.domain(self.program_digest, self._ctx_digest(step), self._geo_digest, n)
-
     def _row_step(self, step: int, n: int, ks: bytes) -> Any:
         row_prefix, salt_prefix, leaf_prefix = self._row_consts
         return ext().RowStep(self._row_domain(step, n).domain_id, ks, row_prefix, salt_prefix, leaf_prefix, step_rows.SCHEMA, step_rows.ROW_BYTES)
-
-    def _level_path(self, levels: list, index: int) -> tuple:
-        if not self.rows:
-            return super()._level_path(levels, index)
-        return tuple(bytes(levels[d][(index >> d) ^ 1].cpu().numpy().tobytes()) for d in range(len(levels) - 1))
-
-    def _gpu_salt(self, step: int, index: int) -> bytes:
-        return step_rows.salt(self.row_keys[step], index) if self.rows else b""
-
-    def _fold_run_root(self, roots: list[bytes]) -> bytes | None:
-        if not self.rows:
-            return super()._fold_run_root(roots)
-        return step_rows.run_root(self.program_digest, self._geo_digest, roots) if all(len(r) == step_rows.ROOT_BYTES for r in roots) else None
-
-    def verify(self, run: Any, opening: Any) -> bool:
-        """rows-sha512: the row and its salt give the hiding leaf, the frame path folds it to the tree root, which binds into the step
-        root, which is in the run root."""
-        if not self.rows:
-            return super().verify(run, opening)
-        try:
-            sc = run.steps[opening.step]
-            ident = self.identity_of(opening.step, opening.index)
-        except (IndexError, KeyError):
-            return False
-        if opening.step not in self._gpu_blocks or ident != opening.identity or len(opening.value) != step_rows.ROW_BYTES:
-            return False
-        if len(opening.salt) != step_rows.SALT_BYTES or any(not isinstance(p, bytes) for p in opening.path):
-            return False
-        h = step_rows.hiding_leaf(opening.value, opening.salt, 8 * step_rows.ROW_BYTES)[1]
-        merkle = step_rows.fold_path(self._row_domain(opening.step, sc.n_leaves), opening.index, h, opening.path)
-        if merkle is None:
-            return False
-        root = step_rows.step_root(self.program_digest, self._ctx_digest(opening.step), self._geo_digest,
-                                   self.layout_digest(self._layouts[opening.step]), sc.n_leaves, merkle)
-        return root == sc.root and len(run.run_root) == step_rows.ROOT_BYTES and self._run_root(run) == run.run_root
-
-    def _refuse_padding(self, padding: list) -> None:
-        if padding and self.rows:
-            raise ValueError(f"padding steps are vllm-v1 position-leaf blocks: not implemented under {step_rows.NAME}")
-        super()._refuse_padding(padding)
-
-    def open_range(self, step: int, lo: int, hi: int) -> Any:
-        if self.rows:
-            raise NotImplementedError(f"open_range: range openings are vllm-v1's; not implemented under {step_rows.NAME}")
-        return super().open_range(step, lo, hi)
-
-    def verify_range(self, run: Any, ro: Any, roots: dict[int, bytes] | None = None) -> bool:
-        if self.rows:
-            raise NotImplementedError(f"verify_range: range openings are vllm-v1's; not implemented under {step_rows.NAME}")
-        return super().verify_range(run, ro, roots)
-
-    def _leaf_record(self, steps: list) -> dict:
-        rec = super()._leaf_record(steps)
-        return {**rec, "commit_scheme": self.commit_scheme} if self.rows else rec
 
     def _window_root(self, step: int, state: dict[str, Any], padded: int, side: Any) -> tuple[list[Any], bytes, float]:
         """The step's tree levels, Merkle root and tree ms from its absorbed windows (`state`, cleared): the upper tree over the per-window
@@ -1023,7 +972,9 @@ class NativeCollectCommitter(NativeHostCommitter):
             return H.tree(lv_all, side.cuda_stream, True, torch.empty(0, dtype=torch.uint8))
         top_span = 1 << (state["n_levels"] - 1)
         n_tops = state["width"] // top_span if rows else -(-state["n_total"] // top_span)
-        if len(state["tops"]) != n_tops:
+        if rows and state.get("leaves"):
+            self._fold_leaves(state, side)
+        if sum(int(t.shape[0]) for t in state["tops"]) != n_tops:
             raise RuntimeError(f"windowed absorb: {len(state['tops'])} window subtrees for {state['n_total']} leaves (expected {n_tops})")
         with torch.inference_mode(), torch.cuda.stream(side):
             tops = torch.cat(state["tops"]) if len(state["tops"]) > 1 else state["tops"][0]
@@ -1049,6 +1000,63 @@ class NativeCollectCommitter(NativeHostCommitter):
         state.clear()
         return levels, mr, tree_ms
 
+    def _hold_leaves(self, state: dict[str, Any], lv: Any, side: Any) -> None:
+        """rows-sha512, a step that keeps no levels: window leaves `lv` wait on the device for the step's window levels, built in one pass
+        of wide launches rather than one subtree a window; the leaves held so far fold first when `lv` would take them past
+        `rows_hold_bytes`."""
+        if state["leaves"] and sum(int(t.numel()) for t in state["leaves"]) + int(lv.numel()) > self.rows_hold_bytes:
+            self._fold_leaves(state, side)
+            self._win_leaf_folds = getattr(self, "_win_leaf_folds", 0) + 1
+        state["leaves"].append(lv)
+
+    def _fold_leaves(self, state: dict[str, Any], side: Any) -> None:
+        """The held leaves, whole windows from the first not yet folded, to their windows' top nodes (level n_levels - 1), after the
+        step's earlier tops; the held tensors are released once concatenated, before the levels above them are built."""
+        n_levels = state["n_levels"]
+        first = sum(int(t.shape[0]) for t in state["tops"]) << (n_levels - 1)
+        with torch.inference_mode(), torch.cuda.stream(side):
+            lv = torch.cat(state["leaves"]) if len(state["leaves"]) > 1 else state["leaves"][0]
+            state["leaves"] = []
+            state["tops"].append(self._hasher.rows_tree_window(state["rs"], lv, n_levels, first, side.cuda_stream, []))
+
+    def _retain_from_transient(self, job: _StepJob, tblocks: list[tuple[int, Any, Any, int]], keep_set: Any, chunk_parts: Any,
+                               ranges: list[tuple[int, int, Any]], side: Any) -> int:
+        """Retention of a bounded LEARNING step, carved out of its transient copies (`tblocks`) now that the metas are known (retain=host:
+        every chunk outside the excluded families' interiors; retain=sample: the challenged windows, or with `chunk_parts` only their
+        challenged chunks), pinned -> pinned into `ranges`; then the transient blocks go back to the pool, so the step's host footprint
+        returns to its retained bytes.  -> the bytes the exclusions kept off host"""
+        W, C = self.win_bytes, self.chunk
+        excl_bytes = 0
+        with torch.inference_mode(), torch.cuda.stream(side):
+            if self.retain == "host":
+                excl = _excluded_chunk_ranges(job.metas, self.retain_exclude, C) if self.retain_exclude else []
+                for kk, _hb, hv, n in tblocks:
+                    base = kk * W
+                    kept_b = 0
+                    for a, b in outside(excl, base, base + n):
+                        rv = self.pool.take(b - a)
+                        rv.copy_(hv[a - base:b - base], non_blocking=True)
+                        ranges.append((a, b, rv))
+                        kept_b += b - a
+                    excl_bytes += n - kept_b
+            elif keep_set is not None:
+                for kk, _hb, hv, n in tblocks:
+                    if (job.step, kk) in keep_set:
+                        if chunk_parts is not None:
+                            base = kk * W
+                            for a, b in chunk_parts(job.step, base, base + n):
+                                rv = self.pool.take(b - a)
+                                rv.copy_(hv[a - base:b - base], non_blocking=True)
+                                ranges.append((a, b, rv))
+                        else:
+                            rv = self.pool.take(n)
+                            rv.copy_(hv[:n], non_blocking=True)
+                            ranges.append((kk * W, kk * W + n, rv))
+            side.synchronize()
+        for _kk, hb, _hv, _n in tblocks:
+            self.pool.give_back(hb)
+        return excl_bytes
+
     def _commit_step_windowed(self, job: _StepJob) -> None:
         """Worker: absorb the step WINDOW BY WINDOW while the serving thread is still filling later windows.  Per window: wait for the
         serving thread's complete-event, D2H the raw bytes to pinned host (retention / re-upload source), hash its leaves in place when the
@@ -1060,7 +1068,7 @@ class NativeCollectCommitter(NativeHostCommitter):
 
         self._gpu_ext_load()
         side = self._side_stream()
-        nc, H, W, C = self._nc, self._hasher, self.win_bytes, GPU_CHUNK_BYTES
+        nc, H, W, C = self._nc, self._hasher, self.win_bytes, self.chunk
         if getattr(nc, "win_dead", False):
             # [R15 capacity] the serving thread's slot wait timed out earlier in this run: every stage() since was refused by name, so this step
             # has nothing staged -- fail it by the SAME name instead of tripping over an empty tree ("cudaMemcpyAsync(root): invalid argument").
@@ -1086,7 +1094,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             sizes, dig = self._window_levels(n_total, j)
             n_levels = len(sizes)
             if rows:
-                state.update(rs=self._row_step(job.step, n_total, ks), width=sizes[0], absorbed=[])
+                state.update(rs=self._row_step(job.step, n_total, ks), width=sizes[0], absorbed=[], leaves=[])
             if not self.retain_levels:
                 state.update(n_total=n_total, n_levels=n_levels, views=None, tops=[])
                 return
@@ -1099,7 +1107,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             state.update(n_total=n_total, n_levels=n_levels, views=views, tops=[])
 
         def row_leaves(src: Any, nbytes: int, k: int) -> Any:
-            """rows-sha512: window k's leaves, its nbytes / 256 rows at src and then pads to the window's end (or the tree's width); capped
+            """rows-sha512: window k's leaves, its nbytes / ROW_BYTES rows at src and then pads to the window's end (or the tree's width); capped
             launches for the window (its leaves and subtree) while the ring has room."""
             first, rs = k << j, state["rs"]
             rs.max_blocks = self.rows_cap_blocks if self.rows_cap_blocks and nc.free_slots() >= self.rows_cap_free else 0
@@ -1110,9 +1118,14 @@ class NativeCollectCommitter(NativeHostCommitter):
             n_k = int(lv_k.shape[0])
             views, n_levels = state["views"], state["n_levels"]
             if rows:
-                dsts = [] if views is None else [views[L][k << (j - L):(k << (j - L)) + (n_k >> L)] for L in range(n_levels)]
-                state["tops"].append(H.rows_tree_window(state["rs"], lv_k, n_levels, k << j, side.cuda_stream, dsts))
                 state["absorbed"].append(k)
+                if views is None:
+                    # no levels kept: the window's leaves (64 B a row) wait on the device for its tree (_window_root) up to rows_hold_bytes;
+                    # a window's own subtree is two launches of a few blocks each, bound by latency and by waiting for SMs
+                    self._hold_leaves(state, lv_k, side)
+                    return
+                dsts = [views[L][k << (j - L):(k << (j - L)) + (n_k >> L)] for L in range(n_levels)]
+                state["tops"].append(H.rows_tree_window(state["rs"], lv_k, n_levels, k << j, side.cuda_stream, dsts))
                 return
             if views is None:
                 state["tops"].append(H.tree_window_top(lv_k, n_levels, side.cuda_stream))
@@ -1131,6 +1144,13 @@ class NativeCollectCommitter(NativeHostCommitter):
         bounded = self.bounded and not self.layout_v2
         learning = plan_used < 0
         learn_only = bounded and learning and self.learn_only
+        # rows on a learning step that keeps no bytes: a leaf's h needs only the step's salt key, so each window is hashed in place to its
+        # h (64 B a row, kept on the device) and released with no host copy; its leaves follow from them once the step's length, and so
+        # its frame domain, is known (rows_frame) -- the same leaves as the re-upload below.  Up to rows_hold_bytes of h: the window that
+        # would pass it and the step's later ones take the host path below (copied, under bounded staging's budget, and re-uploaded)
+        hfirst = rows and learning and self.retain == "none"
+        hwins: list[tuple[int, Any]] = []
+        rs_h = self._row_step(job.step, 1, ks) if hfirst else None
         tblocks: list[tuple[int, Any, Any, int]] = []                           # bounded learning: (k, block, view, bytes) re-hash source
         tbytes = 0
         discard = False
@@ -1147,7 +1167,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             excl = _excluded_chunk_ranges(hint, self.retain_exclude, C)
 
         # bounded retain=sample with the picks known by chunk (`retain_chunks`, set by openings_after_release for a replay): the retained
-        # bytes of a window are the challenged 256 B chunks inside it, sorted, as absolute step-stream ranges
+        # bytes of a window are the challenged chunks inside it, sorted, as absolute step-stream ranges
         chunk_picks: dict[int, list[int]] | None = None
         if bounded and self.retain == "sample" and getattr(self, "retain_chunks", None):
             chunk_picks = {}
@@ -1187,7 +1207,13 @@ class NativeCollectCommitter(NativeHostCommitter):
                     st[used_k:padded_k].zero_()
                 hv = None
                 keep_win = self.retain == "host" or (keep_set is not None and (job.step, k) in keep_set)
-                if bounded and not fault_lifetime:
+                if hfirst and padded_k and sum(int(h.numel()) for _kk, h in hwins) + 64 * (padded_k // C) > self.rows_hold_bytes:
+                    hfirst = False                                              # past rows_hold_bytes of h: this window on takes the host path
+                if hfirst:
+                    if padded_k:
+                        rs_h.max_blocks = self.rows_cap_blocks if self.rows_cap_blocks and nc.free_slots() >= self.rows_cap_free else 0
+                        hwins.append((k, H.rows_h(rs_h, st, padded_k, k << j, tn, side.cuda_stream)[0]))
+                elif bounded and not fault_lifetime:
                     if learning:
                         # learning step: the window is copied to a TRANSIENT block (re-hash source; given back after) while the budget
                         # holds; over budget a learn-only pass drops everything copied so far and just consumes the ring (the plan is
@@ -1221,7 +1247,7 @@ class NativeCollectCommitter(NativeHostCommitter):
                         excl_bytes += padded_k - kept_b
                     elif padded_k and keep_set is not None and (job.step, k) in keep_set:
                         if chunk_picks is not None:
-                            # replay-to-open (R17-5): keep ONLY the challenged chunks of this window (256 B each) as byte ranges -- not the
+                            # replay-to-open (R17-5): keep ONLY the challenged chunks of this window (`chunk` bytes each) as byte ranges -- not the
                             # 256 MiB window; the replay's authentication paths come from its levels, so this is all a replay retains
                             base = k * W
                             for a, b in chunk_parts(job.step, base, base + padded_k):
@@ -1357,14 +1383,20 @@ class NativeCollectCommitter(NativeHostCommitter):
             state["tops"] = old["tops"]
             self._win_relayouts = getattr(self, "_win_relayouts", 0) + 1
         if rehash:
-            # v1: the step length was unknown (learning step) or the plan changed mid-step -> hash from the host windows with the real length
-            if not host_wins:
+            # v1: the step length was unknown (learning step) or the plan changed mid-step -> the leaves with the real length: a rows step's
+            # windows hashed to h in place framed first (each h dropped once framed), then the host windows re-hashed
+            if not host_wins and not hwins:
                 raise RuntimeError("windowed absorb (layout v1): the plan changed mid-step and no host copy exists to re-hash from")
             state.clear()
             pending = []
             begin_tree(padded // C)
             m_words = 0 if self.layout_v2 else padded // 4
+            self._win_hfirst_steps = getattr(self, "_win_hfirst_steps", 0) + bool(hwins)
             with torch.inference_mode(), torch.cuda.stream(side):
+                while hwins:
+                    kk, hs_k = hwins.pop(0)
+                    first = kk << j
+                    absorb(kk, H.rows_frame(state["rs"], hs_k, first, min(1 << j, state["width"] - first), state["n_total"], side.cuda_stream))
                 for kk, hv, n in host_wins:
                     if not n:
                         continue
@@ -1375,7 +1407,7 @@ class NativeCollectCommitter(NativeHostCommitter):
                         lv_k = H.leaves_window(self.win_scratch, n, (kk * W) // C, job.step, self.GPU_TREE_SRC, C, m_words, side.cuda_stream)
                     absorb(kk, lv_k)
                     del lv_k
-            self._win_reupload_bytes = getattr(self, "_win_reupload_bytes", 0) + padded
+            self._win_reupload_bytes = getattr(self, "_win_reupload_bytes", 0) + sum(n for _kk, _hv, n in host_wins)
         if pending:
             if not state:
                 begin_tree(padded // C)
@@ -1401,52 +1433,22 @@ class NativeCollectCommitter(NativeHostCommitter):
         levels, mr, tree_ms = self._window_root(job.step, state, padded, side)
         nc.finish_step(job.step)
         if bounded and learning:
-            # retention of a bounded LEARNING step is carved out of the transient copies now that the metas are known (retain=host:
-            # every chunk outside the excluded families' interiors; retain=sample: the challenged windows), pinned -> pinned; then the
-            # transient blocks go back to the pool -- the step's host footprint returns to its retained bytes
-            with torch.inference_mode(), torch.cuda.stream(side):
-                if self.retain == "host":
-                    excl = _excluded_chunk_ranges(job.metas, self.retain_exclude, C) if self.retain_exclude else []
-                    for kk, _hb, hv, n in tblocks:
-                        base = kk * W
-                        kept_b = 0
-                        for a, b in outside(excl, base, base + n):
-                            rv = self.pool.take(b - a)
-                            rv.copy_(hv[a - base:b - base], non_blocking=True)
-                            ranges.append((a, b, rv))
-                            kept_b += b - a
-                        excl_bytes += n - kept_b
-                elif keep_set is not None:
-                    for kk, _hb, hv, n in tblocks:
-                        if (job.step, kk) in keep_set:
-                            if chunk_picks is not None:
-                                base = kk * W
-                                for a, b in chunk_parts(job.step, base, base + n):
-                                    rv = self.pool.take(b - a)
-                                    rv.copy_(hv[a - base:b - base], non_blocking=True)
-                                    ranges.append((a, b, rv))
-                            else:
-                                rv = self.pool.take(n)
-                                rv.copy_(hv[:n], non_blocking=True)
-                                ranges.append((kk * W, kk * W + n, rv))
-                side.synchronize()
-            for _kk, hb, _hv, _n in tblocks:
-                self.pool.give_back(hb)
+            excl_bytes += self._retain_from_transient(job, tblocks, keep_set, chunk_parts if chunk_picks is not None else None, ranges, side)
             tblocks = []
             host_wins = []
         if bounded and self.retain in ("host", "sample"):
             if self.retain == "sample" and not learning and chunk_picks is None:
                 kept = [(kk, hv, n) for kk, hv, n in host_wins if kk not in transient]
-                keep = _HostWindows(kept, used, W) if kept else None
+                keep = _HostWindows(kept, used, W, C) if kept else None
             else:
                 ex_fams: dict[str, int] = {}
                 for elo, ehi, fam in excl:
                     ex_fams[fam] = ex_fams.get(fam, 0) + (min(ehi, padded) - elo if elo < padded else 0)
-                keep = _HostRanges(ranges, used, ex_fams) if ranges else None
+                keep = _HostRanges(ranges, used, ex_fams, C) if ranges else None
             self.excluded_bytes += excl_bytes
         else:
             kept = [(kk, hv, n) for kk, hv, n in host_wins if kk not in transient] if self.retain in ("host", "sample") else []
-            keep = _HostWindows(kept, used, W) if kept else None
+            keep = _HostWindows(kept, used, W, C) if kept else None
         self._footprint_absorbed(job, padded, levels, keep)
         self._gpu_t["leaf_ms"] += leaf_ms
         self._gpu_t["tree_ms"] += tree_ms
@@ -1605,6 +1607,9 @@ class NativeCollectCommitter(NativeHostCommitter):
         rc.extra["committed_tensors"] = int(st.get("committed", 0)) + int(self._py_committed)
         rc.extra["windows"] = {**dict(self._nc.window_stats()), **getattr(self, "window_info", {}),
                                "reupload_bytes": getattr(self, "_win_reupload_bytes", 0),
+                               "hfirst_steps": getattr(self, "_win_hfirst_steps", 0),
+                               "rows_hold_bytes": self.rows_hold_bytes if self.rows else None,
+                               "leaf_folds": getattr(self, "_win_leaf_folds", 0),
                                "relayouts": getattr(self, "_win_relayouts", 0),
                                "fault_lifetime_windows": getattr(self, "_fault_lifetime_windows", 0)}    # >0 only under VERITY_FAULT=release_before_keep
         # [R17 fp8] bounded staging record: what the flag did this run (a learned-only step = a warm-up-only outcome; on a record run the
@@ -1642,6 +1647,8 @@ class NativeCollectCommitter(NativeHostCommitter):
         self.excluded_bytes = 0
         self.plan_mismatches = 0
         self._win_reupload_bytes = 0    # windowed: per-run counters of finalize's extra["windows"]
+        self._win_hfirst_steps = 0
+        self._win_leaf_folds = 0
         self._win_relayouts = 0
         self._oar_deferred = []         # picks the in-run stages could not open from host (excluded families) -> openings_after_release
         for src in self.sources:

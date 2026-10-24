@@ -87,6 +87,18 @@ def derived_ok(d: str) -> bool:
         return False
 
 
+def composed_ok(rank_dir: str) -> bool:
+    """A TP rank's GP-01 workload Program on disk that a rerun keeps, as `derived_ok` keeps a derive: composed (it has a workload
+    digest) after every request Program under the rank was derived, so a request derived again is composed again."""
+    p = f"{rank_dir}/build_workload/workload_program.json"
+    try:
+        t = os.path.getmtime(p)
+        return (bool(_field(p, lambda d: d.get("workload_digest") or ""))
+                and all(os.path.getmtime(f) < t for f in glob.glob(f"{rank_dir}/build_request_LP*_T*/result.json")))
+    except OSError:
+        return False
+
+
 #: a request derive's peak host memory: a base, a term per Call and attention's term per layer x tokens^2 (every attention Call
 #: lists each earlier key and value row), fit over the 89 request derives of the 2026-09-29 epoch's stored Builds (#11, #57, #67,
 #: #68, #74, #75: within 5% on the large ones), with Calls bounded by the most Calls per (token, layer) measured (54: Qwen3-4B-FP8,
@@ -100,6 +112,22 @@ DERIVE_MARGIN = 1.2
 #: fitted on one Build only, Qwen3-235B-A22B TP8 with one shape (LP256 T31, run r20261003-070729-359b): 20.8 GiB per compose
 #: against 14.1 GiB per derive (1.48x); a compose's planned peak is this multiple of its largest shape's `derive_bytes`
 COMPOSE_PEAK_RATIO = 1.5
+#: ... or, as the requests grow, this multiple of all its shapes' `derive_bytes`, the larger: a compose holds every request's Program.
+#: GLM-5.3 TP8 (78 layers), I256 mixed arrivals: B32 composed at 128.8 GiB a rank against 207.6 GiB summed (0.62x, r20261018-005907-aca0),
+#: B8 past 32.2 GiB against 62.7 GiB (0.51x, OOM-killed at its scope's cap, r20261018-074029-94eb)
+COMPOSE_SUM_RATIO = 0.7
+#: a TP row's required-value manifest (`manifest build-global`): the word check, then one component per rank x declared request.
+#: GLM-5.3 TP8 B8 I256 at 2 processes (r20261020-084508-06dd): the word check 4,738 s, each of the 64 components 356-409 s.  The
+#: limit gives the word check 3x and each component 1,200 s as if one process built them all
+MANIFEST_BASE_S = 4 * 3600
+MANIFEST_COMPONENT_S = 1200
+#: a TP rank's fold Match legs (`tp-fold-match`) as multiples of its request Programs' summed `derive_bytes`: GLM-5.3 TP8 B8 I256
+#: (62.4 GiB summed) ran GM-01 with the shared X-09 at 339 GiB and the fold near 40 GB (r20261019-162751-9b01), each leg in at most
+#: about 2 h; a leg's limit is 350 s a GiB (3x that), at least 7200 s
+FOLD_GM_SUM_RATIO = 5.5
+FOLD_SUM_RATIO = 0.6
+FOLD_LEG_S_PER_GIB = 350
+FOLD_LEG_MIN_S = 7200
 
 
 def derive_bytes(lp: int, t: int, layers: int) -> int:
@@ -107,6 +135,36 @@ def derive_bytes(lp: int, t: int, layers: int) -> int:
     tokens = int(lp) + int(t) + 1
     calls = DERIVE_CALLS_PER_TOKEN_LAYER * layers * tokens
     return int(DERIVE_MARGIN * (DERIVE_BASE_BYTES + DERIVE_BYTES_PER_CALL * calls + DERIVE_BYTES_PER_LAYER_TOKEN2 * layers * tokens * tokens))
+
+
+def compose_bytes(shapes: list[tuple[int, ...]], layers: int) -> int:
+    """The planned peak host memory of a TP rank's GP-01 compose over the request Programs of `shapes`."""
+    each = [derive_bytes(s[0], s[1], layers) for s in shapes]
+    return int(max(COMPOSE_PEAK_RATIO * max(each), COMPOSE_SUM_RATIO * sum(each)))
+
+
+def manifest_timeout(components: int) -> int:
+    """The TP manifest's limit in seconds over `components` component builds (ranks x declared requests), whatever one derive's is."""
+    return MANIFEST_BASE_S + MANIFEST_COMPONENT_S * max(1, int(components))
+
+
+def fold_plan(shapes: list[tuple[int, ...]], layers: int, world: int, mem_bytes: int | None = None, folds: int = 0) -> dict[str, Any]:
+    """The fold Match's sizing for ranks of request `shapes` in `mem_bytes` (default the headroom): a GM-01 leg's and a fold's planned
+    peak, as many ranks' compare and GM-01 legs at once as hold beside `folds` folds (at least one), then as many folds as the rest
+    holds unless `folds` is given (each 1..`world`), whether one of each fits at all, and one leg's limit in seconds."""
+    mem = _memory_headroom() if mem_bytes is None else mem_bytes
+    s = sum(derive_bytes(sh[0], sh[1], layers) for sh in shapes)
+    gm, fold = int(FOLD_GM_SUM_RATIO * s), int(FOLD_SUM_RATIO * s)
+    rw = max(1, min(world, (mem - max(1, folds) * fold) // gm))
+    return {"gm_bytes": gm, "fold_bytes": fold, "mem_bytes": mem, "rank_workers": rw,
+            "fold_workers": folds or max(1, min(world, (mem - rw * gm) // fold)), "fits": mem >= gm + fold,
+            "leg_s": max(FOLD_LEG_MIN_S, int(FOLD_LEG_S_PER_GIB * s / 2**30))}
+
+
+def fold_phase_s(leg_s: int, world: int, rank_workers: int, fold_workers: int) -> int:
+    """`tp-fold-match`'s limit: every rank's fold in rounds of `fold_workers`, then its compare and GM-01 legs in rounds of
+    `rank_workers`, then the cross-rank leg (four legs when every rank runs at once)."""
+    return leg_s * (-(-world // fold_workers) + 2 * -(-world // rank_workers) + 1)
 
 
 def model_layers(ck: str) -> int | None:
@@ -120,19 +178,27 @@ def model_layers(ck: str) -> int | None:
     return None
 
 
-def _memory_headroom() -> int:
-    """cgroup memory.max - memory.current, else MemAvailable."""
+def _memory_headroom(proc: str = "/proc/self/cgroup", root: str = "/sys/fs/cgroup", meminfo: str = "/proc/meminfo") -> int:
+    """The least of MemAvailable and memory.max - memory.current over this process's cgroup and its ancestors (v2: the ``0::`` path
+    of `proc` under `root`; v1: the memory controller's mount): a research queue scope's MemoryMax is its own cgroup's, not the root's."""
     def rd(p: str) -> int | None:
         try:
             v = open(p).read().strip(); return int(v) if v.isdigit() else None
         except OSError:
             return None
-    mx = rd("/sys/fs/cgroup/memory.max") or rd("/sys/fs/cgroup/memory/memory.limit_in_bytes")
-    cur = rd("/sys/fs/cgroup/memory.current") or rd("/sys/fs/cgroup/memory/memory.usage_in_bytes")
-    if mx is None or mx >= (1 << 60) or cur is None:
-        kv = {ln.split(":")[0]: int(ln.split()[1]) * 1024 for ln in open("/proc/meminfo") if ln.split()[1].isdigit()}
-        return kv.get("MemAvailable", 0)
-    return mx - cur
+    kv = {ln.split(":")[0]: int(ln.split()[1]) * 1024 for ln in open(meminfo) if ln.split()[1].isdigit()}
+    try:
+        rel = next((ln.strip().split(":", 2)[2] for ln in open(proc) if ln.startswith("0::")), "")
+    except OSError:
+        rel = ""
+    parts = [p for p in rel.split("/") if p]
+    limits = [(f"{d}/memory.max", f"{d}/memory.current") for d in (os.path.join(root, *parts[:i]) for i in range(len(parts), -1, -1))]
+    heads = [kv.get("MemAvailable", 0)]
+    for a, b in [*limits, (f"{root}/memory/memory.limit_in_bytes", f"{root}/memory/memory.usage_in_bytes")]:
+        mx, cur = rd(a), rd(b)
+        if mx is not None and mx < (1 << 60) and cur is not None:
+            heads.append(mx - cur)
+    return max(0, min(heads))
 
 
 def _cpus() -> int:
@@ -140,20 +206,27 @@ def _cpus() -> int:
 
 
 def build_jobs_auto(shapes: list[tuple[int, int]] | None = None, layers: int | None = None, *, derives: int | None = None,
-                    peak_ratio: float = 1.0, headroom: int | None = None, cpus: int | None = None, budget_gb: float | None = None) -> int:
+                    peak_ratio: float = 1.0, headroom: int | None = None, cpus: int | None = None, budget_gb: float | None = None,
+                    job_bytes: int | None = None) -> int:
     """``--build-jobs auto`` (the default): as many concurrent derives as 80% of the memory headroom (or of `budget_gb`, when smaller)
-    holds at `peak_ratio` x the largest shape's `derive_bytes`, at most one per CPU this process may use and one per derive (`derives`:
-    by default the step's and each shape's; a TP Build's are every rank's).  Without the shapes or the model's layers: that memory /
-    (`peak_ratio` x 20 GiB), 1..8 (and at most `derives`).  A derive that dies of OOM is rc 137, a Build FAIL by rc, never a wrong
-    Program."""
+    holds at `peak_ratio` x the largest shape's `derive_bytes` (or `job_bytes` a job), at most one per CPU this process may use and
+    one per derive (`derives`: by default the step's and each shape's; a TP Build's are every rank's).  Without the shapes or the
+    model's layers: that memory / (`peak_ratio` x 20 GiB), 1..8 (and at most `derives`).  A derive that dies of OOM is rc 137, a
+    Build FAIL by rc, never a wrong Program."""
     head = _memory_headroom() if headroom is None else headroom
     if budget_gb is not None:
         head = min(head, int(budget_gb * (1 << 30)))
     if not shapes or not layers:
         return max(1, min(8, derives or 8, head // int(peak_ratio * (20 << 30))))
-    per = int(peak_ratio * max(derive_bytes(s[0], s[1], layers) for s in shapes))
+    per = job_bytes or int(peak_ratio * max(derive_bytes(s[0], s[1], layers) for s in shapes))
     n = len(shapes) + 1 if derives is None else derives
     return max(1, min(_cpus() if cpus is None else cpus, n, int(0.8 * head) // per))
+
+
+def census_digest(result: dict[str, Any]) -> str | None:
+    """A request Build's census/v1 digest, a function of its Program alone (``result.json``'s ``census``: the census the Build
+    cached beside its descriptor, `pipeline.memory_map.cache`); None for a Build without one."""
+    return (result.get("census") or {}).get("census")
 
 
 def _ir(r: dict) -> dict:
@@ -170,13 +243,14 @@ def build_summary(d: str) -> str:
         art = f"{d}/build_{w}/artifact.json"
         a = json.load(open(art)) if os.path.exists(art) else {}
         out[w] = {"ok": bool(r.get("ok")), "unsupported": r.get("unsupported"), "exception": r.get("exception"), "message": (r.get("message") or "")[:300],
-                  "program_digest": (r.get("program") or {}).get("digest") or a.get("program_digest"), "identity": a.get("identity"),
+                  "program_digest": (r.get("program") or {}).get("digest") or a.get("program_digest"), "census_digest": census_digest(r),
+                  "identity": a.get("identity"),
                   "correspondence_digest": (r.get("program") or {}).get("correspondence_digest") or a.get("correspondence_digest"),
                   "target": (a.get("target_profile") or {}), "applicability": a.get("applicability"), **_ir(r)}
     for p in sorted(glob.glob(f"{d}/build_request_LP*_T*/result.json")):
         r = json.load(open(p)); w = os.path.basename(os.path.dirname(p))
         out[w] = {"ok": bool(r.get("ok")), "unsupported": r.get("unsupported"), "message": (r.get("message") or "")[:300], "program_digest": (r.get("program") or {}).get("digest"),
-                  "correspondence_digest": (r.get("program") or {}).get("correspondence_digest"), **_ir(r)}
+                  "census_digest": census_digest(r), "correspondence_digest": (r.get("program") or {}).get("correspondence_digest"), **_ir(r)}
     json.dump(out, open(f"{d}/build_summary.json", "w"), indent=1, default=str)
     return "PASS" if all(v["ok"] for v in out.values()) else "FAIL"
 
@@ -586,7 +660,7 @@ def tp_shape(wl: str, checkpoints: str, hf_home: str) -> dict[str, Any]:
     req = cfg.engine.args
     mml = req.get("max_model_len") or int(s["max_input"]) + int(s["max_output"])
     batch = int(s["batch"])
-    return {"B": batch, "I": int(s["max_input"]), "O": int(s["max_output"]),
+    return {"B": batch, "I": int(s["max_input"]), "O": int(s["max_output"]), "requests": len(w.get("requests") or s["input_lengths"]),
             "shapes": sorted({(int(a), int(b) - 1) for a, b in zip(s["input_lengths"], s["output_caps"])}),
             "MML": mml, "MNBT": min(int(req.get("max_num_batched_tokens") or mml), batch * int(mml)),
             "ck": checkpoint_dir(cfg.model, cfg.engine.revision, hf_home, checkpoints) or ""}
@@ -609,7 +683,8 @@ def tp_build_summary(b: str, world: int) -> str:
         for p in [f"{rd}/build_step"] + sorted(p for p in glob.glob(f"{rd}/build_request_LP*_T*") if os.path.isdir(p)):   # not the .log/.rc beside each dir
             res = json.load(open(f"{p}/result.json")) if os.path.exists(f"{p}/result.json") else {"ok": False, "message": "no result.json"}
             rk[os.path.basename(p)] = {"ok": bool(res.get("ok")), "unsupported": res.get("unsupported"), "message": (res.get("message") or "")[:300],
-                                       "program_digest": (res.get("program") or {}).get("digest"), "construction": "aot" if res.get("aot") else "trace"}
+                                       "program_digest": (res.get("program") or {}).get("digest"), "census_digest": census_digest(res),
+                                       "construction": "aot" if res.get("aot") else "trace"}
             ok &= bool(res.get("ok"))
         wp = f"{rd}/build_workload/workload_program.json"; W = json.load(open(wp)) if os.path.exists(wp) else {}
         rk["workload"] = {"ok": bool(W.get("workload_digest")), "workload_digest": W.get("workload_digest"), "reason": W.get("reason"), "message": W.get("message"), "mechanism": "GP-01 cb_a.global_program"}

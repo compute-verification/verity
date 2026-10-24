@@ -45,9 +45,10 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-MACHINE = "vy-nebius-1"
-#: node 1's guest cores; its check slots hold 8-95 and 128-159, and 160-191 is proofs' (infra, 4 Oct: 96-127 at nice 19)
-CORES = "96-127"
+#: node 2: its two 560 GB check slots hold all 120 of its cores, so the rebuilds run unpinned at nice 19 beside them, in the
+#: ~480 GB of its 1600 GB slice the slots leave (node 1, their machine since 3 Oct on cores 96-127, drains 23 Oct 13:00Z; CI-152)
+MACHINE = "vy-nebius-2"
+CORES = ""
 BY = "regression"
 PREFIX = "regression "
 PASS = f"{PREFIX}pass"
@@ -57,8 +58,8 @@ INCONCLUSIVE = f"{PREFIX}inconclusive:"
 MARKS = "regression and rebuild"
 SUITE = "verity-vllm"
 LOCK = Path(tempfile.gettempdir()) / "verity-post-train.lock"
-#: the run's bound on the machine: the rebuilds took 89 and 104 min on cores 96-127 beside other lanes' jobs (3 Oct; #39's is the
-#: longest); a run that outlives it is cut off before its junit, and is inconclusive, not a failure
+#: the run's bound on the machine: the rebuilds took 89 and 104 min on node 1's cores 96-127 beside other lanes' jobs (3 Oct;
+#: #39's is the longest); a run that outlives it is cut off before its junit, and is inconclusive, not a failure
 TIMEOUT_S = 4 * 3600
 #: the run's memory, reserved on the machine (`research run --mem-gb`, waiting up to MEM_WAIT_S for it), and its xdist workers
 #: capped at MEM_GB // WORKER_GB: 19 Oct, r20261019-043523-415a ran about 20 workers at ~28 GB each with nothing reserved, 570 GB,
@@ -71,6 +72,8 @@ POLLS = (TIMEOUT_S + 1800) // POLL_S
 SLEEP = time.sleep
 ENDED = ("done", "failed", "cancelled")
 CHECK_RE = re.compile(r"^Check: (r20\d{6}-\d{6}-[0-9a-f]{4})$", re.M)
+#: the trailer of drive's lock commit (`Driver._land`: `Lock records regenerated for ...`), which names the files it regenerated
+LOCKS_RE = re.compile(r"^Regenerated: \S", re.M)
 ROW_RE = re.compile(r"-(r\d+)\]$")
 
 JOB = """set -u
@@ -113,13 +116,15 @@ def check_attempt(commit: str, cwd: Path = ROOT, attempt: str | None = None) -> 
     if attempt is None:
         return passed(sha)
     src = source_of(attempt)
-    merged = re.search(rf"^Checked: {re.escape(attempt)} ", body, re.M) and git("rev-parse", "--verify", "-q", f"{sha}^2", cwd=cwd,
-                                                                                 check=False)
-    if src and src in (sha, merged):
+    checked = re.search(rf"^Checked: {re.escape(attempt)} ", body, re.M)
+    merged = checked and git("rev-parse", "--verify", "-q", f"{sha}^2", cwd=cwd, check=False)
+    # drive's lock commit on top of a train it landed (`Lock records regenerated for ...`) names the train's check
+    locked = checked and LOCKS_RE.search(body) and git("rev-parse", "--verify", "-q", f"{sha}^1", cwd=cwd, check=False)
+    if src and src in (sha, merged, locked):
         return attempt
     print(f"post-train: {attempt} ran on {src[:12] if src else 'no commit its attempt or run record names'}, which is neither "
-          f"{sha[:12]} nor the train it merged (its second parent, with `Checked: {attempt}`), so it is no check of this landing",
-          file=sys.stderr)
+          f"{sha[:12]}, the train it merged (its second parent, with `Checked: {attempt}`), nor the train its lock records were "
+          "regenerated on (its parent, with `Regenerated:`), so it is no check of this landing", file=sys.stderr)
     return None
 
 
@@ -221,13 +226,42 @@ def carried(sha: str, tree: Path) -> dict | None:
     return {**lab, "from": prev}
 
 
+def queued_path() -> Path:
+    """Beside LOCK: each job's landing and the check drive landed it on (`--attempt`), so a job that waited finds the tip's."""
+    return LOCK.with_name(LOCK.stem + ".attempts.json")
+
+
+def note_attempt(sha: str, attempt: str, keep: int = 200) -> None:
+    """Record ``sha``'s attempt for `later_landing`: drive's landings carry no `Check:` line, and drive cancels a train's check
+    once it lands, so `check_attempt` finds no attempt for main's tip (19 Oct: five post-train jobs queued, none superseded,
+    each a 200 GB regression of about an hour on node 1)."""
+    p = queued_path()
+    with open(p.with_suffix(".lock"), "a") as guard:
+        fcntl.flock(guard, fcntl.LOCK_EX)
+        try:
+            got = json.loads(p.read_text())
+        except (OSError, ValueError):
+            got = {}
+        got = {k: v for k, v in got.items() if k != sha}
+        got[sha] = attempt
+        p.write_text(json.dumps(dict(list(got.items())[-keep:])))
+
+
+def queued_attempt(sha: str) -> str | None:
+    try:
+        return json.loads(queued_path().read_text()).get(sha)
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
 def later_landing(sha: str, cwd: Path = ROOT) -> str | None:
-    """The attempt of origin/main's tip when that tip is a landing after ``sha``, else None."""
+    """The attempt of origin/main's tip when that tip is a landing after ``sha`` (its `Check:` line or passed check, else the
+    attempt its own post-train job recorded, `note_attempt`), else None."""
     git("fetch", "-q", "origin", "main", cwd=cwd)
     tip = git("rev-parse", "origin/main", cwd=cwd)
     if tip == sha or subprocess.run(["git", "merge-base", "--is-ancestor", sha, tip], cwd=cwd, capture_output=True).returncode:
         return None
-    return check_attempt(tip, cwd=cwd)
+    return check_attempt(tip, cwd=cwd) or queued_attempt(tip)
 
 
 def _status(p: Path) -> dict:
@@ -245,7 +279,8 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="post_train.py", description=__doc__.split("\n\n")[1])
     ap.add_argument("commit", nargs="?", default="origin/main", help="a landing of main (default origin/main)")
     ap.add_argument("--on", default=MACHINE, metavar="MACHINE", help=f"where the rebuilds run (default {MACHINE})")
-    ap.add_argument("--cores", default=CORES, metavar="LIST", help=f"`taskset -c LIST` for them (default {CORES}; '' for none)")
+    ap.add_argument("--cores", default=CORES, metavar="LIST",
+                    help=f"`taskset -c LIST` for them (default {CORES or 'none'}; '' for none)")
     ap.add_argument("--workers", type=int, default=12, help="pytest-xdist workers: a row's rebuild each (default 12; at most --mem-gb "
                                                                 f"// {WORKER_GB})")
     ap.add_argument("--mem-gb", type=int, default=MEM_GB, help=f"the memory the run reserves on the machine (default {MEM_GB})")
@@ -265,6 +300,8 @@ def main(argv: list[str] | None = None) -> int:
                "has no `Check:` trailer and is no checked commit of origin/main, so it is no landing of main")
         print(f"post-train: {sha[:12]} {why}", file=sys.stderr)
         return 2
+    if attempt and not a.dry_run:
+        note_attempt(sha, attempt)
     with open(LOCK, "a") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)

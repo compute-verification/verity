@@ -1,6 +1,7 @@
 """`verity-vllm row chain`: a row whose Build, Match and Commit Attempts pass publishes its record in the circuit database with their
-artifacts, the Commit's summary.json, the newest captures of record and the tree the Commit ran; any other row publishes nothing.
-The research CLI and `records publish` are stand-ins that record what they were asked."""
+artifacts, the Commit's summary.json, the newest captures of record and the tree the Commit ran; any other row publishes nothing,
+and a chain that would publish a row whose file is not done only at its public cap is refused before any stage runs.  The research
+CLI and `records publish` are stand-ins that record what they were asked."""
 from __future__ import annotations
 
 import json
@@ -10,14 +11,16 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.config import UsageError
+from verity_vllm.config import WORKLOADS, UsageError
 from verity_vllm.pipeline import cli, row
+from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import research as R
 
 ROW = "llama32-1b__bf16__l40s__tp2__b1__i256__o32__mixed__greedy__bi-eager"
 SHA = "1b53f685a81a38f649947e5f88b5ae360709a932"
 RECORD = "art:" + "e" * 64
 BUILD_RUN = "r20261018-021312-bf97"
+MATCH_RUN = "r20261018-094547-82c9"
 
 
 class _Research:
@@ -50,6 +53,17 @@ class _Research:
         assert argv[1:5] == ["-m", "verity_vllm.pipeline.cli", "records", "publish"], argv
         self.published.append(argv)
         return subprocess.CompletedProcess(argv, self.publish_rc, stdout=f"{RECORD}\n" if self.publish_rc == 0 else "")
+
+
+@pytest.fixture(autouse=True)
+def capped(tmp_path, monkeypatch) -> Path:
+    """ROW's file done only at its public cap, as the file of a row the chain publishes must be; returns its path."""
+    doc = json.loads((WORKLOADS / f"{ROW}.json").read_text())
+    p = tmp_path / "workloads" / f"{ROW}.json"
+    p.parent.mkdir()
+    p.write_text(json.dumps({**doc, "sampling": {**doc["sampling"], "ignore_eos": True}}))
+    monkeypatch.setattr(CR, "WORKLOADS", p.parent)
+    return p
 
 
 @pytest.fixture
@@ -107,15 +121,30 @@ def test_a_chain_citing_a_passing_build_attempt_runs_the_rest_on_it_and_publishe
     assert stages["build"] == {"run_id": BUILD_RUN, "artifact": fake.art("build"), "rc": 0}
 
 
-@pytest.mark.parametrize("stages, rc, why", [
-    ("match,commit", 1, f"--build-run {BUILD_RUN}: not a passing Build Attempt"),
-    ("build,match,commit", 0, "--stages without build"),
+def test_a_commit_citing_a_passing_build_and_match_runs_on_them_and_publishes_with_them(tmp_path, research):
+    fake = research()
+    fake.stage_of.update({BUILD_RUN: "build", MATCH_RUN: "match"})
+    assert _chain(tmp_path, "--build-run", BUILD_RUN, "--match-run", MATCH_RUN, "--ref", "cursor/x", "--by", "circuits", "--tier", "fast",
+                  stages="commit") == 0
+    assert fake.ran == ["commit"]
+    assert fake.inputs == {"commit": [f"build={fake.art('build')}", f"match={fake.art('match')}"]}
+    p = fake.published[0]
+    assert (p[p.index("--match") + 1], p[p.index("--match-run") + 1]) == (fake.art("match"), MATCH_RUN)
+    stages = json.loads(Path(tmp_path, ROW, "row.json").read_text())["stages"]
+    assert stages["match"] == {"run_id": MATCH_RUN, "artifact": fake.art("match"), "rc": 0}
+
+
+@pytest.mark.parametrize("st, run, stages, rc, why", [
+    ("build", BUILD_RUN, "match,commit", 1, f"--build-run {BUILD_RUN}: not a passing Build Attempt"),
+    ("build", BUILD_RUN, "build,match,commit", 0, "--stages without build"),
+    ("match", MATCH_RUN, "commit", 1, f"--match-run {MATCH_RUN}: not a passing Match Attempt"),
+    ("match", MATCH_RUN, "match,commit", 0, "--stages without match"),
 ])
-def test_a_cited_build_that_did_not_pass_or_beside_a_build_stage_is_refused_before_any_stage_runs(tmp_path, research, stages, rc, why):
-    fake = research(rc={"build": rc})
-    fake.stage_of[BUILD_RUN] = "build"
+def test_a_cited_stage_that_did_not_pass_or_beside_its_own_stage_is_refused_before_any_stage_runs(tmp_path, research, st, run, stages, rc, why):
+    fake = research(rc={st: rc})
+    fake.stage_of[run] = st
     with pytest.raises(UsageError, match=why):
-        _chain(tmp_path, "--build-run", BUILD_RUN, "--ref", "cursor/x", "--by", "circuits", "--tier", "fast", stages=stages)
+        _chain(tmp_path, f"--{st}-run", run, "--ref", "cursor/x", "--by", "circuits", "--tier", "fast", stages=stages)
     assert fake.ran == []
 
 
@@ -138,6 +167,19 @@ def test_what_the_record_needs_is_refused_before_any_stage_runs(tmp_path, resear
     with pytest.raises(UsageError, match=why):
         _chain(tmp_path, *flags)
     assert fake.ran == []
+
+
+def test_a_chain_that_would_publish_a_row_not_done_only_at_its_public_cap_is_refused_before_any_stage_runs(tmp_path, research, capped):
+    capped.write_text((WORKLOADS / f"{ROW}.json").read_text())
+    fake = research()
+    with pytest.raises(UsageError, match=rf"{ROW}: a row of record \(records\.json\) is done only at its public cap, and its done source "
+                                         r"is 'eos-token'.*the chain would publish it as one \(or --no-publish\)"):
+        _chain(tmp_path, "--ref", "cursor/x", "--by", "circuits", "--tier", "fast")
+    assert fake.ran == [] and not Path(tmp_path, ROW).exists()
+    assert _chain(tmp_path, "--ref", "cursor/x", "--by", "circuits", "--tier", "fast", "--no-publish") == 0
+    assert _chain(tmp_path, "--ref", "cursor/x", "--by", "circuits", "--tier", "fast", stages="build,match") == 0
+    assert fake.ran == ["build", "match", "commit", "build", "match"] and fake.published == [], \
+        "a chain that publishes nothing still runs a research row"
 
 
 def test_the_records_branch_is_the_trees_unless_it_names_none(tmp_path, research, monkeypatch):

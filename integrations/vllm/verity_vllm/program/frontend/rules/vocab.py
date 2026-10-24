@@ -73,6 +73,12 @@ class Vocabulary:
         return d
 
 
+def _int8():
+    """`registry.int8_exact`, loaded on a profile's first int8 kind (it builds the s8 family's circuits)."""
+    from verity_vllm.program.registry import int8_exact
+    return int8_exact
+
+
 def _attention_dot_value(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM):
     """Off the accepted target the scale is an input only under FA2's per-iteration Check_inf (Attention_v11): without
     `FA2_MASKED_FROM` the kind does not bind (`Vocabulary.kind`)."""
@@ -257,11 +263,9 @@ PROFILE_B1_EAGER_V2 = Vocabulary(
 # specialization ids the accepted `GEMMA2_2B` record resolved to are unchanged). `rules/vllm_bindings.py` asks for them. ----------------
 def _dense_kinds() -> tuple[dict, dict]:
     from verity_vllm.program.registry import dense as DN
-    from verity_vllm.program.registry import tables as _tables
     kinds = {
         "scale_tensor": lambda N: ir_bind(b1.Bf16MulScalarTensor, N=N),
         "gelu_tanh_mul": lambda I: ir_bind(DN.GeluTanhMul, I=I),
-        "gelu_tanh_mul_table": lambda I: ir_bind(_tables.GeluTanhMulV3, I=I),
         "attention_softcap": lambda T, NH, KVH, D, CAP: ir_bind(DN.AttentionSoftcap, T=T, NH=NH, KVH=KVH, D=D, BN=b1.fa2_kblock_n(D), CAP=CAP),
         "bf16_div_scalar": lambda N, C: ir_bind(DN.Bf16DivScalar, N=N, C=C),
         "bf16_mul_scalar": lambda N, C: ir_bind(DN.Bf16MulScalar, N=N, C=C),
@@ -289,7 +293,6 @@ def _dense_kinds() -> tuple[dict, dict]:
     notes = {
         "scale_tensor": "Bf16MulScalarTensor_v1{N}: aten.mul.Tensor(bf16 row, 0-d bf16 tensor) — f32 multiply, cvt.rn.bf16.f32",
         "gelu_tanh_mul": "GeluTanhMul_v1{I}: vLLM _C.gelu_tanh_and_mul (act_and_mul_kernel<bf16, gelu_tanh_kernel, act_first>)",
-        "gelu_tanh_mul_table": "GeluTanhMul_v3{I}(gu, gelu_tanh_bf16): GeluTanhMul_v1 with the activation read from the registered table",
         "attention_softcap": "AttentionSoftcap_v1{T,NH,KVH,D,BN=fa2_kblock_n(D),CAP}: FA2 causal GQA with Is_softcap (MUFU.TANH on the scores)",
         "bf16_div_scalar": "Bf16DivScalar_v1{N,C}: aten.div.Tensor(bf16, C) — f32(x) * RN32(1/C), cvt.rn.bf16.f32",
         "bf16_mul_scalar": "Bf16MulScalar_v1{N,C}: aten.mul.Tensor(bf16, C) — f32 multiply, cvt.rn.bf16.f32",
@@ -436,7 +439,7 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # request Program reads from its `splits` Input) are OPERANDS).  `rules/vllm_sampling.py` asks for it.  Greedy rows keep `token_select`.
            # `CONSTRUCTION` = the target's `sampler_construction` (`registry.sampling_vocab.select_for`; the role and its note stay as they were)
            "token_select_stochastic": lambda V, CONSTRUCTION: ir_bind(sampling_vocab.select_for(_sampling.GumbelTopPTokenSelect, CONSTRUCTION), V=V),
-           # the same select at a constant split count S (a single-request workload): its top-p keep word as word gates
+           # the same select at a constant split count S (the registered S): its top-p keep word as word gates
            # (registry.topp_words, `GumbelTopPTokenSelect_v2{V,S}`, the same six operands), so a partition query cuts it
            "token_select_stochastic_split": lambda V, S: ir_bind(_topp_words.GumbelTopPTokenSelectV2, V=V, S=S),
            # [R15 fp8] the block-scaled FP8 linear of a pre-quantised checkpoint on Hopper (registry.fp8, pinned bit-exact on the H100 against
@@ -457,15 +460,23 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # (`registry/layer_norm.py`, `engine/profiles/gen_ln_patterns.py`).  `rules/vllm_bindings/layer_norm.py` asks for it.
            "layer_norm_aten": lambda N, EPS: ir_bind(_LN.LayerNormAten, N=N, EPS=EPS),
            "layer_norm_aten_value": lambda N: ir_bind(_LN.LayerNormAtenV2, N=N),
+           # the exact-int8 profile (`TargetProfile.int8_exact`, `engine.int8_ops`): `rules/vllm_bindings/int8.py` asks for them
+           "int8_row_quant": lambda K: ir_bind(_int8().Int8RowQuant, K=K),
+           "int8_scaled_mm": lambda K, N: _int8().scaled_mm(K, N),
+           "int8_kv_quant": lambda S, D: ir_bind(_int8().Int8KvQuant, S=S, D=D),
+           "int8_attention_row": lambda D, S, SCALE: ir_bind(_int8().Int8LutAttentionRow, D=D, S=S, SCALE=SCALE),
+           "int8_attention_row_table": lambda D, S, SCALE: ir_bind(_int8().Int8LutAttentionRowV2, D=D, S=S, SCALE=SCALE),
            # [GLM-5.3] DeepSeek sparse attention on the H200 (registry.dsa, registry.sparse_mla): the indexer's K slot and query, DeepGEMM's
            # MQA logits, the top-k of a row of at most TOPK keys, and FA3's sparse MLA over the selected rows. `rules/vllm_dsa.py` asks for them.
            "dsa_indexer_k_row": lambda D, ROPE, EPS: ir_bind(_dsa.DsaIndexerKRow, D=D, ROPE=ROPE, EPS=EPS),
            "dsa_indexer_q": lambda H, D, ROPE: ir_bind(_dsa.DsaIndexerQ, H=H, D=D, ROPE=ROPE),
            "dsa_mqa_logits": lambda N, H, D: ir_bind(_dsa.DsaMqaLogitsV3, N=N, H=H, D=D),
            "dsa_topk_short_row": lambda TOPK: ir_bind(_dsa.DsaTopKShortRow, TOPK=TOPK),
-           # a row past TOPK keys (registry.dsa_topk): the run's order checked against the top-TOPK set, and the rows it selects
+           # a row past TOPK keys (registry.dsa_topk): the order the run's Waksman settings route, checked against the top-TOPK set,
+           # and the rows the same settings read
            "dsa_topk_order": lambda N, TOPK: ir_bind(_dsa_topk.DsaTopKOrder, N=N, TOPK=TOPK),
-           "dsa_gather_rows": lambda N, TOPK, W: ir_bind(_dsa_topk.DsaGatherRows, N=N, TOPK=TOPK, W=W),
+           "dsa_waksman_order": lambda N, TOPK: ir_bind(_dsa_topk.DsaWaksmanOrder, N=N, TOPK=TOPK),
+           "dsa_waksman_rows": lambda N, TOPK, W: ir_bind(_dsa_topk.DsaWaksmanRows, N=N, K=TOPK, W=W, E=16),
            "dsa_rmsnorm": lambda N, EPS: ir_bind(_dsa_norm.DsaRMSNorm, N=N, EPS=EPS),
            "triton_block_rmsnorm": lambda N, BLOCK, WARPS, EPS: ir_bind(_dsa_norm.TritonBlockRMSNorm, N=N, BLOCK=BLOCK, WARPS=WARPS, EPS=EPS),
            "dsa_kv_rope": lambda D: ir_bind(_rope.RoPEHeadGptJV2, D=D),
@@ -522,6 +533,19 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "marlin_moe_gemm_w": lambda E, K, N, TK, TN, GRID, DOT:
                ir_bind(_marlin.MarlinMoeExpertGemmW, E=E, K=K, N=N, TK=TK, TN=TN, GRID=GRID, DOT=DOT)},
     notes={**PROFILE_B1_EAGER.notes, **_PAD_NOTES, **_DNN,
+           "int8_row_quant": "Int8RowQuant_v1{K}: verity_int8::row_quant on one bf16 token row -> (x_q s8[K], s_a f32): s_a = "
+                             "RN32(max(amax, RN32(1e-30))/127), x_q = clamp(rint(RN32(x/s_a)), ±127) (registry.int8_exact)",
+           "int8_scaled_mm": "ScaledMmS8_v1{K,N,DOT=BlackwellS8ImmaDot32_v1}: verity_int8::scaled_mm on one quantized row -> "
+                             "y bf16[N], ScaledMmS8Coordinate_v1 per output: K/32 satfinite s8 IMMA steps, y = bf16(RN32(RN32(f32(acc)·s_a)·s_w)); "
+                             "W s8 [N,K] + s_w f32 [N] Inputs (ml.circuits.ops.gemm)",
+           "int8_kv_quant": "Int8KvQuant_v1{S,D}: verity_int8::kv_quant_batch's slice for one KV head of one request's S-key window -> (K' s8 [S,D] under "
+                            "the layer's K scale (a Const32), V' s8 [S,D] per channel over the window, s_v f32 [D], f32(V'_0) [D]) "
+                            "(registry.int8_exact)",
+           "int8_attention_row": "Int8LutAttentionRow_v1{D,S,SCALE}: verity_int8::window_rows_batch on one (query row, head) over its S keys "
+                                 "-- Q' per row, S = Q'K'ᵀ, fattn's uint32 A and 256-entry exp2 LUT (Exp2Lut127_v1), P V', the sink "
+                                 "term; K', V', s_v, f32(V'_0) its KV head's Int8KvQuant_v1 rows (registry.int8_exact)",
+           "int8_attention_row_table": "Int8LutAttentionRow_v2{D,S,SCALE}(.., exp2_lut127): Int8LutAttentionRow_v1 with the exp2 LUT "
+                                       "read from the registered table (Exp2Lut127_v2, TableRead8x2_v1)",
            "token_select_stochastic_split": "GumbelTopPTokenSelect_v2{V,S}: GumbelTopPTokenSelect_v1{V} at the constant split count S, "
                                             "its keep word TopPKeepWord_v1{V,S} as word gates (registry.topp_words); equal to v1 at splits = S",
            "token_select_stochastic": "GumbelTopPTokenSelect_v1{V}(logits bf16[V], top_p f32, seed i64, pos i64, temp f32, splits i32) -> i32: f32 "
@@ -602,10 +626,12 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "dsa_topk_short_row": "DsaTopKShortRow_v1{TOPK}: the top-k of a row of at most TOPK keys (top_k_per_row_prefill, cooperative_topk) "
                                  "-- slot i = i < len ? i : -1",
            "dsa_topk_order": "DsaTopKOrder_v1{N,TOPK}: the selection relation of a row of N > TOPK keys (cooperative_topk's "
-                             "histogram_4096_topk) -- 1 when the run's TOPK-slot order is a permutation of the top-TOPK set of the "
+                             "histogram_4096_topk) -- 1 when a TOPK-slot order is a permutation of the top-TOPK set of the "
                              "logits by convert_to_uint32_v2 key descending, then index ascending",
-           "dsa_gather_rows": "DsaGatherRows_v1{N,TOPK,W}: the W-word rows at a row's TOPK selected indices, Embedding_v1{V=N,H=W} "
-                              "per slot (a mux over the N history rows)",
+           "dsa_waksman_order": "DsaWaksmanOrder_v1{N,TOPK}: the order a Waksman network of N rows reads its first TOPK outputs in at "
+                                "the run's settings (the indices 0..N-1 routed through it)",
+           "dsa_waksman_rows": "DsaWaksmanRows_v1{N,K=TOPK,W,E=16}: the W-word bf16 rows a Waksman network of N rows routes to its "
+                               "first TOPK outputs at the run's settings (one Select and one Xor3 per word a switch)",
            "dsa_rmsnorm": "DsaRMSNorm_v1{N,EPS}: _fused_norm_rope_kernel's cc 9.0 PTX reduction",
            "triton_block_rmsnorm": "TritonBlockRMSNorm_v1{N,BLOCK,WARPS,EPS}: the same reduction over N live elements of a masked BLOCK "
                                    "on 32 WARPS threads (_fused_q_kv_rmsnorm_kernel)",

@@ -23,9 +23,14 @@ each step's events in four passes; the k-th event of a name in the step is occur
    `format.promoted_observation`); a promoted identity binds through nothing else, since its producer module's own output is by
    definition not the promoted Value;
 2. a label a source declares (`ports`: label -> `Port(Definitions, port, call_boundary)`) binds the row of its module (for a call
-   boundary, of `<module>/<fx node>`) that port `port` of one of those Definitions produces: DeepGEMM's quant branch `x_q` / `x_s` is its
-   ports 0 / 1, the attention taps the DSA indexer's ports and the sparse MLA and W_UK_T absorb boundaries.  The occurrences of the
-   label bind the candidates in (invocation, Program) order when there are as many of each, else none;
+   boundary, of `<module>/<fx node>` or of the module itself) that port `port` of one of those Definitions produces: DeepGEMM's quant
+   branch `x_q` / `x_s` is its ports 0 / 1, the attention taps the DSA indexer's ports and the sparse MLA and W_UK_T absorb boundaries.
+   The occurrences of every label declaring one Port at one module bind its candidates in (invocation, Program) order when there are as
+   many of each, else none: the mHC taps' attention and FFN post_pre are one Definition's port twice per layer, in commit order.  A
+   call boundary's fx node is numbered over its request's own steps, so a step that batches requests at different steps of their own
+   spells one Call once per request (mixed arrivals): then occurrence k binds every request's k-th candidate, when each request has as
+   many as there are occurrences, under the first request's spelling, and `spellings` names each request's own (the binding map's
+   per-request entries);
 3. any other label binds the member of its module that it equals, at invocation k (the call-boundary source, the partial, norm,
    sampler, token-id and plane taps, a capture map's taps whose label is the Call's hint);
 4. the tuple slots of occurrence k of a module bind the members of that module at invocation k that 1-3 left, in Program order: slots
@@ -43,7 +48,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Sequence
 
-from verity_vllm.query.manifest.format import promoted_observation
+from verity_vllm.query.manifest.format import batch_launch_shortfall, promoted_observation
 
 __all__ = ["HIDDEN_FAMILIES", "Port", "Binder", "coverage_check", "source_ports", "split_name"]
 
@@ -52,8 +57,9 @@ HIDDEN_FAMILIES = ("fa2.m1/", "fa3.m1/", "moe/")
 
 @dataclass(frozen=True)
 class Port:
-    """What a source's label carries: port `port` of a Call of one of the Definitions `families`; `call_boundary`: the Value is one two
-    Calls of the module body exchange, spelt `<module>/<fx node>`."""
+    """What a source's label carries: port `port` of a Call of one of the Definitions `families`; `call_boundary`: the Call is one of
+    several in its module's body, so its Value is spelt `<module>/<fx node>` when two Calls exchange it or two fx nodes produce its member
+    at the step, else `<module>`."""
 
     families: frozenset[str]
     port: str
@@ -96,9 +102,14 @@ def _engine_steps(r: Mapping[str, Any], arrivals: Mapping[str, int] | None, decl
         return [int(r["engine_step"])]
     if st in (None, "*"):
         return []
-    rid = declared.get(str(rid), f"r{rid}" if str(rid).isdigit() else str(rid))
     lo, hi = st if isinstance(st, list) else (st, st)
-    return [int(s) + int((arrivals or {}).get(rid, 0)) for s in range(int(lo), int(hi) + 1)]
+    return [int(s) + int((arrivals or {}).get(_request(r, declared), 0)) for s in range(int(lo), int(hi) + 1)]
+
+
+def _request(r: Mapping[str, Any], declared: Mapping[str, str]) -> str:
+    """The row's request as the engine names it (`r<i>`): a declared request id through `declared`, a bare index prefixed."""
+    rid = r.get("request_id")
+    return declared.get(str(rid), f"r{rid}" if str(rid).isdigit() else str(rid))
 
 
 def _on_rank(r: Mapping[str, Any], rank: int | None) -> bool:
@@ -119,17 +130,22 @@ class Binder:
         self.aliases = {k: (str(v[0]), int(v[1])) for k, v in (aliases or {}).items()}
         #: engine step -> (op_path, member, invocation) -> (family, port, position)
         self.rows: dict[int, dict[tuple[str, str, int], tuple[str, str, tuple]]] = defaultdict(dict)
+        #: engine step -> (op_path, member, invocation) -> {request whose rows spell it: the row's position in that request's Program}
+        self.requests: dict[int, dict[tuple[str, str, int], dict[str, tuple]]] = defaultdict(dict)
         self.promoted: dict[int, set[tuple[str, str, int]]] = defaultdict(set)
         for row in rows:
             r = {**row, **(row.get("identity") or {})}
             if r.get("family") == "weights" or r.get("op_path") == "weights" or not _on_rank(r, rank):
                 continue
             key = (str(r["op_path"]), str(r.get("output_member", "out")), int(r.get("invocation", 0)))
+            pos = tuple(r.get("position") or ())
             for st in _engine_steps(r, arrivals, declared or {}):
-                self.rows[st].setdefault(key, (_family(r.get("spec")), str(r.get("port", key[1])), tuple(r.get("position") or ())))
+                self.rows[st].setdefault(key, (_family(r.get("spec")), str(r.get("port", key[1])), pos))
+                self.requests[st].setdefault(key, {}).setdefault(_request(r, declared or {}), pos)
                 if r.get("promoted"):
                     self.promoted[st].add(key)
         self._by_op: dict[int, dict[str, list[tuple[str, str, int]]]] = {}
+        self._spelt: dict[tuple[int, tuple[str, str, int]], dict[str, tuple[str, str, int]]] = {}
 
     @classmethod
     def of_manifest(cls, manifest: Mapping[str, Any], *, rank: int | None = None, ports: Mapping[str, Port] | None = None,
@@ -153,8 +169,35 @@ class Binder:
 
     def _candidates(self, step: int, op: str, port: Port) -> list[tuple[str, str, int]]:
         rows, ops = self.rows.get(step, {}), self._ops(step)
-        keys = [k for o, ks in ops.items() if o.rsplit("/", 1)[0] == op and "/" in o for k in ks] if port.call_boundary else ops.get(op, [])
+        keys = [k for o, ks in ops.items() if o == op or "/" in o and o.rsplit("/", 1)[0] == op for k in ks] if port.call_boundary else ops.get(op, [])
         return [k for k in keys if rows[k][0] in port.families and rows[k][1] == port.port]
+
+    def _per_request(self, step: int, cands: list[tuple[str, str, int]], n: int | None = None) -> dict[str, list[tuple[str, str, int]]]:
+        """A call-boundary port's `cands` at `step` as each request spells them, in (invocation, Program) order of the request's own
+        Program, when every request has as many (`n` if given); else {}.  A key two requests at different steps of their own both spell
+        (the module's own output) sits at a different place in each one's Program, and `rows` keeps only the first request's position."""
+        reqs, each = self.requests.get(step, {}), defaultdict(list)
+        for c in cands:
+            for q in sorted(reqs.get(c, ())):
+                each[q].append(c)
+        for q, ks in each.items():
+            ks.sort(key=lambda c: (c[2], reqs[c][q], c[1]))
+        sizes = {len(v) for v in each.values()}
+        return dict(sorted(each.items())) if "*" not in each and len(sizes) == 1 and n in (None, *sizes) else {}
+
+    def spellings(self, step: int, key: tuple[str, str, int]) -> dict[str, tuple[str, str, int]]:
+        """Each request's own spelling of the call boundary `key` at `step` (module docstring, pass 2): {request: its key at the same place
+        in its Program order}, {} for a key no call-boundary port declares."""
+        step = int(step)
+        if (step, key) not in self._spelt:
+            fam, prt, _pos = self.rows.get(step, {}).get(key, ("", "", ()))
+            port = next((p for p in self.ports.values() if p.call_boundary and fam in p.families and p.port == prt), None)
+            each = self._per_request(step, self._candidates(step, key[0].rsplit("/", 1)[0], port)) if port and "/" in key[0] else {}
+            for at in zip(*each.values()):
+                spelt = dict(zip(each, at))
+                self._spelt.update({(step, c): spelt for c in at})
+            self._spelt.setdefault((step, key), {})
+        return self._spelt[(step, key)]
 
     def bind(self, step: int, names: Sequence[str]) -> list[tuple[str, str, int, str]]:
         """The identity each event of `step` binds, as (op_path, member, invocation, how); how = `consumer-input` | `port` | `label` |
@@ -164,7 +207,7 @@ class Binder:
         out: list[tuple[str, str, int, str] | None] = [None] * len(names)
         taken = set(self.promoted.get(step, ()))
         seen: Counter = Counter()
-        declared: dict[tuple[str, str], list[tuple[int, int]]] = defaultdict(list)
+        declared: dict[tuple[str, Port], list[tuple[int, int, str]]] = defaultdict(list)
         slots: dict[tuple[str, int], dict[int, int]] = defaultdict(dict)
         for i, name in enumerate(names):
             k = seen[name]
@@ -184,19 +227,21 @@ class Binder:
                 else:
                     slots[(op, k)][slot] = i
             elif label in self.ports:
-                declared[(op, label)].append((i, k))
+                declared[(op, self.ports[label])].append((i, k, label))
             elif (op, label, k) in rows and (op, label, k) not in taken:
                 out[i] = (op, label, k, "label")
                 taken.add((op, label, k))
             else:
                 out[i] = (op, label, k, "unbound")
-        for (op, label), events in declared.items():
-            cands = [c for c in self._candidates(step, op, self.ports[label]) if c not in taken]
-            ok = len(cands) == len(events)
-            for (i, k), c in zip(events, cands if ok else [None] * len(events)):
+        for (op, port), events in declared.items():
+            cands = [c for c in self._candidates(step, op, port) if c not in taken]
+            each = self._per_request(step, cands, len(events)) if port.call_boundary and len(cands) != len(events) else {}
+            firsts = next(iter(each.values())) if each else cands
+            ok = len(firsts) == len(events)
+            for j, ((i, k, label), c) in enumerate(zip(events, firsts if ok else [None] * len(events))):
                 out[i] = (*c, "port") if c else (op, label, k, "unbound")
                 if c:
-                    taken.add(c)
+                    taken.update([v[j] for v in each.values()] if each else [c])
         ops = self._ops(step)
         for (op, k), sl in slots.items():
             left = [c for c in ops.get(op, []) if c[2] == k and c not in taken]
@@ -211,6 +256,25 @@ class Binder:
         return out  # type: ignore[return-value]
 
 
+def _request_share_shortfall(numel: int, rows: int | None, tokens: int, rows_r: int | None, hi: int) -> str | None:
+    """Whether a request-local range [0, hi) of one batched per-token plane (a MoE block plane over the step's requests) fits inside the
+    request's own `rows_r` token rows of it: the plane's rows are a multiple f of the step's `tokens` (f = TOPK for `act`), the request's
+    share is rows_r x f of them.  Without a shape the plane's words must split into `tokens` equal rows.  None, or the shortfall named."""
+    if rows_r is None:
+        return "the request has no declared rows at the step"
+    if tokens <= 0:
+        return "the step declares no token rows"
+    if rows is None:
+        if numel % tokens:
+            return f"{numel} words do not split into the step's {tokens} token rows"
+        share = numel // tokens * rows_r
+    else:
+        if rows < tokens or rows % tokens:
+            return f"{rows} rows, not a multiple of the step's {tokens} token rows: the plane covers no request"
+        share = rows_r * (rows // tokens) * (numel // rows)
+    return None if hi <= share else f"the request-local range ends at {hi}; the request's {rows_r} token rows of the plane hold {share} words"
+
+
 def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[str, Any]]], *, request_id: str | int | None = None,
                    rank: int = 0, max_report: int = 12, ports: Any = None) -> dict[str, Any]:
     """Every manifest identity of (`request_id`, `rank`) must have a committed tensor bound to the same (step, op_path, output_member,
@@ -218,8 +282,11 @@ def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[
     name bound by the manifest's binder (`Binder`, with the committing sources' declared `ports`).  Reports missing
     identities (by family / step), and the committed extras (allowed).  Identity coverage only -- value correspondence is bind's separate
     check.  A kernel-stream tensor (`HIDDEN_FAMILIES`) the binder leaves unbound is still committed under its own name, as the binding
-    map keeps it: a B>1 batch-level hidden row (request `*`) names the padded whole-step geometry, and is covered op-level by the
-    per-sequence planes (`s<i>/...`) or the whole launch the tap committed under another spelling."""
+    map keeps it: a B>1 batch-level hidden row (request `*`) names the padded whole-step geometry, and is covered when the tensors of its
+    op at the step carry the whole stream of the sequences its `requests` list (`format.batch_launch_shortfall`, their rows from the
+    declared composition), whatever the spelling.  In a global manifest a MoE block plane is one batched tensor per step: a request's
+    request-local range must fit inside its own token rows of it, and a plane whose rows are not a multiple of the step's tokens covers
+    no request (named)."""
     if manifest.get("complete") is False:                                        # [MAN-02] an incomplete manifest never yields coverage
         um = manifest.get("unmodelled") or {}
         n = len(manifest.get("identities") or [])
@@ -229,6 +296,8 @@ def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[
                 "committed_unmatched_n": 0, "committed_unmatched": [], "committed_extras_n": 0, "duplicate_names_n": 0, "steps_committed": [], "unmodelled": um}
     binder = Binder.of_manifest(manifest, rank=rank, ports=ports)
     have: dict[tuple, list[int]] = {}
+    rows_of: dict[tuple, list[int | None]] = {}
+    by_op: dict[tuple, list[tuple[str, int]]] = defaultdict(list)
     extras = 0
     for step, metas in layouts.items():
         for m, (op, member, inv, how) in zip(metas, binder.bind(int(step), [m["name"] for m in metas])):
@@ -240,7 +309,18 @@ def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[
                 numel = 1
                 for d in m.get("shape") or []:
                     numel *= int(d)
-            have.setdefault((int(step), op, member, inv), []).append(int(numel))
+            rows = int(m["shape"][0]) if m.get("shape") else None
+            for key in (set(binder.spellings(int(step), (op, member, inv)).values()) if how == "port" else ()) or [(op, member, inv)]:
+                have.setdefault((int(step), *key), []).append(int(numel))
+                rows_of.setdefault((int(step), *key), []).append(rows)
+                by_op[(int(step), key[0], key[2])].append((key[1], int(numel)))
+    # the declared composition: engine step -> {request: token rows}, and the step's token rows
+    comp: dict[int, dict[str, int]] = {}
+    tokens: dict[int, int] = {}
+    for es in manifest.get("engine_steps") or []:
+        if isinstance(es, dict):
+            comp[int(es["engine_step"])] = {str(m["request_id"]): int(m["rows"]) for m in es.get("members") or []}
+            tokens[int(es["engine_step"])] = int(es.get("rows", sum(comp[int(es["engine_step"])].values())))
     missing: list[dict[str, Any]] = []
     by_family_missing: Counter = Counter()
     by_family_checked: Counter = Counter()
@@ -256,33 +336,27 @@ def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[
         k = (int(r.get("engine_step", r["step"])), r["op_path"], r["output_member"], int(r["invocation"]))
         lo, hi = r["element_range"]
         got = have.get(k)
-        seq_short = None
-        if got is None and r.get("request_id") == "*" and isinstance(r.get("requests"), list) and r["requests"]:
-            # [R15 B8] a batch-level hidden row (B>1: one attention launch per layer per engine step over the co-scheduled sequences) names
-            # the padded whole-step geometry; the tap commits per-SEQUENCE planes (`s<i>/g<HB>x<M>x<NB>/<plane>`) at a segmented prefill, or
-            # one whole-launch plane set at decode.  The requirement is op-level per engine step: every co-scheduled sequence has its planes
-            # (>= n_seq distinct `s<i>` prefixes), or the launch is whole (unsegmented members present).  Same rule as binding.coverage_check.
-            seqs, whole, numels = set(), False, []
-            for (st, op, mem, inv), v in have.items():
-                if st == k[0] and op == k[1] and inv == k[3]:
-                    numels += v
-                    if mem.startswith("s") and "/" in mem and mem[1:mem.index("/")].isdigit():
-                        seqs.add(mem[:mem.index("/")])
-                    else:
-                        whole = True
-            if numels and (whole or len(seqs) >= len(r["requests"])):
-                got, hi = numels, None                                       # op-level: covered; matched below
-                for kk in list(have):
-                    if kk[0] == k[0] and kk[1] == k[1] and kk[3] == k[3]:
-                        matched_keys.add(kk)
-            elif numels:
-                got, seq_short = None, f"{len(seqs)} sequence plane sets committed, {len(r['requests'])} co-scheduled sequences declared ({sorted(seqs)})"
-        if not got or (hi is not None and max(got) < int(hi)):
+        why = None
+        if r.get("request_id") == "*" and isinstance(r.get("requests"), list) and r["requests"]:
+            # [R15 B8; red-team claim 3] a batch-level hidden row (B>1: one attention launch per layer per engine step over the co-scheduled
+            # sequences) names the padded whole-step geometry; the tap stages the launch whole or as per-SEQUENCE planes
+            # (`s<i>/g<h>x<rows_i>x<NB>/<class>`).  Covered when the op's tensors at the step carry the whole stream of the sequences the row
+            # lists, sized by their names' geometry; the same rule as binding.coverage_check.
+            members = by_op.get((k[0], k[1], k[3]), [])
+            undeclared = [q for q in r["requests"] if str(q) not in comp.get(k[0], {})]
+            why = (f"requests {undeclared[:3]} have no declared rows at engine step {k[0]}" if undeclared else
+                   batch_launch_shortfall(r.get("geometry"), [comp[k[0]][str(q)] for q in r["requests"]], members))
+            got, hi = ([w for _m, w in members] or None), None
+            if why is None:
+                matched_keys.update((k[0], k[1], mem, k[3]) for mem, _w in members)
+        elif got and manifest.get("global") and r["family"] == "moe_block_stream" and k[0] in tokens:
+            why = _request_share_shortfall(max(got), rows_of[k][got.index(max(got))], tokens[k[0]], comp[k[0]].get(str(r["request_id"])), int(hi))
+        if not got or why or (hi is not None and max(got) < int(hi)):
             missing.append({"family": r["family"], "step": r["step"], "engine_step": k[0], "request_id": r["request_id"], "op_path": r["op_path"],
-                            "output_member": r["output_member"], "invocation": r["invocation"], "want_range": [lo, hi], "committed_numel": got}
-                           | ({"why": seq_short} if seq_short else {}))
+                            "output_member": r["output_member"], "invocation": r["invocation"], "want_range": [lo, hi],
+                            "committed_numel": got if got is None or len(got) <= 8 else got[:8] + ["..."]} | ({"why": why} if why else {}))
             by_family_missing[r["family"]] += 1
-        else:
+        elif r.get("request_id") != "*":
             matched_keys.add(k)
     unexpected = [k for k in have if k not in matched_keys]
     dup = {k: len(v) for k, v in have.items() if len(v) > 1}

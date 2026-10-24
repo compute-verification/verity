@@ -27,6 +27,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import shutil
 import statistics
 import subprocess
@@ -231,6 +232,9 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--scale", type=float, default=1.0, help="multiply every probe's iterations")
     r.add_argument("--since", default="", help="the census epoch the lines hold from")
     r.add_argument("--run-id", default=os.environ.get("RESEARCH_RUN_ID", ""))
+    r.add_argument("--only", default="", help="time only the probes whose name matches this regex")
+    r.add_argument("--passed-only", action="store_true",
+                   help="time the probes that pass even when others are refused (the refusals stay in gate.json)")
     a = p.parse_args(argv)
 
     if a.cmd == "build":
@@ -249,13 +253,17 @@ def main(argv: list[str] | None = None) -> int:
 
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "gate.json").write_text(json.dumps({"version": G.VERSION, "verdicts": verdicts}, indent=1) + "\n")
-    if wrong:
+    if wrong and not a.passed_only:
         print(f"probe: {len(wrong)} verdicts are not the declared ones; nothing timed", file=sys.stderr)
         return EXIT_FAIL
+    if wrong:
+        print(f"probe: {len(wrong)} verdicts are not the declared ones; timing the rest (--passed-only)", file=sys.stderr)
+    only = re.compile(a.only) if a.only else None
     side = []
     with (a.out / "times.jsonl").open("w") as raw:
         for binary in a.binaries:
-            names = [v["probe"] for v in verdicts if v["binary"] == binary.name and v["passed"]]
+            names = [v["probe"] for v in verdicts if v["binary"] == binary.name and v["passed"] and v["correct"]
+                     and (only is None or only.search(v["probe"]))]
             if not names:
                 continue
             res = subprocess.run([str(binary), "--time", *names, "--reps", str(a.reps), "--scale", str(a.scale)],

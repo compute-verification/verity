@@ -12,7 +12,7 @@ carries one to the other, by `zkmalR_congr` (`Congr`):
 * `zkOf`: the masked record at a protocol `G`, `FlockDeploy.deployZk` with `G`'s nonce, tape, `Hello`, abort and opening
   check, a reading of each opening as its coin (`coinOf`), the reference prover's tape at `G`'s (`tapeOf`), and a
   simulator.
-* `Proto.Honest`: `G`'s message after the openings is the record's reference prover's (`ZkTables.honestP`) at those openings'
+* `Proto.Honest`: `G`'s message after the openings is the record's reference prover's (`ZkTables.honestPR`) at those openings'
   coins and the tape `tapeOf`, and `G` makes no call that it doesn't. Where it holds, the record's prover sends
   `G.prover`'s messages and makes its calls (`zkOf_prover`), so `ZKAt` at `G.prover` is `Claims.Flock.ZK` at `zkOf`
   (`zk_zkOf`).
@@ -62,11 +62,11 @@ def Proto.Honest {Ω : Type} (G : Proto Flock.Wit) (H : Msg → Msg) (P : Flock.
         (((P w).next x (ops.map fun p => (p.1, coinOf p.2)) (tapeOf (ν, r))).eval H).2
 
 /-- **The masked record's reference prover sends `G.prover`'s messages and makes its calls** within `G`'s rounds, where
-`G`'s messages are the reference prover's (`Proto.Honest` at `ZkTables.honestP`): both send `Hello`, check the openings with
-`G.chk`, and abort alike; past the checks, `G`'s message is `ZkTables.honestP`'s. -/
+`G`'s messages are the reference prover's (`Proto.Honest` at `ZkTables.honestPR`): both send `Hello`, check the openings with
+`G.chk`, and abort alike; past the checks, `G`'s message is `ZkTables.honestPR`'s. -/
 theorem zkOf_prover (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (G : Proto Flock.Wit)
     (coinOf : Msg → Msg) (tapeOf : G.Nonce × G.Rand → FlockComplete.TapeZk) (S : Simulator) (H : Msg → Msg)
-    (hG : G.Honest H FlockComplete.ZkTables.honestP coinOf tapeOf) (w : Flock.Wit) (x : Msg) (hist : List (Msg × Msg))
+    (hG : G.Honest H FlockComplete.ZkTables.honestPR coinOf tapeOf) (w : Flock.Wit) (x : Msg) (hist : List (Msg × Msg))
     (ω : G.Nonce × G.Rand) (hlen : hist.length < G.k x) :
     (((G.prover w).next x hist ω).eval H).1 = ((((zkOf rel G coinOf tapeOf S).prover w).next x hist ω).eval H).1 ∧
       (((G.prover w).next x hist ω).eval H).2 ⊆ ((((zkOf rel G coinOf tapeOf S).prover w).next x hist ω).eval H).2 := by
@@ -83,7 +83,7 @@ theorem zkOf_prover (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readabl
       rw [ocBind_eq_bind, allOk_eq_allPass]
     have e₂ : ((zkOf rel G coinOf tapeOf S).prover w).next x ((a, ρ) :: ops) ω =
         (allPass (G.chk x ω.1 ρ) 0 (ops.map Prod.snd)).bind fun ok =>
-          if ok then (FlockComplete.ZkTables.honestP w).next x (ops.map fun p => (p.1, coinOf p.2)) (tapeOf ω)
+          if ok then (FlockComplete.ZkTables.honestPR w).next x (ops.map fun p => (p.1, coinOf p.2)) (tapeOf ω)
           else .ret G.abort := rfl
     rw [e₁, e₂, OC.eval_bind, OC.eval_bind]
     obtain ⟨h₁, h₂⟩ := hG x w ω.1 ω.2 ops hops
@@ -100,7 +100,7 @@ rounds are `Hello` and the deployed verifier's (`deployZk_proto_k`) and its mess
 theorem zk_zkOf (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (G : Proto Flock.Wit)
     (coinOf : Msg → Msg) (tapeOf : G.Nonce × G.Rand → FlockComplete.TapeZk) (S : Simulator) {H : Msg → Msg}
     {εzk γ : Msg → ℝ} (hγ : ∀ x, 0 ≤ γ x) (hk : ∀ x, G.k x = (FlockDeploy.deployZk rel).V.k x + 1)
-    (hG : G.Honest H FlockComplete.ZkTables.honestP coinOf tapeOf)
+    (hG : G.Honest H FlockComplete.ZkTables.honestPR coinOf tapeOf)
     (h : Claims.Flock.ZKAt H (FlockDeploy.deployZk rel) G.prover S εzk γ) :
     Claims.Flock.ZK H (zkOf rel G coinOf tapeOf S) εzk γ :=
   ⟨h.1, zkmalR_congr hγ

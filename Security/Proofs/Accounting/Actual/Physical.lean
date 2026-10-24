@@ -13,6 +13,8 @@ import Mathlib.Algebra.BigOperators.Ring.Finset
   of each link, at the readers' ticks.
 * `computeRate_one`: compute rate at a pricing of at least one per computed gate bounds the number of gates, compute
   rate at one per gate.
+* `state_eq_stateIn_add_compl`: the state is its part in `G` plus its part outside `G`, so memory at a tick bounds
+  the part in any `G` there (`stateIn_le_of_memoryAt`).
 -/
 
 namespace Accounting.SecurityProofs.Actual
@@ -95,6 +97,33 @@ theorem egress_le {E : Type*} [Fintype E] {ends : E → L × L} {β : E → ℕ}
   refine mem_biUnion.2 ⟨link k g, mem_boundary hkX hgX he, ?_⟩
   simp only [Placed.readOn, mem_filter, mem_univ, true_and]
   exact ⟨k, hgk, hne, rfl, (inner_outer hkX hgX he).2.symm, hkt⟩
+
+theorem width_inter_add_compl (S G : Finset (Fin A.N)) : A.width S = A.width (S ∩ G) + A.width (S ∩ Gᶜ) := by
+  have hc : S ∩ Gᶜ = S \ G := by
+    ext a
+    simp
+  rw [hc]
+  unfold Circuit.width
+  exact (sum_inter_add_sum_sdiff S G A.w).symm
+
+/-- **The state splits along any set of gates**: `mem_X(t)` is its part in `G` plus its part outside `G`. -/
+theorem state_eq_stateIn_add_compl (X : Finset L) (t : ℕ) (G : Finset (Fin A.N)) :
+    A.state X t = A.stateIn X t G + A.stateIn X t Gᶜ := by
+  unfold Placed.stateIn Placed.state
+  exact width_inter_add_compl A _ G
+
+theorem stateIn_le_state (X : Finset L) (t : ℕ) (G : Finset (Fin A.N)) : A.stateIn X t G ≤ A.state X t := by
+  rw [state_eq_stateIn_add_compl A X t G]
+  exact Nat.le_add_right _ _
+
+theorem memoryAt_of_memory {𝒳 : Set (Finset L)} {M : Finset L → ℕ} (h : A.Memory 𝒳 M) (T : Set ℕ) :
+    A.MemoryAt 𝒳 M T :=
+  fun X hX t _ => h X hX t
+
+/-- Memory at a tick bounds the state's part in any set of gates there. -/
+theorem stateIn_le_of_memoryAt {𝒳 : Set (Finset L)} {M : Finset L → ℕ} {T : Set ℕ} (h : A.MemoryAt 𝒳 M T)
+    {X : Finset L} (hX : X ∈ 𝒳) {t : ℕ} (ht : t ∈ T) (G : Finset (Fin A.N)) : A.stateIn X t G ≤ M X :=
+  (stateIn_le_state A X t G).trans (h X hX t ht)
 
 /-- **Pricing at least one per gate bounds the gates**: compute rate at a pricing `π ≥ 1` on computed gates is compute
 rate at one per gate. -/

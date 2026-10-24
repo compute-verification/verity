@@ -33,6 +33,9 @@ F32 = Array<32, Value<1>>; each word view is its _v1 at the same statics, `Bf16M
     MulVecF32_v2{N}                               (x, w: Array<N, F32>) -> Array<N, F32>      F32Mul_v3(x_j, w_j)
     Bf16DivScalar_v2{N,C}, Bf16MulScalar_v2{N,C}  (x: Array<N, BF16>) -> Array<N, BF16>       Bf16MulF32_v1(x_j, K)
     Bf16MulScalarTensor_v2{N}                     (x: Array<N, BF16>, s: Array<1, BF16>) -> Array<N, BF16>
+    AddScalarF32_v4{N}, AddScalarBf16_v4{N}, Bf16DivScalar_v4{N}, Bf16MulScalar_v4{N}
+                                                  the same rows with the f32 scalar an input (``c``; the division's
+                                                  ``inv = RN32(1 / C)``); word views `value_inputs`' _v3
 
 Each is a batch of one element Definition per member, traced from `verity.ml.circuits.silicon.fp`'s builders with the IR's NaN words,
 and computes no value twice (`Q_word`'s no-recompute rule): ``x * x`` decodes x once (`SquareF32Element_v1`, not
@@ -55,9 +58,11 @@ from verity.ml.circuits.boolean.trace import definition
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import dense as D
 from verity_vllm.program.registry import prims as P
+from verity_vllm.program.registry import value_inputs as VI
 
-__all__ = ["AddScalarBf16", "AddScalarBf16Element", "AddScalarF32", "AddWidenedBf16", "AddWidenedBf16Element", "Bf16DivScalar",
-           "Bf16MulScalar", "Bf16MulScalarTensor", "GELU_BAND_HI", "GELU_BAND_LO", "GeluTanhMul", "GeluTanhMulBf16", "MulVecF32",
+__all__ = ["AddScalarBf16", "AddScalarBf16Element", "AddScalarBf16In", "AddScalarF32", "AddScalarF32In", "AddWidenedBf16",
+           "AddWidenedBf16Element", "Bf16DivScalar", "Bf16DivScalarIn", "Bf16MulScalar", "Bf16MulScalarIn", "Bf16MulScalarTensor",
+           "GELU_BAND_HI", "GELU_BAND_LO", "GeluTanhMul", "GeluTanhMulBf16", "MulVecF32",
            "ScaleRowBf16", "ScaleRowBf16Element", "ScaleRowF32", "SquareBf16", "SquareBf16Element", "SquareF32", "gelu_tanh_bf16",
            "gelu_tanh_mul"]
 
@@ -219,3 +224,48 @@ Bf16DivScalar = EW.on_bits("Bf16DivScalar", 2, ("N", "C"), _row(BF16, BF16), _bf
 Bf16MulScalar = EW.on_bits("Bf16MulScalar", 2, ("N", "C"), _row(BF16, BF16), _bf16_mul_scalar, D.Bf16MulScalar)
 Bf16MulScalarTensor = EW.on_bits("Bf16MulScalarTensor", 2, ("N",), _row(BF16, BF16, ("s", (1, BF16))),
                                  _bf16_mul_scalar_tensor, b1.Bf16MulScalarTensor)
+
+
+# The scalar rows with their f32 scalar an input (`value_inputs`' _v3 words, which a `registered_values` program registers): the
+# scalar's own gates once per row, then one element per member.
+
+AddScalarF32InScalar, AddScalarF32InElement = EW.shared_operand(
+    ("AddScalarF32InScalar", "AddScalarF32InElement"), 1, lambda C, x, c: fp.f32_add(C, x, c, ir_nan=True), (("x", F32), ("c", F32)),
+    F32, 1, ("the gates of RN32(x + c) that read only c, once per row", "RN32(x + c), F32Add_v1's NaN words, from c's own gates"))
+AddScalarBf16InScalar, AddScalarBf16InElement = EW.shared_operand(
+    ("AddScalarBf16InScalar", "AddScalarBf16InElement"), 1, lambda C, w, c: fp.f32_add(C, fp.bf16_to_f32(w), c, ir_nan=True),
+    (("w", BF16), ("c", F32)), F32, 1,
+    ("the gates of RN32(f32(w) + c) that read only c, once per row", "RN32(f32(w) + c), F32Add_v1's NaN words, from c's own gates"))
+Bf16MulF32InScalar, Bf16MulF32InElement = EW.shared_operand(
+    ("Bf16MulF32InScalar", "Bf16MulF32InElement"), 1, EW.bf16_mul_f32, (("x", BF16), ("s", F32)), BF16, 1,
+    ("the gates of Bf16MulF32_v1(x, s) that read only s, once per row", "Bf16MulF32_v1(x, s) from s's own gates"))
+
+
+def _add_scalar_f32_in(B, S, x, c):
+    """`out_j = RN32(x_j + c)` on bits, c's own gates once."""
+    return B.batch(AddScalarF32InElement, x, c, B.call(AddScalarF32InScalar, c), axes=(0, None, None))
+
+
+def _add_scalar_bf16_in(B, S, w, c):
+    """`out_j = RN32(f32(w_j) + c)` on bits, c's own gates once."""
+    return B.batch(AddScalarBf16InElement, w, c, B.call(AddScalarBf16InScalar, c), axes=(0, None, None))
+
+
+def _bf16_div_scalar_in(B, S, x, inv):
+    """`out_j = Bf16MulF32_v1(x_j, inv)` on bits, `inv = RN32(1 / C)` an input, its own gates once."""
+    return B.batch(Bf16MulF32InElement, x, inv, B.call(Bf16MulF32InScalar, inv), axes=(0, None, None))
+
+
+def _bf16_mul_scalar_in(B, S, x, c):
+    """`out_j = Bf16MulF32_v1(x_j, c)` on bits, `c = f32(C)` an input, its own gates once."""
+    return B.batch(Bf16MulF32InElement, x, c, B.call(Bf16MulF32InScalar, c), axes=(0, None, None))
+
+
+def _row_in(x: Array, out: Array, name: str, xname: str = "x"):
+    return lambda S: (((xname, Array(S.N, x)), (name, F32)), Array(S.N, out))
+
+
+AddScalarF32In = EW.on_bits("AddScalarF32", 4, ("N",), _row_in(F32, F32, "c"), _add_scalar_f32_in, VI.AddScalarF32V3)
+AddScalarBf16In = EW.on_bits("AddScalarBf16", 4, ("N",), _row_in(BF16, F32, "c", "w"), _add_scalar_bf16_in, VI.AddScalarBf16V3)
+Bf16DivScalarIn = EW.on_bits("Bf16DivScalar", 4, ("N",), _row_in(BF16, BF16, "inv"), _bf16_div_scalar_in, VI.Bf16DivScalarV3)
+Bf16MulScalarIn = EW.on_bits("Bf16MulScalar", 4, ("N",), _row_in(BF16, BF16, "c"), _bf16_mul_scalar_in, VI.Bf16MulScalarV3)

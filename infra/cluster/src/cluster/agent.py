@@ -41,7 +41,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import ledger, nebius2, shadow
-from .model import Cluster
+from .model import Cluster, with_live_stop
 from .plan import Evict, Start, plan
 
 STATUS = Path("/workspace/pouw/fill/status.txt")
@@ -162,8 +162,10 @@ def run(cluster: Cluster, out: Path, *, mode: str = "shadow", clock: Callable[[]
         lease_dir: Path = nebius2.LEASE_DIR, proc: Path = Path("/proc"), status: Path = STATUS,
         stop_file: Path | None = None, until: float | None = None, tick_s: float = 1.0, window_poll_s: float = 5.0,
         footprint: Footprint | None = None, executor: Executor | None = None, roll: bool = False,
-        roll_bytes: int = ROLL_BYTES) -> dict[str, Any]:
-    """Run the agent (module docstring) and return its summary, also written to `summary.json` in its (last) segment."""
+        roll_bytes: int = ROLL_BYTES, deadline_file: Path | None = None) -> dict[str, Any]:
+    """Run the agent (module docstring) and return its summary, also written to `summary.json` in its (last) segment. With
+    `deadline_file`, each reading plans with the node's stop from that file while it exists (model.with_live_stop), so a
+    renewal reaches the plan without a new description or a restart."""
     if mode not in ("shadow", "live"):
         raise ValueError(f"unknown mode {mode!r}")
     out = Path(out)
@@ -218,6 +220,8 @@ def run(cluster: Cluster, out: Path, *, mode: str = "shadow", clock: Callable[[]
                 window_polls += 1
                 sleep(window_poll_s)
                 continue
+            if deadline_file is not None:
+                sh.cluster = with_live_stop(cluster, sh.node, deadline_file)
             obs = nebius2.read(int(now), lease_dir, proc)
             sh.step(obs, pre.new())
             ticks += 1
@@ -227,7 +231,7 @@ def run(cluster: Cluster, out: Path, *, mode: str = "shadow", clock: Callable[[]
                 stop["why"] = f"invariant: {broke[0]['msg']}"
                 break
             if mode == "live":
-                _carry_out(cluster, sh, obs, executor, int(now), quiet_only=in_status_window)
+                _carry_out(sh.cluster, sh, obs, executor, int(now), quiet_only=in_status_window)
             ledger.write_state(state_json, sh.state)
             if nebius2.timed_now(cluster, obs):
                 windows += 0 if in_window_since is not None else 1

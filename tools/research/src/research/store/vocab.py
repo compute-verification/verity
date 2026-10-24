@@ -94,6 +94,16 @@ COMMIT_MAP = "commit_map"                             # on a commit-map/v1 artif
 CUSTODY = "custody"                                   # on a run id: whether `research data custody --triage` needs more of it
 CUSTODY_VALUES = ("waived", "never-ran", "needed")
 SOURCE_LOST = "source-lost"                             # on a run id: its exact source (commit + dirty bytes) is gone
+CHALLENGER_KEY = "challenger-key"                     # on a challenger-key/v1 record, by infra: whether verifiers pin its key now
+CHALLENGER_KEY_VALUES = ("current", "retired")
+CHALLENGER_LEDGER = "challenger-ledger"               # on a challenger-ledger/v1|v2 put, by infra's publisher: a head it published
+CHALLENGER_LEDGER_VALUES = ("head",)
+CHALLENGER_PINS = "challenger-pins"                   # on a challenger-pins/v1 put, by infra's publisher: a head it published
+CHALLENGER_PINS_VALUES = ("head",)
+CHALLENGER_MODELS = "challenger-models"               # on a challenger-models/v1 put, by infra's publisher: a head it published
+CHALLENGER_MODELS_VALUES = ("head",)
+MEMORY_LINE_OF_RECORD = "memory-line-of-record"       # on a gate run's verifier run, by its lane: who computed its line of record
+MEMORY_LINE_OF_RECORD_VALUES = ("lean",)
 
 # ---- evidence labels: probe captures and input sets --------------------------------------------------------------------------------
 
@@ -171,10 +181,13 @@ MEASUREMENT_KEYS = ("l", "n", "subbatches", "per_proof_vus", "R_proved", "thread
 #: README's `note:<campaign>/<lane>/<name>`, either the same whichever month folder the file has moved to.  Not a bare name (a handoff
 #: sent to several lanes has the same name in each), and not a path (`.md`, a `YYYY-MM` or `DD` folder).
 NOTE_REF_RE = re.compile(r"^note:(?:(?![\d-]+/)[A-Za-z0-9][\w.-]*/){1,2}(?![\w.-]*\.md$)[\w.-]+$")
+#: A run, as a label's ref names it: its id, r<YYYYMMDD>-<HHMMSS>-<4 hex>.
+RUN_REF_RE = re.compile(r"^r\d{8}-\d{6}-[0-9a-f]{4}$")
 #: Keys whose label is only read with its ref: the form that ref must take, and what it names.
 REF_FORMS: dict[str, tuple[re.Pattern[str], str]] = {
     ABANDONED: (NOTE_REF_RE, "the note that says why (note:<lane>/<file name without .md>, or note:<campaign>/<lane>/<name>)"),
-    SOURCE_LOST: (NOTE_REF_RE, "the note that says how it was lost (note:<lane>/<file name without .md>, or note:<campaign>/<lane>/<name>)")}
+    SOURCE_LOST: (NOTE_REF_RE, "the note that says how it was lost (note:<lane>/<file name without .md>, or note:<campaign>/<lane>/<name>)"),
+    MEMORY_LINE_OF_RECORD: (RUN_REF_RE, "the auditor_line.py run whose auditor_line.json is the line (its run id, r<YYYYMMDD>-<HHMMSS>-<hex>)")}
 #: Label keys that name evidence / findings written by code today (trust dossiers, the ledger's red-team assertions).
 FINDING = "finding"
 LEVEL = "level"
@@ -186,6 +199,11 @@ GRANT_ROLES = ("red-team", "statement-reviewer", "vllm-coordinator", "review")
 #: The owner's word that a pull request is ready at one head (`research queue ready`), which the queue's admission of a single PR
 #: asks for; a train member needs none, since the train's own check is the gate (Daniel, Q14, 6 Oct).
 READY = "ready"
+#: A reviewer's verdict on a pull request at one head (`research queue review`): `land` lands it with drive's `land = "review"`
+#: once every member below it has one, `hold` keeps it and everything above it on `next`; the owner's own doesn't count
+#: (Daniel, 24 Oct 06:05Z: PRs land on an eyeball review, and the full check runs after landing).
+REVIEWED = "reviewed"
+REVIEW_VERDICTS = ("land", "hold")
 #: A `check.py --update` report (its audit.json) on a pull request at one head: a record of what its lean-audit.json change printed
 #: as. No merge needs a statement reviewer (Daniel, 8 Oct); the DM of a changed record is the check.
 LEAN_REVIEW = "lean_review"
@@ -303,6 +321,10 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "not judged; frontier: a distinct route kept for search; kept: adopted; dropped; voided: it didn't measure what it claims; "
        "superseded); the latest label wins", KERNEL_OUTCOMES),
     _k(KERNEL_REASON, GROUP_RESULT, TEXT, "on a kernel-attempt/v1 record: the kernel_outcome's reason, one line"),
+    _k(MEMORY_LINE_OF_RECORD, GROUP_RESULT, ENUM, "on a gate run's verifier run, by its lane: its memory line of record is the "
+       "auditor_line.json of --ref's auditor_line.py run, and that file's line_by, which must be lean (the Lean verifier's line, held "
+       "exactly to line.py's); a line.py-only line is not of record. Gate runs 5-7's labels (credited-..., off-vocab) predate the rule",
+       MEMORY_LINE_OF_RECORD_VALUES),
     # verification
     _k(COMMIT_MAP, GROUP_VERIFICATION, ENUM, "on a commit-map/v1 artifact, by its approver (research.commitmap.ACCEPTORS): whether the rewrite it "
        "records applies, so that records keyed by an old commit are read for its image; the latest label wins", COMMIT_MAP_VALUES),
@@ -320,6 +342,18 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "triage believes only while the run dir shows no sign of a start: no pid in status.json, no started, span_start or sampler_start "
        "event, no sampler reading, no output; needed: triage reads its records again, which withdraws an earlier waived or never-ran); "
        "the latest label wins", CUSTODY_VALUES),
+    _k(CHALLENGER_KEY, GROUP_VERIFICATION, ENUM, "on a challenger-key/v1 record, by infra: whether it names the auditor host's signing key "
+       "that verifiers pin now (current) or one no longer signing (retired); the latest label wins", CHALLENGER_KEY_VALUES),
+    _k(CHALLENGER_LEDGER, GROUP_VERIFICATION, ENUM, "on a challenger-ledger/v1|v2 artifact, by infra's publisher (publish.sh): a head of "
+       "the auditor host's ledger it published, each an extension of the one before; the label isn't authenticated, so a "
+       "verifier checks every published head under the pinned key and refuses two that don't extend one another",
+       CHALLENGER_LEDGER_VALUES),
+    _k(CHALLENGER_PINS, GROUP_VERIFICATION, ENUM, "on a challenger-pins/v1 artifact, by infra's publisher (publish.sh): a head of "
+       "the auditor host's pins log it published, each an extension of the last; pinned_session reads the newest",
+       CHALLENGER_PINS_VALUES),
+    _k(CHALLENGER_MODELS, GROUP_VERIFICATION, ENUM, "on a challenger-models/v1 artifact, by infra's publisher (publish.sh): a head "
+       "of the auditor host's model registry it published, each an extension of the last; a period-open's weights_root is "
+       "one of its entries'", CHALLENGER_MODELS_VALUES),
     _k(SOURCE_LOST, GROUP_VERIFICATION, BOOL, "on a run id: the exact source it ran is gone (its tree held a dirty source that no record "
        "kept, and it was deleted), so the run cannot be re-run or audited from its source; the ref is the note that says how"),
     _k(BELOW_BAR, GROUP_VERIFICATION, BOOL, "the verified proof's whole-proof bound is below the tables' 2^-128 bar: shown in the below-bar drill-down, never a Table 2 cell"),
@@ -328,6 +362,9 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        GRANT_ROLES),
     _k(READY, GROUP_VERIFICATION, BOOL, "the owner's word that pr:<n>@<head> is ready for the merge queue (`research queue ready`); a new head needs it "
        "again; a train member needs none (Q14)"),
+    _k(REVIEWED, GROUP_VERIFICATION, ENUM, "a reviewer's verdict on pr:<n>@<head> (`research queue review`): land, or hold with the "
+       "reason as its ref; drive's review landing counts one only by a reviewer who isn't the PR's owner (Daniel, 24 Oct)",
+       REVIEW_VERDICTS),
     _k(LEAN_REVIEW, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>: the art: id of a `tools/verity/lean/check.py --update` report (its audit.json); a lean-audit.json "
        "change it printed whole as the same statements (moved under --moved, printed differently, rehashed); a record only, since no merge "
        "needs a statement reviewer (Daniel, 8 Oct)"),

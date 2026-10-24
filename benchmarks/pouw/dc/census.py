@@ -5,8 +5,12 @@
 RUN_OUT is a DC run's `out/` (`research fetch RUN --all` puts it at ~/.research/runs/RUN/out; the run id is the name of
 a directory on its path). analyze.py reads each run; a kind's line takes its fastest run (as machine_model's adopt.py
 merges two lines) and names every run that measured it, and the joint rows are the upper hull of every run's points.
---write puts `census.csv` and `rows.csv` in DIR (machine_model's `data/devices/sm_90/` or `sm_100/`), keeping the
-uniform datapath's lines (UNI, and the row UP) that uniform.py wrote there; else they print.
+--write puts `census.csv` and `rows.csv` in DIR (machine_model's `data/devices/sm_90/` or `sm_100/`), keeping every
+line and row this doesn't write: the uniform datapath's (UNI, and the row UP) that uniform.py wrote, the rows of
+other sources (the data sheet's DS_*, TMAB, AT90), and the lines of classes no run prices (the memory and control
+classes added by hand), NOROW's joint issue lines rewritten at the new hull. A row it writes whose old description
+extends the new one keeps the old,
+the added note with it; one whose note it can't keep is named on stderr. Else they print.
 
 The rows (warp instructions/SM/clk, derated by the 2% noise; facets in SMSP-cycles at 1 - 2%, eps1.py's convention):
 - issue: every kind holds 1 SMSP-cycle.
@@ -62,9 +66,19 @@ LD_HONEST = "LDTM_32X32B_X32"
 #: mma.sync probes: (kind, depth). sync_e4m3_k32 is emulated on sm_90 (2 HMMA.16816 + 4 FADD): no kind of its own.
 SYNC = {"imma_s8_k32": ("IMMA16832_S8", 32), "imma_s8_k16": ("IMMA16816_S8", 16), "sync_b1_k256": ("BMMA168256_B1", 256),
         "sync_f16_k16": ("HMMA16816_F16", 16), "sync_bf16_k16": ("HMMA16816_BF16", 16), "sync_tf32_k8": ("HMMA1688_TF32", 8)}
-#: scalar kinds: (row, the alone probes whose fastest pattern gives its rate)
+#: scalar kinds: (row, the alone probes whose fastest pattern gives its rate). The memory and multiply classes have no
+#: pipe row: their lines are the issue row's and the joint rows' (each timed beside the honest form, sm90_wgmma.cu's
+#: memory and imadw lanes). LD.E and IMAD.WIDE, which no class names, price UNLISTED, the measured readings' catch-all:
+#: a class of IMAD.WIDE's own would carry the same lines.
 SCALAR = {"ALU": ("A", {"s_lop3": "LOP3.LUT", "s_shf": "SHF.L.W.U32.HI", "s_lea": "LEA.HI"}),
-          "IMAD": ("I", {"s_imad": "IMAD"}), "SHFL": ("SHFL", {"s_shfl": "SHFL.BFLY"}), "FFMA": (None, {"s_ffma": "FFMA"})}
+          "IMAD": ("I", {"s_imad": "IMAD"}), "SHFL": ("SHFL", {"s_shfl": "SHFL.BFLY"}), "FFMA": (None, {"s_ffma": "FFMA"}),
+          "UNLISTED": (None, {"s_lde": "LD.E*", "s_imadw": "IMAD.WIDE.U32"}),
+          "ATOME32": (None, {"s_atome": "ATOM.E*"}), "REDG32": (None, {"s_redg": "REDG*"}),
+          "ATOMS32": (None, {"s_atoms": "ATOMS*"}), "LDS128": (None, {"s_lds128": "LDS.128"}),
+          "REDUX": (None, {"s_redux": "REDUX*"}),
+          "STS32": (None, {"s_sts32": "STS"}), "STS128": (None, {"s_sts128": "STS.128"}),
+          "STG32": (None, {"s_stg32": "STG.E"}), "STG128": (None, {"s_stg128": "STG.E.128"}),
+          "ISETP": (None, {"s_isetp": "ISETP.GT.U32.XOR"})}
 #: lanes beside the tensor whose pipe row a joint can bind: lane -> (scalar kind, the lane's counted pattern)
 LANE_PIPE = {"imad": ("IMAD", "IMAD"), "lop3": ("ALU", "LOP3.LUT"), "shfl": ("SHFL", "SHFL.BFLY")}
 
@@ -261,8 +275,9 @@ def tight(f: dict) -> str:
     return " and ".join(t.split("@")[0] for t in f["tight"])
 
 
-def census(dev: Device) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
-    """(census.csv lines, rows.csv lines) of one device."""
+def census(dev: Device, carried: frozenset[str] = frozenset()) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    """(census.csv lines, rows.csv lines) of one device; `carried`, kinds no run prices that the old census gave the
+    joint issue rows' scalar coefficient (NOROW), get it on the new rows."""
     fam, sfx = dev.family, dev.family[2:]
     honest = HONEST[fam]
     lines: list[dict[str, str]] = []
@@ -325,6 +340,8 @@ def census(dev: Device) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
         r = f"JI{sfx}_{i}"
         for k in kinds:
             lines.append(cycles_line(k, r, f["MMA"] if k == honest else f["X"], every))
+        for k in sorted(carried - set(kinds)):
+            lines.append(cycles_line(k, r, f["X"], every))
         row(r, "joint", every, f"{honest} {f['MMA']:.3f} + every other warp instruction {f['X']:.3f} SMSP-cycles (DC's "
             f"lanes beside the tensor, 2% noise margin; tight at {tight(f)}); other tensor forms carry the scalar "
             "coefficient, a lower bound on their issue cost")
@@ -436,12 +453,50 @@ def tables(dev: Device) -> str:
     return "\n".join(out) + "\n"
 
 
-def uniform_kept(d: Path, name: str, key: str) -> list[dict[str, str]]:
-    """The lines uniform.py owns in DIR/NAME (UNI's census lines, the UP row), which --write keeps."""
+#: the rows census() writes; a stale one (a joint row the new hull drops) goes, every other row is kept
+OWN_ROW = re.compile(r"issue|MS?|A|I|SHFL|TL|TM\d+_\d+|JI\d+_\d+|JP[A-Z]+\d+_\d+")
+
+
+JI_ROW = re.compile(r"JI\d+_\d+")
+
+
+def old_lines(d: Path, name: str) -> list[dict[str, str]]:
     if not (d / name).is_file():
         return []
     with open(d / name, newline="") as f:
-        return [r for r in csv.DictReader(f) if r[key] in ("UNI", "UP")]
+        return list(csv.DictReader(f))
+
+
+def carried(d: Path, dev: Device) -> frozenset[str]:
+    """The kinds of DIR's census.csv that no run prices but that carry the joint issue rows' scalar coefficient."""
+    return frozenset(r["kind"] for r in old_lines(d, "census.csv")
+                     if JI_ROW.fullmatch(r["row"]) and r["kind"] != "UNI" and r["kind"] not in dev.kinds)
+
+
+def kept(d: Path, name: str, written: set[str] | None = None) -> list[dict[str, str]]:
+    """The lines and rows of DIR/NAME that census() doesn't write, which --write keeps: uniform.py's (UNI's census
+    lines, the UP row), every row of another source (the data sheet's DS_*, TMAB) and, in census.csv, every line of a
+    kind no run prices (`written` is the kinds census() writes) but its joint issue lines, which census() rewrites."""
+    return [r for r in old_lines(d, name) if r.get("kind") == "UNI" or not OWN_ROW.fullmatch(r["row"])
+            or (written is not None and r["kind"] not in written and not JI_ROW.fullmatch(r["row"]))]
+
+
+def with_notes(d: Path, rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    """`rows` with each one's old description where it extends the new one (a note added after the generated text)."""
+    if not (d / "rows.csv").is_file():
+        return rows
+    with open(d / "rows.csv", newline="") as f:
+        old = {r["row"]: r["description"] for r in csv.DictReader(f)}
+    out = []
+    for r in rows:
+        o = old.get(r["row"], "")
+        if o.startswith(r["description"]):
+            r = {**r, "description": o}
+        elif o and not r["description"].startswith(o):
+            print(f"census.py: {r['row']}'s description is regenerated; a note after its old text, if any, is not kept",
+                  file=sys.stderr)
+        out.append(r)
+    return out
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -451,11 +506,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--write", type=Path, help="the device directory (machine_model's data/devices/sm_90 or sm_100)")
     a = p.parse_args(argv)
     dev = Device(a.family, a.outs)
-    lines, rows = census(dev)
+    lines, rows = census(dev, carried(a.write, dev) if a.write else frozenset())
     print(tables(dev))
     if a.write:
         a.write.mkdir(parents=True, exist_ok=True)
-        lines, rows = lines + uniform_kept(a.write, "census.csv", "kind"), rows + uniform_kept(a.write, "rows.csv", "row")
+        lines = lines + kept(a.write, "census.csv", set(dev.kinds))
+        rows = with_notes(a.write, rows) + kept(a.write, "rows.csv")
         (a.write / "census.csv").write_text(rowsmod.census_csv(lines))
         (a.write / "rows.csv").write_text(rows_csv(rows))
         print(f"wrote {a.write / 'census.csv'} ({len(lines)} lines) and {a.write / 'rows.csv'} ({len(rows)} rows)")

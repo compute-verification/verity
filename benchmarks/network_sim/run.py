@@ -8,19 +8,22 @@ process tree it runs:
 3. the fleet (`up --fleet --blocks 2`, `datacenter.examples.two_sites`): two sites of two blocks joined by a 20 ms WAN
    between their spines, the outside host on the west site, run twice with the strategies swapped between the sites,
    so that each of the first four is played across the WAN once (`DIR/fleet/`, `DIR/fleet-swapped/`);
-4. the lab back in its default four blocks, and the workload's three runs of `python -m workload.lab_run run`: honest,
-   `--tamper b1:flip-bit` and `--tamper b2:late` (`DIR/workload/<run>/`). They need a Python with torch: `--python`,
-   else this one if it has torch, else one that `uv` builds in a scratch directory, as the workload's recorded run does.
+4. the lab back in its default four blocks, and the workload's four runs of `python -m workload.lab_run run`: honest,
+   `--tamper b1:flip-bit`, `--tamper b2:late` and `--tamper b1:extra` (`DIR/workload/<run>/`), each at a first-frame
+   latency D of `DELTA_BUCKETS`. They need a Python with torch: `--python`, else this one if it has torch, else one
+   that `uv` builds in a scratch directory, as the workload's recorded run does.
 
 Each step's output is printed and kept in `DIR/<step>.txt`. It refuses to start while a process runs in a lab namespace,
 as lab_run does, and however it ends it leaves the lab up in its default shape with nothing running in it.
 
 Then it reads each step's `summary.json` and writes `DIR/summary.json` and the table `DIR/summary.txt`: each block's
-verdicts under the certifier's audit and the second audit (mockdc's datacenter record check, with the account's charge,
-or lab_run's N3), the median wire lag, the worst proxy tick against its slack, and for each mockdc run its record check
-on every port of the declaration (a fleet's merged ones), and the answers. The verdicts are compared with the expected
-ones (`expected_block`, `expected_records` and `WORKLOAD`), and the exit status is 1 if any differs, a step exited
-nonzero or a proxy tick ran past its slack, so the night is its own regression check.
+verdicts under the certifier's audit, the second audit (mockdc's datacenter record check, with the account's charge,
+or lab_run's N3), N3Window_v5 on every recorded window against the canonical frame templates and, on lab_run's served
+links, N2's served verdict on each link-window, the median wire lag,
+the worst proxy tick against its slack, and for each mockdc run its record check on every port of the declaration (a
+fleet's merged ones), and the answers. The verdicts are compared with the expected ones (`expected_block`,
+`expected_records` and `WORKLOAD`), and the exit status is 1 if any differs, a step exited nonzero or a proxy tick ran
+past its slack, so the night is its own regression check.
 
     python3 benchmarks/network_sim/run.py --out DIR [--python PY]
 """
@@ -57,38 +60,65 @@ DOWN = "no record: the certifier was down or its record was withheld"
 SALT = {"accepted": True, "violations": [], "ingress_salt_frames": [1, 1, 1], "egress_salt_frames": 0,
         "egress_holds_salt": False, "block_received": True}
 STARVED = ["missing", "values"]
-# lab_run's runs: its arguments, the blocks of b0 … b3 that either audit refuses, each as the certifier's refused rows
-# and N3's violation codes (every other block is accepted by both), and the answers.
+# lab_run's D, which it otherwise calibrates from the host's timing of the sessions: `late` holds b2's first response
+# past D, so the window its refusal lands in moves with D, and these verdicts are D = 12's (1.2 s, over four times the
+# slowest session the lab host has timed, 263 ms).
+DELTA_BUCKETS = 12
+# lab_run's runs: its arguments, the blocks of b0 … b3 that an audit refuses, each as the certifier's refused rows, N3's
+# violation codes, the windows N3Window_v5 refuses and the link-windows N2's served counts refuse (every other block is
+# accepted by all four, on each of its `WORKLOAD_WINDOWS` link-windows and v5's two links' worth), and the answers. v5
+# refuses a window whose frames aren't the committed outboxes': flip-bit's flipped message where b1 sends it and where
+# the client relays it into b2, and under late each window carrying bytes of a block that, starved, committed no
+# values. N2 is counts only, so it accepts flip-bit's content and refuses the windows whose egress counts aren't the
+# ones their ingress counts derive, each refused by the served counts' check itself: late's held response and extra's
+# one more event, after b1's last response.
 WORKLOAD = {
     "honest": ([], {}, "equal"),
     "flip-bit": (["--tamper", "b1:flip-bit", "--expect", "refused"],
-                 {"b1": ([], ["content"]), "b2": ([], ["content"])}, "equal"),
+                 {"b1": ([], ["content"], ["b1:responses[0]"], []), "b2": ([], ["content"], ["b2:requests[0]"], [])},
+                 "equal"),
     "late": (["--tamper", "b2:late", "--expect", "refused"],
-             {"b0": ([], STARVED), "b1": ([], STARVED), "b2": ([["responses", 0, COVERAGE, COVERAGE]], STARVED),
-              "b3": ([], STARVED)}, None),
+             {"b0": ([], STARVED, ["b0:responses[0]"], []),
+              "b1": ([], STARVED, ["b1:responses[0]", "b1:requests[0]"], []),
+              "b2": ([["responses", 0, COVERAGE, COVERAGE]], STARVED,
+                     [f"b2:responses[0] (the record's status is {COVERAGE.removeprefix('status:')})", "b2:requests[0]"],
+                     [0]),
+              "b3": ([], STARVED, [], [])}, None),
+    "extra": (["--tamper", "b1:extra", "--expect", "refused"], {"b1": ([], ["unexplained"], [], [1])}, "equal"),
 }
 WORKLOAD_BLOCKS = ["b0", "b1", "b2", "b3"]
+WORKLOAD_WINDOWS = 5  # lab_run's windows at D = 12; N3Window_v5 checks each on both of a block's links
+
+
+def v5(windows: int, *refused: str) -> dict:
+    """N3Window_v5's verdicts on a block's recorded windows (`workload.n3_canonical.summary`)."""
+    return {"windows": windows, "accepted": windows - len(refused), "refused": list(refused)}
 
 
 def expected_block(strategy: str, block: str, salt: bool) -> dict:
     """What mockdc's audits say of a block that plays `strategy`, in `mockdc_verdicts`'s shape: the certifier's refused
     rows, the record check's refusals under the verifier's plan, whether the account is sound and what it charges
     besides timing advice, the same without the plan for a block down for maintenance, whether a block other than the
-    honest one put the honest wire on the fabric, and with `salt` the certifier's salt check, which finds nothing for
-    the window a block is down."""
+    honest one put the honest wire on the fabric, N3Window_v5 on each recorded window (a block down for maintenance
+    records four of the six), and with `salt` the certifier's salt check, which finds nothing for the window a block is
+    down."""
     def refused(w: int, whys, directions=("out",)) -> list[str]:
         return [f"port {block}.cert:{d} [{w * WINDOW}, {(w + 1) * WINDOW}): {why}" for d in directions for why in whys]
 
-    honest = {"strategy": strategy, "certifier": [], "datacenter": [], "sound": True, "charged": ["timing"]}
+    honest = {"strategy": strategy, "certifier": [], "datacenter": [], "sound": True, "charged": ["timing"],
+              "n3_v5": v5(6)}
     e = {"honest": honest,
          "bits": honest | {"wire_is_honests": True},
          "late": honest | {"certifier": [["responses", 0, COVERAGE, COVERAGE]], "datacenter": refused(0, CHEATED),
-                           "sound": False, "charged": ["timing", "refused"], "wire_is_honests": False},
+                           "sound": False, "charged": ["timing", "refused"], "wire_is_honests": False,
+                           "n3_v5": v5(6, f"responses[0] (the record's status is {COVERAGE.removeprefix('status:')})")},
          "extra": honest | {"certifier": [["responses", 2, "mismatch", "mismatch"]], "datacenter": refused(2, CHEATED),
-                            "sound": False, "charged": ["timing", "refused"], "wire_is_honests": False},
+                            "sound": False, "charged": ["timing", "refused"], "wire_is_honests": False,
+                            "n3_v5": v5(6, "responses[2]")},
          "maintenance": honest | {"certifier": [[link, 1, "no-verdict", "no-verdict"] for link in ("responses", "requests")],
                                   "charged": ["timing", "serviced"], "unplanned": refused(1, [DOWN], ("out", "in")),
-                                  "unplanned_sound": False, "unplanned_charged": ["timing", "refused"]}}[strategy]
+                                  "unplanned_sound": False, "unplanned_charged": ["timing", "refused"],
+                                  "n3_v5": v5(4)}}[strategy]
     if salt:
         e = e | {"salt": SALT | {"accepted": False, "violations": [[1, "salt"]], "ingress_salt_frames": [1, 1]}
                  if strategy == "maintenance" else SALT}
@@ -118,7 +148,7 @@ def mockdc_verdicts(entry: dict) -> dict:
     """A block's verdicts in mockdc's `summary.json`."""
     d = entry["datacenter"]
     out = {"strategy": entry["strategy"], "certifier": refused_rows(entry["verdicts"]), "datacenter": d["refused"],
-           "sound": d["account"]["sound"], "charged": charged(d["account"])}
+           "sound": d["account"]["sound"], "charged": charged(d["account"]), "n3_v5": entry.get("n3_v5")}
     if (u := d.get("unplanned")) is not None:
         out |= {"unplanned": u["refused"], "unplanned_sound": u["account"]["sound"],
                 "unplanned_charged": charged(u["account"])}
@@ -136,9 +166,13 @@ def records_verdicts(records: dict) -> dict:
 
 
 def workload_verdicts(block: dict) -> dict:
-    """A block's verdicts in lab_run's `summary.json`: N3's as its violations' codes."""
+    """A block's verdicts in lab_run's `summary.json`: N3's as its violations' codes, N2's as its link-windows, the ones
+    it refuses and the ones its served counts' check alone refuses."""
+    n2 = block.get("n2")
     return {"certifier": refused_rows(block["certifier"]["verdicts"]),
-            "n3": sorted({v.split()[0] for v in block["n3"]["violations"]})}
+            "n3": sorted({v.split()[0] for v in block["n3"]["violations"]}), "n3_v5": block.get("n3_v5"),
+            "n2": None if n2 is None else {"windows": n2["windows"], "refused": n2["refused"],
+                                           "counts_refused": [w for w, ok in enumerate(n2["served_counts"]) if not ok]}}
 
 
 def tick(block: dict) -> dict:
@@ -204,8 +238,10 @@ def summarize(out: Path, exits: dict[str, int]) -> dict:
             mismatches.append(f"{run}: blocks {list(s['blocks'])}, not {WORKLOAD_BLOCKS}")
         blocks = {}
         for b, x in s["blocks"].items():
-            rows, codes = refused.get(b, ([], []))
-            blocks[b] = block(run, b, x["tamper"] or "-", {"certifier": rows, "n3": codes}, workload_verdicts(x), x)
+            rows, codes, windows, n2 = refused.get(b, ([], [], [], []))
+            want = {"certifier": rows, "n3": codes, "n3_v5": v5(2 * WORKLOAD_WINDOWS, *windows),
+                    "n2": {"windows": WORKLOAD_WINDOWS, "refused": n2, "counts_refused": n2}}
+            blocks[b] = block(run, b, x["tamper"] or "-", want, workload_verdicts(x), x)
         got = None if s["answers"] is None else "equal" if s["answers"] == s["reference"] else "differ"
         if got != answers:
             mismatches.append(f"{run} answers: expected {answers!r}, got {got!r} ({s['answers']} against {s['reference']})")
@@ -240,8 +276,20 @@ def render(summary: dict) -> str:
     def account(a: dict) -> str:
         return f"{a['covert_bits']:.3g} {'sound' if a['sound'] else 'NOT sound'}"
 
-    rows = [("run", "block", "case", "certifier audit", "records / N3", "covert budget (bits)", "wire lag",
-             "worst tick", "")]
+    def window_v5(v: dict | None) -> str:
+        if v is None:
+            return "-"
+        refused = ", ".join(r.split(" (")[0] for r in v["refused"])
+        return f"{v['accepted']}/{v['windows']}" + (f" refused {refused}" if refused else "")
+
+    def served(v: dict | None) -> str:
+        if v is None:
+            return "-"
+        refused = ", ".join(f"[{w}]" for w in v["refused"])
+        return f"{v['windows'] - len(v['refused'])}/{v['windows']}" + (f" refused {refused}" if refused else "")
+
+    rows = [("run", "block", "case", "certifier audit", "records / N3", "N3 v5", "N2 served", "covert budget (bits)",
+             "wire lag", "worst tick", "")]
     for run, r in summary["runs"].items():
         for b, x in r["blocks"].items():
             v = x["verdicts"]
@@ -253,14 +301,14 @@ def render(summary: dict) -> str:
                     second += f"; unplanned {records(v['unplanned'])}"
                     charge += f"; unplanned {account(x['unplanned_account'])}"
             t = x["tick"]
-            rows.append((run, b, x["case"], certifier(v), second, charge,
+            rows.append((run, b, x["case"], certifier(v), second, window_v5(v.get("n3_v5")), served(v.get("n2")), charge,
                          "" if t["lag_ms"] is None else f"{t['lag_ms']:.1f} ms",
                          f"{t['late_ms']:.1f}/{t['slack_ms']:g} ms" + (f", {t['over']} over" if t["over"] else ""),
                          "ok" if x["ok"] else "MISMATCH"))
         if (a := r.get("records")) is not None:
             v = a["verdicts"]
             rows.append((run, "all", f"{len(v['ports'])} ports", "", "records " + records(v["refused"], by_block=True),
-                         account(a["account"]), "", "", "ok" if a["ok"] else "MISMATCH"))
+                         "", "", account(a["account"]), "", "", "ok" if a["ok"] else "MISMATCH"))
     widths = [max(len(row[k]) for row in rows) for k in range(len(rows[0]))]
     lines = ["  ".join(c.ljust(w) for c, w in zip(row, widths)).rstrip() for row in rows]
     answers = [f"{run.split('/')[1]} " + ("none" if r["answers"] is None else
@@ -350,7 +398,8 @@ def night(out: Path, python: str | None, exits: dict[str, int]) -> None:
         if py is not None and not exits["lab default"]:
             for name, (args, _, _) in WORKLOAD.items():
                 run = f"workload/{name}"
-                exits[run] = step(run, [py, "-B", "-m", "workload.lab_run", "run", "--out", str(out / run), *args], out)
+                exits[run] = step(run, [py, "-B", "-m", "workload.lab_run", "run", "--out", str(out / run),
+                                        "--delta-buckets", str(DELTA_BUCKETS), *args], out)
 
 
 def main(argv: list[str] | None = None) -> int:

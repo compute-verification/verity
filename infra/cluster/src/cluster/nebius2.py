@@ -110,7 +110,8 @@ def locked(paths: set[Path], proc: Path = Path("/proc")) -> set[Path] | None:
 def read(t: int, lease_dir: Path = LEASE_DIR, proc: Path = Path("/proc")) -> Observation:
     """The live state of `lease_dir`, read-only and without taking a lock: each GPU whose owner line's pid holds its lock,
     and each wait file its waiter holds. A lock held under a line that names another pid (a lease being taken, or a holder
-    that died while a child kept its descriptor) is `held`: busy, and nobody's to move."""
+    that died while a child kept its descriptor) is `held`: busy, and nobody's to move. So is an unleased GPU whose
+    `<i>.foreign` names a live process (`live_foreign`)."""
     lease_dir = Path(os.path.realpath(lease_dir))
     leases: dict[int, str] = {}
     waits: list[tuple[str, str]] = []
@@ -139,7 +140,18 @@ def read(t: int, lease_dir: Path = LEASE_DIR, proc: Path = Path("/proc")) -> Obs
                 leases[i] = line
     gpus = {int(name[:-5]) for name in names if name.endswith(".lock") and name[:-5].isdigit()}
     busy = locked({lease_dir / f"{i}.lock" for i in gpus - set(leases)}, proc) or set()
-    return Observation(t, leases, tuple(sorted(waits)), held=tuple(sorted(int(p.name[:-5]) for p in busy)))
+    foreign = {i for i in gpus - set(leases) if live_foreign(lease_dir / f"{i}.foreign", proc)}
+    return Observation(t, leases, tuple(sorted(waits)), held=tuple(sorted({int(p.name[:-5]) for p in busy} | foreign)))
+
+
+def live_foreign(path: Path, proc: Path = Path("/proc")) -> bool:
+    """Whether `gpu-lease`'s `<i>.foreign` names a process still running: memory a run left on the GPU outside any lease,
+    which `gpu-lease` refuses to grant, so a plan that counts the GPU free grants what can't be taken."""
+    try:
+        text = path.read_text()
+    except FileNotFoundError:
+        return False
+    return any((pid := fields(line).get("pid", "")).isdigit() and (proc / pid).is_dir() for line in text.splitlines())
 
 
 def timed_now(cluster: Cluster, obs: Observation, node: str = NODE) -> bool:
@@ -236,4 +248,4 @@ def preemption(line: str) -> dict[str, Any] | None:
 
 
 __all__ = ["NODE", "LEASE_DIR", "Observation", "Lease", "fields", "from_sampler", "held_by", "locked", "read", "timed_now",
-           "leases", "job_of", "allocations", "unowned", "queue", "preemption"]
+           "leases", "job_of", "allocations", "unowned", "queue", "preemption", "live_foreign"]

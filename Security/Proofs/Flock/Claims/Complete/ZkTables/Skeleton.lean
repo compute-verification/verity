@@ -464,8 +464,8 @@ end Proved
 /-- **Masked completeness from the goals, at any number of tables**: Flock's masked verifier is complete for `honestP`
 with error `δc H`, given each goal and the mask slots' rank bound. -/
 theorem complete_of_goals (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
-    (hMR : MaskRank.MaskRankBound) (g : Goals H rel) : Claims.Flock.Complete H (deployZk rel) := by
-  refine complete_of H rel hMR fun x w hsc hr hready ω r hgood => ?_
+    (hMR : MaskRank.MaskRankBound) (hMF : MaskFree rel) (g : Goals H rel) : Claims.Flock.Complete H (deployZk rel) := by
+  refine complete_of H rel hMR hMF fun x w hsc hr hready ω r hgood => ?_
   have hset : ∃ s spec sts, setupOf true x = some (s, spec, sts) := by
     unfold ZkTables.ready at hready
     split at hready

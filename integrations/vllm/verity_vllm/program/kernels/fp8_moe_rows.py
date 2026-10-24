@@ -9,6 +9,7 @@ from __future__ import annotations
 __models__ = ("zai-org/GLM-5.3",)
 
 from functools import lru_cache
+from typing import Callable
 
 import numpy as np
 
@@ -64,7 +65,7 @@ TWIN_DOT_OF = {HopperE4m3QgmmaDot32.id: "hopper", BlackwellE4m3QmmaDot32.id: "bl
 
 
 def moe_expert_fp8_block_row(xq: np.ndarray, sx: np.ndarray, w: np.ndarray, ws: np.ndarray, *, G: int = 128, KB: int = 32,
-                             swap: bool = False, g: int | None = None, dot: str = "hopper",
+                             swap: bool = False, g: int | None = None, dot: str | Callable = "hopper",
                              chunk: int = 4096) -> tuple[np.ndarray, np.ndarray]:
     """`MoeExpertFp8BlockCoordinate_v1{K,G,KB,SWAP}` (g None) or `MoeExpertFp8BlockCoordinateW_v1` (g the pair's f32 topk weight
     word) on ONE (token, expert) pair of `fused_moe_kernel`: xq (K,) e4m3 bytes, sx (K/G,) f32 words, w (N, K) the expert's e4m3
@@ -72,8 +73,9 @@ def moe_expert_fp8_block_row(xq: np.ndarray, sx: np.ndarray, w: np.ndarray, ws: 
     for each K tile k ascending, `d` = KB/32 `tc_dot32_e4m3` steps from +0, then `acc` = FFMA(FMUL(d, sx[kb]), ws[n // G][kb], acc)
     from +0 (the two scales swapped under `swap`), kb = k*KB // G; then FMUL(acc, g) when g is given, and `cvt.rn.bf16.f32`.
     `dot` = "blackwell" is the `_v3{DOT=BlackwellE4m3QmmaDot32_v1}` forms, `qmma_dot32_e4m3` for the step, and "mmav2" the
-    `_v3{DOT=HopperE4m3MmaV2Dot32_v1}` forms (cc 9.0's small-batch tiles), `mmav2_dot32_e4m3`."""
-    step = TWIN_DOTS[dot]
+    `_v3{DOT=HopperE4m3MmaV2Dot32_v1}` forms (cc 9.0's small-batch tiles), `mmav2_dot32_e4m3`.  A callable `dot` is a step of
+    `TWIN_DOTS`' signature that no Definition registers (a capture's competing model)."""
+    step = dot if callable(dot) else TWIN_DOTS[dot]
     xq = np.asarray(xq, dtype=np.uint8).reshape(-1)
     K = xq.size
     check_statics(K, G, KB)
@@ -104,6 +106,37 @@ def moe_expert_fp8_block_row(xq: np.ndarray, sx: np.ndarray, w: np.ndarray, ws: 
         out[n0:n1] = f2fp_bf16(acc)
         nonfin[n0:n1] = nf | ((acc & 0x7F800000) == 0x7F800000)
     return out, nonfin
+
+
+def moe_expert_fp8_block_accs(xq: np.ndarray, sx: np.ndarray, w: np.ndarray, ws: np.ndarray, *, every: int, G: int = 128,
+                              KB: int = 32, swap: bool = False, dot: str | Callable = "hopper") -> np.ndarray:
+    """`moe_expert_fp8_block_row`'s f32 accumulators (g None) after each ``every`` weights: (K / every, N) words, row c the
+    accumulator after K-chunk c, `MoeExpertFp8CoordinateChunk_v1`'s output at chunk width ``every`` (`f2fp_bf16` of the last
+    row is the coordinate's word)."""
+    step = dot if callable(dot) else TWIN_DOTS[dot]
+    xq = np.asarray(xq, dtype=np.uint8).reshape(-1)
+    K = xq.size
+    check_statics(K, G, KB)
+    if every < 1 or K % every or every % G or every % KB:
+        raise ValueError(f"chunks of {every} weights are not whole scale blocks (G={G}) and tiles (KB={KB}) of K={K}")
+    w = np.asarray(w, dtype=np.uint8).reshape(-1, K)
+    N = w.shape[0]
+    sx = np.asarray(sx, dtype=np.uint32).reshape(K // G)
+    ws = np.asarray(ws, dtype=np.uint32).reshape(weight_blocks(N, G), K // G)
+    rows = np.arange(N) // G
+    acc, out = np.zeros(N, dtype=np.uint32), np.empty((K // every, N), dtype=np.uint32)
+    for k in range(K // KB):
+        d = np.zeros(N, dtype=np.uint32)
+        for st in range(KB // 32):
+            lo = k * KB + 32 * st
+            d, _f = step(d, np.broadcast_to(xq[lo:lo + 32], (N, 32)), w[:, lo:lo + 32])
+        kb = k * KB // G
+        a, b = np.broadcast_to(sx[kb], (N,)), ws[rows, kb]
+        first, second = (b, a) if swap else (a, b)
+        acc = fma_rn(mul_rn(d, first), second, acc)
+        if (k + 1) * KB % every == 0:
+            out[(k + 1) * KB // every - 1] = acc
+    return out
 
 
 @lru_cache(maxsize=1)

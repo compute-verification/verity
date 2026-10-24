@@ -163,6 +163,25 @@ def test_a_file_installed_from_a_commit_main_has_since_merged_and_changed_is_sta
     assert c["state"] == "stale", "no record: the recent search finds the blob in main's own history"
 
 
+def test_a_tree_file_main_deleted_is_a_stray_not_ahead(world):
+    """Node 1's cluster trees kept shadow-node2.sh after main deleted it, and drift called it `ahead` (an old restack branch
+    still held it), so `attic` refused it: a version main held and then removed is a stray however many branches keep it."""
+    node, repo, n = world["node"], world["repo"], world["nodes"]["n"]
+    _git(repo, "checkout", "-q", "-b", "old")
+    _commit(repo, {"src/t/gone.sh": "g1\n"}, "an old branch adds it")
+    _git(repo, "push", "-q", "origin", "old")
+    _git(repo, "checkout", "-q", "main")
+    _commit(repo, {"src/t/gone.sh": "g1\n"}, "main adds it")
+    _git(repo, "rm", "-q", "src/t/gone.sh")
+    _git(repo, "commit", "-q", "-m", "main deletes it")
+    _git(repo, "push", "-q", "origin", "main")
+    (node / "tree" / "gone.sh").write_text("g1\n")
+    rep = deploy.drift(n, "origin/main", local, repo)
+    assert "gone.sh" not in _states(rep) and str(node / "tree" / "gone.sh") in rep["strays"]
+    assert deploy.attic(n, "origin/main", "lane-x", [str(node / "tree" / "gone.sh")], False, local, apply=True, repo=repo)
+    assert not (node / "tree" / "gone.sh").exists()
+
+
 def test_install_refuses_an_unpushed_commit_and_installs_a_pushed_one_atomically_with_a_record(world, capsys):
     node, repo, n = world["node"], world["repo"], world["nodes"]["n"]
     b = node / "bin" / "b"
@@ -339,6 +358,74 @@ def test_drift_is_clean_once_everything_is_mains_and_nothing_strays(world, capsy
     assert "no node 'zz'" in err and err.count("research deploy: --node is now --on") == 1
 
 
+def test_a_node_ssh_cannot_connect_to_is_unreachable_and_any_other_failed_probe_is_an_error(world, capsys):
+    def down(stderr: bytes):
+        return lambda node, argv, stdin: subprocess.CompletedProcess(argv, 255, b"", stderr)
+    for stderr, unreachable in ((b"ssh: connect to host 10.0.0.1 port 22: Connection timed out\n", True),
+                                (b"research@10.0.0.1: Permission denied (publickey).\n", False)):
+        assert deploy.main(["drift", "--json", "--no-fetch"], run=down(stderr), manifest=world["manifest"], repo=world["repo"]) == 1
+        rep = json.loads(capsys.readouterr().out)["n"]
+        assert "probe failed (exit 255)" in rep["error"] and rep.get("unreachable", False) is unreachable
+
+
+def test_an_admin_only_node_is_read_only_when_named(world, capsys):
+    """The auditor host's deploy user is vy-admin, whose key the relays don't hold: a bare drift skips it, `--on` reads it."""
+    manifest = world["manifest"]
+    manifest.write_text(manifest.read_text().replace("[nodes.n]\n", f'[nodes.a]\nadmin = true\nrecord = "{world["node"]}/a.jsonl"\n\n'
+                                                                       "[nodes.n]\n", 1))
+    denied = lambda node, argv, stdin: subprocess.CompletedProcess(argv, 255, b"", b"vy-admin@h: Permission denied (publickey).\n")
+    deploy.main(["drift", "--json", "--no-fetch"], run=denied, manifest=manifest, repo=world["repo"])
+    assert set(json.loads(capsys.readouterr().out)) == {"n"}
+    assert deploy.main(["drift", "--on", "a", "--json", "--no-fetch"], run=denied, manifest=manifest, repo=world["repo"]) == 1
+    assert "Permission denied" in json.loads(capsys.readouterr().out)["a"]["error"]
+    with pytest.raises(ValueError, match="`admin` is true or false"):
+        deploy.load(manifest, manifest.read_text().replace("admin = true", 'admin = "yes"'))
+
+
+def test_a_node_no_machine_entry_names_is_that_nodes_error_not_the_whole_drift(world, monkeypatch, capsys):
+    """A node added to deploy.toml before its VM is registered (vy-auditor-1, 21 Oct) failed every relay drift with Refused."""
+    from research import remote
+
+    def unknown(name, project):
+        raise remote.Refused(f"machine {name!r} is not in machines.toml")
+    monkeypatch.setattr(remote, "resolve_machine", unknown)
+    assert deploy.main(["drift", "--json", "--no-fetch"], run=deploy.ssh_runner(), manifest=world["manifest"],
+                       repo=world["repo"]) == 1
+    assert "is not in machines.toml" in json.loads(capsys.readouterr().out)["n"]["error"]
+
+
+def test_code_running_from_a_tree_without_history_reads_and_fetches_every_branch_of_the_clone_it_is_given(world, tmp_path, capsys):
+    """The control pod's watchers run from a `git archive` tree; drift reads $RESEARCH_DEPLOY_REPO's clone, fetched each run."""
+    repo, origin, clone = world["repo"], tmp_path / "origin.git", tmp_path / "clone"
+    subprocess.run(["git", "clone", "-q", "--no-checkout", str(origin), str(clone)], check=True)
+    new = _commit(repo, {"src/a.py": "a3\n"}, "v3")
+    _git(repo, "push", "-q", "origin", "main")
+    _git(repo, "push", "-q", "origin", "main:later")
+    deploy.install(world["nodes"]["n"], "origin/main", "lane-x", [], local, apply=True, repo=repo)
+    (world["node"] / "bin" / "unit.service").write_text("[Unit]\n")
+    assert deploy.main(["drift", "--json"], run=local, manifest=world["manifest"], repo=clone) == 0
+    assert json.loads(capsys.readouterr().out)["n"]["entries"]
+    assert _git(clone, "rev-parse", "origin/main") == _git(clone, "rev-parse", "origin/later") == new
+    env = {**os.environ, "RESEARCH_DEPLOY_REPO": str(clone)}
+    out = subprocess.run([sys.executable, "-c", "from verity_ops import deploy; print(deploy.REPO, deploy.SRC)"], env=env,
+                         capture_output=True, text=True, check=True).stdout.split()
+    assert out == [str(clone), str(deploy.SRC)]
+
+
+def test_a_staged_node_is_passed_by_unless_named_and_installs_as_any_other(world, capsys):
+    node, repo, manifest = world["node"], world["repo"], world["manifest"]
+    manifest.write_text(manifest.read_text().replace('[nodes.n]\n', '[nodes.n]\nstaged = "created when the quota lands"\n', 1))
+    seen = []
+    run = lambda name, argv, stdin: seen.append(name) or local(name, argv, stdin)
+    assert deploy.main(["drift", "--json", "--no-fetch"], run=run, manifest=manifest, repo=repo) == 0
+    out = capsys.readouterr()
+    assert json.loads(out.out) == {} and not seen and "n is staged (created when the quota lands)" in out.err
+    assert deploy.main(["drift", "--on", "n", "--json", "--no-fetch"], run=run, manifest=manifest, repo=repo) == 1
+    assert json.loads(capsys.readouterr().out)["n"]["entries"] and seen
+    assert deploy.main(["install", "n", "--by", "lane-x", "--no-fetch"], run=local, manifest=manifest, repo=repo) == 0
+    assert "would install" in capsys.readouterr().out and not (node / "bin" / "a.py").exists()
+
+
 def test_an_entry_whose_source_the_ref_lacks_is_absent_and_a_ref_deploys_its_own_manifest(world):
     node, repo, manifest = world["node"], world["repo"], world["manifest"]
     _git(repo, "checkout", "-q", "fix")
@@ -357,7 +444,7 @@ def test_an_entry_whose_source_the_ref_lacks_is_absent_and_a_ref_deploys_its_own
     assert (node / "bin" / "d.py").read_text() == "d1\n"
 
     assert deploy.manifest_at("origin/main", repo) is None
-    rel = deploy.MANIFEST.relative_to(deploy.REPO)
+    rel = deploy.MANIFEST.relative_to(deploy.SRC)
     _commit(repo, {str(rel): "[nodes.m]\nrecord = '/r'\n"}, "a manifest")
     assert set(deploy.load(text=deploy.manifest_at("HEAD", repo))) == {"m"}
 
@@ -369,7 +456,7 @@ def test_the_manifest_loads_and_every_source_is_a_file_of_the_repository():
         assert node.record.startswith("/") and node.managed
         for e in node.entries:
             if e.src:
-                assert (deploy.REPO / e.src).is_dir() if e.tree else (deploy.REPO / e.src).is_file(), e.src
+                assert (deploy.SRC / e.src).is_dir() if e.tree else (deploy.SRC / e.src).is_file(), e.src
             assert e.path.startswith("/") and all(r.split(":", 1)[0] in ("systemd", "user-systemd") for r in e.run)
 
 
@@ -392,7 +479,7 @@ def test_every_switched_unit_is_one_deploy_installs_on_its_node():
                 assert f"/etc/systemd/system/{LO.unit_file(u)}" in paths, (node, u)
     srcs = {e.src for n in nodes.values() for e in n.entries if e.src}
     files = [p for p in lockout.rglob("*") if p.is_file() and "__pycache__" not in p.parts and p.name != "README.md"]
-    assert files and not [p for p in files if p.relative_to(deploy.REPO).as_posix() not in srcs], "deploy.toml installs every file"
+    assert files and not [p for p in files if p.relative_to(deploy.SRC).as_posix() not in srcs], "deploy.toml installs every file"
 
 
 def test_the_manifest_runs_nothing_in_tmux_and_each_entry_has_an_owner_handle():
@@ -400,7 +487,7 @@ def test_the_manifest_runs_nothing_in_tmux_and_each_entry_has_an_owner_handle():
     m = tomllib.loads(deploy.MANIFEST.read_text())
     entries = m["file"] + m["tree"]
     assert not [(e["path"], r) for e in entries for r in e.get("run", []) if not r.startswith(("systemd:", "user-systemd:"))]
-    registry = json.loads((deploy.REPO / ".agents/skills/using-slack/registry.json").read_text())
+    registry = json.loads((deploy.SRC / ".agents/skills/using-slack/registry.json").read_text())
     handles = {h["handle"] for h in registry["handles"]}
     assert not [(e["path"], e.get("owner")) for e in entries if e.get("owner") not in handles]
 
@@ -416,16 +503,16 @@ def _keys(path: Path) -> list[str]:
 def test_each_unit_is_installed_with_the_environment_files_and_scripts_it_names_on_its_nodes():
     nodes = deploy.load()
     srcs = {e.src for n in nodes.values() for e in n.entries if e.src}
-    files = sorted(p.relative_to(deploy.REPO).as_posix() for d in ("units", "env") for p in (PODS / d).iterdir())
+    files = sorted(p.relative_to(deploy.SRC).as_posix() for d in ("units", "env") for p in (PODS / d).iterdir())
     assert files and not [f for f in files if f not in srcs]
     seen = 0
     for node in nodes.values():
         paths = {e.path for e in node.entries if not e.tree}
         trees = [e.path.rstrip("/") + "/" for e in node.entries if e.tree]
         for e in node.entries:
-            if not (e.src or "").startswith(f"{PODS.relative_to(deploy.REPO).as_posix()}/units/"):
+            if not (e.src or "").startswith(f"{PODS.relative_to(deploy.SRC).as_posix()}/units/"):
                 continue
-            text, base = (deploy.REPO / e.src).read_text(), Path(e.path).name
+            text, base = (deploy.SRC / e.src).read_text(), Path(e.path).name
             assert "Restart=on-failure" in text and (base in ROOT_UNITS or "User=research" in text or
                                                      e.path.startswith(deploy.USER_UNITS)), e.path
             units = [deploy.unit_name(r) for r in e.run]
@@ -614,5 +701,5 @@ def test_deploy_puts_the_sandbox_its_setup_and_the_daily_units_on_node_1_only_an
         assert n1[path].src == src and n1[path].run == [], path
         assert any(fnmatch.fnmatch(path, m) for m in nodes["vy-nebius-1"].managed), path
     assert not set(LEAN_CACHE) & {e.path for e in nodes["vy-nebius-2"].entries}
-    for src in (deploy.REPO / _N / "lean_build_setup.sh", deploy.REPO / _N / "lean_sandbox.py", deploy.REPO / "tools/verity/lean/run_daily.py"):
+    for src in (deploy.SRC / _N / "lean_build_setup.sh", deploy.SRC / _N / "lean_sandbox.py", deploy.SRC / "tools/verity/lean/run_daily.py"):
         assert os.access(src, os.X_OK), src                                         # installed with the repository's mode

@@ -35,7 +35,7 @@ theorem verify_ok_tables {spec : SessionSpec} {tabs : Array Setup} {record : Str
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ (hs : i < schs.size) (c : ByteArray), Flock.fast100 tabs[i].m = some schs[i] ∧
         verifyRep spec tabs[i] schs[i] sess i 0 proofs[2 * i]! = .ok c ∧
         verifyRep spec tabs[i] schs[i] sess i 1 proofs[2 * i + 1]! = .ok c := by
-  unfold Flock.verify at h
+  unfold Flock.verify Flock.verifyFiles at h
   dsimp only at h
   by_cases c0 : (tabs.size != spec.tables.size || tabs.size == 0) = true
   · rw [ite_eq_left c0] at h; obtain ⟨_, h0, _⟩ := ebind_ok h; cases h0

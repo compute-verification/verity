@@ -1,6 +1,6 @@
 """Whole cores of its own for a queued CPU run on a shared node (`research run --queue`), on the machine, ahead of the run's allocation.
 
-`research cpu-hold --cpus N --from LIST --wrap K --who NAME [--ack FIFO] -- CMD...` takes at least N CPUs of LIST in whole cores
+`research cpu-hold --cpus N --from LIST --wrap K --who NAME [--rank R] [--ack FIFO] -- CMD...` takes at least N CPUs of LIST in whole cores
 (every SMT sibling of a core, CPU_ROOT's topology) that no live claim holds, records them as the claim CLAIMS/NAME.cpus, and
 execs CMD with LIST replaced by them in its first K arguments (the queue's wrapper: its scope's AllowedCPUs=, its cpuset check
 and its taskset), so the run's pid is unchanged. Node 2's queued Verity runs all ran on all of 48-95, 34 of them at load 1000
@@ -12,8 +12,10 @@ taker removes it. Claims are taken under CLAIMS/.lock. Node 2's fill runner clai
 (fill_runner.py), so a fill job and a queued run never share one.
 
 While the cores aren't free it waits in a line, reading the claims again every POLL_S: each waiter holds a locked ticket
-CLAIMS/wait.<ns>.<NAME>, and only the oldest live one may take cores, so a run asking for many isn't passed for ever by smaller
-ones (and the fill runner starts no pool job while one waits). With `--ack FIFO` (the launch's, remote.LAUNCH_ACK) a wait
+CLAIMS/wait.<ns>.<NAME> (`ticket_name`), and only the first live one may take cores, so a run asking for many isn't passed for
+ever by smaller ones (and the fill runner starts no pool job while one waits). The line is by class, then oldest first: `--rank R`
+is the class's priority less the default class's (the queue's placement, `cores.rank`), so drive's gates aren't behind every lane
+job queued before them (INF-147). With `--ack FIFO` (the launch's, remote.LAUNCH_ACK) a wait
 acknowledges the launch as it starts, as disk-hold's does. A run asking for more cores than LIST has exits 2 at once.
 """
 from __future__ import annotations
@@ -133,29 +135,40 @@ def take(n: int, share: set[int], who: str, d: Path, root: Path) -> tuple[set[in
         return got, locked(d / f"{who}.cpus", f"{fmt(got)}\n")
 
 
-def hold(n: int, share: set[int], who: str, *, d: Path = CLAIMS, root: Path = CPU_ROOT, poll_s: float = POLL_S,
+def ticket_name(rank: int, ns: int, who: str) -> str:
+    """The line's ticket: the line is these names in order, so a higher rank sorts first and the oldest of a rank goes first.  Rank 0
+    (the default class) keeps the unranked `wait.<ns>.<who>`, so a waiter whose cpu-hold predates ranks agrees with this one on
+    who is first: '!' sorts before its digits and '~' after them."""
+    if rank > 0:
+        return f"wait.!{9999 - min(rank, 9999):04d}.{ns:020d}.{who}"
+    if rank < 0:
+        return f"wait.~{min(-rank, 9999):04d}.{ns:020d}.{who}"
+    return f"wait.{ns:020d}.{who}"
+
+
+def hold(n: int, share: set[int], who: str, *, rank: int = 0, d: Path = CLAIMS, root: Path = CPU_ROOT, poll_s: float = POLL_S,
          sleep: Callable[[float], None] = time.sleep, clock_ns: Callable[[], int] = time.time_ns,
          log: Callable[[str], None] = lambda s: print(s, file=sys.stderr, flush=True),
          on_hold: Callable[[], None] = lambda: None) -> tuple[set[int], int]:
-    """Wait in the line until n CPUs of `share` are free in whole cores, and claim them (`take`).  `on_hold` runs once, when the
+    """Wait in the line until n CPUs of `share` are free in whole cores, and claim them (`take`): only when no live ticket sorts
+    ahead of its own (`ticket_name`, by `rank`, its class's priority above the default class's).  `on_hold` runs once, when the
     wait starts.  ValueError when `share` can never hold them."""
     if carve(share, n, root) is None:
         raise ValueError(f"{n} CPUs in whole cores don't fit in {fmt(share)}")
     d.mkdir(parents=True, exist_ok=True)
-    ticket, tfd, polls = None, None, 0
+    ticket, tfd, polls = d / ticket_name(rank, clock_ns(), who), None, 0
     try:
         while True:
-            line = live(d, "wait.*")
-            if (not line if ticket is None else line[0] == ticket) and (got := take(n, share, who, d, root)):
+            ahead = [t for t in live(d, "wait.*") if t.name < ticket.name]
+            if not ahead and (got := take(n, share, who, d, root)):
                 if polls:
                     log(f"research cpu-hold: took CPUs {fmt(got[0])} after {polls} poll(s)")
                 return got
-            if ticket is None:
-                ticket = d / f"wait.{clock_ns():020d}.{who}"
+            if tfd is None:
                 tfd = locked(ticket, f"{n}\n")
                 busy = claimed(d)
                 log(f"research cpu-hold: waiting for {n} CPUs in whole cores of {fmt(share)}: {len(busy)} claim(s) hold "
-                    f"{fmt(set().union(*busy.values()) & share) or 'none of them'}, {len(line)} waiter(s) ahead; polled every "
+                    f"{fmt(set().union(*busy.values()) & share) or 'none of them'}, {len(ahead)} waiter(s) ahead; polled every "
                     f"{poll_s:g} s")
                 on_hold()
             polls += 1
@@ -179,6 +192,8 @@ def main(argv: list[str], *, sleep: Callable[[float], None] = time.sleep,
     ap.add_argument("--from", dest="share", required=True, metavar="LIST", help="the CPUs to take them from, as the wrapper names them")
     ap.add_argument("--wrap", type=int, required=True, metavar="K", help="CMD's first K arguments are the wrapper that names LIST")
     ap.add_argument("--who", required=True, help="the claim's name (the run id)")
+    ap.add_argument("--rank", type=int, default=0, metavar="R", help="its class's priority less the default class's: the line "
+                    "takes higher ranks first, then the oldest (default 0)")
     ap.add_argument("--ack", default=None, metavar="FIFO", help="the launch's acknowledgement FIFO, told when a wait starts")
     ap.add_argument("cmd", nargs=argparse.REMAINDER)
     ns = ap.parse_args(argv)
@@ -195,8 +210,8 @@ def main(argv: list[str], *, sleep: Callable[[float], None] = time.sleep,
 
     d = Path(os.environ.get("RESEARCH_CPU_CLAIMS_DIR", CLAIMS))
     try:
-        got, fd = hold(max(ns.cpus, 1), parse(ns.share), ns.who, d=d, root=Path(os.environ.get("RESEARCH_CPU_ROOT", CPU_ROOT)),
-                       sleep=sleep, on_hold=on_hold)
+        got, fd = hold(max(ns.cpus, 1), parse(ns.share), ns.who, rank=ns.rank,
+                       d=d, root=Path(os.environ.get("RESEARCH_CPU_ROOT", CPU_ROOT)), sleep=sleep, on_hold=on_hold)
     except ValueError as e:
         print(f"research cpu-hold: {e}", file=sys.stderr)
         return 2
@@ -207,4 +222,4 @@ def main(argv: list[str], *, sleep: Callable[[float], None] = time.sleep,
     return 127
 
 
-__all__ = ["CLAIMS", "carve", "claimed", "hold", "main", "pinned", "take"]
+__all__ = ["CLAIMS", "carve", "claimed", "hold", "main", "pinned", "take", "ticket_name"]

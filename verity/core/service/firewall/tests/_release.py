@@ -1,24 +1,19 @@
-"""What this suite's tests share: the paths, the references the Lean is compared with (Rust's `flock_live::release` through
-`tests/rust`, Python's `verity_flock.firewall`, and `flock-firewall contract` for the send check's verdict), and the
-strategies that draw records, ops and outer sessions.
+"""What this suite's tests share: the paths, the references the Lean is compared with (Python's `verity_flock.firewall`,
+the cases frozen from Rust's `flock_live::release` before the Lean replaced it, in `fixtures/`, and `flock-firewall
+contract` for the send check's verdict), and the strategies that draw records, ops and outer sessions.
 
 Every record drawn is one the firewall wrote (Python's, from a drawn history of ops), or one torn by a crash (its last line
 cut short), with blank lines in it or without its final newline. Strings are any Unicode but lone surrogates, integers are
-below 2^40, and a schedule is any JSON but floats: outside that domain Python and Rust already differ from each other (a
-budget that isn't an integer, statements that aren't strings, integers past u64, lines that are JSON but not the firewall's,
+below 2^40, and a schedule is any JSON but floats: outside that domain Python and Rust differed from each other (a budget
+that isn't an integer, statements that aren't strings, integers past u64, lines that are JSON but not the firewall's,
 `\\r\\n`), and the Lean reads only the firewall's own lines (`test_the_lean_reads_only_the_firewalls_lines`).
 """
 
 from __future__ import annotations
 
-import fcntl
 import functools
-import hashlib
 import importlib.util
 import json
-import os
-import re
-import subprocess
 import tempfile
 from pathlib import Path
 
@@ -33,52 +28,8 @@ ROOT = PKG.parents[3]
 FLOCK = ROOT / "verity" / "ml" / "flock"
 LEAN_FLOCK = ROOT / "verity" / "core" / "service" / "flock"
 VECTORS = FLOCK / "live" / "src" / "firewall_record_vectors.json"
-RELEASE_RS = FLOCK / "live" / "src" / "release.rs"
-CRATE = HERE / "rust"
+FIXTURES = HERE / "fixtures"
 REFUSED = "FIREWALL-REFUSED: "
-
-
-def _default(name: str) -> str:
-    """The default `check_build.sh` gives `name` (`name=${VAR:-default}`), with `$HOME` expanded."""
-    m = re.search(rf"^{name}=\$\{{[A-Z_]+:-([^}}]+)\}}$", (FLOCK / "check_build.sh").read_text(), re.M)
-    assert m, f"check_build.sh sets no default for {name}"
-    return m.group(1).replace("$HOME", str(Path.home()))
-
-
-def rust_reference() -> Path:
-    """`tests/rust` built at the toolchain `check_build.sh` pins, in a target directory outside the tree named by its
-    sources' digest (so two checkouts on one machine never run each other's build): the `release-reference` binary. A
-    missing toolchain is installed through rustup under `check_build.sh`'s lock, so the two never install it at once."""
-    toolchain = os.environ.get("RUST_TOOLCHAIN") or _default("RUST_TOOLCHAIN")
-    env = {**os.environ, "PATH": f"{Path.home() / '.cargo' / 'bin'}{os.pathsep}{os.environ.get('PATH', '')}",
-           "RUSTUP_TOOLCHAIN": toolchain, "RUSTUP_AUTO_INSTALL": "0"}
-    listed = subprocess.run(["rustup", "toolchain", "list"], env=env, capture_output=True, text=True, check=True).stdout
-    if not any(line.startswith(f"{toolchain}-") for line in listed.splitlines()):
-        lock = Path((os.environ.get("FLOCK_CHECKOUT") or _default("F")) + ".lock")
-        lock.parent.mkdir(parents=True, exist_ok=True)
-        with open(lock, "a") as f:
-            fcntl.flock(f, fcntl.LOCK_EX)
-            subprocess.run(["rustup", "toolchain", "install", toolchain, "--profile", "minimal"], env=env, check=True,
-                           capture_output=True)
-    sources = [CRATE / "Cargo.toml", CRATE / "Cargo.lock", CRATE / "src" / "main.rs", RELEASE_RS]
-    digest = hashlib.sha256(b"".join(hashlib.sha256(p.read_bytes()).digest() for p in sources)).hexdigest()[:16]
-    target = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "verity" / "core-firewall-rust" / digest
-    p = subprocess.run(["cargo", "build", "--release", "--locked", "--quiet"], cwd=CRATE, env={**env, "CARGO_TARGET_DIR": str(target)},
-                       capture_output=True, text=True)
-    if p.returncode != 0:
-        raise RuntimeError(f"cargo build of {CRATE} failed ({p.returncode}):\n{p.stdout}{p.stderr}")
-    return target / "release" / "release-reference"
-
-
-def through(server: D.Server, fn: str):
-    """A reference that asks `server` (a `Difftest.serve`-framed process: the Rust reference) for `fn`."""
-    def reference(value):
-        kind, text = server.call(fn, value)
-        if kind == "reject":
-            raise D.Reject(text)
-        return json.loads(text)
-
-    return reference
 
 
 def _op(fw: FW.Firewall, op: list):
@@ -122,6 +73,16 @@ def record_of(ops: list[list]) -> str:
             _op(fw, op)
         log = Path(d) / "record.jsonl"
         return log.read_bytes().decode() if log.exists() else ""
+
+
+
+E2E = [("r0000", "L0"), ("r0001", "L0"), ("r0000", "L0"), ("r0000", "L1"), ("r0003", "L0"), ("r0002", "L0")]
+
+
+def e2e_record() -> list[str]:
+    """The end-to-end run's record (`fixtures/release-e2e.jsonl`), one line an event: Python's opens and finishes, then
+    its six outer sessions (`E2E`), as Rust's release side wrote them."""
+    return (FIXTURES / "release-e2e.jsonl").read_text().splitlines(keepends=True)
 
 
 @functools.cache

@@ -58,7 +58,7 @@ from typing import Any, Iterable, Mapping, Sequence
 from verity.ml.circuits import partition_object as PO
 from verity_vllm.query.units import Policy, RequiredValues, ValueRef, partition_by, required_values
 from verity_vllm.query.manifest import format as fmt
-from verity_vllm.program.sampling_event import SAMPLING_EVENT_FAMILIES
+from verity_vllm.program.sampling_event import GREEDY_SELECTS, SAMPLING_EVENT_FAMILIES
 from verity_vllm.correspondence.reader_for_query import CallName, Correspondence
 from verity_vllm.query import word as word_query
 from verity_vllm.query.collective_names import NORM_SITE_MEMBER, collective_sites, norm_sites
@@ -93,7 +93,7 @@ def partition_of(program_digest: str) -> dict[str, Any]:
 #: the sampling event that ends an engine step for one request (verity_vllm.program.sampling_event + the explicit-argmax selector)
 SAMPLING_EVENTS = frozenset(SAMPLING_EVENT_FAMILIES) | {"ArgmaxTokenSelect_v1"}
 #: the sampling events that consume a registered runtime input (seed / splits) beside the logits
-STOCHASTIC_SAMPLING_EVENTS = frozenset(SAMPLING_EVENT_FAMILIES) - {"TokenSelect_v1"}
+STOCHASTIC_SAMPLING_EVENTS = frozenset(SAMPLING_EVENT_FAMILIES) - set(GREEDY_SELECTS)
 #: Definitions implemented by ONE FlashAttention launch per (layer, step) whose M1 stream the protocol requires; their binding record
 #: carries the launch geometry (T, NH, KVH, D)
 FLASH_ATTENTION_LAUNCHES = frozenset({"Attention_v1", "Attention_v2", "Attention_v3", "Attention_v4", "Attention_v5", "Attention_v10", "Attention_v11",
@@ -234,7 +234,7 @@ class Population:
 
     `query` is the query of record (`Q_WORD_ID`: the boundary is every Call's) or `Q_MODULE_BODY_ID` (A/B only: module bodies).  Under
     Q_word a Value two Calls of one module body exchange is required too (`interior`, family `call_boundaries`; a fused-MoE block row's
-    Values are committed as its `moe_block_stream` plane, `format.moe_plane_kind`), spelt under
+    Values are committed as its `moe_block_stream` plane, `format.moe_plane_kind` under `format.moe_plane_modules`), spelt under
     `<module>/<fx node>` with its structural member: serving acquires module outputs, so such a Value needs a source of its own.  TENSOR-RETURN reads the module-body boundary under
     either query: it is what a module returns."""
 
@@ -326,7 +326,9 @@ class Population:
         inside = [v for v in B.values if v.call >= 0 and v not in B_module.values and v not in self.policy.protocol_required]
         # a MoE block row's Value inside its body is committed as the row's `moe_block_stream` plane: no member (a member of the body's
         # `out` would be a second producer beside the block's own output, or beside its AllReduce's on a rank Program)
-        self.plane_fed = frozenset(v for v in inside if fmt.moe_plane_kind(P.call(v.call).family, corr.module_of(v.call)) is not None)
+        planes = fmt.moe_plane_modules((c.family, corr.module_of(c.id)) for c in P.calls)
+        self.plane_fed = frozenset(v for v in inside if (m := corr.module_of(v.call)) in planes
+                                   and fmt.moe_plane_kind(P.call(v.call).family, m) is not None)
         self.interior = frozenset(inside) - self.plane_fed
         # (required_values() would recompute the boundary; the policy is validated the same way here)
         known_inputs = frozenset(P.inputs)

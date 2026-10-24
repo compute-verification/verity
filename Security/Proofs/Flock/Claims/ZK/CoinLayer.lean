@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.ZK.Reference
 import Flock.Hm96
 import Flock.Canon
+import Flock.Firewall.SessionPlan
 
 /-!
 # The deployed coin layer of `flock-circuit --zk`
@@ -21,7 +22,8 @@ masked prover's transport runs it (`verity/ml/flock/live/src/coin_tree.rs`, `Che
   `points · m_pts` coins; coin `j + 1` is round `j` of the rep streams' rounds in `spec.repStreams` order, each stream's
   in order (`FlockDeploy.V`'s rounds), its stream's index in the tree's leaf order, `nr x (j + 1)` coins. The leaf index
   is `stream · 2^roundsLog + round`, the path `roundsLog + log₂(streams)` nodes, and a round past the schedule, a count
-  past the block or a stream outside it fails.
+  past the block or a stream outside it fails. A tree whose streams are not the session's (`session`, then the rep
+  streams, distinct, two a table: `Flock.Firewall.Session.streamsOk`), which the transport refuses, places no coin.
 * **An opening** (`parseD`): `Resp::Coins` of `n + 16 + 4·depth` words, the coins, `T_n`, the salt and the path, read at
   the round's place; it passes where the walk reaches the answer's root (`treeChk`).
 * **The coin handed on** (`coinOfD`): the opening's words, which the reference prover reads as coins (`coinOf`, the first
@@ -158,15 +160,22 @@ def locate : List ℕ → ℕ → ℕ → ℕ × ℕ
 
 /-- **Coin `j`'s place in the committed schedule** at statement `x`: the session's spec, the coin tree's, the stream's
 index in the tree's leaf order and the round. Coin `0` is the `session` stream's round `0`; coin `j + 1` is rep round
-`j`, the rep streams' rounds in `spec.repStreams` order (`FlockDeploy.V`'s rounds). -/
-def slot (x : Msg) (j : ℕ) : Option (Flock.SessionSpec × Flock.CoinTree.Spec × ℕ × ℕ) := do
-  let (_, spec, sts) ← FlockDeploy.setupOf true x
-  let ct ← spec.coinTree
-  if j = 0 then return (spec, ct, 0, 0)
-  let rs := (List.range spec.repStreams.size).map fun k => FlockDeploy.repRounds true spec sts[k / 2]!
-  let (k, r) := locate rs 0 (j - 1)
-  let name := (spec.repStreams[k]?.map (·.2.2)).getD ""
-  return (spec, ct, ct.streams.toList.idxOf name, r)
+`j`, the rep streams' rounds in `spec.repStreams` order (`FlockDeploy.V`'s rounds). None where the tree's streams are not
+the session's (`Flock.Firewall.Session.streamsOk`). -/
+def slot (x : Msg) (j : ℕ) : Option (Flock.SessionSpec × Flock.CoinTree.Spec × ℕ × ℕ) :=
+  match FlockDeploy.setupOf true x with
+  | none => none
+  | some (_, spec, sts) =>
+    match spec.coinTree with
+    | none => none
+    | some ct =>
+      if _root_.Flock.Firewall.Session.streamsOk spec sts ct then
+        if j = 0 then some (spec, ct, 0, 0)
+        else
+          let rs := (List.range spec.repStreams.size).map fun k => FlockDeploy.repRounds true spec sts[k / 2]!
+          some (spec, ct, ct.streams.toList.idxOf (_root_.Flock.Firewall.Session.repName spec (locate rs 0 (j - 1)).1),
+            (locate rs 0 (j - 1)).2)
+      else none
 
 /-- What the check reads of a round's place: whether the place is in the schedule, its position bytes
 `u32be(stream) ‖ u32be(round)`, its leaf index, its coin count and its path's length. -/
@@ -320,7 +329,7 @@ noncomputable def zkDeployed (rel : _root_.Flock.Readable.Parsed → _root_.Floc
 /-- **Flock's zero knowledge against a malicious verifier at the deployed masked record**: `Claims.Flock.ZK` at
 `zkDeployed`, at every rep rounds' coin counts `nr`, at `ε_zk = 8·n_L·δ₁ + 8t·n_L·δ₁ + 2·3^{-t}` with `n_L` the session's
 pre-final leaves, under `Claims.Hm96Hiding` at the pinned key, the tables' five Props (`Tables`, `Complete`, `DummyReg`,
-`Causal`, `TapeOK`) and `HonestMsgs`: `refP`'s messages are `ZkTables.honestP`'s. -/
+`Causal`, `TapeOK`) and `HonestMsgs`: `refP`'s messages are `ZkTables.honestPR`'s. -/
 theorem Flock.zk_deployZk_ref (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nr : Msg → ℕ → ℕ) (T : TableData) (t : ℕ) (ht : 0 < t) {δ₁ : ENNReal}
     (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (hS : (session nr T).Tables)

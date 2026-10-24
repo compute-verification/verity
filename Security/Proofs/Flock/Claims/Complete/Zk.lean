@@ -36,6 +36,8 @@ import Proofs.Flock.Claims.Complete.Zk.LaneAgree
 import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
 import Proofs.Flock.Claims.Complete.Zk.InnerMerkle
 import Proofs.Flock.Claims.Complete.Zk.InnerGo
+import Proofs.Flock.Claims.Complete.Zk.Exact
+import Proofs.Flock.Claims.Complete.Zk.Stops
 import Proofs.Flock.Claims.Complete.Zk.ConsZerocheck
 import Proofs.Flock.Claims.Complete.Zk.ConsLincheck
 import Proofs.Flock.Claims.Complete.Zk.ConsRingSwitch
@@ -61,7 +63,7 @@ import Proofs.Flock.Claims.Complete.Zk.Level0Verifier
 import Proofs.Flock.Claims.Complete.Zk.Level0Complete
 
 /-! Flock's completeness at the deployed masked (`--zk`) verifier at one table (`ZkTables` lifts it to any number, at
-the masked record's prover `ZkTables.honestP`): the honest masked prover (`Honest`: `honestPZk`, on
+the masked record's prover `ZkTables.honestPR`): the honest masked prover (`Honest`: `honestPZk`, on
 the masked tape `TapeZk` and pads `padsOf` of `Tape`, the masked zerocheck and lincheck of `Piop`, level 0's masked
 Ligerito of `Ligerito`, the pads' commitment and inner proof of `Inner`, the session of `Session`), its run against
 `V true` (`Run`: `run_acc_of_zk`), that run as a pure session (`Sim`: `honestRunZk_eq`), `δcZk H` with the composition
@@ -100,7 +102,9 @@ sacrifice coin, so the batched constraint `innerP` checks holds at every coin on
 climbing from its leaf to the root (`innerCommitP_tree`, `inner_column_opens`); `InnerGo` the masked prover's inner
 proof in closed form at the replies' coins, where the batched constraint holds on the pads and `β ≠ 0` (`innerP_go`),
 and the verifier's inner check passing on it, on rounds carrying its sends, at a rep's pads whose constraints vanish
-(`verifyInnerWith_of`); `ConsZerocheck`, `ConsLincheck` and `ConsRingSwitch` the replay's message-dependent rows
+(`verifyInnerWith_of`); `Exact` a masked rep that returns sending exactly its rounds, its pair coins independent, its
+`β ≠ 0` and its rank check passed (`repPZk_exact`), and `Stops` a masked rep that stops, stopping right after the send
+whose reply it refused (`repPZk_stop`, `repPZk_rho_stop`, `repPZk_beta_stop`); `ConsZerocheck`, `ConsLincheck` and `ConsRingSwitch` the replay's message-dependent rows
 vanishing at the pads, from the plain algebra moved by the masks (`zcZ_masks`, `lcZ_masks`), and `ConsReplay` the five
 together on `Zk.replay`'s output wherever the plain checks pass at its coins (`replay_rows_zero`), and `ConsCoins`
 those coins the prover's on rounds carrying its sends, with the rows as `ConsHold` (`replay_coins`,

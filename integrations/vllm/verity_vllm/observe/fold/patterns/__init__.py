@@ -16,7 +16,7 @@ importing the package does not load those registries.
 
 from __future__ import annotations
 
-from verity_vllm.observe.fold.patterns.activations import SiluAndMul
+from verity_vllm.observe.fold.patterns.activations import SiluAndMul, SiluAndMulWithClamp
 from verity_vllm.observe.fold.patterns.attention import FA2_OP_NAMES, AttentionScope
 from verity_vllm.observe.fold.patterns.embedding import Embedding
 from verity_vllm.observe.fold.patterns.gemm import BiasAdd, GemmLaunch, fuse_bias_adds
@@ -29,13 +29,19 @@ from verity_vllm.observe.fold.patterns.resolutions import (ComputeGroup, Transpa
 from verity_vllm.observe.fold.patterns.rotary import RotaryEmbedding, _positions_ok
 from verity_vllm.observe.fold.patterns.sampling import (SCRATCH_TOKEN_SELECT, LogitsGather, TokenSelectArgmax, TokenSelectGumbelTopP,
                                                         TokenSelectGumbelTwoStage)
-from verity_vllm.observe.fold.patterns.target import GEMM_TARGET_SCRATCH_KEY, X01_SCRATCH_KEY, gemm_target_of, target_of
-from verity_vllm.observe.fold.patterns.transparent import (ALIAS_OPS, TransparentAten, TransparentTritonMetadata, classify_transparent,
-                                                           find_descendants, scope_transparents, widened_source)
+from verity_vllm.observe.fold.patterns.target import GEMM_TARGET_SCRATCH_KEY, X01_SCRATCH_KEY, gemm_target_of, target_of, vocab_kind
+from verity_vllm.observe.fold.patterns.transparent import (ALIAS_OPS, SCRATCH_INT_FILLS, TransparentAten, TransparentTritonMetadata,
+                                                           classify_transparent, find_descendants, scope_transparents, widened_source)
 from verity_vllm.observe.fold.resolver import PerRow, Shared
 
 
 def dsa_patterns() -> list:
     """Load GLM-5.3's DSA patterns without making the shared package import them."""
     from verity_vllm.observe.fold.patterns.dsa import dsa_patterns as build
+    return build()
+
+
+def dsv4_patterns() -> list:
+    """Load DeepSeek-V4's patterns without making the shared package import them."""
+    from verity_vllm.observe.fold.patterns.dsv4 import dsv4_patterns as build
     return build()

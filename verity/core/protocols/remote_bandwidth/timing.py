@@ -74,16 +74,44 @@ READ_BYTES_PER_S = GPUS * GPU_READ_BYTES_PER_S + HOST_READ_BYTES_PER_S
 measured rate.  A store in HBM alone reads at `GPUS · GPU_READ_BYTES_PER_S` and leaves host DRAM's share idle."""
 SPEC_BYTES_PER_S = GPUS * GPU_SPEC_BYTES_PER_S + HOST_SPEC_BYTES_PER_S
 """R specified, the headline (Daniel, 13 Oct): every tier at its datasheet rate."""
+GPU_WRITE_BYTES_PER_S = GPU_SPEC_BYTES_PER_S
+"""One RTX PRO 6000's write ceiling, the fastest a fill can write labels into its memory: the datasheet's 1,597 GB/s,
+the bus's own rate (512 bits at the 12,481 MHz memory clock it ran at), 4.4% above every write measured on it.  Labels
+derived on the device were written at 1,528.98 GB/s by TMA bulk stores and 1,526.48 by 16-byte evict-first stores, a
+constant at 1,521.88 by the driver's memset, and labels streamed in over its PCIe 5.0 x16 at 56.39 GB/s by the copy
+engines and 51.40 by zero copy (r20261020-211937-b9c0, `benchmarks/bandwidth/write.cu`).  A ceiling must bound every
+prover, and a measured rate bounds only the kernels tried, so the sheet's rate stands (MEM-45).  A fill of codec labels
+derived from a seed is bounded lower, by the labeller: the node's `SQUARINGS_PER_S[width]` over the codec's
+`encode_squarings` a block (`audit.Rebuild`), about 1.05 GB/s a GPU under `codec.DEFAULT`."""
+HOST_WRITE_BYTES_PER_S = HOST_SPEC_BYTES_PER_S
+"""The host DRAM's write ceiling: its specified 819.2 GB/s, 16 channels of DDR5-6400, above every write measured on it.
+16 cores of one socket, all a guest got on a loaded node, wrote labels at 207.69 GB/s by non-temporal AVX-512 stores,
+88.16 by `rep stosb` and 82.35 by cached stores (r20261020-212232-6ba5, `benchmarks/bandwidth/write_host.c`); a GPU
+streams labels in at 57.25 GB/s over its link (D2H, r20261020-211937-b9c0), and 8 links at PCIe 5.0 x16's 63 GB/s are
+below the DRAM's rate.  The sheet's rate stands for `GPU_WRITE_BYTES_PER_S`'s reason, and so does its bound on derived
+labels.  No DPU write ceiling is stated: no BlueField-3 fill rate is measured (network-accounting, 19 Oct: Amodo's note
+gives its coverage, not a rate), and the datacenter model reads an unset rate as infinite, timing a DPU's wipe by its
+links."""
 GPU_CHIP_BYTES = 263_163_904
 """One RTX PRO 6000's on-chip storage at most: 188 SMs' registers, L1 and shared memory, L1.5, instruction caches,
 uniform registers and warp state, its L2, TLB and 1 MiB of buffers (ra-pcie-exhaust #1852, `chip.cu`, runs
 art:2b6cac05 to art:90de6479)."""
-HOST_CHIP_BYTES = 940_435_456
-"""The host's on-chip storage, its two Xeon 6776P sockets' caches: an estimate (M1-v2's `sm120_schip`,
-note:20261015T0553Z-draft-gpu-model-m1-v2)."""
+HOST_CHIP_BYTES = 1_000_341_504
+"""The host's on-chip storage at most, bounded for the whole host, two Xeon 6776P sockets of 64 cores each, whatever
+share of them its VM gets (vy-nebius-2's guest sees 2 × 48): each socket's 336 MiB of L3 and 2 MiB of uncore queues, and
+each core's 2 MiB of L2, 48 KiB of L1d, 64 KiB of L1i and 64 KiB of registers and buffers. The cache sizes are the
+guest's CPUID topology on that host type (r20261020-212232-6ba5's lscpu), and the 128 cores the host's
+(`benchmarks/rate_squaring/gamma.py`). The 64 KiB a core and 2 MiB a socket are allowances, not an enumeration: two
+threads' architectural state with AMX tiles (about 11 KiB each), the physical register files and the load, store and
+fill buffers; and the memory controllers', UPI's and PCIe's queues (red team, note:20261024T0330Z-report-redteam-night
+(f)4)."""
 CHIP_BYTES = GPUS * GPU_CHIP_BYTES + HOST_CHIP_BYTES
 """S_chip, the node's: every GPU's on-chip storage and the host's caches (the red team's R6 F1,
 note:20261015T0705Z-draft-bandwidth-core-redteam)."""
+LINK_WINDOW_BYTES = 6_291_456
+"""One link window, what the node's boundary link can land in its memory at once beyond the link's rate: its TCP
+receive buffer at most, `net.ipv4.tcp_rmem`'s max on vy-nebius-2 (eth0's ring, 1,024 descriptors at a 1,500-byte MTU,
+holds less; r20261019-004759-4580)."""
 GPU_SQUARINGS_PER_S = {"p1024": 1.67 * 1.499e10, "p512": 1.567 * 5.13e10}
 """Assumption 5 stated per width, one RTX PRO 6000's share of the node: s·(1 + h) over the reference, s the best form
 on the GPU less its MOV and SEL and h the host's 128 cores at their IFMA bound over 8 reference GPUs
@@ -234,15 +262,19 @@ def sketch_reading(rows: int = SKETCH_ROWS) -> tuple[int, Fraction]:
     return min(((r, sketch_rate(rows, r)) for r in range(1, min(rows, SECTOR_BYTES) + 1)), key=lambda x: x[1])
 
 
-def sketch_failure(compressions: int, passes: int, rows: int = SKETCH_ROWS, r: int | None = None) -> Fraction:
+def sketch_failure(compressions: int, passes: int, rows: int = SKETCH_ROWS, r: int | None = None,
+                   blocks: int = 0) -> Fraction:
     """A session's chance that some sketch-sha512 receipt is right without its block's sectors, read at rank r (r* by
-    default), against a prover of `compressions` SHA-512 compressions over a session of `passes` passes.  Every key the
-    prover sees is a seed it computed or one of the session's, so it sees at most `compressions + passes`, ground or
-    not, and every guess is a compression: `C · 2^-8r + (C + P) · SECTORS · sign_rank_at_most(rows, r − 1)`."""
+    default), against a prover of `compressions` SHA-512 compressions over a session of `passes` passes of `blocks`
+    blocks.  Every key the prover sees is a seed it computed or one of the session's, so it sees at most
+    `compressions + passes`, ground or not, and every guess is a compression:
+    `C · 2^-8r + (C + P) · (SECTORS · sign_rank_at_most(rows, r − 1) + N · 2^-512)`, the last term a key's 512-bit
+    receipt of a block right without its hash.  At 16 rows and r = 12 it is the δ at which
+    `Accounting.Guarantees.Remote.SketchBoundDeployed` derives `SketchBound`."""
     if r is None:
         r = sketch_reading(rows)[0]
     return (compressions * Fraction(1, 2 ** (8 * r))
-            + (compressions + passes) * SECTORS * sign_rank_at_most(rows, r - 1))
+            + (compressions + passes) * (SECTORS * sign_rank_at_most(rows, r - 1) + Fraction(blocks, 2 ** 512)))
 
 
 def grind_compressions(leaves: int) -> int:

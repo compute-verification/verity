@@ -1,14 +1,18 @@
 """Each attention layer's KV slots as an acquisition source: per layer and step, the slot every token row's KV went to,
 `<layer name>/slot_mapping` (int64 [rows], slot = page * block_size + offset), in the same step stream and run root as the
-run's other values.  Opt-in (commit `--memory-map`), never the record: the memory map (`pipeline.memory_map`) takes each
-block's page from them and assumes none.
+run's other values.  Opt-in (commit and tp-commit `--memory-map`, a TP rank's own layers), never the record: the memory map
+(`pipeline.memory_map`) takes each block's page from them and assumes none.
 
-The layers are the modules the engine bound a KV cache to (`layer_name`, `kv_cache`).  A forward pre-hook on each reads its
+The layers are the modules the engine bound a KV cache to (`layer_name`, `kv_cache`): attention's and MLA's.  DSA's indexer
+cache (`DeepseekV32IndexerCache`, named by `prefix`, no `layer_name`) is none of them: its 132-byte rows pack across 4 KiB
+blocks, and memory accounting has it uncredited until the map packs them.  A forward pre-hook on each layer reads its
 layer's entry of the forward context's `slot_mapping`, the one its cache write reads (FlashAttention's `do_kv_cache_update`,
 MLA's, and the sparse MLA layer's `fused_norm_rope`, which writes the indexer cache at the same slots), and commits a copy,
 one per distinct tensor of the step.  `caches` keeps each layer's cache tensor: its shape and strides are the page layout
 the map's blocks follow, and its bytes what the map's digests are checked against.  `own_names` are the names it commits: no
 module's output, so no module the identity check counts and no value the Match record holds (`oracle_compare`'s ``own``).
+A layer it can't read slots for is its own error (`errors`), never the committer's, which the Commit's verdict reads
+(`runtime_match/collector_errors`): the map refuses that request by name (no committed slots) and the Commit stands.
 """
 from __future__ import annotations
 
@@ -43,6 +47,7 @@ class KvSlotsSource:
         self._handles: list[Any] = []
         self._copies: dict[int, Any] = {}
         self.stats: dict[str, Any] = {"layers": len(self.layers), "tensors": 0, "bytes": 0, "errors": 0}
+        self.errors: list[str] = []
         self.active = False
 
     def install(self) -> None:
@@ -65,7 +70,9 @@ class KvSlotsSource:
 
     def error(self, msg: str) -> None:
         self.stats["errors"] += 1
-        self.c.errors.append(msg[:300])
+        if len(self.errors) < 8:
+            self.errors.append(msg[:300])
+            print(f"[delta] {msg[:300]}", flush=True)
 
     def _pre(self, name: str) -> Any:
         me = self
@@ -74,15 +81,19 @@ class KvSlotsSource:
             job = me.c._cur
             if job is None:
                 return
-            sm = me._context().slot_mapping
-            s = sm.get(name) if isinstance(sm, dict) else None
-            if s is None:
-                me.error(f"kv slots: {name} ran in step {job.step} with no slot mapping in the forward context ({type(sm).__name__})")
-                return
             t0 = time.perf_counter()
-            v = me._copies.get(id(s))
-            if v is None:
-                v = me._copies[id(s)] = s.to(me.torch.int64, copy=True)
+            try:
+                sm = me._context().slot_mapping
+                s = sm.get(name) if isinstance(sm, dict) else None
+                if s is None:
+                    me.error(f"kv slots: {name} ran in step {job.step} with no slot mapping in the forward context ({type(sm).__name__})")
+                    return
+                v = me._copies.get(id(s))
+                if v is None:
+                    v = me._copies[id(s)] = s.to(me.torch.int64, copy=True)
+            except Exception as e:  # the source's own read, before the committer counts an acquisition (X-03)
+                me.error(f"kv slots: {name} in step {job.step}: {e!r}")
+                return
             me.c._acquire(f"{name}/{MEMBER}", v, job)
             me.stats["tensors"] += 1
             me.stats["bytes"] += int(v.numel()) * 8
@@ -106,4 +117,9 @@ def attach(com: Any, model: Any = None) -> KvSlotsSource:
     return src
 
 
-__all__ = ["MEMBER", "KvSlotsSource", "kv_layers", "attach"]
+def caches_of(com: Any) -> dict[str, Any] | None:
+    """The KV caches of the KV-slots source attached to committer ``com``; None without one."""
+    return next((s.caches for s in getattr(com, "sources", ()) if getattr(s, "short_name", "") == KvSlotsSource.short_name), None)
+
+
+__all__ = ["MEMBER", "KvSlotsSource", "kv_layers", "attach", "caches_of"]

@@ -24,7 +24,9 @@ Top-level directories (a grouping, not an import name, except `verity/`):
     - `claims`: the ids of security claims.
     - The Lean in `primitives`, `devices`, `service` and `protocols`. `difftest` (`verity_difftest`, with its Lake
       package `verity_difftest`) holds the Python that mirrors each one to the Lean.
-    - `service/flock/`: C-Flock's executable verifier of record (no dependencies).
+    - `service/flock/`: C-Flock's executable verifier of record (no dependencies), and the ZK server's Lean
+      (`Flock.Firewall`, the `flock-firewall` binary). `service/firewall/` (`core_firewall`) is the ZK server's release
+      side and record.
   - `verity/ml/` (`verity.ml`): Python and CUDA: the provers, and Python that mirrors the Lean for the prover's speed.
     Until each protocol's verifier of record is Lean, these units are on the soundness path, because its Python verifier
     reads them: `ml.circuits`, `ml.circuits.ops`, `ml.circuits.silicon`, `ml.kernels`, `ml.commitments`,
@@ -53,7 +55,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
   - `benchmarks/tc_probe/`, `benchmarks/tc_probe_fp4/`, `benchmarks/native_peak/`: GPU probes.
   - `benchmarks/numerical/`: the table tooling of the archived proof systems.
 - `tools/`:
-  - `verity/`: the `verity` command (`cli/`) and the tools it runs: `check/` (the one check a merge requires),
+  - `verity/`: the `verity` command (`cli/`) and the tools it runs: `check/` (the one check, run on `main` after each landing),
     `circuit_check/` (the property checks every circuit passes) and `lean/` (the Lean check, `check.py`).
   - `research`: the run recorder and the run-store client: runs, the evidence store, Slack, pods and deploys. It imports
     nothing from Verity.
@@ -89,20 +91,21 @@ Dependencies point inward, and `tests/test_boundaries.py` enforces them:
   Definitions and silicon semantics (`ml.circuits.ops`, `silicon`).
 - Nothing outside `infra/` imports `infra/`, apart from the files `INFRA_IMPORTERS` names.
 
-`verity` is the repository's one command (`tools/verity/cli/`): `verity check` runs every part of the check a merge
-requires, `verity check tests|lean|circuits` runs only those parts, and `verity bench NAME` runs `benchmarks/<NAME>/`'s runner.
+`verity` is the repository's one command (`tools/verity/cli/`): `verity check` runs every part of the
+check, `verity check tests|lean|circuits` runs only those parts, and `verity bench NAME` runs `benchmarks/<NAME>/`'s runner.
 `verity --help` lists the rest.
 
 ~~~text
 uv sync --all-packages --extra torch-cpu  # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
 research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py'  # suites whose inputs changed; --quick: no slow tests
-research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check'  # the merge check; --record: an Attempt
+research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check'  # the whole check; --record: an Attempt
 research status RUN  # check back on a run (`research run` returns once it starts); --wait: only a run under 20 min
 ~~~
 
 ## Design rules
 
-Daniel's, current. `.agents/skills/friction/SKILL.md` has the dated rulings behind most of them.
+Daniel's, current. Their dates and history are in his decisions log in Notion; `.agents/skills/friction/SKILL.md` has
+the standing rulings stated nowhere else.
 
 - **Circuits and values.** A circuit holds only gates. Everything a program or a request brings, every intermediate and
   every output, is a value. A value is committed under a hiding leaf and touched only inside a zero-knowledge proof.
@@ -113,7 +116,9 @@ Daniel's, current. `.agents/skills/friction/SKILL.md` has the dated rulings behi
   - the verifier's coins and draws;
   - hiding commitments.
 
-  Partitions are private, and their properties are public. A proof unit's outputs are at most 16 bits, a literal limit.
+  Partitions are private, and their properties are public. A proof unit's outputs fit its size class, a public power of
+  two from 16 to 262,144 bits and a property of its Definition, and its output bits count in leakage (Daniel, 19 Oct,
+  provisional; `UNIT_CLASS_MAX` set to 16 restores the 16-bit limit).
 - **One proof service.** PoUW, PoUS and network accounting all use one proof service: the workers behind the firewall,
   the challenger, and the verifier.
   - A protocol states what is committed, which units need proofs, the public Program each must pass, and what it does
@@ -134,12 +139,16 @@ Daniel's, current. `.agents/skills/friction/SKILL.md` has the dated rulings behi
   - the remote bandwidth audit's pass seeds inside a window, derived from the window's live challenge and the previous
     pass's root (Daniel, 12 Oct);
   - PoUW's per-matmul noise seeds, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)), from the
-    epoch's live salt and the operands' committed roots, which a drawn unit's proof derives along with its own noise.
+    window's live salt (`pouw.salt`, one per PoUW window from the certifier's draw, #2637) and the operands' committed
+    roots, which a drawn unit's proof derives along with its own noise.
     Grinding is a term of the guarantee: a steer that needs m noised coordinates succeeds with probability at most
     μ^m a try (Daniel, 18 Oct).
 
   There are no retries: a failed proof is a visible failure, and a retry never redraws. Outer proofs go through the
-  firewall one at a time.
+  firewall as independent sessions: each staged statement is fixed before any session draws coins and gets exactly one
+  session; each session draws its own live coins in its own firewall pass; no statement reads another session's
+  transcript or coins; every session is recorded and every verdict counts (Daniel's provisional batch, 24 Oct;
+  https://app.notion.com/p/403399515d9e81298f49e4b6b78634e7).
 - **Verifier cost: O(circuit description), never O(unrolled circuit)** (Daniel, 18 Oct). A verifier of record may do
   work proportional to the descriptor it reads (its Definitions, nodes and references), never to the circuit it unrolls
   to: no walk over every gate, batch member or scan iteration. Summarize once per specialized Definition and multiply
@@ -175,10 +184,15 @@ out-of-memory kill takes all of them down. Locally, run only git (`git merge-tre
 messaging and the notes, one named test file or `-k` selection of under about a minute and 1 GB, `lake env lean` on one
 file in an already-built tree, a Lean package with no Mathlib or ArkLib, and the lock fast path. Everything else runs
 remotely through `research run --on auto --cwd source [--wait] -- CMD` (the shipped tree needs its own `uv sync`), on the cluster queue as an `agent-test` job (4 CPUs, 16 GiB,
-60 min unless `--cpus`, `--mem-gb` or `--timeout` say otherwise), outside the check slots: every suite (`suites.py`),
+60 min unless `--cpus`, `--mem-gb` or `--timeout` say otherwise), outside the check slots, or in vy-nebius-cpu-1's `research`
+pool when it starts sooner there (`research/auto.py`): every suite (`suites.py`),
 `verity check` and `check.py`, circuit-check (24 GB a process), any build of `Security` or `Security/Proofs`, cargo, nvcc, every e2e run
 and every GPU job (the writing-runs skill). The shell hook refuses those commands locally and names the remote one;
 `AGENT_GUARD_LOCAL_OK=1` in the command is the explicit opt-in.
+
+No tool call blocks more than 20 minutes (Daniel, 19 Oct): `research run --wait`, `ask-daniel --wait` and `queue ready --on`
+stop there, cancel nothing, exit 79 naming the command to check back with (`research status RUN`), and you end your turn;
+the shell hook refuses a longer `sleep`.
 
 No test depends on wall-clock time: no sleeps, clock readings or timeouts. Wait on the event itself or inject the clock.
 `tests/test_no_wall_clock.py` enforces it, and its `ALLOWED` list, one reason per entry, holds the exceptions.
@@ -203,52 +217,59 @@ multi-core CPU pod. It covers:
 - C-Flock's Rust build and tests;
 - the Lean verifier's build and its partition check;
 - the Lean check;
-- `merge_requires` (declared per job in `tools/verity/check/ci.toml`): the steps a change's paths demand, such as `lean-agreement`, the cross-check
-  against upstream's Rust verifier, for C-Flock (`verity/ml/flock/`, and its Lean verifier in `verity/core/service/flock/`;
-  `check.py --record` sends what it needs).
+- `lean-agreement`, the cross-check against upstream's Rust verifier, when a change touches C-Flock (`verity/ml/flock/`, or
+  its Lean verifier in `verity/core/service/flock/`; `merge_requires` in `tools/verity/check/ci.toml`): drive's after-landing
+  run sends the upstream build then.
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
 unchanged. `--record` runs `check` through `research run` as an Attempt of the checked-out clean commit.
 
-Landing, as Daniel set it (7 Oct; the CI page in Notion): `main` always passes the whole `check`, and the check is to stay
-fast by reusing a part's verdict whenever its inputs haven't changed. Each verdict is to be keyed on a hash of the part's
-declared inputs (the read guard enforces them), the base image and the code that decides that verdict (a suite's runner and
-harness, not every line of the check tool; Daniel, 9 Oct), so that a docs-only change reruns nothing, a deleted test reruns
-its suite, and a layout move or a change to the runner reruns everything. The merge
-queue runs the check on the queued group, and a nightly uncached check must agree; a disagreement means some part reads
-something it doesn't declare, and it is fixed in the check, not by reverting anyone's change.
+Landing (Daniel, 24 Oct 06:05Z): PRs land on an eyeball review, and the full check runs after landing. A part's verdict is
+reused only while a hash of its declared inputs (the read guard enforces them), the base image and the code that decides it (a
+suite's runner and harness, not every line of the check tool; Daniel, 9 Oct) is unchanged, so a docs-only change reruns
+nothing, a deleted test reruns its suite, and a layout move or a change to the runner reruns everything. A nightly uncached
+check must agree; a disagreement means some part reads something it doesn't declare, and it is fixed in the check, not by
+reverting anyone's change.
 
 Check time is to come down by a lot, and anyone may do whatever it takes (Daniel, 11 Oct): a change to how `check` runs
-lands on its own passing check without its file owner's review, and the owner is told. infra owns check time as an
-outcome. Spend past a budget line, and moving a part out of what `main`'s passing check covers, go to Daniel. Hand
-landing is automated, and ci owns that: from a ready mark to `main` moving, no agent acts unless the automation
-refuses, and the lander handles what it refuses.
+lands without its file owner's review, and the owner is told. infra owns check time as an outcome, and spend past a budget
+line goes to Daniel. Landing is automated, and ci owns that: from a ready mark and a review to `main` moving, no agent acts
+unless the automation refuses, and the lander handles what it refuses.
 
-Daniel moved one class of part out (11 Oct, 8:53 PM PDT): a part whose cold run takes more than about 10 minutes may run
-right after its train lands, on every landing that changed its inputs, and a failure there reverts the landing at once.
-A reused verdict stays in the gate, and the Lean check always runs before landing. Citations and tables read only commits
-whose trailing parts passed. Deferred steps run in one post-landing run on `main`'s tip at a time. A failure there reverts
-the one PR it implicates, else every landing since the last verified tip; one that no landing since touches reverts nothing
-and goes to ci.
-
-PRs land through ci's `research queue drive` (#1826), live since 12 Oct 06:00Z:
+PRs land through ci's `research queue drive`, with `land = "review"` in `tools/verity/check/drive.toml`:
 
 - Drive admits a PR once its owner marks it ready at its head: `research queue ready N --mark --by LANE`, or
-  `research data label pr:N@SHA ready true --by LANE`. It needs no quick-tier pass, and a new head needs a new mark. The
-  owner is the lane a `Lane NAME` line in the PR's body names, else the Cursor agent id the body carries. Marks written
-  before `marked_after` in `tools/verity/check/queue.toml` don't count, and a `hold` label keeps a PR out.
-  `research queue status` says what each PR waits for.
-- No change waits on a per-head grant: not red-team's, the vLLM coordinator's or a statement reviewer's (Daniel, 8 Oct).
-- Drive stacks admitted PRs on `next`, checks them in trains and lands the newest train whose check passed. What it
-  refuses (a conflict, a failed check) goes to the lander, who ejects the PR that caused it; its owner is told, and
-  marks its fixed head ready.
-- A new head doesn't cancel a running train (top, 17 Oct): a train being checked runs on at the head its owner marked, and
-  lands that head if it passes; the new head rejoins `next` above once that train ends. Only when the PR's own train has
-  failed does the new head rebuild at once, since then the push is the fix.
-- A landing that breaks `main` is reverted at once (`git revert -m 1`), and its owner relands with the fix.
+  `research data label pr:N@SHA ready true --by LANE`. A new head needs a new mark. The owner is the lane a `Lane NAME` line
+  in the PR's body names, else the Cursor agent id the body carries. Marks written before `marked_after` in
+  `tools/verity/check/queue.toml` don't count, and a `hold` label keeps a PR out. `research queue status` says what each PR
+  waits for.
+- Drive stacks admitted PRs on `next`, one merge commit each. Reviewers, agents ci staffs and never the PR's owner, read
+  `next` bottom up: `research queue review` lists the members above `main` with no land verdict at their head (number, head,
+  owner, files, whether it waits for a Lean check), and `research queue review N --land [--ref NOTE] --by LANE` or
+  `--hold REASON --by LANE` records one, a `reviewed` label on `pr:N@HEAD`. A verdict by the owner, its handle or its
+  ready mark's author doesn't count, and a new head needs a new one. No change waits on any other per-head grant: not
+  red-team's, the vLLM coordinator's or a statement reviewer's (Daniel, 8 Oct).
+- Each tick, drive fast-forwards `main` to the top of the longest prefix of `next` whose every member has a land verdict and
+  no hold. Before it lands, in minutes: the merge onto `next` is clean, and every `.py` file the landing leaves compiles
+  (drive ejects the PR that broke one). A PR that changes Lean (a `.lean` file of a package with a `lean-audit.json` lock, or
+  the lock) waits for its Lean check: a `lean-audit` that passed on a commit of `next` at or above it, which drive launches on
+  the reviewed prefix's top (`train.sh TOP MACHINES --deferred lean-audit`), and after a failure there on the PR's own commit;
+  only a failure at its own commit goes to its owner. Any recorded run whose `lean-audit` passed there counts too. The top
+  stops below a PR that came onto `next` in the last three ticks; a rebuilt `next` with the same PRs at the same heads keeps
+  the check, and an eject from its prefix rebuilds `next` only once it ends. A PR containing an unmarked PR of the same owner,
+  or one its owner withdrew, carries that change and doesn't wait for it.
+- After each landing one run checks `main`'s tip with every check step (`train.sh MAIN MACHINES --deferred JOBS
+  --no-regenerate`, with `--no-cache` while `after_landing_no_cache = true`), and nothing lands before one such run of `main`
+  itself has ended, its baseline (or ci records `main` green on the control pod: `/data/infra/drive.sh queue baseline SHA
+  --by ci`). A failure of a step that passed on the last verified `main` reverts the one PR it implicates (`git revert -m
+  1`), bisecting among several, and its owner relands with the fix; anything else reverts nothing and goes to ci. Citations
+  and tables read only commits whose after-landing run passed.
 - A pure move that `tools/verity/check/move_check.py BASE HEAD` (`verity check move BASE HEAD`) certifies lands alone, ahead
-  of the queue, since drive doesn't order it: the lander lands it with `research merge` on its own passing check, and
-  drive's next sync rebuilds `next` on it.
+  of the queue: the lander lands it with `research merge --push` on its own passing check, from the control pod
+  (`/data/infra/drive.sh merge ...`), and drive's next sync rebuilds `next` on it. Only drive's App pushes `main` and `next`
+  (GitHub's rulesets, 23 Oct): `research` refuses those pushes off the pod, and an eject run elsewhere only withdraws the mark,
+  for drive's next tick to rebuild `next`.
+- `land = "check"`, drive's default, lands trains on their own check instead (`research.drive`'s docstring).
 
 ## Lean
 
@@ -258,10 +279,21 @@ PRs land through ci's `research queue drive` (#1826), live since 12 Oct 06:00Z:
   and outputs are to use one canonical format, proved in general, so a new workload needs no verifier or proof change.
 - **Lean is either code or security analysis.**
   - Code stays with its component and never requires `Security/`: C-Flock's executable verifier
-    (`verity/core/service/flock/`, no dependencies), the PoUS grader (`verity/core/protocols/pous/lean/`) and
+    (`verity/core/service/flock/`, no dependencies), the ZK server (`Flock.Firewall` in that package, run as
+    `flock-firewall`, and its release side `core_firewall`, `verity/core/service/firewall/`, with its difftest), the
+    PoUS grader (`verity/core/protocols/pous/lean/`) and
     the certifier program (`verity/core/protocols/certifier/lean/`, `NetworkCertifier`, with its
     difftest), the NCI check (`verity/core/protocols/network/nci/lean/`, `NciCheck`, with its difftest) and the remote
     bandwidth audit's verifier (`verity/core/protocols/remote_bandwidth/lean/`, `RemoteAudit`, with its difftest).
+  - The ZK server is Lean, and its Rust path is dropped: under `FC_FIREWALL=1` every round that leaves, level 0's
+    commitment, the opening, the inner proof and each rep's proof file are computed by `Flock.Firewall` (the session
+    loop, each rep's frame, `Level0`, the finish), and a recursive session's release (`--firewall-state`) by
+    `core_firewall`. `flock-circuit` (Rust) still
+    computes the prover workers' values (the host witness, the device's rounds, which the frame passes or fails against
+    the Lean's) and the algebraic phase's scheduled rounds. Its own checks can only refuse more, and it relays the
+    rounds, coins and proof files (live `PROTOCOL.md` §10.4). The ZK theorem (`Flock.zk_server_lean_loop`) reads the
+    released bytes only through named hypotheses not yet proved about the live path (`LiveRoundEq`, `FillRoundEq`,
+    `FinishIs`, `LinkRoundEq`, `ProgReads`), so the ZK server is not yet proved.
   - The analysis is `Security/`. Its spec is `Definitions/` (each component's vocabulary) and `Models/` (its named
     assumptions and guarantee statements), the package `security` (Mathlib, no ArkLib). `Proofs/` is the nested package
     `security_proofs` (ArkLib allowed): every proof and lemma, with `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for
@@ -275,6 +307,11 @@ PRs land through ci's `research queue drive` (#1826), live since 12 Oct 06:00Z:
     in a trusted module (a definition's proof field) may; the Lean check replays it like any proof. C-Flock has no
     `Definitions/` area yet: its guarantees are `Models/Flock/Guarantees`, and the rest of its analysis is in `Proofs/Flock`
     until its spec is extracted.
+  - `Security/` is three trees (Daniel, 24 Oct): definitions (what Daniel reads: vocabulary, named assumptions,
+    guarantee statements), properties (statements about the code, reading only the definitions and that code) and
+    proofs (every proof, lemma and proof-only definition). The Lean check refuses a guarantee or property whose
+    statement reads a definition of the proofs tree, and a module of the definitions or properties tree that imports
+    one (`trees` in `Security/lean-audit.json` names the trees; its `except`, one reason each, is the cleanup's to-do).
   - All packages share one toolchain and one Mathlib revision (`tests/test_lean_packages.py`). Bump them together, in a
     PR of their own.
 - **The Lean check.** Every Lake package has a lock, `lean-audit.json`, and `check` runs the Lean check on every declaration
@@ -313,11 +350,13 @@ keys, and what a guarantee says or rests on, go to Daniel through your coordinat
 still bound themselves under a `budgets.toml` line, and a budget line named in a standing ruling stands. A change that
 crosses owners goes to the other owner, and the coordinator settles a disagreement. When a tool, rule or step gets in
 your way, fix it at the source if the fix is clearly yours. Record each ruling you get. The friction skill,
-`.agents/skills/friction/SKILL.md`, has the rulings so far and the friction notes.
+`.agents/skills/friction/SKILL.md`, has the standing rulings this file doesn't state and the friction note format.
 
 A guard never fails open, and an agent VM can be suspended at any moment, so nothing that bounds spend or preserves
 results may depend on one. Pods bound themselves (`research pods create --max-hours`, under a line of the notes repo's
-`budgets.toml`), and runs preserve their results from the pod.
+`budgets.toml`), and runs preserve their results from the pod. The lane whose budget line pays for a machine owns its
+use, and stops it when its work there ends; `research run --on` starts it again, and infra's idle stop is only a backstop
+(Daniel, 19 Oct).
 
 Never print a secret's value.
 
@@ -351,6 +390,9 @@ Never print a secret's value.
   - `research notes sync --path lanes/<lane>` publishes notes from any VM with `RESEARCH_NOTES_TOKEN` set.
   - A Cursor agent store is its agent's scratch: nothing another agent or a person needs lives only there, and nothing
     cites a `store:` path.
+- **Writing for a person** (an explanation, a one-pager, an answer in someone's chat) is a Notion page, or cites only
+  what they can open: PRs, repository files, run ids and Notion pages. The notes repo is private, so a `note:` id is for
+  agents (Daniel, 19 Oct).
 - **Evidence and generated output** (explore JSON, plots, gate outputs, logs, run results, rendered tables and reports)
   go in the evidence store only, never Git: neither this repo nor the notes.
   - `research run` publishes every run, completed or failed, as an Attempt with its outputs. The contract is
@@ -418,8 +460,8 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
   (`research notes claim`).
 - **Work toward outcomes.** A lane's night is one or two outcomes, each with a done-condition anyone can check, which its
   lead proposed and Daniel approved.
-- **Push your branch after every commit** (never `main`, never `--force`). A push to a PR in a train being checked waits
-  for that train to end (Checking and merging). Only drive and the lander move `main`.
+- **Push your branch after every commit** (never `main`, never `--force`). A push gives a PR a new head, which needs a new
+  ready mark and a new review (Checking and merging). Only drive and the lander move `main`.
 - **Work in a checkout no other agent uses:** your own VM, or your own `git worktree add` (with its own venv) on a shared
   VM, removed when your task ends. Never check out or switch a branch in a tree another agent uses, and push only to
   branches you created or were handed.
@@ -430,10 +472,10 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
   and never resumes a local worker a third time.
 - **Landing is drive's.** The worker that made a branch opens its PR (`research queue open --head BRANCH --sha SHA
   --title T --body-file F --by LANE`, from any VM, with `Lane LANE` in the body), marks it ready and goes back to
-  research; you hear back only if it fails. Before marking, run the Lean check of the packages you touched and
-  `uv run tools/verity/check/suites.py --changed origin/main --quick`, and a suite's slow tier only when you changed that
-  suite's core: drive's train check runs the rest, bisects a failed train and lands its passing prefix, so a full
-  pre-mark run only duplicates it and holds a slot. Prefer small PRs, which bisection lands soonest.
+  research. A reviewer ci staffs writes its verdict, a PR that changes Lean waits for its Lean check, and the full check
+  runs after landing and reverts a PR that breaks `main`; you hear back only if yours is held, ejected or reverted. Before
+  marking, run the Lean check of the packages you touched and `uv run tools/verity/check/suites.py --changed origin/main
+  --quick`, and a suite's slow tier when you changed that suite's core. Prefer small PRs, which review lands soonest.
 - **Slack is for handle holders** (coordinators and service agents) and named humans only, at computeverification.slack.com.
   A worker asks its own coordinator. The coordination API is `research msg`: the using-slack skill,
   `.agents/skills/using-slack/SKILL.md`. Work for another lead goes in as a Linear issue into its team (Where writing
@@ -448,10 +490,11 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
 - GPU kernel work (PoUW kernels on sm_120): `.agents/skills/kernel-engineering/SKILL.md`.
 - When something gets in your way, and the rulings: `.agents/skills/friction/SKILL.md`.
 - When Daniel or a lead asks for a smell check, before you call something served, end to end, proved or credited, and when
-  you relay another lane's claim: `.agents/skills/smell-check/SKILL.md`, with the catalogue of smells found so far.
+  you relay another lane's claim: `.agents/skills/smell-check/SKILL.md`. The catalogue of smells found so far is the
+  notes' `kb/smell-catalogue.md`.
 - Asking Daniel for a decision (a page in the Asks for Daniel Notion database, and its `#ask-daniel` card):
   `.agents/skills/asking-daniel/SKILL.md`.
 - Before adding, changing or retiring a process (a rule here or in the lane contract, a gate in `check` or
   `research merge`, a required review, a file every PR must update), assess its effect on research velocity:
   `.agents/skills/process-design/SKILL.md`.
-- Creating or modifying a skill: `.agents/skills/authoring-skills/SKILL.md`.
+- Creating or modifying a skill (at most 16 KB: current rules, not their history): `.agents/skills/authoring-skills/SKILL.md`.

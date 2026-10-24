@@ -58,7 +58,7 @@ from dataclasses import dataclass
 from verity_vllm.check.match import prefix_reads as PX
 from verity_vllm.check.match import program_compare as C
 from verity_vllm.check.match import supplied_inputs as SI
-from verity_vllm.check.match.input_layout import weights_input_nodes  # noqa: F401  (re-exported: attribution, resolve_decomp, tests)
+from verity_vllm.check.match.input_layout import request_inputs, weights_input_nodes  # noqa: F401  (re-exported: attribution, resolve_decomp, tests)
 from verity_vllm.check.program_ops import Ops
 from verity_vllm.config import option
 from verity_vllm.program import prefix_plan as PP
@@ -192,6 +192,11 @@ class Projection(PX.CachedKv, C.Prog):
         self.peer_fields = {peer_node: oracle.peer_fields[peer_node]} if peer_node is not None and peer_node in getattr(oracle, "peer_fields", {}) else {}
         self._all_peer_nodes = set(getattr(oracle, "peer_fields", {}))
         self.peer_index = getattr(oracle, "peer_index", {})
+        # the request's OWN witness parameters canonicalise as ("WIT", name, ..) (the rank Program's witness input of that name); another
+        # request's is xreq.  Each is request i's for its header index i = this prompt's node, as a `run_<i>` below.
+        w_index = getattr(oracle, "witness_index", {})
+        self.witness_fields = {k: nm for k, nm in getattr(oracle, "witness_fields", {}).items() if w_index.get(k) == tok_node}
+        self._all_witness_nodes = set(getattr(oracle, "witness_fields", {}))
         # the registered `values` are shared like the weights; a `run_<i>` is request i's (the header index = this prompt's node)
         owner = getattr(oracle, "supplied_owner", {})
         self.supplied_fields = {k: f for k, f in getattr(oracle, "supplied_fields", {}).items() if owner.get(k) in (None, tok_node)}
@@ -239,8 +244,10 @@ class Projection(PX.CachedKv, C.Prog):
                     return ("SPLITS", lo, hi)
                 if idx == self.peer_node:
                     return self._peer_src(idx, lo, hi)     # [R17 D90] the request's own received-collective peer input
+                if idx in self.witness_fields:
+                    return ("WIT", self.witness_fields[idx], lo, hi)
                 if idx not in self.weights_nodes:
-                    kind = "seed" if idx in getattr(self, "_all_seed_nodes", ()) else ("peers" if idx in self._all_peer_nodes else "prompt")
+                    kind = self._foreign_kind(idx)
                     self._xreq(f"{kind}-param", idx, lo, hi)
                     return (XREQ, kind, idx, lo, hi)
             elif idx not in self.k2i:
@@ -272,8 +279,10 @@ class Projection(PX.CachedKv, C.Prog):
                         return [("SPLITS", (lo0, hi0), (dL, dH), c)]
                     if idx0 == self.peer_node:
                         return self._peer_srcP(p, unfold)     # [R17 D90] the request's own received-collective peer input
+                    if idx0 in self.witness_fields:
+                        return [("WIT", self.witness_fields[idx0], (lo0, hi0), (dL, dH), c)]
                     if idx0 not in self.weights_nodes:
-                        kind = "seed" if idx0 in getattr(self, "_all_seed_nodes", ()) else ("peers" if idx0 in self._all_peer_nodes else "prompt")
+                        kind = self._foreign_kind(idx0)
                         self._xreq(f"{kind}-param", (idx0, lo0, hi0), (0, dL, dH), c)
                         return [(XREQ, kind, (idx0, lo0, hi0), (0, dL, dH), c)]
                 elif idx0 not in self.k2i:
@@ -289,6 +298,14 @@ class Projection(PX.CachedKv, C.Prog):
                 return super()._srcP(p, unfold)
             return self._per_run(p, unfold)
         return super()._srcP(p, unfold)
+
+    def _foreign_kind(self, idx: int) -> str:
+        """Which parameter of another request Input node `idx` is: its seed, peers or witness, else its prompt."""
+        if idx in getattr(self, "_all_seed_nodes", ()):
+            return "seed"
+        if idx in self._all_peer_nodes:
+            return "peers"
+        return "witness" if idx in self._all_witness_nodes else "prompt"
 
     @property
     def _max_input(self) -> int:
@@ -551,26 +568,12 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     n_in = B.n_input_nodes
     _attr_phase = _Phase(run_prof, "attribution") if profiling else _NoPhase()
     _attr_phase.__enter__()
-    # [R15 stoch] a stochastic fold declares one `seed_<i>` parameter per seeded request between the prompts and the weights (fold._header)
-    # (`Input64_v1` nodes in request order: the i-th seed node is the i-th request's -- every request of a stochastic row is seeded,
-    # derive_step.sampler_geometry refuses otherwise)
-    seed_node_of: dict[str, int] = {}
-    for k, i in sorted(getattr(B, "seed_index", {}).items()):
-        if i >= len(reqs):
-            raise ValueError(f"program has {len(B.seed_index)} seed input nodes but the header has {len(reqs)} requests")
-        seed_node_of[reqs[i]["request_id"]] = k
-    # [R17 D90] a tensor-parallel rank fold declares one `peers_<i>` parameter per request (program.json peers_layout -> load_oracle
-    # `peer_index`: node -> request index), request-owned like the prompt; a header/Program disagreement on the count is refused by name
-    peer_node_of: dict[str, int] = {}
-    for k, i in sorted(getattr(B, "peer_index", {}).items()):
-        if i >= len(reqs):
-            raise ValueError(f"program has a peers input node for request index {i} but the header has {len(reqs)} requests")
-        peer_node_of[reqs[i]["request_id"]] = k
-    if peer_node_of and len(peer_node_of) != len(reqs):
-        raise ValueError(f"program has {len(peer_node_of)} peers input nodes for {len(reqs)} requests (a TP rank fold declares one per request)")
-    # [R16 global, F-fp8-GM1 / M-0823] the shared weights are the Input nodes no request owns -- ONE node for a homogeneous bf16 Record,
-    # one per leaf field for a mixed-width one (FP8: 435) -- never `n_input_nodes - 1`; refused by name when the layout does not hold
-    weights_nodes = weights_input_nodes(B, len(reqs), len(seed_node_of), len(peer_node_of))
+    # the request-owned parameters after the prompts: [R15 stoch] a stochastic fold's `seed_<i>` per seeded request (every request of a
+    # stochastic row is seeded, derive_step.sampler_geometry refuses otherwise), [R17 D90] a TP rank fold's `peers_<i>` per request and a
+    # profile's witness parameters; [R16 global, F-fp8-GM1 / M-0823] the shared weights are the Input nodes no request owns -- ONE node for
+    # a homogeneous bf16 Record, one per leaf field for a mixed-width one (FP8: 435) -- never `n_input_nodes - 1`; refused by name when
+    # the layout does not hold
+    seed_node_of, peer_node_of, witness_owners, weights_nodes = request_inputs(B, reqs)
     meta_of = {o["node"] + n_in: o for o in B.oracle_rows}
 
     # attribution of every instance, in node order (producers precede consumers). Channels, in order:
@@ -587,8 +590,9 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     # A per-position Attention group (rows=|positions sharing T|) is the case only dataflow gets right on pre-X-09 folds.
     shared_idx: list[tuple[int, int]] = []   # (instance index, engine step) of every weight-only instance (owner SHARED, module level)
     owners_of_param: dict[int, set[str]] = collections.defaultdict(set)
-    # request-owned inputs: its prompt, seed, [R17 D90] peers (a collective instance reading request r's peers node is r's) and run values
-    for rid, k in [*param_of.items(), *seed_node_of.items(), *peer_node_of.items(), *SI.run_owners(B, reqs)]:
+    # request-owned inputs: its prompt, seed, [R17 D90] peers (a collective instance reading request r's peers node is r's), witnesses
+    # and run values
+    for rid, k in [*param_of.items(), *seed_node_of.items(), *peer_node_of.items(), *witness_owners, *SI.run_owners(B, reqs)]:
         owners_of_param[k].add(rid)
     shared_inputs = weights_nodes | SI.values_nodes(B)
     owner_of_node: dict[int, str] = {}

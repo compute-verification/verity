@@ -7,10 +7,10 @@ the circuit back.
     - the unit circuit's ANDs keep their operand forms as tuples, not frozensets, and drop them once the unit is laid out:
       nothing reads them after `ir_lower.layout`
     - the unit's netlist (`ir_lower.netlist`'s text) is written once, to a file under ``scratch``, hashed as it is written:
-      `compose` built it three times as one string, twice for `Lowering.sha256` (the expanded text, then the LEAVES and
-      CUT lines) and once expanded. `compose` gets in its place a string of as many newlines, and the circuit text it
-      returns stands for that text with the file in the newlines' place: its digests (`circuit.digest`,
-      `circuit.class_digest`) and circuit.txt are streamed from the parts, both digests in the pass that writes the file
+      `compose` builds it as one string, which `Lowering.sha256_of` hashes with the LEAVES and CUT lines. `compose` gets
+      in its place a string of as many newlines (and `sha256_of` the file's hash), and the circuit text it returns stands
+      for that text with the file in the newlines' place: its digests (`circuit.digest`, `circuit.class_digest`) and
+      circuit.txt are streamed from the parts, both digests in the pass that writes the file
     - any other text's SHA-512 / SHA-256 goes in pieces of 64 Mi characters, each computed once
     - the unit's layout (`ands_layout`) sorts each form's columns in one call, and `ir_lower.evaluate_layout` XORs a row's
       columns with `functools.reduce`: the same rows and values
@@ -167,6 +167,11 @@ def _lowering_sha256(self) -> str:
     return d
 
 
+def _lowering_sha256_of(self, expanded: str) -> str:
+    """`ir_lower.Lowering.sha256_of`, whose ``expanded`` is the newlines `compose` got in the unit netlist's place."""
+    return self.sha256
+
+
 def ands_layout(C, in_names, out_names, in_split=None, out_split=None):
     """`ir_lower.layout` of a circuit of inputs and ANDs only: the same rows, each form's columns sorted in one call (every
     form's bits are distinct and laid out, so the library's parity pass keeps them all) and the constant column, the last,
@@ -287,7 +292,8 @@ def install(scratch: Path) -> None:
             low, out_words = unit_lowering(*a, **k)
         finally:
             _in_unit.pop()
-        _unit_lays[id(low.layout)] = low.layout
+        if not hasattr(low, "template"):
+            _unit_lays[id(low.layout)] = low.layout
         return low, out_words
 
     def lower_(C, *a, **k):
@@ -315,7 +321,7 @@ def install(scratch: Path) -> None:
     def compose_(low, *a, **k):
         text = compose(low, *a, **k)
         e = _units.get((id(low.layout), low.name))
-        if e is not None:
+        if e is not None and text.startswith(f"{FC.FORMAT} "):
             j = text.index("\n", text.index("\n") + 1) + 1
             mark = f"CIRCUIT unit {e['newlines']}\n"
             at = j + len(mark)
@@ -344,7 +350,9 @@ def install(scratch: Path) -> None:
     CS.unit_lowering, IL.lower, IL.layout, FC._expanded, FC.compose = unit_lowering_, lower_, layout_, expanded_, compose_
     Path.write_text = write_text_
     IL.digest, FC.digest, FC.class_digest = sha256, digest, class_digest
-    IL.Lowering.sha256 = property(_lowering_sha256)
+    # a structural unit (`class_statement.TmplLowering`) has no netlist: its unit_sha256 stays the library's, over its template
+    CS.TmplLowering.sha256_of = IL.Lowering.sha256_of
+    IL.Lowering.sha256, IL.Lowering.sha256_of = property(_lowering_sha256), _lowering_sha256_of
     IL.evaluate_layout = evaluate_layout
 
 

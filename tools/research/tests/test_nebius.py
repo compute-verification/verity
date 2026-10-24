@@ -64,6 +64,23 @@ def test_register_host_writes_an_ssh_machine_that_run_on_resolves(reg):
                                  probe=reachable)[1] == "unchanged"
 
 
+def test_register_records_the_owning_lane_and_a_reregistration_keeps_it_and_the_deadline(reg):
+    """The lane whose budget line pays for a node stops it (lane contract v2.19 §3c), and fleet.py's daily report rings it: launch.sh
+    re-registers with --replace and no --lane, which must not hand the machine back to infra, nor drop the sampled deadline."""
+    p, _ = registry.register_ssh("vy-glm53-eu", HOST, "verity", user="research", lane="circuits", probe=reachable)
+    assert tomllib.loads(p.read_text())["lane"] == "circuits"
+    p.write_text(p.read_text() + 'deadline = "2026-10-23T21:00:00Z"\n')
+    assert registry.register_ssh("vy-glm53-eu", HOST, "verity", user="research", probe=reachable)[1] == "unchanged"
+    assert registry.register_ssh("vy-glm53-eu", HOST, "verity", user="research", rate=43.2, replace=True, probe=reachable)[1] == "updated"
+    doc = tomllib.loads(p.read_text())
+    assert (doc["lane"], doc["deadline"], doc["rate_usd_per_hour"]) == ("circuits", "2026-10-23T21:00:00Z", 43.2)
+    assert tomllib.loads(registry.register_ssh("vy-glm53-eu", HOST, "verity", user="research", rate=43.2, lane="kernels",
+                                               probe=reachable)[0].read_text())["lane"] == "kernels"
+    with pytest.raises(remote.Refused, match="lane '@circuits' is not a lane's handle"):
+        registry.register_ssh("vy-glm53-eu2", HOST, "verity", lane="@circuits", probe=reachable)
+    assert "lane" not in tomllib.loads(registry.register_ssh("vy-nebius-1", "198.51.100.9", "verity", probe=reachable)[0].read_text())
+
+
 def test_register_host_refuses_an_unreachable_host_and_a_silent_rebind(reg):
     with pytest.raises(remote.Refused, match="does not answer over ssh"):
         registry.register_ssh("vy-nebius-1", HOST, "verity", probe=lambda e: "ssh rc 255: Connection refused")
@@ -93,7 +110,8 @@ needs_flock = pytest.mark.skipif(shutil.which("flock") is None or shutil.which("
 def gpu_env(tmp_path: Path, count: int = 3) -> dict[str, str]:
     env = {k: v for k, v in os.environ.items() if k != "RESEARCH_RUN_DIR"}
     return {**env, "GPU_LEASE_DIR": str(tmp_path / "gl"), "GPU_LEASE_COUNT": str(count), "RESEARCH_RUN_ID": "r-test",
-            "GPU_LEASE_USAGE_LOG": str(tmp_path / "lease-usage.jsonl"), "GPU_LEASE_UTIL_LOG": str(tmp_path / "util-*.jsonl")}
+            "GPU_LEASE_USAGE_LOG": str(tmp_path / "lease-usage.jsonl"), "GPU_LEASE_UTIL_LOG": str(tmp_path / "util-*.jsonl"),
+            "GPU_LEASE_PREEMPT_GRACE_S": "0", "GPU_LEASE_PREEMPT_GRACE_MAX_S": "0"}
 
 
 @needs_flock
@@ -704,6 +722,34 @@ def test_a_waiter_stops_a_preemptible_lease_and_leaves_an_ordinary_one(tmp_path)
 
 
 @needs_flock
+def test_a_preemptible_lease_in_its_grace_is_not_stopped_until_the_grace_passes(tmp_path):
+    """INF-194: on node 2, 24 Oct 01:11-01:41Z, 23 benchmark points were stopped 4-35 min in, each losing its engine start. A lease
+    granted 5 min ago with a 10 min grace keeps its GPU; one granted 20 min ago (its grace passed) is stopped for the waiter."""
+    env = {**gpu_env(tmp_path, count=1), "GPU_LEASE_POLL_S": "0.1", "GPU_LEASE_PREEMPT_GRACE_S": "600"}
+    pause = [sys.executable, "-c", "import signal; print('ready', flush=True); signal.pause()"]
+    granted = 1792800000                                                  # 2026-10-24T00:00:00Z
+    for after, stopped in ((300, False), (1200, True)):
+        fill = subprocess.Popen(["bash", str(GPU_LEASE), "1", "--preemptible", "--mem-gb", "0", "--", *pause],
+                                env={**env, "GPU_LEASE_STARTED": "2026-10-24T00:00:00Z"}, stdout=subprocess.PIPE, text=True)
+        assert fill.stdout.readline().strip() == "ready"
+        waiter = subprocess.Popen(["bash", str(GPU_LEASE), "1", "--wait", "--mem-gb", "0", "--", "echo", "got"],
+                                  env={**env, "GPU_LEASE_NOW": str(granted + after)}, stdout=subprocess.PIPE, text=True)
+        try:
+            if stopped:
+                assert waiter.stdout.readline().strip() == "got" and fill.wait() != 0
+            else:
+                while not list((tmp_path / "gl").glob("wait.*")):     # queued: its first preemption pass is done
+                    assert waiter.poll() is None
+                assert fill.poll() is None and not (tmp_path / "gl" / "preempted.log").exists(), "in its grace: kept"
+        finally:
+            for p in (waiter, fill):
+                if p.poll() is None:
+                    p.terminate()
+                    p.wait()
+        (tmp_path / "gl" / "preempted.log").unlink(missing_ok=True)
+
+
+@needs_flock
 def test_a_preemptible_waiter_waits_for_a_preemptible_lease_instead_of_stopping_it(tmp_path):
     """Node 1, 2026-10-03: a queue of --preemptible trace chunks stopped its own newest lease every ~20 s, each new chunk the
     oldest waiter in turn."""
@@ -824,6 +870,33 @@ def test_dry_run_renders_the_cloud_init_and_vm_spec_without_credentials():
     assert s["resources"] == {"platform": "gpu-rtx6000-a", "preset": "8gpu-192vcpu-1744gb"}
     nic = s["network_interfaces"][0]
     assert nic["public_ip_address"] == {"static": True} and nic["security_groups"] and s["secondary_disks"][0]["device_id"] == "data"
+    assert "# data disk vy-nebius-1-data: attached as it is if it exists, else created (5022 GiB" in ud
+
+
+def test_a_vm_can_boot_on_another_ones_kept_data_disk():
+    """n1's replacement (INF-57) may boot on vy-nebius-1-data: launch.sh and teardown.sh look the data disk up by this name."""
+    r = launch("--dry-run", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy", NEBIUS_VM_NAME="vy-nebius-cpu-4", NEBIUS_PLATFORM_PREFIX="cpu-d3",
+               NEBIUS_PRESET="192vcpu-768gb", NEBIUS_DATA_DISK="vy-nebius-1-data")
+    assert r.returncode == 0, r.stderr
+    assert "# data disk vy-nebius-1-data: attached as it is if it exists" in r.stdout
+    assert json.loads(r.stdout.split("(ids are placeholders)\n")[1])["metadata"]["name"] == "vy-nebius-cpu-4"
+    for script in ("launch.sh", "teardown.sh"):
+        assert 'disk_id "$DATA_NAME"' in (NEBIUS / script).read_text() and '"$VM_NAME-data"' not in (NEBIUS / script).read_text()
+
+
+@pytest.mark.parametrize("path, nodes", [("now", 2), ("quota", 2), ("reattach", 1)])
+def test_n1s_replacement_plan_prints_each_create_for_a_deploy_node_and_calls_nothing(path, nodes):
+    """n1_replacement.sh plan (INF-57) prints the creates, which spend, for the coordinator: it runs no Nebius call, and each node it
+    creates is a deploy.toml node, so the install it prints next has entries to install."""
+    r = subprocess.run(["bash", str(NEBIUS / "n1_replacement.sh"), "plan", path], capture_output=True, text=True,
+                       env={**os.environ, "NEBIUS_BIN": "/bin/false", "PATH": "/usr/bin:/bin"})
+    assert r.returncode == 0, r.stderr
+    creates = re.findall(r"NEBIUS_VM_NAME=(\S+) .*\\\n\s+bash launch.sh --max-hours \d+ --yes --register --deadline \S+\)", r.stdout)
+    assert len(creates) == nodes and set(creates) <= set(tomllib.loads((NEBIUS / "deploy.toml").read_text())["nodes"])
+    for n in creates:
+        assert f"research deploy install {n} --by infra --ref origin/main --apply" in r.stdout
+    assert ("NEBIUS_DATA_DISK=vy-nebius-1-data" in r.stdout) == (path == "reattach")
+    assert subprocess.run(["bash", str(NEBIUS / "n1_replacement.sh"), "plan", "elsewhere"], capture_output=True).returncode == 2
 
 
 def test_launch_refuses_to_spend_without_yes_and_a_lease():
@@ -3527,6 +3600,15 @@ def test_a_run_on_a_stopped_nebius_vm_starts_it_and_waits_for_its_ssh(monkeypatc
 
     with pytest.raises(remote.Refused, match="ask @infra to start computeinstance-x"):
         remote.wake(m, ["ssh"], nebius=no_creds)
+
+    def plain_start(*args):   # the CLI's --async start prints its operation's id, which fleet.nb can't parse (T1R, 19 Oct)
+        if args[2] == "start":
+            raise json.JSONDecodeError("Expecting value", "computeoperation-x", 0)
+        return nebius(*args)
+
+    answers = iter([1, 0])
+    monkeypatch.setattr(remote, "ssh_run", lambda ssh, argv, timeout=120: subprocess.CompletedProcess(argv, next(answers)))
+    assert remote.wake(m, ["ssh"], nebius=plain_start, sleep=sleep, clock=lambda: t[0]) == "started from STOPPED"
 
 
 def test_a_run_names_the_agent_that_sent_it_a_worker_its_own_conversation():

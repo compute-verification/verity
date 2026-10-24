@@ -14,6 +14,7 @@ from verity_vllm import target_family as tf
 TREE = Path(__file__).resolve().parents[1]
 ROW_L40S = "mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager"
 ROW_H100 = "qwen3-4b-fp8__fp8__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager"
+ROW_H200_TP8 = "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__stoch-t0.8-p0.95__eager"
 
 
 def test_row_id_grammar_names_the_device_class():
@@ -83,6 +84,33 @@ def test_no_visible_gpu_for_a_gpu_stage_fails_closed(monkeypatch):
     monkeypatch.setattr(tf, "device_cc", lambda: (None, "torch.cuda.is_available() False"))
     rec = tf.check(ROW_L40S, {"sweep": {}}, ["commit"])
     assert rec["verdict"] == "FAIL" and rec["mismatches"][0]["fact"] == "device"
+
+
+def test_the_match_s_cpu_phase_reads_no_device_and_every_gpu_stage_still_refuses_without_one(monkeypatch):
+    """The Match's CPU half (the check, the served-shape derives and the fold over GPU legs already captured) runs on a GPU-free CPU
+    node; a TP8 row's was refused there because its `match` counted as a GPU stage whatever its phase."""
+    monkeypatch.setattr(tf, "device_cc", lambda: (_ for _ in ()).throw(AssertionError("device read for the Match's CPU phase")))
+    rec = tf.check(ROW_H200_TP8, {"sweep": {}}, ["match"], match_phase="cpu")
+    assert rec["verdict"] == "PASS" and rec["device"] is None and rec["match_phase"] == "cpu"
+    monkeypatch.setattr(tf, "device_cc", lambda: (None, "torch.cuda.is_available() False"))
+    for stages, phase in ((["match"], "all"), (["match"], "gpu"), (["match", "commit"], "cpu"), (["bench"], "cpu")):
+        rec = tf.check(ROW_H200_TP8, {"sweep": {}}, stages, match_phase=phase)
+        assert rec["verdict"] == "FAIL" and [m["fact"] for m in rec["mismatches"]] == ["device"], (stages, phase)
+
+
+def test_the_row_hands_its_match_phase_to_the_preflight_so_its_cpu_half_needs_no_gpu(tmp_path):
+    """`--match-phase cpu` on the row reaches `target-family`, which then passes on a host with no GPU; the same row's GPU legs
+    (`--match-phase all`) are refused there."""
+    from tests.pipeline.test_row import _tp_row
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join([str(TREE), os.environ.get("PYTHONPATH", "")]), "PATH": str(tmp_path),
+           "CUDA_VISIBLE_DEVICES": ""}
+    for phase, rc, head in (("cpu", 0, "TARGET-FAMILY-OK"), ("all", 3, "PRECHECK_FAIL_TARGET_FAMILY: no GPU visible for a GPU stage")):
+        t = _tp_row(tmp_path, ROW_H200_TP8, "--stages", "match", "--match-phase", phase)
+        os.makedirs(t.d, exist_ok=True)
+        t.child_env = env
+        got = t.target_family(out=str(tmp_path / f"{phase}.json"))
+        assert got[0] == rc and got[1].startswith(head), got
+        assert json.loads((tmp_path / f"{phase}.json").read_text())["match_phase"] == phase
 
 
 def test_rtxpro6000_rows_are_the_cc_12_0_family(monkeypatch):

@@ -4,7 +4,8 @@ Two RTX PRO 6000 nodes, each with a BlueField-3 DPU, behind their own certifiers
 two-stage model, a BF16 linear a node (`models.LINEAR`), whose registered inputs are the weights and the container image
 the first node runs, and whose BMC telemetry is delivered out. Each node's certifier releases a salt into it, and each
 node computes a noised product on it (`models.DOT`, PoUW's proof work in miniature, which never leaves the node). The
-verifier's plan wipes the first node's DPU and BMC, challenges a KV store and opens a read window on it. The demo runs
+registration also commits the occupancy profiles the night may follow, one for each of 8 ticks its schedule may start
+at. The verifier's plan wipes the first node's DPU and BMC, challenges a KV store and opens a read window on it. The demo runs
 the night honestly and accounts for it, under compute accounting's salt custody too, then runs it again with an adversary
 who tries five things at once, each of which the audit refuses for its own reason.
 """
@@ -13,13 +14,14 @@ from __future__ import annotations
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Tuple
 
-from . import (SALT_CUSTODY, Challenge, Deviation, Interval, Plan, Port, ReadWindow, Store, Wipe, account, audit, place,
-               register, run)
+from . import (SALT_CUSTODY, Challenge, Deviation, Interval, Plan, Port, ReadWindow, Store, Wipe, account, audit,
+               occupancy, place, register, run)
 from .examples import GB, rack
 from .models import DOT, LINEAR, MAT, VEC, WEIGHTS, X, program, word, words
 
 IMAGE = words("image", 32)
 S0, S1 = words("salt0", 32), words("salt1", 32)
+KV = Store("kv", 1 * GB, "n1.gpu0")
 
 
 def model(B, x, w1, w2, image, temperature, s0, s1):
@@ -32,16 +34,22 @@ def model(B, x, w1, w2, image, temperature, s0, s1):
 
 PROGRAM = program("RackNight", {"x": VEC, "w1": MAT, "w2": MAT, "image": VEC, "temperature": word(16), "s0": VEC,
                                 "s1": VEC}, Tuple(VEC, word(16)), model, registered=("w1", "w2", "image"))
-REGISTRATION = register(PROGRAM, WEIGHTS | {"image": IMAGE})
+VALUES = WEIGHTS | {"image": IMAGE}
+
+
+def placed(registration, start: int = 0):
+    return place(PROGRAM, rack(nodes=2), "n0.gpu0", registration=registration, deliver="world", stores=(KV,),
+                 start=start, x="world", image="n0.gpu0", temperature="n1.bmc", h="n0.gpu0", y="n1.gpu0", s0="n0.cert",
+                 s1="n1.cert", p0="n0.gpu0", p1="n1.gpu0")
+
+
+#: the night's schedule may start at any of 8 ticks: the registration commits the 8 occupancy profiles that gives
+REGISTRATION = register(PROGRAM, VALUES, profiles=[occupancy(placed(register(PROGRAM, VALUES), s)) for s in range(8)])
 
 
 def night(deviation: Deviation | None = None, assume=()):
-    dc = rack(nodes=2)
-    kv = Store("kv", 1 * GB, "n1.gpu0")
-    p = place(PROGRAM, dc, "n0.gpu0", registration=REGISTRATION, deliver="world", stores=(kv,), x="world",
-              image="n0.gpu0", temperature="n1.bmc", h="n0.gpu0", y="n1.gpu0", s0="n0.cert", s1="n1.cert",
-              p0="n0.gpu0", p1="n1.gpu0")
-    plan = Plan(Interval(0, 16), profiles=8,
+    p = placed(REGISTRATION)
+    plan = Plan(Interval(0, 16), profiles=REGISTRATION,
                 wipes=[Wipe("n0.dpu", 195.2 * GB, Interval(0, 2)), Wipe("n0.bmc", 0.88 * GB, Interval(0, 2))],
                 challenges=[Challenge("kv", at=0, deadline=8)],
                 reads=[ReadWindow("kv", start=0, boundary=10, deadline=12)])

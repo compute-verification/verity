@@ -210,6 +210,17 @@ def _checked_c(tmp_path, monkeypatch, gh, repo):
     _git(repo, "checkout", "-q", "main")
 
 
+def test_a_merge_push_of_main_off_drive_is_refused_and_pushes_nothing(tmp_path, monkeypatch, capsys):
+    """23 Oct: GitHub's rulesets let only drive's App move `main`; a pure move lands from the control pod (`drive.sh merge`)."""
+    repo, gh, _tips, _merge = _world(tmp_path)
+    _checked_c(tmp_path, monkeypatch, gh, repo)
+    monkeypatch.delenv("RESEARCH_DRIVE")
+    before = _git(repo, "ls-remote", "origin", "refs/heads/main")
+    assert M.main(["C", "--push", "-m", "Merge train TC (c)"]) == 1
+    assert "/data/infra/drive.sh merge" in capsys.readouterr().err
+    assert _git(repo, "ls-remote", "origin", "refs/heads/main") == before
+
+
 def test_a_merge_with_push_lands_on_the_remote_then_sweeps(tmp_path, monkeypatch, capsys):
     """Trains landed through `research merge` and a push by hand, so the sweep ran before the push and closed nothing: with --push
     the merge is on the remote before the sweep reads it, and what the tool runs after a landing starts on the commit pushed."""
@@ -613,6 +624,49 @@ def test_each_run_a_landing_names_gets_one_landed_label_on_the_remote_and_a_reru
     assert st3.labels("r20261011-010203-abcd", "landed")[0].ts == "2026-10-11T01:02:03Z", "the lander's fixed date: the run's start"
 
 
+def test_checked_heads_are_the_train_heads_their_own_check_ran_on_less_a_train_a_later_revert_names(tmp_path, monkeypatch,
+                                                                                                    capsys):
+    """`label_landed` labels every commit of a train on its one check run, but the run checked only its own source commit, so
+    `checked_heads` keeps the label whose value is that commit: each train's head. A head whose train holds a commit a later
+    `git revert` names is left out, and so are labels on commits off the line or on runs the index lacks."""
+    from research.store import bucket_index as BI
+    from research.store.local import LocalStore
+
+    repo = tmp_path / "r"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    sha = {}
+    for name in ("root", "a1", "a2", "b1", "c1", "c2"):
+        _git(repo, "commit", "-q", "--allow-empty", "-m", f"Queue: {name}")
+        sha[name] = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", f"Revert c1\n\nThis reverts commit {sha['c1']}, reversing\nchanges.")
+    sha["rev"] = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "Queue: d1")
+    sha["d1"] = _git(repo, "rev-parse", "HEAD")
+    trains = {"r20261020-010000-aaaa": ("a2", ["a1", "a2"]), "r20261020-020000-bbbb": ("b1", ["b1"]),
+              "r20261020-030000-cccc": ("c2", ["c1", "c2"]), "r20261020-040000-dddd": ("d1", ["rev", "d1"])}
+    store = tmp_path / "store"
+    monkeypatch.setenv("RESEARCH_STORE", str(store))
+    monkeypatch.delenv(BI.READER_ENV, raising=False)
+    idx = BI.SqliteIndex(BI.default_path(LocalStore().root))
+    rows = [BI.Row(rid, "run", "check", None, {"id": rid, "source": {"commit": sha[head]}}) for rid, (head, _) in trains.items()]
+    labels = [(rid, sha[c]) for rid, (_, members) in trains.items() for c in members]
+    labels += [("r20261020-050000-eeee", sha["b1"]), ("r20261020-020000-bbbb", "f" * 40)]
+    rows += [BI.Row(f"label:{i}", "label", "landed", None, {"target": rid, "key": "landed", "value": c, "by": M.LANDED_BY})
+             for i, (rid, c) in enumerate(labels)]
+    idx.add(rows)
+    assert M.checked_heads(repo, "main", idx) == [(sha["a2"], "r20261020-010000-aaaa"), (sha["b1"], "r20261020-020000-bbbb"),
+                                                 (sha["d1"], "r20261020-040000-dddd")]
+    assert M.checked_heads(repo, sha["c2"], idx)[-1] == (sha["c2"], "r20261020-030000-cccc"), "before its revert, c2 counts"
+    idx.close()
+    monkeypatch.chdir(repo)
+    assert research_main(["queue", "checked-heads", "--tip", "main"]) == 0
+    assert capsys.readouterr().out.split() == [sha["a2"], sha["b1"], sha["d1"]]
+    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "empty"))
+    assert research_main(["queue", "checked-heads"]) == 1
+    assert "no store index" in capsys.readouterr().err
+
+
 def test_the_landings_go_to_the_merge_thread_quietly_and_a_failed_post_leaves_them_standing(tmp_path, capsys):
     from research.monitors import MERGE_THREAD
     from research.slack import is_quiet
@@ -652,6 +706,14 @@ def test_the_sweep_deletes_the_head_branch_of_a_pr_github_marked_merged_itself(t
     log = []
     M.sweep(repo, gh=gh, log=log.append)                                  # A and B are gone: nothing to delete, nothing kept
     assert not [x for x in log if "branch A" in x or "branch B" in x or "kept" in x], log
+
+
+def test_main_line_is_the_checked_heads_newest_first(tmp_path, monkeypatch):
+    """`merge.main_line` is `checked_heads`' commits reversed, so position 0 is main's head: the verifier's `--main`
+    file lists the checked train heads newest first, and a pin's index is the checked trains it is behind."""
+    heads = [("c0", "run-0"), ("c1", "run-1"), ("c2", "run-2")]           # checked_heads is oldest first
+    monkeypatch.setattr(M, "checked_heads", lambda repo, tip, idx: heads)
+    assert M.main_line(tmp_path, "origin/main", object()) == ["c2", "c1", "c0"]
 
 
 def test_the_branch_sweep_deletes_what_is_on_main_and_archives_idle_unmerged_work(tmp_path):

@@ -39,7 +39,7 @@ table. -/
 theorem verify_nil_plain (spec : SessionSpec) (tabs : Array Setup) (record : String) :
     verify spec tabs record #[] ≠ .ok () := by
   intro h
-  unfold verify at h
+  unfold verify verifyFiles at h
   simp only [] at h
   by_cases c1 : (tabs.size != spec.tables.size || tabs.size == 0) = true
   · rw [ite_eq_left c1] at h

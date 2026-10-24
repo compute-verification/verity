@@ -1,119 +1,278 @@
 import Proofs.Flock.Claims.ZK.Session
-import Proofs.Flock.Claims.Scope.Split
-import Proofs.Flock.Claims.Scope.Tables
+import Proofs.Flock.Claims.ZK.MaskedTables
 
 /-!
-# The deployed masked session's table data
+# The deployed masked session's zero knowledge
 
-`CoinLayer.TableData` at the deployed masked session (`FlockDeploy.setupOf true`), with what the tree fixes made concrete
-and the rest named:
+`Flock.zk_deployZk_ref_on_rounds` at the deployed masked session (`FlockDeploy.setupOf true`): an honest-verifier
+zero-knowledge session whose leaves are hiding salted commitments and whose coins `Hello` commits (Goldreich–Kahan),
+on the statements `Masked.Live` (the masked scope's, at a witness: `live_iff`). Its table data (`tableData`) is
+concrete where the tree fixes it: the tables (`jOf`, `tabC`: `setupOf true x`'s, each `coinedOf` at its `--zk` table
+from its statement alone, `ZkHidden.ZkTab.table`), the witness's table witnesses (`wtOf`, each table's share) and the
+dummy's (`dummy`, a witness of the regions). The rest is two plans:
 
-* concrete: the tables (`jOf`, `stAt`: `setupOf true x`'s tables, none where it does not set up), each table as
-  `Coined` tables at its draw (`TabPlan.C`: `Composed.coinedOf` at the table's `TabZK`), and the witness's table
-  witnesses (`tableData`'s `wt`: each table's share, `Readable.tableWit`, as its model witness `Readable.zOf`);
-* `TabPlan`: each table's `TabZK` and the Ligerito prover, a plan the tree has at the hidden-output form only
-  (`ZkHidden.planZHJ`, `TabPlan.HiddenForm`), not at the single-input-group form;
-* `SessionPlan`: the finite tape and its reading as the masked prover's (`tapeZk`) and as the tables' randomness
-  (`tape`), each table's coins at the session's coins (`cz`, `sessionPZk`'s per-table derivation), the public-region
-  dummy (`wt₀`), and the round encodings (`enc`, `fin`, `off`, `sessionPZk`'s ask messages and `Final.encode`).
+* `RoundPlan`: each table's coins at the session's coins (`cz`, `sessionPZk`'s per-table derivation) and the round
+  encodings (`enc`, `fin`, `off`: `sessionPZk`'s ask messages and `Final.encode`);
+* `TapePlan`: the finite tape, read as the masked prover's (`tapeZk`) and as the tables' randomness (`tape`).
 
-`tables_hidden`: `RefSession.Tables` at `tableData` where each table is the hidden-output plan's
-(`setupTable_planZHJ`). `OneTableLowers`: the relation at a one-table parse makes the witness satisfy the table's
-lowered statement (`stmtOf`), the converse of `good_of_committed_plain`'s reading, which `RefSession.Complete` needs.
+The session's Props at every plan:
+
+* `Tables` (`tables`), `DummyReg` (`dummyReg`) and `Complete` on the masked scope (`complete`) are theorems
+  (`MaskedTables`).
+* `Causal` is the round plan's (`RoundPlan.Causal`): the cut view round `i` encodes is at the tables' coins `cz x c`,
+  whose type reads every coin, so no typing of `enc` makes it hold.
+* `TapeOK` is `FibersEq (U.tape x)` on `Live` statements (`Flock.zk_deployZk_masked`, a Prop of the tape plan), a
+  theorem at a layout's tape of a cell per table (`OneTape`, `fibersEq_ofLayout`), and, on the tape of one statement's
+  tables' randomness (`TapePlan.at`), a theorem (`fibersEq_at`, `Flock.zk_deployZk_masked_at`): what
+  statement-indexed tapes read at that statement.
+* hm96's hiding is at the pinned key's gap, with no premise (`Flock.zk_deployZk_masked_gap`,
+  `Flock.zk_deployZk_masked_at_gap`).
+* `HonestMsgs` is its three rounds (`HonestPreOn`, `HonestFinOn`, `HonestOffOn`) on `Live`, at the deployed relation's
+  witnesses (`RZk`), the only ones zero knowledge reads the prover at. At a round plan whose last message where a table
+  refuses is the empty one (`RoundPlan.stop`, what `ZkTables.prog` returns once `sessionPZk` stops), `HonestOffOn` is
+  about the reference prover alone (`honestOffOn_stop_iff`).
+
+The reference prover is `flock-circuit --zk`'s (`ZkTables.honestPR`): each table's mask-slot words from its tape
+(`TapeZk.mask`, `STREAM_MASK`), and, before the round that would show them, a stop at a zerocheck outer coin `1` and at
+claim points at which the mask slot's weights have rank below `128` per point (`refuse_outer`, `mask_rank_ok`). The
+rounds compare it with the plans' encodings: they ask a tape plan whose `tapeZk` puts the tables' mask words (the
+tables' `zWith` at the base's first component) in `TapeZk.mask`, which `MaskTape`'s `TapePlan.atMask` does
+(`zOf_maskOf`), and a round plan whose coins and encodings are `sessionPZk`'s. The round plan is a parameter here, so
+the three rounds are premises.
 -/
 
-namespace Claims.ZKMal.Masked
+namespace Claims.ZKMal
 
 open Claims FlockSoundness.Merkle FlockSoundness.ZK
 open FlockSoundness.Discharge
 open CoinLayer
 
-/-- **The masked session's tables at statement `x`**: `setupOf true x`'s, none where it does not set up. -/
-def stsOf (x : Msg) : Array _root_.Flock.Stmt :=
-  match FlockDeploy.setupOf true x with
-  | some (_, _, sts) => sts
-  | none => #[]
+set_option synthInstance.maxSize 100000
+set_option synthInstance.maxHeartbeats 1000000
 
-/-- The masked session's table count at `x`. -/
-def jOf (x : Msg) : ℕ := (stsOf x).size
+/-- **`Claims.Flock.ZK` at a larger `ε_zk`**, larger at the statements with a witness. -/
+theorem zk_mono {Coin Col T : Type} {H : Msg → Msg} {D : Claims.Flock.ZkDeploy Coin Col T} {ε ε' γ : Msg → ℝ}
+    (h : Claims.Flock.ZK H D ε γ) (hle : ∀ x w, Claims.Flock.R D.parse x w → ε x ≤ ε' x) :
+    Claims.Flock.ZK H D ε' γ :=
+  ⟨h.1, fun x w hR Θ Vs θ hk Ev => (h.2 x w hR Θ Vs θ hk Ev).trans (by linarith [hle x w hR])⟩
 
-/-- Table `j` of the masked session at `x`. -/
-def stAt (x : Msg) (j : Fin (jOf x)) : _root_.Flock.Stmt := (stsOf x)[j.val]'j.isLt
+/-- **`ε_zk` on `A` and `1` outside it, as `ε_zk` on `B`**, where the statements with a witness are in `A` exactly
+when they are in `B`. -/
+theorem zk_if_congr {Coin Col T : Type} {H : Msg → Msg} {D : Claims.Flock.ZkDeploy Coin Col T} {A B : Msg → Prop}
+    [DecidablePred A] [DecidablePred B] {E E' γ : Msg → ℝ} (h : Claims.Flock.ZK H D (fun x => if A x then E x else 1) γ)
+    (hAB : ∀ x w, Claims.Flock.R D.parse x w → (A x ↔ B x)) (hE : ∀ x, E x ≤ E' x) :
+    Claims.Flock.ZK H D (fun x => if B x then E' x else 1) γ :=
+  zk_mono h fun x w hR => by
+    have e := hAB x w hR
+    split_ifs with h1 h2 h2
+    · exact hE x
+    · exact absurd (e.1 h1) h2
+    · exact absurd (e.2 h2) h1
+    · exact le_rfl
 
-/-- **Each table's `--zk` plan**: the claim points' size, the Ligerito prover, and each table's `TabZK`. -/
-structure TabPlan where
-  mPts : Msg → ℕ
-  P : Composed.LigProver
-  Tz : (x : Msg) → Fin (jOf x) → ZkSession.TabZK FlockLevel3.GF128 (mPts x)
+namespace Masked
 
-/-- **Table `j` at `x` as `Coined` tables**: `coinedOf` at its `TabZK` and its statement. -/
-noncomputable def TabPlan.C (L : TabPlan) (x : Msg) (j : Fin (jOf x)) : Composed.CoinedSetup :=
-  Composed.coinedOf L.P (L.Tz x j) (stAt x j)
+/-- **A family of tables**: at each statement, the masked session's table count of tables. -/
+abbrev Tabs : Type 1 := (x : Msg) → Fin (jOf x) → Composed.CoinedSetup
 
-/-- **Every table is the hidden-output plan's**: at each statement and table, `coinedOf` at some table of
-`ZkHidden.planZHJ` at a draw `verify --zk` sets up, at that draw's statement (`setupTable_planZHJ`'s tables). -/
-def TabPlan.HiddenForm (L : TabPlan) : Prop :=
-  ∀ x (j : Fin (jOf x)), ∃ (n : ℕ) (Reg : Type) (I : Exec.Inputs) (dj : Finset (Fin n) → Lean.Json)
-    (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
-    (y₀ : ZkHidden.DrawSetupZHJ (Composed.inputsJ I 0) (L.mPts x) S₀ d₀) (_ : I.tags.typed = false)
-    (S : Finset (Fin n)) (R : Reg) (k : Fin (Composed.nTab I))
-    (y : ZkHidden.DrawSetupZHJ (Composed.inputsJ I k) (L.mPts x) (Composed.partS I (dj S) S k)
-      (Composed.drawJ I (dj S) k)),
-    L.C x j = Composed.coinedOf L.P ((ZkHidden.planZHJ (Reg := Reg) dj y₀ S R).get
-      (Fin.cast (ZkHidden.planZHJ_length dj y₀ S R).symm k)) y.x.st
+/-- **The tables' randomness at `x`**: each table's base, every pre-final leaf's salt and its ideal seed. -/
+abbrev Rand (C : Tabs) (x : Msg) : Type :=
+  (∀ j, ZkView.Base (C x j).z (C x j).Hi) × (ZkView.Leaves (fun j => (C x j).z) → ZkView.Salt) ×
+    (ZkView.Leaves (fun j => (C x j).z) → ZkView.Bits × ZkView.Salt)
 
-/-- **The rest of the masked session's table data**: the finite tape, its reading as the masked prover's and as the
-tables' randomness, each table's coins at the session's coins, the public-region dummy, and the round encodings. -/
-structure SessionPlan (L : TabPlan) where
+/-- The session's pre-final leaves at `x`. -/
+noncomputable def nL (P : Composed.LigProver) (x : Msg) : ℕ := Fintype.card (ZkView.Leaves fun j => (tabC P x j).z)
+
+/-- **The round plan** at the tables `C`: each table's coins at the session's coins, and the round encodings of the cut
+view, of the tables' views where they admit the coins, and of the cut view where one refuses. -/
+structure RoundPlan (C : Tabs) where
+  cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (C x j).Rest
+  enc : (x : Msg) → (c : Fin (refK x) → FlockDeploy.Coin) → ℕ → (∀ j, ((C x j).T (cz x c j)).tab.Cut) → Msg
+  fin : (x : Msg) → (c : Fin (refK x) → FlockDeploy.Coin) → (∀ j, ((C x j).T (cz x c j)).tab.View) → Msg
+  off : (x : Msg) → (c : Fin (refK x) → FlockDeploy.Coin) → (∀ j, ((C x j).T (cz x c j)).tab.Cut) → Msg
+
+/-- **The tape plan** at the tables `C`: a finite tape, read as the masked prover's (`tapeZk`) and as the tables'
+randomness (`tape`). -/
+structure TapePlan (C : Tabs) where
   Tape : Type
   [finTape : Fintype Tape]
   [neTape : Nonempty Tape]
   tapeZk : Tape → FlockComplete.TapeZk
-  cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (L.C x j).Rest
-  wt₀ : (x : Msg) → ∀ j, FlockSoundness.Model.Witness (L.C x j).S.m
-  enc : (x : Msg) → (c : Fin (refK x) → FlockDeploy.Coin) → ℕ → (∀ j, ((L.C x j).T (cz x c j)).tab.Cut) → Msg
-  fin : (x : Msg) → (c : Fin (refK x) → FlockDeploy.Coin) → (∀ j, ((L.C x j).T (cz x c j)).tab.View) → Msg
-  off : (x : Msg) → (c : Fin (refK x) → FlockDeploy.Coin) → (∀ j, ((L.C x j).T (cz x c j)).tab.Cut) → Msg
-  tape : (x : Msg) → Tape → (∀ j, ZkView.Base (L.C x j).z (L.C x j).Hi) ×
-    (ZkView.Leaves (fun j => (L.C x j).z) → ZkView.Salt) ×
-      (ZkView.Leaves (fun j => (L.C x j).z) → ZkView.Bits × ZkView.Salt)
+  tape : (x : Msg) → Tape → Rand C x
 
-attribute [instance] SessionPlan.finTape SessionPlan.neTape
+attribute [instance] TapePlan.finTape TapePlan.neTape
 
-/-- **The deployed masked session's table data** at the plans `L` and `Q`: the tables `setupOf true x`'s, each
-`L.C`, and the witness's table witnesses each table's share as its model witness. -/
-noncomputable def tableData (L : TabPlan) (Q : SessionPlan L) : TableData where
-  Tape := Q.Tape
-  tapeZk := Q.tapeZk
+/-- **The deployed masked relation**: the witnesses at which zero knowledge reads the reference prover. -/
+abbrev RZk : Rel Claims.Flock.Wit := Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse
+
+/-- **The deployed masked session's table data** at the Ligerito prover `P` and the plans `Q` and `U`: the tables
+`tabC P`, the witness's table witnesses its shares (`wtOf`), the dummy's a witness of the regions (`dummy`). -/
+noncomputable def tableData (P : Composed.LigProver) (Q : RoundPlan (tabC P)) (U : TapePlan (tabC P)) : TableData where
+  Tape := U.Tape
+  tapeZk := U.tapeZk
   J := jOf
-  C := L.C
+  C := tabC P
   cz := Q.cz
-  wt x w j := _root_.Flock.Readable.zOf 1 (_root_.Flock.Readable.tableWit (jOf x) w j.val) 0 (L.C x j).S.m
-  wt₀ := Q.wt₀
+  wt := wtOf P
+  wt₀ x j := dummy (tabC P x j).S
   enc := Q.enc
   fin := Q.fin
   off := Q.off
-  tape := Q.tape
+  tape := U.tape
 
-/-- **`Tables` at the hidden-output form**: where every table is the hidden-output plan's, each is a table the session
-sets up (`setupTable_planZHJ`). -/
-theorem tables_hidden (L : TabPlan) (Q : SessionPlan L) (nr : Msg → ℕ → ℕ) (hH : L.HiddenForm) :
-    (session nr (tableData L Q)).Tables := by
-  intro x j
-  obtain ⟨_, Reg, I, dj, _, _, y₀, ht, S, R, k, y, h⟩ := hH x j
-  show SetupTable (L.C x j)
-  rw [h]
-  exact setupTable_planZHJ L.P I dj y₀ ht S R k y
+/-- **`Tables`**: every table of the masked session is a table it sets up (`setupTable_tabC`). -/
+theorem tables (P : Composed.LigProver) (Q : RoundPlan (tabC P)) (U : TapePlan (tabC P)) (nr : Msg → ℕ → ℕ) :
+    (session nr (tableData P Q U)).Tables :=
+  fun x j => setupTable_tabC P x j
 
-/-- **The relation at a one-table parse makes the witness satisfy the table's lowered statement**: at a parse whose
-one table is `st`, a witness in the readable relation is, as its model witness (`Readable.zOf`), a witness of
-`stmtOf st` at its own regions. The converse of `good_of_committed_plain`'s reading, which `RefSession.Complete` needs
-at the masked session's tables (each table's share in its one-table parse, `Case.tableT`). -/
-def OneTableLowers : Prop :=
-  ∀ (p : _root_.Flock.Readable.Parsed) (st : _root_.Flock.Stmt) (w : Claims.Flock.Wit)
-    (hwf : FlockSoundness.Refine.StmtWF st), p.sts = #[st] →
-    Claims.Flock.RelS (_root_.Flock.Readable.toReadable _root_.Flock.Readable.relation p) w →
-      (FlockSoundness.Refine.stmtOf st hwf (FlockSoundness.Refine.regionsOf st)).Satisfies
-        (_root_.Flock.Readable.zOf 1 w 0 st.m)
+/-- **`DummyReg`**: the dummy's table witnesses carry the public region data (`dummyReg_tabC`). -/
+theorem dummyReg (P : Composed.LigProver) (Q : RoundPlan (tabC P)) (U : TapePlan (tabC P)) (nr : Msg → ℕ → ℕ) :
+    (session nr (tableData P Q U)).DummyReg :=
+  fun x c j => dummyReg_tabC P x j (Q.cz x c j)
 
-end Claims.ZKMal.Masked
+/-- **`Complete`** on any class of statements, at the deployed relation: each table's share is valid
+(`complete_tabC`). -/
+theorem complete (P : Composed.LigProver) (Q : RoundPlan (tabC P)) (U : TapePlan (tabC P)) (nr : Msg → ℕ → ℕ)
+    (A : Msg → Prop) :
+    (session nr (tableData P Q U)).Complete fun x w =>
+      A x ∧ Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w :=
+  fun _ _ h j => complete_tabC P h.2 j
+
+/-- **Round `i`'s encoding reads the coins before `i` only** (`RefSession.Causal` at the round plan), whatever each
+pre-final leaf's pair `(M·y, c(y))`. -/
+def RoundPlan.Causal {C : Tabs} (Q : RoundPlan C) : Prop :=
+  ∀ (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (C x j).S.m) (ω : ∀ j, ZkView.Base (C x j).z (C x j).Hi)
+    (p : ZkView.Leaves (fun j => (C x j).z) → ZkView.Bits × ByteArray) (c c' : Fin (refK x) → FlockDeploy.Coin)
+    (i : ℕ), (∀ j : Fin (refK x), j.val < i → c j = c' j) →
+    Q.enc x c i (cutAt (C x) (Q.cz x c) wt ω fun l =>
+        ZkView.leafH (digOf (C x) (Q.cz x c) wt ω l + (p l).1, (p l).2)) =
+      Q.enc x c' i (cutAt (C x) (Q.cz x c') wt ω fun l =>
+        ZkView.leafH (digOf (C x) (Q.cz x c') wt ω l + (p l).1, (p l).2))
+
+theorem RoundPlan.causal {P : Composed.LigProver} {Q : RoundPlan (tabC P)} (h : Q.Causal) (U : TapePlan (tabC P))
+    (nr : Msg → ℕ → ℕ) : (session nr (tableData P Q U)).Causal :=
+  h
+
+/-- **A round plan whose last message where a table refuses is the empty one**: what `ZkTables.prog` returns once
+`sessionPZk` stops (`.error _ => pure []`) and `ZkTables.honestPR` sends at an outer coin `1`, the session's `abort`. -/
+def RoundPlan.stop {C : Tabs} (cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (C x j).Rest)
+    (enc : (x : Msg) → (c : Fin (refK x) → FlockDeploy.Coin) → ℕ → (∀ j, ((C x j).T (cz x c j)).tab.Cut) → Msg)
+    (fin : (x : Msg) → (c : Fin (refK x) → FlockDeploy.Coin) → (∀ j, ((C x j).T (cz x c j)).tab.View) → Msg) :
+    RoundPlan C :=
+  ⟨cz, enc, fin, fun _ _ _ => []⟩
+
+/-- **`HonestOffOn` at a stopping round plan is the reference prover's**: after `refK x` openings whose coins some table
+refuses, `ZkTables.honestPR`'s next message is the empty one. -/
+theorem honestOffOn_stop_iff {P : Composed.LigProver} {cz enc fin} (U : TapePlan (tabC P)) (nr : Msg → ℕ → ℕ)
+    (A : Msg → Prop) (R : Rel Claims.Flock.Wit) (H : Msg → Msg) :
+    (session nr (tableData P (RoundPlan.stop cz enc fin) U)).HonestOffOn A R H coinOfD (fun ω => U.tapeZk ω.2) ↔
+      ∀ x, A x → ∀ w, R x w → ∀ t (ops : List (Msg × Msg)), ops.length = refK x →
+        ¬ (session nr (tableData P (RoundPlan.stop cz enc fin) U)).Admits x
+          ((session nr (tableData P (RoundPlan.stop cz enc fin) U)).pad (ops.map fun p => rd p.2)) →
+        (((FlockComplete.ZkTables.honestPR w).next x (ops.map fun p => (p.1, coinOfD p.2)) (U.tapeZk t)).eval H).1 =
+          [] :=
+  ⟨fun h x hx w hR t ops hl hA => (h x hx w hR (Classical.arbitrary _) t ops hl hA).symm,
+    fun h x hx w hR _ t ops hl hA => (h x hx w hR t ops hl hA).symm⟩
+
+open Classical in
+/-- **The tape of one statement's tables' randomness**: at `x₀` the tape is `x₀`'s tables' randomness, read as itself;
+elsewhere it reads as one fixed randomness. `z` reads it as the masked prover's. -/
+noncomputable def TapePlan.at {C : Tabs} (x₀ : Msg) (z : Rand C x₀ → FlockComplete.TapeZk) : TapePlan C where
+  Tape := Rand C x₀
+  tapeZk := z
+  tape x r := if h : x₀ = x then h ▸ r else Classical.arbitrary _
+
+/-- **At its statement, the tape is read with fibers of one size**: as itself. -/
+theorem fibersEq_at {C : Tabs} (x₀ : Msg) (z : Rand C x₀ → FlockComplete.TapeZk) :
+    FibersEq ((TapePlan.at x₀ z).tape x₀) := by
+  have e : (TapePlan.at x₀ z).tape x₀ = id := funext fun r => dite_eq_left rfl
+  rw [e]
+  exact fibersEq_of_bijective Function.bijective_id
+
+end Masked
+
+open Masked
+
+open Classical in
+/-- **Flock's zero knowledge at the deployed masked session**, today's form: `Claims.Flock.ZK` at `zkDeployed` at the
+masked session's table data, at `ε_zk = 8·n_L·δ₁ + 8t·n_L·δ₁ + 2·3^{-t}` on the masked scope and `1` outside it, under
+`Claims.Hm96Hiding` at the pinned key, the round plan's `Causal`, the tape plan read with fibers of one size at the
+`Live` statements, and `refP`'s three rounds `ZkTables.honestPR`'s there, at the relation's witnesses. `Tables`, `DummyReg` and `Complete` are
+theorems (`Masked.tables`, `Masked.dummyReg`, `Masked.complete`). -/
+theorem Flock.zk_deployZk_masked (H : Msg → Msg) (nr : Msg → ℕ → ℕ) (P : Composed.LigProver)
+    (Q : RoundPlan (tabC P)) (U : TapePlan (tabC P)) (t : ℕ) (ht : 0 < t) {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁)
+    (hδ₁ : δ₁ ≠ ⊤) (hc : Q.Causal) (hT : ∀ x, Live x → FibersEq (U.tape x))
+    (hpre : (session nr (tableData P Q U)).HonestPreOn Live RZk H coinOfD fun ω => U.tapeZk ω.2)
+    (hfin : (session nr (tableData P Q U)).HonestFinOn Live RZk H coinOfD fun ω => U.tapeZk ω.2)
+    (hoff : (session nr (tableData P Q U)).HonestOffOn Live RZk H coinOfD fun ω => U.tapeZk ω.2) :
+    Claims.Flock.ZK H (zkDeployed _root_.Flock.Readable.relation nr (tableData P Q U) t)
+      (fun x => if Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x then
+        8 * nL P x * δ₁.toReal + 8 * t * nL P x * δ₁.toReal + 2 * (1 / 3) ^ t else 1)
+      fun _ => 4 * t * 3 ^ t := by
+  exact zk_if_congr (Flock.zk_deployZk_ref_on_rounds H _root_.Flock.Readable.relation nr (tableData P Q U) Live t ht
+    hT1 hδ₁ (tables P Q U nr) (complete P Q U nr Live) (dummyReg P Q U nr) (RoundPlan.causal hc U nr) hT hpre hfin
+    hoff) (fun _ _ hR => live_iff hR) fun _ => le_rfl
+
+open Classical in
+/-- **Flock's zero knowledge at the deployed masked session, at one statement's tape**: at `x₀`, the tape `x₀`'s
+tables' randomness (`TapePlan.at`, read with fibers of one size: `fibersEq_at`), `Claims.Flock.ZK` at `ε_zk` at `x₀`
+if it is in the masked scope and `1` elsewhere, under `Claims.Hm96Hiding` at the pinned key, the round plan's `Causal`,
+and `refP`'s three rounds `ZkTables.honestPR`'s at `x₀`, at the relation's witnesses. Statement-indexed tapes read the
+claim at `x₀` at this record. -/
+theorem Flock.zk_deployZk_masked_at (H : Msg → Msg) (nr : Msg → ℕ → ℕ) (P : Composed.LigProver)
+    (Q : RoundPlan (tabC P)) (x₀ : Msg) (z : Rand (tabC P) x₀ → FlockComplete.TapeZk) (t : ℕ) (ht : 0 < t) {δ₁ : ENNReal}
+    (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (hc : Q.Causal)
+    (hpre : (session nr (tableData P Q (TapePlan.at x₀ z))).HonestPreOn (fun x => x = x₀ ∧ Live x) RZk H
+      coinOfD fun ω => z ω.2)
+    (hfin : (session nr (tableData P Q (TapePlan.at x₀ z))).HonestFinOn (fun x => x = x₀ ∧ Live x) RZk H
+      coinOfD fun ω => z ω.2)
+    (hoff : (session nr (tableData P Q (TapePlan.at x₀ z))).HonestOffOn (fun x => x = x₀ ∧ Live x) RZk H
+      coinOfD fun ω => z ω.2) :
+    Claims.Flock.ZK H (zkDeployed _root_.Flock.Readable.relation nr (tableData P Q (TapePlan.at x₀ z)) t)
+      (fun x => if x = x₀ ∧ Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x then
+        8 * nL P x * δ₁.toReal + 8 * t * nL P x * δ₁.toReal + 2 * (1 / 3) ^ t else 1)
+      fun _ => 4 * t * 3 ^ t := by
+  exact zk_if_congr (Flock.zk_deployZk_ref_on_rounds H _root_.Flock.Readable.relation nr
+    (tableData P Q (TapePlan.at x₀ z)) (fun x => x = x₀ ∧ Live x) t ht hT1 hδ₁ (tables P Q _ nr) (complete P Q _ nr _)
+    (dummyReg P Q _ nr) (RoundPlan.causal hc _ nr) (by rintro x ⟨rfl, -⟩; exact fibersEq_at x z) hpre hfin hoff)
+    (fun _ _ hR => and_congr_right fun _ => live_iff hR) fun _ => le_rfl
+
+open Classical in
+/-- **`Flock.zk_deployZk_masked` at the pinned key's hiding gap** (`CROnly.hm96Hiding_gap`): no hiding premise. -/
+theorem Flock.zk_deployZk_masked_gap (H : Msg → Msg) (nr : Msg → ℕ → ℕ) (P : Composed.LigProver)
+    (Q : RoundPlan (tabC P)) (U : TapePlan (tabC P)) (t : ℕ) (ht : 0 < t) (hc : Q.Causal)
+    (hT : ∀ x, Live x → FibersEq (U.tape x))
+    (hpre : (session nr (tableData P Q U)).HonestPreOn Live RZk H coinOfD fun ω => U.tapeZk ω.2)
+    (hfin : (session nr (tableData P Q U)).HonestFinOn Live RZk H coinOfD fun ω => U.tapeZk ω.2)
+    (hoff : (session nr (tableData P Q U)).HonestOffOn Live RZk H coinOfD fun ω => U.tapeZk ω.2) :
+    Claims.Flock.ZK H (zkDeployed _root_.Flock.Readable.relation nr (tableData P Q U) t)
+      (fun x => if Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x then
+        8 * nL P x * FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash +
+          8 * t * nL P x * FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash + 2 * (1 / 3) ^ t else 1)
+      fun _ => 4 * t * 3 ^ t := by
+  have h := Flock.zk_deployZk_masked H nr P Q U t ht
+    (FlockSoundness.CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash) ENNReal.ofReal_ne_top hc hT hpre hfin hoff
+  rwa [ENNReal.toReal_ofReal (FlockSoundness.CROnly.hidingGap_nonneg _ _)] at h
+
+open Classical in
+/-- **`Flock.zk_deployZk_masked_at` at the pinned key's hiding gap** (`CROnly.hm96Hiding_gap`): at one statement's
+tape, under the round plan's `Causal` and the three rounds alone. -/
+theorem Flock.zk_deployZk_masked_at_gap (H : Msg → Msg) (nr : Msg → ℕ → ℕ) (P : Composed.LigProver)
+    (Q : RoundPlan (tabC P)) (x₀ : Msg) (z : Rand (tabC P) x₀ → FlockComplete.TapeZk) (t : ℕ) (ht : 0 < t)
+    (hc : Q.Causal)
+    (hpre : (session nr (tableData P Q (TapePlan.at x₀ z))).HonestPreOn (fun x => x = x₀ ∧ Live x) RZk H
+      coinOfD fun ω => z ω.2)
+    (hfin : (session nr (tableData P Q (TapePlan.at x₀ z))).HonestFinOn (fun x => x = x₀ ∧ Live x) RZk H
+      coinOfD fun ω => z ω.2)
+    (hoff : (session nr (tableData P Q (TapePlan.at x₀ z))).HonestOffOn (fun x => x = x₀ ∧ Live x) RZk H
+      coinOfD fun ω => z ω.2) :
+    Claims.Flock.ZK H (zkDeployed _root_.Flock.Readable.relation nr (tableData P Q (TapePlan.at x₀ z)) t)
+      (fun x => if x = x₀ ∧ Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x then
+        8 * nL P x * FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash +
+          8 * t * nL P x * FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash + 2 * (1 / 3) ^ t else 1)
+      fun _ => 4 * t * 3 ^ t := by
+  have h := Flock.zk_deployZk_masked_at H nr P Q x₀ z t ht
+    (FlockSoundness.CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash) ENNReal.ofReal_ne_top hc hpre hfin hoff
+  rwa [ENNReal.toReal_ofReal (FlockSoundness.CROnly.hidingGap_nonneg _ _)] at h
+
+end Claims.ZKMal

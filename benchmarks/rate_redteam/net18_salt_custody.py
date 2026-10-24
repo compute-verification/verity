@@ -11,7 +11,7 @@ the placeholder in the salt frame's slot and `reveal(p, registration)`, the reco
 unregistered window. ``uv run python benchmarks/rate_redteam/net18_salt_custody.py``
 """
 
-from verity.core.protocols.certifier.active import DATA, LAST, Proxy, encode_frame
+from verity.core.protocols.certifier.active import Proxy, request_frames
 from verity.core.protocols.certifier.grid import GridParams
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
@@ -19,8 +19,8 @@ from verity.core.protocols.sampled_proofs.service import Registration
 
 P = GridParams(buckets=4, allocation=2, frame_bytes=96)
 WINDOWS = 3
-TRAFFIC = [(0, encode_frame(DATA, 7, b"prompt", P.frame_bytes)), (2, encode_frame(LAST, 7, b"end", P.frame_bytes)),
-           (5, encode_frame(LAST, 8, b"next", P.frame_bytes))]
+FIRST = request_frames(b"prompt " * 13, P.frame_bytes)  # two frames
+TRAFFIC = [(0, FIRST[: P.frame_bytes]), (2, FIRST[P.frame_bytes :]), (5, request_frames(b"next", P.frame_bytes))]
 
 
 def registration(window: int) -> Registration:
@@ -30,7 +30,7 @@ def registration(window: int) -> Registration:
 
 def run(salt: bytes) -> tuple[Proxy, list]:
     proxy = Proxy(("127.0.0.1", 9), P, P, SyncSet((0,), (1,)), [ClockSync(0, 1)] * WINDOWS, origin=0.0,
-                  salt=lambda p, n: salt[:n])
+                  ingress_link="requests", clock=lambda: 0.0, salt=lambda p, n: salt[:n])
     for bucket, frame in TRAFFIC:
         proxy.bucketer.arrive(frame, bucket)
     records = [r for r in (proxy.bucketer.tick()[1] for _ in range(WINDOWS * P.buckets)) if r is not None]

@@ -19,10 +19,11 @@ FAMILY = ("moe", "moe_pad", "boolean_moe", "fp8", "fp8_moe", "fp8_moe_experts", 
           "boolean_gather", "dsv4_moe", "boolean_dsv4_moe")
 #: other families' modules the family's Definitions call: the scalar and bit primitives (`prims`, `ref_prims`, `pad_prims`), the B1
 #: composites (`b1`), Hopper's tensor-core step (`hopper`), the lifted-Definition makers (`lifted`), the Boolean bit views
-#: (`boolean_attention._Bits`), and the SwiGLU and logf that DeepSeek-V4's routers and activation call (`act`, `boolean_silu`,
-#: `topp_word_gates`, `gumbel_boolean`)
+#: (`boolean_attention._Bits`), the SwiGLU and logf that DeepSeek-V4's routers and activation call (`act`, `boolean_silu`,
+#: `topp_word_gates`, `gumbel_boolean`), and the i32 gather `GatherI32x{V}_v1` that `boolean_gather.gather_i32` lowers
+#: (`dsv4_decode_indices`, which also registers its row's numpy twin, so it is no Definitions-only module yet)
 OTHER_DEFINITION_MODULES = ("b1", "prims", "ref_prims", "pad_prims", "hopper", "lifted", "boolean_attention", "act", "boolean_silu",
-                            "topp_word_gates", "gumbel_boolean")
+                            "topp_word_gates", "gumbel_boolean", "dsv4_decode_indices")
 ALLOWED = {f"{REGISTRY}.{m}" for m in FAMILY + OTHER_DEFINITION_MODULES}
 #: the catalog, where the layout move put core's Definitions and silicon models
 CATALOG = "verity.ml.circuits"

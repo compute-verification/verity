@@ -1,0 +1,813 @@
+[
+ {
+  "id": "b_w.pretrained",
+  "symbol": "b_w",
+  "unit": "bits/weight",
+  "meaning": "Bits a reader needs per weight of a model trained from scratch, at retained quality (lossy). The rate the thread theorem charges per updated weight when the update is a whole model, as in pretraining.",
+  "estimates": [
+   {
+    "id": "b_w.pretrained/frontier-lossy",
+    "context": "frontier-scale dense or MoE models, quality within about 1 zero-shot point",
+    "low": 0.8,
+    "central": 2.5,
+    "high": 4.5,
+    "confidence": "medium",
+    "merge": "High is the strict within-1%-perplexity standard (4-bit GPTQ/AWQ, SpQR, NVFP4 at 4.03 bits per weight with its 16x16 block scales). Central sits between where zero-shot holds (2 bits, QTIP on Llama 3.1 405B) and where perplexity holds (3 bits); size-optimal fine-tuned rates are 2.0-2.5. Low is QMoE's 0.807 bits/param on an older MoE; a frontier MoE needs about 1.6. Rates that need fine-tuning to decompress are excluded: decompression is itself training.",
+    "evidence": [
+     "frantar-2022-gptq/1",
+     "nvidia-2025-nvfp4/1",
+     "malinovskii-2024-pv-tuning/1",
+     "egiazarian-2024-aqlm/1",
+     "tseng-2024-qtip/1",
+     "unsloth-2025-deepseek-r1-dynamic/1",
+     "frantar-2023-qmoe/1",
+     "frantar-2023-qmoe/3",
+     "nvidia-2025-nvfp4/8"
+    ]
+   },
+   {
+    "id": "b_w.pretrained/low-bit-from-scratch",
+    "context": "weights as read by the forward and backward matmuls of a model trained from scratch in low precision; master weights stay FP32/BF16",
+    "low": 1.58,
+    "central": 4.0,
+    "high": 8,
+    "confidence": "medium",
+    "merge": "Central: NVFP4 weights (16x16 block scales, 4.03 bits) in the largest low-bit runs, Nemotron 3 Ultra (550B total, 55B active, 20T tokens) and Super (120B, 12.7B active, 25T tokens). The loss gap against BF16 is below 0.4% and falls with scale: about 1%, 0.6% and 0.4% at 3B, 8B and 55B active. The final 15% of layers plus attention, latent and embedding projections stay in high precision, which lifts the weight-averaged read to about 5.8. Low: ternary from scratch (BitNet b1.58 2B4T at 4T tokens, Spectra 3.9B, Spectra 1.1 3B at 1.2T), with a fitted loss gap of 5-7% at 15B-330B. 1-bit BitNet reaches 30B but trains on only about 10B tokens. High: FP8 practice (DeepSeek-V3 within 0.25%; FSDP2 float8 weight all-gather). Naive 4-bit weight reads without training-aware quantization cost 5-12%. These are rates of a different training computation, not compressions of a BF16 one: the bound applies to the low-bit run as its own reference circuit, and its master-weight update is extra work the bound does not count.",
+    "evidence": [
+     "nvidia-2026-nemotron3-ultra/1",
+     "nvidia-2026-nemotron3-ultra/2",
+     "nvidia-2026-nemotron3-ultra/3",
+     "nvidia-2026-nemotron3-super/1",
+     "nvidia-2026-nemotron3-super/2",
+     "nvidia-2025-nemotron3-whitepaper/1",
+     "nvidia-2025-nvfp4/8",
+     "nvidia-2025-nvfp4/7",
+     "ma-2025-bitnet-2b4t/1",
+     "kaushal-2024-spectra/2",
+     "vaidhya-2025-spectra-1-1/1",
+     "wang-2023-bitnet/1",
+     "deepseekai-2024-deepseek-v3/1",
+     "pytorch-2024-float8-fsdp2/1",
+     "wang-2025-fp4-training/1",
+     "jia-2024-sdp4bit/1"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "b_w.lossless",
+  "symbol": "b_w",
+  "unit": "bits/weight",
+  "meaning": "Lossless bits per weight of a released checkpoint.",
+  "estimates": [
+   {
+    "id": "b_w.lossless/checkpoints",
+    "context": "BF16 checkpoints (central, high) and FP8-native ones (low)",
+    "low": 6.8,
+    "central": 10.8,
+    "high": 11.0,
+    "confidence": "high",
+    "merge": "Only the exponent compresses: every BF16 measurement lands at 10.5-10.9 bits (DFloat11 at 70B-405B, ZipNN). FP8-native DeepSeek-R1 gives the low. Lossless coding is an upper bound on b_w, never the attacker's rate.",
+    "evidence": [
+     "zhang-2025-dfloat11/2",
+     "hershcovitch-2024-zipnn/1",
+     "yang-2025-ecf8/1"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "b_w.capacity",
+  "symbol": "b_w",
+  "unit": "bits/parameter",
+  "meaning": "Information a trained parameter holds: a ceiling on what a small update can carry per trainable parameter.",
+  "estimates": [
+   {
+    "id": "b_w.capacity/measured",
+    "context": "memorization and knowledge-capacity experiments, at most about 1.5B parameters",
+    "low": 1.5,
+    "central": 2.0,
+    "high": 3.6,
+    "confidence": "medium",
+    "merge": "High: 3.6 bits/param of memorized random data (models of about 100K-20M params). Central: 2 bits/param of extractable knowledge, matching the 2-bit size-optimal quantization rate. Low: the MoE figure.",
+    "evidence": [
+     "morris-2025-memorize/1",
+     "allenzhu-2024-knowledge-capacity/1",
+     "allenzhu-2024-knowledge-capacity/3"
+    ]
+   },
+   {
+    "id": "b_w.capacity/pretrained-vs-init",
+    "context": "information a pretrained model's weights carry beyond its registered (seeded) init, per weight",
+    "low": 1.2,
+    "central": 2.0,
+    "high": 3.6,
+    "confidence": "low",
+    "merge": "The registered init saves almost nothing. Restricting pretraining's weights, or their change from init, to rank d/4 costs 7-30% in perplexity at 1B (15.01 with restarts and 18.22 plain, against 13.97 full rank). So the rate relative to init is the model's own information. Central: 2 bits per parameter of extractable knowledge, matching the 2-2.5-bit lossy rates of frontier models. High: the 3.6 bits per parameter memorization ceiling. Low: 0.58 x 2, because a factorized model with 58% of the parameters matches dense loss at equal FLOPs (Spectron, up to 1.5B). Per step, 4-bit weight differences track full-precision training at 6.7B, so per-step novelty is at most 4 bits per parameter, and the cumulative total is capped by capacity rather than by step count.",
+    "evidence": [
+     "morris-2025-memorize/1",
+     "allenzhu-2024-knowledge-capacity/1",
+     "glentis-2025-param-efficient-survey/1",
+     "glentis-2025-param-efficient-survey/2",
+     "janson-2026-spectron/1",
+     "jia-2024-sdp4bit/2",
+     "li-2024-excp/1",
+     "tseng-2024-qtip/1"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "b_w.delta",
+  "symbol": "b_w",
+  "unit": "bits/base weight",
+  "meaning": "Bits per base-model weight of an update relative to committed theta (fine-tuning, RL), at retained quality.",
+  "estimates": [
+   {
+    "id": "b_w.delta/sft",
+    "context": "supervised fine-tuning deltas up to 70B",
+    "low": 0.003,
+    "central": 0.1,
+    "high": 1.0,
+    "confidence": "medium",
+    "merge": "Values unchanged. Data-free post-hoc codes reach 0.32-0.5 bits per base weight at 7-13B without loss (UltraDelta), between DeltaDQ's data-aware 0.03-0.125 and BitDelta's 1 bit. SFT and distillation deltas lack the rank-1 structure of RL deltas (AlphaRL's controls), so RL rates must not be applied to SFT. High: post-hoc 1-bit codes are near-lossless on chat up to 70B (BitDelta), though they degrade math and code. Central: a random 99% drop at 70B (DARE, about 0.16) and DeltaDQ at 128x (0.125). Low: constrained adapters (VeRA at 13B, 0.003).",
+    "evidence": [
+     "liu-2024-bitdelta/1",
+     "ping-2024-delta-come/1",
+     "yu-2024-dare/1",
+     "jiang-2024-deltadq/1",
+     "dettmers-2023-qlora/1",
+     "kopiczko-2024-vera/1",
+     "wang-2025-ultradelta/1",
+     "cai-2025-alpharl/2"
+    ]
+   },
+   {
+    "id": "b_w.delta/rl",
+    "context": "RL post-training; the trainer chooses the parametrization",
+    "low": 2e-05,
+    "central": 0.006,
+    "high": 1.0,
+    "confidence": "low",
+    "merge": "The central now has two independent supports. Rank-1 LoRA matches full RL on Llama-3.1-8B, and truncating natural RL deltas to rank 1 after training keeps 99.17% of the reasoning gain across 13 models (7B-32B) and 10 algorithms, which is 0.004-0.008 bits per base weight depending on matrix shape. On Qwen3-8B, the best rank-1 LoRA seed matches ranks 16 and 32 but is unreliable across seeds. LoRA RL runs on a 1.04T MoE (Kimi K2) at about 10% of full-RL compute, with no matched full-RL baseline. High: natural RL deltas are dense and full rank, so take the post-hoc 1-bit code. Central: rank-1 LoRA matches full RL on Llama-3.1-8B (3M params, as a rate per base weight). Low: TinyLoRA's 10k parameters on Qwen-7B (13 parameters is the extreme, Qwen-specific). RL sparsity (68-96% unchanged) is treated as a precision artifact that does not lower b_w.",
+    "evidence": [
+     "shenfeld-2025-rls-razor/1",
+     "schulman-2025-lora-without-regret/1",
+     "morris-2026-tinylora/1",
+     "mukherjee-2025-rl-subnetworks/1",
+     "zhu-2025-path-not-taken/1",
+     "cai-2025-alpharl/1",
+     "mindlab-2026-peft-scaling/1",
+     "mindlab-2026-peft-scaling/2"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "update.bits_total",
+  "symbol": "U",
+  "unit": "bits",
+  "meaning": "Description length of a whole update. The policy charges a block for the part of it the block must read; an update under K/2 that a block can also decode fits in one block.",
+  "estimates": [
+   {
+    "id": "update.bits_total/frontier-rl",
+    "context": "RL post-training of a frontier model, smallest parametrization that works",
+    "low": 80000.0,
+    "central": 40000000.0,
+    "high": 10400000000.0,
+    "confidence": "low",
+    "merge": "Low: TinyLoRA-scale adapters (0.01 MB). Central: 1-10 MB, the size of K; R1-Zero's 5.3M episodes bound its reward information at about 0.66 MB. High: rank-1 LoRA on every expert of a 1T MoE, 1.27 GB in bf16 (derived from the Kimi K2 config).",
+    "evidence": [
+     "morris-2026-tinylora/2",
+     "schulman-2025-lora-without-regret/1",
+     "moonshotai-2025-kimi-k2-config/1",
+     "balazy-2025-lora-xs/1"
+    ]
+   },
+   {
+    "id": "update.bits_total/seed-run",
+    "context": "a whole zeroth-order or evolution-strategies run, as seeds and scalars",
+    "low": 6400.0,
+    "central": 320000.0,
+    "high": 9000000.0,
+    "confidence": "medium",
+    "merge": "Central: MeZO stores a 20k-step fine-tune of a 66B model in under 0.1 MB. Low: an intrinsic-dimension subspace. High: NOLA at 70B.",
+    "evidence": [
+     "malladi-2023-mezo/1",
+     "aghajanyan-2021-intrinsic-dim/3",
+     "koohpayegani-2024-nola/4",
+     "qiu-2025-es-at-scale/2"
+    ]
+   },
+   {
+    "id": "update.bits_total/frontier-agentic-rl",
+    "context": "agentic coding RL on a frontier-size model, smallest parametrization demonstrated to work",
+    "low": 2700000000.0,
+    "central": 26000000000.0,
+    "high": 16000000000000.0,
+    "confidence": "low",
+    "merge": "Low: Mehta's rank-32 LoRA if only attention and shared experts carry adapters. Central: TRACE's 1.6B-parameter adapter in bf16, and Mehta's mid reading. High: full-parameter RL on a 1T model in bf16, which Kimi K2 does.",
+    "evidence": [
+     "mehta-2026-agentic-coding-rl-transfer/1",
+     "kang-2026-trace/1",
+     "kimiteam-2025-kimi-k2/2"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "update.decode_flops_per_step",
+  "symbol": "c_dec",
+  "unit": "flops/parameter/seed-step",
+  "meaning": "Work to regenerate one seed-step's perturbation and add it, per parameter.",
+  "estimates": [
+   {
+    "id": "update.decode_flops_per_step/seed",
+    "context": "Gaussian or Rademacher noise from a counter-based PRNG, plus an add",
+    "low": 2,
+    "central": 10,
+    "high": 20,
+    "confidence": "low",
+    "merge": "Derived: rebuilding MeZO's weights needs no forward pass or data, only one noise draw and one multiply-add per parameter per step. In Boolean gates it is about 1e2-1e5 per parameter, which would make decoding the binding cost.",
+    "evidence": [
+     "malladi-2023-mezo/2",
+     "qin-2024-fedkseed/2"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "update.fraction_changed",
+  "symbol": "phi",
+  "unit": "fraction of parameters",
+  "meaning": "Fraction of parameters an update changes materially.",
+  "estimates": [
+   {
+    "id": "update.fraction_changed/fine-tuning",
+    "context": "fine-tuning and RL deltas",
+    "low": 0.005,
+    "central": 0.15,
+    "high": 1.0,
+    "confidence": "medium",
+    "merge": "Low: trained-in sparsity (diff pruning). Central: the top 20% of a delta suffices (TIES); MoE fine-tuning touches 5-15% of experts. High: SFT changes 81-99% of weights. An arbitrary mask costs H(phi) bits per weight, so sparsity lowers b_w only when positions are free (seeded, or whole experts).",
+    "evidence": [
+     "guo-2021-diff-pruning/1",
+     "yadav-2023-ties/1",
+     "wang-2024-esft/1",
+     "zhu-2025-path-not-taken/1"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "update.bits_per_param_step",
+  "symbol": "u_step",
+  "unit": "bits/parameter/step",
+  "meaning": "Aggregate update every replica applies per step in working low-communication pretraining: an achieved rate, so an upper bound on a frontier update's per-step information.",
+  "estimates": [
+   {
+    "id": "update.bits_per_param_step/pretraining",
+    "context": "DiLoCo-family runs at 0.5B-72B",
+    "low": 0.04,
+    "central": 0.1,
+    "high": 0.6,
+    "confidence": "medium",
+    "merge": "Low: Streaming DiLoCo. Central: INTELLECT-1, MuLoCo and SparseLoCo-family runs. High: DisTrO without re-quantized all-reduce. At N = 1e12 even the low is 4e10 bits per step, thousands of times K.",
+    "evidence": [
+     "douillard-2025-streamingdiloco/1",
+     "jaghouar-2024-intellect1/1",
+     "therien-2025-muloco/1",
+     "sarfi-2025-sparseloco/1",
+     "peng-2024-distro/1"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "grad.compression_ratio",
+  "symbol": "r_g",
+  "unit": "x vs dense bf16",
+  "meaning": "Per-worker, per-step communication reduction against a dense bf16 all-reduce. These methods shrink traffic between workers that each hold a full model, so they do not by themselves evade a per-block cap.",
+  "estimates": [
+   {
+    "id": "grad.compression_ratio/frontier",
+    "context": "matched-loss results at 1B-72B",
+    "low": 100,
+    "central": 1000,
+    "high": 3000,
+    "confidence": "medium",
+    "merge": "Low: DiLoCo at 10B (over 100x), MuLoCo, INTELLECT-1. Central: SparseLoCo at matched loss (889x), DisTrO. High: SparseLoCo with a loss penalty. Error feedback keeps the discarded part in dense worker-local state, so the information moves rather than disappears.",
+    "evidence": [
+     "charles-2025-diloco-scaling/1",
+     "therien-2025-muloco/1",
+     "jaghouar-2024-intellect1/1",
+     "sarfi-2025-sparseloco/1",
+     "peng-2024-distro/1",
+     "lin-2017-dgc/1"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "b_a.activation",
+  "symbol": "b_a",
+  "unit": "bits/entry",
+  "meaning": "Bits per activation entry crossing a block boundary in training, at retained quality. Every bound and the sharding floor scale with it.",
+  "estimates": [
+   {
+    "id": "b_a.activation/boundary-training",
+    "context": "residual-stream activations sent between pipeline stages in training; bits per original d_model entry (activation.boundary_bits / d_model), a learned bottleneck folded in",
+    "low": 1,
+    "central": 4,
+    "high": 8,
+    "confidence": "low",
+    "merge": "High: production systems send 8-bit activations across parallel links (DeepSeek-V3 FP8 dispatch at d = 7168, SWARM, Petals); Megatron pipelines send BF16. Central: TAH-Quant, stable from about 4.4 bits at 3B or less, the largest matched-loss boundary test. Learned per-stage Stiefel projections reach 8x (2 bits per original entry) at 1B on 20 tokens per parameter for +1.4-2.0% loss, but a fixed random subspace at 8x costs 5.9% and the Subspace Networks recipe 14-26%, so 2 bits is method-specific and lossy. Low: MAPL with residual VQ at 16x, about 1 bit per original entry, +2.3-3.0% at 1B, with projectors and codebooks held by both stages; Subspace Networks' 100x (0.16 bits) at 8B is set aside because a matched-token replication of its method loses 14-26% at only 8x. Negative: Optimus-CC's forward inter-stage compression diverged even at low rates; no sub-8-bit forward boundary result exists above 3B, so at scale 8 bits is what is defensible and 4 is a small-model figure. Backward traffic needs about 1.5-2x the forward bits under quantization (AQ-SGD, TAH-Quant, Rudakov); early-layer boundaries need more than late ones (Bian).",
+    "evidence": [
+     "deepseekai-2024-deepseek-v3/3",
+     "ryabinin-2023-swarm/1",
+     "borzunov-2022-petals/1",
+     "he-2025-tahquant/1",
+     "nvidia-2025-nvfp4/3",
+     "wang-2024-bitnet-a48/1",
+     "wang-2022-aqsgd/1",
+     "janson-2026-mapl/1",
+     "janson-2026-mapl/2",
+     "janson-2026-mapl/3",
+     "obeidi-2026-heterogeneous/1",
+     "ramasinghe-2025-protocolmodels/5",
+     "rudakov-2024-mp-compression/1",
+     "bian-2023-compressing-activations/6",
+     "song-2023-optimuscc/3"
+    ]
+   },
+   {
+    "id": "b_a.activation/pretraining-forward",
+    "context": "forward activations at linear-layer GEMM inputs in pretraining, scales included (not the tensors sent between blocks)",
+    "low": 4,
+    "central": 4.5,
+    "high": 8.25,
+    "confidence": "medium",
+    "merge": "Central: NVFP4 (E2M1 plus an E4M3 scale per 16) on Fprop inputs ends 1.5% above FP8 at 12B on 10T tokens and within 0.4% of BF16 branches at 550B total / 55B active on 20T, with 15-16% of layers kept in BF16 in both (derived average about 6.2 bits including them). Low: FP4 with one scale per token costs 4.8% at 7-13B on 100B tokens and needs a 0.2-6% high-precision outlier side channel; MXFP4 (4.25) is 2.5% worse than FP8 at 12B. High: FP8 practice, 8 bits per-tensor (Nemotron-H 56B / 20T, under 0.1%) to 8.25 with 1x128 scales (DeepSeek-V3 671B / 14.8T and Ling-1T / 900B, under 0.25%). Conflict: NVIDIA's 4-bit gap shrinks with scale (1% at 3B active, 0.6% at 8B, 0.4% at 55B) while QAT laws and Wang's 1.3B-13B runs find it grows with tokens per parameter; we take the at-scale runs.",
+    "evidence": [
+     "nvidia-2025-nvfp4/3",
+     "nvidia-2025-nvfp4/7",
+     "nvidia-2026-nemotron3-ultra/2",
+     "nvidia-2026-nemotron3-super/1",
+     "nvidia-2025-nemotron3-whitepaper/1",
+     "wang-2025-fp4-training/1",
+     "wang-2025-fp4-training/3",
+     "chen-2025-qat-scaling-law/1",
+     "nvidia-2025-nemotron-h/1",
+     "nvidia-2025-nemotron-h/2",
+     "inclusionai-2025-ling2/1",
+     "deepseekai-2024-deepseek-v3/1",
+     "deepseekai-2024-deepseek-v3/7"
+    ]
+   },
+   {
+    "id": "b_a.activation/pretraining-backward",
+    "context": "activation-gradients at backward GEMM inputs (Dgrad and Wgrad) in pretraining, scales included",
+    "low": 4.25,
+    "central": 4.5,
+    "high": 8,
+    "confidence": "medium",
+    "merge": "Central: NVFP4 activation-gradients with stochastic rounding (and 16x16 Hadamard transforms on Wgrad inputs) at 12B / 10T, and NVFP4 Dgrad and Wgrad in Nemotron 3 Ultra at 550B / 20T. Low: MXFP4 with a random Hadamard transform and stochastic rounding matches BF16 at 1.3B / 210B tokens, with a BF16 forward. High: E5M2 per-tensor at 56B / 20T (Nemotron-H); E4M3 with 1x128 scales is 8.25 (DeepSeek-V3, Ling-1T). The bits equal the forward pass's only with unbiased rounding: round-to-nearest MXFP4 backward costs 3.4% at 1.3B. Conflict: on links between blocks, where nothing is rounded stochastically, gradients need about 1.5-2x the forward bits (Rudakov 6 vs 2-4, TAH-Quant 6-8 vs 4.4), while Optimus-CC's low-rank code finds the reverse (forward diverged; backward 10x lossless on epilogue micro-batches at 8.3B). This estimate takes the GEMM-input runs.",
+    "evidence": [
+     "tseng-2025-mxfp4-training/1",
+     "tseng-2025-mxfp4-training/2",
+     "nvidia-2025-nvfp4/3",
+     "nvidia-2025-nvfp4/9",
+     "nvidia-2026-nemotron3-ultra/1",
+     "nvidia-2025-nemotron-h/1",
+     "inclusionai-2025-ling2/1",
+     "rudakov-2024-mp-compression/1",
+     "he-2025-tahquant/3",
+     "song-2023-optimuscc/1",
+     "song-2023-optimuscc/3"
+    ]
+   },
+   {
+    "id": "b_a.activation/tp-partial-sums-training",
+    "context": "tensor-parallel partial sums in reduce-scatter or all-reduce, forward and backward, in pretraining; bits per entry at full shard width, scales included, a learned bottleneck folded in",
+    "low": 1.6,
+    "central": 8.25,
+    "high": 16,
+    "confidence": "low",
+    "merge": "Central: FP8 with two scales per 256-entry block after an RMS rescale and Hadamard rotation costs +0.70% at GPT-6.7B and +0.03% at Qwen2.5-7B in 10,000-iteration runs (TACO); MegaScale-MoE sends forward partial sums as per-token FP8 and sums them in FP32 at 35B-176B MoE, gap unquantified. High: practice keeps forward partial sums in BF16 (FP8-LM's forward reduce-scatter, DeepSeek-V3's combine, NVFP4's communication). Low: a learned linear encoder before the all-reduce sums partial sums at 100 of 1024 dims (derived 1.6 bits per original entry) in BERT-Large 345M, last layers only, within about 3% on most tasks; the lowest quantizer is Echo's 4.25 bits with error feedback, high-precision summation and a raised LR, +0.9% at 0.6B / 10B tokens. Negative: per-tensor FP8 and INT8 diverge on TP tensors and E5M2 costs 24% (TACO); every working scheme dequantizes before summing (MegaScale-MoE, ZeRO++). Inference partial sums take 5.2 bits at 70-123B for +0.5-1.7% and INT4 in the reduce step (FlashComm).",
+    "evidence": [
+     "liu-2026-taco/1",
+     "liu-2026-taco/2",
+     "jin-2025-megascale-moe/1",
+     "xie-2026-echo/1",
+     "xie-2026-echo/2",
+     "bian-2023-compressing-activations/2",
+     "bian-2023-compressing-activations/5",
+     "hansenpalmus-2024-tp-compression/1",
+     "li-2024-flashcomm/1",
+     "nvidia-2025-nvfp4/5",
+     "deepseekai-2024-deepseek-v3/3",
+     "wang-2023-zeropp/3",
+     "peng-2023-fp8-lm/3"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "b_a.kv",
+  "symbol": "b_kv",
+  "unit": "bits/entry",
+  "meaning": "Bits per KV-cache entry at retained quality (inference).",
+  "estimates": [
+   {
+    "id": "b_a.kv/inference",
+    "context": "KV-cache quantization",
+    "low": 1,
+    "central": 2,
+    "high": 4,
+    "confidence": "high",
+    "merge": "Central: KIVI's 2 bits. Low: coupled and low-rank KV methods. High: production 4-bit KV.",
+    "evidence": [
+     "liu-2024-kivi/1",
+     "zhang-2024-cq/2",
+     "lin-2024-qserve/1"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "activation.boundary_bits",
+  "symbol": "w_cut",
+  "unit": "bits/token",
+  "meaning": "Bits per token crossing a shard boundary at d_model = 7168: effective width times b_a. Sets the sharding floor w_cut / b_tok.",
+  "estimates": [
+   {
+    "id": "activation.boundary_bits/d7168",
+    "context": "attacker's choice of architecture and codec at d_model = 7168",
+    "low": 1147,
+    "central": 14336,
+    "high": 57344,
+    "confidence": "low",
+    "merge": "High: production practice, d at 8 bits. Central: a bottleneck retrained to 0.5 d at 4 bits (a linear d/2 bottleneck costs SWARM 26-28% more steps; ESPACE projects to 0.25 d at +0.18 perplexity). Low: Subspace Networks' claimed 100x (0.01 d at 16 bits), one preprint whose matched-token replication loses 14-26% in loss at only 8x. A standard architecture at FP4 is 28672. An unmodified model's boundary activations are not low-rank.",
+    "evidence": [
+     "deepseekai-2024-deepseek-v3/3",
+     "ryabinin-2023-swarm/2",
+     "sakr-2024-espace/1",
+     "bian-2023-compressing-activations/1",
+     "ramasinghe-2025-protocolmodels/5",
+     "deepseek-2024-v2/1"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "b_tok",
+  "symbol": "b_tok",
+  "unit": "bits/token",
+  "meaning": "Bits per prompt token the policy allows for.",
+  "estimates": [
+   {
+    "id": "b_tok/raw",
+    "context": "raw token ids of frontier tokenizers (128k-200k vocabularies)",
+    "low": 17.0,
+    "central": 17.3,
+    "high": 17.6,
+    "confidence": "high",
+    "merge": "log2 of the vocabulary: Llama 3 (128,256) to o200k (about 200,019). None reaches 20 bits.",
+    "evidence": [
+     "grattafiori-2024-llama3/1",
+     "openai-2026-tiktoken-o200k/1"
+    ]
+   },
+   {
+    "id": "b_tok/entropy-coded",
+    "context": "arithmetic-coded against a strong committed base model",
+    "low": 0.9,
+    "central": 2.2,
+    "high": 3.3,
+    "confidence": "medium",
+    "merge": "Central: Llama-3.1-405B and DeepSeek-V3 at about 0.54 bits/byte on Pile-test, times 3.94 characters per token. Low: Python code. High: 7-8B models (LLMZip). Requires bit-exact probabilities, which exact circuits give.",
+    "evidence": [
+     "deepseekai-2024-deepseek-v3/5",
+     "huang-2024-compression-represents-intelligence/1",
+     "deletang-2023-language-modeling-is-compression/1",
+     "valmeekam-2023-llmzip/1"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "prompt.compression_ratio",
+  "symbol": "r_p",
+  "unit": "x",
+  "meaning": "Prompt compression at retained task quality. Soft-prompt 'compression' cuts positions, not bits: each vector input must be charged as an activation.",
+  "estimates": [
+   {
+    "id": "prompt.compression_ratio/lossy-task-preserving",
+    "context": "token-dropping and learned compressors",
+    "low": 2,
+    "central": 4,
+    "high": 26,
+    "confidence": "medium",
+    "merge": "LLMLingua-2 2-5x and ICAE 4x (central), LLMLingua 20x and gist tokens 26x (high, narrower tasks). 480-1568x soft compression keeps only 62-73% of capability and is not a bit ratio.",
+    "evidence": [
+     "pan-2024-llmlingua2/1",
+     "jiang-2023-llmlingua/1",
+     "mu-2023-gist-tokens/1",
+     "kuratov-2025-cramming/3"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "capability.bits",
+  "symbol": "I",
+  "unit": "bits",
+  "meaning": "Size of the new information behind a measured capability gain: the shared headroom one block keeps.",
+  "estimates": [
+   {
+    "id": "capability.bits/rl-elicitation",
+    "context": "RL with tiny adapters, measured gains on math at 7-8B",
+    "low": 208,
+    "central": 160000.0,
+    "high": 48000000.0,
+    "confidence": "low",
+    "merge": "Low: 26 bytes of TinyLoRA add 15 points. Central: 20 KB. High: rank-1 LoRA on an 8B model (6 MB) matches full RL. Mostly Qwen math models, which run high; all elicitation of existing skill.",
+    "evidence": [
+     "morris-2026-tinylora/6",
+     "schulman-2025-lora-without-regret/2",
+     "shao-2025-spurious-rewards/1"
+    ]
+   },
+   {
+    "id": "capability.bits/sft-data",
+    "context": "small curated SFT sets",
+    "low": 750000.0,
+    "central": 8000000.0,
+    "high": 62000000.0,
+    "confidence": "medium",
+    "merge": "LIMA's 1,000 examples (94 KB), about 1 MB for ReFT-scale sets, s1's 1k traces (7.7 MB).",
+    "evidence": [
+     "zhou-2023-lima/1",
+     "wu-2024-reft/1",
+     "muennighoff-2025-s1/1"
+    ]
+   },
+   {
+    "id": "capability.bits/context",
+    "context": "prompts and context playbooks",
+    "low": 70,
+    "central": 16000.0,
+    "high": 8000000.0,
+    "confidence": "medium",
+    "merge": "OPRO's three words (GSM8K 34% to 80%), URIAL's 2 KB, ACE playbooks and many-shot ICL at 0.2-1 MB.",
+    "evidence": [
+     "yang-2023-opro/1",
+     "lin-2023-urial/1",
+     "zhang-2025-ace/2",
+     "agarwal-2024-many-shot-icl/2"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "train.compute_multiplier",
+  "symbol": "m",
+  "unit": "x (FLOP-equivalent)",
+  "meaning": "Compute a BF16 run needs to reach the loss of a pretraining run at rates (b_w, b_a), divided by that run's compute (FLOPs = 6ND, MACs counted once whatever their precision). 1 for BF16; below 1 when compressed training needs more compute. Pretraining efficiency under the policy is max m / rho.",
+  "estimates": [
+   {
+    "id": "train.compute_multiplier/w8a8",
+    "context": "FP8 weights and activations in every block GEMM, forward and backward; master weights FP16/FP32",
+    "low": 0.95,
+    "central": 1.0,
+    "high": 1.0,
+    "confidence": "high",
+    "merge": "Equal loss at equal tokens at 7B-175B (FP8-LM) and 8B (all GEMMs incl. attention, FOG); 56B on 20T tokens in FP8 (Nemotron-H). Low allows for the architecture changes FP8 attention needs.",
+    "evidence": [
+     "peng-2023-fp8-lm/1",
+     "hernandez-cano-2025-fp8-gemm/1",
+     "hernandez-cano-2025-fp8-gemm/2",
+     "nvidia-2025-nemotron-h/1",
+     "sun-2025-fp-quant-scaling/1"
+    ]
+   },
+   {
+    "id": "train.compute_multiplier/w4a4",
+    "context": "4-bit weights and activations in the linear-layer GEMMs (forward; NVFP4 and Quartet also the backward GEMMs), at a Chinchilla-optimal 1e25 FLOP",
+    "low": 0.55,
+    "central": 0.75,
+    "high": 0.9,
+    "confidence": "medium",
+    "merge": "Central: the unified-law capacity 0.85 (forward-only QAT, 200M, m = rho under its effective-parameter form) and the at-scale NVFP4 anchors, 0.72-0.79 derived from <0.4% and <0.6% loss gaps at 55B and 8B active (Hoffmann law, tokens-equivalent at fixed N; these are lower bounds). Low: Quartet's fwd+bwd FP4 0.62 and Chen's additive law extrapolated to 1e25 (0.56). The 12B NVFP4 run at 830 tokens/parameter (1.5% gap, m ~ 0.38) and Kumar's naive integer quantizer (0.23) are excluded as over-trained and superseded. High: the unified-law single-tensor 4-bit values (0.90, 0.91).",
+    "evidence": [
+     "panferov-2025-unified-compressed/2",
+     "panferov-2025-unified-compressed/4",
+     "nvidia-2026-nemotron3-ultra/2",
+     "nvidia-2025-nemotron3-whitepaper/1",
+     "nvidia-2025-nvfp4/7",
+     "castro-2025-quartet/5"
+    ]
+   },
+   {
+    "id": "train.compute_multiplier/w4-weights",
+    "context": "4-bit forward weights, 16-bit activations, 1e25 FLOP",
+    "low": 0.5,
+    "central": 0.85,
+    "high": 0.95,
+    "confidence": "medium",
+    "merge": "Central: unified-law W4A16 0.90 and Chen W4A16 0.86 at 1e25 (extrapolated). Low: Sun's FP4 E2M1 weight law extrapolated to 1e25 (0.48; 0.81 at 1e21), whose penalty grows as D^0.52/N^0.24. High: a full-precision phase then weight QAT is near-lossless at 4 bits (Dremov).",
+    "evidence": [
+     "panferov-2025-unified-compressed/2",
+     "sun-2025-fp-quant-scaling/1",
+     "sun-2025-fp-quant-scaling/3",
+     "chen-2025-qat-scaling-law/2"
+    ]
+   },
+   {
+    "id": "train.compute_multiplier/ternary-weights",
+    "context": "ternary (1.58-bit) forward weights, 8-16-bit activations, latent weights high precision",
+    "low": 0.15,
+    "central": 0.3,
+    "high": 0.45,
+    "confidence": "low",
+    "merge": "Central: unified-law capacity interpolated at 0.58 of the way from 1 to 2 bits (Gaussian MSE), 0.35; Spectra's fixed-300B-token laws give 0.32 at 3.9B; Spectra 1.1's two laws give 0.23 at 1e21 FLOP. Low: Spectra 1.1 extrapolated past 1e22 collapses (0.02 at 1e25) on a 0.02 floor gap, discounted. High: BitNet's gap narrows with N.",
+    "evidence": [
+     "panferov-2025-unified-compressed/2",
+     "vaidhya-2025-spectra-1-1/1",
+     "kaushal-2024-spectra/1",
+     "kaushal-2024-spectra/2",
+     "wang-2023-bitnet/1"
+    ]
+   },
+   {
+    "id": "train.compute_multiplier/low-rank-updates",
+    "context": "full-rank weights trained through low-rank optimizer updates or merged low-rank adapters (GaLore, Fira, LTE), from scratch",
+    "low": 0.4,
+    "central": 0.6,
+    "high": 1.0,
+    "confidence": "low",
+    "merge": "Low: GaLore at 1B vs tuned full-rank, 0.40 derived from perplexity-vs-FLOPs (Glentis Table 3). Central: LTE needs 40% more samples (0.71, ViT-S) and Fira 0.52 at 1B. High: GaLore 2 matches full-rank at 7B on 500B tokens.",
+    "evidence": [
+     "huh-2024-lora-the-explorer/1",
+     "glentis-2025-param-efficient-survey/1",
+     "su-2025-galore2/1",
+     "lialin-2023-relora/2"
+    ]
+   },
+   {
+    "id": "train.compute_multiplier/w2a2",
+    "context": "2-bit weights and activations in the forward GEMMs, extrapolated to a Chinchilla-optimal 1e25 FLOP",
+    "low": 0.16,
+    "central": 0.3,
+    "high": 0.3,
+    "confidence": "low",
+    "merge": "Central and high: the unified-law capacity at W2A2, 0.30 (forward-only QAT at 30M-200M, m = rho under its effective-parameter form). Low: QuEST's eff(2) = 0.16 with weights and activations tied. Kumar's law predicts divergence at 2-bit activations. No run near this cell exists above 1.6B, so it is an extrapolation in scale and in method.",
+    "evidence": [
+     "panferov-2025-unified-compressed/2",
+     "panferov-2025-quest/3",
+     "kumar-2024-precision-scaling/7"
+    ]
+   },
+   {
+    "id": "train.compute_multiplier/w1a1",
+    "context": "1-bit weights and activations in the forward GEMMs, extrapolated to a Chinchilla-optimal 1e25 FLOP",
+    "low": 0.02,
+    "central": 0.09,
+    "high": 0.09,
+    "confidence": "low",
+    "merge": "Central and high: the unified-law capacity at W1A1, 0.09. Low: QuEST's eff(1) = 0.02. Kumar's law predicts divergence. An extrapolation in scale and method, kept to show where the attacker's gain stops.",
+    "evidence": [
+     "panferov-2025-unified-compressed/2",
+     "panferov-2025-quest/3",
+     "kumar-2024-precision-scaling/7"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "rl.compute_share",
+  "symbol": "s_RL",
+  "unit": "fraction of pretraining compute",
+  "meaning": "Compute spent on RL post-training divided by the base model's pretraining compute.",
+  "estimates": [
+   {
+    "id": "rl.compute_share/frontier-2025",
+    "context": "reasoning and agentic RL on frontier and near-frontier models, 2025",
+    "low": 0.01,
+    "central": 0.1,
+    "high": 1.0,
+    "confidence": "low",
+    "merge": "Low: smallest disclosed share for a competitive reasoning model (Llama-Nemotron Ultra <1%; DeepSeek-R1-Zero 3.8%). Central: the largest first-party measurement, DeepSeek-V3.2 'already exceeds 10%'. High: stated frontier practice without numbers, Grok 4 RL 'at pretraining scale', o3 at 10x o1. Epoch's 20% for R1 is set aside: it implies about 5x the GPU-hours DeepSeek reported.",
+    "evidence": [
+     "deepseek-2025-r1-nature/1",
+     "deepseek-2025-v32/1",
+     "xai-2025-grok4/1",
+     "openai-2025-o3/1",
+     "khatri-2025-scalerl/6",
+     "erdil-2025-epoch-r1/1",
+     "minimax-2025-m1/1",
+     "you-2025-reasoning-scale/1"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "rl.gain_share",
+  "symbol": "g_RL",
+  "unit": "fraction",
+  "meaning": "Fraction of a model's measured gain over its pretrained base that RL training accounts for.",
+  "estimates": [
+   {
+    "id": "rl.gain_share/same-base-pure-rl",
+    "context": "share of DeepSeek-R1's gain over DeepSeek-V3 reproduced by pure RL (R1-Zero) on the same 671B base, per benchmark",
+    "low": 0.17,
+    "central": 0.46,
+    "high": 0.95,
+    "confidence": "medium",
+    "merge": "Supplementary Table 9: SWE-bench Verified (43.2-42.0)/(49.2-42.0)=0.17; MMLU (88.8-87.1)/(90.8-87.1)=0.46; AIME 2024 (77.9-39.2)/(79.8-39.2)=0.95.",
+    "evidence": [
+     "deepseek-2025-r1-nature/4",
+     "deepseek-2025-r1-nature/3",
+     "deepseek-2025-r1/1"
+    ]
+   },
+   {
+    "id": "rl.gain_share/matched-tokens",
+    "context": "RL's own boost at matched output tokens as a share of a reasoning model's total gain over its base (Claude 3.7 vs 3.5 Sonnet)",
+    "low": 0.08,
+    "central": 0.18,
+    "high": 0.37,
+    "confidence": "low",
+    "merge": "Ord: OTIS Mock AIME 4/49, MATH level 5 6/34, GPQA Diamond 9/24; the remainder is inference scaling that RL unlocks. Consistent with Epoch's even log split of a ~10x CEG.",
+    "evidence": [
+     "ord-2025-mostly-inference-scaling/1",
+     "ord-2025-mostly-inference-scaling/2",
+     "ho-2025-reasoning-ceg/3"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "rl.small_state_retention",
+  "symbol": "r_K",
+  "unit": "fraction of full-weight RL's gain",
+  "meaning": "Fraction of full-weight RL's measured gain kept when RL's trainable state is at most about 2e7 bits.",
+  "estimates": [
+   {
+    "id": "rl.small_state_retention/math-rlvr",
+    "context": "RLVR on math, 1.5B-32B bases",
+    "low": 0.0,
+    "central": 0.9,
+    "high": 0.99,
+    "confidence": "medium",
+    "merge": "Retention favours the attacker, so high is the attacker's best. Low: rank-1 LoRA (about 1.8e7 bits) on DeepSeek-R1-Distill-Qwen-1.5B keeps 0%. Central: TinyLoRA keeps about 90% with 1000x fewer parameters at 7-8B; rank-1 LoRA (about 4e7 bits at 8B) matches full RL. High: AlphaRL's post-hoc rank-1 truncation keeps 99% at 7-32B (about 1e8 bits at 32B).",
+    "evidence": [
+     "morris-2026-tinylora/2",
+     "schulman-2025-lora-without-regret/8",
+     "cai-2025-alpharl/1",
+     "yin-2025-peft-rlvr/1"
+    ]
+   },
+   {
+    "id": "rl.small_state_retention/agentic-frontier",
+    "context": "agentic coding and SWE RL on a 100B-1T model",
+    "low": 0.1,
+    "central": 0.5,
+    "high": 0.9,
+    "confidence": "low",
+    "merge": "No measurement at about 2e7 bits exists above 32B or for agentic RL. The smallest state shown to work at 1T is a rank-32 LoRA of at least 2.7e9 bits, with no full-weight baseline; TRACE uses 2.6e10 bits per adapter at 30B; Yin's retention rises with rank (0 at rank 1, 0.77 at rank 16); Kimi K2 itself uses full-parameter RL. Central splits the elicitation reading from the rank-floor reading.",
+    "evidence": [
+     "mehta-2026-agentic-coding-rl-transfer/1",
+     "mehta-2026-agentic-coding-rl-transfer/2",
+     "kang-2026-trace/1",
+     "yin-2025-peft-rlvr/1",
+     "morris-2026-tinylora/5",
+     "kimiteam-2025-kimi-k2/2"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "rl.saturation_multiple",
+  "symbol": "C90/Cmid",
+  "unit": "x RL compute",
+  "meaning": "RL compute at 90% of the fitted asymptotic gain divided by the compute at half the gain, for a fixed base and task set.",
+  "estimates": [
+   {
+    "id": "rl.saturation_multiple/scalerl",
+    "context": "ScaleRL sigmoid fits, 8B dense and 17Bx16 MoE, math RLVR",
+    "low": 3.1,
+    "central": 3.2,
+    "high": 3.8,
+    "confidence": "medium",
+    "merge": "9^(1/B) with fitted B = 1.92 (8B, 14k), 1.89 (8B, 32k), 1.65 (Scout). Not a cap on total frontier RL: adding environments raises the asymptote.",
+    "evidence": [
+     "khatri-2025-scalerl/2",
+     "khatri-2025-scalerl/3",
+     "khatri-2025-scalerl/4",
+     "khatri-2025-scalerl/5"
+    ]
+   }
+  ]
+ }
+]

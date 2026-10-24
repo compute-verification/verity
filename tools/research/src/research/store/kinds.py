@@ -83,7 +83,8 @@ KINDS: dict[str, str] = {
     "vllm-build/v1": "one Build of a row's Program: payload tree = build_summary.json + required-value manifest + descriptor "
                      "files (never the instance set); meta {row, program_digest, correspondence_digest?, stage_status}",
     "vllm-config-record/v1": "a row of the circuit database (verity_vllm.records): payload file = config_record.json "
-                             "(verity-vllm/config-record/v1: the row's config, its Programs' digests per rank, the Match, Commit and replay "
+                             "(verity-vllm/config-record/v1: the row's config, its Programs' digests per rank (a request Program's census "
+                             "digest beside it), the Match, Commit and replay "
                              "verdicts, the evidence's art: ids); meta {row, outcome, world, tree}; refs.build = the vllm-build/v1 holding "
                              "the Programs, refs.manifest, refs.match, refs.commit, refs.conformance; label row",
     "vllm-commit-plan/v1": "one Commit's plan, derived on CPU before the GPU is held (verity_vllm.pipeline.commit_plan): payload tree = "
@@ -99,6 +100,10 @@ KINDS: dict[str, str] = {
                            "context; meta {row, stage, run_root, program_digest, picked, bytes, dump_sha256, commit_pass}",
     "execution-evidence/v1": "application evidence of one stage's execution (timeline.jsonl, schedule / arrival facts) — not "
                              "telemetry; meta {row, stage}",
+    "advice-encoding/v1": "network accounting's advice coded under registered codebooks, bits per certifier window "
+                          "(benchmarks/network_e2e/encodings/measure.py): payload tree = table.json (per trace, window, "
+                          "subject and code, and the summary) + table.md + codebook.json (+ codebooks/fold-K.json, each "
+                          "fold's held-out codebook); meta {corpus, commit, codebook_digest, T, tau_us}",
     "vllm-vu-set/v1": "one subcircuit's input set exported from a passing row's sampled VUs (verity_vllm.pipeline.vu_export): payload "
                       "tree = manifest.json + index.json + flat port arrays; meta {set, relation, n, content_digest, row, model, run, "
                       "run_root, program_digest, manifest_digest, source, epoch}; refs.run_record",
@@ -106,6 +111,39 @@ KINDS: dict[str, str] = {
                         "{program.json, units.jsonl} + values/<sha256>.<dtype>; the flat vllm-vu-set/v1 sets are its extractions",
     "vllm-vu-export/v1": "one row's VU export: payload = export.json (draw, per-family counts, sets); meta {row, model, run, run_root}; "
                          "refs.sets = the vllm-vu-set/v1 artifacts, refs.run_record",
+    "vllm-trace-corpus/v1": "real vLLM V1 scheduler traces under varied traffic (benchmarks/network_e2e/traces): payload tree = "
+                            "README.md + summary.json + meta.json + plan.jsonl + one <trace>/ a traffic setting (steps.jsonl, "
+                            "requests.jsonl, client.jsonl, meta.json, server.log, raw/ the hook's files), and optionally "
+                            "compare/ (compare.json, COMPARE.md: output ids against other corpora of the same plan)",
+    "vllm-adversarial-schedule/v1": "batch invariance against a hostile vLLM scheduler (benchmarks/network_e2e/traces, "
+                                    "vllm_adversarial_plugin): payload tree = corpus/<model>-<variant>/, each a "
+                                    "vllm-trace-corpus/v1 tree of corpus.HOSTILE's traces (honest and hostile schedulers, the "
+                                    "adversary's choices in raw/adversary.*.jsonl), and compare/<sampling>/ (compare.json, "
+                                    "COMPARE.md: whether every request's output ids match the honest trace's, bits per "
+                                    "request, the first divergence)",
+    "challenger-ledger/v1": "the auditor host's challenger ledger (benchmarks/live_challenger/auditor.py, publish.sh): payload "
+                            "windows.jsonl, one signed open entry a window and one end entry a session; meta {host, entries, sha512, "
+                            "key_sha512}",
+    "challenger-ledger/v2": "the auditor host's challenger ledger once it holds v2 entries (one window a Commit root, its prover "
+                            "the opener's gate key, end entries counting each family's released coins, leaves increasing); "
+                            "payload windows.jsonl, the v1 entries first; meta as v1's; label challenger-ledger head by infra",
+    "challenger-session/v1": "one session of the auditor host's challenger: payload tree = request.json + out/ (record.json, key.json, "
+                             "releases.jsonl, challenger.json, ...); meta {session, host}; refs.ledger, the challenger-ledger/v1|v2 "
+                             "whose end entry seals out/",
+    "challenger-pins/v1": "the auditor host's challenger pins log (/opt/vy-challenger/pins.jsonl, auditor.py record_pin, publish.sh): "
+                          "payload pins.jsonl, one challenger.pin_line {commit, main, pinned_utc} a pin, append-only, each put an "
+                          "extension of the last; meta {host, lines, sha512}; label challenger-pins head by infra",
+    "challenger-models/v1": "the auditor host's model registry (/var/lib/vy-challenger/models.jsonl, live_challenger/models.py, "
+                            "publish.sh): payload models.jsonl, one registration a line {model, circuit, prefix, checkpoint, "
+                            "roots, entries, weights_root, key_sha512, ...}, append-only, each put an extension of the last; "
+                            "meta {host, lines, sha512}; label challenger-models head by infra",
+    "challenger-key/v1": "the auditor host's challenger signing key, published by infra apart from the ledger so that a verifier pins "
+                         "it from here: payload one JSON file {host, instance, pubkey (hex), pubkey_sha512, W, H, pinned, valid_from_utc, "
+                         "retired [{pubkey_sha512, retired_utc, sessions}]}; label challenger-key current|retired",
+    "verifier-run/v1": "one run of the verifier host's remote bandwidth verifier (benchmarks/live_verifier/host.py, vy-auditor-1): "
+                       "payload tree = request.json + out/ (verifier.json, challenger/, verifier.log, registry.json, "
+                       "transcripts/*.json.gz + SHA256SUMS) + end.json, and replay/ once replayed; meta {run, by, pinned, peer, "
+                       "period, requested_utc, end {rc, ended_utc}, replay}",
 }
 
 

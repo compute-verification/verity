@@ -11,6 +11,12 @@ establishes about the bytes the verifier holds. They take no premise. What the c
 the receipts' and the store's meaning as the game's oracle and words, the window's wall time) is not here: it is a
 premise or a proofs unit of the bridge, named in each docstring.
 
+The memory line of record (`RemoteAudit.Line.line`, its W from `RemoteAudit.Pooled`) is one statement over what this
+verifier accepts: `Properties.RemoteAudit.Line.LineHeld` and `LineHeldIdentity` (`Properties/RemoteAudit/Line.lean`,
+proved in `Proofs/Accounting/RemoteHeld/Line.lean`), with the line's code-to-model premises named in
+`Properties/RemoteAudit/Line/Premises.lean` and the W's cover of the session's pooled bound in
+`Properties/RemoteAudit/Pooled.lean`.
+
 The window (`verifyWindow`):
 
 * `AcceptChecksOpenings`: an accepted window drew its receipts from its openings coin, has one opening a draw, and
@@ -44,6 +50,9 @@ The session (`Session.run` from `State.init`, every event's result `.ok`; the re
   them, past which its plan reads nothing, so its seed binds every append its plan reads;
 * `ReleasedStayOut`: a block released by an accepted release is read by no pass received after it;
 * `LifetimeCapped`: each append's blocks are read within `lifetime` consecutive windows.
+
+When the session reads a window's openings coin, and what its draw fixes (the code's half of the opening draw's
+`Refused` and `Live`), is `Properties.RemoteAudit.Coins`.
 -/
 
 open RemoteAudit

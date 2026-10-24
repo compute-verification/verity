@@ -74,6 +74,8 @@ def stmtJson : Stmt → Json
   | s@(.opening m c j _ ports nv) => Json.mkObj [("name", s.name), ("template", "rec-residuals"), ("dir", s.dir),
       ("instances", (s.instances : Json)), ("m", (m : Json)), ("claims", (c : Json)), ("part", (j : Json)),
       ("ports", Json.arr (ports.toArray.map fun (nm, n) => Json.arr #[(nm : Json), (n : Json)])), ("nv", (nv : Json))]
+  | s@(.cap l N) => Json.mkObj [("name", s.name), ("template", "rec-cap"), ("dir", s.dir), ("instances", (N : Json)),
+      ("level", (l : Json))]
 
 /-- The pinned menus' inner sessions, each once, with the models whose menus hold it. -/
 def menuSessions : Array (Algebra.Shape × Array String) := Id.run do

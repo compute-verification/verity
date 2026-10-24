@@ -220,14 +220,14 @@ theorem relOn_push {R old ws gone} (h : RelOn R old ws gone) (w : Win) (hp : w.p
     · simp only [k t ht hl] at hi ⊢; exact h.avoid t hl i hi hn
     · simp only [g t ht hl, hp] at hi; simp at hi
 
-theorem relOn_add {R old ws gone} (h : RelOn R old ws gone) (u : Nat) (root : ByteArray) (plan : Plan) (post : Nat)
-    (st : Int) (head : Option ByteArray) (hav : ∀ p, p < plan.length → ¬ R (plan.block p)) :
-    RelOn R old (ws.modify u (addPass root plan post st head)) gone := by
-  have get : ∀ t (ht : t < (ws.modify u (addPass root plan post st head)).size),
-      (ws.modify u (addPass root plan post st head))[t] =
-        if u = t then addPass root plan post st head (ws[t]'(by simpa using ht)) else ws[t]'(by simpa using ht) :=
+theorem relOn_add {R old ws gone} {below now : Nat} (h : RelOn R old ws gone) (u : Nat) (root : ByteArray)
+    (plan : Plan) (post : Nat) (st : Int) (head : Option ByteArray) (hav : ∀ p, p < plan.length → ¬ R (plan.block p)) :
+    RelOn R old (ws.modify u (addPass root plan post st head below now)) gone := by
+  have get : ∀ t (ht : t < (ws.modify u (addPass root plan post st head below now)).size),
+      (ws.modify u (addPass root plan post st head below now))[t] =
+        if u = t then addPass root plan post st head below now (ws[t]'(by simpa using ht)) else ws[t]'(by simpa using ht) :=
     fun t ht => Array.getElem_modify ht
-  have hsz : (ws.modify u (addPass root plan post st head)).size = ws.size := Array.size_modify
+  have hsz : (ws.modify u (addPass root plan post st head below now)).size = ws.size := Array.size_modify
   refine ⟨h.wf, h.covers, by rw [hsz]; exact h.grown, fun t ht ht' => ?_, fun t ht i hi hn => ?_⟩
   · rw [get t ht']
     have := h.kept t ht (by omega)

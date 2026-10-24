@@ -509,7 +509,7 @@ theorem KRuns.query {L : ℕ} (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ �
   refine (KRuns.pow nonce 1 _).bind fun _ _ => (KRuns.sampleVec resp (Nat.succ_ne_zero _) _).bind fun _ _ => ?_
   exact KRuns.pure (by rw [hc]) rfl
 
-theorem levelChalsK {L : ℕ} (resp : ℕ → Claims.Msg) (k : ℕ) :
+theorem levelChalsK {L : ℕ} (resp : ℕ → Claims.Msg) (last : Bool) (k : ℕ) :
     KRuns L (forIn [:4] (#[] : Array F256) fun i (f : Array F256) =>
         if (i + 1 == 4) = true then do
           let r ← liftT (sampleKP (asksS resp))
@@ -521,7 +521,7 @@ theorem levelChalsK {L : ℕ} (resp : ℕ → Claims.Msg) (k : ℕ) :
             { tab := embedF (splitK st.tab), w := liftU st.w, msgs := st.msgs, oods := st.oods, qn := st.qn,
               cn := st.cn, cbn := st.cbn }
           let st ← get
-          FlockComplete.sendMsg (roundPoly st.tab st.w)
+          FlockComplete.sendMsg (if last = true then roundPoly d.tab d.w else roundPoly st.tab st.w)
           pure (ForInStep.yield d.tab)
         else do
           let _ ← challengeP (asksS resp) false
@@ -649,7 +649,7 @@ theorem ligeritoP_opens (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray
       rw [if_pos hj]
       by_cases hj1 : j + 1 < R
       · rw [if_pos hj1]
-        refine (levelChalsK resp _).bind fun f _ => ?_
+        refine (levelChalsK resp _ _).bind fun f _ => ?_
         refine KRuns.ite (fun _ => ?_) fun hne => absurd (by simp; omega) hne
         refine (KRuns.commit h ms _ _ _ _).bind fun cmN hcmN => ?_
         refine (KRuns.absorb _ (pBytes _) (fun t => Flock.RecAlgebra.absorbBytes_eq _ t) _).bind fun _ _ => ?_
@@ -677,7 +677,7 @@ theorem ligeritoP_opens (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray
           · exact hop
       · rw [if_neg hj1]
         have hjR : j + 1 = R := by omega
-        refine (levelChalsK resp _).bind fun f _ => ?_
+        refine (levelChalsK resp _ _).bind fun f _ => ?_
         refine KRuns.ite (fun hc => absurd hc (by simp [hjR])) fun _ => ?_
         refine (KRuns.absorbAll _ _).bind fun _ _ => ?_
         refine (KRuns.query resp nonce ms _ s.2.1 (hq _ (by omega)) _).bind fun q hq' => ?_

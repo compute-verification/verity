@@ -49,6 +49,17 @@
 constexpr uint32_t DITHER_TAG = 7;
 using MLW = ML<128, 128, 32, 3>;
 
+// FOLD's scalar-only dial (note:20261017T0320Z-draft-eps1-fold): the served GEMM's tensor pipe is already busy with the
+// useful IMMA, so the mandatory per-word work must ride the idle scalar issue, not filler MMAs. EG_ROUNDS absorbs each
+// committed word's four s32 limbs R times through the XOR-in(13,19) fold (RK == XIN/XIN64/XIN13), no extra MMAs, so R is
+// the one cost parameter and the tensor time is untouched. EG_ROUNDS == 1 (the default) is byte-identical to the fold of
+// record. The loop runs #pragma unroll 1 so the SASS op-count is constant across R (one dial); the honest kernel pins a
+// fixed R and lets ptxas unroll it. PROFILE sweeps the knee; FOLD measures correctness and cost a round once.
+#ifndef EG_ROUNDS
+#define EG_ROUNDS 1
+#endif
+static_assert(EG_ROUNDS >= 1 && EG_ROUNDS <= 64, "EG_ROUNDS in 1..64");
+
 // The receipt kinds beyond fgemm.cu's DUO, TB4, TB4C, TB2W and TB1W (NONE: no receipts). DUO64: duo on every second
 // running sum only (the odd steps', so derive.py's tile_receipts on Ts[1::2]). XIN: P2-FF's XOR-in fold (pfill.cuh's NC 4
 // under -DPFILL_XIN), three ops a pair: y = (rotl(y, 7) ^ d0) a0 + d1, then y = (rotl(y, 19) ^ d2) a1 + d3 on an
@@ -325,8 +336,16 @@ template <int RK, int LAG, int TIE, bool SLEEP = false, int UF = 0, int USH = 0,
       duo<DUO, 0, J>(ch[H + 3], fx_chain<RK, J, 3>((uint32_t)w[3]));
     } else if constexpr (XF) {
       St& c = ch[J % 4];
+#if EG_ROUNDS > 1
+#pragma unroll 1
+      for (int eg_r = 0; eg_r < EG_ROUNDS; eg_r++) {
+        c.y = (rotl(c.y, ROT0) ^ (uint32_t)w[0]) * kr[0] + (uint32_t)w[1];
+        c.y = (rotl(c.y, 19) ^ (uint32_t)w[2]) * kr[1] + (uint32_t)w[3];
+      }
+#else
       c.y = (rotl(c.y, ROT0) ^ (uint32_t)w[0]) * kr[0] + (uint32_t)w[1];
       c.y = (rotl(c.y, 19) ^ (uint32_t)w[2]) * kr[1] + (uint32_t)w[3];
+#endif
     } else {
       if constexpr (tb_chained(RK) && J == (B == TB2W ? 1 : B == TB1W ? NI - 1 : 0)) rch(ch, kr[NKP<RK>], kr[NKP<RK> + 1]);
       if constexpr (B == TB4) {

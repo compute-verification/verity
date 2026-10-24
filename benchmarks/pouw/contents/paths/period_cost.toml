@@ -1,0 +1,4 @@
+order = 366
+path = "`period_cost.py`"
+runs_on = "CPU"
+what = "The first certified accounting period at ε < 1% (#2722's `ComposePeriod`): windows, draws, prove and Lean process-days, memory-packed node-days and the days to it, from today's SERVE-H1 window with served-unit draws and the measured C-Flock and Lean rates; each lever (load u, the receipt kernel, draws and rounds a window, Lean and prover process reuse, r → 1, the served unit's size, Lean's session cost, nodes) alone and along the greedy fastest route, with its owner and work class; δ_s and ε_♭ shown, not levers"

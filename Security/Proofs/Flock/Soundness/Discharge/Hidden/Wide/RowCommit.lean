@@ -5,11 +5,12 @@ import Proofs.Flock.Soundness.Discharge.Hm.Nets
 
 `Hm.row_commit` and `Hm.port_commit_rows` read `HmRow.rowPrefix words` only through its 128 bytes and its midstate.
 These are theirs for any 128-byte prefix `pre` (`row_commitP`, `port_commit_rowsP`), so for `HmRow.prefixOf` of a
-`sha512/row/v1` or `sha512/row/v2` row (`size_prefixOf`). The row's bytes fill its `n` compressions' blocks and may end in
-its `hm96` slot's block, where SHA-512's padding follows them (`rowMsgP_pad`, `128 n ≤ |data|`,
-`|data| + 17 ≤ 128 (n + 1)`): that block's bits are the row bits `Typed.msgCol` reads there and the constants
-`HmRow.constBit` gives elsewhere (`pad_bitsP`). A row of no compression (`port_commit_rows0`) is hashed by its `hm96` slot
-alone, its `cv` the prefix's midstate.
+`sha512/row/v1` or `sha512/row/v2` row (`size_prefixOf`). The row's bytes and SHA-512's padding after them
+(`rowMsgP_pad`) fill its `n` compressions' blocks and end in its `hm96` slot's block (`128 n ≤ |data| + 16`,
+`|data| + 17 ≤ 128 (n + 1)`): each block's bits are the row bits `Typed.msgCol` reads there and the constants
+`HmRow.constBit` gives elsewhere (`blk_bitsP`), which a compression's block holds only past the row's bits, in the last
+one when the bytes end within 16 bytes of its end (`row_commitW`). A row of no compression (`port_commit_rows0`) is hashed
+by its `hm96` slot alone, its `cv` the prefix's midstate.
 -/
 
 set_option Elab.async false
@@ -91,9 +92,9 @@ theorem rowMsgP_pad {data : List UInt8} :
   show (pre.data.toList ++ data) ++ _ ++ _ ++ _ = _
   simp only [List.append_assoc]
 
-/-- `pre ‖ data` pads to `n + 2` blocks when its data fill `n` blocks and the padding fits in one more
-(`128 n ≤ |data|`, `|data| + 17 ≤ 128 (n + 1)`). -/
-theorem size_padData_rowMsgP {n : ℕ} {data : List UInt8} (h1 : 128 * n ≤ data.length)
+/-- `pre ‖ data` pads to `n + 2` blocks when its data and padding fill `n` blocks and end in one more
+(`128 n ≤ |data| + 16`, `|data| + 17 ≤ 128 (n + 1)`). -/
+theorem size_padData_rowMsgP {n : ℕ} {data : List UInt8} (h1 : 128 * n ≤ data.length + 16)
     (h2 : data.length + 17 ≤ 128 * (n + 1)) : (padData (rowMsgP pre data)).size = 128 * (n + 2) := by
   have hs : (rowMsgP pre data).size = 128 + data.length := by
     rw [← ByteArray.size_data, ← Array.length_toList]
@@ -137,7 +138,7 @@ theorem blockV_rowP {n : ℕ} {data : List UInt8} (h1 : 128 * n ≤ data.length)
   rw [rowMsgP_pad hpre, getD_rowPadP_data hpre (by omega) (by nlinarith),
     show 128 * (k + 1) + 8 * i + j - 128 = 128 * k + 8 * i + j by omega]
 
-theorem lastIdx_rowMsgP {n : ℕ} {data : List UInt8} (h1 : 128 * n ≤ data.length)
+theorem lastIdx_rowMsgP {n : ℕ} {data : List UInt8} (h1 : 128 * n ≤ data.length + 16)
     (h2 : data.length + 17 ≤ 128 * (n + 1)) : (padData (rowMsgP pre data)).size / 128 - 1 = n + 1 := by
   rw [size_padData_rowMsgP hpre h1 h2, Nat.mul_div_cancel_left _ (by norm_num)]
   rfl
@@ -159,17 +160,18 @@ section Pre
 variable {pre : ByteArray} (hpre : pre.size = 128)
 include hpre
 
-/-- **`Hm.row_commit` under the prefix `pre`**: a row whose data fill `n > 0` blocks, the padding in one more, whose
-slots hold Δ's copies, the first `cv` the prefix's midstate and the `hm96` slot's `pad` the last block, outputs the commit
-string of `pre ‖ data`. -/
-theorem row_commitP {n : ℕ} (hn : 0 < n) {data : List UInt8} (h1 : 128 * n ≤ data.length)
+/-- **`Hm.row_commit` under the prefix `pre`, block by block**: a row whose data and padding fill `n > 0` blocks and end in
+one more, whose slots hold Δ's copies, the first `cv` the prefix's midstate, each compression's message its block of
+`pre ‖ data` padded and the `hm96` slot's `pad` the last block, outputs the commit string of `pre ‖ data`. The last
+compression's block may hold the data's end and the padding's start (`|data| mod 128 ≥ 112`). -/
+theorem row_commitW {n : ℕ} (hn : 0 < n) {data : List UInt8} (h1 : 128 * n ≤ data.length + 16)
     (h2 : data.length + 17 ≤ 128 * (n + 1)) (zs : ℕ → Var → Bool) (sub : ℕ → ℕ) (hsub : ∀ k < n, sub k < 3)
     (hrows : ∀ k < n, stHolds (zs k) (compression3.run St.empty).2)
     (hcv0 : ∀ q : ℕ, q < 512 → zs 0 (1536 * sub 0 + q) = wordsBit (Sha512.compress Sha512.iv pre 0) q)
     (hchain : ∀ k, k + 1 < n → ∀ q : ℕ, q < 512 →
       zs (k + 1) (1536 * sub (k + 1) + q) = Hm.bit (zs k) ((compression3.run St.empty).1.2.getD (sub k) []) q)
-    (hmsg : ∀ k < n, ∀ o < 128, ∀ t < 8,
-      zs k (1536 * sub k + 512 + wordBit (8 * o + t)) = bitL data (8 * (128 * k + o) + t))
+    (hmsgW : ∀ k < n, ∀ q : ℕ, q < 1024 →
+      zs k (1536 * sub k + 512 + q) = wbit (blockV (padData (rowMsgP pre data)) (k + 1)) q)
     (zh : Var → Bool) (hh : stHolds zh ((hm96Row Hm96.Default512.key).run St.empty).2)
     (hcvh : ∀ q : ℕ, q < 512 → zh q = Hm.bit (zs (n - 1)) ((compression3.run St.empty).1.2.getD (sub (n - 1)) []) q)
     (hpadh : ∀ q : ℕ, q < 1024 → zh (512 + q) = wbit (blockV (padData (rowMsgP pre data)) (n + 1)) q)
@@ -177,17 +179,6 @@ theorem row_commitP {n : ℕ} (hn : 0 < n) {data : List UInt8} (h1 : 128 * n ≤
     ∀ t < 1024, Hm.bit zh ((hm96Row Hm96.Default512.key).run St.empty).1.2.2.2 t =
       bitL (Binding.commitString (pre.data.toList ++ data) s) t := by
   set P := padData (rowMsgP pre data) with hP
-  have hmsgW : ∀ k < n, ∀ q : ℕ, q < 1024 → zs k (1536 * sub k + 512 + q) = wbit (blockV P (k + 1)) q := by
-    intro k hk q hq
-    have ho : 8 * (q / 64) + (7 - q % 64 / 8) < 128 := by omega
-    have hq' : wordBit (8 * (8 * (q / 64) + (7 - q % 64 / 8)) + q % 8) = q := by unfold wordBit; omega
-    have e := hmsg k hk (8 * (q / 64) + (7 - q % 64 / 8)) ho (q % 8) (Nat.mod_lt _ (by norm_num))
-    rw [hq'] at e
-    rw [e, blockV_rowP hpre h1 hk, wbit, List.getD_eq_getElem?_getD, List.getElem?_map,
-      List.getElem?_range (show q / 64 < 16 by omega), Option.map_some, Option.getD_some,
-      getLsbD_wordL _ _ _ (Nat.mod_lt _ (by norm_num)), bitL,
-      show (8 * (128 * k + (8 * (q / 64) + (7 - q % 64 / 8))) + q % 8) / 8 = 128 * k + 8 * (q / 64) + (7 - q % 64 / 8)
-        by omega, show (8 * (128 * k + (8 * (q / 64) + (7 - q % 64 / 8))) + q % 8) % 8 = q % 64 % 8 by omega]
   have hlen8 : ∀ k, (chainV P k).length = 8 := fun k => by rw [chainV, List.length_map, List.length_range]
   have hlen16 : ∀ k, (blockV P k).length = 16 := fun k => by rw [blockV, List.length_map, List.length_range]
   have hout : ∀ k < n, ∀ q < 512,
@@ -212,6 +203,34 @@ theorem row_commitP {n : ℕ} (hn : 0 < n) {data : List UInt8} (h1 : 128 * n ≤
     intro q hq
     rw [hpadh q hq, lastBlock_eq, hlast]
   exact (hm96_commit zh hh _ hs hcv hpad hy).2
+
+/-- **`Hm.row_commit` under the prefix `pre`**: a row whose data fill `n > 0` blocks, the padding in one more, whose
+slots hold Δ's copies, the first `cv` the prefix's midstate and the `hm96` slot's `pad` the last block, outputs the commit
+string of `pre ‖ data`. -/
+theorem row_commitP {n : ℕ} (hn : 0 < n) {data : List UInt8} (h1 : 128 * n ≤ data.length)
+    (h2 : data.length + 17 ≤ 128 * (n + 1)) (zs : ℕ → Var → Bool) (sub : ℕ → ℕ) (hsub : ∀ k < n, sub k < 3)
+    (hrows : ∀ k < n, stHolds (zs k) (compression3.run St.empty).2)
+    (hcv0 : ∀ q : ℕ, q < 512 → zs 0 (1536 * sub 0 + q) = wordsBit (Sha512.compress Sha512.iv pre 0) q)
+    (hchain : ∀ k, k + 1 < n → ∀ q : ℕ, q < 512 →
+      zs (k + 1) (1536 * sub (k + 1) + q) = Hm.bit (zs k) ((compression3.run St.empty).1.2.getD (sub k) []) q)
+    (hmsg : ∀ k < n, ∀ o < 128, ∀ t < 8,
+      zs k (1536 * sub k + 512 + wordBit (8 * o + t)) = bitL data (8 * (128 * k + o) + t))
+    (zh : Var → Bool) (hh : stHolds zh ((hm96Row Hm96.Default512.key).run St.empty).2)
+    (hcvh : ∀ q : ℕ, q < 512 → zh q = Hm.bit (zs (n - 1)) ((compression3.run St.empty).1.2.getD (sub (n - 1)) []) q)
+    (hpadh : ∀ q : ℕ, q < 1024 → zh (512 + q) = wbit (blockV (padData (rowMsgP pre data)) (n + 1)) q)
+    {s : List UInt8} (hs : s.length = 192) (hy : ∀ q : ℕ, q < 1536 → zh (1536 + q) = bitL s q) :
+    ∀ t < 1024, Hm.bit zh ((hm96Row Hm96.Default512.key).run St.empty).1.2.2.2 t =
+      bitL (Binding.commitString (pre.data.toList ++ data) s) t := by
+  refine row_commitW hpre hn (by omega) h2 zs sub hsub hrows hcv0 hchain (fun k hk q hq => ?_) zh hh hcvh hpadh hs hy
+  have ho : 8 * (q / 64) + (7 - q % 64 / 8) < 128 := by omega
+  have hq' : wordBit (8 * (8 * (q / 64) + (7 - q % 64 / 8)) + q % 8) = q := by unfold wordBit; omega
+  have e := hmsg k hk (8 * (q / 64) + (7 - q % 64 / 8)) ho (q % 8) (Nat.mod_lt _ (by norm_num))
+  rw [hq'] at e
+  rw [e, blockV_rowP hpre h1 hk, wbit, List.getD_eq_getElem?_getD, List.getElem?_map,
+    List.getElem?_range (show q / 64 < 16 by omega), Option.map_some, Option.getD_some,
+    getLsbD_wordL _ _ _ (Nat.mod_lt _ (by norm_num)), bitL,
+    show (8 * (128 * k + (8 * (q / 64) + (7 - q % 64 / 8))) + q % 8) / 8 = 128 * k + 8 * (q / 64) + (7 - q % 64 / 8)
+      by omega, show (8 * (128 * k + (8 * (q / 64) + (7 - q % 64 / 8))) + q % 8) % 8 = q % 64 % 8 by omega]
 
 /-- **A row of no compression**: its `hm96` slot, its `cv` the prefix's midstate and its `pad` the one block after the
 prefix (the data and their padding, `|data| + 17 ≤ 128`), outputs the commit string of `pre ‖ data`. -/
@@ -248,40 +267,45 @@ theorem msgCol_hm (c : Circuit) (g p : ℕ) {n o t : ℕ} (hs : c.ports[p]!.segs
   simp only [Typed.msgCol, Typed.byteAt_none hs, hk', ho', hn, lt_irrefl, ↓reduceIte, hmIn, hg]
   omega
 
-/-- **A row's `pad` bits are its last block's**, for a row of `16 · words` bits whose data fill its `n` compressions'
-blocks and end, with their padding, in its `hm96` slot's block: at a row byte the bit `Typed.msgCol` reads there, at
-every other bit the constant `HmRow.constBit` gives, which the block holds (`hconst`). -/
-theorem pad_bitsP (c : Circuit) (w : ℕ → Bool) (g p : ℕ) {pre : ByteArray} (hpre : pre.size = 128) {n : ℕ}
+/-- **Block `k` of a row's message holds only row bits** where the row's bits fill it (`1024 (k + 1) ≤ bits`). -/
+theorem constBit_row (p : Port) (tl : ByteArray) {k t : ℕ} (ht : t < 1024) (h : 1024 * (k + 1) ≤ p.bits) :
+    HmRow.constBit p tl k t = none := by
+  unfold HmRow.constBit HmRow.blockBit
+  exact if_pos (by omega)
+
+/-- **A row's block's bits**, for a row of `16 · words` bits: block `K + 1` of the row's message after the prefix, padded,
+whose row bytes' bits `Typed.msgCol` reads at `base` (`hcol`), is at `base` the bit `Typed.msgCol` reads at a row byte
+and at every other bit the constant `HmRow.constBit` gives, which the block holds (`hconst`). -/
+theorem blk_bitsP (c : Circuit) (w : ℕ → Bool) (g p : ℕ) {pre : ByteArray} (hpre : pre.size = 128) (K base : ℕ)
     (hs : c.ports[p]!.segs = none) (hb : c.ports[p]!.bits = 16 * c.ports[p]!.words)
-    (hn : ((HmRow.rowSlots c.ports).2[p]!).size = n) (h1 : 128 * n ≤ 2 * c.ports[p]!.words)
-    (h2 : 2 * c.ports[p]!.words + 17 ≤ 128 * (n + 1))
-    (hconst : ∀ t < 1024, ∀ v, HmRow.constBit c.ports[p]! (HmRow.tailOf c.ports[p]!) n t = some v →
-      w (c.slotCol c.hmNet g p + hmIn c 1 + t) = v) :
-    ∀ q < 1024, w (c.slotCol c.hmNet g p + hmIn c 1 + q) =
-      wbit (blockV (padData (rowMsgP pre (bytesOf w (2 * c.ports[p]!.words) (Typed.msgCol c g p)))) (n + 1)) q := by
+    (hcol : ∀ o < 128, ∀ t < 8, 128 * K + o < 2 * c.ports[p]!.words →
+      Typed.msgCol c g p (128 * K + o) t = base + (64 * (o / 8) + 56 - 8 * (o % 8) + t))
+    (hconst : ∀ t < 1024, ∀ v, HmRow.constBit c.ports[p]! (HmRow.tailOf c.ports[p]!) K t = some v → w (base + t) = v) :
+    ∀ q < 1024, w (base + q) =
+      wbit (blockV (padData (rowMsgP pre (bytesOf w (2 * c.ports[p]!.words) (Typed.msgCol c g p)))) (K + 1)) q := by
   intro q hq
   have hlen : (bytesOf w (2 * c.ports[p]!.words) (Typed.msgCol c g p)).length = 2 * c.ports[p]!.words :=
     length_bytesOf _ _ _
   have ho : 8 * (q / 64) + (7 - q % 64 / 8) < 128 := by omega
   rw [wbit_blockV _ _ hq, bitL, rowMsgP_pad hpre,
-    show (8 * (128 * (n + 1) + (8 * (q / 64) + (7 - q % 64 / 8))) + q % 8) / 8 =
-      128 * (n + 1) + (8 * (q / 64) + (7 - q % 64 / 8)) by omega,
-    show (8 * (128 * (n + 1) + (8 * (q / 64) + (7 - q % 64 / 8))) + q % 8) % 8 = q % 8 by omega]
-  by_cases hj : 128 * n + (8 * (q / 64) + (7 - q % 64 / 8)) < 2 * c.ports[p]!.words
+    show (8 * (128 * (K + 1) + (8 * (q / 64) + (7 - q % 64 / 8))) + q % 8) / 8 =
+      128 * (K + 1) + (8 * (q / 64) + (7 - q % 64 / 8)) by omega,
+    show (8 * (128 * (K + 1) + (8 * (q / 64) + (7 - q % 64 / 8))) + q % 8) % 8 = q % 8 by omega]
+  by_cases hj : 128 * K + (8 * (q / 64) + (7 - q % 64 / 8)) < 2 * c.ports[p]!.words
   · rw [getD_rowPadP_data hpre (by omega) (by rw [hlen]; omega),
-      show 128 * (n + 1) + (8 * (q / 64) + (7 - q % 64 / 8)) - 128 = 128 * n + (8 * (q / 64) + (7 - q % 64 / 8))
+      show 128 * (K + 1) + (8 * (q / 64) + (7 - q % 64 / 8)) - 128 = 128 * K + (8 * (q / 64) + (7 - q % 64 / 8))
         by omega]
-    have e := bitL_bytesOf w (N := 2 * c.ports[p]!.words) (Typed.msgCol c g p) (q := 8 * (128 * n + (8 * (q / 64) + (7 - q % 64 / 8))) + q % 8)
-      (by omega)
+    have e := bitL_bytesOf w (N := 2 * c.ports[p]!.words) (Typed.msgCol c g p)
+      (q := 8 * (128 * K + (8 * (q / 64) + (7 - q % 64 / 8))) + q % 8) (by omega)
     unfold bitL at e
-    rw [show (8 * (128 * n + (8 * (q / 64) + (7 - q % 64 / 8))) + q % 8) / 8 = 128 * n + (8 * (q / 64) + (7 - q % 64 / 8))
-        by omega, show (8 * (128 * n + (8 * (q / 64) + (7 - q % 64 / 8))) + q % 8) % 8 = q % 8 by omega] at e
-    rw [e, msgCol_hm c g p hs hn ho]
+    rw [show (8 * (128 * K + (8 * (q / 64) + (7 - q % 64 / 8))) + q % 8) / 8 = 128 * K + (8 * (q / 64) + (7 - q % 64 / 8))
+        by omega, show (8 * (128 * K + (8 * (q / 64) + (7 - q % 64 / 8))) + q % 8) % 8 = q % 8 by omega] at e
+    rw [e, hcol _ ho _ (Nat.mod_lt _ (by norm_num)) hj]
     congr 1
     omega
-  · have hcb : HmRow.constBit c.ports[p]! (HmRow.tailOf c.ports[p]!) n q =
-        some (decide (2 * c.ports[p]!.words ≤ 128 * n + (8 * (q / 64) + (7 - q % 64 / 8))) &&
-          (((HmRow.tailOf c.ports[p]!).get! (128 * n + (8 * (q / 64) + (7 - q % 64 / 8)) - 2 * c.ports[p]!.words)).toNat
+  · have hcb : HmRow.constBit c.ports[p]! (HmRow.tailOf c.ports[p]!) K q =
+        some (decide (2 * c.ports[p]!.words ≤ 128 * K + (8 * (q / 64) + (7 - q % 64 / 8))) &&
+          (((HmRow.tailOf c.ports[p]!).get! (128 * K + (8 * (q / 64) + (7 - q % 64 / 8)) - 2 * c.ports[p]!.words)).toNat
             >>> (q % 8)) % 2 == 1) := by
       have hj1 : (HmRow.blockBit q).1 = 8 * (q / 64) + (7 - q % 64 / 8) := by unfold HmRow.blockBit; omega
       have hj2 : (HmRow.blockBit q).2 = q % 8 := rfl
@@ -289,19 +313,32 @@ theorem pad_bitsP (c : Circuit) (w : ℕ → Bool) (g p : ℕ) {pre : ByteArray}
       simp only [bytes_of_bits hb, hj1, hj2]
       rw [ite_eq_right_iff.2 (fun h => absurd h (by omega))]
     rw [hconst q hq _ hcb, getD_rowPadP_tail hpre (by rw [hlen]; omega), hlen, decide_eq_true (by omega),
-      Bool.true_and, get!_eq_getD, show 128 * (n + 1) + (8 * (q / 64) + (7 - q % 64 / 8)) - (128 + 2 * c.ports[p]!.words) =
-        128 * n + (8 * (q / 64) + (7 - q % 64 / 8)) - 2 * c.ports[p]!.words by omega]
+      Bool.true_and, get!_eq_getD, show 128 * (K + 1) + (8 * (q / 64) + (7 - q % 64 / 8)) - (128 + 2 * c.ports[p]!.words) =
+        128 * K + (8 * (q / 64) + (7 - q % 64 / 8)) - 2 * c.ports[p]!.words by omega]
     simp only [HmRow.tailOf, hs, bytes_of_bits hb]
     generalize ((HmRow.padTail (128 + 2 * c.ports[p]!.words)).data.toList.getD
-      (128 * n + (8 * (q / 64) + (7 - q % 64 / 8)) - 2 * c.ports[p]!.words) 0).toNat = x
+      (128 * K + (8 * (q / 64) + (7 - q % 64 / 8)) - 2 * c.ports[p]!.words) 0).toNat = x
     rw [Nat.testBit, Nat.one_and_eq_mod_two]
     rcases Nat.mod_two_eq_zero_or_one (x >>> (q % 8)) with h | h <;> simp [h]
 
-/-- **`Hm.port_commit` under the prefix `pre`**, for a row of `16 · words` bits whose data fill its `n > 0`
-compressions' blocks and end, with their padding, in its `hm96` slot's block. -/
+/-- **A row's `pad` bits are its last block's**, for a row of `16 · words` bits after its `n` compressions: at a row
+byte the bit `Typed.msgCol` reads there, at every other bit the constant `HmRow.constBit` gives, which the block holds
+(`hconst`). -/
+theorem pad_bitsP (c : Circuit) (w : ℕ → Bool) (g p : ℕ) {pre : ByteArray} (hpre : pre.size = 128) {n : ℕ}
+    (hs : c.ports[p]!.segs = none) (hb : c.ports[p]!.bits = 16 * c.ports[p]!.words)
+    (hn : ((HmRow.rowSlots c.ports).2[p]!).size = n)
+    (hconst : ∀ t < 1024, ∀ v, HmRow.constBit c.ports[p]! (HmRow.tailOf c.ports[p]!) n t = some v →
+      w (c.slotCol c.hmNet g p + hmIn c 1 + t) = v) :
+    ∀ q < 1024, w (c.slotCol c.hmNet g p + hmIn c 1 + q) =
+      wbit (blockV (padData (rowMsgP pre (bytesOf w (2 * c.ports[p]!.words) (Typed.msgCol c g p)))) (n + 1)) q :=
+  blk_bitsP c w g p hpre n _ hs hb (fun _ ho _ _ _ => msgCol_hm c g p hs hn ho) hconst
+
+/-- **`Hm.port_commit` under the prefix `pre`**, for a row of `16 · words` bits whose data and padding fill its `n > 0`
+compressions' blocks and end in its `hm96` slot's block, each compression's message holding the constant bits
+`HmRow.constBit` gives its block (`hconstK`). -/
 theorem port_commitP (c : Circuit) (w : ℕ → Bool) (g p : ℕ) {pre : ByteArray} (hpre : pre.size = 128) {n : ℕ}
     (hs : c.ports[p]!.segs = none) (hb : c.ports[p]!.bits = 16 * c.ports[p]!.words)
-    (hslots : ((HmRow.rowSlots c.ports).2[p]!).size = n) (hn : 0 < n) (h1 : 128 * n ≤ 2 * c.ports[p]!.words)
+    (hslots : ((HmRow.rowSlots c.ports).2[p]!).size = n) (hn : 0 < n) (h1 : 128 * n ≤ 2 * c.ports[p]!.words + 16)
     (h2 : 2 * c.ports[p]!.words + 17 ≤ 128 * (n + 1)) (hsub : ∀ k < n, shaSub c p k < 3)
     (hsin : ∀ s < 3, shaIn c (2 * s) = 1536 * s ∧ shaIn c (2 * s + 1) = 1536 * s + 512)
     (hhin : hmIn c 0 = 0 ∧ hmIn c 1 = 512 ∧ hmIn c 2 = 1536)
@@ -319,13 +356,21 @@ theorem port_commitP (c : Circuit) (w : ℕ → Bool) (g p : ℕ) {pre : ByteArr
     (hcvh : ∀ t < 512, w (c.slotCol c.hmNet g p + hmIn c 0 + t) =
       w (shaBase c g p (n - 1) + shaOut c (shaSub c p (n - 1)) + t))
     (hconst : ∀ t < 1024, ∀ v, HmRow.constBit c.ports[p]! (HmRow.tailOf c.ports[p]!) n t = some v →
-      w (c.slotCol c.hmNet g p + hmIn c 1 + t) = v) :
+      w (c.slotCol c.hmNet g p + hmIn c 1 + t) = v)
+    (hconstK : ∀ k < n, ∀ t < 1024, ∀ v, HmRow.constBit c.ports[p]! (HmRow.tailOf c.ports[p]!) k t = some v →
+      w (shaBase c g p k + shaIn c (2 * shaSub c p k + 1) + t) = v) :
     bytesOf w 128 (bcCol c g p) = Binding.commitString
       (pre.data.toList ++ bytesOf w (2 * c.ports[p]!.words) (Typed.msgCol c g p)) (bytesOf w 192 (saltCol c g p)) := by
   have hd : (bytesOf w (2 * c.ports[p]!.words) (Typed.msgCol c g p)).length = 2 * c.ports[p]!.words :=
     length_bytesOf _ _ _
-  have hpb := pad_bitsP c w g p hpre hs hb hslots h1 h2 hconst
-  have hrow := row_commitP hpre hn (by rw [hd]; exact h1) (by rw [hd]; exact h2) zs (shaSub c p) hsub hrows
+  have hpb := pad_bitsP c w g p hpre hs hb hslots hconst
+  have hblk : ∀ k < n, ∀ q < 1024, w (shaBase c g p k + shaIn c (2 * shaSub c p k + 1) + q) =
+      wbit (blockV (padData (rowMsgP pre (bytesOf w (2 * c.ports[p]!.words) (Typed.msgCol c g p)))) (k + 1)) q :=
+    fun k hk => blk_bitsP c w g p hpre k _ hs hb (fun o ho t ht _ => by
+      rw [msgCol_eq c g p k hs (by omega) ho ht]
+      unfold wordBit
+      omega) (hconstK k hk)
+  have hrow := row_commitW hpre hn (by rw [hd]; exact h1) (by rw [hd]; exact h2) zs (shaSub c p) hsub hrows
     (fun q hq => by
       rw [hzs 0 hn _ (by have := hsub 0 hn; omega), ← hcv0 q hq, (hsin _ (hsub 0 hn)).1]
       exact congrArg w (by omega))
@@ -333,11 +378,8 @@ theorem port_commitP (c : Circuit) (w : ℕ → Bool) (g p : ℕ) {pre : ByteArr
       rw [hzs (k + 1) hk _ (by have := hsub (k + 1) hk; omega), ← hout k (by omega) q hq, ← hchain k hk q hq,
         (hsin _ (hsub (k + 1) hk)).1]
       exact congrArg w (by omega))
-    (fun k hk o ho t ht => by
-      have hwb : wordBit (8 * o + t) < 1024 := by unfold wordBit; omega
-      rw [hzs k hk _ (by have := hsub k hk; omega), bitL_bytesOf _ _ (by omega),
-        show (8 * (128 * k + o) + t) / 8 = 128 * k + o by omega, show (8 * (128 * k + o) + t) % 8 = t by omega,
-        msgCol_eq c g p k hs (by omega) ho ht, (hsin _ (hsub k hk)).2]
+    (fun k hk q hq => by
+      rw [hzs k hk _ (by have := hsub k hk; omega), ← hblk k hk q hq, (hsin _ (hsub k hk)).2]
       exact congrArg w (by omega))
     zh hh
     (fun q hq => by
@@ -396,10 +438,11 @@ theorem hm_zh_in : ∀ v : ℕ, v < 3072 →
 end Nets
 
 /-- **`Hm.port_commit_rows` under the prefix `pre`**: the slots hold their nets' rows and the block holds Δ's copies,
-the first `cv` the prefix's midstate and the `pad` the constant bits of the row's last block. -/
+the first `cv` the prefix's midstate, the `pad` the constant bits of the row's last block and each compression's
+message those of its block. -/
 theorem port_commit_rowsP (c : Circuit) (w : ℕ → Bool) (g p : ℕ) {pre : ByteArray} (hpre : pre.size = 128)
     {n : ℕ} (hs : c.ports[p]!.segs = none) (hb : c.ports[p]!.bits = 16 * c.ports[p]!.words)
-    (hslots : ((HmRow.rowSlots c.ports).2[p]!).size = n) (hn : 0 < n) (h1 : 128 * n ≤ 2 * c.ports[p]!.words)
+    (hslots : ((HmRow.rowSlots c.ports).2[p]!).size = n) (hn : 0 < n) (h1 : 128 * n ≤ 2 * c.ports[p]!.words + 16)
     (h2 : 2 * c.ports[p]!.words + 17 ≤ 128 * (n + 1)) (hck : HmNets.check c = .ok ())
     (hsub : ∀ k < n, shaSub c p k < 3)
     (hsha : ∀ k < n, LaidRows (shaLaid ()) 8192 fun j => w (shaBase c g p k + j))
@@ -411,7 +454,9 @@ theorem port_commit_rowsP (c : Circuit) (w : ℕ → Bool) (g p : ℕ) {pre : By
     (hcvh : ∀ t < 512, w (c.slotCol c.hmNet g p + hmIn c 0 + t) =
       w (shaBase c g p (n - 1) + shaOut c (shaSub c p (n - 1)) + t))
     (hconst : ∀ t < 1024, ∀ v, HmRow.constBit c.ports[p]! (HmRow.tailOf c.ports[p]!) n t = some v →
-      w (c.slotCol c.hmNet g p + hmIn c 1 + t) = v) :
+      w (c.slotCol c.hmNet g p + hmIn c 1 + t) = v)
+    (hconstK : ∀ k < n, ∀ t < 1024, ∀ v, HmRow.constBit c.ports[p]! (HmRow.tailOf c.ports[p]!) k t = some v →
+      w (shaBase c g p k + shaIn c (2 * shaSub c p k + 1) + t) = v) :
     bytesOf w 128 (bcCol c g p) = Binding.commitString
       (pre.data.toList ++ bytesOf w (2 * c.ports[p]!.words) (Typed.msgCol c g p)) (bytesOf w 192 (saltCol c g p)) := by
   have hshaL : ∀ k < n, LaidRows (layout (compression3.run St.empty).2 SHA_IN SHA_OUT (compression3.run St.empty).1.2.flatten.toArray)
@@ -444,7 +489,7 @@ theorem port_commit_rowsP (c : Circuit) (w : ℕ → Bool) (g p : ℕ) {pre : By
     rw [shaOut_eq hck hs, Nat.add_assoc, Nat.add_assoc, this, List.getElem_toArray,
       ← bit_of_lt (by rw [hflat]; omega), bit_flatten_of_len (zs k) hlens ht]
   exact port_commitP c w g p hpre hs hb hslots hn h1 h2 hsub (shaIn_eq hck) (hmIn_eq hck) zs hzs hrows hout _
-    (hm_zh_in c w g p) (hm_zh c w g p hhm) (hm_bc c w g p hck hhm) hcv0 hchain hcvh hconst
+    (hm_zh_in c w g p) (hm_zh c w g p hhm) (hm_bc c w g p hck hhm) hcv0 hchain hcvh hconst hconstK
 
 /-- **A row of no compression at its columns**: its `hm96` slot holds its net's rows, its `cv` the prefix's midstate
 and its `pad` the constant bits of its one block (its bytes and their padding, `2 · words + 17 ≤ 128`), so the bytes at
@@ -463,7 +508,7 @@ theorem port_commit_rows0 (c : Circuit) (w : ℕ → Bool) (g p : ℕ) {pre : By
   beta_reduce at hzh
   have hd : (bytesOf w (2 * c.ports[p]!.words) (Typed.msgCol c g p)).length = 2 * c.ports[p]!.words :=
     length_bytesOf _ _ _
-  have hpb := pad_bitsP c w g p hpre hs hb hslots (by omega) (by omega) hconst
+  have hpb := pad_bitsP c w g p hpre hs hb hslots hconst
   have hrow := row_commit0P hpre (by rw [hd]; exact h2) _ (hm_zh c w g p hhm)
     (fun q hq => by rw [hzh q (by omega), ← hcvh q hq, hhin.1, Nat.add_zero])
     (fun q hq => by

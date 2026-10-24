@@ -9,14 +9,15 @@ import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 `encodeProof sh p` is the file the prover writes for the proof `p` at shape `sh`: `bincode 1.3` of the commitment and
 `R1csProofLigerito` (PROTOCOL.md §8), each `Vec` as its `u64` length then its elements, each `F128` as
 `le64(lo) ‖ le64(hi)`, the vectors the verifier requires empty (`matrix_evals`, the grinding nonces but the query, claim
-and consistency nonces, `sumcheck_transcript`) empty, each ring switch's grinding nonce `0`. It is `--zk`'s `wProof`
-(ZkView/Wire.lean), the pair that file's proof starts with.
+and consistency nonces, `sumcheck_transcript`) empty, each ring switch's grinding nonce `0`, then the zk patch's
+`zk_level0 = None` tag, as every deployed prover writes it: the verifier's `Flock.Wire.proofFile`, the one file
+`decodeProof` accepts for `p`. Its pair is `--zk`'s `wProof` (ZkView/Wire.lean), the pair that file's proof starts
+with.
 
 * `decodeProof_encodeProof`: `decodeProof sh (encodeProof sh p) = .ok p` for every `p` of the shape (`ProofShaped`):
-  every length `decodeProof` checks (Proof.lean:81-158) at its value, a schedule of at least two levels (at one level
-  `recursive_proofs`' length check, Proof.lean:130, refuses every file), digests of positive width, and a file that fits
-  a `u64`.
-* `encodeProof_size_le`: the file is at most `fileBound sh` bytes; at hm96-sha512 and a `fast100` schedule that is at
+  every length `decodeProof` checks (`decodeRead`) at its value, a schedule of at least two levels (at one level
+  `recursive_proofs`' length check refuses every file), digests of positive width, and a file that fits a `u64`.
+* `encodeProof_size_le`: the file is at most `fileBound sh` bytes (the pair's bound and the tag's byte); at hm96-sha512 and a `fast100` schedule that is at
   most `2^32` bytes and `2064` per ring switch (`fast100_file`), and at the inner statement's unsalted SHA-512, whose
   salts are no larger, too (`shapeOf_plain`, `schedPart_plain`).
 * `TableSrc.encodes_of`: `TableSrc.Encodes` at `bytes r := encodeProof (shapeOf …) (proof r)`, from the setup
@@ -31,8 +32,8 @@ namespace FlockVBridge.Family
 open Flock FlockSoundness.Refine FlockSoundness.Discharge FlockSoundness.Discharge.Recursion FlockVBridge.Compiled
 open Flock.RecAlgebra (decoded)
 
-/-- **The inner proof file** of `p` at shape `sh`, as `decodeProof sh` reads it (Proof.lean:81-158). -/
-def encodeProof (sh : Shape) (p : Proof) : ByteArray := ZkView.wProof sh p
+/-- **The inner proof file** of `p` at shape `sh`, the one `decodeProof sh` accepts for it (Proof.lean). -/
+def encodeProof (sh : Shape) (p : Proof) : ByteArray := Flock.Wire.proofFile sh p
 
 /-- **The lengths `decodeProof sh` checks** (Proof.lean:94-151). -/
 def Lengths (sh : Shape) (p : Proof) : Prop :=
@@ -60,19 +61,12 @@ width, and a file whose length fits a `u64`. -/
 def ProofShaped (sh : Shape) (p : Proof) : Prop :=
   0 < sh.hashLen ∧ 1 ≤ sh.sched.levels.size - 1 ∧ (encodeProof sh p).size < 2 ^ 64 ∧ Lengths sh p
 
-theorem ok_of_reads {m : Reader.M Proof} {b : ByteArray} {x : Proof} (h : ZkView.Reads m b x)
-    (hb : b.size < 2 ^ 64) : (do let (p, _) ← m.run ⟨b, 0⟩; return p : V Proof) = .ok x := by
-  have e := h ByteArray.empty ByteArray.empty (by rw [ByteArray.empty_append, ByteArray.append_empty]; exact hb)
-  rw [ByteArray.empty_append, ByteArray.append_empty] at e
-  rw [show (⟨b, 0⟩ : Reader) = ⟨b, ByteArray.empty.size⟩ from rfl, e]
-  rfl
-
-/-- `matrix_evals`, written empty, read by `vecAny` (Proof.lean:111). -/
-theorem reads_matrixEvals :
-    ZkView.Reads (Reader.vecAny 32 (do let _ ← Reader.f128; let _ ← Reader.f128; pure ()) "matrix_evals")
-      (ZkView.wLen 0) #[] :=
-  ZkView.Reads.congr (ZkView.Reads.vecAny (f := fun _ => ByteArray.empty) (#[] : Array Unit) _ (by omega) (by simp)
-    (by simp)) (by simp [ZkView.wVec]) rfl
+theorem ok_of_reads {m : Reader.M Proof} {b : ByteArray} {x : Proof} {what : String}
+    (h : ZkView.Reads m b x) (hb : (b ++ Flock.Wire.plainEnd).size < 2 ^ 64) :
+    Reader.runPlain m (b ++ Flock.Wire.plainEnd) what = .ok x := by
+  have e := h ByteArray.empty Flock.Wire.plainEnd (by rw [ByteArray.empty_append]; exact hb)
+  rw [ByteArray.empty_append] at e
+  exact Reader.runPlain_of_run_tag e (Nat.zero_add b.size)
 
 /-- **`decodeProof` inverts `encodeProof`** at every proof of the shape. -/
 theorem decodeProof_encodeProof (sh : Shape) (p : Proof) (hp : ProofShaped sh p) :
@@ -82,9 +76,12 @@ theorem decodeProof_encodeProof (sh : Shape) (p : Proof) (hp : ProofShaped sh p)
   obtain ⟨hL, hR, hfit, hcap, h1ab, h1c, hrounds, hlr, hzp, hrs, hrs128, hicap, hl0, hrcs, hrc, hrps, hrp, hyr, hfin,
     hmsg, hqn, hood, hcbn, hcon⟩ := hp
   dsimp only at *
-  unfold decodeProof
+  rw [encodeProof] at hfit ⊢
+  refine Flock.decodeProof_of_read ?_
+  unfold decodeRead
+  rw [Flock.Wire.proofFile] at hfit ⊢
   refine ok_of_reads ?_ hfit
-  simp only [encodeProof, ZkView.wProof, ZkView.wParams, ZkView.wLigerito, ZkView.wLevel, ByteArray.append_assoc]
+  simp only [ZkView.wProof, ZkView.wParams, ZkView.wLigerito, ZkView.wLevel, ByteArray.append_assoc]
   rw [ZkView.wVec_eq (ZkView.wVec id) rcaps, ZkView.wVec_eq (ZkView.wLevel sh) rps]
   simp only [ByteArray.append_assoc]
   refine ZkView.Reads.bind (ZkView.Reads.hashes sh hL cap _ hcap.1 hcap.2) ?_
@@ -115,7 +112,7 @@ theorem decodeProof_encodeProof (sh : Shape) (p : Proof) (hp : ProofShaped sh p)
       (fun x _ => by rw [ZkView.wPair, ByteArray.size_append, ZkView.toBytes_size, ZkView.toBytes_size]; omega)
       fun x _ => ZkView.Reads.pair x) ?_
     refine ZkView.Reads.bind (ZkView.Reads.f128s zp _ hzp) ?_
-    refine ZkView.Reads.bind reads_matrixEvals ?_
+    refine ZkView.Reads.bind (ZkView.Reads.vec0 _ _) ?_
     refine ZkView.Reads.bind (ZkView.Reads.vec0 _ _) ?_
     refine ZkView.Reads.bind (ZkView.Reads.vecExact rs _ hrs
       (fun v _ => by have := ZkView.wVec_size_ge F128.toBytes v; rw [ByteArray.size_append]; omega)
@@ -285,10 +282,10 @@ def schedPart (s : Flock.Schedule) (H : ℕ) (sl : Option ℕ) : ℕ :=
     (8 + 2 ^ (s.ext + 1) * 16) + levelSize H sl (lvl R) 16 + 8 + (8 + (s.k0 + 8 + 7 * (R - 1)) * 64) +
     (8 + (R + 1) * 8) + (8 + (1 + 2 * R) * 16) + 8 + (8 + (3 * R + 2) * 8) + (8 + (R + 1) * 8)
 
-/-- **A bound on a file's length at shape `sh`**: the schedule's part, the zerocheck's and lincheck's rounds, and
-`2064` bytes per ring switch. -/
+/-- **A bound on a file's length at shape `sh`**: the schedule's part, the zerocheck's and lincheck's rounds,
+`2064` bytes per ring switch, and the `zk_level0` tag's byte. -/
 def fileBound (sh : Shape) : ℕ :=
-  schedPart sh.sched sh.hashLen sh.saltLen + 32 * (sh.m - 6) + 32 * (sh.kLog - 6) + 2064 * sh.claims
+  schedPart sh.sched sh.hashLen sh.saltLen + 32 * (sh.m - 6) + 32 * (sh.kLog - 6) + 2064 * sh.claims + 1
 
 theorem encodeProof_size_le (sh : Shape) (p : Proof) (hp : Lengths sh p) : (encodeProof sh p).size ≤ fileBound sh := by
   obtain ⟨cap, params, ⟨r1ab, r1c, rounds, fa, fb, fc⟩, ⟨lr, zp⟩, rs,
@@ -342,7 +339,8 @@ theorem encodeProof_size_le (sh : Shape) (p : Proof) (hp : Lengths sh p) : (enco
   rw [hood] at e16
   rw [hcbn] at e17
   rw [hcon] at e18
-  simp only [encodeProof, ZkView.wProof, ZkView.wLigerito, ByteArray.size_append, ht, hw0] at *
+  have htag : Flock.Wire.plainEnd.size = 1 := rfl
+  simp only [encodeProof, Flock.Wire.proofFile, ZkView.wProof, ZkView.wLigerito, ByteArray.size_append, ht, hw0] at *
   simp only [fileBound, schedPart]
   omega
 

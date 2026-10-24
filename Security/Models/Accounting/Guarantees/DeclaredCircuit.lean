@@ -54,7 +54,8 @@ passes' stores, `P·N·4096` bytes.
 
 *The requirement.* The prover chooses everything on `W`'s side after every coin: the placed execution `p x` (each
 value's device `leaf` and the tick `ticks d s` at which device `d` begins engine step `s`), the layout of values in
-blocks `ℓ x`, the groups `grp x` (a KV value's sequence, layer and plane), the step `bind x w j` each pass is bound to,
+blocks `ℓ x` (with each block's first encoded read: deferred residency credits a block from it), the groups `grp x` (a
+KV value's sequence, layer, plane and page parity), the step `bind x w j` each pass is bound to,
 strictly increasing over the passes (#2378), the memory map `σ x`, each pass's plan `plan x w j` (its blocks), and the
 store position `addr x k` of each block `k`. On device `d`'s clock pass `j` of window `w` is the `τ` ticks from the one
 at which `d` begins the pass's step (`Requirement.Placement.passTicks`), window `w` its passes' ticks
@@ -153,7 +154,7 @@ def DeclaredCircuitRequirement : Prop :=
     7 ≤ n → 0 < P → 0 < N → 0 < E →
     Assumptions.SketchRank 16 128 12 ε →
     Assumptions.KeyBinding T M δ enc →
-    Assumptions.EncodeChainHardness Gates.p1024 3 B E εnum εden →
+    Assumptions.EncodeChainHardness Gates.p1024 3 B E εnum εden → εden ≤ 2 ^ 64 * εnum →
     (∀ s w η j pre, Assumptions.SketchHashBudget (((A.session s).window w η).device j pre) (qr * τ)) →
     Assumptions.CircuitCarriers (fun c y => A.session (steer c y)) (RateSketch.steeredStore enc choose layout) layout
       joined (Xr * τ) L B εnum εden Wc Aud →

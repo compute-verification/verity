@@ -22,10 +22,16 @@ equal to `_v1` on every finite input.  A registered id denotes one function, so 
 `BlackwellS8ImmaDot32_v1` is sm_120's s8 `mma.sync` step with `.satfinite` (`integer.BLACKWELL_SM120_S8_M16N8K32`, an s32
 accumulator word), and `S32ToF32Rn_v1` the `cvt.rn.f32.s32` that hands its sum to an f32 epilogue.
 `BlackwellU8S8ImmaDot32_v1` is the step's one sibling, u8 by s8 without `.satfinite` (`integer.BLACKWELL_SM120_U8S8_M16N8K32`,
-wrapping modulo 2^32), from the same probe run.
+wrapping modulo 2^32), from the same probe run.  Each tensor-core step is bound to the model it evaluates through
+(`census.silicon_step`: `.silicon`), whose operand format is its census facet `tc:<precision>`.
+The two s8 steps are also the H200's (sm_90a: `wgmma` m64nNk32 and `mma.sync` m16n8k32) and the B200's (sm_100a: `tcgen05.mma`
+kind::i8 and `mma.sync` m16n8k32) at the same formats: one function on every card (`integer.HOPPER_SM90_S8_K32`,
+`integer.BLACKWELL_SM100_S8_K32`), so a circuit over them names no architecture (`gemm.s8_gemm`: `gemm.GEMM_SM90_S8` is the
+H200's binding, this step).
 """
 from __future__ import annotations
 
+from verity.ml.circuits.census import silicon_step
 from verity.ml.circuits.defs import PrimitiveDefinition, primitive
 from verity.ml.circuits.types import Array, Value
 
@@ -120,12 +126,14 @@ def HopperE4m3QgmmaDot32(acc: int, *ab: int) -> int:
 
 
 @primitive("HopperE4m3MmaV2Dot32", 1, [("acc", F32), ("a", A32_8), ("b", A32_8)], F32,
-           conformance="model-untested: read from Triton 3.7.1 (AccelerateMatmul.cpp supportMMA v3 and mmav2SupportsFp8Operands, "
-                       "MMAv2.cpp's kWidth-4 register order) and its offline sm_90 compile of vLLM d9105ea80's fused_moe_kernel at the "
-                       "tuned H200 tiles 8x32x128 and 8x64x128/SWAP_AB (8 chained mma.sync.m16n8k16.f32.f16.f16.f32 per 128-wide K "
-                       "tile, cvt.rn.f16x2.e4m3x2; SASS F2FP.F16.E4M3.UNPACK_B, HMMA.16816.F32); HMMA.16816.F32 from +0 is "
-                       "HOPPER_BF16_M16N8K16's group on the H100 (r20260922-184111-671e, 0 mismatches), with a nonzero accumulator "
-                       "unmeasured: integrations/vllm/tests/properties/glm53_block_fp8_capture_gpu.py is its hardware check")
+           conformance="exact-model-tested; vLLM d9105ea80's fused_moe_kernel on the H200 (cc 9.0, 132 SMs) at vLLM's defaults, at "
+                       "GLM-5.3's tuned decode tiles 8x32x128 and 8x64x128/SWAP_AB (Triton 3.7.1: 8 chained "
+                       "mma.sync.m16n8k16.f32.f16.f16.f32 per 128-wide K tile, cvt.rn.f16x2.e4m3x2; SASS F2FP.F16.E4M3.UNPACK_B, "
+                       "HMMA.16816.F32): 638,976 w13 and w2 words, 0 mismatches, and an operand probe (+448 * +448 and +448 * -448 "
+                       "in the two k16 halves over small codes) on which the natural k order, the halves swapped, adder widths 24, "
+                       "25, 27 and 28, Ampere's 8 + 8 groups, one k32 group, QGMMA's step and a chain of FMAs each differ "
+                       "(integrations/vllm/tests/properties/glm53_block_fp8_capture_gpu.py v4; run r20261017-125608-3071, "
+                       "art:41943522); HMMA.16816.F32 from +0 is HOPPER_BF16_M16N8K16's group on the H100 (r20260922-184111-671e)")
 def HopperE4m3MmaV2Dot32(acc: int, *ab: int) -> int:
     """One 32-wide k block of an e4m3 `tl.dot` that Triton 3.7.1 lowers to MMAv2 on sm_90 (a dot whose M is not a multiple of 64 or
     whose N is not a multiple of 16, or under fewer than 4 warps): the operands promoted to f16 exactly, then two chained
@@ -250,22 +258,36 @@ def E4m3ToF32(x: int) -> int:
 @primitive("BlackwellS8ImmaDot32", 1, [("acc", S32), ("a", A32_S8), ("b", A32_S8)], S32,
            conformance="exact-model-tested; RTX PRO 6000 Blackwell Server Edition (cc 12.0) IMMA.16832.S8.S8.SAT: run "
                        "r20261015-084000-06d8, 10,243,968 words, 0 mismatches, the clamp tiles admitting only a clamp at D (trust "
-                       "dossier art:86f39a17b5a0c8a8c92e5e25dcdfbee95d6f65408130bc1db6c54d440dfd8474, PINNED)")
+                       "dossier art:86f39a17b5a0c8a8c92e5e25dcdfbee95d6f65408130bc1db6c54d440dfd8474, PINNED); the same words on an "
+                       "H200 (IGMMA.64x8x32.S8.S8.SAT and IMMA.16832.S8.S8.SAT, run r20261019-043020-f267) and a B200 (UTCIMMA "
+                       "kind::i8 and IMMA.16832.S8.S8.SAT, run r20261019-042817-8fd3), each PINNED (silicon.instructions sm90.*.s8, "
+                       "sm100.*.s8)")
 def BlackwellS8ImmaDot32(acc: int, *ab: int) -> int:
     """One accumulator coordinate of `mma.sync.aligned.m16n8k32.row.col.satfinite.s32.s8.s8.s32` on sm_120a (SASS
     `IMMA.16832.S8.S8.SAT`): `acc` (an s32 word) plus the 32 exact s8 x s8 products, summed exactly and clamped once to
-    [-2^31, 2^31 - 1]. Total on every encoding: `integer.BLACKWELL_SM120_S8_M16N8K32.step`."""
+    [-2^31, 2^31 - 1]. Total on every encoding: `integer.BLACKWELL_SM120_S8_M16N8K32.step`. The same function on sm_90a
+    (`wgmma` m64nNk32 `.satfinite`, `mma.sync` m16n8k32) and sm_100a (`tcgen05.mma` kind::i8 saturating, `mma.sync`)."""
     return BLACKWELL_SM120_S8_M16N8K32.step(acc, list(ab[:32]), list(ab[32:64]))
 
 
 @primitive("BlackwellU8S8ImmaDot32", 1, [("acc", S32), ("a", A32_U8), ("b", A32_S8)], S32,
            conformance="exact-model-tested; RTX PRO 6000 Blackwell Server Edition (cc 12.0) IMMA.16832.U8.S8: run "
-                       "r20261015-084000-06d8, 10,243,968 words, 0 mismatches, out-of-range sums wrapping modulo 2^32")
+                       "r20261015-084000-06d8, 10,243,968 words, 0 mismatches, out-of-range sums wrapping modulo 2^32; the same "
+                       "words from the u8.s8 forms without .satfinite on an H200 (IGMMA.64x8x32.U8.S8, IMMA.16832.U8.S8, run "
+                       "r20261019-043020-f267) and a B200 (UTCIMMA kind::i8, IMMA.16832.U8.S8, run r20261019-042817-8fd3)")
 def BlackwellU8S8ImmaDot32(acc: int, *ab: int) -> int:
     """One accumulator coordinate of `mma.sync.aligned.m16n8k32.row.col.s32.u8.s8.s32` on sm_120a (SASS `IMMA.16832.U8.S8`):
     `acc` (an s32 word) plus the 32 exact u8 x s8 products, summed exactly and reduced modulo 2^32 (no `.satfinite`). Total on
-    every encoding: `integer.BLACKWELL_SM120_U8S8_M16N8K32.step`."""
+    every encoding: `integer.BLACKWELL_SM120_U8S8_M16N8K32.step`. The same function on sm_90a and sm_100a."""
     return BLACKWELL_SM120_U8S8_M16N8K32.step(acc, list(ab[:32]), list(ab[32:64]))
+
+
+for _step, _model in ((AmpereBF16TcDot16, AMPERE_BF16_M16N8K16), (HopperBF16WgmmaDot16, HOPPER_BF16_WGMMA_K16),
+                      (HopperE4m3QgmmaDot32, HOPPER_E4M3_WGMMA_K32), (HopperE4m3MmaV2Dot32, HOPPER_E4M3_MMAV2_K32),
+                      (BlackwellE4m3QmmaDot32, BLACKWELL_SM120_E4M3_M16N8K32), (BlackwellE5m2QmmaDot32, BLACKWELL_SM120_E5M2_M16N8K32),
+                      (BlackwellNvf4OmmaDot64, BLACKWELL_SM120_NVF4), (BlackwellMxf4OmmaDot64, BLACKWELL_SM120_MXF4),
+                      (BlackwellS8ImmaDot32, BLACKWELL_SM120_S8_M16N8K32), (BlackwellU8S8ImmaDot32, BLACKWELL_SM120_U8S8_M16N8K32)):
+    silicon_step(_step, _model)
 
 
 @primitive("S32ToF32Rn", 1, [("a", S32)], F32,

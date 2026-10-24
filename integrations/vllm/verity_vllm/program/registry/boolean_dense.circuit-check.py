@@ -7,7 +7,7 @@ from typing import Any
 
 def _boolean_roots() -> list[Any]:
     """`registry.dense`'s rows on bits at 8 elements with Gemma-2's constants: `gelu_tanh_and_mul` at I = 8, the RMSNorm
-    chain's and the logit softcap's element-wise rows at N = 8."""
+    chain's and the logit softcap's element-wise rows at N = 8, and the scalar rows with their scalar an input."""
     from verity.ml.circuits.defs import bind
     from verity_vllm.program.registry import boolean_dense as BDN
 
@@ -19,4 +19,5 @@ def _boolean_roots() -> list[Any]:
         bind(BDN.AddScalarBf16, N=8, C=1.0),
         bind(BDN.Bf16DivScalar, N=8, C=30.0),
         bind(BDN.Bf16MulScalar, N=8, C=30.0),
+        *[bind(d, N=8) for d in (BDN.AddScalarF32In, BDN.AddScalarBf16In, BDN.Bf16DivScalarIn, BDN.Bf16MulScalarIn)],
     ]

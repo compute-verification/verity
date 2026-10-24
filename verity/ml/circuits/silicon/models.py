@@ -43,7 +43,13 @@ from dataclasses import dataclass
 from typing import Literal, Protocol, runtime_checkable
 
 from .errors import InvalidArtifact
-from .integer import BLACKWELL_SM120_S8_M16N8K32, BLACKWELL_SM120_S8_M16N8K32_WRAP, BLACKWELL_SM120_U8S8_M16N8K32
+from .integer import (
+    BLACKWELL_SM100_S8_K32,
+    BLACKWELL_SM120_S8_M16N8K32,
+    BLACKWELL_SM120_S8_M16N8K32_WRAP,
+    BLACKWELL_SM120_U8S8_M16N8K32,
+    HOPPER_SM90_S8_K32,
+)
 from .term import (
     FP32_MAX_EXPONENT,
     FP32_MIN_NORMAL_EXPONENT,
@@ -61,6 +67,8 @@ __all__ = [
     "ADA_E4M3_M16N8K32",
     "ADA_E5M2_M16N8K32",
     "AMPERE_BF16_M16N8K16",
+    "BLACKWELL_SM100_E4M3",
+    "BLACKWELL_SM100_E5M2",
     "BLACKWELL_SM120_E2M1_M16N8K32",
     "BLACKWELL_SM120_E4M3_M16N8K32",
     "BLACKWELL_SM120_E5M2_M16N8K32",
@@ -172,7 +180,9 @@ class GroupSum:
     ``dtype`` names the operand format (``term.FORMATS``); a ``width`` below
     24 means the incoming FP32 accumulator's significand is *truncated* to the
     adder before the grouped add (Hopper/Ada FP8: 14 bits), exactly as a
-    product is.
+    product is.  ``executes`` names the operand format the instruction
+    multiplies in where it isn't ``dtype`` (Triton's MMAv2 e4m3 dot on sm_90
+    promotes its operands exactly to f16 for HMMA), else None.
     """
 
     name: str
@@ -183,6 +193,7 @@ class GroupSum:
     width: int
     zero_exponent: int
     validated: str
+    executes: str | None = None
 
     @property
     def k(self) -> int:
@@ -404,6 +415,56 @@ BLACKWELL_SM120_E5M2_M16N8K32 = GroupSum(
         "6,434,816 finite elements in 13 families, 0 mismatches (BLACKWELL_SM120_E4M3_M16N8K32's pipeline with e5m2 products); the "
         "fresh-seed sweep r20260930-063527-4d6b (driver 580.173.02, CUDA 13.0, SM clock locked at 2,100 MHz, seed 20260931): "
         "25,041,024 elements in 14 families, 0 mismatches (Ada's pipeline with e5m2 products: 15,747,373)"
+    ),
+)
+
+# Blackwell datacenter (sm_100, B200) FP8 ``tcgen05.mma.cta_group::1.kind::f8f6f4`` (SASS UTCQMMA): sm_120's QMMA step to the
+# bit, one group of all 32 products plus the accumulator in a 26-bit truncating adder.  As on sm_120 the plain kind's floor is
+# unobservable (every product is above 2^-33, a subnormal accumulator enters at -126: any floor <= -126 gives the same words);
+# -133 is the one ``kind::mxf8f6f4`` measures, where a UE8M0 scale can put every term below 2^-126.  Also measured with 0
+# mismatches, and outside these objects because a GroupSum has one dtype and no scales: E4M3 x E5M2 and E5M2 x E4M3 (each
+# exact product carried at PRODUCT_WIDTH), and ``kind::mxf8f6f4.block_scale.scale_vec::1X`` (E4M3, E5M2, E4M3 x E5M2), whose
+# UE8M0 pair adds (sa - 127) + (sb - 127) to the exponent of every product of the step before alignment; a group leaving
+# the FP32 range is the sticky infinity of its sign, as here.  The executable reference for those kinds is
+# benchmarks/tc_probe_fp4/f8_model.py (held to this class word for word by its tests).
+_B200_F8_PIN = (
+    "lane B200-FP8 2026-10-19, NVIDIA B200 (sm_100, cc 10.0, driver 580.173.02, nvcc 13.0.88 -gencode compute_100a/sm_100a, "
+    "GPU-2e39ef52), probe kernel benchmarks/tc_probe_fp4/tcgen05_f8.cu: one tcgen05.mma.cta_group::1 (M128 N32 K32, K-major "
+    "no-swizzle smem descriptors, one SASS UTCQMMA a kernel) per K step, issued by one thread, arbitrary FP32 accumulators "
+    "preloaded into tensor memory with tcgen05.st (and enable_input_d = 0 tiles), 1, 2, 4 or 8 steps on one TMEM accumulator; "
+    "an exact-integer layout gate passed on every kind before the capture. Run r20261019-081000-ad35 (f8_sm100.sh, seeds "
+    "20261019 / 20261020): 110,853,632 / 110,853,632 in-domain words over seven kinds (kind::f8f6f4 e4m3, e5m2, e4m3 x e5m2, "
+    "e5m2 x e4m3; kind::mxf8f6f4 e4m3, e5m2, e4m3 x e5m2), 10,853,888 of them in 15 adversarial families a kind (largest-"
+    "exponent spread, cancellation, accumulator walks, subnormal operands and accumulators, signed zero, enable_input_d = 0, "
+    "K = 64..256 chains; for mxf8f6f4 six more: UE8M0 sweeps, extremes, overflow and a floor probe) and 99,999,744 random, "
+    "0 mismatches; no -0 among the 111,034,368 words"
+)
+BLACKWELL_SM100_E4M3 = GroupSum(
+    name="blackwell_sm100_tcgen05_e4m3",
+    arch="sm_100",
+    dtype="e4m3",
+    operand_bits=8,
+    groups=(32,),
+    width=26,
+    zero_exponent=-133,
+    validated=(
+        _B200_F8_PIN + "; kind::f8f6f4 e4m3 x e4m3: 31,274,720 words (1,275,616 adversarial), 0 mismatches, while width 25 / 27 "
+        "miss 203,070 / 112,813, two groups of 16 248,790 and Hopper's 14-bit FP8 adder 1,026,549. The parameters are "
+        "BLACKWELL_SM120_E4M3_M16N8K32's."
+    ),
+)
+BLACKWELL_SM100_E5M2 = GroupSum(
+    name="blackwell_sm100_tcgen05_e5m2",
+    arch="sm_100",
+    dtype="e5m2",
+    operand_bits=8,
+    groups=(32,),
+    width=26,
+    zero_exponent=-133,
+    validated=(
+        _B200_F8_PIN + "; kind::f8f6f4 e5m2 x e5m2: 21,278,720 words (1,277,952 adversarial), 0 mismatches, while width 25 / 27 "
+        "miss 245,886 / 155,907, two groups of 16 301,271 and Hopper's 14-bit FP8 adder 1,007,372. The parameters are "
+        "BLACKWELL_SM120_E5M2_M16N8K32's."
     ),
 )
 
@@ -852,7 +913,9 @@ BLACKWELL_SM100_MXF4 = BlockScaledAlignAdd(
         + "; 0 mismatches over 12,898,304 elements: kind::mxf4 r20260923-001838-42a4 (3,956,736) and r20260923-002320-6fbf "
         "(3,956,736); kind::mxf4nvf4 2X r20260923-001832-17dc (3,956,736) and r20260923-001903-c420 (1,028,096; K=128 chain); "
         "the signed-underflow alternative misses 14,710 / 14,384 / 14,734 / 5,535 (D13 holds on sm_100 too). The parameters "
-        "are BLACKWELL_SM120_MXF4's."
+        "are BLACKWELL_SM120_MXF4's. The floor is sharp on the B200 too (lane B200-FP8, r20261019-080611-3d1d, driver "
+        "580.173.02, GPU-2e39ef52: kind::mxf4nvf4 2X, the subnormal and UE8M0 extreme / underflow families and random scales, "
+        "0 / 3,670,016, while grid_floor -173 / -175 miss 85 / 67 and -170 / -178 365 / 257)."
     ),
 )
 
@@ -894,6 +957,8 @@ MODELS: dict[str, Model] = {
         HOPPER_E5M2_K32,
         BLACKWELL_SM120_E4M3_M16N8K32,
         BLACKWELL_SM120_E5M2_M16N8K32,
+        BLACKWELL_SM100_E4M3,
+        BLACKWELL_SM100_E5M2,
         BLACKWELL_SM120_NVF4,
         BLACKWELL_SM120_MXF4,
         BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED,
@@ -903,5 +968,7 @@ MODELS: dict[str, Model] = {
         BLACKWELL_SM120_S8_M16N8K32,
         BLACKWELL_SM120_S8_M16N8K32_WRAP,
         BLACKWELL_SM120_U8S8_M16N8K32,
+        HOPPER_SM90_S8_K32,
+        BLACKWELL_SM100_S8_K32,
     )
 }

@@ -5,6 +5,7 @@ import VStar.Unit
 import VStar.InnerRepCheck
 import VStar.Algebra
 import VStar.Parts
+import VStar.Cap
 import VStar.Stage
 import VStar.Menu.Pinned
 import VStar.Stream

@@ -79,6 +79,15 @@ def _operand(v: ViewDesc):
     return PerRow(v) if v.rank == 2 else Shared(v)
 
 
+def _refuse_constant(node: TreeNode, ctx: StepContext, spec) -> Resolution | None:
+    """A refusal when the profile is `registered_values`: its Build binds the scalar op's value twin (`<Name>_v3`, the constant a
+    registered value, `rules/vocab.py`'s `*_value` kinds), which this fold does not bind yet."""
+    if getattr(ctx.profile, "registered_values", False):
+        return unsupported(node, f"registered_values: the Build binds {spec.name}'s value twin, which this fold does not bind yet",
+                           spec=spec.id)
+    return None
+
+
 def _compute(node: TreeNode, ctx: StepContext, spec, rows: int, operands: tuple, outputs: tuple, name: str, kernels=KERNELS_ELEMENTWISE,
              *hint_extra: str, consumed: tuple[int, ...] | None = None) -> Compute:
     return Compute(spec, rows, operands, outputs, consumed if consumed is not None else (node.id,), hint=hint_of(node, *hint_extra),
@@ -112,9 +121,10 @@ class ScalarAddF32:
         if src is not None:
             spec = bind(add_scalar_bf16.AddScalarBf16, N=N, C=c)
             roots = ctx.roots_of(src)
-            return _compute(node, ctx, spec, rows, (_operand(src),), (_operand(out),), self.name, KERNELS_ELEMENTWISE,
-                            roots[0].name if roots else "add_scalar")
-        return _compute(node, ctx, bind(add_scalar_f32.AddScalarF32, N=N, C=c), rows, (_operand(x),), (_operand(out),), self.name)
+            return _refuse_constant(node, ctx, spec) or _compute(node, ctx, spec, rows, (_operand(src),), (_operand(out),), self.name,
+                                                                 KERNELS_ELEMENTWISE, roots[0].name if roots else "add_scalar")
+        spec = bind(add_scalar_f32.AddScalarF32, N=N, C=c)
+        return _refuse_constant(node, ctx, spec) or _compute(node, ctx, spec, rows, (_operand(x),), (_operand(out),), self.name)
 
 
 @dataclass
@@ -340,9 +350,6 @@ class GeluTanhAndMul:
             return unsupported(node, "gelu_tanh_and_mul views are not row-major [M,2I] -> [M,I]", x=repr(x), out=repr(out))
         if not (x.dtype == out.dtype == "bfloat16"):
             return unsupported(node, "GeluTanhMul is bf16", dtypes=[x.dtype, out.dtype])
-        if getattr(ctx.profile, "registered_values", False):
-            return unsupported(node, "registered_values: GeluTanhMul_v3 reads the registered table gelu_tanh_bf16, which the fold "
-                               "does not supply yet")
         M, I = out.shape
         return _compute(node, ctx, bind(gelu_tanh_mul.GeluTanhMul, I=I), M, (PerRow(x),), (PerRow(out),), self.name, ("act_and_mul_kernel",),
                         "gelu_tanh_and_mul")
@@ -382,8 +389,8 @@ class Bf16ScalarChain:
         elif b == "aten.mul":
             spec = bind(bf16_mul_scalar.Bf16MulScalar, N=N, C=c)
         else:
-            spec = bind(bf16_tanh.Bf16Tanh, N=N)
-        return _compute(node, ctx, spec, M, (PerRow(x),), (PerRow(out),), self.name)
+            return _compute(node, ctx, bind(bf16_tanh.Bf16Tanh, N=N), M, (PerRow(x),), (PerRow(out),), self.name)
+        return _refuse_constant(node, ctx, spec) or _compute(node, ctx, spec, M, (PerRow(x),), (PerRow(out),), self.name)
 
 
 def gemma2_patterns() -> list:

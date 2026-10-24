@@ -9,7 +9,9 @@ finite type too (`Claims.Flock.ZkDeploy.Rest`, read as `tapeOf`, with no stateme
 a class `A` of statements, as a tape of bounded size can meet it, and the bound outside `A` is `1`, which every pair of
 probabilities meets:
 
-* `RefSession.TapeOKOn A` and `RefSession.HonestMsgsOn A`: `TapeOK` and `HonestMsgs` at the statements in `A`.
+* `RefSession.TapeOKOn A` and `RefSession.HonestMsgsOn A R`: `TapeOK` and `HonestMsgs` at the statements in `A`, the
+  latter at their witnesses in `R`. Zero knowledge reads the prover at the relation's witnesses only; outside it the
+  reference prover stops where its batched constraint fails (`innerP`), a test of the clear values the views mask.
   `RefSession.msgLinkOn` is `TMsgLink` on the relation's statements in `A` from `TapeOKOn A`, as `msgLink` has it from
   `TapeOK`. **`RefSession.tapeOKOn_of_tape`**: `TapeOKOn A` holds when the tape is read with fibers of one size at each
   statement in `A` (`FibersEq (S.tape x)`), since each table's randomness is read from that reading with fibers of one
@@ -19,7 +21,8 @@ probabilities meets:
 * `zkmalR_congr_on`: `zkmalR_congr` with the two provers agreeing only on the relation's statements. `zkmalR_on`:
   `ZKmalR` on the relation's statements in `A` is `ZKmalR` on the relation at the bound `1` outside `A`.
 * `Flock.zkAt_deployZk_ref_on`: `Claims.Flock.ZKAt` at `refP`'s prover at `deployOn (deployZk rel) A`, under the
-  session's Props with `TapeOKOn A` for `TapeOK`. `zk_zkOf_on`: `zk_zkOf` with `Proto.HonestOn A` for `Proto.Honest`.
+  session's Props with `TapeOKOn A` for `TapeOK`. `zk_zkOf_on`: `zk_zkOf` with `Proto.HonestOn A R` at the relation
+  for `Proto.Honest`.
 * **`Flock.zk_zkD_ref_on`**: `Claims.Flock.ZK` at the masked record `RefSession.zkD`, at `Flock.zk_zkD_ref`'s `ε_zk`
   on `A` and `1` outside it, under `TapeOKOn A` and `HonestMsgsOn A`. **`Flock.zk_deployZk_ref_on`** (and `_gap`): the
   same at the deployed masked record `zkDeployed`, with `TapeOKOn A` from the tables' tape read with fibers of one size
@@ -85,21 +88,24 @@ theorem r_deployOn {Coin Col T : Type} (D : Flock.Deploy Coin Col T) (A : Msg �
 
 /-! ## The masked record on a class of statements -/
 
-/-- **`G`'s messages are the reference prover's at the statements in `A`**: `Proto.Honest` there. -/
-def Proto.HonestOn {Ω : Type} (G : Proto Flock.Wit) (A : Msg → Prop) (H : Msg → Msg) (P : Flock.Wit → Prover Ω)
-    (coinOf : Msg → Msg) (tapeOf : G.Nonce × G.Rand → Ω) : Prop :=
-  ∀ x, A x → ∀ w ν r (ops : List (Msg × Msg)), ops.length ≤ G.K x →
+/-- **`G`'s messages are the reference prover's at the statements in `A`**, at their witnesses in `R`: `Proto.Honest`
+there. Zero knowledge reads the prover only at a witness in the relation (`zk_zkOf_on`). -/
+def Proto.HonestOn {Ω : Type} (G : Proto Flock.Wit) (A : Msg → Prop) (R : Rel Flock.Wit) (H : Msg → Msg)
+    (P : Flock.Wit → Prover Ω) (coinOf : Msg → Msg) (tapeOf : G.Nonce × G.Rand → Ω) : Prop :=
+  ∀ x, A x → ∀ w, R x w → ∀ ν r (ops : List (Msg × Msg)), ops.length ≤ G.K x →
     ((G.msg x w ν r (ops.map fun p => G.dec p.2)).eval H).1 =
         (((P w).next x (ops.map fun p => (p.1, coinOf p.2)) (tapeOf (ν, r))).eval H).1 ∧
       ((G.msg x w ν r (ops.map fun p => G.dec p.2)).eval H).2 ⊆
         (((P w).next x (ops.map fun p => (p.1, coinOf p.2)) (tapeOf (ν, r))).eval H).2
 
-/-- **The masked record's reference prover sends `G.prover`'s messages and makes its calls** at a statement in `A`,
-where `G`'s messages are the reference prover's there (`Proto.HonestOn A`): `zkOf_prover` at one statement. -/
+/-- **The masked record's reference prover sends `G.prover`'s messages and makes its calls** at a statement in `A` and
+a witness in `R`, where `G`'s messages are the reference prover's there (`Proto.HonestOn A R`): `zkOf_prover` at one
+statement. -/
 theorem zkOf_prover_on (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (G : Proto Flock.Wit)
     (coinOf : Msg → Msg) (tapeOf : G.Nonce × G.Rand → FlockComplete.TapeZk) (S : Simulator) (H : Msg → Msg)
-    (A : Msg → Prop) (hG : G.HonestOn A H FlockComplete.ZkTables.honestP coinOf tapeOf) (w : Flock.Wit) (x : Msg)
-    (hx : A x) (hist : List (Msg × Msg)) (ω : G.Nonce × G.Rand) (hlen : hist.length < G.k x) :
+    (A : Msg → Prop) (R : Rel Flock.Wit) (hG : G.HonestOn A R H FlockComplete.ZkTables.honestPR coinOf tapeOf)
+    (w : Flock.Wit) (x : Msg) (hx : A x) (hR : R x w) (hist : List (Msg × Msg)) (ω : G.Nonce × G.Rand)
+    (hlen : hist.length < G.k x) :
     (((G.prover w).next x hist ω).eval H).1 = ((((zkOf rel G coinOf tapeOf S).prover w).next x hist ω).eval H).1 ∧
       (((G.prover w).next x hist ω).eval H).2 ⊆ ((((zkOf rel G coinOf tapeOf S).prover w).next x hist ω).eval H).2 := by
   cases hist with
@@ -115,10 +121,10 @@ theorem zkOf_prover_on (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Read
       rw [ocBind_eq_bind, allOk_eq_allPass]
     have e₂ : ((zkOf rel G coinOf tapeOf S).prover w).next x ((a, ρ) :: ops) ω =
         (Claims.Flock.allPass (G.chk x ω.1 ρ) 0 (ops.map Prod.snd)).bind fun ok =>
-          if ok then (FlockComplete.ZkTables.honestP w).next x (ops.map fun p => (p.1, coinOf p.2)) (tapeOf ω)
+          if ok then (FlockComplete.ZkTables.honestPR w).next x (ops.map fun p => (p.1, coinOf p.2)) (tapeOf ω)
           else .ret G.abort := rfl
     rw [e₁, e₂, OC.eval_bind, OC.eval_bind]
-    obtain ⟨h₁, h₂⟩ := hG x hx w ω.1 ω.2 ops hops
+    obtain ⟨h₁, h₂⟩ := hG x hx w hR ω.1 ω.2 ops hops
     cases ((Claims.Flock.allPass (G.chk x ω.1 ρ) 0 (ops.map Prod.snd)).eval H).1 with
     | true =>
         simp only [↓reduceIte]
@@ -127,22 +133,24 @@ theorem zkOf_prover_on (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Read
     | false => exact ⟨rfl, List.Subset.refl _⟩
 
 /-- **`Claims.Flock.ZK` at the masked record of a committed-coin protocol, at the bound `1` outside `A`**, from `ZKAt`
-at its prover on the statements in `A` (`deployOn`): `zk_zkOf` with `G`'s messages the reference prover's on `A` only
-(`Proto.HonestOn`), at `γ ≥ 0`. -/
+at its prover on the statements in `A` (`deployOn`): `zk_zkOf` with `G`'s messages the reference prover's on `A` only,
+at the relation's witnesses (`Proto.HonestOn`), at `γ ≥ 0`. -/
 theorem zk_zkOf_on (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (G : Proto Flock.Wit)
     (coinOf : Msg → Msg) (tapeOf : G.Nonce × G.Rand → FlockComplete.TapeZk) (S : Simulator) {H : Msg → Msg}
     {εzk γ : Msg → ℝ} (A : Msg → Prop) [DecidablePred A] (hγ : ∀ x, 0 ≤ γ x)
     (hk : ∀ x, G.k x = (FlockDeploy.deployZk rel).V.k x + 1)
-    (hG : G.HonestOn A H FlockComplete.ZkTables.honestP coinOf tapeOf)
+    (hG : G.HonestOn A (Flock.R (FlockDeploy.deployZk rel).parse) H FlockComplete.ZkTables.honestPR coinOf tapeOf)
     (h : Claims.Flock.ZKAt H (deployOn (FlockDeploy.deployZk rel) A) G.prover S εzk γ) :
     Claims.Flock.ZK H (zkOf rel G coinOf tapeOf S) (fun x => if A x then εzk x else 1) γ := by
   have h' : ZKmalR H (fun x => (FlockDeploy.deployZk rel).V.k x + 1) (zkOf rel G coinOf tapeOf S).prover
       (Flock.R (deployOn (FlockDeploy.deployZk rel) A).parse) S εzk γ :=
     zkmalR_congr_on hγ
-      (fun w x hR hist ω hh => (zkOf_prover_on rel G coinOf tapeOf S H A hG w x
-        ((r_deployOn (FlockDeploy.deployZk rel) A x w).1 hR).1 hist ω (lt_of_lt_of_eq hh (hk x).symm)).1)
-      (fun w x hR hist ω hh => (zkOf_prover_on rel G coinOf tapeOf S H A hG w x
-        ((r_deployOn (FlockDeploy.deployZk rel) A x w).1 hR).1 hist ω (lt_of_lt_of_eq hh (hk x).symm)).2)
+      (fun w x hR hist ω hh => (zkOf_prover_on rel G coinOf tapeOf S H A _ hG w x
+        ((r_deployOn (FlockDeploy.deployZk rel) A x w).1 hR).1 ((r_deployOn (FlockDeploy.deployZk rel) A x w).1 hR).2
+        hist ω (lt_of_lt_of_eq hh (hk x).symm)).1)
+      (fun w x hR hist ω hh => (zkOf_prover_on rel G coinOf tapeOf S H A _ hG w x
+        ((r_deployOn (FlockDeploy.deployZk rel) A x w).1 hR).1 ((r_deployOn (FlockDeploy.deployZk rel) A x w).1 hR).2
+        hist ω (lt_of_lt_of_eq hh (hk x).symm)).2)
       h.2
   exact ⟨h.1, zkmalR_on A hγ (fun x w hR hA => (r_deployOn (FlockDeploy.deployZk rel) A x w).2 ⟨hA, hR⟩) h'⟩
 
@@ -308,17 +316,18 @@ theorem tapeOKOn_of_tape (S : RefSession) (A : Msg → Prop) (h : ∀ x, A x →
       (FibersEq.pi fun j => fibersEq_tabRand ((S.C x j).T (S.cz x c j)))
   exact hr
 
-/-- **`refP`'s messages are the reference prover's at the statements in `A`**: `HonestMsgs` there. -/
-def HonestMsgsOn (S : RefSession) (A : Msg → Prop) (H : Msg → Msg) (coinOf : Msg → Msg)
+/-- **`refP`'s messages are the reference prover's at the statements in `A`**, at their witnesses in `R`: `HonestMsgs`
+there. -/
+def HonestMsgsOn (S : RefSession) (A : Msg → Prop) (R : Rel Flock.Wit) (H : Msg → Msg) (coinOf : Msg → Msg)
     (tapeOf : S.refP.Nonce × S.refP.Rand → FlockComplete.TapeZk) : Prop :=
-  ∀ x, A x → ∀ w ν t (ops : List (Msg × Msg)), ops.length ≤ refK x →
+  ∀ x, A x → ∀ w, R x w → ∀ ν t (ops : List (Msg × Msg)), ops.length ≤ refK x →
     S.msgAt x (S.wt x w) t (ops.map fun p => S.decOf p.2) =
-      (((FlockComplete.ZkTables.honestP w).next x (ops.map fun p => (p.1, coinOf p.2)) (tapeOf (ν, t))).eval H).1
+      (((FlockComplete.ZkTables.honestPR w).next x (ops.map fun p => (p.1, coinOf p.2)) (tapeOf (ν, t))).eval H).1
 
-theorem honestOn_of_msgs (S : RefSession) (A : Msg → Prop) (H : Msg → Msg) (coinOf : Msg → Msg)
-    (tapeOf : S.refP.Nonce × S.refP.Rand → FlockComplete.TapeZk) (h : S.HonestMsgsOn A H coinOf tapeOf) :
-    S.refP.HonestOn A H FlockComplete.ZkTables.honestP coinOf tapeOf :=
-  fun x hx w ν t ops hops => ⟨h x hx w ν t ops hops, List.nil_subset _⟩
+theorem honestOn_of_msgs (S : RefSession) (A : Msg → Prop) (R : Rel Flock.Wit) (H : Msg → Msg) (coinOf : Msg → Msg)
+    (tapeOf : S.refP.Nonce × S.refP.Rand → FlockComplete.TapeZk) (h : S.HonestMsgsOn A R H coinOf tapeOf) :
+    S.refP.HonestOn A R H FlockComplete.ZkTables.honestPR coinOf tapeOf :=
+  fun x hx w hR ν t ops hops => ⟨h x hx w hR ν t ops hops, List.nil_subset _⟩
 
 /-- `preModel_link` at a statement in `A`, from `TapeOKOn A`. -/
 theorem preModel_link_on (S : RefSession) (H : Msg → Msg) (R : Rel Flock.Wit) (A : Msg → Prop) (hV : S.Complete R)
@@ -398,18 +407,20 @@ theorem Flock.zkAt_deployZk_ref_on (H : Msg → Msg)
 /-- **Flock's zero knowledge at the reference session's masked record, on a class of statements**: `Claims.Flock.ZK`
 at `RefSession.zkD`, at `Flock.zk_zkD_ref`'s `ε_zk` on the statements in `A` and `1` outside them, under
 `Claims.Hm96Hiding` at the pinned key, `Tables`, `Complete` on `A`, `DummyReg`, `Causal`, and `TapeOK` and `HonestMsgs`
-on `A` only (`TapeOKOn`, `HonestMsgsOn`): a tape of bounded size can meet `TapeOKOn A` where `A` bounds the tables. -/
+on `A` only (`TapeOKOn`, `HonestMsgsOn`, the latter at the relation's witnesses): a tape of bounded size can meet
+`TapeOKOn A` where `A` bounds the tables. -/
 theorem Flock.zk_zkD_ref_on (H : Msg → Msg)
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (S : RefSession) (A : Msg → Prop)
     [DecidablePred A] (t : ℕ) (ht : 0 < t) {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁)
     (hδ₁ : δ₁ ≠ ⊤) (hS : S.Tables) (hV : S.Complete fun x w => A x ∧ Flock.R (FlockDeploy.deployZk rel).parse x w)
     (hD : S.DummyReg) (hc : S.Causal) (hT : S.TapeOKOn A) (coinOf : Msg → Msg)
-    (tapeOf : S.refP.Nonce × S.refP.Rand → FlockComplete.TapeZk) (hH : S.HonestMsgsOn A H coinOf tapeOf) :
+    (tapeOf : S.refP.Nonce × S.refP.Rand → FlockComplete.TapeZk)
+    (hH : S.HonestMsgsOn A (Flock.R (FlockDeploy.deployZk rel).parse) H coinOf tapeOf) :
     Claims.Flock.ZK H (S.zkD rel coinOf tapeOf t)
       (fun x => if A x then 8 * S.nLeaves x * δ₁.toReal + 8 * t * S.nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t else 1)
       fun _ => 4 * t * 3 ^ t :=
   zk_zkOf_on rel S.refP coinOf tapeOf _ A (fun _ => by positivity) (deployZk_proto_k rel S.refP fun _ => rfl)
-    (S.honestOn_of_msgs A H coinOf tapeOf hH) (Flock.zkAt_deployZk_ref_on H rel S A t ht hT1 hδ₁ hS hV hD hc hT)
+    (S.honestOn_of_msgs A _ H coinOf tapeOf hH) (Flock.zkAt_deployZk_ref_on H rel S A t ht hT1 hδ₁ hS hV hD hc hT)
 
 /-- **Flock's zero knowledge at the deployed masked record, on a class of statements**: `Claims.Flock.ZK` at
 `zkDeployed`, at `Flock.zk_deployZk_ref`'s `ε_zk` on the statements in `A` and `1` outside them, with the tape asked
@@ -422,7 +433,8 @@ theorem Flock.zk_deployZk_ref_on (H : Msg → Msg)
     (hV : (CoinLayer.session nr T).Complete fun x w => A x ∧ Flock.R (FlockDeploy.deployZk rel).parse x w)
     (hD : (CoinLayer.session nr T).DummyReg) (hc : (CoinLayer.session nr T).Causal)
     (hT : ∀ x, A x → FibersEq (T.tape x))
-    (hH : (CoinLayer.session nr T).HonestMsgsOn A H CoinLayer.coinOfD fun ω => T.tapeZk ω.2) :
+    (hH : (CoinLayer.session nr T).HonestMsgsOn A (Flock.R (FlockDeploy.deployZk rel).parse) H CoinLayer.coinOfD
+      fun ω => T.tapeZk ω.2) :
     Claims.Flock.ZK H (zkDeployed rel nr T t)
       (fun x => if A x then 8 * (CoinLayer.session nr T).nLeaves x * δ₁.toReal +
         8 * t * (CoinLayer.session nr T).nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t else 1)
@@ -437,7 +449,8 @@ theorem Flock.zk_deployZk_ref_on_gap (H : Msg → Msg)
     (hV : (CoinLayer.session nr T).Complete fun x w => A x ∧ Flock.R (FlockDeploy.deployZk rel).parse x w)
     (hD : (CoinLayer.session nr T).DummyReg) (hc : (CoinLayer.session nr T).Causal)
     (hT : ∀ x, A x → FibersEq (T.tape x))
-    (hH : (CoinLayer.session nr T).HonestMsgsOn A H CoinLayer.coinOfD fun ω => T.tapeZk ω.2) :
+    (hH : (CoinLayer.session nr T).HonestMsgsOn A (Flock.R (FlockDeploy.deployZk rel).parse) H CoinLayer.coinOfD
+      fun ω => T.tapeZk ω.2) :
     Claims.Flock.ZK H (zkDeployed rel nr T t)
       (fun x => if A x then 8 * (CoinLayer.session nr T).nLeaves x *
           (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash)).toReal +

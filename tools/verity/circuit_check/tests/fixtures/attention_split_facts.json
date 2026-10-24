@@ -78,7 +78,7 @@
   },
   "AttentionHeadSoftcap_v3{T=17,D=16,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=0,TANH=MufuTanh_v2,EX2=MufuEx2Ftz_v2}": {
    "descriptor_id": "AttentionHeadSoftcap_v3{T=17,D=16,BN=16,CAP={\"f64\":\"0x1.9000000000000p+5\"},DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},INV={\"fn\":\"Fa2InvSum_v2\"},MASKED_FROM=0,TANH={\"fn\":\"MufuTanh_v2\"},EX2={\"fn\":\"MufuEx2Ftz_v2\"}}",
-   "digest": "cfe50810c1e49cf46d9789d7b47b688d4202fcfd3d0e6e8fec10386aaa665c67db51191a47dbbcfcdd1803e76f7646caa562a4d1e7c06b7362462dd3d6467629"
+   "digest": "d1503c33b03c633e36fc6a91dc16d3f05d99208dc014339fbf206e99bed072fdd2065421c361052627eff2e48a2519dbfaa4322350344636c199e891be5c53cb"
   },
   "AttentionHead_v11{T=17,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v1,INV=Fa2InvSum_v1,MASKED_FROM=1}": {
    "descriptor_id": "AttentionHead_v11{T=17,D=16,BN=16,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa2InvSum_v1\"},MASKED_FROM=1}",
@@ -114,19 +114,19 @@
   },
   "AttentionHead_v6{T=17,D=16,BN=16}": {
    "descriptor_id": "AttentionHead_v6{T=17,D=16,BN=16}",
-   "digest": "9fdfc5ad2a0c3ad6a47ba84395f62b937096377c1a3d3527067996160c495f24dfe708b9b48f94b009e957b0ca912aac66b02de4dc9e5641e602f729fe365940"
+   "digest": "1adabead0a6d19f77bae36481572f7c1a6c069cd29745dd1333d06edeb1bd497e0278110e2958be442eda1714a8615eb5b525b19ce51ba11cc8844460e6af84c"
   },
   "AttentionHead_v7{T=5,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa3InvSum_v2}": {
    "descriptor_id": "AttentionHead_v7{T=5,D=16,BN=16,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},INV={\"fn\":\"Fa3InvSum_v2\"}}",
-   "digest": "3d98aae456fb8cf83947e2e4129c0820b72ad2168e4bfc1d2eec5e144f8ea86a4ec6b212420affe70e6fa53ad051a33d6e0c4163f8fe80c8be24d91612463401"
+   "digest": "0ea34098905b295277969ee4a980520085478550e1bb6c9c084ef2b2a84609f9b7f317bd36d7b4159965cbb874a77be6d5ba330c1b06a86afbd7a24e6fffd205"
   },
   "AttentionHead_v8{T=17,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=1}": {
    "descriptor_id": "AttentionHead_v8{T=17,D=16,BN=16,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},INV={\"fn\":\"Fa2InvSum_v2\"},MASKED_FROM=1}",
-   "digest": "948d76a97568cc5aa0bf41721b2e5d5034658b030b1c77be08483ee54210705d1465b38c4f9c603f2a282ba91771825dca11e0efe21d9b359584cffe326df7c4"
+   "digest": "520aa07347b0332e0b8976af759a13ba085dda83a188b29ab5a97d9a8e3d02c249db8d00529ede5b6539a747c8ef049f63cddfb2ddbfa0c141f9cc485dfe75ef"
   },
   "AttentionHead_v9{T=17,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa3InvSum_v2,MASKED_FROM=1}": {
    "descriptor_id": "AttentionHead_v9{T=17,D=16,BN=16,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},INV={\"fn\":\"Fa3InvSum_v2\"},MASKED_FROM=1}",
-   "digest": "4eec72193773c5aed9f445621755cb467d5cf3b1e8840fc29fd3e34bb674ddc0e60908b70fbfbbad9ea7dafcbc274ed783c4b01f417e966486e3305943cabc19"
+   "digest": "82e10410b812d9ee8e667595d0056d2ba7da2bf200c6d1b8163794f65a1cdeff0b39ac878e8f16ba2d5f33419bcd400fac172a1d80cc06eab37c319bc507fcd7"
   },
   "AttentionSoftcap_v1{T=1,NH=12,KVH=2,D=128,BN=64,CAP=50.0}": {
    "descriptor_id": "AttentionSoftcap_v1{T=1,NH=12,KVH=2,D=128,BN=64,CAP={\"f64\":\"0x1.9000000000000p+5\"}}",
@@ -202,7 +202,7 @@
   },
   "AttentionSoftcap_v3{T=17,NH=1,KVH=1,D=16,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=0,TANH=MufuTanh_v2,EX2=MufuEx2Ftz_v2}": {
    "descriptor_id": "AttentionSoftcap_v3{T=17,NH=1,KVH=1,D=16,BN=16,CAP={\"f64\":\"0x1.9000000000000p+5\"},DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},INV={\"fn\":\"Fa2InvSum_v2\"},MASKED_FROM=0,TANH={\"fn\":\"MufuTanh_v2\"},EX2={\"fn\":\"MufuEx2Ftz_v2\"}}",
-   "digest": "f11bccd7cf93f5199525b279afa6e855233f4638fd93abc76c6e52c58cdf240b19326f730c30be6294255b8e29ea8ff93444bd823bc8b47e5bbe0a3d77ded8a7"
+   "digest": "d1b73111a7a0c5f4745c12f872af6a74de51144bdcabef6c9e05314bb283b71ba2024d4497f233eaead983ff8d1e502c2a18a2c819af569695c6fa6e9284cc67"
   },
   "AttentionSoftcap_v4{T=1,NH=12,KVH=2,D=128,BN=64}": {
    "descriptor_id": "AttentionSoftcap_v4{T=1,NH=12,KVH=2,D=128,BN=64}",
@@ -514,19 +514,19 @@
   },
   "Attention_v6{T=17,NH=1,KVH=1,D=16,BN=16}": {
    "descriptor_id": "Attention_v6{T=17,NH=1,KVH=1,D=16,BN=16}",
-   "digest": "59ea23ab586be172d83df52f3c73b8fa90b4385dc408119d0637b007ee06b190663691666b9af715f4cba5659ed60c324f5d19215c57c7ed4a006b3c6fda7c62"
+   "digest": "77c45cf78613c476992f8669d6caaebf197f37cfb24a884bbbf812798379b313fda6df7528f19b4bfb9f4f69ecb42e3ccc942c4a690a67c9599e6a7780be9490"
   },
   "Attention_v7{T=5,NH=1,KVH=1,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa3InvSum_v2}": {
    "descriptor_id": "Attention_v7{T=5,NH=1,KVH=1,D=16,BN=16,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},INV={\"fn\":\"Fa3InvSum_v2\"}}",
-   "digest": "ac702f158aef16e7bb9194c1f63756f6b29555599bfc783588009a27b6a7bc7db94c375d7b504d6cdee7efbd83aae0e6b5e60cec2cbfaca4d87ecd4e04f1862e"
+   "digest": "aed06d0279af2cbe0906df7638cce953abbd7bc64ef734f3ce4206b01e15511a26e061dc7c07939878e536df0b831482e202cb7396e300ebc6b49ddc1ef9e995"
   },
   "Attention_v8{T=17,NH=1,KVH=1,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=1}": {
    "descriptor_id": "Attention_v8{T=17,NH=1,KVH=1,D=16,BN=16,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},INV={\"fn\":\"Fa2InvSum_v2\"},MASKED_FROM=1}",
-   "digest": "bcdada7e15aa7f6a95fd1ecdddec0ae5d4d825939e712d6b5345f448184d57560e8ffd711ebff1f392c56662dfe8003b08b49c32f2902aeada91a2f227268dcb"
+   "digest": "c3a2eacc346613c07aa979a71c4652bd5ea60f807cb923a730d6f19ec4da5d54428bf89a0f47ded25a38ca55af6565e9cf39ca546d21df3af3dfbff8b482193f"
   },
   "Attention_v9{T=17,NH=1,KVH=1,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa3InvSum_v2,MASKED_FROM=1}": {
    "descriptor_id": "Attention_v9{T=17,NH=1,KVH=1,D=16,BN=16,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},INV={\"fn\":\"Fa3InvSum_v2\"},MASKED_FROM=1}",
-   "digest": "fbc98ecdc05310eefc23f9f65dd815cb6ec5551b1448d9aeb4142b1eda7bf3f683d978716bb7f5f0f9e0be5f8a04db3d3c49bbea6e319e32e31330c0dbad701d"
+   "digest": "e8753fb451309c8f7a6efdc0e84d34b42f139913be8d0536133314ac00e21811e310c398ee567d7cd5b62ff75844b7bea141bdeb940bb973bea1c79fd3e36056"
   },
   "AttnBlockFA3_v1{D=128,NVIS=1,FIRST=True}": {
    "descriptor_id": "AttnBlockFA3_v1{D=128,NVIS=1,FIRST=true}",
@@ -578,7 +578,7 @@
   },
   "AttnBlockSoftcap_v3{D=16,NVIS=1,FIRST=True,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,CHECK=True,TANH=MufuTanh_v2,EX2=MufuEx2Ftz_v2}": {
    "descriptor_id": "AttnBlockSoftcap_v3{D=16,NVIS=1,FIRST=true,BN=16,CAP={\"f64\":\"0x1.9000000000000p+5\"},DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},CHECK=true,TANH={\"fn\":\"MufuTanh_v2\"},EX2={\"fn\":\"MufuEx2Ftz_v2\"}}",
-   "digest": "4cdddd9bcf6ee30159c8539cfd24b38a756b9f4418c79fa4b12f161691b187f24c3115401d2bcb3a1a3bcae818874782c20340b3809a7fbdfe6cf3fceae5b5ea"
+   "digest": "a3b3ada0bbeaf68675efb23f3ac6712b60defcac87dfbf90587a48a396ade82d3d8853c94b5bd11ae3d7210ed0a6a5f36013637b52ebb140a1abd2dc024f755d"
   },
   "AttnBlockSoftcap_v3{D=16,NVIS=16,FIRST=False,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,CHECK=True,TANH=MufuTanh_v2,EX2=MufuEx2Ftz_v2}": {
    "descriptor_id": "AttnBlockSoftcap_v3{D=16,NVIS=16,FIRST=false,BN=16,CAP={\"f64\":\"0x1.9000000000000p+5\"},DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},CHECK=true,TANH={\"fn\":\"MufuTanh_v2\"},EX2={\"fn\":\"MufuEx2Ftz_v2\"}}",
@@ -630,19 +630,19 @@
   },
   "AttnBlock_v6{D=16,NVIS=1,FIRST=True,BN=16}": {
    "descriptor_id": "AttnBlock_v6{D=16,NVIS=1,FIRST=true,BN=16}",
-   "digest": "3c09be723a18d5bc8b0f953edbb5a3d3001f5d3b11e19540311e759c418dae35c649e0050b3457b43b72407e6860d8dd40d97d1db4bb7685c36857fbb29a834f"
+   "digest": "dedca63aa490425bd004ca225a793ecfd0f7902b4133e083ed201504d9c76d79a9dedb56c3b76d32322b6337ae3c5250e75e82c8bdc99c978807a8cda836096d"
   },
   "AttnBlock_v7{D=16,NVIS=5,FIRST=True,BN=16,DOT=HopperBF16WgmmaDot16_v2}": {
    "descriptor_id": "AttnBlock_v7{D=16,NVIS=5,FIRST=true,BN=16,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}",
-   "digest": "32af1e055309aa4d9e4889aaa2faa5c54be672fa273a00c9ab292e2dcd609953ef15fe628fcfb163334489b34a49a06d769d2f51717406c018437aee950e68a3"
+   "digest": "8fa52b8caebd5a529869cbd3dc4f530b8473f16e0417a595519200457a658074c3a6b576503e784501de9c9b0f72e325e56067a22006a8e20282daa7ab4339e0"
   },
   "AttnBlock_v8{D=16,NVIS=1,FIRST=True,BN=16,DOT=HopperBF16WgmmaDot16_v2,CHECK=True}": {
    "descriptor_id": "AttnBlock_v8{D=16,NVIS=1,FIRST=true,BN=16,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},CHECK=true}",
-   "digest": "fd3406a738fe7e370f8f88332e4e634b22de7b13d671d9d463343e464e85cabb0973f2a90307d7889870ee2f66ba8634b03a7558db7aa56ef38ffccb02ba4329"
+   "digest": "3b772e8d4e1f3b9f74e00354c981c57742f1da439118fc42399620fd79630fa9586c31a5cd216aa342af71a69a32f4347d590c15d7965a10766b661e335e7bc5"
   },
   "AttnBlock_v9{D=16,NVIS=1,FIRST=True,BN=16,DOT=HopperBF16WgmmaDot16_v2,CHECK=True}": {
    "descriptor_id": "AttnBlock_v9{D=16,NVIS=1,FIRST=true,BN=16,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},CHECK=true}",
-   "digest": "58e17f649fcbc2aa7551cffc7c3caa69309d6566cdca63ca2e1a4d25e4dec02cbb6917bfe220ea46c3c40803685b868bd87037c8a740dc654d1d772c1476f212"
+   "digest": "d68ec196478a2051f6b91fe1d25ea67bbaa565292e3fe9c4f2651ec36907cb2ec2caed2c4ce182f11211536e11109f5e385dfb16e02b2328eeb3f9fe2525fef7"
   },
   "DotBf16Hopper_v1{K=128}": {
    "descriptor_id": "DotBf16Hopper_v1{K=128}",
@@ -846,15 +846,15 @@
   },
   "TritonMlaBlock_v1{DL=16,DR=16,NVIS=2,BN=32,SCALE=1031798784,DOT=HopperBF16WgmmaDot16_v2}": {
    "descriptor_id": "TritonMlaBlock_v1{DL=16,DR=16,NVIS=2,BN=32,SCALE=1031798784,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}",
-   "digest": "cd6b2d90779bbc625c5cfdc2ff29cab85116c081e0251d9a65fd0e515c230e6ab0082f17005a900c496e9a898368e8d304e27295ae5490d99204bc188e18f6a6"
+   "digest": "91b3cdf68bff44b31d59f09fd6991ca968ab80f30862c5f182fbc43f6ea48eca64beaffe90fb0a751a6e61de516b7e7aa3152f96331b4e4d8a011da496cd3e44"
   },
   "TritonMlaDecodeHead_v1{T=2,DL=16,DR=16,BN=32,SPLITS=1,SCALE=1031798784,DOT=HopperBF16WgmmaDot16_v2}": {
    "descriptor_id": "TritonMlaDecodeHead_v1{T=2,DL=16,DR=16,BN=32,SPLITS=1,SCALE=1031798784,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}",
-   "digest": "338384125bcfbbe2f8d8786293161049f0ac93a20eb959bd4926d60204115d8fa7de74e0c4fac900599707df43d30bebbf6ace9969cb4886cc32df02fa9a4822"
+   "digest": "c2fd3377a8a59e9d0c366f9823d47dfb26fc27bc7423c9d6c233e9950b1cad1fba01951f5823b36d7b1ea8efdbaae4284d079e6c418b298abd96527103c46838"
   },
   "TritonMlaDecode_v1{H=1,T=2,DL=16,DR=16,BN=32,SPLITS=1,SCALE=1031798784,DOT=HopperBF16WgmmaDot16_v2}": {
    "descriptor_id": "TritonMlaDecode_v1{H=1,T=2,DL=16,DR=16,BN=32,SPLITS=1,SCALE=1031798784,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}",
-   "digest": "3b396bb403165519ce59fd95683e52491463b50956c9d66bf456e1a21c4aac461381858612470d9c504518a3e3aa3f9fa5202fcc881d1e0d46c3c0988e70d937"
+   "digest": "e8d4bee745993fb3cfb09d8e2404b68fcda6cf392363ce7284edc2d924757719fb26d690b7d98637e64bb7c8fa3a46ca5a6d2f97d7ae8b4bbb1feaa90fdb3a60"
   },
   "TritonMlaGate_v1": {
    "descriptor_id": "TritonMlaGate_v1",
@@ -960,40 +960,52 @@
  },
  "pins": {
   "AttentionHeadSoftcap_v3{T=17,D=16,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=0,TANH=MufuTanh_v2,EX2=MufuEx2Ftz_v2}": {
-   "and": 501142
+   "and": 501142,
+   "type": "0b8c3d2b371532df43df8f30414c4d4af7561fba63fe290835c21a296af56fc04bbf73a34bc71327836778e11fbb3777012a942a71b61b9e9fac5ed7dc5b7168"
   },
   "AttentionSoftcap_v3{T=17,NH=1,KVH=1,D=16,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=0,TANH=MufuTanh_v2,EX2=MufuEx2Ftz_v2}": {
-   "and": 501142
+   "and": 501142,
+   "type": "0b8c3d2b371532df43df8f30414c4d4af7561fba63fe290835c21a296af56fc04bbf73a34bc71327836778e11fbb3777012a942a71b61b9e9fac5ed7dc5b7168"
   },
   "AttnBlockSoftcap_v3{D=16,NVIS=1,FIRST=True,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,CHECK=True,TANH=MufuTanh_v2,EX2=MufuEx2Ftz_v2}": {
-   "and": 38977
+   "and": 38977,
+   "type": "8ef6587ec663871ff96338d9fdbf6b983470cee7c9b4cb998dc9c0e6be40990ab31dcd9186d901db3fe57de24accf8946ddcffd25b775a694aa72e90624c8508"
   },
   "AttnBlockSoftcap_v3{D=16,NVIS=16,FIRST=False,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,CHECK=True,TANH=MufuTanh_v2,EX2=MufuEx2Ftz_v2}": {
-   "and": 439214
+   "and": 439214,
+   "type": "05a8e97d58ef0ef118d2f9438546f39343e572e47c1d0dc09391b2b58e1c5d6c3f0e7cd3d95a3cc1e795dc3ac18b99a7bb9b100624807af645d22e5677f60ac9"
   },
   "DsaTopKShortRow_v2{TOPK=16}": {
-   "and": 469
+   "and": 469,
+   "type": "8790a48daadc23fa42f57a70ee70e74233e7c75b3c951317f923fa2066179fed4695f29209cf1b6268a93864bdf5d8d80a5323ed03791fd6ad154c8e5d5fa982"
   },
   "DsaUe8m0Scale_v2": {
-   "and": 50895
+   "and": 50895,
+   "type": "f8906a882eee69baa27d6e070a21a853a79b6fc4538070f4f56ac5f7fbbe64077946e65a6e02c1060e0cf27e77f0afeb4acc8bc6819408b3c0dca94524e59523"
   },
   "F32CeilFtz_v2": {
-   "and": 315
+   "and": 315,
+   "type": "a2384f4d95cd44f2a4077698a23ba3ad8b65450a63c76be81272159c460a8646ae06b1a57d89c8474dcac25d19b61916dde061555d92c5f2f109e1f4f4157498"
   },
   "Fa3InvSum_v2": {
-   "and": 947
+   "and": 947,
+   "type": "69089fe76484cba1dd1671e3fcb3b48cec76979659f5355751f70e526a48be316687a9d66306c8ad46b2489015fc665278b4e769963243847d78b0e60b863797"
   },
   "I32Sub_v2": {
-   "and": 31
+   "and": 31,
+   "type": "2a9dc0f805e23183140b36eefb60326cbdde54f6ad6dba4ca67e0e27c2bcfb19ee4ada24ef4ef9ac849db56d0a28f3825e8689bb001b960e641f063a84ccb5f7"
   },
   "I32ToF32_v2": {
-   "and": 368
+   "and": 368,
+   "type": "78e2d362b7c6e44e80d36f19ac52657a956cf00187551c712f77c49da550c2b2ad1bc6cbe63c90169369e4a5fed11842fdccb4a3d0d378e715ec1b97bd80a0d7"
   },
   "MoeSharedCombine_v1{H=8,RSF=1072064102}": {
-   "and": 12632
+   "and": 12632,
+   "type": "f22324bc35643d81fd070c4a56c1ac32ffeabd1c522975fef9d21e000f5773836bcf063b18de38959ed8217777fb538a5935034d7e511b35793cdc496e8b1cbf"
   },
   "U32And_v2": {
-   "and": 32
+   "and": 32,
+   "type": "ae78a2985c69006a499b56b8fd32ec4adb0a7ca1e343951731eec15b44560a183c0006a75aa4ef11a8479b21b21344e37a5dd20f0f7631233107c917c0944912"
   }
  },
  "served": {
@@ -3902,7 +3914,6 @@
    "DotBf16_v2{K=576,DOT=HopperBF16WgmmaDot16_v1}",
    "DotBf16_v2{K=64,DOT=AmpereBF16TcDot16_v2}",
    "DotBf16_v2{K=64,DOT=HopperBF16WgmmaDot16_v1}",
-   "DotBf16_v3{K=16,DOT=AmpereBF16TcDot16_v3}",
    "DotBf16_v3{K=16,DOT=HopperBF16WgmmaDot16_v2}",
    "DotBf16_v3{K=32,DOT=HopperBF16WgmmaDot16_v2}",
    "DotBf16_v3{K=64,DOT=AmpereBF16TcDot16_v3}",

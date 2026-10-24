@@ -16,7 +16,9 @@ Without ``--runs`` it selects every `job.sh` attempt in the evidence store and f
   REGISTERED says they were the verifier's own.  A REGISTERED check must pass every registration rule (the honest
   outcome it is paired with may still reject); an ACCEPT check must get accept; a REFUSED registration a reject by a
   registration rule (before ``outcome:``); a REJECT outcome a reject.  An accept's public outputs must be the recorded
-  ``outcome.json``'s.
+  ``outcome.json``'s.  A window recorded before the fixed-length rule (Daniel, 19 Oct, ASK-39: no ``length`` item) is
+  replayed under the verifier's length of its request (`LENGTH`, where its params name none), and a REGISTERED or ACCEPT
+  of it must now get a reject as not of record (``window-form: no-fixed-length``).
 * **openings** (``open-u<t>``, ``open-filler``, ``open-foreign-*``), as `job.sh` maps them, go to `core_check.opening`
   and Lean's.  In a window of the 336-byte entry rows (9 Oct on) an ACCEPT opening must open and a REJECT one must not;
   the windows before them hold entries of an earlier layout, so theirs compare Python with Lean only.
@@ -52,6 +54,7 @@ import verity_difftest as D
 
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import core_check as CC
+from verity.core.protocols.pouw import verifier as PV
 from verity.core.protocols.pouw import window as Wd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -61,7 +64,12 @@ REPO = Path(__file__).resolve().parents[3]
 LEAN = REPO / "verity/core/protocols/pouw/lean/check"
 V2_ART = "art:08afd6b23db47295569411eb024868fb39e6dbae6a11a3835657be263321621d"
 V2_TILE = "Pc8TileSide_v1{K=4096,TM=1,TN=1,DEV='sm120'}"
-REGISTRATION_RULES = ("window", "public-items", "level", "public-value", "population", "law", "query", "scheme")
+REGISTRATION_RULES = ("window", "window-form", "public-items", "level", "public-value", "population", "law", "query",
+                      "scheme")
+#: the verifier's length of every recorded window: e2e.py's served requests, one slot each at SERVED_TOKENS under ignore_eos
+LENGTH = {"max_tokens": [4], "stop": "fixed"}
+#: what PoUW's rule says of a window registered before the fixed-length rule (Daniel, 19 Oct, ASK-39): not of record
+NO_FIXED_LENGTH = "window-form: no-fixed-length"
 V1_PASS = "verity-vllm/pouw-pearl-c-run/v1"
 #: The evidence a registration control is paired with in a window stopped before its outcome: a registration rule
 #: refuses before PoUW's rule reads it, and a control no rule refused is rejected at ``outcome:``, not by a rule.
@@ -121,7 +129,16 @@ def answer_of(outcome_dir: Path, delta: str) -> dict:
 def params_of(out: Path, reg: dict) -> dict:
     p = load(out / "request/params.json")
     return {"check": reg["window"]["public"]["check"], "context": p["context"], "delta": p["delta"], "eps": p["eps"],
-            "grid_bits": p["grid_bits"], "query": reg["query"], "range": p["range"]}
+            "grid_bits": p["grid_bits"], "length": p.get("length", LENGTH), "query": reg["query"], "range": p["range"]}
+
+
+def legacy(case: dict) -> bool:
+    """Whether the case's registration is a window registered before the fixed-length rule: no length item."""
+    try:
+        items = json.loads(bytes.fromhex(case["commitment"]))["window"]["public"]
+    except (KeyError, TypeError, ValueError):
+        return False
+    return isinstance(items, dict) and sorted(items) == sorted(Wd.LEGACY_REGISTERED)
 
 
 def current(reg: Any) -> bool:
@@ -171,7 +188,8 @@ def opening_inputs(out: Path, checks: dict, summary: dict) -> list[tuple[str, di
         reg = regs[side]
         got.append((name, {"params": {"check": {**reg["window"]["public"]["check"], "entries": p["entries"]},
                                       "context": p["context"], "delta": p["delta"], "eps": p["eps"],
-                                      "grid_bits": p["grid_bits"], "query": reg["query"], "range": p["range"]},
+                                      "grid_bits": p["grid_bits"], "length": p.get("length", LENGTH), "query": reg["query"],
+                                      "range": p["range"]},
                            "commitment": hexed(reg), "units": drawn if is_drawn else None, "unit": unit,
                            "pub": (out / pub / "pub.bin").read_bytes().hex(), "opening": load(out / op / "opening.json")}))
     return got
@@ -184,7 +202,7 @@ def _variant(man: dict, coins: dict, opening: dict, case: str) -> dict:
     """`served_commit.coin_variant`: the pass carrying a control's salt coin made of the genuine one."""
     o = dict(opening)
     if case == "foreign":
-        o = Co.Challenger(coins["epoch"]).open("salt", bytes.fromhex(o["after"])).to_json()
+        o = Co.Challenger(coins["epoch"], PV.coins).open("salt", bytes.fromhex(o["after"])).to_json()
     elif case == "early":
         o["after"] = "00" * (len(o["after"]) // 2)
     elif case == "mislabelled":
@@ -308,9 +326,12 @@ def registration_stage(reason: str | None) -> bool:
     return reason is not None and reason.split(":")[0] in REGISTRATION_RULES
 
 
-def judged(recorded: str, a: dict, public: Any) -> bool:
+def judged(recorded: str, a: dict, public: Any, old: bool = False) -> bool:
     """Whether core_check's outcome `a` is the recorded verdict: REGISTERED is the registration's, so an outcome past
-    the registration rules holds it."""
+    the registration rules holds it; a window registered before the fixed-length rule (`old`) that the run registered or
+    accepted must now be refused as not of record."""
+    if recorded in ("REGISTERED", "ACCEPT") and old:
+        return a["verdict"] == "reject" and (a["reason"] or "").startswith(NO_FIXED_LENGTH)
     if a["verdict"] == "accept" and public is not None and D.canonical(a["public"]) != D.canonical(public):
         return False
     if recorded == "REGISTERED":
@@ -359,7 +380,7 @@ def replay_run(sides: Sides, out: Path, passes: dict[str, Path]) -> dict:
         a, same = sides.case(case)
         mapped.add(name)
         row["cases"].append({"check": name, "recorded": recorded, "verdict": a["verdict"], "reason": a["reason"],
-                             "lean_same": same, "same_verdict": judged(recorded, a, public)})
+                             "lean_same": same, "same_verdict": judged(recorded, a, public, legacy(case))})
     rows = entry_rows(out)
     for name, x in opening_inputs(out, checks, summary):
         py, same = sides.open(x)
@@ -383,8 +404,8 @@ def replay_v2(sides: Sides, root: Path) -> list[dict]:
     for p in sorted(root.rglob("registration.json")):
         reg = load(p)
         case = {"params": {"check": {"entries": 2, "scheme": CC.SCHEME, "template": V2_TILE, "tile_work": tile.tile_work},
-                           "context": "v2", "delta": "1/10", "eps": "1/2", "grid_bits": 3, "query": tile.query,
-                           "range": [1, 1 << 40]},
+                           "context": "v2", "delta": "1/10", "eps": "1/2", "grid_bits": 3, "length": LENGTH,
+                           "query": tile.query, "range": [1, 1 << 40]},
                 "commitment": hexed(reg), "evidence": hexed({"protocol": CC.ONE_STAGE, "verdict": "reject",
                                                             "reason": "v2", "commitment": None, "public": None,
                                                             "profile": None})}

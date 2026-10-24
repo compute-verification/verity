@@ -1,7 +1,7 @@
 [project]
 name = "memory-challenger-lean"
 version = "0.0.0"
-description = "The differential tests of the memory challenger's verdict in Lean (this directory's Lake package) against verity.core.protocols.pous.memory_challenger, and verdict.py, the Lean verdict behind memory_challenger.verdict's signature."
+description = "The differential tests of the memory challenger's and the streamed wipe's verdicts in Lean (this directory's Lake package) against verity.core.protocols.pous.memory_challenger and streamed_wipe; verdict.py, the Lean verdict behind memory_challenger.verdict's signature; and wipe_verdict.py, the streamed wipe's verdict decided by the Lean."
 requires-python = ">=3.12"
 dependencies = ["verity", "verity-difftest", "hypothesis>=6.100"]
 

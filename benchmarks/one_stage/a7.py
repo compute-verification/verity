@@ -1,8 +1,10 @@
 """One-stage audit, run A7: the requirement's two proof units (I4), sampled in one audit and wired to the remote bandwidth
-audit's ledger as its requirement link. `PlanMatch_v1` (each pass's plan is the blocks its step reads, `PlanMatches`) and
-`MemoryMapStep_v2` (the blocks a step writes carry its values, written at their step and freed at their last read, and
-each registered block freed at its values' last read), one instance of each per step
-(`verity.ml.circuits.requirement_units`).
+audit's ledger as its requirement link. `PlanMatch_v1` (each pass's plan is exactly the blocks its step reads, which gives
+`PlanMatches`) and
+`MemoryMapStep_v3` (the blocks a step writes carry its values, written at their step and freed at their last structural
+reader, each registered block freed at its values' last structural reader, and each re-key's old block written below
+the cap the committed pass row and the public lifetime cap give), one instance of each per step
+(`verity.ml.circuits.requirement_units`), the layout row at two epochs a value.
 
     PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm:<tree>/tools/verity/circuit_check/src \\
       python benchmarks/one_stage/a7.py --bin flock-circuit --lean flock-verify --out DIR [--k K] [--steps 32] [--delta 2^-20]
@@ -14,12 +16,12 @@ each registered block freed at its values' last read), one instance of each per 
   resident and no plan holds them), each
   active step producing a 2,048-byte KV value its request reads at its later steps. The values are seeded bytes, every
   64-byte piece's top byte zero (p512's words); the layout packs each step's values in fresh blocks of 2 slots in a seeded
-  order (private), the store frees each block, registered or written, at its values' last read. vllm's Store backend
+  order (private), the store frees each block, registered or written, at its values' last structural reader. vllm's Store backend
   replaces these.
 * **Commitments.** The values and the shared rows are committed once, outside the units, as frame-v3-sha512 trees of
   hm96-sha512/row/v2 rows under keyed salts (the canonical commitments, registered beside the statements' ports): the
-  layout row, the map row, each step's plan and gathered tokens, each written value (the one-stage value commitments'
-  stand-in) and each written block's payload. Each unit's witness rows are those rows under those salts, so their
+  layout row, the map row, the pass row, each step's plan and gathered tokens, each written value (the one-stage value
+  commitments' stand-in) and each written block's payload. Each unit's witness rows are those rows under those salts, so their
   ``b || c`` in the statement's public file are the canonical ones; the verifier holds each at the position the public
   requirement names (`bindings`).
 * **Statements and draw.** One circuit per template, staged by C-Flock's `UnitStager` bound to the partition
@@ -34,14 +36,18 @@ each registered block freed at its values' last read), one instance of each per 
   the map unit's own: a payload row's ``b || c`` is its append leaf's commit string (both hm96-sha512 over the block's
   sha512/row/v2 digest under one salt), so the prover appends each step's blocks under its payload rows' salts and the
   verifier recomputes the session's chain of appends (`audit.append_head`) from the map member's public file and each
-  step's public first and count (`units_appends`): `UnitsLink.mapped` holds of the record's chain when it is that one
-  and every map unit is drawn and proved. The chain fixes each append's blocks, order and indices, not the pass it
-  precedes; the bridge (`bridge`) binds the rest on public data, opening no canonical row: each pass's plan length is its
-  step's plan unit's public count, each pass's seed binds the units' chain of the steps before it (`units_heads`), and
-  the registered blocks released after each step are its map unit's public frees. The ledger then credits each pass
-  min(n D, read_bits(s)) on `RequirementLink` (`UnitsLink`), D = 16,384 bits (a written block holds at least one value),
-  the session 1 − ε of their sum, ε the share of it the wrong units the draw allows can carry (`uncertified`), its δ
-  added to the ledger's error.
+  step's public first and count (`units_heads`): `UnitsLink.mapped` holds of the record when its chain is that one,
+  each pass's head is the chain through the appends of the steps below its own, each map unit's public lifetime cap is
+  the record's, and every map unit is drawn and proved. The heads fix the window each append joined. The passes' steps
+  are a value: each map unit's pass row (each window's last pass step, `requirement_units.pass_words`) is bound to one
+  canonical commitment, from which the unit computes each re-key's cap in gates (the stale bound in step form, which no
+  public input carries). The bridge (`bridge`) binds the rest on public data: each pass's plan length is its step's
+  plan unit's public count, each pass's seed binds the units' chain of the steps before it (`units_heads`), and the
+  registered blocks released after each step are its map unit's public frees. The one canonical row it opens is the
+  pass row, whose words are the passes' steps v0's wire carries, until the record commits to them. The ledger then
+  credits each pass the bits its step reads from complete blocks, less a block for each planned block it credits no
+  receipt of (`audit.linked_bits` on `RequirementLink`, `UnitsLink`), the session 1 − ε of their sum, ε the share of
+  it the wrong units the draw allows can carry (`uncertified`), its δ added to the ledger's error.
 * **Check 3.** The session draws ``--samples`` receipts a window, and nothing is opened: each draw goes through the
   remote audit's opening unit (`remote_bandwidth.opening`, `verity.ml.commitments.gates.block_check`, §8's checks 1-3
   and 5 as one unit): the receipt leaf on its path to the pass's receipt root and the step's plan row holding the block
@@ -73,6 +79,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
+import r2_population as R2  # noqa: E402
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, memory_map as MM, opening as C3, receipts  # noqa: E402
 from verity.core.protocols.remote_bandwidth.receipts import Plan  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
@@ -93,6 +100,8 @@ NR = TB + TABLE_ROWS // RPB
 VW = RU.value_bits(SLOTS)
 REQUESTS, ACTIVE, PAUSE = 10, 4, 0.15
 WINDOWS = 4
+#: each written value's epochs in the layout row: its production block's and one re-key's
+EPOCHS = 2
 #: the remote session's draws a window, each proved by check 3's unit (`opening`); at 2 the seeded run draws registered
 #: blocks as well as appended ones
 SAMPLES = 2
@@ -162,7 +171,7 @@ def standin(steps: int, seed: int):
 
 def lay_out(req: RQ.Requirement, positions, seed: int):
     """The registered values at their public blocks; each step's values in fresh blocks of SLOTS slots, in a seeded order;
-    each block, registered or written, freed at its values' last read. Returns the layout and the store."""
+    each block, registered or written, freed at its values' last structural reader. Returns the layout and the store."""
     rng = random.Random(seed ^ 0x5A7)
     block, offset = {}, {}
     for v in range(WEIGHTS):
@@ -285,8 +294,8 @@ def check3_inputs(canons: dict, sp, sm, samples: int = SAMPLES) -> SimpleNamespa
 
 def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[int, bytes],
                    extra: dict[int, list[int]] | None = None, late: dict[int, int] | None = None, alter=None,
-                   early: int | None = None, dummy: int | None = None, rekey: tuple[int, int] | None = None, *,
-                   c3: SimpleNamespace, defer: bool = False):
+                   early: int | None = None, dummy: int | None = None, rekey: tuple[int, int] | None = None,
+                   drop: int | None = None, *, c3: SimpleNamespace, defer: bool = False):
     """The v0 session over the registered store: a pass a step, its plan sent as a change from the last (``plans[s]``, and
     ``extra[s]``'s blocks too: a prover that receipts more than the certified plan), then step s's memory-map record
     (`memory_map.Replay`): its releases (``late``: a block released at another step) and its append, written block j
@@ -294,19 +303,21 @@ def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[
     from the map: ``alter`` ({step: f}, f(payloads, salts) the append it sends in place of the step's), ``early`` (step
     t's append sent before t's pass, after step t − 1's), ``dummy`` (a step whose append adds a block holding no value),
     ``rekey`` ((step, j): block j appended again at that step, in its own slot, of the same payload at a fresh index,
-    the later plans and its free naming that index). Each window draws ``c3.samples`` receipts, and check 3 decides them
+    the later plans and its free naming that index), ``drop`` (the last step that writes: its append never sent, and its
+    blocks in no later plan and no release). Each window draws ``c3.samples`` receipts, and check 3 decides them
     (``c3``, `check3_inputs`) in place of their openings: by its unit's reference on the prover's witness
     (`opening.reference`), or, ``defer``, not yet: the caller proves them (`check3_audit`) and decides each window.
     Returns the session, the prover's store and passes, its record and the verifier's v0 view: each pass's plan and step,
-    each appended index's write step and each block's release step."""
+    its (window, step) in order, each appended index's write step and each block's release step."""
     steps = req.steps
+    gone = frozenset(store.written.get(drop, ())) if drop is not None else frozenset()
     payloads = [store.payload.get(j, 0).to_bytes(RQ.BLOCK_BITS // 8, "little") for j in range(NR)]
     ys = [Entropy(b"a7 payload salts %d" % j)(receipts.SALT_BYTES) for j in range(NR)]
     root = audit.payload_tree(NODE, payloads, ys).commitment.root
     rs = C3.Store(audit.register(SOURCE, NODE, NR, root, P512, nonce=bytes(32)), payloads, ys)
     p = audit.Params(blocks=NR, deadline_ns=10**6, windows=WINDOWS, samples=c3.samples, delta=1e-6, window_ns=10, codec=P512)
     clock = Clock()
-    s = C3.Session(p, rs.registration, None, coins.Challenger(rs.registration.digest, 0, p.coins, entropy=Entropy(b"a7 coins")),
+    s = C3.Session(p, rs.registration, None, coins.local(rs.registration.digest, 0, p.windows, Entropy(b"a7 coins")),
                    not_before_ns=0, clock=clock)
     prover = audit.Prover(rs, None, s.commitment, entropy=Entropy(b"a7 receipt salts"))
     head = MM.Header(rs.registration.digest, NR)
@@ -315,7 +326,7 @@ def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[
     fresh = Entropy(b"a7 fresh salts")
     freed_at = {j: (late or {}).get(j, at) for at, js in store.freed.items() for j in js}
     challenges, previous, plan, t, i = [s.start()], rs.registration.digest, Plan.whole(NR), 0, 0
-    passes, view = {}, {"plans": {}, "written": {}, "released": {}}
+    passes, view = {}, {"plans": {}, "passes": [], "written": {}, "released": {}}
     per_window = -(-steps // WINDOWS)
     out, sent_early = None, None
 
@@ -341,7 +352,7 @@ def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[
             if coin is not None:
                 challenges.append(coin)
             t, i = t + 1, 0
-        want = sorted({index.get(b, b) for b in plans[st]} | set((extra or {}).get(st, ())))
+        want = sorted(({index.get(b, b) for b in plans[st]} | set((extra or {}).get(st, ()))) - gone)
         new = Plan(_runs(want), rs.extent)
         change = (_runs(set(want) - set(plan)), _runs(set(plan) - set(want)))
         ps = prover.run(challenges[t], i, previous, new, head=rs.head)
@@ -351,6 +362,7 @@ def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[
             break
         passes[t, i], previous, plan = ps, ps.root, ps.plan
         view["plans"][st] = want
+        view["passes"].append((t, st))
         i += 1
         freed = sorted(j for j, f in freed_at.items() if f == st)
         written, pay, ys_ = honest(st)
@@ -374,7 +386,7 @@ def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[
         step_rec = MM.Step(st, tuple(fs), ws)
         record.append(step_rec)
         ch = replay.apply(step_rec)
-        if ch.count and ch.first != sent_early:
+        if ch.count and ch.first != sent_early and st != drop:
             got = send(st, pay, ys_)
             if not isinstance(got, int):
                 out = got
@@ -388,12 +400,13 @@ def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[
                 out = got
                 break
             sent_early = got
-        if ch.released:
-            v = s.release(ch.released)
+        released = _runs(j for f, c in ch.released for j in range(f, f + c) if j not in gone)
+        if released:
+            v = s.release(released)
             if v is not None:
                 out = v
                 break
-            for f, c in ch.released:
+            for f, c in released:
                 for j in range(f, f + c):
                     view["released"][j] = st
     verdicts = []
@@ -423,32 +436,40 @@ def payloads_of(store, j: int) -> bytes:
 @dataclass(frozen=True)
 class UnitsLink:
     """`audit.RequirementLink` on A7's units: it holds when the units' audit is accepted, every drawn unit's public and ok
-    rows open, every witness row is bound to its canonical commitment, and v0's bridge holds the canonical plans and map
-    to the session's own. `mapped` holds of a record whose chain is the one `appends` the map units' writes make
-    (`units_appends`), once every map unit is drawn and proved (`proved`); it doesn't yet check the record's per-pass
-    heads and stale bounds (`audit.WindowRecord.heads`, `stale`). `epsilon` and `delta` are what the units' draw established (`uncertified`):
-    the most share of the linked credit the wrong units it allows can carry, at the audit's delta; until they are set,
-    the link credits nothing."""
+    rows open, every witness row is bound to its canonical commitment, and the bridge (`bridge`) holds the session to the
+    units' public data and the canonical pass row. `mapped` holds of a record, once every map unit is drawn and proved (`proved`), whose chain is
+    the one `appends` the map units' writes make, each pass's head (`audit.WindowRecord.heads`) the chain through those
+    of the steps below its own (`heads`, `units_heads`), and the map units' public lifetime cap (`life`) the record's.
+    The stale bound, which no public input carries, is then what each re-key's old block is held below in the unit, which
+    computes it from its committed pass row and that cap. `read_bits` is the step's reads from complete blocks
+    (`RQ.credited_reads`, `creditedReadBits`). `epsilon` and `delta` are what the units' draw established
+    (`uncertified`): the most share of the linked credit the wrong units it allows can carry, at the audit's delta; until
+    they are set, the link credits nothing."""
     holds: bool
-    density_bits: int
     req: RQ.Requirement
+    layout: RQ.Layout
     appends: bytes | None = None
     proved: bool = False
     epsilon: float = 1.0
     delta: float = 0.0
+    heads: tuple[bytes | None, ...] = ()
+    life: int | None = None
 
     def read_bits(self, step: int) -> int:
-        return self.req.read_bits(step)
+        return self.req.bits(RQ.credited_reads(self.req, self.layout, step))
 
     def mapped(self, record: audit.Record) -> bool:
-        return self.holds and self.proved and record.appends == self.appends
+        passes = [(s, h) for w in record.windows for s, h in zip(w.steps, w.heads, strict=True)]
+        return (self.holds and self.proved and record.appends == self.appends and self.life == record.lifetime
+                and all(s < len(self.heads) and h == self.heads[s] for s, h in passes))
 
 
 def units_heads(m: dict, pub_args: list[dict], registration: bytes) -> list[bytes | None]:
-    """The chain over the appends member m's writes make (`audit.append_head`) before each step, and after the last, from
-    its public file and each step's public first and count: step t's append is blocks first .. first + count − 1, its
-    leaves its payload rows' ``b || c`` as hm96-sha512 tree leaves (a payload row's commit string is its append leaf's),
-    in `audit.append_domain`; the steps in order, a step that writes nothing making none."""
+    """The chains over the appends member m's writes make (`audit.append_head`), from its public file and each step's
+    public first and count: step t's append is blocks first .. first + count − 1, its leaves its payload rows' ``b || c``
+    as hm96-sha512 tree leaves (a payload row's commit string is its append leaf's), in `audit.append_domain`; the
+    steps in order, a step that writes nothing making none. Entry s is the chain through the appends of the steps below
+    s, the head a pass at step s carries; the last, past every step, the whole chain."""
     bcs = public_bcs(m["dir"] / f"pub-{m['n']}.bin", m["ports"])
     head, out = None, []
     for i, a in enumerate(pub_args):
@@ -461,9 +482,10 @@ def units_heads(m: dict, pub_args: list[dict], registration: bytes) -> list[byte
     return out + [head]
 
 
-def units_appends(m: dict, pub_args: list[dict], registration: bytes) -> bytes | None:
-    """The chain over every append member m's writes make (`units_heads` after the last step)."""
-    return units_heads(m, pub_args, registration)[-1]
+def session_passes(steps: int) -> list[tuple[int, int]]:
+    """The v0 session's passes, (window, step): a pass a step, `WINDOWS` windows of equal runs of steps."""
+    per_window = -(-steps // WINDOWS)
+    return [(s // per_window, s) for s in range(steps)]
 
 
 @dataclass(frozen=True)
@@ -485,11 +507,12 @@ def statics(steps: int, sd, layout, store) -> tuple[dict, dict]:
     M_ = max(16, 16 * -(-sum(len(b) for b in store.written.values()) // 16))
     K_ = max(sum(1 for v in sd.positions if sd.req.born[v] == s) for s in range(steps))
     C_ = max((len(b) for b in store.written.values()), default=1)
-    return dict(P=P_, NR=NR, V=V_, G=ACTIVE, TB=TB, RPB=RPB), dict(K=K_, C=C_, V=V_, M=M_, N=NR, SLOTS=SLOTS)
+    return (dict(P=P_, NR=NR, V=V_ * EPOCHS, G=ACTIVE, TB=TB, RPB=RPB),
+            dict(K=K_, C=C_, V=V_, E=EPOCHS, M=M_, N=NR, SLOTS=SLOTS, T=WINDOWS))
 
 
-def instances(sd, layout, store, SP, SM, plans):
-    """Each step's PlanMatch and MemoryMapStep arguments."""
+def instances(sd, layout, store, SP, SM, plans, pi, life):
+    """Each step's PlanMatch and MemoryMapStep arguments, the latter with the pass row ``pi`` and lifetime cap ``life``."""
     lam = RU.layout_words(SM, sd.req, layout, sd.positions)
     phi = RU.map_words(SM, store)
     reg_block = {v: layout.block[v] for v in sd.req.registered}
@@ -497,7 +520,7 @@ def instances(sd, layout, store, SP, SM, plans):
     for s in range(sd.req.steps):
         gathered = frozenset(sd.table[r] for r in sd.gathers[s])
         pa.append(RU.plan_inputs(SP, sd.req, s, plans[s], reg_block, sd.gathers[s], gathered, sd.positions, lam))
-        ma.append(RU.map_inputs(SM, sd.req, store, s, sd.positions, lam, phi, reg_block))
+        ma.append(RU.map_inputs(SM, sd.req, store, s, sd.positions, lam, phi, reg_block, pi, life))
     return pa, ma
 
 
@@ -559,6 +582,8 @@ def bound_row(template: str, r: str, i: int, a: dict, S) -> tuple[str, int] | No
         return None
     if r == "phi":
         return "map", 0
+    if r == "pi":
+        return "passes", 0
     kind, at = RU.map_value_leaves(S, a).get(r, (None, 0))
     return ("value", at) if kind == "value" else ("payload", at - S.N) if kind == "block" else None
 
@@ -863,7 +888,8 @@ def main() -> int:
     plan_def, map_def = bind(RU.PlanMatch, **SP), bind(RU.MemoryMapStep, **SM)
     sp, sm = SimpleNamespace(**SP), SimpleNamespace(**SM)
     plan_rows, map_rows = RU.plan_rows(sp), RU.memory_map_rows(sm)
-    pa, ma = instances(sd, layout, store, sp, sm, plans)
+    pi = RU.pass_words(sm, session_passes(req.steps))
+    pa, ma = instances(sd, layout, store, sp, sm, plans, pi, audit.LIFETIME)
     if [RU.plan_match(sp, **{k: x[k] for k in ("count", "regmask", "kvmask", "gmask", "lam", "plan", "tok")}) for x in pa] != [1] * a.steps:
         raise SystemExit("a step's plan instance is refused by the reference")
     if [RU.memory_map(sm, **x) for x in ma] != [1] * a.steps:
@@ -874,8 +900,9 @@ def main() -> int:
     vww = VW // 16
     value_words = [RU._words(req.values[v], vww) for v in sd.positions]
     written = sorted(j for b in store.written.values() for j in b)
-    canons = {"layout": canon("layout", 32 * sm.V, [pa[0]["lam"]], key),
+    canons = {"layout": canon("layout", 32 * sm.V * sm.E, [pa[0]["lam"]], key),
               "map": canon("map", 16 * (sm.N + 2 * sm.M), [ma[0]["phi"]], key),
+              "passes": canon("passes", 16 * sm.T, [pi], key),
               "plan": canon("plan", 16 * sp.P, [x["plan"] for x in pa], key),
               "token": canon("token", 16, [[x["tok"][g]] for x in pa for g in range(sp.G)], key),
               "value": canon("value", VW, value_words, key),
@@ -1015,12 +1042,15 @@ def main() -> int:
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
         print("A7 " + json.dumps({"refused_by_check3": check3["session_verdicts"], "checks": check3.get("checks")}, default=str)[:4000])
         return 1
-    br = bridge(rs, members[0], members[1], req.steps)
+    br = bridge(rs, members[0], members[1], req.steps, canons["passes"], sm)
     session_ok = rs.accepted
     map_m = members[1]
     proved = units_ok and map_m.get("drawn") == list(range(map_m["n"]))
-    link = UnitsLink(holds=units_ok and session_ok and br["ok"] and all(v["ok"] for v in checks.values()), density_bits=VW,
-                     req=req, appends=units_appends(map_m, map_m["args"], rs.registration), proved=proved)
+    heads = units_heads(map_m, map_m["args"], rs.registration)
+    lives = {x["life"] for x in map_m["args"]}
+    link = UnitsLink(holds=units_ok and session_ok and br["ok"] and all(v["ok"] for v in checks.values()),
+                     req=req, layout=layout, appends=heads[-1], proved=proved, heads=tuple(heads),
+                     life=min(lives) if len(lives) == 1 else None)
     rrec = rs.session.record()
     mapped = link.mapped(rrec)
     common = dict(capacity_bytes_per_s=4096 * 10**9 / 10, chip_bytes=0, rebuild=audit.Rebuild(P512, 0.0))
@@ -1036,16 +1066,18 @@ def main() -> int:
     summary["link"] = {"holds": link.holds, "mapped": mapped, "every_map_unit_proved": proved,
                        "appends": None if rrec.appends is None else rrec.appends.hex(),
                        "units_appends": None if link.appends is None else link.appends.hex(),
+                       "heads_are_the_units'": all(h == link.heads[s] for w in rrec.windows for s, h in zip(w.steps, w.heads)),
+                       "life": link.life, "lifetime": rrec.lifetime, "pass_row": pi,
                        "units": units_ok, "session": session_ok, "check3": check3["accepted"], "bridge": br,
                        "epsilon": link.epsilon, "delta": link.delta,
-                       "density_bits": VW, "verdicts": [v.accepted for v in rs.verdicts], "uncertified": uncert,
+                       "verdicts": [v.accepted for v in rs.verdicts], "uncertified": uncert,
                        "circuit_read_bytes": sum(req.read_bits(s) for s in range(req.steps)) // 8,
                        "ledgers": {k: {"gamma": v["gamma"], "timing": v["terms"]["timing"], "linked": v.get("linked"),
                                        "credited_bytes": round((1 - v["terms"]["timing"]) * whole)} for k, v in ledgers.items()}}
     (out / "ledger.json").write_text(json.dumps(ledgers, indent=1, sort_keys=True, default=str))
 
     neg = negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, plans, sp, sm, req, lean_draw, law,
-                    program, query, want, leaf_layer, publics, session_roots, served, n_all, common, salts, link, rrec, c3)
+                    program, query, want, leaf_layer, publics, session_roots, served, n_all, common, salts, link, rrec, c3, rs)
     neg.update(check3_negatives(check3, rs, c3))
     (out / "negatives.json").write_text(json.dumps(neg, indent=1, sort_keys=True, default=str))
     summary["audit"] = {x: result.get(x) for x in ("accepted", "complete", "wrong_units", "profile")}
@@ -1060,14 +1092,15 @@ def main() -> int:
     return 0 if ok else 1
 
 
-def bridge(rs, plan_m: dict, map_m: dict, steps: int) -> dict:
-    """The bridge from the session to the units, on public data alone (no canonical row is opened): each pass's plan is as
-    long as its step's plan unit's public count, and check 3's unit holds each drawn entry to the step's certified plan
-    row; each pass's seed binds the chain over the map units' appends of the steps before it (`units_heads`), so
-    each append follows its step's pass and precedes the next; and the registered blocks the session releases after each
-    step are those that step's map unit frees (its public ``rfree``). A written block's release step is the map row's,
-    private, and isn't bound: a release only narrows the plans the session admits, which are the certified ones, so it
-    moves no credit."""
+def bridge(rs, plan_m: dict, map_m: dict, steps: int, passes: dict, sm) -> dict:
+    """The bridge from the session to the units, on public data and the pass row: each pass's plan is as long as its
+    step's plan unit's public count, and check 3's unit holds each drawn entry to the step's certified plan row; each
+    pass's seed binds the chain over the map units' appends of the steps before it (`units_heads`), so each append
+    follows its step's pass and precedes the next; the registered blocks the session releases after each step are those
+    that step's map unit frees (its public ``rfree``); and the prover opens the canonical pass row (``passes``, its salt)
+    to each window's last pass step on v0's wire (`RU.pass_words`), the one canonical row opened, until the record
+    commits to the passes' steps. A written block's release step is the map row's, private, and isn't bound: a release
+    only narrows the plans the session admits, which are the certified ones, so it moves no credit."""
     bad = []
     heads = units_heads(map_m, map_m["args"], rs.registration)
     for w in rs.session.windows:
@@ -1081,6 +1114,9 @@ def bridge(rs, plan_m: dict, map_m: dict, steps: int) -> dict:
         want = [j for j, b in enumerate(RU._bits(map_m["args"][s]["rfree"], NR)) if b]
         if got != want:
             bad.append({"released": s, "session": got, "map": want})
+    pi = RU.pass_words(sm, rs.view["passes"])
+    if not opens(passes["port"], pi, passes["salts"][0], passes["bc"][0]):
+        bad.append({"passes": 0})
     return {"ok": not bad, "detail": bad[:8]}
 
 
@@ -1096,8 +1132,8 @@ def uncertified(result: dict, rrec, view: dict, store, req, link, common, member
     w_plan, w_map = (per_t[P.template_id(m["defn"])] for m in members)
     credit = {}
     for w in rrec.windows:
-        for n, s in zip(w.credited(True), w.steps):
-            credit[s] = min(n * link.density_bits, req.read_bits(s)) / 8
+        for c, s in zip(audit.linked_bits(w, link, rrec.block_bytes, True), w.steps, strict=True):
+            credit[s] = c / 8
     whole = common["capacity_bytes_per_s"] * rrec.span_ns / 1e9
     top_plan = sum(sorted(credit.values(), reverse=True)[:w_plan])
     reach = {t: sum(c for s, c in credit.items() if s > t and set(view["plans"].get(s, ())) & set(js)) for t, js in store.written.items()}
@@ -1121,13 +1157,97 @@ def _forged(m: dict, i: int, args: dict) -> dict:
     return {"ok_output": o0, "satisfied": int(okbits) & 1 == 1, "opens_to_1": opens(port, [1], m["salts"]["o0"][i], bc)}
 
 
+def _rebound(m: dict, canons: dict, i: int, row: str, words: list[int]) -> dict:
+    """Instance i of member m with its row ``row`` committed to ``words`` under its own salt: refused when that ``b || c``
+    isn't the one of the canonical commitment the row is bound to."""
+    port = {p.name: p for p in m["ports"]}[row]
+    bc = FC._commit_strings([port], {row: np.asarray([words], dtype=np.uint16)}, {row: [m["salts"][row][i]]})[row][0]
+    c = bound_row(m["template"], row, i, m["args"][i], m["S"])
+    return {"refused": bc != canons[c[0]]["bc"][c[1]], "row": row, "instance": i}
+
+
+def rekey_negatives(members: list[dict], sd, layout, req, sm, canons: dict, rs) -> dict[str, dict]:
+    """A re-key held by the map unit to the cap its committed pass row and lifetime cap L give: value v of block o, whose
+    append joined window w ≥ 1, re-keyed at a step r whose first pass after is window w + age, by a forged instance of r
+    with one block more (v at its slot, its epoch-1 layout entry, the new block written at r and freed at v's last structural reader).
+    At L = age the unit accepts it; at L = age + 1 the re-key is one window early, and the unit refuses it. Two forged
+    stale bounds at L = age + 1: o's write step forged below the cap in the map row (r's unit accepts, and o's writer,
+    whose instance pins the step, refuses), and a pass row that dates r's window one later, window w + age's last pass
+    at r (r's unit accepts; the row isn't the canonical one, and a canonical row committed to it isn't the session's
+    passes, `bridge`)."""
+    plan_m, map_m = members
+    steps = req.steps
+    passes = session_passes(steps)
+    joined = [next((w for w, s in passes if s > x), None) for x in range(steps)]
+
+    def room(r):
+        a = map_m["args"][r]
+        return a["count"] < sm.C and bin(a["present"]).count("1") < sm.K and a["first"] - sm.N + a["count"] < sm.M
+
+    pick = next(((r, v) for r in range(steps) if joined[r] is not None and room(r) for v in sd.positions
+                 if layout.block[v] >= sm.N and req.born[v] < r < req.last.get(v, -1) and joined[req.born[v]]
+                 and joined[r] > joined[req.born[v]]), None)
+    if pick is None:
+        return {"re-key-one-window-early (at the cap)": {"refused": False, "why": "no step has room for a re-key"}}
+    r, v = pick
+    s, a = req.born[v], map_m["args"][r]
+    age = joined[r] - joined[s]
+    i, sl, k = sd.positions.index(v), layout.offset[v] // VW, bin(a["present"]).count("1")
+    o, j, x = layout.block[v], a["first"] + a["count"], req.values[v] % (1 << VW)
+    assert a["phi"][sm.N + 2 * (o - sm.N)] == s and a["lam"][2 * i:2 * i + 2] == [o, sl]
+
+    def put(xs, y):
+        return xs[:k] + [y] + xs[k + 1:]
+
+    def rekey(life, phi, pi):
+        lam, ph, pay = list(a["lam"]), list(phi), list(a["pay"])
+        lam[2 * (sm.V + i)], lam[2 * (sm.V + i) + 1] = j, sl
+        ph[sm.N + 2 * (j - sm.N)], ph[sm.N + 2 * (j - sm.N) + 1] = r, req.last[v]
+        pay[a["count"]] = x << (sl * VW)
+        return dict(a, count=a["count"] + 1, present=a["present"] | 1 << k, pos=put(a["pos"], i), ep=put(a["ep"], 1),
+                    last=put(a["last"], req.last[v]), life=life, lam=lam, phi=ph, pi=list(pi), val=put(a["val"], x), pay=pay)
+
+    pi = a["pi"]
+    at_age, early = rekey(age, a["phi"], pi), rekey(age + 1, a["phi"], pi)
+    forged = list(a["phi"])
+    forged[sm.N + 2 * (o - sm.N)] = 0
+    f_age, f_early = _forged(map_m, r, at_age), _forged(map_m, r, early)
+    f_re, f_writer = _forged(map_m, r, rekey(age + 1, forged, pi)), _forged(map_m, s, dict(map_m["args"][s], phi=forged))
+    where = {"step": r, "value": i, "old_block": o, "written_at": s, "new_block": j, "age_windows": age, "pass_row": pi,
+             "caps": {f"L={L}": RU.rekey_cap(sm, pi, L, r) for L in (age, age + 1)}}
+    out = {"re-key-one-window-early (at the cap)": {
+               "refused": f_age["ok_output"] == 1 and f_early["ok_output"] == 0 and not f_early["opens_to_1"], **where,
+               "at_L=age": f_age, "at_L=age+1": f_early,
+               "reference": [RU.memory_map(sm, **at_age), RU.memory_map(sm, **early)]},
+           "forged-stale: the old block's write step below the cap (refused at its writer)": {
+               "refused": f_re["ok_output"] == 1 and f_writer["ok_output"] == 0 and not f_writer["opens_to_1"], **where,
+               "re-key": f_re, "writer": f_writer}}
+    name = "forged-stale: a pass row dating the re-key's window one later (binding, bridge)"
+    if joined[r] + 1 >= sm.T:
+        out[name] = {"refused": False, "why": f"no window after step {r}'s, {joined[r]}, below T = {sm.T}"}
+        return out
+    late = list(pi)
+    late[joined[r]] = r
+    f_late = _forged(map_m, r, rekey(age + 1, a["phi"], late))
+    c = canons["passes"]
+    bc = FC._commit_strings([c["port"]], {"passes": np.asarray([late], dtype=np.uint16)},
+                            {"passes": [c["salts"][0]]})["passes"][0]
+    br = bridge(rs, plan_m, map_m, steps, dict(c, bc=[bc]), sm)
+    rb = _rebound(map_m, canons, r, "pi", late)
+    out[name] = {"refused": f_late["ok_output"] == 1 and rb["refused"] and not br["ok"], **where, "forged_row": late,
+                 "forged_cap": RU.rekey_cap(sm, late, age + 1, r), "unit": f_late, "binding": rb, "bridge": br["detail"]}
+    return out
+
+
 def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, plans, sp, sm, req, lean_draw, law, program, query,
-              want, leaf_layer, publics, session_roots, served, n_all, common, salts, link, rrec, c3) -> dict[str, dict]:
+              want, leaf_layer, publics, session_roots, served, n_all, common, salts, link, rrec, c3, rs0) -> dict[str, dict]:
     """Each re-decides one input altered. The clause negatives are a cheating prover consistent everywhere (its canonical
     commitments and its session agree with the altered witness), so only the unit can refuse it: its ok row commits 0.
     The appends negatives are a session the remote audit accepts whose appends aren't the map units' writes: the
-    record's chain isn't the units' (`mapped`), and the ledger refuses the link. Their sessions' check 3 is decided by
-    its unit's reference (`opening.reference`), the run's own by proofs."""
+    record's chain or a pass's head isn't the units' (`mapped`), and the ledger refuses the link. Their sessions' check 3
+    is decided by its unit's reference (`opening.reference`), the run's own (``rs0``) by proofs. The stale negatives
+    are map units whose lifetime cap isn't the record's (`mapped`, and the opening of their public rows) and a re-key the
+    unit holds to the cap its committed pass row gives (`rekey_negatives`)."""
     neg: dict[str, dict] = {}
     plan_m, map_m = members
     req_steps = req.steps
@@ -1144,7 +1264,7 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
             args = dict(plan_m["args"][s], count=len(bad), plan=bad + [0] * (sp.P - len(bad)))
             f = _forged(plan_m, s, args)
             rs = remote_session(req, layout, store, plans, salts, extra={s: [extra]}, c3=c3)
-            br = bridge(rs, plan_m, map_m, req_steps)
+            br = bridge(rs, plan_m, map_m, req_steps, canons["passes"], sm)
             neg[name] = {"refused": f["ok_output"] == 0 and f["satisfied"] and not f["opens_to_1"], "step": s, "block": extra,
                          "unit": f, "plan_matches": True, "honest_canon_bridge_refuses": not br["ok"]}
             return
@@ -1170,7 +1290,7 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
     f = _forged(plan_m, s0, dict(plan_m["args"][s0], count=len(short), plan=short + [0] * (sp.P - len(short))))
     neg["plan-misses-a-block-the-step-reads (PlanMatches)"] = {"refused": f["ok_output"] == 0 and not f["opens_to_1"], "unit": f}
 
-    # the memory-map unit's clauses: a payload mismatch, a late free, an early free, on a block whose values' last read is
+    # the memory-map unit's clauses: a payload mismatch, a late free, an early free, on a block whose values' last structural reader is
     # at least two steps after its write and before the last step, so both frees fall inside the run after the write
     def block_last(a_s, j):
         return max(a_s["last"][i] for i in range(sm.K) if (a_s["present"] >> i) & 1 and a_s["lam"][2 * a_s["pos"][i]] == j)
@@ -1182,8 +1302,8 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
     pay[j - a_t["first"]] ^= 1 << 1234
     f = _forged(map_m, t, dict(a_t, pay=pay))
     neg["payload-does-not-carry-its-value (Carries)"] = {"refused": f["ok_output"] == 0 and not f["opens_to_1"], "step": t, "block": j, "unit": f}
-    for name, at in (("late-free (a block kept past its values' last read)", lastj + 1),
-                     ("early-free (a block freed before its values' last read)", lastj - 1)):
+    for name, at in (("late-free (a block kept past its values' last structural reader)", lastj + 1),
+                     ("early-free (a block freed before its values' last structural reader)", lastj - 1)):
         phi = list(a_t["phi"])
         phi[sm.N + 2 * (j - sm.N) + 1] = at
         f = _forged(map_m, t, dict(a_t, phi=phi))
@@ -1197,14 +1317,14 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
     f = _forged(map_m, t, dict(a_t, phi=phi))
     neg["write-at-another-step (L4)"] = {"refused": f["ok_output"] == 0 and not f["opens_to_1"], "unit": f}
 
-    # the registered blocks' frees: the expert's weight block, whose values' last read is mid-run, freed a step late or
+    # the registered blocks' frees: the expert's weight block, whose values' last structural reader is mid-run, freed a step late or
     # a step early in the map row (and the store), at the step whose instance names it in rfree
     jx = layout.block[EXPERT]
     lx = req.last[EXPERT]
     a_x = map_m["args"][lx]
     assert RU._bits(a_x["rfree"], sm.N)[jx] and a_x["phi"][jx] == lx
-    for name, at in (("registered-late-free (a registered block kept past its values' last read)", lx + 1),
-                     ("registered-early-free (a registered block freed before its values' last read)", lx - 1)):
+    for name, at in (("registered-late-free (a registered block kept past its values' last structural reader)", lx + 1),
+                     ("registered-early-free (a registered block freed before its values' last structural reader)", lx - 1)):
         phi = list(a_x["phi"])
         phi[jx] = at
         f = _forged(map_m, lx, dict(a_x, phi=phi))
@@ -1242,8 +1362,9 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
             why = None
         except ValueError as e:
             why = str(e)
-        neg[name] = {"refused": not link.mapped(r) and r.appends != link.appends and "memory-map unit" in (why or ""),
-                     "session_accepted": True, "chain_is_the_units'": r.appends == link.appends, "ledger": why}
+        heads = all(h == link.heads[s] for w in r.windows for s, h in zip(w.steps, w.heads))
+        neg[name] = {"refused": not link.mapped(r) and "memory-map unit" in (why or ""), "session_accepted": True,
+                     "chain_is_the_units'": r.appends == link.appends, "heads_are_the_units'": heads, "ledger": why}
 
     t_last = steps_w[-1]
     t_two = next(s for s in steps_w if len(store.written[s]) > 1)
@@ -1253,15 +1374,36 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
              alter={steps_w[0]: lambda pay, ys: ([bytes([pay[0][0] ^ 1]) + pay[0][1:]] + pay[1:], ys)})
     unmapped("append-out-of-the-map's-order (mapped)", alter={t_two: lambda pay, ys: (pay[1::-1] + pay[2:], ys[1::-1] + ys[2:])})
     unmapped("dummy-append (mapped)", dummy=t_last)
+    unmapped("dropped-append (mapped)", drop=t_last)
     unmapped("re-key-not-the-map's (mapped)", rekey=(t_last, j_live))
     t_early = next(s for s in steps_w if s >= 1)
+    unmapped("append-before-its-production-step (mapped)", early=t_early)
+    neg["append-before-its-production-step (mapped)"]["step"] = t_early
     rs = remote_session(req, layout, store, plans, salts, early=t_early, c3=c3)
-    br = bridge(rs, plan_m, map_m, req_steps)
-    same = rs.accepted and rs.session.record().appends == link.appends
+    br = bridge(rs, plan_m, map_m, req_steps, canons["passes"], sm)
     neg["append-before-its-production-step (bridge: heads)"] = {
         "refused": rs.accepted and not br["ok"], "step": t_early, "detail": br["detail"],
-        "chain_is_the_units'": same, "note": "the chain fixes the appends, not the passes between them: under zero "
-        "knowledge this is `mapped`'s, against the record's per-pass heads (`WindowRecord.heads`)"}
+        "chain_is_the_units'": rs.accepted and rs.session.record().appends == link.appends}
+
+    # the stale bound, which no public input carries: the map units' lifetime cap against the record's, and a re-key
+    # held in the unit to the cap its committed pass row gives, one window early or with a forged stale bound
+    loose = 1
+    try:
+        audit.ledger(rrec, **common, requirement=replace(link, life=loose))
+        why = None
+    except ValueError as e:
+        why = str(e)
+    neg["forged-stale: map units at another lifetime cap (mapped)"] = {
+        "refused": not replace(link, life=loose).mapped(rrec) and "memory-map unit" in (why or ""), "life": loose,
+        "record_lifetime": rrec.lifetime, "ledger": why}
+    i_c = map_m["drawn"][-1] if map_m.get("drawn") else 0
+    other_life = dict(map_m["args"][i_c], life=loose)
+    port = {p.name: p for p in map_m["ports"]}["pub"]
+    bcs = public_bcs(map_m["dir"] / f"pub-{map_m['n']}.bin", map_m["ports"])
+    neg["forged-stale: a map unit's public row with another lifetime cap (opening)"] = {
+        "refused": not opens(port, public_words(other_life, map_m["rows"]), map_m["salts"]["pub"][i_c], bcs[i_c]["pub"]),
+        "instance": i_c, "life": loose}
+    neg.update(rekey_negatives(members, sd, layout, req, sm, canons, rs0))
     try:
         audit.ledger(rrec, **common, requirement=replace(link, appends=hashlib.sha512(b"another chain").digest()))
         neg["ledger-on-a-link-whose-units-make-other-appends"] = {"refused": False}
@@ -1274,31 +1416,26 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
         neg["ledger-on-a-link-without-every-map-unit-proved"] = {"refused": "memory-map unit" in str(e), "why": str(e)}
 
     # bindings: a witness row other than its canonical commitment's
-    def rebound(m, i, row, words) -> dict:
-        port = {p.name: p for p in m["ports"]}[row]
-        bc = FC._commit_strings([port], {row: np.asarray([words], dtype=np.uint16)}, {row: [m["salts"][row][i]]})[row][0]
-        c = bound_row(m["template"], row, i, m["args"][i], m["S"])
-        return {"refused": bc != canons[c[0]]["bc"][c[1]], "row": row, "instance": i}
-
     other = list(plan_m["args"][1]["lam"])
     other[0], other[2] = other[2], other[0]
-    neg["layout-row-not-the-shared-one (binding)"] = rebound(plan_m, 1, "lam", other)
-    neg["map-unit's-layout-row-not-the-plan-unit's (binding)"] = rebound(map_m, 1, "lam", other)
+    neg["layout-row-not-the-shared-one (binding)"] = _rebound(plan_m, canons, 1, "lam", other)
+    neg["map-unit's-layout-row-not-the-plan-unit's (binding)"] = _rebound(map_m, canons, 1, "lam", other)
     t2 = next(s for s in range(req_steps) if map_m["args"][s]["count"] > 1 and bin(map_m["args"][s]["present"]).count("1") > 1)
     a_2 = map_m["args"][t2]
-    neg["payload-row-of-another-block (binding)"] = rebound(map_m, t2, "pay0", RU._words(a_2["pay"][1], RU.BLOCK_WORDS))
-    neg["value-row-of-another-value (binding)"] = rebound(map_m, t2, "val0", RU._words(a_2["val"][1], VW // 16))
+    neg["payload-row-of-another-block (binding)"] = _rebound(map_m, canons, t2, "pay0",
+                                                             RU._words(a_2["pay"][1], RU.BLOCK_WORDS))
+    neg["value-row-of-another-value (binding)"] = _rebound(map_m, canons, t2, "val0", RU._words(a_2["val"][1], VW // 16))
 
     # the bridge and the link: a session plan larger than the certified one, a registered block released at another step
     rs = remote_session(req, layout, store, plans, salts, extra={s0: [unselected_table_block(s0)]}, c3=c3)
-    br = bridge(rs, plan_m, map_m, req_steps)
+    br = bridge(rs, plan_m, map_m, req_steps, canons["passes"], sm)
     neg["session-plan-not-the-certified-one (bridge: count)"] = {"refused": not br["ok"], "detail": br["detail"]}
     jx, lx = layout.block[EXPERT], req.last[EXPERT]
     rs = remote_session(req, layout, store, plans, salts, late={jx: lx + 1}, c3=c3)
-    br = bridge(rs, plan_m, map_m, req_steps)
+    br = bridge(rs, plan_m, map_m, req_steps, canons["passes"], sm)
     neg["session-registered-release-not-the-map's (bridge: rfree)"] = {"refused": not br["ok"], "block": jx, "detail": br["detail"]}
     try:
-        audit.ledger(rrec, **common, requirement=UnitsLink(False, VW, req))
+        audit.ledger(rrec, **common, requirement=UnitsLink(False, req, layout))
         neg["ledger-on-a-link-that-does-not-hold"] = {"refused": False}
     except ValueError as e:
         neg["ledger-on-a-link-that-does-not-hold"] = {"refused": "don't hold" in str(e), "why": str(e)}
@@ -1323,7 +1460,7 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
             a.lean, last, last["n"], sdir, out / "neg-altered-public", dict(rec, leaf_layer=leaf_layer), check, zk=True),
             "member": last["name"], "row": f"instance {last['n'] - 1}, port {last['ports'][-1].name}"}
     # the sampled-proofs registration and draw, as A6 checks them
-    fewer = P.mixed_population_program([(plan_m["defn"], plan_m["n"] - 1), (map_m["defn"], map_m["n"])])
+    fewer = R2.program([(plan_m["defn"], plan_m["n"]), (map_m["defn"], map_m["n"])], mixed=True)
     v = V.check(rec, fewer, query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check(rec, program, query, D.parse_law(f"stratified:{a.k // 2 if a.k > 1 else a.k + 1}"), a0.SCHEME, want,

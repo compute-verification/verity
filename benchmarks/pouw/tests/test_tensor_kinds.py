@@ -138,6 +138,24 @@ def test_a_program_faster_than_a_joint_row_is_marked_over(tmp_path: Path):
     assert abs(rows["JI3n_0"]["IMMA16816"] - (0.98 * 17.4 - 8.75) / 1.07) < 1e-9
 
 
+def test_a_spec_point_with_role_cycles_reads_each_role_over_its_own_time(tmp_path: Path):
+    # the MMA warps finish at 8 SMSP-cycles a MMA, the lane warps at 0.5 lane instructions a SMSP-cycle; the block
+    # cycles are the slower role's, so the MMA rate over them is only a lower bound (RT-BLACKWELL-17)
+    imma = ["IMMA.16832.S8.S8 R8, R4.ROW, R2.COL, R8"] * 8 + ["IADD3 R0, R0, 0x1, RZ", "ISETP.GE.AND P0, PT, R0, R9, PT"]
+    lane = ["IADD3 R3, R3, R4, RZ", "FFMA R5, R5, R6, 1"] * 16 + ["IADD3 R0, R0, 0x1, RZ", "ISETP.GE.AND P0, PT, R0, R9, PT"]
+    row, sass = _case("spec", "imma_s8_m16n8k32", "ImmaS8k32", 32, 1000, 140000, imma, lane)
+    row |= {"mma_cyc_med": 16000 * 8.0, "op_cyc_med": 2 * 1000 * 35 / 0.5}
+    _write(tmp_path, [_opalone(1000, 8 * 67 / 0.98), (row, sass)])
+    summary, fails = TK.analyze(tmp_path)
+    [p] = summary["imma_s8_m16n8k32"]["points"]
+    assert fails == [] and p["mma_cycles_per_mma"] == 8.0 and p["lane_per_smsp_cycle"] == 0.5
+    assert p["cycles_per_mma"] == 140000 / 16000
+    done = [json.loads(x) for x in (tmp_path / "tensor_kinds.jsonl").read_text().splitlines()]
+    (tmp_path / "tensor_kinds.jsonl").write_text("\n".join(
+        json.dumps(r | {"sm": 100, "group": 1} if r.get("done") else r) for r in done) + "\n")
+    assert TK.analyze(tmp_path)[1] == ["sm_100: groups [1] finished, want 0 (int8)"]
+
+
 def test_a_lane_op_slower_than_issue_fails_the_gate(tmp_path: Path):
     # 0.52 a SMSP-cycle, as IADD3 alone runs: the mixed points would sit on its pipe's rate, not the issue facet
     _write(tmp_path, [_opalone(1000, 8 * 67 / 0.52)])

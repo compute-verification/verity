@@ -1,26 +1,38 @@
 """The pass and draw difftest's cases: `core_check.pass_epoch`'s arguments, ``{"coins", "raw": hex | null, "context",
-"recorded"}``, and `core_check.draw`'s, ``{"coins", "recorded", "opening", "stream", "registration", "receipt", "k",
-"population", "units"}``.
+"recorded", "reveal", "committed", "stream", "prover"}`` (the last four hex or null), and `core_check.draw`'s,
+``{"coins", "recorded", "opening", "stream", "registration", "receipt", "k", "population", "units"}``.
 
 A pass case is an honest pass (a small workload, its weights' roots, an epoch's coins committed under one of
-`core_check.COIN_VERSIONS` and its salt coin opened after the weights' root, or a recorded pass salted by a beacon), then
-one mutation (`PASS_MUTATIONS`) aimed at one refusal of `pass_epoch`.  A draw case is an honest draw (the draw coin opened
-after a registration's digest, the units `stream_subset` of its key's stream), then one mutation (`DRAW_MUTATIONS`).
+`core_check.COIN_VERSIONS` and its salt coin opened after the weights' root, a recorded pass salted by a beacon, or a
+certified pass under a stream and a prover, salted by the network certifier's reveal for the PoUW window its context
+names, over the weights' root the certifier recorded with the stream and the prover before it drew that salt), then one
+mutation
+(`PASS_MUTATIONS`) aimed at one refusal of `pass_epoch`.  A draw case is an honest draw (the draw coin of seeded coins,
+or of a live epoch's as a certified window's, opened after a registration's digest, the units `stream_subset` of its
+key's stream), then one mutation (`DRAW_NAMES`).
 `tests/test_difftest.py` draws them for the harness, and `verity/core/protocols/pouw/tests/test_pouw_core_check.py`
 holds each mutation to the refusal it aims at.
 """
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import random
 
+from verity.ml.crypto import lms
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import core_check as CC
+from verity.core.protocols.pouw import salt as PS
+from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
 from verity.core.protocols.pouw.protocol import tagged
+from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.ml.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
 from verity.ml.randomness import derive
+
+#: a certified window's verifier's inputs, in `pass_epoch`'s order
+CERTIFIED = ("reveal", "committed", "stream", "prover")
 
 
 class Coins:
@@ -62,13 +74,21 @@ def _raw(man: dict, rng: random.Random) -> bytes:
 
 
 def honest_pass(rng: random.Random, kind: str | None = None) -> dict:
-    """An honest pass: ``coin`` (the current coins), ``recorded-coin`` (the e2e-service passes' coins, in a replay) or
-    ``beacon`` (a recorded pass's), as a case with its manifest and the challenger beside it."""
-    kind = kind or rng.choice(["coin", "coin", "recorded-coin", "beacon"])
+    """An honest pass: ``coin`` (the current coins), ``recorded-coin`` (the e2e-service passes' coins, in a replay),
+    ``beacon`` (a recorded pass's) or ``certified`` (salted by the network certifier's reveal for its PoUW window, which
+    the verifier holds), as a case with its manifest and the challenger beside it."""
+    kind = kind or rng.choice(["coin", "coin", "recorded-coin", "beacon", "certified"])
     us, weights = _workload(rng)
     man = {"schema": CC.MANIFEST_SCHEMA, "matmuls": us, "weights": weights, "run": f"r-{rng.randrange(1 << 30):x}"}
     roots = _roots(man)
-    if kind == "beacon":
+    reveal = window = committed = stream = prover = None
+    if kind == "certified":
+        reveal, window = rng.randbytes(PS.SALT_BYTES), rng.choice([0, 1, rng.randrange(1 << 64), (1 << 64) - 1])
+        stream, prover = rng.randbytes(PS.STREAM_BYTES), rng.randbytes(PS.PROVER_BYTES)
+        committed = PS.pouw_record(CC.weights_root(Co.SCHEME, roots), stream, prover)
+        man.update(schema=CC.MANIFEST_CERTIFIED, salt=PS.pouw_salt(reveal, window, stream, prover).hex())
+        ch = Coins(rng, rng.randrange(4))
+    elif kind == "beacon":
         beacon = rng.randbytes(32)
         salt = derive(beacon, SALT_DOMAIN, {"weights": CC.weights_root(Co.SCHEME, roots)}).stream("salt", 32)
         man.update(schema=CC.MANIFEST_RECORDED, beacon=beacon.hex(), salt=salt.hex())
@@ -80,8 +100,16 @@ def honest_pass(rng: random.Random, kind: str | None = None) -> dict:
         salt = derive(bytes.fromhex(opening["coin"]), EPOCH_SALT_DOMAIN, {"epoch": ch.epoch, "coins": ch.tree.commitment.root,
                                                                           "weights": root}).stream("salt", 32)
         man.update(coins=ch.commitment, salt_opening=opening, salt=salt.hex())
-    case = {"coins": ch.commitment, "recorded": kind != "coin" or rng.random() < 0.3, "run": man["run"]}
+    case = {"coins": ch.commitment, "recorded": kind not in ("coin", "certified") or rng.random() < 0.3, "run": man["run"],
+            "prefix": f"served-zk/{man['run']}", "window": window,
+            **{k: None if v is None else v.hex() for k, v in zip(CERTIFIED, (reveal, committed, stream, prover))}}
     return {"case": case, "man": man, "ch": ch, "kind": kind}
+
+
+def _context(case: dict, digest: str) -> str:
+    """The window's context: the pass's prefix, a certified window's PoUW window (`salt.context`), and the digest."""
+    w = case["window"]
+    return f"{case['prefix']}/{digest}" if w is None else f"{case['prefix']}/{PS.WINDOW_SEGMENT}/{w}/{digest}"
 
 
 def _flip(h: str) -> str:
@@ -207,8 +235,39 @@ def _mutate_pass(h: dict, name: str, rng: random.Random) -> bytes | None:
             man.pop("beacon")
         case "not-named":
             raw = _raw(man, rng)
-            case["context"] = f"served-zk/{case['run']}/{hashlib.sha512(raw + b' ').hexdigest()}"
+            case["context"] = _context(case, hashlib.sha512(raw + b' ').hexdigest())
             return raw
+        case "certified-unread":
+            case["reveal"] = None
+        case "uncertified-pass":
+            case["reveal"] = rng.randbytes(PS.SALT_BYTES).hex()
+        case "reveal-size":
+            case["reveal"] = rng.randbytes(rng.choice([0, 32, 63, 65, 128])).hex()
+        case "no-window":
+            case["window"] = None if rng.random() < 0.5 else rng.choice([f"0{case['window']}", "-1", "x", "", str(1 << 64)])
+        case "other-window":
+            case["window"] = (case["window"] + rng.choice([1, -1, 1 << 32])) % (1 << 64)
+        case "other-reveal":
+            case["reveal"] = rng.randbytes(PS.SALT_BYTES).hex()
+        case "raw-reveal":
+            man["salt"] = case["reveal"]
+        case "weights-unrecorded":
+            case["committed"] = rng.choice([None, rng.randbytes(rng.choice([0, 32, 63, 65])).hex()])
+        case "weights-after-salt":
+            if rng.random() < 0.5:
+                case["committed"] = rng.randbytes(PS.WEIGHTS_ROOT_BYTES).hex()
+            else:
+                man["weights"][rng.choice(list(man["weights"]))]["root"] = rng.randbytes(64).hex()
+        case "binding-form":
+            case[rng.choice(["stream", "prover"])] = rng.choice([None, rng.randbytes(rng.choice([0, 32, 63, 65])).hex()])
+        case "stream-other" | "prover-other":
+            case[name.split("-")[0]] = rng.randbytes(64).hex()
+        case "salted-apart":
+            k = rng.choice(["stream", "prover"])
+            bound = {"stream": bytes.fromhex(case["stream"]), "prover": bytes.fromhex(case["prover"]), k: rng.randbytes(64)}
+            case[k] = bound[k].hex()
+            case["committed"] = PS.pouw_record(CC.weights_root(Co.SCHEME, _roots(man)), bound["stream"],
+                                               bound["prover"]).hex()
         case "spaced-hex":
             w = rng.choice(list(man["weights"]))
             r = man["weights"][w]["root"]
@@ -233,26 +292,35 @@ PASS_MUTATIONS = {
     "coin-foreign": ("coin", "recorded-coin"), "coin-tampered": ("coin", "recorded-coin"),
     "coin-path": ("coin", "recorded-coin"), "coin-early": ("coin", "recorded-coin"), "resalted": None, "salt-missing": None,
     "beacon-empty": ("beacon",), "no-beacon": ("beacon",), "not-named": None, "spaced-hex": None,
+    "certified-unread": ("certified",), "uncertified-pass": ("coin", "recorded-coin", "beacon"),
+    "reveal-size": ("certified",), "no-window": ("certified",), "other-window": ("certified",),
+    "other-reveal": ("certified",), "raw-reveal": ("certified",), "weights-unrecorded": ("certified",),
+    "weights-after-salt": ("certified",), "binding-form": ("certified",), "stream-other": ("certified",),
+    "prover-other": ("certified",), "salted-apart": ("certified",),
 }
 PASS_NAMES = list(PASS_MUTATIONS)
 
 
-def pass_instance(rng: random.Random, name: str = "honest") -> dict:
-    """One `pass_epoch` case: an honest pass, then mutation `name` (on a pass of a kind it applies to)."""
+def pass_instance(rng: random.Random, name: str = "honest", kind: str | None = None) -> dict:
+    """One `pass_epoch` case: an honest pass (of `kind`, by default any), then mutation `name` (on a pass of a kind it
+    applies to)."""
     kinds = PASS_MUTATIONS.get(name)
-    h = honest_pass(rng, rng.choice(kinds) if kinds else None)
+    h = honest_pass(rng, kind or (rng.choice(kinds) if kinds else None))
     case = h["case"]
     raw = _raw(h["man"], rng) if name == "honest" else _mutate_pass(h, name, rng)
     if raw is None:
-        context = f"served-zk/{case['run']}/{'0' * 128}"
+        context = _context(case, "0" * 128)
     else:
-        context = case.get("context") or f"served-zk/{case['run']}/{hashlib.sha512(raw).hexdigest()}"
+        context = case.get("context") or _context(case, hashlib.sha512(raw).hexdigest())
     return {"coins": case["coins"], "raw": None if raw is None else raw.hex(), "context": context,
-            "recorded": case["recorded"]}
+            "recorded": case["recorded"], **{k: case[k] for k in CERTIFIED}}
 
 
 def pass_args(case: dict) -> tuple:
-    return (case["coins"], None if case["raw"] is None else bytes.fromhex(case["raw"]), case["context"], case["recorded"])
+    def hex_or_none(k: str) -> bytes | None:
+        return None if case.get(k) is None else bytes.fromhex(case[k])
+
+    return (case["coins"], hex_or_none("raw"), case["context"], case["recorded"], *map(hex_or_none, CERTIFIED))
 
 
 def _receipt(rng: random.Random, reg: str) -> dict:
@@ -278,7 +346,8 @@ def honest_draw(rng: random.Random, scheme: str | None = None, many: bool = Fals
         derive(coin, CC.DRAW_DOMAIN, ctx).stream("draw", size)
     units = CC.stream_subset(k, n, src)
     return {"coins": ch.commitment, "recorded": ch.scheme != Co.SCHEME or ch.early or rng.random() < 0.3, "opening": opening,
-            "stream": stream, "registration": reg, "receipt": receipt, "k": k, "population": n, "units": units}, ch
+            "stream": stream, "registration": reg, "receipt": receipt, "k": k, "population": n, "units": units,
+            "key": None}, ch
 
 
 def _mutate_draw(d: dict, ch: Coins, name: str, rng: random.Random) -> None:
@@ -326,16 +395,128 @@ def _mutate_draw(d: dict, ch: Coins, name: str, rng: random.Random) -> None:
             else:
                 reg = rng.randbytes(64).hex()
                 d.update(registration=reg, opening=ch.open("draw", bytes.fromhex(reg)))
+        case "seeded-pinned":
+            sk = _challenger_key(rng.randrange(2))
+            d["key"] = Ch.ChallengerKey(sk.params.W, sk.params.H, lms.public_key(sk)).to_json()
         case _:
             raise ValueError(name)
 
 
+@functools.cache
+def _challenger_key(seed: int) -> lms.PrivateKey:
+    return lms.keygen(lms.Params(64, 4, 2), bytes([seed]) * 64)
+
+
+def signed(commitment: Ch.LiveCommitment, rng: random.Random, signer: int | None = None, key: int | None = None) -> dict:
+    """A live window's coins as its verifier holds them: `commitment`'s challenger record, signed on a host by
+    challenger key `signer` (0 or 1, at random), and the verifier's key for key `key` (the signer's by default)."""
+    signer = rng.randrange(2) if signer is None else signer
+    sk, vk = _challenger_key(signer), _challenger_key(signer if key is None else key)
+    host = rng.choice(["vy-nebius-cpu-1", "auditor.local", "h_1"])
+    message = Ch.record_message(lms.public_key(sk)[:16], host, commitment)
+    record = Ch.ChallengerRecord(commitment, host, lms.sign_at(sk, rng.randrange(4), message).encode())
+    return {"key": Ch.ChallengerKey(vk.params.W, vk.params.H, lms.public_key(vk)).to_json(), "record": record.to_json()}
+
+
+#: the challenger key of a prover's own, which no window's parameters pin (`signed`'s keys 0 and 1 are the verifier's)
+PROVERS_KEY = 2
+
+
+def honest_live_draw(rng: random.Random, many: bool = False) -> tuple[dict, Ch.LiveChallenger]:
+    """An honest draw under a live epoch's coins (`window.live_challenger`, a certified window's), held as their signed
+    record (`signed`), under the challenger key the window's parameters pin (``key``, the record's): its ``pouw/draw``
+    coin 0 opened after the registration's digest."""
+    ch = Wd.live_challenger(rng.randrange(4), rng.choice([1, 2, 3]), rng.randbytes)
+    reg, stream = rng.randbytes(64).hex(), rng.randbytes(64).hex()
+    receipt = _receipt(rng, reg)
+    n = rng.choice([50, rng.randint(50, 5000), rng.randint(50, 1 << 40)] + ([] if many else [1, 2, 7]))
+    k = rng.randint(1 if many else 0, min(n, 12))
+    o = ch.open(Wd.DRAW, 0, bytes.fromhex(reg))
+    ctx, size = CC.draw_key_context(stream, reg, receipt), 2 * k * CC.width(n) + 64
+    units = CC.stream_subset(k, n, derive(o.coin, CC.DRAW_DOMAIN, ctx).stream("draw", size))
+    coins = signed(ch.commitment, rng)
+    return {"coins": coins, "recorded": rng.random() < 0.3, "opening": o.to_json(), "stream": stream,
+            "registration": reg, "receipt": receipt, "k": k, "population": n, "units": units, "key": coins["key"]}, ch
+
+
+def _mutate_live_draw(d: dict, ch: Ch.LiveChallenger, name: str, rng: random.Random) -> None:
+    o, c = d["opening"], ch.commitment
+    coins, rec = d["coins"], d["coins"]["record"]
+    match name:
+        case "live-coins":
+            cj = rec["commitment"]
+            bad = rng.choice([{**cj, "root": "00"}, {**cj, "families": "x"}, {**cj, "epoch": -1}, {**cj, "extra": 1}])
+            d["coins"] = {**coins, "record": {**rec, "commitment": bad}}
+        case "live-not-epoch":
+            layout = rng.choice([((Wd.DRAW, 1), (Wd.SALT, 1), (Wd.ROUND, 1)), ((Wd.SALT, 1), (Wd.ROUND, 2)),
+                                 ((Wd.SALT, 1), (Wd.DRAW, 2), (Wd.ROUND, 1))])
+            d["coins"] = signed(Ch.LiveChallenger(Wd.LIVE_SCHEME, c.epoch, layout, rng.randbytes).commitment, rng)
+            d["key"] = d["coins"]["key"]
+        case "live-bare":
+            d["coins"] = rng.choice([c.to_json(), {**coins, "commitment": c.to_json()}, {"record": rec}])
+        case "live-key":
+            key = coins["key"]
+            d["coins"] = {**coins, "key": rng.choice([{**key, "W": 3}, {**key, "H": 0}, {**key, "public": key["public"][:64]},
+                                                      {**key, "extra": 1}, None])}
+        case "live-no-record":
+            d["coins"] = {**coins, "record": None}
+        case "live-unsigned":
+            signer = rng.randrange(2)
+            d["coins"] = rng.choice([signed(c, rng, signer, 1 - signer),
+                                     {**coins, "record": {**rec, "signature": _flip(rec["signature"])}}])
+            d["key"] = d["coins"]["key"]
+        case "live-own-key":
+            d["coins"] = signed(c, rng, PROVERS_KEY)
+        case "live-pinned-other":
+            pinned = Ch.ChallengerKey.from_json(d["key"])
+            d["key"] = rng.choice([signed(c, rng, PROVERS_KEY)["key"], {**d["key"], "H": pinned.H + 1},
+                                   {**d["key"], "public": _flip(d["key"]["public"])}])
+        case "live-no-pin":
+            key = d["key"]
+            d["key"] = rng.choice([None, {**key, "W": 3}, {**key, "public": key["public"][:64]}, {**key, "extra": 1}, 7,
+                                   "key"])
+        case "live-moved":
+            other = Wd.live_challenger(c.epoch, c.family(Wd.ROUND), rng.randbytes).commitment.to_json()
+            d["coins"] = {**coins, "record": {**rec, "commitment": other}}
+        case "live-opening-form":
+            k = rng.choice(["coin", "path", "index", "epoch", "label"])
+            bad = {"coin": ["zz", None], "path": [None, 4], "index": ["0", None, True], "epoch": [str(c.epoch), None],
+                   "label": [5, None]}[k]
+            d["opening"] = rng.choice([{**o, k: rng.choice(bad)}, {x: v for x, v in o.items() if x != "index"}])
+        case "live-label":
+            d["opening"] = ch.open(Wd.SALT, 0, bytes.fromhex(d["registration"])).to_json()
+        case "live-epoch":
+            d["opening"] = {**o, "epoch": o["epoch"] + 1}
+        case "live-foreign":
+            other = Wd.live_challenger(c.epoch, c.family(Wd.ROUND), rng.randbytes)
+            d["opening"] = other.open(Wd.DRAW, 0, bytes.fromhex(d["registration"])).to_json()
+        case "live-tampered":
+            d["opening"] = {**o, "salt": _flip(o["salt"])}
+        case "live-early":
+            d["opening"] = {**o, "after": rng.randbytes(64).hex()}
+        case "live-units":
+            u = d["units"]
+            d["units"] = rng.choice([u[:-1], u + [0], [x + 1 for x in u], None])
+        case _:
+            raise ValueError(name)
+
+
+LIVE_DRAW_NAMES = ["live-coins", "live-not-epoch", "live-bare", "live-key", "live-no-record", "live-unsigned",
+                   "live-own-key", "live-pinned-other", "live-no-pin", "live-moved", "live-opening-form", "live-label",
+                   "live-epoch", "live-foreign", "live-tampered", "live-early", "live-units"]
 DRAW_NAMES = ["verifier-coins", "recorded-scheme", "registration", "stream", "receipt", "law", "opening-form", "label",
-              "epoch", "foreign", "tampered", "early", "units", "other-key", "early-coins-live"]
+              "epoch", "foreign", "tampered", "early", "units", "other-key", "early-coins-live", "seeded-pinned",
+              *LIVE_DRAW_NAMES]
 
 
 def draw_instance(rng: random.Random, name: str = "honest") -> dict:
-    """One `draw` case: an honest draw, then mutation `name`."""
+    """One `draw` case: an honest draw (under seeded coins, or live ones a third of the time), then mutation `name` (a
+    live one's on a live draw)."""
+    if name in LIVE_DRAW_NAMES or (name == "honest" and rng.random() < 1 / 3):
+        d, live = honest_live_draw(rng, name == "live-units")
+        if name != "honest":
+            _mutate_live_draw(d, live, name, rng)
+        return d
     d, ch = honest_draw(rng, CC.COINS_RECORDED if name == "recorded-scheme" else Co.SCHEME if name == "early-coins-live" else None,
                         name in ("units", "other-key"), True if name == "early-coins-live" else None)
     if name != "honest":
@@ -344,4 +525,5 @@ def draw_instance(rng: random.Random, name: str = "honest") -> dict:
 
 
 def draw_args(d: dict) -> tuple:
-    return tuple(d[k] for k in ("coins", "recorded", "opening", "stream", "registration", "receipt", "k", "population", "units"))
+    return tuple(d[k] for k in ("coins", "recorded", "opening", "stream", "registration", "receipt", "k", "population", "units",
+                                "key"))

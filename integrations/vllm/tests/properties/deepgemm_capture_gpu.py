@@ -97,8 +97,16 @@ KERNEL = "FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
 #: shared expert's 3072 column- then row-parallel.
 DSV4_LINEARS = (("fused_wqa_wkv", 7168, 1536 + 512), ("wq_b", 1536, 16 * 512), ("indexer.wq_b", 1536, 64 * 128), ("wo_b", 2 * 1024, 7168),
                 ("shared_experts.gate_up_proj", 7168, 2 * 3072 // 8), ("shared_experts.down_proj", 3072 // 8, 7168))
+#: GLM-5.3's dense FP8 linears as one TP8 rank runs them, (name, K, N): hidden 6144, 64 heads (8 per rank), q_lora 2048, kv_lora 512,
+#: qk nope 192 + rope 64, v 256; the indexer's wq_b 32 x 128, replicated; dense intermediate 12288 and one shared expert of 2048,
+#: column- then row-parallel.  kv_b_proj runs on the dense-MHA prefill route (its absorbed decode forms are bf16), and the indexer's
+#: wk + weights_proj is bf16.
+GLM53_LINEARS = (("fused_qkv_a_proj", 6144, 2048 + 512 + 64), ("q_b_proj", 2048, 8 * (192 + 64)), ("kv_b_proj", 512, 8 * (192 + 256)),
+                 ("o_proj", 8 * 256, 6144), ("indexer.wq_b", 2048, 32 * 128), ("mlp.gate_up_proj", 6144, 2 * 12288 // 8),
+                 ("mlp.down_proj", 12288 // 8, 6144), ("shared_experts.gate_up_proj", 6144, 2 * 2048 // 8),
+                 ("shared_experts.down_proj", 2048 // 8, 6144))
 #: model -> (its linears, its checkpoint's scale format, its `model_type`)
-MODELS = {"dsv4": (DSV4_LINEARS, "e8m0", "deepseek_v4"), "glm53": (B.DENSE, "f32", "glm_moe_dsa")}
+MODELS = {"dsv4": (DSV4_LINEARS, "e8m0", "deepseek_v4"), "glm53": (GLM53_LINEARS, "f32", "glm_moe_dsa")}
 #: DeepSeek-V4's `wo_a` at TP8: (H local groups, K = 8 heads x 512, N = o_lora_rank), its heads per group and head split
 EINSUM = (2, 8 * 512, 1024)
 HEADS_PER_GROUP, NOPE, ROPE, MAX_POS = 8, 448, 64, 4096

@@ -10,6 +10,9 @@
     }
   ],
   "collaborators": [],
+  "external_posters": [
+    "Codex"
+  ],
   "channels": {
     "agent-coordination": {
       "id": "C0C5RCXL66N",
@@ -50,6 +53,17 @@
       "subscribers": [
         "top"
       ]
+    },
+    "resource-accounting": {
+      "id": "C0CABUKBT2S",
+      "purpose": "Collaborators' questions on compute, memory and network accounting and the GPU model they rest on.",
+      "subscribers": [
+        "compute-accounting",
+        "memory-accounting",
+        "network-accounting",
+        "proofs",
+        "kernels"
+      ]
     }
   },
   "handles": [
@@ -58,7 +72,10 @@
       "holder": "the infra coordinator (bc-5a69647d-04f7-5d94-9ff1-56593e2e1037)",
       "remit": "Machines and task infra: utilization, the scheduler, buying compute, alerts, and one API for agents' jobs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-infra",
-      "usergroup": "S0C5APDSYF9",
+      "usergroup": "S0CA15YVA0P",
+      "retired_usergroups": [
+        "S0C5APDSYF9"
+      ],
       "linear": "INF",
       "owns": [
         "infra/",
@@ -71,14 +88,24 @@
         "558b",
         "9e59",
         "98f5"
+      ],
+      "examples": [
+        "Which machines do we have right now, and what is each one busy with?",
+        "I want to run a long job on a GPU tonight. Where can it go, and how do I start it?",
+        "My run failed or was killed. Why, and where are its logs?",
+        "How much are our machines costing per day, and when does each one shut down?",
+        "Can I get access to a node, or more disk or memory for my job?"
       ]
     },
     {
       "handle": "proofs",
-      "holder": "the proofs coordinator (bc-8f4b652b-17bc-5055-a120-b56940b7c7a9); the research coordinator (bc-8ece7cde) keeps running the merge trains",
+      "holder": "the proofs coordinator (bc-a26cefd0-716d-595d-bf02-8f8a47a711bd, generation 4, up 17:33Z on 19 Oct; generation 3 bc-8f4b652b finishes its workers and stops)",
       "remit": "Proofs: Lean, red team, C-Flock, backend sweeps, consolidation and the merge trains.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (proof)",
-      "usergroup": "S0C5Q6KJZTQ",
+      "usergroup": "S0CAGBJTJF4",
+      "retired_usergroups": [
+        "S0C5Q6KJZTQ"
+      ],
       "linear": "PRF",
       "owns": [
         "fixtures/typed-obligation-v0/",
@@ -90,6 +117,7 @@
         "verity/core/protocols/sampled_proofs/",
         "archive/",
         "benchmarks/one_stage/",
+        "benchmarks/live_challenger/",
         "benchmarks/commitments/",
         "benchmarks/multi_unit/",
         "archive/sp1/benchmarks/dot_product/",
@@ -107,7 +135,15 @@
       "branch_suffixes": [
         "95d4",
         "9b2a",
-        "f39a"
+        "f39a",
+        "11bd"
+      ],
+      "examples": [
+        "What exactly have you proved about the proof system, and what do you still assume?",
+        "If a server cheats on only a small part of its work, how likely is a sampled check to catch it?",
+        "Does checking a proof reveal anything about the model's weights or the user's data?",
+        "Who checks the verifier? What if the verifier program itself has a bug?",
+        "Can one proof vouch for many others, so checking stays cheap at datacenter scale?"
       ]
     },
     {
@@ -115,17 +151,22 @@
       "holder": "the circuits coordinator (bc-21f3d3de-28db-5e5d-964b-d357187449aa)",
       "remit": "Circuits of real workloads: the vLLM integration, the epoch run, sm_120 GEMM, TP2.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (circuit)",
-      "usergroup": "S0C5U3LHMFT",
+      "usergroup": "S0CA15ZF6CX",
+      "retired_usergroups": [
+        "S0C5U3LHMFT"
+      ],
       "linear": "CIR",
       "owns": [
         "integrations/",
         "benchmarks/served_units/",
         "benchmarks/served_commit/",
+        "benchmarks/g2/",
         "tools/verity/circuit_check/",
         "benchmarks/native_peak/",
         "benchmarks/tc_probe/",
         "benchmarks/tc_probe_fp4/",
         "benchmarks/load_time/",
+        "benchmarks/bool_build_cost/",
         "verity/ml/circuits/ops/",
         "integrations/vllm/verity_vllm/program/",
         "integrations/vllm/verity_vllm/query/",
@@ -154,14 +195,24 @@
         "8c79",
         "c491",
         "6f04"
+      ],
+      "examples": [
+        "How do you turn a model like GLM or DeepSeek into a circuit, and how big is that circuit?",
+        "How many gates does one decoding step of a large model take, and which parts of the model dominate?",
+        "How do you know the circuit computes exactly what the GPU kernel actually computed, bit for bit?",
+        "How much slower is serving a model when you record and commit everything it computes?",
+        "Which models and batch sizes have a finished, published circuit record so far?"
       ]
     },
     {
       "handle": "compute-accounting",
-      "holder": "the compute-accounting coordinator (bc-1f5fcd84-768c-5ac6-a73e-0e3a950e61ef); its research lane (bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac), which runs PoUW's relative-security work, posts as it too",
+      "holder": "the compute-accounting coordinator (bc-1f5fcd84-768c-5ac6-a73e-0e3a950e61ef): the served path's interfaces with circuits, kernels and vllm, the stranded-branch landing, and anything else; its research lane (bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac), which posts as it too: the machine model, the Lean accounting statements and their red and blue teams, and PoUW's protocol statements (period, salt, credit form)",
       "remit": "Proof of useful work: verity/core/protocols/pouw, its schemes and their runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
-      "usergroup": "S0C5U3Q04JD",
+      "usergroup": "S0CAB8FRE6R",
+      "retired_usergroups": [
+        "S0C5U3Q04JD"
+      ],
       "linear": "CMP",
       "owns": [
         "verity/core/protocols/pouw/",
@@ -176,12 +227,14 @@
         "benchmarks/pouw/receipts/",
         "benchmarks/numerical/",
         "benchmarks/ppl/",
+        "benchmarks/nci/",
         ".agents/skills/kernel-engineering/",
         "integrations/vllm/verity_vllm/protocol_options/pouw.py",
         "integrations/vllm/verity_vllm/protocol_options/pouw_circuit.py",
         "integrations/vllm/verity_vllm/protocol_options/pouw_cuda/",
         "integrations/vllm/verity_vllm/protocol_options/pouw_device.py",
         "integrations/vllm/verity_vllm/protocol_options/pouw_native.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pass.py",
         "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_device.py",
         "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_graphs.py",
         "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_host.py",
@@ -228,6 +281,13 @@
         "e9ac",
         "ea24",
         "1de3"
+      ],
+      "examples": [
+        "How do you prove a GPU actually did the matrix multiplies it claims, rather than something cheaper?",
+        "What stops a datacenter from counting work done by its host CPU or a spare GPU as the audited GPU's work?",
+        "Where do the peak-throughput numbers for H200, B200 and RTX PRO 6000 come from, and how are they checked?",
+        "What exactly is credited as useful work when serving an LLM, and what isn't?",
+        "How much overhead does the proof of useful work add to inference, and how is it measured?"
       ]
     },
     {
@@ -235,7 +295,10 @@
       "holder": "the memory-accounting coordinator (bc-d7be0308-38ba-5176-93d1-9169ce7d6cd3)",
       "remit": "Proof of useful space: verity/core/protocols/pous, its Lean package and its runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
-      "usergroup": "S0C5VRGBZFE",
+      "usergroup": "S0CAJE0SREV",
+      "retired_usergroups": [
+        "S0C5VRGBZFE"
+      ],
       "linear": "MEM",
       "owns": [
         "Security/Definitions/Pous/",
@@ -245,6 +308,7 @@
         "benchmarks/codec_tensor/",
         "benchmarks/kv_filler/",
         "benchmarks/kv_lifetime/",
+        "benchmarks/live_verifier/",
         "benchmarks/pous/",
         "benchmarks/property_redteam/",
         "benchmarks/rate_redteam/",
@@ -305,7 +369,6 @@
         "Security/Models/Accounting/Guarantees/RateAuditPartial.lean",
         "Security/Models/Accounting/Guarantees/RateAuditRemote.lean",
         "Security/Models/Accounting/Guarantees/RateAuditSketch.lean",
-        "Security/Models/Accounting/Guarantees/Remote.lean",
         "Security/Models/Accounting/Guarantees/Requirement.lean",
         "Security/Models/Accounting/Guarantees/Responder.lean",
         "Security/Proofs/Accounting/Bandwidth.lean",
@@ -328,6 +391,13 @@
         "3cf5",
         "b0c1",
         "93c1"
+      ],
+      "examples": [
+        "How do you know the weights were actually held in GPU memory the whole time, and not reloaded from disk when you checked?",
+        "What stops a node from rebuilding the blocks you ask for on the fly instead of storing them?",
+        "How fast can the node pull data in from its disks or the network, and how does that change the memory number?",
+        "When a server is wiped, how do you prove nothing of the old contents survived?",
+        "What do the 19% memory and 75% bandwidth figures mean, and what are they assuming about the hardware?"
       ]
     },
     {
@@ -335,7 +405,10 @@
       "holder": "the network-accounting coordinator (bc-5c916421-64a5-5c38-94ba-2e28fe629237)",
       "remit": "Network accounting: the network certifier (verity/core/protocols/certifier) and its timing-channel proofs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
-      "usergroup": "S0C6LGGSY6L",
+      "usergroup": "S0CAGBGSPCJ",
+      "retired_usergroups": [
+        "S0C6LGGSY6L"
+      ],
       "linear": "NET",
       "owns": [
         "verity/core/protocols/certifier/",
@@ -344,13 +417,22 @@
         "Security/Models/NetworkCertifier/",
         "Security/Proofs/NetworkCertifier/",
         "benchmarks/network_traces/",
+        "benchmarks/network_e2e/",
         "benchmarks/datacenter/",
-        "benchmarks/network_sim/"
+        "benchmarks/network_sim/",
+        "benchmarks/prove_path/"
       ],
       "branch_suffixes": [
         "728f",
         "a190",
         "061a"
+      ],
+      "examples": [
+        "How do you stop a GPU node from secretly sending data out over the network?",
+        "What does the network certifier record about each link, and who has to trust it?",
+        "How many bits could a cheating machine leak just through when it sends packets?",
+        "If two machines exchange model activations, how do you check the traffic is only what the model computes?",
+        "What happens to the audit if a certifier goes down or a node is under maintenance?"
       ]
     },
     {
@@ -358,7 +440,10 @@
       "holder": "Daniel's desktop agent (f7772a12-d61f-4bbb-8c4f-e79e8d6d30dc), on his laptop beside the console's dev server: it reads its Slack inbox whenever Daniel opens it, so asks queue there, and nothing wakes it (Daniel, 2026-10-16 2:37 PM PDT)",
       "remit": "The live console and docs site: panels, formats, frontends, and what agents publish to them.",
       "charter": "Daniel, 2026-10-11 (via top)",
-      "usergroup": "S0C5LSDENA1"
+      "usergroup": "S0CAAA80KGT",
+      "retired_usergroups": [
+        "S0C5LSDENA1"
+      ]
     },
     {
       "handle": "ci",
@@ -383,6 +468,13 @@
         "4292",
         "2a98",
         "1518"
+      ],
+      "examples": [
+        "When will my pull request land on main, and what is it waiting for?",
+        "Why did my PR get taken out of the merge queue?",
+        "A check failed on my change but I don't think I broke it. Can you look?",
+        "How do I run the same checks locally before I mark my PR ready?",
+        "Why is landing on main slow right now, and is it getting faster?"
       ]
     },
     {
@@ -402,6 +494,13 @@
         "741b",
         "6f1e",
         "fc8d"
+      ],
+      "examples": [
+        "How do I know the Lean proofs actually check, with no sorry or extra axioms?",
+        "What does a security guarantee in Lean assume, and where is that written down?",
+        "My Lean build or proof check runs out of memory or takes hours. What should I do?",
+        "I changed a Lean definition and the check says a record changed. What do I run?",
+        "Can I trust a proof that imports Mathlib or ArkLib, and how are those checked?"
       ]
     },
     {
@@ -417,12 +516,18 @@
         "tools/research/tests/test_slack.py",
         "tools/research/tests/slack_routing_vectors.json",
         "tools/research/src/research/linear.py",
-        "tools/research/tests/test_linear.py"
+        "tools/research/tests/test_linear.py",
+        "integrations/slack-events/"
       ],
       "branch_suffixes": [
         "b252",
         "38e0",
         "e34f"
+      ],
+      "examples": [
+        "Who should I ask about something, and how do I reach them here?",
+        "My question got no answer. Who saw it, and what happens next?",
+        "How do I get my own chat channel, or add someone to it?"
       ]
     },
     {
@@ -453,7 +558,7 @@
     },
     {
       "handle": "vllm",
-      "holder": "the vLLM coordinator (bc-0bd3928c-87e8-56f5-aa82-41779608718d, generation 3, succeeding bc-bfa78636 on 18 Oct)",
+      "holder": "the vLLM coordinator (bc-eb1d6598-b608-5bc3-8420-9ed89a1d49ab, generation 4, up 17:38Z on 19 Oct)",
       "remit": "The vLLM integration: what the served model runs under verification, and its hookup to the protocols.",
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
       "usergroup": "S0C954BELSW",
@@ -464,7 +569,15 @@
       "branch_suffixes": [
         "9411",
         "8350",
-        "718d"
+        "718d",
+        "49ab"
+      ],
+      "examples": [
+        "How do you check that a model served with vLLM computed exactly what it claims to?",
+        "Does verification slow down serving, and by how much?",
+        "Which models and quantizations (like int8 Llama) can you serve under verification today?",
+        "How do you prove the GPUs actually held the model's weights in memory while serving?",
+        "What changes when a model runs across several GPUs (tensor parallel)?"
       ]
     },
     {
@@ -476,6 +589,7 @@
       "linear": "BENCH",
       "owns": [
         "benchmarks/harness/",
+        "benchmarks/recursion_e2e/",
         "benchmarks/specs/",
         "infra/cluster/kinds/benchmarks.toml",
         "benchmarks/judge.py"
@@ -483,6 +597,13 @@
       "branch_suffixes": [
         "47e4",
         "6193"
+      ],
+      "examples": [
+        "How much slower does serving a model get when you add verification, and how did you measure that?",
+        "What's the overhead of the bandwidth audit (or PoUW, or the commitment) compared with plain vLLM?",
+        "Can I rerun one of your benchmark numbers myself, and how?",
+        "Why do two of your overhead numbers for the same thing disagree?",
+        "How do you make sure a benchmark comparison is fair, with the same model, settings and GPU, and warm-ups excluded?"
       ]
     },
     {
@@ -496,6 +617,13 @@
       ],
       "branch_suffixes": [
         "15ad"
+      ],
+      "examples": [
+        "How much slower is serving with the commitments on, compared with plain vLLM at full load?",
+        "Why is the proof-of-work matmul so much slower than a normal int8 matmul, and what would make it faster?",
+        "Is the exact int8 path supposed to be slower than ordinary int8 serving?",
+        "How much GPU time does SHA-512 hashing take next to the model's own work?",
+        "How do you measure the overhead fairly: against which baseline, at what batch size, on which GPUs?"
       ]
     },
     {
@@ -507,6 +635,13 @@
       "owns": [],
       "branch_suffixes": [
         "4207"
+      ],
+      "examples": [
+        "How much more hardware would someone need to secretly train a frontier model under your verification scheme?",
+        "Could a lab hide training inside work it declares and proves as inference?",
+        "Which parts of the training-slowdown claim are proved, and which are still assumptions?",
+        "If a lab hides some of its GPUs from monitoring, how much protection is left?",
+        "What would have to improve for the slowdown to go from about 30x to over 1,000x?"
       ]
     }
   ]

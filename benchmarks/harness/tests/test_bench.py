@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import calendar
 import json
 import os
 import re
@@ -32,7 +33,7 @@ from verity_bench.vllm.presets import (
     served,
 )
 from verity_bench.vllm.result import IdentityMismatch, identity_mismatches, judge, validate
-from verity_bench.vllm.runner import ResidentCapacityError, run_benchmark
+from verity_bench.vllm.runner import ResidentCapacityError, _token_digest, run_benchmark
 from verity_bench.vllm.table import render
 
 
@@ -60,6 +61,7 @@ class FakeEngine:
 
     def warmup(self, point):
         self.events.append(("warmup", self.arm.id, point.id))
+        return {"wall_s": 0.5}
 
     def measure(self, point):
         rep = sum(e[:2] == ("measure", self.arm.id) for e in self.events)
@@ -68,7 +70,7 @@ class FakeEngine:
         self.events.append(("measure", self.arm.id, point.id))
         scale = 1.0 if self.arm.id == "stock-fp8" else 2.0
         return {
-            "token_digest": self.timed_digest or ("bad" if self.bad_tokens else "good"),
+            "token_digest": self.timed_digest or _token_digest({f"{point.id}-0": (8 if self.bad_tokens else 7, 9)}),
             "metrics": {
                 "time_per_output_token_s": scale * slower if self.drift else scale * (rep + 1),
                 "time_to_first_token_s": scale * 2,
@@ -141,6 +143,8 @@ def test_cli_and_presets_use_the_benchmark_package_and_stable_gpu_ids(tmp_path):
 def test_every_toml_spec_strictly_loads():
     loaded = []
     for path in sorted(SPEC_ROOT.glob("*.toml")):
+        if path.name == "pyproject.toml":   # the specs' own suite
+            continue
         first = path.read_text().splitlines()[0]
         loaded.append(load_sweep(path.stem) if "vllm-sweep/v0" in first else load_spec(path))
     sweeps = {d.id for d in loaded if isinstance(d, Sweep)}
@@ -209,6 +213,27 @@ def test_dispatch_forwards_the_point_venv_and_the_launcher_runs_the_point_in_it(
     assert argv == "-m verity_bench _vllm-point --point p"
 
 
+def test_the_launcher_finds_a_nodes_jobs_environment_without_verity_bench_venv(tmp_path):
+    """vy-nebius-2's pinned-vLLM Python is $WORK/jobs/venv312, not pod_bootstrap.sh's $WORK/venv312: with no
+    VERITY_BENCH_VENV the launcher takes the first that exists, and refuses naming every path it tried."""
+
+    root = Path(__file__).resolve().parents[3]
+    launcher = root / "benchmarks/harness/run_point.sh"
+    env = {"PATH": "/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path)}
+    missing = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
+    assert missing.returncode == 2 and f"{tmp_path}/jobs/venv312" in missing.stderr
+    python = tmp_path / "jobs" / "venv312" / "bin" / "python"
+    python.parent.mkdir(parents=True)
+    python.write_text('#!/bin/sh\necho "$0"\n')
+    python.chmod(0o755)
+    ran = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
+    assert ran.returncode == 0, ran.stderr
+    assert ran.stdout.strip() == str(python)
+    unset = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root,
+                           env={**env, "VERITY_BENCH_VENV": str(tmp_path / "nope")}, capture_output=True, text=True)
+    assert unset.returncode == 2 and f"{tmp_path}/nope" in unset.stderr
+
+
 def _spec_with(tmp_path, extra: str) -> Path:
     base = (SPEC_ROOT / "llama31-8b-fp8-1gpu.toml").read_text()
     head, sep, tail = base.partition("\n[preset]\n")
@@ -230,6 +255,19 @@ def test_a_spec_env_and_setup_load_strictly_and_bind_the_identity(tmp_path):
     for bad in ("/etc/profile", "../outside.sh", "benchmarks/harness/no-such.sh"):
         with pytest.raises(ValueError, match="must name a script in the source tree"):
             load_spec(_spec_with(tmp_path, f'setup = "{bad}"'))
+
+
+def test_a_spec_warmups_count_loads_strictly_and_binds_the_identity(tmp_path):
+    assert resolve_spec("llama31-8b-fp8-1gpu").warmups == 1
+    spec = resolve_spec(_spec_with(tmp_path, "warmups = 3"))
+    assert spec.warmups == 3
+    assert spec.config_sha256 != replace(spec, warmups=1).config_sha256
+    with pytest.raises(ValueError, match="warmups must be positive"):
+        load_spec(_spec_with(tmp_path, "warmups = 0"))
+    capped = resolve_spec(_spec_with(tmp_path, "warmups = 2\nmax_warmups = 8"))
+    assert capped.max_warmups == 8 and capped.config_sha256 != replace(capped, max_warmups=None).config_sha256
+    with pytest.raises(ValueError, match="max_warmups must be at least warmups"):
+        load_spec(_spec_with(tmp_path, "warmups = 3\nmax_warmups = 2"))
 
 
 def test_dispatch_forwards_the_spec_env_and_setup_and_the_point_refuses_any_other(tmp_path, monkeypatch):
@@ -270,6 +308,19 @@ def test_a_point_refuses_a_local_checkpoint_whose_files_differ_from_the_spec_dig
     assert f"not the spec's model_digest {digest}" in capsys.readouterr().err
 
 
+def test_a_local_checkpoint_is_bound_by_the_files_a_loader_reads_not_the_hub_snapshots_metadata(tmp_path):
+    preset = load_spec("llama31-8b-fp8-1gpu").preset
+    checkpoint = tmp_path / "model"
+    checkpoint.mkdir()
+    (checkpoint / "config.json").write_text("{}")
+    digest = local_checkpoint(preset, checkpoint).model_digest
+    (checkpoint / ".gitattributes").write_text("*.safetensors filter=lfs\n")
+    (checkpoint / "README.md").write_text("# a model card\n")
+    assert local_checkpoint(preset, checkpoint).model_digest == digest
+    (checkpoint / "generation_config.json").write_text("{}")
+    assert local_checkpoint(preset, checkpoint).model_digest != digest
+
+
 def test_the_launcher_sources_the_setup_before_the_point_runs(tmp_path):
     root = Path(__file__).resolve().parents[3]
     setup = tmp_path / "setup.sh"
@@ -289,57 +340,6 @@ def test_the_launcher_sources_the_setup_before_the_point_runs(tmp_path):
     assert failed.returncode != 0 and failed.stdout == ""
 
 
-def test_the_bandwidth_setup_builds_once_per_source_key_and_every_point_loads_its_own_copy(tmp_path):
-    root = Path(__file__).resolve().parents[3]
-    bin_dir, calls = tmp_path / "bin", tmp_path / "nvcc-builds"
-    bin_dir.mkdir()
-    nvcc = bin_dir / "nvcc"
-    nvcc.write_text(
-        '#!/bin/bash\n'
-        '[ "$1" = --version ] && { echo "nvcc fake ${FAKE_NVCC_VERSION:-1}"; exit 0; }\n'
-        'case " $* " in *" -MM "*) for a; do src=$a; done; echo "x.o : $src"; exit 0 ;; esac\n'
-        'while [ $# -gt 0 ]; do [ "$1" = -o ] && out=$2; shift; done\n'
-        '[ -n "$FAKE_NVCC_PREEMPT" ] && case $out in */wt.so) kill -TERM $PPID; exit 0 ;; esac\n'
-        f'echo "$out" >> {calls}; echo "lib $out" > "$out"\n')
-    nvcc.chmod(0o755)
-    python = tmp_path / "venv312" / "bin" / "python"
-    python.parent.mkdir(parents=True)
-    python.write_text('#!/bin/sh\necho "$VERITY_VLLM_BENCH_WT_LIB $VERITY_VLLM_BENCH_TOPUP_LIB"\n')
-    python.chmod(0o755)
-
-    def point(run: str, **extra: str) -> str:
-        env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path),
-               "RESEARCH_RUN_DIR": str(tmp_path / run), "VERITY_BENCH_LIB_CACHE": str(tmp_path / "cache"), **extra,
-               "VERITY_BENCH_SETUP": "benchmarks/harness/setup/vllm_encoded.sh"}
-        ran = subprocess.run(["bash", "benchmarks/harness/run_point.sh"], cwd=root, env=env, capture_output=True,
-                             text=True)
-        assert ran.returncode == 0, ran.stderr
-        wt, topup = ran.stdout.split()
-        assert wt == f"{tmp_path / run}/setup/wt.so" and Path(topup).read_text().startswith("lib ")
-        return (tmp_path / run / "out/setup/build.txt").read_text().splitlines()[-1]
-
-    first = point("r1")
-    assert first.startswith("built ") and len(calls.read_text().splitlines()) == 4
-    second = point("r2")
-    assert second == "reused " + first.split(" ", 1)[1] and len(calls.read_text().splitlines()) == 4
-    other = point("r3", FAKE_NVCC_VERSION="2")
-    assert other.startswith("built ") and other != first and len(calls.read_text().splitlines()) == 8
-    (tmp_path / "a-file").write_text("")
-    unwritable = point("r4", VERITY_BENCH_LIB_CACHE=str(tmp_path / "a-file" / "cache"))
-    assert unwritable.startswith(f"built {tmp_path}/r4/setup-build/") and len(calls.read_text().splitlines()) == 12
-    cached = sorted(p.name for p in (tmp_path / "cache").iterdir())
-    preempted = subprocess.run(
-        ["bash", "benchmarks/harness/run_point.sh"], cwd=root, capture_output=True, text=True,
-        env={"PATH": f"{bin_dir}:/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path),
-             "RESEARCH_RUN_DIR": str(tmp_path / "r5"), "VERITY_BENCH_LIB_CACHE": str(tmp_path / "cache"),
-             "FAKE_NVCC_VERSION": "3", "FAKE_NVCC_PREEMPT": "1",
-             "VERITY_BENCH_SETUP": "benchmarks/harness/setup/vllm_encoded.sh"})
-    assert preempted.returncode == 143 and preempted.stdout == "", preempted.stderr
-    assert sorted(p.name for p in (tmp_path / "cache").iterdir() if not p.name.endswith(".lock")) == [
-        name for name in cached if not name.endswith(".lock")]
-    assert point("r6", FAKE_NVCC_VERSION="3").startswith("built ")
-
-
 def test_the_bandwidth_spec_runs_memory_accountings_arms_with_receipts_on_and_their_libraries_built():
     spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth")
     assert spec.arms == ("stock-fp8", "bandwidth-plain", "bandwidth-audit")
@@ -356,6 +356,29 @@ def test_the_bandwidth_spec_runs_memory_accountings_arms_with_receipts_on_and_th
         assert f"{name}=" in setup, name
     for source in re.findall(r"benchmarks/[\w/]+\.cu", setup):
         assert (root / source).is_file(), source
+
+
+def test_the_served_bandwidth_spec_is_the_bandwidth_spec_with_compiled_stock_beside_its_graph_path():
+    from verity_bench.vllm import runner
+
+    graph, served_spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth"), resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served")
+    assert served_spec.arms == (*graph.arms, "stock-fp8@compiled")
+    assert served_spec.arm_settings["stock-fp8@compiled"].control == "none"
+    assert replace(graph.preset, id=served_spec.preset.id) == served_spec.preset
+    same = dict(id=served_spec.id, arms=served_spec.arms, arm_settings=served_spec.arm_settings, preset=served_spec.preset)
+    assert replace(graph, **same) == served_spec
+
+    stock, compiled = resolve_arms("stock-fp8,stock-fp8@compiled", (), served_spec.arm_settings)
+    assert compiled.control is None and compiled.execution == "compiled"
+    built = []
+    for arm in (stock, compiled):
+        preset, eager = runner.arm_execution(arm, served_spec.preset, served_spec.eager)
+        built.append(runner.engine_args(preset, arm.precision, resident=False, eager=eager))
+    assert built[0]["compilation_config"] == {"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY",
+                                              "cudagraph_capture_sizes": [1, 8, 32, 128]}
+    assert "compilation_config" not in built[1] and built[1]["execution"] == "compiled"
+    assert not built[0]["enforce_eager"] and not built[1]["enforce_eager"]
+    assert {b["kv_cache_memory_bytes"] for b in built} == {60129542144}
 
 
 def test_a_queued_point_records_its_identity_as_the_key_param_resume_matches():
@@ -518,6 +541,97 @@ def test_resident_engines_interleave_arms_rep_by_rep_and_discard_warmups():
     assert doc["points"][0]["arms"]["candidate"]["metrics"]["time_per_output_token_s"]["ratio_to_stock"]["mean"] == 2
 
 
+@pytest.mark.parametrize("resident_failure", [None, "candidate"])
+def test_every_engine_runs_the_warmups_before_its_first_timed_rep_and_the_schedule_keeps_them(resident_failure):
+    """A block engine's first timed rep after one warm-up was slow on the bandwidth arms (18 Oct, r20261018-215203-b81a):
+    the count is a spec knob in the identity, each engine runs all of them before it times anything, and each warm-up's
+    own summary stays in the schedule."""
+
+    preset, points, arms = inputs()
+    factory = FakeFactory(resident_failure=resident_failure)
+    doc = run_benchmark(preset, arms, points, sweep="quick", reps=3, warmups=3, factory=factory, git_commit="abc")
+    assert doc["identity"]["warmups"] == doc["execution"]["warmups"] == 3
+    lifetimes: dict[str, list[list[str]]] = {}
+    for event in factory.events:
+        if event[0] == "create":
+            lifetimes.setdefault(event[1], []).append([])
+        elif event[0] in ("warmup", "measure"):
+            lifetimes[event[1]][-1].append(event[0])
+    timed = [runs for arm in lifetimes.values() for runs in arm if "measure" in runs]
+    assert timed and all(runs[:3] == ["warmup"] * 3 and "warmup" not in runs[3:] for runs in timed)
+    warm = [s for s in doc["execution"]["schedule"] if s["phase"] == "warmup"]
+    assert len(warm) == 3 * len(timed) and [s["warmup"] for s in warm[:3]] == [0, 1, 2]
+    assert all(s["run"]["wall_s"] == 0.5 for s in warm)
+    with pytest.raises(ValueError, match="warm-up"):
+        run_benchmark(preset, arms, points, sweep="quick", reps=1, warmups=0, factory=FakeFactory(), git_commit="abc")
+    with pytest.raises(ValueError, match="max_warmups"):
+        run_benchmark(preset, arms, points, sweep="quick", reps=1, warmups=3, max_warmups=2, factory=FakeFactory(),
+                      git_commit="abc")
+
+
+def test_an_engine_warms_past_its_minimum_until_two_runs_agree_and_says_when_it_never_did():
+    """r20261018-234437-5511's plain engines warmed in 7.6 s, 2.3 s, 1.26 s and then ran at 1.26 s: a fixed count that
+    happens to cover one host's stall is luck, so past `warmups` an engine warms until two consecutive runs agree."""
+
+    from verity_bench.vllm.runner import _warm
+
+    class Stalls:
+        def __init__(self, walls):
+            self.walls = list(walls)
+
+        def warmup(self, point):
+            return {"wall_s": self.walls.pop(0)}
+
+    point = expand_sweep("quick")[1]
+    schedule = []
+    _warm(Stalls([7.6, 2.27, 1.26, 1.262, 9.9]), point, 2, 8, schedule, {"arm": "plain"})
+    assert [s["run"]["wall_s"] for s in schedule] == [7.6, 2.27, 1.26, 1.262]
+    assert "settled" not in schedule[-1]
+    schedule = []
+    _warm(Stalls([1.0, 1.01, 9.9]), point, 2, 8, schedule, {"arm": "stock"})
+    assert len(schedule) == 2
+    schedule = []
+    _warm(Stalls([5.0, 4.0, 3.0, 2.0, 1.0]), point, 1, 3, schedule, {"arm": "never"})
+    assert len(schedule) == 3 and schedule[-1]["settled"] is False
+    schedule = []
+    _warm(Stalls([5.0, 4.0]), point, 2, 2, schedule, {"arm": "fixed"})
+    assert len(schedule) == 2 and "settled" not in schedule[-1]
+
+
+def test_a_timed_rep_keeps_its_step_times_request_times_and_host_counters():
+    """A slow rep must say where its time went: which steps were slow, which requests waited, and whether the host was
+    busy, ran slower code or waited on the device."""
+
+    from verity_bench.vllm.runner import HostProbe, run_trace
+
+    timing = {
+        "steps": [{"s": 0.0123456789, "prefill_tokens": 512, "decode_tokens": 0},
+                  {"s": 0.002, "prefill_tokens": 0, "decode_tokens": 8}],
+        "requests": {"r-0": {"arrival_s": 0.0, "first_output_s": 0.0141},
+                     "r-1": {"arrival_s": 0.0005, "first_output_s": None}},
+    }
+    assert run_trace(timing, start=12.5, ready=10.0) == {
+        "since_ready_s": 2.5,
+        "step_s": [0.012346, 0.002],
+        "step_prefill_tokens": [512, 0],
+        "step_decode_tokens": [0, 8],
+        "arrival_s": [0.0, 0.0005],
+        "first_output_s": [0.0141, None],
+    }
+    import gc
+
+    allocations = iter([{"num_device_alloc": 10, "num_alloc_retries": 0}, {"num_device_alloc": 13, "num_alloc_retries": 1}])
+    probe = HostProbe(lambda: next(allocations))
+    gc.collect()
+    host = probe.close()
+    assert host.pop("device") == {"num_device_alloc": 3, "num_alloc_retries": 1}
+    assert set(host) == {"loadavg_1m", "process_cpu_s", "thread_cpu_s", "involuntary_switches", "voluntary_switches",
+                         "minor_faults", "major_faults", "gc_s"}
+    assert host["gc_s"] > 0 and all(v >= 0 for v in host.values())
+    assert probe._on_gc not in gc.callbacks
+    assert "device" not in HostProbe().close()
+
+
 def test_resident_failure_falls_back_to_alternating_blocks():
     preset, points, arms = inputs()
     factory = FakeFactory(resident_failure="candidate")
@@ -675,6 +789,380 @@ def test_serving_defaults_give_every_arm_process_one_inductor_cache(monkeypatch)
         factory.create(arm, preset, resident=True)
     assert [e["TORCHINDUCTOR_CACHE_DIR"] for e in spawned] == ["/tmp/verity_bench_inductor_x"] * 2
     assert all(e[runner.INDUCTOR_DIR_MARK] == "1" for e in spawned)
+
+
+def test_a_served_variant_times_a_builtin_engine_in_its_own_execution_under_an_eager_spec(monkeypatch):
+    """Every protocol row times eager against eager while vLLM serves compiled: `llama31-8b-fp8-1gpu-compiled` times
+    the eager rows' stock FP8 engine against itself at vLLM's serving defaults, eager and compiled, in one spec."""
+
+    from verity_bench.vllm import runner
+
+    spec = resolve_spec("llama31-8b-fp8-1gpu-compiled")
+    assert spec.eager and "serving_defaults" not in spec.preset.engine_settings
+    base, served_eager, compiled = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
+    assert [(a.id, a.precision, a.control, a.execution) for a in (base, served_eager, compiled)] == [
+        ("stock-fp8", "fp8", None, None),
+        ("stock-fp8@eager", "fp8", None, "eager"),
+        ("stock-fp8@compiled", "fp8", None, "compiled"),
+    ]
+    assert compiled.to_json()["execution"] == "compiled"
+    assert resolve_arms("stock-fp8,stock-fp8@compiled")[1].control == "stock-fp8"
+    for bad in ("stock-fp8@bi-eager", "nope@compiled"):
+        with pytest.raises(ValueError, match="BUILTIN@LABEL"):
+            resolve_arms(f"stock-fp8,{bad}")
+
+    spawned = []
+
+    class Context:
+        def Pipe(self):
+            class End:
+                def recv(self):
+                    return {"ready": {}}
+
+                def close(self):
+                    pass
+            return End(), End()
+
+        def Process(self, target, args):
+            spawned.append(args)
+            return SimpleNamespace(start=lambda: None, join=lambda: None)
+
+    monkeypatch.setenv(runner.INDUCTOR_DIR_MARK, "")
+    monkeypatch.delenv("TORCHINDUCTOR_CACHE_DIR", raising=False)
+    monkeypatch.setattr(runner.tempfile, "mkdtemp", lambda prefix: f"/tmp/{prefix}x")
+    factory = runner.ProcessEngineFactory(eager=True)
+    factory.context = Context()
+    preset, _ = served(spec.preset, spec.eager)
+    for arm in (base, served_eager, compiled):
+        factory.create(arm, preset, resident=True)
+    built = [runner.engine_args(p, a.precision, resident=True, eager=e) for _, a, p, _, e in spawned]
+    assert [(b["enforce_eager"], b.get("execution"), "compilation_config" in b) for b in built] == [
+        (True, None, False), (True, "eager", False), (False, "compiled", False)]
+    assert {b["kv_cache_memory_bytes"] for b in built} == {8 << 30}
+    assert {b["max_num_batched_tokens"] for b in built} == {4096}
+    assert runner.os.environ["TORCHINDUCTOR_CACHE_DIR"] == "/tmp/verity_bench_inductor_x"
+
+
+def test_the_full_sweep_compiled_spec_is_the_quick_one_over_the_full_sweep():
+    """`llama31-8b-fp8-1gpu-compiled-full` restates the quick spec's factor at every shape, so it must time the same
+    engines: only its id (and its preset's, which must match) and its sweep differ."""
+
+    quick, full = load_spec(SPEC_ROOT / "llama31-8b-fp8-1gpu-compiled.toml"), load_spec(
+        SPEC_ROOT / "llama31-8b-fp8-1gpu-compiled-full.toml")
+    assert (quick.sweep, full.sweep) == ("quick", "full")
+    assert replace(full, id=quick.id, sweep=quick.sweep, preset=replace(full.preset, id=quick.preset.id)) == quick
+
+
+def test_a_served_variants_arm_settings_take_only_its_control(tmp_path):
+    source = (SPEC_ROOT / "llama31-8b-fp8-1gpu-compiled.toml").read_text()
+    path = tmp_path / "spec.toml"
+    section = '[arm_settings."stock-fp8@compiled"]\ncontrol = "none"'
+    assert section in source
+    path.write_text(source.replace(section, '[arm_settings."stock-fp8@compiled"]\ncontrol = "stock-fp8@eager"'))
+    spec = load_spec(path)
+    assert resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)[2].control == "stock-fp8@eager"
+    for old, new, why in ((section, '[arm_settings."stock-fp8@compiled"]\nprecision = "bfloat16"', "takes only its control"),
+                          (section, '[arm_settings."stock-fp8@compiled"]\ncontrol = "stock"', "control must be another arm"),
+                          ('[arm_settings."stock-fp8@compiled"]', '[arm_settings."stock-fp8"]', "must name a protocol arm")):
+        assert old in source
+        path.write_text(source.replace(old, new))
+        with pytest.raises(ValueError, match=why):
+            load_spec(path)
+
+
+def test_a_served_variant_loads_its_own_checkpoint_where_the_presets_is_another_encoding(tmp_path):
+    """`llama31-8b-1gpu-pouw-h1-served` times H1 on the int8 pin over stock FP8 as vLLM serves it, which vLLM can't load
+    from the pin (`verity_int8`): its served variant names the pin's BF16 base, and only its engine loads it."""
+
+    from verity_bench.vllm import runner
+
+    spec = resolve_spec("llama31-8b-1gpu-pouw-h1-served")
+    compiled, int8, h1 = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
+    assert [(a.id, a.precision, a.control, a.execution, a.model) for a in (compiled, int8, h1)] == [
+        ("stock-fp8@compiled", "fp8", None, "compiled", "unsloth/Llama-3.1-8B"),
+        ("stock-int8", "int8_exact", None, None, None),
+        ("pouw:eps1-sm120-h1fx1", None, "stock-int8", None, None),
+    ]
+    assert compiled.to_json()["revision"] == "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814"
+    preset, eager = served(spec.preset, spec.eager)
+    built = [runner.arm_execution(a, preset, eager) for a in (compiled, int8, h1)]
+    assert [(p.model, p.revision, p.case, e) for p, e in built] == [
+        ("unsloth/Llama-3.1-8B", "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814", None, False),
+        ("verity-int8/Llama-3.1-8B-INT8", "723d342ac443b040931242c768df342b0f6f15a7", "LLAMA31_8B_INT8", True),
+        ("verity-int8/Llama-3.1-8B-INT8", "723d342ac443b040931242c768df342b0f6f15a7", "LLAMA31_8B_INT8", True),
+    ]
+    args = runner.engine_args(built[0][0], compiled.precision, resident=True, eager=False)
+    assert (args["quantization"], args["execution"], args["max_num_batched_tokens"]) == ("fp8", "compiled", 64)
+
+    source = (SPEC_ROOT / "llama31-8b-1gpu-pouw-h1-served.toml").read_text()
+    path = tmp_path / "spec.toml"
+    pin = 'revision = "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814"\n'
+    for old, new, why in ((pin, "", "set both"),
+                          ('control = "stock-int8"\n', f'control = "stock-int8"\nmodel = "x/y"\n{pin}',
+                           "only a served variant names its own checkpoint")):
+        assert old in source
+        path.write_text(source.replace(old, new))
+        with pytest.raises(ValueError, match=why):
+            load_spec(path)
+
+
+def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_spec(monkeypatch):
+    """BENCH-17: `pouw:pearl-c-sm120-v1-h3` was refused before any engine started (r20261018-193211-a10c): the harness
+    gave every protocol arm the preset's FP8 and no pouw settings. Its spec's `arm_settings` give it the BF16 checkpoint,
+    stock FP8 as its control, and the device, kernel and setup-built cubin, with the harness's challenger as its coins,
+    which the adapter's refusals accept."""
+
+    from verity.core.protocols.pouw import verifier
+    from verity.core.protocols.pouw.coins import CoinCommitment
+    from verity_vllm.protocol_options import pouw
+    from verity_vllm.protocol_options.interface import Context
+
+    from verity_bench.vllm.arms import protocols_config
+
+    spec = resolve_spec("llama31-8b-1gpu-pouw-protocol")
+    control, arm = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
+    assert (control.id, control.precision) == ("stock-fp8", "fp8")
+    assert (arm.protocols, arm.precision, arm.control) == (("pouw:pearl-c-sm120-v1-h3",), "bfloat16", None)
+    assert arm.protocols_config == {"pouw": {"device": "cuda", "kernel": "benchmarks/pouw/pearl_c_sm120",
+                                             "cubin": "$PEARLC_CUBIN", "schedule": "deferred"}}
+    assert arm.to_json()["protocols_config"] == arm.protocols_config
+    settings = spec.arm_settings["pouw:pearl-c-sm120-v1-h3"]
+    other = replace(settings, protocols_config={"pouw": {**settings.protocols_config["pouw"], "schedule": "serial"}})
+    assert spec.config_sha256 != replace(spec, arm_settings={arm.id: other}).config_sha256
+    assert resolve_arms(spec.arms)[1].control == "stock-fp8" and resolve_arms(spec.arms)[1].precision is None
+
+    with pytest.raises(ValueError, match=r"\$PEARLC_CUBIN"):
+        protocols_config(arm, {})
+    monkeypatch.setattr(verifier, "coins", lambda n: b"\1" * n)
+    config = protocols_config(arm, {"PEARLC_CUBIN": "/run/out/setup/pearl_c_sm120.cubin"})
+    assert config["pouw"]["cubin"] == "/run/out/setup/pearl_c_sm120.cubin"
+    assert isinstance(config["pouw"]["coins"].commitment, CoinCommitment)
+    ctx = Context(stage="serve", enabled=arm.protocols, settings=config)
+    assert pouw.refusals("pearl-c-sm120-v1-h3", ctx) == ()
+    assert "device only" in pouw.refusals("pearl-c-sm120-v1-h3", Context(stage="serve", enabled=arm.protocols))[0]
+
+
+def test_arm_settings_name_a_protocol_arm_of_the_spec_and_a_control_it_runs(tmp_path):
+    source = (SPEC_ROOT / "llama31-8b-1gpu-pouw-protocol.toml").read_text()
+    path = tmp_path / "spec.toml"
+    for control, want in (("stock-fp8", "stock-fp8"), ("none", None)):
+        path.write_text(source.replace('control = "none"', f'control = "{control}"'))
+        spec = load_spec(path)
+        assert resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)[1].control == want
+    for old, new, why in (('arms = ["stock-fp8", "pouw:pearl-c-sm120-v1-h3"]', 'arms = ["stock-fp8", "pouw:ncp-v1"]',
+                           "must name a protocol arm"),
+                          ('[arm_settings."pouw:pearl-c-sm120-v1-h3"]\n', '[arm_settings.stock]\n', "must name a protocol arm"),
+                          ('precision = "bfloat16"', 'precision = "int4"', "precision is one of"),
+                          ('control = "none"', 'control = "stock"', "control must be another arm"),
+                          ('control = "none"', 'control = "pouw:pearl-c-sm120-v1-h3"', "control must be another arm")):
+        assert old in source
+        path.write_text(source.replace(old, new))
+        with pytest.raises(ValueError, match=why):
+            load_spec(path)
+    with pytest.raises(ValueError, match="not in --arms"):
+        resolve_arms("stock-fp8", (), load_spec("llama31-8b-1gpu-pouw-protocol").arm_settings)
+
+
+def test_a_pearl_c_protocol_arms_passes_are_the_adapters_and_the_harness_only_reads_them():
+    """The adapter ends a Pearl-C pass at each ``execute_model`` (`pouw.install`); the harness wraps nothing, finds the
+    device run through the option's ``end_pass`` and reports the running totals of the passes it ended."""
+
+    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+
+    from verity_bench.vllm import runner
+
+    class Run(PPD.PearlCDeviceRun):
+        def __init__(self):
+            self.details = {"passes": []}
+
+        def end_pass(self):
+            self.details["passes"].append({"units": 224, "tiles": 5000, "screened_rows": 64, "failing_rows": 0,
+                                           "unsure_rows": 1})
+
+    run = Run()
+    option = SimpleNamespace(end_pass=run.end_pass, release=lambda: None)
+    llm = SimpleNamespace(protocols=SimpleNamespace(get=lambda name: option if name == "pouw" else None))
+    assert runner._pearl_c_run(llm) is run
+    assert runner._pass_totals(run) == dict.fromkeys(("passes", *runner.PASS_COUNTS), 0)
+    run.end_pass()
+    run.end_pass()
+    assert runner._pass_totals(run) == {"passes": 2, "units": 448, "tiles": 10000, "screened_rows": 128,
+                                        "failing_rows": 0, "unsure_rows": 2}
+    other = SimpleNamespace(protocols=SimpleNamespace(get=lambda name: SimpleNamespace(release=lambda: None)))
+    assert runner._pearl_c_run(other) is None
+    assert runner._pearl_c_run(SimpleNamespace(protocols=None)) is None
+
+
+def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(monkeypatch):
+    """Pearl-C's tokens carry the epoch's live salt, so no stock arm is a protocol arm's token control; its own gate is
+    the experimental arm's call check on the installed run: y against x·Wᵀ, the commitment twice, the negative control."""
+
+    import torch
+
+    from verity_bench.vllm import runner
+
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
+
+    class Run:
+        def __init__(self, y):
+            self.y, self.omit, self.details = y, frozenset(), {"passes": [{}]}
+            self.scheme, self.schedule = SimpleNamespace(name="pearl-c-sm120-v1-h3"), SimpleNamespace(name="deferred")
+            g = torch.Generator().manual_seed(0)
+            self.weights = {w: SimpleNamespace(tensor=torch.randn(n, 32, generator=g).to(torch.bfloat16))
+                            for w, n in ((0, 64), (1, 64), (2, 128))}
+
+        def begin(self, stepped=False):
+            self.stepped = stepped
+
+        def poison(self):
+            pass
+
+        def gemm(self, w, x, W, bias):
+            return self.y(x, W)
+
+        def end(self):
+            return {"transcript_root": "omitted" if self.omit else "root", "activation_roots": "a", "units": 1}
+
+    run = Run(lambda x, W: (x.float() @ W.float().T).to(torch.bfloat16))
+    exact = runner._pearl_c_gate(run)
+    assert exact["passed"] and exact["provided"] and exact["schedule"] == "deferred"
+    assert run.stepped
+    assert sorted({(c["n"], c["m"]) for c in exact["checks"]}) == [(64, 16), (64, 64), (128, 16), (128, 64)]
+    wrong = runner._pearl_c_gate(Run(lambda x, W: torch.zeros(x.shape[0], W.shape[0], dtype=torch.bfloat16)))
+    assert not wrong["passed"] and wrong["provided"]
+
+
+def test_pearl_cs_served_row_is_its_protocol_row_beside_the_compiled_engine():
+    """`llama31-8b-1gpu-pouw-protocol-served` measures Pearl-C over the compiled engine in one run, so its Pearl-C arm
+    and preset are the protocol row's and every arm's engine shares its step budget, sequence bound and KV pool."""
+
+    from verity_bench.vllm import runner
+
+    spec = resolve_spec("llama31-8b-1gpu-pouw-protocol-served")
+    protocol = resolve_spec("llama31-8b-1gpu-pouw-protocol")
+    pearl = "pouw:pearl-c-sm120-v1-h3"
+    assert spec.arm_settings[pearl] == protocol.arm_settings[pearl]
+    assert (spec.setup, spec.sweep, spec.reps, spec.eager) == (protocol.setup, protocol.sweep, protocol.reps, True)
+    assert {**protocol.preset.engine_settings, "max_num_seqs": 128} == spec.preset.engine_settings
+    arms = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
+    assert [(a.id, a.precision, a.control, a.execution) for a in arms] == [
+        ("stock-fp8", "fp8", None, None),
+        (pearl, "bfloat16", None, None),
+        ("stock-fp8@compiled", "fp8", None, "compiled"),
+    ]
+    preset, eager = served(spec.preset, spec.eager)
+    for resident in (True, False):
+        built = [runner.engine_args(p, a.precision or p.precision, resident=resident, eager=e)
+                 for a in arms for p, e in [runner.arm_execution(a, preset, eager)]]
+        assert [(b["enforce_eager"], b.get("execution")) for b in built] == [(True, None), (True, None), (False, "compiled")]
+        shared = ("max_num_batched_tokens", "max_num_seqs", "max_model_len", "gpu_memory_utilization",
+                  "kv_cache_memory_bytes")
+        assert len({tuple(b[k] for k in shared) for b in built}) == 1
+        assert built[0]["kv_cache_memory_bytes"] == 8 << 30 and built[0]["max_num_batched_tokens"] == 4096
+
+    b32 = resolve_spec("llama31-8b-1gpu-pouw-protocol-served-b32")
+    assert (b32.arms, b32.arm_settings, b32.setup, b32.eager, b32.preset) == (
+        spec.arms, spec.arm_settings, spec.setup, spec.eager, replace(spec.preset, id=b32.id))
+    assert b32.reps == 6 and b32.sweep == replace(spec.sweep, id="b32", batches=(32,))
+
+
+def test_an_h1_arm_is_gated_against_exact_int8_and_each_run_gets_a_window_the_adapter_accepts(monkeypatch):
+    """`pouw:eps1-sm120-h1fx1` serves the int8_exact arm's own y, so its token control is that engine without PoUW
+    (`stock-int8`). Its settings need the built engine's model runner, which `verity_vllm.LLM` validates before building,
+    so the harness gives each run its own window: the runner, S from the run's step bound, and fresh in-process coins,
+    which the adapter's refusals accept; a spec can't supply them, and T is the engine's step budget."""
+
+    from verity.core.protocols.pouw import verifier
+    from verity_vllm.protocol_options import pouw
+    from verity_vllm.protocol_options import pouw_h1 as PH
+    from verity_vllm.protocol_options.interface import Context
+
+    from verity_bench.vllm.arms import H1, h1_window, protocols_config, window_steps
+    from verity_bench.vllm.runner import engine_args
+
+    spec = resolve_spec("llama31-8b-1gpu-pouw-h1")
+    control, arm = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
+    assert (control.id, control.precision, control.control) == ("stock-int8", "int8_exact", None)
+    assert (arm.id, arm.protocols, arm.precision, arm.control) == (H1, (H1,), None, "stock-int8")
+    assert H1 == f"pouw:{PH.SCHEME}"
+    preset, eager = served(spec.preset, spec.eager)
+    args = engine_args(preset, "int8_exact", resident=True, eager=eager)
+    assert (args["quantization"], args["attention_backend"], args["enforce_eager"]) == ("verity_int8", "CUSTOM", True)
+    assert args["max_num_batched_tokens"] == spec.arm_settings[H1].protocols_config["pouw"]["rows"] == 64
+    assert args["max_num_seqs"] == 64 and engine_args(load_spec("llama31-8b-fp8-1gpu").preset, "fp8", resident=True,
+                                                      eager=True)["max_num_seqs"] == 128
+    with pytest.raises(ValueError, match="eagerly only"):
+        engine_args(preset, "int8_exact", resident=True, eager=False)
+
+    b8, b32 = expand_sweep("quick")
+    assert (window_steps(b8, 64), window_steps(b32, 64)) == (130, 294)
+    monkeypatch.setattr(verifier, "coins", lambda n: b"\1" * n)
+    runner = SimpleNamespace(execute_model=lambda *a, **k: None, decode_query_len=1)
+    config = protocols_config(arm, {})
+    first, second = (h1_window(config, runner, 294, epoch) for epoch in (0, 1))
+    assert first["pouw"]["runner"] is runner and first["pouw"]["steps"] == 294
+    assert first["pouw"]["coins"] is not config["pouw"]["coins"] and first["pouw"]["coins"] is not second["pouw"]["coins"]
+    assert first["pouw"]["rounds"].challenger.commitment.family("pouw/round") == 294
+    ctx = Context(stage="serve", enabled=arm.protocols, settings=first)
+    assert pouw.refusals(PH.SCHEME, ctx) == ()
+    assert any("'runner'" in r for r in pouw.refusals(PH.SCHEME, Context(stage="serve", enabled=arm.protocols,
+                                                                         settings=config)))
+    with pytest.raises(ValueError, match="harness supplies"):
+        h1_window({"pouw": {"rows": 64, "steps": 10}}, runner, 294, 0)
+
+
+def test_an_h1_window_passes_its_gate_only_static_credited_and_entered():
+    from verity_bench.vllm.runner import h1_gate, h1_summary
+
+    def run(**over):
+        base = dict(verdicts={0: {"credit": True}, 1: {"credit": True}}, refused=[], order_ok=True, steps=130, rows=64,
+                    calls=[0, 1], requests=[0], refused_requests=[], coin_source="in-process",
+                    details={"steps_served": 120, "static": True, "u": "1/2"}, request_gaps=lambda: [])
+        return SimpleNamespace(**{**base, **over})
+
+    good = h1_summary(run())
+    assert good["ok"] and good["served_calls"] == good["credit_gate_passed"] == 2 and good["steps_served"] == 120
+    bad = [h1_summary(run(refused=[{"step": 130, "linear": 0, "m": 8}])),
+           h1_summary(run(details={"static": False})),
+           h1_summary(run(verdicts={0: {"credit": False, "reason": "credit: served-output-not-credited-kernel"}})),
+           h1_summary(run(request_gaps=lambda: ["step 3: 1 row of a request with no entry"])),
+           h1_summary(run(details={"static": True, "unopened": "refused"})),
+           h1_summary(run(verdicts={}))]
+    assert not any(b["ok"] for b in bad)
+    assert bad[2]["credit_gate_refusals"] == ["credit: served-output-not-credited-kernel"]
+    assert h1_gate([good, good])["passed"] and not h1_gate([]).get("passed")
+    gate = h1_gate([good, bad[0]])
+    assert not gate["passed"] and gate["provided"] and gate["failed"] == [bad[0]] and "credits nothing" in gate["coins"]
+
+
+def test_pearl_cs_whole_step_arm_builds_vllms_full_decode_graphs_beside_the_served_protocol_arm(monkeypatch):
+    """`llama31-8b-1gpu-pearl-c-whole-served` times the whole-step arm beside the protocol arm as served (its settings the
+    protocol row's) and the compiled engine. Under the eager spec, the arm's overrides build vLLM's FULL decode graphs at
+    the preset's capture sizes without torch.compile, at the `compiled` label, which `verity_vllm.LLM` accepts, and its
+    run takes the graph path's options and serial schedule."""
+
+    from verity_bench.vllm import runner
+    from verity_bench.vllm.arms import plugin
+    from verity_vllm.pipeline.llm import resolve_options
+
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
+    spec = resolve_spec("llama31-8b-1gpu-pearl-c-whole-served")
+    pearl = "pouw:pearl-c-sm120-v1-h3"
+    assert spec.arm_settings[pearl] == resolve_spec("llama31-8b-1gpu-pouw-protocol").arm_settings[pearl]
+    arms = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
+    assert [(a.id, a.precision, a.control, a.execution, a.experimental) for a in arms] == [
+        ("stock-fp8", "fp8", None, None, False), (pearl, "bfloat16", None, None, False),
+        ("stock-fp8@compiled", "fp8", None, "compiled", False), ("pouw-pearl-c-whole", "bfloat16", None, None, True)]
+    assert arms[-1].engine_label == "graphs-mode0" and arms[-1].to_json()["engine_label"] == "graphs-mode0"
+    whole = plugin(arms[-1])
+    preset, eager = served(spec.preset, spec.eager)
+    preset, eager = runner.arm_execution(arms[-1], preset, eager)
+    built = {**runner.engine_args(preset, "bfloat16", resident=False, eager=eager), **whole.engine_overrides(None)}
+    assert built["compilation_config"] == {"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY",
+                                           "cudagraph_capture_sizes": list(spec.preset.engine_settings["capture_sizes"])}
+    opts = resolve_options(built)
+    assert opts["enforce_eager"] is False and opts["execution"] == "compiled"
+    assert whole.run_options == {"graphs": True, "whole_defer": True, "whole_defer_a": True} and whole.schedule == "serial"
 
 
 def test_a_sweep_crosses_samplings_and_greedy_points_keep_their_ids():
@@ -922,9 +1410,23 @@ def test_an_arm_whose_timed_tokens_differ_from_its_controls_keeps_no_points():
     in its timed reps."""
 
     doc = bench(FakeFactory(timed_digest={"candidate": "other"}))
-    [gate] = [g for g in doc["gates"] if g["kind"] == "timed-tokens"]
+    [gate] = [g for g in doc["gates"] if g["kind"] == "timed-tokens" and g["control"]]
     assert not gate["passed"] and gate["reps"] == [0, 1] and doc["points"] == []
     validate(doc)
+
+
+def test_an_arm_without_a_control_is_timed_on_its_own_gated_tokens_in_resident_mode():
+    """An uncontrolled arm (a Pearl-C protocol arm, whose tokens no stock arm reproduces) must still produce in every
+    timed rep the tokens its gate saw from the same engine; blocks mode times other engines, so it has no such gate."""
+
+    doc = bench(FakeFactory(timed_digest={"stock-fp8": "other"}))
+    [gate] = [g for g in doc["gates"] if g["kind"] == "timed-tokens" and g["arm"] == "stock-fp8"]
+    assert (gate["against"], gate["passed"], gate["reps"]) == ("gate", False, [0, 1]) and doc["points"] == []
+    good = bench()
+    assert all(g["passed"] for g in good["gates"] if g["kind"] == "timed-tokens") and good["points"]
+    blocks = bench(FakeFactory(resident_failure="candidate"))
+    assert blocks["execution"]["interleave"] == "blocks"
+    assert not [g for g in blocks["gates"] if g["kind"] == "timed-tokens" and g["control"] is None]
     good = bench()
     with pytest.raises(ValueError, match="lacks gates"):
         validate({**good, "gates": [g for g in good["gates"] if g["kind"] != "tokens"]})
@@ -994,6 +1496,98 @@ def test_resume_counts_only_a_clean_exited_passing_run_of_the_same_identity_and_
     assert identity != jobs.point_identity("0" * 64, pins, point)
 
 
+def _attempt(run, identity, commit, *, validation="passed", rc=0, dirty=False):
+    return {"schema": "research/attempt/v0.1", "id": run, "tool": {"name": "vllm_bench_point", "version": "0"},
+            "derivation": "drv:" + "0" * 64, "reuse_key": None, "argv": [], "params": {"identity": identity},
+            "key_params": ["identity"], "inputs": {}, "conditions": {}, "key_conditions": [],
+            "source": {"commit": commit, "dirty": dirty}, "closure": None,
+            "execution": {"start_utc": f"{run[1:5]}-{run[5:7]}-{run[7:9]}T{run[10:12]}:{run[12:14]}:{run[14:16]}Z"},
+            "cost": None, "status": {"state": "done", "rc": rc, "validation": validation}, "outputs": {}, "telemetry": None}
+
+
+def _stores(tmp_path, remote_attempts):
+    """A fresh local store whose remote is a directory holding `remote_attempts`, so nothing reaches the network."""
+
+    from research.store import canon
+
+    remote = tmp_path / "remote"
+    (remote / "attempts").mkdir(parents=True)
+    for doc in remote_attempts:
+        (remote / "attempts" / f"{doc['id']}.json").write_bytes(canon.dumps(doc))
+    config = tmp_path / "store.toml"
+    config.write_text(f'[remote]\ntype = "fs"\npath = "{remote}"\n')
+    return tmp_path / "local", config
+
+
+COMMITTED = calendar.timegm((2026, 10, 21, 12, 0, 0))
+
+
+def test_a_point_another_machine_ran_counts_and_an_absent_point_stays_missing(tmp_path):
+    """BENCH-10: the lookup read only this machine's catalog, so a fresh VM saw every point as missing (and `run` would
+    have launched them again). It pulls the remote's attempts since the commit, once, and nothing older."""
+
+    from research.store.local import LocalStore
+
+    commit, found, absent, failed = "a" * 40, "1" * 64, "2" * 64, "3" * 64
+    remote_attempts = [
+        _attempt("r20261021-130000-0001", found, commit),
+        _attempt("r20261021-140000-0002", failed, commit, validation="failed", rc=3),
+        _attempt("r20261018-120000-0003", absent, commit),  # before the commit's margin: never fetched
+        _attempt("r20261021-150000-0004", absent, "b" * 40),
+    ]
+    root, config = _stores(tmp_path, remote_attempts)
+    store = LocalStore(root, config_path=config)
+    logged = []
+    lookup = jobs.StoreCompletion(store, commit_time=lambda c: COMMITTED, log=logged.append)
+
+    assert jobs.StoreCompletion(LocalStore(root, config_path=config), local_only=True)(found, commit) is None
+    assert lookup(found, commit) == "r20261021-130000-0001"
+    assert lookup(absent, commit) is None
+    assert lookup(failed, commit) is None
+    assert sorted(store.attempt_ids()) == ["r20261021-130000-0001", "r20261021-140000-0002", "r20261021-150000-0004"]
+    assert logged == [f"pulled 3 attempts started since r20261020 from {store.remote.describe()} (0 of 3 were here)"]
+
+    later = _attempt("r20261021-160000-0005", absent, commit)
+    (tmp_path / "remote" / "attempts" / f"{later['id']}.json").write_bytes(json.dumps(later).encode())
+    assert lookup(absent, commit) is None, "one pull per commit"
+    again = jobs.StoreCompletion(store, commit_time=lambda c: COMMITTED, log=logged.append)
+    assert again(found, commit) == "r20261021-130000-0001" and len(logged) == 1, "a local hit reads no remote"
+    assert again(absent, commit) == "r20261021-160000-0005"
+    assert logged[-1].startswith("pulled 1 attempts") and logged[-1].endswith("(3 of 4 were here)")
+
+
+def test_without_a_remote_the_lookup_refuses_unless_told_to_read_the_catalog_alone(tmp_path):
+    from research.store.local import LocalStore
+
+    config = tmp_path / "store.toml"
+    config.write_text("")
+    store = LocalStore(tmp_path / "local", config_path=config)
+    with pytest.raises(RuntimeError, match="--local-only"):
+        jobs.StoreCompletion(store, commit_time=lambda c: COMMITTED)("1" * 64, "a" * 40)
+    assert jobs.StoreCompletion(store, local_only=True)("1" * 64, "a" * 40) is None
+
+
+def test_check_on_a_fresh_store_counts_the_points_the_remote_holds(tmp_path, monkeypatch, capsys):
+    root = Path(__file__).resolve().parents[3]
+    commit = "a" * 40
+    monkeypatch.setenv("RESEARCH_SOURCE_SHA", commit)
+    monkeypatch.chdir(root)
+    monkeypatch.setattr(jobs, "commit_time", lambda _root, _commit: COMMITTED)
+    points = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, lookup=lambda identity, commit: None).points
+    ran = [_attempt(f"r20261021-13000{i}-000{i}", item.identity, commit) for i, item in enumerate(points[1:])]
+    store, config = _stores(tmp_path, ran)
+    monkeypatch.setenv("RESEARCH_STORE", str(store))
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(config))
+
+    assert main(["check", "llama31-8b-fp8-1gpu", "--local-only"]) == 1
+    assert f"0/{len(points)} points" in capsys.readouterr().out
+    assert main(["check", "llama31-8b-fp8-1gpu"]) == 1
+    out = capsys.readouterr().out
+    assert f"{len(points) - 1}/{len(points)} points" in out
+    assert f"{points[0].point.id}\t{points[0].identity}\tmissing" in out
+    assert all(f"{item.identity}\t{run['id']}" in out for item, run in zip(points[1:], ran))
+
+
 def test_a_requeued_point_deletes_its_earlier_attempts_verdict_before_it_runs(tmp_path, monkeypatch):
     """Red team, attack 7: a preempted point reruns whole; if it reran in its run directory and died before writing a
     new result.json, the earlier attempt's verdict would stand beside the new attempt's half-written files."""
@@ -1039,3 +1633,21 @@ def test_the_readme_states_the_contract_the_code_keeps():
     [subparsers] = [a for a in _parser()._actions if isinstance(a, argparse._SubParsersAction)]
     public = {name for name in subparsers.choices if not name.startswith("_")}
     assert public == set(re.findall(r"^verity-bench ([a-z]+) ", readme, re.M))
+
+
+def test_a_stopped_bandwidth_setup_removes_its_partial_build_even_when_its_builds_already_exited(tmp_path):
+    """The setup's TERM trap runs under `set -e`: a `kill` of an nvcc that already exited returns nonzero, and without a
+    guard the trap stopped there, exiting 1 and leaving its partial build in the shared cache (memory accounting, 19 Oct)."""
+
+    root = Path(__file__).resolve().parents[3]
+    script = (root / "benchmarks/harness/setup/vllm_encoded.sh").read_text()
+    [body] = re.findall(r"trap '([^']*)' TERM INT", script)
+    partial = tmp_path / "partial"
+    partial.mkdir()
+    run = subprocess.run(
+        ["bash", "-c", f'set -euo pipefail; declare -A VE_PIDS=(); true & VE_PIDS[x]=$!; wait "${{VE_PIDS[x]}}"; '
+                       f'VE_TMP={partial}; {body}'],
+        capture_output=True, text=True,
+    )
+    assert run.returncode == 143, run.stderr
+    assert not partial.exists()

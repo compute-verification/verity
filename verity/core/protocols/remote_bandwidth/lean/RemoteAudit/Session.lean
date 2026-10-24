@@ -13,12 +13,12 @@ its openings coin at W + t, and the append coins in the order drawn). Each event
 * `release(runs, withdrawn)`: rejected `release` unless the runs are a canonical plan of the store with none released
   before, and `withdrawn` is empty or a canonical plan of appended blocks inside the runs that no plan received before
   held (memory-map/v1's withdrawn blocks, released before their encode landed);
-* `receive(t, i, root, plan, step)`: rejected `malformed` (a root not 64 bytes), `order` (not the next root, or a window
-  already final), `late` (past `D_t = b_t + A`), `step` (missing, not above the previous pass's, or 2^64 or more), `plan`
+* `receive(t, i, root, plan, step)`: rejected `malformed` (a root not 64 bytes), `order` (not the next root, a window
+  already final, or past a paced window's k roots), `late` (past `D_t = b_t + A`), `step` (missing, not above the previous pass's, or 2^64 or more), `plan`
   (not a canonical plan of the store so far, whole, as runs or as a change of the previous pass's, or one holding a
   released block), `lifetime` (an appended block that joined a window L or more before);
-* `close(t)`: the window's draws; rejected `few` under `min_passes` roots, `coin` at the last window if an append's coin
-  went unused;
+* `close(t)`: the window's draws, once its roots are final (the next window's first root, `D_t` passed, or a paced
+  window's k roots once its boundary has left); rejected `few` under `min_passes` roots, `coin` at the last window if an append's coin went unused;
 * `verify(t, openings)`: `verifyWindow`'s verdict (`checkWindow` on the draws).
 
 A call `Session` refuses with `SessionError` (out of turn, after the session ended, before a window's roots are final)
@@ -29,6 +29,11 @@ namespace RemoteAudit.Session
 
 def STEP_LIMIT : Nat := 2 ^ 64
 
+/-- `audit.Pace`: a paced session's windows hold at most `k` roots each, and its γ is declared per `windowNs`. -/
+structure Pace where
+  k : Nat
+  windowNs : Nat
+
 /-- `audit.Params`, less what the registration fixes. -/
 structure Params where
   deadlineNs : Nat
@@ -37,6 +42,7 @@ structure Params where
   minPasses : Nat
   windowNs : Nat
   lifetime : Nat
+  pace : Option Pace := none
 
 structure Win where
   challenge : ByteArray
@@ -46,6 +52,8 @@ structure Win where
   post : Array Nat := #[]
   steps : Array Nat := #[]
   heads : Array (Option ByteArray) := #[]
+  stale : Array Nat := #[]
+  arrived : Array Nat := #[]
   boundaryNs : Option Nat := none
   final : Bool := false
   drawn : Option (Array (Nat × Nat)) := none
@@ -205,7 +213,8 @@ def receive (s : State) (t i : Int) (root : ByteArray) (runs : Option (Array (In
   let mut s := s
   if t == s.filling + 1 && i == 0 && t < s.windows.size then
     s := { s with windows := s.windows.modify s.filling ({· with final := true}), filling := t.toNat }
-  else if t != s.filling || i != s.windows[s.filling]!.roots.size || s.windows[s.filling]!.final then
+  else if t != s.filling || i != s.windows[s.filling]!.roots.size || s.windows[s.filling]!.final
+      || s.params.pace.any (fun p => decide ((p.k : Int) ≤ i)) then
     return s.fail s.filling .order
   let t := s.filling
   if let some d := s.deadline t then
@@ -232,7 +241,9 @@ def receive (s : State) (t i : Int) (root : ByteArray) (runs : Option (Array (In
       plans := w.plans.push plan
       post := w.post.push post
       steps := w.steps.push st.toNat
-      heads := w.heads.push head }
+      heads := w.heads.push head
+      stale := w.stale.push below
+      arrived := w.arrived.push now }
   s := { s with windows := s.windows.modify t add, plan, step := st,
                 planned := cover (s.planned ++ plan.runs.filterMap fun (f, c) =>
                   if f + c > N then some (max f N, f + c) else none) }
@@ -246,7 +257,8 @@ def close (s : State) (t : Int) (now : Nat) : Except String (Result × State) :=
   if w.drawn.isSome then return (.refused "the window is not open to draw", s)
   if (s.windows.extract 0 t).any (·.drawn.isNone) then return (.refused "windows are drawn in order", s)
   let d := s.deadline t
-  if !w.final && (match d with | none => true | some d => now ≤ d) then
+  let full := d.isSome && s.params.pace.any fun p => decide (p.k ≤ w.roots.size)
+  if !w.final && !full && (match d with | none => true | some d => now ≤ d) then
     return (.refused "the window's roots are not final", s)
   let s := { s with windows := s.windows.modify t ({· with final := true}) }
   if w.roots.size < s.params.minPasses then return s.fail t .few
@@ -313,13 +325,17 @@ def State.outcome (s : State) : Option String :=
   | none =>
     if s.windows.size == s.params.windows && s.windows.all (·.verdict == some .accept) then some "accepted" else none
 
-/-- What `Session.record` gives of an accepted session: each window's passes' lengths, steps and post-seed reads, its
-challenge's release, its deadline, its openings coin's release and draws, and the session's appended and released
-blocks and its chain over its appends. -/
+/-- What `Session.record` gives of an accepted session, which is all of it but the coin commitment's root, the block
+size and the registration's fields its digest binds: each window's passes' lengths, steps, post-seed reads, heads,
+stale bounds and arrivals, its challenge's release, its deadline, its openings coin's release and draws, and the
+session's store size, appended and released blocks, lifetime cap, pace and chain over its appends. -/
 structure WindowSummary where
   lengths : Array Nat
   steps : Array Nat
   post : Array Nat
+  heads : Array (Option ByteArray)
+  stale : Array Nat
+  arrivedNs : Array Nat
   releasedNs : Nat
   deadlineNs : Nat
   openedNs : Nat
@@ -327,8 +343,11 @@ structure WindowSummary where
 
 structure Summary where
   windows : Array WindowSummary
+  blocks : Nat
   appended : Nat
   released : Nat
+  lifetime : Nat
+  pace : Option Pace
   appends : Option ByteArray
 
 def State.summary (s : State) : Option Summary :=
@@ -339,13 +358,19 @@ def State.summary (s : State) : Option Summary :=
       ({ lengths := w.plans.map (·.length)
          steps := w.steps
          post := w.post
+         heads := w.heads
+         stale := w.stale
+         arrivedNs := w.arrived
          releasedNs := w.releasedNs
          deadlineNs := (s.deadline t).getD 0
          openedNs := w.openedNs.getD 0
          drawn := (w.drawn.map (·.size)).getD 0 } : WindowSummary)
     some
-      { appended := s.extent - s.reg.blocks
+      { blocks := s.reg.blocks
+        appended := s.extent - s.reg.blocks
         released := s.released
+        lifetime := s.params.lifetime
+        pace := s.params.pace
         appends := s.head
         windows := (Array.range s.windows.size).map window }
 

@@ -5,8 +5,11 @@
                      reference raises is partial), and every realization of it must equal it bit for bit: every registered
                      kernel (`verity.ml.circuits.evaluation.self_check`), a template's evaluated target where it is another Definition, and
                      the C-Flock Boolean lowering (`verity_flock.ir_lower`: the whole Definition when it is small, a template's
-                     proof units otherwise); a Boolean Definition with a word counterpart
-                     (`verity.ml.circuits.boolean.trace.word_of`) also equals that word Definition through its word view.  A
+                     proof units otherwise) and, under ``Options.struct_max_gates``, the structural lowering's template
+                     (``c-flock:struct_lower``, `struct_lowering`, evaluated from the template); the word Definition a
+                     Boolean Definition names
+                     (`verity.ml.circuits.boolean.trace.word_of`) must equal the Boolean gates through the word view
+                     (``word:<word>``): the Boolean Definition is the definition.  A
                      registered table a Definition reads (`targets.TABLE_PROBES`) is read lazily and probed at chosen
                      entries (`vectors.table_instances`), recorded under ``table`` with the words the instances read
     ports            a Definition's declared return intervals (`verity.ml.circuits.ports`, PROTOCOL.md §12), which the Build takes
@@ -27,21 +30,24 @@
                      beside it (`q_call`: units, committed bits, values computed in two units; or why it refuses, a warning).
                      Both resolve every parameter leaf, so a Definition over ``partition_max_leaves`` is not partitioned (a
                      warning, ``partition/unchecked``)
-    lowering pins    a lowering's AND/XOR/NOT counts against its pin (a piece's, a Boolean Definition's whole lowering's,
+    lowering pins    a lowering's AND/XOR/NOT counts and its circuit's digest (``type``, `lowering_type`) against its pin, which
+                     must hold both (a piece's, a Boolean Definition's whole lowering's,
                      a template unit's, in the sidecar of the module that defines it or its file in ``pins/``, `sidecars`; a Boolean
                      Definition's lowering has at most its own And gates, besides its builder's commits), a template unit's
                      circuit digest against its C-Flock module's `PINS`, and the Boolean export's gate lists checked against the
-                     unit circuit (`verity_flock.boolean_export`)
+                     unit circuit (`verity_flock.boolean_export`); a gated Definition's circuit digest (``gated``: a Program
+                     holds it as one gate naming the digest, such as N2's head check) against its ``digests`` pin
 
 Correctness and invariant violations are failures, each with a name (``"<check>/<code> <definition> ..."``); redundant and dead
-gates are warnings with counts (they become failures with the re-baseline's common-subexpression pass).  An unpinned lowering
-is a warning.
+gates are warnings with counts (they become failures with the re-baseline's common-subexpression pass).  An unpinned lowering,
+and a pin without its lowering's ``type``, is a warning.
 """
 from __future__ import annotations
 
 import random
 from collections import Counter
 from dataclasses import dataclass, field
+from itertools import pairwise
 from pathlib import Path
 from typing import Any, Callable, Iterable, Sequence
 
@@ -68,7 +74,9 @@ class Options:
     ``reference_budget`` gate evaluations on them (never fewer than ``min_vectors``); ``X`` / ``W`` / ``extras`` the word query;
     Definitions over ``partition_max_gates`` gates or ``partition_max_leaves`` parameter leaves are not partitioned, over
     ``lower_max_gates`` IR gates or about ``lower_max_ands`` ANDs (the piece pins' estimate) not lowered whole;
-    ``input_budget`` bounds instances x input leaves, ``lane_budget`` instances x units when a template's units are evaluated."""
+    ``input_budget`` bounds instances x input leaves, ``lane_budget`` instances x units when a template's units are evaluated;
+    a composite of at most ``struct_max_gates`` IR gates is realized by its structural lowering too (`struct_lowering`; 0, the
+    default: none)."""
 
     vectors: int = 64
     min_vectors: int = 4
@@ -84,6 +92,7 @@ class Options:
     input_budget: int = 1 << 22
     lane_budget: int = 1 << 16
     dead_ids: int = 1 << 17
+    struct_max_gates: int = 0
 
 
 @dataclass
@@ -331,22 +340,25 @@ def target_equivalence(target: Any, definition: Any, opts: Options, F: Findings)
     return {"target": target.id, "compared": len(rows), "mismatches": len(bad)}
 
 
-def _wide_words(t: Any, params: Sequence[Any], ret: Any, arrays: Sequence[np.ndarray], n: int) -> np.ndarray:
-    """`evaluate_words` where an element is wider than its 64 bits (PoUW's 576-bit sums of squares): Python ints, each element
-    through its bits (`verity.ml.circuits.evaluation.bits.evaluate_bits`)."""
+def _wide_words(t: Any, words: Sequence[Any], ret: Any, params: Sequence[Any], arrays: Sequence[np.ndarray], n: int) -> np.ndarray:
+    """`evaluate_words` through the bits (`verity.ml.circuits.evaluation.bits.evaluate_bits`), in Python ints: each argument split
+    into the word Definition's leaves (``words``, ``ret``) and each leaf into its bits, LSB first. For an element wider than its 64
+    bits (PoUW's 576-bit sums of squares), and for a port of single bits: `Array<n, Value<1>>` is n one-bit words on the word side
+    and, as `boolean.bit_type` leaves it, one n-bit element on bits, so the word view (`Value<n>`) is not the word's signature
+    (`DsaWaksmanRows_v2`'s settings)."""
     from verity.ml.circuits.evaluation.batch import type_shape
     from verity.ml.circuits.evaluation.bits import evaluate_bits
 
     ins = []
-    for a, p in zip(arrays, params):
-        widths = BL.elements(p)
+    for a, wp, p in zip(arrays, words, params):
+        widths = wp.leaf_widths()
         rows = np.asarray(a, dtype=object).reshape(n, len(widths))
         ins.append(np.array([[(int(v) >> j) & 1 for v, w in zip(row, widths) for j in range(w)] for row in rows],
                             dtype=np.uint8).reshape(n, *type_shape(p)))
     bits = np.asarray(evaluate_bits(t, *ins)).reshape(n, -1)
-    out = np.zeros((n, len(BL.elements(ret))), dtype=object)
+    out = np.zeros((n, ret.leaves), dtype=object)
     at = 0
-    for e, w in enumerate(BL.elements(ret)):
+    for e, w in enumerate(ret.leaf_widths()):
         for i in range(n):
             out[i, e] = sum(int(b) << j for j, b in enumerate(bits[i, at:at + w]))
         at += w
@@ -354,8 +366,9 @@ def _wide_words(t: Any, params: Sequence[Any], ret: Any, arrays: Sequence[np.nda
 
 
 def word_view(t: Any, opts: Options, F: Findings) -> dict | None:
-    """A Boolean Definition against the word Definition it computes (`verity.ml.circuits.boolean.trace.word_of`), through the word view
-    (`verity.ml.circuits.evaluation.bits.evaluate_words`), on the word Definition's edge and random vectors."""
+    """The word Definition a Boolean Definition names (`verity.ml.circuits.boolean.trace.word_of`) against the Boolean one, which is
+    the definition: on the word Definition's edge and random vectors, the word Definition must equal the Boolean gates through the
+    word view (`verity.ml.circuits.evaluation.bits.evaluate_words`, which evaluates the gates)."""
     if isinstance(t, (PrimitiveDefinition, ScalarReference)) or not is_boolean(t):
         return None
     from verity.ml.circuits.evaluation import evaluate_batch
@@ -366,22 +379,28 @@ def word_view(t: Any, opts: Options, F: Findings) -> dict | None:
         word = word_of(t)
     except KeyError:
         return None
-    pw, _ = signature_of(word)
+    pw, rw = signature_of(word)
     arrays = vectors(pw, 16 * opts.vectors, opts.seed + 2)
-    n = arrays[0].shape[0]
+    n = arrays[0].shape[0] if arrays else 1
     pb, rb = signature_of(t)
-    if max(w for p in (*pb, rb) for w in BL.elements(p)) > 64:
-        want = np.asarray(evaluate_batch(word, *arrays), dtype=object).reshape(n, -1)
-        got = _wide_words(t, pb, rb, arrays, n)
+    single_bits = [BL.word_type(p) for p in (*pb, rb)] != [*pw, rw] and [BL.bit_type(p) for p in (*pw, rw)] == [*pb, rb]
+    if not pw:
+        # a batch evaluator sizes its batch by its arguments, so one without any (a constant) is evaluated as its one instance
+        bits, at = evaluate(t), np.cumsum([0, *rw.leaf_widths()])
+        boolean = np.array([[sum(int(b) << j for j, b in enumerate(bits[a:z])) for a, z in pairwise(at)]], dtype=object)
+        got = np.asarray([evaluate(word)], dtype=object)
+    elif single_bits or max(w for p in (*pb, rb) for w in BL.elements(p)) > 64:
+        boolean = _wide_words(t, pw, rw, pb, arrays, n)
+        got = np.asarray(evaluate_batch(word, *arrays), dtype=object).reshape(n, -1)
     else:
-        want = np.asarray(evaluate_batch(word, *arrays), dtype=np.uint64).reshape(n, -1)
-        got = np.asarray(evaluate_words(t, *arrays), dtype=np.uint64).reshape(n, -1)
-    bad = np.flatnonzero((got != want).any(axis=1)).tolist()
+        boolean = np.asarray(evaluate_words(t, *arrays), dtype=np.uint64).reshape(n, -1)
+        got = np.asarray(evaluate_batch(word, *arrays), dtype=np.uint64).reshape(n, -1)
+    bad = np.flatnonzero((got != boolean).any(axis=1)).tolist()
     if bad:
-        F.fail("correspondence", "word-view-mismatch", t.id, f"[{word.id}]: {len(bad)} of {n} vectors", via=f"word-view:{word.id}",
-               examples=[{"instance": i, "args": _short(instance_args(pw, arrays, i)), "boolean": _short(got[i].tolist()),
-                          "word": _short(want[i].tolist())} for i in bad[:_EXAMPLES]])
-    return {"via": f"word-view:{word.id}", "compared": n, "mismatches": len(bad)}
+        F.fail("correspondence", "word-mismatch", t.id, f"[{word.id}]: {len(bad)} of {n} vectors", via=f"word:{word.id}",
+               examples=[{"instance": i, "args": _short(instance_args(pw, arrays, i)), "word": _short(got[i].tolist()),
+                          "boolean": _short(boolean[i].tolist())} for i in bad[:_EXAMPLES]])
+    return {"via": f"word:{word.id}", "compared": n, "mismatches": len(bad)}
 
 
 # --- Boolean circuits -------------------------------------------------------------------------------------------------------
@@ -438,17 +457,54 @@ def _owner_names(root: Any, n: int) -> Callable[[int], str]:
     return lambda v: BE.DISPLAY.get(own[v].fn, own[v].fn) if own[v] is not None and own[v] is not root else "unit"
 
 
+def lowering_type(C: Any) -> str:
+    """A lowering's digest pin (a pin's ``type``): the digest of the gf2 circuit ``C`` as a flat ``program`` circuit type
+    (`circuit_type`; ``SHA-512("verity/circuit-type/v1" ‖ 0 ‖ canon(content))``, which Lean's `Flock.CircuitType.digest`
+    computes from the same content), so it reads nothing but ``C``."""
+    return circuit_type(C).digest()
+
+
+def circuit_type(C: Any) -> Any:
+    """The gf2 circuit ``C`` as a flat ``program`` circuit type (`verity_flock.circuit_types.from_gf2`), validated. Its input
+    ports are ``C``'s named inputs in order, ``[1, bits]`` each; its items the ANDs and table reads the outputs and assertions
+    reach, in the order ``C`` made them; its output ports ``C``'s named outputs, ``[1, bits]`` each, then its assertion forms
+    (each 0 on an accepted input) as one port ``[n, 1]`` when it has any; a table is named by the SHA-512 of its words."""
+    from verity_flock import circuit_types as CT
+    from verity_flock import tail_pieces as TP
+    from verity_flock import type_trace as TT
+
+    ins = [w for w in C.inputs.values() if w]
+    outs = [w for w in C.outputs.values() if w]
+    asserts = [f for _name, f in C.asserts]
+    tables = {name: (TT.table_sha512(name), TP.TABLE_BITS[name], TP.TABLE_VALUE_BITS.get(name, TP.VALUE_BITS))
+              for name, _idx, _width in C.lookups}
+    t = CT.from_gf2(C, [b for w in ins for b in w], [b for w in outs for b in w] + asserts, [(1, len(w)) for w in ins],
+                    [(1, len(w)) for w in outs] + ([(len(asserts), 1)] if asserts else []), "program", tables)
+    CT.validate(t, lambda d: None)
+    return t
+
+
+def _shown(v: Any) -> Any:
+    return f"{v[:16]}..." if isinstance(v, str) and len(v) > 16 else v
+
+
 def _counts_against_pin(kind: str, key: str, got: dict, pins: dict, F: Findings, definition: str) -> dict:
+    """``got`` (the lowering's counts and its ``type``, `lowering_type`) against its pin: a pin that differs in any field it holds
+    is refused by name. A pin without the lowering's ``type`` is a warning (``untyped``), as an unpinned lowering is, since a
+    branch written before ``type`` lands with count-only pins; `--update-pins` writes it."""
     pinned = pins.get(kind, {}).get(key)
     rec = {"pin": key, "counts": got, "pinned": pinned}
     if pinned is None:
-        F.warn("lowering", "unpinned", definition, 1, f"[{key}]: no pinned counts", pins=kind, pin=key, counts=got)
+        F.warn("lowering", "unpinned", definition, 1, f"[{key}]: no pin", pins=kind, pin=key, counts=got)
         rec["status"] = "unpinned"
-    elif any(pinned.get(k) != v for k, v in got.items() if k in pinned):
-        diff = {k: [pinned.get(k), v] for k, v in got.items() if pinned.get(k) != v}
-        F.fail("lowering", "pin-mismatch", definition, f"[{key}]: " + ", ".join(f"{k} {a} -> {b}" for k, (a, b) in diff.items()), pins=kind,
-               pin=key, counts=got, pinned=pinned)
+    elif diff := {k: [pinned[k], v] for k, v in got.items() if k in pinned and pinned[k] != v}:
+        F.fail("lowering", "pin-mismatch", definition, f"[{key}]: " + ", ".join(f"{k} {_shown(a)} -> {_shown(b)}" for k, (a, b) in diff.items())
+               + " (`circuit-check --update-pins` pins what it measures; review the diff)", pins=kind, pin=key, counts=got, pinned=pinned)
         rec["status"] = "mismatch"
+    elif "type" in got and "type" not in pinned:
+        F.warn("lowering", "untyped", definition, 1, f"[{key}]: no type (`circuit-check --update-pins` pins it)", pins=kind,
+               pin=key, counts=got)
+        rec["status"] = "untyped"
     else:
         rec["status"] = "ok"
     return rec
@@ -514,7 +570,7 @@ def _topp_word(t: Any, arrays: Sequence[np.ndarray], ref: list, F: Findings) -> 
 def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: list, opts: Options, F: Findings, pins: dict,
                    memo: dict | None = None) -> dict:
     """The C-Flock lowering of the whole Definition (a primitive's piece, or a small composite piece by piece) against the
-    reference on the correspondence vectors; its redundant ANDs; a primitive's AND count against the piece pins.  A composite's
+    reference on the correspondence vectors; its redundant ANDs; a primitive's AND count and digest against the piece pins.  A composite's
     mismatch names the pieces that already differ from their own primitive (``memo["pieces"]``: piece -> mismatching vectors)."""
     from verity_flock import gf2
     from verity_flock import ir_lower as IL
@@ -556,7 +612,7 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
         C.output(f"out{k}", o)
     counts = C.counts()
     rows = [i for i, r in enumerate(ref) if r is not None]
-    fin = flat(arrays)[rows]
+    fin = (flat(arrays) if arrays else np.zeros((len(ref), 0), np.uint64))[rows]
     T = len(rows)
     rec: dict[str, Any] = {"lowered": True, "via": "c-flock:ir_lower", "ands": counts["ands"], "compared": T}
     if T:
@@ -581,7 +637,7 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
     if red:
         F.warn("redundant-gates", "boolean", t.id, red, "ANDs on identical operands in its C-Flock lowering")
     if isinstance(t, PrimitiveDefinition):
-        rec["pin"] = _counts_against_pin("pieces", t.id, {"and": counts["ands"]}, pins, F, t.id)
+        rec["pin"] = _counts_against_pin("pieces", t.id, {"and": counts["ands"], "type": lowering_type(C)}, pins, F, t.id)
     elif is_boolean(t):
         from verity.ml.circuits.evaluation.bits import compile as compile_bits
 
@@ -590,7 +646,57 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
         if counts["ands"] - commits > own:
             F.fail("lowering", "ands-added", t.id, f"[c-flock]: {counts['ands'] - commits} ANDs (and {commits} commits) for the "
                    f"Definition's {own} And gates", via="c-flock:ir_lower", ands=counts["ands"], commits=commits, definition_ands=own)
-        rec["pin"] = _counts_against_pin("definitions", t.id, {"and": counts["ands"]}, pins, F, t.id)
+        rec["pin"] = _counts_against_pin("definitions", t.id, {"and": counts["ands"], "type": lowering_type(C)}, pins, F, t.id)
+    return rec
+
+
+STRUCT_VIA = "c-flock:struct_lower"
+
+
+def struct_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: list, F: Findings) -> dict:
+    """The whole composite as `verity_flock.struct_lower` lowers it (each specialized Definition once, its calls, batches and
+    scans kept as calls: the ``flock-ir-tmpl/v2`` template a structural unit stager writes), against the reference on the
+    correspondence vectors, evaluated from the template (`tmpl.evaluate`, never unrolled): input column ``i`` of the template
+    is bit ``i`` of the parameters' leaves concatenated, its one output port the return leaves concatenated. The template
+    must be in the order the Lean reader checks (`tmpl.ordered`). Records the unrolled rows (`tmpl.totals`) and the
+    template's own size."""
+    from verity_flock import struct_lower as SL
+    from verity_flock import tmpl as TM
+
+    if isinstance(t, (ScalarReference, PrimitiveDefinition)):
+        return {"via": STRUCT_VIA, "lowered": False, "reason": "a structural lowering lowers a composite's body"}
+    widths = [w for pt in params for w in pt.leaf_widths()]
+    if any(w > 64 for w in widths):
+        return {"via": STRUCT_VIA, "lowered": False, "reason": "a leaf wider than 64 bits"}
+    try:
+        tm, _lw, _top = SL.lower(t, name=t.id)
+    except (KeyError, NotImplementedError) as e:
+        return {"via": STRUCT_VIA, "lowered": False, "reason": str(e)[:200]}
+    tot, order = TM.totals(tm), TM.ordered(tm)
+    rec: dict[str, Any] = {"via": STRUCT_VIA, "lowered": True, "unrolled_rows": tot["rows"],
+                           "template": {"defs": len(tm.defs), "rows": sum(len(d.rows) for d in tm.defs),
+                                        "calls": sum(len(d.calls) for d in tm.defs)}, "ordered": bool(order["ok"])}
+    if not order["ok"]:
+        F.fail("lowering", "template-unordered", t.id, f"[{STRUCT_VIA}]: {order}", via=STRUCT_VIA)
+        return rec
+    rows = [i for i, r in enumerate(ref) if r is not None]
+    rec["compared"] = len(rows)
+    if not rows:
+        return rec
+    fin = (flat(arrays) if arrays else np.zeros((len(ref), 0), np.uint64))[rows]
+    bits = np.concatenate([(fin[:, j:j + 1] >> np.arange(w, dtype=np.uint64)) & np.uint64(1) for j, w in enumerate(widths)]
+                          + [np.zeros((len(rows), 0), np.uint64)], axis=1).astype(np.uint8)
+    out = TM.unslice_lanes(TM.evaluate(tm, TM.slice_lanes(bits)), len(rows))
+    _p, ret = signature_of(t)
+    at = np.cumsum([0, *ret.leaf_widths()])
+    got = [[int.from_bytes(np.packbits(o[a:b], bitorder="little").tobytes(), "little") for a, b in pairwise(at)] for o in out]
+    want = [[int(x) for x in ref[i]] for i in rows]
+    bad = [i for i in range(len(rows)) if got[i] != want[i]]
+    rec["mismatches"] = len(bad)
+    if bad:
+        F.fail("correspondence", "lowering-mismatch", t.id, f"[{STRUCT_VIA}]: {len(bad)} of {len(rows)} vectors", via=STRUCT_VIA,
+               examples=[{"instance": rows[i], "inputs": _short(fin[i].tolist()), "lowered": _short(got[i]),
+                          "reference": _short(want[i])} for i in bad[:_EXAMPLES]])
     return rec
 
 
@@ -749,6 +855,8 @@ def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = 
     else:
         low = {"lowered": False, "reason": "lowered as its template's units"}
     corr["realizations"].append({"via": "c-flock:ir_lower", **low})
+    if kind == "composite" and arrays is not None and t.gates <= opts.struct_max_gates:
+        corr["realizations"].append(struct_lowering(t, params, arrays, ref, F))
     wv = word_view(t, opts, F)
     if wv is not None:
         corr["realizations"].append(wv)
@@ -777,9 +885,21 @@ def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = 
                               "q_call": q_call(t, opts, F, memo.setdefault("word", {}))}
         entry["redundant_gates"] = {"count": 0}
         entry["dead_gates"] = {"count": 0}
+    if getattr(getattr(t, "defn", t), "gated", False):
+        entry["digest"] = circuit_digest_pin(t, pins, F)
     entry["failures"], entry["warnings"] = F.failures, F.warnings
     done[(t.id, lower_whole, as_call)] = entry
     return entry
+
+
+def circuit_digest_pin(t: Any, pins: dict, F: Findings) -> dict:
+    """A gated Definition's circuit digest, core's `program_digest` of its Program, which the gate a Program holds it as
+    names (`verity.core.protocols.certifier.head_check.gate`), against its ``digests`` pin: the pin a verifier reads in
+    place of the digest is the Definition's."""
+    from verity.ml.circuits.codec import program_digest
+    from verity.ml.circuits.program import Program
+
+    return _counts_against_pin("digests", t.id, {"sha512": program_digest(Program(t))}, pins, F, t.id)
 
 
 # --- one subcircuit -----------------------------------------------------------------------------------------------------------
@@ -858,11 +978,12 @@ def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pi
         def build():
             return S.lane_circuit(int(sub.params["V"]))
     C, root = _traced(build)
+    typ = lowering_type(C)
     counts = _export_counts(build, f"{name} unit")
     rec["export"] = counts
     if counts["flat_ands"] != rec["ands"]:
         F.fail("lowering", "export-count", sub.id, f"[{name}]: the export's circuit has {counts['flat_ands']} ANDs, the layout {rec['ands']}")
-    rec["pin"] = _counts_against_pin("units", sub.id, {k: counts[k] for k in ("and", "xor", "not")}, pins, F, sub.id)
+    rec["pin"] = _counts_against_pin("units", sub.id, {**{k: counts[k] for k in ("and", "xor", "not")}, "type": typ}, pins, F, sub.id)
     red, by = redundant_ands(C, _owner_names(root, len(C.kind)))
     rec["redundant_ands"] = {"count": red, "where": dict(by.most_common())}
     if red:

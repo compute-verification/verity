@@ -307,6 +307,7 @@ def test_struct_parser_declaration_order_and_counts():
     assert [(n, c, s) for n, c, s, _b in fs] == [("a", 6, [3, 2]), ("b", 4, [4]), ("c", 1, [])]
 
 
+@pytest.mark.slow
 def test_honest_program_replays_bit_exactly_across_all_strata(world):
     bmap, committed = world.bmap_and_reader()
     rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=2, seed=3)
@@ -610,8 +611,13 @@ def test_partial_replay_with_named_gaps_is_covered_by_a_complete_form_b_coord_m0
 def test_token_select_first_max_tie_rule():
     logits = np.asarray([0x3F80, 0x4000, 0x4000, 0x3F00], dtype=np.uint16)   # 1.0, 2.0, 2.0, 0.5 -> index 1
     assert RK.token_select_first_max(logits) == 1
-    nan = np.asarray([0x7FC0, 0x3F80], dtype=np.uint16)                         # NaN never wins
-    assert RK.token_select_first_max(nan) == 1
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluation.reference import evaluate
+    from verity_vllm.program.registry import b1
+
+    nan = [[0x7FC0, 0x3F80], [0x3F80, 0x7FC0, 0x4000], [0xFF80, 0x7FC0]]   # NaN never wins a comparison, so a NaN logits[0] is the token
+    assert [RK.token_select_first_max(np.asarray(r, dtype=np.uint16)) for r in nan] == [0, 2, 0]
+    assert [evaluate(bind(b1.TokenSelect, V=len(r)), r)[0] for r in nan] == [0, 2, 0]
 
 
 def test_catch_probability_is_evaluated_over_population_per_stratum(world):
@@ -630,6 +636,7 @@ def test_catch_probability_is_evaluated_over_population_per_stratum(world):
     assert "seed_source" in rep["catch_probability"]["note"]
 
 
+@pytest.mark.slow
 def test_module_strata_cap_floor_and_targets(world):
     """(1) the stratum key carries the module op_path: one stratum per (spec, request, rank, phase, module) so every module of every
     request/phase is sampled; (2) the cap never truncates below one VU per stratum (round-robin order); (3) `--replay-target` pins every VU
@@ -983,6 +990,23 @@ def test_model_weights_provider_reads_buffers_as_well_as_parameters_the_set_the_
     assert read("model.model.layers.0.rotary_emb.cos_sin_cache", 0, 9) is None                              # past the field's end
 
 
+def test_model_weights_provider_serves_an_int32_table_as_its_u32_words():
+    """DeepSeek-V4's hash-routed layers register `ffn.gate.tid2eid` as an int32 Parameter [V, 6]; the in-place reader serves its words
+    as the deferred replay does (`cpu_replay.WORDS`), so a `GatherI32x{V}` row reads the table either way, and an int64 one stays None."""
+    torch = pytest.importorskip("torch")
+
+    class Gate(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.tid2eid = torch.nn.Parameter(torch.tensor([[3, -1, 7], [2, 0, 5]], dtype=torch.int32), requires_grad=False)
+            self.wide = torch.nn.Parameter(torch.tensor([1, 2], dtype=torch.int64), requires_grad=False)
+
+    read = OP.model_weights_provider(Gate(), "")
+    got = read("tid2eid", 0, 6)
+    assert got.dtype == np.uint32 and got.tolist() == [3, 0xFFFFFFFF, 7, 2, 0, 5]
+    assert read("wide", 0, 2) is None
+
+
 # --- [R17 dense, ruling R17-9] RoPE_v1: an evaluator, not a NOT_YET label -----------------------------------------------------------------
 
 def test_rope_v1_is_registered_and_the_rows_are_in_the_population_not_named_away(rope_world):
@@ -1227,6 +1251,7 @@ def test_attention_v3_flipped_value_word_of_the_prefill_is_named_at_every_row_th
     assert {("Attention_v3", 0), ("Attention_v3", 1), ("Attention_v3", 2)} <= fams, fams
 
 
+@pytest.mark.slow
 def test_attention_v3_program_naming_the_wrong_position_for_a_key_is_a_mismatch_and_a_short_history_is_refused_by_name(attn_world):
     """[rev M-0136 sign condition] the history is the Program's refs, never inferred: a Program whose last attention row names the key of
     position 2 in position 1's slot (a duplicated ref) evaluates F over THAT history != the committed output -> mismatch at exactly that
@@ -1603,6 +1628,38 @@ def test_moe_swapped_request_plane_split_fails_named(moe_world):
     assert rep["result"] is False
     assert all(m["request_id"] == "r1" and m["op_path"] == "moe/L0" for m in rep["mismatch"]), rep["mismatch"][:2]
     assert {m["spec"].split("{")[0] for m in rep["mismatch"]} >= {"SiluMul_v1", "MoeExpertGemm_v1"}
+
+
+def _r0_rows_cover_r1(planes):
+    """The binding a B=2 step got before binding.py refused a MoE plane whose rows are not a multiple of the step's tokens: the committed
+    plane carries r0's rows only, and r1's entry is that whole plane at offset 0 (request-local range [0, r0's words])."""
+    def mutate(store, entries):
+        for plane in planes:
+            r0, r1 = (next(e for e in entries if e["identity"]["request_id"] == rid and e["identity"]["step"] == 0 and e["identity"]["op_path"] == "moe/L0"
+                           and e["identity"]["output_member"] == plane) for rid in ("r0", "r1"))
+            n0 = int(r0["identity"]["element_range"][1])
+            store[(0, r0["name"])] = store[(0, r0["name"])][:n0 * (4 if r0["encoding"]["dtype"] in ("f32", "i32") else 2)]
+            r1["identity"]["element_range"], r1["element_offset"] = [0, n0], 0
+    return mutate
+
+
+@pytest.mark.parametrize("planes, failing", [
+    (("router_w", "router_ids", "up", "act", "down", "sum"), {"MoeRouterTopK_v1", "MoeExpertGemm_v1", "MoeSum_v1"}),
+    (("sum",), {"MoeSum_v1"}), (("router_w",), {"MoeRouterTopK_v1", "MoeExpertGemmW_v1"}),
+    (("router_ids",), {"MoeRouterTopK_v1", "MoeExpertGemm_v1", "MoeExpertGemmW_v1"}), (("up",), {"MoeExpertGemm_v1", "SiluMul_v1"}),
+    (("act",), {"SiluMul_v1", "MoeExpertGemmW_v1"}), (("down",), {"MoeExpertGemmW_v1", "MoeSum_v1"})],
+    ids=["every_plane", "sum", "router_w", "router_ids", "up", "act", "down"])
+def test_moe_planes_carrying_r0_rows_only_bound_whole_to_r1_fail_the_replay(moe_world, planes, failing):
+    """Red-team claim 3's MoE case run through the replay (the red team checked coverage only): r1's VUs read r0's plane rows, so every
+    per-request stratum sampling of record (one pick per request x phase x op) fails the replay by name at r1 -- a plane alone at the VU that
+    produces it and the one that reads it; every plane cut at once, at the rows whose inputs come from outside the planes (the router reads
+    the gate logits, the up GEMM the normed input, the MoeSum's `out` copy), while r1's act and down VUs stay consistent with r0's words."""
+    w = moe_world
+    bmap, committed = w.bmap_and_reader(mutate=_r0_rows_cover_r1(planes))
+    rep = SR.sampled_replay(_programs(w), bmap, committed, _weights(w), per_stratum=1, seed=5, workers=0)
+    assert rep["result"] is False and rep["grade"] == "mismatch" and not rep["not_evaluated"], (rep["grade"], rep["not_evaluated"][:3])
+    assert {(m["request_id"], m["step"]) for m in rep["mismatch"]} == {("r1", 0)}, rep["mismatch"][:3]
+    assert {m["spec"].split("{")[0] for m in rep["mismatch"]} == failing
 
 
 def test_moe_plane_mapping_refuses_a_program_that_is_not_pair_major(moe_world):

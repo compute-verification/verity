@@ -8,7 +8,8 @@
   "Proofs.Flock",
   "Proofs.Hash",
   "Proofs.Accounting",
-  "Proofs.Accounting.Bandwidth"
+  "Proofs.Accounting.Bandwidth",
+  "Proofs.Population"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
@@ -38,6 +39,14 @@
   "Proofs.Flock.Claims.Complete.CostWalk": {
    "why": "cost_walk, the tactic that bounds a computation's sends by its head (Flock/Claims/Complete/Count.lean's proof of the goal SendCount), a macro that expands to repeated apply of the module's Cost lemmas, extract_lets, intro and split. It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
    "digest": "31980c57d92439ebfa78113f6020236da361df92073e51a3e32ca499b163bbfb"
+  },
+  "Proofs.Flock.Claims.KS.PushSched": {
+   "why": "push_unfold and lead_unfold, local tactics that unfold the primed prover one node (a `simp only` over Lock's rightSame, leftSame, lockWith, interleaveLock, bind and oracleStrat) in the pushing chooser's proofs (firstS_push, followR_push, lead_push and the rest of the module). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
+   "digest": "34be1e89abec1ac3c72f02d08dc9ac7c78124e56f609216a1ef9b345746e2edf"
+  },
+  "Proofs.Flock.Claims.Recursion.LogWalk": {
+   "why": "retl_walk, the tactic (an elab) that walks RetL goals at elaboration, step by step on the logged computation's head (retlStep, in Recursion/DecodeLog.lean's proofs and the module's own). It reads no files and does no IO, and the kernel replays every proof it builds.",
+   "digest": "5dca0cbd5c9510d395564190eaa9597f5352180152be0e3b481a6ceb301f0435"
   },
   "Proofs.Flock.Soundness.Refine.Walk": {
    "why": "walk_step and ret_walk, the tactics that step through a computation of the executable by its head (Refine/Setup.lean's proofs of the setups' well-formedness), and kernel_rfl, which leaves an equation to the kernel (Composed/TagsJ.lean). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
@@ -184,7 +193,7 @@
     "ack": ["CollisionResistance.romCRAdvantage_le_birthday"]
    },
    "A3-uniform-bytes": {
-    "about": "A3 (UniformRandomBytes, uniform/io-getrandombytes): the operating system's bytes, which the live draw reads through IO.getRandomBytes, are independent and uniform",
+    "about": "A3 (UniformRandomBytes, and per test UniformRandomBytesTest, uniform/io-getrandombytes): the operating system's bytes, which the live draw and the firewall's frame and tap read through IO.getRandomBytes and the prover reads as salts through getrandom(2), are independent and uniform, per test up to eta; it rests on Linux's CRNG (drivers/char/random.c, 5.18 and later) and its reseed on a VM generation change (vmgenid), without which a restored snapshot reuses pads",
     "mentions": ["IO.getRandomBytes"],
     "ack": []
    },
@@ -196,7 +205,7 @@
    "pad-nonvanishing": {
     "about": "Assumptions.PadNonvanishing (zero knowledge): X_L + κ ≠ 0 on the level-0 domain, since Ŵ_cols(ω_q) is bit cols of q",
     "mentions": ["AdditiveNTT.normalizedW", "Polynomial.eval"],
-    "ack": []
+    "ack": ["AdditiveNTT.computableNormalizedWValuesArray_getD", "AdditiveNTT.evalNormalizedWAt_eq_normalizedW", "AdditiveNTT.eval_normalizedW_succ_at_beta_prev", "AdditiveNTT.evaluationPointω_eq_twiddleFactor_of_div_2", "AdditiveNTT.get_sDomain_basis", "AdditiveNTT.normalizedW_is_additive", "AdditiveNTT.normalizedWᵢ_eval_βᵢ_eq_1", "AdditiveNTT.normalizedWᵢ_vanishing"]
    },
    "hm-row-computes": {
     "about": "HmRowComputes (circuit/hm96-sha512-row): the sha512x3 and hm96 slots compute SHA-512 and hm96's commit string, the value binding's circuit side (phase 2i)",

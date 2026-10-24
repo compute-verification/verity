@@ -226,7 +226,7 @@ theorem rankCheckP_ok {m kLog : ℕ} {prior : Array (List F128)} {words : List �
   rfl
 
 /-- `claimPoints` reads coin `0` of rounds below `5 + (m − 6) + (k_log − 6)` and round `1`'s first `m − 13`. -/
-theorem claimPoints_congr_lt {m kLog : ℕ} {f g : ℕ → ℕ → F128}
+theorem claimPoints_congr_reads {m kLog : ℕ} {f g : ℕ → ℕ → F128}
     (h0 : ∀ j < 5 + (m - 6) + (kLog - 6), f j 0 = g j 0) (h1 : ∀ e < m - 13, f 1 e = g 1 e) :
     MaskRank.claimPoints m kLog f = MaskRank.claimPoints m kLog g := by
   unfold MaskRank.claimPoints
@@ -301,7 +301,7 @@ theorem lcRounds_points {k : ℕ} (r : Fin k → Coin) (st : Flock.Stmt) (hm : 1
     rw [hC, getElem!_pos _ 1 (by simp [hs]; omega), Array.getElem_append_left (by simp [hs])]
     simp [Array.getElem_push, hs, sent]
   unfold MaskRank.roundPoints MaskRank.claimsAt
-  refine claimPoints_congr_lt (fun j hj => ?_) (fun a ha => ?_)
+  refine claimPoints_congr_reads (fun j hj => ?_) (fun a ha => ?_)
   · have hj' : j < T.size := by omega
     obtain ⟨b, c, -, -, hn, -⟩ := hround j hj'
     exact key j hj' 0 hn

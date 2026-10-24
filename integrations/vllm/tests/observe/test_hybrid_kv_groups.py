@@ -7,9 +7,9 @@ import dataclasses
 
 import pytest
 
-from verity_vllm.observe.events import StepStart, from_json, to_json
+from verity_vllm.observe.events import Note, StepStart, ViewDesc, from_json, to_json
 from verity_vllm.observe.fold.patterns import GeometryError, kv_group_of, kv_slots
-from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Transparent, Unsupported, resolve_step
+from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Transparent, Unsupported, external_buffers, resolve_step
 from tests.observe.test_patterns_synthetic import BS, by_spec, context, decode_step
 from verity_vllm.observe.fold.tree import step_events
 
@@ -169,3 +169,12 @@ def test_step_start_kv_groups_round_trip_and_old_logs_default_to_none():
     assert back.kv_groups == two.kv_groups and back.block_tables == start.block_tables
     d.pop("kv_groups")                                                  # a log written before the field existed
     assert from_json(d).kv_groups is None
+
+
+def test_the_external_buffers_note_gives_each_modules_kv_cache_as_a_view_on_its_allocations_device():
+    note = Note("external buffers", {"buffers": {
+        "kv_cache[model.layers.1.attn]": {"alloc": 7, "shape": [40, 2, 1, 584], "dtype": "uint8", "offset": 1728, "strides": [1435968, 584, 584, 1]},
+        "runner.kv_caches[0]": {"alloc": 7, "shape": [57454080], "dtype": "uint8"}}})
+    assert external_buffers(note, {7: "cuda:3"}.get) == {
+        "kv_cache[model.layers.1.attn]": ViewDesc(7, 1728, (40, 2, 1, 584), (1435968, 584, 584, 1), "uint8", "cuda:3")}
+    assert external_buffers(Note("another note"), {7: "cuda:3"}.get) == {}

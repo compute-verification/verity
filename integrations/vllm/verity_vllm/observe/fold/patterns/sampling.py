@@ -160,7 +160,8 @@ class TokenSelectGumbelTwoStage:
 class TokenSelectArgmax:
     """`aten.argmax(logits[R,V], dim=-1)` (phase sample, greedy) → `Compute(TokenSelect_v1{V}, rows=R, (PerRow(logits),),
     (PerRow(out),))`.  The registered `TokenSelect_v1` is the argmax over *bf16* logits; float32 logits are Unsupported
-    (reported, not silently accepted)."""
+    (reported, not silently accepted).  An argmax over an integer tensor is not over logits: the integer rule's
+    (`classify_transparent`), as vLLM's `split_decodes_and_prefills` finding a mixed step's first prefill request."""
 
     vocab: int | None = None
     name: str = "sample.argmax_token_select"
@@ -174,6 +175,8 @@ class TokenSelectArgmax:
         outs = node.output_views()
         if not isinstance(x, ViewDesc) or not outs:
             return unsupported(node, "argmax arguments not bound as expected", args={k: _fmt(v) for k, v in a.items()})
+        if is_int(x):
+            return None
         if x.rank == 1:
             logits = ViewDesc(x.alloc, x.offset, (1, x.shape[0]), (x.shape[0] * x.strides[0], x.strides[0]), x.dtype, x.device)
             if dim not in (None, 0, -1):

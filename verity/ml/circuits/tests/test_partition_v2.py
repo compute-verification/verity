@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import inspect
 import json
 import random
 import sys
@@ -84,8 +85,8 @@ def _salts(label: str, n: int) -> list[bytes]:
     return [expand(f"verity/partition/v2/vectors/{label}/salt/{i}", A.INST.salt_bytes) for i in range(n)]
 
 
-def _registered(program, q=None, preds=None, family="test", grid_bits=V.GRID_BITS, label="vtop"):
-    adv = V.build(program, q)
+def _registered(program, q=None, preds=None, family="test", grid_bits=V.GRID_BITS, label="vtop", unchecked=False):
+    adv = (V._build_unchecked if unchecked else V.build)(program, q)
     if preds is None:
         preds = V.from_v1(PO.build(program, q))
     preds = dict(preds)
@@ -141,8 +142,9 @@ def test_query_mode_numbers_units_as_v1(program):
 
 @pytest.mark.parametrize("label,name,q", TT.CASES)
 def test_template_mode_numbers_units_as_v1(label, name, q):
+    """Built unchecked, since the program of two templates has units of two size classes and only the numbering is at issue."""
     P = TT.PROGRAMS[name]
-    adv, rs, reg, st = _registered(P, q, label=name)
+    adv, rs, reg, st = _registered(P, q, label=name, unchecked=True)
     assert V.check(st, rs, P).ok
     tp = PO.TemplatePartition(P, q)
     assert [V.locate(st, V.Reader(rs), i)[1:3] for i in range(adv.units)] == [tuple(tp.locate(i)) for i in range(adv.units)]
@@ -235,19 +237,52 @@ def test_each_global_predicate_refuses(program, label, edit, pedit, code):
 
 def test_the_width_limit_refuses_every_unit_returning_a_32_bit_value():
     """At most 16 bits out, with no exception for one wider value: on v1's program, whose values are all 32 bits, every unit
-    with an output is refused, though `Q_word{16, 32}` admits each as one value of at most W bits and v1 verifies it."""
+    with an output is refused, though `Q_word{16, 32}` admits each as one value of at most W bits and v1 verifies it.  Its
+    units without an output are of the 16-bit class and the others of the 32-bit one, so `build` refuses them and they are
+    built unchecked."""
     P = _v1_program()
     assert PO.verify(PO.build(P), P).ok
+    with pytest.raises(V.MixedClasses):
+        V.build(P)
     for preds in (V.predicates(), V.from_v1(PO.build(P))):
         assert preds["width"] == V.WIDTH == 16
-        adv, rs, _reg, st = _registered(P, preds=preds)
+        adv, rs, _reg, st = _registered(P, preds=preds, unchecked=True)
         v = V.check(st, rs, P)
         assert v.codes == ("unit-too-wide",)
         wide = {g["definition"].split("_v")[0]: [u for u, _ob, _og in g["units"]] for g in v.detail["unit-too-wide"]["gates"]}
         assert wide == {"VMax3": [0], "VPair": [0, 1], "VTwice": [0], "VAddOne": [0], "VFan": [0, 1, 2]}
         assert all([ob, og] == [32, 1] for g in v.detail["unit-too-wide"]["gates"] for _u, ob, og in g["units"])
-    _adv, rs, _reg, st = _registered(P, preds=V.predicates(32))
+    _adv, rs, _reg, st = _registered(P, preds=V.predicates(32), unchecked=True)
     assert V.check(st, rs, P).ok
+
+
+def test_the_size_classes():
+    assert V.UNIT_CLASSES[0] == V.WIDTH and V.UNIT_CLASSES[-1] == V.UNIT_CLASS_MAX == 262_144 and len(V.UNIT_CLASSES) == 15
+    assert [V.unit_class(b) for b in (0, 1, 16, 17, 32, 33, 1024, 262_144, 262_145)] == [16, 16, 16, 32, 32, 64, 1024, 262_144, None]
+
+
+def test_the_builder_refuses_units_of_two_size_classes(program):
+    """One unit per Call puts HPair's two 16-bit returns in one unit of 32 bits out, beside HMax3's unit of 16: refused by
+    name, with the first unit of each class.  `build` takes no argument that skips the refusal; only tests reach
+    `_build_unchecked` (`tests/test_boundaries.py`)."""
+    assert list(inspect.signature(V.build).parameters) == ["program", "q", "owners"]
+    with pytest.raises(V.MixedClasses, match=r"span 2 size classes \(16 bits: HMax3_v1 unit 0; 32 bits: HPair_v1 unit 0\)") as e:
+        V.build(program, owners=lambda fn, g: [0] * g.n)
+    assert e.value.spans == {16: ("HMax3_v1", 0), 32: ("HPair_v1", 0)}
+    with pytest.raises(V.MixedClasses, match=r"32 bits: TDot_v1 unit 0; 64 bits: TScale_v1\{N=2,C=1.5\} unit 0"):
+        V.build(*next((TT.PROGRAMS[n], q) for _l, n, q in TT.CASES if n == "mixed"))
+
+
+def test_the_builder_takes_units_of_one_size_class(program):
+    """`Q_word{16, 32}`'s cut of the BF16 program is all of the 16-bit class, and the population program's instances, 64 bits
+    out each, all of the 64-bit one: each is built, and it holds its class's width but not the class below."""
+    _adv, rs, _reg, st = _registered(program)
+    assert V.check(st, rs, program).ok
+    P, q = next((TT.PROGRAMS[n], q) for _l, n, q in TT.CASES if n == "population")
+    _adv, rs, _reg, st = _registered(P, q, preds=V.predicates(64), label="population")
+    assert V.check(st, rs, P).ok
+    _adv, rs, _reg, st = _registered(P, q, preds=V.predicates(32), label="population")
+    assert V.check(st, rs, P).codes == ("unit-too-wide",)
 
 
 def test_the_unit_count_is_on_the_grid(program):
@@ -379,8 +414,9 @@ def _twice_top() -> Program:
 
 
 def test_owner_function_mode(program):
-    """Any flat cut per Definition is advice: one unit per Call here, checked without a width rule or canonical bound."""
-    adv = V.build(program, owners=lambda fn, g: [0] * g.n)
+    """Any flat cut per Definition is advice: one unit per Call here, checked without a width rule or canonical bound.  Its
+    units are of the 16-bit and the 32-bit classes, so they are built unchecked."""
+    adv = V._build_unchecked(program, owners=lambda fn, g: [0] * g.n)
     assert adv.units == 6 and all(e.kind == V.FLAT for e in adv.entries)
     st = V.statement("t", V.predicates(None), adv, "0" * 128)
     assert V.check(st, V.pad(V.rows(adv)), program).ok

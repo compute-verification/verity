@@ -21,12 +21,21 @@ are reparented to, is one).  A session scope is not the run's own, so there only
 signalled), then the run's own scopes are confirmed empty (CONFIRM_S).  The record names the scopes, what each signal reached and what
 was left.  A run in no scope of its own (a direct run without gpu-lease) is ended by the same steps over its group, session and
 run-dir processes, and the record says so (`fallback`).
+
+Who ends a cancelled run is settled by CONTROL_CANCEL, which `claim` creates at most once: `research cancel` claims it with its
+request before it signals anything, and the runner, once the workload has exited, claims it as closed.  Whichever claims it first
+decides: the cancel's request makes the runner end the run after the grace; a closed one (the runner had recorded the exit
+already) or a runner that is gone makes the cancel end the run itself.  Without it a workload that died of the SIGTERM before the
+request was written left the runner ending only its group (vy-glm53-cpu-2, 20 Oct 06:12Z: five `timeout` stages, each its own
+process group, and their vllm.build children ignored SIGTERM and ran on).
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import signal
+import tempfile
 import time
 from collections.abc import Callable, Iterable
 from pathlib import Path
@@ -45,6 +54,49 @@ OWN_SCOPE_RE = re.compile(r"^(?:cluster-(?P<run>r\d{8}-\d{6}-[0-9a-f]{4})|gpu-le
 #: The time a Sweep waits on; a test replaces both.
 clock = time.monotonic
 sleep = time.sleep
+
+
+def claim(path: Path, doc: dict[str, Any]) -> bool:
+    """Create `path` holding `doc` unless it exists, atomically (a reader sees all of it or no file); whether this call created it."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(doc, f)
+        os.link(tmp, path)
+        return True
+    except FileExistsError:
+        return False
+    finally:
+        os.unlink(tmp)
+
+
+def cancel_request(attempt_dir: Path) -> dict[str, Any] | None:
+    """`research cancel`'s request in CONTROL_CANCEL, once it is there and parses: {"grace_s", "actor", "reason", "scopes"}; None
+    for none, and for the runner's `closed`."""
+    try:
+        doc = json.loads((attempt_dir / CONTROL_CANCEL).read_text())
+        return doc if isinstance(doc, dict) and float(doc.get("grace_s")) >= 0 else None
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def runner_alive(attempt_dir: Path, stat: Callable[[int], dict[str, Any] | None] = stat_fields) -> bool:
+    """Whether the runner that started the workload still runs: the writer of status.json's `running` transition that names the
+    group (its `stream`, host:pid:starttime)."""
+    try:
+        st = json.loads((attempt_dir / "status.json").read_text())
+    except (OSError, ValueError):
+        return False
+    for t in st.get("transitions") or []:
+        if isinstance(t, dict) and t.get("state") == "running" and t.get("pgid") is not None and t.get("stream"):
+            try:
+                _, pid, start = str(t["stream"]).rsplit(":", 2)
+                s = stat(int(pid))
+            except ValueError:
+                return False
+            return s is not None and s["state"] not in ("Z", "X") and (start == "na" or str(s["starttime_ticks"]) == start)
+    return False
 
 
 def run_dir_of(pid: int) -> str | None:
@@ -110,13 +162,20 @@ class Sweep:
         if leader_start is None and (st := stat(leader)) is not None:
             leader_start = st["starttime_ticks"]
         self.leader_start = leader_start
-        self.own: dict[str, str] = {s: "named by the cancel" for s in scopes if OWN_SCOPE_RE.match(s.rsplit("/", 1)[-1])}
+        self.own: dict[str, str] = {}
+        self.name(scopes)
         self.seen: set[str] = set()                      # every cgroup a run's process was found in
         self.sent: dict[str, list[str]] = {}             # signal name -> the processes it reached
         self.denied: list[str] = []
         self.left: list[str] = []
         self.ended = False
         self._runner: dict[int, bool] = {}
+
+    def name(self, scopes: Iterable[str]) -> None:
+        """Take `scopes` as the run's own, those whose name says so."""
+        for s in scopes:
+            if OWN_SCOPE_RE.match(s.rsplit("/", 1)[-1]):
+                self.own.setdefault(s, "named by the cancel")
 
     def _is_runner(self, pid: int) -> bool:
         if pid not in self._runner:
@@ -209,12 +268,13 @@ class Sweep:
             sleep(POLL_S)
         return left
 
-    def end(self, grace_s: float = GRACE_S, *, termed: bool = False) -> dict[str, Any]:
+    def end(self, grace_s: float = GRACE_S, *, termed: bool = False, scopes: Callable[[], Iterable[str]] = tuple) -> dict[str, Any]:
         """SIGTERM (unless `termed`: it was sent already), the grace, SIGKILL to whatever is left then (planned again, so what was
-        started during the grace too), and the confirmation that nothing is; the record."""
+        started during the grace too, in the scopes `scopes()` names by then), and the confirmation that nothing is; the record."""
         if not termed:
             self.signal(signal.SIGTERM)
         self.wait(grace_s)
+        self.name(scopes())
         self.signal(signal.SIGKILL)
         self.wait(CONFIRM_S)
         self.left = [_brief(s) for s in self.plan().values()]

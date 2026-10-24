@@ -189,7 +189,7 @@ def _block(B, S, q, kv, e_max, e_sum, acc):
     acc = B.batch(EW.F32Mul, acc, re, axes=(0, None))
     pb = B.batch(BG.F2fpBf16, p, axes=(0,))
     pmb = B.call(BG.F2fpBf16, pm) if pm is not None else None
-    zero16 = c.word(0, 16)
+    zero16 = c.zeros(BF16)
     for g in range(BN // 16):
         k0 = 16 * g
         prow = Coll(A16, concat([(pb[k0 + j] if k0 + j < NVIS else pmb).refs for j in range(16)]))
@@ -217,8 +217,7 @@ def _head(B, S, q, kv):
     T, BN = S.T, S.BN
     _check("TritonMlaDecodeHead_v1", SPLITS_is_1=S.SPLITS == 1, BN_is_32=BN == BLOCK_N, T_positive=T >= 1)
     c = _Bits(B)
-    z = c.word(0, 32)
-    e_max, e_sum, acc = c.word(NEG_INF, 32), z, Coll(Array(S.DL, F32), concat([z.refs] * S.DL))
+    e_max, e_sum, acc = c.word(NEG_INF, 32), c.zeros(F32), c.zeros(Array(S.DL, F32))
     for lo in range(0, T, BN):
         hi = min(T, lo + BN)
         blk = bind(TritonMlaBlock, DL=S.DL, DR=S.DR, NVIS=hi - lo, BN=BN, SCALE=S.SCALE, DOT=S.DOT)

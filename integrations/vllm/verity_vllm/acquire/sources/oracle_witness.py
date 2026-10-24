@@ -4,10 +4,12 @@ The Commit commits each align call's members (`moe_align_source`, `MEMBERS`) and
 (`moe_align_source.CaptureWitness`, `witness_file`).  They are functions of the router's top-k ids as well as of the order atomicAdd
 hands out each expert's slots in: `rank` is a pair's order within its expert, `start` and `blk` follow from the per-expert counts and
 `rank`, and `par` from the counts alone.  So a differing witness says the routing or the schedule differs, and `implied` names which it
-can be.  Nothing is exempt (`WITNESS_RULE`): routing (the top-k ids and weights) is compared across the runs, so every committed
-collective is compared with the capture's bit for bit, and a differing witness FAILS the match by name.  A schedule difference alone
-would be exempt only where the capture replays the committed schedule, which it does not yet, so a pair of runs whose schedules differ
-FAILS too, named as such.
+can be.  The schedule decides each pair's block and so the expert GEMM's split-K cuts, and with them the low bits of every value
+downstream.  So the Commit replays the capture's schedule (`moe_align_source.arm_replay`, the capture's `schedule_file`): every align
+call whose top-k ids are the capture's takes the capture's order, and the two runs compute under one schedule wherever they route
+alike.  Nothing is exempt (`WITNESS_RULE`): every committed collective is compared with the capture's bit for bit, and a differing
+witness FAILS the match by name; it means the routing differs, or the capture recorded no schedule to replay (`schedule_replay` in the
+summary counts both).
 """
 from __future__ import annotations
 
@@ -23,6 +25,11 @@ def witness_file(rank: int) -> str:
     return f"align.rank{rank}.jsonl"
 
 
+def schedule_file(rank: int) -> str:
+    """The capture's align schedule at ``rank``: each call's step, module, top-k ids and rank (`moe_align_source.CaptureWitness`)."""
+    return f"align_schedule.rank{rank}.pt"
+
+
 def digest(b: bytes) -> str:
     """A witness member's digest: sha256 of its committed bytes (the i32 words' float32 view)."""
     return hashlib.sha256(b).hexdigest()
@@ -30,11 +37,11 @@ def digest(b: bytes) -> str:
 
 #: the fields of a rank's oracle a Commit's summary carries
 SUMMARY_KEYS = ("verdict", "steps_compared", "tensors", "compared", "equal", "mismatch_n", "missing_n", "not_in_oracle_n", "by_member",
-                "witness_counts", "witness_differs", "why", "error")
+                "witness_counts", "witness_differs", "schedule_replay", "why", "error")
 WITNESS_RULE = ("nothing is exempt: every paired tensor is compared bit for bit, and an MoE align witness that differs between the runs "
                 "FAILS by name with what it implies (implied): align.par, or align.start / align.blk with align.rank equal, differ only "
-                "when the routing does; align.rank differs when the routing or the schedule does, and fails too until the capture replays "
-                "the committed schedule")
+                "when the routing does; align.rank differs when the routing or the schedule does, and the Commit replays the capture's "
+                "schedule wherever its routing is the capture's (schedule_replay), so there it differs only when the routing does")
 
 
 def implied(members: Iterable[str]) -> str:
@@ -112,8 +119,8 @@ def _why(res: dict[str, Any]) -> str:
     if wit["differs"]:
         w, wd = wit["differs"][0], res["witness_differs"]
         return (f"{wd['n']} MoE align witness(es) differ from the capture's, {wd['routing']} implying a routing difference (first: step {w['step']} "
-                f"{w['module']} {w['members']}, implies {w['implies']}): routing is compared, never exempt, and the capture does not replay "
-                "the committed schedule" + (f"; also {_mismatch_text(res)}" if res["mismatch_n"] else ""))
+                f"{w['module']} {w['members']}, implies {w['implies']}): routing is compared, never exempt, and the capture's schedule is "
+                "replayed only where the routing is equal (schedule_replay)" + (f"; also {_mismatch_text(res)}" if res["mismatch_n"] else ""))
     if res["missing_n"] or res["not_in_oracle_n"]:
         return (f"{res['missing_n']} oracle collective(s) missing in the commit, {res['not_in_oracle_n']} committed member(s) not in the oracle "
                 f"(first {(res['missing_in_commit'] or res['committed_not_in_oracle'])[0]})")
@@ -122,4 +129,5 @@ def _why(res: dict[str, Any]) -> str:
     return "no tensor compared"
 
 
-__all__ = ["MEMBERS", "ROUTING", "ROUTING_OR_SCHEDULE", "SUMMARY_KEYS", "WITNESS_RULE", "digest", "implied", "judge", "witness_file"]
+__all__ = ["MEMBERS", "ROUTING", "ROUTING_OR_SCHEDULE", "SUMMARY_KEYS", "WITNESS_RULE", "digest", "implied", "judge", "schedule_file",
+           "witness_file"]

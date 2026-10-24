@@ -16,7 +16,7 @@ import torch
 import methodology
 from gates import Gates
 from matmul import MM, Run, run_chain
-from model import Config, Layer, Weights, check_reference, head, rotary
+from model import Config, Weights, check_reference, head, make_layer, rotary
 from spec import HEAD
 from steps import FIRST, GROUP
 
@@ -37,8 +37,8 @@ def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list,
     if any(a.needs_calib for a in arms) and calib_ids is None:
         raise ValueError("an arm reads calibration statistics: pass the calibration windows")
     use_calib = calib_ids is not None and any(a.needs_calib for a in arms)
-    gptq_arms = [a for a in arms if any(s.defn.name == "int8" and s.kw.get("gptq") for s in a.linear)]
-    W = Weights(snapshot)
+    gptq_arms = [a for a in arms if any(s.defn.name in ("int8", "native") and s.kw.get("gptq") for s in a.linear)]
+    W = Weights(snapshot, cfg.layers)
     top = W.read(["model.embed_tokens.weight", "model.norm.weight"])
     emb = top["model.embed_tokens.weight"].to(device=device, dtype=torch.bfloat16)
     N, T = ids.shape
@@ -61,7 +61,7 @@ def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list,
     with torch.no_grad():
         for li in range(cfg.layers):
             t0 = time.time()
-            layer = Layer(cfg, li, W.layer(li), device)
+            layer = make_layer(cfg, li, W.layer(li), device)
             if li + 1 < cfg.layers:
                 W.prefetch(li + 1)
             cache: dict = {}
@@ -126,6 +126,7 @@ def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list,
         norm_w = top["model.norm.weight"].to(device=device, dtype=torch.bfloat16)
         name = "lm_head.weight" if "lm_head.weight" in W.where else "model.embed_tokens.weight"
         head_w = W.read([name])[name].to(device=device, dtype=torch.bfloat16)
+        W.close()
         arm_of = {stream_key(a, s): (a, s) for a, s in runs}
         head_layer, head_cache = types.SimpleNamespace(li=cfg.layers), {}
 
@@ -137,7 +138,7 @@ def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list,
             if not steps:
                 return None
             return lambda x, c: run_chain(steps, MM("linear", HEAD, run, x.float(), head_w, maps=(lambda t: t.float(),),
-                                                    draws=[2 * c]))
+                                                    extra={"weight64": head_w.double}, draws=[2 * c]))
 
         nll = {}
         for k, h in [("bf16/s0", ref)] + list(streams.items()):

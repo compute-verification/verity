@@ -45,15 +45,33 @@ def _source(legacy: bool, source: bytes | None) -> None:
         raise ValueError("a non-legacy challenge needs a source: an auditor key")
 
 
+class NoRunRoot(ValueError):
+    """A run whose committer left a step uncommitted has no run root to draw from."""
+
+
+def run_root_of(run: Any) -> bytes:
+    """``run``'s root (a `committer_api.RunCommitment`: rows-sha512's 64 bytes, or vllm-v1's 32), the one its challenge
+    derives from.  A run with a step its committer did not commit (a placeholder root, the step's error in
+    ``run.extra["errors"]``) has none: `NoRunRoot`, naming those steps and the first error."""
+    root = bytes(run.run_root)
+    if len(root) in (32, 64):
+        return root
+    bad = [s.step for s in run.steps if len(s.root) not in (32, 64)]
+    errors = list((run.extra or {}).get("errors") or [])
+    raise NoRunRoot(f"no run root: {len(bad)} of {len(run.steps)} steps not committed (steps {bad[:8]}"
+                    f"{' ...' if len(bad) > 8 else ''}); first error: {errors[0] if errors else 'none recorded'}")
+
+
 def challenge_positions(run_root: bytes, leaves_per_step: list[int], k: int, salt: bytes = b"", *, legacy: bool = LEGACY,
                         source: bytes | None = None) -> list[tuple[int, int]]:
     """`k` committed leaves as (step, leaf within the step), uniform over all leaves with replacement.  Deterministic, so
     the harness and a verifier derive the same list from (root, layout sizes, k, salt) and, off legacy, the source.
 
-    Legacy: 8-byte words of sha256(tag || root || salt || counter), each reduced mod the leaf total."""
+    Legacy: 8-byte words of sha256(tag || root || salt || counter), each reduced mod the leaf total.  The root is vllm-v1's 32
+    bytes or a SHA-512 root's 64 (rows-sha512, the TP run root)."""
     _source(legacy, source)
-    if len(run_root) != 32:
-        raise ValueError("run root must be 32 bytes")
+    if len(run_root) not in (32, 64):
+        raise ValueError(f"a run root is 32 bytes (vllm-v1) or 64 (SHA-512), not {len(run_root)}")
     total = sum(leaves_per_step)
     if total == 0 or k <= 0:
         return []

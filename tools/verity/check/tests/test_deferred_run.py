@@ -28,7 +28,7 @@ def _main(monkeypatch, tmp_path, argv):
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
     monkeypatch.delenv("VERITY_SKIP_STORE", raising=False)
     monkeypatch.setattr(CHECK.SUITES, "foreign", lambda members, env: None)
-    monkeypatch.setattr(CHECK, "run", lambda out, n, cache, keep_going, only: got.append(only) or (True, []))
+    monkeypatch.setattr(CHECK, "run", lambda out, n, cache, keep_going, only, *packs: got.append(only) or (True, []))
     return CHECK.main(argv), got[0] if got else None
 
 

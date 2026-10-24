@@ -22,7 +22,10 @@ every earlier workload) and truncated to the exact planned length.  Sampling `st
 independent stored seed per request (`requests[i].seed`, read by `load_workload`).  `stoch-t0.8-p1`: the same without the top-p mask (temperature and
 Gumbel-max only).  Arrivals `staggered`: request 0 at 0 s, the
 others at seeded offsets over the first ~60 % of a full-length run; stored as `arrival_offsets_s` and as the step-indexed
-`arrive_step` the loaders consume (`arrive_step = round(offset_s / nominal_step_s)`, nominal_step_s = 0.010, recorded).
+`arrive_step` the loaders consume (`arrive_step = round(offset_s / nominal_step_s)`, nominal_step_s = 0.010, recorded), declared
+where the serving loop admits it (`arrivals.realized_arrive_steps`): an arrival after every earlier request has finished is the
+forward after the last of them, since the loop never idles.  The TP Commit places the Build's manifest at the declared steps, so a
+declaration the engine doesn't realize leaves the served identities unbound.
 `--shared-prefix N` (a prefix-caching row): every prompt longer than N starts with the same N tokens of one seeded passage, then its own
 text (`requests[i].shared_prefix_tokens`), the row's `engine.args.enable_prefix_caching` is true, and `--check` requires a request
 longer than N to arrive after the first one (a hit needs the first one's blocks computed).
@@ -41,8 +44,10 @@ from pathlib import Path
 import numpy as np
 from dataclasses import dataclass
 
-from verity_vllm.config import CHECKPOINTS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, RowConfig, option, row_execution, row_world
+from verity_vllm.config import (CHECKPOINTS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, RowConfig, option, row_execution, row_world,
+                                rows_of_record)
 from verity_vllm.engine import served
+from verity_vllm.engine.arrivals import realized_arrive_steps
 from verity_vllm.engine.profiles.transport import row_custom_all_reduce_off, row_p2p_env
 
 CORPUS = resources.files("verity_vllm") / "engine" / "profiles" / "corpus_coverage.json"
@@ -54,7 +59,12 @@ SAMPLING = {
     "stoch-t0.8-p1": {"temperature": 0.8, "top_p": 1.0, "top_k": 0},
 }
 NOMINAL_STEP_S = 0.010          # a decode step of the 1–2B models on L40S (R11: 7.5–10.9 ms); converts arrival seconds -> arrive_step
+ARRIVE_STEP_RULE = ("realized_arrive_steps of round(offset_s / nominal_step_s): an arrival after every earlier request has finished "
+                    "is declared at the forward after the last of them, where the serving loop admits it")
 MIN_CAP = 2                     # the "very short" output cap (prefill + one decode step)
+#: the row file's reason for the switch a target with the int8 attention in scope sets (`TargetProfile.engine_args`)
+INT8_ATTENTION_REASON = ("TargetProfile.int8_exact serves the exact-int8 attention (engine.int8_attention_vllm.Int8AttentionImpl), "
+                         "registered as vLLM's CUSTOM backend")
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -156,7 +166,8 @@ def plan(row_id: str, batch: int, max_input: int, max_output: int, *, sampling: 
         horizon_s = max(0.1, 0.6 * max_output * NOMINAL_STEP_S)            # arrivals over the first ~60 % of a full-length run
         offs = sorted(round(float(x), 3) for x in r.uniform(0.05, horizon_s, size=batch - 1))
         offsets_s = [0.0] + offs
-        steps = [0] + [max(1, int(round(o / NOMINAL_STEP_S))) for o in offs]
+        drawn = [0] + [max(1, int(round(o / NOMINAL_STEP_S))) for o in offs]
+        steps = realized_arrive_steps([{"max_tokens": c, "arrive_step": a} for c, a in zip(caps, drawn)])
     else:
         offsets_s = [0.0] * batch
         steps = [0] * batch
@@ -165,7 +176,7 @@ def plan(row_id: str, batch: int, max_input: int, max_output: int, *, sampling: 
             "min_input": lo, "min_output": MIN_CAP if max_output >= MIN_CAP else max_output,
             "sampling": sampling, "sampling_params": SAMPLING[sampling], "arrivals": arrivals,
             "input_lengths": lengths, "output_caps": caps, "sampling_seeds": seeds, "arrival_offsets_s": offsets_s, "arrive_steps": steps,
-            "arrival_rule": {"nominal_step_s": NOMINAL_STEP_S, "arrive_step": "round(offset_s / nominal_step_s)",
+            "arrival_rule": {"nominal_step_s": NOMINAL_STEP_S, "arrive_step": ARRIVE_STEP_RULE,
                              "schedule": "0 | sorted U[0.05, 0.6*O*nominal_step_s] s (staggered); all 0 (none)"},
             "length_rule": {"input": "anchors I, lo+{0..3}, one awkward per quartile (Q2,Q3,Q1,Q4), then stratified log-uniform over [lo, I] "
                                      "nudged off powers of two; seeded permutation", "output": "same over [2, O]; paired by seeded permutation",
@@ -337,13 +348,14 @@ def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok:
         variants[variant] = SAMPLING[variant]
     horizon = max(int(r["arrive_step"]) + int(r["max_tokens"]) for r in reqs)
     total_prompt = sum(int(r["prompt_len"]) for r in reqs)
+    of_record = p["row_id"] in rows_of_record()
     doc = {
         "schema": SCHEMA, "model": hf_repo, "case": case,
         "engine": {"revision": revision, "vllm": VLLM,
                    "args": {"max_num_batched_tokens": int(max(2048, total_prompt + B)), "max_model_len": int(I + O)}},
         "seed": 0,
         "variants": variants, "seeds": list(p["sampling_seeds"]),
-        "sampling": {"variant": variant, "seed": None, "n": 1},
+        "sampling": {"variant": variant, "seed": None, "n": 1, **({"ignore_eos": True} if of_record else {})},
         "serving_profile": f"sweep-B{B}" + ("-staggered" if p["arrivals"] == "staggered" else ""), "context_class": f"I{I}-O{O}",
         "length_seed": p["seed"], "prompt_seed": p["seed"], "replicate": 0,
         "length_rule": p["length_rule"],
@@ -358,7 +370,8 @@ def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok:
                                     "arrive_steps", "arrival_rule", "length_rule", "seed_rule")},
         "note": (f"R12 sweep {p['row_id']}: B={B} I<={I} O<={O} {variant} arrivals={p['arrivals']}; prompt lens {p['input_lengths']}, caps "
                  f"{p['output_caps']}, arrive steps {p['arrive_steps']}; every request to max_tokens => {horizon} engine steps; "
-                 f"max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched."),
+                 f"max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  "
+                 + ("A row of record: sampling.ignore_eos, every request done only at its public cap." if of_record else "EOS untouched.")),
     }
     doc["sweep"]["lengths_only"] = tok is None
     if n:
@@ -450,6 +463,10 @@ def main(a: Options) -> int:
             return 2
         tok = Tok(tp)
     doc = workload_doc(p, hf_repo=a.hf_repo, revision=a.revision, case=case_for(a.hf_repo, a.revision, a.case), tok=tok)
+    reasons = dict(r.partition("=")[::2] for r in a.reason)
+    if unknown := sorted(set(reasons) - set(served.DEFAULTS)) or [k for k, v in reasons.items() if not v]:
+        print(f"[error] --reason {unknown}: a reason is SWITCH=TEXT for a switch of {sorted(served.DEFAULTS)}", file=sys.stderr)
+        return 2
     if a.target:
         from verity_vllm.program.frontend.target_profile import TargetProfile
         t = json.loads(a.target)
@@ -463,10 +480,8 @@ def main(a: Options) -> int:
         if exec_suffix != tp.execution_label:
             print(f"[error] row id execution suffix {exec_suffix!r} != the target's execution label {tp.execution_label!r}", file=sys.stderr)
             return 3
-    reasons = dict(r.partition("=")[::2] for r in a.reason)
-    if unknown := sorted(set(reasons) - set(served.DEFAULTS)) or [k for k, v in reasons.items() if not v]:
-        print(f"[error] --reason {unknown}: a reason is SWITCH=TEXT for a switch of {sorted(served.DEFAULTS)}", file=sys.stderr)
-        return 2
+        if "attention" in tp.int8_parts:
+            reasons.setdefault("attention_backend", INT8_ATTENTION_REASON)
     if reasons:
         doc["engine"]["reasons"] = reasons
     if tok is not None:

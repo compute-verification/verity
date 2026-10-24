@@ -18,8 +18,8 @@ of its name. So:
   `OpenKeys` puts one port, with one name and one list of positions, in every level's reads file (`openKeys_drawn`),
   which V*'s files are not (each level's `acc` reads that level's positions).
 
-The restatement keys a read by its registration (`site`: value, root, leaf count, row width, domain; not its name or
-positions): `ColKeyedS`, `SiteRowsShared` (implies `RowsShared`, `rowsShared_of_site`; from `SharedRowsS`, and that
+The restatement keys a read by its registration (`site`: value, root, leaf count, row width, domain, leaf schema; not its
+name or positions): `ColKeyedS`, `SiteRowsShared` (implies `RowsShared`, `rowsShared_of_site`; from `SharedRowsS`, and that
 from `NoRegistrantCollisionS`, since the verifier's leaf check reads only a port's registration, `opensLeaf_site`;
 all three hold where no read is segmented, `siteRowsShared` at `ReadsUnsegmented`, since `Accepted` excludes `RegColl`),
 `AccRowsAreS` at `accRegS` (`accRowsAreS_of_shared`), `EndKeysS`, `OpenKeysS`, and `hEnds_of_partS`,
@@ -41,12 +41,12 @@ open FlockVBridge.AccChain (levelLanes)
 open FlockSoundness.Discharge.Hm (bitL)
 open FlockSoundness.Discharge.ZkReg (LiveAcceptsZKR)
 
-/-- The registration a registered port reads: its value, root, leaf count, row width and domain, all its fields but
-its name and its read positions (`Registered.Port`; rec_outer.py:235, `read(chain.reg.entry(), …)`). -/
-abbrev Site := String × ByteArray × ℕ × Option ℕ × ℕ × ByteArray
+/-- The registration a registered port reads: its value, root, leaf count, row width, domain and leaf schema, all its
+fields but its name and its read positions (`Registered.Port`; rec_outer.py:235, `read(chain.reg.entry(), …)`). -/
+abbrev Site := String × ByteArray × ℕ × Option ℕ × ℕ × ByteArray × String
 
 /-- A port's registration (`Site`). -/
-def site (p : Flock.Registered.Port) : Site := (p.value, p.root, p.leaves, p.words, p.wordBits, p.domain)
+def site (p : Flock.Registered.Port) : Site := (p.value, p.root, p.leaves, p.words, p.wordBits, p.domain, p.schema)
 
 /-! ## A drawn unit's registered reads -/
 
@@ -155,13 +155,13 @@ variable {C : FlockSoundness.Audit.Circuit} {n : ℕ} {P : FlockSoundness.Audit.
   {decode' : FlockSoundness.Audit.Partition.DecoderB (C := C') (Reg := Reg₁) plan' tab'}
   {lay' : FlockSoundness.Binding.Layout P' plan' tab' decode'} {rs' : HmRowsX lay'}
 
-/-- The verifier's leaf check reads a port's registration only (`opensLeaf`: its leaf count, domain and root). -/
+/-- The verifier's leaf check reads a port's registration only (`opensLeaf`: its leaf count, domain, schema and root). -/
 theorem opensLeaf_site {p p' : Flock.Registered.Port} (h : site p = site p') :
     Flock.Registered.opensLeaf p = Flock.Registered.opensLeaf p' := by
   simp only [site, Prod.mk.injEq] at h
-  obtain ⟨-, hr, hl, -, -, hd⟩ := h
+  obtain ⟨-, hr, hl, -, -, hd, hs⟩ := h
   funext a b c
-  simp only [Flock.Registered.opensLeaf, hr, hl, hd]
+  simp only [Flock.Registered.opensLeaf, hr, hl, hd, hs]
 
 /-- **`registrants_eq_or_collides` at one registration**: two registered reads of one registration (`site`) at one
 position carry one row's bytes, or their openings collide, or hm96's leaves do (`opensLeaf_site`). -/

@@ -1,7 +1,7 @@
 """The protocol options of a vLLM run: PoUW, POUS and sampled proofs, each enabled on its own, any of them in one run.
 
 A run enables a set of ``name:scheme`` entries (`config.parse_protocols`), off by default.  `verity_vllm.LLM` takes it as
-``protocols=``; a row takes it from ``PROTOCOLS`` (``verity-vllm row --protocols``) or its workload target, and every stage
+``protocols=`` and fills the settings an adapter takes from the built engine (`engine_fills`, `from_engine`); a row takes it from ``PROTOCOLS`` (``verity-vllm row --protocols``) or its workload target, and every stage
 reads it as the target's ``protocols`` (`TargetProfile.protocols`), so the Build, the Commit and the Check read one copy.
 A row refuses a set it cannot run before any stage starts (`at_row`); the Commit checks it again before its engine exists
 (`commit_guard`).  Each protocol has one adapter module here (`interface`), imported only when it is enabled.  The
@@ -45,6 +45,7 @@ gives the Commit the circuit of each executed call.
 """
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import importlib
 import json
@@ -58,13 +59,15 @@ from verity_vllm.engine import hooks
 from verity_vllm.protocol_options.interface import Context, Installed, Option, Target
 
 __all__ = ["ADAPTERS", "RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Option", "Refused", "Target", "adapter",
-           "WeightsView", "at_capture", "at_commit", "at_row", "capture_context", "commit_context", "commit_guard", "install", "into_verdict", "load_settings",
+           "WeightsView", "at_capture", "at_commit", "at_row", "capture_context", "commit_context", "commit_guard", "engine_fills",
+           "from_engine", "install", "into_verdict", "load_settings",
            "parse", "refusals", "register_weights", "requires_build", "undeclared", "weights_view", "CIRCUITS", "circuit_registry",
            "traced_as"]
 
 #: protocol -> its adapter module in this package
 ADAPTERS = {"pouw": "pouw", "pous": "pous", "sampled-proofs": "sampled_proofs"}
-#: Each hook site and who is at it, outermost first; the last may execute there (``EXECUTES``), the others wrap.  At a
+#: Each hook site and who is at it, outermost first; the last may execute there (``EXECUTES``, or per scheme the adapter's
+#: ``executes(scheme)``: PoUW's H1 executes nowhere, since the int8_exact arm serves its own y), the others wrap.  At a
 #: linear layer's ``apply`` POUS hands the decoded weight inward and PoUW replaces the GEMM.  Sampled proofs commits at the
 #: module boundary, outside every site, and its replay evaluates Definitions, never an executor.  `config.PROTOCOLS`, the
 #: install order, is innermost first at every site.
@@ -137,6 +140,49 @@ def requires_build(entry: str, ctx: Context) -> bool:
     return bool(required(scheme, ctx)) if callable(required) else False
 
 
+def engine_fills(ctx: Context) -> dict[str, tuple[str, ...]]:
+    """Per protocol, the settings its adapter takes from the built engine (``fills``), for `verity_vllm.LLM`'s refusals
+    before the build (`Context.filled`); an adapter that can't be imported fills nothing, and `refusals` names it."""
+    out: dict[str, tuple[str, ...]] = {}
+    for entry in ctx.enabled:
+        name, _, scheme = entry.partition(":")
+        try:
+            fills = getattr(adapter(name), "fills", None)
+        except Refused:
+            continue
+        keys = tuple(fills(scheme, ctx.settings_of(name))) if callable(fills) else ()
+        if keys:
+            out[name] = keys
+    return out
+
+
+def from_engine(ctx: Context, llm: Any, *, epoch: int = 0) -> Context:
+    """``ctx`` with each adapter's settings from the built ``vllm.LLM`` ``llm`` (``from_engine``) where the caller left
+    them unset, ``epoch`` the in-process coins' epoch; ``filled`` cleared, so `install` refuses a key left unfilled.
+    `Refused` names every entry whose adapter can't read its settings from this engine."""
+    settings = {k: dict(v) for k, v in ctx.settings.items()}
+    bad = []
+    for entry in ctx.enabled:
+        name, _, scheme = entry.partition(":")
+        try:
+            fill = getattr(adapter(name), "from_engine", None)
+        except Refused:
+            continue
+        if not callable(fill):
+            continue
+        try:
+            got = dict(fill(scheme, ctx.settings_of(name), llm, epoch))
+        except (RuntimeError, AttributeError, ValueError) as e:
+            bad.append(f"{entry}: its settings {list(ctx.filled_of(name))} come from the built engine, which doesn't "
+                       f"supply them: {e}")
+            continue
+        if got:
+            settings[name] = {**settings.get(name, {}), **got}
+    if bad:
+        raise Refused(bad)
+    return dataclasses.replace(ctx, settings=settings, filled={})
+
+
 def _has_circuit(name: str, scheme: str, out: list[str]) -> bool:
     try:
         reg = circuit_registry(name)
@@ -168,7 +214,8 @@ def refusals(ctx: Context) -> tuple[str, ...]:
             out.append(f"{entry}: {name} registers no scheme {scheme!r} (registered: {', '.join(known) or 'none'})")
             continue
         out.extend(f"{entry}: {r}" for r in mod.refusals(scheme, ctx))
-        sites = tuple(getattr(mod, "EXECUTES", ()))
+        executes = getattr(mod, "executes", None)
+        sites = tuple(executes(scheme) if callable(executes) else getattr(mod, "EXECUTES", ()))
         for site in sites:
             if site in executors:
                 out.append(f"{entry}: {site} already has an executor, {executors[site]}; a site has one")
@@ -365,9 +412,13 @@ def at_row(knob: Any, workload: Mapping[str, Any], *, world: int = 1) -> tuple[s
 
 def own_auditor(config: str | Path | Mapping[str, Any] | None, profile: Any) -> dict[str, dict[str, Any]]:
     """The protocols config (`load_settings`) of a pipeline that is its run's own auditor (the Commit, a Match capture):
-    PoUW's ``coins`` a challenger of the epoch held in this process when ``profile`` declares PoUW (`pouw.challenged`)."""
+    PoUW's ``coins`` a challenger of the epoch held in this process when ``profile`` declares PoUW (`pouw.challenged`),
+    unless the config names the auditor host's ``challenger``, H1's one coin source."""
     from verity_vllm.protocol_options import pouw
-    return pouw.challenged(load_settings(config), getattr(profile, "protocols", None))
+    settings = load_settings(config)
+    if "challenger" in settings.get(pouw.NAME, {}):
+        return settings
+    return pouw.challenged(settings, getattr(profile, "protocols", None))
 
 
 def commit_guard(profile: Any, *, world: int = 1, hot: bool = False, installs: bool = True, settings: Any = None) -> Any:

@@ -195,7 +195,8 @@ class AttentionSource:
 
     def _hold_boundary(self, tid: str, layer: int, t: Any, job: Any) -> None:
         """The tensor of `CALL_TAPS` tap `tid` of `layer` at the job's step, held to the step's call boundaries of that layer the tap
-        binds: every request's rows packed, `width` bf16 words each, the identities' element ranges whole; otherwise a collector error."""
+        binds: one per request (each spelt by its own Program's fx node), every request's rows packed, `width` bf16 words each, the
+        identities' element ranges whole; otherwise a collector error."""
         step = int(job.step)
         ids = self.boundaries.get((step, tid, layer))
         if not ids:
@@ -203,7 +204,7 @@ class AttentionSource:
         rows = sum(int(r["rows"]) for r in ids)
         shape = tuple(int(d) for d in t.shape)
         bad = [r for r in ids if list(r.get("element_range") or ()) != [0, int(r["rows"]) * int(r["width"])] or int(r["width"]) != int(ids[0]["width"])]
-        if bad or len({r["op_path"] for r in ids}) != 1 or t.dtype != torch.bfloat16 or not shape or shape[0] != rows \
+        if bad or len({r["request_id"] for r in ids}) != len(ids) or t.dtype != torch.bfloat16 or not shape or shape[0] != rows \
                 or t.numel() != rows * int(ids[0]["width"]):
             self.c.errors.append(f"attention: layer {layer} at engine step {step}: tap {tid} is {shape} {t.dtype}; the manifest's "
                                  f"call boundaries there are {[(r['request_id'], r['op_path'], r['rows'], r['width'], r.get('element_range')) for r in ids][:3]}"[:300])

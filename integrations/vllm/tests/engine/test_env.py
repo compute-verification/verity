@@ -79,6 +79,28 @@ def test_set_since_is_what_the_process_set_or_changed_after_the_snapshot(monkeyp
     assert env.set_since(before) == {"CUBLAS_WORKSPACE_CONFIG": ":16:8", "CUBLASLT_WORKSPACE_SIZE": "1"}
 
 
+def test_a_capture_at_served_defaults_never_pins_a_switch_back() -> None:
+    """A capture that clears `SERVED_DEFAULTS` imports no module that pins the engine's switches (`vllm_meta` pins `EXPORT` at
+    import, batch invariance among it; `engine_profile` pins `ENGINE`) and calls no pinning function, at any level of its code."""
+    import ast
+    from pathlib import Path
+
+    pinning = {"verity_vllm.program.frontend.vllm_meta", "verity_vllm.program.frontend.export_compat",
+               "verity_vllm.engine.engine_profile", "pin", "apply_engine", "apply_target", "apply_env"}
+    captures = [p for p in sorted((Path(__file__).parents[1] / "properties").glob("*_gpu.py")) if "served_defaults" in p.read_text()]
+    assert len(captures) >= 7
+    for p in captures:
+        used = set()
+        for n in ast.walk(ast.parse(p.read_text())):
+            if isinstance(n, ast.Import):
+                used |= {a.name for a in n.names}
+            elif isinstance(n, ast.ImportFrom) and n.module:
+                used |= {n.module, *(f"{n.module}.{a.name}" for a in n.names)}
+            elif isinstance(n, ast.Call):
+                used.add(getattr(n.func, "attr", getattr(n.func, "id", None)))
+        assert not used & pinning, (p.name, sorted(used & pinning))
+
+
 def test_an_engine_records_what_its_build_wrote_into_the_environment() -> None:
     import dataclasses
     import inspect
@@ -88,7 +110,7 @@ def test_an_engine_records_what_its_build_wrote_into_the_environment() -> None:
     src = inspect.getsource(build.build_engine)
     assert src.index("env0 = engine_env.snapshot()") < src.index("engine_kwargs_for(") < src.index("llm = LLM(**kw)")
     assert "engine_env.set_since(env0))" in src.split("llm = LLM(**kw)")[1].split("eng.effective")[0]
-    assert [f.name for f in dataclasses.fields(build.Engine)][-1] == "environ"
+    assert "environ" in [f.name for f in dataclasses.fields(build.Engine)]
 
 
 def test_the_engine_profile_reads_this_table() -> None:
@@ -116,9 +138,15 @@ def test_a_checkpoint_not_on_this_host_is_refused_by_name(tmp_path) -> None:
     m.write_text(json.dumps({"checkpoints": [dict(entry, downloaded=False)]}))
     with pytest.raises(SystemExit, match="org/model is not downloaded on this pod"):
         prof.checkpoint_for("ROLE_X", m)
+    made = dict(entry, downloaded=False, recipe={"id": "verity-int8-channel127/v1"})
+    m.write_text(json.dumps({"checkpoints": [made]}))
+    with pytest.raises(SystemExit, match=f"org/model: local snapshot {tmp_path / 'gone'} missing"):
+        prof.checkpoint_for("ROLE_X", m)
     (tmp_path / "gone").mkdir()
     m.write_text(json.dumps({"checkpoints": [entry]}))
     assert prof.checkpoint_for("ROLE_X", m) == entry
+    m.write_text(json.dumps({"checkpoints": [made]}))
+    assert prof.checkpoint_for("ROLE_X", m) == made
 
 
 def test_serving_and_the_build_put_a_shared_expert_on_one_stream() -> None:

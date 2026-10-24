@@ -190,9 +190,12 @@ def reused(s: Site, _cached: dict[str, Any], _rc_key: str) -> tuple[dict[str, An
     return sr, lk
 
 
-def programs_of_record(s: Site, _rl: dict[str, str]) -> tuple[dict[str, dict], dict[str, str]]:
+def programs_of_record(s: Site, _rl: dict[str, str], *, definitions: bool = True) -> tuple[dict[str, dict], dict[str, str]]:
     """The population is derived from the Program OF RECORD: every loaded Program's digest must be the Build digest of
-    record (--program-digest, B=1) or one of the manifest's component digests (B>=2); else REFUSED by name."""
+    record (--program-digest, B=1) or one of the manifest's component digests (B>=2), and the Definitions this tree evaluates their
+    rows by must be the ones their Builds bound (`check.replay.definitions`); else REFUSED by name.  ``definitions=False`` for a
+    caller that evaluates no row (the replay's plan, the serving rows): the replay that grades the picks checks them."""
+    from verity_vllm.check.replay import definitions as DF
     from verity_vllm.query.manifest import format as MF
 
     args, required_manifest, reqs, sampling = s.args, s.manifest, s.reqs, s.sampling
@@ -219,6 +222,8 @@ def programs_of_record(s: Site, _rl: dict[str, str]) -> tuple[dict[str, dict], d
     if _bad:
         _named = ", ".join(f"{k}: {d[:16]} ({_loaded[k].get('dir')})" for k, d in _bad.items())
         raise RuntimeError(f"replay Program(s) are not the Program of record: {_named} vs of-record {sorted(x[:16] for x in _of_record)} -- refused")
+    if definitions:
+        DF.of_record({k: v["dir"] for k, v in _loaded.items()}, _digs, {k: v["instances"]["rows"] for k, v in _loaded.items()}, what="replay")
     return _loaded, _digs
 
 
@@ -356,7 +361,7 @@ def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False, planner: Any 
     held["bm"] = _bm = json.loads((s.out / f"binding_map_p{pair}.json").read_text())
     _rl = request_labels(reqs)
     facts = planner.ready() if planner is not None else None
-    held["loaded"], held["digs"] = _loaded, _digs = programs_of_record(s, _rl) if facts is None else ({}, {})
+    held["loaded"], held["digs"] = _loaded, _digs = programs_of_record(s, _rl, definitions=not plan) if facts is None else ({}, {})
     held["progs"] = _progs = {k: v["instances"] for k, v in _loaded.items()}
     _arr, _moved = arrivals(s, _rl)
     if _moved:
@@ -370,10 +375,11 @@ def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False, planner: Any 
     _wp, held["rd"] = SRW.readers(args.serving_rows, s.com, rc, s.weights_of(held["pi0"].prefix) if "pi0" in held else None, _progs, _bm, _arr,
                                   _loaded, s.manifest, args.label, _digs)
     if not plan and getattr(args, "memory_map", None):
+        from verity_vllm.acquire.sources.kv_slots_source import caches_of
         from verity_vllm.check.oracle_compare import OpenedReader
         from verity_vllm.pipeline import memory_map as MMP
         MMP.after_commit(args.memory_map, loaded=_loaded, bmap=_bm, committed=OpenedReader(s.com, rc), manifest=s.manifest, arrivals=_arr,
-                         caches=next((x.caches for x in getattr(s.com, "sources", ()) if getattr(x, "short_name", "") == "kv_slots"), None))
+                         caches=caches_of(s.com), session=s.out / MMP.SESSION)
     _rd = held["rd"]
     _wc = None if plan else s.weights_check()
     _seed, _seed_src, _seed_form, _seed_chal = seed_of(args, rc)

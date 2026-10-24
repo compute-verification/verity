@@ -52,21 +52,24 @@ def commitsSib (dom c0 c1 : ByteArray) (x : ℕ) : ByteArray :=
 
 theorem treeLeaf_size (b : ByteArray) : (Hm96.Default512.treeLeaf b).size = 64 := Sha512.hash_size _
 
-/-- **The honest opening is accepted**: row `x < 2`'s `b ‖ c` opens `commitsRoot` at `x` through `commitsSib`. -/
+/-- **The honest opening is accepted**: row `x < 2`'s `b ‖ c` opens `commitsRoot` at `x` through `commitsSib`, at a
+port of `hm96-sha512/row/v1` rows. -/
 theorem opens_commitsRoot {reg : Registered.Port} {c0 c1 : ByteArray} (hl : reg.leaves = 2)
-    (hr : reg.root = commitsRoot reg.domain c0 c1) {x : ℕ} (hx : x < 2) :
+    (hs : reg.schema = HmRow.ROW_SCHEMA) (hr : reg.root = commitsRoot reg.domain c0 c1) {x : ℕ} (hx : x < 2) :
     Registered.opens reg (commitAt c0 c1 x) x (commitsSib reg.domain c0 c1 x) = true := by
-  have hs : (commitsSib reg.domain c0 c1 x).size = 64 := by
+  have hz : (commitsSib reg.domain c0 c1 x).size = 64 := by
     unfold commitsSib
     split <;> exact Sha512.hash_size _
   have hsib : Registered.sibs (commitsSib reg.domain c0 c1 x) 1 = [commitsSib reg.domain c0 c1 x] := by
     have he : (commitsSib reg.domain c0 c1 x).extract 0 64 = commitsSib reg.domain c0 c1 x := by
-      conv_lhs => rw [show (64 : ℕ) = (commitsSib reg.domain c0 c1 x).size from hs.symm]
+      conv_lhs => rw [show (64 : ℕ) = (commitsSib reg.domain c0 c1 x).size from hz.symm]
       exact ByteArray.extract_zero_size
     simp [Registered.sibs, he]
   have hlog : log2ceil reg.leaves = 1 := by rw [hl]; rfl
-  unfold Registered.opens Registered.opensLeaf Registered.climb
-  rw [hlog, hsib, hr, hs, hl]
+  unfold Registered.opens
+  rw [Registered.opensLeaf_row hs]
+  unfold Registered.climb
+  rw [hlog, hsib, hr, hz, hl]
   simp only [Bool.and_eq_true, decide_eq_true_eq]
   refine ⟨⟨hx, trivial⟩, ?_⟩
   interval_cases x <;> simp [Registered.climbL, commitAt, commitsSib, commitsRoot]
@@ -74,7 +77,8 @@ theorem opens_commitsRoot {reg : Registered.Port} {c0 c1 : ByteArray} (hl : reg.
 /-- **An accepted opening of row `x` under `commitsRoot` has row `x`'s leaf**, or it and the honest opening collide
 (`opensLeaf_binding`, `openPair` the extractor). -/
 theorem treeLeaf_eq_or_collides {reg : Registered.Port} {c0 c1 : ByteArray} (hl : reg.leaves = 2)
-    (hr : reg.root = commitsRoot reg.domain c0 c1) {x : ℕ} (hx : x < 2) {bc path : ByteArray}
+    (hs : reg.schema = HmRow.ROW_SCHEMA) (hr : reg.root = commitsRoot reg.domain c0 c1) {x : ℕ} (hx : x < 2)
+    {bc path : ByteArray}
     (h : Registered.opens reg bc x path = true) :
     Hm96.Default512.treeLeaf bc = Hm96.Default512.treeLeaf (commitAt c0 c1 x) ∨
       Registered.Collides (Registered.openPair reg x (Hm96.Default512.treeLeaf bc) path
@@ -82,7 +86,7 @@ theorem treeLeaf_eq_or_collides {reg : Registered.Port} {c0 c1 : ByteArray} (hl 
   by_cases he : Hm96.Default512.treeLeaf bc = Hm96.Default512.treeLeaf (commitAt c0 c1 x)
   · exact Or.inl he
   · exact Or.inr (Registered.opensLeaf_binding reg x _ path _ _ (treeLeaf_size _) (treeLeaf_size _) he h
-      (opens_commitsRoot hl hr hx))
+      (opens_commitsRoot hl hs hr hx))
 
 /-! ## A session's accepted rows -/
 
@@ -172,15 +176,14 @@ namespace VStarFamily
 variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂)
 
 /-- **The verifier's `rec-c<k>` roots are its own, over the history's `c_k`**: at every history `t`, each port of session
-`j`'s reads file registering `rec-c<k>` has two leaves and the root `commitsRoot` over two `b ‖ c`, row `x`'s the `b ‖ c`
-(`cOf`) of the commitment of `t`'s round `x · n₀ + kc k` (rep `x`'s message round `k`, `sel`'s row `x`) where `t` has
-that round. V* builds them
-from the `c_k` alone (`rec_vstage.messages`, `rec_vstage.py:164`; `rec_residuals.commits_entry`,
+`j`'s reads file registering `rec-c<k>` has two `hm96-sha512/row/v1` leaves and the root `commitsRoot` over two `b ‖ c`,
+row `x`'s the `b ‖ c` (`cOf`) of the commitment of `t`'s round `x · n₀ + kc k` (rep `x`'s message round `k`, `sel`'s
+row `x`) where `t` has that round. V* builds them from the `c_k` alone (`rec_vstage.messages`, `rec_vstage.py:164`; `rec_residuals.commits_entry`,
 `rec_residuals.py:402-410`). The check that establishes it: the verifier computes its reads file's `rec-c<k>` entries
 itself from the round commitments it holds, by `commitsRoot` (no file the prover sends carries them). -/
 def HOwnRoots (cOf : Cm → List UInt8) : Prop :=
   ∀ R ω t R₂ j, ∀ reg ∈ (F.zs R ω t R₂ j).own, ∀ k, cIndex reg.value = some k → reg.leaves = 2 ∧
-    ∃ c₀ c₁, reg.root = commitsRoot reg.domain c₀ c₁ ∧ ∀ x < 2, ∀ e : Cm × (ℐ).Coin, t[x * F.n₀ + F.kc k]? = some e →
+    reg.schema = HmRow.ROW_SCHEMA ∧ ∃ c₀ c₁, reg.root = commitsRoot reg.domain c₀ c₁ ∧ ∀ x < 2, ∀ e : Cm × (ℐ).Coin, t[x * F.n₀ + F.kc k]? = some e →
       commitAt c₀ c₁ x = ⟨(cOf e.1).toArray⟩
 
 /-- **An accepted transcript draws the units that read a round's commitment, and labels them itself**: at every
@@ -243,9 +246,9 @@ theorem pubCommits_or_collides (cOf : Cm → List UInt8) (hSk : F.Sk = skOf F.Vs
   rw [← hname, ← hn] at hfind
   obtain ⟨path, hopen⟩ := opens_of_acceptsZKR (F.zs R ω t R₂ j) hacc hreg hfind hd hD hdp hidx hu
     (by rw [hlab]; exact hxr)
-  obtain ⟨hl, c₀, c₁, hroot, hc⟩ := hroots R ω t R₂ j reg hreg k (by rw [hv]; exact hk)
+  obtain ⟨hl, hsch, c₀, c₁, hroot, hc⟩ := hroots R ω t R₂ j reg hreg k (by rw [hv]; exact hk)
   have hat := hc x hx2 e he
-  rcases treeLeaf_eq_or_collides hl hroot hx2 hopen with h | h
+  rcases treeLeaf_eq_or_collides hl hsch hroot hx2 hopen with h | h
   · left
     rw [hat] at h
     rw [vb_cs_inl]

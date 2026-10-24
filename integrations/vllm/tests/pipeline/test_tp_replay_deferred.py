@@ -9,6 +9,7 @@ import gzip
 import hashlib
 import itertools
 import json
+import struct
 import types
 from pathlib import Path
 
@@ -16,7 +17,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.check import weights_of_record as WR
-from verity_vllm.commit import scheme
+from verity_vllm.commit import scheme, step_rows
 from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline.research_outputs import KEPT_APART
@@ -24,6 +25,7 @@ from verity_vllm.pipeline.tp import c2 as C2
 from verity_vllm.pipeline.tp import commit as TC
 from verity_vllm.pipeline.tp import commit_replay as TPR
 from verity_vllm.pipeline.tp import rank_replay as RR
+from verity_vllm.pipeline.tp import run_root as RT
 from verity_vllm.program.frontend import collective_kinds as CK
 
 WORLD = 2
@@ -126,6 +128,127 @@ def test_a_ranks_shards_open_against_its_committed_root_and_another_ranks_do_not
         "composed as the whole tensor, a shard is not a tensor of the checkpoint"
 
 
+def _safetensors(path, tensors):
+    """A safetensors file of `tensors` (name -> (safetensors dtype, array))."""
+    hdr, off, blobs = {}, 0, []
+    for name, (dt, a) in tensors.items():
+        b = np.ascontiguousarray(a).tobytes()
+        hdr[name] = {"dtype": dt, "shape": list(a.shape), "data_offsets": [off, off + len(b)]}
+        off += len(b)
+        blobs.append(b)
+    h = json.dumps(hdr).encode()
+    path.write_bytes(struct.pack("<Q", len(h)) + h + b"".join(blobs))
+
+
+def test_a_ranks_deepgemm_linears_and_absorbed_kv_b_open_as_vllm_rewrites_them_at_load(tmp_path):
+    """GLM-5.3's served block-FP8 linears are vLLM's ue8m0 requant of the rank's shard, and MLA's W_UK_T / W_UV the bf16 split of the
+    requantised kv_b_proj (`fp8_ue8m0`).  Composed as the Build's roles name them (its Program fields less the index's wrapper prefix),
+    every registered tensor of the rank opens against the committed root; without the roles the four requantised fields differ from
+    the checkpoint's words and the absorbed two have no checkpoint tensor (GLM-5.3 B1 TP8's rank 0: 978 and 156 of 2275)."""
+    from verity_vllm.check import fp8_ue8m0 as FU
+
+    G, NH, DN, DV, L, Q, rank = 128, 2, 128, 128, 256, 256, 1
+    rng = np.random.default_rng(5)
+
+    def e4m3(n, k):
+        w = rng.integers(0, 256, (n, k), dtype=np.uint8)
+        return np.where((w & 0x7F) == 0x7F, w & 0xF0, w).astype(np.uint8)     # no NaN words
+
+    def scale(n, k):
+        return rng.uniform(1e-4, 3e-3, (n // G, k // G)).astype(np.float32)
+
+    A = "model.layers.0.self_attn"
+    ckt = {f"{A}.q_b_proj.weight": ("F8_E4M3", e4m3(Q, L)), f"{A}.q_b_proj.weight_scale_inv": ("F32", scale(Q, L)),
+           f"{A}.kv_b_proj.weight": ("F8_E4M3", e4m3(NH * (DN + DV), L)), f"{A}.kv_b_proj.weight_scale_inv": ("F32", scale(NH * (DN + DV), L)),
+           "model.norm.weight": ("BF16", rng.integers(0, 1 << 16, (L,), dtype=np.uint16))}
+    ckd = tmp_path / "ck"
+    ckd.mkdir()
+    (ckd / "config.json").write_text(json.dumps({"quantization_config": {"weight_block_size": [G, G]}, "qk_nope_head_dim": DN, "v_head_dim": DV}))
+    _safetensors(ckd / "model.safetensors", ckt)
+
+    def shard(name):
+        a = ckt[name][1]
+        n = a.shape[0] // WORLD
+        return a[rank * n:(rank + 1) * n]
+
+    qw, qs = FU.requant(shard(f"{A}.q_b_proj.weight"), shard(f"{A}.q_b_proj.weight_scale_inv").view(np.uint32), G)
+    kw, ks = FU.requant(shard(f"{A}.kv_b_proj.weight"), shard(f"{A}.kv_b_proj.weight_scale_inv").view(np.uint32), G)
+    served = {f"{A}.q_b_proj.weight": ("float8_e4m3fn", qw), f"{A}.q_b_proj.weight_scale_inv": ("float32", qs),
+              f"{A}.kv_b_proj.weight": ("float8_e4m3fn", kw), f"{A}.kv_b_proj.weight_scale_inv": ("float32", ks),
+              f"{A}.W_UK_T": ("bfloat16", FU.absorbed(kw, ks, G, NH // WORLD, DN, DV, "W_UK_T")),
+              f"{A}.W_UV": ("bfloat16", FU.absorbed(kw, ks, G, NH // WORLD, DN, DV, "W_UV")),
+              "model.norm.weight": ("bfloat16", ckt["model.norm.weight"][1])}
+    names, roots = [], []
+    for name, (dt, a) in served.items():
+        raw = np.ascontiguousarray(a).reshape(-1).view(np.uint8)
+        names.append([name, dt, list(a.shape), int(raw.size)])
+        roots.append(CPU.tensor_root(raw, CHUNK))
+    geo = bytes(32)
+    tree = {"names": names, "tensor_roots": [r.hex() for r in roots], "root": scheme.weights_root(geo, scheme.names_digest(names), roots).hex(),
+            "chunk": CHUNK, "geo_digest": geo.hex(), "extra": {}}
+
+    pre = "inner.model."
+    wr = {f"{pre}{A}.q_b_proj.weight": {"role": "fp8_w_requant_ue8m0"}, f"{pre}{A}.q_b_proj.weight_scale_inv": {"role": "fp8_ws_requant_ue8m0"},
+          f"{pre}{A}.W_UK_T": {"role": "mla.absorb"}, f"{pre}{A}.W_UV": {"role": "mla.absorb"}, f"{pre}model.norm.weight": {"role": "rmsnorm.weight"}}
+    build = tmp_path / "build" / "rank1" / "build_request_LP4_T1"
+    build.mkdir(parents=True)
+    (build / "derive-report.json").write_text(json.dumps({"provenance": {"weight_roles": wr}}))
+    roles = TPR.registered_roles(types.SimpleNamespace(loaded={"r0": {"dir": str(build)}}, index=types.SimpleNamespace(prefix=pre)))
+    assert set(roles) == set(served) - {f"{A}.kv_b_proj.weight", f"{A}.kv_b_proj.weight_scale_inv"}
+
+    ck = WR.CheckpointIndex(str(ckd), verify_shards=False)
+    words, wc = CPU.open_weights(tmp_path, tree, tree["root"], ck, threads=4, tp={"world": WORLD, "rank": rank}, roles=roles)
+    assert wc["equal"] is True and wc["opened"] == len(served) and wc["mismatched_n"] == 0 and wc["unopened_n"] == 0, wc
+    assert np.array_equal(words[f"{A}.W_UV"].reshape(-1), served[f"{A}.W_UV"][1].reshape(-1))
+    _, bare = CPU.open_weights(tmp_path, tree, tree["root"], ck, threads=4, tp={"world": WORLD, "rank": rank})
+    assert sorted(m["name"] for m in bare["mismatched"]) == sorted(n for n in served if "_proj." in n), bare
+    assert sorted(u["name"] for u in bare["unopened"]) == [f"{A}.W_UK_T", f"{A}.W_UV"], bare
+
+
+def test_a_dsv4_ranks_padded_sink_and_stream_broadcast_open_as_vllm_makes_them_at_load(tmp_path):
+    """DeepSeek-V4's served attn_sink is vLLM's -inf sink at the padded head count with the rank's heads copied in, and layer 0's
+    hc_attn_fn_broadcast the sum of hc_attn_fn's four streams in f32 (`derived_weights`).  Composed by the Build's roles, both open
+    against the committed root; without them the sink is no shard of the checkpoint's and the broadcast has no checkpoint tensor
+    (DeepSeek-V4-Pro B1 TP8's rank 0: every layer's sink unopened, so its 2,033 sampled FlashMlaDecode picks not evaluated)."""
+    HEADS, NH, M, H, rank = 8, 16, 6, 32, 1
+    rng = np.random.default_rng(9)
+    sink = rng.standard_normal(HEADS).astype(np.float32)
+    fn = (rng.standard_normal((M, 4 * H)) * np.exp2(rng.integers(-20, 20, (M, 4 * H)))).astype(np.float32)
+    ckd = tmp_path / "ck"
+    ckd.mkdir()
+    (ckd / "config.json").write_text(json.dumps({"model_type": "deepseek_v4"}))
+    _safetensors(ckd / "model.safetensors", {"layers.0.attn.attn_sink": ("F32", sink), "layers.0.hc_attn_fn": ("F32", fn)})
+
+    L0, per = "model.layers.0", HEADS // WORLD
+    padded = np.full(NH, -np.inf, dtype=np.float32)
+    padded[:per] = sink[rank * per:(rank + 1) * per]
+    streams = fn.reshape(M, 4, H)
+    broadcast = ((np.float32(0) + streams[:, 0] + streams[:, 1]) + streams[:, 2]) + streams[:, 3]
+    served = {f"{L0}.attn.attn_sink": padded, f"{L0}.hc_attn_fn": fn, f"{L0}.hc_attn_fn_broadcast": broadcast}
+    names, roots = [], []
+    for name, a in served.items():
+        raw = np.ascontiguousarray(a).reshape(-1).view(np.uint8)
+        names.append([name, "float32", list(a.shape), int(raw.size)])
+        roots.append(CPU.tensor_root(raw, CHUNK))
+    geo = bytes(32)
+    tree = {"names": names, "tensor_roots": [r.hex() for r in roots], "root": scheme.weights_root(geo, scheme.names_digest(names), roots).hex(),
+            "chunk": CHUNK, "geo_digest": geo.hex(), "extra": {}}
+
+    pre = "inner.model."
+    wr = {f"{pre}{L0}.attn.attn_sink": {"role": "dsv4.attn_sink", "NH": NH}, f"{pre}{L0}.hc_attn_fn_broadcast": {"role": "mhc.fn_broadcast", "HC": 4, "H": H}}
+    build = tmp_path / "build" / "rank1" / "build_request_LP4_T1"
+    build.mkdir(parents=True)
+    (build / "derive-report.json").write_text(json.dumps({"provenance": {"weight_roles": wr}}))
+    roles = TPR.registered_roles(types.SimpleNamespace(loaded={"r0": {"dir": str(build)}}, index=types.SimpleNamespace(prefix=pre)))
+
+    ck = WR.CheckpointIndex(str(ckd), verify_shards=False)
+    words, wc = CPU.open_weights(tmp_path, tree, tree["root"], ck, threads=2, tp={"world": WORLD, "rank": rank}, roles=roles)
+    assert wc["equal"] is True and wc["opened"] == len(served) and wc["mismatched_n"] == 0 and wc["unopened_n"] == 0, wc
+    assert np.array_equal(words[f"{L0}.attn.attn_sink"].reshape(-1).view(np.uint32)[per:], np.full(NH - per, 0xFF800000, dtype=np.uint32))
+    _, bare = CPU.open_weights(tmp_path, tree, tree["root"], ck, threads=2, tp={"world": WORLD, "rank": rank})
+    assert bare["opened"] == 1 and sorted(u["name"] for u in bare["unopened"]) == [f"{L0}.attn.attn_sink", f"{L0}.hc_attn_fn_broadcast"], bare
+
+
 # ------------------------------------------------------------------------------------------------ the gates: in place == deferred + fold
 
 CASES = list(itertools.product(
@@ -192,17 +315,19 @@ def _in_process(fins):
                                   "query_population": C2.query_population_component(rows, True)}, default=str))
 
 
-@pytest.fixture
-def deferred(tmp_path):
+def _seal_deferred(tmp_path, commit_scheme=step_rows.NAME):
     """A one-run TP2 Commit (the config run's only-arm form) as `tp-commit --replay-deferred` leaves it: every rank PENDING, its bundle
-    sealed (a real dumped store of one committed run, its binding map, its weights tree), `replay_deferred.json` naming them."""
+    sealed (a real dumped store of one committed run, its binding map, its weights tree), `replay_deferred.json` naming them.  Every
+    rank commits under `commit_scheme` and the TP run root is that scheme's form (rows-sha512: v2; vllm-v1: an old record's v1)."""
     pytest.importorskip("torch")
     from tests.check.opened import commit_steps
     from verity_vllm.commit import store_dump as SD
 
     out = tmp_path / "commit"
     out.mkdir()
-    com, rc = commit_steps({0: [("model.embed_tokens", bytes(range(256)) * 2)], 1: [("runner.sampler", b"\x01\x02\x03\x04")]})
+    com, rc = commit_steps({0: [("model.embed_tokens", bytes(range(256)) * 2)], 1: [("runner.sampler", b"\x01\x02\x03\x04")]},
+                           commit_scheme=commit_scheme if commit_scheme == step_rows.NAME else None)
+    tag = RT.TP_ROOT_TAG if commit_scheme == step_rows.NAME else RT.TP_ROOT_TAG_V1
     root = rc.run_root.hex()
     man = tmp_path / "manifest.json"
     man.write_text(json.dumps({"identities": [], "ranks": WORLD}))
@@ -222,7 +347,7 @@ def deferred(tmp_path):
         fins.append({k: v for k, v in f.items()})
     vec = {r: rc.run_root for r in range(WORLD)}
     rows = [{"pair": 0, "arm": "instrumented", "tokens_equal_ref": True, "wall_s": 1.0,
-             "commit": {"tp_run_root": TC.tp_run_root(WORLD, vec).hex(), "world": WORLD, "per_rank": per_rank,
+             "commit": {"tp_run_root": RT.combine(tag, WORLD, vec).hex(), "world": WORLD, "per_rank": per_rank,
                         "commitment_vector": [{"rank": r, "run_root": root} for r in range(WORLD)], "commit_pass": None, "commit_fail_reason": RB.PENDING}}]
     sr_comp, lk_comp = C2.sampled_replay_components(rows, VERSIONS)
     qp_comp = C2.query_population_component(rows, True)
@@ -237,12 +362,17 @@ def deferred(tmp_path):
     assert summ["pass"] is None and summ["commit_pass"] is None and len(summ["replay_deferred"]["bundles"]) == WORLD
     (out / "runs.jsonl").write_text("".join(json.dumps(r, default=str) + "\n" for r in rows))
     (out / "summary.json").write_text(json.dumps(summ, default=str))
-    (out / "versions.json").write_text(json.dumps(VERSIONS))
+    (out / "versions.json").write_text(json.dumps({**VERSIONS, "root_tag": tag.decode()}))
     (out / "finalize_pair0.json").write_text(json.dumps(fins, default=str))
     (out / "coverage.json").write_text(json.dumps({"verdict": "PASS", "identity_coverage": True, "reason": None, "replay_pending_ranks": [0, 1],
                                                    "value_correspondence": vc}))
     (out / "sampled_replay.json").write_text(json.dumps({"sampled_replay": sr_comp, "boundary_linkage": lk_comp}, default=str))
     return types.SimpleNamespace(out=out, rc=rc, man=man, dd=json.loads((out / C2.DEFERRED).read_text()))
+
+
+@pytest.fixture
+def deferred(tmp_path):
+    return _seal_deferred(tmp_path)
 
 
 def _replayed(d, rank, sr, lk):
@@ -259,6 +389,7 @@ def test_seal_names_every_ranks_bundle_by_its_manifest_and_a_decided_commit_seal
         m = RB.open_bundle(b["path"])
         assert m["manifest_sha256"] == b["manifest_sha256"] and m["context"]["tp"] == {"world": WORLD, "rank": b["rank"]}
         assert m["context"]["replay"]["seed"] == SEED and m["context"]["required_manifest_sha256"] == hashlib.sha256(d.man.read_bytes()).hexdigest()
+        assert len(bytes.fromhex(m["context"]["tp_run_root"])) == len(bytes.fromhex(m["context"]["run_root"])) == step_rows.ROOT_BYTES
     assert not list(d.out.glob("*.partial"))
     out2 = tmp_path / "decided"
     RB.partial(out2, 0, rank=0).mkdir(parents=True)
@@ -335,7 +466,7 @@ def stubbed(monkeypatch):
     """The rank's Programs, its checkpoint and its C2 stood in for: what `replay_rank` hands each of them is recorded."""
     seen: dict = {}
     wc = {"equal": True, "opened": 0, "servable": 0, "committed_root": "ab" * 32, "opened_by_source": {}, "unopened_n": 0, "wall_s": 0.0, "why": None}
-    monkeypatch.setattr(RR, "load", lambda cfg, rank, world: seen.update(load=(cfg, rank, world)) or types.SimpleNamespace(rank=rank))
+    monkeypatch.setattr(RR, "load", lambda cfg, rank, world: seen.update(load=(cfg, rank, world)) or types.SimpleNamespace(rank=rank, loaded={}, index=types.SimpleNamespace(prefix="")))
     monkeypatch.setattr(WR, "CheckpointIndex", lambda *a, **k: "ck")
     monkeypatch.setattr(CPU, "open_weights", lambda bdir, tree, root, ck, **k: seen.update(open=(root, k)) or ({}, dict(wc)))
 
@@ -355,7 +486,7 @@ def test_a_rank_replays_its_bundle_with_the_commits_seed_against_its_own_shards(
     assert TPR.main(o) == 4, "rank 0 is still to replay"
     cfg, rank, world = stubbed["load"]
     assert (rank, world) == (1, WORLD) and cfg["seed"] == SEED and cfg["programs"] == REPLAY_CFG["programs"]
-    assert stubbed["open"] == ("ab" * 32, {"threads": 8, "tp": {"world": WORLD, "rank": 1}})
+    assert stubbed["open"] == ("ab" * 32, {"threads": 8, "tp": {"world": WORLD, "rank": 1}, "roles": {}})
     _p, _cfg, k = stubbed["evaluate"]
     assert isinstance(k["committed"], OC.OpenedReader) and k["run_root"] == d.rc.run_root and k["bmap"] == _bmap(1, d.rc.run_root.hex())
     assert k["weights_check"]["self_consistent"] is True and k["weights_check"]["pinned"] is None and k["manifest_doc"] == json.loads(d.man.read_text())
@@ -386,12 +517,20 @@ def _tamper_runs(out, fn):
     (out / "runs.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
 
 
+def _tamper_versions(out, **kw):
+    p = out / "versions.json"
+    p.write_text(json.dumps({**json.loads(p.read_text()), **kw}))
+
+
 @pytest.mark.parametrize("tamper,named", [
     (lambda out: (out / "replay_bundle_p0_rank1" / "binding_map.json").write_text("{}"), "sha256 is not the manifest's"),
-    (lambda out: _tamper_runs(out, lambda c: c["per_rank"]["1"].update(run_root="11" * 32)), "commitment vector|run root of record"),
+    (lambda out: _tamper_runs(out, lambda c: c["per_rank"]["1"].update(run_root="11" * 64)), "commitment vector|run root of record"),
     (lambda out: _tamper_runs(out, lambda c: c["per_rank"]["1"]["binding"].update(map_digest="22" * 32)), "binding map"),
     (lambda out: _tamper_runs(out, lambda c: c["per_rank"]["1"].update(commit_pass=True)), "no rank awaiting its deferred replay"),
-    (lambda out: _tamper_runs(out, lambda c: c.update(tp_run_root="33" * 32)), "TP run root of record"),
+    (lambda out: _tamper_runs(out, lambda c: c.update(tp_run_root="33" * 64)), "TP run root of record"),
+    (lambda out: _tamper_runs(out, lambda c: c["commitment_vector"][1].update(run_root="11" * 32)), "rank 1 root is 32 bytes, a vllm-v1"),
+    (lambda out: _tamper_versions(out, root_tag=RT.TP_ROOT_TAG_V1.decode()), "rank 0 root is not 32 bytes"),
+    (lambda out: _tamper_versions(out, root_tag=None), "None is not a TP run root form"),
 ])
 def test_a_bundle_that_is_not_the_records_is_refused_before_any_replay(deferred, stubbed, tamper, named):
     tamper(deferred.out)
@@ -399,6 +538,15 @@ def test_a_bundle_that_is_not_the_records_is_refused_before_any_replay(deferred,
     assert "evaluate" not in stubbed and not TPR.result_path(deferred.out, 0, 1).exists()
     with pytest.raises(TPR.Refused, match=named):
         TPR.replay_rank(TPR.Options(commit_out=str(deferred.out), checkpoint_dir="/ck"), deferred.out, deferred.dd, 0, 1)
+
+
+def test_an_old_vllm_v1_record_replays_under_its_v1_tag_and_never_as_v2(tmp_path, stubbed):
+    d = _seal_deferred(tmp_path, "vllm-v1")
+    assert len(d.rc.run_root) == 32 and len(bytes.fromhex(RB.open_bundle(d.dd["bundles"][1]["path"])["context"]["tp_run_root"])) == 32
+    assert TPR.main(TPR.Options(commit_out=str(d.out), checkpoint_dir="/ck", ranks="1")) == 4 and stubbed["evaluate"][2]["run_root"] == d.rc.run_root
+    _tamper_versions(d.out, root_tag=RT.TP_ROOT_TAG.decode())
+    with pytest.raises(TPR.Refused, match="rank 0 root is 32 bytes, a vllm-v1"):
+        TPR.replay_rank(TPR.Options(commit_out=str(d.out), checkpoint_dir="/ck"), d.out, d.dd, 0, 0)
 
 
 def test_a_manifest_that_is_not_the_commits_is_refused(deferred, stubbed, tmp_path):

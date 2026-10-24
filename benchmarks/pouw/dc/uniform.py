@@ -308,17 +308,26 @@ def census_lines(res: dict, runs: str) -> list[dict[str, str]]:
 
 
 def write_census(dev: Path, res: dict, runs: str) -> None:
-    """Replace UNI's lines in DEVICE_DIR/census.csv, the UP row in rows.csv, and put UP in the current vector's rows."""
+    """Replace UNI's measured lines in DEVICE_DIR/census.csv in place, the UP row in rows.csv, and put UP in the current
+    vector's rows. The data sheet's UNI,DS_* lines and a later vector's refit (a line with `since`) are not this run's
+    and stay; a replaced line's `until` carries over to its row's new line."""
     if res["violations"]:
         raise SystemExit("uniform: UNI's lines exceed measured points: " + "; ".join(res["violations"]))
     cen = dev / "census.csv"
     head, *body = cen.read_text().splitlines()
-    body = [b for b in body if not b.startswith("UNI,")]
+
+    def own(b: str) -> bool:
+        ln = next(csv.DictReader([head, b])) if b.startswith("UNI,") else None
+        return ln is not None and not ln["row"].startswith("DS_") and not ln["since"]
+
+    until = {ln["row"]: ln["until"] for ln in csv.DictReader([head, *filter(own, body)]) if ln["until"]}
+    at = next((i for i, b in enumerate(body) if own(b)), len(body))
+    kept = [b for b in body if not own(b)]
     buf = io.StringIO()
     w = csv.DictWriter(buf, head.split(","), lineterminator="\n")
     for ln in census_lines(res, runs):
-        w.writerow(ln)
-    cen.write_text("\n".join([head, *body]) + "\n" + buf.getvalue())
+        w.writerow(ln | {"until": until.get(ln["row"], "")})
+    cen.write_text("\n".join([head, *kept[:at], *buf.getvalue().splitlines(), *kept[at:]]) + "\n")
     rows = dev / "rows.csv"
     head, *body = rows.read_text().splitlines()
     body = [b for b in body if not b.startswith("UP,")]

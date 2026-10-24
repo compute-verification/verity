@@ -21,7 +21,12 @@ For a location `X` and a set `I` of ticks (an interval `[a, b)`, `Set.Ico a b`, 
   reads;
 * `egress X I`: `out_X(I)`, the width of the gates placed in `X` that a gate placed outside `X` during `I` reads;
 * `state X t`: `mem_X(t)`, the bits `X` carries across `t`: the width of the gates placed in `X` that `A[X, [t, ∞))`
-  reads from outside itself, the gates `X` computed before `t` and the input gates it stores.
+  reads from outside itself, the gates `X` computed before `t` and the input gates it stores;
+* `stateIn X t G`: the part of `mem_X(t)` in a set `G` of gates. `state X t` is `stateIn X t G + stateIn X t Gᶜ`
+  (`Accounting.SecurityProofs.Actual.state_eq_stateIn_add_compl`).
+
+A run's windows are cut at ticks `0 = τ 0 ≤ τ 1 ≤ … ≤ τ J = t` (`Cuts t`), window `j` being `[τ j, τ (j + 1))`; the
+cuts may differ from run to run.
 
 What a region reads from outside itself is what its location carried in plus what crossed its boundary (the split,
 `Accounting.SecurityProofs.Actual.width_into_region_le`), when wires run forward in time inside the location (`Forward`):
@@ -76,6 +81,12 @@ open Classical in
 /-- **State** `mem_X(t)`: the width of the gates placed in `X` that `A[X, [t, ∞))` reads from outside itself. -/
 noncomputable def state (X : Finset L) (t : ℕ) : ℕ :=
   A.width ((A.into (A.region X (Set.Ici t))).filter fun a => A.x a ∈ X)
+
+open Classical in
+/-- **The state in `G`**: the width of the gates of `G` placed in `X` that `A[X, [t, ∞))` reads from outside itself,
+the part of `mem_X(t)` in `G`. -/
+noncomputable def stateIn (X : Finset L) (t : ℕ) (G : Finset (Fin A.N)) : ℕ :=
+  A.width (((A.into (A.region X (Set.Ici t))).filter fun a => A.x a ∈ X) ∩ G)
 
 /-- **Wires run forward in time inside `X`**: a computed gate placed in `X` is read by gates placed in `X` only at its
 tick or later. -/
@@ -132,5 +143,13 @@ noncomputable def declaration (X : Finset L) (t : ℕ) (θ : Finset (Fin A.N)) (
   θ_input a ha := by simp [cut, hθ a ha]
 
 end Placed
+
+/-- **Cuts of `[0, t)`**: ticks `0 = τ 0 ≤ τ 1 ≤ … ≤ τ J = t`, cutting it into the `J` windows `[τ j, τ (j + 1))`. -/
+structure Cuts (t : ℕ) where
+  J : ℕ
+  τ : Fin (J + 1) → ℕ
+  mono : Monotone τ
+  zero : τ 0 = 0
+  last : τ (Fin.last J) = t
 
 end Accounting

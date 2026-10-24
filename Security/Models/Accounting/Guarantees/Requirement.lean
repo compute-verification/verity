@@ -8,8 +8,9 @@ the blocks each pass's receipts cover. The program's theorem is about a declared
 bits `W`'s execution keeps live and the bits it reads (`Definitions/Accounting/Requirement.lean`). These guarantees turn
 one into the other, at each engine step, once the store and the plan hold `W`'s credited blocks (`StoreMatches`,
 `PlanMatches`). Other blocks may be resident or planned too (filler, dead or another workload's): they earn `W`
-nothing. The audit credits the live values in complete blocks (`credited`): a KV block later steps fill is in no
-record yet. The first four bound what it credits, and the last two bound what it leaves out. Their proofs are in
+nothing. The audit credits the live values in complete blocks (`credited`): a KV block later steps fill, or one whose
+append's coin is still out (deferred residency, `Layout.encoded`), is in no record yet. The first four bound what it
+credits, and the last two bound what it leaves out. Their proofs are in
 `Security/Proofs/Accounting/Requirement.lean`.
 
 * `RequirementHeld`: a device holding resident blocks `H` holds all of `W`'s credited live bits but at most a block's
@@ -21,8 +22,8 @@ record yet. The first four bound what it credits, and the last two bound what it
   bits.
 * `RequirementMoved`: a pass that moved the planned blocks `M` moved all of the bits `W` reads from complete blocks at
   that step but at most a block's `b` bits for each planned block outside `M`.
-* `RequirementUncredited`: when the live values in incomplete blocks lie in one block per group (a sequence, layer and
-  plane), `W`'s live bits exceed the credited ones by at most `b` per group.
+* `RequirementUncredited`: when the live values in incomplete blocks lie in one block per group (a sequence, layer,
+  plane and page parity), `W`'s live bits exceed the credited ones by at most `b` per group.
 * `RequirementUnplanned`: the same for the bits a step reads from incomplete blocks.
 
 Frozen (no-function): counting bounds over a wiring, its execution and a store, about no function of the code.
@@ -119,10 +120,12 @@ exceed its credited live bits by at most `b` per group that has such a value:
 
   `liveBits s ≤ creditedBits s + |g(live s \ credited s)|·b`.
 
-**The reading.** With `g` a KV value's sequence, layer and plane, a KV pool fills each one's pages in turn, so the live
-bits the audit can't credit, those in blocks still being written, are at most `b` per sequence, layer and plane being
-served. With `RequirementHeld`, a device that held all but `k` resident blocks held all of `W`'s live bits but `k·b`
-and that share. A block of registered values is complete from the start, so the weights add nothing to the share.
+**The reading.** With `g` a KV value's sequence, layer, plane and page parity, a KV pool fills each one's pages in turn,
+and each page's coin is back before the next page is complete, so the live bits the audit can't credit, those in the
+block still being written and in the one completed last while its encode is out (deferred residency), are at most `2b`
+per sequence, layer and plane being served, `b` when every coin is back before the next step's reads. With
+`RequirementHeld`, a device that held all but `k` resident blocks held all of `W`'s live bits but `k·b` and that share.
+A block of registered values is complete from the start, so the weights add nothing to the share.
 
 Proof: `Accounting.SecurityProofs.RequirementUncredited`: the live values outside `credited` split by group, and the
 values of a group lie in one block, packed into its `b` bits.
@@ -139,8 +142,9 @@ reads exceed those it reads from complete blocks by at most `b` per group that h
 
   `readBits s ≤ creditedReadBits s + |g(reads s \ creditedReads s)|·b`.
 
-**The reading.** As `RequirementUncredited`, for the reads: with `g` a KV value's sequence, layer and plane, the reads
-no receipt can cover are at most `b` per sequence, layer and plane being served.
+**The reading.** As `RequirementUncredited`, for the reads: with `g` a KV value's sequence, layer, plane and page
+parity, the reads no receipt can cover are at most `2b` per sequence, layer and plane being served, `b` when every coin
+is back before the next step's reads.
 
 Proof: `Accounting.SecurityProofs.RequirementUnplanned`, as `RequirementUncredited` with the values read in place of
 the live ones.

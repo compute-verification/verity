@@ -154,10 +154,15 @@ def test_a_scheme_is_named_by_its_registered_name():
         assert I.identifier_bytes(get(name), epoch) == I.identifier_bytes(name, epoch)
 
 
-@pytest.mark.parametrize("salt", [b"", b"\0" * 31, b"\0" * 33, "00" * 32, bytearray(32)])
-def test_a_salt_that_is_not_32_bytes_is_refused(salt):
-    with pytest.raises(DomainError, match="the salt is 32 bytes"):
+@pytest.mark.parametrize("salt", [b"", b"\0" * 31, b"\0" * 33, b"\0" * 63, b"\0" * 65, "00" * 32, bytearray(32)])
+def test_a_salt_that_is_not_32_or_64_bytes_is_refused(salt):
+    with pytest.raises(DomainError, match="the salt is 32 bytes, or a certified epoch's 64"):
         I.identifier_v1("pearl-c-h100-v1", build(salt=salt))
+
+
+def test_a_certified_epochs_64_byte_salt_is_named_whole():
+    salt = bytes(range(64))
+    assert I.identifier_v1("pearl-c-h100-v1", build(salt=salt))["salt"] == salt.hex()
 
 
 @pytest.mark.parametrize("scheme", ["ncp-v9", "", "NCP-V1", "pearl-c-h100-v1 ", None, object()])

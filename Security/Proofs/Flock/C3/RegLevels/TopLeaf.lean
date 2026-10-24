@@ -21,12 +21,12 @@ import Proofs.Flock.Recursive.HPortTie
   outcome, with `ReadsOwnAt`'s port); `leaf_drawn`: `leaf_of_accepts` at a drawn outcome, whose reads the session's
   `hown` gives.
 
-Two registrant records' reads at one root, leaf count and domain, at one position, have one row, or the records clash
-(`enc_eq_of_not_clash`, from `TwoOpenings.collides` and `hm96Pair_spec`). At an accepted history no two of V*'s
-sessions clash (`Accepted`'s `¬ RegColl`), so two sessions' reads of one registered value at one position have one row
-where the value is one the verifier's shared rows register, or R's tops (`SharedValue`), so the two sessions' entries
-for it share their root, leaf count and domain (`SharedOwnRoot rows`, from `checkShared`: `sharedOwnRoot_checked`;
-`row_agree`).
+Two registrant records' reads at one root, leaf count, domain and leaf schema, at one position, have one row, or the
+records clash (`enc_eq_of_not_clash`, from `TwoOpenings.collides` and `hm96Pair_spec`). At an accepted history no two
+of V*'s sessions clash (`Accepted`'s `¬ RegColl`), so two sessions' reads of one registered value at one position have
+one row where the value is one the verifier's shared rows register, or R's tops (`SharedValue`), so the two sessions'
+entries for it share their root, leaf count, domain and leaf schema (`SharedOwnRoot rows`, from `checkShared`:
+`sharedOwnRoot_checked`; `row_agree`).
 -/
 
 namespace FlockSoundness.Registered
@@ -46,19 +46,20 @@ variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : 
   {decode' : Audit.Partition.DecoderB (C := C') (Reg := Reg₁) plan' tab'}
   {lay' : Binding.Layout P' plan' tab' decode'} {rs' : HmRowsX lay'}
 
-/-- **Two registered reads at one root, leaf count, domain and position have one row**, or the records clash: their
-leaves differ and both open the root there (`TwoOpenings.collides`), or the leaves agree over two rows
+/-- **Two registered reads at one root, leaf count, domain, leaf schema and position have one row**, or the records
+clash: their leaves differ and both open the root there (`TwoOpenings.collides`), or the leaves agree over two rows
 (`hm96Pair_spec`). -/
 theorem enc_eq_of_not_clash {rd : ReadsX lay rs} {rd' : ReadsX lay' rs'} (hc : ¬ rd.Clash rd') {p : lay.Pos}
     {p' : lay'.Pos} (hp : rd.isRead p) (hp' : rd'.isRead p') (hroot : (rd.port p).root = (rd'.port p').root)
     (hn : (rd.port p).leaves = (rd'.port p').leaves) (hdom : (rd.port p).domain = (rd'.port p').domain)
+    (hsch : (rd.port p).schema = (rd'.port p').schema)
     (hpos : rd.readAt p = rd'.readAt p') : rs.enc p (rd.wv p) = rs'.enc p' (rd'.wv p') := by
   have hleaf : rd.leaf p = rd'.leaf p' := Classical.byContradiction fun hne =>
     hc ⟨p, p', hp, hp', Or.inl (TwoOpenings.collides
       ⟨rd.port p, rd.readAt p, rd.leaf p, rd.wpath p, rd'.leaf p', rd'.wpath p'⟩ ⟨hne, rd.committed p hp, by
       show Flock.Registered.opensLeaf (rd.port p) (rd'.leaf p').1 (rd.readAt p) (rd'.wpath p') = true
       unfold Flock.Registered.opensLeaf
-      rw [hroot, hn, hdom, hpos]
+      rw [hroot, hn, hdom, hsch, hpos]
       exact rd'.committed p' hp'⟩)⟩
   exact Classical.byContradiction fun hne => hc ⟨p, p', hp, hp', Or.inr
     (hm96Pair_spec (rs.enc p (rd.wv p)) (rd.ws p) (rs'.enc p' (rd'.wv p')) (rd'.ws p') hne hleaf)⟩
@@ -234,9 +235,9 @@ theorem row_agree {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Opti
     HiddenExec.encPortH (F.Vs j).c.ports[q.val]! (FlockVBridge.Decode.regVal (F.zs R ω t R₂ j) (.inl (u, q))) =
       HiddenExec.encPortH (F.Vs j').c.ports[q'.val]!
         (FlockVBridge.Decode.regVal (F.zs R ω t R₂ j') (.inl (u', q'))) := by
-  obtain ⟨hroot, hn, hdom⟩ := hsh R ω t R₂ j j' ⟨_, (h.1 j).1⟩ ⟨_, (h.1 j').1⟩ _ (hro R ω t R₂ τ o h j u q hp).1 _
-    (hro R ω t R₂ τ o h j' u' q' hp').1 hv hs
-  exact FlockSoundness.Registered.enc_eq_of_not_clash (fun hc => h.2.1 ⟨j, j', hc⟩) hp hp' hroot hn hdom hpos
+  obtain ⟨hroot, hn, hdom, hsch⟩ := hsh R ω t R₂ j j' ⟨_, (h.1 j).1⟩ ⟨_, (h.1 j').1⟩ _
+    (hro R ω t R₂ τ o h j u q hp).1 _ (hro R ω t R₂ τ o h j' u' q' hp').1 hv hs
+  exact FlockSoundness.Registered.enc_eq_of_not_clash (fun hc => h.2.1 ⟨j, j', hc⟩) hp hp' hroot hn hdom hsch hpos
 
 /-- **A chosen row for one read of R's level-`l` tops is the row at every other read of that node**:
 `row_agree` at the shared value `rec-top-stacked-L<l>`. This lets `MapsLeft` choose recursive cap entry `e l x`

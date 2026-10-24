@@ -11,10 +11,10 @@ from dataclasses import dataclass
 
 from verity.ml.circuits.defs import bind
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns.geometry import is_row_major
+from verity_vllm.observe.fold.patterns.geometry import GeometryError, as_weight_view, is_row_major
 from verity_vllm.observe.fold.patterns.ops import base_op, bound_args
 from verity_vllm.observe.fold.patterns.resolutions import attribution_for, hint_of, unsupported
-from verity_vllm.observe.fold.patterns.target import _targets, target_of
+from verity_vllm.observe.fold.patterns.target import _targets, target_of, vocab_kind
 from verity_vllm.observe.fold.resolver import Compute, PerRow, Resolution, Shared, StepContext
 from verity_vllm.observe.fold.tree import TreeNode
 
@@ -60,6 +60,53 @@ class CublasLinear:
                 else bind(b1.GemmV2, K=K, N=N, DOT=dot))
         return Compute(spec, M, (PerRow(x), Shared(w)), (PerRow(out),), tuple(sorted(node.ids())), hint=hint_of(node, roots[0].name),
                        kernels=("gemm", "splitK", "cutlass"), attribution=attribution_for(ctx, M, node.phase), pattern=self.name)
+
+
+@dataclass
+class CublasMmF32Out:
+    """`aten.mm.dtype(x [M,K] bf16, W.T, float32)` over a bf16 [N,K] parameter on cuBLAS's captured f32-output route: the Build's
+    `vllm_bindings.bf16_gemm.CublasRouterRule` (`f32out_route`), one instance per row over the untransposed W."""
+
+    name: str = "gemm.cublas_mm_f32out"
+
+    def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
+        if node.is_triton or node.op != "aten.mm.dtype":
+            return None
+        tp, _recorded = target_of(ctx)
+        if tp.batch_invariant or tuple(tp.compute_capability) != (9, 0):
+            return None
+        from verity_vllm.program.frontend.rules.vllm_bindings.bf16_gemm import f32out_route
+
+        a = bound_args(node)
+        x, wt, outs = a.get("self", a.get("arg0")), a.get("mat2", a.get("arg1")), node.output_views()
+        if not isinstance(x, ViewDesc) or not isinstance(wt, ViewDesc) or len(outs) != 1:
+            return unsupported(node, "aten.mm.dtype arguments not bound as (self, mat2)", x=repr(x), wt=repr(wt))
+        out = outs[0]
+        if x.rank != 2 or wt.rank != 2 or x.shape[1] != wt.shape[0]:
+            return unsupported(node, "aten.mm.dtype takes [M,K] x [K,N]", x=repr(x), wt=repr(wt))
+        (M, K), N = x.shape, wt.shape[1]
+        try:
+            w = as_weight_view(wt, K, N)
+        except GeometryError as e:
+            return unsupported(node, f"the mm's mat2 is not W.T of a row-major [N,K] weight: {e}")
+        if (x.dtype, w.dtype, out.dtype) != ("bfloat16", "bfloat16", "float32") or not is_row_major(x) or not is_row_major(out) \
+                or out.shape != (M, N):
+            return unsupported(node, "aten.mm.dtype is not row-major bf16 [M,K] x W.T -> f32 [M,N]", x=repr(x), w=repr(w), out=repr(out))
+        roots = [r for r in ctx.roots_of(w) if r.role == "weight"]
+        if not roots:
+            return unsupported(node, "the mm's weight is not a checkpoint parameter (weight Root)", w=repr(w))
+        route = f32out_route(M, K, N)
+        if isinstance(route, str):
+            return unsupported(node, route)
+        _phase, role, statics = route
+        T = _targets()
+        try:
+            dot = T.tensor_core_dot(tp)
+        except T.UnregisteredTarget as e:
+            return unsupported(node, str(e))
+        return Compute(vocab_kind(ctx, role, K=K, N=N, DOT=dot, **statics), M, (PerRow(x), Shared(w)), (PerRow(out),),
+                       tuple(sorted(node.ids())), hint=hint_of(node, roots[0].name), kernels=("gemm", "splitK"),
+                       attribution=attribution_for(ctx, M, node.phase), pattern=self.name, roots=(None, roots[0].name))
 
 
 def _permuted(v: ViewDesc, order: tuple[int, ...]) -> ViewDesc:

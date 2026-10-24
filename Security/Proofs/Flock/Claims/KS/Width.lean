@@ -27,12 +27,11 @@ local notation "𝔽" => FlockLevel3.GF128
 /-- **A decoded plain proof's level-0 rows have `2^lanes` symbols** (`opened_rows`' `vecExact`). -/
 theorem decodeProof_rows {sh : Shape} {bytes : ByteArray} {p : Proof} (h : decodeProof sh bytes = .ok p) :
     ∀ row ∈ p.ligerito.initialProof.rows, row.size = 2 ^ (sh.sched.levels.getD 0 default).lanes := by
-  unfold decodeProof at h
-  obtain ⟨⟨p', r'⟩, hrun, hp⟩ := ebind_ok h
-  have hp' : p' = p := Except.ok.inj hp
-  rw [← hp']
+  replace h := (Flock.decodeProof_read h).1
+  unfold decodeRead at h
+  obtain ⟨r', hrun, -⟩ := Flock.Reader.runPlain_ok h
   refine (?_ : Post _ fun p : Proof => ∀ row ∈ p.ligerito.initialProof.rows,
-    row.size = 2 ^ (sh.sched.levels.getD 0 default).lanes) p' ⟨_, _, hrun⟩
+    row.size = 2 ^ (sh.sched.levels.getD 0 default).lanes) p ⟨_, _, hrun⟩
   dsimp only
   refine post_bind fun _ _ => ?_
   refine post_bind fun _ _ => post_bind fun _ _ => post_bind fun _ _ => post_bind fun _ _ => ?_
@@ -61,11 +60,9 @@ theorem zkDecode_rows {sh : Shape} {bytes : ByteArray} {p : Zk.ZkProof} (h : Zk.
     ∀ row ∈ p.proof.ligerito.initialProof.rows,
       row.size = 2 ^ (sh.sched.levels.getD 0 default).lanes + Zk.EXTRA_LANES := by
   unfold Zk.decode at h
-  obtain ⟨⟨p', r'⟩, hrun, hp⟩ := ebind_ok h
-  have hp' : p' = p := Except.ok.inj hp
-  rw [← hp']
+  obtain ⟨r', hrun, -⟩ := Flock.Reader.runAll_ok h
   refine (?_ : Post _ fun p : Zk.ZkProof => ∀ row ∈ p.proof.ligerito.initialProof.rows,
-    row.size = 2 ^ (sh.sched.levels.getD 0 default).lanes + Zk.EXTRA_LANES) p' ⟨_, _, hrun⟩
+    row.size = 2 ^ (sh.sched.levels.getD 0 default).lanes + Zk.EXTRA_LANES) p ⟨_, _, hrun⟩
   unfold Zk.reader
   dsimp only
   refine post_bind fun _ _ => ?_
@@ -147,6 +144,10 @@ theorem exists_of_lookCol {os : List (ℕ × List 𝔽)} {q : ℕ} {u : List �
   obtain ⟨p, hp, rfl⟩ := Option.map_eq_some_iff.1 h
   exact ⟨p, List.mem_of_find?_eq_some hp, rfl⟩
 
+namespace Gen
+
+variable [S : ZkSetup]
+
 /-- **The run's reader sits at its last message's table `j`**: its `m` is that table's. -/
 theorem runOf_m {zk : Bool} {s : Claims.Seen} {j : ℕ} {r : Claims.Flock.ZkRun} (h : runOf zk s j = some r) :
     ∃ f s' spec sts st, lastFinal s = some f ∧ setupOf zk f.stmt = some (s', spec, sts) ∧ sts[j]? = some st ∧
@@ -155,6 +156,14 @@ theorem runOf_m {zk : Bool} {s : Claims.Seen} {j : ℕ} {r : Claims.Flock.ZkRun}
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at h
   obtain ⟨f, hf, ⟨s', spec, sts⟩, hs, st, hst, _, _, _, _, rfl⟩ := h
   exact ⟨f, s', spec, sts, st, hf, hs, hst, rfl⟩
+
+end Gen
+
+/-- **The run's reader sits at its last message's table `j`**: its `m` is that table's. -/
+theorem runOf_m {zk : Bool} {s : Claims.Seen} {j : ℕ} {r : Claims.Flock.ZkRun} (h : runOf zk s j = some r) :
+    ∃ f s' spec sts st, lastFinal s = some f ∧ setupOf zk f.stmt = some (s', spec, sts) ∧ sts[j]? = some st ∧
+      r.m = st.m :=
+  Gen.runOf_m (S := S₀) (zk := zk) (s := s) (j := j) (r := r) (h := h)
 
 /-! ## An accepted run decides on its last message -/
 
@@ -186,6 +195,10 @@ theorem run_acc_next {Ω Coin : Type} [Inhabited Coin] (H : Claims.Msg → Claim
       ((List.range ((Claims.run H P V x ω r).msgs.map Prod.fst).length).map (Claims.coinSeq r))).eval H).1 = .acc :=
   stepWith_acc_msgs H P x ω _ (V.k x) [] [] ⟨[], [], [], .rej⟩ rfl h
 
+namespace Gen
+
+variable [S : ZkSetup]
+
 /-- **A decision is on the last message.** -/
 theorem act_decide_final {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
@@ -196,6 +209,20 @@ theorem act_decide_final {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs
   · cases h
   · repeat' split at h
     all_goals first | (cases h; done) | (cases h; simp_all)
+
+end Gen
+
+/-- **A decision is on the last message.** -/
+theorem act_decide_final {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
+    {mids : List (Claims.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
+    as.getLast?.bind finalOf = some f :=
+  Gen.act_decide_final (S := S₀) (zk := zk) (x := x) (as := as) (cs := cs) (s := s) (spec := spec) (sts := sts)
+    (link := link) (c₁ := c₁) (mids := mids) (f := f) (h := h)
+
+namespace Gen
+
+variable [S : ZkSetup]
 
 /-- **An accepted run's last message is a final message on the statement**, at a statement that sets up. -/
 theorem acc_last {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
@@ -214,6 +241,15 @@ theorem acc_last {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Cl
     have hl := act_decide_final hact
     rw [List.getLast?_map, Option.bind_map] at hl
     exact hl
+
+end Gen
+
+/-- **An accepted run's last message is a final message on the statement**, at a statement that sets up. -/
+theorem acc_last {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+    {r : Fin ((V zk).k x) → Coin} (h : (Claims.run H P (V zk) x ω r).out = .acc) :
+    ∃ s spec sts f, setupOf zk x = some (s, spec, sts) ∧ lastFinal (Claims.run H P (V zk) x ω r).seen = some f ∧
+      f.stmt = x :=
+  Gen.acc_last (S := S₀) (zk := zk) (H := H) (Ω := Ω) (P := P) (x := x) (ω := ω) (r := r) (h := h)
 
 /-! ## `ColsOk` at both records -/
 

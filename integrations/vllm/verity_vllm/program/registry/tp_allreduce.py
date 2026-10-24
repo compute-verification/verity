@@ -5,10 +5,14 @@ all-reduce vLLM's batch-invariant mode pins pynccl to, on 4x RTX PRO 6000 with P
     AllReduceMnnvl_v1{WORLD,N,SHOT}           (parts: Array<WORLD, Array<N, bf16>>) -> Array<N, bf16>
     AllReduceRmsNormMnnvl_v1{WORLD,N,SHOT,CLUSTER,EPS,FMA}
                                               (parts, res: Array<N, bf16>, w: Array<N, bf16>) -> (normed, residual')
+    AllReduceResidualMnnvl_v1{WORLD,N,SHOT}   (parts, res) -> residual'   (the fused one's all-reduce and residual add)
+    RmsNormMnnvl_v1{N,SHOT,CLUSTER,EPS,FMA}   (r: Array<N, bf16>, w) -> normed   (the fused one's norm of residual' r)
     AllReduceCustomCoordinate_v1{WORLD,START} (col: Array<WORLD, bf16>) -> bf16
     AllReduceCustom_v1{WORLD,SIZE,STAGE}      (parts: Array<WORLD, Array<SIZE, bf16>>) -> Array<SIZE, bf16>
     AllReduceMultimemCoordinate_v1{WORLD,TREE,FTZ}
                                               (col: Array<WORLD, bf16>) -> bf16
+    AllReduceMultimemVector_v1{WORLD,TREE,FTZ}
+                                              (parts: Array<WORLD, Array<8, bf16>>) -> Array<8, bf16>
     AllReduceMultimem_v1{WORLD,SIZE,TREES,FTZ}
                                               (parts: Array<WORLD, Array<SIZE, bf16>>) -> Array<SIZE, bf16>
     AllReduceNcclTreeCoordinate_v1{WORLD,CHAIN}
@@ -69,7 +73,10 @@ Past FlashInfer's 0.5 MiB at TP 8 on sm_90, `CudaCommunicator.all_reduce` hands 
 issues ``multimem.ld_reduce.relaxed.sys.global.add.acc::f32.v4.bf16x2`` over its slice of ``round_up(SIZE, 16 * WORLD) / WORLD``
 elements (`multimem_owners`) and ``multimem.st``s the result to every rank. The NVSwitch reduces the WORLD payloads in f32 in an
 order no source states; `AllReduceMultimem_v1` takes it per owner as TREES, binary trees over the ranks whose nodes are f32 adds
-(IEEE, or FTZ when FTZ), the 8-GPU capture's probes reading each tree off the switch (`tree_from_clusters`), then RN to bf16.
+(IEEE, or FTZ when FTZ), the 8-GPU capture's probes reading each tree off the switch (`tree_from_clusters`), then RN to bf16. Each
+``ld_reduce`` reduces one 16-byte vector, `MULTIMEM_VECTOR` elements, and an owner's slice is whole vectors, so the Definition is a
+batch of `AllReduceMultimemVector_v1` per run of one tree, no vector reading another's words. The capture's kept words replay on
+this form bit for bit (`MULTIMEM_REPLAY_RUN`, tests/properties/glm53_multimem_replay.py: 20 all-reduces, 17,063,936 elements).
 
 Under vLLM's batch-invariant mode (``VLLM_BATCH_INVARIANT=1``) none of those routes is on: `ParallelConfig` disables the custom
 all-reduce, `override_envs_for_invariance` sets ``VLLM_ALLREDUCE_USE_SYMM_MEM=0`` and `CudaCommunicator` leaves FlashInfer's
@@ -103,12 +110,14 @@ from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.prims import BF16
 
 __all__ = ["AllReduceCustom", "AllReduceCustomCoordinate", "AllReduceMnnvl", "AllReduceMnnvlCoordinate", "AllReduceMultimem",
-           "AllReduceMultimemCoordinate", "AllReduceNcclTree", "AllReduceNcclTreeCoordinate", "AllReduceRmsNormMnnvl",
-           "BATCH_INVARIANT", "CAPTURED", "CAPTURE_RUNS", "CUSTOM_MAX_BYTES", "CUSTOM_SYMM_MAX_BYTES", "Captured", "FI_MAX_BYTES",
-           "MNNVL_ONE_SHOT_BYTES", "NCCL_TREE_RUNS", "RTX_PRO_6000", "SETTINGS", "SYMM_MEM_MAX_BYTES", "WARP", "chain", "covered",
-           "custom_order", "custom_owners", "custom_stage", "device_of", "eps_bits", "fused_max_tokens", "mnnvl_grid", "mnnvl_shot",
-           "multimem_owners", "multimem_runs", "multimem_tree", "multimem_trees", "nccl_chain", "offset_free", "ranks",
-           "route_binding", "served_route", "settings_of", "strategy", "tree_clusters", "tree_from_clusters", "tree_leaves"]
+           "AllReduceMultimemCoordinate", "AllReduceMultimemVector", "AllReduceNcclTree", "AllReduceNcclTreeCoordinate",
+           "AllReduceResidualMnnvl", "AllReduceRmsNormMnnvl", "BATCH_INVARIANT", "CAPTURED", "CAPTURE_RUNS", "CUSTOM_MAX_BYTES",
+           "CUSTOM_SYMM_MAX_BYTES", "Captured", "FI_MAX_BYTES", "MNNVL_ONE_SHOT_BYTES", "MULTIMEM_REPLAY_RUN", "MULTIMEM_VECTOR",
+           "NCCL_TREE_RUNS", "RTX_PRO_6000", "RmsNormMnnvl", "SETTINGS", "SYMM_MEM_MAX_BYTES", "WARP", "chain", "covered",
+           "custom_order", "custom_owners", "custom_stage", "device_of", "eps_bits", "fused_max_tokens", "mnnvl_grid",
+           "mnnvl_shot", "multimem_owners", "multimem_runs", "multimem_tree", "multimem_trees", "nccl_chain", "offset_free",
+           "ranks", "route_binding", "served_route", "settings_of", "strategy", "tree_clusters", "tree_from_clusters",
+           "tree_leaves"]
 
 WARP = 32
 #: FlashInfer `MNNVL_ONE_SHOT_THRESHOLD`: the one-shot kernel up to this many bytes of M * H * WORLD
@@ -123,6 +132,10 @@ CUSTOM_SYMM_MAX_BYTES = 256 * 1024
 SYMM_MEM_MAX_BYTES = 64 * 1024 * 1024
 #: torch's `multimem_all_reduce_` slices are whole 16-byte vectors per rank
 MULTIMEM_ALIGN_BYTES = 16
+#: the bf16 elements of one 16-byte vector, what one ``multimem.ld_reduce.v4.bf16x2`` reduces
+MULTIMEM_VECTOR = MULTIMEM_ALIGN_BYTES // 2
+#: `CAPTURE_RUNS`' kept multimem words replayed on `AllReduceMultimemVector_v1`'s batch (tests/properties/glm53_multimem_replay.py)
+MULTIMEM_REPLAY_RUN = "r20261019-023101-2f28"
 H200_SMS = 132
 _NEG_ZERO32 = const(32, 0x80000000)
 
@@ -393,8 +406,9 @@ def multimem_owners(world: int, size: int) -> list[tuple[int, int, int]]:
     """[(lo, hi, owner)]: torch's `multimem_all_reduce_` reduces elements lo..hi of a SIZE-element bf16 all-reduce from rank
     `owner`'s ``multimem.ld_reduce``, each rank ``round_up(SIZE, 16 * WORLD) / WORLD`` elements (the kernel's 16-byte alignment
     taken as elements), empty slices dropped."""
-    if size % 8:
-        raise ValueError(f"SIZE={size}: torch's multimem all-reduce at 16-byte alignment takes whole 8-element vectors of bf16")
+    if size % MULTIMEM_VECTOR:
+        raise ValueError(f"SIZE={size}: torch's multimem all-reduce at 16-byte alignment takes whole {MULTIMEM_VECTOR}-element "
+                         "vectors of bf16")
     per = -(-size // (MULTIMEM_ALIGN_BYTES * world)) * MULTIMEM_ALIGN_BYTES
     return [(r * per, min((r + 1) * per, size), r) for r in range(world) if r * per < size]
 
@@ -467,11 +481,44 @@ def AllReduceRmsNormMnnvl(B, S, parts, res, w):
     """FlashInfer's MNNVL all-reduce + residual add + RMSNorm (`kARResidualRMSNorm`, fp32 accumulation, weight bias 0) of one
     token: `AllReduceMnnvl_v1`, r = a + res, the sum of squares in `blockReduceSum`'s geometry over CLUSTER CTAs,
     ``rs = rsqrt(sum * rcp(N) + EPS)`` (FMA: one FFMA), and the normed row. Returns (normed, r)."""
-    N, shot, cluster = int(S.N), strategy(S.SHOT), int(S.CLUSTER)
-    block, warps = _fused_geometry(N, cluster)
+    N, shot = int(S.N), strategy(S.SHOT)
+    _fused_geometry(N, int(S.CLUSTER))
     zero = B.call(ZERO32)
     a = B.call(bind(AllReduceMnnvl, WORLD=S.WORLD, N=N, SHOT=shot), parts)
     r = B.batch(P.Bf16AddF2fp, a, res, axes=(0, 0))
+    return tuple_of(_mnnvl_norm(B, S, zero, r, w), r)
+
+
+@composite("AllReduceResidualMnnvl", 1, ["WORLD", "N", "SHOT"],
+           lambda S: ((("parts", Array(int(S.WORLD), Array(S.N, BF16))), ("res", Array(S.N, BF16))), Array(S.N, BF16)),
+           conformance="not-yet-established: AllReduceRmsNormMnnvl_v1's r, whose captures are exact-model-tested; it is that "
+                       "Definition's AllReduceMnnvl_v1 and residual add node for node, not captured on its own "
+                       "(tests/program/test_tp_allreduce_parts.py)")
+def AllReduceResidualMnnvl(B, S, parts, res):
+    """`AllReduceRmsNormMnnvl_v1`'s new residual on its own: ``r = a + res`` (`Bf16AddF2fp_v1`) of the MNNVL all-reduce a,
+    element by element, so any block of its columns is the Definition at that width on those columns."""
+    a = B.call(bind(AllReduceMnnvl, WORLD=S.WORLD, N=S.N, SHOT=strategy(S.SHOT)), parts)
+    return B.batch(P.Bf16AddF2fp, a, res, axes=(0, 0))
+
+
+@composite("RmsNormMnnvl", 1, ["N", "SHOT", "CLUSTER", "EPS", "FMA"],
+           lambda S: ((("r", Array(S.N, BF16)), ("w", Array(S.N, BF16))), Array(S.N, BF16)),
+           conformance="not-yet-established: AllReduceRmsNormMnnvl_v1's normed row from its r, whose captures are "
+                       "exact-model-tested; it is that Definition's norm node for node, not captured on its own "
+                       "(tests/program/test_tp_allreduce_parts.py)")
+def RmsNormMnnvl(B, S, r, w):
+    """`AllReduceRmsNormMnnvl_v1`'s norm on its own: the normed row of the new residual r with weight w, in the fused kernel's
+    geometry (`_fused_geometry`), so ``(RmsNormMnnvl(AllReduceResidualMnnvl(parts, res), w), AllReduceResidualMnnvl(parts,
+    res))`` is that Definition."""
+    _fused_geometry(int(S.N), int(S.CLUSTER))
+    return _mnnvl_norm(B, S, B.call(ZERO32), r, w)
+
+
+def _mnnvl_norm(B, S, zero, r, w):
+    """The fused kernel's normed row of r (one token, `AllReduceRmsNormMnnvl_v1`'s statics), the f32 zero ``zero`` already
+    called."""
+    N, shot, cluster = int(S.N), strategy(S.SHOT), int(S.CLUSTER)
+    block, warps = _fused_geometry(N, cluster)
     rf = B.batch(P.Bf16ToF32, r, axes=(0,))
     if shot == 1:
         sq = B.batch(P.Bf16ToF32, B.batch(P.Bf16MulBf16, r, r, axes=(0, 0)), axes=(0,))
@@ -508,7 +555,7 @@ def AllReduceRmsNormMnnvl(B, S, parts, res, w):
         y = B.batch(P.F32MulFtzV2, B.batch(P.F32MulFtzV2, rf, rs, axes=(0, None)), g, axes=(0, 0))
     else:
         y = B.batch(P.F32MulFtzV2, B.batch(P.F32MulFtzV2, g, rf, axes=(0, 0)), rs, axes=(0, None))
-    return tuple_of(B.batch(P.F2fpBf16, y, axes=(0,)), r)
+    return B.batch(P.F2fpBf16, y, axes=(0,))
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -568,20 +615,33 @@ def AllReduceMultimemCoordinate(B, S, col):
     return B.call(P.F2fpBf16, value(multimem_tree(S.TREE, ranks(S.WORLD))))
 
 
+@composite("AllReduceMultimemVector", 1, ["WORLD", "TREE", "FTZ"],
+           lambda S: ((("parts", Array(int(S.WORLD), Array(MULTIMEM_VECTOR, BF16))),), Array(MULTIMEM_VECTOR, BF16)),
+           conformance="not-yet-established: exercised through the exact-model-tested AllReduceMultimem_v1 captures at vLLM's "
+                       "defaults and with the custom all-reduce off, not tested separately "
+                       "(`CAPTURED`, tests/properties/glm53_tp8_allreduce_capture_gpu.py)")
+def AllReduceMultimemVector(B, S, parts):
+    """One 16-byte vector of torch's multimem all-reduce, the `MULTIMEM_VECTOR` bf16 one ``multimem.ld_reduce`` returns: one
+    `AllReduceMultimemCoordinate_v1{TREE}` per element."""
+    return B.batch(bind(AllReduceMultimemCoordinate, WORLD=S.WORLD, TREE=S.TREE, FTZ=bool(S.FTZ)), parts, axes=(1,))
+
+
 @composite("AllReduceMultimem", 1, ["WORLD", "SIZE", "TREES", "FTZ"],
            lambda S: ((("parts", Array(int(S.WORLD), Array(S.SIZE, BF16))),), Array(S.SIZE, BF16)),
            conformance="exact-model-tested: TP8 on 8 cc 9.0 GPUs (132 SMs) at vLLM's defaults and with the custom all-reduce off, the tree "
                        "read off the switch with IEEE adds: GLM-5.3 at N=6144, 43-2048 tokens, and N=7168, "
-                       "37-2048 tokens (`CAPTURED`, tests/properties/glm53_tp8_allreduce_capture_gpu.py)")
+                       "37-2048 tokens (`CAPTURED`, tests/properties/glm53_tp8_allreduce_capture_gpu.py), its kept words replayed "
+                       "on the vector batch (`MULTIMEM_REPLAY_RUN`, tests/properties/glm53_multimem_replay.py)")
 def AllReduceMultimem(B, S, parts):
     """torch's `multimem_all_reduce_` of WORLD ranks' SIZE bf16 (the whole flattened tensor, whose slices name each element's
-    owner): each run of `multimem_runs` one `AllReduceMultimemCoordinate_v1{TREE=TREES[owner]}` per element."""
-    W = ranks(S.WORLD)
+    owner): each run of `multimem_runs` one `AllReduceMultimemVector_v1{TREE=TREES[owner]}` per 16-byte vector."""
+    W, V = ranks(S.WORLD), MULTIMEM_VECTOR
     outs = []
     for lo, hi, tree in multimem_runs(W, int(S.SIZE), S.TREES):
-        cols = array_of([parts[r][lo:hi] for r in range(W)])
-        outs.append(B.batch(bind(AllReduceMultimemCoordinate, WORLD=W, TREE=tree, FTZ=bool(S.FTZ)), cols, axes=(1,)))
-    return outs[0] if len(outs) == 1 else coll_concat(Array(int(S.SIZE), BF16), outs)
+        vectors = Array((hi - lo) // V, Array(V, BF16))
+        cols = array_of([parts[r][lo:hi].reshape(vectors) for r in range(W)])
+        outs.append(B.batch(bind(AllReduceMultimemVector, WORLD=W, TREE=tree, FTZ=bool(S.FTZ)), cols, axes=(1,)))
+    return coll_concat(Array(int(S.SIZE), BF16), outs)
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------

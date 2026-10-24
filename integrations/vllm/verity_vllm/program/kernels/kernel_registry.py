@@ -1,7 +1,8 @@
 """The integration's kernels as core `verity.ml.circuits.evaluation` kernels, plus what core's kernel registry does not carry yet.
 
 Every kernel here is registered with `verity.ml.circuits.evaluation.register_kernel` against the Definition id it computes and is
-checked against the reference by core `self_check`.  Core's kernel is a batch function returning a decline mask; the
+checked against the reference by core `self_check` on its check specialisations (`check`: by tests/program/test_kernel_self_check.py,
+and by the sampled replay before it grades a row with it, `check.replay.definitions`).  Core's kernel is a batch function returning a decline mask; the
 integration's kernels are written per instance, and their callers record WHY an instance was declined.  `register` keeps
 both forms:
 
@@ -20,15 +21,17 @@ pairs (`registered`).
 from __future__ import annotations
 
 import re
+import zlib
 from dataclasses import dataclass, field
 from typing import Any, Callable, Sequence
 
 import numpy as np
 
-from verity.ml.circuits.evaluation import Kernel, register_kernel
+from verity.ml.circuits.evaluation import Kernel, register_kernel, self_check
 from verity.ml.circuits.evaluation.reference import key_of, statics_of
+from verity_vllm.commit import challenge as CH
 
-__all__ = ["Declined", "Registered", "covers", "instance", "prim_static", "register", "registered"]
+__all__ = ["Declined", "Registered", "check", "covers", "instance", "prim_static", "register", "registered"]
 
 
 class Declined(Exception):
@@ -131,3 +134,27 @@ def covers(target: Any, kernel: str) -> str | None:
 def registered() -> list[Registered]:
     """Every kernel registered through `register`, in registration order."""
     return list(_REGISTERED.values())
+
+
+def check(key: str, kernel: str, n: int = 6) -> list[str]:
+    """Why kernel `kernel` of `key` is not its Definition, [] when it is: core `self_check` against the reference on `n` seeded
+    instances of each of its check specialisations (`check_targets`, drawn by a generator seeded by the pair), each of which it
+    must claim, and not decline every instance of."""
+    reg = _REGISTERED.get((key, kernel))
+    if reg is None:
+        return [f"no {kernel} kernel registered for {key}"]
+    targets = reg.check_targets(CH.generator(zlib.crc32(f"{key}/{kernel}".encode())))
+    if not targets:
+        return [f"{key}: no check specialisations"]
+    out = []
+    for t in targets:
+        why = covers(t, kernel)
+        if why is not None:
+            out.append(f"{t.id}: {why}")
+            continue
+        sc = self_check(t, kernel=kernel, n=n, seed=0)
+        if not sc.ok:
+            out.append(str(sc))
+        elif sc.declined >= sc.n:
+            out.append(f"{t.id}: {kernel} declined all {sc.n} instances")
+    return out

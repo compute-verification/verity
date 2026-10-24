@@ -433,7 +433,8 @@ def test_the_table_is_leans_class_of():
     the family's (run and registered inputs are read by their node, not the table); and each id the table lists that Lean
     doesn't is in `NOT_IN_LEAN`. Then the FP dots are roundings (refused for their operand bits, not their class),
     and so are the integer products reduced mod 2^w and the field extractions; the clamps and the 1-bit logic ops are
-    compare_selects; PoUW's wrapping dots are family steps, and the receipt fold a fold."""
+    compare_selects; PoUW's wrapping dots are family steps (H1's segment dots among them), and the receipt folds' steps
+    folds."""
     ids, families = lean_class_of()
     assert len(ids) > 200 and {i: (P.class_of(i), c) for i, c in ids.items() if P.class_of(i) != c} == {}
     assert set(P.CLASSES) - set(ids) <= NOT_IN_LEAN, set(P.CLASSES) - set(ids) - NOT_IN_LEAN
@@ -449,8 +450,9 @@ def test_the_table_is_leans_class_of():
     assert {P.class_of(f) for f in ("F32Sat_v1", "S32ClampS8_v1", "S32ClampS8_v2", "And2_v1", "Xor2_v1", "BitNot_v1", "Not_v1",
                                     "PouwSel32_v1")} == {"compare_select"}
     assert P.class_of("Bf16ToF32_v1") == "affine" and P.class_of("Lifted[Bf16ToF32_v1]_v2") == "roundings"
-    assert {P.class_of(f) for f in ("PouwSegDot_v1", "PouwDot16U8S8_v1", "BlackwellS8ImmaDot32_v2")} == {"family"}
-    assert P.class_of("PouwDuoAbsorb_v1") == "folds"
+    assert {P.class_of(f) for f in ("PouwSegDot_v1", "PouwSegDot_v2", "PouwSegDot0_v1", "PouwSegDot0_v2", "PouwDot16U8S8_v1",
+                                    "BlackwellS8ImmaDot32_v2")} == {"family"}
+    assert {P.class_of(f) for f in ("PouwDuoAbsorb_v1", "PouwFx1Absorb_v1", "PouwFx1Absorb_v2")} == {"folds"}
     family = ("GatherBf16x128256_v1", "TableRead16x4_v1", "TopPMaskWordx151936_v1", "Const8[0x7f]_v1",
               "BlackwellU8S8ImmaDot32_v1", "Zero_v1", "GatherBf16x16_v2")
     assert [P.class_of(f) for f in family] == ["gathers"] * 2 + ["compare_select", "const", "family", None, None]
@@ -825,5 +827,5 @@ def test_the_table_is_pinned():
     assert P.digest() == PINNED, P.digest()
 
 
-PINNED = ("fc77df15d3eed2a2674fc349bd90e05ff6780b1fd202abd04a10b81fabbc0e1b"
-          "632cff84629a15e07091630bdb5df2fad578398859c00e9e515de3570c6e4c3b")
+PINNED = ("d3a9a7c7865f0dda20fc4d2d2b84c44b0d7c5cfce1d0769263a95eb61ca49257"
+          "c900e0257e24c125a60bf6e7e00a9985697ded79519766df7d8a7e6b13955d2b")

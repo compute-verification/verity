@@ -193,10 +193,9 @@ namespace VStarFamily
 
 variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ)
 
-/-- Obligation: holds where the family registers reads only at rows of ports its sessions' reads files `own` name, as
-`RowsRegistered` takes them, and each session's registered check runs: that check refuses such a port when it is a bit
-row (`Registered.checkPort`: `sha512/row/v2` or `/row-seg/v1`), and every segmented port is one (`HmRow.parse` gives
-a port segments only with `v2`).
+/-- Obligation: holds where every session's circuit is in V*'s scope, whose ports carry no segments (`Layout.scopeOk`,
+`segs_of_scopeOk`; `readsUnsegC3` discharges it so for C3's families). The registered check does not give it: it checks
+a bit row in its own leaf schema (`Registered.checkPort`: `sha512/row/v2` or `/row-seg/v1`) rather than refusing it.
 **No registered read is of a segmented row.** At every accepted outer proof, each session's registered reads are rows
 of ports without segments. Acceptance does not give it: `hown` speaks of the drawn units' reads only, and `rd` is the
 family's field. A segmented row's bytes (`Layout.encSeg`, what `sha512/row-seg/v1` hashes) need not fix its bits

@@ -24,9 +24,10 @@ The path, read from the source:
    fixed tile BLOCK_SIZE_M 64, N 64, K 32 (fused_moe.py:1308-1315): KB 32, SWAP_AB False.  The tuned file's M <= 6 entries,
    BLOCK_SIZE_M 8 x BLOCK_SIZE_N 32 (M <= 3, no SWAP_AB: BLOCK_SIZE_N < 64) and 8 x 64 under SWAP_AB (M 4 to 6, the dot's N 8), are
    no wgmma tile, and Triton runs their dot on mma.sync (`sm90_dot`).
-4. Between them, `ops.silu_and_mul_per_block_quant(group_size=128)` (triton_moe.py:471-485), the fused branch every GLM-5.3 layer
-   takes (SiLU, fp8_w8a8, block [128, 128], no LoRA, no e8m0): `SiluMulFp8BlockQuant_v1` below.  Its (q, scale) is the w2 launch's
-   (A, A_scale); no bf16 intermediate exists.
+4. Between them (triton_moe.py:474-498), at the defaults `silu_and_mul` into a bf16 intermediate (`SiluMul_v2`) and step 2's ue8m0
+   quant of it (`Fp8GroupQuantUe8m0_v1{I,128}`), whose (q, scale) is the w2 launch's (A, A_scale).  Without e8m0 (DeepGEMM off) the
+   fused branch `ops.silu_and_mul_per_block_quant(group_size=128)` (SiLU, fp8_w8a8, block [128, 128], no LoRA) runs instead,
+   `SiluMulFp8BlockQuant_v1` below, with no bf16 intermediate.  `moe_sum` then adds each token's TOPK w2 rows (`MoeSum_v1`).
 
 `fused_moe_kernel`'s block-wise branch (fused_moe.py:542-552), per K tile k of BLOCK_SIZE_K = KB:
 
@@ -95,8 +96,10 @@ from verity_vllm.program.registry.moe import ONE32, NvExpf
 from verity_vllm.program.registry.prims import BF16, F32
 
 
-_CONF = ("model-untested: read from vLLM d9105ea80 fused_moe_kernel and Triton 3.7.1; tests/properties/glm53_block_fp8_capture_gpu.py "
-         "is its hardware check")
+_CONF = ("exact-model-tested as the `_v3` forms at DOT = HopperE4m3QgmmaDot32_v1, of which these are the function "
+         "(tests/program/test_fp8_moe_dot.py): vLLM d9105ea80's fused_moe_kernel (Triton 3.7.1) on cc 9.0 (132 SMs) at vLLM's defaults, "
+         "GLM-5.3's wgmma tiles 16x64x128 and 16x128x128 under SWAP_AB, 18,432,000 w13 and w2 words, 0 mismatches (property "
+         "glm53_block_fp8_capture/v4, run r20261017-125608-3071, art:41943522)")
 
 
 def check_statics(K: int, G: int, KB: int) -> None:
@@ -104,11 +107,15 @@ def check_statics(K: int, G: int, KB: int) -> None:
         raise ValueError(f"fused_moe_kernel block FP8 needs KB % 32 == 0, G % KB == 0 and K % G == 0 (K={K}, G={G}, KB={KB})")
 
 
-def triton_block_acc(B, K: int, G: int, KB: int, SWAP: bool, xq, sx, wrow, sw, zero, dot, fmul, ffma):
+def triton_block_acc(B, K: int, G: int, KB: int, SWAP: bool, xq, sx, wrow, sw, zero, dot, fmul, ffma, acc=None):
     """The f32 accumulator of one coordinate: per K tile k (ascending), `d` = KB/32 `dot` steps from +0, then
-    `acc = ffma(fmul(d, first), second, acc)` from +0 with (first, second) = (sx[kb], sw[kb]), swapped under SWAP, kb = k*KB // G."""
+    `acc = ffma(fmul(d, first), second, acc)` from +0 with (first, second) = (sx[kb], sw[kb]), swapped under SWAP, kb = k*KB // G.
+    Given `acc`, the tiles continue that accumulator instead of +0: K's tiles of a longer coordinate, the earlier ones' sum in
+    `acc`, give that coordinate's accumulator, since each tile is one FFMA into it."""
     check_statics(K, G, KB)
-    acc = zero()
+    if not isinstance(SWAP, bool):
+        raise ValueError(f"SWAP is a boolean, not {SWAP!r} (an id's static is a Python literal: SWAP=False)")
+    acc = zero() if acc is None else acc
     for k in range(K // KB):
         d = zero()
         for st in range(KB // 32):
@@ -121,7 +128,7 @@ def triton_block_acc(B, K: int, G: int, KB: int, SWAP: bool, xq, sx, wrow, sw, z
 
 
 def _acc(B, S, xq, sx, wrow, sw, dot=HopperE4m3QgmmaDot32):
-    return triton_block_acc(B, S.K, S.G, S.KB, bool(S.SWAP), xq, sx, wrow, sw, lambda: B.call(b1.ZERO32), dot, P.F32Mul, P.F32Fma)
+    return triton_block_acc(B, S.K, S.G, S.KB, S.SWAP, xq, sx, wrow, sw, lambda: B.call(b1.ZERO32), dot, P.F32Mul, P.F32Fma)
 
 
 @composite("MoeExpertFp8BlockCoordinate", 1, ["K", "G", "KB", "SWAP"],
@@ -185,8 +192,11 @@ DOT_CONF = ("exact-model-tested at cc 12.0's DOT (GemmTarget.fp8_moe_dot), Black
              "moe/prefill: fused_experts (E 128, top 8, hidden 4096, I 192) under TritonExperts, every block-[64, 64] fused_moe_kernel "
              "launch at 64x64x32, 11,791,360 w13 and w2 words, 0 mismatches; Hopper's step, the swapped and CUTLASS scale orders and an "
              "unfused mul + add each refuted (3,942, 577, 568 and 575 words); read from vLLM d9105ea80 fused_moe_kernel and Triton 3.7.1 "
-             "(each 32-wide tile one QMMA.16832.F32.E4M3.E4M3 from RZ); at DOT = HopperE4m3QgmmaDot32_v1 (cc 9.0's) the function of "
-             "the `_v1` forms (tests/program/test_fp8_moe_dot.py), which are model-untested")
+             "(each 32-wide tile one QMMA.16832.F32.E4M3.E4M3 from RZ); and at cc 9.0's DOTs (as this module's dot picks them), G = 128, KB = 128, SWAP "
+             "both: property glm53_block_fp8_capture/v4 on cc 9.0 (132 SMs) at vLLM's defaults, run r20261017-125608-3071, art:41943522: "
+             "GLM-5.3's served chain under vLLM's FusedMoEKernel / TritonExperts (E 256, top 8, hidden 6144, I 256 and 2048), "
+             "every launch at its tuned tile, HopperE4m3MmaV2Dot32_v1 at 8x32x128 and 8x64x128/SWAP_AB (638,976 words) and "
+             "HopperE4m3QgmmaDot32_v1 at 16x64x128 and 16x128x128/SWAP_AB (18,432,000 words), 0 mismatches")
 
 
 def coordinate_sig(routed: bool, e4m3=E4M3, f32=F32, bf16=BF16):
@@ -238,8 +248,9 @@ def MoeExpertFp8BlockGemmWV3(B, S, xq, sx, g, w, ws):
     return rows(B, coord, S.N, S.G, w, ws, (xq, sx, g))
 
 
-_ACT_CONF = ("model-untested: read from vLLM d9105ea80 fused_silu_mul_block_quant.cu and its build flags; "
-             "tests/properties/glm53_block_fp8_capture_gpu.py is its hardware check")
+_ACT_CONF = ("model-untested: read from vLLM d9105ea80 fused_silu_mul_block_quant.cu and its build flags; not on the served cc 9.0 "
+             "path (vLLM's defaults run silu_and_mul and the ue8m0 quant instead); glm53_block_fp8_capture/v3 compared it on cc 9.0 "
+             "at VLLM_USE_DEEP_GEMM=0 (GO, run r20261014-092222-e32d)")
 
 
 def check_act_statics(I: int, G: int) -> None:

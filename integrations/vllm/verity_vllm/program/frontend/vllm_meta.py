@@ -16,7 +16,6 @@ this module is imported):
 
 from __future__ import annotations
 
-import os
 import socket
 import sys
 from contextlib import contextmanager, nullcontext
@@ -28,10 +27,6 @@ engine_env.pin(engine_env.EXPORT)
 
 import torch  # noqa: E402
 from torch import nn  # noqa: E402
-
-from verity_vllm.program.frontend.loader_parity import (fp8_block_weights_as_the_loader_does,  # noqa: E402
-                                                       mla_absorbed_weights_as_the_loader_does,
-                                                       post_load_tensors_as_the_loader_does, retie_lm_head_as_the_loader_does)
 
 PIN = {"model": "HuggingFaceTB/SmolLM2-135M", "revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2", "dtype": "bfloat16"}
 
@@ -353,7 +348,7 @@ class StochasticEngineStep(nn.Module):
     INPUT (the request's `SamplingParams.seed`: a runtime value of the Program); temperature / top_p are the declared policy (structural
     inputs, constants of the Program); `pos` = the sampled logits row's position (pos0 + M - 1).  [R16 stoch, coord M-0169] `splits`
     (int32 [1]) is a forward INPUT too: the event's split count S = SplitsFor_v1(|live|, num_SMs), a DERIVED value of the workload.
-    In a single-request workload `S` is the constant SplitsFor_v1(1, num_SMs) and the forward takes no `splits`."""
+    With `S` given (the registered split count, `topp_geometry.registered_splits`) the forward takes no `splits`."""
 
     DERIVE_SOURCE = "verity-vllm/stochastic-engine-step/v1"
 
@@ -385,8 +380,8 @@ class StochasticRequest(nn.Module):
     (GM-01 G6 'sampler geometry').  The Program carries no S schedule: the forward reads `splits[s:s+1]` per event (a static view of
     the Input).  Parameter order [prompt, seed, splits] so the workload Program's layout stays [prompts, seeds, splits, weights...].
 
-    [single-request workloads] With `S` given (the workload's one request: S = SplitsFor_v1(1, num_SMs) at
-    every event) the forward takes [prompt, seed] and every select's split count is that constant (`Const32[S]` in the Program)."""
+    [registered S] With `S` given (`topp_geometry.registered_splits(num_SMs)` = SplitsFor_v1(1, num_SMs), every event of every
+    workload) the forward takes [prompt, seed] and every select's split count is that constant (`Const32[S]` in the Program)."""
 
     DERIVE_SOURCE = "verity-vllm/stochastic-request/v1"
 
@@ -448,14 +443,14 @@ def prefix_input(model: nn.Module, C: int) -> torch.Tensor:
     return torch.empty((len(impls), 2, C, kvh * d), dtype=torch.bfloat16, device="meta")
 
 
-def single_request_splits(sampling: dict) -> int | None:
-    """The single-request constant S of a stochastic policy: `sampling["splits"]` when it is an int, the
-    policy's geometry is one request's (`sampler_batch == 1`) and the int is SplitsFor_v1(1, num_SMs) of that geometry; else None."""
-    from verity_vllm.program.registry.topp_geometry import splits_for_v1
+def registered_policy_splits(sampling: dict) -> int | None:
+    """The registered split count S of a stochastic policy: `sampling["splits"]` when it is an int equal to
+    `topp_geometry.registered_splits` of the policy's geometry's num_SMs (`build.sampler_geometry`); else None."""
+    from verity_vllm.program.registry.topp_geometry import registered_splits
     S, g = sampling.get("splits"), sampling.get("geometry") or {}
-    if isinstance(S, bool) or not isinstance(S, int) or g.get("sampler_batch") != 1 or g.get("num_sms") is None:
+    if isinstance(S, bool) or not isinstance(S, int) or g.get("num_sms") is None:
         return None
-    return S if S == int(splits_for_v1(1, int(g["num_sms"]))) else None
+    return S if S == int(registered_splits(int(g["num_sms"]))) else None
 
 
 def cached_wrapper(mod: nn.Module, inputs: tuple, model: nn.Module, C: int) -> tuple[nn.Module, tuple]:
@@ -476,9 +471,9 @@ def make_wrapper(kind: str, model: nn.Module, *, pos0: int = 8, M: int = 1, LP: 
     [X-05] `sampling` is the row's declared policy: the greedy wrappers author `torch.argmax`; [R15 stoch] `{"kind": "stochastic", "temperature", "top_p", "top_k": 0, "seeded": True, "splits": "derived"}`
     authors `vllm_iface.gumbel_topp_token_select` with the seed as a second forward input and [R16, coord M-0169] the derived split
     count `splits` (int32, one entry per sampling event: [1] for the step wrapper, [T+1] for the request wrapper) as a third (step /
-    request wrappers; padded is greedy-only).  [single-request workloads] A numeric `splits` is the single-request constant S =
-    SplitsFor_v1(1, num_SMs) (`build.sampler_geometry`, `geometry.sampler_batch == 1`): the wrapper takes no `splits` input.  Any other
-    numeric `splits` (R15's static S / declared schedule) is REFUSED, as is any other policy (derive_step refuses earlier)."""
+    request wrappers; padded is greedy-only).  A numeric `splits` is the registered S = SplitsFor_v1(1, num_SMs) the served engine
+    pins (`build.sampler_geometry`, `registered_policy_splits`): the wrapper takes no `splits` input.  Any other numeric `splits`
+    (R15's static S / declared schedule) is REFUSED, as is any other policy (derive_step refuses earlier)."""
     if C:
         return cached_wrapper(*make_wrapper(kind, model, pos0=pos0, M=M, LP=LP, T=T, eos_id=eos_id, sampling=sampling), model, C)
     kind_s = (sampling or {"kind": "greedy"}).get("kind")
@@ -486,11 +481,11 @@ def make_wrapper(kind: str, model: nn.Module, *, pos0: int = 8, M: int = 1, LP: 
         s = sampling or {}
         if int(s.get("top_k", 0) or 0) != 0 or not s.get("seeded", False):
             raise ValueError(f"make_wrapper authors the seeded temperature + top-p select only (top_k == 0, seeded): {sampling}")
-        S = single_request_splits(s)
+        S = registered_policy_splits(s)
         if s.get("splits") != "derived" and S is None:
-            raise ValueError(f"make_wrapper: sampling.splits must be 'derived' (S_t = SplitsFor_v1(|live(t)|, num_SMs), a request-owned Input of "
-                             f"the Program; coord M-0169) or, for a single-request workload, the constant SplitsFor_v1(1, num_SMs) of its geometry "
-                             f"-- any other static S or a declared schedule is not a Program the Match can hold, got {s.get('splits')!r}")
+            raise ValueError(f"make_wrapper: sampling.splits must be the registered SplitsFor_v1(1, num_SMs) of its geometry (the S the served "
+                             f"engine pins) or 'derived' (a request-owned Input of the Program) -- any other static S or a declared "
+                             f"schedule is not a Program the Match can hold, got {s.get('splits')!r}")
         temp, p = float(s["temperature"]), float(s.get("top_p", 1.0))
         seed_in = torch.empty((1,), dtype=torch.int64, device="meta")
         if kind == "step":
@@ -610,8 +605,7 @@ def op_histogram(ep) -> dict[str, int]:
 
 __all__ = ["PIN", "make_vllm_config", "ensure_distributed", "instantiate_meta", "fake_forward_context", "EngineStep", "GreedyRequest",
            "CachedGreedyRequest", "CachedStochasticRequest", "cached_wrapper", "prefix_input", "PaddedGreedyRequest", "make_wrapper", "export_module", "export_step", "op_histogram", "consulted_facts",
-           "attention_impls", "export_facts", "BI_TRITON_KERNELS", "retie_lm_head_as_the_loader_does",
-           "mla_absorbed_weights_as_the_loader_does", "fp8_block_weights_as_the_loader_does", "post_load_tensors_as_the_loader_does"]
+           "attention_impls", "export_facts", "BI_TRITON_KERNELS"]
 
 
 def attention_impls(model: nn.Module) -> dict:
@@ -641,6 +635,8 @@ def attention_impls(model: nn.Module) -> dict:
                   "dcp_world_size", "pcp_world_size", "num_queries_per_kv", "kv_sharing_target_layer_name"):
             v = getattr(impl, k, "<absent>")
             obs[k] = list(v) if isinstance(v, tuple) else (None if isinstance(v, torch.Tensor) and v.numel() == 0 else ("tensor" if isinstance(v, torch.Tensor) else v))
+        if callable(kb := getattr(impl, "k_scale_bits", None)):      # the int8 backend's K scales (engine.int8_attention_vllm)
+            obs["int8_k_scales"] = [b & 0xFFFFFFFF for b in kb(getattr(mod, "layer_name", name))]
         out[getattr(mod, "layer_name", name)] = obs
     for name, mod in model.named_modules():
         if not isinstance(mod, MLAAttention):

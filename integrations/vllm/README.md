@@ -17,7 +17,7 @@ Imports point down the layer order `pipeline` > `check` | `properties` > `acquir
 ~~~text
 verity_vllm/
   pipeline/           stage drivers      build.py match.py commit.py row*.py report.py hot.py layout.py cli.py llm.py research_tools.py tp/
-  engine/             the vLLM engine    build.py capture.py pinned.py run_facts.py code_identity.py vllm_adapter.py engine_driver.py engine_profile.py arrivals.py rank_worker.py profiles/
+  engine/             the vLLM engine    build.py capture.py pinned.py run_facts.py code_identity.py vllm_adapter.py engine_driver.py engine_profile.py arrivals.py static_schedule.py served_seed.py rank_worker.py profiles/
   program/            Program            registry/ frontend/ lifting/ verity/ml/kernels/ model.py workload.py compact.py dtypes.py
   query/              verification query module_body.py word.py cross_call.py required.py program_view.py manifest/ compare.py
   correspondence/     runtime corresp.   runtime.py reader_for_*.py resolve*.py capture_identities.py
@@ -32,6 +32,7 @@ verity_vllm/
   pins/               measured pins      <DEVICE>.json (cuBLAS routes, SMs) served/<ROLE>.<DEVICE>.json (a served Build's artifact, dispatch, MoE launches)
   ops/                pod operations     pod_bootstrap.sh pod_gate.sh pod_*_tap.sh canary.sh *_negatives.sh known_roots.json
 tests/<subpackage>/   mirrors the package; tests/regression = the R19 reference harness (opt in with VERITY_REGRESSION=1)
+tools/                scripts run by path: popread.py (which units' cross-unit reads a committed value steers; each unit's egress E(u)), migrate/ (registry splits)
 workloads/ manifests/ fixtures/ data/ docs/    records of the qualification table; never rewritten by the tool
 ~~~
 
@@ -39,7 +40,8 @@ workloads/ manifests/ fixtures/ data/ docs/    records of the qualification tabl
 `global_program.py` (the rooted workload Program of a Build), `m1_capture.py`, `layout.py` (Build / run directory layout),
 `cli.py` (the one CLI, `verity-vllm`), `row.py` / `row_*.py` (`verity-vllm row`: a sweep row's
 stages), `llm.py` (the public `verity_vllm.LLM`), `timeline.py` / `spans.py` / `telemetry/`, `admission_bound.py` / `admission_planner.py`,
-`research_outputs.py` / `research_result.py`, `source_identity.py`, `release_json.py`, `workload.py` /
+`research_outputs.py` / `research_result.py`, `commit_arb.py` (`verity-vllm commit-arb`: the served Commit under seeded
+varied traffic, its records held to the streamed I/O), `source_identity.py`, `release_json.py`, `workload.py` /
 `coverage_workloads.py`, `experiment.py`, `research_tools.py` (the `vllm.build` / `vllm.match` / `vllm.commit` Tools of
 `tools/research`), and `tp/` (the rank-aware capture, commit, match and fold-match drivers).  Entrypoints:
 `verity-vllm <command>` (`python -m verity_vllm.pipeline.cli <command>`) and `verity_vllm.LLM`.  Never: Verity semantics -- a check that
@@ -48,7 +50,8 @@ lives here is misfiled.
 **`engine/`** is the vLLM engine we attach to: `build.py` (the engine under κ and what it reads back), `capture.py` (the
 step observer and run header; `pinned.py` its host buffers), `run_facts.py` (profile manifest, versions), `code_identity.py` (executed code objects),
 `vllm_adapter.py` (workloads and request driving; the stages import the engine's names from it), `engine_driver.py`,
-`engine_profile.py`, `arrivals.py`, `rank_worker.py` (the TP rank worker extension), and `profiles/` (kappa: capture profiles and workload JSON; one generic
+`engine_profile.py`, `arrivals.py`, `static_schedule.py` (a `sampling.ignore_eos` run held to the schedule its declaration alone
+decides), `served_seed.py` (the public default seed a served request without one is sampled under), `rank_worker.py` (the TP rank worker extension), and `profiles/` (kappa: capture profiles and workload JSON; one generic
 constructor + a facts table).  Never: commit, decide what is required.
 
 **`program/`** implements *Program*: Definitions (`registry/`, the registered library; importing it registers the on-demand
@@ -87,7 +90,8 @@ required, name a model.
 `compiled_source.py` / `compiled_kernel_source.py` / `partial_source.py` / `moe_align_source.py` / `norm_scale_source.py` /
 `router_softmax_source.py` / `vocab_range_source.py`, attached by `taps.py`; `kv_slots_source.py`, each KV layer's slots for the
 memory map, attached by `commit --memory-map`; `oracle_witness.py` judges the TP match oracle, where an MoE align witness that
-differs between the runs fails by name), `fa2_plane_classes.py`, `committer_api.py`, and the shipped tap sources (`fa2_tap_src/`,
+differs between the runs fails by name, and the Commit replays the capture's MoE align schedule, `moe_align_source.arm_replay`),
+`fa2_plane_classes.py`, `committer_api.py`, and the shipped tap sources (`fa2_tap_src/`,
 `fa3_tap_src/`, `norm_tap_src/`, `router_tap_src/`).  `gate.py` is the CPU gate (one row's acquisition plan, off-pod).  Four taps are
 on by default; `NORM_TAP=0`, `GUARDED_MAX_TAP=0`, `ROUTER_TAP=0` or `VOCAB_TAP=0` turns one off, for A/B only.  The guarded-max tap
 (`query/guarded_max.py`) runs on every row, whose attention is FA2 or FA3: the tap builds of `pod_fa2_tap.sh FA2_TAP_ROW_GUARD=1` /
@@ -100,16 +104,17 @@ range bits per token, from the fused embedding's ids, no kernel change).  `ops/p
 Never: decide what is required; never a model-name list.
 
 **`commit/`** implements *commitment*: `merkle.py` (trees over canonical ids, `path_shape` / `fold_path`, openings), `hashing.py`
-(`H(tag, *parts)`), `identity.py`, `binding.py` (binding map + coverage), `padding_steps.py`, `hidden_stream.py`, `scheme.py` (the commitment scheme `vllm-v1`: every leaf and root rule, over `verity.ml.commitments.vllm_v1`), and `committer/`, the GPU committer (`native_host.py`, the collector of record;
-`native_collect.py` + `native_*.cu` / `.cpp`, `native_jit.py`, `leafhash.py`, `flush_points.py`, `hidden_gpu_src/`).  Never:
+(`H(tag, *parts)`), `identity.py`, `binding.py` (binding map + coverage), `padding_steps.py`, `hidden_stream.py`, `step_rows.py` (the commitment scheme `rows-sha512`, the Commit's default), `scheme.py` (`vllm-v1`, by name: every leaf and root rule, over `verity.ml.commitments.vllm_v1`), and `committer/`, the GPU committer (`native_host.py`, the host committer every collector extends;
+`native_collect.py`, the collector of record (`native_collect_v2b`, the windowed worker), + `native_*.cu` / `.cpp`, `native_jit.py`, `leafhash.py`, `flush_points.py`, `hidden_gpu_src/`).  Never:
 runtime metadata in the identity tuple.
 
 **`check/`** implements *checks -> verdicts*: `match/` (`global_match.py`, `global_match_fast.py`, `program_compare.py`,
 `batch_decomp.py`, `rank_match.py`, `xrank_collectives.py`), `replay/` (`driver.py` with `sampled_replay`, `replay*.py`,
 `stoch_recompute.py`, `compiled_kernel_check.py`, `vu_query.py`), `gates.py` G1..G8, execution extent (`executed_prefix.py`),
 `verdict.py` (with `commit_verdict`), `value_check.py` / `compiled_value_check.py` / `oracle_compare.py`, `kernel_identity.py`,
-`fold_compare.py`, `operand_provenance.py`, and input provenance (`weights_of_record.py`: checkpoint basis, `weights_pin`;
-`root_policy.py`); `poc_*.py` are v1 leftovers.  Never: acquire or commit anything.
+`fold_compare.py`, `operand_provenance.py`, input provenance (`weights_of_record.py`: checkpoint basis, `weights_pin`;
+`root_policy.py`), and batch invariance (`batch.py`: a template's outputs read no other owner's rows, and its launch shape doesn't
+pick its Definition; `circuit-check --batch` runs it over `predict/batch.py`'s templates); `poc_*.py` are v1 leftovers.  Never: acquire or commit anything.
 
 **`properties/`** holds the property harnesses: `noninterference.py`, `census.py` + `kernel_allowlist.py`, `golden.py` +
 `golden/`, `holdout.py`, `admission.py` (differential admission tests), `quarantine_lint.py`, `protected.py`,
@@ -219,6 +224,7 @@ Supported keyword options:
 | `max_model_len` | the pin's | context length |
 | `gpu_memory_utilization` | the profile's | fraction of device memory the engine may take |
 | `kv_cache_memory_bytes` | vLLM's sizing | the KV cache's size in bytes, in place of sizing it from free memory |
+| `enable_chunked_prefill` | vLLM's, on | False holds a prefill that doesn't fit a step instead of cutting it into chunks |
 | `enforce_eager` | True | eager execution; False compiles with torch.compile and CUDA graphs |
 | `execution` | `bi-eager`, or `bi-compiled` with `enforce_eager` False | the execution label (`engine.served.EXECUTIONS`), which sets batch invariance and `enforce_eager`; `compiled` is vLLM's serving defaults |
 | `dtype` | the profile's | served dtype override |
@@ -237,6 +243,15 @@ parameters, prompt and generated token ids per request) to `llm.records`; `llm.p
 `llm.engine_record` the engine as built (the `vllm.LLM` keyword arguments, the profile's environment flags, the execution vLLM
 reports, the protocol composition record).  `llm.vllm` is the wrapped `vllm.LLM` (for driving its engine step by step) and
 `llm.model` the served model in this process, the object protocol options install on.
+
+A protocol option's settings that come from the engine are filled from the built one (`protocol_options.from_engine`),
+and one that can't be filled there is refused by name.  PoUW's H1 needs only its public parameters: on an int8 pin, with
+the int8_exact parts registered (`engine.int8_ranks.register(("linears", "attention"))`),
+`LLM(model, revision=..., quantization="verity_int8", attention_backend="CUSTOM", max_num_batched_tokens=T,
+protocols="pouw:eps1-sm120-h1fx1", protocols_config={"pouw": {"rows": T, "steps": S}})` installs it with the engine's
+model runner and, without a `challenger`, in-process coins, which credit nothing (`pouw_h1.IN_PROCESS`).
+`llm.reinstall(protocols_config=None)` closes the installed set and installs it afresh, with the next epoch's coins: one
+H1 window per call; `pouw.h1_run(entry)` reads the window until the next install.
 
 ## Hook interface
 
@@ -346,7 +361,13 @@ on every rank, the switches that select its kernels (`engine/served.py`: batch i
 the FlashInfer sampler, the model runner, NCCL P2P, the custom all-reduce, eager and compilation modes, the attention backend and
 FlashAttention version, the MoE backend) and fails closed unless each is vLLM's default or declared, with a reason, by the engine
 profile (`engine/env.py`), the row's execution label (only a `bi-*` row is batch invariant) or the row file; `served` in its
-versions.json and summary.json records them.
+versions.json and summary.json records them.  A row of record (one `manifests/records.json` lists) is done only at its public cap:
+its file declares `sampling.ignore_eos` and every request a `max_tokens`, so its served length is public and the EOS a request
+samples decides no step.  The row file (`config.RowConfig`), `row run`'s precheck (`PRECHECK_FAIL_DONE_SOURCE`) and GP-01
+(`reason: done_source`) refuse one that is not, by name, before any GPU time (`config.done_source_refusal`).  Whatever indexes a
+row makes it one, so `records publish`, `records pull` and `records switch` refuse such a row before they write anything, and `row
+chain` refuses it before any stage when it would publish (`config_record.index_refusal`; `--no-publish` still runs it); a research
+row keeps its EOS stops.
 
 The circuit database (`verity_vllm/records.py`) keeps, per row of record, the exact circuit it served and the evidence that it is
 faithful, by row id; committed values are never kept.  A row's entry is a preserved `vllm-config-record/v1` artifact labelled
@@ -364,11 +385,13 @@ last verdict in `stages.txt`; a Build whose Programs passed while its in-stage m
 passes superseded by the manifest of record.  `records.programs(row)` returns `{rank: {part: DecodedProgram}}` (the workload
 Program the Commit binds, and the step and request Programs it composes; `ranks=` and `part=` select), fetched by row id and
 checked against the record's digests, ready for `verity.ml.circuits.evaluation` on synthetic inputs.  `verity-vllm records
-publish` adds a row (a FAIL record, a Commit that committed against another manifest or other Programs than the Build's, a Build
-artifact that lacks a Program the record names, or a needed property neither cited nor a gap, is refused).  `row chain` publishes
+publish` adds a row (a row file not done only at its public cap, a FAIL record, a Commit that committed against another manifest or
+other Programs than the Build's, a Build artifact that lacks a Program the record names, or a needed property neither cited nor a
+gap, is refused).  `row chain` publishes
 it itself once the row's Build, Match and Commit Attempts pass (their artifacts, the Commit's summary.json and each needed
-property's newest capture of record, `--newest-captures`); a row that did not pass publishes nothing, and `records pull ART`
-indexes in a checkout the record a pod's job tree published.  `records show` prints
+property's newest capture of record, `--newest-captures`); a row that did not pass publishes nothing, a chain that would publish a
+row not done only at its public cap is refused before any stage, and `records pull ART` indexes in a checkout the record a pod's
+job tree published.  `records show` prints
 the rows and their records' ids or a record, and `records programs` decodes a row one rank at a time.  A `research run` job has no store: the launcher
 writes the row's record and the descriptors the job needs into one file (`records fetch ROW --to FILE [--rank R] [--part P]`),
 sends it (`research run --send FILE`, which lands it in `$RESEARCH_RUN_DIR/inputs/`), and the job reads them from it
@@ -377,7 +400,8 @@ sends it (`research run --send FILE`, which lands it in `$RESEARCH_RUN_DIR/input
 A TP row's Build is the trace unless the row is switched.  `verity-vllm predict compare ROW_DIR` predicts every Program of a traced
 Build from the row's declared inputs (`verity_vllm/predict/`) and compares digests rank by rank; `records switch ROW --comparison
 comparison.json --run RUN --trace art:…` records, where every one is equal, the comparison run and that traced Build as the row's
-`aot` in `manifests/records.json`, and pins the predicted Programs.  A switched row's Build (`--build-construction record`, the
+`aot` in `manifests/records.json`, and pins the predicted Programs (a row whose file is not done only at its public cap is
+refused).  A switched row's Build (`--build-construction record`, the
 default) derives each Program with `predict emit` (`verity_vllm/predict/aot.py`): the predicted Program, under the trace's annotations (the
 runtime correspondence: per Call, the fx occurrence, module, views and slots, which only the trace yields) and with its other
 files, refused unless the predicted Program and descriptor are the trace's, byte for byte.  `records publish` refuses a switched
@@ -402,6 +426,7 @@ also backfills one from other evidence).  A new model's module carries the marke
 `verity-vllm rejudge RUN` (`pipeline/tp/rejudge.py`) recomputes a finished TP Commit's gates that need no GPU from what it saved
 (its runs in the row's `runs.jsonl`, each run's verdict from its ranks', manifest agreement, the cross-rank check, `summary.pass`),
 so a fix to gate code can be judged against a failed Commit without rerunning it; it names the gates that need the live values.
+A Commit whose rank verdict is still pending (a deferred replay not yet run) rejudges PENDING, exit 3, rather than FAIL.
 
 The pod runtime (Python 3.12, torch cu129, vLLM `d9105ea80`, native taps, `hidden_gpu`) is built by `verity_vllm/ops/pod_bootstrap.sh`
 and exercised through `research run --source <sha> --on <machine>`.  On a pod without a GPU (`nvidia-smi` absent, or `--cpu`)

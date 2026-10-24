@@ -165,8 +165,8 @@ def test_the_census_rule_counts_served_macs_and_tail_atoms_apart() -> None:
     assert S8.counts(bind(S8.S8Matmul, N=5, **S8.SMOKE_EDITED).bindings) == {"served_macs": 320, "tail_atoms": 480,
                                                                               "receipt_folds": 0}
     assert S8.LimbSplit.carries(bind(S8.LimbSplit, FORM="bytes", N=3, Y=(0, 1)).bindings) == 2
-    assert {f: FAMILY_COUNTS[f] for f in ("S8Dot_v1", "S8Matmul_v1", "S8Dot_v2")} == dict.fromkeys(
-        ("S8Dot_v1", "S8Matmul_v1", "S8Dot_v2"), S8.counts)
+    families = ("S8Dot_v1", "S8Matmul_v1", "S8Dot_v2", "S8Matmul_v2")
+    assert {f: FAMILY_COUNTS[f] for f in families} == dict.fromkeys(families, S8.counts)
 
 
 def test_limb_primitives_are_total_on_words() -> None:

@@ -50,9 +50,9 @@ package an enumerator listed (`targets.load_registries`, the vLLM registry's ``c
 `_ENUMERATORS`: each imports every module it lists and names any that fails, nothing else) is held by its listing, the modules
 it lists by their names, each module's content used only to follow a move (`_children`), and the modules it imported are not
 pinned to their names.  A module whose source `inspect` looked for is held by its name and content (``present``).  The checker's
-own version is the digest of this package's sources less `targets.py`, ``pins/`` and `heavy.json` (`HEAVY`: the scheduler's
+own version is the digest of this package's sources less `targets.py`, ``pins/``, `heavy.json` (`HEAVY`: the scheduler's
 peaks, which decide which targets run beside which, never what a check computes, and which no recording holds either,
-`cli.heavy`).  Beside them the key holds the interpreter and its optimization level, the platform, the request (the target, its options, whether the partition invariant applies to it, as the catalog resolved it, and for
+`cli.heavy`) and the known failures (`KNOWN`, which decide only the run's summary).  Beside them the key holds the interpreter and its optimization level, the platform, the request (the target, its options, whether the partition invariant applies to it, as the catalog resolved it, and for
 a Definition the digest of every primitive and specialization it reaches, each by its descriptor id and canonical descriptor
 entry, `descriptor`), the modules the registries import for having a sidecar (`registries`: a new or removed sidecar, or a
 moved module that has one, reruns every target, as a new import line in `targets.py` would) and the ``VERITY_*`` /
@@ -139,6 +139,9 @@ TARGETS, PINS = _HERE / "targets.py", _HERE / "pins"
 #: the targets' measured peaks `cli.run` schedules by: no input of any target, since they decide only which targets run beside
 #: which, and a target whose process the OOM killer took is never stored
 HEAVY = _HERE / "heavy.json"
+#: the failures `main` already has (`circuit_check.known`): no input of any target, since they decide only the run's summary
+#: (`checks.summarize`, over every target's stored report, recomputed each run) and no check imports them
+KNOWN = (_HERE / "known.py", _HERE / "known")
 #: a sidecar's name beside its module's (`sidecars`): ``fp8.circuit-check.py`` and ``.json`` of ``fp8.py``
 SUFFIX = ".circuit-check"
 #: the binding files beside `targets.py` (each Definition module's sidecar, `sidecars`), absolute; the pins files (``pins/``'s
@@ -1600,12 +1603,13 @@ def _dist(root: Path, top: str) -> str | None:
 
 def version() -> str:
     """The checker's own version: the digest of this package's sources, less `targets.py` and ``pins/`` (each target holds
-    its own parts of them) and `HEAVY` (no target's input)."""
+    its own parts of them), `HEAVY` and `KNOWN` (no target's input)."""
     h = hashlib.sha512()
     _INTERNAL.append(True)
     try:
         for p in sorted(_HERE.rglob("*")):
-            if p.is_file() and "__pycache__" not in p.parts and p not in (TARGETS, HEAVY) and PINS not in p.parents:
+            if (p.is_file() and "__pycache__" not in p.parts and p not in (TARGETS, HEAVY, KNOWN[0])
+                    and PINS not in p.parents and KNOWN[1] not in p.parents):
                 h.update(p.relative_to(_HERE).as_posix().encode() + b"\0" + p.read_bytes() + b"\0")
     finally:
         _INTERNAL.pop()
@@ -1979,6 +1983,28 @@ def seen(root: Path, got: dict[str, list[str]]) -> dict[str, dict[str, str | Non
     return _digests(root, got, fresh=True)
 
 
+def seen_all(root: Path, gots: list[dict[str, list[str]]]) -> list[dict[str, dict[str, str | None]]]:
+    """`seen` of each read set in ``gots``, every read among them digested once, now: what each gives on its own while the tree
+    is unchanged (`circuit_check.units` stores hundreds of records whose reads are mostly the same modules)."""
+    if not gots:
+        return []
+    every = {k: sorted({r for g in gots for r in g.get(k, ())}) for k in {"files", "dirs", *(k for g in gots for k in g)}}
+    now = seen(root, every)
+    return [{k: {r: v[r] for r in g.get(k, ())} for k, v in now.items()} for g in gots]
+
+
+def unit_reads(units: Iterable[str], roots: Iterable[Any]) -> dict[str, list[str]]:
+    """What a catalog binding's build read (`circuit_check.units`): what its ``units`` read and ran while they made their roots
+    (`producing`), and `attributed` over its ``roots``: the build of every Definition they reach, the bindings that made those,
+    those modules' import closures, its own units by digest, and what the process read outside every recording."""
+    units = tuple(units)
+    fr = Frame()
+    for u in units:
+        if u in _PRODUCED:
+            fr.merge(_PRODUCED[u], defs=False)
+    return attributed(fr, units, roots)
+
+
 def task_list_reads(roots: Iterable[Any]) -> dict[str, list[str]]:
     """What the task list's entry holds (`cli.run`): what any target could hold (`attributed` over every binding's recording and
     every root), every in-tree module this process imported, and every binding file whole.  More than the union of the targets'
@@ -2023,5 +2049,5 @@ def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: d
 
 
 __all__ = ["PINS", "SCHEMA", "SUFFIX", "TARGETS", "UNTRACEABLE", "Frame", "attributed", "internal", "key", "lookup", "pin_files",
-           "produced", "recorded_pins", "recording", "registries", "seen", "store", "task_list_reads", "trace", "tracing",
-           "unit_files", "untraced", "version"]
+           "produced", "recorded_pins", "recording", "registries", "seen", "seen_all", "store", "task_list_reads", "trace", "tracing",
+           "unit_files", "unit_reads", "untraced", "version"]

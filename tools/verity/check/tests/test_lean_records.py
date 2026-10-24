@@ -209,6 +209,23 @@ def test_without_the_audits_dependencies_the_tree_fetches_its_own_once(repo, tmp
         "a package that fetches nothing needs none"
 
 
+def test_a_links_file_left_empty_by_a_failed_write_is_no_links(repo, tmp_path, capsys):
+    """A write of `links.json` in place that failed on a full disk after truncating it left it empty, and every later
+    run on that slot's tree failed reading it (r20261019-232316-c617). The tree takes its dependencies again, as a new
+    tree does, and the file is replaced whole."""
+    tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
+    k = LC.LA.deps_key(repo / "a")
+    (deps / k / "dep").mkdir(parents=True)
+    tree.mkdir(parents=True)
+    for text in ("", '{"a": ', "[]"):
+        (tree / LC.LINKS).write_text(text)
+        assert LC.read_links(tree) == {}
+    (tree / LC.LINKS).write_text("")
+    assert LC.audit_records("a", deps, tree) == 0
+    assert json.loads((tree / LC.LINKS).read_text()) == {"a": k} and not (tree / f"{LC.LINKS}.tmp").exists()
+    assert f"dependencies copied ({k[:12]})" in capsys.readouterr().out
+
+
 def test_the_packages_whose_records_read_the_build_are_audited_after_it(repo, tmp_path, monkeypatch, capsys):
     """`--records Security` left `Security/Properties`' records, which read `Security`'s build, unchecked, and an unintended
     change to three of them surfaced only at a train's check (#1793). `a` requires `p` by path and lists a guarantee, so
@@ -232,7 +249,7 @@ def test_the_packages_whose_records_read_the_build_are_audited_after_it(repo, tm
     monkeypatch.setenv("AUDIT_FAILS", "a")
     capsys.readouterr()
     assert LC.audit_records("p", deps, tree) == 1, "a requirer's failure is the run's"
-    assert "lean-records: a requires p, and its records fail on this tree" in capsys.readouterr().out
+    assert "lean-records: a requires p, and its records fail on this build" in capsys.readouterr().out
     _calls(tmp_path)
     (repo / "a" / "lean-audit.json").write_text("{}")
     assert LC.audit_records("p", deps, tree) == 0 and len(_calls(tmp_path)) == 1
@@ -253,8 +270,8 @@ def test_a_tree_keeps_one_packages_dependencies(repo, tmp_path):
 
 def test_it_holds_a_lean_slot_of_pool_build_and_works_on_that_slots_tree(repo, tmp_path, monkeypatch, capsys):
     """Never the `audit` pool, where hour-long audits hold every slot, nor the one LEAN_SLOT_POOL names, nor the one LEAN_SLOT
-    says its caller holds; check.py holds the slot's lock itself. A node whose SLOTS lists no `build` refuses it, even with an
-    `any` pool, and nothing runs."""
+    says its caller holds; check.py holds the slot's lock itself. A node whose SLOTS lists no `build`, even with an `any`
+    pool, takes the `--dev-cache` path on the checkout instead, where check.py takes a slot of its own."""
     deps, slots = tmp_path / "deps", tmp_path / "locks" / "lean-slots"
     slots.parent.mkdir()
     slots.write_text("check 1\naudit 1\nbuild 2\n")
@@ -284,8 +301,12 @@ def test_it_holds_a_lean_slot_of_pool_build_and_works_on_that_slots_tree(repo, t
     capsys.readouterr()
     for text in ("check 1\naudit 1\n", "check 1\nany 4\n"):
         slots.write_text(text)
-        assert LC.audit_records("p", deps) == 2 and _calls(tmp_path) == []
-        assert "lists no pool 'build', the only one this request takes" in capsys.readouterr().out, "a guard never fails open"
+        assert LC.audit_records("p", deps) == 0
+        (call,) = _calls(tmp_path)
+        assert "--dev-cache" in call["argv"] and call["argv"][-1] == str(repo / "p") and "lean_slot" not in call, \
+            "check.py --build takes its own slot, of pool audit or any"
+        said = capsys.readouterr().out
+        assert "lists no pool 'build', the only one this request takes" in said and "taking the --dev-cache path" in said
 
 
 def test_without_lean_slots_its_tree_is_local(repo, tmp_path):
@@ -294,15 +315,34 @@ def test_without_lean_slots_its_tree_is_local(repo, tmp_path):
     assert _calls(tmp_path)[0]["argv"][-1] == str(tmp_path / "cache" / "lean-records" / "local" / "p")
 
 
-def test_it_names_one_package_and_one_run_holds_a_tree(repo, tmp_path, capsys):
+def test_it_names_one_package_and_one_run_holds_a_tree(repo, tmp_path, capsys, monkeypatch):
     tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
     assert LC.audit_records("q", deps, tree) == 2
     assert "lean-records: 'q' matches 0 packages: a, c, p" in capsys.readouterr().out
     assert LC.audit_records("p/", deps, tree) == 0 and _calls(tmp_path)[0]["argv"][-1] == str(tree / "p")
+    now = [0.0]
+    monkeypatch.setattr(LC, "_clock", lambda: now[0])
+    monkeypatch.setattr(LC, "_sleep", lambda s: now.__setitem__(0, now[0] + s))
+    (tree / ".who").write_text("r-holder (pid 1)\n")
     with open(tree / ".lock", "w") as held:
         fcntl.flock(held, fcntl.LOCK_EX)
         assert LC.audit_records("a", deps, tree) == 2
-    assert f"lean-records: another run holds {tree}" in capsys.readouterr().out and _calls(tmp_path) == []
+    out = capsys.readouterr().out
+    assert f"lean-records: another run holds {tree} (r-holder (pid 1)); waiting" in out and _calls(tmp_path) == []
+    assert f"still after {LC.TREE_WAIT_S} s: nothing ran" in out and now[0] >= LC.TREE_WAIT_S
+
+
+def test_a_run_waits_for_the_one_that_holds_its_tree_and_then_runs(repo, tmp_path, monkeypatch, capsys):
+    """A node without SLOTS gives every `--records` run the one `local` tree; a second run waits for the first instead of
+    refusing in 0 s (vy-nebius-cpu-2, 19 Oct), and then runs, naming itself as the holder."""
+    tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
+    tree.mkdir(parents=True)
+    held = open(tree / ".lock", "w")
+    fcntl.flock(held, fcntl.LOCK_EX)
+    monkeypatch.setattr(LC, "_sleep", lambda s: held.close())
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-second")
+    assert LC.audit_records("p", deps, tree) == 0 and _calls(tmp_path)[0]["argv"][-1] == str(tree / "p")
+    assert "another run holds" in capsys.readouterr().out and (tree / ".who").read_text().startswith("r-second ")
 
 
 def test_it_refuses_a_tree_outside_its_own(repo, tmp_path, capsys):

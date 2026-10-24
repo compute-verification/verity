@@ -7,8 +7,8 @@ from typing import Any
 
 def _boolean_roots() -> list[Any]:
     """The u8 x s8 step on bits, the family on bits over `ops.boolean.gemm`'s s8 step (the plain arm at K = 64 and the
-    egemm-shaped edited arm: T every 32, two fresh tail words), and the limb splits on bits at the bindings `ops.s8`'s sidecar
-    checks, with their four steps."""
+    egemm-shaped edited arm: T every 32, two fresh tail words), the plain arm's matmul over N = 3 rows, and the limb splits on
+    bits at the bindings `ops.s8`'s sidecar checks, with their four steps."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops import s8 as S8
     from verity.ml.circuits.ops.boolean import gemm as BG
@@ -19,6 +19,7 @@ def _boolean_roots() -> list[Any]:
         bind(BS8.BlackwellU8S8ImmaDot32),
         bind(BS8.S8Dot, **S8.SMOKE_PLAIN | {"DOT": step}),
         bind(BS8.S8Dot, **S8.SMOKE_EDITED | {"DOT": step, "TDOT": step}),
+        bind(BS8.S8Matmul, N=3, **S8.SMOKE_PLAIN | {"DOT": step}),
         bind(BS8.LimbSplit, FORM="bytes", N=3, Y=(-127 * 65793, 127 * 65793)),
         bind(BS8.LimbSplit, FORM="byteclamp", N=3, Y=(-65152, 65151)),
         bind(BS8.S32LowByte),

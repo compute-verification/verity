@@ -152,8 +152,8 @@ def _prewarm_weights(indices: dict, picked: list[dict], weights: Callable[[str, 
 
 
 #: spec family -> the C++ twin libraries its evaluator dlopens (built JIT on first use)
-_FAMILY_LIBS = {"RMSNormTriton_v1": ("rms",), "RMSNormFusedCuda_v2": ("rms",), "Gemm_v1": (), "Gemm_v2": (), "RoPE_v1": (), "SiluMul_v1": (), "SiluMul_v2": (), "BiasAdd_v1": (),
-                "Embedding_v1": (), "TokenSelect_v1": (), "GumbelTopPTokenSelect_v1": (),
+_FAMILY_LIBS = {"RMSNormTriton_v1": ("rms",), "RMSNormTriton_v5": ("rms",), "RMSNormFusedCuda_v2": ("rms",), "Gemm_v1": (), "Gemm_v2": (), "RoPE_v1": (), "SiluMul_v1": (), "SiluMul_v2": (), "BiasAdd_v1": (),
+                "Embedding_v1": (), "TokenSelect_v1": (), "TokenSelect_v3": (), "TokenSelect_v4": (), "GumbelTopPTokenSelect_v1": (),
                 # [R17 dense, ruling R17-11] the attention rows' softmax reads the measured MUFU.EX2 / MUFU.RCP tables: loaded in the parent
                 "Attention_v3": ("fa2",), "Attention_v2": ("fa2",), "Attention_v4": ("fa2",), "Attention_v5": ("fa2",),
                 "AttentionSoftcap_v2": ("fa2",),
@@ -222,6 +222,11 @@ def _malloc_trim() -> bool:
         return bool(ctypes.CDLL("libc.so.6").malloc_trim(0))
     except (OSError, AttributeError):
         return False
+
+
+def default_workers(processes: int = 1) -> int:
+    """The forked pool's size when the caller names none: half the cores, shared by ``processes`` replays running at once, at most 32."""
+    return max(1, min(32, (os.cpu_count() or 2) // 2 // processes))
 
 
 def fit_pool(want: int, picked: list[dict], worker_peak: int) -> tuple[int, dict[str, Any] | None]:
@@ -604,7 +609,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     # process pool shares the committed store + the weights cache copy-on-write and returns small records.  The children never touch CUDA
     # (weights are pre-read into the cache in the parent, the committed reader slices host tensors); a pool failure / timeout falls back
     # to the serial path.  Results are folded in the picked order below, so the record is independent of the schedule.
-    workers = max(1, min(32, (os.cpu_count() or 2) // 2)) if workers is None else workers
+    workers = default_workers() if workers is None else workers
     workers_requested = int(workers)
     pool_note = None
     # [rev-cb F-cb-44] a DEVICE-retained committed store (`--retain device`) cannot be read by forked children (CUDA after fork ->

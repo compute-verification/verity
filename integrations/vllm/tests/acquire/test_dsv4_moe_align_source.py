@@ -144,10 +144,11 @@ def model_of(ids: list[torch.Tensor]) -> torch.nn.Module:
     return root
 
 
-def fake_marlin(monkeypatch, *, tamper: str | None = None) -> None:
+def fake_marlin(monkeypatch, *, tamper: str | None = None, seed: int = 0) -> None:
+    """The kernel, its atomic order drawn from ``seed`` and the call's pair count: two runs of other seeds schedule apart."""
     def moe_align_block_size(topk_ids, block_size, num_experts, expert_map=None, pad_sorted_ids=False, ignore_invalid_experts=False):
         ids = topk_ids.reshape(-1).tolist()
-        out = kernel(ids, num_experts, block_size, np.random.default_rng(len(ids)).permutation(len(ids)), unwritten=0)
+        out = kernel(ids, num_experts, block_size, np.random.default_rng(len(ids) + seed).permutation(len(ids)), unwritten=0)
         return _tamper(*out, ids, num_experts, block_size, tamper) if tamper else out
 
     m = types.ModuleType(MA.MARLIN_MODULE)
@@ -285,10 +286,167 @@ def test_the_match_capture_records_the_witness_the_commit_commits(monkeypatch, t
             model.model.layers[k].ffn.experts(torch.zeros(1))
     got = w.close(tmp_path)
     rows = [json.loads(ln) for ln in (tmp_path / OW.witness_file(5)).read_text().splitlines()]
-    assert got == {"calls": 4, "rows": 16, "errors_n": 0, "errors": []} and len(rows) == 16
+    assert got == {"calls": 4, "rows": 16, "schedule_calls": 4, "errors_n": 0, "errors": []} and len(rows) == 16
     want = {f"model.layers.{k}.ffn.experts/{m}": OW.digest(c.acquired[f"model.layers.{k}.ffn.experts/{m}"].numpy().tobytes())
             for k in (0, 1) for m in MA.MEMBERS}
     assert [(r["step"], r["k"], f"{r['module']}/{r['member']}") for r in rows] == [
         (s, 3 * k + 2, f"model.layers.{k}.ffn.experts/{m}") for s in (0, 1) for k in (0, 1) for m in MA.MEMBERS]
     assert all(r["rank"] == 5 and r["sha256"] == want[f"{r['module']}/{r['member']}"] for r in rows)
+    sched = torch.load(tmp_path / OW.schedule_file(5), weights_only=True)
+    assert sched["rank"] == 5 and [(x["step"], x["module"]) for x in sched["calls"]] == [
+        (s, f"model.layers.{k}.ffn.experts") for s in (0, 1) for k in (0, 1)]
+    for x in sched["calls"]:
+        assert x["ids"].tolist() == ids[int(x["module"].split(".")[2])].reshape(-1).tolist()
+        assert x["rank"].view(torch.float32).numpy().tobytes() == c.acquired[f"{x['module']}/align.rank"].numpy().tobytes()
     assert MA.capture_witness(torch.nn.Linear(2, 2), 0, lambda: 0, hide) is None
+
+
+# ---------------------------------------------------------------- the Commit replays the capture's schedule
+
+
+@pytest.mark.parametrize("E,P,BM", CASES)
+def test_the_replayed_output_is_the_kernels_for_the_recorded_order(E: int, P: int, BM: int) -> None:
+    """Two atomic orders of one call: rewritten to the other order's recorded ranks, this order's sorted_token_ids is the kernel's for
+    that order slot for slot, `align_values` holds it to the kernel's outputs and recomputes the recorded ranks, and the slots past
+    num_tokens_post_padded are untouched; experts outside [0, E) (ignored by the kernel) included."""
+    rng = np.random.default_rng(P * 17 + E)
+    for trial in range(5):
+        ids = rng.choice([0, 0, 0, E - 1, E - 1, 1, -1, E, 7 - 2**31], P).tolist() if trial % 3 == 2 else rng.integers(0, E, P).tolist()
+        topk = torch.tensor(ids, dtype=torch.int32).reshape(-1, 1)
+        mine, theirs = kernel(ids, E, BM, rng.permutation(P), unwritten=7), kernel(ids, E, BM, rng.permutation(P), unwritten=3)
+        cap_rank = MA.align_values(topk, *theirs, E, BM)[0]
+        sorted_ids = mine[0].clone()
+        same, placed = MA.replay_schedule(topk, sorted_ids, E, BM, topk.reshape(-1), cap_rank)
+        assert bool(same) and bool(placed)
+        npp = int(mine[2])
+        assert sorted_ids[:npp].tolist() == theirs[0][:npp].tolist() and sorted_ids[npp:].tolist() == mine[0][npp:].tolist()
+        rank, *_rest, ok = MA.align_values(topk, sorted_ids, mine[1], mine[2], E, BM)
+        assert bool(ok) and rank.tolist() == cap_rank.tolist()
+
+
+def test_a_call_routed_otherwise_or_a_record_that_misplaces_a_pair_is_not_replayed() -> None:
+    E, P, BM = 4, 13, 4
+    ids = [0, 0, 0, 0, 0, 1, 1, 2, 3, 3, 3, 1, 2]
+    topk = torch.tensor(ids, dtype=torch.int32).reshape(-1, 1)
+    rng = np.random.default_rng(3)
+    mine, theirs = kernel(ids, E, BM, rng.permutation(P)), kernel(ids, E, BM, rng.permutation(P))
+    cap_rank = MA.align_values(topk, *theirs, E, BM)[0]
+    other = topk.reshape(-1).clone()
+    other[[0, 7]] = other[[7, 0]]
+    dup = cap_rank.clone()
+    dup[1] = dup[0]
+    past = cap_rank.clone()
+    past[7] = 2                                                      # expert 2 has two pairs
+    for cap_ids, rank, want in ((other, cap_rank, (False, True)), (topk.reshape(-1), dup, (True, False)),
+                                (topk.reshape(-1), past, (True, False)), (topk.reshape(-1)[:-1], cap_rank[:-1], (False, False))):
+        sorted_ids = mine[0].clone()
+        got = MA.replay_schedule(topk, sorted_ids, E, BM, cap_ids, rank)
+        assert (bool(got[0]), bool(got[1])) == want and sorted_ids.tolist() == mine[0].tolist()
+
+
+def _capture(monkeypatch, tmp_path, ids: list[torch.Tensor], steps: int = 2) -> tuple[dict, list[dict]]:
+    """A Match capture of `model_of(ids)` at rank 0 under the kernel's atomic order of seed 0: (its witness rows by (step, module, member), its
+    schedule file's calls)."""
+    import contextlib
+    import json
+
+    fake_marlin(monkeypatch, seed=0)
+    w = MA.capture_witness(model_of(ids), 0, lambda: 0, contextlib.nullcontext)
+    model = w.src.modules
+    for s in range(steps):
+        w.step(s)
+        for _n, m in model:
+            m(torch.zeros(1))
+    w.close(tmp_path)
+    rows = [json.loads(ln) for ln in (tmp_path / OW.witness_file(0)).read_text().splitlines()]
+    return {(r["step"], r["module"], r["member"]): r["sha256"] for r in rows}, torch.load(tmp_path / OW.schedule_file(0), weights_only=True)["calls"]
+
+
+def _commit(src, c, model, steps: int = 2) -> dict:
+    """The Commit's committed witness digests by (step, module, member) over ``steps`` steps."""
+    got = {}
+    for s in range(steps):
+        c._cur.step = s
+        run_step(src, c, model)
+        got |= {(s, n.rsplit("/", 1)[0], n.rsplit("/", 1)[1]): OW.digest(c.acquired[n].numpy().tobytes())
+                for n in c.acquired if n.rsplit("/", 1)[1] in MA.MEMBERS}
+    return got
+
+
+def test_the_commit_replays_the_captures_schedule_and_commits_the_captures_witness(monkeypatch, tmp_path) -> None:
+    """The Commit's kernel hands out other slots than the capture's (seed 1 against 0), so unarmed its witness differs from the capture's;
+    armed with the capture's schedule file, every call is replayed and every committed member is the capture's, byte for byte.  A new
+    run (the record after a warm-up) counts only its own calls."""
+    ids = [ids_of(1), ids_of(2)]
+    cap, _calls = _capture(monkeypatch, tmp_path, ids)
+    fake_marlin(monkeypatch, seed=1)
+    model, c = model_of(ids), Committer()
+    plain = MA.MoeAlignSource(c, model)
+    plain.install()
+    try:
+        assert _commit(plain, c, model) != cap
+    finally:
+        plain.uninstall()
+    assert MA.replay_stats([plain]) is None
+    c = Committer()
+    src = MA.MoeAlignSource(c, model)
+    assert MA.arm_replay([object(), src], tmp_path, 0) == {"armed": True, "file": str(tmp_path / OW.schedule_file(0)), "calls": 4}
+    src.install()
+    try:
+        assert _commit(src, c, model) == cap
+    finally:
+        src.uninstall()
+    assert not c.errors, c.errors
+    assert MA.replay_stats([src]) == {"replayed": 4, "routing_differs": 0, "missing": 0, "routing_differs_first": []}
+    src.install()
+    src.uninstall()
+    assert MA.replay_stats([src])["replayed"] == 0
+
+
+def test_a_call_routed_otherwise_runs_its_own_schedule_and_is_counted(monkeypatch, tmp_path) -> None:
+    """Layer 1 routes otherwise in the Commit than in the capture: its calls keep the kernel's own order (their witness differs, the
+    oracle names it) and are counted with where they are; layer 0 is replayed.  A capture without a schedule file arms nothing."""
+    _cap, _calls = _capture(monkeypatch, tmp_path, [ids_of(1), ids_of(2)])
+    fake_marlin(monkeypatch, seed=1)
+    model, c = model_of([ids_of(1), ids_of(9)]), Committer()
+    src = MA.MoeAlignSource(c, model)
+    MA.arm_replay([src], tmp_path, 0)
+    src.install()
+    try:
+        _commit(src, c, model)
+    finally:
+        src.uninstall()
+    assert not c.errors, c.errors
+    assert MA.replay_stats([src]) == {"replayed": 2, "routing_differs": 2, "missing": 0,
+                                      "routing_differs_first": [[0, "model.layers.1.ffn.experts"], [1, "model.layers.1.ffn.experts"]]}
+    fresh = MA.MoeAlignSource(Committer(), model)
+    got = MA.arm_replay([fresh], tmp_path / "none", 0)
+    assert got is not None and got["armed"] is False and "predates the schedule record" in got["why"]
+    assert fresh.replay is None and MA.replay_stats([fresh]) is None and MA.arm_replay([], tmp_path, 0) is None
+
+
+def test_the_rank_worker_arms_the_replay_once_before_the_committer_installs(monkeypatch, tmp_path) -> None:
+    """`tp2_commit_install` arms the rank's align source with the capture's schedule before its committer installs: once, at the
+    warm-up's install, and the record's install reuses it.  A Commit without a capture arms nothing."""
+    from verity_vllm.engine import rank_worker as RW
+
+    _capture(monkeypatch, tmp_path, [ids_of(1), ids_of(2)])
+    events: list = []
+    arm = MA.MoeAlignSource.arm
+    monkeypatch.setattr(MA.MoeAlignSource, "arm", lambda self, calls: (events.append(("arm", len(calls))), arm(self, calls))[1])
+
+    def worker(capture_dir: str | None) -> tuple[object, MA.MoeAlignSource]:
+        src = MA.MoeAlignSource(Committer(), model_of([ids_of(1), ids_of(2)]))
+        com = types.SimpleNamespace(sources=[object(), src], reset=lambda: None,
+                                    install=lambda: events.append(("install", src.replay is not None)))
+        ext = object.__new__(RW.TP2CaptureWorkerExtension)
+        ext._tp2_commit = {"com": com, "match_capture_dir": capture_dir, "rank": 0}
+        return ext, src
+
+    ext, _src = worker(str(tmp_path))
+    want = {"armed": True, "file": str(tmp_path / OW.schedule_file(0)), "calls": 4}
+    assert [ext.tp2_commit_install()["schedule_replay"] for _ in range(2)] == [want, want]
+    assert events == [("arm", 4), ("install", True), ("install", True)]
+    events.clear()
+    ext, src = worker(None)
+    assert ext.tp2_commit_install()["schedule_replay"] is None and src.replay is None and events == [("install", False)]

@@ -377,6 +377,7 @@ class PearlC:
         from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
         from verity.core.protocols.pouw.audit import weights_root
+        from verity.core.protocols.pouw import verifier
         from verity.core.protocols.pouw.coins import Challenger
         self.PPD, self.W, self.act = PPD, W, act
         self.weights = dict(enumerate(W.bf16))
@@ -387,7 +388,7 @@ class PearlC:
         t = time.perf_counter()
         salt_key = PPD.new_salt_key(SCHEME)
         roots = PPD.weight_roots(kernel, self.weights, SCHEME, salt_key=salt_key)
-        challenger = Challenger(epoch)
+        challenger = Challenger(epoch, verifier.coins)
         opening = challenger.open("salt", weights_root(roots))
         self.run = PPD.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, self.weights, roots, challenger.commitment,
                                        opening, graphs=True, salt_key=salt_key)

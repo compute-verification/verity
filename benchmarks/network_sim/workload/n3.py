@@ -15,13 +15,14 @@ causal on the hardware, whose units are all covered. From the placement, the Pro
 edges and φ, and φ's occupancy profile must be the public one. (2) Each unit's value rows register to its public root, and
 every crossing value is opened at its source unit (`values.verify`). (3) The schedule, which needs no witness: on every
 certified direction, the frames recorded in each bucket number what the occupancy profile says. (4) Every frame is explained
-(direction 2): a recorded frame is a declared `HELLO` of a connection whose route crosses the direction, or frame j of a
-stream φ puts on the direction, equal byte for byte to frame j of φ applied to the committed values and in φ's bucket.
-(5) Every crossing value appears (direction 1): on every direction a message crosses, its stream's recorded payload holds
-each crossing value's committed bits at φ's position, and every frame φ puts there was recorded.
+(direction 2): the direction's recorded frames, in grid order (by bucket, then as recorded), are φ's on it in its grid
+order (`Phi.slots` by bucket, then send order), each equal byte for byte to φ's frame of the committed values (a
+connection's `HELLO`, or frame j of a message) and in φ's bucket. (5) Every crossing value appears (direction 1): on every
+direction a message crosses, the recorded frames at its positions hold each crossing value's committed bits at φ's
+position, and every frame φ puts there was recorded.
 
-A frame is matched to φ by its stream and its rank among that stream's frames on the direction, so the order in which
-different streams interleave on a link doesn't matter.
+The canonical framing names no message on the wire (`framing`), so a frame is matched to φ by its position alone: φ is
+public, and the order in which a link's connections interleave in a bucket is the grid order N3's layout declares.
 
 **Violation codes**, each with the link direction (or the unit) it concerns:
 
@@ -30,11 +31,10 @@ different streams interleave on a link doesn't matter.
   placement's; a unit's rows don't register to its root or an opening fails).
 - `records`: two logs of one direction disagree.
 - `schedule`: a direction's frames per bucket differ from the occupancy profile.
-- `malformed`: not a B-byte frame with a `DATA` or `LAST` header whose length fits.
-- `unexplained`: a frame of a stream φ doesn't put on the direction, or a stream-0 frame that is no declared `HELLO`.
-- `extra`: a frame of a φ stream past that stream's frame count.
-- `content`: a frame whose header or payload differs from φ's.
-- `fill`: a frame whose header and payload are φ's but whose fill isn't zero, a covert channel in the padding.
+- `malformed`: not a B-byte frame with the canonical header.
+- `extra`: a frame past the frames φ puts on the direction.
+- `content`: a frame whose payload differs from φ's at its position.
+- `fill`: a frame whose data are φ's but whose fill past them isn't zero, a covert channel in the padding.
 - `bucket`: a frame of φ's recorded in another bucket.
 - `missing`: a frame φ puts on a direction that wasn't recorded there.
 - `value`: a crossing value whose bits at φ's position in the recorded payload aren't its committed value.
@@ -44,7 +44,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 
-from verity.core.protocols.certifier.active import DATA, HEADER, LAST, decode_frame
+from verity.core.protocols.certifier.active import HEADER
 from verity.ml.circuits.codec import program_digest
 from verity.ml.commitments import advice
 
@@ -168,14 +168,7 @@ def open_values(public: dict, witness: dict, placement: P.Placement, hw: Hardwar
 
 
 def _well_formed(frame: bytes, B: int) -> bool:
-    if len(frame) != B:
-        return False
-    kind, _, n = HEADER.unpack_from(frame)
-    return kind in (DATA, LAST) and HEADER.size + n <= B
-
-
-def _canonical_prefix(frame: bytes) -> bytes:
-    return frame[:HEADER.size + HEADER.unpack_from(frame)[2]]
+    return len(frame) == B and frame[:HEADER.size] == F.head(B)
 
 
 def check(public: dict, witness: dict, records: Records) -> Report:
@@ -205,72 +198,65 @@ def check(public: dict, witness: dict, records: Records) -> Report:
 
     streams = phi.by_stream()
     slots = phi.slots()
+    cut: dict[int, list[bytes] | None] = {}
+
+    def expected(s: F.Slot) -> tuple[bytes | None, int]:
+        """φ's frame at the slot, of the committed values (None when one didn't open), and the data bytes it holds."""
+        if s.kind == "hello":
+            return F.hello(hw, s.src, s.dst, B), F.HELLO.size
+        m = streams[s.stream]
+        if s.stream not in cut:
+            cut[s.stream] = phi.frames(m, opened) if all(e.value in opened for e in m.edges) else None
+        room = F.room(B)
+        frames = cut[s.stream]
+        return (frames[s.index] if frames else None), min(room, m.nbytes - s.index * room)
+
     for key in sorted(set(slots) | set(records)):
-        expected: dict[int, list[tuple[int, bytes | None]]] = defaultdict(list)
-        hellos: list[tuple[int, bytes]] = []
-        for s in slots.get(key, []):
-            if s.kind == "hello":
-                hellos.append((s.bucket, F.hello(hw, s.src, s.dst, B)))
-            else:
-                m = streams[s.stream]
-                ok = all(e.value in opened for e in m.edges)
-                expected[s.stream].append((s.bucket, phi.frames(m, opened)[s.index] if ok else None))
-        seen: dict[int, list[tuple[int, bytes]]] = defaultdict(list)
-        for b, f in records.get(key, []):
+        want = sorted(slots.get(key, []), key=lambda s: s.bucket)
+        got = sorted(records.get(key, []), key=lambda x: x[0])
+        for i, (b, f) in enumerate(got):
             report.stats["frames"] += 1
+            if i >= len(want):
+                report.add("extra", key, f"frame {i} in bucket {b}, past the {len(want)} φ puts on the direction")
+                continue
+            s = want[i]
+            what = "the HELLO" if s.kind == "hello" else f"frame {s.index} of message {s.stream}"
             if not _well_formed(f, B):
-                report.add("malformed", key, f"a {len(f)}-byte frame in bucket {b}")
+                report.add("malformed", key, f"a {len(f)}-byte frame in bucket {b}, at {what}'s position {i}")
                 continue
-            kind, stream, _ = decode_frame(f)
-            if stream == F.HELLO_STREAM:
-                if (b, f) in hellos:
-                    hellos.remove((b, f))
-                    report.stats["declared"] += 1
-                else:
-                    report.add("unexplained", key, f"a stream-0 frame in bucket {b} that is no declared HELLO")
+            wf, n = expected(s)
+            if wf is not None and f != wf:
+                fill = f[:HEADER.size + n] == wf[:HEADER.size + n]
+                report.add("fill" if fill else "content", key, f"{what} (position {i}) " +
+                           ("has non-zero fill" if fill else "isn't φ of the committed values"))
                 continue
-            if stream not in expected:
-                report.add("unexplained", key, f"a frame of stream {stream:#x} in bucket {b}, which φ doesn't put here")
+            if b != s.bucket:
+                report.add("bucket", key, f"{what} (position {i}) in bucket {b}, φ's is {s.bucket}")
                 continue
-            j = len(seen[stream])
-            seen[stream].append((b, f))
-            if j >= len(expected[stream]):
-                report.add("extra", key, f"frame {j} of stream {stream}, which has {len(expected[stream])}")
-                continue
-            want_b, want_f = expected[stream][j]
-            if want_f is not None and f != want_f:
-                if _canonical_prefix(f) == _canonical_prefix(want_f):
-                    report.add("fill", key, f"frame {j} of stream {stream} has non-zero fill")
-                else:
-                    report.add("content", key, f"frame {j} of stream {stream} isn't φ of the committed values")
-                continue
-            if b != want_b:
-                report.add("bucket", key, f"frame {j} of stream {stream} in bucket {b}, φ's is {want_b}")
-                continue
-            report.stats["explained"] += 1
-        for b, _ in hellos:
-            report.add("missing", key, f"the HELLO of bucket {b}")
-        for stream, want in expected.items():
-            got = seen.get(stream, [])
-            if len(got) < len(want):
-                report.add("missing", key, f"frames {len(got)}..{len(want) - 1} of stream {stream}")
+            report.stats["declared" if s.kind == "hello" else "explained"] += 1
+        if len(got) < len(want):
+            report.add("missing", key, f"frames {len(got)}..{len(want) - 1} of the {len(want)} φ puts on the direction")
+        at: dict[int, list[int]] = defaultdict(list)
+        for i, s in enumerate(want):
+            if s.kind == "data":
+                at[s.stream].append(i)
+        for stream, positions in at.items():
             m = streams[stream]
             payload = b""
-            for _, f in got:
-                kind, _, chunk = decode_frame(f)
-                payload += chunk
-                if kind == LAST:
+            for i in positions:
+                if i >= len(got) or not _well_formed(got[i][1], B):
                     break
-            have, acc = len(payload) * 8, int.from_bytes(payload, "little")
-            positions = m.positions()
+                payload += got[i][1][HEADER.size:]
+            have, acc = min(len(payload), m.nbytes) * 8, int.from_bytes(payload, "little")
+            offsets = m.positions()
             for e in m.edges:
-                o = positions[e.value]
+                o = offsets[e.value]
                 if e.value not in opened:
                     continue
                 if o + e.width > have:
-                    report.add("missing", key, f"value {e.value} of stream {stream}")
+                    report.add("missing", key, f"value {e.value} of message {stream}")
                 elif (acc >> o) & ((1 << e.width) - 1) != opened[e.value]:
-                    report.add("value", key, f"value {e.value} at bit {o} of stream {stream} isn't its committed value")
+                    report.add("value", key, f"value {e.value} at bit {o} of message {stream} isn't its committed value")
                 else:
                     report.stats["appearances"] += 1
     return report

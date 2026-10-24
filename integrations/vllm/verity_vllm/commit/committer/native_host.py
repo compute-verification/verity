@@ -50,7 +50,7 @@ try:
 except ImportError:                      # the offline core (tests, CPU cross-checks) needs no torch
     torch = None  # type: ignore[assignment]
 
-from verity_vllm.commit import hiding, scheme
+from verity_vllm.commit import hiding, scheme, step_rows
 from verity_vllm.commit.committer.input_classes import TOKEN_IDS_INPUT, weights_class
 from verity_vllm.commit.committer.pinned_pool import PINNED_EXACT, PinnedPool
 from verity_vllm.commit.native_ranges import NativeRangeOpenings, open_levels
@@ -255,8 +255,8 @@ def hazard_of_record(name: str, HAZARD_LEAVES: "tuple[str, ...] | frozenset[str]
     function rather than restating it."""
     if TP_PARTIAL_RE.search(name) or CALL_DEPENDENT_RE.search(name):
         return True          # [R14 TP-03] a collective's input partial (or a value overwritten or freed right after): snapshot now
-    if name.startswith("moe/") and name.endswith("/up"):
-        return True          # [R16 moe FLUSH-03] the fused-MoE up plane: its workspace is the block's own w2 output (cache1/cache3 alias)
+    if name.endswith("/up"):
+        return True          # [R16 moe FLUSH-03] the fused-MoE up value (`moe/L<k>/up`, or `<MoE module>/up` at calls): its workspace is the block's own w2 output (cache1/cache3 alias)
     base, _, idx = name.partition("/")
     leaf = base.rsplit(".", 1)[-1]
     if leaf in HAZARD_LEAVES or "embed" in leaf:                 # the caller's table (NativeHostCommitter.HAZARD_LEAVES of record); named so the by-name lint sees the rule
@@ -586,7 +586,8 @@ def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: st
             "margin_frac": ((host_cap_bytes - bound) / host_cap_bytes) if host_cap_bytes else None, "retain": retain, "retain_exclude": sorted(excl)}
 
 
-def step_bound_bytes(model: Any, modules: list[tuple[str, Any]], envelope: dict[str, Any], *, hidden_m1: bool, attn_backend: str = "fa2", moe_layers: int = 0) -> dict[str, Any]:
+def step_bound_bytes(model: Any, modules: list[tuple[str, Any]], envelope: dict[str, Any], *, hidden_m1: bool, attn_backend: str = "fa2", moe_layers: int = 0,
+                     chunk: int = GPU_CHUNK_BYTES) -> dict[str, Any]:
     """Upper bound of the bytes ONE engine step binds into the arena, from the acquired-module set (the required-value manifest of the
     native path: forward outputs of ACQUIRE_CLASSES, per token) and the workload envelope (`batch`, `max_prompt`, `max_new`,
     `max_num_batched_tokens`, `max_model_len`).  Prefill: the admitted prompt tokens of one step (<= max_num_batched_tokens, <= B x max
@@ -641,14 +642,14 @@ def step_bound_bytes(model: Any, modules: list[tuple[str, Any]], envelope: dict[
         else:
             w = hidden * 2
         per_token += w
-        per_step += GPU_CHUNK_BYTES
+        per_step += chunk
         cls = next((c for c in ("LogitsProcessor", "Sampler", "VocabParallelEmbedding", "RMSNorm", "RotaryEmbedding", "Attention", "SiluAndMul",
                                 "LinearBase") if c in names), "other")
         widths[cls] = widths.get(cls, 0) + w
     moe_pt = moe_bytes_per_token(model, moe_layers)
     if moe_pt:
         per_token += moe_pt
-        per_step += moe_layers * 6 * GPU_CHUNK_BYTES
+        per_step += moe_layers * 6 * chunk
         widths["MoeBlock"] = moe_pt
     B = max(1, int(envelope.get("batch") or 1))
     max_prompt = max(1, int(envelope.get("max_prompt") or 1))
@@ -712,6 +713,15 @@ def _gib(n: float) -> str:
     return f"{n / 2**30:.2f} GiB"
 
 
+def _split_step_names(srcs: list[Any], names: Any, step: int, padding_only: bool) -> tuple[Any, dict[str, tuple[int, int]]]:
+    """The step's names with each call-boundary source's own split off in turn, and every source's mismatches."""
+    bad: dict[str, tuple[int, int]] = {}
+    for src in srcs:
+        names, mine = src.split_step_names(names, step, padding_only)
+        bad.update(mine)
+    return names, bad
+
+
 _MEMTRACE = bool(os.environ.get("VERITY_MEMTRACE"))
 
 
@@ -733,8 +743,11 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
     def __init__(self, engine: Any, *, program_digest: bytes | None = None, run_id: str = "run", chunk: int = DEFAULT_CHUNK,
                  hash_threads: int = 2, retain_values: bool = True, acquire_classes: set[str] | None = None, staging: str = "arena",
                  arena_bytes: int = 512 << 20, batch_copy: bool = False, fast_copy: bool = False, regen_row4: bool = False, gpu_tree: bool = False,
-                 geo_digest: bytes | None = None, leaf_scheme: str = scheme.NAME, populate_threads: int | None = None) -> None:
-        """`engine=None` builds the OFFLINE core (hashing, roots, openings, verification; no hooks, no CUDA) for the security tests.  `leaf_scheme`: vllm-v1 position leaves (default) or hm96-sha256/v1 hiding leaves over them (`hiding.LeafSchemeRule`).  `populate_threads`: the pinned pool's (`PinnedPool`)."""
+                 geo_digest: bytes | None = None, leaf_scheme: str = scheme.NAME, populate_threads: int | None = None,
+                 commit_scheme: str | None = None) -> None:
+        """`engine=None` builds the OFFLINE core (hashing, roots, openings, verification; no hooks, no CUDA) for the security tests.  `leaf_scheme`: vllm-v1 position leaves (default) or hm96-sha256/v1 hiding leaves over them (`hiding.LeafSchemeRule`).  `populate_threads`: the pinned pool's (`PinnedPool`).
+        `commit_scheme` rows-sha512: the offline core's GPU-tree steps (`commit_block_offline`) under `step_rows`, as the windowed collector
+        commits a served run's (`NativeCollectCommitter(commit_scheme=)`, which sets its own)."""
         self.engine = engine
         self.runner = getattr(engine, "runner", None)
         self.model = getattr(engine, "model", None)
@@ -804,6 +817,12 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             self.name = f"{self.name}_gputree"
             self.chunk = GPU_CHUNK_BYTES
         self._init_leaf_scheme(leaf_scheme, gpu_tree or type(self)._commit_step is not NativeHostCommitter._commit_step)
+        if commit_scheme not in (None, scheme.NAME):
+            if commit_scheme != step_rows.NAME or engine is not None or not gpu_tree or self.hiding is not None:
+                raise ValueError(f"commit_scheme {commit_scheme!r}: the offline core takes {step_rows.NAME} over GPU-tree steps with vllm-v1 "
+                                 "leaves (engine=None, gpu_tree=True); a served run's is the windowed collector's")
+            self.commit_scheme, self.rows, self.row_keys, self.chunk = step_rows.NAME, True, {}, step_rows.ROW_BYTES
+            self.name = f"{self.name}+{step_rows.NAME}"
         # R13 P0: where absorbed raw bytes live (see RETAIN_MODES); `retain_values=False` (offline tests) maps to "none"
         # P0: host retention goes to pinned pool memory unless VERITY_RETAIN_PINNED=0 (pageable D2H is ~1 GB/s and synchronous)
         self.retain_pinned = os.environ.get("VERITY_RETAIN_PINNED", "1").strip() not in ("0", "false", "no")
@@ -861,8 +880,9 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             hidden_m1 = any("Hidden" in type(s).__name__ for s in getattr(self, "sources", []))
         backend = "fa3" if any(type(s).__name__ in ("HiddenM1SourceFA3", "NativeHiddenM1SourceFA3") for s in getattr(self, "sources", [])) else "fa2"
         moe_src = next((s for s in getattr(self, "sources", []) if getattr(s, "short_name", "") == "moe"), None)
+        chunk = self.chunk if self.gpu_tree else GPU_CHUNK_BYTES
         rec = step_bound_bytes(self.model, self._modules, envelope, hidden_m1=bool(hidden_m1), attn_backend=backend,
-                               moe_layers=(len(moe_src.layers) if moe_src is not None else 0))
+                               moe_layers=(len(moe_src.layers) if moe_src is not None else 0), chunk=chunk)
         # [R14 TP-03] sources that bind extra tensors per step (TP partial source) widen the bound: per token / per sequence / chunk padding
         extra_pt = extra_ps = extra_step = extra_n = 0
         for s in getattr(self, "sources", []):
@@ -883,8 +903,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             rec["promoted_inputs"] = {"consumers": sorted(self.acquire_inputs), "per_token_bytes": sum(int(v) for v in self.acquire_inputs.values())}
         if extra_pt or extra_ps or extra_step or extra_n:
             B = max(1, int(envelope.get("batch") or 1))
-            add_prefill = int(rec["prefill_tokens"]) * extra_pt + B * extra_ps + extra_step + extra_n * GPU_CHUNK_BYTES
-            add_decode = B * extra_pt + B * extra_ps + extra_step + extra_n * GPU_CHUNK_BYTES
+            add_prefill = int(rec["prefill_tokens"]) * extra_pt + B * extra_ps + extra_step + extra_n * chunk
+            add_decode = B * extra_pt + B * extra_ps + extra_step + extra_n * chunk
             rec["extra_sources"] = {"per_token_bytes": extra_pt, "per_seq_bytes": extra_ps, "per_step_bytes": extra_step, "tensors_per_step": extra_n,
                                     "prefill_add": add_prefill, "decode_add": add_decode}
             rec["prefill_step_bytes"] = int(rec["prefill_step_bytes"]) + add_prefill
@@ -1176,6 +1196,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                         st = getattr(so, "sampled_token_ids", None)
                         if isinstance(st, torch.Tensor) and st.device.type == "cuda":
                             me._acquire("runner.sampler/sampled_token_ids", st, job)
+                            for s in (s for s in me.sources if hasattr(s, "on_sample")):   # a source of the draw's inputs (served_record)
+                                s.on_sample(a[1] if len(a) > 1 else kw.get("input_batch"), int(st.shape[0]), job)
                     except Exception as e:  # noqa: BLE001
                         me.errors.append(f"sampler acquire: {e!r}"[:200])
                     me._end_step()
@@ -1386,26 +1408,33 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
     def commit_block_offline(self, step: int, stream: bytes | bytearray, metas: list[TensorMeta]) -> StepCommitment:
         """CPU reference of the GPU chunk tree for ONE packed step block (tests; no CUDA): the same 256 B chunk leaves (CMT-2 header), the
         same production fold, the same retention policy (`retain`), the same per-step state the worker leaves behind, so `open()`,
-        `release_staging()`, `verify()` and `finalize()` run unchanged on the result."""
+        `release_staging()`, `verify()` and `finalize()` run unchanged on the result.  Under rows-sha512, `step_rows`'s tree over the
+        block's rows, salted from a fresh step key (`row_keys`), as the windowed worker commits it."""
         chunk = self.chunk
         used = len(stream)
         padded = -(-used // chunk) * chunk
         buf = bytes(stream) + b"\0" * (padded - used)
-        layout = self._gpu_layout(step, padded // 4)
-        leaves = [scheme.chunk_leaf(scheme.chunk_header(layout, step, i, chunk // 4, self.GPU_TREE_SRC), buf[i * chunk:(i + 1) * chunk]) for i in range(padded // chunk)]
-        lv_bytes = scheme.fold_levels(leaves)
-        levels = [torch.frombuffer(bytearray(b"".join(lv)), dtype=torch.int32).reshape(len(lv), 8).clone() for lv in lv_bytes]
+        n = padded // chunk
+        if self.rows:
+            dom = self._row_domain(step, n)
+            lv_bytes = step_rows.levels(dom, [buf[i * chunk:(i + 1) * chunk] for i in range(n)], self._row_key(step), 8 * chunk)
+            levels = [torch.frombuffer(bytearray(b"".join(lv)), dtype=torch.uint8).reshape(len(lv), step_rows.ROOT_BYTES).clone() for lv in lv_bytes]
+            mr = lv_bytes[-1][0] if lv_bytes else dom.empty_root()
+        else:
+            layout = self._gpu_layout(step, padded // 4)
+            leaves = [scheme.chunk_leaf(scheme.chunk_header(layout, step, i, chunk // 4, self.GPU_TREE_SRC), buf[i * chunk:(i + 1) * chunk]) for i in range(n)]
+            lv_bytes = scheme.fold_levels(leaves)
+            levels = [torch.frombuffer(bytearray(b"".join(lv)), dtype=torch.int32).reshape(len(lv), 8).clone() for lv in lv_bytes]
+            mr = lv_bytes[-1][0]
         keep = torch.frombuffer(bytearray(buf), dtype=torch.uint8).clone() if self.retain != "none" else None
         if keep is not None and self.retain == "device":
             keep = keep.cuda()
             levels = [lv.cuda() for lv in levels]
         for m in metas:
             m.stream_off = m.dev_off
-        mr = lv_bytes[-1][0]
-        n = len(leaves)
         nbytes = sum(m.nbytes for m in metas)
         layout_dig = self.layout_digest(metas)
-        root = scheme.step_root(self.program_digest, self._ctx_digest(step), self._geo_digest, layout_dig, n, mr)
+        root = (step_rows if self.rows else scheme).step_root(self.program_digest, self._ctx_digest(step), self._geo_digest, layout_dig, n, mr)
         self._gpu_levels[step] = levels
         self._gpu_blocks[step] = (keep, used)
         self._layouts[step] = metas
@@ -2027,9 +2056,17 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             modules += [s for s in (sites() if sites is not None else ()) if s not in modules]
         return {"modules": modules, "attention_layers": attn_layers, "fa2_hidden_per_layer": 1 if fa2 else 0, "sampler_ids": 1 if any(n == "runner.sampler" for n in modules) else 0,
                 "moe_layers": moe_layers, "moe_tensors_per_layer": (getattr(moe_src, "stats", {}).get("tensors_per_layer", 6) if moe_src is not None else 0),
+                "moe_hash_layers": sorted(getattr(moe_src, "hash_layers", ())),        # a hash layer's router commits one more (`moe_source`: ids, in)
                 "router_softmax_layers": sorted(int(k) for k in rs_src.layers) if rs_src is not None else [], "tp_sites": sorted(tp_src.site_names()) if tp_src is not None else [], "tp_rank": (tp_src.rank if tp_src is not None else None),
                 # [R19 moe F-r19-moe-1] partials per site per step: 1, or a mid-module site's call count (OlmoeAttention: 2 gathers); the calls its instance's flags rule out are listed
                 "tp_site_counts": (dict(tp_src.site_counts()) if tp_src is not None and hasattr(tp_src, "site_counts") else {}), "tp_sites_ruled_out": list(getattr(tp_src, "mid_sites_ruled_out", None) or [])}
+
+    def _moe_layer_of(self) -> Any:
+        """The MoE source's `layer_of`: the layer of each name it commits (its planes, or its values at calls under a MoE module),
+        which it holds to its own rule; None for every name without one.  Without the source (an offline committer), a plane's layer."""
+        from verity_vllm.acquire.sources.moe_source import plane_layer
+        src = next((s for s in self.sources if getattr(s, "short_name", "") == "moe"), None)
+        return getattr(src, "layer_of", None) or plane_layer
 
     def identity_check(self, manifest: dict[str, Any] | None = None) -> dict[str, Any]:
         """X-03 on IDENTITIES.  For every committed step: (1) every module of the expected manifest produced >= 1 committed tensor and no
@@ -2062,18 +2099,18 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         # covered, the sampler-ids identity present -- a step that drops one identity's ⊥ still FAILS by name.  Never a relabel: the
         # padding's words are checked == bot by `padding_steps.padded_population`, its placement by the composition check.
         padded_run = bool(getattr(self, "_padding", None))
-        padding_only_steps: list[int] = []
-        padding_tensors_n = 0
+        padding_only_steps, padding_tensors_n = [], 0
         # per-step names held to the source's own rule, not rule (4): the call-boundary targets; the capture map's names on the step's routes
         rt_src = next((s for s in self.sources if hasattr(s, "step_modules")), None)
-        cb_src = next((s for s in self.sources if hasattr(s, "split_step_names") and s is not rt_src), None)
+        cb_srcs = [s for s in self.sources if hasattr(s, "split_step_names") and s is not rt_src]
         own = frozenset().union(*(getattr(s, "own_names", ()) for s in self.sources))   # what a source commits that no module produced (KV slots)
+        moe_of = self._moe_layer_of()
 
         def _identity_of_padding(n: str) -> str:                     # "<executed name>/<rid>/bot" -> "<executed name>"
             return n[:-len("/bot")].rsplit("/", 1)[0] if n.endswith("/bot") and "/" in n[:-len("/bot")] else n
 
         # no padding, step-reading source or attention declarations: a step's verdict reads its names, step 0's and the manifest only
-        step_free, verdicts = not padded_run and rt_src is None and cb_src is None and not (decls and man["fa2_hidden_per_layer"]), {}
+        step_free, verdicts = not padded_run and rt_src is None and not cb_srcs and not (decls and man["fa2_hidden_per_layer"]), {}
         for step in sorted(self._layouts):
             metas_all = self._layouts[step]
             cols = metas_all.names if hasattr(metas_all, "scan") else None   # a cached plan's record (plan_cache): its names, no TensorMeta built
@@ -2093,9 +2130,9 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 padding_only_steps.append(int(step))
             names_all = Counter(m.name for m in metas_all) if cols is None else Counter(cols)   # fa2 per-layer uniformity reads every plane of the step (rule (a) planes included)
             names = Counter(m.name for m in metas) if cols is None else names_all
-            mod_names = Counter({n: c for n, c in names.items() if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and not TP_PARTIAL_RE.search(n) and not CALL_DEPENDENT_RE.search(n) and n not in own})
+            mod_names = Counter({n: c for n, c in names.items() if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and moe_of(n) is None and not TP_PARTIAL_RE.search(n) and not CALL_DEPENDENT_RE.search(n) and n not in own})
             pad_ident = Counter(_identity_of_padding(m.name) for m in pad_metas)
-            pad_mod_names = Counter({n: 1 for n in pad_ident if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and not TP_PARTIAL_RE.search(n) and not CALL_DEPENDENT_RE.search(n) and n not in own})
+            pad_mod_names = Counter({n: 1 for n in pad_ident if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and moe_of(n) is None and not TP_PARTIAL_RE.search(n) and not CALL_DEPENDENT_RE.search(n) and n not in own})
             if padding_only:
                 mod_names = pad_mod_names                                # the identities materialized as ⊥, one each (set semantics below)
             tp_bad = tp_partials_bad(man, names)
@@ -2132,15 +2169,16 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             # counted one per padding META = per inactive request, so >= 2 inactive requests read n_inactive x moe_tensors_per_layer -> false refusal)
             moe_src = (Counter({n: 1 for n in pad_ident}) if padding_only else names)
             if man.get("moe_layers"):
-                moe_counts = Counter(int(n.split("/L", 1)[1].split("/", 1)[0]) for n in moe_src.elements() if n.startswith("moe/L"))
-                want, rs_layers = int(man.get("moe_tensors_per_layer") or 0), set(man.get("router_softmax_layers") or [])
-                moe_bad = {k: moe_counts.get(k, 0) for k in man["moe_layers"] if moe_counts.get(k, 0) != want + (k in rs_layers)}
+                moe_counts = Counter(k for n in moe_src.elements() if (k := moe_of(n)) is not None)
+                want, rs_layers, hash_layers = (int(man.get("moe_tensors_per_layer") or 0), set(man.get("router_softmax_layers") or []),
+                                                set(man.get("moe_hash_layers") or []))
+                moe_bad = {k: moe_counts.get(k, 0) for k in man["moe_layers"] if moe_counts.get(k, 0) != want + (k in rs_layers) + (k in hash_layers)}
                 moe_bad.update({k: c for k, c in moe_counts.items() if k not in man["moe_layers"]})
             elif any(n.startswith("moe/") for n in moe_src):
                 moe_bad = {-1: sum(c for n, c in moe_src.items() if n.startswith("moe/"))}      # MoE tensors from no declared source
             n_ids = (1 if "runner.sampler/sampled_token_ids" in pad_ident else 0) if padding_only else names.get("runner.sampler/sampled_token_ids", 0)
             sampler_bad = bool(man["sampler_ids"]) and n_ids != man["sampler_ids"]
-            mod_names, cb_bad = cb_src.split_step_names(mod_names, step, padding_only) if cb_src is not None else (mod_names, {})
+            mod_names, cb_bad = _split_step_names(cb_srcs, mod_names, step, padding_only)
             split_bad = {k: bad for k, bad in (("call_boundaries", cb_bad), ("routes", rt_bad)) if bad}
             ref_names = mod_names if ref_names is None else ref_names
             if padding_only:                                              # (b): set equality of identity names with step 0, not multiplicity
@@ -2321,15 +2359,13 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
 
     def _level_path(self, levels: list, index: int) -> tuple:
         """Leaf `index`'s sibling path in a GPU-tree step's levels."""
-        return tuple(self._HG.gpu_open(levels, index) if self._HG is not None else open_levels(levels, index))
-
-    def _gpu_salt(self, step: int, index: int) -> bytes:
-        """The salt a GPU-tree step's opening carries (none under vllm-v1 chunk leaves)."""
-        return b""
+        return tuple(self._HG.gpu_open(levels, index) if self._HG is not None and not self.rows else open_levels(levels, index))
 
     def verify(self, run: RunCommitment, opening: Opening) -> bool:
         """Production verifier core: shape rule + fold to the bare root, then the context binding to the ORIGINAL step root, then the
         step root's membership in the run root."""
+        if self.rows:
+            return self._verify_rows(run, opening)
         try:
             sc = run.steps[opening.step]
         except IndexError:
@@ -2372,6 +2408,15 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             return False
         return len(run.run_root) == 32 and self._run_root(run) == run.run_root
 
+    def _refuse_padding(self, padding: list) -> None:
+        if padding and self.rows:
+            raise ValueError(f"padding steps are vllm-v1 position-leaf blocks: not implemented under {step_rows.NAME}")
+        super()._refuse_padding(padding)
+
+    def _leaf_record(self, steps: list) -> dict:
+        rec = super()._leaf_record(steps)
+        return {**rec, "commit_scheme": self.commit_scheme} if self.rows else rec
+
     # ------------------------------------------------------------------ coverage
 
     # module (class-name) -> census root families whose NATURALLY-MATERIALIZED outputs the hook on that module binds
@@ -2400,9 +2445,10 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
     def coverage_declaration(self, run: RunCommitment) -> dict:
         by_class: dict[str, dict] = {}
         families: set[str] = set()
+        moe_of = self._moe_layer_of()
         for step, metas in self._layouts.items():
             for m in metas:
-                if m.name.startswith(("fa2.m1/", "fa3.m1/", "moe/")) or m.name.endswith("/row4_f32"):
+                if m.name.startswith(("fa2.m1/", "fa3.m1/", "moe/")) or moe_of(m.name) is not None or m.name.endswith("/row4_f32"):
                     continue                                  # declared separately (hidden source / MoE block source / row-4 regenerate baseline)
                 mc = self._module_class(m.name)
                 compiled_kernel = len(m.name) > 3 and m.name[0] == "c" and m.name[1:3].isdigit() and m.name[3] == "."   # R15 S3: c<piece>.<kernel>/<role>

@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Complete.ZkTables.Stmt
+import Proofs.Flock.Claims.Complete.ZkTables.MaskFree
 import Proofs.Flock.Claims.Complete.ZkTables.Trace
 import Proofs.Flock.Claims.Complete.Zk.Extras
 
@@ -167,8 +168,10 @@ extra claims' algebra (`RsExtrasAt`), and per rep the masked Ligerito and the in
 theorem completeR (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) (S : JsonRT.JsonSpec)
     (h64 : JsonRT.Out64 H) (hS : ∀ c : Case H rel, StmtAt c) (hPR : ∀ c : Case H rel, ProverRunsAt c)
     (hR : ∀ c : Case H rel, RepShapedAt c) (hX : ∀ o : Run H rel, RsExtrasAt o)
-    (hC : ∀ o : Run H rel, LgInnerAt H rel o) (hMR : MaskRank.MaskRankBound) : Claims.Flock.Complete H (deployZk rel) :=
+    (hC : ∀ o : Run H rel, LgInnerAt H rel o) (hMR : MaskRank.MaskRankBound) (hMF : MaskFree rel) :
+    Claims.Flock.Complete H (deployZk rel) :=
   completeAll H rel S h64 hS hPR hR (fun o => repChecksAt_of S h64 o (hS o.toCase) (hR o.toCase) (hX o) (hC o)) hMR
+    hMF
 
 /-- **Flock's masked verifier is complete at the deployed relation** for the honest masked prover on each table's
 share, with error `δc H`, at any number of tables: the statement's premise at one table (`StmtOkZk`), the prover's
@@ -178,7 +181,7 @@ theorem completeRel (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64 :
     (hS : JsonRT.StmtOkZk H Readable.relation) (hPR : ∀ c : Case H Readable.relation, ProverRunsAt c)
     (hR : ∀ c : Case H Readable.relation, RepShapedAt c) (hC : ∀ o : Run H Readable.relation, LgInnerAt H _ o)
     (hMR : MaskRank.MaskRankBound) : Claims.Flock.Complete H (deployZk Readable.relation) :=
-  completeR H Readable.relation S h64 (stmtAt_of S hS) hPR hR Run.rsExtras hC hMR
+  completeR H Readable.relation S h64 (stmtAt_of S hS) hPR hR Run.rsExtras hC hMR maskFree_relation
 
 variable (H rel) in
 /-- **The rep's checks but the ring switch, at every run of several tables.** -/
@@ -198,5 +201,6 @@ theorem completeJRel (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64 
     JsonRT.proverOkZk h64 (JsonRT.repRoundsZk_goal H Readable.relation)
   completeJS H Readable.relation S h64 hS hR hPR (ringSwitchZk_goal S h64 hS hP hR (rsExtrasZk H)) hLg hIn hPRJ hRJ
     (fun o hc => repChecksAt_of S h64 o (stmtOkJ S o.toCase hc) (hRJ o.toCase hc) o.rsExtras (hCJ o hc)) hMR
+    maskFree_relation
 
 end FlockComplete.ZkTables

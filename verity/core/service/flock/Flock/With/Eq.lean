@@ -132,7 +132,7 @@ theorem dgWith_std (spec : SessionSpec) (b : ByteArray) : spec.dgWith std b = pu
   split <;> rfl
 
 theorem decodeWith_std (spec : SessionSpec) (text : String) : Record.decodeWith std spec text = Record.decode spec text := by
-  unfold Record.decodeWith Record.decode
+  unfold Record.decodeWith Record.decodeJWith Record.decode
   simp only [monadLift_self, dgWith_std, pure_bind]
   rfl
 
@@ -199,7 +199,7 @@ end With
 theorem verify_eq_verifyWith (spec : SessionSpec) (tabs : Array Setup) (record : String) (proofs : Array ByteArray)
     (hN : ∀ st ∈ tabs, st.merkle.Named) : verify spec tabs record proofs = verifyWith Sha512.hash spec tabs record proofs := by
   have hN' := With.named_getElem! tabs hN
-  unfold verifyWith verifyWithM verify
+  unfold verifyWith verifyWithM verify verifyFiles
   simp only [monadLift_self, With.decodeWith_std, With.dgWith_std, pure_bind, With.verifyRepWith_std _ _ (hN' _)]
   rfl
 

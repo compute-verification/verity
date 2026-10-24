@@ -34,6 +34,7 @@ import json
 import re
 import sys
 from fnmatch import fnmatchcase
+from fractions import Fraction
 from itertools import combinations
 from pathlib import Path
 
@@ -71,12 +72,17 @@ CLASS_RULES: list[tuple[str, str]] = [
     (r"^ATOMS\..*\.64$", "ATOMS64"), (r"^ATOMS\.", "ATOMS32"),
     (r"^ATOM\.E\..*\.64(\.|$)", "ATOME64"), (r"^ATOM\.E\.", "ATOME32"),
     (r"^STS\.128$", "STS128"), (r"^LDGSTS\.E\.BYPASS\.128$", "LDGSTS16"),
+    # the stores, a sub-word store its word's class
+    (r"^STS(\.[US](8|16))?$", "STS32"), (r"^STG\.E(\.[US](8|16))?$", "STG32"), (r"^STG\.E\.128$", "STG128"),
     (r"^LDSM\.16\.M88$", "LDSM_X1"), (r"^LDSM\.16\.M88\.2$", "LDSM_X2"), (r"^LDSM\.16\.M88\.4$", "LDSM_X4"),
     (r"^LDSM\.16\.MT88$", "LDSM_X1T"), (r"^LDSM\.16\.MT88\.2$", "LDSM_X2T"), (r"^LDSM\.16\.MT88\.4$", "LDSM_X4T"),
     (r"^LDSM\.8\.MT1616$", "LDSM8T_X1"), (r"^LDSM\.8\.MT1616\.2$", "LDSM8T_X2"),
     (r"^STSM\.16\.M88$", "STSM_X1"), (r"^STSM\.16\.M88\.2$", "STSM_X2"), (r"^STSM\.16\.M88\.4$", "STSM_X4"),
     (r"^STSM\.16\.MT88$", "STSM_X1T"), (r"^STSM\.16\.MT88\.2$", "STSM_X2T"), (r"^STSM\.16\.MT88\.4$", "STSM_X4T"),
     (r"^STSM\.8\.MT1616$", "STSM8T_X1"), (r"^STSM\.8\.MT1616\.2$", "STSM8T_X2"), (r"^STSM\.8\.MT1616\.4$", "STSM8T_X4"),
+    # the warp reduce, the predicate test and sm_100's VIADD (ahead of IADD, which VIADD contains): each its own class,
+    # which the H200's and B200's census price on their issue rows alone
+    (r"^REDUX\.", "REDUX"), (r"^ISETP\.", "ISETP"), (r"^VIADD\b", "VIADD"),
     # scalar / CUDA lane classes (floors.csv and census share these names)
     (r"IMAD\.WIDE", "IMADW"), (r"IADD\.64", "ALU64"), (r"DFMA|DADD", "W2"), (r"DMUL", "DMUL"),
     (r"^IDP\.", "IMAD"),  # IDP.4A: the IMAD pipe's (rows.csv's I, the dp4a design's IMAD lanes)
@@ -102,12 +108,44 @@ _ALU = re.compile(r"\bIADD3\b|\bIADD\b|\bLOP3\b|\bLOP\b|\bSHF\b|\bPRMT\b|\bLEA\b
 #: their suffix
 UNIFORM = re.compile(r"U[A-Z].*|LDCU|R2UR|S2UR|CS2UR|VOTEU")
 UR_PAIR = re.compile(r"\.(64|WIDE)\b")
+#: the bulk-copy and TMA units' shared-memory instructions (`cp.async.bulk`, `cp.reduce.async.bulk`, their `.tensor`
+#: forms): one costs its shared-memory bytes on DS_smem (A5b), which its opcode doesn't show, so `bulk_counts` classes
+#: it by its bytes and `class_of` takes it ahead of the uniform rule that would call it UNI (RT4-SHEET-6): unclassed,
+#: but for a bulk reduction (`BULK_RED`)
+BULK = re.compile(r"UBLK(CP|RED)|UTMA(LDG|STG|REDG)")
+#: a bulk reduction (UBLKRED) by its opcode alone is TMAred512, the census's class for one of 512 B: its issue slot and
+#: 512 B on DS_smem on DS-120, its own unit's rows on the measured census. That bounds below every bulk reduction the
+#: tree runs on sm_120 (side.cu's and smem_side.cu's 512 B to 4 KB, cpw_routes' 1 to 16 KB, fold_bulk's 8 to 32 KB);
+#: one under 512 B would be overstated, so it must be counted by its bytes
+BULK_RED = "UBLKRED"
+#: UTMABIG's bytes on DS-120: 99 KB, the most shared memory a block holds on sm_120 (CUDA C++ Programming Guide,
+#: compute capability 12.0), so a bulk instruction's count `S/99 KB` is at most one and a box is never one UTMABIG there
+BULK_BYTES = 101376
+
+
+def bulk_counts(opcode: str, nbytes: int) -> dict[str, Fraction]:
+    """A bulk or TMA instruction's census counts (A5b): `S/99 KB` in UTMABIG, `S` its size, so DS-120 charges DS_smem
+    exactly `S` and DS_issue at most its one slot.
+
+    `nbytes` is its size in bytes (the SASS size register holds bytes/16: fold_bulk.cu's `0x8000` bytes load as
+    `0x800`). Each of these instructions reads or writes `S` bytes of a block's shared memory on at least one side, so
+    `S` is a lower bound on its bank bytes (a reduction into shared memory moves `3S`) and at most 99 KB."""
+    op = opcode.split("@")[-1].strip()
+    if not BULK.match(op.split(".")[0]):
+        raise ValueError(f"{opcode} is no bulk or TMA instruction")
+    if not 0 < nbytes <= BULK_BYTES:
+        raise ValueError(f"{opcode} of {nbytes} B: a bulk instruction moves 1 B to a block's 99 KB of shared memory")
+    return {"UTMABIG": Fraction(nbytes, BULK_BYTES)}
 
 
 def class_of(opcode: str) -> str | None:
-    """The census class of a dotted SASS opcode (`IMMA.16832.S8.S8`, `LOP3.LUT`, `SHFL.BFLY`), or None when not certain."""
+    """The census class of a dotted SASS opcode (`IMMA.16832.S8.S8`, `LOP3.LUT`, `SHFL.BFLY`), or None when not certain:
+    a bulk copy's or TMA instruction's class is its bytes' (`bulk_counts`), and a bulk reduction's TMAred512
+    (`BULK_RED`)."""
     op = opcode.split("@")[-1].strip()
     base = op.split(".")[0]
+    if BULK.match(base):
+        return "TMAred512" if base.startswith(BULK_RED) else None
     if UNIFORM.fullmatch(base):
         return "UNI64" if UR_PAIR.search(op) else "UNI"
     for pat, kind in CLASS_RULES:
@@ -134,7 +172,8 @@ TLD_BY_NAME = {"tld1": "TLD1", "tld2": "TLD2", "tld4": "TLD4w", "tld4n": "TLD4w"
 _TLD_NAME = re.compile(r"_(tld4n|tld4|tld2|tld1)_")
 
 #: side.cu counts its side unit by a wildcard (`REDG*`, `UBLKRED*`), so its unit's name (`hs_red64`, `sa_red64`) is the
-#: class; a unit missing here (a 4 KB bulk op is several TMAred512) stays unclassed
+#: class; a unit missing here takes its pattern's `class_of` (sa_blkred4k's 4 KB reduction is one TMAred512, a lower
+#: bound)
 SIDE_BY_NAME = {"red32": {"REDG*": "RED32"}, "red64": {"REDG*": "RED64"}, "redv4": {"REDG*": "REDV"},
                 "redv4h": {"REDG*": "REDV"}, "redblk": {"REDG*": "RED32"}, "atomg32": {"ATOMG*": "ATOMG32"},
                 "atomgd": {"ATOMG*": "ATOMG32"}, "ldgsts": {"LDGSTS*": "LDGSTS16"},
@@ -231,8 +270,9 @@ def facet_loads(x: dict[str, float], c: dict[str, dict[str, float]], cycle_u: fl
 def program(row: dict, c, cycle_u: float, generic: bool = False, l2: float | None = None) -> dict:
     x = row["x"] if "x" in row else rates_by_class(row)
     load = facet_loads(x, c, cycle_u, generic)
-    if row.get("x_issue") and "issue" in load:
-        load["issue"] += row["x_issue"]
+    if "x_issue" in row and "issue" in load:
+        # a full loop's instruction whose class this census has no line for still issues once
+        load["issue"] += row["x_issue"] + sum(v for k, v in x.items() if not facet_loads({k: 1.0}, c, cycle_u, generic))
     bps = l2_bytes_per_s(row)
     if l2 and bps > 0:
         load[L2_ROW] = bps / l2
@@ -303,7 +343,8 @@ def gate_loops(out: Path) -> dict[str, list[str]]:
 
 def full_x(row: dict, loop: list[str]) -> tuple[dict[str, float], float] | None:
     """The program's x with every instruction of its timed loop counted, and the x of the loop's instructions with no
-    census class (one `issue` cycle each, on no other row). A loop instruction runs once an iteration, so one the gate
+    census class (one `issue` cycle each, on no other row; `program` counts a class its census has no line for the
+    same way). A loop instruction runs once an iteration, so one the gate
     didn't pin runs at the pinned instructions' rate over their number in the loop. None for a program timed over more
     than one loop, or whose listed loop holds none of its pinned opcodes."""
     rates = row.get("rates") or {}

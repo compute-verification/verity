@@ -19,7 +19,9 @@ value, a consistency sum) adds its weight to `W`, scaled by its coin.
 * **Claims.** An out-of-domain sample `z` at a level adds `β·eq(z, ·)` with value `g̃(z)` (`mleF`); level `i`'s queries
   add `β·u^b·V` on the next level's table, `V(c) = Σ_j eq(α)[j]·X̂_c(ω_{pos_j})` (`consW`).
 * **The last level** sends `yr`, the folded K-table as `F` pairs. The message read after its last challenge enters no
-  equation (§13.3); the prover sends the round polynomial of the split coordinate as at every other level.
+  equation (§13.3); the prover sends upstream's plain fold message there, the round polynomial of the folded, unsplit
+  K-table and weight in their next variable (`recursive_prover_with_basis_impl`, whose last round at the last level is
+  `sumcheck.fold`), not the split coordinate's.
 -/
 
 namespace FlockComplete
@@ -220,10 +222,12 @@ def ligeritoP (io : Asks M) (hs : Hashes M) (ms : MerkleScheme) (sch : Schedule)
         if j + 1 == 4 then
           let r ← liftT (sampleKP io)
           modify fun st => { st with tab := foldK r st.tab, w := foldK r st.w }
-          f := (← get).tab
+          let d ← get
+          f := d.tab
           modify fun st => { st with tab := embedF (splitK st.tab), w := liftU st.w }
           let st ← get
-          sendMsg (roundPoly st.tab st.w)
+          -- nothing reads the last level's split: it sends upstream's plain fold message, of the unsplit table
+          sendMsg (if last then roundPoly d.tab d.w else roundPoly st.tab st.w)
         else
           let _ ← challengeP io false
       let ext := splitDim - 4

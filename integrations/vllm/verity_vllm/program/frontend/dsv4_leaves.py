@@ -25,6 +25,8 @@ from contextlib import contextmanager
 
 from verity_vllm.engine import hooks
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 #: fp8_ds_mla's NoPE quantisation block (`DeepseekCompressor._quant_block` at head 512; one UE8M0 byte per 64 NoPE elements)
 FP8_DS_MLA_QB = 64
 

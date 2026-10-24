@@ -31,10 +31,11 @@ reads only port bits among its inputs, and every row is a `sha512/row/v1` row. -
 def scopeOk (c : Circuit) : Bool :=
   c.unit.inGroups.size == 1 && c.outNet == c.unitNet && decide (c.unit.unitLog ≤ 32) && portReadsB c.unit && v1Ports c
 
-/-- A `sha512/row/v2` row the hidden-output headlines cover: unsegmented, `16 · words` bits, its bytes filling its
-compressions' blocks and ending, with SHA-512's 17 bytes of padding, in its `hm96` slot's block. -/
+/-- A `sha512/row/v2` row the hidden-output headlines cover: unsegmented, `16 · words` bits, its bytes and SHA-512's 17
+bytes of padding filling its compressions' blocks and ending in its `hm96` slot's block. The last compression's block
+may hold the bytes' end and the padding's start (`2 · words mod 128 ≥ 112`), the `hm96` block then only padding. -/
 def v2Row (p : Port) : Bool :=
-  p.v2 && p.segs.isNone && p.bits == 16 * p.words && decide (128 * p.chunks ≤ 2 * p.words) &&
+  p.v2 && p.segs.isNone && p.bits == 16 * p.words && decide (128 * p.chunks ≤ 2 * p.words + 16) &&
     decide (2 * p.words + 17 ≤ 128 * (p.chunks + 1))
 
 /-- A `sha512/row-seg/v1` row the hidden-output headlines cover: segmented as `HmRow.segShape` cuts its bits,

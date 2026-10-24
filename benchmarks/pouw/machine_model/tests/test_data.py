@@ -213,14 +213,18 @@ def test_sm89_census_is_well_formed():
 @pytest.mark.parametrize("d", sorted(p for p in DEVICES.glob("sm_*") if (p / "model.toml").is_file()),
                          ids=lambda p: p.name)
 def test_datasheet_vector(d):
-    """A device's DS-NN reads its datasheet rows alone, every kind on DS_issue at one SMSP-cycle, and no data-sheet line
-    prices a kind above what its measured rate alone does by more than decision 76's 2% (a peak the chip beats is a wrong
-    peak, a wrong form's MACs or a wrong pipe)."""
+    """A device's DS-NN reads its datasheet rows, and where it has one DS_uniform, the measured UP line exactly (no
+    document states the uniform datapath's rate: RT-MACHINE-4); every kind is on DS_issue at one SMSP-cycle, and no
+    data-sheet line prices a kind above what its measured rate alone does by more than decision 76's 2% (a peak the chip
+    beats is a wrong peak, a wrong form's MACs or a wrong pipe)."""
     rs, m = rows(d), model(d)
     v = vector(f"DS-{d.name[3:]}", d)
-    assert {r for r in rs if rs[r].status == "datasheet"} == set(v.rows) and "DS_issue" in v.rows
-    c = census(m, m.epochs[-1], d)
+    assert {r for r in rs if rs[r].status == "datasheet"} == set(v.rows) - {"DS_uniform"} and "DS_issue" in v.rows
+    c = census(m, v.epoch, d)
     assert all(row["DS_issue"] == pytest.approx(m.cycle_u) for row in c.values())
+    if "DS_uniform" in v.rows:
+        assert rs["DS_uniform"].status == "measured"
+        assert {k for k, row in c.items() if "DS_uniform" in row} == {"UNI"} and c["UNI"]["DS_uniform"] == c["UNI"]["UP"]
     with open(d / "census.csv", newline="") as f:
         alone = {}
         for x in csv.DictReader(f):
@@ -229,6 +233,27 @@ def test_datasheet_vector(d):
     over = {(k, r): round(u / alone[k], 4) for k, row in c.items() for r, u in row.items()
             if r in v.rows and k in alone and u > 1.02 * alone[k]}
     assert not over, f"data-sheet lines above the kind's measured rate alone: {over}"
+
+
+@pytest.mark.parametrize("name", ["sm_90", "sm_100"])
+def test_datasheet_epoch(name):
+    """sm_90's and sm_100's DS lines are census/DS-NN.csv, an epoch after DC-NN whose lines close where they open
+    (dc/census.py --write rewrites census.csv and keeps none of them), and that epoch's census is DC-NN's with the DS
+    lines added, so DS-NN prices on DC's census and moves no other vector."""
+    d = DEVICES / name
+    m, e = model(d), f"DS-{name[3:]}"
+    v = vector(e, d)
+    ds = set(v.rows)
+    assert v.epoch == e and m.epochs[1] == e
+    assert [p.relative_to(d).as_posix() for p in census_files(m, d)] == ["census.csv", f"census/{e}.csv"]
+    with open(d / "census.csv", newline="") as f:
+        stray = [x["kind"] for x in csv.DictReader(f) if x["row"] in ds]
+    assert not stray, f"census.csv: {stray} on a DS row; a DS line goes in census/DS-NN.csv"
+    with open(d / "census" / f"{e}.csv", newline="") as f:
+        lines = list(csv.DictReader(f))
+    assert lines and all(x["since"] == x["until"] == e and x["row"] in ds for x in lines)
+    measured = {k: rest for k, row in census(m, e, d).items() if (rest := {r: u for r, u in row.items() if r not in ds})}
+    assert measured == census(m, m.epochs[0], d)
 
 
 def test_datasheet_vector_sm120():

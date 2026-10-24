@@ -130,22 +130,37 @@ TLD2D4,DS_issue,,,1,,DS-120,DS-120,note:20261017T1818Z-draft-axioms
 TLD4G,DS_issue,,,1,,DS-120,DS-120,note:20261017T1818Z-draft-axioms
 TLD4w,DS_issue,,,1,,DS-120,DS-120,note:20261017T1818Z-draft-axioms
 TMA512,DS_issue,,,1,,DS-120,DS-120,note:20261017T1818Z-draft-axioms
+TMA512,DS_smem,,,16,,DS-120,DS-120,note:20261017T1818Z-draft-axioms note:20261019T2200Z-draft-fold-proof
 TMAred512,DS_issue,,,1,,DS-120,DS-120,note:20261017T1818Z-draft-axioms
+TMAred512,DS_smem,,,16,,DS-120,DS-120,note:20261017T1818Z-draft-axioms note:20261019T2200Z-draft-fold-proof
 UBLKCP4K,DS_issue,,,1,,DS-120,DS-120,note:20261017T1818Z-draft-axioms
+UBLKCP4K,DS_smem,,,128,,DS-120,DS-120,note:20261017T1818Z-draft-axioms note:20261019T2200Z-draft-fold-proof
 UNI,DS_issue,,,1,,DS-120,DS-120,note:20261017T1818Z-draft-axioms
 UNI64,DS_issue,,,1,,DS-120,DS-120,note:20261017T1818Z-draft-axioms
 UTMA,DS_issue,,,1,,DS-120,DS-120,note:20261017T1818Z-draft-axioms
+UTMA,DS_smem,,,0.5,,DS-120,DS-120,note:20261017T1818Z-draft-axioms note:20261019T2200Z-draft-fold-proof
 UTMA16K,DS_issue,,,1,,DS-120,DS-120,note:20261017T1818Z-draft-axioms
+UTMA16K,DS_smem,,,256.5,,DS-120,DS-120,note:20261017T1818Z-draft-axioms note:20261019T2200Z-draft-fold-proof
 UTMA1K,DS_issue,,,1,,DS-120,DS-120,note:20261017T1818Z-draft-axioms
+UTMA1K,DS_smem,,,16.5,,DS-120,DS-120,note:20261017T1818Z-draft-axioms note:20261019T2200Z-draft-fold-proof
 UTMA2K,DS_issue,,,1,,DS-120,DS-120,note:20261017T1818Z-draft-axioms
+UTMA2K,DS_smem,,,32.5,,DS-120,DS-120,note:20261017T1818Z-draft-axioms note:20261019T2200Z-draft-fold-proof
 UTMA32K,DS_issue,,,1,,DS-120,DS-120,note:20261017T1818Z-draft-axioms
+UTMA32K,DS_smem,,,512.5,,DS-120,DS-120,note:20261017T1818Z-draft-axioms note:20261019T2200Z-draft-fold-proof
 UTMA48K,DS_issue,,,1,,DS-120,DS-120,note:20261017T1818Z-draft-axioms
+UTMA48K,DS_smem,,,1024.5,,DS-120,DS-120,note:20261017T1818Z-draft-axioms note:20261019T2200Z-draft-fold-proof
 UTMA4K,DS_issue,,,1,,DS-120,DS-120,note:20261017T1818Z-draft-axioms
+UTMA4K,DS_smem,,,64.5,,DS-120,DS-120,note:20261017T1818Z-draft-axioms note:20261019T2200Z-draft-fold-proof
 UTMA512,DS_issue,,,1,,DS-120,DS-120,note:20261017T1818Z-draft-axioms
+UTMA512,DS_smem,,,1.5,,DS-120,DS-120,note:20261017T1818Z-draft-axioms note:20261019T2200Z-draft-fold-proof
 UTMA64K,DS_issue,,,1,,DS-120,DS-120,note:20261017T1818Z-draft-axioms
+UTMA64K,DS_smem,,,1536.5,,DS-120,DS-120,note:20261017T1818Z-draft-axioms note:20261019T2200Z-draft-fold-proof
 UTMA8,DS_issue,,,1,,DS-120,DS-120,note:20261017T1818Z-draft-axioms
+UTMA8,DS_smem,,,1,,DS-120,DS-120,note:20261017T1818Z-draft-axioms note:20261019T2200Z-draft-fold-proof
 UTMA8K,DS_issue,,,1,,DS-120,DS-120,note:20261017T1818Z-draft-axioms
+UTMA8K,DS_smem,,,128.5,,DS-120,DS-120,note:20261017T1818Z-draft-axioms note:20261019T2200Z-draft-fold-proof
 UTMABIG,DS_issue,,,1,,DS-120,DS-120,note:20261017T1818Z-draft-axioms
+UTMABIG,DS_smem,,,3168,,DS-120,DS-120,note:20261017T1818Z-draft-axioms note:20261019T2200Z-draft-fold-proof
 VIMNMX,DS_issue,,,1,,DS-120,DS-120,note:20261017T1818Z-draft-axioms
 W2,DS_issue,,,1,,DS-120,DS-120,note:20261017T1818Z-draft-axioms
 XU,DS_issue,,,1,,DS-120,DS-120,note:20261017T1818Z-draft-axioms

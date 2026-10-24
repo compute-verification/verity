@@ -15,6 +15,7 @@ import pytest
 import epoch_coins as E
 import epoch_coins_vectors as V
 from verity.core.protocols.pouw import coins as EC
+from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import Epoch, Workload, salt_of, weights_root
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
 from verity.core.protocols.pouw.schemes import ncp
@@ -112,8 +113,15 @@ def test_a_challenger_opens_each_coin_once_and_only_its_own_labels():
     assert E.challenger().commitment == ch.commitment != E.challenger(b"another").commitment
 
 
-def test_a_fresh_challenger_draws_from_the_operating_system():
-    a, b = EC.Challenger(7), EC.Challenger(7)
+def test_a_challenger_has_no_entropy_of_its_own():
+    """A challenger draws only from the entropy it is handed (a served one's is the Lean verifier of record's,
+    `verifier.coins`; `lean/check/tests/test_difftest.py` holds it to the Lean): there is no default, so none reads
+    Python's generator, and an entropy that answers short is refused."""
+    with pytest.raises(TypeError, match="entropy"):
+        EC.Challenger(7)
+    with pytest.raises(TypeError, match="entropy"):
+        Wd.live_challenger(7, 2)
+    a, b = E.challenger(b"a"), E.challenger(b"b")
     assert a.commitment != b.commitment and len(a.commitment.root) == 64
     with pytest.raises(ValueError, match="returned"):
         EC.Challenger(7, lambda n: bytes(n - 1))

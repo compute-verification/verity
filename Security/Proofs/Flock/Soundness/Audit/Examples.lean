@@ -412,7 +412,7 @@ theorem two_stage_b_tight (L₁ : Law K) {k₂ : ℕ} (hk : k₂ ≤ nv) (hnv : 
 /-- **Nested sampling dilutes.** When the second stage leaves some fine unit undrawn and the first
 draws something, a prover with `K` wrong chains is accepted with probability above `L₁.miss K`:
 more than one-stage over the coarse partition with `L₁` promises, and more than the `m`-dependent
-reading of `TwoStageLaw.profile` gives at `m = nv`. -/
+reading of the retired Python `TwoStageLaw.profile` (ASK-25) gave at `m = nv`. -/
 theorem naive_two_level_unsound (L₁ : Law K) {k₂ : ℕ} (hk : k₂ + 1 ≤ nv)
     (hdraw : ∃ ω, (L₁.draw ω).Nonempty) :
     K ≤ ((coarse K nv).wrong (reg₂ (σT K nv L₁ (by omega : k₂ ≤ nv)))).card ∧
