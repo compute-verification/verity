@@ -166,6 +166,22 @@ def test_workers_that_left_a_runs_group_and_environment_count_by_its_session_sco
     assert node.adj(9) == 0 and node.adj(20) == 0 and node.adj(41) == 0
 
 
+def test_a_train_checks_priority_reservation_ranks_it_below_research_runs(node):
+    """ci 24 Oct 05:47Z: a train check's slot reservation carries "priority": true (#3486), so a research job within its own
+    reservation is still picked before the train, and a train over its reservation ranks with a research job within one."""
+    train = node.run("r-train", pgid=10)
+    (node.ramlock / "check-b.json").write_text(json.dumps({"owner": "check", "gb": 300, "pid": 10, "run_id": "r-train",
+                                                            "priority": True}))
+    node.process(10, pgid=10, anon_gb=250, run_dir=train)
+    lane = node.run("r-lane", pgid=20, gb=100)
+    node.process(20, pgid=20, anon_gb=90, run_dir=lane)
+    over = node.run("r-train2", pgid=30)
+    (node.ramlock / "check-a.json").write_text(json.dumps({"gb": 300, "pid": 30, "run_id": "r-train2", "priority": True}))
+    node.process(30, pgid=30, anon_gb=400, run_dir=over)
+    assert node.main() == 0
+    assert node.adj(10) == -500 and node.adj(20) == 0 and node.adj(30) == round(500 * 100 / 1000)
+
+
 def test_a_dry_run_says_what_it_would_set_and_writes_nothing(node, capsys):
     rd = node.run("r20261019-140000-1111", pgid=50)
     node.process(50, pgid=50, anon_gb=10, run_dir=rd)
