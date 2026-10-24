@@ -201,6 +201,10 @@ PREQ_ENV = "DITHER_SO_PREQ"
 # serving stream's wait on the units, every level of both in one launch after it, not two h1c_builds after it; the same
 # bytes.  A step that withholds or replaces its z/y round leaves (fault_zlate and the step after it) builds them as before
 TAIL_ENV = "DITHER_SO_TAIL"
+# "1" (a diagnostic): the host's progress as events on an idle stream, so a step's phases place it against the GPU's:
+# h_tail_ms (the tail's launch after the units' end), h_read_ms (the root read after the tail), h_udone_ms (the units'
+# end to the serving stream past its wait) and h_flag_ms (the units' flag set to their start, the step before's)
+HMARK_ENV = "DITHER_SO_HMARK"
 # "1": a capture's copies go to host memory, not the device (a prefill capture at T = 2048 is ~30 GB); `DA.check` moves
 # each call's tensors to the device as it reads them
 CAP_HOST_ENV = "DITHER_SO_CAP_HOST"
@@ -295,6 +299,12 @@ class SoWindow(DO.Window):
             if self.overlap:
                 raise RuntimeError(f"${TAIL_ENV}=1 serves an -so arm without -ov (whose rounds build on the sender's ring)")
             self.tail = H1CM.Tail(self.c, self.pre["mid"], self.pre["round"])
+        self.hmark = os.environ.get(HMARK_ENV) == "1"
+        if self.hmark:
+            self.hm_stream = torch.cuda.Stream()
+            # 0 the tail's launch, 1 the root read, 2 + s % 2 step s's units' flag
+            self.ev_h = [torch.cuda.Event(enable_timing=True) for _ in range(4)]
+            self.h_flagged: set[int] = set()
         self.root_lag = int(os.environ.get(ROOT_LAG_ENV) or 0)
         if self.root_lag not in (0, 1, 2):
             raise RuntimeError(f"${ROOT_LAG_ENV}={self.root_lag}: 0, 1 or 2")
@@ -791,6 +801,8 @@ class SoWindow(DO.Window):
         if ads is not None:
             main.wait_event(ev[7])
         zi, yi = kinds.index("z-step"), kinds.index("y-step")
+        if self.hmark:
+            self.ev_h[0].record(self.hm_stream)
         if tail:
             self.tail.levels()
             self.ev_w[2].record()
@@ -831,6 +843,8 @@ class SoWindow(DO.Window):
             if self.ybad_pin is None:
                 self.ybad_pin = torch.empty(sd.ybad.shape, dtype=sd.ybad.dtype).pin_memory()
             self.ybad_pin.copy_(sd.ybad, non_blocking=True)
+            if self.hmark:
+                self.ev_h[1].record(self.hm_stream)
             root = unwords(pre["round"].root(0))
             t_root = time.perf_counter()
             self.phase("record_host")
@@ -868,6 +882,9 @@ class SoWindow(DO.Window):
                 self.stashed.discard(ju)
                 t_coin = self.dispatch_units(ju)
                 t_disp = time.perf_counter()
+                if self.hmark:
+                    self.ev_h[2 + s % 2].record(self.hm_stream)
+                    self.h_flagged = {s - 1, s} & (self.h_flagged | {s})
         if lag is None and not held:
             self._y_refused(s, cap)
         units_wait = self.ev_w[0].elapsed_time(self.ev_w[1]) if waited and lag is None else None
@@ -884,6 +901,12 @@ class SoWindow(DO.Window):
             ph["units_wait_ms"] = units_wait
             ph["tail_mid_ms"] = self.ev_w[1].elapsed_time(self.ev_w[2])
             ph["tail_round_ms"] = self.ev_w[2].elapsed_time(self.ev_w[3])
+            if self.hmark:
+                ph["h_tail_ms"] = self.ev_w[1].elapsed_time(self.ev_h[0])
+                ph["h_read_ms"] = self.ev_w[3].elapsed_time(self.ev_h[1])
+                ph["h_udone_ms"] = sd.ev_u[p][1].elapsed_time(self.ev_w[1])
+                if s - 1 in self.h_flagged:
+                    ph["h_flag_ms"] = self.ev_h[2 + (s - 1) % 2].elapsed_time(sd.ev_u[p][0])
             ph["units_gpu_ms"] = sd.ev_u[p][0].elapsed_time(sd.ev_u[p][1])
             q = sd.prev_of.get(p)
             if q is not None:
