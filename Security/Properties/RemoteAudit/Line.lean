@@ -1,5 +1,6 @@
 import Definitions.Pouw.Basic.Prob
 import Models.Accounting.Assumptions.RemoteHeld
+import Models.Accounting.Assumptions.RemoteOutside
 import Models.Accounting.Assumptions.RemoteDraw
 import Properties.RemoteAudit.Line.Record
 import Properties.RemoteAudit.Line.Premises
@@ -15,7 +16,9 @@ the record:
 * **LineHeld** (link-charged, `forms[1]`): on any trace and opening draw whose trace of record (`ofRecord`, the trace
   with the Lean verifier's verdict on the record as its own) meets the memory model's premises (the links' ceiling
   `Links`, `SquaringCeiling`, `Disks`, `ChipCeiling`, `Routed`, `Paced` at the record's groups `recordPace`, `Covers`,
-  `SketchBound` at `δs`, and the draw's `Live`, `Refused`, `Counted`) and the record's code-to-model premises
+  `SketchBoundAt` at `δs` and `NoOutsideCompute`, statement C in full: no device outside the node computes on a
+  registered block or a receipt during the session, and the draw's `Live`, `Refused`, `Counted`) and the record's
+  code-to-model premises
   (`Registered`, `WindowsOfRecord`, `DrawsOfRecord`, `Properties.RemoteAudit.Line.Premises`), the probability that the
   Lean verifier accepts the record's session and the record's line credits a stretch more than the trace held over its
   span (`Credits`) is at most `δs + δ`, `δ` the one the line reads its pooled bound at (`Node.delta`, a nonnegative
@@ -111,12 +114,13 @@ verifier accepts the record's session and a stretch of the record's link-charged
 held over its span is at most `δs + δ`, the line's `δ`. -/
 def LineHeld : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (X : Fin n → Type) [∀ t, Fintype (X t)] (D : Session n m k X)
-    (T : Trace (Coins n m k X)) (node : Node) (rec : Coins n m k X → Record) (δs : ℝ),
+    (T : Trace (Coins n m k X)) (node : Node) (rec : Coins n m k X → Record) (δs : ℝ) (O : Outside (ofRecord T rec)),
     Links (ofRecord T rec) node.link node.linkBurst →
     SquaringCeiling (ofRecord T rec) node.squarings node.encode node.rebuildBurst →
     Disks (ofRecord T rec) node.disk node.diskBurst → ChipCeiling (ofRecord T rec) node.chipBlocks →
     Routed (ofRecord T rec) → Paced (ofRecord T rec) (recordPace node rec) → Covers (ofRecord T rec) →
-    SketchBound (ofRecord T rec) δs → Live D → Refused D (ofRecord T rec) → Counted D (ofRecord T rec) →
+    SketchBoundAt (ofRecord T rec) O δs → NoOutsideCompute (ofRecord T rec) O →
+    Live D → Refused D (ofRecord T rec) → Counted D (ofRecord T rec) →
     Registered (ofRecord T rec) node → WindowsOfRecord (ofRecord T rec) node rec →
     DrawsOfRecord D (ofRecord T rec) rec →
     Pouw.pr (fun ω => Verified (rec ω) ∧ ¬ HeldAt (ofRecord T rec) ω node (rec ω) 1) ≤ δs + node.delta
@@ -125,11 +129,12 @@ def LineHeld : Prop :=
 block coming in over the node's boundary links (`Identity`) in place of their ceiling. -/
 def LineHeldIdentity : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (X : Fin n → Type) [∀ t, Fintype (X t)] (D : Session n m k X)
-    (T : Trace (Coins n m k X)) (node : Node) (rec : Coins n m k X → Record) (δs : ℝ),
+    (T : Trace (Coins n m k X)) (node : Node) (rec : Coins n m k X → Record) (δs : ℝ) (O : Outside (ofRecord T rec)),
     Identity (ofRecord T rec) → SquaringCeiling (ofRecord T rec) node.squarings node.encode node.rebuildBurst →
     Disks (ofRecord T rec) node.disk node.diskBurst → ChipCeiling (ofRecord T rec) node.chipBlocks →
     Routed (ofRecord T rec) → Paced (ofRecord T rec) (recordPace node rec) → Covers (ofRecord T rec) →
-    SketchBound (ofRecord T rec) δs → Live D → Refused D (ofRecord T rec) → Counted D (ofRecord T rec) →
+    SketchBoundAt (ofRecord T rec) O δs → NoOutsideCompute (ofRecord T rec) O →
+    Live D → Refused D (ofRecord T rec) → Counted D (ofRecord T rec) →
     Registered (ofRecord T rec) node → WindowsOfRecord (ofRecord T rec) node rec →
     DrawsOfRecord D (ofRecord T rec) rec →
     Pouw.pr (fun ω => Verified (rec ω) ∧ ¬ HeldAt (ofRecord T rec) ω node (rec ω) 0) ≤ δs + node.delta
