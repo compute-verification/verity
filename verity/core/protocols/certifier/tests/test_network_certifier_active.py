@@ -19,7 +19,7 @@ import pytest
 import signers
 from verity.ml.crypto import aead, lms
 from verity.core.protocols.certifier import active, online, served
-from verity.core.protocols.certifier.certificate import LmsKey, LmsSigner
+from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsKey, LmsSigner, parameters_digest
 from verity.core.protocols.certifier.active import (
     DATA,
     Bucketer,
@@ -863,6 +863,141 @@ def test_a_pair_seals_its_own_egress_grid_and_opens_frames_of_its_ingress_size()
                   pair=active.Pair.of(SECRET, SESSION, "a>b", "b>a", egress, peer))
     with pytest.raises(ValueError, match="two directions"):
         active.Pair.of(SECRET, SESSION, "a>b", "a>b", EGRESS, INGRESS)
+
+
+class Recorder:
+    """A server that keeps what each stream's connection sends it after its `ORDINAL` header, by that ordinal, and
+    answers nothing."""
+
+    def __init__(self) -> None:
+        self.got: dict[int, bytearray] = {}
+        self.writers: list[asyncio.StreamWriter] = []
+        self.changed = asyncio.Event()
+
+    async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        self.writers.append(writer)
+        _, stream, _ = active.HEADER.unpack(await reader.readexactly(active.HEADER.size))
+        got = self.got[stream] = bytearray()
+        self.changed.set()
+        while data := await reader.read(1 << 16):
+            got += data
+            self.changed.set()
+
+    async def until(self, predicate) -> None:
+        while not predicate(self):
+            self.changed.clear()
+            await self.changed.wait()
+
+
+def chunked_ingress(directory: Path, requests: list[bytes], cut) -> tuple[Proxy, list, dict[int, bytes]]:
+    """A proxy with ordinals whose peer sends `requests`' link frames in the middle of bucket 1, in the reads `cut`
+    makes of them (one read a chunk, all at that instant), each record certified as it closes by a fresh signer on
+    fixed coins. Returns the proxy, its certified records and what its server got on each ordinal."""
+
+    async def run():
+        clock = VirtualClock(-TAU / 2)
+        server = Recorder()
+        srv = await asyncio.start_server(server.handle, "127.0.0.1", 0)
+        directory.mkdir()
+        signer = signers.signer(directory)
+        issuer, certified = Issuer(signer, signers.SESSION, coins=lambda n: b"\x07" * n), []
+
+        def publish(record, params):
+            egress = record.link == "responses"
+            certified.append(issuer.certify(record, Direction.EGRESS if egress else Direction.INGRESS, params,
+                                            parameters_digest(params, SYNC_SET if egress else None)))
+
+        proxy = Proxy(srv.sockets[0].getsockname()[:2], EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0,
+                      ingress_link="requests", clock=clock, sleep=clock.sleep, publish=publish, ordinals=True)
+        link = LinkReader()
+        running = asyncio.create_task(proxy.run(link, NullWriter()))
+        wire = b"".join(active.request_frames(r, B) for r in requests)
+
+        def delivered(_: Recorder) -> bool:
+            return all(st.delivered is not None for st in proxy.streams.values() if st.anchor is not None)
+
+        for t in range(WINDOWS * EGRESS.buckets):
+            clock.advance(t * TAU)
+            await proxy.until(lambda p, t=t: len(p.lateness["egress"]) > t and len(p.lateness["ingress"]) > t)
+            await server.until(delivered)
+            if t == 1:
+                clock.advance(t * TAU + TAU / 2)
+                for chunk in cut(wire):
+                    link.chunks.put_nowait(chunk)
+                await proxy.until(lambda p: link.chunks.empty() and p.link_frames_read >= len(wire) // B)
+                assert proxy.link_frames_read == len(wire) // B
+        await running
+        for w in server.writers:
+            w.close()
+        srv.close()
+        signer.close()
+        return proxy, certified, {k: bytes(v) for k, v in server.got.items()}
+
+    return asyncio.run(run())
+
+
+def _cuts(wire: bytes, sizes) -> list[bytes]:
+    out, at = [], 0
+    for n in sizes:
+        if at >= len(wire):
+            break
+        out.append(wire[at : at + n])
+        at += n
+    return out + ([wire[at:]] if at < len(wire) else [])
+
+
+def test_a_requests_frames_and_signed_records_are_its_token_counts_whatever_its_chunking(tmp_path):
+    """Three id requests of 100, 7 and 40 prompt tokens, sent at one instant in one read, a byte a read, reads that
+    end a byte past or short of each frame, TCP segments of 1448 bytes or random cuts: each request takes
+    `id_request_frames` of its token count, its server gets it whole on its ordinal, and every certified record, both
+    directions, is byte for byte the one-read run's, its signature included. Requests of other fields (ids, model,
+    user, max_tokens, sampling, seed) and the same token counts give the same counts in every signed ingress head, only
+    the frames' root differing, so each request's end, the first bucket where the signed counts reach its frames and
+    those before it, is the bucket the proxy released its last frame in."""
+    rng = random.Random(5)
+
+    def fields(length: int, k: int, other: bool = False) -> dict:
+        if other:
+            return {"model": "m", "user": "u" * 62, "prompt": [2**32 - 1] * length, "max_tokens": 1,
+                    "temperature": 1.5, "top_p": 0.95, "seed": 2**32 - 1}
+        return {"model": "llama-3.1-8b-instruct", "user": f"varied.{k:05d}",
+                "prompt": [rng.randrange(1 << 17) for _ in range(length)], "max_tokens": 64, "temperature": 0.0,
+                "top_p": 1.0, "seed": k}
+
+    lengths = (100, 7, 40)
+    requests = [active.id_request(**fields(n, k), frame_bytes=B) for k, n in enumerate(lengths)]
+    others = [active.id_request(**fields(n, k, True), frame_bytes=B) for k, n in enumerate(lengths)]
+    frames = [active.id_request_frames(n, B) for n in lengths]
+    assert frames == [3, 1, 2] and [len(r) for r in requests] == [len(r) for r in others]
+    n = sum(len(active.request_frames(r, B)) for r in requests)
+    cut = random.Random(7)
+    chunkings = {"one read": [n], "a byte a read": [1] * n, "a byte past each frame": [B + 1] * n,
+                 "a byte short of each frame": [B - 1] * n, "TCP segments": [1448] * n,
+                 "random": [cut.randint(1, 2 * B) for _ in range(n)]}
+    key = LmsKey(signers.SMALL, lms.public_key(signers.key()))
+    runs = {name: chunked_ingress(tmp_path / name.replace(" ", "-"), requests, lambda w, s=sizes: _cuts(w, s))
+            for name, sizes in chunkings.items()}
+    proxy, certified, got = runs["one read"]
+    assert None not in certified and all(c.verify(key, signers.SESSION) for c in certified)
+    heads = [c.head for c in certified if c.direction is Direction.INGRESS]
+    assert [h.status.reason for h in heads] == [None] * WINDOWS
+    counts = [n for h in sorted(heads, key=lambda h: h.window) for n in h.counts]
+    assert sum(counts) == sum(frames) == proxy.link_frames_read and proxy.requests_released == len(requests)
+    assert got == {k + 1: r for k, r in enumerate(requests)}
+    for name, (other, other_certified, other_got) in runs.items():
+        assert other_certified == certified, name
+        assert (other.link_frames_read, other.requests_released, other_got) == \
+            (proxy.link_frames_read, proxy.requests_released, got), name
+
+    released, ends = list(itertools.accumulate(counts)), []
+    for total in itertools.accumulate(frames):
+        ends.append(next(b for b, m in enumerate(released) if m >= total))
+    assert ends == [proxy.streams[k + 1].anchor for k in range(len(requests))] == [3, 3, 4]
+    changed, changed_certified, _ = chunked_ingress(tmp_path / "others", others, lambda w: _cuts(w, [B + 1] * n))
+    changed_heads = [c.head for c in changed_certified if c.direction is Direction.INGRESS]
+    assert [h.counts for h in changed_heads] == [h.counts for h in heads]
+    assert [h.root != o.root for h, o in zip(heads, changed_heads)] == [sum(h.counts) > 0 for h in heads]
+    assert [changed.streams[k + 1].anchor for k in range(len(others))] == ends
 
 
 def registration(window: int, provenance: dict | None = None) -> Registration:
