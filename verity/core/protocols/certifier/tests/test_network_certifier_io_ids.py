@@ -1,8 +1,8 @@
-"""The ingress-ids tie on a fake upstream (`io_ids`): each prompt id the warden certified on ingress held to every
-computation of its position in the Commit's `c00.input/ids` rows, and every prefix-cache read in place of one, by the
-reference and by the Boolean Definitions. The first negative is REDTEAM phase 9 #1 (`cursor/redteam-phase9-iotiereq-061a`):
-IoTieRequest left the prompt ids' values bound to nothing, so the model could compute on another prompt of the same
-length."""
+"""The ingress-ids tie (`io_ids`): each prompt id the warden certified on ingress held to every computation of its
+position in the Commit's step-input port (`served_tie`'s layout, on a fake schedule), and every prefix-cache read in
+place of one, by the reference and by the Boolean Definitions. The first negative is REDTEAM phase 9 #1
+(`cursor/redteam-phase9-iotiereq-061a`): IoTieRequest left the prompt ids' values bound to nothing, so the model could
+compute on another prompt of the same length."""
 from __future__ import annotations
 
 import random
@@ -56,25 +56,25 @@ def _tokens(ps):
     return [p + [900_000 + 100 * q + k for k in range(4)] for q, p in enumerate(ps)]
 
 
-SHAPE = I.Shape(B, 4, 2, 1, P, 8, 4)
+SHAPE = I.Shape(B, 4, 2, 1, P, 8, 8)
+UNIT_ANDS = 4_529_499
 
 
 def _link(sources, ps=None, tokens=None, shape=SHAPE):
     """Each window's instance: the warden's cells of the requests with prompts `ps` (the sources' by default), the
-    Commit of `tokens` (the prompts' by default) on the schedule, and the verifier's map."""
+    steps' ports of `tokens` (the prompts' by default) on the schedule, and the verifier's map."""
     ps = _prompts(sources) if ps is None else ps
     reqs = [id_request(model="glm", user=f"u{i}", prompt=p, max_tokens=16, temperature=0.7, top_p=0.95, seed=i,
                        frame_bytes=B) for i, p in enumerate(ps)]
     windows = Q.windows_of(shape.request, reqs, COUNTS)
     received = tuple(sum(COUNTS[w * shape.T:(w + 1) * shape.T]) for w in range(len(windows)))
     steps = _steps(sources)
-    rows = I.commit_rows(steps, _tokens(ps) if tokens is None else tokens, P)
-    salts, levels, dom = I.commit(rows)
+    ports = I.ports(shape, steps, _tokens(ps) if tokens is None else tokens)
     out = []
     for w, cells in enumerate(windows):
         view = Q.request_view(PL, received, w, B)
         mp = I.window_map(shape, PL, view, steps, sources)
-        out.append(I.instance(shape, Q.instance(shape.request, cells, view, w), mp, rows, salts, levels, dom))
+        out.append(I.instance(shape, Q.instance(shape.request, cells, view, w), mp, ports))
     return out
 
 
@@ -127,6 +127,19 @@ def test_a_commit_that_differs_at_a_source_is_refused_in_both_windows():
     assert _verdicts(_link(ACROSS, tokens=tokens)) == [0, 0, 1]
 
 
+def test_an_id_is_its_whole_element():
+    """The port's ids are i64s: request 2's position 5 computed on the user's id plus 2^32 (its low 32 bits the
+    user's) is refused in the window holding that field, and a high bit on a token no class reads (an output's) is
+    not the tie's."""
+    ps = _prompts(ACROSS)
+    tokens = _tokens(ps)
+    tokens[2][5] += 1 << 32
+    assert _verdicts(_link(ACROSS, tokens=tokens)) == [1, 0, 1]
+    tokens = _tokens(ps)
+    tokens[0][5] += 1 << 40
+    assert _verdicts(_link(ACROSS, tokens=tokens)) == [1, 1, 1]
+
+
 def test_the_map_refuses_an_advice_it_cant_tie():
     """The verifier refuses an advice whose class no step computes (a cached position whose source never computed
     it), a source that isn't an earlier request, a step past P, and more opened steps than S."""
@@ -140,20 +153,22 @@ def test_the_map_refuses_an_advice_it_cant_tie():
     with pytest.raises(ValueError, match="more than P"):
         I.window_map(shape, PL, view, steps + [[I.Row(0, 0, 5), I.Row(2, 0, 12)]], ACROSS)
     with pytest.raises(ValueError, match="more than S"):
-        I.window_map(I.Shape(B, 4, 2, 1, P, 4, 4), PL, view, steps, ACROSS)
+        I.window_map(I.Shape(B, 4, 2, 1, P, 4, 8), PL, view, steps, ACROSS)
 
 
 def test_the_map_and_its_routings_are_the_cuts():
     """Window 1's map: its 72 fields' classes then the sink, every opened step's entries a class of the window or the
-    sink, every class with an entry; the routing takes record f to field f's slot, and the sort orders the members."""
+    sink, every class with an entry; the routing takes record f to field f's slot, and the sort orders the members.
+    The native check holds each opened step's KI chunks to its tree's first leaves."""
     inst = _link(ACROSS)[1]
     sh, mp, r = SHAPE, inst.map, inst.request
     vals, at = I.scan(sh, r.cells, r.view.carry_in, r.window)
     assert len(vals) == len(at) == 72 and mp.keys[72:] == (sh.sink,) * (sh.NK - 72)
     classes = set(mp.keys[:72])
     assert set(mp.ekeys) - {sh.sink} == classes
-    assert all(I.entry(sh, inst.port, e) == vals[mp.keys.index(k)] for e, k in enumerate(mp.ekeys) if k != sh.sink)
+    assert all(I.entry(sh, inst.chunks, e) == vals[mp.keys.index(k)] for e, k in enumerate(mp.ekeys) if k != sh.sink)
     assert len(I.route_switches(sh, inst)) == sh.route and len(I.sort_switches(sh, inst)) == sh.sort
+    assert sh.KI == 1 and I.leaves(sh, mp) == [(f"ids_{k}_0", s, 0) for k, s in enumerate(mp.steps)]
 
 
 # --- the circuit -----------------------------------------------------------------------------------------------------
@@ -248,27 +263,47 @@ def test_the_chain_circuit_is_its_reference():
     assert [int(b) for b in out.reshape(-1)] == want and 60 < sum(want) < 240
 
 
+def test_the_port_circuit_is_its_reference():
+    """`IoTieIdsPort` at P = 3 on random elements and classes: each token's id the low 32 bits of its i64, and ok iff
+    every token of a class other than the sink has the high 32 bits zero; past P·IB the chunk is unread."""
+    P_, CB = 3, 3
+    rng = random.Random(11)
+    cases, want = [], []
+    for _ in range(200):
+        els = [rng.choice([rng.randrange(1 << 32), rng.randrange(1 << 64), 0]) for _ in range(P_)]
+        ks = [rng.choice([7, rng.randrange(7)]) for _ in range(P_)]
+        chunk = b"".join(v.to_bytes(8, "little") for v in els) + bytes(rng.randrange(256) for _ in range(I.CHUNK - 24))
+        cases.append((ks, [chunk]))
+        want.append((int(all(k == 7 or v < 1 << 32 for k, v in zip(ks, els))), [v % (1 << 32) for v in els]))
+    fn = bind(I.IoTieIdsPort, P=P_, IB=8, CB=CB)
+    out = np.asarray(evaluate_bits(fn, *[_bits(a) for a in I.port_arguments(*zip(*cases), CB)]))
+    got = [(int(o[0]), [_int(o[1 + 32 * t:1 + 32 * (t + 1)]) for t in range(P_)]) for o in out.reshape(len(cases), -1)]
+    assert got == want and 30 < sum(w[0] for w in want) < 170
+
+
 @pytest.mark.slow
 def test_the_unit_is_its_reference():
-    """`IoTieRequestIds{512, 4, 2, 1, 16, 8, 4}` against `reference` on the link's three windows, honest, under the
+    """`IoTieRequestIds{512, 4, 2, 1, 16, 8, 8}` against `reference` on the link's three windows, honest, under the
     phase-9 substitution, the Commit differing at a cache source, and a cache hit on another prefix in the same window;
-    a field's class the sink, an entry's class another class and two fields' classes swapped; and random switches for
-    each routing. What the parts' tests can't reach is the wiring: the slots of each cell from the scan's frame and
-    its running count of fields, the classes' routing to the fields, the members (slots, the opened rows' entries,
-    the sink) into the sort, and IoTieRequest's and the port's checks beside them.
+    an id's high half set under its field's low half; a field's class the sink, an entry's class another class and two
+    fields' classes swapped; and random switches for each routing. What the parts' tests can't reach is the wiring: the
+    slots of each cell from the scan's frame and its running count of fields, the classes' routing to the fields, the
+    members (slots, the opened steps' ids, the sink) into the sort, and IoTieRequest's and the ports' checks beside
+    them.
 
-    Slow (about 140 s, the unit's 12.9 million ANDs traced and evaluated, most of it the rows' and the port's SHA-512
-    bodies)."""
+    Slow (about 60 s, the unit's 4.5 million ANDs traced and evaluated, most of it the cells' SHA-512 bodies)."""
     sh = SHAPE
     ps = _prompts(ACROSS)
-    sub, src = _tokens(ps), _tokens(ps)
+    sub, src, high = _tokens(ps), _tokens(ps), _tokens(ps)
     sub[2][5] ^= 1
     src[1][3] ^= 1
+    high[2][5] += 1 << 32
     within = _prompts(WITHIN)
     within[3][4] ^= 1
     honest = _link(ACROSS)
     h1, mp = honest[1], honest[1].map
-    insts = honest + _link(ACROSS, tokens=sub) + _link(ACROSS, tokens=src) + _link(WITHIN, ps=within)[1:2]
+    insts = (honest + _link(ACROSS, tokens=sub) + _link(ACROSS, tokens=src) + _link(WITHIN, ps=within)[1:2]
+             + _link(ACROSS, tokens=high)[1:2])
     e = next(k for k, x in enumerate(mp.ekeys) if x != sh.sink)
     ek, ks = list(mp.ekeys), list(mp.keys)
     ek[e] = (ek[e] + 1) % 72
@@ -276,12 +311,12 @@ def test_the_unit_is_its_reference():
     insts += [h1._replace(map=mp._replace(keys=(sh.sink,) + mp.keys[1:])), h1._replace(map=mp._replace(ekeys=tuple(ek))),
               h1._replace(map=mp._replace(keys=tuple(ks)))]
     want = [I.reference(sh, i) for i in insts]
-    assert want == [1, 1, 1, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0]
+    assert want == [1, 1, 1, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0]
     rng = random.Random(3)
     cases = [(i, I.route_switches(sh, i), I.sort_switches(sh, i)) for i in insts]
     cases += [(h1, [rng.randrange(2) for _ in range(sh.route)], I.sort_switches(sh, h1)),
               (h1, I.route_switches(sh, h1), [rng.randrange(2) for _ in range(sh.sort)])]
-    fn = bind(I.IoTieRequestIds, B=sh.B, T=sh.T, R=sh.R, OWN=sh.OWN, P=sh.P, S=sh.S, DS=sh.DS)
+    fn = bind(I.IoTieRequestIds, B=sh.B, T=sh.T, R=sh.R, OWN=sh.OWN, P=sh.P, S=sh.S, IB=sh.IB)
     args = [I.arguments(sh, i, Q.switches(sh.request, i.request), r, s) for i, r, s in cases]
     out = evaluate_bits(fn, *[_bits([a[k] for a in args]) for k in range(len(args[0]))])
     assert [int(b) for b in np.asarray(out).reshape(-1)] == want + [0, 0]
@@ -289,7 +324,7 @@ def test_the_unit_is_its_reference():
     a = lambda f: HC.ands(f, memo)  # noqa: E731
     rq = sh.request
     parts = (a(bind(Q.IoTieRequest, B=sh.B, T=sh.T, R=sh.R, OWN=sh.OWN)) + (rq.N - sh.OWN) * a(bind(I.IoTieIdsSlots, B=B))
-             + a(bind(IT.IoTiePort, P=sh.P, S=sh.S, DS=sh.DS)) + a(bind(IT.IoTieRoute, W=sh.CB + sh.D1, D=sh.D1))
+             + sh.S * a(bind(I.IoTieIdsPort, P=sh.P, IB=sh.IB, CB=sh.CB)) + a(bind(IT.IoTieRoute, W=sh.CB + sh.D1, D=sh.D1))
              + a(bind(I.IoTieIdsKeys, NK=sh.NK, CB=sh.CB, D1=sh.D1)) + a(bind(IT.IoTieRoute, W=sh.CB + 33, D=sh.D2))
-             + a(bind(I.IoTieIdsChain, CB=sh.CB, D2=sh.D2)) + 3)
-    assert a(fn) == parts == 12_924_899
+             + a(bind(I.IoTieIdsChain, CB=sh.CB, D2=sh.D2)) + 2 + sh.S)
+    assert a(fn) == parts == UNIT_ANDS

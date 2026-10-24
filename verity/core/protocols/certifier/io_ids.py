@@ -1,12 +1,14 @@
-"""The ingress-ids tie (`io_ids`, a prototype on a fake upstream): `IoTieRequest` with the prompt ids' values held to the
-Commit's `c00.input/ids` rows, so the model computes on the prompt the user sent (REDTEAM phase 9 #1: IoTieRequest
-counts each request's prompt fields and checks each is a u32, and the ids' values were tied to nothing).
+"""The ingress-ids tie (`io_ids`): `IoTieRequest` with the prompt ids' values held to the input ids of the Commit's
+step-input port, so the model computes on the prompt the user sent (REDTEAM phase 9 #1: IoTieRequest counts each
+request's prompt fields and checks each is a u32, and the ids' values were tied to nothing).
 
-**The Commit side** (the fake upstream's layout, what PROVE-PATH's Commit exposes): one `hm96-sha512/row/v2` row a
-step under a fresh salt, the step's input ids u32be in the forward's token order (its batch rows in order, row r's n_r
-tokens at offset Σ_{r' < r} n_{r'}), zero past to P, in a dense `frame-v3-sha512` tree of the session's steps whose
-root and domain the Commit registers before the draw. A window opens its S rows at the map's steps (`io_tie.IoTiePort`,
-the egress port's read).
+**The Commit side** is the step-input port the served rows' tie reads (`served_tie`, vllm's served Commit): each step's
+rows-sha512 stream starts with its input ids, P little-endian elements of IB bytes in the forward's token order (its
+batch rows in order, row r's n_r tokens at offset Σ_{r' < r} n_{r'}), zero past its tokens, P the engine's token budget,
+then its positions. So the ids are the step tree's first KI = ⌈P·IB / 4096⌉ chunks (`served_tie.ids`, the shared read).
+A window's unit takes the opened steps' KI chunks as rows ``ids_<s>_<j>``, and the verifier holds each row's b‖c to leaf
+j of step ``steps[s]``'s tree, and that tree's root through its step root to the run root (`served_tie.chunk_ok`,
+`leaves`), natively, as the served tie holds its positions chunks.
 
 **The map** (`window_map`, the verifier's, public in the named gap; at the target under the advice's hiding root).
 The window's prompt fields in scan order are the view's: request carry_in.q's from carry_in.fields, then each ended
@@ -18,12 +20,14 @@ first appearance, the sink 2^CB − 1 past the window's fields. The opened steps
 root is a class of the window, and `ekeys[e]` is opened entry e's class, or the sink. The verifier refuses an advice
 whose class has no computation in any step.
 
-**What 1 means** (`reference`): IoTieRequest's output on the cells and the view, every opened row opens at its step
-under the Commit's root, and the window's fields (`scan`) and the opened entries hold one value a class, each class
-with a field. So every computation of a prompt position of the window, and every KV read in its place, is the id the
-user sent there.
+**What 1 means** (`reference`): IoTieRequest's output on the cells and the view, and the window's fields (`scan`) and
+the opened entries hold one value a class, each class with a field, an entry's value its whole IB-byte element. With
+the native check of the opened chunks, every computation of a prompt position of the window, and every KV read in its
+place, is the id the user sent there.
 
-**The unit** (`IoTieRequestIds{B, T, R, OWN, P, S, DS}`) is IoTieRequest's scan, the cells hashed once, plus:
+**The unit** (`IoTieRequestIds{B, T, R, OWN, P, S, IB}`) is IoTieRequest's scan, the cells hashed once, plus:
+- each opened step's ids (`IoTieIdsPort{P, IB, CB}`): entry t's id is the low 32 bits of its element, and an entry
+  whose class isn't the sink has the element's other bits zero;
 - each request cell's slots (`IoTieIdsSlots{B}`): slot k is a field when the frame's count of fields is above k, its
   value the u32 its 10 characters spell, its ordinal nf + k, nf the window's fields before the cell;
 - the classes routed to the fields (`io_tie.IoTieRoute` over M1 = 2^D1 ≥ NK slot positions, NK = (N − OWN)·K): record
@@ -33,37 +37,38 @@ user sent there.
   (ekeys[e], 1, its id), the rest the sink; `IoTieIdsChain` checks the classes non-decreasing, the values equal within
   a class but the sink, and each class's first member a slot. A Beneš network is a permutation under any switches, so
   every member is in the sorted order and the switches only sort.
-Public: IoTieRequest's, the Commit's root and domain id, the steps, `keys` and `ekeys`. Witness: IoTieRequest's, the
-opened rows, their salts and paths, and both routings' switches.
+Public: IoTieRequest's, the steps, `keys` and `ekeys`. Witness: IoTieRequest's, the opened chunks and both routings'
+switches.
 """
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Mapping, NamedTuple, Sequence
 
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import ZERO, add, and_reduce, const_bits
+from verity.ml.circuits.boolean.forms import ZERO, add, and_reduce, const_bits, or_reduce
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.types import Array
-from verity.ml.commitments.gates.frame_v3 import _part, opens
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
+from verity.ml.commitments.gates.frame_v3 import _part
 from verity.core.protocols.certifier import head_check as HC
 from verity.core.protocols.certifier import io_request as Q
 from verity.core.protocols.certifier import io_tie as IT
+from verity.core.protocols.certifier import served_tie as ST
 from verity.core.protocols.certifier.active import HEADER, ID_DIGITS, ID_FIELD_BYTES
 
-BIT, BYTE, DIGEST, SALT = HC.BIT, HC.BYTE, HC.DIGEST, HC.SALT
+BIT, BYTE = HC.BIT, HC.BYTE
+CHUNK = ST.CHUNK
 #: a slot's record out of `IoTieIdsSlots`: field, ordinal, value
 SLOT = 1 + 32 + 32
 
 
 @dataclass(frozen=True)
 class Shape:
-    """An ingress link-window (`io_request.Shape`'s B, T, R, OWN) and its Commit port: S opened rows of P input ids
-    (E = S·P entries) from a tree of depth DS. Each of the N − OWN request cells has K slots, NK in all; classes are
-    CB-bit, below NK, the sink 2^CB − 1; the classes are routed over M1 = 2^D1 ≥ NK positions and the members sorted
-    over M2 = 2^D2 ≥ NK + E."""
+    """An ingress link-window (`io_request.Shape`'s B, T, R, OWN) and its Commit port: S opened steps of P input ids of
+    IB bytes (E = S·P entries), each step's KI chunks. Each of the N − OWN request cells has K slots, NK in all;
+    classes are CB-bit, below NK, the sink 2^CB − 1; the classes are routed over M1 = 2^D1 ≥ NK positions and the
+    members sorted over M2 = 2^D2 ≥ NK + E."""
 
     B: int
     T: int
@@ -71,11 +76,11 @@ class Shape:
     OWN: int
     P: int
     S: int
-    DS: int
+    IB: int
 
     def __post_init__(self) -> None:
         Q.Shape(self.B, self.T, self.R, self.OWN)
-        for name, least, most in (("P", 1, 1 << 28), ("S", 1, 1 << 32), ("DS", 1, 32)):
+        for name, least, most in (("P", 1, 1 << 28), ("S", 1, 1 << 32), ("IB", 4, 8)):
             if type(getattr(self, name)) is not int or not least <= getattr(self, name) <= most:
                 raise ValueError(f"a Commit port has {least} <= {name} <= {most}, not {getattr(self, name)!r}")
         if self.NK + self.E > 1 << 32:
@@ -96,6 +101,15 @@ class Shape:
     @property
     def E(self) -> int:
         return self.S * self.P
+
+    @property
+    def KI(self) -> int:
+        return -(-self.P * self.IB // CHUNK)
+
+    @property
+    def port(self) -> SimpleNamespace:
+        """The step-input port's statics as `served_tie` reads them (its T the token budget P)."""
+        return SimpleNamespace(T=self.P, IB=self.IB, PB=8)
 
     @property
     def CB(self) -> int:
@@ -122,28 +136,22 @@ class Shape:
         return (2 * self.D2 - 1) << (self.D2 - 1)
 
 
-# --- the fake upstream: the Commit's input-ids rows ------------------------------------------------------------------
+# --- the fake upstream: the steps' input ports -----------------------------------------------------------------------
 
 class Row(NamedTuple):
-    """A step's batch row (advice v0's `Row`, reduced): request q (its arrival ordinal), its first position and its
-    tokens this step."""
+    """A step's batch row (a served row, reduced): request q (its arrival ordinal), its first position and its tokens
+    this step."""
 
     q: int
     start: int
     n: int
 
 
-def commit_rows(steps: Sequence[Sequence[Row]], tokens: Sequence[Sequence[int]], P: int) -> list[bytes]:
-    """Each step's `c00.input/ids` row as the Commit holds it (`io_tie.port_row`): its rows' input ids in batch order,
-    request q's position p being tokens[q][p] (its prompt, then its outputs)."""
-    return [IT.port_row([tokens[r.q][r.start + t] for r in rows for t in range(r.n)], P) for rows in steps]
-
-
-def commit(rows: Sequence[bytes], seed: bytes = b"commit") -> tuple[tuple[bytes, ...], list[list[bytes]], bytes]:
-    """The fake Commit's tree of the rows under fake salts: (salts, levels, domain id)."""
-    salts = tuple(IT.fake_salt(seed, s) for s in range(len(rows)))
-    dom = IT.domain(hashlib.sha512(seed).digest(), len(rows)).domain_id
-    return salts, IT.rows_levels(dom, rows, salts), dom
+def ports(shape: Shape, steps: Sequence[Sequence[Row]], tokens: Sequence[Sequence[int]]) -> list[list[bytes]]:
+    """Each step's step-input port as its stream starts (`served_tie.port_chunks`): its rows' input ids in batch order,
+    request q's position p being tokens[q][p] (its prompt, then its outputs), then their positions."""
+    return [ST.port_chunks(shape.port, [tokens[r.q][r.start + t] for r in rows for t in range(r.n)],
+                           [r.start + t for r in rows for t in range(r.n)]) for rows in steps]
 
 
 # --- the verifier's map ----------------------------------------------------------------------------------------------
@@ -182,14 +190,12 @@ def window_map(shape: Shape, prompt_lens: Sequence[int], view: Q.RequestView, st
                sources: Mapping[int, tuple[int, int]]) -> Map:
     """The verifier's map of an ingress window (the module docstring) from the advice's prompt lengths (arrival order),
     its steps' rows and its prefix-cache sources, and the window's view. Raises `ValueError` on more fields than NK, a
-    step past P tokens or 2^DS steps, a class no step computes, or more opened steps than S."""
+    step past P tokens, a class no step computes, or more opened steps than S."""
     sh, cls, keys = shape, {}, []
     for q, p in fields_of(view):
         keys.append(cls.setdefault(root(q, p, sources), len(cls)))
     if len(keys) > sh.NK:
         raise ValueError(f"the window has {len(keys)} prompt fields, more than NK = {sh.NK}")
-    if len(steps) > 1 << sh.DS:
-        raise ValueError(f"{len(steps)} steps are past a Commit of depth {sh.DS}")
     reads: dict[int, list[tuple[int, int]]] = {}
     for s, rows in enumerate(steps):
         off = 0
@@ -218,16 +224,11 @@ def window_map(shape: Shape, prompt_lens: Sequence[int], view: Q.RequestView, st
 # --- the reference ---------------------------------------------------------------------------------------------------
 
 class Instance(NamedTuple):
-    """One ingress link-window's ids tie: IoTieRequest's instance, the map, the opened rows with their salts and paths,
-    and the Commit's root and domain id."""
+    """One ingress link-window's ids tie: IoTieRequest's instance, the map, and each opened step's KI ids chunks."""
 
     request: Q.Instance
     map: Map
-    port: tuple[bytes, ...]
-    port_salts: tuple[bytes, ...]
-    paths: tuple[tuple[bytes, ...], ...]
-    port_root: bytes
-    port_domain: bytes
+    chunks: tuple[tuple[bytes, ...], ...]
 
 
 def scan(shape: Shape, cells: Sequence[bytes], carry: Q.Carry, window: int = 0
@@ -251,9 +252,10 @@ def scan(shape: Shape, cells: Sequence[bytes], carry: Q.Carry, window: int = 0
     return vals, at
 
 
-def matches(shape: Shape, vals: Sequence[int], mp: Map, port: Sequence[bytes]) -> bool:
+def matches(shape: Shape, vals: Sequence[int], mp: Map, chunks: Sequence[Sequence[bytes]]) -> bool:
     """The fields and the opened entries hold one value a class, each class with a field: field f's class is keys[f],
-    not the sink, and each entry with a class other than the sink is its class's value (`IoTieIdsChain`'s reference)."""
+    not the sink, and each entry with a class other than the sink is its class's value (`IoTieIdsChain`'s reference),
+    its whole element (`IoTieIdsPort`'s high bits)."""
     sh = shape
     if len(vals) > sh.NK or len(mp.keys) != sh.NK or len(mp.ekeys) != sh.E:
         return False
@@ -261,36 +263,36 @@ def matches(shape: Shape, vals: Sequence[int], mp: Map, port: Sequence[bytes]) -
     for k, v in zip(mp.keys, vals):
         if k == sh.sink or held.setdefault(k, v) != v:
             return False
-    return all(k == sh.sink or held.get(k) == entry(sh, port, e) for e, k in enumerate(mp.ekeys))
+    return all(k == sh.sink or held.get(k) == entry(sh, chunks, e) for e, k in enumerate(mp.ekeys))
 
 
-def entry(shape: Shape, port: Sequence[bytes], e: int) -> int:
-    """Opened entry e: row ⌊e / P⌋'s (e mod P)-th input id."""
-    s, r = divmod(e, shape.P)
-    return int.from_bytes(port[s][4 * r:4 * r + 4], "big")
+def entry(shape: Shape, chunks: Sequence[Sequence[bytes]], e: int) -> int:
+    """Opened entry e: step ⌊e / P⌋'s (e mod P)-th input id, its whole IB-byte element."""
+    s, t = divmod(e, shape.P)
+    return int.from_bytes(b"".join(chunks[s])[shape.IB * t:shape.IB * (t + 1)], "little")
 
 
 def reference(shape: Shape, inst: Instance) -> int:
     """`IoTieRequestIds`' output (the module docstring, "What 1 means")."""
     sh, r, mp = shape, inst.request, inst.map
-    if len(inst.port) != sh.S or len(inst.port_salts) != sh.S or len(inst.paths) != sh.S or len(mp.steps) != sh.S or \
-            any(len(x) != 4 * sh.P for x in inst.port) or any(len(p) != sh.DS for p in inst.paths) or \
-            any(not 0 <= s < 1 << sh.DS for s in mp.steps):
-        raise ValueError(f"an instance has S = {sh.S} steps, rows of {4 * sh.P} bytes and paths of DS = {sh.DS}")
+    if len(inst.chunks) != sh.S or len(mp.steps) != sh.S or \
+            any(len(c) != sh.KI or any(len(x) != CHUNK for x in c) for c in inst.chunks):
+        raise ValueError(f"an instance has S = {sh.S} steps of KI = {sh.KI} {CHUNK}-byte chunks")
     if not Q.reference(sh.request, r):
         return 0
-    if not all(opens(SCHEMA, inst.port_root, inst.port_domain, HC.hiding_value(x, s), st, list(p)) == 1
-               for x, s, st, p in zip(inst.port, inst.port_salts, mp.steps, inst.paths)):
-        return 0
     got = scan(sh, r.cells, r.view.carry_in, r.window)
-    return int(got is not None and matches(sh, got[0], mp, inst.port))
+    return int(got is not None and matches(sh, got[0], mp, inst.chunks))
 
 
-def instance(shape: Shape, request: Q.Instance, mp: Map, rows: Sequence[bytes], salts: Sequence[bytes],
-             levels: Sequence[Sequence[bytes]], domain: bytes) -> Instance:
-    """The prover's instance: the map's steps' rows opened in the Commit's tree."""
-    port, port_salts, paths = IT.open_port(levels, rows, salts, mp.steps)
-    return Instance(request, mp, port, port_salts, paths, levels[-1][0], domain)
+def instance(shape: Shape, request: Q.Instance, mp: Map, ports_: Sequence[Sequence[bytes]]) -> Instance:
+    """The prover's instance: the map's steps' ids chunks, each step's port (`ports`) as its stream starts."""
+    return Instance(request, mp, tuple(tuple(ports_[s][:shape.KI]) for s in mp.steps))
+
+
+def leaves(shape: Shape, mp: Map) -> list[tuple[str, int, int]]:
+    """The verifier's native check of the port: each unit row (its name), whose b‖c is to be leaf j of step s's tree
+    (`served_tie.chunk_ok`), as (row, s, j)."""
+    return [(f"ids_{k}_{j}", s, j) for k, s in enumerate(mp.steps) for j in range(shape.KI)]
 
 
 # --- the prover's routings -------------------------------------------------------------------------------------------
@@ -432,27 +434,54 @@ IoTieIdsChain = _part(
     "sink is a slot (kind 0)")
 
 
+def _port_shape(S) -> SimpleNamespace:
+    if not all(type(x) is int for x in (S.P, S.IB, S.CB)) or not (1 <= S.P <= 1 << 28 and 4 <= S.IB <= 8 and
+                                                                   1 <= S.CB <= 32):
+        raise ValueError(f"a port has 1 <= P <= 2^28, 4 <= IB <= 8 and 1 <= CB <= 32, not P={S.P!r}, IB={S.IB!r}, "
+                         f"CB={S.CB!r}")
+    return SimpleNamespace(T=S.P, IB=S.IB, KI=-(-S.P * S.IB // CHUNK))
+
+
+def _sig_port(S):
+    pt = _port_shape(S)
+    return (("ekeys", Array(S.P, Array(S.CB, BIT))),
+            *((f"ids_{j}", Array(8 * CHUNK, BIT)) for j in range(pt.KI))), Array(1 + 32 * S.P, BIT)
+
+
+def _build_port(C, S, *e):
+    pt = _port_shape(S)
+    ekeys, oks, out = e[:S.P], [], []
+    for k, x in zip(ekeys, ST.ids(pt, e[S.P:])):
+        oks.append(C.AND(and_reduce(C, k).inv(), or_reduce(C, x[32:])).inv())
+        out += x[:32]
+    return [[and_reduce(C, oks), *out]]
+
+
+IoTieIdsPort = _part(
+    "IoTieIdsPort", ("P", "IB", "CB"), _sig_port, _build_port,
+    "(ok, each token's id) of a step's ids chunks, the step-input port's first ⌈P·IB / 4096⌉ (`served_tie.ids`) and "
+    "the P tokens' classes: token t's id is the low 32 bits of its IB-byte little-endian element; ok iff every token "
+    "whose class isn't the sink (2^CB − 1) has its element's other bits zero; ids least significant bit first")
+
+
 def _sig_ids(S):
-    sh = Shape(S.B, S.T, S.R, S.OWN, S.P, S.S, S.DS)
+    sh = Shape(S.B, S.T, S.R, S.OWN, S.P, S.S, S.IB)
     request, _ = Q._sig_request(sh.request)
-    return ((*request, ("port_root", DIGEST), ("port_domain", DIGEST), ("steps", Array(S.S, Array(S.DS, BIT))),
-             ("keys", Array(sh.NK, Array(sh.CB, BIT))), ("ekeys", Array(sh.E, Array(sh.CB, BIT))),
-             ("port", Array(S.S, Array(4 * S.P, BYTE))), ("port_salts", Array(S.S, SALT)),
-             ("paths", Array(S.S, Array(S.DS, DIGEST))), ("route", Array(sh.route, BIT)),
-             ("sort", Array(sh.sort, BIT))), BIT)
+    ids = tuple((f"ids_{s}_{j}", Array(8 * CHUNK, BIT)) for s in range(S.S) for j in range(sh.KI))
+    return ((*request, ("keys", Array(sh.NK, Array(sh.CB, BIT))), ("ekeys", Array(sh.E, Array(sh.CB, BIT))), *ids,
+             ("route", Array(sh.route, BIT)), ("sort", Array(sh.sort, BIT))), BIT)
 
 
 def _body_ids(B, S, root_, dom, cells, salts, *rest):
-    sh = Shape(S.B, S.T, S.R, S.OWN, S.P, S.S, S.DS)
-    rq, CB = sh.request, sh.CB
-    head, (port_root, port_domain, steps, keys, ekeys, port, port_salts, paths, route, sort) = rest[:-10], rest[-10:]
+    sh = Shape(S.B, S.T, S.R, S.OWN, S.P, S.S, S.IB)
+    rq, CB, n = sh.request, sh.CB, S.S * sh.KI
+    head, (keys, ekeys), chunks, (route, sort) = rest[:-n - 4], rest[-n - 4:-n - 2], rest[-n - 2:-2], rest[-2:]
     window, (left, fields, ended, count, received, left_out, fields_out, switches_) = \
         (head[0], head[1:]) if S.OWN else (None, head)
-    K, cr, er, pr = HC._Consts(B), HC._refs(cells), HC._refs(ended), HC._refs(port)
+    K, cr, er = HC._Consts(B), HC._refs(cells), HC._refs(ended)
     row = 8 * S.B * S.R
     oks = [B.call(bind(IT.NetworkRowsRoot, N_BITS=row, COUNT=S.T), cells.reshape(Array(S.T, Array(row, BIT))), salts,
-                  root_, dom),
-           B.call(bind(IT.IoTiePort, P=S.P, S=S.S, DS=S.DS), port_root, port_domain, port, port_salts, steps, paths)]
+                  root_, dom)]
     xs = []
     for k in range(rq.M):
         xs += (er[32 * k:32 * (k + 1)] if k < rq.N else K.bits(0, 32)) + K.bits(k, rq.D)
@@ -480,29 +509,35 @@ def _body_ids(B, S, root_, dom, cells, salts, *rest):
                      HC._coll(Array(1 << sh.D1, Array(CB + sh.D1, BIT)), xs1), route)
     ko = HC._refs(B.call(bind(IoTieIdsKeys, NK=sh.NK, CB=CB, D1=sh.D1), HC._coll(Array(sh.NK, Array(SLOT, BIT)), slots),
                          routed1))
-    ek, members = HC._refs(ekeys), []
+    ek, members, flags = HC._refs(ekeys), [], [ko[0]]
     for s in range(sh.NK):
         members += ko[1 + CB * s:1 + CB * (s + 1)] + K.bits(0, 1) + slots[SLOT * s + 33:SLOT * (s + 1)]
-    for e in range(sh.E):
-        # entry e's id is u32be at bytes 4e ... 4e + 3 of the opened rows: its bit j is bit j % 8 of byte 4e + 3 - j // 8
-        members += ek[CB * e:CB * (e + 1)] + K.bits(1, 1) + [pr[8 * (4 * e + 3 - j // 8) + j % 8] for j in range(32)]
+    for s in range(S.S):
+        po = HC._refs(B.call(bind(IoTieIdsPort, P=S.P, IB=S.IB, CB=CB),
+                             HC._coll(Array(S.P, Array(CB, BIT)), ek[CB * S.P * s:CB * S.P * (s + 1)]),
+                             *chunks[sh.KI * s:sh.KI * (s + 1)]))
+        flags.append(po[0])
+        for t in range(S.P):
+            e = S.P * s + t
+            members += ek[CB * e:CB * (e + 1)] + K.bits(1, 1) + po[1 + 32 * t:1 + 32 * (t + 1)]
     for _ in range(sh.NK + sh.E, 1 << sh.D2):
         members += K.bits(sh.sink, CB) + K.bits(1, 1) + K.bits(0, 32)
     ordered = B.call(bind(IT.IoTieRoute, W=CB + 33, D=sh.D2), HC._coll(Array(1 << sh.D2, Array(CB + 33, BIT)), members),
                      sort)
     oks.append(B.call(bind(IoTieIdsChain, CB=CB, D2=sh.D2), ordered))
-    bits = [r for o in oks for r in HC._refs(o)] + [ko[0]]
+    bits = [r for o in oks for r in HC._refs(o)] + flags
     return B.call(BL.and_gate(len(bits)), HC._coll(Array(len(bits), BIT), bits))
 
 
 IoTieRequestIds = CompositeDefinition(
-    "IoTieRequestIds", 1, ("B", "T", "R", "OWN", "P", "S", "DS"), _sig_ids, _body_ids,
+    "IoTieRequestIds", 1, ("B", "T", "R", "OWN", "P", "S", "IB"), _sig_ids, _body_ids,
     conformance="exact-model-tested",
-    doc="1 iff IoTieRequest's checks hold on the cells and the view (its rows, own frame, scan and totals), each of "
-        "the S Commit rows of P input ids opens at its step under the Commit's root (`IoTiePort`), and the window's "
-        "prompt fields (`IoTieIdsSlots`), each given its class by the routed records (`IoTieRoute`, `IoTieIdsKeys`), "
-        "and the opened entries, sorted by class by the switches (`IoTieRoute`), hold one value a class, each class "
-        "starting with a field (`IoTieIdsChain`): the ingress-ids tie of one link-window, every cell opened")
+    doc="1 iff IoTieRequest's checks hold on the cells and the view (its rows, own frame, scan and totals), and the "
+        "window's prompt fields (`IoTieIdsSlots`), each given its class by the routed records (`IoTieRoute`, "
+        "`IoTieIdsKeys`), and the S opened steps' input ids (`IoTieIdsPort`, each step's P ids of IB bytes from its "
+        "step-input port's chunks, an id of a class its whole element), sorted by class by the switches "
+        "(`IoTieRoute`), hold one value a class, each class starting with a field (`IoTieIdsChain`): the ingress-ids "
+        "tie of one link-window, every cell opened; the chunks' b‖c are the verifier's to hold to the Commit (`leaves`)")
 
 
 # --- arguments -------------------------------------------------------------------------------------------------------
@@ -515,15 +550,20 @@ def slots_arguments(cells: Sequence[bytes], frames: Sequence[Sequence[int]], nfs
 def arguments(shape: Shape, inst: Instance, bits: Sequence[int], route: Sequence[int], sort: Sequence[int]
               ) -> list[list[int]]:
     """`IoTieRequestIds`' arguments in its signature's order, each its leaves' bits: IoTieRequest's (with its switches
-    `bits`), then the Commit's root and domain id, the map, the opened rows, salts and paths, and both routings."""
-    sh, d, mp = shape, HC._digest_bits, inst.map
-    return [*Q.arguments(sh.request, inst.request, bits), d(inst.port_root), d(inst.port_domain),
-            [b for s in mp.steps for b in HC._int_bits(s, sh.DS)], [b for k in mp.keys for b in HC._int_bits(k, sh.CB)],
-            [b for k in mp.ekeys for b in HC._int_bits(k, sh.CB)], [b for r in inst.port for b in HC._bytes_bits(r)],
-            [b for s in inst.port_salts for b in d(s)], [b for p in inst.paths for x in p for b in d(x)], list(route),
-            list(sort)]
+    `bits`), then the map's classes, the opened steps' ids chunks, and both routings."""
+    sh, mp = shape, inst.map
+    return [*Q.arguments(sh.request, inst.request, bits), [b for k in mp.keys for b in HC._int_bits(k, sh.CB)],
+            [b for k in mp.ekeys for b in HC._int_bits(k, sh.CB)],
+            *[HC._bytes_bits(c) for step in inst.chunks for c in step], list(route), list(sort)]
 
 
-__all__ = ["Instance", "IoTieIdsChain", "IoTieIdsKeys", "IoTieIdsSlots", "IoTieRequestIds", "Map", "Row", "SLOT",
-           "Shape", "arguments", "commit", "commit_rows", "entry", "fields_of", "instance", "matches", "reference", "root",
-           "route_switches", "scan", "slots_arguments", "sort_switches", "window_map"]
+def port_arguments(ekeys: Sequence[Sequence[int]], chunks: Sequence[Sequence[bytes]], CB: int) -> list[list[int]]:
+    """`IoTieIdsPort`'s arguments for a batch of (a step's P classes, its KI ids chunks)."""
+    return [[[b for k in ks for b in HC._int_bits(k, CB)] for ks in ekeys],
+            *[[HC._bytes_bits(cs[j]) for cs in chunks] for j in range(len(chunks[0]))]]
+
+
+__all__ = ["CHUNK", "Instance", "IoTieIdsChain", "IoTieIdsKeys", "IoTieIdsPort", "IoTieIdsSlots", "IoTieRequestIds",
+           "Map", "Row", "SLOT", "Shape", "arguments", "entry", "fields_of", "instance", "leaves", "matches",
+           "port_arguments", "ports", "reference", "root", "route_switches", "scan", "slots_arguments", "sort_switches",
+           "window_map"]
