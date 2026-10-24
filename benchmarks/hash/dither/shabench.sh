@@ -29,8 +29,13 @@ else
   [ -n "${SHA_BUILD_ONLY:-}" ] && exit 0
 fi
 PY=${PY:-${VERITY_BENCH_VENV:-/workspace/jobs/venv312}/bin/python3}
-echo "shabench: asking for one GPU at $(date -u +%H:%M:%SZ)"
-gpu-lease 1 --wait --max-min 10 -- timeout 550 "$PY" benchmarks/hash/dither/shabench.py --lib "$LIB" --out "$OUT" "$@"
-rc=$?
+if [ -n "${GPU_LEASE_UUID:-}" ]; then  # inside a lease already (job.sh's way)
+  timeout 550 "$PY" benchmarks/hash/dither/shabench.py --lib "$LIB" --out "$OUT" "$@"
+  rc=$?
+else
+  echo "shabench: asking for one GPU at $(date -u +%H:%M:%SZ)"
+  gpu-lease 1 --wait --max-min 10 -- timeout 550 "$PY" benchmarks/hash/dither/shabench.py --lib "$LIB" --out "$OUT" "$@"
+  rc=$?
+fi
 echo "shabench: exited $rc at $(date -u +%H:%M:%SZ)"
 exit "$rc"
