@@ -120,7 +120,7 @@
   },
   "Accounting.Assumptions.TS.LeafChecks": {
    "owner": "@compute-accounting",
-   "digest": "e931c54bbb67fe69554c0d3766f291c33e445d885dd3fdfbbaca8ed1666b0ef4"
+   "digest": "10741a2aa1e791709c4fe6f469c8e87592208bfc4841eb86d030144b78ae1d76"
   },
   "Accounting.Assumptions.TS.LinSteer": {
    "owner": "@compute-accounting",
@@ -216,7 +216,7 @@
   },
   "Accounting.Assumptions.TS.TileChecks": {
    "owner": "@compute-accounting",
-   "digest": "4ee126e92aa445a839ff4112ed600367a6c97e4f2871773597a0a2157143d9e5"
+   "digest": "6c888fae1d3e6d1caebd453792a31425f5dd694cf90bff0fc2726d2063f96ff3"
   },
   "Accounting.Assumptions.TS.UnitFixed": {
    "owner": "@compute-accounting",
@@ -28938,9 +28938,9 @@
    ]
   },
   "Proofs.Accounting.TS.Session.Lanes.Assumptions": {
-   "digest": "6a41059cbaf0c8f686ba73344e0d34df73ade17906562b37e558b493dd61d56c",
+   "digest": "50577fbb02922d8780a089a454524cbc64378250a9cd5479c02e022859640e04",
    "definitions": {
-    "Accounting.Assumptions.TS.LeafChecks": "e931c54bbb67fe69554c0d3766f291c33e445d885dd3fdfbbaca8ed1666b0ef4"
+    "Accounting.Assumptions.TS.LeafChecks": "10741a2aa1e791709c4fe6f469c8e87592208bfc4841eb86d030144b78ae1d76"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
@@ -28996,9 +28996,9 @@
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "Proofs.Accounting.TS.Session.Lanes.Guarantees": {
-   "digest": "e23b567f85236ee20910b183899b298e547a02f972cd94ed9a96d642b8a760bb",
+   "digest": "a5f940a81d529af2998d9b639e3f29ed5285adefe7edd9a1397d9a59f6572ff1",
    "definitions": {
-    "Accounting.Guarantees.TS.LeafLanesSound": "fd422cd133986f68d3ab073b6f8f313e96731a264fbd79b291e0a5290986c8db"
+    "Accounting.Guarantees.TS.LeafLanesSound": "f66f58c679f67d60526ef63955b225ad81232804768ebcadcc4d9fd82d7c01c6"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
@@ -29059,16 +29059,16 @@
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "Proofs.Accounting.TS.Session.Tile.Assumptions": {
-   "digest": "e25748d622db2603a44112158e86897111711e197e1dfa5c2dea5460d9cb6786",
+   "digest": "745975b2705217ed56160e9c9062524bc7ef7927548ad01f9363257e59698519",
    "definitions": {
-    "Accounting.Assumptions.TS.TileChecks": "4ee126e92aa445a839ff4112ed600367a6c97e4f2871773597a0a2157143d9e5"
+    "Accounting.Assumptions.TS.TileChecks": "6c888fae1d3e6d1caebd453792a31425f5dd694cf90bff0fc2726d2063f96ff3"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
   },
   "Proofs.Accounting.TS.Session.Tile.Guarantees": {
-   "digest": "ecb0213094d72459c7d014ab6acc6e67f95b3e8b32031fa90d3bd6b57926419d",
+   "digest": "a8de87c3ded2940f42cab21fca46f5867b8781bcf652f14583ca269b859e9503",
    "definitions": {
-    "Accounting.Guarantees.TS.TileSessionSound": "c64e2962ad9ea6f9a2c2e76102901e6549cbc3a0de263c90732036b3143aea6b"
+    "Accounting.Guarantees.TS.TileSessionSound": "611974b1f3821314e13849b1a9df3f092b5a8bc8ddec3e9147aca477ca9ba2c6"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
   },
