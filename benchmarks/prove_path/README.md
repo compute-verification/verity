@@ -67,6 +67,19 @@ What doesn't change:
 - the per-member `--zk` sessions behind the firewall;
 - Lean's verdicts, the audit record and the Lean `Run.run` agreement.
 
+## What an accepted audit means
+
+The sampled step units are the sampled class of proofs' `NetTiming.Guarantees.SampledAuditAccepted` (#3608, a statement
+with no proof yet). Its one hypothesis is `Claims.Sampling.KS` at the same deployment. On the statements in scope, at
+every δ ≥ 0 and every decoder within Flock's radius, it bounds Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks + ε_bind, where `RAcc δ` holds
+when:
+- the faulty set is in M_δ = {B : P_a(B) > δ} (`RelS`);
+- no faulty unit is in a class drawn `all`: N2's head checks and the transfer-gate units, which are exact;
+- some advice (a, free) makes NetTiming's `Accepted` hold over the trace's transfer gates, with `free` holding values only at
+  the faulty units' committed gates. With no unit faulty, `free` is empty and `Accepted` is exact.
+
+So beyond the advice, an accepted audit leaks the faulty units' committed bits, and the faulty set is in M_δ.
+
 ## The compile unit (the target; not built)
 
 This is the spec for whoever builds the unit (circuits' COMPILER, or a new worker). It closes the named gap: the advice is never
