@@ -1219,4 +1219,69 @@ theorem memberSpans_idx (a : Flock.Program.Arg) (m lo hi : Nat)
     intro t _
     simp [Resolve.memberIdx, hd]
 
+
+/-! ## Gates, as `Width.segGates` names them -/
+
+/-- A position as `Width.segGates` names it: a gate with its width; a parameter's or a node's leaf names none. -/
+def gatePt (x : Tgt × Int) : Option (Int × Nat) :=
+  match x.1 with
+  | .gate w => some (x.2, w)
+  | .ref _ _ => none
+
+theorem flatMap_congr {α β : Type} {l : List α} {f g : α → List β} (h : ∀ a ∈ l, f a = g a) :
+    l.flatMap f = l.flatMap g := by
+  simp only [List.flatMap, List.map_congr_left h]
+
+/-- **A piece's gates are its gate positions**, where it has a row or no columns (`pieceGates` reads a piece of no rows
+as one row). -/
+theorem pieceGates_pos (q : Piece) (h : q.rows ≠ 0 ∨ q.len = 0) :
+    Width.pieceGates q = (pos q).filterMap gatePt := by
+  unfold Width.pieceGates pos
+  rw [List.filterMap_flatMap]
+  rcases ht : q.tgt with ⟨p, i⟩ | w
+  · dsimp only
+    symm
+    apply List.flatMap_eq_nil_iff.2
+    intro r _
+    rw [List.filterMap_map]
+    simp [gatePt, Function.comp_def]
+  · dsimp only
+    rcases h with h | h
+    · rw [show max q.rows 1 = q.rows by omega]
+      apply flatMap_congr
+      intro r _
+      rw [List.filterMap_map]
+      simp [gatePt, Function.comp_def]
+    · rw [List.flatMap_eq_nil_iff.2 (fun _ _ => by rw [h]; rfl), List.flatMap_eq_nil_iff.2 (fun _ _ => by rw [h]; rfl)]
+
+theorem piecesGates_pos (ps : Array Piece) (h : ∀ q ∈ ps.toList, q.rows ≠ 0 ∨ q.len = 0) :
+    Width.piecesGates ps = (posAll ps).filterMap gatePt := by
+  unfold Width.piecesGates posAll
+  rw [List.filterMap_flatMap]
+  exact flatMap_congr fun q hq => pieceGates_pos q (h q hq)
+
+theorem shiftGates_rows (δ : Int) (ps : Array Piece) :
+    ∀ q ∈ (Desc.shiftGates δ ps).toList, ∃ q' ∈ ps.toList, q.rows = q'.rows ∧ q.len = q'.len := by
+  intro q hq
+  simp only [Desc.shiftGates, Array.toList_map, List.mem_map] at hq
+  obtain ⟨q', hq', rfl⟩ := hq
+  refine ⟨q', hq', ?_⟩
+  split <;> exact ⟨rfl, rfl⟩
+
+/-- **A segment's gates are its gate positions**, where it has a copy and each piece a row or no columns. -/
+theorem segGates_pos (s : Seg) (hr : s.reps ≠ 0) (h : ∀ q ∈ s.ps.toList, q.rows ≠ 0 ∨ q.len = 0) :
+    Width.segGates s = (segPos s).filterMap gatePt := by
+  unfold Width.segGates segPos
+  rw [List.filterMap_flatMap]
+  by_cases h1 : s.reps ≤ 1
+  · rw [if_pos h1, show s.reps = 1 by omega, List.range_one, List.flatMap_singleton, copy_zero]
+    exact piecesGates_pos s.ps h
+  · rw [if_neg h1]
+    apply flatMap_congr
+    intro m _
+    apply piecesGates_pos
+    intro q hq
+    obtain ⟨q', hq', e1, e2⟩ := shiftGates_rows _ _ q hq
+    rw [e1, e2]; exact h q' hq'
+
 end NciCheck.Properties.SecurityProofs.ReadsExact
