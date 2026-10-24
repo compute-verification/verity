@@ -9,13 +9,16 @@
 # matches and EXCLUDE doesn't, checks every extracted file against the list, and writes each `<row>.tree` SW lacks.  A
 # `<row>.tree` SW holds at another commit is refused (exit 2): copy_rowdir.sh decides between two trees.  `fail` labels this run
 # `store_tar.parts.NAME` with "failed: MSG" instead, so a `get` waiting for that set stops (exit 8) rather than waiting it out.
+# `wait` is `get`'s wait for RUN:NAME's label alone (exit 0 when it names the set), fetching nothing; `label` labels this run (and
+# LABEL_ALSO's) KEY=VALUE, pushed as the set labels are.
 #   research run --on NODE --mem-gb 16 --timeout 4h --custody-ttl 24h --cwd source --project verity --send match.sha256 -- env LIST=match.sha256 NAME=legs [EXCLUDE=/values/] bash integrations/vllm/manifests/glm_v2_tree/jobs/store_tar.sh put
 #   research run --on NODE --mem-gb 16 --timeout 4h --custody-ttl 24h --cwd source --project verity -- env PARTS=RUN:legs [ONLY=REGEX] bash integrations/vllm/manifests/glm_v2_tree/jobs/store_tar.sh get
 # env: put: LIST (a path, else $RESEARCH_RUN_DIR/inputs/LIST), NAME, [EXCLUDE], [CHUNK=16G]; get: PARTS, [ONLY], [EXCLUDE],
-# [WAIT_MIN=600], [FETCH_MIN_MBPS=16], [FETCH_TRIES=3]; fail: NAME, MSG; put and fail: [LABEL_ALSO: run ids labelled too, for a run
-# that replaces one a waiting `get` names]; all: [SW], [PY], [EVICT_FREE_GB: after each part, `research data evict` to this much free].
+# [WAIT_MIN=600], [FETCH_MIN_MBPS=16], [FETCH_TRIES=3]; wait: PARTS (RUN:NAME), [WAIT_MIN]; fail: NAME, MSG; label: KEY, VALUE; put,
+# fail and label: [LABEL_ALSO: run ids labelled too, for a run that replaces one a waiting `get` names]; all: [SW], [PY],
+# [EVICT_FREE_GB: after each part, `research data evict` to this much free].
 set -uo pipefail
-MODE=${1:?put or get}
+MODE=${1:?put, get, wait, fail or label}
 TREE=$PWD SW=${SW:-/workspace/cp/circuits/glm-v2/rows}
 for p in "${PY:-}" /workspace/cp/circuits/venv312/bin/python /workspace/cp/venv312/bin/python; do
   [ -n "$p" ] && [ -x "$p" ] && { PY=$p; break; }
@@ -42,6 +45,10 @@ r = LS.push_targets(LocalStore(), sys.argv[1:]); sys.exit("label push: " + "; ".
 if [ "$MODE" = fail ]; then
   label "store_tar.parts.${NAME:?NAME}" "failed: ${MSG:-}" || exit 5
   echo "$NAME: labelled failed on $RESEARCH_RUN_ID (${MSG:-})"; exit 0
+fi
+if [ "$MODE" = label ]; then
+  label "${KEY:?KEY}" "${VALUE:?VALUE}" || exit 5
+  echo "$KEY=$VALUE: labelled on $RESEARCH_RUN_ID ${LABEL_ALSO:-}"; exit 0
 fi
 
 if [ "$MODE" = put ]; then
@@ -86,8 +93,9 @@ EOF
   exit 0
 fi
 
-[ "$MODE" = get ] || { echo "MODE $MODE: put or get"; exit 2; }
+[ "$MODE" = get ] || [ "$MODE" = wait ] || { echo "MODE $MODE: put, get, wait, fail or label"; exit 2; }
 P=${PARTS:?PARTS: an art: id, RUN:NAME or a parts.json}
+[ "$MODE" = get ] || [[ $P =~ ^r[0-9]{8}-[0-9]{6}-[0-9a-f]+:.+$ ]] || { echo "wait: PARTS=$P is not RUN:NAME"; exit 2; }
 if [[ $P =~ ^(r[0-9]{8}-[0-9]{6}-[0-9a-f]+):(.+)$ ]]; then
   run=${BASH_REMATCH[1]} key=store_tar.parts.${BASH_REMATCH[2]} waited=0
   until P=$("$RB" data labels "$run" --key "$key" --json 2>/dev/null |
@@ -98,6 +106,7 @@ if [[ $P =~ ^(r[0-9]{8}-[0-9]{6}-[0-9a-f]+):(.+)$ ]]; then
   done
   echo "$run's $key: $P (after $waited min)"
   [[ $P == art:* ]] || exit 8
+  [ "$MODE" = get ] || exit 0
 fi
 if [[ $P == art:* ]]; then
   "$RB" data fetch "$P" --to "$S/parts.d" >/dev/null || { echo "$P: fetch failed"; exit 5; }
