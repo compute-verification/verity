@@ -158,7 +158,7 @@ The dated text is note:lean/20261020T1000Z-report-lean-proofs-rulings-archive.
   `P ∨ ∃ x ∈ run.hashInputs, ∃ y ∈ run.hashInputs, x ≠ y ∧ sha512 x = sha512 y`; for LMS, a verifying signature on a
   message missing from the device's log; for Merkle binding, a collision along the two openings' paths. Every `∃` is
   bounded by what the run carries. No advantage bounds, except PoUW's named random-oracle premises for SHA-512
-  (`StraightLineExtraction`, `SeedExtraction`, `SeedExtractedAt`; ASK-16), each a named `Prop` the lock lists. An input
+  (`StraightLineExtraction`, `SeedExtractedAt`; ASK-16), each a named `Prop` the lock lists. An input
   condition is a verifier refusal, not a hypothesis.
 - For a commit-then-coin step the break is the fork form (two runs of the prover's strategy sharing a commitment), and
   the knowledge form (`EndToEndHidden`, `Claims.KS`) is preferred.
