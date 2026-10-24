@@ -7,7 +7,8 @@ problems, the spread over seeds, the fraction of the full fine-tuning gain, and 
 Each RUN_DIR is a fetched run (`research fetch RUN --all`) whose out/ holds grpo.py's result-*.json (R2's or A2's). Every
 result must cover the same GSM8K test problems in the same order (grpo.py reads gsm8k_test.jsonl in file order), which is
 checked. Gains are greedy accuracy over the 1,319 problems; a seed-averaged arm averages per-problem correctness over its
-seeds before the bootstrap, so its interval is over problems only, and the seed spread is reported beside it.
+seeds before the bootstrap, so its interval is over problems only, and the seed spread is reported beside it. An arm with
+a collapsed seed (`collapse_ratio`) is reported twice: over all its seeds, and over the others as `ARM|ok`.
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ def load(run_dirs, task="gsm8k"):
                 method = f"{method}@lr{r['lr']:g}"
             key = (MODELS.get(r["model"], r["model"]), method, r.get("reward", "true"))
             out[key][r.get("seed", 0)] = {
+                "collapse": collapse_ratio(os.path.join(rd, "out", f"{r['label']}.jsonl")),
                 "x": np.asarray(r["per_problem"], dtype=float), "run": os.path.basename(rd.rstrip("/")),
                 "f": np.asarray(r["per_problem_formatted"], dtype=float) if r.get("per_problem_formatted") else None,
                 "fmt": r.get("formatted"), "steps": r["steps"], "lr": r.get("lr"), "S_bits": r["S_bits"],
@@ -43,6 +45,24 @@ def load(run_dirs, task="gsm8k"):
                 "len": r.get("mean_len") or (r["evals"][-1]["mean_len"] if r.get("evals") else None),
             }
     return out
+
+
+def collapse_ratio(path):
+    """Training accuracy on the run's own samples over its last 10 steps, over its best 10-step mean. A run below
+    COLLAPSED diverged: it learned (or began to) and then lost it, whatever its reward."""
+    if not os.path.exists(path):
+        return None
+    a = np.asarray([d["acc_reward"] for d in map(json.loads, open(path)) if d.get("event") == "step"])
+    if len(a) < 20:
+        return None
+    return float(a[-10:].mean() / np.convolve(a, np.ones(10) / 10, mode="valid").max())
+
+
+COLLAPSED = 0.5
+
+
+def healthy(seeds):
+    return {s: e for s, e in seeds.items() if e["collapse"] is None or e["collapse"] >= COLLAPSED}
 
 
 def boot(fn, arrays, B=10000, seed=0):
@@ -79,6 +99,8 @@ def arm_stats(seeds, base):
         "acc_given_formatted": {s: acc_given_formatted(e) for s, e in sorted(seeds.items())},
         "mean_len": {s: e["len"] for s, e in sorted(seeds.items())},
         "mid_evals": {s: e["mid"] for s, e in sorted(seeds.items())},
+        "collapse_ratio": {s: e["collapse"] for s, e in sorted(seeds.items())},
+        "collapsed": sorted(s for s in seeds if s not in healthy(seeds)),
         "runs": sorted({e["run"] for e in seeds.values()}), "steps": sorted({e["steps"] for e in seeds.values()}),
         "lr": sorted({e["lr"] for e in seeds.values()}), "S_bits": sorted({e["S_bits"] for e in seeds.values()}),
     }
@@ -110,6 +132,9 @@ def main() -> None:
             if mm != m or method == "base":
                 continue
             xs[f"{method}-{reward}"], row["arms"][f"{method}-{reward}"] = arm_stats(seeds, base)
+            h = healthy(seeds)
+            if h and len(h) < len(seeds):
+                xs[f"{method}-{reward}|ok"], row["arms"][f"{method}-{reward}|ok"] = arm_stats(h, base)
         for (mm, method, reward), seeds in sorted(ext.items()):
             if mm == m and method == "full" and reward == "true":
                 xs["full-true(A2)"], row["arms"]["full-true(A2)"] = arm_stats(seeds, base)
@@ -122,16 +147,18 @@ def main() -> None:
                     continue
                 a["frac_of_full"] = a["gain"] / (f.mean() - base.mean())
                 a["frac_of_full_ci"] = boot(lambda t, ff, bb: (t.mean() - bb.mean()) / (ff.mean() - bb.mean()), [xs[k], f, base])
-        t = xs.get("tl10kB-true")
-        for ctl in ["random", "format"]:
-            c = xs.get(f"tl10kB-{ctl}")
-            if t is not None and c is not None:
+        for sub in ["", "|ok"]:
+            t = xs.get(f"tl10kB-true{sub}", xs.get("tl10kB-true"))
+            for ctl in ["random", "format"]:
+                c = xs.get(f"tl10kB-{ctl}{sub}", xs.get(f"tl10kB-{ctl}"))
+                if t is None or c is None or (sub and f"tl10kB-true{sub}" not in xs and f"tl10kB-{ctl}{sub}" not in xs):
+                    continue
                 d = {"diff": float(t.mean() - c.mean()), "ci": boot(lambda a, cc: a.mean() - cc.mean(), [t, c])}
                 if anchor:
                     d["frac_of_full"] = d["diff"] / (xs[anchor].mean() - base.mean())
                     d["frac_of_full_ci"] = boot(lambda a, cc, ff, bb: (a.mean() - cc.mean()) / (ff.mean() - bb.mean()),
                                                 [t, c, xs[anchor], base])
-                row[f"true_minus_{ctl}"] = d
+                row[f"true_minus_{ctl}{sub}"] = d
         doc["models"][m] = row
         print(f"\n== {m}: base {row['base_acc']:.3f} [{row['base_ci'][0]:.3f}, {row['base_ci'][1]:.3f}]"
               f" formatted {b['fmt']} acc|formatted {row['base_acc_given_formatted']} len {b['len']} run {b['run']}  (anchor {anchor})")
@@ -139,11 +166,12 @@ def main() -> None:
             fr = (f" frac {a['frac_of_full']:.2f} [{a['frac_of_full_ci'][0]:.2f}, {a['frac_of_full_ci'][1]:.2f}]"
                   if "frac_of_full" in a else "")
             sd = f" sd {a['seed_sd']:.3f}" if a["seed_sd"] is not None else ""
-            print(f"  {k:18s} acc {a['acc']:.3f} gain {a['gain']:+.3f} [{a['gain_ci'][0]:+.3f}, {a['gain_ci'][1]:+.3f}]{sd}{fr}"
+            cl = f" collapsed {a['collapsed']}" if a["collapsed"] else ""
+            print(f"  {k:18s} acc {a['acc']:.3f} gain {a['gain']:+.3f} [{a['gain_ci'][0]:+.3f}, {a['gain_ci'][1]:+.3f}]{sd}{fr}{cl}"
                   f" seeds {json.dumps({s: round(g, 3) for s, g in a['per_seed_gain'].items()})}"
                   f" fmt {json.dumps({s: round(v, 3) if v is not None else None for s, v in a['formatted'].items()})}"
                   f" acc|fmt {json.dumps({s: round(v, 3) if v is not None else None for s, v in a['acc_given_formatted'].items()})} runs {a['runs']}")
-        for ctl in ["random", "format"]:
+        for ctl in ["random", "format", "random|ok", "format|ok"]:
             d = row.get(f"true_minus_{ctl}")
             if d:
                 fr = f" frac {d['frac_of_full']:.2f} [{d['frac_of_full_ci'][0]:.2f}, {d['frac_of_full_ci'][1]:.2f}]" if "frac_of_full" in d else ""
