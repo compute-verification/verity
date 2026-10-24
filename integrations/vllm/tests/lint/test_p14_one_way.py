@@ -10,8 +10,8 @@ Checked against ``allowlists/p14_one_way.json``, keyed ``(file, kind, symbol, de
 * ``refusal-class``: a class named for a refusal (``...Refused``, ``...Refuse``, ``...Refusal``) outside `ERRORS`, whose
   one ``Refused`` every refusal raises; detail the class's name.
 * ``canonical-json``: a function whose body is one ``return json.dumps(..., sort_keys=True, separators=(",", ":"), ...)``
-  (``.encode()``d or not), another canonical JSON encoder beside `CANONICAL_JSON`; the symbol is the function, detail
-  `CANONICAL_JSON`.
+  (``.encode()``d or not) outside `HASHING`, another canonical JSON encoder beside `CANONICAL_JSON` and `HASHING`'s
+  NaN-refusing ``canonical_json_bytes``; the symbol is the function, detail `CANONICAL_JSON`.
 * ``chacha20``: ChaCha20's constant (``b"expand 32-byte k"``, or its first word ``0x61707865``), another ChaCha20 beside
   `CHACHA20`; detail `CHACHA20`.
 """
@@ -28,6 +28,7 @@ RULE = "P14 (one way to build and reach the vLLM engine, to refuse, to encode ca
 BUILD = "verity_vllm/engine/build.py"
 HANDLE = "verity_vllm/engine/handle.py"
 ERRORS = "verity_vllm/errors.py"
+HASHING = "verity_vllm/commit/hashing.py"
 CANONICAL_JSON = "verity.ml.circuits.codec.canonical_json"
 CHACHA20 = "verity.ml.crypto.chacha20"
 VLLM_LLM = frozenset({"vllm.LLM", "vllm.entrypoints.llm.LLM"})
@@ -62,7 +63,7 @@ def file_violations(src: str, rel: str) -> list[R.Violation]:
             out.append(R.Violation(rel, "vllm-LLM", symbol, "vllm.LLM", node.lineno))
         if rel != ERRORS and isinstance(node, ast.ClassDef) and REFUSAL.search(node.name):
             out.append(R.Violation(rel, "refusal-class", symbol, node.name, node.lineno))
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and _canonical_encoder(node, names):
+        if rel != HASHING and isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and _canonical_encoder(node, names):
             qual = node.name if symbol == "<module>" else f"{symbol}.{node.name}"
             out.append(R.Violation(rel, "canonical-json", qual, CANONICAL_JSON, node.lineno))
         if isinstance(node, ast.Constant) and id(node) not in docs and type(node.value) in (bytes, str, int) \
@@ -92,7 +93,8 @@ def test_no_new_violations() -> None:
                     f"its scheduler, model runner, config or workers only through {HANDLE}'s accessors (add the accessor "
                     "there if it is missing, rather than walking `llm_engine`/`engine_core`/`model_executor` here); and "
                     f"raise {ERRORS}'s `Refused` rather than declaring another refusal class; encode canonical JSON with "
-                    f"`{CANONICAL_JSON}` rather than another `json.dumps(sort_keys=True)` wrapper; and draw ChaCha20 with "
+                    f"`{CANONICAL_JSON}` (or {HASHING}'s `canonical_json_bytes` where NaN must be refused) rather than "
+                    "another `json.dumps(sort_keys=True)` wrapper; and draw ChaCha20 with "
                     f"`{CHACHA20}.keystream` (RFC 8439's 32-bit counter and 96-bit nonce are its 64-bit counter and nonce "
                     "read another way) rather than another implementation.")
 
@@ -141,6 +143,7 @@ def test_detectors_on_examples() -> None:
     )
     assert sorted((v.kind, v.symbol) for v in file_violations(encoders, "verity_vllm/x.py")) == [
         ("canonical-json", "C.raw"), ("canonical-json", "cj")]
+    assert file_violations(encoders, HASHING) == []
     chacha = "'''expand 32-byte k'''\nSIGMA = b'expand 32-byte k'\ndef qr(s):\n    s[0] = 0x61707865\n    return 1\n"
     assert [(v.kind, v.symbol) for v in file_violations(chacha, "verity_vllm/x.py")] == [
         ("chacha20", "<module>"), ("chacha20", "qr")]
