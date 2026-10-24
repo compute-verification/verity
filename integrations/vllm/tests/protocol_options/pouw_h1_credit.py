@@ -136,7 +136,8 @@ class StandIn:
         if o0 is None:
             return "the file reads no receipt table at o0"
         for name, port in ((CR.PUB_PORT, pub), (CR.RECEIPT_PORT, o0), (CR.OK_PORT, o1)):
-            at, (bc, path) = port["reads"][u], (bytes.fromhex(x) for x in opened[name][:2])
+            i, (bc, path) = u - port.get(G.READS_FROM, 0), (bytes.fromhex(x) for x in opened[name][:2])
+            at = port["reads"][i] if 0 <= i < len(port["reads"]) else None
             if at is None or not G.verify_read(self._dom(port), bytes.fromhex(port["root"]), at, bc, path, G.SCHEMA_V2):
                 return f"unit {u}'s {name} row does not open {port['value']} at the file's root"
         if bytes.fromhex(opened[CR.PUB_PORT][0]) != bc_of(pub["known"]["rows"][t], bytes.fromhex(pub["known"]["salts"][t])):
@@ -174,9 +175,11 @@ class StandIn:
 
 
 def _fields(words: Any) -> tuple[bytes, int, tuple[bytes, bytes]]:
-    """A public row's salt, position and (root(A), root(B)) (`core_check.public_words` inverted)."""
+    """A public row's salt, position and (root(A), root(B)) (`core_check.public_words` inverted; a J10-R row's call and
+    blocks after them dropped)."""
     x = b"".join(int(v).to_bytes(2, "little") for v in words)
     x = b"".join(x[i:i + 4][::-1] for i in range(0, len(x), 4))
+    x = x[:CC.PUBLIC_ROW_BITS // 8]
     s = len(x) - 8 - 128
     return x[:s], int.from_bytes(x[s:s + 8], "big"), (x[s + 8:s + 72], x[s + 72:])
 

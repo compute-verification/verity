@@ -1067,6 +1067,10 @@ def credit_check(h1: Any, served: Any, made: Any) -> dict[str, Any]:
     got = PC.check(w, units, lambda c: (made.kept[c]["a"].numpy(), made.kept[c]["b"].numpy()),
                    lambda c: SV.receipt_words(made.kept[c]["receipts"]), h1._key)
     got["s"], got["lines"] = round(time.monotonic() - t0, 1), PC.lines(got)
+    got["weights"] = [{x: e[x] for x in ("value", "leaves", "words")} for e in w.entries
+                      if e["value"].startswith(f"{w.prefix}b/")]
+    got["kept"] = [{"call": c, "k": w.k_of(c), "units": CR.call_work(w.layout)[c][0]} for c in sorted(made.kept)]
+    print(f"[fill] credit weights {json.dumps(got['weights'])} kept {json.dumps(got['kept'])}", flush=True)
     for line in got["lines"]:
         print(f"[fill] {line}", flush=True)
     print(f"POUW-H1-CREDIT {'OK' if got['ok'] else 'FAIL'} units={len(units)} s={got['s']}", flush=True)
