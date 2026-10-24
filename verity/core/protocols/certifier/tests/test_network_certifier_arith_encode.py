@@ -549,3 +549,22 @@ def test_size_counts_the_gates():
     for C in (1, 3):
         assert AE.size("book_kt", C=C)["ands"] == ands(AE.book_kt_unit(C))
     assert AE.size("charge", N=2)["ands"] == ands(AE.charge_unit(2))
+
+
+@pytest.mark.parametrize("traced", [False, True])
+def test_no_and_of_the_charge_reads_a_form_its_earlier_decisions_grew(traced):
+    """The carried words are committed once a decision, as rows of a lowering and in the gate trace alike (where
+    `C.commit` is the word itself), so the widest AND operand is the same at every N and the build linear in N. Without
+    the copies it grows with each decision, 2,983 terms at N = 2 and 3,006 at N = 3."""
+    from verity.ml.circuits import boolean as BL
+    from verity.ml.circuits.boolean.forms import Circuit
+    from verity.ml.circuits.boolean.trace import TracingCircuit
+
+    def widest(N):
+        C = (TracingCircuit if traced else Circuit)(cse=True)
+        params, _ = AE._sig_charge(SimpleNamespace(N=N))
+        ins = [C.input(f"p{i}e{j}", w) for i, (_n, t) in enumerate(params) for j, w in enumerate(BL.elements(t))]
+        C.output("out", [b for e in AE._build_charge(C, SimpleNamespace(N=N), *ins) for b in e])
+        return max(len(C.data[v][k].s) for v in C.live() if C.kind[v] == "and" for k in (0, 1))
+
+    assert widest(2) == widest(3)
