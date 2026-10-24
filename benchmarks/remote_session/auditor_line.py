@@ -1,7 +1,14 @@
 """The memory line on the auditor's clock, the analysis of record for a gate run: each accepted paced session's line
-(`remote_bandwidth.line`, exact, through `verifier.recorded_line`: time-held and link-charged, each read held over time
-and at the passes) with its groups' times read from what the auditor's host signed rather than from the verifier's
-stamps.
+(time-held and link-charged, each read held over time and at the passes, exact) with its groups' times read from what
+the auditor's host signed rather than from the verifier's stamps.
+
+**Who computes it** (`line_by`, `LINE_BY`). The Lean verifier (`remote-audit-verifier`'s `line` request,
+`RemoteAudit.Line.line` with its W from `RemoteAudit.Pooled`) computes each session's line from the inputs
+`verifier.recorded_inputs` reads from the record, and `remote_bandwidth.line` computes it beside it from the same JSON:
+the two are compared exactly, every rational as text in lowest terms and every integer, and a session where they
+differ refuses the run's line, naming both values (`Disagree`). Floats appear only as the exact shares correctly
+rounded for display. `--line-by python` computes it in `line.py` alone, a reading that is never of record: the
+`memory-line-of-record` label needs `line_by` lean.
 
 Group g's coin σ_g left the challenger at its release log's `released_at` for challenge coin g, and window g's last
 root reached it at the first `received_at` of a request naming that root (`auditor_seen`). Openings coin g's request
@@ -60,7 +67,7 @@ measured, credited or not, is `measured`. `--table` writes each session's five c
 
     python auditor_line.py OUT --host-bytes B [--pin SHA512 --period P --commit SHA [--pins LOG --main FILE]]
         [--ledger HEAD ...] [--peer NAME] [--model-pin FILE] [--disk-bytes-per-s B/S] [--link-bytes-per-s B/S]
-        [--bursts stated|none] [--table FILE]
+        [--bursts stated|none] [--line-by lean|python] [--lean-exe PATH] [--table FILE]
 """
 from __future__ import annotations
 
@@ -78,6 +85,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
 import challengers as CH  # noqa: E402
+import lean_verifier as lv  # noqa: E402
 import verifier as V  # noqa: E402
 from verity.core.protocols.remote_bandwidth import audit, coins, ledger, line  # noqa: E402
 from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
@@ -100,6 +108,13 @@ CHECKS = ("credited", "complete", "accepted", "pinned", "bound")
 SHARES = ("time", "snapshot", "filler_time", "filler_snapshot")
 """A session's shares of the node in a form (`shares`): weights held, over time and at the passes, and filler held in
 the same two readings."""
+LINE_BY = ("lean", "python")
+"""Who computes the line (`line_of_record`): the Lean verifier, held exactly to `line.py` on the same inputs, which is
+of record, or `line.py` alone."""
+
+
+class Disagree(ValueError):
+    """The Lean's line and `line.py`'s differ on the same inputs, so there is no line: where, and both values."""
 
 
 def descriptor(tree: str) -> bytes:
@@ -204,21 +219,81 @@ def rates_at(disk_bytes_per_s: float = RATES["disk_bytes_per_s"],
     return out
 
 
-def shares(session: dict, registration: dict, host_bytes: int, rates: dict) -> dict:
-    """A session's shares of the node in each form (`line.FORMS`) at `rates` (`rates_at`), on the clock its
-    `windows_seen` read: weights and filler held, over time and at the passes (`SHARES`), in floats and each exact
-    beside them (`exact`), and the worst stretch over time."""
-    got = V.recorded_line(session, registration, host_bytes=host_bytes,
-                          rates=V.recorded_rates(session, registration, **rates))
+NOTHING = object()
+"""What `differ` names as the value of a key that one side's JSON lacks."""
+
+
+def said(x: object) -> str:
+    return "nothing" if x is NOTHING else json.dumps(x)
+
+
+def differ(lean: object, python: object, at: str = "") -> tuple[str, object, object] | None:
+    """The first place two JSON values differ, its path and each one's value there, or None when they are equal: the
+    same keys, lists of the same length, and leaves of the same type and value."""
+    if isinstance(lean, dict) and isinstance(python, dict):
+        for k in sorted(set(lean) | set(python)):
+            if k not in lean or k not in python:
+                return f"{at}.{k}", lean.get(k, NOTHING), python.get(k, NOTHING)
+            if (d := differ(lean[k], python[k], f"{at}.{k}")) is not None:
+                return d
+        return None
+    if isinstance(lean, list) and isinstance(python, list):
+        if len(lean) != len(python):
+            return f"{at} (its length)", len(lean), len(python)
+        return next((d for i, (x, y) in enumerate(zip(lean, python)) if (d := differ(x, y, f"{at}[{i}]"))), None)
+    return None if type(lean) is type(python) and lean == python else (at or ".", lean, python)
+
+
+def line_of_record(inputs: dict, lean: lv.Lean | None) -> dict:
+    """The line of `inputs` (`line.inputs_json`'s form) as `line.run_json` writes it: with `lean`, the Lean verifier's
+    answer to `line`, held exactly to `line.py`'s on the same inputs (`differ`), or `Disagree` naming both values;
+    with none, `line.py`'s alone. A line both refuse, with the same reason, is `line.Refused`."""
+    python = line.run_json(inputs)
+    got = python
+    if lean is not None:
+        got = lean.call({"op": "line", **inputs})
+        if not isinstance(got, dict) or ("refused" in got) != ("refused" in python):
+            raise Disagree(f"the Lean's line and line.py's disagree: the Lean's {outcome(got)}, line.py's "
+                           f"{outcome(python)}")
+        if (d := differ(got, python)) is not None:
+            at, a, b = d
+            raise Disagree(f"the Lean's line and line.py's disagree at {at}: the Lean's {said(a)}, line.py's "
+                           f"{said(b)}")
+    if "refused" in got:
+        raise line.Refused(got["refused"])
+    return got
+
+
+def outcome(got: object) -> str:
+    """A line's answer in a few words: its refusal, or each form's weights share held over time."""
+    if isinstance(got, dict) and "refused" in got:
+        return f"refusal {json.dumps(got['refused'])}"
+    try:
+        return "line, weights held " + ", ".join(f"{f} {got[f]['time']['weights_share']}" for f in line.FORMS)
+    except (KeyError, TypeError):
+        return json.dumps(got)
+
+
+def shares(session: dict, registration: dict, host_bytes: int, rates: dict, lean: lv.Lean | None = None) -> dict:
+    """A session's shares of the node in each form at `rates` (`rates_at`), on the clock its `windows_seen` read, from
+    its line (`line_of_record`, the Lean's with `lean`; `shares_of`)."""
+    return shares_of(line_of_record(V.recorded_inputs(session, registration, host_bytes=host_bytes,
+                                                      rates=V.recorded_rates(session, registration, **rates)), lean))
+
+
+def shares_of(got: dict) -> dict:
+    """A line's (`line.run_json`'s form) shares of the node in each form (`line.FORMS`): weights and filler held, over
+    time and at the passes (`SHARES`), each exact (`exact`) and the float nearest it beside it, and the worst stretch
+    over time."""
     row = {}
     for f in line.FORMS:
-        exact = {"time": got.share(f), "snapshot": got.share(f, line.SNAPSHOT),
-                 "filler_time": got.share(f, line.TIME, "filler"),
-                 "filler_snapshot": got.share(f, line.SNAPSHOT, "filler")}
-        worst = got.form(f).worst(line.TIME)
-        row[f] = {**{k: float(x) for k, x in exact.items()}, "exact": {k: line.text(x) for k, x in exact.items()},
-                  "worst_stretch": worst.stretch, "worst_l_max_ms": worst.l_max_ns / 1e6,
-                  "worst_span_s": worst.span_ns / 1e9}
+        j = got[f]
+        exact = {"time": j["time"]["weights_share"], "snapshot": j["snapshot"]["weights_share"],
+                 "filler_time": j["time"]["filler_share"], "filler_snapshot": j["snapshot"]["filler_share"]}
+        worst = next(x for x in j["stretches"] if x["stretch"] == j["time"]["stretch"])
+        row[f] = {**{k: float(line.number(x)) for k, x in exact.items()}, "exact": exact,
+                  "worst_stretch": worst["stretch"], "worst_l_max_ms": worst["l_max_ns"] / 1e6,
+                  "worst_span_s": worst["span_ns"] / 1e9}
     return row
 
 
@@ -422,12 +497,13 @@ def signed_lines(d: Path, kind: str, R: str, heads: list[Path], key: Ch.Challeng
 def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, heads: list[Path] | None,
             lane: str = LANE, peer: str | None = None, rates: dict | None = None,
             desc: bytes | None = None, commit: str | None = None, pins: list[str] | None = None,
-            main: list[str] | None = None, model: dict | None = None) -> dict:
+            main: list[str] | None = None, model: dict | None = None, lean: lv.Lean | None = None) -> dict:
     """The run's line: `desc` is the descriptor of the verifier that ran it (`descriptor` of `commit`'s tree), `pins`
     the challenger host's pins log, its lines (None: the gate served none), `main` the auditor's first-parent list of
     main (None: none given), `model` the model the store must be bound to ({name, checkpoint_sha512},
     `--model-pin`'s) when the audit's period signs none, `peer` the gate sessions' peer (None: the record's,
-    `peer_of`), and `rates` the node's (`rates_at`; None: its defaults)."""
+    `peer_of`), `rates` the node's (`rates_at`; None: its defaults), and `lean` the Lean verifier that computes every
+    session's line (`line_of_record`; None: `line.py` alone, `line_by` python)."""
     rates = rates_at() if rates is None else rates
     v = json.loads((out / "verifier.json").read_text())
     reg = v["registration"]
@@ -437,6 +513,7 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
     key = windows = periods = None
     lines: list[str] = []
     doc: dict = {"registration": reg["digest"], "host_bytes": host_bytes, "rates": rates,
+                 "line_by": "python" if lean is None else "lean",
                  "commit": commit, "descriptor": None if desc is None else desc.decode(),
                  "pins": None if pins is None else {"lines": len(pins), "sha512": Ch.log_digest(pins)},
                  "verifier_rtt_ms": {k: x / 1e6 for k, x in v.get("rtt", {}).items() if k.endswith("_ns")}}
@@ -505,8 +582,8 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
         a = copy.deepcopy(s)
         a["windows_seen"] = seen
         row["groups"] = len(seen)
-        row["shares_auditor_clock"] = shares(a, reg, host_bytes, rates)
-        row["shares_verifier_clock"] = shares(s, reg, host_bytes, rates)
+        row["shares_auditor_clock"] = shares(a, reg, host_bytes, rates, lean)
+        row["shares_verifier_clock"] = shares(s, reg, host_bytes, rates, lean)
         row["cross_check"] = cross_check(s["windows_seen"], seen)
         for clock in ("auditor", "verifier"):
             for f, x in row[f"shares_{clock}_clock"].items():
@@ -573,7 +650,7 @@ def table(doc: dict) -> str:
                    + " / ".join(f"{row[x]['filler_time']:.4%}" for x in b) + " (snapshot weights "
                    + " / ".join(f"{row[x]['snapshot']:.4%}" for x in b) + ", filler "
                    + " / ".join(f"{row[x]['filler_snapshot']:.4%}" for x in b) + ")")
-    out.append(doc["credit"]["summary"])
+    out.append(f"line by {doc['line_by']}; {doc['credit']['summary']}")
     return "\n".join(out) + "\n"
 
 
@@ -610,6 +687,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--bursts", choices=BURSTS, default="stated",
                     help="charge `ledger.Node.stated`'s bursts beyond the rates (the line of record) or none (gate runs "
                          "up to 7)")
+    ap.add_argument("--line-by", choices=LINE_BY, default="lean",
+                    help="compute each line in the Lean verifier, held exactly to line.py's (the line of record), or in "
+                         "line.py alone (a reading, not of record)")
+    ap.add_argument("--lean-exe", type=Path, metavar="PATH",
+                    help="the remote-audit-verifier executable (default: `lake build` it in the remote audit's package)")
     a = ap.parse_args(argv)
     desc = None if a.commit is None else descriptor(verifier_tree(a.commit, a.repo))
     pins = None if a.pins is None else [x for x in a.pins.read_text().split("\n") if x]
@@ -621,13 +703,26 @@ def main(argv: list[str] | None = None) -> int:
         except rstore.Refused as e:
             raise SystemExit(f"auditor_line: {e}") from None
         model = {"name": p["name"], "checkpoint_sha512": p["checkpoint_sha512"]}
-    doc = analyse(a.out, host_bytes=a.host_bytes, pin=a.pin, period=a.period, heads=a.ledger, lane=a.lane, peer=a.peer,
-                  rates=rates_at(a.disk_bytes_per_s, a.link_bytes_per_s, a.bursts), desc=desc, commit=a.commit,
-                  pins=pins, main=first_parent, model=model)
+    lean = None
+    if a.line_by == "lean":
+        try:
+            lean = lv.Lean(a.lean_exe or lv.build(), lambda _: None)
+        except (lv.LeanError, OSError) as e:
+            raise SystemExit(f"auditor_line: no Lean verifier to compute the line ({e}): pass --lean-exe, or "
+                             "--line-by python for a reading that is not of record") from None
+    try:
+        doc = analyse(a.out, host_bytes=a.host_bytes, pin=a.pin, period=a.period, heads=a.ledger, lane=a.lane,
+                      peer=a.peer, rates=rates_at(a.disk_bytes_per_s, a.link_bytes_per_s, a.bursts), desc=desc,
+                      commit=a.commit, pins=pins, main=first_parent, model=model, lean=lean)
+    except (Disagree, lv.LeanError) as e:
+        raise SystemExit(f"auditor_line: no line: {e}") from None
+    finally:
+        if lean is not None:
+            lean.close()
     print(json.dumps(doc, indent=1, default=str))
     if a.table is not None:
         a.table.write_text(table(doc))
-    print(f"auditor_line: {doc['credit']['summary']}", file=sys.stderr)
+    print(f"auditor_line: line by {doc['line_by']}; {doc['credit']['summary']}", file=sys.stderr)
     bound = doc["bound"]
     print(f"auditor_line: bound: {'yes, to ' + bound['model']['name'] if bound['ok'] else 'no: ' + bound['reason']}",
           file=sys.stderr)
