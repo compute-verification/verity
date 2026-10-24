@@ -13,8 +13,9 @@ opening, a leaf's receipt, a window's draws and a registration's digest), the re
 with its codec seed, the verifier's registry (`registry`: registrations, sessions over them and their events,
 closes, and `registry/v0` both ways), and `store.py`'s binding (`RemoteAudit.Store`: a pin from its file's bytes,
 canonical JSON, `checkpoint_sha512`, a payload salt, the expected root, `Binding.hold`, and `binding`, the binding as
-the verifier's process starts it and holds each hello to it, its `bind` and `hold` requests), and `line.py`'s memory
-line (`line`, `RemoteAudit.Line`: rationals as strings `n` or `n/d`), whose refusals are outputs (`{"refused": why}`),
+the verifier's process starts it and holds each hello to it, its `bind` and `hold` requests), `line.py`'s memory
+line (`line`, `RemoteAudit.Line`: rationals as strings `n` or `n/d`) and `pooled.py`'s pooled bound, which the line
+reads (`pooled`, `RemoteAudit.Pooled`), whose refusals are outputs (`{"refused": why}`),
 so their reasons are compared. `remote-audit-difftest` serves them.
 -/
 
@@ -475,8 +476,20 @@ private def formJ (nodeBytes : Nat) (f : Line.Form) : Json :=
   Json.mkObj [("burst", ratJ f.charge.burst), ("rate", ratJ f.charge.rate),
     ("stretches", .arr (f.stretches.map stretchJ)), ("time", reading true), ("snapshot", reading false)]
 
-/-- `line.run_json`: the line of `{"groups", "per", "blocks", "block_bytes", "chip_bytes", "node_bytes", "wrong",
-"rates"}` in both forms, or why it has none. -/
+private def windowsOf (j : Json) : V (Array (Nat × Nat)) := do
+  (← J.arr j "windows" "input").mapM fun w => do
+    let xs ← J.asArr w "windows"
+    if xs.size ≠ 2 then throw "windows: a window is [receipts, draws]"
+    pure (← J.asNat xs[0]! "windows", ← J.asNat xs[1]! "windows")
+
+/-- `pooled.run_json`: the pooled bound of `{"windows": [[U, s], ...], "delta"}`, or why there is none. -/
+def pooledFn (j : Json) : V Json := do
+  let got := Pooled.pooled (← windowsOf j) (← ratIn j "delta" "input")
+  pure (refusedOr ((fun (b : Pooled.Bound) => Json.mkObj [("budget", ratJ b.budget), ("floor", ratJ b.floor),
+    ("floors", .arr (b.floors.map ratJ)), ("wrong", ratJ b.wrong)]) <$> got))
+
+/-- `line.run_json`: the line of `{"groups", "per", "blocks", "block_bytes", "chip_bytes", "node_bytes", "windows",
+"delta", "rates"}` in both forms with the wrong receipts it read, or why it has none. -/
 def lineFn (j : Json) : V Json := do
   let groups ← (← J.arr j "groups" "input").mapM groupOf
   let r ← J.get j "rates" "input"
@@ -489,9 +502,9 @@ def lineFn (j : Json) : V Json := do
       diskBurstBytes := ← ratIn r "disk_burst_bytes" "rates"
       linkBurstBytes := ← ratIn r "link_burst_bytes" "rates" }
   let got := Line.line groups (← nat j "per") (← nat j "blocks") (← nat j "block_bytes") (← nat j "chip_bytes")
-    (← nat j "node_bytes") (← ratIn j "wrong" "input") rates
-  pure (refusedOr ((fun (l : Line.Line) => Json.mkObj (l.forms.toList.map fun (f : Line.Form) =>
-    (f.name, formJ l.nodeBytes f))) <$> got))
+    (← nat j "node_bytes") (← windowsOf j) (← ratIn j "delta" "input") rates
+  pure (refusedOr ((fun (l : Line.Line) => Json.mkObj ((l.forms.toList.map fun (f : Line.Form) =>
+    (f.name, formJ l.nodeBytes f)) ++ [("wrong", ratJ l.wrong)])) <$> got))
 
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("session", sessionFn), ("registration_digest", registrationDigestFn), ("register", registerFn),
@@ -500,6 +513,6 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("leaf_receipt", leafReceiptFn), ("draws", drawsFn),
   ("pin", pinFn), ("canonical_json", canonicalJsonFn), ("checkpoint_sha512", checkpointFn),
   ("store_salt", storeSaltFn), ("expected_root", expectedRootFn), ("hold", holdFn), ("binding", bindingFn),
-  ("line", lineFn)]
+  ("line", lineFn), ("pooled", pooledFn)]
 
 end RemoteAudit.Difftest

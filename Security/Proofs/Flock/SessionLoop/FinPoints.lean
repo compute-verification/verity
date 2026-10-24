@@ -2,6 +2,7 @@ import Proofs.Flock.SessionLoop.FinishParts
 import Proofs.Flock.Claims.ZK.FrameRankFault
 import Proofs.Flock.Claims.ZK.FrameLinks
 import Proofs.Flock.VBridge.Family.Structure
+import Proofs.Flock.Claims.ZK.PrefixLive
 
 /-!
 # (b) `FinPoints`: the link points at the opened coins
@@ -11,10 +12,78 @@ import Proofs.Flock.VBridge.Family.Structure
   `p·mPts + j` of the `Commit`'s coin, which the loop requests `points·mPts` words of (`loopNr x 0`), within
   `COIN_MAX` (`live_links`), and which the opened coin holds (`wordsAt_slot`).
 * **`Loop.finPoints_of`**: so `FinPoints` holds where each table's regions carry bytes of their free bits' size
-  (`FlockVBridge.Family.RegionBytes`, `extraClaims_exists`). That is not a premise of `SessionLoopZKDeployed`: the
-  extra claims (`Stmt.regionValue`) refuse a region whose bytes are not `2^|free|` bits, while the loop's `Finish`
-  carries only the claims' coordinates (`Drive.extras`, `Finish.claimsOf`) and never computes their values.
+  (`FlockVBridge.Family.RegionBytes`, `extraClaims_exists`): the extra claims (`Stmt.regionValue`) refuse a region whose
+  bytes are not `2^|free|` bits, while the loop's `Finish` carries only the claims' coordinates (`Drive.extras`,
+  `Finish.claimsOf`) and never computes their values.
+* **`Masked.regionBytes_of_setup`**: every table a `Live` statement sets up has them, since `Stmt.setupH` and
+  `Stmt.setupHidden` refuse a region of any other size (`checkRegionBytes`, `setupH_regionBytes`,
+  `setupHidden_regionBytes`). So **`Loop.finPoints`**: (b) at every statement in the masked scope with a witness.
 -/
+
+namespace Claims.ZKMal.Masked
+
+open Claims FlockSoundness.ZK
+open FlockSoundness.Discharge
+open CoinLayer
+
+open _root_.Flock FlockSoundness.Refine in
+set_option maxHeartbeats 2000000 in
+/-- **What `Stmt.setupH` returns has each region's bytes its free bits** (its `checkRegionBytes`). -/
+theorem setupH_regionBytes {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
+    {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
+    (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) : FlockVBridge.Family.RegionBytes st := by
+  refine (checkRegionBytes_ok _ _).1 ?_
+  unfold Stmt.setupH at h
+  dsimp only at h
+  simp only [throw_bind', pure_bind] at h
+  repeat' walk_step
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    assumption
+
+open _root_.Flock FlockSoundness.Refine in
+set_option maxHeartbeats 4000000 in
+/-- **What `Stmt.setupHidden` returns has each region's bytes its free bits** (its `checkRegionBytes`). -/
+theorem setupHidden_regionBytes {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
+    {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
+    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
+    FlockVBridge.Family.RegionBytes st := by
+  refine (checkRegionBytes_ok _ _).1 ?_
+  cases draw <;> unfold Stmt.setupHidden at h <;> dsimp only at h <;> simp only [throw_bind', pure_bind] at h <;>
+    repeat' walk_step
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    assumption
+
+open _root_.Flock FlockDeploy FlockComplete in
+/-- **Every table a `Live` statement sets up has each region's bytes its free bits**: each is `Stmt.setupH`'s or
+`Stmt.setupHidden`'s (`setupTables_setupOne`), as in `live_bounds`. -/
+theorem regionBytes_of_setup {x : Msg} (hx : Live x) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hsx : setupOf true x = some (s, spec, sts)) : ∀ j (hj : j < sts.size), FlockVBridge.Family.RegionBytes sts[j] := by
+  obtain ⟨p, hp, hsc⟩ := (Readable.scope_iff (deployZk Readable.relation) Readable.relation (readOf true) rfl
+    (fun _ _ h => readOf_zk h) x).1 hx.1
+  have hi := (setupOf_some hsx).1
+  unfold Readable.parseBytes readOf at hp
+  rw [hi] at hp
+  have ht := Readable.toRead_of_parse (r := s.read) hp
+  obtain ⟨hck, -⟩ := (Readable.scope_ok_iff p).1 hsc
+  have hR := ((Readable.check_ok_iff _ _ _ _ _ _ _ _).1 hck).1
+  have hpi : p.publicInputs = none := Option.not_isSome_iff_eq_none.1 (by simp [hR.2.2.2.2.2])
+  have hset := Ins.setup_read (setupOf_some hsx).2
+  rw [← ht] at hset
+  unfold Readable.Read.setup at hset
+  rw [hpi] at hset
+  intro j hj
+  obtain ⟨d, hd, -⟩ := (HiddenExec.setupTables_setupOne hset).2 j hj
+  rcases Bool.eq_false_or_eq_true (FlockSoundness.Discharge.Exec.tagsAt p.tags p.I.count j).hiddenOutputs with hh | hh
+  · rw [HiddenExec.setupOne_hidden hh] at hd
+    exact setupHidden_regionBytes hd
+  · rw [HiddenExec.setupOne_public hh] at hd
+    exact setupH_regionBytes hd
+
+end Claims.ZKMal.Masked
 
 namespace Claims.ZKServer
 
@@ -86,6 +155,15 @@ theorem finPoints_of (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Floc
   rw [getElem!_pos (FlockDeploy.tabsOf (Masked.stsOf x)) (k / 2) hk2']
   simp only [FlockDeploy.tabsOf, Array.getElem_map]
   exact FlockVBridge.Family.extraClaims_exists _ _ (hb (k / 2) hk2)
+
+/-- **(b) `FinPoints`**: at a statement in the masked scope with a witness, the link points at the opened coins are the
+auditor's and each table's extra claims at them return. -/
+theorem finPoints (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
+    (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) :
+    FinPoints L₀ src real wk x w := by
+  intro ν t κ m₀ ρ₀ ops hctx s0 spec hsx
+  exact finPoints_of L₀ src real wk x w hsc hR (Masked.regionBytes_of_setup (Masked.live_of hsc hR) hsx)
+    ν t κ m₀ ρ₀ ops hctx s0 spec hsx
 
 end Loop
 

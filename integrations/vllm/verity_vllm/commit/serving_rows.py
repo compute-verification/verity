@@ -44,7 +44,8 @@ step's root the tree over their roots.  The window registers one port for them, 
 (served-domain rule, leaf schema ``ROOTS_SCHEMA``), so no row is committed twice.  Its linked members (``Member.links``) are
 shared-row chunks whose ``x`` table holds the distinct token rows they read, each under its row table row's salt (so the same
 ``b || c``), read by offset; ``row_tables.check_row_tables`` ties them to the step roots.  ``write`` adds ``t<k>-public.bin``
-(every row's ``b || c``) and ``t<k>-private.bin`` (rows, then salts; prover only).
+(every row's ``b || c``) and ``t<k>-private.bin`` (rows, then salts; prover only).  A wired member (``Member.wired``) commits one
+input port as other units' output rows under their salts, which `wiring.check` holds across statements.
 """
 from __future__ import annotations
 
@@ -71,6 +72,7 @@ from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEM
                                            sha512_row_prefix, sha512_row_seg_digest, sha512_row_v2_prefix)
 from verity.ml.circuits.codec import canonical_json
 
+from . import wiring as WI
 from .hiding import HidingLeaves
 
 SCHEME = "frame-v3-sha512/hm96-sha512"
@@ -252,6 +254,7 @@ class Member:
     schemas: tuple[tuple[str, str], ...] = ()
     link_units: tuple[int, ...] = ()             # a row-table member: per link, how many of its units (consecutive, in order) read it
     links: tuple[tuple[int, int], ...] = ()      # a row-table member: per row of its x table, the window's row table and rank it is
+    wired: tuple[str, str, tuple[int, ...]] | None = None  # (port, out, writers): unit i's port row is unit writers[i]'s out row (`wiring`)
 
     def __post_init__(self) -> None:
         if self.schemas and (sorted(p for p, _ in self.schemas) != sorted(p for p, _ in self.rows + self.outs)
@@ -358,7 +361,8 @@ class Window:
     """What the roots are bound to: the verifier's population program and query (the partition over them), the law it draws by, the
     run (the record's run root, hex), and the members the population is made of, in the partition's order (refused otherwise); and
     its row tables in the canonical order (``RowTable.key``), every rank of each the row of at least one linked member's ``x``
-    table, under ``context`` (hex, 64 bytes serving knew before its first step: the live coin commitment's root)."""
+    table, under ``context`` (hex, 64 bytes serving knew before its first step: the live coin commitment's root).  A ``work`` law
+    draws by the verifier's ``work_table`` (`draw.work_table`), which the registration's law is expanded under."""
     program: Any
     query: dict[str, Any]
     law: dict[str, Any]
@@ -366,6 +370,7 @@ class Window:
     members: tuple[Member, ...]
     row_tables: tuple[RowTable, ...] = ()
     context: str = ""
+    work_table: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         mine, want = [(m.template, m.base, m.n) for m in self.members], P.ranges(self.program, self.query)
@@ -382,6 +387,7 @@ class Window:
             raise ValueError(f"members {mine} are not the partition's units {want} (each template's, in consecutive chunks)")
         if len({m.key for m in self.members}) != len(self.members):
             raise ValueError(f"members {[m.key for m in self.members]}: each its own name")
+        WI.validate(self.members)
         covered = [np.zeros(t.n, dtype=bool) for t in self.row_tables]
         for m in self.members:
             for t, r in m.links:
@@ -621,6 +627,7 @@ def commit(window: Window, data: Sequence[dict[str, dict[str, np.ndarray]]], *, 
     for m in ms:
         if m.links:
             ys[m.port(LINKED)] = b"".join(ys[window.row_tables[t].port][r * SALT_BYTES:(r + 1) * SALT_BYTES] for t, r in m.links)
+    WI.salts(ms, rows, ys)
     t_salt = time.perf_counter()
     roots, bc = commit_ports(domains, rows, {}, ys, workers=workers, chunk=chunk, schemas=schemas)
     table_roots = {t.port: roots.pop(t.port) for t in window.row_tables}
@@ -697,7 +704,7 @@ def registration(c: Committed, provenance: Mapping[str, Any], previous: str | No
     roots = [{"port": p, "root": c.roots[p].hex(), "leaves": c.domains[p].count, "domain": c.domains[p].domain_id.hex()} for p in c.roots]
     publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
     return R.record(w.program, w.query, w.law, SCHEME, roots, {**provenance, "kind": kind, "run": w.run},
-                    leaf_layer=leaf_layer(publics), previous=previous)
+                    leaf_layer=leaf_layer(publics), previous=previous, work_table=w.work_table)
 
 
 def index_doc(members: Sequence[Member], entries: Sequence[Sequence[list[Any]]], run: str) -> dict[str, Any]:
@@ -760,7 +767,8 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
                         **({"row_schemas": m.row_schemas} if m.schemas else {}),
                         **({"registered": registered_entry(c, m, trees)} if m.links else {}),
                         **({"shared_rows": {**dict(m.tables), **{p: m.n for p, _ in m.out_rows}}} if m.tables else {}),
-                        **({"row_links": [list(x) for x in m.links]} if m.links else {})})
+                        **({"row_links": [list(x) for x in m.links]} if m.links else {}),
+                        **({"wired": {"port": m.wired[0], "out": m.wired[1], "writers": list(m.wired[2])}} if m.wired else {})})
     tables = []
     for t, tab in enumerate(c.window.row_tables):
         pub = c.table_public(t)
