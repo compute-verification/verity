@@ -616,7 +616,7 @@ theorem split_credit_le {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise 
           (rowIdx U.layout u i) (actOf (splitTranscript U.layout τ) (rowIdx U.layout u i)) := by
     intro u hu
     have hu' := (hmem u hu).1
-    rw [split_credit hd hN ρ H s hu' (hU u hu').2.1 (actOf τ u)]
+    rw [split_credit hd hN ρ H s hu' (pearlCDomainDev_pos hU hu').2 (actOf τ u)]
     exact sum_congr rfl fun i hi => by rw [actOf_split τ hu' (mem_range.mp hi)]
   have hinj : Set.InjOn (fun p : (_ : ℕ) × ℕ => rowIdx U.layout p.1 p.2)
       ((correctSet (pearlCProtocolDevRev1RowCap d sem' ρ) U H s τ).sigma fun u => range (U.layout.shape u).m) := by
@@ -634,7 +634,7 @@ theorem split_credit_le {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise 
     obtain ⟨huN, c, hc, hcor⟩ := hmem u hu
     have hi' := mem_range.mp hi
     refine mem_filter.mpr ⟨mem_range.mpr (rowIdx_lt_rowsOf huN hi'), rowCommit c i, ?_,
-      split_correct hd hN ρ H s huN hi' (hU u huN).2.1 hcor⟩
+      split_correct hd hN ρ H s huN hi' (pearlCDomainDev_pos hU huN).2 hcor⟩
     rw [splitTranscript_rowIdx τ huN hi', hc]
     rfl
   · intro v hv _
@@ -925,7 +925,7 @@ theorem split_tileCredit_le {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNo
     obtain ⟨u, bi, bj, hb, hu, hbj⟩ := tile_facts (mem_range.mp (mem_filter.mp hg).1)
     have hdom := pearlCDomainDev_pos hU hu
     show (pearlCTilesDevRev1 d sem' ρ).credit H s U g _ = _
-    rw [tilesCredit_eq, hb, tile_unit hb, tile_rows hb, tile_cols hb, tileCredit_rows d ρ _ hdom.1 hdom.2.1,
+    rw [tilesCredit_eq, hb, tile_unit hb, tile_rows hb, tile_cols hb, tileCredit_rows d ρ _ hdom.1 hdom.2,
       Rat.cast_sum]
     refine sum_congr rfl fun i hi => ?_
     obtain ⟨hiI, hrow⟩ := mem_filter.mp hi
@@ -994,7 +994,7 @@ theorem split_tileCredit_le {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNo
     · show (pearlCTilesDevRev1 d sem ρ).capOK H s (splitWorkload U) (splitTile U.layout u i bj) (rowCodes c.act i)
       rw [tilesCap_eq, splitTileW_unit hu hiu hbj, splitTileW_rows hu hiu hbj, splitTileW_cols hu hiu hbj,
         split_passRows hN hu hiu hrow, split_tileDebit hd hN H s hu hiu _ c.act, splitShapeW_eq hu hiu,
-        ← rowTile_cap d ρ _ i hdom.1 hdom.2.1]
+        ← rowTile_cap d ρ _ i hdom.1 hdom.2]
       have hpass : i ∈ sem'.passRows (U.layout.shape u) c.act ((auditTiling 64 64 U.layout).rows g) := by
         rw [tile_rows hb]
         exact mem_filter.mpr ⟨hiI, hrow⟩
@@ -1116,7 +1116,7 @@ theorem pearlCGammaDevRev1RowSeedWAt (CM : CostModel Q R S) (d : PearlCDevice) (
   have hsh : U.layout.shape u = s := hU.2.1.2 u hu
   have hdom := pearlCDomainDev_pos hU.2.1.1 hu
   have hc : sem.unitDebitRev1 d H s' U u act ≤ ρ * creditDevRev1 d (U.layout.shape u) :=
-    rowCap_agg sem d ρ H s' U u act hdom.1 hdom.2.1 hcap
+    rowCap_agg sem d ρ H s' U u act hdom.1 hdom.2 hcap
   show (W (U.layout.shape u) : ℝ) ≤
     (ω : ℝ) * ((creditDevRev1 d (U.layout.shape u) - sem.unitDebitRev1 d H s' U u act : ℚ) : ℝ)
   rw [hsh] at hc ⊢

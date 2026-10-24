@@ -273,17 +273,17 @@ theorem ttOutTilePearlCH100Rev1Witness :
   have hNT : (TR.tiling wideWorkload.layout).NT = 16 := wide_gridTiles_length
   have hu : (TR.tiling wideWorkload.layout).unit 0 = 0 := by
     show ((gridTiles 64 64 wideWorkload.layout).getD 0 (0, 0, 0)).1 = 0
-    rw [wide_gridTiles_zero]; rfl
+    rw [wide_gridTiles_zero]
   have hr : (TR.tiling wideWorkload.layout).rows 0 = Ico 0 1 := by
     show Ico (((gridTiles 64 64 wideWorkload.layout).getD 0 (0, 0, 0)).2.1 * 64)
       (min ((((gridTiles 64 64 wideWorkload.layout).getD 0 (0, 0, 0)).2.1 + 1) * 64)
         (wideWorkload.layout.shape ((gridTiles 64 64 wideWorkload.layout).getD 0 (0, 0, 0)).1).m) = Ico 0 1
-    rw [wide_gridTiles_zero]; rfl
+    rw [wide_gridTiles_zero] <;> rfl
   have hc : (TR.tiling wideWorkload.layout).cols 0 = Ico 0 64 := by
     show Ico (((gridTiles 64 64 wideWorkload.layout).getD 0 (0, 0, 0)).2.2 * 64)
       (min ((((gridTiles 64 64 wideWorkload.layout).getD 0 (0, 0, 0)).2.2 + 1) * 64)
         (wideWorkload.layout.shape ((gridTiles 64 64 wideWorkload.layout).getD 0 (0, 0, 0)).1).n) = Ico 0 64
-    rw [wide_gridTiles_zero]; rfl
+    rw [wide_gridTiles_zero] <;> rfl
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
   · refine ⟨true, fun U _ _ act _ H s => ⟨by simp [witnessTileCM], ?_, by simp [witnessTileCM]⟩⟩
     show (if true = true then ∑ g ∈ range (TR.tiling U.layout).NT,
