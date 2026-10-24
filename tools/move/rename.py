@@ -134,8 +134,9 @@ class Words:
         return self.sub(p, p, protect=False)
 
     def name(self, n: str, path: str = "") -> str:
-        """A Lean or Python dotted name, as it is renamed where it stands in file `path`."""
-        return self.sub(n, path, protect=False)
+        """A Lean or Python dotted name, as it is renamed where it stands in file `path`: not where [keep] keeps it (a
+        namespace that shares a module's name)."""
+        return self.sub(n, path)
 
 
 def record_spans(text: str) -> list[tuple[int, int]]:
