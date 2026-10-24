@@ -3,7 +3,8 @@
 `python manifest.py NODEMAP.json RES_ROOT > manifest.json`, where RES_ROOT/<run id>/ holds a run's result-*.json and
 <label>.jsonl (fetched from its out/) and NODEMAP maps run id to node. Test-set scores of a checkpoint that evalckpts.py
 evaluated (any run under RES_ROOT, on the checkpoint's node) are added: sampled accuracy at T (score_test_sampled) and, for
-an adapter served by vLLM's LoRA path, its greedy and sampled accuracy unmerged.
+an adapter served by vLLM's LoRA path, its greedy and sampled accuracy unmerged. They are matched by task, method, seed and step,
+since a checkpoint may have been evaluated from a copy on another node.
 """
 import glob
 import json
@@ -18,7 +19,7 @@ def main(nodemap_path, root):
     for p in sorted(glob.glob(str(Path(root) / "*" / "ckpteval-*.json"))):
         r = json.load(open(p))
         if r.get("ckpt"):
-            ck.setdefault((nodemap.get(Path(p).parent.name), r["ckpt"]), {})[r.get("mode", "merged")] = r
+            ck.setdefault((r["task"], r["method"], r["seed"], r["step"]), {})[r.get("mode", "merged")] = r
     for d in sorted(Path(root).iterdir()):
         node = nodemap.get(d.name)
         if node is None:
@@ -45,7 +46,7 @@ def main(nodemap_path, root):
                              "seed": r["seed"], "S_bits": r["S_bits"], "n_params": r["n_params"], "step": s,
                              "steps_total": r["steps"], "model": r["model"], "lr": r["lr"],
                              "score_greedy": evals.get(s), "score_online_T1": sum(w) / len(w) if w else None})
-                e = ck.get((node, path), {})
+                e = ck.get((r["task"], r["method"], r["seed"], s), {})
                 if "merged" in e:
                     rows[-1]["score_test_sampled"] = e["merged"]["sampled"]["acc"]
                     rows[-1]["sampled_T"] = e["merged"]["sampled"]["temperature"]
