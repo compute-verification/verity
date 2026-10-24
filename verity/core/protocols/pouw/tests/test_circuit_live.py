@@ -160,7 +160,10 @@ def test_the_live_programs_t_and_s_are_positive_integers(T, S):
 
 def test_the_tables_rows_are_the_statements_port_rows():
     """A slot leaf's row (`slot_words`) and a header's (`header_words`) are the u16 words, low first, of the bits the
-    statement's ``slot_<i>`` and ``req_<i>`` rows hold (`statement_rows`), and ``m``'s row its 32 bits."""
+    statement's ``slot_<i>`` and ``req_<i>`` rows hold (`statement_rows`), and ``m``'s row its 32 bits. The headers are the
+    one ``row-seg/v1`` rows (`REQUEST_SCHEMA`): a ``row/v2`` row this short has no compression before its last block, and a
+    statement needs one."""
+    assert {p[:3]: s for p, s, _b, _ps in LR.statement_rows(4)} == {"slo": G.SCHEMA_V2, "req": G.SCHEMA_SEG, "m": G.SCHEMA_V2}
     rows = {p: (b, ps) for p, _s, b, ps in LR.statement_rows(4)}
     assert list(rows) == [f"slot_{i}" for i in range(4)] + [f"req_{i}" for i in range(4)] + ["m"]
     assert rows["slot_2"] == (32, ["slot[2]"]) and rows["req_3"] == (160, ["req[3]"]) and rows["m"] == (32, ["m"])
@@ -176,7 +179,7 @@ def _window(T, S, rng):
     prog, window, session = "cd" * 64, "ab" * 64, "session-7"
     regs = {LR.table("h1/", LR.REQUESTS): G.Registered.commit(prog, LR.table("h1/", LR.REQUESTS),
                                                              LR.header_words(_valid(rng, T, n=2, m=0)[1]),
-                                                             schema=G.SCHEMA_V2, session=session)}
+                                                             schema=LR.REQUEST_SCHEMA, session=session)}
     for s in range(S):
         v = LR.table("h1/", LR.SLOTS, s)
         regs[v] = G.Registered.commit(prog, v, LR.slot_words([1] * (T // 2) + [0] * (T - T // 2)), schema=G.SCHEMA_V2,
@@ -197,7 +200,7 @@ def test_a_rounds_live_file_reads_its_slot_table_the_request_table_and_the_known
     for i in range(T):
         for port, v in ((f"slot_{i}", LR.table("h1/", LR.SLOTS, s)), (f"req_{i}", LR.table("h1/", LR.REQUESTS))):
             assert {k: ports[port][k] for k in G.ENTRY_KEYS} == {k: regs[v].entry()[k] for k in G.ENTRY_KEYS}
-            assert ports[port]["reads"] == [None] * s + [i] and ports[port]["row_schema"] == G.SCHEMA_V2
+            assert ports[port]["reads"] == [None] * s + [i] and ports[port]["row_schema"] == regs[v].schema
     rows, salts, reg = LR.m_table(prog, "h1/", window, s, 2)
     assert ports["m"]["known"] == {"rows": [LR.slot_words([2])[0]], "salts": [x.hex() for x in salts]}
     assert ports["m"]["root"] == reg.root.hex() and ports["m"]["reads"] == [None] * s + [0]

@@ -21,6 +21,10 @@ OK_PORT = "o0"
 OK_VALUE = "live-ok"
 #: the statement's output rows, as C-Flock's unit stager takes them: the unit's one output, its ok
 STATEMENT_OUT_ROWS = ((G.SCHEMA_V2, (0,)),)
+#: ``requests@0``'s row format: a statement needs a row whose commitment compresses before its last SHA-512 block (C-Flock's
+#: and Lean's ``sha512x3`` range holds no slot otherwise), and a ``row/v2`` row of at most 111 bytes has none, so the headers
+#: are ``row-seg/v1`` rows; ``slots@<s>``, ``m@<s>`` and ``live-ok`` are ``row/v2`` rows, as known content is
+REQUEST_SCHEMA = G.SCHEMA_SEG
 SLOTS, REQUESTS, M_ROWS = "slots", "requests", "m"
 
 
@@ -73,7 +77,7 @@ def statement_rows(T: int) -> list[tuple[str, str, int, list[str]]]:
     def key(name: str, i: int) -> str:
         return name if T == 1 else f"{name}[{i}]"
     return ([(f"slot_{i}", G.SCHEMA_V2, 32, [key("slot", i)]) for i in range(T)]
-            + [(f"req_{i}", G.SCHEMA_V2, 32 * HEADER, [key("req", i)]) for i in range(T)]
+            + [(f"req_{i}", REQUEST_SCHEMA, 32 * HEADER, [key("req", i)]) for i in range(T)]
             + [("m", G.SCHEMA_V2, 32, ["m"])])
 
 
@@ -93,9 +97,9 @@ def reads_file(program: str, T: int, S: int, s: int, roots: dict[str, str], wind
         raise ValueError(f"live@{s} reads {missing}, whose roots the window doesn't register")
     before = [None] * s
 
-    def port(value: str, words: int, leaves: int, row: int, **bind: str) -> dict[str, Any]:
+    def port(value: str, words: int, leaves: int, row: int, schema: str = G.SCHEMA_V2, **bind: str) -> dict[str, Any]:
         return {"value": value, "root": roots[value], "leaves": leaves, "words": words, "word_bits": G.WORD_BITS,
-                "domain": G.domain(program, value, words, leaves, **bind).domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
+                "domain": G.domain(program, value, words, leaves, **bind).domain_id.hex(), **G.schema_entry(schema),
                 "reads": before + [row]}
 
     def known(value: str, rows: list, salts: list, reg: G.Registered, row: int) -> dict[str, Any]:
@@ -104,11 +108,11 @@ def reads_file(program: str, T: int, S: int, s: int, roots: dict[str, str], wind
                 "reads": before + [row], "known": {"rows": rows, "salts": [x.hex() for x in salts]}}
 
     ports = {f"slot_{i}": port(sv, SLOT_WORDS, T, i, window=window) for i in range(T)}
-    ports |= {f"req_{i}": port(rv, HEADER_WORDS, T, i, session=session) for i in range(T)}
+    ports |= {f"req_{i}": port(rv, HEADER_WORDS, T, i, REQUEST_SCHEMA, session=session) for i in range(T)}
     ports["m"] = known(table(prefix, M_ROWS, s), *m_table(program, prefix, window, s, m), 0)
     ports[OK_PORT] = known(table(prefix, OK_VALUE), *ok_table(program, prefix, window, S), s)
     return {"format": G.READS, "ports": ports}
 
 
-__all__ = ["HEADER", "HEADER_WORDS", "M_ROWS", "OK_PORT", "OK_VALUE", "REQUESTS", "ROLES", "SLOTS", "SLOT_WORDS",
+__all__ = ["HEADER", "HEADER_WORDS", "M_ROWS", "OK_PORT", "OK_VALUE", "REQUESTS", "REQUEST_SCHEMA", "ROLES", "SLOTS", "SLOT_WORDS",
            "STATEMENT_OUT_ROWS", "header_words", "m_table", "ok_table", "reads_file", "slot_words", "statement_rows", "table"]
