@@ -739,6 +739,16 @@ def recv(arm: str, conn, op: str) -> dict:
     return msg
 
 
+def mem_peak_gib() -> float | None:
+    """This process's cgroup's memory.peak in GiB: inside gpu-lease, its scope's, so every arm's worker and the gate check's
+    pool, page cache included (what --mem-gb has to cover); None where cgroup v2 doesn't say."""
+    try:
+        rel = Path("/proc/self/cgroup").read_text().split("::", 1)[1].strip()
+        return round(int(Path(f"/sys/fs/cgroup{rel}/memory.peak").read_text()) / 2**30, 2)
+    except (OSError, IndexError, ValueError):
+        return None
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
@@ -933,6 +943,7 @@ def main() -> int:
     summary["gate_failed"] = [x for x in gate_doc if x not in arms]
     summary["stop"] = {arm: {"error": x.get("error"), "close_error": x.get("close_error"), "fill_steps": x.get("fill_steps"),
                              "end_verdict": (x.get("end") or {}).get("verdict")} for arm, x in stops.items()}
+    summary["host_mem_peak_gib"] = mem_peak_gib()
     (out / "summary.json").write_text(json.dumps(summary, indent=1) + "\n")
     print(json.dumps(summary["per_arm"], indent=1), flush=True)
     return rc
