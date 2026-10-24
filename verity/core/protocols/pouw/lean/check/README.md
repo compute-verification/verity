@@ -84,7 +84,9 @@ under the law `work:k` (`workUnits`), over the window's layout (`h1window.progra
 Program's, call by call, each call's tiles row block major), one stratum per K (`strata`), each unit's work R·C·K, at
 the K its period's open committed (`law`; `committedK` reads `draw_k`, and a window with fewer units than K is refused).
 `servedRows`: each manifest row states its call's served rows m_s (`served`, under `calls_root`, so fixed before the
-draw coin), a natural at most the A slot M, one m_s for every call of a step (call c at step `c / (C/S)`); else the
+draw coin), a natural at most the T table rows its period's open committed (`committedRows` reads `rows`, and a
+window whose A slot M is not `slotOf` T, the least power of two at or above T and at least R, is refused), one m_s for
+every call of a step (call c at step `c / (C/S)`); else the
 window is refused (`manifest`). A credited call with m_s = 0 is no credit. `established`: the ε that draw established at
 δ = 2⁻⁴⁰ over the window's credited served work, `PouwWindow.epsAt` (`k_prime` inverted) as `epsAt K δ C W 1`, C the
 credited calls' served work (`servedWork`, m_s·n·K a call, never its M slot rows') and W the window's units'

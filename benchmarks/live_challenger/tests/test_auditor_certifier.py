@@ -291,3 +291,99 @@ def test_with_neither_in_flight_nor_tokens_the_request_and_command_are_todays(ho
                     "--temperature", "0.0", "--top-p", "1.0", "--profile", "planned", "--strategies", "honest"]
     older = {k: v for k, v in request.items() if k not in ("temperature", "top_p")}
     assert A.certifier_command(older, tmp_path, "http://127.0.0.1:40001", tree=Path("/opt/vy-challenger") / PIN) == argv
+
+
+VARIED = REQUEST + ["--traffic", "varied"]
+
+
+@pytest.mark.parametrize("given, recorded, passed", [
+    ([], {}, []),
+    (["--tokens", "16"], {"tokens": 16}, ["--tokens", "16"]),
+    (["--rate", "0.5"], {"rate": 0.5}, ["--rate", "0.5"]),
+    (["--rate", "8"], {"rate": 8.0}, ["--rate", "8.0"]),
+    (["--prompt-range", "1:2048"], {"prompt_range": "1:2048"}, ["--prompt-range", "1:2048"]),
+    (["--prompt-range", "64:64"], {"prompt_range": "64:64"}, ["--prompt-range", "64:64"]),
+    (["--seed", "0"], {"seed": 0}, ["--seed", "0"]),
+    (["--seed", "4294967295"], {"seed": 4294967295}, ["--seed", "4294967295"]),
+    (["--eos-ids", "128009"], {"eos_ids": [128009]}, ["--eos-ids", "128009"]),
+    (["--eos-ids", "0,128001,128008,128009"], {"eos_ids": [0, 128001, 128008, 128009]},
+     ["--eos-ids", "0,128001,128008,128009"]),
+    (["--eos-ids", "128009", "--seed", "7", "--prompt-range", "16:512", "--rate", "1.5", "--tokens", "32"],
+     {"tokens": 32, "rate": 1.5, "prompt_range": "16:512", "seed": 7, "eos_ids": [128009]},
+     ["--tokens", "32", "--rate", "1.5", "--prompt-range", "16:512", "--seed", "7", "--eos-ids", "128009"]),
+    (["--compact", "8"], {"compact": 8}, ["--compact", "8"]),
+    (["--compact", "4096"], {"compact": 4096}, ["--compact", "4096"]),
+    (["--compact", "16", "--eos-ids", "128009", "--tokens", "32"], {"tokens": 32, "eos_ids": [128009], "compact": 16},
+     ["--tokens", "32", "--eos-ids", "128009", "--compact", "16"]),
+])
+def test_a_varied_rehearsal_records_its_flags_when_given_and_runs_the_varied_plan_named_for_its_run(host, tmp_path,
+                                                                                                   given, recorded,
+                                                                                                   passed):
+    """`--traffic varied` is recorded with each varied flag given and no N2 profile (the varied plan's is the advice),
+    its sampling greedy, and its command runs `rehearse --traffic varied --name RUN`: every request's `user` is
+    `RUN.j`, which no other run's is."""
+    started = []
+    rc, out = gate(host, VARIED + given + ["--tamper", "token"], started=started)
+    doc = json.loads(out)
+    assert rc == 0 and started == [doc["run"]]
+    assert {k: v for k, v in doc.items() if k not in ("run", "by", "requested_utc", "unit")} == {
+        "peer": "vy-nebius-1", "port": 8011, "minutes": 30, "tamper": "token", "requests": 400, "traffic": "varied",
+        "temperature": 0.0, "top_p": 1.0} | recorded
+    request = json.loads((host.certifier / doc["run"] / "request.json").read_text())
+    assert request == {k: v for k, v in doc.items() if k != "unit"}
+    argv = A.certifier_command(request, tmp_path, "http://127.0.0.1:40001", tree=Path("/opt/vy-challenger") / PIN)
+    assert argv == [sys.executable, f"/opt/vy-challenger/{PIN}/benchmarks/network_traces/certifier_serve.py",
+                    "rehearse", "--upstream", "http://127.0.0.1:40001", "--out", str(tmp_path), "--requests", "400",
+                    *passed, "--temperature", "0.0", "--top-p", "1.0", "--traffic", "varied", "--name", doc["run"],
+                    "--strategies", "token"]
+
+
+@pytest.mark.parametrize("bad, why", [
+    (["--traffic", "burst"], "--traffic 'burst': one of ['fixed', 'varied']"),
+    (["--traffic", "Varied"], "--traffic 'Varied'"),
+    (["--traffic", "varied", "--in-flight", "2"], "--in-flight: fixed traffic's"),
+    (["--traffic", "varied", "--profile", "planned"], "--profile: fixed traffic's"),
+    (["--traffic", "varied", "--temperature", "0.6"], "--temperature, --top-p: fixed traffic's"),
+    (["--traffic", "varied", "--top-p", "0.9"], "--temperature, --top-p: fixed traffic's"),
+    (["--traffic", "varied", "--tokens", "65"], "--tokens '65': 16 to 64"),
+    *[(["--traffic", "varied", "--rate", v], f"--rate {v!r}: above 0, at most 8")
+      for v in ("0", "0.0", "8.0001", "9", "10", "-1", ".5", "2.", "1e0", "nan", "")],
+    *[(["--traffic", "varied", "--prompt-range", v], f"--prompt-range {v!r}: LO:HI, 1 ≤ LO ≤ HI ≤ 2048")
+      for v in ("0:16", "16:0", "64:16", "16:2049", "16", "16:", ":16", "16-512", "016:512", "16:512:1", " 16:512",
+                "")],
+    *[(["--traffic", "varied", "--seed", v], f"--seed {v!r}: 0 to 4294967295")
+      for v in ("-1", "01", "4294967296", "1.5", "+3", "")],
+    *[(["--traffic", "varied", "--eos-ids", v], f"--eos-ids {v!r}: 1 to 8 token ids, comma-separated")
+      for v in ("", ",", "1,", ",1", "1,,2", "01", "-1", "1 2", "12345678", "1,2,3,4,5,6,7,8,9")],
+    (["--traffic", "varied", "--minutes", "1"], "--minutes 1: 400 requests at 2 a second arrive over 200 seconds"),
+    (["--traffic", "varied", "--minutes", "1", "--requests", "100", "--rate", "1.5"],
+     "--minutes 1: 100 requests at 1.5 a second arrive over 66.6667 seconds"),
+    *[(["--traffic", "varied", "--compact", v], f"--compact {v!r}: 8 to 4096")
+      for v in ("7", "0", "4097", "65536", "-8", "08", "8.0", "B", "")],
+    *[([flag, v], f"{flag}: varied traffic's (--traffic varied)")
+      for flag, v in (("--rate", "2"), ("--prompt-range", "16:1024"), ("--seed", "0"), ("--eos-ids", "2"),
+                      ("--compact", "8"))],
+    *[(["--traffic", "fixed", flag, v], f"{flag}: varied traffic's (--traffic varied)")
+      for flag, v in (("--rate", "2"), ("--seed", "0"), ("--compact", "8"))],
+    (["--traffic", "varied", "--name", "x"], "unrecognized arguments: --name"),
+])
+def test_the_gate_refuses_a_varied_rehearsal_it_cant_check_and_varied_flags_on_fixed_traffic(host, bad, why):
+    good = dict(zip(REQUEST[1::2], REQUEST[2::2]))
+    good.update(dict(zip(bad[::2], bad[1::2])))
+    argv = ["--ssh", shlex.join(["certifier-rehearse", *[w for kv in good.items() for w in kv]]), "--key",
+            "network-accounting"]
+    rc, out = gate(host, argv, started=[])
+    assert rc == 3 and why in json.loads(out)["refused"], out
+    assert not host.certifier.exists()
+
+
+def test_fixed_traffic_given_or_not_is_todays_request_and_command(host, tmp_path):
+    """`--traffic fixed`, the default, records no traffic and runs the command a request without it ran, N2's profile
+    planned unless given."""
+    for extra in ([], ["--traffic", "fixed"]):
+        run = started_run(host, *extra, token="ab12" if not extra else "cd34")
+        request = json.loads((host.certifier / run / "request.json").read_text())
+        assert "traffic" not in request and request["profile"] == "planned"
+        argv = A.certifier_command(request, tmp_path, "u")
+        assert "--traffic" not in argv and "--name" not in argv and argv[-4:] == ["--profile", "planned",
+                                                                                   "--strategies", "honest"]
