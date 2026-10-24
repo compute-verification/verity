@@ -39,7 +39,8 @@ partition and its draw are untouched. Its parameters are named `PREFIX` and thei
 s's from row s·T), ``requests`` (T headers, read by every round) and ``m`` (S rows). Its circuit file is the period-open's
 ``circuit_files["live"]``, and its partition is ``Q_template_instances`` over its template (`query`).
 
-**Round s's statement** ``live@<s>`` reads registered values (`reads_file`), each under the window Program's digest:
+**Round s's statement** ``live@<s>`` reads registered values (`live_reads.reads_file`; the names below are
+`live_reads`', which builds no Program), each under the window Program's digest:
 
 * port ``slot_<i>`` reads row i of round s's slot table ``<prefix>slots@<s>`` (`SLOTS`: T rows of `SLOT_WORDS` u16 words,
   the leaf's u32 little-endian), bound to the window's open root, its root round s's ``slots``;
@@ -68,12 +69,10 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import coll_concat
 from verity.ml.circuits.types import Array, Type
 
-from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.pouw.circuit.live_reads import HEADER
 
 U32 = Array(32, BL.BIT)
 #: a request leaf's header words: index, round, slot, cap and prompt length
-HEADER = 5
 INDEX, PROMPT = 0, 4
 PORTS = ("slot", "req", "m")
 
@@ -155,17 +154,6 @@ PouwLiveSlots = CompositeDefinition(
         "requests (prompt length nonzero) are a prefix [0, N) each at its own index, every slot below m is in [1, N] and "
         "every slot from m on is 0.")
 
-#: the live Program's parameters after its ``PREFIX``
-ROLES = ("slots", "requests", "m")
-#: a slot leaf's and a request header's u16 words a row (u32 little-endian, low half first)
-SLOT_WORDS, HEADER_WORDS = 2, 2 * HEADER
-#: the statement's output row of the unit's ok, which reads the known ``<prefix>live-ok``
-OK_PORT = "o0"
-OK_VALUE = "live-ok"
-#: the statement's output rows, as C-Flock's unit stager takes them: the unit's one output, its ok
-STATEMENT_OUT_ROWS = ((G.SCHEMA_V2, (0,)),)
-
-
 def template(T: int) -> Any:
     """The live Program's one template: `PouwLiveSlots_v1` at T slots."""
     return bind(PouwLiveSlots, T=int(T))
@@ -201,92 +189,3 @@ def program(T: int, S: int, prefix: str = "") -> Program:
 def query(T: int) -> dict[str, Any]:
     """The live Program's partition query: every instance of its template one unit, unit s round s's."""
     return template_instances_query([template(T)])
-
-
-def table(prefix: str, name: str, s: int = 0) -> str:
-    """A live statement's registered value: round s's slot table ``<prefix>slots@<s>`` (`SLOTS`), round 0's request table
-    ``<prefix>requests@0`` (`REQUESTS`), round s's public m ``<prefix>m@<s>`` (`M_ROWS`) or the ok rows
-    ``<prefix>live-ok`` (`OK_VALUE`)."""
-    if name == OK_VALUE:
-        return f"{prefix}{OK_VALUE}"
-    if name not in (SLOTS, REQUESTS, M_ROWS) or (name == REQUESTS and s != 0):
-        raise ValueError(f"a live statement's tables are {SLOTS}@<s>, {REQUESTS}@0, {M_ROWS}@<s> and {OK_VALUE}, not "
-                         f"{name}@{s}")
-    return f"{prefix}{name}@{int(s)}"
-
-
-SLOTS, REQUESTS, M_ROWS = "slots", "requests", "m"
-
-
-def slot_words(leaves: Sequence[int]) -> list[list[int]]:
-    """Slot leaves (each a u32: q + 1, or 0) as ``slots@<s>``'s rows of u16 words."""
-    return [[v & 0xFFFF, v >> 16] for v in leaves]
-
-
-def header_words(headers: Sequence[Sequence[int]]) -> list[list[int]]:
-    """Request headers (each `HEADER` u32) as ``requests@0``'s rows of u16 words."""
-    return [[w for v in h for w in (v & 0xFFFF, v >> 16)] for h in headers]
-
-
-def m_table(program: str, prefix: str, window: str, s: int, m: int) -> tuple[list[list[int]], list[bytes], G.Registered]:
-    """Round s's public m ``<prefix>m@<s>``: one row, m's two u16 words, under `core_check.public_row_salt` of the window's
-    open root `window` and s, registered under `program` binding `window`. Every input is public."""
-    if not (isinstance(m, int) and 0 <= m < 1 << 32):
-        raise ValueError(f"m is a u32, not {m!r}")
-    rows, salts = slot_words([m]), [CC.public_row_salt(window, int(s))]
-    return rows, salts, G.Registered.commit(program, table(prefix, M_ROWS, s), rows, salts, G.WORD_BITS, G.SCHEMA_V2,
-                                            window=window)
-
-
-@functools.lru_cache(maxsize=8)
-def ok_table(program: str, prefix: str, window: str, rounds: int) -> tuple[list[list[int]], list[bytes], G.Registered]:
-    """The live units' ok rows ``<prefix>live-ok``: row s the one word 1 (`core_check.OK_ROW`) under `core_check.ok_salt` of
-    the window's open root `window` and s, registered under `program` binding `window`. Every input is public."""
-    rows = [list(CC.OK_ROW) for _s in range(rounds)]
-    salts = [CC.ok_salt(window, s) for s in range(rounds)]
-    return rows, salts, G.Registered.commit(program, table(prefix, OK_VALUE), rows, salts, G.WORD_BITS, G.SCHEMA_V2,
-                                            window=window)
-
-
-def statement_rows(T: int) -> list[tuple[str, str, int, list[str]]]:
-    """The input rows of a live statement, each ``(port, schema, bits, params)`` as C-Flock's unit stager takes them: each
-    slot leaf its own row (``slot_<i>``), then each request header (``req_<i>``), then ``m``, every one a ``row/v2`` row.
-    Its one output row is ``o0`` (`OK_PORT`), the unit's ok."""
-    def key(name: str, i: int) -> str:
-        return name if T == 1 else f"{name}[{i}]"
-    return ([(f"slot_{i}", G.SCHEMA_V2, 32, [key("slot", i)]) for i in range(T)]
-            + [(f"req_{i}", G.SCHEMA_V2, 32 * HEADER, [key("req", i)]) for i in range(T)]
-            + [("m", G.SCHEMA_V2, 32, ["m"])])
-
-
-def reads_file(program: str, T: int, S: int, s: int, roots: dict[str, str], window: str, session: str, m: int,
-               prefix: str = "") -> dict[str, Any]:
-    """The verifier's ``--registered`` file (`registered.READS`) of round s's statement ``live@<s>``, unit s of the live
-    Program of S rounds at T: its slot ports at round s's ``<prefix>slots@<s>`` and its header ports at
-    ``<prefix>requests@0``, at the roots `roots` (``{value: root}``, the window's entries) gives them, each under
-    `registered.domain` of `program` (the window Program's digest, which the tables are registered under), the slot table
-    bound to the window's open root `window` and the request table to its session `session`; ``m`` at its known content
-    (`m_table`) and the output row ``o0`` at the ok rows (`ok_table`). Units other than s read nothing. Refused
-    (ValueError) when `roots` lacks a table or s is no round."""
-    if not 0 <= s < S:
-        raise ValueError(f"round {s} is none of the window's {S}")
-    sv, rv = table(prefix, SLOTS, s), table(prefix, REQUESTS)
-    if missing := [v for v in (sv, rv) if v not in roots]:
-        raise ValueError(f"live@{s} reads {missing}, whose roots the window doesn't register")
-    before = [None] * s
-
-    def port(value: str, words: int, leaves: int, row: int, **bind: str) -> dict[str, Any]:
-        return {"value": value, "root": roots[value], "leaves": leaves, "words": words, "word_bits": G.WORD_BITS,
-                "domain": G.domain(program, value, words, leaves, **bind).domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
-                "reads": before + [row]}
-
-    def known(value: str, rows: list, salts: list, reg: G.Registered, row: int) -> dict[str, Any]:
-        return {"value": value, "root": reg.root.hex(), "leaves": len(rows), "words": len(rows[0]),
-                "word_bits": G.WORD_BITS, "domain": reg.domain.domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
-                "reads": before + [row], "known": {"rows": rows, "salts": [x.hex() for x in salts]}}
-
-    ports = {f"slot_{i}": port(sv, SLOT_WORDS, T, i, window=window) for i in range(T)}
-    ports |= {f"req_{i}": port(rv, HEADER_WORDS, T, i, session=session) for i in range(T)}
-    ports["m"] = known(table(prefix, M_ROWS, s), *m_table(program, prefix, window, s, m), 0)
-    ports[OK_PORT] = known(table(prefix, OK_VALUE), *ok_table(program, prefix, window, S), s)
-    return {"format": G.READS, "ports": ports}

@@ -10,6 +10,7 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
 from verity.core.protocols.pouw.circuit import h1window as W
 from verity.core.protocols.pouw.circuit import live as L
+from verity.core.protocols.pouw.circuit import live_reads as LR
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
@@ -31,7 +32,7 @@ def _valid(rng, T, n=None, m=None):
     n = rng.randrange(T + 1) if n is None else n
     m = (rng.randrange(T + 1) if n else 0) if m is None else m
     req = [[q, rng.randrange(1 << 32), rng.randrange(1 << 32), rng.randrange(1 << 32), rng.randrange(1, 1 << 32)]
-           if q < n else [0] * L.HEADER for q in range(T)]
+           if q < n else [0] * LR.HEADER for q in range(T)]
     slot = [rng.randrange(1, n + 1) if i < m else 0 for i in range(T)]
     return slot, req, m
 
@@ -51,7 +52,7 @@ def _mutate(rng, slot, req, m):
     elif k == 4:
         req[i][rng.randrange(1, 4)] = rng.randrange(1 << 32)
     else:
-        req[i] = [0] * L.HEADER
+        req[i] = [0] * LR.HEADER
     return slot, req, m
 
 
@@ -76,7 +77,7 @@ def test_an_accepted_round_counts_m_admitted_slots(T):
 
 def _round():
     """T = 8: requests 0, 1 and 2 live, slots [0, 4) theirs."""
-    req = [[q, 0, q, 16, 3 + q] for q in range(3)] + [[0] * L.HEADER] * 5
+    req = [[q, 0, q, 16, 3 + q] for q in range(3)] + [[0] * LR.HEADER] * 5
     return [1, 3, 3, 2, 0, 0, 0, 0], req, 4
 
 
@@ -88,7 +89,7 @@ def _round():
     (lambda s, r, m: (s[:2] + [4] + s[3:], r, m), 0),                        # slot names request 3, not an entry
     (lambda s, r, m: (s[:6] + [1, 0], r, m), 0),                             # an assigned slot past m
     (lambda s, r, m: (s[:2] + [3 + (1 << 31)] + s[3:], r, m), 0),             # a high bit on a named slot
-    (lambda s, r, m: (s, r[:1] + [[0] * L.HEADER] + r[2:], m), 0),           # a gap in the request table
+    (lambda s, r, m: (s, r[:1] + [[0] * LR.HEADER] + r[2:], m), 0),           # a gap in the request table
     (lambda s, r, m: (s, r[:2] + [[7] + r[2][1:]] + r[3:], m), 0),           # an entry at another index
     (lambda s, r, m: (s, r[:3] + [[3, 0, 0, 0, 1]] + r[4:], m), 1),          # one more live request, never named
     (lambda s, r, m: (s, r[:3] + [[9, 9, 9, 9, 0]] + r[4:], m), 1),          # a dead leaf's other words are not read
@@ -136,7 +137,7 @@ def test_the_live_program_is_one_unit_a_round_of_its_one_template(T, S):
     every header, so it evaluates to round s's ok at row s."""
     prog = L.program(T, S, "h1/")
     params, ret = prog.fn.signature()
-    assert [n for n, _ in params] == [f"h1/{r}" for r in L.ROLES] and ret.leaves == S
+    assert [n for n, _ in params] == [f"h1/{r}" for r in LR.ROLES] and ret.leaves == S
     tp = P.evaluate(prog, L.query(T))
     assert tp.population == S
     rng = random.Random(T * S)
@@ -160,25 +161,25 @@ def test_the_live_programs_t_and_s_are_positive_integers(T, S):
 def test_the_tables_rows_are_the_statements_port_rows():
     """A slot leaf's row (`slot_words`) and a header's (`header_words`) are the u16 words, low first, of the bits the
     statement's ``slot_<i>`` and ``req_<i>`` rows hold (`statement_rows`), and ``m``'s row its 32 bits."""
-    rows = {p: (b, ps) for p, _s, b, ps in L.statement_rows(4)}
+    rows = {p: (b, ps) for p, _s, b, ps in LR.statement_rows(4)}
     assert list(rows) == [f"slot_{i}" for i in range(4)] + [f"req_{i}" for i in range(4)] + ["m"]
     assert rows["slot_2"] == (32, ["slot[2]"]) and rows["req_3"] == (160, ["req[3]"]) and rows["m"] == (32, ["m"])
     words = lambda bits: [sum(b << j for j, b in enumerate(bits[16 * i:16 * i + 16])) for i in range(len(bits) // 16)]  # noqa: E731
     for v in (0, 1, 0x1234ABCD, M32):
-        assert L.slot_words([v]) == [words(_b(v))]
+        assert LR.slot_words([v]) == [words(_b(v))]
     h = [7, 0x10002, 3, 1 << 31, 9]
-    assert L.header_words([h]) == [words(sum(map(_b, h), []))] and len(L.header_words([h])[0]) == L.HEADER_WORDS
-    assert G.row_words(L.slot_words([5])[0], G.WORD_BITS, G.SCHEMA_V2) == L.slot_words([5])[0]
+    assert LR.header_words([h]) == [words(sum(map(_b, h), []))] and len(LR.header_words([h])[0]) == LR.HEADER_WORDS
+    assert G.row_words(LR.slot_words([5])[0], G.WORD_BITS, G.SCHEMA_V2) == LR.slot_words([5])[0]
 
 
 def _window(T, S, rng):
     prog, window, session = "cd" * 64, "ab" * 64, "session-7"
-    regs = {L.table("h1/", L.REQUESTS): G.Registered.commit(prog, L.table("h1/", L.REQUESTS),
-                                                             L.header_words(_valid(rng, T, n=2, m=0)[1]),
+    regs = {LR.table("h1/", LR.REQUESTS): G.Registered.commit(prog, LR.table("h1/", LR.REQUESTS),
+                                                             LR.header_words(_valid(rng, T, n=2, m=0)[1]),
                                                              schema=G.SCHEMA_V2, session=session)}
     for s in range(S):
-        v = L.table("h1/", L.SLOTS, s)
-        regs[v] = G.Registered.commit(prog, v, L.slot_words([1] * (T // 2) + [0] * (T - T // 2)), schema=G.SCHEMA_V2,
+        v = LR.table("h1/", LR.SLOTS, s)
+        regs[v] = G.Registered.commit(prog, v, LR.slot_words([1] * (T // 2) + [0] * (T - T // 2)), schema=G.SCHEMA_V2,
                                       window=window)
     return prog, window, session, regs
 
@@ -190,27 +191,27 @@ def test_a_rounds_live_file_reads_its_slot_table_the_request_table_and_the_known
     T, S, s = 4, 3, 1
     prog, window, session, regs = _window(T, S, random.Random(5))
     roots = {v: r.root.hex() for v, r in regs.items()}
-    doc = L.reads_file(prog, T, S, s, roots, window, session, 2, "h1/")
+    doc = LR.reads_file(prog, T, S, s, roots, window, session, 2, "h1/")
     ports = doc["ports"]
-    assert doc["format"] == G.READS and sorted(ports) == sorted([p for p, *_ in L.statement_rows(T)] + [L.OK_PORT])
+    assert doc["format"] == G.READS and sorted(ports) == sorted([p for p, *_ in LR.statement_rows(T)] + [LR.OK_PORT])
     for i in range(T):
-        for port, v in ((f"slot_{i}", L.table("h1/", L.SLOTS, s)), (f"req_{i}", L.table("h1/", L.REQUESTS))):
+        for port, v in ((f"slot_{i}", LR.table("h1/", LR.SLOTS, s)), (f"req_{i}", LR.table("h1/", LR.REQUESTS))):
             assert {k: ports[port][k] for k in G.ENTRY_KEYS} == {k: regs[v].entry()[k] for k in G.ENTRY_KEYS}
             assert ports[port]["reads"] == [None] * s + [i] and ports[port]["row_schema"] == G.SCHEMA_V2
-    rows, salts, reg = L.m_table(prog, "h1/", window, s, 2)
-    assert ports["m"]["known"] == {"rows": [L.slot_words([2])[0]], "salts": [x.hex() for x in salts]}
+    rows, salts, reg = LR.m_table(prog, "h1/", window, s, 2)
+    assert ports["m"]["known"] == {"rows": [LR.slot_words([2])[0]], "salts": [x.hex() for x in salts]}
     assert ports["m"]["root"] == reg.root.hex() and ports["m"]["reads"] == [None] * s + [0]
-    assert ports["m"]["root"] != L.reads_file(prog, T, S, s, roots, window, session, 3, "h1/")["ports"]["m"]["root"]
-    ok = ports[L.OK_PORT]
+    assert ports["m"]["root"] != LR.reads_file(prog, T, S, s, roots, window, session, 3, "h1/")["ports"]["m"]["root"]
+    ok = ports[LR.OK_PORT]
     assert ok["leaves"] == S and ok["reads"] == [None] * s + [s] and ok["known"]["rows"] == [[1]] * S
     with pytest.raises(ValueError, match="none of the window's"):
-        L.reads_file(prog, T, S, S, roots, window, session, 2, "h1/")
+        LR.reads_file(prog, T, S, S, roots, window, session, 2, "h1/")
     with pytest.raises(ValueError, match="doesn't register"):
-        L.reads_file(prog, T, S, 2, {k: r for k, r in roots.items() if not k.endswith("@2")}, window, session, 2, "h1/")
+        LR.reads_file(prog, T, S, 2, {k: r for k, r in roots.items() if not k.endswith("@2")}, window, session, 2, "h1/")
 
 
 def test_the_live_tables_are_named_by_round():
-    assert [L.table("h1/", n, 2) for n in (L.SLOTS, L.M_ROWS)] == ["h1/slots@2", "h1/m@2"]
-    assert L.table("h1/", L.REQUESTS) == "h1/requests@0" and L.table("", L.OK_VALUE) == "live-ok"
+    assert [LR.table("h1/", n, 2) for n in (LR.SLOTS, LR.M_ROWS)] == ["h1/slots@2", "h1/m@2"]
+    assert LR.table("h1/", LR.REQUESTS) == "h1/requests@0" and LR.table("", LR.OK_VALUE) == "live-ok"
     with pytest.raises(ValueError, match="requests@0"):
-        L.table("h1/", L.REQUESTS, 1)
+        LR.table("h1/", LR.REQUESTS, 1)
