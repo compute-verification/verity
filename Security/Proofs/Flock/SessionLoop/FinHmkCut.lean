@@ -387,7 +387,7 @@ values, the binding `st.digest`, `cap` and `root`, after the pending bytes it st
 theorem piopCut_bodies {coin : ℕ → ℕ → F128} {n : ℕ} {st : _root_.Flock.Setup} {lay : _root_.Flock.Zk.PadLayout}
     {src : FlockComplete.RepSrc} {cap root : ByteArray} {extras : Array _root_.Flock.Claim}
     {prior : Array (List F128)} {words : List ℕ} {t₀ : _root_.Flock.Transcript} {l : Array Claims.Msg} {res t₃ l₃}
-    (hm : 14 ≤ st.m) (hk : 6 ≤ st.fold.kLog)
+    (hm : 14 ≤ st.m)
     (h : ((FlockComplete.piopCut (FlockComplete.asksCut coin n) st lay src cap root extras prior words).run t₀).go l =
       (.ok (res, t₃), l₃)) {jj : ℕ} (hj : jj < piopNR st.m st.fold.kLog) :
     l₃[l.size + jj]! = piopBody t₀.pending.data.toList st.m st.fold.kLog st.digest cap root lay src.masked jj := by
@@ -643,7 +643,6 @@ theorem swSrcE_hmk_cut (vs : finS.SwVals)
   rw [hlayG] at hi hne
   -- the PIOP's log
   have hm14' : 14 ≤ (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.m := by rw [hmS]; omega
-  have hk6' : 6 ≤ (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.fold.kLog := by rw [hkS]; omega
   obtain ⟨-, hl₁, hn₁⟩ := FlockComplete.piopCut_at hm14' hpiop default
   rw [hmS, hkS, hl] at hl₁
   have h1 : 1 ≤ Masked.repBase x (2 * j.val + r.val) := by
@@ -677,7 +676,7 @@ theorem swSrcE_hmk_cut (vs : finS.SwVals)
     have hW1 := Masked.runCut_cutPiop_of_ret hx (finCoins x ops)
       (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t) hsx hs hcms j r hexts hprev hext hic hl hpiop
       (n := Masked.repBase x (2 * j.val + r.val) + jj) (Nat.le_add_right _ _) (by omega) (by omega)
-    have hW2 := piopCut_bodies hm14' hk6' hpiop (jj := jj) (by rw [hmS, hkS]; exact hjj')
+    have hW2 := piopCut_bodies hm14' hpiop (jj := jj) (by rw [hmS, hkS]; exact hjj')
     rw [hl, hlayP, hmS, hkS] at hW2
     rw [← hsrc, Nat.add_sub_cancel, hW1, hW2, dropDom_piopBody _ hd] at hm
     rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hp, Option.getD_some]
