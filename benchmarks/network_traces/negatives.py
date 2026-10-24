@@ -34,9 +34,9 @@ verifier); the code is what the verifier of record establishes, which `n2` reads
   head's the request frames the advice needs; ``.view`` when the advice is malformed or doesn't cover the window, which
   refuses every window), ``NetworkIoTie_v1`` (IO-TIE's tie of a drawn frame's token id to the Commit's at its (request,
   position)) and ``NetworkFrameRead`` (its read of a frame under the record's frames root); and, until their owners
-  name them, ``IoUnit.render`` (under the attested-edge design, the egress unit rendering committed outputs to bytes), ``StepUnit`` (PROVE-PATH: the compiled step Program's digest against
-  the committed trace's, and the committed values passing it) and ``Commit`` (the Commit's opening under its registered
-  root).
+  name them, ``IoUnit.render`` (under the attested-edge design, the egress unit rendering committed outputs to bytes),
+  ``StepUnit`` (PROVE-PATH: the compiled step Program's digest against the committed trace's, and the committed values
+  passing it) and ``Commit`` (the Commit's opening under its registered root).
 
 `Negative.waits` names the interfaces a negative waits on; one with none runs today. `table` renders the registry.
 """
@@ -624,6 +624,21 @@ def advice_suite(advice, *, T: int, R: int, syncs, ingress_frames: dict[str, int
     return out
 
 
+def advice_run(path: Path, *, T: int = 50, R: int = 32, frames: int = 1, delta: int = 0, rho: int = 1000) -> dict:
+    """`advice_suite` on the advice at `path` (I1's encode bytes), each request `frames` ingress frames, all received in
+    window 0, every window's sync (δ, ρ): its shape and the rows (`negatives`)."""
+    mod = advice_module()
+    if mod is None:
+        raise NotApplicable(f"no advice codec yet: {ADVICE_MODULE} (I1, ADV-SPEC) hasn't landed")
+    adv = mod.decode(path.read_bytes())
+    windows = max(adv.release, default=0) // T + 1
+    per = {q.id: frames for q in adv.requests}
+    rows = advice_suite(adv, T=T, R=R, syncs=[ClockSync(delta, Fraction(rho))] * windows, ingress_frames=per,
+                        received=[sum(per.values())] + [0] * (windows - 1))
+    return {"format": FORMAT, "advice": str(path), "requests": len(adv.requests), "steps": len(adv.steps),
+            "outputs": len(adv.release), "windows": windows, "T": T, "R": R, "negatives": rows}
+
+
 def n2(run: Path, clock=time.monotonic) -> dict:
     """N2's verdict of record on every link-window of the run's `certified.jsonl`, through the proof service's stream
     as `certifier_serve.check` takes it (Selection All, the Lean audit) without asking the certifier's salts, and the
@@ -670,8 +685,11 @@ def suite(runs: dict[str, Path], work: Path, *, advice: Path | None = None, comm
     honest): a shim negative is its own run (`rehearse --strategies`), any other is made from honest's under `work`.
     A row says what the negative tampers, the check and code it names and what it waits on; whether it ran, and if so
     N2's verdict, its refused link-windows and their codes, and `ok`: refused by its code; for a shim negative whose
-    check is pending (token), N2's accepting it, since only that check may refuse it; else None."""
-    out = {}
+    check is pending (token), N2's accepting it, since only that check may refuse it; else None. An advice negative's
+    verdict is `advice_run`'s, N2-ADVICE's codes on the heads an honest run of `advice` certifies (`honest_codes`
+    theirs on the honest advice), since the certified records don't change with it; `ok` needs the honest advice
+    accepted."""
+    out, judged = {}, None
     for name, n in NEGATIVES.items():
         row = {"family": n.family, "tampers": n.tampers, "check": n.check, "code": n.code, "waits": list(n.waits)}
         run = runs.get(name)
@@ -682,6 +700,23 @@ def suite(runs: dict[str, Path], work: Path, *, advice: Path | None = None, comm
                 row |= {"ran": False, "why": str(err)}
         elif run is None:
             row |= {"ran": False, "why": f"no run of it: rehearse --strategies honest,{name},..."}
+        if run is not None and n.tampers == "advice":
+            if judged is None:
+                try:
+                    judged = advice_run(advice)["negatives"]
+                except ModuleNotFoundError as err:
+                    judged = {"why": f"N2-ADVICE's advised check hasn't landed ({err.name})"}
+            got = judged.get(name)
+            if got is None:
+                row |= {"ran": False, "copy": str(run), "why": judged["why"]}
+            else:
+                honest = judged["honest"]
+                row |= {"copy": str(run), "honest_codes": honest["codes"],
+                        "heads": "an honest run of the advice's, under N2-ADVICE's rule"}
+                row |= {k: v for k, v in got.items() if k not in ("code", "check", "waits")}
+                if got["ran"]:
+                    row["ok"] = got["ok"] and honest["ok"]
+            run = None
         if run is not None:
             v = n2(run, clock=clock)
             got = judge(name, v)
@@ -713,7 +748,7 @@ def main(argv=None) -> int:
     j.add_argument("name", choices=list(NEGATIVES))
     for q in (m, x, j):
         q.add_argument("--run", required=True, type=Path)
-    a = sub.add_parser("advice", help="every advice negative of a run's advice, and N2-ADVICE's codes on it (`advice_suite`)")
+    a = sub.add_parser("advice", help="every advice negative of a run's advice, and N2-ADVICE's codes on it")
     a.add_argument("--advice", required=True, type=Path, help="the run's advice (I1's encode bytes)")
     a.add_argument("--T", type=int, default=50, help="buckets a window (the advice's release buckets')")
     a.add_argument("--R", type=int, default=32, help="egress frames a bucket")
@@ -722,18 +757,12 @@ def main(argv=None) -> int:
     a.add_argument("--rho", type=int, default=1000, help="... and ρ frames a bucket")
     args = ap.parse_args(argv)
     if args.command == "advice":
-        mod = advice_module()
-        if mod is None:
-            raise SystemExit(f"no advice codec yet: {ADVICE_MODULE} (I1, ADV-SPEC) hasn't landed")
-        adv = mod.decode(args.advice.read_bytes())
-        windows = max(adv.release, default=0) // args.T + 1
-        frames = {q.id: args.frames for q in adv.requests}
-        rows = advice_suite(adv, T=args.T, R=args.R, syncs=[ClockSync(args.delta, Fraction(args.rho))] * windows,
-                            ingress_frames=frames, received=[sum(frames.values())] + [0] * (windows - 1))
-        print(json.dumps({"format": FORMAT, "advice": str(args.advice), "requests": len(adv.requests),
-                          "steps": len(adv.steps), "outputs": len(adv.release), "windows": windows, "T": args.T,
-                          "R": args.R, "negatives": rows}, indent=1))
-        return 0 if all(r.get("ok") is not False for r in rows.values()) else 1
+        try:
+            doc = advice_run(args.advice, T=args.T, R=args.R, frames=args.frames, delta=args.delta, rho=args.rho)
+        except NotApplicable as err:
+            raise SystemExit(str(err))
+        print(json.dumps(doc, indent=1))
+        return 0 if all(r.get("ok") is not False for r in doc["negatives"].values()) else 1
     if args.command == "table":
         print(table(args.markdown))
         return 0
