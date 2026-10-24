@@ -20,6 +20,9 @@ rows of the window Program's linears of that K, and `weights_root`, their fold, 
   `_weights` checks.
 * `weights_root` is credit's fold of the roots: `tagged` of ``verity/pouw/h1/weights/v1`` and each ``K, root`` by
   ascending K.
+* **Chunk rows.** Past `CHUNK_MAX` codes a row of K is `chunks` (K) = n leaves, leaf n·r + c chunk c's K/n codes and
+  the row's s_w (`leaf_words` (K) words), and credit's `_weights` reads ``<prefix>b/<K>`` as n·Σn such leaves.
+  `weights_roots` and `entry` still commit whole rows, so at such a K their entry is not yet the one credit accepts.
 """
 from __future__ import annotations
 
