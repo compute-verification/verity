@@ -208,10 +208,10 @@ command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
   > "$OUT/lean-coins-build.log" 2>&1 \
   || { echo "hb_served: LEAN_BUILD_FAIL"; tail -20 "$OUT/lean-coins-build.log"; exit 13; }
 # coins off the node: every port the arms' windows connect to (POUW_CHALLENGER, DITHER_CHALLENGERS'
-# {arm: {"session": ID, "address": HOST:PORT, "secret_file": F, "commitment": HEX, "rounds": R}}), each its own session
-# from infra's gate first (`coins.py open`: reserved in a dev period, opened on its stand-in root, its secret in F on
-# this node, HEX the root of the coin commitment its challenger signed, which its hello must answer, R its --rounds when
-# not 16384), waited for with ss -ltn
+# {arm: {"session": ID, "address": HOST:PORT, "secret_file": F, "commitment": HEX, "rounds": R}}), each its own session from
+# infra's gate first (`coins.py open`: reserved in a dev period, opened on its stand-in root, its secret in F on this
+# node, HEX the root of the coin commitment its challenger signed, which its hello must answer, R its --rounds when not
+# 16384), waited for with ss -ltn
 # before the lease (never a probe connect: a challenger serves the first connection whose hello it accepts); none: in-process
 # (not certified)
 if [ -n "${POUW_CHALLENGER:-}${POUW_CHALLENGER_SESSION:-}" ] && { [ -z "${POUW_CHALLENGER:-}" ] || [ -z "${POUW_CHALLENGER_SESSION:-}" ]; }; then
