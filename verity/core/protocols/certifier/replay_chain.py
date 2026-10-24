@@ -524,9 +524,7 @@ def load_arguments(S, prev: Row, arrivals: Sequence[Arrival], decisions: Sequenc
 
 
 def _evaluate(unit, cases: Sequence[list[list[int]]]):
-    import numpy as np
-
-    args = [np.asarray(col, dtype=np.uint8) for col in zip(*cases)]
+    args = [list(col) for col in zip(*cases)]
     return evaluate_bits(unit, *args).reshape(len(cases), -1).tolist()
 
 
