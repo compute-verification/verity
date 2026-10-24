@@ -1,7 +1,8 @@
-"""arith_encode: advice v1's arithmetic encoder as Boolean Definitions, held to ENC-CODE's coder (`code.py`) on what v1
-and the residual's coder actually code (the fixture's streams, as `benchmarks/network_e2e/encodings/arith_vectors.py
---steps` cut them: the replay's decisions on ENC-REPLAY's step traces, and `code_v1`'s symbols for ENC-DERIVED's
-still-sent fields on the TRACE-CORPUS fixture, each with code.py's state after every symbol and its segment), to the
+"""arith_encode: advice v1's arithmetic encoder as Boolean Definitions, held to ENC-CODE's coders (`code.py`, `code_v1`)
+on what v1 actually codes (the fixture's streams, as `benchmarks/network_e2e/encodings/arith_vectors.py --steps` cut
+them: advice v1's windows, the replay's decisions, the arrival order's deviations and the hits sent past the pool
+bound, on ENC-REPLAY's step traces with v1's charges, and ENC-DERIVED's still-sent fields on the TRACE-CORPUS
+fixture, each symbol tagged a bit or an integer's, with code.py's state after every symbol and its segment), to the
 references on random runs, and refusing every other segment and every symbol code.py refuses."""
 from __future__ import annotations
 
@@ -32,14 +33,22 @@ def _look(seg, pos, k=K):
     return (seg[pos:pos + k] + [0] * k)[:k]
 
 
+def _general(sym):
+    """A tagged symbol as code.py's (cum, freq, total): a bit's is `encode(f0 if bit else 0, f1 if bit else f0, f0 + f1)`."""
+    if sym[0]:
+        _, b, f0, f1 = sym
+        return [f0 if b else 0, f1 if b else f0, f0 + f1]
+    return list(sym[1:])
+
+
 def _runs(stream):
-    """Each window's reference run along its segment: [(state, symbol, lookahead, (next, n))], and the finish."""
+    """Each window's reference run along its segment: [(BIN, state, symbol, lookahead, (next, n))], and the finish."""
     for win in stream["windows"]:
         seg, st, pos, steps = _seg(win), AE.fresh(), 0, []
-        for sym in win["symbols"]:
+        for BIN, *sym in win["symbols"]:
             look = _look(seg, pos)
-            nxt = AE.reference_step(K, stream["BIN"], st, 1, sym, look)
-            steps.append((st, sym, look, nxt))
+            nxt = AE.reference_step(K, BIN, st, 1, sym, look)
+            steps.append((BIN, st, sym, look, nxt))
             st, pos = nxt[0], pos + nxt[1]
         yield win, steps, (st, _look(seg, pos, 2), pos)
 
@@ -48,37 +57,45 @@ def test_the_reference_is_code_py():
     seen = {0: 0, 1: 0}
     for stream in _streams():
         for win, steps, (st, tail, pos) in _runs(stream):
-            for k, ((_s, _sym, _l, (nxt, _n)), (low, high, pending, used)) in enumerate(zip(steps, win["states"], strict=True)):
+            for k, ((BIN, _s, _sym, _l, (nxt, _n)), (low, high, pending, used)) in enumerate(
+                    zip(steps, win["states"], strict=True)):
                 assert (nxt.ok, nxt.low, nxt.high, nxt.open, nxt.used) == (1, low, high, int(pending > 0), used), \
                     f"{stream['source']} symbol {k}"
+                seen[BIN] += 1
             ok, n = AE.reference_finish(st, tail)
             assert ok and pos + n == len(win["segment"]), stream["source"]
-            seen[stream["BIN"]] += len(steps)
-    assert seen[1] >= 300 and seen[0] >= 90
+    assert seen[1] >= 300 and seen[0] >= 200
 
 
-def test_the_model_is_v1s():
-    for stream in (s for s in _streams() if "kt" in s):
-        counts = [tuple(p) for p in stream["priors"]]
-        freqs = [tuple(sym[1:]) for win in stream["windows"] for sym in win["symbols"]]
-        assert len(freqs) == len(stream["kt"])
-        for (ctx, bit), f in zip(stream["kt"], freqs):
-            ok, f0, f1, counts = AE.reference_kt(stream["C"], stream["NW"], counts, 1, ctx, bit)
-            assert ok and (f0, f1) == f, stream["source"]
+def test_the_contexts_are_the_bits():
+    """Each decision's context is min(run, 2), the decisions since the last arrival, carried across windows: the
+    replay's position in the bits, never witness. Every bit symbol is one the model gave an estimate."""
+    seen = 0
+    for stream in _streams():
+        bits = [sym for win in stream["windows"] for sym in win["symbols"] if sym[0]]
+        assert len(bits) == len(stream["kt"]), stream["source"]
+        run = 0
+        for (name, ctx, bit), sym in zip(stream["kt"], bits):
+            assert sym[1] == bit, stream["source"]
+            if name == "arrived":
+                assert ctx == min(run, 2), stream["source"]
+                run = 0 if bit else run + 1
+                seen += 1
+    assert seen >= 300
 
 
 def test_every_other_segment_is_refused():
     """Each fixture window's segment is accepted, and every single-bit flip of it, one bit more and one less refused."""
     for stream in _streams():
         for win in stream["windows"]:
-            seg, syms = _seg(win), win["symbols"]
-            assert AE.check_window(K, stream["BIN"], syms, seg)
-            assert not AE.check_window(K, stream["BIN"], syms, seg + [0])
-            assert not AE.check_window(K, stream["BIN"], syms, seg + [1])
+            seg, syms = _seg(win), [_general(s) for s in win["symbols"]]
+            assert AE.check_window(K, 0, syms, seg)
+            assert not AE.check_window(K, 0, syms, seg + [0])
+            assert not AE.check_window(K, 0, syms, seg + [1])
             if seg:
-                assert not AE.check_window(K, stream["BIN"], syms, seg[:-1])
+                assert not AE.check_window(K, 0, syms, seg[:-1])
             for k in range(len(seg)):
-                assert not AE.check_window(K, stream["BIN"], syms, seg[:k] + [1 - seg[k]] + seg[k + 1:])
+                assert not AE.check_window(K, 0, syms, seg[:k] + [1 - seg[k]] + seg[k + 1:])
 
 
 def _same(K_, BIN, cases):
@@ -91,22 +108,30 @@ def _same(K_, BIN, cases):
 
 def test_the_circuits_are_the_references_on_the_fixture():
     rng = random.Random(0)
+    cases, fins = {0: [], 1: []}, []
     for stream in _streams():
-        cases, fins = [], []
         for _win, steps, (st, tail, _pos) in _runs(stream):
-            for s, sym, look, _ in steps:
+            for BIN, s, sym, look, _ in steps:
                 flip = list(look)
                 flip[rng.randrange(K)] ^= 1
-                cases += [(s, 1, sym, look), (s, 0, sym, look), (s, 1, sym, flip)]
+                cases[BIN] += [(s, 1, sym, look), (s, 0, sym, look), (s, 1, sym, flip)]
             fins.append((st, tail))
-        _same(K, stream["BIN"], cases)
-        assert AE.evaluate_finishes(fins) == [AE.reference_finish(*f) for f in fins]
-        if "kt" in stream:
-            counts, kt = [tuple(p) for p in stream["priors"]], []
-            for ctx, bit in stream["kt"]:
-                kt.append((tuple(counts), 1, ctx, bit))
-                counts = AE.reference_kt(stream["C"], stream["NW"], counts, 1, ctx, bit)[3]
-            assert AE.evaluate_kt(stream["C"], stream["NW"], kt) == [AE.reference_kt(stream["C"], stream["NW"], *c) for c in kt]
+    for BIN in (0, 1):
+        _same(K, BIN, cases[BIN])
+    assert AE.evaluate_finishes(fins) == [AE.reference_finish(*f) for f in fins]
+
+
+@pytest.mark.parametrize("C", [1, 3])
+def test_the_model_is_its_reference_on_random_counts(C):
+    rng = random.Random(C)
+    kt = []
+    for _ in range(300):
+        ctx = rng.randrange(1 << AE._bitlen(C - 1))
+        kt.append((tuple((rng.randrange(1 << 15), rng.randrange(1 << 15)) for _c in range(C)), rng.choice([1, 1, 0]),
+                   ctx, rng.randrange(2)))
+    for c, g in zip(kt, AE.evaluate_kt(C, 16, kt)):
+        w = AE.reference_kt(C, 16, *c)
+        assert (g[0] == 0) if w[0] == 0 else g == w, (c, g, w)
 
 
 class _WNC:

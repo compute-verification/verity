@@ -2,10 +2,11 @@
 
     CacheStep_v1{N, U, TW, RW, L} (table, pfx, r, admit, sent, K, wh, nins, units) -> (ok, table', pfx', trail)
 
-`ReplayStep_v1` (`replay_step`) takes each admitting row's prefix-cache hit as witness that it only bounds, and advice
-v1 charges nothing for it, so a hit the cache didn't give would be a channel nobody charges. ENC-DERIVED's rules
+`ReplayStep_v1` (`replay_step`) takes each admitting row's prefix-cache hit as witness that it only bounds, so a hit
+the cache didn't give would be a channel nobody charges. ENC-DERIVED's rules
 (`benchmarks/network_e2e/encodings/derived.py`, `Prefixes`) fix the hit while the cumulative pool bound rules out
-eviction, and fix the canonical sources always. This Definition is those rules over a committed cache state, with
+eviction, and fix the canonical sources always. Past the bound, advice v1 sends and charges each hit's shortfall from
+the longest cached prefix. This Definition is those rules over a committed cache state, with
 `reference` as their specification in Python. The encodings' `test_cache_step.py` difftests both against `Prefixes`
 on the fixture traces.
 
@@ -28,9 +29,9 @@ unit its request's run completed. Unit j is:
 - *computed* when it isn't a hit unit and j < nins. The row completes it whole, and the request's number r becomes
   its owner if it has none or a higher one. A unit not cached is appended to the table, and a full table refuses.
 
-`sent` = 1 past the bound, where eviction may have shortened the hit. There the hit is advice v1's sent field, charged,
-and the call checks only that it is a cached prefix: an evicting cache never hits past what a cache that never evicts
-holds. The walk's entry after each unit is `trail`. A hit unit's canonical source is its trail entry's owner in the
+With `sent` = 1 the call checks only that the hit is a cached prefix: an evicting cache never hits past what a cache
+that never evicts holds. Advice v1 doesn't use that mode. Its lookups always derive the longest cached prefix, and past
+the bound the hit is that prefix less v1's sent shortfall. The walk's entry after each unit is `trail`. A hit unit's canonical source is its trail entry's owner in the
 table at the end of the engine step (`sources`). An owner can still drop later in the same step, when a lower-numbered
 request completes the unit.
 
@@ -42,18 +43,21 @@ L max_model_len. Widths: EW = bitlen(N) (an entry or ROOT), KU = ⌈L / U⌉, HW
 is little-endian.
 
 **Composition** (PROTOCOL.md, "Advice v1"): the calls follow `ReplayStep_v1`'s scheduling order, the running rows first.
-An admitting candidate's call (nins = 0) checks the hit `ReplayStep_v1` reads, and a second call, from that call's pfx,
-computes the units the row completes. r is the row's I1 request number. An engine step's calls are `scan_step` (and
-`build_scan_step` as a circuit, which `compile_slice` runs on ReplayStep_v1's wires): the units are the request's
-certified tokens, and a cache row (`cache_fields`: the table and each running slot's pfx) is carried from step to step
-beside the state row, from the empty one. N = num_gpu_blocks − 1 holds every unit computed while the bound holds.
+An admitting candidate's call (nins = 0) derives the longest cached prefix. The hit `ReplayStep_v1` reads is that
+prefix less the candidate's shortfall (0 while the bound holds, advice v1's sent one past it). A second call, from
+the hit's trail entry, computes the units the row completes. r is the row's I1 request number. The replay's state chain
+(`replay_chain`) carries the table in its state row, and `ReplayStep_v1` carries each running slot's pfx.
+N = num_gpu_blocks − 1 holds every unit computed while the bound holds. Past it, N is the session's units. The compile
+slice, inside the bound, runs an engine step's calls by `build_scan_step` (`scan_step` its reference) on
+ReplayStep_v1's wires and the requests' certified tokens, with the table and the slots' pfx in a cache row
+(`cache_fields`) carried beside the state row from the empty one.
 
 **Cost** (`size`): a unit costs about N·(2·(U·TW + EW) + 2·RW) ANDs. That is a comparison against every entry and a
 masked write to every entry. A call costs KU units plus its range checks: 5,856 ANDs at (N, U, TW, RW, L) =
 (8, 4, 8, 4, 32) (5,701 lowered), 18,658 at (8, 16, 17, 10, 64), 5.42M at the difftest's (128, 16, 17, 7, 1168), and
 at smallkv's (511, 16, 17, 10, 2048) 300,049 a unit and 38.4M a call. A linear table is the size class of a slice. The
-full session scales by sorting each step's lookups and inserts into the table's order, offline memory checking as
-`advice_check` sorts its events, at O(log² E) a unit for E units in all.
+full session scales by offline memory checking: it sorts the session's unit operations by key and time, as
+`advice_check` sorts its events, at O(log² E) a unit for E operations in all. PROTOCOL.md has the estimate.
 """
 from __future__ import annotations
 
