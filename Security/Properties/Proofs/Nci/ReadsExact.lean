@@ -222,7 +222,7 @@ theorem slice_pos (q : Piece) (a b : Nat) (hb : b ≤ q.count) :
     have heq' : r0 = r1 := by simpa using heq
     subst heq'
     rw [hpart _ _ _ (by omega) (by omega)]
-    congr 2 <;> omega
+    congr 2; omega
   · rename_i hne
     have hne' : r0 < r1 := by
       have : r0 ≠ r1 := by simpa using hne
@@ -245,7 +245,7 @@ theorem slice_pos (q : Piece) (a b : Nat) (hb : b ≤ q.count) :
       simp only [show ((0 : Nat) == 0) = true from rfl, if_true, posAll_empty, List.nil_append]
       rw [hmid r0 (by omega), ← List.map_append, Nat.add_zero,
         range'_join _ _ _ (Nat.mul_le_mul_right _ (by omega))]
-      congr 2 <;> omega
+      congr 2; omega
     · have h0' : (t0 == 0) = false := by simpa using h0
       simp only [h0', Bool.false_eq_true, if_false]
       rw [posAll_singleton, pos_run q r0 t0 q.len _ rfl (by omega) (Nat.le_refl _), hmid (r0 + 1) (by omega),
@@ -257,6 +257,80 @@ theorem slice_pos (q : Piece) (a b : Nat) (hb : b ≤ q.count) :
           r1 * q.len - (r0 * q.len + t0) by omega]
       simp only [Nat.add_zero]
       rw [range'_join _ _ _ (by omega)]
-      congr 2 <;> omega
+      congr 2; omega
+
+/-! ## Slices of pieces laid end to end -/
+
+/-- Positions `[a, b)` of a list. -/
+def sl {α : Type} (l : List α) (a b : Nat) : List α := (l.drop a).take (b - a)
+
+theorem sl_append {α : Type} (l₁ l₂ : List α) (a b : Nat) :
+    sl (l₁ ++ l₂) a b = sl l₁ a (min b l₁.length) ++ sl l₂ (a - l₁.length) (b - l₁.length) := by
+  unfold sl
+  rw [List.drop_append, List.take_append, List.length_drop]
+  congr 1
+  · rw [List.take_eq_take_iff, List.length_drop]; omega
+  · congr 1; omega
+
+theorem sl_map_range {α : Type} (f : Nat → α) (n a b : Nat) (hb : b ≤ n) :
+    sl ((List.range n).map f) a b = (List.range' a (b - a)).map f := by
+  unfold sl
+  rw [← List.map_drop, ← List.map_take, List.range_eq_range', List.drop_range',
+    List.take_range'_of_length_ge (by omega)]
+  congr 2; omega
+
+theorem slice_sl (q : Piece) (a b : Nat) (hb : b ≤ q.count) : posAll (q.slice a b) = sl (pos q) a b := by
+  rw [slice_pos q a b hb, pos_eq_map, sl_map_range _ _ _ _ hb]
+
+def slGo (a b : Nat) : List Piece → Nat → Array Piece → Array Piece
+  | [], _, out => out
+  | q :: qs, st, out =>
+    if st ≥ b then out
+    else slGo a b qs (st + q.count)
+      (if st + q.count > a then out ++ q.slice (max a st - st) (min b (st + q.count) - st) else out)
+
+theorem slicePieces_go (ps : Array Piece) (a b : Nat) : Desc.slicePieces ps a b = slGo a b ps.toList 0 #[] := by
+  unfold Desc.slicePieces
+  simp only [Id.run]
+  rw [← Array.forIn_toList]
+  generalize ps.toList = l
+  generalize (#[] : Array Piece) = out
+  generalize (0 : Nat) = st
+  induction l generalizing st out with
+  | nil => rfl
+  | cons q qs ih =>
+    simp only [List.forIn_cons, slGo]
+    split
+    · rfl
+    · rw [← ih]
+      split <;> rfl
+
+theorem sl_nil {α : Type} (a b : Nat) : sl ([] : List α) a b = [] := by simp [sl]
+
+theorem sl_empty {α : Type} (l : List α) (a b : Nat) (h : b ≤ a ∨ l.length ≤ a) : sl l a b = [] := by
+  unfold sl
+  rcases h with h | h
+  · rw [show b - a = 0 by omega, List.take_zero]
+  · rw [List.drop_eq_nil_of_le h, List.take_nil]
+
+theorem slGo_pos (a b : Nat) : ∀ (l : List Piece) (st : Nat) (out : Array Piece),
+    posAll (slGo a b l st out) = posAll out ++ sl (l.flatMap pos) (a - st) (b - st)
+  | [], st, out => by simp only [slGo, List.flatMap_nil, sl_nil, List.append_nil]
+  | q :: qs, st, out => by
+    unfold slGo
+    split
+    · rw [sl_empty _ _ _ (Or.inl (by omega)), List.append_nil]
+    · rw [slGo_pos a b qs, List.flatMap_cons, sl_append, pos_length, ← List.append_assoc,
+        show a - st - q.count = a - (st + q.count) by omega, show b - st - q.count = b - (st + q.count) by omega]
+      congr 1
+      split
+      · rw [posAll_append, slice_sl _ _ _ (by omega)]
+        congr 2 <;> omega
+      · rw [sl_empty (pos q) _ _ (Or.inr (by rw [pos_length]; omega)), List.append_nil]
+
+/-- **Positions `[a, b)` of pieces laid end to end.** -/
+theorem slicePieces_pos (ps : Array Piece) (a b : Nat) :
+    posAll (Desc.slicePieces ps a b) = sl (posAll ps) a b := by
+  rw [slicePieces_go, slGo_pos, posAll_empty, List.nil_append, Nat.sub_zero, Nat.sub_zero]; rfl
 
 end NciCheck.Properties.SecurityProofs.ReadsExact
