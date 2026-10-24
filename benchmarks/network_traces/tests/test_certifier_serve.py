@@ -1026,6 +1026,27 @@ def test_the_certified_io_reads_each_response_by_its_ordinal_wherever_its_frames
     assert not early["accepted"] and early["violations"] == [[0, "an id event before its request's release"]]
 
 
+def test_the_certified_io_refuses_two_requests_with_one_user(varied):
+    """A request's `user` is its own id, never its session's: with the second request's `user` rewritten in its
+    certified ingress frame to the first's (the field's place and every frame's template kept), the certified I/O
+    refuses that request, and still reads each response by its ordinal."""
+    tmp, _, report, plan, _, _ = varied
+    run, setup = tmp / "honest", ar.Setup(report)
+    e, i = setup.egress_params, setup.ingress_params
+    ins = [ar.unpack_record(b, i.frame_bytes) for b in ar.read_blobs(run / "requests.records")]
+    outs = [ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
+    first, second = (json.dumps(q["session"]).encode() for q in plan["requests"][:2])
+    shared = [SimpleNamespace(window=r.window, grid=[[f if f is None else f.replace(second, first) for f in row]
+                                                     for row in r.grid]) for r in ins]
+    assert sum(f != g for r, s in zip(ins, shared) for row, other in zip(r.grid, s.grid)
+               for f, g in zip(row, other)) == 1
+    honest, refused = cs.certified_io(plan, setup, ins, outs), cs.certified_io(plan, setup, shared, outs)
+    assert honest["accepted"] and len({r["user"] for r in honest["records"]}) == len(plan["requests"])
+    assert not refused["accepted"] and refused["violations"] == [[2, "a request whose user names request 1 too"]]
+    assert [(r["stream"], r["output"]) for r in refused["records"]] == \
+        [(r["stream"], r["output"]) for r in honest["records"]]
+
+
 def test_interleaved_responses_are_recovered_by_their_requests_ordinals(tmp_path):
     """Requests sent four at a time are released two a bucket, and the endpoint streams each two released together
     chunk by chunk: in whatever order the shim reads them, each id event names its request's ingress ordinal, and

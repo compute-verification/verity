@@ -96,9 +96,9 @@ derive from the ingress head and the advice, and this check gives no N2 verdict.
 request's ingress ordinal (its stream on the link), release bucket and id request's fields (`user`, prompt ids,
 `max_tokens`, the sampling fields) from the ingress frames, and its response's token ids from the egress id events
 that name its ordinal, with each frame's canonical position and egress bucket. Accepted when every request is an id
-request, every egress frame is an id event of a request released by its bucket, and every response keeps the finish
-rule: at most `max_tokens` tokens, ending at its first EOS token (the plan's `eos_token_ids`) or at `max_tokens`.
-`extra`'s token after a response's last breaks it. The check writes the I/O to `io.json` for the tie (IO-TIE) and
+request whose `user` (the request's id) no other request has, every egress frame is an id event of a request released
+by its bucket, and every response keeps the finish rule: at most `max_tokens` tokens, ending at its first EOS token
+(the plan's `eos_token_ids`) or at `max_tokens`. `extra`'s token after a response's last breaks it. The check writes the I/O to `io.json` for the tie (IO-TIE) and
 N2's advice counts (N2-ADVICE), and compares it with the ids the shim wrote and the requests the plan sent.
 On the advice profile each link-window is registered by its one-stage registration record (its salted root, chained)
 with the check's own receipt, which no proof stream issues since N2 gives no outcome, and its certified records are
@@ -920,9 +920,9 @@ def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
     """The certified I/O of a varied run, read from the records' frames alone (the module docstring's "The certified
     I/O"): each request's ingress ordinal (its stream), release and fields (`active.id_request_fields`) from the
     ingress frames, and its response's token ids and frames (canonical position, egress bucket) from the egress id
-    events that name its ordinal. `accepted` when every request is an id request, every egress frame is an id event
-    of a request released no later than the frame's bucket, and every response keeps the finish rule: at most
-    `max_tokens` tokens, ending at its first EOS (`eos_token_ids`) or at `max_tokens`."""
+    events that name its ordinal. `accepted` when every request is an id request whose `user` no other request has,
+    every egress frame is an id event of a request released no later than the frame's bucket, and every response keeps
+    the finish rule: at most `max_tokens` tokens, ending at its first EOS (`eos_token_ids`) or at `max_tokens`."""
     e, i = setup.egress_params, setup.ingress_params
     release, _ = ar.ingress_releases(in_records, i, e)
     data, split = defaultdict(bytes), Requests()
@@ -933,12 +933,14 @@ def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
                 if kind == DATA:
                     stream, chunk, _ = split.feed(payload)
                     data[stream] += chunk
-    requests, by_ordinal, violations = [], {}, []
+    requests, by_ordinal, violations, users = [], {}, [], {}
     for stream in sorted(data):
         fields = id_request_fields(data[stream], i.frame_bytes)
         if fields is None:
             violations.append([stream, "a request that isn't an id request"])
             continue
+        if (first := users.setdefault(fields["user"], stream)) != stream:
+            violations.append([stream, f"a request whose user names request {first} too"])
         r = by_ordinal[stream] = fields | {"stream": stream, "release": release.get(stream), "output": [],
                                            "frames": []}
         requests.append(r)
