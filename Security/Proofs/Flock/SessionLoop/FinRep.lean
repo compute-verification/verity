@@ -448,7 +448,7 @@ theorem finRepBounds (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Floc
     rw [hts]
     show (Masked.stsOf x)[k / 2]!.m = _
     rw [getElem!_pos (Masked.stsOf x) (k / 2) hj]
-  refine ⟨by rw [hm]; exact hm1, by rw [hm]; exact hm2, hsch, ?_⟩
+  refine ⟨by rw [hm]; exact hm1, by rw [hm]; exact hm2, by rw [hts]; exact hsch, ?_⟩
   unfold repInOf at hq
   obtain ⟨⟨lay, ms⟩, -, hq⟩ := bok hq
   have hqx : q.xs = _root_.Flock.Firewall.Drive.extras (Masked.stsOf x)[k / 2]!
@@ -462,7 +462,7 @@ theorem finRepBounds (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Floc
       (_root_.Flock.Firewall.Drive.extras st pts).size = st.regions.size * pts.size := by
     intro st pts
     unfold _root_.Flock.Firewall.Drive.extras
-    exact flatMap_size_const _ _ _ fun _ => Array.size_map _ _
+    exact flatMap_size_const _ _ _ fun _ => Array.size_map
   have hlp : ∀ (st : _root_.Flock.Stmt) (c : Array F128),
       (_root_.Flock.Firewall.Drive.linkPoints st c).size ≤ c.size := by
     intro st c
