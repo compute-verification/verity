@@ -152,3 +152,15 @@ def test_the_crons_run_only_with_vercels_cron_secret(world, name):
     assert c.get(f"/api/cron/{name}").status_code == 401
     r = c.get(f"/api/cron/{name}", headers={"Authorization": "Bearer dummy-cron"})
     assert r.status_code == 200 and world.deps.cache.get(LAST_SUCCESS) == T0
+
+
+def test_the_drain_runs_only_with_vercels_cron_secret_and_reports_what_it_handled(world, monkeypatch):
+    from slack_events import subscriber
+
+    async def drain(d):
+        return {"handled": 2, "failed": 0}
+    monkeypatch.setattr(subscriber, "drain", drain)
+    c = client(world)
+    assert c.get("/api/cron/drain").status_code == 401
+    r = c.get("/api/cron/drain", headers={"Authorization": "Bearer dummy-cron"})
+    assert r.status_code == 200 and r.json() == {"handled": 2, "failed": 0}

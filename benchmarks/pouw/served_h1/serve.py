@@ -753,7 +753,9 @@ def run(a: argparse.Namespace) -> dict:
         coins["ok"] = bool(coins["rounds_reason"] is None and coins["draw_reason"] is None and coins["rounds_cover_steps"]
                            and all(recomputed))
         coins["verify"] = ("the verifier's check: coins.py check --challenger-out <the session as the gate publishes it> "
-                           "--ledger <each head of the auditor's ledger infra published> --manifest manifest.json "
+                           "--ledger <each head of the auditor's ledger infra published> --pins <the host's pins log "
+                           "infra published> --main <the verifier's git rev-list --first-parent origin/main> "
+                           "--manifest manifest.json "
                            "--key-record <the challenger's "
                            "challenger-key/v1 record> --period <the window's period> --root <the window's root>, from the "
                            "challenger's own record, never this one" if cs.source == "off-node"

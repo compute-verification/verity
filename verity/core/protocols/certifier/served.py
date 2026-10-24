@@ -1,6 +1,6 @@
 """N2's served profile: on a served link, whose egress end has no public occupancy profile, the egress counts derived
 from the ingress counts under the declared clock sync, zero-knowledge. A Boolean Definition, a gated part of N2's
-served proof unit (`service`'s `NetworkServedLinkWindow` v1), which runs on every link-window; its one output is the ok
+served proof unit (`service`'s `NetworkServedLinkWindow` v2), which runs on every link-window; its one output is the ok
 bit. That unit's Program holds it as one gate (`gate`), and N2's verifier of record runs its `reference`, which the tests
 hold to the circuit.
 
