@@ -2622,6 +2622,18 @@ __global__ void __launch_bounds__(256) h1jr_cols(const UCallR* __restrict__ call
   }
 }
 
+// H1U_JSWZ = G (h1umjc): H1U_SWZ's order for its units, G row blocks at a time column block by column block, so B's lines
+// and the column blocks are read from DRAM once for G row blocks
+#ifndef H1U_JSWZ
+#define H1U_JSWZ 0
+#endif
+__device__ __forceinline__ u32 jswz_unit(const UCallR& c, u32 w, u32 M) {
+  if (!H1U_JSWZ) return w;
+  const u32 ncb = c.N / 32, band = (u32)H1U_JSWZ * ncb, r0 = w / band * (u32)H1U_JSWZ, r = w % band;
+  const u32 rn = min((u32)H1U_JSWZ, M / 32 - r0);
+  return (r0 + r % rn) * ncb + r / rn;
+}
+
 // h1umj with its units' column blocks read (RC)
 __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umjc(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
                                                      const uint8_t* __restrict__ live) {
@@ -2636,12 +2648,13 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umjc(const UCallR* __r
     else hi = mid;
   }
   const UCallR c = calls[lo];
+  const u32 u = jswz_unit(c, gu - c.u0, M);
   if (c.md == 3)
     h1u_unit<3, false, false, false, false, false, true, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws,
-                                                               OneOut{}, gu - c.u0, smem[wp]);
+                                                               OneOut{}, u, smem[wp]);
   else
     h1u_unit<2, false, false, false, false, false, true, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws,
-                                                               OneOut{}, gu - c.u0, smem[wp]);
+                                                               OneOut{}, u, smem[wp]);
 }
 
 // a call's workspace under kh_units_multi_j10rc: its M RB row blocks, then its N CB column blocks, 16 words each
