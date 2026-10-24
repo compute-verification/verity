@@ -174,7 +174,8 @@ def test_the_bodys_seed_is_the_seed_input_and_the_policy_reads_temperature_and_t
     ({"top_p": 1.0}, "no temperature"),
     ({**STOCH, "temperature": "0.8"}, "temperature '0.8', top_p 1.0 and seed None aren't"),
     ({**STOCH, "top_p": 0.0}, "top_p 0.0"),
-    ({**STOCH, "top_p": 0.95}, "top_p 0.95 below 1 (the top-p split count S = SplitsFor_v1(live rows, num_SMs) is the batch's"),
+    ({**STOCH, "top_p": 0.95}, "top_p 0.95 below 1 (a named gap: there the top-p split count S = SplitsFor_v1(live rows, num_SMs) "
+                               "is the batch's, until serving pins S as a registered constant)"),
     ({**STOCH, "seed": -1}, "seed -1"),
     (["temperature"], "aren't an object of named values"),
 ])

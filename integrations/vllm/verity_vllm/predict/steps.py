@@ -33,7 +33,7 @@ The compiler is total: it compiles its input or refuses it by name (`Unexpressib
 - what v0 doesn't compile: a chunked prefill (no chunked request wrapper on either side); a prefix-cache hit on a stochastic
   request (the cached stochastic wrapper isn't ported); a preemption (whose resume's sources go unchecked, as the request compiles
   to nothing), or decode rows that aren't one position a step in consecutive steps; positions past the model's; sampling other
-  than greedy or seeded top-p at top_p = 1 with top_k 0 (top_p < 1, whose split count serving doesn't pin; min_p, the penalties,
+  than greedy or seeded top-p at top_p = 1 with top_k 0 (top_p < 1, a named gap until serving pins its split count; min_p, the penalties,
   logit_bias, min_tokens, n > 1, or a parameter this compiler doesn't know);
 - a compilation `predict.batch.check_compiled` refuses (`BatchDependent`): one where a request's outputs could read its
   batch-mates (R3 a derived split count; R2 a request planned differently alone, which v0 holds every cache hit another request
@@ -169,7 +169,8 @@ def policy_of(i: int, sampling: Any, default_seed: int, num_sms: int | None) -> 
     """Request `i`'s sampling policy as φ.sampling takes it, and its seed Input's value (the body's, else `default_seed`; None when
     greedy), from the parameters its body carries (`SamplingParams` names), refused where its Program wouldn't be the Build's. Top-p
     takes the constant split count S = SplitsFor_v1(1, num_SMs): at top_p = 1 the mask keeps every lane for every S, and below 1
-    the served S is the batch's (`predict.batch`, R3), so top_p < 1 is refused until serving pins S."""
+    the served S is the batch's (`predict.batch`, R3), so top_p < 1 is a named gap, refused until serving pins S as a registered
+    constant."""
     if not isinstance(sampling, Mapping) or any(type(k) is not str for k in sampling):
         raise Unexpressible(f"request {i}: its sampling parameters aren't an object of named values")
     s = dict(sampling)
@@ -184,8 +185,8 @@ def policy_of(i: int, sampling: Any, default_seed: int, num_sms: int | None) -> 
     if 0 < t < SAMPLING_EPS:
         facts.append(f"temperature {t!r} (vLLM samples it greedily, the Build's policy is greedy at 0 only)")
     if t > 0 and p < 1:
-        facts.append(f"top_p {p!r} below 1 (the top-p split count S = SplitsFor_v1(live rows, num_SMs) is the batch's there, and "
-                     f"serving doesn't pin it)")
+        facts.append(f"top_p {p!r} below 1 (a named gap: there the top-p split count S = SplitsFor_v1(live rows, num_SMs) is the "
+                     f"batch's, until serving pins S as a registered constant)")
     if t > 0 and num_sms is None:
         facts.append("top-p on a target that declares no num_sms (its constant split count SplitsFor_v1(1, num_SMs))")
     if facts:
