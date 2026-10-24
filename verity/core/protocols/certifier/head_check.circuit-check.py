@@ -8,8 +8,9 @@ from typing import Any
 def _network_roots() -> list[Any]:
     """N2's head check (`verity.core.protocols.certifier.head_check`) for a 9-byte link name ("responses") at T = 4, with
     and without an occupancy profile, which reaches the opening, the fields, the counts and the signed digest (the
-    head's record digest and its salted digest) at their smallest; and the count check at the deployed T = 600,
-    32·T − 1 = 19,199 ANDs."""
+    head's record digest and its salted digest) at their smallest; the count check at the deployed T = 600,
+    32·T − 1 = 19,199 ANDs; and the certifier-serve rehearsal's size classes, a 6-byte link name ("served") at T = 60
+    with and without a profile, so their gates name a pinned circuit digest and a proof of their unit is accepted."""
     from verity.ml.circuits.defs import bind
     from verity.core.protocols.certifier.head_check import NetworkHeadCounts, unit
 
@@ -17,4 +18,6 @@ def _network_roots() -> list[Any]:
         unit(9, 4, True),
         unit(9, 4, False),
         bind(NetworkHeadCounts, T=600),
+        unit(6, 60, True),
+        unit(6, 60, False),
     ]
