@@ -1078,7 +1078,7 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
   let params : List (String × String) := [("a", r), ("b", c)].flatMap fun (x, n) =>
     (List.range n).map fun i => (s!"{x}_k{k}_{i}", if n == 1 then s!"{x}_k{k}" else s!"{x}_k{k}[{i}]")
   out := out.map fun (p, j) => (p, match params.lookup p, j with
-    | some n, .obj kvs => .obj (kvs.insert compare Flock.Registered.PARAM_KEY (.str n))
+    | some n, .obj kvs => .obj (kvs.insert Flock.Registered.PARAM_KEY (.str n))
     | _, _ => j)
   let words := PouwCheck.PUBLIC_ROW_BITS / 16
   let sb := (hex? (.str salt)).getD ByteArray.empty
