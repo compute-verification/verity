@@ -1,4 +1,6 @@
+import Definitions.Pouw.H1Zy.Chain
 import Definitions.Pouw.H1Zy.Combine
+import Definitions.Pouw.H1Zy.Dequant
 import Definitions.Pouw.H1Zy.Lane
 
 /-!
@@ -9,4 +11,9 @@ partials. Proved to be the XOR check in `Proofs.Pouw.H1Zy`.
 
 `Lane`: `PouwH1LaneZy_v1{TILE}`'s body at a 32 × 32 leaf over `PouwH1Tile_v1`, on its primitives' word views, with the
 dequant's and the chain's words as parameters. Proved in `Proofs.Pouw.H1Zy` to check the exact z, y and partials.
+
+`Dequant`: `PouwZyDequant_v1`'s word view, `h1zy.dequant` (`dequantW`), on `Verity.Fp32`'s IEEE f32 arithmetic.
+
+`Chain`: a lane's chain words (`chainWords`), `h1zy.lane_partial`'s fold from the seeds, the noise and the fold keys,
+with the spec's SHA-512. `Proofs.Pouw.H1Zy.Vectors` holds both to the Python.
 -/

@@ -20,8 +20,8 @@ proved here for every input, at a `K` the lane's tile binds at (`32 ∣ K`, `K <
 
 What stays of the field is the first two claims, `LaneComputes`: on every wire assignment the session's evaluation
 agrees with, the decoded `ok` is the Definition's on `laneIn`. `leafChecks_of_computes` gives `LeafChecks` from it and
-`CombineComputes`. Still a parameter: `chain`, the lane's chain words, which are to be `h1zy.lane_partial`'s fold (the
-fx1 chain over the noise from σ_J and the keys from σ_R), and `dqW`'s float roundings.
+`CombineComputes`. Both hold at any `chain` and `dqW`; `Lanes.Chain` takes them at the Definition's own, the lane's
+chain words (`h1zy.lane_partial`'s fold) and the dequant (`PouwZyDequant_v1`).
 -/
 
 namespace Accounting.TS.Lanes

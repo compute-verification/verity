@@ -156,6 +156,9 @@ as `h1tile._xor` and `h1zy._and_all` build them. `Proofs.Pouw.H1Zy` proves it th
 word views: the index's mux trees, the EXACT z (`GemmAccumulatorS8_v2`), the cell check and the masked partials, with the
 dequant's and the chain's words as parameters. `Proofs.Pouw.H1Zy` proves it the lane check `LeafChecks` reads.
 
+`Dequant` and `Chain`: those parameters' own values, `h1zy.dequant` (`dequantW`, on `Verity.Fp32`) and
+`h1zy.lane_partial`'s fold (`chainWords`, with the spec's SHA-512), held to the Python by `Proofs.Pouw.H1Zy.Vectors`.
+
 ## `PearlC`: Pearl-C's Π and the statements about it
 
 Π's shared definitions (`Defs`): the parameters, the E4M3 encoder, the BF16 conversion and the FP32 encoder, the row
