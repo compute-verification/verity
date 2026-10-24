@@ -1922,8 +1922,9 @@ expectation):
 - **D20:** a record not in its canonical text (S0, §5.1). Upstream parses the record with serde and accepts any text of
   it; the spec refuses (`S0: the record is not in its canonical text …`, `Flock.RecordText.check`), for D17's reason at
   the record: the recursion binds a session's record, so a session has one accepted text
-  (`Flock.RecordText.check_inj`). `redigest.py`'s `record-not-canonical` (the record indented) exercises it
-  (`upstream_accepted`), and `Flock.Test.RecordText` runs the other non-canonical forms on the Lean verifier.
+  (`Flock.RecordText.check_inj`). No vector exercises it: S0 is the Lean verifier's last check, and every set the
+  agreement job mutates is refused ahead of it (D12's form refusal, and `NO_PROGRAM` without `--program`), so its
+  sessions are compared as accepted. `Flock.Test.RecordText` runs the non-canonical forms on `RecordText.check`.
 
 D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
 `redigest.py` and `fuzz.py`).
