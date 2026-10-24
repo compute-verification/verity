@@ -61,11 +61,12 @@ class Compiler:
 
 
 def registered_compiler(name: str = COMPILER, digest: str | None = None) -> Compiler:
-    """The compiler the advice is bound to; without ``digest``, the SHA-512 of `name` and the predictor's code version."""
+    """The compiler the advice is bound to; without ``digest``, the SHA-512 of `name` and the tree's code identity
+    (`source_identity.code_identity`)."""
     if digest is None:
-        # TODO: COMPILER's own registered digest once compile_steps lands with one (score.code_version() is 16 hex digits)
-        from verity_vllm.predict.score import code_version
-        digest = hashlib.sha512(canonical_json({"name": name, "code": code_version()})).hexdigest()
+        # TODO: COMPILER's own registered digest once compile_steps lands with one
+        from verity_vllm.pipeline import source_identity as SI
+        digest = hashlib.sha512(canonical_json({"name": name, "code": SI.code_identity(SI.TREE)["sha256"]})).hexdigest()
     return Compiler(name, digest)
 
 
@@ -339,7 +340,7 @@ class Options:
     out: str | None = option("--out", default=None, help="where registration.json and private/ go (default RUN/advice)")
     compiler_name: str = option("--compiler-name", default=COMPILER, help="the registered compiler the advice is bound to")
     compiler_digest: str | None = option("--compiler-digest", default=None,
-                                         help="its digest, 128 hex digits (default: SHA-512 of the name and the predictor's code version)")
+                                         help="its digest, 128 hex digits (default: SHA-512 of the name and the tree's code identity)")
     T: int = option("--T", type=int, default=600, help="egress buckets per window, for the bits I1 charges each window")
     tau: float = option("--tau", type=float, default=0.1, help="the egress bucket's width in seconds, for each output's release bucket")
 
