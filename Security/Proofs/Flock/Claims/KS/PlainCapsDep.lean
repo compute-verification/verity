@@ -287,17 +287,22 @@ theorem Pr_rdAt_le_capHitK (keepV : Bool → Bool) {Ω A : Type} [Fintype Ω] [N
   · constructor
     · rintro ⟨u, hu⟩
       obtain ⟨hk, hr, a, ha, -⟩ := (mem_rdAtK keepV).1 hu
-      refine ⟨Claims.Recursion.abortRun_acc_iff.2 ⟨hk, hr⟩, ?_⟩
+      refine ⟨(Claims.Recursion.abortRun_acc_iff (H := sha512) (P := P) (V := VK keepV) (x := x) (keep := keep)
+        (ω := ω) (d := d)).2 ⟨hk, hr⟩, ?_⟩
       rw [hopens, decide_eq_true_eq]
       exact (plain_levelCols_queriedK keepV hr hs hst hsch j.1.isLt (by omega) hℓ _).1 ⟨a, ha⟩
     · rintro ⟨hacc, hq⟩
-      obtain ⟨hk, hr⟩ := Claims.Recursion.abortRun_acc_iff.1 hacc
+      obtain ⟨hk, hr⟩ := (Claims.Recursion.abortRun_acc_iff (H := sha512) (P := P) (V := VK keepV) (x := x)
+        (keep := keep) (ω := ω) (d := d)).1 hacc
       rw [hopens, decide_eq_true_eq] at hq
       obtain ⟨a, ha⟩ := (plain_levelCols_queriedK keepV hr hs hst hsch j.1.isLt (by omega) hℓ _).2 hq
       exact ⟨_, (mem_rdAtK keepV).2 ⟨hk, hr, a, ha, rfl⟩⟩
   · obtain ⟨hk, hr, a, ha, rfl⟩ := (mem_rdAtK keepV).1 hu
     obtain ⟨hk', hr', a', ha', rfl⟩ := (mem_rdAtK keepV).1 hu'
-    rw [Claims.Recursion.abortRun_of_keep hk, Claims.Recursion.abortRun_of_keep hk']
+    rw [Claims.Recursion.abortRun_of_keep (H := sha512) (P := P) (V := VK keepV) (x := x) (keep := keep) (ω := ω)
+        (t := d) hk,
+      Claims.Recursion.abortRun_of_keep (H := sha512) (P := P) (V := VK keepV) (x := x) (keep := keep) (ω := ω)
+        (t := d') hk']
     rw [hround] at hc
     exact plain_levelTieK keepV hr hr' hs hst hsch j.1.isLt hℓ hc ha ha' fun he => hne (by rw [he])
 
