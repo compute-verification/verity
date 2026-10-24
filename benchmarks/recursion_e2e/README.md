@@ -1,90 +1,116 @@
-# recursion: the recursive audit's stages, profiled one by one
+# recursion_e2e: the recursive session, timed stage by stage (`verity bench recursion_e2e`)
 
-Recursive witness zero knowledge proves an inner statement with ZK off (M0) against the inner phase's firewall, then proves
-V*, the inner verifier written as C-Flock statements, with `--zk`; the auditor's Lean verifier checks V*'s sessions only.
-This benchmark times each stage of that pipeline as it runs on `main` today, on the smallest real input, so the speed work
-has numbers before the whole recursive session runs end to end.
+Recursive witness zero knowledge proves an inner statement with ZK off (M0) against the inner phase's firewall. It then
+proves V*, the inner verifier written as C-Flock statements, with `--zk`, and the auditor's Lean verifier checks V*'s
+sessions only. This is the one runner for that pipeline. It drives `verity/ml/flock/pod/85-rec-reprice.sh`'s steps as one
+research run, times each stage on the smallest real input (K = 4096, N = 2), repeats what is cheap to repeat, and says
+whether the run was one whole recursive session and whether it was accepted. Speed work measures each cut before and after
+with it.
 
 ~~~text
-verity bench recursion_e2e plan  [--K 4096] [--N 2] [--steps S,..]         the stages, their commands and the launch
-verity bench recursion_e2e run   [--K 4096] [--N 2] [--steps S,..] [--repeat 3] [--modes M,..] [--env K=V ..] [--dry-run]
-                                                                                one recorded job on vy-nebius-1
-verity bench recursion_e2e result --dir OUT [--out FILE]                    the profile's result from a job's out/
-verity bench recursion_e2e table RESULT... [--merge] [--json] [--put]       the table, from results (a file or a run id;
-                                                                                --merge: one table, a later run's row replacing
-                                                                                an earlier one's for the same stage and mode)
+verity bench recursion_e2e plan  [POINT]                          the stages, the lease, and the launch command
+verity bench recursion_e2e run   [POINT] [--e2e] [--dry-run] [--here]
+                                                                   one research run of job.sh (default vy-nebius-1, GPU host)
+verity bench recursion_e2e result --dir OUT [--out F] [--md F]    the result from a job's out/ (the job runs it last)
+verity bench recursion_e2e table RESULT... [--merge] [--json]     the table from results (a file, or a run id whose
+                                                                   records are fetched and read with this reader)
+verity bench recursion_e2e store RESULT... [--merge]              the results and their table as one art: id
+POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 --lease-min M --neg challenge,query
+       --cpu --node N --mem-gb 64 --cpus 32 --max-min M --env KEY=VALUE ...
 ~~~
 
-## The pipeline today (stage map)
+- **Firewall on by default.** `--modes firewall`: AGENTS.md has outer proofs go through the firewall one at a time, and 85
+  proves V*'s statements one after another. `dev` and `host` are there to compare against, never the default. A run never
+  proves two of its V* statements at once.
+- **The lease.** A firewalled V* session at K = 4096 takes minutes. L3 took 519 s, against 2.46 s on the device's witness
+  (`dev`), and L0 to L2 outran 85's default lease of 10 min. So `--lease-min` (85's `GPU_MAX_MIN`) defaults to `lease_min`
+  in `run.py`. That is the largest statement's sessions (alg-p1: 13.99 s in `dev`, about 2950 s with the firewall), scaled
+  from L3, times 1.5: 74 min for one session. `--max-min` defaults to the same model over all ten statements, plus each
+  other step's minutes per repeat. The leases are not preemptible (`job.sh`), because a preempted session is a lost
+  measurement.
+- **`--e2e`**, the one-pass mode (RECBENCH's draft): build, inner, vstage, vcap, oprove, lean and negative once each, one
+  session per prove and no warm one. With `--cpu --K 64 --N 16 --node <cpu node>` it is the CPU prover end to end
+  (`GPU=0`, no lease).
+- **The negative** (`negative`, on by default): the lean step again over a copy of the inner session with one coin of
+  rep 0 flipped (85's `NEG_INNER`, `rec_inner.py forge`), once per `--neg` coin. A flipped coin moves only the V*
+  statements that read it, so a coin counts as refused when Lean refuses it under at least one statement (exit 1, no
+  VERDICT accepting) and every statement has a verdict over it. This is `lean_verdicts.py`'s rule. The row names the
+  statements that refused it and those that rightly accepted it.
+- **The verdict** (`headline` in the result, the table's first line): `complete` when every step that one recursive
+  session needs ran (build, inner, vstage, vcap, oprove, lean). `ok` when, in addition, every invocation exited 0, every
+  honest verdict accepted and every flipped coin was refused. A merged table's verdict is only as whole as its runs.
+- **Data.** 85's staged statements and sessions go under `$FLOCK_WORK/data/rb-<run id>` and are removed at the end unless
+  `--env KEEP_DATA=1`. A later run takes them with `--env TAG=rb-<run id> --env KEEP_DATA=1 --steps oprove,...`. Runs on
+  one TAG must not overlap oprove and lean, because both use `data/$TAG/v-sess`.
+- `--env` passes anything on to `job.sh` and 85: `REPEAT_<STEP>=n` sets one step's repeats, plus `LEVELS=L0,cap`,
+  `LEAN_JOBS`, `PCPUS`, `WARM`, `RUNS` (the inner's sessions) and the like.
 
-Every stage is a STEP of `verity/ml/flock/pod/85-rec-reprice.sh` (proofs' job, read as it is), run on vy-nebius-1 with
-the big files under `$FLOCK_WORK/data/$TAG` for the next step. Each GPU step leases one RTX PRO 6000 per prover invocation
-(`on_gpu`); everything else is CPU. The inner statement is `N` instances of `GemmCoordinate_v2{K, DOT=HopperBF16WgmmaDot16_v1}`
-(`pod/rec_reprice.py`, the population program cut by `Q_template_instance`), every unit drawn.
+## The pipeline (stage map)
 
-| # | stage (STEP) | command (inside 85) | reads | writes | node | runs today |
-|---|---|---|---|---|---|---|
-| 0 | `build` | `60-circuit.sh MODE=build GPU=1 SM=120` (the CUDA prover), `lake build flock-verify` (Lean), `class_statement --program-module rec_reprice.py:program --stage-only` twice | the tree | `stage/` (plain SHA-512 leaves: the recursive inner), `stage-zk/` (hm96 leaves: today's `--zk`, the baseline) | n1, CPU | last recorded runs: rec-ksweep (6 Oct, m = 35), the F1 gate (10 Oct, K = 4096, N = 2: `r20261010-210008-003d`) |
-| 1 | `inner` | `flock-circuit prove --gpu` (M0, ZK off, `FC_COINS=os`) against `python -m verity_flock.rec_live` (the inner firewall: salted tops, the statement's schedule, `Register` answered with the full draw); then today's M0 and `--zk` on loopback (`INNER_LOOPBACK=1`) | `stage/`, `stage-zk/` | `inner/s<k>/` (`public.json`, `private.json`, `session/`) | n1, GPU | as 0 |
-| 2 | `icheck` | `flock-circuit replay` of the last inner session, `python -m verity_flock.rec_vstar` (V*'s hashing reference), the schedule and tree-top controls | `inner/` | records only | n1, CPU | as 0 |
-| 3 | `vstage` | `rec_vstage points`, `inner-fold` (`verity/ml/flock/tests/lean/InnerFold.lean` as an executable), `rec_vstage stage` per statement: each Ligerito level's `RecOpen`, the algebra's `InnerRepCheck` parts, the forgeries | `inner/`, `stage/` | `v/L<l>/`, `v/alg/p<j>/`, `v/forged-*/` | n1, CPU | as 0 |
-| 3b | `vcap` | `rec_vstage.stage_cap`: `RecCap` over each level's committed tops | `inner/`, `v/` | `v/cap/`, `v/cap/L<l>/` | n1, CPU | `r20261020-002938-635a` (20 Oct) |
-| 4 | `oprove` | per V* statement: `flock-circuit serve --zk` (loopback) and `prove --zk --gpu`, per mode: `dev` (the device's witness), `host` (`FC_HOST_WITNESS=1`), `firewall` (`FC_FIREWALL=1`: the Lean session loop, live PROTOCOL.md §10.4) | `v/` | `v-sess/<stmt>/` | n1, GPU | `dev` as 0; `firewall` (24 Oct, `r20261024-054739-343d`): no V* session finishes inside 85's 10-minute lease at K = 4096 (the Lean session loop, `flock-firewall`, holds the prover: 1300 CPU s in 7 min on the prover's 16 cores) |
-| 5 | `oreplay` | `flock-circuit replay --zk` of each V* session (upstream's verifier) | `v-sess/` | records only | n1, CPU | as 0 |
-| 6 | `lean` | `flock-verify rec-inner`, `rec-statements`, then `flock-verify verify --zk` on each V* session with V*'s own inputs (`--rec-inner-*`, `--rec-rows`, `--rec-bindings`); `INNER_LEAN=1` also the inner session (`--coins os --stratified N`); `flock-verify statement` on the inner statement; `lean_verdicts.py` fails closed | `v-sess/`, `stage/`, `inner/` | records only | n1, CPU | as 0 |
+Every stage is a STEP of 85 (proofs' job, read as it is), run on vy-nebius-1 with the big files under
+`$FLOCK_WORK/data/$TAG` for the next step. Each GPU step leases one RTX PRO 6000 per prover invocation (`on_gpu`), and
+everything else is CPU. The inner statement is `N` instances of `GemmCoordinate_v2{K, DOT=HopperBF16WgmmaDot16_v1}`
+(`pod/rec_reprice.py`, the population program cut by `Q_template_instance`), with every unit drawn.
 
-What the recursive audit has that 85 doesn't run, and where it lives today:
+| # | stage (STEP) | command (inside 85) | reads | writes | node |
+|---|---|---|---|---|---|
+| 0 | `build` | `60-circuit.sh MODE=build` (the prover), `lake build flock-verify` (Lean), `class_statement --stage-only` twice; `job.sh` also builds `flock-firewall` from the same Lean sources | the tree | `stage/` (plain SHA-512 leaves: the recursive inner), `stage-zk/` (hm96 leaves: today's `--zk`, the baseline) | n1, CPU |
+| 1 | `inner` | `flock-circuit prove --gpu` (M0, ZK off, `FC_COINS=os`) against `python -m verity_flock.rec_live` (the inner firewall's proxy); then today's M0 and `--zk` on loopback (`INNER_LOOPBACK=1`) | `stage/`, `stage-zk/` | `inner/s<k>/` | n1, GPU |
+| 2 | `icheck` | `flock-circuit replay` of the last inner session, `python -m verity_flock.rec_vstar` (V*'s hashing reference) | `inner/` | records only | n1, CPU |
+| 3 | `vstage` | `rec_vstage points`, `inner-fold` (`InnerFold.lean` as an executable), `rec_vstage stage` per statement: each Ligerito level's `RecOpen`, the algebra's `InnerRepCheck` parts (forgeries off: `FORGE=`) | `inner/`, `stage/` | `v/L<l>/`, `v/alg/p<j>/` | n1, CPU |
+| 3b | `vcap` | `rec_vstage.stage_cap`: `RecCap` over each level's committed tops (V*'s verdict needs them) | `inner/`, `v/` | `v/cap/`, `v/cap/L<l>/` | n1, CPU |
+| 4 | `oprove` | per V* statement, one at a time: `flock-circuit serve --zk` (loopback) and `prove --zk --gpu` in each mode (`firewall`: `FC_FIREWALL=1`, the Lean session loop `flock-firewall`, live PROTOCOL.md §10.4) | `v/` | `v-sess/<stmt>/` | n1, GPU |
+| 5 | `oreplay` | `flock-circuit replay --zk` of each V* session (upstream's verifier) | `v-sess/` | records only | n1, CPU |
+| 6 | `lean` | `flock-verify verify --zk` on each V* session with V*'s own inputs (`--rec-inner-*`, `--rec-rows`, `--rec-bindings`), the inner session (`INNER_LEAN=1`), `flock-verify statement` on the inner statement; `lean_verdicts.py` fails closed | `v-sess/`, `stage/`, `inner/` | records only | n1, CPU |
+| 7 | `negative` | step 6 with `NEG_INNER`: each V* session again over each flipped copy of the inner session | as 6 | records only | n1, CPU |
+
+What the recursive audit has that 85 doesn't run, so no number here covers it:
 
 - **The recursive session through the firewall's release side** (live PROTOCOL.md §10.5): `rec_live --firewall DIR --parts
   L0,…,alg` opening one recursive session per inner session, each outer session through `python -m verity_flock.firewall
-  relay` or `flock-circuit prove --firewall-state DIR --session ID --part NAME` (`core-firewall session`), one outer slot,
-  statements in order. Tests only (`verity/ml/flock/tests/test_rec_live_firewall.py`, the record vectors); 85 proves each
-  V* statement against its own `serve`.
-- **One verdict over the whole recursive session.** STEP=lean verifies each V* session on its own; no command takes the
-  inner record and every V* session and answers once.
-- **Hidden unit circuits (F4 candidate 3)**: `88-rec-c3-inner.sh` (the inner through `rec_session`'s relay with the
-  sparse phase and the stacked table R, `RoPE d64`, CPU) and `87-rec-c3-open.sh` (the opening-only prover, a pytest).
-  CPU only, through a check slot; not part of 85.
-- **rec-v0's first jobs** (`80-rec-inner.sh`, `81-rec-outer.sh`, `83-rec-alg.sh`, RoPE d64 on the CPU): superseded by 85;
-  81's and 83's default inner statement, `verity/flock-circuit`, is refused at setup (`RecSetup.checkForm`).
-
-The e2e run (proofs' lane) is to replace stages 4 to 6's loopback with the firewall's recursive session; this profile's
-`profile` family is the pieces, and an `e2e` family is to read that run's records once it exists.
+  relay` or `flock-circuit prove --firewall-state DIR --session ID --part NAME`, one outer slot, statements in order. Only
+  the tests run it (`verity/ml/flock/tests/test_rec_live_firewall.py`). 85 proves each V* statement against its own `serve`.
+- **One verdict over the whole recursive session.** STEP=lean verifies each V* session on its own, and the runner's
+  `ok` is the conjunction of those verdicts. No one command takes the inner record and every V* session and answers once.
 
 ## What each number covers
 
-`profile run` launches one job (`job.sh`): STEP `build` once, then each step of `--steps` in order, every CPU step
-`--repeat` times (default 3) and every GPU step once with `WARM=1 RUNS=3` sessions inside it. Each invocation of 85 runs
-under its own `RESEARCH_RUN_DIR` (`out/steps/<step>/r<i>/`), so every record 85 writes is kept. `profile result` reads them:
+`job.sh` runs STEP `build` once, then each step of `--steps` in order. Every CPU step runs `--repeat` times (default 3).
+Each GPU step runs once, with its sessions inside it: the inner's `WARM=1 RUNS=3`, each V* statement's
+`--oprove-warm 0 --oprove-runs 1`. Each invocation of 85 runs under its own `RESEARCH_RUN_DIR`
+(`out/steps/<step>/r<i>/`), so every record 85 writes is kept. `result` reads them into `out/recursion_e2e.json` and
+`out/table.md`, and still does so when a run is cancelled or hits `--max-min`.
 
-- **Prover time** (`inner`, `oprove`; the table's "time s"): each timed session's `prove_total_s` from the prover's
-  `LIVE` line (both reps' `prove_s` summed: the device's phases, not the host witness). **Session e2e**: its `e2e_s`, from
-  the session's start to its verdict, the host witness and every wait on the live verifier (coins, `Finish`, the verdict)
-  included. The warm session is left out. Median and [min, max] over the timed sessions.
+- **Prover time** (`inner`, `oprove`; the table's "time s"): each timed session's `prove_total_s` from the prover's `LIVE`
+  line (both reps' `prove_s` summed). This covers the device's phases, not the host witness.
+- **Session e2e**: each timed session's `e2e_s`, from the session's start to its verdict. It includes the host witness
+  and every wait on the live verifier. Median and [min, max] are over the timed sessions, and warm sessions are left out.
 - **Pace** (`session_s`, as 85's summary computes it): the time from the last warm session's verdict to the last timed
-  one's, over the timed sessions. Up to `FC_VERIFY_AHEAD` sessions overlap (one proving, the others waiting on verdicts),
-  so pace, not e2e, is the stage's throughput, and e2e is one session's latency.
-- **Dominant phase**: the largest part of the median session's `e2e_s`, among the prover's own phase buckets (`t.*` of both
-  reps' buckets, summed: `t.witness`, `t.encoding_commitment`, `t.zerocheck`, `t.lincheck`, `t.ring_switch`, `t.ligerito`,
-  `t.link`, and under the firewall `t.firewall_recheck`, `t.lean_finish`, `t.zk_inner`), the host witness (`h.witness`,
-  `witness_s`) and `wait.verifier`, what is left of `e2e_s` (the session waiting on its verifier: the `rec_live` proxy, or
-  `serve`, whose own `verify_s` and `handle_s` per session are in the row's `extra`). Under `firewall` the prover's
-  buckets also hold its waits on the Lean session loop, and the two reps' overlap, so there the cost is read from the
-  loop's own process: `flock-firewall`'s CPU seconds, peak RSS and lifetime, from the run's process samples
-  (`resources.jsonl`, `research run`'s telemetry beside `out/`).
-- **Peak memory**: the prover process's peak RSS (`/usr/bin/time -v` over the invocation, every session) and the leased GPU's
-  memory in use, sampled every half second (`gpu-mib.txt`, a lower bound on the device peak). For CPU steps, each tool's
-  `/usr/bin/time -v` peak RSS.
-- **CPU steps** (`icheck`, `vstage`, `vcap`, `oreplay`, `lean`): each tool's `/usr/bin/time -v` wall, median and [min, max]
-  over the repeats. Lean's verify also splits into `inputs`, `setup` and the session's own checks where it prints them.
-  85 runs the V* stages (`vstage`'s per-statement stages, `lean`'s sessions) `JOBS` at a time (`xargs -P`, 4 here), so
-  each one's wall is under its neighbours' load, and the step's whole wall (`lean step`) is what an auditor waits.
-- **Sizes**: the V* proofs' bytes (`proof_bytes`, the outer sessions' proofs: what the auditor receives), the inner
-  proof's (the prover's witness, never sent), the transcript bytes each way, and the staged files (`sizes.txt`).
-- **Setup** (`build`): the step's wall and peak once, cold or cached as the job found it (the binaries' hashes and
-  whether 85 rebuilt them are in its records). Never repeated: a second build is a cache hit.
+  one's, divided by the timed sessions. It needs a warm session.
+- **Dominant phase**: the largest part of the median session's `e2e_s`. The candidates are the prover's own phase buckets
+  (`t.*`), the host witness (`h.witness`) and `wait.verifier`, which is what is left of `e2e_s` (the session waiting on
+  its verifier: the `rec_live` proxy, or `serve`, whose `verify_s` and `handle_s` are in the row's `extra`). Under
+  `firewall`, the prover's buckets also hold its waits on the Lean session loop, and the two reps overlap. So there the
+  cost is read from the loop's own process: `flock-firewall`'s CPU seconds, peak RSS and lifetime, from the run's process
+  samples (`resources.jsonl`, `research run`'s telemetry beside `out/`).
+- **Peak memory**: the prover process's peak RSS (`/usr/bin/time -v` over the invocation) and the leased GPU's memory in
+  use, sampled every half second (`gpu-mib.txt`, a lower bound). For CPU steps, each tool's `/usr/bin/time -v` peak RSS.
+- **CPU steps** (`icheck`, `vstage`, `vcap`, `oreplay`, `lean`, `negative`): each tool's `/usr/bin/time -v` wall, median
+  and [min, max] over the repeats. Lean's verify also splits into `inputs`, `setup` and the session's own checks. 85
+  runs `vstage`'s stages and `lean`'s sessions `JOBS` at a time (4 here), so each one's wall is measured under its
+  neighbours' load. The step's whole wall (`lean step`) is what an auditor waits, and it is what the pipeline sum adds.
+  `stage <name>` rows carry what `rec_vstage` printed of each unit (template, rows, lowering seconds, circuit bytes).
+- **Sizes**: the V* proofs' bytes (`proof_bytes`, what the auditor receives), the inner proof's (the prover's witness,
+  never sent), the transcript bytes each way, and the staged files (`sizes.txt`).
+- **The pipeline sum**: the inner M0's e2e, the vstage and vcap steps' walls, the outer prove's session e2e summed over
+  every statement in the mode that proved the most of them, and the lean step's wall. It is one recursive session's
+  path, as long as an auditor waits for it.
+- **Setup** (`build`): the step's wall and peak, once, cold or cached as the job found it.
 
-What the numbers leave out: the firewall's release side (above); network latency (every verifier is on loopback on the
-same node, on the job's other cores); queue and lease waits (the lease's own lines are kept, not counted); and contention:
-node 1's queue jobs share cores, and a session's `prover_cores_busy_before` (the prover's cores' load just before it
-started) says how loaded they were.
+What the numbers leave out:
+
+- the firewall's release side (above);
+- network latency: every verifier is on loopback on the same node, on the job's other cores;
+- queue and lease waits: the lease's own lines are kept but not counted;
+- contention: node 1's other jobs share cores. A session's `prover_cores_busy_before` says how loaded its cores were,
+  and two runs side by side (each its own TAG) share the node's memory bandwidth.
