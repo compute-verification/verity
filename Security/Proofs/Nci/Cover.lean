@@ -20,6 +20,7 @@ import Proofs.Nci.Cover.Aligned
 import Proofs.Nci.Cover.Checked
 import Proofs.Nci.Cover.Chained
 import Proofs.Nci.Cover.CheckedChained
+import Proofs.Nci.Cover.ChainedWitness
 
 /-!
 # Proofs of the cover theorem
@@ -41,6 +42,6 @@ the NCI policy's rate. `Training` joins them to a declaration that complies with
 (`Models.Nci.Guarantees.CoverTraining`), `Aligned` gives its variant on whole-word activations, and `Checked` carries it
 to a verdict of the NCI check: the gate-level check's, and the check of record's given `DescAgrees`'s open statements.
 `Chained` is the same join counting the covering bound's chained multiplication blocks on the reference circuit's
-bits as a declaration (`Models.Nci.Guarantees.CoverChained`), and `CheckedChained` carries it to a verdict as `Checked`
-does.
+bits as a declaration (`Models.Nci.Guarantees.CoverChained`), with its witness (`ChainedWitness`), and
+`CheckedChained` carries it to a verdict as `Checked` does.
 -/
