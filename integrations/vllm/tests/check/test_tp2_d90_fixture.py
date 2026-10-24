@@ -827,7 +827,8 @@ def test_fold_match_entry_point_passes_on_the_fixture(tmp_path, monkeypatch):
 def test_a_tp_fold_of_a_v2_sampler_build_carries_the_builds_construction(tmp_path, monkeypatch):
     """Each rank folds under the construction its Build's Programs declare (`match.fold_construction_args`, which the single-rank driver
     passes too): a v2 top-p Build folds under greedy-check-per-stage, never the profile's shared-greedy default, which its Programs never
-    match.  --reuse-fold refolds a persisted fold made under another construction and keeps one made under the same."""
+    match.  --reuse-fold refolds a persisted fold made under another construction (and --reuse-legs then keeps none of its legs) and keeps
+    one made under the same."""
     from verity_vllm.pipeline.tp import fold_match as FM
     fold_worker = FM.fold_rank      # `_e2e` replaces it with the in-process fold
     per_stage = ["--sampler-construction", "greedy-check-per-stage"]
@@ -852,9 +853,8 @@ def test_a_tp_fold_of_a_v2_sampler_build_carries_the_builds_construction(tmp_pat
     fold_worker("py", log, "p", out, None)
     rec = fold_worker("py", log, "p", out, None, reuse=True, construction=per_stage)
     assert len(runs) == 2 and "--sampler-construction" not in runs[0] and runs[1][-2:] == per_stage
-    assert rec["ok"] and rec["construction"]["sampler_construction"] == "greedy-check-per-stage"
-    fold_worker("py", log, "p", out, None, reuse=True, construction=per_stage)
-    assert len(runs) == 2
+    assert rec["ok"] and not rec["kept"] and rec["construction"]["sampler_construction"] == "greedy-check-per-stage"
+    assert fold_worker("py", log, "p", out, None, reuse=True, construction=per_stage)["kept"] and len(runs) == 2
 
 
 @pytest.mark.slow
