@@ -40,17 +40,17 @@ the session, 20 steps, decisions `[0]*6 + [1] + [0]*6 + [1]`.
 - Its keys: `R`, `W`, `A`, `IW`, `Q`, `D`, `P`, `K`, `SEG` and `engine` for `CS.statics`; `arrivals`, `decisions` and
   `steps` for `CS.Slice`; `rows`, the replay's step rows; `served`, the seal's runner rows a step, and `ids`, for
   `served_rows.step_rows(S, served[u], ids)`.
-- `CompileSlice_v1` accepts it with the seal's rows in ``srv`` (0x1F, a 13-bit code), at 222,668 ANDs. The circuit is
-  its reference on it and on four negatives: a decision flipped (``load``, ``rows``; the steps then leave the last
-  decision unread, which the chain carries, so ``steps`` holds), a charge one bit short (``charge``), an arrival's
-  prompt length changed (``rows``), and a served row dropped (``rows``)
+- `CompileSlice_v1` accepts it with the seal's rows in ``srv`` (0x3F, a 13-bit code), at 222,668 ANDs; 8eb1 serves
+  without prefix caching, so the slice makes no cache call and ``cache`` is 1. The circuit is its reference on it and on
+  four negatives: a decision flipped (``load`` and ``rows``; the decision it leaves unread carries), a charge one bit short
+  (``charge``), an arrival's prompt length changed (``rows``), and a served row dropped (``rows``)
   (`verity/core/protocols/certifier/tests/test_network_certifier_compile_slice_w212.py`).
 - `ReplayStep_v1` at AS = 1 is w212's served scheduler on all 22 of its async units, circuit and reference
   (`benchmarks/network_e2e/encodings/tests/test_served_window.py`).
 - At 8eb1's engine class, w212 is `verity/core/protocols/certifier/tests/fixtures/compile_slice_w212_class.json`
   (`--slice 212 --served SEAL --R 8 --W 1 --A 9 --Q 4 --D 32 --P 54 --K 4`): its 3 arrivals in 4 slots, its 14
   decisions in 32, and 34 idle steps after its 20, whose served rows are zero. The slice takes it as it is: its
-  reference accepts the window with the seal's rows (0x1F), and each negative fails the flags it fails at w212's own
+  reference accepts the window with the seal's rows (0x3F), and each negative fails the flags it fails at w212's own
   statics (the same tests, over both fixtures).
 - Its circuit isn't built at the class yet. The builder's wires are GF(2) forms over committed bits, and the coding
   carries the coder's state (`low`, `high`, `x`, `used`), the KT counts and the code position from ask to ask without
