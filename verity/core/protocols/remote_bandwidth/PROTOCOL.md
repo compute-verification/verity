@@ -1038,6 +1038,20 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
     and a drawn receipt of it, of other bytes than the opening's block, rejects (§6). The record is memory-map/v1's
     as before, each pass still starts after the root before it and sends its root once its receipts are made (§5),
     and the verifier sees the same messages, so what it accepts is unchanged.
+- **The schedule check.** Credit after the seed waits on it (`schedule.py`, of record in
+  `lean/RemoteAudit/Schedule.lean`, held by the difftest). The prover publishes the session's schedule: when each
+  appended block is written and freed, which registered blocks are freed and when, and each pass's step. The verifier
+  computes each pass's plan from it (`Schedule.plan`, the blocks resident when the step begins, in store order) and
+  the session's appends (`Schedule.appendRuns`), refuses the session if a pass's plan or an append differs, and
+  counts the schedule's bits (`Session.scheduled`, a `Scheduled` verdict; `Ledger.steering`). `ledger` credits nothing
+  after the seed without a `Scheduled` of the same session. So a credited plan is the verifier's own function of a
+  schedule whose bits it counts, and a plan that follows a coin at that schedule is refused: the `a` of the stacked
+  guarantee's `SteeredLayout` premise is at most those bits plus one (`Properties.RemoteAudit.steered_of_checked`,
+  under `Properties.RemoteAudit.ScheduleLayoutGap`), never the coins' bits for free. Open: the schedule is witness (a
+  request's arrivals and lengths), in the clear here as v0's plans are, so deployed it is committed and the check is
+  a proof unit whose output is the bits; the bits are the whole session's schedule, an upper bound on what the prover
+  chose after a pass's coins; and A7's sessions send their circuit's read sets as plans, not the resident sets, so
+  the check refuses them and they are credited nothing after the seed until they send the replay's plans.
 - **The requirement's link.** What the audit credits is the node's reads of its store. Counting them as the served
   circuit's reads needs A1's link (`StoreMatches`, `PlanMatches`, note:20261017T1847Z-draft-a1-requirement), and three
   of its gaps are on the audit's side. `ledger` takes the link as `requirement`, a `RequirementLink`: whether its
