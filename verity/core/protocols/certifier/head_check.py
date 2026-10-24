@@ -1,9 +1,10 @@
 """N2's check of one certified record head, zero-knowledge: the head committed at leaf 2 + direction of N2's root
 (`service.LinkWindows`) is the link-window's, complete, under the declared grid, and, where its end has an occupancy
 profile, its counts are the profile's; and the certificate's signed digest is the head's record digest salted by the
-certifier. A Boolean Definition, the gated part of N2's proof unit (`service`'s `NetworkLinkWindow` v3), which runs on
-every link-window; its one output is the ok bit. That unit's Program holds it as one gate (`gate`), and N2's verifier
-of record runs its `reference`, which the tests hold to the circuit.
+certifier. A Boolean Definition, the gated part of N2's proof unit (`service`'s `NetworkLinkWindow` v4), which runs on
+every link-window; its one output is the ok bit. That unit's Program holds it as one gate that names its circuit digest
+(`gate`), pinned in this module's sidecar and held to the Definition by circuit-check, and N2's verifier of record runs
+its `reference`, which the tests hold to the circuit.
 
     NetworkHeadCheck_v2{L, T, COUNTS}
         (record, record_domain: Digest, link: Array<L, Byte>, direction: Array<1>, window: Array<64>,
@@ -49,17 +50,22 @@ whole check is 1,066,260 and 3,229,371 (`size` counts each part's ANDs).
 """
 from __future__ import annotations
 
+import json
+import re
 import struct
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Callable, Sequence
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import and_reduce
+from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
+from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, concat
 from verity.ml.circuits.types import Array
 from verity.ml.commitments import hm96
@@ -83,6 +89,8 @@ SALT = Array(hm96.SHA512.salt_bytes // 8, WORD)
 HEADS = 2
 GRID_BYTES = 16 + DIGEST_BYTES
 COMPLETE = STATUS_CODES[None]
+#: the circuit digests circuit-check pins (`pinned_digest`)
+PINS = Path(__file__).with_name("head_check.circuit-check.json")
 
 
 class Shape(SimpleNamespace):
@@ -338,8 +346,35 @@ NetworkHeadCheck = CompositeDefinition(
         "signed digest; its deadline byte and frames root are free")
 
 
+NetworkHeadCheck.gated = True  # type: ignore[attr-defined]  # circuit-check holds its digest pins (`gate`)
+
+
 def unit(L: int, T: int, counts: bool):
     return bind(NetworkHeadCheck, L=L, T=T, COUNTS=int(counts))
+
+
+# --- the gate ---------------------------------------------------------------------------------------------------------
+
+#: a gate's id, `Gate[<Definition id>@<its circuit digest>]_v2`
+GATE = re.compile(r"Gate\[(?P<definition>.+)@(?P<digest>[0-9a-f]{128})\]_v2")
+
+
+def circuit_digest(d) -> str:
+    """A Definition's circuit digest: core's `program_digest` of its Program, the digest a C-Flock statement names its
+    template by (META `program_digests`, `verity_flock.circuit.program_digests`). It encodes every Definition `d`
+    reaches, the commitment gadgets' Boolean bodies included."""
+    return program_digest(Program(d))
+
+
+@lru_cache(maxsize=None)
+def _pins(path: Path) -> dict[str, str]:
+    return {fid: pin["sha512"] for fid, pin in json.loads(path.read_text()).get("digests", {}).items()}
+
+
+def pinned_digest(d, pins: Path = PINS) -> str:
+    """`d`'s circuit digest as its module's sidecar pins it (``digests``, which circuit-check holds to `circuit_digest`),
+    else, for a size class no sidecar pins, `circuit_digest` itself."""
+    return _pins(pins).get(d.id) or circuit_digest(d)
 
 
 def _gate_only(fid: str) -> Callable[..., int]:
@@ -348,16 +383,40 @@ def _gate_only(fid: str) -> Callable[..., int]:
     return evaluate
 
 
+def gate_of(d, digest: str, what: str) -> PrimitiveDefinition:
+    """`d` as one gate that names it and its circuit digest, `Gate[<d.id>@<digest>]_v2`: its signature, the body left to
+    the Definition the digest binds (`expand`)."""
+    params, ret = d.signature()
+    return PrimitiveDefinition(f"Gate[{d.id}@{digest}]", 2, params, ret, _gate_only(d.id), register=False,
+                               doc=f"{d.id}, {what}, as one gate naming its circuit digest: the Definition is registered "
+                                   "and circuit-checked")
+
+
 @lru_cache(maxsize=None)
 def gate(L: int, T: int, counts: bool) -> PrimitiveDefinition:
-    """`unit(L, T, counts)` as one gate of N2's proof unit (`service.LinkWindows.unit`): its signature, under an id that
-    names it, `Gate[NetworkHeadCheck_v2{L=..,T=..,COUNTS=..}]_v1`. The unit's Program holds the gate rather than the
+    """`unit(L, T, counts)` as one gate of N2's proof unit (`service.LinkWindows.unit`), whose id names the Definition and
+    its pinned circuit digest (`pinned_digest`): `Gate[NetworkHeadCheck_v2{L=..,T=..,COUNTS=..}@<digest>]_v2`. So the
+    unit's Program digest, which the spec's check and each registration bind, binds the head check's circuit, and a
+    proof of another circuit of the same interface names another Program. The Program holds the gate rather than the
     Definition's body because the commitment gadgets' Boolean bodies (`Hm96Sha512Leaf`, `FrameV3Node`, `FrameV3Leaf`,
     `Sha512Compress`) encode to about 140 MB, and the proof service encodes the Program on every registration."""
     d = unit(L, T, counts)
-    params, ret = d.signature()
-    return PrimitiveDefinition(f"Gate[{d.id}]", 1, params, ret, _gate_only(d.id), register=False,
-                               doc=f"{d.id}, N2's head check, as one gate: the Definition is registered and circuit-checked")
+    return gate_of(d, pinned_digest(d), "N2's head check")
+
+
+def expand(g: PrimitiveDefinition, d):
+    """`d`, the Definition a proof's circuit puts where gate `g` stands, once `d` is the one `g` names: its id and its
+    circuit digest (`circuit_digest`) are the gate's. Raises `ValueError` for any other circuit, one of the same
+    interface included."""
+    m = GATE.fullmatch(g.id)
+    if m is None:
+        raise ValueError(f"{g.id} is not a gate that names its Definition's circuit digest")
+    if d.id != m["definition"] or d.signature() != g.signature():
+        raise ValueError(f"{g.id} stands for {m['definition']}, not {d.id}")
+    if (got := circuit_digest(d)) != m["digest"]:
+        raise ValueError(f"{g.id} names circuit digest {m['digest'][:16]}…, and this {d.id} is {got[:16]}…: a proof "
+                         "of another circuit is refused")
+    return d
 
 
 # --- the reference and the arguments ----------------------------------------------------------------------------------
@@ -490,6 +549,7 @@ def size(target, memo: dict | None = None) -> dict:
     return out
 
 
-__all__ = ["GRID_BYTES", "HEADS", "Instance", "NetworkHeadCheck", "NetworkHeadCounts", "NetworkHeadFields",
-           "NetworkHidingRead", "NetworkRecordDigest", "NetworkRowDigest", "NetworkSignedDigest", "Shape", "ands",
-           "arguments", "evaluate", "gate", "grid_bytes", "reference", "reference_parts", "size", "unit"]
+__all__ = ["GATE", "GRID_BYTES", "HEADS", "Instance", "NetworkHeadCheck", "NetworkHeadCounts", "NetworkHeadFields",
+           "NetworkHidingRead", "NetworkRecordDigest", "NetworkRowDigest", "NetworkSignedDigest", "PINS", "Shape", "ands",
+           "arguments", "circuit_digest", "evaluate", "expand", "gate", "gate_of", "grid_bytes", "pinned_digest",
+           "reference", "reference_parts", "size", "unit"]
