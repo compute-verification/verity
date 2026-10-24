@@ -144,7 +144,7 @@ theorem squeezeP_quiet (kind : UInt8) (n : ℕ) (hk : kind = 2 ∨ (kind = 1 ∧
     rw [e] at h
     cases h
     have hk2 : kind = 2 := hk.resolve_right fun h => absurd h.2 (by decide)
-    exact ⟨qpend_snoc hp ⟨show kind = 2 ∧ (0 : ℕ) = 0 from ⟨hk2, rfl⟩, fun b e => by cases e⟩ (FlockSoundness.Refine.framed_enc t kind 0), [],
+    exact ⟨qpend_snoc (f := .sq kind 0) hp ⟨show kind = 2 ∧ (0 : ℕ) = 0 from ⟨hk2, rfl⟩, fun b e => by cases e⟩ (FlockSoundness.Refine.framed_enc t kind 0), [],
       by simp, fun _ h => nomatch h⟩
   · have e : ((squeezeP recAsks kind n).run t).run (rs, k) =
         .ok (((Array.range n).map fun i => _root_.Flock.Firewall.Skeleton.coin (k + i + 1),
