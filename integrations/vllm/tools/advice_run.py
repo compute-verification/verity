@@ -13,7 +13,7 @@ scheduler preempts.  `engine.step_trace` records every step.  It writes, under `
     advice/            `verity-vllm advice` on the above
 
     cd integrations/vllm; PYTHONPATH=.:../..:../../tools/research/src /workspace/jobs/venv312/bin/python tools/advice_run.py \\
-        --out DIR [--model REPO --revision SHA] [--requests 48] [--seed 0]
+        --out DIR [--model REPO --revision SHA] [--requests 48] [--seed 0] [--execution bi-eager] [--default-seed N]
 """
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ QUESTIONS = ["Summarize the text above in one sentence.", "What does the miller 
              "Continue the story for a few sentences."]
 
 
-def traffic(tok, n: int, rng: random.Random, max_prompt: int, gaps: int) -> list[SimpleNamespace]:
+def traffic(tok, n: int, rng: random.Random, max_prompt: int, gaps: int, caps: list[int]) -> list[SimpleNamespace]:
     filler = tok.encode(FILLER * (max_prompt // 40 + 2), add_special_tokens=False)
     gap_at = set(rng.sample(range(n // 4, n), gaps)) if gaps else set()
     out, at = [], 0
@@ -55,7 +55,7 @@ def traffic(tok, n: int, rng: random.Random, max_prompt: int, gaps: int) -> list
         at += int(rng.expovariate(1 / 3))
         out.append(SimpleNamespace(request_id=f"r{i:03d}", user=f"user-{i:03d}", prompt_token_ids=list(ids), arrive_step=at,
                                    after_idle=i in gap_at,
-                                   max_tokens=rng.choice([8, 16, 32, 64, 128, 200]), temperature=0.8 if stoch else 0.0,
+                                   max_tokens=rng.choice(caps), temperature=0.8 if stoch else 0.0,
                                    seed=rng.randrange(2**31) if stoch and rng.random() < 0.5 else None))
     return out
 
@@ -72,6 +72,10 @@ def main() -> int:
     ap.add_argument("--max-seqs", type=int, default=8)
     ap.add_argument("--max-batched-tokens", type=int, default=256)
     ap.add_argument("--kv-bytes", type=int, default=None)
+    ap.add_argument("--execution", default=None, help="the engine's execution label (engine.served.EXECUTIONS), such as bi-eager")
+    ap.add_argument("--max-tokens", default="8,16,32,64,128,200", help="the max_tokens values requests draw from")
+    ap.add_argument("--default-seed", type=int, default=None,
+                    help="the seed a stochastic request without a client seed is sampled with, as a server fills one in")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -83,10 +87,16 @@ def main() -> int:
     kw = {"max_num_seqs": a.max_seqs, "max_num_batched_tokens": a.max_batched_tokens}
     if a.kv_bytes:
         kw["kv_cache_memory_bytes"] = a.kv_bytes
+    if a.execution:
+        kw["execution"] = a.execution
     llm = LLM(a.model, revision=a.revision, **kw)
     from vllm import SamplingParams
     tok = llm.vllm.get_tokenizer()
-    reqs = traffic(tok, a.requests, random.Random(a.seed), a.max_prompt, a.gaps)
+    reqs = traffic(tok, a.requests, random.Random(a.seed), a.max_prompt, a.gaps, [int(x) for x in a.max_tokens.split(",")])
+    if a.default_seed is not None:
+        for r in reqs:
+            if r.temperature and r.seed is None:
+                r.seed = a.default_seed
     trace = StepTrace(out / "step_trace.jsonl", request_id=external_id, clock=time.time).install(llm)
     done: dict[str, object] = {}
 
@@ -128,8 +138,10 @@ def main() -> int:
     finishes = {}
     for o in done.values():
         finishes[str(o.outputs[0].finish_reason)] = finishes.get(str(o.outputs[0].finish_reason), 0) + 1
+    from verity_vllm.program.frontend.target_profile import TargetProfile
     (out / "run.json").write_text(json.dumps({
         "model": a.model, "revision": a.revision, "engine_kwargs": kw, "engine_record": llm.engine_record, "args": vars(a),
+        "target": TargetProfile.from_device().to_json(), "execution": a.execution, "default_seed": a.default_seed,
         "commit_record": "requests.jsonl: the engine's own outputs; no committer installed", "finishes": finishes,
         "steps_traced": trace.executed, "wall_s": timing.get("wall_s") if isinstance(timing, dict) else None}, indent=1, default=str) + "\n")
     print(f"[advice-run] {len(done)} requests finished {finishes}, {trace.executed} steps traced -> {out}", flush=True)
