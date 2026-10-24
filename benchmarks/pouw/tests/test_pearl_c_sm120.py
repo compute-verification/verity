@@ -310,7 +310,7 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
     """Bytes each pointer slot must hold for the launch, from the kernel's indexing in pearl_c_sm120.cu."""
     if name == "lines":
         count = i[2]
-        return {0: 32, 1: 32 * count, 2: 32 * count, 3: 128 * count, 4: 32 * i[4]}
+        return {0: 32 * (count > i[4]), 1: 32 * count, 2: 32 * count, 3: 128 * count, 4: 32 * i[4]}
     if name in ("stats_s5", "stats_r"):
         rows, k = i[:2]
         return {0: 4 * rows * k, 1: 4 * rows, 2: 4 * rows, 3: 4 * rows, 4: 8 * rows}
