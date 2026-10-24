@@ -4,9 +4,10 @@
 # only, graph nodes traced) or not (NSYS=0: the host records alone); after the lease, at low priority, each profile's SQLite
 # export and `served_step.py analyze`. From the source tree, with Pearl-C's cubin built once and sent (no nvcc here):
 #   research run --on vy-nebius-2 --project verity --campaign glm53-pearl-c --source <tree> --cwd source \
-#     --env GPU_LEASE_WHO=<id> [--env GPU_LEASE_ON=2,3] [--env ARMS=...] [--env POINT=b8-p512-mixed] [--env NSYS=0] \
+#     --env GPU_LEASE_WHO=<id> [--env GPUS=2,3] [--env ARMS=...] [--env POINT=b8-p512-mixed] [--env NSYS=0] \
 #     --send numabind.py --send pearl_c_sm120.cubin -- bash benchmarks/pouw/pearl_c_vllm/served_step.sh
-# SPEC (default llama31-8b-1gpu-pearl-c-whole-served), POINT, WARMUPS (2), REPS (3), MAX_MIN (the lease, 20). numabind.py is
+# GPUS: the GPUs the lease may take (gpu-lease --on), SPEC (default llama31-8b-1gpu-pearl-c-whole-served), POINT,
+# WARMUPS (2), REPS (3), MAX_MIN (the lease, 20). The node's pinned-vLLM Python is env.sh's VENV. numabind.py is
 # #3395's (benchmarks/hash/dither/numabind.py); NUMABIND names another copy, and without one the arms run unbound. Scratch
 # goes to one mktemp -d directory (TMPDIR), removed at the end; everything kept is under OUT.
 set -euo pipefail
@@ -27,8 +28,9 @@ if [ "${1:-}" != gpu ]; then
   NUMABIND=${NUMABIND:-$IN/numabind.py}
   BIND=(); [ -f "$NUMABIND" ] && BIND=("$VENV/bin/python" "$NUMABIND" "$OUT/numa.json")
   LEASE=$(command -v gpu-lease || echo /workspace/pouw/infra/bin/gpu-lease)
+  ON=(); [ -n "${GPUS:-}" ] && ON=(--on "$GPUS")
   rc=0
-  "$LEASE" 1 --wait --max-min "${MAX_MIN:-20}" --mem-gb 64 -- "${BIND[@]}" bash "$0" gpu || rc=$?
+  "$LEASE" 1 --wait "${ON[@]}" --max-min "${MAX_MIN:-20}" --mem-gb 64 -- "${BIND[@]}" bash "$0" gpu || rc=$?
   if [ "$NSYS" = 1 ]; then
     for rep in "$OUT"/*/served.nsys-rep; do
       [ -f "$rep" ] || continue
