@@ -1882,12 +1882,14 @@
   "Models.Core.Assumptions": {
    "imports": ["Mathlib", "Definitions.Core", "Models.Core.Assumptions"],
    "except": [],
-   "why": "a named assumption reads the protocol's definitions, never a guarantee or a proof"
+   "why": "a named assumption reads the protocol's definitions, never a guarantee or a proof",
+   "sealed": true
   },
   "Models.Core.Guarantees": {
    "imports": ["Mathlib", "Definitions.Core", "Models.Core.Assumptions", "Models.Core.Guarantees"],
    "except": [],
-   "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof"
+   "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof",
+   "sealed": true
   },
   "Definitions.Nci": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Nci"],
@@ -1897,7 +1899,8 @@
   "Models.Nci.Assumptions": {
    "imports": ["Mathlib", "Definitions.Core", "Models.Core.Assumptions", "Definitions.Nci", "Models.Nci.Assumptions"],
    "except": [],
-   "why": "a named assumption reads the protocol, never a proof"
+   "why": "a named assumption reads the protocol, never a proof",
+   "sealed": true
   },
   "Models.Nci.Guarantees": {
    "imports": [
@@ -1910,17 +1913,20 @@
     "Models.Nci.Guarantees"
    ],
    "except": ["Models.Nci.Guarantees.FitRate"],
-   "why": "a guarantee is a Prop over the protocol and the assumptions, never a proof"
+   "why": "a guarantee is a Prop over the protocol and the assumptions, never a proof",
+   "sealed": true
   },
   "Models.Pouw.Assumptions": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Pouw", "Models.Pouw.Assumptions"],
    "except": [],
-   "why": "a named assumption, and a definition or statement over named assumptions, reads the protocol's definitions, never a guarantee or a proof; the service premises per prover read the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ExpectedCR), as C-Flock's guarantees do"
+   "why": "a named assumption, and a definition or statement over named assumptions, reads the protocol's definitions, never a guarantee or a proof; the service premises per prover read the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ExpectedCR), as C-Flock's guarantees do",
+   "sealed": true
   },
   "Models.Pouw.Guarantees": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Pouw", "Models.Pouw.Assumptions", "Models.Pouw.Guarantees"],
    "except": [],
-   "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof"
+   "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof",
+   "sealed": true
   },
   "Definitions.Pouw": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Pouw"],
@@ -1946,7 +1952,8 @@
   "Models.Pous.Assumptions": {
    "imports": ["Mathlib", "Definitions.Pous", "Models.Pous.Assumptions"],
    "except": [],
-   "why": "a named assumption reads the protocol's definitions, never a guarantee or a proof"
+   "why": "a named assumption reads the protocol's definitions, never a guarantee or a proof",
+   "sealed": true
   },
   "Models.Pous.Assumptions.P2": {
    "imports": [
@@ -1963,7 +1970,8 @@
   "Models.Pous.Guarantees": {
    "imports": ["Mathlib", "Definitions.Pous", "Models.Pous.Assumptions", "Models.Pous.Guarantees"],
    "except": [],
-   "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof"
+   "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof",
+   "sealed": true
   },
   "Models.Pous.Guarantees.P2": {
    "imports": [
@@ -2012,7 +2020,8 @@
   "Models.NetworkCertifier.Assumptions": {
    "imports": ["Mathlib", "Definitions.NetworkCertifier", "Models.NetworkCertifier.Assumptions"],
    "except": [],
-   "why": "a named assumption reads the protocol's definitions, never a guarantee or a proof"
+   "why": "a named assumption reads the protocol's definitions, never a guarantee or a proof",
+   "sealed": true
   },
   "Models.NetworkCertifier.Guarantees": {
    "imports": [
@@ -2022,12 +2031,14 @@
     "Models.NetworkCertifier.Guarantees"
    ],
    "except": [],
-   "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof"
+   "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof",
+   "sealed": true
   },
   "Models.Flock.Guarantees": {
    "imports": ["Mathlib", "Definitions.Claims", "Models.Flock.Guarantees"],
    "except": [],
-   "why": "a guarantee is a Prop over Mathlib, never over a proof"
+   "why": "a guarantee is a Prop over Mathlib, never over a proof",
+   "sealed": true
   },
   "Definitions.Accounting": {
    "imports": [
@@ -2061,7 +2072,8 @@
     "Definitions.Claims"
    ],
    "except": [],
-   "why": "the runtime corollary divides the developer's region as NCI does (Definitions.Core.Partition, Definitions.Nci) and takes NCI's named incompressibility assumptions (Models.Nci.Assumptions) as hypotheses; B1 is TT at the cost model of the actual circuit's provers; B2 and lemma M compose with PoUS's audit game (Definitions.Pous) and take P2's named assumption P2RingAuditSecure (Models.Pous.Assumptions.P2) as a hypothesis; a guarantee is stated over resource accounting's definitions and the device model, with the per-resource guarantees and the named assumptions (PoUW's TT, resource accounting's own) as hypotheses, never over a proof; lemma M's P2 forms read P2's cost model (Definitions.Pous.P2.Cost) and its named assumption (Models.Pous.Assumptions.P2); the composed credit's binding lemma (Compose.BindingOfECR) prices a fork by the claims' expected-cost collision resistance (Definitions.Claims' ExpectedCR, Finder), as the claims state it"
+   "why": "the runtime corollary divides the developer's region as NCI does (Definitions.Core.Partition, Definitions.Nci) and takes NCI's named incompressibility assumptions (Models.Nci.Assumptions) as hypotheses; B1 is TT at the cost model of the actual circuit's provers; B2 and lemma M compose with PoUS's audit game (Definitions.Pous) and take P2's named assumption P2RingAuditSecure (Models.Pous.Assumptions.P2) as a hypothesis; a guarantee is stated over resource accounting's definitions and the device model, with the per-resource guarantees and the named assumptions (PoUW's TT, resource accounting's own) as hypotheses, never over a proof; lemma M's P2 forms read P2's cost model (Definitions.Pous.P2.Cost) and its named assumption (Models.Pous.Assumptions.P2); the composed credit's binding lemma (Compose.BindingOfECR) prices a fork by the claims' expected-cost collision resistance (Definitions.Claims' ExpectedCR, Finder), as the claims state it",
+   "sealed": true
   },
   "Definitions.Accounting.Bandwidth": {
    "imports": [
@@ -2086,7 +2098,8 @@
   "Models.Accounting.Assumptions": {
    "imports": ["Mathlib", "Definitions.Pouw", "Definitions.Accounting", "Models.Accounting.Assumptions"],
    "except": [],
-   "why": "a named assumption of resource accounting (the remote audit's W at the rebuild pricing, Identity, PoUW's conjecture for the bound z) is a Prop over its definitions, never over a guarantee or a proof"
+   "why": "a named assumption of resource accounting (the remote audit's W at the rebuild pricing, Identity, PoUW's conjecture for the bound z) is a Prop over its definitions, never over a guarantee or a proof",
+   "sealed": true
   },
   "Definitions.Claims": {
    "imports": ["Mathlib", "Definitions.Claims"],
@@ -2101,7 +2114,8 @@
   "Models.Hash.Guarantees": {
    "imports": ["Mathlib", "Definitions.Claims", "Definitions.Hash", "Models.Hash.Guarantees"],
    "except": [],
-   "why": "a guarantee is stated over the hash area's definitions, never over a proof"
+   "why": "a guarantee is stated over the hash area's definitions, never over a proof",
+   "sealed": true
   },
   "Definitions.Population": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Population"],
