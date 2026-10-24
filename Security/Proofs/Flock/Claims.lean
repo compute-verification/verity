@@ -43,6 +43,8 @@ import Proofs.Flock.Claims.Recursion.VStar
 import Proofs.Flock.Claims.Recursion.VStarBound
 import Proofs.Flock.Claims.Recursion.BoundDeploy
 import Proofs.Flock.Claims.Recursion.BoundDeployE
+import Proofs.Flock.Claims.Recursion.FlockKSDeployE
+import Proofs.Flock.Claims.Recursion.ConflictTiedE
 import Proofs.Flock.Claims.Recursion.PlainKSAbortFails
 import Proofs.Flock.Claims.Recursion.BoundRun
 import Proofs.Flock.Claims.Recursion.BoundForks
