@@ -26,6 +26,18 @@ base (`Loop.FinRepRows`).
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
+namespace FlockSoundness.ZK.Table
+
+theorem toBase_tau {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] (T : Table F K W Salt Seed D Hi VL)
+    (v : T.onVals.View) : (T.toBase v).tau = v.tau := rfl
+
+/-- A real view's `τ` is the view's: `viewWith` changes only the hidden leaves. -/
+theorem Hm96.viewR_tau {F K W Salt B D Hi VL C : Type} [Field F] [Field K] [AddCommGroup B] [CharP F 2]
+    {T : Table F K W Salt (B × Salt) D Hi VL} (M : T.Hm96 C) (p : W) (ω : T.Rand) (ys : T.Hid → Salt) :
+    (M.viewR p ω ys).tau = (T.view p ω).tau := rfl
+
+end FlockSoundness.ZK.Table
+
 /-- **Where its rows hold at its base, a switched view's `τ` is the view's at the workers' values** (`Hm96.swViewR_eq`):
 the real view keeps the view's `τ` and changes the leaves alone. -/
 theorem FlockSoundness.Discharge.ZkView.Coined.swExe_tau {K W Hi VL : Type} [Field K]
@@ -37,11 +49,8 @@ theorem FlockSoundness.Discharge.ZkView.Coined.swExe_tau {K W Hi VL : Type} [Fie
     congrArg T.tab.toBase
       ((FlockSoundness.ZK.Table.Hm96.swViewR_eq T.hm96.onVals (w, v) (w, T.tab.vals) ω ys).trans (ite_eq_left hr))
   rw [e1]
-  first
-  | rfl
-  | (unfold FlockSoundness.ZK.Table.Hm96.viewR FlockSoundness.ZK.Table.viewWith
-     try dsimp only
-     rfl)
+  exact (T.tab.toBase_tau _).trans
+    ((FlockSoundness.ZK.Table.Hm96.viewR_tau T.hm96.onVals (w, v) ω ys).trans (T.tab.toBase_tau _).symm)
 
 namespace Claims.ZKMal
 open Claims FlockSoundness.ZK
@@ -283,18 +292,10 @@ theorem fwTau_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (
       (rp.cons ++ #[("ring switch ab", rp.abValue.addConst (_root_.Flock.Zk.claimCheck rp.claims[0]! ss[0]!)),
         ("ring switch c", rp.cValue.addConst (_root_.Flock.Zk.claimCheck rp.claims[1]! ss[1]!))] ++ lgc)
       (FlockComplete.SimInner.cutCoins (ligCoin c) l₄.size) := by
-    first
-    | (obtain ⟨ip, t₈, l₈, h₈, hp⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hc
-       simp only [StateT.run_pure, FlockComplete.JsonRT.go_pure, Prod.mk.injEq, Except.ok.injEq] at hp
-       obtain ⟨⟨rfl, -⟩, -⟩ := hp
-       exact (FinTau.innerP_cut_tau h₈).2)
-    | (obtain ⟨_, t₈, l₈, hu, hc'⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hc
-       simp only [StateT.run_pure, FlockComplete.JsonRT.go_pure] at hu
-       cases hu
-       obtain ⟨ip, t₉, l₉, h₉, hp⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hc'
-       simp only [StateT.run_pure, FlockComplete.JsonRT.go_pure, Prod.mk.injEq, Except.ok.injEq] at hp
-       obtain ⟨⟨rfl, -⟩, -⟩ := hp
-       exact (FinTau.innerP_cut_tau h₉).2)
+    obtain ⟨ip, t₈, l₈, h₈, hp⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hc
+    simp only [StateT.run_pure, FlockComplete.JsonRT.go_pure, Prod.mk.injEq, Except.ok.injEq] at hp
+    obtain ⟨⟨rfl, -⟩, -⟩ := hp
+    exact (FinTau.innerP_cut_tau h₈).2
   -- the inner proof's slot: the PIOP's sends, then Ligerito's
   have hl0 := (FlockComplete.RankAt.zerocheckCut_round1 (ligCoin c) n hm14 _ _ _ _ _ h₁).1
   obtain ⟨hl1, hl1n, -⟩ := (FlockComplete.CutEq.zerocheckCut_eqAt (ligCoin c) n hm14 st.digest
@@ -466,9 +467,8 @@ theorem finRepTau (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.R
       try dsimp only
     show ((Loop.startOf x k).toOption.map (·.1)).getD default = lay
     rw [e]
-    first
-    | (rw [hst0]; all_goals rfl)
-    | (simp only [hst0]; all_goals rfl)
+    rw [hst0]
+    all_goals rfl
   have hlay0 := LeanRelease.lay_ofLoopLink (L₀ := L₀) src real ⟨k / 2, hj⟩ ⟨k % 2, hr⟩ hst0
   have hd := LeanRelease.draws_ofLoopLink (L₀ := L₀) src real
   have hzs := hS.size (LeanRelease.ofLoopLink L₀ src real) hd ν t ⟨k / 2, hj⟩ ⟨k % 2, hr⟩ hlay0
