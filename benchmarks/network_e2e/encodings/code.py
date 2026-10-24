@@ -22,7 +22,7 @@ The codes:
   are first come, first served), and a step's first release from a release clock (the registered step-time model run
   over the decoded rows, from the previous step's end or an idle engine's next delivery); for admit, the step count
   between two arrivals is predicted from their certified arrival buckets and the step-time model run over the replayed
-  schedule (the residual's other fields have no public conditioning on a served link, whose requests and responses are
+  schedule, or, where a window's flag says the prediction would cost more, coded as a plain gap (the residual's other fields have no public conditioning on a served link, whose requests and responses are
   padded to fixed frame counts, so they keep their static tables). In both, a cache hit is keyed on the advice already
   decoded: its first source is a pick among the earlier sources, most recently used first (a resume's own first source
   and itself ahead of them), and its length a flag for that source's latest hit (vLLM's shared prefixes). `cond+adapt` also rescales the step-time model online from the
@@ -49,6 +49,7 @@ by reading a trace's own rows of those requests.
 from __future__ import annotations
 
 import bisect
+import copy
 import hashlib
 import json
 import math
@@ -1190,7 +1191,7 @@ def predict_gap(cb: Codebook, replay: Replay, i: int, s_prev: int, dbuckets: int
 
 
 def _admit_one(st: Stream, family: str, cb: Codebook, pub: Public, i: int, admit: Sequence[int] | None,
-               out: list[int], replay: Replay | None, adapt: _Adapt | None) -> None:
+               out: list[int], replay: Replay | None, adapt: _Adapt | None, predicted: bool = True) -> None:
     if i == 0:
         out.append(0)  # request 0 joins before step 0
         return
@@ -1200,6 +1201,8 @@ def _admit_one(st: Stream, family: str, cb: Codebook, pub: Public, i: int, admit
         g = st.sym("admit", v, 0, cb.caps.steps_run(pub.T))
     elif family in ("gamma", "static"):
         g = st.sym("admit_gap", v, 0, cb.caps.steps_run(pub.T))
+    elif not predicted:
+        g = st.sym("admit_gap", v, 0, max(replay.end(i) + 1 - s_prev, 0))
     else:
         gmax = max(replay.end(i) + 1 - s_prev, 0)
         db = pub.anchors[i] - pub.anchors[i - 1]
@@ -1212,10 +1215,32 @@ def _admit_one(st: Stream, family: str, cb: Codebook, pub: Public, i: int, admit
     out.append(s_prev + g)
 
 
+def _admit_mode(st: Stream, family: str, cb: Codebook, pub: Public, w: int, admit: Sequence[int] | None,
+                out: Sequence[int], replay: Replay | None, adapt: _Adapt | None) -> bool:
+    """Whether window w's admissions are coded against the replay's prediction rather than as plain gaps: under the
+    conditional codes a flag, which the encoder sets to whichever the codebook makes shorter, so that a window the
+    replay mispredicts (a KV-bound engine's waits) costs at most the flag over the gap table."""
+    if family not in ("cond", "cond+adapt") or not any(pub.requests_in(w)):
+        return True
+    v = None
+    if admit is not None:
+        v, tables = 1, _tables_for(cb, family)
+        if "admit_gap" in tables:  # a codebook being fit has no tables: its symbols are the predicted ones
+            cost = []
+            for predicted in (False, True):
+                cs, got, ad = CountStream(), list(out), copy.deepcopy(adapt)
+                for i in pub.requests_in(w):
+                    _admit_one(cs, family, cb, pub, i, admit, got, replay, ad, predicted)
+                cost.append(model_bits(cs.seen, cb, family))
+            v = int(cost[1] <= cost[0])
+    return bool(st.sym("admit_predicted", v, 0, 1))
+
+
 def _admit_window(st: Stream, family: str, cb: Codebook, pub: Public, w: int, admit: Sequence[int] | None,
                   out: list[int], replay: Replay | None, adapt: _Adapt | None) -> None:
+    predicted = _admit_mode(st, family, cb, pub, w, admit, out, replay, adapt)
     for i in pub.requests_in(w):
-        _admit_one(st, family, cb, pub, i, admit, out, replay, adapt)
+        _admit_one(st, family, cb, pub, i, admit, out, replay, adapt, predicted)
 
 
 def _check_admit(admit: Sequence[int], pub: Public) -> None:
@@ -1341,12 +1366,13 @@ def _hit(st: Stream, name: str, raw: bool, caps: Caps, x: Hit | Row | None, know
 def _residual_window(st: Stream, family: str, cb: Codebook, pub: Public, w: int, res: Residual | None, s: _ResState,
                      replay: Replay, adapt: _Adapt | None) -> None:
     caps, raw, keyed = cb.caps, family == "fixed", family in ("cond", "cond+adapt")
+    predicted = _admit_mode(st, family, cb, pub, w, res.admit if res else None, s.admit, replay, adapt)
     for i in pub.requests_in(w):
         P = st.sym("prompt_len", res.prompt_len[i] if res else None, 1, caps.prompt_max)
         s.prompt_len.append(P)
         s.output_len.append(st.sym("output_len", res.output_len[i] if res else None, 1, caps.output_max))
         s.hit.append(_hit(st, "hit", raw, caps, res.hit[i] if res else None, P, s, i, keyed))
-        _admit_one(st, family, cb, pub, i, res.admit if res else None, s.admit, replay, adapt)
+        _admit_one(st, family, cb, pub, i, res.admit if res else None, s.admit, replay, adapt, predicted)
     for r, known in replay.resumes_in(w):
         own = s.hit[r].sources[:1]
         s.resumes.append(_hit(st, "rehit", raw, caps, res.resumes[len(s.resumes)] if res else None, known, s,
@@ -1425,6 +1451,7 @@ def schema(caps: Caps, T: int) -> dict[str, tuple]:
         out.update({f"{pre}{k}": v for k, v in residual.items()})
     for pre in ("c:", "a:"):
         out.update({f"{pre}admit_res_{ctx}": ("table", -64, 64) for ctx in ADMIT_CONTEXTS})
+        out.update({f"{pre}admit_gap": out["s:admit_gap"], f"{pre}admit_predicted": ("table", 0, 1)})
         out.update({f"{pre}{k}": v for k, v in {**keyed, "hit_any": ("table", 0, 1), "rehit_any": ("table", 0, 1)}.items()})
     return out
 
@@ -1442,6 +1469,8 @@ def fit_codebook(caps: Caps, T: int, tau_us: int, steptime: StepTime,
         for win in wins:
             for name, v, _, _ in win:
                 seen.setdefault(pre[family] + name, []).append(v)
+    for p in ("c:", "a:"):  # the conditional codes' gap branch (`_admit_mode`) is the static code's gap table
+        seen[p + "admit_gap"] = seen.get(p + "admit_gap", []) + seen.get("s:admit_gap", [])
     tables: dict[str, Table | Binned] = {}
     for name, spec in schema(caps, T).items():
         vs = seen.get(name, [])

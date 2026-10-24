@@ -237,12 +237,12 @@ PINNED = {
     "admit/gamma": [992, 947, 0],
     "admit/static": [724, 661, 0],
     "admit/cond": [302, 259, 0],
-    "admit/cond+adapt": [316, 258, 0],
+    "admit/cond+adapt": [315, 259, 0],
     "residual/fixed": [4792, 4075, 0],
     "residual/gamma": [3969, 3408, 0],
     "residual/static": [2340, 2031, 0],
-    "residual/cond": [1908, 1608, 0],
-    "residual/cond+adapt": [1921, 1608, 0],
+    "residual/cond": [1908, 1609, 0],
+    "residual/cond+adapt": [1922, 1609, 0],
 }
 
 
@@ -315,6 +315,23 @@ def test_a_shared_prefix_is_coded_by_its_source(corpus):
     cond = hits("cond")
     assert ("source_seen", 1) in {x[:2] for x in cond} and ("source_hit_same", 1) in {x[:2] for x in cond}
     assert C.model_bits(cond, cb, "cond") < C.model_bits(hits("static"), cb, "static")
+
+
+def test_a_mispredicted_window_falls_back_to_the_gap_table(corpus):
+    """When the replay's predictions cost more than plain gaps (here, admission tables fit to residuals it never makes),
+    the conditional code flags the window and codes its gaps, so it never costs more than a flag over the gap table."""
+    cb, t = corpus
+    pub, rep = t["public"], C.TraceReplay(t["advice"], t["public"])
+    bad = {f"c:admit_res_{ctx}": C.fit_table([64] * 1000, -64, 64, 2 ** -8) for ctx in C.ADMIT_CONTEXTS}
+    worse = C.Codebook(cb.caps, cb.tau_us, cb.steptime, {**cb.tables, **bad})
+    bits, lens = C.encode_admit(t["admit"], pub, worse, "cond", rep)
+    assert C.decode_admit(C.BitReader(bits.bits), pub, worse, "cond", rep) == list(t["admit"])
+    for w, syms in enumerate(C.symbols_admit(t["admit"], pub, worse, "cond", rep)):
+        if not any(pub.requests_in(w)):
+            assert syms == [] and lens[w] == 0
+            continue
+        assert syms[0][:2] == ("admit_predicted", 0) and {x[0] for x in syms[1:]} == {"admit_gap"}
+        assert lens[w] <= C.model_bits(syms[1:], worse, "cond") + M.worst_admit_flag(worse, "cond") + 2
 
 
 def _general_advice():
@@ -415,7 +432,7 @@ def test_refuses_admission_past_the_replayed_backlog(corpus):
     admit = list(t["admit"])
     i = next(i for i in range(1, len(admit)) if admit[i] == rep.end(i) + 1)
     admit = admit[:i] + [a + 1 for a in admit[i:]]
-    with pytest.raises(ValueError, match="admit_res_.* outside its feasible range"):
+    with pytest.raises(ValueError, match=r"admit_(res_\w+|gap) \d+ outside its feasible range"):
         C.encode_admit(admit, t["public"], cb, "cond", rep)
 
 

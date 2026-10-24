@@ -166,8 +166,15 @@ def worst_admit_arrival(cb, T: int, family: str) -> float:
     if family in ("gamma", "static"):
         return C.worst_bits([("admit_gap", 0, 0, cap)], cb, family) - (2 if family == "static" else 0)
     tables = C._tables_for(cb, family)
-    return max(tables[f"admit_res_{ctx}"].worst(-gh, cap - gh) for ctx in C.ADMIT_CONTEXTS
-               for gh in (0, 1, 4, 16, 64, 1024, cap // 2)) + C.OVERHEAD_PER_SYMBOL
+    return max(max(tables[f"admit_res_{ctx}"].worst(-gh, cap - gh) for ctx in C.ADMIT_CONTEXTS
+                   for gh in (0, 1, 4, 16, 64, 1024, cap // 2)), tables["admit_gap"].worst(0, cap)) + C.OVERHEAD_PER_SYMBOL
+
+
+def worst_admit_flag(cb, family: str) -> float:
+    """The most bits a window's admission mode costs (`code._admit_mode`: the conditional codes' one flag)."""
+    if not family.startswith("cond"):
+        return 0.0
+    return C._tables_for(cb, family)["admit_predicted"].worst(0, 1) + C.OVERHEAD_PER_SYMBOL
 
 
 def _worst_source(cb, family: str) -> float:
@@ -202,7 +209,8 @@ def worst_residual_window(cb, T: int, family: str, arrivals: int, resumes: int) 
     lengths -= 2 if family not in ("fixed", "gamma") else 0
     per_arrival = lengths + _worst_hit(cb, family, "hit", caps.prompt_max) + worst_admit_arrival(cb, T, family)
     per_resume = _worst_hit(cb, family, "rehit", caps.prompt_max + caps.output_max)
-    return arrivals * per_arrival + resumes * per_resume + (2 if family not in ("fixed", "gamma") else 0)
+    return (arrivals * per_arrival + resumes * per_resume + worst_admit_flag(cb, family) +
+            (2 if family not in ("fixed", "gamma") else 0))
 
 
 def worst_v0_window(cb, T: int, family: str, arrivals: int) -> float:
@@ -357,11 +365,12 @@ def summarize(result: dict, cb, T: int) -> dict:
                 if fam in DECOMPOSITION:
                     syms.append(t["symbols"][f"{subj}/{DECOMPOSITION[fam]}"][w])
                 if fam != "adv-spec":
-                    worst_pub.append(a * worst_admit_arrival(cb, T, fam) + tail[fam] if subj == "admit" else
+                    worst_pub.append(a * worst_admit_arrival(cb, T, fam) + worst_admit_flag(cb, fam) + tail[fam]
+                                     if subj == "admit" else
                                      worst_residual_window(cb, T, fam, a, m) if subj == "residual" else
                                      worst_v0_window(cb, T, fam, a))
         caps_worst = None if fam == "adv-spec" else (
-            caps_arrivals * worst_admit_arrival(cb, T, fam) + tail[fam] if subj == "admit" else
+            caps_arrivals * worst_admit_arrival(cb, T, fam) + worst_admit_flag(cb, fam) + tail[fam] if subj == "admit" else
             worst_residual_window(cb, T, fam, caps_arrivals, 0) if subj == "residual" else
             worst_v0_window(cb, T, fam, caps_arrivals))
         decode = [t["decode_seconds"][key] for t in result["traces"] if key in t.get("decode_seconds", {})]
