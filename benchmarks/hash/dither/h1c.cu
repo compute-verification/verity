@@ -39,6 +39,7 @@
 // (frame, "node", the table's domain, uint(lv) and seven of uint(idx)'s length's eight bytes) are its (table, level)'s,
 // so h1c_levels' block takes each level's Snap once (a thread a level, before its first level) and h1c_level's block
 // its level's, and every node resumes from it: two compressions a node rather than three, as h1c_a_* already do.
+// H1C_MKN = 1 (H1C_MK): hb_mk folds M_key y a nibble at a time, a row of a nibble table each, not a column a bit.
 #include <cstdint>
 #include <cuda_runtime.h>
 
@@ -75,6 +76,9 @@
 #ifndef H1C_NMID
 #define H1C_NMID 0
 #endif
+#ifndef H1C_MKN
+#define H1C_MKN 0
+#endif
 // unset, h1c_segs' bounds name no blocks an SM: __launch_bounds__(HT, 1) lets it take 136 registers on sm_90a, not 96
 #ifdef H1C_SMINB
 #define H1C_SEGS_BOUNDS __launch_bounds__(HT, H1C_SMINB)
@@ -84,6 +88,7 @@
 static_assert(H1C_HB || (H1C_LVF < 0 && !H1C_DOMSEG && !H1C_MK && !H1C_SEGMID && !H1C_NMID),
               "H1C_LVF, H1C_DOMSEG, H1C_MK, H1C_SEGMID and H1C_NMID are H1C_HB's");
 static_assert(H1C_MK || !H1C_MID, "H1C_MID's snapshots are published at H1C_MK's barriers");
+static_assert(H1C_MK || !H1C_MKN, "H1C_MKN is H1C_MK's M_key a nibble at a time");
 static_assert(H1C_MK || !H1C_LVB, "H1C_LVB's subtrees are H1C_MK's leaves kernel's");
 
 namespace sh {
@@ -873,6 +878,48 @@ extern "C" __global__ void H1C_SEGS_BOUNDS h1c_segs(H1Tab* __restrict__ tabs, in
 // so M_key y is the XOR of the columns of y's set bits.  The block stages MKW words' columns at a time in bf (every
 // thread of the block, at its barriers), and its threads read each column at one address: a broadcast, 1536 columns
 // from shared memory rather than 192 rows from L2.  y comes back in its order (24 rotations).
+#if H1C_MKN
+// H1C_MKN: the same XOR a nibble at a time.  Byte table p's rows v << 4 and v (v < 16) are its high and low nibbles'
+// tables, so M_key y is the XOR of one row of each of y's 384 nibble tables.  A stage is one y word's 16 tables (16 KB
+// of bf), and a row's 16-byte chunk k sits at slot k ^ (v >> 1 & 3): the lanes reading chunk k of rows v < 8 hit eight
+// different bank groups.  A row a nibble, where the columns cost a masked row a bit.
+static_assert(16 * 16 * 64 <= HT * HB, "a word's nibble tables fit bf");
+__device__ __forceinline__ void hb_mk(u64 y[24], u64 mk[8], const u64* __restrict__ btab, uint8_t* bf, bool real) {
+  uint4* cs = reinterpret_cast<uint4*>(bf);
+#pragma unroll
+  for (int k = 0; k < 8; ++k) mk[k] = 0;
+#pragma unroll 1
+  for (int wd = 0; wd < 24; ++wd) {
+    __syncthreads();
+    for (int q = threadIdx.x; q < 16 * 16 * 4; q += HT) {
+      const int t = q >> 6, r = (q >> 2) & 15, k = q & 3;  // table t = 2e + h (byte e from the top, h 1 its low nibble)
+      const u32 v = (t & 1) ? (u32)r : (u32)r << 4;
+      cs[(q & ~3) | (k ^ ((r >> 1) & 3))] =
+          __ldg(reinterpret_cast<const uint4*>(btab + ((size_t)(8 * wd + (t >> 1)) * 256 + v) * 8) + k);
+    }
+    __syncthreads();
+    const u64 w = y[0];
+#pragma unroll
+    for (int k = 0; k < 23; ++k) y[k] = y[k + 1];
+    y[23] = w;
+    if (!real) continue;
+    const uint8_t* cb = reinterpret_cast<const uint8_t*>(cs);
+#pragma unroll
+    for (int t = 0; t < 16; ++t) {
+      const u32 v = (u32)(w >> (60 - 4 * t)) & 15u;
+      const u32 s4 = (v << 3) & 0x30u;
+      const uint8_t* row = cb + (t << 10) + (v << 6);
+#pragma unroll
+      for (int k = 0; k < 4; ++k) {
+        const uint4 q = *reinterpret_cast<const uint4*>(row + (((u32)k << 4) ^ s4));
+        mk[2 * k] ^= (u64)q.y << 32 | q.x;
+        mk[2 * k + 1] ^= (u64)q.w << 32 | q.z;
+      }
+    }
+  }
+  __syncthreads();
+}
+#else
 constexpr int MKW = 4;  // y words a stage: 8 MKW positions of 8 columns of 64 bytes
 static_assert(MKW * 8 * 8 * 64 <= HT * HB && 24 % MKW == 0, "a stage fits bf and the stages cover y");
 __device__ __forceinline__ void hb_mk(u64 y[24], u64 mk[8], const u64* __restrict__ btab, uint8_t* bf, bool real) {
@@ -914,6 +961,7 @@ __device__ __forceinline__ void hb_mk(u64 y[24], u64 mk[8], const u64* __restric
   }
   __syncthreads();
 }
+#endif
 
 // row leaf i's x = SHA-512(Q(n_bits) || d_0 || ..), its salt y, and (mk = M_key y on entry) its frame leaf.  sn (H1C_MID,
 // leaf_head's snapshots) null: every message from its first byte
