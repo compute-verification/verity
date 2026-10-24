@@ -103,7 +103,7 @@ def stats(xs: list[float]) -> dict | None:
     if not xs:
         return None
     s = sorted(xs)
-    at = lambda q: s[min(len(s) - 1, int(q * len(s)))]  # noqa: E731
+    at = lambda q: s[min(len(s) - 1, int(q * len(s)))]
     return {"n": len(s), "mean": round(statistics.fmean(s), 4), "p50": round(at(0.5), 4), "p90": round(at(0.9), 4),
             "p99": round(at(0.99), 4), "max": round(s[-1], 4)}
 
@@ -128,7 +128,7 @@ def tpot_gamma(dec: list[dict], arms: list[str]) -> dict:
     other arm off and on."""
     tpot = {arm: {ph: median([x["tpot_b32_ms"] for x in dec if x["arm"] == arm and x["bw"] == ph])
                   for ph in ("off", "on")} for arm in arms}
-    for arm, t in tpot.items():
+    for t in tpot.values():
         if t["off"] and t["on"]:
             t["on_over_off"] = round(t["on"] / t["off"], 4)
     gamma = {}

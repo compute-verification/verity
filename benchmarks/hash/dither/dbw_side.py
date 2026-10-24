@@ -35,9 +35,10 @@ RS = ROOT / "benchmarks" / "remote_session"
 sys.path.insert(0, str(RS))
 sys.path.insert(0, str(ROOT))
 
-import verifier as V  # noqa: E402
-import wire  # noqa: E402
-from verity.core.protocols.remote_bandwidth import audit  # noqa: E402
+import verifier as V
+import wire
+
+from verity.core.protocols.remote_bandwidth import audit
 
 EVENTS = os.fdopen(os.dup(1), "w", buffering=1)
 os.dup2(2, 1)

@@ -806,6 +806,7 @@ def main() -> int:
             block(r)
     else:
         import shlex
+
         import dbw
         aff = ",".join(map(str, sorted(os.sched_getaffinity(0))))
         for i, pargs in enumerate(a.bw_prover_args or [""]):
