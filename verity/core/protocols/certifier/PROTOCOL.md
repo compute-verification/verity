@@ -1793,6 +1793,11 @@ ANDs a unit), the honest unit and ten negatives, the made-up table refused by ``
 r20261024-162328-03c7); before the cache was wired, eleven units of corpus-smallkv's first seven steps, the six passes
 with the served row and with its own among them (run r20261024-153220-c97c).
 
+## The replay at the served shape
+
+In [protocol/served-shape.md](protocol/served-shape.md): a served window as the slice's input (vLLM 8eb1's w212), and
+the replay's cost at served shapes and its split into units.
+
 ## The active certifier (`active`)
 
 `active.Proxy` runs the certifiers on one boundary link of a live byte stream. It is an asyncio TCP proxy, the I/O shell

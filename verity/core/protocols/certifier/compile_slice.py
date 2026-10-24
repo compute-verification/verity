@@ -79,7 +79,9 @@ b‖c check refuses ``srv``.
 **Statics**: ReplayStep_v1's (R, W, A and the engine's M, T, L, B, H, CH, WM, FULL, PC, NB, and IW), the chain's Q, D,
 P, K (`replay_chain.Shape`), SEG, the codeword's cap in bits, and the cache's CN entries, CTW a token id's width and CU
 the units of each arrival's tokens ``cert`` holds (`cache_step.scan_widths`). A row past CU units, or a table past CN
-entries, is refused: the slice's size class.
+entries, is refused: the slice's size class. Without prefix caching (PC = 0) the engine caches nothing and
+ReplayStep_v1 reads no hits, so the slice has no table, hits or tokens (``cert`` is the arrivals, ``wit`` has no
+``hit`` or ``cache``), makes no CacheStep_v1 call, and ``cache`` is 1; CN, CTW and CU are then 0.
 
 **Cost** (`size`): the cache calls dominate. A unit walked costs about CN·(2·(B·CTW + EW) + 2·IW) ANDs (`cache_step`'s
 cost; a lookup, which writes nothing, about half), and each step's three lookups walk min(CN + 1, CU) units and its
@@ -135,16 +137,18 @@ def _coder():
 
 
 def fields(S) -> dict[str, list[tuple[str, int, int]]]:
+    if not S.PC and (S.CN or S.CTW or S.CU):
+        raise ValueError(f"statics {dict(S.__dict__)}: without prefix caching CN, CTW and CU are 0")
     Sc = chain(S)
     Z = RC.widths(Sc)
+    cached = [("hit", S.P * (S.W + S.A), RS.widths(step_statics(S)).HW), ("cache", S.P + 1, CST.cache_width(S))]
     return {"pub": [("c", 1, CW)],
             "adv": [("dec", S.D, 1), ("count", 1, Z.DW), ("steps", 1, Z.PW)],
-            "cert": RC.arrival_fields(Sc) + [("tok", S.K * S.CU * S.B, S.CTW)],
+            "cert": RC.arrival_fields(Sc) + ([("tok", S.K * S.CU * S.B, S.CTW)] if S.PC else []),
             "srv": [("rows", S.P, step_row_bits(S))],
             "wit": [("state", S.P + 1, RC.width(Sc)), ("window", 1, RC.window_width(Sc)),
-                    ("arr", S.P, RC._bits_of(RC.front_fields(Sc))), ("bits", S.P, S.A),
-                    ("hit", S.P * (S.W + S.A), RS.widths(step_statics(S)).HW), ("cache", S.P + 1, CST.cache_width(S)),
-                    ("seg", 1, S.SEG)]}
+                    ("arr", S.P, RC._bits_of(RC.front_fields(Sc))), ("bits", S.P, S.A)]
+                   + (cached if S.PC else []) + [("seg", 1, S.SEG)]}
 
 
 def row_bits(S) -> dict[str, int]:
@@ -177,12 +181,14 @@ def _build(C, S, pub, adv, cert, srv, wit):
     load_ok = RC._build_load(C, Sc, _consts(RC.encode(RC.empty(Sc), Sc)), _consts(RC.encode_window(RC.Window(), Sc)),
                              RC._flat(c, RC.arrival_fields(Sc)), [e[0] for e in a["dec"]], a["count"][0], a["steps"][0],
                              states[0], win)[0]
-    tok, CA = c["tok"], S.W + S.A
-    cert = {"valid": [e[0] for e in c["a_valid"]], "id": c["a_id"],
-            "tok": [[[x for t in tok[(k * S.CU + j) * S.B:(k * S.CU + j + 1) * S.B] for x in t] for j in range(S.CU)]
-                    for k in range(S.K)]}
-    caches = w["cache"]
-    cache_ok = [RC._zero(C, caches[0])]
+    CA = S.W + S.A
+    if S.PC:
+        tok = c["tok"]
+        cert = {"valid": [e[0] for e in c["a_valid"]], "id": c["a_id"],
+                "tok": [[[x for t in tok[(k * S.CU + j) * S.B:(k * S.CU + j + 1) * S.B] for x in t] for j in range(S.CU)]
+                        for k in range(S.K)]}
+        caches = w["cache"]
+    cache_ok = [RC._zero(C, caches[0])] if S.PC else []
 
     fresh = AE.fresh()
     coder = [const_bits(fresh.low, 32), const_bits(fresh.high, 32), [ZERO], [ZERO], [ZERO], [ONE]]
@@ -194,7 +200,7 @@ def _build(C, S, pub, adv, cert, srv, wit):
     for u in range(S.P):
         cur, nxt, arr, bits = states[u], states[u + 1], w["arr"][u], w["bits"][u]
         r, fa = RC._split(cur, RC.row_fields(Sc)), RC._split(arr, RC.front_fields(Sc))
-        hit = w["hit"][u * CA:(u + 1) * CA]
+        hit = w["hit"][u * CA:(u + 1) * CA] if S.PC else [[ZERO] * ZS.HW for _ in range(CA)]
         elems = []
         for name, n, wd in RS._in_fields(St):
             if name in r:
@@ -217,8 +223,9 @@ def _build(C, S, pub, adv, cert, srv, wit):
 
         quiet = C.AND(or_reduce(C, [e[0] for e in r["run_valid"]]).inv(), r["wait_valid"][0][0].inv())
         forced = C.AND(quiet, fa["arr_valid"][0][0])
-        c_ok, c_next = CST.build_scan_step(C, S, caches[u], r, fa, forced, out, hit, cert)
-        cache_ok += [C.AND(act, c_ok.inv()).inv(), RC._eq(C, mux(C, act, c_next, caches[u]), caches[u + 1])]
+        if S.PC:
+            c_ok, c_next = CST.build_scan_step(C, S, caches[u], r, fa, forced, out, hit, cert)
+            cache_ok += [C.AND(act, c_ok.inv()).inv(), RC._eq(C, mux(C, act, c_next, caches[u]), caches[u + 1])]
         for k in range(S.A):
             en = C.AND(act, RC._lt(C, const_bits(k, ZS.AC), used))
             ctx = [C.AND(x, forced.inv()) for x in pc] if k == 0 else [ZERO, ZERO]
@@ -263,8 +270,8 @@ CompileSlice = _part(
 CompileSlice.build = _build  # type: ignore[attr-defined]
 
 
-def statics(R: int, W: int, A: int, engine: dict, IW: int, Q: int, D: int, P: int, K: int, SEG: int, CN: int, CTW: int,
-            CU: int) -> dict:
+def statics(R: int, W: int, A: int, engine: dict, IW: int, Q: int, D: int, P: int, K: int, SEG: int, CN: int = 0,
+            CTW: int = 0, CU: int = 0) -> dict:
     return {**RS.statics(R, W, A, engine, IW), "Q": Q, "D": D, "P": P, "K": K, "SEG": SEG, "CN": CN, "CTW": CTW, "CU": CU}
 
 
@@ -455,6 +462,9 @@ def scan(S, sl: Slice, window: Sequence[int] | None = None, cert: Sequence[RC.Ar
             out = RS.reference(St, _state(cur), _inputs(S, arr, bits, h))
             if not out.ok:
                 raise ValueError("the step refuses: the slice's class can't take it")
+            if not S.PC:
+                got = SimpleNamespace(cache=cache, hits=h)
+                break
             got = CST.scan_step(S, cache, _state(cur), _inputs(S, arr, bits, h), out, toks, derive=True)
             if got is None:
                 raise ValueError("the cache refuses: the slice's class can't take it")
@@ -512,10 +522,10 @@ def check(S, rows: dict) -> dict[str, bool | None]:
     states = [RC.decode(e, Sc) for e in w["state"]]
     win = RC.decode_window(w["window"][0], Sc)
     cert = RC._items(RC._unflatten(rows["cert"], RC.arrival_fields(Sc))[0], "a", ("id", "P", "O"))
-    toks = _cert_tokens(S, rows["cert"])
-    crow = [[int(b) for b in e] for e in w["cache"]]
-    hit = [_int(e) for e in w["hit"]]
-    cache_ok = not any(crow[0])
+    toks = _cert_tokens(S, rows["cert"]) if S.PC else {}
+    crow = [[int(b) for b in e] for e in w["cache"]] if S.PC else []
+    hit = [_int(e) for e in w["hit"]] if S.PC else [0] * (S.P * (S.W + S.A))
+    cache_ok = not any(crow[0]) if S.PC else True
     count = _int(a["count"][0])
     dec = [e[0] for e in a["dec"]]
     if count > S.D or any(dec[count:]):
@@ -530,7 +540,7 @@ def check(S, rows: dict) -> dict[str, bool | None]:
         bits = [int(b) for b in w["bits"][u]]
         if not cur.steps:
             steps_ok &= nxt == cur
-            cache_ok &= crow[u + 1] == crow[u]
+            cache_ok &= not S.PC or crow[u + 1] == crow[u]
             out_rows.append(None)
             continue
         inp = _inputs(S, arr, bits, hit[u * (S.W + S.A):(u + 1) * (S.W + S.A)])
@@ -539,12 +549,13 @@ def check(S, rows: dict) -> dict[str, bool | None]:
             return {**flags, "steps": False, "code": None, "charge": None, "rows": None, "cache": None}
         want = RC.advance(Sc, win, cur, True, _row(out.state), arr, bits, out.taken, out.used)
         steps_ok &= want is not None and want == nxt
-        try:
-            held = CST.decode_cache(S, crow[u], len(cur.running))
-        except ValueError as e:
-            raise RC.MalformedRow(str(e)) from None
-        got = CST.scan_step(S, held, _state(cur), inp, out, toks)
-        cache_ok &= got is not None and CST.encode_cache(S, got.cache) == crow[u + 1]
+        if S.PC:
+            try:
+                held = CST.decode_cache(S, crow[u], len(cur.running))
+            except ValueError as e:
+                raise RC.MalformedRow(str(e)) from None
+            got = CST.scan_step(S, held, _state(cur), inp, out, toks)
+            cache_ok &= got is not None and CST.encode_cache(S, got.cache) == crow[u + 1]
         forced = _forced(cur, arr)
         for k in range(out.used):
             ok, f0, f1, n = AE.reference_kt(EC, ENW, n, 1, pc if k == 0 and not forced else 0, bits[k])
@@ -596,15 +607,17 @@ def case(S, sl: Slice, *, served: Sequence | None = None, charge: int | None = N
             "srv": srv_row(S, sc.steps if served is None else served)}
     cert_bits = RC.load_arguments(Sc, RC.empty(Sc), RC.Window(), sc.arrivals, sl.decisions, len(sl.decisions), sl.steps,
                                   RC.encode(sc.states[0], Sc), RC.encode_window(sc.window, Sc))[2]
-    n = S.CU * S.B
-    held = [tuple(sc.tokens[x[0]])[:n] for x in sc.arrivals] + [()] * (S.K - len(sc.arrivals))
-    cert_bits += [b for t in held for v in list(t) + [0] * (n - len(t)) for b in _bits(v, S.CTW)]
+    if S.PC:
+        n = S.CU * S.B
+        held = [tuple(sc.tokens[x[0]])[:n] for x in sc.arrivals] + [()] * (S.K - len(sc.arrivals))
+        cert_bits += [b for t in held for v in list(t) + [0] * (n - len(t)) for b in _bits(v, S.CTW)]
     rows["cert"] = cert_bits + [0] * (width["cert"] - len(cert_bits))
     wit = [b for st in sc.states for b in RC.encode(st, Sc)] + list(RC.encode_window(sc.window, Sc))
     wit += [b for arr, _b in sc.fronts for b in RC.front_bits(Sc, arr)]
     wit += [b for _a, bits in sc.fronts for b in bits]
-    wit += [b for h in sc.hits for v in h for b in _bits(v, RS.widths(step_statics(S)).HW)]
-    wit += [b for c in sc.caches for b in CST.encode_cache(S, c)]
+    if S.PC:
+        wit += [b for h in sc.hits for v in h for b in _bits(v, RS.widths(step_statics(S)).HW)]
+        wit += [b for c in sc.caches for b in CST.encode_cache(S, c)]
     wit += seg + [0] * (S.SEG - len(seg))
     rows["wit"] = wit + [0] * (width["wit"] - len(wit))
     assert Z.DW and all(len(rows[r]) == width[r] for r in ROWS)
