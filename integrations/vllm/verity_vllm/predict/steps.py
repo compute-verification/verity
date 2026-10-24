@@ -48,7 +48,8 @@ A refusal refuses the session. `partial=True` (a measurement over served traffic
 request instead: a refused request's rows and Program leave the compilation, and so does every request whose cache hit reads its
 KV; `refused` names why. It records `check_compiled`'s refusal (`batch_rule`) rather than raising it.
 
-The compiler digest is `score.code_version()`, with ℓ beside it. `trace_commands` lists the Build traces (`verity-vllm build
+The compiler digest is `score.code_version()`, with ℓ beside it. `Compiled.transfer_gates` lists the templates whose units hold
+transfer gates (the ingress parse and the token selects), each of which a window proves whole. `trace_commands` lists the Build traces (`verity-vllm build
 --wrapper request`) of a compilation's Programs, and `compare` holds the compiled digests to them.
 """
 from __future__ import annotations
@@ -72,6 +73,8 @@ from .build import Unexpressible, build_program, model_shape
 from .phi import Phi
 
 SCHEMA = "verity-vllm/compiled-steps/v2"
+#: the token-select families, whose units' sampled ids are a request Program's egress (`Compiled.transfer_gates`)
+EGRESS = ("TokenSelect", "GumbelTopPTokenSelect")
 #: ℓ when a registration names none: 1 MiB of advice (PROVE-PATH's `CAP_BITS`), far above a session's few thousand rows
 CAP_BITS = 1 << 23
 #: vLLM's `_SAMPLING_EPS`: a temperature below it samples greedily; the Build's policy is greedy only at 0
@@ -155,6 +158,15 @@ class Compiled:
     cap_bits: int = CAP_BITS
     batch_rule: str | None = None         # partial=True only: `predict.batch`'s refusal of this compilation, which it doesn't raise
 
+    @property
+    def transfer_gates(self) -> tuple[str, ...]:
+        """The templates whose units hold transfer gates, which a window draws whole: each request's ingress parse
+        (`RequestUnit.parse`) and its Program's token selects, whose sampled ids are the egress until an in-circuit renderer takes
+        their place. No model-step template is among them."""
+        ids = {u.parse.id for u in self.requests if u is not None and u.parse is not None}
+        ids |= {n.fn.id for p in self.programs.values() for n in p.fn.body.nodes if n.fn.id.split("{")[0].rsplit("_v", 1)[0] in EGRESS}
+        return tuple(sorted(ids))
+
     def summary(self) -> dict:
         from .score import code_version
         return {"schema": SCHEMA, "compiler": code_version(), "cap_bits": self.cap_bits, "workload_digest": self.workload.digest,
@@ -164,7 +176,7 @@ class Compiled:
                                                      "parse": u.parse and u.parse.id} for u in self.requests],
                 "steps": [[[r.request, r.start, r.n, r.samples] for r in rows] for rows in self.steps],
                 "discarded": [list(d) for d in self.discarded], "refused": {str(i): why for i, why in sorted(self.refused.items())},
-                "batch_rule": self.batch_rule}
+                "batch_rule": self.batch_rule, "transfer_gates": list(self.transfer_gates)}
 
 
 def _number(x: Any) -> bool:

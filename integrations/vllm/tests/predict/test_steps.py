@@ -115,6 +115,9 @@ def test_byte_ingress_compiles_to_the_same_programs_with_a_parse_unit_each():
     parse = bind(IO.IngressPrompt, MODEL=SERVED, LP=8, V=256)
     assert [u.parse for u in wired.requests] == [parse, None, parse]
     assert [u["parse"] for u in json.loads(json.dumps(wired.summary()))["requests"]] == [parse.id, None, parse.id]
+    selects = (f"GumbelTopPTokenSelect_v2{{V=256,S={splits_for_v1(1, reg.phi.target_profile().num_sms)}}}", "TokenSelect_v1{V=256}")
+    assert plain.transfer_gates == selects and wired.transfer_gates == tuple(sorted((parse.id, *selects)))
+    assert wired.summary()["transfer_gates"] == list(wired.transfer_gates)
 
 
 @pytest.mark.parametrize("edit, served, why", [
