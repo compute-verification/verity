@@ -86,7 +86,7 @@ them, as id events (`active.id_event`: the ordinal and one sampled token's id, t
 it adds `UPSTREAM_FIELDS` to each body so that every chunk carries its token ids, as the committing server's do. The
 first `--probes` requests are probed straight to the endpoint at their arrival times
 (`probe_varied`). From them the plan models every frame of every request as ready `delta0_buckets` + ⌊k/ρ0⌋ buckets
-after its release, with ρ0 = (cap − 1)/m at most the slowest probed response's rate over `margin` (2) and every probed
+after its release, with ρ0 = (cap − 1)/m at most the slowest probed response's rate over `--margin` (2) and every probed
 token's latency, times `margin` and plus `extra_s` (0.5 s), covered. Its calibration is that model's at cap frames a
 request, so the envelope it declares in every window meets every modelled frame. The run lasts until every modelled
 frame is handed before its last window. N2's profile is `advice`: no egress profile, the counts are N2-ADVICE's to
@@ -1239,7 +1239,8 @@ def plan_of(args, url: str, clock=time.monotonic, sleep=time.sleep) -> tuple[dic
                                    max_tokens=args.tokens, seed=args.seed, api_key_env=args.api_key_env)
         probed = probe_varied(url, model, requests[:args.probes], args.api_key_env, clock, sleep)
         eos = [int(t) for t in args.eos_ids.split(",")] if args.eos_ids else None
-        report, plan = varied_plan(probed, requests, seed=args.seed, eos=eos, compact=getattr(args, "compact", None))
+        report, plan = varied_plan(probed, requests, seed=args.seed, eos=eos, compact=getattr(args, "compact", None),
+                                   margin=getattr(args, "margin", 2.0))
         return probed, report, plan
     prompt = prompt_tokens(url, model, args.prompt_tokens, args.api_key_env) if args.prompt_tokens else PROMPT
     probed = probe(url, request_body(model, args.tokens, prompt), args.probes, args.api_key_env, clock,
@@ -1344,6 +1345,9 @@ def main(argv=None) -> int:
         q.add_argument("--compact", type=int, metavar="B",
                        help="varied: compact egress records (`active.compact_record`) in cells of B >= 8 bytes, "
                             "the shim writing each token's record (default: id events in 4096-byte frames)")
+        q.add_argument("--margin", type=float, default=2.0,
+                       help="varied: the plan's margin over the probed rates and latencies (an endpoint that slows "
+                            "under load the probes didn't meet needs more)")
     for q in (p, s, c, r):
         q.add_argument("--out", required=True, type=Path)
     for q in (s, c):
