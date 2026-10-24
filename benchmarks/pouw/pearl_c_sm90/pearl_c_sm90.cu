@@ -27,7 +27,7 @@ PL_INSTANCE(851)
 
 // the grouped calls' commitment, A's tree past pd_commit's mode 1, and tile leaves (grouped.py), hash_decode.cuh's bodies
 // unchanged: unit u's launch is the Args at p0 + u i0 (bytes), and CTA (x, u) is unit u's CTA x when x is inside its launch
-// (pd_commit's rows, pd_tree's one, pd_tiles' tiles).  The Args are read through the read-only path, which ptxas reloads
+// (pd_commit's rows, pd_tree's one, pd_tiles' tiles or PD_GROUP's groups of them).  The Args are read through the read-only path, which ptxas reloads
 // after PD_LOOP's called producer (pd_pserve_call); a plain copy stays live across that call and spills (56 bytes of stack
 // in pd_commit_g_851, r20261023-091751-b744)
 DEV Args pd_unit(const Args& g) {
@@ -49,6 +49,15 @@ DEV Args pd_unit(const Args& g) {
     if ((int)blockIdx.x < (a.i[0] + 63) / 64 * (a.i[1] / 64)) pd_tiles_t<V>(a);                                          \
   }
 PD_GROUPED(851)
+// pd_tiles_g with PD_GROUP: CTA (x, u) unit u's CTA x of PD_G tiles of a row block (pd_tiles_V's grid, cdiv(tiles a row, PD_G)
+// a row block), their folds side by side on one warp
+#define PD_GROUPED_TILES(V)                                                                                              \
+  extern "C" __global__ void __launch_bounds__(32 * PD_G) pd_tiles_g_##V(const Args g) {                               \
+    const Args a = pd_unit(g);                                                                                           \
+    static_assert((V & PD_GROUP) != 0, "PD_G tiles a CTA");                                                              \
+    if ((int)blockIdx.x < (a.i[0] + 63) / 64 * ((a.i[1] / 64 + PD_G - 1) / PD_G)) pd_tiles_t<V>(a);                      \
+  }
+PD_GROUPED_TILES(979)
 
 // ---------------------------------------------------------------- formats (IEEE, nearest even, no FTZ)
 DEV float bf2f(uint32_t b) { return __uint_as_float((b & 0xFFFFu) << 16); }

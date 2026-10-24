@@ -15,7 +15,8 @@ each 64-row block of A names its expert (``ex``).  The steps, one launch each (`
 * ``stats_a``, ``eprime_a``, ``pa``: stats_s5, eprime and pa over all of A's rows (a row at a time, no keys);
 * ``form_a``: form_s5_g, each 64-row block's F_A its expert's;
 * ``af``, ``gemm_pearlc``: gemm_words_g_d and gemm_pearlc_g_d over A, each 64-row block's B side its expert's;
-* ``hash_leaf``: pd_tiles_g, unit u's tile leaves on CTA row u, into the pass's leaves at its first tile.
+* ``hash_leaf``: pd_tiles_g, unit u's tile leaves on CTA row u, into the pass's leaves at its first tile, PD_G tiles of a row
+  block a CTA (`TILES_PD`).
 
 With ``split`` (`SPLIT_STEPS`, as `run.Pipeline`'s ``split_a`` without ``fillers``), A's commitment is two launches of the same
 bytes: ``rows_a``, pd_commit_g in mode 1 (each unit's pads, row digests, leaves, seeds, line keys and E_A lines), then
@@ -35,12 +36,13 @@ import numpy as np
 
 #: hash_decode.cuh's variant the grouped launches take (pearl_c_sm90.cu's PD_GROUPED): a CTA a tile
 PD = 851
-#: PROBE: how the grouped launches share SMs, "+"-joined: carve (the grouped kernels' carveout at its most shared memory),
-#: tree (pd_tree_g at PD_PAIR_SMEM, not a whole SM)
+#: the tile leaves' variant where the cubin has it (PD_GROUPED_TILES): PD_GROUP's, PD_G tiles of a row block a CTA, their folds
+#: side by side on one warp, about a third of PD's issue at decode's partial row blocks, which a call's tile leaves share the
+#: SMs with the next call's pd_commit_g on
+TILES_PD = 979
+#: PROBE: the older forms, "+"-joined, for an A/B in one session: tiles851 (the tile leaves at PD's), treewhole (pd_tree_g at
+#: a whole SM's shared memory)
 PLACE = frozenset(os.environ.get("PEARLC_GROUPED_PLACE", "").split("+")) - {"", "base"}
-#: CU_FUNC_ATTRIBUTE_PREFERRED_SHARED_MEMORY_CARVEOUT and CU_SHAREDMEM_CARVEOUT_MAX_SHARED
-CARVEOUT, MAX_SHARED = 9, 100
-CARVED = (f"pd_commit_g_{PD}", f"pd_tiles_g_{PD}", "form_s5_g", "gemm_words_g_d", "gemm_pearlc_g_d")
 #: a unit's segment rows divide by it: the grouped GEMMs' tile rows (run.BM_D) and the tile leaves' (run.TILE)
 SEG = 64
 STEPS = ("commit_a", "stats_a", "eprime_a", "form_a", "af", "pa", "gemm_pearlc", "hash_leaf")
@@ -118,31 +120,41 @@ def setup(R, dev) -> None:
     R.pd_setup(dev)
     if getattr(dev, "pd_smem_g", None) is None:
         dev.pd_smem_g = pd_smem(R, dev, f"pd_commit_g_{PD}")
-        if "carve" in PLACE:
-            for name in CARVED:
-                dev.ck("cuFuncSetAttribute", dev.fn(name), CARVEOUT, MAX_SHARED)
+
+
+def has(dev, name: str) -> bool:
+    """Whether the cubin has kernel `name` (a ship built before pd_tree_g or pd_tiles_g_979 lacks it), looked up once."""
+    got = getattr(dev, "grouped_has", None)
+    if got is None:
+        got = dev.grouped_has = {}
+    if name not in got:
+        try:
+            dev.fn(name)
+            got[name] = True
+        except RuntimeError:
+            got[name] = False
+    return got[name]
 
 
 def has_tree(dev) -> bool:
-    """Whether the cubin has pd_tree_g (one built before it runs only unsplit calls), looked up once."""
-    got = getattr(dev, "has_tree_g", None)
-    if got is None:
-        try:
-            dev.fn(f"pd_tree_g_{PD}")
-            got = True
-        except RuntimeError:
-            got = False
-        dev.has_tree_g = got
-    return got
+    """Whether the cubin has pd_tree_g (one built before it runs only unsplit calls)."""
+    return has(dev, f"pd_tree_g_{PD}")
+
+
+def tiles_pd(dev) -> int:
+    """pd_tiles_g's variant: TILES_PD where the cubin has it, else PD."""
+    return PD if "tiles851" in PLACE or not has(dev, f"pd_tiles_g_{TILES_PD}") else TILES_PD
 
 
 def tree_setup(R, dev) -> None:
-    """pd_tree_g's dynamic shared memory (`pd_smem`), at a split call's first use."""
+    """pd_tree_g's dynamic shared memory, at a split call's first use: PD_PAIR_SMEM, not PD_WHOLE's whole SM, since its CTAs
+    run beside gemm_pearlc_g_d, whose CTA (129 KiB) fits beside one at that and would otherwise wait its chain out."""
     if getattr(dev, "pd_tree_smem_g", None) is None:
-        dev.pd_tree_smem_g = pd_smem(R, dev, f"pd_tree_g_{PD}")
-        if "carve" in PLACE:
-            dev.ck("cuFuncSetAttribute", dev.fn(f"pd_tree_g_{PD}"), CARVEOUT, MAX_SHARED)
-        if "tree" in PLACE:
+        name = f"pd_tree_g_{PD}"
+        if "treewhole" in PLACE:
+            dev.pd_tree_smem_g = pd_smem(R, dev, name)
+        else:
+            dev.ck("cuFuncSetAttribute", dev.fn(name), R.MAX_DYN, R.PD_PAIR_SMEM)
             dev.pd_tree_smem_g = R.PD_PAIR_SMEM
 
 
@@ -234,6 +246,14 @@ class Grouped:
         def tree():
             d.launch(f"pd_tree_g_{PD}", (1, count), 128, d.pd_tree_smem_g, p=(meta + TREE_AT,), i=(REC,))
 
+        def tiles():
+            if tv & R.PD_GROUP:
+                grid = max(R.cdiv(u.m16, 64) * R.cdiv(n // 64, R.PD_G) for u in us)
+                d.launch(f"pd_tiles_g_{tv}", (grid, count), 32 * R.PD_G, R.PD_PAIR_SMEM // 2, p=(meta + TILES_AT,), i=(REC,))
+            else:
+                d.launch(f"pd_tiles_g_{tv}", (max(u.tiles for u in us), count), 32, p=(meta + TILES_AT,), i=(REC,))
+
+        tv = tiles_pd(d)
         if split:
             tree_setup(R, d)
         return list(zip(SPLIT_STEPS if split else STEPS, (
@@ -246,7 +266,7 @@ class Grouped:
             lambda: self.gemm("gemm_words_g_d", 1, rows, R.WORDS_N, ex, (b["af"],)),
             lambda: d.launch("pa", R.cdiv(rows * 64, 256), 256, p=(b["epa_codes"], 0, b["af"], b["pa_t"]), i=(rows,)),
             lambda: self.gemm("gemm_pearlc_g_d", 0, rows, n, ex, (b["c"], b["u"], b["y"]), b["pa_t"], b["pb_t"], b["ia_a"], b["ia_b"]),
-            lambda: d.launch(f"pd_tiles_g_{PD}", (max(u.tiles for u in us), count), 32, p=(meta + TILES_AT,), i=(REC,)))))
+            tiles)))
 
     def gemm(self, name: str, slot: int, M: int, N: int, ex: int, out: tuple, pa: int = 0, pb: int = 0, rs: int = 0,
              cs: int = 0) -> None:

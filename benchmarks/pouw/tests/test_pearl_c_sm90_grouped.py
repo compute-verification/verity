@@ -25,7 +25,7 @@ from verity_vllm.protocol_options import pouw_pearl_c_grouped as PG  # noqa: E40
 HERE = Path(__file__).resolve().parents[1] / "pearl_c_sm90"
 SCHEME = "pearl-c-h100-v1-h3"
 SALT_KEY = bytes(range(100, 132))
-STEPS = ["pd_commit_g_851", "stats_s5", "eprime", "form_s5_g", "gemm_words_g_d", "pa", "gemm_pearlc_g_d", "pd_tiles_g_851"]
+STEPS = ["pd_commit_g_851", "stats_s5", "eprime", "form_s5_g", "gemm_words_g_d", "pa", "gemm_pearlc_g_d", "pd_tiles_g_979"]
 
 
 def load(name: str, path: Path):
@@ -158,8 +158,8 @@ def test_each_units_record_is_its_own_calls_launches(split):
 @pytest.mark.parametrize("counts", [[40], [3, 0, 300, 64, 17, 1]])
 def test_a_call_is_eight_launches_whatever_its_experts(counts):
     """One launch a step, in `grouped.STEPS`' order: pd_commit_g on (max m₁₆, units) CTAs, each an SM's whole shared memory
-    while the units' Σ m₁₆ rows fit the 132 SMs ([40]) and its least past them ([3, 0, 300, 64, 17, 1]), and pd_tiles_g on
-    (max tiles, units), each reading its records from the table; stats, E', P_A over all of A's rows; form_s5_g and both
+    while the units' Σ m₁₆ rows fit the 132 SMs ([40]) and its least past them ([3, 0, 300, 64, 17, 1]), and pd_tiles_g_979 on
+    (max row blocks x groups of PD_G tiles a row, units) of PD_G warps, each reading its records from the table; stats, E', P_A over all of A's rows; form_s5_g and both
     GEMMs with the expert map, the GEMMs persistent at the H100's 132 SMs on A's rows and their map set."""
     n, k = 128, 1024
     g, dev, b, _ = grouped(n, k, experts=len(counts))
@@ -175,8 +175,9 @@ def test_a_call_is_eight_launches_whatever_its_experts(counts):
     assert (smem == dev.pd_smem_g) == (counts == [40]) and dev.pd_smem_g > R.PD_PAIR_SMEM
     assert by["pd_commit_g_851"][1:4] == ((max(u.m16 for u in us), len(us)), 32 * 4, smem)
     assert by["pd_commit_g_851"][5:] == ((b["meta"],), (G.REC,))
-    assert by["pd_tiles_g_851"][1:3] == ((max(u.tiles for u in us), len(us)), 32)
-    assert by["pd_tiles_g_851"][5:] == ((b["meta"] + G.TILES_AT,), (G.REC,))
+    groups = max(R.cdiv(u.m16, 64) * R.cdiv(n // 64, R.PD_G) for u in us)
+    assert by["pd_tiles_g_979"][1:4] == ((groups, len(us)), 32 * R.PD_G, R.PD_PAIR_SMEM // 2)
+    assert by["pd_tiles_g_979"][5:] == ((b["meta"] + G.TILES_AT,), (G.REC,))
     assert by["stats_s5"][6] == (rows, k) and by["eprime"][6] == (rows,) and by["pa"][6] == (rows,)
     assert by["form_s5_g"][1] == (k // 128, rows // 64) and by["form_s5_g"][5][3:] == (b["fa_codes"], b["at"], ex)
     for name, slot, cols in (("gemm_words_g_d", 1, R.WORDS_N), ("gemm_pearlc_g_d", 0, n)):
@@ -188,8 +189,8 @@ def test_a_call_is_eight_launches_whatever_its_experts(counts):
 
 def test_a_split_call_runs_as_tree_from_its_record_after_the_per_row_keying():
     """With `split` a call is `grouped.SPLIT_STEPS`: pd_commit_g as unsplit (its records then in mode 1), pd_tree_g on one
-    CTA of 128 threads a unit, reading its record's pd_tree Args, with pd_tree's dynamic shared memory, then the rest as
-    unsplit."""
+    CTA of 128 threads a unit, reading its record's pd_tree Args, at PD_PAIR_SMEM (not a whole SM: a GEMM CTA fits beside
+    it), then the rest as unsplit."""
     n, k = 128, 1024
     g, dev, b, _ = grouped(n, k, experts=6)
     us = G.units([3, 0, 300, 64, 17, 1], n, R.PD_MAX_ROWS)
@@ -200,7 +201,7 @@ def test_a_split_call_runs_as_tree_from_its_record_after_the_per_row_keying():
         f()
     got = launches(dev)
     assert [x[0] for x in got] == [STEPS[0], "pd_tree_g_851", *STEPS[1:]]
-    assert got[1][1:4] == ((1, len(us)), 128, dev.pd_tree_smem_g) and dev.pd_tree_smem_g == dev.pd_tree_smem[G.PD]
+    assert got[1][1:4] == ((1, len(us)), 128, R.PD_PAIR_SMEM) and dev.pd_tree_smem_g == R.PD_PAIR_SMEM
     assert got[1][5:] == ((b["meta"] + G.TREE_AT,), (G.REC,))
     dev.log.clear()
     for _, f in g.steps(us):
@@ -209,10 +210,10 @@ def test_a_split_call_runs_as_tree_from_its_record_after_the_per_row_keying():
 
 
 class OldCubinDev(RecordingDev):
-    """A cubin built before pd_tree_g: looking it up fails as `run.Dev.fn`'s does."""
+    """A cubin built before pd_tree_g and pd_tiles_g_979: looking them up fails as `run.Dev.fn`'s does."""
 
     def fn(self, name):
-        if name.startswith("pd_tree_g_"):
+        if name.startswith("pd_tree_g_") or name == "pd_tiles_g_979":
             raise RuntimeError("cuModuleGetFunction returned CUresult 500 (named symbol not found)")
         return name
 
@@ -292,12 +293,12 @@ def test_the_vllm_call_runs_on_the_schedules_lanes_from_rotating_sets(schedule):
     for _ in range(3):
         PG.gemm_grouped(run, ws, torch.randn(sum(counts), k).to(torch.bfloat16), counts)
     log = launches(dev)
-    side = ("pd_tree_g_851", "pd_tiles_g_851")
+    side = ("pd_tree_g_851", "pd_tiles_g_979")
     assert [(x[0], x[4]) for x in log] == [(x, lane if x in side else main) for lane in (1, 3, 1) for x in lane_steps(split)]
     by = {name: [x[5] for x in log if x[0] == name] for name in lane_steps(True)}
     ptr = lambda j, x: g.sets[j][x].data_ptr()
     for c, j in enumerate((0, 1, 0)):
-        assert by["pd_commit_g_851"][c] == (ptr(j, "meta"),) and by["pd_tiles_g_851"][c] == (ptr(j, "meta") + G.TILES_AT,)
+        assert by["pd_commit_g_851"][c] == (ptr(j, "meta"),) and by["pd_tiles_g_979"][c] == (ptr(j, "meta") + G.TILES_AT,)
         assert by["gemm_pearlc_g_d"][c][2:4] == (ptr(j, "c"), ptr(j, "u"))
         assert by["pd_tree_g_851"][c:c + 1] == ([(ptr(j, "meta") + G.TREE_AT,)] if split else [])
     for j in (0, 1):
@@ -355,13 +356,17 @@ def test_grouped_checks_pass_diff_counts_what_is_committed_not_the_schedule(tmp_
 
 def test_the_vllm_call_runs_unsplit_on_a_cubin_without_pd_tree_g():
     """A ship built before pd_tree_g (`grouped.has_tree` false) runs ``deferred-a``'s grouped calls as ``deferred``'s: A's
-    whole commitment in pd_commit_g's mode 0 on the main lane, the tile leaves on the side lane."""
+    whole commitment in pd_commit_g's mode 0 on the main lane, the tile leaves on the side lane, a CTA a tile (pd_tiles_g_851,
+    since it has no pd_tiles_g_979)."""
     run, _ = device_run(4, schedule="deferred-a", dev=OldCubinDev())
     dev = run.kernel.dev
     dev.log.clear()
     PG.gemm_grouped(run, (1, 3), torch.randn(40, 1024).to(torch.bfloat16), [30, 10])
-    assert [(x[0], x[4]) for x in launches(dev)] == [(x, 1 if x == "pd_tiles_g_851" else 2) for x in STEPS]
+    old = [*STEPS[:-1], "pd_tiles_g_851"]
+    assert [(x[0], x[4]) for x in launches(dev)] == [(x, 1 if x == "pd_tiles_g_851" else 2) for x in old]
+    assert launches(dev)[-1][1:4] == ((max(u.tiles for u in G.units([30, 10], 128, R.PD_MAX_ROWS)), 2), 32, 0)
     assert not G.has_tree(dev) and G.has_tree(RecordingDev())
+    assert (G.tiles_pd(dev), G.tiles_pd(RecordingDev())) == (G.PD, G.TILES_PD)
     rec = np.frombuffer(PPD._bytes(run._groups[(1, 3)].b["meta"])[:2 * G.REC], np.uint8).reshape(2, G.REC)
     assert rec[:, :G.TILES_AT].copy().view(G.ARGS).ravel()["i"][:, 2].tolist() == [0, 0]
 
