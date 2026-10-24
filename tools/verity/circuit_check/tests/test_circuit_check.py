@@ -829,14 +829,22 @@ def test_a_lowering_with_its_pinned_and_count_but_another_circuit_is_refused_on_
         f"lowering/pin-mismatch F32Mul_v1 [F32Mul_v1]: type {pin['counts']['type'][:16]}... -> {_lowering_pin(e)['counts']['type'][:16]}..."]
 
 
-def test_a_pin_without_a_type_is_refused():
-    """A pin with the lowering's AND count and no ``type`` is refused, so every pin carries the digest."""
+def test_a_pin_without_a_type_is_named_as_untyped_and_update_pins_types_it(monkeypatch):
+    """A pin with the lowering's AND count and no ``type`` (a branch written before ``type``) passes with an ``untyped``
+    warning, and `--update-pins` writes the lowering's ``type`` into it."""
+    from circuit_check import cli
+    from circuit_check import sidecars as SC
     from verity_vllm.program.registry import prims as P
 
     pin = _lowering_pin(CK.check_definition(P.F32Mul, OPTS, pins={"pieces": {}, "units": {}}))
     e = CK.check_definition(P.F32Mul, OPTS, pins={"pieces": {"F32Mul_v1": {"and": pin["counts"]["and"]}}, "units": {}})
-    assert [f["name"].split(" (")[0] for f in e["failures"]] == [
-        f"lowering/pin-mismatch F32Mul_v1 [F32Mul_v1]: type None -> {pin['counts']['type'][:16]}..."]
+    assert not e["failures"] and _lowering_pin(e)["status"] == "untyped"
+    assert [w["name"].split(" (")[0] for w in e["warnings"] if w["code"] == "untyped"] == [
+        "lowering/untyped F32Mul_v1: 1 [F32Mul_v1]: no type"]
+    written = {}
+    monkeypatch.setattr(SC, "write_pins", written.update)
+    cli.update_pins({"targets": [e]})
+    assert written == {("pieces", "F32Mul_v1"): pin["counts"]}
 
 
 def test_a_gated_definitions_circuit_digest_is_held_to_its_pin():

@@ -39,8 +39,8 @@
                      holds it as one gate naming the digest, such as N2's head check) against its ``digests`` pin
 
 Correctness and invariant violations are failures, each with a name (``"<check>/<code> <definition> ..."``); redundant and dead
-gates are warnings with counts (they become failures with the re-baseline's common-subexpression pass).  An unpinned lowering
-is a warning.
+gates are warnings with counts (they become failures with the re-baseline's common-subexpression pass).  An unpinned lowering,
+and a pin without its lowering's ``type``, is a warning.
 """
 from __future__ import annotations
 
@@ -489,17 +489,22 @@ def _shown(v: Any) -> Any:
 
 
 def _counts_against_pin(kind: str, key: str, got: dict, pins: dict, F: Findings, definition: str) -> dict:
-    """``got`` (the lowering's counts and its ``type``, `lowering_type`) against its pin: a pin that differs in any of them, or
-    lacks one, is refused by name."""
+    """``got`` (the lowering's counts and its ``type``, `lowering_type`) against its pin: a pin that differs in any field it holds
+    is refused by name. A pin without the lowering's ``type`` is a warning (``untyped``), as an unpinned lowering is, since a
+    branch written before ``type`` lands with count-only pins; `--update-pins` writes it."""
     pinned = pins.get(kind, {}).get(key)
     rec = {"pin": key, "counts": got, "pinned": pinned}
     if pinned is None:
         F.warn("lowering", "unpinned", definition, 1, f"[{key}]: no pin", pins=kind, pin=key, counts=got)
         rec["status"] = "unpinned"
-    elif diff := {k: [pinned.get(k), v] for k, v in got.items() if pinned.get(k) != v}:
+    elif diff := {k: [pinned[k], v] for k, v in got.items() if k in pinned and pinned[k] != v}:
         F.fail("lowering", "pin-mismatch", definition, f"[{key}]: " + ", ".join(f"{k} {_shown(a)} -> {_shown(b)}" for k, (a, b) in diff.items())
                + " (`circuit-check --update-pins` pins what it measures; review the diff)", pins=kind, pin=key, counts=got, pinned=pinned)
         rec["status"] = "mismatch"
+    elif "type" in got and "type" not in pinned:
+        F.warn("lowering", "untyped", definition, 1, f"[{key}]: no type (`circuit-check --update-pins` pins it)", pins=kind,
+               pin=key, counts=got)
+        rec["status"] = "untyped"
     else:
         rec["status"] = "ok"
     return rec

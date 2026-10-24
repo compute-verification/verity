@@ -596,12 +596,12 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
 
 
 def update_pins(rep: dict) -> dict:
-    """Every pin, with each unpinned or changed count the report saw set to the count measured now, in the file that holds the pin
+    """Every pin, with each unpinned, untyped or changed one the report saw set to what it measures now, in the file that holds the pin
     or, for a new one, the sidecar of the module that defines its Definition (`sidecars.write_pins`)."""
     updates = {}
     for t in rep["targets"]:
         for f in t.get("failures", []) + t.get("warnings", []):
-            if f["check"] == "lowering" and f["code"] in ("unpinned", "pin-mismatch"):
+            if f["check"] == "lowering" and f["code"] in ("unpinned", "untyped", "pin-mismatch"):
                 updates[f["pins"], f["pin"]] = f["counts"]
     CK.load_pins()
     SC.write_pins(updates)

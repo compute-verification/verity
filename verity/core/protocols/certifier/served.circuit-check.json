@@ -1,12 +1,10 @@
 {
  "definitions": {
   "NetworkServedCounts_v1{T=12,FOUT=3,FIN=2,R=2,RIN=2,OWN=1}": {
-   "and": 4932,
-   "type": "d45065b6b77de3c133a655628ad944689691a1e1122bec669f4a81da5df4f0299ad759e4a298a6dcc94b83dd31d1ba81cb92b82237472dfc2644480502ec97f9"
+   "and": 4932
   },
   "NetworkServedCounts_v1{T=8,FOUT=3,FIN=1,R=2,RIN=2,OWN=0}": {
-   "and": 3476,
-   "type": "2c88984102899df9175c20ab6a9b0fd31b5280d338e96fa238456c69407f6fd05eddd5d20b5d6403d0ff35f0ba02e5e041d9dadd0edf5e2163135aa22bdf031f"
+   "and": 3476
   }
  },
  "digests": {
