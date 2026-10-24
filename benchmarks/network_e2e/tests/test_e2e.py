@@ -35,7 +35,8 @@ e2e = _load()
 
 def _args(src, out) -> SimpleNamespace:
     return SimpleNamespace(sources=[str(src)], upstream=None, vllm=None, out=str(out), work=None, bin=None, lean=None,
-                           delta=2.0 ** -20, no_prove=True, proofs=None)
+                           delta=2.0 ** -20, no_prove=True, proofs=None, advice=None, serving_config=None,
+                           prove_path=None, no_negatives=False)
 
 
 @pytest.fixture(scope="module")
