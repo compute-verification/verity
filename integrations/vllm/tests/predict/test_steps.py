@@ -356,25 +356,68 @@ def test_partial_refuses_a_request_whose_cache_hit_reads_a_refused_requests_kv()
         compile_steps(_registered(), advice, ingress)
 
 
-@pytest.mark.parametrize("reqs,steps,fact", [
-    ([(8, 2, GREEDY)], [[(0, 0, 3)], [(0, 3, 5)], [(0, 8, 1)]], "a chunked prefill, 3 of its 8 uncached prompt tokens at step 0"),
-    ([(62, 4, GREEDY)], [[(0, 0, 62)], [(0, 62, 1)], [(0, 63, 1)], [(0, 64, 1)]],
-     "request 0: positions to 64, past the model's 64 positions"),
-])
-def test_what_v0_cannot_run_is_refused_by_name(reqs, steps, fact):
-    with pytest.raises(Unexpressible, match=fact):
-        compile_steps(_registered(), *_session(reqs, steps))
+def test_positions_past_the_models_are_refused_by_name():
+    with pytest.raises(Unexpressible, match="request 0: positions to 64, past the model's 64 positions"):
+        compile_steps(_registered(), *_session([(62, 4, GREEDY)], [[(0, 0, 62)], [(0, 62, 1)], [(0, 63, 1)], [(0, 64, 1)]]))
     compile_steps(_registered(), *_session([(60, 4, GREEDY)], [[(0, 0, 60)], [(0, 60, 1)], [(0, 61, 1)], [(0, 62, 1)]]))
 
 
-def test_a_gap_between_decodes_and_a_preemption_are_refused():
+def _whole(reg: Registered, LP: int, T: int, C: int = 0) -> str:
+    return build_program(Phi.from_json({**reg.phi.to_json(), "sampling": {"kind": "greedy"}}), "request", LP=LP, T=T, C=C).digest
+
+
+def test_a_chunked_prefill_compiles_to_the_whole_prefill_program():
+    """Request 0's prompt of 8 runs as chunks of 3 and 5, the first's sample discarded: its Program is the one it has unchunked, and
+    each chunk is its prefill rows in turn. Request 1's chunks follow its prefix-cache hit of request 0's first block."""
     reg = _registered()
-    gap = _session([(8, 2, GREEDY), (4, 1, {**GREEDY, "max_tokens": 1})], [[(0, 0, 8)], [(1, 0, 4)], [(0, 8, 1)]])
-    with pytest.raises(Unexpressible, match=r"request 0: its row 1 is \(step, start, n\) = \(2, 8, 1\), not the decode \(1, 8, 1\)"):
-        compile_steps(reg, *gap)
-    resumed = _session([(8, 3, GREEDY)], [[(0, 0, 8)], [(0, 8, 1)], [(0, 0, 10, {"preempted": True})]])
-    with pytest.raises(Unexpressible, match="step 2: request 0 preempted"):
-        compile_steps(reg, *resumed)
+    c = compile_steps(reg, *_session([(8, 2, GREEDY)], [[(0, 0, 3)], [(0, 3, 5)], [(0, 8, 1)]]))
+    d = _whole(reg, 8, 1)
+    assert c.requests[0].digest == d and c.requests[0].first_step == 0 and c.discarded == []
+    assert c.steps == [[RowRef(0, d, 0, 3, 0)], [RowRef(0, d, 3, 5, 1)], [RowRef(0, d, 8, 1, 1)]]
+    assert c.requests[0].digest == compile_steps(reg, *_session([(8, 2, GREEDY)], [[(0, 0, 8)], [(0, 8, 1)]])).requests[0].digest
+    p = _prompt(0, 40)
+    c = compile_steps(reg, *_session([(40, 1, {**GREEDY, "max_tokens": 1}, p), (40, 2, {**GREEDY, "max_tokens": 2}, p)], [
+        [(0, 0, 40)],
+        [(1, 16, 8, {"cache_hit": 16, "sources": (I1.Source(0, 16),)})],
+        [(1, 24, 16)],
+        [(1, 40, 1)],
+    ]))
+    d = _whole(reg, 40, 1, C=16)
+    assert (c.requests[1].digest, c.requests[1].C, c.requests[1].producers) == (d, 16, (0,))
+    assert [s[-1] for s in c.steps[1:]] == [RowRef(1, d, 16, 8, 0), RowRef(1, d, 24, 16, 1), RowRef(1, d, 40, 1, 1)]
+
+
+def test_a_preempted_request_compiles_to_its_program_and_its_recompute_is_discarded():
+    """Request 0 is preempted after two kept outputs and resumes at step 3 by recomputing positions 0..9: its Program is the one it
+    has unpreempted, position 9 is its resume's one new row, and positions 0..8 are a recompute no Program holds. A gap of steps
+    between rows is no matter either."""
+    reg = _registered()
+    plain = compile_steps(reg, *_session([(8, 3, GREEDY)], [[(0, 0, 8)], [(0, 8, 1)], [(0, 9, 1)]]))
+    c = compile_steps(reg, *_session([(8, 3, GREEDY), (4, 1, {**GREEDY, "max_tokens": 1})],
+                                     [[(0, 0, 8)], [(0, 8, 1)], [(1, 0, 4)], [(0, 0, 10, {"preempted": True})]]))
+    d = plain.requests[0].digest
+    assert c.requests[0].digest == d == _whole(reg, 8, 2)
+    assert [[r for r in rows if r.request == 0] for rows in c.steps] == [[RowRef(0, d, 0, 8, 1)], [RowRef(0, d, 8, 1, 1)], [],
+                                                                         [RowRef(0, d, 9, 1, 1)]]
+    assert c.discarded == [(3, 0, 0, 9)]
+
+
+def test_a_resume_reads_its_own_kv_past_its_prompt():
+    """Request 0 (LP 20) is preempted at position 33 and resumes on a hit of 32 tokens of its own KV, past its prompt: I1's replay
+    holds that run (the request computed those positions), its resume recomputes position 32 and computes 33 anew."""
+    reg = _registered()
+    rows = [[(0, 0, 20)]] + [[(0, 20 + k, 1)] for k in range(13)] + [[(0, 32, 2, {"cache_hit": 32, "preempted": True,
+                                                                               "sources": (I1.Source(0, 32),)})], [(0, 34, 1)]]
+    c = compile_steps(reg, *_session([(20, 16, {**GREEDY, "max_tokens": 16})], rows))
+    d = _whole(reg, 20, 15)
+    assert (c.requests[0].digest, c.requests[0].C) == (d, 0)
+    assert c.steps[14] == [RowRef(0, d, 33, 1, 1)] and c.discarded == [(14, 0, 32, 1)] and c.steps[15] == [RowRef(0, d, 34, 1, 1)]
+    p = _prompt(0, 20)
+    other = _session([(20, 5, {**GREEDY, "max_tokens": 5}, p), (20, 16, {**GREEDY, "max_tokens": 16}, p)],
+                     [[(0, 0, 20), (1, 0, 20)]] + [[(0, 20 + k, 1)] * (k < 4) + [(1, 20 + k, 1)] for k in range(13)]
+                     + [[(1, 32, 2, {"cache_hit": 32, "preempted": True, "sources": (I1.Source(0, 24), I1.Source(1, 8))})], [(1, 34, 1)]])
+    with pytest.raises(Unexpressible, match="request 1: step 14's cache hit reads request 0's KV at positions 0 … 23, past a certified"):
+        compile_steps(reg, *other)
 
 
 def test_the_row_past_a_requests_last_kept_output_is_discarded():
@@ -391,8 +434,8 @@ def test_the_row_past_a_requests_last_kept_output_is_discarded():
 
 
 def test_partial_refuses_request_by_request():
-    """A measurement over served traffic: request 1's hit of a part of a block, request 2's preemption and request 3's top_k refuse
-    those requests by name, their rows leave the steps, and request 0 compiles as it would alone."""
+    """A measurement over served traffic: request 1's hit of a part of a block and request 3's top_k refuse those requests by name,
+    their rows leave the steps, and requests 0 and 2 (preempted, resumed) compile as they would alone."""
     p0 = _prompt(0, 8)
     advice, ingress = _session([(8, 4, GREEDY, p0), (8, 2, GREEDY, p0[:4] + [9] * 4), (8, 3, GREEDY), (5, 2, {**STOCH, "top_k": 50})], [
         [(0, 0, 8), (1, 4, 4, {"cache_hit": 4, "sources": (I1.Source(0, 4),)}), (2, 0, 8)],
@@ -401,36 +444,51 @@ def test_partial_refuses_request_by_request():
         [(0, 10, 1), (2, 0, 10, {"preempted": True})],
     ])
     reg = _registered()
-    with pytest.raises(Unexpressible, match="step 3: request 2 preempted"):
+    with pytest.raises(Unexpressible, match="not whole blocks of 16"):
         compile_steps(reg, advice, ingress)
     c = compile_steps(reg, advice, ingress, partial=True)
-    assert sorted(c.refused) == [1, 2, 3]
-    assert "not whole blocks of 16" in c.refused[1] and "step 3: request 2 preempted" in c.refused[2] and "top_k=50" in c.refused[3]
-    assert [u is not None for u in c.requests] == [True, False, False, False]
+    assert sorted(c.refused) == [1, 3]
+    assert "not whole blocks of 16" in c.refused[1] and "top_k=50" in c.refused[3]
+    assert [u is not None for u in c.requests] == [True, False, True, False]
     alone = compile_steps(reg, *_session([(8, 4, GREEDY, p0)], [[(0, 0, 8)], [(0, 8, 1)], [(0, 9, 1)], [(0, 10, 1)]]))
-    assert c.steps == alone.steps and c.programs.keys() == alone.programs.keys()
-    assert sorted(c.summary()["refused"]) == ["1", "2", "3"]
+    assert [[r for r in rows if r.request == 0] for rows in c.steps] == alone.steps
+    d2 = c.requests[2].digest
+    assert [[r for r in rows if r.request == 2] for rows in c.steps] == [[RowRef(2, d2, 0, 8, 1)], [RowRef(2, d2, 8, 1, 1)], [],
+                                                                         [RowRef(2, d2, 9, 1, 1)]]
+    assert c.discarded == [(3, 2, 0, 9)] and sorted(c.programs) == sorted({alone.requests[0].digest, d2})
+    assert sorted(c.summary()["refused"]) == ["1", "3"]
     with pytest.raises(Unexpressible, match=r"every request is refused, request 0 first: request 0 \('q0'\): no certified request body"):
         compile_steps(reg, *_hit(16)[:1], {"q1": _hit(16)[1]["q1"]}, partial=True)
 
 
 def test_dead_gates_are_counted_as_circuit_check_counts_them():
-    """The request wrapper's prefill runs the last layer on every prompt row and only the last row reaches the LM head, so
-    today's request Programs have dead gates: `dead_gates_of` counts them as circuit-check does and says under which definitions. The
-    top-p select at a constant split count (`GumbelTopPTokenSelect_v2{V,S}`) has more than the last layer's GEMMs."""
+    """The request wrapper drops its dead units, but gates inside live units still reach no sample (the final norm on the prompt rows
+    before the last, the query columns of the last layer's fused qkv on those rows, and the top-p select's at a constant split
+    count, `GumbelTopPTokenSelect_v2{V,S}`), so today's request Programs have dead gates: `dead_gates_of` counts them as circuit-check
+    does and says under which definitions."""
     from verity.ml.circuits.liveness import dead_gates
+    from verity_vllm.program.prune import dead_units
     c = compile_steps(_registered(), *_mixed())
     got = dead_gates_of(c)
     assert sorted(got["programs"]) == sorted(c.programs)
     for d, p in c.programs.items():
         rep = dead_gates(p, limit=0, transitive=True)
         rec = got["programs"][d]
-        assert (rec["dead_computed"], rec["unread_inputs"]) == (rep.computed, rep.input) and rep.computed > 0
+        assert (rec["dead_computed"], rec["unread_inputs"]) == (rep.computed, rep.input) and rep.computed > 0 and not dead_units(p.fn.body)
         assert sum(rec["by_definition"].values()) == rep.computed + rep.input
         by = rec["by_definition"]
-        top = "GumbelTopPTokenSelect_v2" if d == c.requests[1].digest else "Gemm_v2"
-        assert next(iter(by)) == top and sum(n for k, n in by.items() if k.startswith("Input")) == rep.input
+        top = "GumbelTopPTokenSelect_v2" if d == c.requests[1].digest else "RMSNormTriton_v1"
+        assert next(iter(by)) == top and "Gemm_v2" in by and sum(n for k, n in by.items() if k.startswith("Input")) == rep.input
     assert got["dead_computed"] == sum(r["dead_computed"] for r in got["programs"].values())
+
+
+def test_a_program_with_a_dead_unit_is_refused(monkeypatch):
+    """A request Program holding a node no output reads is refused, with the fix (in the lowering, never the advice) in the message."""
+    import verity_vllm.predict.build as PB
+    monkeypatch.setattr(PB, "without_dead_units", lambda b: (b, list(range(len(b.nodes)))))
+    with pytest.raises(Unexpressible, match=r"request 0's Program [0-9a-f]{16} holds 56 dead units, node 104 \(RoPE_v1\{NHEADS=4,D=16\}\) first, which no "
+                                            r"output reads: drop them in the lowering"):
+        compile_steps(_registered(), *_mixed())
 
 
 def test_a_target_without_batch_invariance_is_refused():

@@ -16,9 +16,14 @@
   (`output_len` − 1), C its prefix-cache hit (the cached request wrapper: every layer's first C key and value rows are its `prefix`
   input, the producers' rows, which GP-01 records per block). The one row async scheduling runs past a request's last kept output
   samples nothing kept: it is `discarded`, in no Program. A request's (LP, T, C, policy) reads its own advice record and body
-  alone, never its batch; requests of one (LP, T, C, policy) share one Program.
+  alone, never its batch; requests of one (LP, T, C, policy) share one Program. A chunked or preempted request compiles to the
+  same Program: chunking and preemption are advice no Program reads.
 - On a batch-invariant target a request's Program does not read its batch, so the advice's steps only place rows: each live row
   is a `RowRef` into its request's Program (positions start..start+n-1; `samples` the tokens the row samples), in I1's row order.
+  The Program holds each of its positions C..LP+T-1 once, in the row that first reaches it: a chunked prefill's chunks are its
+  prefill rows in turn, and a resume's recompute of positions its request had reached is `discarded`, like the row past the last
+  kept output. This rests on the target computing a position's row bit for bit alike however its prefill is chunked or
+  recomputed; where it doesn't, the committed row isn't the Program's and the proof fails visibly.
 - GP-01 (`program.workload.WorkloadProgram`) composes the request Programs side by side, sharing only the weights, each at its
   first scheduled step and with cap T + 1 (the executed prefix), under the target's lag.
 
@@ -29,15 +34,14 @@ The compiler is total: it compiles its input or refuses it by name (`Unexpressib
 - a request whose body is missing or off the ingress schema, whose prompt isn't `prompt_len` token ids of the vocabulary, or
   whose `output_len` and `finish` its `max_tokens` contradicts;
 - a cache hit whose `sources` don't hold the request's own KV: through each run, the source's certified prompt must equal the
-  request's (the KV at a position reads every token up to it), in whole blocks of the engine's block size;
-- what v0 doesn't compile: a chunked prefill (no chunked request wrapper on either side); a prefix-cache hit on a stochastic
-  request (the cached stochastic wrapper isn't ported); a preemption (whose resume's sources go unchecked, as the request compiles
-  to nothing), or decode rows that aren't one position a step in consecutive steps; positions past the model's; sampling other
-  than greedy or seeded top-p at top_p = 1 with top_k 0 (top_p < 1, a named gap until serving pins its split count; min_p, the penalties,
-  logit_bias, min_tokens, n > 1, or a parameter this compiler doesn't know);
+  request's (the KV at a position reads every token up to it), in whole blocks of the engine's block size where the Program reads
+  the hit (a resume's run of its own KV is I1's replay's to hold);
+- what v0 doesn't compile: a prefix-cache hit on a stochastic request (the cached stochastic wrapper isn't ported); positions
+  past the model's; sampling other than greedy or seeded top-p at top_p = 1 with top_k 0 (top_p < 1, a named gap until serving
+  pins its split count; min_p, the penalties, logit_bias, min_tokens, n > 1, or a parameter this compiler doesn't know);
+- a request Program with a dead unit (`program.prune`: a node no output reads), whose fix is in the lowering, never the advice;
 - a compilation `predict.batch.check_compiled` refuses (`BatchDependent`): one where a request's outputs could read its
-  batch-mates (R3 a derived split count; R2 a request planned differently alone, which v0 holds every cache hit another request
-  computed to, as such a hit has no solo form; R1 GP-01's wiring and cones).
+  batch-mates (R3 a derived split count; R2 a request planned differently alone; R1 GP-01's wiring and cones).
 
 A refusal refuses the session. `partial=True` (a measurement over served traffic, never a registration) refuses request by
 request instead: a refused request's rows and Program leave the compilation, and so does every request whose cache hit reads its
@@ -59,6 +63,7 @@ from typing import Any
 from verity.core.protocols.certifier import advice as I1
 from verity.ml.circuits.defs import bind
 from verity_vllm.program import prefix_plan as PP
+from verity_vllm.program.prune import dead_units
 from verity_vllm.program.registry import io_shell as IO
 from verity_vllm.program.registry.topp_geometry import splits_for_v1
 
@@ -255,10 +260,14 @@ def request_of(i: int, q: I1.RequestAdvice, body: Any, vocab: int) -> tuple[tupl
 
 def check_sources(s: int, row: I1.Row, prompts: Mapping[int, tuple[int, ...]]) -> None:
     """A cache hit's sources hold the KV of the request's own tokens: through each run, the source's certified prompt equals the
-    hitting request's (the KV at a position reads every token up to it). Refused otherwise, or where a run leaves a prompt."""
+    hitting request's (the KV at a position reads every token up to it). Refused otherwise, or where a run leaves a prompt. A
+    resume's run of its own KV is its own by I1's replay (the request computed those positions), past its prompt too."""
     r, at = row.request, 0
     for src in row.sources:
         end, a, b = at + src.n, prompts.get(row.request), prompts.get(src.request)
+        if src.request == r and row.preempted:
+            at = end
+            continue
         if a is None or b is None:
             raise Unexpressible(f"request {r}: step {s}'s cache hit reads request {src.request}'s KV, and one of the two has no certified "
                                 f"prompt")
@@ -271,27 +280,44 @@ def check_sources(s: int, row: I1.Row, prompts: Mapping[int, tuple[int, ...]]) -
         at = end
 
 
-def shape_of(i: int, prompt_len: int, rows: list[tuple[int, I1.Row]], output_len: int) -> tuple[int, int, int, int]:
-    """Request `i`'s (LP, T, first step, C) from its rows: at its first step the whole prompt after its C cached rows (0 without a
-    prefix-cache hit), then one decode row a step; anything else refused by name. T counts the live decode rows, `output_len` − 1
-    (one row past the last kept output may follow, discarded)."""
+Rows = list[tuple[int, int, I1.Row]]  # a request's rows as (step, index in the step, row), in step order
+Placed = tuple[tuple[int, int, int] | None, list[tuple[int, int]]]  # a row's part its Program holds, and its parts none holds
+
+
+def shape_of(i: int, prompt_len: int, rows: Rows, output_len: int) -> tuple[int, int, int, int]:
+    """Request `i`'s (LP, T, first step, C): its prompt length, its live decode rows (`output_len` − 1: one row past the last kept
+    output may follow, discarded), and its first row's step and prefix-cache hit (0 without one), which leaves at least the prompt's
+    last position to compute."""
     LP = int(prompt_len)
-    s0, first = rows[0]
+    s0, _, first = rows[0]
     C = int(first.cache_hit)
     if first.start != C or not C < LP:
         raise Unexpressible(f"request {i}: its first row starts at position {first.start} with a cache hit of {C} tokens, for a prompt of "
                             f"{LP} (a prefill computes the positions after its hit, and at least the last)")
-    if first.n != LP - C:
-        raise Unexpressible(f"request {i}: a chunked prefill, {first.n} of its {LP - C} uncached prompt tokens at step {s0} (no chunked "
-                            f"request wrapper: v0 needs chunked prefill off)")
-    for k, (s, row) in enumerate(rows[1:], start=1):
-        got, want = (s, row.start, row.n), (s0 + k, LP + k - 1, 1)
-        if got != want:
-            raise Unexpressible(f"request {i}: its row {k} is (step, start, n) = {got}, not the decode {want} (a gap, a recompute or a "
-                                f"chunk: v0 runs each request one position a step from its prefill)")
-    if not output_len <= len(rows) <= output_len + 1:
-        raise Unexpressible(f"request {i}: {len(rows)} rows for {output_len} kept outputs (a row each, and at most one past the last)")
     return LP, int(output_len) - 1, s0, C
+
+
+def place(i: int, LP: int, T: int, C: int, rows: Rows, output_len: int) -> dict[tuple[int, int], Placed]:
+    """Each of request `i`'s rows by (step, index in the step): the part of it its Program holds, (start, n, samples) or None, and
+    its parts no Program holds, [(start, n)]. The Program holds positions C..LP+T-1 once each, in the row that first reaches them:
+    a resume's positions up to where its request had reached are a recompute, and the row past the last kept output is past the
+    Program. `samples` is 1 where the row's sample is a kept output (I1's rule: the row reaches its request's known tokens)."""
+    out: dict[tuple[int, int], Placed] = {}
+    reached, known, kept = C, LP, 0
+    for s, j, row in rows:
+        a, b = row.start, row.start + row.n
+        sample = b == known and kept < output_len
+        if sample:
+            kept, known = kept + 1, known + 1
+        lo, hi = max(a, reached), min(b, LP + T)
+        if sample and not lo < hi == b:
+            raise Unexpressible(f"request {i}: step {s} keeps the sample at position {b - 1}, which its Program doesn't compute in that row")
+        out[s, j] = ((lo, hi - lo, int(sample)) if lo < hi else None,
+                     [(x, y - x) for x, y in ((a, min(b, reached)), (max(a, LP + T), b)) if x < y])
+        reached = max(reached, hi)
+    if reached != LP + T:
+        raise Unexpressible(f"request {i}: its rows reach position {reached}, not the {LP + T} of its prompt and live decode rows")
+    return out
 
 
 def producers_of(i: int, s: int, row: I1.Row, bs: int) -> tuple[int, ...]:
@@ -347,6 +373,10 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial:
     canon: dict = {}
     for u in plan.distinct():
         r = request_program(registered, u)
+        if dead := dead_units(body := r.program.fn.body):
+            raise Unexpressible(f"request {u.request}'s Program {r.digest[:16]} holds {len(dead)} dead units, node {dead[0]} "
+                                f"({body.nodes[dead[0]].fn.id}) first, which no output reads: drop them in the lowering, on the "
+                                f"Build's side and predict's alike (`program.prune.without_dead_units` drops a one-rank request wrapper's)")
         programs[r.digest], digests[u.key()] = r.program, r.digest
         comps[u.key()] = request_component(r, canon)
     units = [None if u is None else replace(u, digest=digests[u.key()]) for u in plan.requests]
@@ -397,35 +427,36 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
             prompts[i], params[i] = request_of(i, q, body, shape.V)
         except Unexpressible as e:
             refuse(i, str(e))
-    rows: dict[int, list[tuple[int, I1.Row]]] = {i: [] for i in range(len(adv.requests))}
+    rows: dict[int, Rows] = {i: [] for i in range(len(adv.requests))}
     for s, step in enumerate(adv.steps):
-        for row in step.rows:
-            rows[row.request].append((s, row))
-            if row.preempted:
-                refuse(row.request, f"step {s}: request {row.request} preempted (v0 runs each request from its prefill without preemption)")
-            elif row.sources:
+        for j, row in enumerate(step.rows):
+            rows[row.request].append((s, j, row))
+            if row.sources:
                 try:
                     check_sources(s, row, prompts)
                 except Unexpressible as e:
                     refuse(row.request, str(e))
     bs = int((phi0.engine or {}).get("block_size") or PP.DEFAULT_BLOCK_SIZE)
     units: list[RequestUnit | None] = []
+    placed: dict[tuple[int, int], Placed] = {}
     for i, q in enumerate(adv.requests):
         if i not in refused:
             try:
                 LP, T, s0, C = shape_of(i, q.prompt_len, rows[i], q.output_len)
                 if LP + T > shape.max_pos:
                     raise Unexpressible(f"request {i}: positions to {LP + T - 1}, past the model's {shape.max_pos} positions")
+                own = place(i, LP, T, C, rows[i], q.output_len)
                 policy, seed = policy_of(i, params[i], registered.default_seed, phi0.target_profile().num_sms)
                 if C and policy["kind"] != "greedy":
                     raise Unexpressible(f"request {i}: a prefix-cache hit of {C} tokens on a stochastic request (the cached stochastic "
                                         f"request wrapper isn't ported)")
-                producers = producers_of(i, s0, rows[i][0][1], bs) if C else ()
+                producers = producers_of(i, s0, rows[i][0][2], bs) if C else ()
             except Unexpressible as e:
                 refuse(i, str(e))
             else:
                 parse = bind(IO.IngressPrompt, MODEL=registered.served_model, LP=LP, V=shape.V) if i in wired else None
                 units.append(RequestUnit(i, "", LP, T, policy, seed, s0, q.id, C, producers, parse))
+                placed.update(own)
                 continue
         units.append(None)
     while partial and (lost := [(u.request, p) for u in units if u is not None for p in u.producers if units[p] is None][:1]):
@@ -438,13 +469,13 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
     discarded: list[tuple[int, int, int, int]] = []
     for s, step in enumerate(adv.steps):
         live = []
-        for row in step.rows:
-            if (u := units[row.request]) is None:
+        for j, row in enumerate(step.rows):
+            if units[row.request] is None:
                 continue
-            if row.start >= u.LP + u.T:
-                discarded.append((s, row.request, row.start, row.n))
-            else:
-                live.append((row.request, row.start, row.n, int(row.start + row.n >= u.LP)))
+            held, past = placed[s, j]
+            if held is not None:
+                live.append((row.request, *held))
+            discarded += [(s, row.request, start, n) for start, n in past]
         steps.append(live)
     return Plan(units, steps, discarded, dict(sorted(refused.items())))
 
