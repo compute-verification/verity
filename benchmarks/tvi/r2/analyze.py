@@ -21,6 +21,7 @@ from collections import defaultdict
 import numpy as np
 
 MODELS = {"Qwen/Qwen2.5-1.5B-Instruct": "Instruct", "Qwen/Qwen2.5-1.5B": "Base"}
+DEFAULT_LR = {"tl10kB": 1.5e-3, "full": 2e-6}  # grpo.py's; a run at another lr is its own arm
 
 
 def load(run_dirs, task="gsm8k"):
@@ -30,7 +31,10 @@ def load(run_dirs, task="gsm8k"):
             r = json.load(open(p))
             if r["task"].removesuffix("B") != task or r.get("ckpt"):
                 continue
-            key = (MODELS.get(r["model"], r["model"]), r["method"], r.get("reward", "true"))
+            method = r["method"]
+            if method in DEFAULT_LR and r.get("lr") is not None and abs(r["lr"] - DEFAULT_LR[method]) > 1e-12:
+                method = f"{method}@lr{r['lr']:g}"
+            key = (MODELS.get(r["model"], r["model"]), method, r.get("reward", "true"))
             out[key][r.get("seed", 0)] = {
                 "x": np.asarray(r["per_problem"], dtype=float), "run": os.path.basename(rd.rstrip("/")),
                 "f": np.asarray(r["per_problem_formatted"], dtype=float) if r.get("per_problem_formatted") else None,

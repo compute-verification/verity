@@ -37,16 +37,17 @@ nvidia-smi -i "${CUDA_VISIBLE_DEVICES:-0}" --query-gpu=index,name,memory.used,me
 "$PY" -c 'import torch, transformers, vllm, math_verify; print(torch.__version__, transformers.__version__, vllm.__version__, torch.cuda.get_device_name(0))' | tee -a "$OUT/versions.txt"
 set +e
 
-run_item() {  # M:method:reward:seed:steps[:task]
-  IFS=: read -r m method reward seed steps task <<< "$1"
+run_item() {  # M:method:reward:seed:steps[:task[:extra args, comma-separated]]
+  IFS=: read -r m method reward seed steps task extra <<< "$1"
   task=${task:-gsm8k}
   case $m in
     I) model=Qwen/Qwen2.5-1.5B-Instruct; variant="" ;;
     B) model=Qwen/Qwen2.5-1.5B; variant=B ;;
   esac
-  local log="$OUT/log-$task-$m-$method-$reward-seed$seed.txt"
+  local log="$OUT/log-$task-$m-$method-$reward-seed$seed${extra:+-x}.txt"
+  # shellcheck disable=SC2086
   "$PY" grpo.py --task "$task" --method "$method" --reward "$reward" --seed "$seed" --steps "$steps" --model "$model" \
-    ${variant:+--variant $variant} --data "$S/data" --out "$OUT" --ckpt-root "$S/ckpt" --svd-cache "$SVD" > "$log" 2>&1
+    ${variant:+--variant $variant} --data "$S/data" --out "$OUT" --ckpt-root "$S/ckpt" --svd-cache "$SVD" ${extra//,/ } > "$log" 2>&1
   local rc=$?
   echo "$(date -u +%H:%MZ) $1 rc=$rc"
   [ $rc -eq 0 ] || { echo "rc=$rc ${RESEARCH_RUN_ID:-}" > "$QDIR/$name/failed"; tail -20 "$log"; }
