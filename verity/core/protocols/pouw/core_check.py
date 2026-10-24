@@ -46,9 +46,11 @@ session's signed log shows R alone as what its salt coin followed, and under the
 opened once, after R.
 `rounds` is the rule on a live window's round coins (`window.rounds_reason`, over the proof service's challenger
 `sampled_proofs.challenger`): it reads the challenger's coins only through the session the auditor's signed ledger
-opens and ends for the window, under the window's pinned key (`challenger.trusted_session_of`), never a commitment the
-prover hands in; under the commitment that session signed, round r's coin opened once, after the r-th round root, and
-the round roots are the ones its signed log shows it received.
+opens and ends for the window, under the window's pinned key, run from a commit the host's pins log records on main's
+first-parent line (`challenger.trusted_session_of`, over `challenger.pinned_session`), never a commitment the prover
+hands in; under the commitment that session signed, round r's coin opened once, after the r-th round root, and the
+round roots are the ones its signed log shows it received.  `salt` reads its session through the same
+`pinned_session`, so a window whose session ran any tree but main's is credited neither.
 
 Every refusal has one reason, the first rule it breaks in the order below; the Lean port writes the same strings.
 """
@@ -652,12 +654,31 @@ def public_row(salt: bytes, position: int, roots: tuple[bytes, bytes]) -> bytes:
     return b"".join(x[i:i + 4][::-1] for i in range(0, len(x), 4))
 
 
+def public_words(salt: bytes, position: int, roots: tuple[bytes, bytes]) -> list[int]:
+    """`public_row` as a ``row/v2`` row of 16-bit leaves: word w its bits 16 w .. 16 w + 15, low byte first."""
+    x = public_row(salt, position, roots)
+    return [x[i] | x[i + 1] << 8 for i in range(0, len(x), 2)]
+
+
 def public_row_salt(context: str, position: int) -> bytes:
     """The public row's hm96 salt, which anyone derives from the window's context and the unit's position: three SHA-512
     blocks of `PUBLIC_ROW_SALT_DOMAIN` ‖ u64be(len) ‖ context ‖ u64be(position) ‖ u8(i)."""
     ctx = context.encode()
     head = PUBLIC_ROW_SALT_DOMAIN + len(ctx).to_bytes(8, "big") + ctx + position.to_bytes(8, "big")
     return b"".join(hashlib.sha512(head + bytes([i])).digest() for i in range(SALT_BYTES // 64))
+
+
+#: the ok row the verifier accepts: a unit's one output bit, 1, in its one word (h1_prove's `OK`, #3124)
+OK_ROW = (1,)
+#: the ok row's hm96 salt tag (h1_prove's, #3124)
+OK_SALT_TAG = b"verity/pouw/h1-prove/ok-row-salt/v0\0"
+
+
+def ok_salt(context: str, position: int) -> bytes:
+    """The ok row's hm96 salt, which anyone derives from the window's context and the unit's position: its content is
+    the one the verifier accepts (`OK_ROW`), so the salt hides nothing. SHAKE-256 of `OK_SALT_TAG` ‖ context ‖ 0 ‖
+    u64be(position), `SALT_BYTES` bytes."""
+    return hashlib.shake_256(OK_SALT_TAG + context.encode() + b"\0" + int(position).to_bytes(8, "big")).digest(SALT_BYTES)
 
 
 def public_bc(context: str, salt: bytes, position: int, roots: tuple[bytes, bytes]) -> bytes:
@@ -1278,13 +1299,14 @@ OTHER_WINDOW = ("the session's open root is not the window's: salt.window_open_r
 NOT_RECEIVED = "the challenger's log does not show the window's open root as the one root its salt coin followed"
 
 
-def salt(key: Any, ledger: Any, window: Any, session: Any, weights_root: Any, requests_root: Any, opening: Any,
-         verify: Ch.Verify) -> tuple[str, str] | None:
+def salt(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, weights_root: Any, requests_root: Any,
+         opening: Any, verify: Ch.Verify) -> tuple[str, str] | None:
     """None when `opening` is a live window's salt coin, opened after the window's own open root, every coin and root of
     it read through the challenger's own session as `rounds` reads them, never one the prover hands in: the one session
     the auditor's signed v2 ledger `ledger` opens and ends closed for `window` (``{root}``) under the pinned challenger
-    key `key`, from that session's files `session` (`challenger.audited_session` and `session_named`, its signatures
-    checked with `verify`).  S is the session the ledger's signed reserve entry names (a session opened without one is
+    key `key`, run from a commit the host's pins log `pins` records and the verifier's copy of main's first-parent
+    history `main` holds, from that session's files `session` (`challenger.pinned_session` and `session_named`, its
+    signatures checked with `verify`).  S is the session the ledger's signed reserve entry names (a session opened without one is
     refused) and R the root its signed open entry opened S on; R is `salt.window_open_root` of the window's weights'
     root `weights_root` and its round-0 request table's root `requests_root` (hex, from the window's record) and S; the
     session's signed log shows R, alone, as the root its salt coin followed; and under the commitment the session
@@ -1296,7 +1318,7 @@ def salt(key: Any, ledger: Any, window: Any, session: Any, weights_root: Any, re
     except Ch.CoinError as e:
         return "coin", f"the verifier's challenger key is malformed: {e}"
     try:
-        a = Ch.audited_session(ledger, window, k, verify)
+        a = Ch.pinned_session(ledger, window, k, pins, main, verify)
         c, received = Ch.session_named(a, k, session, verify)
     except Ch.CoinError as e:
         return "coin", f"the challenger's session is not trusted: {e}"
@@ -1323,12 +1345,13 @@ def salt(key: Any, ledger: Any, window: Any, session: Any, weights_root: Any, re
     return None if why is None else ("coin", f"the salt's {why}")
 
 
-def rounds(key: Any, ledger: Any, window: Any, session: Any, roots: Any, openings: Any, verify: Ch.Verify
-           ) -> tuple[str, str] | None:
+def rounds(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, roots: Any, openings: Any,
+           verify: Ch.Verify) -> tuple[str, str] | None:
     """None when `openings` are a live window's round coins, read through the challenger's own session and never a
     commitment the prover hands in: the one session the auditor's signed v2 ledger `ledger` (its lines, the head
     `challenger.ledger_head` took) opens and ends closed for `window` (``{root}``) under the window's pinned challenger key
-    `key` (its JSON), from that session's files `session` (``{close, hellos, log, record}``;
+    `key` (its JSON), run from a commit the host's pins log `pins` records and the verifier's copy of main's first-parent
+    history `main` holds, from that session's files `session` (``{close, hellos, log, record}``;
     `challenger.trusted_session_of`, its signatures checked with `verify`).  Under the commitment the challenger signed, round r's coin opened once, after
     `roots[r]`, the r-th round root (hex), every recorded round's coin opened (`window.rounds_reason`), and the roots are
     the round roots the challenger's signed log shows it received, in order; else the refusal (``coin`` or ``rounds``,
@@ -1338,7 +1361,7 @@ def rounds(key: Any, ledger: Any, window: Any, session: Any, roots: Any, opening
     except Ch.CoinError as e:
         return "coin", f"the verifier's challenger key is malformed: {e}"
     try:
-        c, received = Ch.trusted_session_of(ledger, window, k, session, verify)
+        c, received = Ch.trusted_session_of(ledger, window, k, pins, main, session, verify)
     except Ch.CoinError as e:
         return "coin", f"the challenger's session is not trusted: {e}"
     if not (isinstance(roots, list) and all(_str(r) and _DIGEST.fullmatch(r) for r in roots)):

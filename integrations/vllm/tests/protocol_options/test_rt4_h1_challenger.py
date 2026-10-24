@@ -140,7 +140,7 @@ class _Session:
     def trusted(self, commits) -> str | None:
         """`trusted_rounds_reason` of `commits` against this session, as `audited` opens and ends it."""
         return PHC.trusted_rounds_reason(commits, self.directory, [self.audited()], self.window, KEY,
-                                         pins=[self.audited().with_name("windows.pins.jsonl")])
+                                         pins=[self.audited().with_name("windows.pins.jsonl")], main=CH.MAIN)
 
 
 def _serve(settings, seed: int = 9, prompt: int = 5, run: bool = False):
@@ -196,7 +196,8 @@ def test_a_window_is_held_to_the_one_session_the_auditors_ledger_opened_for_its_
     or another Commit, weights other than the period's registered ones, a session tree core's check refuses (another
     session's, a rewritten release log, a missing tree, a record signed under another key than the pinned one), a
     session that never ended, ended unclosed or short of its coins, an end entry under another commitment than the
-    window's, and a record whose commitment or leaf aren't the ones its end entry records."""
+    window's, a record whose commitment or leaf aren't the ones its end entry records, and a session the verifier holds
+    no first-parent history of main for, or whose pin isn't on that history (`challenger.pinned_session`)."""
     gate = _gate()
     first, a = _window(gate, tmp_path, monkeypatch, SA, 11)
     second, b = _window(gate, tmp_path, monkeypatch, SB, 12)
@@ -208,6 +209,9 @@ def test_a_window_is_held_to_the_one_session_the_auditors_ledger_opened_for_its_
     assert "secret" not in first["session"] and first["session"]["commitment"] == a.commitment
     ledger, fetch = gate.ledger(), {SA: a.tree, SB: b.tree}.get
     assert PHC.session_reason(first, ledger, fetch) is None and PHC.session_reason(second, ledger, fetch) is None
+    assert PHC.session_reason(first, gate.ledger(main=None), fetch) == f"session {SA} is not trusted: {LC.NO_MAIN}"
+    assert PHC.session_reason(first, gate.ledger(main=CH.MAIN[:1]), fetch) == (
+        f"session {SA} is not trusted: {LC.first_parent_reason(SA, CH.PINNED, list(CH.MAIN[:1]))}")
     claims_a = {**second, "session": {**second["session"], "root": ra}}
     assert PHC.session_reason(claims_a, ledger, fetch) == (
         f"the window's session {SB} is not {SA}, the one the auditor's ledger opened for Commit {ra}")
@@ -317,12 +321,13 @@ def test_a_session_whose_tree_the_hosts_pins_log_doesnt_record_is_refused(tmp_pa
     heads = [a.audited()]
     published = heads[0].with_name("windows.pins.jsonl")
     assert a.trusted(first) is None
-    assert PHC.trusted_rounds_reason(first, a.directory, heads, a.window, KEY, pins=None) == (
+    assert PHC.trusted_rounds_reason(first, a.directory, heads, a.window, KEY, pins=None, main=CH.MAIN) == (
         f"the challenger's session is not trusted: {LC.NO_PINS}")
-    assert PHC.trusted_rounds_reason(first, a.directory, heads, a.window, KEY, pins=[tmp_path / "none.jsonl"]).startswith(
+    assert PHC.trusted_rounds_reason(first, a.directory, heads, a.window, KEY, pins=[tmp_path / "none.jsonl"],
+                                     main=CH.MAIN).startswith(
         f"the challenger's session is not trusted: {LC.NO_PINS} (none readable at {tmp_path / 'none.jsonl'}")
     CH.write_pins(published, [LC.pin_line(other, other, "2026-10-20T10:00:00Z")])
-    assert PHC.trusted_rounds_reason(first, a.directory, heads, a.window, KEY, pins=[published]) == (
+    assert PHC.trusted_rounds_reason(first, a.directory, heads, a.window, KEY, pins=[published], main=CH.MAIN) == (
         f"the challenger's session is not trusted: the host's pins log is not the one the open of session {a.name} "
         "sealed: its first 1 lines were edited or rewritten")
 
