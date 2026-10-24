@@ -30,6 +30,7 @@ def test_an_entry_a_move_took_out_of_the_package_is_not_stale(tmp_path, monkeypa
     (tmp_path / "x.json").write_text(json.dumps({"rule": "X", "entries": [
         {"file": "verity/ml/definitions/a.py", "kind": "k", "symbol": "f", "detail": "d"},
         {"file": "verity_vllm", "kind": "k", "symbol": "<package>", "detail": "gone"},
+        {"file": "verity_vllm", "kind": "module-cycle", "symbol": "<package>", "detail": "pipeline.build <-> program.moved_away"},
     ]}))
     assert R.stale_entries("x", []) == ['  delete {"file": "verity_vllm", "kind": "k", "symbol": "<package>", "detail": "gone"}']
 
