@@ -1,5 +1,17 @@
 {
  "definitions": {
+  "ArithCountFinish_v1{CW=20}": {
+   "and": 41
+  },
+  "ArithCountStep_v1{K=18,BIN=0,CW=20}": {
+   "and": 3963
+  },
+  "ArithCountStep_v1{K=18,BIN=1,CW=20}": {
+   "and": 2243
+  },
+  "ArithCountStep_v1{K=3,BIN=1,CW=4}": {
+   "and": 1996
+  },
   "ArithEncodeFinish_v1": {
    "and": 6
   },

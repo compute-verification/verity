@@ -1,18 +1,41 @@
-"""Advice v1's arithmetic encoder as Boolean Definitions: decode, inside the compile unit, is this encoder run forward
-alongside the replay scan, each window's output held to its committed segment.
+"""Advice v1's arithmetic encoder as Boolean Definitions, run forward inside the compile unit alongside the replay scan:
+counting the bits it would write, which is what the composition charges, or checking them against a committed segment.
 
-    ArithEncodeStep_v1{K, BIN}   (coder, en, symbol, seg[K]) -> (coder', n)
-    ArithEncodeFinish_v1         (coder, seg[2]) -> (ok, n)
-    KTContext_v1{C, NW}          (counts[C], en, ctx, bit) -> (ok, f0, f1, counts')
+    ArithCountStep_v1{K, BIN, CW}  (tally, en, symbol) -> tally'
+    ArithCountFinish_v1{CW}        (tally, c) -> (ok, bits)
+    tally = (low[32], high[32], used, ok, bits[CW])
+
+    ArithEncodeStep_v1{K, BIN}     (coder, en, symbol, seg[K]) -> (coder', n)
+    ArithEncodeFinish_v1           (coder, seg[2]) -> (ok, n)
     coder = (low[32], high[32], open, x, used, ok)
 
-Under advice v1 (the certifier PROTOCOL's "Advice v1") the advice is the replay's decisions, each one symbol of ENC-CODE's
-32-bit Witten–Neal–Cleary arithmetic coder (`benchmarks/network_e2e/encodings/code.py`, `ArithEncoder`) at ENC-REPLAY's
-adaptive estimate for its context, one terminated segment per certifier window. The compile unit can't run the decoder
-ahead of the replay, since which request a decision is about, and so its context and window, is the replay's position.
-So it runs the encoder forward: each decision is encoded as the replay step reads it, and the encoder's output must be
-the window's committed segment. `code.ArithDecoder.finish` takes a segment only when it is the encoder's codeword for
-what it decodes to, so this forward encoding is `decode`.
+    KTContext_v1{C, NW}            (counts[C], en, ctx, bit) -> (ok, f0, f1, counts')
+
+Under advice v1 (the certifier PROTOCOL's "Advice v1") the replay's decisions are each one symbol of ENC-CODE's 32-bit
+Witten–Neal–Cleary arithmetic coder (`benchmarks/network_e2e/encodings/code.py`, `ArithEncoder`) at ENC-REPLAY's
+adaptive estimate for its context, one terminated segment per certifier window. The compile unit runs the encoder
+forward, since which request a decision is about, and so its context and window, is the replay's position.
+
+**The counting variant** is what the PROTOCOL composes. The committed advice is the decisions themselves, which the
+replay scan reads, and the charge is their coded length: the encoder runs over the same decisions and counts the
+segment bits it would write, and the window's finish refuses unless the count is at most the declared charge c. A
+segment is `shifts + 2` bits, or none when nothing was used (code.py's `ArithEncoder`): each scaling puts one bit in it
+(a resolved bit, or a pending one the next resolution or the finish writes), and the finish two more. So the step adds
+its scalings to `bits`, and the finish adds 2 when `used`, then outputs ok (`ok` and bits ≤ c) and bits. Within one
+symbol code.py's loop takes p resolutions (E1, E2: low and high agree on their top bit) and then u underflows (E3:
+low's top two bits 01 and high's 10), and never a resolution after an underflow, which leaves low's top bit 0 and
+high's 1. In
+bit positions from the top, p is the first index where low and high differ, and u the run after it where low is 1 and
+high 0. So the step takes n = p + u from a thermometer over the top K + 2 positions (three ANDs a position), refuses
+n > K, and gets the next interval by one shift: low becomes 0 followed by low's low 31 bits shifted up by n, with 0s
+in, and high 1 followed by its shifted up with 1s in, a log shifter of bitlen(K) levels. It has no per-scaling slots,
+which the segment check needs. The count is CW bits (`CW` = 20, a window's charge below 2^20), and a count past it is
+refused.
+
+**The bit-checking variant** (`ArithEncodeStep_v1`, `ArithEncodeFinish_v1`) is the alternative composition, where the
+advice is the coded segments: the encoder's output must be the window's committed segment. `code.ArithDecoder.finish`
+takes a segment only when it is the encoder's codeword for what it decodes to, so there the forward encoding is
+`decode`. The rest of this docstring is that variant's, with the model the two share.
 
 **The coder's state.** `low` and `high` are code.py's, 32 bits each. code.py also counts its pending bits (the
 underflow scalings not yet resolved); the circuit doesn't, because it never writes the output. A pending run's bits are
@@ -52,13 +75,15 @@ After h ≥ 1 halvings f is ⌊n / 2^(h−1)⌋ + 1, so the circuit takes the fi
 passes the counts through. It refuses a context ≥ C and a count that would overflow NW bits. The context index is
 the replay's (plain: min(passes, 2), C = 3).
 
-**Statics** (public): K, the scaling slots (18 covers every symbol); BIN, binary (1) or general (0) symbols; C, the
-contexts; and NW, a count's width. Fields are little-endian.
+**Statics** (public): K, the scalings a symbol may take (18 covers every symbol); BIN, binary (1) or general (0)
+symbols; CW, the count's width; C, the contexts; and NW, a count's width in the model. Fields are little-endian. Both
+steps are specified on the states a window reaches (low ≤ high), where code.py's loop is the one above.
 
-**Cost** (`size`, ANDs): ArithEncodeStep_v1{K=18, BIN=1} is 3,244: the interval (one 33 × 16-bit product, one
-non-restoring division with 32 quotient bits, and the two ends) 1,855, the 18 scaling slots 1,188 and the segment check
-201. {K=18, BIN=0} is 4,964. ArithEncodeFinish_v1 is 6. KTContext_v1{C=3, NW=24} is 1,202. One decision under plain
-contexts is the step and the model: 4,446 ANDs.
+**Cost** (`size`, ANDs): ArithCountStep_v1{K=18, BIN=1, CW=20} is 2,243: the interval (one 33 × 16-bit product, one
+non-restoring division with 32 quotient bits, and the two ends) 1,855, the scalings at once 366 and the count 22.
+{K=18, BIN=0, CW=20} is 3,963, and ArithCountFinish_v1{CW=20} 41. One decision under plain contexts, counted, is the step
+and the model: 3,445 ANDs. ArithEncodeStep_v1{K=18, BIN=1} is 3,244: the interval 1,855, the 18 scaling slots 1,188 and
+the segment check 201. {K=18, BIN=0} is 4,964, and ArithEncodeFinish_v1 6. KTContext_v1{C=3, NW=24} is 1,202.
 """
 from __future__ import annotations
 
@@ -81,6 +106,8 @@ Q3 = 3 * Q1
 MAX_TOTAL = 1 << 16
 #: the most scalings one symbol needs: its interval keeps at least 2^14 values, and each scaling doubles it past 2^31
 K_MAX = 18
+#: the count's width the composition binds: a window's charge below 2^20 bits
+CW = 20
 
 
 def _bitlen(v: int) -> int:
@@ -193,6 +220,64 @@ def reference_kt(C: int, NW: int, counts: Sequence[tuple[int, int]], en: int, ct
     return 1, f0, f1, counts[:ctx] + ((m0, m1),) + counts[ctx + 1:]
 
 
+@dataclass(frozen=True)
+class Tally:
+    """The counting encoder's state: code.py's interval and `used`, `ok`, and `bits`, the segment bits counted."""
+
+    low: int = 0
+    high: int = TOP
+    used: int = 0
+    ok: int = 1
+    bits: int = 0
+
+
+def _scale(low: int, high: int) -> tuple[int, int, int]:
+    """code.py's loop: the interval after it and its scalings."""
+    n = 0
+    while True:
+        if high < HALF or low >= HALF:
+            low, high = low & (HALF - 1), high & (HALF - 1)
+        elif low >= Q1 and high < Q3:
+            low, high = low - Q1, high - Q1
+        else:
+            return low, high, n
+        low, high, n = 2 * low, 2 * high + 1, n + 1
+
+
+def reference_count_step(K: int, BIN: int, CW: int, st: Tally, en: int, sym: Sequence[int]) -> Tally:
+    """One symbol through code.py's encoder, its scalings added to `bits` (each puts one bit in the segment: a resolved
+    bit, or a pending one the next resolution or the finish writes). A refusal (a symbol code.py refuses, more than K
+    scalings, or `bits` past CW bits) sets `ok` to 0, and then only `ok` is specified."""
+    low, high, used = st.low, st.high, st.used
+    if en:
+        valid, cum, freq, total = _symbol(BIN, sym)
+        if not valid:
+            return replace(st, ok=0)
+        r = high - low + 1
+        low, high = low + (r * cum) // total, low + (r * (cum + freq)) // total - 1
+        used |= int(freq != total)
+    low, high, n = _scale(low, high)
+    if n > K or (st.bits + n) >> CW:
+        return replace(st, ok=0)
+    return Tally(low, high, used, st.ok, st.bits + n)
+
+
+def reference_count_finish(CW: int, st: Tally, c: int) -> tuple[int, int]:
+    """code.py's `finish` counted: (ok, bits), with bits the window's segment length (two more when `used`) and ok 0
+    unless it is at most the declared charge c."""
+    total = st.bits + 2 * st.used
+    return st.ok & int(total <= c and not total >> CW), total & ((1 << CW) - 1)
+
+
+def count_window(K: int, BIN: int, symbols: Sequence[Sequence[int]], CW: int = CW) -> int | None:
+    """The window's segment length by the references (en = 1 each), None on a refusal."""
+    st = Tally()
+    for s in symbols:
+        st = reference_count_step(K, BIN, CW, st, 1, s)
+    ok, bits = reference_count_finish(CW, st, (1 << CW) - 1)
+    return bits if ok else None
+
+
 def check_window(K: int, BIN: int, symbols: Sequence[Sequence[int]], segment: Sequence[int]) -> bool:
     """The window's segment against its symbols (en = 1 each), by the reference: every step and the finish accept, and
     the segment ends where the finish does."""
@@ -231,6 +316,26 @@ def _kt_in(S) -> list[tuple[str, int, int]]:
 
 def _kt_out(S) -> list[tuple[str, int, int]]:
     return [("ok", 1, 1), ("f0", 1, 16), ("f1", 1, 16), ("n0", S.C, S.NW), ("n1", S.C, S.NW)]
+
+
+def _tally(S) -> list[tuple[str, int, int]]:
+    return [("low", 1, PREC), ("high", 1, PREC), ("used", 1, 1), ("ok", 1, 1), ("bits", 1, S.CW)]
+
+
+def _count_in(S) -> list[tuple[str, int, int]]:
+    return _tally(S) + _step_in(S)[len(_CODER):-1]
+
+
+def _count_out(S) -> list[tuple[str, int, int]]:
+    return _tally(S)
+
+
+def _count_fin_in(S) -> list[tuple[str, int, int]]:
+    return _tally(S) + [("c", 1, S.CW)]
+
+
+def _count_fin_out(S) -> list[tuple[str, int, int]]:
+    return [("ok", 1, 1), ("bits", 1, S.CW)]
 
 
 def _type(fields) -> Tuple:
@@ -284,12 +389,8 @@ def _le_pow2(C, x, k):
     return C.AND(x[k], _nonzero(C, x[:k])).inv()
 
 
-def _build_step(C, S, *elements):
-    f = _split(_step_in(S), elements)
-    low, high = f["low"][0], f["high"][0]
-    op, x, used, ok = f["open"][0][0], f["x"][0][0], f["used"][0][0], f["ok"][0][0]
-    en, seg = f["en"][0][0], f["seg"][0]
-
+def _interval(C, S, f, low, high, used, ok, en):
+    """The symbol's subinterval (the module's "The step"): (low, high, used, ok) after it."""
     C.phase = "interval"
     r = add(C, sub(C, high, low, PREC)[0], [ONE], width=PREC + 1)
     if S.BIN:
@@ -315,14 +416,48 @@ def _build_step(C, S, *elements):
         diff = or_reduce(C, [a ^ b for a, b in zip(freq, total)])
         used = _or(C, used, C.AND(en, diff))
     ok = C.AND(ok, C.AND(en, valid.inv()).inv())
+    return low, high, used, ok
+
+
+def _flags(C, low, high):
+    """One scaling slot's case: e12 (E1 or E2 resolves a bit), e3 (an underflow) and s, whether it scales at all."""
+    e12 = (low[31] ^ high[31]).inv()
+    e3 = C.AND(C.AND(e12.inv(), low[30]), high[30].inv())
+    return e12, e3, e12 ^ e3
+
+
+def _shift(C, s, e3, low, high):
+    l30, h30 = low[30], high[30]
+    return mux(C, s, [ZERO] + low[:30] + [l30 ^ e3], low), mux(C, s, [ONE] + high[:30] + [h30 ^ e3], high)
+
+
+def _more(C, low, high):
+    """The interval would scale again: past the K slots, a refusal."""
+    return (low[31] ^ high[31]).inv() ^ C.AND(C.AND((low[31] ^ high[31]), low[30]), high[30].inv())
+
+
+def _scalings(therm, w):
+    """The count of a thermometer (slot j scales only after slot j − 1 did) in w bits, by XORs alone."""
+    n = [ZERO] * w
+    for j, t in enumerate(therm):
+        for k in range(w):
+            if ((j >> k) ^ ((j + 1) >> k)) & 1:
+                n[k] = n[k] ^ t
+    return n
+
+
+def _build_step(C, S, *elements):
+    f = _split(_step_in(S), elements)
+    low, high = f["low"][0], f["high"][0]
+    op, x, used, ok = f["open"][0][0], f["x"][0][0], f["used"][0][0], f["ok"][0][0]
+    en, seg = f["en"][0][0], f["seg"][0]
+    low, high, used, ok = _interval(C, S, f, low, high, used, ok, en)
 
     therm, bad = [], []
     for j in range(S.K):
         C.phase = "scale"
-        l31, l30, h31, h30 = low[31], low[30], high[31], high[30]
-        e12 = (l31 ^ h31).inv()
-        e3 = C.AND(C.AND(e12.inv(), l30), h30.inv())
-        s = e12 ^ e3
+        l31 = low[31]
+        e12, e3, s = _flags(C, low, high)
         C.phase = "check"
         sj = seg[j]
         bad.append(C.AND(e12, _or(C, sj ^ l31 ^ op, C.AND(op, x ^ l31))))
@@ -331,19 +466,51 @@ def _build_step(C, S, *elements):
         x = x ^ C.AND(start, sj ^ x)
         op = _or(C, C.AND(op, e12.inv()), e3)
         C.phase = "scale"
-        low = mux(C, s, [ZERO] + low[:30] + [l30 ^ e3], low)
-        high = mux(C, s, [ONE] + high[:30] + [h30 ^ e3], high)
+        low, high = _shift(C, s, e3, low, high)
         therm.append(s)
     C.phase = "check"
-    more = (low[31] ^ high[31]).inv() ^ C.AND(C.AND((low[31] ^ high[31]), low[30]), high[30].inv())
-    ok = C.AND(ok, _or(C, or_reduce(C, bad), more).inv())
-    n = [ZERO] * _bitlen(S.K)
-    for j, t in enumerate(therm):
-        for k in range(len(n)):
-            if ((j >> k) ^ ((j + 1) >> k)) & 1:
-                n[k] = n[k] ^ t
-    res = {"low": [low], "high": [high], "open": [[op]], "x": [[x]], "used": [[used]], "ok": [[ok]], "n": [n]}
+    ok = C.AND(ok, _or(C, or_reduce(C, bad), _more(C, low, high)).inv())
+    res = {"low": [low], "high": [high], "open": [[op]], "x": [[x]], "used": [[used]], "ok": [[ok]],
+           "n": [_scalings(therm, _bitlen(S.K))]}
     return _flat(_step_out(S), res)
+
+
+def _normalize(C, K, low, high):
+    """code.py's loop at once (the module's "The counting variant"): the interval after it, n its scalings, and
+    whether it takes more than K. Index i is bit 31 − i. F[i]: the first difference is at i; A: no difference through
+    i; B: past the first difference, every index since it has low 1 and high 0. Each pair joined is disjoint, so XOR
+    joins it."""
+    C.phase = "scale"
+    a, A, F = ONE, [], []
+    for i in range(K + 1):
+        F.append(C.AND(a, low[31 - i] ^ high[31 - i]))
+        a = a ^ F[i]
+        A.append(a)
+    b, B = ZERO, [ZERO]
+    for i in range(1, K + 2):
+        b = C.AND(b ^ F[i - 1], C.AND(low[31 - i], high[31 - i].inv()))
+        B.append(b)
+    T = [A[j] ^ B[j + 1] for j in range(K + 1)]
+    n = _scalings(T[:K], _bitlen(K))
+    lo, hi = low[:31], high[:31]
+    for k, s in enumerate(n):
+        sh = 1 << k
+        lo = mux(C, s, [ZERO] * sh + lo[:31 - sh], lo)
+        hi = mux(C, s, [ONE] * sh + hi[:31 - sh], hi)
+    return lo + [ZERO], hi + [ONE], n, T[K]
+
+
+def _build_count_step(C, S, *elements):
+    f = _split(_count_in(S), elements)
+    low, high, used, ok = f["low"][0], f["high"][0], f["used"][0][0], f["ok"][0][0]
+    en, bits = f["en"][0][0], f["bits"][0]
+    low, high, used, ok = _interval(C, S, f, low, high, used, ok, en)
+    low, high, n, more = _normalize(C, S.K, low, high)
+    C.phase = "count"
+    bits = add(C, bits, n, width=S.CW + 1)
+    ok = C.AND(ok, _or(C, more, bits[S.CW]).inv())
+    res = {"low": [low], "high": [high], "used": [[used]], "ok": [[ok]], "bits": [bits[:S.CW]]}
+    return _flat(_count_out(S), res)
 
 
 def _build_finish(C, S, *elements):
@@ -353,6 +520,14 @@ def _build_finish(C, S, *elements):
     bad = or_reduce(C, [seg[0] ^ b ^ op, (seg[1] ^ b).inv(), C.AND(op, x ^ b)])
     ok = C.AND(ok, C.AND(used, bad).inv())
     return _flat(_FIN_OUT, {"ok": [[ok]], "n": [[ZERO, used]]})
+
+
+def _build_count_finish(C, S, *elements):
+    f = _split(_count_fin_in(S), elements)
+    used, ok, bits, c = f["used"][0][0], f["ok"][0][0], f["bits"][0], f["c"][0]
+    total = add(C, bits, [ZERO, used], width=S.CW + 1)
+    over = _or(C, total[S.CW], sub(C, c, total[:S.CW], S.CW)[1])
+    return _flat(_count_fin_out(S), {"ok": [[C.AND(ok, over.inv())]], "bits": [total[:S.CW]]})
 
 
 def _build_kt(C, S, *elements):
@@ -423,6 +598,18 @@ def _sig_kt(S):
     return tuple((name, Array(n, Array(w, BIT))) for name, n, w in _kt_in(S)), _type(_kt_out(S))
 
 
+def _sig_count(S):
+    if not 1 <= S.K <= 30 or S.BIN not in (0, 1) or S.CW < _bitlen(S.K):
+        raise ValueError(f"statics {dict(S.__dict__)}: 1 ≤ K ≤ 30, BIN a bit and CW ≥ bitlen(K)")
+    return tuple((name, Array(n, Array(w, BIT))) for name, n, w in _count_in(S)), _type(_count_out(S))
+
+
+def _sig_count_finish(S):
+    if S.CW < 2:
+        raise ValueError(f"statics {dict(S.__dict__)}: CW ≥ 2")
+    return tuple((name, Array(n, Array(w, BIT))) for name, n, w in _count_fin_in(S)), _type(_count_fin_out(S))
+
+
 ArithEncodeStep = _part(
     "ArithEncodeStep", ("K", "BIN"), _sig_step, _build_step,
     "one symbol through ENC-CODE's 32-bit WNC arithmetic encoder, its output bits checked in the decoder's order against "
@@ -438,6 +625,16 @@ KTContext = _part(
     "ENC-REPLAY's adaptive KT estimate for one decision's context, scaled into the coder's total as advice v1 does, and "
     "its counts updated (`arith_encode.reference_kt`)")
 
+ArithCountStep = _part(
+    "ArithCountStep", ("K", "BIN", "CW"), _sig_count, _build_count_step,
+    "one symbol through ENC-CODE's 32-bit WNC arithmetic encoder, the bits it puts in the window's segment added to the "
+    "window's count (`arith_encode.reference_count_step`)")
+
+ArithCountFinish = _part(
+    "ArithCountFinish", ("CW",), _sig_count_finish, _build_count_finish,
+    "ENC-CODE's arithmetic encoder's termination added to the window's count, held to the declared charge c "
+    "(`arith_encode.reference_count_finish`)")
+
 
 def step_unit(K: int = K_MAX, BIN: int = 1):
     return bind(ArithEncodeStep, K=K, BIN=BIN)
@@ -449,6 +646,14 @@ def finish_unit():
 
 def kt_unit(C: int = 3, NW: int = 24):
     return bind(KTContext, C=C, NW=NW)
+
+
+def count_unit(K: int = K_MAX, BIN: int = 1, CW: int = CW):
+    return bind(ArithCountStep, K=K, BIN=BIN, CW=CW)
+
+
+def count_finish_unit(CW: int = CW):
+    return bind(ArithCountFinish, CW=CW)
 
 
 # --- arguments and evaluation ----------------------------------------------------------------------------------------
@@ -503,6 +708,32 @@ def evaluate_finishes(cases: Sequence[tuple[Coder, Sequence[int]]]) -> list[tupl
     return [(f["ok"][0], f["n"][0]) for f in (_fields(_FIN_OUT, row) for row in out.reshape(len(cases), -1).tolist())]
 
 
+def _tally_vals(st: Tally) -> dict:
+    return {"low": st.low, "high": st.high, "used": st.used, "ok": st.ok, "bits": st.bits}
+
+
+def evaluate_counts(K: int, BIN: int, CW: int, cases: Sequence[tuple[Tally, int, Sequence[int]]]) -> list[Tally]:
+    """The counting step at (K, BIN, CW) on each (state, en, symbol), in one evaluation."""
+    S = SimpleNamespace(K=K, BIN=BIN, CW=CW)
+    names = ("bit", "f0", "f1") if BIN else ("cum", "freq", "total")
+    args = [list(rows) for rows in zip(*(_args(_count_in(S), {**_tally_vals(st), "en": en, **dict(zip(names, sym))})
+                                         for st, en, sym in cases))]
+    out = evaluate_bits(count_unit(K, BIN, CW), *args)
+    res = []
+    for row in out.reshape(len(cases), -1).tolist():
+        f = _fields(_count_out(S), row)
+        res.append(Tally(f["low"][0], f["high"][0], f["used"][0], f["ok"][0], f["bits"][0]))
+    return res
+
+
+def evaluate_count_finishes(CW: int, cases: Sequence[tuple[Tally, int]]) -> list[tuple[int, int]]:
+    S = SimpleNamespace(CW=CW)
+    args = [list(rows) for rows in zip(*(_args(_count_fin_in(S), {**_tally_vals(st), "c": c}) for st, c in cases))]
+    out = evaluate_bits(count_finish_unit(CW), *args)
+    return [(f["ok"][0], f["bits"][0]) for f in (_fields(_count_fin_out(S), row)
+                                                for row in out.reshape(len(cases), -1).tolist())]
+
+
 def evaluate_kt(C: int, NW: int, cases: Sequence[tuple[Sequence[tuple[int, int]], int, int, int]]
                 ) -> list[tuple[int, int, int, tuple[tuple[int, int], ...]]]:
     S = SimpleNamespace(C=C, NW=NW)
@@ -526,7 +757,9 @@ def evaluate_kt(C: int, NW: int, cases: Sequence[tuple[Sequence[tuple[int, int]]
 @lru_cache(maxsize=None)
 def _staged(kind: str, key: tuple) -> dict[str, int]:
     sig, build, statics = {"step": (_sig_step, _build_step, ("K", "BIN")), "finish": (_sig_finish, _build_finish, ()),
-                           "kt": (_sig_kt, _build_kt, ("C", "NW"))}[kind]
+                           "kt": (_sig_kt, _build_kt, ("C", "NW")),
+                           "count": (_sig_count, _build_count_step, ("K", "BIN", "CW")),
+                           "count_finish": (_sig_count_finish, _build_count_finish, ("CW",))}[kind]
     S = SimpleNamespace(**dict(zip(statics, key)))
     C = Circuit(cse=True)
     params, _ = sig(S)
@@ -536,13 +769,16 @@ def _staged(kind: str, key: tuple) -> dict[str, int]:
 
 
 def size(kind: str = "step", **st) -> dict[str, int]:
-    """ANDs by stage of the step (K, BIN), the finish or the model (C, NW), traced on a counting circuit."""
-    keys = {"step": ("K", "BIN"), "finish": (), "kt": ("C", "NW")}[kind]
+    """ANDs by stage of the step (K, BIN), the finish, the model (C, NW), the counting step (K, BIN, CW) or its finish
+    (CW), traced on a counting circuit."""
+    keys = {"step": ("K", "BIN"), "finish": (), "kt": ("C", "NW"), "count": ("K", "BIN", "CW"), "count_finish": ("CW",)}[kind]
     out = dict(_staged(kind, tuple(st[k] for k in keys)))
     out["ands"] = sum(out.values())
     return out
 
 
-__all__ = ["ArithEncodeFinish", "ArithEncodeStep", "Coder", "HALF", "K_MAX", "KTContext", "MAX_TOTAL", "Q1", "TOP",
-           "check_window", "evaluate_finishes", "evaluate_kt", "evaluate_steps", "finish_unit", "fresh", "kt_unit",
+__all__ = ["ArithCountFinish", "ArithCountStep", "ArithEncodeFinish", "ArithEncodeStep", "CW", "Coder", "HALF", "K_MAX",
+           "KTContext", "MAX_TOTAL", "Q1", "TOP", "Tally", "check_window", "count_finish_unit", "count_unit",
+           "count_window", "evaluate_count_finishes", "evaluate_counts", "evaluate_finishes", "evaluate_kt",
+           "evaluate_steps", "finish_unit", "fresh", "kt_unit", "reference_count_finish", "reference_count_step",
            "reference_finish", "reference_kt", "reference_step", "scaled", "size", "step_arguments", "step_unit"]

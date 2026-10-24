@@ -218,8 +218,92 @@ def test_refusals():
     assert [g[0] for g in got[:2]] == [0, 0] and got[2:] == want[2:]
 
 
+def _same_counts(K_, BIN, CW, cases):
+    got = AE.evaluate_counts(K_, BIN, CW, cases)
+    for c, g in zip(cases, got):
+        want = AE.reference_count_step(K_, BIN, CW, *c)
+        assert (g.ok == 0) if want.ok == 0 else g == want, (c, g, want)
+    return got
+
+
+def _same_count_finishes(CW, cases):
+    got = AE.evaluate_count_finishes(CW, cases)
+    for c, g in zip(cases, got):
+        want = AE.reference_count_finish(CW, *c)
+        assert (g[0] == 0) if want[0] == 0 else g == want, (c, g, want)
+    return got
+
+
+def test_the_count_is_code_pys_segment_length():
+    """On every fixture window the counting reference keeps code.py's interval and `used` after each symbol, and its
+    finish counts the segment code.py wrote: accepted at that charge, refused one bit below it."""
+    seen = 0
+    for stream in _streams():
+        for win in stream["windows"]:
+            st, n = AE.Tally(), len(win["segment"])
+            for k, (sym, (low, high, _pending, used)) in enumerate(zip(win["symbols"], win["states"], strict=True)):
+                st = AE.reference_count_step(K, stream["BIN"], AE.CW, st, 1, sym)
+                assert (st.ok, st.low, st.high, st.used) == (1, low, high, used), f"{stream['source']} symbol {k}"
+            assert AE.reference_count_finish(AE.CW, st, n) == (1, n)
+            if n:
+                assert AE.reference_count_finish(AE.CW, st, n - 1)[0] == 0
+            assert AE.count_window(K, stream["BIN"], win["symbols"]) == n
+            seen += 1
+    assert seen >= 16
+
+
+def test_the_counting_circuits_are_the_references():
+    """On the fixture's symbols and on random runs, each with its step disabled too, and each window's finish at its
+    segment's length and one bit below it."""
+    rng = random.Random(2)
+    for BIN in (1, 0):
+        cases, fins = [], []
+        runs = [win["symbols"] for s in _streams() if s["BIN"] == BIN for win in s["windows"]]
+        runs += [[_symbol(rng, BIN) for _ in range(rng.randrange(1, 30))] for _ in range(60)]
+        for syms in runs:
+            st = AE.Tally()
+            for s in syms:
+                cases += [(st, 1, s), (st, 0, s)]
+                if AE._symbol(BIN, s)[0]:
+                    st = AE.reference_count_step(K, BIN, AE.CW, st, 1, s)
+            valid = [s for s in syms if AE._symbol(BIN, s)[0]]
+            n = len(_encode(BIN, valid))
+            assert AE.count_window(K, BIN, valid) == n
+            fins += [(st, n), (st, max(n - 1, 0))]
+        want = [AE.reference_count_step(K, BIN, AE.CW, *c) for c in cases]
+        assert any(w.bits - c[0].bits >= 15 for w, c in zip(want, cases) if w.ok) and sum(not w.ok for w in want) > 20
+        _same_counts(K, BIN, AE.CW, cases)
+        _same_count_finishes(AE.CW, fins)
+
+
+def test_counting_refusals():
+    st = AE.Tally()
+    for BIN, sym in [(1, (1, 0, 5)), (1, (0, 5, 0)), (1, (1, 40000, 30000)), (0, (0, 0, 5)), (0, (3, 4, 6)),
+                     (0, (0, 1, AE.MAX_TOTAL + 1))]:
+        (got,) = _same_counts(K, BIN, AE.CW, [(st, 1, sym)])
+        assert not got.ok
+        assert _same_counts(K, BIN, AE.CW, [(st, 0, sym)]) == [st]
+    # a symbol of probability 2^-16 takes 16 scalings: refused at K = 3, and by a 4-bit count
+    sym = (1, AE.MAX_TOTAL - 1, 1)
+    assert AE.reference_count_step(K, 1, AE.CW, st, 1, sym).bits == 16
+    assert not _same_counts(3, 1, 4, [(st, 1, sym)])[0].ok
+    assert not _same_counts(K, 1, 5, [(AE.Tally(bits=16), 1, sym)])[0].ok
+    two = AE.reference_count_step(K, 1, 5, st, 1, (1, 3, 1))
+    assert two.ok and two.bits == 2 and _same_counts(K, 1, 5, [(st, 1, (1, 3, 1))]) == [two]
+    # code.py's early return: the only possible symbol leaves the window unused, and its finish counts nothing
+    (got,) = _same_counts(K, 0, AE.CW, [(st, 1, (0, 9, 9))])
+    assert got == st
+    # the finish: two bits once used, held to c, and a count that overflows CW bits refused
+    used, full = AE.Tally(used=1, bits=13), AE.Tally(used=1, bits=14)
+    got = _same_count_finishes(4, [(st, 0), (used, 15), (used, 14), (full, 15)])
+    assert got[:2] == [(1, 0), (1, 15)] and [g[0] for g in got[2:]] == [0, 0]
+
+
 def test_size_counts_the_gates():
     assert AE.size("step", K=K, BIN=1)["ands"] == ands(AE.step_unit(K, 1))
     assert AE.size("step", K=K, BIN=0)["ands"] == ands(AE.step_unit(K, 0))
     assert AE.size("finish")["ands"] == ands(AE.finish_unit())
     assert AE.size("kt", C=3, NW=24)["ands"] == ands(AE.kt_unit(3, 24))
+    for BIN in (1, 0):
+        assert AE.size("count", K=K, BIN=BIN, CW=AE.CW)["ands"] == ands(AE.count_unit(K, BIN, AE.CW))
+    assert AE.size("count_finish", CW=AE.CW)["ands"] == ands(AE.count_finish_unit(AE.CW))
