@@ -122,16 +122,12 @@ Arms:
                  ARM on $HB_H1U_KC's
     ARM-cgp      a dither-a-so arm serving at priority (DITHER_SO_PRIO=1) with vLLM's graphs captured at it too
                  (DITHER_SO_CAPTURE_PRIO=1, `dither_so.capture_at`)
-    ARM-cgn      ARM-cgp with each kernel node of vLLM's graphs set to that priority before instantiation
-                 (DITHER_SO_CAPTURE_PRIO=2; the stats' capture_node_priorities count the nodes' captured priorities)
     ARM-mc32     a dither arm whose worker has 32 hardware queues (CUDA_DEVICE_MAX_CONNECTIONS=32, set before its engine
                  makes the CUDA context)
     ARM-skip, ARM-rd0  a dither-a-so J10-R arm whose dead row blocks are the zero receipt (DITHER_UNITS_SKIP_DEAD=1), or
                  one with DITHER_SO_RDEAD=0 (J10-R's default computes them in full, which $DITHER_SO_RDEAD=1 refuses)
     ARM-lag1, ARM-lag2  a dither-a-so arm with DITHER_SO_ROOT_LAG=1 or 2
     ARM-ug0      a dither-a-so arm whose units are launched each step, not replayed as a CUDA graph (DITHER_SO_GRAPH=0)
-    ARM-ue       a dither-a-so arm whose units are dispatched at the start of `after`, beside the step's trees
-                 (DITHER_SO_UNITS_EARLY=1)
     ARM-zs       a dither-a-so arm whose z tables build on a tree stream beside its A tables (DITHER_SO_ZSIDE=1)
     ARM-mmc      a dither-a arm whose GEMMs take $SBENCH_MM_CFG's configs ($DITHER_MM_CFG, dmmsweep.py's best.json)
 
@@ -307,7 +303,6 @@ SUFFIXES = {"-xl": install_exactlin, "-a2": a_form(2), "-a3": a_form(3), "-j10r"
             "-mc32": env_of("CUDA_DEVICE_MAX_CONNECTIONS", "32"), "-skip": env_of("DITHER_UNITS_SKIP_DEAD", "1"),
             "-rd0": env_of("DITHER_SO_RDEAD", "0"), "-lag1": env_of("DITHER_SO_ROOT_LAG", "1"),
             "-lag2": env_of("DITHER_SO_ROOT_LAG", "2"), "-ug0": env_of("DITHER_SO_GRAPH", "0"),
-            "-cgn": env_of("DITHER_SO_CAPTURE_PRIO", "2"), "-ue": env_of("DITHER_SO_UNITS_EARLY", "1"),
             "-zs": env_of("DITHER_SO_ZSIDE", "1"), "-mmc": mm_cfg}
 # -smqQ / -smqQoD / -smqQoDcC: a dither-a-so arm's units on the SMs whose id % D < Q, at most C CTAs on each
 # ($DITHER_SO_UNITS_SMQ=Q/D/C, D 8 and no cap without them; -smq0 every SM, whatever the run's environment says)

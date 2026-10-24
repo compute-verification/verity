@@ -94,7 +94,6 @@ $DITHER_MANIFEST_DIR, which `dither_manifest.py check` holds to the challenger's
 """
 from __future__ import annotations
 
-import collections
 import contextlib
 import ctypes as C
 import dataclasses
@@ -133,9 +132,7 @@ MANIFEST_ENV = "DITHER_MANIFEST_DIR"    # an off-node window's manifest.json goe
 GRAPH_ENV = "DITHER_SO_GRAPH"           # "0": a step's units launched call by call (`SoSide.dispatch`), else one graph
 PRIO_ENV = "DITHER_SO_PRIO"             # "1": any -so arm serves as -ovp does, on a stream above the units' (`patch`)
 # "1": under the serving priority, vLLM's graphs captured on a stream at that priority too (`capture_at`): vLLM's
-# graph_capture captures on a fresh priority-0 stream, and a replayed graph's kernels keep their capture's priority;
-# "2": and every kernel node of those graphs set to that priority before instantiation (torch instantiates with
-# cudaGraphInstantiateFlagUseNodePriority, so a node's own priority, not the launch stream's, orders its blocks)
+# graph_capture captures on a fresh priority-0 stream, and a replayed graph's kernels keep their capture's priority
 CAPTURE_PRIO_ENV = "DITHER_SO_CAPTURE_PRIO"
 # "1": a step's units in one launch over every call (h1u.cu's kh_units_multi: each unit's noise hashed by its own warp,
 # no workspace), in place of each call's noise and units launches; the same receipts
@@ -176,9 +173,6 @@ SKIP_DEAD_ENV = "DITHER_UNITS_SKIP_DEAD"
 # is already out, else at the next `after`'s start (after forward s + 1), so the trees also run while `before` and the
 # engine's input preparation do; round s then waits up to a forward longer for its coin (a deeper ring: -so10)
 ROOT_LAG_ENV = "DITHER_SO_ROOT_LAG"
-# "1" (without -ov): step s + 1 - (D - 1)'s units dispatched at the start of step s's `after` (its coin long back), so
-# they run beside step s's trees, not after them; the same units, salts and rounds (round s + 1 still after them)
-UNITS_EARLY_ENV = "DITHER_SO_UNITS_EARLY"
 # "1" (with the tree streams, -pt under the serving priority, without -ov): a step's z tables built on the first tree
 # stream from the forward's end, beside its A tables, stash and spill on the serving stream, which waits for them
 # before `before_mid`; the same tables
@@ -251,12 +245,8 @@ class SoWindow(DO.Window):
             raise RuntimeError(f"{COIN_ASYNC_ENV}={self.coin_async}: 0, 1 or 2")
         self.deferred: int | None = None
         self.deferrals = {"deferred": 0, "in_forward": 0, "in_after": 0, "after_forward": 0}
-        self.units_early = os.environ.get(UNITS_EARLY_ENV) == "1"
         self.z_side = os.environ.get(ZSIDE_ENV) == "1"
         self.ev_z = (torch.cuda.Event(), torch.cuda.Event())
-        if self.units_early and (self.overlap or self.depth < 3):
-            raise RuntimeError(f"{UNITS_EARLY_ENV}=1 serves without -ov (whose units have their own schedule) and at "
-                               f"depth 3 or more (at 2 the step it dispatches is the one `after` stashes)")
         self.late_waits: list[float] = []
         self.a_step = os.environ.get(DO.A_STEP_ENV) == "1"
         if self.a_step and (self.a_once or self.overlap):
@@ -675,7 +665,6 @@ class SoWindow(DO.Window):
         if self.deferred is not None and self.coin_async == 1:
             t_late = self._late_dispatch()
         s, m, cap, pre, ev, kinds = self.s, self.m, self.cap, self.pre, self.ev, self.round_kinds
-        early = self._dispatch_next(s, d) if self.units_early and self.deferred is None else None
         zs = None
         if self.z_side:
             if self.tree_streams is None:
@@ -724,7 +713,7 @@ class SoWindow(DO.Window):
             self.c.build(pre["z"], self.stepv[0:1])
         for f in self.before_mid:
             f()
-        if self.deferred is not None and self.deferred <= s - d:
+        if self.deferred is not None:
             t_late = self._late_dispatch()
         self.phase("receipt_leaf")
         o = pre["mid"].level_off[kinds.index("receipt-step")]
@@ -800,12 +789,21 @@ class SoWindow(DO.Window):
             if prev == "fault_zlate" and prev in self.caps:
                 self.caps[prev].update(next_leaves=leaves)
         units_wait = self.ev_w[0].elapsed_time(self.ev_w[1]) if waited and lag is None else None
-        t_capd = time.perf_counter()
-        t_wait, t_coin, t_disp = early if early is not None else self._dispatch_next(s, d)
+        self.phase("coin_wait")
+        ju = s + 1 - d
+        t_wait = t_coin = t_disp = time.perf_counter()
+        if ju in self.stashed:
+            if self.coin_async and s != self.end_at and self.pipe.opening(self.ix(ju), wait=False) is None:
+                self.deferred = ju
+                self.deferrals["deferred"] += 1
+            else:
+                self.stashed.discard(ju)
+                t_coin = self.dispatch_units(ju)
+                t_disp = time.perf_counter()
         t_end = time.perf_counter()
         self.phase(None)
         ph = {"m": m, "forward_ms": 1e3 * (t_fwd - self.t_before), "trees_ms": 1e3 * (t_root - t_fwd),
-              "record_host_ms": 1e3 * (t_sent - t_root), "captures_ms": 1e3 * (t_capd - t_sent),
+              "record_host_ms": 1e3 * (t_sent - t_root), "captures_ms": 1e3 * (t_wait - t_sent),
               "coin_wait_ms": 1e3 * (t_coin - t_wait),
               "dispatch_ms": 1e3 * (t_disp - t_coin), "between_ms": 1e3 * (t_end - t_fwd),
               "coin_late_ms": 1e3 * t_late}
@@ -820,22 +818,6 @@ class SoWindow(DO.Window):
         self.s += 1
         self.steps += 1
         self._step_end(s)
-
-    def _dispatch_next(self, s: int, d: int) -> tuple[float, float, float]:
-        """Step s + 1 - d's units, whose receipts round s + 1 commits: dispatched if their coin is back (or step s ends
-        the window), else deferred under $DITHER_SO_COIN_ASYNC; (wait start, coin back, dispatched) on perf_counter."""
-        self.phase("coin_wait")
-        ju = s + 1 - d
-        t_wait = t_coin = t_disp = time.perf_counter()
-        if ju in self.stashed:
-            if self.coin_async and s != self.end_at and self.pipe.opening(self.ix(ju), wait=False) is None:
-                self.deferred = ju
-                self.deferrals["deferred"] += 1
-            else:
-                self.stashed.discard(ju)
-                t_coin = self.dispatch_units(ju)
-                t_disp = time.perf_counter()
-        return t_wait, t_coin, t_disp
 
     def _step_end(self, s: int) -> None:
         if s == self.end_at:
@@ -927,7 +909,7 @@ class SoWindow(DO.Window):
                      "coin_wait_ms": {"n": len(waits), "p50": _q(waits, 0.5), "p90": _q(waits, 0.9), "max": _q(waits, 1.0)},
                      "coin_async": {"on": self.coin_async, **deferrals,
                                     "late_wait_ms": {"n": len(late), "p50": _q(late, 0.5), "max": _q(late, 1.0)}},
-                     "units_early": self.units_early, "z_side": self.z_side,
+                     "z_side": self.z_side,
                      "root_lag": {"on": self.root_lag, "steps": lagn,
                                   "wait_ms": {"p50": _q(lagw, 0.5), "p90": _q(lagw, 0.9), "max": _q(lagw, 1.0)}},
                      "order_reason": self.order_why, "windows": self.k + 1, "window_open": self.open,
@@ -936,9 +918,7 @@ class SoWindow(DO.Window):
                      "roots_sha512": hashlib.sha512(b"".join(sent)).hexdigest(),
                      "window_end": self.end_stats(), "serving_stream_priority": torch.cuda.current_stream().priority,
                      "units_stream_priority": DA.SIDE[0].side.priority if DA.SIDE else None,
-                     "capture_stream_priority": getattr(torch.cuda.graph, "so_priority", None),
-                     # kernel nodes of vLLM's graphs by their captured priority, and how many `capture_at` set
-                     "capture_node_priorities": dict(getattr(torch.cuda.graph, "so_nodes", None) or {})}
+                     "capture_stream_priority": getattr(torch.cuda.graph, "so_priority", None)}
         if ov is not None:
             doc["so"]["overlap"] = {"order": OV_ORDER, "ring": ov.R, "rounds_built": ov.sent_upto + 1,
                                     "units_dispatched": ov.dispatched_upto + 1,
@@ -1295,7 +1275,7 @@ class SoSide(DA.Side):
                 cg = self.graphs.get((p, m))
                 if cg is None:
                     t0 = time.perf_counter()
-                    cg = torch.cuda.CUDAGraph(keep_graph=False)
+                    cg = torch.cuda.CUDAGraph()
                     cg.capture_begin(capture_error_mode="thread_local")
                     try:
                         rc = self._units(p, m)
@@ -1862,33 +1842,22 @@ def patch(t: int, h1c: str, h1o: str, unit: str, h1u: str, ao: str, pt: bool, de
         # vLLM serves (replays its graphs) on the stream its patched set_stream last recorded
         from vllm.utils import torch_utils  # noqa: F401
         torch.cuda.set_stream(torch.cuda.Stream(priority=-1))
-        if os.environ.get(CAPTURE_PRIO_ENV) in ("1", "2"):
-            capture_at(-1, nodes=os.environ[CAPTURE_PRIO_ENV] == "2")
+        if os.environ.get(CAPTURE_PRIO_ENV) == "1":
+            capture_at(-1)
     DO.Window = SoWindow
     DA.side = side
 
 
-def capture_at(priority: int, nodes: bool = False) -> None:
+def capture_at(priority: int) -> None:
     """Every `torch.cuda.graph` capture asked of a stream below `priority` (vLLM's) taken on one at it instead; the
-    units' graphs (`SoSide.dispatch`, capture_begin on the units stream) keep theirs.  Each such graph is kept
-    (keep_graph) and instantiated after its kernel nodes' captured priorities are counted (`so_nodes`); `nodes`: each
-    of those nodes set to `priority` first."""
+    units' graphs (`SoSide.dispatch`, capture_begin on the units stream) keep theirs."""
     base = torch.cuda.graph
     if getattr(base, "so_priority", None) is not None:
         return
     streams: dict[int, torch.cuda.Stream] = {}
 
-    class KeptGraph(torch.cuda.CUDAGraph):
-        # the C++ base takes keep_graph in __init__ (torch.cuda.CUDAGraph's __new__ passes it on, unread)
-        def __new__(cls, keep_graph: bool = True):
-            return super().__new__(cls, keep_graph)
-
-        def __init__(self, keep_graph: bool = True):
-            super().__init__(keep_graph)
-
     class graph(base):
         so_priority = priority
-        so_nodes: collections.Counter = collections.Counter()
 
         def __init__(self, cuda_graph, pool=None, stream=None, *args, **kwargs):
             if stream is None or stream.priority > priority:
@@ -1898,42 +1867,7 @@ def capture_at(priority: int, nodes: bool = False) -> None:
                 stream = streams[dev]
             super().__init__(cuda_graph, pool, stream, *args, **kwargs)
 
-        def __exit__(self, *args):
-            super().__exit__(*args)
-            if args[0] is None and isinstance(self.cuda_graph, KeptGraph):
-                node_priority(self.cuda_graph.raw_cuda_graph(), priority if nodes else None, graph.so_nodes)
-                self.cuda_graph.instantiate()
-
-    torch.cuda.CUDAGraph = KeptGraph
     torch.cuda.graph = graph
-
-
-def node_priority(raw: int, priority: int | None, seen: collections.Counter) -> None:
-    """Count the kernel nodes of the cudaGraph_t `raw` by their priority attribute in `seen` (child graphs as
-    "child_graphs"), and set each to `priority` unless it's None ("set" counts those)."""
-    from cuda.bindings import runtime as rt
-
-    def ok(res):
-        err, *out = res if isinstance(res, tuple) else (res,)
-        if err != rt.cudaError_t.cudaSuccess:
-            raise RuntimeError(f"dither_so capture_at: {err!r}")
-        return out[0] if len(out) == 1 else out
-
-    _, n = ok(rt.cudaGraphGetNodes(raw, numNodes=0))
-    found, n = ok(rt.cudaGraphGetNodes(raw, numNodes=n))
-    attr = rt.cudaLaunchAttributeID.cudaLaunchAttributePriority
-    for node in found[:n]:
-        kind = ok(rt.cudaGraphNodeGetType(node))
-        if kind == rt.cudaGraphNodeType.cudaGraphNodeTypeGraph:
-            seen["child_graphs"] += 1
-        if kind != rt.cudaGraphNodeType.cudaGraphNodeTypeKernel:
-            continue
-        value = ok(rt.cudaGraphKernelNodeGetAttribute(node, attr))
-        seen[f"priority {value.priority}"] += 1
-        if priority is not None:
-            value.priority = priority
-            ok(rt.cudaGraphKernelNodeSetAttribute(node, attr, value))
-            seen["set"] += 1
 
 
 def stats(win: SoWindow):
