@@ -7,12 +7,15 @@ and each window's salt is revealed once. The same holds four in flight against a
 last two tokens in one event, as vLLM does: the plan's F is the body's tokens, and the shim pads a short response. On
 N2's served profile (`--profile served`) the plan fixes no egress counts: the proxy admits requests by NET-54's rule,
 a group sent in a window's first bucket goes behind the salt frame, and N2's served counts accept honest traffic on
-every window and refuse the extra event."""
+every window and refuse the extra event. Against an endpoint that streams GLM-5.3's tokens (multi-byte, and tokens
+that split a character's UTF-8, which vLLM sends as chunks of no text) both profiles accept honest traffic with F the
+body's tokens, and a token of more than 64 bytes needs F declared (`--response-frames`)."""
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import codecs
 import importlib.util
 import itertools
 import json
@@ -60,10 +63,14 @@ class _SideBySide:
     each group's responses wait for the whole group, then write their chunks in turn, one each, so the shim reads them
     interleaved (`writes`: (request, chunk) in write order). `/v1/models` lists one model and `/tokenize` makes 200
     tokens of any prompt. For the requests `merges` picks (by arrival), the last two tokens share one chunk, as vLLM
-    v1's output collector merges a request's deltas the API server hasn't read yet."""
+    v1's output collector merges a request's deltas the API server hasn't read yet. Token k's bytes are `token(k)`,
+    detokenized as vLLM's detokenizer does: bytes that end inside a UTF-8 character are held back, so their chunk has
+    no text and the next carries them, and an incomplete character at the end is never sent; the text goes in the
+    chunk as UTF-8, not escaped, as vLLM's JSON writes it."""
 
-    def __init__(self, group: int, merges=lambda request: False) -> None:
+    def __init__(self, group: int, merges=lambda request: False, token=lambda k: b" t%d" % k) -> None:
         self.group, self.arrived, self.writes, self.bodies, self.merges = group, 0, [], [], merges
+        self.token = token
         self.turns: dict = defaultdict(asyncio.Event)
 
     async def __call__(self, reader, writer):
@@ -85,12 +92,13 @@ class _SideBySide:
         if i == self.group - 1:
             self.turns[(g, 0, 0)].set()
         writer.write(b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ntransfer-encoding: chunked\r\n\r\n")
-        text, n = b"", body["max_tokens"]
+        text, n, detokenize = "", body["max_tokens"], codecs.getincrementaldecoder("utf-8")()
         for k in range(n):
             await self.turns[(g, k, i)].wait()
-            text += b" t%d" % k
+            text += detokenize.decode(self.token(k))
             if not (k == n - 2 and self.merges(me)):
-                p, text = b'data: {"choices":[{"text":"%s"}]}\n\n' % text, b""
+                chunk = json.dumps({"choices": [{"text": text}]}, ensure_ascii=False, separators=(",", ":"))
+                p, text = b"data: %s\n\n" % chunk.encode(), ""
                 writer.write(b"%x\r\n%s\r\n" % (len(p), p))
                 await writer.drain()
                 self.writes.append((me, k))
@@ -222,8 +230,8 @@ def test_four_in_flight_the_endpoints_shape_is_sent_and_the_shim_writes_request_
     response whole, in the order their requests reached it, so the egress counts are the planned profile's and honest
     traffic is accepted on every link-window."""
     endpoint = _SideBySide(2)
-    args = argparse.Namespace(model=None, api_key_env=None, prompt_tokens=128, tokens=TOKENS, probes=4, in_flight=4,
-                              requests=REQUESTS, delta_buckets=None, profile="planned")
+    args = argparse.Namespace(model=None, api_key_env=None, prompt_tokens=128, tokens=TOKENS, response_frames=None,
+                              probes=4, in_flight=4, requests=REQUESTS, delta_buckets=None, profile="planned")
 
     async def go():
         server = await asyncio.start_server(endpoint, "127.0.0.1", 0)
@@ -376,6 +384,11 @@ def test_the_served_plan_takes_f_from_the_bodys_tokens_and_refuses_a_response_lo
             cs.served_plan(probed(*lengths), 4, delta_buckets=20)
     with pytest.raises(ValueError, match="exactly its tokens"):
         cs.served_plan(probed(TOKENS) | {"body": body | {"min_tokens": 1}}, 4, delta_buckets=20)
+    _, plan = cs.served_plan(probed(TOKENS, TOKENS + 1), 4, delta_buckets=20, frames=TOKENS + 1)
+    assert plan["pad_to"] == plan["served"]["response_frames"] == TOKENS + 1 and plan["served"]["tokens"] == TOKENS
+    assert sum(map(sum, plan["occupancy"]["egress"])) == 4 * (TOKENS + 1)
+    with pytest.raises(ValueError, match="at least the body's"):
+        cs.served_plan(probed(TOKENS), 4, delta_buckets=20, frames=TOKENS - 1)
 
 
 MERGED_TOKENS = 64
@@ -410,8 +423,9 @@ def merged(tmp_path_factory):
     every other response's last two tokens in one chunk: honest, late and extra, each checked."""
     tmp = tmp_path_factory.mktemp("merged")
     endpoint = _SideBySide(2, merges=lambda request: request % 2 == 1)
-    args = argparse.Namespace(model=None, api_key_env=None, prompt_tokens=128, tokens=MERGED_TOKENS, probes=4,
-                              in_flight=4, requests=REQUESTS, delta_buckets=None, profile="planned")
+    args = argparse.Namespace(model=None, api_key_env=None, prompt_tokens=128, tokens=MERGED_TOKENS,
+                              response_frames=None, probes=4, in_flight=4, requests=REQUESTS, delta_buckets=None,
+                              profile="planned")
     challenger = cs.signer(tmp / "keys" / "challenger", 6)
 
     async def go():
@@ -487,8 +501,9 @@ def served_profile(tmp_path_factory):
     server holds is answered, so an endpoint that held one for its partner would never answer it."""
     tmp = tmp_path_factory.mktemp("served-profile")
     endpoint = _SideBySide(1, merges=lambda request: request % 2 == 1)
-    args = argparse.Namespace(model=None, api_key_env=None, prompt_tokens=128, tokens=MERGED_TOKENS, probes=4,
-                              in_flight=4, requests=REQUESTS, delta_buckets=30, profile="served")
+    args = argparse.Namespace(model=None, api_key_env=None, prompt_tokens=128, tokens=MERGED_TOKENS,
+                              response_frames=None, probes=4, in_flight=4, requests=REQUESTS, delta_buckets=30,
+                              profile="served")
     challenger = cs.signer(tmp / "keys" / "challenger", 6)
 
     async def go():
@@ -591,3 +606,124 @@ def test_each_salt_is_revealed_once_under_the_served_profile(served_profile):
         assert check["salt_again"].startswith("refused: the certifier refused window 0's salt")
         assert runs[strategy]["revealed"] == [0, 1, 2]
         assert len({r["salt_fingerprint"] for r in check["rows"]}) == 3
+
+
+#: Tokens of GLM-5.3's tokenizer (zai-org/GLM-5.3 at aca966e4, their ids beside them): words and punctuation of two
+#: and three bytes a character, and tokens that split a character's UTF-8, as 🦙 (three tokens) and 龘 (two) are split;
+#: the tokenizer has 1095 tokens that aren't whole UTF-8.
+GLM_TOKENS = ("数据".encode(),  # 99080
+              " 计算".encode(),  # 118648
+              "，".encode(),  # 3837
+              b"\xf0\x9f", b"\xa6", b"\x99",  # 9281, 99, 247: 🦙
+              "模型".encode(),  # 100484
+              b"\xe9\xbe", b"\x98",  # 82225, 246: 龘
+              "。".encode(),  # 1773
+              b" GL", b"M")  # 5588, 44
+#: GLM-5.3's token 96598, 80 spaces: one of its 124 tokens of more than `active.TOKEN_BYTES` (64) bytes
+LONG_TOKEN = b" " * 80
+
+
+def _glm_token(k: int) -> bytes:
+    return GLM_TOKENS[k % len(GLM_TOKENS)]
+
+
+def _rehearse(tmp: Path, endpoint, args, strategies=cs.STRATEGIES) -> tuple[dict, dict, dict, dict]:
+    """(probe, calibration, plan, runs): `endpoint` on a port, planned by `plan_of` with `args`, then each of
+    `strategies` run on the injected clock and checked."""
+    challenger = cs.signer(tmp / "keys" / "challenger", 6)
+
+    async def go():
+        server = await asyncio.start_server(endpoint, "127.0.0.1", 0)
+        upstream = server.sockets[0].getsockname()[:2]
+        url = "http://%s:%d" % upstream
+        try:
+            probed, report, plan = await asyncio.to_thread(cs.plan_of, args, url, lambda: 0.0)
+            runs = {}
+            for strategy in strategies:
+                certifier = cs.signer(tmp / "keys" / strategy, 6)
+                try:
+                    runs[strategy] = await asyncio.to_thread(_run, tmp / strategy, plan, report, url, upstream,
+                                                             certifier, challenger, strategy)
+                finally:
+                    certifier.close()
+        finally:
+            server.close()
+        return probed, report, plan, runs
+
+    try:
+        return asyncio.run(go())
+    finally:
+        challenger.close()
+
+
+def _glm_args(profile: str, response_frames: int | None = None) -> argparse.Namespace:
+    return argparse.Namespace(model=None, api_key_env=None, prompt_tokens=128, tokens=MERGED_TOKENS,
+                              response_frames=response_frames, probes=4, in_flight=4, requests=REQUESTS,
+                              delta_buckets=30, profile=profile)
+
+
+@pytest.fixture(scope="module", params=cs.PROFILES)
+def glm(request, tmp_path_factory):
+    """The gate's shape (four in flight, 64 tokens, every other response's last two tokens in one chunk, D = 30) on
+    each of N2's profiles, against an endpoint that streams GLM-5.3's tokens: honest, late and extra, each checked."""
+    tmp = tmp_path_factory.mktemp(f"glm-{request.param}")
+    endpoint = _SideBySide(1, merges=lambda r: r % 2 == 1, token=_glm_token)
+    return (tmp, *_rehearse(tmp, endpoint, _glm_args(request.param)))
+
+
+def test_a_glm_token_is_one_event_and_the_shim_carries_the_text_byte_for_byte(glm):
+    """F is still the body's tokens: a token that ends inside a character is a chunk of no text, so an empty event,
+    and the next event carries the character whole; each response's events, joined, are the UTF-8 text the endpoint
+    sent, byte for byte."""
+    tmp, probed, _, plan, _ = glm
+    assert sorted({r["events"] for r in probed["responses"]}) == [MERGED_TOKENS - 1, MERGED_TOKENS]
+    assert plan["pad_to"] == plan["served"]["response_frames"] == plan["served"]["tokens"] == MERGED_TOKENS
+    detokenize = codecs.getincrementaldecoder("utf-8")()
+    text = "".join(detokenize.decode(_glm_token(k)) for k in range(MERGED_TOKENS)).encode()
+    carried: dict = defaultdict(list)
+    for _, name, _, _, e in sorted(ar.read_events(tmp / "honest" / "server.events.gz")):
+        carried[name].append(active.event_data(active.event_body(e)))
+    assert len(carried) == REQUESTS
+    for c in carried.values():
+        assert len(c) == MERGED_TOKENS and b"".join(c) == text
+        assert c[:10] == [w.encode() for w in ("数据", " 计算", "，", "", "", "🦙", "模型", "", "龘", "。")]
+
+
+def test_honest_glm_traffic_is_accepted_and_late_and_extra_are_refused(glm):
+    """On each of N2's profiles, honest GLM traffic is accepted on every link-window, the late shim is refused on its
+    window-0 egress record, the extra one on N2's counts alone, and each window's salt is revealed once."""
+    *_, plan, runs = glm
+    honest = runs["honest"]["check"]
+    assert honest["verdict"] == "accepted", cs.table(honest)
+    assert honest["profile"] == plan["occupancy"]["kind"] and honest["network_verdict"]["refused"] == []
+    assert all(r["n2"]["accepted"] for r in honest["rows"])
+    late = runs["late"]["check"]
+    assert late["verdict"] == "refused" and 0 in late["network_verdict"]["refused"]
+    assert late["rows"][0]["audit"]["egress"]["raw"] == "status:coverage-never-established"
+    extra = runs["extra"]["check"]
+    assert extra["verdict"] == "refused" and extra["network_verdict"]["refused"] == [0] and extra["audit_accepted"]
+    for strategy in cs.STRATEGIES:
+        check = runs[strategy]["check"]
+        assert all(r["salt"] == "revealed" for r in check["rows"]) and check["salt_again"].startswith("refused")
+        assert runs[strategy]["revealed"] == list(range(plan["windows"]))
+
+
+def test_a_glm_token_longer_than_an_event_needs_a_declared_f(tmp_path):
+    """GLM-5.3's token of 80 spaces is two events, so a response that holds one is one event longer than its tokens:
+    the default plan refuses it, naming `--response-frames`; with F declared one more, every response is padded to it,
+    and on the served profile honest traffic is accepted on every window and the extra event refused."""
+    endpoint = _SideBySide(1, merges=lambda r: r % 2 == 1, token=lambda k: LONG_TOKEN if k == 10 else _glm_token(k))
+    with pytest.raises(ValueError, match=r"\[64, 65\] events long.*--response-frames"):
+        _rehearse(tmp_path / "default", endpoint, _glm_args("served"), strategies=())
+    tmp = tmp_path / "declared"
+    probed, _, plan, runs = _rehearse(tmp, endpoint, _glm_args("served", MERGED_TOKENS + 1), ("honest", "extra"))
+    assert sorted({r["events"] for r in probed["responses"]}) == [MERGED_TOKENS, MERGED_TOKENS + 1]
+    assert plan["pad_to"] == plan["occupancy"]["response_frames"] == MERGED_TOKENS + 1
+    carried: dict = defaultdict(list)
+    for _, name, _, _, e in sorted(ar.read_events(tmp / "honest" / "server.events.gz")):
+        carried[name].append(active.event_data(active.event_body(e)))
+    assert all(len(c) == MERGED_TOKENS + 1 and c[10:12] == [b" " * 64, b" " * 16] for c in carried.values())
+    honest, extra = runs["honest"]["check"], runs["extra"]["check"]
+    assert honest["verdict"] == "accepted", cs.table(honest)
+    assert all(r["n2"]["accepted"] and r["served_counts"] for r in honest["rows"])
+    assert extra["verdict"] == "refused" and extra["network_verdict"]["refused"] == [0] and extra["audit_accepted"]

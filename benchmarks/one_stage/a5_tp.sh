@@ -126,7 +126,7 @@ bundle_windows() {  # COMMIT BUILD PARTITION OUT LOGS: each rank's stand-in wind
   echo ${ranks//,/ } | tr ' ' '\n' | xargs -P ${A5_JOBS:-1} -I{} sh -c \
     "$TIME $REPO/.venv/bin/verity-vllm tp-serving-rows $1 --build-root $2 --partition $3 --out $4 --ranks {} \
       ${A5_CHECKPOINT:+--checkpoint-dir $A5_CHECKPOINT --no-verify-shards} > $5/tp-serving-rows-{}.log 2>&1" \
-    || { tail -20 $5/tp-serving-rows-*.log; return 1; }
+    || { tail -n 20 $5/tp-serving-rows-*.log; return 1; }
   grep -h '^\[tp-serving-rows\]' $5/tp-serving-rows-*.log
 }
 

@@ -8,7 +8,8 @@
 1. The check.  At check.json's shape (fixture.py's), every kernel runs on the fixture's inputs and every buffer it writes is
    compared byte for byte with the fixture, for each variant (`sm120`, G = 4, and `sm120-unpromoted`), hashing format -h3
    (SHA-512 throughout); the GEMMs, with gemm_pearlc_s (y alone), are re-run on all, 1 and 3 CTAs and compared again
-   (`<buffer>@<step>/<tile>/grid<n>`), and the chain's 64 x 64 kernels (decode's) too.  A variant is timed only if all of its
+   (`<buffer>@<step>/<tile>/grid<n>`), and the chain's 64 x 64 kernels (decode's) too, with decode's split kernels (words_k,
+   stats_r) and the ones they replace (`Pipeline.replaced`).  A variant is timed only if all of its
    buffers match (C~ and U bit-exact against the CPU reference), the plain baselines only if theirs do.  Exit 4 if any check
    fails.
 2. Diagnostic timing (not the headline: GPU 6's harness times the arm against autotuned baselines), at each of SHAPES
@@ -16,7 +17,8 @@
    (the weight side; the call's commitment of A, forming, GEMM, clean-up and hashing), the call end to end with and without
    its hashes (commit and hashing; without, the chain is gemm_pearlc_s where it runs), and consistency checks (C~ of gemm_ct
    equals gemm_pearlc's; a second gemm_pearlc gives the same U; gemm_pearlc_s's y equals gemm_pearlc's; form_s5_scalar and
-   form_s5_r144, timed beside form_s5, and the RATE kernels write form_s5's codes).
+   form_s5_r144, timed beside form_s5, and the RATE kernels write form_s5's codes; at decode, words_k and stats_r write
+   the words of the kernels they replace, timed beside them as af_warps and stats_a_warps).
    `form_rates` prices the forming loop per code in the mix it runs in, in units of one dense E4M3 MAC, and the packed cast
    within it (form_rate less form_rate_nocast; at the 144-byte row stride, form_rate_r144 less form_rate_nocast_r144).
    form_s5's codes and the lines' transposed F lines are in K32 order (pearl_c_sm120.cu); the check's fixture holds them in
@@ -26,7 +28,7 @@
 One JSON object per line on stdout as each part finishes, a summary on stderr.
 
   python3 run.py [check.json]   (env: PEARLC_EXPECT_UUID, SHAPES="8192", REPS=5, VARIANTS="sm120 sm120-unpromoted",
-                                 PEARLC_LIBCUDA, PEARLC_LIBNVML)
+                                 PEARLC_LIBCUDA, PEARLC_LIBNVML, PEARLC_SPLIT=0 for decode on words and stats_s5)
 
 Dry runs on a stand-in driver only: PEARLC_ANY_GPU=1 skips the identity check, and PEARLC_UNGATED=1 (refused without it)
 times regardless of the check and marks every row ungated.
@@ -48,6 +50,10 @@ SM_COUNT, MAX_DYN, CC_MAJOR, CC_MINOR, MAX_SHARED_OPTIN, SHARED_SIZE = 16, 8, 75
 NORM_256, NORM_16 = 0x4600, 0x4400      # bf16(32 x the line norm): E's lines, and F's under v1
 NT, BM, BM_D, RASTER = 256, 128, 64, 8
 ML_NT = 384                  # mainloop_sm120.cuh's block: a TMA producer warpgroup and 8 consumer warps
+WK_WARPS = 16                # words_k's block: warps per m16 x n8 tile (pearl_c_sm120.cu)
+SR_ROWS, SR_MAX_K = 256, 32768   # stats_r (a block a row) for at most SR_ROWS rows of k <= SR_MAX_K, else stats_s5
+#: decode's split kernels (words_k, stats_r); PEARLC_SPLIT=0 runs the kernels they replace (words, stats_s5), the same words
+SPLIT = os.environ.get("PEARLC_SPLIT", "1") != "0"
 VARIANT_G = {"sm120": 4, "sm120-unpromoted": 0}
 TMAP_UINT8, TMAP_SWIZZLE_128B, TMAP_L2_128B, TMAP_BYTES = 0, 3, 2, 128
 #: the mainloop GEMMs' operand pairs, a set of four tensor maps (A, B, P_A, P_B) each at `tma` + ML_SET * slot
@@ -585,13 +591,37 @@ class Pipeline:
         out = {"gemm_pearlc_cu": lambda: self.gemm(f"gemm_pearlc{tile}{sx}", "at", "bt", m, n, out=("c", "u", "y"), **peel())}
         if self.bm == BM:
             out["gemm_pearlc_s"] = lambda: self.gemm("gemm_pearlc_s" + sx, "at", "bt", m, n, out=(None, None, "y"), **peel())
+        else:
+            out.update(self.replaced())
         return out
 
+    def replaced(self) -> dict[str, object]:
+        """The kernels the split ones replace at decode, on the same buffers: `af_warps`, A'F_B on `words` (a warp a tile over
+        all of K) where `af` runs words_k, and `stats_a_warps`, stats_s5 (a warp a row) where `stats_a` runs stats_r."""
+        d, b, m, k, out = self.dev, self.b, self.m, self.k, {}
+        if self.g and SPLIT:
+            out["af_warps"] = lambda: d.launch("words", m // 16, 128, p=(b["at"], b["fbT32"], b["af"]), i=(m, 32, k))
+        if self.stats_kernel(m) == "stats_r":
+            out["stats_a_warps"] = lambda: self.stats("a", m, "xa", "stats_s5")
+        return out
+
+    def stats_kernel(self, rows: int) -> str:
+        return "stats_r" if SPLIT and rows <= SR_ROWS and self.k <= SR_MAX_K else "stats_s5"
+
+    def stats(self, tag: str, rows: int, x: str, kernel: str | None = None) -> None:
+        """A side's row statistics (`stats_<tag>`) over its FP32 rows x: stats_s5, a warp a row, or for few rows stats_r, a
+        block a row; the same words."""
+        b, kernel = self.b, kernel or self.stats_kernel(rows)
+        self.dev.launch(kernel, rows if kernel == "stats_r" else cdiv(rows, 8), 256,
+                        p=(b[x], b[f"alpha_{tag}"], b[f"beta_{tag}"], b[f"ia_{tag}"], b[f"aux_{tag}"]), i=(rows, self.k))
+
     def words(self, a: str, b: str, M: int, out: str, warps: bool = False) -> None:
-        """The FP32 words of an (M x K) by (32 x K) product: on 128 x 32 CTA tiles, or with `warps` one warp per m16 x n8
-        tile, a block per m16 row."""
+        """The FP32 words of an (M x K) by (32 x K) product: on 128 x 32 CTA tiles, or with `warps` (decode's few rows) on
+        words_k, a block of WK_WARPS warps a m16 x n8 tile, K split among them (unpromoted, on `words_u`, a warp a tile)."""
         if M % BM == 0 and not warps:
             self.gemm("gemm_words" + self.suffix, a, b, M, 32, out=(out,))
+        elif self.g and SPLIT:
+            self.dev.launch("words_k", M // 16 * 4, 32 * WK_WARPS, p=(self.b[a], self.b[b], self.b[out]), i=(M, 32, self.k))
         else:
             self.dev.launch("words" + self.suffix, M // 16, 128, p=(self.b[a], self.b[b], self.b[out]), i=(M, 32, self.k))
 
@@ -607,8 +637,7 @@ class Pipeline:
 
         def form_side(tag, rows, x, e_codes, f_codes, out):
             ep = f"ep{tag}_codes"
-            return [(f"stats_{tag}", lambda: d.launch("stats_s5", cdiv(rows, 8), 256, p=(b[x], b[f"alpha_{tag}"], b[f"beta_{tag}"],
-                                                                                      b[f"ia_{tag}"], b[f"aux_{tag}"]), i=(rows, k))),
+            return [(f"stats_{tag}", lambda: self.stats(tag, rows, x)),
                      (f"eprime_{tag}", lambda: d.launch("eprime", cdiv(rows, 128), 128, p=(b[e_codes], b[f"beta_{tag}"], b[ep]),
                                                         i=(rows,))),
                      (f"form_{tag}", lambda: d.launch("form_s5", (k // 128, rows // 64), 128,
@@ -662,11 +691,34 @@ class Pipeline:
         self.dev.sync()
 
     def diff(self, x: str, y: str) -> int:
-        words = self.size[x] // 4
+        return self.diff_at(self.b[x], self.b[y], self.size[x])
+
+    def diff_at(self, x: int, y: int, n: int) -> int:
+        """Words differing between n bytes at device addresses x and y."""
+        words = n // 4
         self.dev.ck("cuMemsetD8_v2", u64(self.b["diff"]), 0, 8)
-        self.dev.launch("diff_words", cdiv(words, 256), 256, p=(self.b[x], self.b[y], self.b["diff"]), i=(words,))
+        self.dev.launch("diff_words", cdiv(words, 256), 256, p=(x, y, self.b["diff"]), i=(words,))
         self.dev.sync()
         return int.from_bytes(self.dev.read(self.b["diff"], 8), "little")
+
+    def splits(self) -> dict[str, int]:
+        """Each split kernel against the one it replaces (SPLITS), on this pipeline's inputs: the replaced step's outputs
+        copied into c2, the split step run, the words differing per output."""
+        steps, alt, out = {nm: f for nm, _, f in self.steps()}, self.extra(), {}
+        for step, ref, outs in SPLITS:
+            if ref not in alt:
+                continue
+            alt[ref]()
+            at = 0
+            for o in outs:
+                self.dev.copy(self.b["c2"] + at, self.b[o], self.size[o])
+                at += self.size[o]
+            steps[step]()
+            at = 0
+            for o in outs:
+                out[f"{o}_{step}_vs_{ref}_words_differing"] = self.diff_at(self.b[o], self.b["c2"] + at, self.size[o])
+                at += self.size[o]
+        return out
 
 
 # ---- the check ----------------------------------------------------------------------------------------------------
@@ -677,8 +729,11 @@ FORM_ALTS = ("form_s5_scalar", "form_s5_r144")
 GEMM_RERUNS = (("gemm_pearlc", ("c", "u", "y")), ("gemm_ct", ("c2",)), ("gemm_plain", ("y_plain",)), ("gemm_fast", ("y_fast",)),
                ("af", ("af",)), ("bf", ("bf",)), ("gemm_adopt", ("y_adopt",)), ("gemm_pearlc_s", ("y",)))
 ALIASES = {"c2": "c"}
-#: the 64 x 64 pipeline's: the chain, and A'F_B on the words kernel
-SMALL_RERUNS = GEMM_RERUNS[:2] + (("af", ("af",)),)
+STATS_A = ("alpha_a", "beta_a", "ia_a", "aux_a")
+#: the 64 x 64 pipeline's: the chain, A'F_B on words_k, and the kernels the split ones replace (`Pipeline.replaced`)
+SMALL_RERUNS = GEMM_RERUNS[:2] + (("af", ("af",)), ("af_warps", ("af",)), ("stats_a_warps", STATS_A))
+#: each split kernel's step at decode, the step it replaces (`Pipeline.replaced`) and their outputs, held word for word
+SPLITS = (("af", "af_warps", ("af",)), ("stats_a", "stats_a_warps", STATS_A))
 
 
 def compare(dev: Dev, pipe: Pipeline, name: str, want: bytes, alias: str | None = None) -> dict:
@@ -914,6 +969,7 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
             out["consistency"]["y_s_vs_pearlc_words_differing"] = pipe.diff("y", "y2")
         out["consistency"].update({f"{tag}t_form_s5_vs_{kernel.removeprefix('form_s5_')}_words_differing": pipe.form_alt(tag, kernel)
                                    for tag in ("a", "b") for kernel in FORM_ALTS})
+        out["consistency"].update(pipe.splits())
         out["form_rate"] = rate = form_rates(dev, nv, pipe, reps)
         out["consistency"].update({f"bt_{nm}_codes_differing": rate[nm]["codes_differing"]
                                    for nm in ("form_rate", "form_rate_scalar", "form_rate_r144") if nm in rate})
