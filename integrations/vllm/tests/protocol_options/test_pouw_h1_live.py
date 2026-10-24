@@ -9,6 +9,7 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from verity.core.protocols.pouw.circuit import live as L  # noqa: E402
+from verity.core.protocols.pouw.circuit import live_reads as LR  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
 from verity_vllm.protocol_options import pouw  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1 as PH  # noqa: E402
@@ -48,7 +49,7 @@ def test_a_served_window_registers_round_0s_request_headers_and_each_rounds_slot
         e = reg.entry()
         assert e["domain"] == G.domain(served.program_digest, e["value"], e["words"], e["leaves"], **bound).domain_id.hex()
         assert e in served.entries()
-    assert [e["words"] for e in (req.entry(), slots.entry())] == [L.HEADER_WORDS, L.SLOT_WORDS]
+    assert [e["words"] for e in (req.entry(), slots.entry())] == [LR.HEADER_WORDS, LR.SLOT_WORDS]
     assert LV.verdicts(run) == [{"round": 0, "m": 3, "admitted": 3, "ok": True}]
     with pytest.raises(ValueError, match="live table"):
         run.open_request(0)
@@ -77,7 +78,7 @@ def test_a_live_unit_claiming_other_than_the_served_rows_is_refused(claim):
     assert run.manifest()[0]["served"] == LV.m_of(run, 0) == 3 and LV.evaluated(run, 0) == 1
     assert LV.evaluated(run, 0, claim) == 0
     (rows, honest), (other_rows, other) = LV.statement(run, 0), LV.statement(run, 0, claim)
-    served = L.m_table(run.served.program_digest, "h1/", run.served.root, 0, 3)[2].root.hex()
+    served = LR.m_table(run.served.program_digest, "h1/", run.served.root, 0, 3)[2].root.hex()
     assert honest["ports"]["m"]["root"] == served != other["ports"]["m"]["root"]
     assert all(honest["ports"][p] == other["ports"][p] for p in honest["ports"] if p != "m")
     assert all((rows[p] == other_rows[p]).all() for p in rows if p != "m")

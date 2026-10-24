@@ -4,14 +4,14 @@ the unit that makes each round's served rows m_s a proved value, one ``live@<s>`
 * **The tables.** With the Commit (`pouw_h1_served.Served`'s ``tap``) a window registers its round tables as values of
   the live Program, under the window Program's digest as its other values (`Served._tree`):
 
-  * round 0's request table ``<prefix>requests@0`` (`live.REQUESTS`): T rows, its entries' headers in admission order
+  * round 0's request table ``<prefix>requests@0`` (`live_reads.REQUESTS`): T rows, its entries' headers in admission order
     (index, round, first slot, cap and prompt length, each u32: the first 20 bytes of `RequestEntry.row`, as
-    `live.header_words`), then `EMPTY_REQUEST`'s zero header. It is registered as the window opens, after round 0's
+    `live_reads.header_words`), then `EMPTY_REQUEST`'s zero header. It is registered as the window opens, after round 0's
     admissions, and its domain binds the window's session, since its root, round 0's ``request_table``, is inside round
     0's request root and so inside the open root (`credit.requests_root`), as ``ids@0``'s is. The prompts' tokens are
     ``ids@0``'s, not its.
-  * round s's slot table ``<prefix>slots@<s>`` (`live.SLOTS`): T rows, slot i's leaf (q + 1 for a row of request q, 0
-    past the step's batch, `live.slot_words`), registered at round s's close under the open root and listed whole among
+  * round s's slot table ``<prefix>slots@<s>`` (`live_reads.SLOTS`): T rows, slot i's leaf (q + 1 for a row of request q, 0
+    past the step's batch, `live_reads.slot_words`), registered at round s's close under the open root and listed whole among
     round s's segments (`Served.segments`), so round s's root commits it before its coin (`credit._a_link`).
 
   Each is its round's table: round 0's ``request_table`` and round s's ``slots`` are their roots, in place of the hiding
@@ -21,7 +21,7 @@ the unit that makes each round's served rows m_s a proved value, one ``live@<s>`
   A rows are padded to the graph's size, past them (`pouw_h1.Call.pad`), and those rows are no slot of the step's.
 * **The statements.** ``live@<s>`` is unit s of the live Program (`live.program` of T, the window's S and its prefix), on
   round s's slot table, the request headers and the public m_s: `statement` gives its rows and its ``--registered``
-  file (`live.reads_file`), and `verdicts` holds each round's tables to the roots its round committed and its rows to
+  file (`live_reads.reads_file`), and `verdicts` holds each round's tables to the roots its round committed and its rows to
   `live.live_ok` at m_s.
 """
 from __future__ import annotations
@@ -31,19 +31,20 @@ from typing import Any, Sequence
 import numpy as np
 
 from verity.core.protocols.pouw.circuit import live as L
+from verity.core.protocols.pouw.circuit import live_reads as LR
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.commitments import Commitment
 
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
 
-SLOTS, REQUESTS = L.SLOTS, L.REQUESTS
+SLOTS, REQUESTS = LR.SLOTS, LR.REQUESTS
 
 
 def nonce(base: int, name: str, s: int) -> int:
     """Row 0's salt nonce of a live table, from the window's live nonce ``base`` (`pouw_h1_served.LIVE_NONCE`):
     ``requests@0``'s is ``base``, ``slots@<s>``'s ``base + 1 + s``."""
-    return base if name == L.REQUESTS else base + 1 + int(s)
+    return base if name == LR.REQUESTS else base + 1 + int(s)
 
 
 def headers(entries: Sequence[RQ.RequestEntry]) -> list[tuple[int, ...]]:
@@ -55,8 +56,8 @@ def request_words(entries: Sequence[RQ.RequestEntry], rows: int) -> np.ndarray:
     """``requests@0``'s rows ``(T, 10)`` u16: the entries' headers in admission order, then zero headers."""
     if len(entries) > rows:
         raise ValueError(f"round 0 admits {len(entries)} requests, past its {rows} leaves")
-    hs = headers(entries) + [(0,) * L.HEADER] * (rows - len(entries))
-    return np.asarray(L.header_words(hs), np.uint16)
+    hs = headers(entries) + [(0,) * LR.HEADER] * (rows - len(entries))
+    return np.asarray(LR.header_words(hs), np.uint16)
 
 
 def slot_leaves(owners: Sequence[int | None], rows: int) -> list[int]:
@@ -67,7 +68,7 @@ def slot_leaves(owners: Sequence[int | None], rows: int) -> list[int]:
 
 def slot_words(owners: Sequence[int | None], rows: int) -> np.ndarray:
     """``slots@<s>``'s rows ``(T, 2)`` u16."""
-    return np.asarray(L.slot_words(slot_leaves(owners, rows)), np.uint16)
+    return np.asarray(LR.slot_words(slot_leaves(owners, rows)), np.uint16)
 
 
 class Table:
@@ -84,16 +85,16 @@ class Table:
 
 
 def value(served: Any, name: str, s: int = 0) -> str:
-    return L.table(served.program.fn.bindings["PREFIX"], name, s)
+    return LR.table(served.program.fn.bindings["PREFIX"], name, s)
 
 
 def table(served: Any, run: Any, name: str, r: int, base: int, session: str) -> Table | None:
-    """Round r's live table, registered now in ``served.live``: ``requests@0`` (``name`` `live.REQUESTS`, round 0 only)
-    bound to ``session``, or ``slots@<r>`` (`live.SLOTS`) bound to the window's open root. None without the tap, once
+    """Round r's live table, registered now in ``served.live``: ``requests@0`` (``name`` `live_reads.REQUESTS`, round 0 only)
+    bound to ``session``, or ``slots@<r>`` (`live_reads.SLOTS`) bound to the window's open root. None without the tap, once
     the window is refused, and before its Program and open root exist (a slot table)."""
-    if served.tap is None or served.refused or served.program is None or (name == L.REQUESTS and r):
+    if served.tap is None or served.refused or served.program is None or (name == LR.REQUESTS and r):
         return None
-    if name == L.REQUESTS:
+    if name == LR.REQUESTS:
         words, window, bound = request_words(run.admitted.get(0, []), run.rows), None, session
     elif served.root is None:
         return None
@@ -110,8 +111,8 @@ def m_of(run: Any, s: int) -> int:
 
 
 def statement(run: Any, s: int, m: int | None = None) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
-    """Round s's ``live@<s>``: its input rows, each port's u16 words (`live.statement_rows`' ports, one instance), and
-    its ``--registered`` file (`live.reads_file`) under the window Program's digest, the open root and the session, at
+    """Round s's ``live@<s>``: its input rows, each port's u16 words (`live_reads.statement_rows`' ports, one instance), and
+    its ``--registered`` file (`live_reads.reads_file`) under the window Program's digest, the open root and the session, at
     m_s (or a claimed ``m``)."""
     served, T = run.served, run.rows
     if s >= len(run.round_log):
@@ -120,8 +121,8 @@ def statement(run: Any, s: int, m: int | None = None) -> tuple[dict[str, np.ndar
     m = m_of(run, s) if m is None else m
     rows = {f"slot_{i}": w for i, w in enumerate(slot_words(run.owners.get(s, []), T))}
     rows |= {f"req_{i}": w for i, w in enumerate(request_words(run.admitted.get(0, []), T))}
-    rows["m"] = np.asarray(L.slot_words([m])[0], np.uint16)
-    doc = L.reads_file(served.program_digest, T, run.steps, s, roots, served.root, served.live[value(served, L.REQUESTS)].session,
+    rows["m"] = np.asarray(LR.slot_words([m])[0], np.uint16)
+    doc = LR.reads_file(served.program_digest, T, run.steps, s, roots, served.root, served.live[value(served, LR.REQUESTS)].session,
                        m, served.program.fn.bindings["PREFIX"])
     return {p: np.asarray(w, np.uint16).reshape(1, -1) for p, w in rows.items()}, doc
 
@@ -144,12 +145,12 @@ def verdicts(run: Any) -> list[dict[str, Any]]:
     served = run.served
     if served is None or not served.live or served.refused:
         return []
-    req = served.live.get(value(served, L.REQUESTS))
+    req = served.live.get(value(served, LR.REQUESTS))
     heads = headers(run.admitted.get(0, []))
-    heads += [(0,) * L.HEADER] * (run.rows - len(heads))
+    heads += [(0,) * LR.HEADER] * (run.rows - len(heads))
     out = []
     for s, row in enumerate(run.round_log):
-        slots, m = served.live.get(value(served, L.SLOTS, s)), m_of(run, s)
+        slots, m = served.live.get(value(served, LR.SLOTS, s)), m_of(run, s)
         leaves = slot_leaves(run.owners.get(s, []), run.rows)
         why = ("its slot table was never registered" if slots is None
                else "its slot table isn't the one round s's root commits" if slots.root.hex() != row["slots"]
