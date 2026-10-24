@@ -6,6 +6,7 @@ import Proofs.Flock.SessionLoop.Tables
 import Proofs.Flock.SessionLoop.FinishParts
 import Proofs.Flock.SessionLoop.FinCommits
 import Proofs.Flock.SessionLoop.FinPoints
+import Proofs.Flock.SessionLoop.FinRounds
 
 /-!
 # Proof of C-Flock's zero knowledge at the session loop's own frames
