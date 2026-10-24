@@ -147,6 +147,7 @@ import Proofs.Flock.Claims.ZK.FinishSwMk
 import Proofs.Flock.Claims.ZK.FinishSwFrame
 import Proofs.Flock.Claims.ZK.FinishSwLig
 import Proofs.Flock.Claims.ZK.FinishSwLigE
+import Proofs.Flock.Claims.ZK.L0Pin
 import Proofs.Flock.Claims.ZK.FinishSwInner
 import Proofs.Flock.Claims.ZK.FinishSwTau
 import Proofs.Flock.Claims.ZK.FinishSwRows
@@ -686,6 +687,10 @@ import Proofs.Flock.Claims.ZK.CutPrefix
   (`Masked.swSrcE_restart`); the honest source's are the session's at the coins (`ligY1E`, `ligYbarE`, `ligSaltE`). So
   at the deployed rep's coins, packed table, basis and the tape's extra lanes, lane paddings and salts, `LigHyp` holds at
   the switched source with `l0Clear` as level 0's part and the request's pads (**`Masked.swSrcE_ligHyp_E`**).
+* `L0Pin`: level 0's bodies pin the source. Equal bodies at one coins, table and basis have equal pads from `zp 64` to
+  `h_ab` (**`LigLock.l0BodyAt_pads`**); a rep from a source, cut in level 0's opening, sends `l0BodyAt` at the pads
+  `padsL0` (masked plus `l0Clear`; **`LigLock.repCut_cutL0`**), so where those are a run's at pads `h` the source's
+  masked values there are `l0Clear` plus `h` (**`LigLock.masked_of_cutL0`**).
 * `FinishSwInner`: `repCut_fw`'s `hinner` at that source. The switched view keeps `ρ_in`, `σ_in` (`padShift` moves
   `h_tx`, `h_ty` against the exposed pads; `Table.innerMsg_padShift`) and `Y₂`, and where the rows hold `Y₁`, so the
   switched source's `ρ_in`, `σ_in` and `Y` are the honest source's (`Masked.swSrcE_inner`, `Masked.swSrcE_y`). The
