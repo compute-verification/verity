@@ -1,12 +1,15 @@
 """The I/O tie's prototype (`io_tie`) on a fake upstream: requests' variable-length responses interleaved over a
 link-window's cells as a warden would schedule them, each output's release bucket its cell's; advice-v0-shaped outputs,
-from which the verifier computes the window's map; and the Commit's sampled ids, one hiding row a step, which the
-window opens at its outputs' steps. The reference accepts the honest window and refuses every way the cells can differ
-from the map and the port, and every port that isn't the Commit's; the Boolean parts agree with it."""
+from which the verifier computes the window's map (through advice v1's order permutation where the engine's numbering
+isn't the arrival order, as on TRACE-CORPUS's heavy trace); and the Commit's sampled ids, one hiding row a step, which
+the window opens at its outputs' steps. The reference accepts the honest window and refuses every way the cells can
+differ from the map and the port, and every port that isn't the Commit's; the Boolean parts agree with it."""
 
 import hashlib
+import json
 import random
 from dataclasses import replace
+from pathlib import Path
 from typing import NamedTuple
 
 import numpy as np
@@ -57,17 +60,18 @@ def serve(shape: IT.Shape, responses: dict[int, tuple[int, list[int]]], seed: in
         occupancy = [0] * shape.T
         for _ in order:
             occupancy[rng.choice([t for t in range(shape.T) if occupancy[t] < shape.R])] += 1
+    arrival = arrival or {}
     nxt, placed, k = dict.fromkeys(responses, 0), [], 0
     for t, n in enumerate(occupancy):
         bucket = []
         for q in order[k:k + n]:
             bucket.append((q, nxt[q]))
             nxt[q] += 1
-        placed += [(t * shape.R + s, q, j) for s, (q, j) in enumerate(sorted(bucket))]
+        bucket.sort(key=lambda qj: (arrival.get(qj[0], qj[0]), qj[1]))
+        placed += [(t * shape.R + s, q, j) for s, (q, j) in enumerate(bucket)]
         k += n
     start = {q: rng.randrange(spread) for q in responses}
     row = {q: r for r, q in enumerate(sorted(responses))}
-    arrival = arrival or {}
 
     def output(q: int, j: int) -> IT.Output:
         return IT.Output(1 + start[q] + j - responses[q][0], row[q], q, j)
@@ -92,10 +96,12 @@ def serve(shape: IT.Shape, responses: dict[int, tuple[int, list[int]]], seed: in
     return Served(cells, outputs, release, rows)
 
 
-def commit(shape: IT.Shape, served: Served, seed: bytes = b"w") -> IT.Instance:
+def commit(shape: IT.Shape, served: Served, seed: bytes = b"w", order: list[int] | None = None,
+           window: int = WINDOW) -> IT.Instance:
     """The window's tie: the cells committed as the warden commits them (a row a bucket), the map and steps the
-    verifier computes from the advice, and the port opened from the Commit's rows at those steps."""
-    cmap, steps = IT.window_map(shape, served.outputs, served.release, WINDOW)
+    verifier computes from the advice (with advice v1's `order`), and the port opened from the Commit's rows at those
+    steps."""
+    cmap, steps = IT.window_map(shape, served.outputs, served.release, window, order)
     cd, pd = IT.domain(_h(b"cells" + seed), shape.T), IT.domain(_h(b"port" + seed), len(served.rows))
     cs = [IT.fake_salt(seed + b"c", t) for t in range(shape.T)]
     ps = [IT.fake_salt(seed + b"p", s) for s in range(len(served.rows))]
@@ -166,6 +172,13 @@ def test_the_map_is_the_windows_outputs_in_the_wardens_order():
     assert cmap == (IT.MapEntry(2, 0), IT.MapEntry(5, 1), IT.MapEntry(5, 5), None, None, None)
     assert IT.map_bytes(cmap) == IT.MAP.pack(2, 0) + IT.MAP.pack(5, 1) + IT.MAP.pack(5, 5) + b"\xff" * 24
     assert IT.window_map(sh, outputs, [0] * 5, 7) == ((None,) * 6, (0, 0, 0))
+    order = list(range(10))
+    order[2], order[5] = 5, 2
+    assert IT.window_map(sh, outputs, [21, 21, 22, 24, 20], 7, order)[0] == (
+        IT.MapEntry(2, 1), IT.MapEntry(5, 0), IT.MapEntry(2, 5), None, None, None)
+    for bad in (order[:9], [1, *order[1:]], order[:5] + [10] + order[6:]):
+        with pytest.raises(ValueError, match="permutation"):
+            IT.window_map(sh, outputs, [21, 21, 22, 24, 20], 7, bad)
     with pytest.raises(ValueError, match="more than R"):
         IT.window_map(sh, outputs, [21, 21, 21, 24, 20], 7)
     with pytest.raises(ValueError, match="more than S"):
@@ -326,14 +339,73 @@ def test_a_port_that_isnt_the_commits_is_refused(big):
 def test_a_request_admitted_ahead_of_an_earlier_arrival_is_refused():
     """Advice v0 numbers requests in order of first row, the warden streams in order of arrival, and the map holds
     every data cell's stream to its request: so a request whose first row isn't its arrival order (the server admitted
-    a later arrival first) puts its outputs on another stream than the map names, and every request has an output."""
+    a later arrival first) puts its outputs on another stream than the map names, and every request has an output.
+    Advice v1's order permutation names the arrival, so the same cells are accepted through it, and only through the
+    permutation that is the warden's."""
     rs = responses(21, BIG, count=4)
     qs = sorted(rs)
     assert IT.reference(commit(BIG, serve(BIG, rs, 21)))
     assert IT.reference(commit(BIG, serve(BIG, rs, 21, arrival={q: q for q in qs})))
     swapped = {qs[0]: qs[1], qs[1]: qs[0]}
-    inst = commit(BIG, serve(BIG, rs, 21, arrival=swapped))
-    assert IT.reference_parts(inst) == {"cells_root": True, "port": True, "content": False}
+    served = serve(BIG, rs, 21, arrival=swapped)
+    assert IT.reference_parts(commit(BIG, served)) == {"cells_root": True, "port": True, "content": False}
+    order = [swapped.get(i, i) for i in range(1_000)]
+    assert IT.reference(commit(BIG, served, order=order))
+    other = [{qs[1]: qs[2], qs[2]: qs[1]}.get(i, i) for i in order]
+    assert IT.reference_parts(commit(BIG, served, order=other))["content"] is False
+
+
+def serve_trace(shape: IT.Shape, trace: dict) -> tuple[dict[int, list[bytes]], list[IT.Output], list[int], list[bytes]]:
+    """A recorded link's egress as the warden serves it, from its order permutation (`order[i]`: advice request i's
+    rank in the warden's release order, its stream), admission buckets and output lengths: request i's output k is
+    sampled at step a_i + k, in the batch row of its rank by i among that step's requests, and released at bucket
+    a_i + k + delay, one cell a stream a bucket (r = 1, the response's framing cells left out). Each bucket's cells are
+    its outputs sorted by stream; ids are synthetic. Returns each bucket's data cells, the advice's outputs and release
+    buckets, and the Commit's rows of sampled ids, one a step."""
+    order, admitted, lens, delay = trace["order"], trace["admitted"], trace["output_len"], trace["delay"]
+    batches: dict[int, list[tuple[int, int]]] = {}
+    for i, (a, n) in enumerate(zip(admitted, lens, strict=True)):
+        for k in range(n):
+            batches.setdefault(a + k, []).append((i, k))
+    def token(i: int, k: int) -> int:
+        return (1_000_003 * i + 7_919 * k) % V
+
+    outputs, release, ids, buckets = [], [], {}, {}
+    for s, batch in sorted(batches.items()):
+        for row, (i, k) in enumerate(sorted(batch)):
+            outputs.append(IT.Output(s, row, i, k))
+            release.append(s + delay)
+            ids[s, row] = token(i, k)
+        buckets[s + delay] = [IT.data_cell(token(i, k), order[i], shape.B)
+                              for i, k in sorted(batch, key=lambda ik: order[ik[0]])]
+    rows = [IT.port_row([ids.get((s, r), 0) for r in range(shape.P)], shape.P) for s in range(1 << shape.DS)]
+    return buckets, outputs, release, rows
+
+
+def test_the_heavy_traces_honest_egress_is_accepted_through_its_order():
+    """TRACE-CORPUS's heavy trace (`fixtures/warden-heavy-order.json`, from
+    art:d538087522581c66e103caa5e5929dcc10ed8602aa485d8538cff4d5d3943b16): 1,000 requests, 126,502 outputs over buckets
+    301 … 589, whose engine admits in the API server's body-read order, 2,970 inversions from the warden's release
+    order. Served as the warden serves it, each of the 19 egress windows of T = 16 buckets of R = 1,024 cells is
+    accepted through advice v1's order permutation. Without it (v0's identity) exactly the windows that release an
+    output of a request the engine numbered out of release order are refused, 18 of the 19: honest traffic that a v0
+    map refuses."""
+    trace = json.loads((Path(__file__).parent / "fixtures" / "warden-heavy-order.json").read_text())
+    sh = IT.Shape(256, 16, 1_024, P=1_024, S=16, DS=9)
+    buckets, outputs, release, rows = serve_trace(sh, trace)
+    assert len(outputs) == 126_502 and (min(buckets), max(buckets)) == (301, 589)
+    order = trace["order"]
+    moved = {b for o, b in zip(outputs, release) if order[o.request] != o.request}
+    accepted, refused = [], []
+    for w in range(min(release) // sh.T, max(release) // sh.T + 1):
+        cells = [c for t in range(sh.T) for c in
+                 (buckets.get(w * sh.T + t, []) + [IT.pad_cell(sh.B)] * sh.R)[:sh.R]]
+        served = Served(cells, outputs, release, rows)
+        accepted.append(IT.reference(commit(sh, served, order=order, window=w)))
+        if not IT.reference(commit(sh, served, window=w)):
+            refused.append(w)
+    assert all(accepted) and len(accepted) == 19
+    assert refused == sorted({b // sh.T for b in moved}) and len(refused) == 18
 
 
 def test_the_benes_network_routes_every_permutation():
