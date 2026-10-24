@@ -68,6 +68,7 @@ from __future__ import annotations
 import bisect
 import hashlib
 import json
+import math
 import os
 from collections import Counter, deque
 from dataclasses import dataclass
@@ -474,7 +475,7 @@ class H1Run:
         m, t = call.m, self.rows
         given = [x for x in (a, s_a, zy) if x is not None]
         kernels = (a is not None and call.k % 2 == 0 and call.units > 0 and (records is None or zy is not None)
-                   and (not m or int(np.prod(s_a.shape)) == m))
+                   and (not m or math.prod(s_a.shape) == m))
         where = TD.path(*given) if kernels else "python"
         if where != "python":
             self._kernel_tables(call, a, s_a, zy if m and records is not None else None, where)

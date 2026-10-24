@@ -9,9 +9,9 @@ is ChaCha20 blocks 3i .. 3i + 2 at that nonce, ``hiding_rows``' keystream. An A 
 f32 scale; a z table's leaf is a ``ZY_BYTES`` record, its first ``ZY_BYTES - 4`` bytes as the codes and its last 4 as the word
 (`record_rows`). The step's own root, over its one table, is not read.
 
-`device_hash` launches the tables on the device's side streams (`STREAMS`, in turn) behind everything the current stream has
-enqueued, nothing waiting on the host, and hands back a `Pending` whose `roots` waits for them: `H1Run` reads a step's roots
-at its round's close, so a call's tables hash beside the forward rather than in it. `device_roots` waits at once.
+`device_hash` launches a call's tables on one of the device's side streams (`STREAMS`, in turn) behind everything the current
+stream has enqueued, nothing waiting on the host, and hands back a `Pending` whose `roots` waits for them: `H1Run` reads a
+step's roots at its round's close, so a call's tables hash beside the forward rather than in it. `device_roots` waits at once.
 `host_roots` runs the same functions on the CPU (`row_table_host.cpp`), the twin the CPU tests hold to `hiding_rows` on
 machines without a GPU. Builds share the Commit's row-table builds (`row_tables_device._build`); nvcc is `pouw_device`'s.
 """
@@ -35,8 +35,7 @@ __all__ = ["MODE", "Pending", "STREAMS", "available", "device_hash", "device_lib
 #: ``"python"`` (``hiding_rows``, the reference)
 MODE = "auto"
 MODES = ("auto", "gpu", "host", "python")
-#: the side streams a device's tables hash on, one table each in turn: a table's kernels are a few blocks long and bound by
-#: their serial hash chains, so successive tables hash side by side
+#: the side streams a device's calls hash on, one call's tables each in turn
 STREAMS = 4
 _M32 = 0xFFFFFFFF
 
@@ -185,27 +184,26 @@ def path(*tensors: Any) -> str:
 
 
 class Pending:
-    """Tables launched on side streams (`device_hash`): ``ready()`` without blocking, ``roots()`` their roots in order. It
-    holds their inputs and scratch until the roots are read, so the allocator has nothing back that a side stream still
-    reads."""
+    """Tables launched on a side stream (`device_hash`): ``ready()`` without blocking, ``roots()`` their roots in order. It
+    holds their inputs and scratch until the roots are read; each is also recorded on the side stream, so dropping it
+    early gives the allocator nothing back that the side stream still uses."""
 
-    def __init__(self, done: list[Any], host: Any, held: tuple[Any, ...]) -> None:
+    def __init__(self, done: Any, host: Any, held: tuple[Any, ...]) -> None:
         self.done, self.host, self.held = done, host, held
 
     def ready(self) -> bool:
-        return all(e.query() for e in self.done)
+        return bool(self.done.query())
 
     def roots(self) -> list[bytes]:
-        for e in self.done:
-            e.synchronize()
+        self.done.synchronize()
         self.held = ()
         host = self.host.numpy()
         return [_root(host[i, 8:]) for i in range(len(host))]
 
 
 def device_hash(tables: Sequence[tuple[bytes, int, Any, Any]], key: bytes) -> Pending:
-    """`host_roots` hashed on the side streams of the tables' device after everything its current stream has enqueued so
-    far, every codes and words a contiguous CUDA tensor there, nothing waiting on the host."""
+    """`host_roots` hashed on the next side stream of the tables' device, after everything its current stream has enqueued
+    so far, every codes and words a contiguous CUDA tensor there, nothing waiting on the host."""
     import torch
 
     dev = tables[0][2].device
@@ -221,30 +219,34 @@ def device_hash(tables: Sequence[tuple[bytes, int, Any, Any]], key: bytes) -> Pe
     tabs = np.stack([tab for tab, _args in laid])
     for i, (_did, _nonce, c, w) in enumerate(tables):
         tabs[i, 0], tabs[i, 1] = c.data_ptr(), w.data_ptr()
+    # each table's scratch, in 64-byte units: its segment digests, leaves, tree and step tree; then every table's output
+    units = [(n * s, n, RTD._width(n), 2) for n, s in ((int(t[2]) >> 32, int(t[3]) >> 32) for t, _args in laid)]
     staged = torch.from_numpy(tabs.view(np.int64)).pin_memory()
     meta = staged.to(dev, non_blocking=True)
     perm = d.ranks(torch, max(int(c.shape[0]) for _did, _nonce, c, _w in tables))
     written = torch.cuda.Event()
     written.record(torch.cuda.current_stream(dev))
-    host = torch.empty((len(tables), 16), dtype=torch.int64, pin_memory=True)
-    done, held = [], [staged, meta, perm, *(x for _did, _nonce, c, w in tables for x in (c, w))]
-    for i, (tab, args) in enumerate(laid):
-        side = d.stream()
-        side.wait_event(written)
-        n, s = int(tab[2]) >> 32, int(tab[3]) >> 32
-        with torch.cuda.stream(side):
-            dig, leaves, tree, step, out = (torch.empty(8 * m, dtype=torch.int64, device=dev)
-                                            for m in (n * s, n, RTD._width(n), 2, 2))
-            rc = d.lib.rt_step(side.cuda_stream, meta[i].data_ptr(), perm.data_ptr(), n * s, n, d.hm.data_ptr(),
-                               d.ms.data_ptr(), ctypes.byref(args), dig.data_ptr(), leaves.data_ptr(), tree.data_ptr(),
-                               step.data_ptr(), out.data_ptr())
+    side = d.stream()
+    side.wait_event(written)
+    inputs = (meta, perm, *(x for _did, _nonce, c, w in tables for x in (c, w)))
+    for x in inputs:
+        x.record_stream(side)
+    with torch.cuda.stream(side):
+        scratch = torch.empty(8 * (sum(map(sum, units)) + 2 * len(laid)), dtype=torch.int64, device=dev)
+        at, outs = scratch.data_ptr(), scratch[-16 * len(laid):].view(len(laid), 16)
+        for i, ((_tab, args), (segs, n, w, st)) in enumerate(zip(laid, units)):
+            dig, leaves, tree, step = at, at + 64 * segs, at + 64 * (segs + n), at + 64 * (segs + n + w)
+            at += 64 * (segs + n + w + st)
+            rc = d.lib.rt_step(side.cuda_stream, meta.data_ptr() + 8 * RTD.TAB_WORDS * i, perm.data_ptr(), segs, n,
+                               d.hm.data_ptr(), d.ms.data_ptr(), ctypes.byref(args), dig, leaves, tree, step,
+                               outs[i].data_ptr())
             if rc:
                 raise RuntimeError(f"rt_step: CUDA error {rc}")
-            host[i].copy_(out, non_blocking=True)
-            done.append(torch.cuda.Event())
-            done[-1].record(side)
-        held += [dig, leaves, tree, step, out]
-    return Pending(done, host, tuple(held))
+        host = torch.empty((len(laid), 16), dtype=torch.int64, pin_memory=True)
+        host.copy_(outs, non_blocking=True)
+        done = torch.cuda.Event()
+        done.record(side)
+    return Pending(done, host, (staged, scratch, *inputs))
 
 
 def device_roots(tables: Sequence[tuple[bytes, int, Any, Any]], key: bytes) -> list[bytes]:
