@@ -175,7 +175,9 @@ template <int NA> DEV void acc_fence(float* d) {
 // C~, U and y are not stored (their products are still computed, as a wgmma tile's 64 rows are one instruction's).  i5
 // (overlap; G = 4 on 64-row tiles): each window's atoms are issued, into a second set of accumulators, before the window
 // before it is waited on, so its MMAs run while that one's sum is added; the same sums go into the total in the same order.
-enum { M_PLAIN, M_CT, M_PEARLC, M_PEARLC_S };
+// WIN (G = 4): a CTA a tile's window kb, its sum from +0 stored to slab kb of p2 (K / 128 slabs of M x N FP32), which
+// pa_w adds up as the other modes' total does.
+enum { M_PLAIN, M_CT, M_PEARLC, M_PEARLC_S, M_WIN };
 constexpr int BK = 128, PEEL_ROW = 128, SMEM_BUDGET = 200 * 1024, MAX_STAGES = 8;
 struct Maps { uint8_t a[128], b[128], pa[128], pb[128]; };
 
@@ -207,11 +209,13 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
   constexpr bool STORE_C = MODE == M_CT || MODE == M_PEARLC, STORE_U = MODE == M_PEARLC;
   static_assert(G == 0 || G == BK / 32, "a promotion window is one stage");
   static_assert(!PEEL || BN >= 64, "the peel's wgmma is n64 or n128");
+  static_assert(MODE != M_WIN || G != 0, "a window's sum is a promotion window's");
   extern __shared__ __align__(1024) uint8_t smem[];
   const uint32_t base = (sa(smem) + 1023) & ~1023u, bars = base + STAGES * T::STAGE;
   const int M = a.i[0], N = a.i[1], K = a.i[2], group = a.i[3], live = a.i[4] ? a.i[4] : M;
   const bool overlap = NWG == 1 && G != 0 && a.i[5] != 0;
-  const int tiles_m = M / TM, tiles_n = N / BN, tiles = tiles_m * tiles_n, KB = K / BK;
+  const int KB = K / BK, wins = MODE == M_WIN ? KB : 1;
+  const int tiles_m = M / TM, tiles_n = N / BN, tiles = tiles_m * tiles_n * wins;
   const int tid = threadIdx.x, wg = tid / 128;
   const int* ex = reinterpret_cast<const int*>(a.p[12]);
   const auto b_row = [&](int tm) { return GR ? ex[tm * (TM / 64)] * N : 0; };
@@ -236,13 +240,13 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
       uint32_t ph = 0;
       for (int t = blockIdx.x; t < tiles; t += gridDim.x) {
         int tm, tn;
-        raster(t, tiles_m, tiles_n, group, tm, tn);
-        const int br = b_row(tm) + tn * BN;
-        for (int kb = 0; kb < KB + PEEL; kb++) {
+        raster(t / wins, tiles_m, tiles_n, group, tm, tn);
+        const int br = b_row(tm) + tn * BN, k0 = MODE == M_WIN ? t % wins : 0, k1 = MODE == M_WIN ? k0 + 1 : KB;
+        for (int kb = k0; kb < k1 + PEEL; kb++) {
           const uint32_t st = base + s * T::STAGE, full = bars + 8 * s;
           mbar_wait(bars + 8 * (STAGES + s), ph ^ 1);
           mbar_expect_tx(full, T::STAGE);
-          if (kb < KB) {
+          if (kb < k1) {
             tma_load(st, maps->a, full, kb * BK, tm * TM);
             if (once)
               tma_load_hint(st + T::A_BYTES, maps->b, full, kb * BK, br, first);
@@ -266,7 +270,30 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
   float d[NA], total[NA];
   for (int t = blockIdx.x; t < tiles; t += gridDim.x) {
     int tm, tn;
-    raster(t, tiles_m, tiles_n, group, tm, tn);
+    raster(t / wins, tiles_m, tiles_n, group, tm, tn);
+    if constexpr (MODE == M_WIN) {
+      mbar_wait_warp(bars + 8 * s, ph);
+      const uint32_t a0 = base + s * T::STAGE + wg * 64 * BK, b0 = base + s * T::STAGE + T::A_BYTES;
+      WG_FENCE;
+      qmma<BN>(d, desc_sw128(a0), desc_sw128(b0), 0);
+      qmma<BN>(d, desc_sw128(a0 + 32), desc_sw128(b0 + 32), 1);
+      qmma<BN>(d, desc_sw128(a0 + 64), desc_sw128(b0 + 64), 1);
+      qmma<BN>(d, desc_sw128(a0 + 96), desc_sw128(b0 + 96), 1);
+      WG_COMMIT;
+      WG_WAIT(0);
+      acc_fence<NA>(d);
+      if (lane == 0) mbar_arrive(bars + 8 * (STAGES + s));
+      if (++s == STAGES) { s = 0; ph ^= 1; }
+      const int row = tm * TM + wg * 64 + 16 * (x / 32) + (x % 32) / 4, col0 = tn * BN + 2 * (x % 4);
+      float* W = reinterpret_cast<float*>(a.p[2]) + (size_t)(t % wins) * M * N;
+#pragma unroll
+      for (int j = 0; j < NA / 4; j++) {
+        const int col = col0 + 8 * j;
+        store2(W + (size_t)row * N + col, d[4 * j], d[4 * j + 1]);
+        store2(W + (size_t)(row + 8) * N + col, d[4 * j + 2], d[4 * j + 3]);
+      }
+      continue;
+    }
     if constexpr (G == 0) {
       for (int kb = 0; kb < KB; kb++) {
         mbar_wait_warp(bars + 8 * s, ph);
@@ -406,7 +433,7 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
 
 // G4: pearl-c-h100-v1 (pearl_c_device.H100); gemm_fast is the plain GEMM unpromoted.  The 128 x 128 tile; _n64: 128 x 64
 // (n a multiple of 64, not 128); _d: 64 x 64 (decode's few rows, m a multiple of 64, not 128); gemm_words: 128 x 32 and
-// gemm_words_d: 64 x 32, the 32-column words (A'F_B, B~F_A, G)
+// gemm_words_d: 64 x 32, the 32-column words (A'F_B, B~F_A, G); gemm_words_win_d: gemm_words_d's windows a CTA each (WIN)
 #define GEMM(NAME, MODE, TM, BN, G)                                                                                       \
   extern "C" __global__ void __launch_bounds__(Tile<TM, BN>::NT, 1) NAME(const Args a) { gemm_body<MODE, TM, BN, G>(a); } \
   extern "C" __global__ void NAME##_smem(int* out) { *out = Tile<TM, BN>::SMEM; }
@@ -427,6 +454,7 @@ GEMM(gemm_pearlc_d, M_PEARLC, 64, 64, 4)
 GEMM(gemm_pearlc_s_d, M_PEARLC_S, 64, 64, 4)
 GEMM(gemm_words, M_CT, 128, 32, 4)
 GEMM(gemm_words_d, M_CT, 64, 32, 4)
+GEMM(gemm_words_win_d, M_WIN, 64, 32, 4)
 // the grouped calls' chain and A'F_B (GR), on 64-row tiles: each unit's segment of A is a multiple of 64 rows
 #define GEMM_G(NAME, MODE, TM, BN, G)                                                                                     \
   extern "C" __global__ void __launch_bounds__(Tile<TM, BN>::NT, 1) NAME(const Args a) { gemm_body<MODE, TM, BN, G, true>(a); } \
@@ -690,6 +718,27 @@ extern "C" __global__ void pa(const Args a) {
   const int row = t / 64, e = t % 64;
   const uint16_t v = e < 32 ? e4m3bf(reinterpret_cast<const uint8_t*>(a.p[0])[row * 32 + e])
                             : f2bf(reinterpret_cast<const float*>(a.p[2])[row * 32 + e - 32]);
+  reinterpret_cast<uint16_t*>(a.p[3])[(size_t)row * 64 + e] = v;
+}
+
+// pa from A'F_B's windows (gemm_words_win_d's): each AF word their sum from +0, one FADD (RN) a window in ascending k, as
+// gemm_words_d's total, stored to p2 and into P_A as pa's.  p0 E'_A codes, p1 the windows (i1 slabs of rows x 32), p2 AF
+// words out, p3 out; i0 rows, i1 windows
+extern "C" __global__ void pa_w(const Args a) {
+  const int t = blockIdx.x * blockDim.x + threadIdx.x, rows = a.i[0], wins = a.i[1];
+  if (t >= rows * 64) return;
+  const int row = t / 64, e = t % 64;
+  uint16_t v;
+  if (e < 32) {
+    v = e4m3bf(reinterpret_cast<const uint8_t*>(a.p[0])[row * 32 + e]);
+  } else {
+    const float* w = reinterpret_cast<const float*>(a.p[1]) + row * 32 + e - 32;
+    float total = 0.0f;
+#pragma unroll 8
+    for (int kb = 0; kb < wins; kb++) total = __fadd_rn(total, w[(size_t)kb * rows * 32]);
+    reinterpret_cast<float*>(a.p[2])[row * 32 + e - 32] = total;
+    v = f2bf(total);
+  }
   reinterpret_cast<uint16_t*>(a.p[3])[(size_t)row * 64 + e] = v;
 }
 

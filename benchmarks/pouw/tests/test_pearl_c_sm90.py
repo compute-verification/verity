@@ -76,7 +76,7 @@ def test_gemms_fit_h100_shared_memory_and_are_the_runners():
     assert "SMEM_BUDGET = 200 * 1024" in SOURCE and const("PEEL_ROW") == const("BK") == RUN.PEEL_ROW == 128
     names = {n for n, *_ in gemms()}
     assert names == {f"{g}{t}" for g in ("gemm_plain", "gemm_fast", "gemm_ct", "gemm_pearlc", "gemm_pearlc_s")
-                     for t in ("", "_n64", "_d")} | {"gemm_words", "gemm_words_d"}
+                     for t in ("", "_n64", "_d")} | {"gemm_words", "gemm_words_d", "gemm_words_win_d"}
     for name, mode, tm, bn, g in gemms():
         assert 48 * 1024 < tile_smem(tm, bn) <= H100_MAX_DYN, name
         assert RUN.gemm_tile(name) == (tm, bn) and RUN.gemm_threads(name) == 128 * (tm // 64 + 1), name
@@ -361,6 +361,9 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         elif base in ("gemm_ct", "gemm_words"):
             assert base == "gemm_ct" or N == 32, name
             need[2] = 4 * M * N
+        elif base == "gemm_words_win":                           # a slab of M x N words a window
+            assert N == 32, name
+            need[2] = 4 * M * N * (K // RUN.WINDOW)
         else:
             assert base in ("gemm_pearlc", "gemm_pearlc_s"), name
             need.update({4: 2 * M * N, 5: 128 * M, 6: 128 * N, 7: 4 * M, 8: 4 * N})
@@ -373,6 +376,8 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: src, 2: 4 * rows * k, **({1: scales} if scales else {})}
     if name == "pa":
         return {0: 32 * i[0], 2: 128 * i[0], 3: 128 * i[0]}
+    if name == "pa_w":
+        return {0: 32 * i[0], 1: 128 * i[0] * i[1], 2: 128 * i[0], 3: 128 * i[0]}
     if name == "pb":
         return {0: 32 * i[0], 2: 128 * i[0], 3: 32 * 32 * 4, 4: 128 * i[0]}
     if name == "s512_rows":
@@ -563,9 +568,12 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     assert {ev["i"][0] for ev in launched if ev["name"] == "s512_row_segs"} == {1008, 1024, 40}   # A's real rows, B's
     lines_ea = [ev for ev in launched if ev["name"] == "lines" and ev["i"][4]]
     assert {(ev["i"][2], ev["i"][4]) for ev in lines_ea} == {(1024, 1008), (64, 40)}
-    # decode's 40 rows pad to 64, so the chain runs on 64 x 64 tiles and A'F_B on 64 x 32
+    # decode's 40 rows pad to 64, so the chain runs on 64 x 64 tiles and A'F_B on 64 x 32, a CTA a window (WORDS_WIN) that
+    # pa_w adds up
     names = {ev["name"] for ev in launched}
-    assert {"gemm_pearlc_d", "gemm_ct_d", "gemm_words_d", "gemm_words"} <= names
+    assert {"gemm_pearlc_d", "gemm_ct_d", "gemm_words_win_d", "pa_w", "gemm_words"} <= names
+    wins = [ev for ev in launched if ev["name"] == "gemm_words_win_d"]
+    assert wins and all(ev["grid"][0] == min(132, ev["i"][2] // RUN.WINDOW) for ev in wins)
 
 
 def room(allocs: dict[int, int], ptr: int) -> int:
@@ -606,7 +614,8 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
         if name.startswith("gemm_") and not name.endswith("_smem"):
             tm, bn = RUN.gemm_tile(name)
             assert ev["block"] == 128 * (tm // 64 + 1) and 48 * 1024 < ev["smem"] <= H100_MAX_DYN
-            assert g[0] <= min(132, (i[0] // tm) * (i[1] // bn)) and i[2] % 128 == 0 and i[0] % tm == 0 and i[1] % bn == 0
+            wins = i[2] // RUN.WINDOW if name.startswith("gemm_words_win") else 1
+            assert g[0] <= min(132, (i[0] // tm) * (i[1] // bn) * wins) and i[2] % 128 == 0 and i[0] % tm == 0 and i[1] % bn == 0
             if maps is not None:
                 M, N, K = i[:3]
                 assert {(p[0], K, M, tm), (p[1], K, N, bn)} <= maps, name

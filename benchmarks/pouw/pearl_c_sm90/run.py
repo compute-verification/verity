@@ -8,7 +8,8 @@ libcuda.so.1, stdlib only, nothing built on the card).
 1. The check.  At check.json's shape (fixture.py's), every kernel runs on the fixture's inputs and every buffer it writes is
    compared byte for byte with the fixture, for the variant `h100` (pearl-c-h100-v1-h3: G = 4, hashing format -h3, SHA-512
    throughout); the GEMMs, with gemm_pearlc_s (y alone), are re-run on all, 1 and 3 CTAs and compared again
-   (`<buffer>@<step>/<tile>/grid<n>`), at each of the three tiles (bm128: 128 x 128, n64: 128 x 64, bm64: 64 x 64), and
+   (`<buffer>@<step>/<tile>/grid<n>`; after af, pa and its P_A too: at bm64, WORDS_WIN's windows and pa_w), at each of the
+   three tiles (bm128: 128 x 128, n64: 128 x 64, bm64: 64 x 64), and
    at 64 x 64 on LIVE_ROWS real rows (`check_live`): the real rows the fixture's, the rest as the memset left them.
    hash_decode.cuh's served launches (whole, split, and the whole's stamp twins: `check_pd`) write every output they own
    over a poison (0xA5) and must match; the no-write control must not.  So do A's commit launches past them under each chain (`check_chains`: "pl", hash_prefill.cuh's, and "h3"),
@@ -28,7 +29,8 @@ One JSON object per line on stdout as each part finishes, a summary on stderr.
 
   python3 run.py [check.json]   (env: PEARLC_EXPECT_UUID, SHAPES="8192", REPS=5, VARIANTS="h100", PEARLC_CHAIN="pl",
                                  PEARLC_LIBCUDA, PEARLC_LIBNVML, PEARLC_LIVE=0 for decode's 64 x 64 GEMMs storing all m rows,
-                                 PEARLC_OVERLAP=0 for the 64-row GEMMs waiting on each window before issuing the next)
+                                 PEARLC_OVERLAP=0 for the 64-row GEMMs waiting on each window before issuing the next,
+                                 PEARLC_WORDS_WIN=0 for A'F_B on one 64 x 32 CTA and pa at 64-row tiles)
 
 Dry runs on a stand-in driver only: PEARLC_ANY_GPU=1 skips the identity check, and PEARLC_UNGATED=1 (refused without it)
 times regardless of the check and marks every row ungated.
@@ -57,6 +59,11 @@ LIVE = os.environ.get("PEARLC_LIVE", "1") != "0"
 #: the 64-row GEMMs issue each promotion window's atoms before the window before it is waited on (i5); PEARLC_OVERLAP=0
 #: waits on each window before issuing the next, the same sums in the same order
 OVERLAP = os.environ.get("PEARLC_OVERLAP", "1") != "0"
+#: a promotion window's depth (pearl_c_sm90.cu's BK)
+WINDOW = 128
+#: with 64-row tiles and an af_win buffer, A'F_B is a CTA a window (gemm_words_win_d), which pa_w adds up in gemm_words_d's
+#: order; PEARLC_WORDS_WIN=0 runs gemm_words_d and pa
+WORDS_WIN = os.environ.get("PEARLC_WORDS_WIN", "1") != "0"
 TMAP_UINT8, TMAP_SWIZZLE_128B, TMAP_L2_128B, TMAP_BYTES = 0, 3, 2, 128
 #: every GEMM's operand pair, a set of four tensor maps (A, B, P_A, P_B) each at `tma` + MAP_SET * slot: the chain's (P_A, P_B
 #: the peel's), the words' (A'F_B, B~F_A, G) and the baselines' (A and B again for the tail, which they don't load)
@@ -522,7 +529,8 @@ class Pipeline:
             "fbT128": 128 * k, "g": 128 * 32 * 4,
             "alpha_a": 4 * m, "beta_a": 4 * m, "ia_a": 4 * m, "aux_a": 8 * m, "epa_codes": m * 32,
             "alpha_b": 4 * n, "beta_b": 4 * n, "ia_b": 4 * n, "aux_b": 8 * n, "epb_codes": n * 32,
-            "at": m * k, "bt": n * k, "at2": max(m, n) * k, "af": m * 32 * 4, "bf": n * 32 * 4, "pa_t": m * 128, "pb_t": n * 128,
+            "at": m * k, "bt": n * k, "at2": max(m, n) * k, "af": m * 32 * 4, "af_win": m * 32 * 4 * (k // WINDOW),
+            "bf": n * 32 * 4, "pa_t": m * 128, "pb_t": n * 128,
             "c": m * n * 4, "c2": m * n * 4, "u": m * n * 4, "y": m * n * 2, "y2": m * n * 2, "tma": MAP_SET * len(MAPS),
             "line_a": 32, "seed_a": 32, "seeds_a": 32 * m_real, "lkeys_a": 32 * m_real, "rowdig_a": 64 * m_real, "rowdig_b": 64 * n,
             "leaves": tiles * NB,
@@ -684,7 +692,7 @@ class Pipeline:
         tm, bn = gemm_tile(name)
         if self.boxes.get((a, b)) != (tm, bn):
             raise ValueError(f"{name} takes {tm} x {bn} tiles, and ({a}, {b})'s maps are {self.boxes.get((a, b))}")
-        tiles = (M // tm) * (N // bn)
+        tiles = (M // tm) * (N // bn) * (self.k // WINDOW if name.startswith("gemm_words_win") else 1)
         if live is None:
             live = self.m_real if LIVE and (tm, bn) == (BM_D, BM_D) and self.m_real < M else 0
         ptrs = [self.b[a], self.b[b], 0, 0, 0, 0, 0, 0, 0, dg, self.b["tma"] + MAP_SET * MAPS[(a, b)], key]
@@ -701,6 +709,10 @@ class Pipeline:
         peel = lambda: {"pa": b["pa_t"], "pb": b["pb_t"], "rs": b["ia_a"], "cs": b["ia_b"]}  # noqa: E731
         return {"gemm_pearlc_cu": lambda: self.gemm(f"gemm_pearlc{tile}", "at", "bt", m, n, out=("c", "u", "y"), **peel()),
                 "gemm_pearlc_s": lambda: self.gemm(f"gemm_pearlc_s{tile}", "at", "bt", m, n, out=(None, None, "y"), **peel())}
+
+    def words_win(self) -> bool:
+        """Whether A'F_B runs a CTA a window (WORDS_WIN): on 64-row tiles, where the buffers hold its windows."""
+        return WORDS_WIN and self.bm == BM_D and "af_win" in self.b
 
     def words(self, a: str, b: str, M: int, out: str, small: bool = False) -> None:
         """The FP32 words of an (M x K) by (32 x K) product: on 128 x 32 tiles where 128 divides M (and not `small`), else
@@ -754,9 +766,14 @@ class Pipeline:
         pd = self.pd is not None
         forming = [ea] * (not pd) + form_side("a", m, "xa", "ea_codes", "fa_codes", "at")
         gemm = [("gemm_ct", lambda: self.gemm(ct, "at", "bt", m, n, out=("c2",)))]
-        cleanup = [("af", lambda: self.words("at", "fbT32", m, "af", small=self.bm == BM_D)),
-                   ("pa", lambda: d.launch("pa", cdiv(m * 64, 256), 256, p=(b["epa_codes"], 0, b["af"], b["pa_t"]), i=(m,))),
-                   ("gemm_pearlc", chain["gemm_pearlc_cu"])]
+        if self.words_win():
+            cleanup = [("af", lambda: self.gemm("gemm_words_win_d", "at", "fbT32", m, WORDS_N, out=("af_win",))),
+                       ("pa", lambda: d.launch("pa_w", cdiv(m * 64, 256), 256, p=(b["epa_codes"], b["af_win"], b["af"], b["pa_t"]),
+                                               i=(m, k // WINDOW)))]
+        else:
+            cleanup = [("af", lambda: self.words("at", "fbT32", m, "af", small=self.bm == BM_D)),
+                       ("pa", lambda: d.launch("pa", cdiv(m * 64, 256), 256, p=(b["epa_codes"], 0, b["af"], b["pa_t"]), i=(m,)))]
+        cleanup.append(("gemm_pearlc", chain["gemm_pearlc_cu"]))
         widen_b = [("widen_b", lambda: widen(d, self.widen[0], self.widen[1], self.widen[2], b["xb"], n, k))] if self.widen else []
         epoch = widen_b + self.tree_setup("b", n, "dom_b") + self.row_tree("b", "xb", n, "dom_b")
         unit = self.tree_setup("a", mr, "dom_a") * (not pd) + self.tree_setup("t", tiles, "dom_t")
@@ -802,6 +819,9 @@ FORM_ALTS = ("form_s5_scalar",)
 GEMM_RERUNS = (("gemm_pearlc", ("c", "u", "y")), ("gemm_ct", ("c2",)), ("gemm_plain", ("y_plain",)), ("gemm_fast", ("y_fast",)),
                ("af", ("af",)), ("bf", ("bf",)), ("gemm_adopt", ("y_adopt",)), ("gemm_pearlc_s", ("y",)))
 ALIASES = {"c2": "c"}
+#: a rerun step's followers at each tile, each with what it writes: pa after the words (under WORDS_WIN it adds up their
+#: windows into af)
+RERUN_AFTER = {"af": {"pa": "pa_t"}}
 #: the tiles the check re-runs every GEMM at, (tag, bm, bn): the fixture's m and n are multiples of 128, so each is forced
 TILES = (("bm128", BM, BM), ("n64", BM, BN_N64), ("bm64", BM_D, BM_D))
 
@@ -951,8 +971,9 @@ LIVE_ROWS, LIVE_FILL = 40, 0xAB
 
 
 def check_live(dev: Dev, pipe: Pipeline, want) -> dict:
-    """The A side's GEMMs of GEMM_RERUNS (all but bf, over B's rows) at 64 x 64 on LIVE_ROWS real rows (i4): each output's
-    real rows against the fixture's, and its filler rows as LIVE_FILL's memset left them."""
+    """The A side's GEMMs of GEMM_RERUNS (all but bf, over B's rows, and af under `words_win`, whose windows and pa_w store
+    every row) at 64 x 64 on LIVE_ROWS real rows (i4): each output's real rows against the fixture's, and its filler rows as
+    LIVE_FILL's memset left them."""
     res = {}
     p_ = Pipeline(dev, pipe.m, pipe.n, pipe.k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"], bufs=pipe.b, bm=BM_D,
                   bn=BM_D, weight=pipe.weight)
@@ -960,7 +981,7 @@ def check_live(dev: Dev, pipe: Pipeline, want) -> dict:
     real = p_.gemm
     p_.gemm = lambda *a, **kw: real(*a, **{**kw, "live": LIVE_ROWS})
     for step, outs in GEMM_RERUNS:
-        if step == "bf":
+        if step == "bf" or step == "af" and p_.words_win():
             continue
         for o in outs:
             dev.ck("cuMemsetD8_v2", u64(pipe.b[o]), LIVE_FILL, pipe.size[o])
@@ -1008,6 +1029,7 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
             steps = {**p_.extra(), **{nm: fn for nm, _, fn in p_.steps()}}
             for grid in (None, 1, 3) if tag == "bm128" else (None, 3):
                 for step, outs in GEMM_RERUNS:
+                    outs = (*outs, *RERUN_AFTER.get(step, {}).values())
                     for o in outs:
                         dev.ck("cuMemsetD8_v2", u64(pipe.b[o]), 0xAB, pipe.size[o])
                     real = p_.gemm
@@ -1017,6 +1039,8 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
                         return _real(*a, **kw)
                     p_.gemm = pinned
                     steps[step]()
+                    for after in RERUN_AFTER.get(step, {}):
+                        steps[after]()
                     p_.gemm = real
                     dev.sync()
                     for o in outs:
