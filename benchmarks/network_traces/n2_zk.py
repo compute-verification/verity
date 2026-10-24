@@ -1,6 +1,8 @@
-"""N2 in zero knowledge on a certifier-serve run: each link-window's head checks (`head_check.NetworkHeadCheck_v2`, the
-gated part of N2's unit, `service.LinkWindows`) proved by C-Flock `prove --zk` behind the Lean firewall and held by the
-Lean verifier, through the one-stage audit as `benchmarks/one_stage/a8.py` proves its openings.
+"""N2's head checks proved in zero knowledge beside N2's verdict of record, on a certifier-serve run: each link-window's
+head checks (`head_check.NetworkHeadCheck_v2`, the gated part of N2's unit, `service.LinkWindows`) proved by C-Flock
+`prove --zk` behind the Lean firewall and held by the Lean verifier, through the one-stage audit as
+`benchmarks/one_stage/a8.py` proves its openings. The stream's verdict of record is still N2's host verify, which reads
+the opening (`link_windows`), and the proved template is the row adapter, not the Program N2 registers.
 
     python benchmarks/network_traces/n2_zk.py virtual --out DIR [--requests 40] [--tokens 4]
     python benchmarks/network_traces/n2_zk.py prove --run DIR [--extra DIR] --bin flock-circuit --lean flock-verify
