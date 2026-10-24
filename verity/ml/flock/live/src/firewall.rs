@@ -538,12 +538,13 @@ pub struct LeanLevel0 {
 }
 
 /// The level-0 hiding of record on a firewalled table under the Lean session loop: the loop, on its frames port `addr`, draws
-/// level 0's hiding and salts from the OS for the host's packed witness `z` at `m`, commits level 0 on them and keeps it
-/// for the session `session` names ([`level0_session`]) until that session ends (`level0 SESSION M LEN` followed by `z`,
-/// answered `ok N R` and the draws then the root, its last `R` bytes). `extra_words`, `lanes` (the extra ones included),
+/// level 0's hiding and salts from the OS for the host's packed witness `z` of the session's table `table` at `m`, commits
+/// level 0 on them and keeps it for that table of the session `session` names ([`level0_session`]) until that session ends
+/// (`level0 SESSION TABLE M LEN` followed by `z`, answered `ok N R` and the draws then the root, its last `R` bytes). The
+/// loop draws a table's level 0 once a session and refuses a second request for it. `extra_words`, `lanes` (the extra ones included),
 /// `t_pad` and `leaves` are the statement's level-0 sizes, which the answer must have.
 #[cfg(feature = "sha512")]
-pub fn lean_level0(addr: &str, session: &str, m: usize, z: &[F128], extra_words: usize, lanes: usize, t_pad: usize,
+pub fn lean_level0(addr: &str, session: &str, table: usize, m: usize, z: &[F128], extra_words: usize, lanes: usize, t_pad: usize,
                    leaves: usize) -> Result<LeanLevel0, String> {
     use std::io::{BufRead, Read, Write};
     let fail = |e: String| refused(format!("the Lean loop's level 0 at {addr}: {e}"));
@@ -552,7 +553,7 @@ pub fn lean_level0(addr: &str, session: &str, m: usize, z: &[F128], extra_words:
     let mut out = std::io::BufReader::new(tcp.try_clone().map_err(|e| fail(e.to_string()))?);
     let body = f128_wire(z);
     let mut w = &tcp;
-    write!(w, "level0 {session} {m} {}\n", body.len()).and_then(|_| w.write_all(&body)).and_then(|_| w.flush()).map_err(|e| fail(e.to_string()))?;
+    write!(w, "level0 {session} {table} {m} {}\n", body.len()).and_then(|_| w.write_all(&body)).and_then(|_| w.flush()).map_err(|e| fail(e.to_string()))?;
     let mut line = String::new();
     out.read_line(&mut line).map_err(|e| fail(e.to_string()))?;
     let l = line.trim_end();

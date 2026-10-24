@@ -28,15 +28,17 @@ the prover's bytes:
   took them.
 * Each table's level 0 is the loop's: on its frames port the loop draws a table's level-0 hiding and salts from the
   operating system for the packed witness the prover hands it, and commits level 0 on them (`level0`, `Level0.draw`),
-  for the live session the request names (by its coin tree's root, `Level0.nameOf`). A `Commit`'s roots leave only as
-  roots drawn for its own session, each at its table's `m` (`Level0.commit`), and the `Commit` that leaves is the
+  for the live session and table the request names (by its coin tree's root, `Level0.nameOf`), once a table: a second
+  request for a table is refused (`Level0.Registry.draw`). A `Commit`'s roots leave only as each table's one draw for
+  its own session, at its table's `m` (`Level0.commit`), and the `Commit` that leaves is the
   loop's (`commitFrame`): `root_F` the session's Σ, the roots its tables' level 0 now bound, and no public words. Every
   level 0 drawn for a session, bound or not, is gone when it ends (`Level0.Registry.close`).
 * `Finish` leaves only once the schedule's last opening has (`State.request`), as `FINISH`. The proof files are the
   loop's own finish's, a connection to the frames port (`Finish.serveLoop`): it reads each table's level 0 from the
   loop's `Level0` of the table's root, draws each rep's salts for levels ≥ 1 itself, which the prover's trees then take,
   refuses a rep's request whose draws, passed values, extra claims or coins are not its frame's (`Frames.ownOf`,
-  `Finish.RepIn.differs`), and keeps each rep's proof file, once (`Frames.Registry.file`).
+  `Finish.RepIn.differs`), refuses a table's level-0 data from the host (`table`) and any rep's proof file but the one
+  its live inner request computed (`Finish.Kept`), and keeps each rep's proof file, once (`Frames.Registry.file`).
 * A `Proof` the prover sends is answered `Resp::Ok` and dropped. The proofs that leave, just before `Finish`, are the
   loop's kept files (`ownProofs`), every rep's of the session's bound level 0 or none, and only once every rep's frame
   ended not stopped (`Frames.finish`). The finish computes none where a constraint fails on the pads. Where a frame
@@ -547,7 +549,7 @@ def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Registry)
         sendFrame a h
         let some r ← recvFrame a | break
         let (st', out) := st.answer .hello r
-        if st.session.isNone && st'.session.isSome then l0s.modify (·.name (Level0.nameOf r) sid)
+        if st.session.isNone && st'.session.isSome then l0s.modify (·.name (Level0.nameOf r) sid st.tables.size)
         st := st'
         sendFrame p out
     | .ok k =>
@@ -692,21 +694,24 @@ def sockChan (c : Socket.Client) : IO Frame.Chan := do
     return b.extract 0 n
   return { getLine, readExact, write := fun b => (c.sendAll #[b]).block, flush := pure () }
 
-/-- **A table's level 0, drawn by the loop**, for the request line `line` on `ch`: `level0 SESSION M LEN` followed by the
-`LEN` bytes of the table's packed witness is answered `ok N R` followed by the `N` bytes of the hiding the loop drew for
-it from the operating system and the root it committed, the last `R` of them (`Level0.draw`, `Level0.drawsOf`). The
-table's `Level0` is kept in `l0s` for the live session named `SESSION` (`Level0.nameOf`: the hex of its coin tree's root)
-until that session ends, and only that session's `Commit` may carry its root. Anything else is answered `err WHY`. -/
+/-- **A table's level 0, drawn by the loop**, for the request line `line` on `ch`: `level0 SESSION TABLE M LEN` followed by
+the `LEN` bytes of the session's table `TABLE`'s packed witness is answered `ok N R` followed by the `N` bytes of the
+hiding the loop drew for it from the operating system and the root it committed, the last `R` of them (`Level0.draw`,
+`Level0.drawsOf`). The table's `Level0` is kept in `l0s` for table `TABLE` of the live session named `SESSION`
+(`Level0.nameOf`: the hex of its coin tree's root) until that session ends, and only that session's `Commit` may carry its
+root, as that table's. A table's level 0 is drawn once a session: a second request for it, or one for a table the session
+does not have, is refused, and nothing drawn for it is kept or answered (`Level0.Registry.draw`, in the one update that
+keeps the first). Anything else is answered `err WHY`. -/
 def level0 (ch : Frame.Chan) (l0s : IO.Ref Level0.Registry) (line : String) : IO Unit := do
   let say := fun (s : String) => ch.write (s ++ "\n").toUTF8
   match (line.replace "\n" "").splitOn " " with
-  | ["level0", name, m, len] =>
-    let (some m, some len) := (m.toNat?, len.toNat?) | say s!"err a request `{line.trim}`"
+  | ["level0", name, j, m, len] =>
+    let (some j, some m, some len) := (j.toNat?, m.toNat?, len.toNat?) | say s!"err a request `{line.trim}`"
     let b ← ch.readExact len
     if len % 16 != 0 then return (← say s!"err a {len}-byte witness, not whole words")
     match ← Level0.draw IO.getRandomBytes m (Frame.words b 0 (len / 16)) with
     | .ok l =>
-      let kept : Except String Unit ← l0s.modifyGet fun R => match R.draw name l with
+      let kept : Except String Unit ← l0s.modifyGet fun R => match R.draw name j l with
         | .ok R' => (.ok (), R')
         | .error e => (.error e, R)
       if let .error e := kept then return (← say s!"err {e}")
