@@ -110,6 +110,53 @@ def test_the_circuit_is_the_reference_on_random_walks(cfg):
     assert not bad, f"steps {bad[:5]}: {got[bad[0]] if bad else ''} vs {want[bad[0]] if bad else ''}"
 
 
+def _victims(S, st, inp):
+    """The reference's running loop alone: how many requests it preempts, and whether one preempts itself."""
+    run, free, budget, i, n_victims = list(st.running), st.free, S.T, 0, 0
+    while i < len(run) and budget > 0:
+        r = run[i]
+        n = min(r.P + r.out - r.comp, S.H or budget, budget, S.L - r.comp - 1)
+        if n <= 0:
+            i += 1
+            continue
+        need = RS.cdiv(r.comp + n, S.B) - RS.cdiv(r.comp, S.B)
+        while need > free:
+            j = len(run) - 1
+            v = run.pop()
+            n_victims += 1
+            free += inp.ret[j] if S.PC else RS.cdiv(v.comp, S.B)
+            if j == i:
+                return n_victims, True
+        free, budget, i = free - need, budget - n, i + 1
+    return n_victims, False
+
+
+@pytest.mark.parametrize("pc", [0, 1])
+def test_the_circuit_is_the_reference_under_kv_pressure(pc):
+    """Running lists a few tokens from their blocks' ends and 0-3 free blocks: the circuit's one comparison a slot (the
+    victims a suffix) against the reference's pops, over one, two and three victims and requests preempting themselves."""
+    st = RS.statics(5, 6, 2, _engine(num_gpu_blocks=14, enable_prefix_caching=bool(pc)), 7)
+    S, rng, cases = SimpleNamespace(**st), random.Random(pc), []
+    for _ in range(1500):
+        run = []
+        for i in range(rng.randint(0, S.R)):
+            O, P = rng.randint(1, 8), rng.randint(1, 60)
+            out = rng.randint(0, O - 1)
+            comp = min(rng.choice((P + out - 1, rng.randint(0, P + out - 1), 16 * rng.randint(1, 4) - rng.randint(0, 1))),
+                       P + out - 1)
+            run.append(RS.Req(i, P, O, out, comp))
+        arr = tuple(RS.Req(80 + a, rng.randint(1, 40), rng.randint(1, 5)) for a in range(rng.randint(0, S.A)))
+        cases.append((RS.State(tuple(run), (), rng.randint(0, 3)),
+                      RS.Inputs(arr, (1, 0), ret=tuple(rng.choice((0, 1, 2, 3, 5)) for _ in range(S.R)))))
+    want = [RS.reference(S, s, i) for s, i in cases]
+    shapes = {_victims(S, s, i) for (s, i), w in zip(cases, want) if w.ok}
+    assert {(1, False), (2, False), (3, False), (1, True), (2, True)} <= shapes
+    assert any(not w.ok for w in want)
+    got = RS.evaluate(st, cases)
+    bad = [k for k, (g, w) in enumerate(zip(got, want)) if g != w]
+    assert not bad, f"cases {bad[:5]}"
+
+
 def _both(st, state, inp):
     S = SimpleNamespace(**st)
     ref = RS.reference(S, state, inp)

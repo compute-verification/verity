@@ -492,42 +492,41 @@ def _build(C, S, *elements):
             return _pad(held, HW)
         return I["ret"][p]
 
-    # the running loop
+    # the running loop. The victims are a suffix and no need or return is negative, so the slots kept are those i with
+    # free + (the returns of the slots after i) ≥ (the needs of slots 0..i), each slot's n taken from the budget the
+    # slots before it leave as if all were kept: one comparison a slot instead of a pass over the victims.
     stage("running")
+    SW = max(BW, HW + 1 + RC) + 1
     budget = const_bits(S.T, TW)
-    popped = [ZERO] * R
-    broken = ZERO
-    run_n = [[ZERO] * TW for _ in range(R)]
+    ns, needs = [], []
     for i in range(R):
         r = run[i]
-        active = and_reduce(C, [r["valid"], popped[i].inv(), broken.inv(), or_reduce(C, budget)])
         ntok = _add(C, r["P"], r["out"], LW)
         n = _clamp(C, _sub(C, ntok, r["comp"], NW), S.H, NW)
         n = _min(C, n, budget, NW)
-        n = _min(C, n, _sub(C, const_bits(S.L - 1, LW), r["comp"], LW), NW)
-        tried = C.AND(active, or_reduce(C, n))
+        n = _sel(C, r["valid"], _min(C, n, _sub(C, const_bits(S.L - 1, LW), r["comp"], LW), NW))
         held = _cdiv(C, r["comp"], LB, HW + 1)
-        need = _sub(C, _cdiv(C, _add(C, r["comp"], n, LW + 1), LB, HW + 1), held, HW + 1)
-        failing = C.AND(tried, _lt(C, free, need))
-        for j in range(R - 1, i, -1):
-            v = run[j]
-            pop = and_reduce(C, [failing, v["valid"], popped[j].inv()])
-            back = ret_of(j, _cdiv(C, v["comp"], LB, HW))
-            if S.PC:
-                bad.append(C.AND(pop, _lt(C, _cdiv(C, v["comp"], LB, HW + 1), back)))
-            free = _add(C, free, _sel(C, pop, back), BW)
-            popped[j] = popped[j] ^ pop
-            failing = C.AND(failing, _lt(C, free, need))
-        back = ret_of(i, _cdiv(C, r["comp"], LB, HW))
+        needs.append(_sub(C, _cdiv(C, _add(C, r["comp"], n, LW + 1), LB, HW + 1), held, HW + 1))
+        budget = _sub(C, budget, n, TW)
+        ns.append(_pad(n, TW))
+    backs = [_sel(C, run[j]["valid"], ret_of(j, _cdiv(C, run[j]["comp"], LB, HW))) for j in range(R)]
+    after = [[ZERO] * SW]
+    for j in range(R - 1, 0, -1):
+        after.insert(0, _add(C, after[0], backs[j], SW))
+    room, upto, kept = _pad(free, SW), [ZERO] * SW, []
+    for i in range(R):
+        upto = _add(C, upto, needs[i], SW)
+        kept.append(C.AND(run[i]["valid"], _lt(C, _add(C, room, after[i], SW), upto).inv()))
+    popped = [C.AND(run[j]["valid"], kept[j].inv()) for j in range(R)]
+    budget = const_bits(S.T, TW)
+    run_n = []
+    for j in range(R):
         if S.PC:
-            bad.append(C.AND(failing, _lt(C, held, back)))
-        free = _add(C, free, _sel(C, failing, back), BW)
-        popped[i] = popped[i] ^ failing
-        broken = broken ^ failing
-        ok_i = C.AND(tried, failing.inv())
-        free = _sub(C, free, _sel(C, ok_i, need), BW)
-        budget = _sub(C, budget, _sel(C, ok_i, n), TW)
-        run_n[i] = _sel(C, ok_i, _pad(n, TW))
+            bad.append(C.AND(popped[j], _lt(C, _cdiv(C, run[j]["comp"], LB, HW + 1), backs[j])))
+        free = _add(C, free, _sel(C, popped[j], backs[j]), BW)
+        free = _sub(C, free, _sel(C, kept[j], needs[j]), BW)
+        run_n.append(_sel(C, kept[j], ns[j]))
+        budget = _sub(C, budget, run_n[j], TW)
     preempted = or_reduce(C, popped)
 
     # the waiting loop: W waiting slots, then A arrivals
