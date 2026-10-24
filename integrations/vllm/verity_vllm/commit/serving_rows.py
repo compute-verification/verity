@@ -33,7 +33,7 @@ from the registration and the Commit's record (``expected_ports``).  The leaf la
 member (its template, or its chunk's name) to the SHA-512 of its public body (``leaf_layer``).  ``write`` puts into a window
 directory ``registration.json``, ``index.json`` (unit -> served identity, its SHA-512 in the window's provenance), per member
 ``m<k>-public.bin`` and ``m<k>-private.bin`` (M0's public and prover bodies; the private one is prover only) and ``m<k>-units.json``
-(its global unit indices), and ``window.json``; ``flock_input_files`` wraps
+(its global unit indices), and ``window.json``; ``flock_inputs.flock_input_files`` wraps
 member ``k``'s bodies as M0's ``m<k>-pub-<n>.bin`` (``rows: false``) and ``m<k>-inst-<n>.bin``.
 
 A window may carry row tables (:class:`RowTable`, ``Window.row_tables``): one per int8 quantize output (an engine step's token rows
@@ -44,7 +44,8 @@ step's root the tree over their roots.  The window registers one port for them, 
 (served-domain rule, leaf schema ``ROOTS_SCHEMA``), so no row is committed twice.  Its linked members (``Member.links``) are
 shared-row chunks whose ``x`` table holds the distinct token rows they read, each under its row table row's salt (so the same
 ``b || c``), read by offset; ``row_tables.check_row_tables`` ties them to the step roots.  ``write`` adds ``t<k>-public.bin``
-(every row's ``b || c``) and ``t<k>-private.bin`` (rows, then salts; prover only).
+(every row's ``b || c``) and ``t<k>-private.bin`` (rows, then salts; prover only).  A wired member (``Member.wired``) commits one
+input port as other units' output rows under their salts, which `wiring.check` holds across statements.
 """
 from __future__ import annotations
 
@@ -71,6 +72,7 @@ from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEM
                                            sha512_row_prefix, sha512_row_seg_digest, sha512_row_v2_prefix)
 from verity.ml.circuits.codec import canonical_json
 
+from . import wiring as WI
 from .hiding import HidingLeaves
 
 SCHEME = "frame-v3-sha512/hm96-sha512"
@@ -92,8 +94,6 @@ CHUNK = 1 << 14
 TABLE_SCHEMA, TABLE_PORT, LINKED = SCHEMA_HM96_SHA512_ROW_SEG, "row-table", "x"
 ROOTS_SCHEMA = RT.ROOTS_SCHEMA
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
-#: M0's ``flock-circuit-inputs`` header constants (``verity_flock.circuit``) and the META keys a class leaves out
-M0_FORMAT, M0_STATEMENT, M0_BINDING_KEYS = "flock-circuit-inputs", "verity/flock-circuit", ("partition", "program_sha512", "program_digests")
 
 _FRAME = b"veritor/protocol/merkle/frame/v3\0"
 
@@ -253,6 +253,7 @@ class Member:
     name: str = ""
     schemas: tuple[tuple[str, str], ...] = ()
     links: tuple[tuple[int, int], ...] = ()      # a row-table member: per row of its x table, the window's row table and rank it is
+    wired: tuple[str, str, tuple[int, ...]] | None = None  # (port, out, writers): unit i's port row is unit writers[i]'s out row (`wiring`)
 
     def __post_init__(self) -> None:
         if self.schemas and (sorted(p for p, _ in self.schemas) != sorted(p for p, _ in self.rows + self.outs)
@@ -372,6 +373,7 @@ class Window:
             raise ValueError(f"members {mine} are not the partition's units {want} (each template's, in consecutive chunks)")
         if len({m.key for m in self.members}) != len(self.members):
             raise ValueError(f"members {[m.key for m in self.members]}: each its own name")
+        WI.validate(self.members)
         covered = [np.zeros(t.n, dtype=bool) for t in self.row_tables]
         for m in self.members:
             for t, r in m.links:
@@ -611,6 +613,7 @@ def commit(window: Window, data: Sequence[dict[str, dict[str, np.ndarray]]], *, 
     for m in ms:
         if m.links:
             ys[m.port(LINKED)] = b"".join(ys[window.row_tables[t].port][r * SALT_BYTES:(r + 1) * SALT_BYTES] for t, r in m.links)
+    WI.salts(ms, rows, ys)
     t_salt = time.perf_counter()
     roots, bc = commit_ports(domains, rows, {}, ys, workers=workers, chunk=chunk, schemas=schemas)
     table_roots = {t.port: roots.pop(t.port) for t in window.row_tables}
@@ -734,7 +737,8 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
                         "units_sha512": hashlib.sha512(ub).hexdigest(),
                         **({"row_schemas": m.row_schemas} if m.schemas else {}),
                         **({"shared_rows": {**dict(m.tables), **{p: m.n for p, _ in m.out_rows}}} if m.tables else {}),
-                        **({"row_links": [list(x) for x in m.links]} if m.links else {})})
+                        **({"row_links": [list(x) for x in m.links]} if m.links else {}),
+                        **({"wired": {"port": m.wired[0], "out": m.wired[1], "writers": list(m.wired[2])}} if m.wired else {})})
     tables = []
     for t, tab in enumerate(c.window.row_tables):
         pub = c.table_public(t)
@@ -760,40 +764,3 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
     (d / "window.json").write_text(json.dumps(win, indent=1, default=str) + "\n")
     return win
 
-
-def flock_input_files(window_dir: str | Path, k: int, circuit_text: str, out_dir: str | Path) -> dict[str, Any]:
-    """Member ``k``'s M0 ``m<k>-pub-<n>.bin`` (``rows: false``) and ``m<k>-inst-<n>.bin``, under the header
-    ``verity_flock.circuit.write`` gives the circuit it composed: its SHA-512 pin, its META's statement, subcircuit, block shape
-    and class, the member's global unit indices, and its ``frame_v3``.  The bodies are the window's bytes."""
-    d, o = Path(window_dir), Path(out_dir)
-    win = json.loads((d / "window.json").read_text())
-    rec = json.loads((d / "registration.json").read_text())
-    mem = win["members"][k]
-    head_line, meta_line, rest = circuit_text.split("\n", 2)
-    meta = json.loads(meta_line[5:])
-    if ([list(p[:2]) for p in meta["ports"]] != mem["ports"] or [list(p) for p in meta["out_ports"]] != mem["out_ports"]
-            or meta.get("input_ports") != mem["input_ports"]):
-        raise ValueError(f"the circuit's ports {meta['ports']} / {meta['out_ports']} ({meta.get('input_ports')} input rows) are not "
-                         f"member {k}'s {mem['ports']} / {mem['out_ports']} ({mem['input_ports']} input rows)")
-    if meta.get("row_schemas") != mem.get("row_schemas"):
-        raise ValueError(f"the circuit's row schemas {meta.get('row_schemas')} are not member {k}'s {mem.get('row_schemas')}")
-    if meta.get("scheme") != SCHEME:
-        raise ValueError(f"the circuit commits under {meta.get('scheme')!r}, the window under {SCHEME!r}")
-    cls_meta = {x: v for x, v in meta.items() if x not in M0_BINDING_KEYS}
-    cls = hashlib.sha512((head_line + "\nMETA " + json.dumps(cls_meta, sort_keys=True, separators=(",", ":")) + "\n" + rest).encode()).hexdigest()
-    n, G = int(mem["n"]), int(meta["vus_per_block"])
-    idx = list(range(int(mem["base"]), int(mem["base"]) + n))
-    units = {"vus_per_block": G, "units_per_vu": meta["units_per_vu"], "indices": idx, "blocks": [idx[b:b + G] for b in range(0, n, G)],
-             "classes": [cls] * n}
-    head = {"format": M0_FORMAT, "statement": meta.get("statement", M0_STATEMENT), "scheme": SCHEME,
-            "set": f"served/{rec['window']['run']}/m{k}", "subcircuit": meta["subcircuit"], "range": [0, n], "instances": n,
-            "circuit_sha512": hashlib.sha512(circuit_text.encode()).hexdigest(), "units": units, "frame_v3": mem["frame_v3"], "rows": True}
-    if mem.get("shared_rows"):
-        head["shared_rows"] = mem["shared_rows"]
-    o.mkdir(parents=True, exist_ok=True)
-    pub = (d / f"m{k}-public.bin").read_bytes()
-    (o / f"m{k}-pub-{n}.bin").write_bytes(json.dumps(dict(head, rows=False), sort_keys=True).encode() + b"\n" + pub)
-    fd = os.open(o / f"m{k}-inst-{n}.bin", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "wb") as f:
-        f.write(json.dumps(head, sort_keys=True).encode() + b"\n" + (d / f"m{k}-private.bin").read_bytes() + pub)
-    return {"pub": str(o / f"m{k}-pub-{n}.bin"), "inst": str(o / f"m{k}-inst-{n}.bin"), "circuit_sha512": head["circuit_sha512"], "class": cls}
