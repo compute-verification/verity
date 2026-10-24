@@ -32,6 +32,18 @@ def test_traffic_is_seeded_varied_and_in_arrival_order():
     assert all(x.get("min_tokens", 0) <= x["max_tokens"] for x in s)
 
 
+def test_a_template_frame_wraps_the_same_turns():
+    class Tok:
+        def apply_chat_template(self, turns, *, tokenize, add_generation_prompt, enable_thinking):
+            assert not tokenize and add_generation_prompt and not enable_thinking
+            return f"<u>{turns[0]['content']}</u><a>"
+
+    frame = CA.template_frame(Tok())
+    assert frame == ("<u>", "</u><a>")
+    reqs = CA.traffic(encode, 20, seed=1, prompt_tokens=(64, 128), max_tokens=8, rate=1.0, frame=frame)
+    assert all(q["prompt"][1:4] == encode("<u>")[1:] and q["prompt"][-7:] == encode("</u><a>")[1:] for q in reqs)
+
+
 @pytest.mark.parametrize("text", ["16", "a:b", "0:4", "9:3"])
 def test_prompt_range_refuses(text):
     with pytest.raises(UsageError):

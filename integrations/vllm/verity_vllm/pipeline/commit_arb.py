@@ -62,8 +62,9 @@ class Options:
     prompt_range: str = option("--prompt-range", default="16:1024", help="prompt lengths LO:HI, log-uniform")
     tokens: int = option("--tokens", type=int, default=64, help="max_tokens is uniform in 1 … this")
     rate: float = option("--rate", type=float, default=0.5, help="Poisson arrivals, requests an engine step")
-    chat: bool = option("--chat", action="boolean_optional", default=True,
-                        help="chat-turn prompts, CERT-VARLEN's (--no-chat: the questions and filler as plain text)")
+    chat: str = option("--chat", choices=("cert-varlen", "template", "plain"), default="cert-varlen",
+                       help="cert-varlen: CERT-VARLEN's chat-turn prompts; template: the tokenizer's chat template around the same "
+                            "turns (an instruct model's own EOS ends its answers); plain: the questions and filler as plain text")
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
     max_model_len: int = option("--max-model-len", type=int, default=2048)
     max_num_batched_tokens: int = option("--max-num-batched-tokens", type=int, default=2048)
@@ -86,12 +87,25 @@ def prompt_range(text: str) -> tuple[int, int]:
     return a, b
 
 
+def template_frame(tokenizer: Any) -> tuple[str, str]:
+    """The text the tokenizer's chat template puts before and after one user turn, with the assistant's turn opened (and
+    thinking off, where the template has it)."""
+    mark = "\x00verity-user-turn\x00"
+    text = tokenizer.apply_chat_template([{"role": "user", "content": mark}], tokenize=False, add_generation_prompt=True,
+                                         enable_thinking=False)
+    head, found, tail = text.partition(mark)
+    if not found:
+        raise UsageError("--chat template: the tokenizer's chat template does not render the user's turn")
+    return head, tail
+
+
 def traffic(encode: Any, n: int, *, seed: int, prompt_tokens: tuple[int, int], max_tokens: int, rate: float,
-            chat: bool = True) -> list[dict[str, Any]]:
+            chat: bool = True, frame: tuple[str, str] | None = None) -> list[dict[str, Any]]:
     """``n`` requests in arrival order: CERT-VARLEN's prompts and caps (the module docstring) arriving at Poisson engine
-    steps, each with the sampling it asks for. ``encode(text)`` is the tokenizer's (special tokens added)."""
+    steps, each with the sampling it asks for. ``encode(text)`` is the tokenizer's (special tokens added); ``frame`` the
+    text around a user turn in place of CERT-VARLEN's (`template_frame`)."""
     lo, hi = prompt_tokens
-    head, tail = (CHAT_HEAD, CHAT_TAIL) if chat else ("", "\n\nAnswer: ")
+    head, tail = frame or ((CHAT_HEAD, CHAT_TAIL) if chat else ("", "\n\nAnswer: "))
     bos = encode("")
     tail_ids = encode(tail)[len(bos):]
     filler, k = [], 1
@@ -303,7 +317,7 @@ def main(opts: Options) -> int:
     llm, com = build(opts)
     tok = llm.get_tokenizer()
     reqs = traffic(lambda s: list(tok.encode(s)), opts.requests, seed=opts.seed, prompt_tokens=(lo, hi), max_tokens=opts.tokens,
-                   rate=opts.rate, chat=opts.chat)
+                   rate=opts.rate, chat=opts.chat != "plain", frame=template_frame(tok) if opts.chat == "template" else None)
     cfg = scheduler_config(llm.vllm.llm_engine)
     (out / "run.json").write_text(json.dumps({"options": {k: getattr(opts, k) for k in opts.__dataclass_fields__},
                                               "engine": llm.engine_record, "scheduler": cfg, "arena": com.arena_sizing_record,
