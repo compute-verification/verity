@@ -46,7 +46,10 @@ fi
 MAIN=()
 UNSHALLOW=()
 [ "$(git -C "$HERE" rev-parse --is-shallow-repository)" = true ] && UNSHALLOW=(--unshallow)
-if git -C "$HERE" fetch -q "${UNSHALLOW[@]}" origin +refs/heads/main:refs/remotes/origin/main >> "$OUT/fetch.log" 2>&1 \
+# a run's clone (--cwd clone) has the shipped tree as its origin, which holds main only as its own origin/main
+if { git -C "$HERE" fetch -q "${UNSHALLOW[@]}" origin +refs/heads/main:refs/remotes/origin/main >> "$OUT/fetch.log" 2>&1 \
+      || git -C "$HERE" fetch -q "${UNSHALLOW[@]}" origin +refs/remotes/origin/main:refs/remotes/origin/main \
+        >> "$OUT/fetch.log" 2>&1; } \
     && git -C "$HERE" rev-list --first-parent refs/remotes/origin/main > "$OUT/main.txt"; then
   MAIN=(--main "$OUT/main.txt")
   echo "main rc 0, $(grep -c . "$OUT/main.txt") first-parent commits" >> "$OUT/fetch.log"

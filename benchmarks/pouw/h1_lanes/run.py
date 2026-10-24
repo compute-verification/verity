@@ -25,7 +25,8 @@ statement reading the leaf's lane partials, a value committed after the draw (`o
   `h1unit.ok_salt`. The ``--registered`` file is `leaf_lanes.registered_file`'s at the entries and roots of the world's
   registration record and produced record alone (`leaf_lanes.verifier_entries`), the public file `h1unit.verifier_pub`'s.
   Each check is the Lean verifier's verdict and `pouw-leaf-own`'s (PoUW's `PouwWindow.Lanes.leafOwn?`): the file, as
-  flock-verify parses it, holds the layout's data ports at the roots of the records the verifier holds (``holds``).
+  flock-verify parses it, holds the layout's data ports at the roots of the records the verifier holds (``holds``), and
+  each of the statement's sessions draws every unit of its partition (`PouwWindow.Lanes.checkFull`, the draw policy).
 * **The negatives**, each a statement proved and checked like the others:
   ``swap-lane3`` and ``swap-lane4``: a partials tree with rows 3 and 4 swapped (its record well-formed); each lane reads
   its own row, which holds the other lane's partial, so its ok is 0 (REJECT). ``swap-combine``: the combine on that tree,
@@ -46,7 +47,7 @@ statement reading the leaf's lane partials, a value committed after the draw (`o
   file without ``complete``, which nothing else refuses (ACCEPT, by design: the control).
   ``combine-skips-p5-bit``: the combine over a circuit that reads bit i of ``p5`` in place of its last bit j, two bits the
   honest row holds equal (`lazy_combine`, its own Program), so its ok is 1 on the honest rows and it depends on no bit j:
-  the verifier's file marks every partials port ``read_in_full`` (`leaf_lanes.registered_file`), and Flock's
+  the verifier's file marks every A, B and partials port ``read_in_full`` (`leaf_lanes.registered_file`), and Flock's
   `KnownRead.fullRows` refuses the circuit by name (REJECT, ``WHY``); ``combine-skips-p5-bit-unmarked``, the same session
   against that file with ``p5``'s mark removed, which nothing else refuses (ACCEPT, by design: the control).
   ``other-registration-file``: lane 0 of the other leaf, its file and session that leaf's own and consistent, so

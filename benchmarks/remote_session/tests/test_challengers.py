@@ -109,9 +109,9 @@ class Host:
         for t in self.runs.values():
             t.join()
 
-    def gate(self, out: Path, *, pin: str | None = None, period: str = "p-1", call=None,
-             peer: str = "vy-nebius-1") -> challengers.Gate:
-        return challengers.Gate(out, call or self.call, peer, pin or self.pin, period, address=self.address,
+    def gate(self, out: Path, *, pin: str | None = None, period: str = "p-1", main: list[str] | None = MAIN,
+             call=None, peer: str = "vy-nebius-1") -> challengers.Gate:
+        return challengers.Gate(out, call or self.call, peer, pin or self.pin, period, main, address=self.address,
                                 pause=self.pause, polls=3)
 
     def period(self, name: str = "p-1", circuit: str = CIRCUIT) -> None:
@@ -170,12 +170,56 @@ def test_a_session_whose_coins_the_gates_session_released_is_held_to_the_ledger_
     assert (reserve["by"], reserve["peer"], reserve["scheme"], reserve["epoch"]) == (LANE, "vy-nebius-1", coins.SCHEME, 0)
     assert reserve["families"] == [list(f) for f in coins.families(params().windows, 8)]
     assert (tmp_path / "out" / f"{sid}.ledger.jsonl").read_bytes() == host.host.ledger.read_bytes()
+    assert (tmp_path / "out" / f"{sid}.pins.jsonl").read_bytes() == host.host.pins.read_bytes()
     assert not (tmp_path / "out" / sid / "secret").exists()
     key = gate.key()
     heads = [tmp_path / "out" / f"{sid}.ledger.jsonl"]
-    assert s.trusted_reason(tmp_path / "out" / sid / "out", heads, key, challengers.lms_verify, "p-2") == (
+    assert s.trusted_reason(tmp_path / "out" / sid / "out", heads, key, PINS, MAIN, challengers.lms_verify, "p-2") == (
         "the challenger's session for this session's window is not trusted: the auditor's ledger holds the session's "
         "window in period p-1, not the audit's period p-2")
+
+
+@pytest.mark.parametrize("case", ["no-main", "stale-main", "no-pins"])
+def test_a_gate_session_is_refused_as_coins_unless_the_hosts_pins_log_and_the_verifiers_main_hold_its_pin(
+        store, host, tmp_path, case):
+    """`Gate.finish` reads the window's session through `coins.trusted`, so through `challenger.pinned_session`, with
+    the host's pins log as the gate serves it (`pins`, fetched beside the ledger) and the verifier's own first-parent
+    list of main. An honest session, its coins the gate's session's and its open sealing the host's log, is refused when the
+    verifier holds no copy of main, when its copy predates the host's pin, and when the gate serves no pins log."""
+    host.period()
+    main = {"no-main": None, "stale-main": MAIN[2:], "no-pins": MAIN}[case]
+
+    def call(words):
+        return (3, b'{"refused": "usage"}\n') if words[0] == "pins" and case == "no-pins" else host.call(words)
+
+    gate = host.gate(tmp_path / "out", main=main, call=call)
+    s, verdicts = session(store, gate)
+    assert all(v.accepted for v in verdicts)
+    doc = gate.finish(s)
+    sid = doc["session"]
+    assert doc["closed"] is None and ("end" in doc) is (case != "no-pins")
+    assert doc["reason"] == {
+        "no-main": f"the challenger's session for this session's window is not trusted: {NO_MAIN}",
+        "stale-main": (f"the challenger's session for this session's window is not trusted: session {sid} ran commit "
+                       f"{PIN}, which the host's pins log records but which is not on main's first-parent line in the "
+                       "verifier's copy (`git rev-list --first-parent origin/main`): a branch commit merged into main "
+                       "is in main's history but no tree main's check ran on; repin the challenger host to a commit "
+                       "on main's first-parent line (vy-challenger-pin) and rerun the window there"),
+        "no-pins": ("the auditor's session is not readable: the challenger gate answered pins with exit 3: "
+                    '{"refused": "usage"}')}[case]
+
+
+def test_a_gate_verifier_needs_the_auditors_first_parent_list_of_main(tmp_path):
+    """`--challenger gate` without `--challenger-main FILE`, or with a FILE it can't read, is refused before the run
+    starts, so no gate run takes coins it would refuse at every session's end."""
+    flags = dict(ssh="-i /nonexistent/key research@192.0.2.1", peer="vy-nebius-1", pin="ab" * 64, period="p-1")
+    with pytest.raises(ValueError, match=re.escape("--challenger-main FILE (the auditor's own `git rev-list "
+                                                   "--first-parent origin/main`)")):
+        challengers.of("gate", tmp_path / "out", None, None, **flags)
+    with pytest.raises(CoinError, match=re.escape(f"{NO_MAIN} (none at {tmp_path / 'absent'})")):
+        challengers.of("gate", tmp_path / "out", None, None, **flags, main=tmp_path / "absent")
+    (tmp_path / "main.txt").write_text("".join(c + "\n" for c in MAIN))
+    assert challengers.of("gate", tmp_path / "out", None, None, **flags, main=tmp_path / "main.txt").main == MAIN
 
 
 def test_a_challenger_key_other_than_the_pinned_one_is_refused_before_a_reserve(store, host, tmp_path):
@@ -374,13 +418,15 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
 def test_a_session_whose_pin_isnt_a_logged_commit_on_mains_first_parent_line_earns_no_credit(host, tmp_path,
                                                                                               monkeypatch, sealed,
                                                                                               main):
-    """An honest session, complete and accepted by the Lean in a period that committed its verifier, on a host whose
-    tree (`PIN`) isn't a logged commit on main's first-parent line when the session opens: the log the open sealed
-    holds only an earlier pin, and the pin appended after the open doesn't count; or, as on every gate before
-    RT4-INT-40, the open seals no log at all; or the log records the pin but the auditor's first-parent list of main
-    doesn't hold it, as it doesn't a branch commit merged into main; or the auditor gives no copy of main. The line
-    credits zero, and the session's `credited` check (`credited_session` reads the pin first) and its `pinned` check
-    each name the fix."""
+    """An honest session, complete in a period that committed its verifier, on a host whose tree (`PIN`) isn't a
+    logged commit on main's first-parent line when the session opens: the log the open sealed holds only an earlier
+    pin, and the pin appended after the open doesn't count; or, as on every gate before RT4-INT-40, the open seals no
+    log at all; or the log records the pin but the auditor's first-parent list of main doesn't hold it, as it doesn't a
+    branch commit merged into main; or the auditor gives no copy of main. The line credits zero, and the session's
+    `credited` check (`credited_session` reads the pin first) and its `pinned` check each name the fix. When the open
+    sealed no log or one without the pin, the verifier's own read of the session (`coins.trusted`, under the host's
+    log and its own copy of main) has already refused it as `coins`, so it is neither accepted nor of record; when only
+    the auditor's copy of main fails, the verifier, holding main's own, accepted it."""
     host.seal(monkeypatch, sealed)
     out = tmp_path / "run"
     sessions, reg, desc = gate_run(host, out, "honest", defer_openings=True)
@@ -404,16 +450,28 @@ def test_a_session_whose_pin_isnt_a_logged_commit_on_mains_first_parent_line_ear
                "first-parent line in the verifier's copy (`git rev-list --first-parent origin/main`): a branch commit "
                "merged into main is in main's history but no tree main's check ran on; repin the challenger host to a "
                "commit on main's first-parent line (vy-challenger-pin) and rerun the window there")
-    assert all(s["credit"][c]["ok"] for c in ("complete", "accepted")) and s["of_record"]
+    assert s["credit"]["complete"]["ok"]
     assert s["credit"]["credited"]["ok"] is False and s["credit"]["credited"]["reason"] == why
     assert s["credit"]["pinned"] == {"commit": PIN, "seal": None if sealed is None else pins_seal(sealed), "ok": False,
                                      "reason": why}
-    assert s["credit"]["zero"] == [f"not credited: {why}", f"not pinned: {why}"] and not s["credit"]["ok"]
+    if sealed != PINS:
+        assert not s["accepted"] and s["failure"]["failure"] == "coins" and not s["of_record"]
+        assert s["verifier_coin_check"] == f"the challenger's session for this session's window is not trusted: {why}"
+        refused = "the Lean refused it (coins)"
+        zero = [f"not credited: {why}", f"not accepted: {refused}", f"not pinned: {why}",
+                "not of record: its ledger entries, its release log or its coins fail the checks beside it (ledger, "
+                "log, verifier_coin_check)"]
+        cells = f"no: {why} | yes | no: {refused} | no: {why}"
+    else:
+        assert s["credit"]["accepted"]["ok"] and s["of_record"] and s["verifier_coin_check"] is None
+        zero = [f"not credited: {why}", f"not pinned: {why}"]
+        cells = f"no: {why} | yes | yes | no: {why}"
+    assert s["credit"]["zero"] == zero and not s["credit"]["ok"]
     t = s["T"]
     assert doc["line"][t]["credited_sessions"] == [] and doc["line"][t]["4.4e+09"] == dict.fromkeys(al.SHARES, 0.0)
     assert doc["credit"]["summary"] == ("the line credits zero: no session is credited, complete, accepted, pinned "
-                                        f"and bound; session 0: not credited: {why}; not pinned: {why}")
-    assert f"| 0 | {t} | no: {why} | yes | yes | no: {why} | yes | zero |" in al.table(doc).splitlines()
+                                        f"and bound; session 0: {'; '.join(zero)}")
+    assert f"| 0 | {t} | {cells} | yes | zero |" in al.table(doc).splitlines()
 
 
 @pytest.mark.parametrize("peer", ["vy-nebius-1", "vy-auditor-1"], ids=["n1", "host-run"])
@@ -456,3 +514,15 @@ def test_the_gate_sessions_peer_is_the_one_the_runs_record_names_and_a_record_na
         assert str(e.value) == (f"auditor_line: the run's record names {named} (verifier.json's gate sessions, "
                                 f"{request}'s --challenger-peer): pass --peer NAME, the verifier machine's name in the "
                                 "challenger host's /etc/vy/peers")
+
+
+def test_the_clock_rate_beside_the_line_doesnt_read_the_first_coins_round_trip():
+    """Coins 110 ms apart on a challenger clock 30 ppm fast, σ_0 and σ_1 stamped a 100 ms round trip before the
+    challenger released them and every later coin 50 ms after: the cross-check's rate reads 30 ppm, where the ratio end
+    to end reads the round trip over the session's span."""
+    ms = 1_000_000
+    Rv = [g * 110 * ms for g in range(96)]
+    Ra = [round(t * (1 + 30e-6)) + 7_000 * ms + (100 * ms if g < 2 else -50 * ms) for g, t in enumerate(Rv)]
+    assert al.clock_rate_ppm(Rv, Ra) == pytest.approx(30, abs=0.01)
+    assert ((Ra[-1] - Ra[0]) / (Rv[-1] - Rv[0]) - 1) * 1e6 < -14_000
+    assert al.clock_rate_ppm(Rv[:3], Ra[:3]) is None
