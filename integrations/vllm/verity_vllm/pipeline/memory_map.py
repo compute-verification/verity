@@ -128,7 +128,7 @@ def _put(path: Path, doc: Mapping[str, Any]) -> None:
 
 def cache(d: str | Path, program: Any, digest: str, build: str | Path | None = None) -> dict[str, Any]:
     """Write Build dir ``d``'s `CENSUS` and `KV_ROWS` for its request Program ``program`` (``digest``), the census read back when
-    one beside it already names the Program,     a warm Program's cached prefix as the Build (``build``, else ``d``) laid it out
+    one beside it already names the Program, a warm Program's cached prefix as the Build (``build``, else ``d``) laid it out
     (``prefix_cache.json``); a Program with no KV a memory map lays out gets the reason in place of its rows."""
     d = Path(d)
     c = _read(d / CENSUS, digest)
