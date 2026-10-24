@@ -36,8 +36,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # names of the engine the runner builds, which a test checks on the runner's local-checkpoint engine; its profiling arms
 # write each run's records after the run's timed window, which a test checks with the same fakes; and its TP decode
 # driver's phases, batches and gate are tested on recorded shapes. A Pearl-C protocol arm's own gate is the
-# experimental Pearl-C arm's call check, which a test runs on a fake device run. A point sent to a node behind check
-# slots must take the form that node's launcher admits (`slot_only.through_slot`), which a test checks.
+# experimental Pearl-C arm's call check, which a test runs on a fake device run.
 inputs = [
     "benchmarks/pouw/pearl_c_vllm/bench_arm.py",
     "benchmarks/harness/README.md",
@@ -53,5 +52,6 @@ inputs = [
     "benchmarks/codec_tensor/wt.cu",
     "benchmarks/codec_tensor/reader.cu",
     "benchmarks/kv_filler/topup.cu",
+    # a point sent to a node behind check slots takes the form that node's launcher admits, which a test checks
     "tools/research/src/research/pods/nebius/slot_only.py",
 ]
