@@ -53,13 +53,13 @@ the auditor's.
 
 At each T the line is the least share among the credited sessions there, and zero when none is, with every session's
 reasons; beside each share of weights held is the same session's share of filler held (the rest of HBM and the host
-tier, `line`'s `filler`), which the line doesn't count as weights. Each form charges the node's rates (`RATES`) and,
-with `--bursts stated`, its bursts (`rates_at`). What every accepted paced session measured, credited or not, is
-`measured`. `--table` writes each session's five checks and the line as Markdown.
+tier, `line`'s `filler`), which the line doesn't count as weights. Each form charges the node's rates (`RATES`) and
+their bursts (`rates_at`; `--bursts none` for the reading of gate runs up to 7). What every accepted paced session
+measured, credited or not, is `measured`. `--table` writes each session's five checks and the line as Markdown.
 
     python auditor_line.py OUT --host-bytes B [--pin SHA512 --period P --commit SHA [--pins LOG --main FILE]]
         [--ledger HEAD ...] [--peer NAME] [--model-pin FILE] [--disk-bytes-per-s B/S] [--link-bytes-per-s B/S]
-        [--bursts none|stated] [--table FILE]
+        [--bursts stated|none] [--table FILE]
 """
 from __future__ import annotations
 
@@ -87,9 +87,10 @@ RATES = {"disk_bytes_per_s": 4.4e9, "link_bytes_per_s": 5e10}
 """The node's ceilings a gate run's line is read at, bytes a second (`line.Rates`): the node's NICs into its memory,
 which Identity leaves in, charged in both forms as `ledger.Node`'s disks are, and its boundary links beyond them,
 link-charged (54.4e9 in all)."""
-BURSTS = ("none", "stated")
-"""What the line charges beyond the rates (`rates_at`): no burst, the reading gate run 7's line of record took, or
-`ledger.Node.stated`'s."""
+BURSTS = ("stated", "none")
+"""What the line charges beyond the rates (`rates_at`): `ledger.Node.stated`'s bursts, the line of record's
+(`verifier.ingress_bursts`), or none, the reading of gate runs up to 7, whose recorded lines it reproduces (a burst of 0
+states the rate down to one nanosecond)."""
 LANE = "memory-accounting"
 VERIFIER_TREE = "verity/core/protocols/remote_bandwidth"
 LEAN_VERDICTS = ("lean", "both")
@@ -188,10 +189,10 @@ def group_l(seen: list[dict]) -> list[int]:
 
 
 def rates_at(disk_bytes_per_s: float = RATES["disk_bytes_per_s"],
-             link_bytes_per_s: float = RATES["link_bytes_per_s"], bursts: str = "none") -> dict:
+             link_bytes_per_s: float = RATES["link_bytes_per_s"], bursts: str = "stated") -> dict:
     """The node's rates `verifier.recorded_rates` takes beside the record's squarings: its disks' and links' ceilings,
     and with `bursts` stated `ledger.Node.stated`'s bursts (one rebuild batch on the chips, a second of the disks, one
-    link window)."""
+    link window: `verifier.ingress_bursts` in each form)."""
     if bursts not in BURSTS:
         raise ValueError(f"bursts are one of {', '.join(BURSTS)}, not {bursts}")
     out = {"disk_bytes_per_s": disk_bytes_per_s, "link_bytes_per_s": link_bytes_per_s}
@@ -605,8 +606,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="the ceiling into node memory both forms charge (default: the NICs', `RATES`)")
     ap.add_argument("--link-bytes-per-s", type=float, default=RATES["link_bytes_per_s"], metavar="B/S",
                     help="the boundary links' ceiling the link-charged form adds (default: 400 Gb/s, `RATES`)")
-    ap.add_argument("--bursts", choices=BURSTS, default="none",
-                    help="charge no burst beyond the rates (gate run 7's reading) or `ledger.Node.stated`'s")
+    ap.add_argument("--bursts", choices=BURSTS, default="stated",
+                    help="charge `ledger.Node.stated`'s bursts beyond the rates (the line of record) or none (gate runs "
+                         "up to 7)")
     a = ap.parse_args(argv)
     desc = None if a.commit is None else descriptor(verifier_tree(a.commit, a.repo))
     pins = None if a.pins is None else [x for x in a.pins.read_text().split("\n") if x]
