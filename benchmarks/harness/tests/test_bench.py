@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import calendar
 import json
 import os
 import re
@@ -286,6 +287,19 @@ def test_a_point_refuses_a_local_checkpoint_whose_files_differ_from_the_spec_dig
     assert f"not the spec's model_digest {digest}" in capsys.readouterr().err
 
 
+def test_a_local_checkpoint_is_bound_by_the_files_a_loader_reads_not_the_hub_snapshots_metadata(tmp_path):
+    preset = load_spec("llama31-8b-fp8-1gpu").preset
+    checkpoint = tmp_path / "model"
+    checkpoint.mkdir()
+    (checkpoint / "config.json").write_text("{}")
+    digest = local_checkpoint(preset, checkpoint).model_digest
+    (checkpoint / ".gitattributes").write_text("*.safetensors filter=lfs\n")
+    (checkpoint / "README.md").write_text("# a model card\n")
+    assert local_checkpoint(preset, checkpoint).model_digest == digest
+    (checkpoint / "generation_config.json").write_text("{}")
+    assert local_checkpoint(preset, checkpoint).model_digest != digest
+
+
 def test_the_launcher_sources_the_setup_before_the_point_runs(tmp_path):
     root = Path(__file__).resolve().parents[3]
     setup = tmp_path / "setup.sh"
@@ -321,6 +335,29 @@ def test_the_bandwidth_spec_runs_memory_accountings_arms_with_receipts_on_and_th
         assert f"{name}=" in setup, name
     for source in re.findall(r"benchmarks/[\w/]+\.cu", setup):
         assert (root / source).is_file(), source
+
+
+def test_the_served_bandwidth_spec_is_the_bandwidth_spec_with_compiled_stock_beside_its_graph_path():
+    from verity_bench.vllm import runner
+
+    graph, served_spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth"), resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served")
+    assert served_spec.arms == (*graph.arms, "stock-fp8@compiled")
+    assert served_spec.arm_settings["stock-fp8@compiled"].control == "none"
+    assert replace(graph.preset, id=served_spec.preset.id) == served_spec.preset
+    same = dict(id=served_spec.id, arms=served_spec.arms, arm_settings=served_spec.arm_settings, preset=served_spec.preset)
+    assert replace(graph, **same) == served_spec
+
+    stock, compiled = resolve_arms("stock-fp8,stock-fp8@compiled", (), served_spec.arm_settings)
+    assert compiled.control is None and compiled.execution == "compiled"
+    built = []
+    for arm in (stock, compiled):
+        preset, eager = runner.arm_execution(arm, served_spec.preset, served_spec.eager)
+        built.append(runner.engine_args(preset, arm.precision, resident=False, eager=eager))
+    assert built[0]["compilation_config"] == {"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY",
+                                              "cudagraph_capture_sizes": [1, 8, 32, 128]}
+    assert "compilation_config" not in built[1] and built[1]["execution"] == "compiled"
+    assert not built[0]["enforce_eager"] and not built[1]["enforce_eager"]
+    assert {b["kv_cache_memory_bytes"] for b in built} == {60129542144}
 
 
 def test_a_queued_point_records_its_identity_as_the_key_param_resume_matches():
@@ -785,6 +822,16 @@ def test_a_served_variant_times_a_builtin_engine_in_its_own_execution_under_an_e
     assert runner.os.environ["TORCHINDUCTOR_CACHE_DIR"] == "/tmp/verity_bench_inductor_x"
 
 
+def test_the_full_sweep_compiled_spec_is_the_quick_one_over_the_full_sweep():
+    """`llama31-8b-fp8-1gpu-compiled-full` restates the quick spec's factor at every shape, so it must time the same
+    engines: only its id (and its preset's, which must match) and its sweep differ."""
+
+    quick, full = load_spec(SPEC_ROOT / "llama31-8b-fp8-1gpu-compiled.toml"), load_spec(
+        SPEC_ROOT / "llama31-8b-fp8-1gpu-compiled-full.toml")
+    assert (quick.sweep, full.sweep) == ("quick", "full")
+    assert replace(full, id=quick.id, sweep=quick.sweep, preset=replace(full.preset, id=quick.preset.id)) == quick
+
+
 def test_a_served_variants_arm_settings_take_only_its_control(tmp_path):
     source = (SPEC_ROOT / "llama31-8b-fp8-1gpu-compiled.toml").read_text()
     path = tmp_path / "spec.toml"
@@ -796,6 +843,42 @@ def test_a_served_variants_arm_settings_take_only_its_control(tmp_path):
     for old, new, why in ((section, '[arm_settings."stock-fp8@compiled"]\nprecision = "bfloat16"', "takes only its control"),
                           (section, '[arm_settings."stock-fp8@compiled"]\ncontrol = "stock"', "control must be another arm"),
                           ('[arm_settings."stock-fp8@compiled"]', '[arm_settings."stock-fp8"]', "must name a protocol arm")):
+        assert old in source
+        path.write_text(source.replace(old, new))
+        with pytest.raises(ValueError, match=why):
+            load_spec(path)
+
+
+def test_a_served_variant_loads_its_own_checkpoint_where_the_presets_is_another_encoding(tmp_path):
+    """`llama31-8b-1gpu-pouw-h1-served` times H1 on the int8 pin over stock FP8 as vLLM serves it, which vLLM can't load
+    from the pin (`verity_int8`): its served variant names the pin's BF16 base, and only its engine loads it."""
+
+    from verity_bench.vllm import runner
+
+    spec = resolve_spec("llama31-8b-1gpu-pouw-h1-served")
+    compiled, int8, h1 = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
+    assert [(a.id, a.precision, a.control, a.execution, a.model) for a in (compiled, int8, h1)] == [
+        ("stock-fp8@compiled", "fp8", None, "compiled", "unsloth/Llama-3.1-8B"),
+        ("stock-int8", "int8_exact", None, None, None),
+        ("pouw:eps1-sm120-h1fx1", None, "stock-int8", None, None),
+    ]
+    assert compiled.to_json()["revision"] == "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814"
+    preset, eager = served(spec.preset, spec.eager)
+    built = [runner.arm_execution(a, preset, eager) for a in (compiled, int8, h1)]
+    assert [(p.model, p.revision, p.case, e) for p, e in built] == [
+        ("unsloth/Llama-3.1-8B", "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814", None, False),
+        ("verity-int8/Llama-3.1-8B-INT8", "723d342ac443b040931242c768df342b0f6f15a7", "LLAMA31_8B_INT8", True),
+        ("verity-int8/Llama-3.1-8B-INT8", "723d342ac443b040931242c768df342b0f6f15a7", "LLAMA31_8B_INT8", True),
+    ]
+    args = runner.engine_args(built[0][0], compiled.precision, resident=True, eager=False)
+    assert (args["quantization"], args["execution"], args["max_num_batched_tokens"]) == ("fp8", "compiled", 64)
+
+    source = (SPEC_ROOT / "llama31-8b-1gpu-pouw-h1-served.toml").read_text()
+    path = tmp_path / "spec.toml"
+    pin = 'revision = "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814"\n'
+    for old, new, why in ((pin, "", "set both"),
+                          ('control = "stock-int8"\n', f'control = "stock-int8"\nmodel = "x/y"\n{pin}',
+                           "only a served variant names its own checkpoint")):
         assert old in source
         path.write_text(source.replace(old, new))
         with pytest.raises(ValueError, match=why):
@@ -928,6 +1011,40 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     assert not wrong["passed"] and wrong["provided"]
 
 
+def test_pearl_cs_served_row_is_its_protocol_row_beside_the_compiled_engine():
+    """`llama31-8b-1gpu-pouw-protocol-served` measures Pearl-C over the compiled engine in one run, so its Pearl-C arm
+    and preset are the protocol row's and every arm's engine shares its step budget, sequence bound and KV pool."""
+
+    from verity_bench.vllm import runner
+
+    spec = resolve_spec("llama31-8b-1gpu-pouw-protocol-served")
+    protocol = resolve_spec("llama31-8b-1gpu-pouw-protocol")
+    pearl = "pouw:pearl-c-sm120-v1-h3"
+    assert spec.arm_settings[pearl] == protocol.arm_settings[pearl]
+    assert (spec.setup, spec.sweep, spec.reps, spec.eager) == (protocol.setup, protocol.sweep, protocol.reps, True)
+    assert {**protocol.preset.engine_settings, "max_num_seqs": 128} == spec.preset.engine_settings
+    arms = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
+    assert [(a.id, a.precision, a.control, a.execution) for a in arms] == [
+        ("stock-fp8", "fp8", None, None),
+        (pearl, "bfloat16", None, None),
+        ("stock-fp8@compiled", "fp8", None, "compiled"),
+    ]
+    preset, eager = served(spec.preset, spec.eager)
+    for resident in (True, False):
+        built = [runner.engine_args(p, a.precision or p.precision, resident=resident, eager=e)
+                 for a in arms for p, e in [runner.arm_execution(a, preset, eager)]]
+        assert [(b["enforce_eager"], b.get("execution")) for b in built] == [(True, None), (True, None), (False, "compiled")]
+        shared = ("max_num_batched_tokens", "max_num_seqs", "max_model_len", "gpu_memory_utilization",
+                  "kv_cache_memory_bytes")
+        assert len({tuple(b[k] for k in shared) for b in built}) == 1
+        assert built[0]["kv_cache_memory_bytes"] == 8 << 30 and built[0]["max_num_batched_tokens"] == 4096
+
+    b32 = resolve_spec("llama31-8b-1gpu-pouw-protocol-served-b32")
+    assert (b32.arms, b32.arm_settings, b32.setup, b32.eager, b32.preset) == (
+        spec.arms, spec.arm_settings, spec.setup, spec.eager, replace(spec.preset, id=b32.id))
+    assert b32.reps == 6 and b32.sweep == replace(spec.sweep, id="b32", batches=(32,))
+
+
 def test_an_h1_arm_is_gated_against_exact_int8_and_each_run_gets_a_window_the_adapter_accepts(monkeypatch):
     """`pouw:eps1-sm120-h1fx1` serves the int8_exact arm's own y, so its token control is that engine without PoUW
     (`stock-int8`). Its settings need the built engine's model runner, which `verity_vllm.LLM` validates before building,
@@ -995,6 +1112,36 @@ def test_an_h1_window_passes_its_gate_only_static_credited_and_entered():
     assert h1_gate([good, good])["passed"] and not h1_gate([]).get("passed")
     gate = h1_gate([good, bad[0]])
     assert not gate["passed"] and gate["provided"] and gate["failed"] == [bad[0]] and "credits nothing" in gate["coins"]
+
+
+def test_pearl_cs_whole_step_arm_builds_vllms_full_decode_graphs_beside_the_served_protocol_arm(monkeypatch):
+    """`llama31-8b-1gpu-pearl-c-whole-served` times the whole-step arm beside the protocol arm as served (its settings the
+    protocol row's) and the compiled engine. Under the eager spec, the arm's overrides build vLLM's FULL decode graphs at
+    the preset's capture sizes without torch.compile, at the `compiled` label, which `verity_vllm.LLM` accepts, and its
+    run takes the graph path's options and serial schedule."""
+
+    from verity_bench.vllm import runner
+    from verity_bench.vllm.arms import plugin
+    from verity_vllm.pipeline.llm import resolve_options
+
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
+    spec = resolve_spec("llama31-8b-1gpu-pearl-c-whole-served")
+    pearl = "pouw:pearl-c-sm120-v1-h3"
+    assert spec.arm_settings[pearl] == resolve_spec("llama31-8b-1gpu-pouw-protocol").arm_settings[pearl]
+    arms = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
+    assert [(a.id, a.precision, a.control, a.execution, a.experimental) for a in arms] == [
+        ("stock-fp8", "fp8", None, None, False), (pearl, "bfloat16", None, None, False),
+        ("stock-fp8@compiled", "fp8", None, "compiled", False), ("pouw-pearl-c-whole", "bfloat16", None, None, True)]
+    assert arms[-1].engine_label == "graphs-mode0" and arms[-1].to_json()["engine_label"] == "graphs-mode0"
+    whole = plugin(arms[-1])
+    preset, eager = served(spec.preset, spec.eager)
+    preset, eager = runner.arm_execution(arms[-1], preset, eager)
+    built = {**runner.engine_args(preset, "bfloat16", resident=False, eager=eager), **whole.engine_overrides(None)}
+    assert built["compilation_config"] == {"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY",
+                                           "cudagraph_capture_sizes": list(spec.preset.engine_settings["capture_sizes"])}
+    opts = resolve_options(built)
+    assert opts["enforce_eager"] is False and opts["execution"] == "compiled"
+    assert whole.run_options == {"graphs": True, "whole_defer": True} and whole.schedule == "serial"
 
 
 def test_a_sweep_crosses_samplings_and_greedy_points_keep_their_ids():
@@ -1326,6 +1473,98 @@ def test_resume_counts_only_a_clean_exited_passing_run_of_the_same_identity_and_
     identity = jobs.point_identity(spec.config_sha256, pins, point)
     assert identity != jobs.point_identity(spec.config_sha256, replace(pins, vllm_pin="0" * 40), point)
     assert identity != jobs.point_identity("0" * 64, pins, point)
+
+
+def _attempt(run, identity, commit, *, validation="passed", rc=0, dirty=False):
+    return {"schema": "research/attempt/v0.1", "id": run, "tool": {"name": "vllm_bench_point", "version": "0"},
+            "derivation": "drv:" + "0" * 64, "reuse_key": None, "argv": [], "params": {"identity": identity},
+            "key_params": ["identity"], "inputs": {}, "conditions": {}, "key_conditions": [],
+            "source": {"commit": commit, "dirty": dirty}, "closure": None,
+            "execution": {"start_utc": f"{run[1:5]}-{run[5:7]}-{run[7:9]}T{run[10:12]}:{run[12:14]}:{run[14:16]}Z"},
+            "cost": None, "status": {"state": "done", "rc": rc, "validation": validation}, "outputs": {}, "telemetry": None}
+
+
+def _stores(tmp_path, remote_attempts):
+    """A fresh local store whose remote is a directory holding `remote_attempts`, so nothing reaches the network."""
+
+    from research.store import canon
+
+    remote = tmp_path / "remote"
+    (remote / "attempts").mkdir(parents=True)
+    for doc in remote_attempts:
+        (remote / "attempts" / f"{doc['id']}.json").write_bytes(canon.dumps(doc))
+    config = tmp_path / "store.toml"
+    config.write_text(f'[remote]\ntype = "fs"\npath = "{remote}"\n')
+    return tmp_path / "local", config
+
+
+COMMITTED = calendar.timegm((2026, 10, 21, 12, 0, 0))
+
+
+def test_a_point_another_machine_ran_counts_and_an_absent_point_stays_missing(tmp_path):
+    """BENCH-10: the lookup read only this machine's catalog, so a fresh VM saw every point as missing (and `run` would
+    have launched them again). It pulls the remote's attempts since the commit, once, and nothing older."""
+
+    from research.store.local import LocalStore
+
+    commit, found, absent, failed = "a" * 40, "1" * 64, "2" * 64, "3" * 64
+    remote_attempts = [
+        _attempt("r20261021-130000-0001", found, commit),
+        _attempt("r20261021-140000-0002", failed, commit, validation="failed", rc=3),
+        _attempt("r20261018-120000-0003", absent, commit),  # before the commit's margin: never fetched
+        _attempt("r20261021-150000-0004", absent, "b" * 40),
+    ]
+    root, config = _stores(tmp_path, remote_attempts)
+    store = LocalStore(root, config_path=config)
+    logged = []
+    lookup = jobs.StoreCompletion(store, commit_time=lambda c: COMMITTED, log=logged.append)
+
+    assert jobs.StoreCompletion(LocalStore(root, config_path=config), local_only=True)(found, commit) is None
+    assert lookup(found, commit) == "r20261021-130000-0001"
+    assert lookup(absent, commit) is None
+    assert lookup(failed, commit) is None
+    assert sorted(store.attempt_ids()) == ["r20261021-130000-0001", "r20261021-140000-0002", "r20261021-150000-0004"]
+    assert logged == [f"pulled 3 attempts started since r20261020 from {store.remote.describe()} (0 of 3 were here)"]
+
+    later = _attempt("r20261021-160000-0005", absent, commit)
+    (tmp_path / "remote" / "attempts" / f"{later['id']}.json").write_bytes(json.dumps(later).encode())
+    assert lookup(absent, commit) is None, "one pull per commit"
+    again = jobs.StoreCompletion(store, commit_time=lambda c: COMMITTED, log=logged.append)
+    assert again(found, commit) == "r20261021-130000-0001" and len(logged) == 1, "a local hit reads no remote"
+    assert again(absent, commit) == "r20261021-160000-0005"
+    assert logged[-1].startswith("pulled 1 attempts") and logged[-1].endswith("(3 of 4 were here)")
+
+
+def test_without_a_remote_the_lookup_refuses_unless_told_to_read_the_catalog_alone(tmp_path):
+    from research.store.local import LocalStore
+
+    config = tmp_path / "store.toml"
+    config.write_text("")
+    store = LocalStore(tmp_path / "local", config_path=config)
+    with pytest.raises(RuntimeError, match="--local-only"):
+        jobs.StoreCompletion(store, commit_time=lambda c: COMMITTED)("1" * 64, "a" * 40)
+    assert jobs.StoreCompletion(store, local_only=True)("1" * 64, "a" * 40) is None
+
+
+def test_check_on_a_fresh_store_counts_the_points_the_remote_holds(tmp_path, monkeypatch, capsys):
+    root = Path(__file__).resolve().parents[3]
+    commit = "a" * 40
+    monkeypatch.setenv("RESEARCH_SOURCE_SHA", commit)
+    monkeypatch.chdir(root)
+    monkeypatch.setattr(jobs, "commit_time", lambda _root, _commit: COMMITTED)
+    points = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, lookup=lambda identity, commit: None).points
+    ran = [_attempt(f"r20261021-13000{i}-000{i}", item.identity, commit) for i, item in enumerate(points[1:])]
+    store, config = _stores(tmp_path, ran)
+    monkeypatch.setenv("RESEARCH_STORE", str(store))
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(config))
+
+    assert main(["check", "llama31-8b-fp8-1gpu", "--local-only"]) == 1
+    assert f"0/{len(points)} points" in capsys.readouterr().out
+    assert main(["check", "llama31-8b-fp8-1gpu"]) == 1
+    out = capsys.readouterr().out
+    assert f"{len(points) - 1}/{len(points)} points" in out
+    assert f"{points[0].point.id}\t{points[0].identity}\tmissing" in out
+    assert all(f"{item.identity}\t{run['id']}" in out for item, run in zip(points[1:], ran))
 
 
 def test_a_requeued_point_deletes_its_earlier_attempts_verdict_before_it_runs(tmp_path, monkeypatch):
