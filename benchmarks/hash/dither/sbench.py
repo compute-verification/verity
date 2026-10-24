@@ -153,7 +153,7 @@ warm or gate is dropped, its error in gate.json, and the rest timed (exit 5 stil
 checked, so N arms need N engines' memory plus one arm's captures.
 
 `prof` (an op, for any arm; under DITHER_NSYS=1 or prof): generates PROF_N[0] and then PROF_N[1] tokens for the 32 requests
-inside one CUDA profiler range, each generation in its own NVTX range PROF_RANGE/<arm>/n<N>, so a kernel's launches and time
+($SBENCH_PROF_REQS of them if set: T for decode steps of m = T, a saturation step) inside one CUDA profiler range, each generation in its own NVTX range PROF_RANGE/<arm>/n<N>, so a kernel's launches and time
 a decode step are the two ranges' difference over PROF_N[1] - PROF_N[0] (`exactlin/steps.py`; `stepprof.py` splits a dither
 arm's step by part, its between-step phases by their NVTX ranges).  nsys's capture range ends at the first profiler stop,
 so a run profiles one arm: under DITHER_NSYS=prof the gate runs unprofiled, so a gated run's prof op is the capture.
@@ -826,11 +826,12 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             if prof:
                 torch.cuda.profiler.start()
             counts = PF if pf else PROF_N
-            res = {"prof_n": list(counts), "profiled": prof, "prefill": pf}
+            reqs = int(os.environ.get("SBENCH_PROF_REQS", B))
+            res = {"prof_n": list(counts), "profiled": prof, "prefill": pf, "prof_requests": reqs}
             for n in counts:
                 if prof:
                     torch.cuda.nvtx.range_push(f"{PROF_RANGE}/{arm}/n{n}")
-                t, outs = gen(pp[:n], 1) if pf else gen(ps, n)
+                t, outs = gen(pp[:n], 1) if pf else gen(ps if reqs == B else prompts(reqs), n)
                 torch.cuda.synchronize()
                 if prof:
                     torch.cuda.nvtx.range_pop()
@@ -838,7 +839,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             if prof:
                 torch.cuda.profiler.stop()
             step = round(1e3 * (res[f"gen_n{counts[1]}_s"] - res[f"gen_n{counts[0]}_s"]) / (counts[1] - counts[0]), 4)
-            res["prefill_step_ms" if pf else "tpot_b32_ms"] = step
+            res["prefill_step_ms" if pf else "tpot_b32_ms" if reqs == B else f"step_m{reqs}_ms"] = step
             conn.send(res)
         elif cmd["op"] == "smq_sweep":
             from dither_so import smq_of
