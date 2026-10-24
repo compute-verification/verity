@@ -38,13 +38,6 @@ A spec-level reference for network accounting's timing channel:
   rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one
   canonical bit string the compiler reads, refused unless it is a schedule vLLM could have run, with its bits charged
   to the earliest egress window that can show each record (`bits`);
-- advice v1's arithmetic encoder (`arith_encode`): `ArithEncodeStep_v1{K, BIN}`, `ArithEncodeFinish_v1` and
-  `KTContext_v1{C, NW}`, Boolean Definitions with `reference_step`, `reference_finish` and `reference_kt` their specs.
-  They run ENC-CODE's 32-bit coder forward on one decision at its context's adaptive estimate, and check each output
-  bit against the window's committed segment in the decoder's order, so a window's segment is accepted exactly when it
-  is the coder's codeword. It is held symbol for symbol to `code.py` on the replay's decisions and on ENC-DERIVED's
-  still-sent fields (`benchmarks/network_e2e/encodings/arith_vectors.py`), and it is in no proof-service Spec yet
-  (`PROTOCOL.md`, "Advice v1");
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
   buckets before;
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
@@ -68,7 +61,14 @@ A spec-level reference for network accounting's timing channel:
   window) its ingress admits whole requests by the admission rule (`served.Admission`). On a sealed pair link
   (`Proxy(pair=active.Pair.of(…))`, off by default), between two of the auditor's certifiers, every slot of the link is
   sealed after its record and opened before it (`verity.ml.crypto.aead`, SHA-512 counter mode then HMAC-SHA512, a
-  nonce per slot), so the records are the unsealed run's and a unit that doesn't open fails the link closed.
+  nonce per slot), so the records are the unsealed run's and a unit that doesn't open fails the link closed;
+- advice v1's arithmetic encoder (`arith_encode`): `ArithEncodeStep_v1{K, BIN}`, `ArithEncodeFinish_v1` and
+  `KTContext_v1{C, NW}`, Boolean Definitions with `reference_step`, `reference_finish` and `reference_kt` their specs.
+  They run ENC-CODE's 32-bit coder forward on one decision at its context's adaptive estimate, and check each output
+  bit against the window's committed segment in the decoder's order, so a window's segment is accepted exactly when it
+  is the coder's codeword. It is held symbol for symbol to `code.py` on the replay's decisions and on ENC-DERIVED's
+  still-sent fields (`benchmarks/network_e2e/encodings/arith_vectors.py`), and it is in no proof-service Spec yet
+  (`PROTOCOL.md`, "Advice v1").
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's
