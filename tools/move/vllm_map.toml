@@ -77,6 +77,9 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 "integrations/vllm/tests/protocol_options/" = "integrations/vllm/tests/protocols/"
 "integrations/vllm/tests/linear/" = "integrations/vllm/tests/protocols/linear/"
 "integrations/vllm/tests/store/" = "integrations/vllm/tests/protocols/remote_bandwidth/"
+# the int8 row's GPU harness, beside the int8 harness it imports: its usage line's paths are relative to
+# `integrations/vllm/`, so it keeps its depth
+"integrations/vllm/tests/store/int8_store_gpu.py" = "integrations/vllm/tests/engine/int8_store_gpu.py"
 "integrations/vllm/tests/predict/" = "integrations/vllm/tests/program/predict/"
 "integrations/vllm/tests/collectives/" = "integrations/vllm/tests/engine/collectives/"
 
@@ -100,6 +103,7 @@ paths = []
 "integrations.vllm.tests.predict" = "integrations.vllm.tests.program.predict"
 "integrations.vllm.tests.protocol_options" = "integrations.vllm.tests.protocols"
 "integrations.vllm.tests.store" = "integrations.vllm.tests.protocols.remote_bandwidth"
+"integrations.vllm.tests.store.int8_store_gpu" = "integrations.vllm.tests.engine.int8_store_gpu"
 "verity_vllm.collectives" = "verity_vllm.engine.collectives"
 "verity_vllm.linear" = "verity_vllm.protocols.linear"
 "verity_vllm.pipeline.engine_spec" = "verity_vllm.engine.spec"
