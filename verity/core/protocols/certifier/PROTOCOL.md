@@ -462,6 +462,25 @@ padded to S. The unit reads the map as 8 bytes a cell (q and e as u32be, a pad's
   its output: of every order of a bucket's frames one is accepted, so the order is a function of which frames the
   bucket holds, which the release buckets already say and charge. The only orders the map leaves free are
   byte-identical cells (one request's repeated id), so the channel is zero bits.
+- **The response's finish, under compact framing (#3650): the egress tie's.** A compact record's token field carries
+  the finish in band: the id while more outputs follow, 2^31 + id (`COMPACT_LAST`) for the last at `max_tokens`, and
+  2^32 − 1 (`COMPACT_EOS`) for a sampled stop token, which carries no id. That is about a trit at each response end
+  that the server would choose. The map fixes it: each record also carries its output's finish f, a function of the
+  advice (none for output k < output_len − 1; for the last, the request's `finish`, `eos` or `length`, with
+  output_len counting the stopping EOS). The unit holds each data cell's field to f and to the port:
+  - f none: the field is the routed entry's id, below 2^31 − 1;
+  - f `length`: the field is 2^31 + the routed entry's id;
+  - f `eos`: the field is 2^32 − 1, and the routed entry's id, the Commit's sampled id, is one of the registered EOS
+    ids (public, the model's), so a stop the engine didn't sample is refused.
+
+  One field value is accepted at each cell, so the channel is zero bits. That the advice's finish and output_len
+  follow from its ids by the stop rule is the compile unit's (advice v1's `finish`). The map record stays 8 bytes,
+  with f in e's top two bits (none 0, `length` 1, `eos` 2), which needs E < 2^30 (2^20 served). A record's ordinal
+  is at least 1, so no record is a pad: with streams numbered from 0, the record carries q + 1, and the unit holds it
+  to order[i] + 1. The unit is the tie's compact form, owner network-accounting (IO-TIE): `IoTieCell`'s parse of the
+  record (ok, data, the ordinal and the field, zero fill after the record) and `IoTieMatch`'s check of the field
+  against f, the routed id and the EOS ids. It is built when #3650 lands; until then the tie reads id-event cells,
+  whose `finish_reason` is the template's null and which carry no finish.
 
 **The two ingress ties.** N2-ADVICE derives each request's ingress end from advice v0's prompt lengths. That rests on
 two ties between the advice's requests and the warden's certified ingress record:
