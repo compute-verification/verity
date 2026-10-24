@@ -832,8 +832,9 @@ def main() -> int:
                     print(json.dumps({"bw": i, "session": 1 + r, "accepted": doc["sessions"][1 + r]["accepted"],
                                       "failure": doc["sessions"][1 + r]["failure"]}), flush=True)
                 k, dither = 1 + a.reps, [x for x in arms if x.startswith("dither")] or arms
-                est = sum(x["t_n1_s"] + x["t_n2_s"] for x in reps if x.get("side") == i and x.get("bw") == "off"
-                          and x["rep"] == i * a.reps + a.reps - 1 and x["arm"] in dither and "t_n1_s" in x)
+                est = sum((x["spans_ns"][-1] - x["spans_ns"][0]) / 1e9 for x in reps if x.get("side") == i
+                          and x.get("bw") == "on" and x["rep"] == i * a.reps + a.reps - 1 and x["arm"] in dither
+                          and "spans_ns" in x)
                 side.start(k, dbw.paced(est, a.bw_cover))
                 doc["blocks"].append(block(i * a.reps + a.reps - 1, "tamper", i, only=dither) | {"k": k})
                 doc["sessions"][k] = side.end(k)
