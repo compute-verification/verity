@@ -2244,7 +2244,8 @@ def test_an_eager_forward_under_whole_eager_runs_a_prefills_calls_with_as_tree_a
     the row digests, the row seeds and the real rows' E_A lines, keyed per row and reading no line_a), the forming and the
     GEMMs, and never A's level 0; from a full tile of rows the side lane after the call's runs A's level 0 over the row
     digests of the call's set, its levels and seed_A, and the call's side lane the tile leaves.  A second eager_forward,
-    after a call, changes nothing; the next pass is back on its own schedule, and without whole_eager nothing moves."""
+    after a call, changes nothing; the next pass is back on its own schedule, and without whole_eager nothing moves.  A
+    level 0 reads its unit index (its salt nonce) from its own set's keys."""
     make, kernel, weights, *_ = device_run
     assert make().whole_eager is None and (r := make()) and (r.eager_forward() or r.schedule.name) == "serial"
     run = make(whole_eager="deferred-a")
@@ -2274,6 +2275,8 @@ def test_an_eager_forward_under_whole_eager_runs_a_prefills_calls_with_as_tree_a
     leaves = [p for n, st, p, i in log if n == "hm_leaves"]
     for c, j in enumerate((0, 1)):
         assert folds[c][1] == leaves[c][0] == ptr(j, "rowdig_a") and leaves[c][1] == ptr(j, "tree_a")
+        keys = sh.keys if j == 0 else sh.sets[j]["keys"]
+        assert leaves[c][5] == keys.data_ptr() + run.nb + 96      # A's unit index, its salt nonce: the set's own keys
     assert run.end()["schedule"] == "deferred-a"
     run.begin()
     assert run.schedule.name == "serial" and run._eager_from is None
@@ -2401,6 +2404,36 @@ def test_deferred_a_commits_what_the_serial_one_commits_and_leaves_the_padding_l
     assert [a for a, _ in d_lines] == [a for a, _ in s_lines]
     assert [len(p) for _, p in d_lines] == [32 * 32, 32 * 32, 0, 32 * 32, 32 * 32]
     assert all(set(p) == {0xA5} for _, p in d_lines if p) and all(set(p) != {0xA5} for _, p in s_lines if p)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")
+def test_deferred_a_at_a_prefills_rows_commits_what_the_serial_one_commits(tmp_path):
+    """Past pd's rows (a prefill's: A's commitment split over the generic kernels, `run.Pipeline.FUSED_GENERIC`), two calls
+    of each shape in a pass under ``deferred-a`` take the ring's two sets, each call's A tree under its own set's keys, and
+    the pass commits what the serial one commits (`TwinDev`: the trees computed on the host): the records root, the
+    commitment and each call's A root, beside a pd call."""
+    pd = HD.build(tmp_path)
+    rng = np.random.default_rng(29)
+    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
+               for w, n in ((0, 256), (1, 128))}
+    xs = [(w, torch.from_numpy(bf16_words(rng, m, 1024).view(np.float32).copy()).to(torch.bfloat16))
+          for w, m in ((0, 300), (1, 290), (0, 300), (1, 20), (1, 290))]
+    kernel = PPD.Kernel(R, F, TwinDev(pd), "0" * 64)
+    roots = PPD.weight_roots(kernel, weights, SCHEME, salt_key=SALT_KEY)
+    got = {}
+    for schedule in ("serial", "deferred-a"):
+        run = PPD.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, *salt_coin(roots),
+                                  capacity=1 << 12, schedule=schedule, salt_key=SALT_KEY)
+        run.begin(retain=str(tmp_path / schedule), run=RUN)
+        for w, x in xs:
+            run.gemm(w, x, weights[w], None)
+        if schedule == "deferred-a":
+            assert [run.shapes[(304, 256, 1024)].turn, run.shapes[(304, 128, 1024)].turn] == [2, 2]
+        man = json.loads(Path(run.end()["manifest"]).read_text())
+        got[schedule] = ({k: man[k] for k in ("records_root", "commitment", "salt")},
+                         [{k: u[k] for k in ("root_a", "excluded_a", "real_rows", "m", "n")} for u in man["matmuls"]])
+    assert got["deferred-a"] == got["serial"] and len({u["root_a"] for u in got["serial"][1]}) == len(xs)
 
 
 def test_a_lane_graphs_replay_makes_the_eager_calls_driver_calls_in_its_order(sm90_run, monkeypatch):

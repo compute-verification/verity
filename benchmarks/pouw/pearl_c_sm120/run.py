@@ -549,9 +549,10 @@ class Pipeline:
         its levels.  A's salt nonce is its unit index, read from `unit`; B's HM96_WEIGHTS + weight."""
         d, b = self.dev, self.b
         nonce = (0, 0) if tag == "a" else nonce_args(HM96_WEIGHTS + self.weight)
-        block = self.keys["unit"] + 96 if tag == "a" else 0
+        # read at launch: a ring's sets each hold their call's keys, and the lanes point `keys` at the set's before each call
+        block = lambda: self.keys["unit"] + 96 if tag == "a" else 0  # noqa: E731
         return [(f"rowdig_{tag}", lambda: self.row_digests(b[x], b[f"rowdig_{tag}"], b.get(f"segdig_{tag}", 0), count)),
-                (f"hash_rows_{tag}", lambda: Pipeline.hm_level0(self, tag, b[f"rowdig_{tag}"], count, dom, block, nonce)),
+                (f"hash_rows_{tag}", lambda: Pipeline.hm_level0(self, tag, b[f"rowdig_{tag}"], count, dom, block(), nonce)),
                 (f"tree_{tag}", lambda: self.levels(tag, count, dom))]
 
     def row_digests(self, x: int, out: int, scratch: int, count: int) -> None:
