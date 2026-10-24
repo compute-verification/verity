@@ -26,8 +26,9 @@ both facts does.
 
 `ksLin2_deployed_partAccepts` and `bitsLin2_deployed_partAccepts` are `ksLin2_deployed_recRead` and
 `bitsLin2_deployed_recRead` at the coin server's record (`recTr`), with the pair replaced by `DecompB` at
-`PartAccepts`, the same premise, and `ReadsBackB` from `readsBack_recTr`: `recRead` reads that record back at every
-accepted run. What they take: `DecompB` there and the readers' `ReadersTrue`.
+`PartAccepts`, the same premise, `ReadsBackB` from `readsBack_recTr` (`recRead` reads that record back at every
+accepted run) and `ReadersTrue` from `readersTrue_layoutBTops` (every hm96 slot `layoutBTops` reads outputs its commit
+string at the outer relation, `hmSlotsCommit_of_full`). What they take: `DecompB` there, and nothing else.
 -/
 
 namespace Claims.Recursion.VStarB
@@ -107,11 +108,11 @@ open Claims (Msg Out)
 open FlockDeploy (Coin)
 
 /-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)` and the coin server's record
-(`recTr`), without `PartChecksB` or `ReadsBackB`**: `ksLin2_deployed_recRead` at the brings whose transcript is
-`recTr aux nOf hd recRest`, with its inner check `PartAccepts` (`partChecksB_partAccepts`) and `recRead` reading that
-transcript back (`readsBack_recTr`). What stays open at the dense form is `DecompB` at what each part's circuit
-accepts, the same premise as the pair (`exists_chk_iff`); then the readers' `ReadersTrue`. This bounds no number by
-itself: those premises are open. -/
+(`recTr`), from `DecompB` alone**: `ksLin2_deployed_recRead` at the brings whose transcript is
+`recTr aux nOf hd recRest`, with its inner check `PartAccepts` (`partChecksB_partAccepts`), `recRead` reading that
+transcript back (`readsBack_recTr`) and the readers' calls true (`readersTrue_layoutBTops`,
+`hmSlotsCommit_of_full`). What stays open at the dense form is `DecompB` at what each part's circuit accepts, the same
+premise as the pair (`exists_chk_iff`). This bounds no number by itself: that premise is open. -/
 theorem ksLin2_deployed_partAccepts (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (rest : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
@@ -126,18 +127,18 @@ theorem ksLin2_deployed_partAccepts (b : Brings) (aux : Msg → ℕ → Flock.Re
       Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape
         (Claims.Recursion.VStarB.PartAccepts FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation) L
           shape (showsPart recRead bR) (cmtTr recRead))) →
-    ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
-  intro bR L Bd D bL hD hRT
+  intro bR L Bd D bL hD
   exact ksLin2_deployed_recRead bR rest wE join final w (readsBack_recTr _ _ bL _ aux nOf hd recRest rfl)
-    (fun shape hsh => (Claims.Recursion.VStarB.exists_chk_iff _ _ _ _ _ _ _ _).2 (hD shape hsh)) hRT
+    (fun shape hsh => (Claims.Recursion.VStarB.exists_chk_iff _ _ _ _ _ _ _ _).2 (hD shape hsh))
+    (readersTrue_layoutBTops (finOpen rest) Bd.IVStar bR _ hmSlotsCommit_of_full)
 
 /-- **`BitsLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)` and the coin server's record
-(`recTr`), without `PartChecksB` or `ReadsBackB`**: `bitsLin2_deployed_recRead` at `recTr aux nOf hd recRest`, with its
-inner check `PartAccepts` and `ReadsBackB` from `readsBack_recTr`. It reads `StrictBirthday` and `ExpectedCR`, the
-named SHA-512 collision assumptions, and `ksLin2_deployed_partAccepts`'s open premises: a bound on a number under
-named premises, not a proved security level. -/
+(`recTr`), from `DecompB` alone**: `bitsLin2_deployed_recRead` at `recTr aux nOf hd recRest`, with its inner check
+`PartAccepts`, `ReadsBackB` from `readsBack_recTr` and `ReadersTrue` from `readersTrue_layoutBTops`. It reads
+`StrictBirthday` and `ExpectedCR`, the named SHA-512 collision assumptions, and `ksLin2_deployed_partAccepts`'s open
+premise: a bound on a number under named premises, not a proved security level. -/
 theorem bitsLin2_deployed_partAccepts (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (rest : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
@@ -152,11 +153,11 @@ theorem bitsLin2_deployed_partAccepts (b : Brings) (aux : Msg → ℕ → Flock.
       Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape
         (Claims.Recursion.VStarB.PartAccepts FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation) L
           shape (showsPart recRead bR) (cmtTr recRead))) →
-    ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.BitsLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
-  intro bR L Bd D bL hD hRT
+  intro bR L Bd D bL hD
   exact bitsLin2_deployed_recRead bR rest wE join final w (readsBack_recTr _ _ bL _ aux nOf hd recRest rfl)
-    (fun shape hsh => (Claims.Recursion.VStarB.exists_chk_iff _ _ _ _ _ _ _ _).2 (hD shape hsh)) hRT
+    (fun shape hsh => (Claims.Recursion.VStarB.exists_chk_iff _ _ _ _ _ _ _ _).2 (hD shape hsh))
+    (readersTrue_layoutBTops (finOpen rest) Bd.IVStar bR _ hmSlotsCommit_of_full)
 
 end RecDeploy
