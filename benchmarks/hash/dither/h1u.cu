@@ -2708,6 +2708,13 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj(const UCallR* __re
                                                                               c.rws, OneOut{}, gu - c.u0, smem[wp]);
 }
 
+// H1U_JCOL = 1 (with H1U_JCTA): h1umj_sm's claims walk a call's units column block by column block, row block fastest
+// (claim i of a call of R row blocks is unit (i % R, i / R)), so a CTA's WARPS warps take one column block in WARPS row
+// blocks and read its B lines through one SM's L1, where row-major claims read each column block's B from L2 once a row
+// block (8 times a call at T 256); 0: row-major (unit i). The same units, each its own words
+#ifndef H1U_JCOL
+#define H1U_JCOL 0
+#endif
 // h1umj's unit gu, for h1umj_sm (h1umj keeps its own copy, as h1um does of h1um_one)
 __device__ __forceinline__ void h1umj_one(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
                                           const uint8_t* __restrict__ live, u32 gu, WarpSmem& S) {
@@ -2718,13 +2725,18 @@ __device__ __forceinline__ void h1umj_one(const UCallR* __restrict__ calls, u32 
     else hi = mid;
   }
   const UCallR c = calls[lo];
+  u32 u = gu - c.u0;
+  if constexpr (H1U_JCOL) {
+    const u32 ncb = c.N / 32, nrb = (calls[lo + 1].u0 - c.u0) / ncb;
+    u = (u % nrb) * ncb + u / nrb;
+  }
   if (H1U_JMD1 || c.md == 3)
     h1u_unit<3, false, false, false, false, false, true, false, (bool)H1U_JX>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out,
-                                                                              c.rws, OneOut{}, gu - c.u0, S,
+                                                                              c.rws, OneOut{}, u, S,
                                                                               c.md == 3 ? 3u : 2u);
   else
     h1u_unit<2, false, false, false, false, false, true, false, (bool)H1U_JX>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out,
-                                                                              c.rws, OneOut{}, gu - c.u0, S);
+                                                                              c.rws, OneOut{}, u, S);
 }
 
 // H1U_JCTA = 1 (h1umj_sm): a CTA's warps take WARPS units in turn together, warp w the w-th, as h1umj's grid places them,
@@ -2732,6 +2744,9 @@ __device__ __forceinline__ void h1umj_one(const UCallR* __restrict__ calls, u32 
 // takes its own, and neighbouring units run on any SMs
 #ifndef H1U_JCTA
 #define H1U_JCTA 0
+#endif
+#if H1U_JCOL && !H1U_JCTA
+#error "H1U_JCOL orders H1U_JCTA's claims, so it needs H1U_JCTA = 1"
 #endif
 // h1umj on the SMs whose %smid % den < q alone, its warps taking units from *next in turn (h1um_sm's partition, its last
 // CTA's fallback and its CAP too)
