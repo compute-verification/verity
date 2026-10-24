@@ -3,9 +3,9 @@
 A committing engine under arbitrary traffic runs a request in rows the scheduler picks while serving: a whole prompt or a
 chunk of it, one decode token a step, a recompute from position 0 after a preemption, a suffix after a prefix-cache hit, and,
 under async scheduling, a row past the token that finished it (an EOS, a stop token or string the scheduler hadn't seen
-yet). None of that is a rule here; each is a fact the record states. `NativeHostCommitter` with ``sampler_inputs`` on keeps
-each step's rows (`Row`: the runner's request id, its token rows [lo, hi) of the step, its first position and its prefill
-length) and binds, beside the sampled ids, the seed and the position each row's draw read (`SAMPLER_INPUTS`). `Record.absorb`
+yet). None of that is a rule here; each is a fact the record states. A `NativeHostCommitter` with a `SamplerInputsSource`
+attached keeps each step's rows (`Row`: the runner's request id, its token rows [lo, hi) of the step, its first position and
+its prefill length) and binds, beside the sampled ids, the seed and the position each row's draw read (`SAMPLER_INPUTS`). `Record.absorb`
 reads a finished window back from the committed bytes into one `RequestRecord` per request:
 
 - ``inputs``: position p -> the committed input id at p (``c00.input/ids`` on the compiled path, ``model.embed_tokens/in`` on
@@ -37,7 +37,7 @@ SCHEMA = "verity-vllm/served-record/v1"
 #: ``<module>/in`` pre-hook on the ``VocabParallelEmbedding``).
 IDS_NAMES = ("c00.input/ids", "model.embed_tokens/in")
 SAMPLED = "runner.sampler/sampled_token_ids"
-#: Each sampled row's seed and the position its draw read, one i64 a row (`NativeHostCommitter.sampler_inputs`).
+#: Each sampled row's seed and the position its draw read, one i64 a row (`SamplerInputsSource`).
 SAMPLER_INPUTS = ("runner.sampler/seed", "runner.sampler/pos")
 _SUFFIX = re.compile(r"-[0-9a-f]{8}$")
 
@@ -80,6 +80,56 @@ class Row:
         if self.start + self.n < self.prefill_len:
             return "prefill-chunk"
         return "decode" if self.n == 1 and self.start >= self.prefill_len else "prefill"
+
+
+class SamplerInputsSource:
+    """The committer source (`NativeHostCommitter.attach_source`) that, on each sampled step, binds the seed and the position
+    each row's draw read (Model Runner V2's `gumbel_sample`: ``seeds[idx_mapping]`` and ``positions[logits_indices]``), one
+    i64 a row under `SAMPLER_INPUTS`, and keeps the step's rows in ``rows`` (`Row`'s fields, keyed by the committer's step;
+    a window's step 0 starts them afresh)."""
+
+    short_name = "sampler_inputs"
+    own_names = frozenset(SAMPLER_INPUTS)
+
+    def __init__(self, committer: Any) -> None:
+        self.com = committer
+        self.rows: dict[int, list[tuple]] = {}
+
+    def install(self) -> None:
+        pass
+
+    def uninstall(self) -> None:
+        pass
+
+    def on_step_begin(self) -> None:
+        pass
+
+    def extra_step_bytes(self, envelope: Any, model: Any) -> dict[str, int]:  # noqa: ARG002
+        return {"per_seq_bytes": 8 * len(SAMPLER_INPUTS), "tensors_per_step": len(SAMPLER_INPUTS)}
+
+    def on_sample(self, ib: Any, n_sampled: int, job: Any) -> None:
+        com = self.com
+        if job.step == 0:
+            self.rows = {}
+        ss = getattr(getattr(com.runner, "sampler", None), "sampling_states", None)
+        if ib is None or ss is None or not hasattr(ss, "seeds"):
+            com.errors.append(f"sampler inputs: step {job.step} has no input batch or sampling states to read")
+            return
+        n = int(ib.num_reqs)
+        if n != n_sampled:
+            com.errors.append(f"sampler inputs: step {job.step} samples {n_sampled} rows for {n} requests")
+            return
+        com._acquire(SAMPLER_INPUTS[0], ss.seeds.gpu[ib.idx_mapping.long()], job)
+        com._acquire(SAMPLER_INPUTS[1], ib.positions[ib.logits_indices].long(), job)
+        qsl = [int(x) for x in ib.query_start_loc_np[: n + 1]]
+        self.rows[job.step] = [(str(ib.req_ids[i]), qsl[i], qsl[i + 1], int(ib.num_computed_tokens_np[i]), int(ib.prefill_len_np[i]))
+                               for i in range(n)]
+
+
+def served_rows(committer: Any) -> dict[int, list[tuple]]:
+    """The rows its `SamplerInputsSource` kept, by step; empty without one."""
+    src = next((s for s in getattr(committer, "sources", ()) if isinstance(s, SamplerInputsSource)), None)
+    return src.rows if src is not None else {}
 
 
 def committed_ints(committer: Any, step: int, name: str) -> list[int] | None:
@@ -219,9 +269,9 @@ class Record:
         names = {m.name for metas in layouts.values() for m in metas}
         ids_name = next((n for n in IDS_NAMES if n in names), None)
         errors: list[str] = []
-        rows_of = getattr(committer, "served_rows", {}) or {}
+        rows_of = served_rows(committer)
         if layouts and not rows_of:
-            errors.append("the committer kept no rows (sampler_inputs off)")
+            errors.append("the committer kept no rows (no SamplerInputsSource attached)")
         if ids_name is None and rows_of:
             errors.append(f"no committed input ids under any of {list(IDS_NAMES)}")
         held: list[str] = []

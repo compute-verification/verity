@@ -16,11 +16,13 @@ SEED = 11
 
 
 class FakeCommitter:
-    """`_layouts` and `served_rows` as `NativeHostCommitter` keeps them once a window is finalized (host-retained values)."""
+    """`_layouts` and its `SamplerInputsSource`'s rows as `NativeHostCommitter` keeps them once a window is finalized
+    (host-retained values)."""
 
     def __init__(self) -> None:
         self._layouts: dict[int, list] = {}
-        self.served_rows: dict[int, list[tuple]] = {}
+        self.sources = [SR.SamplerInputsSource(self)]
+        self.served_rows = self.sources[0].rows
 
     def step(self, rows: list[tuple], ids: list[int], sampled: list[int], *, seeds: list[int] | None = None,
              pos: list[int] | None = None, drop: str | None = None) -> None:

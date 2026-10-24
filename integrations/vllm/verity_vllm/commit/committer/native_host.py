@@ -54,7 +54,6 @@ from verity_vllm.commit import hiding, scheme, step_rows
 from verity_vllm.commit.committer.input_classes import TOKEN_IDS_INPUT, weights_class
 from verity_vllm.commit.committer.pinned_pool import PINNED_EXACT, PinnedPool
 from verity_vllm.commit.native_ranges import NativeRangeOpenings, open_levels
-from verity_vllm.commit.served_record import SAMPLER_INPUTS
 from verity_vllm.acquire.committer_api import Opening, RunCommitment, StepCommitment, declaration
 from verity_vllm.engine import hooks
 from verity_vllm.pipeline.spans import Spans
@@ -858,10 +857,6 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         # modules dropped per class, None until applied
         self.skip_classes = skip_classes_of_env()
         self.skipped: dict[str, list[str]] | None = None
-        # The served path's sampler inputs (`commit.served_record`): every sampled step also binds `SAMPLER_INPUTS` (the seed and the
-        # position each row's draw read, one i64 a row) and keeps the model runner's rows of the step in `served_rows`.
-        self.sampler_inputs = False
-        self.served_rows: dict[int, list[tuple]] = {}
         self._side = None                           # the worker's CUDA side stream (created lazily on the worker thread)
         if engine is not None:
             self._geo_digest = geo_digest or self._model_geo_digest()
@@ -897,8 +892,6 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             e = f(envelope, self.model)
             extra_pt += int(e.get("per_token_bytes", 0)); extra_ps += int(e.get("per_seq_bytes", 0)); extra_n += int(e.get("tensors_per_step", 0))
             extra_step += int(e.get("per_step_bytes", 0))
-        if self.sampler_inputs:
-            extra_ps += 8 * len(SAMPLER_INPUTS); extra_n += len(SAMPLER_INPUTS)
         if self.acquire_inputs:
             # [R19 int-20] the manifest-driven `<consumer>/in` acquisitions: one per-token tensor per consumer per step (its width from the
             # promoted member's registry signature), minus the embedding-class inputs the module table already counts
@@ -1203,8 +1196,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                         st = getattr(so, "sampled_token_ids", None)
                         if isinstance(st, torch.Tensor) and st.device.type == "cuda":
                             me._acquire("runner.sampler/sampled_token_ids", st, job)
-                            if me.sampler_inputs:
-                                me._acquire_sampler_inputs(a[1] if len(a) > 1 else kw.get("input_batch"), int(st.shape[0]), job)
+                            for s in (s for s in me.sources if hasattr(s, "on_sample")):   # a source of the draw's inputs (served_record)
+                                s.on_sample(a[1] if len(a) > 1 else kw.get("input_batch"), int(st.shape[0]), job)
                     except Exception as e:  # noqa: BLE001
                         me.errors.append(f"sampler acquire: {e!r}"[:200])
                     me._end_step()
@@ -1212,24 +1205,6 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
 
             self._hooks.patch(runner, "sample", sample)
         self.installed = True
-
-    def _acquire_sampler_inputs(self, ib: Any, n_sampled: int, job: _StepJob) -> None:
-        """The seed and the position each sampled row's draw read (Model Runner V2's `gumbel_sample`: ``seeds[idx_mapping]`` and
-        ``positions[logits_indices]``), bound as values, and the step's rows: (runner request id, token rows [lo, hi), first
-        position, prefill length).  A row samples an output token when its last position reaches the prefill length."""
-        ss = getattr(getattr(self.runner, "sampler", None), "sampling_states", None)
-        if ib is None or ss is None or not hasattr(ss, "seeds"):
-            self.errors.append(f"sampler inputs: step {job.step} has no input batch or sampling states to read")
-            return
-        n = int(ib.num_reqs)
-        if n != n_sampled:
-            self.errors.append(f"sampler inputs: step {job.step} samples {n_sampled} rows for {n} requests")
-            return
-        self._acquire(SAMPLER_INPUTS[0], ss.seeds.gpu[ib.idx_mapping.to(torch.long)], job)
-        self._acquire(SAMPLER_INPUTS[1], ib.positions[ib.logits_indices].to(torch.long), job)
-        qsl = [int(x) for x in ib.query_start_loc_np[: n + 1]]
-        self.served_rows[job.step] = [(str(ib.req_ids[i]), qsl[i], qsl[i + 1], int(ib.num_computed_tokens_np[i]), int(ib.prefill_len_np[i]))
-                                      for i in range(n)]
 
     def uninstall(self) -> None:
         if not self.installed:
@@ -1259,7 +1234,6 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         self._padding = {}
         self.padding_stats = None
         self._step_index = 0
-        self.served_rows = {}
         self.spans = Spans(scheme.NAME)
         self.gc_pauses.pauses, self.gc_pauses.freeze_s = [], []
         self.pool.reset()

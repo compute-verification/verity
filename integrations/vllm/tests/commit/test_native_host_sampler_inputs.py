@@ -1,6 +1,7 @@
-"""`NativeHostCommitter.sampler_inputs`: each sampled step binds the seed and the position each row's draw read (Model
-Runner V2's ``seeds[idx_mapping]`` and ``positions[logits_indices]``) and keeps the step's rows, and refuses by name a
-step whose input batch it can't read or whose rows don't match the samples."""
+"""`served_record.SamplerInputsSource` on a `NativeHostCommitter`: each sampled step binds the seed and the position each
+row's draw read (Model Runner V2's ``seeds[idx_mapping]`` and ``positions[logits_indices]``) and keeps the step's rows,
+widens the arena's step bound by them, and refuses by name a step whose input batch it can't read or whose rows don't
+match the samples."""
 from __future__ import annotations
 
 import types
@@ -10,7 +11,7 @@ import pytest
 import torch
 
 from verity_vllm.commit.committer.native_host import NativeHostCommitter
-from verity_vllm.commit.served_record import SAMPLER_INPUTS
+from verity_vllm.commit.served_record import SAMPLER_INPUTS, SamplerInputsSource, served_rows
 
 
 def committer(seeds):
@@ -18,10 +19,11 @@ def committer(seeds):
     runner = types.SimpleNamespace(sampler=types.SimpleNamespace(sampling_states=states))
     com = NativeHostCommitter(types.SimpleNamespace(model=torch.nn.Module(), runner=runner), run_id="sampler-inputs", arena_bytes=None,
                               geo_digest=b"g" * 32)
-    com.sampler_inputs = True
+    src = SamplerInputsSource(com)
+    com.attach_source(src)
     got = {}
     com._acquire = lambda name, t, job: got.__setitem__(name, t.tolist())
-    return com, got
+    return com, src, got
 
 
 def batch():
@@ -33,18 +35,24 @@ def batch():
 
 
 def test_binds_the_draws_seed_and_position_and_keeps_the_rows():
-    com, got = committer([11, 0, 33])
-    com._acquire_sampler_inputs(batch(), 2, types.SimpleNamespace(step=3))
+    com, src, got = committer([11, 0, 33])
+    src.on_sample(batch(), 2, types.SimpleNamespace(step=3))
     assert got == {SAMPLER_INPUTS[0]: [33, 11], SAMPLER_INPUTS[1]: [9, 6]}
-    assert com.served_rows == {3: [("b-0123abcd", 0, 1, 9, 5), ("a-0123abcd", 1, 4, 4, 12)]}
-    assert not com.errors
-    com.reset()
-    assert com.served_rows == {}
+    assert served_rows(com) == {3: [("b-0123abcd", 0, 1, 9, 5), ("a-0123abcd", 1, 4, 4, 12)]}
+    assert not com.errors and com.name.endswith("+sampler_inputs")
+    src.on_sample(batch(), 2, types.SimpleNamespace(step=0))          # a new window's first step
+    assert list(served_rows(com)) == [0]
+
+
+def test_the_inputs_widen_the_step_bound_and_stay_out_of_module_names():
+    _com, src, _got = committer([1])
+    assert src.extra_step_bytes({}, None) == {"per_seq_bytes": 16, "tensors_per_step": 2}
+    assert src.own_names == set(SAMPLER_INPUTS)
 
 
 @pytest.mark.parametrize("ib, n, problem", [(None, 2, "no input batch"), (batch(), 3, "samples 3 rows for 2 requests")])
 def test_refuses_a_step_it_cannot_bind(ib, n, problem):
-    com, got = committer([1, 2, 3])
-    com._acquire_sampler_inputs(ib, n, types.SimpleNamespace(step=0))
-    assert not got and not com.served_rows
+    com, src, got = committer([1, 2, 3])
+    src.on_sample(ib, n, types.SimpleNamespace(step=0))
+    assert not got and not served_rows(com)
     assert any(problem in e for e in com.errors), com.errors

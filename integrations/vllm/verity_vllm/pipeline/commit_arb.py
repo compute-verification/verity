@@ -1,11 +1,11 @@
 """`verity-vllm commit-arb`: the served Commit under arbitrary traffic, its records held to the streamed I/O.
 
-    verity-vllm commit-arb --out DIR [--model REPO --revision SHA] [--precision int8_exact|verity_int8|pin]
+    verity-vllm commit-arb --out DIR --model REPO --revision SHA [--precision int8_exact|verity_int8|pin]
         [--requests 32] [--seed 0] [--prompt-range 16:1024] [--tokens 64] [--rate 0.5]
         [--max-num-seqs 8] [--max-num-batched-tokens 2048] [--no-chunked-prefill] [--kv-cache-mb N] [--window-steps 64]
 
 The engine is serve-openai's (`verity_vllm.LLM`, in-process engine core, Model Runner V2, `NativeHostCommitter` committing
-every step, values retained on host), with `sampler_inputs` on and the served default seed (`engine.served_seed`). It is
+every step, values retained on host), with a `served_record.SamplerInputsSource` attached and the served default seed (`engine.served_seed`). It is
 stepped here, without HTTP, under seeded varied traffic: CERT-VARLEN's (``varied_requests`` in
 `benchmarks/network_traces/certifier_serve.py`: chat-turn prompts cut to a length log-uniform in ``--prompt-range``,
 ``max_tokens`` uniform in 1 … ``--tokens``, the model's own EOS), arriving as a Poisson process of ``--rate`` requests an
@@ -34,7 +34,6 @@ from typing import Any
 
 from verity_vllm.config import UsageError, option
 
-INT8_PIN = ("verity-int8/Llama-3.1-8B-INT8", "723d342ac443b040931242c768df342b0f6f15a7")
 PRECISIONS = ("int8_exact", "verity_int8", "pin")
 CHAT_HEAD = "<|start_header_id|>user<|end_header_id|>\n\n"
 CHAT_TAIL = "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
@@ -54,8 +53,8 @@ STOPS = (["."], ["\n"], [","])
 @dataclass(frozen=True, kw_only=True)
 class Options:
     out: str = option("--out", env="RESEARCH_RUN_DIR", default=".", help="the records' directory (default $RESEARCH_RUN_DIR, else .)")
-    model: str = option("--model", default=INT8_PIN[0], help=f"the pinned model (default {INT8_PIN[0]})")
-    revision: str = option("--revision", default=INT8_PIN[1], help="its pinned revision")
+    model: str = option("--model", default="", help="the pinned model (a repo of manifests/checkpoints.json)")
+    revision: str = option("--revision", default="", help="its pinned revision")
     precision: str = option("--precision", choices=PRECISIONS, default="int8_exact",
                             help="int8_exact: int8 linears and attention; verity_int8: int8 linears only; pin: the pin's engine profile")
     requests: int = option("--requests", type=int, default=32)
@@ -64,7 +63,7 @@ class Options:
     tokens: int = option("--tokens", type=int, default=64, help="max_tokens is uniform in 1 … this")
     rate: float = option("--rate", type=float, default=0.5, help="Poisson arrivals, requests an engine step")
     chat: bool = option("--chat", action="boolean_optional", default=True,
-                        help="Llama-3 chat-turn prompts, CERT-VARLEN's (--no-chat: the questions and filler as plain text)")
+                        help="chat-turn prompts, CERT-VARLEN's (--no-chat: the questions and filler as plain text)")
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
     max_model_len: int = option("--max-model-len", type=int, default=2048)
     max_num_batched_tokens: int = option("--max-num-batched-tokens", type=int, default=2048)
@@ -156,8 +155,10 @@ def build(opts: Options) -> tuple[Any, Any]:
 
     eng = SimpleNamespace(llm=llm.vllm, runner=get_model_runner(llm.vllm), model=llm.model,
                           cp={"repo": llm.pin.model, "revision": llm.pin.revision})
+    from verity_vllm.commit.served_record import SamplerInputsSource
+
     com = NativeHostCommitter(eng, run_id=f"commit-arb:{os.environ.get('RESEARCH_RUN_ID', 'local')}", arena_bytes=None)
-    com.sampler_inputs = True
+    com.attach_source(SamplerInputsSource(com))
     tokens = int(opts.max_num_batched_tokens)
     com.arena_sizing_record = com.size_arena({"batch": opts.max_num_seqs, "max_prompt": tokens, "max_new": 1,
                                               "max_num_batched_tokens": tokens, "max_model_len": opts.max_model_len})
@@ -290,6 +291,8 @@ def scheduler_config(engine: Any) -> dict[str, Any]:
 
 
 def main(opts: Options) -> int:
+    if not (opts.model and opts.revision):
+        raise UsageError("commit-arb needs --model REPO --revision SHA, a pin of manifests/checkpoints.json")
     if opts.window_steps < 1 or opts.requests < 1 or opts.tokens < 1 or opts.rate <= 0:
         raise UsageError("--window-steps, --requests and --tokens are at least 1, --rate positive")
     lo, hi = prompt_range(opts.prompt_range)
