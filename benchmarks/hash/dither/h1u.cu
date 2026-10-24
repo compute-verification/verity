@@ -2679,10 +2679,11 @@ extern "C" int kh_units_multi_j10r_cols(const void* calls, unsigned ncalls, unsi
     carve<h1umjc_sm<true>>();
   else
     carve<h1umjc_sm<false>>();
+  void (*const units_k)(const UCallR*, u32, u32, const uint8_t*, u32, u32, u32*, u32) =
+      cap ? h1umjc_sm<true> : h1umjc_sm<false>;
   int dev = 0, sms = 0, per = 0, perc = 0;
   if (cudaGetDevice(&dev) != cudaSuccess || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) != cudaSuccess ||
-      cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, cap ? h1umjc_sm<true> : h1umjc_sm<false>, 32 * WARPS, 0) !=
-          cudaSuccess ||
+      cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, units_k, 32 * WARPS, 0) != cudaSuccess ||
       cudaOccupancyMaxActiveBlocksPerMultiprocessor(&perc, h1jr_cols, 256, 0) != cudaSuccess || per < 1 || perc < 1)
     return 3;
   cudaStream_t s = (cudaStream_t)stream;
@@ -2693,15 +2694,8 @@ extern "C" int kh_units_multi_j10r_cols(const void* calls, unsigned ncalls, unsi
   }
   if (mode != 1) {
     if (cudaMemsetAsync(next, 0, sizeof(u32) * (cap ? 1 + SMC_SLOTS : 1), s) != cudaSuccess) return 3;
-    if (cap)
-      h1umjc_sm<true><<<2u * (unsigned)per * (unsigned)sms, 32 * WARPS, 0, s>>>((const UCallR*)calls, ncalls, M,
-                                                                               (const uint8_t*)live, q, den, (u32*)next,
-                                                                               cap);
-    else
-      h1umjc_sm<false><<<2u * (unsigned)per * (unsigned)sms, 32 * WARPS, 0, s>>>((const UCallR*)calls, ncalls, M,
-                                                                                (const uint8_t*)live, q, den, (u32*)next,
-                                                                                0);
-    }
+    units_k<<<2u * (unsigned)per * (unsigned)sms, 32 * WARPS, 0, s>>>((const UCallR*)calls, ncalls, M,
+                                                                      (const uint8_t*)live, q, den, (u32*)next, cap);
   }
   return cudaGetLastError() == cudaSuccess ? 0 : 3;
 }
