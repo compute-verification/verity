@@ -140,6 +140,17 @@ tarball's 21 files matching its `end.json`. Report run r20261024-081948-55d8 (a3
 The first three are one report, OK, with the tampered head made from 0c53 refused at window 0, proved; 3c48 is its own
 report (`out/served`), since a report takes one honest run, and is NOT OK only for having no late or extra run.
 
+The same four against vllm's Llama-3.2-1B on vy-nebius-1:18082 (INF-204, pinned to main 11ce5fe77c, 40 requests, 16
+tokens, 11 link-windows), report run r20261024-101818-8c94 (c46c32c2cb, vy-nebius-2), likewise OK, its served report
+likewise NOT OK only for having no late or extra run:
+
+| gate run | strategy | gate | N2 | proved (Lean) |
+|---|---|---|---|---|
+| c20261024T090216Z-e03e | honest, planned | accepted | accepted, 11/11 | both ends, every link-window accepted |
+| c20261024T090349Z-a90a | late | refused | refused at window 0 | not proved (late isn't an `n2_zk` member) |
+| c20261024T090523Z-eb39 | extra | refused | refused at window 0 | egress, refused at window 0 |
+| c20261024T090656Z-0ce6 | honest, served | accepted | accepted, 11/11 | not proved (`NetworkServedCounts_v1`) |
+
 An honest run is required, because the tampered head is made from it. Two runs of the same strategy are refused.
 
 ## The report
