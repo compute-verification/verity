@@ -7,6 +7,7 @@ import os
 import time
 from typing import Any
 
+from verity_vllm import envs
 from verity_vllm.acquire.sources.hidden_source import (
     HiddenM1Source,
     HiddenM1SourceFA3,
@@ -29,13 +30,14 @@ class NativeHiddenM1Source(HiddenM1Source):
         super().__init__(committer, so_path, ns)
         self._w = committer.native_ext().Fa2Wrap(committer._nc, self.orig_op, self.tapped_op, committer._intern, ns)
         # R13 P0 (p0b): per-sequence compaction of multi-sequence launches (only the rows the kernel wrote are staged; B=1 unchanged)
-        self._w.compact = os.environ.get("VERITY_FA2_COMPACT", "1").strip() not in ("0", "false", "no")
-        self._w.zero_after = os.environ.get("VERITY_FA2_ZERO", "1").strip() not in ("0", "false", "no")
+        self._w.compact = envs.VERITY_FA2_COMPACT
+        self._w.zero_after = envs.VERITY_FA2_ZERO
         self.short_name, self._w.ms = "hidden_m1", self.ms              # the MS class sizes every buffer and is a seventh compacted plane
         # [R18 tap, F-r17-23] bounded tap: one device buffer of <= cap bytes; a multi-sequence launch whose padded tap buffer exceeds it is
         # split into consecutive sequence groups (hidden_source.plan_fa2_tap_groups) tapped one after another into that buffer (C++ Fa2Wrap
         # seq_base / hold_launch / bound_words).  Names and bytes of the staged compacted rectangles are those of the unsplit launch.
-        cap_mb = int(os.environ.get("VERITY_FA2_TAP_CAP_MB", str(self.DEFAULT_TAP_CAP_MB)).strip() or 0)
+        cap = envs.VERITY_FA2_TAP_CAP_MB
+        cap_mb = self.DEFAULT_TAP_CAP_MB if cap is None else cap
         self.tap_cap_bytes = max(0, cap_mb) << 20
         self._w.bound_words = self.tap_cap_bytes // 4
         self.telemetry_path: str | None = None           # commit_delta: <out>/fa2_tap_windows.jsonl (one line per tapped window / group)

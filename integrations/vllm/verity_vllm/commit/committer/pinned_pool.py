@@ -15,8 +15,10 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+from verity_vllm import envs
+
 BLOCK_BYTES = 64 << 20
-PINNED_EXACT = os.environ.get("VERITY_PINNED_EXACT", "1") != "0"
+PINNED_EXACT = envs.VERITY_PINNED_EXACT
 _PAGE = 4096
 # Growing the exact pool is page faulting: every page of a fresh shared mapping is allocated and zeroed when it is first touched, which
 # `cudaHostRegister` does one page at a time on the calling thread.  On vy-nebius-1 (a VM: first touch also faults on the host) that ran

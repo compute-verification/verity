@@ -3,7 +3,8 @@
 Checked today, against ``allowlists/p07_declared_inputs.json``:
 
 * ``environ``: any use of ``os.environ``/``os.environb``/``os.getenv``/``os.putenv``/``os.unsetenv`` (keyed by the
-  variable when it is a literal).
+  variable when it is a literal), and any read of a settings variable (``envs.NAME``, keyed by ``NAME``): the settings
+  module, ``verity_vllm/envs.py`` (P14), names each variable once, and a read through it is the same undeclared input.
 * ``cwd``: ``os.getcwd()``, ``os.getcwdb()``, ``Path.cwd()``.
 * ``machine-path``: a string literal naming a machine path (``/workspace``, ``/root``, ``/home``, ``/Users``,
   ``/tmp``, ``/mnt``, ``/opt``, ``/usr/local``, ``/data``, ``/scratch``, ``/dev/shm``).
@@ -14,7 +15,8 @@ Checked today, against ``allowlists/p07_declared_inputs.json``:
 * ``seed-default``: a parameter named ``seed``/``*_seed``/``seed_*`` with a default value.
 
 ``ENV_OWNERS`` may read the environment and name machine paths: ``pipeline/cli.py`` turns both into declared inputs
-(option defaults, ``config.RunEnv``), and ``engine/env.py`` writes vLLM's pins.  Every other ``environ`` use is a violation.
+(option defaults, ``config.RunEnv``), ``engine/env.py`` writes vLLM's pins, and ``envs.py`` is where the other reads
+are.  Every other ``environ`` use is a violation.
 The rule's torch-stub test (the plan digest is the same with torch present and stubbed out) is not a lint.
 """
 from __future__ import annotations
@@ -29,8 +31,9 @@ from . import _ratchet as R
 
 NAME = "p07_declared_inputs"
 RULE = "P7 (results depend only on declared inputs)"
-ENV_OWNERS: frozenset[str] = frozenset({"verity_vllm/engine/env.py", "verity_vllm/pipeline/cli.py"})
+ENV_OWNERS: frozenset[str] = frozenset({"verity_vllm/engine/env.py", "verity_vllm/pipeline/cli.py", "verity_vllm/envs.py"})
 ENV_NAMES = frozenset({"os.environ", "os.environb", "os.getenv", "os.putenv", "os.unsetenv", "os.getenvb"})
+SETTINGS = "verity_vllm.envs"
 CWD_CALLS = frozenset({"os.getcwd", "os.getcwdb", "pathlib.Path.cwd", "Path.cwd"})
 MACHINE_PATH = re.compile(r"^(/workspace|/root|/home|/Users|/tmp|/mnt|/opt|/usr/local|/data|/scratch|/dev/shm)(/|$)")
 SEED_NAME = re.compile(r"^(seed|seeds|\w+_seed|seed_\w+)$")
@@ -80,7 +83,7 @@ def file_violations(src: str, rel: str) -> list[R.Violation]:
     aliases = R.aliases(tree)
     docs = R.docstring_ids(tree)
     out: list[R.Violation] = []
-    envy = "environ" in src or "getenv" in src or "putenv" in src
+    envy = "environ" in src or "getenv" in src or "putenv" in src or "envs" in src
     parents: dict[int, ast.AST] = {}
     for node in (ast.walk(tree) if envy else ()):
         for child in ast.iter_child_nodes(node):
@@ -95,6 +98,8 @@ def file_violations(src: str, rel: str) -> list[R.Violation]:
             parent = parents.get(id(node))
             if origin in ENV_NAMES and not (isinstance(parent, ast.Attribute) and aliases.resolve(parent) in ENV_NAMES):
                 emit("environ", node, symbol, _env_detail(node, parents))
+            elif origin and origin.rpartition(".")[0] == SETTINGS:
+                emit("environ", node, symbol, origin.rpartition(".")[2])
         if isinstance(node, ast.Call):
             origin = aliases.resolve(node.func) or R.dotted(node.func)
             if origin in CWD_CALLS:
@@ -224,3 +229,12 @@ def test_detectors_on_examples() -> None:
         "        raise\n"
     )
     assert file_violations(good, "verity_vllm/x.py") == []
+
+
+def test_a_read_through_the_settings_module_keeps_its_key() -> None:
+    direct = "import os\ndef run():\n    return os.environ.get('VERITY_LAYOUT', '').strip()\n"
+    settings = "from verity_vllm import envs\ndef run():\n    return envs.VERITY_LAYOUT.strip()\n"
+    key = [("verity_vllm/x.py", "environ", "run", "VERITY_LAYOUT")]
+    assert [v.key for v in file_violations(direct, "verity_vllm/x.py")] == key
+    assert [v.key for v in file_violations(settings, "verity_vllm/x.py")] == key
+    assert file_violations("import os\nX = os.environ.get('VERITY_LAYOUT')\n", "verity_vllm/envs.py") == []

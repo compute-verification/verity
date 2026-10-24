@@ -39,6 +39,8 @@ from typing import Any
 from research.pythonpath import package_dirs, workspace_root
 from research.store.tool import Tool
 
+from verity_vllm import envs
+
 DEFAULT_QUERY = "Q_word_v1{X=16,W=32,R=no-recompute}"
 DEFAULT_PY = "/workspace/venv312/bin/python"
 
@@ -255,7 +257,7 @@ def _probe_pins(env: dict[str, Any] | None = None) -> dict[str, Any]:
     interpreter is absent (e.g. on the control laptop) — such a derivation
     legitimately differs from one probed on a pod.
     """
-    py = os.environ.get("PY") or DEFAULT_PY
+    py = envs.PY or DEFAULT_PY
     out: dict[str, Any] = {"torch": None, "vllm": None, "py": py}
     if not os.path.exists(py):
         return out
