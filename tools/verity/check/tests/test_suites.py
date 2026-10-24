@@ -802,6 +802,25 @@ def test_inside_a_research_run_the_tests_get_its_custody_key_and_require_the_sto
     assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
 
 
+def test_each_test_process_gets_its_share_of_the_cpus_for_its_thread_pools(tmp_path, monkeypatch):
+    """Sized to the whole node, each xdist worker of ten lane runs ran 159-191 threads (24 Oct, load 522 on cpu-5's 192 cores):
+    each test process's OpenMP, MKL, OpenBLAS and numexpr pools get the CPUs divided by --jobs, and a size the caller set stays."""
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setattr(S, "cpus", lambda: 192)
+    assert [S.threads_per_process(j) for j in (1, 32, 192, 400, 0)] == [192, 6, 1, 1, 192]
+    root = tmp_path / "tree"
+    _env_workspace(root, {"pkg": "import os\n\ndef test_env():\n"
+                                 "    got = {os.environ.get(v) for v in ('OMP_NUM_THREADS', 'MKL_NUM_THREADS', 'OPENBLAS_NUM_THREADS', "
+                                 "'NUMEXPR_NUM_THREADS')}\n"
+                                 "    assert got == {os.environ['WANT']} if os.environ['WANT'] else len(got) == 1 and int(got.pop()) >= 1\n"})
+    for var in S.THREAD_VARS:
+        monkeypatch.delenv(var, raising=False)
+    p = _run_suite(root, tmp_path, "--fresh", extra={"WANT": ""})
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
+    p = _run_suite(root, tmp_path, "--fresh", extra={"WANT": "3", **{v: "3" for v in S.THREAD_VARS}})
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
+
+
 def test_a_pass_earned_on_one_machine_is_reused_on_another_and_names_its_run(tmp_path):
     """Daniel's CI update (7 Oct): a suite's pass is reused on any machine while its inputs, the base image and the check code
     are as they were.  Machine a's passes travel as a verdict pack; on machine b a change to one suite's inputs runs that suite
