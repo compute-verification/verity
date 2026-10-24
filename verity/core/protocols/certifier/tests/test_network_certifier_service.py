@@ -327,7 +327,7 @@ def test_the_unit_is_each_ends_head_check(tmp_path):
                                       *(f"ingress_{n}" for n, _ in HC.gate(9, 4, False).params if n not in fixed)]
     assert set(declared.layout["pub"]) | set(declared.layout["wit"]) == {n for n, _ in params}
     assert all(n.split("_", 1)[1] in ("head", "salt", "path", "salt_c") for n in declared.layout["wit"])
-    assert declared.bits("pub") % 16 == declared.bits("wit") % 16 == 0 and declared.bits("o0") == 2
+    assert declared.bits("pub") % 16 == declared.bits("wit") % 16 == 0 and declared.bits("o0") == 16
     wide = replace(lw, ingress=GridParams(8, 2, 1))
     assert wide.head_key(1) == (9, 8, 0) and wide.head_key(0) == (9, 4, 0)
 

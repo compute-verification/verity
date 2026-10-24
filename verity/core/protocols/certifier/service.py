@@ -167,6 +167,9 @@ OUTPUTS = ("verdict", "deadline")
 #: output row ``o0``, the two output bits; each instance's commitments are in this order in a statement's public file
 ROWS = ("pub", "wit")
 PORTS = ROWS + ("o0",)
+#: the output row's length: C-Flock commits an output port as whole u16 words, so ``o0`` is one word, its bit 0 the
+#: verdict and bit 1 the deadline, its other bits 0
+OUT_BITS = 16
 #: a head check's witness parameters; the rest of the unit's parameters are public
 _WITNESS = ("head", "salt", "path", "salt_c")
 #: a head check's parameters the unit fixes rather than takes: each end's direction is its own (egress 0, ingress 1)
@@ -365,6 +368,11 @@ def _opens(data: bytes, bits: int, salt: Any, bc: bytes) -> bool:
     return _INST.commit_string(_INST.default_key, sha512_row_v2_digest(data, bits), salt) == bc
 
 
+def output_row(word: int) -> bytes:
+    """The output row's bytes for the output word `word` (`OUT_BITS`)."""
+    return word.to_bytes(OUT_BITS // 8, "little")
+
+
 def _opened(delivered: Delivered, unit: int, public: bytes | None, bits: int) -> int | None:
     """The unit's output word, once the proof's public file holds the unit's public row as `public` (the verifier's own
     copy, `bits` long) and its output row as the word delivered, each under the salt delivered; else None."""
@@ -372,7 +380,7 @@ def _opened(delivered: Delivered, unit: int, public: bytes | None, bits: int) ->
     if public is None or bcs is None or type(word) is not int or not 0 <= word < 1 << len(OUTPUTS):
         return None
     if not (_opens(public, bits, salts.get("pub"), bcs["pub"])
-            and _opens(bytes([word]), len(OUTPUTS), salts.get("o0"), bcs["o0"])):
+            and _opens(output_row(word), OUT_BITS, salts.get("o0"), bcs["o0"])):
         return None
     return word
 
@@ -606,9 +614,9 @@ class LinkWindows:
         return out
 
     def bits(self, row: str) -> int:
-        """A row's length in bits: `layout`'s, or the output row's (``o0``)."""
+        """A row's length in bits: `layout`'s, or the output row's (``o0``, `OUT_BITS`)."""
         if row == "o0":
-            return len(OUTPUTS)
+            return OUT_BITS
         params, _ = self.unit.signature()
         return sum(t.leaves for n, t in params if n in self.layout[row])
 
@@ -867,5 +875,5 @@ class LinkWindows:
         return {"accepted": accepted, "windows": n, "refused": refused, "records": records, "digest": digest}
 
 
-__all__ = ["BC_BYTES", "Delivered", "HEADS", "LEAVES", "LinkWindows", "OUTPUTS", "Opening", "PORTS", "PUBLIC",
-           "PUBLIC_SERVED", "ROWS", "SCHEMA", "VALUE", "encode", "rows", "unit"]
+__all__ = ["BC_BYTES", "Delivered", "HEADS", "LEAVES", "LinkWindows", "OUTPUTS", "OUT_BITS", "Opening", "PORTS",
+           "PUBLIC", "PUBLIC_SERVED", "ROWS", "SCHEMA", "VALUE", "encode", "output_row", "rows", "unit"]

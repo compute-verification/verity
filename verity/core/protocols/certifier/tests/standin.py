@@ -38,7 +38,7 @@ def prove(lw: SVC.LinkWindows, opening: SVC.Opening, draw: S.Draw, syncs: Sequen
     root = bytes.fromhex(draw.registration.record["roots"][0]["root"]) if root is None else root
     args = lw.arguments(opening, root, syncs)
     rows = {r: lw.row(args, r) if args is not None else bytes(lw.bits(r) // 8) for r in SVC.ROWS}
-    rows["o0"] = bytes([lw.outputs(opening, root, syncs) if args is not None else 0])
+    rows["o0"] = SVC.output_row(lw.outputs(opening, root, syncs) if args is not None else 0)
     public = out / "public.bin"
     header = {"units": {"indices": list(draw.units if units is None else units)}, "instances": 1}
     public.write_bytes(json.dumps(header).encode() + b"\n"
@@ -50,7 +50,8 @@ def prove(lw: SVC.LinkWindows, opening: SVC.Opening, draw: S.Draw, syncs: Sequen
     circuit = out / "circuit.txt"
     circuit.write_text(f"stand-in circuit of {lw.proof_unit.id}\n")
     delivered = {"pub": SALTS["pub"], "o0": SALTS["o0"], **(salts or {})}
-    return SVC.Delivered(PF.Proof(circuit, public, (session,)), delivered, rows["o0"][0] if word is None else word)
+    output = int.from_bytes(rows["o0"], "little") if word is None else word
+    return SVC.Delivered(PF.Proof(circuit, public, (session,)), delivered, output)
 
 
 def circuit_sha512(delivered: SVC.Delivered) -> str:
