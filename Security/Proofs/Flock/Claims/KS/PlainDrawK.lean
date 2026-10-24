@@ -89,7 +89,7 @@ theorem verifyWithMK_nil (keep : Bool → Bool) (hs : Hashes _root_.Flock.V) (sp
   obtain ⟨_, -, h⟩ := ebind_ok h
   have c3 : ((#[] : Array ByteArray).size != spec.repStreams.size) = true := by
     simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, beq_iff_eq, not_or, Decidable.not_not] at c1
-    simp only [List.size_toArray, List.length_nil, repStreams_size, bne_iff_ne, ne_eq]
+    simp only [List.size_toArray, List.length_nil, Custody.repStreams_size, bne_iff_ne, ne_eq]
     omega
   rw [ite_eq_left c3] at h
   obtain ⟨_, h', _⟩ := ebind_ok h
