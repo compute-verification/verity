@@ -328,7 +328,8 @@ PD_SERVED, PD_MAX_ROWS, PD_MAX_K, PD_PAIR_SMEM, PD_G, PD_WHOLE, PD_GROUP = (851,
 
 
 def pd_variant(m_real: int, n: int, k: int) -> int | None:
-    """The pd variant a decode shape takes: 979 (PD_GROUP's tiles, four a CTA) where the tile grid is wide (n at least 16,384)
+    """The pd variant a decode shape's tiles take (its pd_commit is that without PD_GROUP, `Pipeline.pd_commit`): 979
+    (PD_GROUP's tiles, four a CTA) where the tile grid is wide (n at least 16,384)
     or every row block is full, else 851, the fastest at Llama-3.1-8B's linears at m16 = 32 and 128 (runs
     r20261018-225110-fbef and r20261018-230602-5632); None outside pd_commit's rows and k."""
     if m_real > PD_MAX_ROWS or k > PD_MAX_K:
@@ -347,7 +348,7 @@ def pd_setup(dev) -> None:
         dev.rs_heads = True
     dev.launch("pd_heads", 1, 32)
     optin, smem = dev.get("cuDeviceGetAttribute", MAX_SHARED_OPTIN, dev.dev), {}
-    for v in PD_SERVED:
+    for v in sorted({x & ~PD_GROUP for x in PD_SERVED}):
         fn = dev.fn(f"pd_commit_{v}")
         smem[v] = optin - dev.get("cuFuncGetAttribute", SHARED_SIZE, fn) if v & PD_WHOLE else PD_PAIR_SMEM
         if smem[v] < PD_PAIR_SMEM:
@@ -549,8 +550,10 @@ class Pipeline:
 
     def pd_commit(self) -> None:
         """A's commitment under pd (`FUSED`'s steps), pd_commit in mode 0: a CTA a real row, E_A's lines for all m rows (row
-        i < m_real's under its own line key, the rest under line_a), its counter left zero."""
-        d, b, kk, v, s = self.dev, self.b, self.keys, self.pd, self.k // 256
+        i < m_real's under its own line key, the rest under line_a), its counter left zero.  Every shape's on one kernel,
+        the variant without PD_GROUP (a bit pd_commit doesn't read): the decode step's other commit kernel had its code
+        fetched cold once a layer (979's at gate_up, 110.3 µs against 851's 98.3 at qkv, r20261024-104625-7b57)."""
+        d, b, kk, v, s = self.dev, self.b, self.keys, self.pd & ~PD_GROUP, self.k // 256
         d.launch(f"pd_commit_{v}", self.m_real, 32 * (cdiv(s, 32) * 2 + 2), d.pd_smem[v],
                  p=(b["xa"], b["rowdig_a"], b["tree_a"], b["seeds_a"], b["lkeys_a"], kk["unit"], kk["dom_a"], kk["salt_key"],
                     kk["hm"], b["pd_count"], b["seed_a"], b["line_a"], b["ea_codes"], 0), i=(self.m_real, self.k, 0, self.m))
