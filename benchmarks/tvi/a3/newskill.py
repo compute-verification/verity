@@ -332,7 +332,12 @@ def lm_logp(model, ids, P, amp):
     return torch.gather(F.log_softmax(logits, -1), 2, ids[:, P:, None]).squeeze(-1)
 
 
-def sft(model, st, task, steps, lr, seed, amp, bs=64, val=None, log=None):
+TARGET = 0.995  # validation exact-match at which SFT stops early and RL is skipped (nothing left to gain)
+
+
+def sft(model, st, task, steps, lr, seed, amp, bs=64, val=None, log=None, every=100):
+    """AdamW on the cross-entropy of the coded letters; stops once validation exact-match reaches TARGET.
+    Returns the steps run."""
     opt = torch.optim.AdamW(st.params, lr=lr, weight_decay=0.0)
     rng = random.Random(seed * 7919 + 17)
     model.train()
@@ -348,10 +353,19 @@ def sft(model, st, task, steps, lr, seed, amp, bs=64, val=None, log=None):
         loss.backward()
         torch.nn.utils.clip_grad_norm_(st.params, 1.0)
         opt.step()
-        if log is not None and (step % 100 == 0 or step == steps):
-            log.append({"step": step, "loss": loss.item(), "t": round(time.time() - t0, 1)})
+        if step % every == 0 or step == steps:
+            entry = {"step": step, "loss": loss.item(), "t": round(time.time() - t0, 1)}
+            if val is not None:
+                vex, _ = evaluate(model, st, task, val, amp)
+                entry["val_exact"] = sum(vex) / len(vex)
+                model.train()
+            if log is not None:
+                log.append(entry)
+            if entry.get("val_exact", 0.0) >= TARGET:
+                break
     opt.zero_grad(set_to_none=True)
     del opt
+    return step
 
 
 def grpo(model, st, task, steps, lr, seed, amp, B=32, G=8, val=None, every=50, log=None):
@@ -374,14 +388,16 @@ def grpo(model, st, task, steps, lr, seed, amp, B=32, G=8, val=None, every=50, l
         ex, frac = task.score(rep, toks)
         r = torch.tensor(frac, device=prompt.device).view(B, G)
         adv = ((r - r.mean(1, keepdim=True)) / (r.std(1, keepdim=True) + 1e-4)).view(-1)
-        model.train()
-        st.refresh()
-        logp = lm_logp(model, torch.cat([prompt, toks], 1), task.P, amp)
-        loss = -(adv[:, None] * logp).mean()
-        opt.zero_grad(set_to_none=True)
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(st.params, 1.0)
-        opt.step()
+        # a batch with no reward spread in any group has no signal, and an Adam step on a zero gradient still moves
+        if bool((adv.abs() > 0).any()):
+            model.train()
+            st.refresh()
+            logp = lm_logp(model, torch.cat([prompt, toks], 1), task.P, amp)
+            loss = -(adv[:, None] * logp).mean()
+            opt.zero_grad(set_to_none=True)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(st.params, 1.0)
+            opt.step()
         if step % every == 0 or step == steps:
             vex, _ = evaluate(model, st, task, val, amp)
             v = sum(vex) / len(vex)
@@ -395,18 +411,22 @@ def grpo(model, st, task, steps, lr, seed, amp, B=32, G=8, val=None, every=50, l
     return best
 
 
+# tried in this order (middle first); a trial that reaches TARGET ends the sweep
 LR_GRID = {
-    "full": [1e-5, 3e-5, 1e-4],
-    "lora16": [1e-4, 3e-4, 1e-3],
-    "xs:13": [3e-3, 1e-2, 3e-2],
-    "xs:625": [1e-3, 3e-3, 1e-2],
-    "xs:5000": [1e-3, 3e-3, 1e-2],
-    "xs:48552": [3e-4, 1e-3, 3e-3],
-    "hl:625": [1e-3, 3e-3, 1e-2],
-    "hl:5000": [1e-3, 3e-3, 1e-2],
+    "full": [3e-5, 1e-4, 1e-5],
+    "lora16": [3e-4, 1e-3, 1e-4],
+    "xs:13": [1e-2, 3e-2, 3e-3],
+    "xs:625": [3e-3, 1e-2, 1e-3],
+    "xs:5000": [3e-3, 1e-2, 1e-3],
+    "xs:48552": [1e-3, 3e-3, 3e-4],
+    "hl:13": [1e-2, 3e-2, 3e-3],
+    "hl:625": [3e-3, 1e-2, 1e-3],
+    "hl:5000": [3e-3, 1e-2, 1e-3],
+    "hl:50000": [1e-3, 3e-3, 3e-4],
 }
-S_LABEL = {"full": "full", "lora16": "lora16", "xs:13": "tiny", "xs:625": "10kbit", "xs:5000": "10kB",
-           "xs:48552": "100kB", "hl:625": "hl10kbit", "hl:5000": "hl10kB"}
+S_LABEL = {"full": "full", "lora16": "lora16", "xs:13": "xs-tiny", "xs:625": "xs-10kbit", "xs:5000": "xs-10kB",
+           "xs:48552": "xs-100kB", "hl:13": "hl-tiny", "hl:625": "hl-10kbit", "hl:5000": "hl-10kB",
+           "hl:50000": "hl-100kB"}
 
 
 def load_model(name, spec, device):
@@ -416,23 +436,47 @@ def load_model(name, spec, device):
     return m
 
 
-def save_ckpt(path, model_name, st, model, meta):
-    """Final checkpoint for B1: merged HF model (fp32 W + delta for adapters, bf16 as stored for full), the exact
-    trainable state, meta.json, then DONE."""
+def save_merged(path, model_name, deltas):
+    m = AutoModelForCausalLM.from_pretrained(model_name, dtype=torch.float32)
+    with torch.no_grad():
+        for n, d in deltas.items():
+            m.get_submodule(n).weight.add_(d)
+    m.save_pretrained(path, safe_serialization=True)
+    del m
+
+
+def save_ckpt(path, model_name, st, model, meta, merged=True):
+    """Checkpoint for B1: the exact trainable state (trainable.pt; for full, the bf16 model as stored), meta.json, and for
+    adapters with merged=True the merged HF model (fp32 W + delta); `newskill.py merge` builds it later otherwise. DONE last."""
     os.makedirs(path, exist_ok=True)
     if st.spec == "full":
         model.save_pretrained(path, safe_serialization=True)
+        meta["merged_dtype"] = "bfloat16"
     else:
-        deltas = st.deltas()
-        m = AutoModelForCausalLM.from_pretrained(model_name, dtype=torch.float32)
-        with torch.no_grad():
-            for n, d in deltas.items():
-                m.get_submodule(n).weight.add_(d)
-        m.save_pretrained(path, safe_serialization=True)
-        del m
         torch.save({"spec": st.spec, "seed": st.seed, "state": st.trainable_dict()}, os.path.join(path, "trainable.pt"))
+        if merged:
+            save_merged(path, model_name, st.deltas())
+        meta["merged_dtype"] = "float32" if merged else None
+    meta["merged"] = st.spec == "full" or merged
     json.dump(meta, open(os.path.join(path, "meta.json"), "w"), indent=1)
     open(os.path.join(path, "DONE"), "w").write(time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()) + "\n")
+
+
+def merge(a):
+    """Materialize the merged fp32 HF model of a checkpoint saved without one: base + the trainable state's delta."""
+    meta = json.load(open(os.path.join(a.ckpt, "meta.json")))
+    tr = torch.load(os.path.join(a.ckpt, "trainable.pt"))
+    model = load_model(meta["base_model"], tr["spec"], "cuda")
+    st = State(model, tr["spec"], tr["seed"], "cuda")
+    with torch.no_grad():
+        if tr["spec"] == "lora16":
+            for n, w in st.wrapped:
+                w.A.copy_(tr["state"][f"{n}.A"])
+                w.B.copy_(tr["state"][f"{n}.B"])
+        else:
+            st.shared.z.copy_(tr["state"]["z"])
+    save_merged(a.out, meta["base_model"], st.deltas())
+    print("merged", a.ckpt, "->", a.out)
 
 
 def run_job(job, a, tok, device):
@@ -442,30 +486,38 @@ def run_job(job, a, tok, device):
     val = task.plains(256, 900 + job["order"])
     test = task.plains(512, 800 + job["order"])
     torch.manual_seed(seed)
-    rec = {"job": job, "H_bits": task.H, "model": a.model, "sft_steps": job["sft_steps"], "rl_steps": job["rl_steps"],
-           "trials": []}
+    rec = {"job": job, "H_bits": task.H, "model": a.model, "sft_budget": job["sft_steps"], "rl_steps": job["rl_steps"],
+           "trials": [], "target": TARGET}
+    lrs = job.get("lrs") or LR_GRID[spec]
+    if job.get("lr_from"):
+        src = os.path.join(a.results, job["lr_from"] + ".json")
+        if os.path.exists(src):
+            lrs = [json.load(open(src))["sft_lr"]]
+            rec["lr_from"] = job["lr_from"]
     best = None
-    for lr in job.get("lrs") or LR_GRID[spec]:
+    for lr in lrs:
         model = load_model(a.model, spec, device)
         st = State(model, spec, seed, device)
         log = []
         t0 = time.time()
-        sft(model, st, task, job["sft_steps"], lr, seed, amp, log=log)
+        ran = sft(model, st, task, job["sft_steps"], lr, seed, amp, val=val, log=log)
         st.round_to_stored()
         vex, vfr = evaluate(model, st, task, val, amp)
         v = sum(vex) / len(vex)
-        rec["trials"].append({"lr": lr, "val_exact": v, "val_pos": sum(vfr) / len(vfr), "log": log,
+        rec["trials"].append({"lr": lr, "steps": ran, "val_exact": v, "val_pos": sum(vfr) / len(vfr), "log": log,
                               "sec": round(time.time() - t0, 1)})
-        print(f"[{job['id']}] sft lr={lr:g} val_exact={v:.3f} val_pos={sum(vfr)/len(vfr):.3f} "
+        print(f"[{job['id']}] sft lr={lr:g} steps={ran} val_exact={v:.3f} val_pos={sum(vfr)/len(vfr):.3f} "
               f"{time.time()-t0:.0f}s", flush=True)
         if best is None or v > best["v"] + 1e-9 or (abs(v - best["v"]) < 1e-9 and sum(vfr) > best["pos"]):
-            best = {"v": v, "lr": lr, "model": model, "st": st, "pos": sum(vfr)}
+            best = {"v": v, "lr": lr, "model": model, "st": st, "pos": sum(vfr), "steps": ran}
         del model, st
         torch.cuda.empty_cache()
-    lr, model, st = best["lr"], best["model"], best["st"]
+        if best["v"] >= TARGET:
+            break
+    lr, model, st, sft_steps, sft_val = best["lr"], best["model"], best["st"], best["steps"], best["v"]
     del best
     rec["bits"] = st.bits
-    rec["sft_lr"] = lr
+    rec["sft_lr"], rec["sft_steps"], rec["sft_val_exact"] = lr, sft_steps, sft_val
     tex, tfr = evaluate(model, st, task, test, amp)
     rec["sft_test_exact"], rec["sft_test_pos"] = tex, tfr
     label = f"{job['task']}-{S_LABEL[spec]}"
@@ -477,15 +529,29 @@ def run_job(job, a, tok, device):
         rec["sft_test_exact"], rec["sft_test_pos"] = sex, sfr
     print(f"[{job['id']}] SFT best lr={lr:g} test_exact={sum(rec['sft_test_exact'])/512:.3f}", flush=True)
     if a.ckpt:
-        p = os.path.join(a.ckpt, f"{label}-sft-seed{seed}", f"step{job['sft_steps']}")
+        p = os.path.join(a.ckpt, f"{label}-sft-seed{seed}", f"step{sft_steps}")
         save_ckpt(p, a.model, st, stored_model, {
             "task": job["task"], "order": job["order"], "H_bits": task.H, "spec": spec, "S_label": S_LABEL[spec],
-            "S_bits": st.bits, "phase": "sft", "seed": seed, "steps": job["sft_steps"], "lr": lr,
+            "S_bits": st.bits, "phase": "sft", "seed": seed, "steps": sft_steps, "lr": lr,
             "test_exact": sum(rec["sft_test_exact"]) / 512, "test_pos": sum(rec["sft_test_pos"]) / 512,
-            "base_model": a.model, "merged_dtype": "bfloat16" if spec == "full" else "float32"})
+            "base_model": a.model}, merged=seed == 0 and sft_val >= TARGET)
         rec["sft_ckpt"] = p
     if stored_model is not model:
         del stored_model
+    if sft_val >= TARGET:
+        # nothing left for RL to gain: the RL result is the SFT state, and its checkpoint a link to SFT's
+        rec.update({"rl_skipped": True, "rl_lr": None, "rl_log": [], "rl_sec": 0.0, "rl_best_step": 0, "rl_best_val": sft_val,
+                    "rl_test_exact": rec["sft_test_exact"], "rl_test_pos": rec["sft_test_pos"],
+                    "rl_final_test_exact": rec["sft_test_exact"], "rl_final_test_pos": rec["sft_test_pos"]})
+        if a.ckpt:
+            link = os.path.join(a.ckpt, f"{label}-rl-seed{seed}")
+            if not os.path.lexists(link):
+                os.symlink(f"{label}-sft-seed{seed}", link)
+            rec["rl_ckpt"] = os.path.join(link, f"step{sft_steps}")
+        print(f"[{job['id']}] RL skipped (SFT val {sft_val:.3f})", flush=True)
+        del model, st
+        torch.cuda.empty_cache()
+        return rec
     # GRPO from the SFT state, same trainable state
     rl_lr = lr * job.get("rl_lr_mult", 0.3)
     log = []
@@ -504,13 +570,12 @@ def run_job(job, a, tok, device):
     print(f"[{job['id']}] RL best step={bstep} test_exact={sum(bex)/512:.3f} final={sum(fex)/512:.3f} "
           f"{time.time()-t0:.0f}s", flush=True)
     if a.ckpt:
-        p = os.path.join(a.ckpt, f"{label}-rl-seed{seed}", f"step{job['sft_steps'] + bstep}")
+        p = os.path.join(a.ckpt, f"{label}-rl-seed{seed}", f"step{sft_steps + bstep}")
         save_ckpt(p, a.model, st, stored_model, {
             "task": job["task"], "order": job["order"], "H_bits": task.H, "spec": spec, "S_label": S_LABEL[spec],
-            "S_bits": st.bits, "phase": "rl", "seed": seed, "sft_steps": job["sft_steps"], "rl_step": bstep,
-            "steps": job["sft_steps"] + bstep, "sft_lr": lr, "rl_lr": rl_lr,
-            "test_exact": sum(bex) / 512, "test_pos": sum(bfr) / 512, "base_model": a.model,
-            "merged_dtype": "bfloat16" if spec == "full" else "float32"})
+            "S_bits": st.bits, "phase": "rl", "seed": seed, "sft_steps": sft_steps, "rl_step": bstep,
+            "steps": sft_steps + bstep, "sft_lr": lr, "rl_lr": rl_lr,
+            "test_exact": sum(bex) / 512, "test_pos": sum(bfr) / 512, "base_model": a.model}, merged=seed == 0)
         rec["rl_ckpt"] = p
     del model, st, stored_model
     torch.cuda.empty_cache()
@@ -525,24 +590,45 @@ def worker(a):
     jobs = json.load(open(a.jobs))
     os.makedirs(a.results, exist_ok=True)
     os.makedirs(a.claims, exist_ok=True)
-    for job in jobs:
-        try:
-            fd = os.open(os.path.join(a.claims, job["id"]), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        except FileExistsError:
-            continue
-        os.write(fd, f"{a.rank}\n".encode())
-        os.close(fd)
-        t0 = time.time()
-        try:
-            rec = run_job(job, a, tok, device)
-            rec["sec"] = round(time.time() - t0, 1)
-            rec["worker"] = a.rank
-            json.dump(rec, open(os.path.join(a.results, job["id"] + ".json"), "w"))
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            json.dump({"job": job, "error": repr(e)}, open(os.path.join(a.results, job["id"] + ".error.json"), "w"))
-            torch.cuda.empty_cache()
+    if a.copy_to:
+        os.makedirs(a.copy_to, exist_ok=True)
+    done = lambda i: any(os.path.exists(os.path.join(a.results, i + s)) for s in (".json", ".error.json"))
+    pending = list(jobs)
+    while pending:
+        progressed = False
+        for job in list(pending):
+            if os.path.exists(os.path.join(a.claims, job["id"])):
+                pending.remove(job)
+                continue
+            if job.get("lr_from") and not done(job["lr_from"]):
+                continue  # its learning rate comes from a job that hasn't finished
+            try:
+                fd = os.open(os.path.join(a.claims, job["id"]), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            except FileExistsError:
+                pending.remove(job)
+                continue
+            os.write(fd, f"{a.tag} {a.rank}\n".encode())
+            os.close(fd)
+            pending.remove(job)
+            progressed = True
+            t0 = time.time()
+            try:
+                rec = run_job(job, a, tok, device)
+                rec["sec"] = round(time.time() - t0, 1)
+                rec["worker"] = f"{a.tag} {a.rank}"
+                name = job["id"] + ".json"
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                rec = {"job": job, "error": repr(e)}
+                name = job["id"] + ".error.json"
+                torch.cuda.empty_cache()
+            for d in [a.results] + ([a.copy_to] if a.copy_to else []):
+                json.dump(rec, open(os.path.join(d, name + ".tmp"), "w"))
+                os.replace(os.path.join(d, name + ".tmp"), os.path.join(d, name))
+            break  # rescan from the top: earlier jobs (seed 0) first
+        if pending and not progressed:
+            time.sleep(15)
 
 
 def base(a):
@@ -588,8 +674,13 @@ def main():
     w.add_argument("--claims", required=True)
     w.add_argument("--ckpt", default="")
     w.add_argument("--rank", type=int, default=0)
+    w.add_argument("--tag", default="")
+    w.add_argument("--copy-to", default="")
+    m = sub.add_parser("merge")
+    m.add_argument("--ckpt", required=True)
+    m.add_argument("--out", required=True)
     a = ap.parse_args()
-    {"base": base, "worker": worker}[a.mode](a)
+    {"base": base, "worker": worker, "merge": merge}[a.mode](a)
 
 
 if __name__ == "__main__":
