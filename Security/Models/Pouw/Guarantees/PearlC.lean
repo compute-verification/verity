@@ -1,6 +1,7 @@
 import Definitions.Pouw.PearlC.DeviceKernelWref
 import Definitions.Pouw.PearlC.DevicePricesLoop
 import Definitions.Pouw.Assumptions.PearlC.TTOutW1
+import Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1
 import Models.Pouw.Assumptions.PearlC.TTOutRev1
 import Definitions.Pouw.Basic.Prob
 import Definitions.Pouw.Basic.QTree
@@ -50,8 +51,10 @@ the game's, so Pearl-C's are named in full.
 **At W1.** A guarantee that rests on a device TT_OUT form (`TTOutPearlCDev`, `TTOutPearlCDevRev1`, their tile forms and
 the H100's) is stated at the cost model `W1.w1Priced dv salt`, the W1 machine on the record's device `dv`
 (`W1Device.sm120`, `.sm120Loop` or `.h100` at prices `sha` and `fetch`) with the salt's bytes `salt`, and rests on that
-form at W1 (`Definitions.Pouw.Assumptions.PearlC.TTOutW1`). The rest (the chain-only, chain-cap, U-only, row-seed and
-FP4 readers) are still stated over any `CostModel`.
+form at W1 (`Definitions.Pouw.Assumptions.PearlC.TTOutW1`). Pearl-C4's headline readers rest on `TTOutFp4Sm120W1` or
+`TTOutTileFp4Sm120W1` and conclude at `W1.w1Priced (W1Device.fp4Sm120 sha fetch) salt`
+(`Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1`). The rest (the chain-only, chain-cap, U-only and row-seed readers)
+are still stated over any `CostModel`.
 -/
 
 namespace Pouw.Guarantees.PearlC
@@ -97,8 +100,8 @@ open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom Pouw.PearlC.Fp4Dev
 
 /-- **Pearl-C4's headline on sm_120, 16384³**, worst case under the cap `1/400`: `γ = 5473473967/895794400000` (0.61102%). -/
 def _root_.Pouw.Guarantees.PearlC.GammaFp4Sm120_16384 : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (sem : Fp4Sem Q R S) (hTT : TTOutFp4Sm120 CM sem (1 / 400)),
-    Gγ CM (pearlCProtocolFp4 devFp4Sm120 sem (1 / 400)) (pearlCDomainFp4At sem sh16384)
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : Fp4Sem Q R S) (hTT : TTOutFp4Sm120W1 sha fetch salt sem (1 / 400)),
+    Gγ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.fp4Sm120 sha fetch) salt) (pearlCProtocolFp4 devFp4Sm120 sem (1 / 400)) (pearlCDomainFp4At sem sh16384)
     ((5473473967 / 895794400000 : ℚ) : ℝ) εPearlC
 
 end Pouw.PearlC
@@ -108,8 +111,8 @@ open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom Pouw.PearlC.Fp4Dev
 
 /-- **Pearl-C4's headline on sm_120, 8192³**, worst case under the cap `1/400`: `γ = 9875013901/1376663200000` (0.71732%). -/
 def _root_.Pouw.Guarantees.PearlC.GammaFp4Sm120_8192 : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (sem : Fp4Sem Q R S) (hTT : TTOutFp4Sm120 CM sem (1 / 400)),
-    Gγ CM (pearlCProtocolFp4 devFp4Sm120 sem (1 / 400)) (pearlCDomainFp4At sem sh8192)
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : Fp4Sem Q R S) (hTT : TTOutFp4Sm120W1 sha fetch salt sem (1 / 400)),
+    Gγ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.fp4Sm120 sha fetch) salt) (pearlCProtocolFp4 devFp4Sm120 sem (1 / 400)) (pearlCDomainFp4At sem sh8192)
     ((9875013901 / 1376663200000 : ℚ) : ℝ) εPearlC
 
 end Pouw.PearlC
@@ -132,8 +135,8 @@ open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom Pouw.PearlC.Fp4Dev
 
 /-- **Pearl-C4's headline on sm_120 per audit tile, 16384³**: `GγSampled` at `γ = 5473473967/895794400000`. -/
 def _root_.Pouw.Guarantees.PearlC.SampledFp4Sm120_16384 : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (sem : Fp4Sem Q R S) (hTT : TTOutTileFp4Sm120 CM sem (1 / 400)),
-    GγSampled CM (pearlCProtocolFp4 devFp4Sm120 sem (1 / 400)) (pearlCTilesFp4 devFp4Sm120 sem (1 / 400))
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : Fp4Sem Q R S) (hTT : TTOutTileFp4Sm120W1 sha fetch salt sem (1 / 400)),
+    GγSampled (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.fp4Sm120 sha fetch) salt) (pearlCProtocolFp4 devFp4Sm120 sem (1 / 400)) (pearlCTilesFp4 devFp4Sm120 sem (1 / 400))
     (pearlCDomainFp4At sem sh16384) ((5473473967 / 895794400000 : ℚ) : ℝ) εPearlC
 
 end Pouw.PearlC
@@ -143,8 +146,8 @@ open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom Pouw.PearlC.Fp4Dev
 
 /-- **Pearl-C4's headline on sm_120 per audit tile, 8192³**: `GγSampled` at `γ = 9875013901/1376663200000`. -/
 def _root_.Pouw.Guarantees.PearlC.SampledFp4Sm120_8192 : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (sem : Fp4Sem Q R S) (hTT : TTOutTileFp4Sm120 CM sem (1 / 400)),
-    GγSampled CM (pearlCProtocolFp4 devFp4Sm120 sem (1 / 400)) (pearlCTilesFp4 devFp4Sm120 sem (1 / 400))
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : Fp4Sem Q R S) (hTT : TTOutTileFp4Sm120W1 sha fetch salt sem (1 / 400)),
+    GγSampled (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.fp4Sm120 sha fetch) salt) (pearlCProtocolFp4 devFp4Sm120 sem (1 / 400)) (pearlCTilesFp4 devFp4Sm120 sem (1 / 400))
     (pearlCDomainFp4At sem sh8192) ((9875013901 / 1376663200000 : ℚ) : ℝ) εPearlC
 
 end Pouw.PearlC
