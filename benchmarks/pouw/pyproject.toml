@@ -19,7 +19,7 @@ verity-exact-kit = { workspace = true }
 [tool.verity.tests]
 # test_lean_headline compares the headline instances' Lean data (Security/Definitions/Accounting/Headline) with what
 # lean_headline.py writes, and test_lean_headline_dc the data-centre ones' (Security/Definitions/Accounting/HeadlineDc)
-# with what lean_headline_dc.py writes, and each statement's ε literal in Models' HeadlineDc.lean against the export's
+# with what lean_headline_dc.py writes, and each statement's ε literal in Definitions' HeadlineDc.lean against the export's
 # ε/B_♭ pair; theory/fold_proof.py reads Sm120's fold menu in Headline and the data sheet's issue row
 # (Security/Definitions/Accounting/TS/Sheet.lean).
 # Test-only: test_hidden_zk_stage runs hidden_zk/stage.py, which stages through C-Flock's Python; harness/price_twins.py

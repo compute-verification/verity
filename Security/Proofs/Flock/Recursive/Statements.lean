@@ -42,7 +42,7 @@ form of `Pouw.Guarantees`; its proof is `Flock.SecurityProofs.G : Flock.Guarante
   (`Proofs.Flock.Recursive.Firewall`). `RecursiveZK` and the circuit-privacy forms above are the committed-coin case,
   each message fixed by the auditor's tape before any commitment.
 
-C-Flock's definitions and the recursion's model are still in the proofs package, so `Models.lean` does not import this
+C-Flock's definitions and the recursion's model are still in the proofs package, so `Definitions.lean` does not import this
 module: `Proofs.Flock.Recursive` does.
 -/
 

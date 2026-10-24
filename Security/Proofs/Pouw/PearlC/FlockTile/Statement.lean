@@ -14,7 +14,7 @@ C-Flock's hidden audit (`Pouw.PearlC.FlockTile.TileReadSession.audit`), with the
 hypothesis. Its proof is `Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192`.
 
 C-Flock's definitions, and the session's (`FlockTile.Audit`), are still in the proofs package, so this module imports
-`Proofs.Pouw.PearlC.FlockTile.Audit`, as `Flock.Guarantees.EndToEndHidden`'s statement does C-Flock's; `Models.lean`,
+`Proofs.Pouw.PearlC.FlockTile.Audit`, as `Flock.Guarantees.EndToEndHidden`'s statement does C-Flock's; `Definitions.lean`,
 which the `security` package builds without `security_proofs`, does not import it.
 -/
 

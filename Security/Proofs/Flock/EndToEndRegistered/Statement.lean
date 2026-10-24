@@ -16,7 +16,7 @@ circuit it unrolls to, as `EndToEndHidden` is; `EndToEndRegisteredFlat`, `EndToE
 `EndToEndRegisteredDrawnFlat` are the same statements at a flat circuit file, `D = Desc.single c`.
 
 C-Flock's definitions are still in its proofs package, so this module imports
-`Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ`, and `Models.lean`, which the `security` package builds without
+`Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ`, and `Definitions.lean`, which the `security` package builds without
 `security_proofs`, does not import it: `Proofs.Flock.EndToEndRegistered` does.
 -/
 

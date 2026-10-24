@@ -20,11 +20,11 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
 
 - **Code or analysis.** Code the verifier runs, or that the V[B] generator or a reference prover runs, stays with its
   component: `verity/core/service/flock/` (no dependencies), and each protocol's `lean/`. Everything else is under
-  `Security/`: a definition in `Definitions/<Area>/`, an assumption or guarantee statement in
-  `Models/<Area>/{Assumptions,Guarantees}` (package `security`, Mathlib only), a proof in `Proofs/<Area>/` (package
-  `security_proofs`, ArkLib allowed), a property of code in `Properties.<Protocol>` with its proof in
-  `Proofs.Properties.<Protocol>` (package `security_properties`, never requiring `security_proofs`). No new package: an
-  area is a directory in each tree.
+  `Security/`, in three trees: a definition in `Definitions/<Area>/` and an assumption or guarantee statement in
+  `Definitions/<Area>/{Assumptions,Guarantees}` (package `security`, Mathlib only); a property of code in
+  `Properties.<Protocol>` (package `security_properties`, never requiring `security_proofs`); a proof in
+  `Proofs/<Area>/`, and a property's in `Proofs.Properties.<Protocol>` (package `security_proofs`, ArkLib allowed). No
+  new package: an area is a directory in each tree.
 - **Lean is the definition and the verifier of record.** A verifier is Lean code and imports nothing from `verity.ml`;
   the Python that mirrors it is held to it by difftest (`verity/core/difftest/`).
 - **Own a subdirectory and namespace** with one aggregator module; the area's root imports the aggregator once, so
@@ -35,7 +35,7 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
 - **Parallel proof work runs against fixed statements**: the final theorem's statement and each open piece's statement
   are on the branch before any worker starts. What isn't closed by the deadline is a gap list of exact lemma names, each
   with a size and an owner, with no `sorry` outside them.
-- **Definitions a guarantee reads go in `Definitions/` or `Models/`**, not in a proof file (`reads` in the lock lists
+- **Definitions a guarantee reads go in `Definitions/`**, not in a proof file (`reads` in the lock lists
   where they are; keep it short).
 - **Build in your own checkout.** Two agents never share a writable `.lake`. A second Lean task on one machine gets its
   own worktree, its dependencies copied (never symlinked) from a checkout with the same manifest and toolchain:
@@ -93,7 +93,7 @@ python tools/verity/lean/check.py PKG  once, before pushing
 
 ## Assumptions and guarantees
 
-- **An assumption is a named `Prop`** in its area's `Models/<Area>/Assumptions` (C-Flock's in
+- **An assumption is a named `Prop`** in its area's `Definitions/<Area>/Assumptions` (C-Flock's in
   `Proofs/Flock/Soundness/Assumptions` until its spec is extracted), taken as a hypothesis by each theorem that needs it
   and listed by name in the lock's `assumptions` with its owner. Its docstring opens with its claim id
   (`verity.core.claims`) and gives its rationale; a ledger points to the docstring. Never an `axiom`, a `sorry` on

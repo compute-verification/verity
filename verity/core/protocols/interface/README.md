@@ -63,13 +63,14 @@ own profile type and JSON.
 
 A protocol's properties go in `Security/Properties/<Protocol>.lean`, stated against `P.check` (or `P.Accepts`) with its
 actual parameters, every input covered and assumptions as named `Prop`s. They, not the
-port, are what makes a verifier proven. All protocols share one Lake package for them, `security_properties` (#1494), with the statements in
-`Properties.<Protocol>` and the proofs in `Proofs.Properties.<Protocol>` (top, 1791398523.782759):
-- It requires `security` (Definitions and Models) and, by path, the code it states properties of. It never requires
-  `security_proofs`, so code requires nothing, `security` requires no code, and nothing pulls in ArkLib.
-- A result whose proof needs `security_proofs` keeps its statement in `Properties.<Protocol>`, and its proof goes in
-  `security_proofs` as `Proofs.<Protocol>`, which may require `security_properties`. Sampled proofs' `audit_profile`
-  (`Proofs/Flock/Soundness/Audit/OneStage.lean`) is one such result.
+port, are what makes a verifier proven. All protocols share one Lake package for the statements, `security_properties` (#1494), in `Properties.<Protocol>`,
+and their proofs are in `security_proofs` as `Proofs.Properties.<Protocol>` (Daniel, 23 Oct: `Security/` is three
+trees):
+- `security_properties` requires `security` (`Definitions`) and, by path, the code it states properties of. It never
+  requires `security_proofs`, so code requires nothing, `security` requires no code, and stating a property pulls in no
+  ArkLib.
+- `security_proofs` requires `security_properties`. A proof may use the rest of `security_proofs`, as sampled proofs'
+  `audit_profile` (`Proofs/Flock/Soundness/Audit/OneStage.lean`) does.
 - Each protocol adds its root and its `[[require]]` to that one lakefile.
 
 `CoreProtocol/Example.lean` is a toy protocol whose `#guard`s pin every path of `answer` and `case`, and the decoders'

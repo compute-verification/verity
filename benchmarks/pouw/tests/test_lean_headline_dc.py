@@ -217,7 +217,7 @@ def test_flat_never_folds_by_a_counted_route(monkeypatch):
 
 def test_each_statement_has_its_eps_and_b_flat_as_one_pair(tmp_path):
     """HB-PROOF's pairing hazard: ε is a fraction of one B_♭, so a reading emits them together (`Reading.pair`): the
-    statement's name, its ε (the exact bound rounded up at 10^-5, the literal `1 - N / 100000` the Models file states
+    statement's name, its ε (the exact bound rounded up at 10^-5, the literal `1 - N / 100000` the Definitions file states
     for it), the B_♭ of the same export, exact, its facet, and the credit (1 − ε)·B_♭. `--json` writes each pair whole
     beside its reading, and a reading for the record names no statement."""
     models = (H.LH.ROOT / "Security" / "Definitions" / "Accounting" / "Guarantees" / "HeadlineDc.lean").read_text()

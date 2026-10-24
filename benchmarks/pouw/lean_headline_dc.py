@@ -267,7 +267,7 @@ class Reading:
     machine_core: float                  # the machine model's core ε at q* = ½, for comparison
     machine_eps: float
     luck: float
-    statement: str                       # the guarantee this reading is (Models' HeadlineDc); "" for the record
+    statement: str                       # the guarantee this reading is (Definitions' HeadlineDc); "" for the record
     pair: dict                           # ε and the B_♭ it is a fraction of, one export (`_pair`)
     exact: dict
     data: _Exact

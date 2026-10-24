@@ -1,5 +1,5 @@
 {
- "roots": ["Definitions", "Models"],
+ "roots": ["Definitions"],
  "proved_in": ["Proofs"],
  "assumptions": {
   "Accounting.Additive": {

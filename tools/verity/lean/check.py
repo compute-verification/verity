@@ -1462,7 +1462,7 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     definitions the guarantees read there, each owned by the one owner of the guarantees that read it (or ``owner``).
     ``premised`` ({definition: the guarantees whose statements take it}, from `Facts.lean`'s `premises`) names the premises
     a statement takes, headed by a constant of an assumptions module or of any module this repository builds
-    (`own_modules`: a premise defined in `Definitions` carries what it assumes as much as one in `Models`), its `Guarantees`
+    (`own_modules`: a premise defined in `Definitions` carries what it assumes as much as one in an assumptions module), its `Guarantees`
     definitions unfolded and a `Premises` abbrev seen through:
     one the lock doesn't list fails, and an update adds it the same way, so an entry lost in a merge is never silent."""
     assumed, fails, out = policy.get("assumptions", {}), [], {}

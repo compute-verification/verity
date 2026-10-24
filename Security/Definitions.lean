@@ -17,5 +17,35 @@ import Definitions.Claims.Recursion
 import Definitions.Claims.RecursionLin
 import Definitions.Claims.Sampling
 import Definitions.Hash
+import Definitions.Core.Assumptions
+import Definitions.Core.Guarantees
+import Definitions.Nci.Assumptions
+import Definitions.Nci.Guarantees
+import Definitions.Nci.Guarantees.Reads
+import Definitions.Nci.Guarantees.Threads
+import Definitions.Nci.Guarantees.Layered
+import Definitions.Nci.Guarantees.Contained
+import Definitions.Nci.Guarantees.Fit
+import Definitions.Nci.Guarantees.FitRate
+import Definitions.Nci.Guarantees.Dampener
+import Definitions.Nci.Guarantees.Remote
+import Definitions.Nci.Guarantees.Info
+import Definitions.Nci.Guarantees.Fmt
+import Definitions.Nci.Guarantees.Fmt2
+import Definitions.Nci.Guarantees.Training
+import Definitions.Nci.Guarantees.Packed
+import Definitions.Nci.Guarantees.PackedTraining
+import Definitions.Nci.Guarantees.Activations
+import Definitions.Nci.Guarantees.Covering
+import Definitions.Nci.Guarantees.CoveringTwoCosts
+import Definitions.Pous.Assumptions
+import Definitions.Pous.Guarantees
+import Definitions.Pouw.Assumptions
+import Definitions.Pouw.Guarantees
+import Definitions.NetworkCertifier.Assumptions
+import Definitions.NetworkCertifier.Guarantees
+import Definitions.Flock.Guarantees
+import Definitions.Accounting.Guarantees
+import Definitions.Hash.Guarantees
 
-/-! The trusted vocabulary: each component's definitions. -/
+/-! The trusted text: each component's definitions, and its named assumptions and guarantee statements. -/

@@ -44,8 +44,8 @@ Top-level directories (a grouping, not an import name, except `verity/`):
       C-Flock, the proof system. Its patches on upstream Flock, the CUDA prover, the zero-knowledge prover (`live/`,
       `flock-circuit --zk`), and `verifier/`: the verifier's specification and the scripts that run it, with upstream's
       Rust verifier as a cross-check.
-- `Security/`: the Lean every protocol states its guarantees in, and their proofs: `Definitions/`, `Models/` and `Proofs/`
-  (Lean below). `Properties/` is `security_properties` (Lean below).
+- `Security/`: the Lean every protocol states its guarantees in, and their proofs, in three trees: `Definitions/`,
+  `Properties/` and `Proofs/` (Lean below).
 - `integrations/`: one directory per outside system. `integrations/vllm/` (`verity_vllm`) is the vLLM integration. It
   builds each served workload's circuit and commits its values while serving; `benchmarks/one_stage/` takes those values
   through C-Flock's prover and the Lean verifier.
@@ -286,19 +286,21 @@ PRs land through ci's `research queue drive` (#1826), live since 12 Oct 06:00Z:
     rounds, coins and proof files (live `PROTOCOL.md` §10.4). The ZK theorem (`Flock.zk_server_lean_loop`) reads the
     released bytes only through named hypotheses not yet proved about the live path (`LiveRoundEq`, `FillRoundEq`,
     `FinishIs`, `LinkRoundEq`, `ProgReads`), so the ZK server is not yet proved.
-  - The analysis is `Security/`. Its spec is `Definitions/` (each component's vocabulary) and `Models/` (its named
-    assumptions and guarantee statements), the package `security` (Mathlib, no ArkLib). `Proofs/` is the nested package
-    `security_proofs` (ArkLib allowed): every proof and lemma, with `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for
-    each proved guarantee.
-    `Properties/` is the nested package `security_properties`: properties of the code stated against its Lean functions
-    (`Properties.<Protocol>`) and proved (`Proofs.Properties.<Protocol>`). It may require `security` and that code, never
-    `security_proofs`.
+  - The analysis is `Security/`, three trees (Daniel, 23 Oct):
+    - `Definitions/` is the spec, the package `security` (Mathlib, no ArkLib): each component's vocabulary, and its
+      named assumptions and guarantee statements in `Definitions/<Area>/{Assumptions,Guarantees}`.
+    - `Properties/` is the nested package `security_properties`: properties of the code stated against its Lean
+      functions (`Properties.<Protocol>`). It may require `security` and that code, never `security_proofs`.
+    - `Proofs/` is the nested package `security_proofs` (ArkLib allowed): every proof and lemma, with
+      `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for each proved guarantee, and the properties' proofs
+      (`Proofs.Properties.<Protocol>`). They are roots of `security_proofs`, not a package of their own, because two
+      packages can't share the module root `Proofs`.
   - A component's Lean goes in its own area of each tree it has Lean in (`Core`, `Nci`, `Pouw`, `Pous`,
     `NetworkCertifier`, `Flock`; `Accounting` is the device model the resource audits share, and their joint guarantee).
   - The spec imports only itself and Mathlib (`layers` in `Security/lean-audit.json`). A theorem that must stay
-    in a trusted module (a definition's proof field) may; the Lean check replays it like any proof. C-Flock has no
-    `Definitions/` area yet: its guarantees are `Definitions/Flock/Guarantees`, and the rest of its analysis is in `Proofs/Flock`
-    until its spec is extracted.
+    in a trusted module (a definition's proof field) may; the Lean check replays it like any proof. C-Flock's
+    definitions aren't extracted yet: its guarantees are `Definitions/Flock/Guarantees`, and the rest of its analysis
+    is in `Proofs/Flock` until its spec is extracted.
   - All packages share one toolchain and one Mathlib revision (`tests/test_lean_packages.py`). Bump them together, in a
     PR of their own.
 - **The Lean check.** Every Lake package has a lock, `lean-audit.json`, and `check` runs the Lean check on every declaration

@@ -72,7 +72,7 @@ bridge that makes it a discharge of `WindowBound` is named there (`Pouw.Window.F
 `Pouw.Guarantees.PearlCSampledByDeadline`).
 
 C-Flock's audit definitions are still in the proofs package, so this module imports them, as `Flock.Guarantees.EndToEnd`'s
-statement does C-Flock's; `Models.lean`, which the `security` package builds without `security_proofs`, does not import
+statement does C-Flock's; `Definitions.lean`, which the `security` package builds without `security_proofs`, does not import
 it. `TileWork` and `StraightLineExtraction` are named premises awaiting their card.
 -/
 

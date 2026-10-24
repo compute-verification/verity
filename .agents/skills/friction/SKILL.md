@@ -121,12 +121,16 @@ What an agent may change:
 
 Protocols and claims:
 
+- (23 Oct) `Security/` is three trees, `Definitions/`, `Properties/` and `Proofs/`, with one name per area across them:
+  `Models/<Area>/{Assumptions,Guarantees}` folds into `Definitions/<Area>/`, and the properties' proofs come under
+  `Proofs/`. A package boundary that must stay is a package inside `Proofs/` that states why. Overlapping areas merge,
+  and dead files and stale or vacuous statements are retired.
 - (21 Oct) θ comes only from registered public data, registered at the start of a deployment; outputs of earlier runs
   are never θ (drops `NciCheck.Baseline`'s output provenance).
 - (8 Oct) A protocol's verifier of record switches from Python to Lean only on evidence: its gap list shows nothing the
   Python checks that the Lean doesn't, and every recorded run replayed through the Lean gets the Python's verdict,
   negative controls included. The Python keeps running as the reference, the switch is one reversible line, and it moves
-  the protocol's properties from `Models/` to `Properties/`. Where it leads (18 Oct): Lean is the definition and the
+  the protocol's properties from `Definitions/` to `Properties/`. Where it leads (18 Oct): Lean is the definition and the
   verifier of record, `verity.ml`'s Python mirrors it under difftest, and a verifier imports no `verity.ml` code.
 - (17 Oct) The prover controls the audited circuit's inputs and knows every coin once it is issued, so no defense assumes
   the circuit can't learn a coin, and verifier coins stay public. Only the weights may take a private encoding from a
