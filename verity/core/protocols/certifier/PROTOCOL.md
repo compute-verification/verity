@@ -504,6 +504,199 @@ the `8·B·N` bits read.
 The two terms of the charge that the capacity bounds leave open, the content advice `A_c` and the coins (D7), are fixed in
 the trusted text: the last section of `Security/Models/NetworkCertifier/Guarantees.lean`'s documentation.
 
+## Advice for arbitrary serving: what it can carry
+
+Daniel's goal of 24 Oct (04:25Z) is network accounting for arbitrary vLLM usage: no FIXLEN, no fixed request size, and
+real EOS. The registered thing is a precommitted ahead-of-time compiler. After serving, the prover hands it an
+**advice** string that encodes everything serving made unpredictable: in advice v0, each request's lengths and finish,
+each step's batch rows, and each step's release bucket. The compiler turns the advice into each step's circuit, and the
+certifier certifies the I/O. Sampled proofs check two things: that the committed values pass the compiled circuits (the
+step units), and that they agree with the certified I/O (the tie units). N2 holds each window's egress counts to the
+ingress counts and the advice. The advice's length is the leak, charged as `A_c` in the accepted-runs bound.
+
+This section is that claim's red team, written before its parts land: the advice codec (`advice.py`, with `encode`,
+`decode` and `bits`), N2's advice mode, the I/O tie unit and the compiler (`verity_vllm.predict.compile_steps`). Nothing
+in it is implemented or proved. It gives the argument, every assumption the argument rests on, what each attack costs
+under the design as drafted, and the adversarial cases each part's tests must carry.
+
+### The argument
+
+The notation is for one audit of W windows:
+- I is the certified ingress: the requests' bytes and counts. It is charged on ingress, as reads and timing (the K
+  charge), and nothing below charges it again.
+- w is the weights, under a root registered before any coin.
+- `compile` is `compile_steps(registered, ·)`. It is registered with the codec, a cap c on the advice's charged bits,
+  Σ_sync and (T, r, B, τ_b, Q), all before the audit's first window.
+- a is the advice the prover registers, and 𝒜_c is the set of advice strings whose charge `bits(a)` is at most c.
+- The units are the step units of the compiled circuits, the tie units, and N2's units (one per link-window).
+
+**The claim.** Given the ingress, the registered items fix a set of egress observation sequences with at most
+
+    #𝒜_c · #Φ · #Σ_sync^W · D^n   elements,   that is   c + 1 + I_ε + W·log2 #Σ_sync + n·log2 D bits,
+
+and the audit accepts a run whose sequence lies outside it with probability at most δ_audit. Here Φ is the influence
+of the wrong units (step 3 below), I_ε = log2 #Φ, and δ_audit = δ + ε_ks + δ_link + δ_in is the error of
+`audit_influence` (`Security/Proofs/Flock/Soundness/Audit/Influence.lean`).
+
+**Why it holds.**
+1. **Fix a.** Then every unit's circuit is fixed, because `compile` is a function of the registered items and of a. So
+   for each a the audit is the one-stage audit of a fixed circuit, and `audit_influence` applies: the audit accepts
+   while the values it delivers lie outside Φ_a with probability at most δ_audit. Φ_a is the set of values reachable
+   when the wrong units form a set whose escape is at least δ, and it is fixed before the draw.
+2. **With no wrong unit, the egress is a function of I and a.** Every committed value is the forward evaluation of the
+   compiled circuits from I, w and a, because every value a circuit reads has exactly one writer (A2). Each tie unit
+   then holds its frame to the canonical frame of the committed token at the (request, position) the advice maps it to.
+   N2 holds each window's counts to the counts that the ingress counts and the advice derive. So the egress rows are
+   the Program `constantRate T W ss frames` with content advice a: `frames ins a ℓ` gives each frame's payload, anchor
+   and logical index.
+3. **A wrong unit adds its influence.** Take the content advice of step 2 to be (a, φ), where φ is the wrong units and
+   what they let through, so that Ac = 𝒜_c × Φ.
+   - A wrong step unit lets through its outputs, at most 16 bits (a unit's outputs are at most 16 bits), plus the
+     choice of which unit is wrong. That is `card_influenceSet_le_harm`'s `H + log2 Σ_{j ≤ K} C(n, j)`.
+   - A wrong tie unit lets through the frame it was to hold, not its one-bit verdict. That is 8·B bits, or about
+     log2 V for the token alone if an exhaustive check holds every frame to the canonical form (attack 8).
+4. **Count.** `SecurityProofs.EncardAccSeqsLeConstantRate` with this Ac gives `#Ac · #Σ_sync^W · D^n`, so no new
+   counting guarantee is needed. What is new is the bridge from steps 1 to 3: that an audit accepted by sampled proofs
+   is, except with probability δ_audit, `Accepted` for some (a, φ). `Accepted` is the exact binding, in which every
+   recorded row is the Program's. Today's audit gets it by recomputing the grid, and a sampled audit does not.
+5. **The advice set.** `#𝒜_c ≤ 2^(c+1) − 1`. `encode` is injective and canonical (A5), so distinct advice values are
+   distinct bit strings of at most c bits.
+
+The prover's choice of a is free inside 𝒜_c. Acceptance is existential (`AcceptedUpTo`: some advice explains the run),
+so the bound counts every string the audit would admit, whenever and however it was chosen. That makes the advice's
+length the right charge. It is also why advice that is not what serving did costs nothing more (attack 7).
+
+### What it rests on
+
+Each assumption, and what breaks without it:
+- **A1, a deterministic compiler.** `compile` is a pure function of the registered items and the advice, pinned by
+  digest before the run. It reads nothing the prover chooses later.
+  - The row's pin and the device pin (`predict.compiled`'s kernel configurations, autotune winners, cuBLAS routes and
+    fused-MoE configurations) are registered items. The prover chooses them before the run, so they cost their size
+    once, like a hidden profile list (`Security/Models/NetworkCertifier/Guarantees.lean`, "The declaration"), unless the
+    auditor fixes them from a reference device of its own.
+  - The circuits are the exact silicon semantics. There is no tolerance: a band of t accepted values on a checked value
+    frees log2 t bits there. No input names a reduction order, an atomic's interleaving or an autotune choice.
+  - A kernel that is nondeterministic on silicon makes honest runs fail. That is a completeness failure, and its fix
+    is a deterministic kernel or a charged advice field, never a witness.
+- **A2, the Commit covers every value the circuit reads, each with one writer.** A value a compiled circuit reads is one
+  of these:
+  - a certified input, through an exhaustive tie. The prompt's token ids are the registered tokenizer and chat template
+    applied to the certified request body. The request's parameters (temperature, top-p, seed, maximum tokens, stops)
+    are read from the body;
+  - the weights' committed root;
+  - a constant the advice fixes: positions, shapes and the wiring;
+  - the committed output of exactly one unit earlier in the advice's order. A decode row's input id is the previous
+    position's sampled token. A KV entry at (request, position, layer) is its writer's output. A cache hit names its
+    donor, whose token prefix equals the request's.
+
+  `compile` refuses a read with no writer. Without A2, a value nobody checks feeds the circuits, and every draw passes
+  (attacks 4 and 6).
+- **A3, the tie and the step units are drawn at ε at δ, not all.** N2's units are `All`. The step units add I_ε at
+  probability δ_audit. A wrong tie unit adds 8·B bits unless the tie is `All` too (attack 8). The bound holds on
+  accepted audits only, as every capacity bound here does: a rejected window may already have carried up to its unbound
+  capacity.
+- **A4, the advice is bound to the run before the coins.** The registration that the challenger receipts before its
+  draw holds the advice's canonical digest (or every compiled Program's digest), with the run, the link and the windows
+  in its context. Every consumer (the compiler, N2 and the tie) reads that one advice. If the advice can follow the
+  draw, the prover picks, after the draw, an a under which the drawn units pass. The error then grows to as much as
+  #𝒜_c · δ, which is vacuous. Each window's advice must precede its own units' draw. It may follow an earlier window's
+  draw, since an earlier window's wrong units are counted in Φ by their exits, whatever later circuits read them.
+- **A5, the charge is the encoding every consumer decodes.**
+  - `bits` counts the canonical, self-delimiting encoding of every field any consumer reads, and no consumer reads
+    anything else. A field read from elsewhere (the Commit's row metadata, a default, a field an encoding stopped
+    sending) is a free channel, unless the consumer recomputes it or checks it against the decoded advice.
+  - `decode` refuses whatever `encode` would not produce: padding bits, a trailing byte, a non-minimal integer, an
+    unused enumeration value. The auditor's side re-encodes the decoded advice rather than forwarding the prover's
+    bytes, as the Flock firewall relay re-encodes a round (#3378).
+  - Each window's part is self-delimiting, and the windows' charges sum to the whole encoding.
+  - Each field is charged to a window no later than the first window whose rows it can change. Then the first m
+    windows' charges bound the first m windows, which the per-window form needs, as `ExpectedRowCausal` gives it for
+    the syncs. A prefill step that releases nothing is still charged.
+- **A6, the certifier's clock.** The buckets are the certifier's, under `trusted-nebius-host`, W1 to W6 and J (D = 1
+  is no jitter), and the advice's release buckets are certifier buckets. Nothing else in the accounting reads a time.
+  The challenger's readings of when a registration or a proof arrived (`received_at`) are the prover's choice within
+  their deadlines, so they stay out of anything published, or they are charged.
+- **A7, the advice set is fixed before the run.** The codec and the cap c are registered before the audit's first
+  window, and the audit refuses advice over the cap, as it refuses a sync outside Σ_sync. `A_c = log2 #Ac` in the
+  trusted text needs the set fixed before the run. Without a registered cap, the realized charge is sound only in the
+  indexed form: for every c, the runs whose charge is at most c number at most 2^(c+1) times the rest.
+
+The claim does not say three things: that the advice is what serving did (attack 7), anything about rejected windows,
+and the ingress terms, which stay the K charge's.
+
+### Attacks
+
+The prices are estimates for one 60 s window at the llama8b-node1 calibration (T = 600, B = 4,096, r = 1,686, and
+16 × 8 sync values), under an assumed load of 3,000 output tokens a second. That is 180,000 decode rows, 3,000 engine
+steps and 900 requests a window, with Llama-3's V = 128,256 tokens (log2 V ≈ 17). Measurements from the trace corpus
+and the encodings' table replace these estimates when they land.
+
+| # | Attack | Under the design | Cost to the prover | What closes it |
+|---|---|---|---|---|
+| 1 | A covert channel in the advice: batch compositions or chunk sizes chosen to encode weights | Charged: it is the channel `A_c` counts. v0 sends every row's fields; at 40 to 50 bits a row, that is 7 to 9 Mbit a window | Nothing but throughput | An encoding that charges only departures from a public predictor: `compile` replaying a deterministic scheduler from the arrivals, or the trusted text's κ step clock and registered profiles (log2 N bits once). It is priced, never refused |
+| 2 | Scheduling choices the advice describes but that don't change the outputs | Charged. The registered Program digests are a function of the advice, so the choice is in the record whether or not the advice is published | Nothing | A canonical schedule: the advice must be the predictor's, and a departure is charged as in 1 |
+| 3 | Timing | Jitter is n·log2 D, which is 0 under J. The advice's `release` is timing advice, charged as advice. It replaces the sync's 7 bits with up to log2 C(S + T − 1, S) ≈ 2,330 bits a window at S = 3,000 steps (30,000 in a fixed-width field). Proposition 2 caps it at the envelope T·log2(r + 1) ≈ 6,430 bits a link-window, since once the frames and their order are fixed, the counts are all the timing the wire shows | Nothing | Release derived from the anchors, the declared sync and the schedule (zero-bit fields), which brings back the sync's 7 bits. The times at which registrations and proofs reach the challenger are a separate channel (A6) |
+| 4 | Token choice at temperature 0 | None, if A1, A2 and the tie hold: the argmax with its tie-break fixed, the decode input wired to the previous sample, and the streamed token tied | — | A2 refuses each of three breaks. (a) A decode input id not wired to the previous sampled token frees 17 bits a decode row, about 3 Mbit a window; the Commit holds `c00.input/ids` and `runner.sampler/sampled_token_ids` as separate values, so the wiring must be checked. (b) A prompt in another tokenization of the same text frees the choice among the tokenizations. (c) A request parameter read from the advice rather than the body is uncharged |
+| 5 | Sampling at temperature > 0: the seed and the RNG | Open. A seed the prover chooses is 64 bits a request, about 58 kbit a window. An RNG state shared across requests is advice. A `splits` input not derived from the schedule frees each event's draw | k usable bits a request cost about 2^k runs of the request | The seed from the request body, or from coins nobody inside chooses (the challenger's, or the certifier's salt, as D7 exempts them), with `splits` derived in the circuit. Otherwise, charge 64 bits a request |
+| 6 | Preemption or cache-hit claims that don't match the real cache | The real cache is never seen, so a claim is advice: charged (v0's `cache_hit` and `preempted`), and under batch-variant kernels it steers near-ties. The dangerous form is a hit whose KV has no checked writer. Fabricated KV makes the request's whole output free, and no draw catches it, since every step unit computes correctly from what it reads | Nothing | A2: a hit names its donor, the donor's token prefix equals the request's certified one, and the KV is the donor writer's output. `compile` refuses a read with no writer. A hit that an encoding derives from the prompt history is recomputed, never read |
+| 7 | Advice for a different but plausible schedule that computes the same outputs | Not refused. It costs its own encoding and no more, since acceptance is existential. Nothing the prover runs is trusted, so the Commit needn't be serving's, only registered by the deadline. The leak is log2 of the number of schedules that give the same tokens and release, at most the schedule fields' charge (v0: 7 to 9 Mbit a window); under a replay encoding, each departure is charged at its own encoding | Under batch-invariant kernels, nothing. Otherwise, a re-execution under the claimed schedule before the registration deadline. Under a replay encoding, sending the replay's own prediction costs 0 bits whatever serving did, but the streamed tokens and the release must then be the prediction's | Nothing needs to for the network bound, since the charge counts every explanation. It breaks any claim that the advice is serving's schedule: an account that credits work or live slots by the advice's rows credits work when it wasn't done. Closing that needs the schedule attested on a trusted clock, which the design doesn't have |
+| 8 | A frame let through by a wrong tie unit | Open under a sampled tie. The frame is witness that only the tie holds, so a wrong tie unit frees all 8·B = 32,768 bits of it. At ε = 10^−3 that is 180 frames, about 5.9 Mbit a window, and the advice doesn't bound it | Nothing | The tie with Selection `All` (an N3-like unit a window over every frame). Or an exhaustive check that every frame is canonical for some token, which leaves log2 V + log2 N_f ≈ 35 bits a wrong tie unit, about 6.2 kbit a window at ε = 10^−3 |
+| 9 | The lengths of the windows' parts | If the parts aren't self-delimiting, how many bits each window gets is free: log2 C(c + W, W) over W windows. That is about 11 bits a window at 1 kbit a window, and 24 at 8 Mbit, more than the sync's 7 | Nothing | A5: each part self-delimiting, or a registered cap per window |
+| 10 | Encodings that decode alike: padding bits, trailing bytes, non-minimal integers, unused enumeration values | Free wherever the prover's bytes, or a digest of them, reach the record | Nothing | A5: `decode` refuses them, and the record holds the re-encoding |
+| 11 | Two advices: N2, the tie and the compiler reading different strings, or a consumer reading a field from the Commit's metadata | Free: the counts, the frames' mapping and the circuits each follow a different explanation | Nothing | A4 and A5: one digest in the registration, and every consumer decodes those bytes |
+| 12 | Advice chosen after the draw | The error bound grows to #𝒜_c · δ | Nothing | A4 |
+| 13 | A field an encoding stops charging but a consumer still reads as sent (`finish`, `output_len`, `prompt_len`, `cache_hit`) | Free. `output_len` alone is log2 of the token cap per request, 10 bits at 1,024 | Nothing | The consumer recomputes a derived field (EOS from the sampled tokens, and `length` only at the body's cap) and never reads it |
+| 14 | A request with no certified ingress, or two requests with one `user` | A phantom request's prompt is free and steers the rows batched with it. A shared id lets the prover swap outputs | Nothing | Refuse both: every request the advice names is a certified request, named once |
+| 15 | Making `compile` or any check refuse | The window is rejected, which is visible, and a rejected window may carry up to its unbound capacity, as now | The run | The policy that already applies to rejected windows |
+
+### Adversarial cases
+
+Each part's tests carry these cases, each refused or charged as stated. They are small and CPU-only, and each goes into
+its part's tests as the part lands.
+- **The advice codec:**
+  - `decode(encode(a)) == a`, and `encode(decode(x)) == x` for every x that `decode` accepts. A flipped padding bit, a
+    trailing byte, a non-minimal integer and an unused `kind` or `finish` value are refused (10);
+  - changing any one field of any request, row or release changes the encoding, and its bits are charged to some
+    window no later than the first window it can change, a prefill step that releases nothing included. The windows'
+    charges sum to at least the encoding's length, and the windows' parts, concatenated, parse one way (9, 13);
+  - a duplicate `id`, and a row whose request index is out of range, are refused (14).
+- **N2's advice mode:**
+  - the derived counts read only the ingress counts, the advice's output lengths and its release buckets: two advice
+    values that agree on those derive the same counts, and a head one frame off anywhere is refused (11);
+  - a response released at or before its request's anchor is refused;
+  - a response with one frame more than its `output_len` plus the framer's constant overhead is refused.
+- **The I/O tie:**
+  - a frame with the right token id and any other byte changed is refused (8);
+  - two frames mapped to one (request, position), and a position with no frame, are refused;
+  - a prompt whose committed ids are another tokenization of the certified text is refused (4);
+  - the tie and N2 read one advice digest (11).
+- **The compiler and the Commit:**
+  - a decode row whose input id is not the previous position's sampled token is refused (4);
+  - a cache hit with no donor of an equal prefix, and a KV read with no writer, are refused (6);
+  - a stochastic request's seed is the body's or the coins', never the advice's (5);
+  - `compile` under an unregistered pin either gives the same Programs or refuses (A1).
+
+### For Daniel: what the guarantees would have to say
+
+These points change what a guarantee says or rests on, so they are claims, and this section changes nothing in
+`Security/`:
+1. **Sampled acceptance.** The accepted-runs bound is exact today (`Accepted`: every recorded row is the Program's).
+   Under sampled step and tie units it holds only except with probability δ_audit, and only with the influence term
+   I_ε added. The bridge from a sampled audit to `Accepted` for some (a, φ) composes `NetTiming` with the one-stage
+   audit's `audit_influence`. It is a new statement, and it rests on the verifier's coins (A3,
+   `uniform/io-getrandombytes`) and the proof system's knowledge soundness, besides what the certifier's bounds rest
+   on.
+2. **The tie's weight.** `audit_influence` prices a wrong unit by the width it adds to a separator, its exits. That is
+   right for a step unit and wrong for a tie unit, whose exit is one bit while it frees a whole frame. Either the tie is
+   `All`, or the network term weights each tie unit by its frame's free bits.
+3. **The length.** "The advice's length is the leak" holds only with A7: a cap registered before the run, or the
+   indexed form (for every c, the runs charged at most c), with each window's part self-delimiting.
+4. **Public advice.** The advice, or the compiled Programs' digests that determine it, is public in this design. That
+   is beyond the four kinds of public things, unless the advice counts as a protocol output. A hiding commitment to the
+   advice, with the universal unit (`private_circuits`) running each step, would keep it private. The network charge
+   would stay the same, since the egress still depends on the advice.
+
 ## Calibration (`calibration`)
 
 `network-certifier-calibrate TRACE [--ingress-bucket-ms 100]` reads honest timing traces (the format is in the module
