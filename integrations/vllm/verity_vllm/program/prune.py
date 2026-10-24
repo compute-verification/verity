@@ -1,18 +1,23 @@
-"""A flat body's dead units, and the body without them.
+"""A flat body's dead units, and the body without them; the registered compiler's dead-free form of a body.
 
 A unit is one node of a body: a Call, a primitive, a batch or a scan. It is live when the body's return reads one of its outputs,
 or a live unit's arguments do; a unit no live unit or return reads is dead, whatever its gates compute. This is the unit level of
 circuit-check's dead-gates property (`verity.ml.circuits.liveness`, transitive), which also counts the gates no output reads inside
 a live unit. `without_dead_units` drops the dead units and renumbers the references to the rest, each reference kept in its form
-(an `Affine` stays an `Affine`, a `Concat` keeps its parts), so that equal bodies stay equal: the Build's derive and
-`predict.build` drop the request wrapper's dead units alike (the last layer's rows before a prefill's last).
+(an `Affine` stays an `Affine`, a `Concat` keeps its parts), so that equal bodies stay equal.
+
+`dead_free` also swaps each Call of a Definition with dead gates inside it for its version without them (`dead_free_versions`,
+`registry.dead_free`): the same statics, signature and function, so only the node's gates change. The Build's derive and
+`predict.build` put the request wrapper alike in that form at one rank (`kept_records`), the registered compiler's Programs; rows
+of record keep the v1s.
 """
 from __future__ import annotations
 
 from dataclasses import replace
+from functools import cache
 from typing import Any
 
-from verity.ml.circuits.defs import Body
+from verity.ml.circuits.defs import Body, bind
 from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, Refs, Strided
 
 
@@ -88,10 +93,38 @@ def without_dead_units(body: Body) -> tuple[Body, list[int]]:
     return Body(body.params, body.ret_type, nodes, _renumbered(body.ret, new, memo), offsets), kept
 
 
-def kept_records(body: Body, calls: list, hints: dict[int, Any], *, drop: bool) -> tuple[Body, list, dict[int, Any]]:
-    """A derivation's flat `body` with its runtime correspondence's `calls` (one per node) and its node `hints` (by node index),
-    without the dead units when `drop`."""
-    if not drop:
-        return body, calls, dict(hints)
+@cache
+def dead_free_versions() -> dict[str, Any]:
+    """`Name_vN` of each Definition with dead gates the registered compiler emits -> its version without them."""
+    from verity_vllm.program.registry import dead_free as DF
+    return {"RMSNormTriton_v1": DF.RMSNormTritonV5, "TokenSelect_v1": DF.TokenSelectV3}
+
+
+def swapped(body: Body) -> Body:
+    """`body` with each node of a Definition `dead_free_versions` names bound to its dead-free version at the same statics."""
+    table = dead_free_versions()
+    nodes = [replace(n, fn=bind(table[n.fn.base_id], **n.fn.bindings)) if n.form != "primitive" and n.fn.base_id in table else n
+             for n in body.nodes]
+    if all(a is b for a, b in zip(nodes, body.nodes)):
+        return body
+    offsets = [0]
+    for n in nodes:
+        offsets.append(offsets[-1] + n.gates)
+    return Body(body.params, body.ret_type, nodes, body.ret, offsets)
+
+
+def dead_free(body: Body) -> tuple[Body, list[int]]:
+    """`body` in the registered compiler's form: without its dead units, the rest `swapped`; and the index in `body` of each node
+    kept, in order."""
     pruned, kept = without_dead_units(body)
+    return swapped(pruned), kept
+
+
+def kept_records(body: Body, calls: list, hints: dict[int, Any], *, registered: bool) -> tuple[Body, list, dict[int, Any]]:
+    """A derivation's flat `body` with its runtime correspondence's `calls` (one per node) and its node `hints` (by node index), in
+    the registered compiler's form (`dead_free`) when `registered`. A swapped node keeps its Call record: its arguments and outputs
+    are the v1's."""
+    if not registered:
+        return body, calls, dict(hints)
+    pruned, kept = dead_free(body)
     return pruned, [calls[k] for k in kept], {i: hints[k] for i, k in enumerate(kept) if k in hints}

@@ -95,7 +95,7 @@ def test_byte_ingress_compiles_to_the_same_programs_with_a_parse_unit_each():
     parse = bind(IO.IngressPrompt, MODEL=SERVED, LP=8, V=256)
     assert [u.parse for u in wired.requests] == [parse, None, parse]
     assert [u["parse"] for u in json.loads(json.dumps(wired.summary()))["requests"]] == [parse.id, None, parse.id]
-    selects = (f"GumbelTopPTokenSelect_v2{{V=256,S={registered_splits(reg.phi.target_profile().num_sms)}}}", "TokenSelect_v1{V=256}")
+    selects = (f"GumbelTopPTokenSelect_v2{{V=256,S={registered_splits(reg.phi.target_profile().num_sms)}}}", "TokenSelect_v3{V=256}")
     assert plain.transfer_gates == selects and wired.transfer_gates == tuple(sorted((parse.id, *selects)))
     assert wired.summary()["transfer_gates"] == list(wired.transfer_gates)
 
@@ -446,10 +446,11 @@ def test_partial_refuses_request_by_request():
 
 
 def test_dead_gates_are_counted_as_circuit_check_counts_them():
-    """The request wrapper drops its dead units, but gates inside live units still reach no sample (the final norm on the prompt rows
-    before the last, the query columns of the last layer's fused qkv on those rows, and the top-p select's at a constant split
-    count, `GumbelTopPTokenSelect_v2{V,S}`), so today's request Programs have dead gates: `dead_gates_of` counts them as circuit-check
-    does and says under which definitions."""
+    """The request wrapper is in the dead-free form (`program.prune.dead_free`: no dead unit, and RMSNormTriton and TokenSelect at
+    their versions without dead gates), but gates inside live units still reach no sample (the query columns of the last layer's
+    fused qkv on the prompt rows before the last, Attention_v5's, and the top-p select's at a constant split count,
+    `GumbelTopPTokenSelect_v2{V,S}`), so today's request Programs have dead gates: `dead_gates_of` counts them as circuit-check does
+    and says under which definitions."""
     from verity.ml.circuits.liveness import dead_gates
     from verity_vllm.program.prune import dead_units
     c = compile_steps(_registered(), *_mixed())
@@ -461,15 +462,16 @@ def test_dead_gates_are_counted_as_circuit_check_counts_them():
         assert (rec["dead_computed"], rec["unread_inputs"]) == (rep.computed, rep.input) and rep.computed > 0 and not dead_units(p.fn.body)
         assert sum(rec["by_definition"].values()) == rep.computed + rep.input
         by = rec["by_definition"]
-        top = "GumbelTopPTokenSelect_v2" if d == c.requests[1].digest else "RMSNormTriton_v1"
+        top = "GumbelTopPTokenSelect_v2" if d == c.requests[1].digest else "Gemm_v2"
         assert next(iter(by)) == top and "Gemm_v2" in by and sum(n for k, n in by.items() if k.startswith("Input")) == rep.input
+        assert not [k for k in by if k.startswith(("RMSNormTriton", "TokenSelect"))]
     assert got["dead_computed"] == sum(r["dead_computed"] for r in got["programs"].values())
 
 
 def test_a_program_with_a_dead_unit_is_refused(monkeypatch):
     """A request Program holding a node no output reads is refused, with the fix (in the lowering, never the advice) in the message."""
     import verity_vllm.predict.build as PB
-    monkeypatch.setattr(PB, "without_dead_units", lambda b: (b, list(range(len(b.nodes)))))
+    monkeypatch.setattr(PB, "dead_free", lambda b: (b, list(range(len(b.nodes)))))
     with pytest.raises(Unexpressible, match=r"request 0's Program [0-9a-f]{16} holds 56 dead units, node 104 \(RoPE_v1\{NHEADS=4,D=16\}\) first, which no "
                                             r"output reads: drop them in the lowering"):
         compile_steps(_registered(), *_mixed())

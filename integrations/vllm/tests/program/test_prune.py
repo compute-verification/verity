@@ -1,13 +1,16 @@
 """verity_vllm.program.prune: a body's dead units (the nodes no output reads) and the body without them, each reference renumbered
-in its own form; on one rank, the request wrapper's dead units are the last layer's rows before the prefill's last."""
+in its own form; on one rank, the request wrapper's dead units are the last layer's rows before the prefill's last, and its
+RMSNormTriton and TokenSelect Calls are at their versions without dead gates (`dead_free`)."""
 from __future__ import annotations
 
 from collections import Counter
 
 from verity_vllm.predict import build as PB
 from verity_vllm.predict.phi import Phi
-from verity_vllm.program.prune import _read, _renumbered, dead_units, without_dead_units
+from verity_vllm.program.prune import _read, _renumbered, dead_free, dead_units, swapped, without_dead_units
 
+from verity.ml.circuits.liveness import dead_gates
+from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Concat, Explicit, Strided
 
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
@@ -22,9 +25,10 @@ def _shape(body) -> list:
 
 def test_the_request_wrappers_dead_units_are_the_last_layers_rows_before_the_prefills_last(monkeypatch):
     """TINY's request of 8 prompt rows: the last layer's attention, o projection, MLP and their norms on rows 0-6 (and the rotary
-    of their queries) reach no sample; the build drops those 56 units and nothing else, as pruning the unpruned body does."""
+    of their queries) reach no sample; the build drops those 56 units and nothing else, as pruning the unpruned body does, and swaps
+    the rest's Definitions with dead gates (`swapped`)."""
     pruned = PB.build_program(PHI, "request", LP=8, T=3)
-    monkeypatch.setattr(PB, "without_dead_units", lambda b: (b, list(range(len(b.nodes)))))
+    monkeypatch.setattr(PB, "dead_free", lambda b: (b, list(range(len(b.nodes)))))
     full = PB.build_program(PHI, "request", LP=8, T=3)
     body = full.program.fn.body
     dead = dead_units(body)
@@ -32,11 +36,33 @@ def test_the_request_wrappers_dead_units_are_the_last_layers_rows_before_the_pre
                                                                          "Attention_v5": 7, "SiluMul_v2": 7}
     again, kept = without_dead_units(body)
     assert kept == [k for k in range(len(body.nodes)) if k not in set(dead)]
-    assert _shape(again) == _shape(pruned.program.fn.body) and again.offsets[-1] == body.offsets[-1] - sum(body.nodes[k].gates for k in dead)
-    assert dead_units(pruned.program.fn.body) == [] and without_dead_units(pruned.program.fn.body)[0] is pruned.program.fn.body
+    assert again.offsets[-1] == body.offsets[-1] - sum(body.nodes[k].gates for k in dead)
+    form, form_kept = dead_free(body)
+    assert form_kept == kept and _shape(form) == _shape(swapped(again)) == _shape(pruned.program.fn.body)
+    assert dead_units(pruned.program.fn.body) == [] and dead_free(pruned.program.fn.body)[0] is pruned.program.fn.body
     assert pruned.digest != full.digest
     step = PB.build_program(PHI, "step", M=1, pos0=8)
     assert dead_units(step.program.fn.body) == []
+
+
+def test_the_dead_free_form_binds_rmsnorm_and_token_select_to_their_versions_without_dead_gates():
+    """`swapped` binds each RMSNormTriton_v1 and TokenSelect_v1 node to v5 and v3 at the same statics (`registry.dead_free`): the
+    same arguments and outputs, fewer gates, none of them dead; every other node is the same object. The step wrapper, which isn't
+    the registered form, keeps the v1s."""
+    body = PB.build_program(PHI, "step", M=2, pos0=8).program.fn.body
+    sw = swapped(body)
+    assert Counter(n.fn.id for n in body.nodes if n.fn.name in ("RMSNormTriton", "TokenSelect")) == {
+        "RMSNormTriton_v1{N=64,EPS=1e-05}": 2, "TokenSelect_v1{V=256}": 1}
+    assert Counter(n.fn.id for n in sw.nodes if n.fn.name in ("RMSNormTriton", "TokenSelect")) == {
+        "RMSNormTriton_v5{N=64,EPS=1e-05}": 2, "TokenSelect_v3{V=256}": 1}
+    for a, b in zip(body.nodes, sw.nodes):
+        if a.fn.name in ("RMSNormTriton", "TokenSelect"):
+            assert (b.form, b.args, b.out, b.n, b.fn.bindings) == (a.form, a.args, a.out, a.n, a.fn.bindings) and b.gates < a.gates
+            assert dead_gates(Program(b.fn), limit=0, transitive=True).computed == 0 < dead_gates(Program(a.fn), limit=0, transitive=True).computed
+        else:
+            assert b is a
+    assert sw.ret is body.ret and sw.offsets[-1] == sum(n.gates for n in sw.nodes) < body.offsets[-1]
+    assert swapped(sw) is sw
 
 
 def test_each_reference_is_renumbered_in_its_own_form():
