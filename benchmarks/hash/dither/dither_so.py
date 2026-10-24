@@ -177,6 +177,11 @@ ROOT_LAG_ENV = "DITHER_SO_ROOT_LAG"
 # stream from the forward's end, beside its A tables, stash and spill on the serving stream, which waits for them
 # before `before_mid`; the same tables
 ZSIDE_ENV = "DITHER_SO_ZSIDE"
+# "1" (with $DITHER_SO_FUSED=1, without -ov): a step's commit, fault and receipt trees on a stream of their own at the
+# units' priority ("2": at the serving priority) once its units are done, so the next step's units, which wait only for
+# that commit to have read the stage, run beside the trees; a capture's step keeps them on the units stream; the same
+# receipts and roots
+RTSIDE_ENV = "DITHER_SO_RTSIDE"
 ROUNDS_ENV = "DITHER_ROUNDS"            # the window's layout (its round coins), the session's when off the node
 MF_CHUNK = 64                           # manifest rows a pinned host chunk
 # -we's spill (`Spill`): what each step keeps past the ring until its window's draw, so the prover can open a drawn unit
@@ -1107,6 +1112,12 @@ class SoSide(DA.Side):
         self.graphs: dict[tuple[int, int], torch.cuda.CUDAGraph] = {}
         self.warm: set[int] = set()
         self.capture_ms: list[float] = []
+        rts = os.environ.get(RTSIDE_ENV) or "0"
+        if rts not in ("0", "1", "2") or (rts != "0" and (not self.fused or win.overlap)):
+            raise ValueError(f"${RTSIDE_ENV}={rts}: 0, 1 or 2, and 1 or 2 needs ${FUSED_ENV}=1 and no -ov")
+        self.rts = None if rts == "0" else torch.cuda.Stream(device=dev, priority=-1 if rts == "2" else 0)
+        self.rt_commit, self.rt_done = torch.cuda.Event(), torch.cuda.Event()
+        self.rt_pending = False
         if CONF.get("serve_prio") and pt and not win.overlap:
             win.tree_streams = tuple(torch.cuda.Stream(device=dev, priority=-1) for _ in range(2))
         self.ov = Ov(win, self, win.overlap) if win.overlap else None
@@ -1228,11 +1239,11 @@ class SoSide(DA.Side):
                 self.ys.data_ptr(), None, self.ring_scale[p][win.spos[w]].data_ptr(), win.sw[w].data_ptr(),
                 self.ring_s1[p].data_ptr(), min(m, win.t))
 
-    def _units(self, p: int, m: int) -> int:
+    def _units(self, p: int, m: int, tail: bool = True) -> int:
         """The units of the step in ring slot p at m live rows, on the units stream (current): seeds from
-        `ring_salt[p]`, each call's units, the commit and the receipt trees, their roots into `rroots[p]`; the first
-        launch's nonzero return code, else 0.  Every launch reads only ring slot p and buffers fixed at the build, so the same launches
-        replay as one graph (`dispatch`)."""
+        `ring_salt[p]`, each call's units and, with `tail`, the commit and the receipt trees (`_commit`, `_trees`); the
+        first launch's nonzero return code, else 0.  Every launch reads only ring slot p and buffers fixed at the build,
+        so the same launches replay as one graph (`dispatch`)."""
         win, st, L = self.win, self.side, self.win.L
         tab = self.tables[p]
         if self.j10r:
@@ -1284,15 +1295,25 @@ class SoSide(DA.Side):
                 rc = rc or self.h.kh_one(*args, st.cuda_stream)
         if rc:
             return rc
-        n = self.stage.numel()
+        if tail:
+            self._commit(p)
+            self._trees(p)
+        return 0
+
+    def _commit(self, p: int) -> None:
+        """The stage into the receipts under ring slot p's flags, and its fault, on the current stream."""
+        win, n = self.win, self.stage.numel()
         DA.dithera_commit[(triton.cdiv(n, 4096),)](self.stage, win.plan.out, self.ring_S[p], n, BLOCK=4096)
-        DA.dithera_fault[(1,)](win.plan.out, self.ring_S[p], self.at, L, 1 << self.shift,
-                               BLOCK=triton.next_power_of_2(L))
+        DA.dithera_fault[(1,)](win.plan.out, self.ring_S[p], self.at, win.L, 1 << self.shift,
+                               BLOCK=triton.next_power_of_2(win.L))
+
+    def _trees(self, p: int) -> None:
+        """The receipt trees over the receipts, their roots into `rroots[p]`, on the current stream."""
+        win = self.win
         if self.rdead:
             self.r_live.copy_(self.ring_live[p])
         win.c.build(win.rset, self.ring_stepv[p][0:1])
         self.rroots[p].copy_(win.rset.roots)
-        return 0
 
     def dispatch(self, j: int, salt: bytes, m: int, g: dict | None) -> None:
         """Step j's units on the units stream once its ring slot is written (`_units`) under `salt`, whose receipt
@@ -1300,12 +1321,17 @@ class SoSide(DA.Side):
         DITHER_SO_GRAPH=0, `_units` runs as a CUDA graph of its (ring slot, m), captured at that pair's first step and
         replayed after, so the host launches one graph a step in place of each call's launches; the first step at each
         m runs eagerly (Triton's compiles and the units' one-time attributes outside any capture).  A capture's poison
-        and copies stay outside the graph, and `g["units_graph"]` says which way its units ran."""
+        and copies stay outside the graph, and `g["units_graph"]` says which way its units ran.  Under
+        $DITHER_SO_RTSIDE the graph holds the seeds and units alone, and the commit and receipt trees follow on `rts`
+        (a capture's on the units stream), whose commit the next step's units wait for before they write the stage."""
         win = self.win
         p, st = j % win.depth, self.side
+        tail = self.rts is None
         self.salt_host[p].copy_(torch.from_numpy(words(salt)))
         with torch.cuda.stream(st):
             st.wait_event(self.ready[p])
+            if self.rt_pending:
+                st.wait_event(self.rt_commit if g is None else self.rt_done)
             self.ev_u[p][0].record(st)
             self.ring_salt[p].copy_(self.salt_host[p], non_blocking=True)
             if g is not None:
@@ -1319,7 +1345,7 @@ class SoSide(DA.Side):
                     cg = torch.cuda.CUDAGraph()
                     cg.capture_begin(capture_error_mode="thread_local")
                     try:
-                        rc = self._units(p, m)
+                        rc = self._units(p, m, tail)
                     finally:
                         cg.capture_end()
                     if rc:
@@ -1327,14 +1353,28 @@ class SoSide(DA.Side):
                     self.graphs[(p, m)] = cg
                     self.capture_ms.append(round(1e3 * (time.perf_counter() - t0), 3))
                 cg.replay()
-            elif rc := self._units(p, m):
+            elif rc := self._units(p, m, tail):
                 raise RuntimeError(f"dither-a-so step {j}'s units: a launch returned {rc}")
             self.warm.add(m)
-            if g is not None:
-                g["receipts"], g["r_roots"] = win.plan.out.clone(), win.rset.roots.clone()
-                g["units_graph"] = graph
-            self.ev_u[p][1].record(st)
-            self.udone[p].record(st)
+            if not tail and g is None:
+                self.ev_u[p][1].record(st)
+                with torch.cuda.stream(self.rts):
+                    self.rts.wait_event(self.ev_u[p][1])
+                    self._commit(p)
+                    self.rt_commit.record(self.rts)
+                    self._trees(p)
+                    self.rt_done.record(self.rts)
+                    self.udone[p].record(self.rts)
+                self.rt_pending = True
+            else:
+                if not tail:
+                    self._commit(p)
+                    self._trees(p)
+                if g is not None:
+                    g["receipts"], g["r_roots"] = win.plan.out.clone(), win.rset.roots.clone()
+                    g["units_graph"] = graph
+                self.ev_u[p][1].record(st)
+                self.udone[p].record(st)
         self.prev_of[p], self.last_p = self.last_p, p
         self.dispatched[j] = p
         self.unit_steps += 1
@@ -1355,6 +1395,7 @@ class SoSide(DA.Side):
                 "units_form": {"form": self.units_form, "noise": UNITS_FORMS[self.units_form],
                                **(self._j10r_info() if self.j10r else {})},
                 "receipt_dead_rows_x_once": self.rdead,
+                "receipt_trees_stream_priority": None if self.rts is None else self.rts.priority,
                 "overlap": None if self.ov is None else {"order": OV_ORDER, "ring": self.ov.R}}
 
 
