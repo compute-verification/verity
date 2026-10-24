@@ -14,8 +14,10 @@ responses.
   ``check``), with that traffic and that upstream. ``--out`` holds the warden's files (``deployment.json``, the records,
   ``cells.jsonl``; ``cells.salts`` is witness) and ``check.json``.
 
-    python benchmarks/one_stage/warden_replay.py rehearse --serve-run RUN --window K --out DIR [--gap 1] [--token-ms 20] [schedule]
-    python benchmarks/one_stage/warden_replay.py endpoint --serve-run RUN --window K --listen HOST:PORT [--token-ms 20]
+    python benchmarks/one_stage/warden_replay.py rehearse --serve-run RUN --serve-window K --out DIR [--gap 1] [--token-ms 20] [schedule]
+    python benchmarks/one_stage/warden_replay.py endpoint --serve-run RUN --serve-window K --listen HOST:PORT [--token-ms 20]
+
+``--serve-window`` is the served run's Commit window; ``--window`` is the warden's own, in buckets (`WardenParams`).
 """
 from __future__ import annotations
 
@@ -124,7 +126,7 @@ async def replay_endpoint(reader: asyncio.StreamReader, writer, *, held: dict, m
 
 
 def endpoint(args) -> int:
-    held, model = answers(served_requests(args.serve_run, args.window)), served_model(args.serve_run)
+    held, model = answers(served_requests(args.serve_run, args.serve_window)), served_model(args.serve_run)
 
     async def run() -> None:
         server = await asyncio.start_server(
@@ -141,7 +143,7 @@ def rehearse(args) -> int:
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
     params = ws._params(args)
-    sent = traffic(args.serve_run, args.window, start_s=args.start, gap_s=args.gap)
+    sent = traffic(args.serve_run, args.serve_window, start_s=args.start, gap_s=args.gap)
     (out / "traffic.json").write_text(json.dumps(sent))
     warden = [sys.executable, str(TRACES / "warden_serve.py")]
     scratch = Path(tempfile.mkdtemp(prefix="warden-replay-"))
@@ -149,7 +151,7 @@ def rehearse(args) -> int:
     try:
         ws.cs.load_key(scratch / "warden", args.height)
         up = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "endpoint", "--serve-run", str(args.serve_run),
-                               "--window", str(args.window), "--listen", "127.0.0.1:0", "--token-ms", str(args.token_ms)],
+                               "--serve-window", str(args.serve_window), "--listen", "127.0.0.1:0", "--token-ms", str(args.token_ms)],
                               stdout=subprocess.PIPE, text=True)
         procs.append(up)
         upstream = tuple(json.loads(up.stdout.readline())["listening"])
@@ -173,7 +175,7 @@ def rehearse(args) -> int:
             if proc.poll() is None:
                 proc.terminate()
         shutil.rmtree(scratch)
-    result = ws.check(out) | {"served": {"run": str(args.serve_run), "window": args.window, "requests": len(sent)},
+    result = ws.check(out) | {"served": {"run": str(args.serve_run), "window": args.serve_window, "requests": len(sent)},
                               "upstream": list(upstream), "model": sent[0]["body"]["model"],
                               "exit": {"serve": serve_exit, "client": client_exit}}
     (out / "check.json").write_text(json.dumps(result, indent=1))
@@ -187,7 +189,7 @@ def parser() -> argparse.ArgumentParser:
     e, r = sub.add_parser("endpoint", help="the window's recorded answers"), sub.add_parser("rehearse", help="the warden run")
     for q in (e, r):
         q.add_argument("--serve-run", required=True, type=Path, help="a serve-openai run dir (serve.json, requests.jsonl)")
-        q.add_argument("--window", required=True, type=int, help="the closed Commit window K")
+        q.add_argument("--serve-window", required=True, type=int, help="the served run's closed Commit window K")
         q.add_argument("--token-ms", type=float, default=20.0, help="milliseconds between a response's events")
     e.add_argument("--listen", required=True, type=ws.cs._address, help="HOST:PORT (port 0: any)")
     r.add_argument("--out", required=True, type=Path)
