@@ -2,16 +2,16 @@
 
     verity-vllm serve-openai --model REPO --revision SHA --out DIR [--port 18082] [--precision verity_int8|int8_exact|pin]
         [--protocol vllm|plain] [--no-commit] [--no-gpu-tree] [--window-steps 64] [--force-include-usage | --no-force-include-usage]
-        [--scheme vllm-v1|rows-sha512] [--seal]
+        [--scheme vllm-v1|rows-sha512 --required-manifest ROW/manifest.json --hidden-so SO --norm-tap-so SO] [--seal]
 
 It serves what network-accounting's certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
 ``/tokenize`` and ``/v1/completions``, the prompt as token ids or text, streamed as vLLM's own server streams it (one
 ``data: {...}`` event per engine output, the usage chunk, ``data: [DONE]``), or as one JSON response. vLLM's OpenAI server
 is the reference: under ``--protocol vllm`` (the default) a request is parsed by its ``CompletionRequest`` (defaults,
 validation, ``to_sampling_params``) and every chunk is its ``CompletionStreamResponse``, serialized the way its
-``completion_stream_generator`` does; ``max_tokens`` is bounded by its ``get_max_tokens`` rule. `PlainProtocol`
-(``--protocol plain``) is the same framing without vLLM, for the CPU tests; `framing_agrees` holds the two to each
-other and the server records the result at start.
+``completion_stream_generator`` does; ``max_tokens`` is bounded by its ``get_max_tokens`` rule. `serve_protocol.PlainProtocol`
+(``--protocol plain``) is the same framing without vLLM, for the CPU tests; `serve_protocol.framing_agrees` holds the two to
+each other and the server records the result at start.
 
 Sampling parameters are values the request brings (network-accounting, 24 Oct 07:33Z): the server applies vLLM's neutral
 defaults, never the model's ``generation_config``, and records each request's ingress (the sampling fields it sent, the
@@ -43,7 +43,8 @@ Under ``--out`` the server writes ``serve.json`` (the engine, the protocol in us
 line a Commit: its run root, step roots, the committer's errors and identity check, the requests it holds), ``requests.jsonl``
 (one line a request: the HTTP id, the engine id, the body's ``user``, the runner's ids, the prompt ids, the streamed ids, its
 ingress, its finish, its committed rows and seeds, and its check) and `serve_commit.advice_trace`'s file. ``--scheme rows-sha512``
-commits as a declared Commit does and ``--seal`` seals each closed window as a deferred Commit's row dir (`serve_seal`). SIGTERM or SIGINT
+commits as the bench row's declared Commit does, with its committer parts built from the row's ``--required-manifest`` and taps
+(the acquisition plan under ``acquisition/``), and ``--seal`` seals each closed window as a deferred Commit's row dir (`serve_seal`). SIGTERM or SIGINT
 stops it: the open window is closed and its requests checked, and ``summary.json`` counts the requests and checks.
 """
 from __future__ import annotations
@@ -62,9 +63,11 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import UsageError, option
-from verity_vllm.engine.served_seed import DEFAULT_SEED, seeded
+from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import serve_seal as SS
-from verity_vllm.pipeline.serve_commit import SAMPLING_FIELDS, CommitWindows, advice_trace, ingress_of, param_of, user_of
+from verity_vllm.pipeline.serve_commit import CommitWindows, advice_trace, ingress_of, param_of, user_of
+from verity_vllm.pipeline.serve_protocol import (PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError, VllmProtocol,
+                                                 error_body, framing_agrees, http_chunk, sse, usage_of)
 
 PRECISIONS = ("verity_int8", "int8_exact", "pin")
 #: precision -> (the int8 parts it registers, the int8 scope its layers must then run; None: not checked). Every precision
@@ -112,243 +115,18 @@ class Options:
                          help="the Commit's scheme: vllm-v1 (NativeHostCommitter, 32-byte roots) or rows-sha512 (the declared Commit's)")
     seal: bool = option("--seal", action="boolean_optional", default=False,
                         help="seal each closed window as a deferred Commit's row dir, OUT/windows/w<k>/ (serve_seal.seal_window)")
+    required_manifest: str | None = option("--required-manifest", default=None,
+                                           help="rows-sha512: the bench row's required manifest (its manifest.json), which the Commit of "
+                                                "record's committer parts and the sealed binding map are built from")
+    programs_root: str | None = option("--programs-root", default=None,
+                                       help="the Build's row dir of the manifest's partition and attention record (default: the manifest's dir)")
+    hidden_so: str | None = option("--hidden-so", default=None, help="rows-sha512: the attention hidden tap (as the Commit's --hidden-so)")
+    hidden_ns: str | None = option("--hidden-ns", default=None, help="its op namespace (default: the .so's stem)")
+    tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="the hidden tap's bounded device buffer, MiB (as the Commit's)")
+    norm_tap_so: str | None = option("--norm-tap-so", default=None, help="rows-sha512: the norm-scale tap (as the Commit's --norm-tap-so)")
     force_include_usage: bool = option("--force-include-usage", action="boolean_optional", default=True,
                                        help="vLLM's --enable-force-include-usage: the usage chunk on every stream, and usage on each "
                                             "chunk (default on)")
-
-
-# ---------------------------------------------------------------------------------------------------------------- protocol
-
-class RequestError(Exception):
-    """A request the server refuses: an OpenAI error response with this status."""
-
-    def __init__(self, message: str, status: int = 400, kind: str = "BadRequestError", param: str | None = None) -> None:
-        super().__init__(message)
-        self.status, self.kind, self.param = status, kind, param
-
-
-@dataclass
-class Completion:
-    """One parsed ``/v1/completions`` request: what the engine and the response need of it."""
-
-    model: str | None
-    prompt: list[int] | str
-    stream: bool
-    max_tokens: int | None
-    add_special_tokens: bool = True
-    include_usage: bool = False
-    continuous_usage: bool = False
-    return_token_ids: bool = False
-    raw: Any = None              # vLLM's CompletionRequest, when parsed by it
-
-
-def error_body(message: str, status: int, kind: str, param: str | None = None) -> bytes:
-    """vLLM's ``ErrorResponse``, as its server returns it."""
-    return json.dumps({"error": {"message": message, "type": kind, "param": param, "code": status}}).encode()
-
-
-def _compact(obj: Any) -> str:
-    return json.dumps(obj, separators=(",", ":"), ensure_ascii=False)
-
-
-def _usage(prompt_tokens: int, completion_tokens: int) -> dict[str, int]:
-    return {"prompt_tokens": prompt_tokens, "total_tokens": prompt_tokens + completion_tokens, "completion_tokens": completion_tokens}
-
-
-def should_include_usage(stream_options: Mapping[str, Any] | None, force: bool) -> tuple[bool, bool]:
-    """vLLM's ``should_include_usage``."""
-    if force:
-        return True, True
-    if stream_options:
-        include = bool(stream_options.get("include_usage"))
-        return include, include and bool(stream_options.get("continuous_usage_stats"))
-    return False, False
-
-
-class PlainProtocol:
-    """vLLM's completion protocol for what the certifier sends, without vLLM: request fields and defaults as
-    ``CompletionRequest``'s, chunks serialized as ``completion_stream_generator`` serializes its pydantic models
-    (``exclude_unset=True`` for a choice chunk, ``exclude_none=True`` for the usage chunk)."""
-
-    name = "plain"
-    UNSUPPORTED = {"echo": (None, False), "logprobs": (None,), "n": (None, 1), "best_of": (None, 1), "use_beam_search": (None, False),
-                   "prompt_embeds": (None,), "suffix": (None,)}
-
-    def __init__(self, force_include_usage: bool = False) -> None:
-        self.force_include_usage = force_include_usage
-
-    def parse(self, body: Any) -> Completion:
-        if not isinstance(body, dict):
-            raise RequestError("the request body is a JSON object")
-        for k, ok in self.UNSUPPORTED.items():
-            if body.get(k) not in ok:
-                raise RequestError(f"serve-openai does not serve {k}={body.get(k)!r}", param=k)
-        prompt = body.get("prompt")
-        if isinstance(prompt, list) and len(prompt) == 1 and isinstance(prompt[0], (list, str)):
-            prompt = prompt[0]
-        if isinstance(prompt, list):
-            if not prompt or not all(isinstance(t, int) and not isinstance(t, bool) and t >= 0 for t in prompt):
-                raise RequestError("prompt: a non-empty list of token ids, or a string", param="prompt")
-        elif not isinstance(prompt, str):
-            raise RequestError("prompt: one prompt, as token ids or a string", param="prompt")
-        stream = bool(body.get("stream", False))
-        so = body.get("stream_options")
-        if so is not None and not stream:
-            raise RequestError("Stream options can only be defined when `stream=True`.", param="stream_options")
-        max_tokens = body.get("max_tokens", 16)
-        if max_tokens is not None and (not isinstance(max_tokens, int) or max_tokens < 0):
-            raise RequestError("max_tokens: a non-negative integer", param="max_tokens")
-        include, continuous = should_include_usage(so, self.force_include_usage)
-        return Completion(model=body.get("model"), prompt=prompt, stream=stream, max_tokens=max_tokens,
-                          add_special_tokens=bool(body.get("add_special_tokens", True)), include_usage=include,
-                          continuous_usage=continuous, return_token_ids=bool(body.get("return_token_ids") or False), raw=body)
-
-    def sampling_params(self, req: Completion, max_tokens: int, defaults: Mapping[str, Any]) -> dict[str, Any]:
-        b = req.raw
-        temperature, top_p = b.get("temperature"), b.get("top_p")
-        if top_p is not None and (isinstance(top_p, bool) or not isinstance(top_p, (int, float)) or not 0 < top_p <= 1):
-            raise RequestError(f"top_p must be in (0, 1], got {top_p!r}", param="top_p")
-        return {"max_tokens": max_tokens, "min_tokens": int(b.get("min_tokens") or 0), "ignore_eos": bool(b.get("ignore_eos", False)),
-                "temperature": defaults.get("temperature", 1.0) if temperature is None else temperature,
-                "top_p": defaults.get("top_p", 1.0) if top_p is None else top_p, "top_k": int(b.get("top_k") or 0),
-                "seed": b.get("seed"), "output_kind": "delta" if req.stream else "final_only"}
-
-    def brought(self, req: Completion) -> dict[str, Any]:
-        """The sampling fields the request sent, as it sent them."""
-        return {k: req.raw[k] for k in SAMPLING_FIELDS if k in req.raw}
-
-    def seeded(self, params: dict[str, Any]) -> dict[str, Any]:
-        """``params`` with the served default seed when the request sent none (`engine.served_seed`)."""
-        return {**params, "seed": DEFAULT_SEED} if params.get("seed") is None else params
-
-    def max_tokens(self, req: Completion, max_model_len: int, prompt_len: int, defaults: Mapping[str, Any]) -> int:
-        """vLLM's ``get_max_tokens`` without truncation or an override (and no platform limit, which CUDA hasn't)."""
-        if max_model_len < prompt_len:
-            raise ValueError(f"Input length ({prompt_len}) exceeds model's maximum context length ({max_model_len}).")
-        asked = req.max_tokens if req.max_tokens is not None else defaults.get("max_tokens")
-        return min(v for v in (max_model_len - prompt_len, asked) if v is not None)
-
-    def chunk(self, *, request_id: str, created: int, model: str, text: str, finish_reason: str | None, stop_reason: Any,
-              prompt_token_ids: list[int] | None, token_ids: list[int] | None, usage: dict[str, int] | None) -> str:
-        choice = {"index": 0, "text": text, "logprobs": None, "finish_reason": finish_reason, "stop_reason": stop_reason,
-                  "prompt_token_ids": prompt_token_ids, "token_ids": token_ids}
-        out: dict[str, Any] = {"id": request_id, "object": "text_completion", "created": created, "model": model, "choices": [choice]}
-        if usage is not None:
-            out["usage"] = usage
-        return _compact(out)
-
-    def usage_chunk(self, *, request_id: str, created: int, model: str, usage: dict[str, int]) -> str:
-        return _compact({"id": request_id, "object": "text_completion", "created": created, "model": model, "choices": [], "usage": usage})
-
-    def response(self, *, request_id: str, created: int, model: str, text: str, finish_reason: str | None, stop_reason: Any,
-                 prompt_token_ids: list[int] | None, token_ids: list[int] | None, usage: dict[str, int]) -> str:
-        choice = {"index": 0, "text": text, "logprobs": None, "finish_reason": finish_reason, "stop_reason": stop_reason,
-                  "token_ids": token_ids, "prompt_logprobs": None, "prompt_token_ids": prompt_token_ids, "routed_experts": None}
-        return _compact({"id": request_id, "object": "text_completion", "created": created, "model": model, "choices": [choice],
-                         "service_tier": None, "system_fingerprint": None, "usage": {**usage, "prompt_tokens_details": None,
-                                                                                    "completion_tokens_details": None},
-                         "kv_transfer_params": None, "ec_transfer_params": None, "metrics": None})
-
-
-class VllmProtocol(PlainProtocol):
-    """The reference itself: vLLM's ``CompletionRequest`` parses and makes the ``SamplingParams``
-    (``to_sampling_params``), its ``CompletionStreamResponse`` / ``CompletionResponse`` serialize."""
-
-    name = "vllm"
-
-    def __init__(self, force_include_usage: bool = False) -> None:
-        super().__init__(force_include_usage)
-        from vllm.entrypoints.openai.completion import protocol as P
-
-        self.P = P
-
-    def parse(self, body: Any) -> Completion:
-        if not isinstance(body, dict):
-            raise RequestError("the request body is a JSON object")
-        for k, ok in self.UNSUPPORTED.items():
-            if body.get(k) not in ok:
-                raise RequestError(f"serve-openai does not serve {k}={body.get(k)!r}", param=k)
-        try:
-            r = self.P.CompletionRequest.model_validate(body)
-        except Exception as e:  # noqa: BLE001  (pydantic's ValidationError and vLLM's own)
-            raise RequestError(str(e)) from e
-        prompt = r.prompt
-        if isinstance(prompt, list) and len(prompt) == 1 and isinstance(prompt[0], (list, str)):
-            prompt = prompt[0]
-        if not (isinstance(prompt, str) or (isinstance(prompt, list) and prompt and all(isinstance(t, int) for t in prompt))):
-            raise RequestError("prompt: one prompt, as token ids or a string", param="prompt")
-        include, continuous = should_include_usage(r.stream_options.model_dump() if r.stream_options else None, self.force_include_usage)
-        return Completion(model=r.model, prompt=prompt, stream=bool(r.stream), max_tokens=r.max_tokens,
-                          add_special_tokens=bool(r.add_special_tokens), include_usage=include, continuous_usage=continuous,
-                          return_token_ids=bool(r.return_token_ids), raw=r)
-
-    def sampling_params(self, req: Completion, max_tokens: int, defaults: Mapping[str, Any]) -> Any:
-        return req.raw.to_sampling_params(max_tokens, dict(defaults))
-
-    def brought(self, req: Completion) -> dict[str, Any]:
-        return req.raw.model_dump(include=set(SAMPLING_FIELDS), exclude_unset=True)
-
-    def seeded(self, params: Any) -> Any:
-        return seeded(params)
-
-    def chunk(self, *, request_id: str, created: int, model: str, text: str, finish_reason: str | None, stop_reason: Any,
-              prompt_token_ids: list[int] | None, token_ids: list[int] | None, usage: dict[str, int] | None) -> str:
-        P = self.P
-        c = P.CompletionStreamResponse(id=request_id, object="text_completion", created=created, model=model, choices=[
-            P.CompletionResponseStreamChoice(index=0, text=text, logprobs=None, finish_reason=finish_reason, stop_reason=stop_reason,
-                                             prompt_token_ids=prompt_token_ids, token_ids=token_ids)])
-        if usage is not None:
-            c.usage = P.UsageInfo(**usage)
-        return c.model_dump_json(exclude_unset=True)
-
-    def usage_chunk(self, *, request_id: str, created: int, model: str, usage: dict[str, int]) -> str:
-        P = self.P
-        c = P.CompletionStreamResponse(id=request_id, created=created, model=model, choices=[], usage=P.UsageInfo(**usage),
-                                       system_fingerprint=None, metrics=None)
-        return c.model_dump_json(exclude_unset=False, exclude_none=True)
-
-    def response(self, *, request_id: str, created: int, model: str, text: str, finish_reason: str | None, stop_reason: Any,
-                 prompt_token_ids: list[int] | None, token_ids: list[int] | None, usage: dict[str, int]) -> str:
-        P = self.P
-        return P.CompletionResponse(id=request_id, created=created, model=model, usage=P.UsageInfo(**usage), choices=[
-            P.CompletionResponseChoice(index=0, text=text, logprobs=None, finish_reason=finish_reason, stop_reason=stop_reason,
-                                       token_ids=token_ids, prompt_token_ids=prompt_token_ids)]).model_dump_json()
-
-
-PROTOCOLS = {"vllm": VllmProtocol, "plain": PlainProtocol}
-
-
-FRAMING_BASE = {"request_id": "cmpl-0123-0", "created": 1, "model": "m"}
-_CHOICE = {"text": " a\u00e9", "finish_reason": None, "stop_reason": None, "prompt_token_ids": None, "token_ids": None}
-#: (method, arguments) of the frames `framing_agrees` compares; the streamed ones byte for byte, the response as JSON.
-FRAMING_CASES = (
-    ("chunk", {**FRAMING_BASE, **_CHOICE, "usage": None}),
-    ("chunk", {**FRAMING_BASE, **_CHOICE, "finish_reason": "length", "token_ids": [7], "prompt_token_ids": [1, 2], "usage": _usage(2, 1)}),
-    ("usage_chunk", {**FRAMING_BASE, "usage": _usage(128, 16)}),
-    ("response", {**FRAMING_BASE, **_CHOICE, "finish_reason": "length", "usage": _usage(2, 1)}),
-)
-
-
-def framing_agrees(ref: PlainProtocol) -> dict[str, Any]:
-    """`PlainProtocol`'s frames against ``ref``'s (vLLM's) for `FRAMING_CASES`: {"agrees", "cases", "differences"}."""
-    plain, diffs = PlainProtocol(), []
-    for kind, kw in FRAMING_CASES:
-        a, b = getattr(plain, kind)(**kw), getattr(ref, kind)(**kw)
-        if json.loads(a) != json.loads(b) or (kind != "response" and a != b):
-            diffs.append({"kind": kind, "plain": a, "vllm": b})
-    return {"agrees": not diffs, "cases": len(FRAMING_CASES), "differences": diffs}
-
-
-def sse(data: str) -> bytes:
-    return f"data: {data}\n\n".encode()
-
-
-SSE_DONE = b"data: [DONE]\n\n"
-
-
-def http_chunk(payload: bytes) -> bytes:
-    """One chunk of a ``transfer-encoding: chunked`` body."""
-    return b"%x\r\n" % len(payload) + payload + b"\r\n"
 
 
 # ---------------------------------------------------------------------------------------------------------------- engine loop
@@ -619,7 +397,7 @@ class Server:
                 payload = self.proto.response(request_id=adm.http_id, created=created, model=model, text="".join(text),
                                               finish_reason=last.finish_reason, stop_reason=last.stop_reason,
                                               prompt_token_ids=adm.prompt_ids if req.return_token_ids else None,
-                                              token_ids=ids if req.return_token_ids else None, usage=_usage(n_prompt, len(ids)))
+                                              token_ids=ids if req.return_token_ids else None, usage=usage_of(n_prompt, len(ids)))
                 return await self._json(writer, 200, payload.encode())
             writer.write(self._head(200, "text/event-stream; charset=utf-8", None))
             self.streaming.add(writer)
@@ -633,7 +411,7 @@ class Server:
                 if not d.text and not d.token_ids and not n_out:
                     continue                                     # vLLM: no empty chunk before the first token
                 n_out += len(d.token_ids)
-                usage = _usage(n_prompt, n_out) if req.continuous_usage else None
+                usage = usage_of(n_prompt, n_out) if req.continuous_usage else None
                 data = self.proto.chunk(request_id=adm.http_id, created=created, model=model, text=d.text, finish_reason=d.finish_reason,
                                         stop_reason=d.stop_reason, prompt_token_ids=adm.prompt_ids if (first and req.return_token_ids) else None,
                                         token_ids=d.token_ids if req.return_token_ids else None, usage=usage)
@@ -642,7 +420,7 @@ class Server:
                 await writer.drain()
             if req.include_usage and n_out:
                 writer.write(http_chunk(sse(self.proto.usage_chunk(request_id=adm.http_id, created=created, model=model,
-                                                                   usage=_usage(n_prompt, n_out)))))
+                                                                   usage=usage_of(n_prompt, n_out)))))
             writer.write(http_chunk(SSE_DONE) + b"0\r\n\r\n")
             await writer.drain()
         finally:
@@ -716,6 +494,11 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which) 
         raise UsageError("--seal seals each Commit window: it needs the Commit (drop --no-commit)")
     if opts.scheme == "rows-sha512" and not opts.gpu_tree:
         raise UsageError("--scheme rows-sha512 is the windowed collector's, which hashes its rows on the GPU: drop --no-gpu-tree")
+    if opts.commit and opts.scheme == "rows-sha512" and not opts.required_manifest:
+        raise UsageError("--scheme rows-sha512 commits with the Commit of record's parts, which its bench row's manifest names: pass "
+                         "--required-manifest ROW_DIR/manifest.json (and the row's --hidden-so, --norm-tap-so)")
+    if opts.required_manifest and not Path(opts.required_manifest).is_file():
+        raise UsageError(f"--required-manifest {opts.required_manifest}: no such file")
     if opts.commit and opts.gpu_tree and which("ninja") is None:
         raise UsageError("--gpu-tree JIT-builds its kernel with ninja, which is not on PATH: put the environment's bin (where its "
                          "ninja is) on PATH, or pass --no-gpu-tree")
@@ -779,7 +562,9 @@ def main(opts: Options) -> int:
               "commit": opts.commit, "scheme": getattr(com, "commit_scheme", "vllm-v1") if com is not None else None,
               "sealed": "windows/w<k>/" if windows is not None and windows.seal is not None else None,
               "weights": getattr(com, "weights", None), "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
-              "committer_options": {k: getattr(opts, k) for k in ("chunk", "hash_threads", "gpu_tree", "cudart_copy")},
+              "committer_options": {k: getattr(opts, k) for k in ("chunk", "hash_threads", "gpu_tree", "cudart_copy", "required_manifest",
+                                                                  "hidden_so", "hidden_ns", "tap_cap_mb", "norm_tap_so")},
+              "required_manifest_path": getattr(com, "required_manifest_path", None),
               "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id,
               **SS.target_of()}
     (out / "serve.json").write_text(json.dumps(record, indent=1, default=str))
