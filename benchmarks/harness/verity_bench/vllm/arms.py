@@ -98,6 +98,9 @@ def experimental_arm(spec: str) -> Arm:
     if not callable(get("install")):
         raise ValueError(f"experimental arm {spec!r}: NAME must expose install(target)")
     kernel_digest = get("kernel_digest")
+    execution = get("execution")
+    if execution is not None and execution not in SERVED_EXECUTIONS:
+        raise ValueError(f"experimental arm {spec!r}: execution {execution!r} is none of {list(SERVED_EXECUTIONS)}")
     return Arm(
         id=str(name),
         protocols=_protocols(get("protocols")),
@@ -107,6 +110,7 @@ def experimental_arm(spec: str) -> Arm:
         kernel_digest=kernel_digest if isinstance(kernel_digest, str) else None,
         experimental=True,
         resident=bool(get("resident", True)),
+        execution=execution,
     )
 
 

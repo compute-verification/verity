@@ -388,6 +388,24 @@ def test_experimental_arm_can_require_an_isolated_engine(monkeypatch):
     assert arm.experimental and not arm.resident
 
 
+def test_an_experimental_arms_execution_builds_its_engine_at_the_serving_defaults(monkeypatch):
+    """A compiled Commit arm runs beside an eager spec's batch-invariant arms (`served_commit.served_arm`): its object's
+    `execution` reaches its arm as a served variant's does, and an execution that isn't one is refused."""
+
+    from verity_bench.vllm.runner import arm_execution
+
+    module = ModuleType("bench_execution_arm")
+    module.ARM = SimpleNamespace(id="commit-compiled", install=lambda target: None, control="stock@compiled", execution="compiled")
+    module.BAD = SimpleNamespace(id="commit-bad", install=lambda target: None, execution="bi-eager")
+    monkeypatch.setitem(sys.modules, module.__name__, module)
+    _stock, _compiled, arm = resolve_arms("stock,stock@compiled,commit-compiled", (f"{module.__name__}:ARM",))
+    assert (arm.execution, arm.control, arm.to_json()["execution"]) == ("compiled", "stock@compiled", "compiled")
+    preset, eager = arm_execution(arm, load_spec("llama31-8b-fp8-1gpu").preset, True)
+    assert not eager and preset.engine_settings["serving_defaults"] and not preset.engine_settings["enforce_eager"]
+    with pytest.raises(ValueError, match="execution 'bi-eager'"):
+        resolve_arms("commit-bad", (f"{module.__name__}:BAD",))
+
+
 def test_graphs_are_refused_for_arms_bound_to_the_build():
     from verity_bench.vllm.arms import build_bound
     from verity_bench.vllm.runner import ProcessEngineFactory
