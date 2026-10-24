@@ -62,16 +62,27 @@ verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic 
   served profiles and by the rehearsal's own check on the advice profile. There the certified I/O's finish rule refuses
   it when the response it cuts ran to its max_tokens (short of it without EOS); one that ended at EOS stays well formed
   one token shorter, which only N2-ADVICE's counts will refuse. Token is a row pending the check that alone refuses it
-  (IO-TIE), with the verdicts it got. A tamper whose shim received no request is reported as not run, never as refused.
+  (IO-TIE), with the verdicts it got. A tamper whose shim received no request, or with no `server.json` to say it did,
+  is reported as not run, never as refused.
+- On the advice profile a negative is refused only when the rehearsal's own check names its own violation
+  (`e2e.OWN_CODE`, as NEG's `judge` requires its code): late's window's coverage fault
+  (`audit.status:coverage-never-established`), extra's response longer than its max_tokens, drop's short of it without
+  EOS. A refusal for any other reason (a stalled forward's coverage fault on a drop run, say) is reported with the codes
+  it did name, and isn't the negative's.
 - `--advice FILE`: the advice, as I1 v0's JSON or `encode` bytes, or a prove-path stand-in's from before v0 (its first
   runs'), which is upgraded with each kept output released in its step's bucket. The report gives v0's bits per
   link-window (`advice.bits_by_window`, T the run's egress window). With `--serving-config` (`derived.Config`'s fields, or
   a step trace's `config`) it also gives ENC-DERIVED's derived bits, unshaped and shaped. On a varied run the honest run's
-  certified I/O (`io.json`) binds the advice to the run, and the residual must rebuild the whole advice from it.
+  certified I/O (`io.json`) binds the advice to the run (`bits.bound`), and the residual must rebuild the whole advice
+  from it (`bits.rebuilt`). Where an advice is given, the OK needs both to be true. The serving config is the one the job
+  was given, not one the endpoint registered, so the derived bits and the residual's own check under it
+  (`public_fields`) stay out of the OK.
 - `--prove-path DIR`: a `prove_path.py` run's output (PROVE-PATH's `run.sh` `$OUT`, or a tarball of it), adopted. The
-  honest arm must pass every rank, and the forged arm must have Lean refuse its unit. The advice it committed is held to
-  `--advice`'s: by the file's SHA-512 where it committed that, and by its bits only where it committed a hiding root
-  (from 01ea29e10f on, whose opening is the prover's).
+  honest arm must pass every rank, and the forged arm must have Lean refuse its unit. The advice each arm committed is
+  held to the `--advice` file (`committed_is_the_advice_file`): by the file's SHA-512 where it committed that, and by its
+  bits only where it committed a hiding root (from 01ea29e10f on, whose opening is the prover's). That isn't these runs':
+  the prove path is `bound` to them only once the file is their advice and the Commit it proves is held to theirs, which
+  no input carries yet (`bound_why`), and only a bound prove path's verdict counts in the OK.
 - NEG's registry (`benchmarks/network_traces/negatives.py`'s `suite`) runs on the runs unless `--no-negatives`. Each row
   that ran must be refused by the code it names; the rest say what they wait on. It doesn't run on the advice profile.
 
@@ -126,9 +137,12 @@ An honest run is required, because the tampered head is made from it. Two runs o
 - the chain's stages that ran (`chain`: the advice, its bits per link-window, the prove path, NEG's rows), and `stubbed`.
 
 `report.md` renders the same thing as tables. OK means: the honest run was accepted on every link-window by N2 and, where
-proofs ran, by every proved head check held by Lean; each negative was refused by everything that checked it; and every
-chain stage that ran passed. On the advice profile the rehearsal's own check stands in for N2. When it isn't OK,
-`why_not` (and the line under `report.md`'s title) says which of these failed, a missing negative's run among them.
+proofs ran, by every proved head check held by Lean; each negative was refused by everything that checked it; a given
+advice is these runs' and rebuilt from their certified I/O; a bound prove path and NEG's registry, where they ran,
+passed. On the advice profile the rehearsal's own check stands in for N2, and a negative counts only for its own
+violation. `report.md`'s title says what the OK rests on (`ran`) and what didn't run (`not_run`), so an OK on the
+self-check alone reads as that. When it isn't OK, `why_not` (and the line under the title) says which of these failed, a
+missing negative's run among them.
 
 ## What it proves, and what it doesn't
 

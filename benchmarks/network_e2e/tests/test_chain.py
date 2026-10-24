@@ -121,7 +121,9 @@ def test_a_prove_paths_output_is_adopted_and_held_to_the_given_advice(tmp_path):
     _arm(d, "glm-forged", {"digest": info["file_sha512"]}, forged=True)
     (d / "advice").mkdir()
     got = chain.prove_path(d, info)
-    assert got["ok"] is True and got["advice_is_given"] is True and sorted(got["arms"]) == ["glm", "glm-forged"]
+    assert got["ok"] is True and got["committed_is_the_advice_file"] is True and sorted(got["arms"]) == ["glm", "glm-forged"]
+    assert got["bound"] is False and got["bound_why"] == "the --advice file isn't these runs' advice"
+    assert chain.prove_path(d, info, True)["bound_why"].startswith("the Commit it proves isn't held to these runs'")
     assert got["arms"]["glm"]["ranks"]["0"] == {"ok": True, "accepted": True, "population": 10, "drawn": 2,
                                                 "wrong_units_bound": 3, "negatives_refused": True,
                                                 "forged_refused": None, "seconds": 1.5, "source": "stand-in"}
@@ -130,7 +132,7 @@ def test_a_prove_paths_output_is_adopted_and_held_to_the_given_advice(tmp_path):
     assert chain.prove_path(d, other | {"file_sha512": "0"})["ok"] is False
     v0 = tmp_path / "v0"
     _arm(v0, "honest", {"root": "r", "bits": info["bits"]}, negatives={"a": {"refused": False}})
-    assert chain.prove_path(v0, info)["advice_is_given"] is True and chain.prove_path(v0, info)["ok"] is True
+    assert chain.prove_path(v0, info)["committed_is_the_advice_file"] is True and chain.prove_path(v0, info)["ok"] is True
     assert chain.prove_path(v0, info)["arms"]["honest"]["ranks"]["0"]["negatives_refused"] is False
     assert chain.prove_path(v0, info)["arms"]["honest"]["advice_held_by"].startswith("its bits only")
     assert got["arms"]["glm"]["advice_held_by"] == "the file's SHA-512"
@@ -165,7 +167,9 @@ def test_the_report_carries_every_stage_on_the_planned_profile(virtual, tmp_path
     out = tmp_path / "out"
     r = e2e.run(_args(virtual, out, advice=str(tmp_path / "s.json"), serving_config=str(tmp_path / "config.json"),
                       prove_path=str(tmp_path / "pp.tgz")), [], clock=lambda: 0.0)
-    assert r["ok"] is True and r["format"] == e2e.FORMAT and r["claim"] == e2e.CLAIM
+    assert r["format"] == e2e.FORMAT and r["claim"] == e2e.CLAIM
+    assert r["ok"] is False and r["why_not"] == ["the advice isn't these runs'",
+                                                 "the advice wasn't rebuilt from the certified I/O"]
     c = r["chain"]
     assert c["advice"]["form"].startswith("a prove-path stand-in's") and c["bits"]["public_fields"] is True
     assert c["bits"]["bound"] is None and c["prove_path"]["dir"] == str(tmp_path / "pp.tgz") and c["prove_path"]["ok"]
@@ -183,22 +187,35 @@ def test_the_report_carries_every_stage_on_the_planned_profile(virtual, tmp_path
     summary.write_text(json.dumps(json.loads(summary.read_text()) | {"ok": False}))
     r = e2e.run(_args(virtual, tmp_path / "out2", advice=str(tmp_path / "s.json"), prove_path=str(pp)), [],
                 clock=lambda: 0.0)
-    assert r["ok"] is False and r["chain"]["prove_path"]["ok"] is False and r["chain"]["bits"]["config"] is None
+    assert r["chain"]["prove_path"]["ok"] is False and r["chain"]["bits"]["config"] is None
+    assert "the prove path failed" not in r["why_not"]
 
 
-def _varied(d: Path, virtual: Path, verdicts: dict) -> Path:
+#: what the check finds of each negative on the advice profile: late's window faulted (the audit's status), extra's and
+#: drop's response breaking the certified I/O's finish rule
+OWN = {"late": {"audit": "status:coverage-never-established"}, "extra": {"io": "longer than max_tokens"},
+       "drop": {"io": "short of max_tokens without EOS"}}
+
+
+def _varied(d: Path, virtual: Path, verdicts: dict, found: dict | None = None) -> Path:
     """A varied rehearsal's runs as certifier-serve's check leaves them on the advice profile: its plan, the
-    calibration (the virtual run's), the check's verdict with its certified I/O, and honest's ``io.json``."""
+    calibration (the virtual run's), the check's verdict with its certified I/O and what it found of a refused run
+    (``found``, by default `OWN`'s), the shim's request count, and honest's ``io.json``."""
+    found = OWN | (found or {})
     for s, v in verdicts.items():
         (d / s).mkdir(parents=True)
         (d / s / "certified.jsonl").write_text("")
+        (d / s / "server.json").write_text(json.dumps({"requests": 2}))
         shutil.copy(virtual / "honest" / "calibration.json", d / s / "calibration.json")
         (d / s / "plan.json").write_text(json.dumps({"windows": 3, "occupancy": {"kind": "advice"}, "live_model": "m",
                                                      "varied": {"requests": 2, "max_tokens": 4}}))
+        f = found.get(s, {}) if v == "refused" else {}
         (d / s / "check.json").write_text(json.dumps({
-            "verdict": v, "network_verdict": {"accepted": None}, "audit_accepted": v == "accepted",
+            "verdict": v, "network_verdict": {"accepted": None}, "audit_accepted": "audit" not in f,
             "salt_accepted": True, "certified_accepted": True,
-            "io": {"accepted": True, "requests": 2, "tokens": 3, "finish": {"eos": 1, "length": 1}, "violations": []}}))
+            "rows": [{"window": 0, "audit": {"egress": {"raw": f.get("audit"), "committed": f.get("audit")}}}],
+            "io": {"accepted": "io" not in f, "requests": 2, "tokens": 3, "finish": {"eos": 1, "length": 1},
+                   "violations": [[1, f["io"]]] if "io" in f else []}}))
     (d / "honest" / "io.json").write_text(json.dumps({"windows": 3, "requests": _io()}))
     return d
 
@@ -218,7 +235,9 @@ def test_on_the_advice_profile_the_rehearsals_check_is_the_verdict_and_the_advic
     assert r["runs"]["honest"]["network"]["accepted"] is None and r["proofs"]["ran"] is False
     assert "N2-ADVICE" in r["proofs"]["why"] and r["chain"]["negatives"]["ran"] is False
     assert sorted(r["negatives"]) == ["drop", "extra", "late"]
-    assert all(r["negatives"][s]["by"] == ["the rehearsal's own check"] for s in ("late", "drop"))
+    assert r["negatives"]["late"]["by"] == ["the rehearsal's own check (audit.status:coverage-never-established)"]
+    assert r["negatives"]["drop"]["by"] == ["the rehearsal's own check (io:short of max_tokens without EOS)"]
+    assert r["ran"] == ["the rehearsal's own check", "the advice, these runs' and rebuilt from their certified I/O"]
     b = r["chain"]["bits"]
     assert b["bound"] is True and b["rebuilt"] is True and [x["window"] for x in b["windows"]] == [0, 1, 2]
     md = (tmp_path / "out" / "report.md").read_text()

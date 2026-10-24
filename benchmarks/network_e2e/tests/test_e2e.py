@@ -122,7 +122,7 @@ def _cost(windows: int) -> dict:
 
 
 def test_the_proofs_columns_and_cost_are_read_from_n2_zk_and_an_unheld_proof_refuses_nothing(tmp_path):
-    runs = {s: {"dir": tmp_path / s, "check": None, "gate": None} for s in ("honest", "late", "extra")}
+    runs = {s: {"dir": tmp_path / s, "check": None, "gate": None, "shim_requests": 8} for s in ("honest", "late", "extra")}
     members = {"honest-egress": _member("honest-egress", 2, None), "honest-ingress": _member("honest-ingress", 2, None),
                "tampered-egress": _member("tampered-egress", 2, 0), "extra-egress": _member("extra-egress", 2, 0)}
     proofs = {"ran": True, "rc": 0, "why": None, "extra_proved": True,

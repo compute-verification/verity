@@ -83,6 +83,11 @@ HONEST, TAMPERED = "honest", "tampered"
 NEGATIVES = ("late", "extra", TAMPERED)
 # NEG's live tampers that only a check that hasn't landed refuses
 PENDING = {"token": "IO-TIE"}
+#: each negative's own violation in the rehearsal's own check (`_check`'s codes), the verdict on the advice profile,
+#: where N2 gives none: late's held session faults its window (the audit's status, as NEG names it), extra's response
+#: runs past its max_tokens, and drop's cut response stops short of it without EOS (the certified I/O's finish rule)
+OWN_CODE = {"late": "audit.status:coverage-never-established", "extra": "io:longer than max_tokens",
+            "drop": "io:short of max_tokens without EOS"}
 README = "verity/core/protocols/certifier/README.md"
 PEERS = Path("/etc/vy/peers")
 GATE_HOST = "vy-challenger-1"
@@ -138,7 +143,10 @@ CLAIM_ADVICE = {
         "session; the certified I/O well formed (every request an id request, every egress frame an id event of a "
         "request released by its bucket, every response ending at its first EOS or at its max_tokens); the certifier's "
         "audit of both records and the salt audit accepted (the rehearsal's own check); and late and extra, and drop "
-        "where it ran, each refused by that check. The advice's sections say what was checked of the advice, and the prove path's what it proved."),
+        "where it ran, each refused by that check for its own violation (late: its window's coverage fault; extra: a "
+        "response longer than its max_tokens; drop: one short of it without EOS). Where an advice was given, it is these "
+        "runs' (every advice request a certified one) and rebuilt from their certified I/O. The advice's sections say "
+        "what was checked of the advice, and the prove path's what it proved."),
     "not_covered": [
         "N2's counts: no link-window's head is held to a profile or to the advice (N2-ADVICE), and nothing is proved by "
         "n2_zk, whose head check is the planned profile's; a tampered head is not refused.",
@@ -177,11 +185,15 @@ def _unpack(src: Path, work: Path) -> Path:
 
 
 def _check(doc: dict | None) -> dict | None:
-    """A run's own check (`certifier_serve.check`'s, at the rehearsal): its verdict and parts."""
+    """A run's own check (`certifier_serve.check`'s, at the rehearsal): its verdict and parts, and the codes of what it
+    found: each window's audit status (``audit.status:…``) and each certified I/O violation (``io:…``)."""
     if not doc:
         return None
     io = doc.get("io")
-    return {"verdict": doc.get("verdict"), "network": (doc.get("network_verdict") or {}).get("accepted"),
+    codes = {f"audit.{v}" for w in doc.get("rows") or doc.get("windows") or () for x in (w.get("audit") or {}).values()
+             for v in x.values() if v} | {f"io:{v[1]}" for v in (io or {}).get("violations") or ()}
+    return {"verdict": doc.get("verdict"), "codes": sorted(codes),
+            "network": (doc.get("network_verdict") or {}).get("accepted"),
             "audit": doc.get("audit_accepted"), "salt": doc.get("salt_accepted"), "salt_again": doc.get("salt_again"),
             "certified": doc.get("certified_accepted"),
             "io": None if io is None else {k: io.get(k) for k in ("accepted", "requests", "tokens", "finish",
@@ -438,7 +450,8 @@ def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict,
         ends = {e: _member(members[f"{name}-{e}"]) | {"units": members[f"{name}-{e}"]["units"]}
                 for e in n2_zk.ENDS if (members.get(f"{name}-{e}") or {}).get("units")}
         out_runs[name] = {"dir": str(given.get("dir", runs[HONEST]["dir"])), "check": given.get("check"),
-                          "gate": given.get("gate"), "shim_requests": given.get("shim_requests"),
+                          "gate": given.get("gate"),
+                          "shim_requests": (given if name in runs else runs[HONEST]).get("shim_requests"),
                           "network": {k: (h["network"] or {}).get(k) for k in ("accepted", "windows", "refused", "digest")},
                           "issuer_refused": h.get("issuer_refused"),
                           "proofs": {e: {k: v for k, v in m.items() if k != "units"} for e, m in ends.items()} or None}
@@ -449,7 +462,7 @@ def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict,
                 "run": name, "window": w, "n2": _n2_row(x), "failed_parts": x.get("parts"), "proof": proved or None,
                 "head_checks": None if not proved else "pass" if all(v == "accept" for v in proved.values())
                 else "malformed" if None in proved.values() or "malformed" in proved.values() else "refuse"})
-    negatives = {name: negative(out_runs[name], [r for r in rows if r["run"] == name])
+    negatives = {name: negative(out_runs[name], [r for r in rows if r["run"] == name], name)
                  for name in expected if name in out_runs}
     honest, honest_rows = out_runs[HONEST], [r for r in rows if r["run"] == HONEST]
     proved_ok = not proofs.get("ran") or (
@@ -459,20 +472,33 @@ def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict,
                         and all(r["n2"] == "accept" for r in honest_rows))
     check_ok = (honest["check"] or {}).get("verdict") == "accepted" if advised or honest["check"] is not None else True
     s = stages or {}
-    b, p, ng = s.get("bits") or {}, s.get("prove_path"), s.get("negatives")
-    stages_ok = (b.get("public_fields") is not False and b.get("rebuilt") is not False and (p is None or p["ok"])
-                 and (ng is None or not ng.get("ran") or ng["ok"]))
+    b, p, ng = s.get("bits"), s.get("prove_path"), s.get("negatives")
+    # the derived bits and the residual's own check (`public_fields`) are under the serving config the job was given,
+    # not one the endpoint registered, so they stay out of the OK; the advice's binding and its rebuild from the
+    # certified I/O don't rest on that config's being the endpoint's
+    advice_ok = b is None or (b.get("bound") is True and b.get("rebuilt") is True)
     why_not = ([] if n2_ok else ["N2 didn't accept the honest run on every link-window"]) \
         + ([] if check_ok else ["the rehearsal's own check didn't accept the honest run"]) \
         + ([] if proved_ok else ["the honest run's proofs didn't all run and hold"]) \
-        + ([] if stages_ok else ["a chain stage failed"]) \
+        + ([] if b is None or b.get("bound") is True else ["the advice isn't these runs'"]) \
+        + ([] if b is None or b.get("rebuilt") is True else ["the advice wasn't rebuilt from the certified I/O"]) \
+        + ([] if p is None or not p.get("bound") or p["ok"] else ["the prove path failed"]) \
+        + ([] if ng is None or not ng.get("ran") or ng["ok"] else ["NEG's registry failed"]) \
         + [f"no {s} run" for s in expected if s not in negatives] \
         + [f"{s} not refused" for s, n in negatives.items() if not n["refused"]]
     ok = not why_not
+    ran = {"N2's verdicts of record": any(r["n2"] in ("accept", "refuse") for r in honest_rows),
+           "the proofs (n2_zk, held by Lean)": bool(proofs.get("ran")),
+           "the rehearsal's own check": honest["check"] is not None,
+           "the advice, these runs' and rebuilt from their certified I/O": b is not None and advice_ok,
+           "the prove path, of these runs": bool(p and p.get("bound")),
+           "NEG's registry": bool(ng and ng.get("ran"))}
     waiting = {name: {"waits": w, "check": (out_runs[name]["check"] or {}).get("verdict"),
-                      "n2": out_runs[name]["network"]["accepted"], "ran": out_runs[name]["shim_requests"] != 0}
+                      "n2": out_runs[name]["network"]["accepted"],
+                      "ran": isinstance(out_runs[name]["shim_requests"], int) and out_runs[name]["shim_requests"] != 0}
                for name, w in pending.items()}
     return {"format": FORMAT, **meta, "claim": CLAIM_ADVICE if advised else CLAIM, "ok": ok, "why_not": why_not,
+            "ran": [k for k, v in ran.items() if v], "not_run": [k for k, v in ran.items() if not v],
             "runs": out_runs,
             "link_windows": rows, "negatives": negatives, "pending": waiting, "chain": stages,
             "proofs": {"ran": bool(proofs.get("ran")), "adopted": proofs.get("adopted"), "why": proofs.get("why"),
@@ -499,26 +525,31 @@ def alone(summary: dict, d: Path | None) -> dict | None:
     return out or None
 
 
-def negative(run: dict, rows: list[dict]) -> dict:
-    """Whether the negative was refused, and by what: N2's network verdict and its link-windows' verdicts of record,
-    the rehearsal's own check, and where proved, its head checks' proved verdicts (each proof held by Lean). Refused
-    only when every one of them that ran refuses it."""
+def negative(run: dict, rows: list[dict], name: str | None = None) -> dict:
+    """Whether negative ``name`` was refused, and by what: N2's network verdict and its link-windows' verdicts of
+    record, the rehearsal's own check, and where proved, its head checks' proved verdicts (each proof held by Lean).
+    Refused only when every one of them that ran refuses it. Where N2 gives no verdict (the advice profile), the check
+    refuses it only by its own violation (`OWN_CODE`): a refusal for another reason is not this negative's. A run whose
+    shim received no request, or that has no ``server.json`` to say, didn't run."""
     by, check = [], run.get("check")
     n2 = [r["window"] for r in rows if r["n2"] == "refuse"]
     decided = run["network"]["accepted"] is not None
+    own = None if decided else OWN_CODE.get(name)
+    check_refused = check is not None and check["verdict"] == "refused"
+    by_own = check_refused and own is not None and own in (check.get("codes") or ())
     if run["network"]["accepted"] is False and n2:
         by.append(f"N2 (network verdict; link-windows {n2})")
-    if check is not None and check["verdict"] == "refused":
-        by.append("the rehearsal's own check")
+    if check_refused and (decided or by_own):
+        by.append("the rehearsal's own check" + (f" ({own})" if own else ""))
     proved = [r["window"] for r in rows if r["head_checks"] == "refuse"]
     held = all(p["held"] for p in (run["proofs"] or {}).values())
     if proved and held:
         by.append(f"the proved head checks (link-windows {proved})")
-    ran = run.get("shim_requests") != 0
-    refused = ((run["network"]["accepted"] is False and bool(n2) if decided else check is not None)
-               and (check is None or check["verdict"] == "refused") and (not run["proofs"] or (held and bool(proved)))
-               and ran)
-    return {"refused": refused, "ran": ran, "by": by if ran else [], "n2_refused_windows": n2,
+    ran = isinstance(run.get("shim_requests"), int) and run["shim_requests"] != 0
+    refused = ((run["network"]["accepted"] is False and bool(n2) if decided else by_own)
+               and (check is None or check_refused) and (not run["proofs"] or (held and bool(proved))) and ran)
+    return {"refused": refused, "ran": ran, "by": by if ran else [], "own_code": own,
+            "check_codes": None if check is None else check.get("codes"), "n2_refused_windows": n2,
             "proved_refused_windows": proved,
             "failed_parts": {r["window"]: r["failed_parts"] for r in rows if r["n2"] == "refuse"},
             "proved": bool(run["proofs"]), "proofs_held": held if run["proofs"] else None}
@@ -535,7 +566,10 @@ def markdown(r: dict) -> str:
                f"{_cell(v.get('max_tokens'))}, prompts of {'–'.join(map(str, v.get('prompt_tokens') or ())) or '—'} "
                f"tokens, EOS {_cell(v.get('eos_token_ids'))}" if v else
                f"{_cell(r.get('tokens'))} tokens a response, {_cell(r.get('requests'))} requests")
-    lines = [f"# Network accounting end to end: {'OK' if r['ok'] else 'NOT OK'}", "",
+    on = r.get("ran") or []
+    lines = [f"# Network accounting end to end: {'OK' if r['ok'] else 'NOT OK'} on "
+             f"{', '.join(on[:-1]) + ' and ' + on[-1] if len(on) > 1 else on[0] if on else 'nothing that ran'}"
+             + (f" (not run: {', '.join(r['not_run'])})" if r.get("not_run") else ""), "",
              *([f"Not OK: {'; '.join(r['why_not'])}.", ""] if r.get("why_not") else []),
              f"Source {', '.join(r['from'])}; model {_cell(r.get('model'))} (as the plan names it), {traffic}; endpoint "
              f"{_cell(r.get('upstream'))}, {_cell(r.get('where'))}; N2's profile {_cell(r.get('profile'))}; "
@@ -572,10 +606,14 @@ def markdown(r: dict) -> str:
                      f"{_cell(pr.get('ingress'))} | {_cell(x['head_checks'])} | {_cell(failed)} |")
     lines += ["", "## Negatives", ""]
     for name, n in r["negatives"].items():
+        other = (f"; the rehearsal's own check refused it for {', '.join(n['check_codes'] or ()) or 'no code'}, not "
+                 f"its own violation {n['own_code']}" if not n["refused"] and n.get("own_code") and n.get("check_codes")
+                 is not None and r["runs"][name]["check"]["verdict"] == "refused" else "")
         lines.append(f"- **{name}**: " + (
             f"{'refused' if n['refused'] else 'NOT refused'} by {'; '.join(n['by']) or 'nothing'}"
-            f"{'' if n['proved'] else ' (not proved)'}" if n.get("ran", True)
-            else "NOT refused: not run, its shim received no request, so its tamper never ran"))
+            f"{'' if n['proved'] else ' (not proved)'}{other}" if n.get("ran", True)
+            else "NOT refused: not run, its shim received no request (or no server.json says it did), so its tamper "
+                 "never ran"))
     for name, n in (r.get("pending") or {}).items():
         n2 = n["n2"]
         lines.append(f"- **{name}** (NEG's, pending {n['waits']}, which alone refuses it here): " + (
@@ -639,8 +677,8 @@ def stages_of(runs: dict[str, dict], plan: dict, args, work: Path, clock) -> dic
                                  config and config.get("config", config), (_read(honest / "io.json") or {}).get("requests"))
     if args.prove_path:
         src = Path(args.prove_path)
-        out["prove_path"] = chain.prove_path(_unpack(src, work) if src.is_file() else src, out.get("advice")) | {
-            "dir": str(src)}
+        out["prove_path"] = chain.prove_path(_unpack(src, work) if src.is_file() else src, out.get("advice"),
+                                             (out.get("bits") or {}).get("bound")) | {"dir": str(src)}
         log(f"prove path: adopted from {src}, ok {out['prove_path']['ok']}")
     if (plan.get("occupancy") or {}).get("kind") == chain.ADVICE:
         out["negatives"] = {"ran": False, "why": "its rows take N2's verdict, which the advice profile has none of "

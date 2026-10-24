@@ -19,7 +19,8 @@ stood on; `stubs` lists what is still a stand-in.
   each arm a directory with its ``summary.json``): an honest arm passes when every rank's audit accepted on the verifier's
   coins and every negative was refused; a forged arm when Lean refused the forged unit it drew. The advice the arm
   committed is held to ``--advice``'s: the stand-in's codec committed the file's bytes (its SHA-512), v0's commitment is
-  hiding, so there only its ``total_bits``.
+  hiding, so there only its ``total_bits``. That holds it to the file, not to these runs: the prove path is bound to them
+  only when the file is their advice and the Commit it proves is theirs, and only a bound prove path counts in the OK.
 * **The negatives** (`negatives`): NEG's `suite` on the runs, handed the advice's v0 bytes for its advice negatives.
 """
 from __future__ import annotations
@@ -153,8 +154,12 @@ def _same(committed: dict | None, info: dict | None) -> bool | None:
     return committed.get("bits") == info["bits"] if "bits" in committed else None
 
 
-def prove_path(src: Path, info: dict | None) -> dict:
-    """`prove_path.py audit`'s output at ``src``, one row per arm and rank (the module's docstring)."""
+def prove_path(src: Path, info: dict | None, advice_bound: bool | None = None) -> dict:
+    """`prove_path.py audit`'s output at ``src``, one row per arm and rank (the module's docstring). Each arm's
+    committed advice is held to the ``--advice`` file (``info``), which says nothing of these runs: the prove path is
+    ``bound`` to them only when that file is these runs' advice (``advice_bound``, `bits`' ``bound``) and the Commit it
+    proves is theirs, which nothing here checks yet (no Commit record of these runs is an input), so it is never bound
+    and its ``ok`` stays out of the report's."""
     arms = {}
     for p in sorted(x for x in src.iterdir() if x.is_dir()):
         try:
@@ -175,15 +180,19 @@ def prove_path(src: Path, info: dict | None) -> dict:
         arms[p.name] = {"ok": s.get("ok") is True and bool(ranks), "forged": bool(s.get("forged")),
                         "world": s.get("world"), "rule": s.get("rule"), "delta": s.get("delta"),
                         "compiler": (s.get("compiler") or {}).get("name"), "tp_run_root": s.get("tp_run_root"),
-                        "advice": s.get("advice"), "advice_is_given": _same(committed, info),
+                        "advice": s.get("advice"), "committed_is_the_advice_file": _same(committed, info),
                         "advice_held_by": "the file's SHA-512" if "digest" in committed else
                         "its bits only: the committed root hides it, and its opening is the prover's" if "root" in committed
                         else None, "gap": s.get("gap"), "ranks": ranks}
     if not arms:
         raise SystemExit(f"{src}: no prove-path arm (a directory with prove_path.py audit's summary.json)")
-    given = [a["advice_is_given"] for a in arms.values()]
-    return {"dir": str(src), "arms": arms, "advice_is_given": None if None in given else all(given),
-            "ok": all(a["ok"] for a in arms.values()) and any(not a["forged"] for a in arms.values())
+    given = [a["committed_is_the_advice_file"] for a in arms.values()]
+    committed = None if None in given else all(given)
+    why = ("its arms' committed advice isn't the --advice file" if committed is not True else
+           "the --advice file isn't these runs' advice" if advice_bound is not True else
+           "the Commit it proves isn't held to these runs' (no Commit record of these runs is an input)")
+    return {"dir": str(src), "arms": arms, "committed_is_the_advice_file": committed, "bound": False,
+            "bound_why": why, "ok": all(a["ok"] for a in arms.values()) and any(not a["forged"] for a in arms.values())
             and False not in given}
 
 
@@ -275,7 +284,9 @@ def markdown(c: dict) -> list[str]:
                   f"T = {b['T']} buckets a window. v0: I1's `bits_by_window` ({b['v0_total']} bits in all). Derived: "
                   "ENC-DERIVED's residual at its least widths, charged by I1's rule, with the release sent (unshaped) "
                   "and derived (shaped); forced: the residual's fields only witness fixes. Serving config: "
-                  + (f"{json.dumps(cfg, sort_keys=True)}" if cfg else "none") + f". Every step and output length given "
+                  + (f"{json.dumps(cfg, sort_keys=True)}, the one the job was given (--serving-config), not one the "
+                     "endpoint registered, so these bits and the residual's own check under it are outside the OK"
+                     if cfg else "none") + f". Every step and output length given "
                   f"back by the residual and the config alone: {_cell(b['public_fields'])}; the whole advice rebuilt "
                   f"from the residual and the certified I/O: {_cell(b['rebuilt'])}."
                   + (f" {b['why']}." if b["why"] else ""),
@@ -287,8 +298,9 @@ def markdown(c: dict) -> list[str]:
         lines += ["", "## Prove path", "",
                   f"`prove_path.py audit`'s output adopted from {p['dir']}: each rank's step units compiled from the "
                   "advice by the registered compiler, drawn on the verifier's own coins, proved --zk behind the Lean "
-                  "firewall and verified by Lean. The advice each arm committed is the given one: "
-                  f"{_cell(p['advice_is_given'])}"
+                  "firewall and verified by Lean. The advice each arm committed is the --advice file: "
+                  f"{_cell(p['committed_is_the_advice_file'])}. Bound to these runs: {_cell(p['bound'])}"
+                  + ("" if p["bound"] else f" ({p['bound_why']}), so its ok is not the report's")
                   + "".join(f"; {n} held by {a['advice_held_by']}" for n, a in p["arms"].items() if a.get("advice_held_by"))
                   + "." + "".join(f" {n}'s gap: {a['gap']}." for n, a in p["arms"].items() if a.get("gap")), "",
                   "| arm | ok | rank | audit accepted | units | drawn | wrong units at most | negatives refused | "
