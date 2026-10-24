@@ -29,8 +29,10 @@ STOP=$DIR/stopped
 TICK=/root/drive-tick.lock
 # TMPDIR is on the volume: a train's check.py --record holds ~8 GiB in check-lean-deps-* at its peak, which took the pod's 20 GiB
 # root overlay to 95% (21 Oct). post_train.py's lock is under it too (tempfile.gettempdir()), so change it only between ticks.
+# The trains' checkouts (train.sh's TRAIN_TREES, ~180 MB each while its check runs, and removed by the next launch once it ends)
+# are on the root overlay: on the volume each took 80-100 s of a launch (24 Oct).
 export PATH=$DIR/bin:/root/.local/bin:$PATH GH_CONFIG_DIR=$DIR/gh-config GIT_TERMINAL_PROMPT=0 LC_ALL=C.UTF-8 \
-  RESEARCH_LANE=ci RESEARCH_NOTES=/data/steward/research-notes RESEARCH_STORE=/root/drive-store TMPDIR=$DIR/tmp
+  RESEARCH_LANE=ci RESEARCH_NOTES=/data/steward/research-notes RESEARCH_STORE=/root/drive-store TMPDIR=$DIR/tmp TRAIN_TREES=/tmp
 mkdir -p "$TMPDIR"
 locked() {
   exec 8> "$TICK"; flock 8

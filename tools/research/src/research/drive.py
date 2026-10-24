@@ -237,10 +237,21 @@ def touched_launch(repo: Path, commit: str, base: str, auth: tuple[str, ...] = (
                    how: RemoteSuites | None = None) -> tuple[list[str], str]:
     """A train's touched-suites run (`queue.touched_suites` on a node, `RemoteSuites`: `research run --on auto`, outside the check
     slots) of ``commit`` against ``base``, shipped from a temporary worktree of the queue's clone: (its run ids, its output's
-    tail).  It runs as lane ci, with the queue's credentials, and git never prompts."""
+    tail).  It runs as lane ci, with the queue's credentials, and git never prompts.  It ships train.sh's own tree of ``commit``
+    when that is there (`train_tree`): a second checkout took 80-100 s more of each launch on the control pod (24 Oct)."""
     how = how or RemoteSuites(env={**auth_env(auth), "RESEARCH_LANE": "ci"})
-    t = touched_suites(repo, commit, base, how)
+    t = touched_suites(repo, commit, base, how, wt=train_tree(commit))
     return t.ids, (t.tail or "; ".join(t.notes))[-600:]
+
+
+def train_tree(commit: str) -> Path | None:
+    """train.sh's worktree of ``commit`` (`train-SHA` under `TRAIN_TREES`, else TMPDIR), while it is there and at ``commit``: it
+    stays until the check launched from it ends."""
+    tree = Path(os.environ.get("TRAIN_TREES") or tempfile.gettempdir()) / f"train-{commit[:12]}"
+    if not (tree / ".git").exists():
+        return None
+    head = _git(tree, "rev-parse", "HEAD", check=False)
+    return tree if head.returncode == 0 and head.stdout.strip() == commit else None
 
 
 #: what a running check has written of its steps and suites so far (check.py's `STEPS_LOG`, suites.py's `failing_path` of each

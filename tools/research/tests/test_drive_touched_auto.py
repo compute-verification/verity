@@ -79,6 +79,27 @@ def test_the_run_is_research_run_on_auto_from_a_worktree_of_exactly_the_commit_w
     assert not wt.exists() and _no_worktree_left(world, world.dev)
 
 
+def test_a_trains_touched_suites_ship_train_sh_tree_of_its_commit_and_make_no_checkout_of_their_own(world, monkeypatch):
+    """24 Oct: on the control pod's network volume each checkout took 80-100 s, and a train's launch made two of the same commit,
+    train.sh's and the touched suites'.  The touched run ships train.sh's tree (`TRAIN_TREES`) while it is at the commit;
+    without one it checks out its own, as before."""
+    base = _git(world.dev, "rev-parse", "origin/main")
+    commit, other = world.change({"a.txt": "train\n"}), world.change({"a.txt": "other\n"})
+    trees = world.tmp / "trees"
+    monkeypatch.setenv("TRAIN_TREES", str(trees))
+    _git(world.dev, "worktree", "add", "-q", "--detach", str(trees / f"train-{commit[:12]}"), commit)
+    launch = FakeLaunch()
+    how = Q.RemoteSuites(launch=launch)
+    assert touched_launch(world.dev, commit, base, how=how)[0] == [RID]
+    assert launch.calls[-1]["cwd"] == trees / f"train-{commit[:12]}" and launch.calls[-1]["dirty"] == ""
+    assert not any((world.tmp / "tmp").iterdir()) and (trees / f"train-{commit[:12]}").is_dir()
+    _git(trees / f"train-{commit[:12]}", "checkout", "-q", "--detach", other)        # not at the commit: not train.sh's tree of it
+    for c in (commit, other):
+        touched_launch(world.dev, c, base, how=how)
+        assert launch.calls[-1]["head"] == c and launch.calls[-1]["cwd"].parent.parent == world.tmp / "tmp"
+    assert len(_git(world.dev, "worktree", "list").splitlines()) == 2 and not any((world.tmp / "tmp").iterdir())
+
+
 def test_local_is_passed_only_to_a_suites_py_that_takes_it_and_base_is_resolved_to_a_full_sha(world):
     """`--local` (#2477) keeps suites.py on the node from sending itself to a node again; an older suites.py refuses the flag."""
     _move_main(world, {"tools/verity/check/suites.py": 'ap.add_argument("--changed")\n'})

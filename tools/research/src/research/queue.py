@@ -149,6 +149,12 @@ DATES = ("GIT_AUTHOR_DATE", "GIT_COMMITTER_DATE")
 #: a transfer from the remote under 1 KB/s for 2 min aborts: git has no timeout, and a stalled HTTPS fetch held a drive tick
 #: for 10 min (13 Oct 02:33Z), the next tick retrying it
 STALL = ("-c", "http.lowSpeedLimit=1000", "-c", "http.lowSpeedTime=120")
+#: the clone's git config that keeps git from starting a gc of its own after a fetch or a merge: one train.sh's fetch started
+#: mid-tick ran `git prune` for 10 min on the control pod's network volume, while each launch's checkout beside it took 80-100 s
+#: instead of 14 (24 Oct); drive runs `Queue.gc` once its tick is done
+NO_AUTO_GC = {"gc.auto": "0", "maintenance.auto": "false"}
+#: `Queue.gc`'s threshold of loose objects: git's own default for `gc.auto`
+GC_AUTO = 6700
 #: `gh api`'s limit: gh has no timeout, and a listing of the open PRs held a drive tick on a dead connection for 5 min
 #: (14 Oct 00:46Z) while the same call answered in a second from a fresh one
 GH_TIMEOUT_S = 120
@@ -539,11 +545,15 @@ class Queue:
         # as text, and any two PRs that each add a record conflict (12 Oct: #1806 dropped from `next`)
         from .clone import RECORD_DRIVER
 
-        for k, v in RECORD_DRIVER.items():
+        for k, v in {**RECORD_DRIVER, **NO_AUTO_GC}.items():
             _git(self.workdir, "config", k, v)
         _git(self.workdir, "merge", "--abort", check=False)
         _git(self.workdir, "reset", "-q", "--hard")
         _git(self.workdir, "clean", "-qfdx")
+
+    def gc(self) -> None:
+        """The clone's `git gc --auto` at git's own thresholds, in the foreground, once drive's tick is done (`NO_AUTO_GC`)."""
+        _git(self.workdir, "-c", f"gc.auto={GC_AUTO}", "-c", "gc.autoDetach=false", "gc", "--auto", "--quiet", check=False)
 
     def fetch(self, prs: Iterable[PR] = ()) -> dict[int, str]:
         """Forced refspecs only: `main`, the queue's branch when it exists, and each open PR's head as `refs/queue/pr/{n}`;
@@ -2219,6 +2229,7 @@ def main(argv: list[str]) -> int:
 
             Driver(q, on=flags.on, max_running=flags.max_running, train_size=flags.train_size, defer=frozenset(flags.defer),
                    regenerate_locks=flags.regenerate_locks, per_pr_shadow=flags.per_pr_shadow).tick(dry_run=a.dry_run)
+            q.gc()
             return 0
         if a.command == "report":
             from .mergequeue import Reporter, Statuses
