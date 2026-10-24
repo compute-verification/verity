@@ -44,10 +44,10 @@ PARTS = {"AllReduceRmsNormMnnvl_v1": (("AllReduceResidualMnnvl_v1", (("arg", 0),
                                       ("RmsNormMnnvl_v1", (("out", 1), ("arg", 2)), (0,))),
          "DeepGemmFp8Linear_v1": (("Fp8GroupQuantUe8m0_v1", (("arg", 0),), (0, 1)),
                                   ("ScaledMmFp8BlockSharedScale_v1", (("out", 0), ("out", 1), ("arg", 1), ("arg", 2)), (2,)))}
-PART_OF = {p[0]: (row, p) for row, ps in PARTS.items() for p in ps}
 #: the statics a ``PARTS`` row family's parts take that the row has none of: DeepGEMM's linear quantises and scales in
 #: 128-wide blocks (`deepgemm.FP8_BLOCK`)
 PART_STATICS = {"DeepGemmFp8Linear_v1": {"G": 128}}
+PART_OF = {p[0]: (row, p) for row, ps in PARTS.items() for p in ps}
 #: a member's layout by the family of its template's word; any other template is the row itself
 LAYOUTS = {"RoPEHead_v1": "rope", "GemmCoordinate_v1": "gemm", "ScaledMmS8Coordinate_v1": "s8"}
 #: a row template's element widths whose ports the rows commit as their little-endian bytes
@@ -130,15 +130,6 @@ def template(t: str) -> Template:
     return hit
 
 
-def part(word: str, spec: str) -> tuple | None:
-    """The ``PARTS`` entry of template word ``word`` on a row of ``spec`` when ``word``'s family is a part of the row's; else None
-    (the row is ``word``'s own family)."""
-    from verity_vllm.query.program_view import spec_base
-
-    hit = PART_OF.get(spec_base(word))
-    return hit[1] if hit is not None and hit[0] == spec_base(spec) else None
-
-
 def cols_refused(word: str) -> str | None:
     """Why ``word``'s ``COLS`` column blocks are not the columns of its family's rows, or None (a family elementwise at every
     statics).  torch's multimem all-reduce (`tp_allreduce.AllReduceMultimem`) reduces each owner rank's slice of its SIZE
@@ -161,6 +152,15 @@ def cols_refused(word: str) -> str | None:
         return (f"{word}: its owners' TREES are {len(set(trees))} trees, and a column block's elements are reduced through "
                 f"other owners' trees than the row's")
     return None
+
+
+def part(word: str, spec: str) -> tuple | None:
+    """The ``PARTS`` entry of template word ``word`` on a row of ``spec`` when ``word``'s family is a part of the row's; else None
+    (the row is ``word``'s own family)."""
+    from verity_vllm.query.program_view import spec_base
+
+    hit = PART_OF.get(spec_base(word))
+    return hit[1] if hit is not None and hit[0] == spec_base(spec) else None
 
 
 _UNITS: dict[str, tuple[tuple[str, int], ...]] = {}

@@ -114,7 +114,6 @@ from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import serving_rows as CS
 from verity_vllm.pipeline import chunk_rows as CR
-from verity_vllm.pipeline import part_rows as PR
 from verity_vllm.pipeline import slice_rows as SL
 from verity_vllm.pipeline.chunk_rows import s8_words
 from verity_vllm.pipeline.serving_templates import (COLS, COORDS, CUT, LAYOUTS, PACKED, PART_OF, PARTS, SLICES, Template,  # noqa: F401
@@ -394,6 +393,7 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
     operand and output its rows' columns [jw, jw + w) in order, under one index entry.  A part of the row (``PARTS``) reads the
     row's argument groups and committed outputs it names, in its order, and returns, and names in its entry, its outputs.  A
     ``cols`` row whose blocks are not its columns (`cols_refused`) is refused in blocks."""
+    from verity_vllm.pipeline import part_rows as PR
     from verity_vllm.pipeline.serving_templates import cols_refused
     from verity_vllm.query.program_view import spec_base, spec_statics
 
