@@ -273,10 +273,15 @@ structure PortIndex where
   last : Std.HashMap String Json := {}
   count : Nat := 0
 
-def PortIndex.add (ix : PortIndex) (r : Json) : PortIndex :=
-  match (Flock.canon (getD r "port")).toOption with
-  | none => { ix with count := ix.count + 1 }
-  | some k => { last := ix.last.insert k r, count := if ix.last.contains k then ix.count else ix.count + 1 }
+/-- One root into the index. The index is taken apart first and the map read and written in one call, so a map held
+once is updated in place: reading it after the insert would copy it, root by root. -/
+def PortIndex.add : PortIndex → Json → PortIndex
+  | ⟨last, count⟩, r =>
+    match (Flock.canon (getD r "port")).toOption with
+    | none => ⟨last, count + 1⟩
+    | some k =>
+      let p := last.containsThenInsert k r
+      ⟨p.2, if p.1 then count else count + 1⟩
 
 def portIndex (roots : Array Json) : PortIndex := roots.foldl PortIndex.add {}
 
@@ -442,21 +447,23 @@ private def Inv (acc : Array Json) (ix : PortIndex) (seen : List Json) : Prop :=
 private theorem inv_step {acc : Array Json} {ix : PortIndex} {seen : List Json} (h : Inv acc ix seen) (r : Json) :
     Inv (distinctStep acc r) (ix.add r) (r :: seen) := by
   obtain ⟨hc, hk, hl⟩ := h
+  obtain ⟨last, count⟩ := ix
   unfold distinctStep PortIndex.add
+  simp only [Std.HashMap.containsThenInsert_fst, Std.HashMap.containsThenInsert_snd] at *
   rcases hx : Flock.canon (getD r "port") with e | k₀
   · have hn : acc.any (jeq · (getD r "port")) = false := by simp [jeq_of_canon_error hx]
     have hkey : ∀ k, keyIs k (getD r "port") = false := fun k => by simp [keyIs, hx, Except.toOption]
     simp only [hn, Except.toOption, Bool.false_eq_true, ↓reduceIte]
     refine ⟨by simp [hc], fun k => by simp [hk, hkey], fun k => by simp [hkey, hl]⟩
-  · have hany : acc.any (jeq · (getD r "port")) = ix.last.contains k₀ := by
+  · have hany : acc.any (jeq · (getD r "port")) = last.contains k₀ := by
       rw [hk]; congr 1; funext y; rw [jeq_of_canon hx]; rfl
     have hkey : ∀ k, keyIs k (getD r "port") = (k₀ == k) := fun k => by
       simp [keyIs, hx, Except.toOption]
     simp only [Except.toOption, hany]
     refine ⟨?_, fun k => ?_, fun k => ?_⟩
-    · cases h0 : ix.last.contains k₀ <;> simp [hc]
+    · cases h0 : last.contains k₀ <;> simp [hc]
     · rw [Std.HashMap.contains_insert]
-      cases h0 : ix.last.contains k₀
+      cases h0 : last.contains k₀
       · simp only [Bool.false_eq_true, ↓reduceIte, Array.any_push, ← hk, hkey, Bool.or_comm]
       · simp only [↓reduceIte, ← hk]
         by_cases he : k₀ = k
