@@ -24,7 +24,8 @@ interface is note:compute-accounting/20261024T0212Z-draft-liveunit-interface.
 * `liveOk_named`, `liveOk_decode`, `liveOk_one_request`, `liveOk_m_le`, `liveOk_decode_round`: **the per-request
   bound**. A request holds at most what it `takes`, a decoding one at most one slot; one request named in every slot below
   `m` bounds `m` by what it takes, so it can't fill the round with padded rows; `m ≤ Σ_{q ∈ entries} takes q`, and in a
-  round where no entry is prefilling, `m` is at most the entries' count.
+  round where no entry is prefilling, `m` is at most the entries' count. `takesAt` is the bound at a given round, and
+  `takes` is it at the decoded `s`; `live_credit` states it at each call's own round through `hs`.
 * `LiveSlotsChecks`: **the named premise**, that the unit's circuit computes `liveOk` at its decoded port rows, in
   `Accounting.Assumptions.TS.LeafChecks`' form; `liveOk_of_accept` reads it.
 * `dense_credit`, `dense_credit_of_sessions`: **dense credit is `Σ_c m_{s(c)}·n_c·K_c`**. The rows rule A credits, times
@@ -39,9 +40,11 @@ interface is note:compute-accounting/20261024T0212Z-draft-liveunit-interface.
 
 What a decode reads from the port rows (the slot words, each header's index, round, cap and prompt length, the public
 `m` and `s`, and the `ok` word) is the statement's port layout, read through `dec`. That the decoded `m` is the call's
-public row, the decoded `s` its round, and the decoded slot and request rows are the round's registered `slots@<s>` and
-its request table (`requests@0` under round-0-only admission), is the statement's registration (flock-verify's complete
-check and the served path's roots), outside this file.
+public row and the decoded `s` its step's round are `live_credit`'s hypotheses `hm` and `hs`: credit opens the unit's `m`
+at the known `m@<s>` row of the manifest's `m_s` and its `s` at the known `round@<s>` row of the round's index, so a
+statement decoded at another round proves nothing about this one. That the decoded slot and request rows are the round's
+registered `slots@<s>` and its request table (`requests@0` under round-0-only admission) is the statement's registration
+(flock-verify's complete check and the served path's roots), outside this file.
 -/
 
 namespace Pouw.SecurityProofs.LiveCredit
@@ -66,11 +69,15 @@ structure LiveView where
 /-- The request table's entries: the leaves below `T` whose prompt length is nonzero (every entry has a prompt token). -/
 def entries (T : ℕ) (v : LiveView) : Finset ℕ := (range T).filter fun q => v.plen q ≠ 0
 
+/-- **How many of round `r`'s slots request `q` can take**: its prompt length when `r` is the round that admitted it
+(its prefill), one in each of the `cap - 1` rounds after (a decode row each), none in any other round. -/
+def takesAt (v : LiveView) (r q : ℕ) : ℕ :=
+  if v.rnd q = r then v.plen q else if v.rnd q < r ∧ r < v.rnd q + v.cap q then 1 else 0
+
 /-- **How many of round `s`'s slots request `q` can take** (`circuit.live.takes`): its prompt length in the round that
 admitted it (its prefill, the whole prompt in one step), one in each of the `cap - 1` rounds after (a decode row each), none
 in any other round. -/
-def takes (v : LiveView) (q : ℕ) : ℕ :=
-  if v.rnd q = v.s then v.plen q else if v.rnd q < v.s ∧ v.s < v.rnd q + v.cap q then 1 else 0
+def takes (v : LiveView) (q : ℕ) : ℕ := takesAt v v.s q
 
 /-- The slots below `T` that name request `q` (as `q + 1`). -/
 def named (T : ℕ) (v : LiveView) (q : ℕ) : Finset ℕ := (range T).filter fun i => v.slot i = q + 1
@@ -151,7 +158,7 @@ theorem liveOk_named {T : ℕ} {v : LiveView} (h : liveOk T v) {q : ℕ} (hq : q
 theorem liveOk_decode {T : ℕ} {v : LiveView} (h : liveOk T v) {q : ℕ} (hq : q < T) (hd : v.rnd q ≠ v.s) :
     (named T v q).card ≤ 1 := by
   have := liveOk_named h hq
-  unfold takes at this
+  unfold takes takesAt at this
   split_ifs at this <;> omega
 
 /-- **One request can't fill a round**: in an accepted round whose every slot below `m` names request `q`, `m` is at most
@@ -191,7 +198,7 @@ theorem liveOk_decode_round {T : ℕ} {v : LiveView} (h : liveOk T v) (hd : ∀ 
     v.m ≤ (entries T v).card := by
   refine le_trans (liveOk_m_le h) (le_trans (sum_le_sum fun q hq => (?_ : takes v q ≤ 1)) (by simp))
   have := hd q hq
-  unfold takes
+  unfold takes takesAt
   split_ifs <;> omega
 
 /-! ## The named premise -/
@@ -345,10 +352,12 @@ theorem population_admits {ι σ : Type} (calls : Finset ι) (step : ι → σ) 
 
 /-- **Dense credit over the live population.** `T` is the round tables' leaf count (the pouw setting `rows`), and `M`,
 at least `T`, the window's slot (`h1window.slot`), whose `M / R` row blocks are credit's tile grid. Where each call's round
-has its `PouwLiveSlots_v1{T}` session accepted at the call's public row `m c`, and the draw's population `P` is the live
-tiles (a dead tile, every row at or past `m c`, never drawn): every `m c` is at most `T`, and at most what its round's
-entries take (`liveOk_m_le`: a request's prompt length in its own round, one row in a later round within its cap, none
-otherwise), so no request's padded rows are credited; the rows rule A credits, times
+has its `PouwLiveSlots_v1{T}` session accepted at the call's public row `m c` and at its step's round `round (step c)`
+(`hs`: the decoded `s`, so the per-request bound is the call's own round's, not one the prover picks), and the draw's
+population `P` is the live tiles (a dead tile, every row at or past `m c`, never drawn): every `m c` is at most `T`; in
+the call's round each request holds at most what it `takesAt` that round (its prompt length in the round that admitted
+it, one row in a later round within its cap, none otherwise), so a request decoding there holds at most one slot, and
+`m c` is at most what the round's entries take, so no request's padded rows are credited; the rows rule A credits, times
 `n·K`, sum to `C = Σ_c m_c·n_c·K_c`; `C` is at most `P`'s work; every unit of `P` holds a row serving an admitted
 request; no dead tile is in `P`; and a call with `m c = 0` has no unit in `P` and earns 0. -/
 theorem live_credit {ι σ : Type} (calls : Finset ι) (step : ι → σ) (n K m : ι → ℕ) {R C M T : ℕ} (hR : 0 < R)
@@ -358,10 +367,15 @@ theorem live_credit {ι σ : Type} (calls : Finset ι) (step : ι → σ) (n K m
     (heval : ∀ c ∈ calls, ∀ u, ∀ g ∈ (sess (step c)).P.io u, (sess (step c)).Circ.eval (vals (step c)) g = vals (step c) g)
     (hok : ∀ c ∈ calls, (dec (sess (step c)) (portRead (sess (step c)) (vals (step c)))).ok = true)
     (hm : ∀ c ∈ calls, (dec (sess (step c)) (portRead (sess (step c)) (vals (step c)))).m = m c)
+    (round : σ → ℕ) (hs : ∀ c ∈ calls, (dec (sess (step c)) (portRead (sess (step c)) (vals (step c)))).s = round (step c))
     (P : Finset (Σ _ : ι, ℕ × ℕ)) (hP : P = population calls R C M m n) :
     (∀ c ∈ calls, m c ≤ T) ∧
+      (∀ c ∈ calls, ∀ q < T, (named T (dec (sess (step c)) (portRead (sess (step c)) (vals (step c)))) q).card ≤
+        takesAt (dec (sess (step c)) (portRead (sess (step c)) (vals (step c)))) (round (step c)) q) ∧
+      (∀ c ∈ calls, ∀ q < T, (dec (sess (step c)) (portRead (sess (step c)) (vals (step c)))).rnd q ≠ round (step c) →
+        (named T (dec (sess (step c)) (portRead (sess (step c)) (vals (step c)))) q).card ≤ 1) ∧
       (∀ c ∈ calls, m c ≤ ∑ q ∈ entries T (dec (sess (step c)) (portRead (sess (step c)) (vals (step c)))),
-        takes (dec (sess (step c)) (portRead (sess (step c)) (vals (step c)))) q) ∧
+        takesAt (dec (sess (step c)) (portRead (sess (step c)) (vals (step c)))) (round (step c)) q) ∧
       ∑ c ∈ calls, admitted T (dec (sess (step c)) (portRead (sess (step c)) (vals (step c)))) * n c * K c =
         ∑ c ∈ calls, m c * n c * K c ∧
       ∑ c ∈ calls, m c * n c * K c ≤ ∑ u ∈ P, R * C * K u.1 ∧
@@ -373,7 +387,9 @@ theorem live_credit {ι σ : Type} (calls : Finset ι) (step : ι → σ) (n K m
   have hmT : ∀ c ∈ calls, m c ≤ T := fun c hc => hm c hc ▸ (hv c hc).1
   have hmM : ∀ c ∈ calls, m c ≤ M := fun c hc => le_trans (hmT c hc) hTM
   subst hP
-  exact ⟨hmT, fun c hc => by rw [← hm c hc]; exact liveOk_m_le (hv c hc),
+  exact ⟨hmT, fun c hc q hq => by rw [← hs c hc]; exact liveOk_named (hv c hc) hq,
+    fun c hc q hq hd => liveOk_decode (hv c hc) hq fun he => hd (he.trans (hs c hc)),
+    fun c hc => by rw [← hm c hc, ← hs c hc]; exact liveOk_m_le (hv c hc),
     dense_credit_of_sessions calls step n K m T sess dec hchk vals heval hok hm,
     credit_le_work calls m n K hR hC hRM hmM hCn,
     fun u hu => population_admits calls step m n v hv hm hu,
