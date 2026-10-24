@@ -81,7 +81,8 @@ def launch(kernel: Any, rows: int, args: tuple, block: int) -> None:
     kernel it compiled directly, skipping Triton's per-call binding, cache lookup and hook checks (about 40 µs of host time a
     call).  The key holds what Triton's kernel cache keys on here: the current device, its debug and instrumentation knobs,
     each tensor's dtype and 16-byte alignment, and every scalar's value (a superset of the integers' specialization).  With
-    any launch hook, pre-run hook or stage inspection set, and off the GPU (Triton's interpreter), every launch is Triton's own."""
+    a launch hook in either chain, a pre-run hook or stage inspection set, and off the GPU (Triton's interpreter), every launch
+    is Triton's own."""
     import torch
     if not args[0].is_cuda:
         kernel[(rows,)](*args, BLOCK=block)
@@ -92,13 +93,19 @@ def launch(kernel: Any, rows: int, args: tuple, block: int) -> None:
     key = (kernel, device, block, rt.debug, knobs.compilation.instrumentation_mode,
            *((a.dtype, a.data_ptr() % 16 == 0) if isinstance(a, torch.Tensor) else (type(a), a) for a in args))
     hit = _COMPILED.get(key)
-    if hit is None or kernel.pre_run_hooks or rt.launch_enter_hook or rt.launch_exit_hook or rt.add_stages_inspection_hook:
+    if (hit is None or kernel.pre_run_hooks or rt.add_stages_inspection_hook is not None
+            or not _empty(rt.launch_enter_hook) or not _empty(rt.launch_exit_hook)):
         compiled = kernel[(rows,)](*args, BLOCK=block)
         if compiled is not None:
             _COMPILED[key] = (compiled.run, compiled.function, compiled.packed_metadata)
         return
     run, function, metadata = hit
     run(rows, 1, 1, torch._C._cuda_getCurrentRawStream(device), function, metadata, None, None, None, *args, block)
+
+
+def _empty(hook: Any) -> bool:
+    """Whether a Triton launch hook calls nothing: none set, or an empty `knobs.HookChain` (Triton's default)."""
+    return hook is None or getattr(hook, "calls", None) == []
 
 
 def excluded(fails: Any, unsure: Any, x: Any) -> tuple[int, ...]:
