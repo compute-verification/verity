@@ -1,8 +1,8 @@
 """network-e2e: network accounting end to end on a served model, as one report. A certifier-serve rehearsal's runs (the
 network certifier in front of a served endpoint, `certifier_serve.py`), N2's verdict of record on every link-window and
-the link's network verdict (`LinkWindows.verify` through the proof service's stream, `network_verdict`), every
-link-window's head checks proved by C-Flock ``prove --zk`` behind the Lean firewall and held by Lean (`n2_zk.prove`), and
-the negatives (``late``, ``extra`` and a tampered head) refused, in `report.json` and `report.md` under ``--out``.
+the link's network verdict (`LinkWindows.unproved_outcome`, in the clear, through the proof service's stream,
+`network_verdict`), the head checks' proofs an adopted `n2_zk.prove` summary holds (C-Flock ``prove --zk`` behind the
+Lean firewall, held by Lean), and the negatives (``late``, ``extra`` and a tampered head) refused, in `report.json` and `report.md` under ``--out``.
 
     python benchmarks/network_e2e/e2e.py --from SRC [SRC ...] --out DIR (--bin flock-circuit --lean flock-verify |
                                          --proofs N2ZK_DIR | --no-prove)
@@ -18,14 +18,16 @@ then runs this. The README says what the report establishes and what it doesn't.
   option this file doesn't take passed on) into ``DIR/rehearsal``. An honest run is required: the tampered head is its
   window 0's egress head one count off (`n2_zk.one_count`).
 * **N2.** Per run, each link-window committed under fresh salts, registered on N2's stream, selected (Selection All) and
-  decided by N2's verifier of record on the host, with the Lean audit (`n2_zk.link_windows`), then `network_verdict`.
-  Honest, tampered and extra are `n2_zk.prove`'s own rounds, so their verdicts are on the roots it proves under; any other
-  run's (late) are taken here the same way.
+  decided in the clear, with the Lean audit (`link_windows`: `LinkWindows.unproved_outcome`, as for any run that proves
+  nothing), then `network_verdict`. A summary `n2_zk.prove` wrote before N2's registered unit was proved (adopted)
+  carries honest's, tampered's and extra's verdicts on the roots it proved under; any other run's are taken here.
 * **Proofs** (planned profile). `n2_zk.prove` on the honest run and, when its plan has the honest run's windows, the
   extra run: each member (honest egress and ingress, tampered egress, extra egress) one statement of n units, drawn by the
   verifier's Lean, proved ``--zk`` behind the firewall and held by Lean; the verifier opens each unit's ``pub`` row to its
   own copy and its verdict row. With ``--proofs`` they are a run's of its own, adopted (`adopt`: each proved unit's
-  certificate digest must be these runs'), so that what N2-ZK's run proved isn't proved again. On the served profile
+  certificate digest must be these runs'), so that what N2-ZK's run proved isn't proved again. Not yet on `n2_zk` as it
+  now proves: one member a round, each link-window decided by its proof of N2's registered unit; `prove` refuses and
+  `adopt` refuses such a summary, each saying so (``--no-prove`` takes N2's verdicts only). On the served profile
   nothing is proved: its count check is `NetworkServedCounts_v1`, which `n2_zk` doesn't prove (the claim says so).
 * **Cost.** Each member's session: the prover's time (``prove_total_s``), Lean's ``verify --zk`` time and the proof's
   bytes, each divided by its n units for a link-window's end, and the peak RSS of the largest process the driver has run
@@ -41,7 +43,6 @@ import json
 import os
 import resource
 import shutil
-import socket
 import subprocess
 import sys
 import tarfile
@@ -69,8 +70,8 @@ README = "verity/core/protocols/certifier/README.md"
 CLAIM = {
     "statement": (
         "Counts only. A report marked OK establishes, for the rehearsal's one link: on every link-window of the honest "
-        "run N2's verdict of record accepted (LinkWindows.verify, through the proof service's stream with Selection "
-        "All), and the link's network verdict, the AND over its link-windows with no epsilon and no share credit "
+        "run N2's verdict of record accepted (LinkWindows.unproved_outcome, decided in the clear, through the proof "
+        "service's stream with Selection All), and the link's network verdict, the AND over its link-windows with no epsilon and no share credit "
         "(LinkWindows.network_verdict), accepted, so each window's per-bucket frame counts are the planned occupancy "
         "profile's on egress (on a served link, the ones its ingress head's counts derive under the declared sync), "
         "which puts the link's timing at the profile; and late, extra and a tampered head were each refused. Where "
@@ -96,15 +97,14 @@ CLAIM = {
         "response length, are the run's (the report's 'tokens').",
     ],
     "zero_knowledge_gaps": [
-        "N2's unit isn't proved as the verifier of record (README, 'Not yet zero-knowledge'): the verdict of record is "
-        "LinkWindows.verify on the host, which runs head_check.reference over the opening and so reads the heads and "
-        "the certifier's salts. The proofs here run beside it, on the roots it registered; they don't replace it.",
-        "The proofs here are of n2_zk's row adapter around the unchanged NetworkHeadCheck_v2, not of N2's registered "
-        "unit, so LinkWindows.proved, which refuses a proof of any Program but the unit's (NET-43), doesn't take them. "
-        "Lean holds each proof to the program and partition the driver wrote.",
-        "The certificate's link to its head (README, NET-42): until the unit is proved, the verifier of record checks "
-        "each signed digest against its head and the certifier's salt on the host, over the opening "
-        "(CertifiedRecord.verify).",
+        "N2's verdicts here are decided in the clear (README, 'A run that proves nothing'): LinkWindows.unproved_outcome "
+        "runs LinkWindows.clear over the opening, and so reads the heads and the certifier's salts. n2_zk decides each "
+        "link-window on a --zk proof of N2's registered unit instead; this report doesn't take those verdicts yet.",
+        "The proofs an adopted summary carries are of n2_zk's earlier row adapter around the unchanged "
+        "NetworkHeadCheck_v2, not of N2's registered unit, so LinkWindows.proved, which refuses a proof of any Program "
+        "but the unit's (NET-43), doesn't take them. Lean holds each proof to the program and partition the driver wrote.",
+        "The certificate's link to its head (README, NET-42): decided in the clear, each signed digest is checked "
+        "against its head and the certifier's salt on the host, over the opening (CertifiedRecord.verify).",
     ],
     "source": README,
 }
@@ -202,56 +202,48 @@ def parts(rd: SimpleNamespace, x: SimpleNamespace) -> dict[str, list[str] | None
     """Each end's head-check parts that fail on link-window x, by the reference in the clear
     (`head_check.reference_parts`), and on a served link the served counts (`LinkWindows.served_check`)."""
     out = {end: None if c is None else [k for k, ok in HC.reference_parts(c).items() if not ok]
-           for end, c in zip(n2_zk.ENDS, x.checks)}
+           for end, c in zip(n2_zk.ENDS, x.insts)}
     if rd.lw.served is not None and not rd.lw.served_check(x.opening, [ClockSync(d, Fraction(r))
                                                                          for d, r in rd.plan["syncs"]]):
         out["egress"] = (out["egress"] or []) + ["served-counts"]
     return out
 
 
+def link_windows(run: Path, edit=None, clock=time.monotonic) -> SimpleNamespace:
+    """`n2_zk.link_windows` (each link-window's opening under fresh salts and its head checks; ``edit`` as there) on N2's
+    stream as certifier-serve's check takes it: registered, selected (Selection All), and its outcome of record decided
+    before the next registration by `LinkWindows.unproved_outcome` (in the clear: nothing is proved here), kept as
+    ``host``; and the link's network verdict."""
+    rd = n2_zk.link_windows(run, edit=edit)
+    lw = rd.lw
+    st = lw.stream(budget=rd.plan["windows"], delta=n2_zk.cs.DELTA, challenger="n2-zk", coins=n2_zk.cs._no_coins,
+                   clock=clock)
+    previous = None
+    for x in rd.windows:
+        reg = lw.register(st, lw.registration(x.opening, previous))
+        previous = x.digest = reg.digest
+        draw = st.select(reg)
+        outcome = st.deliver(draw, [lw.session(x.opening, draw)]) or lw.unproved_outcome(st, draw, x.opening, rd.syncs)
+        x.host = {"accepted": outcome.accepted, "codes": list(outcome.verdict.codes), "public": dict(outcome.public)}
+    rd.network = lw.network_verdict(st, rd.plan["windows"])
+    return rd
+
+
 def host(rd: SimpleNamespace) -> dict:
-    """`n2_zk.link_windows`'s result as `n2_zk.prove` records N2's verdicts (its summary's ``host``), with each
+    """`link_windows`'s result as an adopted `n2_zk.prove` summary records N2's verdicts (its ``host``), with each
     link-window's failed parts (`parts`)."""
     return {"windows": [{"window": x.window, "registration": x.digest, **(x.host or {}), "parts": parts(rd, x)}
                         for x in rd.windows], "network": rd.network, "issuer_refused": rd.issuer_refused}
 
 
-def _ports(n: int) -> int:
-    """A base port with ``n`` free loopback ports after it (`n2_zk.prove` takes member j's session at base + j)."""
-    for _ in range(64):
-        with socket.socket() as s:
-            s.bind(("127.0.0.1", 0))
-            base = s.getsockname()[1]
-        if base + n > 65535:
-            continue
-        try:
-            for p in range(base, base + n):
-                with socket.socket() as s:
-                    s.bind(("127.0.0.1", p))
-        except OSError:
-            continue
-        return base
-    raise SystemExit(f"no {n} free loopback ports in a row")
+#: why `prove` and `adopt` take no proof of `n2_zk` as it now proves
+NOT_YET = ("n2_zk proves N2's registered unit, one member a round, each link-window decided by its proof; this report "
+           "reads the per-end members n2_zk proved before, and doesn't read these yet (--no-prove: N2's verdicts only)")
 
 
 def prove(runs: dict[str, dict], args, work: Path) -> dict:
-    """`n2_zk.prove` on the honest run and, when its plan has the honest run's windows, the extra run; its summary."""
-    honest, extra = runs[HONEST]["dir"], runs.get("extra", {}).get("dir")
-    if extra is not None and (_read(extra / "plan.json") or {}).get("windows") != (_read(honest / "plan.json") or {}).get(
-            "windows"):
-        log("extra: its plan's windows aren't the honest run's, so n2_zk proves it in no member; N2's verdict only")
-        extra = None
-    out = work / "n2zk"
-    a = SimpleNamespace(run=honest, extra=extra, bin=args.bin, lean=args.lean, out=str(out), port=_ports(8),
-                        delta=args.delta, points=[], dry=False)
-    try:
-        rc = n2_zk.prove(a)
-    except SystemExit as e:
-        rc, why = 1, str(e)
-    else:
-        why = None
-    summary = _read(out / "summary.json") or {}
-    return {"rc": rc, "why": why, "dir": out, "summary": summary, "extra_proved": extra is not None}
+    """`n2_zk.prove`'s result as this report reads it: refused before anything is proved (`NOT_YET`)."""
+    return {"rc": 1, "why": NOT_YET, "dir": work / "n2zk", "summary": {}, "extra_proved": False}
 
 
 def adopt(d: Path, runs: dict[str, dict]) -> dict:
@@ -263,6 +255,8 @@ def adopt(d: Path, runs: dict[str, dict]) -> dict:
     members = summary.get("members") or {}
     if not members:
         raise SystemExit(f"{d}: no n2_zk members (n2_zk.prove's --out, or n2_zk.sh's $OUT/n2zk)")
+    if any(k in n2_zk.ROUNDS for k in members):
+        raise SystemExit(f"{d}: {NOT_YET}")
     for k, m in members.items():
         if not m.get("units"):
             continue
@@ -513,9 +507,9 @@ def run(args, rest: list[str], clock=time.monotonic) -> dict:
                 x["parts"] = {e: refs[f"{name}-{e}"]["failed"][i] for e in n2_zk.ENDS if f"{name}-{e}" in refs}
         for name, r in runs.items():
             if name not in n2:
-                n2[name] = host(n2_zk.link_windows(r["dir"], clock=clock))
+                n2[name] = host(link_windows(r["dir"], clock=clock))
         if TAMPERED not in n2:
-            n2[TAMPERED] = host(n2_zk.link_windows(runs[HONEST]["dir"], edit=n2_zk.one_count, clock=clock))
+            n2[TAMPERED] = host(link_windows(runs[HONEST]["dir"], edit=n2_zk.one_count, clock=clock))
         served = plan.get("served") or {}
         meta = {"from": [str(s) for s in sources], "commit": _commit(), "model": plan.get("live_model"),
                 "tokens": served.get("tokens"), "requests": served.get("requests"), **where(runs),
