@@ -67,14 +67,21 @@ def _plain(v: Any) -> Any:
 
 
 def scheduler_config(sched: Any) -> dict[str, Any]:
-    """What of the scheduler's configuration decides its schedules."""
+    """What of the scheduler's configuration decides its schedules (``max_model_len`` the scheduler's own where its
+    scheduler config no longer holds it, as in vLLM 0.11 on)."""
     sc = getattr(sched, "scheduler_config", None)
     cc = getattr(sched, "cache_config", None)
     pick = lambda o, names: {n: _plain(getattr(o, n)) for n in names if o is not None and hasattr(o, n)}   # noqa: E731
-    return {"scheduler": type(sched).__name__,
-            **pick(sc, ("max_num_batched_tokens", "max_num_seqs", "max_model_len", "enable_chunked_prefill", "long_prefill_token_threshold",
-                        "max_num_partial_prefills", "policy", "async_scheduling")),
-            **pick(cc, ("block_size", "enable_prefix_caching", "num_gpu_blocks"))}
+    out = {"scheduler": type(sched).__name__,
+           **pick(sc, ("max_num_batched_tokens", "max_num_seqs", "max_model_len", "enable_chunked_prefill", "long_prefill_token_threshold",
+                       "max_num_partial_prefills", "policy", "async_scheduling")),
+           **pick(cc, ("block_size", "enable_prefix_caching", "num_gpu_blocks"))}
+    if "max_model_len" not in out:
+        mc = getattr(getattr(sched, "vllm_config", None), "model_config", None)
+        n = getattr(sched, "max_model_len", None) or getattr(mc, "max_model_len", None)
+        if n is not None:
+            out["max_model_len"] = int(n)
+    return out
 
 
 def step_geometry(so: Any) -> tuple[dict[str, int], list[str], list[str], dict[str, int]]:
