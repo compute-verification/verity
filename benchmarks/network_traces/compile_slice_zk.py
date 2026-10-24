@@ -53,7 +53,7 @@ from verity.ml.commitments.rowleaf import bit_row, row_leaf  # noqa: E402
 
 FIXTURE = REPO / "verity/core/protocols/certifier/tests/fixtures/compile_slice_smallkv.json"
 KINDS = ("honest", "flip", "charge", "arrival") + CS.PHASE9 + ("sixpass", "sixpass-own")
-REFUSED = {"honest": set(), "flip": {"load", "steps", "rows"}, "charge": {"charge"}, "arrival": {"rows"},
+REFUSED = {"honest": set(), "flip": {"load", "rows"}, "charge": {"charge"}, "arrival": {"rows"},
            "context": {"code", "charge"}, "frequency": {"code", "charge"}, "hit": {"steps", "rows"},
            "reread": {"steps", "rows"}, "untaken": {"steps", "rows"}, "sixpass": {"rows"}, "sixpass-own": set()}
 OPENED = ("o0", "pub")
