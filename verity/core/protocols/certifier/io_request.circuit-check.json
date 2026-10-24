@@ -1,1 +1,16 @@
-{}
+{
+ "definitions": {
+  "IoTieRequestEnd_v1": {
+   "and": 65
+  },
+  "IoTieRequestFrame_v1{B=512}": {
+   "and": 20876
+  },
+  "IoTieRequestStep_v1": {
+   "and": 135
+  },
+  "IoTieRequest_v1{B=512,L=1,R=2}": {
+   "and": 42082
+  }
+ }
+}
