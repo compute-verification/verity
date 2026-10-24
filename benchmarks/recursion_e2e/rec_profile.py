@@ -386,10 +386,12 @@ def read(root: Path) -> dict[str, Any]:
 
         lrows = tool_rows(ln, "lean", rel, verdict=lv)
         for r in lrows:
-            if r.stage.startswith("lean forged-"):
-                r.extra["forged"] = True
-                r.ok = None if r.ok is None else not r.ok
             name = r.stage[len("lean "):]
+            if name.startswith("forged-"):
+                r.extra["forged"] = True
+                if r.ok is not None:
+                    r.extra["refused"] = r.ok is False and all(lean_verdict(o / "lean" / f"{name}.log") for o in ln)
+                    r.ok = r.extra["refused"]
             splits = [lean_split(o / "lean" / f"{name}.err") for o in ln]
             parts = {}
             for k in ("inputs_s", "setup_s", "session_s"):
@@ -405,7 +407,7 @@ def read(root: Path) -> dict[str, Any]:
                 r.dominant = {"phase": k, "s": round(parts[k], 4), "share": round(parts[k] / r.wall_s.median, 3), "of": "wall_s",
                               "phases": {p: round(x, 4) for p, x in sorted(parts.items(), key=lambda kv: -kv[1])}}
             why = [str((lean_verdict(o / "lean" / f"{name}.log") or {}).get("why"))[:200] for o in ln]
-            if r.ok is False:
+            if r.ok is False or r.extra.get("refused"):
                 r.note = next((w for w in why if w and w != "None"), text(ln[0] / "lean" / f"{name}.log")[-200:].strip())
         rows.append(step_row(ln, "lean", "85 STEP=lean whole (JOBS sessions at once), as an auditor waits"))
         rows += lrows
@@ -417,6 +419,7 @@ def read(root: Path) -> dict[str, Any]:
     if ng:
         rows.append(step_row(ng, "negative", "85 STEP=lean with NEG_INNER: every V* session again, over each flipped coin"))
         rows += negative_rows(ng[0] / "lean")
+    forgeries(rows)
     s = summary(rows)
     fw = processes(root.parent / "resources.jsonl", "flock-firewall")
     if fw:
@@ -492,11 +495,40 @@ def negative_rows(d: Path) -> list[Row]:
 
 
 def refused(r: Row) -> None:
-    """A forged statement's outer row: ok when no session of it was accepted (the firewall stopped it before release, or its
-    sessions were refused), the stop or the refusal as its note."""
+    """A forged statement's outer row: refused when no session of it was accepted (the firewall stopped it before release, or
+    its sessions were refused), the stop or the refusal as its note; `forgeries` judges an accepted one."""
     r.extra["forged"] = True
-    accepted = r.ok is True
-    r.ok, r.note = not accepted, ("ACCEPTED: a forged statement's session was accepted; " if accepted else "") + r.note
+    r.extra["refused"] = r.ok is not True
+    r.ok = r.extra["refused"]
+
+
+def kind_of(part: str, honest: list[str]) -> str:
+    """The forgery ``forged-KIND-PART`` is KIND, PART the longest honest part it ends with; else the name without ``forged-``
+    (lean_verdicts.py's rule)."""
+    name = part.removeprefix("forged-")
+    ends = [h for h in honest if name.endswith("-" + h)]
+    return name[: -len(max(ends, key=len)) - 1] if ends else name
+
+
+def forgeries(rows: list[Row]) -> None:
+    """85's forged statements, judged per forgery as lean_verdicts.py judges them: V* accepts only when every part does, so a
+    forgery is refused when one of its parts is, and a part it leaves as the honest one (forged-message's alg-p1) is accepted.
+    An accepted part's row is ok when another part of its forgery, at the same step, was refused."""
+    groups: dict[tuple[str, str], list[Row]] = {}
+    for step in ("oprove", "lean"):
+        named = [(r, r.stage.split(" ", 1)[1]) for r in rows if r.step == step and r.stage.startswith(("outer ", "lean "))]
+        honest = [n for r, n in named if not r.extra.get("forged")]
+        for r, n in named:
+            if "refused" in r.extra:
+                r.extra["kind"] = kind_of(n, honest)
+                groups.setdefault((step, r.extra["kind"]), []).append(r)
+    for rs in groups.values():
+        held = any(r.extra["refused"] for r in rs)
+        for r in rs:
+            if not r.extra["refused"]:
+                r.ok = held
+                r.note = ("accepted: a part this forgery leaves as the honest one; " if held
+                          else "ACCEPTED: no part of this forgery was refused; ") + r.note
 
 
 def forge_after_rows(p: Path) -> list[Row]:
@@ -539,24 +571,17 @@ def headline(rows: list[Row], s: dict[str, Any], steps: dict[str, list[str]]) ->
             "forged_refused": forged(rows) or None}
 
 
-_FORGED_STMT = re.compile(r"(?:outer|lean) forged-(top-salt|[a-z]+)(?:-.*)?")
-
-
 def forged(rows: list[Row]) -> dict[str, bool]:
-    """Each forgery kind's verdict: 85's forged statements of it (their outer and lean rows) and forge-after's cases of it,
-    every one refused, and forge-after's honest controls of it accepted."""
+    """Each forgery kind's verdict: 85's forged statements of it refused at each step (`forgeries`), forge-after's cases of
+    it every one refused, and forge-after's honest controls of it accepted."""
     out: dict[str, bool] = {}
     for r in rows:
         if r.ok is None:
             continue
-        if r.step in ("oprove", "lean"):
-            m = _FORGED_STMT.fullmatch(r.stage)
-        elif r.step == "forge-after":
-            m = re.fullmatch(r"forge-after [^/]+/([a-z]+)-[a-z]+", r.stage)
-        else:
-            m = None
-        if m:
-            out[m.group(1)] = out.get(m.group(1), True) and r.ok
+        m = re.fullmatch(r"forge-after [^/]+/([a-z]+)-[a-z]+", r.stage) if r.step == "forge-after" else None
+        kind = m.group(1) if m else r.extra.get("kind") if r.step in ("oprove", "lean") else None
+        if kind:
+            out[kind] = out.get(kind, True) and r.ok
     return out
 
 
