@@ -21,7 +21,12 @@ An adapter is one module of this package (`sampled_proofs`, `pous`, `pouw`) that
   option (`protocol_options.refusals`): its GEMMs would read the copy, not what POUS stores.  Absent means False;
 * optionally ``commit_weights(scheme, target) -> Mapping``: its commitment to the plaintext weights of record, made in
   the composition's first phase, before any option changes the model or reads a beacon (`install`).  ``install`` then
-  finds every option's in ``target.weight_commitments``.
+  finds every option's in ``target.weight_commitments``;
+* optionally ``fills(scheme, settings) -> tuple[str, ...]`` and ``from_engine(scheme, settings, llm, epoch) -> Mapping``:
+  the settings it takes from the built engine when the caller leaves them unset (PoUW's H1: the model runner and, without
+  a challenger, in-process coins), named before the build and read from the built ``vllm.LLM`` after it.
+  `verity_vllm.LLM` fills them (`protocol_options.from_engine`): its refusals before the build read the named keys as set
+  (`Context.filled`), and the install's refusals read the filled settings, so a key left unfilled is refused there.
 
 An adapter holds no protocol logic: the scheme, its commitments, the salt and the audit are its protocol package's
 (`verity.core.protocols.pouw`, `verity.core.protocols.pous`, `verity.core.protocols.sampled_proofs`), which never import this one.  It finds its hook sites by type,
@@ -45,13 +50,15 @@ STAGES = ("serve", "capture", "commit")
 class Context:
     """What an adapter's refusals read.  ``enabled`` is the whole set in its one spelling (`config.parse_protocols`), so
     an adapter sees what it is composed with; ``settings`` holds each protocol's own keys of the protocols config
-    (``{name: {...}}``), which are never hashed."""
+    (``{name: {...}}``), which are never hashed.  ``filled`` names, per protocol, the settings the built engine will
+    supply (`protocol_options.engine_fills`): set only for `verity_vllm.LLM`'s check before its engine exists."""
 
     stage: str
     enabled: tuple[str, ...]
     world: int = 1
     enforce_eager: bool = True
     settings: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
+    filled: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.stage not in STAGES:
@@ -63,6 +70,9 @@ class Context:
 
     def settings_of(self, name: str) -> Mapping[str, Any]:
         return self.settings.get(name) or {}
+
+    def filled_of(self, name: str) -> tuple[str, ...]:
+        return tuple(self.filled.get(name) or ())
 
 
 @dataclass(frozen=True)

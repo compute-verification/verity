@@ -50,8 +50,22 @@ A spec-level reference for network accounting's timing channel:
   prover's routing of the view's prompt lengths by `IoTieRoute`, the totals and the carry-out by `IoTieRequestEnd`);
 - the capacity counts;
 - the calibration of honest runs;
+- advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
+  rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one
+  canonical bit string the compiler reads, refused unless it is a schedule vLLM could have run, with its bits split by
+  the earliest egress window that can show each record (`bits`). v0 is the committed form; the charge is ENC-CODE's
+  compressed length of the advice;
+- advice v0's validity (`advice_check`): `AdviceCheck_v1{L}`, the compile unit's first part as a Boolean Definition, 1
+  exactly when the committed bits (at most L) decode to a v0 advice, up to the three refusals of `decode` it defers
+  (unique ids, a source's KV computed there, release order per request); its AND count at each L is `size(L)`. From
+  `verity` it takes the circuits and their evaluator;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
   buckets before;
+- the active warden (`warden`): a relay that knows bytes only, between any client and any server. It forwards each
+  direction's bytes unchanged, in B-byte cells, r a bucket each way per connection, and egress cell i goes out in
+  bucket s + D + ⌊i/r⌋ from its admission s. A miss fails the connection closed with a `FAIL` cell that carries no
+  reason. It records and certifies exactly the cells it sends, and each failure's reason in a third record, `fails`.
+  `PROTOCOL.md`'s "The active warden" has its leak bound, and `benchmarks/network_traces/warden_serve.py` runs it;
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
   With its salt on (`Proxy(salt=active.fresh_salt)`, off by default), each PoUW window (`pouw_window` certifier
   windows) gets one salt of `salt_bits` bits (512 by default), carried into the block only. The ingress record holds a
@@ -126,9 +140,13 @@ content check, is the design (Daniel's provisional call on ASK-70, 19 Oct). N2 n
 (`LinkWindows.verify` runs `check_link(grid=False)`, NET-38). Nothing may call the count check zero-knowledge until
 this is closed:
 - **N2's unit isn't proved yet.** `LinkWindows.verify`, the verifier of record, runs `head_check.reference` (and on a
-  served link `served.reference`) on the host over the opening, so it reads the heads and the certifier's salts. When
-  the unit is proved, its head-check gate must bind `NetworkHeadCheck_v2`'s circuit digest (and its served gate
-  `NetworkServedCounts_v1`'s), and the verifier must refuse a proof of any other circuit (NET-43).
+  served link `served.reference`) on the host over the opening, so it reads the heads and the certifier's salts.
+
+A proof of the unit is held to its circuit already. Each gate names its Definition's circuit digest
+(`Gate[NetworkHeadCheck_v2{…}@<digest>]_v2`, `served.gate` likewise), as `head_check.circuit-check.json` and
+`served.circuit-check.json` pin it and circuit-check holds the pin to the Definition. So the unit's Program, which the
+spec and each registration bind, binds both circuits, and `LinkWindows.verify`, given a proof's findings, refuses one
+that names any other Program, or a unit of a size class no sidecar pins (`LinkWindows.proved`).
 
 The certificate no longer signs a hash of witness (NET-42). The certifier signs `D = SHA-512("verity/net-cert/v1" ‖
 salt_c ‖ R)`, R the head's record digest and `salt_c` 64 bytes the certifier draws fresh for each record
