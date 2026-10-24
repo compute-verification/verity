@@ -11,6 +11,9 @@ the TT family restated at `W1.w1Priced`.
 
 - `exec_ite_untaken`: an `ite` runs one branch, so a run is the same whatever its untaken branch is. That branch may be
   any `Code`, of any size, at no cost: W1 charges only the path a run takes.
+- `exec_tree`: a complete tree of `ite`s of depth `n` (`tree`, `2^n` leaves) costs `n` INT32 instructions and the one
+  leaf the memory reaches (`pathOf`), whatever the other leaves are. At `n = 256` on the salt's bits, that is a table of
+  one leaf per salt, selected for 256 INT32.
 - `not_ttOutW1_of_win`, `not_gγ_of_win`, `not_gγPerCoin_of_win`: one adversary within `T` and `q ≤ 2^64` calls that
   wins with probability above the error refutes each form. They are the forms read at that adversary.
 - `schema_not_ttOutW1` (and `schema_not_gγ`, `schema_not_gγPerCoin`): the forms as schemas carry no guard of their own.
@@ -19,9 +22,9 @@ the TT family restated at `W1.w1Priced`.
   protocol's reference being expensive to produce, which the form does not state.
 
 What these do not do: refute a named form at the deployed protocol. At `NoiseSha512.sha512Sem` with the game's salt the
-reference reads no oracle, so a program may tabulate it per salt in a code tree of `2^256` leaves and pay for one path
-(`exec_ite_untaken`); the cost of that program is the red team's arithmetic, not a theorem here
-(`note:compute-accounting/20261024T1730Z-report-w1-redteam`, W1RT-1).
+reference reads no oracle, so a program may tabulate it per salt in `tree` at depth 256 and pay for one path
+(`exec_tree`). The rest of that program (the salt's bits, the word tables, the leaf's writes) and its transcript are
+the red team's arithmetic, not a theorem here (`note:compute-accounting/20261024T1730Z-report-w1-redteam`, W1RT-1).
 -/
 
 namespace Pouw.PearlC.W1Tabulate
@@ -38,6 +41,52 @@ theorem exec_ite_untaken (dv : W1Device) (t : Bool) (p : Addr) (a a' b k : W1.Co
     (h : w32 (st.mem p) = 0) :
     exec dv t (.ite p a b k) st = exec dv t (.ite p a' b k) st := by
   simp [exec, h]
+
+/-- A complete binary tree of `ite`s of depth `n` on the words at `(10, n − 1)`, …, `(10, 0)`, with `leaf path` at the
+end of each of its `2^n` paths (`path` lists the branches taken, nonzero as `true`, the last one first). -/
+def tree (leaf : List Bool → W1.Code) : ℕ → List Bool → W1.Code
+  | 0, path => leaf path
+  | n + 1, path => .ite (10, n) (tree leaf n (true :: path)) (tree leaf n (false :: path)) .done
+
+/-- The leaf a memory reaches in `tree leaf n path`. -/
+def pathOf (M : Mem) : ℕ → List Bool → List Bool
+  | 0, path => path
+  | n + 1, path => pathOf M n (decide (w32 (M (10, n)) ≠ 0) :: path)
+
+/-- **A run through a tree of `ite`s of depth `n` pays `n` INT32 instructions and its one leaf**, whatever the other
+`2^n − 1` leaves are. The branches fetch nothing (region 10 is not pre-salt) and leave memory as it was, and the leaf
+runs under the taint rule. -/
+theorem exec_tree (dv : W1Device) (leaf : List Bool → W1.Code) :
+    ∀ (n : ℕ) (path : List Bool) (st : St),
+      exec dv true (tree leaf n path) st =
+        exec dv true (leaf (pathOf st.mem n path)) ⟨st.mem, st.fetched, st.cost + n * dv.prices.int32⟩
+  | 0, path, st => by simp [tree, pathOf]
+  | n + 1, path, st => by
+      have hf : ([((10 : ℕ), n)] : List Addr).filter preSalt = [] := by simp [preSalt]
+      have hc : st.cost + dv.prices.int32 + (n : ℚ) * dv.prices.int32 =
+          st.cost + ((n + 1 : ℕ) : ℚ) * dv.prices.int32 := by
+        push_cast; ring
+      by_cases h : w32 (st.mem (10, n)) = 0
+      · have e : exec dv true (tree leaf (n + 1) path) st =
+            exec dv true (tree leaf n (false :: path)) ⟨st.mem, st.fetched, st.cost + dv.prices.int32⟩ := by
+          simp [tree, exec, h, hf]
+        have hp : pathOf st.mem (n + 1) path = pathOf st.mem n (false :: path) := by simp [pathOf, h]
+        rw [e, exec_tree dv leaf n]
+        dsimp only
+        rw [hc, hp]
+      · have e : exec dv true (tree leaf (n + 1) path) st =
+            exec dv true (tree leaf n (true :: path)) ⟨st.mem, st.fetched, st.cost + dv.prices.int32⟩ := by
+          simp [tree, exec, h, hf]
+        have hp : pathOf st.mem (n + 1) path = pathOf st.mem n (true :: path) := by simp [pathOf, h]
+        rw [e, exec_tree dv leaf n]
+        dsimp only
+        rw [hc, hp]
+
+/-- A tree run from an untainted start runs as from a tainted one: its root is an `ite`, which taints both branches,
+and nothing follows it. -/
+theorem exec_tree_untainted (dv : W1Device) (leaf : List Bool → W1.Code) (n : ℕ) (path : List Bool) (st : St) :
+    exec dv false (tree leaf (n + 1) path) st = exec dv true (tree leaf (n + 1) path) st := by
+  simp [tree, exec]
 
 /-! ## A cheap winning program refutes each form -/
 
@@ -136,8 +185,7 @@ theorem schema_not_ttOutW1 (dv : W1Device) (γ₀ : ℝ) {ε : ℕ → ℕ → �
   rw [pr_eq_one]
   · exact hε
   · intro x
-    rw [emptyAdv_correctSet]
-    simp [tabP]
+    simp [emptyAdv_correctSet, tabP]
 
 /-- **The γ-gap property at W1, as a schema, fails** at `tabP`, at every `γ` and error with `η 0 1 < 1`. -/
 theorem schema_not_gγ (dv : W1Device) (γ : ℝ) {η : ℕ → ℕ → ℝ} (hη : η 0 1 < 1) :
@@ -146,9 +194,7 @@ theorem schema_not_gγ (dv : W1Device) (γ : ℝ) {η : ℕ → ℕ → ℝ} (h�
   rw [pr_eq_one]
   · exact hη
   · intro x
-    simp only [Wins]
-    rw [emptyAdv_correctSet]
-    simp [tabP]
+    simp [Wins, emptyAdv_correctSet, tabP]
 
 /-- **The γ-gap property per coin at W1, as a schema, fails** at `tabP`, at every `γ` and error with `η 0 1 < 1`. -/
 theorem schema_not_gγPerCoin (dv : W1Device) (γ : ℝ) {η : ℕ → ℕ → ℝ} (hη : η 0 1 < 1) :
@@ -160,8 +206,6 @@ theorem schema_not_gγPerCoin (dv : W1Device) (γ : ℝ) {η : ℕ → ℕ → �
     · exact hη
     · intro x
       refine ⟨(emptyAdv_cost dv x.1 x.2).le, ?_⟩
-      simp only [Wins]
-      rw [emptyAdv_correctSet]
-      simp [tabP]
+      simp [Wins, emptyAdv_correctSet, tabP]
 
 end Pouw.PearlC.W1Tabulate
