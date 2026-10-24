@@ -140,9 +140,9 @@ def build(opts: Options) -> tuple[Any, Any]:
 
     engine_env.apply_engine(os.environ.get("HF_HOME") or "/workspace/hf")
     os.environ["VERITY_RETAIN"] = "host"
-    if opts.precision == "int8_exact":
+    if opts.precision != "pin":
         from verity_vllm.engine import int8_ranks
-        int8_ranks.register(("linears", "attention"))
+        int8_ranks.register(("linears", "attention") if opts.precision == "int8_exact" else ("linears",))
     from verity_vllm.pipeline.llm import LLM
 
     llm = LLM(opts.model, revision=opts.revision, **engine_options(opts))
