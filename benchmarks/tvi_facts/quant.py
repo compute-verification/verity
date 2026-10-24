@@ -92,6 +92,24 @@ def lzma_bits(t):
     return 8 * len(lzma.compress(t.to(dt).numpy().tobytes(), preset=6))
 
 
+def gram_svd(X):
+    """thin SVD through the eigendecomposition of the smaller Gram matrix: exact singular values (squared, so
+    only the leading vectors are accurate, and only those are used), and far faster than linalg.svd on a GPU"""
+    T, D = X.shape
+    G = X.T @ X if T >= D else X @ X.T
+    e, W = torch.linalg.eigh(G.double())
+    e, W = e.flip(0).clamp_min(0), W.flip(1)
+    S = e.sqrt()
+    inv = torch.where(S > S[0] * 1e-6, 1 / S.clamp_min(1e-30), torch.zeros_like(S))
+    if T >= D:
+        V = W
+        U = (X.double() @ V) * inv
+        return U.float(), S.float(), V.T.float()
+    U = W
+    Vh = (U.T @ X.double()) * inv[:, None]
+    return U.float(), S.float(), Vh.float()
+
+
 def to_device(dev):
     """move the grids (shared by FORMATS) so the estimators run where the activations are"""
     for G in (G_BF16, G_E4M3, G_E4M3_POS, G_E2M1):
@@ -141,7 +159,7 @@ def analyze_pair(X0, X1, fmts, mdl_ranks=(), want_lzma=True, want_svd=True):
     out = {}
     dX = X1 - X0
     if want_svd:
-        U, S, Vh = torch.linalg.svd(dX, full_matrices=False)
+        U, S, Vh = gram_svd(dX)
         e = (S.double() ** 2).cumsum(0)
         e = e / e[-1] if e[-1] > 0 else e
         out["r90"] = int((e < 0.90).sum()) + 1 if e[-1] > 0 else 0

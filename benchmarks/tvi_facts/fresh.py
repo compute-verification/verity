@@ -18,7 +18,7 @@ import quant
 TARGETS = ("q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj")
 FMTS = ("bf16", "fp8t", "mxfp8", "nvfp4")
 MDL_RANKS = (1, 4, 16, 64, 256)
-N_PEOPLE = int(os.environ.get("FRESH_PEOPLE", "32"))
+N_PEOPLE = int(os.environ.get("FRESH_PEOPLE", "16"))
 LZMA_LAYERS = {int(x) for x in os.environ.get("LZMA_LAYERS", "12").split(",") if x}
 LZMA_TOKENS = int(os.environ.get("LZMA_TOKENS", "256"))
 
