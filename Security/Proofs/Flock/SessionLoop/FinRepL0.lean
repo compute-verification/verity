@@ -1,4 +1,5 @@
 import Proofs.Flock.SessionLoop.FinRepFinal
+import Proofs.Flock.SessionLoop.FinRepXs
 import Proofs.Flock.SessionLoop.Tables
 import Proofs.Flock.Claims.ZK.FinishRank
 import Proofs.Flock.Claims.ZK.FinishSwPts
@@ -147,8 +148,8 @@ theorem piopCut_counts (st : Setup) (lay : Zk.PadLayout) (src : RepSrc) (cap roo
   obtain ⟨rfl, rfl⟩ := Replay.rankCheckP_go h₃
   try dsimp only at h
   obtain ⟨⟨ss, T, sws⟩, t₄, l₄, h₄, h⟩ := run_bind_ok h
-  simp only [StateT.run_pure, JsonRT.go_pure, Prod.mk.injEq, Except.ok.injEq] at h
-  obtain ⟨⟨-, rfl⟩, rfl⟩ := h
+  obtain ⟨h, rfl⟩ := Prod.mk.inj h
+  obtain ⟨-, rfl⟩ := Prod.mk.inj (Except.ok.inj h)
   have s1 := (zerocheckCut_at coin n hm _ _ _ _ _ h₁).2
   have s2 := (lincheckCut_at coin n _ _ _ _ _ h₂).2
   have s3 := (ringSwitchCut_sws coin n _ _ (by simp [abcClaims]) h₄).2.1
@@ -317,6 +318,45 @@ theorem commit0Cut_rows {ms : MerkleScheme} {lv : Level} {src : TabSrc} {cm : Co
 
 end FlockComplete
 
+namespace FlockSoundness.ZK.Table
+
+section
+
+variable {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] (T : Table F K W Salt Seed D Hi VL)
+
+theorem toBase_l0 (v : T.onVals.View) :
+    ((T.toBase v).rows, (T.toBase v).xrows, (T.toBase v).salts0) = (v.rows, v.xrows, v.salts0) := rfl
+
+end
+
+section
+
+variable {F K W Salt B D Hi VL C : Type} [Field F] [Field K] [AddCommGroup B] [CharP F 2]
+  {T : Table F K W Salt (B × Salt) D Hi VL}
+
+/-- **A real view's level-0 rows and salts read the witness alone**, not the clear values. -/
+theorem Hm96.onVals_viewR_l0 (M : T.Hm96 C) (w : W) (v v' : T.Vals) (ω : T.Rand) (ys : T.Hid → Salt) :
+    ((M.onVals.viewR (w, v) ω ys).rows, (M.onVals.viewR (w, v) ω ys).xrows, (M.onVals.viewR (w, v) ω ys).salts0) =
+      ((M.onVals.viewR (w, v') ω ys).rows, (M.onVals.viewR (w, v') ω ys).xrows,
+        (M.onVals.viewR (w, v') ω ys).salts0) := by
+  unfold FlockSoundness.ZK.Table.Hm96.viewR FlockSoundness.ZK.Table.viewWith FlockSoundness.ZK.Table.view
+  try dsimp only
+  try rfl
+
+/-- **Moving the pads leaves a real view's level-0 rows and salts**: `Table.shift` moves the pads alone. -/
+theorem Hm96.viewR_shift_l0 (M : T.Hm96 C) (p q r : W) (ω : T.Rand) (ys : T.Hid → Salt) :
+    ((M.viewR r (T.shift p q ω) ys).rows, (M.viewR r (T.shift p q ω) ys).xrows,
+        (M.viewR r (T.shift p q ω) ys).salts0) =
+      ((M.viewR r ω ys).rows, (M.viewR r ω ys).xrows, (M.viewR r ω ys).salts0) := by
+  unfold FlockSoundness.ZK.Table.Hm96.viewR FlockSoundness.ZK.Table.viewWith FlockSoundness.ZK.Table.view
+    FlockSoundness.ZK.Table.shift
+  try dsimp only
+  try rfl
+
+end
+
+end FlockSoundness.ZK.Table
+
 /-- **A switched view's level-0 rows and salts are the honest view's**: it is the view at the workers' values or the
 view with the pads moved (`Hm96.swViewR_eq`), and level 0's rows and salts read the witness, the level-0 randomness and
 the seeds alone, whatever the values and the pads. -/
@@ -334,15 +374,13 @@ theorem FlockSoundness.Discharge.ZkView.Coined.swExe_l0 {K W Hi VL : Type} [Fiel
     refine e1.trans (Eq.trans ?_ e2)
     beta_reduce
     split_ifs
-    all_goals
-      first
-      | rfl
-      | (unfold FlockSoundness.ZK.Table.Hm96.viewR FlockSoundness.ZK.Table.viewWith FlockSoundness.ZK.Table.view
-         try unfold FlockSoundness.ZK.Table.shift
-         try dsimp only
-         rfl)
-  simp only [Prod.mk.injEq] at key
-  exact key
+    · exact (FlockSoundness.ZK.Table.toBase_l0 T.tab _).trans
+        ((FlockSoundness.ZK.Table.Hm96.onVals_viewR_l0 T.hm96 w v T.tab.vals ω ys).trans
+          (FlockSoundness.ZK.Table.toBase_l0 T.tab _).symm)
+    · exact (FlockSoundness.ZK.Table.toBase_l0 T.tab _).trans
+        ((FlockSoundness.ZK.Table.Hm96.viewR_shift_l0 T.hm96.onVals (w, v) (w, T.tab.vals) (w, T.tab.vals) ω
+          ys).trans (FlockSoundness.ZK.Table.toBase_l0 T.tab _).symm)
+  exact ⟨congrArg (·.1) key, congrArg (·.2.1) key, congrArg (·.2.2) key⟩
 
 namespace Claims.ZKMal.Masked
 
