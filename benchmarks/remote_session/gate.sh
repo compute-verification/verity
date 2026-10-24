@@ -12,16 +12,17 @@
 #          PACE_PASS_MS, MINUTES, JITTER_MS, QUANTILE, MODEL with ENGINES arenas of ARENA_BLOCKS); its `status` every 30 s
 #          until it ends, then the run's directory without its transcripts (`fetch`) into host/RUN. Exits with the run's rc.
 #   close  `period-close --name PERIOD`, then the closed ledger.
+#   audit  `auditor.sh` over the host run HOST_RUN (default the one `host` fetched), into $OUT itself: ledger.jsonl,
+#          pins.jsonl, auditor_line.json, credit.md, which `gate_whatif.sh` reads.
 #   fire   wait until PROVER_RUN holds ENGINES GPUs on PROVER_NODE (its `gpu-lease status`, over that node's line of
-#          /etc/vy/peers), then probe, open, host, close and `auditor.sh` over the host run (into $OUT itself: ledger.jsonl,
-#          pins.jsonl, auditor_line.json, credit.md, which `gate_whatif.sh` reads). A host run that fails leaves the period
-#          open for a rerun in it and runs no auditor.
+#          /etc/vy/peers), then probe, open, host, close and audit. A host run that fails leaves the period open for a
+#          rerun in it and runs no auditor.
 #
 # With DRY=1 no request reaches either gate: each is written to gate.requests and printed, the key need not exist, and
 # what doesn't need it runs (the circuit, the peers line to PROVER_NODE and its lease status, vy-auditor-1's host key).
 set -u
 : "${OUT:?}"
-VERB=${1:?probe, open, host, close or fire}
+VERB=${1:?probe, open, host, close, audit or fire}
 GATE_KEY=${GATE_KEY:-$HOME/.ssh/vy-challenger-gate-memory-accounting}
 CHALLENGER=${CHALLENGER:-research@204.12.178.84}
 AUDITOR=${AUDITOR:-research@81.85.1.145}
@@ -203,15 +204,18 @@ fire() {
     exit $r
   fi
   close_period || exit 3
-  local run
-  run=$(cat "$OUT/host-run.txt" 2> /dev/null || echo DRY)
+  audit
+}
+
+audit() {
+  local run=${HOST_RUN:-$OUT/host/$(cat "$OUT/host-run.txt" 2> /dev/null || echo DRY)}
   # PEER empty: the sessions' challenger peer is the host record's (vy-auditor-1), not the prover's node
   if [ -n "${DRY:-}" ]; then
-    echo "DRY: PEER='' GATE=$CHALLENGER GATE_KEY=$GATE_KEY RUN=$OUT/host/$run PERIOD=$PERIOD PIN=$PIN COMMIT=$COMMIT" \
+    echo "DRY: PEER='' GATE=$CHALLENGER GATE_KEY=$GATE_KEY RUN=$run PERIOD=$PERIOD PIN=$PIN COMMIT=$COMMIT" \
       "bash benchmarks/remote_session/auditor.sh"
     return 0
   fi
-  PEER='' GATE=$CHALLENGER GATE_KEY=$GATE_KEY RUN=$OUT/host/$run bash benchmarks/remote_session/auditor.sh
+  PEER='' GATE=$CHALLENGER GATE_KEY=$GATE_KEY RUN=$run bash benchmarks/remote_session/auditor.sh
 }
 
 : > "$OUT/gate.requests"
@@ -220,6 +224,7 @@ case $VERB in
   open) open_period ;;
   host) host_run ;;
   close) close_period ;;
+  audit) audit ;;
   fire) fire ;;
-  *) echo "VERB is probe, open, host, close or fire, not $VERB"; exit 2 ;;
+  *) echo "VERB is probe, open, host, close, audit or fire, not $VERB"; exit 2 ;;
 esac

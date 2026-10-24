@@ -53,7 +53,7 @@ W=$(mktemp -d)
 trap 'git -C "$ROOT" worktree remove --force "$W" > /dev/null 2>&1; rm -rf "$W"' EXIT
 git -C "$ROOT" worktree add -q --detach "$W" "$COMMIT" || exit 3
 read -r REPO REV < <(python3 -c 'import json, sys
-e = json.load(open(sys.argv[1]))["models"][sys.argv[2]]
+e = json.load(open(sys.argv[1]))[sys.argv[2]]
 print(e["repo"], e["revision"])' "$W/verity/core/protocols/pouw/lean/check/models.json" "$ROLE") \
   || { echo "core's pin at $COMMIT has no role $ROLE"; exit 3; }
 SNAP=/workspace/hf/hub/models--${REPO//\//--}/snapshots/$REV
@@ -111,12 +111,12 @@ fi
 [ -z "${fire:-}" ] || [ -n "$DRY" ] || { echo "$STATE already has fire $fire: name a new PERIOD"; exit 3; }
 grep -q '^COMMIT=' "$STATE" || record COMMIT "$COMMIT"
 echo "== 1. checkpoint on $PROVER_NODE"
-launch checkpoint --on "$PROVER_NODE" --cwd source --send "$HERE/checkpoint.sh" --wait --env CHECK_ONLY=1 \
+launch checkpoint --on "$PROVER_NODE" --cwd source --send "$HERE/checkpoint.sh" --timeout 20m --wait --env CHECK_ONLY=1 \
   --env "ROLE=$ROLE" -- bash -lc 'bash "$RESEARCH_RUN_DIR/inputs/checkpoint.sh"' || exit 3
 echo "== 2. probe on $GATE_ON"
 gate_step probe probe --mem-gb 4 --timeout 10m --wait || exit 3
 echo "== 3. prover on $PROVER_NODE"
-PROVER=(--on "$PROVER_NODE" --cwd source --timeout 6h
+PROVER=(--on "$PROVER_NODE" --cwd source --timeout 6h --custody-ttl 12h
   --env ROLE=prover --env "PORT=$PORT" --env SERVE=node --env "PLAN=$PLAN" --env "MODEL=$SNAP"
   --env ENGINE_CPUS=0-23 --env PROVER_CPUS=24-47 --env "ENGINE_ARGS=--step-hz 2 --align-steps --arena-gib 62 --util 0.8"
   --env "NODE_ARGS=--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir $SNAP"
@@ -131,5 +131,5 @@ else
   PROVER_RUN=$prover
 fi
 echo "== 4. fire on $GATE_ON"
-gate_step fire fire --mem-gb 16 --timeout 8h --store-read --env "PROVER_RUN=$PROVER_RUN" ${DRY:+--wait} || exit $?
+gate_step fire fire --mem-gb 16 --timeout 8h --custody-ttl 12h --store-read --env "PROVER_RUN=$PROVER_RUN" ${DRY:+--wait} || exit $?
 echo "state: $STATE; once fire ends: benchmarks/remote_session/gate_run.sh whatif $PERIOD"
