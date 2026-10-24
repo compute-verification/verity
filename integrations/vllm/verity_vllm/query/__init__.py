@@ -8,7 +8,6 @@
                    the Program's literals (Calls that read no Value: the descriptor's, never acquired)
     required       required values under the query of record (Q_word v1: every Call boundary; Q_module_body_v1 for A/B) spelt as v1
                    IDENTITY_KEY rows; the partition of record (`partition_of`)
-    compare        identity-set comparison against a v1 manifest, every difference classified
     (the CLI)      `verity-vllm manifest build|build-global ... --out manifest.json`
 
 Nothing in this package names a model or decides a member by a module-name or Definition-family table
