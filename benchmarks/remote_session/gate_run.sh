@@ -20,12 +20,12 @@
 #   whatif         gate_whatif.sh at origin/main's head on WHATIF_ON over the fire run's artifact (the host run in it,
 #                  its ledger and pins) and the prover's; RUN_ART, SUB, AUDITOR_ART and PROVER_ART name others.
 #
-# COMMIT is the commit vy-auditor-1's verifier is pinned at (default origin/main's head; the probe refuses another and
-# names the host's); the steps run from a worktree of it, with this file's gate.sh and checkpoint.sh sent beside. GATE_KEY
-# is the key's path on GATE_ON (default gate.sh's, under that machine's user's ~/.ssh). A dry run's ids go to
-# PERIOD.dry.env. --dry-run
-# runs steps 1 and 2 (with DRY=1: no request reaches a gate, and GATE_KEY need not exist), prints step 3, and runs step 4
-# with DRY=1 against PROVER_RUN, any run id (default none), whose lease it reads.
+# COMMIT is the commit vy-auditor-1's verifier is pinned at (default PERIOD.env's, else origin/main's head; the probe
+# refuses another and names the host's, and a COMMIT given here replaces the recorded one); the steps run from a
+# worktree of it, with this file's gate.sh and checkpoint.sh sent beside. GATE_KEY is the key's path on GATE_ON (default
+# gate.sh's, under that machine's user's ~/.ssh). A dry run's ids go to PERIOD.dry.env. --dry-run runs steps 1 and 2
+# (with DRY=1: no request reaches a gate, and GATE_KEY need not exist), prints step 3, and runs step 4 with DRY=1
+# against PROVER_RUN, any run id (default none), whose lease it reads.
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(git -C "$HERE" rev-parse --show-toplevel)
@@ -44,11 +44,13 @@ VERIFIER_SSH=${VERIFIER_SSH:--o StrictHostKeyChecking=accept-new -i /home/resear
 STATE=$HOME/.research/gate-runs/$PERIOD${DRY:+.dry}.env
 mkdir -p "$(dirname "$STATE")"
 touch "$STATE"
+GIVEN_COMMIT=${COMMIT:-}
+unset COMMIT
 # shellcheck disable=SC1090
 . "$STATE"
 git -C "$ROOT" fetch -q origin main || exit 3
 MAIN=$(git -C "$ROOT" rev-parse origin/main)
-COMMIT=${COMMIT:-$MAIN}
+COMMIT=${GIVEN_COMMIT:-${COMMIT:-$MAIN}}
 TREE=$COMMIT
 [ "$VERB" = whatif ] && TREE=$MAIN
 W=$(mktemp -d)
@@ -112,7 +114,7 @@ if [ "$VERB" = whatif ]; then
 fi
 
 [ -z "${fire:-}" ] || [ -n "$DRY" ] || { echo "$STATE already has fire $fire: name a new PERIOD"; exit 3; }
-grep -q '^COMMIT=' "$STATE" || record COMMIT "$COMMIT"
+[ "$(grep '^COMMIT=' "$STATE" | tail -n 1)" = "COMMIT=$COMMIT" ] || record COMMIT "$COMMIT"
 echo "== 1. checkpoint on $PROVER_NODE"
 launch checkpoint --on "$PROVER_NODE" --cwd source --send "$HERE/checkpoint.sh" --timeout 20m --wait --env CHECK_ONLY=1 \
   --env "ROLE=$ROLE" -- bash -lc 'bash "$RESEARCH_RUN_DIR/inputs/checkpoint.sh"' || exit 3
