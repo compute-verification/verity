@@ -18,8 +18,9 @@ import numpy as np
 
 KB = 8_000
 CONFIGS = ("deepseek-v4-pro", "kimi-k2")
-K_LINES = {"10kB": 10 * KB, "1MB": 1000 * KB}
-K_COLORS = {"10kB": "tab:blue", "1MB": "tab:green"}
+#: 10 kB and the deck's calibration, k = 2.5 MB (1 MB sits 0.4 decades from it and overlaps its curves)
+K_LINES = {"10kB": 10 * KB, "2.5MB": 2500 * KB}
+K_COLORS = {"10kB": "tab:blue", "2.5MB": "tab:red"}
 FULL = None  # placed at the target model's full-training S
 
 #: goal -> [(series, [(S bits or FULL, capability)])]: the coordinator's capability data, fractions of the full-training
@@ -60,8 +61,9 @@ def load(paths: list[str], precision: str) -> dict[tuple[str, str, str], dict]:
 
 
 def draw(curves: dict, out: Path, precision: str, inputs_note: str) -> list[Path]:
-    """One column per goal on one S axis: capability on top, then rho for each config (exact attack solid, with
-    recipe changes dashed, the bound's rho(S) dotted, the full-training bound a star), k dashed through all rows."""
+    """One column per goal on one S axis: capability on top, then rho for each config (the best attack found with the
+    recipe kept solid, with recipe changes dashed, the bound's rho(S) dotted, its full-training count at beta_gx a filled
+    star and at beta_v a hollow one), k dashed through all rows."""
     import matplotlib
 
     matplotlib.use("Agg")
@@ -101,16 +103,19 @@ def draw(curves: dict, out: Path, precision: str, inputs_note: str) -> list[Path
                     continue
                 col = K_COLORS[k_label]
                 S = np.array(cv["S"])
-                rx.plot(S, nan(cv["attack_exact"]), "-", color=col, lw=2.0, label=f"rho_attack, recipe kept (k = {k_label})")
-                rx.plot(S, nan(cv["attack"]), "--", color=col, lw=1.0, label=f"rho_attack, with recipe changes (k = {k_label})")
-                rx.plot(S, cv["bound"], ":", color=col, lw=1.8, label=f"bound rho(S) (k = {k_label})")
-                rx.scatter([S[-1]], [cv["full"]], marker="*", color=col, s=80, zorder=6,
-                           label=f"bound, full training (k = {k_label})")
+                rx.plot(S, nan(cv["attack_exact"]), "-", color=col, lw=2.0,
+                        label=f"execution upper bound (best attack found, recipe kept), k = {k_label}")
+                rx.plot(S, nan(cv["attack"]), "--", color=col, lw=1.0,
+                        label=f"execution upper bound (best attack found, with recipe changes), k = {k_label}")
+                rx.plot(S, cv["bound"], ":", color=col, lw=1.8,
+                        label=f"slowdown lower bound (beta_gx count, conditional), k = {k_label}")
+                rx.scatter([S[-1]], [cv["full_gx"]], marker="*", color=col, s=90, zorder=6,
+                           label=f"slowdown lower bound at full training (beta_gx count), k = {k_label}")
+                rx.scatter([S[-1]], [cv["full"]], marker="*", facecolors="none", edgecolors=col, s=90, zorder=6,
+                           label=f"the same with the beta_v count, k = {k_label}")
             rx.set_yscale("log")
             rx.set_ylabel(f"rho, {cfg}")
             rx.set_title(f"{cfg}, matched c, {precision}, {WORKLOAD[goal].upper()}", fontsize=8)
-            if j == 0 and i == 1:
-                rx.legend(fontsize=6, loc="upper left", framealpha=0.9)
         for i in range(rows):
             a = axes[i][j]
             a.set_xscale("log")
@@ -121,10 +126,13 @@ def draw(curves: dict, out: Path, precision: str, inputs_note: str) -> list[Path
                 if i == 0:
                     a.text(k, 1.05, f" k = {k_label}", color=K_COLORS[k_label], fontsize=7, va="bottom")
         axes[-1][j].set_xlabel("S (bits of trained state)")
-    fig.suptitle(f"Capability against S (top; measured on Qwen2.5-0.5B/1.5B, S as the experiment counts it) and "
-                 f"rho_attack(S) against the bound's rho(S) for DeepSeek-V4-Pro and Kimi K2 (below), matched c, "
-                 f"{precision}. {inputs_note}", fontsize=9)
-    fig.tight_layout(rect=(0, 0, 1, 0.975))
+    fig.suptitle(f"Capability against S (top; measured on Qwen2.5-0.5B/1.5B, S as the experiment counts it; facts placed "
+                 f"at the 12-epoch measurement of N = 2,000, N = 200 at 90 epochs for reference)\nand rho for DeepSeek-V4-Pro and Kimi K2 (below), matched c = k phi, "
+                 f"{precision}; k = 2.5 MB is the deck's calibration.\nF (fresh bits per token at a block boundary) is "
+                 f"B1's measurement on Qwen2.5-1.5B scaled by d/1536 to each model. {inputs_note}", fontsize=9)
+    handles, labels = axes[1][0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", ncol=len(K_LINES), fontsize=7.5, frameon=False)
+    fig.tight_layout(rect=(0, 0.075, 1, 0.955))
     paths = []
     for ext in ("png", "svg"):
         p = out / f"capability_vs_rho_{precision}.{ext}"

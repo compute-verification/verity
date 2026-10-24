@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -93,6 +94,11 @@ def test_the_full_training_bound_is_the_covering_count():
         assert b["rho"] == pytest.approx(c * NVFP4.beta_v * QWEN.values_per_token / (K * u * QWEN.f))
     eta1 = ra.bound(QWEN, S, 3000.0, K, K * QWEN.phi(), NVFP4, ra.Knobs(), True)
     assert eta1["rho"] == pytest.approx(QWEN.phi() * NVFP4.beta_v / (6 * QWEN.d_eff))
+    gx = replace(NVFP4, beta_gx=0.05)
+    both = ra.bound(QWEN, S, 3000.0, K, K * QWEN.phi(), gx, ra.Knobs(), True)
+    assert both["rho_gx"] == pytest.approx(both["rho"] * 0.05 / NVFP4.beta_v)
+    cliff = ra.bound(QWEN, 2 * K, 3000.0, K, K * QWEN.phi(), gx, ra.Knobs(), False)
+    assert cliff["rho_gx"] == cliff["rho"]
 
 
 def test_only_recipe_changes_and_lossy_corrections_carry_their_own_broken_assumption():
@@ -206,3 +212,15 @@ def test_merge_joins_per_config_runs(cli_run, tmp_path):
     doc = json.loads((tmp_path / "all" / "rho_attack_in_hand_rank64.json").read_text())
     assert {r["config"] for r in doc["rows"]} == {"qwen2.5-1.5b", "other"}
     assert (tmp_path / "all" / "rho_attack_in_hand_rank64_nvfp4_s1.png").stat().st_size > 0
+
+
+def test_readout_tables_name_both_bounds(cli_run):
+    import readout
+
+    doc = json.loads(cli_run.read_text())
+    for item in doc["rows"] + doc["curves"]:
+        item.update(config="kimi-k2", precision="fp8", c_mode="eta1")
+        item["workload"] = item.get("workload", "sft")
+    text = readout.tables(doc)
+    assert "bound (beta_v count) | bound (beta_gx count)" in text
+    assert "| Kimi K2 | fp8 | 10kB |" in text and "| Kimi K2 | fp8 | 2.5MB |" in text

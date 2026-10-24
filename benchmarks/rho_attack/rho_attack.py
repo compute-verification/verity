@@ -41,7 +41,7 @@ from configs import Config, Map  # noqa: E402
 
 KB = 8_000  # bits in a (decimal) kB, as the notes use it
 C_FIXED = 1.4e17
-K_GRID = {"10kB": 10 * KB, "100kB": 100 * KB, "1MB": 1000 * KB}
+K_GRID = {"10kB": 10 * KB, "100kB": 100 * KB, "1MB": 1000 * KB, "2.5MB": 2500 * KB}  # 2.5 MB: the deck's k
 
 
 @dataclass(frozen=True)
@@ -539,7 +539,8 @@ def bound(cfg: Config, S: float, F: float, k: float, c: float, beta: Beta, kn: K
     SFT, 4f for GRPO, whose rollouts are generated): O(1) for S < k, but never below the data floor (every token id, or
     for GRPO every prompt and seed, enters some block: ``c * bits / (k u)``, eta / 3 for SFT); at the cliff
     (2/3) * crossings * F / h with two crossings, times eta = c / (k phi) and 3f / u; for full training the covering
-    theorem |T| >= w(V) / k, i.e. ``c * beta_v * V / (k u)`` (eta * phi * beta_v / (6 d_eff) for SFT)."""
+    theorem |T| >= w(V) / k, i.e. ``c * beta_v * V / (k u)`` (eta * phi * beta_v / (6 d_eff) for SFT). ``rho`` is the
+    bound with that count at beta_v; ``rho_gx`` the same with the count at beta_gx (they differ only at full training)."""
     phi = cfg.phi(kn.traffic)
     eta = c / (k * phi)
     f = cfg.f
@@ -554,13 +555,13 @@ def bound(cfg: Config, S: float, F: float, k: float, c: float, beta: Beta, kn: K
     full_rho = c * beta.beta_v * cfg.values_per_token / (k * u)
     full_gx = c * beta.gx * cfg.values_per_token / (k * u)
     if S < k:
-        rho = max(1.0, floor)
+        rho = rho_gx = max(1.0, floor)
     elif full:
-        rho = max(1.0, floor, full_rho)
+        rho, rho_gx = max(1.0, floor, full_rho), max(1.0, floor, full_gx)
     else:
-        rho = max(1.0, floor, cliff)
-    return {"rho": rho, "eta": eta, "cliff": cliff, "full": full_rho, "full_gx": full_gx, "floor": floor,
-            "regime": "S<k" if S < k else ("full" if full else "cliff")}
+        rho = rho_gx = max(1.0, floor, cliff)
+    return {"rho": rho, "rho_gx": rho_gx, "eta": eta, "cliff": cliff, "full": full_rho, "full_gx": full_gx,
+            "floor": floor, "regime": "S<k" if S < k else ("full" if full else "cliff")}
 
 
 # ------------------------------------------------------------------------------------------------------------ optimizer
@@ -647,6 +648,7 @@ def evaluate(cfg: Config, inputs: Inputs, kn: Knobs, labels: list[str], k: float
             "strategies": {n: a.to_json() for n, a in res["all"].items()},
             "ratio": (best.rho / b["rho"]) if best else None,
             "ratio_exact": (ex.rho / b["rho"]) if ex else None,
+            "ratio_gx": (best.rho / b["rho_gx"]) if best else None,
             "breaks": _breaks(best, b, full) if best else None,
             "breaks_exact": _breaks(ex, b, full) if ex else None,
             "hybrid": hyb.to_json() | {"bound_same_phases": kn.phi0 + (1 - kn.phi0) * b["rho"]} if hyb else None,
@@ -672,26 +674,36 @@ def F_curve(inputs: Inputs, cfg: Config, precision: str, kn: Knobs) -> tuple[np.
 
 def curve(cfg: Config, inputs: Inputs, kn: Knobs, k: float, c: float, precision: str, workload: str,
           n: int = 36, s_min: float = 1e2) -> dict:
+    """rho_attack and the bound's rho(S) at n sizes up to full training, F, G / F and the betas interpolated in log S
+    between the labels; ``cliff_2k`` the same at S = 2k, just above the cliff."""
     base = inputs.beta_for("full", precision) if "full" in inputs.F else inputs.precisions[precision]
     s_full = cfg.params * base.beta_w
-    Ss = np.geomspace(s_min, s_full, n)
     sx, ys = F_curve(inputs, cfg, precision, kn)
     at = lambda key, S: float(np.interp(np.log(S), np.log(sx), ys[key]))  # noqa: E731
-    out = {"S": [], "attack": [], "strategy": [], "attack_exact": [], "strategy_exact": [], "bound": [], "cliff": [],
-           "full": None}
-    for S in Ss:
-        F = at("F", S)
+
+    def point(S: float) -> tuple[dict, dict]:
         beta = replace(base, **{f: at(f, S) for f in _INTERP})
         kl = replace(kn, grad_factor=at("gf", S))
-        res = rho_attack(cfg, float(S), F, k, c, beta, kl, workload)
-        b = bound(cfg, float(S), F, k, c, beta, kl, False, workload)
+        return rho_attack(cfg, S, at("F", S), k, c, beta, kl, workload), bound(cfg, S, at("F", S), k, c, beta, kl,
+                                                                               False, workload)
+
+    out = {"S": [], "attack": [], "strategy": [], "attack_exact": [], "strategy_exact": [], "bound": [], "cliff": [],
+           "full": None}
+    for S in np.geomspace(s_min, s_full, n):
+        res, b = point(float(S))
         out["S"].append(float(S))
         for key, a in (("", res["best"]), ("_exact", res["best_exact"])):
             out["attack" + key].append(a.rho if a else None)
             out["strategy" + key].append(a.strategy if a else None)
         out["bound"].append(b["rho"])
         out["cliff"].append(b["cliff"])
-    out["full"] = bound(cfg, s_full, float(ys["F"][-1]), k, c, base, kn, True, workload)["rho"]
+    res, b = point(2 * k)
+    out["cliff_2k"] = {"S": 2 * k, "bound": b["rho"],
+                       **{"attack" + key: (a.rho if a else None) for key, a in (("", res["best"]), ("_exact", res["best_exact"]))},
+                       **{"strategy" + key: (a.strategy if a else None)
+                          for key, a in (("", res["best"]), ("_exact", res["best_exact"]))}}
+    full = bound(cfg, s_full, float(ys["F"][-1]), k, c, base, kn, True, workload)
+    out["full"], out["full_gx"] = full["rho"], full["rho_gx"]
     return out
 
 
@@ -750,15 +762,17 @@ def fmt(x: float | None) -> str:
 
 
 def summarize(rows: list[dict]) -> str:
-    lines = ["| config | c | k | precision | workload | S | rho_bound (regime) | exact attack | exact/bound | "
-             "any attack | any/bound | breaks |", "|" + "---|" * 12]
+    lines = ["| config | c | k | precision | workload | S | bound (beta_v count) (regime) | bound (beta_gx count) | "
+             "exact attack | exact / bound (beta_v count) | any attack | any / bound (beta_v count) | "
+             "any / bound (beta_gx count) | breaks |", "|" + "---|" * 14]
     for r in rows:
         a, e = r["attack"], r["attack_exact"]
         lines.append(f"| {r['config']} | {r['c_mode']} | {r['k_label']} | {r['precision']} | {r['workload']} | "
                      f"{r['S_label']} ({fmt(r['S_bits'])} b) | {fmt(r['bound']['rho'])} ({r['bound']['regime']}) | "
+                     f"{fmt(r['bound']['rho_gx'])} | "
                      f"{fmt(e['rho']) + ' ' + e['strategy'] if e else 'infeasible'} | {fmt(r['ratio_exact'])} | "
                      f"{fmt(a['rho']) + ' ' + a['strategy'] if a else 'infeasible'} | {fmt(r['ratio'])} | "
-                     f"{r['breaks'] or ''} |")
+                     f"{fmt(r['ratio_gx'])} | {r['breaks'] or ''} |")
     return "\n".join(lines) + "\n"
 
 

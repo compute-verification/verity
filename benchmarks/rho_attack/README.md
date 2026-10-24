@@ -32,7 +32,8 @@ one input file).
   theta's: the correction given theta, default `beta_v`), `beta_g` (per interior output gradient, default `beta_v`),
   `raw_bits` (per coordinate sent with no theta baseline, default `2 * beta_x`), `b_acc` (per weight of a gradient
   accumulator, default `beta_w`). Blocks that recompute theta's activations pay `beta_gx`; the bound and raw sends pay
-  `beta_v` (the bound's row also reports `full_gx`, its full-training count at `beta_gx`).
+  `beta_v`; the bound's row also reports `rho_gx`, the bound with its full-training count at `beta_gx`, and the table
+  names both: bound (beta_v count) and bound (beta_gx count).
 - `F`: fresh bits per token crossing a block boundary forward, per S label, a number or one per precision. `G` (optional,
   same shape): the backward crossing's fresh bits; without it `G = grad_factor * F`. `F_scaling: per_dim` scales F and G
   by `d / measured_on.d_model` on each config (x 4.67 for DeepSeek-V4-Pro and Kimi K2 from d = 1536); `absolute` doesn't.
@@ -49,7 +50,9 @@ boundary's forward-and-backward), per precision and per S label.
 
 `figure.py RUN.json --out OUT --precision fp8` draws capability against S for each training goal (A2 RL elicitation,
 A3 cipher, B3 facts; the data are in `GOALS`) above `rho_attack(S)` and the bound's `rho(S)` for DeepSeek-V4-Pro and
-Kimi K2 at matched c on the same S axis, with k = 10 kB and 1 MB marked; RL is priced as GRPO, the others as SFT.
+Kimi K2 at matched c on the same S axis, with k = 10 kB and the deck's 2.5 MB marked; RL is priced as GRPO, the others
+as SFT. `readout.py RUN.json --out readout.md` writes the readout's absolute tables for V4 and K2 at k = 10 kB, 1 MB
+and 2.5 MB: full training against both bounds, and the cliff just above k (the smallest S label above it, and S = 2k).
 Capability sits at S as each experiment counts its state; "full" at the larger target's full fine-tune.
 
 ## Strategies
@@ -78,7 +81,8 @@ A block holding fewer than a step's tokens (`step_tokens`) carries the step's gr
 
 `bound()`: `rho = O(1)` for `S < k` (never below the data floor `c * h / (k u)`); at the cliff the program's
 `(2/3) * 2 * F / h`, times `eta = c / (k phi)`; for full training `c * beta_v * V / (k u)`, the covering count over the
-counted values V. `c` is matched to traffic (`eta = 1`, `c = k phi`) or fixed at 1.4e17.
+counted values V. `c` is matched to traffic (`eta = 1`, `c = k phi`) or fixed at 1.4e17. The k grid is 10 kB, 100 kB,
+1 MB and 2.5 MB (2e7 bits, the deck's calibration).
 
 ## Known omissions
 
