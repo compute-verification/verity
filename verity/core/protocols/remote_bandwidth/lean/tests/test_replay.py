@@ -40,7 +40,7 @@ def verifier_json(r: M.Run) -> dict:
         "k": 0, "accepted": s.outcome == "accepted",
         "failure": None if v is None else {"t": v.window, "failure": v.failure, "at": None if v.at is None else list(v.at)},
         "allowance_ns": r.params.deadline_ns, "samples": r.params.samples, "window_ns": r.params.window_ns,
-        "windows": r.params.windows, "registration": reg.digest.hex(),
+        "windows": r.params.windows, "lifetime": r.params.lifetime, "registration": reg.digest.hex(),
         "pace": None if pace is None else {"k": pace.k, "t_ms": pace.window_ns / 1e6},
         "draws": {str(t): [list(d) for d in w.draws] for t, w in enumerate(s.windows) if w.draws},
         "windows_seen": [{"t": t, "released_ns": w.released_ns, "boundary_ns": w.boundary_ns,
