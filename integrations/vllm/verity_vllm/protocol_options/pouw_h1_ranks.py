@@ -23,9 +23,9 @@ K. Each rank ships each call's A rows and scales, its z/y records and, once, its
 ``b/<K>``: the period's registration of a rank's shards (`Weights`, a registry) is refused here, since no public rule
 slices the pinned checkpoint into shards yet.
 
-With ``commit`` (ROOTS1, VLLM-81) the Commit runs on every rank (`RankExtension.h1rank_commit`: the committer and the int8
-source on the rank's model, `acquire.h1_commit.attach`), and the rank's tap (`RankTap`) ships what it acquired to the
-holder: each H1 linear's x_q and s_a at its site, renamed to the window's name of the linear (``…qkv_proj@tp1/row_quant``),
+With ``commit`` (ROOTS1, VLLM-81) the Commit runs on every rank (`acquire.h1_commit.RankCommit`, the engine's
+``worker_extension_cls`` then: the committer and the int8 source on the rank's model), and the rank's tap (`RankTap`)
+ships what it acquired to the holder: each H1 linear's x_q and s_a at its site, renamed to the window's name of the linear (``…qkv_proj@tp1/row_quant``),
 and the embedding's input ids. The holder's one `pouw_h1_commit.CommitTap` takes them before the calls (`feed`), so its
 AROW of each (step, K) is every rank's calls' rows, call after call, as the window's A table is. The input ids are the
 first rank's (the one holding linear 0), one ``ids@<s>`` a round for the window; another rank's ids at the same engine
@@ -35,7 +35,6 @@ from __future__ import annotations
 import importlib
 import os
 from dataclasses import asdict, dataclass, field
-from types import SimpleNamespace
 from typing import Any, Mapping, Sequence
 
 import numpy as np
@@ -54,6 +53,8 @@ from verity_vllm.protocol_options import pouw_h1_requests as RQ
 
 ENTRY = f"pouw:{PH.SCHEME}"
 EXTENSION = "verity_vllm.protocol_options.pouw_h1_ranks.RankExtension"
+#: with ``install``'s ``commit``: `RankExtension` with the Commit on each rank (in ``acquire``, which builds the int8 source)
+COMMIT_EXTENSION = "verity_vllm.acquire.h1_commit.RankCommit"
 #: the module of Model Runner V2, whose `sort_batch_req_ids` orders a step's rows (`pouw_h1_requests.batch_order`)
 MRV2 = "vllm.v1.worker.gpu.model_runner"
 
@@ -110,7 +111,7 @@ class RankRun(PH.H1Run):
 
 @dataclass
 class RankTap(CT.CommitTap):
-    """A rank's tap on its Commit (`RankExtension.h1rank_commit`): what the holder's `pouw_h1_commit.CommitTap` reads of what
+    """A rank's tap on its Commit (`acquire.h1_commit.RankCommit.h1rank_commit`): what the holder's `pouw_h1_commit.CommitTap` reads of what
     the Commit acquired, each H1 linear's x_q (``/0``) and s_a (``/1``) at its site and the embedding's input ids, copied
     to the host with the engine step, each site under the window's name of its linear (``names``: the rank's module name
     to the window's), kept until the holder's next pull (`drain`)."""
@@ -190,27 +191,6 @@ class RankExtension:
         self._h1rank = {"run": run, "hooks": hooks, "sent": 0}
         return {"lo": lo, "roots": {lo + i: PH.weight_root(lo + i, PH.numpy_of(m.weight)).hex()
                                     for i, m in enumerate(layers)}}
-
-    def _h1rank_engine(self, model: Any, cp: Mapping[str, Any]) -> Any:
-        """What the committer reads of an engine (`acquire.h1_commit.attach`), on this rank: its model, runner, vLLM
-        config and the checkpoint's pin ``cp`` (repo, revision)."""
-        return SimpleNamespace(llm=SimpleNamespace(llm_engine=SimpleNamespace(vllm_config=self.vllm_config)),  # type: ignore[attr-defined]
-                               runner=self.model_runner, model=model, cp=dict(cp))  # type: ignore[attr-defined]
-
-    def h1rank_commit(self, cp: Mapping[str, Any] | None = None, **committer: Any) -> dict[str, Any]:
-        """The Commit on this rank (`acquire.h1_commit.attach`, ``committer`` the committer's keywords, its ``run_id``
-        named with the rank's first linear), its tap a `RankTap` naming each of the rank's H1 linears as the window does;
-        returns the committer's name and the module whose input ids it acquires."""
-        from verity_vllm.acquire import h1_commit as HC
-        from verity_vllm.protocol_options import pouw
-        st = self._h1rank
-        run: RankRun = st["run"]
-        model, layers = self._h1rank_layers()
-        names = {name: run.modules[run.lo + int(i)] for i, name in pouw._named(model, layers).items()}
-        committer["run_id"] = f"{committer.get('run_id', 'h1')}/rank{run.lo}"
-        com, _src, tap = HC.attach(self._h1rank_engine(model, cp or {}), layers, tap=RankTap(names=names), **committer)
-        st["commit"] = (com, tap)
-        return {"lo": run.lo, "committer": com.name, "embed": tap.embed}
 
     def h1rank_open(self, salt: bytes) -> None:
         self._h1rank["run"]._salt = bytes(salt)
@@ -371,8 +351,9 @@ def install(llm: Any, *, rows: int, steps: int, coins: Any = None, rounds: Any =
     ``execute_model`` wrapped (`Holder.admitting`). ``rounds`` is the round coins' `LiveRecord`, its draw family the
     window's draw coin when ``coins`` are given. A module is named by its rank at TP > 1 (``…qkv_proj@tp1``). ``served``
     (`pouw_h1_served.Served`, without the period's `Weights` or a registry) registers the window's tables from the rows
-    the ranks ship; ``commit`` (with ``served``, at PP 1) puts the Commit on every rank, its keywords
-    `RankExtension.h1rank_commit`'s, and ``served``'s tap is the window's `pouw_h1_commit.CommitTap`."""
+    the ranks ship; ``commit`` (with ``served``, at PP 1, the engine's ``worker_extension_cls`` `COMMIT_EXTENSION`)
+    puts the Commit on every rank, its keywords `acquire.h1_commit.RankCommit.h1rank_commit`'s, and ``served``'s tap is the
+    window's `pouw_h1_commit.CommitTap`."""
     if (coins is None) == (opener is None):
         raise ValueError(f"{entry}: the window's salt is from coins or opened by its opener, one of the two")
     if served is not None and (served.weights is not None or served.registry is not None):
@@ -429,5 +410,5 @@ def install(llm: Any, *, rows: int, steps: int, coins: Any = None, rounds: Any =
     return holder
 
 
-__all__ = ["ENTRY", "EXTENSION", "Holder", "RankExtension", "RankRun", "RankTap", "executor_of", "feed", "ingest", "install",
+__all__ = ["COMMIT_EXTENSION", "ENTRY", "EXTENSION", "Holder", "RankExtension", "RankRun", "RankTap", "executor_of", "feed", "ingest", "install",
            "wire_rank"]

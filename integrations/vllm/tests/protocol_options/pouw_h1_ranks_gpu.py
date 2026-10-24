@@ -198,7 +198,7 @@ def serve(a: argparse.Namespace) -> dict[str, Any]:
             from verity_vllm.protocol_options import pouw_h1_ranks as PHR
             kw, _env, cp = engine_kwargs_for(cps, max_num_seqs=max_num_seqs, case=a.role, target=target, engine_args={
                 **args, "pipeline_parallel_size": a.pp, "tensor_parallel_size": a.tp, "distributed_executor_backend": "mp",
-                "worker_extension_cls": PHR.EXTENSION, "async_scheduling": a.async_scheduling})
+                "worker_extension_cls": PHR.COMMIT_EXTENSION if a.commit else PHR.EXTENSION, "async_scheduling": a.async_scheduling})
             llm = LLM(**kw)
     cfg = llm.llm_engine.vllm_config
     doc["engine"] = {"build_s": round(time.monotonic() - t0, 1), "pp": cfg.parallel_config.pipeline_parallel_size,

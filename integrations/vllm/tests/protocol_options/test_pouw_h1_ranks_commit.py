@@ -3,11 +3,12 @@ Commit runs on every rank, each rank's tap ships what it acquired, and the holde
 `pouw_h1_commit.CommitTap` register each step's A table of K over both ranks' calls and its AROW over both ranks' sites, so
 core's ROOTS1 steps (`pouw_h1_gpu.core_verdict`, the GPU run's check) tie the window. One rank's call handed other codes
 than its Commit acquired is refused at ``arow``, and a rank whose input ids aren't the first rank's leaves the window
-untied. The ranks are stand-ins: each worker a `RankExtension` over two linears on the int8 arm with z/y records
+untied. The ranks are stand-ins: each worker an `acquire.h1_commit.RankCommit` over two linears on the int8 arm with z/y records
 (`test_pouw_h1_commit.Arm`), its committer the int8 source's face (`acquire.h1_commit.source`)."""
 from __future__ import annotations
 
 import hashlib
+import importlib
 import random
 from types import SimpleNamespace
 
@@ -76,7 +77,7 @@ def _attach(engine, layers, tap=None, **committer):
     return com, com.src, tap
 
 
-class Rank(PHR.RankExtension):
+class Rank(HC.RankCommit):
     """A worker of a TP engine: its (pp, tp) rank and its model's two shards, named as vLLM names them."""
 
     def __init__(self, tp, edit=None):
@@ -188,3 +189,11 @@ def test_install_refuses_a_periods_weights_across_ranks_and_a_commit_without_ser
         PHR.install(None, served=SV.Served(weights=SimpleNamespace()), **kw)
     with pytest.raises(ValueError, match="it needs served"):
         PHR.install(None, commit={}, **kw)
+
+
+def test_the_commit_extension_names_the_rank_with_the_commit():
+    """`pouw_h1_ranks.COMMIT_EXTENSION`, the string vLLM's workers import as ``worker_extension_cls``, is
+    `acquire.h1_commit.RankCommit`, which ``protocol_options`` can't import (``acquire`` imports it)."""
+    module, _, name = PHR.COMMIT_EXTENSION.rpartition(".")
+    assert getattr(importlib.import_module(module), name) is HC.RankCommit
+    assert issubclass(HC.RankCommit, PHR.RankExtension) and not hasattr(PHR.RankExtension, "h1rank_commit")
