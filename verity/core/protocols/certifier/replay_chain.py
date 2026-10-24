@@ -6,8 +6,8 @@ The compile unit replays the scheduler from advice v1 and the certified record, 
 decisions in, the step's rows and the next state out. A window is many steps, so the state passes between units as
 rows of produced values, each unit reading its rows at public positions. This module is that chain: the rows (`Shape`,
 `Row`, `Window`, `encode`, `decode`), their commitment and reads (`commit_window`, `reads`), the verifier's check of how
-the windows join (`check_chain`), and the two Boolean parts it puts in the units, `ReplayAdvance` beside each step and
-`ReplayLoad` once a window, with `advance` and `load` their specifications.
+the windows join (`check_chain`), and the three Boolean parts it puts in the units, `ReplayAdvance` beside each step,
+`ReplayLoad` once a window and `ReplayClose` once a session, with `advance`, `load` and `close` their specifications.
 
 **Why a window has a row of its own.** The step reads its arrivals and decisions at the scan's cursors, which move by
 its `taken` and `used`, and the cursors are private: a step's position in the certified arrivals or the window's
@@ -55,8 +55,13 @@ dropped (`ReplayAdvance`'s `active` = 0).
 
 - **The carry.** Window w's state row 0 is window w − 1's state row P + 1, and its window row 0 is window w − 1's
   window row 1, each committed under the same salt (`commit_window(carry=…)`), so its opening b‖c is the same, and the
-  verifier checks they're equal (`check_chain`). The load refuses a state row 0 that left decisions or steps unread, so
-  each window reads exactly its own.
+  verifier checks they're equal (`check_chain`). The load refuses a state row 0 that left steps to run, so each window
+  runs exactly its own. Decisions left unread carry: the load writes the window's after the last window row's unread
+  ones, as it does the queue's arrivals, since A5 ("The windows") can charge a decision up to two windows before its
+  step's (at T = 20, 5 of async-kv-pressure's 17 decisions and 5 of sync-kv-pressure's 15). A decision is then read
+  after its window's row loads, so it is charged no later than A5 allows.
+- **The end.** `ReplayClose` reads the session's last state row (its last window's P + 1) and window row (that
+  window's 1) and refuses a session that ends with a decision unread or a step to run (`close`).
 - **The start.** The session's first rows are the empty state (`empty`: nothing held, NB − 1 free blocks, vLLM's block
   0 being its null block) and the empty window, each under its public salt (`empty_salts`), so the verifier computes
   their openings (`empty_openings`).
@@ -64,6 +69,7 @@ dropped (`ReplayAdvance`'s `active` = 0).
 **Cost** (`size`). Per step: `ReplayAdvance`'s ANDs (the two fronts, about (Q + A·QW)·(1 + IW + 2·LW) and D + A·DW, and
 about 2·width for the idle select and the equality), three reads and one state row. Per window: P steps, one
 `ReplayLoad`, P + 2 state rows and two window rows, and 3P + 4 reads, each a frame-v3 path of depth ⌈log2(P + 2)⌉ or 1.
+Per session one `ReplayClose` and its two reads.
 On TRACE-CORPUS's 15 sync traces a step is 16,569 to 80,959 ANDs and a window 3.5e7 to 1.9e8 (PROTOCOL.md).
 """
 
@@ -372,14 +378,14 @@ def advance(S, win: Window, cur: Row, ok: bool, stepped: Row, arrivals: Sequence
     """The state row after step unit u: `cur` when the window's steps are done (idle), else the step's next state
     (`stepped`'s running, waiting and free) with the heads past what it took and read and one step fewer. None refuses:
     the step's ok is 0, its arrivals or bits aren't the window row's at the heads, it took more than A or than are
-    left, it read more than A or than are left, or the window's last step leaves some unread."""
+    left, or it read more than A or than are left. Decisions the window's last step leaves unread carry (`load`)."""
     if not cur.steps:
         return cur
     want_arr, want_bits = front(S, win, cur)
     dh = cur.dh + used
     if not ok or tuple(map(tuple, arrivals)) != want_arr or tuple(bits) + (0,) * (S.A - len(bits)) != want_bits:
         return None
-    if taken > len(want_arr) or used > S.A or dh > len(win.decisions) or (cur.steps == 1 and dh != len(win.decisions)):
+    if taken > len(want_arr) or used > S.A or dh > len(win.decisions):
         return None
     return Row(stepped.running, stepped.waiting, stepped.free, cur.qh + taken, dh, cur.steps - 1)
 
@@ -387,18 +393,24 @@ def advance(S, win: Window, cur: Row, ok: bool, stepped: Row, arrivals: Sequence
 def load(S, prev: Row, last: Window, arrivals: Sequence[Arrival], decisions: Sequence[int],
          steps: int) -> tuple[Row, Window] | None:
     """The window's state row 1 and window row: state row 0 (`prev`, the last window's last) with its heads reset and
-    the window's executed step count, and the last window's arrivals past `prev`'s head with the window's certified
-    arrivals appended and its decisions. None refuses: the last window left decisions or steps, the queue overflows Q,
-    more than K arrivals, D decisions or P steps, or decisions with no step to read them."""
-    if prev.steps or prev.dh != len(last.decisions):
+    the window's executed step count, and the last window's arrivals and decisions past `prev`'s heads with the
+    window's certified arrivals and its decisions appended. None refuses: the last window left steps, or read past its
+    decisions, the queue overflows Q or the decisions D, more than K arrivals or P steps."""
+    if prev.steps or prev.dh > len(last.decisions):
         return None
-    rest = last.queue[prev.qh:]
+    rest, kept = last.queue[prev.qh:], last.decisions[prev.dh:]
     if len(arrivals) > S.K or len(rest) + len(arrivals) > S.Q:
         return None
-    if len(decisions) > S.D or steps > S.P or (not steps and decisions):
+    if len(kept) + len(decisions) > S.D or steps > S.P:
         return None
     return (Row(prev.running, prev.waiting, prev.free, 0, 0, steps),
-            Window(rest + tuple(tuple(a) for a in arrivals), tuple(decisions)))
+            Window(rest + tuple(tuple(a) for a in arrivals), kept + tuple(decisions)))
+
+
+def close(S, row: Row, win: Window) -> bool:
+    """Whether a session may end in state row `row` and window row `win` (its last window's P + 1 and 1): the window's
+    steps all run and its decisions, the carried ones among them, all read."""
+    return not row.steps and row.dh == len(win.decisions)
 
 
 # --- the chain ------------------------------------------------------------------------------------------------------------
@@ -459,6 +471,11 @@ def reads(S) -> list[dict[str, dict[str, int]]]:
     state rows `row` u and `next` u + 1 and window row `window` 1."""
     return ([{VALUE: {"prev": 0, "next": 1}, WINDOW: {"last": 0, "window": 1}}]
             + [{VALUE: {"row": u, "next": u + 1}, WINDOW: {"window": 1}} for u in range(1, S.P + 1)])
+
+
+def close_reads(S) -> dict[str, dict[str, int]]:
+    """`ReplayClose`'s rows, of the session's last window: state row `row` P + 1 and window row `window` 1."""
+    return {VALUE: {"row": S.P + 1}, WINDOW: {"window": 1}}
 
 
 def openings(value: Committed) -> tuple[list[bytes], list[bytes]]:
@@ -563,12 +580,11 @@ def _build_advance(C, S, ok, cur, win, stepped, arr, bits, taken, used, nxt):
     m = max(Z.DW, Z.AC) + 1
     dh_new = add(C, _pad(dh, m), _pad(used, m), width=m)
     left = w["left"][0]
-    active, last = or_reduce(C, steps), _eq(C, steps, const_bits(1, Z.PW))
+    active = or_reduce(C, steps)
     step_ok = and_reduce(C, [ok[0], _eq(C, _flat(fr, front_fields(S)), arr),
                              _eq(C, [e[0] for e in _front(C, w["dec"], dh, S.A)], bits),
                              _lt(C, const_bits(S.A, Z.AC + 1), taken).inv(), *took,
-                             _lt(C, const_bits(S.A, Z.AC + 1), used).inv(), _lt(C, left, dh_new).inv(),
-                             C.AND(last, _eq(C, dh_new, left).inv()).inv()])
+                             _lt(C, const_bits(S.A, Z.AC + 1), used).inv(), _lt(C, left, dh_new).inv()])
     stepped_row = _pad(list(stepped) + add(C, qh, _pad(taken, Z.QW), width=Z.QW) + dh_new[:Z.DW]
                        + sub(C, steps, const_bits(1, Z.PW), Z.PW)[0], Wd)
     same = _eq(C, mux(C, active, stepped_row, list(cur)), nxt)
@@ -589,12 +605,21 @@ def _build_load(C, S, prev, last, arrivals, decisions, count, steps, nxt, window
             overflow = or_reduce(C, [e[0] for e in moved[S.Q:]])
         queue[qn] = [[x ^ y for x, y in zip(pe, me)] for pe, me in zip(rest[qn], moved[:S.Q])]
     past = [C.AND(decisions[k], _lt(C, const_bits(k, Z.DW + 1), count).inv()) for k in range(S.D)]
-    checks = [prefix, overflow.inv(), _zero(C, past), _lt(C, const_bits(S.D, Z.DW + 1), count).inv(),
-              _lt(C, const_bits(S.P, Z.PW + 1), steps).inv(), C.AND(_zero(C, steps), _zero(C, count).inv()).inv(),
-              _zero(C, p["steps"][0]), _eq(C, p["dh"][0], lw["left"][0])]
+    dh, left = p["dh"][0], lw["left"][0]
+    kept = sub(C, left, dh, Z.DW)[0]
+    total = add(C, _pad(kept, Z.DW + 1), _pad(count, Z.DW + 1), width=Z.DW + 1)
+    moved = _shr(C, [[d] for d in decisions], kept)
+    dec = [x[0] ^ y[0] for x, y in zip(_shl(C, lw["dec"], dh), moved)]
+    checks = [prefix, overflow.inv(), _zero(C, past), _lt(C, const_bits(S.D, Z.DW + 1), total).inv(),
+              _lt(C, const_bits(S.P, Z.PW + 1), steps).inv(), _zero(C, p["steps"][0]), _lt(C, left, dh).inv()]
     loaded = _pad(_flat(p, state_fields(S)) + [ZERO] * (Z.QW + Z.DW) + list(steps), Wd)
-    opened = _pad(_flat(queue, queue_fields(S)) + list(decisions) + list(count), Ww)
+    opened = _pad(_flat(queue, queue_fields(S)) + dec + total[:Z.DW], Ww)
     return [and_reduce(C, checks + [_eq(C, loaded, nxt), _eq(C, opened, window)])]
+
+
+def _build_close(C, S, row, window):
+    r, w = _split(row, row_fields(S)), _split(window, window_fields(S))
+    return [C.AND(_zero(C, r["steps"][0]), _eq(C, r["dh"][0], w["left"][0]))]
 
 
 def _sig_advance(S):
@@ -612,6 +637,10 @@ def _sig_load(S):
              ("next", Array(Wd, BIT)), ("window", Array(Ww, BIT))), BIT)
 
 
+def _sig_close(S):
+    return (("row", Array(width(S), BIT)), ("window", Array(window_width(S), BIT))), BIT
+
+
 ReplayAdvance = _part(
     "ReplayAdvance", STATICS, _sig_advance, _build_advance,
     "the chain beside one replay step: the step's arrivals and decision bits are the window row's at the state row's "
@@ -621,8 +650,12 @@ ReplayAdvance = _part(
 ReplayLoad = _part(
     "ReplayLoad", STATICS, _sig_load, _build_load,
     "a window's first unit: the last window's last state row with its heads reset and the window's executed step count, "
-    "and the window row, the last window's arrivals past its head with the window's certified arrivals appended and its "
-    "decisions, the last window's all read")
+    "and the window row, the last window's arrivals and decisions past its heads with the window's certified arrivals "
+    "and its decisions appended, the last window's steps all run")
+
+ReplayClose = _part(
+    "ReplayClose", STATICS, _sig_close, _build_close,
+    "a session's last unit: its last state row has no step to run and has read every decision of its window row")
 
 
 def advance_unit(S):
@@ -631,6 +664,10 @@ def advance_unit(S):
 
 def load_unit(S):
     return bind(ReplayLoad, **_statics(S))
+
+
+def close_unit(S):
+    return bind(ReplayClose, **_statics(S))
 
 
 def _statics(S) -> dict[str, int]:
@@ -667,6 +704,11 @@ def load_arguments(S, prev: Row, last: Window, arrivals: Sequence[Arrival], deci
             list(decisions) + [0] * (S.D - len(decisions)), cb, sb, list(nxt), list(window)]
 
 
+def close_arguments(S, row: Row, win: Window) -> list[list[int]]:
+    """`ReplayClose`'s arguments: the session's last state row's bits and its window row's."""
+    return [list(encode(row, S)), list(encode_window(win, S))]
+
+
 def _evaluate(unit, cases: Sequence[list[list[int]]]):
     args = [list(col) for col in zip(*cases)]
     return evaluate_bits(unit, *args).reshape(len(cases), -1).tolist()
@@ -682,12 +724,18 @@ def evaluate_load(S, cases: Sequence[list[list[int]]]) -> list[int]:
     return [int(o[0]) for o in _evaluate(load_unit(S), cases)]
 
 
+def evaluate_close(S, cases: Sequence[list[list[int]]]) -> list[int]:
+    """`ReplayClose` on each case's arguments (`close_arguments`): its ok bit each."""
+    return [int(o[0]) for o in _evaluate(close_unit(S), cases)]
+
+
 # --- cost -----------------------------------------------------------------------------------------------------------------
 
 @lru_cache(maxsize=None)
 def _counted(which: str, key: tuple) -> int:
     S = SimpleNamespace(**dict(zip(STATICS, key)))
-    sig, build = {"advance": (_sig_advance, _build_advance), "load": (_sig_load, _build_load)}[which]
+    sig, build = {"advance": (_sig_advance, _build_advance), "load": (_sig_load, _build_load),
+                  "close": (_sig_close, _build_close)}[which]
     C = Circuit(cse=True)
     ins = [C.input(name, sum(BL.elements(t))) for name, t in sig(S)[0]]
     out = build(C, S, *ins)
@@ -697,19 +745,21 @@ def _counted(which: str, key: tuple) -> int:
 
 def size(S) -> dict[str, int]:
     """The chain's cost at a shape (traced on a counting circuit, no gates written): per step `ReplayAdvance`'s ANDs, per
-    window P of them and one `ReplayLoad`, the rows, the reads and their path depth."""
+    window P of them and one `ReplayLoad`, per session one `ReplayClose`, the rows, the reads and their path depth."""
     key = tuple(getattr(S, k) for k in STATICS)
     step, window = _counted("advance", key), _counted("load", key)
     return {"width": width(S), "window_width": window_width(S), "state_bits": _bits_of(state_fields(S)),
             "queue_bits": _bits_of(queue_fields(S)), "ands_per_step": step, "ands_load": window,
+            "ands_close": _counted("close", key),
             "ands_per_window": S.P * step + window, "rows_per_window": S.P + 2, "window_rows_per_window": 2,
             "reads_per_window": 3 * S.P + 4, "path_depth": (S.P + 1).bit_length(),
             "record_bytes_per_window": (S.P + 4) * produced.BC_BYTES}
 
 
-__all__ = ["Arrival", "Committed", "MalformedRow", "ReplayAdvance", "ReplayLoad", "Row", "Running", "STATICS", "Shape",
-           "VALUE", "WINDOW", "Waiting", "Window", "advance", "advance_arguments", "advance_unit", "arrival_fields",
-           "check_chain", "commit_window", "decode", "decode_window", "empty", "empty_openings", "empty_salts", "encode",
-           "encode_window", "evaluate_advance", "evaluate_load", "front", "front_bits", "front_fields", "load",
-           "load_arguments", "load_unit", "openings", "queue_fields", "reads", "row", "row_fields", "size", "state_bits",
-           "state_fields", "unrow", "widths", "window_fields", "window_width"]
+__all__ = ["Arrival", "Committed", "MalformedRow", "ReplayAdvance", "ReplayClose", "ReplayLoad", "Row", "Running", "STATICS",
+           "Shape", "VALUE", "WINDOW", "Waiting", "Window", "advance", "advance_arguments", "advance_unit", "arrival_fields",
+           "check_chain", "close", "close_arguments", "close_reads", "close_unit", "commit_window", "decode",
+           "decode_window", "empty", "empty_openings", "empty_salts", "encode", "encode_window", "evaluate_advance",
+           "evaluate_close", "evaluate_load", "front", "front_bits", "front_fields", "load", "load_arguments", "load_unit",
+           "openings", "queue_fields", "reads", "row", "row_fields", "size", "state_bits", "state_fields", "unrow",
+           "widths", "window_fields", "window_width"]
