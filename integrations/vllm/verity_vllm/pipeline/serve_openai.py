@@ -39,10 +39,10 @@ seeds, by position. Once a request has finished, `Record.check` holds them to wh
 streamed ids, the seed it carried, and where its finish says the stream ends.
 
 Under ``--out`` the server writes ``serve.json`` (the engine, the protocol in use, the address), ``windows.jsonl`` (one
-line a Commit: its run root, step roots, the committer's errors and identity check, the requests it holds) and
-``requests.jsonl`` (one line a request: the HTTP id, the engine id, the runner's ids, the prompt ids, the streamed ids, its
-ingress, its finish, every row it was committed at, the committed seeds, and its check). SIGTERM or SIGINT stops it: the open window is
-closed and its requests checked, and ``summary.json`` counts the requests and checks.
+line a Commit: its run root, step roots, the committer's errors and identity check, the requests it holds), ``requests.jsonl``
+(one line a request: the HTTP id, the engine id, the body's ``user``, the runner's ids, the prompt ids, the streamed ids, its
+ingress, its finish, its committed rows and seeds, and its check) and `serve_commit.advice_trace`'s file. SIGTERM or SIGINT
+stops it: the open window is closed and its requests checked, and ``summary.json`` counts the requests and checks.
 """
 from __future__ import annotations
 
@@ -61,7 +61,7 @@ from typing import Any
 
 from verity_vllm.config import UsageError, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED, seeded
-from verity_vllm.pipeline.serve_commit import SAMPLING_FIELDS, CommitWindows, ingress_of, param_of
+from verity_vllm.pipeline.serve_commit import SAMPLING_FIELDS, CommitWindows, advice_trace, ingress_of, param_of, user_of
 
 PRECISIONS = ("verity_int8", "int8_exact", "pin")
 #: precision -> (the int8 parts it registers, the int8 scope its layers must then run; None: not checked). Every precision
@@ -370,7 +370,7 @@ class Admission:
     params: Any
     deliver: Callable[[Delta], None]
     ingress: dict[str, Any]
-
+    user: str | None = None
 
 
 def engine_id_of(http_id: str) -> str:
@@ -588,7 +588,8 @@ class Server:
         if top_p is not None and float(top_p) < 1:
             raise RequestError(TOP_P_REFUSAL.format(top_p=top_p), param="top_p")
         http_id = new_http_id()
-        return req, Admission(http_id, engine_id_of(http_id), prompt_ids, params, deliver, ingress_of(self.proto.brought(req), params))
+        return req, Admission(http_id, engine_id_of(http_id), prompt_ids, params, deliver, ingress_of(self.proto.brought(req), params),
+                              user_of(req.raw))
 
     async def completions(self, b: Any, writer: asyncio.StreamWriter) -> None:
         loop = asyncio.get_running_loop()
@@ -756,13 +757,13 @@ def main(opts: Options) -> int:
     proto = PROTOCOLS[opts.protocol](opts.force_include_usage)
     framing = framing_agrees(proto) if isinstance(proto, VllmProtocol) else None
     defaults: dict[str, Any] = {}                            # vLLM's neutral defaults: the request brings its sampling
-    run_id = opts.run_id
     tok = llm.get_tokenizer()
+    trace = advice_trace(out, llm)
     windows = None
     if com is not None:
-        windows = CommitWindows(com, out, run_id=run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
+        windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
                                 eos_ids=[int(tok.eos_token_id)] if tok.eos_token_id is not None else [],
-                                decode=lambda ids: tok.decode(list(ids), skip_special_tokens=True))
+                                decode=lambda ids: tok.decode(list(ids), skip_special_tokens=True), marks=trace.window)
     loop = EngineLoop(engine, windows)
     served = opts.served_model_name or opts.model
     server = Server(proto=proto, served_name=served, max_model_len=opts.max_model_len, tokenizer=tok,
@@ -779,11 +780,10 @@ def main(opts: Options) -> int:
     record = {"address": list(bound[0]), "served_model_name": served, "model": opts.model, "revision": opts.revision,
               "precision": opts.precision, "protocol": proto.name, "framing": framing, "defaults": dict(defaults),
               "generation_config_not_applied": engine.vllm_config.model_config.get_diff_sampling_param(),
-              "default_seed": DEFAULT_SEED, "top_p": "refused below 1 (CIR-87)",
+              "default_seed": DEFAULT_SEED, "top_p": "refused below 1 (CIR-87)", "committer": getattr(com, "name", None),
               "commit": opts.commit, "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
-              "committer": getattr(com, "name", None),
               "committer_options": {k: getattr(opts, k) for k in ("chunk", "hash_threads", "gpu_tree", "cudart_copy")},
-              "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": run_id}
+              "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id}
     (out / "serve.json").write_text(json.dumps(record, indent=1, default=str))
     print(f"SERVE-OPENAI listening on {bound[0][0]}:{bound[0][1]} model={served} commit={opts.commit} protocol={proto.name}", flush=True)
     try:
@@ -794,6 +794,7 @@ def main(opts: Options) -> int:
                    "commit": windows.summary() if windows is not None else None}
         (out / "summary.json").write_text(json.dumps(summary, indent=1))
         print(f"SERVE-OPENAI stopped: {json.dumps(summary)}", flush=True)
+        trace.uninstall()
         if com is not None:
             com.close()
     return 0 if loop.error is None and (windows is None or windows.summary()["passed"] or not server.served) else 1

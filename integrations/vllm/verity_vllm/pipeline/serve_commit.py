@@ -8,8 +8,10 @@ root. The record is the served path's and COMMIT-ARB's one record, `commit.serve
 the step's rows, and at each close `served_record.Record.absorb` reads the window back from the committed bytes into one
 `RequestRecord` per engine request. A finished request is checked by `Record.check` against what was streamed for it,
 the seed it carried into the engine (the client's, or the served default, `engine.served_seed`) and how its stream
-ended. Its ingress record, the sampling parameters it brought, is written beside it. Each committed step gets a line of
-``step_trace.jsonl`` at its window's close: its root, when its engine step ended, its rows and the committer's trace.
+ended. Its ingress record, the sampling parameters it brought, is written beside it, with the body's ``user`` (null when it
+sent none). Each committed step gets a line of ``step_trace.jsonl`` at its window's close: its root, when its engine step ended,
+its rows and the committer's trace. ``marks`` hears each window's open and close (the scheduler step trace's window records,
+`engine.step_trace.StepTrace.window`).
 """
 from __future__ import annotations
 
@@ -25,6 +27,22 @@ from verity_vllm.commit.served_record import Record, served_rows, window_commit
 #: The request fields that are sampling inputs, recorded as each request brought them.
 SAMPLING_FIELDS = ("temperature", "top_p", "top_k", "min_p", "seed", "max_tokens", "min_tokens", "ignore_eos", "stop",
                    "stop_token_ids", "presence_penalty", "frequency_penalty", "repetition_penalty")
+
+
+def user_of(body: Any) -> str | None:
+    """A request body's ``user`` (a dict, or vLLM's ``CompletionRequest``), None when it sent none."""
+    u = body.get("user") if isinstance(body, Mapping) else getattr(body, "user", None)
+    return None if u is None else str(u)
+
+
+def advice_trace(out: Path, engine: Any) -> Any:
+    """The scheduler step trace (`engine.step_trace.StepTrace`) of ``engine`` for the server's lifetime, at ``out/advice_trace.jsonl``
+    (`step_trace.SERVED`, beside the committer's step_trace.jsonl), under the engine ids requests.jsonl records (vLLM's internal
+    suffix dropped): what `verity-vllm advice OUT` reads, with each window's open and close (``CommitWindows(marks=trace.window)``)."""
+    from verity_vllm.engine.engine_driver import external_id
+    from verity_vllm.engine.step_trace import SERVED, StepTrace
+
+    return StepTrace(Path(out) / SERVED, request_id=external_id, clock=time.time).install(engine)
 
 
 def param_of(params: Any, name: str) -> Any:
@@ -48,6 +66,7 @@ class Ledger:
     engine_id: str
     prompt_ids: list[int]
     ingress: dict[str, Any] = field(default_factory=dict)
+    user: str | None = None                      # the body's `user`, the id the advice names the request by
     streamed: list[int] = field(default_factory=list)
     finish: dict[str, Any] | None = None
     finished: bool = False
@@ -62,8 +81,9 @@ class CommitWindows:
 
     def __init__(self, committer: Any, out: Path, *, run_id: str, window_steps: int, idle_close_steps: int = 1,
                  eos_ids: Sequence[int] = (), decode: Callable[[Sequence[int]], str] | None = None,
-                 clock: Callable[[], float] = time.perf_counter, wall: Callable[[], float] = time.time) -> None:
-        self.com, self.out, self.clock, self.wall = committer, Path(out), clock, wall
+                 clock: Callable[[], float] = time.perf_counter, wall: Callable[[], float] = time.time,
+                 marks: Callable[[int, str], None] | None = None) -> None:
+        self.com, self.out, self.clock, self.wall, self.marks = committer, Path(out), clock, wall, marks
         self.run_id, self.window_steps, self.idle_close_steps = run_id, int(window_steps), int(idle_close_steps)
         self.eos_ids, self.decode = [int(x) for x in eos_ids], decode
         self.known: dict[str, str] = {}                  # every admitted engine id -> its HTTP id; rows past a finish still map
@@ -78,7 +98,8 @@ class CommitWindows:
     def admitted(self, adm: Any) -> None:
         """``adm`` a `verity_vllm.pipeline.serve_openai.Admission`."""
         self.known[adm.engine_id] = adm.http_id
-        self.ledgers[adm.engine_id] = Ledger(adm.http_id, adm.engine_id, list(adm.prompt_ids), dict(adm.ingress))
+        self.ledgers[adm.engine_id] = Ledger(adm.http_id, adm.engine_id, list(adm.prompt_ids), dict(adm.ingress),
+                                             getattr(adm, "user", None))
 
     def streamed(self, engine_id: str, token_ids: list[int], finish_reason: str | None, stop_reason: Any) -> None:
         led = self.ledgers.get(engine_id)
@@ -114,6 +135,8 @@ class CommitWindows:
         self.com.install()
         self.open_s = self.clock() - t0
         self.is_open = True
+        if self.marks is not None:
+            self.marks(self.window, "open")
 
     def stepped(self) -> None:
         """An engine step has returned: its committed steps ended now."""
@@ -143,6 +166,8 @@ class CommitWindows:
             fh.write(json.dumps(rec) + "\n")
         self._write_step_trace(rec, rc)
         self._check_finished()
+        if self.marks is not None:
+            self.marks(self.window, "close")
         return rec
 
     def check(self, led: Ledger) -> dict[str, Any]:
@@ -177,7 +202,7 @@ class CommitWindows:
             for eid in done:
                 led = self.ledgers.pop(eid)
                 rr = self.record.requests.get(eid)
-                rec = {"http_id": led.http_id, "engine_id": led.engine_id, "runner_ids": rr.runner_ids if rr else [],
+                rec = {"http_id": led.http_id, "engine_id": led.engine_id, "user": led.user, "runner_ids": rr.runner_ids if rr else [],
                        "prompt_ids": led.prompt_ids, "streamed_ids": led.streamed, "ingress": led.ingress, "finish": led.finish,
                        "windows": sorted({r[0] for r in rr.rows}) if rr else [], "rows": rr.rows if rr else [],
                        "committed_seeds": sorted(rr.seeds) if rr else [], "check": self.check(led)}
