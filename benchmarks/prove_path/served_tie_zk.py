@@ -21,9 +21,11 @@ N2-ZK's audit path (`benchmarks/network_traces/n2_zk.py`: its stager, firewall a
   is proved and its verdict is ``ACCEPT``. The positions chunks are bound natively, opened under the run root
   (``bindings``): the Commit's leaves are its position-leaf digests under its hiding rule, not row leaves, so their b‖c is
   not yet a proof row's.
-  The received-pieces scan (`n2_zk.public_pieces`, `a8.received`) reports a found piece of fewer than ``DISTINCT`` byte
-  values (a small integer and zeros, as an N = 1 step's positions are) as ``structured``, not ``leaked``: the verifier's
-  files hold such words by their own format, and only a ``leaked`` piece fails a statement.
+  The received-pieces scan (`n2_zk.public_pieces`, `a8.received`) fails a statement on a ``leaked`` piece: one of at least
+  ``DISTINCT`` byte values found anywhere, or one of fewer (positions, a few switch bits and zeros) found in every
+  repetition's proof stream. The streams hold small integers and zeros at fixed offsets of their own format, valued
+  afresh in each repetition, so a low-entropy piece found in only some repetitions, which prove one witness, is reported
+  as ``structured``.
 """
 from __future__ import annotations
 
@@ -299,6 +301,16 @@ def blobs_of(units: list, salts: dict) -> tuple[dict[str, bytes], set[str]]:
     return blobs, held
 
 
+def classify(received: dict, blobs: dict[str, bytes]) -> tuple[list[str], dict[str, int]]:
+    """`a8.received`'s found pieces as the ``leaked`` ones, which fail a statement, and the ``structured`` rest with their
+    distinct byte values (the module's docstring)."""
+    files = received["files"]
+    reps = [f for f in files if ".rep" in f and f.endswith(".bin")]
+    leaked = [k for k in received["verifier_found"] if len(set(blobs[k])) >= DISTINCT
+              or (len(reps) > 1 and all(k in files[f]["found"] for f in reps))]
+    return leaked, {k: len(set(blobs[k])) for k in received["verifier_found"] if k not in leaked}
+
+
 def population(meta: dict, n: int) -> int:
     """The fewest units, at least n, whose statement fits `--zk`'s shape (k_log + nbl ≥ 25, `stage`)."""
     b = 25 - meta["k_log"]
@@ -368,9 +380,7 @@ def prove(a) -> int:
         blobs, held, public = N2.public_pieces(M.a8, *blobs_of(units, m["salts"]), (m["dir"] / "circuit.txt").read_bytes())
         res["received"] = {**M.a8.received(out / name / "verifier", m["dir"] / f"inst-{m['n']}.bin", blobs, held),
                            "public_pieces": len(public)}
-        found = res["received"]["verifier_found"]
-        res["received"]["structured"] = [k for k in found if len(set(blobs[k])) < DISTINCT]
-        res["received"]["leaked"] = [k for k in found if len(set(blobs[k])) >= DISTINCT]
+        res["received"]["leaked"], res["received"]["structured"] = classify(res["received"], blobs)
         res["staged"] = {"n": m["n"], "ands": m["ands"], "k_log": m["meta"]["k_log"], "nbl": m["nbl"], "pin": m["pin"],
                          "lower_s": sg.lower_s, "stage_s": m["stage_s"]}
         want = ["accept" if u.kind in expect else "reject" for u in units]
