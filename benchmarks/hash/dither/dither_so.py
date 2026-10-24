@@ -159,10 +159,11 @@ RDEAD_ENV = "DITHER_SO_RDEAD"
 # to j10r_so's references (h1r's J10-R version 1 on every capture and the window's end, J10R's Definition on the gate step)
 UNITS_ENV = "DITHER_SO_UNITS"
 UNITS_FORMS = {"today": "each unit's own seed_j stream", "j10r": "J10-R: each call's seed_c stream at call scale"}
-# R (with $DITHER_SO_UNITS=j10r, $DITHER_SO_FUSED=1 and no $DITHER_SO_UNITS_SMQ): a step whose units compute at least R
-# rows (the layout's M, its live rows under $DITHER_UNITS_SKIP_DEAD=1) hashes each call's column blocks once too, beside
-# its rows, and its units read both (h1u.cu's kh_units_multi_j10rc, an h1u build with H1U_JRC=1, each call's workspace
-# kh_j10r_ws_bytes at T rows); the same receipts.  Unset, never: J10-R's units hash a column block once in each row tile
+# R (with $DITHER_SO_UNITS=j10r and $DITHER_SO_FUSED=1): a step whose units compute at least R rows (the layout's M, its
+# live rows under $DITHER_UNITS_SKIP_DEAD=1) hashes each call's column blocks once too, beside its rows, and its units
+# read both (h1u.cu's kh_units_multi_j10rc, an h1u build with H1U_JRC=1, each call's workspace kh_j10r_ws_bytes at T
+# rows; under $DITHER_SO_UNITS_SMQ without a cap, kh_units_multi_j10rc_sm); the same receipts.  Unset, never: J10-R's
+# units hash a column block once in each row tile
 # they compute, so it pays at prefill's 64 and costs at decode's one, where its own launch is the difference (unitsbench
 # --j10r, H1U_JSWZ 32: T 2048 step 287.1 -> 233.1 ms, T 512 71.9 -> 59.8 ms; T 64 M 32 5.11 -> 7.16 ms unswizzled)
 J10RC_MIN_T_ENV = "DITHER_SO_J10RC_MIN_T"
@@ -185,6 +186,13 @@ ROOT_LAG_ENV = "DITHER_SO_ROOT_LAG"
 # stream from the forward's end, beside its A tables, stash and spill on the serving stream, which waits for them
 # before `before_mid`; the same tables
 ZSIDE_ENV = "DITHER_SO_ZSIDE"
+# DO.A_STEP_ENV's tables' level schedule (`H1C.set`'s lvf: their levels from L up in one block a table, on an H1C_HB
+# build).  A K a table makes a step's tables few and deep (Llama-8B at T = 64: 2 tables of 2^13 leaves), so the build's
+# H1C_LVF = 2 would run 11 of their levels on two blocks of the GPU.  Unset: from depth - A_LVF_TOP (at least 0), the
+# level of 128 nodes a table (n1, RTX PRO 6000, T = 64: L = 4 to 7 within 0.01 ms, 0.16 ms under L = 2); "L": from L;
+# "": the build's H1C_LVF, as every other set.  The roots are the same at every L
+A_LVF_ENV = "DITHER_A_LVF"
+A_LVF_TOP = 8
 ROUNDS_ENV = "DITHER_ROUNDS"            # the window's layout (its round coins), the session's when off the node
 MF_CHUNK = 64                           # manifest rows a pinned host chunk
 # -we's spill (`Spill`): what each step keeps past the ring until its window's draw, so the prover can open a drawn unit
@@ -200,6 +208,11 @@ DEAD_ONCE_ENV = "DITHER_DEAD_ONCE"
 # "1": a step's inputs written from pinned host memory without a wait (`_put`): the serving stream orders them after
 # step s - 1's trees, lm_head and sampler, so the host launches forward s while the sampler runs
 PUT_ASYNC_ENV = "DITHER_SO_PUT_ASYNC"
+# "1": the units step s + 1 - d's `after` dispatches, queued as their graph before round s's root read, behind a wait on
+# a pinned host word (cuStreamWaitValue32) that `SoSide.dispatch` sets once round s is sent, the coin is back and the
+# salt is written: the same order (round s, coin, units), without the host's dispatch between them and the units' start.
+# Graph steps only, and never a step that holds a capture or a fault, nor a window's last step's units
+PREQ_ENV = "DITHER_SO_PREQ"
 # "1": a capture's copies go to host memory, not the device (a prefill capture at T = 2048 is ~30 GB); `DA.check` moves
 # each call's tensors to the device as it reads them
 CAP_HOST_ENV = "DITHER_SO_CAP_HOST"
@@ -297,6 +310,7 @@ class SoWindow(DO.Window):
         self.lag: dict | None = None
         self.lag_root = torch.empty(8, dtype=torch.int64).pin_memory() if self.root_lag else None
         self.lag_ybad: torch.Tensor | None = None
+        self.ybad_pin: torch.Tensor | None = None
         self.ev_lag = torch.cuda.Event()
         self.lag_n, self.lag_waits = 0, []
         # the engine's own host time a step (from one `after`'s end to the next `before`), and `before`'s
@@ -312,7 +326,9 @@ class SoWindow(DO.Window):
                             data=self.slot_groups[k].view(torch.uint8), stride=k, body=k, length=k + 4,
                             tail=self.scale_all[at:at + n].view(torch.uint8), tail_stride=4, lab=(f"a/{k}@", "")))
             at += n
-        self.pre["ak"] = self.c.set(tabs)
+        v = os.environ.get(A_LVF_ENV)
+        lvf = max(0, max(H1CM.merkle_depth(t.count) for t in tabs) - A_LVF_TOP) if v is None else int(v) if v else None
+        self.pre["ak"] = self.c.set(tabs, lvf=lvf)
         self.a_gidx = torch.tensor([ks.index(k) for _, k in self.nk], dtype=torch.long, device=self.dev)
         o = self.pre["mid"].level_off[0]
         self.a_leaves = self.pre["mid"].level[o:o + 8 * self.L].view(self.L, 8)
@@ -790,7 +806,6 @@ class SoWindow(DO.Window):
             rl[8 * yi:8 * yi + 8].copy_(self.zlate[1])
             self.zlate = None
         self.c.build(pre["round"], self.stepv[0:1])
-        self.put_row(s, pre["mid"], pre["round"])
         prev = self.cap_of.get(s - 1)
         late = self.cap_of.pop(j, None) if j >= self.s0 else None
         held = (cap in self.caps) or (late in self.caps) or (prev == "fault_zlate" and prev in self.caps)
@@ -806,6 +821,14 @@ class SoWindow(DO.Window):
             t_root = t_sent = time.perf_counter()
         else:
             self.phase("root_read")
+            ju = s + 1 - d
+            if (sd.preq and not held and ju in self.stashed and ju != self.end_at and self.cap_of.get(ju) is None
+                    and ju in self.m_of):
+                sd.prequeue(ju, self.m_of[ju])
+            # ybad rides the root read's sync rather than a nonzero's own
+            if self.ybad_pin is None:
+                self.ybad_pin = torch.empty(sd.ybad.shape, dtype=sd.ybad.dtype).pin_memory()
+            self.ybad_pin.copy_(sd.ybad, non_blocking=True)
             root = unwords(pre["round"].root(0))
             t_root = time.perf_counter()
             self.phase("record_host")
@@ -813,7 +836,7 @@ class SoWindow(DO.Window):
             if i != self.ix(s):
                 raise RuntimeError(f"step {s}'s round went out as round {i}, not {self.ix(s)}")
             t_sent = time.perf_counter()
-            bad = sd.ybad.nonzero().flatten().tolist()
+            bad = self.ybad_pin.nonzero().flatten().tolist()
             if bad:
                 sd.y_refused.append({"s": s, "capture": cap, "calls": len(bad)})
         if held:
@@ -845,6 +868,8 @@ class SoWindow(DO.Window):
                 self.stashed.discard(ju)
                 t_coin = self.dispatch_units(ju)
                 t_disp = time.perf_counter()
+        # the manifest row's copies queue behind the root read and the units' dispatch, off the step's critical path
+        self.put_row(s, pre["mid"], pre["round"])
         t_end = time.perf_counter()
         self.phase(None)
         ph = {"m": m, "forward_ms": 1e3 * (t_fwd - self.t_before), "trees_ms": 1e3 * (t_root - t_fwd),
@@ -1077,9 +1102,8 @@ class SoSide(DA.Side):
         self.j10rc_min_t = int(os.environ.get(J10RC_MIN_T_ENV) or 0)
         if self.units_form not in UNITS_FORMS:
             raise ValueError(f"${UNITS_ENV}={self.units_form}: one of {tuple(UNITS_FORMS)}")
-        if self.j10rc_min_t and (not self.j10r or self.units_smq):
-            raise ValueError(f"${J10RC_MIN_T_ENV}: needs ${UNITS_ENV}=j10r and no ${UNITS_SMQ_ENV} (kh_units_multi_j10rc "
-                             "has every SM)")
+        if self.j10rc_min_t and not self.j10r:
+            raise ValueError(f"${J10RC_MIN_T_ENV}: needs ${UNITS_ENV}=j10r")
         self._check_smq(self.units_smq, self.units_smd, f"${UNITS_SMQ_ENV}={os.environ.get(UNITS_SMQ_ENV)}",
                         self.units_cap)
         self.skip_dead = not self.j10r or os.environ.get(SKIP_DEAD_ENV) == "1"
@@ -1119,7 +1143,7 @@ class SoSide(DA.Side):
         if self.fused:
             self.mtab, self.m_units = self._multi_tables()
             vp, u32 = C.c_void_p, C.c_uint
-            for f in ("kh_units_multi_sm", "kh_units_multi_j10r_sm"):
+            for f in ("kh_units_multi_sm", "kh_units_multi_j10r_sm", "kh_units_multi_j10rc_sm"):
                 if hasattr(self.h, f):
                     getattr(self.h, f).argtypes = [vp, u32, u32, u32, vp, u32, u32, vp, vp]
             for f in ("kh_units_multi_smc", "kh_units_multi_j10r_smc"):
@@ -1129,6 +1153,17 @@ class SoSide(DA.Side):
             self.unit_next = torch.zeros(words, dtype=torch.int32, device=dev)
         self.graphs: dict[tuple[int, int], torch.cuda.CUDAGraph] = {}
         self.warm: set[int] = set()
+        self.preq = os.environ.get(PREQ_ENV) == "1"
+        self.queued: dict[int, tuple[int, int]] = {}
+        self.preq_gen = 0
+        if self.preq:
+            from cuda.bindings import driver as cu
+            self.cu = cu
+            hp = self._cu_ok(cu.cuMemHostAlloc(4 * D, cu.CU_MEMHOSTALLOC_DEVICEMAP | cu.CU_MEMHOSTALLOC_PORTABLE))
+            self.flag_dev = int(self._cu_ok(cu.cuMemHostGetDevicePointer(hp, 0)))
+            self.flag_host = (C.c_uint32 * D).from_address(int(hp))
+            for p in range(D):
+                self.flag_host[p] = 0
         self.capture_ms: list[float] = []
         if CONF.get("serve_prio") and pt and not win.overlap:
             win.tree_streams = tuple(torch.cuda.Stream(device=dev, priority=-1) for _ in range(2))
@@ -1140,6 +1175,9 @@ class SoSide(DA.Side):
         if q and not (self.fused and 1 <= q <= den <= SMQ_DEN_MAX and 0 <= cap <= 64 and hasattr(self.h, f)):
             raise ValueError(f"{what}: needs ${FUSED_ENV}=1, 1 <= q <= den <= {SMQ_DEN_MAX}, cap <= 64 and an h1u build "
                              f"with {f}")
+        if q and self.j10rc_min_t and (cap or not hasattr(self.h, "kh_units_multi_j10rc_sm")):
+            raise ValueError(f"{what} with ${J10RC_MIN_T_ENV}: needs no cap (kh_units_multi_j10rc has no capped form) "
+                             "and an h1u build with kh_units_multi_j10rc_sm")
 
     def set_units_smq(self, q: int, den: int = 8, cap: int = 0) -> None:
         """The units launch on the SMs whose id % den < q, at most cap CTAs on each (0: no cap), from the next dispatch
@@ -1274,7 +1312,12 @@ class SoSide(DA.Side):
         if self.j10r:
             import j10r_so as JS
             M = JS.rows(self.j10r_m, win.t, m)
-            if self.j10rc_min_t and (min(m, M) if self.skip_dead else M) >= self.j10rc_min_t:
+            j10rc = self.j10rc_min_t and (min(m, M) if self.skip_dead else M) >= self.j10rc_min_t
+            if j10rc and self.units_smq:
+                rc = rc or self.h.kh_units_multi_j10rc_sm(self.mtab[p].data_ptr(), L, self.m_units, M,
+                                                          self.units_live[p].data_ptr(), self.units_smq, self.units_smd,
+                                                          self.unit_next.data_ptr(), st.cuda_stream)
+            elif j10rc:
                 rc = rc or self.h.kh_units_multi_j10rc(self.mtab[p].data_ptr(), L, self.m_units, M,
                                                        self.units_live[p].data_ptr(), 0, st.cuda_stream)
             elif self.units_cap:
@@ -1324,6 +1367,35 @@ class SoSide(DA.Side):
         self.rroots[p].copy_(win.rset.roots)
         return 0
 
+    @staticmethod
+    def _cu_ok(res):
+        err, *out = res if isinstance(res, tuple) else (res,)
+        if int(err) != 0:
+            raise RuntimeError(f"${PREQ_ENV}=1: {err!r}")
+        return out[0] if len(out) == 1 else out
+
+    def prequeue(self, j: int, m: int) -> bool:
+        """Under $DITHER_SO_PREQ=1, step j's units graph at m live rows queued on the units stream behind a wait on its
+        slot's pinned host word, which `dispatch` sets once their salt is written; False (nothing queued) if that
+        (ring slot, m) has no graph yet."""
+        p = j % self.win.depth
+        cg = self.graphs.get((p, m)) if self.preq and self.graph and m in self.warm else None
+        if cg is None:
+            return False
+        self.preq_gen += 1
+        st = self.side
+        with torch.cuda.stream(st):
+            st.wait_event(self.ready[p])
+            self._cu_ok(self.cu.cuStreamWaitValue32(self.cu.CUstream(st.cuda_stream), self.cu.CUdeviceptr(self.flag_dev + 4 * p),
+                                                    self.preq_gen, self.cu.CUstreamWaitValue_flags.CU_STREAM_WAIT_VALUE_EQ))
+            self.ev_u[p][0].record(st)
+            self.ring_salt[p].copy_(self.salt_host[p], non_blocking=True)
+            cg.replay()
+            self.ev_u[p][1].record(st)
+            self.udone[p].record(st)
+        self.queued[j] = (p, self.preq_gen)
+        return True
+
     def dispatch(self, j: int, salt: bytes, m: int, g: dict | None) -> None:
         """Step j's units on the units stream once its ring slot is written (`_units`) under `salt`, whose receipt
         roots go into `rroots` for round j + D - 1 (`udone`); a capture's receipts and roots into `g`.  Unless
@@ -1334,6 +1406,16 @@ class SoSide(DA.Side):
         win = self.win
         p, st = j % win.depth, self.side
         self.salt_host[p].copy_(torch.from_numpy(words(salt)))
+        q = self.queued.pop(j, None)
+        if q is not None:
+            self.flag_host[q[0]] = q[1]
+            if g is not None or q[0] != p:
+                raise RuntimeError(f"dither-a-so step {j}'s units were queued ({PREQ_ENV}) in slot {q[0]}, then "
+                                   f"dispatched in slot {p} or under a capture")
+            self.prev_of[p], self.last_p = self.last_p, p
+            self.dispatched[j] = p
+            self.unit_steps += 1
+            return
         with torch.cuda.stream(st):
             st.wait_event(self.ready[p])
             self.ev_u[p][0].record(st)
