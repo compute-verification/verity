@@ -2,7 +2,8 @@
 # A row's checkpoint staged on a GPU node from the hub (model.sh: REPO at REV into DST, LOCAL_CK by default): every file of the pin
 # in checkpoints.json as a real file (`snapshot_download --local-dir`), each checked against its sha256 there (the shards' hub LFS
 # records, the rest hashed from their bytes), then DST/.verified, which `ckpt_bind` (match_gpu.sh, commit.sh) serves at FS_CK, the
-# pin's local_path.  A file already in DST at its size and sha256 is kept, so a rerun after an eviction fetches only the rest.
+# pin's local_path.  A file already in DST at its size (the pin's, else the hub's at REV) and sha256 is kept, so a rerun after an
+# eviction fetches only the rest.
 # ONLY=GLOB stages just the matching files and writes no .verified: a rehearsal of the rate ($OUT/stage.json: GB, download and
 # check seconds, MB/s).  Refused (exit 3) unless /workspace has room for what is left to fetch.
 #   research run --on NODE --mem-gb 32 --timeout 4h --source . --cwd source --project verity -- env ROW=... bash integrations/vllm/manifests/glm_v2_tree/jobs/stage_ckpt.sh
@@ -36,10 +37,15 @@ def check(names):
     with cf.ThreadPoolExecutor(int(jobs)) as ex:
         return dict(ex.map(sha, names))
 
-there = [n for n, f in files.items() if os.path.isfile(os.path.join(dst, n)) and os.path.getsize(os.path.join(dst, n)) == f["size"]]
+size = {n: f["size"] for n, f in files.items() if "size" in f}
+if len(size) < len(files):
+    from huggingface_hub import HfApi
+    hub = {s.rfilename: s.size for s in HfApi().model_info(repo, revision=rev, files_metadata=True).siblings}
+    size.update({n: hub[n] for n in files if n not in size})
+there = [n for n in files if os.path.isfile(os.path.join(dst, n)) and os.path.getsize(os.path.join(dst, n)) == size[n]]
 good = {n for n, h in check(there).items() if h == files[n]["sha256"]}
 todo = sorted(set(files) - good)
-need = sum(files[n]["size"] for n in todo)
+need = sum(size[n] for n in todo)
 print(f"{len(good)} of {len(files)} files in {dst} already checkpoints.json's; fetching {len(todo)} ({need / 1e9:.1f} GB)", flush=True)
 if need > int(avail) * 0.98:
     print(f"{dst}: {int(avail) / 1e9:.1f} GB free, {need / 1e9:.1f} GB to fetch"); sys.exit(3)
