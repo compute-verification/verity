@@ -563,10 +563,15 @@ def lakefile_in_place(old: str, new: str, path: str, moves: dict[str, tuple[str,
 
 def pins_change(a: list[str], b: list[str], old: str, new: str, base: Tree, head: Tree, pmap: dict[str, str]) -> str | None:
     """The first hunk of a `TRUSTED.sha256` edit whose lines are not each a file's digest at BASE rewritten to its digest at
-    HEAD, under its path moved by the map; None when there is none."""
+    HEAD, under its path moved by the map, in any order (the command that writes the file sorts the paths, and a moved
+    path sorts anew); None when there is none."""
+    digests: dict[tuple[int, str], str | None] = {}
+
     def digest(tree: Tree, path: str) -> str | None:
-        data = tree.blob(path)
-        return None if data is None else hashlib.sha256(data).hexdigest()
+        if (id(tree), path) not in digests:
+            data = tree.blob(path)
+            digests[id(tree), path] = None if data is None else hashlib.sha256(data).hexdigest()
+        return digests[id(tree), path]
 
     def pair(x: str, y: str) -> bool:
         mx, my = PIN_LINE.match(x), PIN_LINE.match(y)
@@ -575,7 +580,15 @@ def pins_change(a: list[str], b: list[str], old: str, new: str, base: Tree, head
         po = posixpath.normpath(posixpath.join(posixpath.dirname(old), mx[2]))
         pn = posixpath.normpath(posixpath.join(posixpath.dirname(new), my[2]))
         return map_path(po, pmap) == pn and digest(base, po) == mx[1] and digest(head, pn) == my[1]
-    return first_unexplained(a, b, a, b, pair=pair)
+    hunk = first_unexplained(a, b, a, b, pair=pair)
+    if hunk is None or len(a) != len(b):
+        return hunk
+    left = list(a)
+    for y in b:
+        if (x := next((x for x in left if pair(x, y)), None)) is None:
+            return hunk
+        left.remove(x)
+    return None
 
 
 def moves_change(old: str, new: str, moved: dict[str, str], base: Tree) -> tuple[str, str | None] | None:

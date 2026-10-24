@@ -473,9 +473,9 @@ def _sha(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
 
 
-def _worded(tmp_path: Path, **over: str) -> dict:
+def _worded(tmp_path: Path, base_pins: str | None = None, **over: str) -> dict:
     """`Models/Core/` moved to `Definitions/Core/` with the map's words applied, as `tools/move/rename.py` does it."""
-    base_files = {**WORD_BASE, "p/TRUSTED.sha256": f"{_sha(WORD_BASE['S/Models/Core/A.lean'])}  ../S/Models/Core/A.lean\n"}
+    base_files = {**WORD_BASE, "p/TRUSTED.sha256": base_pins or f"{_sha(WORD_BASE['S/Models/Core/A.lean'])}  ../S/Models/Core/A.lean\n"}
     repo, base = _repo(tmp_path, base_files)
     for m in ("A", "B"):
         _move(repo, f"S/Models/Core/{m}.lean", f"S/Definitions/Core/{m}.lean")
@@ -524,6 +524,20 @@ def test_a_word_that_renames_nothing_the_range_moved_is_refused(tmp_path):
 def test_a_pin_whose_digest_is_not_its_file_is_refused(tmp_path):
     [f] = _worded(tmp_path, **{"p/TRUSTED.sha256": f"{'0' * 64}  ../S/Definitions/Core/A.lean\n"})["refusals"]
     assert f["path"] == "p/TRUSTED.sha256"
+
+
+def test_pins_sorted_anew_after_their_paths_moved_are_a_move(tmp_path):
+    """The command that writes a pin file sorts its paths, so a regeneration after the move may order them anew."""
+    a, b = "import Definitions.Core.B\n\n/-! Trusted: `Definitions/Core/B.lean` states `Definitions.Core.B`. -/\n", "def x := 1\n"
+    base_pins = (f"{_sha(WORD_BASE['S/Models/Core/A.lean'])}  ../S/Models/Core/A.lean\n"
+                 f"{_sha(b)}  ../S/Models/Core/B.lean\n")
+    swapped = f"{_sha(b)}  ../S/Definitions/Core/B.lean\n{_sha(a)}  ../S/Definitions/Core/A.lean\n"
+    (tmp_path / "ok").mkdir()
+    r = _worded(tmp_path / "ok", base_pins, **{"p/TRUSTED.sha256": swapped})
+    assert r["certified"], r["refusals"]
+    (tmp_path / "dropped").mkdir()
+    dropped = f"{_sha(a)}  ../S/Definitions/Core/A.lean\n"
+    assert not _worded(tmp_path / "dropped", base_pins, **{"p/TRUSTED.sha256": dropped})["certified"]
 
 
 def test_a_moves_record_of_a_path_that_did_not_move_whole_is_refused(tmp_path):
