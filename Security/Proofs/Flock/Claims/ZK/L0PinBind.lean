@@ -212,7 +212,7 @@ theorem openStep_switch (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom 
     (Array.replicate (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0).len 0) t.extra t.lanePad
     (fun l => _root_.Flock.Firewall.Finish.saltAt (hi.getD (l - 1) ByteArray.empty)) r.1.2 r.2 #[] cs (by omega) hc
   rw [hQ] at hlen ⊢
-  have e := hF (by simp) (by simpa using hlen)
+  have e := hF (by simp) (by rw [Array.size_empty, Nat.zero_add]; exact hlen)
   obtain ⟨L', hL, hL'⟩ := ringSwitchCut_gamma (fun j i => (cs.getD j #[])[i]!) (xs.size + 2)
     (fun k => switchVec t.g r.1.1.2.2[k]!) r.1.1.2.2 (by omega) r.1.2 #[] (by simp [hna])
   have hro : ((repOpening (cutAsks (fun j i => (cs.getD j #[])[i]!) (xs.size + 2))
@@ -224,8 +224,7 @@ theorem openStep_switch (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom 
     unfold repOpening
     rw [ringSwitchP_eq, cutAsks_toC]
     exact FlockComplete.bind_go_err hL
-  rw [hro] at e
-  have e2 := congrArg Array.toList (Prod.mk.inj e).2
+  have e2 := congrArg Array.toList (Prod.mk.inj (hro.symm.trans e)).2
   rw [hL', hpe, empty_toList] at e2
   simp only [Array.toList_append, List.toList_toArray, Array.toList_empty, List.nil_append, Array.size_empty,
     Nat.sub_zero] at e2
