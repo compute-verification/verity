@@ -3,12 +3,15 @@
 The advice (I1 v0, `verity/core/protocols/certifier/advice.py` once ADV-SPEC lands it) is everything serving made
 unpredictable, and its length is the leak, charged as `A_c` in the certifier's accepted-runs bound
 (`SecurityProofs.EncardAccSeqsLeConstantRate`: at most `#Ac · #Σ_sync^W · D^n` observation sequences). This module codes
-two subjects, each with four codes, all prefix-free and all fixed before the run by a registered `Codebook`:
+three subjects, each with four codes, all prefix-free and all fixed before the run by a registered `Codebook`:
 
 - **v0**: I1 v0's fields as ADV-SPEC defines them (`requests`; `steps` with their rows, a cache hit with its sources;
   `release`, one bucket per kept output), the request ids aside (they are the certified ingress's `user` fields);
-- **admit**: the residual left once the fields that the certified I/O already determines are dropped (ENC-DERIVED)
-  and the scheduler is replayed (ENC-REPLAY): each request's admission step, the engine step before which it joined.
+- **admit**: each request's admission step, the engine step before which it joined: the timing that replaying the
+  scheduler (ENC-REPLAY) leaves;
+- **residual** (`Residual`): all that remains on a shaped egress once the fields the certified I/O determines are
+  dropped (ENC-DERIVED) and the scheduler is replayed: the admission steps, and the prompt and output lengths and
+  cache hits the replay reads.
 
 The codes:
 - `fixed`: every field at the width of its registered cap (v0's fixed-width code);
@@ -19,7 +22,9 @@ The codes:
   are first come, first served), and a step's first release from a release clock (the registered step-time model run
   over the decoded rows, from the previous step's end or an idle engine's next delivery); for admit, the step count
   between two arrivals is predicted from their certified arrival buckets and the step-time model run over the replayed
-  schedule. `cond+adapt` also rescales the step-time model online from the decoded past (a public, adaptive model).
+  schedule (the residual's other fields have no public conditioning on a served link, whose requests and responses are
+  padded to fixed frame counts, so they keep their static tables). `cond+adapt` also rescales the step-time model
+  online from the decoded past (a public, adaptive model).
 
 **What a window is charged.** Window w's segment codes the requests whose certified arrival bucket is in w and the steps
 charged to w (ADV-SPEC's charge: the earliest window of an output at that step or later) with their outputs' releases,
@@ -33,10 +38,10 @@ existing bound, with `Ac` the set of codewords it admits:
   accepted run charged L bits is one of at most `2^L · #Σ_sync^W · D^n` sequences. A per-window realized charge `ℓ_w` is
   cumulative, as the timing charge is: the first m windows carry at most `Σ_{w<m} ℓ_w` bits of advice.
 
-**The decoder** (`decode_v0`, `decode_admit`) is a deterministic public function of the bits, the public data
-(`Public`) and the codebook, with exact integer arithmetic and no hash. For `admit` it also reads the replayed schedule
-of the requests already decoded (`Replay`); `TraceReplay` stands in for ENC-REPLAY's replay by reading a trace's own
-rows of those requests.
+**The decoder** (`decode_v0`, `decode_admit`, `decode_residual`) is a deterministic public function of the bits, the
+public data (`Public`) and the codebook, with exact integer arithmetic and no hash. For `admit` and `residual` it also
+reads the replayed schedule of the requests already decoded (`Replay`); `TraceReplay` stands in for ENC-REPLAY's replay
+by reading a trace's own rows of those requests.
 """
 
 from __future__ import annotations
@@ -1239,11 +1244,14 @@ class Hit(NamedTuple):
 @dataclass(frozen=True)
 class Residual:
     """What remains of the advice on a shaped egress (whose releases are derived from public data) once the fields the
-    certified I/O fixes are dropped (ENC-DERIVED) and the scheduler is replayed (ENC-REPLAY): each request's prompt
-    length, its first row's cache hit with its sources, and its admission step; and each resume's re-hit with its
-    sources, in step order. The hits are whole blocks of `Caps.block_size` tokens, as vLLM's prefix cache makes them."""
+    certified I/O fixes are dropped (ENC-DERIVED) and the scheduler is replayed (ENC-REPLAY): each request's prompt and
+    output lengths, its first row's cache hit with its sources, and its admission step; and each resume's re-hit with
+    its sources, in step order. The output length stays: the replay needs where each request stopped, which only the
+    committed samples show, and the rows it would be derived from are the replay's output. The hits are whole blocks
+    of `Caps.block_size` tokens, as vLLM's prefix cache makes them."""
 
     prompt_len: tuple[int, ...]
+    output_len: tuple[int, ...]
     hit: tuple[Hit, ...]
     admit: tuple[int, ...]
     resumes: tuple[Hit, ...]
@@ -1259,13 +1267,14 @@ def residual_of(adv: Any, admit: Sequence[int]) -> Residual:
                 first[x.request] = Hit(x.cache_hit, x.sources)
             elif x.preempted:
                 resumes.append(Hit(x.cache_hit, x.sources))
-    return Residual(tuple(q.prompt_len for q in adv.requests), tuple(first[i] for i in range(len(adv.requests))),
-                    tuple(admit), tuple(resumes))
+    return Residual(tuple(q.prompt_len for q in adv.requests), tuple(q.output_len for q in adv.requests),
+                    tuple(first[i] for i in range(len(adv.requests))), tuple(admit), tuple(resumes))
 
 
 @dataclass
 class _ResState:
     prompt_len: list[int] = field(default_factory=list)
+    output_len: list[int] = field(default_factory=list)
     hit: list[Hit] = field(default_factory=list)
     admit: list[int] = field(default_factory=list)
     resumes: list[Hit] = field(default_factory=list)
@@ -1286,6 +1295,7 @@ def _residual_window(st: Stream, family: str, cb: Codebook, pub: Public, w: int,
     for i in pub.requests_in(w):
         P = st.sym("prompt_len", res.prompt_len[i] if res else None, 1, caps.prompt_max)
         s.prompt_len.append(P)
+        s.output_len.append(st.sym("output_len", res.output_len[i] if res else None, 1, caps.output_max))
         s.hit.append(_hit(st, "hit", raw, caps, res.hit[i] if res else None, P, s, i))
         _admit_one(st, family, cb, pub, i, res.admit if res else None, s.admit, replay, adapt)
     for r, known in replay.resumes_in(w):
@@ -1314,14 +1324,17 @@ def encode_residual(res: Residual, pub: Public, cb: Codebook, family: str, repla
     _check_admit(res.admit, pub)
     out = BitWriter()
     s, lens = _residual_segments(res, pub, cb, family, replay, w=out)
-    if (s.prompt_len, s.hit, s.admit, s.resumes) != (list(res.prompt_len), list(res.hit), list(res.admit), list(res.resumes)):
+    if _residual(s) != res:
         raise ValueError(f"the residual does not round-trip under {family}")
     return out, lens
 
 
+def _residual(s: _ResState) -> Residual:
+    return Residual(tuple(s.prompt_len), tuple(s.output_len), tuple(s.hit), tuple(s.admit), tuple(s.resumes))
+
+
 def decode_residual(r: BitReader, pub: Public, cb: Codebook, family: str, replay: Replay) -> Residual:
-    s, _ = _residual_segments(None, pub, cb, family, replay, r=r)
-    return Residual(tuple(s.prompt_len), tuple(s.hit), tuple(s.admit), tuple(s.resumes))
+    return _residual(_residual_segments(None, pub, cb, family, replay, r=r)[0])
 
 
 def symbols_residual(res: Residual, pub: Public, cb: Codebook, family: str,
@@ -1353,7 +1366,8 @@ def schema(caps: Caps, T: int) -> dict[str, tuple]:
             "cache_hit_new": ("binned", caps.prompt_max), "release_same": ("table", -2, 2),
             **{f"release_res_{q}": ("table", -8, 8) for q in range(PHASES + 1)}}
     out.update({f"c:{k}": v for k, v in cond.items()})
-    residual = {"prompt_len": reqs["prompt_len"], "hit": ("table", 0, 64), "rehit": ("binned", span),
+    residual = {"prompt_len": reqs["prompt_len"], "output_len": reqs["output_len"], "hit": ("table", 0, 64),
+                "rehit": ("binned", span),
                 **{k: rows[k] for k in ("sources_more", "source_delta", "source_n")}}
     for pre in ("s:", "c:", "a:"):
         out.update({f"{pre}{k}": v for k, v in residual.items()})

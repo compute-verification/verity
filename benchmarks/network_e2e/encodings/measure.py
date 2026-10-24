@@ -118,7 +118,7 @@ def training_symbols(traces: list[dict], cb) -> dict[str, list]:
         for fam in ("static", "cond", "cond+adapt"):
             wins = C.symbols_residual(res, t["public"], cb, fam, rep)
             if fam != "cond+adapt":
-                wins = [[x for x in win if not x[0].startswith(("prompt_len", "source"))] for win in wins]
+                wins = [[x for x in win if not x[0].startswith(("prompt_len", "output_len", "source"))] for win in wins]
             out[fam] += wins
     return out
 
@@ -168,8 +168,9 @@ def worst_residual_window(cb, T: int, family: str, arrivals: int, resumes: int) 
     """The most bits a window of `arrivals` requests and `resumes` resumes (both public: the certified ingress and the
     replay) costs under the residual: each field at its cap, each hit with the most sources."""
     caps = cb.caps
-    prompt = C.worst_bits([("prompt_len", 0, 1, caps.prompt_max)], cb, family) - (2 if family not in ("fixed", "gamma") else 0)
-    per_arrival = prompt + _worst_hit(cb, family, "hit", caps.prompt_max) + worst_admit_arrival(cb, T, family)
+    lengths = C.worst_bits([("prompt_len", 0, 1, caps.prompt_max), ("output_len", 0, 1, caps.output_max)], cb, family)
+    lengths -= 2 if family not in ("fixed", "gamma") else 0
+    per_arrival = lengths + _worst_hit(cb, family, "hit", caps.prompt_max) + worst_admit_arrival(cb, T, family)
     per_resume = _worst_hit(cb, family, "rehit", caps.prompt_max + caps.output_max)
     return arrivals * per_arrival + resumes * per_resume + (2 if family not in ("fixed", "gamma") else 0)
 

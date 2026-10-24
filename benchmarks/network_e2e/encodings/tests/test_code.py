@@ -238,11 +238,11 @@ PINNED = {
     "admit/static": [724, 661, 0],
     "admit/cond": [302, 259, 0],
     "admit/cond+adapt": [316, 258, 0],
-    "residual/fixed": [4000, 3411, 0],
-    "residual/gamma": [2566, 2289, 0],
-    "residual/static": [1691, 1495, 0],
-    "residual/cond": [1269, 1092, 0],
-    "residual/cond+adapt": [1282, 1093, 0],
+    "residual/fixed": [4792, 4075, 0],
+    "residual/gamma": [3969, 3408, 0],
+    "residual/static": [2340, 2031, 0],
+    "residual/cond": [1918, 1628, 0],
+    "residual/cond+adapt": [1932, 1628, 0],
 }
 
 
