@@ -19,8 +19,9 @@
 #   The stand-in (no PP_TP, no PP_LLAMA): the CPU TP Commit tests/pipeline/served_tp --deferred, world 2, SiluMul_v2{I=256}:
 #     honest subset:4, forged subset:8 (every unit drawn).
 #   PP_JOBS=N ranks at once (a GLM-5.3 rank: its bundle window ~2.5 min and ~11 GB, its audit ~10 GB); PP_RANKS=0,3 those ranks
-#   only; PP_FORGE=MEMBER:UNIT the forged unit (default 0:1); PP_FLOCK_WORK=DIR keeps M0's build across runs.
-#   research run --on vy-nebius-2 --project verity --source . --cwd clone --mem-gb 64 --mem-wait 3600 \
+#   only; PP_FORGE=MEMBER:UNIT the forged unit (default 0:1); PP_ONLY=honest|forged that run alone; PP_FLOCK_WORK=DIR keeps M0's
+#   build across runs. The Llama honest audit peaks at ~20 GB (one process), its forged one well under.
+#   research run --on vy-nebius-cpu-2 --project verity --source . --cwd clone --mem-gb 64 --mem-wait 3600 \
 #     --env PP_LLAMA=art:f74282995892011346dbf7ec656b3651ca35b48e8c26cea4d4796b36afadce7f -- bash benchmarks/prove_path/run.sh
 # Kept in $OUT: the records and logs, the public files, the sessions (their proofs and records), the binaries' sha256; never the
 # advice or its opening (the prover's, private: the verifier is handed the opening, the named gap), a prover's file (inst-*,
@@ -81,6 +82,7 @@ run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, 
          # run's arguments (--tp-commit DIR --build-root DIR, or --bundle DIR --row-dir DIR --workload F)
   local name=$1 src=$2 advice=$3 part=$4 ranks=$5; shift 5
   local forged=; [ $# -gt 0 ] && forged=--forged
+  case "${PP_ONLY:-}:${forged:+forged}" in honest:forged|forged:) return 0;; esac
   mkdir -p $O/$name
   $TIME $PP commit $src --advice $advice --opening $W/$name-opening.json --partition $part \
     ${ranks:+--ranks $ranks} \
