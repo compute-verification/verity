@@ -85,7 +85,8 @@ def main() -> None:
     funcs, weights = C.reward_funcs(args.reward, args.seed)
     want["reward_weights"] = weights
     if args.gen == "vllm":
-        want.update(vllm_mode="colocate", vllm_gpu_memory_utilization=args.vllm_mem)
+        want.update(vllm_mode="colocate", vllm_gpu_memory_utilization=args.vllm_mem,
+                    generation_kwargs={"stop_token_ids": C.chat_stop_ids(tok)})
     want.update(json.loads(args.extra))
     fields = {f.name for f in dataclasses.fields(GRPOConfig)}
     dropped = sorted(set(want) - fields)

@@ -60,7 +60,10 @@ def main() -> None:
     gold = [r["answer"] for r in ds]
     t0 = C.now()
     res = {"args": vars(args), "versions": C.versions(), "n_problems": len(ds)}
-    sp = SamplingParams(n=args.samples, temperature=args.temperature, max_tokens=args.max_tokens, seed=args.seed)
+    stop = C.chat_stop_ids(llm.get_tokenizer())
+    res["stop_token_ids"] = stop
+    sp = SamplingParams(n=args.samples, temperature=args.temperature, max_tokens=args.max_tokens, seed=args.seed,
+                        stop_token_ids=stop)
     outs = llm.chat(msgs, sp, lora_request=lora_req)
     correct = [sum(C.is_correct(o.text, g) for o in out.outputs) for out, g in zip(outs, gold)]
     for k in ks:
@@ -70,7 +73,8 @@ def main() -> None:
     res["mean_len_tokens"] = sum(len(o.token_ids) for out in outs for o in out.outputs) / (len(outs) * args.samples)
     res["mean_formatted_frac"] = sum(C.is_formatted(o.text) for out in outs for o in out.outputs) / (len(outs) * args.samples)
     if args.greedy:
-        g_outs = llm.chat(msgs, SamplingParams(n=1, temperature=0.0, max_tokens=args.max_tokens), lora_request=lora_req)
+        g_outs = llm.chat(msgs, SamplingParams(n=1, temperature=0.0, max_tokens=args.max_tokens, stop_token_ids=stop),
+                          lora_request=lora_req)
         res["per_problem_greedy"] = [int(C.is_correct(o.outputs[0].text, g)) for o, g in zip(g_outs, gold)]
         res["per_problem_greedy_formatted"] = [int(C.is_formatted(o.outputs[0].text)) for o in g_outs]
         res["greedy_acc"] = sum(res["per_problem_greedy"]) / len(gold)

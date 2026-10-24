@@ -22,6 +22,13 @@ import time
 import torch
 
 SYSTEM = "Please reason step by step, and put your final answer within \\boxed{}."
+# A base Qwen's generation config stops only at <|endoftext|>, so under the chat template it would run on past its turn.
+CHAT_STOP = ["<|im_end|>", "<|endoftext|>"]
+
+
+def chat_stop_ids(tokenizer) -> list[int]:
+    ids = [tokenizer.convert_tokens_to_ids(t) for t in CHAT_STOP]
+    return [i for i in ids if isinstance(i, int) and i != tokenizer.unk_token_id]
 QWEN_TARGETS = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
 
 
