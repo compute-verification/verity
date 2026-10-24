@@ -789,6 +789,30 @@ def test_ready_mark_writes_the_mark_with_no_quick_tier(world, capsys):
     assert StoreLabels(world.store, log=world.logs.append).ready(3, h) is True
 
 
+def test_ready_without_sha_marks_the_branchs_tip_not_the_head_github_still_shows(world, monkeypatch):
+    """24 Oct (benchmarks): `research queue ready N --mark` seconds after a push preflighted GitHub's old head, which conflicted
+    with `next`, and a retry passed at the same commit. Without --sha, the branch's tip (git's refs, which a push moves at once)
+    is the head to mark, and GitHub's PR head is waited for as with --sha."""
+    import dataclasses
+
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    world.with_store_remote()
+    old, new = world.change({"s.txt": "old\n"}), world.change({"s.txt": "new\n"})
+    world.gh.put(5, old, ready=False)
+    world.gh.prs[5] = dataclasses.replace(world.gh.prs[5], branch="lane-5/work")
+    monkeypatch.setattr(world.gh, "branch_tip", lambda branch: new if branch == "lane-5/work" else None, raising=False)
+    reads = []
+
+    def sleep(s):
+        reads.append(s)
+        world.gh.prs[5] = dataclasses.replace(world.gh.prs[5], head=new)
+
+    assert ready(world.gh, world.store, 5, "lane-5", MarkOnly(), sleep=sleep) == 0
+    labels = StoreLabels(world.store, log=world.logs.append)
+    assert reads and labels.ready(5, new) is True and labels.ready(5, old) is False
+
+
 def test_ready_sha_waits_for_github_to_show_the_pushed_head_and_never_marks_another(world, capsys):
     """20 Oct: `git push && research queue ready 2848 --mark` marked the old head, since GitHub's headRefOid lagged the push."""
     from research.queue import SHA_READS, MarkOnly, StoreLabels, ready
@@ -1501,6 +1525,7 @@ def test_a_remote_quick_tier_that_never_got_a_check_slot_never_started_and_did_n
     err = capsys.readouterr().err
     assert re.search(r"#1 is not marked ready at \w{12}: the quick tier never started: run \S+ on vy-test waited for a check slot "
                      r"until its --wait-max and never ran the tier", err) and "the quick tier failed" not in err
+    assert "lands on an eyeball review, and the quick tier isn't required" in err and "research run --on vy-nebius-cpu-K" in err
     assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is False
     rid = machine.launched[-1][machine.launched[-1].index("--id") + 1]
     assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch) == 1
@@ -1747,3 +1772,10 @@ def test_a_gh_call_that_never_answers_fails_the_tick_instead_of_holding_it(monke
     with pytest.raises(M.Refused, match=f"no answer in {M.GH_TIMEOUT_S} s"):
         M._gh_cli(Path("."), "pr", "view", "1")
     assert asked == [Q.GH_TIMEOUT_S, M.GH_TIMEOUT_S]
+
+
+def test_a_lane_line_names_its_handle_without_a_trailing_period():
+    """23 Oct: #3427's body said `Lane proofs.`, and the queue's owner was `proofs.`, a handle no one holds."""
+    for body, lane in (("Lane proofs.", "proofs"), ("Lane `lane-2`.", "lane-2"), ("Lane a.", "a"), ("Lane ci-x_", "ci-x"),
+                       ("Lane: vllm\n\nmore", "vllm")):
+        assert PR(1, "h", "t", body).owner == lane, body

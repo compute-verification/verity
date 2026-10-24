@@ -8,6 +8,10 @@ captured into the graph and drained at the logits), and the native collector (`N
 staging) hashes them into one root per step. Its control is ``stock`` token for token: committing must not change what
 is served.
 
+These arms commit ``vllm-v1`` by name (``commit_scheme``), as does every `prof_arm` arm that doesn't name ``rows-sha512``: they
+measure the record as it was before the Commit's default became ``rows-sha512``. The default Commit is what `prof_arm`'s rows arms
+and the harness's ``commit`` arms (`verity_bench.vllm.commit_arm`) measure.
+
 Each of the harness's runs is one Commit. ``begin_run`` resets the committer and installs it (before the clock),
 ``end_run`` finalizes the run's commitment (inside the timed window, so a run's time includes the hashing backlog), and
 the run's checks happen after the window, before the next run or when the harness reads ``extras`` or ``gate``: the
