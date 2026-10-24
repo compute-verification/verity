@@ -22,8 +22,11 @@ def label(r):
     meta = r.get("meta") or {}
     if "task" in meta or "method" in meta:
         fam = "A2" if "/A2/" in r["ckpt"] else ("A3" if "/A3/" in r["ckpt"] else "ckpt")
-        cond = f"{meta.get('task', meta.get('label', '?'))}:{meta.get('method', meta.get('family', '?'))}"
-        return fam, cond, meta.get("step")
+        cond = ":".join(str(meta[k]) for k in ("task", "method", "S_label", "phase") if k in meta)
+        step = meta.get("step", meta.get("steps"))
+        if meta.get("phase") == "rl":
+            step = meta.get("sft_steps", 0) + meta.get("rl_step", 0)
+        return fam, cond, step
     m = re.match(r"(.+)_s(\d+)$", r["name"])
     return "sweep", (m.group(1) if m else r["name"]), (int(m.group(2)) if m else None)
 
@@ -57,6 +60,16 @@ def approx(r):
     return out
 
 
+def route_min(r, f):
+    """beta_v with a second route per map: code the output through its input (the input's fresh bits over the same cones),
+    whichever is cheaper. It leaves out the cost of theta''s weights, which a step amortizes over its whole batch."""
+    tot = cnt = 0.0
+    for m in r["maps"].values():
+        tot += min(m["y"][f]["min"], r["inputs"][m["input"]]["x"][f]["min"])
+        cnt += m["counted"]
+    return tot / cnt
+
+
 def entry(r):
     fam, cond, step = label(r)
     s = r["summary"]
@@ -70,6 +83,7 @@ def entry(r):
         e["beta"][f] = {k: x[k] for k in ("beta_v", "beta_v_given_x", "beta_v_per_output", "beta_x", "beta_w",
                                           "beta_w_embed", "update_bits_est")}
         e["beta"][f]["beta_v_by_map"] = x["beta_v_by_map"]
+        e["beta"][f]["beta_v_route_min"] = route_min(r, f)
         fb = [a + b for a, b in zip(x["F_fwd_per_layer"], x["F_bwd_per_layer"])]
         e["F"][f] = {"F_fwd_per_layer": [round(v, 1) for v in x["F_fwd_per_layer"]],
                      "F_bwd_per_layer": [round(v, 1) for v in x["F_bwd_per_layer"]],
@@ -97,7 +111,7 @@ def ranges(entries, fam):
             continue
         m = out.setdefault(e["model"], {})
         for f in FMTS:
-            for k in ("beta_v", "beta_v_given_x", "beta_x", "beta_w"):
+            for k in ("beta_v", "beta_v_route_min", "beta_v_given_x", "beta_x", "beta_w"):
                 v = e["beta"][f][k]
                 lo, hi = m.setdefault(f, {}).get(k, [v, v])
                 m[f][k] = [min(lo, v), max(hi, v)]
