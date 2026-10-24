@@ -6,10 +6,11 @@ around each call's `Units.seeds` and `Units.receipts`) and ``wall_ms`` the step'
 before `prepare` (operands to the device, receipts back to the host, a call at a time). Batched, ``gpu_ms`` is each K's
 seeds and `Units.multi` launch and ``wall_ms`` the step as `Served` makes it now: at its last call of K = 4096 `prepare`
 of its qkv, o and gate_up calls then each one's ask, then the same for its down calls at K = 14336 (``prepare_ms`` the
-two `prepare` calls of it). Each is the median over ``--reps`` steps after one warm-up step. Before anything is timed, each
-linear's skipped receipts are held to the computed ones (a row block holding a served row word for word, a dead one zero
-words), and every call's batched receipts of a whole step to its own, word for word. Writes ``--out`` (JSON) and prints a
-line a row count.
+two `prepare` calls of it), at each of ``--launch-units`` (`Receipts.launch_units`, 0 one launch a K). Each is the median
+over ``--reps`` steps after one warm-up step. Before anything is timed, each linear's skipped receipts are held to the
+computed ones (a row block holding a served row word for word, a dead one zero words), and every call's batched receipts
+of a whole step, at each ``--launch-units``, to its own, word for word. Writes ``--out`` (JSON) and prints a line a row
+count.
 
     producer_gpu.sh runs it on each build under its lease (``STEP_ROWS``), into ``$OUT/step-<build>.json``.
 """
@@ -60,6 +61,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--slot", type=int, default=64)
     ap.add_argument("--layers", type=int, default=32)
     ap.add_argument("--reps", type=int, default=5)
+    ap.add_argument("--launch-units", type=_rows, default=[0, 16384, 8192],
+                    help="Receipts.launch_units of the batched path, comma-separated (0: one launch a K)")
     ap.add_argument("--out")
     a = ap.parse_args(argv)
     if a.slot % 32 or not a.rows or not all(0 <= r <= a.slot for r in a.rows):
@@ -80,9 +83,9 @@ def main(argv: list[str] | None = None) -> int:
                  "groups": {str(k): len(g) for k, g in groups.items()}, "device": torch.cuda.get_device_name(dev),
                  "so": a.so, "rows": {}}
 
-    def made(skip: bool) -> _At:
+    def made(skip: bool, launch: int = 0) -> _At:
         return _At(starts, SimpleNamespace(m=a.slot), SimpleNamespace(salt=SALT), units=units,
-                   weight=lambda c: ws[c.layer], roots=lambda c: (RA, RB), skip_dead=skip)
+                   weight=lambda c: ws[c.layer], roots=lambda c: (RA, RB), skip_dead=skip, launch_units=launch or None)
 
     def at_rows(rows: int) -> dict | None:
         codes = {k: torch.randint(-127, 128, (rows, k), dtype=torch.int8, device=dev, generator=gen).cpu().numpy()
@@ -103,12 +106,15 @@ def main(argv: list[str] | None = None) -> int:
 
         same = {}
         for skip in (False, True):
-            alone, p = made(skip), made(skip)
+            alone = made(skip)
             want = {c.index: alone(c, codes[c.k], None, None, None) for c in calls}
-            got = dict(zip([c.index for g in groups.values() for c in g], batched(p)))
-            same["skip" if skip else "full"] = bool(sorted(got) == sorted(want) and not p._ready
-                                                    and all(np.array_equal(got[i], want[i]) for i in want))
-            del want, got
+            for launch in a.launch_units:
+                p = made(skip, launch)
+                got = dict(zip([c.index for g in groups.values() for c in g], batched(p)))
+                same[f"{'skip' if skip else 'full'}@{launch}"] = bool(
+                    sorted(got) == sorted(want) and not p._ready and all(np.array_equal(got[i], want[i]) for i in want))
+                del got
+            del want
         if not all(v["ok"] for v in held.values()) or not all(same.values()):
             print(f"step_time: MISMATCH at {rows} rows: skip {held}, batched {same}")
             out["rows"][str(rows)] = {"rows": rows, "held": held, "batched_same": same}
@@ -160,8 +166,8 @@ def main(argv: list[str] | None = None) -> int:
                 p(c, codes[c.k], None, None, None)
             return 1e3 * (time.perf_counter() - t)
 
-        def wall_batch(skip: bool) -> tuple[float, float]:
-            p, prep = made(skip), 0.0
+        def wall_batch(skip: bool, launch: int) -> tuple[float, float]:
+            p, prep = made(skip, launch), 0.0
             torch.cuda.synchronize()
             t = time.perf_counter()
             for g in groups.values():
@@ -175,27 +181,32 @@ def main(argv: list[str] | None = None) -> int:
         r: dict = {"rows": rows, "live_units": sum(v["live"] for v in held.values()) * a.layers, "held": held,
                    "batched_same": same, "load": os.getloadavg()}
         for skip in (False, True):
-            for warm in (gpu_step, gpu_batch, wall_step, wall_batch):
+            for warm in (gpu_step, gpu_batch, wall_step):
                 warm(skip)
             g = [gpu_step(skip) for _ in range(a.reps)]
             w = [wall_step(skip) for _ in range(a.reps)]
             gb = [gpu_batch(skip) for _ in range(a.reps)]
-            wb = [wall_batch(skip) for _ in range(a.reps)]
+            walls = {}
+            for launch in a.launch_units:
+                wall_batch(skip, launch)
+                wb = [wall_batch(skip, launch) for _ in range(a.reps)]
+                walls[str(launch)] = {"wall_ms": statistics.median(x for x, _ in wb), "wall_ms_all": [x for x, _ in wb],
+                                      "prepare_ms": statistics.median(x for _, x in wb)}
             r["skip" if skip else "full"] = {
                 "gpu_ms": statistics.median(x for x, _ in g), "gpu_ms_all": [x for x, _ in g],
                 "gpu_ms_by_linear": {m: statistics.median(p[m] for _, p in g) for m in g[0][1]},
                 "wall_ms": statistics.median(w), "wall_ms_all": w,
                 "batch": {"gpu_ms": statistics.median(x for x, _ in gb), "gpu_ms_all": [x for x, _ in gb],
                           "gpu_ms_by_k": {k: statistics.median(p[k] for _, p in gb) for k in gb[0][1]},
-                          "wall_ms": statistics.median(x for x, _ in wb), "wall_ms_all": [x for x, _ in wb],
-                          "prepare_ms": statistics.median(x for _, x in wb)}}
+                          "wall_by_launch_units": walls}}
         r["load_after"] = os.getloadavg()
         out["rows"][str(rows)] = r
         f, s = r["full"], r["skip"]
+        bw = ", ".join(f"{lu}: {f['batch']['wall_by_launch_units'][lu]['wall_ms']:.1f} / "
+                       f"{s['batch']['wall_by_launch_units'][lu]['wall_ms']:.1f}" for lu in map(str, a.launch_units))
         print(f"step_time: {rows}/{a.slot} rows, {len(calls)} calls, {u0} units, load {r['load'][0]:.0f}: per call gpu "
               f"{f['gpu_ms']:.1f} / {s['gpu_ms']:.1f} ms (full / skip), wall {f['wall_ms']:.1f} / {s['wall_ms']:.1f}; "
-              f"batched gpu {f['batch']['gpu_ms']:.1f} / {s['batch']['gpu_ms']:.1f}, wall {f['batch']['wall_ms']:.1f} / "
-              f"{s['batch']['wall_ms']:.1f} (prepare {f['batch']['prepare_ms']:.1f} / {s['batch']['prepare_ms']:.1f}); "
+              f"batched gpu {f['batch']['gpu_ms']:.1f} / {s['batch']['gpu_ms']:.1f}, wall by launch units {{{bw}}}; "
               f"batched words same {same}")
         return r
 
