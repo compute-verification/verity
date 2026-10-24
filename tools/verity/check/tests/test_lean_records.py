@@ -249,7 +249,7 @@ def test_the_packages_whose_records_read_the_build_are_audited_after_it(repo, tm
     monkeypatch.setenv("AUDIT_FAILS", "a")
     capsys.readouterr()
     assert LC.audit_records("p", deps, tree) == 1, "a requirer's failure is the run's"
-    assert "lean-records: a requires p, and its records fail on this tree" in capsys.readouterr().out
+    assert "lean-records: a requires p, and its records fail on this build" in capsys.readouterr().out
     _calls(tmp_path)
     (repo / "a" / "lean-audit.json").write_text("{}")
     assert LC.audit_records("p", deps, tree) == 0 and len(_calls(tmp_path)) == 1
@@ -270,8 +270,8 @@ def test_a_tree_keeps_one_packages_dependencies(repo, tmp_path):
 
 def test_it_holds_a_lean_slot_of_pool_build_and_works_on_that_slots_tree(repo, tmp_path, monkeypatch, capsys):
     """Never the `audit` pool, where hour-long audits hold every slot, nor the one LEAN_SLOT_POOL names, nor the one LEAN_SLOT
-    says its caller holds; check.py holds the slot's lock itself. A node whose SLOTS lists no `build` refuses it, even with an
-    `any` pool, and nothing runs."""
+    says its caller holds; check.py holds the slot's lock itself. A node whose SLOTS lists no `build`, even with an `any`
+    pool, takes the `--dev-cache` path on the checkout instead, where check.py takes a slot of its own."""
     deps, slots = tmp_path / "deps", tmp_path / "locks" / "lean-slots"
     slots.parent.mkdir()
     slots.write_text("check 1\naudit 1\nbuild 2\n")
@@ -301,8 +301,12 @@ def test_it_holds_a_lean_slot_of_pool_build_and_works_on_that_slots_tree(repo, t
     capsys.readouterr()
     for text in ("check 1\naudit 1\n", "check 1\nany 4\n"):
         slots.write_text(text)
-        assert LC.audit_records("p", deps) == 2 and _calls(tmp_path) == []
-        assert "lists no pool 'build', the only one this request takes" in capsys.readouterr().out, "a guard never fails open"
+        assert LC.audit_records("p", deps) == 0
+        (call,) = _calls(tmp_path)
+        assert "--dev-cache" in call["argv"] and call["argv"][-1] == str(repo / "p") and "lean_slot" not in call, \
+            "check.py --build takes its own slot, of pool audit or any"
+        said = capsys.readouterr().out
+        assert "lists no pool 'build', the only one this request takes" in said and "taking the --dev-cache path" in said
 
 
 def test_without_lean_slots_its_tree_is_local(repo, tmp_path):

@@ -48,7 +48,8 @@ CATEGORY = {"gemm_pearlc": "gemm",
             "commit_a": "hashing"}      # run.Pipeline's FUSED at decode: A's commitment, with E_A's lines
 #: GPU 1's cubin's kernels by category, for nsys's per-kernel sums: short names exactly (``pa`` is not ``paged_attention``),
 #: the rest by prefix; every other kernel is vLLM's or torch's
-EXACT = {"lines": "forming", "eprime": "forming", "words": "forming", "words_u": "forming", "pa": "forming", "pb": "forming"}
+EXACT = {"lines": "forming", "eprime": "forming", "words": "forming", "words_u": "forming", "words_k": "forming", "stats_r": "forming",
+         "pa": "forming", "pb": "forming"}
 PREFIXES = (("gemm_pearlc", "gemm"), ("gemm_ct", "gemm"), ("stats_s5", "forming"), ("form_s5", "forming"), ("gemm_words", "forming"),
             ("s512_", "hashing"), ("hm_", "hashing"), ("pd_", "hashing"))
 
