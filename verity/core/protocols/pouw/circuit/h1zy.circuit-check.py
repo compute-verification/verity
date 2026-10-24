@@ -7,8 +7,9 @@ from typing import Any
 
 def _pouw_roots() -> list[Any]:
     """`PouwZyCheck_v1` at the smoke's 4 × 8 unit (32 `PouwZyDequant_v2` and `PouwZyCell_v2`, then 31 `PouwAndBit_v2`), and
-    `PouwH1TileZy_v1` over `PouwH1Tile_v1` and `PouwH1Tile_v3` at their smallest tile, one lane (4 × 8) at K = 64 on the s8
-    accumulator on bits (`h1tile`'s sidecar's), each the tile and that check. `PouwH1LaneZy_v1` over both at the smallest
+    `PouwH1TileZy_v1` over `PouwH1Tile_v1` and `PouwH1Tile_v3`, and over J10-R's `PouwH1Tile_v5` and `PouwH1Tile_v6` (whose
+    call and blocks it passes on), at their smallest tile, one lane (4 × 8) at K = 64 on the s8 accumulator on bits
+    (`h1tile`'s sidecar's), each the tile and that check. `PouwH1LaneZy_v1` over both at the smallest
     leaf of whole index bits, 8 × 16 (4 lanes, the low 2 bits of a 16-bit index): one lane's seed, 13 noise blocks and its
     key block, each counter picked by `PouwMuxBit_v2` over the index, its fx1 chain, z (v1's exact dots or v3's one-stream
     cells), its 32 record cells picked over the index, that check, the admit gate and the equality of its partials row (8
@@ -18,7 +19,8 @@ def _pouw_roots() -> list[Any]:
     segment a chunk), the first with its key block and `GemmAccumulatorS8_v2` at the chunk's K, the others continuing the
     carried chain and z, each its carry out's equality, the last the record's check and the partials' (the whole lane's
     8 and 10 words). `PouwH1TileZyChunks_v1` over the v1 unit at K = 64 on 2 chunk rows a row: each whole row joined from
-    its chunk rows, the unit on them, and each later chunk's scale held to chunk 0's (12 `PouwEq32_v2`). All are bound as
+    its chunk rows, the unit on them, and each later chunk's scale held to chunk 0's (12 `PouwEq32_v2`), and
+    `PouwH1TileZyChunks_v2` the same over J10-R's v5 and v6 units, passing their call and blocks on. All are bound as
     Definitions, since `h1zy.lane`, `h1zy.lane_chunk` and `h1zy.combine` stage only a
     leaf whose R is a multiple of 16, and the combine only at K >= 384 (`h1zy.LEAST_K`). None where
     `circuit.segment` is not on the tree, which is where `PouwH1Tile` is registered. `PouwZyDequant`, `PouwZyCell`,
@@ -35,8 +37,8 @@ def _pouw_roots() -> list[Any]:
         return bind(d, EXACT=exact, R=r, C=c, PAIRS=tuple((i, j) for i in range(r) for j in range(c)))
 
     tiles = (H.PouwH1Tile, H.PouwH1Tile3)
-    return ([bind(Z.PouwZyCheck, R=4, C=8)] + [Z.unit(tile(d, 4, 8)) for d in tiles]
-            + [Z.unit_chunks(tile(H.PouwH1Tile, 4, 8), 2)]
+    return ([bind(Z.PouwZyCheck, R=4, C=8)] + [Z.unit(tile(d, 4, 8)) for d in (*tiles, H.PouwH1Tile5, H.PouwH1Tile6)]
+            + [Z.unit_chunks(tile(d, 4, 8), 2) for d in (H.PouwH1Tile, H.PouwH1Tile5, H.PouwH1Tile6)]
             + [bind(Z.PouwH1LaneZy, TILE=tile(d, 8, 16)) for d in tiles]
             + [bind(Z.PouwH1Combine, TILE=tile(H.PouwH1Tile, 8, 16))]
             + [bind(Z.PouwH1LaneZyChunk, TILE=tile(H.PouwH1Tile, 8, 16, k), CHUNKS=n, CHUNK=c)

@@ -12334,7 +12334,7 @@
    ]
   },
   "Definitions.Accounting.Gates.Registry": {
-   "digest": "0cac192d1d4ebe7d382e6630e72c49275a3b50f5e6ccb65bd544125faee4c440",
+   "digest": "812ea9cfc03810e85766f05a2f230bbdfc1a2432f809998b7b4577c86e5ebe6f",
    "definitions": {
     "Accounting.Gates.Class": "fbc22a2c1fae8184bf3932dc00e980466fc000346f7fe30bff3745694b6f8e75",
     "Accounting.Gates.Class.affine": "291a5bf226e55e5c668cb70e73d5771ac2aaa288c12cf33ba623992c8c83ac2d",
@@ -12348,7 +12348,7 @@
     "Accounting.Gates.families": "dfb46f7c1cb52f844eda2868694b07f7d04d6edbf3b57626a3db4ce29fb1ae43",
     "Accounting.Gates.numbered": "93dcb39c1bbb6694e874093a2f05e622440d55eb647d2d777cb75ea3395bf2e8",
     "Accounting.Gates.numeral": "e60186403df5edd56fda63d293e84fce58023c2d30e5704103cc3dfaad1a6b5f",
-    "Accounting.Gates.registry": "f2fc1eaad694a5fe78eaa7907e83fed3a01e60f7c3e7eda19efff47efbe60987",
+    "Accounting.Gates.registry": "ffaeceacd03eca0ab221c25f3b7c4489e3b0c02a347a8088d2bf84f4005e14e3",
     "Accounting.Gates.tableReadBits": "910b13c7bf81cf9efe6f6d863a602f0d3ca4b8d543780aad847da22a62b80f83"
    },
    "guarantees": ["Accounting.SecurityProofs.Gates.Bf16ToF32Affine"]

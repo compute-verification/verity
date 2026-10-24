@@ -17,7 +17,8 @@
 #                       and public_input_claim_false (a false anchor claim, the verifier's file agreeing with it) REJECT
 #      until T4 the verifier refuses --public-inputs (#1179), so summarize.py expects each row-unit check REFUSED; once every
 #      check has passed it refuses a plain tile's output row of two output ports, so a plain tile's honest checks are
-#      REFUSED, and a hiding tile's, whose rows (row-seg/v1, row/v2) are covered, ACCEPT
+#      REFUSED, and so are a hiding tile's, whose rows (row-seg/v1, row/v2) are covered, for the tile's want of a Program
+#      (no --program, NO_PROGRAM)
 #      A tile has no public input, so it runs honest-own without --public-inputs and none of the anchor controls.
 #   3. summarize.py: out/<role>-k<K>/summary.json and out/summary.json
 # A staged config is kept under $HZ_CACHE/stage, keyed by its role, K, N, HZ_STAGE, the venv and every source stage.py

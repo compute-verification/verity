@@ -23,7 +23,8 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   at the A row's position and the weight row's at the weight row's (`Accounting.Served.DequantOf`: s_a with the A row, s_w
   registered).
 * **The unit** `PouwH1TileZy_v1{TILE}` is ``(a: R rows, b: C rows, zy, salt, position, roots) -> {receipt, ok}``: TILE, the
-  H1 tile (`h1tile.PouwH1Tile` v1 or v3 over the full grid), on the rows' codes gives z and the receipt; `PouwZyCheck_v1`
+  H1 tile (`h1tile.PouwH1Tile` v1 or v3 over the full grid; or J10-R's v5 or v6, `J10R_TILES`, whose ``call`` and
+  ``blocks`` the unit takes after ``roots``), on the rows' codes gives z and the receipt; `PouwZyCheck_v1`
   holds the record to them, ``ok`` 1 exactly when every cell's record z is z and its record y is `PouwZyDequant_v2` of z at
   its row's s_a and its column's s_w. Every cell is dequantized, a padded row's too: an empty slot's y is dq(0, +0, s_w),
   which is +0 only for a finite positive s_w (0x8000 for a negative one, 0x7FFF for an infinite or NaN one), so no cell's
@@ -91,10 +92,15 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   at n i + c, as its table commits them) and its ``b`` the n C of its B rows. It is UNIT on the whole rows, each its
   chunks' codes in turn at chunk 0's scale, and its ok is UNIT's AND every later chunk's scale equal to chunk 0's (as a
   lane's chunks hold each row's scale to the carried one), (n - 1)(R + C) `PouwEq32`s more. Its drawn leaf is UNIT's
-  leaf, proved as above, so a chunked K is refused over v3 and v4.
+  leaf, proved as above, so a chunked K is refused over v3 and v4. Over J10-R's tiles (`J10R_TILES`, v5 and v6) the
+  unit on chunk rows is `PouwH1TileZyChunks_v2{UNIT, CHUNKS = n}`: v1's body with UNIT's ``call`` and ``blocks`` after
+  ``roots``, passed on as they are. UNIT runs on the whole rows at the whole K, so its noise is the call-scale stream's
+  rows and columns from ``blocks`` (`h1tile.j10r_blocks` at the call's slot and the whole K, `Layout`(R, C, K)'s RB and
+  CB), `h1tile.j10r_reference`'s word for word: chunking cuts the committed rows, never the noise stream. A J10-R leaf
+  has no lanes (`PouwH1LaneZy` is over v1 and v3).
 
 `records` gives a unit's honest record on words (`scaled_mm_zy`'s for its rows and scales), `reference` the unit on words,
-``(receipt, ok)``, and `chunks_reference` the unit on chunk rows, `lane_partial` a lane's honest partials row, and `lane_reference` and `combine_reference` a lane's and the
+``(receipt, ok)``, and `chunks_reference` the unit on chunk rows (each with ``j10r``: over J10-R), `lane_partial` a lane's honest partials row, and `lane_reference` and `combine_reference` a lane's and the
 combine's ok; `lane_chunk_carries` a lane's honest carries in chunks, and `lane_chunk_reference` a chunk's ok.
 `statement_rows` is a lane's, a chunk's and the combine's input rows as `class_statement.unit_lowering` takes them, and
 `statement_ports` their C-Flock ports, each input's and the output's bits in its port's row, which Lean states as
@@ -220,6 +226,8 @@ def PouwZyCheck(B, S, zy, z, sa, sw):
 
 #: the tile units the record check takes: (a, b, salt, position, roots) -> {z, receipt}
 TILES = ("PouwH1Tile_v1", "PouwH1Tile_v3")
+#: the J10-R tile units the unit takes too: (a, b, salt, position, roots, call, blocks) -> {z, receipt}
+J10R_TILES = ("PouwH1Tile_v5", "PouwH1Tile_v6")
 
 
 def _tile(S: Any) -> tuple[int, int, int]:
@@ -227,10 +235,10 @@ def _tile(S: Any) -> tuple[int, int, int]:
     return a.n, b.n, a.elem.n
 
 
-def _refuse_tile(b: dict) -> str | None:
+def _refuse_tile(b: dict, tiles: tuple[str, ...] = TILES) -> str | None:
     t = b.get("TILE")
-    if getattr(getattr(t, "defn", None), "id", None) not in TILES:
-        return f"TILE is an H1 tile ({', '.join(TILES)}) bound to its full grid, not {getattr(t, 'id', t)!r}"
+    if getattr(getattr(t, "defn", None), "id", None) not in tiles:
+        return f"TILE is an H1 tile ({', '.join(tiles)}) bound to its full grid, not {getattr(t, 'id', t)!r}"
     r, c = t.bindings["R"], t.bindings["C"]
     if tuple(t.bindings["PAIRS"]) != tuple((i, j) for i in range(r) for j in range(c)):
         return f"TILE's z is its full {r} × {c} grid in row-major order, the record's cells"
@@ -248,9 +256,9 @@ def _rows(a: Coll, n: int, field: str) -> Coll:
     return Coll(Array(n, a[0].field(field).type), concat([a[i].field(field).refs for i in range(n)]))
 
 
-def _body(B: Any, S: Any, a: Coll, b: Coll, zy: Coll, salt: Coll, position: Coll, roots: Coll) -> Coll:
+def _body(B: Any, S: Any, a: Coll, b: Coll, zy: Coll, *public: Coll) -> Coll:
     r, c, _k = _tile(S)
-    out = B.call(S.TILE, _rows(a, r, "codes"), _rows(b, c, "codes"), salt, position, roots)
+    out = B.call(S.TILE, _rows(a, r, "codes"), _rows(b, c, "codes"), *public)
     ok = B.call(bind(PouwZyCheck, R=r, C=c), zy, out.field("z"), _rows(a, r, "scale"), _rows(b, c, "scale"))
     return Coll(_signature(S)[1], concat([out.field("receipt").refs, ok.refs]))
 
@@ -261,11 +269,12 @@ def _unit_ports(S: Any) -> Any:
 
 
 PouwH1TileZy = CompositeDefinition(
-    "PouwH1TileZy", 1, ("TILE",), _signature, _body, conformance="protocol-defined", refuse=_refuse_tile,
-    register=H.SG is not None, ports=_unit_ports,
+    "PouwH1TileZy", 1, ("TILE",), _signature, _body, conformance="protocol-defined",
+    refuse=lambda b: _refuse_tile(b, TILES + J10R_TILES), register=H.SG is not None, ports=_unit_ports,
     doc="The H1 tile with its z/y record checked (`circuit.h1zy`): TILE on the A and B rows' codes, the salt, position and "
-        "roots gives z and the receipt; the unit returns the receipt and ok, 1 exactly when the record's z is z and its y "
-        "is PouwZyDequant_v2 of z at each cell's row scale s_a and column scale s_w, each the f32 after its row's codes.")
+        "roots (a J10-R TILE's then its call and blocks) gives z and the receipt; the unit returns the receipt and ok, 1 "
+        "exactly when the record's z is z and its y is PouwZyDequant_v2 of z at each cell's row scale s_a and column scale "
+        "s_w, each the f32 after its row's codes.")
 
 
 def unit(tile: Any) -> Any:
@@ -733,9 +742,9 @@ def _whole_rows(rows: Coll, count: int, n: int, k: int) -> Coll:
     return Coll(Array(count, ROW(k)), concat(refs))
 
 
-def _tile_chunks_body(B: Any, S: Any, a: Coll, b: Coll, zy: Coll, salt: Coll, position: Coll, roots: Coll) -> Coll:
+def _tile_chunks_body(B: Any, S: Any, a: Coll, b: Coll, zy: Coll, *public: Coll) -> Coll:
     r, c, k, n = _tile_chunks(S)
-    out = B.call(S.UNIT, _whole_rows(a, r, n, k), _whole_rows(b, c, n, k), zy, salt, position, roots)
+    out = B.call(S.UNIT, _whole_rows(a, r, n, k), _whole_rows(b, c, n, k), zy, *public)
     later = [(rows, i, ch) for rows, m in ((a, r), (b, c)) for i in range(m) for ch in range(1, n)]
     w = len(later)
     eq = B.batch(SG.PouwEq32, Coll(Array(w, H.U32), concat([rows[n * i + ch].field("scale").refs for rows, i, ch in later])),
@@ -754,15 +763,47 @@ PouwH1TileZyChunks = CompositeDefinition(
         "to chunk 0's.")
 
 
+def _refuse_tile_chunks_j10r(b: dict) -> str | None:
+    u, n = b.get("UNIT"), b.get("CHUNKS")
+    if getattr(u, "defn", None) is not PouwH1TileZy:
+        return f"UNIT is h1zy's PouwH1TileZy_v1 over a J10-R tile, not {getattr(u, 'id', u)!r}"
+    t = u.bindings["TILE"]
+    if t.defn.id not in J10R_TILES:
+        return (f"PouwH1TileZyChunks_v2 is over J10-R's tiles ({', '.join(J10R_TILES)}), not {t.defn.id}: "
+                "PouwH1Tile_v1's unit on chunk rows is PouwH1TileZyChunks_v1")
+    if not (isinstance(n, int) and not isinstance(n, bool) and n >= 2):
+        return f"CHUNKS is an integer of at least 2 (one chunk is the unit itself, PouwH1TileZy_v1), not {n!r}"
+    k = t.signature()[0][0][1].elem.n
+    if k % (32 * n):
+        return f"K = {k} is {n} chunks of whole 32-entry segments only where 32 {n} divides it"
+    return None
+
+
+PouwH1TileZyChunks2 = CompositeDefinition(
+    "PouwH1TileZyChunks", 2, ("UNIT", "CHUNKS"), _tile_chunks_signature, _tile_chunks_body, conformance="protocol-defined",
+    refuse=_refuse_tile_chunks_j10r, register=H.SG is not None, ports=_unit_ports,
+    doc="v1's unit on chunk rows over J10-R (`circuit.h1zy`): UNIT h1zy's PouwH1TileZy_v1 over an R × C PouwH1Tile_v5 or "
+        "_v6 at K, on its n R A and n C B chunk rows (row i's chunk c at n i + c, its K / n codes from c K / n and the "
+        "row's f32 scale), then UNIT's record, salt, position, roots, call and blocks. Each whole row is its chunks' codes "
+        "in turn and chunk 0's scale, so UNIT's noise is the call-scale stream's rows and columns at K from blocks; the "
+        "unit returns UNIT's receipt on them, and ok, UNIT's ok AND every later chunk's scale equal to chunk 0's.")
+
+
 def unit_chunks(tile: Any, n: int) -> Any:
-    """`PouwH1TileZyChunks` over `unit`(``tile``) on ``n`` chunk rows a row."""
-    return bind(PouwH1TileZyChunks, UNIT=unit(tile), CHUNKS=int(n))
+    """The zy unit `unit`(``tile``) on ``n`` chunk rows a row: `PouwH1TileZyChunks_v1` over it, or v2 over a J10-R tile
+    (`J10R_TILES`)."""
+    d = PouwH1TileZyChunks2 if getattr(getattr(tile, "defn", None), "id", None) in J10R_TILES else PouwH1TileZyChunks
+    return bind(d, UNIT=unit(tile), CHUNKS=int(n))
+
+
+#: the units on chunk rows: v1 over PouwH1Tile_v1, v2 over J10-R's tiles
+CHUNKED = (PouwH1TileZyChunks, PouwH1TileZyChunks2)
 
 
 def window_unit(tile: Any) -> Any:
     """The tile unit a window binds at ``tile``'s K, whose rows are the ones a table at K commits (`chunk_leaves`): `unit`
     at `chunks`(K) = 1, else `unit_chunks` on its n = `chunks`(K) chunk rows. ValueError at a K `chunks` refuses, and past
-    `CHUNK_MAX` on any tile but PouwH1Tile_v1 over GemmAccumulatorS8_v2."""
+    `CHUNK_MAX` on any tile but PouwH1Tile_v1 over GemmAccumulatorS8_v2 and J10-R's (`J10R_TILES`)."""
     n = chunks(tile.signature()[0][0][1].elem.n)
     return unit(tile) if n == 1 else unit_chunks(tile, n)
 
@@ -849,24 +890,30 @@ def check(zr: Sequence[int], yr: Sequence[int], z: Sequence[int], sa: Sequence[i
 
 def reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], sa: Sequence[int], sw: Sequence[int],
               zy: tuple[Sequence[int], Sequence[int]], salt: bytes, position: int, roots: tuple[bytes, bytes],
-              stream: bool = False) -> tuple[list[int], int]:
+              stream: bool = False, j10r: tuple[int, tuple[int, int]] | None = None) -> tuple[list[int], int]:
     """The unit on words: (receipt, ok) for A's rows and B's rows (s8 encodings), their scales (f32 encodings), the record
-    ``zy`` (z s32 words, y bf16 encodings, row-major), the salt, position and roots; ``stream``: over v3 (`h1tile`)."""
-    z, receipt = H.reference(a, b, salt, position, roots, stream=stream)
+    ``zy`` (z s32 words, y bf16 encodings, row-major), the salt, position and roots; ``stream``: over v3 (`h1tile`), and
+    with ``j10r`` ``(call, blocks)`` over J10-R's v5 (v6 with ``stream``, `h1tile.j10r_reference`)."""
+    if j10r is None:
+        z, receipt = H.reference(a, b, salt, position, roots, stream=stream)
+    else:
+        z, receipt = H.j10r_reference(a, b, salt, position, roots, j10r[0], j10r[1], stream=stream)
     return receipt, check(zy[0], zy[1], z, sa, sw)
 
 
 def chunks_reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], sa: Sequence[int], sw: Sequence[int],
                      zy: tuple[Sequence[int], Sequence[int]], salt: bytes, position: int, roots: tuple[bytes, bytes],
-                     n: int) -> tuple[list[int], int]:
+                     n: int, stream: bool = False,
+                     j10r: tuple[int, tuple[int, int]] | None = None) -> tuple[list[int], int]:
     """`PouwH1TileZyChunks` on words: (receipt, ok) for its n R A and n C B chunk rows (s8 encodings, row i's chunk c at
     n i + c) and their scales (f32 encodings, one a chunk row), the record ``zy``, the salt, position and roots: `reference`
     on the whole rows (each its chunks' codes in turn, at chunk 0's scale), its ok AND every chunk's scale its row's chunk
-    0's."""
+    0's. With ``j10r`` ``(call, blocks)`` it is v2's over J10-R (``stream``: over v6), whose blocks are the call-scale
+    stream's at the whole K (`h1tile.j10r_blocks`)."""
     def whole(rows: Sequence[Sequence[int]]) -> list[list[int]]:
         return [[v for c in range(n) for v in rows[n * i + c]] for i in range(len(rows) // n)]
 
-    receipt, ok = reference(whole(a), whole(b), sa[::n], sw[::n], zy, salt, position, roots)
+    receipt, ok = reference(whole(a), whole(b), sa[::n], sw[::n], zy, salt, position, roots, stream, j10r)
     same = all(s[n * i + c] & M32 == s[n * i] & M32 for s in (sa, sw) for i in range(len(s) // n) for c in range(n))
     return receipt, int(ok and same)
 
@@ -1009,9 +1056,11 @@ def lane_chunk_reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]],
                and check([zy[0][u] for u in cells], [zy[1][u] for u in cells], got["z"], sa, sw))
 
 
-__all__ = ["BF16", "CARRY", "CHUNK_ALIGN", "CHUNK_MAX", "F32", "LANE", "LEAST_K", "PUBLIC", "S32", "S8", "PouwAndBit",
-           "PouwH1Combine", "PouwH1LaneZy", "PouwH1LaneZyChunk", "PouwH1TileZy", "PouwH1TileZyChunks", "PouwMuxBit",
-           "PouwZyCell", "PouwZyCheck", "PouwZyDequant", "PouwZyDequantWord", "RECORD", "ROW", "TILES", "carry_words",
+__all__ = ["BF16", "CARRY", "CHUNKED", "CHUNK_ALIGN", "CHUNK_MAX", "F32", "LANE", "LEAST_K", "PUBLIC", "S32", "S8",
+           "PouwAndBit", "PouwH1Combine", "PouwH1LaneZy", "PouwH1LaneZyChunk", "PouwH1TileZy", "PouwH1TileZyChunks",
+           "PouwH1TileZyChunks2", "PouwMuxBit",
+           "PouwZyCell", "PouwZyCheck", "PouwZyDequant", "PouwZyDequantWord", "RECORD", "ROW", "J10R_TILES", "TILES",
+           "carry_words",
            "check", "chunk_leaves", "chunk_words", "chunks", "chunks_reference", "combine", "combine_reference", "dequant",
            "lane", "lane_bits", "lane_cells", "lane_chunk", "lane_chunk_carries", "lane_chunk_reference", "lane_partial",
            "lane_reference", "lane_statements", "records", "reference", "statement_ports", "statement_rows", "unit",
