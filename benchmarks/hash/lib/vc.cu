@@ -686,6 +686,18 @@ __global__ void k_put64(uint8_t* dst, ulonglong4 a, ulonglong4 b) {
   }
 }
 
+// vc_chunk_rows_launch: a thread a 16 bytes of a leaf (kc16 of codes, then the scale's, then zeros to the stride)
+__global__ void __launch_bounds__(THREADS) k_chunk_rows(const uint4* __restrict__ codes, u64 cs16, const u32* __restrict__ scales,
+                                                        u64 n_leaves, u32 chunks, u32 kc16, uint4* __restrict__ out, u64 os16) {
+  const u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (t >= n_leaves * os16) return;
+  const u64 j = t / os16, w = t % os16, r = j / chunks;
+  uint4 v = make_uint4(0, 0, 0, 0);
+  if (w < kc16) v = codes[r * cs16 + (j % chunks) * kc16 + w];
+  else if (w == kc16) v.x = scales[r];
+  out[t] = v;
+}
+
 // The arity what-if: a thread a parent, its message assembled byte by byte (a slow path: it is not served)
 DEV void put_byte(u64* W, u32 off, u32 b) { W[off >> 3] |= (u64)(b & 0xFF) << (56 - 8 * (off & 7)); }
 DEV void put_be(u64* W, u32 off, u64 v, int n) {
@@ -908,6 +920,20 @@ int vc_sha512_launch(const uint8_t* msgs, uint64_t stride, uint64_t len, uint64_
 int vc_compress_launch(const uint8_t* states, const uint8_t* blks, uint64_t n, uint8_t* out, cudaStream_t st) {
   if (!n) return 0;
   k_compress<<<blocks(n, THREADS), THREADS, 0, st>>>(states, blks, n, out);
+  return rc();
+}
+
+int vc_chunk_rows_launch(const uint8_t* codes, uint64_t codes_stride, const uint8_t* scales, uint64_t n_rows, uint32_t k,
+                         uint32_t chunks, uint8_t* out, uint64_t out_stride, cudaStream_t st) {
+  if (!chunks || k % chunks || (k / chunks) % 16 || codes_stride % 16 || codes_stride < k || out_stride % 16 ||
+      out_stride < k / chunks + 4 || (reinterpret_cast<uintptr_t>(codes) | reinterpret_cast<uintptr_t>(out)) % 16 ||
+      reinterpret_cast<uintptr_t>(scales) % 4)
+    return -1;
+  if (!n_rows) return 0;
+  const u64 n = n_rows * chunks, os16 = out_stride / 16;
+  k_chunk_rows<<<blocks(n * os16, THREADS), THREADS, 0, st>>>(reinterpret_cast<const uint4*>(codes), codes_stride / 16,
+                                                             reinterpret_cast<const u32*>(scales), n, chunks, k / chunks / 16,
+                                                             reinterpret_cast<uint4*>(out), os16);
   return rc();
 }
 

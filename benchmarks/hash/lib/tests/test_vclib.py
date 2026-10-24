@@ -5,6 +5,7 @@ library itself on a GPU node (gpu.sh)."""
 from __future__ import annotations
 
 import ctypes
+import hashlib
 import random
 import re
 import sys
@@ -176,6 +177,43 @@ def test_an_empty_trees_records_are_all_outside_and_unwritten_ones_fail():
 def test_parse_openings_refuses_a_buffer_of_another_size():
     with pytest.raises(ValueError):
         vclib.parse_openings(bytes(vclib.OPEN_HEAD), 2, 1)
+
+
+@pytest.mark.parametrize("case", cf.SPLITK, ids=[c["case"] for c in cf.SPLITK])
+def test_the_chunk_leaf_reference_is_splitks_vectors(case):
+    """conformance's reference for case_splitk (weights.chunks and row_words under Registered.commit, credit's reading of
+    a/<K>@<s> and b/<K>) gives SPLITK's pinned domain, root and every leaf's words, row digest and frame leaf."""
+    _rows, reg = cf.splitk_reference(case)
+    words = [bytes(b for w in r for b in (w & 0xFF, w >> 8)) for r in reg.rows]
+    assert (reg.leaves, reg.words) == (case["leaves"], case["words"]) == (
+        cf.Wt.chunks(case["k"]) * case["rows"], cf.Wt.leaf_words(case["k"]))
+    assert reg.domain.domain_id.hex() == case["domain"] and reg.root.hex() == case["root"]
+    assert cf.leaves_digest(hashlib.sha512(w).digest() for w in words) == case["words_sha512"]
+    assert cf.leaves_digest(cf.G.row_digest(r, cf.G.WORD_BITS, cf.G.SCHEMA_V2) for r in reg.rows) == case["row_digest"]
+    assert cf.leaves_digest(reg.levels[0][:reg.leaves]) == case["frame_leaf"]
+
+
+def test_chunk_leaves_cut_each_row_and_repeat_its_scale():
+    k = 12288
+    rows = cf.splitk_rows("layout", k, 3)
+    leaves = cf.chunk_leaves(rows, k)
+    assert cf.Wt.chunks(k) == 3 and len(leaves) == 9 and {len(x) for x in leaves} == {k // 3 + 4}
+    for j, x in enumerate(leaves):
+        r, c = divmod(j, 3)
+        assert x == rows[r][c * 4096:(c + 1) * 4096] + rows[r][k:]
+
+
+@pytest.mark.parametrize("k", [64, 2048, 4096])
+def test_chunk_leaves_up_to_4096_are_the_rows(k):
+    rows = cf.splitk_rows("whole", k, 5)
+    assert cf.chunk_leaves(rows, k) == rows
+
+
+def test_chunk_rows_spec_is_row_v2_of_a_chunk_leaf():
+    spec, stride = vclib.chunk_rows(bytes(64), 14336, 4, ("chacha64", bytes(32), cf.WHOLE["nonce"]))
+    assert (spec.row_bits, stride, spec.schema) == (8 * 3588, 3600, b"hm96-sha512/row/v2")
+    assert spec.salt_source == vclib.SALT_CHACHA64 and spec.salt_nonce == cf.WHOLE["nonce"]
+    assert vclib.chunk_rows(bytes(64), 4096, 1)[1] == 4112
 
 
 def test_row_bytes_are_what_the_served_kernel_hashes():

@@ -34,7 +34,9 @@ sys.path.insert(0, str(ROOT))
 
 import vclib  # noqa: E402
 from verity.core.protocols.pouw import audit  # noqa: E402
+from verity.core.protocols.pouw import weights as Wt  # noqa: E402
 from verity.core.protocols.pouw.schemes import pearl_c  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
 from verity.ml.commitments import RangeIndexedDomain, hm96  # noqa: E402
 from verity.ml.commitments.limits import VerificationLimits  # noqa: E402
 from verity.ml.commitments.merkle import CommitmentDomain, MerkleTree, _message, _uint, tree_levels, verify_opening  # noqa: E402
@@ -57,6 +59,68 @@ def _load(name: str, path: Path):
 
 
 CG_REF = _load("commit_gpu_reference", ROOT / "benchmarks/pouw/commit_gpu/reference.py")
+
+
+#: SPLITK's vectors (#3467: verity/core/protocols/pouw/tests/splitk_rows_vectors.py, vectors/splitk_rows.json): a case's
+#: inputs re-derived as its generator derives them (`splitk_rows`), and what it pins: the value's domain id and root, and
+#: SHA-512 over the concatenation of its leaves' words_sha512, row_digest and frame_leaf, leaf after leaf
+SPLITK_LABEL = b"verity/pouw/splitk-rows-vectors/v1"
+SPLITK = (
+    {"case": "a-14336-s0", "value": "a/14336@0", "k": 14336, "rows": 64, "nonce": (1 << 61) + (1 << 42), "window": True,
+     "leaves": 256, "words": 1794,
+     "domain": "8acce5e4bf00be8d31e84814e2b349dd5e0906103d55748662898e15e1501c93a50a993b29b5add3c21e89a8e984942ec4a943b0ee4df17e5ea4e239bee20e56",
+     "root": "b2e05799b4fad2b3795b165d5e262d2b35e8776ef3d41eabc132aa160a0fbed537e53927727063f844054ddcce12cb1a5e0e941e4442a4ba50231f7ab72cc369",
+     "words_sha512": "42b9420b355857826b519116ac6ef82f238c550e693867cb7dfa0780dde14181fa0fab5d21118600db2b5800024c66aedfddcd03c2d31e4fc96a1a049f421770",
+     "row_digest": "317d1ab4010138176e5be0720ce095dc13eeaf71dcd02a82f2f0ecd95477efefb4c6f3681ad325c59d552cc2c7498d6692ac993b7e7420f883affe3817562c03",
+     "frame_leaf": "07829b6034e62dad7efa0c1cfab96fff5a0531b3f16aee0b3f3cf90db1a256170ef0d65f6e3ae16656975ced60d67cf54e341f343f2d6982dcf9f9f84ef024cf"},
+    {"case": "b-6144", "value": "b/6144", "k": 6144, "rows": 64, "nonce": Wt.B_NONCE, "window": False, "leaves": 128,
+     "words": 1538,
+     "domain": "ee06cb8014a9ea97fa6e3c319a61ac9094dfa6727b6a8bca92c9c6daf8098080499f505edeb236c03264fb695e79f2f2c9985ae9250712ae33de36591fbf5358",
+     "root": "f93f07478d0900b061ffc2a6d6b24aa342a7b0247380bd95b2aa3f80fffc8567bed58d4be497b41321d288a33bdd910062e394dbf70444582a7e8f014b49e7ad",
+     "words_sha512": "379e24b63bc42eb4b1d920dd366616e90f92d2fd8b84e9d2a72b2bb5f298201276ca3648763e1121fd8de0315bf181f7cb2fc8d9ebec5831d15606154fb93a65",
+     "row_digest": "d41640503a4a31cc1957175bf105048838ca25b13cde3a39fb0aa16f8cbe19fab5586f676ba7ea3a60ed1672b9236cc843761f31582bbb76e07022654cf78ed0",
+     "frame_leaf": "4a1574a159584e082c17452941079cfa1c9a16d524a98ed49c2feef27354d098cb0e6a25d3e07010ffbef24894456291be67b992a7343271bc6365e73fea0bab"},
+)
+#: a K at or below weights.CHUNK_MAX, whose rows are their own leaves (no SPLITK vector: the layout there is unchanged)
+WHOLE = {"case": "k-4096", "value": "a/4096@0", "k": 4096, "rows": 64, "nonce": (1 << 61) + (1 << 42), "window": True}
+
+
+def _splitk_shake(*parts: bytes, n: int) -> bytes:
+    return hashlib.shake_256(b"\0".join((SPLITK_LABEL, *parts))).digest(n)
+
+
+def splitk_rows(case: str, k: int, count: int) -> list[bytes]:
+    """SPLITK's rows of a case: its K int8 codes, then a finite f32 scale (bits in [2^-7, 2^-6)), little-endian."""
+    data, out = _splitk_shake(case.encode(), n=count * (k + 4)), []
+    for r in range(count):
+        row = data[r * (k + 4):(r + 1) * (k + 4)]
+        bits = 0x3C000000 | struct.unpack("<I", row[k:])[0] & 0x007FFFFF
+        out.append(row[:k] + struct.pack("<I", bits))
+    return out
+
+
+def chunk_leaves(rows: list[bytes], k: int) -> list[bytes]:
+    """The leaves of rows of K codes and a scale at n = weights.chunks(K): leaf n r + c row r's codes [c K/n, (c+1) K/n),
+    then its scale."""
+    n = Wt.chunks(k)
+    kc = k // n
+    return [r[c * kc:(c + 1) * kc] + r[k:k + 4] for r in rows for c in range(n)]
+
+
+def splitk_reference(case: dict) -> tuple[list[bytes], G.Registered]:
+    """A case's rows and its registration as credit reads it: `chunk_leaves`' u16 words (weights.row_words) under
+    `Registered.commit`'s hm96-sha512/row/v2 leaves, leaf j salted audit.hm96_salt(key, nonce, j)."""
+    rows = splitk_rows(case["case"], case["k"], case["rows"])
+    words = [Wt.row_words(x) for x in chunk_leaves(rows, case["k"])]
+    key = _splitk_shake(b"key", n=32)
+    salts = [audit.hm96_salt(key, case["nonce"], j) for j in range(len(words))]
+    window = _splitk_shake(b"window", n=64).hex() if case["window"] else None
+    return rows, G.Registered.commit(_splitk_shake(b"program", n=64).hex(), case["value"], words, salts,
+                                     schema=G.SCHEMA_V2, window=window)
+
+
+def leaves_digest(xs) -> str:
+    return hashlib.sha512(b"".join(xs)).hexdigest()
 
 
 def rfc_salts_identity(key: bytes, nonce: int, n: int) -> bytes:
@@ -786,8 +850,81 @@ def case_empty(d: Dev, rng: random.Random, quick: bool) -> None:
                record_bytes=d.lib.open_bytes(0), bad=absent or present or None, control_rejected=bool(control))
 
 
+def case_splitk(d: Dev, rng: random.Random, quick: bool) -> None:
+    """An H1 table's chunk leaves (vc_chunk_rows_launch from a row-major [R, K] code buffer and its [R] scales), committed
+    in every form under the value's registered domain and audit.hm96_salt's ChaCha20 salts on the device: SPLITK's two
+    vectors leaf for leaf, and at K = 4096 the whole rows' commit byte for byte. The same commit over whole rows at a
+    chunked K (the layout before SPLITK) is a control that must miss the vector's root."""
+    for case in SPLITK + (WHOLE,):
+        k, R = case["k"], case["rows"]
+        n = Wt.chunks(k)
+        rows, reg = splitk_reference(case)
+        N, lb = n * R, k // n + 4
+        pinned = case is WHOLE or (reg.domain.domain_id.hex() == case["domain"] and reg.root.hex() == case["root"])
+        key = _splitk_shake(b"key", n=32)
+        spec, st = vclib.chunk_rows(reg.domain.domain_id, k, n, ("chacha64", key, case["nonce"]))
+        cp, sp = d.up(b"".join(r[:k] for r in rows)), d.up(b"".join(r[k:] for r in rows))
+        out = d.buf(st * N)
+        d.lib.chunk_rows_launch(cp, k, sp, R, k, n, out, st, d.s)
+        got = chunks(d.down(out, st * N), st)
+        want = chunk_leaves(rows, k)
+        packed_ok = [x[:lb] for x in got] == want and all(x[lb:] == bytes(st - lb) for x in got)
+        words_ok = case is WHOLE or leaves_digest(hashlib.sha512(x[:lb]).digest() for x in got) == case["words_sha512"]
+        if case is WHOLE:
+            packed_ok = packed_ok and want == rows
+        plan = d.lib.plan(spec)
+        tab = d.tables(plan)
+        dig = d.buf(64 * N)
+        d.lib.rows_launch(plan.ptr, None, out, st, N, dig, None, d.s)
+        got_dig = chunks(d.down(dig, 64 * N), 64)
+        want_dig = [G.row_digest(w, G.WORD_BITS, G.SCHEMA_V2) for w in reg.rows]
+        dig_ok = got_dig == want_dig and (case is WHOLE or leaves_digest(got_dig) == case["row_digest"])
+        report("splitk/leaves", pinned and packed_ok and words_ok and dig_ok, case=case["case"], k=k, chunks=n, leaves=N,
+               leaf_bytes=lb, reference_pinned=pinned, packed=packed_ok, words=words_ok, row_digests=dig_ok,
+               dig_diff=first_diff(got_dig, want_dig))
+        width, size = d.lib.tree_width(N), d.lib.tree_bytes(N)
+        for form, fname in FORMS:
+            lv, scratch, bc = d.buf(size), d.buf(d.lib.commit_scratch_bytes(N)), d.buf(128 * N)
+            d.poison(lv, bc, scratch)
+            d.lib.commit_rows_launch(plan.ptr, tab, out, st, None, N, lv, bc, scratch, form, d.s)
+            levels = levels_of(d.down(lv, size), width)
+            ok, where = same_levels(levels, reg.levels)
+            root = levels[-1][0].hex()
+            frames_ok = case is WHOLE or leaves_digest(levels[0][:N]) == case["frame_leaf"]
+            got_bc = chunks(d.down(bc, 128 * N), 128)
+            report("splitk/commit", ok and frames_ok and got_bc == list(reg.bcs) and root == reg.root.hex(),
+                   case=case["case"], form=fname, root=root, want=case.get("root", reg.root.hex()), where=where,
+                   frame_leaves=frames_ok, bc_diff=first_diff(got_bc, list(reg.bcs)))
+        if case is WHOLE:
+            # the whole rows packed by hand (no vc_chunk_rows_launch) commit to the same root
+            hp = d.up(packed(rows, st))
+            lv, scratch = d.buf(size), d.buf(d.lib.commit_scratch_bytes(N))
+            d.lib.commit_rows_launch(plan.ptr, tab, hp, st, None, N, lv, None, scratch, vclib.FORM_AUTO, d.s)
+            same = d.down(lv, size)[-64:] == reg.root
+            report("splitk/k-4096-whole-rows", same and packed_ok, root=reg.root.hex())
+            continue
+        # control: the rows whole at the chunked K, under that layout's own domain, must miss the vector's root
+        wdom = G.domain(reg.program, reg.value, Wt.b_words(k), R, G.WORD_BITS, reg.window)
+        wplan = d.lib.plan(vclib.hm96_rows(wdom.domain_id, 8 * (k + 4), salt=("chacha64", key, case["nonce"])))
+        wst = stride_of(k + 4)
+        whole = d.buf(wst * R)
+        d.lib.chunk_rows_launch(cp, k, sp, R, k, 1, whole, wst, d.s)
+        wsize = d.lib.tree_bytes(R)
+        lv, scratch = d.buf(wsize), d.buf(d.lib.commit_scratch_bytes(R))
+        d.lib.commit_rows_launch(wplan.ptr, d.tables(wplan), whole, wst, None, R, lv, None, scratch, vclib.FORM_AUTO, d.s)
+        wroot = d.down(lv, wsize)[-64:].hex()
+        refused = []
+        for bad in ((k, k // 8), (k + 2, n), (k, 0)):   # 8-code chunks, a K past the codes' stride, no chunks
+            try:
+                d.lib.chunk_rows_launch(cp, k, sp, R, bad[0], bad[1], out, st, d.s)
+            except vclib.LaunchError:
+                refused.append(bad)
+        report("splitk/controls-rejected", wroot != case["root"] and len(refused) == 3, case=case["case"], whole_root=wroot,
+               refused=[list(b) for b in refused])
+
+
 CASES = [case_sha512, case_compress, case_rows, case_frame, case_arity, case_hm96_x, case_hm96_rows, case_fold_wide, case_pearl, case_graph,
-         case_open, case_empty]
+         case_open, case_empty, case_splitk]
 
 
 def main() -> int:
