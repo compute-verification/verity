@@ -1,0 +1,7 @@
+# rho_attack(S, k, c): the cheapest layout of a training run as inference-like blocks, against the bound's rho(S).
+# Not a package: `rho_attack.py` runs as a script (README), and its tests run here as a suite.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.verity.tests]
+inputs = []

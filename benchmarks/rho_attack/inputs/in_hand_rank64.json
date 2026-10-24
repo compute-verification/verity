@@ -1,0 +1,21 @@
+{
+ "source": "in-hand: pythia-160m full fine-tuning at 5e-5, deep residual layers, best compressor (note:console/20261024T1900Z-draft-training-vs-inference-program, runs r20261024-181810-e975); beta_v taken equal to the activations' beta_x until B1 measures the counted values; F a rank-64 fresh part at 4 bits per coefficient, 256 bits per token at any width",
+ "measured_on": {"model": "program estimate", "d_model": 7168},
+ "F_scaling": "absolute",
+ "precisions": {
+  "fp8_s1": {"beta_v": 3.1, "beta_x": 3.1, "beta_w": 0.23, "raw_bits": 6.0},
+  "fp8_s1000": {"beta_v": 5.7, "beta_x": 5.7, "beta_w": 2.6, "raw_bits": 6.0},
+  "nvfp4_s1": {"beta_v": 1.4, "beta_x": 1.4, "beta_w": 0.05, "raw_bits": 3.5},
+  "nvfp4_s1000": {"beta_v": 3.4, "beta_x": 3.4, "beta_w": 0.76, "raw_bits": 3.5}
+ },
+ "F": {
+  "tinylora": 256,
+  "10kbit": 256,
+  "10kB": 256,
+  "100kB": 256,
+  "1MB": 256,
+  "10MB": 256,
+  "rank16": 256,
+  "full": 256
+ }
+}
