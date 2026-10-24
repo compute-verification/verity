@@ -78,10 +78,10 @@ A spec-level reference for network accounting's timing channel:
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
   buckets before;
 - the prefix cache (`cache_step`): `CacheStep_v1`, a Boolean Definition of one scheduled row's pass over a table of
-  whole cached units, which checks the row's hit (the longest cached prefix while no block can have been evicted, a
-  cached prefix past that) and owns or appends the units the row computes (`PROTOCOL.md`, "Advice v1"); an engine
-  step's calls are `scan_step` and, as a circuit, `build_scan_step`. It takes the circuits and their evaluator from
-  `verity`;
+  whole cached units (an engine step's calls are `scan_step` and, as a circuit, `build_scan_step`), which checks the
+  row's hit (the longest cached prefix while no block can have been evicted, a
+  cached prefix past that) and owns or appends the units the row computes (`PROTOCOL.md`, "Advice v1"). It takes the
+  circuits and their evaluator from `verity`;
 - advice v1's arithmetic encoder (`arith_encode`): `ArithEncodeStep_v1{K, BIN}`, `ArithEncodeFinish_v1` and
   `KTContext_v1{C, NW}`, Boolean Definitions with `reference_step`, `reference_finish` and `reference_kt` their specs.
   They run ENC-CODE's 32-bit coder forward one symbol at a time, checking each output bit against a segment in the
