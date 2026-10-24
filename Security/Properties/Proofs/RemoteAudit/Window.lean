@@ -298,14 +298,12 @@ theorem checkWindow_extract (reg : Registration) (digest : ByteArray) (appends :
   rw [checkWindow_eq]
   simp only [Array.size_extract, hsize, ne_eq, not_true_eq_false, ↓reduceIte]
   rw [List.range'_eq_map_range, List.findSome?_map]
-  congr 1
-  apply findSome?_congr
-  intro k hk
+  refine congrArg (Option.getD · Verdict.accept) (findSome?_congr fun k hk => ?_)
   have hk : k < min b drawn.size - a := List.mem_range.1 hk
   have hd : (drawn.extract a b)[k]! = drawn[a + k]! := by
-    rw [getElem!_pos _ _ (by simp; omega), getElem!_pos _ _ (by omega), Array.getElem_extract]
+    rw [getElem!_pos _ _ (by rw [Array.size_extract]; omega), getElem!_pos _ _ (by omega), Array.getElem_extract]
   have ho : (openings.extract a b)[k]! = openings[a + k]! := by
-    rw [getElem!_pos _ _ (by simp; omega), getElem!_pos _ _ (by omega), Array.getElem_extract]
+    rw [getElem!_pos _ _ (by rw [Array.size_extract]; omega), getElem!_pos _ _ (by omega), Array.getElem_extract]
   simp only [rejectAt, Function.comp, hd, ho]
 
 /-- The first `m` chunks of `s` draws each, of `n`, cover draws `[0, min (m·s) n)` in order. -/
