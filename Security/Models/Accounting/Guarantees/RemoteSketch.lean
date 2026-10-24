@@ -25,7 +25,7 @@ device did not obtain is uniform, and at rank `r` at most `256^(32−r)` of its 
 
     `δs = C/2^96 + (C + P)·(ε + N/2^512)`,
 
-  `timing.sketch_failure(C, P, 16, N)`, the error `ledger.sketch` puts in the memory line's δ.
+  `timing.sketch_failure(C, P, 16, blocks=N)`, the error `ledger.sketch` puts in the memory line's δ.
 
 What stays assumed: the hash is a random function at each seed and the store is uniform (the model's coins, claims
 `random-oracle` and `rate-sketch-verbatim`), the devices obtain sectors whole and verbatim (`RateSketch.Device`), the
