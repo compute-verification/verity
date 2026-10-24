@@ -377,7 +377,8 @@ def left_by(tree: Path) -> dict | None:
 def damaged(lib: Path) -> list[Path]:
     """The traces under ``lib`` (a `.lake/build/lib/lean`) whose module an interrupted build left half-written: an output
     the trace lists that is missing, an `.olean` without the olean header, an output whose `.hash` is not the trace's, or
-    a trace that is not JSON. Lake takes a module whose trace matches as built, so each must go for Lake to rebuild it."""
+    a trace that is not JSON. Lake rebuilds a module whose outputs are missing, but takes one whose trace matches and whose
+    files exist as built, half-written or not, so each loses its trace for Lake to rebuild it."""
     out = []
     for trace in sorted(lib.rglob("*.trace")) if lib.is_dir() else []:
         base = trace.with_suffix("")
