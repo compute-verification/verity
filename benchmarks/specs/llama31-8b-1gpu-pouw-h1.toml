@@ -11,9 +11,10 @@ id = "llama31-8b-1gpu-pouw-h1"
 # warm-up and timed rep), its S the run's step bound (`arms.window_steps`), opened before the clock starts and closed
 # after it stops; each window's coins are in-process (a salt coin and S round coins, the Lean verifier's entropy), so it
 # credits nothing (`pouw_h1.IN_PROCESS`): this row measures cost only. Each served call commits its A table and its z/y
-# records' table on the host inside the forward; no receipts are computed (that is a listener's, kernels' dither arm).
-# The arm's own gate: every window static (each call inside its S steps and T rows, in order), the credit gate passing
-# every served call, every request entered. One rep: a b32 run is about 290 steps of host commitments.
+# records' table inside the forward, with the row-table kernels on the GPU (`pouw_h1_tables_device`); no receipts are
+# computed (that is a listener's, kernels' dither arm). The arm's own gate: every window static (each call inside its S
+# steps and T rows, in order), the credit gate passing every served call, every request entered. One rep: a b32 run is
+# about 290 steps of commitments.
 #
 # At T = 64 every quick prompt is chunked: int8_exact's attention takes each chunk as the last rows of its window (#3387),
 # one batched call per layer step over the step's requests (`verity_vllm.engine.int8_ops.paged_attention`).
