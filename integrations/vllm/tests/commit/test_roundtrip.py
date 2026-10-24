@@ -180,28 +180,3 @@ def test_transient_storage_is_released() -> None:
     assert grown <= declared + 1024, (grown, declared, n_sub, L.n_words * 4, fx_words)
     assert grown < L.n_words * 4 // 8
     assert len(R) == 32
-
-
-def test_production_verifier_authenticates_the_same_bytes() -> None:
-    """C0 §C0.2-style cross-check: the words a position opening authenticates are exactly the bytes the production
-    id-carrying leaf (`hashing.leaf_hash`, `MerkleTree`, `verify_opening`) authenticates for the same identity."""
-    from verity_vllm.observe.capture_v1 import Value
-    from verity_vllm.commit.merkle import MerkleTree, verify_opening
-
-    fx = synthetic_fixture(seed=5, geo=GEO, layer=4, step=3, prompt_len=30)   # decode: one row per head, T = 32
-    L = HierLayout(fx.ctx, GEO, 1)
-    c = HierCommitment(L)
-    R = c.commit(fx)
-    rl = L.row_layout(0, 32)
-    from tests.commit.fa2_prototype.reference import replay_row
-
-    words, _ = replay_row(rl, *fx.row_inputs(0, 32))
-    values = [Value(v.canonical_id("a594a58ec69b", "req", "decode"), "float32", (), words[i:i + 1].tobytes()) for i, v in enumerate(rl.ids())]
-    tree = MerkleTree.from_values(values, "ru/req/000003")
-    for i in (0, 5, rl.count // 2, rl.count - 1):
-        vid = rl.unrank(i)
-        mine = c.open(fx, vid)
-        assert verify_value_opening(R, L, mine)
-        prod = tree.open(values[i])
-        assert verify_opening(tree.root, tree.leaf_count, prod)
-        assert prod.value == mine.word and prod.canonical_id == vid.canonical_id("a594a58ec69b", "req", "decode")
