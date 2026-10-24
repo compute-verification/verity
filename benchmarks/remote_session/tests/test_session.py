@@ -149,7 +149,7 @@ class TickingBackend(prover.CpuBackend):
 
 
 def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1, checks=None,
-        read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int = audit.LIFETIME,
+        read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int | None = None,
         layout: list | None = None, host_bytes: int = 0, paces: list | None = None, verdict: str = verifier.VERDICT,
         then=None, transcript: Path | None = None, challenger=None, appends: int | None = None, store=None,
         binding=None, **kv):
@@ -304,7 +304,8 @@ def test_a_paced_session_runs_k_passes_a_coin_and_declares_its_time_held_line(mo
     passes under each coin and waits for the next, and the verifier sends each boundary as the window's (k − 1)-th
     root arrives (`Session.next_boundary_ns`; k = 1: as the window before's root does), so on the pass clock window t
     holds k passes, none discarded; γ is declared over the fixed windows of T from the first challenge to the last
-    deadline, and the session declares all three memory forms."""
+    deadline, and the session declares all three memory forms.  Its lifetime cap counts groups, those of their nominal
+    length (the stretch over its groups) in 30 s."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     T = 10**9
     pace = verifier.pace_of(f"{k}:{T // 10**6}:12:2", 500 / k)
@@ -312,6 +313,7 @@ def test_a_paced_session_runs_k_passes_a_coin_and_declares_its_time_held_line(mo
     (r,), (pr,) = run("honest", paces=[pace])
     assert r["accepted"] and pr["accepted"] and r["windows"] == 6 and r["pace"] == pace
     assert r["record"]["public"]["pace"] == {"k": k, "window_ns": T}
+    assert r["lifetime"] == r["record"]["public"]["lifetime"] == audit.lifetime_windows(T // 2) == 60
     assert pr["passes"] == [k] * 6 and pr["discarded"] == 0
     assert [(w["released_ns"], w["boundary_ns"], w["arrivals_ns"]) for w in r["windows_seen"]] == [
         (s, b, list(a)) for s, b, a in schedule]
@@ -1065,7 +1067,7 @@ def test_a_layout_that_is_not_the_stores_regions_in_order_is_refused(layout):
         verifier.regions_of(layout, 16)
 
 
-def greeted(lifetime: int, deferred: bool, *, hello: dict | None = None, drop: tuple[str, ...] = (),
+def greeted(lifetime: int | None, deferred: bool, *, hello: dict | None = None, drop: tuple[str, ...] = (),
             plan: str = "honest", verdict: str = verifier.VERDICT
             ) -> tuple[verifier.Verifier, ValueError | None, list[str]]:
     """A prover of `plan` whose backend says `deferred` greeting a verifier of lifetime cap `lifetime`, its hello with
@@ -1106,11 +1108,12 @@ def greeted(lifetime: int, deferred: bool, *, hello: dict | None = None, drop: t
 def test_a_prover_that_defers_residency_is_refused_under_a_lifetime_of_one_window():
     """The hello says whether the prover defers an appended block's residency to its encode: a block appended in window
     w is then resident from w or w + 1, so its re-key falls at age L − 1, and under L = 1 the verifier refuses it with
-    `bye` before drawing a registration.  At L = 2, or not deferring, the session's parameters carry it."""
+    `bye` before drawing a registration.  At L = 2, or not deferring, the session's parameters carry it, and so does
+    the default, whose count of windows (`audit.lifetime_windows`) is at least 2 for a prover that defers."""
     v, refused, heard = greeted(1, True)
     assert refused is not None and "lifetime of at least 2 windows, not 1" in str(refused)
     assert heard == [f"refused: {refused}"] and v.registry.drawn(b"test-node") == 0
-    for lifetime, deferred in ((2, True), (1, False)):
+    for lifetime, deferred in ((2, True), (1, False), (None, True), (None, False)):
         v, refused, heard = greeted(lifetime, deferred)
         assert refused is None and heard == [] and v.deferred is deferred and v.registry.drawn(b"test-node") == 1
 
@@ -1121,12 +1124,12 @@ def test_only_a_hello_whose_plan_appends_nothing_reserves_no_append_coins():
     a verifier given `appends` keeps its own.  A hello whose `appends` isn't a bool is refused with `bye`."""
     for plan, drop, appends in (("honest,skip:0.25", (), 0), ("honest,kv:2", (), coins.APPENDS),
                                 ("serve", (), coins.APPENDS), ("honest", ("appends",), coins.APPENDS)):
-        v, refused, heard = greeted(audit.LIFETIME, False, plan=plan, drop=drop)
+        v, refused, heard = greeted(None, False, plan=plan, drop=drop)
         assert refused is None and heard == [] and v.appends_of() == appends, plan
-    v, refused, _ = greeted(audit.LIFETIME, False, plan="honest")
+    v, refused, _ = greeted(None, False, plan="honest")
     v.appends = 8
     assert v.appends_of() == 8
-    v, refused, heard = greeted(audit.LIFETIME, False, hello={"appends": "no"})
+    v, refused, heard = greeted(None, False, hello={"appends": "no"})
     assert refused is not None and "true or false" in str(refused) and heard == [f"refused: {refused}"]
     assert v.registry.drawn(b"test-node") == 0
 
@@ -1136,7 +1139,7 @@ def test_a_hello_asking_for_receipts_that_bind_tiles_is_refused_under_each_verdi
     """A hello asking that its receipts bind PoUW's tile outputs (`bind`): the Lean covers receipts of blocks alone, so
     both registries refuse it before drawing a registration (`audit.Registry.register` as `Registry.register` does),
     and the prover reads why in its `bye`."""
-    v, refused, heard = greeted(audit.LIFETIME, False, hello={"bind": True}, verdict=verdict)
+    v, refused, heard = greeted(None, False, hello={"bind": True}, verdict=verdict)
     assert refused is not None and "tile outputs" in str(refused)
     assert heard == [f"refused: {refused}"] and v.registry.drawn(b"test-node") == 0
 

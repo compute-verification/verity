@@ -39,7 +39,8 @@ many reads of a node's registered blocks the node made in each window, from rece
    every coin is drawn once, and an append no root follows, or one sent again, rejects the session (`coin`);
    a block released (`Session.release`) is in no later plan, and one the release names withdrawn (released before its
    encode landed, so never written) was in no earlier plan either; and an appended block is in no plan of a window L
-   or more after the window it joined (`Params.lifetime`): one kept longer is released and appended again, under a
+   or more after the window it joined (`Params.lifetime`, the windows of T in 30 s, `lifetime_windows`): one kept
+   longer is released and appended again, under a
    fresh index and a fresh coin, so a fresh bound key, and a session that defers residency to the encode
    (`Params.deferred`) has L ≥ 2.
 5. Deadline.  Window t's roots must all arrive by `D_t = b_t + A`, where `b_t` is the verifier's clock when it sent the
@@ -134,11 +135,24 @@ FAILURES = ("late", "order", "step", "plan", "lifetime", "append", "coin", "rele
             "receipt-path", "codec", "payload-path", "tile", "receipt")
 STEP_LIMIT = 1 << 64
 """A step is an integer below this, memory-map/v1's."""
-LIFETIME = 60
-"""L, the lifetime cap, in windows: a block appended after the codec seed is in no plan of a window L or more after the
-window it joined (the window of the first root received after its append), so it leaves the credited store within L
-windows unless the prover appends it again, which gives it a fresh index and a fresh coin, and so a fresh bound key.
-60 windows is an hour at the stated window."""
+LIFETIME_NS = 30 * 10**9
+"""D, the lifetime cap's duration: a block appended after the codec seed is in no plan of a window L or more after the
+window it joined (the window of the first root received after its append), L = `lifetime_windows(T)` the whole windows
+of T in D, so it leaves the credited store within L windows unless the prover appends it again, which gives it a fresh
+index and a fresh coin, and so a fresh bound key.  A carrier of a declared circuit's may work on a block from its coin
+until it leaves, so what the carriers may hold grows with the passes in L windows
+(`Accounting.Guarantees.DeclaredCircuitRequirement`'s `C`): over 30 s of 61 ms passes it is under 8% of the store at
+both served models' caps (`PROTOCOL.md` §4, "The lifetime cap"), where 60 windows was an hour at the stated window."""
+
+
+def lifetime_windows(window_ns: int, deferred: bool = False, life_ns: int = LIFETIME_NS) -> int:
+    """L, the lifetime cap in windows of `window_ns` (a paced session's: its groups, at their nominal length): the whole
+    windows in `life_ns`, at least 1, and at least 2 for a session that defers residency (`Params.deferred`), so at the
+    stated 60 s window it is 1, or 2 deferred, and at 1 s it is 30."""
+    for name, v in (("window_ns", window_ns), ("life_ns", life_ns)):
+        if type(v) is not int or v < 1:
+            raise ValueError(f"the lifetime's {name} is a positive integer of nanoseconds, not {v!r}")
+    return max(2 if deferred else 1, life_ns // window_ns)
 
 
 @dataclass(frozen=True, slots=True)
@@ -170,11 +184,14 @@ class Params:
     stated window), the fewest passes a window may certify, the stated window `T` (`window_ns`, 60 s by default: no
     boundary message leaves sooner after its window's challenge), the store's codec, receipt kind, whether its
     receipts bind z, its block layout and its sketch rows (None for the kind's default, `receipts.sketch_rows`), the
-    registration's, the lifetime cap L on an appended block, in windows (`LIFETIME`), and whether the prover defers an
+    registration's, the lifetime cap L on an appended block, in windows (None: `lifetime_windows` of the stated
+    window, `LIFETIME_NS`), and whether the prover defers an
     appended block's residency to its encode (`deferred`, memory-map/v1's deferred residency), which needs L ≥ 2: a
     block appended in window w is resident from w or w + 1, so its re-key falls at age L − 1, and at L = 1 that is
     before it may be resident.  `pace` paces the session (`Pace`, None for a stated window each): its windows are
-    then groups of at most k passes, the last the closing window."""
+    then groups of at most k passes, the last the closing window, and L counts groups: by default as many as the
+    pace's stated window would hold of `LIFETIME_NS`, the fewest the life allows, which the verifier raises to the
+    groups of their nominal length (`lifetime_windows(T // groups)`)."""
 
     blocks: int
     deadline_ns: int
@@ -188,19 +205,23 @@ class Params:
     bind: bool = False
     layout: str = receipts.LAYOUT
     rows: int | None = None
-    lifetime: int = LIFETIME
+    lifetime: int | None = None
     deferred: bool = False
     pace: Pace | None = None
 
     def __post_init__(self) -> None:
-        for name in ("blocks", "deadline_ns", "windows", "samples", "min_passes", "window_ns", "lifetime"):
-            if type(getattr(self, name)) is not int or getattr(self, name) < 1:
-                raise ValueError(f"{name} is a positive integer")
         if type(self.deferred) is not bool:
             raise ValueError("deferred is a bool")
         if self.pace is not None and (type(self.pace) is not Pace or self.windows < 2):
             raise ValueError(f"a paced session is a Pace's, with at least one window and the closing window, not "
                              f"{self.windows} windows under {self.pace!r}")
+        if self.lifetime is None:
+            stated = self.window_ns if self.pace is None else self.pace.window_ns
+            if type(stated) is int and stated >= 1:
+                object.__setattr__(self, "lifetime", lifetime_windows(stated, self.deferred))
+        for name in ("blocks", "deadline_ns", "windows", "samples", "min_passes", "window_ns", "lifetime"):
+            if type(getattr(self, name)) is not int or getattr(self, name) < 1:
+                raise ValueError(f"{name} is a positive integer")
         if self.deferred and self.lifetime < 2:
             raise ValueError(f"a session that defers residency has a lifetime of at least 2 windows, not "
                              f"{self.lifetime}: a block appended in window w is resident from w or w + 1, so its "
