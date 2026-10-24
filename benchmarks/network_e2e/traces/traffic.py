@@ -10,6 +10,7 @@ scaled by 1 / rate. A request's prompt is token ids:
 * then a body: BOS when there is no prefix, then the L - p tokens of a document that end `gap` tokens before its end, where
   `gap` is 0 with probability `AT_END` and else uniform in [4, 240]. A base model that is a few sentences from a
   document's end tends to finish it and emit its end-of-text token: the outputs end on EOS or the cap as the model chooses.
+  At the very end (gap 0) it emits EOS at once, a one-token output; `AT_END` keeps those few.
 
 Caps are `CAPS` (64 or 256), each with probability 1/2. Temperature is 0.
 """
@@ -28,7 +29,7 @@ LENGTHS = ((0.35, "log", 16, 128), (0.40, "uniform", 128, 512), (0.25, "uniform"
 PREFIXES = (32, 64, 128, 128, 256, 256, 384, 512)
 SHARED = 0.6
 MIN_BODY = 16
-AT_END = 0.2
+AT_END = 0.05
 GAP = (4, 240)
 CAPS = (64, 256)
 

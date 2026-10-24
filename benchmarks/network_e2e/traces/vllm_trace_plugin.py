@@ -56,6 +56,9 @@ class Tracer:
         self.k = 0
         self.empty = 0
         self.pending: dict[int, int] = {}
+        #: each live request's prefix-cache hit: its num_computed_tokens when first scheduled (the Request's prefill_stats is
+        #: unset by the time it is freed)
+        self.hits: dict[str, int] = {}
 
     def write(self, kind: str, rec: dict) -> None:
         f = self.files[kind]
@@ -88,6 +91,7 @@ class Tracer:
                 row["num_output_tokens"] = int(req.num_output_tokens)
             if not resumed:
                 row["cache_hit"] = int(r.num_computed_tokens)
+                self.hits.setdefault(r.req_id, row["cache_hit"])
             new.append(row)
         cached = []
         c = so.scheduled_cached_reqs
@@ -116,14 +120,13 @@ class Tracer:
 
     def freed(self, req) -> None:
         reason = req.get_finished_reason()
-        stats = getattr(req, "prefill_stats", None)
         self.write("requests", {
             "id": client_id(req.request_id), "engine_id": req.request_id, "arrival": req.arrival_time, "t_free": time.time(),
             "prompt_ids": list(req.prompt_token_ids or ()), "output_ids": [int(x) for x in req.output_token_ids],
             "finish_reason": reason.name.lower() if reason is not None else None,
             "stop_reason": req.stop_reason if isinstance(req.stop_reason, (int, str)) or req.stop_reason is None else str(req.stop_reason),
             "status": req.status.name, "num_preemptions": int(req.num_preemptions), "max_tokens": int(req.max_tokens),
-            "cache_hit": int(stats.num_local_cached_tokens) if stats is not None else None})
+            "cache_hit": self.hits.pop(req.request_id, None)})
 
 
 def _tracer(sched) -> Tracer:

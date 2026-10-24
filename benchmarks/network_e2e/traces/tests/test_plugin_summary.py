@@ -13,11 +13,11 @@ class Finish(enum.IntEnum):
 
 
 class Request:
-    def __init__(self, rid: str, prompt: list[int], max_tokens: int, hit: int):
+    def __init__(self, rid: str, prompt: list[int], max_tokens: int):
         self.request_id, self.prompt_token_ids, self.max_tokens = rid, prompt, max_tokens
         self.num_prompt_tokens, self.output_token_ids, self.num_preemptions = len(prompt), [], 0
         self.arrival_time, self.stop_reason, self.status, self.finish = 1000.0, None, NS(name="RUNNING"), None
-        self.prefill_stats = NS(num_local_cached_tokens=hit)
+        self.prefill_stats = None
 
     @property
     def num_output_tokens(self) -> int:
@@ -61,7 +61,7 @@ def serve(tmp_path, monkeypatch, plugin) -> Scheduler:
     """A, 40 prompt tokens with a 16-token prefix-cache hit, prefilled in two chunks then decoded to EOS; B, 20 tokens,
     prefilled whole, preempted after two outputs, recomputed (22 tokens) and cut at its cap."""
     monkeypatch.setenv(plugin.TRACE_DIR, str(tmp_path / "t" / "raw"))
-    a, b = Request(A, [1] * 40, 256, 16), Request(B, [2] * 20, 4, 0)
+    a, b = Request(A, [1] * 40, 256), Request(B, [2] * 20, 4)
     # (scheduler output, model runner output, tokens appended after it); so() schedules nothing, and the malformed one
     # makes the hook raise
     script = [(so(new=[(A, 16, 16, 40), (B, 0, 20, 20)]), NS(req_ids=[B, A], sampled_token_ids=[[5], []]), {B: 5}),
@@ -119,7 +119,7 @@ def test_hook_records_steps_outputs_and_requests(tmp_path, monkeypatch, mod):
     reqs = {r["id"]: r for r in records(tmp_path, "requests")}
     assert reqs["t-00000"]["output_ids"] == [7, 8, 128001] and reqs["t-00000"]["finish_reason"] == "stop"
     assert reqs["t-00001"]["finish_reason"] == "length" and reqs["t-00001"]["num_preemptions"] == 1
-    assert reqs["t-00000"]["cache_hit"] == 16 and reqs["t-00000"]["engine_id"] == A
+    assert reqs["t-00000"]["cache_hit"] == 16 and reqs["t-00000"]["engine_id"] == A and reqs["t-00001"]["cache_hit"] == 0
     (err,) = (tmp_path / "t" / "raw").glob("hook_errors.*.txt")
     assert err.read_text().count("--- schedule") == 1
 

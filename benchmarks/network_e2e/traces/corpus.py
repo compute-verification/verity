@@ -42,19 +42,22 @@ EOS = (128001,)
 #: core is always its own process)
 ENGINE_ENV = {"VLLM_USE_V2_MODEL_RUNNER": "1", "VLLM_USE_FLASHINFER_SAMPLER": "0", "VLLM_DISABLE_SHARED_EXPERTS_STREAM": "1",
               "VLLM_BATCH_INVARIANT": "1", "VERITY_INT8_PARTS": "linears"}
+#: --max-num-seqs pinned, so the batch cap a saturating trace hits is the corpus's, not the vLLM version's default
 BASE_ARGS = ["--quantization", "verity_int8", "--enforce-eager", "--no-async-scheduling", "--enable-prefix-caching",
-             "--max-model-len", "2048", "--seed", "0", "--disable-uvicorn-access-log"]
+             "--max-model-len", "2048", "--max-num-seqs", "256", "--seed", "0", "--disable-uvicorn-access-log"]
 WHOLE_PREFILLS = ["--no-enable-chunked-prefill", "--max-num-batched-tokens", "8192"]
 KV_SMALL_BYTES = 1 << 30
-#: name -> (Poisson rate in requests/s, server arguments, what it is for)
+#: name -> (Poisson rate in requests/s, server arguments, what it is for). On one RTX PRO 6000 a decode step takes about
+#: 32 ms from 5 to 50 rows and whole prefills run at about 37k tokens/s (the 60-request smoke, r20261024-045656-4c66), so
+#: 2/s keeps a handful of rows running and 100/s outruns 256 sequences and queues.
 TRACES = {
-    "light": (1.5, WHOLE_PREFILLS, "light load, whole prefills"),
-    "medium": (5.0, WHOLE_PREFILLS, "medium load, whole prefills"),
-    "heavy": (20.0, WHOLE_PREFILLS, "batch-saturating load, whole prefills"),
+    "light": (2.0, WHOLE_PREFILLS, "light load, whole prefills"),
+    "medium": (10.0, WHOLE_PREFILLS, "medium load, whole prefills"),
+    "heavy": (100.0, WHOLE_PREFILLS, "batch-saturating load (256 sequences, a waiting queue), whole prefills"),
     "chunked": (20.0, ["--enable-chunked-prefill", "--max-num-batched-tokens", "512"],
-                "batch-saturating load, chunked prefill with a 512-token step budget"),
-    "smallkv": (20.0, ["--enable-chunked-prefill", "--max-num-batched-tokens", "2048", "--kv-cache-memory-bytes",
-                       str(KV_SMALL_BYTES)], "batch-saturating load, chunked prefill, a 1 GiB KV cache (8192 tokens), so the scheduler preempts"),
+                "chunked prefill with a 512-token step budget, near its throughput"),
+    "smallkv": (10.0, ["--enable-chunked-prefill", "--max-num-batched-tokens", "2048", "--kv-cache-memory-bytes",
+                       str(KV_SMALL_BYTES)], "chunked prefill and a 1 GiB KV cache (8192 tokens), so the scheduler preempts"),
 }
 ORDER = ("heavy", "medium", "chunked", "smallkv", "light")
 
