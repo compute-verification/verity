@@ -11,7 +11,7 @@ Nothing here is the warden's but bytes. Tonight's clients send HTTP/1.1 requests
 with `Connection: close`, so the server's end of stream ends egress (the warden never half-closes toward a server).
 
 **What it can't enforce here.**
-- The warden runs on the server's host (`trusted-nebius-host` stands for the auditor's host), and the server's host
+- The warden runs on the server's host (`trusted-host` stands for the auditor's host), and the server's host
   can reach anyone by any other route, which nothing here sees.
 - TLS is not terminated: both legs are plain TCP.
 - The rehearsal's client is on the same host, so its link is loopback, and its arrival times are read on the warden's

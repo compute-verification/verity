@@ -634,7 +634,7 @@ Each assumption, and what breaks without it:
   - Each field is charged to a window no later than the first window whose rows it can change. Then the first m
     windows' charges bound the first m windows, which the per-window form needs, as `ExpectedRowCausal` gives it for
     the syncs. A prefill step that releases nothing is still charged.
-- **A6, the certifier's clock.** The buckets are the certifier's, under `trusted-nebius-host`, W1 to W6 and J (D = 1
+- **A6, the certifier's clock.** The buckets are the certifier's, under `trusted-host`, W1 to W6 and J (D = 1
   is no jitter), and the advice's release buckets are certifier buckets. Nothing else in the accounting reads a time.
   The challenger's readings of when a registration or a proof arrived (`received_at`) are the prover's choice within
   their deadlines, so they stay out of anything published, or they are charged.
@@ -1195,7 +1195,7 @@ sealed under an AEAD built from SHA-512 alone.
   - S and its keys live only in the two certifier processes and on their hosts, never in a record, a log or the
     prover's configuration.
   - They are protocol keys, which seal frames, not access keys.
-  - Their custody joins `trusted-nebius-host`, which now also covers each pair's secret on its two hosts and the
+  - Their custody joins `trusted-host`, which now also covers each pair's secret on its two hosts and the
     deployment channel that installs it.
   - A leaked S opens that pair's link for that session. It changes no record and no verdict: the account only loses
     the premise below, and the link is charged as an unsealed one.
@@ -1224,7 +1224,7 @@ sealed under an AEAD built from SHA-512 alone.
     value certified equal to the committed output at a certifier on the facility boundary, or one of s side-channel
     bits per window.
   - **The premise:** every link between two spatial units is a sealed pair link between two of the auditor's
-    certifiers. The AEAD's security rests on `prf/sha-512`, and its keys' custody on `trusted-nebius-host`.
+    certifiers. The AEAD's security rests on `prf/sha-512`, and its keys' custody on `trusted-host`.
   - **What it changes:** A1's units are then the facility, not each block.
 - **What it costs** (run `r20261024-014147-3886`, `benchmarks/network_sim/mockdc.py seal`, on vy-nebius-cpu-2: an AMD
   EPYC Genoa, 256 cores at a load of about 30, with `sha_ni` but no SHA-512 instructions, and OpenSSL 3.0.13).

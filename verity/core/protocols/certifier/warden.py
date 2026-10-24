@@ -1,7 +1,7 @@
 """The active warden: the network certifier as a relay that knows bytes only and retransmits everything on a fixed
 schedule, so it rebuilds the framing of every connection it carries.
 
-The warden runs on an auditor host (`trusted-nebius-host`; co-located with the server for tonight's demo, a named
+The warden runs on an auditor host (`trusted-host`; co-located with the server for tonight's demo, a named
 assumption). It terminates each client's TCP connection, opens one to the server for it, and forwards each direction's
 bytes unchanged in content: no tokenizer, API, request or stop string is the warden's. What it decides is the framing
 and the timing, both public functions of the schedule (`WardenParams`), and it certifies every cell it sends with the
