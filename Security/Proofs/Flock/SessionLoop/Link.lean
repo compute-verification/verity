@@ -114,7 +114,7 @@ theorem linkRoundEq_ofLoopLink (vs : (session Loop.loopNr dataE).SwVals)
     {x : Msg} {w : Flock.Wit} (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hs : Loop.LinkLevel0 src x w) :
     LinkRoundEq (session Loop.loopNr dataE) vs (ofLoopLink L₀ src real) x w :=
-  linkRoundEq_ofLoop vs (withLink L₀ src) src real rfl (live_of hsc hR) hs
+  linkRoundEq_ofLoop vs (withFiles (withLink L₀ src) src) src real rfl (live_of hsc hR) hs
 
 end LeanRelease
 
