@@ -1,7 +1,7 @@
 """M1: one step family's unit through C-Flock, timed: the Definition a Program row names (its ``spec``) as M0's `UnitStager`
 statement on the serving rows' ports (an input row per parameter and an output row per returned field, each a
-``hm96-sha512/row/v2`` row of its u16 words), flat (`ir_lower`) or structural (``--structural``: `struct_lower`'s template,
-the flat unit never built), and with ``--bin`` and ``--lean`` one round of ``--n`` units staged on finite bf16 values (every
+``hm96-sha512/row/v2`` row of its u16 words), flat (`ir_lower`; ``--reads slots``: its MUFU reads in lookup slots,
+`read_slots`) or structural (``--structural``: `struct_lower`'s template, the flat unit never built), and with ``--bin`` and ``--lean`` one round of ``--n`` units staged on finite bf16 values (every
 parameter of a bf16 family; a stand-in for the served values, which only the window reads), proved by M0 under ``--zk``
 (`a0.session`: serve and prove, the verifier's subset draw of all of them) and verified by the Lean verifier of record
 (`a0.lean_verify`).  A coordinate template (`serving_rows.COORDS`: the expert-indexed pair GEMMs and FlashInfer's FP8 linear at
@@ -21,7 +21,7 @@ per shard) with ``--row SPEC`` likewise stages the ``--units`` of a synthetic ro
 
     PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/m1_unit.py --spec 'RMSNormFusedCudaVector8_v1{N=6144,EPS=...,BLOCK=256}' --out DIR \\
-      [--structural iv/hybrid/4] [--bin flock-circuit --lean flock-verify] [--n 1]
+      [--structural iv/hybrid/4 | --reads slots] [--bin flock-circuit --lean flock-verify] [--n 1]
 
 Prints ``M1U {json}`` per phase: the build's seconds and peak RSS, the unit's ANDs and rows, k_log, vus_per_block and
 chunk_cap (`a6.chunk_cap`'s rule), then the stage, the session and Lean's verdict.
@@ -319,6 +319,10 @@ def main() -> int:
     ap.add_argument("--spec", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--structural", default=None, metavar="LAYOUT", help="the structural stager at this layout mode (iv/hybrid/4)")
+    ap.add_argument("--reads", choices=("inline", "slots"), default="inline",
+                    help="a flat unit's MUFU table reads: inline rows of the unit, or C-Flock lookup slots (read_slots)")
+    ap.add_argument("--stage-ands", type=int, default=None, metavar="N",
+                    help="with --reads slots: at most N ANDs a net (read_slots.split's stage_ands)")
     ap.add_argument("--bin", default=None, help="M0's flock-circuit: prove one round")
     ap.add_argument("--lean", default=None, help="the Lean verifier of record (flock-verify)")
     ap.add_argument("--n", type=int, default=1)
@@ -357,13 +361,15 @@ def main() -> int:
     d = out / "stage"
     t = time.time()
     with K.no_cyclic_gc():
-        st = CS.UnitStager(fn, f"m1/{K.family(fn.id)}", rows, K.out_rows(n_out), circuit=d / "circuit.txt",
+        st = CS.UnitStager(fn, f"m1/{K.family(fn.id)}", rows, K.out_rows(n_out), circuit=d / "circuit.txt", reads=a.reads,
+                           stage_ands=a.stage_ands,
                            **({"layout": a.structural, "structural": True} if a.structural else {}))
-    m, c = st.meta, st.low.layout.counts
+    m, c = st.meta, getattr(st.low, "counts", None) or st.low.layout.counts
     cap = int(m["vus_per_block"]) << (M_MAX - int(m["k_log"])) if M_MAX - int(m["k_log"]) >= 3 else 0
-    say("built", seconds=round(time.time() - t, 1), structural=a.structural, ands=c["ands"], unit_rows=c.get("rows"),
-        k_log=m["k_log"], unit_log=m["unit_log"], vus_per_block=m["vus_per_block"], chunk_cap=cap, pin=st.pin,
-        circuit_bytes=(d / "circuit.txt").stat().st_size, domain=st.low.domain)
+    say("built", seconds=round(time.time() - t, 1), structural=a.structural, reads=a.reads, ands=c["ands"], unit_rows=c.get("rows"),
+        nnz=c.get("nnz_a", 0) + c.get("nnz_b", 0), lookups=m.get("per_vu", {}), k_log=m["k_log"], unit_log=m["unit_log"],
+        vus_per_block=m["vus_per_block"], chunk_cap=cap, pin=st.pin, circuit_bytes=(d / "circuit.txt").stat().st_size,
+        domain=st.low.domain)
     if not a.bin:
         return 0
 
