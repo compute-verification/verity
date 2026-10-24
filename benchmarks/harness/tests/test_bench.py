@@ -1132,6 +1132,7 @@ def test_pearl_cs_whole_step_arm_builds_vllms_full_decode_graphs_beside_the_serv
     assert [(a.id, a.precision, a.control, a.execution, a.experimental) for a in arms] == [
         ("stock-fp8", "fp8", None, None, False), (pearl, "bfloat16", None, None, False),
         ("stock-fp8@compiled", "fp8", None, "compiled", False), ("pouw-pearl-c-whole", "bfloat16", None, None, True)]
+    assert arms[-1].engine_label == "graphs-mode0" and arms[-1].to_json()["engine_label"] == "graphs-mode0"
     whole = plugin(arms[-1])
     preset, eager = served(spec.preset, spec.eager)
     preset, eager = runner.arm_execution(arms[-1], preset, eager)
