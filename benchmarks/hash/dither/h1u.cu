@@ -356,6 +356,17 @@ __device__ __forceinline__ void mma_s8(int (&d)[4], const u32 (&a)[4], const u32
       : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]));
 }
 
+// H1U_FROT = 1: the fold's rotation on the FMA pipe, rotl(uu, r) + y as the two halves of uu 2^r (one mul.wide.u32,
+// 2^r read from constant memory so ptxas can't turn it back into a shift) and y summed (one IADD3), where 0 takes a
+// funnel shift and an add on the ALU pipe; the same words
+#ifndef H1U_FROT
+#define H1U_FROT 0
+#endif
+#if H1U_FROT
+__constant__ u32 FOLD_P2[8] = {1u << KeysT{}.rot[0], 1u << KeysT{}.rot[1], 1u << KeysT{}.rot[2], 1u << KeysT{}.rot[3],
+                               1u << KeysT{}.rot[4], 1u << KeysT{}.rot[5], 1u << KeysT{}.rot[6], 1u << KeysT{}.rot[7]};
+#endif
+
 // one set: the lane's entry q = 4 t + e is acc[t][e]; chain c absorbs entry 8 i + c at step i, key t = 2 i + (c >= 4)
 __device__ __forceinline__ void fold(const int (&acc)[8][4], u32 (&y)[8], u32 (&z)[8]) {
 #pragma unroll
@@ -366,7 +377,13 @@ __device__ __forceinline__ void fold(const int (&acc)[8][4], u32 (&y)[8], u32 (&
       const u32 p = (u32)acc[t][e] * KEYS.fx1[8 * i + c];
       const u32 uu = y[c] ^ p ^ KEYS.kk[t];
       y[c] = uu * KEYS.ka[t] + z[c];
+#if H1U_FROT
+      u64 w;
+      asm("mul.wide.u32 %0, %1, %2;" : "=l"(w) : "r"(uu), "r"(FOLD_P2[t]));
+      z[c] = (u32)w + (u32)(w >> 32) + y[c];
+#else
       z[c] = __funnelshift_l(uu, uu, KEYS.rot[t]) + y[c];
+#endif
     }
   }
 }
