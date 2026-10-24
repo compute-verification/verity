@@ -66,7 +66,8 @@
 //              kh_units_multi_j10r_sm and a served step's seeds from h1r's call table, kh_seeds_j10r_h1r
 //   kh_units_multi_j10rc(calls, ncalls, units, M, live, mode, stream)   (H1U_JRC) kh_units_multi_j10r's receipts with
 //              each call's column blocks hashed once a call too, its workspace kh_j10r_ws_bytes(M, N, K), its units
-//              H1U_JSWZ row blocks at a time
+//              H1U_JSWZ row blocks at a time; kh_units_multi_j10rc_sm(calls, ncalls, units, M, live, q, den, next,
+//              stream) its blocks, then its units on q / den of the SMs (as kh_units_multi_j10r_sm)
 //   kh_words(K), kh_digits(K), kh_ws_bytes(M, N, K), kh_j10_ws_bytes(rows, N, K), kh_noise_blocks(K), kh_fault_shift()
 #include "h1sha.cuh"
 #include <cuda_bf16.h>
@@ -565,12 +566,28 @@ struct OneOut {
 #endif
 static_assert(H1U_JPD >= 1 && (H1U_JRING == 0 || H1U_JRING == 1) && 16 % (H1U_JPD + H1U_JRING) == 0,
               "a chunk's 16 segments are whole rings of H1U_JPD (+ 1 with H1U_JRING) sets");
+// H1U_JPI = 1 (RW, with H1U_PF, H1U_JRING and a ring of 4 or 8 sets): the ring's loads and L2 prefetches at immediate
+// offsets from row pointers advanced once a ring (the segments run in order across the chunks), where 0 computes every
+// row's address each segment; the same loads
+#ifndef H1U_JPI
+#define H1U_JPI 0
+#endif
 // RC (with RW; kh_units_multi_j10rc, built with H1U_JRC = 1): the column blocks come from the call's workspace too, at
 // their stream positions M RB + (32 cj + lane) CB + c (h1jr_cols hashes each once a call), so the unit hashes no block
 // and reads no seed_c. At prefill's m a column block is every row tile's (64 at M = 2048), and RW hashes it in each of
 // them; at decode's one live row block it is hashed once either way
 #ifndef H1U_JRC
 #define H1U_JRC 0
+#endif
+// H1U_JRCPF = 1 (with RC): each iteration's L2 prefetch of the next one's row and column blocks, which RC's unit reads
+// with no hash to wait behind
+#ifndef H1U_JRCPF
+#define H1U_JRCPF 0
+#endif
+// H1U_JPROBE = 1 (RW without RC): a timing probe, never a receipt: the column blocks are the row block's words, not
+// hashed, so a unit's time less its column hash bounds what sharing the column blocks can save (unitsbench --probe)
+#ifndef H1U_JPROBE
+#define H1U_JPROBE 0
 #endif
 // JX (with RW, not RC; kh_units_multi_j10r and _sm built with H1U_JX = 1): a row block's X = A + b, its Y = X P and its
 // digits A_d are the same in every unit of the row block, so h1jr_x computes them once a call, in the units' launch after
@@ -650,6 +667,8 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
   constexpr bool PF = WS || H1U_PF;
   constexpr bool RING = RW ? H1U_JRING : H1U_RING;
   constexpr int PD = RW ? H1U_JPD : H1U_PD, NS = PD + RING;
+  constexpr bool PI = RW && H1U_JPI;
+  static_assert(!PI || (PF && RING && NS % 4 == 0), "H1U_JPI is the prefetch ring's, in whole groups of 4 segments");
   const u32 lane = threadIdx.x & 31;
   const u32 g = lane >> 2, q = lane & 3;
   const u32 ncb = DG ? 1 : N / 32;
@@ -776,6 +795,37 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
       b[r] = ld2e<H1U_L2HINT, H1U_EVF && H1U_EVFU>(Bb + (u64)(8 * r + g) * K + kofs);
     }
   };
+  // PI: the rows' pointers at segment PD of the ring pass to come (A's one under XS), the L2 prefetches' at segment 16
+  const int8_t* par[PI && !XS ? 4 : 1];
+  const int8_t* pbr[PI ? 4 : 1];
+  const int8_t *pfa = nullptr, *pfb = nullptr;
+  constexpr u32 ASEG = XS ? 1024 : 32;
+  if constexpr (PI) {
+#pragma unroll
+    for (int r = 0; r < 4; ++r) {
+      if constexpr (!XS) par[r] = Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + 8 * q + 32 * PD;
+      pbr[r] = Bb + (u64)(8 * r + g) * K + 8 * q + 32 * PD;
+    }
+    if constexpr (XS) par[0] = Ab + 1024 * PD + 16 * lane;
+    pfa = XS ? Ab + 1024 * 16 + 128 * lane : Ab + (u64)lane * K + 32 * 16;
+    pfb = Bb + (u64)lane * K + 32 * 16;
+  }
+  // PI: the segment jo past the pointers'
+  const auto load_at = [&](int jo, uint2(&a)[4], uint2(&b)[4]) {
+#pragma unroll
+    for (int r = 0; r < 4; ++r) {
+      if constexpr (XS) {
+        if (r % 2 == 0) {
+          const uint4 v = ld4<H1U_L2HINT>(par[0] + 1024 * jo + 256 * r);
+          a[r] = make_uint2(v.x, v.z);
+          a[r + 1] = make_uint2(v.y, v.w);
+        }
+      } else {
+        a[r] = ld2<H1U_L2HINT>(par[r] + 32 * jo);
+      }
+      b[r] = ld2e<H1U_L2HINT, H1U_EVF && H1U_EVFU>(pbr[r] + 32 * jo);
+    }
+  };
   if (PF) {
 #pragma unroll
     for (int d = 0; d < PD; ++d) load_seg(d, pa[d], pb[d]);
@@ -823,6 +873,10 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
         uint4 cv[4];
 #pragma unroll
         for (int w = 0; w < 4; ++w) cv[w] = ld4<H1U_L2HINT_WS>(csrc + w);
+        if (H1U_JRCPF && it < chunks) {
+          prefetch_l2(ws + 16 * ((u64)(32 * ri + lane) * rb + it));
+          prefetch_l2(ws + 16 * ((u64)M * rb + (u64)(32 * cj + lane) * cb + it));
+        }
 #pragma unroll
         for (int w = 0; w < 4; ++w) {
           S.rowbits[lane][4 * w] = rv[w].x;
@@ -836,7 +890,13 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
         }
       } else {
         u64 s[8];
-        noise_block(S.nm, (u64)M * rb + (u64)(32 * cj + lane) * cb + blk, s);
+        if constexpr (H1U_JPROBE) {
+#pragma unroll
+          for (int j = 0; j < 8; ++j)
+            s[j] = ((u64)(j & 1 ? rv[j >> 1].z : rv[j >> 1].x) << 32 | (j & 1 ? rv[j >> 1].w : rv[j >> 1].y)) ^ (blk + cj);
+        } else {
+          noise_block(S.nm, (u64)M * rb + (u64)(32 * cj + lane) * cb + blk, s);
+        }
 #pragma unroll
         for (int w = 0; w < 4; ++w) {
           S.rowbits[lane][4 * w] = rv[w].x;
@@ -935,12 +995,20 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
       for (int jj = 0; jj < NS; ++jj) {
         const u32 j = j0 + jj, sg = 16 * blk + j;
         uint2 ca[4], cw[4];
-        if (H1U_L2PF && sg % 4 == 0 && sg + 16 < ks) {
-          prefetch_l2(XS ? Ab + 1024ull * (sg + 16) + 128 * lane : Ab + (u64)lane * K + 32 * (sg + 16));
-          prefetch_l2(Bb + (u64)lane * K + 32 * (sg + 16));
+        if (H1U_L2PF && (PI ? jj % 4 == 0 : sg % 4 == 0) && sg + 16 < ks) {
+          if constexpr (PI) {
+            prefetch_l2(pfa + ASEG * jj);
+            prefetch_l2(pfb + 32 * jj);
+          } else {
+            prefetch_l2(XS ? Ab + 1024ull * (sg + 16) + 128 * lane : Ab + (u64)lane * K + 32 * (sg + 16));
+            prefetch_l2(Bb + (u64)lane * K + 32 * (sg + 16));
+          }
         }
         if (PF && RING) {
-          if (sg + PD < ks) load_seg(sg + PD, pa[(jj + PD) % NS], pb[(jj + PD) % NS]);
+          if (sg + PD < ks) {
+            if constexpr (PI) load_at(jj, pa[(jj + PD) % NS], pb[(jj + PD) % NS]);
+            else load_seg(sg + PD, pa[(jj + PD) % NS], pb[(jj + PD) % NS]);
+          }
 #pragma unroll
           for (int r = 0; r < 4; ++r) {
             ca[r] = pa[jj][r];
@@ -1043,6 +1111,14 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
         }
         fold(T, y, z);
         ring_put(S, j, lane, y, z);
+      }
+      if constexpr (PI) {
+#pragma unroll
+        for (int r = 0; r < (XS ? 1 : 4); ++r) par[r] += ASEG * NS;
+#pragma unroll
+        for (int r = 0; r < 4; ++r) pbr[r] += 32 * NS;
+        pfa += ASEG * NS;
+        pfb += 32 * NS;
       }
     }
     __syncwarp();
@@ -2870,6 +2946,61 @@ __device__ __forceinline__ u32 jswz_unit(const UCallR& c, u32 w, u32 M) {
   return (r0 + r % rn) * ncb + r / rn;
 }
 
+// unit gu of h1umjc's order, under RC
+__device__ __forceinline__ void h1umjc_one(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
+                                           const uint8_t* __restrict__ live, u32 gu, WarpSmem& S) {
+  u32 lo = 0, hi = ncalls;
+  while (hi - lo > 1) {
+    const u32 mid = (lo + hi) >> 1;
+    if (calls[mid].u0 <= gu) lo = mid;
+    else hi = mid;
+  }
+  const UCallR c = calls[lo];
+  const u32 u = jswz_unit(c, gu - c.u0, M);
+  if (c.md == 3)
+    h1u_unit<3, false, false, false, false, false, true, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws,
+                                                               OneOut{}, u, S);
+  else
+    h1u_unit<2, false, false, false, false, false, true, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws,
+                                                               OneOut{}, u, S);
+}
+
+// h1umjc on the SMs whose %smid % den < q alone, its warps taking units from *next in turn (h1umj_sm's partition, its
+// last CTA's fallback, its CAP and its H1U_JCTA: a CTA's warps take neighbouring units of jswz_unit's order, the row
+// blocks of one column block at decode, so they read its column blocks and B's lines through one SM's L1)
+template <bool CAP>
+__global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umjc_sm(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
+                                                        const uint8_t* __restrict__ live, u32 q, u32 den,
+                                                        u32* __restrict__ next, u32 cap) {
+  u32 smid;
+  asm volatile("mov.u32 %0, %%smid;" : "=r"(smid));
+  if (!sm_keep<CAP>(smid, q, den, cap, next)) return;
+  __shared__ WarpSmem smem[WARPS];
+  const u32 wp = threadIdx.x >> 5, lane = threadIdx.x & 31, total = calls[ncalls].u0;
+  if constexpr (H1U_JCTA) {
+    __shared__ u32 claim;
+    for (;;) {
+      __syncthreads();
+      if (threadIdx.x == 0) claim = atomicAdd(next, (u32)WARPS);
+      __syncthreads();
+      const u32 g0 = claim, gu = g0 + wp;
+      if (g0 >= total) break;
+      if (gu >= total) continue;
+      h1umjc_one(calls, ncalls, M, live, gu, smem[wp]);
+      __syncwarp();
+    }
+  } else {
+    for (;;) {
+      u32 gu = 0;
+      if (lane == 0) gu = atomicAdd(next, 1u);
+      gu = __shfl_sync(0xffffffffu, gu, 0);
+      if (gu >= total) break;
+      h1umjc_one(calls, ncalls, M, live, gu, smem[wp]);
+      __syncwarp();
+    }
+  }
+}
+
 // h1umj with its units' column blocks read (RC)
 __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umjc(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
                                                      const uint8_t* __restrict__ live) {
@@ -2918,6 +3049,26 @@ extern "C" int kh_units_multi_j10rc(const void* calls, unsigned ncalls, unsigned
     carve<h1umjc>();
     h1umjc<<<(units + WARPS - 1) / WARPS, 32 * WARPS, 0, s>>>((const UCallR*)calls, ncalls, M, (const uint8_t*)live);
   }
+  return cudaGetLastError() == cudaSuccess ? 0 : 3;
+}
+
+// kh_units_multi_j10rc's blocks, then its units on q / den of the SMs (h1umjc_sm; kh_units_multi_j10r_sm's grid and
+// counter): the blocks' launches take any SM, as kh_units_multi_j10r_sm's rows do
+extern "C" int kh_units_multi_j10rc_sm(const void* calls, unsigned ncalls, unsigned units, unsigned M, const void* live,
+                                       unsigned q, unsigned den, void* next, void* stream) {
+  if (!ncalls || ncalls > 65535 || M % 32 || !q || q > den || den > SMQ_DEN_MAX || !next) return 2;
+  if (!units) return 0;
+  carve<h1umjc_sm<false>>();
+  int dev = 0, sms = 0, per = 0;
+  if (cudaGetDevice(&dev) != cudaSuccess || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) != cudaSuccess ||
+      cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, h1umjc_sm<false>, 32 * WARPS, 0) != cudaSuccess || per < 1)
+    return 3;
+  cudaStream_t s = (cudaStream_t)stream;
+  h1jr_rows<<<dim3((M * 33 + 255) / 256, ncalls), 256, 0, s>>>((const UCallR*)calls, M, (const uint8_t*)live);
+  h1jr_cols<<<dim3(128, ncalls), 256, 0, s>>>((const UCallR*)calls, M);
+  if (cudaMemsetAsync(next, 0, sizeof(u32), s) != cudaSuccess) return 3;
+  h1umjc_sm<false><<<2u * (unsigned)per * (unsigned)sms, 32 * WARPS, 0, s>>>((const UCallR*)calls, ncalls, M,
+                                                                            (const uint8_t*)live, q, den, (u32*)next, 0);
   return cudaGetLastError() == cudaSuccess ? 0 : 3;
 }
 #endif
