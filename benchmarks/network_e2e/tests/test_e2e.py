@@ -81,6 +81,18 @@ def test_every_negative_of_the_harness_is_in_the_report_by_its_code(virtual):
     assert virtual.report["ok"] is True
 
 
+def test_an_advice_negatives_row_reads_n2_advices_codes_on_the_advice():
+    """With --advice, an advice negative's row carries N2-ADVICE's codes on the advice (`negatives.suite`), not an N2
+    verdict on a run: refused by its code, accepted when only its step unit may refuse it, or not refused."""
+    row = {"ran": True, "code": "NetworkAdvisedCounts_v1", "check": "N2's advised counts", "waits": ["N2-ADVICE"],
+           "honest_codes": [], "codes": ["NetworkAdvisedCounts_v1"], "ok": True}
+    assert e2e._by_code(row).startswith("refused by its code (N2-ADVICE")
+    step = row | {"code": "StepUnit.program", "check": "the step unit", "codes": []}
+    assert "accepts it: only the step unit may refuse it" in e2e._by_code(step)
+    assert e2e._by_code(row | {"codes": [], "ok": False}).startswith("NOT refused by its code")
+    assert e2e._by_code(row | {"honest_codes": ["NetworkAdvisedCounts_v1"]}).startswith("NOT judged")
+
+
 def test_the_claim_is_in_both_files(virtual):
     doc = json.loads((virtual.out / "report.json").read_text())
     md = (virtual.out / "report.md").read_text()

@@ -425,6 +425,15 @@ def _by_code(n: dict) -> str:
     pending = f"pending: {', '.join(n['waits'])}" if n["waits"] else ""
     if not n["ran"]:
         return f"not run: {n['why']}" + (f" ({pending})" if pending else "")
+    if "honest_codes" in n:
+        on = "N2-ADVICE, on the heads an honest run of the advice certifies"
+        if n["honest_codes"]:
+            return f"NOT judged: {on}, refuses the honest advice ({', '.join(n['honest_codes'])})"
+        if n["code"] in n["codes"]:
+            return f"refused by its code ({on}); {pending}"
+        if n.get("ok"):
+            return f"{on}, accepts it: only {n['check']} may refuse it; {pending}"
+        return f"NOT refused by its code: {on}, {', '.join(n['codes']) or 'accepts it'}"
     if n["by_code"]:
         return f"refused by its code (link-windows {n['refused_windows']})"
     if n["waits"]:
