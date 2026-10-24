@@ -91,6 +91,18 @@ env_files = ["/root/.config/verity/relay.env", "/data/agent-watch/cursor.env"]
 needs = ["{dir}/top-sweep.json"]
 env = { FLEET_DIR = "{dir}/fleet" }
 
+# landing's watchdog (research.queue_watch, ci's): every 5 min, beside drive and never inside it, it reads drive's log and state, its
+# own clone of main and next (README's deploy) and the train checks' runs and slots, and pages @ci in the merge thread, as infra,
+# when the landing SLO is breached
+[[loop]]
+name = "queue-watch"
+argv = ["python3.12", "-s", "-m", "research", "queue", "watch", "--every", "300", "--log", "/data/drive/drive.log", "--drive-state",
+        "/root/.research/queue/verity.state.json", "--drive-runs", "/root/.research/runs", "--repo", "{dir}/queue-watch/repo",
+        "--state", "{dir}/queue-watch/state.json"]
+env_files = ["/root/.config/verity/relay.env", "/root/.config/verity/r2.env"]
+needs = ["{dir}/queue-watch/repo"]
+env = { RESEARCH_STORE = "/root/watchers-queue-watch-store" }
+
 # the challenger host's ledger and each ended session put in the store every 5 min (publish.sh, as the challenger-host lane wrote
 # it: it is installed on the pod at {dir}/challenger/publish.sh, not part of {src})
 [[loop]]
