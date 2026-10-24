@@ -289,7 +289,7 @@ def PlainSimWrPAtDK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionSpec}
     ∃ (δ : ℕ → ℝ) (_ : ∀ t, 0 ≤ δ t)
       (_ : ∑ i, Claims.Flock.slackC ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
           (fun r ℓ (i : Fin ((V false).k x)) =>
-            Claims.Flock.slackW ((V false).k x) δ (plainJ (tables_head_one h) hsch r ℓ).val i.val) i ≤
+            Claims.Flock.slackW ((V false).k x) δ (plainJ (x := x) (tables_head_one h) hsch r ℓ).val i.val) i ≤
         2 * ((2 : ℝ) ^ l₀.logLen * l₀.queries)),
     ∀ ω : Ω, ∃ (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire 65536 1 spec.mPts) (τ : Type)
       (_ : Fintype τ) (_ : Nonempty τ) (P' : Claims.Prover (Ω × τ))
@@ -315,7 +315,7 @@ def PlainSimWrPAtDK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionSpec}
             Fintype.card τ ≤
           (Claims.Pr fun s : (Fin ((V false).k x) → Coin) × (Fin ((V false).k x) → Coin) =>
             plainForkEvK keep h hsch P r ℓ ω s.1 s.2) +
-            Claims.Flock.forkSlack sha512 (VK keep) P x δ (plainJ (tables_head_one h) hsch r ℓ).val ω)
+            Claims.Flock.forkSlack sha512 (VK keep) P x δ (plainJ (x := x) (tables_head_one h) hsch r ℓ).val ω)
 
 /-- **A simulator at a plain statement, at the verdict at the draw, at `VK keep`**: `PlainSimWD` at
 `PlainSimWrPAtDK keep`, with the decoders `plain_hdecAtK keep` and `plain_hdecHAtK keep`. -/

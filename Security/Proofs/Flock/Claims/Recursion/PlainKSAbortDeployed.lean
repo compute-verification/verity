@@ -283,10 +283,10 @@ theorem plain_tableBoundθAccAtR_of_simDK (keep : Bool → Bool) {x : Claims.Msg
     Claims.Flock.TableBoundθAccAtR sha512 (deployPlainK keep Readable.relation) (wordLen false) (wide false) x := by
   intro Ω _ _ P
   obtain ⟨δ, hδ, hfit, hω⟩ := hs Ω P
-  refine ⟨Claims.Flock.slackEsc sha512 (VK keep) P x ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (plainJ (tables_head_one h) hsch)
+  refine ⟨Claims.Flock.slackEsc sha512 (VK keep) P x ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (plainJ (x := x) (tables_head_one h) hsch)
       (fun r ℓ ω s s' => plainForkEvK keep h hsch P r ℓ ω s s') (plainEv₁K keep P x) (fun _ _ _ _ _ he => he.2.2)
       (fun _ _ he => he.2)
-      (fun r ℓ i => Claims.Flock.slackW ((V false).k x) δ (plainJ (tables_head_one h) hsch r ℓ).val i.val)
+      (fun r ℓ i => Claims.Flock.slackW ((V false).k x) δ (plainJ (x := x) (tables_head_one h) hsch r ℓ).val i.val)
       (Claims.Flock.slackG sha512 (VK keep) P x) (Claims.Flock.slackG_tied sha512 (VK keep) P x),
     Claims.Flock.slackEsc_onAcc₁ _ _ _ _ _ _ _ _ _ _ _ (fun _ _ _ _ _ he => ⟨he.1, he.2.1⟩) (fun _ _ he => he.1),
     Claims.Escapes.FitsFork.fitsForkR
@@ -308,7 +308,7 @@ theorem plain_tableBoundθAccAtR_of_simDK (keep : Bool → Bool) {x : Claims.Msg
       (fun rs _ => capOfRoot rs[0]!) (N x) (hdec C (plainRoot P x ω)) (plainRoot P x ω)
       (fun u => liveStrat (fun _ => 1) (fun _ => spec.mPts) N dg w sha512 P' x (ω, u)) hσ))
     (mean_epsSL_le_slack execArith Refine.H512 Refine.enc512 Refine.leaf512 h L m k0 l₀ l₁ rest ext hsch hk0 hm
-      PT_LOCAL [] [] _ _ sha512 (VK keep) P (plainJ (tables_head_one h) hsch) _ _ _ _ _
+      PT_LOCAL [] [] _ _ sha512 (VK keep) P (plainJ (x := x) (tables_head_one h) hsch) _ _ _ _ _
       (fun _ _ _ => Claims.Flock.slackW_nonneg hδ _ _ _) _ _ ω
       (fun r ℓ => (hfork C hok r ℓ).trans (add_le_add le_rfl
         (Claims.Flock.forkSlack_le sha512 (VK keep) P x hδ _ ω)))
@@ -343,10 +343,10 @@ theorem plain_tableBoundθAccAtR_of_simDUK (keep : Bool → Bool) {x : Claims.Ms
     Claims.Flock.TableBoundθAccAtR sha512 (deployPlainK keep Readable.relation) (wordLen false) (wide false) x := by
   intro Ω _ _ P
   obtain ⟨δ, hδ, hfit, hω⟩ := hs Ω P
-  refine ⟨Claims.Flock.slackEsc sha512 (VK keep) P x ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (plainJ (tables_head_one h) hsch)
+  refine ⟨Claims.Flock.slackEsc sha512 (VK keep) P x ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (plainJ (x := x) (tables_head_one h) hsch)
       (fun r ℓ ω s s' => plainForkEvK keep h hsch P r ℓ ω s s') (plainEv₁K keep P x) (fun _ _ _ _ _ he => he.2.2)
       (fun _ _ he => he.2)
-      (fun r ℓ i => Claims.Flock.slackW ((V false).k x) δ (plainJ (tables_head_one h) hsch r ℓ).val i.val)
+      (fun r ℓ i => Claims.Flock.slackW ((V false).k x) δ (plainJ (x := x) (tables_head_one h) hsch r ℓ).val i.val)
       (Claims.Flock.slackG sha512 (VK keep) P x) (Claims.Flock.slackG_tied sha512 (VK keep) P x),
     Claims.Flock.slackEsc_onAcc₁ _ _ _ _ _ _ _ _ _ _ _ (fun _ _ _ _ _ he => ⟨he.1, he.2.1⟩) (fun _ _ he => he.1),
     Claims.Escapes.FitsFork.fitsForkR
@@ -368,7 +368,7 @@ theorem plain_tableBoundθAccAtR_of_simDUK (keep : Bool → Bool) {x : Claims.Ms
       (fun rs _ => capOfRoot rs[0]!) (N x) (hdec C (plainRoot P x ω)) (plainRoot P x ω)
       (fun u => liveStrat (fun _ => 1) (fun _ => spec.mPts) N dg w sha512 P' x (ω, u)) hσ))
     (mean_epsSL_le_slack execArith Refine.H512 Refine.enc512 Refine.leafPlain h L m k0 l₀ l₁ rest ext hsch hk0 hm
-      PT_LOCAL [] [] _ _ sha512 (VK keep) P (plainJ (tables_head_one h) hsch) _ _ _ _ _
+      PT_LOCAL [] [] _ _ sha512 (VK keep) P (plainJ (x := x) (tables_head_one h) hsch) _ _ _ _ _
       (fun _ _ _ => Claims.Flock.slackW_nonneg hδ _ _ _) _ _ ω
       (fun r ℓ => (hfork C hok r ℓ).trans (add_le_add le_rfl
         (Claims.Flock.forkSlack_le sha512 (VK keep) P x hδ _ ω)))

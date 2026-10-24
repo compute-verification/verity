@@ -462,14 +462,14 @@ theorem plainAdv_le_ofUK (keep : Bool → Bool) {x : Claims.Msg} {spec : Session
     (P : Claims.Prover Ω) (ω : Ω) (C : Fin (wordLen false x) → List 𝔽) (r : Fin 2)
     (ℓ : Fin (l₀ :: l₁ :: rest).length)
     (halign : ∀ u, PlainAlignQUK keep L m k0 l₀ l₁ rest ext hsch hk0 hm hlay I d x opn hdec hw P ω C r ℓ
-      (plainJ h0 hsch r ℓ).val u)
+      (plainJ (x := x) h0 hsch r ℓ).val u)
     (hpair : ∀ u r₁ r₂, PlainLiveForkUK keep P x ω st (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) hw I d opn
       ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ C u r₁ r₂ r ℓ.val →
       Claims.Flock.pairEv sha512 (VK keep) P x ω (plainΦ x spec st (u, r₁)) (plainΦ x spec st (u, r₂))) :
     plainAdvUK keep L m k0 l₀ l₁ rest ext hsch hk0 hm hlay I d x opn hdec hw P ω C r ℓ ≤
       Claims.Flock.simForkPr sha512 (VK keep) P x (plainΦ x spec st) (fun t => Claims.Flock.FnFork.forkN t) ω
-        (plainJ h0 hsch r ℓ).val := by
-  have hj : (plainJ h0 hsch r ℓ).val < plainN x + 2 := by have := (plainJ h0 hsch r ℓ).isLt; omega
+        (plainJ (x := x) h0 hsch r ℓ).val := by
+  have hj : (plainJ (x := x) h0 hsch r ℓ).val < plainN x + 2 := by have := (plainJ (x := x) h0 hsch r ℓ).isLt; omega
   unfold Claims.Flock.simForkPr
   rw [Claims.Bridge.Pr_eq_Ex, Claims.Bridge.Ex_prod]
   refine div_le_div_of_nonneg_right (Finset.sum_le_sum fun u _ => ?_) (Nat.cast_nonneg _)
@@ -614,7 +614,7 @@ theorem plainAdv_leUK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.
         (plain_hdecHUAtK keep hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay) (plain_mPts hs hin hset).1 P ω C r
         ℓ ≤
       Claims.Flock.simForkPr sha512 (VK keep) P x (plainΦ x spec st) (fun t => Claims.Flock.FnFork.forkN t) ω
-        (plainJ (tables_head_one h) hsch r ℓ).val := by
+        (plainJ (x := x) (tables_head_one h) hsch r ℓ).val := by
   have hS := fun u => plainLive_schedLK keep hset h hsch (by simp) (plain_mPts hs hin hset).1 P ω u
   refine plainAdv_le_ofUK keep (tables_head_one h) (plainN_add hset) L m k0 l₀ l₁ rest ext hsch hk0 hm hlay _ _ _ _ _ P ω
     C r ℓ (fun u => plainAlignQ_of_slotUK keep (slotRSL_lead L (plain_mPts hs hin hset).2.2 _ _ _ _ m k0 l₀ l₁ rest ext hsch

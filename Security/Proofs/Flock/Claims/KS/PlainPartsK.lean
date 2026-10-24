@@ -144,7 +144,7 @@ def PlainSimForkLeK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
             (plain_hdecAtK keep hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay) (plain_mPts hs hin hset).1
             P ω C r ℓ ≤
           Claims.Flock.simForkPr sha512 (VK keep) P x (plainΦ x spec st) (fun t => Claims.Flock.FnFork.forkN t) ω
-            (plainJ (tables_head_one h) hsch r ℓ).val) ∧
+            (plainJ (x := x) (tables_head_one h) hsch r ℓ).val) ∧
     (∀ (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1"),
       ∀ C : Fin (wordLen false x) → List 𝔽, (∀ p, wide false x (C p)) → ∀ r ℓ,
         plainAdvK keep L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d x
@@ -152,7 +152,7 @@ def PlainSimForkLeK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
             (plain_hdecHAtK keep hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay) (plain_mPts hs hin hset).1
             P ω C r ℓ ≤
           Claims.Flock.simForkPr sha512 (VK keep) P x (plainΦ x spec st) (fun t => Claims.Flock.FnFork.forkN t) ω
-            (plainJ (tables_head_one h) hsch r ℓ).val)
+            (plainJ (x := x) (tables_head_one h) hsch r ℓ).val)
 
 /-! ## The chain -/
 
@@ -185,7 +185,7 @@ theorem plainSimWrPAtD_of_partsK (keep : Bool → Bool) {x : Claims.Msg} {s : Cl
         plainAdvK keep L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d x opn hdec (plain_mPts hs hin hset).1 P ω
             C r ℓ ≤
           Claims.Flock.simForkPr sha512 (VK keep) P x (plainΦ x spec st) (fun t => Claims.Flock.FnFork.forkN t) ω
-            (plainJ (tables_head_one h) hsch r ℓ).val) :
+            (plainJ (x := x) (tables_head_one h) hsch r ℓ).val) :
     PlainSimWrPAtDK keep h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d opn hdec := by
   intro Ω _ _ P
   obtain ⟨hw, hm1, hp⟩ := plain_mPts hs hin hset

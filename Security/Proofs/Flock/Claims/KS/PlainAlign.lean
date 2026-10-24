@@ -330,12 +330,12 @@ def PlainSlotAlignK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
       PlainSlotQK keep L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d x
         (plainOpn (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
         (plain_hdecAtK keep hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay) (plain_mPts hs hin hset).1 P ω C r ℓ
-        (plainJ (tables_head_one h) hsch r ℓ).val u) ∧
+        (plainJ (x := x) (tables_head_one h) hsch r ℓ).val u) ∧
     (∀ (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1"), ∀ C r ℓ u,
       PlainSlotQK keep L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d x
         (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
         (plain_hdecHAtK keep hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay) (plain_mPts hs hin hset).1 P ω C r ℓ
-        (plainJ (tables_head_one h) hsch r ℓ).val u)
+        (plainJ (x := x) (tables_head_one h) hsch r ℓ).val u)
 
 /-- `plainForkAlign_of_slot` at `VK keep`. -/
 theorem plainForkAlign_of_slotK (keep : Bool → Bool) {x : Claims.Msg} (h : PlainSlotAlignK keep x) : PlainForkAlignK keep x :=

@@ -504,12 +504,12 @@ def PlainForkAlignK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
       PlainAlignQK keep L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d x
         (plainOpn (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
         (plain_hdecAtK keep hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay) (plain_mPts hs hin hset).1 P ω C
-        r ℓ (plainJ (tables_head_one h) hsch r ℓ).val u) ∧
+        r ℓ (plainJ (x := x) (tables_head_one h) hsch r ℓ).val u) ∧
     (∀ (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1"), ∀ C r ℓ u,
       PlainAlignQK keep L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d x
         (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
         (plain_hdecHAtK keep hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay) (plain_mPts hs hin hset).1 P ω
-        C r ℓ (plainJ (tables_head_one h) hsch r ℓ).val u)
+        C r ℓ (plainJ (x := x) (tables_head_one h) hsch r ℓ).val u)
 
 /-- **The live fork event's collision, at `keep`** (`PlainForkClash` at `PlainForkQK keep`). -/
 def PlainForkClashK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
@@ -543,14 +543,14 @@ theorem plainAdv_le_ofK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionS
     (P : Claims.Prover Ω) (ω : Ω) (C : Fin (wordLen false x) → List 𝔽) (r : Fin 2)
     (ℓ : Fin (l₀ :: l₁ :: rest).length)
     (halign : ∀ u, PlainAlignQK keep L m k0 l₀ l₁ rest ext hsch hk0 hm hlay I d x opn hdec hw P ω C r ℓ
-      (plainJ h0 hsch r ℓ).val u)
+      (plainJ (x := x) h0 hsch r ℓ).val u)
     (hpair : ∀ u r₁ r₂, PlainLiveForkK keep P x ω st (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) hw I d
       opn ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ C u r₁ r₂ r ℓ.val →
       Claims.Flock.pairEv sha512 (VK keep) P x ω (plainΦ x spec st (u, r₁)) (plainΦ x spec st (u, r₂))) :
     plainAdvK keep L m k0 l₀ l₁ rest ext hsch hk0 hm hlay I d x opn hdec hw P ω C r ℓ ≤
       Claims.Flock.simForkPr sha512 (VK keep) P x (plainΦ x spec st) (fun t => Claims.Flock.FnFork.forkN t) ω
-        (plainJ h0 hsch r ℓ).val := by
-  have hj : (plainJ h0 hsch r ℓ).val < plainN x + 2 := by have := (plainJ h0 hsch r ℓ).isLt; omega
+        (plainJ (x := x) h0 hsch r ℓ).val := by
+  have hj : (plainJ (x := x) h0 hsch r ℓ).val < plainN x + 2 := by have := (plainJ (x := x) h0 hsch r ℓ).isLt; omega
   unfold Claims.Flock.simForkPr
   rw [Claims.Bridge.Pr_eq_Ex, Claims.Bridge.Ex_prod]
   refine div_le_div_of_nonneg_right (Finset.sum_le_sum fun u _ => ?_) (Nat.cast_nonneg _)

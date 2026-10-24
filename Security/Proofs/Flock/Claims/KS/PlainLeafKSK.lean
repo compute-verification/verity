@@ -70,7 +70,7 @@ theorem slackEsc_fitsFork_plainK (keep : Bool → Bool) (rel : Readable.Parsed �
     (ev₁ : Ω → (Fin ((VK keep).k x) → Coin) → Prop)
     (tied : ∀ r ℓ ω s s', ev r ℓ ω s s' → Claims.TiedColl sha512
       ((Claims.run sha512 P (VK keep) x ω s).vLog ++
-        (Claims.run sha512 P (VK keep) x ω (Claims.forkCoins (plainJ h0 hsch r ℓ) s s')).vLog))
+        (Claims.run sha512 P (VK keep) x ω (Claims.forkCoins (plainJ (x := x) h0 hsch r ℓ) s s')).vLog))
     (tied₁ : ∀ ω s, ev₁ ω s → Claims.TiedColl sha512 (Claims.run sha512 P (VK keep) x ω s).vLog)
     (w : Fin 2 → Fin sch.levels.length → Fin ((VK keep).k x) → ℝ)
     (G : Fin ((VK keep).k x) → Ω → (Fin ((VK keep).k x) → Coin) →
@@ -80,16 +80,16 @@ theorem slackEsc_fitsFork_plainK (keep : Bool → Bool) (rel : Readable.Parsed �
         (Claims.run sha512 P (VK keep) x ω (Claims.forkCoins i s s')).vLog))
     (hfit : ∑ i, Claims.Flock.slackC sch w i ≤
       2 * ((2 : ℝ) ^ (sch.levels.headD default).logLen * (sch.levels.headD default).queries)) :
-    (Claims.Flock.slackEsc sha512 (VK keep) P x sch (plainJ h0 hsch) ev ev₁ tied tied₁ w G tiedG).FitsFork
+    (Claims.Flock.slackEsc sha512 (VK keep) P x sch (plainJ (x := x) h0 hsch) ev ev₁ tied tied₁ w G tiedG).FitsFork
       ((deployPlainK keep rel).weight x) ((deployPlainK keep rel).k x) := by
   rw [deployPlainK_weight, deployPlainK_k]
   refine ⟨2, fun r => ?_, ?_, ?_⟩
   · show (Finset.univ.filter fun i : (Fin 2 × Fin sch.levels.length) ⊕ Fin ((VK keep).k x) =>
-        (Sum.elim (fun a : Fin 2 × Fin sch.levels.length => plainJ h0 hsch a.1 a.2) id i :
+        (Sum.elim (fun a : Fin 2 × Fin sch.levels.length => plainJ (x := x) h0 hsch a.1 a.2) id i :
           Fin ((VK keep).k x)) = r).card + (if r.val = 0 then 1 else 0) ≤ 2
     rw [Finset.card_filter, Fintype.sum_sum_type]
     have h1 : (∑ a : Fin 2 × Fin sch.levels.length,
-        if id (α := Fin ((VK keep).k x)) (plainJ h0 hsch a.1 a.2) = r then 1 else 0) ≤
+        if id (α := Fin ((VK keep).k x)) (plainJ (x := x) h0 hsch a.1 a.2) = r then 1 else 0) ≤
           if r.val = 0 then 0 else 1 := by
       rw [← Finset.card_filter]
       split_ifs with hr
@@ -104,7 +104,7 @@ theorem slackEsc_fitsFork_plainK (keep : Bool → Bool) (rel : Readable.Parsed �
       rw [Finset.sum_ite_eq']
       simp
     show (∑ a : Fin 2 × Fin sch.levels.length,
-        if id (α := Fin ((VK keep).k x)) (plainJ h0 hsch a.1 a.2) = r then 1 else 0) +
+        if id (α := Fin ((VK keep).k x)) (plainJ (x := x) h0 hsch a.1 a.2) = r then 1 else 0) +
       (∑ i : Fin ((VK keep).k x), if i = r then 1 else 0) + (if r.val = 0 then 1 else 0) ≤ 2
     rw [h2]
     split_ifs at h1 ⊢ <;> omega
@@ -154,7 +154,7 @@ def PlainSimWrPAtDUK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionSpec
     ∃ (δ : ℕ → ℝ) (_ : ∀ t, 0 ≤ δ t)
       (_ : ∑ i, Claims.Flock.slackC ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
           (fun r ℓ (i : Fin ((V false).k x)) =>
-            Claims.Flock.slackW ((V false).k x) δ (plainJ (tables_head_one h) hsch r ℓ).val i.val) i ≤
+            Claims.Flock.slackW ((V false).k x) δ (plainJ (x := x) (tables_head_one h) hsch r ℓ).val i.val) i ≤
         2 * ((2 : ℝ) ^ l₀.logLen * l₀.queries)),
     ∀ ω : Ω, ∃ (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire 65536 1 spec.mPts) (τ : Type)
       (_ : Fintype τ) (_ : Nonempty τ) (P' : Claims.Prover (Ω × τ))
@@ -180,7 +180,7 @@ def PlainSimWrPAtDUK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionSpec
             Fintype.card τ ≤
           (Claims.Pr fun s : (Fin ((V false).k x) → Coin) × (Fin ((V false).k x) → Coin) =>
             plainForkEvK keep h hsch P r ℓ ω s.1 s.2) +
-            Claims.Flock.forkSlack sha512 (VK keep) P x δ (plainJ (tables_head_one h) hsch r ℓ).val ω)
+            Claims.Flock.forkSlack sha512 (VK keep) P x δ (plainJ (x := x) (tables_head_one h) hsch r ℓ).val ω)
 
 open Classical in
 /-- `plainSimWrPAtD_of_partsU` at `VK keep`. -/
@@ -210,7 +210,7 @@ theorem plainSimWrPAtD_of_partsUK (keep : Bool → Bool) {x : Claims.Msg} {s : C
         plainAdvUK keep L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d x opn hdec (plain_mPts hs hin hset).1 P ω C r
             ℓ ≤
           Claims.Flock.simForkPr sha512 (VK keep) P x (plainΦ x spec st) (fun t => Claims.Flock.FnFork.forkN t) ω
-            (plainJ (tables_head_one h) hsch r ℓ).val) :
+            (plainJ (x := x) (tables_head_one h) hsch r ℓ).val) :
     PlainSimWrPAtDUK keep h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d opn hdec := by
   intro Ω _ _ P
   obtain ⟨hw, hm1, hp⟩ := plain_mPts hs hin hset
