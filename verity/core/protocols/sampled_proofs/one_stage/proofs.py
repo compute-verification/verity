@@ -42,6 +42,8 @@ EXE = "flock-verify"
 #: the statement every drawn unit's session proves
 STATEMENT = "verity/flock-circuit"
 _DIGEST = re.compile(r"[0-9a-f]{128}")
+#: an input bound at registration (`program.REGISTERED_ID`, Lean's `Program.inputId?`), a descriptor's `definitions` key
+_REGISTERED_INPUT = re.compile(r"RegisteredInput[1-9][0-9]*_v1")
 _CHUNK = 1 << 24
 
 
@@ -101,6 +103,16 @@ def _header(path: Path) -> Any:
         return json.loads(f.readline().decode())
 
 
+def reads_registered(program: bytes) -> bool:
+    """Whether the program descriptor `program` has an input bound at registration (a `RegisteredInput<w>_v1` among its
+    `definitions`), or has no `definitions` object to tell: True unless it names none."""
+    try:
+        defs = json.loads(program)["definitions"]
+    except (ValueError, KeyError, TypeError):
+        return True
+    return not isinstance(defs, dict) or any(_REGISTERED_INPUT.fullmatch(k) for k in defs)
+
+
 def proved_units(public: Path, session: Path) -> tuple[int, ...]:
     """The global units a session proved: the public file's unit indices (``units.indices``) of the instances its record
     drew (``unit_draw.units``), ascending. Read only off a session the verifier accepted."""
@@ -112,11 +124,19 @@ def proved_units(public: Path, session: Path) -> tuple[int, ...]:
 def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapping[str, Any],
            registered: Mapping[str, Any] | None = None) -> tuple[list[Finding] | None, tuple[str, str] | None]:
     """Each of `proof`'s sessions verified by the verifier of record against the verifier's own `program` (its
-    descriptor's bytes), `partition` and `registered` file (None for a statement that reads no registered value, such as
-    N2's, whose unit opens the committed value inside its circuit), on the circuit file the auditor committed as
-    `circuit_sha512`; the findings in session order and None, or None and the refusal (``circuit``: the circuit file
-    is not the committed one; ``proof``: a file is missing or the verifier's answer is not one verdict a session
-    naming the partition object's program). A session the verifier rejects is a finding, not a refusal."""
+    descriptor's bytes), `partition` and `registered` file (None only for a program that reads no registered value, such
+    as N2's, whose unit opens the committed value inside its circuit), on the circuit file the auditor committed as
+    `circuit_sha512`; the findings in session order and None, or None and the refusal (``registered``: `registered` is
+    None and the program reads registered values, `reads_registered`; ``circuit``: the circuit file is not the
+    committed one; ``proof``: a file is missing or the verifier's answer is not one verdict a session naming the
+    partition object's program). A session the verifier rejects is a finding, not a refusal.
+
+    The ``registered`` refusal is the verifier's own: without ``--registered``, Lean refuses a statement's registered
+    reads only where its public file, which the prover writes, names them (`Registered.check`), so a prover that
+    commits a registered port's rows afresh and names none would be checked against no registered root."""
+    if registered is None and reads_registered(program):
+        return None, ("registered", "the program reads registered values (a RegisteredInput among its definitions) and "
+                                    "the verifier holds no registered reads: verify with its own registered file")
     if not (isinstance(circuit_sha512, str) and _DIGEST.fullmatch(circuit_sha512)):
         return None, ("circuit", "the committed circuit file's digest is not a SHA-512 digest (128 lowercase hex)")
     if not (proof.circuit.is_file() and proof.public.is_file() and proof.sessions
@@ -156,4 +176,4 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
 
 
 __all__ = ["EXE", "PACKAGE", "STATEMENT", "Finding", "LeanError", "Proof", "executable", "file_sha512", "proved_units",
-           "verify"]
+           "reads_registered", "verify"]
