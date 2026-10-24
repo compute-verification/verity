@@ -294,29 +294,35 @@ theorem check_ok {gs : Array Group} {per blocks blockBytes nodeBytes : ℕ} {wro
   exact ⟨Nat.not_lt.1 h1, Nat.not_lt.1 h4, not_lt.1 h5, not_lt.1 h6, not_lt.1 h7,
     not_lt.1 h8, not_lt.1 h9, not_lt.1 h10, not_lt.1 h11⟩
 
-/-- A line `line` computes: `check` accepted, and its forms are `stretches` at each form's charge. -/
-theorem line_spec {gs : Array Group} {per blocks blockBytes chipBytes nodeBytes : ℕ} {wrong : ℚ} {rates : Rates}
-    {l : Line} (h : line gs per blocks blockBytes chipBytes nodeBytes wrong rates = .ok l) :
-    check gs per blocks blockBytes nodeBytes wrong rates = .ok () ∧
-    ∃ ts ls, stretches gs per blocks blockBytes chipBytes wrong (charges rates blockBytes).1 = .ok ts ∧
-      stretches gs per blocks blockBytes chipBytes wrong (charges rates blockBytes).2 = .ok ls ∧
-      l = ⟨nodeBytes, #[⟨"time-held", (charges rates blockBytes).1, ts⟩,
-        ⟨"link-charged", (charges rates blockBytes).2, ls⟩]⟩ := by
+/-- A line `line` computes: `check` accepted the wrong receipts' bound it read (`l.wrong`), and its forms are
+`stretches` at each form's charge and that bound. -/
+theorem line_spec {gs : Array Group} {per blocks blockBytes chipBytes nodeBytes : ℕ} {ws : Array (ℕ × ℕ)} {δ : ℚ}
+    {rates : Rates} {l : Line} (h : line gs per blocks blockBytes chipBytes nodeBytes ws δ rates = .ok l) :
+    check gs per blocks blockBytes nodeBytes l.wrong rates = .ok () ∧
+    ∃ ts ls, stretches gs per blocks blockBytes chipBytes l.wrong (charges rates blockBytes).1 = .ok ts ∧
+      stretches gs per blocks blockBytes chipBytes l.wrong (charges rates blockBytes).2 = .ok ls ∧
+      l.forms = #[⟨"time-held", (charges rates blockBytes).1, ts⟩,
+        ⟨"link-charged", (charges rates blockBytes).2, ls⟩] := by
   unfold line at h
-  cases hc : check gs per blocks blockBytes nodeBytes wrong rates with
-  | error e => rw [hc] at h; cases h
-  | ok u =>
-    rw [hc] at h
-    refine ⟨rfl, ?_⟩
-    cases ht : stretches gs per blocks blockBytes chipBytes wrong (charges rates blockBytes).1 with
-    | error e => simp only [ht] at h; cases h
-    | ok ts =>
-      cases hl : stretches gs per blocks blockBytes chipBytes wrong (charges rates blockBytes).2 with
-      | error e => simp only [ht, hl] at h; cases h
-      | ok ls =>
-        simp only [ht, hl] at h
-        cases h
-        exact ⟨ts, ls, rfl, rfl, rfl⟩
+  cases hp : _root_.RemoteAudit.Pooled.pooled ws δ with
+  | error e => rw [hp] at h; cases h
+  | ok bd =>
+    have hp' : _root_.RemoteAudit.Pooled.pooled ws δ = pure bd := hp
+    rw [hp', pure_bind] at h
+    dsimp only at h
+    cases hc : check gs per blocks blockBytes nodeBytes bd.wrong rates with
+    | error e => rw [hc] at h; cases h
+    | ok u =>
+      rw [hc] at h
+      cases ht : stretches gs per blocks blockBytes chipBytes bd.wrong (charges rates blockBytes).1 with
+      | error e => simp only [ht] at h; cases h
+      | ok ts =>
+        cases hl : stretches gs per blocks blockBytes chipBytes bd.wrong (charges rates blockBytes).2 with
+        | error e => simp only [ht, hl] at h; cases h
+        | ok ls =>
+          simp only [ht, hl] at h
+          cases h
+          exact ⟨hc, ts, ls, ht, hl, rfl⟩
 
 section Facts
 
@@ -564,7 +570,7 @@ theorem stretch_bound_of {gs : Array Group} {per N b chip : ℕ} {W : ℚ} {c : 
 
 /-- **LineChecked**, proved. -/
 theorem lineChecked : LineChecked := by
-  intro gs per blocks blockBytes chipBytes nodeBytes wrong rates l h
+  intro gs per blocks blockBytes chipBytes nodeBytes windows δ rates l h
   exact check_ok (line_spec h).1
 
 theorem charges_nonneg {rates : Rates} {b : ℕ} (hb : 1 ≤ b) (hE : 1 ≤ rates.encodeSquarings)
@@ -577,8 +583,9 @@ theorem charges_nonneg {rates : Rates} {b : ℕ} (hb : 1 ≤ b) (hE : 1 ≤ rate
 
 /-- **The arithmetic link** (`StretchBound`), proved. -/
 theorem stretchBound : StretchBound := by
-  intro gs per blocks blockBytes chipBytes nodeBytes wrong rates l h i hi f hf x hx
-  obtain ⟨hck, ts, ls, hts, hls, rfl⟩ := line_spec h
+  intro gs per blocks blockBytes chipBytes nodeBytes windows δ rates l h i hi f hf x hx
+  obtain ⟨hck, ts, ls, hts, hls, hforms⟩ := line_spec h
+  rw [hforms] at hf
   obtain ⟨hb, hE, hs, hd, hl, hr, hbd, hbl, hW⟩ := check_ok hck
   obtain ⟨h1r, h1b, h2r, h2b⟩ := charges_nonneg hb hE hs hd hl hr hbd hbl (rates := rates) (b := blockBytes)
   rcases (by omega : i = 0 ∨ i = 1) with rfl | rfl

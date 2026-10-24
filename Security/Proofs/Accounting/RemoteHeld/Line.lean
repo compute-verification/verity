@@ -1,14 +1,15 @@
 import Proofs.Accounting.RemoteHeld.Window
 import Proofs.Accounting.RemoteHeld.Draw
 import Properties.Proofs.RemoteAudit.Line
+import Properties.Proofs.RemoteAudit.Pooled
 
 /-!
 # The memory line of record, proved (`Properties.RemoteAudit.Line`: `LineHeld`, `LineHeldIdentity`)
 
 At each outcome where the Lean verifier accepts the record's session (so the audit accepts, `VerdictOfRecord`), the
-receipts' sketch holds and the trace's wrong receipts are at most the session's pooled bound at `δc` (`holdsAnd` of
-`SketchBound` and `Draw.pooledDraw`, so at most the record's bound, `PooledOfRecord`), every stretch of the record's line
-credits what the trace held (`heldAt_of`):
+receipts' sketch holds and the trace's wrong receipts are at most the session's pooled bound at the line's `δ`
+(`holdsAnd` of `SketchBound` and `Draw.pooledDraw`, so at most the W the line reads: `LineCoversSession` at the
+session's windows, `DrawsOfRecord`), every stretch of the record's line credits what the trace held (`heldAt_of`):
 
 * the arithmetic link (`stretchBound`, `Properties.Proofs.RemoteAudit.Line`) bounds the stretch's credit by the left-hand
   side of `HeldOverTimeLinks` at its paced session `stretchPace`, over its span from `spanStart`;
@@ -82,8 +83,8 @@ theorem weights_le {Ω : Type} {T : Trace Ω} {ω : Ω} {u v : ℕ} {x : Stretch
         = b * ((x.spanNs : ℝ) * ((x.weights : ℝ) - x.time.lost)) := by ring
       _ ≤ b * ∑ t ∈ Ico u v, ((T.mem ω t ∩ R).card : ℝ) := mul_le_mul_of_nonneg_left h1 hb0
 
-/-- On an accepting outcome where the receipts' sketch holds and the trace's wrong receipts are at most the record's
-bound, every stretch of form `i` credits what the trace held over its span. -/
+/-- On an accepting outcome where the receipts' sketch holds and the trace's wrong receipts are at most the W the
+record's line reads, every stretch of form `i` credits what the trace held over its span. -/
 theorem heldAt_of {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {rec : Ω → Record} (i : ℕ) (hi : i < 2)
     {βl Bl : ℝ} (hβl : 0 ≤ node.rates.linkBytesPerS → 0 ≤ βl) (hl : Links T βl Bl)
     (hcr : (((if i = 0 then (charges node.rates node.blockBytes).1 else (charges node.rates node.blockBytes).2).rate
@@ -94,11 +95,11 @@ theorem heldAt_of {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {rec : �
     (hS : ChipCeiling T node.chipBlocks) (hr : Routed T) (hp : Paced T (recordPace node rec)) (hcov : Covers T)
     (hN : Registered T node) (hW : WindowsOfRecord T node rec) {ω : Ω} (ha : T.accepts ω)
     (hk : ∀ p < T.passes, ∀ j ∈ T.correct ω p, ∃ t, T.tick ω p ≤ t ∧ t < T.tick ω (p + 1) ∧ j ∈ T.present ω t)
-    (hw : (T.wrong ω : ℝ) ≤ (rec ω).wrong) :
+    (hw : ∀ l, lineOf node (rec ω) = .ok l → (T.wrong ω : ℝ) ≤ l.wrong) :
     HeldAt T ω node (rec ω) i := by
   intro l hline f hf x hx
-  obtain ⟨hb, hE, hs0, hd0, hl0, -, -, -, -⟩ := lineChecked _ _ _ _ _ _ _ _ _ hline
-  obtain ⟨hhi, hne, hspan, hstop, hstart, hch, hbound, hwts⟩ := stretchBound _ _ _ _ _ _ _ _ _ hline i hi f hf x hx
+  obtain ⟨hb, hE, hs0, hd0, hl0, -, -, -, -⟩ := lineChecked _ _ _ _ _ _ _ _ _ _ hline
+  obtain ⟨hhi, hne, hspan, hstop, hstart, hch, hbound, hwts⟩ := stretchBound _ _ _ _ _ _ _ _ _ _ hline i hi f hf x hx
   set gs := (rec ω).groups with hgs
   set m := x.stretch with hm
   set per := node.per with hper
@@ -142,10 +143,10 @@ theorem heldAt_of {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {rec : �
   have hs' : (0 : ℝ) ≤ node.squarings := by simp only [Node.squarings, ns]; push_cast; positivity
   have hβ' : (0 : ℝ) ≤ node.disk := by simp only [Node.disk, ns]; push_cast; positivity
   have hwin := heldOverWindow_of K ω hE' hs' hβ' (hβl hl0) hl hsq hd hS hr hfP' hfg' hrel' hre' hpass' (hcov ω ha) hu.1 hu.2
-    hk hw
+    hk (hw l hline)
   rw [hKs, ← hspan] at hwin
   have hL : K.longest ω = (stretchPace (fun _ : Unit => gs) per m).longest () := rfl
-  have hF : K.fill ω T.blocks (rec ω).wrong = (stretchPace (fun _ : Unit => gs) per m).fill () node.blocks (rec ω).wrong := by
+  have hF : K.fill ω T.blocks l.wrong = (stretchPace (fun _ : Unit => gs) per m).fill () node.blocks l.wrong := by
     rw [hN]; rfl
   rw [hL, hF] at hwin
   rw [hch, hcr, hcb] at hbound
@@ -158,14 +159,24 @@ theorem heldAt_of {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {rec : �
     linarith
   exact ⟨hspan, hheld, fun R hR => weights_le hwts hR hheld hspan⟩
 
+/-- Where the record's windows are the session's, the trace's wrong receipts below the session's pooled bound at the
+line's `δ` are below the W every line of the record reads (`LineCoversSession`). -/
+theorem wrong_le_line {n m : ℕ} {k : Fin n → ℕ} {X : Fin n → Type} {D : Session n m k X} {T : Trace (Coins n m k X)}
+    {node : Node} {rec : Coins n m k X → Record} (hD : DrawsOfRecord D T rec) {ω : Coins n m k X} (ha : T.accepts ω)
+    (hw : (T.wrong ω : ℝ) ≤ D.pooled node.delta ω) :
+    ∀ l, lineOf node (rec ω) = .ok l → (T.wrong ω : ℝ) ≤ l.wrong := fun l hline => by
+  unfold lineOf at hline
+  rw [hD ω ha] at hline
+  exact hw.trans (Properties.RemoteAudit.lineCoversSession n m k X D ω node.delta _ _ _ _ _ _ _ l hline)
+
 /-- **The memory line of record, link-charged** (`LineHeld`), proved. -/
 theorem lineHeld : LineHeld := by
-  intro n m k X _ D T node rec δs δc hl hsq hd hS hr hp hcov hk hL hR hC hV hN hW hP
-  have hH := holdsAnd hk (Draw.pooledDraw D T δc.coe_nonneg hL hR hC)
+  intro n m k X _ D T node rec δs hl hsq hd hS hr hp hcov hk hL hR hC hV hN hW hD hδ
+  have hH := holdsAnd hk (Draw.pooledDraw D T (Rat.cast_nonneg.2 hδ) hL hR hC)
   refine le_trans (Pouw.pr_mono fun ω hω => ⟨hV ω hω.1, fun h => hω.2 ?_⟩) hH
   have ha := hV ω hω.1
   have hc := charge_units node
-  refine heldAt_of 1 (by omega) ?_ hl ?_ ?_ hsq hd hS hr hp hcov hN hW ha h.1 (h.2.trans (hP ω ha))
+  refine heldAt_of 1 (by omega) ?_ hl ?_ ?_ hsq hd hS hr hp hcov hN hW ha h.1 (wrong_le_line hD ha h.2)
   · intro h0
     simp only [Node.link, ns]
     push_cast
@@ -175,12 +186,12 @@ theorem lineHeld : LineHeld := by
 
 /-- **The memory line of record, time-held, under Identity** (`LineHeldIdentity`), proved. -/
 theorem lineHeldIdentity : LineHeldIdentity := by
-  intro n m k X _ D T node rec δs δc hI hsq hd hS hr hp hcov hk hL hR hC hV hN hW hP
-  have hH := holdsAnd hk (Draw.pooledDraw D T δc.coe_nonneg hL hR hC)
+  intro n m k X _ D T node rec δs hI hsq hd hS hr hp hcov hk hL hR hC hV hN hW hD hδ
+  have hH := holdsAnd hk (Draw.pooledDraw D T (Rat.cast_nonneg.2 hδ) hL hR hC)
   refine le_trans (Pouw.pr_mono fun ω hω => ⟨hV ω hω.1, fun h => hω.2 ?_⟩) hH
   have ha := hV ω hω.1
   have hc := charge_units node
   exact heldAt_of 0 (by omega) (fun _ => le_rfl) (links_of_identity hI) (by simpa using hc.1) (by simpa using hc.2.1) hsq hd
-    hS hr hp hcov hN hW ha h.1 (h.2.trans (hP ω ha))
+    hS hr hp hcov hN hW ha h.1 (wrong_le_line hD ha h.2)
 
 end Properties.RemoteAudit.Line.SecurityProofs

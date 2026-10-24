@@ -15,9 +15,11 @@ yet, and says which code would close it.
 * `WindowsOfRecord`: on an accepting outcome the record has one group for each of the session's windows. The groups
   are built from the verifier's summary by the line's Python glue (`benchmarks/remote_session/auditor_line.py`), not by
   Lean.
-* `PooledOfRecord`: on an accepting outcome the record's wrong receipts' bound is at least the session's pooled bound
-  (`Draw.Session.pooled`). The bound is `audit.pooled`'s, computed in Python; the line computing it in Lean from the
-  windows' sizes and draws, with a proof that it covers `Session.pooled`, closes it.
+* `DrawsOfRecord`: on an accepting outcome the windows the line computes its pooled bound from
+  (`RemoteAudit.Pooled.pooled`) are the session's, each window's receipts and its draws (`Draw.Session.size`,
+  `Draw.Session.draws`). The record's windows are the verifier's record's (`audit.Record`), read by Python. With it,
+  `Properties.RemoteAudit.LineCoversSession` gives the line's W at least the session's pooled bound.
+* `DeltaOfNode`: the δ the line reads its pooled bound at is nonnegative, as a probability's bound is.
 
 The record's clock is the trace's: that each credited pass ran inside its group's window on the record's clock is the
 model's own `Paced` premise read at `recordPace`.
@@ -37,10 +39,13 @@ def Registered {Ω : Type} (T : Trace Ω) (node : Node) : Prop := T.blocks = nod
 def WindowsOfRecord {Ω : Type} (T : Trace Ω) (node : Node) (rec : Ω → Record) : Prop :=
   ∀ ω, T.accepts ω → (rec ω).groups.size = node.windows
 
-/-- **The record's pooled bound**: on every accepting outcome the record's wrong receipts' bound is at least the
-session's pooled bound at `δ`. -/
-def PooledOfRecord {n m : ℕ} {k : Fin n → ℕ} {X : Fin n → Type} (D : Session n m k X) (T : Trace (Coins n m k X))
-    (rec : Coins n m k X → Record) (δ : ℝ) : Prop :=
-  ∀ ω, T.accepts ω → D.pooled δ ω ≤ (rec ω).wrong
+/-- **The record's windows are the session's**: on every accepting outcome the windows the line computes its pooled
+bound from are the session's, each window's receipts and its draws. -/
+def DrawsOfRecord {n m : ℕ} {k : Fin n → ℕ} {X : Fin n → Type} (D : Session n m k X) (T : Trace (Coins n m k X))
+    (rec : Coins n m k X → Record) : Prop :=
+  ∀ ω, T.accepts ω → (rec ω).windows = Array.ofFn fun t => ((D.size t ω : ℕ), D.draws t ω)
+
+/-- **The line's δ**: the δ the line reads its pooled bound at is nonnegative. -/
+def DeltaOfNode (node : Node) : Prop := 0 ≤ node.delta
 
 end Properties.RemoteAudit.Line

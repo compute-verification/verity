@@ -15,15 +15,17 @@ the record:
 * **LineHeld** (link-charged, `forms[1]`): on any trace and opening draw meeting the memory model's premises (the links'
   ceiling `Links`, `SquaringCeiling`, `Disks`, `ChipCeiling`, `Routed`, `Paced` at the record's groups `recordPace`,
   `Covers`, `SketchBound` at `δs`, and the draw's `Live`, `Refused`, `Counted`) and the record's code-to-model premises
-  (`VerdictOfRecord`, `Registered`, `WindowsOfRecord`, `PooledOfRecord` at `δc`, `Properties.RemoteAudit.Line.Premises`),
-  the probability that the Lean verifier accepts the record's session and the record's line credits a stretch more than
-  the trace held over its span (`Credits`) is at most `δs + δc`. The rates are the node's in the model's units, a tick a
+  (`VerdictOfRecord`, `Registered`, `WindowsOfRecord`, `DrawsOfRecord`, `DeltaOfNode`,
+  `Properties.RemoteAudit.Line.Premises`), the probability that the Lean verifier accepts the record's session and the
+  record's line credits a stretch more than the trace held over its span (`Credits`) is at most `δs + δ`, `δ` the one
+  the line reads its pooled bound at (`Node.delta`). The rates are the node's in the model's units, a tick a
   nanosecond (`Node.squarings` … `Node.chipBlocks`), and the openings' law is the model's
   (`Accounting.Remote.Draw.Openings`).
 * **LineHeldIdentity** (time-held, `forms[0]`): the same under Identity, no block coming in over the links.
 
-They follow from the model's argument for `Accounting.Guarantees.Remote.HeldOverTimeLinksDrawn` through two properties
-of the line's code, proved of it:
+They follow from the model's argument for `Accounting.Guarantees.Remote.HeldOverTimeLinksDrawn`, the line's W covering
+the session's pooled bound (`Properties.RemoteAudit.LineCoversSession`), and two properties of the line's code, proved
+of it:
 
 * **LineChecked**: a line the code computes had a block of one or more bytes, a block's encode of one or more squarings,
   nonnegative rates and a nonnegative wrong receipts' bound (`check`).
@@ -31,7 +33,7 @@ of the line's code, proved of it:
   own paced session (`stretchPace`) and span, term for term, the units and the clock included: the span `Σ`, its
   closing group's coin as `stop`, its start group 0's end (the first stretch) or the stretch's first coin (the rest),
   `L` at most the line's `L` (`lMax`, which also reads group `lo − 1`), `X` and `B` the form's charge, `S` the chips'
-  whole blocks at most `chip / b`, and `fill(W)` at most the line's greedy fill at the record's `W` (the greedy over
+  whole blocks at most `chip / b`, and `fill(W)` at most the line's greedy fill at the `W` it read (the greedy over
   groups highest rate first attains the fractional knapsack's optimum, and the line's rates are the model's or above).
 
 A stretch after the first starts at its first group's coin `s_lo`, earlier than its paced session's `start = e_lo`, so
@@ -45,24 +47,27 @@ open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote
   Accounting.Remote.Draw.Assumptions _root_.RemoteAudit.Line
 
 /-- **LineChecked**: a line the code computes had a block of one or more bytes, a block's encode of one or more
-squarings, nonnegative rates and bursts, and a nonnegative wrong receipts' bound. -/
+squarings, nonnegative rates and bursts, and read a nonnegative wrong receipts' bound. -/
 def LineChecked : Prop :=
-  ∀ (gs : Array Group) (per blocks blockBytes chipBytes nodeBytes : ℕ) (wrong : ℚ) (rates : Rates) (l : Line),
-    line gs per blocks blockBytes chipBytes nodeBytes wrong rates = .ok l →
+  ∀ (gs : Array Group) (per blocks blockBytes chipBytes nodeBytes : ℕ) (windows : Array (ℕ × ℕ)) (δ : ℚ)
+    (rates : Rates) (l : Line),
+    line gs per blocks blockBytes chipBytes nodeBytes windows δ rates = .ok l →
     1 ≤ blockBytes ∧ 1 ≤ rates.encodeSquarings ∧ 0 ≤ rates.squaringsPerS ∧ 0 ≤ rates.diskBytesPerS ∧
       0 ≤ rates.linkBytesPerS ∧ 0 ≤ rates.rebuildBurstBytes ∧ 0 ≤ rates.diskBurstBytes ∧
-      0 ≤ rates.linkBurstBytes ∧ 0 ≤ wrong
+      0 ≤ rates.linkBurstBytes ∧ 0 ≤ l.wrong
 
 /-- **The arithmetic link.** Each stretch `x` of form `i` (time-held, link-charged) of a line the code computes: its
 closing group is a group of the record, its span is `[spanStart, spanStop)` on the record's clock, nonempty, ending at
 its paced session's `stop` and starting at its `ended 0` (the first stretch) or its `released 0` (the rest), its form's
 charge is `charges`', its credit `span · (N − lost)` is at most the left-hand side of
 `Accounting.Guarantees.Remote.HeldOverTimeLinks` at its paced session (`stretchPace`), that span, the chips' whole
-blocks `chip / b`, the form's charge and the record's wrong receipts' bound, and its weights bytes a tick are
+blocks `chip / b`, the form's charge and the wrong receipts' bound the line read (`Line.wrong`), and its weights bytes
+a tick are
 `max(0, w − lost) · b`. -/
 def StretchBound : Prop :=
-  ∀ (gs : Array Group) (per blocks blockBytes chipBytes nodeBytes : ℕ) (wrong : ℚ) (rates : Rates) (l : Line),
-    line gs per blocks blockBytes chipBytes nodeBytes wrong rates = .ok l →
+  ∀ (gs : Array Group) (per blocks blockBytes chipBytes nodeBytes : ℕ) (windows : Array (ℕ × ℕ)) (δ : ℚ)
+    (rates : Rates) (l : Line),
+    line gs per blocks blockBytes chipBytes nodeBytes windows δ rates = .ok l →
     ∀ i < 2, ∀ f, l.forms[i]? = some f → ∀ x ∈ f.stretches,
       (x.stretch + 1) * per < gs.size ∧
       spanStart gs per x.stretch < spanStop gs per x.stretch ∧
@@ -77,7 +82,7 @@ def StretchBound : Prop :=
               ((f.charge.rate : ℝ) *
                   ((x.spanNs : ℝ) + 2 * (stretchPace (fun _ : Unit => gs) per x.stretch).longest ()) +
                 f.charge.burst)
-          - (stretchPace (fun _ : Unit => gs) per x.stretch).fill () blocks wrong ∧
+          - (stretchPace (fun _ : Unit => gs) per x.stretch).fill () blocks l.wrong ∧
       x.time.weights = max 0 (x.weights - x.time.lost) * (blockBytes : ℚ)
 
 /-- What stretch `x` of a line over the record's groups `gs` says of the trace at `ω`, over its span
@@ -101,25 +106,27 @@ def HeldAt {Ω : Type} (T : Trace Ω) (ω : Ω) (node : Node) (r : Record) (form
 /-- **The memory line of record, link-charged.** On a trace over a session's coins and the session's opening draw,
 meeting the memory model's premises at the node's rates and the record's groups, and the record's code-to-model
 premises, the probability that the Lean verifier accepts the record's session and a stretch of the record's
-link-charged line credits more than the trace held over its span is at most `δs + δc`. -/
+link-charged line credits more than the trace held over its span is at most `δs + δ`, the line's `δ`. -/
 def LineHeld : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (X : Fin n → Type) [∀ t, Fintype (X t)] (D : Session n m k X)
-    (T : Trace (Coins n m k X)) (node : Node) (rec : Coins n m k X → Record) (δs : ℝ) (δc : NNReal),
+    (T : Trace (Coins n m k X)) (node : Node) (rec : Coins n m k X → Record) (δs : ℝ),
     Links T node.link node.linkBurst → SquaringCeiling T node.squarings node.encode node.rebuildBurst →
     Disks T node.disk node.diskBurst → ChipCeiling T node.chipBlocks → Routed T → Paced T (recordPace node rec) →
     Covers T → SketchBound T δs → Live D → Refused D T → Counted D T →
-    VerdictOfRecord T rec → Registered T node → WindowsOfRecord T node rec → PooledOfRecord D T rec δc →
-    Pouw.pr (fun ω => Verified (rec ω) ∧ ¬ HeldAt T ω node (rec ω) 1) ≤ δs + δc
+    VerdictOfRecord T rec → Registered T node → WindowsOfRecord T node rec → DrawsOfRecord D T rec →
+    DeltaOfNode node →
+    Pouw.pr (fun ω => Verified (rec ω) ∧ ¬ HeldAt T ω node (rec ω) 1) ≤ δs + node.delta
 
 /-- **The memory line of record, time-held, under Identity.** `LineHeld` for the record's time-held line, with no
 block coming in over the node's boundary links (`Identity`) in place of their ceiling. -/
 def LineHeldIdentity : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (X : Fin n → Type) [∀ t, Fintype (X t)] (D : Session n m k X)
-    (T : Trace (Coins n m k X)) (node : Node) (rec : Coins n m k X → Record) (δs : ℝ) (δc : NNReal),
+    (T : Trace (Coins n m k X)) (node : Node) (rec : Coins n m k X → Record) (δs : ℝ),
     Identity T → SquaringCeiling T node.squarings node.encode node.rebuildBurst →
     Disks T node.disk node.diskBurst → ChipCeiling T node.chipBlocks → Routed T → Paced T (recordPace node rec) →
     Covers T → SketchBound T δs → Live D → Refused D T → Counted D T →
-    VerdictOfRecord T rec → Registered T node → WindowsOfRecord T node rec → PooledOfRecord D T rec δc →
-    Pouw.pr (fun ω => Verified (rec ω) ∧ ¬ HeldAt T ω node (rec ω) 0) ≤ δs + δc
+    VerdictOfRecord T rec → Registered T node → WindowsOfRecord T node rec → DrawsOfRecord D T rec →
+    DeltaOfNode node →
+    Pouw.pr (fun ω => Verified (rec ω) ∧ ¬ HeldAt T ω node (rec ω) 0) ≤ δs + node.delta
 
 end Properties.RemoteAudit.Line
