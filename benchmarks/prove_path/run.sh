@@ -20,9 +20,10 @@
 #   PP_SERVE_RUN=DIR|art:ID PP_WINDOW=K PP_SERVE_ROWS=DIR|art:ID: a serve-openai run's closed Commit window K (default 0), its
 #     advice, requests and engine from the run dir, its Commit from the window's sealed row dir (#3532's form); PP_TARGET=F the
 #     serving device's target profile where serve.json records none. The honest and forged partitions are PP_PARTITION and
-#     PP_FORGED_PARTITION (default the Llama ones above), forged at PP_FORGE (default 0:0). With PP_TRANSFER_GATES, the window's
-#     advice is registered under the compiler listing them (`verity-vllm advice --compiler-name/--compiler-digest`, the inner
-#     name and digest `prove_path.py compiler --transfer-gate T` prints).
+#     PP_FORGED_PARTITION (default the Llama ones above), forged at PP_FORGE (default 0:0). The window's compiler lists its
+#     model's transfer gates of record (prove_path.GATES_OF_RECORD, which PP_TRANSFER_GATES may only restate), and its advice is
+#     registered under that compiler (`verity-vllm advice --compiler-name/--compiler-digest`, the inner name and digest
+#     `prove_path.py compiler` prints).
 #   The stand-in (no PP_TP, no PP_LLAMA): the CPU TP Commit tests/pipeline/served_tp --deferred, world 2, SiluMul_v2{I=256}:
 #     honest subset:4, forged subset:8 (every unit drawn).
 #   PP_JOBS=N ranks at once (a GLM-5.3 rank: its bundle window ~2.5 min and ~11 GB, its audit ~10 GB); PP_RANKS=0,3 those ranks
