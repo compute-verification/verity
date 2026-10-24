@@ -980,8 +980,8 @@ class Session:
         (None: the registered store in order; a numpy array of rows (first, count): `Plan.from_array`), or `change`,
         the blocks (added, removed) from the session's previous pass's plan (`Plan.changed`; before its first pass, the
         registered store).  A plan is over the store's blocks so far, registered and appended, holds none released,
-        and keeps its window's receipts below `RECEIPT_LIMIT`; its rejection, `lifetime`, if it holds an appended block that joined a window `Params.lifetime` or more before
-        `t`.  `step` is the step of the served circuit whose reads the pass covers, above the previous pass's: the plan
+        and keeps its window's receipts below `RECEIPT_LIMIT`; its rejection, `lifetime`, if it holds an appended block
+        that joined a window `Params.lifetime` or more before `t`.  `step` is the step of the served circuit whose reads the pass covers, above the previous pass's: the plan
         is to hold every complete block the circuit reads at it, filler beside them allowed (`PlanMatches`), which the
         plan's proof unit checks against the prover's memory map (`PROTOCOL.md` §8); its rejection, `step`, if it is
         missing or not above.  A paced session's window holds at
