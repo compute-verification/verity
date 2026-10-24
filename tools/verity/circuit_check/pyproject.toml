@@ -67,6 +67,8 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/certifier/head_check.circuit-check.json",
           "verity/core/protocols/certifier/served.py", "verity/core/protocols/certifier/served.circuit-check.py",
           "verity/core/protocols/certifier/served.circuit-check.json",
+          "verity/core/protocols/certifier/advised.py", "verity/core/protocols/certifier/advised.circuit-check.py",
+          "verity/core/protocols/certifier/advised.circuit-check.json",
           "verity/core/protocols/certifier/advice.py", "verity/core/protocols/certifier/advice_check.py",
           "verity/core/protocols/certifier/advice_check.circuit-check.py",
           "verity/core/protocols/certifier/advice_check.circuit-check.json",

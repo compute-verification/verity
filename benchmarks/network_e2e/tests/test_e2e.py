@@ -3,7 +3,8 @@ late and extra at a tiny shape, N2's verdicts only (nothing is lowered or proved
 report holds per run its network verdict and per link-window N2's verdict of record: the honest run is accepted on every
 link-window, and late, extra and the tampered head are each refused at window 0 for their own reason (late: its egress
 head's fields and counts; extra: its counts alone; tampered: its counts and signed digest). The claim is in both files
-word for word and names the gaps the certifier README names. The proofs' columns are read from n2_zk's summary as
+word for word and names the gaps the certifier README names. The proofs' columns, each proving session's cost (no
+per-link-window share of it) and the cost pass's one link-window proved alone are read from n2_zk's summary as
 `n2_zk.prove` writes it, and a proof that wasn't held never counts as a refusal. Proofs n2_zk's own run kept are adopted
 for these runs, and refused when a unit carries another run's certificate. A gate run's fetched directory and a tarball
 of a rehearsal are read as the rehearsal is."""
@@ -34,7 +35,8 @@ e2e = _load()
 
 def _args(src, out) -> SimpleNamespace:
     return SimpleNamespace(sources=[str(src)], upstream=None, vllm=None, out=str(out), work=None, bin=None, lean=None,
-                           delta=2.0 ** -20, no_prove=True, proofs=None)
+                           delta=2.0 ** -20, no_prove=True, proofs=None, advice=None, serving_config=None,
+                           prove_path=None, ids=None, no_negatives=False)
 
 
 @pytest.fixture(scope="module")
@@ -67,7 +69,7 @@ def test_the_honest_run_is_accepted_and_each_negative_refused_for_its_own_reason
         assert r["runs"][name]["network"] == r["runs"][name]["network"] | {"accepted": False, "refused": [0]}, name
         assert rows[(name, 0)]["failed_parts"] == {"egress": failed, "ingress": []}, name
         assert all(rows[(name, w)]["n2"] == "accept" for w in range(1, windows)), name
-    assert r["proofs"]["ran"] is False and r["proofs"]["cost_per_link_window"] is None
+    assert r["proofs"]["ran"] is False and r["proofs"]["alone"] is None and "prove_s" not in rows[("honest", 0)]
 
 
 def test_the_claim_is_in_both_files(virtual):
@@ -83,8 +85,8 @@ def test_the_claim_is_in_both_files(virtual):
 
 def test_the_claims_gaps_are_the_ones_the_certifier_readme_names():
     readme = (ROOT / e2e.README).read_text()
-    gaps = readme.split("## Not yet zero-knowledge", 1)[1]
-    for named, ours in (("N2's unit isn't proved yet", "N2's unit isn't proved as the verifier of record"),
+    gaps = readme.split("## Zero knowledge: what N2's verdict reads, and what's open", 1)[1]
+    for named, ours in (("A run that proves nothing", "N2's verdicts here are decided in the clear"),
                         ("NET-42", "NET-42"), ("CertifiedRecord.verify", "CertifiedRecord.verify")):
         assert named in gaps and any(ours in g for g in e2e.CLAIM["zero_knowledge_gaps"]), named
     assert "counts only" in readme and any("N3" in x for x in e2e.CLAIM["not_covered"])
@@ -106,32 +108,49 @@ def _member(name: str, windows: int, bad: int | None, held: bool = True) -> dict
     units = [{"window": w, "unit": w, "verdict": "reject" if w == bad else "accept"} for w in range(windows)]
     return {"n": windows, "ands": 1000, "stage_s": 1.0, "accepted": held, "units": units,
             "verdicts": {f"m0-verifier/{name}": held, f"lean-verify/{name}": held}, "lean_verify_s": 2.0 * windows,
-            "timing": {"session_s": 9.0, "timing": {"prove_total_s": 4.0 * windows},
+            "timing": {"session_s": 9.0, "timing": {"prove_total_s": 4.0 * windows, "proof_bytes": [50, 50]},
                        "process": {"max_child_rss_gb": 3.5}},
-            "per_unit": {"prove_total_s": 4.0, "lean_verify_s": 2.0, "proof_bytes": 100.0},
+            "per_unit": {"prove_total_s": 4.0, "lean_verify_s": 2.0, "proof_bytes": 100.0 / windows},
             "received": {"verifier_bytes": 10, "verifier_found": [], "control": {"holds_all": True}}}
 
 
+def _cost(windows: int) -> dict:
+    """n2_zk's cost pass as `a8.cost` records it: per end, one session whose verifier draws one of the staged units."""
+    return {end: [{"arm": "fw", "k": 1, "rep": 0, "units": 1, "staged": windows, "accepted": True, "prove_total_s": 3.0,
+                   "max_child_rss_gb": 3.6, "lean": {"accepted": True, "verify_s": 2.5, "why": ""}}]
+            for end in ("egress", "ingress")}
+
+
 def test_the_proofs_columns_and_cost_are_read_from_n2_zk_and_an_unheld_proof_refuses_nothing(tmp_path):
-    runs = {s: {"dir": tmp_path / s, "check": None, "gate": None} for s in ("honest", "late", "extra")}
+    runs = {s: {"dir": tmp_path / s, "check": None, "gate": None, "shim_requests": 8} for s in ("honest", "late", "extra")}
     members = {"honest-egress": _member("honest-egress", 2, None), "honest-ingress": _member("honest-ingress", 2, None),
                "tampered-egress": _member("tampered-egress", 2, 0), "extra-egress": _member("extra-egress", 2, 0)}
-    proofs = {"ran": True, "rc": 0, "why": None, "extra_proved": True, "summary": {"ok": True, "members": members}}
+    proofs = {"ran": True, "rc": 0, "why": None, "extra_proved": True,
+              "summary": {"ok": True, "members": members, "cost": _cost(2)}}
     r = e2e.report(runs, _n2(2, {"late": 0, "extra": 0, "tampered": 0}), proofs, {})
     rows = {(x["run"], x["window"]): x for x in r["link_windows"]}
-    assert r["ok"] is True
+    assert r["ok"] is True and r["why_not"] == []
     assert rows[("honest", 0)]["proof"] == {"egress": "accept", "ingress": "accept"}
-    assert rows[("honest", 1)]["head_checks"] == "pass" and rows[("honest", 1)]["prove_s"] == 8.0
-    assert rows[("honest", 1)]["verify_s"] == 4.0 and rows[("honest", 1)]["peak_gb"] == 3.5
+    assert rows[("honest", 1)]["head_checks"] == "pass" and "prove_s" not in rows[("honest", 1)]
+    session = r["runs"]["honest"]["proofs"]["egress"]
+    assert (session["n"], session["prove_s"], session["verify_s"], session["proof_bytes"], session["proof_files"],
+            session["peak_gb"]) == (2, 8.0, 4.0, 100, 2, 3.5)
     assert rows[("tampered", 0)]["head_checks"] == "refuse" and rows[("late", 0)]["proof"] is None
     assert r["negatives"]["tampered"]["proved_refused_windows"] == [0] and not r["negatives"]["late"]["proved"]
-    assert r["proofs"]["cost_per_link_window"] == {"link_windows": 2, "prove_s": 8.0, "verify_s": 4.0,
-                                                   "proof_bytes": 200.0, "peak_gb": 3.5}
+    assert r["proofs"]["alone"]["egress"] == {"held": True, "staged": 2, "prove_s": 3.0, "verify_s": 2.5,
+                                              "proof_bytes": None, "proof_files": None, "peak_gb": 3.6}
+    md = e2e.markdown(r | {"from": ["x"]})
+    assert "| honest | egress | 2 | True | 8.0 | 4.0 | 100 | 3.5 |" in md and "| ingress | 2 | True | 3.0 | 2.5 | — | 3.6 |" in md
     members["extra-egress"] = _member("extra-egress", 2, 0, held=False)
     r = e2e.report(runs, _n2(2, {"late": 0, "extra": 0, "tampered": 0}), proofs, {})
-    assert r["negatives"]["extra"]["refused"] is False and r["ok"] is False
+    assert r["negatives"]["extra"]["refused"] is False and r["ok"] is False and r["why_not"] == ["extra not refused"]
+    assert e2e.markdown(r | {"from": ["x"]}).splitlines()[2] == "Not OK: extra not refused."
     members["honest-ingress"] = _member("honest-ingress", 2, None, held=False)
-    assert e2e.report(runs, _n2(2, {"late": 0, "extra": 0, "tampered": 0}), proofs, {})["ok"] is False
+    r = e2e.report(runs, _n2(2, {"late": 0, "extra": 0, "tampered": 0}), proofs, {})
+    assert r["ok"] is False and r["why_not"] == ["the honest run's proofs didn't all run and hold", "extra not refused"]
+    honest_only = {s: x for s, x in _n2(2, {"tampered": 0}).items() if s in ("honest", "tampered")}
+    r = e2e.report({"honest": runs["honest"]}, honest_only, {"ran": False, "why": "served"}, {})
+    assert r["ok"] is False and r["why_not"] == ["no late run", "no extra run"]
 
 
 def _kept(d: Path, runs: dict) -> Path:
@@ -147,8 +166,23 @@ def _kept(d: Path, runs: dict) -> Path:
         (d / k / "verifier" / "n2.json").write_text(json.dumps(
             [{"window": w, "signed": certified[(direction, w)].certificate.digest.hex()} for w in windows]))
         members[k] = _member(k, len(windows), None if name == "honest" else 0)
-    (d / "summary.json").write_text(json.dumps({"ok": True, "members": members}))
+    cost = _cost(len(windows))
+    for end in cost:
+        session = d / "cost" / end / "fw-k1-r0" / "sessions" / "l0000-1"
+        session.mkdir(parents=True)
+        for rep in (0, 1):
+            (session / f"circuit.rep{rep}.bin").write_bytes(b"p" * 30)
+    (d / "summary.json").write_text(json.dumps({"ok": True, "members": members, "cost": cost}))
     return d
+
+
+def test_n2_zks_proofs_of_the_registered_unit_are_not_taken_yet_and_the_report_says_why(rehearsal, tmp_path):
+    (tmp_path / "n2zk").mkdir()
+    (tmp_path / "n2zk" / "summary.json").write_text(json.dumps({"ok": True, "members": {"honest": {"windows": []}}}))
+    with pytest.raises(SystemExit, match="one member a round"):
+        e2e.adopt(tmp_path / "n2zk", e2e.collect([rehearsal.runs], tmp_path / "runs"))
+    got = e2e.prove({}, None, tmp_path)
+    assert got["rc"] == 1 and got["why"] == e2e.NOT_YET and not got["summary"]
 
 
 def test_proofs_of_these_runs_are_adopted_and_another_runs_refused(rehearsal, tmp_path):
@@ -161,10 +195,12 @@ def test_proofs_of_these_runs_are_adopted_and_another_runs_refused(rehearsal, tm
     args = _args(rehearsal.runs, tmp_path / "out")
     args.no_prove, args.proofs = False, str(kept)
     r = e2e.run(args, [], clock=lambda: 0.0)
-    assert r["ok"] is True and r["proofs"]["adopted"] == str(kept) and r["proofs"]["cost_per_link_window"]
+    assert r["ok"] is True and r["proofs"]["adopted"] == str(kept)
+    assert r["proofs"]["alone"]["ingress"]["proof_bytes"] == 60 and r["proofs"]["alone"]["ingress"]["proof_files"] == 2
     assert r["negatives"]["tampered"]["proved_refused_windows"] == [0] and r["negatives"]["extra"]["proofs_held"]
     md = (tmp_path / "out" / "report.md").read_text()
     assert "Proofs: adopted from" in md and "- honest ingress: 10 bytes; witness pieces found: none" in md
+    assert "## Proving sessions" in md and "| egress | " in md and "| 3.0 | 2.5 | 60 | 3.6 |" in md
     with tarfile.open(tmp_path / "n2zk.tgz", "w:gz") as tar:
         tar.add(kept, arcname="n2zk")
     args.proofs, args.out = str(tmp_path / "n2zk.tgz"), str(tmp_path / "out2")
@@ -191,6 +227,7 @@ def test_a_gate_runs_directory_and_a_tarball_are_read_as_the_rehearsal(tmp_path)
     _rehearsal(gate / "out", ["honest"], {"honest": "accepted"})
     (gate / "end.json").write_text(json.dumps({"run": "r1", "rc": 0, "ended": "the rehearsal ended", "pinned": "abc",
                                                "runs": {"honest": {"verdict": "accepted", "network": True}}}))
+    (gate / "request.json").write_text(json.dumps({"run": "r1", "peer": "vy-nebius-1", "port": 18080}))
     local = _rehearsal(tmp_path / "local" / "planned-40", ["late", "extra"], {"late": "refused", "extra": "refused"})
     tgz = tmp_path / "planned-40.tgz"
     with tarfile.open(tgz, "w:gz") as tar:
@@ -202,7 +239,13 @@ def test_a_gate_runs_directory_and_a_tarball_are_read_as_the_rehearsal(tmp_path)
     assert got["honest"]["dir"] == gate / "out" / "honest" and got["honest"]["check"]["verdict"] == "accepted"
     assert got["honest"]["gate"]["run"] == "r1" and got["honest"]["gate"]["verdict"] == "accepted"
     assert got["late"]["dir"].parent.name == "planned-40" and got["late"]["check"]["verdict"] == "refused"
-    assert e2e.where(got)["where"].startswith("gate: ")
+    at = e2e.where(got)
+    assert at["where"] == ("gate: the certifier on vy-challenger-1, the auditor's host, through its gate (vy-challenger-gate "
+                           "certifier-rehearse), tunnelled to vy-nebius-1:18080; gate runs honest r1; pinned to main abc; "
+                           "extra, late off the gate")
+    assert at["upstream"] == "vy-nebius-1:18080"
+    (gate / "out" / "honest" / "deployment.json").write_text(json.dumps({"upstream": "http://127.0.0.1:41000"}))
+    assert e2e.where(got)["upstream"] == "vy-nebius-1:18080 (its 127.0.0.1, tunnelled to http://127.0.0.1:41000)"
     with pytest.raises(SystemExit, match="two honest runs"):
         e2e.collect([gate, gate], work)
     with pytest.raises(SystemExit, match="no honest run"):
