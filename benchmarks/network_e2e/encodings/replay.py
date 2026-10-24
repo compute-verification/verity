@@ -5,7 +5,8 @@ pin, d9105ea80) decides those rows deterministically from:
 
 - the registered engine configuration: `max_num_seqs`, `max_num_batched_tokens`, `max_model_len`, `long_prefill_token_threshold`,
   chunked prefill, the KV block size, `watermark`, `scheduler_reserve_full_isl`, prefix caching, async scheduling, and
-  `num_gpu_blocks` (fixed at startup by memory profiling, so a per-session field unless the deployment pins it);
+  `num_gpu_blocks` (fixed at startup by memory profiling, and registered before the run: a prover that chose it could
+  buy derived hits with a bigger pool);
 - each request's prompt length and `max_tokens` (the certified request), where it stopped (the committed sampled tokens),
   and, with prefix caching on, its tokens (their block hashes);
 - the order requests reached the engine (the certified ingress order);
