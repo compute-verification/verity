@@ -1,7 +1,8 @@
 {
  "definitions": {
   "TableRead6x1_v2": {
-   "and": 1008
+   "and": 1008,
+   "type": "ba5831f281958bb6ff8fdc8c88af94d7897224ec15bcb2c7e56dbec0bdabf35d758dddd2e64789e829cb32e74d1fb2b239e3b9e4987e1832a9c2f0327bfe8abf"
   }
  }
 }
