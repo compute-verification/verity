@@ -65,6 +65,13 @@ LIVE = os.environ.get("PEARLC_LIVE", "1") != "0"
 #: decode's chain (gemm_pearlc_d) on 128-deep stages with L2's 256-byte fetch; PEARLC_DEEP=0 runs the 64-deep one it
 #: replaces (gemm_pearlc4_d), the same words
 DEEP = os.environ.get("PEARLC_DEEP", "1") != "0"
+#: B~'s prefetch into L2 ahead of a decode call's chain (`Pipeline.prefetch_b`): prefetch_l2's form (PEARLC_PREFETCH_FORM: 0 a
+#: line a thread, 1 the same evict_last, 2 a 16 KiB bulk prefetch a thread), its blocks, and B~'s leading bytes it takes
+#: (PEARLC_PREFETCH_MB, 0 all of them)
+PREFETCH_FORM = int(os.environ.get("PEARLC_PREFETCH_FORM", "0"))
+PREFETCH_CTAS = int(os.environ.get("PEARLC_PREFETCH_CTAS", "64"))
+PREFETCH_MB = int(os.environ.get("PEARLC_PREFETCH_MB", "0"))
+PREFETCH_FORMS = (0, 1, 2)
 VARIANT_G = {"sm120": 4, "sm120-unpromoted": 0}
 TMAP_UINT8, TMAP_SWIZZLE_128B, TMAP_L2_128B, TMAP_BYTES = 0, 3, 2, 128
 #: the mainloop GEMMs' operand pairs, a set of four tensor maps (A, B, P_A, P_B) each at `tma` + ML_SET * slot
@@ -659,8 +666,9 @@ class Pipeline:
     def replaced(self) -> dict[str, object]:
         """The kernels the split ones replace at decode, on the same buffers: `af_warps`, A'F_B on `words` (a warp a tile over
         all of K) where `af` runs words_k, `stats_a_warps`, stats_s5 (a warp a row) where `stats_a` runs stats_r, and
-        `gemm_pearlc_full`, the chain over all m rows where `gemm_pearlc` runs on the real ones (LIVE), and `gemm_pearlc_bk64`,
-        the chain on 64-deep stages (gemm_pearlc4_d) where `gemm_pearlc` runs the 128-deep ones (DEEP)."""
+        `gemm_pearlc_full`, the chain over all m rows where `gemm_pearlc` runs on the real ones (LIVE), `gemm_pearlc_bk64`,
+        the chain on 64-deep stages (gemm_pearlc4_d) where `gemm_pearlc` runs the 128-deep ones (DEEP), and
+        `gemm_pearlc_prefetched`, the chain after B~'s prefetch in each form (`prefetch_b`), which writes nothing."""
         d, b, m, k, out = self.dev, self.b, self.m, self.k, {}
         if self.g and SPLIT:
             out["af_warps"] = lambda: d.launch("words", m // 16, 128, p=(b["at"], b["fbT32"], b["af"]), i=(m, 32, k))
@@ -672,7 +680,22 @@ class Pipeline:
         if DEEP:
             out["gemm_pearlc_bk64"] = lambda: self.gemm("gemm_pearlc4_d" + self.suffix, "at", "bt", m, self.n,
                                                        out=("c", "u", "y"), **self.peel())
+
+        def prefetched():
+            for f in PREFETCH_FORMS:
+                self.prefetch_b(f)
+            self.gemm(chain, "at", "bt", m, self.n, out=("c", "u", "y"), **self.peel())
+        out["gemm_pearlc_prefetched"] = prefetched
         return out
+
+    def prefetch_b(self, form: int | None = None, limit: int | None = None) -> None:
+        """B~'s leading `limit` bytes (default PREFETCH_MB's, all n·k at 0) into L2 ahead of the chain, which reads them all:
+        prefetch_l2 in `form` (default PREFETCH_FORM) on PREFETCH_CTAS blocks.  It writes nothing."""
+        size = self.n * self.k
+        limit = PREFETCH_MB << 20 if limit is None else limit
+        size = min(size, limit) if limit else size
+        self.dev.launch("prefetch_l2", PREFETCH_CTAS, 256, p=(self.b["bt"],),
+                        i=(size - size % 128, PREFETCH_FORM if form is None else form))
 
     def real(self, x: str) -> int:
         """The bytes of buffer x's real rows (its first m_real of m), the only ones a consumer reads."""
@@ -808,7 +831,7 @@ ALIASES = {"c2": "c"}
 STATS_A = ("alpha_a", "beta_a", "ia_a", "aux_a")
 #: the 64 x 64 pipeline's: the chain, A'F_B on words_k, and the kernels the split ones replace (`Pipeline.replaced`)
 SMALL_RERUNS = GEMM_RERUNS[:2] + (("af", ("af",)), ("af_warps", ("af",)), ("stats_a_warps", STATS_A),
-                                  ("gemm_pearlc_bk64", ("c", "u", "y")))
+                                  ("gemm_pearlc_bk64", ("c", "u", "y")), ("gemm_pearlc_prefetched", ("c", "u", "y")))
 #: each split kernel's step at decode, the step it replaces (`Pipeline.replaced`) and their outputs, held word for word (the
 #: chain's one output at a time: c2, where the replaced step's land, holds one m x n FP32 product)
 SPLITS = (("af", "af_warps", ("af",)), ("stats_a", "stats_a_warps", STATS_A),

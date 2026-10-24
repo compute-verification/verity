@@ -387,6 +387,8 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: 4 * i[0] * i[1]}
     if name == "diff_words":
         return {0: 4 * i[0], 1: 4 * i[0], 2: 8}
+    if name == "prefetch_l2":
+        return {0: i[0]}
     if name.endswith("_smem"):
         return {0: 4}
     raise AssertionError(f"no footprint for {name}")

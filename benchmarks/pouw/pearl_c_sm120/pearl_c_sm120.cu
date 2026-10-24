@@ -894,6 +894,26 @@ extern "C" __global__ void pa(const Args a) {
   reinterpret_cast<uint16_t*>(a.p[3])[(size_t)row * 64 + e] = v;
 }
 
+// B~'s bytes into L2 ahead of its call's GEMM, beside the call's per-row keying, which leaves DRAM idle.  Writes nothing.
+// p0 the bytes; i0 their count (a multiple of 128), i1 the form: 0 prefetch.global.L2 a 128-byte line a thread, 1 the same
+// with ::evict_last, 2 cp.async.bulk.prefetch.L2 a PF_CHUNK chunk a thread
+#define PF_CHUNK 16384
+extern "C" __global__ void __launch_bounds__(256) prefetch_l2(const Args a) {
+  const char* p = reinterpret_cast<const char*>(a.p[0]);
+  const size_t n = (size_t)(uint32_t)a.i[0], t = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+  const size_t stride = (size_t)gridDim.x * blockDim.x;
+  if (a.i[1] == 2) {
+    for (size_t o = t * PF_CHUNK; o < n; o += stride * PF_CHUNK) {
+      const uint32_t len = (uint32_t)(n - o < PF_CHUNK ? n - o : PF_CHUNK);
+      asm volatile("cp.async.bulk.prefetch.L2.global [%0], %1;" ::"l"(p + o), "r"(len) : "memory");
+    }
+  } else if (a.i[1] == 1) {
+    for (size_t o = t * 128; o < n; o += stride * 128) asm volatile("prefetch.global.L2::evict_last [%0];" ::"l"(p + o));
+  } else {
+    for (size_t o = t * 128; o < n; o += stride * 128) asm volatile("prefetch.global.L2 [%0];" ::"l"(p + o));
+  }
+}
+
 // P_B rows: [RNE_bf16(FP32 add(fma chain from +0 over p of be_p G_pq, -BF_jq)) || -be], be = bf16(E'_B).
 // p0 E'_B codes, p2 BF words (rows x 32), p3 G words (32 x 32, row p), p4 out; i0 rows
 extern "C" __global__ void pb(const Args a) {
