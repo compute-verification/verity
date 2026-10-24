@@ -14,6 +14,12 @@ parameter-hardness at weight cost `c_w` (`Nci.Assumptions.ParameterHardAt`). Bot
 declaration (`bitDecl c`), so a block's size, what it is handed and every cut are counted in bits, the unit of the NCI
 policy's novel reads.
 
+Why bits and not `c`'s gates: on the gates, `|in(S) \ θ|` counts gates while an IU's novel reads count bits, so a block
+handed `k` bits is handed up to `k / w_min` gates, and the bound would lose up to `w_max / w_min` unless every gate had
+one width; and a constant gate (computed, reading nothing) is a source outside `θ`, so every block of gates holding it
+is handed it, while an IU holding it computes it for free. On the bits every gate is one bit wide and a constant's bits
+are free, so neither needs a hypothesis.
+
 The route is `CoverTraining`'s. A compliant division of the declared circuit `d`, pulled back through the containment,
 divides `c` into pieces. Piece `u`'s block, the bits of the piece and of what it reads, is a subcircuit of `bitDecl c`
 with at most `s ≥ w₀ Γ + α Γ + width(θ)` bits that is handed `k_u ≤ α σ_u` bits outside the free bits, where `σ_u ≤ Γ`
