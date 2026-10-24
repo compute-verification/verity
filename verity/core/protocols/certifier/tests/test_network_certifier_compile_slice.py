@@ -1,7 +1,8 @@
 """The compile slice (`compile_slice.CompileSlice_v1`) on corpus-smallkv's first seven steps: the reference's scan is the
-replay's (its rows and its symbols' contexts), the circuit's verdict is the reference's on the honest rows and on each
+replay's (its rows and its symbols' contexts), the circuit's verdict is `check`'s on the honest rows and on each
 negative (a decision flipped in the window row, a charge one below the coded length, an arrival not the certified
-one, a wrong digest), the codeword is the encoder's, and the cost `size` reports."""
+one, a wrong digest) and on each of REDTEAM's phase 9 choices (a context, frequencies, a prefix hit, the heads left in
+place), the codeword is the encoder's, and the cost `size` reports."""
 from __future__ import annotations
 
 import json
@@ -69,6 +70,25 @@ def test_the_circuit_is_its_reference(slice_):
                      "digest": {"rows"}, "salt": {"rows"}}
 
 
+def test_redteams_phase9_choices_are_refused(slice_):
+    """Every interface REDTEAM's phase 9 found free in a piece alone (`compile_slice.phase9`) is the unit's own here: no
+    witness field carries a context, a frequency, a hit, an eviction, a return or a consumed count, and each choice is
+    refused by the proved verdict. The codes are shorter than the honest one (8 bits), and the unit holds the charge to
+    its own count; the hit schedules 32 tokens fewer, and the unit's step takes no hit (the cache counts' stand-in);
+    the heads must move by ReplayStep_v1's own taken and used."""
+    x = slice_
+    assert [name for name, _n, _w in CS.fields(x.S)["wit"]] == ["state", "window", "arr", "bits", "seg", "salt"]
+    digest = CS.rows_digest(x.S, x.rows, SALT)
+    cases = {k: CS.case(x.S, x.sl, SALT, digest=digest, **kw) for k, kw in CS.phase9(x.S, x.sl).items()}
+    assert tuple(cases) == CS.PHASE9
+    assert CS.evaluate(x.st, list(cases.values())) == [c.verdict for c in cases.values()]
+    flags = {k: {f for f, ok in c.flags.items() if not ok} for k, c in cases.items()}
+    assert flags == {"context": {"code", "charge"}, "frequency": {"code", "charge"}, "hit": {"steps", "rows"},
+                     "reread": {"steps", "rows"}, "untaken": {"steps", "rows"}}
+    assert (cases["context"].length, cases["frequency"].length) == (4, 2)
+    assert cases["hit"].steps[0] == ((0, 0, 0, 32, 256),) and x.rows[0] == ((0, 0, 0, 0, 256),)
+
+
 def test_the_codeword_is_the_encoders():
     """`codeword` is the segment `arith_encode`'s reference accepts, and no bit of it can flip."""
     rng = random.Random(7)
@@ -82,4 +102,4 @@ def test_the_codeword_is_the_encoders():
 
 def test_size(slice_):
     s = CS.size(**slice_.st)
-    assert s == {"ands": 139327, "pub_bits": 528, "adv_bits": 16, "cert_bits": 112, "wit_bits": 2416}
+    assert s == {"ands": 140090, "pub_bits": 528, "adv_bits": 16, "cert_bits": 112, "wit_bits": 2416}

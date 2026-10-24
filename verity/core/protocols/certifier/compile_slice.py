@@ -32,10 +32,19 @@ every ReplayAdvance's ok (with each active step's ReplayStep ok); bit 2 ``code``
 finish's, the code within SEG bits; bit 3 ``charge``, the coded length ≤ c; bit 4 ``rows``, the rows' digest is
 ``pub``'s. The rest are 0.
 
+**The reference** is `check`, the flags the circuit's pieces' references give any unit's rows; `case` builds the rows of
+a prover's run (`scan`, with the choices REDTEAM's phase 9 found free in a piece alone: the codeword, the prefix hits
+and the heads' moves) and `check`'s verdict on them. No witness field carries a context, a frequency, a cache count or a
+consumed count: the context is the plain counter's, the frequencies KTContext_v1's outputs, and the heads move by
+ReplayStep_v1's own ``taken`` and ``used``.
+
 **Stand-ins** (named, each a piece not ready):
 - *the cache counts*: ENC-DERIVED's hit, evictable and returned-block counts are held at 0 (ReplayStep_v1's ``hit``,
   ``evict`` and ``ret``), true of a slice that hits no prefix and stops or preempts nothing; `cache_step.CacheStep_v1`
-  isn't wired, and on any other slice the rows differ from the clear recompile's and ``rows`` refuses;
+  isn't wired, so a claimed hit is refused by the 0 and an honest one can't be taken: on any slice that hits, the rows
+  differ from the clear recompile's and ``rows`` refuses;
+- *the model*: KT counts from a zero prior at each window's start, the per-window counts not coded (advice v1 under
+  #3642 starts from the registered book's prior and codes them first);
 - *the counting encoder*: ENC-CODE's encoder that counts its emitted bits is ArithEncodeStep_v1 checking a witness
   codeword, whose consumed positions are the count (a symbol's scalings depend only on the interval);
 - *the still-sent fields*: ``adv`` holds only the decisions, the count and the step count;
@@ -49,6 +58,7 @@ P, K (`replay_chain.Shape`) and SEG, the codeword's cap in bits.
 from __future__ import annotations
 
 import hashlib
+import itertools
 from dataclasses import dataclass, replace
 from functools import lru_cache
 from types import SimpleNamespace
@@ -116,7 +126,8 @@ def step_row_bits(S) -> int:
 
 
 def _pos_width(S) -> int:
-    return _bitlen(S.SEG + EK + 2)
+    """The code position's width: every ask consumes at most EK bits and the finish 2, so the count can't wrap."""
+    return _bitlen(max(S.SEG, S.P * S.A * EK + 2))
 
 
 # --- the circuit ------------------------------------------------------------------------------------------------------------
@@ -236,11 +247,11 @@ class Slice:
 
 @dataclass(frozen=True)
 class Case:
-    """A unit's rows (bits each, `fields`' layouts) and the verdict the reference gives them, with the scan's rows (per
-    step, `RS.Out.rows`), its symbols (bit, f0, f1) and the coded length."""
+    """A unit's rows (bits each, `fields`' layouts) and the verdict `check` gives them (None where it leaves a flag
+    open), with the scan's rows (per step, `RS.Out.rows`), its symbols (bit, f0, f1) and the coded length."""
 
     rows: dict
-    verdict: int
+    verdict: int | None
     flags: dict
     steps: tuple
     symbols: tuple
@@ -322,11 +333,33 @@ def _pack(S, r: str, vals: dict) -> list[int]:
     return out + [0] * (row_bits(S)[r] - len(out))
 
 
-def scan(S, sl: Slice, window: Sequence[int] | None = None, cert: Sequence[RC.Arrival] | None = None) -> SimpleNamespace:
+def _plain(pc: int, used: int, taken: int, bits: Sequence[int], forced: bool) -> int:
+    """The plain-context counter after a step, as `replay.encode`'s ``passed`` moves."""
+    if used and not bits[used - 1]:
+        return min(pc + 1, 2) if used == 1 and not forced else 1
+    return 0 if taken else pc
+
+
+def _forced(cur: RC.Row, arr: Sequence[RC.Arrival]) -> bool:
+    return not cur.running and not cur.waiting and len(arr) > 0
+
+
+def _inputs(S, arr: Sequence[RC.Arrival], bits: Sequence[int], hit: Sequence[int] | None = None) -> RS.Inputs:
+    """ReplayStep_v1's inputs at a step: the arrivals and bits, the cache counts 0 (the stand-in) unless `hit`."""
+    zero = (0,) * (S.W + S.A)
+    return RS.Inputs(tuple(RS.Req(*a) for a in arr), tuple(bits), tuple(hit) if hit is not None else zero, zero,
+                     (0,) * S.R)
+
+
+def scan(S, sl: Slice, window: Sequence[int] | None = None, cert: Sequence[RC.Arrival] | None = None, *,
+         hits: dict[int, Sequence[int]] | None = None,
+         consume: dict[int, tuple[int, int]] | None = None) -> SimpleNamespace:
     """The window as a prover runs it from `sl`: ReplayLoad's rows, then each step by `replay_step.reference` on the state
-    and the window row's arrivals and bits at the heads, the asks' symbols under the plain contexts. `window`: the
-    decisions the prover puts in W_1 (default the advice's); `cert`: the arrivals it puts in ``cert`` (default `sl`'s).
-    The rows past a refused advance are the step's next state with the heads moved, as the circuit computes them."""
+    and the window row's arrivals and bits at the heads, the asks' symbols under the plain contexts. The prover's
+    choices: `window`, the decisions it puts in W_1 (default the advice's); `cert`, the arrivals it puts in ``cert``
+    (default `sl`'s); `hits`, step u -> the prefix hit its step u takes (`replay_step.Inputs.hit`; default none);
+    `consume`, step u -> the (taken, used) it moves the heads by at step u (default the step's own). Its next row is
+    the step's next state with the heads moved by those, and its symbols are the first ``used`` bits'."""
     Sc, St = chain(S), step_statics(S)
     arrivals = tuple(map(tuple, cert if cert is not None else sl.arrivals))
     loaded = RC.load(Sc, RC.empty(Sc), RC.Window(), arrivals, sl.decisions, sl.steps)
@@ -335,57 +368,109 @@ def scan(S, sl: Slice, window: Sequence[int] | None = None, cert: Sequence[RC.Ar
     cur, win = loaded
     if window is not None:
         win = replace(win, decisions=tuple(window))
-    states, fronts, steps, ok, symbols = [cur], [], [], True, []
-    pc, n = 0, {c: (0, 0) for c in range(EC)}
-    for _u in range(S.P):
+    states, fronts, steps, symbols = [cur], [], [], []
+    pc, n = 0, ((0, 0),) * EC
+    for u in range(S.P):
         arr, bits = RC.front(Sc, win, cur)
         fronts.append((arr, bits))
         if not cur.steps:
             states.append(cur)
             continue
-        inp = RS.Inputs(tuple(RS.Req(i, p_, o) for i, p_, o in arr), tuple(bits), (0,) * (S.W + S.A), (0,) * (S.W + S.A),
-                        (0,) * S.R)
-        out = RS.reference(St, _state(cur), inp)
+        out = RS.reference(St, _state(cur), _inputs(S, arr, bits, (hits or {}).get(u)))
         if not out.ok:
             raise ValueError("the step refuses: the slice's class can't take it")
+        taken, used = (consume or {}).get(u, (out.taken, out.used))
         stepped = _row(out.state)
-        nxt = RC.advance(Sc, win, cur, out.ok, stepped, arr, bits, out.taken, out.used)
-        if nxt is None:
-            ok = False
-            nxt = RC.Row(stepped.running, stepped.waiting, stepped.free, cur.qh + out.taken, cur.dh + out.used, cur.steps - 1)
-        forced = not cur.running and not cur.waiting and len(arr) > 0
-        for k in range(out.used):
-            ctx = pc if k == 0 and not forced else 0
-            f0, f1 = AE.scaled(2 * n[ctx][0] + 1, 2 * n[ctx][1] + 1)
+        nxt = RC.Row(stepped.running, stepped.waiting, stepped.free, cur.qh + taken, cur.dh + used, cur.steps - 1)
+        forced = _forced(cur, arr)
+        for k in range(used):
+            _ok, f0, f1, n = AE.reference_kt(EC, ENW, n, 1, pc if k == 0 and not forced else 0, bits[k])
             symbols.append((bits[k], f0, f1))
-            n[ctx] = (n[ctx][0] + (not bits[k]), n[ctx][1] + bool(bits[k]))
-        if out.used and not bits[out.used - 1]:
-            pc = min(pc + 1, 2) if out.used == 1 and not forced else 1
-        elif out.taken:
-            pc = 0
+        pc = _plain(pc, used, taken, bits, forced)
         steps.append(out.rows)
         states.append(nxt)
         cur = nxt
-    return SimpleNamespace(states=states, window=win, fronts=fronts, steps=steps, ok=ok, symbols=symbols, arrivals=arrivals)
+    return SimpleNamespace(states=states, window=win, fronts=fronts, steps=steps, symbols=symbols, arrivals=arrivals)
+
+
+def _int(bits: Sequence[int]) -> int:
+    return sum(int(b) << j for j, b in enumerate(bits))
+
+
+def check(S, rows: dict) -> dict[str, bool | None]:
+    """The circuit's flags on a unit's rows (`fields`' layouts), by its pieces' references: ReplayLoad's `load` from the
+    session's empty rows; per active step `replay_step.reference` on the witness state row with the witness arrivals and
+    bits (the cache counts 0) and `advance` with that step's own taken and used, against the next witness row, and an
+    idle step's row kept; the step's asks under the plain contexts (`reference_kt`) through `reference_step` against the
+    witness codeword; `reference_finish`, the count within SEG and c; SHA-512 over the salt and the active steps' rows.
+
+    For well-formed rows (`replay_chain.decode`'s, each field in range); `MalformedRow` otherwise. A flag is None where
+    a step's ReplayStep refuses and the circuit's later outputs are its own: ``steps`` is then False."""
+    Sc, St = chain(S), step_statics(S)
+    F = fields(S)
+    p, a, w = (RC._split(rows[r], F[r]) for r in ("pub", "adv", "wit"))
+    states = [RC.decode(e, Sc) for e in w["state"]]
+    win = RC.decode_window(w["window"][0], Sc)
+    cert = RC._items(RC._unflatten(rows["cert"], RC.arrival_fields(Sc))[0], "a", ("id", "P", "O"))
+    count = _int(a["count"][0])
+    dec = [e[0] for e in a["dec"]]
+    if count > S.D or any(dec[count:]):
+        raise RC.MalformedRow(f"the advice's count {count} with a decision past it")
+    loaded = RC.load(Sc, RC.empty(Sc), RC.Window(), cert, dec[:count], _int(a["steps"][0]))
+    flags: dict[str, bool | None] = {"load": loaded == (states[0], win)}
+    seg = [int(b) for b in w["seg"][0]]
+    pc, n, coder, pos, steps_ok, code_ok, out_rows = 0, ((0, 0),) * EC, AE.fresh(), 0, True, True, []
+    for u in range(S.P):
+        cur, nxt = states[u], states[u + 1]
+        arr = RC._items(RC._unflatten(w["arr"][u], RC.front_fields(Sc))[0], "arr", ("id", "P", "O"))
+        bits = [int(b) for b in w["bits"][u]]
+        if not cur.steps:
+            steps_ok &= nxt == cur
+            out_rows.append(None)
+            continue
+        out = RS.reference(St, _state(cur), _inputs(S, arr, bits))
+        if not out.ok:
+            return {**flags, "steps": False, "code": None, "charge": None, "rows": None}
+        want = RC.advance(Sc, win, cur, True, _row(out.state), arr, bits, out.taken, out.used)
+        steps_ok &= want is not None and want == nxt
+        forced = _forced(cur, arr)
+        for k in range(out.used):
+            ok, f0, f1, n = AE.reference_kt(EC, ENW, n, 1, pc if k == 0 and not forced else 0, bits[k])
+            code_ok &= bool(ok)
+            coder, m = AE.reference_step(EK, 1, coder, 1, (bits[k], f0, f1), (seg[pos:pos + EK] + [0] * EK)[:EK])
+            pos += m
+        pc = _plain(pc, out.used, out.taken, bits, forced)
+        out_rows.append(out.rows)
+    ok, m = AE.reference_finish(coder, (seg[pos:pos + 2] + [0, 0])[:2])
+    length = pos + m
+    salt = bytes(_int(e) for e in w["salt"])
+    flags.update(steps=steps_ok, code=code_ok and bool(ok) and length <= S.SEG, charge=length <= _int(p["c"][0]),
+                 rows=rows_digest(S, out_rows, salt) == bytes(_int(e) for e in p["digest"]))
+    return flags
+
+
+def verdict(flags: dict[str, bool | None]) -> int | None:
+    """The verdict word of `check`'s flags; None while one is unspecified."""
+    if any(flags[f] is None for f in FLAGS):
+        return None
+    return sum(int(flags[f]) << k for k, f in enumerate(FLAGS))
 
 
 def case(S, sl: Slice, salt: bytes, *, digest: bytes | None = None, charge: int | None = None,
-         window: Sequence[int] | None = None, cert: Sequence[RC.Arrival] | None = None) -> Case:
-    """A unit's rows for `sl` and the reference's verdict on them. `digest` and `charge` are ``pub``'s (default the
-    scan's own: its rows' digest under `salt` and its coded length); `window` and `cert` are `scan`'s."""
+         window: Sequence[int] | None = None, cert: Sequence[RC.Arrival] | None = None,
+         hits: dict[int, Sequence[int]] | None = None, consume: dict[int, tuple[int, int]] | None = None,
+         seg: Sequence[int] | None = None) -> Case:
+    """A unit's rows for the prover's run of `sl` (`scan`'s, with `window`, `cert`, `hits` and `consume`) and `check`'s
+    verdict on them. `digest` and `charge` are ``pub``'s (default the run's own: its rows' digest under `salt` and its
+    coded length); `seg` is the codeword it puts in ``wit`` (default its symbols' `codeword`). ``length`` is the
+    codeword's."""
     Sc = chain(S)
     Z = RC.widths(Sc)
-    sc = scan(S, sl, window, cert)
-    seg = codeword(sc.symbols)
+    sc = scan(S, sl, window, cert, hits=hits, consume=consume)
+    seg = list(codeword(sc.symbols) if seg is None else seg)
     length = len(seg)
-    own = rows_digest(S, sc.steps, salt)
-    digest = own if digest is None else bytes(digest)
+    digest = rows_digest(S, sc.steps, salt) if digest is None else bytes(digest)
     charge = length if charge is None else charge
-    honest = RC.load(Sc, RC.empty(Sc), RC.Window(), sc.arrivals, sl.decisions, sl.steps)
-    flags = {"load": honest is not None and honest == (sc.states[0], sc.window), "steps": sc.ok,
-             "code": length <= S.SEG and AE.check_window(EK, 1, sc.symbols, seg), "charge": length <= charge,
-             "rows": own == digest}
-    verdict = sum(int(flags[f]) << k for k, f in enumerate(FLAGS))
     if length > S.SEG:
         seg = seg[:S.SEG]
     width = row_bits(S)
@@ -401,7 +486,36 @@ def case(S, sl: Slice, salt: bytes, *, digest: bytes | None = None, charge: int 
     wit += seg + [0] * (S.SEG - len(seg)) + [b for x in salt for b in _bits(x, 8)]
     rows["wit"] = wit + [0] * (width["wit"] - len(wit))
     assert Z.DW and all(len(rows[r]) == width[r] for r in ROWS)
-    return Case(rows, verdict, flags, tuple(sc.steps), tuple(sc.symbols), length)
+    flags = check(S, rows)
+    return Case(rows, verdict(flags), flags, tuple(sc.steps), tuple(sc.symbols), length)
+
+
+PHASE9 = ("context", "frequency", "hit", "reread", "untaken")
+
+
+def phase9(S, sl: Slice) -> dict[str, dict]:
+    """REDTEAM's phase 9 interfaces (`note:network-accounting/20261024T0558Z-finding-redteam-v3`, "PHASE 9 RESULTS") as
+    `case`'s keywords, each the prover's run of `sl` with that interface chosen to lower its charge or its schedule:
+    ``context``, each decision coded at the context that makes the codeword shortest, the charge that length;
+    ``frequency``, each decision coded as near certain (2^16 − 1 to 1), the charge that length; ``hit``, the first
+    step's first candidate takes a 2-block prefix hit; ``reread``, step 2 leaves the decision head in place, so step 3
+    reads its decision again; ``untaken``, step 0 leaves the arrival head in place. ``pub``'s digest is the caller's
+    (the clear recompile's); in the first two the run's step rows are the honest ones too."""
+
+    def coded(ctxs):
+        n, syms = ((0, 0),) * EC, []
+        for c, b in zip(ctxs, sl.decisions):
+            _ok, f0, f1, n = AE.reference_kt(EC, ENW, n, 1, c, b)
+            syms.append((b, f0, f1))
+        return codeword(syms)
+
+    cheapest = min(itertools.product(range(EC), repeat=len(sl.decisions)), key=lambda c: (len(coded(c)), c))
+    certain = codeword([(b, 1, AE.MAX_TOTAL - 1) if b else (b, AE.MAX_TOTAL - 1, 1) for b in sl.decisions])
+    return {"context": {"seg": coded(cheapest), "charge": len(coded(cheapest))},
+            "frequency": {"seg": certain, "charge": len(certain)},
+            "hit": {"hits": {0: (2,) + (0,) * (S.W + S.A - 1)}},
+            "reread": {"consume": {2: (0, 0)}},
+            "untaken": {"consume": {0: (0, 0)}}}
 
 
 def words(bits: Sequence[int]) -> list[int]:

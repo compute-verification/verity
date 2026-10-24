@@ -93,7 +93,7 @@ A spec-level reference for network accounting's timing channel:
   is the coder's codeword. It is held symbol for symbol to `code.py` on the replay's decisions and on ENC-DERIVED's
   still-sent fields (`benchmarks/network_e2e/encodings/arith_vectors.py`), and it is in no proof-service Spec yet
   (`PROTOCOL.md`, "Advice v1");
-- the compile slice (`compile_slice`): `CompileSlice_v1`, a Boolean Definition with `case` its reference, composes
+- the compile slice (`compile_slice`): `CompileSlice_v1`, a Boolean Definition with `check` its reference, composes
   `ReplayLoad`, `ReplayStep_v1` and `ReplayAdvance` on shared wires, and the encoder over the scan's asks, for one
   window. It holds the coded length to the declared charge and the step rows' salted SHA-512 to the public digest. The
   cache counts are a stand-in held at 0 (`PROTOCOL.md`, "The compile slice"), and
