@@ -128,7 +128,12 @@ committing endpoint, the chain ran on a PROVE-PATH run of a declared workload as
 G-A's run of record on the endpoint's own advice: r20261024-111424-88c9 (d5e3b1055d, vy-nebius-2), the varied chain
 against vllm's Llama-3.2-1B serving run r20261024-094558-6d6a on vy-nebius-1:18083 (40 requests at 0.5/s, max_tokens
 up to 32, EOS 128001, 16 link-windows), report OK. honest accepted (597 tokens, 38 ending at max_tokens and 2 at EOS);
-late, extra and drop refused by their own codes; token accepted (pending IO-TIE). Its advice is 6d6a's Commit windows
+late, extra and drop refused by their own codes. Token, which the rehearsal's check accepted, is refused by the I/O tie
+in r20261024-142953-359c: NEG's `tie-run` on each member, with the sampled ids of 6d6a's requests that arrived in that
+member's link-windows, and #3566's `io_tie` merged into the tree for that run. The tie refused token by
+`IoTieWindow.content` at link-windows 0 and 1, the two its 23 changed ids fall in, and accepted honest (597 outputs
+placed, frames held on all 16 windows at both ends). The report re-made there with the tie folded in is OK, with token
+a negative. 88c9's advice is 6d6a's Commit windows
 w345-w375: 31 windows, 40 requests, 532 steps, every window opened, bound and rebuilt; 23,972 v0 bits, 4,021 derived
 (2,496 shaped, 334 forced). Its prove path is PROVE-PATH's Llama TP1 fixed workload (r20261024-072909-b53f's honest arm,
 r20261024-090358-218a's forged), labelled as such: 6d6a's Commit windows have no sealed replay bundle yet.
