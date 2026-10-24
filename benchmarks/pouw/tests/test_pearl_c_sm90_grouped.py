@@ -6,6 +6,7 @@ and retained records are those of each unit called alone through `PearlCDeviceRu
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -303,6 +304,28 @@ def test_the_vllm_call_runs_on_the_schedules_lanes_from_rotating_sets(schedule):
     assert len({ptr(j, x) for j in (0, 1) for x in PG.ROTATED}) == 2 * len(PG.ROTATED)
     assert [set(PPD._bytes(run.roots_buf[nb * i:nb * (i + 1)])) for i in range(3 * len(us))] == [
         {0x11 * (j + 1)} for j in (0, 1, 0) for _ in us]
+
+
+def test_grouped_checks_pass_diff_counts_what_is_committed_not_the_schedule(tmp_path):
+    """grouped_check's `_same` over a grouped call's retained pass under ``deferred-a`` and its units called alone under the
+    serial schedule: their manifests differ in the schedule they ran under alone, which it doesn't count, and a changed A
+    rows file it does."""
+    C = load("pearl_c_sm90_grouped_check", HERE / "grouped_check.py")
+    ws, counts, n, k = (1, 3), [3, 20], 128, 1024
+    x = torch.randn(sum(counts), k).to(torch.bfloat16)
+    run, weights = device_run(4, n, k, tmp_path / "grouped", "deferred-a")
+    PG.gemm_grouped(run, ws, x, counts)
+    alone, _ = device_run(4, n, k, tmp_path / "alone")
+    for u in G.units(counts, n, R.PD_MAX_ROWS):
+        alone.gemm(ws[u.pos], x[u.src:u.src + u.m], weights[ws[u.pos]], None)
+    run.end_pass()
+    alone.end_pass()
+    a, b = (json.loads((tmp_path / d / "manifest.json").read_text()) for d in ("alone", "grouped"))
+    assert [kk for kk in a if a[kk] != b.get(kk)] == ["schedule"]
+    assert C._same(tmp_path / "alone", tmp_path / "grouped") == []
+    rows = tmp_path / "grouped" / b["matmuls"][1]["rows"]["path"]
+    rows.write_bytes(bytes(c ^ 1 for c in rows.read_bytes()))
+    assert C._same(tmp_path / "alone", tmp_path / "grouped") == ["matmul 1 rows"]
 
 
 def test_the_vllm_call_runs_unsplit_on_a_cubin_without_pd_tree_g():

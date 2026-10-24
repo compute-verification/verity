@@ -40,9 +40,10 @@ SCHEDULES = ("serial", "deferred", "deferred-a")
 
 
 def _same(a: Path, b: Path) -> list[str]:
-    """Where two retained passes differ: their manifests less the run name, and every call's A rows file."""
+    """Where two retained passes differ: their manifests less the run name and the schedule the pass ran under (its lanes,
+    which commit nothing), and every call's A rows file."""
     ma, mb = (json.loads((p / "manifest.json").read_text()) for p in (a, b))
-    out = [k for k in sorted(set(ma) | set(mb)) if k != "run" and ma.get(k) != mb.get(k)]
+    out = [k for k in sorted(set(ma) | set(mb)) if k not in ("run", "schedule") and ma.get(k) != mb.get(k)]
     for x, y in zip(ma["matmuls"], mb["matmuls"]):
         if (a / x["rows"]["path"]).read_bytes() != (b / y["rows"]["path"]).read_bytes():
             out.append(f"matmul {x['index']} rows")
