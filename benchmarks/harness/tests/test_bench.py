@@ -785,35 +785,6 @@ def test_a_served_variant_times_a_builtin_engine_in_its_own_execution_under_an_e
     assert runner.os.environ["TORCHINDUCTOR_CACHE_DIR"] == "/tmp/verity_bench_inductor_x"
 
 
-def test_pearl_cs_served_row_is_its_protocol_row_beside_the_compiled_engine():
-    """`llama31-8b-1gpu-pouw-protocol-served` measures Pearl-C over the compiled engine in one run, so its Pearl-C arm
-    and preset are the protocol row's and every arm's engine shares its step budget, sequence bound and KV pool."""
-
-    from verity_bench.vllm import runner
-
-    spec = resolve_spec("llama31-8b-1gpu-pouw-protocol-served")
-    protocol = resolve_spec("llama31-8b-1gpu-pouw-protocol")
-    pearl = "pouw:pearl-c-sm120-v1-h3"
-    assert spec.arm_settings[pearl] == protocol.arm_settings[pearl]
-    assert (spec.setup, spec.sweep, spec.reps, spec.eager) == (protocol.setup, protocol.sweep, protocol.reps, True)
-    assert {**protocol.preset.engine_settings, "max_num_seqs": 128} == spec.preset.engine_settings
-    arms = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
-    assert [(a.id, a.precision, a.control, a.execution) for a in arms] == [
-        ("stock-fp8", "fp8", None, None),
-        (pearl, "bfloat16", None, None),
-        ("stock-fp8@compiled", "fp8", None, "compiled"),
-    ]
-    preset, eager = served(spec.preset, spec.eager)
-    for resident in (True, False):
-        built = [runner.engine_args(p, a.precision or p.precision, resident=resident, eager=e)
-                 for a in arms for p, e in [runner.arm_execution(a, preset, eager)]]
-        assert [(b["enforce_eager"], b.get("execution")) for b in built] == [(True, None), (True, None), (False, "compiled")]
-        shared = ("max_num_batched_tokens", "max_num_seqs", "max_model_len", "gpu_memory_utilization",
-                  "kv_cache_memory_bytes")
-        assert len({tuple(b[k] for k in shared) for b in built}) == 1
-        assert built[0]["kv_cache_memory_bytes"] == 8 << 30 and built[0]["max_num_batched_tokens"] == 4096
-
-
 def test_a_served_variants_arm_settings_take_only_its_control(tmp_path):
     source = (SPEC_ROOT / "llama31-8b-fp8-1gpu-compiled.toml").read_text()
     path = tmp_path / "spec.toml"
@@ -955,6 +926,35 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     assert sorted({(c["n"], c["m"]) for c in exact["checks"]}) == [(64, 16), (64, 64), (128, 16), (128, 64)]
     wrong = runner._pearl_c_gate(Run(lambda x, W: torch.zeros(x.shape[0], W.shape[0], dtype=torch.bfloat16)))
     assert not wrong["passed"] and wrong["provided"]
+
+
+def test_pearl_cs_served_row_is_its_protocol_row_beside_the_compiled_engine():
+    """`llama31-8b-1gpu-pouw-protocol-served` measures Pearl-C over the compiled engine in one run, so its Pearl-C arm
+    and preset are the protocol row's and every arm's engine shares its step budget, sequence bound and KV pool."""
+
+    from verity_bench.vllm import runner
+
+    spec = resolve_spec("llama31-8b-1gpu-pouw-protocol-served")
+    protocol = resolve_spec("llama31-8b-1gpu-pouw-protocol")
+    pearl = "pouw:pearl-c-sm120-v1-h3"
+    assert spec.arm_settings[pearl] == protocol.arm_settings[pearl]
+    assert (spec.setup, spec.sweep, spec.reps, spec.eager) == (protocol.setup, protocol.sweep, protocol.reps, True)
+    assert {**protocol.preset.engine_settings, "max_num_seqs": 128} == spec.preset.engine_settings
+    arms = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
+    assert [(a.id, a.precision, a.control, a.execution) for a in arms] == [
+        ("stock-fp8", "fp8", None, None),
+        (pearl, "bfloat16", None, None),
+        ("stock-fp8@compiled", "fp8", None, "compiled"),
+    ]
+    preset, eager = served(spec.preset, spec.eager)
+    for resident in (True, False):
+        built = [runner.engine_args(p, a.precision or p.precision, resident=resident, eager=e)
+                 for a in arms for p, e in [runner.arm_execution(a, preset, eager)]]
+        assert [(b["enforce_eager"], b.get("execution")) for b in built] == [(True, None), (True, None), (False, "compiled")]
+        shared = ("max_num_batched_tokens", "max_num_seqs", "max_model_len", "gpu_memory_utilization",
+                  "kv_cache_memory_bytes")
+        assert len({tuple(b[k] for k in shared) for b in built}) == 1
+        assert built[0]["kv_cache_memory_bytes"] == 8 << 30 and built[0]["max_num_batched_tokens"] == 4096
 
 
 def test_an_h1_arm_is_gated_against_exact_int8_and_each_run_gets_a_window_the_adapter_accepts(monkeypatch):
