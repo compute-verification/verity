@@ -24,8 +24,10 @@ draw `c`'s, `W + c`.
   agree below `W + c`, wherever two sessions have drawn draw `c`, each window of it has the same record and the same
   openable receipts.
 
-At `g = 1` each is the statement it generalizes: `Shared.run 1` is `Session.run` (`RemoteAudit.Shared.run_one`), `c`
-is the window, and draw `c` is window `c` alone (`Properties.Proofs.RemoteAudit.Shared`'s `*_one`).
+At `g = 1`, `Shared.run 1` is `Session.run` (`RemoteAudit.Shared.run_one`), `c` is the window, and draw `c` is window
+`c` alone (`drawWindows_one`, `drawLengths_one`): `OpeningsUnreadUntilDrawn` and `RecordKeptAfterDraw` give today's, and
+`ReleaseOrder 1` and `LiveUnder 1` are today's (`Properties.Proofs.RemoteAudit.Shared`'s `*_one`). Today's
+`DrawIsSubset` and `AcceptDrawsOpenable` are on `draws` and `verifyWindow` alone; these state them for a session's draw.
 -/
 
 open RemoteAudit

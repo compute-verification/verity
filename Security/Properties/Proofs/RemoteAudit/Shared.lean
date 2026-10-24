@@ -20,7 +20,8 @@ its record (`sdraw_keeps`), and with `t` undrawn so is its draw's first window (
 `OpeningsUnreadUntilDrawn` and `ReleaseOrder` read. It needs `1 ≤ g`: at `g = 0` every window is draw 0, and coins that
 agree below `W` leave every window's openings coin free.
 
-`*_one`: each statement at `g = 1` is today's (`Shared.run 1` is `Session.run`, `RemoteAudit.Shared.run_one`).
+`*_one`: at `g = 1` the session statements are today's (`Shared.run 1` is `Session.run`, `RemoteAudit.Shared.run_one`).
+`AcceptDrawsOpenable` is open.
 -/
 
 open RemoteAudit RemoteAudit.Session
