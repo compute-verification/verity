@@ -133,6 +133,7 @@ from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.pouw.circuit import live_reads as LR
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.commitments.indexed import RangeIndexedDomain
@@ -142,7 +143,8 @@ MODULES = ["q_proj", "k_proj", "o_proj", "down_proj", "attn·out"]
 
 
 def _hex(rng: random.Random) -> str:
-    return rng.randbytes(64).hex()
+    # a digest of one short draw: 64 drawn bytes a root made a period's examples overrun Hypothesis's entropy budget
+    return hashlib.sha512(rng.randbytes(8)).hexdigest()
 
 
 def _row(rng: random.Random, i: int) -> dict:
@@ -191,7 +193,7 @@ REQUEST_WORDS = 10
 def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: str | Callable[[str | None], str],
            other: str | None = None, calls: list[int] | None = None, prefix: str | None = None,
            weights: list[dict] | None = None, off: str | None = None, sid: str = "s-1", m: int = 1,
-           requests: str | None = None) -> tuple[list[dict], list[dict], dict[str, dict]]:
+           requests: str | None = None, t: int | None = None) -> tuple[list[dict], list[dict], dict[str, dict]]:
     """A window's registered entries under its registration (the circuit whose descriptor's SHA-512 is `program`, and the
     window's open root `window`, or `window` of round 0's registered input-ids table's root when it is a function, since
     that root is inside the open root), each value under `prefix` (a random ``h1/w-<i>/`` when None), its round log over
@@ -209,8 +211,11 @@ def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: 
     (``program``) or no window root nor session (``unbound``, main's h1_prove form). `off` (`AROW_NAMES`') registers an
     A table or an ids table over other rows than its true ones, an A table one call short (its true rows too), or no ids
     table of a round, and ``ids0-other-session`` binds ids@0's domain to another session. With `calls` and round 0's
-    request table's root `requests`, it registers (at random, always under `REQ0_NAMES`) the request table
-    ``…/requests@0`` at that root, its domain binding the session as ids@0's does, which `REQ0_NAMES` break."""
+    request table's root `requests`, it registers (at random, always under `REQ0_NAMES` or with `t`) the request table
+    ``…/requests@0`` at that root, its domain binding the session as ids@0's does, which `REQ0_NAMES` break. With `t`
+    (the period's T) its request table has T rows, and each round s registers its slot table ``…/slots@<s>`` (T leaves
+    of `live_reads.SLOT_WORDS`, committed whole by round s, binding the open root), the tables the live units read,
+    which `LIVE_TABLE_NAMES` break."""
     prefix = f"h1/w-{rng.randrange(100)}/" if prefix is None else prefix
     values, entries, true = {}, [], {}
     prog = _hex(rng) if other == "program" else program
@@ -271,12 +276,21 @@ def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: 
         entries.append({**zy, "domain": G.domain(prog, zy["value"], 3, zy["leaves"], window=own).domain_id.hex()})
     for s in range(1, steps if calls else 0):
         a(f"{prefix}ids@{s}", IDS_WORDS, leaves, s)
-    if calls and requests is not None and (off in REQ0_NAMES or rng.random() < 0.5):
+    if calls and t is not None:
+        odd = rng.randrange(steps)
+        for s in range(steps):
+            if not (s == odd and off == "live-no-slots"):
+                a(LR.table(prefix, LR.SLOTS, s), LR.SLOT_WORDS,
+                  t + rng.choice([-1, 1]) if s == odd and off == "live-slots-rows" and t > 1 else
+                  t + 1 if s == odd and off == "live-slots-rows" else t, s)
+    if (calls and requests is not None and off != "live-no-requests"
+            and (off in REQ0_NAMES or t is not None or rng.random() < 0.5)):
+        n = leaves if t is None else t + 1 if off == "live-requests-rows" else t
         v = f"x/{prefix}requests@0" if off == "req0-other-prefix" else f"{prefix}requests@0"
-        dom = (G.domain(prog, v, REQUEST_WORDS, leaves, window=own) if off == "req0-window" else
-               G.domain(prog, v, REQUEST_WORDS, leaves, session=f"{sid}-other" if off == "req0-other-session"
+        dom = (G.domain(prog, v, REQUEST_WORDS, n, window=own) if off == "req0-window" else
+               G.domain(prog, v, REQUEST_WORDS, n, session=f"{sid}-other" if off == "req0-other-session"
                         else sid if off == "ids0-other-session" else session))
-        e = {"value": v, "root": _hex(rng) if off == "req0-root-off" else requests, "leaves": leaves,
+        e = {"value": v, "root": _hex(rng) if off == "req0-root-off" else requests, "leaves": n,
              "words": REQUEST_WORDS, "domain": dom.domain_id.hex()}
         entries += [e, dict(e)] if off == "req0-twice" else [e]
     if rng.random() < 0.5:
@@ -370,7 +384,7 @@ def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = N
                   leaf: int = rc.RECORD_LEAF, ks: list[int] | None = None, program: str | None = None,
                   other: str | None = None, calls: list[int] | None = None, prefix: str | None = None,
                   weights: list[dict] | None = None, off: str | None = None, rounds: int | None = None, m: int = 1,
-                  served: list | None = None) -> tuple[dict, rc.Session]:
+                  served: list | None = None, t: int | None = None) -> tuple[dict, rc.Session]:
     """An honest served window of `rows` manifest rows (one to five when None), each call's served rows ``served[i]``
     (`credit.SERVED_ROWS`; `MISSING` drops it) when given, whose draw coin opened after its draw root
     (none for ``no-draw``), its session `sid` signing its record at `leaf`. Its round log and entries are `_a_log`'s at
@@ -380,7 +394,8 @@ def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = N
     when None); with `weights`, its open root is `salt.window_open_root` of their
     `weights_root` (`fold`), round 0's ``requests`` and `sid`, else a random one. Round 0's ``requests`` is
     `credit.requests_root` of its ``request_table`` (a random root) and its input-ids table's (`IDS0_NAMES` break
-    it), or the bare table's when it registers none. Each round's root is the one the
+    it), or the bare table's when it registers none; with `t` it registers the live units' tables (`_a_log`). Each
+    round's root is the one the
     challenger received and its coin the one opened after it; under ``never-received`` the challenger received other
     roots, and the log carries their coins as if opened after its own, its draw root over it (the composed check's
     counterexample: `_credited` and `_a_link` accept it, `core_check.rounds` doesn't)."""
@@ -400,7 +415,7 @@ def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = N
 
     ks = rng.sample([64, 4096, 14336], rng.randint(1, 2)) if ks is None else ks
     entries, log, true = _a_log(rng, rounds, ks, _hex(rng) if program is None else program, open_root, other,
-                                calls, prefix, weights, off, sid, m, table)
+                                calls, prefix, weights, off, sid, m, table, t)
     window = opened["window"]
     log[0]["requests"], log[0]["request_table"] = opened["requests"], table
     d = {"salt": _hex(rng), "calls": [_row(rng, i) for i in range(rng.randint(1, 5) if rows is None else rows)],
@@ -1033,6 +1048,183 @@ def _rehome(weights: list[dict], program: str, prefix: str) -> list[dict]:
     return out
 
 
+#: each way the tables a window's live units read are not its registration's, made before its draw: one round's slot
+#: table unregistered (``live-no-slots``) or of other than T rows (``live-slots-rows``), and round 0's request table
+#: unregistered (``live-no-requests``) or of other than T rows (``live-requests-rows``)
+LIVE_TABLE_NAMES = ["live-no-slots", "live-slots-rows", "live-no-requests", "live-requests-rows"]
+#: each way a window's live evidence does not prove each step's served rows: its form, a descriptor that is no canonical
+#: descriptor (``live-descriptor-form``), no live Program or one whose units are not S calls of its unit
+#: (``live-body``), a live Program at another T, S or PREFIX, and its rounds' proof outcomes: one missing, twice, past the
+#: rounds, rejected, verified against another circuit, opening ``m@<s>`` at another m than the manifest's m_s
+#: (``live-m-other``), ``round@<s>`` at another round than s (``live-round-other``), another round's slot table
+#: (``live-slots-other``) or other ok rows than ``live-ok`` (``live-ok-off``, a unit that computed 0), and their form
+LIVE_NAMES = [*LIVE_TABLE_NAMES, "live-form", "live-descriptor-form", "live-not-live", "live-body", "live-t-other",
+              "live-s-other", "live-prefix", "live-missing", "live-twice", "live-past", "live-failed",
+              "live-other-circuit", "live-m-other", "live-round-other", "live-slots-other", "live-ok-off", "live-proofs-form"]
+
+
+def live_program(t: int, steps: int, prefix: str) -> dict:
+    """A live Program's descriptor (`circuit.live.program`'s encoding as far as `credit.live_of` reads it): its program
+    function's record T, S and PREFIX, its unit ``PouwLiveSlots_v1{T=<T>}`` (a composite bound to T alone) and its
+    root's input batches (S·T slot words, T headers, S m's, S rounds, as bits) then S calls of the unit, round s's unit
+    s."""
+    fn = f"{Cr.LIVE_FN}{{T={t},S={steps},PREFIX={Cr._canonical(prefix)}}}"
+    unit, root = f"{Cr.LIVE_UNIT}{{T={t}}}", f"Root[{Cr.LIVE_FN}]_v1"
+    nodes = [{"form": "batch", "fn": 0, "n": n} for n in (steps * t * 32, t * 160, steps * 32, steps * 32)]
+    nodes += [{"form": "call", "fn": 1} for _s in range(steps)]
+    return {"schema": Cr.SCHEMA, "callees": ["Input1_v1", unit], "program_fn": fn, "root": root,
+            "definitions": {"Input1_v1": {"form": "primitive", "id": "Input1_v1"},
+                            root: {"form": "composite", "id": root, "bindings": {},
+                                   "body": {"nodes": nodes, "params": []}},
+                            unit: {"form": "composite", "id": Cr.LIVE_UNIT, "bindings": {"T": t},
+                                   "body": {"nodes": [], "params": []}}}}
+
+
+def live_hex(p: dict) -> str:
+    return Cr._canonical(p).encode().hex()
+
+
+def _live_ms(d: dict, steps: int) -> list[int]:
+    """Each step's served rows m_s as the manifest states them (0 for a malformed one, which an earlier step refuses)."""
+    per = len(d["calls"]) // steps
+    ms = [d["calls"][s * per].get(Cr.SERVED_ROWS) for s in range(steps)]
+    return [m if type(m) is int and 0 <= m < 1 << 32 else 0 for m in ms]
+
+
+def live_proof(rng: random.Random, d: dict, desc: str, s: int, m: int, prefix: str | None = None) -> dict:
+    """Round s's accepted live@<s> proof outcome, as the verifier of record gives it on the ``--registered`` file
+    `live_reads.reads_file` builds for the window `d` of PREFIX `prefix` (its descriptor's when None) at served rows
+    `m`: each port at its value and root (a random root for a table the window doesn't register)."""
+    steps, t = len(d["rounds"]), d["rows"]
+    prefix = Cr._prefix(bytes.fromhex(d["descriptor"])) if prefix is None else prefix
+    program = hashlib.sha512(bytes.fromhex(d["descriptor"])).hexdigest()
+    roots = {e["value"]: e["root"] for e in d["entries"] if isinstance(e, dict) and "value" in e}
+    for v in [LR.table(prefix, LR.SLOTS, x) for x in range(steps)] + [LR.table(prefix, LR.REQUESTS)]:
+        if v not in roots:
+            roots[v] = _hex(rng)
+    reg = LR.reads_file(program, t, steps, s, roots, d["window"]["root"], d["sid"], m, prefix)
+    return {"unit": s, "verdict": "accept", "program": hashlib.sha512(bytes.fromhex(desc)).hexdigest(),
+            "registered": {port: {"value": x["value"], "root": x["root"]} for port, x in reg["ports"].items()}}
+
+
+def live_evidence(rng: random.Random, d: dict, prefix: str) -> dict:
+    """The window `d`'s live evidence (`credit.LIVE_KEYS`): its live Program at its period's T, its S rounds and its
+    circuit's PREFIX `prefix` (given, since a broken descriptor's names none), and each round's accepted proof outcome
+    (`live_proof`) at its step's m_s, in any order."""
+    steps = len(d["rounds"])
+    desc = live_hex(live_program(d["rows"], steps, prefix))
+    proofs = [live_proof(rng, d, desc, s, m, prefix) for s, m in enumerate(_live_ms(d, steps))]
+    rng.shuffle(proofs)
+    return {"descriptor": desc, "proofs": proofs}
+
+
+def _break_live_desc(rng: random.Random, d: dict, name: str) -> str:
+    t, steps, prefix = d["rows"], len(d["rounds"]), Cr._prefix(bytes.fromhex(d["descriptor"]))
+    p = live_program(t, steps, prefix)
+    unit, root = p["callees"][1], p["root"]
+    match name:
+        case "live-descriptor-form":
+            return rng.choice([json.dumps(p).encode().hex(), live_hex({**p, "schema": "verity-ir/descriptor/v0"}),
+                               live_hex({k: v for k, v in p.items() if k != "callees"}), b"\xff\xfe".hex(),
+                               live_hex([p])])
+        case "live-not-live":
+            pre = Cr._canonical(prefix)
+            p["program_fn"] = rng.choice([f"{Cr.LIVE_FN}{{T=0,S={steps},PREFIX={pre}}}",
+                                          f"{Cr.LIVE_FN}{{T={t},S={steps}}}",
+                                          f"{Cr.LIVE_FN}{{T={t},S={steps},PREFIX=5}}",
+                                          f"{Cr.LIVE_FN}{{S={steps},T={t},PREFIX={pre}}}",
+                                          f"{Cr.LIVE_FN}{{T={t},S=0{steps},PREFIX={pre}}}",
+                                          f"PouwLiveWindow_v2{{T={t},S={steps},PREFIX={pre}}}"])
+            if rng.random() < 0.3:
+                return d["descriptor"]
+        case "live-body":
+            nodes = p["definitions"][root]["body"]["nodes"]
+            match rng.randrange(6):
+                case 0:
+                    p["definitions"][unit]["bindings"] = {"T": t, "N": 1}
+                case 1:
+                    p["definitions"][unit]["bindings"] = {"T": t + 1}
+                case 2:
+                    p["definitions"][unit]["id"] = "PouwLiveSlots_v2"
+                case 3:
+                    nodes.append({"form": "call", "fn": 1}) if rng.random() < 0.5 else nodes.pop()
+                case 4:
+                    p["callees"].append("And2_v1")
+                    p["definitions"]["And2_v1"] = {"form": "primitive", "id": "And2_v1"}
+                    nodes.append({"form": "call", "fn": 2})
+                case _:
+                    del p["definitions"][unit]
+        case "live-t-other":
+            p = live_program(rng.choice([x for x in (t - 1, t + 1, 2 * t) if x >= 1 and x != t]), steps, prefix)
+        case "live-s-other":
+            p = live_program(t, rng.choice([x for x in (steps - 1, steps + 1) if x >= 1]), prefix)
+        case "live-prefix":
+            p = live_program(t, steps, rng.choice([f"other-{rng.randrange(100)}/", prefix + "x/", ""]))
+    return live_hex(p)
+
+
+def _mutate_live(rng: random.Random, d: dict, name: str) -> None:
+    live, steps = d["live"], len(d["rounds"])
+    proofs = live["proofs"]
+    match name:
+        case "live-form":
+            h = live["descriptor"]
+            d["live"] = rng.choice([None, [live], {**live, "statements": []}, {"descriptor": h},
+                                    {**live, "descriptor": h.upper()}, {**live, "descriptor": h[:-1]},
+                                    {**live, "descriptor": 5}])
+        case "live-descriptor-form" | "live-not-live" | "live-body" | "live-t-other" | "live-s-other" | "live-prefix":
+            live["descriptor"] = _break_live_desc(rng, d, name)
+        case "live-missing":
+            del proofs[rng.randrange(len(proofs))]
+        case "live-twice":
+            proofs.insert(rng.randrange(len(proofs) + 1), json.loads(json.dumps(rng.choice(proofs))))
+        case "live-past":
+            proofs.append({**rng.choice(proofs), "unit": steps + rng.randrange(3)})
+        case "live-failed":
+            rng.choice(proofs)["verdict"] = "reject"
+        case "live-other-circuit":
+            rng.choice(proofs)["program"] = _hex(rng)
+        case "live-m-other":
+            i = rng.randrange(len(proofs))
+            s = proofs[i]["unit"]
+            m = _live_ms(d, steps)[s]
+            other = rng.choice([x for x in (m - 1, m + 1, rng.randint(0, d["rows"])) if x >= 0 and x != m])
+            proofs[i] = live_proof(rng, d, live["descriptor"], s, other)
+        case "live-round-other":
+            p = rng.choice(proofs)
+            raw = bytes.fromhex(d["descriptor"])
+            x = rng.choice([y for y in (p["unit"] + 1, p["unit"] - 1, rng.randrange(1 << 16)) if y >= 0 and y != p["unit"]])
+            reg = LR.round_table(hashlib.sha512(raw).hexdigest(), Cr._prefix(raw), d["window"]["root"], x)[2]
+            p["registered"]["s"] = {"value": rng.choice([reg.value, LR.table(Cr._prefix(raw), LR.ROUND_ROWS, p["unit"])]),
+                                    "root": reg.root.hex()}
+        case "live-slots-other":
+            p = rng.choice(proofs)
+            ports = [port for port in p["registered"] if port.startswith("slot_")]
+            prefix = Cr._prefix(bytes.fromhex(d["descriptor"]))
+            others = [e for e in d["entries"] if e["value"].startswith(f"{prefix}{LR.SLOTS}@")
+                      and e["value"] != p["registered"][ports[0]]["value"]]
+            for port in rng.sample(ports, rng.randint(1, len(ports))):
+                p["registered"][port] = ({"value": others[0]["value"], "root": others[0]["root"]} if others
+                                         else {**p["registered"][port], "root": _hex(rng)})
+        case "live-ok-off":
+            rng.choice(proofs)["registered"][LR.OK_PORT]["root"] = _hex(rng)
+        case "live-proofs-form":
+            p = rng.choice(proofs)
+            match rng.randrange(5):
+                case 0:
+                    live["proofs"] = rng.choice([None, {"0": p}, 5])
+                case 1:
+                    del p["registered"]
+                case 2:
+                    p["verdict"] = "maybe"
+                case 3:
+                    p["unit"] = rng.choice([-1, True, "0", None])
+                case _:
+                    p["registered"][LR.OK_PORT]["root"] = "zz"
+        case _:
+            raise ValueError(name)
+
+
 def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", leaf: int = rc.RECORD_LEAF,
                   lay: dict | None = None, desc: str | None = None, prefix: str | None = None,
                   weights: list[dict] | None = None, t: int | None = None) -> tuple[dict, rc.Session]:
@@ -1040,7 +1232,9 @@ def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", le
     when None), its weights `weights` (`weights_of` when None, its open root over them, ``d["weights"]``), a K it can be
     drawn at, its period's table rows T `t` (``rows``, `table_rows` when None) and each step's served rows at most T,
     one call per manifest row, and an accepted proof of each unit its draw coin
-    draws at that K. Its A rows are its rounds' A tables of each K, as main's served form registers them
+    draws at that K, and its live evidence (``live``, `live_evidence`): its live Program and each round's accepted
+    live@<s> proof outcome at its step's m_s. Its A rows are its rounds' A tables of each K, as main's served form
+    registers them
     (`h1window.table`), beside each round's input-ids table, over rounds that call each linear once (one round under
     `TWO_CALLS`), and its Commit record registers each of them (`commit_record`); under `AROW_NAMES`
     one of them is not the Commit's. ``layout`` is the layout, which the verifier
@@ -1060,10 +1254,12 @@ def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", le
     d, s = honest_credit(rng, name if name in [*CREDIT_NAMES, "never-received"] else "honest", rows=len(lay["calls"]),
                          sid=sid, leaf=leaf, ks=sorted(set(k_of.values())), program=program, other=other,
                          calls=[k_of[lin] for lin, _blk in lay["calls"]], prefix=prefix, weights=weights,
-                         off=name if name in [*AROW_NAMES, *IDS0_NAMES, *REQ0_NAMES] else None, m=lay["m"],
-                         rounds=steps, served=served_rows(rng, t, len(lins), steps, name))
+                         off=name if name in [*AROW_NAMES, *IDS0_NAMES, *REQ0_NAMES, *LIVE_TABLE_NAMES] else None,
+                         m=lay["m"], rounds=steps, served=served_rows(rng, t, len(lins), steps, name), t=t)
     d["layout"], d["k"], d["descriptor"], d["weights"], d["rows"] = lay, _k(rng, lay), desc, weights, t
     d["proofs"] = _window_proofs(rng, d, _served_units(d))
+    d["sid"] = sid
+    d["live"] = live_evidence(rng, d, prefix)
     return d, s
 
 
@@ -1094,8 +1290,11 @@ def window_instance(rng: random.Random, name: str = "honest", lay: dict | None =
     match name:
         case "honest":
             pass
-        case _ if name in AROW_NAMES or name in IDS0_NAMES or name in REQ0_NAMES or name in ROWS_NAMES:
+        case _ if (name in AROW_NAMES or name in IDS0_NAMES or name in REQ0_NAMES or name in ROWS_NAMES
+                   or name in LIVE_TABLE_NAMES):
             pass
+        case _ if name in LIVE_NAMES:
+            _mutate_live(rng, d, name)
         case "commit-unbound":
             rec = json.loads(bytes.fromhex(d["commit"]))
             rec["registered"].append({"value": "sampled-ids/0", "root": _hex(rng), "leaves": 1, "words": 2,
@@ -1222,11 +1421,12 @@ REGISTRATION_NAMES = ["other-registration", "a-call-unbound", "proof-other-regis
 WINDOW_NAMES = ["manifest-count", "chosen", "failed", "missing", "descriptor-hex", *DESC_NAMES,
                 "credit-changed", "credit-no-draw", "credit-forged-ledger", "credit-branch-pin", "k-form", "k-past-units",
                 "never-received", "round-coin", "a-untied", "no-a", *REGISTRATION_NAMES, *WINDOW_WEIGHTS_NAMES,
-                *AROW_NAMES, *IDS0_NAMES, *REQ0_NAMES, "commit-unbound", "credit-commit-form", *ROWS_NAMES, "t-other", "t-form"]
+                *AROW_NAMES, *IDS0_NAMES, *REQ0_NAMES, "commit-unbound", "credit-commit-form", *ROWS_NAMES, "t-other",
+                "t-form", *LIVE_NAMES]
 WINDOW_KEYS = ("key", "ledger", "pins", "main", *Cr.PROVED_KEYS, "k", "rows")
 #: `credit.window`'s arguments, in order
 WINDOW_ARGS = ("key", "ledger", "pins", "main", "window", "session", "salt", "calls", "served", "commit", "rounds",
-               "draw", "descriptor", "entries", "proofs", "k", "rows")
+               "draw", "descriptor", "entries", "proofs", "live", "k", "rows")
 
 
 def window_args(d: dict) -> tuple:
@@ -1392,8 +1592,14 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
             windows[i]["proofs"] = _mutate_proofs(windows[i]["proofs"], rng, rng.choice(["failed", "missing"]), [])
         case "proof-other-registration":
             _other_root(rng, windows[i]["proofs"])
+        case "live-refused":
+            proofs = windows[i]["live"]["proofs"]
+            if rng.random() < 0.5:
+                del proofs[rng.randrange(len(proofs))]
+            else:
+                rng.choice(proofs)["verdict"] = "reject"
         case "windows-form":
-            drop = rng.choice(["proofs", "descriptor"])
+            drop = rng.choice(["proofs", "descriptor", "live"])
             windows = rng.choice([None, {"0": windows[0]}, windows[:i] + [5] + windows[i + 1:],
                                   windows[:i] + [{k: v for k, v in windows[i].items() if k != drop}]
                                   + windows[i + 1:]])
@@ -1409,7 +1615,7 @@ PERIOD_NAMES = ["no-close", "incomplete", "missing", "order", "extra", "foreign"
                 "k-form", "k-past-units", "other-k", "no-rows", "t-form", "t-other", "alt-layout", "bad-circuit", "tile-k",
                 "never-received",
                 "proof-other-registration", "branch-pin", "no-weights", "weights-form", *MODEL_NAMES, "other-sw",
-                "zero-codes", "stale-pin"]
+                "zero-codes", "live-refused", "stale-pin"]
 PERIOD_KEYS = ("key", "ledger", "pins", "main", "name", "windows")
 
 
