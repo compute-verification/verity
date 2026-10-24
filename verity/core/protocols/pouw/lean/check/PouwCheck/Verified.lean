@@ -13,9 +13,9 @@ circuit file and its public file, and its sessions' directories), never a verdic
 
 * with no answers (`runs` null), it names each verifier run (`asks`): in statement order, up to the first statement a
   check before the verifier refuses, the statement's index, the circuit file's SHA-512 the period's open committed for
-  its call's K (`CIRCUIT_FILES`, `{k<K>: SHA-512}`), the call's `--registered` file (`Credit.registeredFile`, at the
-  roots the window's entries register, its open root, its rounds and its Program salt) and the partition object
-  (`Credit.partitionOf`). The caller runs the verifier on exactly those inputs, against the window's descriptor;
+  its call's K (`CIRCUIT_FILES`, `{k<K>: SHA-512, live: SHA-512}`), the call's `--registered` file
+  (`Credit.registeredFile`, at the roots the window's entries register, its open root, its rounds and its Program salt)
+  and the partition object (`Credit.partitionOf`). The caller runs the verifier on exactly those inputs, against the window's descriptor;
 * with the answers (`runs`, one a run in that order, as far as the caller ran them), it judges them (`judge`): a
   verifier that could not run or refused the statement refuses the window (`proof`, or the verifier's code), a session it
   rejected refuses the window whole (`failed`: no partial credit, and no retry), a session that opened its call's public
@@ -41,12 +41,13 @@ def STATEMENTS_FORM : String :=
   "window, the paths of its circuit file and its public file, and its sessions' directories (at least " ++
   "one): the window carries each call's proof files, and credit verifies them itself, never a verdict"
 
-/-- The period-open's field holding each K's template's circuit file's SHA-512, `{k<K>: SHA-512}`. -/
+/-- The period-open's field holding each K's template's circuit file's SHA-512 and the live Program's template's,
+`{k<K>: SHA-512, live: SHA-512}`. -/
 def CIRCUIT_FILES : String := "circuit_files"
 
 def FILES_FORM : String :=
-  s!"the committed circuit files are not \{k<K>: SHA-512} (the period-open's {CIRCUIT_FILES}, each digest " ++
-  "128 lowercase hex)"
+  s!"the committed circuit files are not \{k<K>: SHA-512, live: SHA-512} (the period-open's " ++
+  s!"{CIRCUIT_FILES}, each digest 128 lowercase hex)"
 
 def noStatementFiles (k : Nat) : String :=
   s!"the period's open commits no circuit file for K = {k}'s template ({CIRCUIT_FILES} k{k}, the SHA-512 of the " ++
