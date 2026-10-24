@@ -941,9 +941,9 @@ class Run:
         """`from M import n` written in a string or a document: each name to the module it now lives in."""
         def fix(m: re.Match) -> str:
             mod = m.group("m")
-            if not self.L.renamed_prefix(mod):
-                return m.group(0)
             items = [x.strip() for x in m.group("n").split(",")]
+            if not any(self.L.renamed_prefix(n) for n in (mod, *(f"{mod}.{it.partition(' as ')[0].strip()}" for it in items))):
+                return m.group(0)
             groups: dict[str, list[str]] = {}
             for it in items:
                 name, _, alias = it.partition(" as ")

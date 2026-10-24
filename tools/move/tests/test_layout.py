@@ -163,10 +163,12 @@ def test_a_relative_path_through_a_moved_directory_is_normalized_though_neither_
 def test_a_subpackage_renamed_under_the_same_parent_is_renamed_where_it_is_imported_from_that_parent(tmp_path):
     """`from pkg import old as O`, where `pkg.old` becomes `pkg.new`: the statement's module stays `pkg`, only the imported
     name changes, and an unchanged module is no reason to leave the statement as it was (the vLLM move left 30 such
-    `from verity_vllm import protocol_options as PO` lines naming a package that no longer exists)."""
+    `from verity_vllm import protocol_options as PO` lines, and one in a script's string, naming a package that no longer
+    exists)."""
     r = tmp_path / "repo"
     files = {"pkg/__init__.py": "", "pkg/old/__init__.py": "X = 1\n", "pkg/keep.py": "Y = 2\n",
              "use.py": "from pkg import old as O\nfrom pkg import keep, old\nfrom pkg import keep as K\n",
+             "run.py": 'SCRIPT = """\nfrom pkg import old as O\nfrom pkg import keep\n"""\n',
              "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
     for p, t in files.items():
         (r / p).parent.mkdir(parents=True, exist_ok=True)
@@ -179,6 +181,7 @@ def test_a_subpackage_renamed_under_the_same_parent_is_renamed_where_it_is_impor
     subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml"), "--no-lock"], check=True,
                    capture_output=True)
     assert (r / "use.py").read_text() == "from pkg import new as O\nfrom pkg import keep, new as old\nfrom pkg import keep as K\n"
+    assert (r / "run.py").read_text() == 'SCRIPT = """\nfrom pkg import new as O\nfrom pkg import keep\n"""\n', "and in a string"
 
 
 def test_rust_literals_spans_strings_and_skips_comments_chars_and_lifetimes():
