@@ -19,10 +19,10 @@ the record.  In the statements' terms, with b a block's bytes and every rate in 
   time-held is `Σ·(N − S) − 2L·(X·(Σ + 2L) + B) − fill` block-ns over Σ, where `fill` spreads W over the groups at
   v_g = (s_(g+1) − s_g)/n_g (L/n_C in C), highest first, at most n_g·N in group g.
 
-The memory line counts registered blocks only.  δ is the statements' error: the record's δ (δc), 2^-slack_log2 a pass
-(the allowance for `PooledDraw`'s draw terms: Σk_t/2^64 over the windows' k_t draws, and the PRFs' advantages
-Σadv_t), the coin commitment's
-hiding terms (`hiding`) and, under sketch-sha512, `timing.sketch_failure` over the session (δs)."""
+The memory line counts registered blocks only.  δ is the statements' error, term for term: the record's δ (δc), the
+draw's terms (`draw`: `PooledDraw`'s rejections Σ_t s/2^64 and the windows' PRF advantages Σ_t adv_t, the coin
+commitment's hiding terms, and the receipts' binding term) and, under sketch-sha512, `timing.sketch_failure` over the
+session (δs).  γ's errors carry the same draw terms beside the ledger's own (`Gamma`)."""
 from __future__ import annotations
 
 import math
@@ -132,6 +132,28 @@ def sketch(record: audit.Record, node: Node) -> float:
                                        outside=node.sketch_outside))
 
 
+PRF_ADVANTAGE_LOG2 = -128
+"""Each window's distinguisher's advantage on its keyed stream (`adv_t`, `PooledDraw`): claim `prf/sha-512`'s η for one
+test of a stream under a 32-byte key (A4), a claimed value."""
+
+OPENING_HASHES = 64 + 5
+"""The SHA-512 evaluations one receipt opening's check makes at most (`Hash.RowLeaf.outerHashed` and `innerHashed`): the
+path's nodes, at most 64 since a rank is a u64, the frame leaf, the hm96 leaf, its salt's digest and its key's, and the
+row digest."""
+
+
+def rejected(record: audit.Record) -> float:
+    """`PooledDraw`'s Σ_t s/2^64 over the record's n windows, s the session's samples: some draw's first word rejected
+    by the sampler.  The record holds each window's draws, min(s, U_t), so s is read as their largest, which is s
+    itself once a window holds s receipts or more (every gate session's)."""
+    return len(record.windows) * max(w.profile.drawn["receipt"] for w in record.windows) / 2.0 ** 64
+
+
+def advantage(record: audit.Record) -> float:
+    """`PooledDraw`'s Σ_t adv_t: each of the record's n windows' distinguishers at `PRF_ADVANTAGE_LOG2`."""
+    return len(record.windows) * 2.0 ** PRF_ADVANTAGE_LOG2
+
+
 def hiding(record: audit.Record) -> float:
     """The coin commitment's hiding terms over the record's n windows (`Committed.hide`,
     `Accounting.Guarantees.Remote.PooledDraw`): window t's two distances between coin t's hm96 leaf and a leaf
@@ -143,6 +165,49 @@ def hiding(record: audit.Record) -> float:
 def compressions(record: audit.Record, node: Node) -> int:
     """C, the node's SHA-512 compressions over the record's span, at its stated rate."""
     return math.ceil(node.sha512_per_s * record.span_ns / 1e9)
+
+
+def binding(record: audit.Record, node: Node) -> float:
+    """The receipts' binding term (`Accounting.Remote.Draw.Receipts.binding`): the probability that some opened
+    receipt moved, presented with an accepted row other than the one its root holds, the likeliest given what precedes
+    its window's coin, which hashes a SHA-512 collision (`Hash.Guarantees.RowBinding`).  Window t's fork finder runs
+    the prover twice from its roots on independent coins and checks both runs' openings, q_t = 2·F·C +
+    2·s'_t·`OPENING_HASHES` SHA-512 calls, F·C the most compressions the prover makes over the span (`sketch`'s);
+    under claim `cr/sha-512` (`SHA512CRStrict`) it finds a collision with probability ε_t ≤ q_t²/2^513.  Each receipt
+    moves with probability at most the square root of the finder's chance on it, so over window t's U_t receipts, at
+    most s'_t opened a run, its share is at most √(U_t·s'_t·ε_t) (Cauchy–Schwarz; the forking step
+    `Accounting.SecurityProofs.TS.DrawnBindingOfFork` proves for the proof layer), read at the record's U_t and s'_t:
+    Σ_t √(U_t·s'_t)·q_t/2^256.5."""
+    fc = node.sketch_outside * compressions(record, node)
+    total = 0.0
+    for w in record.windows:
+        s = w.profile.drawn["receipt"]
+        total += math.sqrt(w.receipts * s) * (2 * fc + 2 * s * OPENING_HASHES)
+    return total / 2 ** 256.5
+
+
+@dataclass(frozen=True, slots=True)
+class Draw:
+    """`PooledDraw`'s terms beyond its δ, each by name (`rejected`, `advantage`, `hiding`, `binding`): what reading
+    the record's openings as uniform draws over receipts its roots bind costs, in γ's errors and the memory line's δ
+    alike."""
+
+    rejected: float
+    advantage: float
+    hiding: float
+    binding: float
+
+    @property
+    def total(self) -> float:
+        return self.rejected + self.advantage + self.hiding + self.binding
+
+    def to_json(self) -> dict:
+        return {"advantage": self.advantage, "binding": self.binding, "hiding": self.hiding, "rejected": self.rejected}
+
+
+def draw(record: audit.Record, node: Node) -> Draw:
+    """The record's draw terms on `node`."""
+    return Draw(rejected(record), advantage(record), hiding(record), binding(record, node))
 
 
 def windows(record: audit.Record) -> list[tuple[int, int]]:
@@ -160,12 +225,14 @@ class Gamma:
     """γ against one R, `capacity_bytes_per_s`: the session's terms (`audit.Ledger`, read per window at Wδ, `gamma`,
     and over the horizon at δ, `gamma_horizon`) and `windows`, the same over each span γ is declared over (`windows`:
     a paced session's fixed windows), each as a fraction of R over its own span.  `error` and `error_horizon` are the
-    ledger's with the sketch's term added."""
+    ledger's with the sketch's term and the draw's (`draw`) added: both readings read the record's openings, each
+    window's or pooled."""
 
     capacity_bytes_per_s: float
     ledger: audit.Ledger
     windows: tuple[audit.WindowLedger, ...]
     sketch: float
+    draw: Draw
 
     @property
     def gamma(self) -> float:
@@ -177,15 +244,16 @@ class Gamma:
 
     @property
     def error(self) -> float:
-        return self.ledger.error + self.sketch
+        return self.ledger.error + self.sketch + self.draw.total
 
     @property
     def error_horizon(self) -> float:
-        return self.ledger.error_horizon + self.sketch
+        return self.ledger.error_horizon + self.sketch + self.draw.total
 
     def to_json(self) -> dict:
         return {"capacity_bytes_per_s": self.capacity_bytes_per_s,
-                "error": {"horizon": self.error_horizon, "windows": self.error},
+                "error": {"draw": self.draw.to_json(), "horizon": self.error_horizon, "sketch": self.sketch,
+                          "windows": self.error},
                 "gamma": self.gamma, "gamma_horizon": self.gamma_horizon,
                 "windows": [{"gamma": w.gamma, "gamma_horizon": w.gamma_horizon, "span_ns": w.span_ns,
                              "window": w.window} for w in self.windows]}
@@ -236,7 +304,7 @@ def gamma(record: audit.Record, node: Node, capacity_bytes_per_s: float, *,
     lg = audit.ledger(record, capacity_bytes_per_s=capacity_bytes_per_s, chip_bytes=node.chip_bytes,
                       rebuild=node.rebuild(record.codec), wrong=wrong)
     ws = lg.windows if record.pace is None else _fixed(record, lg, node.chip_bytes, capacity_bytes_per_s)
-    return Gamma(capacity_bytes_per_s, lg, ws, sketch(record, node))
+    return Gamma(capacity_bytes_per_s, lg, ws, sketch(record, node), draw(record, node))
 
 
 @dataclass(frozen=True, slots=True)
@@ -304,7 +372,7 @@ def memory(record: audit.Record, node: Node) -> tuple[Line, Line, Line]:
     """The memory line's three forms (`FORMS`)."""
     N, b, P = record.blocks, record.block_bytes, record.passes
     W = audit.pooled(record)[0]
-    delta = record.windows[0].profile.delta + P * 2.0 ** -audit.SLACK_LOG2 + hiding(record) + sketch(record, node)
+    delta = record.windows[0].profile.delta + draw(record, node).total + sketch(record, node)
     S = -(-node.chip_bytes // b)
     rebuild = node.rebuild(record.codec)
     X = rebuild.squarings_per_s / record.codec.encode_squarings / 1e9 + node.disk_bytes_per_s / b / 1e9

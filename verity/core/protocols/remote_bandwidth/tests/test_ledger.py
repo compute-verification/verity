@@ -153,13 +153,15 @@ def test_gamma_is_the_ledger_at_both_r_and_per_window(store) -> None:
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r, n = s.record(), node(squarings=1e9)
     out = ledger.declared(r, n)
-    sk = ledger.sketch(r, n)
+    sk, d = ledger.sketch(r, n), ledger.draw(r, n)
     assert 0 <= sk < 2.0 ** -40
     for g, cap in ((out.spec, n.spec_bytes_per_s), (out.measured, n.read_bytes_per_s)):
         want = audit.ledger(r, capacity_bytes_per_s=cap, chip_bytes=n.chip_bytes, rebuild=n.rebuild(r.codec))
         assert g.ledger == want and g.windows == want.windows and g.capacity_bytes_per_s == cap
-        assert (g.error, g.error_horizon) == (want.error + sk, want.error_horizon + sk)
+        assert g.draw == d and (g.error, g.error_horizon) == (want.error + sk + d.total,
+                                                              want.error_horizon + sk + d.total)
     assert out.to_json()["gamma"]["spec"]["gamma"] == out.spec.gamma
+    assert out.to_json()["gamma"]["spec"]["error"]["draw"] == d.to_json()
 
 
 def test_a_paced_session_reads_gamma_per_fixed_window(k1) -> None:
@@ -195,8 +197,7 @@ def test_the_snapshot_is_helds_conclusion(store) -> None:
     W, X, P = audit.pooled(r)[0], 3.0, r.passes
     assert snap.lost_blocks == pytest.approx(W / P + (X * r.span_ns + 3 + 5) / P + 2, rel=1e-12)
     assert snap.epsilon == min(1, snap.lost_blocks / N) and snap.held_bytes == (1 - snap.epsilon) * N * B
-    assert snap.delta == (r.windows[0].profile.delta + P * 2.0 ** -audit.SLACK_LOG2 + ledger.hiding(r)
-                          + ledger.sketch(r, n))
+    assert snap.delta == r.windows[0].profile.delta + ledger.draw(r, n).total + ledger.sketch(r, n)
     assert "unpaced" in held.refused and links.refused == held.refused and held.epsilon is None
 
 
@@ -207,6 +208,29 @@ def test_the_coin_commitments_hiding_is_charged(store) -> None:
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r = s.record()
     assert len(r.windows) > 1 and ledger.hiding(r) == pytest.approx(len(r.windows) * 2.0 ** -191, rel=1e-12)
+
+
+def test_the_draws_terms_are_charged_by_name(store) -> None:
+    """`ledger.draw` is `PooledDraw`'s terms beyond δ over the record's n windows: n·s/2^64 rejections, s the most
+    draws a window; n PRF advantages at 2^-128; the hiding terms; and the receipts' binding term under `cr/sha-512`,
+    Σ_t √(U_t·s'_t)·q_t/2^256.5 at q_t = 2·F·C + 2·s'_t·69 for the fork finder that runs the prover twice.  γ's errors
+    and the line's δ carry their sum, and no slack allowance stands in for them."""
+    s, prover, passes, clock = drive(store, params(samples=7), SCHEDULE)
+    assert all(v.accepted for v in finish(s, prover, passes, clock))
+    r, n = s.record(), node(squarings=1e9)
+    t, drawn = len(r.windows), [w.profile.drawn["receipt"] for w in r.windows]
+    assert t > 1 and max(drawn) == 7
+    d = ledger.draw(r, n)
+    assert d.rejected == t * 7 / 2.0 ** 64 and d.advantage == t * 2.0 ** -128 and d.hiding == ledger.hiding(r)
+    fc = n.sketch_outside * ledger.compressions(r, n)
+    want = sum(math.sqrt(w.receipts * s) * (2 * fc + 2 * s * (64 + 5)) for w, s in zip(r.windows, drawn)) / 2 ** 256.5
+    assert d.binding == pytest.approx(want, rel=1e-12) and 0 < d.binding < 2.0 ** -150
+    assert d.total == d.rejected + d.advantage + d.hiding + d.binding
+    assert d.to_json() == {"advantage": d.advantage, "binding": d.binding, "hiding": d.hiding,
+                           "rejected": d.rejected}
+    g = ledger.gamma(r, n, n.spec_bytes_per_s)
+    assert g.draw == d and g.error == g.ledger.error + g.sketch + d.total
+    assert ledger.memory(r, n)[0].delta == r.windows[0].profile.delta + d.total + ledger.sketch(r, n)
 
 
 def test_the_time_held_line_is_held_over_times_conclusion(k1) -> None:
