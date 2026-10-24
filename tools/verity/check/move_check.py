@@ -31,9 +31,9 @@ Every path git sees changed must be one of:
   comments and `require`s by relative path to a Lake package at HEAD; a manifest only in its name, the moved paths of
   its path packages, and new path packages; a lock lists no guarantees (an empty record at most) and keeps each field it
   keeps; a toolchain is identical;
-- in place, a `lakefile.toml` that drops from a library's `roots` the modules the range moved into a new Lake package,
-  adds a `require` of a new Lake package or adds comment lines (`lakefile_in_place`), and a `lake-manifest.json` that
-  adds that package (`manifest_change`);
+- in place, a `lakefile.toml` whose library `roots` lose the modules the range moved out of its package and gain those it
+  moved in, that adds a `require` of a new Lake package, or adds comment lines (`lakefile_in_place`), and a
+  `lake-manifest.json` that adds that package (`manifest_change`);
 - a `TRUSTED.sha256` line rewritten from a file's digest at BASE to its digest at HEAD, under its path moved by the map;
 - `moves.json` (research's record of the moves) with entries appended, each path in them one the range moved whole;
 - any of these after the move scripts' word maps (`tools/move/*.toml` with `[words]`, read at BASE) are applied, as
@@ -517,14 +517,17 @@ def lakefile_change(old: str, new: str, src_path: str, new_path: str, pmap: dict
             "comments and requires by relative path to a Lake package at HEAD"), h
 
 
-def lakefile_in_place(old: str, new: str, path: str, moved_out: set[str], new_lake) -> tuple[str, str | None] | None:
-    """Why an in-place `lakefile.toml` edit is more than dropping from a library's `roots` the modules moved into a new Lake
-    package (``moved_out``), requiring a new Lake package (``new_lake``) by its relative path, and adding comment lines."""
+def lakefile_in_place(old: str, new: str, path: str, moves: dict[str, tuple[str, str]], new_lake) -> tuple[str, str | None] | None:
+    """Why an in-place `lakefile.toml` edit is more than moving `roots` with their modules (``moves``: a module, by its old
+    name and its new, to its package at BASE and at HEAD): dropping those moved out of this package and adding those moved
+    into it, requiring a new Lake package (``new_lake``) by its relative path, and adding comment lines."""
     try:
         a, b = tomllib.loads(old), tomllib.loads(new)
     except tomllib.TOMLDecodeError:
         return "not TOML", None
     here = posixpath.dirname(path)
+    out = {m for m, (bp, hp) in moves.items() if bp == here != hp}
+    into = {m for m, (bp, hp) in moves.items() if hp == here != bp}
     ra, rb = a.pop("require", []), b.pop("require", [])
     it = iter(rb)
     if not all(r in it for r in ra):
@@ -538,8 +541,8 @@ def lakefile_in_place(old: str, new: str, path: str, moved_out: set[str], new_la
         return "adds or drops a `lean_lib`", None
     for x, y in zip(la, lb):
         rx, ry = x.pop("roots", []), y.pop("roots", [])
-        if x != y or [r for r in rx if r not in moved_out] != [r for r in ry if r not in moved_out] or set(ry) - set(rx):
-            return (f"`lean_lib` {x.get('name')} changes beyond dropping roots moved into a new Lake package",
+        if x != y or [r for r in rx if r not in out] != [r for r in ry if r not in into]:
+            return (f"`lean_lib` {x.get('name')} changes beyond the roots of modules moved out of this package or into it",
                     field_hunk("roots", json.dumps(rx), json.dumps(ry)))
     if a != b:
         return "changes a field other than `require`, `roots` and comments", None
@@ -670,7 +673,12 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
                 dests.setdefault(hp, set()).add(bp)
     moved = dict(renamed)
     maps = word_maps(B, renamed, lmods)
-    moved_out = {m for o, n in renamed if n.endswith(".lean") and H.package(n) in dests for m in (B.module(o), H.module(n)) if m}
+    moves: dict[str, tuple[str, str]] = {}                  # a module that changed package: (its package at BASE, at HEAD)
+    for o, n in renamed:
+        if o.endswith(".lean") and n.endswith(".lean"):
+            bp, hp = B.package(o), H.package(n)
+            if bp is not None and hp is not None and bp != hp:
+                moves.update(dict.fromkeys(filter(None, (B.module(o), H.module(n))), (bp, hp)))
     report = {"base": base, "head": head, "map": dict(sorted(pmap.items())), "lean_modules": dict(sorted(lmods.items())),
               "renames": [], "edits": [], "refusals": []}
 
@@ -798,7 +806,7 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             why = h and ("relative path now resolves elsewhere" if same
                          else f"edit beyond {'path strings' if k == 'path' else 'import lines'}", h)
             if why and not same and old == new and name == "lakefile.toml":
-                why = lakefile_in_place(a, b, new, moved_out, new_lake) and why
+                why = lakefile_in_place(a, b, new, moves, new_lake) and why
             elif why and not same and old == new and name == "lake-manifest.json":
                 why = manifest_change(a, b, old, new, pmap, H, added=new_lake) and why
         if why:

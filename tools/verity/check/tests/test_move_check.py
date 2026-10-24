@@ -575,3 +575,21 @@ def test_an_in_place_require_of_an_existing_package_is_refused(tmp_path):
 def test_an_inputs_line_naming_an_existing_package_is_refused(tmp_path):
     r = _in_place(tmp_path, **{"x/pyproject.toml": 'inputs = [\n    "Sec/Props/lakefile.toml",\n    "Sec/Props/lean-toolchain",\n]\n'})
     assert [f["path"] for f in r["refusals"]] == ["x/pyproject.toml"]
+
+
+def test_a_fold_into_an_existing_package_moves_its_roots(tmp_path):
+    """`Props.Proofs` folded into `Sec/Proofs`'s existing package (srcDir `..`): `props` drops the roots and `proofs` gains them."""
+    proofs = 'name = "proofs"\nsrcDir = ".."\n\n[[lean_lib]]\nname = "Proofs"\nroots = ["Proofs.B"]\n'
+    repo, base = _repo(tmp_path, {
+        "Sec/Props/lakefile.toml": PROPS, "Sec/Props/A.lean": "def a := 1\n",
+        "Sec/Props/Proofs/A.lean": "import Props.A\n\ntheorem t : a = 1 := rfl\n",
+        "Sec/Proofs/lakefile.toml": proofs, "Sec/Proofs/B.lean": "import Props.Proofs.A\n"})
+    _move(repo, "Sec/Props/Proofs/A.lean", "Sec/Proofs/Props/A.lean")
+    _write(repo, {"Sec/Props/lakefile.toml": PROPS.replace(', "Props.Proofs.A"', ""),
+                  "Sec/Proofs/lakefile.toml": proofs.replace('"Proofs.B"]', '"Proofs.B", "Proofs.Props.A"]'),
+                  "Sec/Proofs/B.lean": "import Proofs.Props.A\n"})
+    r = _check(repo, base)
+    assert r["certified"], r["refusals"]
+    _write(repo, {"Sec/Proofs/lakefile.toml": proofs.replace('"Proofs.B"]', '"Proofs.B", "Proofs.Props.A", "Proofs.C"]')})
+    [f] = _check(repo, base)["refusals"]
+    assert f["path"] == "Sec/Proofs/lakefile.toml"
