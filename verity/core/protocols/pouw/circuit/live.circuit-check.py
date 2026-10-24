@@ -7,8 +7,9 @@ from typing import Any
 
 def _pouw_roots() -> list[Any]:
     """`PouwLiveSlots_v1` at T = 32 and T = 96, two tables' leaf counts (the pouw setting ``rows``, a multiple of 32; 96's
-    window slot is 128, so T < M there): the m ≤ T test, T request liveness, index and prefix tests, the popcount N, and T
-    slot tests against N and m. It grows linearly in T."""
+    window slot is 128, so T < M there): the m ≤ T test, T request liveness, index and prefix tests, the popcount N, T
+    slot tests against N and m, and each request's slot count against what it takes in round s. It grows as T², the
+    counts."""
     from verity.ml.circuits.defs import bind
     from verity.core.protocols.pouw.circuit import live as LV
 
