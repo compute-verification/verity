@@ -460,7 +460,8 @@ WORD_BASE = {
     "notes.md": "The core's statements are `S/Models/Core/` (`Models.Core`). Trusted.\n",
     "more.md": "`S/Models/` states them.\n",
     "p/TRUSTED.sha256": "",
-    "tools/research/src/research/store/moves.json": json.dumps({"about": "x", "moves": [{"paths": {"a/": "b/"}}]}, indent=2) + "\n",
+    "tools/research/src/research/store/moves.json": json.dumps({"about": "x", "moves": [{"paths": {"S/Specs/": "S/Models/"}}]},
+                                                               indent=2) + "\n",
 }
 
 
@@ -485,7 +486,8 @@ def _worded(tmp_path: Path, **over: str) -> dict:
         "more.md": "`S/Definitions/` states them.\n",
         "p/TRUSTED.sha256": f"{_sha(a)}  ../S/Definitions/Core/A.lean\n",
         "tools/research/src/research/store/moves.json": json.dumps(
-            {"about": "x", "moves": [{"paths": {"a/": "b/"}}, {"paths": {"S/Models/": "S/Definitions/"}}]}, indent=2) + "\n",
+            {"about": "x", "moves": [{"paths": {"S/Specs/": "S/Models/"}}, {"paths": {"S/Models/": "S/Definitions/"}}]},
+            indent=2) + "\n",
     }
     _write(repo, {**head, **over})
     return _check(repo, base)
@@ -513,7 +515,7 @@ def test_a_pin_whose_digest_is_not_its_file_is_refused(tmp_path):
 
 
 def test_a_moves_record_of_a_path_that_did_not_move_whole_is_refused(tmp_path):
-    moves = json.dumps({"about": "x", "moves": [{"paths": {"a/": "b/"}}, {"paths": {"S/": "T/"}}]}, indent=2) + "\n"
+    moves = json.dumps({"about": "x", "moves": [{"paths": {"S/Specs/": "S/Models/"}}, {"paths": {"S/": "T/"}}]}, indent=2) + "\n"
     [f] = _worded(tmp_path, **{"tools/research/src/research/store/moves.json": moves})["refusals"]
     assert "S/ -> T/" in f["reason"]
 
