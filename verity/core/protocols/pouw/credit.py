@@ -24,7 +24,10 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   and roots its seed and its receipt's fold keys are derived from, is a row of its call's public table
   ``<prefix>pub@<c>``, which credit builds itself from the window's Program salt, the unit's position and the call's
   own roots, root(``a/<K>@<s>``) and root(``b/<K>``) as the window's entries register them, and names at that known
-  content. The window Program's one ``roots`` parameter is the layout's, not what a call's units are seeded under.
+  content. The window Program's one ``roots`` parameter is the layout's, not what a call's units are seeded under. A
+  J10-R window's templates (`SHARED_J10R`) take two more, ``call`` and ``blocks``, its noise's call stream and its
+  unit's place in it, and its public row holds those as credit derives them from the layout (`core_check.j10r_blocks`),
+  every K's template in one form.
 * **A unit's ok is the verifier's** (`registered_file`'s ``o1``): the statement's output row ``ok`` reads the window's
   ok rows ``<prefix>ok``, row u unit u's, the one word 1 under its public `core_check.ok_salt` (h1_prove's
   registration, #3124), which credit registers itself and names at that known content. A unit that computed 0 opens no
@@ -245,6 +248,8 @@ RECORD = ("TILES", "LINEARS", "CALLS", "M", "PREFIX")
 #: K's template, `h1window.template`, and its parameters after its A and B rows (`h1window.SHARED`)
 TILE_FN = "PouwH1WindowTile_v1"
 SHARED = ("zy", "salt", "position", "roots")
+#: a J10-R template's (`h1window.SHARED_J10R`): its call's first position and its unit's blocks after them
+SHARED_J10R = (*SHARED, "call", "blocks")
 _INPUT = re.compile(r"(?:Registered)?Input[1-9][0-9]*_v1")
 DESCRIPTOR_FORM = ("the window's descriptor is not a verity-ir/descriptor/v1 descriptor in canonical JSON (keys sorted, "
                    "compact, ASCII: the bytes program_digest hashes) with its callees, definitions, program function and "
@@ -591,12 +596,13 @@ def _record(fid: str) -> list[tuple[str, str]]:
 def no_template(k: int) -> str:
     return (f"the window's template at K = {k} is not h1window's: a composite {TILE_FN} bound to its UNIT and K = {k}, "
             f"its id {TILE_FN}{{UNIT=…,K={k}}}, whose parameters are a_k{k} and b_k{k}, the tile's R and C rows, then "
-            f"{', '.join(SHARED)}, at the same R × C at every K")
+            f"{', '.join(SHARED)} (with J10-R's noise, then {', '.join(SHARED_J10R[len(SHARED):])}), at the same R × C "
+            "and in the same form at every K")
 
 
-def _tile(dj: Any, tid: str, k: int) -> tuple[int, int] | None:
-    """The R × C of K = `k`'s template `dj` (its definition, under the id `tid`), or None when it is not
-    `h1window.template`'s."""
+def _tile(dj: Any, tid: str, k: int) -> tuple[int, int, bool] | None:
+    """The R × C of K = `k`'s template `dj` (its definition, under the id `tid`) and whether it is J10-R's (its
+    parameters end in `SHARED_J10R`), or None when it is not `h1window.template`'s."""
     if not (isinstance(dj, dict) and dj.get("form") == "composite" and dj.get("id") == TILE_FN):
         return None
     b, body = dj.get("bindings"), dj.get("body")
@@ -605,12 +611,12 @@ def _tile(dj: Any, tid: str, k: int) -> tuple[int, int] | None:
         return None
     ps = body.get("params")
     if not (type(ps) is list and all(type(p) is list and len(p) == 2 for p in ps)
-            and [p[0] for p in ps] == [f"a_k{k}", f"b_k{k}", *SHARED]):
+            and [p[0] for p in ps] in ([f"a_k{k}", f"b_k{k}", *SHARED], [f"a_k{k}", f"b_k{k}", *SHARED_J10R])):
         return None
     rows = [p[1] for p in ps[:2]]
     if not all(type(t) is list and len(t) == 3 and t[0] == "Array" and _nat(t[1]) and t[1] >= 1 for t in rows):
         return None
-    return rows[0][1], rows[1][1]
+    return rows[0][1], rows[1][1], len(ps) == 2 + len(SHARED_J10R)
 
 
 def _runs(xs: Any) -> list[list]:
@@ -664,7 +670,7 @@ def layout_of(descriptor: Any) -> tuple[dict | None, tuple[str, str] | None]:
         if got is None or rc not in (None, got):
             return no(no_template(k))
         rc = got
-    layout = {"calls": vals["CALLS"], "linears": vals["LINEARS"], "m": vals["M"], "tile": list(rc)}
+    layout = {"calls": vals["CALLS"], "linears": vals["LINEARS"], "m": vals["M"], "tile": list(rc[:2])}
     _ss, why = strata(layout)
     if why is not None:
         return None, why
@@ -672,7 +678,7 @@ def layout_of(descriptor: Any) -> tuple[dict | None, tuple[str, str] | None]:
     if tks != lks:
         return no(f"the window's TILES are at K = {tks}, not at its linears' K = {lks}: h1window binds one template "
                   "per K its linears have")
-    (r, c), m, of = rc, layout["m"], {k: t["fn"] for k, t in tiles}
+    (r, c, _j10r), m, of = rc, layout["m"], {k: t["fn"] for k, t in tiles}
     ks = {name: (k, n) for name, k, n in layout["linears"]}
     want = _runs((of[ks[lin][0]], (m // r) * (ks[lin][1] // c)) for lin, _blk in layout["calls"])
     root = defs.get(d["root"])
@@ -717,7 +723,8 @@ def shape_of(descriptor: bytes) -> dict:
     parameters' ``prefix`` (its record's ``PREFIX``) and, for each K, its template's id (``TILES``) and the 16-bit words
     of its A row, its B row and its z/y record (``a_k<K>``'s element, ``b_k<K>``'s and ``zy``, h1window's widths:
     `h1window.table_reads_file`'s), and of its unit's receipt (the ``receipt`` field of its return, the statement's
-    output row o0; 0 when it returns none of whole 16-bit words). Its cost is the descriptor's bytes."""
+    output row o0; 0 when it returns none of whole 16-bit words), and whether it is J10-R's (``j10r``, its parameters
+    ending in `SHARED_J10R`). Its cost is the descriptor's bytes."""
     d = json.loads(descriptor.decode())
     vals = {k: json.loads(v) for k, v in _record(d["program_fn"])}
     tiles = {}
@@ -725,7 +732,8 @@ def shape_of(descriptor: bytes) -> dict:
         body = d["definitions"][t["fn"]]["body"]
         a, b, zy = (p[1] for p in body["params"][:3])
         tiles[k] = {"fn": t["fn"], "a": _leaves(a[2]) // 16, "b": _leaves(b[2]) // 16, "zy": _leaves(zy) // 16,
-                    "receipt": _receipt_words(body.get("ret_type"))}
+                    "receipt": _receipt_words(body.get("ret_type")),
+                    "j10r": [p[0] for p in body["params"][2:]] == list(SHARED_J10R)}
     return {"prefix": vals["PREFIX"], "tiles": tiles}
 
 
@@ -793,7 +801,11 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
     u0 + t and the call's roots, root(``a/<K>@<s>``) and root(``b/<K>``) as the window registers them
     (`core_check.public_words`), each under `core_check.public_row_salt` of `window` and its position, at the root of
     their registration. So a unit seeded under another salt, position or roots (another call's, or made up) opens no row
-    of it, and the prover never chooses its own noise or fold keys.
+    of it, and the prover never chooses its own noise or fold keys. A J10-R window's (`shape_of`'s ``j10r``) row is that
+    and then the unit's ``call`` and ``blocks`` (`core_check.public_row`'s J10-R form), which the verifier derives from
+    the window's layout too: ``call`` the call's first position u0 (its seed_c's) and ``blocks`` tile (I, J) = (t // (n/C),
+    t % (n/C))'s `core_check.j10r_blocks` at the call's slot M, its K and the tile, so a unit that draws its noise from
+    another call's stream or another unit's blocks of it opens no row either.
 
     The statement's output row ``ok`` (`OK_PORT`, o1) is the verifier's own too: unit u reads row u of the window's ok
     rows ``<prefix>ok`` (`OK_VALUE`, `ok_table`, one row a unit of the window), named at its known content, the one word
@@ -848,7 +860,8 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
                                         window=None if is_held(v) else window).domain_id.hex(),
                      **G.schema_entry(G.SCHEMA_V2), "reads": reads}
     pv = f"{prefix}pub@{call}"
-    rows, salts, reg = public_table(program, pv, salt, window, u0, size, (roots[a][0], roots[b][0]))
+    blocks = [CC.j10r_blocks(m, k, (r, c), t // per, t % per) for t in range(size)] if tile["j10r"] else None
+    rows, salts, reg = public_table(program, pv, salt, window, u0, size, (roots[a][0], roots[b][0]), blocks)
     out[PUB_PORT] = {"value": pv, "root": reg.root.hex(), "leaves": size, "words": len(rows[0]), "word_bits": G.WORD_BITS,
                      "domain": reg.domain.domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
                      "reads": [None] * u0 + list(range(size)), "known": {"rows": rows, "salts": [x.hex() for x in salts]}}
@@ -860,14 +873,15 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
     return {"format": G.READS, "ports": out}, None
 
 
-def public_table(program: str, value: str, salt: str, window: str, u0: int, n: int, roots: tuple[str, str]
-                 ) -> tuple[list[list[int]], list[bytes], G.Registered]:
+def public_table(program: str, value: str, salt: str, window: str, u0: int, n: int, roots: tuple[str, str],
+                 blocks: list[tuple[int, int]] | None = None) -> tuple[list[list[int]], list[bytes], G.Registered]:
     """`h1window.public_table`: a call's public rows ``value`` over its `n` units from unit `u0`, their salts and their
     registration, unit u's row the window's Program salt `salt`, its position u and its call's `roots` (each hex,
-    `core_check.public_words`), under `core_check.public_row_salt` of the window's open root `window` and u, registered
-    under the descriptor's SHA-512 `program` binding `window`."""
+    `core_check.public_words`), and with `blocks` (a J10-R window's, one a unit) the call's first position `u0` and unit
+    u's blocks, under `core_check.public_row_salt` of the window's open root `window` and u, registered under the
+    descriptor's SHA-512 `program` binding `window`."""
     s, rs = bytes.fromhex(salt), (bytes.fromhex(roots[0]), bytes.fromhex(roots[1]))
-    rows = [CC.public_words(s, u, rs) for u in range(u0, u0 + n)]
+    rows = [CC.public_words(s, u0 + t, rs, None if blocks is None else (u0, blocks[t])) for t in range(n)]
     salts = [CC.public_row_salt(window, u) for u in range(u0, u0 + n)]
     return rows, salts, G.Registered.commit(program, value, rows, salts, G.WORD_BITS, G.SCHEMA_V2, window=window)
 

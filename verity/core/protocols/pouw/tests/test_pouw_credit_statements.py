@@ -303,6 +303,62 @@ def test_a_units_public_row_is_its_calls_own_salt_position_and_roots(seed, tmp_p
         assert got is None and refused[0] == "failed" and refused[1].startswith(f"call {s['call']}'s session "), refused
 
 
+def window_j10r(seed: int, tmp: Path) -> tuple[dict, list[dict]]:
+    """An honest window over J10-R units, each call of at least two row tiles, so a call's units' blocks differ."""
+    d = cases.window_instance(random.Random(f"statements-j10r/{seed}"), "j10r")
+    return d, prove(d, d["k"], tmp)
+
+
+def _j10r_rows(d: dict, s: dict, call: int, blocks: list[tuple[int, int]]) -> dict:
+    """Statement ``s``'s ``--registered`` file with its public rows the prover's, each unit's ``call`` and ``blocks``
+    `call` and `blocks` (one a unit of its call) in place of the ones credit derives: every other port credit's."""
+    program, _lay, _shape, reg = _files(d, s)
+    pub, w = reg["ports"][Cr.PUB_PORT], d["window"]["root"]
+    u0, n = pub["reads"].index(0), pub["leaves"]
+    roots = tuple(bytes.fromhex(next(p for x, p in reg["ports"].items() if x.startswith(f"{t}_k"))["root"]) for t in "ab")
+    rows = [Cr.CC.public_words(bytes.fromhex(d["salt"]), u0 + t, roots, (call, blocks[t])) for t in range(n)]
+    salts = [Cr.CC.public_row_salt(w, u0 + t) for t in range(n)]
+    got = Cr.G.Registered.commit(program, pub["value"], rows, salts, Cr.G.WORD_BITS, Cr.G.SCHEMA_V2, window=w)
+    return {**reg, "ports": {**reg["ports"], Cr.PUB_PORT: {**pub, "root": got.root.hex(), "known": {
+        "rows": rows, "salts": [x.hex() for x in salts]}}}}
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_a_j10r_units_public_row_holds_the_call_and_blocks_credit_derives(seed, tmp_path, verifier):
+    """RT-ALGO-16: a J10-R window's unit's public row is today's, then its ``call``, its call's first position u0 (the
+    one its seed_c is drawn at), and its ``blocks``, `core_check.j10r_blocks` of its tile (I, J) = (t // (n/C),
+    t % (n/C)) at the call's slot M, its K and the tile: credit derives both from the committed layout, as it builds
+    the rest of the row. A statement whose units drew their noise at another unit's blocks, at another call's u0, or at
+    blocks one off was proved against another file, so its session is rejected and the window refused whole."""
+    d, statements = window_j10r(seed, tmp_path)
+    for s in statements:
+        _program, lay, shape, reg = _files(d, s)
+        c, pub = s["call"], reg["ports"][Cr.PUB_PORT]
+        k, n = next((k, n) for name, k, n in lay["linears"] if name == lay["calls"][c][0])
+        (r, cc), m = lay["tile"], lay["m"]
+        a, b = (reg["ports"][f"a_k{k}_0"], reg["ports"][f"b_k{k}_0"])
+        u0, size = sum(x for x, _w in Cr.call_work(lay)[:c]), Cr.call_work(lay)[c][0]
+        blocks = [Cr.CC.j10r_blocks(m, k, (r, cc), t // (n // cc), t % (n // cc)) for t in range(size)]
+        assert shape["tiles"][k]["j10r"] and pub["words"] == 112 and size >= 2 and len(set(blocks)) == size
+        assert pub["known"]["rows"] == [Cr.CC.public_words(bytes.fromhex(d["salt"]), u0 + t, (
+            bytes.fromhex(a["root"]), bytes.fromhex(b["root"])), (u0, blocks[t])) for t in range(size)]
+    assert credit(d, statements) == (_credited(d), None)
+    s = random.Random(seed).choice(statements)
+    _program, lay, _shape, reg = _files(d, s)
+    pub = reg["ports"][Cr.PUB_PORT]
+    u0, size = pub["reads"].index(0), pub["leaves"]
+    k, n = next((k, n) for name, k, n in lay["linears"] if name == lay["calls"][s["call"]][0])
+    own = [Cr.CC.j10r_blocks(lay["m"], k, tuple(lay["tile"]), t // (n // lay["tile"][1]), t % (n // lay["tile"][1]))
+           for t in range(size)]
+    starts = [sum(x for x, _w in Cr.call_work(lay)[:c]) for c in range(len(lay["calls"]))]
+    other = next((x for x in starts if x != u0), u0 + size)
+    for call, blocks in ((u0, own[1:] + own[:1]), (other, own), (u0, [(b0 + 1, b1) for b0, b1 in own]),
+                         (u0, [(b0, b1 - 1) for b0, b1 in own])):
+        _rebind(d, s, _j10r_rows(d, s, call, blocks))
+        got, refused = credit(d, statements)
+        assert got is None and refused[0] == "failed" and refused[1].startswith(f"call {s['call']}'s session "), refused
+
+
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_session_that_opened_another_public_table_root_is_refused(seed, tmp_path, verifier):
     """A verifier finding that a session opened its call's public table at another root than the rows credit built
