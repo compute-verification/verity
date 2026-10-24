@@ -569,11 +569,10 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
             assert ev["block"] == RUN.RS_FOLD_NT and i[1] <= RUN.RS_MAX_SEGS and i[3] <= RUN.RS_MAX_SEGS
         if name.startswith("pd_commit_"):
             assert g == [i[0], 1, 1] and i[0] <= RUN.PD_MAX_ROWS and i[1] % 256 == 0 and i[1] <= RUN.PD_MAX_K and i[2] in (0, 1)
-            assert i[2] == 0 or i[0] == i[3], ev               # mode 1 leaves the filler lines' line_a to pd_tree
             assert ev["block"] == 32 * (-(-i[1] // 256 // 32) * 2 + 2) and RUN.PD_PAIR_SMEM <= ev["smem"] <= H100_MAX_DYN
-        if name.startswith("pd_tree_"):
-            assert g == [1, 1, 1] and ev["block"] == 128 and 0 < i[0] == i[3] <= RUN.PD_MAX_ROWS and not p[12], ev
-            assert RUN.PD_PAIR_SMEM <= ev["smem"] <= H100_MAX_DYN
+        if name.startswith("pd_tree_"):                     # the padding rows' lines past the real rows, where there are any
+            assert g == [1, 1, 1] and ev["block"] == 128 and 0 < i[0] <= i[3] and i[0] <= RUN.PD_MAX_ROWS, ev
+            assert bool(p[12]) == (i[0] < i[3]) and RUN.PD_PAIR_SMEM <= ev["smem"] <= H100_MAX_DYN, ev
         if name.startswith(("pd_commit_", "pd_tree_")):
             assert bool(p[13]) == bool(int(name.rsplit("_", 1)[1]) & RUN.PD_STAMP), ev
         if name.startswith("pl_"):
