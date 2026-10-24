@@ -1,7 +1,7 @@
 // Decode at use inside the GEMM's operand load: y = x W^T + b for a linear whose bf16 weight W [N][K] the engine's arena
 // holds encoded in place in `../word_codec/kv.cu`'s codec (this file includes it, so its build is kv.so's plus these
 // launchers, at the same KV_FIELD, KV_MASK and KV_FOLD6), each word at its codec index: the weight's first word index
-// plus the word's offset in W. `fused_bench.py` gates and times it; `engine.py`'s Hooks take it with --fused.
+// plus the word's offset in W. `fused_bench.py` gates and times it (`fused.sh`); the engine's Hooks don't use it.
 //
 // A CTA owns NT rows of W and a range of K's steps. In each step its 128 threads load a word each (KT = 128 / NT words of
 // a row), decode it with kv_decode's arithmetic (kv::decode_word_t, its tweak stepped as decode_kernel steps it, by
