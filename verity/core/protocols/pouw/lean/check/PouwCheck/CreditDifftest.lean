@@ -15,8 +15,8 @@ Beside `PouwCheck.Difftest`'s, behind the same `pouw-check-difftest` (`PouwCheck
 * `outcome` (`drawn`'s and `proofs`, as `credit._outcome` takes them) and `a-link` (`rounds`, `entries`, `calls`, the
   window's call count, and `rows`, `{value: rows}` the layout gives or null for none, as `credit._a_link` takes them),
   `Credit.Internal`'s: null, or `{"refused": [code, why]}`.
-* `chunks` (`k`): `{"chunks": n, "leaf_words": w}`, `Credit.chunks?` and `Credit.leafWords` (`weights.chunks` and
-  `weights.leaf_words`), or `{"chunks": null}` for a K they refuse.
+* `leaf-words` (`k`): `{"leaf_words": w}`, `Credit.leafWords` (`weights.leaf_words`), or `{"leaf_words": null}` for a K
+  `Credit.chunks?` refuses (`PouwCheck.Difftest`'s `chunks` holds the count itself).
 * `window` (`credit`'s, `descriptor` in hex, `entries`, `proofs` and `k`, as `credit._window_outcomes` takes them): `{"credited": [indices]}`,
   and `period` (`key`, `ledger`, `pins`, `main`, `name`, `windows`, as `credit._period_outcomes` takes them, each window's evidence
   `window`'s): `{"credited": …}`; or
@@ -70,11 +70,11 @@ def aLinkOf (j : Json) : Except String Json := do
         | .obj kvs => kvs.toArray.toList.filterMap fun (v, n) => (v, ·) <$> PouwCheck.nat? n
         | _ => []))
 
-def chunksOf (j : Json) : Except String Json := do
+def leafWordsOf (j : Json) : Except String Json := do
   let k ← PouwCheck.Difftest.get j "k"
-  pure (match (PouwCheck.nat? k).bind Credit.chunks? with
-    | some n => Json.mkObj [("chunks", toJson n), ("leaf_words", toJson (Credit.leafWords ((PouwCheck.nat? k).getD 0)))]
-    | none => Json.mkObj [("chunks", Json.null)])
+  pure (match (PouwCheck.nat? k).filter (Credit.chunks? · |>.isSome) with
+    | some k => Json.mkObj [("leaf_words", toJson (Credit.leafWords k))]
+    | none => Json.mkObj [("leaf_words", Json.null)])
 
 def weightsOf (j : Json) : Except String Json := do
   let f := PouwCheck.Difftest.get j
@@ -105,7 +105,7 @@ def registeredFileOf (j : Json) : Except String Json := do
 
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("credit", creditOf), ("drawn", drawnOf), ("outcome", outcomeOf), ("window", windowOf), ("period", periodOf),
-  ("a-link", aLinkOf), ("weights", weightsOf), ("registered-file", registeredFileOf), ("chunks", chunksOf)]
+  ("a-link", aLinkOf), ("weights", weightsOf), ("registered-file", registeredFileOf), ("leaf-words", leafWordsOf)]
 
 /-- `pouw-check-difftest`'s functions: `PouwCheck.Difftest.table`'s, then these. -/
 def all (name : String) : Option _root_.Difftest.Fn := PouwCheck.Difftest.table name <|> table name

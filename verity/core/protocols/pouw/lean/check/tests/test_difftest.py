@@ -32,6 +32,9 @@ round coins, each opened after its recorded round root, read through the challen
 ledger opens and ends for the window, then one mutation each aimed at every refusal), compared output for output: null, or the same refusal.
 Its `salt` against `core_check.salt` likewise, over the live windows' salt coins the same module generates, read through
 the same session, reserved before it opened (opened after the session's open root, `salt.window_open_root`).
+
+Its `chunks` against `weights.chunks` (an H1 lane's chunks along K, the chunk rows a table at K commits a row as): every
+multiple of 32 below 2^17, then drawn integers and non-integers, compared output for output: the count, or the same refusal.
 """
 from __future__ import annotations
 
@@ -55,7 +58,7 @@ import pouw_rounds_cases as rounds_cases
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import verifier as V
-from verity.core.protocols.pouw import weights as Wt
+from verity.core.protocols.pouw import weights as W
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -420,26 +423,50 @@ def test_credit(pass_server):
     assert any(k.startswith("window a-link: ") and "the window's layout gives it" in k for k in CREDITED)
 
 
-def chunks(case: dict) -> dict:
+def leaf_words(case: dict) -> dict:
     try:
-        return {"chunks": Wt.chunks(case["k"]), "leaf_words": Wt.leaf_words(case["k"])}
+        return {"leaf_words": W.leaf_words(case["k"])}
     except ValueError:
-        return {"chunks": None}
+        return {"leaf_words": None}
 
 
-CHUNKS = D.Port("pouw-check-difftest", "chunks", chunks, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
-                inputs=st.builds(lambda k: {"k": k}, st.integers(-2, 1 << 20)))
+LEAF_WORDS = D.Port("pouw-check-difftest", "leaf-words", leaf_words, package=LEAN, need_rejects=False,
+                    of_record=V.RECORD_VERDICT, inputs=st.builds(lambda k: {"k": k}, st.integers(-2, 1 << 20)))
+
+
+def test_leaf_words(pass_server):
+    """`weights.leaf_words` (a leaf's words at K: a chunk's codes, then the row's scale) against `Credit.leafWords` at every
+    K to 4096 + 64, every multiple of 32 below 2^17 (the models' K, the ones with no chunks among them) and drawn K to
+    2^20."""
+    stats = D.run(LEAF_WORDS, examples=500, server=pass_server)
+    got = Counter(D.replay(LEAF_WORDS, {"k": k}, pass_server)[1] == '{"leaf_words":null}'
+                  for k in sorted({*range(-1, 4096 + 65), *range(32, 1 << 17, 32)}))
+    print(f"pouw-check-difftest leaf-words: {stats}; swept {dict(got)} (True: no chunks)")
+    assert got[True] and got[False]
+
+
+def chunks(k) -> dict:
+    if type(k) is not int or k < 0:
+        raise D.Reject("the input is not a natural number K")
+    try:
+        return {"chunks": W.chunks(k)}
+    except ValueError as e:
+        return {"refused": str(e)}
+
+
+CHUNKS = D.Port("pouw-check-difftest", "chunks", chunks, package=LEAN, of_record=V.RECORD_VERDICT,
+                inputs=st.one_of(st.integers(-64, 1 << 18), st.booleans(), st.text(max_size=2), st.none()))
 
 
 def test_chunks(pass_server):
-    """`weights.chunks` and `weights.leaf_words` (an A or B row's leaves at K, and a leaf's words) against
-    `Credit.chunks?` and `Credit.leafWords` at every K to 4096 + 64, every multiple of 32 below 2^17 (the models' K, the
-    ones with no chunks among them) and drawn K to 2^20."""
+    """`PouwCheck.Chunks.chunks` is `weights.chunks` at every multiple of 32 below 2^17 (every served K, the whole lane up to
+    4096 and up to 256 chunks past it, each refusal's message included), then on drawn integers, negative ones a reject,
+    and non-integers."""
+    outs = [json.loads(D.replay(CHUNKS, k, pass_server)[1]) for k in range(0, 1 << 17, 32)]
     stats = D.run(CHUNKS, examples=500, server=pass_server)
-    got = Counter(D.replay(CHUNKS, {"k": k}, pass_server)[1] == '{"chunks":null}'
-                  for k in sorted({*range(-1, 4096 + 65), *range(32, 1 << 17, 32)}))
-    print(f"pouw-check-difftest chunks: {stats}; swept {dict(got)} (True: no chunks)")
-    assert got[True] and got[False]
+    print(f"pouw-check-difftest chunks: 4096 Ks swept, then {stats}")
+    assert Counter(next(iter(o)) for o in outs) == {"chunks": 375, "refused": 3721}
+    assert [outs[k // 32] for k in (4096, 6144, 12288, 14336, 16384)] == [{"chunks": n} for n in (1, 2, 3, 4, 4)]
 
 
 ROUNDED: Counter[str] = Counter()
