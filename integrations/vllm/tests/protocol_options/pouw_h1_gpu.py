@@ -510,8 +510,14 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         registered_s: dict[int, float] = {}
         hashed_s: dict[int, float] = {}
         nr_commit = SV.NR.commit
+        prof = None
         if served is not None and not a.handoff:
             served_commit, at = served.commit, [0]
+            if a.profile_register:
+                import cProfile
+
+                prof = cProfile.Profile()
+                served_commit = profiled(prof, served_commit)
 
             def hashing(*args: Any, **kw: Any) -> Any:
                 t = time.monotonic()
@@ -578,6 +584,8 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                 out["register_path"] = SV.NR.path()
                 del served.commit
                 SV.NR.commit = nr_commit
+                if prof is not None:
+                    write_profile(prof, tdir / "register-profile.txt")
             print(f"[fill] {name} served step_s={out['step_s']} registered_s={out.get('registered_s')} "
                   f"hashed_s={out.get('hashed_s')} register_path={out.get('register_path')} rss_gib={rss_gib()}", flush=True)
             if com is not None:
@@ -658,6 +666,30 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         except Exception as e:  # noqa: BLE001
             doc["h1_solo"] = {"ok": False, "error": f"{type(e).__name__}: {e}"[:2000]}
     return fill_record(doc, outdir)
+
+
+def profiled(prof: Any, fn: Any) -> Any:
+    """``fn`` run under the profiler ``prof``."""
+    def run(*args: Any, **kw: Any) -> Any:
+        prof.enable()
+        try:
+            return fn(*args, **kw)
+        finally:
+            prof.disable()
+    return run
+
+
+def write_profile(prof: Any, path: Path) -> None:
+    """``prof``'s 60 functions of most cumulative time, then of most own time, as text at ``path``."""
+    import io
+    import pstats
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    buf = io.StringIO()
+    stats = pstats.Stats(prof, stream=buf).strip_dirs()
+    stats.sort_stats("cumulative").print_stats(60)
+    stats.sort_stats("tottime").print_stats(60)
+    path.write_text(buf.getvalue())
 
 
 def rss_gib() -> float:
@@ -1178,6 +1210,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="with --commit: after the honest window, serve one whose A codes H1 is handed are all zero and "
                          "one with a row off, each with the Commit in the engine (NEGATIVES), and hold each to core's "
                          "ROOTS1 steps (core_verdict)")
+    ap.add_argument("--profile-register", action="store_true",
+                    help="fill with --served: profile each served window's registration (Served.commit) and write its "
+                         "functions by cumulative time to <window out>/register-profile.txt")
     ap.add_argument("--core-from", metavar="DIR", help="no GPU: core's ROOTS1 steps (core_verdict) over each window's "
                                                        f"saved evidence, DIR/*/{CORE_EVIDENCE}")
     a = ap.parse_args(argv)
