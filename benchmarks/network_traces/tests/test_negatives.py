@@ -463,7 +463,7 @@ def test_n2s_advised_counts_refuse_the_advice_negatives_and_accept_the_step_unit
     """Against N2-ADVICE's `advised` (skipped until it lands), on heads an honest run of the advice certifies: the
     honest advice is accepted; length, missing, extra and release are refused by the advised counts, each well formed;
     start and chunk are accepted, their frames honest's, so only the step unit can refuse them."""
-    AD = pytest.importorskip("verity.core.protocols.certifier.advised")
+    pytest.importorskip(NG.ADVISED_MODULE)
     from verity.core.protocols.certifier.schedule import ClockSync
 
     T, R, RIN, OWN, syncs = 8, 4, 8, 0, [ClockSync(1, Fraction(1))]
@@ -524,6 +524,10 @@ class _Codec:
         return Advice(tuple(RequestAdvice(**q) for q in d["requests"]), tuple(StepAdvice(tuple(r)) for r in rows),
                       tuple(d["release"]))
 
+    @staticmethod
+    def total_bits(a) -> int:
+        return 8 * len(_Codec.encode(a))
+
 
 def test_an_advice_negative_writes_the_edited_advice_beside_a_copy_of_the_run(tmp_path, monkeypatch):
     """Through I1's codec (the stand-in's, until it lands): the tampered copy is the run and the edited advice."""
@@ -536,6 +540,28 @@ def test_an_advice_negative_writes_the_edited_advice_beside_a_copy_of_the_run(tm
     out = NG.make("advice-start", run, tmp_path / "out", advice=tmp_path / "advice.bin")
     assert (out / "certified.jsonl").read_text() == "{}\n"
     assert codec.decode((out / "advice.bin").read_bytes()) == NG.start_shifted(_advice())
+
+
+def test_the_suites_advice_rows_are_n2_advices_codes_on_the_given_advice(runs, tmp_path, monkeypatch):
+    """With --advice, each advice negative's row in the one command's report is `advice_run`'s on it (N2-ADVICE's codes,
+    not N2's on the unchanged certified records), its tampered advice beside a copy of honest's run; until N2-ADVICE
+    lands, not run, saying so."""
+    codec = V if V is not sys.modules[__name__] else _Codec
+    monkeypatch.setattr(NG, "advice_module", lambda: codec)
+    (tmp_path / "advice.bin").write_bytes(codec.encode(_advice()))
+    rs, _ = runs["planned"]
+    rows = NG.suite({"honest": rs["honest"]}, tmp_path / "work", advice=tmp_path / "advice.bin", clock=lambda: 0.0)
+    advice = {k: r for k, r in rows.items() if r["tampers"] == "advice"}
+    assert advice and all(r["copy"] == str(tmp_path / "work" / k) for k, r in advice.items())
+    assert all("run" not in r for r in advice.values())
+    try:
+        importlib.import_module(NG.ADVISED_MODULE)
+    except ModuleNotFoundError:
+        assert all(not r["ran"] and "N2-ADVICE" in r["why"] and "ok" not in r for r in advice.values())
+        return
+    assert all(r["ran"] and r["valid"] and r["ok"] and r["honest_codes"] == [] for r in advice.values()), advice
+    assert {k for k, r in advice.items() if r["codes"]} == {"advice-length", "advice-missing", "advice-extra",
+                                                           "advice-release"}
 
 
 # --- the Commit record: a stand-in of I3 as drafted --------------------------------------------------------------------
