@@ -800,6 +800,12 @@ def test_leaving_a_tree_its_sm_needs_a_deferred_a_tree_on_a_kernel_whose_gemms_t
             PPD.PearlCDeviceRun(None, "test", k, {}, {}, None, None, whole_defer=True, whole_defer_a=defer_a, whole_tree_sm=True)
 
 
+def test_an_end_aside_needs_lagged_ends():
+    k = SimpleNamespace(run=SimpleNamespace(Pipeline=SimpleNamespace(FUSED={"tree_seed_a": ()})))
+    with pytest.raises(ValueError, match="aside_ends"):
+        PPD.PearlCDeviceRun(None, "test", k, {}, {}, None, None, aside_ends=True)
+
+
 def test_a_lagged_end_gets_its_commitment_in_place_at_the_next_end_and_only_an_engine_steps_end_lags():
     """A lagged end's readback (its copies behind an event) completes at `settle`: the next end's first step, and
     `finish`'s.  It waits for the event once and fills the ended pass's own dict, the one `details["passes"]` and the

@@ -302,18 +302,21 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
                  coins: CoinCommitment, opening: CoinOpening, hashing: bool = True, capacity: int = LEAF_CAPACITY,
                  time_gemm: bool = False, schedule: str | Schedule = SERIAL, graphs: bool = False, whole_defer: bool = False,
                  flag_rows: int = FLAG_ROWS, salt_key: bytes | None = None, whole_defer_a: bool = False,
-                 whole_fork_stats: bool = False, lag_ends: bool = False, whole_tree_sm: bool = False):
+                 whole_fork_stats: bool = False, lag_ends: bool = False, whole_tree_sm: bool = False, aside_ends: bool = False):
         """`coins` is the challenger's coin commitment of the epoch and `opening` its salt coin, opened after the weights'
         root (`Epoch.start`, which raises `DomainError` for any other coin): the epoch's salt is the coin's.  The whole
         capture's options: `whole_options`.  `lag_ends`: an engine step's pass end (`_ExecutorPass.end`, `end_pass` with
-        ``step``) leaves its commitment's readback in flight (`end` with ``lag``, `LaneCalls.settle`)."""
+        ``step``) leaves its commitment's readback in flight (`end` with ``lag``, `LaneCalls.settle`); with `aside_ends`
+        too, its tile tree runs on a stream of its own over a copy of the leaves (`LaneCalls._end_aside`)."""
         whole_options(entry, kernel, whole_defer, whole_defer_a, whole_fork_stats, whole_tree_sm)
+        if aside_ends and not lag_ends:
+            raise ValueError(f"{entry}: aside_ends runs a lagged end's tree aside, and lag_ends is off")
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
         self.nb, self.salt_key = kernel.run.NB, salt_key
         self.graphs = graphs and next(iter(weights.values())).device.type == "cuda"
         self.whole_defer, self.whole_defer_a, self.whole_fork_stats = whole_defer, whole_defer_a, whole_fork_stats
         self.whole_tree_sm = whole_tree_sm
-        self.lag_ends, self._lagged = lag_ends, None
+        self.lag_ends, self.aside_ends, self._lagged, self._end_side = lag_ends, aside_ends, None, None
         self._graphs: dict[tuple, _Graph] = {}
         self.variant = scheme.device.name
         self.time_gemm, self.events, self.omit = time_gemm, [], frozenset()
@@ -372,7 +375,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
                        + (" and its A tree beside its forming and GEMM" if whole_defer_a else "")
                        + (" (the GEMM leaving the tree its SM)" if whole_tree_sm else "")
                        + (", its A scales beside its A commitment" if whole_fork_stats else "")) if self.graphs else None,
-            "pass_end": "an engine step's commitment read back at the next end" if lag_ends else "read back at its end",
+            "pass_end": ("an engine step's commitment read back at the next end" + (", its tile tree on a stream of its own"
+                                                                                     if aside_ends else "")) if lag_ends else "read back at its end",
             "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound (red team F4)"}
         self.cur: _Pass | None = None
         self.begin()
@@ -657,19 +661,29 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
             dom = _zeros(nb, self.device)
             _put(dom, transcript_domain(epoch, count, self.tree_hash).domain_id)
             ns = types.SimpleNamespace(dev=K.dev, b={"tree_t": tree.data_ptr()}, keys={"dom_t": dom.data_ptr(), **self.const_keys})
-            K.dev.stream = self.stream()
+            units = len(cur.matmuls)
+            flags = self.flag_buf[:cur.flag_rows].to(torch.int64).sum(0) if cur.flag_rows else torch.zeros(2, dtype=torch.int64)
+            aside = lag and self.aside_ends and cur.retain is None and self.device.type == "cuda"
+            leaves, side, got = self._end_aside(count, self.roots_buf[:nb * units], flags) if aside else \
+                (self.leaves.data_ptr(), None, None)
+            K.dev.stream = side.cuda_stream if aside else self.stream()
             try:
                 for _, f in R.Pipeline.tree_setup(ns, "t", count, "dom_t"):
                     f()
-                R.Pipeline.tree_leaves(ns, "t", self.leaves.data_ptr(), count, "dom_t")
+                R.Pipeline.tree_leaves(ns, "t", leaves, count, "dom_t")
                 R.Pipeline.levels(ns, "t", count)
             finally:
                 K.dev.stream = None
-            units = len(cur.matmuls)
             out.update(screened_rows=cur.flag_rows,
                        excluded_rows=sum(len(r.excluded_a) for r in cur.records) if cur.retain is not None else None)
-            flags = self.flag_buf[:cur.flag_rows].to(torch.int64).sum(0) if cur.flag_rows else torch.zeros(2, dtype=torch.int64)
-            if lag and cur.retain is None and self.device.type == "cuda":
+            if aside:
+                with torch.cuda.stream(side):
+                    root, done = torch.empty(nb, dtype=torch.uint8, pin_memory=True).copy_(tree[-nb:], non_blocking=True), torch.cuda.Event()
+                    done.record()
+                tree.record_stream(side)
+                dom.record_stream(side)
+                self._lagged = (out, done, [got[0], root, got[1]], units, count)
+            elif lag and cur.retain is None and self.device.type == "cuda":
                 got = [torch.empty(t.shape, dtype=t.dtype, pin_memory=True).copy_(t, non_blocking=True)
                        for t in (self.roots_buf[:nb * units], tree[-nb:], flags)]
                 done = torch.cuda.Event()

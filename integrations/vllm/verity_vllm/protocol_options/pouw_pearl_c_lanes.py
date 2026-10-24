@@ -117,7 +117,7 @@ class LaneCalls:
     ``_side_turn`` and ``_side_cache``, and its
     graph path's lane graphs (`GraphCalls._lane_graph`, ``_capture_lanes``, ``_offsets``); where a whole capture cuts a
     call's steps (`_call_cuts`, `_call_tree`, `_call_stats`, from ``entry`` and `_call_names`); and a lagged end's readback
-    (`settle`: ``_lagged``, ``commits``)."""
+    (`settle`: ``_lagged``, ``commits``) and tree aside (`_end_aside`: ``_end_side``, ``leaves``)."""
 
     def _call_cuts(self, pipe: Any) -> tuple[int, int]:
         """Where a deferred whole capture (`whole_defer`) splits `_call_steps`: after A's tree, beside which the call before's
@@ -163,6 +163,21 @@ class LaneCalls:
         (out, done, (roots_a, root, flags), units, count), self._lagged = self._lagged, None
         done.synchronize()
         self._ended(out, roots_a.numpy().tobytes(), root.numpy().tobytes(), flags.tolist(), units, count)
+
+    def _end_aside(self, count: int, roots: Any, flags: Any) -> tuple[int, Any, list[Any]]:
+        """A lagged end's tile tree on a stream of its own (`aside_ends`), so the next step needn't wait for it: on the current
+        stream the pass's leaves are copied to the end's buffer, which `settle` left free, and A's roots and the flag counts
+        start back to the host; the end's stream waits for that.  Returns the copy's address, the stream and the readbacks."""
+        import torch
+        n = self.nb * count
+        if self._end_side is None or self._end_side[1].numel() < n:
+            self._end_side = (self._end_side[0] if self._end_side else torch.cuda.Stream(self.device),
+                              torch.empty(2 * n, dtype=torch.uint8, device=self.device))
+        side, staged = self._end_side
+        staged[:n].copy_(self.leaves[:n], non_blocking=True)
+        got = [torch.empty(t.shape, dtype=t.dtype, pin_memory=True).copy_(t, non_blocking=True) for t in (roots, flags)]
+        side.wait_stream(torch.cuda.current_stream())
+        return staged.data_ptr(), side, got
 
     def _ended(self, out: dict[str, Any], roots_a: bytes, root: bytes, flags: list[int], units: int, count: int) -> None:
         out.update(transcript_root=root.hex(), activation_roots=hashlib.sha512(roots_a).hexdigest(),
