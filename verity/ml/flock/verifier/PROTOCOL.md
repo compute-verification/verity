@@ -1170,7 +1170,8 @@ An input node is `Input<w>_v1` (bound per run) or `RegisteredInput<w>_v1` (bound
 `Program.inputId?` records the binding time; both are inputs to every query, never Calls.
 
 **`Q_call` v1** (`Flock.Qcall`, `flock-verify qcall-program`; core's PROTOCOL.md §11) is core's evaluation, refusals and cut
-check, as `Flock.Qcall` documents them.
+check, as `Flock.Qcall` documents them, kept for the Python's agreement: it is retired from the verifier of record, which
+refuses a statement bound to it (below).
 
 **σ, a Boolean Program's lift of its word Program** (`Flock.Sigma`, `flock-verify sigma-check WORD BITS`; the mirror is
 `verity_vllm.program.boolean.sigma_check`, held to it by the `verity/core/service/sigma` difftest). A Boolean Program's
@@ -1396,8 +1397,9 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   program_digests) ‖ "\n" ‖ the file after its META line)`. For a `verity/partition/v1` binding the verifier needs its own copy
   of the partition object (`--partition`, by path or archive digest). Its form is #111's canonical one with open query names:
   exactly `format`, `program`, `query`; a SHA-512 program; a query of exactly `name` (a non-empty string), `version` (a
-  natural number) and `params` (an object), and for a query the verifier evaluates, its parameters too (`Q_word` v1 and v2:
-  exactly `X`, `W`, positive integers; `Q_call` v1: exactly `X`, an integer in 1..2^16). Its tagged digest `SHA-512("verity/partition/v1\0" ‖ canon(object))` must be META's, and its
+  natural number) and `params` (an object), and for `Q_word` v1 and v2 and `Q_call` v1, its parameters too (`Q_word`:
+  exactly `X`, `W`, positive integers; `Q_call`: exactly `X`, an integer in 1..2^16). A statement bound to `Q_call` v1 is
+  refused: that query is retired from the verifier of record. Its tagged digest `SHA-512("verity/partition/v1\0" ‖ canon(object))` must be META's, and its
   `program` must be META's `program_sha512`. The provisional unit cover takes no object.
 - **Tail outputs, packed ranges and leaf cuts (GEMM).** META may name `out_net`, the circuit whose
   output group holds the returned outputs (default `unit`), with `out_net_ports`, and `leaf_cuts`, `[unit, u, port, leaf]`.
@@ -1429,10 +1431,7 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   `units` is `derived` when the verifier derived the statement's units itself, given `--program`: for the template
   queries (above), and for `Q_word` v1 and v2 (§16.7) when the program is the object's, the query applies, every claimed unit is
   one whole activation of the circuit's template (the innermost Definition on its `locate` path, whose cut is one unit),
-  and every Call's cut holds the invariant and the width rule. Likewise for `Q_call` v1 (§16.7): every claimed unit is one
-  whole activation of the template (the Definition its path ends at, and not a batch's or scan's members taken together),
-  and every Call's cut holds the invariant and `X`, a value computed in two units counted in `note`, not refused. A
-  failing cut refuses the partition, naming the Call and its codes. For any other query, or without `--program`, `units`
+  and every Call's cut holds the invariant and the width rule. A failing cut refuses the partition, naming the Call and its codes. For any other query, or without `--program`, `units`
   is `as stated`, with the reason in `note`, which an audit reports as a gap.
 - **Registered reads**. A shared-row header may name `registered`, `{port: {value, positions, paths}}`: registered rows.
   The verifier needs its own `--registered F` (`verity/registered-reads/v1`: per port the value, root, leaves, domain,

@@ -81,17 +81,10 @@ theorem deriveQwordUnitsWith_std (c : Circuit) (obj : Json) (program : ByteArray
   try rfl
 
 set_option maxRecDepth 20000 in
-theorem deriveQcallUnitsWith_std (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) :
-    HmRow.deriveQcallUnitsWith std c obj program indices = HmRow.deriveQcallUnits c obj program indices := by
-  unfold HmRow.deriveQcallUnitsWith HmRow.deriveQcallUnits
-  simp only [programDecodeWith_std]
-  try rfl
-
-set_option maxRecDepth 20000 in
 theorem qwordFindingWith_std (c : Circuit) (pub : Public) (obj : Json) (program : ByteArray) (f : HmRow.PartitionFinding) :
     HmRow.qwordFindingWith std c pub obj program f = HmRow.qwordFinding c pub obj program f := by
   unfold HmRow.qwordFindingWith HmRow.qwordFinding
-  simp only [deriveQwordUnitsWith_std, deriveQcallUnitsWith_std]
+  simp only [deriveQwordUnitsWith_std]
   try rfl
 
 set_option maxRecDepth 20000 in

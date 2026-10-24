@@ -1,7 +1,7 @@
 /-
 The verifier's own program, from its descriptor's bytes (`verity-ir/descriptor/v1`): the template queries' reading of it
-(`Flock.TemplateQuery.Desc`) and C-Flock's decoding of the whole program (`Flock.Program.Prog`), whose root Calls
-`Q_word` and `Q_call` cut. Bytes either refuses are refused.
+(`Flock.TemplateQuery.Desc`) and C-Flock's decoding of the whole program (`Flock.Program.Prog`), whose Definitions the
+template checks read. Bytes either refuses are refused.
 -/
 import Flock.Program
 import Flock.TemplateQuery

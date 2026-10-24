@@ -5,8 +5,7 @@ there.
 
 * **Classes.** Two, the population and then the inputs. The population's strata are the query's (`Partition.strata`:
   one per template or Definition, in the order of its first unit), each stratum's replay units its units in ascending
-  order, each unit one proof unit, its gates (`Partition.unitGates`): an instance's, a `Q_call` unit's interval, or the
-  span of the gates a `Q_word` unit owns, which another unit's gates may interleave. The input class is one stratum (none
+  order, each unit one proof unit, its gates (`Partition.unitGates`): an instance's. The input class is one stratum (none
   when the root has no input) of every gate of the root's input nodes, in gate order, each a replay unit of one proof
   unit; it is drawn `all`, as `partition_object`'s input unit is always checked and never drawn.
 * **Slots.** A replay unit's slot is its index in class, stratum and replay-unit order (`Partition.rus`). Where no two

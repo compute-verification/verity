@@ -73,7 +73,6 @@ from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEM
                                             bit_row, row_leaf, sha512_row_digest, sha512_row_seg_digest,
                                             sha512_row_v2_digest)
 from verity.ml.circuits.codec import canonical_json, jcs_domain_error
-from verity.ml.circuits.partition_object import TemplatePartition
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array
 
@@ -361,11 +360,9 @@ def reads(program: Program, query: Mapping[str, Any], values: Mapping[str, int],
     in every unit or in none: a read at a computed position is no public read. `schemas` (`{value: schema}`) gives a
     value's row format when it is not `SCHEMA`, which sets how many leaves a row holds (`row_leaves`). A key is one
     parameter's or one row's of it (in every template that has it): two reads under one key, a parameter `a[0]` beside
-    row 0 of a parameter `a`, are refused, never merged. The units are a template query's instances; a `Q_word` or
-    `Q_call` unit reads no registered value (`ValueError`)."""
+    row 0 of a parameter `a`, are refused, never merged. The units are a template query's instances, the only query
+    one-stage applies (`partition.evaluate`)."""
     tp = P.evaluate(program, query)
-    if not isinstance(tp, TemplatePartition):
-        raise ValueError("a registered value is read by a template query's instances, not by a Q_word or Q_call unit")
     owner: dict[int, tuple[str, int]] = {}
     per_row = {v: row_leaves(program, v, w, (schemas or {}).get(v, SCHEMA)) for v, w in values.items()}
     for v, w in values.items():

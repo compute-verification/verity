@@ -14,9 +14,8 @@ arbitrary calls tables, for `check_public` and `check_verdicts` the proof servic
 `service.check_verdicts`), and for the `run` piece (a registration's whole run, `Run.run`) those references in a
 `Stream`'s order. The `partition`, `select` and `slots` pieces also run on random partitions: mixed population
 programs of random members of three templates, and rarely of `FORK` and of `IDENTITY`, of no gate, which one-stage
-refuses, under template queries over them, and programs of random root Calls (`call_program`) under `Q_word` and `Q_call`, a 32-bit
-Call among them, whose unit `Q_word` takes in the 32-bit class and `Q_call` at `X = 16` refuses, and `SHARED`, whose
-`Q_call` unit at `X = 16` holds a constant another unit reads. Records are v1 and, on the programs with root parameters to register
+refuses, under template queries over them, and programs of random root Calls (`call_program`) under `Q_word` and `Q_call`,
+which one-stage refuses: both are retired from the verifier of record. Records are v1 and, on the programs with root parameters to register
 (`REGISTERED_SETUPS`, 16- and 32-bit), mostly v2: the verifier expects values registered (`registered`, with its program
 function's `parameters`), and the record (and an earlier one in the log) registers `Registered.commit`'s entries; on
 the programs with a pair of digests to fill (`SUPPLIED_SETUPS`, 32- and 1-bit leaves) the verifier fills it itself from
@@ -90,8 +89,7 @@ def _fork(B, S, x):
     return tuple_of(first, B.call(XOR8, x[2], x[3]), last)
 
 
-#: Three outputs, two units at `Q_word`'s `X = 16`: the first two, whose gates the last one's interleaves, and the last;
-#: the interior value both read is committed, a unit of its own.
+#: Three outputs, the first and last reading one interior value.
 FORK = bind(CompositeDefinition("CoreSampledProofsFork", 0, (),
                                 lambda S: ((("x", Array(4, Value(8))),), Tuple(Value(8), Value(8), Value(8))), _fork,
                                 register=False))
@@ -116,8 +114,7 @@ def _shared(B, S, x):
 HELD = bind(CompositeDefinition("CoreSampledProofsHeld", 0, (),
                                 lambda S: ((("x", Array(2, Value(8))),), Tuple(Value(8), Value(8), Value(8))), _held,
                                 register=False))
-#: A Call whose first `Q_call` unit at `X = 16`, `HELD`, returns 16 bits and holds a constant the last gate reads: 24
-#: committed bits, in the 32-bit class, which `Q_call`'s width rule doesn't count; at `X = 8` the constant is in no unit.
+#: A Call to `HELD`, which holds a constant the last gate reads.
 SHARED = bind(CompositeDefinition("CoreSampledProofsShared", 0, (),
                                   lambda S: ((("x", Array(2, Value(8))),), Tuple(Value(8), Value(8), Value(8))), _shared,
                                   register=False))
@@ -166,7 +163,7 @@ class Setup:
 
 def call_program(members) -> Program:
     """A root of one Call per member, an index into `CALLEES`, each over a parameter of its own (a primitive's two values
-    as an array of two), returning their results: what `Q_word` and `Q_call` cut, Call by Call."""
+    as an array of two), returning their results: what `Q_word` and `Q_call`, which one-stage refuses, would cut."""
     def param(f):
         return Array(2, f.signature()[0][0][1]) if isinstance(f, PrimitiveDefinition) else f.signature()[0][0][1]
 
@@ -182,8 +179,7 @@ def call_program(members) -> Program:
 
 SETUPS = [Setup(P.population_program(PAIR, n), P.template_instance_query(PAIR.id)) for n in (1, 3, 6)] + [
     Setup(P.mixed_population_program([(PAIR, 2), (TRIPLE, 3)]), P.template_instances_query([PAIR.id, TRIPLE.id])),
-    Setup(P.mixed_population_program([(PAIR, 1), (TRIPLE, 2), (PAIR, 2)]), P.template_instances_query([TRIPLE.id, PAIR.id])),
-    Setup(call_program((0, 2, 0, 3)), PO.query()), Setup(call_program((1, 2, 3)), PO.call_query(8))]
+    Setup(P.mixed_population_program([(PAIR, 1), (TRIPLE, 2), (PAIR, 2)]), P.template_instances_query([TRIPLE.id, PAIR.id]))]
 
 
 def _registered_program(name: str, n: int, extra, registered) -> Program:
@@ -285,7 +281,7 @@ PROGRAMS = {s.sha512: s.program for s in SETUPS + REGISTERED_SETUPS}
 PROGRAMS_TEMPLATES = [PAIR.id, TRIPLE.id]
 #: The strata a work table may name: the templates' and the Calls'.
 WORK_IDS = list(dict.fromkeys([t.id for t in TEMPLATES] + CALLEE_IDS))
-#: `Q_word` and `Q_call` as one-stage applies them, `X = 16` and `X <= 16`, and at the widths it refuses.
+#: `Q_word` and `Q_call`, of core's form, which one-stage refuses at every width: both are retired from the verifier of record.
 CALL_QUERIES = [PO.query(), PO.query(W=16), PO.call_query(16), PO.call_query(8), PO.call_query(4), PO.call_query(32),
                 PO.query(X=8), PO.query(version=2)]
 #: Queries a verifier may hold: the setups' own, `CALL_QUERIES`, and ones core refuses or one-stage doesn't apply.
@@ -317,8 +313,8 @@ def partitions(draw) -> tuple[dict, dict, int]:
     """A random partition P = Q(C): a mixed population program of one to four members, each some instances of one of
     `MEMBERS` (rarely of `FORK` or `IDENTITY`; one template's members apart, adjacent or alone), and a template query over
     it, mostly one that applies (the members' templates, in any order); or, a third of the time, a program of one to five
-    root Calls of `CALLEES` (rarely the 32-bit one or `SHARED`) under `Q_word` or `Q_call`, mostly at a width one-stage
-    applies. The program's descriptor, the query and the population, 0 where the query doesn't apply."""
+    root Calls of `CALLEES` (rarely the 32-bit one or `SHARED`) under `Q_word` or `Q_call`, which one-stage refuses, or
+    another query. The program's descriptor, the query and the population, 0 where the query doesn't apply."""
     if draw(st.integers(0, 2)) == 0:
         members = tuple(draw(st.lists(st.sampled_from([0, 1, 2, 3] * 6 + [4, 4, 5]), min_size=1, max_size=5)))
         query = draw(st.sampled_from(CALL_QUERIES[:4] * 3 + CALL_QUERIES[4:]) | st.sampled_from(QUERIES))
@@ -2961,31 +2957,17 @@ def test_the_slots_follow_the_strata(pieces):
     assert out["checked"] == [[v, 0] for v in sorted(drawn + [v for v, u in enumerate(units) if u is None])]
 
 
-def test_the_call_queries_cut_call_by_call(pieces):
-    """On a program of root Calls, Lean's slots are the Python's whole under `Q_word` at `X = 16` and `Q_call` at `X = 8`:
-    the strata are the Calls' Definitions, `FORK`'s `Q_word` units two output units and its committed interior value, the
-    first's gate span holding the second's; both refuse the widths one-stage doesn't apply, and agree on a Call whose
-    `Q_word` unit commits 32 bits, in the 32-bit class, which `Q_call` at `X = 16` refuses."""
-    desc = json.loads(_calls((0, 2, 0, 3)))
-    case = {"closure": None, "program": desc, "rule": {"law": "subset:2", "rule": "law"},
+def test_the_call_queries_are_refused(pieces):
+    """On programs of root Calls, among them a 32-bit Call and `SHARED`, Lean refuses `Q_word` and `Q_call` at every width
+    as the Python does: both are retired from the verifier of record, which applies the template queries only."""
+    case = {"closure": None, "rule": {"law": "subset:2", "rule": "law"},
             "source": hashlib.shake_256(b"calls").hexdigest(400), "work_table": None}
-    word = slots({**case, "query": _json(PO.query())})
-    assert D.replay(SLOTS, {**case, "query": _json(PO.query())}, pieces) == ("output", D.canonical(word))
-    assert [[r["unit"] for r in s] for s in word["classes"][0]] == [[0, 4], [1, 2, 3], [5]]
-    (first,), (second,) = word["classes"][0][1][0]["pus"], word["classes"][0][1][1]["pus"]
-    assert first[0] < second[0] < second[1] < first[1]
-    call = slots({**case, "query": _json(PO.call_query(8))})
-    assert D.replay(SLOTS, {**case, "query": _json(PO.call_query(8))}, pieces) == ("output", D.canonical(call))
-    assert [[r["unit"] for r in s] for s in call["classes"][0]] == [[0, 5], [1, 2, 3, 4], [6]]
-    wide = json.loads(_calls((0, 4)))
-    taken = {**case, "program": wide, "query": _json(PO.query())}
-    assert D.replay(SLOTS, taken, pieces) == ("output", D.canonical(slots(copy.deepcopy(taken))))
-    for program, query in [(desc, PO.call_query(4)), (desc, PO.call_query(32)), (desc, PO.query(X=8)),
-                           (desc, PO.query(version=2)), (wide, PO.call_query(16))]:
-        refused = {**case, "program": program, "query": _json(query)}
-        assert D.replay(SLOTS, refused, pieces)[0] == "reject", query
-        with pytest.raises(D.Reject):
-            slots(copy.deepcopy(refused))
+    for members in [(0, 2, 0, 3), (0, 4), (0, 5)]:
+        for query in CALL_QUERIES:
+            refused = {**case, "program": json.loads(_calls(members)), "query": _json(query)}
+            assert D.replay(SLOTS, refused, pieces)[0] == "reject", (members, query)
+            with pytest.raises(D.Reject):
+                slots(copy.deepcopy(refused))
 
 
 XOR64 = PrimitiveDefinition("CoreSampledProofsXor64", 1, (("a", Value(64)), ("b", Value(64))), Value(64),
@@ -3006,12 +2988,9 @@ def _template_population(template, n: int) -> dict:
 def test_a_unit_wider_than_the_widest_class_or_a_template_of_no_gate_is_refused(pieces):
     """Lean refuses as the Python does a template instance of 262,208 bits, one class past the widest, and a population
     with an instance of `IDENTITY`, of no gate; both take an instance of 262,144 bits, the widest class (the measured
-    widths' `Gemm_v2{K=2048,N=16384}`), and `SHARED` under `Q_call` at `X = 16`, whose first unit passes `Q_call`'s width
-    rule with 16 returned bits while it holds a constant a later unit reads, 24 bits in the 32-bit class, and at `X = 8`,
-    where that constant is in no unit, and agree on their slots."""
+    widths' `Gemm_v2{K=2048,N=16384}`), and agree on its slots."""
     case = {"closure": None, "rule": {"law": "subset:1", "rule": "law"},
             "source": hashlib.shake_256(b"refused").hexdigest(400), "work_table": None}
-    shared = json.loads(_calls((0, 5)))
     widest, over = bind(WIDE, N=4096), bind(WIDE, N=4097)
     for program, query in [(_template_population(over, 1), P.template_instance_query(over.id)),
                            (json.loads(_population(((0, 1), (4, 2)))), P.template_instances_query([PAIR.id, IDENTITY.id]))]:
@@ -3019,10 +2998,8 @@ def test_a_unit_wider_than_the_widest_class_or_a_template_of_no_gate_is_refused(
         assert D.replay(SLOTS, refused, pieces)[0] == "reject", query
         with pytest.raises(D.Reject):
             slots(copy.deepcopy(refused))
-    for program, query in [(_template_population(widest, 1), P.template_instance_query(widest.id)),
-                           (shared, PO.call_query(16)), (shared, PO.call_query(8))]:
-        taken = {**case, "program": program, "query": _json(query)}
-        assert D.replay(SLOTS, taken, pieces) == ("output", D.canonical(slots(copy.deepcopy(taken)))), query
+    taken = {**case, "program": _template_population(widest, 1), "query": _json(P.template_instance_query(widest.id))}
+    assert D.replay(SLOTS, taken, pieces) == ("output", D.canonical(slots(copy.deepcopy(taken))))
 
 
 R7_CODES = {"R7-registered", "R7-values", "R7-root", "R7-leaves", "R7-words", "R7-domain", "R7-word_bits", "R7-held",
