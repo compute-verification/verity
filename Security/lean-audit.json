@@ -1122,6 +1122,10 @@
    "owner": "@compute-accounting",
    "digest": "d777f337d5fdcbc5d7ea6d48f614a284b764038886ca18ec4b5a0f892056c342"
   },
+  "Nci.Assumptions.ParameterHardPricedAt": {
+   "owner": "@training",
+   "digest": "733baecc853f27cbcc97a8c248eb55e55b7b7756e83b678869381bf78100cbb7"
+  },
   "Nci.Assumptions.PartialSumsIncompressible": {
    "owner": "@lean",
    "digest": "3e12dadef8d8457e3aa1179212599e1eabeef158cb25d3d51bab61e7668f6374"
@@ -7746,6 +7750,12 @@
    "assumptions": [],
    "type_hash": "d3f79b9bf0b40f087a3ff732e52168c9d455850f506d37f97e9d327daae4af5c"
   },
+  "Nci.SecurityProofs.CoveringBoundPriced": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.CoveringBoundPriced : Nci.Guarantees.CoveringBoundPriced"],
+   "assumptions": [],
+   "type_hash": "5136ccf244c834b3c555ffb5f0397740f4acca21e2fba5d1b11ff0869dc461e9"
+  },
   "Nci.SecurityProofs.CoveringBoundTwoCosts": {
    "owner": "@compute-accounting",
    "signature": ["Nci.SecurityProofs.CoveringBoundTwoCosts : Nci.Guarantees.CoveringBoundTwoCosts"],
@@ -11268,7 +11278,8 @@
    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1": "frozen (no-function): It bounds AccSeqsWithin with advice v1's charge (AdviceV1.bits, the mirror of arith_encode.py's reference_charge), the observation sequences an abstract Program accepts with advice within the caps, not runs of the network check's code, and takes no assumption about the charge; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, advice v1's charge (AdviceV1.bits, the mirror of arith_encode.py's reference_charge) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, advice v1's charge (AdviceV1.bits, the mirror of arith_encode.py's reference_charge) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
-   "Nci.Cover.SecurityProofs.CoverTrainingChained": "frozen (no-function): Like CoverTraining, it is about an arbitrary reference training circuit, here as its bits made a declaration (bitDecl, Security/Definitions/Nci/BitDecl.lean) with its multiplication blocks and token computations (Nci.Covering.MulBlocks), and a declaration that contains it with its baseline registered (the named BaselineRegistered, Security/Models/Nci/Assumptions/Baseline.lean), under the named ParameterHardAt on those bits and with ActivationChainedAt read in its statement (Security/Models/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; Security/Proofs/Nci/Cover/CheckedChained.lean joins it to a verdict (coverTrainedChained, from NciCheck.Properties.Witnesses), and stating that join among the properties is what would give it an acceptance."
+   "Nci.Cover.SecurityProofs.CoverTrainingChained": "frozen (no-function): Like CoverTraining, it is about an arbitrary reference training circuit, here as its bits made a declaration (bitDecl, Security/Definitions/Nci/BitDecl.lean) with its multiplication blocks and token computations (Nci.Covering.MulBlocks), and a declaration that contains it with its baseline registered (the named BaselineRegistered, Security/Models/Nci/Assumptions/Baseline.lean), under the named ParameterHardAt on those bits and with ActivationChainedAt read in its statement (Security/Models/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; Security/Proofs/Nci/Cover/CheckedChained.lean joins it to a verdict (coverTrainedChained, from NciCheck.Properties.Witnesses), and stating that join among the properties is what would give it an acceptance.",
+   "Nci.SecurityProofs.CoveringBoundPriced": "frozen (no-function): CoveringBoundTwoCosts's twin with a price per weight in place of one weight cost c_w, beside it: it is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ParameterHardPricedAt (Security/Models/Nci/Assumptions/CoveringPriced.lean) and with ActivationChainedAt read in its statement (Security/Models/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -15585,6 +15596,7 @@
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.ContainedTrainingOn",
     "Nci.SecurityProofs.CoveringBound",
+    "Nci.SecurityProofs.CoveringBoundPriced",
     "Nci.SecurityProofs.CoveringBoundTwoCosts",
     "Nci.SecurityProofs.DampenerRemote",
     "Nci.SecurityProofs.DampenerThreaded",
@@ -15679,6 +15691,7 @@
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.ContainedTrainingOn",
     "Nci.SecurityProofs.CoveringBound",
+    "Nci.SecurityProofs.CoveringBoundPriced",
     "Nci.SecurityProofs.CoveringBoundTwoCosts",
     "Nci.SecurityProofs.DampenerRemote",
     "Nci.SecurityProofs.DampenerThreaded",
@@ -16571,6 +16584,7 @@
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
     "Nci.Cover.SecurityProofs.CoveringBoundAdditive",
     "Nci.SecurityProofs.CoveringBound",
+    "Nci.SecurityProofs.CoveringBoundPriced",
     "Nci.SecurityProofs.CoveringBoundTwoCosts"
    ]
   },
@@ -30597,6 +30611,13 @@
    },
    "guarantees": ["Nci.SecurityProofs.CoveringBound"]
   },
+  "Models.Nci.Assumptions.CoveringPriced": {
+   "digest": "1226a4e3466977791d2f8c18fdd5952b8fab64b0e9ae1e858447b652338595c8",
+   "definitions": {
+    "Nci.Assumptions.ParameterHardPricedAt": "733baecc853f27cbcc97a8c248eb55e55b7b7756e83b678869381bf78100cbb7"
+   },
+   "guarantees": ["Nci.SecurityProofs.CoveringBoundPriced"]
+  },
   "Models.Nci.Assumptions.CoveringTwoCosts": {
    "digest": "4965f5ecb57ad599d5c56c135d6eedd25d98b72a6a27361aa523c8b97eac0372",
    "definitions": {
@@ -30607,6 +30628,7 @@
    "guarantees": [
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
     "Nci.Cover.SecurityProofs.CoveringBoundAdditive",
+    "Nci.SecurityProofs.CoveringBoundPriced",
     "Nci.SecurityProofs.CoveringBoundTwoCosts"
    ]
   },
@@ -30860,6 +30882,13 @@
     "Nci.Guarantees.CoveringBound": "19a82c84031d0920c7145a871632219c5322dcbc559eee7f27930db159628318"
    },
    "guarantees": ["Nci.SecurityProofs.CoveringBound"]
+  },
+  "Models.Nci.Guarantees.CoveringPriced": {
+   "digest": "07859826589d14104bb013de9ea1722f255057c7ac09f99da9264704d4df889a",
+   "definitions": {
+    "Nci.Guarantees.CoveringBoundPriced": "4b53795ba482410463b9393a10e3c80c52c07b868adf2636645ccf96bada892d"
+   },
+   "guarantees": ["Nci.SecurityProofs.CoveringBoundPriced"]
   },
   "Models.Nci.Guarantees.CoveringTwoCosts": {
    "digest": "3316e5210f167499e011334c1b2e192a25a4ae988f7daea6fe61bfbee9d11a64",
