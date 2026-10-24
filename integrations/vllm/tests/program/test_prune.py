@@ -8,10 +8,12 @@ from collections import Counter
 from verity_vllm.predict import build as PB
 from verity_vllm.predict.phi import Phi
 from verity_vllm.program.prune import _read, _renumbered, dead_free, dead_units, swapped, without_dead_units
+from verity_vllm.program.registry import topp_words as TW
 
+from verity.ml.circuits.defs import Body, Node, bind
 from verity.ml.circuits.liveness import dead_gates
 from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Affine, Concat, Explicit, Strided
+from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, Strided
 
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
         "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5, "tie_word_embeddings": True,
@@ -65,6 +67,18 @@ def test_the_dead_free_form_binds_rmsnorm_and_token_select_to_their_versions_wit
             assert b is a
     assert sw.ret is body.ret and sw.offsets[-1] == sum(n.gates for n in sw.nodes)
     assert swapped(sw) is sw
+
+
+def test_the_dead_free_form_binds_the_top_p_select_to_v3():
+    """A request at the registered split count selects with `GumbelTopPTokenSelect_v2{V,S}` (`registry.topp_words`); `swapped`
+    binds it to v3 at the same V and S, with v2's arguments and output and none of its dead gates."""
+    sd = bind(TW.GumbelTopPTokenSelectV2, V=3, S=2)
+    args = tuple(Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(sd.body.params))
+    body = Body(sd.body.params, sd.body.ret_type, [Node("call", sd, args, sd.body.ret_type)], Affine("n", 0, 0, 1), [0, sd.gates])
+    (a,), (b,) = body.nodes, swapped(body).nodes
+    assert (a.fn.id, b.fn.id) == ("GumbelTopPTokenSelect_v2{V=3,S=2}", "GumbelTopPTokenSelect_v3{V=3,S=2}")
+    assert (b.form, b.args, b.out) == (a.form, a.args, a.out)
+    assert dead_gates(Program(b.fn), limit=0, transitive=True).computed == 0 < dead_gates(Program(a.fn), limit=0, transitive=True).computed
 
 
 def test_each_reference_is_renumbered_in_its_own_form():
