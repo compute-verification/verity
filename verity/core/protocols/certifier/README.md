@@ -32,13 +32,22 @@ A spec-level reference for network accounting's timing channel:
   link"). The proxy's admission rule (`Proxy(served=…)`) admits a request only while its window still ends idle, so
   an honest served link is accepted. An egress end with neither profile gets no verdict (`ValueError`, failing
   closed);
-- the I/O tie (`io_tie`), a design (`PROTOCOL.md`, "The I/O tie") and its prototype on a fake upstream, in no Spec:
+  - the I/O tie (`io_tie`), a design (`PROTOCOL.md`, "The I/O tie") and its prototype on a fake upstream, in no Spec:
   every cell of an egress link-window is opened, each a pad or the canonical event of one token id on the stream the
   warden set, and each is the output the verifier's map names at its place (`window_map`, from advice v0's outputs and
   release buckets), with the id the Commit sampled for it (the port: one hiding row of ids a step, opened under the
   Commit's root). The warden commits each bucket's cells as one hiding row. It has the reference and the unit's Boolean
   Definition (`IoTieWindow`: the cells' root by `NetworkRowsRoot`, the port's rows by `IoTiePort`, then `IoTieContent`:
   `IoTieCell` on every cell, the prover's Beneš routing of the port's entries `IoTieRoute`, `IoTieMatch`);
+- an advised link's counts (`advised`, `LinkWindows(advised=AdvisedProfile(windows, request_frames, own))`), a
+  served link under arbitrary traffic: N2's advised unit, `NetworkAdvisedLinkWindow`, adds `NetworkAdvisedCounts_v1`
+  (63,031 ANDs at T = 600, R_in = 1), which holds the egress head's counts to the releases of the prover's advice
+  (`LinkAdvice`: I1's `advice.Advice` and each window's request frames), and the ingress head's counts to the advice:
+  each release eligible under a declared sync in Σ_sync, and at least a bucket, after its request's frames, whose end
+  on the ingress link `advised.ends` derives from v0's prompt lengths and the link's public framing, and each window's
+  ingress total the advice's. Carry-over between windows is the advice's. With the advice fixed the counts are
+  determined, so the egress timing carries at most `advice.bits` (`PROTOCOL.md`, "An advised link").
+  An egress end with no profile that is neither served nor advised gets no verdict (`ValueError`, failing closed);
 - the capacity counts;
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
@@ -75,8 +84,8 @@ It is pure Python. It imports only the standard library and `verity`: for the re
 Definition, and in `active` the proof service's registration and receipt, which `reveal` reads, and the pair link's
 AEAD (`verity.ml.crypto.aead`). The certificate's signature scheme is a parameter: the certifier's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
-From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` the circuits
-and their evaluator.
+From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` and `advised`
+the circuits and their evaluator.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`Security/`, area `NetworkCertifier`).
 `lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's
 definitions, proved equal to them in `Security/Proofs/NetworkCertifier/Code.lean`, and the difftest that holds this
