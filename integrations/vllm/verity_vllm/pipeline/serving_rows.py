@@ -24,7 +24,7 @@ templates, or for one when the file names ``Q_template_instances``) is the one t
 is the derived file, digest and members included.  ``scope.op_path_prefix`` restricts the population to one module
 (``model.layers.0.``, or a MoE layer's ``moe/L40``), ``scope.steps`` (``[lo, hi)``) to those steps of each request.  A chunked
 template's units (``CHUNKED``: a ``ScaledMmS8Coordinate``, a ``COORDS`` coordinate, a ``COLS`` column block, a ``SLICES``
-slice or a ``KCHUNKS`` K-chunk) are split
+slice, a ``KCHUNKS`` K-chunk or a ``SPLITS`` split part or combine) are split
 into consecutive chunks of at most its ``chunk_cap`` (flock-circuit's spec shape, as ``benchmarks/one_stage/a6.py`` computes
 it; ``chunk_caps`` writes the entry), each chunk a member on C-Flock's bit rows (`chunk_rows.unit_rows`) with its public file of global unit indices;
 ``row_tables`` puts the ``ScaledMmS8Coordinate`` chunks in the row-table layout (``with_row_tables``).
@@ -37,7 +37,9 @@ does not compute what the row computes is no match), or when the template's word
 row is split into its N coordinates), or at a halving of its width (``COLS``: the row is split into column blocks), or when it
 is a part of the row's Definition (``PARTS``: the row is split into Definitions of its own, one member per part), or when it
 is the row's Definition at every axis of a batch 1 (``SLICES``: the row is split into its slices along those axes), or when it
-is a K-chunk of the row's coordinate (``KCHUNKS``: each coordinate is split along K, one template per chunk place).  A Boolean
+is a K-chunk of the row's coordinate (``KCHUNKS``: each coordinate is split along K, one template per chunk place), or when it
+is a split part or the combine of the row's Definition (``SPLITS``: each head is split into its splits' parts and their
+combine, one template per part key count and one for the combine, `split_rows`).  A Boolean
 Program's rows are its word view (`pipeline.build_instances`: each
 row the word Definition its Call's Boolean Definition computes, that Boolean Definition its ``bits``), so a template matches the
 same rows under either IR, and the members, their rows and every committed word are the same; the population program is over the
@@ -70,6 +72,12 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    ``in<g>`` per parameter, ``xq``, ``sx``, ``e``, ``acc`` (the twin's chain; wired to chunk
                                    c - 1's ``o0``), the slab and scale columns of its k weights -> ``o0`` (the accumulator, LAST
                                    the served word n); always chunked, v2 bit rows; one index entry per row
+  ``SparseMlaSplitPart_v1{T=k,..}``, ``SparseMlaCombine_v1{NSPLIT=n,..}``  each split of k keys of every head of the
+                                   ``SparseMlaSplit_v1`` rows in n non-empty splits, and each head's combine (``SPLITS``,
+                                   `split_rows`): a part ``in0``, ``in1``, ``in2`` (the head's q_nope and q_rope, the split's kv
+                                   rows) -> ``o0``, ``o1`` (the twin's partial and lse); a combine ``in0.<s>``, ``in1.<s>`` (wired
+                                   to split s's part's ``o1`` and ``o0``) -> ``o0`` (the served head); always chunked, v2 bit
+                                   rows, MUFU reads in lookup slots (`chunk_rows.reads`); one index entry per row
   ``MoeSum_v1{H=w,..}``, ``AllReduceMnnvl_v1{N=w,..}``  every block j of w columns of the rows of that Definition W wide, W / w
                                    a power of two (``COLS``): ``in<g>`` per argument group, each of its rows' columns [jw, jw + w)
                                    in order -> ``out.<member>``, the row's output columns [jw, jw + w); one index entry per row;
