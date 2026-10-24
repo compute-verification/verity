@@ -1,5 +1,6 @@
 import Models.Nci.Guarantees.Remote
 import Proofs.Nci.Dampener
+import Proofs.Nci.Escape
 
 /-!
 # Proofs of the compute dampener, remote protocol
@@ -9,12 +10,12 @@ whose expectation `expected_wrong` swaps into the windows' marginals. `VerdictLa
 (`Finset.sum_sdiff`) and sums the rest by identity (`Finset.sum_fiberwise_of_maps_to`): under `TerminalDetection` one
 identity's faulty blocks at or after its first detected one all lie within `Δ` of it, so they skip at most `Φ Δ`.
 `escape_slack` is Markov's inequality again, on the escaped blocks' skipped work, whose expectation `expected_escaped`
-sums `SampledEscape`'s per-identity bound. `DampenerRemote` reads the residual's hypothesis outside both events as
-`DampenerThreaded`'s at `(1 − ε_W) W_cert − ε' C − (JΔ/H) C − θ C`, and sums the sources with no memory cap
-(`sources_le_at`, unmonitored compute at efficiency `MFU₀`) into both the efficiency and the hardware-multiple forms
-(`remote_core`); the union of the two events has probability at most the sum of theirs (`prob_or_le`), so the
-complement has probability at least `1 − p/ε' − J ((1 − q)/q) B/(θ C)` (`prob_ge_of_not`), `μ` summing to 1
-(`prob_add_not`).
+sums the per-identity bound `sampled_escape` derives from `SampledDetection`. `DampenerRemote` reads the residual's
+hypothesis outside both events as `DampenerThreaded`'s at `(1 − ε_W) W_cert − ε' C − (JΔ/H) C − θ C`, and sums the
+sources with no memory cap (`sources_le_at`, unmonitored compute at efficiency `MFU₀`) into both the efficiency and the
+hardware-multiple forms (`remote_core`); the union of the two events has probability at most the sum of theirs
+(`prob_or_le`), so the complement has probability at least `1 − p/ε' − J ((1 − q)/q) B/(θ C)` (`prob_ge_of_not`), `μ`
+summing to 1 (`prob_add_not`).
 -/
 
 namespace Nci.SecurityProofs
@@ -168,11 +169,12 @@ theorem VerdictLag : Guarantees.VerdictLag := by
   have hsplit := Finset.sum_sdiff hEsub (f := w)
   linarith
 
-/-- The expected work the escaped blocks skip is at most `J ((1 − q)/q) B`: `SampledEscape`'s bound, summed over the
+/-- The expected work the escaped blocks skip is at most `J ((1 − q)/q) B`: `sampled_escape`'s bound, summed over the
 identities. -/
 theorem expected_escaped {Ω β ι : Type} [Fintype Ω] [DecidableEq ι] (μ : PMF Ω) (bad detected : Ω → Finset β)
-    (I : Finset ι) (ident : β → ι) (τ w : β → ℝ) (q B : ℝ) (hI : ∀ ω, ∀ b ∈ bad ω, ident b ∈ I)
-    (hS : Assumptions.SampledEscape μ bad detected ident τ w q B) :
+    (I : Finset ι) (ident : β → ι) (τ w : β → ℝ) (q B : ℝ) (hI : ∀ ω, ∀ b ∈ bad ω, ident b ∈ I) (hq : 0 < q)
+    (hq1 : q ≤ 1) (hB : 0 ≤ B) (hw : ∀ b, 0 ≤ w b) (hwB : ∀ ω, ∀ b ∈ bad ω, w b ≤ B)
+    (hS : Assumptions.SampledDetection μ bad detected ident τ q) :
     ∑ ω, (μ ω).toReal * ∑ b ∈ escaped (bad ω) (detected ω) ident τ, w b ≤ I.card * ((1 - q) / q * B) := by
   have hmaps : ∀ ω, ∀ b ∈ escaped (bad ω) (detected ω) ident τ, ident b ∈ I :=
     fun ω b hb => hI ω b (mem_escaped.1 hb).1
@@ -181,14 +183,16 @@ theorem expected_escaped {Ω β ι : Type} [Fintype Ω] [DecidableEq ι] (μ : P
         rw [Finset.sum_comm]
         refine Finset.sum_congr rfl fun ω _ => ?_
         rw [← Finset.mul_sum, Finset.sum_fiberwise_of_maps_to (hmaps ω) w]
-    _ ≤ ∑ _j ∈ I, (1 - q) / q * B := Finset.sum_le_sum fun j _ => hS j
+    _ ≤ ∑ _j ∈ I, (1 - q) / q * B :=
+        Finset.sum_le_sum fun j _ => sampled_escape μ bad detected ident τ w q B hq hq1 hB hw hwB hS j
     _ = I.card * ((1 - q) / q * B) := by rw [Finset.sum_const, nsmul_eq_mul]
 
-/-- **The escape slack**: under `SampledEscape`, the faulty blocks accepted before their identity's first detection
+/-- **The escape slack**: under `SampledDetection`, the faulty blocks accepted before their identity's first detection
 skip more than `θ C` with probability at most `J ((1 − q)/q) B/(θ C)`, by Markov's inequality. -/
 theorem escape_slack {Ω β ι : Type} [Fintype Ω] [DecidableEq ι] (μ : PMF Ω) (bad detected : Ω → Finset β)
     (I : Finset ι) (ident : β → ι) (τ w : β → ℝ) (q B θ C : ℝ) (hθ : 0 < θ) (hC : 0 < C) (hw : ∀ b, 0 ≤ w b)
-    (hI : ∀ ω, ∀ b ∈ bad ω, ident b ∈ I) (hS : Assumptions.SampledEscape μ bad detected ident τ w q B) :
+    (hI : ∀ ω, ∀ b ∈ bad ω, ident b ∈ I) (hq : 0 < q) (hq1 : q ≤ 1) (hB : 0 ≤ B) (hwB : ∀ ω, ∀ b ∈ bad ω, w b ≤ B)
+    (hS : Assumptions.SampledDetection μ bad detected ident τ q) :
     prob μ (fun ω => θ * C < ∑ b ∈ escaped (bad ω) (detected ω) ident τ, w b) ≤
       I.card * ((1 - q) / q * B) / (θ * C) := by
   have hZ : ∀ ω, 0 ≤ ∑ b ∈ escaped (bad ω) (detected ω) ident τ, w b :=
@@ -196,7 +200,7 @@ theorem escape_slack {Ω β ι : Type} [Fintype Ω] [DecidableEq ι] (μ : PMF �
   have hm : θ * C * prob μ (fun ω => θ * C < ∑ b ∈ escaped (bad ω) (detected ω) ident τ, w b) ≤
       ∑ ω, (μ ω).toReal * ∑ b ∈ escaped (bad ω) (detected ω) ident τ, w b :=
     markov μ (fun ω => ∑ b ∈ escaped (bad ω) (detected ω) ident τ, w b) hZ (θ * C)
-  have hE := expected_escaped μ bad detected I ident τ w q B hI hS
+  have hE := expected_escaped μ bad detected I ident τ w q B hI hq hq1 hB hw hwB hS
   rw [le_div_iff₀ (mul_pos hθ hC)]
   linarith
 
@@ -273,12 +277,12 @@ theorem residualShare_sub {W C εW ε L θ : ℝ} (hC : 0 < C) :
 
 theorem DampenerRemote : Guarantees.DampenerRemote := by
   intro Ω _ μ N c wrong p ε β ι _ bad detected I ident τ w Φ Δ H q B θ εW κ C U W χ mfu M Mu Mr Mx Γ α b_w b_a r d T
-    dd e Mc hp hε hc hcC hsound hH hΔ hΦ hI hT hcap hθ hw hS hκ hC hU hmfu hmfu1 hα hbw hba hdd hcomp hB hthr hW hsize
-    hM0 hM hu hres hx
+    dd e Mc hp hε hc hcC hsound hH hΔ hΦ hI hT hcap hθ hw hq hq1 hB0 hwB hS hκ hC hU hmfu hmfu1 hα hbw hba hdd hcomp hB
+    hthr hW hsize hM0 hM hu hres hx
   refine prob_ge_of_not μ ?_ ((prob_or_le μ (fun ω => ε * C < wrongCapacity c (wrong ω))
     (fun ω => θ * C < ∑ b ∈ escaped (bad ω) (detected ω) ident τ, w b)).trans
       (add_le_add (CertificateSlack Ω μ N c wrong p ε C hp hε hC hc hcC hsound)
-        (escape_slack μ bad detected I ident τ w q B θ C hθ hC hw hI hS)))
+        (escape_slack μ bad detected I ident τ w q B θ C hθ hC hw hI hq hq1 hB0 hwB hS)))
   intro ω hbad
   by_contra hgood
   apply hbad
