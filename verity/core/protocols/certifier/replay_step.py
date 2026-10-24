@@ -74,8 +74,9 @@ moves left by the stopped before it, low bit first, which never collides); the w
 left by the admitted and right by the preempted. `size` counts its ANDs by stage.
 
 **Cost** (`size`, on the smallkv engine: T = 2048, NB = 512, chunked prefill and prefix caching): 12,320 ANDs at
-(R, W, A) = (4, 8, 4), 95,247 at (16, 64, 16) and 160,803 at (32, 64, 32). By stage, to within 2% of every measured
-class: the running loop's preemption pairs 15.6·R² + 205·R, the requeue's shifts about 104·W·bitlen(R) + 250·R, the
+(R, W, A) = (4, 8, 4), 95,247 at (16, 64, 16), 160,803 at (32, 64, 32) and 126,225 at (48, 4, 8). By stage (fitted
+within 2% on 15 classes up to R = 32, W = 128, A = 32, and 6% high at (48, 4, 8), whose running loop it gets within
+0.2%): the running loop's preemption pairs 15.6·R² + 205·R, the requeue's shifts about 104·W·bitlen(R) + 250·R, the
 candidates' scan about 250·W + 290·A, the placing shifters about 96·R·bitlen(R) + 270·min(W, R) and the compaction
 130·R·bitlen(R).
 The running loop is most of a class that covers max_num_seqs = 256: about 1.7M ANDs a step, 1.1M of them the pairs.
@@ -88,8 +89,6 @@ from dataclasses import dataclass
 from functools import lru_cache
 from types import SimpleNamespace
 from typing import Sequence
-
-import numpy as np
 
 from verity.ml.circuits.boolean.forms import ONE, ZERO, Circuit, add, and_reduce, const_bits, mux, or_reduce, sub
 from verity.ml.circuits.evaluation.bits import evaluate_bits
@@ -742,7 +741,7 @@ def decode(S, flat: Sequence[int]) -> Out:
 def evaluate(st_: dict, cases: Sequence[tuple[State, Inputs]]) -> list[Out]:
     """The unit at statics `st_` on each (state, inputs), in one evaluation."""
     S = SimpleNamespace(**st_)
-    args = [np.asarray(rows, dtype=np.uint8) for rows in zip(*(arguments(S, s, i) for s, i in cases))]
+    args = [list(rows) for rows in zip(*(arguments(S, s, i) for s, i in cases))]
     out = evaluate_bits(unit(**st_), *args)
     return [decode(S, row) for row in out.reshape(len(cases), -1).tolist()]
 
