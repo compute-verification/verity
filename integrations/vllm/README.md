@@ -104,8 +104,7 @@ range bits per token, from the fused embedding's ids, no kernel change).  `ops/p
 Never: decide what is required; never a model-name list.
 
 **`commit/`** implements *commitment*: `merkle.py` (trees over canonical ids, `path_shape` / `fold_path`, openings), `hashing.py`
-(`H(tag, *parts)`), `identity.py`, `binding.py` (binding map + coverage), `padding_steps.py`, `hidden_stream.py`, `served_record.py`
-(a served request's committed ids by position, whatever the scheduler did, held to its streamed I/O), `scheme.py` (the commitment scheme `vllm-v1`: every leaf and root rule, over `verity.ml.commitments.vllm_v1`), and `committer/`, the GPU committer (`native_host.py`, the collector of record;
+(`H(tag, *parts)`), `identity.py`, `binding.py` (binding map + coverage), `padding_steps.py`, `hidden_stream.py`, `scheme.py` (the commitment scheme `vllm-v1`: every leaf and root rule, over `verity.ml.commitments.vllm_v1`), and `committer/`, the GPU committer (`native_host.py`, the collector of record;
 `native_collect.py` + `native_*.cu` / `.cpp`, `native_jit.py`, `leafhash.py`, `flush_points.py`, `hidden_gpu_src/`).  Never:
 runtime metadata in the identity tuple.
 
