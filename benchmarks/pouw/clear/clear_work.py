@@ -258,6 +258,13 @@ def check_opened(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Seque
             return f"{side} row {index} is {kind} but {'fails' if kind == 'credited' else 'passes'} the per-row rules"
         if kind == "credited" and r1(side, index, True):
             return f"{side} row {index} is credited but its own debit passes R1's bound (ρ·its cell credit)"
+    return cap_failure(scheme, record, tile, ops, tol)
+
+
+def cap_failure(scheme: C.PearlC, record: UnitRecord, tile: Tile, ops, tol=0) -> str | None:
+    """`check_opened`'s cap on the tile's credited words: None, or the reason the tile's debit or (under a row-capped
+    format) a credited row's is over its cap.  The hidden path's is `circuit.cap`'s (`cap.served`)."""
+    k = record.matmul.shape.k
     rows, cols = record.credited(tile)
     if rows and cols:
         bound = 1 + Fraction(tol)
