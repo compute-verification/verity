@@ -6,7 +6,7 @@
 # Each spec of RS_PROVE is built with its reads in slots, staged, proved under --zk and verified by the Lean verifier; each
 # "MODE SPEC" of RS_BUILD (MODE slots or inline) is only built, for its size (ANDs, nonzeros, k_log). Records: $OUT/<tag>/m1.log.
 # The router starts at E=32: M1's statement needs a row longer than one SHA-512 block (compose's pin range).
-# env: RS_PROVE, RS_BUILD (';'-separated)  RS_ARGS (more m1_unit.py arguments: --stage-ands N)  RS_MEM_GB=64 (the job's --mem-gb)  RS_CACHE
+# env: RS_PROVE, RS_BUILD (';'-separated)  RS_ARGS (more m1_unit.py arguments: --stage-ands N|auto|none, auto by default)  RS_MEM_GB=64 (the job's --mem-gb)  RS_CACHE
 set -uo pipefail
 ROUTER='MoeRouterSigmoidBias_v1{E=%d,TOPK=%d,SCALE={"f64":"0x1.4000000000000p+1"},KERNEL="block"}'
 RS_PROVE=${RS_PROVE-$(printf "$ROUTER" 64 8)}

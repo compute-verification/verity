@@ -857,7 +857,7 @@ def _leaf_bits(t) -> list[int]:
 
 def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[str]]],
                   public: Sequence[str] = (), structural: bool = False, reads: str = "inline",
-                  stage_ands: int | None = None) -> tuple[IL.Lowering, list[int]]:
+                  stage_ands: int | str | None = "auto") -> tuple[IL.Lowering, list[int]]:
     """A unit Definition on named u16 row ports: input row ``(row, params)`` is the little-endian bit concatenation of those
     parameters' leaves, in order (PoUW's rows, `leaves.words_*`; ``p[r]`` is row ``r`` of parameter ``p``, as a tile reads
     it), of exactly its words (its bits a multiple of 16); output
@@ -868,8 +868,8 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
     the unit as `struct_lower` lowers it on these ports (`TmplLowering`, the flat unit never built), else `ir_lower`'s
     (`unit_circuit`), its circuit dropped once laid out (nothing reads it after `ir_lower.layout`). ``reads``: ``inline``, each
     table read laid out as rows of the unit (`ir_lower._Read`), or ``slots``, its reads of the pinned MUFU tables split out to
-    lookup slots (`read_slots.split`, a `read_slots.ReadSlots`, at most ``stage_ands`` ANDs a net; the flat unit's own when it
-    reads none)."""
+    lookup slots (`read_slots.split`, a `read_slots.ReadSlots`, its nets' ANDs capped by ``stage_ands``, by default the caps
+    whose nets take the fewest cells; the flat unit's own when it reads none)."""
     if reads not in ("inline", "slots") or (structural and reads != "inline"):
         raise ValueError(f"{name}: reads is inline or slots, and a structural unit's are inline")
     ports, out_words, row_words = unit_ports(definition, name, in_rows, public)
@@ -1056,12 +1056,12 @@ class UnitStager:
     that template `struct_lower`'s (`unit_lowering`'s ``structural``), the flat unit never built, the outputs the template's
     (`TmplLowering.evaluate`); else `tmpl.emit`'s of the flat unit. ``reads`` (``inline`` or ``slots``, flat statements only):
     `unit_lowering`'s; under ``slots`` a unit reading a pinned MUFU table is the unit, tail stages and lookup slots of
-    `read_slots`, the last stage returning the outputs, each net at most ``stage_ands`` ANDs."""
+    `read_slots`, the last stage returning the outputs, its nets' ANDs capped by ``stage_ands`` (`read_slots.split`'s)."""
 
     def __init__(self, definition, name: str, in_rows: Sequence[tuple[str, str, int, Sequence[str]]],
                  out_rows: Sequence[tuple[str, Sequence[int]]], public_inputs: dict | None = None, circuit: Path | None = None,
                  bind: dict | None = None, layout: str | None = None, structural: bool = False, reads: str = "inline",
-                 stage_ands: int | None = None):
+                 stage_ands: int | str | None = "auto"):
         from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
 
         if bind is not None and set(bind) != {"partition", "program"}:
