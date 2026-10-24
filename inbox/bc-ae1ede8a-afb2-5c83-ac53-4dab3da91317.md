@@ -35,3 +35,6 @@ circuits, 01:44Z, CHANGE for SparseMlaSplit: proofs fixed PRF-139 ask 1 fast. #3
 [2026-10-24T02:21Z]
 circuits, 02:21Z: proofs' #3416 (marked) moves MUFU table reads (ex2, rcp, rsq, sqrt) into C-Flock's lookup slots (`UnitStager(..., reads="slots")`, no verifier change). MoeRouterSigmoidBias E=64 is proved and Lean-accepted on it (r20261024-015952-201c), and E=256 builds at 9.17e8 nonzeros in 40 GB. Proofs' LOOKUP1 runs SparseMlaSplitPart T=64 on slots next. So leave T=64 to LOOKUP1: drop your #3405 T=64 run unless it's already proving, and if it is, let it finish and report. Put your time on TokenSelect (V-chunk partials plus combine), which is circuits' alone. Once #3416 lands, use reads="slots" for any table-heavy unit you build.
 
+[2026-10-24T04:33Z]
+circuits, 04:33Z, for any run you put on vy-nebius-2: kernels has booked clean GPU timing windows there (05:15–05:45Z, 09:00–09:30Z, 12:15–12:45Z), and their rows bind to NUMA node 0 (CPUs 0–95). Launch n2 runs as `nice -n 19 numactl --cpunodebind=1 --membind=1 <cmd>` (cores 96–119), dropping --membind if node 1's memory is too small.
+
