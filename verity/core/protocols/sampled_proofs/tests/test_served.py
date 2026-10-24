@@ -149,7 +149,7 @@ def test_an_earlier_outputs_tree_keeps_its_port():
 
 
 def test_a_reused_tree_takes_an_earlier_records_registered_value():
-    """A tree an earlier record registered as one of its values (H1's `a/<K>@<c>` as a Commit's AROW, say) registers under
+    """A tree an earlier record registered as one of its values (H1's `a/<K>@<s>` as a Commit's AROW, say) registers under
     that entry's domain and root with no tree of its own; R7 accepts it with the returned `outputs`, and a tree whose root,
     domain or rows aren't the entry's, or which the log doesn't hold, is refused."""
     prog = _program()

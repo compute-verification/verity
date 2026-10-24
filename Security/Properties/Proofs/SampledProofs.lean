@@ -796,7 +796,8 @@ theorem id_bind {α β : Type} (x : Id α) (f : α → Id β) : x >>= f = f x :=
 
 theorem registration_nil (rec : Json) (v : Registration.Verifier) :
     Registration.check rec v = #[] ↔ ∃ law, Registered v rec law := by
-  unfold Registration.check
+  rw [Registration.check_eq_checkRef]
+  unfold Registration.checkRef
   extract_lets v2 get c0 w program part partDigest mine roots previous j14 j13 j12 j11 j10 j9 j8 distinct j7 j6 j5 j4 j3 j2 j1 j0
     c1
   have h14 : ∀ c, j14 () c = #[] ↔ c = #[] ∧ True := fun c => ⟨fun h => ⟨h, trivial⟩, fun h => h.1⟩
