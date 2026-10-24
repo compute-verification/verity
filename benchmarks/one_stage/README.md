@@ -34,7 +34,9 @@ negatives.
   named by the units' value and each unit's read (connection, cell) placed by the wiring the warden signed
   (`warden_rows.port`, after `check_registration` under the warden's key), which refuses a foreign, a duplicate and a
   padding-slot read by name; the altered run, and a statement made for another units' wiring (a pad in a data cell's place,
-  its rows under the Program's value, two units swapped: `--made-for`), are refused by Lean's registered reads.
+  its rows under the Program's value, two units swapped: `--made-for`), are refused by Lean's registered reads. Its warden run
+  is rehearsed against a fake endpoint, or (`A5_WARDEN_RUN`) is `warden_replay.py`'s: a served window's requests through the
+  warden, each answered with the tokens the server streamed it.
 - `a5_glm53_commit.sh`, `a5_glm53_cpu.sh`: A5 on GLM-5.3 in its two halves. The first is the GPU job (`research run --on
   vy-glm53-eu2 --cwd source -- bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
