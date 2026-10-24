@@ -13,7 +13,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
 - `verity/`: the distribution `verity` (the root `pyproject.toml`), in two parts. The module list is `verity/README.md`.
   Import from the owning module (`from verity.ml.circuits import Program`); `verity` re-exports nothing. Each directory's
   tests sit beside it as their own suite.
-  - `verity/core/` (`verity.core`): the verifiers, trusted code. `Security/Models/` states their guarantees, and one whose
+  - `verity/core/` (`verity.core`): the verifiers, trusted code. `Security/Definitions/` states their guarantees, and one whose
     proof isn't in `Security/Proofs/` is open: that verifier's properties aren't proven yet.
     - `protocols`: the integrity profile (`profile`) and one package per protocol: sampled proofs (`sampled_proofs`, with
       its plans and consumers), PoUW (`pouw`), PoUS (`pous`), the bandwidth audit over PoUS's store (`bandwidth`), the
