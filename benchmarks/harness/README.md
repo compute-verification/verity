@@ -59,8 +59,7 @@ invariant (`bi-eager`, `bi-compiled`).
 
 A served variant `BUILTIN@eager` or `BUILTIN@compiled` (`stock-fp8@compiled`) is a built-in arm's engine at vLLM's
 serving defaults in that execution, whatever the spec's `eager` and the preset's `serving_defaults` say for the other
-arms, so one spec times one engine in two executions (`llama31-8b-fp8-1gpu-compiled`), or an eager protocol arm against
-the engine vLLM serves (`llama31-8b-1gpu-pouw-protocol-served`). Its control is the built-in
+arms, so one spec times one engine in two executions (`llama31-8b-fp8-1gpu-compiled`). Its control is the built-in
 unless its `[arm_settings."ARM"]` names another arm or `"none"`, and its `execution` is in the arm's identity.
 
 An experimental arm (`arm_modules`, `pkg.mod:NAME`) may need its own environment. The spec's `[env]` table (upper-case
