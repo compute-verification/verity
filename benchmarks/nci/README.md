@@ -29,6 +29,7 @@ Nothing in `verity` reads this directory. The theorems it cites are in `Security
 | `slowdown.py` | the bracket per row; `python benchmarks/nci/slowdown.py [--calibration ID] [--row ID]` |
 | `kappa.py` | kappa per token and over each frontier model's pretraining schedule, by part; `python benchmarks/nci/kappa.py [--model ID]` |
 | `covering_priced.py` | Kimi K2's dampener rho under the covering bound's forms (one cost, two costs, a price per weight, the priced additive form) at bf16, FP8 and FP4, from per-class weight prices; `python benchmarks/nci/covering_priced.py [--prices FILE.json] [--dgrad]` |
+| `prices_olmoe.json` | a price file for `covering_priced.py --prices`: per-role prices of an updated weight measured on OLMoE-1B-7B-0924's checkpoints (AdamW, 64 experts, top-8), the routed experts (`mlp_in`, `mlp_out`) apart from a dense MLP (`dense_mlp_in`, `dense_mlp_out`); its `about`, `runs` and `method` say how |
 | `tiers.py` | compute efficiency eta and the compute dampener D under the verification stack, per tier; `python benchmarks/nci/tiers.py [--json]` |
 | `exposure.py` | what eta is most exposed to: ranges, tornados, elasticities, thresholds on 1/eta, and the closed forms of mu, nu and chi |
 | `fit.py` | the fit bound: the memory cap when no server window holds a model that reaches the target loss; `python benchmarks/nci/fit.py [--json]` |

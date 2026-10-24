@@ -96,3 +96,18 @@ def test_the_dense_mlp_and_shared_expert_can_be_priced_apart_from_the_routed_exp
     assert P.mean_price(base(), p) == pytest.approx(6.0 * (1 - routed / 2), rel=1e-12)
     pyt = P.prices(P.PYTHIA["160m@100k"]["fp8"])
     assert pyt["dense_in"] == pyt["expert_in"] and pyt["shared_out"] == pyt["expert_out"]
+
+
+def test_the_olmoe_price_file_prices_every_class_at_every_point(capsys):
+    """`prices_olmoe.json` (OLMoE-1B-7B's measured routed-expert prices) loads, prices every K2 class above 0 at every
+    point and format, gives each OLMoE point the uniform forms' cheapest tier, and runs through the report."""
+    pts, cheapest = P.load_prices(str(Path(P.__file__).parent / "prices_olmoe.json"))
+    assert {pt for pt in pts if pt.startswith("olmoe@")} <= set(cheapest) <= set(pts)
+    for pt, tab in pts.items():
+        assert set(tab) == set(P.FMTS)
+        for fmt in P.FMTS:
+            p = P.prices(tab[fmt])
+            assert all(p[c] > 0 for c in P.CLASSES), (pt, fmt, p)
+            assert pt not in cheapest or cheapest[pt]["1%"][fmt] > 0
+    P.report(pts, cheapest, "prices_olmoe")
+    assert "Priced form at 1 MB" in capsys.readouterr().out
