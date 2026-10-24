@@ -1,5 +1,6 @@
 import Proofs.Flock.Soundness.TmplUnitNet
 import Proofs.Flock.Soundness.ExecSetup
+import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
 
 /-!
 # A templated file's nets fit their slots (PRF-133)
@@ -9,7 +10,9 @@ inside the input rows; at least a word of rows; and the constant row reading its
 `Net.ofRowsAt` built (`ofRowsAt_netOK`): its constant is placed at `pos[constPos]`, past the input rows, which `pos`
 keeps in place, and its committed constant row is the logical one read through `pos`. So they hold of a read templated
 unit's committed net (`TmplUnit.netOK`), and of every net of a templated file's circuit (`parseTmpl_nets_ok`, through
-`nets_okPre`, `nets_ok` over `ParseFactsPre`). They are facts of the committed nets the lincheck reads, whatever the
+`nets_okPre`, `nets_ok` over `ParseFactsPre`). So do the facts `Discharge.Integrate.net_width` and
+`Discharge.Inst.portBits_nodup_net` give a flat file's nets: `A` and `B` stored at the slot's width, at most 32 lookup
+bits, distinct port bits (`ofRowsAt_width`, `nets_widthPre`, `parseTmpl_net_width`). They are facts of the committed nets the lincheck reads, whatever the
 audit's unit for a templated statement. No verifier path reads this file.
 -/
 
@@ -81,6 +84,47 @@ theorem nets_okPre {tags : Flock.Tags} {pre : Array (String × Net)} {c : Flock.
     rw [this] at hq
     cases hq
 
+/-- **A net committed at a position map stores `A` and `B` at its slot's width**, has no lookup table, and its port bits
+are distinct. -/
+theorem ofRowsAt_width {name : String} {useful constPos : ℕ} {ig og : Array Group} {ra rb : Array (Array ℕ)}
+    {pos : Array ℕ} {net : Net} (h : Net.ofRowsAt name useful constPos ig og ra rb pos = .ok net) :
+    net.a.width = 2 ^ net.unitLog ∧ net.b.width = 2 ^ net.unitLog ∧ net.lookup = none ∧
+      (portBits net.inGroups).Nodup := by
+  obtain ⟨n, hn, -, -, -, ha, hb, -, hig, -, hlk, -⟩ := Net.ofRowsAt_ok h
+  obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, hlk0, -⟩ := Net.ofRows_ok hn
+  refine ⟨Discharge.Integrate.ofRows_width ha, Discharge.Integrate.ofRows_width hb, hlk.trans hlk0, ?_⟩
+  rw [hig]
+  exact Discharge.Aliased.portBits_nodup ⟨_, _, _, _, _, _, _, hn⟩
+
+theorem unrollAt_width {t : Tmpl} {lays : Array Lay} {net : Net} (h : Tmpl.unrollAt t lays = .ok net) :
+    net.a.width = 2 ^ net.unitLog ∧ net.b.width = 2 ^ net.unitLog ∧ net.lookup = none ∧
+      (portBits net.inGroups).Nodup := by
+  unfold Tmpl.unrollAt at h
+  obtain ⟨_, -, h2⟩ := Flock.TmplOrder.bind_ok h
+  exact ofRowsAt_width h2
+
+/-- **`Discharge.Integrate.net_width` and `Discharge.Inst.portBits_nodup_net` with nets `pre` first, of any kind**:
+every net of a circuit `HmRow.parse` accepted after `pre` stores `A` and `B` at its slot's width, reads at most 32
+lookup bits and has distinct port bits, when `pre`'s nets do. -/
+theorem nets_widthPre {tags : Flock.Tags} {pre : Array (String × Net)} {c : Flock.Circuit}
+    (P : ParseFactsPre tags pre c)
+    (hpre : ∀ x ∈ pre.toList, x.2.a.width = 2 ^ x.2.unitLog ∧ x.2.b.width = 2 ^ x.2.unitLog ∧ x.2.lookup = none ∧
+      (portBits x.2.inGroups).Nodup) {i : ℕ} (hi : i < c.nets.size) :
+    (c.nets.getD i default).2.a.width = 2 ^ (c.nets.getD i default).2.unitLog ∧
+      (c.nets.getD i default).2.b.width = 2 ^ (c.nets.getD i default).2.unitLog ∧
+      (∀ lk, (c.nets.getD i default).2.lookup = some lk → lk.bits ≤ 32) ∧
+      (portBits (c.nets.getD i default).2.inGroups).Nodup := by
+  rcases P.nets _ (getD_mem_toList hi) with hp | hp | ⟨_, _, _, _, _, hl⟩
+  · obtain ⟨ha, hb, hlk, hn⟩ := hpre _ hp
+    exact ⟨ha, hb, fun lk h => by rw [hlk] at h; cases h, hn⟩
+  · obtain ⟨hlk, -, -, -, -, _, _, -, -, ha, hb⟩ := built_spec hp
+    exact ⟨Discharge.Integrate.ofRows_width ha, Discharge.Integrate.ofRows_width hb,
+      fun lk h => by rw [hlk] at h; cases h, Discharge.Aliased.portBits_nodup hp⟩
+  · obtain ⟨h1, h2, h3⟩ := Discharge.Integrate.build_width hl
+    refine ⟨h1, h2, h3, ?_⟩
+    rw [(build_facts hl).2.1, Discharge.Aliased.portBits_eq]
+    simpa using List.nodup_range'
+
 end FlockSoundness
 
 namespace Flock
@@ -104,5 +148,18 @@ theorem parseTmpl_nets_ok {tags : Flock.Tags} {bytes : ByteArray} {tables : List
   refine nets_okPre P (fun x hx => ?_) i
   obtain rfl : x = ("unit", tu.net) := by simpa using hx
   exact tu.netOK
+
+/-- **Every net of a templated file's circuit stores `A` and `B` at its slot's width**, reads at most 32 lookup bits and
+has distinct port bits: its unit, the read unit's committed net, and the file's own nets, as a flat file's. -/
+theorem parseTmpl_net_width {tags : Flock.Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
+    {c : Flock.Circuit} (h : HmOut.parseTmpl tags bytes tables = .ok c) {i : ℕ} (hi : i < c.nets.size) :
+    (c.nets.getD i default).2.a.width = 2 ^ (c.nets.getD i default).2.unitLog ∧
+      (c.nets.getD i default).2.b.width = 2 ^ (c.nets.getD i default).2.unitLog ∧
+      (∀ lk, (c.nets.getD i default).2.lookup = some lk → lk.bits ≤ 32) ∧
+      (portBits (c.nets.getD i default).2.inGroups).Nodup := by
+  obtain ⟨tu, c₀, P, -, rfl, -, -⟩ := TmplValue.parseTmpl_facts h
+  refine nets_widthPre P (fun x hx => ?_) hi
+  obtain rfl : x = ("unit", tu.net) := by simpa using hx
+  exact unrollAt_width tu.unrolled
 
 end FlockSoundness
