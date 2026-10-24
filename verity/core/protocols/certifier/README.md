@@ -33,9 +33,12 @@ A spec-level reference for network accounting's timing channel:
   an honest served link is accepted. An egress end with neither profile gets no verdict (`ValueError`, failing
   closed);
 - the I/O tie (`io_tie`), a design (`PROTOCOL.md`, "The I/O tie") and its prototype on a fake upstream, in no Spec:
-  on draws, a served link-window's frame k under the head's frames root is the canonical event of the token id the
-  Commit's token port holds for request ⌊k / F⌋'s output k mod F. It has the reference and one draw's Boolean
-  Definition (`IoTieDraw`: `NetworkFrameRead`, `IoTieEvent`, the port row's `NetworkHidingRead`, `IoTieColumn`);
+  every cell of an egress link-window is opened, each a pad or the canonical event of one token id on the stream the
+  warden set, and each is the output the verifier's map names at its place (`window_map`, from advice v0's outputs and
+  release buckets), with the id the Commit sampled for it (the port: one hiding row of ids a step, opened under the
+  Commit's root). The warden commits each bucket's cells as one hiding row. It has the reference and the unit's Boolean
+  Definition (`IoTieWindow`: the cells' root by `NetworkRowsRoot`, the port's rows by `IoTiePort`, then `IoTieContent`:
+  `IoTieCell` on every cell, the prover's Beneš routing of the port's entries `IoTieRoute`, `IoTieMatch`);
 - the capacity counts;
 - the calibration of honest runs;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`

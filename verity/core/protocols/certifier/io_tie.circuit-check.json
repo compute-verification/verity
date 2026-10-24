@@ -1,0 +1,10 @@
+{
+ "definitions": {
+  "IoTieCell_v1{B=256}": {
+   "and": 3678
+  },
+  "IoTieCell_v1{B=4096}": {
+   "and": 34398
+  }
+ }
+}

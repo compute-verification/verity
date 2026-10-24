@@ -40,7 +40,7 @@ GB = 10**9
 GIB = 2**30
 LIMITS: dict[str, dict[str, float]] = {
     "n1": {"workspace_pct": 80.0, "workspace_hard_pct": 85.0},
-    "n2": {"workspace_pct": 55.0, "workspace_hard_pct": 55.0},
+    "n2": {"workspace_pct": 80.0, "workspace_hard_pct": 85.0},   # node 1's lines since node 2 took its place (INF-57)
 }
 COMMON = {"root_free_gb": 60.0, "root_hard_free_gb": 45.0, "inode_pct": 80.0, "mem_avail_pct": 10.0, "idle_gpu_gib": 20.0,
           "idle_gpu_s": 900.0, "unpreserved_runs": 10, "unpreserved_age_s": 3600.0, "inode_growth_per_h": 100_000,
