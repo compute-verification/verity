@@ -56,7 +56,8 @@ model's rows are registered under that key before the salt, the window refused u
 weights' root, the one ``period-open --model M`` signed. ``pouw_h1_rehearsal.py`` runs it all against infra's gate.
 ``--baseline-h1`` (fill, with ``--served``) serves an H1 window without `Served` first, in the solo window's place, so
 one engine measures plain, H1 and H1 with its registered tables; each window records its host RSS, and a served one
-its registration's seconds a step (``registered_s``, VLLM-76). The period's declared Program and its digest are
+its registration's seconds a step (``registered_s``, VLLM-76), the part of them inside `pouw_h1_registered.commit`
+(``hashed_s``) and where that hashed (``register_path``: the GPU or NumPy, VLLM-79). The period's declared Program and its digest are
 declared once before any window (`period_program`), as the period's.
 
 ``--receipts SO`` (fill, ``--served``, no ``--handoff``) registers each call's ``receipt@<c>`` too (BRIDGE2), computed on the
@@ -68,6 +69,12 @@ window's last step are kept, and their first unit of each row block is held to `
 them with the producer's torch chain over noise.cu's noise instead. ``--j10r`` declares the period's window Program over
 J10-R's tile unit (`period_unit`, `h1tile.PouwH1Tile5`), so the producer computes J10-R's receipts (one noise stream a call)
 and they are held to `h1tile.j10r_reference`; v1's unit is the default.
+
+``--credit`` (with ``--commit`` and ``--receipts``) runs core credit's statement steps over the honest Commit window
+(`credit_check`, `pouw_h1_credit`): `credit.registered_file`, `credit._verified` on a stand-in verifier of record that
+opens each drawn unit's pub, o0 and o1 rows against that file's roots and recomputes its receipt, `credit._proved` and
+`credit._registration`, the drawn units the first and last of each kept call; then a receipt word flipped (with and
+without its round's root re-listed), a public table under another step's A root and an ok row 0, each to be refused.
 
 ``--commit`` (fill, ``--served``, in-process coins) serves the 64's window again with the Commit in the engine
 (`acquire.h1_commit.attach`: the committer, the int8 source at each linear's Int8RowQuant_v1 site and its tap) into
@@ -539,24 +546,42 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         if commit and a.served and registry is None and shared[0] is None:
             t0 = time.monotonic()
             shared[0] = local_weights(eng.model, layers, decl.rows, decl.steps, period)
-            print(f"[fill] B registered under a local key in {time.monotonic() - t0:.0f} s", flush=True)
+            doc["b_registered"] = {"s": round(time.monotonic() - t0, 1), "path": SV.NR.path()}
+            print(f"[fill] B registered under a local key {doc['b_registered']}", flush=True)
         served = (SV.Served(prover=a.prover_dir, registry=registry, weights=shared[0], tap=tap,
                             window=None if a.challenger else os.urandom(64), program=period[0], program_digest=period[1])
                   if a.served and name not in ("solo", "baseline") else None)
         registered_s: dict[int, float] = {}
+        hashed_s: dict[int, float] = {}
+        nr_commit = SV.NR.commit
+        prof = None
         if served is not None and not a.handoff:
-            served_commit = served.commit
+            served_commit, at = served.commit, [0]
+            if a.profile_register:
+                import cProfile
+
+                prof = cProfile.Profile()
+                served_commit = profiled(prof, served_commit)
+
+            def hashing(*args: Any, **kw: Any) -> Any:
+                t = time.monotonic()
+                try:
+                    return nr_commit(*args, **kw)
+                finally:
+                    hashed_s[at[0]] = hashed_s.get(at[0], 0.0) + time.monotonic() - t
 
             def timed(run: Any, call: Any, *rest: Any) -> dict[str, str]:
-                t = time.monotonic()
+                t, at[0] = time.monotonic(), call.step
                 if call.layer == 0:
                     print(f"[fill] {name} step {call.step} rss_gib={rss_gib()} registered_s(prev)="
-                          f"{round(registered_s.get(call.step - 1, 0.0), 2)} values={len(served.registered)}", flush=True)
+                          f"{round(registered_s.get(call.step - 1, 0.0), 2)} hashed_s(prev)="
+                          f"{round(hashed_s.get(call.step - 1, 0.0), 2)} values={len(served.registered)}", flush=True)
                 try:
                     return served_commit(run, call, *rest)
                 finally:
                     registered_s[call.step] = registered_s.get(call.step, 0.0) + time.monotonic() - t
             served.commit = timed
+            SV.NR.commit = hashing
         ctx = PO.Context(stage="serve", enabled=(entry_name,),
                          settings=h1_settings(eng, decl.rows, decl.steps, a.challenger, a.session, a.gate, retain_steps=a.retain,
                                               transcript_dir=str(tdir), admission="round-0", served=served))
@@ -602,9 +627,14 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             out.update(served_measures(got, want, cap, served_steps, t0, end, stamps))
             if served is not None and not a.handoff:
                 out["registered_s"] = [round(registered_s.get(s, 0.0), 3) for s in range(decl.steps)]
+                out["hashed_s"] = [round(hashed_s.get(s, 0.0), 3) for s in range(decl.steps)]
+                out["register_path"] = SV.NR.path()
                 del served.commit
+                SV.NR.commit = nr_commit
+                if prof is not None:
+                    write_profile(prof, tdir / "register-profile.txt")
             print(f"[fill] {name} served step_s={out['step_s']} registered_s={out.get('registered_s')} "
-                  f"rss_gib={rss_gib()}", flush=True)
+                  f"hashed_s={out.get('hashed_s')} register_path={out.get('register_path')} rss_gib={rss_gib()}", flush=True)
             if com is not None:
                 rc = com.finalize()
                 out["committer"] = {"run_root": rc.run_root.hex(), "name": com.name, "finalize_s": round(rc.t_finalize_s, 3),
@@ -627,7 +657,11 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                 if tap is not None:
                     out["roots1"] = h1.details["roots1"]
                     out["ok"] = bool(out["ok"] and out["roots1"]["tied"])
+                    if a.live_dump and out["requests"].get("live"):
+                        from verity_vllm.protocol_options import pouw_h1_live as LV
+                        out["live_dump"] = LV.dump(h1, Path(a.live_dump) / name)
         finally:
+            SV.NR.commit = nr_commit
             lie.uninstall()
             comp.close()
             if com is not None:
@@ -639,6 +673,9 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         out = released(name, h1, out, served, tdir, bool(a.challenger), register=not (a.commit or a.skip_register))
         if tap is not None:
             out["core"] = core_tie({"commitment": dict(h1.commits), "calls": h1.manifest()}, h1.served.program, tdir)
+        if a.credit and edit is None and tap is not None and made is not None:
+            out["credit"] = credit_check(h1, served, made)
+            out["ok"] = bool(out["ok"] and out["credit"]["ok"])
         out["host"] = {"install": out["host"], "end": host_memory()}
         print(f"[fill] {name} core {json.dumps(out.get('core'), default=str)[:2000]} host {json.dumps(out['host'])}",
               flush=True)
@@ -673,7 +710,8 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                          "host": doc["host"], "window": doc["public"],
                          "layout_static": c.get("layout_static"), "same_tokens": c["same_tokens"],
                          "roots1": c.get("roots1"), "core": c.get("core"), "negatives": negs,
-                         "committer": c.get("committer"),
+                         "committer": c.get("committer"), "receipts": c.get("receipts"),
+                         "credit": {k: (c.get("credit") or {}).get(k) for k in ("ok", "lines", "units", "s")},
                          "ok": bool(c["ok"] and (c.get("core") or {}).get("tied")
                                     and all(v["refused"] for v in negs.values())
                                     and len(negs) == len(negatives_of(layers)) * a.negatives)}
@@ -688,6 +726,30 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         except Exception as e:  # noqa: BLE001
             doc["h1_solo"] = {"ok": False, "error": f"{type(e).__name__}: {e}"[:2000]}
     return fill_record(doc, outdir)
+
+
+def profiled(prof: Any, fn: Any) -> Any:
+    """``fn`` run under the profiler ``prof``."""
+    def run(*args: Any, **kw: Any) -> Any:
+        prof.enable()
+        try:
+            return fn(*args, **kw)
+        finally:
+            prof.disable()
+    return run
+
+
+def write_profile(prof: Any, path: Path) -> None:
+    """``prof``'s 60 functions of most cumulative time, then of most own time, as text at ``path``."""
+    import io
+    import pstats
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    buf = io.StringIO()
+    stats = pstats.Stats(prof, stream=buf).strip_dirs()
+    stats.sort_stats("cumulative").print_stats(60)
+    stats.sort_stats("tottime").print_stats(60)
+    path.write_text(buf.getvalue())
 
 
 def rss_gib() -> float:
@@ -1073,6 +1135,30 @@ def receipts_check(made: Any) -> dict[str, Any]:
             "ok": bool(rows) and all(r[3] for r in rows) and 0 < live < len(rows)}
 
 
+def credit_check(h1: Any, served: Any, made: Any) -> dict[str, Any]:
+    """``--credit``: core credit's statement steps (`pouw_h1_credit.check`) over the honest Commit window with receipts
+    on, the drawn units the first and last of each kept call (`receipts_producer`'s: the first block's linears at step 0
+    and the last step), their operands and receipts the producer's on the serving GPU; then each prover-side negative
+    (`pouw_h1_credit.NEGATIVES`) at the first of them."""
+    from tests.protocol_options import pouw_h1_credit as PC
+    from verity.core.protocols.pouw import credit as CR
+    from verity_vllm.protocol_options import pouw_h1_served as SV
+    t0 = time.monotonic()
+    w = PC.of_run(h1, served)
+    units = [u for c in sorted(made.kept) for u in (w.u0(c), w.u0(c) + CR.call_work(w.layout)[c][0] - 1)]
+    got = PC.check(w, units, lambda c: (made.kept[c]["a"].numpy(), made.kept[c]["b"].numpy()),
+                   lambda c: SV.receipt_words(made.kept[c]["receipts"]), h1._key)
+    got["s"], got["lines"] = round(time.monotonic() - t0, 1), PC.lines(got)
+    got["weights"] = [{x: e[x] for x in ("value", "leaves", "words")} for e in w.entries
+                      if e["value"].startswith(f"{w.prefix}b/")]
+    got["kept"] = [{"call": c, "k": w.k_of(c), "units": CR.call_work(w.layout)[c][0]} for c in sorted(made.kept)]
+    print(f"[fill] credit weights {json.dumps(got['weights'])} kept {json.dumps(got['kept'])}", flush=True)
+    for line in got["lines"]:
+        print(f"[fill] {line}", flush=True)
+    print(f"POUW-H1-CREDIT {'OK' if got['ok'] else 'FAIL'} units={len(units)} s={got['s']}", flush=True)
+    return got
+
+
 def _check(h1: Any) -> tuple[dict[str, Any], bool]:
     try:
         out = h1.check()
@@ -1258,6 +1344,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--handoff-state", metavar="DIR", help="with --handoff: the prover's scratch the window is saved in")
     ap.add_argument("--prover-dir", metavar="DIR", help="fill with --served: the prover's private directory, kept past the "
                                                        "close, outside --out (pouw_h1_prover: its salt key and values)")
+    ap.add_argument("--live-dump", metavar="DIR", help="with --commit: each Commit window's live@<s> statements, the "
+                                                       "prover's rows and openings (pouw_h1_live.dump), into DIR/<window>, "
+                                                       "outside --out, for benchmarks/pouw/h1_prove/live.sh")
     ap.add_argument("--close-from", metavar="DIR", help="no GPU: close and release the window a --handoff run saved in DIR, "
                                                         "on the session's stream --stream-fd, completing --out's record")
     ap.add_argument("--stream-fd", type=int, metavar="FD", help="with --close-from: the session's stream, as the holder "
@@ -1282,6 +1371,14 @@ def main(argv: list[str] | None = None) -> int:
                     help="with --commit: after the honest window, serve one whose A codes H1 is handed are all zero and "
                          "one with a row off, each with the Commit in the engine (NEGATIVES), and hold each to core's "
                          "ROOTS1 steps (core_verdict)")
+    ap.add_argument("--credit", action="store_true",
+                    help="with --commit and --receipts: core credit's statement steps over the honest Commit window "
+                         "(pouw_h1_credit: registered_file, _verified on a stand-in verifier of record, _proved, "
+                         "_registration), accepting it, and refusing a receipt word flipped, a public table under another "
+                         "step's A root and an ok row 0")
+    ap.add_argument("--profile-register", action="store_true",
+                    help="fill with --served: profile each served window's registration (Served.commit) and write its "
+                         "functions by cumulative time to <window out>/register-profile.txt")
     ap.add_argument("--core-from", metavar="DIR", help="no GPU: core's ROOTS1 steps (core_verdict) over each window's "
                                                        f"saved evidence, DIR/*/{CORE_EVIDENCE}")
     a = ap.parse_args(argv)
@@ -1298,6 +1395,8 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--commit is the fill workload's, with --served, without --challenger or --handoff")
     if a.negatives and not a.commit:
         ap.error("--negatives is --commit's")
+    if a.credit and not (a.commit and a.receipts):
+        ap.error("--credit is --commit's, with --receipts (a window's receipt tables are what its statements' o0 reads)")
     if a.declare and (a.workload != "fill" or len(a.declare) != 4):
         ap.error("--declare is the fill workload's, SLOTS,CAP,T,S")
     if a.close_from:

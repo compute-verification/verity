@@ -54,15 +54,19 @@ def test_a_link_window_is_every_slot_of_its_grid_whatever_the_load(traffic):
 
 
 def test_a_connections_rows_are_the_cells_its_client_got_in_order(traffic):
+    """Keyed by ordinal, which counts connections from 0 in the order they reached the warden (IO-TIE's and advice v0's
+    numbering; the active certifier's `Requests` stream s is ordinal s − 1)."""
     warden, clients = traffic
-    seen = 0
+    seen, ordinals = 0, set()
     for record in records(warden)[1]:
         rows, first = W.window_rows(record, GRID), record.window * PARAMS.window
         for ordinal, positions in W.connection_rows(record, GRID).items():
             wire = b"".join(d for t, d in clients[ordinal].writes if first <= t < first + PARAMS.window)
             assert [rows[p] for p in positions] == [wire[i:i + B] for i in range(0, len(wire), B)]
             seen += len(positions)
+            ordinals.add(ordinal)
     assert seen == sum(len(c.cells()) for c in clients) > 0
+    assert sorted(ordinals) == list(range(len(clients)))
 
 
 def test_every_row_opens_the_signed_root_at_its_position_and_nowhere_else(traffic, tmp_path):
