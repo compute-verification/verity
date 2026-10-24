@@ -100,9 +100,10 @@ where code.py's loop is the one above.
 **Cost** (`size`, ANDs): ArithCountStep_v1{K=18, BIN=1, CW=20} is 2,243: the interval (one 33 × 16-bit product, one
 non-restoring division with 32 quotient bits, and the two ends) 1,855, the scalings at once 366 and the count 22.
 {K=18, BIN=0, CW=20} is 3,963. ArithCountFinish_v1{CW=20, NB=0}, advice v1's, is 41, and {CW=20, NB=21} (a pool
-header to 2^20 blocks) 67. BookKT_v1{C=3} is 337 and {C=1} 210. One decision, counted, is the step and the book's model: 2,580 ANDs,
-and the context counter's few. ArithEncodeStep_v1{K=18, BIN=1} is 3,244: the interval 1,855, the 18 scaling slots 1,188
-and the segment check 201. {K=18, BIN=0} is 4,964, and ArithEncodeFinish_v1 6. KTContext_v1{C=3, NW=24} is 1,202.
+header to 2^20 blocks) 67. BookKT_v1{C=3} is 337 and {C=1} 210. One decision, counted, is the step and the book's
+model: 2,580 ANDs, and the context counter's few. ArithEncodeStep_v1{K=18, BIN=1} is 3,244: the interval 1,855, the 18
+scaling slots 1,188 and the segment check 201. {K=18, BIN=0} is 4,964, and ArithEncodeFinish_v1 6. KTContext_v1{C=3,
+NW=24} is 1,202.
 """
 from __future__ import annotations
 

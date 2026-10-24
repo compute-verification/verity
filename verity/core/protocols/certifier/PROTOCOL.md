@@ -1184,10 +1184,11 @@ bit-checking variant below).
   - Each window's finish gives v1's charge and refuses one bit less.
   - The book's model gives each bit's estimate, and each decision's context is min(run, 2) of the bits before it.
   - The bit-checking variant runs along the same segments, and refuses every flipped or cut one.
-  - On all 14 corpus traces at T = 600, and the 6 of them that send ENC-DERIVED's fields: 0 mismatches in 593,386
-    circuit cases, each window's counted total v1's charge
-    (art:ff4b26d8b4f6a796af9a33734c0a47fae8b50e15c2dee26525d51fece681a2c0). On ENC-REPLAY's step traces and the
-    TRACE-CORPUS fixture (the certifier's vectors) too.
+  - On all 14 corpus traces at T = 600, each read with the warden's ingress (arrivals in release order) and with the
+    client's send as the release (order entries sent, as v1's table reads them), and the 6 of them that send
+    ENC-DERIVED's fields: 0 mismatches in 1,103,746 circuit cases, each window's counted total v1's charge
+    (art:903980ba78e15721babf9fd51b65befe7e298f4cc671052604dbad9599166040). On ENC-REPLAY's step traces and the
+    TRACE-CORPUS fixture (the certifier's vectors) too, whose arrivals never deviate, so they hold no order entry.
 - *Cost* (`arith_encode.size`, ANDs, pinned in its circuit-check sidecar).
   - A decision costs 2,580: the step's 2,243 (the interval 1,855, with one 33 × 16-bit product and one division to 32
     quotient bits; the scalings at once 366; the count 22) and the book's model 337. The context counter adds a few.
@@ -1197,7 +1198,9 @@ bit-checking variant below).
     `hleft` are. The corpus's largest windows (the art above, `shapes.json`):
     - light's has 4,396 decisions and 6 integer symbols, 11.4M ANDs;
     - smallkv's has 1,466 decisions and 5,686 integer symbols, nearly all its sent hits', 26.3M before the integers'
-      lowering.
+      lowering;
+    - async heavy's, with the client's send as the release, has 1,000 decisions and 1,761 integer symbols, most of
+      them its order entries', 9.6M.
 - *The bit-checking variant* (`ArithEncodeStep_v1{K, BIN}`, `ArithEncodeFinish_v1`, with `reference_step` and
   `reference_finish`) is the alternative composition, where the advice is the coded segments and the encoder's output
   must be each window's committed segment, bit for bit, in the decoder's order. Its step costs 3,244 at BIN = 1 (18
