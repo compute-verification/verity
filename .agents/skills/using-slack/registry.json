@@ -588,6 +588,7 @@
       "linear": "BENCH",
       "owns": [
         "benchmarks/harness/",
+        "benchmarks/recursion/",
         "benchmarks/specs/",
         "infra/cluster/kinds/benchmarks.toml",
         "benchmarks/judge.py"
