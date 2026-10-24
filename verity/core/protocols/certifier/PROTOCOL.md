@@ -960,6 +960,74 @@ no outputs is charged wholly to window 0. The accepted-runs bound for a run's fi
   and, through `sources`, which requests share a prompt prefix. Whether that is protocol structure or has to be
   committed is for the red team, and for Daniel through the lead.
 
+## Advice v1 (`benchmarks/network_e2e/encodings/v1.py`)
+
+v1 is the advice the compile unit takes: I1 v0 sent as only what the certified record, the scheduler replay and the
+derived rules leave. `v1.encode(advice, record, registered) -> bytes` and `v1.decode(bytes, record, registered) -> I1
+v0` with `decode(encode(a)) == a`. `decode` is total: it refuses by name every string that isn't the canonical
+encoding of an advice under the record, and a string past the cap ℓ unread. It stays in the encodings until its circuit
+lands.
+
+**Certified, 0 bits**: the warden's signed records under design v3 (#3540, #3553) and the id I/O they carry (#3552),
+which the compile unit holds as witness.
+- The admission order: the k-th connection to arrive has ordinal k, and the queue's head is admitted at the first
+  bucket s with a free lane (#3553's admission, every cell carrying its ordinal).
+- Each request's ingress bytes, one id request (#3552's `active.id_request_fields`): `user` (I1's `id`), `prompt`
+  (prompt_len and the ids), `max_tokens`, `temperature`, `top_p` and `seed`. Its last-frame mark is a, the bucket of
+  its connection's ingress `END` cell (#3553).
+- Each output's id, the `token_id` of the id event that carries it (#3552's `active.id_event`, tagged by its request's
+  ordinal). These give `output_len`, and through the registered stop ids, `finish`.
+- Each output's release bucket, that of the egress cell carrying its event. Cell i of the connection admitted at s
+  is in bucket s + D + ⌊i/r⌋, a function of s alone (#3553). v1 doesn't read the `fails` record: a failed connection
+  has no advice.
+
+**Replayed, 0 bits**: ENC-REPLAY's replay (#3555) runs vLLM's scheduler under the registered engine, over the requests
+in arrival order, by (a, ordinal). It gives every step's rows (request, start, n), the new and resumed requests, the
+cache hits (its block pool's LRU, eviction included) and the preemptions. It needs one decision per open step: whether
+the next request had arrived.
+
+**Derived, 0 bits**: ENC-DERIVED's walk (#3560) recomputes every start and n and checks them against the replay. It
+gives the batch order (Model Runner V2's stable sort by n), I1's numbering by first row, `kind`, the canonical
+`sources`, and the request records (`prompt_len`, `output_len`, `finish`). Past the cumulative pool bound, the hits and
+resumes the walk would send are the replay's.
+
+**Sent.** Only the decisions are sent, each one symbol of ENC-CODE's arithmetic coder (#3513) at ENC-REPLAY's adaptive
+estimate for its context, plus `num_gpu_blocks` unless the registration pins it. The string is MSB first: Elias-gamma
+of `num_gpu_blocks` unless pinned, then for each window w < W, Elias-gamma(ℓ_w + 1) and an ℓ_w-bit segment holding the
+decisions about the requests whose a falls in w, then zero bits to a byte. W is the record's last bucket // T + 1. A
+window's charge is its frame, with the header charged to window 0 (`bits_by_window`), a function of the string alone.
+
+- *The bound.* The frames make the strings prefix-free for every W, so at most 2^c strings are charged c bits or
+  fewer. That is LEAK-LEAN's `BitsCount` by `bitsCount_of_prefixFree` (#3533). Since `decode` takes only the canonical
+  string, at most that many advices decode at that charge.
+- *v0's per-window parts.* Each window's part is self-delimited, which settles this item of v0's list above.
+- *Measured.* On the five greedy corpus traces, the v1 charged is heavy 63, chunked 2,002, smallkv 218, medium 3,425
+  and light 5,569 bits, against v0's 6.9–7.5 Mbit; the contexts read no release time, which the warden's fixed schedule
+  makes carry no engine timing.
+
+**Composition**, all in one ZK proof under the advice's hiding root:
+1. v1's frames: the committed string is at most ℓ bits, and parses into the header and W segments.
+2. The scan of ENC-REPLAY's `ReplayStep_v1` over the session's steps, from the empty engine, with the certified
+   requests in (a, ordinal) order as its arrivals and the decisions as its residual bits, which are witness. The scan
+   also carries the coder's counts and one ENC-CODE encoder per window: each decision is encoded at its context as the
+   step reads it. At the end, each window's terminated codeword must equal its segment. Because `decode` takes only the
+   canonical string, this forward encoding is `decode`. The coder can't run ahead of the scan as a parser, since which
+   request a decision is about, and so which window it is coded in, is the replay's cursor.
+3. ENC-DERIVED's walk over the rows, which gives I1 v0.
+4. ADV-SPEC's `AdviceCheck_v1{L}` (#3547) is the specification of what 1–3 give. The tests hold every advice v1 decodes,
+   from random and bit-flipped strings too, to I1's own `advice.decode`, whose refusals that circuit makes. So it holds
+   wherever 2 and 3 derive their rows rather than take them as witness, and needn't run at v0's length.
+5. `compile_steps(registered, advice, ingress)` (#3504) turns the advice into the Programs, with `ingress` the certified
+   bodies by id.
+
+**Open.**
+- `ReplayStep_v1` is synchronous FCFS. Async scheduling's lag row is in v1's replay and walk, not yet in the circuit.
+- `ReplayStep_v1` takes the prefix layer (each hit, its evictable blocks, each slot's returns) as witness it bounds. v1
+  charges nothing for those choices, because the replay's block pool fixes them. Until that pool, or ENC-DERIVED's
+  rules with the pool bound's fallback, is in the circuit, the hits past the bound are a channel v1 doesn't charge.
+- The corpus records stand in for the warden's: each request's a is the engine's arrival stamp (`replay`'s
+  `ingress="warden"`), and the release buckets are the engine's.
+
 ## The active certifier (`active`)
 
 `active.Proxy` runs the certifiers on one boundary link of a live byte stream. It is an asyncio TCP proxy, the I/O shell
