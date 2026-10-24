@@ -918,7 +918,7 @@ class Run:
                 return ("." * node.level + (node.module or ""), next(iter(groups)))
             return [f"from {mod} import {', '.join(ns)}" for mod, ns in groups.items()]
         names = [a.name + (f" as {a.asname}" if a.asname else "") for a in node.names]
-        if list(groups) == [m_old]:
+        if list(groups) == [m_old] and groups[m_old] == names:
             return None
         if len(groups) == 1 and next(iter(groups.values())) == names:
             return (m_old, next(iter(groups)))
