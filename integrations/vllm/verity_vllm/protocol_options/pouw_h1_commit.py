@@ -11,8 +11,8 @@ token ids, layer 0's input. Core's credit holds each to the Commit's value of th
 * **Its values** (`CommitTap.arow`, `CommitTap.input_ids`): call c = (s, w)'s AROW is the Commit's x_q and s_a of linear
   w's site at the engine step H1's step s maps to, in H1's table form (`pouw_h1_served.Served.a_words`), registered as
   `credit.commit_rows` of (s, linear); round s's input ids are the Commit's ``<embed>/in`` at that engine step
-  (`pouw_h1_served.ids_words`), registered as `credit.commit_ids` of s. Layer 0's call maps s to the next engine step
-  the Commit acquired (an empty call's to none). When the rows are the window's, the Commit registers the window's own
+  (`pouw_h1_served.ids_words`), registered as `credit.commit_ids` of s. Step s's first call to come, whichever linear
+  its forward runs first, maps s to the next engine step the Commit acquired (an empty call's to none). When the rows are the window's, the Commit registers the window's own
   tree, one commitment; rows off them make a tree of the Commit's own under the same domain and salts, at another root.
 * **The record** (`CommitTap.record`, the commitment's ``commit``, `CommitTap.hex`): a ``verity/registration/v2`` record
   (one-stage's `registration`) of those values, with what the tap refused, its canonical JSON in hex as
@@ -123,7 +123,7 @@ class CommitTap:
             self.refused.append(f"{op}: an s_a at engine step {step} with no x_q")
 
     def _engine_step(self, call: Any) -> int | None:
-        if call.layer == 0 and call.step not in self._steps and call.m:
+        if call.step not in self._steps and call.m:
             got = self._x.get(site(call.module))
             j = got[0] if got is not None and got[0] > self._last else None
             self._steps[call.step] = j

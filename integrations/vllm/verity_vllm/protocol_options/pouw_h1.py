@@ -25,8 +25,11 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
 * **Units** are in compile's order, the order the manifest lists them in: the call, then its row block, then its column
   block, row-major.
 * **The hook.** The arm hands every served call to `engine.int8_vllm.Int8PlainLinearMethod.observe` after both ops, and the
-  option records it there as a `Call`: its engine step (counted at linear 0), its layer (the linear's ordinal), its served
-  rows and its position. Then each listener (`H1Run.listen`) gets the call with the served tensors, on the device: A (the s8
+  option records it there as a `Call`: its engine step, its layer (the linear's ordinal), its served rows and its
+  position. A step's calls come in its forward's order, which need not be module order (GLM-5.3's DSA attention runs
+  fused_qkv_a_proj and q_b_proj before its indexer's wq_b, which module order puts first): a step starts at the window's
+  first call and at a linear the step already holds, and each call sits at (s, w)'s index and position whatever its place
+  in the forward. Then each listener (`H1Run.listen`) gets the call with the served tensors, on the device: A (the s8
   rows, as the Commit taps ``Int8RowQuant_v1/0``), s_a (``/1``), the int8 weight and its scales; `H1Run.close` hands it the
   empty steps' calls too, with no rows. A's slot i is the call's row i, so a tile's rows are 32 consecutive slots. What a
   listener returns (its roots and receipt root, as hex) is recorded with the call (``bound``). `Call.inputs` is
@@ -64,6 +67,7 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
 """
 from __future__ import annotations
 
+import bisect
 import hashlib
 import json
 import os
@@ -299,7 +303,7 @@ class H1Run:
     is recorded.
 
     Round s is step s. The engine's admissions and batch order (`admit`, from `admitting`) go to the round of the step about
-    to run, and round s closes once step s's last linear is recorded (or at `close`): its root (`pouw_h1_requests.round_row`)
+    to run, and round s closes once every linear of step s is recorded (or at `close`): its root (`pouw_h1_requests.round_row`)
     over the step's calls, its request table and its slot table, and with ``served`` each of the step's calls' A tables
     ``a/<K>@<c>`` whole (`pouw_h1_served.Served.segments`), is recorded with
     ``rounds`` (a `LiveRecord` over a live challenger's round family), which opens round s's coin only after it, and
@@ -327,7 +331,13 @@ class H1Run:
         self.entry, self._salt, self._opener, self.modules, self.commit = entry, salt, opener, dict(modules), commit
         self.shapes_, self.rows, self.steps = [tuple(map(int, s)) for s in shapes], int(rows), int(steps)
         self.offs, self.u_step = layout(self.shapes_, self.rows)
+        #: the window's calls in index order; per step, how many are in, and the linears of the step being recorded in the
+        #: order they came, against the first step's order (``order_ok``: one forward order a window)
         self.calls: list[Call] = []
+        self._in: Counter[int] = Counter()
+        self._came: list[int] = []
+        self._held: set[int] = set()
+        self._order: list[int] | None = None
         self.listeners: list[Listener] = []
         self.bound: dict[int, Mapping[str, Any]] = {}
         self.refused: list[dict[str, int]] = []
@@ -433,14 +443,22 @@ class H1Run:
             PV.keep_call(self.prover, call.index, av, sv, records)
 
     def _index(self, s: int, w: int) -> int:
-        """Call (s, w)'s index: the calls before it here (s·L + w in a static window; a rank's, `pouw_h1_ranks`)."""
-        return len(self.calls)
+        """Call (s, w)'s index, s·L + w, whatever its place in its step's forward."""
+        return s * len(self.shapes_) + w
+
+    def call(self, index: int) -> Call:
+        """Call `index`; KeyError when the window has none."""
+        i = bisect.bisect_left(self.calls, index, key=lambda c: c.index)
+        if i == len(self.calls) or self.calls[i].index != index:
+            raise KeyError(f"{self.entry}: no call {index}")
+        return self.calls[i]
 
     def _call(self, s: int, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, records: Any = None) -> Call:
         n, k = self.shapes_[w]
         call = Call(self._index(s, w), s, w, self.modules.get(w, str(w)), int(a.shape[0]) if a is not None else 0, k, n,
                     s * self.u_step + self.offs[w], self.rows)
-        self.calls.append(call)
+        bisect.insort(self.calls, call, key=lambda c: c.index)
+        self._in[s] += 1
         if self.commit:
             self._commit_tables(call, a, s_a, records)
             if self.served is not None:
@@ -450,7 +468,7 @@ class H1Run:
             if out is not None:
                 self.bound[call.index] = {**self.bound.get(call.index, {}), **out}
         self.details["calls"] = self.commits["calls"] = len(self.calls)
-        if w == len(self.shapes_) - 1:
+        if self._in[s] == len(self.shapes_):
             self._close_rounds(s)
         return call
 
@@ -543,7 +561,7 @@ class H1Run:
     def receipt(self, index: int, root: bytes) -> None:
         """Call `index`'s receipt root, computed after its round's coin: it goes under the next round's root (the last
         round's in the draw's root), so it is refused before that coin, once the next round has closed, or twice."""
-        call = self.calls[index]
+        call = self.call(index)
         if len(self.round_log) <= call.step:
             raise RuntimeError(f"{self.entry}: call {index}'s receipt before round {call.step}'s coin")
         if len(self.round_log) > call.step + 1 or "draw" in self.commits or index in self.receipts:
@@ -578,13 +596,18 @@ class H1Run:
     def record(self, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, z: Any = None) -> Call | None:
         """Linear `w`'s served call: its s8 rows a [m, k], their f32 scales s_a [m], its int8 weight [n, k] and scales, and
         the z its arm handed over: its records (`pouw_h1_records.of`), committed as its z table; without them nothing is
-        committed for z, and with ``retain`` `int_mm` computes its exact Y beside, only to retain it."""
+        committed for z, and with ``retain`` `int_mm` computes its exact Y beside, only to retain it. The window's first
+        call and a linear its step already holds start the next step."""
         if self.closed:
             raise RuntimeError(f"{self.entry}: a call after the window closed")
-        if w == 0:
-            self.step += 1
-        elif self.last is None or w != self.last + 1:
+        if self.step < 0 or w in self._held:
+            if self._order is None and self.step >= 0:
+                self._order = self._came
+            self.step, self._came, self._held = self.step + 1, [], set()
+        if self._order is not None and self._order[len(self._came):len(self._came) + 1] != [w]:
             self.order_ok = False
+        self._came.append(w)
+        self._held.add(w)
         self.last = w
         self._weights[w] = (weight, weight_scale)
         m, k = (int(d) for d in a.shape)
@@ -624,7 +647,7 @@ class H1Run:
         if not self.commit or self._unopened is not None:
             return
         self.details["steps_served"] = self.step + 1
-        self.details["last_step_complete"] = self.last in (None, len(self.shapes_) - 1)
+        self.details["last_step_complete"] = self.step < 0 or sum(c.step == self.step for c in self.calls) == len(self.shapes_)
         for s in range(self.step + 1, self.steps):
             for w, (n, k) in enumerate(self.shapes_):
                 weight, scale = self._weights.get(w, (None, None))
