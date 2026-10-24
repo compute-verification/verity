@@ -1,11 +1,14 @@
+import RemoteAudit.Pooled
+
 /-!
 # The memory line held over time
 
 `line.py`'s line, the line of record a gate run publishes: the conclusions of
 `Accounting.Guarantees.Remote.HeldOverTime` (time-held) and `HeldOverTimeLinks` (link-charged),
 `Security/Models/Accounting/Guarantees/RemoteHeld.lean`, read over each stretch of a paced session's groups in exact
-rationals, every refusal the Python's word for word. `line.py`'s docstring has the form; `tests/test_line.py` holds the
-two together through `RemoteAudit.Difftest`'s `line`. Code: Lean core only.
+rationals, every refusal the Python's word for word. The wrong receipts W are the pooled bound of the session's record
+(`RemoteAudit.Pooled.pooled`: its windows' receipts and draws at δ). `line.py`'s docstring has the form;
+`tests/test_line.py` holds the two together through `RemoteAudit.Difftest`'s `line`. Code: Lean core only.
 -/
 
 namespace RemoteAudit.Line
@@ -164,20 +167,24 @@ structure Form where
   charge : Charge
   stretches : Array Stretch
 
-/-- A session's line in both forms, time-held then link-charged, against `nodeBytes` of node memory. -/
+/-- A session's line in both forms, time-held then link-charged, against `nodeBytes` of node memory, with at most
+`wrong` of its receipts wrong. -/
 structure Line where
   nodeBytes : Nat
   forms : Array Form
+  wrong : Rat
 
 /-- The session's line on a node of `rates`, `nodeBytes` of memory and `chipBytes` of on-chip storage, with at most
-`wrong` of its receipts wrong; or why it has none. -/
-def line (gs : Array Group) (per blocks blockBytes chipBytes nodeBytes : Nat) (wrong : Rat) (rates : Rates) :
-    Except String Line := do
-  check gs per blocks blockBytes nodeBytes wrong rates
+W of its receipts wrong, the pooled bound of its record's `windows` (each window's receipts and draws) at `δ`; or why
+it has none. -/
+def line (gs : Array Group) (per blocks blockBytes chipBytes nodeBytes : Nat) (windows : Array (Nat × Nat)) (δ : Rat)
+    (rates : Rates) : Except String Line := do
+  let W := (← Pooled.pooled windows δ).wrong
+  check gs per blocks blockBytes nodeBytes W rates
   let (t, l) := charges rates blockBytes
-  let ts ← stretches gs per blocks blockBytes chipBytes wrong t
-  let ls ← stretches gs per blocks blockBytes chipBytes wrong l
-  pure ⟨nodeBytes, #[⟨"time-held", t, ts⟩, ⟨"link-charged", l, ls⟩]⟩
+  let ts ← stretches gs per blocks blockBytes chipBytes W t
+  let ls ← stretches gs per blocks blockBytes chipBytes W l
+  pure ⟨nodeBytes, #[⟨"time-held", t, ts⟩, ⟨"link-charged", l, ls⟩], W⟩
 
 private def digits? (s : String) : Option Nat :=
   if !s.isEmpty && s.all Char.isDigit then s.toNat? else none

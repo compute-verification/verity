@@ -512,14 +512,23 @@ def recorded_rates(session: dict, registration: dict, **node: float) -> line.Rat
                       wire.codec_named(registration["codec"]).encode_squarings, **node)
 
 
+def recorded_windows(session: dict) -> tuple[list[tuple[int, int]], float]:
+    """The pooled bound's inputs (`pooled.bound`) from an accepted session's record in `verifier.json`: each window's
+    receipts and draws, and δ."""
+    ws = session["record"]["profile"]["windows"]
+    return [(sum(w["lengths"]), w["profile"]["drawn"]["receipt"]) for w in ws], ws[0]["profile"]["delta"]
+
+
 def recorded_line(session: dict, registration: dict, *, host_bytes: int, rates: line.Rates) -> line.Line:
     """An accepted paced session's line in both forms (`line.line`, exact) from its record in `verifier.json`, against
-    its HBM and `host_bytes`, at `rates` (`recorded_rates`); the pooled wrong receipts are the recorded line's."""
-    lg, mem = session["ledger"], session["ledger"]["memory"]
+    its HBM and `host_bytes`, at `rates` (`recorded_rates`); the wrong receipts are the pooled bound of its record's
+    windows (`recorded_windows`)."""
+    mem = session["ledger"]["memory"]
+    windows, delta = recorded_windows(session)
     return line.line(paced_groups(mem, session["windows_seen"], block_bytes=mem["block_bytes"]),
                      per=session["pace"]["groups"], blocks=registration["blocks"], block_bytes=mem["block_bytes"],
                      chip_bytes=mem["chip_bytes"], node_bytes=mem["hbm_bytes"] + host_bytes,
-                     wrong=lg["paced"]["wrong"], rates=rates)
+                     windows=windows, delta=delta, rates=rates)
 
 
 class RealClock:
