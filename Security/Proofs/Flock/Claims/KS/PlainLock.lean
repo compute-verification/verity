@@ -159,8 +159,10 @@ theorem run_acc_iff_lastK (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg)
     (x : Claims.Msg) (ω : Ω) (r₁ r₂ : Fin ((V false).k x) → Coin)
     (h : ∀ i, i + 1 < (V false).k x → Claims.coinSeq r₁ i = Claims.coinSeq r₂ i) :
     (Claims.run H P (VK keep) x ω r₁).out = .acc ↔ (Claims.run H P (VK keep) x ω r₂).out = .acc := by
+  replace h : ∀ i, i + 1 < (V false).k x →
+      Claims.coinSeq (k := (VK keep).k x) r₁ i = Claims.coinSeq (k := (VK keep).k x) r₂ i := h
   unfold Claims.run
-  refine stepWith_acc_iff H P x ω _ _ ((V false).k x) (fun bs hb => ?_) (fun bs hb => ?_) _ [] [] _ (by simp)
+  refine stepWith_acc_iff H P x ω _ _ ((V false).k x) (fun bs hb => ?_) (fun bs hb => ?_) _ [] [] _ rfl
   · show nextK keep x bs _ = nextK keep x bs _
     congr 1
     exact List.map_congr_left fun i hi => h i (by have := List.mem_range.1 hi; omega)

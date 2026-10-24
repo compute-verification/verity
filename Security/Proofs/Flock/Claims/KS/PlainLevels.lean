@@ -372,25 +372,24 @@ theorem plain_levelOpeningK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prove
     exact e
   have h0 : 0 < (tabsOf sts).size := by simpa [tabsOf] using hsts0
   have ht0 : (tabsOf sts)[0] = Setup.ofCircuit st := by rw [tabsOf_getElem h0]; simp only [hst0]
-  replace hv : verifyWithM (hashesIn (L.map Prod.fst)) spec (tabsOf sts) f.record f.proofs = .ok () := hv
-  obtain ⟨sess, hdec, hsz, hreps⟩ :=
-    plainLevels_verifyWithM (hashesIn (L.map Prod.fst)) spec (tabsOf sts) f.record f.proofs (tabsOf_fold sts) hv
-  obtain ⟨sch, hsch, hrep⟩ := hreps 0 h0
-  obtain ⟨stream, extras', p, hstream, hext', hp', hlev⟩ := hrep k hk
-  simp only [ht0] at hsch hext' hp' hlev
-  have hdec' : Record.decode spec f.record = .ok sess := by
-    rw [← With.decodeWith_std]
-    exact (With.decodeWith_sim sub (sub_hashes (L.map Prod.fst)) spec f.record) sess hdec
-  obtain ⟨-, hpts, -, hstreams⟩ := Claims.Bridge.Custody.decode_live hdec' hlv
+  obtain ⟨hszL, hall⟩ := rep_plainK keep _ hv hlv
+  have hkL : k < lv.streams.size := by rw [hszL]; omega
+  obtain ⟨sess, sch, y, c, hpts, hpn, hschK, hrep, hy, hfa⟩ := hall k hkL
+  have hk2 : k / 2 = 0 := by omega
+  have hkm : k % 2 = k := by omega
+  have hst0' : sts[k / 2]! = st := by rw [hk2, getElem!_pos sts 0 hsts0, hst0]
+  rw [hst0'] at hschK
+  rw [hst0', hk2, hkm] at hrep
+  rw [hk2, hkm] at hy
+  have hsch : fast100 (Setup.ofCircuit st).m = some sch := hschK
+  obtain ⟨hfi, hkl⟩ := tabsOf_fold sts (Setup.ofCircuit st) (ht0 ▸ Array.getElem_mem h0)
+  obtain ⟨stream, extras', p, hstream, hext', hp', hlev⟩ :=
+    plainLevels_verifyRepWith _ spec (Setup.ofCircuit st) sch sess 0 k _ c hsch hfi hkl hrep
   rw [hpts, hext] at hext'
   cases hext'
-  have htab : 0 < spec.tables.size := by rw [← hsz]; exact h0
-  obtain ⟨hk', hrs⟩ := Claims.Bridge.Custody.repStreams_getElem spec htab hk
-  obtain ⟨y, hy, hfa⟩ := hstreams (2 * 0 + k) hk'
-  rw [hrs] at hy
   have hys : y = stream := Option.some.inj (hy.symm.trans hstream)
   subst hys
-  have hcoins := forall₂_coins (fun _ _ hab => hab.2.1) hfa
+  have hcoins := forall₂_coins (fun _ _ hab => hab.2) hfa
   have hsched : (Claims.Flock.plainProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
       (Setup.ofCircuit st).merkle.digestLen (saltLenOf false (Setup.ofCircuit st))).sched = sch := by
     simp only [Claims.Flock.plainProofShape, Claims.Flock.plainSched, hsch]
@@ -407,14 +406,14 @@ theorem plain_levelOpeningK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prove
         (y.rounds[plainLevelRound (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog sch.k0 (2 + extras.size)
           (sch.levels.size - 1) ℓ]!).coins (openAt p.ligerito (sch.levels.size - 1) ℓ).1 := by
     rw [← hent]
-    have e1 : lv.streams.getD k #[] = lv.streams[2 * 0 + k]! := by
-      rw [show (#[] : Array Flock.Round) = default from rfl, getD_eq_getElem!]; simp
-    have e2 : f.proofs.getD k ByteArray.empty = f.proofs[2 * 0 + k]! := by
-      rw [show ByteArray.empty = default from rfl, getD_eq_getElem!]; simp
+    have e1 : lv.streams.getD k #[] = lv.streams[k] := by
+      rw [show (#[] : Array Flock.Round) = default from rfl, getD_eq_getElem!, getElem!_pos lv.streams k hkL]
+    have e2 : f.proofs.getD k ByteArray.empty = f.proofs[k]! := by
+      rw [show ByteArray.empty = default from rfl, getD_eq_getElem!]
     rw [e1, e2]
     refine plainLevelColsOf_congr _ _ _ fun j => ?_
     rw [← Array.getElem?_toList, ← Array.getElem?_toList]
-    exact (hcoins j).symm
+    exact hcoins j
   rw [hcolsEq] at ha
   obtain ⟨j, hj, -, hjq, hja⟩ := mem_zkRepCols ha
   have hms : (Setup.ofCircuit st).merkle = MerkleScheme.hm96Sha512 ∨
@@ -445,10 +444,8 @@ theorem plain_levelOpeningK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prove
       hcs, fun b hb => (hcw b hb).trans hdl, rfl, merkleCheck_opens _ _ _ _ _ _ _ _ _ hpure i hi,
       fun b hb => (merkleCheck_sibs _ _ _ _ _ _ _ _ _ hpure i b hb).trans hdl, hlog i hi⟩
   have hn : extras.size = st.regions.size * spec.points := by
-    obtain ⟨hsz, hall⟩ := rep_plain _ hv hlv
-    obtain ⟨sess', -, -, -, hpts', hpn', -⟩ := hall 0 (by omega)
-    rw [extraClaims_size (st := st) hext, ← hpts', hpn']
-  rw [hn, Nat.mul_zero, Nat.zero_add] at hp'
+    rw [extraClaims_size (st := st) hext, ← hpts, hpn]
+  rw [hn] at hp'
   exact ⟨s, spec, sts, f, st, sch, p, _, hs, hf, hst, hsch, hp', hja, hcs, fun b hb => (hcw b hb).trans hdl,
     hjq ▸ hop j hj⟩
 
