@@ -1347,7 +1347,8 @@ class RequirementLink(Protocol):
     the proof units have shown, for every pass, that its plan holds every complete block the circuit reads at the
     pass's step and the layout packs the values read into blocks (`PlanMatches`; the plan unit, I4's: PlanMatch, or
     PlanShard for a registered store, with `Packs` under the census's layout rule), and that every free in the memory
-    map, of a registered block or a written one, is at its values' last read (the memory-map unit, I4's).  The link
+    map, of a registered block or a written one, is at its values' last structural reader on the public schedule, a
+    gather that may select one included (the memory-map unit, I4's; `memory_map.py`).  The link
     is one-sided: a plan may hold blocks the circuit doesn't read at its step (filler, a gathered table's unselected
     rows, a paused request's pages), which carry none of its reads, so a planned block need carry none of its bits,
     and the ledger credits each pass the circuit's reads, never its receipts (`linked_bits`, `RequirementMoved`).  A

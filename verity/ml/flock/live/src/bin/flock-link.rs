@@ -507,7 +507,7 @@ impl PrimeProxy {
         let l = std::os::unix::net::UnixListener::bind(path).expect("--prime-sock");
         let px = Arc::new(PrimeProxy { hello: false.into(), done: Mutex::new(None) });
         let p2 = px.clone();
-        let h = std::thread::spawn(move || {
+        let h = flock_live::spawn(move || {
             let Ok((conn, _)) = l.accept() else { return json!({"error": "no prime connection"}) };
             let mut r = BufReader::new(conn.try_clone().unwrap());
             let mut w = BufWriter::new(conn);
@@ -1135,6 +1135,7 @@ fn selftest(ch: Arc<Chain>) {
 }
 
 fn main() {
+    flock_live::init_threads();
     let cmd = std::env::args().nth(1).unwrap_or_default();
     let vus: usize = arg("--vus", "8").parse().unwrap();
     let k: usize = arg("--k", "1536").parse().unwrap();
