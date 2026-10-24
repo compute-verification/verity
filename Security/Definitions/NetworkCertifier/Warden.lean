@@ -1,3 +1,5 @@
+import Mathlib.Data.Nat.Notation
+
 /-!
 # The warden: cells on a public schedule, the fail cell, and what the client sees
 
