@@ -481,18 +481,23 @@ The record names \(L\) (`lifetime`), and the remote session sends it with the se
 
 \(L\) is a duration's whole windows: \(L = \max(L_{\min}, \lfloor D/T \rfloor)\) at \(D = 30\) s (`LIFETIME_NS`,
 `lifetime_windows`), \(L_{\min}\) 2 for a session that defers residency and 1 otherwise. That is 1 window at the stated
-60 s (2 deferred), 2 at 20 s deferred, and 30 at 1 s. A paced session's windows are its groups, and its \(L\) counts
-them at their nominal length, the stretch over its groups (the verifier's; `Params` alone counts a group as the pace's
-stated window, the fewest the life allows): 352 at k = 1 and an 85 ms pass. The duration is what the carrier term
+60 s (2 deferred), 2 at 20 s deferred, and 30 at 1 s. The vLLM serving store defers residency and its hello says so
+(`StoreBackend.deferred`), and its map re-keys a window ahead, so a serving session refuses \(L < 2\) (`Serving`): at
+\(L = 1\) every line would re-key every live block. A served session at the stated window therefore has \(L = 2\). A
+paced session's windows are its groups, and its \(L\) counts them at their nominal length, the stretch over its groups
+(the verifier's; `Params` alone counts a group as the pace's stated window, the fewest the life allows): 353 for k = 1
+at 85 ms over a 60 s stretch (706 groups), and 6 for k = 82 at 61 ms (12 groups). The duration is what the carrier term
 needs. A carrier of a declared circuit's may work on a block from its append's coin until the block leaves, so what the
 carriers may hold grows with the passes in \(L\) windows: `Accounting.Guarantees.DeclaredCircuitRequirement` charges
 \(\lceil 1024 \cdot L c P N \cdot 4096 / E \rceil\) bits a pass for it, \(128\, L P c / E\) of the store, at the
 property's cap \(c\) a certified byte. A count of 60 windows was an hour at the stated window, which put that share at
 916% for 8B (\(c\) = 0.442, eight engines) and 190% for 70B (TP8, 0.0918), so the guarantee said nothing. Over 30 s of
 61 ms passes the share is 7.6% and 1.6%, and the guarantee's ε a session 8.6% and 2.6%
-(note:20261024T1630Z-report-carrier-life). A window longer than \(D\) still holds a block for \(L_{\min}\) windows: at
-the stated 60 s, 8B's ε is 16% (31.5% deferred), so 10% at 8B needs windows or groups of at most about 35 s (17 s
-deferred). The cost of the short life is re-keys at the cap, about 5 GPU-µs a block at k = 3. At the served models'
+(note:20261024T1630Z-report-carrier-life), at a session whose passes a window are fixed (paced, \(P = k\)) and whose
+windows draw at least 2,773 openings. No deployed KV-credited session is such a session yet: the gate's k = 1 groups
+draw fewer. A window longer than \(D\) still holds a block for \(L_{\min}\) windows: at the stated 60 s, 8B's ε is 16%,
+and 31.5% for a deferring prover such as the serving store (70B: 4.2% and 7.3%), so 10% at 8B needs windows or groups
+of at most about 35 s (17 s deferred). The cost of the short life is re-keys at the cap, about 5 GPU-µs a block at k = 3. At the served models'
 page lives, 30 s re-keys about 0.004 GPU a GPU at 8B and 0.05 at 70B (note:20261018T0745Z-report-kv-credit-frontier).
 Each pass still reads every live block, and the memory line, which credits registered blocks, doesn't read \(L\).
 Counting the life from residency instead of from the append would allow \(L = 1\) under deferred residency, but it
