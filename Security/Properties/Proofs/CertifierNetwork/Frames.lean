@@ -209,15 +209,18 @@ theorem ingressTail_shaper (st : State) (t : Nat) : (ingressTail st t).1.shaper 
     (fun (r : State × Array Action) => r.1.shaper = st.shaper) _ _ ?_ ?_
   · refine forIn_inv_arr (fun (r : State × Array State.Started) => r.1.shaper = st.shaper) rfl ?_
     intro slot _ y hy
-    split
-    · exact hy
-    · repeat' split
-      all_goals exact hy
+    repeat' split
+    all_goals first
+      | exact hy
+      | exact (releaseSalt_keeps _ _).2.1.trans hy
   · intro y hy
     have h0 : ∀ acts : Array Action,
         (Id.run (forIn y.2 (y.1, acts) fun x r => match x with
           | .connect s => pure (ForInStep.yield (r.1, r.2.push (.connect s)))
           | .pump s => match r.1.pump s with
+            | (st', more) => pure (ForInStep.yield (st', r.2 ++ more))
+          | .saltConnect => pure (ForInStep.yield (r.1, r.2.push .connectSalt))
+          | .saltPump => match r.1.saltPump with
             | (st', more) => pure (ForInStep.yield (st', r.2 ++ more)))).1.shaper = st.shaper := by
       intro acts
       refine forIn_inv_arr (fun (r : State × Array Action) => r.1.shaper = st.shaper) hy ?_
@@ -227,6 +230,11 @@ theorem ingressTail_shaper (st : State) (t : Nat) : (ingressTail st t).1.shaper 
       · rename_i s _
         have p1 := pump_shaper r.1 s
         generalize r.1.pump s = z at p1 ⊢
+        rcases z with ⟨st', more⟩
+        exact p1.trans hr
+      · exact hr
+      · have p1 := (saltPump_keeps r.1).2.1
+        generalize r.1.saltPump = z at p1 ⊢
         rcases z with ⟨st', more⟩
         exact p1.trans hr
     split
@@ -248,6 +256,11 @@ theorem step_sized {c : Config} {st : State} (hg : Good c st) (hs : Sized c.egre
     intro st' s y hq hy
     subst hy
     exact hs.of_pending (by rw [pump_shaper, hq])
+  have saltPump_ok : ∀ (st' : State) (y : State × Array Action), st'.shaper = st.shaper → st'.saltPump = y →
+      Sized c.egress.frameBytes y.1.shaper := by
+    intro st' y hq hy
+    subst hy
+    exact hs.of_pending (by rw [(saltPump_keeps st').2.1, hq])
   unfold step
   split
   · exact hs
@@ -282,6 +295,23 @@ theorem step_sized {c : Config} {st : State} (hg : Good c st) (hs : Sized c.egre
     · dsimp only at heq
       split at heq
       · exact pump_ok _ _ _ (by rfl) heq
+      · cases heq; exact hs
+    · split at heq
+      · split at heq
+        · refine saltPump_ok _ _ ?_ heq
+          rfl
+        · cases heq; exact hs
+      · cases heq; exact hs
+    · split at heq
+      · split at heq
+        · cases heq; exact hs
+        · cases heq; exact hs
+      · cases heq; exact hs
+    · split at heq
+      · split at heq
+        · refine saltPump_ok _ _ ?_ heq
+          rfl
+        · cases heq; exact hs
       · cases heq; exact hs
 
 theorem init_sized (c : Config) : Sized c.egress.frameBytes (init c).shaper := by
