@@ -45,7 +45,10 @@ its own generation config to a request that omits them.
   and `fails.records` (each failed connection's reason, witness), and each is certified (`certificate.Issuer`, with
   the warden's parameters digest) into `certified.jsonl`. Each window of the wire's two records is also committed as
   rows, a cell a row (`warden_rows`), its head signed: `cells.jsonl` holds the registration and the cost (rows, commit
-  and sign ms), `cells.salts` the rows' salts (witness, the prover's).
+  and sign ms), `cells.salts` the rows' salts (witness, the prover's). All of that is done by a spawned process
+  (`PublisherProcess`), which alone holds the key and gets each tick's rows as the warden releases them: a window's
+  commit takes seconds of CPU, and in the warden's own process, even on another thread, it holds the ticker's GIL and
+  puts ticks past their slack.
 - `client` sends each request of the traffic at its time after the origin on a connection of its own, reads the cells
   to the warden's close, and writes `client.json`: per connection its ordinal, outcome, every cell's kind and arrival,
   the SHA-256 of what it sent and of the bytes it got, and the HTTP response read from them.
@@ -66,6 +69,8 @@ import dataclasses
 import hashlib
 import json
 import math
+import multiprocessing
+import multiprocessing.connection
 import random
 import re
 import secrets
@@ -74,7 +79,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from concurrent.futures import ThreadPoolExecutor
+import traceback
 from dataclasses import asdict, replace
 from pathlib import Path
 
@@ -82,8 +87,8 @@ import active_replay as ar
 import certifier_serve as cs
 from verity.core.protocols.certifier import warden_rows as WR
 from verity.core.protocols.certifier.active import DATA, PAD
-from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer, LmsSigner, record_head
-from verity.core.protocols.certifier.grid import GridParams, Record
+from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer, LmsKey, record_head
+from verity.core.protocols.certifier.grid import GridParams, Record, Status, row_count
 from verity.core.protocols.certifier.warden import END, FAIL, REFUSED, Shim, Warden, WardenParams, audit, cells
 
 HERE = Path(__file__).resolve().parent
@@ -266,17 +271,17 @@ async def probe(upstream: tuple[str, int], traffic: list[dict], in_flight: int =
 # The warden's run.
 
 class Publisher:
-    """The warden's `publish`, on one worker thread so that signing never holds the ticker: each record packed to its
-    file (`requests.records`, `responses.records`, `fails.records`), and certified by `issuer` under its link name and
-    direction (`CERTIFIED`) with the schedule's parameters digest, one line of `certified.jsonl` each, or the
-    link-window under `refused`."""
+    """The warden's `publish`, inline: each record packed to its file (`requests.records`, `responses.records`,
+    `fails.records`), and certified by `issuer` under its link name and direction (`CERTIFIED`) with the schedule's
+    parameters digest, one line of `certified.jsonl` each, or the link-window under `refused`; the wire's two also
+    committed as rows by `commit` (`attest`). `serve` runs it in `PublisherProcess`: on the ticker's thread, or on any
+    thread of its process, a window's commit holds the ticker's GIL for seconds. `close` gives the issuer's refusals."""
 
-    def __init__(self, out: Path, issuer: Issuer, params: WardenParams) -> None:
-        self.out, self.issuer, self.params = out, issuer, params
-        self.executor, self.futures = ThreadPoolExecutor(1), []
+    def __init__(self, out: Path, issuer: Issuer, params: WardenParams, commit=WR.Cells.commit) -> None:
+        self.out, self.issuer, self.params, self.commit = out, issuer, params, commit
 
     def __call__(self, record: Record, grid: GridParams) -> None:
-        self.futures.append(self.executor.submit(self.keep, record, grid))
+        self.keep(record, grid)
 
     def keep(self, record: Record, grid: GridParams) -> None:
         ar.write_blobs(self.out / f"{record.link}.records", ar.pack_record(record))
@@ -293,8 +298,8 @@ class Publisher:
         """The link-window's cells as rows (`warden_rows`), their head signed: one line of `cells.jsonl` (the
         registration, or the link-window under `refused`, and the cost), the salts to `cells.salts` (witness)."""
         t0 = time.perf_counter()
-        cells_ = WR.Cells.commit(link, direction, record.window, WR.window_rows(record, grid), self.params.digest,
-                                 self.issuer.session)
+        cells_ = self.commit(link, direction, record.window, WR.window_rows(record, grid), self.params.digest,
+                             self.issuer.session)
         head = cells_.head
         t1 = time.perf_counter()
         cert = self.issuer.sign(link, direction, record.window, head.digest())
@@ -306,10 +311,95 @@ class Publisher:
         with open(self.out / "cells.jsonl", "a") as fh:
             fh.write(json.dumps(line | {"cost": cost}) + "\n")
 
-    def close(self) -> None:
-        self.executor.shutdown(wait=True)
-        for f in self.futures:
-            f.result()
+    def close(self) -> list:
+        return list(self.issuer.refused)
+
+
+def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params: WardenParams, commit) -> None:
+    """`PublisherProcess`'s process: the warden's key and its leaf state are this process's alone. It sends the public
+    key, rebuilds each record from its released rows, keeps it as `Publisher` does at its close, and at the end sends
+    the issuer's refusals and its own usage."""
+    try:
+        own = cs.signer(key)
+        results.send(("key", own.public_key()))
+        publisher = Publisher(out, Issuer(own, session), params, commit or WR.Cells.commit)
+        grids = {INGRESS: params.grid, EGRESS: params.grid, FAILS: params.fails_grid}
+        filling: dict[str, list] = {link: [] for link in grids}
+        B = params.cell_bytes
+        while (item := rows.get()) is not None:
+            link, n, data = item
+            grid = grids[link]
+            if n is not None:
+                filling[link].append(tuple(data[i * B:(i + 1) * B] for i in range(n)) + (None,) * (grid.allocation - n))
+                continue
+            (window, reason), got = data, filling[link]
+            if len(got) != grid.buckets:
+                raise ValueError(f"{link} window {window} closed after {len(got)} rows, not {grid.buckets}")
+            publisher.keep(Record(link, window, tuple(got), Status(reason)), grid)
+            filling[link] = []
+        results.send(("done", {"refused": publisher.close(), "usage": ar._usage()}))
+        own.close()
+    except BaseException:
+        results.send(("error", traceback.format_exc()))
+        raise
+
+
+class PublisherProcess:
+    """`serve`'s `publish` and `release`: `Publisher` in one spawned process, which alone holds the warden's key.
+    `release` hands it each grid's row as the warden ticks (its frames as one bytes object), and `__call__` the
+    record's close: the ticker only queues them, and the queue's own thread pickles each tick's few kilobytes, never a
+    whole window. The process rebuilds each record from its rows and keeps, certifies and commits it, so neither a
+    commit nor a signature takes the ticker's GIL. `key` is the warden's public key; `close` waits for every record and
+    gives the issuer's refusals; `usage` is then the process's own. `commit` stands in for `Cells.commit` (a test's)."""
+
+    def __init__(self, out: Path, key: Path, session: bytes, params: WardenParams, commit=None) -> None:
+        ctx = multiprocessing.get_context("spawn")
+        self.rows = ctx.Queue()
+        self.results, results = ctx.Pipe(duplex=False)
+        self.process = ctx.Process(target=_publisher_main, name="warden-publisher", daemon=True,
+                                   args=(self.rows, results, out, key, session, params, commit))
+        self.process.start()
+        results.close()
+        self.usage: dict | None = None
+        self.key: LmsKey = self._receive("key")
+
+    def _receive(self, kind: str):
+        multiprocessing.connection.wait([self.results, self.process.sentinel])
+        if not self.results.poll():
+            raise RuntimeError(f"the publisher process exited ({self.process.exitcode}) before its {kind}")
+        got, value = self.results.recv()
+        if got == "error":
+            raise RuntimeError(f"the publisher process failed: {value}")
+        if got != kind:
+            raise RuntimeError(f"the publisher process sent its {got}, not its {kind}")
+        return value
+
+    def _end(self) -> dict:
+        """The process's last message once every record is kept, else its failure, raised; the rows still queued are
+        then dropped, so that this process's exit doesn't wait on a reader that is gone."""
+        try:
+            return self._receive("done")
+        except BaseException:
+            self.rows.cancel_join_thread()
+            raise
+
+    def release(self, link: str, row) -> None:
+        n = row_count(row)
+        self.rows.put((link, n, b"".join(row[:n])))
+
+    def __call__(self, record: Record, grid: GridParams) -> None:
+        if not self.process.is_alive():
+            self._end()
+        self.rows.put((record.link, None, (record.window, record.status.reason)))
+
+    def close(self) -> list:
+        self.rows.put(None)
+        done = self._end()
+        self.rows.close()
+        self.rows.join_thread()
+        self.process.join()
+        self.usage = done["usage"]
+        return done["refused"]
 
 
 def _quantiles(xs: list[float]) -> dict:
@@ -318,28 +408,28 @@ def _quantiles(xs: list[float]) -> dict:
     return {"n": len(xs), "p50": pick(0.5), "p99": pick(0.99), "max": pick(1.0)}
 
 
-def deployment_record(params: WardenParams, signer: LmsSigner, session: bytes, *, origin_unix: float, windows: int,
+def deployment_record(params: WardenParams, key: LmsKey, session: bytes, *, origin_unix: float, windows: int,
                       listen: tuple[str, int], upstream: tuple[str, int], slack: float) -> dict:
     """`deployment.json`, the auditor's record of a run: the warden's public key and session, the schedule's
     parameters and their digest, the origin and where it listened."""
-    return {"key": cs.public_json(signer.public_key()), "session": session.hex(), "link": LINK,
+    return {"key": cs.public_json(key), "session": session.hex(), "link": LINK,
             "params": asdict(params), "digest": params.digest.hex(), "slack_ms": slack * 1000,
             "origin_unix": origin_unix, "windows": windows, "listen": list(listen), "upstream": list(upstream)}
 
 
-async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], listen: tuple[str, int],
-                signer: LmsSigner, session: bytes, windows: int, start_in: float = 5.0, slack: float = 0.025,
+async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], listen: tuple[str, int], key: Path,
+                session: bytes, windows: int, start_in: float = 5.0, slack: float = 0.025,
                 announce=cs._announce) -> dict:
-    """One run of the warden on the host's clock (the module docstring's `serve`). Returns what `warden.json` holds."""
+    """One run of the warden on the host's clock (the module docstring's `serve`), its records published by a
+    `PublisherProcess` that holds the key in `key`. Returns what `warden.json` holds."""
     out.mkdir(parents=True, exist_ok=True)
     loop = asyncio.get_running_loop()
-    issuer = Issuer(signer, session)
-    publish = Publisher(out, issuer, params)
+    publish = PublisherProcess(out, key, session, params)
     origin = time.monotonic() + start_in
     warden = Warden(params, lambda: asyncio.open_connection(*upstream), origin=origin, windows=windows,
-                    publish=publish, slack=slack)
+                    publish=publish, release=publish.release, slack=slack)
     server = await asyncio.start_server(warden.handle, *listen)
-    deployment = deployment_record(params, signer, session, origin_unix=time.time() + origin - time.monotonic(),
+    deployment = deployment_record(params, publish.key, session, origin_unix=time.time() + origin - time.monotonic(),
                                    windows=windows, listen=(listen[0], server.sockets[0].getsockname()[1]),
                                    upstream=upstream, slack=slack)
     (out / "deployment.json").write_text(json.dumps(deployment, indent=1))
@@ -348,11 +438,12 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
         await warden.run()
     finally:
         server.close()
-        await loop.run_in_executor(None, publish.close)
+        refused = await loop.run_in_executor(None, publish.close)
     lateness = [x * 1000 for x in warden.lateness]
     log = {"connections": warden.log, "ordinals": warden.ordinals, "refused": warden.refused, "ticks": warden.ticks,
            "lateness_ms": _quantiles(lateness) | {"over_slack": sum(x > slack * 1000 for x in lateness)},
-           "issuer_refused": [[link, d.value, w] for link, d, w in issuer.refused], "usage": ar._usage()}
+           "issuer_refused": [[link, d.value, w] for link, d, w in refused], "usage": ar._usage(),
+           "publisher_usage": publish.usage}
     (out / "warden.json").write_text(json.dumps(log, indent=1))
     announce({"served": True, "out": str(out)})
     return log
@@ -714,9 +805,8 @@ def main(argv=None) -> int:
         if len(session) != 32:
             raise SystemExit("--session is 32 bytes in hex")
         ar._quiet_runtime()
-        asyncio.run(serve(_params(args), args.out, upstream=args.upstream, listen=args.listen,
-                          signer=cs.signer(args.key), session=session, windows=args.windows,
-                          start_in=args.start_in, slack=args.slack))
+        asyncio.run(serve(_params(args), args.out, upstream=args.upstream, listen=args.listen, key=args.key,
+                          session=session, windows=args.windows, start_in=args.start_in, slack=args.slack))
         return 0
     if args.command == "client":
         ar._quiet_runtime()

@@ -1,7 +1,8 @@
 """warden-serve without the wall clock: its varied traffic, its HTTP bytes against the fake endpoint over loopback, and
 the offline check of a run whose warden is driven tick by tick on a `VirtualClock`, its records certified by an LMS
 key: the check accepts the run, and refuses a record that isn't what was certified, a cell that reached its client in
-another bucket, and a response that isn't the record's."""
+another bucket, and a response that isn't the record's; and a window's slow commit, which faults the next window when
+it runs in the warden's process, moves no tick in `serve`'s publisher process."""
 
 from __future__ import annotations
 
@@ -12,13 +13,21 @@ import math
 import sys
 from pathlib import Path
 
+import pytest
+
+from verity.core.protocols.certifier import warden_rows as WR
 from verity.core.protocols.certifier.active import DATA, VirtualClock
+from verity.core.protocols.certifier.grid import Reason
 from verity.core.protocols.certifier.warden import END, Shim, Warden, WardenParams, cells, read_cell, reason_frame
 
 HERE = Path(__file__).resolve().parents[1]
 PARAMS = WardenParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, queue=4, window=60, ingress_cells=40,
                       ingress_buckets=30, egress_cells=128)
 SESSION = bytes(range(32))
+#: the clocks `slow_commit` moves: a run's while it ticks in this process; a spawned process's list stays empty
+PROCESS_CLOCK: list[VirtualClock] = []
+#: what a window's commit takes of its process's time: TRACE-CORPUS's small-KV run measured 378-392 ms
+SLOW_COMMIT_S = 0.4
 
 
 def _load():
@@ -153,13 +162,35 @@ def _response(texts: list[str]) -> bytes:
             + b"".join(ws._sse(e) for e in events) + b"e\r\ndata: [DONE]\n\n\r\n0\r\n\r\n")
 
 
-def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes]) -> None:
-    """A run of the warden for one window on a `VirtualClock`, published as `serve` and `client` publish one: its
-    records and certificates through `Publisher`, `deployment.json`, and `client.json` with every cell's arrival 1 ms
-    into the bucket it was sent in."""
+def slow_commit(*args, **kwargs):
+    """`Cells.commit`, taking `SLOW_COMMIT_S` of the clock of the process it runs in (`PROCESS_CLOCK`): pure Python
+    holds its process's GIL, so a ticker in that process, on any thread, waits as long. A spawned process has none."""
+    for clock in PROCESS_CLOCK:
+        clock.advance(clock() + SLOW_COMMIT_S)
+    return WR.Cells.commit(*args, **kwargs)
+
+
+def refusing_commit(*args, **kwargs):
+    raise ValueError("a refusing commit")
+
+
+def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *, windows: int = 1, commit=None,
+         process: bool = False) -> Warden:
+    """A run of the warden for `windows` windows on a `VirtualClock`, published as `serve` and `client` publish one:
+    its records and certificates through `Publisher` inline (`serve`'s `PublisherProcess` when `process`), each window
+    committed by `commit`, `deployment.json`, and `client.json` with every cell's arrival 1 ms into the bucket it was
+    sent in. Returns the warden."""
     tau = PARAMS.bucket_ms / 1000
-    signer = ws.cs.signer(key, 4)
-    publisher = ws.Publisher(out, ws.Issuer(signer, SESSION), PARAMS)
+    if process:
+        import warden_serve  # by name, so that the spawned process finds its functions
+
+        ws.cs.load_key(key, 4)
+        publisher = warden_serve.PublisherProcess(out, key, SESSION, PARAMS, commit)
+        hooks, public = {"publish": publisher, "release": publisher.release}, publisher.key
+    else:
+        signer = ws.cs.signer(key, 4)
+        publisher = ws.Publisher(out, ws.Issuer(signer, SESSION), PARAMS, commit or WR.Cells.commit)
+        hooks, public = {"publish": publisher}, signer.public_key()
     answers = iter(responses)
 
     async def connect():
@@ -171,9 +202,9 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes]) ->
     def settled(w: Warden) -> bool:
         return all(c.server is not None and c.ingress_ended and c.egress_ended for c in w.active)
 
-    async def main() -> list[_Writer]:
+    async def main() -> tuple[list[_Writer], Warden]:
         clock = VirtualClock(-tau / 2)
-        warden = Warden(PARAMS, connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep, publish=publisher)
+        warden = Warden(PARAMS, connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, **hooks)
         running = asyncio.create_task(warden.run())
         clients, tasks = [], []
         for request in requests:
@@ -183,18 +214,22 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes]) ->
             clients.append(_Writer(warden))
             tasks.append(asyncio.create_task(warden.handle(reader, clients[-1])))
         await warden.until(lambda w: w.ordinals == len(requests))
-        for t in range(PARAMS.window):
-            await warden.until(settled)
-            clock.advance(t * tau)
-            await warden.until(lambda w, t=t: w.ticks > t)
-        await running
+        PROCESS_CLOCK.append(clock)
+        try:
+            for t in range(windows * PARAMS.window):
+                await warden.until(settled)
+                clock.advance(t * tau)
+                await warden.until(lambda w, t=t: w.ticks > t)
+            await running
+        finally:
+            PROCESS_CLOCK.remove(clock)
         await asyncio.gather(*tasks)
-        return clients
+        return clients, warden
 
-    clients = asyncio.run(main())
+    clients, warden = asyncio.run(main())
     publisher.close()
-    deployment = ws.deployment_record(PARAMS, signer, SESSION, origin_unix=0.0, windows=1, listen=("127.0.0.1", 1),
-                                      upstream=("127.0.0.1", 2), slack=0.025)
+    deployment = ws.deployment_record(PARAMS, public, SESSION, origin_unix=0.0, windows=windows,
+                                      listen=("127.0.0.1", 1), upstream=("127.0.0.1", 2), slack=warden.slack)
     (out / "deployment.json").write_text(json.dumps(deployment))
     log = []
     for index, (request, client) in enumerate(zip(requests, clients)):
@@ -208,6 +243,7 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes]) ->
         shim.outcome = "end" if shim.arrivals and END in [k for _, k in shim.arrivals] else "cut"
         log.append(ws.connection_log(index, 0.0, 0.0, request, shim, 0.0))
     (out / "client.json").write_text(json.dumps({"connections": log}))
+    return warden
 
 
 def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(tmp_path):
@@ -290,3 +326,34 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
     problems = refused(lambda: edit_client(lambda c: c.update(data_sha256="0" * 64)))
     assert any(p.startswith("connection 1:") and "'response_certified': False" in p for p in problems)
     assert ws.check(out)["accepted"]
+
+
+def test_a_windows_commit_and_signatures_move_no_tick_past_its_slack_in_the_publisher_process(tmp_path):
+    """A window's commit that takes `SLOW_COMMIT_S` of its process's time (`slow_commit`), run in the warden's process
+    as the inline `Publisher` runs it, puts the ticks after the window's end past their slack: the next window faults
+    (`monitor-unavailable`) and the check refuses it. In `serve`'s `PublisherProcess` the same commit runs in the
+    spawned process, which signs and commits from the rows released to it: every tick is on time, and the check
+    accepts every link-window, certified and registered. A commit that fails there fails `close`, and the warden's
+    process doesn't wait on it."""
+    requests = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 200, 30)]
+    responses = [_response([" a", " b"]), _response([" word"] * 40), _response([])]
+    runs = {name: tmp_path / name for name in ("inline", "process", "refusing")}
+    for out in runs.values():
+        out.mkdir()
+
+    inline = _run(runs["inline"], tmp_path / "inline-key", requests, responses, windows=2, commit=slow_commit)
+    late = [t for t, x in enumerate(inline.lateness) if x > inline.slack]
+    assert late[0] == PARAMS.window and max(inline.lateness) > SLOW_COMMIT_S
+    problems = ws.check(runs["inline"])["problems"]
+    assert {f"{name} window 1: {Reason.MONITOR_UNAVAILABLE.value}" for name in ws.CERTIFIED} <= set(problems)
+
+    process = _run(runs["process"], tmp_path / "process-key", requests, responses, windows=2, commit=slow_commit,
+                   process=True)
+    assert len(process.lateness) == 2 * PARAMS.window and max(process.lateness) == 0
+    result = ws.check(runs["process"])
+    assert result["accepted"], result["problems"]
+    s = result["summary"]
+    assert (s["certified_windows"], s["cell_rows"]["registered"], s["ended"], s["signer_refused"]) == (6, 4, 3, [])
+
+    with pytest.raises(RuntimeError, match="a refusing commit"):
+        _run(runs["refusing"], tmp_path / "refusing-key", requests, responses, commit=refusing_commit, process=True)

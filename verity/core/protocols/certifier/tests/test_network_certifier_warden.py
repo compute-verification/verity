@@ -149,11 +149,12 @@ def settled(warden: Warden, server: Server) -> bool:
 
 
 async def drive(server: Server, arrivals: dict[int, list[bytes]], *, windows: int = 1, late: dict | None = None,
-                params: WardenParams = PARAMS):
+                params: WardenParams = PARAMS, **hooks):
     """Connect `arrivals[t]` (each a client's raw cell bytes) just before bucket t's tick, let the server answer what is
-    due and the warden read it, then tick, for `windows` windows; `late[t]` puts tick t that many seconds late."""
+    due and the warden read it, then tick, for `windows` windows; `late[t]` puts tick t that many seconds late.
+    `hooks` are the warden's `publish` and `release`."""
     clock = VirtualClock(-TAU / 2)
-    warden = Warden(params, server.connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep)
+    warden = Warden(params, server.connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, **hooks)
     running = asyncio.create_task(warden.run())
     clients: list[Client] = []
     for t in range(windows * params.window):
@@ -238,6 +239,22 @@ def test_the_records_are_the_wire():
         for t, data in client.writes:
             by_bucket.setdefault(t, []).append(data)
     assert b"".join(rows) == b"".join(b"".join(by_bucket[t]) for t in sorted(by_bucket))
+
+
+def test_the_rows_released_before_each_publish_are_its_records_grid():
+    """`release` gets each grid's row as it ticks, before the window's `publish`: a publisher in another process
+    rebuilds every record, bucket for bucket, from the rows alone."""
+    events = []
+    run([[(0, b"hello"), (0, EOF)], [(0, b"x" * 100), (0, EOF)]], {0: [cells(request(5), B), cells(request(70), B)]},
+        windows=2, release=lambda link, row: events.append((link, row)), publish=lambda r, grid: events.append(r))
+    pending, published = {}, []
+    for e in events:
+        if isinstance(e, tuple):
+            pending.setdefault(e[0], []).append(e[1])
+        else:
+            assert e.grid == tuple(pending.pop(e.link)), (e.link, e.window)
+            published.append((e.link, e.window))
+    assert published == [(link, w) for w in range(2) for link in ("requests", "responses", "fails")] and not pending
 
 
 # --- fail closed -----------------------------------------------------------------------------------------------------
