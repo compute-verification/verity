@@ -462,15 +462,21 @@ class Issuer:
             raise ValueError(f"the certifier's coins gave {len(salt)} bytes for a {SALT_BYTES}-byte salt")
         head = record_head(record.link, direction, record.window, record.grid, record.status, params, parameters,
                            deadline=deadline)
-        digest = certificate_digest(salt, head.digest())
+        certificate = self.sign(record.link, direction, record.window, certificate_digest(salt, head.digest()))
+        return None if certificate is None else CertifiedRecord(head, salt, certificate)
+
+    def sign(self, link: str, direction: Direction, window: int, digest: bytes) -> Certificate | None:
+        """A certificate of the 64-byte `digest` for the link-window in this session, or None when the signer refuses
+        (the link-window is then listed in `refused`). `certify` signs a record's salted digest with it, and the
+        warden's cell rows their head's digest (`warden_rows`)."""
         key_id = self.signer.key_id
-        message = certificate_message(key_id, self.session, record.link, direction, record.window, digest)
+        message = certificate_message(key_id, self.session, link, direction, window, digest)
         try:
             if not self.started:
                 self.signer.start(self.session)
                 self.started = True
             signature = self.signer.sign(message)
         except SignerRefused:
-            self.refused.append((record.link, direction, record.window))
+            self.refused.append((link, direction, window))
             return None
-        return CertifiedRecord(head, salt, Certificate(key_id, record.link, direction, record.window, digest, signature))
+        return Certificate(key_id, link, direction, window, digest, signature)
