@@ -58,8 +58,8 @@ theorem unit_eval (hwf : t.wellFormed = true) (ha : t.apart = true) (ho : t.orde
   exact unroll_eval hwf ha ho h hu hs hc hb hj hw y hy
 
 /-- **A copy of a computing Definition carries its spec**: column values `f` that take, at the copy's columns, its
-Definition's value on `f` at its bound inputs, with the constant at 1, are on `e`'s columns `outs` `spec` of `f` at those
-inputs, when the copy is bound to as many inputs as `e` has and `e` computes `spec` on `outs`. -/
+Definition's value on `f` at its bound inputs, with the constant at 1, are on `e`'s columns `outs` `spec` of `f` at
+those inputs, when the copy is bound to as many inputs as `e` has and `e` computes `spec` on `outs`. -/
 theorem computes_of_eval {e o : ℕ} {inp : List ℕ} {f : ℕ → Bool} (hlen : inp.length = (t.defs.getD e default).ins)
     (hev : ∀ y < (t.defs.getD e default).cols, f (o + y) = t.evalDef e (inp.map f) true y)
     {outs : List ℕ} {spec : (ℕ → Bool) → List Bool} (hD : t.DefComputes e outs spec)

@@ -7,8 +7,8 @@ import Flock.HmRow
 A templated statement's circuit is `HmOut.parseTmpl`'s: its template read as a unit (`TmplUnit.read`), whose committed
 net `tu.net` is `HmRow.parse`'s first net, named `unit`, where a flat file's `CIRCUIT unit` section is, then
 `HmOut.checkRows`, with the unit carried on the circuit (`parseTmpl_cases`). That net is `Tmpl.unrollAt`'s:
-`Tmpl.unroll`'s logical net, its rows moved to `posMap`'s positions (`unroll_of_unrollAt`). So column values that satisfy
-the committed net satisfy, through `posMap`, the audit's `Rows` of the logical net, the rows `unit_eval` reads, and are
+`Tmpl.unroll`'s logical net, its rows moved to `posMap`'s positions (`unroll_of_unrollAt`). So column values that
+satisfy the committed net satisfy, through `posMap`, the audit's `Rows` of the logical net, the rows `unit_eval` reads, and are
 zero off `posMap`'s image (`TmplUnit.rowsSat`). With the constant at 1, at every copy of a computing Definition placed
 under one of the root's calls past the input rows, they carry its spec on its bound inputs (`TmplUnit.computes`, the
 committed net's `unit_computes`). No verifier path reads this file.
@@ -69,8 +69,8 @@ theorem TmplUnit.rowsSat (tu : TmplUnit) {n : Net} (hn : Tmpl.unroll tu.t = .ok 
     (hlog : tu.net.unitLog ≤ 32) {z : ℕ → Bool} (hs : FlockSoundness.NetSat tu.net (2 ^ tu.net.unitLog) z) :
     (FlockSoundness.Audit.Rows.ofNet (FlockSoundness.TmplValue.unroll_built hn)).Sat
         (fun c => z ((Tmpl.posMap tu.t tu.lays).getD c.val 0)) ∧
-      ∀ p < 2 ^ tu.net.unitLog, (∀ x < (tu.t.defs.getD tu.t.root default).cols, (Tmpl.posMap tu.t tu.lays).getD x 0 ≠ p) →
-        z p = false := by
+      ∀ p < 2 ^ tu.net.unitLog,
+        (∀ x < (tu.t.defs.getD tu.t.root default).cols, (Tmpl.posMap tu.t tu.lays).getD x 0 ≠ p) → z p = false := by
   obtain ⟨_, n₀, -, hn₀, hat, hu₀⟩ := FlockSoundness.TmplValue.unroll_of_unrollAt tu.unrolled
   have e : n₀ = n := Except.ok.inj (hu₀.symm.trans hn)
   subst e
