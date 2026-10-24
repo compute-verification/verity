@@ -1,6 +1,6 @@
 """The memory line held over time (`line`) in exact rationals: a stretch's span, L, rebuilds, fill and both readings
 as `RemoteHeld.lean`'s forms charge them, each form's rate and burst from the node's, the worst stretch the first on a
-tie, every refusal, and the JSON form the Lean reads."""
+tie, every refusal, and the JSON form the Lean reads, W the pooled bound of the record's windows."""
 
 from __future__ import annotations
 
@@ -8,9 +8,11 @@ from fractions import Fraction
 
 import pytest
 
-from verity.core.protocols.remote_bandwidth import ledger, line
+from verity.core.protocols.remote_bandwidth import ledger, line, pooled
 
 N, B = 1000, 4096
+NONE_WRONG = dict(windows=[(1, 1)], delta=2.0 ** -40)
+"""A record whose one window was opened whole: no receipt can be wrong."""
 
 
 def groups(stretch: int = 1, *, weights: int = 600, host: int = 0, n: int = 12) -> list[line.Group]:
@@ -63,27 +65,33 @@ def test_each_form_charges_the_nodes_rates_and_bursts_in_blocks_a_ns():
 
 def test_the_line_is_each_readings_worst_stretch_the_first_on_a_tie_against_the_node():
     gs = groups(1)
-    whole = line.line(gs, per=4, blocks=N, block_bytes=B, chip_bytes=0, node_bytes=10 * N * B, wrong=0,
+    whole = line.line(gs, per=4, blocks=N, block_bytes=B, chip_bytes=0, node_bytes=10 * N * B, **NONE_WRONG,
                       rates=line.Rates(0, 1))
+    assert whole.wrong == 0
     for f in line.FORMS:
         assert [x.time.weights for x in whole.form(f).stretches] == [600 * B, 600 * B]
         assert whole.form(f).worst(line.TIME).stretch == 0
         assert whole.share(f) == Fraction(6, 100) and whole.share(f, line.SNAPSHOT, "filler") == Fraction(4, 100)
-    burst = line.line(groups(9), per=4, blocks=N, block_bytes=B, chip_bytes=B, node_bytes=10 * N * B, wrong=50,
-                      rates=line.Rates(10 ** 6, 1))
+    burst = line.line(groups(9), per=4, blocks=N, block_bytes=B, chip_bytes=B, node_bytes=10 * N * B,
+                      windows=[(100, 10)], delta=2.0 ** -40, rates=line.Rates(10 ** 6, 1))
     assert burst.form(line.TIME_HELD).worst(line.TIME).stretch == 1
+    assert burst.wrong == pooled.bound([(100, 10)], Fraction(1, 2 ** 40)).wrong == 90
 
 
 def test_the_json_form_is_the_lines_and_refuses_what_isnt_its_inputs():
     gs = groups(9, host=300)
-    args = dict(per=4, blocks=N, block_bytes=B, chip_bytes=3 * B, node_bytes=10 * N * B, wrong=12.5,
-                rates=line.Rates(1.5e11, 7, 4.4e9, 5e10, 2.5, 3, 6291456))
+    args = dict(per=4, blocks=N, block_bytes=B, chip_bytes=3 * B, node_bytes=10 * N * B, windows=[(4000, 7), (900, 7)],
+                delta=1e-9, rates=line.Rates(1.5e11, 7, 4.4e9, 5e10, 2.5, 3, 6291456))
     j = line.inputs_json(gs, **args)
-    assert j["wrong"] == "25/2" and j["rates"]["squarings_per_s"] == "150000000000"
+    assert j["windows"] == [[4000, 7], [900, 7]] and j["rates"]["squarings_per_s"] == "150000000000"
+    assert line.number(j["delta"]) == Fraction(1e-9) != Fraction("1e-9")
     assert line.run_json(j) == line.line(gs, **args).to_json()
+    assert line.run_json(j)["wrong"] == line.text(pooled.bound(args["windows"], 1e-9).wrong)
     assert line.number("-3/6") == Fraction(-1, 2) and line.number(0.1) == Fraction(1, 10)
-    for bad in ({**j, "per": -1}, {**j, "wrong": 0.5}, {**j, "wrong": "1/0"}, {**j, "wrong": "1.5"},
-                {**j, "groups": [{**j["groups"][0], "least": True}]}, {k: v for k, v in j.items() if k != "rates"}):
+    for bad in ({**j, "per": -1}, {**j, "delta": 0.5}, {**j, "delta": "1/0"}, {**j, "delta": "1.5"},
+                {**j, "windows": [[1]]}, {**j, "windows": [[2, True]]}, {**j, "windows": [[-1, 1]]},
+                {**j, "groups": [{**j["groups"][0], "least": True}]}, {k: v for k, v in j.items() if k != "rates"},
+                {k: v for k, v in j.items() if k != "windows"}):
         with pytest.raises(line.Malformed):
             line.run_json(bad)
 
@@ -94,7 +102,11 @@ def test_the_json_form_is_the_lines_and_refuses_what_isnt_its_inputs():
     (dict(node_bytes=0), "the node is one or more bytes"),
     (dict(rates=line.Rates(1, 0)), "a block's encode is one or more squarings"),
     (dict(rates=line.Rates(1, 1, link_burst_bytes=-1)), "link_burst_bytes is nonnegative"),
-    (dict(wrong="-1/3"), "the wrong receipts are nonnegative"),
+    (dict(windows=[]), "a session has one or more windows"),
+    (dict(delta=1), "δ is above 0 and below 1"),
+    (dict(delta=0.0), "δ is above 0 and below 1"),
+    (dict(windows=[(5, 2), (3, 0)]), "window 1 draws no receipt"),
+    (dict(windows=[(2, 3)], block_bytes=0), "window 0 draws 3 receipts of its 2"),
     (dict(per=0), "a stretch is one or more groups"),
     (dict(per=1), "stretch 0's span is empty: group 1's coin left no later than group 0's end"),
     (dict(per=7), "the session's 12 groups at 7 a stretch leave no stretch before the closing one"),
@@ -102,7 +114,7 @@ def test_the_json_form_is_the_lines_and_refuses_what_isnt_its_inputs():
     (dict(groups=groups()[:1]), "the session's 1 groups at 4 a stretch leave no stretch before the closing one"),
 ])
 def test_the_line_refuses_inputs_it_has_no_line_of(change, why):
-    args = dict(groups=groups(), per=4, blocks=N, block_bytes=B, chip_bytes=0, node_bytes=10 * N * B, wrong=0,
+    args = dict(groups=groups(), per=4, blocks=N, block_bytes=B, chip_bytes=0, node_bytes=10 * N * B, **NONE_WRONG,
                 rates=line.Rates(1, 1)) | change
     with pytest.raises(line.Refused) as e:
         line.line(**args)

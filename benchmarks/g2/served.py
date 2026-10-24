@@ -21,28 +21,41 @@ median with [min, max] over the pairs:
   f             compiled stock / batch-invariant eager stock, which turns an eager ratio into a served one (#3377's f)
 The metrics are curve.py's: prefill ttft (time to first token, the mean over the batch's requests), decode itl_p50 (per-token
 latency p50) and run tpot (the run's wall over its generated tokens, prefill included). A ratio's gates pass when every gate on
-either arm passed (the harness's: an arm's tokens equal its control's, its KV pool equals its control's, it closed clean). No
-RTX PRO 6000 Build of record pins the compiled Commit's kernels, so by curve.py's rules its ratios are mechanism evidence.
+either arm passed (the harness's: an arm's tokens equal its control's, its KV pool equals its control's, it closed clean).
 
-    uv run --no-project --with matplotlib python3 benchmarks/g2/served.py RUN... [--runs-dir DIR] [--out DIR]
+A ratio counts by curve.py's rules (`curve.Measure.counts`; `of_record` for f, stock over stock): its gates passed, its Commit
+is rows-sha512, the run's GPU is its preset's, and a ratio with a compiled arm ran pinned: the run's `out/pin_check.txt`
+(`served_arm.sh` PIN_BUILD: every arm's process compiled into one Inductor dir seeded with the Build of record's autotune
+winners) says the dir's winners are the Build's. An uncounted ratio is mechanism evidence, its reason in the tables. The
+RTX PRO 6000's Builds of record are `integrations/vllm/verity_vllm/pins/served/*.NVIDIA_RTX_PRO_6000_Blackwell_Server_Edition.json`'s
+(Llama-3.2-1B, Qwen3-8B); the served Build has no FP8 path, so no FP8 compiled ratio counts.
 
-Reads each run's `out/result.json` from DIR/RUN (`research fetch RUN --all`), else from its record in the evidence store.
-Writes OUT/g2-served.md, OUT/g2-served.json (every measure, and each run's facts: timed points, host load, failed gates) and
-OUT/g2-served.png; OUT defaults to $OUT, else ./out.
+    uv run --no-project --with matplotlib python3 benchmarks/g2/served.py RUN... [--tail RUN=FIXED]... [--runs-dir DIR] [--out DIR]
+
+Reads each run's `out/result.json` and `out/pin_check.txt` from DIR/RUN (`research fetch RUN --all`), else from its record in
+the evidence store.
+Writes OUT/g2-served.md, OUT/g2-served.json (every measure with its pin and why it isn't counted, and each run's facts: timed
+points, host load, failed gates, pin) and OUT/g2-served.png; OUT defaults to $OUT, else ./out.
+
+``--tail RUN=FIXED`` reads RUN's compiled Commit run time with FIXED's tail (`retail`): for a run whose Commit arm did more
+than commit between its last step and the clock stop (`prof_arm.RootsArm` wrote its profiling records there before
+8374522a79), FIXED being a run of the same model whose arm doesn't. Its rows are labeled ``RUN (tail FIXED)``.
 """
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import os
 import statistics
 import subprocess
 import sys
 import tempfile
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
-from curve import gpu_name, model_name, research
+import curve
+from curve import gpu_name, model_name, pin_state, research
 
 RATIOS = {"served": ("commit-compiled", "stock-compiled"), "eager-served": ("commit-eager", "stock-compiled"),
           "eager": ("commit-eager", "stock-eager"), "compiled-bi": ("commit-compiled", "stock-eager"),
@@ -74,6 +87,8 @@ class Measure:
     over_ms: float
     gates: bool
     run: str
+    pin: str = "unpinned"   # the run's (curve.pin_state), or eager for a ratio of eager arms
+    counts: str = ""        # why the ratio isn't counted by curve.py's rules; empty when it is
 
 
 def spec_execution(ident: dict) -> str:
@@ -116,12 +131,25 @@ def gates_by_arm(doc: dict) -> dict[str, bool]:
     return out
 
 
-def measures(doc: dict, *, run: str) -> list[Measure]:
-    """Every ratio RATIOS names whose two arms the doc (a verity-bench result, vllm-overhead/v1) holds, per point and metric."""
+def counts(m: Measure, preset_gpu: str | None) -> str:
+    """Why curve.py's rules don't count `m` (its `Measure.counts`, or `of_record` for f, whose arms are both stock), else "".
+    Every arm of COMMIT_MODULES commits rows-sha512 at 4 KiB rows, which `curve.classify` can't read from the harness's name
+    (`commit`)."""
+    c = curve.Measure(model=m.model, gpu=m.gpu, mode="eager" if m.pin == "eager" else "compiled", batch=m.batch, phase=m.phase,
+                      metric=m.metric, arm=m.arm, scheme=curve.SCHEME_ROWS, acquisition="full", row_bytes=4096, ratio=m.median,
+                      lo=m.lo, hi=m.hi, stock_ms=m.over_ms, run=m.run, source=m.run, pin=m.pin, retain=None, gates=m.gates,
+                      preset_gpu=preset_gpu)
+    return (c.of_record() if m.ratio == "f" else c.counts())[1]
+
+
+def measures(doc: dict, *, run: str, pin: str = "unpinned") -> list[Measure]:
+    """Every ratio RATIOS names whose two arms the doc (a verity-bench result, vllm-overhead/v1) holds, per point and metric;
+    `pin` is the run's served-pin verdict (`curve.pin_state`), which a ratio with a compiled arm takes."""
     ident = doc["identity"]
     arms = roles(ident)
     gates = gates_by_arm(doc)
-    gpu = gpu_name(None, ident["gpu"]) if ident.get("gpu") else gpu_name(ident["preset"].get("gpu_id"))
+    preset_gpu = gpu_name(ident["preset"]["gpu_id"]) if ident["preset"].get("gpu_id") else None
+    gpu = gpu_name(None, ident["gpu"]) if ident.get("gpu") else preset_gpu or "?"
     out = []
     for point in doc["points"]:
         batch = int(point["point"]["batch"])
@@ -133,11 +161,28 @@ def measures(doc: dict, *, run: str) -> list[Measure]:
                 xs = [ra["metrics"][key] for ra in a]
                 ys = [rb["metrics"][key] for rb in b]
                 ratios = [x / y for x, y in zip(xs, ys)]
-                out.append(Measure(model=model_label(ident["preset"]), gpu=gpu, batch=batch, phase=phase, metric=metric,
-                                   ratio=name, arm=arms[num], over=arms[den], median=statistics.median(ratios),
-                                   lo=min(ratios), hi=max(ratios), pairs=len(ratios), arm_ms=1e3 * statistics.median(xs),
-                                   over_ms=1e3 * statistics.median(ys),
-                                   gates=gates.get(arms[num], False) and gates.get(arms[den], False), run=run))
+                m = Measure(model=model_label(ident["preset"]), gpu=gpu, batch=batch, phase=phase, metric=metric,
+                            ratio=name, arm=arms[num], over=arms[den], median=statistics.median(ratios),
+                            lo=min(ratios), hi=max(ratios), pairs=len(ratios), arm_ms=1e3 * statistics.median(xs),
+                            over_ms=1e3 * statistics.median(ys),
+                            gates=gates.get(arms[num], False) and gates.get(arms[den], False), run=run,
+                            pin=pin if "compiled" in num + den else "eager")
+                out.append(replace(m, counts=counts(m, preset_gpu)))
+    return out
+
+
+def retail(doc: dict, fixed: dict) -> dict:
+    """``doc`` with each compiled Commit rep's run time per output token over its wall less its own device tail (from its last
+    step's return to the clock stop, where the arm's ``end_run`` runs) plus ``fixed``'s compiled Commit's median tail at the same
+    batch: the serving is the run's own, the tail the fixed arm's. Prefill and decode latency don't read the tail."""
+    arm, fixed_arm = (roles(d["identity"])["commit-compiled"] for d in (doc, fixed))
+    tails = {int(p["point"]["batch"]): statistics.median(r["host_timing"]["device_tail_s"] for r in p["arms"][fixed_arm]["reps"])
+             for p in fixed["points"]}
+    out = copy.deepcopy(doc)
+    for point in out["points"]:
+        tail = tails[int(point["point"]["batch"])]
+        for r in point["arms"][arm]["reps"]:
+            r["metrics"]["time_per_output_token_s"] = (r["wall_s"] - r["host_timing"]["device_tail_s"] + tail) / r["generated_tokens"]
     return out
 
 
@@ -176,7 +221,8 @@ def run_facts(doc: dict) -> dict:
 def cell(m: Measure | None) -> str:
     if m is None:
         return ""
-    return f"{m.median:.3f}× [{m.lo:.3f}, {m.hi:.3f}]" + ("" if m.gates else " (gates failed)")
+    why = " (gates failed)" if not m.gates else " (not counted)" if m.counts else ""
+    return f"{m.median:.3f}× [{m.lo:.3f}, {m.hi:.3f}]{why}"
 
 
 def stock_ms(row: list[Measure | None]) -> tuple[str, str]:
@@ -192,17 +238,20 @@ def report(ms: list[Measure], steps: dict[str, dict[int, tuple[float, float, flo
     batches = sorted({m.batch for m in ms})
     lines = ["# G2's served arm: the Commit (rows-sha512, 4 KiB rows) over stock as served, RTX PRO 6000", "",
              ("Ratios are arm / reference in the same run, paired by interleaved rep: median [min, max] over the pairs. "
-              "Lower is better; 1.000× is no overhead."), "",
+              "Lower is better; 1.000× is no overhead. A ratio counts by curve.py's rules when its gates passed and, for a "
+              "ratio with a compiled arm, the run's GPU is its preset's and every arm compiled the Build of record's kernels "
+              "(pinned); one that doesn't is mechanism evidence, marked (not counted)."), "",
              "## Served overhead (compiled Commit / compiled stock)", "",
-             "| model | B | prefill ttft | decode itl_p50 | run tpot | compiled stock itl_p50 ms | Commit arm | run |",
-             "|---|---:|---|---|---|---:|---|---|"]
+             ("| model | B | prefill ttft | decode itl_p50 | run tpot | compiled stock itl_p50 ms | Commit arm | run | "
+              "counted |"), "|---|---:|---|---|---|---:|---|---|---|"]
     for model, run in groups:
         for b in batches:
             row = [by.get((model, run, b, p, "served")) for p in METRICS]
             if not all(row):
                 continue
             dec = by[(model, run, b, "decode", "served")]
-            lines.append(f"| {model} | {b} | {' | '.join(cell(m) for m in row)} | {dec.over_ms:.3f} | {dec.arm} | {run} |")
+            lines.append(f"| {model} | {b} | {' | '.join(cell(m) for m in row)} | {dec.over_ms:.3f} | {dec.arm} | {run} | "
+                         f"{'; '.join(sorted({m.counts for m in row if m.counts})) or 'yes'} |")
     lines += ["", "## Every ratio", "",
               (f"| model | run | B | phase | metric | {' | '.join(TITLES[r] for r in RATIOS)} | compiled stock ms | "
                "bi-eager stock ms |"), "|---|---|---:|---|---|" + "---|" * len(RATIOS) + "---:|---:|"]
@@ -222,12 +271,12 @@ def report(ms: list[Measure], steps: dict[str, dict[int, tuple[float, float, flo
             lines.append(f"| {run} | {b} | {rep:.0f} | {eag:.0f} | {n:.0f} |")
     if facts:
         lines += ["", "## Runs", "",
-                  "| run | model | Commit arms | timed points | host load (1 min) over its reps | failed gates |",
-                  "|---|---|---|---:|---|---|"]
+                  "| run | model | Commit arms | timed points | host load (1 min) over its reps | failed gates | pin |",
+                  "|---|---|---|---:|---|---|---|"]
         for run, f in facts.items():
             load = f"{f['load'][0]:.0f}–{f['load'][1]:.0f}" if f["load"] else ""
             lines.append(f"| {run} | {f['model']} | {', '.join(f['commit'])} | {f['points']} | {load} | "
-                         f"{'; '.join(f['failed']) or 'none'} |")
+                         f"{'; '.join(f['failed']) or 'none'} | {f.get('pin', '')} |")
     runs = sorted({m.run for m in ms})
     failed = sorted({m.run for m in ms if not m.gates})
     lines += ["", f"Runs: {', '.join(runs)}. Gates failed in: {', '.join(failed) or 'none'}."]
@@ -263,6 +312,9 @@ def plot(ms: list[Measure], png: Path) -> None:
                 err = [[m.median - m.lo for _, m in pts], [m.hi - m.median for _, m in pts]]
                 ax.errorbar(xs, ys, yerr=err, ls=ls, marker=mk, color=colors[model], capsize=3,
                             label=f"{model}: {TITLES[ratio]}")
+                hollow = [(x, m.median) for x, (_, m) in zip(xs, pts) if m.counts]
+                if hollow:
+                    ax.scatter(*zip(*hollow), marker=mk, facecolors="white", edgecolors=colors[model], zorder=3)
         ax.axhline(1.0, color="black", lw=0.5)
         ax.set_yscale("log")
         lo, hi = ax.get_ylim()
@@ -279,37 +331,49 @@ def plot(ms: list[Measure], png: Path) -> None:
             legend.setdefault(label, h)
     fig.legend(list(legend.values()), list(legend), loc="lower center", ncol=3, fontsize=7)
     fig.suptitle("G2's served arm on RTX PRO 6000: the Commit (rows-sha512, 4 KiB rows) over compiled stock (served) and over "
-                 "bi-eager stock; median, [min, max] over 3 interleaved pairs", fontsize=9)
+                 "bi-eager stock; median, [min, max] over 3 interleaved pairs; hollow: not counted (curve.py's rules)", fontsize=9)
     fig.tight_layout(rect=(0, 0.16, 1, 1))
     fig.savefig(png, dpi=110)
 
 
-def load(run: str, runs_dir: Path | None, scratch: Path) -> dict:
-    """A run's result doc: DIR/RUN/out/result.json, else its record's out/result.json from the evidence store."""
-    if runs_dir is not None and (runs_dir / run / "out" / "result.json").is_file():
-        return json.loads((runs_dir / run / "out" / "result.json").read_text())
-    rec = (json.loads(research("data", "show", run, "--json")).get("outputs") or {}).get("run_record")
-    if not rec:
-        raise SystemExit(f"served.py: {run} has no run record in the store and no out/result.json under {runs_dir}")
-    subprocess.run(["research", "data", "fetch", rec, "--to", str(scratch / run), "--path", "out/result.json"], check=True,
-                   capture_output=True, text=True)
-    return json.loads(next((scratch / run).rglob("out/result.json")).read_text())
+def load(run: str, runs_dir: Path | None, scratch: Path) -> tuple[dict, str]:
+    """A run's result doc and its served-pin verdict (`curve.pin_state` of its `out/pin_check.txt`): from DIR/RUN/out, else
+    from its record in the evidence store."""
+    out = runs_dir / run / "out" if runs_dir is not None else None
+    if out is None or not (out / "result.json").is_file():
+        rec = (json.loads(research("data", "show", run, "--json")).get("outputs") or {}).get("run_record")
+        if not rec:
+            raise SystemExit(f"served.py: {run} has no run record in the store and no out/result.json under {runs_dir}")
+        subprocess.run(["research", "data", "fetch", rec, "--to", str(scratch / run), "--path", "out/result.json", "--path",
+                        "out/pin_check.txt"], check=True, capture_output=True, text=True)
+        out = next((scratch / run).rglob("out/result.json")).parent
+    pin = out / "pin_check.txt"
+    return json.loads((out / "result.json").read_text()), pin_state(pin.read_text() if pin.is_file() else None)
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("runs", nargs="+")
+    ap.add_argument("--tail", action="append", default=[], metavar="RUN=FIXED",
+                    help="RUN's compiled Commit run time with FIXED's tail (retail)")
     ap.add_argument("--runs-dir", type=Path, help="read DIR/RUN/out/result.json where it exists (research fetch RUN --all)")
     ap.add_argument("--out", type=Path, default=Path(os.environ.get("OUT", "out")))
     a = ap.parse_args()
+    tails = dict(t.split("=", 1) for t in a.tail)
+    if unknown := sorted(set(tails) - set(a.runs)):
+        ap.error(f"--tail names runs that aren't rendered: {', '.join(unknown)}")
     ms: list[Measure] = []
     steps: dict[str, dict[int, tuple[float, float, float]]] = {}
     facts: dict[str, dict] = {}
     with tempfile.TemporaryDirectory(prefix="g2-served-") as tmp:
         for run in a.runs:
-            doc = load(run, a.runs_dir, Path(tmp))
-            ms += measures(doc, run=run)
-            facts[run] = run_facts(doc)
+            doc, pin = load(run, a.runs_dir, Path(tmp))
+            if run in tails:
+                fixed, fixed_pin = load(tails[run], a.runs_dir, Path(tmp))
+                doc, run = retail(doc, fixed), f"{run} (tail {tails[run]})"
+                pin = pin if fixed_pin == "pinned" else fixed_pin
+            ms += measures(doc, run=run, pin=pin)
+            facts[run] = run_facts(doc) | {"pin": pin}
             if s := graph_steps(doc):
                 steps[run] = s
     a.out.mkdir(parents=True, exist_ok=True)
