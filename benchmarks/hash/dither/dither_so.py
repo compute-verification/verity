@@ -163,7 +163,7 @@ UNITS_FORMS = {"today": "each unit's own seed_j stream", "j10r": "J10-R: each ca
 # its rows, and its units read both (h1u.cu's kh_units_multi_j10rc, an h1u build with H1U_JRC=1, each call's workspace
 # kh_j10r_ws_bytes at T rows); the same receipts.  Unset, never: J10-R's units hash a column block once in each row tile
 # they compute, so it pays at prefill's 64 and costs at decode's one, where its own launch is the difference (unitsbench
-# --j10r: T 2048 step 287.3 -> 256.5 ms, T 64 M 32 5.12 -> 7.16 ms)
+# --j10r, H1U_JSWZ 32: T 2048 step 287.1 -> 233.1 ms, T 512 71.9 -> 59.8 ms; T 64 M 32 5.11 -> 7.16 ms unswizzled)
 J10RC_MIN_T_ENV = "DITHER_SO_J10RC_MIN_T"
 # J10-R's layout rows of a call (h1tile.j10r_blocks' m; j10r_so.M_MODES), open until J10R rules: "slot" (default) or "live"
 J10R_M_ENV = "DITHER_SO_J10R_M"

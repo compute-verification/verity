@@ -65,7 +65,8 @@
 //              kh_units_multi's receipts under J10-R's call-scale noise (measured only; at the end of this file), with
 //              kh_units_multi_j10r_sm and a served step's seeds from h1r's call table, kh_seeds_j10r_h1r
 //   kh_units_multi_j10rc(calls, ncalls, units, M, live, mode, stream)   (H1U_JRC) kh_units_multi_j10r's receipts with
-//              each call's column blocks hashed once a call too, its workspace kh_j10r_ws_bytes(M, N, K)
+//              each call's column blocks hashed once a call too, its workspace kh_j10r_ws_bytes(M, N, K), its units
+//              H1U_JSWZ row blocks at a time
 //   kh_words(K), kh_digits(K), kh_ws_bytes(M, N, K), kh_j10_ws_bytes(rows, N, K), kh_noise_blocks(K), kh_fault_shift()
 #include "h1sha.cuh"
 #include <cuda_bf16.h>
@@ -2622,10 +2623,11 @@ __global__ void __launch_bounds__(256) h1jr_cols(const UCallR* __restrict__ call
   }
 }
 
-// H1U_JSWZ = G (h1umjc): H1U_SWZ's order for its units, G row blocks at a time column block by column block, so B's lines
-// and the column blocks are read from DRAM once for G row blocks
+// H1U_JSWZ = G (h1umjc; 0 is the launch's order): H1U_SWZ's order for its units, G row blocks at a time column block by
+// column block, so B's lines and the column blocks are read from DRAM once for G row blocks (unitsbench --j10r at
+// T = M = 2048, step_multi_j10rc: G 0 256.8, 8 240.6, 16 236.0, 32 233.1, 64 237.3 ms)
 #ifndef H1U_JSWZ
-#define H1U_JSWZ 0
+#define H1U_JSWZ 32
 #endif
 __device__ __forceinline__ u32 jswz_unit(const UCallR& c, u32 w, u32 M) {
   if (!H1U_JSWZ) return w;
