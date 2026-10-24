@@ -120,6 +120,9 @@ from verity.core.protocols.certifier.active import (
     Requests,
     VirtualClock,
     check_salts,
+    compact_cell,
+    compact_record,
+    compact_unit,
     decode_frame,
     encode_frame,
     event,
@@ -815,6 +818,26 @@ def id_events(sse: bytes, request: int) -> list[bytes]:
     """A vLLM server-sent event as id events (`active.id_event`) of request `request`: one a sampled token
     (`chunk_tokens`), and none for a chunk of none, so neither the endpoint's chunking nor its text reaches the wire."""
     return [id_event(request, t) for t in chunk_tokens(sse) or ()]
+
+
+def compact_records(sse: bytes, request: int, eos: frozenset = frozenset()) -> list[bytes]:
+    """A vLLM server-sent event as compact records (`active.compact_record`) of request `request`, one a sampled token
+    as `id_events` has them: an EOS id (`eos`), or the last of a chunk whose `finish_reason` is "stop", is the stop
+    record, and the last of a chunk whose `finish_reason` is "length" carries `COMPACT_LAST`."""
+    ids = chunk_tokens(sse) or []
+    finish = None
+    for line in sse.split(b"\n"):
+        if line.startswith(b"data:") and (data := line[5:].strip()) != b"[DONE]":
+            finish = next((c.get("finish_reason") for c in json.loads(data).get("choices") or ()
+                           if c.get("finish_reason")), None)
+    out = []
+    for k, t in enumerate(ids):
+        end = finish if k == len(ids) - 1 else None
+        if t in eos or end == "stop":
+            out.append(compact_record(request, None, "stop"))
+        else:
+            out.append(compact_record(request, t, "length" if end == "length" else None))
+    return out
 
 
 async def _http_body(reader: asyncio.StreamReader, head: bytes):
