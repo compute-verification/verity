@@ -10,11 +10,19 @@ Fraction of full gain = (acc_S - acc_base) / (acc_full - acc_base).
 import glob
 import json
 import random
+import re
 import sys
 from collections import defaultdict
 
-ORDER = ["base", "tiny13", "kbit10", "kB10", "kB100", "lora16", "full"]
+ORDER = ["base", "temp", "tiny13", "kbit10", "kB10", "kB100", "lora16", "full"]
 B = 4000
+LR_VARIANT = re.compile(r"^(.*)lr([0-9.e+-]+)$")
+
+
+def remap(task, method):
+    """A learning-rate variant (task 'gsm8klr1e-2') is a row of its task's table: method 'tiny13 lr=1e-2'."""
+    m = LR_VARIANT.match(task)
+    return (m.group(1), f"{method} lr={m.group(2)}") if m else (task, method)
 
 
 def fmt_bits(b):
@@ -48,7 +56,7 @@ def table(by, rng):
     base_acc = boots["base"][0]["acc"]
     full = boots.get("full", [])
     rows = []
-    for m in ORDER:
+    for m in ORDER + sorted(set(boots) - set(ORDER)):
         if m not in boots:
             continue
         rs = boots[m]
@@ -82,6 +90,7 @@ def load(dirs):
     for d in dirs:
         for p in sorted(glob.glob(f"{d}/**/result-*.json", recursive=True)):
             r = json.load(open(p))
+            r["task"], r["method"] = remap(r["task"], r["method"])
             if r.get("ckpt"):
                 if "passk" in r:
                     passk[f"{r['task']} {r['method']} step{r['steps']}"] = r["passk"]
@@ -96,6 +105,7 @@ def load(dirs):
             greedy[r["task"]][r["method"]].append(r)
         for p in sorted(glob.glob(f"{d}/**/ckpteval-*.json", recursive=True)):
             r = json.load(open(p))
+            r["task"], r["method"] = remap(r["task"], r["method"])
             if "passk" in r:
                 passk[f"{r['task']} {r['method']} seed{r['seed']} step{r['step']}"] = r["passk"]
             run = {"seed": r["seed"], "S_bits": r["S_bits"], "n_params": r["n_params"], "steps": r["step"], "step": r["step"],
@@ -170,7 +180,7 @@ def online(dirs, window=25):
 def main(dirs):
     greedy, sampled, ck_greedy, passk = load(dirs)
     rng = random.Random(0)
-    out = {"greedy": {}, "sampled": {}, "passk": passk, "online": {}}
+    out = {"greedy": {}, "ckpt_greedy": {}, "sampled": {}, "passk": passk, "online": {}}
     on = online(dirs)
     for task, t in on.items():
         # The base must be read on training prompts: the Instruct model scores higher on the train splits than on the test
@@ -199,6 +209,10 @@ def main(dirs):
         t = table(by, rng)
         if t:
             out["greedy"][task] = t
+    for task, by in sorted(ck_greedy.items()):
+        t = table(by, rng)
+        if t:
+            out["ckpt_greedy"][task] = t
     for task, by in sorted(sampled.items()):
         t = table(by, rng)
         if t:
@@ -211,6 +225,7 @@ def main(dirs):
 def render(out):
     lines = []
     for kind, title in (("greedy", "greedy accuracy at the end of training"),
+                        ("ckpt_greedy", "greedy accuracy, final checkpoints"),
                         ("sampled", "sampled accuracy (mean over n samples at T, the GRPO objective), final checkpoints")):
         for task, t in out[kind].items():
             extra = f", n = {t.get('n')}, T = {t.get('T')}" if kind == "sampled" else ""
