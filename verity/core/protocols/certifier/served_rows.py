@@ -13,16 +13,18 @@ is the slice's P steps in turn, each packed as `rows_bits` packs it (an idle ste
 ``srv`` row (`compile_slice.srv_row`).
 
 **The commitment** (`register`), made when the window closes and published with its run root before the advice check and
-the draw: window w as row w of one hm96-sha512/row/v2 registration in a frame-v3-sha512 tree
-(`verity.ml.commitments.advice`'s construction), its row the window's bits as u16 words, as a proof commits a row, under
-`binding` of the run root. `Served.record` is the public part: the root, the count and the row width. The rows and their
-salts stay the prover's.
+the draw: each block of G steps of window w (j = 0 … P / G − 1, `block_bits`) as row w·(P / G) + j of one
+hm96-sha512/row/v2 registration in a frame-v3-sha512 tree (`verity.ml.commitments.advice`'s construction), its row the
+block's bits as u16 words, as a proof commits a row, under `binding` of the run root. G is P unless given, so a window is
+one row, the slice's ``srv``. `Served.record` is the public part: the root, the count, the row width and G. The rows and
+their salts stay the prover's.
 
-**The verifier's side.** `leaf_ok` holds a unit's ``srv`` row by its b‖c to window w's registered leaf, as the advice's
-``adv`` row is held.
+**The verifier's side.** `leaf_ok` holds a unit's row by its b‖c to its registered leaf (`leaf`: window w's block j), as
+the advice's ``adv`` row is held; `reads_port` is the same registration as the Lean verifier's registered reads take it
+(`flock-verify verify --registered`), each unit's leaf its own.
 
-That the served rows are the rows the served compute ran is the step tree's to bind (each row's start and n against the
-step's committed positions and input ids); nothing here checks it.
+That the served rows are the rows the served compute ran is the tie's to bind (`served_tie`: each row's valid, start and
+n against its step's Program, and the ids IoTieRequest's); nothing here checks it.
 """
 from __future__ import annotations
 
@@ -31,6 +33,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from verity.core.protocols.certifier import compile_slice as CS, replay_step as RS
+from verity.core.protocols.sampled_proofs.one_stage import produced, registered as REG
 from verity.ml.commitments import advice as ADV
 from verity.ml.commitments.frame_v3 import BitRowLeaf
 from verity.ml.commitments.rowleaf import bit_row, row_leaf
@@ -76,38 +79,79 @@ def window_bits(S, window: Sequence[tuple[Row, ...] | None]) -> list[int]:
     return CS.srv_row(S, window)
 
 
+def _blocks(S, G: int | None) -> int:
+    G = S.P if G is None else G
+    if not 1 <= G <= S.P or S.P % G:
+        raise ValueError(f"a block is G steps, G dividing P = {S.P}, not G = {G!r}")
+    return G
+
+
+def block_bits(S, window: Sequence[tuple[Row, ...] | None], G: int, j: int) -> list[int]:
+    """Block j of a window: its steps [j·G, (j + 1)·G), each `compile_slice.rows_bits` in turn (an idle step zero), zero-padded
+    to whole words; at G = P the window's `window_bits`."""
+    _blocks(S, G)
+    if len(window) > S.P or not 0 <= j < S.P // G:
+        raise ValueError(f"block {j} of G = {G} steps of a window of {len(window)} steps, P = {S.P}")
+    steps = (list(window) + [None] * S.P)[j * G:(j + 1) * G]
+    bits = [b for s in steps for b in CS.rows_bits(S, s)]
+    return bits + [0] * (-len(bits) % CS.WORD)
+
+
+def leaf(S, record: Mapping, w: int, j: int) -> int:
+    """Window w's block j's leaf: w·(P / G) + j."""
+    U = S.P // record.get("G", S.P)
+    if not 0 <= j < U:
+        raise ValueError(f"block {j} of a window of {U}")
+    return w * U + j
+
+
 def _row(bits: Sequence[int]) -> tuple[bytes, int]:
     return bit_row((CS.words(bits), CS.WORD))[0], len(bits)
 
 
 @dataclass(frozen=True)
 class Served:
-    """The prover's side: the registration, its rows and their salts."""
+    """The prover's side: the registration, its rows and their salts, and the steps G a row holds."""
 
     registration: ADV.Registration
+    G: int
 
     def record(self) -> dict:
         r = self.registration
         return {"schema": SCHEMA, "binding": r.binding.hex(), "root": r.root.hex(), "count": len(r.rows),
-                "n_bits": r.n_bits}
+                "n_bits": r.n_bits, "G": self.G}
 
-    def bc(self, w: int) -> bytes:
-        """Window w's row commitment b‖c, as a proof that holds the row under its salt commits it."""
+    def bc(self, i: int) -> bytes:
+        """Leaf i's row commitment b‖c, as a proof that holds the row under its salt commits it."""
         r = self.registration
-        return ADV.INST.commit_string(r.key, BitRowLeaf(r.n_bits).layout().digest(r.rows[w]), r.salts[w])
+        return ADV.INST.commit_string(r.key, BitRowLeaf(r.n_bits).layout().digest(r.rows[i]), r.salts[i])
 
 
-def register(S, session: Sequence[Sequence[tuple[Row, ...] | None]], run_root: bytes, *,
+def register(S, session: Sequence[Sequence[tuple[Row, ...] | None]], run_root: bytes, *, G: int | None = None,
              salts: Sequence[bytes] | None = None) -> Served:
-    """Commit the session's windows (`windows`' form) under the run root; fresh salts unless given."""
-    rows = [_row(window_bits(S, w)) for w in session]
-    return Served(ADV.register([r for r, _n in rows], rows[0][1], binding(run_root), salts))
+    """Commit the session's windows (`windows`' form) under the run root, a row each block of G steps (P unless given);
+    fresh salts unless given."""
+    G = _blocks(S, G)
+    rows = [_row(block_bits(S, w, G, j)) for w in session for j in range(S.P // G)]
+    return Served(ADV.register([r for r, _n in rows], rows[0][1], binding(run_root), salts), G)
 
 
-def leaf_ok(record: Mapping, run_root: bytes, w: int, bc: bytes, path: Sequence[bytes]) -> bool:
-    """Whether b‖c, with `path`, is window w's row of the registration `record` publishes under the run root."""
+def leaf_ok(record: Mapping, run_root: bytes, i: int, bc: bytes, path: Sequence[bytes]) -> bool:
+    """Whether b‖c, with `path`, is leaf i's row of the registration `record` publishes under the run root."""
     b, n, n_bits = binding(run_root), record["count"], record["n_bits"]
-    if record["binding"] != b.hex() or not 0 <= w < n:
+    if record["binding"] != b.hex() or not 0 <= i < n:
         return False
-    leaf = row_leaf(ADV.domain(b, n), w, ADV.INST.tree_leaf(ADV.INST.default_key, bytes(bc)), BitRowLeaf(n_bits).hiding_schema)
-    return ADV._scheme(b, n, n_bits).verify_path(ADV.PORT, bytes.fromhex(record["root"]), n, w, leaf, tuple(path))
+    lf = row_leaf(ADV.domain(b, n), i, ADV.INST.tree_leaf(ADV.INST.default_key, bytes(bc)), BitRowLeaf(n_bits).hiding_schema)
+    return ADV._scheme(b, n, n_bits).verify_path(ADV.PORT, bytes.fromhex(record["root"]), n, i, lf, tuple(path))
+
+
+def reads_port(record: Mapping, run_root: bytes, reads: Sequence[int | None], reads_from: int = 0) -> dict:
+    """The Lean verifier's own ``--registered`` port (`verity/registered-reads/v1`) over the registration `record`
+    publishes under the run root: unit ``reads_from + i`` reads leaf ``reads[i]`` (None: none)."""
+    b, n, n_bits = binding(run_root), record["count"], record["n_bits"]
+    if record["binding"] != b.hex() or n_bits % CS.WORD:
+        raise ValueError("a registration under another run root, or rows of part words")
+    e = {"leaves": n, "words": n_bits // CS.WORD, "word_bits": CS.WORD, "domain": ADV.domain(b, n).domain_id.hex()}
+    port = produced.port(SCHEMA, e, record["root"], [None if r is None else int(r) for r in reads],
+                         BitRowLeaf(n_bits).hiding_schema)
+    return port | ({REG.READS_FROM: int(reads_from)} if reads_from else {})
