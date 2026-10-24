@@ -1,5 +1,6 @@
 import Difftest
 import RemoteAudit.Registry
+import RemoteAudit.Store
 
 /-!
 # The difftest's Lean half
@@ -8,8 +9,10 @@ The functions `tests/` holds `audit.py`, `receipts.py` and `codec.py` to through
 strings lowercase hex, indices integers): a whole session's events (`session`: every event's result, the outcome and
 the record), and the pieces a mismatch there would point to (the codec's decode, a plan, a receipt, a frame-v3-sha512
 opening, a leaf's receipt, a window's draws and a registration's digest), the registration `audit.register` makes
-with its codec seed, and the verifier's registry (`registry`: registrations, sessions over them and their events,
-closes, and `registry/v0` both ways). `remote-audit-difftest` serves them.
+with its codec seed, the verifier's registry (`registry`: registrations, sessions over them and their events,
+closes, and `registry/v0` both ways), and `store.py`'s binding (`RemoteAudit.Store`: a pin from its file's bytes,
+canonical JSON, `checkpoint_sha512`, a payload salt, the expected root and `Binding.hold`), whose refusals are outputs
+(`{"refused": why}`), so their reasons are compared. `remote-audit-difftest` serves them.
 -/
 
 namespace RemoteAudit.Difftest
@@ -310,10 +313,92 @@ def drawsFn (j : Json) : V Json := do
     | throw "the draw ran past its reads"
   pure (.arr (ds.map pairJ))
 
+private def refusedOr (x : Except String Json) : Json :=
+  match x with
+  | .ok v => v
+  | .error why => Json.mkObj [("refused", .str why)]
+
+/-- `store.pin_of` (`model_pin` with `model`) on a pin file's bytes `data`, read from `path`. -/
+def pinFn (j : Json) : V Json := do
+  let data ← hex j "data"
+  let path ← J.str j "path" "input"
+  let role ← match ← J.get j "role" "input" with
+    | .null => pure none
+    | v => some <$> J.asStr v "role"
+  let model ← J.bool j "model" "input"
+  let pin ← match model, role with
+    | true, some r => pure (Store.modelPin data path r)
+    | true, none => throw "a binding's pin is a role's"
+    | false, r => pure (Store.pinOf data path r)
+  pure (refusedOr ((fun p => Json.mkObj [("pin", p.toJson)]) <$> pin))
+
+/-- `store.canonical_json` of a value with no number. -/
+def canonicalJsonFn (j : Json) : V Json := do
+  let some s := Store.pyJson (← J.get j "value" "input") | throw "a value with a number"
+  pure (.str s)
+
+/-- `store.checkpoint_sha512` of `{file: string}`, with the canonical JSON it hashes. -/
+def checkpointFn (j : Json) : V Json := do
+  let .obj kvs ← J.get j "files" "input" | throw "files is an object"
+  let files ← kvs.toArray.mapM fun (f, h) => do pure (f, ← J.asStr h "files")
+  pure (Json.mkObj [("canonical", .str (Store.filesJson files)), ("sha512", .str (Store.checkpointSha512 files))])
+
+def storeSaltFn (j : Json) : V Json := do
+  let c ← nat j "c"
+  if c ≥ 2 ^ 64 then throw "a block index is a u64"
+  pure (hexJ (Store.storeSalt (← hex j "key") (← hex j "label") c))
+
+private def digestsOf (j : Json) : V (Array ByteArray) := do
+  let ds ← hexes j "digests"
+  if ds.isEmpty || ds.any (·.size ≠ 64) then throw "an arena's weights are one or more blocks' digests of 64 bytes"
+  pure ds
+
+/-- `store.expected_root` of a store of `engines` arenas of `arena_blocks`, then `host_blocks`. -/
+def expectedRootFn (j : Json) : V Json := do
+  let digests ← digestsOf j
+  let (engines, arenaBlocks, host) := (← nat j "engines", ← nat j "arena_blocks", ← nat j "host_blocks")
+  let node ← hex j "node"
+  if engines = 0 || arenaBlocks < digests.size then throw "a store is one or more arenas of at least the weights"
+  if !(1 ≤ node.size && node.size ≤ 64) then throw "a node's id is 1 to 64 bytes"
+  pure (hexJ (Store.expectedRoot engines arenaBlocks host digests node (← hex j "key")))
+
+private def regionOf (j : Json) : V Store.Region := do
+  let xs ← J.asArr j "layout"
+  if xs.size ≠ 4 then throw "a region is [kind, tier, first, blocks]"
+  let kind ← J.asStr xs[0]! "kind"
+  let tier ← J.asStr xs[1]! "tier"
+  if !["weights", "kv", "filler", "activations"].contains kind || !["hbm", "host"].contains tier then
+    throw "a region's kind and tier are regions_of's"
+  pure (kind, tier, ← J.asInt xs[2]! "first", ← J.asInt xs[3]! "blocks")
+
+private def regionJ (r : Store.Region) : Json := .arr #[.str r.1, .str r.2.1, toJson r.2.2.1, toJson r.2.2.2]
+
+/-- The binding of `role` over an arena of the weights blocks' digests `digests` and `engines` arenas of
+`arena_blocks` (`Store`'s check as `Binding` starts), then `Binding.hold` of a hello: the regions bound, or why not,
+and the expected root `record()` keeps. -/
+def holdFn (j : Json) : V Json := do
+  let role ← J.str j "role" "input"
+  let digests ← digestsOf j
+  let (engines, arenaBlocks, blocks) := (← int j "engines", ← int j "arena_blocks", ← int j "blocks")
+  let (node, root, key) := (← hex j "node", ← hex j "payload_root", ← hex j "key")
+  let layout ← match ← J.get j "layout" "input" with
+    | .null => pure none
+    | v => some <$> (← J.asArr v "layout").mapM regionOf
+  match Store.shape engines arenaBlocks digests.size with
+  | .error why => pure (Json.mkObj [("refused", .str why), ("expected_root", .null)])
+  | .ok () =>
+    let h := Store.hold role digests engines.toNat arenaBlocks.toNat node blocks root key layout
+    pure (Json.mkObj [match h.regions with
+        | .ok rs => ("regions", .arr (rs.map regionJ))
+        | .error why => ("refused", .str why),
+      ("expected_root", match h.expectedRoot with | some r => hexJ r | none => .null)])
+
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("session", sessionFn), ("registration_digest", registrationDigestFn), ("register", registerFn),
   ("registry", registryFn), ("codec_decode", codecDecodeFn),
   ("plan", planFn), ("plan_changed", planChangedFn), ("receipt", receiptFn), ("verify_opening", verifyOpeningFn),
-  ("leaf_receipt", leafReceiptFn), ("draws", drawsFn)]
+  ("leaf_receipt", leafReceiptFn), ("draws", drawsFn),
+  ("pin", pinFn), ("canonical_json", canonicalJsonFn), ("checkpoint_sha512", checkpointFn),
+  ("store_salt", storeSaltFn), ("expected_root", expectedRootFn), ("hold", holdFn)]
 
 end RemoteAudit.Difftest
