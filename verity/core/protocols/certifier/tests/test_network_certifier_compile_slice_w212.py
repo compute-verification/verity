@@ -17,7 +17,7 @@ from verity.core.protocols.certifier import served_rows as SR
 
 FIXTURES = Path(__file__).parent / "fixtures"
 OWN, CLASS = "compile_slice_w212.json", "compile_slice_w212_class.json"
-ANDS = {OWN: 222668}
+ANDS = 222668
 
 
 def _load(name):
@@ -74,8 +74,10 @@ def test_the_slice_accepts_w212(w212):
 def test_the_circuit_is_its_reference_on_w212():
     """The unit's verdict word is the reference's on the honest window and each negative, and its size at w212's shape.
     About a minute: it builds and evaluates the 222,668-AND unit at the served engine's widths (L = 512, NB = 101,626,
-    P = 20), which the smallkv slice's test doesn't reach."""
+    P = 20), which the smallkv slice's test doesn't reach. Not at the class: the coder's carried state isn't committed
+    from ask to ask, so the build's linear forms grow with every ask, past memory at the class's 486
+    (protocol/served-shape.md)."""
     x = _load(OWN)
     cases = _cases(x)
     assert CS.evaluate(x.st, list(cases.values())) == [c.verdict for c in cases.values()]
-    assert CS.size(**x.st)["ands"] == ANDS[OWN]
+    assert CS.size(**x.st)["ands"] == ANDS
