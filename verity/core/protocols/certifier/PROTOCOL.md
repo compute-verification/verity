@@ -1890,25 +1890,19 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
 
 ## The compile slice (`compile_slice`)
 
-`CompileSlice_v1` composes the compile unit's pieces (PRF-143's statement, "Advice v1" above) whole for one window of P
-steps, so the composition is proved end to end before the chain splits it into a unit a step. Its rows, circuit,
-verdict, reference (`check`) and stand-ins are `compile_slice`'s docstring. In short: `ReplayLoad`, then per step
-`ReplayStep_v1` and `ReplayAdvance` on shared wires and the encoder over the step's asks, at the circuit's own context
-and frequencies. The coded length is held to the public charge c, and the step rows' salted SHA-512 to the public
-digest. The verdict's five flags (`ACCEPT` = 0x1F) say which check refused a unit.
-- *Stand-ins.* The cache counts are held at 0 (`CacheStep_v1` isn't wired). The count is the positions
-  `ArithEncodeStep_v1` consumed against a witness codeword. KT counts start from zero each window, ``adv`` holds no
-  still-sent field, and scheduling is sync.
-- *The slice.* Corpus-smallkv's first seven steps at (R 2, W 1, A 2), with Q 3, D 7, P 7, K 3 and SEG 32: 140,090 ANDs.
-- *REDTEAM's phase 9* (`phase9`). A context or frequencies of the prover's choosing are refused by ``code`` and
-  ``charge`` (0x13). A prefix hit, a decision read again and an arrival left queued are refused by ``steps`` and
-  ``rows`` (0x0D), the hit by the stand-in until `CacheStep_v1`'s derived hit is wired. A fabricated cache table and
-  free returns aren't expressible on the slice.
-- *In zero knowledge* (`benchmarks/network_traces/compile_slice_zk.py`, run r20261024-140227-8995). Nine units are
-  proved `--zk` behind the Lean firewall and held by Lean `verify --zk`: the honest one, three negatives (a flipped
-  decision 0x0C, a low charge 0x17, an uncertified arrival 0x0F) and phase 9's five. Each opens to its verdict, the
-  honest one's ``adv`` and ``cert`` bindings hold, and no witness piece is in what the verifier received. At m = 26 it
-  proves in 40.4 s, and Lean verifies in 15.4 s.
+`CompileSlice_v1` is the compile unit's pieces (PRF-143's statement, "Advice v1" above) composed whole for one window:
+`ReplayLoad`, then per step `ReplayStep_v1` and `ReplayAdvance` on shared wires and the encoder over the step's asks,
+at the circuit's own context and frequencies. The coded length is held to the public charge, and the step rows' salted
+SHA-512 to the public digest. Its rows, verdict flags, reference (`check`) and stand-ins, the cache counts held at 0
+among them, are `compile_slice`'s docstring.
+- *The slice.* Corpus-smallkv's first seven steps: 140,090 ANDs.
+- *REDTEAM's phase 9* (`phase9`). The prover's context or frequencies are refused by ``code`` and ``charge``. A prefix
+  hit, a decision read again and an arrival left queued are refused by ``steps`` and ``rows``, the hit by the stand-in
+  until `CacheStep_v1`'s derived hit is wired. A fabricated table and free returns aren't expressible on the slice.
+- *In zero knowledge* (`benchmarks/network_traces/compile_slice_zk.py`, run r20261024-140227-8995). Nine units (the
+  honest one, three negatives and phase 9's five) are proved `--zk` behind the Lean firewall and held by Lean
+  `verify --zk`. Each opens to its verdict, and no witness piece is in what the verifier received. At m = 26 it proves
+  in 40.4 s, and Lean verifies in 15.4 s.
 
 ## The active certifier (`active`)
 
@@ -2316,15 +2310,9 @@ and seven lemmas, and three more proved lemmas:
     `check_chain` accepts it, and refuses a short window, the empty state or window under a fresh salt or another
     program's, the carried state or window under a fresh salt, and another row of the last window;
   - `size` is the parts' AND counts, which circuit-check pins at the tests' shape and at the sync KV-pressure trace's;
-- **`test_network_certifier_compile_slice.py`:** the compile slice on corpus-smallkv's first seven steps:
-  - the reference's scan gives the replay's rows and the plain contexts' symbols, and its digest is the clear rows';
-  - the circuit's verdict is `check`'s on the honest rows and on each negative: a decision flipped in the window
-    row, the charge one below the coded length, an arrival not the certified one, a wrong digest and a wrong salt.
-    Each is refused by exactly the checks `check` names;
-  - REDTEAM's phase 9 choices (a context, frequencies, a prefix hit, a decision read again, an arrival left in the
-    queue) are refused by the circuit's verdict, `check`'s, and no witness field carries any of them;
-  - `codeword` is the segment `arith_encode` accepts, and a flipped bit of it is refused;
-  - `size` is the unit's AND count, which circuit-check pins;
+- **`test_network_certifier_compile_slice.py`:** the compile slice's scan is the replay's, and the circuit's verdict
+  is `check`'s on the honest rows, five negatives and REDTEAM's phase 9 choices, each refused by exactly the checks
+  `check` names; `codeword` is the encoder's, and `size` is pinned;
 - **`test_network_certifier_active.py`:** the active certifier over localhost sockets on an injected clock:
   - `Shaper` is `run_shaper`'s rule on random instances;
   - an honest run's records, hand times and wire are the Program's, accepted raw and committed;
