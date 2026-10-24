@@ -58,6 +58,16 @@ def test_a_served_window_registers_round_0s_request_headers_and_each_rounds_slot
     assert v["a_link"] is None and v["tied"], v
 
 
+def test_the_gpu_harness_holds_a_commit_windows_requests_to_its_live_verdicts():
+    """`pouw_h1_gpu.requests_check` on a window with the Commit: its request and slot tables are live, so each round's
+    ``live@<s>`` verdict stands in place of the leaf openings, one a round, all accepted."""
+    from tests.protocol_options import pouw_h1_gpu as GPU
+    run = _window()
+    out = GPU.requests_check(run, 1)
+    assert out["live"] == LV.verdicts(run) and out["live_accepted"] == "1/1", out
+    assert out["entries_refused"] == out["slots_refused"] == [] and out["rounds"] is None
+
+
 @pytest.mark.parametrize("claim", [0, 2, 4, ROWS])
 def test_a_live_unit_claiming_other_than_the_served_rows_is_refused(claim):
     """``live@0`` on the window's slot table evaluates to 1 at m = 3, the manifest's served rows, and to 0 at any other
