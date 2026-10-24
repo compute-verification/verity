@@ -1448,6 +1448,9 @@
    "assumptions": [],
    "type_hash": "3fa28ce2488ed71727f4bb8023747125b95abe20a9a494fa45e5a29c21b0aada"
   },
+  "Properties.RemoteAudit.chunkedIsWhole": {
+   "owner": "@memory-accounting"
+  },
   "Properties.RemoteAudit.drawIsSubset": {
    "owner": "@memory-accounting",
    "signature": ["Properties.RemoteAudit.drawIsSubset : Properties.RemoteAudit.DrawIsSubset"],
@@ -2454,6 +2457,10 @@
    "Properties.RemoteAudit.changedReadsDistinct": {
     "function": "RemoteAudit.Plan.changed",
     "outcome": "accept"
+   },
+   "Properties.RemoteAudit.chunkedIsWhole": {
+    "function": "RemoteAudit.checkWindowChunked",
+    "outcome": "none"
    },
    "Properties.RemoteAudit.acceptedMinPasses": {
     "function": ["RemoteAudit.Session.run", "RemoteAudit.Session.State.outcome"],
