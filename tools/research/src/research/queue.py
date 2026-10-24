@@ -2103,9 +2103,10 @@ def review_owners(q: Queue, labels: StoreLabels, pr: int, head: str, owner: str 
     return {owner, q.handle(p), labels.ready_by(pr, head)}
 
 
-def baseline(q: Queue, sha: str, by: str) -> int:
-    """`research queue baseline SHA --by ci`: record `main` at SHA as verified by the after-landing run (`drive["postland"]`),
-    when ci knows it is green, so the review landing lands without first running the after-landing run on `main` itself
+def baseline(q: Queue, sha: str, by: str, steps: str | None = None) -> int:
+    """`research queue baseline SHA --by ci [--steps STEP,...]`: record `main` at SHA as verified by the after-landing run
+    (`drive["postland"]`), on the steps ci knows are green there (every after-landing step by default; with --steps, only those,
+    as a red baseline run records: a later failure of another step reverts nothing), so the review landing lands without first running the after-landing run on `main` itself
     (`Driver._unbaselined`), and a later failure reverts only a landing above SHA.  It drops a bisection still open (it reverted
     nothing), and is refused while a post-landing run runs, for a SHA `main` doesn't hold, and off drive (`/data/infra/drive.sh
     queue baseline SHA --by ci` on the control pod)."""
@@ -2113,6 +2114,9 @@ def baseline(q: Queue, sha: str, by: str) -> int:
 
     if _who(by) != "ci":
         raise QueueError(f"baseline: only ci records a green `main` (--by ci), not {by}")
+    green = [x for x in (steps or "").split(",") if x] or list(AFTER_LANDING)
+    if unknown := [x for x in green if x not in AFTER_LANDING]:
+        raise QueueError(f"baseline: --steps {', '.join(unknown)}: not after-landing steps ({', '.join(AFTER_LANDING)})")
     q._clone()
     q.fetch()
     full = _git(q.workdir, "rev-parse", "--verify", "-q", f"{sha}^{{commit}}", check=False).stdout.strip()
@@ -2127,7 +2131,7 @@ def baseline(q: Queue, sha: str, by: str) -> int:
         print(f"research queue: dropped the bisection of `main` {b['tip'][:12]}'s failed after-landing run; it reverted nothing")
     on = lambda a, b: not _git(q.workdir, "merge-base", "--is-ancestor", a, b, check=False).returncode  # noqa: E731
     pl["verified"] = full
-    pl["verified_as"] = {"steps": list(AFTER_LANDING), "no_cache": None, "by": by,
+    pl["verified_as"] = {"steps": green, "no_cache": None, "by": by,
                          "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
     pl["pending"] = [p for p in pl.get("pending", []) if not on(p, full)]
     if pl.get("failed") and on(pl["failed"], full):
@@ -2238,6 +2242,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("pr", nargs="?", help="eject, ready, review: the PR number; judge: the quick tier's run id; baseline: the "
                     "commit of `main` ci knows is green")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
+    ap.add_argument("--steps", help="baseline: the after-landing steps green at SHA (default every one): a later failure of "
+                    "another step reverts nothing")
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE"),
                     help="eject, ready, judge: who ejects it, the handle its notice is posted as (default merge-queue, which no "
                          "one holds, so the notice fails) or says it's ready (no default: the owner's lane), "
@@ -2432,7 +2438,7 @@ def main(argv: list[str]) -> int:
             if not on_drive():
                 raise QueueError(f"baseline: drive's state is the control pod's, and this isn't drive (no {DRIVE_ENV}=1): run "
                                  f"`/data/infra/drive.sh queue baseline {a.pr} --by {a.by}` there")
-            return baseline(q, a.pr, a.by)
+            return baseline(q, a.pr, a.by, a.steps)
 
         if a.command in ("sync", "land") and not (a.dry_run or on_drive()):
             raise QueueError(off_drive(q.branch if a.command == "sync" else "main", f"queue {a.command}"))

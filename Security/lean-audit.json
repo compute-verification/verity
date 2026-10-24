@@ -1042,6 +1042,14 @@
    "owner": "@proofs",
    "digest": "4c6283114e6093bce72430d7e41df49d280807a9f7dcfd337e81398948a04d9f"
   },
+  "Hash.RowLeaf.accepts": {
+   "owner": "@kernels",
+   "digest": "263fd6e9a4a0df8f6ad4ed23bf92236e58354b1007cca6fe6e818d1fa4862cde"
+  },
+  "Hash.Tree.accepts": {
+   "owner": "@kernels",
+   "digest": "3f74d9fed34e2079842ae3580468d60b2c8665410cae66f630120abc695a2c61"
+  },
   "Nci.Assumptions.ActivationChained": {
    "owner": "@compute-accounting",
    "digest": "d4bfbb246cc11cfcca2547991efc002a69eec1c219bb47cae59eb583e7ca21da"
@@ -2203,7 +2211,7 @@
   "Definitions.Hash": {
    "imports": ["Mathlib", "Definitions.Claims", "Definitions.Hash"],
    "except": [],
-   "why": "the hash area's definitions are trusted text: the served row leaf's formats (frame-v3 trees, sha512/row-seg/v1, hm96-sha512/v1) over a hash, on Mathlib and the claims' messages and collisions (Definitions.Claims); they import no assumption, guarantee or proof"
+   "why": "the hash area's definitions are trusted text: the served row leaf's formats (frame-v3 trees, sha512/row-seg/v1 and sha512/row/v2, hm96-sha512/v1) over a hash, on Mathlib and the claims' messages and collisions (Definitions.Claims); they import no assumption, guarantee or proof"
   },
   "Models.Hash.Guarantees": {
    "imports": ["Mathlib", "Definitions.Claims", "Definitions.Hash", "Models.Hash.Guarantees"],
@@ -7412,11 +7420,17 @@
    "assumptions": [],
    "type_hash": "e68eb3b88c65d2f37e9f5f41402a589d574ad22ab95867ac9f47a796660fcbbe"
   },
-  "Hash.SecurityProofs.Stated": {
-   "owner": "@hash",
-   "signature": ["Hash.SecurityProofs.Stated : Hash.Guarantees.Stated"],
+  "Hash.SecurityProofs.RowBinding": {
+   "owner": "@kernels",
+   "signature": ["Hash.SecurityProofs.RowBinding : Hash.Guarantees.RowBinding"],
    "assumptions": [],
-   "type_hash": "f2427bb0d064a77600f917fdfb62cfe489cbcb68556322ce1d0ecea2380f62c5"
+   "type_hash": "90af0c2f35c7e8347ee3e22fd25338c89dd0204060da92f494d94c2d23aaea5f"
+  },
+  "Hash.SecurityProofs.TreeBinding": {
+   "owner": "@kernels",
+   "signature": ["Hash.SecurityProofs.TreeBinding : Hash.Guarantees.TreeBinding"],
+   "assumptions": [],
+   "type_hash": "1ad81857586f7b7d31994f0793364f85a65fc836785f058f640191a61ecff010"
   },
   "Nci.SecurityProofs.ActivationsBoundOn": {
    "owner": "@lean",
@@ -9893,6 +9907,14 @@
    "Pouw.SecurityProofs.Receipt.Fx1PairXorNoKernel": {
     "function": ["Pouw.Receipt.stateSpread", "Pouw.Receipt.fx1Pair"],
     "outcome": "none"
+   },
+   "Hash.SecurityProofs.RowBinding": {
+    "function": "Hash.RowLeaf.accepts",
+    "outcome": "accept"
+   },
+   "Hash.SecurityProofs.TreeBinding": {
+    "function": "Hash.Tree.accepts",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -10424,9 +10446,6 @@
    "Accounting.SecurityProofs.TS.TemplateCondition": "lemma: h1tile's segment (32 columns, words of at most 32 skipped products, a one-bit dither) meets TileLuck's condition with M = 1 at κ = 4 and r·θ = 1/256, from elementary bounds on exp; not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.TemplateMoment": "lemma: TileLuck at h1tile's segment, the gain's moment at most 1 at θ = 1/(256·r) a product and κ = 4; not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.OneRegisterLowBit": "lemma: the barrier to a lower bound read off a fold's low bit, over every one-register fold of binding steps (a definition) whose steps' bit 0 is a function of the state's and the word's bits 0 (a hypothesis): the run's bit 0 is a parity of its words' bits 0; not a property of a Lean function.",
-   "Hash.Guarantees.TreeBinding": "unstated: statement first (Daniel, 17 Oct), restated to the served frame node after the red team (note:hash/20261018T0846Z-finding-redteam-2474, T1-T3) and recorded through Hash.SecurityProofs.Stated; next a card to Daniel, then the proof, Hash.SecurityProofs.TreeBinding in Security/Proofs/Hash/, which the lock then lists under guarantees",
-   "Hash.Guarantees.RowBinding": "unstated: statement first (Daniel, 17 Oct), the statement the red team found missing (note:hash/20261018T0846Z-finding-redteam-2474, T4), recorded through Hash.SecurityProofs.Stated; next its red team, a card to Daniel, then the proof, Hash.SecurityProofs.RowBinding in Security/Proofs/Hash/, which the lock then lists under guarantees",
-   "Hash.SecurityProofs.Stated": "frozen (no-function): It states no property of the verifier: it reads the hash area's statements (Hash.Guarantees.RowBinding, Hash.Guarantees.TreeBinding), so the lock records their text, and a statement leaves it when its own proof is listed.",
    "Accounting.SecurityProofs.RequirementCredits": "completeness: on a declared circuit's placed execution (Security/Definitions/Accounting/Requirement.lean, Security/Definitions/Accounting/Requirement/Placed.lean), when the node runs W as placed, PouwWork.credits is the work of W's region outside the marking, the run's inputs being input gates wherever they are placed; about the actual run of a node that runs W as placed (Placement.actual takes the leaf and ticks as given, its operations constants, with no outputs and no coins among its gates), so it says what an honest node is credited or helped, not what a node that passes PoUW ran; about no function of the code.",
    "Accounting.SecurityProofs.RequirementHelp": "completeness: on a declared circuit's placed execution (Security/Definitions/Accounting/Requirement.lean, Security/Definitions/Accounting/Requirement/Placed.lean), when the node runs W as placed in a topological wiring the execution follows, PouwWork.help is W's ingress into the node and the verifier's leaves; about the actual run of a node that runs W as placed (Placement.actual takes the leaf and ticks as given, its operations constants, with no outputs and no coins among its gates), so it says what an honest node is credited or helped, not what a node that passes PoUW ran; about no function of the code.",
    "Accounting.SecurityProofs.RequirementHelpBound": "completeness: on a declared circuit's placed execution (Security/Definitions/Accounting/Requirement.lean, Security/Definitions/Accounting/Requirement/Placed.lean), when the node runs W as placed, with no hypothesis, PouwWork.help is at most W's ingress into the node and the verifier's leaves; about the actual run of a node that runs W as placed (Placement.actual takes the leaf and ticks as given, its operations constants, with no outputs and no coins among its gates), so it says what an honest node is credited or helped, not what a node that passes PoUW ran; about no function of the code.",
@@ -14195,7 +14214,8 @@
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursionClaimsStated",
     "Flock.SecurityProofs.SamplingClaimsStated",
-    "Hash.SecurityProofs.Stated",
+    "Hash.SecurityProofs.RowBinding",
+    "Hash.SecurityProofs.TreeBinding",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
    ]
@@ -15522,7 +15542,7 @@
     "Hash.uint": "54f1380cede20ece799c577d798408019afc86701c15097bc10064e1b29ac7bf",
     "Hash.utf8": "ef81714f5482b6ab1df3203d386a5f234d14a69049d33735cee24064152636c6"
    },
-   "guarantees": ["Hash.SecurityProofs.Stated"]
+   "guarantees": ["Hash.SecurityProofs.RowBinding", "Hash.SecurityProofs.TreeBinding"]
   },
   "Definitions.Hash.Hm96": {
    "digest": "a25e93ee3e42e5c6fb4928fcbc844fa373b338928a514b95d66128aac4291dc7",
@@ -15537,25 +15557,33 @@
     "Hash.Hm96.maskBit": "84c9847922cdabdcf8f9e4803039807462219e01b65429a93936bed110e7fbac",
     "Hash.Hm96.saltPrefix": "74d72964af334edfdb91fc4be5b5e9a07fbb5c930ebc4b745ab2246293d83aa6"
    },
-   "guarantees": ["Hash.SecurityProofs.Stated"]
+   "guarantees": ["Hash.SecurityProofs.RowBinding"]
   },
   "Definitions.Hash.RowLeaf": {
-   "digest": "59daabfc3d76dc4c3b6cd697813f2fa94b4a358f586e509ad4f4770e29572b8c",
+   "digest": "a332210454866a3b88c93c3c35906dc941366fe79a3b6566ebb3dfa4e8544ec7",
    "definitions": {
+    "Hash.RowLeaf.Format": "0472c90a1d50acced878693c13e313afdaae2a4b9dbbd2da94f839c468a5b7db",
+    "Hash.RowLeaf.Format.casesOn": "8141a54d622f92d6417272ffd595ff544ff949fbfa08635c12929413d01becbd",
+    "Hash.RowLeaf.Format.digest": "3b177656ac57a96665fa9b3563f27d13000537b13bbda2cb2ccf17f2009634c3",
+    "Hash.RowLeaf.Format.hashed": "05f50bf81a9f3bec9e56fb5d8a2235b7ca9d29eae67935a9db68d62c2aa4e5aa",
+    "Hash.RowLeaf.Format.rec": "a86989681110fe016c7cd15c844338a25ca4bc324445cb19c461eab9ec003ce2",
+    "Hash.RowLeaf.Format.schema": "cd534d52df63aea28b64a0f311bba20d5ee61f2ba0c58b4840349bb91b92799f",
+    "Hash.RowLeaf.Format.seg": "c1bb382b8bbae77a74eecc4b89a9ed6ff895ed83b131e4da8e930d041066d56c",
+    "Hash.RowLeaf.Format.v2": "dc0d6378518d88053662a388757ec3bc4f309527dbf963f2f16fc599560f469e",
     "Hash.RowLeaf.Opening": "8910cb507cf436e6164cb88b22689f4689fbc98df5d1969eb9ead98b84b72cbe",
     "Hash.RowLeaf.Opening.row": "1a7f3e8cb436f751b4c19bb2ba565ea5e78c6bfb137833818fb458c31c37e74a",
     "Hash.RowLeaf.Opening.salt": "a54029a04dad6dcf74412db8e6504e4b945bc41b2f9ba56ef50d01bd4e0486b6",
     "Hash.RowLeaf.Opening.sibs": "0cc8c9953660890823876ca2dce96218c76b37e219bf6a2217cdd68b07d5736d",
-    "Hash.RowLeaf.SCHEMA": "3c73c778fbe68db97bb8a859022c2106fa7def566576eeba62d04dc8359ff732",
-    "Hash.RowLeaf.Verifier": "70f344e30a234ac192ce808e5b92481561696f80ee984f5db34c125dd6200c50",
+    "Hash.RowLeaf.Verifier": "e580d8e982feeea056b05d9050174fb113be6551db94b9bf905a5f1beed698ea",
     "Hash.RowLeaf.Verifier.domain": "4479c28106a028df16b1f30df58372370ba5dd780d55d4a71388b47aad3c46a2",
+    "Hash.RowLeaf.Verifier.format": "fe2503ef5d3838c25a26f2289c713703af3a8b9ab72d3bc42ded003ae33c149b",
     "Hash.RowLeaf.Verifier.key": "543756473d4ccec741c25fd709e743fdcb1fd596ef49e4828d2ee92e1b8893bf",
     "Hash.RowLeaf.accepts": "263fd6e9a4a0df8f6ad4ed23bf92236e58354b1007cca6fe6e818d1fa4862cde",
-    "Hash.RowLeaf.innerHashed": "28932fa064239d1e3c2c2ee132f45679e891b73af65f71dba7008ced7ebcbb44",
-    "Hash.RowLeaf.leafMsg": "6a298fe332784d47c3541c0b347f8b230a2a89f0feea2d98fe945d85950624e5",
-    "Hash.RowLeaf.outerHashed": "5cd7ce5aba7869151a792451bd9cdfed618ae5d327304620785aa3a82225c262"
+    "Hash.RowLeaf.innerHashed": "9f9aca8d741e62a07555ca5705e166260c858abdf0a57bccec3d862cb446268c",
+    "Hash.RowLeaf.leafMsg": "b6618d2baacea640c3f31fd3b3604c634198f8e03b74fbd9e97e8afbf34756cd",
+    "Hash.RowLeaf.outerHashed": "2d80b04f02a6dbb598aede89f6ff2c3008d0ca0f96d2d9a3afa9eddfb0461f11"
    },
-   "guarantees": ["Hash.SecurityProofs.Stated"]
+   "guarantees": ["Hash.SecurityProofs.RowBinding"]
   },
   "Definitions.Hash.RowSeg": {
    "digest": "90bfdb254a02577fb455c429e2b39538b1096a953cb4aa4b3a604bec66068775",
@@ -15574,7 +15602,17 @@
     "Hash.RowSeg.segmentMsgs": "06d9f0294b3435c558727cf0fcbb49bae36cc32a705d683476e81cb81c8cb10a",
     "Hash.RowSeg.segmentPrefix": "17d166519a13a99d5f75b079467ff2419a10f206a6767e6f65027a12a05c0152"
    },
-   "guarantees": ["Hash.SecurityProofs.Stated"]
+   "guarantees": ["Hash.SecurityProofs.RowBinding"]
+  },
+  "Definitions.Hash.RowV2": {
+   "digest": "52e1b6519c9a37823278a704e4fa649e244d97074670631af94edaf015eb29f6",
+   "definitions": {
+    "Hash.RowV2.digest": "471ea94c9740fb5a8f86529f61b2f781d4c12e3e59aa8046bf7deae964d59ee8",
+    "Hash.RowV2.hashed": "bcd62edf66f26861e8b5c34ec8e151d94946344f73712e7f0803146cfdc6b71a",
+    "Hash.RowV2.msg": "73f58fbc3bc895270bcc2e61559234430c03d76b31dcb1d1bd053200796feff0",
+    "Hash.RowV2.rowPrefix": "5685bbc629d745a50fd750e1c773369607d76b2a4e18288590e2c6164197eb0e"
+   },
+   "guarantees": ["Hash.SecurityProofs.RowBinding"]
   },
   "Definitions.Hash.Tree": {
    "digest": "c4b8c7ea14f3c9a159c9a52d84b0b56922af0b7ecce92dc113116c019277fdc5",
@@ -15592,7 +15630,7 @@
     "Hash.Tree.leafMsg": "c03f78eb03c50bae57d161e89fa7af3fe26e1c1584952f654cf4057b3f4b2d77",
     "Hash.Tree.nodeMsg": "f0246edca6110f84d6a81bbf1e435afe3a2e8da1f97e4b4ee3a97741dff654a8"
    },
-   "guarantees": ["Hash.SecurityProofs.Stated"]
+   "guarantees": ["Hash.SecurityProofs.RowBinding", "Hash.SecurityProofs.TreeBinding"]
   },
   "Definitions.Nci": {
    "digest": "cb17b875c510656446a000071eb88c8642b91ee75ceba126abdbf87bbe46f15d",
@@ -28537,13 +28575,12 @@
    "guarantees": ["Flock.SecurityProofs.SamplingClaimsStated"]
   },
   "Models.Hash.Guarantees": {
-   "digest": "6c2584c904a5dff93f2875bde664ff00bf4603d98e68237987ce6521d0999c76",
+   "digest": "19e9fcea482aa5af527ceb48166741b5c12059a2133c4b0f9d00d9ae6ab64713",
    "definitions": {
-    "Hash.Guarantees.RowBinding": "a5f3d22ed07d19252f31e6e2087a0289c6f629a1631b4c00a4f8e272d652820e",
-    "Hash.Guarantees.Stated": "d6ec0d5bf438d5563dd1f1f18ef063e5d036efe021df874888fea7c94d357569",
+    "Hash.Guarantees.RowBinding": "eb2b5136f8ce060b9e18a900cd57bd9df1a732e36d8756e3a59b202fc98e2edf",
     "Hash.Guarantees.TreeBinding": "5a6ac8239b2f217ee43962de29f8aca8baceb9c73ebc5f095fa328da95bd9d1a"
    },
-   "guarantees": ["Hash.SecurityProofs.Stated"]
+   "guarantees": ["Hash.SecurityProofs.RowBinding", "Hash.SecurityProofs.TreeBinding"]
   },
   "Models.Nci.Assumptions": {
    "digest": "83716c466c58f7f4f5e7659d570bcb6fda1c73d0d559a67e915b389928fd4778",

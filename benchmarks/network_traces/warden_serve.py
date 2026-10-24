@@ -37,14 +37,17 @@ with `Connection: close`, so the server's end of stream ends egress (the warden 
   the origin, the listener), runs the warden for `--windows` windows, and writes `warden.json` (each connection's
   outcome, the tick lateness, the refusals). Each window's records go to `requests.records`, `responses.records`
   and `fails.records` (each failed connection's reason, witness), and each is certified (`certificate.Issuer`, with
-  the warden's parameters digest) into `certified.jsonl`.
+  the warden's parameters digest) into `certified.jsonl`. Each window of the wire's two records is also committed as
+  rows, a cell a row (`warden_rows`), its head signed: `cells.jsonl` holds the registration and the cost (rows, commit
+  and sign ms), `cells.salts` the rows' salts (witness, the prover's).
 - `client` sends each request of the traffic at its time after the origin on a connection of its own, reads the cells
   to the warden's close, and writes `client.json`: per connection its ordinal, outcome, every cell's kind and arrival,
   the SHA-256 of what it sent and of the bytes it got, and the HTTP response read from them.
 - `check` (`check`): every window of the three records has a certificate that verifies and whose head is the
-  record's, the audit (`warden.audit`) accepts the records, and every connection's client got exactly its egress
-  record's cells, each in its bucket, its request is the ingress record's and its response the egress record's;
-  `check.json`.
+  record's, every window of the wire's two has a registration that verifies whose root is its record's rows under
+  their salts (`check_cells`), the audit (`warden.audit`) accepts the records, and every connection's client got
+  exactly its egress record's cells, each in its bucket, its request is the ingress record's and its response the
+  egress record's; `check.json`.
 - `rehearse` makes a key in a scratch directory, writes the traffic, starts the fake endpoint when `--fake`, and runs
   `serve` and `client` as processes, then `check`.
 """
@@ -71,6 +74,7 @@ from pathlib import Path
 
 import active_replay as ar
 import certifier_serve as cs
+from verity.core.protocols.certifier import warden_rows as WR
 from verity.core.protocols.certifier.active import DATA, PAD
 from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer, LmsSigner, record_head
 from verity.core.protocols.certifier.grid import GridParams, Record
@@ -264,6 +268,25 @@ class Publisher:
                 else cs.certified_json(certified))
         with open(self.out / "certified.jsonl", "a") as fh:
             fh.write(json.dumps(line) + "\n")
+        if record.link != FAILS:
+            self.attest(record, grid, link, direction)
+
+    def attest(self, record: Record, grid: GridParams, link: str, direction: Direction) -> None:
+        """The link-window's cells as rows (`warden_rows`), their head signed: one line of `cells.jsonl` (the
+        registration, or the link-window under `refused`, and the cost), the salts to `cells.salts` (witness)."""
+        t0 = time.perf_counter()
+        cells_ = WR.Cells.commit(link, direction, record.window, WR.window_rows(record, grid), self.params.digest,
+                                 self.issuer.session)
+        head = cells_.head
+        t1 = time.perf_counter()
+        cert = self.issuer.sign(link, direction, record.window, head.digest())
+        t2 = time.perf_counter()
+        cost = {"rows": len(cells_.rows), "commit_ms": round((t1 - t0) * 1000, 3), "sign_ms": round((t2 - t1) * 1000, 3)}
+        line = ({"refused": [link, direction.value, record.window]} if cert is None
+                else {"registration": WR.registration(head, cert, grid)})
+        ar.write_blobs(self.out / "cells.salts", b"".join(cells_.salts))
+        with open(self.out / "cells.jsonl", "a") as fh:
+            fh.write(json.dumps(line | {"cost": cost}) + "\n")
 
     def close(self) -> None:
         self.executor.shutdown(wait=True)
@@ -378,6 +401,52 @@ def read_certified(path: Path) -> tuple[dict[tuple[str, Direction, int], Certifi
     return got, refused
 
 
+def read_cells(run: Path) -> list[tuple[dict, list[bytes]]]:
+    """`cells.jsonl` and `cells.salts`, line by line: each link-window's registration (or refusal) and cost, and its
+    rows' salts."""
+    path = run / "cells.jsonl"
+    lines = [json.loads(x) for x in path.read_text().splitlines()] if path.exists() else []
+    salts = ar.read_blobs(run / "cells.salts")
+    if len(salts) != len(lines):
+        raise ValueError(f"cells.jsonl has {len(lines)} lines and cells.salts {len(salts)} blobs")
+    n = WR.SALT_BYTES
+    return [(doc, [s[i:i + n] for i in range(0, len(s), n)]) for doc, s in zip(lines, salts)]
+
+
+def check_cells(run: Path, dep: dict, params: WardenParams, records: dict[str, list[Record]]) -> tuple[dict, list]:
+    """Every link-window of the wire's two records has a registration that `warden_rows.check_registration` accepts
+    under the warden's key and session, whose root is the record's rows under its salts; the per-window cost."""
+    key, session = cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
+    got = {}
+    for doc, salts in read_cells(run):
+        if "registration" in doc:
+            r = doc["registration"]
+            got[(r["link"], r["direction"], r["window"])] = (doc, salts)
+    problems, costs, ok_n = [], [], 0
+    for name in (INGRESS, EGRESS):
+        link, direction = CERTIFIED[name]
+        by_window = {r.window: r for r in records[name]}
+        for w in range(dep["windows"]):
+            doc, salts = got.get((link, direction.value, w), (None, None))
+            ok = False
+            if doc is not None and w in by_window:
+                costs.append(doc["cost"])
+                try:
+                    head, _ = WR.check_registration(doc["registration"], key, session, params.grid, params.digest, link,
+                                                    direction, w)
+                    rows = WR.window_rows(by_window[w], params.grid)
+                    ok = WR.Cells.commit(link, direction, w, rows, params.digest, session, salts).root == head.root
+                except ValueError as e:
+                    problems.append(f"{name} window {w}'s cells: {e}")
+            ok_n += ok
+            if not ok:
+                problems.append(f"{name} window {w}'s cells aren't registered")
+    summary = {"registered": ok_n, "of": 2 * dep["windows"], "rows": sorted({c["rows"] for c in costs}),
+               "commit_ms": _quantiles([c["commit_ms"] for c in costs]),
+               "sign_ms": _quantiles([c["sign_ms"] for c in costs])}
+    return summary, problems
+
+
 def egress_cells(records: list[Record], params: WardenParams) -> dict[int, list[tuple[int, int]]]:
     """Each connection's egress cells as (bucket, kind), in the records' order."""
     out: dict[int, list[tuple[int, int]]] = {}
@@ -412,6 +481,8 @@ def check(run: Path) -> dict:
                 problems.append(f"{name} window {w} isn't certified")
             elif r.status.reason is not None:
                 problems.append(f"{name} window {w}: {r.status.reason.value}")
+    cells_summary, cells_problems = check_cells(run, dep, params, records)
+    problems += cells_problems
     verdict = audit(params, records[INGRESS], records[EGRESS], records[FAILS])
     if not verdict["accepted"]:
         problems += [f"audit: {p}" for w in verdict["windows"] for p in w["problems"]]
@@ -449,7 +520,7 @@ def check(run: Path) -> dict:
         "refused": sum(r["outcome"] == "refused" for r in rows),
         "failed": sorted({r["outcome"] for r in rows} - {"end", "refused"}),
         "windows": dep["windows"], "certified_windows": sum(w["certified"] for w in windows),
-        "certificates": len(certified), "signer_refused": refused,
+        "certificates": len(certified), "signer_refused": refused, "cell_rows": cells_summary,
         "cells": verdict["cells"], "wire_bits": {k: n * B * 8 for k, n in verdict["cells"].items()},
         "data_bytes": {"ingress": sum(c["ingress_bytes"] for c in verdict["connections"]),
                        "egress": sum(c["egress_bytes"] for c in verdict["connections"])},
@@ -471,7 +542,9 @@ def table(result: dict) -> str:
             f"{s['refused']} refused, failed {s['failed']}; {s['certified_windows']}/{len(CERTIFIED) * s['windows']} "
             f"link-windows "
             f"certified; cells in their bucket {s['cells_in_their_bucket'][0]}/{s['cells_in_their_bucket'][1]}; "
-            f"cells {s['cells']}; tick lateness {s['tick_lateness_ms']}")
+            f"cells {s['cells']}; tick lateness {s['tick_lateness_ms']}; cell rows {s['cell_rows']['registered']}/"
+            f"{s['cell_rows']['of']} link-windows registered, {s['cell_rows']['rows']} rows a window, commit ms "
+            f"{s['cell_rows']['commit_ms']}, sign ms {s['cell_rows']['sign_ms']}")
 
 
 # The rehearsal.
