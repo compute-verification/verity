@@ -48,7 +48,7 @@ def test_the_quantizers_range_rule_holds_on_its_evaluator():
 @pytest.mark.parametrize("model,wrapper,kw,digest,steps,affine,units,lifetime", [
     ("llama32-1b", "step", dict(M=1, pos0=8), "5e34739ca3f59dda", 1, 135168,
      {"roundings": 78513484, "compare_select": 385277, "gathers": 17, "folds": 0}, 1),
-    ("llama32-1b", "request", dict(LP=3, T=2), "f74a4cb370a5250b", 3, 665468,
+    ("llama32-1b", "request", dict(LP=3, T=2), "cdf004e855f279a4", 3, 665468,
      {"roundings": 351786258, "compare_select": 1570701, "gathers": 85, "folds": 0}, 2),
     ("qwen3-30b-a3b", "step", dict(M=1, pos0=8), "d12a2b4c96ad1b35", 1, 1632256,
      {"roundings": 197326508, "compare_select": 1041597, "gathers": 3090, "folds": 0}, 1),
