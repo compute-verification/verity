@@ -589,8 +589,26 @@ def _scan0(read: bool, where: str) -> str:
     return P.text("R_v1")
 
 
+def minimal() -> str:
+    """`_scan0` shrunk: an input `x`; `s`, a scan of no iterations of `Step_v1` (which passes its carry through and has no
+    nodes) from `x`; and a call of `Step_v1` on `s`'s carry. The root returns `x`. `operands` of the call refuses (the
+    scan has no output), and no primitive node reads the scan."""
+    P = Program(random.Random(0))
+    x = P.input(8, False)
+    step = P.composite(Body(P, [V(8)], 0), Tup(V(8), Tup()), {"affine": ["p", 0, 0, 1]}, "Step_v1")
+    root = Body(P, [], 1)
+    root.push({"args": [], "fn": P.fn(x), "form": "primitive", "out": P.ty(V(8))}, V(8), [], 1, "input")
+    out = Tup(V(8), A(0, Tup()))
+    root.push({"args": [{"refs": {"affine": ["n", 0, 0, 1]}, "type": P.ty(V(8))}], "fn": P.fn(step), "form": "scan",
+               "n": 0, "n_xs": 0, "out": P.ty(out)}, out, [1], 0, "scan")
+    root.push({"args": [{"refs": {"affine": ["n", 1, 0, 1]}, "type": P.ty(V(8))}], "fn": P.fn(step), "form": "call",
+               "out": P.ty(Tup(V(8), Tup()))}, Tup(V(8), Tup()), [1], 0, "call")
+    P.composite(root, V(8), {"affine": ["n", 0, 0, 1]}, "R_v1")
+    return P.text("R_v1")
+
+
 def hand() -> list[dict]:
-    out = []
+    out = [{"id": "hand-scan0-minimal", "family": "hand", "program": minimal()}]
     for where in ("root", "callee", "shared", "batch"):
         for read in (False, True):
             out.append({"id": f"hand-scan0-{where}-{'read' if read else 'unread'}", "family": "hand",
