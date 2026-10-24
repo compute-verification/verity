@@ -16,7 +16,7 @@
 # The serve dir D (row dirs, bundles) stays on the node under `research keep`; $OUT keeps the records and logs.
 set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
-PORT=${PORT:-18084} UNTIL=${UNTIL:-13:30} ADMIT=${ADMIT:-arrival} BURSTS=${BURSTS:-8} PER_BURST=${PER_BURST:-4} CAP=${CAP:-8388608}
+PORT=${PORT:-18084} UNTIL=${UNTIL:-13:30} ADMIT=${ADMIT:-arrival} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512} BURSTS=${BURSTS:-8} PER_BURST=${PER_BURST:-4} CAP=${CAP:-8388608}
 REPO=unsloth/Llama-3.2-1B REV=9535bd9b1d1dea6acafbdc4813b728796aeb28da
 ROW=${ROW:-/workspace/research/vllm-llama1b-commit/r20261024-055630-5377/llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager}
 HIDDEN_SO=${HIDDEN_SO:-/workspace/cp/fa2/build/matReqG/verity_fa2_matReqG.so} NORM_TAP_SO=${NORM_TAP_SO:-/workspace/cp/norm_tap/build/verity_norm_tap.so}
@@ -48,7 +48,7 @@ fi
 
 vv serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" --precision pin --run-id "${RESEARCH_RUN_ID:-local}" \
   --scheme rows-sha512 --seal --gpu-tree --window-steps 256 --required-manifest "$ROW/manifest.json" --hidden-so "$HIDDEN_SO" \
-  --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 --admit "$ADMIT" > "$OUT/serve.log" 2>&1 &
+  --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 --admit "$ADMIT" --max-model-len "$MAX_MODEL_LEN" > "$OUT/serve.log" 2>&1 &
 SRV=$!
 echo "$SRV" > "$D/serve.pid"
 for _ in $(seq 1 600); do
@@ -119,6 +119,38 @@ print(json.dumps({"run": run, "http_sent": {"release 1": sent[1], "release 0": s
 sys.exit(0 if ok else 1)
 EOF2
   [ "${PIPESTATUS[0]}" = 0 ] || { echo "ADMIT SMOKE FAILED"; kill -TERM "$SRV"; wait "$SRV"; exit 12; }
+fi
+
+if [ "$MAX_MODEL_LEN" -gt 512 ]; then  # one request filling the context: MAX_MODEL_LEN - 64 prompt ids, then all 64 new ones, its window sealed
+  "$PY" - "$PORT" "$REPO" "$D" "$MAX_MODEL_LEN" <<'EOF2' 2>&1 | tee "$OUT/long_smoke.txt"
+import json, sys, time, urllib.request
+from pathlib import Path
+port, model, d, L = sys.argv[1], sys.argv[2], Path(sys.argv[3]), int(sys.argv[4])
+P = L - 64
+body = {"model": model, "user": "long-smoke", "prompt": [128000] + [1000 + (7 * i) % 100000 for i in range(P - 1)],
+        "max_tokens": 64, "min_tokens": 64, "temperature": 0, "top_p": 1.0, "return_token_ids": True, "ignore_eos": True}
+rq = urllib.request.Request(f"http://127.0.0.1:{port}/v1/completions", json.dumps(body).encode(), {"content-type": "application/json"})
+with urllib.request.urlopen(rq, timeout=300) as r:
+    resp = json.loads(r.read())
+ch = resp["choices"][0]
+n_out = len(ch.get("token_ids") or [])
+rec, line = {}, {}
+for _ in range(120):
+    if (d / "requests.jsonl").exists():
+        rec = next((r for r in map(json.loads, (d / "requests.jsonl").read_text().splitlines()) if r.get("user") == "long-smoke"), {})
+    if rec and rec.get("windows"):
+        w = rec["windows"][-1]
+        line = next((x for x in map(json.loads, (d / "windows.jsonl").read_text().splitlines()) if x["window"] == w), {})
+        if line:
+            break
+    time.sleep(1)
+ok = n_out == 64 and len(rec.get("prompt_ids") or []) == P and bool(line.get("passed")) and bool((line.get("sealed") or {}).get("row_dir"))
+print(json.dumps({"max_model_len": L, "prompt": P, "new": n_out, "finish": ch.get("finish_reason"), "windows": rec.get("windows"),
+                  "check": rec.get("check"), "window_passed": line.get("passed"), "sealed": (line.get("sealed") or {}).get("row_dir"),
+                  "port_layout": (line.get("sealed") or {}).get("port_layout"), "ok": ok}))
+sys.exit(0 if ok else 1)
+EOF2
+  [ "${PIPESTATUS[0]}" = 0 ] || { echo "LONG SMOKE FAILED"; kill -TERM "$SRV"; wait "$SRV"; exit 13; }
 fi
 
 "$PY" tools/serve_load.py --port "$PORT" --model "$REPO" --bursts "$BURSTS" --per-burst "$PER_BURST" --out "$D/load.jsonl" \
