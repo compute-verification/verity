@@ -22,6 +22,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.Live
 import Proofs.Flock.Soundness.Discharge.Exec.Merkle
 import Proofs.Flock.Soundness.Discharge.Exec.Retained
 import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
+import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
 import Proofs.Flock.Soundness.Discharge.Exec.Decode
 import Proofs.Flock.Soundness.Discharge.Exec.Emit
 import Proofs.Flock.Soundness.Discharge.Exec.FramesLigerito
