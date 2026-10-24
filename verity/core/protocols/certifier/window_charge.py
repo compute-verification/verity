@@ -51,14 +51,14 @@ with p < pos, a gap past 2^24, r past 2^24 or p = 2^32 − 1 (its pos wouldn't f
 
 **The carry** is `ChargeCount_v1`'s (the KT counts and run) and `code_v1._State`'s order step and index, as pos and
 rank: 149 bits in a 160-bit row (`ROW_BITS`), chained as `charge_chain` chains v1's, under this module's own value
-`VALUE`. After each hit and each order entry the carried words are committed, as after each decision, so the build stays
-linear in N + H + O.
+`VALUE`. After each hit, and after each order entry's gap and its rank step, the carried words are committed, as after
+each decision, so the build stays linear in N + H + O.
 
 **Cost** (`size`, ANDs): `ChargeCount_v2{N, 0, 0}` is `ChargeCount_v1{N}` and 24 for the carry-in's rank check: 19,560
-at N = 2. A hit adds 8,662: the bin step and one uniform step, at 3,963 each, and the bin's selection. An order entry
-adds 25,707: the gap's bin and two uniform steps, the rank step's three, and their selections. A nonzero count (S ≥ 1
-slots) costs the bin step and, from S = 2 on, its offset step, as n_arrived does: one step more than the 0 v1 codes.
-`ChargeCount_v2{1, 1, 1}` is 51,939 and `ChargeLink_v2{2, 2, 2}` 107,880, with 160 ANDs for the link. A lowering adds
+at N = 2. A hit slot adds about 8,600: its bin step and one uniform step, about 4,000 each, and the bin's selection. An
+order slot adds about 25,800: the gap's bin and two uniform steps, the rank step's three, and their selections. A count
+over S ≥ 2 slots adds its offset step, as n_arrived does. `ChargeCount_v2{1, 1, 1}` is 53,287, {2, 2, 0} 39,803,
+{2, 0, 2} 74,901 and {4, 2, 2} 100,586; `ChargeLink_v2` adds 160 for the link (100,746 at {4, 2, 2}). A lowering adds
 the copies (`size`'s ``carry``).
 """
 from __future__ import annotations
@@ -418,6 +418,8 @@ def _build_window(C, S, *elements):
         bad = or_reduce(C, [borrow, over, C.AND(rr[RW - 1], AE._nonzero(C, rr[:RW - 1])), and_reduce(C, pp)])
         oks.append(C.AND(e, bad).inv())
         tally = _binned(C, "order", e, g[:25], f["order_gap"], gcums, f["order_gap_total"][0], GAP_CAP, tally, oks)
+        C.phase = "carry"
+        tally = _commit(C, tally)
         C.phase = "order"
         d = sub(C, rr + [ZERO], rank + [ZERO], RW + 1)[0]
         z = [d[RW]] + [d[k] ^ d[RW] for k in range(RW)]
