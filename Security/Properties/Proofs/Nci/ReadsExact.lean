@@ -1048,6 +1048,132 @@ theorem flatMap_getElem?_block {α β : Type} (F : α → List β) :
     rw [List.getElem?_append_right (by omega), Nat.add_assoc, Nat.add_sub_cancel_left]
     exact flatMap_getElem?_block F l i t (by simpa using hi) ht
 
+/-! ## A member's runs of a mapped argument -/
+
+/-- Runs `[x, y)` laid end to end. -/
+def spansPos (xs : Array (Nat × Nat)) : List Nat := xs.toList.flatMap fun p => List.range' p.1 (p.2 - p.1)
+
+theorem range'_shift (X s n : Nat) : List.range' X n = (List.range' s n).map fun t => X + (t - s) := by
+  rw [List.range'_eq_map_range, List.range'_eq_map_range, List.map_map]
+  apply List.map_congr_left
+  intro i _
+  simp only [Function.comp]
+  omega
+
+/-- The runs of `[lo, hi)` in blocks of `L`, from block `q0`, for `n` blocks. -/
+theorem blocks_cover (L lo hi q0 : Nat) (h0 : q0 * L ≤ lo) : ∀ n : Nat,
+    (List.range n).flatMap (fun q' => List.range' (max lo ((q0 + q') * L))
+      (min hi ((q0 + q' + 1) * L) - max lo ((q0 + q') * L))) =
+      List.range' lo (min hi ((q0 + n) * L) - lo)
+  | 0 => by
+    rw [List.range_zero, List.flatMap_nil, Nat.add_zero, show min hi (q0 * L) - lo = 0 by omega]; rfl
+  | n + 1 => by
+    rw [List.range_succ, List.flatMap_append, blocks_cover L lo hi q0 h0 n, List.flatMap_singleton]
+    have hY : (q0 + n + 1) * L = (q0 + n) * L + L := Nat.succ_mul _ _
+    have hX : q0 * L ≤ (q0 + n) * L := Nat.mul_le_mul_right _ (by omega)
+    rw [show q0 + (n + 1) = q0 + n + 1 by omega]
+    generalize (q0 + n) * L = X at hY hX
+    rw [hY]
+    by_cases hx : hi ≤ X
+    · rw [show min hi (X + L) - max lo X = 0 by omega, show min hi X = hi by omega,
+        show min hi (X + L) = hi by omega]
+      simp
+    · by_cases hl : X ≤ lo
+      · rw [show min hi X - lo = 0 by omega, show max lo X = lo by omega]
+        simp
+      · rw [show max lo X = X by omega, show min hi X = X by omega, range'_join _ _ _ (by omega)]
+        congr 1; omega
+
+theorem flatMap_filterMap_spans {β : Type} (g : β → Option (Nat × Nat)) (l : List β) :
+    (l.filterMap g).flatMap (fun p => List.range' p.1 (p.2 - p.1)) =
+      l.flatMap fun b => match g b with
+        | some p => List.range' p.1 (p.2 - p.1)
+        | none => [] := by
+  induction l with
+  | nil => rfl
+  | cons b l ih =>
+    rw [List.filterMap_cons, List.flatMap_cons]
+    cases g b with
+    | none => simp [ih]
+    | some p => simp [ih]
+
+/-- **A member's runs** (`Desc.memberSpans`) are the argument's indices of the member's parameter leaves `[lo, hi)`,
+in order: leaf `t` of member `m` of an argument mapped with dims `(d, L)` is index `(t / L · d + m) · L + t % L`. -/
+theorem memberSpans_pos (a : Flock.Program.Arg) (m lo hi : Nat) (d L : Nat) (hd : a.dims = some (d, L))
+    (hL : L = 0 → hi ≤ lo) :
+    spansPos (Desc.memberSpans a m lo hi) =
+      (List.range' lo (hi - lo)).map fun t => (t / L * d + m) * L + t % L := by
+  unfold Desc.memberSpans
+  rw [hd]
+  dsimp only
+  split
+  · rename_i h
+    have : L = 0 := by simpa using h
+    rw [show hi - lo = 0 by have := hL this; omega]; rfl
+  rename_i h
+  have hL0 : 0 < L := by
+    have : L ≠ 0 := by simpa using h
+    omega
+  unfold spansPos
+  rw [Array.toList_filterMap, Array.toList_range, flatMap_filterMap_spans]
+  have hq0 : lo / L * L ≤ lo := Nat.div_mul_le_self lo L
+  have hblock : ∀ q' : Nat,
+      (match (if max lo ((lo / L + q') * L) < min hi ((lo / L + q' + 1) * L) then
+          some (((lo / L + q') * d + m) * L + (max lo ((lo / L + q') * L) - (lo / L + q') * L),
+            ((lo / L + q') * d + m) * L + (min hi ((lo / L + q' + 1) * L) - (lo / L + q') * L)) else none) with
+        | some p => List.range' p.1 (p.2 - p.1)
+        | none => []) =
+      (List.range' (max lo ((lo / L + q') * L)) (min hi ((lo / L + q' + 1) * L) - max lo ((lo / L + q') * L))).map
+        fun t => (t / L * d + m) * L + t % L := by
+    intro q'
+    generalize lo / L + q' = q
+    have hY : (q + 1) * L = q * L + L := Nat.succ_mul _ _
+    by_cases hse : max lo (q * L) < min hi ((q + 1) * L)
+    · rw [if_pos hse]
+      dsimp only
+      rw [range'_shift _ (max lo (q * L)), show ((q * d + m) * L + (min hi ((q + 1) * L) - q * L) -
+          ((q * d + m) * L + (max lo (q * L) - q * L))) = min hi ((q + 1) * L) - max lo (q * L) by omega]
+      apply List.map_congr_left
+      intro t ht
+      obtain ⟨i, hi', rfl⟩ := List.mem_range'.1 ht
+      have hM1 : q * L ≤ max lo (q * L) := Nat.le_max_right _ _
+      have hlt : max lo (q * L) + 1 * i - q * L < L := by omega
+      have hsplit : max lo (q * L) + 1 * i = (max lo (q * L) + 1 * i - q * L) + L * q := by
+        rw [Nat.mul_comm L q]; omega
+      have e1 : (max lo (q * L) + 1 * i) / L = q := by
+        conv => lhs; rw [hsplit]
+        rw [Nat.add_mul_div_left _ _ hL0, Nat.div_eq_of_lt hlt, Nat.zero_add]
+      have e2 : (max lo (q * L) + 1 * i) % L = max lo (q * L) + 1 * i - q * L := by
+        conv => lhs; rw [hsplit]
+        rw [Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hlt]
+      rw [e1, e2]
+      generalize max lo (q * L) = M at *
+      generalize q * L = Q at *
+      omega
+    · rw [if_neg hse]
+      dsimp only
+      rw [show min hi ((q + 1) * L) - max lo (q * L) = 0 by omega]; rfl
+  simp only [hblock]
+  rw [← List.map_flatMap, blocks_cover L lo hi (lo / L) hq0]
+  congr 1
+  by_cases hlh : hi ≤ lo
+  · rw [show hi - lo = 0 by omega]
+    rw [show min hi ((lo / L + ((hi + L - 1) / L - lo / L)) * L) - lo = 0 by omega]
+  · have hce : hi ≤ (hi + L - 1) / L * L := by
+      have h1 := Nat.div_add_mod (hi + L - 1) L
+      have h2 := Nat.mod_lt (hi + L - 1) hL0
+      have h3 : (hi + L - 1) / L * L = L * ((hi + L - 1) / L) := Nat.mul_comm _ _
+      omega
+    have hle : lo / L ≤ (hi + L - 1) / L := Nat.div_le_div_right (by omega)
+    rw [show lo / L + ((hi + L - 1) / L - lo / L) = (hi + L - 1) / L by omega, show min hi ((hi + L - 1) / L * L) = hi
+      by omega]
+
+theorem memberSpans_none (a : Flock.Program.Arg) (m lo hi : Nat) (hd : a.dims = none) :
+    spansPos (Desc.memberSpans a m lo hi) = List.range' lo (hi - lo) := by
+  unfold Desc.memberSpans
+  rw [hd]
+  simp [spansPos]
+
 /-- **Reference `k` of a decoded sequence** is position `k` of its parts' (`Walk.seq_get`). -/
 theorem partsPos_get (ps : Array Part) :
     (List.range (Seq.ofParts ps).count).map (fun k => refPos ((Seq.ofParts ps).get k)) = partsPos ps := by
@@ -1077,5 +1203,20 @@ theorem partsPos_get (ps : Array Part) :
     symm
     apply List.getElem?_eq_none
     omega
+
+/-- **A member's runs** are its parameter leaves' indices into the argument (`Resolve.memberIdx`). -/
+theorem memberSpans_idx (a : Flock.Program.Arg) (m lo hi : Nat)
+    (hL : ∀ d L, a.dims = some (d, L) → L = 0 → hi ≤ lo) :
+    spansPos (Desc.memberSpans a m lo hi) = (List.range' lo (hi - lo)).map (Resolve.memberIdx a m) := by
+  rcases hd : a.dims with _ | ⟨d, L⟩
+  · rw [memberSpans_none a m lo hi hd]
+    conv => lhs; rw [← List.map_id (List.range' lo (hi - lo))]
+    apply List.map_congr_left
+    intro t _
+    simp [Resolve.memberIdx, hd]
+  · rw [memberSpans_pos a m lo hi d L hd (hL d L hd)]
+    apply List.map_congr_left
+    intro t _
+    simp [Resolve.memberIdx, hd]
 
 end NciCheck.Properties.SecurityProofs.ReadsExact
