@@ -8,6 +8,7 @@ import PouwCheck.Pass
 import PouwCheck.Rounds
 import PouwCheck.Credit
 import PouwCheck.LeafOwn
+import PouwCheck.Verified
 
 /-!
 # PoUW's window check as a core protocol
