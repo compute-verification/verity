@@ -111,6 +111,10 @@ Arms:
     ARM-a2       any dither arm with each call's A table from `h1c_a_call2_k` (DITHER_A_FORM=2: the same table, its
                  compressions paired); ARM-a3 from `h1c_a_call3_k` (DITHER_A_FORM=3: paired, its messages in registers);
                  the suffixes compose (ARM-a3-xl), each gated as ARM
+    ARM-j10r     a dither-a-so arm with its units under J10-R's call-scale noise (DITHER_SO_UNITS=j10r, `dither_so`)
+    ARM-smqQ, ARM-smqQoD  a dither-a-so arm with its units on the SMs whose id % D < Q (DITHER_SO_UNITS_SMQ=Q/D, D 8
+                 without it); -smq0 on every SM, whatever the run's environment sets.  These set the arm's own worker's
+                 environment, so one run times the units' forms and shares side by side (ARM-j10r-smq9o16)
 
 `gate` (--gate, before the reps): exact and dither each generate GATE_TOKENS tokens for the 32 requests; dither's window
 checks one B32 decode step (`dither_fused.check`, its transcript buffers 0xA5 before the kernels wrote them) and refuses
@@ -146,6 +150,7 @@ import argparse
 import json
 import multiprocessing as mp
 import os
+import re
 import statistics
 import sys
 import time
@@ -257,7 +262,19 @@ def a_form(f: int):
     return set_form
 
 
-SUFFIXES = {"-xl": install_exactlin, "-a2": a_form(2), "-a3": a_form(3)}
+def env_of(name: str, value: str | None):
+    def set_env() -> None:
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value
+    return set_env
+
+
+SUFFIXES = {"-xl": install_exactlin, "-a2": a_form(2), "-a3": a_form(3), "-j10r": env_of("DITHER_SO_UNITS", "j10r")}
+# -smqQ / -smqQoD: a dither-a-so arm's units on the SMs whose id % D < Q ($DITHER_SO_UNITS_SMQ=Q/D, D 8 without it;
+# -smq0 every SM, whatever the run's environment says)
+SMQ_SUFFIX = re.compile(r"-smq(\d+)(?:o(\d+))?$")
 
 
 def suffix_of(arm: str) -> str | None:
@@ -265,7 +282,16 @@ def suffix_of(arm: str) -> str | None:
         for s in SUFFIXES:
             if arm.endswith(s):
                 return s
+        if m := SMQ_SUFFIX.search(arm):
+            return m.group(0)
     return None
+
+
+def suffix_env(s: str):
+    if s in SUFFIXES:
+        return SUFFIXES[s]
+    m = SMQ_SUFFIX.fullmatch(s)
+    return env_of("DITHER_SO_UNITS_SMQ", None if m[1] == "0" else f"{m[1]}/{m[2] or 8}")
 
 
 def base_arm(arm: str) -> str:
@@ -277,7 +303,7 @@ def build(arm: str, scratch: Path, gpu_mem: float):
     from vllm import LLM
     s = suffix_of(arm)
     if s:
-        SUFFIXES[s]()
+        suffix_env(s)()
         return build(arm[:-len(s)], scratch, gpu_mem)
     if arm in DISABLED:
         os.environ["VLLM_DISABLED_KERNELS"] = DISABLED[arm]
@@ -444,6 +470,10 @@ TOKENS_GATED = {"dither-1s": False, "dither-1s-credit": False, "dither-1s-warp":
 # names start with one are pinned (exact,dither: the arms held to exact's tokens), the rest keep their timed picks
 PICK_ENV = "SBENCH_PICK"
 PICK_ARMS_ENV = "SBENCH_PICK_ARMS"
+# SBENCH_SMQ_SWEEP=V[,V]: after the gate, each dither-a-so arm's decode TPOT and phases at each units SM share V (q or
+# q/den, 0 every SM; `dither_so.SoSide.set_units_smq`), in one engine, then back to its own share for the reps: a screen
+# (smq_sweep.json), never a row
+SMQ_SWEEP_ENV = "SBENCH_SMQ_SWEEP"
 
 
 def pick_of(arm: str) -> str | None:
@@ -616,6 +646,22 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                 torch.cuda.profiler.stop()
             res["tpot_b32_ms"] = round(1e3 * (res[f"gen_n{PROF_N[1]}_s"] - res[f"gen_n{PROF_N[0]}_s"]) / (PROF_N[1] - PROF_N[0]), 4)
             conn.send(res)
+        elif cmd["op"] == "smq_sweep":
+            sd = sys.modules["dither_a"].SIDE[0]
+            q0, d0 = sd.units_smq, sd.units_smd
+            rows = []
+            for v in cmd["values"]:
+                q, _, den = v.partition("/")
+                sd.set_units_smq(int(q), int(den or 8))
+                gen(ps, 8)
+                llm.dither_stats()
+                t1, _ = gen(ps, N1)
+                t2, _ = gen(ps, N2)
+                rows.append({"smq": v, "tpot_b32_ms": round(1e3 * (t2 - t1) / (N2 - N1), 4),
+                             "phases_by_m": llm.dither_stats().get("phases_by_m")})
+            sd.set_units_smq(q0, d0)
+            gen(ps, 8)
+            conn.send({"sweep": rows})
         elif cmd["op"] == "sat":
             t, outs = gen(prompts(SAT_REQS), SAT_TOKENS)
             n = sum(len(o.outputs[0].token_ids) for o in outs)
@@ -692,6 +738,9 @@ def main() -> int:
     missing = sorted({REF_OF[x] for x in arms if x in TOKENS_ONLY and REF_OF[x] not in arms})
     if a.gate and missing:
         ap.error(f"a tokens-only arm's gate is its reference's tokens: add {','.join(missing)} to --arms")
+    smq_sweep = [v for v in (os.environ.get(SMQ_SWEEP_ENV) or "").split(",") if v]
+    if not all(re.fullmatch(r"0|\d+(/\d+)?", v) for v in smq_sweep):
+        ap.error(f"${SMQ_SWEEP_ENV}={os.environ[SMQ_SWEEP_ENV]}: comma-separated q or q/den")
     ctx = mp.get_context("spawn")
     conns, procs, info = {}, {}, {}
     for arm in arms:      # one engine at a time comes up, so their memory profiling doesn't race
@@ -751,6 +800,14 @@ def main() -> int:
                 return 4
             arms = [x for x in arms if x not in failed]
             rc = 4
+    sweep: dict = {}
+    for arm in arms if smq_sweep else ():
+        if base_arm(arm) in DITHER_SO:
+            conns[arm].send({"op": "smq_sweep", "values": smq_sweep})
+            sweep[arm] = recv(arm, conns[arm], "smq_sweep")["sweep"]
+            recv(arm, conns[arm], "smq_sweep")
+            print(json.dumps({"smq_sweep": arm, "tpot_b32_ms": {x["smq"]: x["tpot_b32_ms"] for x in sweep[arm]}}), flush=True)
+            (out / "smq_sweep.json").write_text(json.dumps(sweep, indent=1) + "\n")
     for r in range(a.reps):
         for op in a.ops.split(","):
             for j in range(len(arms)):
@@ -805,6 +862,8 @@ def main() -> int:
         if p["tokens_per_s"] and base["tokens_per_s"]:
             p["throughput_overhead_pct"] = round(100 * (1 - p["tokens_per_s"] / base["tokens_per_s"]), 3)
     summary["gate_failed"] = [x for x in gate_doc if x not in arms]
+    if sweep:
+        summary["smq_sweep"] = {arm: {x["smq"]: x["tpot_b32_ms"] for x in rows} for arm, rows in sweep.items()}
     summary["stop"] = {arm: {"error": x.get("error"), "close_error": x.get("close_error"), "fill_steps": x.get("fill_steps"),
                              "end_verdict": (x.get("end") or {}).get("verdict")} for arm, x in stops.items()}
     (out / "summary.json").write_text(json.dumps(summary, indent=1) + "\n")

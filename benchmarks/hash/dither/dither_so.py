@@ -903,15 +903,12 @@ class SoSide(DA.Side):
         self.fused = os.environ.get(FUSED_ENV) == "1"
         q, _, den = (os.environ.get(UNITS_SMQ_ENV) or "0").partition("/")
         self.units_smq, self.units_smd = int(q), int(den or 8)
-        if self.units_smq and not (self.fused and 1 <= self.units_smq <= self.units_smd <= 64
-                                   and hasattr(self.h, "kh_units_multi_sm")):
-            raise ValueError(f"${UNITS_SMQ_ENV}={os.environ[UNITS_SMQ_ENV]}: needs ${FUSED_ENV}=1, 1 <= q <= den <= 64 "
-                             "and an h1u build with kh_units_multi_sm")
         self.units_form = os.environ.get(UNITS_ENV) or "today"
-        self.j10r_m = os.environ.get(J10R_M_ENV) or "slot"
         self.j10r = self.units_form == "j10r"
+        self.j10r_m = os.environ.get(J10R_M_ENV) or "slot"
         if self.units_form not in UNITS_FORMS:
             raise ValueError(f"${UNITS_ENV}={self.units_form}: one of {tuple(UNITS_FORMS)}")
+        self._check_smq(self.units_smq, self.units_smd, f"${UNITS_SMQ_ENV}={os.environ.get(UNITS_SMQ_ENV)}")
         if self.j10r:
             import j10r_so as JS
             JS.rows(self.j10r_m, win.t, win.t)
@@ -929,13 +926,12 @@ class SoSide(DA.Side):
             vp, u32 = C.c_void_p, C.c_uint
             self.h.kh_seeds_j10r_h1r.argtypes = [vp, C.c_int, C.c_int, vp, vp, vp, vp]
             self.h.kh_units_multi_j10r.argtypes = [vp, u32, u32, u32, vp, C.c_int, vp]
-            if self.units_smq:
-                self.h.kh_units_multi_j10r_sm.argtypes = [vp, u32, u32, u32, vp, u32, u32, vp, vp]
         if self.fused:
             self.mtab, self.m_units = self._multi_tables()
-        if self.units_smq:
             vp, u32 = C.c_void_p, C.c_uint
-            self.h.kh_units_multi_sm.argtypes = [vp, u32, u32, u32, vp, u32, u32, vp, vp]
+            for f in ("kh_units_multi_sm", "kh_units_multi_j10r_sm"):
+                if hasattr(self.h, f):
+                    getattr(self.h, f).argtypes = [vp, u32, u32, u32, vp, u32, u32, vp, vp]
             self.unit_next = torch.zeros(1, dtype=torch.int32, device=dev)
         self.graphs: dict[tuple[int, int], torch.cuda.CUDAGraph] = {}
         self.warm: set[int] = set()
@@ -944,6 +940,20 @@ class SoSide(DA.Side):
             win.tree_streams = tuple(torch.cuda.Stream(device=dev, priority=-1) for _ in range(2))
         self.ov = Ov(win, self, win.overlap) if win.overlap else None
         self.spill = Spill(win, self, win.spill_mode) if win.window_end and win.spill_mode else None
+
+    def _check_smq(self, q: int, den: int, what: str) -> None:
+        f = "kh_units_multi_j10r_sm" if self.j10r else "kh_units_multi_sm"
+        if q and not (self.fused and 1 <= q <= den <= 64 and hasattr(self.h, f)):
+            raise ValueError(f"{what}: needs ${FUSED_ENV}=1, 1 <= q <= den <= 64 and an h1u build with {f}")
+
+    def set_units_smq(self, q: int, den: int = 8) -> None:
+        """The units launch on the SMs whose id % den < q from the next dispatch on (q 0: kh_units_multi's every SM),
+        each (ring slot, m) graph captured again at its next step: a screen of the SM share inside one engine
+        (sbench's SBENCH_SMQ_SWEEP); a served row's share is $DITHER_SO_UNITS_SMQ's, fixed at the build."""
+        self._check_smq(q, den, f"set_units_smq({q}, {den})")
+        torch.cuda.synchronize()
+        self.units_smq, self.units_smd = q, den
+        self.graphs.clear()
 
     def call(self, w: int, x: torch.Tensor, wt: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor) -> None:
         win = self.win
