@@ -34,19 +34,17 @@ and checks it in full at the window's start, before any decision is coded, so a 
 to leave a field unchecked and change its pins. A sibling value under the same carry rule gives the same guarantee and
 leaves the scan's chain as it is.
 
-**The compile slice's multi-window form.** `CompileSlice_v1` (#3661) charges one window from public constants: its
-`ChargeCount_v1{P·A}` takes the priors as part of the public book. Its multi-window form takes the chain as follows:
+**The compile slice takes the chain** ([compile-slice.md](compile-slice.md)):
 
-- `charge_in` and `charge_out` are the unit's reads of `replay-charge` rows 0 and 1 (`charge_chain.reads()`), next to
-  the state and window rows it reads from `replay_chain`.
-- The call is `charge_chain.build_link(C, N, book, row_in, row_out, en, bits)` in place of `build_charge`. `book` is
-  `book_fields(N)`, the public tables without the carry, and `en` and `bits` are the scan's asks as now. Its ok goes
-  into `code`, and its bits into `charge`, held to c_w as now.
-- The verifier runs `charge_chain.check_chain` on the charge rows' openings beside `replay_chain.check_chain`.
+- ``cin`` and ``cout`` are the unit's reads of `replay-charge` rows 0 and 1 (`charge_chain.reads()`).
+- Its charge is `charge_chain.build_link(C, D, book, cin, cout, en, bits)`, `ChargeLink_v1{D}`. `book` is
+  `book_fields(D)`, the public tables without the carry. `bits` are the D decisions the window commits, and
+  en_i = i < their count. Its ok is the verdict's `code` bit, and its bits are held to c_w (`charge`).
+- The verifier runs `charge_chain.check_chain` on the charge rows' openings.
 - The prover commits each window with `commit_window(program, book, carry', registration, carry=previous)`.
 - Where the replay is split into units, the charge sits in the load unit, over window row 1's `dec` with
-  en_i = i < `left`. That is the scan's order, since `ReplayAdvance` reads the decisions at `dh` in turn and the next
-  load refuses unread ones. There it is `ChargeLink_v1{D}`.
+  en_i = i < `left`, as `ChargeLink_v1{D}`. That is the scan's order: `ReplayAdvance` reads the decisions at `dh` in
+  turn, and the next load refuses unread ones.
 
 **Cost.** `ChargeCount_v1{N}` and 96 ANDs (the carry-out's equality and the ok): 19,632 at N = 2 and 50,760 at N = 14
 (pinned). Per window: two rows, the charging unit's two reads (each a frame-v3 path of depth 1) and 256 record bytes.

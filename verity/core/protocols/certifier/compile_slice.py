@@ -78,8 +78,8 @@ which takes any carry-in, and refused by `charge_chain.check_chain` (``CH-carry`
   tree's to bind (`served_rows`).
 
 **Every advised window is proved**, never sampled: the carry chain binds only proved units (an unproved window's
-carry-out is any the prover likes), and ``en`` is the slice's scan's. The certifier PROTOCOL says so where it says which
-units need proofs.
+carry-out is any the prover likes), and ``en`` is the slice's scan's (the certifier PROTOCOL's A3,
+`protocol/compile-slice.md`).
 
 **Statics**: ReplayStep_v1's (R, W, A and the engine's M, T, L, B, H, CH, WM, FULL, PC, NB, and IW), the chain's Q, D,
 P, K (`replay_chain.Shape`), and the cache's CN entries, CTW a token id's width and CU the units of each arrival's tokens
