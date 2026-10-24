@@ -23,7 +23,10 @@
 # COMMIT is the commit vy-auditor-1's verifier is pinned at (default PERIOD.env's, else origin/main's head; the probe
 # refuses another and names the host's, and a COMMIT given here replaces the recorded one); the steps run from a
 # worktree of it, with this file's gate.sh and checkpoint.sh sent beside. GATE_KEY is the key's path on GATE_ON (default
-# gate.sh's, under that machine's user's ~/.ssh). A dry run's ids go to PERIOD.dry.env. --dry-run runs steps 1 and 2
+# gate.sh's, under that machine's user's ~/.ssh), PROVER_SSH how GATE_ON reaches PROVER_NODE to read its lease (empty:
+# GATE_ON's /etc/vy/peers line), MAXMIN the prover's `gpu-lease --max-min` (a lease that would run into a booked window
+# of the node's waits it out), CHECKPOINT=0 skips step 1 and GATE_MEM=0 reserves no memory for the gate steps. A dry
+# run's ids go to PERIOD.dry.env. --dry-run runs steps 1 and 2
 # (with DRY=1: no request reaches a gate, and GATE_KEY need not exist), prints step 3, and runs step 4 with DRY=1
 # against PROVER_RUN, any run id (default none), whose lease it reads.
 set -uo pipefail
@@ -35,8 +38,10 @@ VERB=fire
 [ "${1:-}" = whatif ] && { VERB=whatif; shift; }
 PERIOD=${1:?usage: gate_run.sh [--dry-run] PERIOD | gate_run.sh whatif PERIOD}
 PIN=${PIN:-27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc}
-GATE_ON=${GATE_ON:-vy-nebius-1}
+GATE_ON=${GATE_ON:-vy-nebius-cpu-5}
 PROVER_NODE=${PROVER_NODE:-vy-nebius-2}
+PROVER_SSH=${PROVER_SSH--o StrictHostKeyChecking=accept-new -i /home/research/.ssh/vy-cluster -o IdentitiesOnly=yes research@81.85.2.121}
+MAXMIN=${MAXMIN:-90} CHECKPOINT=${CHECKPOINT:-1} GATE_MEM=${GATE_MEM:-1}
 WHATIF_ON=${WHATIF_ON:-vy-nebius-cpu-4}
 ROLE=${ROLE:-QWEN25_32B_BF16} ENGINES=${ENGINES:-8} PORT=${PORT:-7951}
 PLAN=${PLAN:-honest,skip:0.0625,honest,skip:0.0625}
@@ -84,12 +89,13 @@ launch() {
 
 GATE_ENV=(--env "COMMIT=$COMMIT" --env "PERIOD=$PERIOD" --env "PIN=$PIN" ${GATE_KEY:+--env "GATE_KEY=$GATE_KEY"}
   --env "MODEL=$ROLE" --env "ENGINES=$ENGINES" --env "PORT=$PORT" --env "PROVER_NODE=$PROVER_NODE"
-  ${DRY:+--env DRY=1} ${CIRCUIT:+--env "CIRCUIT=$CIRCUIT"})
+  ${PROVER_SSH:+--env "PROVER_SSH=$PROVER_SSH"} ${DRY:+--env DRY=1} ${CIRCUIT:+--env "CIRCUIT=$CIRCUIT"})
 gate_step() {
-  # NAME VERB GB research-run-args...: gate.sh VERB on GATE_ON in GB of memory, waited for (a dry step reserves none)
+  # NAME VERB GB research-run-args...: gate.sh VERB on GATE_ON in GB of memory, waited for (a dry step, or GATE_MEM=0
+  # where reservations are full and a fire queued behind them would outwait the prover's tunnel, reserves none)
   local name=$1 verb=$2 mem=(--mem-gb "$3" --mem-wait 3600)
   shift 3
-  [ -z "$DRY" ] || mem=()
+  [ -z "$DRY" ] && [ "$GATE_MEM" != 0 ] || mem=()
   launch "$name" --on "$GATE_ON" --cwd clone --send "$HERE/gate.sh" "${GATE_ENV[@]}" "${mem[@]}" "$@" \
     -- bash -lc "bash \"\$RESEARCH_RUN_DIR/inputs/gate.sh\" $verb"
 }
@@ -115,9 +121,13 @@ fi
 
 [ -z "${fire:-}" ] || [ -n "$DRY" ] || { echo "$STATE already has fire $fire: name a new PERIOD"; exit 3; }
 [ "$(grep '^COMMIT=' "$STATE" | tail -n 1)" = "COMMIT=$COMMIT" ] || record COMMIT "$COMMIT"
-echo "== 1. checkpoint on $PROVER_NODE"
-launch checkpoint --on "$PROVER_NODE" --cwd source --send "$HERE/checkpoint.sh" --timeout 20m --wait --env CHECK_ONLY=1 \
-  --env "ROLE=$ROLE" -- bash -lc 'bash "$RESEARCH_RUN_DIR/inputs/checkpoint.sh"' || exit 3
+if [ "$CHECKPOINT" = 0 ]; then
+  echo "== 1. checkpoint skipped (CHECKPOINT=0): the host's binding still refuses a store that isn't the pin's"
+else
+  echo "== 1. checkpoint on $PROVER_NODE"
+  launch checkpoint --on "$PROVER_NODE" --cwd source --send "$HERE/checkpoint.sh" --timeout 20m --wait \
+    --env CHECK_ONLY=1 --env "ROLE=$ROLE" -- bash -lc 'bash "$RESEARCH_RUN_DIR/inputs/checkpoint.sh"' || exit 3
+fi
 echo "== 2. probe on $GATE_ON"
 gate_step probe probe 4 --timeout 10m --wait || exit 3
 echo "== 3. prover on $PROVER_NODE"
@@ -126,7 +136,7 @@ PROVER=(--on "$PROVER_NODE" --cwd source --timeout 6h --custody-ttl 12h
   --env ENGINE_CPUS=0-23 --env PROVER_CPUS=24-47 --env "ENGINE_ARGS=--step-hz 2 --align-steps --arena-gib 62 --util 0.8"
   --env "NODE_ARGS=--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir $SNAP"
   --env "VERIFIER_SSH=$VERIFIER_SSH" --env TUNNEL_WAIT_S=1800 --env "GPU_LEASE_WHO=memory-accounting-$PERIOD"
-  -- /workspace/pouw/infra/bin/gpu-lease "$ENGINES" --wait --max-min 90 --mem-gb $((32 * ENGINES))
+  -- /workspace/pouw/infra/bin/gpu-lease "$ENGINES" --wait --max-min "$MAXMIN" --mem-gb $((32 * ENGINES))
   -- bash benchmarks/remote_session/run.sh)
 if [ -n "$DRY" ]; then
   echo "DRY: research run --project verity --source <worktree of $COMMIT> ${PROVER[*]}"
