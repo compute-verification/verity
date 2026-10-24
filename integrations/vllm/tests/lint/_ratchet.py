@@ -1,4 +1,4 @@
-"""Ratchet machinery shared by the rule lints in this directory (rules P1-P12).
+"""Ratchet machinery shared by the rule lints in this directory (rules P1-P14).
 
 Each ``test_pNN_*.py`` scans the integration's library code (``verity_vllm/**/*.py`` and ``verity_vllm/**/*.sh``) with
 ``ast`` and regexes.  Nothing scanned is imported, so the lints need neither torch nor vllm and run in seconds.  What a
