@@ -27,7 +27,7 @@
    "why": "13 descriptions naming 2^22 to 2^52 + 1 scan iterations or batch members, past what NciCheck.Desc walks one by one (NciCheck.Desc.WALK): a scan of pass-through iterations a gate reads and one nothing reads, a batch returning its shared input read whole, by a gate and through a mapped argument, scans swapping their carry an odd and an even number of times, carries leaving through an xs row, and gates reading a carry or part of an xs row; on each one NciCheck.Desc.check gives a verdict, the one it gives on the same description at a small count (the novel reads for a description whose reads grow with it), which NciCheck.check gives on that one expanded gate by gate",
    "args": ["{desc_liveness/cases.jsonl}", "13"],
    "data": {
-    "desc_liveness/cases.jsonl": "60c77a5c6788db1520ba9dc07d441cd6c0d3c20ecee519c0495b566d6150456c"
+    "desc_liveness/cases.jsonl": "481b3a6d30e820f52e496e918a7a6653b4f2bcd903f75cd1f24f5332cd5e18a2"
    },
    "generate": ["python3", "scripts/desc_liveness_vectors.py", "{repo}", "--out", "{out}"]
   },

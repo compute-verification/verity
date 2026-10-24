@@ -114,10 +114,11 @@ def aff(s, i, b, c):
     return {"affine": [s, i, b, c]}
 
 
-def finish(P: Program, root: Body, ret_node: int) -> dict:
+def finish(P: Program, root: Body, ret_node: int, theta: tuple[int, ...] = ()) -> dict:
+    """The instance: every other root node in IU 0, and θ the inputs `theta`, which a read then doesn't count."""
     P.composite("R_v1", root, V(8), aff("n", ret_node, 0, 1))
     owner = ["input" if k in root.inputs else 0 for k in range(len(root.nodes))]
-    return {"program": P.text(), "theta": [], "owner": owner, "gamma": 10, "alpha": [8, 1]}
+    return {"program": P.text(), "theta": list(theta), "owner": owner, "gamma": 10, "alpha": [8, 1]}
 
 
 def passscan(n: int, read: bool = True) -> dict:
@@ -156,26 +157,26 @@ def passbatch(n: int, how: str) -> dict:
 
 
 def swap(n: int) -> dict:
-    """A carry `(V8, V16)` from two inputs, the step returning it swapped; a gate reads the final carry's leaf 0, the
-    `V8` input after an even number of iterations and the `V16` one after an odd number."""
+    """A carry of two leaves from inputs `a` and `b` (in θ), the step returning it swapped; a gate reads the final
+    carry's leaf 0, `a` after an even number of iterations (8 novel bits) and `b` after an odd number (none)."""
     P = Program()
     root = Body(P, [])
-    x8, x16 = root.input(8), root.input(16)
-    ct = Tup(V(8), V(16))
+    xa, xb = root.input(8), root.input(8)
+    ct = Tup(V(8), V(8))
     step = P.composite("Swap_v1", Body(P, [ct]), Tup(ct, Tup()), {"explicit": [["p", 0, 1], ["p", 0, 0]]})
-    init = {"concat": [aff("n", x8, 0, 1), aff("n", x16, 0, 1)]}
+    init = {"concat": [aff("n", xa, 0, 1), aff("n", xb, 0, 1)]}
     s = root.node("scan", step, [root.arg(init, ct)], Tup(ct, A(n, Tup())), n, n_xs=0)
     g = root.node("primitive", P.prim("Op8_v1", [V(8)], V(8)), [root.arg(aff("n", s, 0, 1), V(8))], V(8))
-    return finish(P, root, g)
+    return finish(P, root, g, (xb,))
 
 
 def exit_xs(n: int) -> dict:
-    """A carry of three leaves from inputs of widths 8, 16 and 32, shifted down one place an iteration, the last filled
-    from the iteration's `xs` row, a batch of `n` members of `W` sharing a `V64` input; a gate reads the final carry's
-    leaf 0: the `xs` row of iteration `n - 3`, or for `n < 3` the initial carry's leaf `n`."""
+    """A carry of three leaves from three inputs, shifted down one place an iteration, the last filled from the
+    iteration's `xs` row, a batch of `n` members of `W` sharing a fourth input, in θ; a gate reads the final carry's
+    leaf 0: the `xs` row of iteration `n - 3` (no novel bits), or for `n < 3` the initial carry's leaf `n` (8)."""
     P = Program()
     root = Body(P, [])
-    xs = [root.input(w) for w in (8, 16, 32, 64)]
+    xs = [root.input(8) for _ in range(4)]
     w = P.composite("W_v1", Body(P, [V(8)]), V(8), aff("p", 0, 0, 1))
     b = root.node("batch", w, [root.arg(aff("n", xs[3], 0, 1), V(8))], A(n, V(8)), n, axes=[None])
     ct = Tup(V(8), V(8), V(8))
@@ -185,57 +186,59 @@ def exit_xs(n: int) -> dict:
     s = root.node("scan", step, [root.arg(init, ct), root.arg(aff("n", b, 0, n), A(n, V(8)))],
                   Tup(ct, A(n, Tup())), n, n_xs=1)
     g = root.node("primitive", P.prim("Op8_v1", [V(8)], V(8)), [root.arg(aff("n", s, 0, 1), V(8))], V(8))
-    return finish(P, root, g)
+    return finish(P, root, g, (xs[3],))
 
 
 def carry_read(n: int, xs: bool) -> dict:
-    """A step with a gate reading its carry's leaf 0. Without `xs`: a carry `(V8, V16)` from two inputs that the step
-    returns as `(c[1], c[1])`, so every iteration after the first reads the `V16` input; with `xs`: a carry `V8` the step
-    returns from its `xs` row, a batch of `n` members of `W` sharing a `V32` input."""
+    """A step with a gate reading its carry's leaf 0, the first iteration's an input in θ. Without `xs`: a carry of two
+    leaves from inputs `a` (in θ) and `b` that the step returns as `(c[1], c[1])`, so every iteration after the first
+    reads `b`; with `xs`: a carry of one leaf from `a` the step returns from its `xs` row, a batch of `n` members of `W`
+    sharing `b`. Either way, 8 novel bits, which only the iterations after the first read."""
     P = Program()
     root = Body(P, [])
     op = P.prim("Op8_v1", [V(8)], V(8))
+    xa, xb = root.input(8), root.input(8)
     if not xs:
-        x8, x16 = root.input(8), root.input(16)
-        ct = Tup(V(8), V(16))
+        ct = Tup(V(8), V(8))
         sb = Body(P, [ct])
         sb.node("primitive", op, [sb.arg(aff("p", 0, 0, 1), V(8))], V(8))
         step = P.composite("Step_v1", sb, Tup(ct, Tup()), {"explicit": [["p", 0, 1], ["p", 0, 1]]})
-        init = {"concat": [aff("n", x8, 0, 1), aff("n", x16, 0, 1)]}
+        init = {"concat": [aff("n", xa, 0, 1), aff("n", xb, 0, 1)]}
         s = root.node("scan", step, [root.arg(init, ct)], Tup(ct, A(n, Tup())), n, n_xs=0)
     else:
-        x8, x32 = root.input(8), root.input(32)
         w = P.composite("W_v1", Body(P, [V(8)]), V(8), aff("p", 0, 0, 1))
-        b = root.node("batch", w, [root.arg(aff("n", x32, 0, 1), V(8))], A(n, V(8)), n, axes=[None])
+        b = root.node("batch", w, [root.arg(aff("n", xb, 0, 1), V(8))], A(n, V(8)), n, axes=[None])
         sb = Body(P, [V(8), V(8)])
         sb.node("primitive", op, [sb.arg(aff("p", 0, 0, 1), V(8))], V(8))
         step = P.composite("Step_v1", sb, Tup(V(8), Tup()), aff("p", 1, 0, 1))
-        s = root.node("scan", step, [root.arg(aff("n", x8, 0, 1), V(8)), root.arg(aff("n", b, 0, n), A(n, V(8)))],
+        s = root.node("scan", step, [root.arg(aff("n", xa, 0, 1), V(8)), root.arg(aff("n", b, 0, n), A(n, V(8)))],
                       Tup(V(8), A(n, Tup())), n, n_xs=1)
     g = root.node("primitive", op, [root.arg(aff("n", s, 0, 1), V(8))], V(8))
-    return finish(P, root, g)
+    return finish(P, root, g, (xa,))
 
 
 def xs_part(n: int) -> dict:
     """A step with a gate reading leaf 1 of its `xs` row `(V8, V8)`, the rows a batch of `n` members of `W2`, which
-    returns its input and its input passed through `W`, sharing a `V16` input."""
+    returns its first input, in θ, and its second passed through `W`, both shared: 8 novel bits from leaf 1, none from
+    leaf 0, and 8 from the initial carry, which the last gate reads."""
     P = Program()
     root = Body(P, [])
-    x8, x16 = root.input(8), root.input(16)
+    x8, xa, xb = root.input(8), root.input(8), root.input(8)
     op = P.prim("Op8_v1", [V(8)], V(8))
     w = P.composite("W_v1", Body(P, [V(8)]), V(8), aff("p", 0, 0, 1))
-    w2b = Body(P, [V(8)])
-    w2b.node("call", w, [w2b.arg(aff("p", 0, 0, 1), V(8))], V(8))
+    w2b = Body(P, [V(8), V(8)])
+    w2b.node("call", w, [w2b.arg(aff("p", 1, 0, 1), V(8))], V(8))
     row = Tup(V(8), V(8))
     w2 = P.composite("W2_v1", w2b, row, {"concat": [aff("p", 0, 0, 1), aff("n", 0, 0, 1)]})
-    b = root.node("batch", w2, [root.arg(aff("n", x16, 0, 1), V(8))], A(n, row), n, axes=[None])
+    b = root.node("batch", w2, [root.arg(aff("n", xa, 0, 1), V(8)), root.arg(aff("n", xb, 0, 1), V(8))], A(n, row), n,
+                  axes=[None, None])
     sb = Body(P, [V(8), row])
     sb.node("primitive", op, [sb.arg(aff("p", 1, 1, 1), V(8))], V(8))
     step = P.composite("Step_v1", sb, Tup(V(8), Tup()), aff("p", 0, 0, 1))
     s = root.node("scan", step, [root.arg(aff("n", x8, 0, 1), V(8)), root.arg(aff("n", b, 0, 2 * n), A(n, row))],
                   Tup(V(8), A(n, Tup())), n, n_xs=1)
     g = root.node("primitive", op, [root.arg(aff("n", s, 0, 1), V(8))], V(8))
-    return finish(P, root, g)
+    return finish(P, root, g, (xa,))
 
 
 #: (id, mode, the instance at n, small n, big n)
