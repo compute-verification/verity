@@ -41,6 +41,10 @@ A spec-level reference for network accounting's timing channel:
   failing closed);
 - the capacity counts;
 - the calibration of honest runs;
+- advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
+  rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one
+  canonical bit string the compiler reads, refused unless it is a schedule vLLM could have run, with its bits charged
+  to the earliest egress window that can show each record (`bits`);
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
   buckets before;
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
