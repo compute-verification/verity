@@ -43,18 +43,20 @@ G = load("pearl_c_sm90_grouped", HERE / "grouped.py")
 
 class RecordingDev:
     """What `run.Pipeline`, `grouped.Grouped` and the run touch of `run.Dev`, recording each launch (name, grid, block, dynamic
-    shared memory, stream, pointers, ints); its attribute reads get an H100's opt-in shared memory and no static shared memory."""
+    shared memory, stream, pointers, ints) and each kernel's maximum dynamic shared memory set (``max_dyn``); its attribute
+    reads get an H100's opt-in shared memory and no static shared memory."""
 
     sms, dev = 132, 0
 
     def __init__(self):
-        self.stream, self.log, self.n = None, [], 0
+        self.stream, self.log, self.n, self.max_dyn = None, [], 0, {}
 
     def launch(self, name, grid, block, smem=0, p=(), i=(), stream=None):
         self.log.append((name, grid, block, smem, self.stream if stream is None else stream, tuple(p), tuple(i)))
 
-    def ck(self, *_):
-        pass
+    def ck(self, f, *a):
+        if f == "cuFuncSetAttribute" and a[1] == R.MAX_DYN:
+            self.max_dyn[a[0]] = a[2]
 
     def get(self, f, *_):
         return {"cuDeviceGetAttribute": 232448, "cuFuncGetAttribute": 0}[f]
@@ -195,6 +197,7 @@ def test_a_call_is_eight_launches_whatever_its_experts(counts):
     assert by["pd_commit_gm_851"][5:] == ((b["meta"], b["meta"] + G.Grouped.map_at(us)), (G.REC,))
     groups = max(R.cdiv(u.m16, 64) * R.cdiv(n // 64, G.TILES_GW) for u in us)
     assert by["pd_tiles_gw_979"][1:4] == ((groups, len(us)), 32 * G.TILES_GW, R.PD_PAIR_SMEM // 2)
+    assert dev.max_dyn["pd_tiles_gw_979"] == R.PD_PAIR_SMEM // 2
     assert by["pd_tiles_gw_979"][5:] == ((b["meta"] + G.TILES_AT,), (G.REC,))
     assert by["stats_s5"][6] == (rows, k) and by["eprime"][6] == (rows,) and by["pa"][6] == (rows,)
     assert by["form_s5_g"][1] == (k // 128, rows // 64) and by["form_s5_g"][5][3:] == (b["fa_codes"], b["at"], ex)

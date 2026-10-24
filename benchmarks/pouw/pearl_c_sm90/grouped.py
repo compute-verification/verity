@@ -137,11 +137,14 @@ def pd_smem(R, dev, name: str) -> int:
 
 
 def setup(R, dev) -> None:
-    """`run.pd_setup`, and pd_commit_g's and pd_commit_gm's dynamic shared memory (`pd_smem`)."""
+    """`run.pd_setup`, pd_commit_g's and pd_commit_gm's dynamic shared memory (`pd_smem`), and pd_tiles_gw's maximum at its
+    PD_PAIR_SMEM / 2, which with its static digests (33 KiB) is past the 48 KiB a launch gets without it."""
     R.pd_setup(dev)
     if getattr(dev, "pd_smem_g", None) is None:
         names = [f"pd_commit_g_{PD}", *([f"pd_commit_gm_{PD}"] if has(dev, f"pd_commit_gm_{PD}") else [])]
         dev.pd_smem_g = min(pd_smem(R, dev, name) for name in names)
+        if has(dev, f"pd_tiles_gw_{TILES_PD}"):
+            dev.ck("cuFuncSetAttribute", dev.fn(f"pd_tiles_gw_{TILES_PD}"), R.MAX_DYN, R.PD_PAIR_SMEM // 2)
 
 
 def has(dev, name: str) -> bool:
