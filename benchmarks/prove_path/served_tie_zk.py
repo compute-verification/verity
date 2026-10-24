@@ -3,6 +3,7 @@ knowledge: the window's P / G units by C-Flock `prove --zk` behind the Lean fire
 N2-ZK's audit path (`benchmarks/network_traces/n2_zk.py`: its stager, firewall and received-pieces scan); and the cost.
 
     python benchmarks/prove_path/served_tie_zk.py cost [--out DIR]
+    python benchmarks/prove_path/served_tie_zk.py build --class slice|9c10|served --g G [--out DIR]
     python benchmarks/prove_path/served_tie_zk.py prove --serve-run DIR --window K [--g G] [--blocks all|executed] [--per N]
       --bin flock-circuit --lean flock-verify --out DIR [--dry]
 
@@ -10,6 +11,7 @@ N2-ZK's audit path (`benchmarks/network_traces/n2_zk.py`: its stager, firewall a
   9c10's (R 8, P 256, IW 16, L 512, T 2048) and at the served class (T 8192, R 256, L 131072), each beside the all-pairs
   form's count it replaces (``all_pairs``), and a unit's C-Flock block (``zk_block``): its rows' in-circuit hashing, not
   the tie's ANDs, sets it, since every unit hashes the window's whole ``srv`` row and each step's T·PB bytes of positions.
+* **build**: a class's unit at G steps built as a Definition, and each Definition it calls, with seconds and peak RSS.
 * **prove**: the window and the rows as `served_tie_window` opens and binds them natively (``bindings``). Statements of
   one template, block j of G steps a unit:
   - ``window-i``: the honest window's blocks, each once (Selection All: every unit drawn), at most ``--per`` a statement;
@@ -113,6 +115,37 @@ def cost(a) -> int:
     if a.out:
         Path(a.out).mkdir(parents=True, exist_ok=True)
         (Path(a.out) / "cost.json").write_text(json.dumps(out, indent=1))
+    return 0
+
+
+def build(a) -> int:
+    """One class's unit at G steps built as a Definition, with every Definition it calls once: each one's gates, the
+    seconds its body took and the process's peak RSS after it."""
+    import resource
+
+    st = {**CLASSES[a.cls], "G": a.g}
+    t0, seen, rows = time.time(), set(), []
+
+    def walk(d) -> None:
+        if d.id in seen:
+            return
+        seen.add(d.id)
+        t = time.time()
+        body = d.body
+        rows.append({"definition": d.id, "gates": d.gates, "seconds": round(time.time() - t, 1),
+                     "peak_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2 ** 20, 2)})
+        log(f"{a.cls} G {a.g}: {rows[-1]}")
+        for n in body.nodes:
+            if n.form == "call":
+                walk(n.fn)
+
+    walk(ST.unit(**st))
+    out = {"class": a.cls, "statics": st, "unit_ands": ST.size(**st)["ands"], "definitions": rows,
+           "seconds": round(time.time() - t0, 1), "peak_gb": max(r["peak_gb"] for r in rows)}
+    log(f"{a.cls} G {a.g}: built in {out['seconds']} s at {out['peak_gb']} GB peak")
+    if a.out:
+        Path(a.out).mkdir(parents=True, exist_ok=True)
+        (Path(a.out) / f"build-{a.cls}-G{a.g}.json").write_text(json.dumps(out, indent=1))
     return 0
 
 
@@ -407,6 +440,10 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="command", required=True)
     c = sub.add_parser("cost", help="the routed tie's ANDs at the slice's, 9c10's and the served class")
     c.add_argument("--out")
+    b = sub.add_parser("build", help="one class's unit and the Definitions it calls built: seconds and peak RSS")
+    b.add_argument("--class", dest="cls", choices=tuple(CLASSES), required=True)
+    b.add_argument("--g", type=int, required=True, help="steps a unit")
+    b.add_argument("--out")
     p = sub.add_parser("prove", help="a sealed window's units proved --zk and held by Lean")
     p.add_argument("--serve-run", type=Path, required=True)
     p.add_argument("--window", type=int, required=True)
@@ -421,7 +458,7 @@ def main(argv=None) -> int:
     p.add_argument("--delta", type=float, default=2.0 ** -20)
     p.add_argument("--dry", action="store_true", help="the window, its units and their references only")
     a = ap.parse_args(argv)
-    return cost(a) if a.command == "cost" else prove(a)
+    return {"cost": cost, "build": build, "prove": prove}[a.command](a)
 
 
 if __name__ == "__main__":
