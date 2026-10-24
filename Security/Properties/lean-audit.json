@@ -7942,13 +7942,13 @@
    ]
   },
   "Properties.RemoteAudit.Line": {
-   "digest": "b3797f5f611c4911287a1f65d751415505a640251cccb32c269cc1488e513b7f",
+   "digest": "a6cf10dcc00e6d25f3ead42bd16be4466d8dda0f03f91db3689c0c568fff7746",
    "definitions": {
     "Properties.RemoteAudit.Line.Credits": "9eec9eb1330187d597bef59966923e5ccf2461e6b517b9ffe07fbd35fba6844d",
     "Properties.RemoteAudit.Line.HeldAt": "5af243528466ee1f818da31f0b9632e466c6bef20c824495d5d167eff2579285",
     "Properties.RemoteAudit.Line.LineChecked": "1c5505e0b300c71854bafd0ede4feac0aea5016477e28030deb3bc4f7989742a",
-    "Properties.RemoteAudit.Line.LineHeld": "789ecd24c331535bc8a4f65eacbb840a9eb245ce0438afbb597cbce4aeed8f13",
-    "Properties.RemoteAudit.Line.LineHeldIdentity": "064ace457092722b34264e87075c733022041d3f796a1d83d5b60e8ffe94da60",
+    "Properties.RemoteAudit.Line.LineHeld": "672bf3e6ea93d043247153f5130d84743328d5ea739b08e6fcd4e24f022dd5e4",
+    "Properties.RemoteAudit.Line.LineHeldIdentity": "bb311b9c0524354f52339c1c789c4217ff460381e37fcfcf5e6b967bc2c323c4",
     "Properties.RemoteAudit.Line.StretchBound": "d2fd1511c22acab992d17179d4063bc8e30948b86d21f2b7efb8275a13b59b95"
    },
    "guarantees": [
@@ -7959,12 +7959,10 @@
    ]
   },
   "Properties.RemoteAudit.Line.Premises": {
-   "digest": "f7ccfd256c9f6d0c8cf4a854b090db300ed2f983151e48784e9b4bec1a72a639",
+   "digest": "288f88b8bf2c8a0c485ef6bc723cacb63ca5607b3e903a2af4f6a31007458833",
    "definitions": {
-    "Properties.RemoteAudit.Line.DeltaOfNode": "3eba8ea28f2557a8924aaf786845486f0f8dbfb2c264eae7c86adbbd2f72db34",
     "Properties.RemoteAudit.Line.DrawsOfRecord": "9bb438c6fb77516ff81d7ffda897b9e5375a9c479692f9b4a6d0a02db498bad4",
     "Properties.RemoteAudit.Line.Registered": "7c773414aca257d4e824b995ad666c83efa6f99c5da980456cf89fd6cdb80f3d",
-    "Properties.RemoteAudit.Line.VerdictOfRecord": "756088b3767255fa604ddde3ebdf5594338a61a3a7ecf6857eb020e22f6e0da9",
     "Properties.RemoteAudit.Line.WindowsOfRecord": "d2adcdd9f2ff1e505fd25a1a4d964455ee06cb1c81e65571e757a678194b8dba"
    },
    "guarantees": [
@@ -7973,14 +7971,14 @@
    ]
   },
   "Properties.RemoteAudit.Line.Record": {
-   "digest": "ebde38b26899b0572be5a8b144a77e69f08187badbaec395bdaa9908d70d3349",
+   "digest": "fee1ef9dee9b15229043c102b8131e6aa07e395893ccac0721407a2c76fb8727",
    "definitions": {
-    "Properties.RemoteAudit.Line.Node": "c3a6a24117908c6a9b2b842508cd7301e739ecd78d0ab0a766634a7dccb703e2",
+    "Properties.RemoteAudit.Line.Node": "1194f476391df9c66961bc505f6761e1842c167954355786c66cfbcc396f0c1a",
     "Properties.RemoteAudit.Line.Node.blockBytes": "f524d416457d24d143e21fc21c677bc42d3e688063d80b20b2964a5998ad2701",
     "Properties.RemoteAudit.Line.Node.blocks": "930c8ca95cdf231c0fbd59e7444ef48cae87674262d9a9ae9d66918f83e2a1f6",
     "Properties.RemoteAudit.Line.Node.chipBlocks": "8e365e636bfc9c0ac102c9952fb9605035dc2e5c0cd8f10ffd28c57a81fdc341",
     "Properties.RemoteAudit.Line.Node.chipBytes": "58375f92761184373d1bf107a344f6c36d50c30a7a01df938da99ea3f7624e66",
-    "Properties.RemoteAudit.Line.Node.delta": "37d022b26096871382fe27c8abc6864378eb8def489b12e7307095ec9b78bad0",
+    "Properties.RemoteAudit.Line.Node.delta": "7283e36705e42d27aadcc75e295f5e8b18e93ffad5f16fa7b01e969eab9063dd",
     "Properties.RemoteAudit.Line.Node.disk": "42bf6c5f5fa13bcb5789610d468b1551a2662d617b11612210b64adbb8bf3437",
     "Properties.RemoteAudit.Line.Node.diskBurst": "a0238dd94ef277cc35af69264acd222f97892217158be9208d310b2851edf6e5",
     "Properties.RemoteAudit.Line.Node.encode": "4c613ec0176768cc81a6ef886900e8c8a0d13dd1984c847f87c774291e67f485",
@@ -8004,7 +8002,8 @@
     "Properties.RemoteAudit.Line.Verified": "9a4e283de281f41029fefbcb3b160e5d0e1f04be395432ec5c08ab0d273aabf4",
     "Properties.RemoteAudit.Line.ended": "ed2fd8c554b8b5389272a0a564f5f76506bbb3b345e2f1d7613bce2aacfc4b90",
     "Properties.RemoteAudit.Line.firstPass": "bf9a98a4c7254d3528dbcdf163f01f5d13f40bf9dafdd41a19e82ae33849cc7b",
-    "Properties.RemoteAudit.Line.lineOf": "a49d90df49c1e9d38af74a5e14dc12904d2985de74e610fca4d021e15e793c90",
+    "Properties.RemoteAudit.Line.lineOf": "64bddb9a416397978cda0e100dc1032dbb0720f61e9642fc2760963d43c6f640",
+    "Properties.RemoteAudit.Line.ofRecord": "3a2555e2ec5d9065017d2a9c1faa6745d6e2b392bc73998c1632f53e052d493a",
     "Properties.RemoteAudit.Line.recordPace": "fb6aea768a63dcc9ce1f1e26d865ae6d8c996d7973affe12ef978690cdcbbc8b",
     "Properties.RemoteAudit.Line.released": "aa4c0e9650f0b709d54c8d67184b2d817882506059c4d3911b5b57a581e66c97",
     "Properties.RemoteAudit.Line.spanStart": "5abeb3e47b0228283062b5aa31507abf65ad01d964a30e39c7d247a3f8401e39",
