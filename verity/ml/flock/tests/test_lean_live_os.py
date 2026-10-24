@@ -57,7 +57,7 @@ def sessions(tmp_path_factory):
 
     store = tmp_path_factory.mktemp("store")
     try:
-        root, circuit = ci.fetch(FIXTURE, store), ci.fetch(CIRCUIT, store)
+        root, circuit = ci.fetch_sessions(FIXTURE, store), ci.fetch(CIRCUIT, store)
     except (subprocess.CalledProcessError, OSError) as e:
         pytest.skip(f"the evidence store is not reachable: {e}")
     pin = (root / "stage" / "circuit.sha512").read_text().split()[0]

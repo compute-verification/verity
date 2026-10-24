@@ -45,7 +45,7 @@ def verdicts(tmp_path_factory):
     import ci
 
     try:
-        root = ci.fetch(FIXTURE, tmp_path_factory.mktemp("store"))
+        root = ci.fetch_sessions(FIXTURE, tmp_path_factory.mktemp("store"))
     except (subprocess.CalledProcessError, OSError) as e:
         pytest.skip(f"the evidence store is not reachable: {e}")
     subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
