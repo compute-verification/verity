@@ -29,7 +29,9 @@ registered served roots (`RowsSession.ServedRegistered`), which the reads built 
 give, and two named premises: the
 lanes' and the combine's circuits compute their pieces' compositions on bits, at their port rows, read through the
 layout's decodes (`Accounting.TS.Lanes.LaneLowers` and `CombineLowers` at `Lanes.decL`, `Lanes.decC`; the lane's dequant
-is its Definition's word view, `Pouw.H1Zy.zyDequant` (`PouwZyDequant_v1`), and its chain words `chain` are a parameter; the complete check makes those rows the registered reads). That the pieces'
+is its Definition's word view, `Pouw.H1Zy.zyDequant` (`PouwZyDequant_v1`), and its chain words are `h1tile._chain`'s,
+`Accounting.TS.Lanes.laneChain K nw` (`Pouw.H1Zy.h1Chain K` at the `pub` row's seeds); the complete check makes those
+rows the registered reads). That the pieces'
 lowerings compose to the Definitions is proved (`Accounting.TS.Lanes.laneComputes_of_lowers`,
 `combineComputes_of_lowers`, `Pouw.H1Zy.laneBits_bv`, `combineBits_bitsOf`), and that
 each Definition's `ok = 1` means the lane's or the combine's check
@@ -69,7 +71,7 @@ each a session `sess₀ x w i k` (#2909's `RowsSession`) at its registrants' ope
 built from `own` (`RowsSession.canon`: each unit reads its row of every circuit port `own` names, through `own`'s first
 port of that name at that port's one position, the registrants committing only the rows, salts and paths, each opening
 `own`'s root there), with outcomes `out x w i k`, and the leaf layer
-`leafLayer sess out known full want (dqOf Pouw.H1Zy.zyDequant) (partOf chain) pub receiptOf leafOf right` (accepted where flock-verify `--zk --registered` accepts all
+`leafLayer sess out known full want (dqOf Pouw.H1Zy.zyDequant) (partOf (laneChain K nw)) pub receiptOf leafOf right` (accepted where flock-verify `--zk --registered` accepts all
 33 sessions, its known-content check at `known x w i k = knownOf (pub x w i) (salts x w i k) k`, the rows of the path's
 public inputs `pub x w i` (`PouwWindow.Lanes.knownRows`) under any salts, and its complete check
 (`Flock.Registered.checkComplete`, run when the `--registered` file sets `complete`: every port of the circuit is a port
@@ -97,10 +99,11 @@ $$n \cdot (\varepsilon_{ks} + \delta_{link} + \delta_{rows} + q_R^2/2^{513}) \le
 their pieces' compositions on bits, at their port rows through the layout's decodes at
 the served tile (`Accounting.TS.Lanes.LaneLowers` at `servedTile K`: the s8 multiply's Baugh–Wooley steps and clamp,
 `PouwZyCell_v2`, `PouwMuxBit_v2`, `PouwMask32_v2` and `PouwEq32_v2` at their lowerings, `Pouw.H1Zy.laneBits`, at the
-lanes' chain words `chain` and the dequant's Definition `Pouw.H1Zy.zyDequant` (`PouwZyDequant_v1`) on bits; and `Accounting.TS.Lanes.CombineLowers` at `decC nw (servedTile K)`: `PouwXor32_v2`, `PouwEq32_v2` and
+lanes' chain words `laneChain K nw` (`Pouw.H1Zy.h1Chain K`, the fx1 chain over the noise from σ_J keyed from σ_R, at
+the `pub` row's salt, position and roots) and the dequant's Definition `Pouw.H1Zy.zyDequant` (`PouwZyDequant_v1`) on bits; and `Accounting.TS.Lanes.CombineLowers` at `decC nw (servedTile K)`: `PouwXor32_v2`, `PouwEq32_v2` and
 `PouwAndBit_v2` at their lowerings, `Pouw.H1Zy.combineBits`; under the complete check every port the
 decodes read is registered and opens at its registered root), with the unit's served checks at the Definition's own
-dequant and partials (`dqOf Pouw.H1Zy.zyDequant`, `partOf chain`), each
+dequant and partials (`dqOf Pouw.H1Zy.zyDequant`, `partOf (laneChain K nw)`), each
 proof is accepted with a committed leaf that
 fails the unit's served checks on the path, and no clash of its sessions' registrants' records or of their
 known-content ties, with probability at most `33 δ`. That each circuit names each port once and has a port `o0` that
@@ -119,7 +122,6 @@ def LeafLanesSound : Prop :=
     let sess := fun x w i k => (sess₀ x w i k).canon (op x w i k)
     ∀ (out : ∀ x w i k, (sess x w i k).Out)
     (salts : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → String → ByteArray)
-    (chain : LanePub → Fin 32 → (Fin 4 → Fin K → BitVec 8) → (Fin 8 → Fin K → BitVec 8) → Fin nw → BitVec 32)
     (pub : Paths Ω S → Fin S → Fin nπ → LanePub)
     (roots : Paths Ω S → Fin S → Fin nπ → String → _root_.Flock.Registered.Port)
     (place : Paths Ω S → Fin S → Fin nπ → String → String × ℕ)
@@ -127,12 +129,12 @@ def LeafLanesSound : Prop :=
     (∀ x w i k, (sess x w i k).CR) →
     (∀ k, Accounting.Assumptions.TS.WindowLaw (fun x w i => sess x w i k) (fun x w i => out x w i k)) →
     (∀ x w i k, ((sess x w i k).n : ℝ≥0∞) * (sess x w i k).bound ≤ ENNReal.ofReal δ) → 0 ≤ δ →
-    (∀ x w i, LaneLowers (servedTile K) chain Pouw.H1Zy.zyDequant (sess x w i)) →
+    (∀ x w i, LaneLowers (servedTile K) (laneChain K nw) Pouw.H1Zy.zyDequant (sess x w i)) →
     (∀ x w i, CombineLowers (sess x w i) (decC nw (servedTile K))) →
     (leafLayer sess out (fun x w i k => knownOf (pub x w i) (salts x w i k) k)
       (fun _ _ _ k => PouwWindow.Lanes.readFull (servedTile K) (k.map Fin.val))
       (fun x w i k => PouwWindow.Lanes.ownOf (roots x w i) (place x w i) (servedTile K) (k.map Fin.val))
-      (dqOf Pouw.H1Zy.zyDequant) (partOf chain) pub
+      (dqOf Pouw.H1Zy.zyDequant) (partOf (laneChain K nw)) pub
       (fun x w i => receiptOf nw (servedTile K) (sess x w i)) (fun x w i => leafOf K (servedTile K) (sess x w i))
       right).SoundAt
       (33 * δ)
