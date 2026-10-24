@@ -188,7 +188,8 @@ class Plan:
             return cls(tuple(tuple(r) if type(r) is list else r for r in rows) if type(rows) is list else rows, blocks)
         if not 1 <= len(view) < 1 << 32:
             raise ValueError(_RUNS)
-        flat = view.cast("B").cast(view.format)
+        raw = view.cast("B")
+        flat = raw.cast(view.format)
         firsts, counts = flat[0::2].tolist(), flat[1::2].tolist()
         ends = list(map(operator.add, firsts, counts))
         if min(firsts) < 0 or min(counts) < 1 or max(ends) > blocks:
@@ -197,11 +198,16 @@ class Plan:
             raise ValueError(_CONTINUED)
         if any(map(operator.gt, sorted(ends), itertools.islice(sorted(firsts), 1, None))):
             raise ValueError(_DISJOINT)
-        words = array("Q", flat.tolist())
+        words = array("Q")
+        if view.itemsize == words.itemsize:
+            words.frombytes(raw)  # every word is nonnegative now, so a signed one's bytes are its u64's
+        else:
+            words.extend(flat.tolist())
+        native_firsts = words[0::2]
         if sys.byteorder == "little":
             words.byteswap()
         plan = object.__new__(cls)
-        plan._set(blocks, len(firsts).to_bytes(4, "big") + words.tobytes(), array("Q", firsts),
+        plan._set(blocks, len(firsts).to_bytes(4, "big") + words.tobytes(), native_firsts,
                   array("Q", itertools.accumulate(counts)), None)
         return plan
 
