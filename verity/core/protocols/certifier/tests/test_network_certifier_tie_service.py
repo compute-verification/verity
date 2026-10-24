@@ -26,6 +26,7 @@ from verity.core.protocols.sampled_proofs.one_stage import registration as R
 
 import signers
 import standin
+from advised_traffic import StandInClocks
 
 B = 512
 SHAPE = Q.Shape(B, 4, 2, 1)
@@ -146,7 +147,7 @@ def test_the_advised_link_reads_the_tie_only_from_its_source_of_record(tmp_path)
 
     def views(name, source):
         lw = SVC.LinkWindows(name, egress, sync_set, key, RUN, signers.SESSION, ingress=ingress, proof_deadline=60.0,
-                             advised=PROFILE, ties=source)
+                             advised=PROFILE, ties=source, clocks=StandInClocks(tuple(syncs)))
         return [lw._view(w, syncs, advice) for w in range(2)]
 
     assert None not in views(LINK, ties)

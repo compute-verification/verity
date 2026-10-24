@@ -51,9 +51,10 @@ def _ends(adv, received, certified=None):
 
 
 def _view(adv, received, sync=ONE, sync_set=ONLY_ONE, T_=T, certified=None):
-    """`advised.view` of `adv`'s window 0 under the verdict `_ends` reads."""
+    """`advised.view` of `adv`'s window 0 under the verdict `_ends` reads, on a window the certifier ran under
+    `sync`."""
     link = AD.LinkAdvice(adv, received)
-    return AD.view(link, 0, T_, R, [sync], sync_set, FRAMING, **held(link, certified))
+    return AD.view(link, 0, T_, R, [sync], sync_set, FRAMING, clocks=[sync], **held(link, certified))
 
 
 def _accepts(adv, received, ingress, egress, sync=ONE, sync_set=ONLY_ONE, own=OWN, certified=None):
@@ -131,7 +132,8 @@ def test_no_declared_sync_releases_a_frame_before_its_requests_last_frame():
         _view(_advice((4,)), received, ClockSync(0, 1), SyncSet((2,), (1,)))
     later = AD.LinkAdvice(_advice((T + 3,)), (2, 0))
     with pytest.raises(ValueError, match="Σ_sync"):
-        AD.view(later, 0, T, R, [ONE, ClockSync(0, 1)], ONLY_ONE, FRAMING, **held(later))
+        AD.view(later, 0, T, R, [ONE, ClockSync(0, 1)], ONLY_ONE, FRAMING, clocks=[ONE, ClockSync(0, 1)],
+                **held(later))
 
 
 def test_bucket_zero_is_capped_at_rin_with_the_certifiers_own_frame():

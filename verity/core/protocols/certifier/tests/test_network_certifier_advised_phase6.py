@@ -20,7 +20,7 @@ from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.certifier.service import LinkWindows
 
 import signers
-from advised_traffic import LINK, StandInTie, held
+from advised_traffic import LINK, StandInClocks, StandInTie, held
 
 T, R, RIN = 4, 32, 9
 #: CERT-VARLEN's id-request framing at B = 4096 (`active.id_request_frames`): a prompt of up to 337 tokens is one
@@ -43,7 +43,7 @@ def _one_prefill(prompt_lens, release):
 
 
 def _view(link, tie):
-    return AD.view(link, 0, T, R, [SYNC], SS, RF, **tie)
+    return AD.view(link, 0, T, R, [SYNC], SS, RF, clocks=[SYNC], **tie)
 
 
 def _accepts(link, ingress, egress, own=0, certified=None, tie=None):
@@ -101,7 +101,8 @@ def _phase6_link(key, ties):
     """A link of this case's shape (T = 4, R = 32, R_in = 9, one window, the B = 4096 framing) whose verifier's tie
     source is `ties`."""
     return LinkWindows(LINK, GridParams(T, R, 1), SS, key, "r-phase6", signers.SESSION, ingress=GridParams(T, RIN, 1),
-                       proof_deadline=60.0, advised=AD.AdvisedProfile(1, RF, 0), ties=ties)
+                       proof_deadline=60.0, advised=AD.AdvisedProfile(1, RF, 0), ties=ties,
+                       clocks=StandInClocks((SYNC,)))
 
 
 def test_a_verdict_the_prover_builds_never_reaches_the_verifier_of_record(tmp_path):

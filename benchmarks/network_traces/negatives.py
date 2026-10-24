@@ -841,10 +841,11 @@ def stated(advised):
 
 
 def _n2_view(AD, advised, window: int, T: int, R: int, syncs, sync_set, request_frames):
-    """`advised.view` of the (link, tie) `n2_advice` gives, held to `N2_LINK` and its stand-in registrations."""
+    """`advised.view` of the (link, tie) `n2_advice` gives, held to `N2_LINK` and its stand-in registrations, on
+    windows the certifier ran under the declared `syncs`."""
     link, tie = advised
     return AD.view(link, window, T, R, syncs, sync_set, request_frames, tie=tie, link_name=N2_LINK,
-                   registrations=n2_registrations(len(link.received)))
+                   registrations=n2_registrations(len(link.received)), clocks=syncs)
 
 
 def advised_codes(advised, window: int, syncs, sync_set, request_frames, T: int, R: int, RIN: int, OWN: int, ingress,
