@@ -456,8 +456,13 @@ and proves that at most `2^c` decision streams are charged `c` bits or fewer ove
 `2^bits`; a scaling keeps the weight, a decision's two outcomes split it, and the finish charges no more than the weight
 pays for, so the weights `2^(−charge)` sum to at most 1. So with advice v1 the advice string's bounds hold with no
 assumption on the charge (`SecurityProofs.EncardAccSeqsWithinLeConstantRateV1`, `SecurityProofs.EncardDecodableWithinLeCompiledV1`,
-`SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1`). What it leaves is that the circuit computes the reference,
-which circuit-check holds `ChargeCount_v1` to; it is not proved in Lean.
+`SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1`). The windows covered are decision-only: their four counts
+are sent as 0, which is `ChargeCount_v1`'s scope. Which slots ask (`en`) is not charged because it is not advice: the
+compile slice, its charge included, is proved on every advised window and never sampled, so `en` is pinned by that
+slice's scan, and the carry across windows is chained from the book's priors (#3801, `charge_chain.check_chain`). The
+one hypothesis left is that `ChargeCount_v1`'s circuit computes Lean's `window`. circuit-check holds the circuit to the
+Python reference, and the Lean is held to that reference by a comparison on random cases (1,200 windows and 400
+sessions, with no mismatch); it is not proved in Lean.
 
 The bound charges the caps `b_w`, not the realized lengths, since a run counts if any advice within the caps explains
 it. The compiler must be registered before the run (`CompilerPrecommitted`), and its frames must read only the advice

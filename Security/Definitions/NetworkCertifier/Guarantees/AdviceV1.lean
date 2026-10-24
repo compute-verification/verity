@@ -17,9 +17,15 @@ outcomes take disjoint sub-intervals, so their weights sum to at most the state'
 from an interval wider than `2^30`, so `2^(−charge) · 2^32` is at most its weight. Summed over every decision stream, the
 weights `2^(−charge)` come to at most 1, and at most `2^c` streams are charged `c` or less.
 
-**What this covers.** The Lean functions are the Python references (`arith_encode.py`'s `reference_charge`), one for one.
-That `ChargeCount_v1`'s circuit computes them is circuit-check's (its Definition is held to the reference), not
-`security`'s.
+**Scope.** Decision-only windows: a window sends its four counts as 0 (`ChargeCount_v1`'s scope). Which slots ask (`en`)
+is not charged because it is not advice: the compile slice, its charge included, is proved on every advised window and
+never sampled, so `en` is pinned by that slice's scan. The carry across windows is chained from the book's priors
+(#3801, `charge_chain.check_chain`).
+
+**What is left, the one hypothesis.** That `ChargeCount_v1`'s circuit computes `AdviceV1.window`. It is not proved in
+Lean: circuit-check holds the circuit to the Python reference (`arith_encode.py`'s `reference_charge`), and the Lean
+functions are that reference one for one, held to it by a comparison on random cases (1,200 windows and 400 sessions,
+accepted and refused, with no mismatch).
 -/
 
 namespace NetTiming.Guarantees
@@ -30,7 +36,9 @@ open AdviceV1
 set_option linter.unusedVariables false
 
 /-- **Advice v1's charge counts (Kraft).** Under any registered book `bk`, with windows of `N` slots, at most `2^c`
-decision streams of `W` windows are charged `c` bits or fewer in all, with no window refused. -/
+decision streams of `W` windows are charged `c` bits or fewer in all, with no window refused. The windows are
+decision-only (their four counts sent as 0), and the charge is `ChargeCount_v1`'s as its Python reference defines it:
+that the circuit computes it is the one hypothesis left (module doc). -/
 def EncardChargedLe : Prop :=
   ∀ (bk : Book) (N W c : ℕ),
     {a : Fin W → List Bool | ∃ ls, charges bk N a = some ls ∧ ls.sum ≤ c}.encard ≤ ((2 ^ c : ℕ) : ℕ∞)
@@ -39,7 +47,8 @@ def EncardChargedLe : Prop :=
 decision streams (`Streams`) and its charge `AdviceV1.bits`, so with no assumption on the charge: the constant-rate
 Program's observation sequences of length `n` (within the `W` windows with advice, and the first `m` windows), with
 jitter below `D`, accepted with advice charged at most `b w` in every window `w`, number at most
-`2^(Σ_w b w) · #Σ_sync^min(W, m) · D^n`. -/
+`2^(Σ_w b w) · #Σ_sync^min(W, m) · D^n`. Decision-only windows, and the circuit's agreement with the reference is the one
+hypothesis left (module doc). -/
 def EncardAccSeqsWithinLeConstantRateV1 : Prop :=
   ∀ {L K S W : ℕ} {In : Type} (bk : Book) (N : ℕ) (b : Fin W → ℕ) (T : ℕ) (ss : SyncSet)
     (frames : List In → Streams bk N W → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In)

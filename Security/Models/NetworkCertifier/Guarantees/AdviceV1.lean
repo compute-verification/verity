@@ -8,6 +8,11 @@ import Models.NetworkCertifier.Guarantees.AdviceString
 and its charge (`AdviceV1.bits`, `ChargeCount_v1{N}`'s count). `BitsCount` is not a premise: advice v1's charge meets it
 under any registered book (`EncardChargedLe`, `Definitions/NetworkCertifier/Guarantees/AdviceV1`). The premises left
 are the wire's (W2, J) and the compiler's (precommitted, deterministic).
+
+The scope and the one hypothesis left are `EncardChargedLe`'s: the windows are decision-only (their four counts sent as
+0), with the asks (`en`) pinned by the always-proved compile slice's scan; and that `ChargeCount_v1`'s circuit computes
+`AdviceV1.window` is not proved in Lean (circuit-check holds the circuit to the Python reference, and the Lean
+definitions are held to that reference by a comparison on random cases).
 -/
 
 namespace NetTiming.Guarantees
@@ -20,7 +25,8 @@ set_option linter.unusedVariables false
 /-- **The leak bound through the wire, with advice v1's charge (W2 and J).** `EncardDecodableWithinLeCompiled` with
 advice v1's decision streams under the registered book `bk` and windows of `N` slots, so with no assumption on the
 charge: a decoder of the wire's first `n` steps recovers at most `2^(Σ_w b w) · #Σ_sync^min(W, m) · D^n` secrets whose
-runs the compiled Program accepts with advice v1 charged at most `b w` in every window `w`. -/
+runs the compiled Program accepts with advice v1 charged at most `b w` in every window `w`. Decision-only windows, and
+the circuit's agreement with the reference is the one hypothesis left (module doc). -/
 def EncardDecodableWithinLeCompiledV1 : Prop :=
   ∀ {L K S W : ℕ} {Z In Act Wire Ω : Type}
     (I : Interaction L K S Z In Act Wire) (T : ℕ) (ss : SyncSet) (bk : Book) (N : ℕ) (b : Fin W → ℕ)
@@ -37,7 +43,8 @@ def EncardDecodableWithinLeCompiledV1 : Prop :=
 
 /-- **The leak bound per window, with advice v1's charge (W2 and J).** `EncardDecodableWithinLeCompiledPerWindow` with
 advice v1's decision streams and charge: over all `W` windows, a decoder of the wire recovers at most
-`∏_w (2^(b w) · #Σ_sync · D^T)` secrets. -/
+`∏_w (2^(b w) · #Σ_sync · D^T)` secrets. Decision-only windows, and the circuit's agreement with the reference is the one
+hypothesis left (module doc). -/
 def EncardDecodableWithinLeCompiledPerWindowV1 : Prop :=
   ∀ {L K S W : ℕ} {Z In Act Wire Ω : Type}
     (I : Interaction L K S Z In Act Wire) (T : ℕ) (ss : SyncSet) (bk : Book) (N : ℕ) (b : Fin W → ℕ)

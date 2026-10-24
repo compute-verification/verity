@@ -14,9 +14,20 @@ each decision at the book's KT estimate for its context `min(run, 2)`, then the 
 the finish. The window's charge is the scalings the coder takes, one segment bit each, and 2 more at the finish of a
 window that used the coder.
 
+**Scope: decision-only windows.** The windows modelled send decisions only: their four counts are sent as 0 (`zeros`),
+which is `ChargeCount_v1`'s scope. A window that sends a nonzero count is not covered.
+
 **The decision stream.** A window's slots are the scan's asks, and `ChargeCount_v1`'s witness is which slots ask (`en`)
 and their decisions (`bit`). A slot that doesn't ask changes nothing, so the charge is a function of the decisions of the
-slots that ask, in order: the window's decision stream, a `List Bool`. The run's decision stream is one per window.
+slots that ask, in order: the window's decision stream, a `List Bool`. The run's decision stream is one per window. The
+asks themselves are not advice: the compile slice, its charge included, is proved on every advised window and never
+sampled, so `en` is the scan that slice proves, pinned by it. The carry from window to window (the KT counts and the
+run) is committed across windows and chained from the book's priors (#3801, `charge_chain.check_chain`), as `charges`
+starts from `priors` and passes each window's carry on.
+
+**What is left.** That `ChargeCount_v1`'s circuit computes `window` is not proved in Lean. circuit-check holds the circuit
+to the Python reference, and these definitions are held to that reference by a comparison on random cases (1,200 windows
+and 400 sessions, accepted and refused, with no mismatch).
 
 **Refusals.** Each reference refuses (ok 0) where the Python does, and then specifies nothing else, so each function here
 returns `none` there. On the states a window reaches (`low ≤ high < 2^32`), the Python's masks `& (HALF − 1)` are
