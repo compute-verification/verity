@@ -481,8 +481,8 @@ two ties between the advice's requests and the warden's certified ingress record
   them.
 - **Each request's prompt_len is its certified ingress record's: checked by the ingress tie, not here.** The advice's
   prompt_len must be the number of prompt fields in the request the warden certified on ingress. This unit reads
-  egress only; `IoTieRequest` ("The ingress tie" below) reads the ingress cells. The ids' binding to `c00.input/ids`
-  is the ingress-ids tie's (`io_ids`, below), reading the Commit's input rows as `IoTiePort` reads its sampled rows.
+  egress only; `IoTieRequest` ("The ingress tie" below) reads the ingress cells. The ids' binding to the Commit's input
+  ids is the ingress-ids tie's (`io_ids`, below), reading the step-input port's ids chunks the served rows' tie reads.
 
 **The ingress tie** (`io_request`, `IoTieRequest{B, T, R, OWN}`: the reference and the Boolean Definition, with
 its sidecar). It is one unit per ingress link-window at selection `All`, with one output bit, and it is what N2-ADVICE's
@@ -563,21 +563,20 @@ window. It outputs 1 exactly when:
   the advice's output_len ≤ max_tokens (an optional check) and one request a user (`certified_io`'s). The ingress head
   signing each bucket's completed requests would bind the frames only, not prompt_len exactly, which the advice's
   prefill rows need.
-- **The ingress-ids tie** (`io_ids`, `IoTieRequestIds{B, T, R, OWN, P, S, DS}`: the reference on a fake upstream
-  Commit and the Boolean Definition, with its sidecar). It is the ingress analog of `IoTiePort`: IoTieRequest's scan,
-  so the cells are hashed once, plus the Commit's `c00.input/ids` rows opened, and every computation of a prompt
-  position, and every prefix-cache read in place of one, held to the id the user sent there. It is meant to replace
-  IoTieRequest as the ingress unit once the Commit side exists.
-  - **What PROVE-PATH must expose** (the Commit side; the fake upstream's layout, `io_ids.commit_rows`):
-    `c00.input/ids` of every executed step as one `hm96-sha512/row/v2` row a step under a fresh 192-byte salt: the
-    step's input ids, u32be, in the forward's token order (the advice step's rows in batch order, row r's n_r tokens
-    at offset Σ_{r' < r} n_{r'}), zero past to a fixed width P (the engine's `max_num_batched_tokens`), in a dense
-    `frame-v3-sha512` tree of the session's steps. Its root and domain are registered before the draw and bound to
-    the run root and to the compiled circuits' `c00.input/ids` values, which the sampled proofs prove from, as the
-    port's sampled rows are (one tree may hold both). The prover keeps each step's salt and path until the tie's
-    outcome of record. The verifier also needs each prefix-cache hit's source (ENC-DERIVED's `sources`), which advice
-    v0's `cache_hit` count doesn't name.
-  - **The map** (`window_map`, public in the named gap from the advice's steps and sources; at the target under the
+- **The ingress-ids tie** (`io_ids`, `IoTieRequestIds{B, T, R, OWN, P, S, IB}`: the reference and the Boolean
+  Definition, with its sidecar). It is the ingress analog of `IoTiePort`: IoTieRequest's scan, so the cells are hashed
+  once, plus the opened steps' input ids, and every computation of a prompt position, and every prefix-cache read in
+  place of one, held to the id the user sent there. It is meant to replace IoTieRequest as the ingress unit.
+  - **The Commit side** is the step-input port the served rows' tie reads (`served_tie`, vllm's served Commit, #3761's
+    layout): each step's rows-sha512 stream starts with its input ids, P i64s (IB = 8 bytes) in the forward's token
+    order (the step's served rows in batch order, row r's n_r tokens at offset Σ_{r' < r} n_{r'}), zero past its N
+    tokens, P the engine's `max_num_batched_tokens`, then its positions. So a step's ids are its tree's first
+    KI = ⌈P·IB / 4096⌉ chunks (`served_tie.ids`, the shared read). The unit takes each opened step's KI chunks as rows
+    ``ids_<s>_<j>``, and the verifier holds each row's b‖c to leaf j of step ``steps[s]``'s tree, and that tree's root
+    through its step root to the run root (`io_ids.leaves`, `served_tie.chunk_ok`), natively, as the served tie holds
+    its positions chunks. Nothing of the port is hashed in the circuit. The verifier also needs each prefix-cache hit's
+    source (ENC-DERIVED's `sources`).
+  - **The map** (`window_map`, public in the named gap from the served rows and the sources; at the target under the
     advice's hiding root). The window's prompt fields in scan order are the view's: carry_in.q's from
     carry_in.fields, each ended request's, then carry_out.q's up to carry_out.fields. Their cells are private (which
     cells hold request frames is the warden's timing), so the map names fields by ordinal, not by cell. Field f is
@@ -588,32 +587,40 @@ window. It outputs 1 exactly when:
     prompt token, a preempted request's recomputation included), and `ekeys[e]` is opened entry e's class, or the
     sink. The verifier refuses an advice whose class no step computes, a source that isn't an earlier request, a step
     past P tokens and more opened steps than S.
-  - **In the unit:** each request cell's slots (`IoTieIdsSlots{B}`) give each slot's value (the u32 its 10 characters
-    spell, at its place in a first frame's or a continuation's reading), whether it is a field (the frame has more
-    fields than its index) and its ordinal (the window's fields before the cell plus its index). The prover's first
-    Beneš network routes record f, (keys[f], f), to field f's slot, and `IoTieIdsKeys` holds each field to the record
-    routed to it, with its ordinal as index and a class other than the sink, and gives every other slot the sink.
-    The second sorts the members, each slot (class, 0, value), each opened entry (class, 1, its id) and the sink past
-    them, and `IoTieIdsChain` checks the classes non-decreasing, one value a class but the sink, and each class
-    starting with a slot. A Beneš network is a permutation under any switches, so every member is in the order and
-    the switches can only sort. On a link whose every window is accepted, every computation of request q's prompt
-    id i, and every KV read in place of one, is the id the user sent. Public: IoTieRequest's, the Commit's root and
-    domain id, the steps, `keys` and `ekeys`. Witness: IoTieRequest's, the opened rows, their salts and paths, and
-    both routings.
+  - **In the unit:** each opened step's ids (`IoTieIdsPort{P, IB, CB}`): token t's id is the low 32 bits of its
+    element, and a token whose class isn't the sink has the element's other bits zero, so an id is its whole i64.
+    Each request cell's slots (`IoTieIdsSlots{B}`) give each slot's value (the u32 its 10 characters spell, at its
+    place in a first frame's or a continuation's reading), whether it is a field (the frame has more fields than its
+    index) and its ordinal (the window's fields before the cell plus its index). The prover's first Beneš network
+    routes record f, (keys[f], f), to field f's slot, and `IoTieIdsKeys` holds each field to the record routed to it,
+    with its ordinal as index and a class other than the sink, and gives every other slot the sink. The second sorts
+    the members, each slot (class, 0, value), each opened entry (class, 1, its id) and the sink past them, and
+    `IoTieIdsChain` checks the classes non-decreasing, one value a class but the sink, and each class starting with a
+    slot. A Beneš network is a permutation under any switches, so every member is in the order and the switches can
+    only sort. On a link whose every window is accepted, every computation of request q's prompt id i, and every KV
+    read in place of one, is the id the user sent. Public: IoTieRequest's, the steps, `keys` and `ekeys`. Witness:
+    IoTieRequest's, the opened chunks and both routings.
+  - **A relabel.** The served rows' tie binds each slot's start and n, not its request id, so it accepts two prefill
+    slots that swap request ids. The ids tie refuses it in each window holding one of them: by the chain where the
+    relabelled slot covers its new request's prompt (that request's ids aren't its user's), and by the map where it
+    doesn't (a prompt position no step computes). A decode slot relabelled onto a position inside its new request's
+    prompt is refused the same way; a decode's input is otherwise the egress tie's.
   - **Tests** (`test_network_certifier_io_ids.py`): a link of chunked prefill across windows, a recompute after a
     preemption and a cache hit from another window's request or the same window's is accepted in every window.
-    Refused: REDTEAM phase 9 #1 (one prompt id substituted in the Commit, which IoTieRequest accepts), a cache hit on
-    another prefix (either kind), and a Commit that differs at a cache source (both windows). The unit is its
-    reference on those and on map and switch tampers (`test_the_unit_is_its_reference`, slow).
-  - **Cost.** `IoTieRequestIds{512, 4, 2, 1, 16, 8, 4}` is 12,924,899 ANDs: IoTieRequest's 4,042,173 (and 3 more in
-    the final AND, over 6 checks), the slots 24,670 a cell, the 8 port rows 8,400,647, the routing 78,336, the keys
-    16,064, the sort 182,784 and the chain 32,202. At REDTEAM's RIN (N = 5,400, B = 4,096, NK = 2.0 × 10^6
-    slots, at least 245 rows of 8,192 ids opened): the slots 1.09 × 10^9 (201,004 a cell), the routing 1.81 × 10^9,
-    the keys 1.5 × 10^8, the sort 4.87 × 10^9 (over 2^22 members of 54 bits), the chain 3.4 × 10^8 and the rows
-    4.22 × 10^9 (1.72 × 10^7 each): about 1.25 × 10^10 a window on IoTieRequest's 1.14 × 10^10. A cheaper split
-    has PROVE-PATH also register the session's prompt stream, the requests' prompt ids in arrival order, and hold
-    every computation and cache hit to it in the Commit's units; the tie would then read the window's stream entries
-    in order with no map or sort.
+    Refused: REDTEAM phase 9 #1 (one prompt id substituted in the Commit, which IoTieRequest accepts), an id whose
+    i64's high half is set under the user's low half, a cache hit on another prefix (either kind), and a Commit that
+    differs at a cache source (both windows). The unit is its reference on those and on map and switch tampers
+    (`test_the_unit_is_its_reference`, slow). `benchmarks/prove_path/ids_tie_window.py` runs the tie on a sealed
+    served window's real rows and ports (honest, a relabel, a wrong id, a decode relabel).
+  - **Cost.** `IoTieRequestIds{512, 4, 2, 1, 16, 8, 8}` is 4,529,499 ANDs: IoTieRequest's 4,042,173 (and 10 more in
+    the final AND), the slots 24,670 a cell, the ports 655 a step, the routing 78,336, the keys 16,064, the sort
+    182,784 and the chain 32,202. A port step is P·(CB + 32) − 1 ANDs. At REDTEAM's RIN (N = 5,400, B = 4,096,
+    NK = 2.0 × 10^6 slots, at least 245 steps of 8,192 ids opened): the slots 1.09 × 10^9 (201,004 a cell), the
+    routing 1.81 × 10^9, the keys 1.5 × 10^8, the sort 4.87 × 10^9 (over 2^22 members of 54 bits), the chain
+    3.4 × 10^8 and the ports 1.06 × 10^8 (434,175 each): about 8.4 × 10^9 a window on IoTieRequest's 1.14 × 10^10.
+    A cheaper split has the Commit also register the session's prompt stream, the requests' prompt ids in arrival
+    order, and hold every computation and cache hit to it in the Commit's units; the tie would then read the
+    window's stream entries in order with no map or sort.
 - **Cost.** The unit is its parts: `IoTieRequest{512, 4, 2, 1}` is 4,042,173 ANDs, of which the rows are 3,888,916,
   the own frame 4,095, each of the 7 frames 20,924, each step 265 or 267, the routing 700 and the totals and carry-out
   129.
@@ -891,7 +898,7 @@ Definitions above, and their tests:
 
 Still to build: the warden writing and committing cells (`active`), the cells' registration, the port's real layout
 and registration (vllm's Commit), the target's map registration and its range read, the ingress tie's view read
-under the advice's hiding root, and the real Commit's `c00.input/ids` rows that the ingress-ids tie (`io_ids`) reads.
+under the advice's hiding root, and the prefix-cache sources that the ingress-ids tie (`io_ids`) reads, registered.
 
 **Open for proofs.**
 - Hidden-position reads (frame and port) under the one soundness theorem. In v4 every read is at a public position
