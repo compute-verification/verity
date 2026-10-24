@@ -277,6 +277,49 @@ def check (c : Circuit) (pub : Public) (own : Option (Array Port)) (derived : Bo
   let indices ← unitIndices pub
   own.toList.forM (checkPort c pub t indices)
 
+/-- The root body's nodes the program binds at registration: each node whose callee is `RegisteredInput<w>_v1`
+(`Program.inputId?`'s `registration`), by its index in the root's body and the callee's id. `Program.decode` keeps input
+nodes to the root's body, so these are all the registered inputs the program reads. -/
+def programInputs (P : Program.Prog) : Array (Nat × String) :=
+  let body := (P.defs[P.root]!).body
+  (Array.range body.nodes.size).filterMap fun k =>
+    let f := P.defs[body.nodes[k]!.fn]!
+    if f.prim && (Program.inputId? f.key).map (·.1) == some Program.REGISTRATION then some (k, f.key) else none
+
+/-- **A program that reads a registered value is verified only against registered roots** (PROTOCOL.md §16.10): with the
+verifier's own program (`program`, `--program`), a statement whose program has a `RegisteredInput<w>_v1` node
+(`programInputs`) is refused unless the verifier holds its own registered reads (`registered`, `--registered`), whatever
+the statement's files say. The public file's header `registered` is the prover's, and the circuit marks no port
+registered, so neither can tell the verifier its rows of a registered value must open a registered root: a statement that
+names none would commit them afresh. With the registered reads, `check` opens every port of them, header or not. -/
+def checkProgram (program : Option ByteArray) (registered : Bool) : V Unit := do
+  let some b := program | pure ()
+  if registered then return
+  let P ← Program.decode b
+  match (programInputs P)[0]? with
+  | none => pure ()
+  | some (k, id) =>
+    throw s!"registered reads: the verifier's program reads a registered value (root node {k}, {id}), and the verifier holds no registered roots (--registered): its rows would be committed afresh, whatever the statement's public file names"
+
+/-- `checkProgram` accepts the verifier's program `b` only with its registered reads, or when `b` decodes to a program
+with no registered input. -/
+theorem checkProgram_ok {b : ByteArray} {registered : Bool} (h : checkProgram (some b) registered = .ok ()) :
+    registered = true ∨ ∃ P, Program.decode b = .ok P ∧ programInputs P = #[] := by
+  cases registered with
+  | true => exact .inl rfl
+  | false =>
+    refine .inr ?_
+    unfold checkProgram at h
+    cases hd : Program.decode b with
+    | error e => simp [hd] at h <;> cases h
+    | ok P =>
+      refine ⟨P, rfl, ?_⟩
+      cases hi : (programInputs P)[0]? with
+      | none =>
+        have : (programInputs P).size ≤ 0 := Array.getElem?_eq_none_iff.mp hi
+        exact Array.eq_empty_of_size_eq_zero (by omega)
+      | some x => simp [hd, hi] at h <;> cases h
+
 /-- The file's `complete` (`COMPLETE_KEY`), false when absent. -/
 def completeOf (j : Json) : V Bool :=
   match j.getObjVal? COMPLETE_KEY with
