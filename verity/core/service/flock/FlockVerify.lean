@@ -325,9 +325,12 @@ would keep one of them. A port the file names at known content (`Registered.KNOW
 the root of that content (`Registered.checkKnownAll`). Beside the ports, whether the file names every port of the
 statement (`Registered.completeOf`, `Registered.checkComplete`), and the rows `KnownRead.check` holds every statement
 to: the known content (`Registered.knownOf`), whose input ports every statement must read in every bit, then each port
-the file marks `read_in_full` (`KnownRead.readOf`) as one row of its registered row's words (`KnownRead.fullRows`). -/
+the file marks `read_in_full` (`KnownRead.readOf`) as one row of its registered row's words (`KnownRead.fullRows`), and the
+template parameter each port reads (`Registered.paramsOf`, which `Registered.checkCover` holds the program's registered
+reads to). -/
 def registeredFile (args : List String) (flag : String := "--registered") (ctx : String := "registered reads") :
-    IO (Except String (Option (Array Registered.Port × Bool × Array (String × Array (Array Nat × ByteArray))))) := do
+    IO (Except String (Option (Array Registered.Port × Bool × Array (String × Array (Array Nat × ByteArray)) ×
+      Array String))) := do
   let some f := argOf args flag | return .ok none
   let bytes ← match argOf args "--archive" with
     | none => (try pure (Except.ok (← IO.FS.readBinFile f)) catch e => pure (Except.error s!"{ctx}: {e}"))
@@ -340,11 +343,12 @@ def registeredFile (args : List String) (flag : String := "--registered") (ctx :
       | .ok _, some k =>
         return .error s!"{ctx}: an object of the file names the key {k} twice, which a JSON parser would read as once: each port, and each key of a port, once"
       | .ok j, none =>
-        let r : V (Array Registered.Port × Bool × Array (String × Array (Array Nat × ByteArray))) := do
+        let r : V (Array Registered.Port × Bool × Array (String × Array (Array Nat × ByteArray)) × Array String) := do
           let own ← Registered.ofJson j
           let known ← Registered.knownOf j
           Registered.checkKnownAll own known
-          return (own, ← Registered.completeOf j, known ++ KnownRead.fullRows own (← KnownRead.readOf j))
+          return (own, ← Registered.completeOf j, known ++ KnownRead.fullRows own (← KnownRead.readOf j),
+            ← Registered.paramsOf j)
         return (r.mapError fun e => if flag == "--registered" then e else s!"{ctx}: {e}").map some
       | .error e, _ => return .error s!"{ctx}: not JSON: {e}"
 
@@ -704,7 +708,8 @@ pinned compression circuit; `J` (default 1) is the tables of every session (§16
 verifier's own `--work K`, `--work-table`, `--program` and `--partition`, one with a stratified draw its own
 `--stratified K`, `--program` and `--partition`, a closure draw its own `--closure F`, a statement that reads registered
 values its own `--registered F` (`Registered.check`; a verifier whose own `--program` has a `RegisteredInput<w>_v1` node
-refuses every session without it, whatever the public file's header names, `Registered.checkProgram`), a circuit with public input ports its own `--public-inputs F`, and
+refuses every session without it, whatever the public file's header names, `Registered.checkProgram`, and with it every
+session whose template reads a registered input through a parameter no port of it reads, `Registered.checkCover`), a circuit with public input ports its own `--public-inputs F`, and
 a public file whose header names an identifier its own `--identifier F` (§16.10), one of V*'s statements its own inner
 shape `--rec-inner F` (under which `--statement` must be `verity/flock-circuit`, V*'s, and no lookup table is held), which of V*'s statements the session is `--rec-part J` (`J` indexing the list `rec-statements`
 prints from 0: the levels, then the algebra's parts, then candidate 3's, then the level-0 cap) and its own bindings `--rec-bindings F` (from
@@ -736,8 +741,10 @@ statement whose form the soundness proof does not cover (`ProvedScope.check`, th
 `ProvedScope.sizesOk`, §16.15) is refused, and
 so is a session without a draw, under `--rec-inner` a session whose draw is not every unit of its population, a
 session with `--rec-part`, `--rec-bindings` or `--rec-rows` but no `--rec-inner` (`RecSetup.fullDraw`), and a session
-over an inner session whose record (`--rec-inner-session`) holds no draw (`RecSetup.innerDrawn`), all after
-every check has passed (so the reason is the refusal only when nothing else fails; the form's first). Exit 0 iff every
+over an inner session whose record (`--rec-inner-session`) holds no draw (`RecSetup.innerDrawn`), and a session
+verified without the verifier's own `--program` (`ProvedScope.programHeld`, `ProvedScope.NO_PROGRAM`: a verifier that cannot read the Program
+cannot know what it verifies), all after every check has passed (so the reason is the refusal only when nothing else
+fails; the form's first). Exit 0 iff every
 session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
 none is on `os` or `seed` coins (the live build reads no `FC_COINS` under `--zk`), so `--zk` takes no `--coins`.
 `--upstream-plain`: the plain proof files are upstream's form, without the zk patch's `zk_level0 = None` tag that every
@@ -789,8 +796,8 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let closure ← match ← closureInput args with
     | .ok c => pure c
     | .error e => IO.eprintln e; return 2
-  let (registered, complete, known) ← match ← registeredFile args with
-    | .ok r => pure (r.map Prod.fst, r.any (·.2.1), (r.map (·.2.2)).getD #[])
+  let (registered, complete, known, params) ← match ← registeredFile args with
+    | .ok r => pure (r.map Prod.fst, r.any (·.2.1), (r.map (·.2.2.1)).getD #[], (r.map (·.2.2.2)).getD #[])
     | .error e => IO.eprintln e; return 2
   let publicInputs ← match ← publicInputsInput args with
     | .ok p => pure p
@@ -844,6 +851,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
         let r ← buildSessionOf parsed tags circuitB pubB compB coins tables count draw partition program work stratified closure
           registered publicInputs (identifier.map Prod.snd)
         if complete then r.2.forM fun (st : Stmt) => Registered.checkComplete st.c (registered.getD #[])
+        r.2.forM fun (st : Stmt) => Registered.checkCover st.c program partition registered params
         r.2.forM fun (st : Stmt) => KnownRead.check st.c known
         RecSetup.checks recInner recCommits stmtTags tables r.2 circuitB partition program registered recPart
           recBindings recRows
@@ -902,12 +910,13 @@ def verifyCmd (args : List String) : IO UInt32 := do
       else verify spec tabs record proofs
       -- last, so a session that fails a check keeps that check's reason: the form's refusal (its statement's, then its
       -- tables' sizes), then a draw-less session's, then a recursive session's without --rec-inner or a V* session's
-      -- short of every unit, then a session's over an inner record without a draw
+      -- short of every unit, then a session's over an inner record without a draw, then a session's without the program
       scope
       ProvedScope.sizesOk zk (tabs.map Setup.m)
       if draw.isNone then ProvedScope.drawLaw zk draw
       RecSetup.fullDraw recInner (recPart.isSome || recBindings.isSome || recRows.isSome) draw record
       RecSetup.innerDrawn recCoins
+      ProvedScope.programHeld program
     if let some k := coinKey then coinKeys := coinKeys.push k
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok
@@ -972,7 +981,7 @@ def statementCmd (args : List String) : IO UInt32 := do
     | .ok p => pure p
     | .error e => IO.eprintln e; return 2
   let (registered, complete, known) ← match ← registeredFile args with
-    | .ok r => pure (r.map Prod.fst, r.any (·.2.1), (r.map (·.2.2)).getD #[])
+    | .ok r => pure (r.map Prod.fst, r.any (·.2.1), (r.map (·.2.2.1)).getD #[])
     | .error e => IO.eprintln e; return 2
   let publicInputs ← match ← publicInputsInput args with
     | .ok p => pure p

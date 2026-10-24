@@ -311,13 +311,17 @@ def requests_check(h1: Any, requests: int) -> dict[str, Any]:
     that admitted it, recorded before that round's coin, at a first slot naming it (`pouw_h1_requests.request_reason`), every slot
     of every step naming the request its row is, under a round no later than its step (`slot_reason`), the log against the
     coins (`rounds_reason`), no served row without an entry (``gaps``), and each call's A table under its round's root
-    (``a_roots``, `pouw_h1_requests.tables_reason`)."""
+    (``a_roots``, `pouw_h1_requests.tables_reason`). With the Commit the request and slot tables are live (VLLM-85): their
+    leaves open in each round's ``live@<s>``, so ``live`` holds each round's verdict (`pouw_h1_live.verdicts`, its unit's
+    circuit evaluated on its statement) in place of the openings."""
+    from verity_vllm.protocol_options import pouw_h1_live as LV
     from verity_vllm.protocol_options import pouw_h1_requests as RQ
     coins = h1.rounds.challenger.commitment
-    why = [w for e in h1.requests if (w := RQ.request_reason(h1.round_log, coins, h1.salt, h1.rows, e, h1.open_request(e.index),
-                                                             h1.open_first(e.index), h1.admission))]
-    manifest, slots = h1.manifest(), []
-    for s in range(len(h1.round_log)):
+    live = LV.verdicts(h1)
+    why = [] if live else [w for e in h1.requests if (w := RQ.request_reason(
+        h1.round_log, coins, h1.salt, h1.rows, e, h1.open_request(e.index), h1.open_first(e.index), h1.admission))]
+    manifest, slots = h1.manifest(), [f"{v['reason']} (m = {v['m']})" for v in live if not v["ok"]]
+    for s in range(0 if live else len(h1.round_log)):
         calls = [m for m in manifest if m["step"] == s]
         for p in range(h1.rows):
             slot = h1.open_slot(s, p)
@@ -332,9 +336,11 @@ def requests_check(h1: Any, requests: int) -> dict[str, Any]:
     out = {**h1.details["requests"], "served": requests, "entries_refused": why[:20], "slots_refused": slots[:20],
            "rounds": rounds, "entries_checked": len(h1.requests), "slots_checked": len(h1.round_log) * h1.rows,
            "slot_owners": owners, "slots_are_rows": [len(o) for o in owners] == h1.step_rows()[:len(owners)],
-           "entries": [[e.index, e.round, e.slot] for e in h1.requests]}
+           "entries": [[e.index, e.round, e.slot] for e in h1.requests], "live": live,
+           "live_accepted": f"{sum(v['ok'] for v in live)}/{h1.steps}" if live else None}
     out["ok"] = bool(out["admitted"] == requests and not out["refused"] and not out["gaps"] and not why and not slots
-                     and rounds is None and out["slots_are_rows"] and str(out.get("a_roots")).startswith("bound"))
+                     and rounds is None and out["slots_are_rows"] and str(out.get("a_roots")).startswith("bound")
+                     and (not live or len(live) == h1.steps))
     return out
 
 
@@ -1033,14 +1039,16 @@ def core_verdict(ev: dict[str, Any]) -> dict[str, Any]:
     """Core credit's ROOTS1 steps over a window's evidence, as `credit.window` runs them once its challenger steps pass
     (a window under in-process coins has none to pass): the record one manifest under calls_root with the Commit's record
     (`record_reason`), each A table and input-ids table committed whole by its round's root (`credit._a_link`), and each
-    the Commit's value of its rows (`credit._arow`). ``tied`` when none refuses."""
+    the Commit's value of its rows (`credit._arow`), each at the rows the layout gives it (`credit.table_rows`: n chunk
+    leaves a row past K = 4096). ``tied`` when none refuses."""
     from verity.core.protocols.pouw import credit as CR
     c, raw = ev["commitment"], bytes.fromhex(ev["descriptor"])
     entries, rounds = (c.get("served") or {}).get("entries") or [], c.get("rounds")
     layout, why = CR.layout_of(raw)
     got, cwhy = CR.commit_of(c.get("commit"))
+    rows = CR.table_rows(layout, len(rounds), CR._prefix(raw)) if why is None and isinstance(rounds, list) else None
     out: dict[str, Any] = {"manifest": record_reason({"commitment": c, "calls": ev["calls"]}),
-                           "a_link": CR._a_link(rounds, entries, len(ev["calls"])), "layout": why, "commit": cwhy}
+                           "a_link": CR._a_link(rounds, entries, len(ev["calls"]), rows), "layout": why, "commit": cwhy}
     out["arow"] = None if why or cwhy else CR._arow(rounds, entries, got[1], layout, CR._prefix(raw))
     out["tied"] = all(v is None for v in out.values())
     out["commit_values"] = len(got[1]) if got else None
