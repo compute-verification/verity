@@ -3,6 +3,7 @@ import Flock.Keccak
 import Flock.Program
 import Flock.RegKnown
 import PouwCommit.Frame
+import PouwCheck.Chunks
 import PouwCheck.Json
 import PouwCheck.Opening
 import PouwCheck.Pass
@@ -99,20 +100,9 @@ def LEVELS : Nat := 64
 table's rows are the layout's own (`tableRows`), every weights' value's too (`Internal.weights`), and no entry's leaves
 are bounded otherwise. -/
 def MAX_ROWS : Nat := 2 ^ 24
-/-- `weights.CHUNK_MAX`: the most codes one leaf of an A or B row holds. -/
-def CHUNK_MAX : Nat := 4096
-/-- `weights.CHUNK_ALIGN`: a chunk's codes are whole blocks of this many. -/
-def CHUNK_ALIGN : Nat := 512
-
-/-- `weights.chunks`: the leaves an A or B row of K = `k` codes is cut into, 1 at K ≤ `CHUNK_MAX`, else the least
-n ≥ ⌈K/`CHUNK_MAX`⌉ whose chunk K/n is whole blocks of `CHUNK_ALIGN` codes; none for K = 0 or a K with no such n
-(Python's `ValueError`). -/
-def chunks? (k : Nat) : Option Nat :=
-  if k == 0 then none
-  else if k ≤ CHUNK_MAX then some 1
-  else
-    let lo := (k + CHUNK_MAX - 1) / CHUNK_MAX
-    (List.range' lo (k / CHUNK_ALIGN + 1 - lo)).find? fun n => k % (CHUNK_ALIGN * n) == 0
+/-- `weights.chunks` (`PouwCheck.Chunks.chunks`): the leaves an A or B row of K = `k` codes is cut into; none for a K it
+refuses (Python's `ValueError`). -/
+def chunks? (k : Nat) : Option Nat := (Chunks.chunks k).toOption
 
 /-- `weights.leaf_words`: an A or B leaf's 16-bit words at K = `k`, its chunk's K/n codes then the row's 4-byte scale
 (`bWords` of K/n); 0 for a K `chunks?` refuses. -/
@@ -1402,8 +1392,8 @@ def Internal.weights (window layout entries requests session program prefix_ : J
     (k, (lins.filter (·.1 == k)).foldl (fun a x => a + x.2) 0)
   let bad := ((rows.map (·.1)).filter (chunks? · |>.isNone)).mergeSort
   unless bad.isEmpty do
-    layoutRefuse (s!"the window's K = {listStr bad} have no chunks (weights.chunks: K <= {CHUNK_MAX}, or K/n a " ++
-      s!"multiple of {CHUNK_ALIGN} codes for some n >= K/{CHUNK_MAX}), so no row of them is leaves")
+    layoutRefuse (s!"the window's K = {listStr bad} have no chunks (weights.chunks: K <= {Chunks.CHUNK_MAX}, or K/n a " ++
+      s!"multiple of {Chunks.CHUNK_ALIGN} codes for some n >= K/{Chunks.CHUNK_MAX}), so no row of them is leaves")
   let .arr es := entries | weightsRefuse ENTRIES_FORM
   unless es.all isObj do weightsRefuse ENTRIES_FORM
   let mut roots : List (Nat × ByteArray) := []

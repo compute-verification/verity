@@ -323,7 +323,7 @@ def _chunked(k: int, unit: Any) -> Any:
     """``unit`` at K: wrapped in `h1zy.PouwH1TileZyChunks` at `weights.chunks` (K) when that is above 1 and ``unit`` is
     the bare zy unit, else ``unit``; ValueError on a K with no chunks."""
     n = W.chunks(k)
-    return Z.chunk_unit(unit, n) if n > 1 and getattr(unit, "defn", None) is Z.PouwH1TileZy else unit
+    return Z.unit_chunks(unit.bindings["TILE"], n) if n > 1 and getattr(unit, "defn", None) is Z.PouwH1TileZy else unit
 
 
 def query(program: Program) -> dict[str, Any]:
