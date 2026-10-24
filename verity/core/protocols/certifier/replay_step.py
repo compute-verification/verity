@@ -101,8 +101,9 @@ stage.
 requeue 55k (about 131·W·bitlen(R) + 215·R) and the update 43k (168·R); the candidates' scan is about 210·W + 245·A.
 The replay's own waiting list holds only the preempted and the forced arrival (at most 5 on the corpus), since the
 arrivals not yet scheduled stay in the certified stream, so W stays small. Async adds 132 ANDs at (4, 8, 4), 3,108
-at (16, 64, 16), 15,640 at (64, 4, 8) and 33,326 at (128, 4, 8) (1.1% to 13%), most of it the requeue's compaction of
-the victims not `fin`. Walk entries of 9 bits add 207, 1,431 and 8,055 at the first three.
+at (16, 64, 16), 15,640 at (64, 4, 8), 33,326 at (128, 4, 8) and 70,109 at (256, 4, 8) (1.1% to 13.4%), most of it the
+requeue's compaction of the victims not `fin` (59k of the 70k at R = 256). Walk entries of 9 bits add 207, 1,431,
+8,055 and 41,463 at (4, 8, 4), (16, 64, 16), (64, 4, 8) and (256, 4, 8).
 """
 from __future__ import annotations
 
