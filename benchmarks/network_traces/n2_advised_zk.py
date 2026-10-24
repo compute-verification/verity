@@ -28,7 +28,8 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
   each kept output released in the bucket the certified I/O says its frame went out, and ``received`` the certified
   ingress heads' request frames; the tie the same stand-in, on the certified prompts. Its clock source is the run's
   certifier's own record of the syncs its shaper ran each window under (`CertifierClocks`, ``proxy.json.gz``'s
-  ``syncs``), never the plan the prover declared; a run without that record is refused. The link's first
+  ``syncs``), never the plan the prover declared, standing in for the certifier's report to the verifier; a run
+  without that record is refused. The link's first
   ``--windows`` windows are proved, by default every one.
 * **The tie** on either link is the stand-in, and the summary says so (``tie``): IoTieRequest is pinned at one size
   class, `TIE_PINNED`, and neither link's ingress is in it. The summary's ``clocks`` names the clock source.
@@ -136,7 +137,9 @@ def advised_refs(lw: LinkWindows, link: AD.LinkAdvice, egress, ingress, syncs=AT
 class CertifierClocks:
     """The verifier's clock source on a served run (`advised.ClockSource`): the syncs the run's certifier ran its
     windows under, as its proxy logged them (``proxy.json.gz``'s ``syncs``, its shaper's), for `link` alone. It reads
-    nothing the prover declares (the plan's ``syncs``)."""
+    nothing the prover declares (the plan's ``syncs``). It stands in for the certifier's report of its syncs to the
+    verifier, which doesn't exist yet: the log is read from the run's directory, and a rehearsal's certifier may run on
+    the prover's machine."""
 
     link: str
     ran: tuple[ClockSync, ...]
