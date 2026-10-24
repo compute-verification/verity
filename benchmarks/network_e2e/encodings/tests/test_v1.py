@@ -63,7 +63,7 @@ def exact_bits(data: bytes, rec, reg) -> bytearray:
 def test_decode_inverts_encode(name, contexts):
     t, rec, reg, adv = case(name, T=20, contexts=contexts)
     data = V.encode(adv, rec, reg)
-    assert V.decode(data, rec, reg) == adv
+    assert V.decode(data, rec, reg) == adv == I1.decode(I1.encode(adv))
     charge = V.bits_by_window(data, rec, reg)
     assert len(charge) == V.windows(rec, reg.T) > 1
     assert 0 <= 8 * len(data) - sum(charge.values()) < 8
@@ -139,7 +139,8 @@ def _tiny(windows: int):
 def test_the_strings_are_prefix_free(w):
     """Every bit string of up to 18 bits through `decode_bits`: no accepted one is a proper prefix of another, so
     #{accepted strings of at most c bits} ≤ 2^c (Kraft), LEAK-LEAN's `BitsCount` for the charge `bits_by_window`; and
-    each accepted one is the encoding of the advice it decodes to."""
+    each accepted one is the encoding of the advice it decodes to, a well-formed I1 v0 (`advice.decode`'s refusals, which
+    ADV-SPEC's validity circuit makes)."""
     rec, reg = _tiny(w)
     accepted = {}
     for n in range(19):
@@ -157,6 +158,7 @@ def test_the_strings_are_prefix_free(w):
     for s, adv in accepted.items():
         data = V.encode(adv, rec, reg)
         assert exact_bits(data, rec, reg) == bytearray(s) and sum(V.bits_by_window(data, rec, reg).values()) == len(s)
+        assert I1.decode(I1.encode(adv)) == adv
 
 
 def test_truncated_and_extended_strings_are_refused():
@@ -193,6 +195,7 @@ def test_decode_is_total():
             continue
         decoded += 1
         assert V.encode(got, rec, V.registered_of(x, rec, reg)) == x
+        assert I1.decode(I1.encode(got)) == got
     assert decoded
 
 
