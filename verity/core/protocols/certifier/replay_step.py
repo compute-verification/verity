@@ -1,7 +1,7 @@
 """One vLLM v1 scheduler step as a Boolean Definition: the compile unit's core, between advice validity and the Programs.
 
-    ReplayStep_v1{R, W, A, M, T, L, B, H, CH, WM, FULL, PC, NB, IW, AS, EW} (state, arrivals, bits, prefix[, walk])
-        -> (ok, rows, state'[, walk'])
+    ReplayStep_v1{R, W, A, M, T, L, B, H, CH, WM, FULL, PC, NB, IW, AS, EW} (state, arrivals, bits, prefix[, row_pfx])
+        -> (ok, taken, used[, looked], rows, state')
 
 The precommitted compiler (PRF-143: committed Programs = compile(advice) under the advice's hiding root, total, refusing
 every ill-formed advice up to the cap ℓ) need not read the schedule from the advice: ENC-REPLAY replays vLLM's
@@ -32,9 +32,12 @@ synchronous or async scheduling, FCFS, one full-attention KV group, as `replay._
   frees its blocks. A request reaching O sets `fin` and keeps its slot. A `fin` victim frees its blocks at preemption
   and isn't requeued, but the step still preempted, so its waiting loop doesn't run. The certified O forces every lag
   row, so async costs no decision.
-- *Walk entries* (EW ≥ 1, `CacheStep_v1`'s entry width): each running slot's `pfx` moves with its request through the
-  compaction and placement. A slot with a row takes that row's entry after its `CacheStep_v1` calls, a kept slot
-  without one keeps its own, and a preempted or stopped request drops its own.
+- *Walk entries* (EW ≥ 1, `CacheStep_v1`'s entry width; the certifier's PROTOCOL.md, "The rows"): each running slot's
+  `pfx` moves with its request through the compaction and placement. A slot with a row takes that row's entry after
+  its `CacheStep_v1` calls (a running row's one, an admitted row's second), a kept slot without one keeps its own, and
+  a preempted or stopped request drops its own, since it resumes as an admitting row from the root. The step also
+  says which candidates' lookups it read (`looked`): each waiting slot its loop reaches, the one whose allocation ends
+  the loop included, and each arrival it checks for an ask. Past the pool bound advice v1 sends one shortfall for each.
 
 **Statics** (all public): the size class R running slots, W waiting slots and A arrivals looked ahead; the engine's
 max_num_seqs M, max_num_batched_tokens T, max_model_len L, block_size B (a power of 2), long_prefill_token_threshold
@@ -48,20 +51,20 @@ HW = bitlen(⌈L / B⌉), AC = bitlen(A). Every field is little-endian.
   waiting request has computed nothing) and the free block count. A request holds ⌈computed / B⌉ blocks, so the
   state carries no block counts per request. The scan starts from the empty engine with NB − 1 free blocks (block 0
   is vLLM's null block), so the state's own invariants (valid slots a prefix, computed < P + out ≤ L, out < O) hold
-  by induction and the step doesn't recheck them. With AS the state ends with its async group: each running slot's
-  `fin` and `cap`, then each waiting slot's `cap`;
+  by induction and the step doesn't recheck them. With EW each running slot's walk entry `run_pfx` follows `run_comp`.
+  With AS the state ends with its async group: each running slot's `fin` and `cap`, then each waiting slot's `cap`;
 - the next A certified arrivals (valid, id, P, O, and with AS cap), in order from the scan's cursor;
 - A residual bits: the a-th open arrival's decision is bit a;
 - the prefix layer's counts, read only with PC: per candidate (W waiting slots, then A arrivals) its hit h and how
   many of those blocks are evictable (cached, unreferenced: taking them shrinks the free count), and per running slot
   how many blocks it returns when it is preempted or stops (its blocks whose last reference it drops). Without PC
   there are no hits and a request returns all it holds, and these inputs are unread;
-- with EW, the walk entries: `run_pfx`, each running slot's (the state row's cache group holds it), and `row_pfx`, each
-  row's entry after its `CacheStep_v1` calls, by the row's slot.
+- with EW, `row_pfx`: each row's walk entry after its `CacheStep_v1` calls, by the row's slot.
 
-**Outputs.** ok; taken, the arrivals consumed (the scan's cursor moves by it); used, the residual bits read; R rows
-(valid, request, kind, start, n), in the scheduler's order (running first, then the admitted, in order) at the slots
-of the running list before the step's leaving requests leave it; the next state; and with EW the next `run_pfx`.
+**Outputs.** ok; taken, the arrivals consumed (the scan's cursor moves by it); used, the residual bits read; with EW,
+`looked`, one bit per candidate (W waiting slots, then A arrivals); R rows (valid, request, kind, start, n), in the
+scheduler's order (running first, then the admitted, in order) at the slots of the running list before the step's
+leaving requests leave it; and the next state.
 
 **ok = 0 refuses** what this size class can't express or the inputs make meaningless:
 - an admission into a full running list (R slots, fewer than M), a waiting list past W after preemption, or a step
@@ -103,7 +106,8 @@ The replay's own waiting list holds only the preempted and the forced arrival (a
 arrivals not yet scheduled stay in the certified stream, so W stays small. Async adds 132 ANDs at (4, 8, 4), 3,108
 at (16, 64, 16), 15,640 at (64, 4, 8), 33,326 at (128, 4, 8) and 70,109 at (256, 4, 8) (1.1% to 13.4%), most of it the
 requeue's compaction of the victims not `fin` (59k of the 70k at R = 256). Walk entries of 9 bits add 207, 1,431,
-8,055 and 41,463 at (4, 8, 4), (16, 64, 16), (64, 4, 8) and (256, 4, 8).
+8,055 and 41,463 at (4, 8, 4), (16, 64, 16), (64, 4, 8) and (256, 4, 8); `looked` is the candidates' scan's own bits
+and adds none.
 """
 from __future__ import annotations
 
@@ -140,12 +144,14 @@ def widths(S) -> SimpleNamespace:
 
 
 def _state_fields(S) -> list[tuple[str, int, int]]:
-    """The committed state, as the step reads and writes it: the sync step's part, then async's group (AS)."""
+    """The committed state, as the step reads and writes it: the sync step's part, with EW's `run_pfx` after `run_comp`
+    (PROTOCOL.md, "The rows"), then async's group (AS)."""
     Z = widths(S)
     R, W = S.R, S.W
     return ([("run_valid", R, 1), ("run_id", R, S.IW), ("run_P", R, Z.LW), ("run_O", R, Z.LW), ("run_out", R, Z.LW),
-             ("run_comp", R, Z.LW), ("wait_valid", W, 1), ("wait_id", W, S.IW), ("wait_P", W, Z.LW), ("wait_O", W, Z.LW),
-             ("wait_out", W, Z.LW), ("free", 1, Z.BW)]
+             ("run_comp", R, Z.LW)] + ([("run_pfx", R, S.EW)] if S.EW else [])
+            + [("wait_valid", W, 1), ("wait_id", W, S.IW), ("wait_P", W, Z.LW), ("wait_O", W, Z.LW), ("wait_out", W, Z.LW),
+               ("free", 1, Z.BW)]
             + ([("run_fin", R, 1), ("run_cap", R, 1), ("wait_cap", W, 1)] if S.AS else []))
 
 
@@ -156,15 +162,15 @@ def _in_fields(S) -> list[tuple[str, int, int]]:
             + [("arr_valid", A, 1), ("arr_id", A, S.IW), ("arr_P", A, Z.LW), ("arr_O", A, Z.LW)]
             + ([("arr_cap", A, 1)] if S.AS else [])
             + [("bits", A, 1), ("hit", W + A, Z.HW), ("evict", W + A, Z.HW), ("ret", R, Z.HW)]
-            + ([("run_pfx", R, S.EW), ("row_pfx", R, S.EW)] if S.EW else []))
+            + ([("row_pfx", R, S.EW)] if S.EW else []))
 
 
 def _out_fields(S) -> list[tuple[str, int, int]]:
     Z = widths(S)
     R = S.R
-    return ([("ok", 1, 1), ("taken", 1, Z.AC), ("used", 1, Z.AC), ("row_valid", R, 1), ("row_id", R, S.IW),
-             ("row_kind", R, 1), ("row_start", R, Z.LW), ("row_n", R, Z.TW)]
-            + _state_fields(S) + ([("run_pfx", R, S.EW)] if S.EW else []))
+    return ([("ok", 1, 1), ("taken", 1, Z.AC), ("used", 1, Z.AC)] + ([("looked", S.W + S.A, 1)] if S.EW else [])
+            + [("row_valid", R, 1), ("row_id", R, S.IW), ("row_kind", R, 1), ("row_start", R, Z.LW), ("row_n", R, Z.TW)]
+            + _state_fields(S))
 
 
 def _type(fields) -> Tuple:
@@ -214,6 +220,7 @@ class Out:
     state: State | None = None
     taken: int = 0
     used: int = 0
+    looked: tuple[int, ...] = ()            # with EW, per candidate: whether the step read its lookup
 
 
 def empty(S) -> State:
@@ -297,12 +304,14 @@ def reference(S, st: State, inp: Inputs) -> Out:
         i += 1
 
     k = 0
+    looked = [0] * (S.W + S.A)
     if not preempted:
         def admit(r: dict, c: int, ask: bool) -> int:
             """0: the loop ends here; 1: r is admitted; 2: refused (ok = 0). Reads bit `ask`'s index when asked."""
             nonlocal free, budget, used
             if budget <= 0 or len(run) >= S.M:
                 return 0
+            looked[c] = 1
             h, ev = (_at(inp.hit, c), _at(inp.evict, c)) if S.PC else (0, 0)
             ntok = r["P"] + r["out"]
             if S.PC and (ev > h or h * S.B >= ntok):
@@ -382,7 +391,7 @@ def reference(S, st: State, inp: Inputs) -> Out:
     if len(waiting) > S.W:
         return Out(False)
     return Out(True, tuple(rows), State(tuple(Req(**r) for r in keep), tuple(Req(**{**r, "comp": 0}) for r in waiting), free),
-               taken, used)
+               taken, used, tuple(looked) if EW else ())
 
 
 # --- the circuit -----------------------------------------------------------------------------------------------------------
@@ -600,13 +609,14 @@ def _build(C, S, *elements):
     used = [ZERO] * AC
     taken = [ZERO] * AC
     taken[0] = forced
-    adm = []
+    adm, looked = [], []
     for c in range(W + A):
         is_arr = c >= W
         r = arr[c - W] if is_arr else wait[c]
         present = r["valid"]
         room = _lt(C, cnt, const_bits(S.M, max(RC + 1, _bitlen(S.M)))) if S.M <= R else ONE
         reach = and_reduce(C, [going, present, or_reduce(C, budget), room])
+        looked.append([reach])
         ntok = _add(C, r["P"], r["out"], LW)
         h, ev = (I["hit"][c], I["evict"][c]) if S.PC else ([ZERO] * HW, [ZERO] * HW)
         hb = _pad([ZERO] * LB + list(h), LW + 1)
@@ -728,7 +738,7 @@ def _build(C, S, *elements):
     wait_next = [[x ^ y for x, y in zip(rest[q], front[q])] if q < R else rest[q] for q in range(W)]
 
     stage("out")
-    res = {"ok": [[or_reduce(C, bad).inv()]], "taken": [taken], "used": [used], **O}
+    res = {"ok": [[or_reduce(C, bad).inv()]], "taken": [taken], "used": [used], "looked": looked, **O}
     at = 0
     for k, w in (("run_valid", 1), ("run_id", S.IW), ("run_P", LW), ("run_O", LW), ("run_out", LW), ("run_comp", LW),
                  ("run_cap", AS), ("run_fin", AS), ("run_pfx", EW)):
@@ -753,8 +763,8 @@ def _sig(S):
 
 ReplayStep = _part(
     "ReplayStep", STATICS, _sig, _build,
-    "one vLLM v1 scheduler step (sync, FCFS) on a committed queue state: the certified arrivals it admits, read with the "
-    "residual's decisions, its rows and the next state, 0 for ok to refuse what the size class or the prefix layer's "
+    "one vLLM v1 scheduler step (sync or async, FCFS) on a committed queue state: the certified arrivals it admits, read "
+    "with the residual's decisions, its rows and the next state, 0 for ok to refuse what the size class or the prefix layer's "
     "counts can't express (`replay_step.reference`)")
 
 
@@ -821,7 +831,8 @@ def decode(S, flat: Sequence[int]) -> Out:
     if not f["ok"][0]:
         return Out(False)
     rows = tuple((p, f["row_id"][p], f["row_kind"][p], f["row_start"][p], f["row_n"][p]) for p in range(S.R) if f["row_valid"][p])
-    return Out(True, rows, State(reqs("run", True), reqs("wait", False), f["free"][0]), f["taken"][0], f["used"][0])
+    return Out(True, rows, State(reqs("run", True), reqs("wait", False), f["free"][0]), f["taken"][0], f["used"][0],
+               tuple(f.get("looked", ())))
 
 
 def evaluate(st_: dict, cases: Sequence[tuple[State, Inputs]]) -> list[Out]:
@@ -850,11 +861,12 @@ def to_json(state: State, inp: Inputs, want: Out) -> list:
             [[_req(r) if r.cap else _req(r)[:3] for r in inp.arrivals], [k for k, b in enumerate(inp.bits) if b], nz(inp.hit),
              nz(inp.evict), nz(inp.ret)] + ([nz(inp.row_pfx)] if any(inp.row_pfx) else []),
             [[list(r) for r in want.rows], [[_req(r) for r in want.state.running], [_req(r) for r in want.state.waiting],
-                                            want.state.free], want.taken, want.used]]
+                                            want.state.free], want.taken, want.used]
+            + ([[k for k, b in enumerate(want.looked) if b]] if want.looked else [])]
 
 
 def from_json(st_: dict, v: list) -> tuple[State, Inputs, Out]:
-    (run, wait, free), (arr, ones, hit, evict, ret, *pfx), (rows, (nrun, nwait, nfree), taken, used) = v
+    (run, wait, free), (arr, ones, hit, evict, ret, *pfx), (rows, (nrun, nwait, nfree), taken, used, *lk) = v
 
     def dense(pairs, n):
         out = [0] * n
@@ -869,7 +881,8 @@ def from_json(st_: dict, v: list) -> tuple[State, Inputs, Out]:
     return (State(reqs(run), reqs(wait), free),
             Inputs(reqs(arr), dense([(k, 1) for k in ones], A), dense(hit, W + A), dense(evict, W + A), dense(ret, R),
                    dense(pfx[0], R) if pfx else ()),
-            Out(True, tuple(tuple(r) for r in rows), State(reqs(nrun), reqs(nwait), nfree), taken, used))
+            Out(True, tuple(tuple(r) for r in rows), State(reqs(nrun), reqs(nwait), nfree), taken, used,
+                dense([(k, 1) for k in (lk[0] if lk else ())], W + A) if st_.get("EW") else ()))
 
 
 # --- cost ------------------------------------------------------------------------------------------------------------------

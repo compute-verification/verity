@@ -1073,13 +1073,16 @@ in `ReplayStep_v1`'s scheduling order:
 - *The state row.* `replay_chain`'s state row gains one group after its heads, in `CacheStep_v1`'s `_in_fields` order,
   with EW = bitlen(N):
 
-      cache    c_valid N×1 | c_parent N×EW | c_tok N×(U·TW) | c_owner N×RW | run_pfx R×EW | filled 1×BW | sent 1×1
+      cache    c_valid N×1 | c_parent N×EW | c_tok N×(U·TW) | c_owner N×RW | filled 1×BW | sent 1×1
 
-  `run_pfx` is one more running-slot field, which `ReplayStep_v1{…, EW}` moves with its slot through its compaction
-  and placement. It reads `run_pfx` and `row_pfx`, each row's entry after its last `CacheStep_v1` call (a running
-  row's one call, an admitted row's second), by the row's slot, and writes the next `run_pfx`: a slot with a row
-  takes its `row_pfx`, a kept slot without one keeps its own, and a preempted or stopped request drops its own (a
-  preempted one resumes as an admitting row from the root). The empty state's group is all zero bits. While the bound holds, nothing leaves the
+  `ReplayStep_v1{…, EW}`'s state gains `run_pfx R×EW` after `run_comp`, one more running-slot field, which its
+  compaction and placement move with its slot, so the state row's state group carries it. The step reads `row_pfx`,
+  each row's entry after its last `CacheStep_v1` call (a running row's one call, an admitted row's second), by the
+  row's slot: a slot with a row takes its `row_pfx`, a kept slot without one keeps its own, and a preempted or stopped
+  request drops its own (a preempted one resumes as an admitting row from the root). The step also outputs
+  `looked (W + A)×1` after `used`, the candidates whose lookup it read: each waiting slot its loop reaches, the one
+  whose allocation ends the loop included, and each arrival it checks for an ask. `replay_vectors --EW` holds it to
+  the replay's `_KV.hit` calls. The empty state's group is all zero bits. While the bound holds, nothing leaves the
   cache, so N = NB − 1 entries hold every unit computed: 149,212 bits of table a state row at smallkv's
   (511, 16, 17, 10).
 - *Past the bound* (`sent` = 1), eviction may have shortened a hit, and the call checks only that the hit is a cached
@@ -1153,8 +1156,9 @@ resumes and async's lag bits) on the 6 corpus traces that send any: 0 mismatches
   tables, which isn't built. v1 sends none. `code_v1.KT` also halves its counts in place, where v1 scales the estimate
   as it reads it; `KTContext_v1` is v1's.
 - `ReplayStep_v1` models async scheduling (AS) and carries the walk entries (EW), but `replay_chain`'s rows don't yet:
-  with AS the step's state part ends `run_fin R×1 | run_cap R×1 | wait_cap W×1` after `free`, and an arrival carries
-  its cap (O = max_tokens), so the window row's queue needs `q_cap Q×1` after `q_O`.
+  its state group needs `run_pfx R×EW` after `run_comp`; with AS the step's state part ends
+  `run_fin R×1 | run_cap R×1 | wait_cap W×1` after `free`, and an arrival carries its cap (O = max_tokens), so the
+  window row's queue needs `q_cap Q×1` after `q_O`.
 - `ReplayStep_v1` takes the prefix layer (each hit, its evictable blocks, each slot's returns) as witness it bounds.
   `CacheStep_v1` fixes the hits while the no-eviction bound holds. Past it, the hits are a channel v1 doesn't charge
   until v1 sends them (above). The evictable counts and the returns stay bounded witness. A reference count per entry

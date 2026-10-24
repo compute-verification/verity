@@ -8,10 +8,11 @@ hit and evictable blocks, as `_KV.hit` found them; each leaving request's return
 freed them) and what the replay did (rows, next state, arrivals taken, decisions read). It also checks the one fact the
 circuit's state rests on, that a running request holds ⌈computed / B⌉ blocks.
 
-    python3 replay_vectors.py TRACE... [--R 16 --W 64 --A 16] [--circuit] [--out OUT.json] [--fixture N]
+    python3 replay_vectors.py TRACE... [--R 16 --W 64 --A 16] [--EW 9] [--circuit] [--out OUT.json] [--fixture N]
 
 checks `replay_step.reference` on every step that fits the size class (the rest are counted, out of class), and with
-`--circuit` the Definition on them too; `--fixture N` writes each trace's N consecutive fitting steps with the most
+`--circuit` the Definition on them too; with `--EW` each step's `looked` against the lookups the scheduler made (the
+candidates whose `_KV.hit` it called), which is what v1 sends a shortfall for past the pool bound; `--fixture N` writes each trace's N consecutive fitting steps with the most
 preemptions, cache hits, admissions and stops (`window`) as the vectors the certifier's test reads
 (`verity/core/protocols/certifier/tests/fixtures/replay_step_vectors.json`).
 """
@@ -128,12 +129,13 @@ def _instrumented(rec: _Recorder):
         K.hit, K.free_request = orig["hit"], orig["free_request"]
 
 
-def vectors(trace: RP.Trace, *, R: int, W: int, A: int) -> tuple[dict, list[tuple[RS.State, RS.Inputs, RS.Out]]]:
+def vectors(trace: RP.Trace, *, R: int, W: int, A: int, EW: int = 0) -> tuple[dict, list[tuple[RS.State, RS.Inputs, RS.Out]]]:
     """The binding for `trace`'s engine at (R, W, A), and every unit of the scan as (state, inputs, the replay's
-    outputs): each `schedule()`, empty ones included, since under async scheduling one still updates the step before."""
+    outputs): each `schedule()`, empty ones included, since under async scheduling one still updates the step before.
+    With EW the outputs carry `looked`, the candidates whose `_KV.hit` the step called (the walk entries stay 0)."""
     e = trace.engine
     n = len(trace.requests)
-    st = RS.statics(R, W, A, dict(e.__dict__), max(n - 1, 1).bit_length())
+    st = RS.statics(R, W, A, dict(e.__dict__), max(n - 1, 1).bit_length(), EW)
     first = trace.first_scheduled()
     rec = _Recorder()
 
@@ -161,11 +163,11 @@ def vectors(trace: RP.Trace, *, R: int, W: int, A: int) -> tuple[dict, list[tupl
         forced = int(quiet and adds_before < n)
         first_open = adds_before + forced
         wait_ids = [r.id for r in prev.waiting] or ([adds_before] if forced else [])
-        hit, evict = [0] * (W + A), [0] * (W + A)
+        hit, evict, looked = [0] * (W + A), [0] * (W + A), [0] * (W + A)
         for i, h, ev in sr["hits"]:
             c = wait_ids.index(i) if i in wait_ids else W + (i - first_open)
             if 0 <= c < W + A:
-                hit[c], evict[c] = h, ev
+                hit[c], evict[c], looked[c] = h, ev, 1
         ret = [0] * R
         if [r.id for r in prev.running] != sr["before"]:
             raise AssertionError("a unit's running list isn't the one the unit before it left")
@@ -178,7 +180,7 @@ def vectors(trace: RP.Trace, *, R: int, W: int, A: int) -> tuple[dict, list[tupl
         inp = RS.Inputs(arrivals, tuple(sr["asked"]) + (0,) * (A - len(sr["asked"])), tuple(hit), tuple(evict), tuple(ret))
         rows = tuple((sr["running"].index(i), i, int(nn == 1 and start >= reqs[i].prompt_len), start, nn)
                      for i, start, nn in step.rows)
-        want = RS.Out(True, rows, sr["next"], sr["adds"] - adds_before, len(sr["asked"]))
+        want = RS.Out(True, rows, sr["next"], sr["adds"] - adds_before, len(sr["asked"]), tuple(looked) if EW else ())
         out.append((prev, inp, want))
         prev, adds_before = sr["next"], sr["adds"]
     return st, out
@@ -227,6 +229,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     ap.add_argument("--R", type=int, default=16)
     ap.add_argument("--W", type=int, default=64)
     ap.add_argument("--A", type=int, default=16)
+    ap.add_argument("--EW", type=int, default=0, help="walk entries of this width, and `looked` checked against `_KV.hit`")
     ap.add_argument("--circuit", action="store_true", help="evaluate the Definition on the fitting steps too")
     ap.add_argument("--fixture", type=int, default=0, help="keep the first N fitting steps of each trace")
     ap.add_argument("--out", type=Path)
@@ -237,7 +240,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         name = p.stem if p.is_file() else f"{p.resolve().parent.name}/{p.name}"
         tr = RP.read_any(p)
         try:
-            st, vs = vectors(tr, R=a.R, W=a.W, A=a.A)
+            st, vs = vectors(tr, R=a.R, W=a.W, A=a.A, EW=a.EW)
         except ValueError as e:
             report["traces"][name] = {"skipped": str(e)}
             print(f"{name}: skipped ({e})", flush=True)

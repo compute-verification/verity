@@ -255,6 +255,29 @@ def test_walk_entries_move_with_their_slots():
     assert [(r.id, r.pfx) for r in got.state.running] == [(1, 7), (3, 9)]
 
 
+def test_looked_is_the_lookups_the_scheduler_reads():
+    """`looked` marks each waiting slot the loop reaches, the one whose allocation ends it included, and each arrival
+    `would_admit` checks, asked or not; none past the loop's end, once the budget is spent or in a step that preempted."""
+    st = RS.statics(3, 2, 2, _engine(enable_prefix_caching=True, num_gpu_blocks=12), 7, 4)
+    running = (RS.Req(0, 40, 5, 2, 41),)
+    waiting = (RS.Req(1, 20, 2), RS.Req(2, 90, 2))
+    # waiting 1 is admitted, waiting 2 doesn't fit the 4 free blocks: both read, the arrival not reached
+    got = _both(st, RS.State(running, waiting, 4), RS.Inputs((RS.Req(3, 8, 2),), (1, 0)))
+    assert got.looked == (1, 1, 0, 0) and got.used == 0
+    # an empty waiting list: the first arrival is read and declined, the second isn't reached
+    got = _both(st, RS.State(running, (), 9), RS.Inputs((RS.Req(3, 8, 2), RS.Req(4, 8, 2)), (0, 1)))
+    assert got.looked == (0, 0, 1, 0) and got.used == 1 and got.taken == 0
+    # the running row takes the whole budget: nothing is read
+    got = _both(st, RS.State((RS.Req(0, 100, 5, 0, 30),), waiting, 9), RS.Inputs((RS.Req(3, 8, 2),), (1, 0)))
+    assert got.looked == (0, 0, 0, 0)
+    # a step that preempted runs no waiting loop
+    edge = tuple(RS.Req(i, 32, 9, 1, 32) for i in range(2))
+    got = _both(st, RS.State(edge, (RS.Req(5, 8, 2),), 0), RS.Inputs((), ret=(2, 2, 0)))
+    assert [r.id for r in got.state.waiting][:1] == [1] and got.looked == (0, 0, 0, 0)
+    assert RS.statics(3, 2, 2, _engine(), 7)["EW"] == 0 and _both(RS.statics(3, 2, 2, _engine(), 7), RS.State(running, (), 9),
+                                                                   RS.Inputs((RS.Req(3, 8, 2),), (0, 0))).looked == ()
+
+
 def test_size_counts_the_gates():
     for cfg in CONFIGS[:2] + CONFIGS[6:7]:
         st = RS.statics(cfg["R"], cfg["W"], cfg["A"], cfg["engine"], 7, cfg.get("EW", 0))
