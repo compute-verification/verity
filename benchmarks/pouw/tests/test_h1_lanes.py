@@ -48,7 +48,7 @@ def test_the_known_rows_are_the_harness_own(seed: int):
     if seed > 1:
         leaf = dataclasses.replace(leaf, admit=[rng.getrandbits(1) for _ in range(RN.RC[0])])
     roots = (rng.randbytes(64), rng.randbytes(64))
-    w = RN.World("honest", leaf, roots, {}, "", "", None, {})
+    w = RN.World("honest", leaf, roots, {}, "", "", None, {}, {})
     ctx = RN.Ctx(Path("."), f"h1-lanes-{seed}", 32, position)
     for index, (kind, ln) in enumerate(LL.statements(*RN.RC)):
         got = RN.known_rows(ctx, w, kind, ln, index)
@@ -73,7 +73,7 @@ def test_off_the_served_leaf_the_known_rows_refuse_and_take_what_the_harness_did
         position = rng.choice((0, (1 << 32) - 1, 1 << 32, (1 << 64) - 1, rng.getrandbits(64), 1 << 64, -1))
         leaf = RN.Leaf([], [], [], [], (), [rng.getrandbits(1) for _ in range(rng.choice((32, 0, 1, 15, 17, 79)))],
                        rng.randbytes(64), position)
-        w = RN.World("honest", leaf, (rng.randbytes(64), rng.randbytes(64)), {}, "", "", None, {})
+        w = RN.World("honest", leaf, (rng.randbytes(64), rng.randbytes(64)), {}, "", "", None, {}, {})
         ctx = RN.Ctx(Path("."), "h1-lanes", 32, position)
         ln = rng.choice((None, 0, 31, rng.randrange(32)))
         kind, index = (LL.COMBINE, 32) if ln is None else (LL.LANE, ln)

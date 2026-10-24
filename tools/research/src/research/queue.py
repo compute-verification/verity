@@ -48,11 +48,14 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
     research queue stats (--log FILE | --per-pr) [--hours H] [--until TS] [--json]
                                                    where landed PRs' time went, from drive's log (`research.queue_stats`); --per-pr,
                                                    the per-PR shadow's would-land times from drive's state file instead
-    research queue checked-heads [--tip REV] [--json]
+    research queue checked-heads [--tip REV] [--json] [--out FILE]
                                                    the commits on REV's first-parent line (default origin/main) whose own `check`
                                                    passed and landed them, oldest first, one a line: each train's head, by drive's
                                                    `landed` labels in the store index (`merge.checked_heads`), less a head whose
-                                                   train a later `git revert` names; what an auditor passes as main's line
+                                                   train a later `git revert` names. --out FILE writes them newest first, an
+                                                   optional source for the verifier's --main file (`merge.main_line`), for a
+                                                   deployment that wants credit's line to be the checked train heads rather than
+                                                   the raw `git rev-list --first-parent origin/main` infra writes by default
     common flags: [--shadow] [--workdir DIR] [--rules FILE] [--repo OWNER/NAME] [--remote URL]
 
 Admission.  A PR is admitted while it is open against `main`, has an owner, carries no hold label, and is marked ready at its head;
@@ -152,7 +155,8 @@ STALL = ("-c", "http.lowSpeedLimit=1000", "-c", "http.lowSpeedTime=120")
 #: `gh api`'s limit: gh has no timeout, and a listing of the open PRs held a drive tick on a dead connection for 5 min
 #: (14 Oct 00:46Z) while the same call answered in a second from a fresh one
 GH_TIMEOUT_S = 120
-LANE_RE = re.compile(r"^[ \t>*_]*Lane[:\s]+`?([A-Za-z0-9][A-Za-z0-9._-]*)`?", re.M)
+#: the lane's handle ends on a letter or digit, so a sentence's period (`Lane proofs.`, #3427) isn't part of it
+LANE_RE = re.compile(r"^[ \t>*_]*Lane[:\s]+`?([A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)`?", re.M)
 REGISTRY = Path(".agents/skills/using-slack/registry.json")
 AGENT_RE = re.compile(r"\bbc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b")
 TRAILER_RE = re.compile(r"^(PR|Head|Owner): (.+)$", re.M)
@@ -252,6 +256,16 @@ class GitHub:
         if r.returncode:
             raise QueueError(f"gh api repos/{self.repo}/pulls: {(r.stderr or r.stdout).strip()[-300:]}")
         return [PR.from_api(d) for page in _json_values(r.stdout) for d in (page if isinstance(page, list) else [page])]
+
+    def branch_tip(self, branch: str) -> str | None:
+        """``branch``'s commit as git has it now (the refs API, which a push moves at once; a PR's head lags it by seconds), or
+        None when it can't be read (a fork's branch, no answer)."""
+        try:
+            r = subprocess.run(["gh", "api", f"repos/{self.repo}/git/ref/heads/{branch}", "--jq", ".object.sha"], capture_output=True,
+                               text=True, timeout=GH_TIMEOUT_S)
+        except subprocess.TimeoutExpired:
+            return None
+        return r.stdout.strip() or None if r.returncode == 0 else None
 
 
 # ---- rules and labels ---------------------------------------------------------------------------------------------------------------
@@ -690,10 +704,12 @@ class Queue:
         return bool(self.ready(m.pr, m.head)) and self._same_or_fixed(m, entries)
 
     def _frozen(self, m: Member, entries: dict[int, Entry]) -> bool:
-        """Whether member ``m`` stays at its old head: `frozen` names it, its PR is still open, and neither ejected nor held."""
+        """Whether member ``m`` stays at its old head: `frozen` names it, its PR is still open, neither ejected nor held, and that
+        head is still marked ready (23 Oct: #3261's 73f5eb82, its mark withdrawn at 14:56Z for failing two lints, rode five
+        running trains until 745e2a0024e9's check failed on it at 16:14Z)."""
         e = entries.get(m.pr)
         return (m.pr in self.frozen and e is not None and e.pr.head != m.head and e.state != "refused"
-                and not e.why.startswith("held"))
+                and not e.why.startswith("held") and bool(self.ready(m.pr, m.head)))
 
     def _forces_cold(self, n: int) -> bool:
         r = _git(self.workdir, "diff", "--name-only", f"refs/remotes/origin/main...refs/queue/pr/{n}", check=False)
@@ -1837,6 +1853,9 @@ def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str |
     ``preflight`` (`Preflight`; None with `--no-preflight`) refuses a head that would break `next`, with the fix.  With ``sha``
     (`--sha`) it marks only that head: GitHub's head lags a push by seconds (20 Oct: `git push && research queue ready 2848 --mark`
     marked the old head), so it reads again, up to `SHA_READS` times, and refuses when GitHub still has another head."""
+    if not sha and number is not None and (p := next((x for x in github.open_prs() if x.number == number), None)) and p.branch \
+            and (tip := getattr(github, "branch_tip", lambda _b: None)(p.branch)):
+        sha = tip                                           # 24 Oct: a mark seconds after a push preflighted GitHub's old head
     for i in range(SHA_READS if sha else 1):
         prs = github.open_prs() if number is not None else []
         pr = next((p for p in prs if p.number == number), None)
@@ -1979,7 +1998,7 @@ def _stats(a: argparse.Namespace) -> int:
     """`research queue stats` (`queue_stats`): each landed PR's head from `main`'s merges onto `next`, its ready mark from the
     store, the landing check's records fetched with `research status --also`."""
     from . import queue_stats
-    from .drive import _fetch
+    from .merge import fetch_run
     from .store.local import LocalStore
 
     top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
@@ -2000,7 +2019,11 @@ def _stats(a: argparse.Namespace) -> int:
         return queue_stats.ts(at) if at else None
 
     def run_dir(rid: str) -> Path:
-        return _fetch(top, rid, ["slot.json", "steps.jsonl"]) or Path("/nonexistent")
+        # a landing's check has ended (--refresh); one name a fetch, since slot.json beside steps.jsonl fetched neither (23 Oct)
+        got = fetch_run(rid, ["steps.jsonl"], top, refresh=True)
+        if got and not (got[0] / "slot.json").is_file():
+            fetch_run(rid, ["slot.json"], top, refresh=True)
+        return got[0] if got else Path("/nonexistent")
 
     return queue_stats.main(a.log, a.hours, a.until, marked, run_dir, a.json)
 
@@ -2020,6 +2043,11 @@ def _checked_heads(a: argparse.Namespace) -> int:
     except (QueueError, Refused, RuntimeError) as e:
         print(f"research queue checked-heads: {e}", file=sys.stderr)
         return 1
+    if a.out is not None:
+        a.out.write_text("".join(c + "\n" for c, _ in reversed(heads)))
+        print(f"research queue checked-heads: wrote {len(heads)} checked train heads (newest first) to {a.out}, an "
+              "optional verifier --main file (first-parent by default)", file=sys.stderr)
+        return 0
     print(json.dumps([{"commit": c, "run": r} for c, r in heads], indent=1) if a.json else "\n".join(c for c, _ in heads))
     return 0
 
@@ -2090,6 +2118,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--body-file", type=Path, help="open: the PR's body, verbatim (its first line `Lane NAME` names the owner)")
     ap.add_argument("--base", default="main", help="open: the base branch (default main)")
     ap.add_argument("--tip", default="origin/main", help="checked-heads: whose first-parent line (default origin/main)")
+    ap.add_argument("--out", type=Path, metavar="FILE", help="checked-heads: write the checked train heads newest first "
+                    "to FILE (an optional source for the verifier's --main file) instead of listing them on stdout")
     ap.add_argument("--draft", action="store_true", help="open: as a draft (default: ready for review)")
     ap.add_argument("--log", type=Path, help="stats: drive's log (its stdout, every tick's)")
     ap.add_argument("--hours", type=float, default=24.0, help="stats: the window's length (default 24)")
@@ -2199,6 +2229,10 @@ def main(argv: list[str]) -> int:
             else:
                 print(_render(entries))
             return 0
+        from .merge import off_drive, on_drive
+
+        if a.command in ("sync", "land") and not (a.dry_run or on_drive()):
+            raise QueueError(off_drive(q.branch if a.command == "sync" else "main", f"queue {a.command}"))
         if a.command == "sync":
             q.sync(dry_run=a.dry_run)
             return 0
@@ -2218,7 +2252,11 @@ def main(argv: list[str]) -> int:
         if a.pr is None or not a.reason:
             ap.error("eject needs a PR number and --reason")
         told = q.tell_ejected(q.eject(a.pr, a.reason, a.by, sha=a.sha), a.reason, a.by)
-        q.sync()
+        if on_drive():
+            q.sync()
+        else:
+            print(f"research queue: #{a.pr}'s mark is withdrawn; drive's next tick rebuilds `{q.branch}` without it (only drive "
+                  "pushes it)")
         return told
     except QueueError as e:
         print(f"research queue: {e}", file=sys.stderr)
