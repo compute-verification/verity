@@ -116,6 +116,17 @@ def test_a_trace_corpus_trace_round_trips(tmp_path):
         V.encode(adv, rec, V.Registered(t.engine, stops, row_order="scheduling"))
 
 
+def test_the_corpus_table(tmp_path, capsys):
+    out = tmp_path / "table.json"
+    (tmp_path / "c").mkdir()
+    assert V.main([f"smallkv={_corpus(tmp_path / 'c')}", "--stops", "128009,128001,128008", "--jobs", "1",
+                   "--out", str(out)]) == 0
+    (row,) = json.loads(out.read_text())["rows"]
+    assert row["plain"]["round_trip"] and row["egress"]["round_trip"]
+    assert row["plain"]["bits"] == sum(row["plain"]["by_window"].values()) < row["v0"] // 1000
+    assert "| smallkv | " in capsys.readouterr().out
+
+
 def _tiny(windows: int):
     """Three requests into an engine of two sequences and an 8-token budget, so the replay asks about each arrival."""
     e = R.Engine(max_num_seqs=2, max_num_batched_tokens=8, max_model_len=64, num_gpu_blocks=32, block_size=4)

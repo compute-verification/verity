@@ -48,9 +48,14 @@ exactly that long, zero padding of fewer than 8 bits and no byte past it.
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
+import json
+import os
 import sys
+import time
 from collections.abc import Callable, Sequence
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, TypeVar
@@ -515,3 +520,79 @@ def advice_of(trace: Any, record: Record) -> I1.Advice:
                 kept[j] += 1
         steps.append(I1.StepAdvice(tuple(out)))
     return I1.Advice(requests, tuple(steps), tuple(release))
+
+
+# --- the corpus table --------------------------------------------------------------------------------------------------
+
+TABLE_CONTEXTS = ("plain", "egress")  # v1 charged; and the release buckets of today's engine as ENC-REPLAY's context
+
+
+def measure(label: str, path: str, stop_ids: Sequence[int], T: int = 600) -> dict[str, Any]:
+    """One TRACE-CORPUS trace (`replay.read_corpus_trace`, the warden's ingress) through v1 under each of
+    `TABLE_CONTEXTS`: each string's charge per window, its header's bits, and whether it decodes back to the trace's
+    I1 v0; and I1 v0's own charge (`advice.bits_by_window`) for that advice."""
+    tr = R.read_corpus_trace(path, ingress="warden")
+    rec = record_of(tr, stop_ids)
+    adv = advice_of(tr, rec)
+    row: dict[str, Any] = {"trace": label, "requests": len(rec.requests), "steps": len(adv.steps),
+                           "windows": windows(rec, T), "v0": sum(I1.bits_by_window(adv, T).values())}
+    for contexts in TABLE_CONTEXTS:
+        reg = Registered(tr.engine, tuple(stop_ids), T=T, contexts=contexts)
+        t0 = time.monotonic()
+        data = encode(adv, rec, reg, check=False)
+        t1 = time.monotonic()
+        back = decode(data, rec, reg) == adv
+        by = bits_by_window(data, rec, reg)
+        row[contexts] = {"bits": sum(by.values()), "by_window": by, "max_window": max(by.values()),
+                         "header": C.gamma_len(tr.engine.num_gpu_blocks), "bytes": len(data),
+                         "round_trip": back, "encode_s": round(t1 - t0, 1), "decode_s": round(time.monotonic() - t1, 1)}
+    return row
+
+
+def render(rows: Sequence[dict[str, Any]], T: int) -> str:
+    out = [f"| trace | requests | windows (T = {T}) | I1 v0 | v1 charged (total; per window) | of it the pool's header "
+           "| v1, egress contexts (total; max per window) | decode(encode(a)) == a |",
+           "|---|---|---|---|---|---|---|---|"]
+    for r in rows:
+        if "error" in r:
+            out.append(f"| {r['trace']} | error: {r['error']} |||||||")
+            continue
+        p, e = r["plain"], r["egress"]
+        per = ", ".join(f"{p['by_window'][w]:,}" for w in sorted(p["by_window"]))
+        out.append(f"| {r['trace']} | {r['requests']} | {r['windows']} | {r['v0']:,} | {p['bits']:,}; {per} | "
+                   f"{p['header']} | {e['bits']:,}; {e['max_window']:,} | {p['round_trip'] and e['round_trip']} |")
+    return "\n".join(out) + "\n"
+
+
+def _measured(job: tuple[str, str, tuple[int, ...], int]) -> dict[str, Any]:
+    try:
+        return measure(*job)
+    except (ValueError, RuntimeError) as e:
+        return {"trace": job[0], "error": str(e)}
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description="Advice v1's bits per window over TRACE-CORPUS traces, with its round "
+                                             "trip, against I1 v0's charge.")
+    ap.add_argument("traces", nargs="+", help="LABEL=DIR: a trace's directory (steps.jsonl, requests.jsonl, meta.json, "
+                                              "server.log)")
+    ap.add_argument("--stops", default="128001", help="the registered stop ids, comma-separated, EOS first")
+    ap.add_argument("--T", type=int, default=600, help="the window, in 100 ms buckets")
+    ap.add_argument("--jobs", type=int, default=0, help="processes (default: one a trace, up to the cores)")
+    ap.add_argument("--out", type=Path, required=True, help="the table's JSON")
+    a = ap.parse_args(argv)
+    stops = tuple(int(s) for s in a.stops.split(","))
+    jobs = [(t.split("=", 1)[0], t.split("=", 1)[1], stops, a.T) for t in a.traces]
+    workers = a.jobs or min(len(jobs), os.cpu_count() or 1)
+    if workers == 1:
+        rows = [_measured(j) for j in jobs]
+    else:
+        with ProcessPoolExecutor(workers) as pool:
+            rows = list(pool.map(_measured, jobs))
+    a.out.write_text(json.dumps({"T": a.T, "stops": stops, "rows": rows}, indent=1) + "\n")
+    print(render(rows, a.T), end="")
+    return 0 if all("error" not in r and r["plain"]["round_trip"] and r["egress"]["round_trip"] for r in rows) else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
