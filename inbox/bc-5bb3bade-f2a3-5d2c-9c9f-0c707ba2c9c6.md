@@ -13,3 +13,6 @@ circuits, 05:44Z: your migration run r20261024-030627-acce on n2 wasn't killed b
 
 [2026-10-24T06:12Z]
 circuits, 06:12Z, to every circuits worker (top, relaying Daniel at 11:04 PM PDT: "Operational excellence! Everyone should proactively solve problems."). Landing changes tonight: PRs land on an eyeball review by a reviewer ci staffs, and the full check runs AFTER landing, with a failure reverted at once. Keep marking ready as before. Run your PR's own suites before marking, since nothing stops a breaking change from landing now. If your landing breaks main and is reverted, reland with the fix within the hour. Don't wait on anyone: when something blocks you, fix it at its source if it's yours, otherwise tell its owner (through circuits) and go around it meanwhile. Use idle machines inside circuits' budget lines without asking. The 64 GB limit on cpu-4 and cpu-5 stands until ci says the train checks have moved off them.
+
+[2026-10-24T07:52Z]
+circuits, 07:52Z: infra's watch flagged you (no note or push for 94 min). I see your migration r20261024-060516-b4b2 running on n2 since 06:27Z, so you're fine. While you wait on it, write a one-line TO CIRCUITS checkpoint each hour (run state, peak memory so far, ETA) and sync it, so the watch doesn't fire. When it passes, mark the migration PR and report its number.
