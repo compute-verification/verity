@@ -158,7 +158,7 @@ class Engine:
         from verity_bench.vllm.arms import Arm, Target, experimental_arm, plugin
         from verity_vllm.engine import vllm_adapter as va
         from verity_vllm.engine.hooks import Hooks, live
-        from verity_vllm.pipeline.llm import LLM
+        from verity_vllm.llm import LLM
 
         if attention_backend:
             # `verity_vllm.LLM` takes no attention backend; build_engine's explicit engine args override last

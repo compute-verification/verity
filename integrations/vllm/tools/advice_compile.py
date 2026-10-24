@@ -41,9 +41,9 @@ def main() -> int:
     from verity.core.protocols.certifier import advice as I1
     from verity_vllm.config import checkpoint_entries
     from verity_vllm.engine import step_trace as ST
-    from verity_vllm.predict.build import Unexpressible
-    from verity_vllm.predict.phi import Phi
-    from verity_vllm.predict.steps import Registered, compare, compile_steps, trace_commands
+    from verity_vllm.program.predict.build import Unexpressible
+    from verity_vllm.program.predict.phi import Phi
+    from verity_vllm.program.predict.steps import Registered, compare, compile_steps, trace_commands
 
     advice = I1.decode(Path(a.advice or run / "advice" / "private" / "advice.bin").read_bytes())
     meta = json.loads((run / "run.json").read_text())
