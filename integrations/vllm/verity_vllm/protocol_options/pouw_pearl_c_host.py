@@ -25,6 +25,7 @@ from verity.core.protocols.pouw.audit import (
     salt_of,
     weights_root,
 )
+from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening
 from verity.core.protocols.pouw.protocol import DomainError
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.challenger import LiveCommitment, LiveOpening
@@ -74,7 +75,12 @@ def _constant_keys(t: Any) -> dict[str, int]:
     return {"salt_key": p, "hm": p + 256}
 
 
-def epoch_of(workload: Workload, roots: dict[int, bytes], coins: Any, opening: Any) -> Epoch:
+#: the salt coin's commitment and opening a device run takes: the challenger's held in this process, or a live session's
+SaltCoins = CoinCommitment | LiveCommitment
+SaltOpening = CoinOpening | LiveOpening
+
+
+def epoch_of(workload: Workload, roots: dict[int, bytes], coins: SaltCoins, opening: SaltOpening) -> Epoch:
     """The epoch whose salt is the challenger's salt coin `opening`, opened against `coins` after the weights' root: a
     `CoinOpening` of a `CoinCommitment` through `Epoch.start`, or a live session's `LiveOpening` of its `LiveCommitment`
     (the auditor host's, `pouw_h1_window.open_session`) under the same rules: every weight committed and only those, the

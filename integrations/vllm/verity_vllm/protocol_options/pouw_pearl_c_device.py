@@ -65,8 +65,6 @@ from pathlib import Path
 from typing import Any
 
 from verity.core.protocols.pouw.audit import Epoch, Workload, rows_domain, transcript_domain
-from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening
-from verity.core.protocols.sampled_proofs.challenger import LiveCommitment, LiveOpening
 from verity.core.protocols.pouw.protocol import Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c as C
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
@@ -90,6 +88,8 @@ from .pouw_pearl_c_lanes import (  # noqa: F401 - the schedule's names, kept imp
     splits,
 )
 from .pouw_pearl_c_host import (
+    SaltCoins,
+    SaltOpening,
     _bytes,
     _constant_keys,
     _constants,
@@ -298,12 +298,11 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
     the passes the bench and the verifier need (`begin`, `end`, `end_pass`)."""
 
     def __init__(self, scheme: C.PearlC, entry: str, kernel: Kernel, weights: dict[int, Any], roots: dict[int, bytes],
-                 coins: CoinCommitment | LiveCommitment, opening: CoinOpening | LiveOpening, hashing: bool = True,
-                 capacity: int = LEAF_CAPACITY, time_gemm: bool = False, schedule: str | Schedule = SERIAL, graphs: bool = False,
-                 whole_defer: bool = False, flag_rows: int = FLAG_ROWS, salt_key: bytes | None = None):
-        """`coins` is the challenger's coin commitment of the epoch and `opening` its salt coin, opened after the weights'
-        root: one held in this process or a live session's on the auditor host (`epoch_of`, which raises `DomainError` for
-        any other coin).  The epoch's salt is the coin's."""
+                 coins: SaltCoins, opening: SaltOpening, hashing: bool = True, capacity: int = LEAF_CAPACITY,
+                 time_gemm: bool = False, schedule: str | Schedule = SERIAL, graphs: bool = False, whole_defer: bool = False,
+                 flag_rows: int = FLAG_ROWS, salt_key: bytes | None = None):
+        """`coins` is the epoch's coin commitment, held in this process or a live session's on the auditor host, and `opening`
+        its salt coin, opened after the weights' root (`epoch_of`, which raises `DomainError` otherwise): the salt is the coin's."""
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
         self.nb, self.salt_key = kernel.run.NB, salt_key
         self.graphs = graphs and next(iter(weights.values())).device.type == "cuda"
