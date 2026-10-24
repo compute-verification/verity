@@ -1122,11 +1122,55 @@ window's charge is its frame, with the header charged to window 0 (`bits_by_wind
 5. `compile_steps(registered, advice, ingress)` (#3504) turns the advice into the Programs, with `ingress` the certified
    bodies by id.
 
+**The prefix cache in the scan.** `CacheStep_v1` (`cache_step`) is ENC-DERIVED's prefix rules (`Prefixes`) as a Boolean
+Definition: one row's pass over a table of at most N cached units (a unit's U tokens, its parent entry and its owner,
+the lowest-numbered request that computed it), compared on tokens, with no hash in the circuit. Each engine step of the
+scan (item 2) is one `ReplayStep_v1` and the `CacheStep_v1` calls on its rows, which carry the table from call to call
+in `ReplayStep_v1`'s scheduling order:
+- *The calls.* Each running row comes first, from its slot's walk entry `pfx` over the units from its start's: it owns
+  or appends the units it completes. Each candidate (the W waiting slots, then the A arrivals) then gets a lookup from
+  the root (`admit`, nins = 0), which checks the candidate's hit h, the input `ReplayStep_v1` reads with U = B. An
+  admitted candidate gets a second call from the lookup's `pfx`, which owns or appends the units its row completes.
+  So a later candidate's lookup reads an earlier one's units, as vLLM caches a block when it allocates it. The scan
+  skips an empty slot's call: it keeps the table and doesn't read that call's ok. That is R + 2·(W + A) calls a step.
+- *The owner.* A call's r is the row's request id, the arrival ordinal `ReplayStep_v1` carries (RW = IW). FCFS admits
+  new requests in arrival order, so the lowest id is the earliest-admitted request, the one I1 numbers lowest. A hit's
+  canonical sources are its lookup's trail entries' owners in the table at the step's end (`cache_step.sources`), where
+  an owner may have dropped to a lower request later in the step. The walk (item 3) reads them as I1's `sources`.
+- *The derive bit.* Each step's calls take one bit `sent`: 0 while the no-eviction bound holds, when the call refuses
+  any hit but the longest cached prefix. The bound counts the step's own admissions, ⌈(P + O)/B⌉ blocks per admitted
+  request, while the lookups that size those admissions read the bit. So the bit is witness, and the step's end checks
+  it against the count: sent = 0 iff the count through this step is at most NB − 1. The count only grows, so the bit
+  never returns to 0.
+- *The state row.* `replay_chain`'s state row gains one group after its heads, in `CacheStep_v1`'s `_in_fields` order,
+  with EW = bitlen(N):
+
+      cache    c_valid N×1 | c_parent N×EW | c_tok N×(U·TW) | c_owner N×RW | run_pfx R×EW | filled 1×BW | sent 1×1
+
+  `run_pfx` is one more running-slot field, moved with its slot by `ReplayStep_v1`'s compaction and placement. An
+  admitted row's slot takes its second call's `pfx`, and a preempted request drops its own, since it resumes as an
+  admitting row from the root. The empty state's group is all zero bits. While the bound holds, nothing leaves the
+  cache, so N = NB − 1 entries hold every unit computed: 149,212 bits of table a state row at smallkv's
+  (511, 16, 17, 10).
+- *Past the bound* (`sent` = 1), eviction may have shortened a hit, and the call checks only that the hit is a cached
+  prefix: an evicting cache never hits past what a cache that never evicts holds. So the hit is the prover's choice,
+  and v1 must send it, as ENC-DERIVED's residual does (a sparse field of the hits that miss the longest cached prefix).
+  That changes v1's format, which takes the replay's LRU hits there today. On the fixtures, 14 of corpus-smallkv's 46
+  admitting rows past the bound, and 38 of sync-crush's 100, hit less than the longest cached prefix.
+- *Cost* (`cache_step.size`): a call walks ⌈L / U⌉ units at about N·(2·(U·TW + EW) + 2·RW) ANDs each. That is 5,856
+  ANDs at (N, U, TW, RW, L) = (8, 4, 8, 4, 32), and 38.4M at smallkv's (511, 16, 17, 10, 2048): about 1.1G a step at
+  (R, W, A) = (4, 8, 4), where `ReplayStep_v1` is 12,235. The linear table is a slice's size class, and its difftest
+  (`cache_vectors`) runs it over two traces' slices at N = 128, against `Prefixes` over the whole traces. Two levers
+  remain. A static window would let a continuing row's call walk only the units its chunk touches, not all ⌈L / U⌉. And
+  sorting each step's lookups and inserts into the table's order, offline memory checking as `advice_check` sorts its
+  events, costs O(log² E) a unit for E units in all.
+
 **Open.**
 - `ReplayStep_v1` is synchronous FCFS. Async scheduling's lag row is in v1's replay and walk, not yet in the circuit.
-- `ReplayStep_v1` takes the prefix layer (each hit, its evictable blocks, each slot's returns) as witness it bounds. v1
-  charges nothing for those choices, because the replay's block pool fixes them. Until that pool, or ENC-DERIVED's
-  rules with the pool bound's fallback, is in the circuit, the hits past the bound are a channel v1 doesn't charge.
+- `ReplayStep_v1` takes the prefix layer (each hit, its evictable blocks, each slot's returns) as witness it bounds.
+  `CacheStep_v1` fixes the hits while the no-eviction bound holds. Past it, the hits are a channel v1 doesn't charge
+  until v1 sends them (above). The evictable counts and the returns stay bounded witness. A reference count per entry
+  in the table would fix both while the bound holds, and past it they need the replay's LRU block pool in the circuit.
 - The corpus records stand in for the warden's: each request's a is the engine's arrival stamp (`replay`'s
   `ingress="warden"`), and the release buckets are the engine's.
 
