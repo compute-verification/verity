@@ -26,10 +26,11 @@
 # gate.sh's, under that machine's user's ~/.ssh), PROVER_SSH how GATE_ON reaches PROVER_NODE to read its lease (empty:
 # GATE_ON's /etc/vy/peers line), MAXMIN the prover's `gpu-lease --max-min` (a lease that would run into a booked window
 # of the node's waits it out), CHECKPOINT=0 skips step 1 and GATE_MEM=0 reserves no memory for the gate steps or whatif.
-# PROVER_RUN names a prover already launched for PERIOD, which step 4 fires against (step 3 launches none). A dry
-# run's ids go to PERIOD.dry.env. --dry-run runs steps 1 and 2
-# (with DRY=1: no request reaches a gate, and GATE_KEY need not exist), prints step 3, and runs step 4 with DRY=1
-# against PROVER_RUN, any run id (default none), whose lease it reads.
+# LEASE_ON names the GPUs the prover leases (`gpu-lease --on`, default any ENGINES free ones) and LEASE_MEM_GB its host
+# memory (default 32 GB an engine). PROVER_RUN names a prover already launched for PERIOD, which step 4 fires against
+# (step 3 launches none). A dry run's ids go to PERIOD.dry.env. --dry-run runs steps 1 and 2 (with DRY=1: no request
+# reaches a gate, and GATE_KEY need not exist), prints step 3, and runs step 4 with DRY=1 against PROVER_RUN, any run id
+# (default none), whose lease it reads.
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(git -C "$HERE" rev-parse --show-toplevel)
@@ -45,6 +46,7 @@ PROVER_SSH=${PROVER_SSH--o StrictHostKeyChecking=accept-new -i /home/research/.s
 MAXMIN=${MAXMIN:-90} CHECKPOINT=${CHECKPOINT:-1} GATE_MEM=${GATE_MEM:-1}
 WHATIF_ON=${WHATIF_ON:-vy-nebius-cpu-4}
 ROLE=${ROLE:-QWEN25_32B_BF16} ENGINES=${ENGINES:-8} PORT=${PORT:-7951}
+LEASE_ON=${LEASE_ON:-} LEASE_MEM_GB=${LEASE_MEM_GB:-$((32 * ENGINES))}
 PLAN=${PLAN:-honest,skip:0.0625,honest,skip:0.0625}
 VERIFIER_SSH=${VERIFIER_SSH:--o StrictHostKeyChecking=accept-new -i /home/research/.ssh/vy-auditor-tunnel-prover prover@81.85.1.145}
 STATE=$HOME/.research/gate-runs/$PERIOD${DRY:+.dry}.env
@@ -139,7 +141,8 @@ PROVER=(--on "$PROVER_NODE" --cwd source --timeout 6h --custody-ttl 12h
   --env ENGINE_CPUS=0-23 --env PROVER_CPUS=24-47 --env "ENGINE_ARGS=--step-hz 2 --align-steps --arena-gib 62 --util 0.8"
   --env "NODE_ARGS=--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir $SNAP"
   --env "VERIFIER_SSH=$VERIFIER_SSH" --env TUNNEL_WAIT_S=1800 --env "GPU_LEASE_WHO=memory-accounting-$PERIOD"
-  -- /workspace/pouw/infra/bin/gpu-lease "$ENGINES" --wait --max-min "$MAXMIN" --mem-gb $((32 * ENGINES))
+  -- /workspace/pouw/infra/bin/gpu-lease "$ENGINES" --wait ${LEASE_ON:+--on "$LEASE_ON"} --max-min "$MAXMIN"
+  --mem-gb "$LEASE_MEM_GB"
   -- bash benchmarks/remote_session/run.sh)
 if [ -n "$DRY" ]; then
   echo "DRY: research run --project verity --source <worktree of $COMMIT> ${PROVER[*]}"
