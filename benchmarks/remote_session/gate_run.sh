@@ -10,7 +10,8 @@
 #   1. checkpoint  checkpoint.sh with CHECK_ONLY=1 on PROVER_NODE: the pinned checkpoint's files against core's pin.
 #   2. probe       gate.sh probe on GATE_ON (the machine with GATE_KEY): vy-challenger-1's key is PIN, PERIOD unused and
 #                  no period of the lane open, vy-auditor-1 pinned at COMMIT and idle. Nothing is written to a gate.
-#   3. prover      run.sh on PROVER_NODE inside `gpu-lease ENGINES --wait`, ROLE=prover SERVE=node with PLAN at the
+#   3. prover      run.sh on PROVER_NODE inside `gpu-lease ENGINES --wait` (32 GB of host memory an engine; not
+#                  preemptible: a gate run stopped midway spends its period), ROLE=prover SERVE=node with PLAN at the
 #                  snapshot core's pin names, gate run 7's engine and node settings, VERIFIER_SSH to vy-auditor-1's
 #                  tunnel account; once leased it waits up to TUNNEL_WAIT_S for the host's verifier to listen.
 #   4. fire        gate.sh fire on GATE_ON: once the prover holds its GPUs, probe again, period-open (circuit of
@@ -83,10 +84,11 @@ GATE_ENV=(--env "COMMIT=$COMMIT" --env "PERIOD=$PERIOD" --env "PIN=$PIN" ${GATE_
   --env "MODEL=$ROLE" --env "ENGINES=$ENGINES" --env "PORT=$PORT" --env "PROVER_NODE=$PROVER_NODE"
   ${DRY:+--env DRY=1} ${CIRCUIT:+--env "CIRCUIT=$CIRCUIT"})
 gate_step() {
-  # NAME VERB research-run-args...: gate.sh VERB on GATE_ON
-  local name=$1 verb=$2
-  shift 2
-  launch "$name" --on "$GATE_ON" --cwd clone --send "$HERE/gate.sh" "${GATE_ENV[@]}" "$@" \
+  # NAME VERB GB research-run-args...: gate.sh VERB on GATE_ON in GB of memory, waited for (a dry step reserves none)
+  local name=$1 verb=$2 mem=(--mem-gb "$3" --mem-wait 3600)
+  shift 3
+  [ -z "$DRY" ] || mem=()
+  launch "$name" --on "$GATE_ON" --cwd clone --send "$HERE/gate.sh" "${GATE_ENV[@]}" "${mem[@]}" "$@" \
     -- bash -lc "bash \"\$RESEARCH_RUN_DIR/inputs/gate.sh\" $verb"
 }
 
@@ -115,14 +117,14 @@ echo "== 1. checkpoint on $PROVER_NODE"
 launch checkpoint --on "$PROVER_NODE" --cwd source --send "$HERE/checkpoint.sh" --timeout 20m --wait --env CHECK_ONLY=1 \
   --env "ROLE=$ROLE" -- bash -lc 'bash "$RESEARCH_RUN_DIR/inputs/checkpoint.sh"' || exit 3
 echo "== 2. probe on $GATE_ON"
-gate_step probe probe --mem-gb 4 --timeout 10m --wait || exit 3
+gate_step probe probe 4 --timeout 10m --wait || exit 3
 echo "== 3. prover on $PROVER_NODE"
 PROVER=(--on "$PROVER_NODE" --cwd source --timeout 6h --custody-ttl 12h
   --env ROLE=prover --env "PORT=$PORT" --env SERVE=node --env "PLAN=$PLAN" --env "MODEL=$SNAP"
   --env ENGINE_CPUS=0-23 --env PROVER_CPUS=24-47 --env "ENGINE_ARGS=--step-hz 2 --align-steps --arena-gib 62 --util 0.8"
   --env "NODE_ARGS=--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir $SNAP"
   --env "VERIFIER_SSH=$VERIFIER_SSH" --env TUNNEL_WAIT_S=1800 --env "GPU_LEASE_WHO=memory-accounting-$PERIOD"
-  -- /workspace/pouw/infra/bin/gpu-lease "$ENGINES" --wait --max-min 90 --mem-gb 256 --preemptible
+  -- /workspace/pouw/infra/bin/gpu-lease "$ENGINES" --wait --max-min 90 --mem-gb $((32 * ENGINES))
   -- bash benchmarks/remote_session/run.sh)
 if [ -n "$DRY" ]; then
   echo "DRY: research run --project verity --source <worktree of $COMMIT> ${PROVER[*]}"
@@ -132,5 +134,9 @@ else
   PROVER_RUN=$prover
 fi
 echo "== 4. fire on $GATE_ON"
-gate_step fire fire --mem-gb 16 --timeout 8h --custody-ttl 12h --store-read --env "PROVER_RUN=$PROVER_RUN" ${DRY:+--wait} || exit $?
+gate_step fire fire 16 --timeout 8h --custody-ttl 12h --store-read --env "PROVER_RUN=$PROVER_RUN" ${DRY:+--wait} || {
+  r=$?
+  [ -n "$DRY" ] || (cd "$ROOT" && uv run -q research cancel "$PROVER_RUN" --reason "gate_run.sh: $PERIOD's fire didn't launch")
+  exit $r
+}
 echo "state: $STATE; once fire ends: benchmarks/remote_session/gate_run.sh whatif $PERIOD"
