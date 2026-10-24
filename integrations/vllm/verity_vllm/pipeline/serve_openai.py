@@ -40,8 +40,10 @@ streamed ids, the seed it carried, and where its finish says the stream ends.
 
 Under ``--out`` the server writes ``serve.json`` (the engine, the protocol in use, the address), ``windows.jsonl`` (one
 line a Commit: its run root, step roots, the committer's errors and identity check, the requests it holds) and
-``requests.jsonl`` (one line a request: the HTTP id, the engine id, the runner's ids, the prompt ids, the streamed ids, its
-ingress, its finish, every row it was committed at, the committed seeds, and its check). SIGTERM or SIGINT stops it: the open window is
+``requests.jsonl`` (one line a request: the HTTP id, the engine id, the body's ``user``, the runner's ids, the prompt ids, the
+streamed ids, its ingress, its finish, every row it was committed at, the committed seeds, and its check), and ``advice_trace.jsonl``,
+the scheduler's step trace (`engine.step_trace`) with each Commit window's open and close, from which `verity-vllm advice OUT`
+derives each window's advice. SIGTERM or SIGINT stops it: the open window is
 closed and its requests checked, and ``summary.json`` counts the requests and checks.
 """
 from __future__ import annotations
@@ -61,6 +63,7 @@ from typing import Any
 
 from verity_vllm.config import UsageError, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED, seeded
+from verity_vllm.engine.step_trace import SERVED as ADVICE_TRACE
 from verity_vllm.pipeline.serve_commit import SAMPLING_FIELDS, CommitWindows, ingress_of, param_of
 
 PRECISIONS = ("verity_int8", "int8_exact", "pin")
@@ -209,6 +212,11 @@ class PlainProtocol:
     def brought(self, req: Completion) -> dict[str, Any]:
         """The sampling fields the request sent, as it sent them."""
         return {k: req.raw[k] for k in SAMPLING_FIELDS if k in req.raw}
+
+    def user(self, req: Completion) -> str | None:
+        """The body's ``user``, None when it sent none."""
+        u = req.raw.get("user") if isinstance(req.raw, Mapping) else getattr(req.raw, "user", None)
+        return None if u is None else str(u)
 
     def seeded(self, params: dict[str, Any]) -> dict[str, Any]:
         """``params`` with the served default seed when the request sent none (`engine.served_seed`)."""
@@ -370,7 +378,7 @@ class Admission:
     params: Any
     deliver: Callable[[Delta], None]
     ingress: dict[str, Any]
-
+    user: str | None = None
 
 
 def engine_id_of(http_id: str) -> str:
@@ -588,7 +596,8 @@ class Server:
         if top_p is not None and float(top_p) < 1:
             raise RequestError(TOP_P_REFUSAL.format(top_p=top_p), param="top_p")
         http_id = new_http_id()
-        return req, Admission(http_id, engine_id_of(http_id), prompt_ids, params, deliver, ingress_of(self.proto.brought(req), params))
+        return req, Admission(http_id, engine_id_of(http_id), prompt_ids, params, deliver, ingress_of(self.proto.brought(req), params),
+                              self.proto.user(req))
 
     async def completions(self, b: Any, writer: asyncio.StreamWriter) -> None:
         loop = asyncio.get_running_loop()
@@ -747,6 +756,15 @@ def build(opts: Options) -> tuple[Any, Any]:
     return llm, com
 
 
+def advice_trace(out: Path, engine: Any) -> Any:
+    """The scheduler step trace (`engine.step_trace.StepTrace`) of ``engine`` for the server's lifetime, at ``out/ADVICE_TRACE``
+    under the engine ids requests.jsonl records (vLLM's internal suffix dropped), what `verity-vllm advice` reads."""
+    from verity_vllm.engine.engine_driver import external_id
+    from verity_vllm.engine.step_trace import StepTrace
+
+    return StepTrace(Path(out) / ADVICE_TRACE, request_id=external_id, clock=time.time).install(engine)
+
+
 def main(opts: Options) -> int:
     preflight(opts)
     out = Path(opts.out)
@@ -758,11 +776,12 @@ def main(opts: Options) -> int:
     defaults: dict[str, Any] = {}                            # vLLM's neutral defaults: the request brings its sampling
     run_id = opts.run_id
     tok = llm.get_tokenizer()
+    trace = advice_trace(out, llm)
     windows = None
     if com is not None:
         windows = CommitWindows(com, out, run_id=run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
                                 eos_ids=[int(tok.eos_token_id)] if tok.eos_token_id is not None else [],
-                                decode=lambda ids: tok.decode(list(ids), skip_special_tokens=True))
+                                decode=lambda ids: tok.decode(list(ids), skip_special_tokens=True), marks=trace.window)
     loop = EngineLoop(engine, windows)
     served = opts.served_model_name or opts.model
     server = Server(proto=proto, served_name=served, max_model_len=opts.max_model_len, tokenizer=tok,
@@ -794,6 +813,7 @@ def main(opts: Options) -> int:
                    "commit": windows.summary() if windows is not None else None}
         (out / "summary.json").write_text(json.dumps(summary, indent=1))
         print(f"SERVE-OPENAI stopped: {json.dumps(summary)}", flush=True)
+        trace.uninstall()
         if com is not None:
             com.close()
     return 0 if loop.error is None and (windows is None or windows.summary()["passed"] or not server.served) else 1
