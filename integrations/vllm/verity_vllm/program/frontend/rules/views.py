@@ -1,6 +1,6 @@
 """View rules: reference rearrangements (no gates) and static structure (index tensors, allocations).
 
-Every rule here emits NO gate. Views reuse the frontend's reference builder (`torch_frontend._view` & co.), so a
+Every rule here emits NO gate. Views reuse the frontend's reference builder (`strided_views._view` & co.), so a
 derived view is the very same affine/strided descriptor an authored program would carry.
 """
 
@@ -12,8 +12,9 @@ import torch
 
 from verity.ml.circuits.refs import Coll, array_of, concat
 from verity.ml.circuits.types import Array, Value
-from verity_vllm.program.frontend.torch_frontend import (FrontendError, _dim_len, _expand, _norm_dim, _permute, _select, _slice, _stack, _tensor_type, shape_of,
-                              type_of_tensor, width_of)
+from verity_vllm.program.frontend.errors import FrontendError
+from verity_vllm.program.frontend.strided_views import _dim_len, _expand, _norm_dim, _permute, _select, _slice, _stack, _tensor_type
+from verity_vllm.program.frontend.value_types import shape_of, type_of_tensor, width_of
 from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
 from verity_vllm.program.frontend.rules.base import RuleInfo, ViewRule
 
