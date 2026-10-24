@@ -109,10 +109,8 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
                       binder: Any = None, padded: Collection[str] = ()) -> dict[str, Any]:
     """identity -> commitment location, for every committed tensor of every step, from the published layouts + the step roots.
 
-    `request_rows[step]` = [(request_id, row_lo, row_hi)] splits the leading (token/row) dimension of a batched member between the
-    requests of that step (the scheduler's row order, recorded by the engine wrapper); without it the whole member binds `request_id`.
-    A member named in `padded` is per-token with rows past the step's tokens (the step-input port's, T rows): it splits as one of
-    exactly the step's token rows does.
+    `request_rows[step]` = [(request_id, row_lo, row_hi)] splits the leading (token/row) dimension of a batched member between the requests of that step
+    (the scheduler's row order, recorded by the engine wrapper; a `padded` member, the step-input port's, has rows past the step's tokens); else the whole member binds `request_id`.
     A MoE block plane whose rows are not a token multiple binds no request: its entry is request `*` with `refused`, the reason.
     Entries are compact (one per tensor x request); `digest` is over the canonical JSON of the entries -- recorded in the Commit record and
     mixed into the challenge, so the map cannot be chosen after the openings.
