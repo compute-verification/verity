@@ -85,7 +85,7 @@ Arms:
                  HB_H1U_KC, DITHER_H1C_KC and DITHER_ZY1_KC) in the statement's order (RT4-INT-12, `dither_so`): the
                  forward computes and commits a step's A, scales and z/y leaves, round s goes out before coin s, and step
                  s's seeds and units run after coin s on a ring of D steps' A slots, beside a later step's forward, their
-                 receipts under round s + D - 1: dither-a-{hbk,hbr,hbc}-zy-{aom,aomn,ab,abn}[-pt]-so<D> (D 2 to 8), -aom
+                 receipts under round s + D - 1: dither-a-{hbk,hbr,hbc}-zy-{aom,aomn,ab,abn}[-pt]-so<D> (D 2 to 10), -aom
                  the A tables per call on four streams in the forward, -aomn with each call's noise on four streams
                  beside the units, -ab and -abn the step's A tables in one build between steps (not ruled in by CA: a
                  separate arm); its gate adds the order's checks and two faults (fault_rearly, fault_zlate).  With
@@ -111,6 +111,25 @@ Arms:
     ARM-a2       any dither arm with each call's A table from `h1c_a_call2_k` (DITHER_A_FORM=2: the same table, its
                  compressions paired); ARM-a3 from `h1c_a_call3_k` (DITHER_A_FORM=3: paired, its messages in registers);
                  the suffixes compose (ARM-a3-xl), each gated as ARM
+    ARM-j10r     a dither-a-so arm with its units under J10-R's call-scale noise (DITHER_SO_UNITS=j10r, `dither_so`)
+    ARM-smqQ, ARM-smqQoD  a dither-a-so arm with its units on the SMs whose id % D < Q (DITHER_SO_UNITS_SMQ=Q/D, D 8
+                 without it); -smq0 on every SM, whatever the run's environment sets; ARM-smqQoDcC with at most C of
+                 the units' CTAs on each of those SMs (Q/D/C; -smq1o1c2 every SM, 2 CTAs each).  These set the arm's
+                 own worker's environment, so one run times the units' forms and shares side by side (ARM-j10r-smq9o16)
+    ARM-zy1      a dither-a-hbc arm with DITHER_ZY1_KC=1 (its z and y tables in one h1c_build), whatever the run's
+                 environment sets
+    ARM-kcb      a dither-a-hbc arm on a second h1u_kc build ($HB_H1U_KC_B, e.g. hb_served.sh's HB_KC_FLAGS_B), timed beside
+                 ARM on $HB_H1U_KC's
+    ARM-cgp      a dither-a-so arm serving at priority (DITHER_SO_PRIO=1) with vLLM's graphs captured at it too
+                 (DITHER_SO_CAPTURE_PRIO=1, `dither_so.capture_at`)
+    ARM-mc32     a dither arm whose worker has 32 hardware queues (CUDA_DEVICE_MAX_CONNECTIONS=32, set before its engine
+                 makes the CUDA context)
+    ARM-skip, ARM-rd0  a dither-a-so J10-R arm whose dead row blocks are the zero receipt (DITHER_UNITS_SKIP_DEAD=1), or
+                 one with DITHER_SO_RDEAD=0 (J10-R's default computes them in full, which $DITHER_SO_RDEAD=1 refuses)
+    ARM-lag1, ARM-lag2  a dither-a-so arm with DITHER_SO_ROOT_LAG=1 or 2
+    ARM-ug0      a dither-a-so arm whose units are launched each step, not replayed as a CUDA graph (DITHER_SO_GRAPH=0)
+    ARM-zs       a dither-a-so arm whose z tables build on a tree stream beside its A tables (DITHER_SO_ZSIDE=1)
+    ARM-mmc      a dither-a arm whose GEMMs take $SBENCH_MM_CFG's configs ($DITHER_MM_CFG, dmmsweep.py's best.json)
 
 `gate` (--gate, before the reps): exact and dither each generate GATE_TOKENS tokens for the 32 requests; dither's window
 checks one B32 decode step (`dither_fused.check`, its transcript buffers 0xA5 before the kernels wrote them) and refuses
@@ -121,7 +140,8 @@ kernels inside the range only).  The decode gate compares each arm's
 tokens with its reference arm's (dither: exact; any other: the first arm); a dither arm's are a second GATE_TOKENS
 generation after its checks with nothing armed, since its fault steps move served values on purpose (fault_wb moves
 column 0 of every call's y at one step), the capture run's kept as tokens_capture.  A failed gate times nothing (exit 4); a worker
-that errs or dies ends the run (exit 5, its gates so far in gate.json).  Each dither arm's gate captures are freed once
+that errs or dies ends the run (exit 5, its gates so far in gate.json), except that under --time-passed one that errs in its
+warm or gate is dropped, its error in gate.json, and the rest timed (exit 5 still).  Each dither arm's gate captures are freed once
 checked, so N arms need N engines' memory plus one arm's captures.
 
 `prof` (an op, for any arm; under DITHER_NSYS=1 or prof): generates PROF_N[0] and then PROF_N[1] tokens for the 32 requests
@@ -138,6 +158,12 @@ $POUW_CHALLENGER_SECRET_FILE and $POUW_CHALLENGER_COMMITMENT), one session a win
 hello's commitment held to HEX) and closed at the arm's stop; without one they are in-process, and the arm's stats say
 ``coins: in-process (not certified)``.
 
+SBENCH_ARM_ENV (``{"ARM": {"NAME": "VALUE"}}``) sets an arm's own environment in its worker, so the arms of one lease can
+differ in a knob the worker reads; each arm's ready line says what it set (``arm_env``).  ``ARM@TAG`` in --arms is ARM
+built and timed under its own name (its own SBENCH_ARM_ENV, --arm-mem and DITHER_CHALLENGERS entries), so one arm is
+timed beside itself with a knob set.  SBENCH_TIME_AT=HH:MM (UTC) holds the reps until then (a booked window's start),
+the engines built and gated before it; sbench.sh's SBENCH_TIMED=1 takes the lease such a window grants (gpu-lease --timed).
+
     python sbench.py --out OUT [--arms stock,exact,dither] [--reps 3] [--t 64] [--ops decode] [--gate]
 """
 from __future__ import annotations
@@ -146,6 +172,7 @@ import argparse
 import json
 import multiprocessing as mp
 import os
+import re
 import statistics
 import sys
 import time
@@ -257,7 +284,36 @@ def a_form(f: int):
     return set_form
 
 
-SUFFIXES = {"-xl": install_exactlin, "-a2": a_form(2), "-a3": a_form(3)}
+def env_of(name: str, value: str | None):
+    def set_env() -> None:
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value
+    return set_env
+
+
+def kc_b() -> None:
+    if not os.environ.get("HB_H1U_KC_B"):
+        raise ValueError("an ARM-kcb arm needs $HB_H1U_KC_B, a second h1u_kc build")
+    os.environ["HB_H1U_KC"] = os.environ["HB_H1U_KC_B"]
+
+
+def mm_cfg() -> None:
+    if not os.environ.get("SBENCH_MM_CFG"):
+        raise ValueError("an ARM-mmc arm needs $SBENCH_MM_CFG, a $DITHER_MM_CFG text (dmmsweep.py's best.json)")
+    os.environ["DITHER_MM_CFG"] = os.environ["SBENCH_MM_CFG"]
+
+
+SUFFIXES = {"-xl": install_exactlin, "-a2": a_form(2), "-a3": a_form(3), "-j10r": env_of("DITHER_SO_UNITS", "j10r"),
+            "-kcb": kc_b, "-zy1": env_of("DITHER_ZY1_KC", "1"), "-cgp": env_of("DITHER_SO_CAPTURE_PRIO", "1"),
+            "-mc32": env_of("CUDA_DEVICE_MAX_CONNECTIONS", "32"), "-skip": env_of("DITHER_UNITS_SKIP_DEAD", "1"),
+            "-rd0": env_of("DITHER_SO_RDEAD", "0"), "-lag1": env_of("DITHER_SO_ROOT_LAG", "1"),
+            "-lag2": env_of("DITHER_SO_ROOT_LAG", "2"), "-ug0": env_of("DITHER_SO_GRAPH", "0"),
+            "-zs": env_of("DITHER_SO_ZSIDE", "1"), "-mmc": mm_cfg}
+# -smqQ / -smqQoD / -smqQoDcC: a dither-a-so arm's units on the SMs whose id % D < Q, at most C CTAs on each
+# ($DITHER_SO_UNITS_SMQ=Q/D/C, D 8 and no cap without them; -smq0 every SM, whatever the run's environment says)
+SMQ_SUFFIX = re.compile(r"-smq(\d+)(?:o(\d+))?(?:c(\d+))?$")
 
 
 def suffix_of(arm: str) -> str | None:
@@ -265,19 +321,30 @@ def suffix_of(arm: str) -> str | None:
         for s in SUFFIXES:
             if arm.endswith(s):
                 return s
+        if m := SMQ_SUFFIX.search(arm):
+            return m.group(0)
     return None
 
 
+def suffix_env(s: str):
+    if s in SUFFIXES:
+        return SUFFIXES[s]
+    m = SMQ_SUFFIX.fullmatch(s)
+    return env_of("DITHER_SO_UNITS_SMQ", None if m[1] == "0" else f"{m[1]}/{m[2] or 8}" + (f"/{m[3]}" if m[3] else ""))
+
+
 def base_arm(arm: str) -> str:
+    arm = arm.split("@")[0]
     s = suffix_of(arm)
     return base_arm(arm[:-len(s)]) if s else arm
 
 
 def build(arm: str, scratch: Path, gpu_mem: float):
     from vllm import LLM
+    arm = arm.split("@")[0]
     s = suffix_of(arm)
     if s:
-        SUFFIXES[s]()
+        suffix_env(s)()
         return build(arm[:-len(s)], scratch, gpu_mem)
     if arm in DISABLED:
         os.environ["VLLM_DISABLED_KERNELS"] = DISABLED[arm]
@@ -415,7 +482,7 @@ DITHER_A = {f"dither-a{u}{z}{o}{p}{q}": (unit, zm, ao, pt, ls)
 # each step's A and z/y records held in pinned host memory until its draw (`dither_so.Spill`), -wea its A alone
 DITHER_SO = {f"dither-a-{unit}-zy-{o}{p}-so{d}{v}{e}": (unit, ao, pt, d, r, sp, we, spill)
              for unit in ("hbk", "hbr", "hbc") for o, ao in (("aom", "m"), ("aomn", "mn"), ("ab", "b"), ("abn", "bn"))
-             for p, pt in (("", False), ("-pt", True)) for d in range(2, 9)
+             for p, pt in (("", False), ("-pt", True)) for d in range(2, 11)
              for v, r, sp in (("", 0, False), ("-ov", 2, False), ("-ov1", 1, False), ("-ovp", 2, True))
              for e, we, spill in (("", False, None), ("-we", True, "azy"), ("-wea", True, "a"))}
 
@@ -444,6 +511,10 @@ TOKENS_GATED = {"dither-1s": False, "dither-1s-credit": False, "dither-1s-warp":
 # names start with one are pinned (exact,dither: the arms held to exact's tokens), the rest keep their timed picks
 PICK_ENV = "SBENCH_PICK"
 PICK_ARMS_ENV = "SBENCH_PICK_ARMS"
+# SBENCH_SMQ_SWEEP=V[,V]: after the gate, each dither-a-so arm's decode TPOT and phases at each units SM share V (q,
+# q/den or q/den/cap, 0 every SM; `dither_so.SoSide.set_units_smq`), in one engine, then back to its own share for the
+# reps: a screen (smq_sweep.json), never a row
+SMQ_SWEEP_ENV = "SBENCH_SMQ_SWEEP"
 
 
 def pick_of(arm: str) -> str | None:
@@ -454,7 +525,31 @@ GATE_TOKENS = 16    # enough B32 decode steps for the gate's capture, its receip
 # challenger session off the node (its POUW_CHALLENGER, POUW_CHALLENGER_SESSION, POUW_CHALLENGER_SECRET_FILE and
 # POUW_CHALLENGER_COMMITMENT), since every arm's engine, and so its window, lives through the whole run
 CHALLENGERS_ENV = "DITHER_CHALLENGERS"
+# {arm: {NAME: VALUE}}: an arm's own environment, set in its worker before its engine is built, so one lease times arms
+# that differ in a knob the worker reads (not sbench.sh's builds, which read the run's)
+ARM_ENV_ENV = "SBENCH_ARM_ENV"
+# "HH:MM" (UTC): the reps start no earlier than then, at most TIME_AT_MAX_MIN minutes after the gates end, so the engines
+# build and gate before a booked window and only the reps run in it
+TIME_AT_ENV = "SBENCH_TIME_AT"
+TIME_AT_MAX_MIN = 20
 GATE_RANGE = "verity/dither/gate"   # GATE_RANGE/<arm>: kernels.py reads each dither worker's kernels inside its own
+
+
+def wait_time_at() -> dict | None:
+    """$SBENCH_TIME_AT's wait before the reps: until that UTC time when it is at most TIME_AT_MAX_MIN minutes ahead."""
+    at = os.environ.get(TIME_AT_ENV)
+    if not at:
+        return None
+    import datetime as dt
+    now = dt.datetime.now(dt.timezone.utc)
+    h, m = (int(x) for x in at.split(":"))
+    wait = (now.replace(hour=h, minute=m, second=0, microsecond=0) - now).total_seconds()
+    if wait < -43200:
+        wait += 86400
+    waited = wait if 0 < wait <= 60 * TIME_AT_MAX_MIN else 0.0
+    time.sleep(waited)
+    return {"at": at, "ahead_s": round(wait, 1), "waited_s": round(waited, 1),
+            "reps_start_utc": dt.datetime.now(dt.timezone.utc).strftime("%H:%M:%SZ")}
 
 
 def close_coins() -> None:
@@ -495,6 +590,8 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             os.environ["POUW_CHALLENGER_COMMITMENT"] = at["commitment"]
         if at.get("rounds"):
             os.environ["DITHER_ROUNDS"] = str(at["rounds"])
+    arm_env = json.loads(os.environ.get(ARM_ENV_ENV) or "{}").get(arm) or {}
+    os.environ.update(arm_env)
     import torch
     from vllm import SamplingParams
     if arm.startswith("dither"):
@@ -510,7 +607,8 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
         conn.send({"error": f"{type(e).__name__}: {e}"})
         return
     conn.send({"ready": True, "build_s": round(time.perf_counter() - t0, 1), "kernels": kernels_of(llm),
-               "disabled": os.environ.get("VLLM_DISABLED_KERNELS"), "scheduler": scheduler_of(llm)})
+               "disabled": os.environ.get("VLLM_DISABLED_KERNELS"), "scheduler": scheduler_of(llm),
+               "arm_env": arm_env or None})
     ps = prompts(B)
 
     def gen(reqs: list[str], n: int):
@@ -616,6 +714,22 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                 torch.cuda.profiler.stop()
             res["tpot_b32_ms"] = round(1e3 * (res[f"gen_n{PROF_N[1]}_s"] - res[f"gen_n{PROF_N[0]}_s"]) / (PROF_N[1] - PROF_N[0]), 4)
             conn.send(res)
+        elif cmd["op"] == "smq_sweep":
+            from dither_so import smq_of
+            sd = sys.modules["dither_a"].SIDE[0]
+            q0, d0, c0 = sd.units_smq, sd.units_smd, sd.units_cap
+            rows = []
+            for v in cmd["values"]:
+                sd.set_units_smq(*smq_of(v))
+                gen(ps, 8)
+                llm.dither_stats()
+                t1, _ = gen(ps, N1)
+                t2, _ = gen(ps, N2)
+                rows.append({"smq": v, "tpot_b32_ms": round(1e3 * (t2 - t1) / (N2 - N1), 4),
+                             "phases_by_m": llm.dither_stats().get("phases_by_m")})
+            sd.set_units_smq(q0, d0, c0)
+            gen(ps, 8)
+            conn.send({"sweep": rows})
         elif cmd["op"] == "sat":
             t, outs = gen(prompts(SAT_REQS), SAT_TOKENS)
             n = sum(len(o.outputs[0].token_ids) for o in outs)
@@ -643,16 +757,18 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             return
 
 
-def recv(arm: str, conn, op: str) -> dict:
+def recv(arm: str, conn, op: str, keep: bool = False) -> dict:
     """ARM's next message.  A worker that reports an error or exits ends the run (exit 5, its result kept: the gates so
-    far in gate.json, the reps in reps.jsonl); sys.exit terminates the daemon workers, so no engine outlives it."""
+    far in gate.json, the reps in reps.jsonl); sys.exit terminates the daemon workers, so no engine outlives it.  With
+    KEEP the error is returned instead, the worker gone and the run going on without it."""
     try:
         msg = conn.recv()
     except EOFError:
         msg = {"error": f"{op}: the worker exited"}
     if "error" in msg:
         print(json.dumps({"arm": arm, "op": op, "error": msg["error"], "timed": False}), flush=True)
-        sys.exit(5)
+        if not keep:
+            sys.exit(5)
     return msg
 
 
@@ -692,6 +808,9 @@ def main() -> int:
     missing = sorted({REF_OF[x] for x in arms if x in TOKENS_ONLY and REF_OF[x] not in arms})
     if a.gate and missing:
         ap.error(f"a tokens-only arm's gate is its reference's tokens: add {','.join(missing)} to --arms")
+    smq_sweep = [v for v in (os.environ.get(SMQ_SWEEP_ENV) or "").split(",") if v]
+    if not all(re.fullmatch(r"0|\d+(/\d+(/\d+)?)?", v) for v in smq_sweep):
+        ap.error(f"${SMQ_SWEEP_ENV}={os.environ[SMQ_SWEEP_ENV]}: comma-separated q, q/den or q/den/cap")
     ctx = mp.get_context("spawn")
     conns, procs, info = {}, {}, {}
     for arm in arms:      # one engine at a time comes up, so their memory profiling doesn't race
@@ -702,9 +821,6 @@ def main() -> int:
         msg = recv(arm, here, "build")
         conns[arm], procs[arm], info[arm] = here, p, msg
         print(json.dumps({"arm": arm, **msg}), flush=True)
-    for arm in arms:
-        conns[arm].send({"op": "warm"})
-        recv(arm, conns[arm], "warm"), recv(arm, conns[arm], "warm")
     reps: list[dict] = []
     rc = 0
     ref_tokens: dict = {}
@@ -712,22 +828,34 @@ def main() -> int:
     vs_ref: dict = {}
     vs_rep0: dict = {}
     gate_doc: dict = {}
+    for arm in arms:
+        conns[arm].send({"op": "warm"})
+        res = recv(arm, conns[arm], "warm", a.time_passed)
+        if "error" not in res:
+            res = recv(arm, conns[arm], "warm", a.time_passed)
+        if "error" in res:
+            gate_doc[arm], rc = {"error": res["error"]}, 5
+    arms = [x for x in arms if x not in gate_doc]
     if a.gate:
-        for arm in arms:
+        for arm in list(arms):
             conns[arm].send({"op": "gate"})
-            res = recv(arm, conns[arm], "gate")
+            res = recv(arm, conns[arm], "gate", a.time_passed)
+            if "error" in res:
+                gate_doc[arm], rc = {"error": res["error"]}, 5
+                arms.remove(arm)
+                continue
             msg = recv(arm, conns[arm], "gate")
             res["stats"], res["picks_summary"] = msg["stats"], msg.get("picks")
             gate_doc[arm] = res
             (out / "gate.json").write_text(json.dumps(gate_doc, indent=1) + "\n")
         for arm in arms:
             ref = REF_OF.get(arm, arms[0])
-            if ref in gate_doc and ref != arm:
+            if "tokens" in gate_doc.get(ref, {}) and ref != arm:
                 gate_doc[arm]["tokens_equal_" + ref] = gate_doc[arm]["tokens"] == gate_doc[ref]["tokens"]
                 if "tokens_capture" in gate_doc[arm]:
                     gate_doc[arm]["tokens_capture_requests_equal_" + ref] = sum(
                         x == y for x, y in zip(gate_doc[arm]["tokens_capture"], gate_doc[ref]["tokens"]))
-            if "stock" in gate_doc and arm != "stock":
+            if "tokens" in gate_doc.get("stock", {}) and arm != "stock":
                 gate_doc[arm]["tokens_equal_stock"] = gate_doc[arm]["tokens"] == gate_doc["stock"]["tokens"]
                 gate_doc[arm]["tokens_requests_equal_stock"] = sum(
                     x == y for x, y in zip(gate_doc[arm]["tokens"], gate_doc["stock"]["tokens"]))
@@ -750,7 +878,20 @@ def main() -> int:
             if not a.time_passed:
                 return 4
             arms = [x for x in arms if x not in failed]
-            rc = 4
+            rc = rc or 4
+    if not arms:
+        return rc
+    sweep: dict = {}
+    for arm in arms if smq_sweep else ():
+        if base_arm(arm) in DITHER_SO:
+            conns[arm].send({"op": "smq_sweep", "values": smq_sweep})
+            sweep[arm] = recv(arm, conns[arm], "smq_sweep")["sweep"]
+            recv(arm, conns[arm], "smq_sweep")
+            print(json.dumps({"smq_sweep": arm, "tpot_b32_ms": {x["smq"]: x["tpot_b32_ms"] for x in sweep[arm]}}), flush=True)
+            (out / "smq_sweep.json").write_text(json.dumps(sweep, indent=1) + "\n")
+    time_at = wait_time_at()
+    if time_at:
+        print(json.dumps({"time_at": time_at}), flush=True)
     for r in range(a.reps):
         for op in a.ops.split(","):
             for j in range(len(arms)):
@@ -785,7 +926,8 @@ def main() -> int:
             stops[arm] = {"error": "stop: the worker exited"}
         print(json.dumps({"stop": arm, **{k: v for k, v in stops[arm].items() if k != "stats"}}), flush=True)
     (out / "stop.json").write_text(json.dumps(stops, indent=1, default=str) + "\n")
-    summary = {"arms": arms, "info": info, "gate_tokens_equal_ref_arm": gate, "decode_tokens_vs_ref": vs_ref,
+    summary = {"arms": arms, "info": info, "numa": json.loads(os.environ.get("DITHER_NUMA_RECORD") or "null"),
+               "gate_tokens_equal_ref_arm": gate, "decode_tokens_vs_ref": vs_ref,
                "decode_tokens_vs_rep0": vs_rep0, "ref_of": REF_OF, "n1": N1, "n2": N2, "b": B,
                "gate": {arm: {k: v for k, v in d.items() if k not in ("tokens", "picks")} for arm, d in gate_doc.items()},
                "pick": os.environ.get(PICK_ENV) or "timed", "pick_by_arm": {arm: pick_of(arm) or "timed" for arm in info},
@@ -805,6 +947,8 @@ def main() -> int:
         if p["tokens_per_s"] and base["tokens_per_s"]:
             p["throughput_overhead_pct"] = round(100 * (1 - p["tokens_per_s"] / base["tokens_per_s"]), 3)
     summary["gate_failed"] = [x for x in gate_doc if x not in arms]
+    if sweep:
+        summary["smq_sweep"] = {arm: {x["smq"]: x["tpot_b32_ms"] for x in rows} for arm, rows in sweep.items()}
     summary["stop"] = {arm: {"error": x.get("error"), "close_error": x.get("close_error"), "fill_steps": x.get("fill_steps"),
                              "end_verdict": (x.get("end") or {}).get("verdict")} for arm, x in stops.items()}
     (out / "summary.json").write_text(json.dumps(summary, indent=1) + "\n")

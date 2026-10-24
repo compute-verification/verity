@@ -8,6 +8,9 @@
 # An exact-fused or -xl arm runs only after exactlin's kgate.py passes in the same lease (SBENCH_KGATE=0|1 overrides).
 # DITHER_NCU=REGEX runs it under ncu instead (--clock-control none): the first DITHER_NCU_COUNT (16) launches of kernels
 # matching REGEX, their throughput, occupancy, scheduler, warp-state and instruction sections, as ncu.ncu-rep and ncu.csv.
+# Inside the lease everything runs on the leased GPU's NUMA node (numabind.py: that node's CPUs among the run's, and its
+# memory), or unbound with DITHER_NUMA=0 or without numactl or a node; numa.json, the `numa:` line and summary.json's "numa"
+# say which.
 #   research run --on vy-nebius-2 --project verity --campaign dither-loop --source . --cwd source \
 #     --env GPU_LEASE_WHO=kernels-dither-rtx -- bash benchmarks/hash/dither/sbench.sh
 set -uo pipefail
@@ -59,6 +62,16 @@ case " $* " in *dither-a-hbc*)
   echo "sbench: h1u_kc.so with ${HB_KC_FLAGS:-no flags}" | tee "$OUT/kc-flags.txt"
   grep -B1 -A2 "h1k\|h1u" "$OUT/build-h1u_kc.log" | grep -i "registers\|spill" | head -8
   export HB_H1U_KC=$S/h1u_kc.so
+  # and, with HB_KC_FLAGS_B, a second such build for the ARM-kcb arms (HB_H1U_KC_B)
+  read -r -a kcb <<< "${HB_KC_FLAGS_B:-}"
+  if [ ${#kcb[@]} -gt 0 ]; then
+    nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode arch=compute_120a,code=sm_120a -Xptxas -v -Xcompiler -fPIC -shared \
+      -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 "${kcb[@]}" -o "$S/h1u_kcb.so" benchmarks/hash/dither/h1u.cu > "$OUT/build-h1u_kcb.log" 2>&1 \
+      || { echo "sbench: NVCC_FAIL h1u_kcb"; grep -v "^ptxas info" "$OUT/build-h1u_kcb.log" | tail -30; exit 11; }
+    echo "sbench: h1u_kcb.so with ${HB_KC_FLAGS_B}" | tee -a "$OUT/kc-flags.txt"
+    grep -B1 -A2 "h1um\|h1jr_rows" "$OUT/build-h1u_kcb.log" | grep -i "registers\|spill" | head -8
+    export HB_H1U_KC_B=$S/h1u_kcb.so
+  fi
   # and, with HB_KC_H1C_FLAGS (h1c.cu's knobs), its own libh1c.so: its A, z, y and receipt tables (DITHER_H1C_KC)
   read -r -a kh <<< "${HB_KC_H1C_FLAGS:-}"
   if [ ${#kh[@]} -gt 0 ]; then
@@ -118,6 +131,18 @@ if [ -n "${H1V3_SHA:-}" ]; then
 else
   export DITHER_H1V3_TREE=$ROOT DITHER_H1V3_SHA=${RESEARCH_SOURCE_SHA:-source}
 fi
+# J10R's Definition (h1tile.j10r_reference) for DITHER_SO_UNITS=j10r's gate (j10r_so.py): J10R_SHA's verity/, as H1V3_SHA's
+# (the archive: j10r-$J10R_SHA.tar.gz)
+if [ -n "${J10R_SHA:-}" ]; then
+  mkdir -p "$S/j10r"
+  if git cat-file -e "$J10R_SHA^{commit}" 2>/dev/null; then
+    git archive "$J10R_SHA" verity | tar -x -C "$S/j10r"
+  elif [ -f "$D/inputs/j10r-$J10R_SHA.tar.gz" ]; then
+    tar -xzf "$D/inputs/j10r-$J10R_SHA.tar.gz" -C "$S/j10r"
+  fi
+  [ -f "$S/j10r/verity/core/protocols/pouw/circuit/h1tile.py" ] || { echo "sbench: J10R_NO_TREE at $J10R_SHA"; exit 14; }
+  export DITHER_J10R_TREE=$S/j10r DITHER_J10R_SHA=$J10R_SHA
+fi
 # ASK-64's measured round trips (percall_rtt.py's percall-wait-ns.txt, sent with the run) for the dither-1s-percall-rtt arm
 [ -f "$D/inputs/percall-wait-ns.txt" ] && export DITHER_PERCALL_WAITS=$D/inputs/percall-wait-ns.txt
 cd integrations/vllm
@@ -146,7 +171,12 @@ SMI=$!
 MAX_MIN=${SBENCH_MAX_MIN:-40}
 # SBENCH_PREEMPTIBLE=1: the lease may be taken back by a non-preemptible one (which ends the run unfinished)
 PRE=(); [ "${SBENCH_PREEMPTIBLE:-}" = 1 ] && PRE=(--preemptible)
-gpu-lease 1 --wait "${PRE[@]}" --max-min "$MAX_MIN" -- bash -c '
+# SBENCH_TIMED=1: a timed lease (gpu-lease --timed), the one a booked window grants, the node kept quiet while it's held
+[ "${SBENCH_TIMED:-}" = 1 ] && PRE+=(--timed)
+# SBENCH_MEM_GB=G: the host memory the lease reserves (gpu-lease --mem-gb), else gpu-lease's default
+[ -n "${SBENCH_MEM_GB:-}" ] && PRE+=(--mem-gb "$SBENCH_MEM_GB")
+gpu-lease 1 --wait "${PRE[@]}" --max-min "$MAX_MIN" -- "$PY" "$ROOT/benchmarks/hash/dither/numabind.py" "$OUT/numa.json" \
+  bash -c '
   if [ "$KGATE" = 1 ]; then
     timeout 900 "$KGATE_PY" "$KGATE_SCRIPT" --out "$0/kgate" --shapes all --models llama-3.1-8b,qwen3-8b --no-stock \
       > "$0/kgate.log" 2>&1
