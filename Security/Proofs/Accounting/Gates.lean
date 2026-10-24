@@ -905,8 +905,9 @@ theorem floor_of_pow_sub (n c : ℕ) (hn : 68 ≤ n) (hc : c % 4 = 1) (hc' : c �
   omega
 
 /-- p1024 is inside `EncodeChainHardness`'s floor on `p`: `2^66 ≤ p` and `p ≡ 3 mod 4`. -/
-theorem p1024_floor : 2 ^ 66 ≤ p1024.p ∧ p1024.p % 4 = 3 :=
-  floor_of_pow_sub p1024.n p1024.c (by show 68 ≤ 1024; norm_num) (by show 105 % 4 = 1; norm_num)
+theorem p1024_floor : 2 ^ 66 ≤ p1024.p ∧ p1024.p % 4 = 3 := by
+  unfold Field.p
+  exact floor_of_pow_sub p1024.n p1024.c (by show 68 ≤ 1024; norm_num) (by show 105 % 4 = 1; norm_num)
     (by show 105 ≤ 2 ^ 66; norm_num)
 
 /-- At `ε = 0` it holds: the floor excludes the red team's `encodeChainHardness_false_eps0`. -/
