@@ -8,15 +8,16 @@ i is in bucket ⌊i / R⌋ of the window. A cell is a pad (`pad_cell`, B zero by
 `DATA` header whose stream is the request's ingress ordinal, which the warden writes from the connection it
 terminated, then one token id's event (`id_event`) and zero fill. The warden commits one row a bucket (`bucket_rows`).
 
-**The map is the verifier's** (`window_map`), computed from advice v0, which is public in v0 (N2-ADVICE's `advised`
-reads it so, and every window reports its digest): for each cell, the output the warden must have released there, its
-request q and its entry e in the window's port, or a pad. Bucket t's outputs (release bucket w·T + t) fill its first
-cells sorted by (request, index), the order the warden releases a bucket in, and pads fill the rest. No prover value
-says where an output goes.
+**The map is a function of the advice** (`window_map`): for each cell, the output the warden must have released there,
+its request q and its entry e in the window's port, or a pad. Bucket t's outputs (release bucket w·T + t) fill its
+first cells sorted by (request, index), the order the warden releases a bucket in, and pads fill the rest. No prover
+value says where an output goes. The advice is private; here the verifier computes the map in the clear from the
+opened advice v0, which is the named gap ("the advice is opened to the verifier until the compile unit exists"). The
+target reads the map inside the proof under the advice's hiding root.
 
 **The port is the Commit's**: its sampled ids, one hiding row a step (`port_row`: the step's P ids, u32be in batch-row
 order, zero past its batch) in a dense frame-v3-sha512 tree of the session's steps, whose root the Commit registers.
-The window opens S rows (`Shape.S`), at the steps its outputs were sampled in (`window_map`'s steps, public), and its
+The window opens S rows (`Shape.S`), at the steps its outputs were sampled in (`window_map`'s steps, public with the map), and its
 entry e = σ·P + r is opened row σ's r-th id. The real port is vllm's Commit (its binding map's `sampled_token_ids`
 under the run root), which this fake upstream stands in for.
 
@@ -42,8 +43,9 @@ on another stream, a fabricated output, a wrong id and a forged port row each ma
 `IoTieWindow` is the unit: it recomputes the cells' root from every bucket row and salt, opens each port row at its
 step (`FrameV3Read`), and holds every cell to the map (`IoTieContent`). The content routes the port's E entries, each
 its id and its index e, to the cells by the prover's switches (`switches`); any setting is a permutation, and
-`IoTieMatch` holds each data cell's id to the entry the map names, by its index. Public: both roots and domain ids, the
-steps and the map. Witness: the cells and their salts, the opened port rows, their salts and paths, and the switches.
+`IoTieMatch` holds each data cell's id to the entry the map names, by its index. Public: both roots and domain ids, and,
+until the named gap closes, the steps and the map. Witness: the cells and their salts, the opened port rows, their salts
+and paths, and the switches.
 """
 from __future__ import annotations
 
