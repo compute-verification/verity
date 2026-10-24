@@ -1,4 +1,4 @@
-"""`verity_vllm.program.registry.boolean_silu`: the Boolean SiLU Definitions agree with their word Definitions (`trace.word_of`)
+"""`verity.ml.definitions.registry.boolean_silu`: the Boolean SiLU Definitions agree with their word Definitions (`trace.word_of`)
 on every gate word, on every pair of special words and on random and edge-product pairs, carry exactly their builder's live
 ANDs, are pinned by gate count and program digest, and partition under `Q_word_v1{X=16, W=32}` into one unit per element, as
 their word rows do. The v4 pair (word view the served `SiluMulBf16_v2`) is also exact on the overflow window, the gates
@@ -20,10 +20,10 @@ from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.defs import REGISTRY, bind
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import Circuit
-from verity_vllm.program.registry import act
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import boolean_silu as BSL
-from verity_vllm.program.registry import prims as P
+from verity.ml.definitions.registry import act
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry import boolean_silu as BSL
+from verity.ml.definitions.registry import prims as P
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {

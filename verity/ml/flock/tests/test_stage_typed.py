@@ -12,7 +12,7 @@ from verity_flock import circuit as FC
 from verity_flock import typed_statement as TS
 
 pytest.importorskip("verity_numerical")
-pytest.importorskip("verity_vllm.program.registry.prims")
+pytest.importorskip("verity.ml.definitions.registry.prims")
 from verity_numerical.bench import templates as TM  # noqa: E402
 from verity_numerical.bench.generate import generate  # noqa: E402
 from verity_numerical.bench.input_sets import InputSet  # noqa: E402

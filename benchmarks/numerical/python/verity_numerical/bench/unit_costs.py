@@ -286,7 +286,7 @@ def argmax_tree(V: int, stage: str = "TokenSelectStage") -> dict[str, Any]:
     laid out as one unit (nnz = nnz_a + nnz_b + rows, C = I over rows)."""
     from verity.ml.circuits.cut import separable
     from verity.ml.circuits.evaluation.reference import resolve
-    from verity_vllm.program.registry import sampling_boolean as SB
+    from verity.ml.definitions.registry import sampling_boolean as SB
 
     members: list[dict[str, Any]] = []
     memo: dict[str, dict[str, int]] = {}

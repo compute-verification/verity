@@ -8,9 +8,9 @@ from typing import Any
 import numpy as np
 
 from verity.ml.circuits.defs import bind
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry import value_inputs as VI
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry import prims as P
+from verity.ml.definitions.registry import value_inputs as VI
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_row_major
@@ -133,7 +133,7 @@ class CudaRmsNorm:
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         if node.is_triton or base_op(node.op) != "_C.rms_norm" or target_of(ctx)[0].batch_invariant:
             return None
-        from verity_vllm.program.registry import cuda_rmsnorm as C
+        from verity.ml.definitions.registry import cuda_rmsnorm as C
 
         got = _cuda_norm_args(node, ("result", "input", "weight", "epsilon"))
         if got is None:
@@ -159,7 +159,7 @@ class CudaFusedAddRmsNorm:
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         if node.is_triton or base_op(node.op) != "_C.fused_add_rms_norm" or target_of(ctx)[0].batch_invariant:
             return None
-        from verity_vllm.program.registry import cuda_rmsnorm as C
+        from verity.ml.definitions.registry import cuda_rmsnorm as C
 
         got = _cuda_norm_args(node, ("input", "residual", "weight", "epsilon"))
         if got is None:
