@@ -289,7 +289,7 @@ def serve_ingress(requests: list[Mapping[str, Any]]) -> dict[str, dict]:
 
 
 def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target: str | None = None) -> Any:
-    """φ of a served engine as `tools/advice_compile.py` registers it (the formula its Build compiles the request Programs under):
+    """φ of a served engine as vllm's advice compiler (#3619's) registers it (the formula its Build compiles the request Programs under):
     the pinned model (``serve.json``'s ``model`` and ``revision``, the checkpoint's ``config.json``, default unsloth/Llama-3.2-1B's),
     the serving device's target profile (``serve.json``'s ``target``, else the file ``target``) and the engine's execution label
     (``engine.execution``); no workload."""
