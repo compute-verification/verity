@@ -1,12 +1,13 @@
 """What `nci-desc-fuzz`'s output says, per statement: how many Programs passed the preconditions and were checked, the
 shapes they covered, and every failure (the first few of each kind in full).
 
-    python gen/summarize.py OUT.jsonl [OUT.jsonl ...] [--json FILE]
+    python gen/summarize.py OUT.jsonl[.gz] [OUT.jsonl[.gz] ...] [--json FILE]
 """
 from __future__ import annotations
 
 import argparse
 import collections
+import gzip
 import json
 
 SHAPE_MAX = ("depth", "defs", "activations", "walkBound", "gates", "root_nodes", "scans", "scanN", "batches",
@@ -27,7 +28,7 @@ def summarize(paths: list[str]) -> dict:
     fails = collections.defaultdict(list)
     most_vs_bound = 0.0
     for p in paths:
-        for line in open(p):
+        for line in (gzip.open(p, "rt") if p.endswith(".gz") else open(p)):
             r = json.loads(line)
             pre[r["pre"]] += 1
             by_family[r["family"]][r["pre"]] += 1
