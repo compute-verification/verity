@@ -64,8 +64,9 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   PROTOCOL.md §10.4), its `Hello` set up on the statement's partition and program. Lean `verify --zk` holds each session with
   `--partition` and `--program` (units derived).
 * **The draw from the auditor's challenger** (`--challenger local|gate:USER@HOST`, a TP Commit; `a5_coins`), on the proof
-  service's path of record: the step's one challenger session, opened on the TP run root, and each rank's own
-  `service.Stream` over its window's templates in their order (one stratified Spec over their mixed population, its law the
+  service's path of record: the step's one challenger session, opened on the TP run root once every rank has passed its
+  checks before the draw and planned the coins its draw reads (`a5_coins.need`), and only under a reserve that covers
+  them all (`a5_coins.reserve_reason`), and each rank's own `service.Stream` over its window's templates in their order (one stratified Spec over their mixed population, its law the
   partition file's rule, `stratified:K` among them), on the session's coins (`coins.ChallengerCoins` over
   `remote.RemoteChallenger`). The stream registers the rank's window at its counts under the TP run root (`register`), the
   coins commit to the registration's digest, and the stream draws once (`select`: Lean's `Select.select` on the bytes it
@@ -188,14 +189,17 @@ def stream_of(a: argparse.Namespace, mine: CS.Window, members: list[dict], want:
 
 def coins_draw(a: argparse.Namespace, rank: int, rec: dict, mine: CS.Window, members: list[dict], want: dict,
                leaf_layer: str | None) -> tuple[S.Stream | None, S.Draw | None, dict | None, bytes, dict | None, dict | None]:
-    """Rank ``rank``'s draw of record (`stream_of`): the stream registers the window under the TP run root (`register`, at
-    the window's counts), the challenger's coins commit to the registration's digest, and the stream draws once from them
-    (`select`: Lean's `Select.select` on the bytes read, then `check_draw`), in the rank's turn on the step's one client;
-    -> (the stream, its draw, `register`'s counts, the bytes read, the coins' segment, and why it drew none)."""
+    """Rank ``rank``'s draw of record (`stream_of`). The rank first plans its draw's coins from its window
+    (`a5_coins.need`), which opens the step's one session once every rank has planned (`a5_coins.Draws.plan`). Then the
+    stream registers the window under the TP run root (`register`, at the window's counts), the challenger's coins commit
+    to the registration's digest, and the stream draws once from them (`select`: Lean's `Select.select` on the bytes read,
+    then `check_draw`), in the rank's turn on the step's one client. -> (the stream, its draw, `register`'s counts, the
+    bytes read, the coins' segment, why it drew none, and the coins it planned)."""
     coins = AC.RankCoins(a.coins, rank)
     stream = draw = counts = refused = None
     try:
         stream, counts = stream_of(a, mine, members, want, leaf_layer, coins)
+        coins.plan(AC.need(a.rule, mine.program, mine.query, mine.population))
         reg = stream.register(rec, want, leaf_layer=leaf_layer, window_root=a.window_root, counts=counts)
         coins.commit(bytes.fromhex(reg.digest))
         draw = stream.select(reg)
@@ -205,7 +209,7 @@ def coins_draw(a: argparse.Namespace, rank: int, rec: dict, mine: CS.Window, mem
         refused = {"ok": False, "codes": ["stream"], "detail": {"stream": str(e)}}
     finally:
         segment = coins.drawn()
-    return stream, draw, counts, bytes(coins.read), segment, refused
+    return stream, draw, counts, bytes(coins.read), segment, refused, coins.need
 
 
 def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts: dict | None, rec: dict, mine: CS.Window,
@@ -388,8 +392,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         p = a0.run([a.lean, "draw", "--population", str(n_all), "--k", str(law["k"])], out / "draw.log")
         union_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     else:
-        stream, draw, counts_of, read, segment, refused = coins_draw(a, rank, rec, mine, members, want, leaf_layer)
-        (out / "segment.json").write_text(json.dumps({"segment": segment, "read": read.hex()}, sort_keys=True))
+        stream, draw, counts_of, read, segment, refused, need = coins_draw(a, rank, rec, mine, members, want, leaf_layer)
+        (out / "segment.json").write_text(json.dumps({"segment": segment, "read": read.hex(), "need": need}, sort_keys=True))
         if draw is None:
             summary.update(checks={**checks, "draw": refused})
             (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
@@ -564,9 +568,9 @@ def tp(a: argparse.Namespace, sets: dict, out: Path) -> bool:
             raise SystemExit(f"--challenger draws every rank from the step's one session, which ends once every rank has drawn: "
                              f"audit the {len(ranks)} ranks at once (--jobs {len(ranks)}), or fewer ranks (--ranks)")
         a.window_root = rec["tp_run_root"]
-        manager, a.coins, finisher, sid = AC.start(a.challenger, a.window_root, ranks, out / "challenger", a.main,
-                                                   ssh_key=a.gate_key, peer=a.peer, key_record=a.challenger_key)
-        summary["challenger"] = {"challenger": a.challenger, "session": sid, "rule": a.rule}
+        manager, a.coins, finisher = AC.start(a.challenger, a.window_root, ranks, out / "challenger", a.main,
+                                              ssh_key=a.gate_key, peer=a.peer, key_record=a.challenger_key)
+        summary["challenger"] = {"challenger": a.challenger, "rule": a.rule}
     try:
         for r, row in tp_ranks(a, sets, out, world, ranks):
             summary["ranks"][str(r)] = row
@@ -578,7 +582,8 @@ def tp(a: argparse.Namespace, sets: dict, out: Path) -> bool:
                 a.coins.skip(r)
             finisher.join()
             published = a.coins.evidence()
-            summary["challenger"].update(trusted=published.get("trusted"), error=published.get("error"))
+            summary["challenger"].update(trusted=published.get("trusted"), error=published.get("error"),
+                                         **(published.get("plan") or {}))
             manager.shutdown()
     summary["accepted"] = ok_all and sorted(summary["ranks"]) == sorted(str(r) for r in ranks) \
         and not summary.get("challenger", {}).get("error")

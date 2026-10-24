@@ -1,0 +1,9 @@
+# The one-stage audit runs (a0 ... a11). Not a package: the suite tests a5's coin sources (`a5_coins.py`): the reserve its
+# challenger session is sized to, and the local challenger's session it opens.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.verity.tests]
+# `verity`: the stream, its sampler and the challenger's coins. `benchmarks/live_challenger`: the local challenger's auditor
+# host (auditor.py) and the session it serves (serve.py, under its tests' stub of the Lean verifier's coins, stub_serve.py).
+inputs = ["verity", "benchmarks/live_challenger"]

@@ -29,7 +29,8 @@
 #   one session on the TP run root (a5.py --challenger, a5_coins.py): local, a development session on this
 #   machine; gate:USER@HOST, vy-challenger-1 through infra's gate, with A5_PEER (this machine in its /etc/vy/peers),
 #   A5_CHALLENGER_KEY (the challenger's key record) and A5_GATE_KEY (the lane's gate key). The step's ranks draw from the one
-#   session, so A5_JOBS covers every audited rank. The session's files, the ledger and the host's pins log are kept in
+#   session, so A5_JOBS covers every audited rank. It opens once every rank has passed its checks before the draw, with
+#   coins sized from every rank's draw, and not at all if one hasn't. The session's files, the ledger and the host's pins log are kept in
 #   $OUT/<name>/challenger/. The verifier's own copy of main's first-parent history (a5.py --main) is A5_MAIN, else this
 #   clone's fetch of origin/main ($OUT/main.txt, as benchmarks/remote_session/auditor.sh writes it).
 set -uxo pipefail
