@@ -1,6 +1,8 @@
 """`research queue`: the merge queue (infra plan change 5).  `next` is `main` plus every admitted PR, one merge commit each, in the
-order they were admitted; `main` fast-forwards to the newest commit on `next` that `research merge`'s gate accepts: a passing
-`check` attempt of that exact commit.
+order they were admitted.  Drive (`research.drive`, drive.toml's `land = "review"`) fast-forwards `main` to the top of the
+longest prefix of `next` whose every member has a reviewer's land verdict at its head (Daniel, 24 Oct 06:05Z: PRs land on an
+eyeball review, and the full check runs after landing); `land` below, and drive's `land = "check"`, take the newest commit on
+`next` that `research merge`'s gate accepts: a passing `check` attempt of that exact commit.
 
     research queue status [--json]                 each open PR: its place in `next`, what it waits for, or why it was refused
     research queue sync [--dry-run]                admit and drop PRs, merge them onto `next`, push it
@@ -25,15 +27,25 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
                                                    --collect-only` in a suite
                                                    whose inputs its change touches; --no-preflight skips it (the lander's)
     research queue drive (--on MACHINE | --config PATH [--config-from-tree]) [--max-running N] [--train-size N] [--marked-after TS]
-                         [--first N,...] [--defer STEPS] [--[no-]regenerate-locks] [--per-pr-shadow N] [--dry-run]
-                                                   one tick of the landing automation (`research.drive`): land what passed, sync,
-                                                   check `next` in trains with train.sh, eject what one PR broke, tell @ci the rest;
+                         [--first N,...] [--defer STEPS] [--[no-]regenerate-locks] [--per-pr-shadow N]
+                         [--landing review|check] [--[no-]after-landing-no-cache] [--dry-run]
+                                                   one tick of the landing automation (`research.drive`): with --landing review
+                                                   (drive.toml's `land`), sync and land the reviewed prefix of `next`, a lock
+                                                   change once its Lean check passed, then check `main` (--after-landing-no-cache:
+                                                   reusing no pass); with check, land what passed, sync, check `next` in trains with
+                                                   train.sh, eject what one PR broke; either way tell @ci the rest.
                                                    --per-pr-shadow N runs the per-PR landing beside the trains in shadow, N checks
                                                    at most, landing and ejecting nothing (`research queue stats --per-pr` reads it).
                                                    --config reads the flags (`DriveFlags`) from PATH at `main` in the queue's clone,
                                                    fresh each tick, so a change to them is a reviewed commit (drive's of record:
                                                    tools/verity/check/drive.toml); a flag given here overrides the file's, the
                                                    effective flags print once a tick, and --config-from-tree reads this file system's
+    research queue review [N (--land [--ref NOTE] | --hold REASON) --by LANE] [--sha SHA] [--json]
+                                                   without N: `next`'s members above `main` that no land verdict at their head
+                                                   lands, bottom first (number, head, owner, files, whether it changes a lock);
+                                                   with N: a reviewer's verdict, a `reviewed` label on `pr:N@HEAD` (its head on
+                                                   `next`, or --sha), which drive's review landing counts unless LANE is the
+                                                   PR's owner, refused here
     research queue report --on MACHINE [--max-running N] [--dry-run]
                                                    one tick of the reporter for GitHub's merge queue (`research.mergequeue`): check
                                                    each merge group's head, post its `verity/check` status
@@ -92,8 +104,10 @@ which files conflict and which queued PRs touched them.
 Landing.  `land` walks `next` down from its tip and fast-forwards `main` to the first commit the gate accepts: `main` gets exactly
 the tree that was checked, with no new merge commit.  A push refused because `main` moved leaves `main` alone; the next sync rebuilds
 `next` on the new `main`.  A landing that changes what a guarantee says DMs Daniel what changed (`spec_alert`).  `drive`
-(`research.drive`) is the loop's tick that needs no agent: it launches the checks of `next`'s trains, lands what passed (onto a
-moved `main` too, when the two share no file), ejects the PR a failure points at alone and tells `@ci` what it refuses.
+(`research.drive`) is the loop's tick that needs no agent: with `land = "review"` it lands `next`'s reviewed prefix, a lock change
+once its Lean check passed, and checks `main` after each landing, reverting what that check fails; with `land = "check"` it
+launches the checks of `next`'s trains, lands what passed (onto a moved `main` too, when the two share no file), ejects the PR a
+failure points at alone; either way it tells `@ci` what it refuses.
 
 Notices.  A refusal (a conflict, an ejection) is posted in the merge thread to `@ci` and the owner's handle, once per PR head:
 drive tells each conflict its sync finds, and `eject` posts as its ejector.  Nothing is written to the notes: a handoff note
@@ -289,6 +303,10 @@ class Rules:
         return cls(doc.get("hold_label", "hold"), source, cut)
 
 
+#: drive's ways of landing (`DriveFlags.land`)
+LANDINGS = ("check", "review")
+
+
 @dataclass(frozen=True)
 class DriveFlags:
     """`research queue drive`'s flags: the defaults, then what `--config` reads (`DRIVE_FLAGS` on `main`, so a change to them is
@@ -301,6 +319,11 @@ class DriveFlags:
     regenerate_locks: bool = False
     first: tuple[int, ...] = ()
     per_pr_shadow: int = 0
+    #: how `next` lands: "check", each train on its own check; "review", each member on a reviewer's verdict, the full check
+    #: running after landing (`Driver`; Daniel, 24 Oct 06:05Z)
+    land: str = "check"
+    #: the after-landing run of `land = "review"` reuses no pass (`check.py --no-cache`)
+    after_landing_no_cache: bool = False
 
     @classmethod
     def parse(cls, text: str, source: str = "drive.toml") -> "DriveFlags":
@@ -352,12 +375,23 @@ class DriveFlags:
             if type(doc["per_pr_shadow"]) is not int or doc["per_pr_shadow"] < 0:
                 raise bad("per_pr_shadow", "a whole number: the per-PR shadow's checks at once, 0 for off")
             got["per_pr_shadow"] = doc["per_pr_shadow"]
+        if "land" in doc:
+            if doc["land"] not in LANDINGS:
+                raise bad("land", f"one of {', '.join(LANDINGS)}")
+            got["land"] = doc["land"]
+        if "after_landing_no_cache" in doc:
+            if not isinstance(doc["after_landing_no_cache"], bool):
+                raise bad("after_landing_no_cache", "true or false")
+            got["after_landing_no_cache"] = doc["after_landing_no_cache"]
         return cls(**got)
 
     def override(self, a: argparse.Namespace) -> "DriveFlags":
         """These flags with each one ``a`` (the command line) gives explicitly in its place."""
-        given = {k: getattr(a, k) for k in ("on", "max_running", "train_size", "marked_after", "regenerate_locks", "per_pr_shadow")
+        given = {k: getattr(a, k) for k in ("on", "max_running", "train_size", "marked_after", "regenerate_locks", "per_pr_shadow",
+                                            "after_landing_no_cache")
                  if getattr(a, k, None) is not None}
+        if getattr(a, "landing", None) is not None:
+            given["land"] = a.landing
         if a.defer is not None:
             given["defer"] = tuple(x for x in a.defer.split(",") if x)
         if a.first is not None:
@@ -389,6 +423,22 @@ def drive_flags(path: str, clone: Path | None) -> tuple[DriveFlags, str]:
 
 def label_target(pr: int, head: str) -> str:
     return f"pr:{pr}@{head}"
+
+
+def unreviewed(labels: Iterable, owner: str) -> str | None:
+    """Why the `reviewed` ``labels`` on one head don't land it, or None when they do: each reviewer's newest verdict counts, a
+    hold by anyone keeps it, and a land counts only by a reviewer who isn't ``owner``, the PR's owning lane or agent id
+    (`PR.owner`)."""
+    newest: dict[str, object] = {}
+    for lab in sorted(labels, key=lambda lab: lab.ts):
+        newest[lab.by.lstrip("@")] = lab
+    if held := [f"{by} ({lab.ref or 'no reason'})" for by, lab in newest.items() if lab.value == "hold"]:
+        return f"held by {', '.join(held)}"
+    if any(lab.value == "land" and by != owner for by, lab in newest.items()):
+        return None
+    if owner in newest:
+        return f"no land verdict but its owner's own ({owner}), which doesn't count"
+    return "no land verdict"
 
 
 class StoreLabels:
@@ -423,6 +473,10 @@ class StoreLabels:
         labs = sorted(self._labels(pr, head, vocab.READY), key=lambda lab: lab.ts)
         self._newest[(pr, head)] = labs[-1] if labs else None
         return bool(labs) and str(labs[-1].value).lower() == "true" and (self.since is None or labs[-1].ts >= self.since)
+
+    def reviews(self, pr: int, head: str) -> list:
+        """The `reviewed` labels on `pr:{n}@{head}` (`research queue review`), pulled as `ready`'s are."""
+        return self._labels(pr, head, vocab.REVIEWED)
 
     def marked_by(self, pr: int, head: str) -> str | None:
         """Who wrote the newest `ready` label `ready` read on `pr:{n}@{head}`."""
@@ -1959,6 +2013,51 @@ def _mark(store, pr: PR, by: str, failed: str | None, command: str) -> int:
     return 1 if lost else 0
 
 
+def review(q: Queue, store, labels: StoreLabels, pr: int | None, verdict: str | None, ref: str | None, by: str | None,
+           sha: str | None = None, as_json: bool = False) -> int:
+    """`research queue review`: without ``pr``, list `next`'s members above `main` that no land verdict at their head lands
+    (`unreviewed`), bottom first, the order drive lands them in; with it, write ``verdict`` (`land` or `hold`, ``ref`` its note or
+    reason) by ``by`` on the PR's head on `next` (or ``sha``, or its open head when it isn't on `next`), refusing its owner."""
+    from .store.cli import _label_write_through
+
+    q._clone()
+    q.fetch()
+    main = _out(q.workdir, "rev-parse", "refs/remotes/origin/main")
+    chain = [m for m in q.chain() if _git(q.workdir, "merge-base", "--is-ancestor", m.commit, main, check=False).returncode]
+    if pr is None:
+        labels.prefetch([(m.pr, m.head) for m in chain])
+        rows = []
+        for m in chain:
+            if (why := unreviewed(labels.reviews(m.pr, m.head), m.owner)) is None:
+                continue
+            files = sorted(changed(q.workdir, f"{m.commit}^1", m.commit))
+            rows.append({"pr": m.pr, "head": m.head, "owner": m.owner, "lock": any(Path(f).name == "lean-audit.json" for f in files),
+                         "files": files, "why": why})
+        if as_json:
+            print(json.dumps(rows, indent=1))
+        else:
+            for r in rows:
+                shown = ", ".join(r["files"][:8]) + (f" (+{len(r['files']) - 8} more)" if len(r["files"]) > 8 else "")
+                print(f"#{r['pr']} {r['head'][:12]} {r['owner']} lock change: {'yes' if r['lock'] else 'no'}: {r['why']}\n    {shown}")
+            print(f"research queue review: {len(rows)} of {len(chain)} member(s) of `{q.branch}` above `main` lack a land verdict")
+        return 0
+    m = next((m for m in chain if m.pr == pr), None)
+    head, owner = (sha or m.head, m.owner) if m and (sha in (None, m.head)) else (sha, None)
+    if owner is None:
+        open_pr = next((p for p in q.github.open_prs() if p.number == pr), None)
+        if open_pr is None:
+            raise QueueError(f"review: #{pr} is neither on `{q.branch}` nor open")
+        head, owner = head or open_pr.head, open_pr.owner
+    if not owner or by.lstrip("@") == owner:
+        raise QueueError(f"review: #{pr} is {by}'s own PR (or has no owner), and an owner's verdict doesn't count: a reviewer "
+                         "who isn't its owner reviews it")
+    target = label_target(pr, head)
+    store.add_label(target, vocab.REVIEWED, verdict, by, ref=ref or None)
+    said, lost = _label_write_through(store, target)
+    print(f"research queue: #{pr} reviewed `{verdict}` at {head[:12]} by {by} ({target}); {said}")
+    return 1 if lost else 0
+
+
 def broker_gh(top: Path) -> str:
     """The gh to open PRs with: the checkout's broker wrapper (`<git common dir>/verity-auth/bin/gh`, which trades the agent's
     identity for an installation token) when it has one, else gh on PATH."""
@@ -2055,8 +2154,8 @@ def _checked_heads(a: argparse.Namespace) -> int:
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
     ap.add_argument("command", choices=["status", "sync", "land", "eject", "ready", "judge", "drive", "report", "open",
-                                            "stats", "checked-heads"])
-    ap.add_argument("pr", nargs="?", help="eject, ready: the PR number; judge: the quick tier's run id")
+                                            "stats", "checked-heads", "review"])
+    ap.add_argument("pr", nargs="?", help="eject, ready, review: the PR number; judge: the quick tier's run id")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE"),
                     help="eject, ready, judge: who ejects it, the handle its notice is posted as (default merge-queue, which no "
@@ -2105,6 +2204,14 @@ def main(argv: list[str]) -> int:
                          "`main` or `next` and ejects nothing (`research.drive`; 0, the default, is off)")
     ap.add_argument("--per-pr", action="store_true", help="stats: the per-PR shadow's records (drive's state file beside "
                                                           "--workdir) in place of drive's log")
+    ap.add_argument("--landing", choices=LANDINGS,
+                    help="drive: land each train on its own check (check, the default), or each member of `next` on a reviewer's "
+                         "land verdict, a lock change once a Lean check passed, with the full check after landing (review)")
+    ap.add_argument("--after-landing-no-cache", action=argparse.BooleanOptionalAction,
+                    help="drive: with --landing review, run the after-landing check reusing no pass (check.py --no-cache)")
+    ap.add_argument("--land", action="store_true", help="review N: the verdict that lands it")
+    ap.add_argument("--hold", metavar="REASON", help="review N: the verdict that keeps it, and everything above it, on `next`")
+    ap.add_argument("--ref", help="review N --land: the note or reason the verdict rests on")
     ap.add_argument("--config", metavar="PATH",
                     help=f"drive: read its flags from PATH (`DriveFlags`, e.g. {DRIVE_FLAGS}) at `main` in the queue's clone, "
                          "fresh each tick; a flag given here overrides the file's")
@@ -2175,6 +2282,10 @@ def main(argv: list[str]) -> int:
         ap.error(f"{a.command} needs --on MACHINE (train.sh's: a machine, or `auto`) for the checks it launches")
     if a.command in ("ready", "judge") and not a.by:
         ap.error(f"{a.command} writes the owner's ready mark: pass --by <lane> (or set $RESEARCH_LANE)")
+    if (a.land or a.hold is not None or a.ref) and not (a.command == "review" and a.pr):
+        ap.error("--land, --hold and --ref are for review N only")
+    if a.command == "review" and a.pr and (a.land == (a.hold is not None) or not a.by):
+        ap.error("review N records one verdict: --land [--ref NOTE] or --hold REASON, with --by <reviewer lane> (or $RESEARCH_LANE)")
     a.by = a.by or "merge-queue"
     if a.command != "judge" and a.pr is not None:
         if not a.pr.isdigit():
@@ -2229,6 +2340,9 @@ def main(argv: list[str]) -> int:
             else:
                 print(_render(entries))
             return 0
+        if a.command == "review":
+            return review(q, store, labels, a.pr, "land" if a.land else "hold" if a.pr else None, a.hold or a.ref, a.by,
+                          sha=a.sha, as_json=a.json)
         from .merge import off_drive, on_drive
 
         if a.command in ("sync", "land") and not (a.dry_run or on_drive()):
@@ -2242,7 +2356,8 @@ def main(argv: list[str]) -> int:
             from .drive import Driver
 
             Driver(q, on=flags.on, max_running=flags.max_running, train_size=flags.train_size, defer=frozenset(flags.defer),
-                   regenerate_locks=flags.regenerate_locks, per_pr_shadow=flags.per_pr_shadow).tick(dry_run=a.dry_run)
+                   regenerate_locks=flags.regenerate_locks, per_pr_shadow=flags.per_pr_shadow, land=flags.land,
+                   after_landing_no_cache=flags.after_landing_no_cache, reviews=labels.reviews).tick(dry_run=a.dry_run)
             return 0
         if a.command == "report":
             from .mergequeue import Reporter, Statuses

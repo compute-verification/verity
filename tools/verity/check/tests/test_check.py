@@ -1282,10 +1282,18 @@ def test_train_sh_refuses_every_flag_but_agreement(tmp_path):
     a stale `--verdicts-in`) would change what is reused or checked, so it is refused before anything is read."""
     import subprocess
 
+    def train(*flags: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), "abc", "vy-x", *flags],
+                              capture_output=True, text=True, cwd=tmp_path, env={"PATH": "/usr/bin:/bin"})
+
     for flag in ("--no-cache", "--verdicts-in", "--cores"):
-        p = subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), "abc", "vy-x", "--agreement", flag],
-                           capture_output=True, text=True, cwd=tmp_path, env={"PATH": "/usr/bin:/bin"})
+        p = train("--agreement", flag)
         assert p.returncode == 2 and f"train: {flag} refused" in p.stderr, p.stderr
+    # drive's after-landing run of a review landing: every job, the upstream build, no reuse; past the flags, the store key
+    p = train("--deferred", "pytest,lean-audit", "--agreement", "--no-cache")
+    assert p.returncode == 1 and "no parent store key" in p.stderr, p.stderr
+    p = train("--deferred", "pytest", "--against", "main")
+    assert p.returncode == 2 and "--deferred takes no --against" in p.stderr, p.stderr
 
 
 @pytest.mark.parametrize("twins", [False, True])
