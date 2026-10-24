@@ -68,15 +68,17 @@ research run --project verity --on vy-nebius-cpu-2 --source . --cwd clone --mem-
   - `--policy` at A (Γ = 2^44, α = 2^-25);
   - at C (α = 2^-28) with Γ = 2^44 and with Γ = 2^52;
   - at A's four neighbours.
-- **Each `nci-check`** decodes the whole descriptor. `--check-mem-gb` caps each one's address space, so a check that
-  outgrows its share of the run's `--mem-gb` fails rather than the node.
+- **Each `nci-check`** decodes the whole descriptor (about 50 GB resident for a whole-node session).
+  `--check-mem-gb` caps each one's address space, which runs about 15 GB above its resident peak, so a check that
+  outgrows its share of the run's `--mem-gb` fails rather than the node. A dry run on a root `Desc` can't read ends
+  there.
 - **The root must be inputs and one Call.** `NciCheck.Desc` can't hold a session laid out as the root's own nodes
   (`root_calls` in `results.json` counts them), for the reason above.
 
 ~~~sh
 research run --project verity --on vy-nebius-cpu-4 --source . --cwd clone --mem-gb 120 --timeout 16h \
   $(for f in descriptor.json.gz trusted.json provenance.json registration.json; do echo --send glm53-b1-node.$f; done) \
-  -- bash benchmarks/verifier_cost/nci_glm.sh --case registered-node --node-digest HEX --jobs 2 --check-mem-gb 58
+  -- bash benchmarks/verifier_cost/nci_glm.sh --case registered-node --node-digest HEX --jobs 2
 ~~~
 
 `flock_read.sh K...` measures C-Flock's Lean verifier (`flock-verify verify --zk`) on #3002's H1 tile unit, step by step:

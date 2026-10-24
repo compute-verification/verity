@@ -7,7 +7,7 @@
 #     -- bash benchmarks/verifier_cost/nci_glm.sh --jobs 10 [ARGS...]
 #   research run --project verity --on vy-nebius-cpu-4 --source . --cwd clone --mem-gb 120 --timeout 16h \
 #     $(for f in descriptor.json.gz trusted.json provenance.json registration.json; do echo --send glm53-b1-node.$f; done) \
-#     -- bash benchmarks/verifier_cost/nci_glm.sh --case registered-node --node-digest HEX --jobs 2 --check-mem-gb 58 [ARGS...]
+#     -- bash benchmarks/verifier_cost/nci_glm.sh --case registered-node --node-digest HEX --jobs 2 [ARGS...]
 set -euo pipefail
 O=${OUT:?run under research run, which sets OUT}
 IN=${RESEARCH_RUN_DIR:?run under research run}/inputs
