@@ -16,7 +16,9 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
   tie is IoTieRequest's verdict, from the verifier's own tie source (`service.LinkWindows.ties`), which the proof
   service doesn't have yet, so the verifier of record refuses every advised link (`advised`, fail closed); here the
   link's tie source is the tests' stand-in (`advised_traffic.StandInTie`) on the link's certified prompts, the
-  verifier's own and never the prover's, so this prices the unit and its proof, not IoTieRequest's.
+  verifier's own and never the prover's, so this prices the unit and its proof, not IoTieRequest's. Its clock
+  source (`service.LinkWindows.clocks`) is the stand-in `advised_traffic.StandInClocks`, the declared syncs as an
+  honest certifier runs them.
 * **A served run's link** (`e2e`, ``--e2e RUN``): network-e2e's output directory of a run on the advice profile
   (``report.json``, the honest rehearsal's records under ``rehearsal/honest``, the endpoint's advice under
   ``endpoint/advice``), N2's link of its honest rehearsal (``served``: T = 60 on both ends, the egress allocation the
@@ -24,8 +26,9 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
   id-request framing (`active.id_request_frames`). Its advice is the Commit windows' I1 advice that the report bound to
   the run and rebuilt from its certified I/O, joined into one (`joined`), its requests in the certified arrival order,
   each kept output released in the bucket the certified I/O says its frame went out, and ``received`` the certified
-  ingress heads' request frames; the tie the same stand-in, on the certified prompts. The link's first ``--windows``
-  windows are proved.
+  ingress heads' request frames; the tie the same stand-in, on the certified prompts, and the clock source the
+  plan's syncs, which the run's certifier ran (`certifier_serve` hands them to its proxy). The link's first
+  ``--windows`` windows are proved.
 * **Members.** One stream each, over the link's windows: ``honest``, the session's advice and records;
   ``moved``, one kept output's release bucket one later (`advised_traffic.moved`); and on the simulated link
   ``short``, one request's output length one short (`advised_traffic.with_output_len`), and ``extra``, one frame more
@@ -182,7 +185,8 @@ def simulated(seed: int = SEED, shape=SHAPE, own: int = OWN, height: int = 6) ->
             lw = LinkWindows(AT.LINK, shape.egress, AT.SYNC_SET, certifier.public_key(), "n2-advised-zk", session,
                              ingress=shape.ingress, proof_deadline=cs.PROOF_DEADLINE_S,
                              advised=AD.AdvisedProfile(shape.windows, AT.FRAMING, own),
-                             ties=AT.StandInTie(s.certified, AT.LINK, shape.windows))
+                             ties=AT.StandInTie(s.certified, AT.LINK, shape.windows),
+                             clocks=AT.StandInClocks(tuple(AT.SYNCS)))
             ingress = [issuer.certify(r, Direction.INGRESS, shape.ingress, parameters_digest(shape.ingress))
                        for r in s.ingress]
 
@@ -251,7 +255,8 @@ def e2e(run: Path, windows: int = 1) -> SimpleNamespace:
     lw = LinkWindows(link_name, setup.egress_params, setup.sync_set, cs.read_public(dep["certifier_key"]),
                      dep["run_id"], bytes.fromhex(dep["session"]), ingress=setup.ingress_params,
                      proof_deadline=cs.PROOF_DEADLINE_S, advised=AD.AdvisedProfile(n, framing, own),
-                     ties=AT.StandInTie(tuple(len(r["prompt"]) for r in io), link_name, n))
+                     ties=AT.StandInTie(tuple(len(r["prompt"]) for r in io), link_name, n),
+                     clocks=AT.StandInClocks(tuple(syncs)))
     certified, _ = cs.read_certified(honest / "certified.jsonl")
     pairs = [(certified[(Direction.EGRESS, w)], certified[(Direction.INGRESS, w)]) for w in range(n)]
     egress, ingress = ([list(p[d].head.counts) for p in pairs] for d in (0, 1))
