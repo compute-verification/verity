@@ -15,8 +15,10 @@
 #     --env GPU_LEASE_WHO=kernels-dither-rtx -- bash benchmarks/hash/dither/sbench.sh
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT"
-mkdir -p /workspace/pouw
-S=$(mktemp -d /workspace/pouw/tmp-dither-sbench.XXXXXX); trap 'rm -rf "$S"' EXIT
+# DITHER_SCRATCH: the scratch's parent (vy-nebius-3 has no /workspace/pouw: /workspace/tmp there)
+SCR=${DITHER_SCRATCH:-/workspace/pouw}
+mkdir -p "$SCR"
+S=$(mktemp -d "$SCR/tmp-dither-sbench.XXXXXX") || exit 2; trap 'rm -rf "$S"' EXIT
 ROOT=$PWD
 git rev-parse HEAD | tee "$OUT/commit.txt"
 CUDA=${CUDA:-/usr/local/cuda-13.0}

@@ -25,7 +25,7 @@ D=${RESEARCH_RUN_DIR:?}
 mkdir -p "$D/out"
 # FlashInfer's JIT cache is a private copy (its cuda_home the node's /usr/local/cuda-13.0, so nothing rebuilds): a timed
 # lease's Quiet stops other runs' ninja, and one stopped holding the shared cache's sampling.lock hung a pass for good
-FI=$(mktemp -d /workspace/pouw/tmp-prefill-fi.XXXXXX); trap 'rm -rf "$FI"' EXIT
+FI=$(mktemp -d "${DITHER_SCRATCH:-/workspace/pouw}/tmp-prefill-fi.XXXXXX") || exit 2; trap 'rm -rf "$FI"' EXIT
 mkdir -p "$FI/.cache" && cp -a "$HOME/.cache/flashinfer" "$FI/.cache/" 2>/dev/null
 export FLASHINFER_WORKSPACE_BASE=$FI CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
 KC=""
