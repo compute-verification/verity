@@ -110,7 +110,8 @@ def link(run: Path) -> tuple[LinkWindows, dict]:
     profile = plan.get("occupancy") or {}
     lw = LinkWindows(dep["links"]["n2"], setup.egress_params, setup.sync_set, cs.read_public(dep["certifier_key"]),
                      dep["run_id"], bytes.fromhex(dep["session"]), ingress=setup.ingress_params,
-                     proof_deadline=cs.PROOF_DEADLINE_S, occupancy=(profile.get("egress"), profile.get("ingress")))
+                     proof_deadline=cs.PROOF_DEADLINE_S, occupancy=(profile.get("egress"), profile.get("ingress")),
+                     served=cs.served_profile(plan))
     return lw, plan
 
 
@@ -138,11 +139,13 @@ def link_windows(run: Path, edit=None) -> SimpleNamespace:
         args = lw.arguments(opening, root, syncs)
         word = lw.outputs(opening, root, syncs) if args is not None else None
         others = lw.certified(w, certificates) and w < len(syncs) and syncs[w] in lw.sync_set
+        failed = {e: None if i is None else [k for k, ok in HC.reference_parts(i).items() if not ok]
+                  for e, i in zip(ENDS, insts)}
+        if lw.served is not None and failed["egress"] is not None and not lw.served_check(opening, syncs):
+            failed["egress"].append("served")
         out.append(SimpleNamespace(
             window=w, opening=opening, root=root, insts=insts, args=args, word=word, certificates=certificates,
-            failed={e: None if i is None else [k for k, ok in HC.reference_parts(i).items() if not ok]
-                    for e, i in zip(ENDS, insts)},
-            expect=int(word == 0b11 and others), statement=None))
+            failed=failed, expect=int(word == 0b11 and others), statement=None))
     return SimpleNamespace(lw=lw, plan=plan, syncs=syncs, windows=out, issuer_refused=refused)
 
 
@@ -162,8 +165,9 @@ def one_count(lw: LinkWindows, w: int, pair: tuple[CertifiedRecord, CertifiedRec
 
 def expected(name: str, rd: SimpleNamespace) -> bool:
     """Whether the member's references are its round's: every unit takes an instance, and its verdict bit is 1 exactly
-    where no part fails; honest, none fails and every window accepts; tampered, window 0's egress head fails its counts
-    and its signed digest only; extra, egress heads fail their counts alone, on one window or more; late, egress heads
+    where no part fails (on a served link the served counts' check is the egress end's part ``served``); honest, none
+    fails and every window accepts; tampered, window 0's egress head fails its counts (on a served link, the served
+    counts) and its signed digest only; extra, egress heads fail their counts alone, on one window or more; late, egress heads
     fail their fields and counts on one window or more, and their counts alone where the late frames left a window
     short (the window before). The ingress heads fail nothing, and every negative member refuses one window or more."""
     xs = rd.windows
@@ -176,7 +180,7 @@ def expected(name: str, rd: SimpleNamespace) -> bool:
     if name == "honest":
         return all(x.expect for x in xs)
     if name == "tampered":
-        return eg[0] == ["counts", "signed"] and not any(eg[1:])
+        return eg[0] == (["signed", "served"] if rd.lw.served else ["counts", "signed"]) and not any(eg[1:])
     allowed, needed = {"extra": (([], ["counts"]), ["counts"]),
                        "late": (([], ["counts"], ["fields", "counts"]), ["fields", "counts"])}[name]
     return all(f in allowed for f in eg) and needed in eg
@@ -504,6 +508,7 @@ def prove(a) -> int:
     members = {k: v for k, v in members.items() if k in a.rounds}
     lw0 = next(iter(members.values())).lw
     summary["link"] = {"name": lw0.link, "unit": lw0.unit.id, "keys": {e: lw0.head_key(d) for d, e in enumerate(ENDS)},
+                       "served": lw0.served_key(),
                        "program": lw0.partition["program"], "partition": P.digest(lw0.partition),
                        "gates": [g.id for g in lw0.gates()], "pinned": all(HC.pinned(g) for g in lw0.gates()),
                        "windows": {k: len(v.windows) for k, v in members.items()},
