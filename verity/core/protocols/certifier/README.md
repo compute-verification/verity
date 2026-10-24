@@ -106,9 +106,13 @@ content check, is the design (Daniel's provisional call on ASK-70, 19 Oct). N2 n
 (`LinkWindows.verify` runs `check_link(grid=False)`, NET-38). Nothing may call the count check zero-knowledge until
 this is closed:
 - **N2's unit isn't proved yet.** `LinkWindows.verify`, the verifier of record, runs `head_check.reference` (and on a
-  served link `served.reference`) on the host over the opening, so it reads the heads and the certifier's salts. When
-  the unit is proved, its head-check gate must bind `NetworkHeadCheck_v2`'s circuit digest (and its served gate
-  `NetworkServedCounts_v1`'s), and the verifier must refuse a proof of any other circuit (NET-43).
+  served link `served.reference`) on the host over the opening, so it reads the heads and the certifier's salts.
+
+A proof of the unit is held to its circuit already. Each gate names its Definition's circuit digest
+(`Gate[NetworkHeadCheck_v2{…}@<digest>]_v2`, `served.gate` likewise), as `head_check.circuit-check.json` and
+`served.circuit-check.json` pin it and circuit-check holds the pin to the Definition. So the unit's Program, which the
+spec and each registration bind, binds both circuits, and `LinkWindows.verify`, given a proof's findings, refuses one
+that names any other Program, or a unit of a size class no sidecar pins (`LinkWindows.proved`).
 
 The certificate no longer signs a hash of witness (NET-42). The certifier signs `D = SHA-512("verity/net-cert/v1" ‖
 salt_c ‖ R)`, R the head's record digest and `salt_c` 64 bytes the certifier draws fresh for each record
