@@ -358,7 +358,8 @@ class Window:
     """What the roots are bound to: the verifier's population program and query (the partition over them), the law it draws by, the
     run (the record's run root, hex), and the members the population is made of, in the partition's order (refused otherwise); and
     its row tables in the canonical order (``RowTable.key``), every rank of each the row of at least one linked member's ``x``
-    table, under ``context`` (hex, 64 bytes serving knew before its first step: the live coin commitment's root)."""
+    table, under ``context`` (hex, 64 bytes serving knew before its first step: the live coin commitment's root).  A ``work`` law
+    draws by the verifier's ``work_table`` (`draw.work_table`), which the registration's law is expanded under."""
     program: Any
     query: dict[str, Any]
     law: dict[str, Any]
@@ -366,6 +367,7 @@ class Window:
     members: tuple[Member, ...]
     row_tables: tuple[RowTable, ...] = ()
     context: str = ""
+    work_table: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         mine, want = [(m.template, m.base, m.n) for m in self.members], P.ranges(self.program, self.query)
@@ -697,7 +699,7 @@ def registration(c: Committed, provenance: Mapping[str, Any], previous: str | No
     roots = [{"port": p, "root": c.roots[p].hex(), "leaves": c.domains[p].count, "domain": c.domains[p].domain_id.hex()} for p in c.roots]
     publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
     return R.record(w.program, w.query, w.law, SCHEME, roots, {**provenance, "kind": kind, "run": w.run},
-                    leaf_layer=leaf_layer(publics), previous=previous)
+                    leaf_layer=leaf_layer(publics), previous=previous, work_table=w.work_table)
 
 
 def index_doc(members: Sequence[Member], entries: Sequence[Sequence[list[Any]]], run: str) -> dict[str, Any]:

@@ -26,7 +26,9 @@ namespace has no other interface. On real hosts it is only the route of the meas
 **The served plan** (`plan`, `served_plan`). The endpoint is probed with the one request body every session sends,
 straight from the host, `--in-flight` requests at a time after one uncounted round: `/v1/completions`, streamed, a
 prompt of exactly `--prompt-tokens` tokens (`PROMPT` padded with `FILLER` in the endpoint's own tokenizer, `/tokenize`,
-and cut there), exactly `--tokens` tokens out (`min_tokens` and `max_tokens`, `ignore_eos`), temperature 0. F, the
+and cut there), exactly `--tokens` tokens out (`min_tokens` and `max_tokens`, `ignore_eos`), at `--temperature` (0)
+and `--top-p` (1), both always sent, since an endpoint applies its own generation config to a request that omits
+them. F, the
 frames of a response, is that token count, not the endpoint's events: vLLM v1 merges a request's tokens that its API
 server hasn't read yet into one chunk, so with several in flight a response's last two tokens sometimes share one
 event and sometimes don't, though the tokens are the same. vLLM's detokenizer holds back a token whose bytes end
@@ -78,7 +80,9 @@ or ignore_eos. `--requests` requests arrive as a Poisson process at `--rate` a s
 the middle of the bucket before the one its arrival falls in. Each prompt is a list of the endpoint's token ids, a chat
 turn (a question that the model answers in a word or at length, and filler) cut to a length log-uniform in
 `--prompt-range`, with `max_tokens` uniform in 1 … `--tokens`, a seed of its own, temperature 0 and the model's own
-EOS. Its session is the body's `user`, the request's id. Each is an id request (`active.id_request`): its sampling
+EOS. Its session is the body's `user`, the request's id, `--name`.j (j its index, five digits), which the shim forwards
+the endpoint, so a run named apart from every other one the endpoint served names each of its requests there as the
+certified I/O does. Each is an id request (`active.id_request`): its sampling
 fields at fixed places, each prompt id in a field of its own, in `active.id_request_frames(prompt length)` link frames,
 a function of its length alone. The proxy opens each request's connection to the shim with the request's ingress
 ordinal (`Proxy(ordinals=True)`), and the shim writes the responses interleaved, in the order the endpoint streams
@@ -109,11 +113,13 @@ certified, the I/O, the audit and the salt accept.
 
     python certifier_serve.py keys --dir KEYDIR [--height 10]
     python certifier_serve.py plan --upstream URL --out DIR [--model NAME] [--requests 400] [--in-flight 4]
+        [--temperature 0] [--top-p 1]
         [--tokens 64] [--response-frames F] [--prompt-tokens 128] [--probes 8] [--delta-buckets D]
         [--profile planned|served] [--traffic fixed|varied] [--rate 2] [--prompt-range 16:1024] [--seed 0]
-        [--eos-ids ID,...]
+        [--eos-ids ID,...] [--name varied]
     python certifier_serve.py serve --plan PLAN --calibration REPORT --upstream URL --out DIR --link HOST:PORT
-        --reveal HOST:PORT --key KEYDIR --challenger-key PUBLIC.json --session HEX [--start-in 10] [--tamper late|extra]
+        --reveal HOST:PORT --key KEYDIR --challenger-key PUBLIC.json --session HEX [--start-in 10]
+        [--tamper late|extra|drop|token]
     python certifier_serve.py client --plan PLAN --calibration REPORT --deployment DEPLOYMENT.json --out DIR
     python certifier_serve.py check --run DIR --challenger KEYDIR [--expect accepted|refused]
     python certifier_serve.py rehearse (--upstream URL | --vllm MODEL) --out DIR [plan's options] [--strategies S,...]
@@ -446,11 +452,13 @@ class CertifierProcess:
 
 # The served plan.
 
-def request_body(model: str, tokens: int, prompt: str | list[int] = PROMPT) -> dict:
+def request_body(model: str, tokens: int, prompt: str | list[int] = PROMPT, temperature: float = 0.0,
+                 top_p: float = 1.0) -> dict:
     """The request every session of a served plan sends: exactly `tokens` tokens (`min_tokens` and `max_tokens`, never
-    stopped early), greedy, streamed."""
+    stopped early), streamed, at `temperature` and `top_p` (greedy by default). Both are always sent: an endpoint
+    applies its own generation config to a request that omits them."""
     return {"model": model, "prompt": prompt, "max_tokens": tokens, "min_tokens": tokens, "stream": True,
-            "ignore_eos": True, "temperature": 0}
+            "ignore_eos": True, "temperature": temperature, "top_p": top_p}
 
 
 def _call(url: str, path: str, body: dict | None = None, api_key_env: str | None = None) -> dict:
@@ -1235,19 +1243,21 @@ def plan_of(args, url: str, clock=time.monotonic, sleep=time.sleep) -> tuple[dic
     """(probe, calibration, plan) of the endpoint at `url` (`plan`'s): each request `--tokens` tokens out of a prompt of
     exactly `--prompt-tokens` tokens (`PROMPT` as text with 0), probed and planned `--in-flight` at a time; or, with
     `--traffic varied`, `--requests` requests of varied traffic (`varied_requests`: `--rate`, `--prompt-range`,
-    `--tokens` the cap, `--seed`), the first `--probes` of them probed at their arrival times."""
+    `--tokens` the cap, `--seed`, `--name` the users'), the first `--probes` of them probed at their arrival times."""
     model = args.model or served_model(url, args.api_key_env)
     if getattr(args, "traffic", TRAFFIC[0]) == "varied":
         lo, _, hi = args.prompt_range.partition(":")
+        name = getattr(args, "name", None) or "varied"
         requests = varied_requests(url, model, args.requests, rate=args.rate, prompt_tokens=(int(lo), int(hi)),
-                                   max_tokens=args.tokens, seed=args.seed, api_key_env=args.api_key_env)
+                                   max_tokens=args.tokens, seed=args.seed, name=name, api_key_env=args.api_key_env)
         probed = probe_varied(url, model, requests[:args.probes], args.api_key_env, clock, sleep)
         eos = [int(t) for t in args.eos_ids.split(",")] if args.eos_ids else None
         report, plan = varied_plan(probed, requests, seed=args.seed, eos=eos, compact=getattr(args, "compact", None),
                                    margin=getattr(args, "margin", 2.0))
         return probed, report, plan
     prompt = prompt_tokens(url, model, args.prompt_tokens, args.api_key_env) if args.prompt_tokens else PROMPT
-    probed = probe(url, request_body(model, args.tokens, prompt), args.probes, args.api_key_env, clock,
+    probed = probe(url, request_body(model, args.tokens, prompt, args.temperature, args.top_p), args.probes,
+                   args.api_key_env, clock,
                    in_flight=args.in_flight, warmup=args.in_flight)
     report, plan = served_plan(probed, args.requests, args.delta_buckets, in_flight=args.in_flight,
                                profile=args.profile, frames=args.response_frames)
@@ -1306,7 +1316,7 @@ def rehearse(args) -> int:
     return 0 if ok else 1
 
 
-def main(argv=None) -> int:
+def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="certifier_serve.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
     k = sub.add_parser("keys", help="make or load an LMS key and write its public.json")
@@ -1322,6 +1332,8 @@ def main(argv=None) -> int:
         q.add_argument("--api-key-env", help="the environment variable that holds the endpoint's bearer key")
     for q in (p, r):
         q.add_argument("--model", help="the endpoint's model name (default: the one /v1/models lists)")
+        q.add_argument("--temperature", type=float, default=0.0, help="every request's temperature")
+        q.add_argument("--top-p", type=float, default=1.0, help="every request's top_p")
         q.add_argument("--requests", type=int, default=400)
         q.add_argument("--in-flight", type=int, default=4, help="requests sent together, served side by side")
         q.add_argument("--tokens", type=int, default=64,
@@ -1343,13 +1355,15 @@ def main(argv=None) -> int:
                             "profile)")
         q.add_argument("--rate", type=float, default=2.0, help="varied: arrivals a second")
         q.add_argument("--prompt-range", default="16:1024", help="varied: LO:HI, the prompts' lengths in tokens")
+        q.add_argument("--name", default="varied",
+                       help="varied: the users' prefix: request j's user, its session, is NAME.j (j five digits)")
         q.add_argument("--seed", type=int, default=0, help="varied: the traffic's seed")
         q.add_argument("--eos-ids", help="varied: the model's EOS token ids, comma-separated (default: the last ids "
                                          "of the probe's responses that stopped)")
         q.add_argument("--compact", type=int, metavar="B",
                        help="varied: compact egress records (`active.compact_record`) in cells of B >= 8 bytes, "
-                            "the shim writing each token's record (default: id events in 4096-byte frames); "
-                            "experimental: the gate takes no compact option, so no verdict of record runs on it")
+                            "the shim writing each token's record (default: id events in 4096-byte frames); the "
+                            "gate's certifier-rehearse --traffic varied --compact B runs it on the auditor's host")
         q.add_argument("--margin", type=float, default=2.0,
                        help="varied: the plan's margin over the probed rates and latencies (an endpoint that slows "
                             "under load the probes didn't meet needs more)")
@@ -1379,7 +1393,11 @@ def main(argv=None) -> int:
     r.add_argument("--vllm-cpus", help="with --vllm: its CPUs (taskset -c)")
     r.add_argument("--height", type=int, default=HEIGHT, help="the LMS keys' tree height")
     r.add_argument("--strategies", default=",".join(STRATEGIES))
-    args = ap.parse_args(argv)
+    return ap
+
+
+def main(argv=None) -> int:
+    args = parser().parse_args(argv)
 
     if args.command == "keys":
         load_key(args.dir, args.height)
