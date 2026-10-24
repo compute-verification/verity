@@ -16,7 +16,8 @@ gate    for each fused library and nt (64, 32), under one masked p1024 key of `-
           and against float64, at each M of GATE_MS: every output within FP32 accumulation rounding of float64,
           |y - y64| <= K 2^-24 sum|x w| + half a bf16 ulp, the same bound F.linear's outputs are held to; how many
           equal F.linear's bit for bit; kv_gemm run twice gives the same bits.
-        Nothing is timed unless every gate passed (exit 4).
+        A fused library that fails any of them is recorded and left untimed; nothing is timed (exit 4) unless
+        the rare branches were all hit and some fused library passed.
 time    a --arena-gib arena laid out as gate run 7's engine (`engine.pack`: embed, 64 layers' qkv, o, gate_up, down,
         lm_head) of random words; a step is the embedding, each layer's attention stand-in (a read of its share of
         the KV cache at gate run 7's load, KV_LAYER_BYTES) and four linears, then the LM head, at each M of --ms,
@@ -196,24 +197,29 @@ def gate_words(torch, libs: list[Lib], key: K.Key, log) -> dict:
         want = torch.frombuffer(bytearray(to_bytes(ms)), dtype=torch.uint8).cuda()
         dec, dump = torch.empty_like(y), torch.empty_like(y)
         for lib in libs:
-            lib.call("kv_decode", y.data_ptr(), dec.data_ptr(), n, base, key.rounds, 0, None, st)
-            torch.cuda.synchronize()
-            if not torch.equal(dec, want):
-                out["bad"].append({"lib": lib.name, "base": base, "what": "kv_decode"})
-            for nt in (64, 32):
-                for m in TILES:
-                    steps = Kd // (WE * 128 // nt)
-                    for splits in (1, 2, 3):
-                        per = -(-steps // splits)
-                        dump.fill_(0xA5)
-                        got = lib.call("kv_gemm_dump", y.data_ptr(), base, dump.data_ptr(), m, N, Kd, key.rounds, nt,
-                                       splits, st)
-                        torch.cuda.synchronize()
-                        if got != -(-steps // per) or not torch.equal(dump, want):
-                            out["bad"].append({"lib": lib.name, "base": base, "nt": nt, "m": m, "splits": splits,
-                                               "got": got})
+            try:
+                lib.call("kv_decode", y.data_ptr(), dec.data_ptr(), n, base, key.rounds, 0, None, st)
+                torch.cuda.synchronize()
+                if not torch.equal(dec, want):
+                    out["bad"].append({"lib": lib.name, "base": base, "what": "kv_decode"})
+                for nt in (64, 32):
+                    for m in TILES:
+                        steps = Kd // (WE * 128 // nt)
+                        for splits in (1, 2, 3):
+                            per = -(-steps // splits)
+                            dump.fill_(0xA5)
+                            got = lib.call("kv_gemm_dump", y.data_ptr(), base, dump.data_ptr(), m, N, Kd, key.rounds,
+                                           nt, splits, st)
+                            torch.cuda.synchronize()
+                            if got != -(-steps // per) or not torch.equal(dump, want):
+                                out["bad"].append({"lib": lib.name, "base": base, "nt": nt, "m": m, "splits": splits,
+                                                   "got": got})
+            except RuntimeError as e:
+                out["bad"].append({"lib": lib.name, "base": base, "error": str(e)})
     out["branches_hit"] = hits
-    out["ok"] = not out["bad"] and all(hits.get(b, 0) for b in ("sigma_slow", "sigma_undo", "sub_zero", "root_edge"))
+    out["branches_ok"] = all(hits.get(b, 0) for b in ("sigma_slow", "sigma_undo", "sub_zero", "root_edge"))
+    out["failed_libs"] = sorted({b["lib"] for b in out["bad"]})
+    out["ok"] = not out["bad"] and out["branches_ok"]
     log(f"gate words: {'ok' if out['ok'] else 'FAIL'} ({n} words, {len(specs)} crafted, at {list(GATE_BASES)}; "
         f"branches {hits}; bad {out['bad'][:4]})")
     return out
@@ -253,19 +259,24 @@ def gate_shapes(torch, libs: list[Lib], enc_lib: Lib, key: K.Key, log) -> dict:
         back = torch.empty_like(w)
         r = res[name] = {"N": N, "K": Kd, "base": base, "dump": {}, "gemm": {}}
         for lib in libs:
-            lib.call("kv_decode", enc.data_ptr(), back.data_ptr(), words, base, key.rounds, 0, None, st)
-            torch.cuda.synchronize()
-            ok = torch.equal(back, w)
-            r["dump"][f"{lib.name}:kv_decode"] = ok
-            bad += [] if ok else [(name, lib.name, "kv_decode")]
-            for nt in (64, 32):
-                for m in (1, 64):
-                    back.view(torch.int16).fill_(-1)
-                    lib.call("kv_gemm_dump", enc.data_ptr(), base, back.data_ptr(), m, N, Kd, key.rounds, nt, 0, st)
-                    torch.cuda.synchronize()
-                    ok = torch.equal(back, w)
-                    r["dump"][f"{lib.name}:{nt}:{m}"] = ok
-                    bad += [] if ok else [(name, lib.name, nt, m)]
+            try:
+                lib.call("kv_decode", enc.data_ptr(), back.data_ptr(), words, base, key.rounds, 0, None, st)
+                torch.cuda.synchronize()
+                ok = torch.equal(back, w)
+                r["dump"][f"{lib.name}:kv_decode"] = ok
+                bad += [] if ok else [(name, lib.name, "kv_decode")]
+                for nt in (64, 32):
+                    for m in (1, 64):
+                        back.view(torch.int16).fill_(-1)
+                        lib.call("kv_gemm_dump", enc.data_ptr(), base, back.data_ptr(), m, N, Kd, key.rounds, nt, 0,
+                                 st)
+                        torch.cuda.synchronize()
+                        ok = torch.equal(back, w)
+                        r["dump"][f"{lib.name}:{nt}:{m}"] = ok
+                        bad += [] if ok else [(name, lib.name, nt, m)]
+            except RuntimeError as e:
+                r["dump"][f"{lib.name}:error"] = False
+                bad.append((name, lib.name, str(e)))
         bias = (torch.randn(N, device="cuda", generator=g) * 0.1).to(torch.bfloat16) if name == "qkv" else None
         for m in GATE_MS:
             x = torch.randn(m, Kd, device="cuda", generator=g).to(torch.bfloat16)
@@ -284,15 +295,20 @@ def gate_shapes(torch, libs: list[Lib], enc_lib: Lib, key: K.Key, log) -> dict:
             ref_within = bool(((ref.double() - y64).abs() <= bound).all())
             for lib in libs:
                 for nt in (64, 32):
-                    splits = lib.call("kv_gemm_splits", m, N, Kd, nt)
-                    part = torch.empty(max(1, splits) * m * N, dtype=torch.float32, device="cuda")
-                    y = torch.empty(m, N, dtype=torch.bfloat16, device="cuda")
-                    y2 = torch.empty_like(y)
-                    for out in (y, y2):
-                        got = lib.call("kv_gemm", enc.data_ptr(), base, x.data_ptr(), out.data_ptr(),
-                                       bias.data_ptr() if bias is not None else None, part.data_ptr(),
-                                       part.numel() * 4, m, N, Kd, key.rounds, nt, 0, st)
-                    torch.cuda.synchronize()
+                    try:
+                        splits = lib.call("kv_gemm_splits", m, N, Kd, nt)
+                        part = torch.empty(max(1, splits) * m * N, dtype=torch.float32, device="cuda")
+                        y = torch.empty(m, N, dtype=torch.bfloat16, device="cuda")
+                        y2 = torch.empty_like(y)
+                        for out in (y, y2):
+                            got = lib.call("kv_gemm", enc.data_ptr(), base, x.data_ptr(), out.data_ptr(),
+                                           bias.data_ptr() if bias is not None else None, part.data_ptr(),
+                                           part.numel() * 4, m, N, Kd, key.rounds, nt, 0, st)
+                        torch.cuda.synchronize()
+                    except RuntimeError as e:
+                        r["gemm"][f"{lib.name}:{nt}:{m}"] = {"error": str(e)}
+                        bad.append((name, lib.name, nt, m, str(e)))
+                        continue
                     err = (y.double() - y64).abs()
                     within = bool((err <= bound).all())
                     equal = float((y.view(torch.int16) == ref.view(torch.int16)).double().mean())
@@ -308,12 +324,18 @@ def gate_shapes(torch, libs: list[Lib], enc_lib: Lib, key: K.Key, log) -> dict:
             del ref, y64, s64, bound, acc
         del w, enc, back
         torch.cuda.empty_cache()
-        eq = [v["equal_to_f_linear"] for v in r["gemm"].values()]
-        log(f"gate {name} [{N}, {Kd}] at index {base}: dumps {all(r['dump'].values())}, gemm within "
-            f"{all(v['within_fp32_rounding'] for v in r['gemm'].values())} (F.linear within "
-            f"{all(v['f_linear_within'] for v in r['gemm'].values())}), bit-equal to F.linear "
-            f"{min(eq):.4f}-{max(eq):.4f} of outputs, max {max(v['max_ulps_from_f_linear'] for v in r['gemm'].values()):.2f} ulps")
-    return {"shapes": res, "bad": bad, "ok": not bad}
+        for lib in libs:
+            dumps = all(v for k, v in r["dump"].items() if k.startswith(f"{lib.name}:"))
+            gs = [v for k, v in r["gemm"].items() if k.startswith(f"{lib.name}:")]
+            errs = [v["error"] for v in gs if "error" in v]
+            gs = [v for v in gs if "error" not in v]
+            eq = [v["equal_to_f_linear"] for v in gs] or [math.nan]
+            log(f"gate {name} [{N}, {Kd}] at index {base}, {lib.name}: dumps {dumps}, gemm within "
+                f"{all(v['within_fp32_rounding'] for v in gs)} (F.linear within "
+                f"{all(v['f_linear_within'] for v in gs)}), deterministic {all(v['deterministic'] for v in gs)}, "
+                f"bit-equal to F.linear {min(eq):.4f}-{max(eq):.4f} of outputs, max "
+                f"{max([v['max_ulps_from_f_linear'] for v in gs] or [math.nan]):.2f} ulps; errors {errs[:2]}")
+    return {"shapes": res, "bad": bad, "failed_libs": sorted({b[1] for b in bad}), "ok": not bad}
 
 
 # --- timing ------------------------------------------------------------------------------------------------------------
@@ -355,6 +377,7 @@ class Model:
                         for nt in (64, 32):
                             most = max(most, lib.call("kv_gemm_splits", m, N, Kd, nt) * m * N)
         self.part = torch.empty(most, dtype=torch.float32, device="cuda")
+        self.splits: dict[tuple, int] = {}
 
     def view(self, off: int, N: int, Kd: int):
         return self.buf[off:off + N * Kd * 2].view(self.torch.bfloat16).view(N, Kd)
@@ -373,10 +396,13 @@ class Model:
                                     self.base(off), self.k, 0, None, stream(torch))
             F.linear(x, self.scratch[:N * Kd * 2].view(torch.bfloat16).view(N, Kd), bias)
         else:
-            self.libs[rest[0]].call("kv_gemm", self.buf.data_ptr() + off, self.base(off), x.data_ptr(),
-                                    self.y[N].data_ptr(), bias.data_ptr() if bias is not None else None,
-                                    self.part.data_ptr(), self.part.numel() * 4, m, N, Kd, self.k, int(rest[1]), 0,
-                                    stream(torch))
+            lib, nt = self.libs[rest[0]], int(rest[1])
+            at = (lib.name, m, N, Kd, nt)
+            if at not in self.splits:
+                self.splits[at] = lib.call("kv_gemm_splits", m, N, Kd, nt)
+            lib.call("kv_gemm", self.buf.data_ptr() + off, self.base(off), x.data_ptr(), self.y[N].data_ptr(),
+                     bias.data_ptr() if bias is not None else None, self.part.data_ptr(), self.part.numel() * 4, m, N,
+                     Kd, self.k, nt, self.splits[at], stream(torch))
 
     def embed(self, arm: str, off: int, m: int) -> None:
         torch, F = self.torch, self.F
@@ -530,7 +556,7 @@ def ncu_report(csv_path: Path, ops_path: Path) -> dict:
 
 # --- serve -------------------------------------------------------------------------------------------------------------
 
-def serve(torch, model: Model, d: Path, out: Path, hz: float, m: int, log) -> None:
+def serve(torch, model: Model, d: Path, out: Path, hz: float, m: int, failed: set[str], log) -> None:
     info = {"bytes": model.buf.numel(), **export(model.buf.data_ptr())}
     write_json(d / "engine.json", info)
     log(f"serve: arena exported ({model.buf.numel()} bytes)")
@@ -546,6 +572,9 @@ def serve(torch, model: Model, d: Path, out: Path, hz: float, m: int, log) -> No
                 break
             if ctl.get("seq", -1) != seq:
                 seq, arm = ctl["seq"], ctl.get("arm")
+                if arm and arm.startswith("fused:") and arm.split(":")[1] in failed:
+                    log(f"serve: {arm} failed its gate, idle instead")
+                    arm = None
                 write_json(d / "status.json", {"seq": seq, "arm": arm})
             wait = next_at - time.perf_counter()
             if wait > 0:
@@ -615,20 +644,27 @@ def main() -> int:
         res["libs"][lib.name]["occupancy"] = {f"{m}:{nt}": lib.call("kv_gemm_occupancy", m, nt)
                                              for m in (1, 16, 32, 64) for nt in (64, 32)}
     if "gate" in modes:
-        res["gate"] = {"words": gate_words(torch, fused, key, log)}
-        res["gate"]["shapes"] = gate_shapes(torch, fused, libs.get("kv", fused[0]), key, log)
-        res["gate"]["ok"] = res["gate"]["words"]["ok"] and res["gate"]["shapes"]["ok"]
+        g = res["gate"] = {"words": gate_words(torch, fused, key, log)}
+        g["shapes"] = gate_shapes(torch, fused, libs.get("kv", fused[0]), key, log)
+        failed = set(g["words"]["failed_libs"]) | set(g["shapes"]["failed_libs"])
+        g["passed_libs"] = [lib.name for lib in fused if lib.name not in failed]
+        g["failed_libs"] = sorted(failed)
+        g["ok"] = g["words"]["branches_ok"] and bool(g["passed_libs"])
         write_json(res_path, res)
-        log(f"gate: {'ok' if res['gate']['ok'] else 'FAIL, nothing timed'}")
-        if not res["gate"]["ok"]:
+        log(f"gate: {'ok' if g['ok'] else 'FAIL, nothing timed'}; passed {g['passed_libs']}, failed {g['failed_libs']}"
+            f" (left untimed)")
+        if not g["ok"]:
             return 4
         torch.cuda.empty_cache()
     elif ({"time", "ncu", "serve"} & set(modes)) and not res.get("gate", {}).get("ok"):
         log("no passed gate in fused_bench.json: nothing is timed")
         return 4
+    failed = set(res.get("gate", {}).get("failed_libs", ()))
     arms, ms = a.arms.split(","), [int(m) for m in a.ms.split(",")]
+    arms = [arm for arm in arms if not (arm.startswith("fused:") and arm.split(":")[1] in failed)]
+    timed = {n: lib for n, lib in libs.items() if n not in failed}
     if "time" in modes:
-        model = Model(torch, libs, key, a.arena_gib)
+        model = Model(torch, timed, key, a.arena_gib)
         res["rates"] = rates(torch, model, libs, key, log)
         write_json(res_path, res)
         res["time"] = timing(torch, model, arms, ms, a.reps, log)
@@ -636,11 +672,11 @@ def main() -> int:
         del model
         torch.cuda.empty_cache()
     if "ncu" in modes:
-        model = Model(torch, libs, key, 0, entries=layout(1))
+        model = Model(torch, timed, key, 0, entries=layout(1))
         ncu_ops(torch, model, arms, ms, a.out)
     if "serve" in modes:
-        model = Model(torch, libs, key, a.arena_gib)
-        serve(torch, model, a.serve_dir, a.out, a.hz, a.serve_m, log)
+        model = Model(torch, timed, key, a.arena_gib)
+        serve(torch, model, a.serve_dir, a.out, a.hz, a.serve_m, failed, log)
     return 0
 
 

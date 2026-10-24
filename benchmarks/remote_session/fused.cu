@@ -15,6 +15,8 @@
 
 #include <cuda_bf16.h>
 
+#include <cstdio>
+
 namespace kvg {
 
 using kv::u32;
@@ -183,23 +185,30 @@ inline int pick_splits(int tiles, int steps, int slots, int most) {
   return 1;
 }
 
+// static: a function-local static of an external template is one object across every library loaded with it
+// (STB_GNU_UNIQUE), so fused6.so would take fused.so's opt-in and launch its own kernel without one.
 template <int NT, int MT, bool DUMP>
-int launch(const void *w, uint64_t base, const void *x, void *part, void *dump, int M, int N, int K, int k, int splits,
-           cudaStream_t s) {
+static int launch(const void *w, uint64_t base, const void *x, void *part, void *dump, int M, int N, int K, int k,
+                  int splits, cudaStream_t s) {
   using S = Shape<NT, MT>;
   if (N % NT || K % S::KT || M > MT || (!DUMP && M < 1)) return -2;
   // (32, 64)'s tiles are 48 KiB, past the default limit once the static tweak step is beside them.
   static const cudaError_t opted = cudaFuncSetAttribute(gemm_kernel<NT, MT, DUMP>,
                                                         cudaFuncAttributeMaxDynamicSharedMemorySize, S::SMEM);
-  if (opted) return -1000 - (int)opted;
   const int steps = K / S::KT, tiles = N / NT;
-  if (splits <= 0) splits = pick_splits(tiles, steps, occupancy<NT, MT, DUMP>(), 16);
-  const int per = (steps + splits - 1) / splits;
-  splits = (steps + per - 1) / per;
-  gemm_kernel<NT, MT, DUMP><<<dim3(tiles, splits), TH, S::SMEM, s>>>(
-      (const u32 *)w, base, (const uint16_t *)x, (float *)part, (uint16_t *)dump, M, N, K, k, per, steps);
-  const int rc = (int)cudaPeekAtLastError();
-  return rc ? -1000 - rc : splits;
+  cudaError_t rc = opted;
+  if (!rc) {
+    if (splits <= 0) splits = pick_splits(tiles, steps, occupancy<NT, MT, DUMP>(), 16);
+    const int per = (steps + splits - 1) / splits;
+    splits = (steps + per - 1) / per;
+    gemm_kernel<NT, MT, DUMP><<<dim3(tiles, splits), TH, S::SMEM, s>>>(
+        (const u32 *)w, base, (const uint16_t *)x, (float *)part, (uint16_t *)dump, M, N, K, k, per, steps);
+    rc = cudaGetLastError();
+  }
+  if (rc)
+    fprintf(stderr, "kv_gemm<%d, %d, %d>: %s, grid %d x %d, %d bytes of tiles, M %d N %d K %d: %s\n", NT, MT, (int)DUMP,
+            opted ? "cudaFuncSetAttribute" : "launch", tiles, splits, S::SMEM, M, N, K, cudaGetErrorString(rc));
+  return rc ? -1000 - (int)rc : splits;
 }
 
 // NT 64 (KT 128) for every batch tile; NT 32 (KT 256, half the accumulators a thread) from MT 16.

@@ -73,15 +73,17 @@ def main() -> int:
     d = a.dir
     seq = 0
 
-    def ctl(**kw) -> None:
+    def ctl(**kw) -> str | None:
+        """The arm the stand-in took (None: idle, as for an arm whose library failed its gate)."""
         nonlocal seq
         seq += 1
         write_json(d / "ctl.json", {"seq": seq, **kw})
         t0 = time.monotonic()
         while time.monotonic() - t0 < 60:
             try:
-                if json.loads((d / "status.json").read_text()).get("seq") == seq:
-                    return
+                st = json.loads((d / "status.json").read_text())
+                if st.get("seq") == seq:
+                    return st.get("arm")
             except (FileNotFoundError, json.JSONDecodeError):
                 pass
             time.sleep(0.02)
@@ -104,7 +106,10 @@ def main() -> int:
     for spec in a.phases.split(","):
         *arm, secs = spec.split(":")
         arm = ":".join(arm)
-        ctl(arm=None if arm == "idle" else arm)
+        took = ctl(arm=None if arm == "idle" else arm)
+        if arm != "idle" and took != arm:
+            print(f"beside {arm}: the stand-in idles instead (its library failed the gate), skipped", flush=True)
+            continue
         time.sleep(a.settle_s)
         w0 = time.time()
         at, gpu, wall = chain(torch, s, float(secs))
