@@ -72,6 +72,7 @@ import Proofs.Flock.Soundness.Game.LockOff
 import Proofs.Flock.Soundness.ExtractAccLin
 import Proofs.Flock.Soundness.Lowering
 import Proofs.Flock.Soundness.ExecRows
+import Proofs.Flock.Soundness.SparseRows
 import Proofs.Flock.Soundness.ExecDelta
 import Proofs.Flock.Soundness.ExecPlacement
 import Proofs.Flock.Soundness.ExecParse
@@ -80,6 +81,8 @@ import Proofs.Flock.Soundness.TmplFoldRef
 import Proofs.Flock.Soundness.TmplFoldPos
 import Proofs.Flock.Soundness.TmplFoldLayout
 import Proofs.Flock.Soundness.TmplSplitEq
+import Proofs.Flock.Soundness.TmplUnit
+import Proofs.Flock.Soundness.TmplShare
 import Proofs.Flock.Soundness.TmplUnrollAt
 import Proofs.Flock.Soundness.TmplScope
 import Proofs.Flock.Soundness.ExecCircuit

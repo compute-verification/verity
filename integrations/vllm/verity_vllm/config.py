@@ -441,7 +441,13 @@ class BuildConfig:
     build_ram_budget_gb: float | None = option("--build-ram-budget-gb", env="BUILD_RAM_BUDGET_GB", type=float, default=None,
                                                help="auto's memory budget when the host's headroom is shared (a sweep's per-config share)")
     build_timeout: int | None = option("--build-timeout", env="BUILD_TIMEOUT", type=int, default=None,
-                                       help="seconds per derive; default scales with the envelope (TP: 7200)")
+                                       help="seconds for one derive (and for one workload Program compose; TP: one rank's GP-01 and the "
+                                            "call-boundary check); default scales with the envelope (TP: 7200).  Never the TP manifest, "
+                                            "which --manifest-timeout bounds")
+    manifest_timeout: int | None = option("--manifest-timeout", env="MANIFEST_TIMEOUT", type=int, default=None,
+                                          help="TP: seconds for the required-value manifest over the W ranks, the Build's and a Commit's "
+                                               "rebuild (default 4 h + 1200 s a component build, W x declared requests: "
+                                               "row_records.manifest_timeout; 0 = no limit).  manifest.log reports each component built")
     lp: int | None = option("--lp", env="LP", type=int, default=None,
                             help="request wrapper prompt length (default: the longest prompt; a stochastic row: r0's)")
     t: int | None = option("--t", env="T", type=int, default=None,
@@ -488,14 +494,22 @@ class MatchConfig:
     compare_timeout: int | None = option("--compare-timeout", env="COMPARE_TIMEOUT", type=int, default=None,
                                          help="seconds per comparator (default scales with B and the envelope)")
     fold_timeout: int | None = option("--fold-timeout", env="FOLD_TIMEOUT", type=int, default=None,
-                                      help="TP: seconds for each leg of the per-rank fold Match (fold, compare, GM-01; default 7200); "
-                                           "tp-fold-match as a whole gets four legs' worth, the cross-rank leg included")
+                                      help="TP: seconds for each leg of the per-rank fold Match (fold, compare, GM-01; default 350 s a GiB of a "
+                                           "rank's summed request derive peaks, at least 7200: row_records.fold_plan); tp-fold-match as a "
+                                           "whole gets the folds' rounds, the compare and GM-01 rounds and the cross-rank leg "
+                                           "(row_records.fold_phase_s: four legs when every rank runs at once)")
+    fold_mem_gb: float | None = option("--fold-mem-gb", env="RESEARCH_RUN_MEM_GB", type=float, default=None,
+                                       help="TP: the memory (GB) the fold Match's concurrent legs are sized to (default: research run's "
+                                            "--mem-gb, RESEARCH_RUN_MEM_GB; without one, the host's headroom); one that holds no planned "
+                                            "GM-01 leg beside one fold runs one rank at a time, with a warning in row.log")
     fold_rank_workers: int = option("--fold-rank-workers", env="FOLD_RANK_WORKERS", type=int, default=0,
-                                    help="TP: ranks whose fold Match legs run at once (0 = every rank; a GLM-5.3 B8 rank's X-09 compare "
-                                         "passes 200 GB, so 8 at once overfill a 1.5 TB host)")
+                                    help="TP: ranks whose compare and GM-01 legs run at once (0 = as many as --fold-mem-gb holds at a GM-01 "
+                                         "leg's planned peak beside one fold, 5.5x a rank's summed request derive peaks: GLM-5.3 B8 I256's "
+                                         "339 GiB; every rank when the checkpoint's layers are unknown)")
     fold_workers: int = option("--fold-workers", env="FOLD_WORKERS", type=int, default=0,
-                               help="TP: ranks whose fold leg runs at once (0 = as --fold-rank-workers, which then bounds only their compare "
-                                    "and GM-01 legs; a GLM-5.3 B8 I256 rank's fold peaks at 40 GB, its GM-01 with the shared X-09 near 400 GB)")
+                               help="TP: ranks whose fold leg runs at once (0 = as many as the memory those GM-01 legs leave holds at a "
+                                    "fold's planned peak, 0.6x the same sum: B8 I256's 40 GB; as --fold-rank-workers when it is given or "
+                                    "the layers are unknown)")
     match_reuse: str = option("--match-reuse", env="MATCH_REUSE", default="off", choices=("off", "fold", "legs"),
                               help="TP, --match-phase cpu, rerunning a CPU half that stopped part way under the same code: fold = keep each "
                                    "rank's persisted fold of the capture in place; legs = also each rank's written compare and GM-01 "

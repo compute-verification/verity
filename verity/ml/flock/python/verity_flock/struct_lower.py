@@ -1,7 +1,8 @@
 """A structural lowering (PRF-133): each specialized Definition lowered once per pattern of its arguments, its calls,
 batch members and scan iterations kept as calls, written as ``flock-ir-tmpl/v2`` (:mod:`verity_flock.tmpl`) instead of
-:func:`ir_lower.lower`'s one walk over the unrolled gates. An opt-in mode: nothing else calls it, and no existing
-circuit's lowering or digest changes.
+:func:`ir_lower.lower`'s one walk over the unrolled gates. An opt-in mode: only a structural unit stager
+(`class_statement.UnitStager`'s ``structural``, on `unit_lowering`'s ports, :class:`Ports`) and circuit-check's
+``c-flock:struct_lower`` realization call it, and no existing circuit's lowering or digest changes.
 
 A Definition's argument bit is a constant or a linear form over the caller's committed bits, as the unrolled lowering
 carries it. The callee is lowered once per *pattern* of its arguments: which argument positions name one gate (a caller
@@ -42,6 +43,7 @@ from __future__ import annotations
 import json
 import sys
 import time
+from array import array
 from dataclasses import dataclass, field
 from functools import partial
 
@@ -60,6 +62,9 @@ SUPPORT = 8
 #: later calls share one in which each constant argument bit is an input
 FOLD_CAP, FOLD_GATES = 4, 1000
 ZERO, ONE_REF = -1, -2  # a caller "bit" an input is bound to: the caller's zero column, or the unit's constant
+#: a call variable's data is one int, its copy's index above COL_BITS and its column in that copy below (not a tuple of two
+#: ints, which cost a 32 × 32 tile's 15.8M call variables a gigabyte); a copy's labels are 32-bit
+COL_BITS = 32
 
 
 @dataclass
@@ -80,12 +85,50 @@ class Spec:
     index: int = -1
 
 
-@dataclass
+@dataclass(slots=True)
 class _Block:
     pos: int
     key: tuple
-    labels: list
+    labels: array
     base: int = 0
+
+
+def _live(C: Circuit, seeds) -> set:
+    """The ANDs of ``C.live`` from the variables ``seeds`` (a specialization's read labels and returns) rather than
+    outputs: a specialization lays out only its ANDs, so no other variable is held."""
+    seen: set = set()
+    stack = list(seeds)
+    kind, data = C.kind, C.data
+    while stack:
+        v = stack.pop()
+        if v in seen or kind[v] != "and":
+            continue
+        seen.add(v)
+        a, b = data[v]
+        stack.extend(a.s)
+        stack.extend(b.s)
+    return seen
+
+
+def _last_reads(circuit, sc, body) -> dict[tuple[int, int], list[int]]:
+    """Per body node and member (a batch's or scan's activation), the gates whose last reader it is: the lowering drops
+    their wires after it, so a Definition whose body is a long loop, unrolled or a scan, holds the words its later members
+    still read, not every word it computed."""
+    last: dict[int, tuple[int, int]] = {}
+    for k, node in enumerate(body.nodes):
+        if isinstance(node.fn, PrimitiveDefinition) and node.form == "primitive":
+            lo = sc.offset + body.offsets[k]
+            for g in range(lo, lo + node.gates):
+                for o in circuit.gate(g).operands:
+                    last[o] = (k, 0)
+            continue
+        for m in range(1 if node.form == "call" else node.n):
+            for a in FunctionCall(circuit, sc, k, m).args:
+                last[a] = (k, m)
+    out: dict[tuple[int, int], list[int]] = {}
+    for g, km in last.items():
+        out.setdefault(km, []).append(g)
+    return out
 
 
 def _column_order(C: Circuit, v: int) -> tuple:
@@ -95,8 +138,8 @@ def _column_order(C: Circuit, v: int) -> tuple:
     if k == "arg":
         return (1, C.data[v], 0, 0)
     if k == "call":
-        blk, x = C.data[v]
-        return (0, C.blocks[blk].pos, 0, x)
+        d = C.data[v]
+        return (0, C.blocks[d >> COL_BITS].pos, 0, d & ((1 << COL_BITS) - 1))
     return (0, v, 1, 0)
 
 
@@ -154,8 +197,12 @@ class _Lowerer:
                 key = (fc.fn.id, None, pat)
                 sp = self.specs.get(key) or self._generic(fc, key, pat, len(label_vars))
         sp = sp or self._lower(fc, key, pat, len(label_vars))
-        blk = _Block(len(C.kind), key, label_vars)
+        key = sp.key
+        if sp.cols >> COL_BITS or len(C.kind) >> 31:
+            raise NotImplementedError(f"{fc.id}: a specialization or a body of 2^{COL_BITS} columns or 2^31 variables")
+        blk = _Block(len(C.kind), key, array("i", label_vars))
         C.blocks.append(blk)
+        call_at = (len(C.blocks) - 1) << COL_BITS
         col_var: dict[int, L] = {}
         bits = iter(sp.rets)
         for r in fc.returns:
@@ -178,11 +225,12 @@ class _Lowerer:
                         s = s ^ frozenset((label_vars[x],))
                     else:
                         if x not in col_var:
-                            col_var[x] = C._new("call", (len(C.blocks) - 1, x))
+                            col_var[x] = C._new("call", call_at | x)
                         s = s ^ col_var[x].s
                 out.append(L(s, c))
             wires.setdefault(r, out)
-        C.used.extend(L(frozenset((v,)), 0) for v in label_vars if v >= 0)
+        kind = C.kind
+        C.used.update(v for v in label_vars if v >= 0 and kind[v] == "and")
         C.zero = getattr(C, "zero", False) or ZERO in label_vars
         return key
 
@@ -199,7 +247,7 @@ class _Lowerer:
 
     def _lower(self, fc: FunctionCall, key: tuple, pat: tuple, ins: int) -> Spec:
         C = Circuit()
-        C.used, C.blocks = [], []
+        C.used, C.blocks = set(), []
         fresh = [C._new("arg", i) for i in range(ins)]
         it = iter(pat)
         wires: dict[int, list] = {}
@@ -230,13 +278,21 @@ class _Lowerer:
                     raise KeyError(f"{fc.id}: a parameter leaf has no wire")
             else:
                 body = sc.spec.body
+                keep = set(fc.returns)
+                drop = _last_reads(self.circuit, sc, body)
                 for k, node in enumerate(body.nodes):
                     if isinstance(node.fn, PrimitiveDefinition) and node.form == "primitive":
                         lo = sc.offset + body.offsets[k]
                         IL.lower_gates(C, Region(self.circuit, lo, lo + node.gates), wires)
-                        continue
-                    for m in range(1 if node.form == "call" else node.n):
-                        self.call(C, FunctionCall(self.circuit, sc, k, m), wires)
+                        members = 0
+                    else:
+                        members = 1 if node.form == "call" else node.n
+                    for m in range(max(members, 1)):
+                        if members:
+                            self.call(C, FunctionCall(self.circuit, sc, k, m), wires)
+                        for g in drop.pop((k, m), ()):
+                            if g not in keep:
+                                wires.pop(g, None)
         if C.asserts or C.lookups:
             raise NotImplementedError(f"{fc.id}: assertions and table reads are not laid out by the structural lowering yet")
         rets = []
@@ -248,7 +304,7 @@ class _Lowerer:
                 if len(b.s) > self.support or (self.gather and len(b.s) > 1 and any(C.kind[v] != "arg" for v in b.s)):
                     b = C.commit([b])[0]
                 rets.append(("f", b.c, b.s))
-                C.used.append(L(b.s, 0))
+                C.used.update(v for v in b.s if C.kind[v] == "and")
         sp = self._finish(C, key, ins, rets)
         self.specs[key] = sp
         sp.index = len(self.order)
@@ -264,8 +320,9 @@ class _Lowerer:
             if C.kind[v] == "and":
                 a, b = C.data[v]
                 read |= a.s | b.s
+        kind = C.kind
         for blk in C.blocks:
-            read.update(x for x in blk.labels if x >= 0)
+            read.update(x for x in blk.labels if x >= 0 and kind[x] == "and")
         out: dict[int, None] = {}
         for t in rets:
             if t[0] == "f" and len(t[2]) == 1:
@@ -277,8 +334,7 @@ class _Lowerer:
     def _finish(self, C: Circuit, key: tuple, ins: int, rets: list) -> Spec:
         """Lay out a lowered specialization: its live ANDs and its copies in creation order, then its rows and its copies'
         runs in template references."""
-        C.output("used", C.used)
-        live = C.live()
+        live = _live(C, C.used)
         sp = Spec(key, ins)
         col: dict[int, int] = {}
         blocks = [b for b in C.blocks if self.specs[b.key].cols]
@@ -300,17 +356,18 @@ class _Lowerer:
             col[v] = n
             n += 1
         sp.cols = n
-        for v in range(len(C.kind)):
-            if C.kind[v] == "call":
-                blk, x = C.data[v]
-                b = C.blocks[blk]
-                col[v] = b.base + x
         K = sp.cols + ins
+        kind, data, cblocks = C.kind, C.data, C.blocks
+        mask = (1 << COL_BITS) - 1
 
         def ref(v: int) -> int:
             if v < 0:
                 return 0 if v == ZERO else K
-            return sp.cols + C.data[v] if C.kind[v] == "arg" else col[v]
+            k = kind[v]
+            if k == "call":
+                d = data[v]
+                return cblocks[d >> COL_BITS].base + (d & mask)
+            return sp.cols + data[v] if k == "arg" else col[v]
 
         def refs(f: L) -> tuple:
             return tuple(sorted(map(ref, f.s))) + ((K,) if f.c else ())
@@ -322,10 +379,10 @@ class _Lowerer:
             sp.rows.append((col[v], refs(a), refs(b)))
             sp.refs += len(a.s) + a.c + len(b.s) + b.c
             sp.commits += b is ONE
-        sp.rets = [t if t[0] == "c" else ("f", t[1], tuple(("l", C.data[v]) if C.kind[v] == "arg" else ("v", col[v])
+        sp.rets = [t if t[0] == "c" else ("f", t[1], tuple(("l", C.data[v]) if C.kind[v] == "arg" else ("v", ref(v))
                                                                 for v in sorted(t[2]))) for t in rets]
         sp.copies = [b.key for b in C.blocks]
-        sp.calls = _runs([(b.base, b.key, [ref(v) for v in b.labels]) for b in blocks], self.specs, sp.cols)
+        sp.calls = _runs(blocks, lambda b: np.fromiter(map(ref, b.labels), np.int64, len(b.labels)), self.specs, sp.cols)
         return sp
 
     def total(self, key: tuple) -> dict:
@@ -352,48 +409,85 @@ def _segs(r0: list[int], step: list[int], cols: int) -> tuple:
     return tuple(map(tuple, out))
 
 
-def _runs(blocks: list[tuple[int, tuple, list[int]]], specs: dict, cols: int) -> list[T.Call]:
+def _runs(blocks: list[_Block], refs, specs: dict, cols: int) -> list[T.Call]:
     """Consecutive copies of one specialization, side by side, whose input references step by one fixed vector per copy,
-    each staying among the caller's own columns or past them, as one call each."""
+    each staying among the caller's own columns or past them, as one call each. ``refs(block)`` is a copy's input
+    references, read once per copy, so only one run's are held."""
     calls = []
     i = 0
+    nxt = refs(blocks[0]) if blocks else None
     while i < len(blocks):
-        base, key, r0 = blocks[i]
+        base, key, r0 = blocks[i].base, blocks[i].key, nxt
+        own0 = r0 < cols
         sp = specs[key]
         j = i + 1
         step = None
+        nxt = None
         while j < len(blocks):
-            b, k2, rj = blocks[j]
-            if k2 != key or b != base + (j - i) * sp.cols or any((x < cols) != (y < cols) for x, y in zip(rj, r0)):
+            b = blocks[j]
+            if b.key != key or b.base != base + (j - i) * sp.cols:
+                nxt = None
                 break
-            d = [x - y for x, y in zip(rj, r0)]
+            rj = refs(b)
+            nxt = rj
+            if not np.array_equal(rj < cols, own0):
+                break
+            d = rj - r0
             if step is None:
-                if any(x < 0 for x in d):
+                if (d < 0).any():
                     break
                 step = d
-            elif any(x != (j - i) * s for x, s in zip(d, step)):
+            elif not np.array_equal(d, (j - i) * step):
                 break
+            nxt = None
             j += 1
-        calls.append(T.Call(sp.index, j - i, base, sp.cols, _segs(r0, step or [0] * len(r0), cols)))
+        calls.append(T.Call(sp.index, j - i, base, sp.cols, _segs(r0.tolist(), (step if step is not None else np.zeros(len(r0), np.int64)).tolist(), cols)))
         i = j
+        if nxt is None and i < len(blocks):
+            nxt = refs(blocks[i])
     return calls
 
 
+@dataclass(frozen=True)
+class Ports:
+    """A unit's ports, as `class_statement.unit_lowering` lays a Definition on rows: the input ports' widths (one input
+    group), each argument leaf's bits among their concatenated bits; the output ports' widths (one output group), each
+    output bit the returned bit it copies (the returns' leaves concatenated) or None, a zero bit."""
+
+    ins: tuple[int, ...]
+    leaves: tuple[tuple[int, ...], ...]
+    outs: tuple[int, ...]
+    bits: tuple[int | None, ...]
+
+
 def lower(target, support: int = SUPPORT, name: str = "unit", fold_cap: int = FOLD_CAP,
-          fold_gates: int = FOLD_GATES, column_order: bool = True, gather: bool = True) -> tuple[T.Tmpl, _Lowerer, Spec]:
-    """``target`` (a bound composite) as a templated unit: one input group of its argument leaves, its root's copy, one
-    output group of its return leaves, the constant last (``ir_lower.layout``'s order)."""
+          fold_gates: int = FOLD_GATES, column_order: bool = True, gather: bool = True,
+          ports: Ports | None = None) -> tuple[T.Tmpl, _Lowerer, Spec]:
+    """``target`` (a bound composite) as a templated unit: one input group, its root's copy, one output group, the constant
+    last (``ir_lower.layout``'s order). The input group is the argument leaves and the output group one port of the return
+    leaves, or ``ports``' ports."""
     sys.setrecursionlimit(100000)
     _prog, root = IL.standalone(target)
     lw = _Lowerer(root.circuit, support, fold_cap, fold_gates, column_order, gather)
     args = list(dict.fromkeys(root.args))
     widths = [IL._width(root.circuit.gate(a).prim) for a in args]
     C = Circuit()
-    C.used, C.blocks = [], []
-    wires = {a: C.input(f"in{a}", w) for a, w in zip(args, widths)}
+    C.used, C.blocks = set(), []
+    if ports is None:
+        wires = {a: C.input(f"in{a}", w) for a, w in zip(args, widths)}
+    else:
+        if len(ports.leaves) != len(args) or [len(x) for x in ports.leaves] != widths:
+            raise ValueError(f"{name}: the ports' leaves are not the arguments' {widths}")
+        bits = [b for j, w in enumerate(ports.ins) for b in C.input(f"in{j}", w)]
+        wires = {a: [bits[i] for i in x] for a, x in zip(args, ports.leaves)}
+        widths = list(ports.ins)
     top = lw.call(C, root, wires)
     sp = lw.specs[top]
     outs = [b for r in root.returns for b in wires[r]]
+    if ports is not None:
+        if len(ports.bits) != sum(ports.outs) or {i for i in ports.bits if i is not None} != set(range(len(outs))):
+            raise ValueError(f"{name}: the output ports do not copy each returned bit")
+        outs = [L(frozenset(), 0) if i is None else outs[i] for i in ports.bits]
     nin = sum(widths)
     in_words = ceil_pow2(max(1, -(-nin // IL.WORD)))
     in_cols = in_words * IL.WORD
@@ -401,7 +495,7 @@ def lower(target, support: int = SUPPORT, name: str = "unit", fold_cap: int = FO
     col_of_call = {}
     for v in range(len(C.kind)):
         if C.kind[v] == "call":
-            col_of_call[v] = base + C.data[v][1]
+            col_of_call[v] = base + (C.data[v] & ((1 << COL_BITS) - 1))
     end = base + sp.cols
     out_word = -(-end // IL.WORD)
     out_words = ceil_pow2(max(1, -(-len(outs) // IL.WORD)))
@@ -419,7 +513,8 @@ def lower(target, support: int = SUPPORT, name: str = "unit", fold_cap: int = FO
     blk = C.blocks[0]
     assert min(blk.labels, default=0) >= 0, "the root's call binds a constant"
     calls = [T.Call(sp.index, 1, base, sp.cols, _segs([ref(v) for v in blk.labels], [0] * len(blk.labels), cols))] if sp.cols else []
-    groups = [str(x) for x in (1, 0, in_words, len(widths), *widths, 1, out_word, out_words, 1, len(outs))]
+    out_widths = (len(outs),) if ports is None else ports.outs
+    groups = [str(x) for x in (1, 0, in_words, len(widths), *widths, 1, out_word, out_words, len(out_widths), *out_widths)]
     defs = [T.Def(s.cols, s.ins, tuple(s.rows), tuple(s.calls)) for s in lw.order]
     defs.append(T.Def(cols, 0, tuple(rows), tuple(calls)))
     t = T.Tmpl(name, len(defs) - 1, groups, defs)
