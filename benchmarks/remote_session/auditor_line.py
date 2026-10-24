@@ -70,8 +70,9 @@ measured, credited or not, is `measured`. `--table` writes each session's five c
 
 **Error.** Each accepted paced session's line fails, crediting more than the node held, with probability at most its
 `error`'s total (`session_error`): the memory line's δ as the ledger computed it, read from the record, with its three
-parts beside it: the windows' profile δ, AuditRO's 2^-41 a pass (which dominates: 2^-29.95 over a 60 s session's 2118
-passes) and δs, the sketch's. The line at each T, and the line of record over every T (`credit`'s `error`), fail with
+parts beside it: the windows' profile δ, AuditRO's 2^-slack a pass (the slack its ledger was charged at: 67 bits, and
+41 in a record that doesn't say, where it dominates: 2^-29.95 over a 60 s session's 2118 passes) and δs, the
+sketch's. The line at each T, and the line of record over every T (`credit`'s `error`), fail with
 at most the sum of their credited sessions' totals: the least share is read off whichever session the run made least,
 so the union bound holds where a maximum wouldn't.
 
@@ -323,10 +324,11 @@ def session_error(session: dict) -> dict:
     memory line's δ as the ledger computed it (`ledger.memory`'s `Line.delta`, every form's in the record's
     `declared`), read and never recomputed, so it charges whatever the ledger does (the F the node states among it);
     beside it its three parts (`ledger.delta_parts`): `delta_profile`, the windows' profile δ, `delta_slack`, AuditRO's
-    2^-SLACK_LOG2 a pass, and `delta_sketch`, δs. A record that carries the parts (verifier.json's `delta`) must sum to
+    2^-slack a pass, and `delta_sketch`, δs. A record that carries the parts (verifier.json's `delta`) must sum to
     the total as the ledger adds them, or there is no line (`Disagree`); one written before them gives the profile δ
-    from its windows (`recorded_windows`) and the slack from its passes, both exact, and δs as the rest. Each in floats
-    and exact beside them (`exact`), and the total's log2."""
+    from its windows (`recorded_windows`) and the slack from its passes at the slack its ledger was charged at (its
+    `inputs`' `slack_log2`, else `V.UNRECORDED_SLACK_LOG2`), both exact, and δs as the rest. Each in floats and exact
+    beside them (`exact`), and the total's log2."""
     lg = session["ledger"]
     totals = {m["delta"] for m in lg["declared"]["memory"].values() if "delta" in m}
     if len(totals) != 1:
@@ -338,7 +340,7 @@ def session_error(session: dict) -> dict:
         profile, slack, sketch = (Fraction(d[n]) for n in ("profile", "slack", "sketch"))
     else:
         profile = pooled.number(V.recorded_windows(session)[1])
-        slack = Fraction(lg["inputs"]["passes"], 2 ** audit.SLACK_LOG2)
+        slack = Fraction(lg["inputs"]["passes"], 2 ** lg["inputs"].get("slack_log2", V.UNRECORDED_SLACK_LOG2))
         sketch = total - profile - slack
     exact = {"delta_profile": profile, "delta_slack": slack, "delta_sketch": sketch, "total": total}
     return {**{k: float(x) for k, x in exact.items()}, "exact": {k: line.text(x) for k, x in exact.items()},
@@ -726,7 +728,7 @@ def table(doc: dict) -> str:
                    + " / ".join(f"{row[x]['snapshot']:.4%}" for x in b) + ", filler "
                    + " / ".join(f"{row[x]['filler_snapshot']:.4%}" for x in b) + ")"
                    + (f", error {row['error']['total']:.3g} (2^{row['error']['log2']:.2f}): the ledger's δ "
-                      "(profile δ + P·2^-41 + δs) summed over the credited sessions"
+                      "(profile δ + P·2^-slack + δs) summed over the credited sessions"
                       if row["error"]["sessions"] else ""))
     out.append(f"line by {doc['line_by']}; {doc['credit']['summary']}")
     return "\n".join(out) + "\n"

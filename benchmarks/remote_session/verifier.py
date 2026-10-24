@@ -147,6 +147,9 @@ DISK_BYTES_PER_S = 4.4e9
 how much of a paced line's ingress charge is its disks (`ingress_bursts`)."""
 KINDS = ("weights", "kv", "filler", "activations")
 TIERS = ("hbm", "host")
+UNRECORDED_SLACK_LOG2 = 41
+"""The AuditRO slack a ledger whose `inputs` carry no `slack_log2` was charged at, bits a pass: every record written
+before they carried it, gate runs 8 and 9's among them."""
 
 
 def timing_parts(*, capacity_bytes_per_s: float, span_ns: int, passes: int, reads_bytes: int, tiers: dict,
@@ -1427,7 +1430,7 @@ class Verifier:
         `delta` is the memory line's δ in its three parts (`ledger.delta_parts`), whose sum `declared`'s forms carry.
         Each window's bound on wrong receipts is computed once for both readings, exactly, in the check workers when
         there are some (`checks.Checks.bounds`).  `inputs` carries the AuditRO slack γ and δ were charged at
-        (`slack_log2`); a record without it was charged 41 bits a pass."""
+        (`slack_log2`); a record without it was charged `UNRECORDED_SLACK_LOG2`."""
         cal = self.calibration
         reported = float(cal["read_bytes_per_s"])
         stated = ledger.Node.stated(reported_read_bytes_per_s=reported, disk_bytes_per_s=self.disk_bytes_per_s,

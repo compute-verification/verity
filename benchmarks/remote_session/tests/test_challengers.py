@@ -396,7 +396,7 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
             lg["delta"][n] for n in ("profile", "slack", "sketch")]
         assert doc["line"][t]["error"] == doc["credit"]["error"] == al.union_error([honest])
         assert al.table(doc).splitlines()[-2].endswith(
-            "): the ledger's δ (profile δ + P·2^-41 + δs) summed over the credited sessions")
+            "): the ledger's δ (profile δ + P·2^-slack + δs) summed over the credited sessions")
         by = al.lv.Lean(al.lv.build(), lambda _: None)
         try:
             assert doc["line_by"] == "python" and analysed(out, host, sessions, reg, desc, line_by=by) == {
@@ -641,10 +641,11 @@ GATE_RUNS = {(8, 0): (2118, 9.640646787142758e-10, -51.59094185809943),
 
 @pytest.mark.parametrize("run,k", GATE_RUNS)
 def test_the_lines_error_is_the_ledgers_delta_on_gate_runs_8_and_9(run, k):
-    """On gate runs 8 and 9's records, written before verifier.json carried δ's parts, a session's error is the
-    memory line's δ its ledger recorded, bit for bit: 2^-40 of profile δ, AuditRO's 2^-41 a pass, which dominates
-    (2^-29.95 over a 60 s session's 2118 passes, 2^-34.39 over a 1 s session's 96), and δs, the rest, which is the
-    sketch the record charged."""
+    """On gate runs 8 and 9's records, written before verifier.json carried δ's parts or the slack (`slack_log2`), a
+    session's error is the memory line's δ its ledger recorded, bit for bit: 2^-40 of profile δ, AuditRO's 2^-41 a
+    pass (`UNRECORDED_SLACK_LOG2`, the slack they were charged at), which dominates (2^-29.95 over a 60 s session's
+    2118 passes, 2^-34.39 over a 1 s session's 96), and δs, the rest, which is the sketch the record charged. A record
+    that states its slack is split at it."""
     passes, delta, sketch_log2 = GATE_RUNS[run, k]
     window = {"lengths": [passes], "profile": {"delta": 2.0 ** -40, "drawn": {"receipt": 0}}}
     memory = {f: {"delta": delta} for f in al.ledger.FORMS}
@@ -653,6 +654,11 @@ def test_the_lines_error_is_the_ledgers_delta_on_gate_runs_8_and_9(run, k):
     e = al.session_error(s)
     parts = {n: al.line.number(e["exact"][n]) for n in ("delta_profile", "delta_slack", "delta_sketch")}
     assert e["total"] == delta and al.line.number(e["exact"]["total"]) == Fraction(delta) == sum(parts.values())
+    assert al.V.UNRECORDED_SLACK_LOG2 == 41 < al.audit.SLACK_LOG2
     assert parts["delta_profile"] == Fraction(1, 2 ** 40) and parts["delta_slack"] == Fraction(passes, 2 ** 41)
     assert al.timing.log2(parts["delta_sketch"]) == pytest.approx(sketch_log2, abs=1e-6)
     assert e["log2_total"] == pytest.approx(-29.950 if passes == 2118 else -34.385, abs=1e-3)
+    stated = json.loads(json.dumps(s))
+    stated["ledger"]["inputs"]["slack_log2"] = al.audit.SLACK_LOG2
+    slack = al.line.number(al.session_error(stated)["exact"]["delta_slack"])
+    assert slack == Fraction(passes, 2 ** al.audit.SLACK_LOG2) and al.timing.log2(slack) < -55.9
