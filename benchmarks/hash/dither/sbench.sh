@@ -62,6 +62,16 @@ case " $* " in *dither-a-hbc*)
   echo "sbench: h1u_kc.so with ${HB_KC_FLAGS:-no flags}" | tee "$OUT/kc-flags.txt"
   grep -B1 -A2 "h1k\|h1u" "$OUT/build-h1u_kc.log" | grep -i "registers\|spill" | head -8
   export HB_H1U_KC=$S/h1u_kc.so
+  # and, with HB_KC_FLAGS_B, a second such build for the ARM-kcb arms (HB_H1U_KC_B)
+  read -r -a kcb <<< "${HB_KC_FLAGS_B:-}"
+  if [ ${#kcb[@]} -gt 0 ]; then
+    nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode arch=compute_120a,code=sm_120a -Xptxas -v -Xcompiler -fPIC -shared \
+      -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 "${kcb[@]}" -o "$S/h1u_kcb.so" benchmarks/hash/dither/h1u.cu > "$OUT/build-h1u_kcb.log" 2>&1 \
+      || { echo "sbench: NVCC_FAIL h1u_kcb"; grep -v "^ptxas info" "$OUT/build-h1u_kcb.log" | tail -30; exit 11; }
+    echo "sbench: h1u_kcb.so with ${HB_KC_FLAGS_B}" | tee -a "$OUT/kc-flags.txt"
+    grep -B1 -A2 "h1um\|h1jr_rows" "$OUT/build-h1u_kcb.log" | grep -i "registers\|spill" | head -8
+    export HB_H1U_KC_B=$S/h1u_kcb.so
+  fi
   # and, with HB_KC_H1C_FLAGS (h1c.cu's knobs), its own libh1c.so: its A, z, y and receipt tables (DITHER_H1C_KC)
   read -r -a kh <<< "${HB_KC_H1C_FLAGS:-}"
   if [ ${#kh[@]} -gt 0 ]; then
