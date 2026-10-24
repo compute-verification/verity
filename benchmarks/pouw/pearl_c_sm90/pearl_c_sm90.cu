@@ -313,11 +313,10 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
 #pragma unroll
       for (int i = 0; i < NA; i++) total[i] = d[i];
     } else if constexpr (NWG == 1) {
-      // window kb's atoms into d (kb even) or e (kb odd), each issued before the window before it is waited on; each window's
-      // sum still goes into the total alone, in ascending k.  No wgmma is issued or waited on in a branch, which ptxas
-      // serializes (C7514, C7518): K / 128 is even (K is a multiple of 256) and the last pair is peeled
+      // windows kb (into d) and kb + 1 (into e) issued together, d's sum added while e's atoms run; each window's sum still
+      // goes into the total alone, in ascending k.  K / 128 is even (K is a multiple of 256).  No wgmma is in flight across
+      // the loop's back edge or issued or waited on in a branch, either of which ptxas serializes (C7514, C7518)
       float e[NA];
-      int sd, se;
       const auto issue = [&](float* acc) {
         mbar_wait_warp(bars + 8 * s, ph);
         const uint32_t a0 = base + s * T::STAGE + wg * 64 * BK, b0 = base + s * T::STAGE + T::A_BYTES;
@@ -340,24 +339,16 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
       if (KB % 2) __trap();
 #pragma unroll
       for (int i = 0; i < NA; i++) total[i] = 0.0f;
-      sd = s;
-      issue(d);
-      for (int kb = 2; kb < KB; kb += 2) {
-        se = s;
+      for (int kb = 0; kb < KB; kb += 2) {
+        const int sd = s;
+        issue(d);
+        const int se = s;
         issue(e);
         WG_WAIT(1);
         take(d, sd);
-        sd = s;
-        issue(d);
-        WG_WAIT(1);
+        WG_WAIT(0);
         take(e, se);
       }
-      se = s;
-      issue(e);
-      WG_WAIT(1);
-      take(d, sd);
-      WG_WAIT(0);
-      take(e, se);
     } else {
 #pragma unroll
       for (int i = 0; i < NA; i++) total[i] = 0.0f;
