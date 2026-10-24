@@ -20,12 +20,10 @@ The checker never runs the runtime; it is C++/OpenMP over the opened words (``cp
 pure Python for the scalar gate ``independent_gemm_coordinate`` (one output coordinate from the
 opened input row and one opened weight column).
 
-Interface.  With W2's harness importable (``verity_vllm.program.kernels.relations``) this module fills the
-registered slots ``gemm.bf16.v1`` and ``lm_head.bf16.v1`` at import time and adds
-``gemm.bf16.coordinate.v1``; the checkers then receive a ``NodeInstance`` and a mapping of
-argument names to authenticated ``Value`` objects.  Without W2's package the same functions
-accept a plain node mapping and ``opened_inputs`` keyed by argument name *or* canonical id, with
-values as ``Value``-likes, ``numpy`` ``uint16`` arrays or raw little-endian bytes.
+Interface.  ``RELATIONS`` maps ``gemm.bf16.v1``, ``lm_head.bf16.v1`` and ``gemm.bf16.coordinate.v1`` to
+their checkers (:func:`register` installs them into a registry).  A checker takes a node (a ``NodeInstance``-like
+or a plain node mapping) and ``opened_inputs`` keyed by argument name *or* canonical id, with values as
+``Value``-likes, ``numpy`` ``uint16`` arrays or raw little-endian bytes.
 
 How the epilogue is chosen (the model must be told, it must not guess by trying both):
 
@@ -477,30 +475,6 @@ RELATION_IDS = {
 RELATIONS: dict[str, Any] = {rid: fn for rid, (_, fn, _) in RELATION_IDS.items()}
 
 
-def register_with_w2(replace: bool = False) -> list[str]:
-    """Fill W2's slots (``verity_vllm.program.kernels.relations``); returns the ids registered, [] if W2 is absent."""
-
-    try:
-        from verity_vllm.program.kernels import relations as R
-    except ImportError:
-        return []
-    done = []
-    for rid, (op_type, fn, doc) in RELATION_IDS.items():
-        existing = R.REGISTRY.get(rid)
-        if existing is not None and existing.implemented and not replace:
-            continue
-
-        def _wrap(inst, inputs, _fn=fn):
-            try:
-                return _fn(inst, inputs)
-            except GemmRelationError as error:
-                raise R.RelationError(str(error)) from error
-
-        R.register(rid, klass=R.INDEPENDENT, op_type=op_type, includes_full_op=False, version=MODEL_VERSION, doc=doc, owner="W4", replace=replace)(_wrap)
-        done.append(rid)
-    return done
-
-
 def register(registry: Any) -> None:
     """Install into a dict-like registry or one exposing ``.register(id, fn)`` (standalone use)."""
 
@@ -509,10 +483,3 @@ def register(registry: Any) -> None:
             registry.register(rid, fn)
         else:
             registry[rid] = fn
-
-
-REGISTERED_WITH_W2 = register_with_w2()
-
-# W11: the independent attention relation (FlashAttention-2 model) registers itself alongside the GEMM
-# relations when this module is imported; kept in its own module (fa2_relation.py).
-from verity_vllm.program.kernels import fa2_relation as _fa2_relation  # noqa: E402,F401
