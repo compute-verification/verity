@@ -179,8 +179,9 @@ def _worst_source(cb, family: str) -> float:
     step = C.worst_bits([("source_delta", 0, -Q, Q)], cb, family) - tail
     if family in ("gamma", "static"):
         return step
-    return C.worst_bits([("source_seen", 0, 0, 1)], cb, family) - tail + max(
-        step, C.worst_bits([("source_rank", 0, 0, Q - 1)], cb, family) - tail)
+    seen = C._tables_for(cb, family)["source_seen"]
+    rank = C.worst_bits([("source_rank", 0, 0, Q - 1)], cb, family) - tail
+    return C.OVERHEAD_PER_SYMBOL + max(seen.cost(0, 0, 1) + step, seen.cost(1, 0, 1) + rank)
 
 
 def _worst_hit(cb, family: str, name: str, known_max: int) -> float:

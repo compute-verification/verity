@@ -24,8 +24,8 @@ The codes:
   between two arrivals is predicted from their certified arrival buckets and the step-time model run over the replayed
   schedule (the residual's other fields have no public conditioning on a served link, whose requests and responses are
   padded to fixed frame counts, so they keep their static tables). In both, a cache hit is keyed on the advice already
-  decoded: its first source is a pick among the earlier sources, most recently used first, and its length a flag for
-  that source's latest hit (vLLM's shared prefixes). `cond+adapt` also rescales the step-time model online from the
+  decoded: its first source is a pick among the earlier sources, most recently used first (a resume's own first source
+  and itself ahead of them), and its length a flag for that source's latest hit (vLLM's shared prefixes). `cond+adapt` also rescales the step-time model online from the
   decoded past (a public, adaptive model).
 
 **What a window is charged.** Window w's segment codes the requests whose certified arrival bucket is in w and the steps
@@ -725,6 +725,7 @@ class _V0State:
     last_src: int = 0  # the last cache-hit source's request
     src_mru: list[int] = field(default_factory=list)  # every source so far, most recently used first
     src_hit: dict[int, int] = field(default_factory=dict)  # each first source's latest hit
+    own: dict[int, int] = field(default_factory=dict)  # each request's first hit's first source
 
     def done(self, r: int) -> bool:
         return self.kept[r] >= self.requests[r].output_len
@@ -748,6 +749,8 @@ class _V0State:
         for r in self.keeps(rows):
             self.kept[r] += 1
         for x in rows:
+            if not self.started[x.request] and x.sources:
+                self.own[x.request] = x.sources[0][0]
             self.pos[x.request] = x.start + x.n
             self.started[x.request] = True
             if self.done(x.request):
@@ -771,10 +774,11 @@ def _requests_window(st: Stream, family: str, caps: Caps, idx: range, adv: Advic
         s.started.append(False)
 
 
-def _source(st: Stream, keyed: bool, s: Any, y: int | None, nreq: int) -> int:
-    """A source request among the first `nreq`: `keyed`, a pick among the earlier sources, most recently used first
-    (vLLM's shared prefixes come back to the few requests that first held them), else a step from the last source's."""
-    mru = [r for r in s.src_mru if r < nreq] if keyed else []
+def _source(st: Stream, keyed: bool, s: Any, y: int | None, nreq: int, prefer: Sequence[int] = ()) -> int:
+    """A source request among the first `nreq`: `keyed`, a pick among `prefer` and then the earlier sources, most
+    recently used first (vLLM's shared prefixes come back to the few requests that first held them), else a step from
+    the last source's."""
+    mru = [r for r in dict.fromkeys([*prefer, *s.src_mru]) if r < nreq] if keyed else []
     if mru and st.sym("source_seen", int(y in mru) if y is not None else None, 0, 1):
         return mru[st.sym("source_rank", mru.index(y) if y is not None else None, 0, len(mru) - 1)]
     pred = min(s.last_src, nreq - 1)
@@ -782,7 +786,7 @@ def _source(st: Stream, keyed: bool, s: Any, y: int | None, nreq: int) -> int:
 
 
 def _sources(st: Stream, raw: bool, caps: Caps, c: int, x: Row | None, s: Any, nreq: int | None = None,
-             keyed: bool = False, first: int | None = None) -> tuple[tuple[int, int], ...]:
+             keyed: bool = False, first: int | None = None, prefer: Sequence[int] = ()) -> tuple[tuple[int, int], ...]:
     """A cache hit's sources, the runs that cover positions 0 … c − 1: their count, then each one's request (`raw`: at
     the registered width; else `_source`'s, the first one already decoded when `first` is given) and length (the last
     run's is what remains). A source is one of the first `nreq` requests (default: every request decoded)."""
@@ -804,7 +808,7 @@ def _sources(st: Stream, raw: bool, caps: Caps, c: int, x: Row | None, s: Any, n
         elif j == 0 and first is not None:
             r = first
         else:
-            r = _source(st, keyed, s, y[0] if x else None, nreq)
+            r = _source(st, keyed, s, y[0] if x else None, nreq, prefer)
         if r >= nreq:
             raise ValueError(f"a source names request {r}, which has not arrived")
         n = c - at if j == m - 1 else 1 + st.sym("source_n", y[1] - 1 if x else None, 0, c - at - (m - j))
@@ -897,7 +901,8 @@ def _step_cond(st: Stream, caps: Caps, x: StepAdvice | None, s: _V0State, prev: 
         if s.started[r]:
             pre = bool(st.sym("resumed", int(y.preempted) if x else None, 0, 1))
             if pre:
-                h = _hit(st, "rehit_new", False, caps, y, known, s, len(s.requests), keyed=True)
+                h = _hit(st, "rehit_new", False, caps, y, known, s, len(s.requests), keyed=True,
+                         prefer=(s.own[r], r) if r in s.own else (r,))
             start = h.cache_hit if pre else s.pos[r]
         else:
             h = _hit(st, "cache_hit_new", False, caps, y, q.prompt_len, s, len(s.requests), keyed=True)
@@ -1309,10 +1314,10 @@ class _ResState:
 
 
 def _hit(st: Stream, name: str, raw: bool, caps: Caps, x: Hit | Row | None, known: int, s: Any, nreq: int,
-         keyed: bool = False) -> Hit:
+         keyed: bool = False, prefer: Sequence[int] = ()) -> Hit:
     """A cache hit below `known` tokens, in blocks, and its sources among the first `nreq` requests. `keyed` (the
-    conditional codes): whether there is one, its first source, then its length, which a flag says is that source's
-    latest hit (a shared prefix is hit at its own length), and the rest of its sources."""
+    conditional codes): whether there is one, its first source (`_source`, `prefer` first), then its length, which a
+    flag says is that source's latest hit (a shared prefix is hit at its own length), and the rest of its sources."""
     b = caps.block_size
     top = (known - 1) // b
     if x is not None and (x.cache_hit % b or not 0 <= x.cache_hit <= b * top or bool(x.cache_hit) != bool(x.sources)):
@@ -1322,7 +1327,7 @@ def _hit(st: Stream, name: str, raw: bool, caps: Caps, x: Hit | Row | None, know
         return Hit(c, _sources(st, raw, caps, c, x, s, nreq))
     if top == 0 or not st.sym(f"{name}_any", int(x.cache_hit > 0) if x else None, 0, 1):
         return Hit(0, ())
-    r = _source(st, True, s, x.sources[0][0] if x else None, nreq)
+    r = _source(st, True, s, x.sources[0][0] if x else None, nreq, prefer)
     if r >= nreq:
         raise ValueError(f"a source names request {r}, which has not arrived")
     prev = s.src_hit.get(r, 0)
@@ -1330,7 +1335,7 @@ def _hit(st: Stream, name: str, raw: bool, caps: Caps, x: Hit | Row | None, know
         c = prev
     else:
         c = b * st.sym(name, x.cache_hit // b if x else None, 1, top)
-    return Hit(c, _sources(st, False, caps, c, x, s, nreq, keyed=True, first=r))
+    return Hit(c, _sources(st, False, caps, c, x, s, nreq, keyed=True, first=r, prefer=prefer))
 
 
 def _residual_window(st: Stream, family: str, cb: Codebook, pub: Public, w: int, res: Residual | None, s: _ResState,
@@ -1343,8 +1348,9 @@ def _residual_window(st: Stream, family: str, cb: Codebook, pub: Public, w: int,
         s.hit.append(_hit(st, "hit", raw, caps, res.hit[i] if res else None, P, s, i, keyed))
         _admit_one(st, family, cb, pub, i, res.admit if res else None, s.admit, replay, adapt)
     for r, known in replay.resumes_in(w):
+        own = s.hit[r].sources[:1]
         s.resumes.append(_hit(st, "rehit", raw, caps, res.resumes[len(s.resumes)] if res else None, known, s,
-                              len(s.prompt_len), keyed))
+                              len(s.prompt_len), keyed, prefer=(*(g for g, _ in own), r)))
 
 
 def _residual_segments(res: Residual | None, pub: Public, cb: Codebook, family: str, replay: Replay,
