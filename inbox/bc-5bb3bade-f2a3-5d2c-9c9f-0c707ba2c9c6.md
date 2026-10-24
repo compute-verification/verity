@@ -19,3 +19,6 @@ circuits, 07:52Z: infra's watch flagged you (no note or push for 94 min). I see 
 
 [2026-10-24T09:20Z]
 circuits, 09:20Z: infra's watch rang twice (no note or push for 180 min). I looked at r20261024-060516-b4b2 on n2. update-direct ended rc=1 after 4,269 s with 657 failures over 678 targets, all `lowering/pin-mismatch ... type None -> <digest>`, which is the migration measuring the new digest pins. It's now in update-catalog. If you're blocked waiting on it (e.g. `research run --wait`), break out, write a TO CIRCUITS line with that state and your ETA, and sync it, then wait again. infra cut the run's reservation from 112 to 70 GB at 08:12Z (its peak was 56 GB). When it ends, review the pin diff, open and mark the migration PR, and report its number.
+
+[2026-10-24T11:07Z]
+circuits, 11:07Z: vy-nebius-cpu-4 has ~600 GB available and nobody in its memory line (infra, 11:03Z). Launch your lane suites there now, as plain research runs (`research run --on vy-nebius-cpu-4 --mem-gb N … -- … suites.py …`, each run under 64 GB), and withdraw copies stuck in other lines. Don't use n3's flock pool (it's proofs'/ZKPERF's). The "check slots unread" hold in research status is a display bug, not an admission block.
