@@ -325,6 +325,9 @@ def read(root: Path) -> dict[str, Any]:
             stmt = d.name[: -len(mode) - 1] if d.name.endswith("-" + mode) else d.name
             rows.append(prover_row(d, f"outer {stmt}", "oprove", f"V*'s {stmt} with --zk, mode {mode}"))
             rows[-1].extra |= {"mode": mode, "statement": stmt}
+            if mode == "firewall" and rows[-1].wall_s:
+                rows[-1].note = ("the prover's phase buckets include its waits on the Lean session loop (flock-firewall), "
+                                 "the reps' overlapping; " + rows[-1].note).rstrip("; ")
     orr = repeats(root, "oreplay")
     if orr:
         rows += tool_rows(orr, "oreplay", {f"replay {n}": (f"oreplay/{n}/time-replay.txt", f"flock-circuit replay --zk of {n}")
@@ -366,8 +369,31 @@ def read(root: Path) -> dict[str, Any]:
                 r.note = next((w for w in why if w and w != "None"), text(ln[0] / "lean" / f"{name}.log")[-200:].strip())
         rows.append(step_row(ln, "lean", "85 STEP=lean whole (JOBS sessions at once), as an auditor waits"))
         rows += lrows
-    return {"schema": SCHEMA, "params": params(root), "rows": [r.to_json() for r in rows], "summary": summary(rows),
+    s = summary(rows)
+    fw = processes(root.parent / "resources.jsonl", "flock-firewall")
+    if fw:
+        s["flock_firewall"] = fw
+    return {"schema": SCHEMA, "params": params(root), "rows": [r.to_json() for r in rows], "summary": s,
             "steps": step_status(root)}
+
+
+def processes(p: Path, comm: str) -> list[dict[str, Any]]:
+    """Each ``comm`` process the run's sampler saw (``research run``'s ``resources.jsonl`` beside ``out/``): its CPU seconds and
+    peak RSS at its last sample, and when it was first and last seen; the run's own telemetry, not 85's records."""
+    seen: dict[int, dict[str, Any]] = {}
+    for ln in text(p).splitlines():
+        if '"kind":"process"' not in ln or comm not in ln:
+            continue
+        try:
+            d = json.loads(ln)
+        except ValueError:
+            continue
+        for q in d.get("processes", []):
+            if q.get("comm") == comm:
+                e = seen.setdefault(q["pid"], {"pid": q["pid"], "first": d["t_utc"]})
+                e |= {"last": d["t_utc"], "cpu_s": q.get("cpu_s"), "rss_hwm_gb": round((q.get("rss_hwm_bytes") or 0) / 2**30, 2),
+                      "threads": q.get("threads")}
+    return [e for e in seen.values() if (e.get("cpu_s") or 0) >= 1]
 
 
 def params(root: Path) -> dict[str, str]:
@@ -427,9 +453,13 @@ def merge(docs: list[dict[str, Any]]) -> dict[str, Any]:
             by[(r["step"], r["stage"], r["extra"].get("mode", ""))] = r
     order = {s: i for i, s in enumerate(("build", "inner", "icheck", "vstage", "vcap", "oprove", "oreplay", "lean"))}
     rows = sorted(by.values(), key=lambda r: order.get(r["step"], len(order)))
+    s = summary([Row.from_json(r) for r in rows])
+    fw = [e | {"run": d.get("ref") or d.get("run")} for d in docs for e in d.get("summary", {}).get("flock_firewall", [])]
+    if fw:
+        s["flock_firewall"] = fw
     return {"schema": SCHEMA, "params": docs[-1].get("params", {}), "runs": [d.get("ref") or d.get("run") for d in docs],
             "run_params": {str(d.get("ref") or d.get("run")): d.get("params", {}) for d in docs},
-            "rows": rows, "summary": summary([Row.from_json(r) for r in rows]),
+            "rows": rows, "summary": s,
             "steps": {f"{k} ({d.get('ref') or d.get('run')})": v for d in docs for k, v in d.get("steps", {}).items()}}
 
 
@@ -485,6 +515,10 @@ def markdown(doc: dict[str, Any]) -> str:
     if s.get("pipeline_sum_s"):
         lines.append("One recursive session, sum of medians along its path: " + ", ".join(
             f"{k} {v:.3g}" for k, v in s["pipeline"].items() if v) + f"; total {s['pipeline_sum_s']:.3g} s.")
+    if s.get("flock_firewall"):
+        lines.append("The Lean session loop (flock-firewall, from the run's process samples): " + "; ".join(
+            f"{e['cpu_s']:.0f} CPU s, peak RSS {e['rss_hwm_gb']} GB, {e['threads']} threads, seen {e['first'][11:19]}–"
+            f"{e['last'][11:19]}Z" + (f" ({e['run']})" if e.get("run") else "") for e in s["flock_firewall"]) + ".")
     if s.get("not_ok"):
         lines.append("Not accepted or not run: " + ", ".join(s["not_ok"]) + ".")
     lines.append("Steps' exit codes: " + ", ".join(f"{k} {'/'.join(v)}" for k, v in doc.get("steps", {}).items()) + ".")

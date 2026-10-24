@@ -197,6 +197,22 @@ def test_a_preempted_statement_says_how_often(tmp_path: Path) -> None:
     assert l1["note"] == "lease preempted 3x; no session finished in the lease's 2m00s"
 
 
+def test_the_lean_firewall_is_read_from_the_runs_process_samples(tmp_path: Path) -> None:
+    o = job(tmp_path)
+
+    def sample(t: str, cpu: float) -> str:
+        procs = [{"pid": 7, "comm": "flock-firewall", "cpu_s": cpu, "rss_hwm_bytes": 8 * 2**30, "threads": 203},
+                 {"pid": 8, "comm": "flock-firewall", "cpu_s": 0.1, "rss_hwm_bytes": 0, "threads": 4},
+                 {"pid": 9, "comm": "flock-circuit", "cpu_s": 16.0}]
+        return json.dumps({"kind": "process", "t_utc": t, "processes": procs}, separators=(",", ":")) + "\n"
+    (tmp_path / "resources.jsonl").write_text(sample("2026-10-24T07:17:46.6Z", 2.0) + sample("2026-10-24T07:26:27.6Z", 1177.0))
+    doc = RP.read(o)
+    assert doc["summary"]["flock_firewall"] == [{"pid": 7, "first": "2026-10-24T07:17:46.6Z", "last": "2026-10-24T07:26:27.6Z",
+                                                 "cpu_s": 1177.0, "rss_hwm_gb": 8.0, "threads": 203}]
+    assert "flock-firewall" in next(r for r in doc["rows"] if r["stage"] == "outer L0" and r["extra"]["mode"] == "firewall")["note"]
+    assert "1177 CPU s, peak RSS 8.0 GB, 203 threads, seen 07:17:46–07:26:27Z" in RP.markdown(doc)
+
+
 def test_markdown_has_one_line_per_row(tmp_path: Path) -> None:
     doc = RP.read(job(tmp_path))
     md = RP.markdown(doc)

@@ -68,7 +68,10 @@ under its own `RESEARCH_RUN_DIR` (`out/steps/<step>/r<i>/`), so every record 85 
   reps' buckets, summed: `t.witness`, `t.encoding_commitment`, `t.zerocheck`, `t.lincheck`, `t.ring_switch`, `t.ligerito`,
   `t.link`, and under the firewall `t.firewall_recheck`, `t.lean_finish`, `t.zk_inner`), the host witness (`h.witness`,
   `witness_s`) and `wait.verifier`, what is left of `e2e_s` (the session waiting on its verifier: the `rec_live` proxy, or
-  `serve`, whose own `verify_s` and `handle_s` per session are in the row's `extra`).
+  `serve`, whose own `verify_s` and `handle_s` per session are in the row's `extra`). Under `firewall` the prover's
+  buckets also hold its waits on the Lean session loop, and the two reps' overlap, so there the cost is read from the
+  loop's own process: `flock-firewall`'s CPU seconds, peak RSS and lifetime, from the run's process samples
+  (`resources.jsonl`, `research run`'s telemetry beside `out/`).
 - **Peak memory**: the prover process's peak RSS (`/usr/bin/time -v` over the invocation, every session) and the leased GPU's
   memory in use, sampled every half second (`gpu-mib.txt`, a lower bound on the device peak). For CPU steps, each tool's
   `/usr/bin/time -v` peak RSS.
