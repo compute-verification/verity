@@ -384,9 +384,9 @@ def ingressTick (st : State) (now : Nat) : State × Array Action := Id.run do
   let mut started := #[]
   for (slot, i) in (row.extract 0 (rowCount row)).zipIdx do
     if let some (_, w) := bucketer.own.find? (·.1 == i) then
-      let (st', x) := st.releaseSalt (w / (st.config.salt.map (·.pouwWindow)).getD 1)
-      st := st'
-      if let some x := x then started := started.push x
+      let salt := st.releaseSalt (w / (st.config.salt.map (·.pouwWindow)).getD 1)
+      st := salt.1
+      if let some x := salt.2 then started := started.push x
       continue
     let (kind, _, payload) := decodeFrame (slot.getD ByteArray.empty)
     if kind != kindData then continue
