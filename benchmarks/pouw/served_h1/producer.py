@@ -24,6 +24,11 @@ noise derived (`kh_unit`'s ``live`` mask, receipts.py's `gated_receipts`). A row
 full, and the receipts keep one row a unit in tile order. It stays off while the window Program's unit is v1, whose dead
 tile has its noise's receipt, not zero.
 
+`Served` hands a step's calls of one K to `Receipts.prepare` before it asks each of them. With the units kernel, the
+producer computes all of their units in one `kh_units_multi` launch, with one copy of their codes to the device and one
+copy of their receipts back, so a call's ask returns its rows with no launch or sync of its own. A call asked without
+`prepare` is computed on its own, to the same words.
+
 It returns (units, 2 (KS + m)) uint32 (KS = K / 32, m = `segment.n_digits(KS)`: 260 words at K = 4096, 902 at 14336), the
 input of `pouw_h1_served.receipt_words`, which `Served` refuses at any other shape. It takes no coin: the noise is the
 salt's and the unit's position's. The kernel needs 512 | K (`kh_unit`); the torch chain any 32 | K, K >= 64.
@@ -79,9 +84,16 @@ def _stream(t: torch.Tensor) -> int:
     return torch.cuda.current_stream(t.device).cuda_stream
 
 
+#: h1u.cu's `UCall`, `kh_units_multi`'s record of one call: its A, B, seeds and receipts' device addresses, N, K, its first
+#: unit's index in the launch and n_digits(K / 32)
+UCALL = np.dtype([("A", "<u8"), ("B", "<u8"), ("seeds", "<u8"), ("out", "<u8"),
+                  ("N", "<u4"), ("K", "<u4"), ("u0", "<u4"), ("md", "<u4")])
+
+
 class Units:
-    """h1u.cu's `kh_seeds` and `kh_unit` from an -hbc build: a call's units' seeds and receipts, on torch's current stream,
-    every unit live (``live`` NULL: v1's ungated unit) unless `receipts` is given a row block's live bits."""
+    """h1u.cu's `kh_seeds`, `kh_unit` and `kh_units_multi` from an -hbc build: a call's units' seeds and receipts, or the
+    receipts of many calls in one launch (`multi`), on torch's current stream, every unit live (``live`` NULL: v1's
+    ungated unit) unless given a row block's live bits."""
 
     def __init__(self, lib: str | Path | C.CDLL):
         h = lib if isinstance(lib, C.CDLL) else C.CDLL(str(lib))
@@ -90,22 +102,70 @@ class Units:
         h.kh_seeds.restype = C.c_int
         h.kh_unit.argtypes = [vp, vp, u32, u32, u32, vp, vp, vp, vp]
         h.kh_unit.restype = C.c_int
-        h.kh_words.argtypes = [u32]
-        h.kh_words.restype = u32
+        h.kh_units_multi.argtypes = [vp, u32, u32, u32, vp, vp]
+        h.kh_units_multi.restype = C.c_int
+        for f in (h.kh_words, h.kh_digits):
+            f.argtypes, f.restype = [u32], u32
+        h.kh_ucall_bytes.argtypes, h.kh_ucall_bytes.restype = [], u32
+        if h.kh_ucall_bytes() != UCALL.itemsize:
+            raise ValueError(f"h1u.cu's UCall is {h.kh_ucall_bytes()} bytes, not the {UCALL.itemsize} `UCALL` lays out")
         self.h = h
 
     def words(self, k: int) -> int:
         return int(self.h.kh_words(k))
 
-    def seeds(self, record: torch.Tensor, base: int, units: int) -> torch.Tensor:
-        """(units, 16) int64 on ``record``'s device: unit u's seed_j then σ_R, big-endian words, at position base + u, from
-        ``record`` (`seed_record`, (30,) int64)."""
+    def seeds(self, record: torch.Tensor, base: int, units: int, out: torch.Tensor | None = None) -> torch.Tensor:
+        """(units, 16) int64 on ``record``'s device (into ``out``, if given): unit u's seed_j then σ_R, big-endian words, at
+        position base + u, from ``record`` (`seed_record`, (30,) int64)."""
         if tuple(record.shape) != (30,) or record.dtype != torch.int64 or not record.is_cuda:
             raise ValueError(f"kh_seeds: a (30,) int64 record on the device, not {record.dtype} {tuple(record.shape)}")
-        out = torch.empty(units, 16, dtype=torch.int64, device=record.device)
+        if out is None:
+            out = torch.empty(units, 16, dtype=torch.int64, device=record.device)
+        elif tuple(out.shape) != (units, 16) or out.dtype != torch.int64 or out.device != record.device \
+                or not out.is_contiguous():
+            raise ValueError(f"kh_seeds: out is {out.dtype} {tuple(out.shape)} on {out.device}, not ({units}, 16) int64")
         rc = self.h.kh_seeds(record.contiguous().data_ptr(), int(base), int(units), out.data_ptr(), _stream(record))
         if rc:
             raise RuntimeError(f"kh_seeds returned {rc} (U = {units})")
+        return out
+
+    def multi(self, calls: list[tuple[torch.Tensor, torch.Tensor, torch.Tensor]],
+              live: torch.Tensor | None = None) -> torch.Tensor:
+        """Every unit of ``calls``, each ``(A [M, K], B [N, K], seeds)`` as `receipts` takes them, every A M rows of one K,
+        in one launch (`kh_units_multi`) -> their receipts (sum of units, kh_words(K)) int32, call i's from the sum of the
+        units before it, each word for word its `receipts`. ``live`` as `receipts`', every call's."""
+        if not calls:
+            raise ValueError("kh_units_multi: no calls")
+        (m, k), dev = calls[0][0].shape, calls[0][0].device
+        n_of, rec = [], np.zeros(len(calls) + 1, UCALL)
+        for i, (a, b, seeds) in enumerate(calls):
+            n = b.shape[0]
+            units = (m // RC.R) * (n // RC.C_)
+            if tuple(a.shape) != (m, k) or (a.dtype, b.dtype) != (torch.int8, torch.int8) or tuple(b.shape) != (n, k) \
+                    or m % RC.R or n % RC.C_ or a.device != dev or b.device != dev or not dev.type == "cuda" \
+                    or tuple(seeds.shape) != (units, 16) or seeds.dtype != torch.int64 or seeds.device != dev \
+                    or not (a.is_contiguous() and b.is_contiguous() and seeds.is_contiguous()):
+                raise ValueError(f"kh_units_multi: call {i}'s A {a.dtype} {tuple(a.shape)}, B {b.dtype} {tuple(b.shape)}, "
+                                 f"seeds {tuple(seeds.shape)}: contiguous s8 rows on one device, every A {m} × {k}, 32 | "
+                                 "M, N, and a unit's seeds each")
+            rec[i]["A"], rec[i]["B"], rec[i]["seeds"] = a.data_ptr(), b.data_ptr(), seeds.data_ptr()
+            rec[i]["N"], rec[i]["K"], rec[i]["md"], rec[i]["u0"] = n, k, self.h.kh_digits(k), sum(n_of)
+            n_of.append(units)
+        if k % 512 or rec[0]["md"] not in (2, 3):
+            raise ValueError(f"kh_units_multi: no units kernel at K = {k} (512 | K, n_digits(K / 32) 2 or 3)")
+        if live is not None and (live.dtype != torch.uint8 or tuple(live.shape) != (m // RC.R,) or live.device != dev
+                                 or not live.is_contiguous()):
+            raise ValueError(f"kh_units_multi: live is {live.dtype} {tuple(live.shape)} on {live.device}, not a contiguous "
+                             f"uint8 bit a row block, {m // RC.R}, on {dev}")
+        total = rec[-1]["u0"] = sum(n_of)
+        out = torch.empty(total, self.words(k), dtype=torch.int32, device=dev)
+        for i in range(len(calls)):
+            rec[i]["out"] = out[int(rec[i]["u0"])].data_ptr() if n_of[i] else out.data_ptr()
+        table = torch.from_numpy(rec.view(np.uint8)).to(dev, non_blocking=False)
+        rc = self.h.kh_units_multi(table.data_ptr(), len(calls), total, m, None if live is None else live.data_ptr(),
+                                   _stream(out))
+        if rc:
+            raise RuntimeError(f"kh_units_multi returned {rc} ({len(calls)} calls, {total} units, M = {m}, K = {k})")
         return out
 
     def receipts(self, a: torch.Tensor, b: torch.Tensor, seeds: torch.Tensor,
@@ -157,6 +217,8 @@ class Receipts:
         self._weight, self._roots, self._keep = weight, roots, keep
         self._b: dict[int, tuple[Any, torch.Tensor]] = {}
         self._starts: tuple[Any, list[tuple[int, int]]] | None = None
+        self._records: dict[tuple[bytes, bytes, bytes], torch.Tensor] = {}
+        self._ready: dict[int, tuple[Any, np.ndarray]] = {}
         self.kept: dict[int, dict[str, Any]] = {}
 
     def bind(self, run: Any) -> "Receipts":
@@ -220,27 +282,83 @@ class Receipts:
             a[:len(x)] = torch.from_numpy(np.ascontiguousarray(x)).to(self.device)
         return a, self.weight_of(call, w)
 
+    def _record(self, salt: bytes, ra: bytes, rb: bytes) -> torch.Tensor:
+        key = (salt, ra, rb)
+        if key not in self._records:
+            self._records = {key: torch.from_numpy(seed_record(salt, ra, rb)).to(self.device)}
+        return self._records[key]
+
+    def _live(self, m: int) -> torch.Tensor | None:
+        if not self.skip_dead:
+            return None
+        return (torch.arange(int(self.served.m) // RC.R, device=self.device) * RC.R < m).to(torch.uint8)
+
+    def prepare(self, batch: list[tuple[Any, Any, Any, Any, Any]]) -> None:
+        """`Served`'s hook before it asks a step's calls of one K, ``batch`` their ``(call, codes, s_a, weight codes, s_w)``
+        in the order it asks them: with the units kernel, every unit of them in one launch (`Units.multi`) and their
+        receipts copied to the host once, so each call's ask returns its rows (the same words) with no launch, copy or
+        sync of its own. Their codes go to the device in one copy. Nothing with the torch chain, or unless every call of the
+        batch serves the same rows at one K: each is then asked on its own."""
+        self._ready = {}
+        if self.units is None or self.run is None or len(batch) < 2:
+            return
+        m, k, slot = len(batch[0][1]), int(batch[0][0].k), int(self.served.m)
+        if any(len(codes) != m or int(call.k) != k for call, codes, *_rest in batch):
+            return
+        xs = [np.asarray(codes) for _call, codes, *_rest in batch]
+        if any(x.dtype != np.int8 or x.shape != (m, k) for x in xs) or m > slot:
+            raise ValueError(f"calls {[c.index for c, *_r in batch]}: their codes are not {m} rows of {k} int8 codes each, "
+                             f"at most {slot}")
+        a = torch.zeros(len(batch), slot, k, dtype=torch.int8, device=self.device)
+        if m:
+            host = torch.empty(len(batch), m, k, dtype=torch.int8, pin_memory=True)
+            hn = host.numpy()
+            for i, x in enumerate(xs):
+                hn[i] = x
+            a[:, :m].copy_(host, non_blocking=True)
+        bs = [self.weight_of(call, w) for call, _codes, _s_a, w, _s_w in batch]
+        spans = [self.start(call) for call, *_rest in batch]
+        for (call, *_rest), b, (_u0, n) in zip(batch, bs, spans):
+            if (slot // RC.R) * (b.shape[0] // RC.C_) != n:
+                raise ValueError(f"call {call.index}: {n} units in the window Program, not its {slot} × {b.shape[0]} tiles")
+        seeds, at = torch.empty(sum(n for _u0, n in spans), 16, dtype=torch.int64, device=self.device), 0
+        for (call, *_rest), (u0, n) in zip(batch, spans):
+            self.units.seeds(self._record(self.run.salt, *self.roots(call)), u0, n, out=seeds[at:at + n])
+            at += n
+        offs = np.cumsum([0] + [n for _u0, n in spans])
+        out = self.units.multi([(a[i], bs[i], seeds[offs[i]:offs[i + 1]]) for i in range(len(batch))], self._live(m))
+        got = torch.empty(out.shape, dtype=torch.int32, pin_memory=True)
+        got.copy_(out, non_blocking=True)
+        torch.cuda.current_stream(self.device).synchronize()
+        words = got.numpy().view(np.uint32)
+        self._ready = {call.index: (codes, words[offs[i]:offs[i + 1]]) for i, (call, codes, *_r) in enumerate(batch)}
+
     def __call__(self, call: Any, codes: Any, s_a: Any, w: Any, s_w: Any) -> np.ndarray:
         if self.run is None:
             raise ValueError("the receipt producer is bound to no run: its units' seeds take the run's salt (`bind`)")
         salt = self.run.salt
         u0, n = self.start(call)
         ra, rb = self.roots(call)
-        a, b = self.operands(call, codes, w)
-        if (a.shape[0] // RC.R) * (b.shape[0] // RC.C_) != n:
-            raise ValueError(f"call {call.index}: {n} units in the window Program, not its {a.shape[0]} × {b.shape[0]} tiles")
         m = len(codes)
-        if self.units is not None:
-            seeds = self.units.seeds(torch.from_numpy(seed_record(salt, ra, rb)).to(self.device), u0, n)
-            live = None
-            if self.skip_dead:
-                live = (torch.arange(a.shape[0] // RC.R, device=self.device) * RC.R < m).to(torch.uint8)
-            out = self.units.receipts(a, b, seeds, live).cpu().numpy().view(np.uint32)
-        elif self.skip_dead:
-            out = RC.gated_receipts(RC.Call(a, b), np.arange(a.shape[0]) < m, salt, u0, ra, rb)[0]
+        ready = self._ready.pop(call.index, None)
+        if ready is not None and ready[0] is codes:
+            out = ready[1]
+            a = b = None
         else:
-            out = RC.call_receipts(RC.Call(a, b), salt, u0, ra, rb)
+            a, b = self.operands(call, codes, w)
+            if (a.shape[0] // RC.R) * (b.shape[0] // RC.C_) != n:
+                raise ValueError(f"call {call.index}: {n} units in the window Program, not its {a.shape[0]} × "
+                                 f"{b.shape[0]} tiles")
+            if self.units is not None:
+                seeds = self.units.seeds(self._record(salt, ra, rb), u0, n)
+                out = self.units.receipts(a, b, seeds, self._live(m)).cpu().numpy().view(np.uint32)
+            elif self.skip_dead:
+                out = RC.gated_receipts(RC.Call(a, b), np.arange(a.shape[0]) < m, salt, u0, ra, rb)[0]
+            else:
+                out = RC.call_receipts(RC.Call(a, b), salt, u0, ra, rb)
         if self._keep is not None and self._keep(call):
+            if a is None:
+                a, b = self.operands(call, codes, w)
             self.kept[call.index] = {"a": a.cpu(), "b": b.cpu(), "salt": salt, "base": u0, "roots": (ra, rb),
                                      "receipts": out.copy(), "m": m, "pub": self.public(call), "skip": self.skip_dead}
         return out
