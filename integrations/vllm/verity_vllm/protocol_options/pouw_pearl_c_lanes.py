@@ -151,7 +151,7 @@ class LaneCalls:
             lane.wait_event(main.event)
         if cuda and side and sh.done[j] is not None and not waited:  # and rewrites set j only once its side steps are done
             lane.wait_event(sh.done[j])
-        cut, side_cut = pipe.lane_cuts if aside else (None, 0)
+        cut, side_cut = (g.cut, g.side_cut) if g is not None else pipe.lane_cuts if aside else (None, 0)
         self._launching = lane
         self.kernel.dev.stream = lane_raw
         try:

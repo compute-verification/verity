@@ -8,7 +8,9 @@ Under a schedule with a side lane (`pouw_pearl_c_lanes`), a call of decode's row
 lane's steps as one graph (`_lane_graph`), one pair a pipeline and ring set: the main lane's, ending with a scatter of its
 flags (and A's root, where A's tree stays there), and the side lane's, ending with a scatter of the leaves (and A's root,
 where the tree runs there); there the main graph records an external event after the per-row keying, and the tree is a
-graph of its own, which the call's side lane replays behind that event.  Every graph reads
+graph of its own, which the call's side lane replays behind that event.  The main graph runs ``stats_a`` (and the screen's
+scatter, where A's tree is aside) on a branch of its own beside the per-row keying, joined before the forming reads A's
+scales and at the graph's end.  Every graph reads
 the pair's own slot, the call's keys and offsets in one upload, which waits for the side steps of the set's last call, as
 the set's other buffers do.  The driver replays them (`_Driver`, on the graphs' executables and the streams' and
 events' handles), so the call's host work is a few launches, and the next call's main lane runs beside this one's side
@@ -40,7 +42,7 @@ from typing import Any
 from verity.core.protocols.pouw.protocol import Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 
-from .pouw_pearl_c_host import _bytes, _write, _zeros, torch_uint8
+from .pouw_pearl_c_host import _bytes, _event, _Lane, _write, _zeros, torch_uint8
 from .pouw_pearl_c_screen import excluded, scatter_into
 
 #: with ``graphs``, calls of at most this many rows (decode's) replay their steps as one CUDA graph; above it the launches are
@@ -110,9 +112,10 @@ class _Slots:
 
 
 class GraphCalls:
-    """`PearlCDeviceRun`'s graph path, as its base class: the run's ``graphs``, ``order``, ``nb`` (its trees' node bytes),
-    ``key_slots``, ``offs``, ``_host_keys``, ``_host_offs``, ``_slots_copied``, ``_predicted`` and ``_graphs``, its `_call_steps` and `_call_cuts`, and
-    its pass and the pass's buffers (``roots_buf``, ``flag_buf``, whose lengths bound it)."""
+    """`PearlCDeviceRun`'s graph path, as its base class: the run's ``graphs``, ``driver``, ``fork``, ``order``, ``nb`` (its
+    trees' node bytes), ``key_slots``, ``offs``, ``_host_keys``, ``_host_offs``, ``_slots_copied``, ``_predicted`` and
+    ``_graphs``, its `_call_steps` and `_call_cuts`, and its pass and the pass's buffers (``roots_buf``, ``flag_buf``, whose
+    lengths bound it)."""
 
     #: while vLLM captures forwards (`whole_capture_begin`), the calls made inside its stream capture, in order; None otherwise
     _whole: list[WholeCall] | None = None
@@ -315,14 +318,54 @@ class GraphCalls:
             size, nb = pipe.size["tree_a"], self.nb
             root, flags, none, leaves = sh.buf("tree_a")[size - nb:size], self.flag_buf.view(-1), g.leaves[:0], g.leaves[:nb * tiles]
             xa, alpha, aux = sh.xa, sh.b["alpha_a"], sh.b["aux_a"]
-            g.steps = list(steps)
-            if rows or not aside:
-                g.steps.append(lambda: scatter_into(xa, alpha, aux, rows, flags, none, self.leaves, none if aside else root,
-                                                    self.roots_buf, g.offs))
+            screen = (lambda: scatter_into(xa, alpha, aux, rows, flags, none, self.leaves, none if aside else root,
+                                           self.roots_buf, g.offs)) if rows or not aside else None
+            g.steps, shift = self._main_steps(pipe, list(steps), screen, aside)
+            if g.cut is not None:
+                g.cut += shift
             g.side_steps = [*side, lambda: scatter_into(xa, alpha, aux, 0, flags, leaves, self.leaves, root if aside else none,
                                                         self.roots_buf, g.offs)]
             self._graphs[key] = g
         return g, rows > 0
+
+    def _main_steps(self, pipe: Any, steps: list, screen: Any, aside: bool) -> tuple[list, int]:
+        """A lane graph's main steps, and how far they moved the per-row keying's end: `steps` with ``stats_a`` (A's
+        scales, which read only A's words) on the run's fork lane beside the steps before it (`_forked`), and with it the
+        scatter of the screen (`screen`) where that reads nothing else of the call (A's tree aside); else `screen` last."""
+        names = getattr(pipe, "main_names", ())
+        if self.driver is None or "stats_a" not in names:
+            return [*steps, *([screen] if screen else [])], 0
+        at = names.index("stats_a")
+        beside = [steps[at], *([screen] if screen and aside else [])]
+        out = self._forked([*steps[:at], *steps[at + 1:]], beside, at)
+        return [*out, *([screen] if screen and not aside else [])], 1
+
+    def _forked(self, steps: list, beside: list, at: int) -> list:
+        """`steps`, launched on whichever stream the kernel's device is on (a lane, or a capture of it), with `beside` on
+        the run's fork lane (``fork``, the main lane's priority): it starts behind an event at the start, the lane waits for
+        its first step before its own step `at`, and for all of them at its end.  The events go through the driver on raw
+        handles, so a capture takes them as the graph's edges and the fork as a branch of it."""
+        import torch
+        if self.fork is None:
+            self.fork = _Lane(self.device, "greatest", -2)
+        D, dev, fork = self.driver, self.kernel.dev, self.fork
+        start, first, end = _event(), _event(), _event()
+
+        def go():
+            lane = dev.stream
+            D.record(start, lane)
+            D.wait(fork.raw, start)
+            dev.stream = fork.raw
+            try:
+                with torch.cuda.stream(fork.stream):
+                    beside[0]()
+                    D.record(first, fork.raw)
+                    for f in beside[1:]:
+                        f()
+                    D.record(end, fork.raw)
+            finally:
+                dev.stream = lane
+        return [go, *steps[:at], lambda: D.wait(dev.stream, first), *steps[at:], lambda: D.wait(dev.stream, end)]
 
     def _capture_lanes(self, g: _Graph) -> None:
         """`g`'s lanes' steps captured as its graphs (the main lane's, recording `ev_tree` before step `cut` where A's tree

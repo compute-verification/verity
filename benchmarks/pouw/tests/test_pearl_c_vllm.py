@@ -2136,6 +2136,47 @@ def test_a_lane_graphs_replay_makes_the_eager_calls_driver_calls_in_its_order(sm
     assert sh.done == ["done0", "done1"] and bytes(up.view[i, :200]) == b"k" * 200
 
 
+def test_a_lane_graphs_main_steps_run_stats_and_the_screen_on_a_fork_beside_the_per_row_keying(sm90_run, monkeypatch):
+    """A lane graph's main steps (`_main_steps`) run ``stats_a``, which reads only A's words, and the screen's scatter where
+    A's tree is aside, on the run's fork lane: it starts behind an event recorded on the lane at its start, and the lane
+    waits for stats_a before eprime and for the whole fork at its end, so the per-row keying's end moves one step (the
+    fork's).  Where A's tree stays on the main lane the scatter copies A's root, so it runs last on the lane; without the
+    driver (no graphs) the steps are as they were."""
+    from verity_vllm.protocol_options import pouw_pearl_c_graphs as PPG
+    make, kernel, *_ = sm90_run
+    run = make()
+    calls = []
+
+    class Driver:
+        def __getattr__(self, name):
+            return lambda *a: calls.append((name, *a))
+
+    monkeypatch.setattr(PPG, "_event", iter(["start", "first", "end", "start2", "first2", "end2"]).__next__)
+    run.driver = Driver()
+    pipe, *_ = run._pipe(0, run._shape(32, 256, 1024))
+    assert pipe.main_names == ("rows_a", "stats_a", "eprime_a", "form_a", "af", "pa", "gemm_pearlc")
+
+    def step(name):
+        return lambda: calls.append((name, kernel.dev.stream))
+    steps = [step(x) for x in pipe.main_names]
+    kernel.dev.stream = 2
+    got, shift = run._main_steps(pipe, steps, step("screen"), True)
+    for f in got:
+        f()
+    assert shift == 1 and kernel.dev.stream == 2 and run.fork.raw == -2
+    assert calls == [("record", "start", 2), ("wait", -2, "start"), ("stats_a", -2), ("record", "first", -2), ("screen", -2),
+                     ("record", "end", -2), ("rows_a", 2), ("wait", 2, "first"), *((x, 2) for x in pipe.main_names[2:]),
+                     ("wait", 2, "end")]
+    calls.clear()
+    got, _ = run._main_steps(pipe, steps, step("screen"), False)
+    for f in got:
+        f()
+    assert calls[:3] == [("record", "start2", 2), ("wait", -2, "start2"), ("stats_a", -2)]
+    assert calls[-2:] == [("wait", 2, "end2"), ("screen", 2)] and ("screen", -2) not in calls
+    run.driver = None
+    assert run._main_steps(pipe, steps, None, True) == (steps, 0)
+
+
 def test_the_lane_graphs_driver_calls_take_raw_handles_and_raise_with_the_drivers_code():
     from verity_vllm.protocol_options import pouw_pearl_c_host as PPH
     got = []

@@ -326,6 +326,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
         self.schedule = schedule_of(schedule, scheme, kernel)
         self.main: _Lane | None = None      # the main lane, when the schedule runs it above the caller's priority
         self.sides: list[_Lane] = []         # the side lanes, as many as the schedule's ring, which calls take in turn
+        self.fork: _Lane | None = None      # the lane graphs' fork beside the main lane's per-row keying, made at first use
         self.driver = _Driver(kernel.dev.cu) if self.graphs else None   # a lane graph's replay's driver calls
         self._side_turn = 0
         self._side_cache: dict[tuple, frozenset[str]] = {}
@@ -495,7 +496,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
     def _pipe(self, w: int, sh: _Shape) -> tuple[Any, list[Any], list[Any]]:
         """The call's pipeline and its steps: the main lane's, and (with hashing) the side lane's, by the schedule's groups
         (`_side_groups`; A's commitment split where A's tree goes there).  The pipeline's ``lane_cuts`` are how many of the
-        main lane's steps are its per-row keying, which A's tree reads, and how many of the side lane's are A's tree."""
+        main lane's steps are its per-row keying, which A's tree reads, and how many of the side lane's are A's tree; its
+        ``main_names`` name the main lane's steps."""
         side_groups = self._side_groups(sh)
         aside = "a_tree" in side_groups
         key = (w, sh.m16, self.omit, self.hashing, self.schedule.name, self._graphed(sh.m16), aside)
@@ -520,6 +522,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
             pipe.lane_cuts = tuple(len(list(itertools.takewhile(lambda x, g=g: STEP_GROUPS[x] == g, [x for x in present
                                                                                                      if lane[x] == ln])))
                                    for ln, g in (("main", "row_seeds"), ("side", "a_tree")))
+            pipe.main_names = tuple(x for x in present if lane[x] == "main")
             self.pipes[key] = (pipe, main, aside)
         return self.pipes[key]
 
