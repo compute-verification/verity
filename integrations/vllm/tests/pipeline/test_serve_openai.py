@@ -97,6 +97,12 @@ def test_command_is_registered():
     assert (env.run_id, env.hf_home) == ("r1", "/h")
     with pytest.raises(SystemExit):
         cli.parse("serve-openai", ["--out", "/tmp/x"], environ={})
+
+
+def test_each_int8_precision_registers_its_parts_and_names_its_scope():
+    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--precision", "verity_int8"], environ={})
+    assert so.engine_options(opts)["quantization"] == "verity_int8" and "attention_backend" not in so.engine_options(opts)
+    assert so.INT8_PARTS == {"int8_exact": (("linears", "attention"), "all"), "verity_int8": (("linears",), "linears")}
     assert so.engine_options(opts)["quantization"] == "verity_int8" and so.engine_options(opts)["attention_backend"] == "CUSTOM"
 
 

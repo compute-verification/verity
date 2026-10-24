@@ -51,6 +51,8 @@ from verity_vllm.config import UsageError, option
 from verity_vllm.pipeline.serve_commit import CommitWindows
 
 PRECISIONS = ("int8_exact", "verity_int8", "pin")
+#: precision -> (the int8 parts it registers, the int8 scope its layers must then run)
+INT8_PARTS = {"int8_exact": (("linears", "attention"), "all"), "verity_int8": (("linears",), "linears")}
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -647,16 +649,17 @@ def build(opts: Options) -> tuple[Any, Any]:
     engine_env.apply_engine(opts.hf_home)
     if opts.commit:
         engine_env.apply_target({"VERITY_RETAIN": "host"})
-    if opts.precision == "int8_exact":
+    parts, scope = INT8_PARTS.get(opts.precision, ((), None))
+    if parts:
         from verity_vllm.engine import int8_ranks
-        int8_ranks.register(("linears", "attention"))
+        int8_ranks.register(parts)
     from verity_vllm.pipeline.llm import LLM
 
     llm = LLM(opts.model, revision=opts.revision, **engine_options(opts))
-    if opts.precision == "int8_exact":
+    if scope is not None:
         from verity_vllm.program.frontend.kernel_readback import int8_exact_of
-        if (got := int8_exact_of(llm.model)) != "all":
-            raise RuntimeError(f"an int8_exact engine whose layers run int8 scope {got!r}, not 'all'")
+        if (got := int8_exact_of(llm.model)) != scope:
+            raise RuntimeError(f"a {opts.precision} engine whose layers run int8 scope {got!r}, not {scope!r}")
     if not opts.commit:
         return llm, None
     from types import SimpleNamespace
