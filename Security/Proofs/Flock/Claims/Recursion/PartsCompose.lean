@@ -19,7 +19,8 @@ opens to them, and the element-level verifier accepts the opened messages (`Boun
 * `len j`, for each round `j` before the last: its message is 128 bytes a row;
 * `salt j i` and `row j i`, for each of round `j`'s `Bound.nAt` commit strings: the salt's hash is the string's last 64
   bytes, and the row's digest is its first 64 unmasked at the salt (`Bound.opens`);
-* `elem q`, for each check of a split of the element-level verifier's acceptance (`ElemSplit`), at the opened messages.
+* `elem q`, for each check of a split of the element-level verifier's acceptance (`ElemSplit`), at the opened messages
+  of a last message that reads as `k - 1` rounds.
 
 Every check reads `ms` and `c` alone; which checks there are is fixed by the inner statement. None of them is
 `IVStar`'s acceptance: `shape`, `len`, `salt` and `row` are single comparisons, and an `elem` check is whatever the
@@ -40,7 +41,9 @@ the readers' messages, `IVStar` accepts them. With per-part lowering facts, `Par
 `PartComputes`, part `s`'s share of the checks, is the least such `PC` (`ownedBy_partComputes`), and the default
 inventory (`ownHolders`) gives each commit string's salt and row checks to the round's first holder, the part whose
 message the readers take, and the rest to the statement or to the code side's `ownE`. Which checks the statement
-fixes is a code fact about the layout and `final`; no part computes `final`'s reading or an opened round's tag.
+fixes is a code fact about the layout and `final`; no part computes `final`'s reading or an opened round's tag. At the
+deployment the statement's setup is fixed by the reader (`RecDeploy.setup_fixed`) and the tags by the join
+(`RecDeploy.tag_fixed`), so `StmtFixes` there asks only for the rest (`RecDeploy.stmtFixes_deploy`).
 
 The checks are exactly `IVStar`'s acceptance at the step split (`ivstar_acc_iff_checks`): where every check holds,
 `IVStar` accepts (`ivstar_acc_of_checks`, the one fact about `IVStar` the composition reads), and where it accepts,
@@ -163,7 +166,7 @@ def IVCheck.Holds {Q : Type} (H : Msg → Msg) (Bd : Bound Coin Col T) (S : Elem
       (os.getD j [])[i]? = some o → H (Bd.saltPrefix ++ List.ofFn o.2) = (commitAt (ms.getD j []) i).drop 64
   | .row j i => ∀ os last, Bd.final (ms.getD (Bd.DE.V.k x - 1) []) = some (os, last) → ∀ o,
       (os.getD j [])[i]? = some o → H (Bd.rowIn o.1) = xorMask ((commitAt (ms.getD j []) i).take 64) (Bd.mask o.2)
-  | .elem q => ∀ os last, Bd.final (ms.getD (Bd.DE.V.k x - 1) []) = some (os, last) →
+  | .elem q => ∀ os last, Bd.final (ms.getD (Bd.DE.V.k x - 1) []) = some (os, last) → os.length + 1 = Bd.DE.V.k x →
       S.holds q x (Bd.opened os last) ((List.range (Bd.DE.V.k x)).map c)
 
 /-- **`IVStar`'s checks at the inner statement `x`**: the last message's reading; at each round before the last, its
@@ -289,6 +292,7 @@ theorem ivstar_acc_of_checks {Q : Type} (H : Msg → Msg) (Bd : Bound Coin Col T
         os last hfin o hi
   · refine S.sound x _ _ (by simp [Bound.opened, hos]) (by simp [Bound.opened, hos]) fun q hq => ?_
     exact h (.elem q) (List.mem_cons_of_mem _ (List.mem_append_right _ (List.mem_map.2 ⟨q, hq, rfl⟩))) os last hfin
+      hos
 
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
 /-- **`IVStar`'s acceptance gives its opening layer and the element-level verifier's**: at messages of its `k` rounds,
@@ -392,7 +396,7 @@ theorem ivstar_acc_iff_checks (H : Msg → Msg) (Bd : Bound Coin Col T) (x : Msg
     rw [hfin'] at hf'
     cases hf'
     exact ((checks_of_opensRound H Bd _ _ (hround j (by omega))).2 i o ho).2
-  · intro os' last' hf'
+  · intro os' last' hf' _
     rw [hfin'] at hf'
     cases hf'
     have hjk : j < (Bd.opened os last).length := by
@@ -676,6 +680,91 @@ theorem ownedBy_deploy (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed →
         cases h
         exact hr'
     exact hR x st hx hf r hr s ho
+
+/-- **The statement sets up**: at every compiled statement the deployed reader parses, Flock's plain verifier sets the
+inner statement up (`parse_innerOk`), so the setup check holds at every message and coin. -/
+theorem setup_fixed (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
+    (nextE : Msg → List Msg → List Coin → Claims.OC Out)
+    (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
+    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
+    (hcoin : ∀ x as cs c, FlockDeploy.act false x as cs = .coin c → ((nextE x as cs).eval H).1 = .msg c.bytes)
+    {R : Type} (LS : LastSplit H nextE R) (rel' : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
+    (b : Brings) (L : LayoutB) (IV : Claims.Verifier Coin) {x : Msg} {st : Claims.Recursion.Stmt}
+    (hx : (recBound rel' b L IV).parse x = some st) (c : ℕ → Coin) (ms : List Msg) :
+    (IVCheck.elem DeployCheck.setup : IVCheck (DeployCheck R)).Holds H (bdDeployed rel nextE colsE wE join rowIn final w)
+      (deploySplit H rel nextE colsE wE join rowIn final w hcoin LS) (Claims.Recursion.xI (recBound rel' b L IV) x)
+      c ms := by
+  intro _ _ _ _
+  obtain ⟨s, spec, sts, h, -⟩ := parse_innerOk hx
+  show (FlockDeploy.setupOf false (xIOf x)).isSome = true
+  rw [h]
+  rfl
+
+/-- **Each opened round before the last is tagged `0`** wherever every join of rows is, at every message and coin:
+the opened messages are the joins of the last message's rows (`Bound.opened`). -/
+theorem tag_fixed (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
+    (nextE : Msg → List Msg → List Coin → Claims.OC Out)
+    (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) {join : List Msg → Msg}
+    (hj : ∀ rs, ∃ a, join rs = 0 :: a)
+    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
+    (hcoin : ∀ x as cs c, FlockDeploy.act false x as cs = .coin c → ((nextE x as cs).eval H).1 = .msg c.bytes)
+    {R : Type} (LS : LastSplit H nextE R) (x : Msg) (c : ℕ → Coin) (ms : List Msg) {j : ℕ}
+    (hjk : j < (FlockDeploy.V false).k x - 1) :
+    (IVCheck.elem (DeployCheck.tag j) : IVCheck (DeployCheck R)).Holds H
+      (bdDeployed rel nextE colsE wE join rowIn final w) (deploySplit H rel nextE colsE wE join rowIn final w hcoin LS)
+      x c ms := by
+  intro os last _ hos
+  have hos' : os.length + 1 = (FlockDeploy.V false).k x := hos
+  exact tag_of_join hj os last (by omega)
+
+/-- **What the statement keeps at the deployment, less the setup and the tags**: at the deployment's split and default
+inventory, `StmtFixes` holds wherever each check the inventory keeps that is not the setup or a tag holds at the
+readers' messages of every witnesses whose calls are true, at every coin. The setup is fixed by the statement
+(`setup_fixed`), and the tags by the join (`tag_fixed`). What `hrest` asks is the last message's reading, the rounds'
+lengths, the salts and rows of rounds no part holds whole, and the verdict's checks `ownR` gives no part. -/
+theorem stmtFixes_deploy (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
+    (nextE : Msg → List Msg → List Coin → Claims.OC Out)
+    (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) {join : List Msg → Msg}
+    (hj : ∀ rs, ∃ a, join rs = 0 :: a)
+    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
+    (hcoin : ∀ x as cs c, FlockDeploy.act false x as cs = .coin c → ((nextE x as cs).eval H).1 = .msg c.bytes)
+    {R : Type} (LS : LastSplit H nextE R) (ownR : Msg → R → Option ℕ)
+    (rel' : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings) (L : LayoutB)
+    (IV : Claims.Verifier Coin) (shape : Claims.Recursion.Form → Prop)
+    (hrest : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+      ∀ q ∈ ivChecks (bdDeployed rel nextE colsE wE join rowIn final w)
+          (deploySplit H rel nextE colsE wE join rowIn final w hcoin LS) (Claims.Recursion.xI (recBound rel' b L IV) x),
+        ownHolders (recBound rel' b L IV) L (ownDeploy ownR) x q = none →
+        (∀ r, q = .elem r → ∃ r', r = .last r') →
+        ∀ c ws, ws.length = (recBound rel' b L IV).nS x → (∀ e ∈ L.allCalls x ws, H e.1 = e.2) →
+          q.Holds H (bdDeployed rel nextE colsE wE join rowIn final w)
+            (deploySplit H rel nextE colsE wE join rowIn final w hcoin LS) (Claims.Recursion.xI (recBound rel' b L IV) x)
+            c (L.msgs x ws)) :
+    StmtFixes H (recBound rel' b L IV) (bdDeployed rel nextE colsE wE join rowIn final w) L shape
+      (deploySplit H rel nextE colsE wE join rowIn final w hcoin LS)
+      (ownHolders (recBound rel' b L IV) L (ownDeploy ownR)) := by
+  intro x st hx hf q hq ho c ws hl hT
+  cases q with
+  | elem r =>
+    cases r with
+    | setup => exact setup_fixed H rel nextE colsE wE join rowIn final w hcoin LS rel' b L IV hx c _
+    | tag j =>
+      have hjm := mem_ivChecks_elem _ _ _ hq
+      have hjk : j < (FlockDeploy.V false).k (Claims.Recursion.xI (recBound rel' b L IV) x) - 1 := by
+        rcases List.mem_cons.1 hjm with h | h
+        · cases h
+        rcases List.mem_append.1 h with h | h
+        · obtain ⟨j', hj', h⟩ := List.mem_map.1 h
+          cases h
+          exact List.mem_range.1 hj'
+        · obtain ⟨_, _, h⟩ := List.mem_map.1 h
+          cases h
+      exact tag_fixed H rel nextE colsE wE hj rowIn final w hcoin LS _ c _ hjk
+    | last r' => exact hrest x st hx hf _ hq ho (fun _ h => ⟨r', (IVCheck.elem.inj h).symm⟩) c ws hl hT
+  | shape => exact hrest x st hx hf _ hq ho (fun _ h => by cases h) c ws hl hT
+  | len _ => exact hrest x st hx hf _ hq ho (fun _ h => by cases h) c ws hl hT
+  | salt _ _ => exact hrest x st hx hf _ hq ho (fun _ h => by cases h) c ws hl hT
+  | row _ _ => exact hrest x st hx hf _ hq ho (fun _ h => by cases h) c ws hl hT
 
 /-! ## The dense corollaries, from the parts' lowering facts -/
 
