@@ -34,11 +34,11 @@ def why (program : Option ByteArray) (f : Option Json) (p : Public) : String :=
   | .ok () => ""
 
 def refusal : String :=
-  "registered reads: the verifier's program reads a registered value (root node 1, RegisteredInput32_v1), and the verifier holds no registered roots (--registered): its rows would be committed afresh, whatever the statement's public file names"
+  "registered reads: the verifier's program reads a registered value (RegisteredInput32_v1), and the verifier holds no registered roots (--registered): its rows would be committed afresh, whatever the statement's public file names"
 
 -- the program's registered input, found from the descriptor alone
-#guard (Program.decode reg).toOption.map (Registered.programInputs ·) == some #[(1, "RegisteredInput32_v1")]
-#guard (Program.decode plain).toOption.map (Registered.programInputs ·) == some #[]
+#guard (TemplateQuery.Desc.parse reg).toOption.map (Registered.programInputs ·) == some #["RegisteredInput32_v1"]
+#guard (TemplateQuery.Desc.parse plain).toOption.map (Registered.programInputs ·) == some #[]
 
 -- a program that reads a registered value, verified without --registered: refused, with the header and without it
 #guard why (some reg) none pub == refusal
