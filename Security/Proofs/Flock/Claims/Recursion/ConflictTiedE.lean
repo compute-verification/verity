@@ -82,7 +82,7 @@ theorem plainQueryRound_verifyWithMK (keep : Bool → Bool) (hs : Hashes Flock.V
         ∃ (stream : StreamRec) (extras : Array Flock.Claim) (p : Proof),
           sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some stream ∧
           tabs[i].extra sess.points = .ok extras ∧
-          decodeProof (shapeOf tabs[i] sch extras.size) proofs[2 * i + r]! = .ok p ∧
+          decodeProof (FlockSoundness.Refine.shapeOf tabs[i] sch extras.size) proofs[2 * i + r]! = .ok p ∧
           Claims.Flock.plainQueryRound tabs[i].m tabs[i].kLog sch.k0 (2 + extras.size) < stream.rounds.size ∧
           Claims.Flock.plainRepColsOf (Claims.Flock.plainProofShape tabs[i].m tabs[i].kLog (2 + extras.size)
               tabs[i].merkle.digestLen
@@ -104,7 +104,7 @@ theorem plainQueryRound_verifyWithMK (keep : Bool → Bool) (hs : Hashes Flock.V
   obtain ⟨hfi, hkl⟩ := hf tabs[i] (Array.getElem_mem hi)
   refine ⟨schs[i]'hi', hsch, fun r hr2 => ?_⟩
   have hr : ∃ c, verifyRepWith hs spec tabs[i] (schs[i]'hi') sess i r proofs[2 * i + r]! = .ok c := by
-    interval_cases r
+    rcases (by omega : r = 0 ∨ r = 1) with rfl | rfl
     · exact ⟨c₀, by simpa using h0⟩
     · exact ⟨c₁, h1⟩
   obtain ⟨c, hc⟩ := hr
