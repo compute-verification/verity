@@ -140,7 +140,8 @@ MODULES = ["q_proj", "k_proj", "o_proj", "down_proj", "attn·out"]
 
 
 def _hex(rng: random.Random) -> str:
-    return rng.randbytes(64).hex()
+    # a digest of one short draw: 64 drawn bytes a root made a period's examples overrun Hypothesis's entropy budget
+    return hashlib.sha512(rng.randbytes(8)).hexdigest()
 
 
 def _row(rng: random.Random, i: int) -> dict:
@@ -1083,7 +1084,8 @@ def live_proof(rng: random.Random, d: dict, desc: str, s: int, m: int) -> dict:
     prefix, program = Cr._prefix(bytes.fromhex(d["descriptor"])), hashlib.sha512(bytes.fromhex(d["descriptor"])).hexdigest()
     roots = {e["value"]: e["root"] for e in d["entries"] if isinstance(e, dict) and "value" in e}
     for v in [LR.table(prefix, LR.SLOTS, x) for x in range(steps)] + [LR.table(prefix, LR.REQUESTS)]:
-        roots.setdefault(v, _hex(rng))
+        if v not in roots:
+            roots[v] = _hex(rng)
     reg = LR.reads_file(program, t, steps, s, roots, d["window"]["root"], d["sid"], m, prefix)
     return {"unit": s, "verdict": "accept", "program": hashlib.sha512(bytes.fromhex(desc)).hexdigest(),
             "registered": {port: {"value": x["value"], "root": x["root"]} for port, x in reg["ports"].items()}}

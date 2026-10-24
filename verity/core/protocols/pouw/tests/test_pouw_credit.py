@@ -564,7 +564,7 @@ def test_an_expert_call_whose_rows_the_commit_lacks_refuses(seed):
     whose calls are expert calls only, `_arow` refuses the window before any proof is read (``commit-missing-expert``)."""
     d = cases.window_instance(random.Random(f"moe/{seed}"), lay=cases.expert_layout(random.Random(f"layout/{seed}")))
     got, refused = Cr._window_outcomes(*cases.window_args(d))
-    assert refused is None and got == [i for i, row in enumerate(d["calls"]) if row[Cr.CREDIT]]
+    assert refused is None and got == _served(d)
     d = cases.window_instance(random.Random(f"commit-missing-expert/{seed}"), "commit-missing-expert")
     lay, steps = Cr.layout_of(bytes.fromhex(d["descriptor"]))[0], len(d["rounds"])
     names = {e["value"] for e in Cr.commit_of(d["commit"])[0][1]}
