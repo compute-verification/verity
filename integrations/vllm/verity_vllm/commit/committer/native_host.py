@@ -1386,6 +1386,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 torch.cuda.current_stream().synchronize()
             self._footprint_absorbed(job, padded, levels, keep)
             self.arena.release(job.arena)
+            job.arena = None
             memtrace("worker: block released", job.step)
         mr = mr_t.numpy().astype("uint32").tobytes() if hasattr(mr_t, "numpy") else bytes(mr_t)
         self._gpu_t["leaf_ms"] += ev[0].elapsed_time(ev[1])
@@ -1810,6 +1811,10 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 self._commit_step(job)
             except Exception as e:  # noqa: BLE001
                 self.errors.append(f"worker step {job.step}: {e!r}"[:300])
+                if self.arena is not None and job.arena is not None:   # the serving thread waits on the ring for the blocks a failed step holds
+                    for blk in [job.arena, *(b for b, _u in job.overflow)]:
+                        self.arena.release(blk)
+                    job.arena, job.overflow = None, []
                 self._done[job.step] = StepCommitment(job.step, b"", b"", 0, 0, 0, b"", job.t_step_end, time.perf_counter(), job.backlog)
 
     # Ablations for the cost decomposition ONLY (env VERITY_ABL, comma list; none of them is a commitment):
