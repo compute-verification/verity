@@ -446,9 +446,9 @@ def test_partial_refuses_request_by_request():
 
 
 def test_dead_gates_are_counted_as_circuit_check_counts_them():
-    """The request wrapper is in the dead-free form (`program.prune.dead_free`: no dead unit, and RMSNormTriton, TokenSelect and the
-    top-p select at a constant split count at their versions without dead gates), but gates inside live units still reach no sample
-    (the query columns of the last layer's fused qkv on the prompt rows before the last, and Attention_v5's), so today's request
+    """The request wrapper is in the dead-free form (`program.prune.dead_free`: no dead unit, RMSNormTriton, TokenSelect and the
+    top-p select at a constant split count at their versions without dead gates, and the last layer's fused qkv on the prompt rows
+    before the last narrowed to its keys and values), but gates inside Attention_v5 still reach no sample, so today's request
     Programs have dead gates: `dead_gates_of` counts them as circuit-check does and says under which definitions."""
     from verity.ml.circuits.liveness import dead_gates
     from verity_vllm.program.prune import dead_units
@@ -458,11 +458,11 @@ def test_dead_gates_are_counted_as_circuit_check_counts_them():
     for d, p in c.programs.items():
         rep = dead_gates(p, limit=0, transitive=True)
         rec = got["programs"][d]
-        assert (rec["dead_computed"], rec["unread_inputs"]) == (rep.computed, rep.input) and rep.computed > 0 and not dead_units(p.fn.body)
+        assert (rec["dead_computed"], rec["unread_inputs"]) == (rep.computed, rep.input) and not dead_units(p.fn.body)
         assert sum(rec["by_definition"].values()) == rep.computed + rep.input
         by = rec["by_definition"]
-        assert next(iter(by)) == "Gemm_v2" and sum(n for k, n in by.items() if k.startswith("Input")) == rep.input
-        assert not [k for k in by if k.startswith(("RMSNormTriton", "TokenSelect", "GumbelTopPTokenSelect"))]
+        assert sum(n for k, n in by.items() if k.startswith("Input")) == rep.input
+        assert {k for k in by if not k.startswith("Input")} <= {"Attention_v5"}
     assert got["dead_computed"] == sum(r["dead_computed"] for r in got["programs"].values())
 
 
@@ -507,5 +507,5 @@ def test_a_compiled_request_equals_the_traced_build():
     body = {**GREEDY, "max_tokens": 32, "prompt": [k % cfg["vocab_size"] for k in range(256)]}
     advice, ingress = _session([(256, 32, body, body["prompt"])], [[(0, 0, 256)]] + [[(0, 256 + k, 1)] for k in range(31)])
     c = compile_steps(reg, advice, ingress)
-    assert c.requests[0].digest == ("c72b96b9a407e23b35ffb4bcbf2cee6a014eb597389f5483b34dbe20ebaac04101230f43d82b8babf375b0edc06b3123166b78f754f79ffcac6e19c29"
-                                    "9404fee")
+    assert c.requests[0].digest == ("7a96a646f3ded690fb6fbf33b1e31318e26570803b588f7560868390b1131d692f103828d10bd2351d1b9ac4bc368c9884531efaae96342bcc6763a27"
+                                    "c154bb7")

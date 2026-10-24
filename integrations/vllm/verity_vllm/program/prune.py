@@ -7,9 +7,11 @@ a live unit. `without_dead_units` drops the dead units and renumbers the referen
 (an `Affine` stays an `Affine`, a `Concat` keeps its parts), so that equal bodies stay equal.
 
 `dead_free` also swaps each Call of a Definition with dead gates inside it for its version without them (`dead_free_versions`,
-`registry.dead_free`): the same statics, signature and function, so only the node's gates change. The Build's derive and
-`predict.build` put the request wrapper alike in that form at one rank (`kept_records`), the registered compiler's Programs; rows
-of record keep the v1s.
+`registry.dead_free`): the same statics, signature and function, so only the node's gates change. And it narrows each linear
+whose output words are read only in part (`narrowed`, `COLUMNS`) to the columns read: the last layer's fused qkv on the prompt
+rows before the last, whose queries nothing reads, becomes a K/V-only projection over the weight's K and V rows. The Build's
+derive and `predict.build` put the request wrapper alike in that form at one rank (`kept_records`), the registered compiler's
+Programs; rows of record keep the v1s.
 """
 from __future__ import annotations
 
@@ -17,7 +19,7 @@ from dataclasses import replace
 from functools import cache
 from typing import Any
 
-from verity.ml.circuits.defs import Body, bind
+from verity.ml.circuits.defs import Body, Node, bind
 from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, Refs, Strided
 
 
@@ -113,18 +115,144 @@ def swapped(body: Body) -> Body:
     return Body(body.params, body.ret_type, nodes, body.ret, offsets)
 
 
-def dead_free(body: Body) -> tuple[Body, list[int]]:
-    """`body` in the registered compiler's form: without its dead units, the rest `swapped`; and the index in `body` of each node
-    kept, in order."""
+#: `Name_vN` of a linear `x[K] @ W[N,K]^T [+ b[N]]` that is one coordinate Definition batched over W's rows, so that its output
+#: word j reads only row j of each argument named -> those arguments (W's, and the bias's)
+COLUMNS = {"Gemm_v1": (1,), "Gemm_v2": (1,), "GemmBias_v1": (1, 2), "GemmBias_v2": (1, 2)}
+
+
+def _widen(span: list[int], lo: int, hi: int) -> None:
+    span[0], span[1] = min(span[0], lo), max(span[1], hi)
+
+
+def _reach(r: Refs, spans: dict[int, list[int]], full: dict[int, int], seen: set[int]) -> None:
+    """Widen `spans[k]` ([least, past the greatest) leaf read) by the leaves `r` reads of each node k it holds."""
+    if id(r) in seen:
+        return
+    seen.add(id(r))
+    if isinstance(r, (Affine, Strided)):
+        if r.space != "n" or not r.count or r.idx not in spans:
+            return
+        if isinstance(r, Affine):
+            _widen(spans[r.idx], r.base, r.base + r.count)
+        elif min(r.outer_stride, r.inner_stride) < 0:
+            _widen(spans[r.idx], 0, full[r.idx])
+        else:
+            last = [r.count - 1] + ([(r.count - 1) // r.inner * r.inner - 1] if r.count > r.inner else [])
+            _widen(spans[r.idx], r.base, max(r[j][2] for j in last) + 1)
+    elif isinstance(r, Concat):
+        for p in r.parts:
+            _reach(p, spans, full, seen)
+    elif isinstance(r, Explicit):
+        for s, i, j in r.items:
+            if s == "n" and i in spans:
+                _widen(spans[i], j, j + 1)
+    else:
+        raise TypeError(f"a reference sequence of an unknown form, {type(r).__name__}")
+
+
+def _shifted(r: Refs, by: dict[int, int], memo: dict[int, Refs]) -> Refs:
+    """`r` with each leaf of a node k in `by` moved down by `by[k]`, each reference kept in its form."""
+    if (hit := memo.get(id(r))) is not None:
+        return hit
+    if isinstance(r, Affine):
+        out = Affine("n", r.idx, r.base - by[r.idx], r.count) if r.space == "n" and r.count and r.idx in by else r
+    elif isinstance(r, Strided):
+        out = (Strided("n", r.idx, r.base - by[r.idx], r.inner, r.outer_stride, r.inner_stride, r.count)
+               if r.space == "n" and r.count and r.idx in by else r)
+    elif isinstance(r, Concat):
+        parts = [_shifted(p, by, memo) for p in r.parts]
+        out = r if all(p is q for p, q in zip(parts, r.parts)) else Concat(parts)
+    elif isinstance(r, Explicit):
+        items = tuple((s, i, j - by[i]) if s == "n" and i in by else (s, i, j) for s, i, j in r.items)
+        out = r if items == r.items else Explicit(items)
+    else:
+        raise TypeError(f"a reference sequence of an unknown form, {type(r).__name__}")
+    memo[id(r)] = out
+    return out
+
+
+def narrowed(body: Body) -> tuple[Body, dict[int, tuple[int, int]]]:
+    """`body` with each Call of a `COLUMNS` linear whose output words are read only in [a, b) ⊊ [0, N) bound at N = b - a over its
+    column arguments' rows a..b-1, the references to its outputs moved down by a; and those nodes' [a, b) by node index."""
+    cand = {k: n for k, n in enumerate(body.nodes) if n.form == "call" and n.fn.base_id in COLUMNS}
+    if not cand:
+        return body, {}
+    full = {k: n.out.leaves for k, n in cand.items()}
+    spans = {k: [full[k], 0] for k in cand}
+    seen: set[int] = set()
+    for n in body.nodes[min(cand) + 1:]:
+        for a in n.args:
+            _reach(a.refs, spans, full, seen)
+    _reach(body.ret, spans, full, seen)
+    cols, by, nodes = {}, {}, list(body.nodes)
+    for k, n in cand.items():
+        N = n.fn.bindings["N"]
+        per = full[k] // N
+        a, b = spans[k][0] // per, -(-spans[k][1] // per)
+        if b <= a or (a, b) == (0, N):
+            continue
+        fn = bind(n.fn.defn, **{**n.fn.bindings, "N": b - a})
+        params, ret = fn.signature()
+        args = tuple(Coll(params[i][1], c.refs.slice(a * (c.type.leaves // N), b * (c.type.leaves // N))) if i in COLUMNS[n.fn.base_id]
+                     else c for i, c in enumerate(n.args))
+        nodes[k] = Node("call", fn, args, ret, name=n.name)
+        cols[k], by[k] = (a, b), a * per
+    if not cols:
+        return body, {}
+    memo: dict[int, Refs] = {}
+    for k in range(min(cols) + 1, len(nodes)):
+        n = nodes[k]
+        args = tuple(Coll(c.type, r) if (r := _shifted(c.refs, by, memo)) is not c.refs else c for c in n.args)
+        if any(x is not y for x, y in zip(args, n.args)):
+            nodes[k] = replace(n, args=args)
+    offsets = [0]
+    for n in nodes:
+        offsets.append(offsets[-1] + n.gates)
+    return Body(body.params, body.ret_type, nodes, _shifted(body.ret, by, memo), offsets), cols
+
+
+def _dead_free(body: Body) -> tuple[Body, list[int], dict[int, tuple[int, int]]]:
     pruned, kept = without_dead_units(body)
-    return swapped(pruned), kept
+    form, cols = narrowed(swapped(pruned))
+    return form, kept, cols
+
+
+def dead_free(body: Body) -> tuple[Body, list[int]]:
+    """`body` in the registered compiler's form: without its dead units, the rest `swapped` and `narrowed`; and the index in `body`
+    of each node kept, in order."""
+    return _dead_free(body)[:2]
+
+
+def _cut(slot: dict, lo: int, hi: int) -> dict:
+    """A Call record's return or argument slot cut to its leaves [lo, hi)."""
+    if slot.get("leaves") is not None:
+        return {**slot, "leaves": [slot["leaves"][0] + lo, slot["leaves"][0] + hi]}
+    if not slot.get("spans"):
+        return slot
+    spans, at = [], 0
+    for p in slot["spans"]:
+        s, e = p["leaves"]
+        x, y = max(lo, at), min(hi, at + e - s)
+        if y > x:
+            spans.append({**p, "leaves": [s + x - at, s + y - at]})
+        at += e - s
+    return {**slot, "spans": spans}
 
 
 def kept_records(body: Body, calls: list, hints: dict[int, Any], *, registered: bool) -> tuple[Body, list, dict[int, Any]]:
     """A derivation's flat `body` with its runtime correspondence's `calls` (one per node) and its node `hints` (by node index), in
     the registered compiler's form (`dead_free`) when `registered`. A swapped node keeps its Call record: its arguments and outputs
-    are the v1's."""
+    are the v1's. A narrowed node's record keeps the columns it computes: its output's and its column arguments' leaves cut to
+    them."""
     if not registered:
         return body, calls, dict(hints)
-    pruned, kept = dead_free(body)
-    return pruned, [calls[k] for k in kept], {i: hints[k] for i, k in enumerate(kept) if k in hints}
+    form, kept, cols = _dead_free(body)
+    recs = [calls[k] for k in kept]
+    for i, (a, b) in cols.items():
+        n, rec = body.nodes[kept[i]], recs[i]
+        N, widths = n.fn.bindings["N"], COLUMNS[n.fn.base_id]
+        per = n.out.leaves // N
+        recs[i] = {**rec, "returns": [_cut(s, a * per, b * per) for s in rec["returns"]],
+                   "args": [_cut(s, a * (n.args[j].type.leaves // N), b * (n.args[j].type.leaves // N)) if j in widths else s
+                            for j, s in enumerate(rec["args"])]}
+    return form, recs, {i: hints[k] for i, k in enumerate(kept) if k in hints}
