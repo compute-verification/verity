@@ -1843,8 +1843,12 @@ def capture_at(priority: int, nodes: bool = False) -> None:
     streams: dict[int, torch.cuda.Stream] = {}
 
     class KeptGraph(torch.cuda.CUDAGraph):
+        # the C++ base takes keep_graph in __init__ (torch.cuda.CUDAGraph's __new__ passes it on, unread)
         def __new__(cls, keep_graph: bool = True):
             return super().__new__(cls, keep_graph)
+
+        def __init__(self, keep_graph: bool = True):
+            super().__init__(keep_graph)
 
     class graph(base):
         so_priority = priority
