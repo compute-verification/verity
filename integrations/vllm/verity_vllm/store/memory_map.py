@@ -23,16 +23,18 @@ freed     an appended block (written since the map began, j >= N) of a page `kv_
           recorded (`Store`'s dirty), unless that step's record writes the slot (a write releases the slot's previous
           block).  A block re-keyed: its old j at once, so it leaves the plans by the cap, its new j's write waiting
           for its encode.  And a block appended whose page `kv_free` returns before its write is recorded: its write
-          is recorded all the same (its j is the session's), and its free in the next line, a step later.  A block is
+          is recorded all the same (its j is the session's), and its free in the next line, a step later, past its last
+          structural reader (memory-map/v1 withdraws such a block, which this map doesn't emit yet).  A block is
           freed once; `kv_alloc` emits nothing
 ~~~
 
 Steps.  `Store.kv_append(appends, s)` opens step s's line: the engine has scheduled step s, whose forward is next.  A
-`kv_free` is recorded in the open line, the step whose forward ran last, which is the last read of the freed values:
-vLLM frees a finished request's pages in `Scheduler.update_from_output` after step s's forward, and a preempted
-request's in the next `Scheduler.schedule`, before that step's `kv_append`; an abort between the two frees there too.
-Each of those pages was last read by step s's forward if its request was scheduled at s (a finished or preempted one
-was), and earlier if not, so s bounds the last read from above.  A block written at s and freed before the line closes
+`kv_free` is recorded in the open line, the step whose forward ran last, which bounds the freed values' last structural
+reader (where memory-map/v1 frees a block) from above: vLLM frees a finished request's pages in
+`Scheduler.update_from_output` after step s's forward, and a preempted request's in the next `Scheduler.schedule`,
+before that step's `kv_append`; an abort between the two frees there too.  Step s is those pages' last structural
+reader if their request was scheduled at s (a finished or preempted one was) and its attention reads every row it
+holds (dense attention, DSA's top-k network), and earlier if not, so s bounds it from above.  A block written at s and freed before the line closes
 was never read by a later step: the line drops the write and frees the block the slot held before, if any.
 
 `end_step` (the binder's `Scheduler.update_from_output`, once the step's forward has written its KV) takes the
@@ -165,8 +167,8 @@ class MemoryMap:
 
     def free(self, keys: np.ndarray) -> np.ndarray:
         """`kv_free` returned the pool's live blocks ``keys``: those appended (held at a j of the map's, or completed in
-        the open line) are freed in the open line, the step whose forward read them last (after the last line closed,
-        in the next); those appended whose writes the record has not taken yet are freed in the line after the one
+        the open line) are freed in the open line, the step whose forward ran last, which bounds their last structural
+        reader from above (after the last line closed, in the next); those appended whose writes the record has not taken yet are freed in the line after the one
         that takes them; the rest, registered blocks no write has reached, stay resident.  The mask of those freed."""
         p, n = self.store.pool, self.header.blocks
         first = self.store.region(p.regions[0]).first

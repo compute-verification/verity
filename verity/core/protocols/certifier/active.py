@@ -95,6 +95,15 @@ it signs) and the deployment record's custody (the keys and the run id it gives 
 `reveal(p, registration)` and `committed(p, registration)` are the in-process calls the tests and replays make, and
 hold only on the auditor's side.
 
+**Sealed pair links** (`Proxy(pair=…)`, off by default; PROTOCOL.md, "Sealed pair links"): when the link's peer is
+another of the auditor's certifiers, the frames between them are sealed under `verity.ml.crypto.aead`, keys of the
+pair's session secret per direction (`Pair.of`). The egress tick seals each of its bucket's r slots, frames and padding
+alike, after the egress certifier records it (`Sealer`, slot j of bucket t at nonce (t // T, t mod T, j)), and the
+link carries r units of B + 64 bytes a bucket. The ingress side opens the k-th unit it reads as slot k of the peer's
+egress grid (`Opener`) before the ingress certifier takes it. So every record, and everything the audit reads, is the
+unsealed run's; only the link's bytes change. The first unit that doesn't open is refused, and so is every one after
+it: its ingress window and every later one fault `malformed`.
+
 **Back from maintenance** (`Proxy(start=k, position=p)`, off by default): a certifier that was down serves from window k
 of the trusted clock on. Its first tick of each grid is the window's first bucket, its first records are window k's, and
 the first egress frame it takes is the Program's at position p, the frames before it being those of the windows before.
@@ -134,7 +143,8 @@ closes faulted while its queue would still hold frames faults the next one too, 
   certifier could: the window of bucket t is faulted, and the frame is dropped with the queue. A window closed before
   the frame was handed can't be faulted any more; its record is the Program's on the frames handed by its close;
 - a malformed frame (`malformed`): an event whose body is longer than a frame, without a position or with one already
-  seen, on a stream with no released request, or bytes left unframed at the stream's end.
+  seen, on a stream with no released request, or bytes left unframed at the stream's end; on a sealed pair link, a
+  unit that doesn't open at its slot's nonce, and every window after it.
 """
 
 from __future__ import annotations
@@ -160,6 +170,7 @@ from concurrent.futures import Executor, Future, ProcessPoolExecutor
 from dataclasses import dataclass, field
 
 from verity.ml.commitments.identity import tagged_sha512
+from verity.ml.crypto import aead
 from verity.core.protocols.certifier.audit import Audit, Verdict
 from verity.core.protocols.certifier.certificate import PublicKey, Signer, SignerRefused
 from verity.core.protocols.certifier.grid import (
@@ -388,6 +399,87 @@ def salt_frame(window: int, value: bytes, frame_bytes: int) -> bytes:
     """PoUW window `window`'s salt frame, carrying `value`: `PLACEHOLDER` in the grid, the salt on the server's
     connection."""
     return encode_frame(SALT, SALT_STREAM, window.to_bytes(8, "big") + value, frame_bytes)
+
+
+def fresh_pair_secret() -> bytes:
+    """A sealed pair link's session secret, `aead.SECRET_BYTES` bytes of the certifier host's own randomness."""
+    return secrets.token_bytes(aead.SECRET_BYTES)
+
+
+class Sealer:
+    """The sending certifier's half of a sealed pair link (no I/O): slot `slot` of bucket t of its egress grid `params`
+    (t counted from window 0) is sealed at `aead.nonce(t // T, t % T, slot)` under `keys`. It refuses (`RuntimeError`)
+    a slot at or before the last it sealed, so no nonce is used twice under its keys: a proxy back from maintenance in
+    the same session takes the same sealer."""
+
+    def __init__(self, keys: aead.Keys, params: GridParams) -> None:
+        self.keys, self.params = keys, params
+        self.last: tuple[int, int] | None = None
+
+    def seal(self, t: int, slot: int, frame: bytes) -> bytes:
+        p = self.params
+        if len(frame) != p.frame_bytes or not 0 <= slot < p.allocation or t < 0:
+            raise ValueError(f"a sealed slot is one of {p.allocation} frames of {p.frame_bytes} bytes in a bucket ≥ 0")
+        if self.last is not None and (t, slot) <= self.last:
+            raise RuntimeError(f"slot {slot} of bucket {t} is at or before the last sealed, {self.last}: a nonce "
+                               "is used once under a pair's keys")
+        self.last = (t, slot)
+        return aead.seal(self.keys, aead.nonce(t // p.buckets, t % p.buckets, slot), frame)
+
+    def seal_bucket(self, t: int, frames: Sequence[bytes]) -> list[bytes]:
+        """Bucket t's r slots, the frames then the padding, sealed in slot order."""
+        if len(frames) != self.params.allocation:
+            raise ValueError(f"a bucket is {self.params.allocation} slots")
+        return [self.seal(t, j, f) for j, f in enumerate(frames)]
+
+
+class Opener:
+    """The receiving certifier's half of a sealed pair link (no I/O): the k-th unit read off the link is slot k of the
+    sending certifier's egress grid `params` from window `start` on, opened at that slot's nonce under `keys`
+    (`open`). The first unit that doesn't open is refused, and so is every unit after it (`refused`): a frame missing
+    from the stream changes everything after it, so the link stays failed closed."""
+
+    def __init__(self, keys: aead.Keys, params: GridParams, start: int = 0) -> None:
+        self.keys, self.params = keys, params
+        self.position = start * params.buckets * params.allocation
+        self.refused = False
+
+    @property
+    def unit_bytes(self) -> int:
+        return self.params.frame_bytes + aead.TAG_BYTES
+
+    def open(self, unit: bytes) -> bytes | None:
+        """The next unit's frame, or None if it, or any unit before it, doesn't open."""
+        p, k = self.params, self.position
+        self.position += 1
+        if self.refused:
+            return None
+        t, slot = divmod(k, p.allocation)
+        frame = aead.unseal(self.keys, aead.nonce(t // p.buckets, t % p.buckets, slot), unit) \
+            if len(unit) == self.unit_bytes else None
+        if frame is None:
+            self.refused = True
+        return frame
+
+
+@dataclass(frozen=True, slots=True)
+class Pair:
+    """One certifier's half of a sealed pair link (`Proxy(pair=…)`): its egress sealed by `sealer`, its ingress opened
+    by `opener`, both under keys of the pair's session secret, which only the pair's two certifier hosts hold."""
+
+    sealer: Sealer
+    opener: Opener
+
+    @classmethod
+    def of(cls, secret: bytes, session: bytes, out: str, into: str, egress: GridParams, peer: GridParams, *,
+           peer_start: int = 0) -> Pair:
+        """The half that seals its egress grid `egress` under direction `out`'s keys and opens what the pair's other
+        certifier seals of its egress grid `peer` (from window `peer_start` on) under direction `into`'s, in session
+        `session` under `secret` (`aead.keys`)."""
+        if out == into:
+            raise ValueError("a pair link's two directions have names of their own, so keys of their own")
+        return cls(Sealer(aead.keys(secret, session, out), egress),
+                   Opener(aead.keys(secret, session, into), peer, peer_start))
 
 
 def served_window(registration: Registration) -> int | None:
@@ -768,6 +860,11 @@ class Proxy:
       admission rule (`Bucketer(served=…)`) under each window's declared sync (the slowest of Σ_sync under an online
       prover, or past `syncs`), so that each window ends idle, which N2's served counts check. With `salt` the profile
       counts its frame (`own` 1), at a PoUW window of one certifier window, so that frame heads every window;
+    - with `pair` (off by default), the link is a sealed pair link to another of the auditor's certifiers: each egress
+      slot, frame or padding, is written sealed (`Pair.sealer`) after the egress certifier records it, and each unit
+      read is opened (`Pair.opener`) before the ingress certifier takes it, so every record is the unsealed run's. A
+      unit that doesn't open faults its ingress window `malformed`, and every later one too (`link_frames_read` counts
+      units then);
     - `until(predicate)` waits until the proxy's state satisfies it, for a caller that drives a `VirtualClock`."""
 
     def __init__(self, upstream: tuple[str, int], egress: GridParams, ingress: GridParams, sync_set: SyncSet,
@@ -782,9 +879,11 @@ class Proxy:
                  position: int = 0, reveal_deadline: float | None = None, prover_key: PublicKey | None = None,
                  prover_context: bytes = b"", challenger_key: PublicKey | None = None,
                  signer: Signer | None = None, run_nonce: Callable[[int], bytes] = secrets.token_bytes,
-                 served: ServedProfile | None = None) -> None:
+                 served: ServedProfile | None = None, pair: Pair | None = None) -> None:
         if (egress.buckets * egress.bucket_ms) != (ingress.buckets * ingress.bucket_ms):
             raise ValueError("the egress and ingress grids have windows of the same length")
+        if pair is not None and (pair.sealer.params != egress or pair.opener.params.frame_bytes != ingress.frame_bytes):
+            raise ValueError("a pair link seals this certifier's egress grid and opens frames of its ingress size")
         if prover is not None and syncs:
             raise ValueError("an online prover declares every window's sync")
         if served is not None and (egress.buckets, egress.bucket_ms) != (ingress.buckets, ingress.bucket_ms):
@@ -837,6 +936,7 @@ class Proxy:
             served, egress.allocation, lambda w: syncs[w] if prover is None and w < len(syncs) else slowest)
         self.bucketer = Bucketer(Certifier(ingress_link, ingress), None if salt is None else self._draw_salt, start,
                                  served=admission)
+        self.pair = pair
         self.records: list[Record] = []
         self.publish = publish or (lambda record, params: self.records.append(record))
         self.streams: dict[int, _Stream] = {}
@@ -896,9 +996,10 @@ class Proxy:
                 tick(t)
 
     async def _egress(self, writer: asyncio.StreamWriter) -> None:
-        p = self.egress
-        bucket_bytes = p.allocation * p.frame_bytes
-        padding = memoryview(bytes(bucket_bytes))
+        p, pair = self.egress, self.pair
+        bucket_bytes = p.allocation * (p.frame_bytes if pair is None else p.frame_bytes + aead.TAG_BYTES)
+        padding = memoryview(bytes(p.allocation * p.frame_bytes))
+        pad = bytes(p.frame_bytes)
         choices = self.choices
         if choices is not None and self.windows:
             choices.start()
@@ -911,7 +1012,10 @@ class Proxy:
             row, record = self.shaper.tick()
             n = row_count(row)
             if backlog <= 4 * bucket_bytes:
-                writer.writelines([*row[:n], padding[: (p.allocation - n) * p.frame_bytes]])
+                if pair is None:
+                    writer.writelines([*row[:n], padding[: (p.allocation - n) * p.frame_bytes]])
+                else:
+                    writer.writelines(pair.sealer.seal_bucket(t, [*row[:n], *[pad] * (p.allocation - n)]))
             if choices is not None and (t + choices.prover.lag) % p.buckets == 0 and \
                     (t + choices.prover.lag) // p.buckets < self.windows:
                 choices.start()
@@ -948,6 +1052,8 @@ class Proxy:
         tau, tau_e = p.bucket_ms / 1000, self.egress.bucket_ms / 1000
 
         def tick(t: int) -> None:
+            if self.pair is not None and self.pair.opener.refused:
+                self.bucketer.certifier.fault(Reason.MALFORMED)
             row, record = self.bucketer.tick()
             anchor = t * p.bucket_ms // self.egress.bucket_ms
             own = self.bucketer.own
@@ -1136,13 +1242,18 @@ class Proxy:
             and self.registered(registration) == window
 
     async def _read_link(self, reader: asyncio.StreamReader) -> None:
-        size, buffer = self.ingress.frame_bytes, bytearray()
+        opener = None if self.pair is None else self.pair.opener
+        size, buffer = self.ingress.frame_bytes if opener is None else opener.unit_bytes, bytearray()
         while data := await reader.read(1 << 16):
             bucket = math.ceil((self.clock() - self.origin) * 1000 / self.ingress.bucket_ms)
             buffer += data
             whole = len(buffer) - len(buffer) % size
             for i in range(0, whole, size):
-                self.bucketer.arrive(bytes(buffer[i : i + size]), bucket)
+                frame = bytes(buffer[i : i + size])
+                if opener is not None and (frame := opener.open(frame)) is None:
+                    self.bucketer.certifier.fault(Reason.MALFORMED)
+                else:
+                    self.bucketer.arrive(frame, bucket)
                 self.link_frames_read += 1
             del buffer[:whole]
             self._changed.set()

@@ -1,5 +1,6 @@
 import Definitions.Claims
 import Definitions.Pouw.RelativeSecurity
+import Definitions.Pouw.RelativeSecurityJ10R
 
 /-!
 # Relative security's named premises for the staged window (trusted)
@@ -35,6 +36,16 @@ of SHA-512 calls computed from the adversary's time, `c · time M + d` at stated
 finder's declared cost, so no choice of finder lowers it. The constant forms stay, superseded,
 because the floors of `Models.Pouw.Guarantees.RelativeSecurity` are proved from them; the floors per prover are stated
 beside them and not yet proved (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).
+
+**At call scope under J10-R** (RT-ALGO-17, card bbf40543). J10-R draws H1's noise once a call, so a call's rows and
+columns share their coins across the whole call, and a segment's coin × coin part is one `⟨M, 32, N⟩` product
+(`Definitions.Pouw.RelativeSecurityJ10R`). Each premise above has a mirror on that call design, where a stage is a
+call and its run one straight-line program over the call's bits: `ServiceSoundStagedJ10R` and its per-prover form,
+`KScopeOneSidedJ10R` and `ChargeVF3j16J10R`; overlapped, `ServiceSoundOverlapJ10R`, its per-prover form,
+`KScopeOverlapOneSidedJ10R` and `ChargeVF3j16OverlapJ10R`. They say what the per-unit forms say, read at the call: no
+premise here is weakened for it. The charge counts every product of the call's program, so a cheaper algorithm for the
+call's product, one whose products each serve several rows or columns, is charged fewer products and is outside the
+call's one-sided scope (charging purity at `jFrame`): K1 is not claimed there, as it isn't per unit.
 -/
 
 namespace Pouw.Assumptions
@@ -333,5 +344,151 @@ def ChargeVF3j16Overlap (Mc : Machine) (S : Service) (run : ORunMap Mc S R St n 
         Mc.charge M (e.symm x, r)
 
 end Overlap
+
+section J10R
+
+variable {R St n L B n' : ℕ} {Ar : Type} [CommRing Ar]
+
+/-- `pouw-rs-staged-service` (proposed) at call scope under J10-R: `ServiceSoundStaged` on the call design. The
+service's seed is the window's live coins (`e`): `R` rounds, each `St` call draws of the call's bits (`JStage`: every
+row's dither bits, every column's coin bits and `U`'s bytes, drawn once a call) and one check of a call and a
+cell-block. For every adversary in `Mc` that commits first and every value `r` of its own coins, its run's play fixes
+each call's error table at the call's operand commitment, before its draw; every run the verifier accepts is accepted
+by the play's game or breaks binding or zero knowledge in some round, at most `δb` and `δz` a round.
+
+**Superseded by `ServiceSoundStagedJ10RPerProver`**, for `ServiceSoundStaged`'s reason: one `δb` for every adversary is
+false below 1 at SHA-512 (note:proofs/20261018T1604Z-report-redteam-2474). It mirrors the premise today's floor of
+record is proved from, so that the call-scope floor `StagedFloorKOneSidedJ10R` is that floor read at the call. -/
+def ServiceSoundStagedJ10R (Mc : Machine) (S : Service) (run : JRunMap Mc S R St n L B n' Ar)
+    (e : S.Seed ≃ Paths (JStage St n L B n') R) (δb δz : ℝ) : Prop :=
+  ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
+    (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',
+      (∀ w, prob ((run Ω' M r).Bind w) ≤ δb) ∧ (∀ w, prob ((run Ω' M r).ZK w) ≤ δz) ∧
+      ∀ x, S.verify (Mc.eval M (e.symm x, r)).1 (e.symm x) (Mc.eval M (e.symm x, r)).2 = true →
+        (run Ω' M r).play.game.accepts x ∨ ∃ w, (run Ω' M r).Bind w x ∨ (run Ω' M r).ZK w x
+
+/-- `pouw-rs-staged-service` (proposed; per prover) at call scope under J10-R: `ServiceSoundStagedPerProver` on the
+call design. The seed, the round protocol and the play's form are `ServiceSoundStagedJ10R`'s; round `w`'s binding
+break is at most `δb + βb · Pr[fb Ω' M r w finds a collision of sha]` and its zero-knowledge break
+`δz + βz · Pr[fz Ω' M r w …]`. Everything `ServiceSoundStagedPerProver` says of its form, finders and budgets holds
+here unchanged: it assumes nothing of SHA-512, and `ecr/sha-512` enters only the floors' bound (`breakBound`). -/
+def ServiceSoundStagedJ10RPerProver (Mc : Machine) (S : Service) (run : JRunMap Mc S R St n L B n' Ar)
+    (e : S.Seed ≃ Paths (JStage St n L B n') R) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
+    (δb βb δz βz : ℝ) : Prop :=
+  ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
+    (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',
+      (∀ w, prob ((run Ω' M r).Bind w) ≤ δb + βb * (fb Ω' M r w).Pr sha) ∧
+      (∀ w, prob ((run Ω' M r).ZK w) ≤ δz + βz * (fz Ω' M r w).Pr sha) ∧
+      ∀ x, S.verify (Mc.eval M (e.symm x, r)).1 (e.symm x) (Mc.eval M (e.symm x, r)).2 = true →
+        (run Ω' M r).play.game.accepts x ∨ ∃ w, (run Ω' M r).Bind w x ∨ (run Ω' M r).ZK w x
+
+/-- `pouw-rs-k-scope-one-sided` (proposed) at call scope under J10-R: `KScopeOneSided` on the call design. For every
+adversary that commits first, every value of its coins and every play `x`, each round's call is one straight-line
+program over `Z/2³²` on the call's bits (E3; ring operations only), and:
+- every product slot is one-sided, of any form: a function of the rows' dither bits times a function of the columns'
+  coin bits and `U`'s bytes (`OneSided`);
+- the call's error table is its committed prefix words (`word`) minus their targets (`jPrefix`: the int8 operands
+  `s8 (A + b)` and `s8 (W + c + U)`, as served; S4, the check reads the prefix word);
+- no product is two-sided, mod 2, at the frames (`jFrame`: a row's dither bits and a column's coin bits of one
+  segment) of two cell-blocks whose words read it with odd coefficients (`SlpG.ChargePureJ`).
+
+A product shared by the call's rows or columns of a segment (a fast algorithm for the call's `⟨M, 32, N⟩` product, or
+a selection of shared streams) is two-sided at several frames and outside it. K1 is not claimed outside the scope, and
+the verifier can't observe which case applies: no check of the service refuses a run outside it. -/
+def KScopeOneSidedJ10R (Mc : Machine) (S : Service) (run : JRunMap Mc S R St n L B n' (ZMod (2 ^ 32))) : Prop :=
+  ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
+    (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ (r : Ω') x,
+      (∀ w s j, ((run Ω' M r).prog x w s).isProd j = true → OneSided (((run Ω' M r).prog x w s).prod j)) ∧
+      (∀ w s c, (run Ω' M r).play.errAt x w s c = fun z =>
+        ((run Ω' M r).prog x w s).val z ((run Ω' M r).word x w s c) -
+          jPrefix ((run Ω' M r).aq x w s) ((run Ω' M r).wq x w s) c.1 c.2.1 c.2.2.val z) ∧
+      ∀ w s, ((run Ω' M r).prog x w s).ChargePureJ toF2 ((run Ω' M r).word x w s)
+
+/-- `pouw-rs-charge-vf3j16` (proposed) at call scope under J10-R. **The machine charges a run at least `κ` a product
+of each call's program.** For every adversary that commits first, every value of its coins and every play `x`, the
+run's charge (`max(|M|, cost)`) is at least `κ` times the products of every call's straight-line program over the
+call's bits (the call's rows' and columns' coins, shared across the call, each segment's coin × coin part one
+`⟨M, 32, N⟩` product), summed over every call of every round, less its noise reads `V x ≤ Vmax`. With `Mc` the sm_120
+machine B_θ this is P1 at VF3j-16's prices with P4, as `ChargeVF3j16`, read at the call rather than the unit: it
+holds when a call's interval, from its draw to its outputs' commitment, holds no other draw. Overlapping calls are
+`ChargeVF3j16OverlapJ10R`'s. -/
+def ChargeVF3j16J10R (Mc : Machine) (S : Service) (run : JRunMap Mc S R St n L B n' Ar)
+    (e : S.Seed ≃ Paths (JStage St n L B n') R) (κ Vmax : ℝ) : Prop :=
+  ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
+    (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ (r : Ω') x,
+      (run Ω' M r).V x ≤ Vmax ∧
+      κ * ∑ w, ∑ s, ((univ.filter fun j => ((run Ω' M r).prog x w s).isProd j = true).card : ℝ) - (run Ω' M r).V x ≤
+        Mc.charge M (e.symm x, r)
+
+end J10R
+
+section J10ROverlap
+
+variable {R St L : ℕ} {n B n' : Fin St → ℕ} {Ar : Type} [CommRing Ar]
+
+/-- `pouw-rs-overlap-service` (proposed) at call scope under J10-R: `ServiceSoundOverlap` on the call design. `R`
+rounds, each one draw a call of the call's bits, the draws overlapping at any depth, and one check of a cell-block
+drawn uniformly among every call's (the uniform draw is `ServiceSoundOverlap`'s deployment requirement); the play fixes
+each round's error tables, every call's, before the round's first draw (E3); every accepted run is accepted by the
+play's game or breaks binding or zero knowledge in some round, at most `δb` and `δz` a round.
+
+**Superseded by `ServiceSoundOverlapJ10RPerProver`**, for `ServiceSoundOverlap`'s reason. It mirrors the premise
+today's overlapped floor of record is proved from. -/
+def ServiceSoundOverlapJ10R (Mc : Machine) (S : Service) (run : JORunMap Mc S R St n L B n' Ar)
+    (e : S.Seed ≃ Paths (OJSpot St n L B n') R) (δb δz : ℝ) : Prop :=
+  ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
+    (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',
+      (∀ w, prob ((run Ω' M r).Bind w) ≤ δb) ∧ (∀ w, prob ((run Ω' M r).ZK w) ≤ δz) ∧
+      ∀ x, S.verify (Mc.eval M (e.symm x, r)).1 (e.symm x) (Mc.eval M (e.symm x, r)).2 = true →
+        (run Ω' M r).play.game.accepts x ∨ ∃ w, (run Ω' M r).Bind w x ∨ (run Ω' M r).ZK w x
+
+/-- `pouw-rs-overlap-service` (proposed; per prover) at call scope under J10-R: `ServiceSoundOverlapPerProver` on the
+call design, with `ServiceSoundOverlapJ10R`'s seed, round protocol, uniform draw and play, and each round's breaks
+bounded through the adversary's own collision finders as `ServiceSoundOverlapPerProver` states. -/
+def ServiceSoundOverlapJ10RPerProver (Mc : Machine) (S : Service) (run : JORunMap Mc S R St n L B n' Ar)
+    (e : S.Seed ≃ Paths (OJSpot St n L B n') R) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
+    (δb βb δz βz : ℝ) : Prop :=
+  ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
+    (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',
+      (∀ w, prob ((run Ω' M r).Bind w) ≤ δb + βb * (fb Ω' M r w).Pr sha) ∧
+      (∀ w, prob ((run Ω' M r).ZK w) ≤ δz + βz * (fz Ω' M r w).Pr sha) ∧
+      ∀ x, S.verify (Mc.eval M (e.symm x, r)).1 (e.symm x) (Mc.eval M (e.symm x, r)).2 = true →
+        (run Ω' M r).play.game.accepts x ∨ ∃ w, (run Ω' M r).Bind w x ∨ (run Ω' M r).ZK w x
+
+/-- `pouw-rs-k-scope-overlap-one-sided` (proposed) at call scope under J10-R: `KScopeOverlapOneSided` on the call
+design. For every adversary that commits first, every value of its coins and every play `x`, each round's run is one
+straight-line program over `Z/2³²` on every call's bits (E3), and:
+- every product slot is, at every bit point of the other calls', one-sided of any form on call `t`'s bits (its rows'
+  against its columns'), for every call `t` (`OneSidedAtJ`);
+- call `t`'s error table is its committed prefix words (`word`) minus their targets (`jPrefix`), read on call `t`'s
+  bits (S4);
+- at every bit point of the draws, no product is two-sided, mod 2, at the frames (`jFrame`) of two cell-blocks, of any
+  calls, whose words read it with odd coefficients (`SlpG.ChargePureAtJ`).
+
+K1 is not claimed outside the scope, and the verifier can't observe which case applies. -/
+def KScopeOverlapOneSidedJ10R (Mc : Machine) (S : Service) (run : JORunMap Mc S R St n L B n' (ZMod (2 ^ 32))) :
+    Prop :=
+  ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
+    (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ (r : Ω') x,
+      (∀ w j, ((run Ω' M r).prog x w).isProd j = true → OneSidedAtJ (((run Ω' M r).prog x w).prod j)) ∧
+      (∀ w c, (run Ω' M r).play.errAt x w c = fun z => ((run Ω' M r).prog x w).val z ((run Ω' M r).word x w c) -
+        jPrefix ((run Ω' M r).aq x w c.1) ((run Ω' M r).wq x w c.1) c.2.1 c.2.2.1 c.2.2.2.val fun v => z ⟨c.1, v⟩) ∧
+      ∀ w, ((run Ω' M r).prog x w).ChargePureAtJ toF2 ((run Ω' M r).word x w)
+
+/-- `pouw-rs-charge-vf3j16-overlap` (proposed) at call scope under J10-R. **The machine charges an overlapped run at
+least `κ` a product of each round's program over its calls' bits.** For every adversary that commits first, every
+value of its coins and every play `x`, the run's charge is at least `κ` times the products of every round's run, one
+straight-line program over every call's bits (each call's rows' and columns' coins shared across the call), less its
+noise reads `V x ≤ Vmax`. With `Mc` the sm_120 machine B_θ this is P1 at VF3j-16's prices with P4, as
+`ChargeVF3j16Overlap`; it counts each product once, whatever calls' intervals it lies in. -/
+def ChargeVF3j16OverlapJ10R (Mc : Machine) (S : Service) (run : JORunMap Mc S R St n L B n' Ar)
+    (e : S.Seed ≃ Paths (OJSpot St n L B n') R) (κ Vmax : ℝ) : Prop :=
+  ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
+    (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ (r : Ω') x,
+      (run Ω' M r).V x ≤ Vmax ∧
+      κ * ∑ w, ((univ.filter fun j => ((run Ω' M r).prog x w).isProd j = true).card : ℝ) - (run Ω' M r).V x ≤
+        Mc.charge M (e.symm x, r)
+
+end J10ROverlap
 
 end Pouw.Assumptions

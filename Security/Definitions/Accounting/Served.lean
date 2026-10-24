@@ -180,9 +180,10 @@ is that realization's to prove, at the premises `Accounting.Guarantees.TS.Sessio
 * `pf.rel` holds its record to the product and its `dq`, as `Held` reads them, and the layer pins each committed value's
   derivation (`ProofLayer.Pins`; `ServedChecksHold` at the session's value layer). The unit's Definition with its check
   words fixed to `1` (`PouwH1TileZy_v1` with `ok = 1`) is `Accounting.Guarantees.TS.TileSessionSound`'s relation
-  (`TileRel`), under its premise `Accounting.Assumptions.TS.TileChecks`. `CheckedSessionSound`'s relation (`CheckedRel`)
-  is only that the opened rows are an assignment the circuit's evaluation agrees with, which says nothing of the
-  product or `dq`;
+  (`TileRel`), under its premise `Accounting.TS.Tile.TileComputes` (the circuit computes its Definition at its
+  registered reads; that the Definition's `ok = 1` gives the cells' checks is proved, at a `K` its EXACT binds at).
+  `CheckedSessionSound`'s relation (`CheckedRel`) is only that the opened rows are an assignment the circuit's
+  evaluation agrees with, which says nothing of the product or `dq`;
 * `pf.opened` holds the leaves of the round's record tables, the records committed under its root before σ_w;
 * `ServedRootsLinked`'s `rows` read the unit's `zy` and A ports at its round root's tables, which
   `Flock.SecurityProofs.ServedRowsLinked` gives at the drawn units under `RowsSession.ServedRegistered` and a circuit
@@ -194,7 +195,8 @@ values of the proof layer that realizes it, not gates of `Cd`. They take no clas
 over the unit's records only, and no gate of the unit reads another unit's computed word through them. That the 33
 statements, accepted over shared committed values, realize the one unit's checks is that linked realization's to
 prove: BRIDGE2's `Accounting.Guarantees.TS.LeafLanesSound`, from `CheckedSessionSound` at each statement, under its
-premise `LeafChecks` (each statement's circuit realizes its Definition at its decoded ports), with the leaf and the
+premises `LaneLowers` and `CombineLowers` (each statement's pieces at their lowerings, whose composition computing its
+Definition is proved), with the leaf and the
 receipt the ones the statements' committed rows decode to (the known ports' are checked, and each A, B and partials
 row is one row of one registered tree that every statement reading it reads in full).
 -/
