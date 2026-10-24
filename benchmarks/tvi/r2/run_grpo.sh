@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # R2 (elicitation controls), one leased GPU walking a node-local queue of GRPO items on GSM8K.
-# ITEMS="M:method:reward:seed:steps ..." with M = I (Qwen2.5-1.5B-Instruct) or B (Qwen2.5-1.5B); every GPU job on a node
+# ITEMS="M:method:reward:seed:steps[:task] ..." (task gsm8k, the default, or math) with M = I (Qwen2.5-1.5B-Instruct) or B (Qwen2.5-1.5B); every GPU job on a node
 # claims the first unclaimed item in $QDIR (mkdir is atomic) and skips one that would end past $DEADLINE (epoch seconds).
-# Sent inputs: grpo.py and the gsm8k_{train,test}.jsonl A2 uses. Results and logs go to $OUT; a TinyLoRA item's trained
+# Sent inputs: grpo.py and the {gsm8k,math}_{train,test}.jsonl A2 uses. Results and logs go to $OUT; a TinyLoRA item's trained
 # state (state.pt, meta.json: the 2,492 fp32 coefficients) is copied to $OUT/state/; checkpoints are scratch.
 set -euo pipefail
 IN="$RESEARCH_RUN_DIR/inputs"
@@ -37,14 +37,15 @@ nvidia-smi -i "${CUDA_VISIBLE_DEVICES:-0}" --query-gpu=index,name,memory.used,me
 "$PY" -c 'import torch, transformers, vllm, math_verify; print(torch.__version__, transformers.__version__, vllm.__version__, torch.cuda.get_device_name(0))' | tee -a "$OUT/versions.txt"
 set +e
 
-run_item() {  # M:method:reward:seed:steps
-  IFS=: read -r m method reward seed steps <<< "$1"
+run_item() {  # M:method:reward:seed:steps[:task]
+  IFS=: read -r m method reward seed steps task <<< "$1"
+  task=${task:-gsm8k}
   case $m in
     I) model=Qwen/Qwen2.5-1.5B-Instruct; variant="" ;;
     B) model=Qwen/Qwen2.5-1.5B; variant=B ;;
   esac
-  local log="$OUT/log-$m-$method-$reward-seed$seed.txt"
-  "$PY" grpo.py --task gsm8k --method "$method" --reward "$reward" --seed "$seed" --steps "$steps" --model "$model" \
+  local log="$OUT/log-$task-$m-$method-$reward-seed$seed.txt"
+  "$PY" grpo.py --task "$task" --method "$method" --reward "$reward" --seed "$seed" --steps "$steps" --model "$model" \
     ${variant:+--variant $variant} --data "$S/data" --out "$OUT" --ckpt-root "$S/ckpt" --svd-cache "$SVD" > "$log" 2>&1
   local rc=$?
   echo "$(date -u +%H:%MZ) $1 rc=$rc"

@@ -2,7 +2,7 @@
 """R2's table from fetched run dirs: per model, the base score and, per arm, the gain over base with a paired bootstrap over
 problems, the spread over seeds, the fraction of the full fine-tuning gain, and true minus random / format.
 
-    python analyze.py RUN_DIR... [--json OUT.json] [--full-from RUN_DIR...]
+    python analyze.py RUN_DIR... [--task gsm8k|math] [--json OUT.json] [--full-from RUN_DIR...]
 
 Each RUN_DIR is a fetched run (`research fetch RUN --all`) whose out/ holds grpo.py's result-*.json (R2's or A2's). Every
 result must cover the same GSM8K test problems in the same order (grpo.py reads gsm8k_test.jsonl in file order), which is
@@ -23,12 +23,12 @@ import numpy as np
 MODELS = {"Qwen/Qwen2.5-1.5B-Instruct": "Instruct", "Qwen/Qwen2.5-1.5B": "Base"}
 
 
-def load(run_dirs):
+def load(run_dirs, task="gsm8k"):
     out = defaultdict(dict)
     for rd in run_dirs:
         for p in sorted(glob.glob(os.path.join(rd, "out", "result-*.json"))):
             r = json.load(open(p))
-            if not r["task"].startswith("gsm8k") or r.get("ckpt"):
+            if r["task"].removesuffix("B") != task or r.get("ckpt"):
                 continue
             key = (MODELS.get(r["model"], r["model"]), r["method"], r.get("reward", "true"))
             out[key][r.get("seed", 0)] = {
@@ -74,14 +74,15 @@ def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("runs", nargs="+")
     p.add_argument("--full-from", nargs="*", default=[], help="other runs (A2's) whose `full` results are a second anchor")
+    p.add_argument("--task", default="gsm8k", choices=["gsm8k", "math"])
     p.add_argument("--json", default=None)
     args = p.parse_args()
-    ev = load(args.runs)
-    ext = load(args.full_from) if args.full_from else {}
+    ev = load(args.runs, args.task)
+    ext = load(args.full_from, args.task) if args.full_from else {}
     ns = {len(e["x"]) for v in list(ev.values()) + list(ext.values()) for e in v.values()}
     if len(ns) > 1:
         raise SystemExit(f"results cover different problem counts {ns}")
-    doc = {"metric": "greedy accuracy, GSM8K test", "n_problems": sorted(ns), "models": {}}
+    doc = {"metric": f"greedy accuracy, {args.task} test", "n_problems": sorted(ns), "models": {}}
     for m in ["Instruct", "Base"]:
         if (m, "base", "true") not in ev:
             continue
