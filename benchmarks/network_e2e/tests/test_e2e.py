@@ -129,7 +129,7 @@ def test_the_proofs_columns_and_cost_are_read_from_n2_zk_and_an_unheld_proof_ref
               "summary": {"ok": True, "members": members, "cost": _cost(2)}}
     r = e2e.report(runs, _n2(2, {"late": 0, "extra": 0, "tampered": 0}), proofs, {})
     rows = {(x["run"], x["window"]): x for x in r["link_windows"]}
-    assert r["ok"] is True
+    assert r["ok"] is True and r["why_not"] == []
     assert rows[("honest", 0)]["proof"] == {"egress": "accept", "ingress": "accept"}
     assert rows[("honest", 1)]["head_checks"] == "pass" and "prove_s" not in rows[("honest", 1)]
     session = r["runs"]["honest"]["proofs"]["egress"]
@@ -143,9 +143,14 @@ def test_the_proofs_columns_and_cost_are_read_from_n2_zk_and_an_unheld_proof_ref
     assert "| honest | egress | 2 | True | 8.0 | 4.0 | 100 | 3.5 |" in md and "| ingress | 2 | True | 3.0 | 2.5 | — | 3.6 |" in md
     members["extra-egress"] = _member("extra-egress", 2, 0, held=False)
     r = e2e.report(runs, _n2(2, {"late": 0, "extra": 0, "tampered": 0}), proofs, {})
-    assert r["negatives"]["extra"]["refused"] is False and r["ok"] is False
+    assert r["negatives"]["extra"]["refused"] is False and r["ok"] is False and r["why_not"] == ["extra not refused"]
+    assert e2e.markdown(r | {"from": ["x"]}).splitlines()[2] == "Not OK: extra not refused."
     members["honest-ingress"] = _member("honest-ingress", 2, None, held=False)
-    assert e2e.report(runs, _n2(2, {"late": 0, "extra": 0, "tampered": 0}), proofs, {})["ok"] is False
+    r = e2e.report(runs, _n2(2, {"late": 0, "extra": 0, "tampered": 0}), proofs, {})
+    assert r["ok"] is False and r["why_not"] == ["the honest run's proofs didn't all run and hold", "extra not refused"]
+    honest_only = {s: x for s, x in _n2(2, {"tampered": 0}).items() if s in ("honest", "tampered")}
+    r = e2e.report({"honest": runs["honest"]}, honest_only, {"ran": False, "why": "served"}, {})
+    assert r["ok"] is False and r["why_not"] == ["no late run", "no extra run"]
 
 
 def _kept(d: Path, runs: dict) -> Path:

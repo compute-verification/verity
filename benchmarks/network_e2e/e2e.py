@@ -462,12 +462,18 @@ def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict,
     b, p, ng = s.get("bits") or {}, s.get("prove_path"), s.get("negatives")
     stages_ok = (b.get("public_fields") is not False and b.get("rebuilt") is not False and (p is None or p["ok"])
                  and (ng is None or not ng.get("ran") or ng["ok"]))
-    ok = (n2_ok and check_ok and proved_ok and stages_ok and len(negatives) == len(expected)
-          and all(n["refused"] for n in negatives.values()))
+    why_not = ([] if n2_ok else ["N2 didn't accept the honest run on every link-window"]) \
+        + ([] if check_ok else ["the rehearsal's own check didn't accept the honest run"]) \
+        + ([] if proved_ok else ["the honest run's proofs didn't all run and hold"]) \
+        + ([] if stages_ok else ["a chain stage failed"]) \
+        + [f"no {s} run" for s in expected if s not in negatives] \
+        + [f"{s} not refused" for s, n in negatives.items() if not n["refused"]]
+    ok = not why_not
     waiting = {name: {"waits": w, "check": (out_runs[name]["check"] or {}).get("verdict"),
                       "n2": out_runs[name]["network"]["accepted"], "ran": out_runs[name]["shim_requests"] != 0}
                for name, w in pending.items()}
-    return {"format": FORMAT, **meta, "claim": CLAIM_ADVICE if advised else CLAIM, "ok": ok, "runs": out_runs,
+    return {"format": FORMAT, **meta, "claim": CLAIM_ADVICE if advised else CLAIM, "ok": ok, "why_not": why_not,
+            "runs": out_runs,
             "link_windows": rows, "negatives": negatives, "pending": waiting, "chain": stages,
             "proofs": {"ran": bool(proofs.get("ran")), "adopted": proofs.get("adopted"), "why": proofs.get("why"),
                        "rc": proofs.get("rc"), "extra_proved": proofs.get("extra_proved"), "n2_zk_ok": summary.get("ok"),
@@ -530,6 +536,7 @@ def markdown(r: dict) -> str:
                f"tokens, EOS {_cell(v.get('eos_token_ids'))}" if v else
                f"{_cell(r.get('tokens'))} tokens a response, {_cell(r.get('requests'))} requests")
     lines = [f"# Network accounting end to end: {'OK' if r['ok'] else 'NOT OK'}", "",
+             *([f"Not OK: {'; '.join(r['why_not'])}.", ""] if r.get("why_not") else []),
              f"Source {', '.join(r['from'])}; model {_cell(r.get('model'))} (as the plan names it), {traffic}; endpoint "
              f"{_cell(r.get('upstream'))}, {_cell(r.get('where'))}; N2's profile {_cell(r.get('profile'))}; "
              f"{_cell(r.get('windows'))} link-windows planned; commit {_cell(r.get('commit'))}; "
