@@ -50,7 +50,7 @@ On each link:
 
 - **Constant rate, with a cap, left-packed (W4).**
   - Every bucket emits exactly r frames: `n_t = min(queue, r)` real frames in slots 0 … n_t − 1, in queue order, then
-    padding.
+    padding. The I/O tie's design sorts each bucket's frames by stream instead, which isn't built ("The I/O tie", (c)).
   - The **occupancy** is (n_0, …, n_{T−1}), the number of real frames per bucket.
   - A colluding receiver can tell padding from a real frame, so occupancy is the timing channel.
 - **FIFO, with the queue carried across windows.** The release count is Lean's `released`, and the grid Lean's `fill`.
@@ -344,6 +344,571 @@ the ingress counts and the charged advice carry, and under the premises it is th
 the record's own, at most r_in a bucket, as on any end without a profile. What it doesn't establish: the frames
 (N3's; the salt frame's place among them is the salt audit's, which takes it only first in bucket 0, `check_salts`),
 and the premises, which nothing checks.
+
+## The I/O tie (`io_tie`, a design)
+
+N2 holds a window's counts, and N3's design holds its frames to the head's frames root and a template, but neither says
+the frames carry the tokens the served computation produced: N3's open item is its outbox's agreement with the values.
+The I/O tie closes it on a served link's egress. It is one unit per egress link-window at selection `All`. It opens
+every cell of the window and holds each to the output the advice's map names there, and that output's id to the id
+the Commit sampled. It is a design with a prototype on a fake upstream (`io_tie`), in no Spec and unproved; the ingress
+side isn't built. The unit outputs 1 exactly when:
+1. every cell is a pad (B zero bytes) or a data cell: the warden's header (`DATA`, the stream, a payload of 138
+   bytes), one token id's canonical event, then zero fill;
+2. every cell is its map's: a pad where the map has a pad, else a data cell on the map's stream q whose id is entry e
+   of the window's port;
+3. every opened port row opens at its public step under the root the Commit registered;
+4. the cells' root is recomputed from every bucket row and its salt.
+
+So a duplicated, dropped, reordered, moved or altered cell, a byte anywhere outside the id, a cell on another
+request's stream, an output in the wrong bucket, a fabricated output, a wrong id and a port row that isn't the
+Commit's each refuse the window. Nothing is drawn within the window, so there is no ε: the verdict covers every cell.
+In proofs' sampled-audit statement (`SampledAuditAccepted`, #3608), a class drawn `All` has error 0. That statement
+doesn't yet model the transfer gates' tie to the certifier's signed rows, so this unit's place in it is still to state.
+
+**No value of the prover's says what a cell must be.** v3 held the cells to a table the prover committed, so the table
+was a free input: REDTEAM (`cursor/redteam-phase4-io-061a`) forged a wrong id and a fabricated response, each with a
+matching table, and both were accepted. Now the map is a function of the advice, which is registered before the draw,
+and each id is an entry of the Commit's rows, opened under the Commit's registered root. The prover's values are the
+witness that opens those: the cells' and rows' salts, the rows' paths and the routing. Both of REDTEAM's cases are regressions, refused
+(`test_network_certifier_io_tie_phase4.py`), and so is a two-sided tamper of the routing: two ids swapped together
+with the switches that route each cell the entry carrying its new id. This also closes NETREV's finding on v3: the
+table's binding to the token port was outside the tie and load-bearing, and had to be an `All` unit's egress transfer
+gates. v4 has no table. `IoTiePort` opens each id from the Commit's own rows under the Commit's registered root,
+inside this unit, and `IoTieMatch` holds each routed entry's index to the one the map names.
+
+**(a) Decision: the token's id in the frame, not its text.** Each egress event carries one sampled id, and the user
+decodes it with the public tokenizer.
+- **The event** is `data: {…,"choices":[{"index":0,"token_id":%10d,"finish_reason":null}]}\n\n`, `EVENT_HEAD`'s
+  object up to the choice, then the id right-aligned in 10 decimal characters. The shim asks vLLM for ids
+  (`return_token_ids: true`, which `record.py` already sends and `live_body` deletes; else
+  `return_tokens_as_token_ids` with logprobs) and writes one event per id of each chunk's `token_ids`, so neither
+  vLLM's chunking nor its UTF-8 holdback reaches the wire. `pad_to`'s empty events and `events`' 64-byte cut go. A
+  response is one event per kept output, of any number.
+- **CERT-VARLEN's event** (`active.id_event(request, token_id)`, #3552) is this one with the request's ordinal ahead
+  of the id (`"request":%10d,"token_id":%10d`): 159 bytes, with the ordinal at frame byte 110 and the id at 132.
+  `io_tie.id_event` is 138 bytes, with the id at 111. On egress the ordinal is the warden's stream, so the server's copy
+  of it is redundant, and a field the server writes is a channel unless it is checked. With CERT-VARLEN's event, the
+  cell holds the ordinal to q too: one more 10-digit decode and a compare, at B ≥ 168. The prototype keeps the
+  138-byte event. The shim writes one of the two, to be settled with CERT-VARLEN, and `IoTieCell` follows it.
+- **Ingress** carries ids too: a request is a canonical `/v1/completions` body whose prompt is token ids, each in an
+  11-byte field (`[` or `,`, then `%10d`; 11 spaces past the prompt's length, which JSON reads as whitespace), placed so
+  no field straddles a frame. The server adds nothing to a token-id prompt, so `c00.input/ids` is the request's ids.
+- **N3's template** trades the text field (88 base64 characters at byte 119) for the 10-character field, and its outbox
+  holds a u32 a frame instead of up to 64 bytes.
+- **The cell** is `IoTieCell{B}`, 3,678 ANDs at B = 256 (34,398 at 4,096): the header, the event's 128 fixed bytes, the
+  zero fill (8B − 1,176 bits), and the id's decode (spaces then digits, no leading zero, below 2^32, so each id has
+  one cell).
+
+Measured on canonical frames (the real-vLLM rehearsal `r20261024-021333-0ca6`: 40 requests of 16 tokens, 640 events a
+profile; the GLM-4.5 tokenizer, V = 151,329):
+
+| vLLM chunks that merged tokens | honest | late | extra |
+|---|---|---|---|
+| served-40 | 9 | 10 | 12 |
+| planned-40 | 19 | 23 | 19 |
+
+A merged chunk is one frame of several tokens' text and one padding frame, so 2.8% (served, honest) and 5.9%
+(planned, honest) of the frames aren't one token's text. 1,077 of the tokenizer's tokens (0.71%) are invalid UTF-8
+alone, which vLLM holds back and merges into the next chunk, and 124 are longer than an event's 64 bytes. Text =
+vocab[id] in the circuit was set aside: each frame would need a hidden read of the vocabulary (151,329 entries of up to
+512 bytes), a span table, the holdback's UTF-8 rule and the base64, and the grouping would be vLLM's under load, a
+choice of up to F − 1 bits a response that no template fixes.
+
+**(b) Decision: every cell, with the advice's map.** The map is a function of the advice: for each cell, the output
+the warden must have released there, or a pad (`window_map`). Bucket t's outputs, those whose
+release bucket is w·T + t, fill its first cells sorted by (request, index), the order the warden releases a bucket
+in, and pads fill the rest. Each output's entry in the window's port is e = σ·P + row: σ is its step's place among
+the window's steps, sorted and padded to S. The unit reads the map as 8 bytes a cell (q and e as u32be, a pad's all
+0xFF).
+- **The advice is private** (Daniel, 23 Oct, 9:55 PM PDT: it is never published; it enters the circuit builder and is
+  proved in zero knowledge). v4 computes the map in the clear from the opened advice v0, as N2-ADVICE's `advised`
+  reads it, and takes the map and the steps as public inputs. That is the **named gap**, the one PROVE-PATH's compile
+  unit carries (#3507: the advice's hiding root in the registration, "the advice is opened to the verifier until the
+  compile unit exists"). Nothing may call the tie zero-knowledge until it is closed.
+- **The target** reads a committed map inside the proof, bound to the advice's hiding root. The map is registered
+  with the advice before the draw, as rows of `verity.ml.commitments.advice` (#3507; fixed-width bit rows under
+  `hm96-sha512/row/v2` leaves in one `frame-v3-sha512` tree, `advice.Registration`), here 4 KiB rows: a window's 8N
+  bytes of entries and 4S of steps, at a window-aligned place in a link-day's map. The compile unit holds the map's
+  rows to the advice's outputs and release buckets, as `window_map` does in the clear. The window reads its rows by a
+  range read (each row's digest, hm96 leaf and `FrameV3Leaf`, the subtree's nodes once and the path above it): 12 rows
+  at depth 15, 3.07 × 10^7, at the rehearsal, and 1,980 rows at depth 22, 4.77 × 10^9, served. That is about half of
+  v3's table (9.86 × 10^9), at 8 bytes a cell over N cells against 16 bytes a slot over M. The steps then come from
+  the map's rows, so the port's reads are at hidden positions. `FrameV3Read` already takes its position as a value,
+  so they cost what they cost now. The served window is 1.466 × 10^11, 3.4% more than v4 (the table below).
+- **The verifier's cost.** v4's map is a public input of 8 bytes a cell, 8.09 MB a served window, which the verifier
+  computes in time linear in the window's capacity. At the target it goes away: the verifier reads the roots, the
+  domain ids and the statics, which are O(1) a window.
+- **Complete:** every cell is opened and held to its place in the map, so the data cells are exactly the outputs the
+  advice releases in the window, with no duplicate and no drop, and responses are of any length. The tie needs none of
+  FIXLEN, the window-local arithmetic map or the K draws (FIXLEN stays a premise of N2's served profile, "A served
+  link"). Nor does it need a window to start at a request boundary or end idle: a request's outputs fall in the
+  windows their release buckets name.
+- **The routing** brings each data cell its entry: a Beneš network over M = 2^D ≥ max(N, E) positions carries each of
+  the port's E = S·P entries, its id and its index e (W = 32 + D bits), and its (2D − 1)·2^(D − 1) switches are
+  witness. Every setting is a permutation, and `IoTieMatch` holds each data cell's routed entry to the index the map
+  names, so the switches can only find entries, never choose them.
+
+**(c) Decision: the stream is the warden's, and a bucket has one order.**
+- **The stream** is warden framing: the request's ingress ordinal, which the warden writes from the connection it
+  terminated. The server writes only the id, and a cell on another request's stream is refused by the map.
+- **The numbering, under a real engine.** The ordinal is the warden's release order: the order in which the requests'
+  last ingress cells land on the link. TRACE-CORPUS found that the engine admits in the API server's body-read order,
+  not in the release order: 2,970 inversions on its heavy trace and 3 on smallkv. Advice v0 numbers requests by first
+  row, the engine's admission, so on such a link the honest advice's q differs from the stream, and the unit refuses
+  honest traffic. That is a gap in completeness, not in soundness. It closes either way:
+  - the map carries a public permutation from the advice's numbering to the release ordinal (advice v1's certified
+    order, `PromptTie.order`), and the unit holds each cell's stream to order[q], with the deviation charged as advice
+    (TRACE-CORPUS: 2,194 bits on the heavy trace, 30 on smallkv);
+  - or the server admits in release order (a serve-openai change, vllm's), which makes the charge zero.
+- **The order within a bucket.** W4 releases a bucket's frames in queue order, a channel of up to log2 n_t! bits a
+  bucket that neither advice v0 nor the timing term charges (advice v0's "The order within a bucket"). The warden
+  instead releases each bucket's frames sorted by stream, each stream's in its order. This changes W4's order within
+  a row only, not its counts, its left-packing or FIFO across buckets. The map pins it, since a cell's place names
+  its output: of every order of a bucket's frames one is accepted, so the order is a function of which frames the
+  bucket holds, which the release buckets already say and charge. The only orders the map leaves free are
+  byte-identical cells (one request's repeated id), so the channel is zero bits.
+
+**The two ingress ties.** N2-ADVICE derives each request's ingress end from advice v0's prompt lengths. That rests on
+two ties between the advice's requests and the warden's certified ingress record:
+- **Each request's first row is its arrival order: checked in this unit.** Advice v0 numbers requests in order of first
+  row (`advice` validates it), and the map's q is that number. The warden writes each data cell's stream as its
+  request's arrival ordinal on the link, and the unit holds it to q. Every request has an output (`output_len ≥ 1`),
+  released in one of the session's windows. So on a link whose every egress window is accepted, each request's number
+  in the advice is its arrival ordinal. A server that admits a later arrival first puts its outputs on a stream the map
+  doesn't name, and the window refuses (`test_a_request_admitted_ahead_of_an_earlier_arrival_is_refused`). The premise
+  is the warden's numbering: the proxy forwards whole requests, one connection each, in the order the warden numbers
+  them.
+- **Each request's prompt_len is its certified ingress record's: checked by the ingress tie, not here.** The advice's
+  prompt_len must be the number of prompt fields in the request the warden certified on ingress. This unit reads
+  egress only; `IoTieRequest` ("The ingress tie" below) reads the ingress cells. The ids' binding to `c00.input/ids`
+  is the ingress-ids tie's (`io_ids`, below), reading the Commit's input rows as `IoTiePort` reads its sampled rows.
+
+**The ingress tie** (`io_request`, `IoTieRequest{B, T, R, OWN}`: the reference and the Boolean Definition, with
+its sidecar). It is one unit per ingress link-window at selection `All`, with one output bit, and it is what N2-ADVICE's
+advised verdict requires (REDTEAM's phase 6 showed that the advised floor accepts an acausal release under swapped
+prompt lengths). B is the ingress frame size (4,096), R the ingress allocation and OWN the certifier's own frame a
+window. It outputs 1 exactly when:
+1. the window's cells recompute the warden's registered cells root, committed as the egress cells are (one
+   `hm96-sha512/row/v2` row a bucket in a dense `frame-v3-sha512` tree of T rows);
+2. every cell is a pad, the own frame at bucket 0's head when OWN = 1 (`active.salt_frame` of the window and
+   `PLACEHOLDER`, as the grid holds it), or a request frame (`DATA` on `CANONICAL_STREAM`, B − 9 bytes of payload),
+   with each bucket's request frames before its pads;
+3. cut as `active.Requests` cuts the link (a request starts a frame with its LENGTH and ends at the frame that holds
+   its last byte), every request frame is that frame of a canonical id request (`active.id_request`, CERT-VARLEN).
+   The head and the fixed fields are at their places, with the content-length LENGTH's, the prompt fields are 11
+   bytes (`[` or `,`, then a u32 in 10 characters), gap spaces come only where the next piece would straddle a frame,
+   and `]}` then zero fill ends the request at its last byte. A name (`model`, `user`) is printable ASCII but `"`
+   and `\` in quotes: a request whose name needs a JSON escape is refused. Each frame parses without its request's
+   prompt length (`parse_frame`), so the count of prompt fields comes from the certified bytes;
+4. the cut, started from the view's carry-in, ends exactly as many requests as the view's `ended` has prompt lengths,
+   in order, each with its prompt_len, the window holds `received` request frames, and the cut leaves the carry-out's
+   bytes left and prompt fields.
+
+- **The view** (`request_view`) is public in the named gap. The verifier computes it from the opened advice's prompt
+  lengths and `received`, as `advised.view` does:
+  - the carry-in: the request in progress at the window's first request frame, with its ordinal, its bytes left and
+    its prompt fields so far;
+  - `ended`: the prompt lengths of requests carry_in.q, carry_in.q + 1, … whose last frame falls in the window, from
+    Σ `active.id_request_frames`, which is `advised.ends` over the link's framing;
+  - `received`: the window's request frames;
+  - the carry-out: the request in progress after the window's last request frame, the next window's carry-in.
+
+  At the target the unit reads the view under the advice's hiding root, as the egress map is read.
+- **The statements** (`statements`, `chained`). The verifier computes window w's statement from its own advice: the
+  (root, domain id) the warden registered for w, w and `request_view` of w. A link's statements chain: window 0's
+  carry-in is (0, 0, 0), each carry-out is the next window's carry-in, and the last is between requests. Each
+  IoTieRequest proof is held to its window's statement, so with the carry-out checked, a window's verdict says its
+  cells take the request in progress from the carry-in to the carry-out, and a link's verdicts hold every request's
+  prompt_len, spanning windows or not. Checked alone, a window would accept a carried prompt-field count with any
+  amount added to it and to its first ended request (REDTEAM phase 9 (b)); the previous window's verdict holds its
+  carry-out's count, so the chain refuses it. The ordinals are the verifier's: the cells carry none, and by the same
+  chain the j-th request that ends in a window is the link's request carry_in.q + j, its arrival ordinal q from 0.
+  On the wire the ordinal is q + 1, at least 1 (`active.Requests` streams the k-th request as k + 1, and CERT-VARLEN's
+  compact record carries it, #3650), so a tie that reads a stream or a record's ordinal reads advice request q as
+  ordinal − 1. IoTieRequest reads none: a request frame is on `CANONICAL_STREAM`.
+- **The circuit.** `IoTieRequest` recomputes the cells' root (`NetworkRowsRoot`), holds the own frame to the window
+  (`IoTieRequestOwn`), and scans the cells from the carry-in with one `IoTieRequestFrame{B}` and one
+  `IoTieRequestStep{D, NEW}` a cell. The frame reads its cell against its request's bytes left (0: a request starts
+  there) both ways, as a first frame and as a continuation, each with its prompt slots at fixed places. `]}` sits
+  where the bytes left put it, so each slot is a field, the end or zero fill by a comparison of the bytes left with a
+  constant, and the frame outputs whether it ends the request, the bytes left after it and its prompt fields. The
+  step keeps (left, fields, the requests ended, the request frames, a pad seen in the bucket, ok). The view's prompt
+  lengths, each with its index j, are routed by the prover's Beneš switches (`IoTieRoute`, W = 32 + D), and the step
+  holds the frame that ends the j-th request to entry j: its index and its count of fields. The count's carry past
+  2^32 is kept, so a sum that wraps is refused. `IoTieRequestEnd` holds the totals to `count` and `received`, and the
+  scan's last bytes left and prompt fields to the carry-out's, with its count below 2^32. Public: the root, its
+  domain id, the window, and in the named gap the carry-in's left and fields, `ended`, `count`, `received` and the
+  carry-out's left and fields (`left_out`, `fields_out`). Witness: the cells, their salts and the switches.
+- **What N2-ADVICE takes: the verdict** (`advised.IoTieVerdict`, #3502). `advised.ends` takes the prompt-length tie
+  only from an `IoTieVerdict(advice, accepted)` keyed to the advice's digest (`advised.digest`), one bit a window,
+  built only from IoTieRequest proofs the verifier verified on its own statements (`statements` from that advice's
+  prompt lengths and `received`, and the warden's registrations, `chained`), and refuses an advised link whose every
+  ingress window isn't accepted. Tonight the reference on the certified record stands in for each proof. That makes
+  `advised.ends`' premise a check: the link's r-th arrival is an id request of `prompt_lens[r]` prompt ids. Advice
+  request i is arrival order[i] (advice v1's order permutation; v0's is the identity), which the egress tie holds
+  through its map's stream. The advised unit itself doesn't change.
+- **The first negative** is REDTEAM phase 6's split (`test_redteam_phase6_split_is_refused`). At B = 4,096, prompts
+  of 338 and 16 tokens take 2 frames and 1, released one a bucket. The forged advice swaps them, keeping the total,
+  and `advised` accepts it with ends (1, 3) for (2, 3). The tie reads 338 fields in request 0's cells and refuses.
+  Lengths one off that keep every request's frames, which `advised.ends` can't see, are refused the same way. The
+  circuit reads the same cells (`test_redteam_phase6_frames_read_their_prompt_lengths`: 337 fields and no end, then 1
+  and the end, then 16 and the end), and the unit refuses the split at B = 512 and every forgery, cell tamper and view
+  tamper the reference does, with a routing that matches the forged counts refused by the entries' indices
+  (`test_the_unit_is_its_reference`). REDTEAM's phase-9 cases (`cursor/redteam-phase9-iotiereq-061a`) are
+  regressions in `test_network_certifier_io_request_phase9.py`: the carried count's free addend is refused by the
+  chain, and the prompt ids' values are the ingress-ids tie's (`io_ids`, below).
+- **Not in it: the prompt ids' values** (REDTEAM phase 9 #1: the tie counts each request's prompt fields and checks
+  each is a u32, but the ids the user sent are tied to nothing). The ingress-ids tie below closes it. Also not in it:
+  the advice's output_len ≤ max_tokens (an optional check) and one request a user (`certified_io`'s). The ingress head
+  signing each bucket's completed requests would bind the frames only, not prompt_len exactly, which the advice's
+  prefill rows need.
+- **The ingress-ids tie** (`io_ids`, `IoTieRequestIds{B, T, R, OWN, P, S, DS}`: the reference on a fake upstream
+  Commit and the Boolean Definition, with its sidecar). It is the ingress analog of `IoTiePort`: IoTieRequest's scan,
+  so the cells are hashed once, plus the Commit's `c00.input/ids` rows opened, and every computation of a prompt
+  position, and every prefix-cache read in place of one, held to the id the user sent there. It is meant to replace
+  IoTieRequest as the ingress unit once the Commit side exists.
+  - **What PROVE-PATH must expose** (the Commit side; the fake upstream's layout, `io_ids.commit_rows`):
+    `c00.input/ids` of every executed step as one `hm96-sha512/row/v2` row a step under a fresh 192-byte salt: the
+    step's input ids, u32be, in the forward's token order (the advice step's rows in batch order, row r's n_r tokens
+    at offset Σ_{r' < r} n_{r'}), zero past to a fixed width P (the engine's `max_num_batched_tokens`), in a dense
+    `frame-v3-sha512` tree of the session's steps. Its root and domain are registered before the draw and bound to
+    the run root and to the compiled circuits' `c00.input/ids` values, which the sampled proofs prove from, as the
+    port's sampled rows are (one tree may hold both). The prover keeps each step's salt and path until the tie's
+    outcome of record. The verifier also needs each prefix-cache hit's source (ENC-DERIVED's `sources`), which advice
+    v0's `cache_hit` count doesn't name.
+  - **The map** (`window_map`, public in the named gap from the advice's steps and sources; at the target under the
+    advice's hiding root). The window's prompt fields in scan order are the view's: carry_in.q's from
+    carry_in.fields, each ended request's, then carry_out.q's up to carry_out.fields. Their cells are private (which
+    cells hold request frames is the warden's timing), so the map names fields by ordinal, not by cell. Field f is
+    position p of request q, and its class is its root's: (q, p), or, below q's prefix-cache hit, its source's root
+    at p, so a cached position shares a class with the computation whose KV it reads, and one opened entry serves
+    every request that reads it. `keys[f]` is field f's class, numbered in order of first appearance, then the sink
+    2^CB − 1. The opened steps are every step with a token whose root is a class of the window (every scheduled
+    prompt token, a preempted request's recomputation included), and `ekeys[e]` is opened entry e's class, or the
+    sink. The verifier refuses an advice whose class no step computes, a source that isn't an earlier request, a step
+    past P tokens and more opened steps than S.
+  - **In the unit:** each request cell's slots (`IoTieIdsSlots{B}`) give each slot's value (the u32 its 10 characters
+    spell, at its place in a first frame's or a continuation's reading), whether it is a field (the frame has more
+    fields than its index) and its ordinal (the window's fields before the cell plus its index). The prover's first
+    Beneš network routes record f, (keys[f], f), to field f's slot, and `IoTieIdsKeys` holds each field to the record
+    routed to it, with its ordinal as index and a class other than the sink, and gives every other slot the sink.
+    The second sorts the members, each slot (class, 0, value), each opened entry (class, 1, its id) and the sink past
+    them, and `IoTieIdsChain` checks the classes non-decreasing, one value a class but the sink, and each class
+    starting with a slot. A Beneš network is a permutation under any switches, so every member is in the order and
+    the switches can only sort. On a link whose every window is accepted, every computation of request q's prompt
+    id i, and every KV read in place of one, is the id the user sent. Public: IoTieRequest's, the Commit's root and
+    domain id, the steps, `keys` and `ekeys`. Witness: IoTieRequest's, the opened rows, their salts and paths, and
+    both routings.
+  - **Tests** (`test_network_certifier_io_ids.py`): a link of chunked prefill across windows, a recompute after a
+    preemption and a cache hit from another window's request or the same window's is accepted in every window.
+    Refused: REDTEAM phase 9 #1 (one prompt id substituted in the Commit, which IoTieRequest accepts), a cache hit on
+    another prefix (either kind), and a Commit that differs at a cache source (both windows). The unit is its
+    reference on those and on map and switch tampers (`test_the_unit_is_its_reference`, slow).
+  - **Cost.** `IoTieRequestIds{512, 4, 2, 1, 16, 8, 4}` is 12,924,899 ANDs: IoTieRequest's 4,042,173 (and 3 more in
+    the final AND, over 6 checks), the slots 24,670 a cell, the 8 port rows 8,400,647, the routing 78,336, the keys
+    16,064, the sort 182,784 and the chain 32,202. At REDTEAM's RIN (N = 5,400, B = 4,096, NK = 2.0 × 10^6
+    slots, at least 245 rows of 8,192 ids opened): the slots 1.09 × 10^9 (201,004 a cell), the routing 1.81 × 10^9,
+    the keys 1.5 × 10^8, the sort 4.87 × 10^9 (over 2^22 members of 54 bits), the chain 3.4 × 10^8 and the rows
+    4.22 × 10^9 (1.72 × 10^7 each): about 1.25 × 10^10 a window on IoTieRequest's 1.14 × 10^10. A cheaper split
+    has PROVE-PATH also register the session's prompt stream, the requests' prompt ids in arrival order, and hold
+    every computation and cache hit to it in the Commit's units; the tie would then read the window's stream entries
+    in order with no map or sort.
+- **Cost.** The unit is its parts: `IoTieRequest{512, 4, 2, 1}` is 4,042,173 ANDs, of which the rows are 3,888,916,
+  the own frame 4,095, each of the 7 frames 20,924, each step 265 or 267, the routing 700 and the totals and carry-out
+  129.
+  `IoTieRequestFrame{4096}` is 170,994 (both readings check every prompt slot), the step 277 at D = 13 and the own
+  frame 32,767. Every ingress byte is hashed once. At T = 600 and R = 9 (REDTEAM's RIN, N = 5,400), the rows are
+  about 1.05 × 10^10, the frames 9.23 × 10^8, the routing 4.6 × 10^6 and the steps 1.5 × 10^6: about 1.14 × 10^10 a
+  window, the rows 92% of it.
+
+**The unit,** `IoTieWindow{B, T, R, P, S, DS}` (R = r):
+- **The cells** are the warden's per-window value. Each bucket's R cells are one `hm96-sha512/row/v2` row of R·B
+  bytes under a fresh salt, in a `frame-v3-sha512` tree of T rows (a dense domain, its pads to a power of two).
+- **The port** is the Commit's value: one `hm96-sha512/row/v2` row a step of the session, its P sampled ids (u32be in
+  batch-row order, zero past its batch), in a dense `frame-v3-sha512` tree of 2^DS steps whose root and domain the
+  Commit registers. The window opens its S rows at the map's steps (`IoTiePort`: each row's digest, its hm96 leaf and
+  `FrameV3Read{DS}`). This is the fake upstream's layout. The real port is vllm's Commit
+  (`runner.sampler/sampled_token_ids`, int32 [num_reqs, 1], under the run root's binding map): vllm owns its layout,
+  and `IoTiePort` follows it.
+- **The content** (`IoTieContent`) parses each cell, routes the port's entries and matches them.
+- **Public:** both roots and domain ids, the statics, and in v4 the map and the steps (the named gap). At the target
+  the map registration's root and domain id replace the map and the steps.
+- **Witness:** the N cells and T salts, the S opened port rows with their salts and paths, and the switches.
+- **Output:** one bit, ok.
+
+A row's digest costs a compression per 128 bytes and one more, and its hm96 leaf, frame-v3 leaf and node about 8.5
+more, whatever its length. With a row a cell at B = 256, each cell's 2 compressions of bytes cost 11.5. With a row a
+bucket, the cells' rows cost 1.05 times their bytes at the rehearsal and 1.004 times served.
+
+**On registered reads** (the flock verifier's §16.10, `--registered`, which WARDEN's #3594 uses to read the warden's
+rows), the statement's own `sha512x3` and `hm96` slots prove each registered row's digest and hiding commit: 58,120
+ANDs a compression, and three compressions for hm96. They must, since the row hides a private value. The verifier
+checks the row's frame-v3 leaf and path from its public b ‖ c. So a registered read takes the tree above the rows out
+of the proof, but not the rows' hashing: no gate of the unit hashes, yet the proof still hashes every byte once. With
+both the cells and the Commit's step rows read as registered rows, by the warden's row layout:
+
+| The warden's rows | Rehearsal | Served | Served, compact B = 16 | Rows and public b ‖ c, served |
+|---|---|---|---|---|
+| v4 as built (both roots in the unit) | 1.020 × 10^9 | 1.419 × 10^11 | 2.85 × 10^10 | none |
+| A row a bucket (S·B bytes) | 7.58 × 10^8 (−25.6%) | 1.252 × 10^11 (−11.7%) | 1.15 × 10^10 (−59.6%) | 600, 77 KB |
+| Rows of 4 KiB | 8.13 × 10^8 (−20.3%) | 1.361 × 10^11 (−4.0%) | 1.21 × 10^10 (−57.4%) | 63,225, 8.1 MB |
+| A row a cell (#3594's) | 1.77 × 10^9 (+73.9%) | 3.015 × 10^11 (+112.5%) | 1.805 × 10^11 (+534%) | 1,011,600, 129 MB |
+
+- **The saving** is what it was: the port's paths (`FrameV3Read{DS}`, 3.96 × 10^6 of a served step's 4.70 × 10^6) and
+  the cells' tree (1.7% at the rehearsal, 0.2% served). The bytes' floor is 90% of the registered window at the
+  rehearsal and 94% served.
+- **A row a cell** multiplies the cells' hashing by the cost of a row: 290,600 for a 256-byte cell (5 compressions
+  for 2 of bytes), and 174,360 for a 16-byte one (3 compressions for an eighth of one). The verifier then climbs a
+  path a cell and reads 128 bytes of b ‖ c a cell.
+- **At WARDEN's schedule** (T = 600, 16 slots, B = 256), a bucket is 4 KiB. The cells cost 1.22 × 10^9 a window as
+  bucket rows, 2.79 × 10^9 as cell rows, and 1.56 × 10^9 as v4's bucket rows in the unit.
+- **Reading one cell** costs its whole row: 2.9 × 10^5 in a cell row, 2.0 × 10^6 in a 4 KiB row and 2.0 × 10^8 in a
+  served bucket row.
+
+So the layout to register is a row a bucket. Row t − w·T holds bucket t's S slots in slot order, slot j at bytes
+j·B to (j + 1)·B: WARDEN's row (t − w·T)·S + j becomes words j·B/2 onward of row t − w·T. At WARDEN's schedule that
+row is 4 KiB. The unit then reads T + S registered rows and recomputes no root; its parse, routing and match are
+unchanged. Not built: `IoTieWindow` still recomputes both roots, and a statement with T + S registered ports this
+large hasn't been measured.
+
+**What the map and the port must be.** For advice v0's output k = (step, row, request, index), released in the window
+(`release[k] // T = w`):
+- its cell is in bucket t = `release[k]` − w·T, at its place in the bucket's (request, index) order;
+- q is `request`, advice v0's number, which the unit holds to the warden's stream ("The two ingress ties");
+- e = σ·P + `row`, with σ the place of `step` among the window's steps;
+- the id is port row `step`'s `row`-th id: `runner.sampler/sampled_token_ids` of step `step` at batch row `row`.
+
+So each `release[k]` is output k's frame bucket in the warden's certified egress record, which is what N2-ADVICE's
+advised floor reads. The unit checks this by position: a cell's bucket is its row in the warden's registered tree,
+and the map puts output k's cell in row `release[k]` − w·T and nowhere else.
+
+`window_map` computes the map and the steps. vllm and compute own the port's layout and its binding to
+`c00.input/ids` and `sampled_token_ids`, in zero knowledge what `check/commit_tokens.py` does in the clear. The tie
+reads the Commit's root as public.
+
+**Cost a link-window** in ANDs, by part. The rehearsal is L = 6, T = 60, r = 98 (N = 5,880), with a port of S = 128
+steps of P = 64 from a session of 2^10 (E = M = 8,192). Served is `SERVED`'s shape, L = 9, T = 600, r = 1,686 (N =
+1,011,600), with S = 4,096 steps of P = 256 from a session of 2^23 (E = M = 2^20). Egress cells are 256 bytes and
+ingress frames 4,096. Each part's formula is exact, checked against `HC.ands` at two sizes or more and the whole window
+at T = 3, R = 4, P = 4, S = 4, DS = 3 (`IoTieWindow{256, 3, 4, 4, 4, 3}`, 6,721,770 ANDs: `IoTiePort` 3,534,423,
+`NetworkRowsRoot` 3,139,634, `IoTieContent` 47,711 and 2 joining them), and extrapolated from there; nothing at these
+sizes is built.
+
+| Part | Rehearsal | Served | From |
+|---|---|---|---|
+| Cells' rows: digests | 684,933,540 | 117,273,138,600 | T × ⌈(R·B + 17) / 128⌉ compressions of 57,947 (`NetworkRowDigest`) |
+| Cells' rows: hm96 leaves | 12,935,820 | 129,358,200 | T × `Hm96Sha512Leaf`, 215,597 |
+| Cells' tree | 17,487,788 | 282,689,596 | T `FrameV3Leaf`s, the pads to a power of two (`FrameV3Pad`), the nodes, `LmsEqual` |
+| The port's rows and reads | 277,345,151 | 19,256,418,303 | `IoTiePort`: S × (`NetworkRowDigest{32P}`, `Hm96Sha512Leaf`, `FrameV3Read{DS}`) + S − 1; 2,166,758 and 4,701,273 a step |
+| Cells' parse | 21,626,640 | 3,720,664,800 | N × `IoTieCell`, 3,678 |
+| Routing | 4,608,000 | 1,063,256,064 | `IoTieRoute`, W = 32 + D ANDs a switch |
+| Match | 764,399 | 131,507,999 | `IoTieMatch`, N·(130 + D − tz(E)) − 1 |
+| Joins | 2 | 2 | the window's |
+| **The window** | **1,019,701,340** | **141,857,033,564** | 173,419 and 140,230 a cell |
+| The target's map read | 30,710,631 | 4,770,375,793 | a range read of ⌈(8N + 4S) / 4,096⌉ rows of 4 KiB (12 and 1,980) at depth 15 and 22, and a join; estimated from the parts above, no range read is built |
+| **The window, the target** | **1,050,411,971** | **146,627,409,357** | 178,641 and 144,946 a cell |
+
+- **The floor.** The window's bytes take ⌈N·B / 128⌉ compressions, 6.81 × 10^8 and 1.172 × 10^11: 67% and 83% of the
+  window. Hashing every byte once with SHA-512 is the floor of any tie that opens every cell under a SHA-512
+  commitment. The port is 27% and 14%, and the tie's own checks are 2.6% and 3.5%.
+- **At B = 4,096** the window is 1.142 × 10^10 and 1.932 × 10^12, with 16 times the bytes to hash.
+- **A served link-day** (1,440 windows) is 2.043 × 10^14: against N2's 9.30 × 10^9 and N3's design at 4.9 to 9.2 ×
+  10^14.
+- **Every part scales with the capacity** (N = T·R cells, S·P port entries), not with what is served: a served
+  window's 35,386 tokens (REDTEAM's figure) fill 3.5% of N, and the pads are hashed, routed and matched as data cells
+  are.
+
+**Prove seconds and proof bytes, extrapolated, not measured.** N2-ZK's unit was measured (`r20261024-044047-69ad`,
+`r20261024-050601-9e82`): `NetworkHeadCheckRows{6, 60, 1}` at k_log 23, 1,726,108 ANDs, `prove --zk` in 5.40 to 5.63
+s on 23 cores, a 153 KB proof, Lean verify in 4.68 to 4.8 s. This takes it linearly in ANDs, with a machine being one
+such 23-core prover. The machines a link needs are the prove time over the window's span (6 s at the rehearsal, 60 s
+served):
+
+| A window | ANDs | N2-sized units | Prove, 23 cores | Machines a link | Proof | Lean verify |
+|---|---|---|---|---|---|---|
+| Rehearsal, B = 256 (as built) | 1.02 × 10^9 | 591 | 53 to 55 min | 530 to 550 | 90 MB | 46 to 47 min |
+| Served, B = 256 (as built) | 1.419 × 10^11 | 82,183 | 5.1 to 5.4 days | 7,400 to 7,710 | 12.6 GB | 4.5 to 4.6 days |
+| Served, compact B = 16 | 2.85 × 10^10 | 16,487 | 24.7 to 25.8 h | 1,480 to 1,550 | 2.5 GB | 21.4 to 22.0 h |
+| Served, compact B = 8 | 2.48 × 10^10 | 14,372 | 21.6 to 22.5 h | 1,290 to 1,350 | 2.2 GB | 18.7 to 19.2 h |
+| Served, B = 16, port rows of 64 steps | 1.13 × 10^10 | 6,551 | 9.8 to 10.2 h | 590 to 610 | 1.0 GB | 8.5 to 8.7 h |
+| Served, B = 8, port rows of 64 steps | 7.66 × 10^9 | 4,436 | 6.7 to 6.9 h | 400 to 420 | 0.68 GB | 5.8 to 5.9 h |
+| Rehearsal, B = 256, the target | 1.05 × 10^9 | 609 | 55 to 57 min | 550 to 570 | 93 MB | 48 to 49 min |
+| Served, B = 256, the target | 1.466 × 10^11 | 84,947 | 5.3 to 5.5 days | 7,650 to 7,970 | 13.0 GB | 4.6 to 4.7 days |
+| Served, B = 16, port rows of 64 steps, the target | 1.61 × 10^10 | 9,314 | 14.0 to 14.6 h | 840 to 870 | 1.4 GB | 12.1 to 12.4 h |
+
+The target's map read is the same 4.77 × 10^9 at every framing, so it is 3.3% of a served window at B = 256 and 30%
+at B = 16 with port rows of 64 steps (3.32 × 10^10 at B = 16, 2.96 × 10^10 at B = 8, 1.24 × 10^10 at B = 8 with port
+rows of 64 steps). At the compact framing its 8 bytes a cell are half the cells' 16, which makes the entry's width a
+lever there: e needs log2 E bits (20 served) and q log2 of the session's requests, not 32 each.
+
+The proof bytes are an upper bound if one statement's proof grows slower than its ANDs. Before any prove at these
+sizes, `lms`'s `Sha512Compress` needs a `build` (N2-ZK's caveat: C-Flock lowers it gate by gate, and it is most of
+this unit).
+
+**Two ties, and the bound each gives.** The protocol can run the tie on every cell or on K draws a window, with live
+coins. In both, the head's counts are N2's and the release buckets advice v0's. What changes is the term the tie adds
+to the bound: a cell the tie never checks carries whatever the server wrote in it.
+
+| Tie | ANDs a window | Its term in the bound, at δ |
+|---|---|---|
+| **All**: every cell, as built | 1.419 × 10^11 served, 1.02 × 10^9 at the rehearsal | none: every cell is checked, so the bound has no content term from the tie |
+| **K-draw**: K data cells a window | K × 2.02 × 10^8 served at B = 256 with a row a bucket | ε·n·b: ε·n unchecked cells of b free bits each |
+
+- **ε·n.** A window whose wrong data cells are a fraction f_w of its n_w escapes K draws with probability (1 −
+  f_w)^K. So on a link whose windows are all accepted, Σ_w f_w ≤ ln(1/δ)/K at δ over all of them, and ε·n = ln(1/δ)·
+  n_w/K, n_w being the most data cells a window holds. It doesn't grow with the number of windows: REDTEAM's link-day
+  (W = 1,440, ε = ln(1/δ)/(K·W)) is one case of it. If a window can be full to capacity (n_w = N), the bound is 28.6
+  times the one at the served average.
+- **b.** It is log2|V| = 17.21 bits (V = 151,329) only when every other byte of every cell is fixed and the id is
+  below V. On the current framing that needs every cell's form checked, which hashes every byte: the cells' rows and
+  their parse, 1.214 × 10^11 a served window, 86% of the All tie, with an id < V compare that `IoTieCell` doesn't make
+  (it checks below 2^32). N3's design checks every frame's form too, at more than the All tie costs. Without that check,
+  an unchecked cell carries what the server wrote in it, up to B − 9 = 247 bytes at B = 256 (b = 1,976). With the
+  compact framing below, the warden's fixed cut leaves only the id's bytes to the server, so b = 32 with no check (24
+  with 3-byte ids). log2|V| then still needs id < V checked on every cell, and so every cell opened.
+
+  At δ = 2^−40 and n_w = 35,386 (REDTEAM's served average), restated at three values of K:
+
+  | K | ε at W = 1,440 | ε·n, cells | b = log2\|V\| | b = 32 | b = 1,976 |
+  |---|---|---|---|---|---|
+  | 20 | 0.0963% | 49,055 | 844 kbit | 1.57 Mbit | 96.9 Mbit |
+  | 100 | 0.0193% | 9,811 | 169 kbit | 314 kbit | 19.4 Mbit |
+  | 1,000 | 0.00193% | 981 | 16.9 kbit | 31.4 kbit | 1.94 Mbit |
+- **A draw's price** depends on the warden's rows. A draw opens its cell's bucket row and the port row its map entry
+  names. With a row a bucket at B = 256, it hashes the bucket's 431,616 bytes: 2.02 × 10^8 a draw (the port row's 4.7
+  × 10^6 of it), 4.0 × 10^9 a window at K = 20. Other row sizes, with what each costs the All tie's cells against
+  bucket rows' 1.177 × 10^11:
+  - a row a cell: 8.2 × 10^6 a draw, 6.88 × 10^11 for the cells;
+  - 4 KiB rows of 16 cells: 9.2 × 10^6 a draw, 1.528 × 10^11 (30% more);
+  - 64 KiB rows: 3.7 × 10^7 a draw, 1.195 × 10^11 (1.5% more).
+
+  At compact B = 16, a bucket row is 26,976 bytes, and a draw costs 1.89 × 10^7 (3.8 × 10^8 at K = 20).
+- **What else a K-draw tie needs.** A drawn cell's place names its map entry, so a dropped output is caught at its
+  cell as a wrong cell is (a pad where the map names an output). The draws pick among public positions, a cell and its
+  entry's map row (at the target the entry is private, its place isn't), so the coins need no reduction inside the
+  proof. At the target a draw also opens its map row, 5.9 × 10^6 served.
+
+So at B = 256, a K-draw tie whose term is ε·n·log2|V| costs nearly what the All tie does. A term near that at a K-draw
+tie's price needs the compact framing. There it is ε·n·32 bits (24 with 3-byte ids), 1.57 Mbit at K = 20, for K ×
+1.89 × 10^7. With the compact framing, the All tie, which has no term, costs 2.85 × 10^10 a served window as built,
+and 1.13 × 10^10 with port rows of 64 steps.
+
+**The compact-framing lever.** At B = 256, 83% of the All tie is SHA-512 over the cells' bytes, and the 138-byte event
+is what fills a cell. The registered compiler (vllm's NET-61 default) could fix the server's response framing as one
+binary record a token: the id as u32be, with a client-side shim rendering OpenAI SSE from the records with the public
+tokenizer. The warden would then cut the server's bytes every 4 instead of at `\n\n`, a byte rule that still parses
+nothing. It would frame each record as now: its 9-byte header, the 4 bytes and 3 zero bytes, so B = 16. The stream
+stays in the warden's header, so the record carries none. A 5-byte header (a 24-bit stream and a 1-byte length) and
+3-byte ids (V < 2^24) make B = 8. The served window at B = 16 is 2.85 × 10^10, by part:
+- the port, 1.93 × 10^10 (68%);
+- the cells' rows, 7.75 × 10^9 (27%);
+- routing, 1.06 × 10^9; the match, 1.3 × 10^8;
+- the parse, 2.6 × 10^8, estimated at 256 ANDs a cell (no compact cell is built).
+
+At B = 8 it is 2.48 × 10^10. The port is then the largest part, and its layout is vllm's. Its levers, each priced at
+the served shape:
+- **Rows of 64 steps** (64 KiB rows of 2^17 in the tree) cost 5.14 × 10^5 a step against 4.70 × 10^6, 2.1 × 10^9 a
+  window when its steps fall in 64 rows. That takes the served window to 1.13 × 10^10 at B = 16 (590 to 610 machines a
+  link) and 7.66 × 10^9 at B = 8 (400 to 420).
+- **A range read** of the window's consecutive steps shares the path above them: about 1.02 × 10^6 a step, 4.17 × 10^9.
+- **Registered reads** take the paths out of the circuit: 3.96 × 10^6 of each step's 4.70 × 10^6.
+
+The rehearsal window drops from 1.02 × 10^9 to 3.60 × 10^8 at B = 16 (190 to 200 machines), and to 9.9 × 10^7 with
+port rows of 64 steps (52 to 54). `io_tie` takes B > 147 today, and the compact cell (`IoTieCell` over a binary record)
+isn't built.
+
+**The warden's rows, exactly.** The warden registers its cells as the following root a link-window, and the tie
+recomputes it. The reference is `io_tie.data_cell`, `pad_cell`, `bucket_rows`, `domain` and `rows_root`.
+- **A cell** is B bytes (B = 256; `io_tie` takes B > 147).
+  - A pad is B zero bytes: `HEADER` (`>BII`) of kind `PAD` = 0, stream 0 and length 0, then zero fill.
+  - A data cell is `HEADER` with kind `DATA` = 1, the stream as u32be and the payload's length, 138, as u32be. The
+    payload follows, `id_event(id)`: `ID_EVENT_HEAD`, the id right-aligned in 10 decimal characters (`%10d`), then
+    `,"finish_reason":null}]}\n\n`. Zero fill runs to B.
+  - The server writes the payload; the warden writes the header and the fill.
+- **The stream** is q, the request's ingress ordinal on the link counted from 0 over the session: the index of the
+  request in advice v0's `requests` and the map's q. `active.Requests` numbers its streams from 1, so its stream is q +
+  1.
+- **A bucket's order:** its data cells first, sorted by stream, each stream's cells in their order; then pads to R
+  cells.
+- **Row t,** for t in 0 … T − 1, is bucket t's R cells concatenated: R·B bytes, 25,088 at the rehearsal (R = 98) and
+  431,616 served (R = 1,686).
+- **Its leaf value** is `head_check.hiding_value(row, salt)`, the `hm96-sha512/row/v2` leaf: hm96's (`hm96.SHA512`,
+  its default key) tree leaf over `commit_string(key, sha512_row_v2_digest(row, 8·R·B), salt)`. The salt is fresh for
+  each row: 192 bytes of the warden's own randomness.
+- **The tree** is the dense `frame-v3-sha512` domain of T rows, `io_tie.domain(binding, T)`, which is
+  `CommitmentDomain(binding, -1, RangeIndexedDomain(0, T), hash="sha512")`. The binding is a 64-byte digest naming the
+  link, the window and the cells, which the warden's registration fixes; the tie reads the domain id as public. Under
+  that domain:
+  - leaf t is `leaf_ref(domain_id, "hm96-sha512/row/v2", value_t, t)`;
+  - the pads are `_hash(b"pad", domain_id, uint(t))` for t in T … 2^⌈log2 T⌉ − 1;
+  - each node is `node_ref(domain_id, level, index, left, right)`.
+
+  This equals `tree_levels` over the domain's `row_leaf`s.
+- **Registered:** the root and the domain id, with the window w; bucket t is session bucket w·T + t. The T salts go
+  to the prover, privately: they are its witness, and it rebuilds the cells from the map and the port.
+- **The port's rows** (the fake upstream's; the real ones are vllm's) are the same leaves and tree over the session's
+  2^DS steps: row s is `port_row` of step s's sampled ids, each under a fresh salt (`rows_levels`, `open_port`).
+- **Not needed by the All tie:** a per-stream sequence number in the header.
+
+**What the prover keeps,** from the window's registration until the tie's outcome of record, by `proof_deadline`: the
+warden's T salts, and the port rows' salts and paths at the window's steps, which the Commit's prover keeps for its own
+openings. At the target, it also keeps the map's rows, salts and paths, which the advice's prover registers. The cells
+are a function of the map and the port, so the prover rebuilds them, and it computes the switches when it proves.
+
+**Composition.**
+- **N2** (`All`) holds the head's fields and counts and the certificate that signs them.
+- **The cells' root** is the warden's own per-window value, registered by the auditor's device
+  (`trusted-host`). It isn't the head's frames root, which is an unsalted tree that can't be opened outside a
+  proof. The head's counts and the cells come from one grid of the warden's: bucket t holds n_t data cells. The tie
+  doesn't read the head; tying the cells' root into it (a record v3 field) is open.
+- **N3** (`All`, a design) holds every frame under the head's root to its template, which on a served link's egress
+  the tie's check of every cell covers.
+- **The map** is the advice's, charged as `A_c`. In v4 the verifier computes it from the opened advice v0, the named
+  gap. At the target it is registered with the advice before the draw and read in the proof, and the compile unit
+  holds it to the advice. **The port** is the Commit's root, and its layout and its binding to the run root are
+  compute's and vllm's.
+
+**Reuse.** `Sha512Compress`, `NetworkRowDigest`, `Hm96Sha512Leaf`, `FrameV3Leaf`, `FrameV3Node`, `FrameV3Read` and
+`LmsEqual`. The new Definitions (`IoTieCell`, `IoTieRoute`, `IoTieMatch`, `IoTieContent`, `IoTiePort`, `FrameV3Pad`,
+`NetworkRowsRoot`, `IoTieWindow`) are composites of those, with no new hash.
+
+**The prototype** (`io_tie`, on a fake upstream) has the reference (`io_tie.reference`, in the clear), the Boolean
+Definitions above, and their tests:
+- `test_network_certifier_io_tie.py` holds every circuit to its reference. It covers honest, empty and full windows;
+  11 ways the cells can differ from the map and 5 maps other than the verifier's; 5 ways the port can differ from the
+  Commit's (a row, a salt, a sibling, a step, another root); a request admitted ahead of an earlier arrival; two ids
+  swapped with the routing that matches them; and a Beneš network that routes every permutation. Every tamper is
+  refused;
+- `test_network_certifier_io_tie_adversarial.py` holds the red team's cases (`cursor/redteam-advice-tests-061a`): no
+  field of a cell but the id is the server's; interleaved responses of any length, with a count one off either way
+  refused; a bucket's order accepted in one order of all its permutations; a payload in 1, 3 or 17 cells refused, with
+  the K-draw tie's price, about 49,000 cells and 844 kbit over a link, as its comparison;
+- `test_network_certifier_io_tie_phase4.py` holds REDTEAM's v3 cases (`cursor/redteam-phase4-io-061a`), refused. They
+  are a wrong id and a fabricated response, each with a map and a port of the prover's own that match it and with the
+  Commit's rows carrying it (or port rows of its ids). It also shows the only free order in a bucket is byte-identical
+  cells.
+
+Still to build: the warden writing and committing cells (`active`), the cells' registration, the port's real layout
+and registration (vllm's Commit), the target's map registration and its range read, the ingress tie's view read
+under the advice's hiding root, and the real Commit's `c00.input/ids` rows that the ingress-ids tie (`io_ids`) reads.
+
+**Open for proofs.**
+- Hidden-position reads (frame and port) under the one soundness theorem. In v4 every read is at a public position
+  (every bucket row, every port row at its public step), and what is hidden is the routing: a Beneš network whose
+  switches are witness, which only finds entries, since the match checks each routed entry's index. At the target the
+  port's reads are at hidden positions, the steps the private map gives, and the map's rows stay at public ones.
+
+What this establishes, once built: on an egress link whose every window is accepted, every cell the user received is
+a pad or `event(id)`. That id is the Commit's sampled id at the step and batch row advice v0 names for that cell's
+output. The cell is on its request's stream, at the release bucket and the place in it that the advice names, and each
+request's number in the advice is its arrival ordinal. This holds for every cell with no ε and for responses of any
+length. What it doesn't establish:
+- zero knowledge for the advice: v4 reads the map and the steps in the clear from the opened advice, the named gap,
+  which the target and the compile unit close;
+- the advice's prompt lengths against the ingress record, which is the ingress tie's (`IoTieRequest`);
+- the port's layout and the registration of its root (vllm's and compute's);
+- anything about the text a client shows beyond the public tokenizer's decode.
 
 ## The Program's logical schedule and the clock-sync advice (`schedule`)
 
