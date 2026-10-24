@@ -1,7 +1,7 @@
 """Streaming Merkle construction with O(log n) resident state, and replay-to-open (CPERF 2026-09-17 addendum).
 
-Same frozen framing and the same pairing/lift rule as :class:`verity_vllm.commit.merkle.MerkleTree` (so the streaming root
-equals the production root whenever the leaves are streamed in the production tree order), but the builder never
+Same frozen framing and the same pairing/lift rule as :func:`verity_vllm.commit.scheme.fold` (so the streaming root
+equals the batch root whenever the leaves are streamed in the production tree order), but the builder never
 holds the leaves: it keeps ONE pending digest per level (the classic Merkle frontier) plus two counters per level.
 
     b = StreamingMerkle()
@@ -11,12 +11,12 @@ holds the leaves: it keeps ONE pending digest per level (the classic Merkle fron
 Replay-to-open: nothing but ``(root, leaf_count)`` is retained.  To open leaf ``i`` later, the deterministic producer
 is re-run and streamed through :class:`StreamingMerkle` with ``track=i``; the builder records the sibling of the
 tracked node at every level as pairs form (still O(log n) state) and returns a path that
-:func:`verity_vllm.commit.merkle.verify_opening` accepts against the retained root.
+:func:`verity_vllm.commit.merkle.fold_path` folds to the retained root.
 
 Tree order: production sorts canonical ids (``identity.tree_sorted``); a stream can only reduce online in ARRIVAL
 order, so either (a) the producer emits in tree order (true for an RU whose op list is fixed by the template:
 ``ids_sorted`` is known before any value exists) or (b) the frame is versioned so that tree order = emission order.
-This module does not decide that; :func:`stream_in_tree_order` shows (a) for a stored RU.
+This module does not decide that.
 """
 
 from __future__ import annotations
@@ -158,23 +158,3 @@ def replay_to_open(producer: Callable[[], Iterator[tuple[bytes, bytes | memoryvi
     if value is None:
         raise IndexError(index)
     return root, b.leaf_count, b.path, value
-
-
-def stream_in_tree_order(reader: Any, rid: str, step: int) -> tuple[bytes, int, int]:
-    """A stored RU streamed in the production tree order (ids known from the index before the values): root,
-    leaves, peak resident bytes of the builder.  Root equals ``commitments.json``'s."""
-    from verity_vllm.commit import identity
-
-    ru = reader.ru(rid, step)
-    by = {e.canonical_id: e for e in ru.index.entries}
-    ids = identity.tree_sorted(list(by))
-    import numpy as np
-
-    mm = memoryview(np.memmap(ru.dir / "values.bin", dtype=np.uint8, mode="r"))
-
-    def gen() -> Iterator[tuple[bytes, memoryview]]:
-        for c in ids:
-            e = by[c]
-            yield ft.leaf_header(c, e.dtype, e.shape), mm[e.offset : e.offset + e.nbytes]
-
-    return stream_root(gen())
