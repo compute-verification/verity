@@ -95,6 +95,19 @@ research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool
   bash benchmarks/verifier_cost/flock_read.sh 256 1024
 ~~~
 
+`registration.sh N...` times the one-stage verifier's R3 against the window's ports: `registration.py` writes, per N, a
+valid v1 audit with N more ports (`test_difftest._many_ports`, a MoE window's shape; TPEVAL's w13 window at chunk cap 64
+is 1,536 members, about 12k ports), and `registration/Main.lean`, built in a scratch Lake package against the checkout's
+verifier, times `Registration.check` (one canonical key per root, `Registration.portIndex`) and `Registration.checkRef`
+(R3 as first written, quadratic in the ports; `check_eq_checkRef` proves them equal) on the parsed input, and fails where
+their codes differ. `checkRef` runs up to `REF_MAX` ports (default 12288). `$OUT` gets registration.jsonl, one row per N
+and function (ports, roots, milliseconds, peak RSS, codes).
+
+~~~sh
+research run --as proofs --project verity --on vy-nebius-cpu-2 --source . --pool proofs --cwd clone -- \
+  bash benchmarks/verifier_cost/registration.sh 1024 4096 12288 49152
+~~~
+
 `flock_tmpl.sh K...` is the same unit in `flock-ir-tmpl/v2` (`Flock/Tmpl.lean`, PRF-133): `flock_read.py --circuit-only`
 builds the circuit, `python -m verity_flock.tmpl` writes its unit's templated form (Definitions read off the flat unit's
 repeated blocks), and `flock_tmpl/Main.lean` times the templated read (`Tmpl.parse`) and diffs `Tmpl.unroll`'s lines
