@@ -54,7 +54,7 @@ theorem recordDraw_of_parse {record : String} {j : Json} (h : Json.parse record 
 
 /-- The checks after the verdict at the parsed value: the statement, the draw at `f.j`, custody at `j'`. -/
 def checksAtJ (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
-    (mids : List (Claims.Msg × Coin)) (f : FinalJ) (j' : Json) : V Unit := do
+    (mids : List (Claims.Msg × Coin)) (f : FinalJ) (j' : Json) : Flock.V Unit := do
   Record.check (f.stmt == x) "live: the last message's statement is not the statement"
   Record.check (drawEq (drawOfJ f.j) s.read.draw) "live: the record's draw is not the statement's"
   custody spec (← liveOfJ spec j') link c₁ mids
