@@ -14,7 +14,7 @@ from research.queue import QueueError, StoreLabels, label_target, lean_change
 from research.store import vocab
 from test_drive_postland import _registry
 from test_queue import World, _git
-from test_queue_drive import Harness, _check, _failed_run, _steps_run, _tip
+from test_queue_drive import Harness, _failed_run, _steps_run, _tip
 
 EVERY = {s: "passed" for s in AFTER_LANDING if s not in AFTER_LANDING_OPTIONAL}
 
@@ -666,63 +666,3 @@ def test_review_lists_the_members_lacking_a_land_verdict_and_records_one_refusin
                                                                                "no land verdict")
     (lab,) = world.store.labels(label_target(1, world.gh.prs[1].head), key=vocab.REVIEWED)
     assert (lab.value, lab.by, lab.ref) == ("land", "lane-9", "note:ci/x")
-
-
-#: a landing gate (`Driver._landing_gates`): it fails each queue merge above BASE whose own change touches bad.txt
-GATE = """\
-import json, subprocess, sys
-base, top = sys.argv[1:3]
-git = lambda *a: subprocess.run(["git", *a], capture_output=True, text=True, check=True).stdout
-failures = []
-for line in git("log", "--first-parent", "--format=%H %P", f"{base}..{top}").splitlines():
-    commit, first, *_ = line.split()
-    if "bad.txt" in git("diff", "--name-only", first, commit).split():
-        failures.append({"commit": commit, "why": "touches bad.txt", "fix": ["delete bad.txt"]})
-print(json.dumps({"failures": failures}))
-sys.exit(1 if failures else 0)
-"""
-
-
-def test_a_landing_gate_at_main_ejects_the_members_it_fails_and_what_is_below_them_lands(world, monkeypatch):
-    _move_main(world, {"gates/g.py": GATE})
-    h = Review(world, monkeypatch)
-    h.d.landing_gates = ("gates/g.py",)
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    world.gh.put(2, world.change({"bad.txt": "2\n", "gates/g.py": "import sys\nsys.exit(0)\n"}))   # its own copy doesn't count
-    world.gh.put(3, world.change({"c.txt": "3\n"}))
-    for n in (1, 2, 3):
-        h.review(n)
-    assert h.tick().startswith("landed #1"), world.logs
-    assert _subject(world, "main").startswith("Queue: #1")
-    (post,) = [p for p in h.posts if "fails a landing gate" in p]
-    assert "#2: gates/g.py: touches bad.txt; delete bad.txt" in post and "Ejected #2" in post, post
-    assert h.tick().startswith("landed #3"), world.logs
-
-
-def test_a_landing_gate_that_cannot_judge_lands_nothing_and_tells_ci(world, monkeypatch):
-    h = Review(world, monkeypatch)
-    h.d.landing_gates = ("gates/missing.py",)
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    h.review(1)
-    before = _main(world)
-    assert not h.tick().startswith("landed"), world.logs
-    assert _main(world) == before
-    (post,) = [p for p in h.posts if "can't judge" in p]
-    assert "the landing gate gates/missing.py can't judge" in post and "gates/missing.py isn't at" in post, post
-    h.d.landing_gates, h.d.run_gate = ("gates/other.py",), lambda repo, base, top, path: (1, "not json")
-    assert not h.tick().startswith("landed") and _main(world) == before
-    assert any("exit 1: failures that name no member of it" in p for p in h.posts), h.posts
-
-
-def test_a_train_that_passed_its_check_lands_only_below_a_member_a_landing_gate_fails(world, monkeypatch):
-    _move_main(world, {"gates/g.py": GATE})
-    h = Harness(world, monkeypatch)
-    h.d.landing_gates = ("gates/g.py",)
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    world.gh.put(2, world.change({"bad.txt": "2\n"}))
-    h.tick()
-    before, tip = _main(world), _tip(world)
-    _check(world, monkeypatch, tip)
-    assert not h.tick().startswith("landed"), world.logs     # #1's own commit has no check of its own
-    assert _main(world) == before
-    assert any("fails a landing gate" in p and "#2: gates/g.py: touches bad.txt" in p for p in h.posts), h.posts

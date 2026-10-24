@@ -108,7 +108,7 @@ def test_drive_reads_the_flags_at_main_in_its_clone_never_the_callers_tree_and_t
     assert drive(world, "--config", DRIVE_FLAGS) == 0
     assert driven[-1] == {"first": (1858,), "on": "m1,m2", "max_running": 4, "train_size": 15,
                           "defer": frozenset({"circuit-check", "pytest"}), "regenerate_locks": True, "per_pr_shadow": 2, "land": "review",
-                          "after_landing_no_cache": True, "landing_gates": ("gates/g.py",)}
+                          "after_landing_no_cache": True}
     lines = [x for x in capsys.readouterr().out.splitlines() if "flags from" in x]
     assert lines == [f"research queue drive: flags from {DRIVE_FLAGS} at main {sha[:12]}: on=m1,m2 max_running=4 train_size=15 "
                      "marked_after=2026-10-12T06:00:00Z defer=circuit-check,pytest regenerate_locks=True first=1858 per_pr_shadow=2 land=review "
@@ -121,8 +121,7 @@ def test_drive_reads_the_flags_at_main_in_its_clone_never_the_callers_tree_and_t
     (world.dev / DRIVE_FLAGS).write_text('on = ["stale"]\ntrain_size = 1\n')
     assert drive(world, "--config", DRIVE_FLAGS, "--config-from-tree") == 0
     assert driven[-1] == {"first": (), "on": "stale", "max_running": 2, "train_size": 1, "defer": frozenset(), "regenerate_locks": False,
-                          "per_pr_shadow": 0, "land": "check", "after_landing_no_cache": False,
-                          "landing_gates": ()}
+                          "per_pr_shadow": 0, "land": "check", "after_landing_no_cache": False}
     assert f"flags from {DRIVE_FLAGS}: on=stale " in capsys.readouterr().out
 
 
@@ -132,8 +131,7 @@ def test_a_flag_given_on_the_command_line_overrides_the_files(world, driven, mon
     assert drive(world, "--config", DRIVE_FLAGS, "--on", "m9", "--max-running", "1", "--defer", "", "--no-regenerate-locks",
                  "--first", "7,8", "--per-pr-shadow", "0", "--landing", "check", "--no-after-landing-no-cache") == 0
     assert driven[-1] == {"first": (7, 8), "on": "m9", "max_running": 1, "train_size": 15, "defer": frozenset(),
-                          "regenerate_locks": False, "per_pr_shadow": 0, "land": "check", "after_landing_no_cache": False,
-                          "landing_gates": ("gates/g.py",)}
+                          "regenerate_locks": False, "per_pr_shadow": 0, "land": "check", "after_landing_no_cache": False}
 
 
 def test_without_config_drive_takes_its_flags_as_before(world, driven, monkeypatch, capsys):
@@ -142,12 +140,12 @@ def test_without_config_drive_takes_its_flags_as_before(world, driven, monkeypat
     monkeypatch.chdir(world.dev)
     assert drive(world, "--on", "m1", "--rules", str(rules)) == 0
     assert driven[-1] == {"first": (), "on": "m1", "max_running": 2, "train_size": 4, "defer": frozenset(), "regenerate_locks": False,
-                          "per_pr_shadow": 0, "land": "check", "after_landing_no_cache": False, "landing_gates": ()}
+                          "per_pr_shadow": 0, "land": "check", "after_landing_no_cache": False}
     assert drive(world, "--on", "m1", "--rules", str(rules), "--max-running", "4", "--train-size", "15", "--defer",
                  "circuit-check,pytest", "--regenerate-locks", "--first", "5", "--per-pr-shadow", "3") == 0
     assert driven[-1] == {"first": (5,), "on": "m1", "max_running": 4, "train_size": 15,
                           "defer": frozenset({"circuit-check", "pytest"}), "regenerate_locks": True, "per_pr_shadow": 3, "land": "check",
-                          "after_landing_no_cache": False, "landing_gates": ()}
+                          "after_landing_no_cache": False}
     assert "flags from" not in capsys.readouterr().out
 
 

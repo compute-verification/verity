@@ -19,7 +19,7 @@ import pytest
 
 from research.cli import _custody_ttl_problem, main as research_main
 from research.pods.nebius import slot_only
-from research.queue import PR, SHADOW_BRANCH, Queue, QueueError, Rules, credential_args, label_target
+from research.queue import DRIVE_FLAGS, PR, SHADOW_BRANCH, Queue, QueueError, Rules, credential_args, label_target
 from research.store import ids, labels_sync, vocab
 from research.store.local import LocalStore
 from research.store.model import Label
@@ -260,6 +260,66 @@ def test_a_conflicting_pr_is_left_out_with_the_queued_pr_that_touched_the_file_a
     assert q.load_state()["conflicts"]["2"]["why"] == entries[2].why
     assert not (world.tmp / "notes").exists()
     assert q.status()[2].why == "conflicts with `next` in a.txt (touched by #1) (at the last sync)"
+
+
+#: a landing gate: refuses a head whose change touches a file `gates/banned.txt` at `main` names, and can't judge one touching
+#: crash.txt
+GATE = """\
+import json, subprocess, sys
+main, head = sys.argv[1:3]
+git = lambda *a: subprocess.run(["git", *a], capture_output=True, text=True, check=True).stdout
+banned = git("show", f"{main}:gates/banned.txt").split()
+files = git("diff", "--name-only", git("merge-base", main, head).strip(), head).split()
+if "crash.txt" in files:
+    print("gate: can't read crash.txt", file=sys.stderr)
+    sys.exit(2)
+bad = sorted(set(files) & set(banned))
+failures = [{"commit": head, "why": f"touches {', '.join(bad)}", "fix": [f"delete {f}" for f in bad]}] if bad else []
+print(json.dumps({"failures": failures}))
+sys.exit(1 if failures else 0)
+"""
+GATED = {DRIVE_FLAGS: 'landing_gates = ["gates/g.py"]\n', "gates/g.py": GATE, "gates/banned.txt": "bad.txt\n"}
+
+
+def _gate_says(main: str, what: str) -> str:
+    f = what.split(" ", 1)[1]
+    return (f"the landing gate gates/g.py at `main` {main[:12]}: {what}; delete {f} (`python3 gates/g.py origin/main HEAD` in "
+            "the branch runs it)")
+
+
+def test_a_pr_a_landing_gate_at_main_refuses_is_left_out_with_its_fix_and_only_the_members_a_sync_merges_are_judged(world, monkeypatch):
+    """ci and top, 24 Oct: a landing gate judges a PR as the sync merges it onto `next`, never at landing, where ejecting a
+    member low on `next` rebuilds it and cancels the Lean check running there.  A member the sync keeps isn't judged again; one
+    it merges again after `main` moved is, and is left out once the gate at the new `main` refuses it."""
+    from research import queue as Q
+
+    main = _move_main(world, GATED)
+    real, judged = Q.gate_refusal, []
+    monkeypatch.setattr(Q, "gate_refusal", lambda repo, m, head, gates: judged.append(head) or real(repo, m, head, gates))
+    world.gh.put(1, h1 := world.change({"a.txt": "1\n"}))
+    world.gh.put(2, h2 := world.change({"bad.txt": "2\n", "gates/g.py": "import sys\nsys.exit(0)\n"}))   # its own copy is moot
+    world.gh.put(3, world.change({"c.txt": "3\n"}, base=h2))
+    world.gh.put(4, h4 := world.change({"d.txt": "4\n"}))
+    world.gh.put(5, h5 := world.change({"crash.txt": "5\n"}))
+    q = world.queue()
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1, 4] == world.on_next(q)
+    assert entries[2].state == "refused" and entries[2].why == _gate_says(main, "touches bad.txt")
+    assert entries[3].state == "waiting" and entries[3].why == "contains #2, which didn't merge"
+    assert entries[5].state == "refused" and entries[5].why == (f"the landing gate gates/g.py can't judge {h5[:12]} on `main` "
+                                                                f"{main[:12]} (exit 2: gate: can't read crash.txt)")
+    assert {n: c["why"] for n, c in q.load_state()["conflicts"].items()} == {"2": entries[2].why, "5": entries[5].why}
+    assert q.status()[2].why == entries[2].why + " (at the last sync)"
+
+    judged.clear()
+    world.gh.put(4, h4b := world.change({"d.txt": "4 fixed\n"}, base=h4))     # #1 is kept, #4 merged again at its new head
+    members, _ = q.sync()
+    assert [(m.pr, m.head) for m in members] == [(1, h1), (4, h4b)] and h1 not in judged and set(judged) == {h2, h4b, h5}
+
+    main = _move_main(world, {"gates/banned.txt": "bad.txt\na.txt\n"})       # `main` moves: `next` is rebuilt on it
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [4]
+    assert entries[1].state == "refused" and entries[1].why == _gate_says(main, "touches a.txt")
 
 
 def test_status_names_a_ready_pr_that_conflicts_with_main_without_a_sync_here(world):
@@ -1063,6 +1123,24 @@ def test_the_preflight_refuses_a_head_whose_merge_onto_next_breaks_an_invariant_
     assert says in err, err
     assert [ln for ln in err.splitlines() if ln.startswith("  - ")] == [next(ln for ln in err.splitlines() if says in ln)]
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is False and _no_worktree_left(world)
+
+
+def test_the_preflight_refuses_a_head_a_landing_gate_at_main_fails_with_its_fix_and_notes_one_that_cant_judge(world, capsys):
+    """The sync leaves out what a landing gate refuses; the preflight says so at mark time, and a gate that can't judge there is
+    a note, since the sync judges again."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    _preflight_main(world, GATED)
+    main = _git(world.origin, "rev-parse", "main")
+    world.gh.put(2, h2 := world.change({"bad.txt": "2\n"}), ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 1
+    err = capsys.readouterr().err
+    assert [ln for ln in err.splitlines() if ln.startswith("  - ")] == [f"  - {_gate_says(main, 'touches bad.txt')}"], err
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is False and _no_worktree_left(world)
+    world.gh.put(3, h3 := world.change({"crash.txt": "3\n"}), ready=False)
+    assert ready(world.gh, world.store, 3, "lane-3", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    said = next(s for s in world.logs if f"preflight: #3 at {h3[:12]}" in s)
+    assert "nothing refused" in said and f"the landing gate gates/g.py can't judge {h3[:12]}" in said and "exit 2" in said
 
 
 def test_the_preflight_runs_a_lint_only_on_a_change_that_reaches_what_it_judges(world, capsys):

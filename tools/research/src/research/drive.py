@@ -55,16 +55,14 @@ reads it); a record ends once the trains land the PR's head, or it closes, leave
 Review landing (`land = "review"`; Daniel, 24 Oct 06:05Z: PRs land on an eyeball review, and the full check runs after landing).
 A tick syncs `next` as above, then lands its longest prefix whose every member has a land verdict at its head and no hold
 (`research queue review N --land|--hold`, a `reviewed` label on `pr:N@HEAD`; one by its owner, the owner's handle or its ready
-mark's author doesn't count: `queue.unreviewed`), a fast-forward of `main` through the same landing steps.  Gates cut the
+mark's author doesn't count: `queue.unreviewed`), a fast-forward of `main` through the same landing steps.  Two gates cut the
 prefix first.  A Lean change (a member whose own change touches a lock, `lean-audit.json`, or a Lean source of a package that
 has one: `queue.lean_change`) lands only once a lean-audit passed on a commit of `next` at or above it: drive's own Lean check
 (`train.sh TOP MACHINES --deferred lean-audit`, of the prefix's top, while `next` stays on its base for it as for a train's
 check), or any recorded run of the store whose lean-audit passed there; one that regenerated locks lands exactly at its commit,
 the locks on top.  A failed Lean check is run again on the Lean change's own commit, and only a failure there is told to its
 owner; nothing at or above a failed commit lands until it leaves `next`.  And every .py file the landing leaves must compile
-(`py_compile`): the PR that last changed one that doesn't is ejected.  Then each of drive.toml's `landing_gates`, a script
-run as it is at `main` on `main` and the prefix's top (`run_gate`), ejects the members it fails; one that can't judge lands
-nothing.  A train's landing passes them too.  No train is checked.  Each landing awaits the
+(`py_compile`): the PR that last changed one that doesn't is ejected.  No train is checked.  Each landing awaits the
 after-landing run, the post-landing run above with every ci.toml job (`AFTER_LANDING`), `--no-cache` while
 `after_landing_no_cache`, and `--no-regenerate` (a lock record difference fails it).  Nothing lands before one such run of `main`
 itself ended (its baseline, verifying the steps it passed; `/data/infra/drive.sh queue baseline SHA --by ci` records a green one
@@ -192,27 +190,6 @@ class Verdict:
 def needs_agreement(repo: Path, base: str, commit: str) -> bool:
     """The lander's rule: a train that adds or changes a guarantee anywhere is checked with the pinned upstream build."""
     return any(p == "lean-audit.json" or p.endswith("/lean-audit.json") for p in changed(repo, base, commit))
-
-
-#: how long a landing gate may run before drive takes it as unable to judge (`run_gate`)
-GATE_TIMEOUT_S = 600
-
-
-def run_gate(repo: Path, base: str, top: str, path: str) -> tuple[int | None, str]:
-    """The landing gate ``path`` as it is at ``base`` (so the change it judges can't weaken it), run as `python3 PATH BASE TOP
-    --json` in ``repo``: (its exit, its output), or (None, why it didn't run)."""
-    r = _git(repo, "show", f"{base}:{path}", check=False)
-    if r.returncode:
-        return None, f"{path} isn't at {base[:12]}"
-    with tempfile.TemporaryDirectory(prefix="drive-gate-") as d:
-        script = Path(d) / Path(path).name
-        script.write_text(r.stdout, errors="surrogateescape")
-        try:
-            p = subprocess.run([sys.executable, str(script), base, top, "--json"], cwd=repo, capture_output=True, text=True,
-                               stdin=subprocess.DEVNULL, timeout=GATE_TIMEOUT_S)
-        except subprocess.TimeoutExpired:
-            return None, f"{path} ran over {GATE_TIMEOUT_S} s"
-    return p.returncode, p.stdout if p.returncode in (0, 1) else (p.stderr or p.stdout).strip()[-400:]
 
 
 def auth_env(auth: tuple[str, ...]) -> dict[str, str]:
@@ -690,10 +667,8 @@ class Driver:
                  regenerate_locks: bool = False, per_pr_shadow: int = 0,
                  slots: Callable[[Path, str], dict[str, int]] = free_slots, land: str = "check",
                  after_landing_no_cache: bool = False, reviews: Callable[[int, str], list] | None = None,
-                 ready_by: Callable[[int, str], str | None] | None = None, landing_gates: tuple[str, ...] = ()):
+                 ready_by: Callable[[int, str], str | None] | None = None):
         self.q, self.on, self.max_running, self.train_size = q, on, max_running, train_size
-        #: the scripts each landing passes first (`_landing_gates`), and how one runs (`run_gate`)
-        self.landing_gates, self.run_gate = landing_gates, run_gate
         #: `land = "review"` (Daniel, 24 Oct 06:05Z): each member lands on a reviewer's verdict, a Lean change once a Lean check
         #: passed, and the full check runs after landing (`_review`), reusing no pass with ``after_landing_no_cache``
         self.review, self.after_landing_no_cache = land == "review", after_landing_no_cache
@@ -1293,15 +1268,10 @@ class Driver:
             return None
         main = _out(self.repo, "rev-parse", "origin/main")
         moved = sorted(changed(self.repo, base, main)) if main != base else []
-        gated = len(chain) - 1                              # nothing above it lands: a landing gate failed there
         for i in range(len(chain) - 1, -1, -1):
             m = chain[i]
-            if i > gated:
-                continue
             v = self.verdict(m.commit, base, drive)
             if v.state != "passed":
-                continue
-            if self.landing_gates and (gated := self._landing_gates(drive, chain, base, i)) < i:
                 continue
             self._land_saw = m.commit
             members = chain[: i + 1]
@@ -2569,8 +2539,6 @@ class Driver:
         t, rid = self._lean_gate(drive, chain, k, dry_run)
         if t >= 0:
             t = self._compiles(drive, chain, base, t)
-        if t >= 0 and self.landing_gates:
-            t = self._landing_gates(drive, chain, base, t)
         if t < 0:
             return None, f"nothing lands: #{chain[0].pr} at {chain[0].head[:8]} waits (see above)"
         m, members = chain[t], chain[: t + 1]
@@ -2826,39 +2794,6 @@ class Driver:
         self._eject(drive, f"compile:{chain[u].commit}", f"`{self.q.branch}` {top[:12]} ({prs}) doesn't compile, the gate before a "
                     "review landing", chain[t], prs, Verdict("failed", "py_compile"), [chain[i] for i in sorted(by)],
                     "; ".join(f"#{chain[i].pr}: {', '.join(errs)}" for i, errs in sorted(by.items())))
-        return u - 1
-
-    def _landing_gates(self, drive: dict, chain: list[Member], base: str, t: int) -> int:
-        """The highest index at or below ``t`` whose landing every landing gate passes (`landing_gates`, each run on ``base``..
-        ``chain[t]`` by `run_gate`; its `--json` `failures` name each failing member by its `commit`, with `why` and an optional
-        `fix`).  The members a gate fails are ejected (`_eject`), and what's below the lowest lands.  A gate that can't judge
-        (missing at ``base``, an exit other than 0 or 1, failures that name no member) lands nothing, and `CI` is told."""
-        top = chain[t].commit
-        pos = {m.commit: i for i, m in enumerate(chain[: t + 1])}
-        by: dict[int, list[str]] = {}
-        for path in self.landing_gates:
-            rc, out = self.run_gate(self.repo, base, top, path)
-            if rc == 0:
-                continue
-            failures = None
-            if rc == 1:
-                with contextlib.suppress(ValueError, TypeError, KeyError, AttributeError):
-                    failures = [(pos[f["commit"]], f"{f['why']}" + "".join(f"; {x}" for x in (f.get("fix") or [])[:5]))
-                                for f in json.loads(out)["failures"]]
-            if not failures:
-                why = out if rc is None else f"exit {rc}" + (f": {out}" if rc != 1 else ": failures that name no member of it")
-                self.refuse(drive, f"gate:{path}:{top}", f"the landing gate {path} can't judge `{self.q.branch}` {top[:12]} on "
-                                                         f"`main` {base[:12]} ({why[-400:]}): nothing lands until it can")
-                return -1
-            for i, why in failures:
-                by.setdefault(i, []).append(f"{path}: {why}")
-        if not by:
-            return t
-        u = min(by)
-        prs = " ".join(f"#{x.pr}" for x in chain[: t + 1])
-        self._eject(drive, f"gate:{chain[u].commit}", f"`{self.q.branch}` {top[:12]} ({prs}) fails a landing gate", chain[t], prs,
-                    Verdict("failed", "landing gate"), [chain[i] for i in sorted(by)],
-                    "; ".join(f"#{chain[i].pr}: {' | '.join(whys)}" for i, whys in sorted(by.items())))
         return u - 1
 
     def _after_landing(self, drive: dict, tip: str, base: str) -> None:
