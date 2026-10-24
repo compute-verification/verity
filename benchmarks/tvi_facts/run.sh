@@ -10,6 +10,7 @@ cd "$S"
 export OMP_NUM_THREADS="${THREADS:-2}" TOKENIZERS_PARALLELISM=false PYTHONUNBUFFERED=1
 PY=/workspace/jobs/venv312/bin/python
 export HF_HUB_CACHE=/workspace/hf/hub HF_HUB_OFFLINE=1
+if [ "${CKPT_ROOT:-}" = scratch ]; then export CKPT_ROOT="$S/ckpt"; fi
 if [ -n "${CKPT_ROOT:-}" ]; then
   mkdir -p "$CKPT_ROOT"
   if [[ "$CKPT_ROOT" != /workspace/jobs/tvi/* ]]; then
