@@ -209,7 +209,8 @@ outputs = llm.generate(["The capital of France is"], SamplingParams(temperature=
 `model` and `revision` (the full commit sha) must be pinned in `manifests/checkpoints.json` with the snapshot on the host.
 The engine is built by `engine.vllm_adapter.build_engine` from that pin's engine profile, as every `verity-vllm` stage
 builds it: dtype, tokenizer and attention come from the profile unless explicitly overridden, and prefix caching is off
-(a single-GPU row whose `engine.args` turn it on serves with it, each run from an empty cache; `program/prefix_plan.py`).
+unless `enable_prefix_caching` turns it on (a single-GPU row whose `engine.args` turn it on serves with it, each run from
+an empty cache; `program/prefix_plan.py`).
 `LLM.from_spec(path)` builds the same engine from an engine spec, a config v0 document (`verity_config`) of schema
 `verity-vllm/engine-spec/v0` with `model`, `revision` and an `[engine]` table of exactly the options below
 (`pipeline/engine_spec.py`).  An unknown or missing key, or a value of the wrong type, refuses before any engine is
@@ -225,6 +226,7 @@ Supported keyword options:
 | `gpu_memory_utilization` | the profile's | fraction of device memory the engine may take |
 | `kv_cache_memory_bytes` | vLLM's sizing | the KV cache's size in bytes, in place of sizing it from free memory |
 | `enable_chunked_prefill` | vLLM's, on | False holds a prefill that doesn't fit a step instead of cutting it into chunks |
+| `enable_prefix_caching` | off | True lets a request read the KV blocks another computed for the same prefix |
 | `enforce_eager` | True | eager execution; False compiles with torch.compile and CUDA graphs |
 | `execution` | `bi-eager`, or `bi-compiled` with `enforce_eager` False | the execution label (`engine.served.EXECUTIONS`), which sets batch invariance and `enforce_eager`; `compiled` is vLLM's serving defaults |
 | `dtype` | the profile's | served dtype override |
