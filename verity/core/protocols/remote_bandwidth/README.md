@@ -80,8 +80,8 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
 
 ## Code
 
-- `audit.py`: the lifecycle (`register`, `Registry`, `Session`), pacing (`Pace`: a live coin every k passes), the
-  record and its ledger.
+- `audit.py`: the lifecycle (`register`, `Registry`, `Session`), pacing (`Pace`: a live coin every k passes, two
+  windows in flight or, at `in_flight` 1, each coin after the root before it), the record and its ledger.
 - `ledger.py`: the declared outputs from an accepted session's record (`declared`): γ at both R, per window and over
   the session, and the memory line's three forms (snapshot, time-held and link-charged) on the verifier's node
   (`Node`).
