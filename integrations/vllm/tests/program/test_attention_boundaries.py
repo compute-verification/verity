@@ -8,14 +8,15 @@ Definition module imports.  An import is any import statement, at module level o
 from __future__ import annotations
 
 import ast
+import importlib.util
 import sys
 from pathlib import Path
 
 import pytest
 
 VLLM = Path(__file__).resolve().parents[2]
-REGISTRY = VLLM / "verity_vllm" / "program" / "registry"
 PKG = "verity_vllm.program.registry"
+REGISTRY = Path(importlib.util.find_spec(PKG).origin).parent
 DEFINITION_MODULES = ["fa2_check_inf", "fa3_check_inf", "fa2_softcap", "boolean_attention", "boolean_softcap", "mla", "dsa",
                       "boolean_dsa", "sparse_mla", "boolean_sparse_mla"]
 VOCAB = "attention_vocab"

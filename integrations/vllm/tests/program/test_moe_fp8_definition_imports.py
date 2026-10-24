@@ -8,13 +8,14 @@ package; `from verity_vllm.program.registry import m` imports the module `m`.
 from __future__ import annotations
 
 import ast
+import importlib.util
 import sys
 from pathlib import Path
 
 import pytest
 
 REGISTRY = "verity_vllm.program.registry"
-DIR = Path(__file__).resolve().parents[2] / "verity_vllm" / "program" / "registry"
+DIR = Path(importlib.util.find_spec(REGISTRY).origin).parent
 FAMILY = ("moe", "moe_pad", "boolean_moe", "fp8", "fp8_moe", "fp8_moe_experts", "boolean_fp8", "boolean_fp8_moe", "nvfp4",
           "boolean_gather", "dsv4_moe", "boolean_dsv4_moe")
 #: other families' modules the family's Definitions call: the scalar and bit primitives (`prims`, `ref_prims`, `pad_prims`), the B1

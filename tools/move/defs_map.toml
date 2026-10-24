@@ -59,8 +59,6 @@ paths = []
 "verity/core/primitives/evaluate/pyproject.toml: integrations/vllm/verity_vllm/program/registry" = "the suite's inputs also name pouw_rows.py, the one staying module its tests import"
 "integrations/vllm/README.md: integrations/vllm/verity_vllm/program/registry" = "names where the registered Definitions live, which is the larger part"
 "integrations/vllm/tests/lint/test_p03_one_evaluator.py: integrations/vllm/verity_vllm/program/kernels" = "LADDER_HOMES also names each staying kernels module by file"
-"integrations/vllm/tests/migrate/test_superseded_quarantine.py: integrations/vllm/verity_vllm/program/registry" = "REG is where promoted Definitions live; quarantine/ has its own row (QDIR)"
-"integrations/vllm/tools/migrate/superseded_quarantine.py: integrations/vllm/verity_vllm/program/registry" = "REGISTRY_DIR is where promoted Definitions live; quarantine/ has its own row"
 "integrations/vllm/verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager.py: integrations/vllm/verity_vllm/program/kernels" = "a comment naming W11's model, which moves"
 "integrations/vllm/verity_vllm/properties/protected.py: integrations/vllm/verity_vllm/program/registry" = "PRIMITIVE_PATHS is the registered primitives, which move; quarantine/'s patterns have their own row"
 "tools/verity/circuit_check/tests/test_attention_split.py: integrations/vllm/verity_vllm/program/registry" = "names the registry's Definitions, which move"
@@ -107,5 +105,8 @@ exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*
            "tools/verity/check/tests/test_move_check.py",
            "tools/research/src/research/store/moves.json",
            "benchmarks/tc_probe_fp4/fp4_emulation_1ad1aaa2.py",
-           "benchmarks/network_e2e/tests/data/**"]
+           "benchmarks/network_e2e/tests/data/**",
+           # the superseded-quarantine migration and its test, which run on a synthetic tree of the layout they migrated
+           "integrations/vllm/tools/migrate/superseded_quarantine.py",
+           "integrations/vllm/tests/migrate/test_superseded_quarantine.py"]
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]

@@ -205,7 +205,7 @@ def test_descriptor_round_trip_and_registry():
 
 
 def test_quarantine_lint_passes_for_the_collective_package():
-    rep = lint(REPO / "verity_vllm" / "program" / "registry" / "quarantine")
+    rep = lint(Path(QC.__file__).parents[1])
     mine = [f for f in rep["files"] if "/collective/" in f["file"]]
     assert {Path(f["file"]).name for f in mine} >= {"allreduce.py", "allreduce_difftest.py", "__init__.py"}
     assert all(f["status"] == "pass" for f in mine), [(f["file"], f["problems"]) for f in mine]

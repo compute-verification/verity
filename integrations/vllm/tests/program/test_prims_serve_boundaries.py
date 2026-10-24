@@ -6,13 +6,14 @@ catalog can take these modules without the integration."""
 from __future__ import annotations
 
 import ast
+import importlib.util
 import sys
 from pathlib import Path
 
 import pytest
 
-REGISTRY = Path(__file__).resolve().parents[2] / "verity_vllm" / "program" / "registry"
 REG = "verity_vllm.program.registry"
+REGISTRY = Path(importlib.util.find_spec(REG).origin).parent
 FAMILY = ("__init__", "catalog", "prims", "ref_prims", "pad_prims", "lifted", "tables", "value_inputs", "operand_widths", "b1",
           "b1_tp2", "serve3", "spec", "pouw_rows")
 #: the other families' Definition modules this family reads (each family's own split judges its modules)

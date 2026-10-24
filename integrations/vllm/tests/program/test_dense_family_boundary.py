@@ -6,13 +6,14 @@ from __future__ import annotations
 
 import ast
 import importlib
+import importlib.util
 import sys
 from pathlib import Path
 
 import pytest
 
 REGISTRY = "verity_vllm.program.registry"
-REGISTRY_DIR = Path(__file__).resolve().parents[2] / "verity_vllm" / "program" / "registry"
+REGISTRY_DIR = Path(importlib.util.find_spec(REGISTRY).origin).parent
 FAMILY = ("dense", "act", "boolean_dense", "boolean_dense_norm", "boolean_norms", "boolean_activation", "boolean_silu",
           "boolean_rope", "boolean_tanh", "cuda_rmsnorm", "gemm_bias", "layer_norm", "gelu_erf_table", "traced_parts")
 #: other families' Definition modules the family reads: the primitives, the b1 composites, `sampling.bit_at` (`UnpackF32_v1`),

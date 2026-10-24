@@ -39,6 +39,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sys
 from array import array
 from collections import Counter
 from pathlib import Path
@@ -384,9 +385,9 @@ def use_rule_cache(directory: str | None) -> None:
 def _code_version() -> str:
     if not _CODE:
         import verity.ml.circuits
-        here = Path(__file__).parent
+        from verity_vllm.query import call_scope, cross_call
         h = hashlib.sha256()
-        for p in [*sorted(Path(verity.ml.circuits.__file__).parent.glob("*.py")), *(here / f for f in ("word.py", "cross_call.py", "call_scope.py"))]:
+        for p in [*sorted(Path(verity.ml.circuits.__file__).parent.glob("*.py")), *(Path(m.__file__) for m in (sys.modules[__name__], cross_call, call_scope))]:
             h.update(p.name.encode() + b"\0" + p.read_bytes() + b"\0")
         _CODE.append(h.hexdigest())
     return _CODE[0]

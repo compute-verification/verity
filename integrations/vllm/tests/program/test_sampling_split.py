@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import ast
+import importlib.util
 import json
 import re
 import subprocess
@@ -22,7 +23,7 @@ import pytest
 
 VLLM = Path(__file__).resolve().parents[2]
 REPO = VLLM.parents[1]
-REG = VLLM / "verity_vllm" / "program" / "registry"
+REG = Path(importlib.util.find_spec("verity_vllm.program.registry").origin).parent
 FIXTURE = Path(__file__).resolve().parent / "data" / "sampling_split_digests.json"
 TASKS = REPO / "tools" / "verity" / "circuit_check" / "tests" / "data" / "sampling_split_tasks.json"
 PKG = "verity_vllm.program.registry"
