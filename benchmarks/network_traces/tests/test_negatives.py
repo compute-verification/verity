@@ -445,41 +445,45 @@ def test_advice_chunk_serves_the_same_positions_in_other_step_shapes():
         NG.chunk_split(one)
 
 
+FRAMING = (1, 1, 2, 2, 2)  # the link's request frames by prompt length: r0's prompt of 5 two, r1's of 2 one
+
+
 def _n2(b, received=(3,)):
-    """`b` as N2-ADVICE reads it (`n2_advice`): r0 two request frames, r1 one, a copy its original's."""
-    frames = {"r0": 2, "r1": 1}
-    return NG.n2_advice(b, frames | {f"{k}~extra": v for k, v in frames.items()}, list(received))
+    """`b` as N2-ADVICE reads it (`n2_advice`), under `FRAMING`."""
+    return NG.n2_advice(b, FRAMING, list(received))
 
 
-def test_n2_reads_one_release_bucket_a_step_and_the_ingress_frames_beside_the_advice():
+def test_the_declared_received_is_the_advices_requests_frames_under_the_links_framing():
+    """`received` as a prover declares it beside the advice: the honest run's, less or more the frames of a request the
+    advice leaves out or adds (a copy's are its original's), in the first window that receives any."""
     a = _advice()
-    v = _n2(a)
-    assert v.release == [3, 3, 3, 5] and [q.ingress_frames for q in v.requests] == [2, 1] and v.received == [3]
-    assert _n2(NG.extra_request(a)).received == [5] and _n2(NG.missing_request(a)).received == [2]
-    assert _n2(a, (0, 3)).received == [0, 3]
+    assert NG.link_received(a, FRAMING, [3]) == [3] and NG.link_received(a, FRAMING, [0, 3]) == [0, 3]
+    assert NG.link_received(NG.extra_request(a), FRAMING, [3]) == [5]
+    assert NG.link_received(NG.missing_request(a), FRAMING, [3]) == [2]
 
 
 def test_n2s_advised_counts_refuse_the_advice_negatives_and_accept_the_step_units():
     """Against N2-ADVICE's `advised` (skipped until it lands), on heads an honest run of the advice certifies: the
     honest advice is accepted; length, missing, extra and release are refused by the advised counts, each well formed;
-    start and chunk are accepted, their frames honest's, so only the step unit can refuse them."""
-    pytest.importorskip(NG.ADVISED_MODULE)
-    from verity.core.protocols.certifier.schedule import ClockSync
+    start and chunk are accepted, their frames honest's, so only the step unit can refuse them; a `received` that
+    isn't the requests' frames is refused by the view."""
+    AD = pytest.importorskip(NG.ADVISED_MODULE)
+    from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 
-    T, R, RIN, OWN, syncs = 8, 4, 8, 0, [ClockSync(1, Fraction(1))]
+    T, R, RIN, OWN, syncs, sigma = 8, 4, 8, 0, [ClockSync(1, Fraction(1))], SyncSet((1,), (Fraction(1),))
     a = _advice()
-    heads = NG.honest_heads(_n2(a), T, R, syncs)
+    heads = NG.honest_heads(_n2(a), T, R, syncs, sigma, FRAMING)
+    assert [e for _, e in heads] == [[0, 0, 0, 4, 0, 1, 0, 0]]
 
-    def codes(v) -> list[str]:
-        return sorted({c for w, (i, e) in enumerate(heads) for c in NG.advised_codes(v, w, syncs, T, R, RIN, OWN, i, e)})
+    def codes(link) -> list[str]:
+        return sorted({c for w, (i, e) in enumerate(heads)
+                       for c in NG.advised_codes(link, w, syncs, sigma, FRAMING, T, R, RIN, OWN, i, e)})
 
     assert codes(_n2(a)) == []
     for name, n in NG.NEGATIVES.items():
         if n.tampers == "advice":
             assert codes(_n2(n.make.edit(a))) == ([] if n.code.startswith("StepUnit") else [n.code]), name
-    v = _n2(a)
-    v.release = v.release[:-1]
-    assert codes(v) == [f"{NG.ADVISED}.view"]
+    assert codes(AD.LinkAdvice(a, (4,))) == [f"{NG.ADVISED}.view"]
 
 
 def test_the_advice_suite_makes_each_advice_negative_and_names_n2s_codes_on_it():
@@ -491,7 +495,7 @@ def test_the_advice_suite_makes_each_advice_negative_and_names_n2s_codes_on_it()
         pytest.skip(f"{NG.ADVICE_MODULE} (I1) isn't importable")
     from verity.core.protocols.certifier.schedule import ClockSync
 
-    rows = NG.advice_suite(_advice(), T=8, R=4, syncs=[ClockSync(1, Fraction(1))], ingress_frames={"r0": 2, "r1": 1},
+    rows = NG.advice_suite(_advice(), T=8, R=4, syncs=[ClockSync(1, Fraction(1))], request_frames=FRAMING,
                            received=[3])
     assert rows["honest"] == {"bits": V.total_bits(_advice()), "codes": [], "ok": True}
     made = {k: r for k, r in rows.items() if k != "honest"}
