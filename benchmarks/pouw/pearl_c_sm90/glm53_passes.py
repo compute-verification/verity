@@ -1,12 +1,12 @@
 """Pearl-C's served device path on one H100 or H200 at GLM-5.3's in-domain linears (`glm53.linears`, one TP8 rank): the gate and
 three retained passes, then the reference replay of each.
 
-  python benchmarks/pouw/pearl_c_sm90/glm53_passes.py capture --out DIR [--cubin C]       # on the card
+  python benchmarks/pouw/pearl_c_sm90/glm53_passes.py capture --out DIR [--cubin C] [--schedule S] [--graphs]  # on the card
   python benchmarks/pouw/pearl_c_sm90/glm53_passes.py verify --out DIR [--jobs J] [--fast]  # on CPUs, after
-  python benchmarks/pouw/pearl_c_sm90/glm53_passes.py full --out DIR [--jobs J] [--without-y]  # on CPUs, after
+  python benchmarks/pouw/pearl_c_sm90/glm53_passes.py full --out DIR [--jobs J] [--without-y] [--passes P ...]  # on CPUs, after
 
 ``capture`` installs `pouw_pearl_c_device.PearlCDeviceRun` (``pearl-c-h100-v1-h3`` on this directory's kernels, the serial
-schedule) on synthetic BF16 weights, one a distinct in-domain (n, k), under an epoch whose salt coin a challenger opened after
+schedule or ``--schedule``, its decode calls replayed as CUDA graphs with ``--graphs``) on synthetic BF16 weights, one a distinct in-domain (n, k), under an epoch whose salt coin a challenger opened after
 the weights' root (its coin commitment is published as ``coins.json``, where `verify_run` reads it), then:
 
 - the gate (`bench_arm.PearlCArm.gate`): at each weight and m in 16 and 64, three fresh passes on poisoned outputs: y within
@@ -22,7 +22,7 @@ shape's (a pass calls every weight the epoch commits, `audit.Epoch`'s rule).
 
 ``verify`` runs `verify_run.verify` on each pass ``capture.json`` lists (grouped_check.py's too) under ``coins.json``: every
 pass but control must be accepted (replay-verified, development shortcut; the protocol's check is a ZK proof) and control
-rejected.  ``full`` checks prefill's and decode's outputs in full, every tile of every call rather than verify's draws: its
+rejected.  ``full`` checks prefill's and decode's outputs (``--passes``) in full, every tile of every call rather than verify's draws: its
 openings and its leaf against C~ and U recomputed from the opened rows on the device record (`clear_audit.Verifier.check_tile`,
 the verifier's own), then every real row's served y against y_unit of those U and α (RN_f32(RN_f32(U·RN_f32(1/α_A))·RN_f32(1/α_B)),
 then BF16 nearest-even, as `pearl_c.PearlC.useful` states it and fixture.py's y is), on `fast_tile`'s batch forms with every
@@ -69,10 +69,10 @@ def capture(a) -> int:
     opening = coins.open("salt", weights_root(roots))
     (out / "coins.json").write_text(json.dumps(coins.commitment.to_json()) + "\n")
     run = PPD.PearlCDeviceRun(PPD.scheme_of(a.scheme), f"pouw:{a.scheme}", kernel, weights, roots, coins.commitment, opening,
-                              salt_key=salt_key)
+                              salt_key=salt_key, schedule=a.schedule, graphs=a.graphs)
     arm = BA.PearlCArm()
     arm.run, arm.weights = run, weights
-    log = {"scheme": a.scheme, "cubin_sha256": kernel.cubin_sha256, "kernel_source_sha256": kernel.source_sha256,
+    log = {"scheme": a.scheme, "schedule": a.schedule, "graphs": run.graphs, "cubin_sha256": kernel.cubin_sha256, "kernel_source_sha256": kernel.source_sha256,
            "device": torch.cuda.get_device_name(dev), "shapes": shapes, "prefill": PREFILL, "decode": DECODE,
            "gate": arm.gate(None), "passes": {}}
     print(f"gate: {'PASS' if log['gate']['passed'] else 'FAIL'}", flush=True)
@@ -256,10 +256,10 @@ def full(a) -> int:
     out = Path(a.out)
     coins = CoinCommitment.from_json(json.loads((out / "coins.json").read_text()))
     res = {}
-    for name in FULL:
+    for name in a.passes:
         res[name] = full_pass(out / name, coins, a.jobs, a.cross_check, a.without_y)
         print(f"{name}: {res[name]['line']}", flush=True)
-    res["ok"] = all(res[x]["ok"] for x in FULL)
+    res["ok"] = bool(a.passes) and all(res[x]["ok"] for x in a.passes)
     (out / "full.json").write_text(json.dumps(res, indent=1, default=str) + "\n")
     print(f"full {'PASS' if res['ok'] else 'FAIL'}", flush=True)
     return 0 if res["ok"] else 1
@@ -272,10 +272,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--scheme", default=glm53.SCHEME)
     p.add_argument("--cubin", help="the build's cubin (default this directory's)")
     p.add_argument("--shapes", nargs="*", help="capture: N:K, a weight each (default every in-domain linear)")
+    p.add_argument("--schedule", default="serial", help="capture: the run's schedule (verity.core.protocols.pouw.serving.SCHEDULES)")
     p.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     p.add_argument("--fast", action="store_true", help="verify_run's --fast")
     p.add_argument("--cross-check", type=int, default=64, help="with --fast, and full: every N-th tile on the scalar reference too")
     p.add_argument("--without-y", action="store_true", help="full: C~ and U alone (passes captured before served y was retained)")
+    p.add_argument("--passes", nargs="+", choices=FULL, default=list(FULL), help="full: the passes to check (default both)")
+    p.add_argument("--graphs", action="store_true", help="capture: calls of up to 256 rows replayed as CUDA graphs")
     a = p.parse_args(argv)
     Path(a.out).mkdir(parents=True, exist_ok=True)
     return {"capture": capture, "verify": verify, "full": full}[a.mode](a)

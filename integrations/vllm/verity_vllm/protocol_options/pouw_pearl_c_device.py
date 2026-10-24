@@ -46,17 +46,9 @@ the keys by native SHA-512 (`_Keys`, byte for byte `call_keys`), their upload th
 screen as one fused kernel (`screen_into`, Triton; `screen` where Triton can't run), A's roots copied into a pass buffer,
 and the stream read from torch's raw accessor.
 
-The schedule (`verity.core.protocols.pouw.serving.Schedule`, by name from `SCHEDULES`; the decode plan's step 2,
-bc-b139c29c's) places each call's step groups (`STEP_GROUPS`) on lanes.  Under ``deferred``, the measured one, the call's tile
-hashing (`SIDE_IO`: the tile leaves) runs on a side lane at the least priority behind an event after the GEMM, while the next
-calls go on, and the rest of the call runs on a main lane of the run's own at the greatest priority, joined to the caller's
-stream by events on both sides (``deferred-caller`` leaves it on the caller's stream, #564's first cut).  A's commitment stays
-on the main lane: forming reads each row's digest and seed (``row_seeds``), and under -h3 as implemented the filler rows'
-lines read ``line_a`` from A's root, so ``deferred-a`` (A's tree beside the tile hashing) is refused until the filler keying
-changes (card 448a9d2d).  Each shape rotates `Schedule.ring` sets of the buffers the side lane touches (`rotated`), and a call
-reuses a set only once the side lane has finished with it; the pass's end, and the next pass's begin, wait for the side lane.
-The same kernels read and write the same bytes, so the commitments are the serial schedule's.  A schedule changes only between
-passes (`begin`), and one whose placement this path or the scheme's format can't run is refused (`schedule_of`).
+The schedule (`verity.core.protocols.pouw.serving.Schedule`) places each call's step groups on lanes (`pouw_pearl_c_lanes`):
+``deferred`` runs the tile hashing on a side lane beside the next calls, and ``deferred-a`` A's tree there too, where the
+kernel splits A's commitment.  The commitments are the serial schedule's.
 
 With ``hashing`` off (the bench's ``pearlc-nohash``) the call skips A's tree, E_A's lines, the leaves and the records.  What
 is left is the same forming and GEMM without hashing, for the time split.  ``hashing`` may change between passes, never within.
@@ -64,6 +56,7 @@ is left is the same forming and GEMM without hashing, for the time split.  ``has
 from __future__ import annotations
 
 import hashlib
+import itertools
 import types
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -80,14 +73,22 @@ from verity.core.protocols.pouw.serving import (
     SERIAL,
     Schedule,
     SchemeId,
-    StepIO,
     hash_format,
-    schedule_refusals,
 )
 
 from .pouw_pearl_c_graphs import GRAPH_ROWS, SLOT_BYTES, GraphCalls, _Graph
+from .pouw_pearl_c_lanes import (  # noqa: F401 - the schedule's names, kept importable here, as callers read them
+    SIDE_GROUPS,
+    SIDE_IO,
+    STEP_GROUPS,
+    LaneCalls,
+    rotated,
+    schedule_of,
+    splits,
+)
 from .pouw_pearl_c_host import (
     _bytes,
+    _Driver,
     _Keys,
     _Lane,
     _put,
@@ -140,40 +141,8 @@ EPOCH_STEPS = ("pad_b", "rowdig_b", "hash_rows_b", "tree_b")
 JOB_STEPS = ("lines_eb", "lines_fa", "lines_fb", "stats_b", "eprime_b", "form_b", "bf", "g", "pb")
 CALL_STEPS = ("pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "lines_ea", "stats_a", "eprime_a", "form_a",
               "af", "pa", "gemm_pearlc", "hash_leaf")
-HASH_STEPS = frozenset({"pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "lines_ea", "hash_leaf", "commit_a"})
-#: each call step's group (`verity.core.protocols.pouw.serving.GROUPS`), which a schedule places on a lane.  The per-row
-#: keying forming reads (A's pads, each row's digest, each real row's seed) is ``row_seeds``; A's hm96 leaves, tree and
-#: unit seed are ``a_tree``, movable under h3 once filler rows' lines stop reading `line_a` from the root (card 448a9d2d);
-#: ``commit_a`` (`run.Pipeline.FUSED`), which ends with A's tree and the lines it keys, is ``a_tree``
-STEP_GROUPS = {"pad_a": "row_seeds", "rowdig_a": "row_seeds", "hash_rows_a": "a_tree", "tree_a": "a_tree", "seed_a": "a_tree",
-               "seeds_a": "row_seeds", "lines_ea": "forming", "stats_a": "forming", "eprime_a": "forming", "form_a": "forming",
-               "af": "cleanup", "pa": "cleanup", "gemm_pearlc": "cleanup", "hash_leaf": "tile_hash", "commit_a": "a_tree"}
-#: the steps this path can run on a side lane, with the per-call buffers they read and write (the constant keys and the pass's
-#: leaf buffer aside, which no later call rewrites): each shape rotates these, so a call never overwrites what the side lane
-#: still reads.  Only the tile hashing moves, the tile leaves over C~ and U; A's tree stays on the main lane, and the screen
-#: runs on the caller.
-SIDE_IO = {"hash_leaf": StepIO("tile_hash", frozenset({"c", "u"}), frozenset({"segdig_t"}))}
-SIDE_GROUPS = frozenset(io.group for io in SIDE_IO.values())
-
-
-def rotated(schedule: Schedule) -> tuple[str, ...]:
-    """The per-call buffers each shape rotates under `schedule`: those its side-lane steps read or write."""
-    return tuple(sorted({b for io in SIDE_IO.values() if io.group in schedule.side for b in io.reads | io.writes}))
-
-
-def schedule_of(name: str | Schedule, scheme: C.PearlC) -> Schedule:
-    """`name`'s schedule (`verity.core.protocols.pouw.serving.SCHEDULES`), refused where the scheme's format or this path can't run it."""
-    s = SCHEDULES[name] if isinstance(name, str) else name
-    bad = schedule_refusals(hash_format(scheme), s)
-    if "a_tree" in s.side:
-        bad.append(f"{s.name}: this path keys filler rows' lines on line_a from A's root (the `lines` kernel at i4 = m_real),"
-                   " so a_tree is on the GEMM's critical path until the filler keying changes (card 448a9d2d)")
-    if set(s.side) - SIDE_GROUPS - {"a_tree"}:
-        bad.append(f"{s.name}: this path runs only {', '.join(sorted(SIDE_GROUPS))} on a side lane, not "
-                   f"{', '.join(sorted(set(s.side) - SIDE_GROUPS - {'a_tree'}))}")
-    if bad:
-        raise ValueError(f"{scheme.name}: " + "; ".join(bad))
-    return s
+HASH_STEPS = frozenset({"pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "lines_ea", "hash_leaf", "commit_a",
+                        "rows_a", "tree_seed_a"})
 
 
 def scheme_of(name: str, **instance: Any) -> C.PearlC:
@@ -228,6 +197,15 @@ class _Shape:
     turn: int = 0
     size: dict = field(default_factory=dict)   # the pipeline's buffer sizes at this shape
     count: Any = None              # pd_commit's counter (`run.Pipeline`'s pd_count): 16 zero bytes, never poisoned
+    j: int = 0                     # the set the last call wrote, and the buffers it took from it (its schedule's `rotated`)
+    rot: tuple = ()
+
+    def buf(self, name: str) -> Any:
+        """The last call's buffer `name` (``keys`` among them): its set's where it took it from one (set 0's keys are the
+        shape's own), else the shape's own."""
+        if name in self.rot and name in self.sets[self.j]:
+            return self.sets[self.j][name]
+        return self.keys if name == "keys" else self.b[name]
 
 
 @dataclass
@@ -296,9 +274,12 @@ def _constant_keys(t: Any) -> dict[str, int]:
 
 
 def _pipeline(kernel: Kernel, m: int, n: int, k: int, bufs: dict[str, int], xb: int, keys: dict[str, int], xa: int = 0,
-              m_real: int | None = None, *, variant: str, weight: int = 0) -> Any:
+              m_real: int | None = None, *, variant: str, weight: int = 0, split_a: bool = False) -> Any:
+    """The kernel's pipeline over the caller's buffers; with `split_a` (A's tree on a side lane) A's commitment split and
+    the padding rows' E_A lines left unwritten (`run.Pipeline`'s ``fillers``)."""
     full = {"dom_a": 0, "dom_b": 0, "dom_t": 0, "line_b": 0, "unit": 0, "salt_key": 0, "hm": 0, **keys}
-    return kernel.run.Pipeline(kernel.dev, m, n, k, variant, full, xa, xb, bufs=bufs, m_real=m_real, weight=weight)
+    return kernel.run.Pipeline(kernel.dev, m, n, k, variant, full, xa, xb, bufs=bufs, m_real=m_real, weight=weight,
+                               **({"split_a": True, "fillers": False} if split_a else {}))
 
 
 def _steps(pipe: Any, names: tuple[str, ...]) -> list[Any]:
@@ -319,7 +300,7 @@ def _run(kernel: Kernel, pipe: Any, names: tuple[str, ...], stream: int) -> None
         kernel.dev.stream = None
 
 
-class PearlCDeviceRun(GraphCalls):
+class PearlCDeviceRun(LaneCalls, GraphCalls):
     """One install's Pearl-C workload on the device, with `pouw._Run`'s interface (`gemm`, `finish`, `commits`, `details`) and
     the passes the bench and the verifier need (`begin`, `end`, `end_pass`)."""
 
@@ -342,9 +323,13 @@ class PearlCDeviceRun(GraphCalls):
                                  self.roots, coins, opening)
         self.salt = salt = self.epoch.salt
         self.device = next(iter(weights.values())).device
-        self.schedule = schedule_of(schedule, scheme)
+        self.schedule = schedule_of(schedule, scheme, kernel)
         self.main: _Lane | None = None      # the main lane, when the schedule runs it above the caller's priority
-        self.side: _Lane | None = None      # the side lane, when the schedule has one
+        self.sides: list[_Lane] = []         # the side lanes, as many as the schedule's ring, which calls take in turn
+        self.fork: _Lane | None = None      # the lane graphs' fork beside the main lane's per-row keying, made at first use
+        self.driver = _Driver(kernel.dev.cu) if self.graphs else None   # a lane graph's replay's driver calls
+        self._side_turn = 0
+        self._side_cache: dict[tuple, frozenset[str]] = {}
         self._launching: Any = None          # the torch stream the current step group launches on (the GEMM's timing events)
         self.const = _constants(scheme, self.device, salt_key)
         self.const_keys = _constant_keys(self.const)
@@ -378,7 +363,8 @@ class PearlCDeviceRun(GraphCalls):
             "hashing": hashing, "passes": [], "excluded_b": {str(w): len(x.excluded) for w, x in self.weights.items()},
             "host": {"keys": "native sha512", "screen": "fused (Triton)" if self.fused_screen else "torch"},
             "schedule": None,
-            "graphs": (f"calls of at most {GRAPH_ROWS} rows, serial schedule"
+            "graphs": (f"calls of at most {GRAPH_ROWS} rows: the serial schedule's one graph a call, a side lane's schedule's "
+                       f"one a lane and ring set (A's tree its own where it is aside), replayed by the driver"
                        + (", a whole capture's tile hashing beside the next call" if whole_defer else "")) if self.graphs else None,
             "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound (red team F4)"}
         self.cur: _Pass | None = None
@@ -396,12 +382,20 @@ class PearlCDeviceRun(GraphCalls):
         self.schedule = schedule
         if schedule.main_priority == "greatest" and self.main is None:
             self.main = _Lane(self.device, "greatest", 2)
-        if schedule.side and self.side is None:
-            self.side = _Lane(self.device, schedule.side_priority, 1)
+        while schedule.side and len(self.sides) < schedule.ring:    # stand-ins 1, then 3, 4, … past the main lane's 2
+            self.sides.append(_Lane(self.device, schedule.side_priority, 1 if not self.sides else 2 + len(self.sides)))
         self.details["schedule"] = {
             "name": schedule.name, "side": sorted(schedule.side), "ring": schedule.ring,
             "main": self.main.priority if schedule.main_priority == "greatest" else "the caller's",
-            "side_lane": self.side.priority if schedule.side else None}
+            "side_lane": self.sides[0].priority if schedule.side else None}
+
+    def join_sides(self, stream: Any = None) -> None:
+        """`stream` (the current stream's torch stream when None) waits for every side lane's work so far."""
+        if self.device.type != "cuda":
+            return
+        stream = self.torch_stream(self.stream()) if stream is None else stream
+        for lane in self.sides:
+            stream.wait_stream(lane.stream)
 
     # ---- the weight side --------------------------------------------------------------------------------------------
 
@@ -450,17 +444,18 @@ class PearlCDeviceRun(GraphCalls):
         return self._ring(self.shapes[key])
 
     def _ring(self, sh: _Shape) -> _Shape:
-        """`sh` with the schedule's ring of per-call buffers: set 0 is its own; each further set holds the buffers the side lane
-        touches (`rotated`), made when a schedule first needs them, from poisoned bytes inside a poisoned pass."""
-        if len(sh.sets) >= self.schedule.ring and len(sh.done) == len(sh.sets):
-            return sh
+        """`sh` with the schedule's ring of per-call buffers: set 0 is its own (its keys too); each further set holds the
+        buffers the side lane touches (`rotated`; ``keys``, dom_a ‖ unit, among them when A's tree moves), each made when a
+        schedule first needs it, from poisoned bytes inside a poisoned pass."""
         names = rotated(self.schedule)
         while len(sh.sets) < self.schedule.ring:
-            extra = {x: _zeros(sh.size[x], self.device) for x in names}
-            if self.cur is not None and self.cur.poison is not None:
-                for t in extra.values():
-                    t.fill_(self.cur.poison)
-            sh.sets.append(extra)
+            sh.sets.append({})
+        for st in sh.sets[1:]:
+            for x in names:
+                if x not in st:
+                    st[x] = _zeros(len(sh.keys) if x == "keys" else sh.size[x], self.device)
+                    if self.cur is not None and self.cur.poison is not None:
+                        st[x].fill_(self.cur.poison)
         sh.done += [None] * (len(sh.sets) - len(sh.done))
         return sh
 
@@ -499,8 +494,13 @@ class PearlCDeviceRun(GraphCalls):
         return a, b
 
     def _pipe(self, w: int, sh: _Shape) -> tuple[Any, list[Any], list[Any]]:
-        """The call's pipeline and its steps: the main lane's, and (with hashing) the side lane's, by the schedule's groups."""
-        key = (w, sh.m16, self.omit, self.hashing, self.schedule.name, self._graphed(sh.m16))
+        """The call's pipeline and its steps: the main lane's, and (with hashing) the side lane's, by the schedule's groups
+        (`_side_groups`; A's commitment split where A's tree goes there).  The pipeline's ``lane_cuts`` are how many of the
+        main lane's steps are its per-row keying, which A's tree reads, and how many of the side lane's are A's tree; its
+        ``main_names`` name the main lane's steps."""
+        side_groups = self._side_groups(sh)
+        aside = "a_tree" in side_groups
+        key = (w, sh.m16, self.omit, self.hashing, self.schedule.name, self._graphed(sh.m16), aside)
         if key not in self.pipes:
             wt, K = self.weights[w], self.kernel
             bufs = {**{x: t.data_ptr() for x, t in wt.b.items()}, **{x: t.data_ptr() for x, t in sh.b.items()}, "y": 0,
@@ -508,16 +508,21 @@ class PearlCDeviceRun(GraphCalls):
             kp = self.key_slots[self.order[w]].data_ptr() if self._graphed(sh.m16) else sh.keys.data_ptr()
             keys = {"line_b": wt.keys.data_ptr(), "dom_b": wt.keys.data_ptr() + 64, "dom_a": kp, "unit": kp + self.nb,
                     **self.const_keys}
-            pipe = _pipeline(K, sh.mp, sh.n, sh.k, bufs, 0, keys, sh.xa.data_ptr(), sh.m16, variant=self.variant)
+            pipe = _pipeline(K, sh.mp, sh.n, sh.k, bufs, 0, keys, sh.xa.data_ptr(), sh.m16, variant=self.variant,
+                             split_a=aside)
             names = self._call_names(pipe)
             present = [x for x in names if x in {n for n, _, _ in pipe.steps()}]
             steps = _steps(pipe, names)
             if self.time_gemm and self.device.type == "cuda":
                 at = present.index("gemm_pearlc")
                 steps[at] = self._timed(steps[at])
-            lane = {x: "side" if self.hashing and STEP_GROUPS[x] in self.schedule.side else "main" for x in present}
+            lane = {x: "side" if STEP_GROUPS[x] in side_groups else "main" for x in present}
             main = [f for x, f in zip(present, steps, strict=True) if lane[x] == "main"]
             aside = [f for x, f in zip(present, steps, strict=True) if lane[x] == "side"]
+            pipe.lane_cuts = tuple(len(list(itertools.takewhile(lambda x, g=g: STEP_GROUPS[x] == g, [x for x in present
+                                                                                                     if lane[x] == ln])))
+                                   for ln, g in (("main", "row_seeds"), ("side", "a_tree")))
+            pipe.main_names = tuple(x for x in present if lane[x] == "main")
             self.pipes[key] = (pipe, main, aside)
         return self.pipes[key]
 
@@ -570,50 +575,20 @@ class PearlCDeviceRun(GraphCalls):
             sh.xa[m:m16].zero_()
         pipe, steps, side = self._pipe(w, sh)
         raw = self.stream()
-        cuda = self.device.type == "cuda"
-        caller = self.torch_stream(raw) if cuda else None
-        main = self.main if self.schedule.main_priority == "greatest" else None
+        caller = self.torch_stream(raw) if self.device.type == "cuda" else None
         if self._graphed(m16):
+            sh.j, sh.rot = 0, ()
             y, screened = self._graph_call(w, sh, pipe, raw, tiles, m, index, caller)
             return self._after(cur, w, wt, sh, pipe, index, m, k, m16, tiles, y, lead, bias, screened, scattered=self.hashing)
+        aside = bool(pipe.lane_cuts[1])                 # A's tree is among the side steps (omits can drop it)
+        if self._lane_graphed(sh, side):
+            g, screened = self._lanes(w, sh, pipe, steps, side, raw, caller, index, aside, graph=(m, tiles))
+            return self._after(cur, w, wt, sh, pipe, index, m, k, m16, tiles, g.y.clone(), lead, bias, screened, scattered=True)
         y = torch.empty((sh.mp, wt.n), dtype=torch.bfloat16, device=x.device)
         pipe.b["y"], pipe.b["leaves"] = y.data_ptr(), self.leaves.data_ptr() + self.nb * cur.tiles
-        lane_raw, lane = (main.raw, main.stream) if main is not None else (raw, caller)
-        if side:
-            j = sh.turn % len(sh.sets)
-            sh.turn += 1
-            pipe.b.update({x: t.data_ptr() for x, t in sh.sets[j].items()})
-        if self.hashing:
-            self.uploads.put(sh.keys, self.keys(self.roots[w], index, m16), caller if self.uploads.cuda else None)
-        if cuda and main is not None:               # the main lane starts after the caller's x, y and keys
-            main.event.record(caller)
-            lane.wait_event(main.event)
-        if cuda and side and sh.done[j] is not None:  # and rewrites set j only once the side lane is done with it
-            lane.wait_event(sh.done[j])
-        self._launching = lane
-        self.kernel.dev.stream = lane_raw
-        try:
-            for f in steps:
-                f()
-            if side:
-                if cuda:
-                    self.side.event.record(lane)
-                    self.side.stream.wait_event(self.side.event)
-                self.kernel.dev.stream = self.side.raw
-                for f in side:
-                    f()
-                if cuda:
-                    sh.done[j] = sh.done[j] or torch.cuda.Event()
-                    sh.done[j].record(self.side.stream)
-            if cuda and main is not None:           # the caller reads A's root and y only after the main lane
-                main.event.record(lane)
-                caller.wait_event(main.event)
-        finally:
-            self.kernel.dev.stream = None
-            self._launching = None
+        self._lanes(w, sh, pipe, steps, side, raw, caller, index, aside)
         return self._after(cur, w, wt, sh, pipe, index, m, k, m16, tiles, y, lead, bias,
-                           rows=x2 if x2.is_contiguous() and x2.dtype == torch.bfloat16 else None)
-
+                           rows=x2 if x2.is_contiguous() and x2.dtype == torch.bfloat16 else None, scattered=aside)
 
     def _after(self, cur: _Pass, w: int, wt: _Weight, sh: _Shape, pipe: Any, index: int, m: int, k: int, m16: int, tiles: int,
                y: Any, lead: Any, bias: Any, screened: bool = False, rows: Any = None, scattered: bool = False) -> Any:
@@ -624,12 +599,14 @@ class PearlCDeviceRun(GraphCalls):
         if self.hashing:
             size = pipe.size["tree_a"]
             if not scattered:
-                self.roots_buf[self.nb * index:self.nb * (index + 1)].copy_(sh.b["tree_a"][size - self.nb:size])
+                self.roots_buf[self.nb * index:self.nb * (index + 1)].copy_(sh.buf("tree_a")[size - self.nb:size])
             flags = self.flag_buf[cur.flag_rows:cur.flag_rows + m]
             if not screened:
                 screen_into(flags, sh.xa[:m] if rows is None else rows, sh.b["alpha_a"], sh.b["aux_a"], self.fused_screen)
             cur.flag_rows += m
             if cur.retain is not None:
+                if "a_tree" in self._side_groups(sh) and sh.done[sh.j] is not None:   # A's tree is the call's side lane's
+                    self.torch_stream(self.stream()).wait_event(sh.done[sh.j])
                 self._retained(cur, cur.matmuls[-1], m, flags, *self._kept(sh, pipe))
             cur.tiles += tiles
         out = y[:m] if bias is None else y[:m] + bias
@@ -642,9 +619,8 @@ class PearlCDeviceRun(GraphCalls):
         """A new pass: its own transcript under the install's epoch, the call indices from 0, under `schedule` (the last one's
         when None; a schedule changes only between passes).  With `retain`, the pass writes what the prover opens from into
         that directory, from poisoned outputs, and its manifest names `run`.  `stepped`: an engine step's end begins it."""
-        if self.side is not None and self.side.stream is not None:     # the last pass's side lane is done before anything new
-            self.torch_stream(self.stream()).wait_stream(self.side.stream)
-        self._use(self.schedule if schedule is None else schedule_of(schedule, self.scheme))
+        self.join_sides()                   # the last pass's side lanes are done before anything new
+        self._use(self.schedule if schedule is None else schedule_of(schedule, self.scheme, self.kernel))
         self.cur = _Pass(Path(retain) if retain else None, run, stepped=stepped)
         if retain and self.hashing:
             self.poison()
@@ -670,8 +646,7 @@ class PearlCDeviceRun(GraphCalls):
         cur, K = self.cur, self.kernel
         out: dict[str, Any] = {"units": len(cur.matmuls), "tiles": cur.tiles, "hashing": self.hashing, "schedule": self.schedule.name}
         if self.hashing and cur.matmuls:
-            if self.side is not None and self.side.stream is not None:
-                self.torch_stream(self.stream()).wait_stream(self.side.stream)
+            self.join_sides()
             epoch = Epoch(Workload(tuple(cur.matmuls)), self.roots, self.salt)
             R, count, nb = K.run, cur.tiles, self.nb
             tree = _zeros(nb * (2 * R.pow2(count) - 1), self.device)
@@ -762,7 +737,7 @@ class PearlCExecutor:
         ok = set()
         for name in SCHEDULES:
             try:
-                schedule_of(name, run.scheme)
+                schedule_of(name, run.scheme, run.kernel)
             except ValueError:
                 continue
             ok.add(name)
