@@ -618,6 +618,7 @@ AdviceReplay = _part("AdviceReplay", ("L",), _sig_replay, _build_replay,
                      "one event of the sorted stream replayed on its request's state")
 AdviceReplayEnd = _part("AdviceReplayEnd", ("L",), _sig_replay_end, _build_replay_end,
                         "the replay ended with the last request's outputs all kept")
+PARTS = (AdviceParse, AdviceParseEnd, AdviceSwap, AdviceReplay, AdviceReplayEnd)
 
 
 def _sig(S):
@@ -628,7 +629,7 @@ def _sig(S):
 def _body(B, S, bits, length):
     Z = _widths(S.L)
     K = _Consts(B)
-    part = {d.name: bind(d, L=S.L) for d in (AdviceParse, AdviceParseEnd, AdviceSwap, AdviceReplay, AdviceReplayEnd)}
+    part = {d.name: bind(d, L=S.L) for d in PARTS}
     lay = _state_layout(Z)
     init = {name: K.bits(0, w) for name, w in lay}
     init["rem"] = K.bits(0, 3) + _refs(length) + K.bits(0, Z.REM - 3 - Z.LW)
@@ -688,7 +689,7 @@ def evaluate(L: int, datas: Sequence[bytes]) -> list[int]:
 @lru_cache(maxsize=None)
 def part_ands(L: int) -> dict[str, int]:
     """Each part's ANDs at L."""
-    return {d.name: ands(bind(d, L=L)) for d in (AdviceParse, AdviceParseEnd, AdviceSwap, AdviceReplay, AdviceReplayEnd)}
+    return {d.name: ands(bind(d, L=L)) for d in PARTS}
 
 
 def size(L: int) -> dict[str, int]:
@@ -701,5 +702,5 @@ def size(L: int) -> dict[str, int]:
 
 
 __all__ = ["AdviceCheck", "AdviceParse", "AdviceParseEnd", "AdviceReplay", "AdviceReplayEnd", "AdviceSwap", "BLOCK",
-           "DEFERRED", "arguments", "comparators", "decodes", "evaluate", "part_ands", "reference", "size",
+           "DEFERRED", "PARTS", "arguments", "comparators", "decodes", "evaluate", "part_ands", "reference", "size",
            "sort_layers", "unit"]
