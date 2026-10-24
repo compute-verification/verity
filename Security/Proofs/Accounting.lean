@@ -44,6 +44,7 @@ import Proofs.Accounting.TS.Grind
 import Proofs.Accounting.TS.Fixed
 import Proofs.Accounting.TS.FixedMeets
 import Proofs.Accounting.TS.SharedNoise
+import Proofs.Accounting.TS.J10RChecks
 import Proofs.Accounting.TS.SessionSound
 import Proofs.Accounting.TS.CheckedSound
 import Proofs.Accounting.TS.LanesSound
@@ -58,6 +59,7 @@ import Proofs.Accounting.TS.Session.Lanes.KnownFields
 import Proofs.Accounting.TS.Session.Lanes.KnownRead
 import Proofs.Accounting.TS.Session.Lanes.Combine
 import Proofs.Accounting.TS.Session.Lanes.Lane
+import Proofs.Accounting.TS.Session.Lanes.Stream
 import Proofs.Accounting.TS.HeldSound
 import Proofs.Accounting.TS.Session.Tile.Computes
 import Proofs.Accounting.TS.TileSound

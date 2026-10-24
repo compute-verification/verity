@@ -91,6 +91,7 @@ def _all_bf16() -> list[int]:
     return list(range(1 << 16))
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("c", [30.0, 0.125])
 def test_bf16_scalar_chain_inputs_over_every_word(c):
     """The logits softcap's division and multiplication on all 65,536 bf16 words."""

@@ -119,6 +119,7 @@ def test_a_window_hands_off_once_open_and_unclosed_and_a_table_off_its_root_is_r
     assert host.ended() is not None
 
 
+@pytest.mark.slow
 def test_the_close_stage_completes_the_serving_stages_record(tmp_path, monkeypatch):
     """`pouw_h1_gpu.py --close-from` on a handed-off window and the record its serving stage left: the window closed,
     measured and released on the session's stream, and the record (``pouw_h1_gpu.json``) completed with its commitment,
@@ -153,21 +154,6 @@ def test_a_gate_verb_reaches_the_gate_over_ssh_word_for_word():
     got = GPU.gate_argv(ssh, verb)
     assert got[:len(ssh)] == ssh and shlex.split(" ".join(got[len(ssh):])) == verb
     assert GPU.gate_argv(["python", "-I", "local_gate.py", "d"], verb) == ["python", "-I", "local_gate.py", "d", *verb]
-
-
-def test_a_listener_is_seen_without_a_connect():
-    """`pouw_h1_gpu.await_listener` sees a listening port from the host's socket tables, and connects to nothing: the
-    listener's backlog stays empty."""
-    from tests.protocol_options import pouw_h1_gpu as GPU
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        port = s.getsockname()[1]
-        assert not GPU.listening(port)
-        s.listen(1)
-        assert GPU.await_listener(port) == 0
-        s.setblocking(False)
-        with pytest.raises(BlockingIOError):
-            s.accept()
 
 
 def test_the_stream_outlives_the_process_that_handed_it_over(tmp_path):

@@ -222,7 +222,7 @@ def _random_heads(target, heads: int) -> tuple[np.ndarray, np.ndarray]:
     return x, cs
 
 
-@pytest.mark.parametrize("target", ROPES, ids=lambda t: t.id)
+@pytest.mark.parametrize("target", [pytest.param(t, marks=pytest.mark.slow) if t.bindings['D'] == 256 else t for t in ROPES], ids=lambda t: t.id)
 def test_every_served_binding_agrees_with_rope_v1(target) -> None:
     """1,024 random heads of each binding the served Programs call against `RoPE_v1`'s registered kernel (`twins.RoPETwin`,
     self-checked against the IR reference by the kernel registry): `RoPE_v2`'s batch over the heads and its shared cos/sin row
@@ -230,6 +230,7 @@ def test_every_served_binding_agrees_with_rope_v1(target) -> None:
     _agree(target, list(_random_heads(target, 1024)))
 
 
+@pytest.mark.boolean_sweep
 @pytest.mark.slow
 @pytest.mark.parametrize("target", LARGE, ids=lambda t: t.id)
 def test_each_served_head_width_agrees_with_rope_v1_on_16k_heads(target) -> None:

@@ -1217,7 +1217,8 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
   keeps them, and the leaves' salts: 64 bytes a 4 KiB block and 192 a leaf of 16, about 1/60 of what it read in the
   window. Keeping each tree above its leaves and re-reading an opened leaf's 16 blocks instead costs a small fraction of
   the reads again (ra-openings puts it at 0.06–0.1%). The reference keeps every pass whole.
-- **Lean.** The statement is ra-remote-theorem's `Accounting.Remote.Conservation`, with the per-pass routes
+- **Lean.** The statement is `Accounting.Guarantees.RemoteSessionRunConservation` (and `RemoteWindowRunConservation`,
+  each with a `Relay` form): ra-remote-theorem's `Accounting.SecurityProofs.Remote.Conservation` at the per-pass routes
   ra-remote-lean and ra-bound-lean prove. The openings are ra-openings' (#1900, open):
   `Accounting.Guarantees.RateWindowDraw`, a window's pooled draw over its passes' receipts, and `RateSessionDraw`,
   the horizon and every window at once, both from `HorizonSampling`, the causal horizon bound. They take windows of

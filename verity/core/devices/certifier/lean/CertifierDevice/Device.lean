@@ -44,8 +44,9 @@ proxy event by event:
   window that declares it is faulted `monitor-unavailable` at its first tick, as a late tick is, and its sync is the
   choice made on the frames read.
 * **The salt** (`Config.salt`, off by default). At PoUW window p's first ingress tick (its first certifier window of
-  `pouwWindow`) the bucketer enqueues the certifier's own frame, `saltFrame p placeholder`, ahead of that bucket's
-  arrivals, and follows it by its place in the queue. When the ingress certifier releases it, the proxy queues p's salt
+  `pouwWindow`) the bucketer enqueues the certifier's own frame, `saltFrame p placeholder`, at the head of the queue,
+  ahead of that bucket's arrivals and of any queue carried over, so it leaves in that bucket's slot 0. When the ingress
+  certifier releases it, the proxy queues p's salt
   (`values[p]`, the certifier's coins, drawn outside the device) in that frame in place of the placeholder for a server
   connection of its own: the first opens it (`connectSalt`, answered `saltConnected` or `saltRefused`, which is
   `delivery-refused` on ingress), and each frame is written (`writeSalt`) once the one before it is drained
