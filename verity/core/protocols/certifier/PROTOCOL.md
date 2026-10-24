@@ -578,9 +578,15 @@ window. It outputs 1 exactly when:
   - the carry-out: the request in progress after the window's last request frame, the next window's carry-in.
 
   At the target the unit reads the view under the advice's hiding root, as the egress map is read.
-- **The statements** (`statements`, `chained`). The verifier computes window w's statement from its own advice: the
-  (root, domain id) the warden registered for w, w and `request_view` of w. A link's statements chain: window 0's
-  carry-in is (0, 0, 0), each carry-out is the next window's carry-in, and the last is between requests. Each
+- **The statements** (`statements`, `chained`). The verifier computes window w's statement from its own advice and
+  the warden's registration of window w as it read it (`Registration`: the link, the registration's digest, and the
+  root and domain id the registration names): the link, w, the digest, the root and domain id, and `request_view` of
+  w. A link's statements chain: one link, each window its own registration, window 0's carry-in (0, 0, 0), each
+  carry-out the next window's carry-in, and the last between requests. So a verdict built from them names the link
+  and the registrations its proofs were verified on, and `advised.view` checks both against its own link's (REDTEAM
+  phase 10 (4): a verdict that names no link passes on another link carrying the same advice). The circuit reads the
+  root and domain id, and the domain id, which the warden derives from the session, link, direction and window, keeps
+  a proof on one link-window's root from opening another's. Each
   IoTieRequest proof is held to its window's statement, so with the carry-out checked, a window's verdict says its
   cells take the request in progress from the carry-in to the carry-out, and a link's verdicts hold every request's
   prompt_len, spanning windows or not. Checked alone, a window would accept a carried prompt-field count with any
@@ -604,10 +610,13 @@ window. It outputs 1 exactly when:
   domain id, the window, and in the named gap the carry-in's left and fields, `ended`, `count`, `received` and the
   carry-out's left and fields (`left_out`, `fields_out`). Witness: the cells, their salts and the switches.
 - **What N2-ADVICE takes: the verdict** (`advised.IoTieVerdict`, #3502). `advised.ends` takes the prompt-length tie
-  only from an `IoTieVerdict(advice, accepted)` keyed to the advice's digest (`advised.digest`), one bit a window,
+  only from an `IoTieVerdict(link, registrations, advice, accepted)`: the link, its ingress windows' registrations
+  (each one's `registration.digest`, in order), the advice's digest (`advised.digest`) and one bit a registration,
   built only from IoTieRequest proofs the verifier verified on its own statements (`statements` from that advice's
-  prompt lengths and `received`, and the warden's registrations, `chained`), and refuses an advised link whose every
-  ingress window isn't accepted. Tonight the reference on the certified record stands in for each proof. That makes
+  prompt lengths and `received`, and the warden's registrations, `chained`) and given only by the verifier's own tie
+  source (`LinkWindows.ties`, `tie_service.Ties`). It refuses a verdict on another link or other registrations than
+  the source records, and an advised link whose every ingress window isn't accepted. The proof service runs it
+  (`tie_service.IngressTie`, "The tie" below). That makes
   `advised.ends`' premise a check: the link's r-th arrival is an id request of `prompt_lens[r]` prompt ids. Advice
   request i is arrival order[i] (advice v1's order permutation; v0's is the identity), which the egress tie holds
   through its map's stream. The advised unit itself doesn't change.
@@ -1058,8 +1067,10 @@ requests, whose frames are a function of the prompt's length alone), for every p
     and the registrations the verifier's tie source records, so a verdict on another link or ingress record isn't
     reused;
   - the framing, and each window's declared sync, which must be one of Σ_sync, the set the certified egress head's
-    parameters digest binds (outside it the advice is refused), and the sync the certifier ran that window under,
-    which the verifier takes only from its own clock source (`LinkWindows.clocks`, `advised.ClockSource`).
+    parameters digest binds (outside it the window is refused), and the sync the certifier ran that window under,
+    which every floor reads and the declared one must be, and which the verifier takes only from its own clock
+    source (`LinkWindows.clock_source`, `advised.ClockSource`): the certifier's signed clock sync
+    ([protocol/clock-certificate.md](protocol/clock-certificate.md)).
 - **The ingress ends are derived** (`advised.ends`), not advised: advice request j is the link's j-th request and its
   prompt length is the certified prompt's, which the tie holds (FCFS admission meets the order, since v0's first-row
   order is then the arrival order), so it ends at request frame `ends[j]` = Σ_{i ≤ j} `request_frames[prompt_len_i −
@@ -1069,20 +1080,26 @@ requests, whose frames are a function of the prompt's length alone), for every p
   v0's says
   where a request ends, so the ends cost nothing beside `advice.bits`.
 - **The window's view** (`advised.view`), computed by the verifier in the clear from the advice, the framing and the
-  declared syncs, is the unit's public input:
+  syncs the certifier ran, is the unit's public input:
   - `released[t]`, the frames the advice releases in bucket t, at most R (more refuses the advice);
   - `floor[t]`, the request frames the window's ingress must have released by bucket t, less B_w = Σ_{v<w}
     `received[v]`. Output λ of request j released at b is eligible no earlier than j's anchor + δ + ⌊λ/ρ⌋
-    (`schedule.eligible`) under the sync (δ, ρ) of the window that holds b, and is released no earlier: so the first
-    `ends[j]` request frames are released by bucket b − δ − ⌊λ/ρ⌋. A frame for which that bucket is before 0, or
-    released in a window with no declared sync, refuses the advice. Since δ ≥ 0, no declared sync lets a frame out
-    before the bucket that releases its request's last frame. A release in that bucket is a served clock's, an
-    engine's first output in its request's bucket (a served run's advice, `test_network_certifier_advised_served.py`);
-    on a certified path the proxy hands a frame read in bucket t on at t + 1, so its honest syncs have δ ≥ 1. A
-    window whose declared sync isn't the one the certifier ran it under refuses the advice: a δ below the traffic's
-    loosens the floor, and REDTEAM phase 11 accepted an output in its request's own bucket under δ = 0 declared for a
-    window run at δ = 1 (regressions in `test_network_certifier_advised_phase11_floor.py`). Until the certifier
-    reports its syncs to the verifier there is no clock source, and every advised link is refused;
+    (`schedule.eligible`) under the sync (δ, ρ) the certifier ran the window that holds b under, and is released no
+    earlier: so the first `ends[j]` request frames are released by bucket b − δ − ⌊λ/ρ⌋. A frame for which that
+    bucket is before 0, or released past the link's windows or in one without the certifier's signed sync, refuses
+    the advice. Since δ ≥ 0, no sync lets a frame out before the bucket that releases its request's last frame. A
+    release in that bucket is a served clock's, an engine's first output in its request's bucket (a served run's
+    advice, `test_network_certifier_advised_served.py`); on a certified path the proxy hands a frame read in bucket t
+    on at t + 1, so its honest syncs have δ ≥ 1. A window whose declared sync isn't the one the certifier ran it under
+    is refused: a δ below the traffic's would loosen the floor, and REDTEAM phase 11 accepted an output in its
+    request's own bucket under δ = 0 declared for a window run at δ = 1 (regressions in
+    `test_network_certifier_advised_phase11_floor.py`). The bucket b − δ − ⌊λ/ρ⌋ can fall in a window before the
+    one that releases the frame, so a floor that read a declaration would carry one window's word into another's
+    view. No floor reads one, so a wrong declaration refuses its own window and no other (REDTEAM phase 15), and the
+    link's verdict, the AND over its windows, refuses the link. The verifier takes the sync the certifier ran each
+    window under only from the certifier's clock certificate of the window, verified under its key and session, and
+    a window without a valid one is refused, and the link with it
+    ([protocol/clock-certificate.md](protocol/clock-certificate.md));
   - `received`, `received[w]`.
 - **The unit** is `NetworkAdvisedLinkWindow` v2{EGRESS, INGRESS, ADVISED}: `NetworkLinkWindow`'s checks, and one gate
   (`advised.gate`) naming `advised.NetworkAdvisedCounts_v1{T, RIN, OWN}` and its circuit digest pinned in
@@ -1101,7 +1118,7 @@ requests, whose frames are a function of the prompt's length alone), for every p
   link: it computes `view(A, w)` itself, under the tie from its own tie source alone (`LinkWindows.ties`; no entry
   point takes one beside the advice), and opens the proof's public row only to its own copy, so a proof made on
   another advice's view of the window is refused. Without a `LinkAdvice`, a tie source or a clock source
-  (`LinkWindows.clocks`), or on an advice `view`
+  (`LinkWindows.clock_source`), or on an advice `view`
   refuses, the unit takes no instance and the window is refused. The in-the-clear check (`clear`, the debug comparison) runs `advised_check`:
   `advised.reference` over the opened heads' counts and `view(A, w)`. Each window reports a third public output,
   `advice`, the SHA-512 of A's canonical
@@ -1135,34 +1152,46 @@ requests, whose frames are a function of the prompt's length alone), for every p
   `test_network_certifier_advised_phase6.py`). So the advice carries no tie, and `advised.ends` takes it only as
   IO-TIE's in-proof `IoTieRequest` (`cursor/io-tie-request-061a`, note:network-accounting/20261024T0420Z-report-io-tie):
   its verdict on every ingress window of this link's registrations, for the same advice digest, from proofs the
-  verifier of record verified itself, given by the verifier's own tie source (`LinkWindows.ties`). Until IoTieRequest
-  runs in the proof service there is no such source, and every advised link is refused, never accepted. The tests
-  stand in for the source with its reference in the clear (`tests/advised_traffic.py`, `StandInTie`), as
-  `tests/standin.py` stands in for the proof.
+  verifier of record verified itself (`advised.IoTieVerdict`, naming the link, the registrations and the advice),
+  given by the verifier's own tie source (`LinkWindows.ties`). The tie service (`tie_service.IngressTie`) builds it,
+  and `tie_service.Ties` is that source. The warden commits each ingress link-window's T bucket rows under fresh
+  salts and registers their root, one proof unit a registration, held to the window's order. The unit is
+  `NetworkIngressTieWindow`: one gate naming IoTieRequest and its pinned circuit digest
+  (`io_request.circuit-check.json`) and a zero pad that fills the witness row to whole u16 words. The verifier of
+  record decides each window on the proof alone against its own statement (`io_request.statements` from the advice
+  it holds), and reports the advice's digest. `IngressTie.tie` reads the verdict from the stream's outcomes of
+  record alone, on the link and the stream's registrations. Window w is accepted when its outcome is, decided on the
+  proof for the advice's digest. Every window is refused unless the stream registers exactly the advice's windows in
+  order, their statements chain from window 0 (`chained`), and the advised profile's framing and OWN are
+  IoTieRequest's. A size class with no pinned digest has no accepted proof, and at the served size none is pinned
+  (about 1.14 × 10^10 ANDs a window), so there every advised link is still refused, never accepted.
+  `tests/test_network_certifier_tie_service.py` holds REDTEAM phase 9's carried field count, its forged advice and
+  phase 6's split, refused through the verifier, on stand-in proofs (`tests/standin.py`). The advised tests stand in
+  for the source with its reference in the clear (`tests/advised_traffic.py`, `StandInTie`).
 - **Bucket 0 is capped at R_in, which holds the own frame.** The ingress certifier releases min(queue, r_in) frames a
-  bucket (`grid.Certifier`) with its own frame queued ahead of bucket 0's arrivals (`active.Bucketer`), and a head
-  with a count past its allocation doesn't exist (`certificate.RecordHead`): with R_in request frames arriving in
-  bucket 0 the certified count is R_in, one of them the own frame, and the last request frame goes out in bucket 1.
+  bucket (`grid.Certifier`) with its own frame queued at the head of the queue, ahead of bucket 0's arrivals and of any
+  request frames carried from the window before (`active.Bucketer`), and a head with a count past its allocation
+  doesn't exist (`certificate.RecordHead`): with R_in request frames arriving in bucket 0 the certified count is R_in,
+  one of them the own frame, and the last request frame goes out in bucket 1.
 - **The ends are where the signed counts put them** (CERT-VARLEN's rule): request k ends in the first bucket where the
   ingress head's signed counts, less one own frame a window, reach `ends[k]`, with `request_frames[n − 1]` CERT-VARLEN's
   `id_request_frames(n, B)`. The floor reads the same prefix sums, so it holds each output to the bucket the signed
-  counts end its request in. The rule is exact while each window's own frame leaves in its first bucket, and always
-  once CERT-VARLEN's FIFO change queues the own frame at the head of each window's queue; until then a window that
-  starts with R_in or more request frames carried in puts an end one bucket late, never early.
-- **Named gap: the record holds neither the prompt lengths nor the syncs the unit reads** (owned by network-accounting).
-  The unit takes v0's prompt lengths, held to the certified ones only by IoTieRequest's verdict (the tie above), and
-  each window's sync from its declaration, held to Σ_sync and to the sync the certifier reports it ran (the clock
-  source above), a trusted device's report rather than a signed record, because neither head signs them. Design: the
-  ingress head
-  signs each bucket's completed requests and the egress head the window's sync (`served.sync_words`), inside
-  `RecordHead.encode`, and the unit reads both from the heads it opens. It changes the head encoding that Lean pins, so it lands with the head check's and the Lean model's
-  change, not before. With CERT-VARLEN's FIFO change the completed requests follow from the signed counts and the
-  certified prompt lengths, so on ingress what's left is holding v0's prompt lengths to the certified bodies.
+  counts end its request in. The rule is exact, since each window's own frame leaves in its first bucket.
+- **Named gap: the record doesn't hold the prompt lengths the unit reads** (owned by network-accounting). The unit
+  takes v0's prompt lengths, held to the certified ones only by IoTieRequest's verdict (the tie above), because the
+  ingress head doesn't sign them. Design: the ingress head signs each bucket's completed requests inside
+  `RecordHead.encode`, and the unit reads them from the head it opens. It changes the head encoding that Lean pins, so
+  it lands with the head check's and the Lean model's change, not before. With CERT-VARLEN's FIFO change the
+  completed requests follow from the signed counts and the certified prompt lengths, so on ingress what's left is
+  holding v0's prompt lengths to the certified bodies. Each window's sync is signed: the certifier's clock certificate
+  beside its egress record, which the verifier holds the public declared sync to in the clear, so it needs no head
+  change ([protocol/clock-certificate.md](protocol/clock-certificate.md)).
 - **Premises** of "an honest advised link is accepted", on which N2's claim doesn't rest:
   - `release` is the certified egress record's: each kept output is one egress frame, in the link's canonical order,
     which IO-TIE fixes (within a bucket the order doesn't change the counts);
   - the releases fall in the link's windows, each of which declares a sync in Σ_sync, the one the certifier ran it
-    under, which the certifier reports to the verifier (until it does, no advised link is accepted);
+    under, whose clock certificate the certifier signed and the verifier holds (without it, no advised link is
+    accepted);
   - `received` is the ingress record's;
   - the link's j-th request is advice request j (FCFS admission: IoTieRequest's ordinals are the verifier's, so an
     advice numbered in another order, as a runner's batch order numbers v0 and ENC-DERIVED's `walk.order` maps back,
@@ -1172,16 +1201,14 @@ requests, whose frames are a function of the prompt's length alone), for every p
   - each window's declared sync has a δ and ρ that every frame released in it meets: a small δ, and ρ at least a
     stream's frames a bucket (`schedule.eligible` reads the anchor's window's sync, the view the release's, which the
     verifier sees);
-  - with the salt on, a window's own frame counts as bucket 0's, so a window that starts with R_in or more request
-    frames carried in under-counts by one until it is released, which only a release at its exact eligibility
-    notices (CERT-VARLEN's FIFO change, the own frame first in each window's queue, removes this);
   - both ends share T and τ_b (checked by `LinkWindows`).
 
 What this establishes: on every accepted link-window of an advised link, the egress head's counts are the advice's
 releases, and the advice's releases are eligible after the ingress head's releases under the declared sync. What it
 doesn't: the frames (N3's and IO-TIE's), that the advice is the computation's (the compiler's and PoUW's), the
-tie itself (IoTieRequest's, which isn't in the proof service yet, so today no advised link is accepted), the syncs
-the certifier ran (its report, which no head signs yet), and the premises.
+tie itself (IoTieRequest's, through the tie service; no IoTieRequest digest is pinned at the served size class, so
+there no advised link is accepted), the syncs the certifier ran (its report, which no head signs yet), and the
+premises.
 
 ## The audit (`audit`)
 

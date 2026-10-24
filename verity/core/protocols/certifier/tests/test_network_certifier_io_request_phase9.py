@@ -15,6 +15,7 @@ regressions: what a window's verdict holds alone, and what rests on the statemen
 """
 from __future__ import annotations
 
+import hashlib
 import inspect
 
 from verity.core.protocols.certifier import io_request as Q
@@ -51,7 +52,8 @@ def _ref(cells, view, window):
 def _record(windows):
     insts = [Q.instance(SHAPE, c, Q.RequestView(Q.Carry(0, 0, 0), (), 0, Q.Carry(0, 0, 0)), w)
              for w, c in enumerate(windows)]
-    return [(i.root, i.domain) for i in insts]
+    return [Q.Registration("ingress-0", hashlib.sha512(b"ingress-0/%d" % w + i.root).digest(), i.root, i.domain)
+            for w, i in enumerate(insts)]
 
 
 def test_honest_link_accepts():

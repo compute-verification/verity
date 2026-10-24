@@ -120,7 +120,7 @@ def test_no_declared_sync_releases_a_frame_before_its_requests_last_frame():
     Program's eligibility, the anchor bucket itself, so the release in bucket 3 is accepted (a served first token in
     its request's bucket), and one in bucket 2, before the request's last frame, is refused, under δ = 0 as under
     every sync, since δ ≥ 0 never moves the floor past the release bucket. A sync outside Σ_sync is refused outright,
-    in whichever window the advice releases in."""
+    in the window that declares it and only there: an earlier window's floor reads the sync the certifier ran."""
     ingress, egress, received = [0, 0, 0, 2, 0, 0, 0, 0], [0, 0, 0, 1, 0, 0, 0, 0], (2,)
     loose = SyncSet((0, 2), (1,))
     assert not _accepts(_advice((3,)), received, ingress, egress, ClockSync(2, 1), loose)
@@ -131,9 +131,11 @@ def test_no_declared_sync_releases_a_frame_before_its_requests_last_frame():
     with pytest.raises(ValueError, match="Σ_sync"):
         _view(_advice((4,)), received, ClockSync(0, 1), SyncSet((2,), (1,)))
     later = AD.LinkAdvice(_advice((T + 3,)), (2, 0))
+    off = [ONE, ClockSync(0, 1)]
     with pytest.raises(ValueError, match="Σ_sync"):
-        AD.view(later, 0, T, R, [ONE, ClockSync(0, 1)], ONLY_ONE, FRAMING, clocks=[ONE, ClockSync(0, 1)],
-                **held(later))
+        AD.view(later, 1, T, R, off, ONLY_ONE, FRAMING, clocks=[ONE, ONE], **held(later))
+    assert AD.view(later, 0, T, R, off, ONLY_ONE, FRAMING, clocks=[ONE, ONE], **held(later)) == \
+        AD.view(later, 0, T, R, [ONE, ONE], ONLY_ONE, FRAMING, clocks=[ONE, ONE], **held(later))
 
 
 def test_bucket_zero_is_capped_at_rin_with_the_certifiers_own_frame():

@@ -154,16 +154,23 @@ A spec-level reference for network accounting's timing channel:
   served link under arbitrary traffic: N2's advised unit, `NetworkAdvisedLinkWindow`, adds `NetworkAdvisedCounts_v1`
   (63,031 ANDs at T = 600, R_in = 1), which holds the egress head's counts to the releases of the prover's advice
   (`LinkAdvice`: I1's `advice.Advice` and each window's request frames), and the ingress head's counts to the advice:
-  each release eligible under its window's declared sync, one of Σ_sync and the one the certifier ran the window
-  under (the verifier's own clock source, `LinkWindows.clocks`), so never before the bucket of its request's last
-  frame (the request's end on the ingress link, which `advised.ends` derives from v0's prompt lengths and the link's
-  public framing), and each window's ingress total the advice's. Carry-over between windows is the advice's. With the
-  advice fixed the counts are determined, so the egress timing carries at most `advice.bits` (`PROTOCOL.md`, "An
-  advised link"). The prompt lengths are tied to the certified ones only by IO-TIE's `IoTieRequest` verdict
+  each release eligible under the sync the certifier ran its window under (the verifier's own clock source,
+  `LinkWindows.clock_source`: the certifier's clock certificates, `certificate.ClockCertificate`, which each window's
+  declared sync must match, one of Σ_sync, or that window is refused), so never before the bucket of its request's
+  last frame (the request's end on the ingress link, which `advised.ends` derives from v0's prompt lengths and the
+  link's public framing), and each window's ingress total the advice's. Carry-over between windows is the advice's.
+  With the advice fixed the counts are determined, so the egress timing carries at most `advice.bits` (`PROTOCOL.md`,
+  "An advised link"). The prompt lengths are tied to the certified ones only by IO-TIE's `IoTieRequest` verdict
   (`advised.IoTieVerdict`, naming the link and its ingress registrations), which the verifier takes from its own tie
-  source (`LinkWindows.ties`), never beside the advice; IoTieRequest isn't in the proof service yet, and the
-  certifier doesn't report its syncs to the verifier yet, so there is no source of either and every advised link is
-  refused (fail closed).
+  source (`LinkWindows.ties`), never beside the advice: the tie service's (below). The served size class isn't
+  pinned, so there every advised link is refused (fail closed), as is a link without the certifier's clock
+  certificates;
+- the ingress tie through the proof service (`tie_service`): `IngressTie`, each ingress link-window's `IoTieRequest`
+  proved as `NetworkIngressTieWindow` (one gate naming its pinned circuit digest, `io_request.circuit-check.json`, and
+  a zero pad to whole u16 words) on the cells the warden committed and registered, decided by the verifier of record
+  on its own statement from the advice, and `IngressTie.tie`, which builds `advised.IoTieVerdict` on the link and the
+  stream's registrations from the stream's outcomes of record alone; `Ties`, the tie and its stream as the
+  `LinkWindows.ties` the advised link reads. A size class no sidecar pins has no accepted proof.
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's

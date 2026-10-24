@@ -33,12 +33,20 @@ carry-out's bytes left and prompt fields.
 **The statements** (`statements`): window w's `RequestStatement` is the warden's registered root and domain id, w,
 and `request_view` of w, so a link's statements chain (`chained`): window 0's carry-in is the link's start, (0, 0, 0),
 and each carry-out is the next window's carry-in. The verifier computes them from its own advice and holds each
-IoTieRequest proof to its window's; `advised.IoTieVerdict` (N2-ADVICE) is built from those proofs, one verdict a
+IoTieRequest proof to its window's; `advised.IoTieVerdict` is built from those proofs (`tie_service`), one verdict a
 window, under the advice's digest. With the carry-out held, a window's verdict says the cells take its request in
 progress from the carry-in to the carry-out, so a link's verdicts hold every request's prompt_len, spanning windows
 or not, by the chain from window 0 (REDTEAM phase 9 (b): checked alone, a carried prompt-field count accepts any
 added amount). The ordinals are the verifier's: the cells carry none, and the j-th request ending in window w is
 carry_in.q + j by the same chain.
+
+**The link and its registrations** (REDTEAM phase 10 (4)): `registered[w]` is the warden's `Registration` of window
+w as the verifier read it, the link's name, the registration's digest and the root and domain id it names, and each
+statement carries the link and the digest beside the root and domain id the circuit reads. `statements` takes one
+link's registrations, each window its own, and `chained` holds the statements to one link and distinct
+registrations, so a verdict built from them names the link and the registrations its proofs were verified on, and
+`advised.view` can check both against its link's. The domain id, which the warden derives from the session, link,
+direction and window, keeps a proof on one link-window's root from opening another's.
 
     IoTieRequestFrame{B}(cell: Array<B, Byte>, left: Array<32>) -> Array<68>
         pad, req, start, ended, the bytes left after it (u32) and its prompt fields (u32), LSB first
@@ -66,6 +74,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
+from pathlib import Path
 from types import SimpleNamespace
 from typing import NamedTuple, Sequence
 
@@ -218,11 +227,24 @@ class RequestView(NamedTuple):
     carry_out: Carry
 
 
-class RequestStatement(NamedTuple):
-    """IoTieRequest's public inputs for an ingress link's window `window`: the root and domain id the warden registered
-    for it and the view (`statements`)."""
+class Registration(NamedTuple):
+    """The warden's registration of an ingress link-window as the verifier read it (the warden's `check_registration`):
+    the link's name, the registration's digest (the cells digest its certificate signs, which binds the link,
+    direction, window, schedule, wiring, domain and root), and the root and domain id it names."""
 
+    link: str
+    digest: bytes
+    root: bytes
+    domain: bytes
+
+
+class RequestStatement(NamedTuple):
+    """IoTieRequest's public statement for an ingress link's window `window`: the link, the digest of the warden's
+    registration of the link-window, the root and domain id it names (the circuit's), and the view (`statements`)."""
+
+    link: str
     window: int
+    registration: bytes
     root: bytes
     domain: bytes
     view: RequestView
@@ -312,28 +334,39 @@ def request_view(prompt_lens: Sequence[int], received: Sequence[int], window: in
 
 
 def statements(shape: Shape, prompt_lens: Sequence[int], received: Sequence[int],
-               registered: Sequence[tuple[bytes, bytes]]) -> tuple[RequestStatement, ...]:
-    """An ingress link's statements, one a window: `registered[w]`, the (root, domain id) the warden registered for
-    window w, and `request_view` of w from the advice's prompt lengths, in arrival order, and `received`. Raises
-    `ValueError` unless there is one registration a window, at least one, and the requests' frames are the windows'
-    total."""
+               registered: Sequence[Registration]) -> tuple[RequestStatement, ...]:
+    """An ingress link's statements, one a window: `registered[w]`, the warden's registration of window w, and
+    `request_view` of w from the advice's prompt lengths, in arrival order, and `received`. Raises `ValueError` unless
+    there is one registration a window, at least one, all of one link and no two the same, and the requests' frames are
+    the windows' total."""
     prompt_lens, received = _u32s(prompt_lens, "the advice's prompt lengths"), _u32s(received, "received")
-    if not received or len(received) != len(registered):
-        raise ValueError(f"{len(received)} windows received and {len(registered)} registered: a link's statements "
+    regs = tuple(registered)
+    if not received or len(received) != len(regs):
+        raise ValueError(f"{len(received)} windows received and {len(regs)} registered: a link's statements "
                          f"cover every window, at least one")
-    return tuple(RequestStatement(w, root, dom, request_view(prompt_lens, received, w, shape.B))
-                 for w, (root, dom) in enumerate(registered))
+    if not all(isinstance(r, Registration) and type(r.link) is str and r.link and
+               all(type(x) is bytes and len(x) == 64 for x in (r.digest, r.root, r.domain)) for r in regs):
+        raise ValueError("each window's registration is a Registration: a link's name and 64-byte digest, root and "
+                         "domain id")
+    if len({r.link for r in regs}) != 1 or len({r.digest for r in regs}) != len(regs):
+        raise ValueError(f"a link's statements are on one link's registrations, each window its own, not "
+                         f"{sorted({r.link for r in regs})} with {len({r.digest for r in regs})} digests for "
+                         f"{len(regs)} windows")
+    return tuple(RequestStatement(r.link, w, r.digest, r.root, r.domain, request_view(prompt_lens, received, w, shape.B))
+                 for w, r in enumerate(regs))
 
 
 def chained(stmts: Sequence[RequestStatement]) -> bool:
-    """Whether a link's statements chain: windows 0, 1, … in order, window 0's carry-in the link's start (0, 0, 0),
-    each carry-out the next window's carry-in and the last one between requests, each carry-out's ordinal its
-    carry-in's plus the requests that end in the window."""
-    start = Carry(0, 0, 0)
+    """Whether a link's statements chain: one link, each window its own registration, windows 0, 1, … in order,
+    window 0's carry-in the link's start (0, 0, 0), each carry-out the next window's carry-in and the last one between
+    requests, each carry-out's ordinal its carry-in's plus the requests that end in the window."""
+    start, seen = Carry(0, 0, 0), set()
     for w, s in enumerate(stmts):
         v = s.view
-        if s.window != w or v.carry_in != start or v.carry_out.q != v.carry_in.q + len(v.ended):
+        if s.link != stmts[0].link or s.registration in seen or s.window != w or v.carry_in != start or \
+                v.carry_out.q != v.carry_in.q + len(v.ended):
             return False
+        seen.add(s.registration)
         start = v.carry_out
     return bool(stmts) and start.left == 0 and start.fields == 0
 
@@ -753,6 +786,9 @@ IoTieRequest = CompositeDefinition(
         "ending count requests whose prompt fields are ended's, in order (routed by the switches, `IoTieRoute`), in "
         "received request frames, and leaving the carry-out (left_out, fields_out) (`IoTieRequestEnd`): the ingress "
         "tie of one link-window, every cell opened")
+IoTieRequest.gated = True  # type: ignore[attr-defined]  # circuit-check holds its digest pins (`tie_service.gate`)
+#: the circuit digests circuit-check pins (`head_check.pinned_digest`)
+PINS = Path(__file__).with_name("io_request.circuit-check.json")
 
 
 # --- arguments -------------------------------------------------------------------------------------------------------
@@ -777,6 +813,7 @@ def arguments(shape: Shape, inst: Instance, bits: Sequence[int]) -> list[list[in
 
 
 __all__ = ["BODY_AT", "Carry", "Cut", "END", "FRAME_OUT", "Frame", "Instance", "IoTieRequest", "IoTieRequestEnd",
-           "IoTieRequestFrame", "IoTieRequestOwn", "IoTieRequestStep", "Layout", "RequestStatement", "RequestView",
-           "STATE", "Shape", "arguments", "chained", "cut", "ends", "frame_arguments", "instance", "layout",
-           "own_frame", "parse_frame", "reference", "request_view", "rows", "statements", "switches", "windows_of"]
+           "IoTieRequestFrame", "IoTieRequestOwn", "IoTieRequestStep", "Layout", "PINS", "RequestStatement",
+           "RequestView", "STATE", "Shape", "arguments", "chained", "cut", "ends", "frame_arguments", "instance",
+           "layout", "own_frame", "parse_frame", "reference", "request_view", "rows", "statements", "switches",
+           "windows_of"]

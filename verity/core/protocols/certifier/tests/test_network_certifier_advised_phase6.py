@@ -1,7 +1,8 @@
 """REDTEAM phases 6, 7 and 10, target 1 and target 3, against N2's advised counts (`advised`), held as regressions of
 the tie (IoTieRequest's verdict, `advised.IoTieVerdict`; here its stand-in, `advised_traffic.StandInTie`): on one
-certified ingress and egress record, a prover who splits the request frames among the requests otherwise (a short prompt and a
-long one swapped) lowers an early request's end and so the floor, and the verdict on the certified record refuses it.
+certified ingress and egress record, a prover who splits the request frames among the requests otherwise (a short
+prompt and a long one swapped) lowers an early request's end and so the floor, and the verdict on the certified record
+refuses it.
 A tie the prover states (phase 7: one stating the swapped split reopened phase 6) isn't one, nor is a verdict it builds
 and delivers (phase 10 and ci's reproduction: one for the forged advice's digest, every window accepted, got the
 swapped split's ends (1, 3) accepted through the verifier of record), the honest advice's verdict doesn't carry to

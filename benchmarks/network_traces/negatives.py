@@ -803,14 +803,16 @@ def certified_ingress(Q, requests: list[bytes], counts: list[int], *, T: int, fr
 def request_tie(Q, cells: Ingress, link) -> tuple[bool, ...]:
     """IoTieRequest's verdict on each ingress window of `link` (`advised.LinkAdvice`): its reference on the certified
     `cells` against the verifier's statement of the window from the link's advice (`io_request.statements`: the
-    advice's prompt lengths in order, `received`, and the warden's registration), the statements chained from window
-    0; every window refused where the advice can't be stated (its requests' frames aren't the windows' total) or the
-    statements don't chain. The verifier of record takes the verdict from IoTieRequest proofs it verified; this is
-    their reference in the clear."""
+    advice's prompt lengths in order, `received`, and the warden's registration, `io_request.Registration` on
+    `N2_LINK` with `n2_registrations`' stand-in digest, the one the tie names, and the certified root and domain), the
+    statements chained from window 0; every window refused where the advice can't be stated (its requests' frames
+    aren't the windows' total) or the statements don't chain. The verifier of record takes the verdict from
+    IoTieRequest proofs it verified; this is their reference in the clear."""
     refused = (False,) * len(link.received)
+    regs = [Q.Registration(N2_LINK, bytes.fromhex(d), root, domain)
+            for d, (root, domain) in zip(n2_registrations(len(cells.registered)), cells.registered)]
     try:
-        stmts = Q.statements(cells.shape, [q.prompt_len for q in link.advice.requests], link.received,
-                             cells.registered)
+        stmts = Q.statements(cells.shape, [q.prompt_len for q in link.advice.requests], link.received, regs)
     except ValueError:
         return refused
     if not Q.chained(stmts):

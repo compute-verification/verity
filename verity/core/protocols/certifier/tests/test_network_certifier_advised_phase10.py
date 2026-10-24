@@ -1,10 +1,11 @@
 """REDTEAM phase 10, target 1, against #3502's tie (`advised.IoTieVerdict`), held as regressions of its fix. The
-verdict is meant to come only from IoTieRequest proofs the verifier of record verified, so that until IoTieRequest
-runs in the proof service every advised link is refused (PROTOCOL.md, "The tie is IoTieRequest's verdict"). The
+verdict is meant to come only from IoTieRequest proofs the verifier of record verified, so that without them every
+advised link is refused (PROTOCOL.md, "The tie is IoTieRequest's verdict"). The
 verifier read it off the delivered `LinkAdvice`, and the verdict held only the advice's digest, which the delivered
 advice fixes: a prover that delivered its own verdict reopened phase 6's acausal release through the verifier of
 record. Now the advice carries no tie, the verifier takes the verdict only from its own tie source
-(`LinkWindows.ties`, here the stand-in `advised_traffic.StandInTie`; none in the package), and the verdict names the
+(`LinkWindows.ties`: `tie_service.Ties` in the package, here the stand-in `advised_traffic.StandInTie`), and the
+verdict names the
 link and its ingress registrations, which `view` holds to the verifier's, so one link's verdict isn't another's.
 """
 
@@ -143,10 +144,11 @@ def test_ends_refuses_another_digest_and_every_partial_verdict(why):
     assert AD.ends(link, FRAMING, **tie) == (1, 4)
 
 
-def test_the_stand_in_is_unreachable_from_the_package_and_nothing_there_builds_a_verdict():
-    """No module of the certifier outside its tests imports `advised_traffic` or `standin`, or calls
-    `IoTieVerdict(…)`, and the verifier takes the verdict only from its own tie source: `_view` reads
-    `self.ties`, which is None unless the verifier sets it."""
+def test_the_stand_in_is_unreachable_from_the_package_and_only_the_tie_service_builds_a_verdict():
+    """No module of the certifier outside its tests imports `advised_traffic` or `standin`, none but the tie service
+    (`tie_service.IngressTie.tie`, from the stream's outcomes of record) calls `IoTieVerdict(…)`, and the verifier
+    takes the verdict only from its own tie source: `_view` reads `self.ties`, which is None unless the verifier sets
+    it."""
     pkg = Path(SVC.__file__).parent
     built, imported = [], []
     for path in sorted(pkg.glob("*.py")):
@@ -161,7 +163,7 @@ def test_the_stand_in_is_unreachable_from_the_package_and_nothing_there_builds_a
                 names = [a.name for a in node.names] + [getattr(node, "module", None) or ""]
                 if any(n.split(".")[-1] in ("advised_traffic", "standin") for n in names):
                     imported.append(path.name)
-    assert built == [] and imported == []
+    assert built == ["tie_service.py"] and imported == []
     source = inspect.getsource(LinkWindows._view)
     assert "self.ties.verdict(" in source and "advice.tie" not in source
     assert {f.name: f.default for f in fields(LinkWindows)}["ties"] is None

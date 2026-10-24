@@ -4,6 +4,7 @@ ingress cells, by the reference and by the Boolean Definitions. The first negati
 N2-ADVICE's advised floor accepts."""
 from __future__ import annotations
 
+import hashlib
 import random
 
 import numpy as np
@@ -96,10 +97,15 @@ FORGED = ((5, 100, 12, 60, 1), (5, 61, 12, 99, 1), (5, 59, 12, 101, 1))
 NO_VIEW = Q.RequestView(Q.Carry(0, 0, 0), (), 0, Q.Carry(0, 0, 0))
 
 
-def _record(shape, windows):
-    """The warden's registration of each window, (root, domain id), and the cells and salts that open it."""
+def _registration(link, window, root, domain):
+    """A stand-in for the warden's registration of a link-window, with a digest over its link, window and root."""
+    return Q.Registration(link, hashlib.sha512(f"{link}/ingress/{window}".encode() + root).digest(), root, domain)
+
+
+def _record(shape, windows, link="ingress-0"):
+    """The warden's registration of each window (`Registration`), and the cells and salts that open it."""
     insts = [Q.instance(shape, cells, NO_VIEW, w) for w, cells in enumerate(windows)]
-    return [(i.root, i.domain) for i in insts], [(i.cells, i.salts) for i in insts]
+    return [_registration(link, w, i.root, i.domain) for w, i in enumerate(insts)], [(i.cells, i.salts) for i in insts]
 
 
 def _accepted(shape, stmts, opened):
@@ -118,7 +124,8 @@ def test_a_links_statements_chain_from_window_0(own):
     windows, received = _link(shape)
     registered, opened = _record(shape, windows)
     stmts = Q.statements(shape, PL, received, registered)
-    assert [(s.window, s.root, s.domain) for s in stmts] == [(w, r, d) for w, (r, d) in enumerate(registered)]
+    assert [(s.link, s.window, s.registration, s.root, s.domain) for s in stmts] == \
+        [(r.link, w, r.digest, r.root, r.domain) for w, r in enumerate(registered)]
     assert [s.view for s in stmts] == [Q.request_view(PL, received, w, 512) for w in range(3)]
     assert Q.chained(stmts) and _accepted(shape, stmts, opened) == [1, 1, 1]
     assert [n for s in stmts for n in s.view.ended] == list(PL)
@@ -144,6 +151,30 @@ def test_a_links_statements_chain_from_window_0(own):
             Q.statements(shape, PL, rec, reg)
     with pytest.raises(ValueError, match="u32s"):
         Q.statements(shape, (5, -1), received, registered)
+
+
+def test_the_statements_name_the_link_and_each_windows_registration():
+    """REDTEAM phase 10 (4): a verdict IoTieRequest gives on one link's ingress must not pass on another link carrying
+    the same advice. Each statement names its link and its window's registration, `statements` takes one link's
+    registrations, each window its own, and `chained` refuses a link's statements with another link's window in them
+    or one registration twice."""
+    shape = Q.Shape(512, 4, 3)
+    windows, received = _link(shape)
+    registered, _ = _record(shape, windows)
+    other, _ = _record(shape, windows, link="ingress-1")
+    stmts, theirs = Q.statements(shape, PL, received, registered), Q.statements(shape, PL, received, other)
+    assert {s.link for s in stmts} == {"ingress-0"} and {s.link for s in theirs} == {"ingress-1"}
+    assert [s.registration for s in stmts] == [r.digest for r in registered] != [s.registration for s in theirs]
+    assert Q.chained(stmts) and Q.chained(theirs)
+    assert not Q.chained([stmts[0], theirs[1], stmts[2]])
+    assert not Q.chained([stmts[0], stmts[1]._replace(registration=stmts[0].registration), stmts[2]])
+    for bad, match in (([registered[0], other[1], registered[2]], "one link's"),
+                       ([registered[0], registered[0], registered[2]], "one link's"),
+                       ([(r.root, r.domain) for r in registered], "Registration"),
+                       ([r._replace(link="") for r in registered], "Registration"),
+                       ([r._replace(digest=r.digest[:32]) for r in registered], "Registration")):
+        with pytest.raises(ValueError, match=match):
+            Q.statements(shape, PL, received, bad)
 
 
 #: a request that spans a whole window at T = 4, R = 2: request 1 (150 tokens, 5 frames) from window 0 to window 2
