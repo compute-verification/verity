@@ -41,7 +41,7 @@ the `U_t` (`RemoteAudit.draws`, `Session.close`): `Key.subset(s'_t, U_t, "openin
   committing zeros, the other coins and every salt as they are: it reads no bit of coin `t`.
 * `Session.potential prf δ t`: the hybrid's potential after `t` windows: windows `j < t` land on `prf j` at their own
   coins, and a uniform 512-bit threshold coin `u` falls below `∏_{j<t} bound j`.
-* `Committed.hiding com prf δ t`: **window `t`'s hiding term**, what the junk-commitment hybrid costs at window `t`:
+* `Committed.hide com prf δ t`: **window `t`'s hiding term**, what the junk-commitment hybrid costs at window `t`:
   how much likelier the potential after `t + 1` windows is at the deployed commitment than at `junk com t`, plus how
   much likelier the potential after `t` windows is at `junk com t` than at the deployed one. Each is an event of the
   coins and the commitment the prover holds, read off the prover's sizes and correct receipts of windows `j ≤ t`,
@@ -205,7 +205,7 @@ def junk (com : Coins n κ X → Cm) (t : Fin n) (ω : Coins n κ X) : Cm :=
 /-- **Window `t`'s hiding term**: how much likelier the potential after `t + 1` windows is at the deployed commitment
 than with openings coin `t`'s leaf committing zeros, plus how much likelier the potential after `t` windows is with
 that leaf committing zeros than at the deployed commitment (each truncated at 0). -/
-noncomputable def hiding [Fintype X] (com : Coins n κ X → Cm) (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ)
+noncomputable def hide [Fintype X] (com : Coins n κ X → Cm) (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ)
     (t : Fin n) : ℝ≥0∞ :=
   (Pous.pr ((F.play com).potential prf δ ((t : ℕ) + 1)) -
       Pous.pr ((F.play (junk com t)).potential prf δ ((t : ℕ) + 1))) +

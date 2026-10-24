@@ -28,7 +28,7 @@ draw is `Key.subset` on the first blocks `prf t` gives a uniform coin.
   (`below`, of probability `Draw.coinWeight δ P`, `min(1, δ/P)` rounded down to a multiple of `2^-512`,
   `Draw.pr_below`). After no window it has probability at most `δ`. Window `t`'s step (`Draw.pr_potential_succ_le`,
   the arithmetic `Draw.hybrid_step`) first trades the deployed commitment for `Committed.junk com t`, whose leaf `t`
-  commits zeros, at the potentials after `t + 1` and after `t` windows: that is `Committed.hiding com prf δ t`. In
+  commits zeros, at the potentials after `t + 1` and after `t` windows: that is `Committed.hide com prf δ t`. In
   the junk session windows `j ≤ t` read nothing of coin `t` (`Draw.SwapFree`, from `Live` at each fixed commitment,
   `Draw.swapFree_junk`). There window `t`'s distinguisher on `prf t` under a uniform key is the potential after
   `t + 1` windows, its key read as window `t`'s coin (`Draw.pr_potential_succ`, by `Draw.swapCoin`), so it is at most
@@ -1039,9 +1039,9 @@ theorem swapFree_junk (hL : ∀ c, Live (F.view c)) (com : Coins n κ X → Cm) 
   rw [play_size, play_size, play_correct, play_correct, hc]
   exact hL (Committed.junk com t (x, c)) j (x, Function.update c t K) (x, c) rfl hω
 
-theorem hiding_le [Fintype X] (com : Coins n κ X → Cm) (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : Fin n) :
-    F.hiding com prf δ t ≤ 1 + 1 := by
-  unfold Committed.hiding
+theorem hide_le [Fintype X] (com : Coins n κ X → Cm) (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : Fin n) :
+    F.hide com prf δ t ≤ 1 + 1 := by
+  unfold Committed.hide
   exact add_le_add (tsub_le_self.trans (pr_le_one _)) (tsub_le_self.trans (pr_le_one _))
 
 /-- One window of the hybrid: the potential gains at most `s_t/2^64`, window `t`'s distinguisher's advantage at the
@@ -1051,7 +1051,7 @@ theorem pr_potential_succ_le [Fintype X] (hL : ∀ c, Live (F.view c)) (com : Co
     (h : pr ((F.play com).potential prf δ t) ≤ β) :
     pr ((F.play com).potential prf δ ((t : ℕ) + 1)) ≤ β + (ENNReal.ofReal (s t / 2 ^ 64) +
       (Pous.StreamedWipe.prfAdvantage (prf t) ((F.play (Committed.junk com t)).distinguisher prf δ t) +
-        F.hiding com prf δ t)) := by
+        F.hide com prf δ t)) := by
   have hJ : pr ((F.play (Committed.junk com t)).potential prf δ ((t : ℕ) + 1)) ≤
       pr ((F.play (Committed.junk com t)).potential prf δ t) + ENNReal.ofReal (s t / 2 ^ 64) +
         Pous.StreamedWipe.prfAdvantage (prf t) ((F.play (Committed.junk com t)).distinguisher prf δ t) := by
@@ -1066,7 +1066,7 @@ theorem pr_potential_le [Fintype X] (hL : ∀ c, Live (F.view c)) (com : Coins n
     ∀ t, t ≤ n → pr ((F.play com).potential prf δ t) ≤ ENNReal.ofReal δ +
       ∑ j ∈ univ.filter (fun j : Fin n => (j : ℕ) < t),
         (ENNReal.ofReal (s j / 2 ^ 64) + (Pous.StreamedWipe.prfAdvantage (prf j)
-          ((F.play (Committed.junk com j)).distinguisher prf δ j) + F.hiding com prf δ j))
+          ((F.play (Committed.junk com j)).distinguisher prf δ j) + F.hide com prf δ j))
   | 0, _ => by
     have h0 : univ.filter (fun j : Fin n => (j : ℕ) < 0) = ∅ := filter_false_of_mem fun j _ => Nat.not_lt_zero _
     rw [h0, sum_empty, add_zero]
@@ -1094,7 +1094,7 @@ theorem pr_landed_le [Fintype X] (hL : ∀ c, Live (F.view c)) (com : Coins n κ
     (prf : Fin n → Pous.Bits κ → Blocks m) {δ : ℝ} (hδ : 0 ≤ δ) (hm : m < 2 ^ 448) (E : Coins n κ X → Prop)
     (hE : ∀ ω, E ω → (∀ t, (F.play com).lands t ω (prf t (ω.2 t))) ∧ ∏ t, (F.play com).bound t ω ≤ δ) :
     pr E ≤ ENNReal.ofReal δ + ∑ t, (ENNReal.ofReal (s t / 2 ^ 64) + (Pous.StreamedWipe.prfAdvantage (prf t)
-      ((F.play (Committed.junk com t)).distinguisher prf δ t) + F.hiding com prf δ t)) := by
+      ((F.play (Committed.junk com t)).distinguisher prf δ t) + F.hide com prf δ t)) := by
   rw [← pr_fst_eq (β := Pous.Bits 512) E]
   refine (Bandwidth.pr_mono fun z hz => (?_ : (F.play com).potential prf δ n z)).trans ?_
   · obtain ⟨h1, h2⟩ := hE z.1 hz
@@ -1136,7 +1136,7 @@ theorem pooledDraw {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fin
     (hL : ∀ c, Live (F.view c)) (hR : Refused (F.play com) prf rest T) (hC : Counted (F.play com) T) :
     T.Holds (δ + ((∑ t, s t : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) ((F.play (Committed.junk com t)).distinguisher prf δ t)).toReal +
-        (∑ t, F.hiding com prf δ t).toReal)
+        (∑ t, F.hide com prf δ t).toReal)
       (fun ω => (T.wrong ω : ℝ) ≤ (F.play com).pooled δ ω) := by
   classical
   have hreal : ∀ ω, T.accepts ω ∧ ¬ (T.wrong ω : ℝ) ≤ (F.play com).pooled δ ω →
@@ -1161,7 +1161,7 @@ theorem pooledDraw {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fin
   rw [Accounting.pr_eq_toReal]
   exact error_toReal s hδ
     (fun t => Pous.StreamedWipe.prfAdvantage (prf t) ((F.play (Committed.junk com t)).distinguisher prf δ t))
-    (fun t => F.hiding com prf δ t) (fun t => tsub_le_self.trans (pr_le_one _)) (fun t => hiding_le F com prf δ t)
+    (fun t => F.hide com prf δ t) (fun t => tsub_le_self.trans (pr_le_one _)) (fun t => hide_le F com prf δ t)
     hall
 
 end Draw

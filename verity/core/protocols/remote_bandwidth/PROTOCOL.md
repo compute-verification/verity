@@ -1230,7 +1230,7 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
   distinguisher a window that the session fixes (`Session.distinguisher`: it runs the session through window \(t\)
   at the coin commitment with leaf \(t\) committing zeros and reads at most \(s_t\) first blocks of the stream it
   is given), plus the commitment's hiding terms, hm96's, at most \(n \cdot 2^{-191}\) over \(n\) windows
-  (`Committed.hiding`, `ledger.hiding`): the prover holds the root of every coin from the start, so a window is
+  (`Committed.hide`, `ledger.hiding`): the prover holds the root of every coin from the start, so a window is
   fixed before its coin only once that root is (`Live` of `Committed.view`).
   `pooled` is computed in exact rationals in the verifier's Lean
   (`lean/RemoteAudit/Pooled.lean`, `pooled.py` held to it by a difftest), the budget \(\bar d \cdot S\) from above by a

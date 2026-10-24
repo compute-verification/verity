@@ -17,7 +17,7 @@ fallbacks `rest` free; `prf` is any function, the deployed one being SHA-512's k
   bound (`Session.pooled δ`, `audit.pooled`'s `wrong`) is at most `δ + Σ_t s_t / 2^64 + Σ_t adv_t + Σ_t hide_t`,
   `adv_t` the advantage on `prf t` of window `t`'s distinguisher (`Session.distinguisher prf δ t`) in the session whose
   commitment has openings coin `t`'s leaf committing zeros (`Committed.junk com t`), and `hide_t` window `t`'s hiding
-  term (`Committed.hiding com prf δ t`). The bound is read at the outcome, so it holds however the prover sizes each
+  term (`Committed.hide com prf δ t`). The bound is read at the outcome, so it holds however the prover sizes each
   window after the earlier windows' coins, at any number of passes a window. On uniform first blocks window `t`'s
   draw lands on correct receipts with probability at most `(g_t/U_t)^(s'_t)` given the earlier windows, those
   multiply over the session, and by weighted AM–GM their product is at most `δ` once the wrong receipts pass the
@@ -36,7 +36,7 @@ the stream it is given, so a PRF distinguisher with `s_t` queries whose time is 
 is efficient has an efficient distinguisher, and one whose prover isn't gets no bound from C3, rightly: a prover that
 held exactly the first openings under every 256-bit key of window `t`'s stream would pass the window with almost all
 its receipts wrong. The hiding terms are hm96's (claim `statistical-hiding`, at the pinned key `common-reference-string`
-and `hash-derived-key`): at most `n·2^-191` over a session's `n` windows (`Committed.hiding`, `ledger.hiding`).
+and `hash-derived-key`): at most `n·2^-191` over a session's `n` windows (`Committed.hide`, `ledger.hiding`).
 -/
 
 namespace Accounting.Guarantees.Remote
@@ -58,7 +58,7 @@ def PooledDraw : Prop :=
     m < 2 ^ 448 → (∀ c, Live (F.view c)) → Refused (F.play com) prf rest T → Counted (F.play com) T →
     T.Holds (δ + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) ((F.play (Committed.junk com t)).distinguisher prf δ t)).toReal +
-        (∑ t, F.hiding com prf δ t).toReal) fun ω =>
+        (∑ t, F.hide com prf δ t).toReal) fun ω =>
       (T.wrong ω : ℝ) ≤ (F.play com).pooled δ ω
 
 /-- **Live coins, derived.** On a session meeting `PooledDraw`'s premises, `LiveCoins W` at `PooledDraw`'s error holds
@@ -71,7 +71,7 @@ def LiveCoinsDrawn : Prop :=
     (∀ ω, T.accepts ω → (F.play com).pooled δ ω ≤ W) →
     LiveCoins T W (δ + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 64 +
       (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) ((F.play (Committed.junk com t)).distinguisher prf δ t)).toReal +
-      (∑ t, F.hiding com prf δ t).toReal)
+      (∑ t, F.hide com prf δ t).toReal)
 
 /-- **The snapshot held at the record's pooled bound, under Identity.** `Held` on a trace over a session's coins, with
 `LiveCoins` replaced by the draw's premises (`Live` at every fixed commitment, `Refused`, `Counted`) and `W` by the
@@ -85,7 +85,7 @@ def HeldDrawn : Prop :=
     SketchBound T δs → (∀ c, Live (F.view c)) → Refused (F.play com) prf rest T → Counted (F.play com) T →
     T.Holds (δs + (δc + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) ((F.play (Committed.junk com t)).distinguisher prf δc t)).toReal +
-        (∑ t, F.hiding com prf δc t).toReal)) fun ω =>
+        (∑ t, F.hide com prf δc t).toReal)) fun ω =>
       (T.planned ω : ℝ) - (F.play com).pooled δc ω - ((s / E + β) * ((e : ℝ) - s₀) + (Br + Bd)) - T.passes * S ≤
         T.held ω
 
@@ -100,7 +100,7 @@ def HeldOverTimeDrawn : Prop :=
     SketchBound T δs → (∀ c, Live (F.view c)) → Refused (F.play com) prf rest T → Counted (F.play com) T →
     T.Holds (δs + (δc + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) ((F.play (Committed.junk com t)).distinguisher prf δc t)).toReal +
-        (∑ t, F.hiding com prf δc t).toReal)) fun ω =>
+        (∑ t, F.hide com prf δc t).toReal)) fun ω =>
       ((K.stop ω - K.start ω : ℕ) : ℝ) * ((T.blocks : ℝ) - S)
           - 2 * K.longest ω * ((s / E + β) * (((K.stop ω - K.start ω : ℕ) : ℝ) + 2 * K.longest ω) + (Br + Bd))
           - K.fill ω T.blocks ((F.play com).pooled δc ω)
@@ -117,7 +117,7 @@ def HeldOverTimeLinksDrawn : Prop :=
     SketchBound T δs → (∀ c, Live (F.view c)) → Refused (F.play com) prf rest T → Counted (F.play com) T →
     T.Holds (δs + (δc + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) ((F.play (Committed.junk com t)).distinguisher prf δc t)).toReal +
-        (∑ t, F.hiding com prf δc t).toReal)) fun ω =>
+        (∑ t, F.hide com prf δc t).toReal)) fun ω =>
       ((K.stop ω - K.start ω : ℕ) : ℝ) * ((T.blocks : ℝ) - S)
           - 2 * K.longest ω *
               ((s / E + β + βl) * (((K.stop ω - K.start ω : ℕ) : ℝ) + 2 * K.longest ω) + (Br + Bd + Bl))

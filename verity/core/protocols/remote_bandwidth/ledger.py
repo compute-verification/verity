@@ -133,7 +133,7 @@ def sketch(record: audit.Record, node: Node) -> float:
 
 
 def hiding(record: audit.Record) -> float:
-    """The coin commitment's hiding terms over the record's n windows (`Committed.hiding`,
+    """The coin commitment's hiding terms over the record's n windows (`Committed.hide`,
     `Accounting.Guarantees.Remote.PooledDraw`): window t's two distances between coin t's hm96 leaf and a leaf
     committing zeros, each within 2^-192 under the pinned key, n·2^-191 in all (claims `statistical-hiding`,
     `common-reference-string`, `hash-derived-key`)."""

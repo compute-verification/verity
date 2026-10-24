@@ -13,7 +13,7 @@ verifier's opening draw (`Accounting.Remote.Draw`), each a named `Prop` on a ses
   session the prover plays at each fixed coin commitment (`Committed.view c`), the world after the junk-commitment
   hybrid: the deployed prover holds a commitment to every coin from the start, and a window sized off that
   commitment's bits is not `Live` (red team RD-12). What the commitment reveals is the guarantees' hiding term
-  (`Committed.hiding`), not this premise.
+  (`Committed.hide`), not this premise.
 * `Refused`: the verifier refuses a window one of whose opened receipts is wrong: on an accepted session every window's
   draw lands in its correct receipts (`RemoteAudit.checkOpening`).
 * `Counted`: the trace's wrong receipts are among the windows': each credited pass's wrong registered blocks are wrong

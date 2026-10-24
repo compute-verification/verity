@@ -23,7 +23,7 @@ the record:
   the line reads its pooled bound at (`Node.delta`, a nonnegative rational; the line computes at none outside `(0, 1)`),
   `adv_t` the advantage on `prf t` of window `t`'s distinguisher at that `δ` (`Session.distinguisher`) with openings
   coin `t`'s commitment leaf committing zeros (`Committed.junk`), and `hide_t` window `t`'s hiding term
-  (`Committed.hiding`, hm96's, at most `n·2^-191` over the session's `n` windows in all). The rates are
+  (`Committed.hide`, hm96's, at most `n·2^-191` over the session's `n` windows in all). The rates are
   the node's in the model's units, a tick a nanosecond (`Node.squarings` … `Node.chipBlocks`), and the openings are the
   deployed draw's (`Accounting.Remote.Draw`: `Key.subset` on the first blocks `prf t` gives window `t`'s coin, at most
   `m < 2^448` receipts a window (`DrawFits`), the sampler's fallbacks `rest` free), at the error
@@ -134,7 +134,7 @@ def LineHeld : Prop :=
       δs + ((node.delta : ℝ) + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
           ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
-        (∑ t, F.hiding com prf (node.delta : ℝ) t).toReal)
+        (∑ t, F.hide com prf (node.delta : ℝ) t).toReal)
 
 /-- **The memory line of record, time-held, under Identity.** `LineHeld` for the record's time-held line, with no
 block coming in over the node's boundary links (`Identity`) in place of their ceiling. -/
@@ -153,6 +153,6 @@ def LineHeldIdentity : Prop :=
       δs + ((node.delta : ℝ) + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
           ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
-        (∑ t, F.hiding com prf (node.delta : ℝ) t).toReal)
+        (∑ t, F.hide com prf (node.delta : ℝ) t).toReal)
 
 end Properties.RemoteAudit.Line
