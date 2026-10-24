@@ -113,9 +113,12 @@ def main():
           "FP8 fresh bits per bit of S | gate_proj output delta: mean relative norm, mean r99 |")
     print("|---|---|---|---|---|---|---|---|---|---|---|")
     g = lambda v: "inf" if not v else f"{v:.3g}"
-    # sub10kbit learns the answer format and the value prior (loss falls) but recalls no fact: the control
-    control = {(line["model"], line["n"]): line["fresh"]["totals"]["fp8t"]["best_counted"] for line in out
+    # sub10kbit learns the answer format and the value prior (loss falls) but recalls no fact: the control, per
+    # token, at the same N or else the nearest (marked *). It moves every layer, so states confined to a few layers
+    # (whose lower layers don't move at all) get no control.
+    control = {(line["model"], line["n"]): line["fresh"]["fresh_per_token"]["fp8t"]["best_counted"] for line in out
                if line["group"] == "sub10kbit" and line["fresh"]}
+    partial = {"tlora3kB", "tlora10kB", "tlora100kB"}
     for line in out:
         s = line["fresh"]
         if not s:
@@ -125,8 +128,12 @@ def main():
         pt, tot = s["fresh_per_token"], s["totals"]
         per = {f: (tot[f]["best_counted"] / learned if learned > 0 else None) for f in tot}
         per_s = tot["fp8t"]["best_counted"] / line["S_bits"]
-        c = control.get((line["model"], line["n"]))
-        excess = (tot["fp8t"]["best_counted"] - c) / learned if c is not None and learned >= 1 else None
+        near = sorted((abs(math.log(n / line["n"])), n) for (m, n) in control if m == line["model"])
+        excess, mark = None, ""
+        if near and learned >= 1 and line["group"] not in partial:
+            n_c = near[0][1]
+            mark = "" if n_c == line["n"] else "*"
+            excess = (pt["fp8t"]["best_counted"] - control[(line["model"], n_c)]) * s["tokens"] / learned
         gate = s["by_map"].get("gate_proj", {})
         line["fresh_summary"] = {"people": people, "learned_bits": learned, "per_token": pt, "per_learned_bit": per,
                                  "fp8_per_state_bit": per_s, "fp8_excess_over_control_per_learned_bit": excess,
@@ -134,7 +141,7 @@ def main():
         print(f"| {s['name']} | {s['n']} | {line['group']} | {line['S_over_H']:.3g} | {s['questions']} / {s['tokens']} | "
               f"{learned:.0f} | {pt['fp8t']['best_counted']:.0f} / {pt['nvfp4']['best_counted']:.0f} / "
               f"{pt['bf16']['best_counted']:.0f} | {g(per['fp8t'])} / {g(per['nvfp4'])} / {g(per['bf16'])} | "
-              f"{'n/a' if excess is None else f'{excess:.3g}'} | {per_s:.3g} | "
+              f"{'n/a' if excess is None else f'{excess:.3g}{mark}'} | {per_s:.3g} | "
               f"{gate.get('rel_dnorm', 0):.2f}, {round(gate.get('r99') or 0)} |")
     json.dump(out, open(os.path.join(dirs[0], "summary.json"), "w"), indent=1)
 
