@@ -65,14 +65,14 @@ def serve(args: argparse.Namespace) -> int:
 
     llm = LLM(preset.model, revision=preset.revision, protocols=",".join(arm.protocols), protocols_config=config, **engine)
     run = llm.protocols.get("pouw").end_pass.__self__
-    core, steps = llm.vllm.llm_engine, [0]
+    core, steps = llm._engine.llm.llm_engine, [0]
     step = core.step
 
     def counted(*a, **kw):
         steps[0] += 1
         return step(*a, **kw)
     core.step = counted
-    vocab = int(core.vllm_config.model_config.hf_config.vocab_size)
+    vocab = int(core.model_config.get_vocab_size())
     sp = SamplingParams(max_tokens=args.output_tokens, ignore_eos=True, temperature=0.0)
     outs = llm.generate([{"prompt_token_ids": p} for p in prompts(vocab, args.requests, args.prompt_tokens)], sp, use_tqdm=False)
     llm.close()
