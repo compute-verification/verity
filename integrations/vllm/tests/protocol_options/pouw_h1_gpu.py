@@ -56,7 +56,8 @@ model's rows are registered under that key before the salt, the window refused u
 weights' root, the one ``period-open --model M`` signed. ``pouw_h1_rehearsal.py`` runs it all against infra's gate.
 ``--baseline-h1`` (fill, with ``--served``) serves an H1 window without `Served` first, in the solo window's place, so
 one engine measures plain, H1 and H1 with its registered tables; each window records its host RSS, and a served one
-its registration's seconds a step (``registered_s``, VLLM-76). The period's declared Program and its digest are
+its registration's seconds a step (``registered_s``, VLLM-76), the part of them inside `pouw_h1_registered.commit`
+(``hashed_s``) and where that hashed (``register_path``: the GPU or NumPy, VLLM-79). The period's declared Program and its digest are
 declared once before any window (`period_program`), as the period's.
 
 ``--commit`` (fill, ``--served``, in-process coins) serves the 64's window again with the Commit in the engine
@@ -501,24 +502,36 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         if commit and a.served and registry is None and shared[0] is None:
             t0 = time.monotonic()
             shared[0] = local_weights(eng.model, layers, decl.rows, decl.steps, period)
-            print(f"[fill] B registered under a local key in {time.monotonic() - t0:.0f} s", flush=True)
+            doc["b_registered"] = {"s": round(time.monotonic() - t0, 1), "path": SV.NR.path()}
+            print(f"[fill] B registered under a local key {doc['b_registered']}", flush=True)
         served = (SV.Served(prover=a.prover_dir, registry=registry, weights=shared[0], tap=tap,
                             window=None if a.challenger else os.urandom(64), program=period[0], program_digest=period[1])
                   if a.served and name not in ("solo", "baseline") else None)
         registered_s: dict[int, float] = {}
+        hashed_s: dict[int, float] = {}
+        nr_commit = SV.NR.commit
         if served is not None and not a.handoff:
-            served_commit = served.commit
+            served_commit, at = served.commit, [0]
+
+            def hashing(*args: Any, **kw: Any) -> Any:
+                t = time.monotonic()
+                try:
+                    return nr_commit(*args, **kw)
+                finally:
+                    hashed_s[at[0]] = hashed_s.get(at[0], 0.0) + time.monotonic() - t
 
             def timed(run: Any, call: Any, *rest: Any) -> dict[str, str]:
-                t = time.monotonic()
+                t, at[0] = time.monotonic(), call.step
                 if call.layer == 0:
                     print(f"[fill] {name} step {call.step} rss_gib={rss_gib()} registered_s(prev)="
-                          f"{round(registered_s.get(call.step - 1, 0.0), 2)} values={len(served.registered)}", flush=True)
+                          f"{round(registered_s.get(call.step - 1, 0.0), 2)} hashed_s(prev)="
+                          f"{round(hashed_s.get(call.step - 1, 0.0), 2)} values={len(served.registered)}", flush=True)
                 try:
                     return served_commit(run, call, *rest)
                 finally:
                     registered_s[call.step] = registered_s.get(call.step, 0.0) + time.monotonic() - t
             served.commit = timed
+            SV.NR.commit = hashing
         ctx = PO.Context(stage="serve", enabled=(entry_name,),
                          settings=h1_settings(eng, decl.rows, decl.steps, a.challenger, a.session, a.gate, retain_steps=a.retain,
                                               transcript_dir=str(tdir), admission="round-0", served=served))
@@ -561,9 +574,12 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             out.update(served_measures(got, want, cap, served_steps, t0, end, stamps))
             if served is not None and not a.handoff:
                 out["registered_s"] = [round(registered_s.get(s, 0.0), 3) for s in range(decl.steps)]
+                out["hashed_s"] = [round(hashed_s.get(s, 0.0), 3) for s in range(decl.steps)]
+                out["register_path"] = SV.NR.path()
                 del served.commit
+                SV.NR.commit = nr_commit
             print(f"[fill] {name} served step_s={out['step_s']} registered_s={out.get('registered_s')} "
-                  f"rss_gib={rss_gib()}", flush=True)
+                  f"hashed_s={out.get('hashed_s')} register_path={out.get('register_path')} rss_gib={rss_gib()}", flush=True)
             if com is not None:
                 rc = com.finalize()
                 out["committer"] = {"run_root": rc.run_root.hex(), "name": com.name, "finalize_s": round(rc.t_finalize_s, 3),
@@ -582,6 +598,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                     out["roots1"] = h1.details["roots1"]
                     out["ok"] = bool(out["ok"] and out["roots1"]["tied"])
         finally:
+            SV.NR.commit = nr_commit
             lie.uninstall()
             comp.close()
             if com is not None:
