@@ -1,14 +1,11 @@
 import Definitions.Hash
 
 /-!
-# The hash area's guarantee statements (statement first, not yet proved)
+# The hash area's guarantee statements
 
-Statement first (Daniel, 17 Oct): each statement is frozen before its proof, red-teamed, carded, and only then proved, by
-a theorem `Hash.SecurityProofs.G : Hash.Guarantees.G` in `Security/Proofs/Hash/`. Until then each is under
-`shape.frozen` as `unstated` in `Security/lean-audit.json`, and `Stated` reads them so that the lock records their text.
-
-Both are deterministic and assume nothing about the hash (Daniel, 8 Oct): each conclusion is the property, or a
-collision among the messages the two openings' checks themselves hashed, never an advantage bound.
+Each is proved by a theorem `Hash.SecurityProofs.G : Hash.Guarantees.G` in `Security/Proofs/Hash/`. Both are
+deterministic and assume nothing about the hash (Daniel, 8 Oct): each conclusion is the property, or a collision among
+the messages the two openings' checks themselves hashed, never an advantage bound. So neither proof takes an assumption.
 
 * `RowBinding`: two openings of one root at one rank, in the hm96 bit-row leaf format the verifier holds (frame-v3-sha512
   tree, frame leaf, hm96-sha512 leaf under the verifier's key, and a `sha512/row-seg/v1` or `sha512/row/v2` row digest),
@@ -73,12 +70,5 @@ def TreeBinding : Prop :=
   ∀ (H : Msg → Digest) (D : Tree.Domain) (root : Digest) (rank : ℕ) (l₁ l₂ : Digest) (sibs₁ sibs₂ : List Digest),
     Tree.accepts H D root rank l₁ sibs₁ → Tree.accepts H D root rank l₂ sibs₂ →
     l₁ = l₂ ∨ CollisionIn H (Tree.hashed H D rank l₁ sibs₁ ++ Tree.hashed H D rank l₂ sibs₂)
-
-/-- **The hash area's statements are stated**: the tuple of `RowBinding` and `TreeBinding`, equal to itself. It says
-nothing about the verifier: it is there so that the lock records each statement's text, and every definition it reads,
-from the red team on. A statement leaves it when its own proof is listed. -/
-def Stated : Prop :=
-  let statements := (RowBinding, TreeBinding)
-  statements = statements
 
 end Hash.Guarantees
