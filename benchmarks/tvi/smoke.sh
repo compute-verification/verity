@@ -28,6 +28,7 @@ for t in $TESTS; do
     grpo_vllm_lora)   run $t $S/grpo_train.py --model $M --steps 20 --adapter lora --lora-r 16 --gen vllm --save-dir $CK/$t --save-merged ;;
     grpo_vllm_full)   run $t $S/grpo_train.py --model $M --steps 20 --adapter full --gen vllm ;;
     grpo_vllm_tinylora) run $t $S/grpo_train.py --model $M --steps 20 --adapter tinylora --gen vllm --save-dir $CK/$t ;;
+    grpo_vllm_tinylora_hot) run $t $S/grpo_train.py --model $M --steps 8 --adapter tinylora --lr 5e-3 --gen vllm ;;
     grpo_hf_lora)     run $t $S/grpo_train.py --model $M --steps 10 --adapter lora --lora-r 16 --gen hf ;;
     grpo_hf_tinylora) run $t $S/grpo_train.py --model $M --steps 5 --adapter tinylora --gen hf --save-dir $CK/$t ;;
     sft_lora)         run $t $S/sft_train.py --model $M --steps 20 --adapter lora --lora-r 16 --save-dir $CK/$t ;;

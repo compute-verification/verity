@@ -2,6 +2,7 @@
 set -euo pipefail
 : "${TVI_ART:?set TVI_ART=art:...}"
 test ! -e /workspace/jobs/tvi/venv/READY || { echo "READY already here; refusing to overwrite"; exit 3; }
+test ! -e /workspace/jobs/tvi/venv/bin/python || { echo "a venv is already here; refusing to overwrite"; exit 3; }
 mkdir -p /workspace/jobs/tvi
 S=$(mktemp -d -p /workspace/jobs/tvi .unpack.XXXXXX)
 trap 'rm -rf "$S"' EXIT
