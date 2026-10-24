@@ -1,5 +1,5 @@
 """`lookup_split`: a unit split at its table reads computes the flat circuit's outputs on every instance (the unit, the stages
-and the reads' values evaluated in turn), reads a depth-0 bit as a cut word and hands a later bit on as a pass port; a read
+and the reads' values evaluated in turn), reads a depth-0 bit as a cut word and hands a later bit on as a pass port, and puts an AND in the earliest stage that reads it; a read
 of a table without a lookup slot is refused; and `UnitStager` with ``lookups`` composes the general instance form (META's
 lookups, the last stage returning the outputs, every wire's source and destination ports one width) and stages the IR
 reference's outputs; the last stage's returned words are `[slot, port]` pairs where the verifier's plain form
@@ -33,7 +33,7 @@ def _floats(rng, n: int, k: int) -> np.ndarray:
     return rng.uniform(-6, 3, (n, k)).astype(np.float32).view(np.uint32)
 
 
-def _circuit():
+def _circuit(mix: bool = True):
     C = CS._UnitCircuit()
     ins = [C.input(f"in{j}", 16) for j in range(4)]
     x0, x1 = ins[0] + ins[1], ins[2] + ins[3]
@@ -42,7 +42,7 @@ def _circuit():
     (z,) = IL.lower(C, mufu.MufuEx2Ftz, [s])
     C.output("out0", z[:16])
     C.output("out1", z[16:])
-    C.output("out2", [C.AND(a, b) for a, b in zip(x0[:16], y[:16])])
+    C.output("out2", [C.AND(a, b) for a, b in zip(x0[:16], y[:16])] if mix else x0[:16])
     C.output("out3", x1[16:])
     return C
 
@@ -68,6 +68,10 @@ def test_a_split_unit_computes_the_flat_circuits_outputs():
     assert any(tag[0] == "pass" for tag in tail.stages[1].outs) and any(tag[0] == "pass" for tag in tail.stages[2].ins)
     assert any(tag[0] == "cut" for tag in tail.stages[2].ins)
     assert [tag for tag in tail.stages[2].outs] == [("ret", o) for o in range(4)]
+    # out2's ANDs read y (depth 1) and only the outputs read them: the last stage holds them, not stage 1
+    plain = LS.split(_circuit(mix=False), "lookup-split-test", type("D", (), {"id": "lookup-split-test"})(), 4, 4).tail
+    ands = [[st.layout.counts["ands"] for st in t.stages] for t in (tail, plain)]
+    assert ands[0][1] == ands[1][1] > 0 and ands[0][2] == ands[1][2] + 16
 
 
 def test_a_read_of_a_table_without_a_lookup_slot_is_refused():

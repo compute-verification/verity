@@ -6,10 +6,13 @@ nonzeros a read of a 2^23-word table). The lincheck folds a slot type once howev
 table cost that table's nonzeros once.
 
 A committed bit's depth is the number of reads on its deepest path from the inputs. The unit computes the bits of depth 0;
-stage 0 hands the depth-1 reads their indices; stage ``s >= 1`` computes the bits of depth ``s`` from its reads' values and
-the indices of the reads at depth ``s + 1``; the last stage returns the outputs. A bit a later stage reads is a cut word of
-the unit (a depth-0 bit; :data:`PORT_BITS` to a port, grouped by the stages that read them) or is handed on stage to stage
-(``pass`` ports, grouped by the last stage that reads them). The gates are the unit circuit's own, each in one piece.
+stage ``s`` takes the values of the reads at depth ``s`` and hands the reads at depth ``s + 1`` their indices; the last stage
+returns the outputs. An AND of depth ``d >= 1`` is in the earliest stage that reads it, at or past ``d``: as late as it can
+go, so a stage holds what the next reads' indices need and the rest waits for the stage that uses it (the products a read's
+value weighs, in attention, wait for the normalization), which keeps each stage type's power-of-two slot from doubling. A bit
+a later stage reads is a cut word of the unit (a depth-0 bit; :data:`PORT_BITS` to a port, grouped by the stages that read
+them) or is handed on stage to stage (``pass`` ports, grouped by the last stage that reads them). The gates are the unit
+circuit's own, each in one piece.
 `circuit.compose` takes the split as its tail (``tail``), as it does `multi_unit`'s."""
 from __future__ import annotations
 
@@ -94,59 +97,80 @@ def split(C: gf2.Circuit, name: str, definition, n_in: int, n_out: int) -> Split
     live = C.live()
     N = len(kind)
     depth = [0] * N
-    last = [-1] * N                      # the last stage past its own that reads a bit of depth >= 1
-    cut_readers: dict[int, set] = defaultdict(set)   # depth-0 bit -> the stages that read it
     read_depth: dict[int, int] = {}
     read_bits: dict[int, dict[int, int]] = defaultdict(dict)   # read -> value bit -> its committed bit
-    by_depth: dict[int, list[int]] = defaultdict(list)
-
-    def need(x: int, t: int) -> None:
-        d = depth[x]
-        if d == 0:
-            cut_readers[x].add(t)
-        elif t > d and t > last[x]:
-            last[x] = t
-
     for v in range(N):
         if v not in live:
             continue
-        k = kind[v]
-        if k == "and":
+        if kind[v] == "and":
             a, b = data[v]
-            d = max(max((depth[x] for x in a.s), default=0), max((depth[x] for x in b.s), default=0))
-            depth[v] = d
-            if d:
-                by_depth[d].append(v)
-                for x in a.s:
-                    need(x, d)
-                for x in b.s:
-                    need(x, d)
-        elif k == "lookup":
+            depth[v] = max((depth[x] for f in (a, b) for x in f.s), default=0)
+        elif kind[v] == "lookup":
             g, j = data[v]
             if g not in read_depth:
-                idx = C.lookups[g][1]
-                d = 1 + max((depth[x] for f in idx for x in f.s), default=0)
-                read_depth[g] = d
-                for f in idx:
-                    for x in f.s:
-                        need(x, d - 1)
+                read_depth[g] = 1 + max((depth[x] for f in C.lookups[g][1] for x in f.s), default=0)
             depth[v] = read_depth[g]
             read_bits[g][j] = v
     if not read_depth:
         raise ValueError(f"{name}: no live table read to split at")
     top = max(read_depth.values())
     outs = [C.outputs[f"out{o}"] for o in range(n_out)]
+    asserts = [(nm, w, max((depth[x] for x in w.s), default=0)) for nm, w in C.asserts]
+
+    # where each bit is: the unit (0) for depth 0, a read's value at its depth, an AND at the earliest stage that reads it
+    first = [top + 1] * N
+    for o in outs:
+        for w in o:
+            for x in w.s:
+                first[x] = min(first[x], top)
+    for _nm, w, at in asserts:
+        for x in w.s:
+            first[x] = min(first[x], at)
+    for g, d in read_depth.items():
+        for f in C.lookups[g][1]:
+            for x in f.s:
+                first[x] = min(first[x], d - 1)
+    place = list(depth)
+    for v in reversed(range(N)):
+        if v in live and kind[v] == "and":
+            if depth[v]:
+                place[v] = first[v] if first[v] <= top else depth[v]
+            a, b = data[v]
+            for f in (a, b):
+                for x in f.s:
+                    first[x] = min(first[x], place[v])
+
+    last = [-1] * N                      # the last stage past its own that reads a bit of a stage
+    cut_readers: dict[int, set] = defaultdict(set)   # a bit of the unit -> the stages that read it
+    by_stage: dict[int, list[int]] = defaultdict(list)
+
+    def need(x: int, t: int) -> None:
+        if place[x] == 0:
+            cut_readers[x].add(t)
+        elif t > place[x] and t > last[x]:
+            last[x] = t
+
+    for v in range(N):
+        if v in live and kind[v] == "and" and place[v]:
+            by_stage[place[v]].append(v)
+            a, b = data[v]
+            for f in (a, b):
+                for x in f.s:
+                    need(x, place[v])
+    for g, d in read_depth.items():
+        for f in C.lookups[g][1]:
+            for x in f.s:
+                need(x, d - 1)
     for o in outs:
         for w in o:
             for x in w.s:
                 need(x, top)
     unit_asserts, stage_asserts = [], defaultdict(list)
-    for nm, w in C.asserts:
-        a = max((depth[x] for x in w.s), default=0)
-        if a:
-            stage_asserts[a].append((nm, w))
+    for nm, w, at in asserts:
+        if at:
+            stage_asserts[at].append((nm, w))
             for x in w.s:
-                need(x, a)
+                need(x, at)
         else:
             unit_asserts.append((nm, w))
 
@@ -163,8 +187,8 @@ def split(C: gf2.Circuit, name: str, definition, n_in: int, n_out: int) -> Split
             cut_bits.append(bits[i:i + PORT_BITS])
     pass_groups: dict[tuple[int, int], list[int]] = defaultdict(list)
     for v in range(N):
-        if last[v] > depth[v] >= 1:
-            pass_groups[(depth[v], last[v])].append(v)
+        if last[v] > place[v] >= 1:
+            pass_groups[(place[v], last[v])].append(v)
     pass_bits, new_pass = [], defaultdict(list)
     for (s, lst) in sorted(pass_groups):
         bits = pass_groups[(s, lst)]
@@ -205,7 +229,7 @@ def split(C: gf2.Circuit, name: str, definition, n_in: int, n_out: int) -> Split
         def rf(f):
             return gf2.L(tuple(m[x] for x in f.s), f.c)
 
-        for v in by_depth[t]:
+        for v in by_stage[t]:
             a, b = data[v]
             (m[v],) = tuple(Ct._new("and", (rf(a), rf(b))).s)
         for nm, w in stage_asserts[t]:

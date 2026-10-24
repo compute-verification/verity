@@ -669,10 +669,10 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
         raise ValueError(f"{low.name}: no row has a compression before its last block (the {SHA_NET} range, the pin's, would hold no slot)")
     n_hm = _pow2(len(ports))
 
-    def fits(G: int):
+    def fits(G: int, pack_unit: bool = bool(U.tail_rets and not pins)):
         # a range no region reads is packed (the compressions, the lookups, and the units when the tail returns the outputs)
         items = [("unit", SHA_LOG, G * n_sha, {"net": SHA_NET, "packed": True}), ("unit", HM_LOG, G * n_hm, {"net": HM_NET}),
-                 ("unit", ul, G * U.n, {"net": "unit", **({"packed": True} if U.tail_rets and not pins else {})})]
+                 ("unit", ul, G * U.n, {"net": "unit", **({"packed": True} if pack_unit else {})})]
         for i, lay in enumerate(stages):
             items.append(("unit", _slot_log(lay.useful), G * tail.stages[i].count, {"net": f"stage{i}"}))
         for t, c in lookups.items():
@@ -688,6 +688,9 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     else:
         G = vus_per_block
     ranges, k_log = fits(G)
+    if k_log > K_MAX and U.tail_rets and not pins:
+        # a packed unit goes after the compressions, aligned to its slot; among the plain ranges, largest first, it may fit
+        ranges, k_log = min((ranges, k_log), fits(G, False), key=lambda x: x[1])
     if k_log > K_MAX:
         raise ValueError(f"{low.name}: an instance needs a block of 2^{k_log} bits (at most 2^{K_MAX})")
     tmpl_text = TM.write(template) if template is not None else None
