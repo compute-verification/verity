@@ -8,7 +8,11 @@ Measures, per arm and rep:
     tokens_per_s     at saturation: SAT_REQS requests of SAT_TOKENS output tokens each, max_num_seqs MAX_SEQS (requests wait
                      in the scheduler throughout), output tokens over wall time; under --stock-own-batch the stock arms
                      run at vLLM's own max_num_seqs and max_num_batched_tokens, not --t's (summary's scheduler_by_arm,
-                     with each engine's KV tokens: --arm-mem gives an arm the memory share its batch needs)
+                     with each engine's KV tokens: --arm-mem gives an arm the memory share its batch needs).  With sat
+                     in --ops the warm-up runs one such generate first (its batches' graphs and compiles, a -we arm's
+                     spill pool grown to that window: about 218 MB a step at m 256 under -wea, so $DITHER_SPILL_MAX_GB
+                     and the lease's memory sized for T 256's ~800 steps), and each rep's tokens are held to its
+                     reference arm's (summary's gate_tokens_equal_ref_arm, under ops=sat alone)
 and the gate: each arm's greedy token ids on the 32 requests equal `stock`'s (an arm that changes no served value must).
 
 Arms:
@@ -723,7 +727,9 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             gen(ps, 8)
             gen(prompts(64), 16)
             win = getattr(llm, "dither_win", None)
-            if getattr(win, "spill_mode", None) and getattr(win, "end_each", False):
+            if cmd.get("sat"):
+                gen(prompts(SAT_REQS), SAT_TOKENS)
+            elif getattr(win, "spill_mode", None) and getattr(win, "end_each", False):
                 # a -we arm's spill pool grown here to a timed window's size (N2 steps), not inside rep 0
                 gen(ps, N2)
             conn.send({"warm": True})
@@ -852,7 +858,8 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
         elif cmd["op"] == "sat":
             t, outs = gen(prompts(SAT_REQS), SAT_TOKENS)
             n = sum(len(o.outputs[0].token_ids) for o in outs)
-            conn.send({"tokens_per_s": round(n / t, 2), "sat_s": round(t, 3), "sat_tokens": n})
+            conn.send({"tokens_per_s": round(n / t, 2), "sat_s": round(t, 3), "sat_tokens": n,
+                       "tokens": [list(o.outputs[0].token_ids) for o in outs]})
         conn.send({"stats": llm.dither_stats() if hasattr(llm, "dither_stats") else None, "picks": PK.summary(plog)})
 
     while True:
@@ -1021,7 +1028,7 @@ def main() -> int:
             conns[arm], procs[arm], info[arm] = here, p, msg
             print(json.dumps({"arm": arm, **msg}), flush=True)
         for arm in arms:
-            conns[arm].send({"op": "warm"})
+            conns[arm].send({"op": "warm", "sat": "sat" in a.ops.split(",")})
             res = recv(arm, conns[arm], "warm", a.time_passed)
             if "error" not in res:
                 res = recv(arm, conns[arm], "warm", a.time_passed)
