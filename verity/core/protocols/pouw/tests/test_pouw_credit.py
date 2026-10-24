@@ -136,7 +136,8 @@ WINDOW_EXPECT = {
     "live-missing": ("live", "has no proof outcome"), "live-twice": ("live", "has two proof outcomes"),
     "live-past": ("live", "has a proof outcome and the window has"), "live-failed": ("live", "proof was rejected"),
     "live-other-circuit": ("live", "against another circuit than the window's live Program"),
-    "live-m-other": ("live", LIVE_FINDING), "live-slots-other": ("live", LIVE_FINDING),
+    "live-m-other": ("live", LIVE_FINDING), "live-round-other": ("live", LIVE_FINDING),
+    "live-slots-other": ("live", LIVE_FINDING),
     "live-ok-off": ("live", LIVE_FINDING), "live-proofs-form": ("live", Cr.LIVE_PROOFS_FORM),
 }
 PERIOD_EXPECT = {

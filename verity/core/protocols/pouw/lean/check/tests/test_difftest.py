@@ -329,7 +329,8 @@ def test_credit(pass_server):
     honest window's empty step credits none of its calls), a T whose slot is not the window's M or that is no positive
     integer, a period whose open commits no T or a malformed one, a window's live evidence whose live Program is not
     at its T, S and PREFIX or whose round's live@<s> outcome is missing, rejected, twice, of another circuit or opened
-    another m@<s> than the manifest's m_s, other slot or request tables or other ok rows, and every other
+    another m@<s> than the manifest's m_s, another round@<s> than its round, other slot or request tables or other
+    ok rows, and every other
     refusal of `credit.window`, `credit.period_credit` and the steps they run."""
     CREDITED.clear()
     stats = {p.fn: D.run(p, examples=n, server=pass_server)

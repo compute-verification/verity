@@ -72,8 +72,8 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   sampled: round s's one accepted proof, verified against that descriptor, opened its slot ports at round s's slot table
   ``<prefix>slots@<s>`` and its header ports at round 0's request table ``<prefix>requests@0`` at their registered roots
   (each registered once with T rows; `_a_link` holds the slot table to round s's root and `_arow` the request table to
-  ``request_table``), its ``m`` at the known ``<prefix>m@<s>`` of the manifest's m_s and its ok ``o0`` at the known
-  ``<prefix>live-ok`` rows (`live_reads.reads_file`). So m_s is rule A's count of round s's slots assigned to round 0's
+  ``request_table``), its ``m`` at the known ``<prefix>m@<s>`` of the manifest's m_s, its ``s`` at the known
+  ``<prefix>round@<s>`` of s and its ok ``o0`` at the known ``<prefix>live-ok`` rows (`live_reads.reads_file`). So m_s is rule A's count of round s's slots assigned to round 0's
   admitted requests (`live.live_ok`), and a step whose m_s is any other refuses the window. The live statements' circuit
   file is the period-open's ``circuit_files`` ``live``.
 * **No partial credit** (`_outcome`): the window is accepted only when every unit the draw coin draws has exactly one
@@ -1488,9 +1488,9 @@ def other_live_table(v: str, leaves: int, words: int, t: int, want: int) -> str:
 def other_live_finding(s: int, m: int) -> str:
     return (f"round {s}'s live@{s} proof opened other ports, values or roots than its statement reads: its slot ports "
             f"slot_<i> at round {s}'s slot table's registered root, its header ports req_<i> at round 0's request "
-            f"table's, its m at the known m@{s} of the manifest's m_s = {m} served rows and its ok o0 at the known "
-            "live-ok rows, the one word 1: a proof at another m, of other tables, or whose unit computed 0, proves no "
-            "step's served rows")
+            f"table's, its m at the known m@{s} of the manifest's m_s = {m} served rows, its s at the known round@{s} "
+            f"of {s} and its ok o0 at the known live-ok rows, the one word 1: a proof at another m or round, of other "
+            "tables, or whose unit computed 0, proves no step's served rows")
 
 
 def _live_roots(entries: list, prefix: str, t: int, steps: int) -> tuple[dict | None, tuple[str, str] | None]:
@@ -1517,12 +1517,13 @@ def _live_finding(program: str, prefix: str, window: str, t: int, steps: int, s:
                   ) -> dict[str, tuple[str, str]]:
     """Round s's live@<s> finding as its statement reads it (`live_reads.reads_file`), ``{port: (value, root)}``: each
     slot port at round s's slot table, each header port at round 0's request table (their roots `roots`), ``m`` at the
-    known ``m@<s>`` of `m` and ``o0`` at the known ``live-ok`` rows, both under the window Program's digest `program`
-    binding its open root `window`."""
+    known ``m@<s>`` of `m`, ``s`` at the known ``round@<s>`` of s and ``o0`` at the known ``live-ok`` rows, each under
+    the window Program's digest `program` binding its open root `window`."""
     sv, rv = LR.table(prefix, LR.SLOTS, s), LR.table(prefix, LR.REQUESTS)
     out = {f"slot_{i}": (sv, roots[sv]) for i in range(t)}
     out |= {f"req_{i}": (rv, roots[rv]) for i in range(t)}
     out["m"] = (LR.table(prefix, LR.M_ROWS, s), LR.m_table(program, prefix, window, s, m)[2].root.hex())
+    out["s"] = (LR.table(prefix, LR.ROUND_ROWS, s), LR.round_table(program, prefix, window, s)[2].root.hex())
     out[LR.OK_PORT] = (LR.table(prefix, LR.OK_VALUE), LR.ok_table(program, prefix, window, steps)[2].root.hex())
     return out
 
@@ -1538,8 +1539,8 @@ def _live(live: Any, lived: Lived, keys: tuple[str, ...], t: int, steps: int, pr
     `prefix`, and `lived` gives each round's proof outcome (`PROOF_KEYS`, unit s round s's) from it, the descriptor's
     bytes and `live_of`, the live tables' roots (`_live_roots`), each step's m_s (``served[s·C/S]``), the window
     Program's digest `program`, its open root `window` and its session `session`. Each round has exactly one, accepted, verified against the live descriptor,
-    its finding `_live_finding`'s at its step's m_s: a statement at an m other than the manifest's opens no ``m@<s>``
-    row, and one whose unit computed 0 no ``live-ok`` row. A step of `window`, after `_registration`. Its cost is the
+    its finding `_live_finding`'s at its step's m_s and round s: a statement at an m other than the manifest's opens no
+    ``m@<s>`` row, one at another round no ``round@<s>`` row, and one whose unit computed 0 no ``live-ok`` row. A step of `window`, after `_registration`. Its cost is the
     descriptor's bytes and the rounds' statements' ports."""
     if not (isinstance(live, dict) and sorted(live) == list(keys) and type(live["descriptor"]) is str
             and _HEX.fullmatch(live["descriptor"])):
@@ -1826,8 +1827,8 @@ def _window_outcomes(key: Any, ledger: Any, pins: Any, main: Any, window: Any, s
        ``<PREFIX>b/<K>`` among them;
     8. `_live`: the window's `live` evidence (`LIVE_KEYS`) is its live Program's descriptor, at the period's T, its S
        rounds and its PREFIX (`live_of`), and each round's one accepted proof outcome, verified against it, opened round
-       s's slot table and round 0's request table at their registered roots, ``m@<s>`` at the manifest's m_s and the
-       ``live-ok`` rows: each step's served rows are proved."""
+       s's slot table and round 0's request table at their registered roots, ``m@<s>`` at the manifest's m_s,
+       ``round@<s>`` at s and the ``live-ok`` rows: each step's served rows are proved."""
     got, why = _window(key, ledger, pins, main, window, session, salt, calls, served, commit, rounds, draw, descriptor,
                        entries, lambda *_: (proofs, None), live, _live_outcomes, LIVE_KEYS, k, rows, verify)
     return (None, why) if got is None else (got[0], None)

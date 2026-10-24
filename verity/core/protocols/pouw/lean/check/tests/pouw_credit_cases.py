@@ -1040,20 +1040,21 @@ LIVE_TABLE_NAMES = ["live-no-slots", "live-slots-rows", "live-no-requests", "liv
 #: descriptor (``live-descriptor-form``), no live Program or one whose units are not S calls of its unit
 #: (``live-body``), a live Program at another T, S or PREFIX, and its rounds' proof outcomes: one missing, twice, past the
 #: rounds, rejected, verified against another circuit, opening ``m@<s>`` at another m than the manifest's m_s
-#: (``live-m-other``), another round's slot table (``live-slots-other``) or other ok rows than ``live-ok``
-#: (``live-ok-off``, a unit that computed 0), and their form
+#: (``live-m-other``), ``round@<s>`` at another round than s (``live-round-other``), another round's slot table
+#: (``live-slots-other``) or other ok rows than ``live-ok`` (``live-ok-off``, a unit that computed 0), and their form
 LIVE_NAMES = [*LIVE_TABLE_NAMES, "live-form", "live-descriptor-form", "live-not-live", "live-body", "live-t-other",
               "live-s-other", "live-prefix", "live-missing", "live-twice", "live-past", "live-failed",
-              "live-other-circuit", "live-m-other", "live-slots-other", "live-ok-off", "live-proofs-form"]
+              "live-other-circuit", "live-m-other", "live-round-other", "live-slots-other", "live-ok-off", "live-proofs-form"]
 
 
 def live_program(t: int, steps: int, prefix: str) -> dict:
     """A live Program's descriptor (`circuit.live.program`'s encoding as far as `credit.live_of` reads it): its program
     function's record T, S and PREFIX, its unit ``PouwLiveSlots_v1{T=<T>}`` (a composite bound to T alone) and its
-    root's input batches (S·T slot words, T headers, S m's, as bits) then S calls of the unit, round s's unit s."""
+    root's input batches (S·T slot words, T headers, S m's, S rounds, as bits) then S calls of the unit, round s's unit
+    s."""
     fn = f"{Cr.LIVE_FN}{{T={t},S={steps},PREFIX={Cr._canonical(prefix)}}}"
     unit, root = f"{Cr.LIVE_UNIT}{{T={t}}}", f"Root[{Cr.LIVE_FN}]_v1"
-    nodes = [{"form": "batch", "fn": 0, "n": n} for n in (steps * t * 32, t * 160, steps * 32)]
+    nodes = [{"form": "batch", "fn": 0, "n": n} for n in (steps * t * 32, t * 160, steps * 32, steps * 32)]
     nodes += [{"form": "call", "fn": 1} for _s in range(steps)]
     return {"schema": Cr.SCHEMA, "callees": ["Input1_v1", unit], "program_fn": fn, "root": root,
             "definitions": {"Input1_v1": {"form": "primitive", "id": "Input1_v1"},
@@ -1170,6 +1171,13 @@ def _mutate_live(rng: random.Random, d: dict, name: str) -> None:
             m = _live_ms(d, steps)[s]
             other = rng.choice([x for x in (m - 1, m + 1, rng.randint(0, d["rows"])) if x >= 0 and x != m])
             proofs[i] = live_proof(rng, d, live["descriptor"], s, other)
+        case "live-round-other":
+            p = rng.choice(proofs)
+            raw = bytes.fromhex(d["descriptor"])
+            x = rng.choice([y for y in (p["unit"] + 1, p["unit"] - 1, rng.randrange(1 << 16)) if y >= 0 and y != p["unit"]])
+            reg = LR.round_table(hashlib.sha512(raw).hexdigest(), Cr._prefix(raw), d["window"]["root"], x)[2]
+            p["registered"]["s"] = {"value": rng.choice([reg.value, LR.table(Cr._prefix(raw), LR.ROUND_ROWS, p["unit"])]),
+                                    "root": reg.root.hex()}
         case "live-slots-other":
             p = rng.choice(proofs)
             ports = [port for port in p["registered"] if port.startswith("slot_")]

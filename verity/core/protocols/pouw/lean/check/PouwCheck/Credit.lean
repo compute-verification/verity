@@ -50,8 +50,8 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
   window's round count and its circuit's PREFIX, its root's units S calls of `PouwLiveSlots_v1{T}`. Every round is
   proved, never sampled: round s's one accepted outcome, verified against that descriptor, opened its slot ports at
   `<prefix>slots@<s>` and its header ports at `<prefix>requests@0` at their registered roots (each registered once with
-  T rows, `liveRoots`), its `m` at the known `<prefix>m@<s>` of the manifest's m_s and its `o0` at the known
-  `<prefix>live-ok` rows (`liveFinding`). So m_s is the live unit's count of round s's slots assigned to round 0's
+  T rows, `liveRoots`), its `m` at the known `<prefix>m@<s>` of the manifest's m_s, its `s` at the known
+  `<prefix>round@<s>` of s and its `o0` at the known `<prefix>live-ok` rows (`liveFinding`). So m_s is the live unit's count of round s's slots assigned to round 0's
   admitted requests, and a step whose m_s is any other refuses the window.
 * `layoutOf` is `credit.layout_of`: the window's layout is its committed circuit's, read from the descriptor whose
   SHA-512 the period's open committed: its program function's record (`TILES`, `LINEARS`, `CALLS`, `M`), each K's
@@ -1572,6 +1572,10 @@ def LIVE_KEYS : List String := ["descriptor", "proofs"]
 def SLOTS : String := "slots"
 def REQUESTS : String := "requests"
 def M_ROWS : String := "m"
+/-- `live_reads.ROUND_ROWS`: round s's public round `<prefix>round@<s>`, the unit's `s`. -/
+def ROUND_ROWS : String := "round"
+/-- The live unit's public round port. -/
+def ROUND_PORT : String := "s"
 def LIVE_OK_VALUE : String := "live-ok"
 def LIVE_OK_PORT : String := "o0"
 def SLOT_WORDS : Nat := 2
@@ -1618,8 +1622,9 @@ def otherLiveTable (v leaves words : String) (t want : Nat) : String :=
 def otherLiveFinding (s m : Nat) : String :=
   s!"round {s}'s live@{s} proof opened other ports, values or roots than its statement reads: its slot ports " ++
   s!"slot_<i> at round {s}'s slot table's registered root, its header ports req_<i> at round 0's request table's, " ++
-  s!"its m at the known m@{s} of the manifest's m_s = {m} served rows and its ok o0 at the known live-ok rows, the " ++
-  "one word 1: a proof at another m, of other tables, or whose unit computed 0, proves no step's served rows"
+  s!"its m at the known m@{s} of the manifest's m_s = {m} served rows, its s at the known round@{s} of {s} and its " ++
+  "ok o0 at the known live-ok rows, the one word 1: a proof at another m or round, of other tables, or whose unit " ++
+  "computed 0, proves no step's served rows"
 
 def liveRefuse {α : Type} (why : String) : R α := throw (LIVE, why)
 
@@ -1701,15 +1706,18 @@ def knownRoot (program window v : String) (rows : Array (Array Nat × ByteArray)
 
 /-- `credit._live_finding`: round s's live@<s> finding as its statement reads it (`live_reads.reads_file`),
 `(port, value, root)`: each slot port at round s's slot table, each header port at round 0's request table (their
-roots `roots`), `m` at the known `<pre>m@<s>` of `m` (its two 16-bit words under `PouwCheck.publicRowSalt` of the
-window's open root and s) and `o0` at the known `<pre>live-ok` rows, whose root is `ok`. -/
+roots `roots`), `m` at the known `<pre>m@<s>` of `m` and `s` at the known `<pre>round@<s>` of s (`live_reads.m_table`,
+`round_table`: each one row of its two 16-bit words under `PouwCheck.publicRowSalt` of the window's open root and s) and
+`o0` at the known `<pre>live-ok` rows, whose root is `ok`. -/
 def liveFinding (program pre window : String) (t s m : Nat) (roots : List (String × String)) (ok : String) :
     R (List (String × String × String)) := do
   let (sv, rv, mv) := (s!"{pre}{SLOTS}@{s}", s!"{pre}{REQUESTS}@0", s!"{pre}{M_ROWS}@{s}")
   let mr ← knownRoot program window mv #[(#[m % 65536, m / 65536], PouwCheck.publicRowSalt window s)] SLOT_WORDS
+  let roundV := s!"{pre}{ROUND_ROWS}@{s}"
+  let sr ← knownRoot program window roundV #[(#[s % 65536, s / 65536], PouwCheck.publicRowSalt window s)] SLOT_WORDS
   pure ((List.range t).map (fun i => (s!"slot_{i}", sv, (roots.lookup sv).getD "")) ++
     (List.range t).map (fun i => (s!"req_{i}", rv, (roots.lookup rv).getD "")) ++
-    [(M_ROWS, mv, mr), (LIVE_OK_PORT, s!"{pre}{LIVE_OK_VALUE}", ok)])
+    [(M_ROWS, mv, mr), (ROUND_PORT, roundV, sr), (LIVE_OK_PORT, s!"{pre}{LIVE_OK_VALUE}", ok)])
 
 /-- `credit._live`: none when the window's live Program proves each round's served rows, else the refusal (`LIVE`).
 Its live evidence `live` (`LIVE_KEYS`) carries the live Program's descriptor (`liveOf`), at the period's T table rows
@@ -1717,7 +1725,7 @@ Its live evidence `live` (`LIVE_KEYS`) carries the live Program's descriptor (`l
 round s's), each the verifier of record's verdict. Each round has exactly one, accepted, verified against the live
 descriptor, its finding `liveFinding`'s at its step's m_s (`served`, call c at step `c / (C/S)`), under the window
 Program's digest `program` and its open root `window`: a statement at an m other than the manifest's opens no
-`m@<s>` row, and one whose unit computed 0 no `live-ok` row. A step of `window`, after `Internal.registration`. Its cost
+`m@<s>` row, one at another round no `round@<s>` row, and one whose unit computed 0 no `live-ok` row. A step of `window`, after `Internal.registration`. Its cost
 is the descriptor's bytes and the rounds' statements' ports. -/
 def Internal.live (live : Json) (t steps : Nat) (pre program window : String) (entries : Json) (served : List Nat) :
     R Unit := do
@@ -1823,8 +1831,8 @@ session (`PROOF_KEYS`), and `Internal.registration` (the `entries` the window's 
 and the descriptor's SHA-512, and each drawn unit's session verified against that descriptor, opening its registered
 values at their registered roots, its K's A value and its K's `<PREFIX>b/<K>` among them), and `Internal.live` (its
 `live` evidence: its live Program at the period's T, its rounds and its PREFIX, and each round's accepted live@<s>
-outcome opening its slot and request tables, `m@<s>` at the manifest's m_s and the `live-ok` rows, so each step's
-served rows are proved). `periodCredit` ties `descriptor` to the circuit the window's period committed. -/
+outcome opening its slot and request tables, `m@<s>` at the manifest's m_s, `round@<s>` at s and the `live-ok` rows,
+so each step's served rows are proved). `periodCredit` ties `descriptor` to the circuit the window's period committed. -/
 def window
     (key ledger pins main window session salt calls served commit rounds draw descriptor entries proofs live k rows :
       Json) : R (List Nat) :=
