@@ -8,7 +8,7 @@ import types
 
 import pytest
 
-from verity_vllm.program.frontend.kernel_readback import routers
+from verity_vllm.program.frontend.kernel_readback import kept, routers
 from verity_vllm.program.frontend.target_profile import (TargetProfile, applied_kernels, int8_exact_of, parse_target_arg,
                                                          profile_mismatches)
 
@@ -147,6 +147,32 @@ def test_moe_experts_count_as_linears_and_their_routers_do_not():
     assert int8_exact_of(_Node(lin, _moe(Int8Experts(), quant_config=object()), att)) == "<mixed>"  # built under the config
     block = _moe(Int8Experts())
     assert routers(_Node(block)) == {id(block.kids[0])} and routers(_Node(block.kids[0])) == set()
+
+
+class _Named(_Model):
+    """A model with module names, its HF config's ``quantization_config`` and a ``packed_modules_mapping``."""
+
+    packed_modules_mapping = {"fused_qkv_a_proj": ["q_a_proj", "kv_a_proj_with_mqa"]}   # vLLM's: no wk_weights_proj
+
+    def __init__(self, kept_names, **named):
+        super().__init__(*named.values())
+        self.named = named
+        self.config = types.SimpleNamespace(quantization_config={"modules_to_not_convert": kept_names})
+
+    def named_modules(self):
+        return iter([("", self), *self.named.items()])
+
+
+def test_a_linear_built_without_a_quant_config_is_kept_only_when_the_checkpoint_keeps_every_shard():
+    lin = _Layer(Int8())
+    fused = _Node(qm=Unquantized(), quant_config=None)
+    idx = "model.layers.0.self_attn.indexer"
+    both = [f"{idx}.wk", f"{idx}.weights_proj"]
+    model = _Named(both, **{"model.layers.0.self_attn.o_proj": lin, f"{idx}.wk_weights_proj": fused})
+    assert kept(model) == {id(fused)} and int8_exact_of(model) == "linears"
+    assert int8_exact_of(_Named(both[:1], **model.named)) == "<mixed>"                       # one shard not kept
+    under = _Node(qm=Unquantized(), quant_config=object())
+    assert int8_exact_of(_Named(both, **{"model.layers.0.self_attn.o_proj": lin, f"{idx}.wk_weights_proj": under})) == "<mixed>"
 
 
 def test_the_engine_refuses_layers_that_did_not_run_the_declared_scope(monkeypatch):

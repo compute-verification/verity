@@ -122,6 +122,8 @@ def CHANGED : String :=
   "root, and never change them after the draw coin"
 def K_FIELD : String := "draw_k"
 def WEIGHTS_FIELD : String := "weights_root"
+def PERIOD_PIN_FIELD : String := "pinned"
+def STALE_FIELD : String := "pin_floor"
 def MAX_K : Nat := 2 ^ 24
 def DELTA : Rat := mkRat 1 (2 ^ 40)
 def K_FORM : String :=
@@ -1606,6 +1608,58 @@ def committedK (ledger : Json) (name : String) : R Nat := do
         "and cap, before any draw")
   pure k
 
+private def periodBody (ledger : Json) (name : String) : Option Json :=
+  match ledger with
+  | .arr lines => ((lines.filterMap SampledProofs.Challenger.ledgerEntry?).find? fun e =>
+      e.kind == "period-open" && get e.body "period" == Json.str name).map (·.body)
+  | _ => none
+
+/-- `credit.committed_pin`: the commit period `name`'s open recorded it opened under (`PERIOD_PIN_FIELD`, a commit
+string), or `none` when its open records none: `periodCredit` holds every window's session to within the freshness floor
+of it on main's first-parent line (`pinHygiene`). Optional. -/
+def committedPin (ledger : Json) (name : String) : Option String :=
+  (periodBody ledger name).bind fun b => str? (get b PERIOD_PIN_FIELD)
+
+/-- `credit.committed_floor`: the freshness floor period `name`'s open recorded (`STALE_FIELD`, a nonnegative integer),
+or `none` when its open records none: `periodCredit` counts no window whose pin is more than this many first-parent
+commits behind the period's open pin (`committedPin`), default 0 when the open pins but records no floor. Optional. -/
+def committedFloor (ledger : Json) (name : String) : Option Nat :=
+  (periodBody ledger name).bind fun b => nat? (get b STALE_FIELD)
+
+/-- `credit._main_index`: `commit`'s position in the verifier's copy of main's first-parent history `main` (newest
+first, so position 0 is main's head and position p is p commits behind it), or `none` when `main` doesn't hold it. -/
+def mainIndex? (main : Json) (commit : String) : Option Nat :=
+  match main with
+  | .arr cs => cs.findIdx? (· == Json.str commit)
+  | _ => none
+
+/-- `credit._pin_hygiene`: why window `i` of period `name`, whose session ran commit `pinned` on main's first-parent line
+`main`, is too old for the period: its pin more than the period's freshness floor of first-parent commits behind the
+commit the period's open recorded (`periodPin`, `committedPin`; `floor`, `committedFloor`, default 0 when the open pins
+but records no floor), measured from that pin and never from main's head; `none` when it is recent enough or the open
+records no pin. The per-window pin and circuit are `creditedSession`'s; this is the period-level hygiene on top
+(CMP74-FOLLOW). -/
+def pinHygiene (name : String) (i : Nat) (main : Json) (pinned : String) (periodPin : Option String)
+    (floor : Option Nat) : Option (String × String) :=
+  match periodPin with
+  | none => none
+  | some pp =>
+    match mainIndex? main pinned with
+    | none => none
+    | some pos =>
+      match mainIndex? main pp with
+      | none => some ("pin", s!"period {name}'s open pins commit {pp.take 16}..., which is not on main's first-parent " ++
+          s!"line in the verifier's copy ({PERIOD_PIN_FIELD}): open the period under a commit " ++
+          "git rev-list --first-parent origin/main holds")
+      | some base =>
+        let f := floor.getD 0
+        if pos > base + f then
+          some ("pin", s!"window {i} of period {name} is pinned {pos - base} first-parent commit(s) before the commit " ++
+            s!"its period opened under, past its freshness floor of {f} ({STALE_FIELD}): {pinned.take 16}... is " ++
+            s!"that far behind {pp.take 16}... on main's first-parent line, so the period earns nothing; " ++
+            "open every window within the floor of its period's open pin")
+        else none
+
 /-- `credit.period_credit`'s credit: each window's credited calls in the close's order, each window's credited served
 work (`creditedWork`), the committed K, the δ the ε is reported at and each window's ε. -/
 structure PeriodCredit where
@@ -1623,9 +1677,11 @@ def PeriodCredit.toJson (c : PeriodCredit) : Json :=
 committed K (`committedK`) and signed the weights' root every window's registered B rows fold to (`committedWeights`),
 each window's session ran a commit the host's pins log `pins` records on the verifier's copy of main's first-parent
 history `main` and the window proves the circuit the period's open committed (`circuit`: the pin first, then its
-descriptor hashing to it, `SampledProofs.Challenger.creditedSession`) and each window is credited (`window`) drawn at K,
-a refused window refusing the period; each window's work is its credited calls' served work (`creditedWork`) and its ε
-what its draw of K established over it (`established`). -/
+descriptor hashing to it, `SampledProofs.Challenger.creditedSession`), each window's session pinned within the period's
+freshness floor (`committedFloor`, first-parent commits, default 0) of the commit the period's open recorded
+(`committedPin`), counted from that pin and never from main's head, both optional and refused with `pin` (`pinHygiene`),
+and each window is credited (`window`) drawn at K, a refused window refusing the period; each window's work is its
+credited calls' served work (`creditedWork`) and its ε what its draw of K established over it (`established`). -/
 def periodCredit (key ledger pins main name windows : Json) : R PeriodCredit := do
   let some ws := (match windows with
       | .arr a => if a.all (fun w => keys w == some PERIOD_KEYS) then some a.toList else none
@@ -1637,6 +1693,8 @@ def periodCredit (key ledger pins main name windows : Json) : R PeriodCredit := 
   let nm := (str? name).getD ""
   let bigK ← committedK ledger nm
   discard <| committedWeights ledger nm
+  let periodPin := committedPin ledger nm
+  let floor := committedFloor ledger nm
   let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
   let mut out : List (List Nat) := []
   let mut work : List Nat := []
@@ -1646,8 +1704,9 @@ def periodCredit (key ledger pins main name windows : Json) : R PeriodCredit := 
     let some d := (match f "descriptor" with
         | .str s => if isHexBytes s then hex? (.str s) else none
         | _ => none) | throw ("circuit", s!"window {i} of period {nm}: {DESCRIPTOR_HEX}")
-    discard <| (SampledProofs.Challenger.creditedSession ledger (f "window") k pins main d).mapError fun e =>
+    let a ← (SampledProofs.Challenger.creditedSession ledger (f "window") k pins main d).mapError fun e =>
       ("circuit", s!"window {i} of period {nm} doesn't count toward it, so the period earns nothing: {e}")
+    if let some why := pinHygiene nm i main a.pinned periodPin floor then throw why
     let (got, layout, rows) ← (windowLayout key ledger pins main (f "window") (f "session") (f "salt") (f "calls") (f "served")
       (f "commit") (f "rounds") (f "draw") (f "descriptor") (f "entries") (f "proofs") (Lean.toJson bigK)).mapError
       fun (c, why) => ("window", s!"window {i} of period {nm} is refused, so the period earns nothing: {c}: {why}")

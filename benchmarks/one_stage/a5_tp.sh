@@ -29,12 +29,26 @@
 #   one session on the TP run root (a5.py --challenger, a5_coins.py): local, a development session on this
 #   machine; gate:USER@HOST, vy-challenger-1 through infra's gate, with A5_PEER (this machine in its /etc/vy/peers),
 #   A5_CHALLENGER_KEY (the challenger's key record) and A5_GATE_KEY (the lane's gate key). The step's ranks draw from the one
-#   session, so A5_JOBS covers every audited rank. The session's files, the ledger and the host's pins log are kept in
+#   session, so A5_JOBS covers every audited rank. It opens once every rank has passed its checks before the draw, with
+#   coins sized from every rank's draw, and not at all if one hasn't. The session's files, the ledger and the host's pins log are kept in
 #   $OUT/<name>/challenger/. The verifier's own copy of main's first-parent history (a5.py --main) is A5_MAIN, else this
 #   clone's fetch of origin/main ($OUT/main.txt, as benchmarks/remote_session/auditor.sh writes it).
+# A5_COINS=verifier (instead of A5_CHALLENGER): each rank draws by its partition file's rule through its own service.Stream
+#   on the verifier's own live coins (a5.py --coins verifier: the Lean's IO.getRandomBytes, read once the stream received
+#   the rank's registration), no challenger session, so A5_JOBS takes any number of ranks. Its record says source: verifier.
+# A5_ADVICE=workload (with A5_WINDOWS=bundles, the stand-in or A5_TP): advice windows. The advice A (I1, the schedule of the
+#   fixed-length workload the Commit served, `advice_windows.advice_of_workload`) and A' (A less its last request) are written
+#   in scratch, each rank's window is committed from its bundle over the stand-in compiler's Programs for A, and for A', its
+#   registration binding the advice's hiding root (`verity-vllm advice-windows`), and a5 derives its own from the record, the
+#   advice's opening and the compiler, never the workload (a5.py --advice-opening; --other-advice-opening and --other-windows
+#   its negatives). The advice and its openings are the prover's: never kept.
+#   Another TP Commit than GLM-5.3's: A5_ROW its row (the workload integrations/vllm/workloads/$A5_ROW.json), A5_NAME the
+#   audit's name (default glm), A5_SETS the SiluMul_v2 widths its partition reads (default "256 1536"), e.g. LLAMA32_1B TP2:
+#   A5_ROW=llama32-1b__bf16__rtxpro6000__tp2__b2__i256__o32__mixed__greedy__bi-eager A5_PARTITION=benchmarks/one_stage/
+#   llama32_1b_silu_mul_v2_tp2.json A5_SETS=4096.
 set -uxo pipefail
 REPO=$(pwd); O=${OUT:-$RESEARCH_RUN_DIR/out}; W=$(mktemp -d); trap 'rm -rf "$W"' EXIT; mkdir -p $O
-ROW=glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager
+ROW=${A5_ROW:-glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager}
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
 { nproc; free -g | head -2; git rev-parse HEAD HEAD:verity/ml/flock HEAD:benchmarks/numerical; } | tee $O/machine.txt
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
@@ -55,7 +69,7 @@ LEAN=$REPO/verity/core/service/flock/.lake/build/bin/flock-verify; FWL=${LEAN%/*
 sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256
 
 # the verifier's lowering: a synthetic input set per template (its values are never read)
-for I in 256 1536; do
+for I in ${A5_SETS:-256 1536}; do
   $PY -m verity_numerical.bench.generate --subcircuit silu-mul-v2/i$I/bf16 --n 4 --seed 1 --out $W/sets/i$I > $O/sets-i$I.log 2>&1 || exit 9
 done
 M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm
@@ -76,11 +90,11 @@ keep() {  # NAME: $W/NAME's records into $O/NAME
   (cd $W/$1 && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -path './*/archive/*' -print0 \
     | xargs -0 -r -I{} cp --parents {} $O/$1/)
 }
-audit() {  # NAME TP_COMMIT BUILD WORKLOAD WINDOWS PARTITION
+audit() {  # NAME TP_COMMIT BUILD WORKLOAD WINDOWS PARTITION [A5 ARGS...]: WORKLOAD empty under --advice
   mkdir -p $O/$1
-  $TIME $PY benchmarks/one_stage/a5.py --tp-commit $2 --build-root $3 --workload $4 --windows $5 --partition $6 \
+  $TIME $PY benchmarks/one_stage/a5.py --tp-commit $2 --build-root $3 ${4:+--workload $4} --windows $5 --partition $6 "${@:7}" \
     ${A5_RANKS:+--ranks $A5_RANKS} ${A5_JOBS:+--jobs $A5_JOBS} ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$1 \
-    ${A5_CHALLENGER:+--challenger $A5_CHALLENGER} ${A5_PEER:+--peer $A5_PEER} ${A5_CHALLENGER_KEY:+--challenger-key $A5_CHALLENGER_KEY} ${A5_GATE_KEY:+--gate-key $A5_GATE_KEY} \
+    ${A5_CHALLENGER:+--challenger $A5_CHALLENGER} ${A5_COINS:+--coins $A5_COINS} ${A5_PEER:+--peer $A5_PEER} ${A5_CHALLENGER_KEY:+--challenger-key $A5_CHALLENGER_KEY} ${A5_GATE_KEY:+--gate-key $A5_GATE_KEY} \
     ${MAIN:+--main $MAIN} > $O/$1/a5.log 2> $O/$1/a5.err
   local rc=$?
   grep '^A5' $O/$1/a5.log | cut -c1-4000; tail -25 $O/$1/a5.err
@@ -101,20 +115,44 @@ bundle_windows() {  # COMMIT BUILD PARTITION OUT LOGS: each rank's stand-in wind
   echo ${ranks//,/ } | tr ' ' '\n' | xargs -P ${A5_JOBS:-1} -I{} sh -c \
     "$TIME $REPO/.venv/bin/verity-vllm tp-serving-rows $1 --build-root $2 --partition $3 --out $4 --ranks {} \
       ${A5_CHECKPOINT:+--checkpoint-dir $A5_CHECKPOINT --no-verify-shards} > $5/tp-serving-rows-{}.log 2>&1" \
-    || { tail -20 $5/tp-serving-rows-*.log; return 1; }
+    || { tail -n 20 $5/tp-serving-rows-*.log; return 1; }
   grep -h '^\[tp-serving-rows\]' $5/tp-serving-rows-*.log
+}
+
+advice_windows() {  # COMMIT BUILD PARTITION OUT ADVICE LOGS [ARGS...]: each rank's stand-in window from its sealed bundle over the
+                    # stand-in compiler's Programs for the advice, its opening written to ADVICE.opening.json
+  local log=$6/advice-windows-$(basename $4).log
+  mkdir -p $6
+  $TIME $REPO/.venv/bin/verity-vllm advice-windows $1 --build-root $2 --partition $3 --out $4 --advice $5 --opening ${5%.bin}.opening.json \
+    ${A5_RANKS:+--ranks $A5_RANKS} "${@:7}" > $log 2>&1 || { tail -20 $log; return 1; }
+  grep -h '^\[advice-windows\]' $log
 }
 
 rc=0
 PART=${A5_PARTITION:-benchmarks/one_stage/glm53_silu_mul_v2_tp8.json}
+advice_pair() {  # COMMIT BUILD PARTITION WORKLOAD WINDOWS LOGS: windows under the workload's advice A into WINDOWS and under A'
+                 # (A less its last request) into other-windows beside it, the advice and openings there too; sets ADV, a5's
+                 # advice arguments
+  [ "$A5_ADVICE" = workload ] && [ "${A5_WINDOWS:-served}" = bundles ] \
+    || { echo "A5_ADVICE=workload commits each rank's window from its bundle: set A5_WINDOWS=bundles"; exit 3; }
+  local d=$(dirname $5) last=$($PY -c "import json, sys; print('r%d' % (len(json.load(open(sys.argv[1]))['requests']) - 1))" $4)
+  advice_windows $1 $2 $3 $5 $d/advice.bin $6 --write-from-workload $4 || exit 8
+  advice_windows $1 $2 $3 $d/other-windows $d/other-advice.bin $6 --write-from-workload $4 --drop $last || exit 8
+  ADV=(--advice-opening $d/advice.opening.json --other-advice-opening $d/other-advice.opening.json --other-windows $d/other-windows)
+  public $d/other-windows $6/other-window
+}
+
 if [ -n "${A5_TP:-}" ]; then
-  WIN=$A5_TP/serving-rows
-  if [ "${A5_WINDOWS:-served}" = bundles ]; then
+  N=${A5_NAME:-glm}; WIN=$A5_TP/serving-rows; WL=integrations/vllm/workloads/$ROW.json; ADV=()
+  if [ -n "${A5_ADVICE:-}" ]; then
     WIN=$W/serving-rows
-    bundle_windows $A5_TP/commit ${A5_BUILD:-$A5_TP/build} $PART $WIN $O/glm || exit 8
+    advice_pair $A5_TP/commit ${A5_BUILD:-$A5_TP/build} $PART $WL $WIN $O/$N; WL=
+  elif [ "${A5_WINDOWS:-served}" = bundles ]; then
+    WIN=$W/serving-rows
+    bundle_windows $A5_TP/commit ${A5_BUILD:-$A5_TP/build} $PART $WIN $O/$N || exit 8
   fi
-  public $WIN $O/glm/window
-  audit glm $A5_TP/commit ${A5_BUILD:-$A5_TP/build} integrations/vllm/workloads/$ROW.json $WIN $PART || rc=1
+  public $WIN $O/$N/window
+  audit $N $A5_TP/commit ${A5_BUILD:-$A5_TP/build} "$WL" $WIN $PART "${ADV[@]}" || rc=1
 else
   for e in ${STANDIN:-256:subset:4 1536:subset:4}; do   # a rank's stand-in window holds 8 units; a draw of all leaves no negative
     if [ "$e" = row-tables ]; then
@@ -130,13 +168,16 @@ else
     DEFERRED=$([ "${A5_WINDOWS:-served}" = bundles ] && echo --deferred)
     (cd integrations/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I $I --law $LAW $DEFERRED) \
       > $O/standin-i$I.json 2> $O/standin-i$I.err || { tail -20 $O/standin-i$I.err; exit 8; }
-    if [ -n "$DEFERRED" ]; then
+    WL=$S/workload.json; ADV=()
+    if [ -n "${A5_ADVICE:-}" ]; then
+      advice_pair $S/commit $S/build $S/partition.json $WL $S/serving-rows $O/standin-i$I; WL=
+    elif [ -n "$DEFERRED" ]; then
       bundle_windows $S/commit $S/build $S/partition.json $S/serving-rows $O/standin-i$I || exit 8
     fi
     # the record's files, never a sealed bundle (its store holds the prover's values)
     public $S/serving-rows $O/standin-i$I/window && mkdir -p $O/standin-i$I/commit && cp $S/workload.json $S/partition.json $O/standin-i$I/ \
       && find $S/commit -maxdepth 1 -type f -exec cp {} $O/standin-i$I/commit/ \;
-    audit standin-i$I $S/commit $S/build $S/workload.json $S/serving-rows $S/partition.json || rc=1
+    audit standin-i$I $S/commit $S/build "$WL" $S/serving-rows $S/partition.json "${ADV[@]}" || rc=1
   done
 fi
 exit $rc
