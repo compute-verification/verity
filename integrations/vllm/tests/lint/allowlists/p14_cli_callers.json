@@ -30,6 +30,7 @@
     {"file": "verity_vllm/program/kernels/sampling_rng.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "sampling-rng"},
     {"file": "verity_vllm/program/kernels/twins.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "twins"},
     {"file": "verity_vllm/program/profile_descriptor.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "profile-descriptor"},
-    {"file": "verity_vllm/program/registry/mla_capture.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "mla-capture"}
+    {"file": "verity_vllm/program/registry/mla_capture.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "mla-capture"},
+    {"file": "verity_vllm/properties/quarantine_lint.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "quarantine-lint"}
   ]
 }
