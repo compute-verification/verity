@@ -113,6 +113,10 @@ import Proofs.Flock.Claims.Recursion.RecRecord
 import Proofs.Flock.Claims.Recursion.RecOpen
 import Proofs.Flock.Claims.Recursion.SlotsCommit
 import Proofs.Flock.Claims.Recursion.SlotsCheck
+import Proofs.Flock.Claims.Recursion.OpensReads
+import Proofs.Flock.Claims.Recursion.CapOpens
+import Proofs.Flock.Claims.Recursion.TopsOpens
+import Proofs.Flock.Claims.Recursion.PartAccepts
 import Proofs.Flock.Claims.Recursion.BoundDeployOuter
 import Proofs.Flock.Claims.Counted
 import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
