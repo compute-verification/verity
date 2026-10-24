@@ -78,8 +78,9 @@ reads requests from outside).
 
     python certifier_serve.py keys --dir KEYDIR [--height 10]
     python certifier_serve.py plan --upstream URL --out DIR [--model NAME] [--requests 400] [--in-flight 4]
-        [--tokens 64] [--temperature 0] [--top-p 1] [--response-frames F] [--prompt-tokens 128] [--probes 8]
-        [--delta-buckets D] [--profile planned|served]
+        [--temperature 0] [--top-p 1]
+        [--tokens 64] [--response-frames F] [--prompt-tokens 128] [--probes 8] [--delta-buckets D]
+        [--profile planned|served]
     python certifier_serve.py serve --plan PLAN --calibration REPORT --upstream URL --out DIR --link HOST:PORT
         --reveal HOST:PORT --key KEYDIR --challenger-key PUBLIC.json --session HEX [--start-in 10] [--tamper late|extra]
     python certifier_serve.py client --plan PLAN --calibration REPORT --deployment DEPLOYMENT.json --out DIR
@@ -927,11 +928,11 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--api-key-env", help="the environment variable that holds the endpoint's bearer key")
     for q in (p, r):
         q.add_argument("--model", help="the endpoint's model name (default: the one /v1/models lists)")
+        q.add_argument("--temperature", type=float, default=0.0, help="every request's temperature")
+        q.add_argument("--top-p", type=float, default=1.0, help="every request's top_p")
         q.add_argument("--requests", type=int, default=400)
         q.add_argument("--in-flight", type=int, default=4, help="requests sent together, served side by side")
         q.add_argument("--tokens", type=int, default=64, help="min_tokens and max_tokens of every request (ignore_eos)")
-        q.add_argument("--temperature", type=float, default=0.0, help="every request's temperature")
-        q.add_argument("--top-p", type=float, default=1.0, help="every request's top_p")
         q.add_argument("--response-frames", type=int,
                        help="F, a response's canonical events, padded to (default: --tokens); a token of more than "
                             "64 bytes is one event per 64")
