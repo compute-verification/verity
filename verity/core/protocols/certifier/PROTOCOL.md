@@ -1863,9 +1863,10 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
 `CompileSlice_v1` is the compile unit's pieces ("Advice v1" above) composed whole for one window, each hit
 ReplayStep_v1 reads derived by `CacheStep_v1`'s calls on the certified tokens from the empty cache. Its circuit, verdict
 flags, reference (`check`), stand-ins and REDTEAM's phase 9 cases (`phase9`) are `compile_slice`'s docstring.
-`benchmarks/network_traces/compile_slice_zk.py` proves nine units of corpus-smallkv's first seven steps `--zk`, held
-by Lean `verify --zk` (run r20261024-140227-8995, before the cache was wired): the honest one, three negatives and
-phase 9's five, each opening to its verdict, with no witness piece in what the verifier received.
+`benchmarks/network_traces/compile_slice_zk.py` proves eleven units of corpus-smallkv's first seven steps `--zk`
+(7,642,069 ANDs a unit, m = 29), held by Lean `verify --zk` (run r20261024-160743-1256): the honest one, five
+negatives (a made-up table and made-up tokens among them) and phase 9's five, each opening to its verdict, with no
+witness piece in what the verifier received. They prove in 338 s, and Lean verifies them in 156 s.
 
 ## The active certifier (`active`)
 
