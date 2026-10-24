@@ -12,7 +12,7 @@ run hashes, reads `Flock.Sha512.hash` whichever of the two the code calls:
 * `TaggedIsFlock`: `Identity.taggedSha512 tag payload` is `Flock.Sha512.hash` of `taggedInput tag payload`, the string
   `tagged_sha512` hashes, and both refuse together.
 
-`Properties.Proofs.Identity` proves both.
+`Proofs.Properties.Identity` proves both.
 -/
 
 namespace Properties.Identity

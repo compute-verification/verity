@@ -1,5 +1,5 @@
 import Mathlib
-import Models.Accounting.Guarantees.RateAudit
+import Definitions.Accounting.Guarantees.RateAudit
 import Proofs.Accounting.Bandwidth.AuditRO
 import Proofs.Accounting.RateAudit.Chip
 

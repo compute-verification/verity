@@ -291,13 +291,13 @@ PRs land through ci's `research queue drive` (#1826), live since 12 Oct 06:00Z:
     `security_proofs` (ArkLib allowed): every proof and lemma, with `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for
     each proved guarantee.
     `Properties/` is the nested package `security_properties`: properties of the code stated against its Lean functions
-    (`Properties.<Protocol>`) and proved (`Properties.Proofs.<Protocol>`). It may require `security` and that code, never
+    (`Properties.<Protocol>`) and proved (`Proofs.Properties.<Protocol>`). It may require `security` and that code, never
     `security_proofs`.
   - A component's Lean goes in its own area of each tree it has Lean in (`Core`, `Nci`, `Pouw`, `Pous`,
     `NetworkCertifier`, `Flock`; `Accounting` is the device model the resource audits share, and their joint guarantee).
   - The spec imports only itself and Mathlib (`layers` in `Security/lean-audit.json`). A theorem that must stay
     in a trusted module (a definition's proof field) may; the Lean check replays it like any proof. C-Flock has no
-    `Definitions/` area yet: its guarantees are `Models/Flock/Guarantees`, and the rest of its analysis is in `Proofs/Flock`
+    `Definitions/` area yet: its guarantees are `Definitions/Flock/Guarantees`, and the rest of its analysis is in `Proofs/Flock`
     until its spec is extracted.
   - All packages share one toolchain and one Mathlib revision (`tests/test_lean_packages.py`). Bump them together, in a
     PR of their own.

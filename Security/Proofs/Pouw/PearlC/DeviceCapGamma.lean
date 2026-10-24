@@ -1,6 +1,6 @@
 import Proofs.Pouw.PearlC.DeviceRev1Gamma
 import Definitions.Pouw.PearlC.DevicePrices
-import Models.Pouw.Guarantees.PearlC
+import Definitions.Pouw.Guarantees.PearlC
 
 /-!
 # The unpromoted record, the cap, and γ at sm_120's prices (the TT_OUT restatements lane's file)

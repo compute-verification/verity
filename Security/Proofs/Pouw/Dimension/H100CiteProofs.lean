@@ -1,4 +1,4 @@
-import Models.Pouw.Assumptions.Dimension.H100Cite
+import Definitions.Pouw.Assumptions.Dimension.H100Cite
 import Proofs.Pouw.Dimension.H100FragProofs
 import Proofs.Pouw.Dimension.H100MeasuredProofs
 

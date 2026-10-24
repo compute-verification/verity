@@ -1,5 +1,5 @@
 import Mathlib
-import Models.Accounting.Guarantees.Bandwidth
+import Definitions.Accounting.Guarantees.Bandwidth
 
 /-!
 # The honest device: the guarantee is not vacuous

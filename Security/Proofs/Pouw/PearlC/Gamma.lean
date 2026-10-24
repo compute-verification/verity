@@ -1,4 +1,4 @@
-import Models.Pouw.Assumptions.PearlC.TTOut
+import Definitions.Pouw.Assumptions.PearlC.TTOut
 import Proofs.Pouw.Prob
 import Proofs.Pouw.PearlC.Game
 import Proofs.Pouw.PearlC.Instance
@@ -8,13 +8,13 @@ import Mathlib.Tactic.Linarith
 import Mathlib.Tactic.NormNum
 import Mathlib.Tactic.Positivity
 import Mathlib.Tactic.Ring
-import Models.Pouw.Guarantees.PearlC
+import Definitions.Pouw.Guarantees.PearlC
 
 /-!
 # γ from TT_OUT (the cheap-binding lane's file)
 
 Lemmas, none a guarantee: `TTOutPearlC`, the premise of `pearlCGamma8192` and `pearlCGamma16384`, is falsified by the
-first-promotion skip (`Models.Pouw.Assumptions.PearlC.TTOut`), and rev1 (`TTOutPearlCDevRev1`) is its repair.
+first-promotion skip (`Definitions.Pouw.Assumptions.PearlC.TTOut`), and rev1 (`TTOutPearlCDevRev1`) is its repair.
 
 * `gammaFromTTOut`: if every in-domain unit that passes the activation rules and the debit cap has reference cost at
   most `Ω` times its credit, `TT_OUT(γ₀)` gives the γ-gap property at `γ = 1 − (1 − γ₀)/Ω` with the same error; the

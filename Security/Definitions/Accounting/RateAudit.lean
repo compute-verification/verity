@@ -9,7 +9,7 @@ device whose side link carries a certified stream and whose regeneration is paid
 the trusted host streams `ρ` fresh bits `R` to the device over its side link (PCIe), and the verifier reveals a fresh
 seed `σ`; the prover must commit, before a deadline, to the tag `H(σ, R, j, E_j)` of every word `j`, so every tag
 absorbs the stream; the verifier then checks `s` words drawn uniformly. The guarantee
-(`Models/Accounting/Guarantees/RateAudit.lean`) bounds the probability that a device is accepted while the device memory
+(`Definitions/Accounting/Guarantees/RateAudit.lean`) bounds the probability that a device is accepted while the device memory
 its window read falls short of the store by more than what it could have held on chip, taken in over the link's free
 capacity, guessed, or rebuilt with the compute it had.
 

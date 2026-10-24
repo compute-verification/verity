@@ -6,10 +6,10 @@ import Std.Data.HashSet
 `Accounting.Requirement` (`Security/Definitions/Accounting/Requirement.lean`) on one instance: a declared circuit's
 wiring, one scheduled execution of it and a layout of its values (`Instance`), the audit's store (`Store`), and a
 placement of the execution on devices (`Placement`), whose regions, ingress and credits are PoUW's over the placed
-execution (`Models/Accounting/Guarantees/RequirementPouw.lean`). A step is always an engine step, never a device tick.
+execution (`Definitions/Accounting/Guarantees/RequirementPouw.lean`). A step is always an engine step, never a device tick.
 This is code, so it requires nothing of `Security/`: `Properties.Accounting.Requirement` states that each function here
 is the definition it computes, on the wiring, execution, layout, store and placement an instance denotes, and
-`Properties.Proofs.Accounting.Requirement` proves it. `requirement-difftest` serves these functions to the difftest, which
+`Proofs.Properties.Accounting.Requirement` proves it. `requirement-difftest` serves these functions to the difftest, which
 holds them to `verity.ml.circuits.requirement` (`tests/test_requirement_difftest.py`).
 
 An instance's values are `0 … n - 1`, `n` the length of `width`, and the operands a gate uses are those at this

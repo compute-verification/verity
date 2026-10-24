@@ -30,7 +30,7 @@ there stay open (RT-FP-6), as do the pairs at rho >= 2 everywhere, until a lemma
 isa_escape.py's classes, re-read for FP words.
 
 It also replays premise (a), the small-grid exactness `Accounting.Assumptions.TS.Fp8GridExact` and `Fp4GridExact`
-(Security/Models/Accounting/Assumptions/FpMma.lean): on the bit-exact models of record transcribed from Lean
+(Security/Definitions/Accounting/Assumptions/FpMma.lean): on the bit-exact models of record transcribed from Lean
 (`Pouw.Fp8Atom.groupSum` at sm_120's 26-bit and Hopper's 14-bit adder, `Pouw.PearlC.Fp4.Fp4Atom.step`), a step whose
 accumulator and products are multiples of 2^g (g >= -126) with magnitudes summing below 2^(g+p) writes the exact sum, at
 p = 24 (26-bit adder, FP4 align-add) and p = 14 (Hopper), and controls just outside it don't. The models are not the

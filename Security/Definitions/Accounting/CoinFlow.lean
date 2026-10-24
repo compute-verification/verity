@@ -3,7 +3,7 @@ import Definitions.Accounting.HMu
 /-!
 # A Program's coin flow: the Build's two coin rules, on a graph (trusted)
 
-The vocabulary of `Models.Accounting.Guarantees.CoinFlow`. Under one σ shared by every matmul of a batch, a declared
+The vocabulary of `Definitions.Accounting.Guarantees.CoinFlow`. Under one σ shared by every matmul of a batch, a declared
 Program could unwind its own noise (read a coin again and cancel what it added) or use one noise twice, and then a
 skipped value's coins are in the cheater's view (`Accounting.HMuProofs.readsCoin`, `twoCopies`). The Build refuses
 both (`verity/ml/circuits/ports.py`, `E_COIN_FLOW` and `E_COIN_REUSE`). This is its rules on a model of the Program's

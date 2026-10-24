@@ -1,5 +1,5 @@
 import Proofs.Accounting.Compose.ServiceCovers
-import Models.Accounting.Guarantees.Compose
+import Definitions.Accounting.Guarantees.Compose
 import Proofs.Accounting.TS
 import Proofs.Accounting.Compose.ServiceBudget
 import Proofs.Accounting.Compose.SplitRateMerged

@@ -1,5 +1,5 @@
 import Properties.Nci.Threads
-import Properties.Proofs.Nci
+import Proofs.Properties.Nci
 import Proofs.Nci.Threads
 
 /-!

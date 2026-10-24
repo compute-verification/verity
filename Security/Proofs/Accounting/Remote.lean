@@ -1,4 +1,4 @@
-import Models.Accounting.Guarantees.Remote
+import Definitions.Accounting.Guarantees.Remote
 import Proofs.Pouw.Prob
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Tactic.FieldSimp
@@ -9,7 +9,7 @@ import Mathlib.Tactic.Ring
 /-!
 # The remote audit's compositions, from their routes
 
-Each statement of `Models.Accounting.Guarantees.Remote` follows from the routes it takes, as hypotheses, by a union
+Each statement of `Definitions.Accounting.Guarantees.Remote` follows from the routes it takes, as hypotheses, by a union
 bound over the routes' errors (`holds_and`) and, at each outcome, the γ arithmetic. The correct receipts' `(1 − ε) · C`
 bits were paid by the node's reads, its state at the pass boundaries (at most `μ_chip · C`), its rebuilt bits (at most
 `μ_rebuild · C`, by the rebuild's work at π_r and its fit beside `W_r`) and the guessing slack (`λ · C`); under

@@ -1,5 +1,5 @@
 import Proofs.Pouw.PearlC.DeviceSm120KernelGamma
-import Models.Pouw.Guarantees.PearlC
+import Definitions.Pouw.Guarantees.PearlC
 
 /-!
 # v1 under rev1 at a stricter cap, FP32 at the issue-bound add (FP8 security's file)

@@ -1,4 +1,4 @@
-import Models.Flock.Guarantees.RecursionClaims
+import Definitions.Flock.Guarantees.RecursionClaims
 
 /-! `Flock.SecurityProofs.RecursionClaimsStated : Flock.Guarantees.RecursionClaimsStated`, by reflexivity: the
 guarantee is there for its record, which holds the recursion's claims' text. -/

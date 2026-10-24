@@ -1,7 +1,7 @@
 import Proofs.Pouw.PearlC.ChainOnlyGamma
 import Definitions.Pouw.PearlC.DevicePricesLoop
 import Definitions.Pouw.PearlC.DevicePrices
-import Models.Pouw.Guarantees.PearlC
+import Definitions.Pouw.Guarantees.PearlC
 
 /-!
 # γ at the RTX PRO 6000 (sm_120) records against the kernel as it runs (the price-twins lane's file; staged)

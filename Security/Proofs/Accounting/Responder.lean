@@ -1,4 +1,4 @@
-import Models.Accounting.Guarantees.Responder
+import Definitions.Accounting.Guarantees.Responder
 import Proofs.Accounting.Actual.Confidence
 import Proofs.Accounting.Memory
 

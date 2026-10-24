@@ -283,7 +283,7 @@ def lifted_audit(tmp_path: Path, source: str = LIFTED_SOURCE, recorded: bool = T
     (lean / "Models" / "Pouw" / "Guarantees").mkdir(parents=True)
     (lean / "Models" / "Pouw" / "Guarantees" / "PearlC.lean").write_text(source)
     audit = {"guarantees": {LIFTED: {"type_hash": "l", "signature": [f"{LIFTED} :", f"  {LIFTED_G}"]}},
-             "reads": {"Models.Pouw.Guarantees.PearlC": {"definitions": {LIFTED_G: "h"} if recorded else {}, "pins": [LIFTED]}}}
+             "reads": {"Definitions.Pouw.Guarantees.PearlC": {"definitions": {LIFTED_G: "h"} if recorded else {}, "pins": [LIFTED]}}}
     return audit, lean
 
 

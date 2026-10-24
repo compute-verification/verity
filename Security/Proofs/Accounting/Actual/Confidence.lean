@@ -1,4 +1,4 @@
-import Models.Accounting.Guarantees.Confidence
+import Definitions.Accounting.Guarantees.Confidence
 import Proofs.Accounting.Actual.Split
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Data.Fintype.Pi

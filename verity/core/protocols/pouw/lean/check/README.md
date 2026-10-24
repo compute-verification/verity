@@ -114,7 +114,7 @@ its registered root, and opened its unit's K's A value, the window's `…/a/<K>`
 is not the one its sessions opened are refused.
 
 The properties are stated in `Security/Properties/Pouw/Check.lean` and proved in
-`Security/Properties/Proofs/Pouw/Check.lean`.
+`Security/Proofs/Properties/Pouw/Check.lean`.
 
 `tests/test_difftest.py`, the suite `verity-pouw-check-difftest`, which `check` runs after the Lean builds, holds
 `core_check.case` to `pouw-check serve` on the shared harness (`verity/core/difftest/`) as a `ProtocolPort` with the Lean

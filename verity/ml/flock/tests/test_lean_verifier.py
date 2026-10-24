@@ -59,7 +59,7 @@ AUDIT_IMPORTS = re.compile(r"import (Mathlib\.|Proofs\.Flock\.Soundness\.Game\.|
 
 def test_audit_layer_is_abstract():
     """The audit theorems import only the interaction model, Mathlib, each other and their lifted statements
-    (`Models.Flock.Guarantees.Audit`, which imports only Mathlib), so any backend can instantiate them
+    (`Definitions.Flock.Guarantees.Audit`, which imports only Mathlib), so any backend can instantiate them
     (`Security/Proofs/Flock/Soundness/DESIGN.md` §12). The Flock instantiations are the only files that import Flock's theorems:
     `Flock.lean` (oracle layer), `FlockCompiled.lean` (one table), `FlockBatched.lean` (several tables),
     `FlockBatchedAcc.lean` (the expected-time extractor), `FlockLink.lean` (the link theorem), `FlockLinked.lean` (the
