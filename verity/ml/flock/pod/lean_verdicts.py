@@ -6,7 +6,9 @@ kind): V* accepts only when every part does, so a forgery is refused when one of
 refusal, with a VERDICT and none accepting, and every other part of it has a VERDICT (a part the forgery leaves as the
 honest one is accepted). ``flock-verify statement``'s line is its part's VERDICT: accepted when Lean derived the units from
 the verifier's program (``partition_check``'s ``units`` ``derived``), refused as ``setup: …``. A part that never ran has
-neither file and fails. One line per part, then the count; the exit is 0 only when there is a part, every honest part
+neither file and fails, except a forgery's part the firewall held back: its prover's ``LIVE`` lines (``PART.live``, the
+session verdicts oprove kept) stop at ``FIREWALL-REFUSED: …``, so no session reached Lean, and the part counts as
+refused by the firewall. One line per part, then the count; the exit is 0 only when there is a part, every honest part
 passes and every forgery is refused.
 
     python3 verity/ml/flock/pod/lean_verdicts.py DIR PART...
@@ -47,10 +49,29 @@ def verdicts(log: Path) -> list[dict]:
     return out
 
 
+def firewall_refusal(live: Path) -> str | None:
+    """The firewall's refusal among the prover's ``LIVE`` verdicts (one JSON per line), if one stopped at it."""
+    if not live.exists():
+        return None
+    for line in live.read_text(errors="replace").splitlines():
+        try:
+            stopped = json.loads(line).get("prover_stopped")
+        except (ValueError, AttributeError):
+            continue
+        if isinstance(stopped, str) and stopped.startswith("FIREWALL-REFUSED"):
+            return stopped
+    return None
+
+
 def check(d: Path, part: str, kind: str | None = None) -> tuple[bool, bool, str]:
     """``part``'s (passes, refused, line); a forgery's part (``kind``) passes when it has a VERDICT, and is refused when it
-    exited 1 with none accepting."""
+    exited 1 with none accepting, or when no session reached Lean because the firewall refused it."""
     rc, vs = exit_status(d / f"time-{part}.txt"), verdicts(d / f"{part}.log")
+    fw = None if vs or rc is not None else firewall_refusal(d / f"{part}.live")
+    if fw:
+        line = (f"lean {part}{f' (forgery {kind}: one of its parts must be refused)' if kind else ''}: refused by the "
+                f"firewall before Lean, why {fw[:300]!r}{'' if kind else '  <- FAILS'}")
+        return bool(kind), True, line
     accepted = [v.get("accepted") is True for v in vs]
     refused = bool(vs) and rc == REFUSED and not any(accepted)
     ok = bool(vs) and (refused or rc == 0 and all(accepted) if kind else rc == 0 and all(accepted))

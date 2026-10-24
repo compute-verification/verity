@@ -39,8 +39,9 @@
 #                (ProvedScope.leafOk); ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s), and
 #                flock-verify statement on the inner statement with the partition object and program vstage wrote. The job
 #                fails unless each statement (staged or proved) and ZK_LEAN's session exited 0 with every VERDICT accepted,
-#                each forgery refused by one of its parts, and the inner statement's units were derived from the program (lean_verdicts.py; the
-#                inner's session is not checked)
+#                each forgery refused by one of its parts (by Lean, or by the firewall before any session reached Lean),
+#                and the inner statement's units were derived from the program (lean_verdicts.py; the inner's session is
+#                not checked)
 # The prover runs on the job's first PCPUS cores, the verifier (proxy, serve, replay) on the rest. Every step writes
 # out/summary-$STEP.json. Only a prove invocation holds a GPU, leased for it alone (on_gpu), so every STEP is launched without
 # --gpus (a CPU phase): staging, the proxy, serve, replay and Lean never hold one.
@@ -121,11 +122,13 @@ KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh v
   $(find verity/ml/flock/cuda verity/ml/flock/live -type f ! -name '*.md' | LC_ALL=C sort) | sha256sum | cut -c1-16)
 BIN=$W/bin-$KEY-g$GPU-sm$SM; B=$BIN/flock-circuit; F=$FW/flock-gpu-link/flock
 LSHA=$(cd verity/core/service/flock && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
-LEAN_BIN=$L/lean-$LSHA/flock-verify; FIREWALL_BIN=$L/lean-$LSHA/flock-firewall
+LEAN_BIN=$L/lean-$LSHA/flock-verify
+# the Lean frame a firewalled prover (MODES=firewall) releases through, built beside flock-verify
+export FC_FIREWALL_LEAN=$L/lean-$LSHA/flock-firewall
 FSHA=$( (echo $LSHA; cat verity/ml/flock/tests/lean/InnerFold.lean) | sha256sum | cut -c1-16)
 FOLD_BIN=$L/fold-$FSHA/inner-fold
 # the ship's name for each binary: its cache key in the name, so a node takes only the one its own sources key
-SHIPS="$B:flock-circuit-$KEY-g$GPU-sm$SM $LEAN_BIN:flock-verify-$LSHA $FIREWALL_BIN:flock-firewall-$LSHA $FOLD_BIN:inner-fold-$FSHA"
+SHIPS="$B:flock-circuit-$KEY-g$GPU-sm$SM $LEAN_BIN:flock-verify-$LSHA $FC_FIREWALL_LEAN:flock-firewall-$LSHA $FOLD_BIN:inner-fold-$FSHA"
 if [ -n "${PREBUILT:-}" ]; then
   for s in $SHIPS; do
     f=$PREBUILT/${s#*:}; [ -x ${s%%:*} ] || [ ! -f $f ] || { mkdir -p $(dirname ${s%%:*}) && cp $f ${s%%:*}.$$ && chmod +x ${s%%:*}.$$ && mv ${s%%:*}.$$ ${s%%:*}; }
@@ -406,13 +409,13 @@ EOF
 
 # lean_build: flock-verify and the firewall's flock-firewall (FC_FIREWALL_LEAN), from the one Lean package, keyed by its sources
 lean_build() {
-  [ -x $LEAN_BIN ] && [ -x $FIREWALL_BIN ] && return 0
+  [ -x $LEAN_BIN ] && [ -x $FC_FIREWALL_LEAN ] && return 0
   no_build "flock-verify-$LSHA or flock-firewall-$LSHA"
   (
     export PATH=$HOME/.elan/bin:$PATH
     command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
     exec 9>$L/lean.lock; flock 9
-    if [ ! -x $LEAN_BIN ] || [ ! -x $FIREWALL_BIN ]; then
+    if [ ! -x $LEAN_BIN ] || [ ! -x $FC_FIREWALL_LEAN ]; then
       rm -rf $L/lean-src && mkdir -p $L/lean-src && cp -r verity/core/service/flock/. $L/lean-src/ \
         && (cd $L/lean-src && lake build flock-verify flock-firewall) && mkdir -p $L/lean-$LSHA || exit 1
       for x in flock-verify flock-firewall; do [ -x $L/lean-$LSHA/$x ] || cp $L/lean-src/.lake/build/bin/$x $L/lean-$LSHA/$x || exit 1; done
@@ -678,9 +681,9 @@ oprove)
   # the firewall releases through the Lean flock-firewall built from this checkout's Lean sources (FC_FIREWALL_LEAN)
   if [[ " $MODES " == *" firewall "* ]] || [ -n "${CONTROLS:-}" ]; then
     lean_build > $O/build-lean.log 2>&1 || { tail -20 $O/build-lean.log; exit 1; }
-    sha256sum $FIREWALL_BIN | tee $O/firewall.sha
+    sha256sum $FC_FIREWALL_LEAN | tee $O/firewall.sha
   fi
-  FWENV="FC_FIREWALL=1 FC_HOST_WITNESS=1 FC_FIREWALL_LEAN=$FIREWALL_BIN"
+  FWENV="FC_FIREWALL=1 FC_HOST_WITNESS=1 FC_FIREWALL_LEAN=$FC_FIREWALL_LEAN"
   mkdir -p $DD/v-sess
   W0=$WARM R0=$RUNS
   for C in $(cd $V && find . -name inst.bin -printf '%h\n' | sed 's:^\./::' | sort -V); do
@@ -693,6 +696,8 @@ oprove)
       LAST=; again loopback $n $V/$C/pub.bin $V/$C/inst.bin $V/$C/circuit.txt --zk
     done
     PENV=
+    # the last mode's LIVE verdicts, which STEP=lean reads for a FIREWALL-REFUSED stop when no session reached it
+    grep -h $'\tLIVE\t' $O/oprove/$n/prove.tsv 2>/dev/null | cut -f3- > $DD/v-sess/$l.live
     du -sb $V/$C/inst.bin $V/$C/pub.bin $V/$C/circuit.txt ${LAST:+$LAST/*.bin} > $O/oprove/$n/sizes.txt
     [ -n "${LAST:-}" ] || { echo "$n: no session"; continue; }
     # REPLAY=0: upstream's replay waits for STEP=oreplay (CPU), outside the GPU lease
@@ -827,7 +832,7 @@ EOF
   [ "${ZK_LEAN:-0}" = 1 ] && PARTS="$PARTS zk"
   [ -f $DD/stage/circuit.txt ] && PARTS="$PARTS inner-statement"
   if [ "${LEVELS:-}" = none ] && [ -z "$PARTS" ]; then echo "lean: LEVELS=none and no ZK_LEAN: no part to check"
-  else python3 verity/ml/flock/pod/lean_verdicts.py $O/lean $PARTS; LEAN_RC=$?; fi
+  else cp $DD/v-sess/*.live $O/lean/ 2>/dev/null; python3 verity/ml/flock/pod/lean_verdicts.py $O/lean $PARTS; LEAN_RC=$?; fi
   ;;
 esac
 summary
