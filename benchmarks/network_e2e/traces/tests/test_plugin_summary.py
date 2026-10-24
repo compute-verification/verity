@@ -236,8 +236,46 @@ def test_compare_places_the_first_difference_in_every_trace(tmp_path, mod):
     assert d["at"]["x"]["row"] == "decode" and d["at"]["x"]["token"] == 6 and d["at"]["x"]["prefill_chunks"] == 1
     y = d["at"]["y"]
     assert (y["step"], y["rows"], y["row"], y["resumed"], y["preempted_before"], y["token"]) == (3, 1, "prefill", True, 1, 9)
-    assert "| 1 | 1 | y (differs) | 9 | 3 | 1 | 4 | prefill (resumed) | 1 | 1 | 2 (length) |" in \
-        "\n".join(summary.outputs_section(c))
+    assert (d["at"]["x"]["path"], y["path"], y["start"], y["n"], y["forced_before"]) == \
+        ("decode, decode-only step", "prefill from 0", 0, 4, 0)
+    assert c["same_as_first"] == {"x": 2, "y": 1} and c["bits_per_request"] == {"mean": 0.5, "max": 1.0}
+    assert c["first"] == {"y": {**y, "i": 1, "index": 1}}
+    text = "\n".join(summary.outputs_section(c))
+    assert "| 1 | 1 | y (differs) | 9 | 3 | 1 | 4 | prefill (resumed) | prefill from 0 | 0 / 4 | 1 | 1 [0] | 2 (length) |" in text
+    assert ("First divergence in `y`: request 1, output index 1 (token 9), step 3 (1 rows, 4 tokens), prefill from 0 from "
+            "position 0 (4 tokens), after 1 prefill chunks and 1 preemptions (0 forced).") in text
+    assert "Requests with the output ids of `x`, per trace: y: 1 of 2." in text and "mean 0.5, max 1.0" in text
+
+
+def test_summary_joins_the_adversarys_choices_to_its_steps(tmp_path, mod):
+    summary = mod("summary")
+    d = tmp_path / "refuse-1"
+    (d / "raw").mkdir(parents=True)
+    # call 3 cuts a's 40-token prefill to 16 and refuses its 32-token hit; call 4 schedules nothing (no tracer line) and
+    # holds b back; call 5 preempts b and finishes a's prefill over the KV of call 3's chunk
+    steps = [{"step": 0, "sched_step": 3, "new": [row("a", 0, 16, 40, 0)], "cached": [], "preempted": [], "finished": [],
+              "total_num_scheduled_tokens": 16, "waiting": 1, "running": 1, "empty_before": 0},
+             {"step": 1, "sched_step": 5, "new": [], "cached": [row("a", 16, 24, 40, 0)], "preempted": ["b"],
+              "finished": [], "total_num_scheduled_tokens": 24, "waiting": 1, "running": 1, "empty_before": 1}]
+    calls = [{"step": 3, "preempted": [], "held": 1, "admissible": 1, "splits": [["a", 40, 16]], "hits": [["a", 32, 0]]},
+             {"step": 4, "preempted": [], "held": 1, "admissible": 0, "splits": [], "hits": []},
+             {"step": 5, "preempted": ["b"], "held": 1, "admissible": 0, "splits": [], "hits": []}]
+    for name, recs in (("steps", steps), ("adversary", calls), ("outputs", [{"step": 1, "t": 0, "batch": ["a"],
+                                                                             "sampled": [[9]]}]), ("requests", [])):
+        (d / "raw" / f"{name}.1.jsonl").write_text("".join(json.dumps(x) + "\n" for x in recs))
+    (d / "meta.json").write_text(json.dumps({"adversary": {"cache": "refuse", "seed": 1}}))
+    t = summary.join_trace(d, {})
+    a = t["adversary"]
+    assert (a["seed"], a["cache"], a["calls"], a["forced_preemptions"], a["requests_force_preempted"]) == (1, "refuse", 3, 1, 1)
+    assert (a["calls_holding_back"], a["held_share"]["max"], a["splits"], a["hits_seen"], a["hits_refused"]) == (3, 1.0, 1, 1, 1)
+    joined = summary.read_jsonl(d / "steps.jsonl")
+    assert joined[0]["adversary"]["splits"] == [["a", 40, 16]] and joined[1]["adversary"]["preempted"] == ["b"]
+    (where,) = summary.located(d, {"a": {0}, "b": {0}}).values()
+    assert (where["step"], where["path"], where["start"], where["n"], where["cut"], where["prefill_chunks"]) == \
+        (1, "prefill over KV", 16, 24, False, 2)
+    honest = tmp_path / "honest"
+    (honest / "raw").mkdir(parents=True)
+    assert summary.join_trace(honest, {})["adversary"] is None
 
 
 def test_compare_corpora_refuses_different_plans_and_labels_by_variant(tmp_path, mod):

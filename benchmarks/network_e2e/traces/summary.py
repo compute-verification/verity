@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from collections import Counter
 from pathlib import Path
 
@@ -86,6 +87,8 @@ def histogram(xs: list[int], edges: list[int]) -> dict:
 
 def join_trace(d: Path, plan: dict[int, dict]) -> dict:
     steps, outputs, engine = raw(d, "steps"), raw(d, "outputs"), raw(d, "requests")
+    calls = raw(d, "adversary")
+    by_call = {c["step"]: c for c in calls}
     client = {r["id"]: r for r in read_jsonl(d / "client.jsonl")}
     by_step = {o["step"]: o for o in outputs}
     first, last = {}, {}
@@ -98,6 +101,9 @@ def join_trace(d: Path, plan: dict[int, dict]) -> dict:
             o = by_step.get(s["step"])
             if o is not None:
                 s["batch"], s["sampled"], s["t_output"] = o["batch"], o["sampled"], o["t"]
+            c = by_call.get(s.get("sched_step"))
+            if c is not None:
+                s["adversary"] = {k: c[k] for k in ("preempted", "held", "admissible", "splits", "hits")}
             f.write(json.dumps(s, separators=(",", ":")) + "\n")
     reqs = []
     for e in engine:
@@ -119,7 +125,26 @@ def join_trace(d: Path, plan: dict[int, dict]) -> dict:
     with open(d / "requests.jsonl", "w", encoding="utf-8") as f:
         for r in reqs:
             f.write(json.dumps(r, separators=(",", ":")) + "\n")
-    return summarize_trace(d, steps, reqs, client)
+    return summarize_trace(d, steps, reqs, client) | {"adversary": adversary(d, calls)}
+
+
+def adversary(d: Path, calls: list[dict]) -> dict | None:
+    """What a hostile scheduler (`vllm_adversarial_plugin`) chose over the trace, from its records; None for the honest one."""
+    meta = json.loads((d / "meta.json").read_text()) if (d / "meta.json").exists() else {}
+    if not meta.get("adversary") and not calls:
+        return None
+    forced = Counter(x for c in calls for x in c["preempted"])
+    splits = [x for c in calls for x in c["splits"]]
+    hits = [x for c in calls for x in c["hits"]]
+    queued = [c for c in calls if c["held"] + c["admissible"]]
+    return {**(meta.get("adversary") or {}), "calls": len(calls), "forced_preemptions": sum(forced.values()),
+            "requests_force_preempted": len(forced), "max_forced_per_request": max(forced.values(), default=0),
+            "calls_holding_back": sum(1 for c in queued if c["held"]),
+            "held_share": stats([round(c["held"] / (c["held"] + c["admissible"]), 3) for c in queued]),
+            "splits": len(splits), "requests_split": len({x[0] for x in splits}),
+            "split_to": stats([x[2] for x in splits]), "hits_seen": len(hits),
+            "hits_refused": sum(1 for x in hits if x[2] == 0), "hits_cut": sum(1 for x in hits if 0 < x[2] < x[1]),
+            "errors": sum(p.read_text().count("--- ") for p in (d / "raw").glob("adversary_errors.*.txt"))}
 
 
 def summarize_trace(d: Path, steps: list[dict], reqs: list[dict], client: dict) -> dict:
@@ -200,15 +225,31 @@ def summarize(root: Path) -> dict:
     return out
 
 
+def path(row: dict, kinds: set[str]) -> str:
+    """The attention path of a row that samples: a decode (one query row over the request's KV) in a decode-only or a
+    mixed step, or a prefill's last chunk, from position 0 or over KV already there (an earlier chunk's, a prefix-cache
+    hit's, or that of a resumed request's earlier chunks). The linear layers run one batch-invariant matmul over every row
+    of the step whatever the path."""
+    if row["kind"] == "decode":
+        return "decode, decode-only step" if kinds == {"decode"} else "decode, mixed step"
+    return "prefill from 0" if row["num_computed_tokens"] == 0 else "prefill over KV"
+
+
 def located(d: Path, wanted: dict[str, set[int]]) -> dict[tuple[str, int], dict]:
     """Where trace `d` sampled output token j of request id, for each (id, j) in `wanted` (id -> {j}): the step, its rows and
-    tokens, the row, and the request's chunks and preemptions up to then. A token sampled twice (an in-flight token dropped
-    at a preemption and sampled again) is placed at its last sampling."""
-    out, chunks, preempted = {}, Counter(), Counter()
+    tokens, the row (its kind, attention `path`, first position `start` and token count `n`, and whether a hostile
+    scheduler cut that count), and the request's chunks and preemptions up to then (those a hostile scheduler forced
+    too). A token sampled twice (an in-flight token dropped at a preemption and sampled again) is placed at its last
+    sampling."""
+    out, chunks, preempted, forced = {}, Counter(), Counter(), Counter()
     for s in read_jsonl(d / "steps.jsonl"):
+        adv = s.get("adversary") or {}
         for x in s["preempted"]:
             preempted[x] += 1
+        for x in adv.get("preempted", ()):
+            forced[x] += 1
         rows = s["new"] + s["cached"]
+        kinds = {r["kind"] for r in rows}
         batch = s.get("batch") or []
         for row in rows:
             rid = row["id"]
@@ -220,8 +261,10 @@ def located(d: Path, wanted: dict[str, set[int]]) -> dict[tuple[str, int], dict]
                 continue
             k = batch.index(rid) if rid in batch else None
             out[(rid, j)] = {"step": s["step"], "rows": len(rows), "tokens": s["total_num_scheduled_tokens"],
-                             "row": row["kind"], "resumed": bool(row.get("resumed")), "prefill_chunks": chunks[rid],
-                             "preempted_before": preempted[rid], "batch_index": k,
+                             "row": row["kind"], "path": path(row, kinds), "start": row["num_computed_tokens"],
+                             "n": row["num_scheduled_tokens"], "cut": any(x[0] == rid for x in adv.get("splits", ())),
+                             "resumed": bool(row.get("resumed")), "prefill_chunks": chunks[rid],
+                             "preempted_before": preempted[rid], "forced_before": forced[rid], "batch_index": k,
                              "token": s["sampled"][k][0] if k is not None and s.get("sampled") and s["sampled"][k] else None}
     return out
 
@@ -233,11 +276,17 @@ def first_difference(a: list[int], b: list[int]) -> int:
 def compare(traces: dict[str, Path]) -> dict:
     """Whether every trace (label -> summarized trace dir, all of one plan) gave each plan request the same output ids. A
     request that differs is placed at its first difference: the earliest output index where some trace's ids differ from
-    the first trace's, located in every trace (`located`)."""
+    the first trace's, located in every trace (`located`); `first` has each differing trace's earliest such step.
+
+    `bits_per_request` measures what the traces' schedules chose among: per request, log2 of the number of distinct
+    output-id sequences across the traces (0 where all agree), its mean over the requests and its maximum. With the first
+    trace honest and the rest hostile, that is how many bits a scheduler steered into a request's outputs here, a lower
+    bound on the covert channel's capacity (the traces tried only some schedules)."""
     labels = list(traces)
     reqs = {lb: {r["i"]: r for r in read_jsonl(d / "requests.jsonl") if r.get("i") is not None} for lb, d in traces.items()}
     every = sorted(set().union(*(set(x) for x in reqs.values()))) if reqs else []
     pairs = {f"{a} = {b}": 0 for k, a in enumerate(labels) for b in labels[k + 1:]}
+    same = dict.fromkeys(labels, 0)
     missing, differ = [], []
     for i in every:
         rs = {lb: reqs[lb].get(i) for lb in labels}
@@ -245,6 +294,8 @@ def compare(traces: dict[str, Path]) -> dict:
             missing.append(i)
             continue
         ids = {lb: r["output_ids"] for lb, r in rs.items()}
+        for lb in labels:
+            same[lb] += ids[lb] == ids[labels[0]]
         for k, a in enumerate(labels):
             for b in labels[k + 1:]:
                 pairs[f"{a} = {b}"] += ids[a] == ids[b]
@@ -263,7 +314,14 @@ def compare(traces: dict[str, Path]) -> dict:
         where = located(traces[lb], want)
         for x in differ:
             x["at"][lb] |= where.get((x["at"][lb]["id"], x["token"]), {"step": None})
+    first = {}
+    for lb in labels[1:]:
+        placed = [x for x in differ if lb in x["differs_from_first"] and x["at"][lb].get("step") is not None]
+        if placed:
+            x = min(placed, key=lambda x: x["at"][lb]["step"])
+            first[lb] = {**x["at"][lb], "i": x["i"], "index": x["token"]}
     n = len(every) - len(missing)
+    bits = [math.log2(x["outputs"]) for x in differ]
     if not labels:
         verdict = "no traces"
     elif differ:
@@ -273,7 +331,9 @@ def compare(traces: dict[str, Path]) -> dict:
     if missing:
         verdict += f" ({len(missing)} requests missing from some trace)"
     return {"traces": labels, "requests": n, "identical": n - len(differ), "verdict": verdict, "missing": missing,
-            "pairs_identical": pairs, "differ": differ}
+            "same_as_first": same, "pairs_identical": pairs,
+            "bits_per_request": {"mean": round(sum(bits) / n, 6) if n else 0.0, "max": round(max(bits, default=0.0), 6)},
+            "first": first, "differ": differ}
 
 
 def corpus_spec(arg: str) -> tuple[Path, list[str] | None]:
@@ -308,23 +368,38 @@ def compare_corpora(specs: list[tuple[Path, list[str] | None]], out: Path) -> di
 
 def outputs_section(c: dict, limit: int = 20) -> list[str]:
     lines = [f"**{c['verdict']}.** Traces: {', '.join(f'`{x}`' for x in c['traces'])}.", ""]
+    if "same_as_first" in c and len(c["traces"]) > 1:
+        ref = c["traces"][0]
+        lines += [f"Requests with the output ids of `{ref}`, per trace: " +
+                  "; ".join(f"{k}: {v} of {c['requests']}" for k, v in c["same_as_first"].items() if k != ref) + ".", ""]
     if len(c["traces"]) > 2:
         lines += ["Requests with the same output ids, pair by pair: " +
                   "; ".join(f"{k}: {v}" for k, v in c["pairs_identical"].items()) + ".", ""]
+    if "bits_per_request" in c:
+        b = c["bits_per_request"]
+        lines += [f"Bits per request (log2 of the distinct output-id sequences across the traces, 0 where they agree): mean "
+                  f"{b['mean']}, max {b['max']}.", ""]
     if not c["differ"]:
         return lines
+    for lb, a in (c.get("first") or {}).items():
+        lines += [f"First divergence in `{lb}`: request {a['i']}, output index {a['index']} (token {a['token']}), step "
+                  f"{a['step']} ({a['rows']} rows, {a['tokens']} tokens), {a['path']} from position {a['start']} ({a['n']} tokens"
+                  f"{', cut by the adversary' if a.get('cut') else ''}), after {a['prefill_chunks']} prefill chunks and "
+                  f"{a['preempted_before']} preemptions ({a.get('forced_before', 0)} forced).", ""]
     lines += [f"The first {min(limit, len(c['differ']))} of {len(c['differ'])} requests that differ (all in `differ`), at "
               "the first output index where some trace's ids differ from the first trace's; per trace: the step that "
-              "sampled that index, the step's rows and tokens, the request's row there, its prefill chunks and the "
-              "preemptions before it.", "",
-              "| request | index | trace | token | step | rows | tokens | row | prefill chunks | preempted before | outputs |",
-              "|---|---|---|---|---|---|---|---|---|---|---|"]
+              "sampled that index, the step's rows and tokens, the request's row there (its attention path, first "
+              "position and tokens), its prefill chunks and the preemptions before it (forced ones in brackets).", "",
+              "| request | index | trace | token | step | rows | tokens | row | path | start / n | prefill chunks | "
+              "preempted before | outputs |",
+              "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for x in c["differ"][:limit]:
         for lb, a in x["at"].items():
             lines.append(f"| {x['i']} | {x['token']} | {lb}{' (differs)' if lb in x['differs_from_first'] else ''} | "
                          f"{a.get('token')} | {a.get('step')} | {a.get('rows')} | {a.get('tokens')} | "
-                         f"{a.get('row')}{' (resumed)' if a.get('resumed') else ''} | {a.get('prefill_chunks')} | "
-                         f"{a.get('preempted_before')} | {a['output_len']} ({a['finish']}) |")
+                         f"{a.get('row')}{' (resumed)' if a.get('resumed') else ''} | {a.get('path')} | "
+                         f"{a.get('start')} / {a.get('n')}{' (cut)' if a.get('cut') else ''} | {a.get('prefill_chunks')} | "
+                         f"{a.get('preempted_before')} [{a.get('forced_before', 0)}] | {a['output_len']} ({a['finish']}) |")
     return lines
 
 
@@ -341,8 +416,8 @@ FIELDS = """\
   request by request (`summary.compare`).
 - `<trace>/steps.jsonl`: one line per scheduler step (`Scheduler.schedule()` call) that scheduled a token or reported a
   preempted or finished request, in order:
-  - `step` (0, 1, ...), `t` (unix seconds when `schedule()` returned), `empty_before` (calls since the last line that
-    scheduled nothing);
+  - `step` (0, 1, ...), `sched_step` (the scheduler's `current_step`, which counts every call), `t` (unix seconds when
+    `schedule()` returned), `empty_before` (calls since the last line that scheduled nothing);
   - `new`: `scheduled_new_reqs`, the requests scheduled for the first time and (Model Runner V2) those resumed after a
     preemption: `id`, `num_computed_tokens` (the first position scheduled; at a first scheduling, the prefix-cache hit),
     `num_scheduled_tokens`, `prompt_len`, `num_output_tokens`, `resumed`, and `cache_hit` (first scheduling only);
@@ -354,7 +429,11 @@ FIELDS = """\
   - `total_num_scheduled_tokens`, `preempted` (`preempted_req_ids`: preempted in this call), `finished`
     (`finished_req_ids`: finished since the previous call), `waiting` and `running` (queue lengths after the call);
   - `batch`: the model runner's row order for the step (`ModelRunnerOutput.req_ids`; V2 puts decodes first), `sampled`:
-    the token ids it sampled per batch row (empty for a partial chunk), `t_output` (unix seconds when the output was back).
+    the token ids it sampled per batch row (empty for a partial chunk), `t_output` (unix seconds when the output was back);
+  - in a hostile trace, `adversary`: what `vllm_adversarial_plugin` chose for the call: `preempted` (the requests it
+    preempted before it, also in `preempted`), `held` and `admissible` (the waiting requests it held back and left),
+    `splits` (`[id, n, cut to]` per row whose token count it cut) and `hits` (`[id, hit, hit used]` per prefix-cache
+    lookup that found one).
 - `<trace>/requests.jsonl`: one line per request the scheduler freed: `id` (the client's X-Request-Id, `req-<i>` in every
   trace; corpora made before seeded sampling used `<trace>-<i>`),
   `i` (the plan's index), `arrival` (unix seconds, vLLM's `Request.arrival_time`), `send_unix` and `planned_s` (the
@@ -366,8 +445,8 @@ FIELDS = """\
   equal the engine's).
 - `<trace>/client.jsonl`, `<trace>/raw/`: the client's records as written (with the `seed` each request sent, if any) and
   the hook's (`raw/steps.PID.jsonl`,
-  `raw/outputs.PID.jsonl`, `raw/requests.PID.jsonl`); `<trace>/server.log`, `<trace>/meta.json`: the server's log, argv
-  and timings.
+  `raw/outputs.PID.jsonl`, `raw/requests.PID.jsonl`, and in a hostile trace the adversary's `raw/adversary.PID.jsonl`);
+  `<trace>/server.log`, `<trace>/meta.json`: the server's log, argv, timings and adversary (seed and prefix-cache mode).
 """
 
 
@@ -410,6 +489,22 @@ def readme(s: dict) -> str:
             f"{pe['events']} ({pe['requests_preempted']}) | {rw['partial_prefill_chunks']} ({st['with_partial_chunk']}) | "
             f"{st['mixed_prefill_decode']} | {ov['rows']} ({ov['by_finish'].get('eos', 0)} / "
             f"{ov['by_finish'].get('length', 0)}) |")
+    hostile = {name: t["adversary"] for name, t in s["traces"].items() if t.get("adversary")}
+    if hostile:
+        lines += ["", "## The hostile schedulers", "",
+                  "What `vllm_adversarial_plugin` chose in each hostile trace, from its records (`raw/adversary.PID.jsonl`; "
+                  "each step's own choices are its `adversary` in `steps.jsonl`).", "",
+                  "| trace | seed | prefix cache | schedule calls | forced preemptions (requests; max per request) | calls "
+                  "holding back (held share p50 / p90) | prefill rows cut (requests; cut to p50 tokens) | hits seen | "
+                  "refused | cut to one block | errors |",
+                  "|---|---|---|---|---|---|---|---|---|---|---|"]
+        for name, a in hostile.items():
+            h = a["held_share"]
+            lines.append(f"| {name} | {a.get('seed')} | {a.get('cache')} | {a['calls']} | {a['forced_preemptions']} "
+                         f"({a['requests_force_preempted']}; {a['max_forced_per_request']}) | {a['calls_holding_back']} "
+                         f"({h.get('p50')} / {h.get('p90')}) | {a['splits']} ({a['requests_split']}; "
+                         f"{a['split_to'].get('p50')}) | {a['hits_seen']} | {a['hits_refused']} | {a['hits_cut']} | "
+                         f"{a['errors']} |")
     if s.get("outputs"):
         lines += ["", "## Output ids across traces", "", *outputs_section(s["outputs"])]
     lines += ["", "## Lengths", ""]
