@@ -23,6 +23,7 @@ from verity.ml.circuits.refs import Affine, Coll as _Coll, Explicit, array_of, c
 from verity.ml.circuits.types import Array, Record, Tuple
 from verity.ml.circuits.ops.gemm import DotBf16 as DotBf16V2, Gemm as GemmV2, GemmCoordinate as GemmCoordinateV2
 from verity.ml.circuits.ops.prims import ZERO32, const
+from verity.ml.circuits.ops.scalar import BitNot
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.prims import A16, BF16, BIT, F32, I32
 
@@ -535,13 +536,28 @@ def chunks(V: int, C: int) -> list[tuple[int, int]]:
     return [(lo, min(lo + C, V)) for lo in range(0, V, C)]
 
 
+@composite("TokenSelectChunkStep", 1, [], lambda S: ((("carry", Tuple(BF16, I32, I32)), ("x", BF16)), Tuple(Tuple(BF16, I32, I32), I32)),
+           conformance="model-untested")
+def TokenSelectChunkStep(B, S, carry, x):
+    """`ArgmaxStep_v1`'s function with each select's condition negated and its branches swapped, so that a select's else
+    branch (whose bits its output's bits are, XOR one AND each) is the step's logit and its constant index, not the running
+    (best, index): the scan's carry is then a form of at most two committed bits per bit at every step, where `ArgmaxStep_v1`'s
+    gains one at each, and the flat lowering of C steps is linear in C rather than quadratic, with the same ANDs."""
+    best, best_i, i = carry[0], carry[1], carry[2]
+    keep = B.call(BitNot, B.call(P.Bf16GtStrict, x, best))
+    nb = B.call(P.SelectBf16, keep, best, x)
+    ni = B.call(P.SelectI32, keep, best_i, i)
+    nxt = B.call(P.I32Add, i, B.call(const(32, 1)))
+    return tuple_of(tuple_of(nb, ni, nxt), ni)
+
+
 @composite("TokenSelectChunk", 1, ["C"], lambda S: ((("x", Array(S.C, BF16)),), Tuple(BF16, I32)), conformance="model-untested")
 def TokenSelectChunk(B, S, x):
-    """A V-chunk of `TokenSelect_v1`'s scan: `ArgmaxStep_v1` over all C logits from (-inf, 0, 0), returning (best, its index in
-    the chunk): the chunk's first maximum above -inf, a NaN never taken, and (-inf, 0) when it has none.  Its partial is what
-    `TokenSelectCombine_v1` reduces."""
+    """A V-chunk of `TokenSelect_v1`'s scan: its step's function (`TokenSelectChunkStep_v1`) over all C logits from (-inf, 0,
+    0), returning (best, its index in the chunk): the chunk's first maximum above -inf, a NaN never taken, and (-inf, 0) when
+    it has none.  Its partial is what `TokenSelectCombine_v1` reduces."""
     init = tuple_of(B.call(const(16, NEG_INF_BF16)), B.call(const(32, 0)), B.call(const(32, 0)))
-    step = B.scan(ArgmaxStep, init, xs=(x,))
+    step = B.scan(TokenSelectChunkStep, init, xs=(x,))
     return tuple_of(step[0][0], step[0][1])
 
 

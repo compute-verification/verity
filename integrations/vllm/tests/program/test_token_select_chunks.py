@@ -10,6 +10,8 @@ import pytest
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch
+from verity_flock import ir_lower as IL
+from verity_flock.gf2 import Circuit
 from verity_vllm.program.registry import b1
 
 #: the words an argmax turns on: quiet NaNs of both signs, a signalling NaN, +0, -0, +inf, -inf, 1, -1, 2
@@ -55,6 +57,35 @@ def test_a_nan_first_logit_is_the_token_and_a_later_nan_never_is() -> None:
     assert _token_select(x).tolist() == [0, 2, 0, 0]
     for C in (1, 2, 3):
         assert _composed(x, C).tolist() == [0, 2, 0, 0]
+
+
+def test_the_chunk_step_is_argmax_step() -> None:
+    """`TokenSelectChunkStep_v1` is `ArgmaxStep_v1` word for word: every pair of edge words as (x, best), at indices past the
+    best's and before it, and random words."""
+    rng = np.random.default_rng(3)
+    x, best = (a.ravel() for a in np.meshgrid(EDGES, EDGES))
+    x, best = np.concatenate([x, rng.integers(0, 1 << 16, 512)]), np.concatenate([best, rng.integers(0, 1 << 16, 512)])
+    n = len(x)
+    carry = np.stack([best, rng.integers(0, 1 << 31, n), rng.integers(0, 1 << 31, n)], 1)
+    assert np.array_equal(_ev(bind(b1.TokenSelectChunkStep), carry, x[:, None]), _ev(bind(b1.ArgmaxStep), carry, x[:, None]))
+
+
+def _flat(C: int) -> tuple[int, int, int]:
+    """``TokenSelectChunk_v1{C}``'s flat lowering (`ir_lower`): its ANDs, their operands' bits (the AND rows' nonzeros) and the
+    widest operand."""
+    Cc = Circuit()
+    IL.lower(Cc, bind(b1.TokenSelectChunk, C=C), [Cc.input(f"x{j}", 16) for j in range(C)])
+    ops = [len(f.s) for k, d in zip(Cc.kind, Cc.data) if k == "and" for f in d]
+    return len(ops) // 2, sum(ops), max(ops)
+
+
+def test_the_chunk_lowers_linearly_in_its_width() -> None:
+    """Each step's ANDs read the running (best, index) as forms of a few bits at every width, so the steps 130 .. 249, past the
+    first at which the index's 8th bit is a form, each add the same ANDs and nonzeros, and no operand widens (at C = 4840 a
+    step that kept the running best's form, as `ArgmaxStep_v1` does, built a 14 GB circuit in 35 min at 63 GB)."""
+    (a1, z1, w1), (a2, z2, w2), (a3, z3, w3) = _flat(130), _flat(190), _flat(250)
+    assert w1 == w2 == w3
+    assert a3 - a2 == a2 - a1 > 0 and z3 - z2 == z2 - z1 > 0
 
 
 def test_a_chunk_of_no_number_above_minus_inf_is_minus_inf_at_zero() -> None:
