@@ -36,7 +36,7 @@ def test_research_run_pool_wraps_the_command_in_a_named_pool_that_the_launcher_a
         S.in_pool("gpu", "x", ["true"])
         raise AssertionError("an unknown pool must be refused")
     except ValueError as e:
-        assert "the pools are proofs, research" in str(e)
+        assert "the pools are network, proofs, research" in str(e)
     from research.cli import main
     for argv, why in ((["--pool", "research", "--", "true"], "needs --on MACHINE and --source"),
                       (["--on", "m", "--source", ".", "--pool", "research", "--", "true"], "needs a lane"),
