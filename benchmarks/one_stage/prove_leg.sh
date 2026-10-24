@@ -6,6 +6,7 @@
 #     --env LEG_CACHE=/workspace/research/cache/pouw-hidden-zk -- bash benchmarks/one_stage/prove_leg.sh
 # env: LEG_MEM_GB (the job's --mem-gb, 32 by default)  LEG_CACHE (the build cache)  LEG_N (units a member, 4)
 #      LEG_KS (the stand-in's K values, "128,256")  LEG_NEGATIVES=0 (honest only)  LEG_FIREWALL=0 (prove without it)
+#      LEG_REGISTERED=1 (the registered-weights stand-in at the first K, verified with --registered)
 # Kept in $OUT/leg: the leg's records (leg.json, audit.json, registration, draw), the public files and the sessions; never a
 # prover's file (inst-*) nor a circuit (its pin is kept), nor a session's archive. $OUT/summary.json: the verdicts.
 set -uo pipefail
@@ -26,8 +27,9 @@ if [ "${LEG_FIREWALL:-1}" = 1 ]; then
 fi
 log "leg: stand-in, n ${LEG_N:-4}, ks ${LEG_KS:-128,256}, firewall ${FW:-off}, negatives ${LEG_NEGATIVES:-1}"
 NEG=--negatives; [ "${LEG_NEGATIVES:-1}" = 0 ] && NEG=
+REG=; [ "${LEG_REGISTERED:-0}" = 1 ] && REG=--registered
 "$PY" benchmarks/one_stage/prove_leg.py standin --bin "$BIN" --lean "$LEAN" ${FW:+--firewall "$FW"} --out "$W/leg" \
-  --n "${LEG_N:-4}" --ks "${LEG_KS:-128,256}" $NEG 2>&1 | tee -a "$OUT/leg.log" | cut -c1-4000
+  --n "${LEG_N:-4}" --ks "${LEG_KS:-128,256}" $NEG $REG 2>&1 | tee -a "$OUT/leg.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/leg"
 (cd "$W/leg" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/leg/")

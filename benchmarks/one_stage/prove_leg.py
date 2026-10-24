@@ -6,7 +6,7 @@ record. Network-accounting's I5 for the arbitrary-vLLM goal (thread 1792816009.5
 head-check units and the I/O tie's units all ride it.
 
     python benchmarks/one_stage/prove_leg.py standin --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
-      --out DIR [--n 4] [--negatives]
+      --out DIR [--n 4] [--negatives] [--registered]
 
 * **Members** (`Member`). One template's units, one statement: a bound Definition C-Flock lowers flat (`ir_lower`; Lean
   refuses typed and template statements until PRF-133), `UnitStager`'s rows and output rows, the prover's rows, the rows
@@ -134,11 +134,14 @@ def _stage_forged(st, m: Member, d: Path, salt_key: bytes, indices: list[int], s
     st.reference_check(m.values, outs)
     for i in m.forge:
         outs["o0"][i, 0] ^= 1
-    salts = FC.stage_salts(iset, 0, n, st.ports, salt_key)
+    tables = m.stage_kw.get("tables")
+    table_rows = None if tables is None else {p.name: len(tables[p.name]) if p.name in tables else n for p in st.ports}
+    salts = {**FC.stage_salts(iset, 0, n, st.ports, salt_key, table_rows), **(m.stage_kw.get("salts") or {})}
     d.mkdir(parents=True, exist_ok=True)
     FC.write(st.text, iset, 0, n, d / "inst.bin", d / "pub.bin", salt_key,
              rows={r: np.asarray(m.values[r], dtype=np.uint16) for r, *_ in st.in_rows}, outs=outs, salts=salts,
-             public_words={}, digests=(st.pin, st.class_sha512), indices=indices)
+             public_words={}, digests=(st.pin, st.class_sha512), indices=indices, share_rows=tables is not None,
+             tables=tables, refs=m.stage_kw.get("refs"), registered=m.stage_kw.get("registered"), meta=st.meta)
     counts = st.low.layout.counts
     return {"outs": outs, "salts": salts, "ands": counts["ands"], "unit_nnz": counts["nnz_a"] + counts["nnz_b"]}
 
@@ -229,7 +232,12 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
     if registered is not None:
         files["registered_file"] = Path(registered)
     bound = {"partition": P.digest(part), "program": part["program"]}
-    bases = {tid: (base, cnt) for tid, base, cnt in P.ranges(program, query)}
+    bases: dict[str, tuple[int, int]] = {}
+    for tid, base, cnt in P.ranges(program, query):
+        b0, c0 = bases.get(tid, (base, 0))
+        if b0 + c0 != base:
+            raise ValueError(f"template {tid}'s units are not one contiguous range of the program's (a member is one statement)")
+        bases[tid] = (b0, c0 + cnt)
     population = P.units(program, query)
     leg: dict[str, Any] = {"format": FORMAT, "population": population, "partition": bound["partition"],
                            "program": bound["program"], "firewall": tools.firewall is not None, "members": {},
@@ -393,13 +401,16 @@ def tampered_registered_root(honest: dict, member: str, registered: Path, tools:
     return {"refused": a0.lean_refused(lv), "port": port, "lean": lv.get("accepted"), "lean_why": lv.get("why")}
 
 
-def negatives(members: list[Member], coins, registered: Path | None, tools: Tools, out: Path, honest: dict) -> dict:
+def negatives(members: list[Member], coins, registered: Path | None, tools: Tools, out: Path, honest: dict,
+              program=None, query=None) -> dict:
     """The proof-layer negatives on the first member (and, for wrong-unit, the second), each expected refused. ``coins``
-    must draw unit 0 of the first member (``"lean"`` with every unit drawn does)."""
+    must draw unit 0 of the first member (``"lean"`` with every unit drawn does). ``program``/``query``: the honest
+    leg's, when it was given its own."""
     m = members[0]
     neg: dict[str, dict] = {}
+    kw = {"tools": tools, "program": program, "query": query}
 
-    leg = prove_units([replace(m, forge=(0,))], coins, registered, tools=tools, out=out / "tampered-unit")
+    leg = prove_units([replace(m, forge=(0,))], coins, registered, out=out / "tampered-unit", **kw)
     neg["tampered-unit"] = {"refused": refused(leg, m.name), "units": leg["members"][m.name].get("units"),
                             "lean_why": leg["members"][m.name].get("lean_why"), "audit": leg.get("audit")}
 
@@ -407,7 +418,13 @@ def negatives(members: list[Member], coins, registered: Path | None, tools: Tool
         row = next(iter(m.held))
         vals = {r: np.array(v, copy=True) for r, v in m.values.items()}
         vals[row][0, 0] ^= 1
-        leg = prove_units([replace(m, values=vals)], coins, registered, tools=tools, out=out / "tampered-public")
+        skw = dict(m.stage_kw)
+        if row in (skw.get("tables") or {}):
+            t = np.array(skw["tables"][row], copy=True)
+            t[skw["refs"][row][0], 0] ^= 1
+            skw["tables"] = {**skw["tables"], row: t}
+            vals[row] = t[np.asarray(skw["refs"][row])]
+        leg = prove_units([replace(m, values=vals, stage_kw=skw)], coins, registered, out=out / "tampered-public", **kw)
         neg["tampered-public"] = {"refused": refused(leg, m.name), "row": row, "units": leg["members"][m.name].get("units"),
                                   "lean": leg["members"][m.name].get("lean"), "openings": leg["members"][m.name].get("openings")}
 
@@ -415,7 +432,7 @@ def negatives(members: list[Member], coins, registered: Path | None, tools: Tool
         rec["roots"][0]["root"] = "00" * 64
         return rec
 
-    leg = prove_units([m], coins, registered, tools=tools, out=out / "tampered-root", mutate=bad_root)
+    leg = prove_units([m], coins, registered, out=out / "tampered-root", mutate=bad_root, **kw)
     neg["tampered-root"] = {"refused": refused(leg) and leg.get("refused") == "before the draw",
                             "checks_before_draw": leg.get("checks_before_draw")}
 
@@ -454,6 +471,47 @@ def standin(n: int, ks: Sequence[int] = (128, 256), seed: int = 20261024) -> lis
     return out
 
 
+def registered_standin(n: int, K: int, out: Path, table_rows: int = 8, seed: int = 20261024):
+    """The stand-in with registered weights: a Program whose ``weights`` parameter (``table_rows`` bf16 rows of K, a
+    registered value committed once, `registered.Registered.commit`) unit i reads row ``positions[i]`` of as its ``w``,
+    ``x`` the unit's own and held by the verifier. Returns ``(member, program, query, registered file)``: the verifier's
+    own ``--registered`` file (`registered.reads_file`, at the value's root) written under ``out``."""
+    from circuit_check import targets as TG
+    from verity.core.protocols.sampled_proofs.one_stage import registered as G
+    from verity.ml.circuits.defs import CompositeDefinition, bind
+    from verity.ml.circuits.program import Program
+    from verity.ml.circuits.refs import coll_concat
+    from verity.ml.circuits.types import Array
+
+    TG.load_registries()
+    fn = TG.definition(f"LlBf16DotprodDot_v1{{K={K},BS=128,VEC=8,FMA=1}}")
+    (xn, xt), (wn, wt) = fn.signature()[0]
+    ret = fn.signature()[1]
+    rng = np.random.default_rng(seed)
+    positions = [int(p) for p in rng.integers(0, table_rows, n)]
+
+    def sig(S):
+        return ((xn, Array(n, xt)), ("weights", Array(table_rows, wt))), Array(n, ret)
+
+    def body(B, S, x, weights):
+        return coll_concat(sig(S)[1], [B.call(fn, x[i], weights[p]) for i, p in enumerate(positions)])
+
+    program = Program(bind(CompositeDefinition("ProveLegRegisteredDot", 0, (), sig, body, register=False)))
+    query = P.template_instance_query(fn)
+    x, weights = bf16(rng.normal(0, 1, (n, K))), bf16(rng.normal(0, 0.02, (table_rows, K)))
+    reg = G.Registered.commit(P.program_digest(program), "weights", weights.tolist())
+    own = G.reads_file(program, query, {"weights": K}, {"weights": reg.root.hex()})
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "registered.json").write_text(json.dumps(own, sort_keys=True))
+    table, refs = G.table(positions)
+    rows, salts, entry = reg.statement(table)
+    member = Member(f"dot{K}-registered", fn, [(xn, V2, 16 * K, [xn]), (wn, V2, 16 * K, [wn])], [(V2, (0,))],
+                    {xn: x, wn: weights[positions]}, held={xn: x},
+                    stage_kw={"tables": {xn: x, wn: np.asarray(rows, dtype=np.uint16)},
+                              "refs": {xn: list(range(n)), wn: refs}, "registered": {wn: entry}, "salts": {wn: salts}})
+    return member, program, query, out / "registered.json"
+
+
 def n2_member(name: str, key: tuple[int, int, int], insts: Sequence, pubs: Sequence[Sequence[int]],
               oks: Sequence[int] | None = None) -> Member:
     """N2's head checks (`n2_zk`'s ``NetworkHeadCheckRows`` around `head_check.unit(L, T, COUNTS)`, ``key``) as one
@@ -483,16 +541,24 @@ def main(argv=None) -> int:
     s.add_argument("--n", type=int, default=4)
     s.add_argument("--ks", default="128,256")
     s.add_argument("--negatives", action="store_true")
+    s.add_argument("--registered", action="store_true",
+                   help="the registered-weights stand-in (one member at the first K) in place of the population one")
     a = ap.parse_args(argv)
     tools = Tools(a.bin, a.lean, a.firewall)
-    members = standin(a.n, [int(x) for x in a.ks.split(",")])
     a.out.mkdir(parents=True, exist_ok=True)
-    honest = prove_units(members, "lean", None, tools=tools, out=a.out / "honest")
+    ks = [int(x) for x in a.ks.split(",")]
+    program = query = reg = None
+    if a.registered:
+        m, program, query, reg = registered_standin(a.n, ks[0], a.out / "verifier")
+        members = [m]
+    else:
+        members = standin(a.n, ks)
+    honest = prove_units(members, "lean", reg, tools=tools, out=a.out / "honest", program=program, query=query)
     summary = {"honest": {x: honest.get(x) for x in ("accepted", "audit", "members", "verdicts", "registration", "seconds",
                                                     "firewall")}}
     ok = bool(honest.get("accepted"))
     if a.negatives:
-        neg = negatives(members, "lean", None, tools, a.out / "negatives", honest)
+        neg = negatives(members, "lean", reg, tools, a.out / "negatives", honest, program, query)
         summary["negatives"] = neg
         ok &= all(r["refused"] for r in neg.values())
     summary["ok"] = ok
