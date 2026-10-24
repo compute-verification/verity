@@ -11,6 +11,10 @@ STEPS=${STEPS:-150}
 LR=${LR:-1e-6}
 # vLLM's warmup samples top-k/top-p through flashinfer, which JIT-builds with ninja and nvcc; neither is on PATH here.
 export PATH="$(dirname "$V"):$PATH" VLLM_USE_FLASHINFER_SAMPLER=0
+# TRL's default vLLM IS correction (sequence_mask) drops every sequence whose summed trainer/vLLM log-ratio leaves [0, 3]:
+# with emulated low-precision GEMMs in the trainer and bf16 rollouts, the per-token gap (fp8 0.044, nvfp4 0.21 vs bf16
+# 0.008) masks nearly all of them (nvfp4's grad norm 3e-9). Token-level truncation (clip at 3) keeps every token.
+EXTRA=${EXTRA:-'{"vllm_importance_sampling_mode": "token_truncate"}'}
 CK=/workspace/jobs/tvi/ckpt/prec/$RESEARCH_RUN_ID
 # seconds an item needs: setup and the eval (~6 min) plus STEPS at the recipe's s/step measured on n2 (emulation is slow)
 need_s() {
@@ -41,7 +45,7 @@ for item in $ARMS; do
     *)
       r=${item%:*}; s=${item#*:}; n=${r}_s$s; d=$CK/$n
       "$V" $S/grpo_train.py --model "$M" --steps "$STEPS" --adapter full --precision "$r" --seed "$s" --lr "$LR" \
-        --save-dir "$d" --out "$OUT/$n" > "$OUT/$n.log" 2>&1
+        --extra "$EXTRA" --save-dir "$d" --out "$OUT/$n" > "$OUT/$n.log" 2>&1
       rc=$?
       echo "$n train rc=$rc $(grep -o '"steps_per_s": [0-9.]*' "$OUT/$n/metrics.json" 2>/dev/null)"
       [ $rc -eq 0 ] && evalm "$d" "$OUT/$n/eval" ;;
