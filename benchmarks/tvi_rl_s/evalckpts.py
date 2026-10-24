@@ -51,7 +51,7 @@ def main():
             continue
         ckpts.append((d, meta))
     jobs = [(None, {"task": t + args.variant, "method": "base", "seed": 0, "step": 0, "S_bits": 0, "n_params": 0})
-            for t in args.base.split(",") if t] + ckpts
+            for t in args.base.replace("+", ",").split(",") if t] + ckpts
     print(f"{len(jobs)} evaluations", flush=True)
     tok = AutoTokenizer.from_pretrained(args.model)
     llm = LLM(model=args.model, dtype="bfloat16", gpu_memory_utilization=0.6, max_model_len=2560, enable_prefix_caching=True,
