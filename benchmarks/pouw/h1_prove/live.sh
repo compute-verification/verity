@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
 # A served H1 window's live units (VLLM-85's live@<s>) through sampled proofs: each round's statement proved by C-Flock --zk
 # and verified by the Lean verifier against the verifier's own live Program, partition and registered reads (live.py's
-# docstring has the checks). On the node that holds the window's dump (`pouw_h1_gpu --commit --live-dump DIR`):
-#   research run --on vy-nebius-1 --project verity --campaign pouw --source . --cwd source --mem-gb 160 --cpus 32 \
+# docstring has the checks). On a node that holds the window's dump (or reads it, --send) (`pouw_h1_gpu --commit --live-dump DIR`):
+#   research run --on vy-nebius-cpu-5 --project verity --campaign pouw --source . --cwd source --mem-gb 128 \
 #     --declared-output 'out/*' --env H1_LIVE=/workspace/research/runs/RUN/prover -- bash benchmarks/pouw/h1_prove/live.sh
 #   1. hidden_zk/job.sh's builds (flock-circuit, the Lean flock-verify, a venv)
 #   2. per window under H1_LIVE (each directory holding a window.json): live.py prepare (the verifier's files, the
 #      openings checked, each round staged), one loopback --zk session per S line of its plan, each prover under the
 #      firewall unless H1_FIREWALL=0, the Lean check of each C line, and live.py summarize: out/<window>/live-summary.json
-# env: H1_LIVE (a dump DIR, or one window's)  H1_MEM_GB (160, the job's --mem-gb)  H1_PAR (sessions and Lean checks at a
-#      time; H1_MEM_GB / 40)  H1_FIREWALL (1)  HZ_CACHE: hidden_zk's
+# env: H1_LIVE (a dump DIR, or one window's, or a .tgz of either: --send it, then H1_LIVE=inputs/NAME.tgz; relative: the
+#      run dir's)  H1_MEM_GB (128, the job's --mem-gb)  H1_PAR (sessions and Lean checks at a
+#      time; H1_MEM_GB / 60)  H1_FIREWALL (1)  HZ_CACHE: hidden_zk's
 set -uo pipefail
-export HZ_CONFIGS=live HZ_MEM_GB=${H1_MEM_GB:-160} HZ_RUNS=${HZ_RUNS:-1} HZ_WARM=${HZ_WARM:-0}
+export HZ_CONFIGS=live HZ_MEM_GB=${H1_MEM_GB:-128} HZ_RUNS=${HZ_RUNS:-1} HZ_WARM=${HZ_WARM:-0}
 export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
 # shellcheck source=../hidden_zk/job.sh
 . benchmarks/pouw/hidden_zk/job.sh
@@ -19,6 +20,7 @@ export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm
 H=$SRC/benchmarks/pouw/h1_prove
 LIVE=${H1_LIVE:?}
 case $LIVE in /*) ;; *) LIVE=$RESEARCH_RUN_DIR/$LIVE ;; esac
+[ -f "$LIVE" ] && { mkdir -p "$W/live" && tar -xzf "$LIVE" -C "$W/live" && LIVE=$W/live; }
 setup
 FW=${H1_FIREWALL:-1}
 if [ "$FW" = 1 ]; then
@@ -44,9 +46,9 @@ for L in "${WINDOWS[@]}"; do
     export FC_FIREWALL_HELLO_ARGS="--partition $WK/verifier/partition.json --program $WK/verifier/program.json"
     vlimit() { :; }   # the firewall's Lean children can't start their threads under `ulimit -v` (job.sh)
   fi
-  # each statement is one instance of a few thousand ANDs, padded to k_log 26 by --zk: a session peaks near 20 GB and
-  # takes 10 to 20 min on 32 CPUs, so they run PAR at a time (each serve and prove under the run's cgroup alone)
-  PAR=${H1_PAR:-$(( MEM_GB / 40 ))}; [ "$PAR" -lt 1 ] && PAR=1
+  # each statement is one instance of a few thousand ANDs, padded to k_log 26 by --zk: a session (serve, prove and the
+  # firewall's Lean) peaks near 55 GB and takes about 20 min on 32 CPUs, so they run PAR at a time under the run's cgroup
+  PAR=${H1_PAR:-$(( MEM_GB / 60 ))}; [ "$PAR" -lt 1 ] && PAR=1
   log "live $name: prove, $PAR sessions at a time"
   while IFS=$'\t' read -r kind tag D n; do
     [ "$kind" = S ] || continue
