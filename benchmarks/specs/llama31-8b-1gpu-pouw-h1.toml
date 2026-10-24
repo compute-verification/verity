@@ -14,13 +14,13 @@ id = "llama31-8b-1gpu-pouw-h1"
 # (`pouw_h1.IN_PROCESS`): this row measures cost only. Each served call commits its A table and its z/y records' table
 # inside the forward; no receipts are computed (that is a listener's, kernels' dither arm). The arm's own gate: every
 # window static (each call inside its S steps and T rows, in order), the credit gate passing every served call, every
-# request entered. One rep: a b32 run is about 290 steps of commitments.
+# request entered. Three reps, for an interval: a b32 window is about 290 steps of commitments, five a point.
 #
 # At T = 64 every quick prompt is chunked: int8_exact's attention takes each chunk as the last rows of its window (#3387),
 # one batched call per layer step over the step's requests (`verity_vllm.engine.int8_ops.paged_attention`).
 arms = ["stock-int8", "pouw:eps1-sm120-h1fx1"]
 sweep = "quick"
-reps = 1
+reps = 3
 eager = true
 setup = "benchmarks/harness/setup/int8_pin.sh"
 
