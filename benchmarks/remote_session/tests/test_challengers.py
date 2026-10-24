@@ -20,6 +20,8 @@ import shlex
 import sys
 import threading
 from datetime import datetime, timezone
+from fractions import Fraction
+from functools import lru_cache
 from pathlib import Path
 
 import pytest
@@ -37,6 +39,8 @@ import verifier  # noqa: E402
 import wire  # noqa: E402
 from test_remote_bandwidth import SCHEDULE, drive, finish, params, store  # noqa: E402,F401
 from test_session import run as run_sessions  # noqa: E402
+from verity.core.protocols.certifier import certificate as cert  # noqa: E402
+from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Record, fill  # noqa: E402
 from verity.core.protocols.remote_bandwidth import coins  # noqa: E402
 from verity.core.protocols.sampled_proofs.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
@@ -323,18 +327,19 @@ def gate_run(host: Host, out: Path, plan: str, defer_openings: bool,
 def analysed(out: Path, host: Host, sessions: list[dict], reg: dict, desc: bytes, *, verdict: str = "lean",
              pins: list[str] | None = PINS, main: list[str] | None = MAIN, bound: dict | None = MODEL,
              model: dict | None = MODEL, peer: str | None = None, lean: dict | None = None,
-             commit: str = VERIFIER, line_by: al.lv.Lean | None = None) -> dict:
+             commit: str = VERIFIER, line_by: al.lv.Lean | None = None, boundary: dict | None = None) -> dict:
     """`auditor_line`'s analysis of the run, its verifier.json recording a binding of the store to `bound` (none if
     None), the Lean's `hold` answering `lean` (by default bound at the registration's root), the line held to `model`
-    (`--model-pin`'s), `peer` its --peer (None: the record's), `commit` the commit its verifier ran at, and each line
-    computed by the Lean verifier `line_by` (None: line.py alone)."""
+    (`--model-pin`'s), `peer` its --peer (None: the record's), `commit` the commit its verifier ran at, each line
+    computed by the Lean verifier `line_by` (None: line.py alone), and its credit held to the certifiers' records
+    `boundary` (`read_boundary`'s; None: not checked)."""
     held = {"regions": [], "expected_root": reg["payload_root"]} if lean is None else lean
     binding = {} if bound is None else {"binding": {**bound, "payload_root": reg["payload_root"],
                                                     "expected_root": reg["payload_root"], "bound": True, "lean": held}}
     (out / "verifier.json").write_text(json.dumps(
         {"registration": reg, "sessions": [{**s, "verdict": verdict} for s in sessions]} | binding))
     return al.analyse(out, host_bytes=1 << 30, pin=host.pin, period="p-1", heads=[host.host.ledger], desc=desc,
-                      commit=commit, pins=pins, main=main, model=model, peer=peer, lean=line_by)
+                      commit=commit, pins=pins, main=main, model=model, peer=peer, lean=line_by, boundary=boundary)
 
 
 def test_the_line_reads_the_sketch_at_its_outside_factor() -> None:
@@ -407,6 +412,13 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
                           for x in ("time", "filler_time"))
         assert (f"| 0 | {t} | yes | yes | yes | yes | yes | credited: weights {shares}, filler {filler} |"
                 in al.table(doc).splitlines())
+        assert honest["error"] == al.session_error(sessions[0], reg) and "error" not in dropper
+        assert doc["line"][t]["error"] == doc["credit"]["error"] == al.union_error([honest])
+        assert next(x for x in al.table(doc).splitlines() if x.startswith(f"line {t}:")).endswith(
+            "): δ + δs summed over the credited sessions")
+        assert doc["conditional_on"] == al.CONDITIONAL_ON and list(doc["conditional_on"]) == ["NoOutsideCompute"]
+        assert doc["boundary"] == {"checked": False, "reason": "off by default (--boundary)"}
+        assert f"conditional on NoOutsideCompute: {al.CONDITIONAL_ON['NoOutsideCompute']}" in al.table(doc).splitlines()
         by = al.lv.Lean(al.lv.build(), lambda _: None)
         try:
             assert doc["line_by"] == "python" and analysed(out, host, sessions, reg, desc, line_by=by) == {
@@ -421,7 +433,7 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
                             r"incomplete\)", dropper["credit"]["complete"]["reason"])
         assert doc["line"][t][al.line.TIME_HELD] == {**dict.fromkeys(al.SHARES, 0.0),
                                                      "exact": dict.fromkeys(al.SHARES, "0")}
-        assert doc["line"][t]["credited_sessions"] == []
+        assert doc["line"][t]["credited_sessions"] == [] and doc["line"][t]["error"]["sessions"] == []
         assert doc["credit"]["summary"].startswith("the line credits zero: no session is credited, complete, accepted, "
                                                    "pinned and bound; session 0: not complete: period p-1 closed "
                                                    "incomplete")
@@ -587,6 +599,104 @@ def test_a_session_earns_credit_only_under_the_commit_its_verifier_ran_at_on_mai
         analysed(out, host, sessions, reg, desc, commit=VERIFIER)
 
 
+BOUNDARY_GRID = GridParams(buckets=4, allocation=2, frame_bytes=64)
+#: the boundary certifiers' session
+CERTIFIER_SESSION = bytes(range(32))
+#: the verifier's messages over the session as the boundary links frame them: two frames on the uplink, none on the BMC's
+VERIFIER_FRAMES = {"uplink": [b"\x01" * 64, b"\x02" * 64], "bmc": []}
+
+
+@lru_cache(maxsize=None)
+def certifier_key() -> lms.PrivateKey:
+    return lms.keygen(lms.Params(64, 1, 6), hashlib.sha512(b"boundary certifier").digest())
+
+
+def boundary(d: Path, let_in: dict[str, list[bytes]], *, links: tuple[str, ...] = ("uplink", "bmc"),
+             windows: tuple[tuple[int, int, int], ...] = ((0, 0, 1 << 62),)) -> tuple[Path, str]:
+    """A boundary file in `d` (`auditor_line.read_boundary`'s form) for `links`, whose certifier signed each link's
+    ingress window 0 letting in `let_in`'s frames (a link it doesn't name has no record), its windows `windows`
+    ((window, start_ns, end_ns) on the challenger's clock) and the verifier's frames `VERIFIER_FRAMES`; and its key's
+    pin."""
+    d.mkdir(parents=True)
+    key = certifier_key()
+    issuer = cert.Issuer(cert.LmsSigner.create(key, d / "signer.json"), CERTIFIER_SESSION, coins=lambda n: b"\x07" * n)
+    T, r = BOUNDARY_GRID.buckets, BOUNDARY_GRID.allocation
+    records = [issuer.certify(Record(link, 0, fill(frames, [max(0, min(r, len(frames) - r * t)) for t in range(T)], r),
+                                     COMPLETE), cert.Direction.INGRESS, BOUNDARY_GRID,
+                              cert.parameters_digest(BOUNDARY_GRID)) for link, frames in let_in.items()]
+    public = lms.public_key(key)
+    (d / "boundary.json").write_text(json.dumps({
+        "links": list(links), "key": {"N": 64, "W": 1, "H": 6, "public": public.hex()},
+        "session": CERTIFIER_SESSION.hex(), "grid": {"buckets": T, "allocation": r, "frame_bytes": 64},
+        "windows": [{"window": w, "start_ns": s, "end_ns": e} for w, s, e in windows],
+        "verifier_frames": {link: {"0": [f.hex() for f in fs]} for link, fs in VERIFIER_FRAMES.items()},
+        "records": [al.certified_record_json(x) for x in records]}))
+    return d / "boundary.json", hashlib.sha512(public).hexdigest()
+
+
+def test_a_session_earns_no_credit_when_its_boundarys_certifiers_show_ingress_beside_the_verifiers_messages(
+        host, tmp_path, monkeypatch):
+    """`--boundary` (off by default): an honest session, credited without it, keeps its credit when the network
+    certifiers' signed ingress records of the gate node's boundary links over its credited span let in exactly the
+    verifier's messages, and earns none, with the reason, when they show more: a frame on a link the verifier sent
+    nothing on (a relay's helper talking to the node), frames as many as the verifier's but not its own (their root), a
+    boundary link with no record, or windows that leave the span uncovered. Either way the line stays conditional on
+    `NoOutsideCompute`. A file whose certifier key isn't the pinned one is refused."""
+    host.seal(monkeypatch, PINS)
+    out = tmp_path / "run"
+    sessions, reg, desc = gate_run(host, out, "honest", defer_openings=True)
+    rc, closed = host.call(["period-close", "--name", "p-1"])
+    assert rc == 0 and json.loads(closed)["body"]["complete"] is True, closed
+
+    def held(name: str, let_in: dict[str, list[bytes]], **kw) -> dict:
+        return analysed(out, host, sessions, reg, desc, boundary=al.read_boundary(*boundary(tmp_path / name, let_in,
+                                                                                           **kw)))
+
+    doc = held("exact", VERIFIER_FRAMES)
+    (s,) = doc["sessions"]
+    assert s["credit"]["ok"] and doc["credit"]["credited_sessions"] == [0]
+    assert s["credit"]["boundary"]["ok"] and s["credit"]["boundary"]["windows"] == [0]
+    assert doc["boundary"]["checked"] and doc["boundary"]["links"] == ["uplink", "bmc"]
+    assert doc["conditional_on"] == al.CONDITIONAL_ON
+    assert any(x.startswith(f"| 0 | {s['T']} | yes | yes | yes | yes | yes | yes | credited: ")
+               for x in al.table(doc).splitlines())
+    relay = b"\x09" * 64
+    for name, let_in, kw, why in (
+            ("helper", {**VERIFIER_FRAMES, "bmc": [relay]}, {},
+             "bmc's ingress window 0 let in 1 frames, the verifier's messages 0"),
+            ("swapped", {**VERIFIER_FRAMES, "uplink": [b"\x01" * 64, relay]}, {},
+             "uplink's ingress window 0 let in frames other than the verifier's messages (its root is not theirs)"),
+            ("unrecorded", VERIFIER_FRAMES, {"links": ("uplink", "bmc", "nvlink")},
+             "nvlink's ingress window 0 has no record to read (no-verdict)"),
+            ("uncovered", VERIFIER_FRAMES, {"windows": ((0, 0, 1),)}, None)):
+        doc = held(name, let_in, **kw)
+        (s,) = doc["sessions"]
+        got = s["credit"]["boundary"]["reason"]
+        if why is None:
+            assert re.fullmatch(r"the certifiers' windows cover its span \[(\d+), (\d+)\] ns only to \1", got), got
+        else:
+            assert got == why
+        assert s["credit"]["zero"] == [f"not boundary: {got}"] and doc["credit"]["credited_sessions"] == []
+        assert doc["conditional_on"] == al.CONDITIONAL_ON
+    path, _ = boundary(tmp_path / "pinned", VERIFIER_FRAMES)
+    with pytest.raises(SystemExit, match="not the one --boundary-pin names"):
+        al.read_boundary(path, "00" * 64)
+
+
+def test_the_boundary_check_needs_the_certifiers_windows_that_meet_the_span_to_cover_it():
+    """A credited span from σ_0's release at 100 ns to the last root's arrival at 250 ns is covered by windows
+    [0, 120) and [120, 251), whatever lies beyond it, and not with a gap at 120 or a last window ending at 250."""
+    seen = [{"released_ns": 100, "arrivals_ns": [150]}, {"released_ns": 160, "arrivals_ns": [250]}]
+
+    def check(*windows: tuple[int, int, int]) -> dict:
+        return al.boundary_check({"links": [], "windows": list(windows)}, seen)
+
+    got = check((0, 0, 120), (1, 120, 251), (7, 400, 500))
+    assert got["ok"] and got["windows"] == [0, 1] and got["span_ns"] == [100, 250]
+    assert check((0, 0, 120), (1, 121, 300))["reason"] == "the certifiers' windows cover its span [100, 250] ns only to 120"
+    assert check((0, 0, 250))["reason"] == "the certifiers' windows cover its span [100, 250] ns only to 250"
+
+
 def test_the_clock_rate_beside_the_line_doesnt_read_the_first_coins_round_trip():
     """Coins 110 ms apart on a challenger clock 30 ppm fast, σ_0 and σ_1 stamped a 100 ms round trip before the
     challenger released them and every later coin 50 ms after: the cross-check's rate reads 30 ppm, where the ratio end
@@ -597,3 +707,36 @@ def test_the_clock_rate_beside_the_line_doesnt_read_the_first_coins_round_trip()
     assert al.clock_rate_ppm(Rv, Ra) == pytest.approx(30, abs=0.01)
     assert ((Ra[-1] - Ra[0]) / (Rv[-1] - Rv[0]) - 1) * 1e6 < -14_000
     assert al.clock_rate_ppm(Rv[:3], Ra[:3]) is None
+
+
+def test_the_line_records_delta_the_sketchs_delta_and_their_sum_over_its_credited_sessions():
+    """Each accepted paced session's error is the pooled bound's δ (its record's float, exactly) plus the sketch's δs
+    (`timing.sketch_failure` of the compressions the verifier charged over the record's passes, rows and store blocks,
+    as `ledger.sketch` reads it, and 0 for a block-sha512 record), exactly; the line at each T, and over every T, fails
+    with at most the sum over its credited sessions, and a T that credits none has error 0."""
+    def session(delta: float, compressions: int) -> dict:
+        return {"record": {"public": {"blocks": 1 << 20},
+                           "profile": {"windows": [{"lengths": [8], "profile": {"delta": delta,
+                                                                                "drawn": {"receipt": 2}}}]}},
+                "ledger": {"inputs": {"passes": 700, "rows": 16}, "sketch_failure": {"compressions": compressions}}}
+
+    sketch = {"receipt": al.receipts.SKETCH_SHA512}
+    ds = al.timing.sketch_failure(10 ** 12, 700, 16, blocks=1 << 20)
+    assert ds > al.timing.sketch_failure(10 ** 12, 700, 16)
+    a, b = al.session_error(session(2.0 ** -40, 10 ** 12), sketch), al.session_error(session(2.0 ** -30, 0), sketch)
+    total = Fraction(1, 2 ** 40) + ds
+    assert a["exact"] == {"delta": "1/1099511627776", "delta_sketch": str(ds), "total": str(total)}
+    assert a["total"] == float(total) and a["log2_total"] == al.timing.log2(total)
+    blocks = al.session_error(session(2.0 ** -40, 10 ** 12), {"receipt": al.receipts.BLOCK_SHA512})
+    assert blocks["exact"] == {"delta": "1/1099511627776", "delta_sketch": "0", "total": "1/1099511627776"}
+    held = {f: {**dict.fromkeys(al.SHARES, 0.5), "exact": dict.fromkeys(al.SHARES, "1/2")} for f in al.line.FORMS}
+
+    def row(k: int, t: str, ok: bool, error: dict) -> dict:
+        return {"k": k, "T": t, "shares_auditor_clock": held, "error": error,
+                "credit": {"ok": ok, "zero": [] if ok else ["not accepted: the Lean refused it (receipt)"]}}
+
+    out, credit = al.credited_line([row(0, "T=1s", True, a), row(1, "T=1s", True, b), row(2, "T=60s", False, a)])
+    both = total + Fraction(1, 2 ** 30) + al.timing.sketch_failure(0, 700, 16, blocks=1 << 20)
+    assert out["T=1s"]["error"] == credit["error"] == {"sessions": [0, 1], "total": float(both), "exact": str(both),
+                                                       "log2": al.timing.log2(both)}
+    assert out["T=60s"]["error"] == {"sessions": [], "total": 0.0, "exact": "0", "log2": None}

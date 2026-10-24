@@ -65,7 +65,13 @@ codec than the record's, or a bare fraction. The stated ceiling is the node's, t
 0.065% under the default codec, 0.097% at k = 2 and 0.31% under p512/k2 (`timing.SQUARINGS_PER_S`,
 `timing.READ_BYTES_PER_S`). The failure probability is \(W\delta\) for a session of \(W\) windows read per window, or
 \(\delta\) read over the horizon, plus \(2^{-\text{slack}}\) per pass, plus \(s/2^{512}\) per window for guessing a
-receipt. Under the default receipt kind, sketch-sha512, a receipt also rests on the receipts' sketch (`SketchBound`,
+receipt, plus the deployed draw's terms beyond \(\delta\) (`ledger.draw`, `PooledDraw`'s): \(\sum_t s'_t/2^{64}\) for
+a rejected first word (`ledger.rejection`), the coin commitment's hiding terms (\(n \cdot 2^{-191}\) over \(n\)
+windows), and the receipts' binding term, \(\sum_t \sqrt{U_t s'_t} \cdot q_t/2^{256.5}\) under `cr/sha-512` for
+window \(t\)'s fork finder of \(q_t = 2FC + 2 \cdot 69 \, s'_t\) SHA-512 calls, which runs the prover twice from the
+window's roots (`ledger.binding`). The windows' PRF advantages are the draw's fourth term: named with their claim
+(`prf/sha-512`, `ledger.PRF_CLAIM`), with no value. The memory line's \(\delta\) carries the hiding and binding terms
+beside its \(2^{-\text{slack}}\) a pass. Under the default receipt kind, sketch-sha512, a receipt also rests on the receipts' sketch (`SketchBound`,
 derived by `Accounting.Guarantees.Remote.SketchBoundDeployed`), which adds at most \(Q \cdot 2^{-95.12}\) a session
 at 16 rows for a prover of \(Q = F \cdot C\) SHA-512 compressions, \(C\) the node's own over the span and \(F\) the
 outside-compute factor (\(2^{20}\), provisional), and \((Q + P) N \cdot 2^{-512}\) for a receipt right without its
@@ -934,6 +940,17 @@ its structure, its outputs, the verifier's coins and draws, and hiding commitmen
   link-charged, one link window as well), and its on-chip storage \(S_{\text{chip}}\). δ is the horizon's error plus
   the sketch's (`timing.sketch_failure`).
 
+  Every form, the link-charged one included, is conditional on `NoOutsideCompute`, statement C in full: no device
+  outside the node computes on a registered block or a receipt during the session. Identity is only its links clause:
+  a relay prover, a thin node forwarding each coin to a helper that holds the store and computes the receipts, sends no
+  block over the links, so neither Identity nor the links' charge sees it, and only C excludes it. The line's statement
+  takes C as a premise (`LineHeld`, `LineHeldIdentity`, beside `SketchBoundAt`, the receipts' sketch wherever
+  computed), and the line of record says it is conditional on it (`auditor_line.json`'s
+  `conditional_on`, `credit.md`; the `memory-line-of-record` label requires the field) until certifiers cover the gate
+  node's boundary (`certifier-coverage`) and certify that nothing but the verifier's messages entered the node over the
+  credited span. `auditor_line.py --boundary`, off by default, refuses a session's credit when the certifiers' records
+  of the boundary links over its span show other ingress.
+
 \(R\), \(S_{\text{chip}}\), the squaring ceiling, the disks' and links' ceilings and the bursts are the verifier's: the
 node's stated or measured capacities, protocol structure, never the prover's report (§1).
 
@@ -1232,7 +1249,11 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
   at the coin commitment with leaf \(t\) committing zeros and reads at most \(s_t\) first blocks of the stream it
   is given), plus the commitment's hiding terms, hm96's, at most \(n \cdot 2^{-191}\) over \(n\) windows
   (`Committed.hide`, `ledger.hiding`): the prover holds the root of every coin from the start, so a window is
-  fixed before its coin only once that root is (`Live` of `Committed.view`).
+  fixed before its coin only once that root is (`Live` of `Committed.view`). Plus the receipts' binding term
+  (`Receipts.binding`, `ledger.binding`): `Refused` lets an opened receipt through only correct or moved off the row
+  its root holds, and a move is two accepted openings of one root and rank with different rows, a SHA-512 collision
+  among their checks (`Hash.Guarantees.RowBinding`, proved), charged under `cr/sha-512` through the fork form (a
+  forking step on paper, not yet in Lean).
   `pooled` is computed in exact rationals in the verifier's Lean
   (`lean/RemoteAudit/Pooled.lean`, `pooled.py` held to it by a difftest), the budget \(\bar d \cdot S\) from above by a
   certified rational root, and `Properties.RemoteAudit.PooledCovers` proves its W at least the bound `PooledDraw`
