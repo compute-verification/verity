@@ -1,0 +1,7 @@
+# The advice's encodings (network accounting for arbitrary vLLM usage): `code.py`, the codes and their decoders,
+# `synth.py`, synthetic serving traces in I1 v0's form, and `measure.py`, bits per window on a corpus. Not a package:
+# the modules load by path (the directory's name shadows the stdlib's `encodings`, and `code.py` the stdlib's `code`),
+# and they run here as a suite (`uv run tools/verity/check/suites.py benchmarks/network_e2e/encodings`). Stdlib only.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
