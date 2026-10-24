@@ -40,7 +40,8 @@ stood on; `stubs` lists what is still a stand-in.
 * **The I/O tie on the runs** (`tie`, on the advice profile, where NEG's registry doesn't run): NEG's `tie_run` on each
   run, IO-TIE's reference in the clear on its stand-ins (each window's certified frames held to their head, the sampled
   ids as the Commit's port), with each run's ids from the endpoint's records (`served_ids`, the requests that arrived in
-  its link-windows) or ``--ids``, which must cover each run's certified requests (`uncovered`). Honest owes acceptance,
+  its link-windows) or ``--ids``, which must give each run's certified requests an id for each output they served
+  (`uncovered`). Honest owes acceptance,
   and token, whose certified ids aren't the endpoint's, a refusal by content at exactly the link-windows its changed ids
   fall in (`changed_windows`). The tie is required on the advice profile (`tie_gate`): the report isn't OK when it
   didn't run, gave the honest run no verdict or didn't accept it, or when a part it must establish there
@@ -589,17 +590,26 @@ def changed_windows(run: Path) -> list[int] | None:
 
 
 def uncovered(run: Path, ids: dict[str, list[int]]) -> str | None:
-    """Why ``ids`` don't cover the run's certified requests (the users of its ``io.json``, which the rehearsal's check
-    writes on the advice profile), or None when every one has its sampled ids. `negatives.tie_run` gives a request with
-    no ids no rows of the Commit's port, so a tie over ids that miss the run's requests ties none of their outputs."""
+    """Why ``ids`` don't cover the run's certified requests (its ``io.json``, which the rehearsal's check writes on the
+    advice profile: each request's user and served ``output``), or None when every one has a sampled id for each of
+    its served outputs. `negatives.tie_run` gives each sampled id one row of the Commit's port and has no backstop for
+    a served output with none (its unplaced count is committed outputs no cell carries), so ids that miss a request,
+    or name it with fewer ids than it served, leave those outputs untied (REDTEAM phase 14)."""
     io = _read_json(run / "io.json")
     if not isinstance(io, dict) or not isinstance(io.get("requests"), list):
         return "no certified I/O (io.json) to hold the sampled ids to"
-    users = [r.get("user") for r in io["requests"]]
-    if not users:
+    reqs = io["requests"]
+    if not reqs:
         return "no certified request in its io.json to tie"
-    lacking = sum(u not in ids for u in users)
-    return f"no sampled ids for {lacking} of its {len(users)} certified requests" if lacking else None
+    if not all(isinstance(r, dict) and isinstance(r.get("output"), list) for r in reqs):
+        return "a certified request in its io.json without its served outputs to hold the sampled ids to"
+    missing = sum(r.get("user") not in ids for r in reqs)
+    short = [(len(ids[r["user"]]), len(r["output"])) for r in reqs
+             if r.get("user") in ids and len(ids[r["user"]]) < len(r["output"])]
+    why = [f"no sampled ids for {missing}"] * bool(missing) + \
+        [f"fewer sampled ids than served outputs for {len(short)}"] * bool(short)
+    return None if not why else f"{' and '.join(why)} of its {len(reqs)} certified requests" + (
+        f" ({sum(n for n, _ in short)} sampled, {sum(m for _, m in short)} served)" if short else "")
 
 
 def tie(runs: dict[str, Path], ep: Path | None, ids: Path | None, why: str | None = None) -> dict:

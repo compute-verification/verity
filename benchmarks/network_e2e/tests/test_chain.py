@@ -655,14 +655,15 @@ def test_on_the_advice_profile_the_ties_verdict_refuses_token_where_it_changed_i
     NG = chain.NG
     runs = _varied(tmp_path / "varied", virtual, {"honest": "accepted", "late": "refused", "extra": "refused",
                                                   "drop": "refused", "token": "accepted"})
-    (tmp_path / "ids.jsonl").write_text("".join(json.dumps({"user": u, "output_ids": [5]}) + "\n" for u in ("q0", "q1")))
+    (tmp_path / "ids.jsonl").write_text("".join(json.dumps({"user": x["user"], "output_ids": x["output"]}) + "\n"
+                                                for x in _io()))
     ties, seen = _ties(), []
     monkeypatch.setattr(NG, "io_tie_module", lambda: object())
     monkeypatch.setattr(NG, "tie_run", lambda run, ids: seen.append(ids) or ties[run.name])
     monkeypatch.setattr(chain, "changed_windows", lambda run: [1] if run.name == "token" else None)
     r = e2e.run(_args(runs, tmp_path / "out", ids=str(tmp_path / "ids.jsonl")), [], clock=lambda: 0.0)
     assert r["ok"] is True, r["why_not"]
-    assert seen == [{"q0": [5], "q1": [5]}] * 5 and r["pending"] == {}
+    assert seen == [{"q0": [5, 6], "q1": [9]}] * 5 and r["pending"] == {}
     assert "the I/O tie (IO-TIE's reference in the clear, on stand-ins)" in r["ran"]
     token, drop = r["negatives"]["token"], r["negatives"]["drop"]
     assert token["refused"] is True and token["by"] == [
