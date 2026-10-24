@@ -48,6 +48,8 @@ The plan's target (G-A) is one command from serving to the Lean verdict: serve, 
 Lean, with the advice's bits per link-window. `chain.py` holds the stages after N2 and the proofs, each on what exists now:
 
 ~~~text
+verity bench network_e2e --endpoint-peer NAME:PORT --endpoint-run SERVE_DIR --traffic varied --out DIR \
+  --strategies honest,late,extra,drop,token --prove-path PROVE_PATH_OUT
 verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic varied --out DIR \
   --strategies honest,late,extra,drop,token --advice ADVICE --serving-config CONFIG.json --prove-path PROVE_PATH_OUT
 ~~~
@@ -77,12 +79,29 @@ verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic 
   ENC-DERIVED's derived bits, unshaped and shaped, and the residual must rebuild the whole advice (`bits.rebuilt`). Where an advice is given, the OK needs both to be true. The serving config is the one the job
   was given, not one the endpoint registered, so the derived bits and the residual's own check under it
   (`public_fields`) stay out of the OK.
+- `--endpoint-run SERVE_DIR`: the endpoint's own advice, in place of `--advice`. SERVE_DIR is a `verity-vllm
+  serve-openai` run's `out/serve` on the `--endpoint-peer` node (or a local copy). The endpoint records each request's
+  `user`, which the shim forwards on a varied plan. After the rehearsal its records (`chain.ENDPOINT`: the scheduler
+  trace `advice_trace.jsonl` with each Commit window's open and close, `requests.jsonl`, `windows.jsonl`, `serve.json`)
+  are copied into `DIR/endpoint`. `verity-vllm advice` (vllm's #3619; until it lands, its `verity_vllm` laid over the
+  checkout, as its `research_tools` looks for the workspace above its own file) then writes one I1 v0 advice for each
+  closed Commit window: a public registration naming the window's Commit, with the
+  advice's hiding root, and the advice and its opening under `private/`. The honest run's Commit windows are those
+  whose first step falls in its link-windows. The advice is bound to the run (`bits.bound`) when each of those windows'
+  requests is a certified one, every certified request is in exactly one of them, and each window's opening opens its
+  registered root, with its registration naming the window's Commit. Each window's advice must be rebuilt from its
+  certified I/O (`bits.rebuilt`) under the config read off the endpoint's records. That config is outside the OK, as a
+  given one is. The report lists each Commit window's bits and places them in the run's link-windows from its first
+  step's bucket. The rehearsal opens the advice to the report, where only the registrations are public.
 - `--prove-path DIR`: a `prove_path.py` run's output (PROVE-PATH's `run.sh` `$OUT`, or a tarball of it), adopted. The
   honest arm must pass every rank, and the forged arm must have Lean refuse its unit. The advice each arm committed is
   held to the `--advice` file (`committed_is_the_advice_file`): by the file's SHA-512 where it committed that, and by its
   bits only where it committed a hiding root (from 01ea29e10f on, whose opening is the prover's). That isn't these runs':
   the prove path is `bound` to them only once the file is their advice and the Commit it proves is held to theirs, which
-  no input carries yet (`bound_why`), and only a bound prove path's verdict counts in the OK.
+  no input carries yet (`bound_why`), and only a bound prove path's verdict counts in the OK. Beside the endpoint's own
+  advice there is no file to hold an arm to: its arms prove their own fixed workload, not this run. Each rank's time
+  is reported per drawn unit, its prover's and Lean's seconds over the units its statement proves (PROVE-PATH's
+  `per_unit`, 92e4e50ca5).
 - NEG's registry (`benchmarks/network_traces/negatives.py`'s `suite`) runs on the runs unless `--no-negatives`. Each row
   that ran must be refused by the code it names; the rest say what they wait on. It doesn't run on the advice profile.
   With `--advice` and `--ids FILE` (each request's sampled ids by its advice id, ADVICE-SRC's `requests.jsonl`: `user`,
@@ -91,10 +110,18 @@ verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic 
   part it names and accepts the honest windows. Until IO-TIE lands, those rows say so.
 
 The report's `stubbed` list says what each run still stood on that isn't the chain's own: the advice of another run, a
-given serving config, a prove path of a declared workload, pending negatives, the certifier off the gate. Until the
-committing endpoint and ADVICE-SRC exist, the chain runs on a PROVE-PATH run of a declared workload as its fixture:
-r20261024-060515-0e35 (its CLI from 01ea29e10f on), with `prove_path.py advice --workload out/standin/workload.json` as
-`--advice` and its `out/` as `--prove-path`; before it, r20261024-052710-8932 (GLM-5.3 TP8 B1).
+given serving config, a prove path of a declared workload, pending negatives, the certifier off the gate. Before the
+committing endpoint, the chain ran on a PROVE-PATH run of a declared workload as its fixture: r20261024-060515-0e35
+(its CLI from 01ea29e10f on), with `prove_path.py advice --workload out/standin/workload.json` as `--advice` and its
+`out/` as `--prove-path`; before it, r20261024-052710-8932 (GLM-5.3 TP8 B1).
+
+G-A's run of record on the endpoint's own advice: r20261024-111424-88c9 (d5e3b1055d, vy-nebius-2), the varied chain
+against vllm's Llama-3.2-1B serving run r20261024-094558-6d6a on vy-nebius-1:18083 (40 requests at 0.5/s, max_tokens
+up to 32, EOS 128001, 16 link-windows), report OK. honest accepted (597 tokens, 38 ending at max_tokens and 2 at EOS);
+late, extra and drop refused by their own codes; token accepted (pending IO-TIE). Its advice is 6d6a's Commit windows
+w345-w375: 31 windows, 40 requests, 532 steps, every window opened, bound and rebuilt; 23,972 v0 bits, 4,021 derived
+(2,496 shaped, 334 forced). Its prove path is PROVE-PATH's Llama TP1 fixed workload (r20261024-072909-b53f's honest arm,
+r20261024-090358-218a's forged), labelled as such: 6d6a's Commit windows have no sealed replay bundle yet.
 
 ## Inputs: rehearsals and gate runs
 
@@ -125,6 +152,17 @@ tarball's 21 files matching its `end.json`. Report run r20261024-081948-55d8 (a3
 
 The first three are one report, OK, with the tampered head made from 0c53 refused at window 0, proved; 3c48 is its own
 report (`out/served`), since a report takes one honest run, and is NOT OK only for having no late or extra run.
+
+The same four against vllm's Llama-3.2-1B on vy-nebius-1:18082 (INF-204, pinned to main 11ce5fe77c, 40 requests, 16
+tokens, 11 link-windows), report run r20261024-101818-8c94 (c46c32c2cb, vy-nebius-2), likewise OK, its served report
+likewise NOT OK only for having no late or extra run:
+
+| gate run | strategy | gate | N2 | proved (Lean) |
+|---|---|---|---|---|
+| c20261024T090216Z-e03e | honest, planned | accepted | accepted, 11/11 | both ends, every link-window accepted |
+| c20261024T090349Z-a90a | late | refused | refused at window 0 | not proved (late isn't an `n2_zk` member) |
+| c20261024T090523Z-eb39 | extra | refused | refused at window 0 | egress, refused at window 0 |
+| c20261024T090656Z-0ce6 | honest, served | accepted | accepted, 11/11 | not proved (`NetworkServedCounts_v1`) |
 
 An honest run is required, because the tampered head is made from it. Two runs of the same strategy are refused.
 

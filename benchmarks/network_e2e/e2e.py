@@ -7,10 +7,10 @@ the chain's stages (`chain`): the advice's bits per link-window, the prove path'
 still stubbed.
 
     python benchmarks/network_e2e/e2e.py --from SRC [SRC ...] --out DIR (--bin flock-circuit --lean flock-verify |
-                                         --proofs N2ZK_DIR | --no-prove) [--advice FILE [--serving-config FILE]]
-                                         [--ids FILE] [--prove-path DIR] [--no-negatives]
+                                         --proofs N2ZK_DIR | --no-prove) [--advice FILE [--serving-config FILE] |
+                                         --endpoint-run DIR] [--ids FILE] [--prove-path DIR] [--no-negatives]
     python benchmarks/network_e2e/e2e.py (--upstream URL | --vllm MODEL | --endpoint-peer NAME:PORT) --out DIR [...]
-                                         [certifier_serve.py rehearse's options]
+                                         [--endpoint-run DIR] [certifier_serve.py rehearse's options]
 
 `run.sh` is the runner (`verity bench network_e2e`): it builds the binaries and the firewall's frame as `n2_zk.sh` does,
 then runs this. The README says what the report establishes and what it doesn't.
@@ -44,8 +44,10 @@ then runs this. The README says what the report establishes and what it doesn't.
 * **Varied traffic** (``rehearse --traffic varied``, passed on): N2's profile is ``advice``, on which N2 gives no
   verdict until N2-ADVICE, so nothing is proved and the rehearsal's own check (certified, the certified I/O, audit,
   salt) is each run's verdict, late, extra and drop its negatives (`CLAIM_ADVICE`).
-* **The chain** (`stages_of`, `chain`'s docstring): ``--advice`` and ``--serving-config``, ``--prove-path``, and NEG's
-  registry on the runs; each that ran must pass for the report to be OK, and ``stubbed`` lists what is still a stand-in.
+* **The chain** (`stages_of`, `chain`'s docstring): ``--advice`` and ``--serving-config``, or ``--endpoint-run``, the
+  endpoint's records, whose own advice for the honest run's Commit windows `verity-vllm advice` writes
+  (`endpoint_advice`, `chain.served_advice`), ``--prove-path``, and NEG's registry on the runs; each that ran must pass
+  for the report to be OK, and ``stubbed`` lists what is still a stand-in.
 
 Exit 0 when the honest run is accepted everywhere it was checked, each negative is refused and every chain stage that
 ran passed (`report["ok"]`).
@@ -56,6 +58,7 @@ import argparse
 import json
 import os
 import resource
+import shlex
 import shutil
 import socket
 import subprocess
@@ -65,6 +68,7 @@ import tempfile
 import time
 import urllib.parse
 from fractions import Fraction
+from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -90,6 +94,7 @@ OWN_CODE = {"late": "audit.status:coverage-never-established", "extra": "io:long
             "drop": "io:short of max_tokens without EOS"}
 README = "verity/core/protocols/certifier/README.md"
 PEERS = Path("/etc/vy/peers")
+ADVICE = [sys.executable, "-m", "verity_vllm.pipeline.cli", "advice"]  # vllm's #3619
 GATE_HOST = "vy-challenger-1"
 
 CLAIM = {
@@ -259,14 +264,21 @@ def where(runs: dict[str, dict], peer: str | None = None) -> dict:
             (", the endpoint's own (loopback), so the prover's node, not an auditor host" if local else "")}
 
 
+def _ssh_to(peer: str, peers: Path) -> list[str]:
+    """ssh's arguments to node NAME (``peer``, NAME:PORT), from the nodes' own ssh to each other (``peers``)."""
+    name = peer.rsplit(":", 1)[0]
+    to = next((line.split()[1:] for line in peers.read_text().splitlines() if line.split()[:1] == [name]), None)
+    if not to:
+        raise SystemExit(f"--endpoint-peer {peer}: no {name} in {peers}")
+    return to
+
+
 def forward(peer: str, log_to: Path, peers: Path = PEERS) -> tuple[str, subprocess.Popen]:
     """An ssh forward from a free port on this host's 127.0.0.1 to NAME's 127.0.0.1:PORT (``peer``), through the
     nodes' own ssh to each other (``peers``, as `benchmarks/remote_session/run.sh` opens it), and the upstream URL it
     gives here, once it connects."""
     name, port = peer.rsplit(":", 1)
-    to = next((line.split()[1:] for line in peers.read_text().splitlines() if line.split()[:1] == [name]), None)
-    if not to:
-        raise SystemExit(f"--endpoint-peer {peer}: no {name} in {peers}")
+    to = _ssh_to(peer, peers)
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         here = s.getsockname()[1]
@@ -287,6 +299,55 @@ def forward(peer: str, log_to: Path, peers: Path = PEERS) -> tuple[str, subproce
         raise SystemExit(f"--endpoint-peer {peer}: the forward never listened ({log_to})")
     log(f"endpoint: {name}'s 127.0.0.1:{port} forwarded to 127.0.0.1:{here}")
     return f"http://127.0.0.1:{here}", p
+
+
+def endpoint_records(src: str, peer: str | None, dest: Path, peers: Path = PEERS) -> Path:
+    """The endpoint's records (`chain.ENDPOINT`) copied into ``dest``: from ``src`` on ``peer``'s node through the
+    nodes' own ssh, or from a local ``src``."""
+    dest.mkdir(parents=True, exist_ok=True)
+    if peer is None:
+        if Path(src).resolve() != dest.resolve():
+            for f in chain.ENDPOINT:
+                shutil.copyfile(Path(src) / f, dest / f)
+        return dest
+    p = subprocess.run(["ssh", "-T", "-o", "BatchMode=yes", *_ssh_to(peer, peers),
+                        f"cd {shlex.quote(src)} && tar cf - {' '.join(chain.ENDPOINT)}"], capture_output=True, check=False)
+    if p.returncode:
+        raise OSError(f"ssh to {peer.rsplit(':', 1)[0]} exited {p.returncode}: {p.stderr.decode()[-400:]}")
+    with tarfile.open(fileobj=BytesIO(p.stdout)) as tar:
+        tar.extractall(dest, filter="data")
+    return dest
+
+
+def endpoint_advice(ep: Path | None, why: str | None, honest: Path, plan: dict) -> tuple[dict | None, dict]:
+    """The endpoint's own advice for the honest run: `verity-vllm advice` (`ADVICE`, one advice a closed Commit
+    window) over its records ``ep`` into ``ep/advice`` at the
+    certifier's bucket, unless an index is there, then `chain.served_advice` on the honest run's certified I/O. Without
+    the records or the advice (``why``, or the command's own failure) the advice is not these runs'."""
+    T, dep = chain.window_buckets(honest), _read(honest / "deployment.json")
+    io_ = (_read(honest / "io.json") or {}).get("requests")
+    eos = (plan.get("varied") or {}).get("eos_token_ids")
+
+    def none(why: str) -> tuple[None, dict]:
+        return None, {"T": T, "served": None, "config": None, "bound": False, "bound_why": why, "public_fields": None,
+                      "rebuilt": None, "why": None, "v0_total": 0, "commit_windows": [], "windows": []}
+
+    if ep is None:
+        return none(f"no endpoint records: {why}")
+    if io_ is None or dep is None or not eos:
+        return none("the honest run has no certified I/O, deployment or EOS ids (only a varied run's check writes them)")
+    adv = ep / "advice"
+    if not (adv / "windows.json").exists():
+        p = subprocess.run([*ADVICE, str(ep), "--out", str(adv), "--tau", repr(dep["window_s"] / T)],
+                           capture_output=True, text=True, check=False)
+        (ep / "advice.log").write_text(p.stdout + p.stderr)
+        log(f"endpoint advice: verity-vllm advice exited {p.returncode} ({ep / 'advice.log'})")
+        if not (adv / "windows.json").exists():
+            return none(f"verity-vllm advice made no index (exit {p.returncode}: {(p.stdout + p.stderr)[-300:].strip()})")
+    try:
+        return chain.served_advice(ep, adv, dep, io_, T, eos)
+    except (OSError, KeyError, ValueError) as err:
+        return none(f"the endpoint's advice: {err!r}")
 
 
 def rehearse(args, rest: list[str], out: Path) -> Path:
@@ -665,11 +726,17 @@ def markdown(r: dict) -> str:
 
 def stages_of(runs: dict[str, dict], plan: dict, args, work: Path, clock) -> dict:
     """The chain's stages (`chain`): the advice and its bits per link-window when ``--advice`` gives it (T, the
-    certified I/O and the windows from the honest run), the prove path when ``--prove-path`` does, and NEG's negatives
-    on the runs unless ``--no-negatives`` (not on the advice profile: its rows take N2's verdict), with the I/O tie's
-    verdict when ``--ids`` gives each request's sampled ids."""
+    certified I/O and the windows from the honest run), or the endpoint's own when ``--endpoint-run`` names its records
+    (`endpoint_advice`), the prove path when ``--prove-path`` does, and NEG's negatives on the runs unless
+    ``--no-negatives`` (not on the advice profile: its rows take N2's verdict), with the I/O tie's verdict when ``--ids``
+    gives each request's sampled ids."""
     honest, out, adv = runs[HONEST]["dir"], {}, None
-    if args.advice:
+    if getattr(args, "endpoint_run", None):
+        out["advice"], out["bits"] = endpoint_advice(getattr(args, "endpoint_dir", None),
+                                                     getattr(args, "endpoint_why", None), honest, plan)
+        log(f"endpoint advice: bound {out['bits']['bound']}, rebuilt {out['bits']['rebuilt']}"
+            + (f" ({out['bits']['bound_why']})" if out["bits"]["bound_why"] else ""))
+    elif args.advice:
         adv, out["advice"] = chain.advice(Path(args.advice))
         config = _read(Path(args.serving_config)) if args.serving_config else None
         if args.serving_config and not isinstance(config, dict):
@@ -713,6 +780,13 @@ def run(args, rest: list[str], clock=time.monotonic) -> dict:
         sources = [Path(s) for s in args.sources] if args.sources else [rehearse(args, rest, out / "rehearsal")]
         if tunnel is not None:
             tunnel.kill()
+        if getattr(args, "endpoint_run", None):
+            try:
+                args.endpoint_dir = endpoint_records(args.endpoint_run, getattr(args, "endpoint_peer", None),
+                                                     out / "endpoint")
+                log(f"endpoint records: {args.endpoint_run} copied to {args.endpoint_dir}")
+            except (OSError, SystemExit) as err:
+                args.endpoint_dir, args.endpoint_why = None, f"{args.endpoint_run} not copied: {err}"
         runs = collect(sources, work)
         plan = _read(runs[HONEST]["dir"] / "plan.json") or {}
         profile = (plan.get("occupancy") or {}).get("kind")
@@ -788,6 +862,10 @@ def main(argv=None) -> int:
                                                      "stand-in's (chain.advice); its bits per link-window")
     ap.add_argument("--serving-config", metavar="FILE", help="the serving config the derived bits take (derived.Config's "
                                                              "fields, or a step trace's config)")
+    ap.add_argument("--endpoint-run", metavar="DIR", help="the endpoint's records (a verity-vllm serve-openai run's "
+                                                          "out/serve; on --endpoint-peer's node, copied after the "
+                                                          "rehearsal): its own advice for the honest run's Commit "
+                                                          "windows, by verity-vllm advice (endpoint_advice)")
     ap.add_argument("--prove-path", metavar="DIR", help="adopt prove_path.py audit's output (its run.sh's $OUT, or a "
                                                         "tarball of it)")
     ap.add_argument("--ids", metavar="FILE", help="each request's sampled ids by its advice id (ADVICE-SRC's "
@@ -799,6 +877,9 @@ def main(argv=None) -> int:
         ap.error(f"unrecognized arguments: {' '.join(rest)}")
     if not args.out:
         ap.error("--out, or $OUT")
+    if args.endpoint_run and (args.advice or args.serving_config):
+        ap.error("--endpoint-run takes the endpoint's own advice and reads its config off its records: no --advice or "
+                 "--serving-config beside it")
     if not (args.no_prove or args.proofs) and not (args.bin and args.lean):
         ap.error("proving needs --bin and --lean (run.sh builds them), --proofs DIR, or --no-prove")
     r = run(args, rest)

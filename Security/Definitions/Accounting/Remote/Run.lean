@@ -25,7 +25,7 @@ each outcome, over the audited interval `I = [t_0, t_P)`, where `t_j` is the tic
   determines from its memory tiers over `I`.
 
 A route is a bound the run meets except with probability `δ` over the coins when the audit accepts (`Run.Holds`); a
-model row that holds on every outcome is a route at `δ = 0`. The guarantees (`Models.Accounting.Guarantees.Remote`)
+model row that holds on every outcome is a route at `δ = 0`. The compositions (`Accounting.SecurityProofs.Remote`)
 compose them by a union bound; each lane proves a route for the runs its game or the actual circuit realizes:
 
 * `Sampled ε`: correct receipts cover `(1 − ε) · C` (μ_sample); the verifier checks `committed · b ≥ C` and samples.
