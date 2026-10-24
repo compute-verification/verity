@@ -1,8 +1,6 @@
 import Definitions.NetworkCertifier.Grid
 import Definitions.NetworkCertifier.Run
 import Definitions.NetworkCertifier.Ingress
-import Definitions.NetworkCertifier.SampledAudit
-import Definitions.NetworkCertifier.Guarantees.SampledAudit
 import Definitions.NetworkCertifier.Schedule
 import Definitions.NetworkCertifier.Premises
 
@@ -14,9 +12,9 @@ the certifier, the interaction and its runs, the Program, acceptance and the acc
 the interaction read inward, a link's frames with the timing erased, and acceptance as it bears on ingress. `Schedule`:
 the Program's logical schedule and clock-sync advice, and the constant-rate Program they define. `Premises`: the one
 premise a property of the network certifier takes, that the certifier device runs as built (`DeviceIntact`).
-`SampledAudit`: what an accepted sampled audit of the computation's program says about its egress, `Accepted` by the
-circuit's Program at `δ`, on sampling's vocabulary (`Definitions.Claims.Sampling`); its guarantee's statement is
-`Guarantees/SampledAudit`.
+`SampledAudit`, which the root `Definitions` imports rather than this module, so the protocol's own importers don't take
+sampling's vocabulary: what an accepted sampled audit of the computation's program says about its egress, `Accepted` by
+the circuit's Program at `δ`, on `Definitions.Claims.Sampling`; its guarantee's statement is `Guarantees/SampledAudit`.
 
 This module, `Assumptions` and `Guarantees` are the trusted text: they import only one another, the claims' definitions
 (`Definitions.Claims`) and Mathlib, so their diff is everything a statement reviewer reads. `SecurityProofs` holds the proofs and every lemma, which nobody reviews
