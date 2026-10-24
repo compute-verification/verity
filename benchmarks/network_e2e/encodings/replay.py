@@ -1448,22 +1448,24 @@ def table(trace: Trace, *, bucket_s: float = 0.1, window_buckets: int = 600, v0:
             "passed": [x for x in g if x is not None]}
 
 
-def load_v0(spec: str | None) -> Any:
-    """ADV-SPEC's advice module: `spec` a path to its `advice.py`, else `verity.core.protocols.certifier.advice` when
-    importable, else None (`table` falls back to `v0_widths`)."""
-    import importlib
+#: where ADV-SPEC's advice v0 sits in the tree once it lands (PR #3499)
+V0_PATH = Path(__file__).resolve().parents[3] / "verity" / "core" / "protocols" / "certifier" / "advice.py"
+
+
+def load_v0(spec: str | Path | None) -> Any:
+    """ADV-SPEC's advice module from `spec`, a path to its `advice.py`, else from `V0_PATH` when it is there, else None
+    (`table` falls back to `v0_widths`)."""
     import importlib.util
     import sys
-    if spec:
-        s = importlib.util.spec_from_file_location("advice_v0", spec)
-        assert s is not None and s.loader is not None
-        sys.modules["advice_v0"] = mod = importlib.util.module_from_spec(s)
-        s.loader.exec_module(mod)
-        return mod
-    try:
-        return importlib.import_module("verity.core.protocols.certifier.advice")
-    except ImportError:
-        return None
+    if not spec:
+        if not V0_PATH.exists():
+            return None
+        spec = V0_PATH
+    s = importlib.util.spec_from_file_location("advice_v0", spec)
+    assert s is not None and s.loader is not None
+    sys.modules["advice_v0"] = mod = importlib.util.module_from_spec(s)
+    s.loader.exec_module(mod)
+    return mod
 
 
 def read_any(p: Path, *, egress: str = "engine") -> Trace:
@@ -1482,7 +1484,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                     help="step traces (*.jsonl; <name>.tokens.json beside one with prefix caching) or TRACE-CORPUS trace dirs")
     ap.add_argument("--bucket-ms", type=float, default=100.0)
     ap.add_argument("--window-buckets", type=int, default=600)
-    ap.add_argument("--v0", help="path to ADV-SPEC's advice.py (default: the installed module, else fixed widths)")
+    ap.add_argument("--v0", help="path to ADV-SPEC's advice.py (default: V0_PATH in the tree, else fixed widths)")
     ap.add_argument("--egress", choices=("engine", "client"), default="engine",
                     help="a TRACE-CORPUS output's release time: its step's (engine) or its streamed chunk's (client)")
     ap.add_argument("--out", type=Path, help="write {trace: table} as JSON")

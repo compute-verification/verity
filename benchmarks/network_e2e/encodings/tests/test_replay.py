@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import random
 import sys
 from pathlib import Path
@@ -186,7 +187,9 @@ def test_order_bits_charge_only_reordering():
 
 
 def test_v0_advice_is_valid_advice_v0():
-    v0 = pytest.importorskip("verity.core.protocols.certifier.advice")
+    v0 = R.load_v0(os.environ.get("VERITY_ENCODINGS_ADVICE_V0"))
+    if v0 is None:
+        pytest.skip(f"ADV-SPEC's advice v0 isn't at {R.V0_PATH} (VERITY_ENCODINGS_ADVICE_V0: a path to its advice.py)")
     for name in CASES:
         t = trace(name)
         adv = R.v0_advice(t, v0)
