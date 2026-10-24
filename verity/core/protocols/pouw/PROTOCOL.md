@@ -904,10 +904,6 @@ useful    U/(α_A·α_B), glue
       tile as `check_tile` does. The work sampling design stays credit-sound there only while an excluded column earns
       nothing (`test_an_excluded_weight_row_earns_nothing_and_its_tiles_are_accepted`); approaches registry
       `pouw/work-law-weight-row-exclusion`.
-  - A weight whose n is not whole column tiles is served zero-padded to the next whole tile (`pad_weight`; GLM-5.3's
-    lm_head, 19,360 rows a TP8 rank, to 19,392). Each zero row fails the noise floor, so it is an excluded row and earns
-    nothing, and the real columns' credit is at the padded n's cell credit, below their honest credit. That rests on the
-    exclusion above: Lean refuses the last tile until it models a failing weight row.
   - **Voluntary rows (V-EX;** the assessor's B at 17:32Z**):** the record may also give up up to ⌈m/64⌉ A rows
     (`voluntary_a`), and each weight up to ⌈n/64⌉ B rows (`voluntary_b`, the same in every unit of the weight).
     - They are committed in `records_root` beside the excluded rows, before the draw coin opens. A record without them
@@ -917,6 +913,11 @@ useful    U/(α_A·α_B), glue
     - The tile cap and R1 read the credited rows only. Past the count caps the audit rejects.
     - `volunteer` is an honest prover's remedy for a tile over the cap: it gives up the rows whose removal brings each
       tile under, before the draw coin opens.
+    - A weight whose n is not whole column tiles is served zero-padded to the next whole tile (`pad_weight`; GLM-5.3's
+      lm_head, 19,360 rows a TP8 rank, to 19,392), and the last tile's rows, its real columns with the zero rows, are
+      voluntary (`declare`'s `padded_b`, though the zero rows fail the noise floor). That tile has no credited cell, so
+      no draw lands on it and it opens no exclusion tile: no tile check sees a zero row. The credit is the full tiles'
+      real columns (19,328 of 19,360) at the padded n's cell credit.
   - A cell's draw weight is its row's share of `W_ref` at the kept width, the `W_ref` of the Lean statement the draw
     cites (`draw_wref`). On sm_120 at its cap that is `wrefDevRev1K` at `Prices.sm120Loop` and the honest cast at 8.72
     (`SM120_LOOP_CAST_8P72`), the statement of the served γ and ε. Its ratio to `wref` differs between linears, so a

@@ -30,7 +30,8 @@ Checked (all on the checkpoint's dequantized weights, `--layers` and the MTP lay
                  columns per head; heads permuted within a rank in q_b, kv_b and o_proj)
   cast           how far Pearl-C's v1 cast (e4m3(α·x) per row, both operands, per rank's k on row-parallel linears) moves
                  each layer's update, unrotated and rotated (the measure registration's docstring states: 158% / 4%)
-  lm_head        n = 19360 padded to whole 64-column tiles with zero rows: the domain, the rows' verdicts and the credit
+  lm_head        n = 19360 padded to whole 64-column tiles with zero rows, the last tile's rows voluntary: the domain, that
+                 no other tile goes undrawn, V-EX's cap, and the credit on the full tiles' real columns
   shares         the credit map's shares (`--map`, glm53_credit_map's JSON) with the unreached linears uncredited under
                  Pearl-C and lm_head padded
 
@@ -67,7 +68,7 @@ from verity.core.protocols.pouw.audit import Epoch, Workload, weights_root  # no
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape  # noqa: E402
 from verity.core.protocols.pouw.schemes import pearl_c as C  # noqa: E402
 from verity.core.protocols.pouw.schemes.pearl_c_device import SM120  # noqa: E402
-from verity.core.protocols.pouw.schemes.pearl_c_work import Split, UnitRecord  # noqa: E402
+from verity.core.protocols.pouw.schemes.pearl_c_work import Split, UnitRecord, pad_weight  # noqa: E402
 
 SNAP = "/workspace/hf/hub/models--zai-org--GLM-5.3/snapshots/aca966e4e02791568aa6a4ced368624b3d897f42"
 TP = 8
@@ -787,20 +788,24 @@ def check_lm_head(ck, D, h, Q, rows: Rows, log) -> dict:
                 dom[nn] = "admitted"
             except DomainError as e:
                 dom[nn] = str(e)
-        excluded = tuple(range(n, npad))
-        rec = UnitRecord(Matmul(0, Shape(64, k, npad), 0), 64, k_kept, (), excluded)
+        _, voluntary = pad_weight([b"\0"] * n, s.tile[1])
+        rec = UnitRecord(Matmul(0, Shape(64, k, npad), 0), 64, k_kept, (), (), (), voluntary)
         _, credit = CW.work(s, [rec])
         honest = (1 - s.cap) * Fraction(s.credit_of(Shape(64, k_kept, n)))
         cells = sum(len(r) * len(c) for r, c in (rec.credited(t) for t in s.tiles(rec.matmul.shape)))
-        out[name] = {"domain": dom, "credited_cells": cells, "real_cells": 64 * n,
+        undrawn = [t.cols for _, t, w in CW.tickets(s, [rec]) if w == 0]
+        out[name] = {"domain": dom, "padded_tile": [voluntary[0], voluntary[-1]], "credited_cells": cells,
+                     "real_cells": 64 * n, "credited_fraction": cells / (64 * n),
+                     "undrawn_tiles_are_the_padded_one": bool(undrawn) and all(c == voluntary for c in undrawn),
+                     "within_vex_cap": len(voluntary) <= CW.voluntary_cap(npad),
                      "credit_over_real_columns_honest": float(credit / honest)}
     log(f"lm_head: rel {out['function']['rel']:.2e}, padded rows fail {out['padded_rows_fail']}, {out['pearl-c-h100-v1-h3']}")
     return out
 
 
-def shares(map_doc: dict, unreached: set[str], lm_padded: dict[str, bool]) -> dict:
-    """The credit map's shares, then Pearl-C's with `unreached` uncredited and lm_head credited where its padded shape is
-    admitted (`lm_padded`, by scheme), and the mixes."""
+def shares(map_doc: dict, unreached: set[str], lm_padded: dict[str, float]) -> dict:
+    """The credit map's shares, then Pearl-C's with `unreached` uncredited and lm_head credited, where its padded shape is
+    admitted, on the share of its MACs its full tiles' real columns hold (`lm_padded`, by scheme), and the mixes."""
     # glm53_credit_map's steps: prefill leaves lm_head out (one row per sequence)
     steps = {"decode": (("both", "decode"), ()), "prefill": (("both", "prefill"), ("lm_head",)),
              "decode+mtp": (("both", "decode", "mtp"), ())}
@@ -808,15 +813,16 @@ def shares(map_doc: dict, unreached: set[str], lm_padded: dict[str, bool]) -> di
     mixes = {"mix H200": ("pearl-c-h100-v1-h3", "h1-sm_90"), "mix RTX PRO 6000": ("pearl-c-sm120-v1-h3", "h1-sm_120")}
     rows = map_doc["linears"]
 
-    def credited(r, scheme, new):
-        c = r["schemes"][scheme]["credited"]
+    def credited(r, scheme, new) -> float:
+        """The share of the linear's MACs credited: lm_head padded earns on the real columns of its full tiles."""
+        c = float(r["schemes"][scheme]["credited"])
         if not new or scheme not in pearls:
             return c
         base = r["id"].removeprefix("mtp.")
         if base == "lm_head":
             return lm_padded[scheme]
         names = MAP_IDS.get(base, ())
-        return c and not any(x in unreached for x in names)
+        return 0.0 if any(x in unreached for x in names) else c
 
     out = {}
     for new in (False, True):
@@ -824,11 +830,11 @@ def shares(map_doc: dict, unreached: set[str], lm_padded: dict[str, bool]) -> di
         for step, (routes, left_out) in steps.items():
             rs = [r for r in rows if r["route"] in routes and r["id"] not in left_out]
             tot = sum(r["macs"] for r in rs)
-            v = {s: sum(r["macs"] for r in rs if credited(r, s, new)) / tot for s in rows[0]["schemes"]}
+            v = {s: sum(r["macs"] * credited(r, s, new) for r in rs) / tot for s in rows[0]["schemes"]}
             for m, (a, b) in mixes.items():
-                v[m] = sum(r["macs"] for r in rs if credited(r, a, new) or credited(r, b, new)) / tot
+                v[m] = sum(r["macs"] * max(credited(r, a, new), credited(r, b, new)) for r in rs) / tot
             v["uncredited by Pearl-C (H200)"] = [r["id"] for r in rs if r["schemes"]["pearl-c-h100-v1-h3"]["credited"]
-                                                 and not credited(r, "pearl-c-h100-v1-h3", new)]
+                                                 and credited(r, "pearl-c-h100-v1-h3", new) == 0]
             tab[step] = v
         out["with the rotation's reach and lm_head padded" if new else "the map as it stands"] = tab
     out["reproduces_the_map"] = all(
@@ -918,7 +924,8 @@ def main() -> int:
     if a.map:
         lm = doc["lm_head"]
         doc["shares"] = shares(json.loads(Path(a.map).read_text()), unreached,
-                               {s: lm[s]["domain"][lm["n_padded"]] == "admitted" for s in SCHEMES})
+                               {s: lm[s]["credited_fraction"] if lm[s]["domain"][lm["n_padded"]] == "admitted" else 0.0
+                                for s in SCHEMES})
 
     worst = max([v["rel"] for c in doc["checked"] for v in c["function"].values() if "rel" in v]
                 + [doc["mtp"]["eh_proj"]["rel"], doc["mtp"]["layer"]["output"]["rel"], doc["mtp"]["logits"]["rel"],
@@ -933,8 +940,9 @@ def main() -> int:
                       "exact_rule_agrees": not rows.mismatch,
                       "check_linear_agrees_with_reach": all(doc["rule_agrees_with_reach"].values()),
                       "registration_accepts_rotation": doc["registration"][f"{[REG.ROTATION_8]} curated=False"] == "accepted",
-                      "lm_head_padding_sound": doc["lm_head"]["padded_rows_fail"] and doc["lm_head"]["padded_rows_exact_fail"]
-                      and all(doc["lm_head"][s]["credit_over_real_columns_honest"] <= 1 for s in SCHEMES)}
+                      "lm_head_padding_sound": all(doc["lm_head"][s]["credit_over_real_columns_honest"] <= 1
+                                                   and doc["lm_head"][s]["undrawn_tiles_are_the_padded_one"]
+                                                   and doc["lm_head"][s]["within_vex_cap"] for s in SCHEMES)}
     v = doc["verdict"]
     ok = (worst < EXACT and sets and lat_worst < EXACT and vo_worst < EXACT and v["exact_rule_agrees"]
           and v["check_linear_agrees_with_reach"] and v["registration_accepts_rotation"] and v["lm_head_padding_sound"])
