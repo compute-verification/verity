@@ -24,23 +24,30 @@ Lean verifier checks each read's path (`registered.verify_read`).
 **The rows**, each field's elements in turn and each element least significant bit first, then zero bits to a whole
 16-bit word. A state row (`row_fields`, `Shape.width` bits) and a window row (`window_fields`, `Shape.window_width`):
 
-    state    run_valid R×1 | run_id R×IW | run_P R×LW | run_O R×LW | run_out R×LW | run_comp R×LW
+    state    run_valid R×1 | run_id R×IW | run_P R×LW | run_O R×LW | run_out R×LW | run_comp R×LW [| run_pfx R×EW]
              | wait_valid W×1 | wait_id W×IW | wait_P W×LW | wait_O W×LW | wait_out W×LW | free 1×BW
+             [| run_fin R×1 | run_cap R×1 | wait_cap W×1]
     heads    qh 1×QW | dh 1×DW | steps 1×PW
 
-    queue    q_valid Q×1 | q_id Q×IW | q_P Q×LW | q_O Q×LW
+    queue    q_valid Q×1 | q_id Q×IW | q_P Q×LW | q_O Q×LW [| q_cap Q×1]
     dec      dec D×1 | left 1×DW
 
 - `state` is ReplayStep_v1's committed state as its `_in_fields` lay it out, and its next state as its `_out_fields`
   do, bit for bit: R running slots (id, prompt P, certified output length O, outputs so far, tokens computed), W
   waiting slots (a waiting request has computed nothing) and the free block count. A running request holds
-  ⌈computed / B⌉ blocks, so the KV pool is the free count, with no count per request.
+  ⌈computed / B⌉ blocks, so the KV pool is the free count, with no count per request. With EW (the walk entries'
+  width, 0 for none) each running slot's walk entry `run_pfx` follows `run_comp`. With AS (async scheduling) the
+  state ends with each running slot's `fin` and `cap` and each waiting slot's `cap`, and an arrival carries its
+  `cap` (O is its max_tokens): `q_cap` here, the step's `arr_cap` and the load's `a_cap`.
+- A `Row`'s and a `Window`'s entries are tuples of their fields in `replay_step.Req`'s order, those the shape has:
+  running (id, P, O, out, computed[, cap, fin][, pfx]), waiting (id, P, O, out[, cap]) and an arrival
+  (id, P, O[, cap]) (`running_names`, `waiting_names`, `arrival_names`).
 - `qh` and `dh` are how many of the window row's arrivals and decisions the window's steps so far took and read;
   `steps` counts the window's executed steps still to come.
 - `queue` is the arrivals in certified order, the step's `arr_*` the A at `qh`; `dec` the decisions, the step's `bits`
   the A at `dh`, and `left` counts them.
 - Widths, from the size class and the public config (`widths`): LW = bitlen(L), BW = bitlen(NB), AC = bitlen(A),
-  QW = bitlen(Q), DW = bitlen(D), PW = bitlen(P), bitlen(0) being 1; IW is a request id's.
+  QW = bitlen(Q), DW = bitlen(D), PW = bitlen(P), bitlen(0) being 1; IW is a request id's and EW a walk entry's.
 - In every row the valid elements of each group are a prefix and the rest are zero bits, as are `dec`'s bits past
   `left`. `decode` refuses any other row. The circuit needs no such check: the first rows are the empty ones, and every
   later row is a proved unit's output.
@@ -70,7 +77,10 @@ dropped (`ReplayAdvance`'s `active` = 0).
 about 2·width for the idle select and the equality), three reads and one state row. Per window: P steps, one
 `ReplayLoad`, P + 2 state rows and two window rows, and 3P + 4 reads, each a frame-v3 path of depth ⌈log2(P + 2)⌉ or 1.
 Per session one `ReplayClose` and its two reads.
-On TRACE-CORPUS's 15 sync traces a step is 16,569 to 80,959 ANDs and a window 3.5e7 to 1.9e8 (PROTOCOL.md).
+On TRACE-CORPUS's 15 sync traces a step is 16,569 to 80,959 ANDs and a window 3.5e7 to 1.9e8 (PROTOCOL.md, before
+the carry). AS and EW widen the rows by the step's own fields, and the parts with them: at vLLM run 8eb1's engine class
+(R, W, A) = (8, 1, 9), Q 4, D 32, P 54, K 4, `ReplayAdvance` is 1,761 ANDs sync, 1,814 at AS = 1 and 2,102 with 17-bit
+walk entries, and `ReplayLoad` 1,944, 2,000 and 2,144 (protocol/served-shape.md).
 """
 
 from __future__ import annotations
@@ -95,7 +105,7 @@ from verity.core.protocols.sampled_proofs.one_stage import registered as G
 VALUE = "replay-state"
 WINDOW = "replay-window"
 WORD_BITS = 16
-STATICS = ("R", "W", "A", "L", "NB", "IW", "Q", "D", "P", "K")
+STATICS = ("R", "W", "A", "L", "NB", "IW", "Q", "D", "P", "K", "AS", "EW")
 _INST = hm96.SHA512
 
 
@@ -111,7 +121,8 @@ def _bitlen(v: int) -> int:
 class Shape:
     """The public size class: ReplayStep_v1's R running slots, W waiting slots and A arrivals a step, the engine's
     max_model_len L and num_gpu_blocks NB, a request id's width IW; the chain's Q pending arrivals, D decisions and P
-    steps a window, and the warden's K arrival slots a window."""
+    steps a window, and the warden's K arrival slots a window; ReplayStep_v1's async_scheduling AS (0 or 1) and its
+    walk entries' width EW (0 for none)."""
 
     R: int
     W: int
@@ -123,12 +134,18 @@ class Shape:
     D: int
     P: int
     K: int
+    AS: int = 0
+    EW: int = 0
 
     def __post_init__(self) -> None:
         for f in fields(self):
             v = getattr(self, f.name)
-            if not isinstance(v, int) or isinstance(v, bool) or v < 1:
+            if not isinstance(v, int) or isinstance(v, bool):
+                raise ValueError(f"{f.name} is an integer, not {v!r}")
+            if f.name not in ("AS", "EW") and v < 1:
                 raise ValueError(f"{f.name} is a positive integer, not {v!r}")
+        if self.AS not in (0, 1) or self.EW < 0:
+            raise ValueError(f"AS is 0 or 1 and EW at least 0, not {self.AS!r} and {self.EW!r}")
 
     def statics(self) -> dict[str, int]:
         return {k: getattr(self, k) for k in STATICS}
@@ -154,16 +171,35 @@ def widths(S) -> SimpleNamespace:
 
 
 def state_fields(S) -> list[tuple[str, int, int]]:
-    """ReplayStep_v1's state, its `_in_fields`' and `_out_fields`' order and widths."""
+    """ReplayStep_v1's state, its `_in_fields`' and `_out_fields`' order and widths: with EW `run_pfx` after
+    `run_comp`, with AS the async group after `free`."""
     Z, R, W = widths(S), S.R, S.W
-    return [("run_valid", R, 1), ("run_id", R, S.IW), ("run_P", R, Z.LW), ("run_O", R, Z.LW), ("run_out", R, Z.LW),
-            ("run_comp", R, Z.LW), ("wait_valid", W, 1), ("wait_id", W, S.IW), ("wait_P", W, Z.LW), ("wait_O", W, Z.LW),
-            ("wait_out", W, Z.LW), ("free", 1, Z.BW)]
+    return ([("run_valid", R, 1), ("run_id", R, S.IW), ("run_P", R, Z.LW), ("run_O", R, Z.LW), ("run_out", R, Z.LW),
+             ("run_comp", R, Z.LW)] + ([("run_pfx", R, S.EW)] if S.EW else [])
+            + [("wait_valid", W, 1), ("wait_id", W, S.IW), ("wait_P", W, Z.LW), ("wait_O", W, Z.LW), ("wait_out", W, Z.LW),
+               ("free", 1, Z.BW)]
+            + ([("run_fin", R, 1), ("run_cap", R, 1), ("wait_cap", W, 1)] if S.AS else []))
+
+
+def running_names(S) -> tuple[str, ...]:
+    """A running entry's fields, in `Row.running`'s tuples."""
+    return ("id", "P", "O", "out", "comp") + (("cap", "fin") if S.AS else ()) + (("pfx",) if S.EW else ())
+
+
+def waiting_names(S) -> tuple[str, ...]:
+    """A waiting entry's fields, in `Row.waiting`'s tuples."""
+    return ("id", "P", "O", "out") + (("cap",) if S.AS else ())
+
+
+def arrival_names(S) -> tuple[str, ...]:
+    """An arrival's fields, in `Window.queue`'s tuples, the step's and the load's arrivals."""
+    return ("id", "P", "O") + (("cap",) if S.AS else ())
 
 
 def _arrivals(prefix: str, n: int, S) -> list[tuple[str, int, int]]:
     Z = widths(S)
-    return [(f"{prefix}_valid", n, 1), (f"{prefix}_id", n, S.IW), (f"{prefix}_P", n, Z.LW), (f"{prefix}_O", n, Z.LW)]
+    return ([(f"{prefix}_valid", n, 1), (f"{prefix}_id", n, S.IW), (f"{prefix}_P", n, Z.LW), (f"{prefix}_O", n, Z.LW)]
+            + ([(f"{prefix}_cap", n, 1)] if S.AS else []))
 
 
 def queue_fields(S) -> list[tuple[str, int, int]]:
@@ -207,9 +243,9 @@ def window_width(S) -> int:
 
 # --- the rows ---------------------------------------------------------------------------------------------------------------
 
-Running = tuple[int, int, int, int, int]   # (id, P, O, out, computed)
-Waiting = tuple[int, int, int, int]        # (id, P, O, out)
-Arrival = tuple[int, int, int]             # (id, P, O)
+Running = tuple[int, ...]   # (id, P, O, out, computed[, cap, fin][, pfx]): `running_names`
+Waiting = tuple[int, ...]   # (id, P, O, out[, cap]): `waiting_names`
+Arrival = tuple[int, ...]   # (id, P, O[, cap]): `arrival_names`
 
 
 @dataclass(frozen=True)
@@ -245,6 +281,8 @@ def _put(out: list[int], v: int, w: int, name: str) -> None:
 
 
 def _group(vals: dict[str, list[int]], prefix: str, names: Sequence[str], items: Sequence[Sequence[int]], n: int) -> None:
+    if any(len(x) != len(names) for x in items):
+        raise MalformedRow(f"{prefix}: an entry is ({', '.join(names)}) at this shape")
     vals[f"{prefix}_valid"] = [1] * len(items) + [0] * (n - len(items))
     for k, name in enumerate(names):
         vals[f"{prefix}_{name}"] = [x[k] for x in items] + [0] * (n - len(items))
@@ -256,8 +294,8 @@ def _values(row: Row, S) -> dict[str, list[int]]:
     if row.qh > S.Q or row.dh > S.D or row.steps > S.P:
         raise MalformedRow(f"heads {row.qh}, {row.dh} of at most {S.Q}, {S.D}; steps {row.steps} of at most {S.P}")
     vals: dict[str, list[int]] = {}
-    _group(vals, "run", ("id", "P", "O", "out", "comp"), row.running, S.R)
-    _group(vals, "wait", ("id", "P", "O", "out"), row.waiting, S.W)
+    _group(vals, "run", running_names(S), row.running, S.R)
+    _group(vals, "wait", waiting_names(S), row.waiting, S.W)
     vals["free"], vals["qh"], vals["dh"], vals["steps"] = [row.free], [row.qh], [row.dh], [row.steps]
     return vals
 
@@ -266,7 +304,7 @@ def _window_values(win: Window, S) -> dict[str, list[int]]:
     if len(win.queue) > S.Q or len(win.decisions) > S.D or any(b not in (0, 1) for b in win.decisions):
         raise MalformedRow("the window exceeds the size class, or a decision isn't a bit")
     vals: dict[str, list[int]] = {}
-    _group(vals, "q", ("id", "P", "O"), win.queue, S.Q)
+    _group(vals, "q", arrival_names(S), win.queue, S.Q)
     vals["dec"] = list(win.decisions) + [0] * (S.D - len(win.decisions))
     vals["left"] = [len(win.decisions)]
     return vals
@@ -310,7 +348,7 @@ def front_bits(S, arrivals: Sequence[Arrival]) -> tuple[int, ...]:
     if len(arrivals) > S.A:
         raise MalformedRow(f"{len(arrivals)} arrivals of at most {S.A}")
     vals: dict[str, list[int]] = {}
-    _group(vals, "arr", ("id", "P", "O"), arrivals, S.A)
+    _group(vals, "arr", arrival_names(S), arrivals, S.A)
     return tuple(_flatten(vals, front_fields(S)))
 
 
@@ -347,8 +385,7 @@ def decode(bits: Sequence[int], S) -> Row:
     qh, dh, steps = f["qh"][0], f["dh"][0], f["steps"][0]
     if qh > S.Q or dh > S.D or steps > S.P:
         raise MalformedRow(f"heads {qh}, {dh} of at most {S.Q}, {S.D}; steps {steps} of at most {S.P}")
-    return Row(_items(f, "run", ("id", "P", "O", "out", "comp")), _items(f, "wait", ("id", "P", "O", "out")), f["free"][0],
-               qh, dh, steps)
+    return Row(_items(f, "run", running_names(S)), _items(f, "wait", waiting_names(S)), f["free"][0], qh, dh, steps)
 
 
 def decode_window(bits: Sequence[int], S) -> Window:
@@ -357,7 +394,7 @@ def decode_window(bits: Sequence[int], S) -> Window:
     left = f["left"][0]
     if left > S.D or any(f["dec"][left:]):
         raise MalformedRow(f"left {left} of {S.D} with no decision past it")
-    return Window(_items(f, "q", ("id", "P", "O")), tuple(f["dec"][:left]))
+    return Window(_items(f, "q", arrival_names(S)), tuple(f["dec"][:left]))
 
 
 def row(bits: Sequence[int]) -> tuple[int, ...]:
@@ -696,7 +733,7 @@ def load_arguments(S, prev: Row, last: Window, arrivals: Sequence[Arrival], deci
     if len(arrivals) > S.K or len(decisions) > S.D:
         raise ValueError("the arrivals or decisions exceed the size class")
     vals: dict[str, list[int]] = {}
-    _group(vals, "a", ("id", "P", "O"), arrivals, S.K)
+    _group(vals, "a", arrival_names(S), arrivals, S.K)
     cb, sb = [], []
     _put(cb, count, Z.DW, "count")
     _put(sb, steps, Z.PW, "steps")
@@ -758,8 +795,8 @@ def size(S) -> dict[str, int]:
 
 __all__ = ["Arrival", "Committed", "MalformedRow", "ReplayAdvance", "ReplayClose", "ReplayLoad", "Row", "Running", "STATICS",
            "Shape", "VALUE", "WINDOW", "Waiting", "Window", "advance", "advance_arguments", "advance_unit", "arrival_fields",
-           "check_chain", "close", "close_arguments", "close_reads", "close_unit", "commit_window", "decode",
-           "decode_window", "empty", "empty_openings", "empty_salts", "encode", "encode_window", "evaluate_advance",
-           "evaluate_close", "evaluate_load", "front", "front_bits", "front_fields", "load", "load_arguments", "load_unit",
-           "openings", "queue_fields", "reads", "row", "row_fields", "size", "state_bits", "state_fields", "unrow",
-           "widths", "window_fields", "window_width"]
+           "arrival_names", "check_chain", "close", "close_arguments", "close_reads", "close_unit", "commit_window",
+           "decode", "decode_window", "empty", "empty_openings", "empty_salts", "encode", "encode_window",
+           "evaluate_advance", "evaluate_close", "evaluate_load", "front", "front_bits", "front_fields", "load",
+           "load_arguments", "load_unit", "openings", "queue_fields", "reads", "row", "row_fields", "running_names", "size",
+           "state_bits", "state_fields", "unrow", "waiting_names", "widths", "window_fields", "window_width"]
