@@ -68,25 +68,29 @@ theorem repCut_roundPoints (st : Setup) (hm : 14 ≤ st.m) (hk : 6 ≤ st.kLog) 
       (Transcript.init #[] dom)).go l = (.ok (p, tr), l')) :
     MaskRank.roundPoints st.m st.kLog tr.rounds = MaskRank.claimPoints st.m st.kLog fun j e => coin (l.size + j) e := by
   dsimp only [repCut] at h
-  obtain ⟨⟨zp, lp, ss, T, sws⟩, t₃, l₃, hP, h⟩ := Flock.Firewall.Finish.run_bind_ok h
-  try dsimp only at h
-  obtain ⟨⟨lg, zl, rec⟩, t₄, l₄, h₄, h⟩ := Flock.Firewall.Finish.run_bind_ok h
-  try dsimp only at h
-  obtain ⟨tr', t₅, l₅, h₅, h⟩ := Flock.Firewall.Finish.run_bind_ok h
+  obtain ⟨⟨zp, lp, ss, T, sws⟩, t₃, l₃, hP, hA⟩ := Flock.Firewall.Finish.run_bind_ok h
+  try dsimp only at hA
+  obtain ⟨⟨lg, zl, rec⟩, t₄, l₄, h₄, hB⟩ := Flock.Firewall.Finish.run_bind_ok hA
+  try dsimp only at hB
+  obtain ⟨tr', t₅, l₅, h₅, hC⟩ := Flock.Firewall.Finish.run_bind_ok hB
   rw [Flock.Firewall.Finish.get_run_go] at h₅
   simp only [Prod.mk.injEq, Except.ok.injEq] at h₅
-  obtain ⟨⟨rfl, rfl⟩, rfl⟩ := h₅
-  try dsimp only at h
-  obtain ⟨⟨rp, tt⟩, t₆, l₆, h₆, h⟩ := Flock.Firewall.Finish.run_bind_ok h
-  obtain ⟨-, rfl, rfl⟩ := Flock.Firewall.Finish.liftV_run_ok h₆
-  try dsimp only at h
-  obtain ⟨lgc, t₇, l₇, h₇, h⟩ := Flock.Firewall.Finish.run_bind_ok h
-  obtain ⟨-, rfl, rfl⟩ := Flock.Firewall.Finish.liftV_run_ok h₇
-  try dsimp only at h
-  obtain ⟨inner, t₈, l₈, h₈, h⟩ := Flock.Firewall.Finish.run_bind_ok h
-  rw [Replay.pure_go] at h
-  simp only [Prod.mk.injEq, Except.ok.injEq] at h
-  obtain ⟨⟨-, rfl⟩, rfl⟩ := h
+  obtain ⟨⟨htr, ht₅⟩, hl₅⟩ := h₅
+  subst tr' t₅ l₅
+  try dsimp only at hC
+  obtain ⟨⟨rp, tt⟩, t₆, l₆, h₆, hD⟩ := Flock.Firewall.Finish.run_bind_ok hC
+  obtain ⟨-, ht₆, hl₆⟩ := Flock.Firewall.Finish.liftV_run_ok h₆
+  subst t₆ l₆
+  try dsimp only at hD
+  obtain ⟨lgc, t₇, l₇, h₇, hE⟩ := Flock.Firewall.Finish.run_bind_ok hD
+  obtain ⟨-, ht₇, hl₇⟩ := Flock.Firewall.Finish.liftV_run_ok h₇
+  subst t₇ l₇
+  try dsimp only at hE
+  obtain ⟨inner, t₈, l₈, h₈, hF⟩ := Flock.Firewall.Finish.run_bind_ok hE
+  rw [Replay.pure_go] at hF
+  simp only [Prod.mk.injEq, Except.ok.injEq] at hF
+  obtain ⟨⟨-, htr8⟩, -⟩ := hF
+  subst htr8
   obtain ⟨zc, t₁, l₁, lc, t₂, l₂, h₁, h₂, h₃⟩ := piopCut_split hP
   have hpre : Replay.Prefix t₂.rounds t₈.rounds :=
     ((prefix_of_grows coin 0 (ringSwitchCut_grows coin n 0 _ _) h₃).trans
