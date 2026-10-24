@@ -426,4 +426,100 @@ theorem sched_binding {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : 
   unfold Claims.toMsg at hk2
   rw [hk2, openBind]
 
+/-! ## Level 0's rounds in the schedule -/
+
+theorem ligeritoCoins_l0 (sch : _root_.Flock.Schedule) :
+    ∃ rest, (_root_.Flock.Firewall.Session.ligeritoCoins sch).toList =
+      sch.n :: 1 :: (List.replicate sch.k0 2 ++ 2 :: 2 :: rest) := by
+  unfold _root_.Flock.Firewall.Session.ligeritoCoins
+  simp only [Array.toList_append, List.append_assoc, List.toList_toArray, Array.toList_replicate, List.cons_append,
+    List.nil_append]
+  exact ⟨_, rfl⟩
+
+/-- Past the ring switch's, the opening's counts reach past level 0's first `k₀ + 4` rounds. -/
+theorem openList_len_l0 {N : ℕ} (sch : _root_.Flock.Schedule) (hN : N ≠ 0) (hn0 : sch.n ≠ 0) :
+    N + 1 + (sch.k0 + 4) ≤ (Count.openList N sch).length := by
+  obtain ⟨rest, hr⟩ := ligeritoCoins_l0 sch
+  have hf : (sch.n :: 1 :: (List.replicate sch.k0 2 ++ 2 :: 2 :: rest)).filter (· != 0) =
+      sch.n :: 1 :: (List.replicate sch.k0 2 ++ 2 :: 2 :: rest.filter (· != 0)) := by
+    simp [List.filter_cons, List.filter_append, List.filter_replicate, hn0]
+  rw [openList_eq sch hN, hr, hf]
+  simp only [List.length_append, List.length_replicate, List.length_cons]
+  omega
+
+/-- **A rep's schedule holds level 0's rounds**: fed the coins of the algebraic phase's rounds, the ring switch's, `γ`'s
+and level 0's first `j`, a rep's schedule past the ring switch's rounds is level 0's first `j + 1` bodies at zero pads,
+at the fed coins from the binding on, the switch's target and basis, with the opening's counts. -/
+theorem sched_l0 {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
+    {hi : Array ByteArray} {cr : Array (Array F128)} {alg sched : Array (ByteArray × ℕ)}
+    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+      .ok alg)
+    (hs : schedSoFar t rep dom xs hi cr = .ok sched) (hdom : dom.size < 2 ^ 64)
+    (hdg : t.st.digest.size < 2 ^ 64) (hcn : (_root_.Flock.Firewall.Finish.flat t.cm0.cap).size < 2 ^ 64)
+    (hm : t.st.m < 2 ^ 64) (hmk : t.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (hx : xs.size + 2 < 2 ^ 64)
+    (hk : 1 ≤ t.sch.k0) (hn : t.sch.n < 2 ^ 62) (hq : ∀ i, (t.sch.levels.getD i default).q < 2 ^ 63)
+    (hn0 : t.sch.n ≠ 0) {j : ℕ} (hj : j < t.sch.k0 + 4)
+    (hcr : cr.size = alg.size + (xs.size + 2) + 1 + j) :
+    alg.size + (xs.size + 2) + 1 + j < sched.size ∧
+      ∃ T sws, ∀ i ≤ j,
+        (sched.getD (alg.size + (xs.size + 2) + 1 + i) (.empty, 0)).1.data.toList =
+          FlockComplete.LigLock.l0BodyAt (fun j i => ((cr.extract alg.size cr.size).toList.getD j #[])[i]!)
+            (xs.size + 2 + 1) [] T (FlockComplete.flat t.cm0.toC.cap) t.sch t.g
+            (FlockComplete.basisVals sws (t.st.m - 7)) (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0)
+            (Array.replicate (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0).len 0) rep t.extra
+            (fun _ _ => 0) i ∧
+        (sched.getD (alg.size + (xs.size + 2) + 1 + i) (.empty, 0)).2 =
+          (Count.openList (xs.size + 2) t.sch).getD (xs.size + 2 + 1 + i) 0 := by
+  obtain ⟨rest, hrest⟩ := schedSoFar_pre hal hs
+  have hAle : alg.size ≤ sched.size := by rw [hrest, Array.size_append]; omega
+  obtain ⟨hdrop, hnf⟩ := schedSoFar_sentQ hal hs (by omega)
+  have hcsl : (cr.extract alg.size cr.size).toList.length = xs.size + 2 + 1 + j := by
+    simp only [Array.length_toList, Array.size_extract]
+    omega
+  have hlenF := feed_part _ _ _
+    (Count.openStep_end t rep dom xs hi (cr.extract 0 alg.size) hdom hdg hcn hm hx hk hn hq)
+    (by rw [hcsl]; have := openList_len_l0 t.sch (N := xs.size + 2) (by omega) hn0; omega) hnf
+  rw [hcsl] at hlenF
+  have hsz : sched.size = alg.size + (xs.size + 2) + 1 + j + 1 := by
+    have := congrArg List.length hdrop
+    simp only [List.length_drop, List.length_map, Array.length_toList] at this
+    omega
+  refine ⟨by omega, ?_⟩
+  have hc := coinAt_getD (cr.extract alg.size cr.size).toList
+  obtain ⟨r, hp, -, hL0⟩ := FlockComplete.LigLock.Fed.openStep_l0 t rep dom xs hi (cr.extract 0 alg.size) hdom hdg
+    hcn hm hmk (cr.extract alg.size cr.size).toList
+    (fun j i => ((cr.extract alg.size cr.size).toList.getD j #[])[i]!) #[] hc
+    (by intro h0; rw [h0] at hlenF; simp at hlenF)
+  have hna : r.1.1.2.2.size = xs.size + 2 := by
+    have := Count.piop_na (cr.extract 0 alg.size) t.st (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0)
+      (_root_.Flock.Firewall.Finish.flat t.cm0.cap) ByteArray.empty (claimsOf xs) (fun _ => 0) hdg hcn (by decide) hm _
+      (Sched.trAlike_init dom hdom) #[]
+    rw [hp] at this
+    have h' : r.1.1.2.2.size = (claimsOf xs).size + 2 := this
+    simpa only [claimsOf, Array.size_map] using h'
+  obtain ⟨⟨ss, T, sws⟩, t', L', hL, hLl, ht'⟩ := Switch.ringSwitchCut_bodies
+    (fun j i => ((cr.extract alg.size cr.size).toList.getD j #[])[i]!) (xs.size + 2 + 1 + j)
+    (fun k => switchVec t.g r.1.1.2.2[k]!) r.1.1.2.2 (by omega) r.1.2 #[] (by simp [hna])
+  have hLs : L'.size = xs.size + 2 + 1 := by
+    have := congrArg List.length hLl
+    simp only [Array.length_toList, Array.toList_empty, List.nil_append, List.length_map, List.length_range,
+      hna] at this
+    exact this
+  have key := hL0 (j := j) (ss := ss) (T := T) (sws := sws) (tr₂ := t') (l₂ := L') hj hk hn0 (by simp)
+    (by rw [hLs]; exact hL) (by rw [hLs]; simp only [Array.size_empty, Nat.zero_add]; omega)
+  rw [hLl, hLs, ht', empty_toList] at key
+  simp only [Array.toList_empty, List.nil_append, Array.size_empty, Nat.sub_zero, hna] at key
+  refine ⟨T, sws, fun i hi => ⟨?_, ?_⟩⟩
+  · have hk2 := List.getElem_of_eq key (i := xs.size + 2 + 1 + i)
+      (by simp only [List.length_map, List.length_take]; omega)
+    rw [List.getElem_append_right (by simp)] at hk2
+    simp only [List.getElem_map, List.getElem_take, List.length_map, List.length_range, Nat.add_sub_cancel_left,
+      List.getElem_range] at hk2
+    rw [show alg.size + (xs.size + 2) + 1 + i = alg.size + (xs.size + 2 + 1 + i) by omega,
+      sched_entry hdrop (by omega)]
+    unfold Claims.toMsg at hk2
+    exact hk2
+  · rw [show alg.size + (xs.size + 2) + 1 + i = alg.size + (xs.size + 2 + 1 + i) by omega]
+    exact sched_count hal hs hdom hdg hcn hm hx hk hn hq (by omega)
+
 end Claims.ZKServer.Bind
