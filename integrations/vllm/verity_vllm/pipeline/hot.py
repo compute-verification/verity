@@ -1,4 +1,4 @@
-"""Hot Commit worker (R16 BRIEF §5 / §8 #4, lane sys): one commit_delta process serves consecutive Commit jobs of the SAME engine key
+"""Hot Commit worker (BRIEF §5 / §8 #4): one commit_delta process serves consecutive Commit jobs of the SAME engine key
 instead of building a fresh vLLM engine per invocation.  Not a distributed service: one worker per pod, files under one directory,
 the client is a drop-in for `verity-vllm commit ARGS` (row_pod.sh `HOT_ENGINE=1`).
 

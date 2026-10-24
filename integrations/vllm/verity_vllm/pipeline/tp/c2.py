@@ -408,9 +408,9 @@ def seal(out: Path, summ: dict[str, Any], rows: list[dict[str, Any]], bundles_of
 
 
 def weights_pin_component(rows: list[dict], versions: dict) -> dict:
-    """value_correspondence.components.weights_pin (MAN-09) folded over ranks and instrumented pairs: True only when every rank of every
-    pair compared its served shards to the checkpoint-composed digests of record with no difference; a rank without a record is
-    'unpinned' (result None -> the Commit FAILs closed under --required-manifest)."""
+    """[manbind MAN-09 / COORD M-0614 (1)] value_correspondence.components.weights_pin folded over ranks and instrumented pairs: True only when
+    every rank of every pair compared its served shards to the checkpoint-composed digests of record with no difference; a rank without a
+    record is 'unpinned' (result None -> the Commit FAILs closed under --required-manifest)."""
     per_rank: dict[str, dict] = {}
     results: list = []
     for r in rows:
@@ -429,9 +429,9 @@ def weights_pin_component(rows: list[dict], versions: dict) -> dict:
 
 
 def linkage_component(rows: list[dict], versions: dict) -> dict:
-    """`components.linkage` = the per-(request, engine step) token gate: every committed sampled-ids row of every rank is the Match
-    record's k-th generated id of the request the rank's request->rows map names (tp2_worker._tp2_attribution).  Its shape:
-    {result, method, checked, why} (+ per_rank)."""
+    """[report M-0407 / DECISIONS-2 §4] `components.linkage` = the per-(request, engine step) token gate: every committed sampled-ids row
+    of every rank is the Match record's k-th generated id of the request the rank's request->rows map names (tp2_worker._tp2_attribution).
+    Shape per report's interface: {result, method, checked, why} (+ per_rank)."""
     pr = last_per_rank(rows)
     if not versions.get("match_record") or not pr:
         return {"result": None, "method": "per-(request, engine step) committed sampled_token_ids vs the Match record", "checked": 0,
@@ -448,7 +448,7 @@ def linkage_component(rows: list[dict], versions: dict) -> dict:
 
 
 def oracle_compare_component(rows: list[dict], versions: dict, man_doc: dict | None) -> dict:
-    """`components.oracle_compare`, C2's form (B) as far as a TP2 row can carry it: committed values vs the INDEPENDENT Match
+    """[coord M-0481 C2 form (B), as far as a TP2 row can carry it] `components.oracle_compare` = committed values vs the INDEPENDENT Match
     observation (tp2_match capture arm, a different instrumented run): (a) `attribution` = every committed sampled-ids row vs the record's
     k-th generated id of its request (rev-cb T6-3 / F-cb-23), (b) `tp_partials` = every committed TP partial / MoE received output vs the
     recorder's stored collective input/output per (step, k) (TPPartialSource.compare_match_oracle).  `complete` is FALSE by construction:
