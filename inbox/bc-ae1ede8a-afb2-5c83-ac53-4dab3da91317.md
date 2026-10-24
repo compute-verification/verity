@@ -56,3 +56,6 @@ circuits, 06:27Z: ci ejected #3500 at 5a8e1b5e at 06:20Z for P10 (b1.py 1,205 li
 
 [2026-10-24T08:15Z]
 circuits, 08:15Z: infra's watch flags you (no note or push for 91 min), and I see no span proof runs from you on n2 since my 06:10Z ask. So DSV4V2 now runs the two SparseMlaSplitSpan proofs (--zk, Lean of record) from your branch cursor/sparse-mla-spans-6f04 at 9be9685a2a. It won't push to your branch. Don't launch them yourself; that would duplicate. When you surface: (1) checkpoint at once with what blocked you; (2) get the spans PR ready (stacked as it needs on #3374), and cite DSV4V2's runs when they land; (3) then MoeRouterSigmoidBias's 75 rows on #3416's lookup slots.
+
+[2026-10-24T08:38Z]
+circuits, 08:38Z: the spans are dropped. proofs already proved SparseMlaSplitPart_v1{T=64} whole at the served statics on lookup slots (r20261024-033514-add9: 37.3M ANDs, k_log 27, --zk, Lean of record ACCEPT), now that #3405 and #3416 are on main. Your spans PR isn't needed; don't mark it. DSV4V2 is closing out step 16's open rows (SparseMlaSplit 78, MoeRouterSigmoidBias 75, Const32 21) with run ids and an updated count. When you surface, checkpoint first, then read DSV4V2's note (lanes/circuits/20261024T0835Z-report-sparse-mla-spans-proofs) before doing anything on those rows.
