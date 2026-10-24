@@ -15,10 +15,12 @@ import pytest
 from verity.ml.circuits import ports as PT
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.ports import In, Out, Ports
+from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, coll_concat
 from verity.ml.circuits.types import Array, Record, Value
 
 from verity.core.protocols.pouw import credit as Cr
+from verity.core.protocols.pouw import leaf_lanes as LL
 from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.pouw.circuit import h1zy as Z
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
@@ -594,3 +596,127 @@ def test_a_window_whose_receipts_padding_spills_into_another_block_is_staged():
     assert [HW.tile_unit(k, TILE).signature()[1].fields[0][1].leaves // 8 for k in ks] == [112, 120, 240, 248]
     prog = HW.program(tuple((f"l{k}", k, C) for k in ks), tuple((f"l{k}", 0) for k in ks), R, TILE)
     assert HW.call_units(prog) == [(0, 1), (1, 1), (2, 1), (3, 1)]
+
+
+#: a leaf of four lanes (G = Q = 2), so a lane's rows and columns are not the leaf's first
+LEAF = (8, 16)
+LEAF_LINEARS = (("q_proj", 32, 32), ("k_proj", 32, 16), ("down_proj", 64, 16))
+
+
+def _leaf_window():
+    return HW.program(LEAF_LINEARS, CALLS, HW.slot(5, LEAF), LEAF, prefix="h1/w/", unit=lambda k: unit(k, LEAF))
+
+
+def test_a_drawn_leafs_statements_read_its_tiles_rows_at_its_place():
+    """Each of a drawn leaf's statements reads its value's leaf-local row (`leaf_lanes.reads`) past the leaf's `place` in
+    that value, proofs' ``place`` in `PouwWindow.Lanes.ownOf`: lane l's A row at slot s is the tile's A row
+    ``rowOf l s`` where `table_reads` has it, its B row at slot t the tile's ``colOf l t``, its record the tile's, and its
+    partial row l of the leaf's produced partials; the combine's p<x> row x of them and its receipt row t of the call's
+    receipts. At each step count that divides the calls."""
+    prog = _leaf_window()
+    tp = P.evaluate(prog, HW.query(prog))
+    (r, c), units, k_of = LEAF, HW.call_units(prog), {name: k for name, k, _n in LEAF_LINEARS}
+    for steps in (1, 2, 3, 6):
+        for ci, (u0, n) in enumerate(units):
+            lin = CALLS[ci][0]
+            k = k_of[lin]
+            for t in range(n):
+                u = u0 + t
+                at, tr = HW.place(prog, u, steps), HW.table_reads(prog, tp, u, steps)
+                assert at[LL.ZY] == (f"h1/w/zy@{ci}", t) and at[LL.RECEIPT] == (f"h1/w/receipt@{ci}", t)
+                assert at[LL.PARTIALS] == (LL.PARTIALS, 0) and at[LL.B][0] == f"h1/w/b/{k}"
+                assert at[LL.A] == (tr[f"a_k{k}[0]"][0], tr[f"a_k{k}[0]"][1]) and at[LL.B][1] == tr[f"b_k{k}[0]"][1]
+                for ln in range(LL.lanes(r, c)):
+                    got = HW.leaf_reads(prog, u, LL.LANE, ln, steps=steps)
+                    assert got == {**{f"a{s}": tr[f"a_k{k}[{i}]"] for s, i in enumerate(LL.lane_rows(r, c, ln))},
+                                   **{f"b{q}": tr[f"b_k{k}[{j}]"] for q, j in enumerate(LL.lane_cols(r, c, ln))},
+                                   "zy": (HW.table(prog, "zy", ci), t), "partials": (LL.PARTIALS, ln)}, (steps, u, ln)
+                    assert set(got) | set(LL.known(r, c, LL.LANE, ln)) == LL.own(r, c, LL.LANE, ln)
+                assert HW.leaf_reads(prog, u, LL.COMBINE, steps=steps) == {
+                    **{f"p{x}": (LL.PARTIALS, x) for x in range(LL.lanes(r, c))}, "receipt": (f"h1/w/receipt@{ci}", t)}
+    assert HW.table(prog, HW.RECEIPTS, 4) == "h1/w/receipt@4"
+
+
+def test_a_drawn_leafs_file_marks_its_shared_rows_read_in_full_and_binds_its_windows_tables():
+    """`leaf_reads_file`: every port of a statement is the verifier's own (`leaf_lanes.own`), the file says so
+    (``complete``), each read one row; an A, B or partials read is marked `READ_IN_FULL`, the record and the receipt not;
+    the call's A, z and receipt tables bind the window's open root and the weights' b/<K> none, each at its table's rows
+    and width (`_shapes`: the receipts one row a unit of the call, a row the tile's receipt); the partials take the given
+    entry. A value whose root the verifier doesn't hold, or a port both read and known, is refused."""
+    prog, window = _leaf_window(), "cd" * 64
+    digest, (r, c), u, steps = P.program_digest(prog), LEAF, 7, 2
+    ci = HW.call_of(prog, u)[0]
+    k = 64
+    at = HW.place(prog, u, steps)
+    roots = {v: f"{i + 1:02x}" * 64 for i, (v, _row) in enumerate(at.values())}
+    partials = {"leaves": LL.lanes(r, c), "words": 4, "word_bits": 16, "domain": "ee" * 64}
+    tile_receipt = dict(dict(prog.fn.bindings["TILES"])[k].signature()[1].fields)["receipt"]
+    for kind, ln in [(LL.LANE, ln) for ln in range(LL.lanes(r, c))] + [(LL.COMBINE, None)]:
+        i = LL.statements(r, c).index((kind, ln))
+        rows = HW.leaf_known_rows(prog, kind, ln, salt=bytes(64), position=u, roots=(bytes(64), bytes(64)))
+        known = {p: {"value": v, "row": w} for p, (v, w) in rows.items()}
+        file = HW.leaf_reads_file(prog, u, kind, ln, roots, partials, known, window=window, steps=steps)
+        ports = file["ports"]
+        assert file["format"] == G.READS and file[LL.COMPLETE] is True and set(ports) == LL.own(r, c, kind, ln)
+        assert known[LL.OK]["value"] == f"ok{i}" and (kind == LL.COMBINE or rows[LL.ADMIT][1] == LL.bits_words([1] * r))
+        for port, (value, row) in HW.leaf_reads(prog, u, kind, ln, steps=steps).items():
+            e = ports[port]
+            assert (e["value"], e["root"], e["reads"], e["row_schema"]) == (value, roots[value], [row], G.SCHEMA_V2)
+            logical = LL.reads(r, c, kind, ln)[port][0]
+            assert e.get(HW.READ_IN_FULL, False) is (logical in HW.FULL), port
+            if value == LL.PARTIALS:
+                assert {x: e[x] for x in partials} == partials
+                continue
+            held = value == f"h1/w/b/{k}"
+            assert e["domain"] == G.domain(digest, value, e["words"], e["leaves"],
+                                           window=None if held else window).domain_id.hex(), port
+            assert e["domain"] == Cr.domain_of(digest, window, e), port
+            if logical == LL.RECEIPT:
+                assert (e["leaves"], e["words"]) == (HW.call_units(prog)[ci][1], tile_receipt.leaves // 16)
+            if logical == LL.A:
+                assert (e["leaves"], e["words"]) == (HW.slot(5, LEAF) * HW.step_of(prog, ci, steps)[1], _words(k))
+    lane = HW.leaf_known_rows(prog, LL.LANE, 0, salt=bytes(64), position=u, roots=(bytes(64), bytes(64)))
+    with pytest.raises(ValueError, match="does not hold"):
+        HW.leaf_reads_file(prog, u, LL.LANE, 0, {LL.PARTIALS: "00" * 64}, partials, {}, steps=steps)
+    with pytest.raises(ValueError, match="both reads and known"):
+        HW.leaf_reads_file(prog, u, LL.LANE, 0, roots, partials, {"zy": lane[LL.OK]}, steps=steps)
+
+
+def test_a_windows_leaves_have_no_lanes_but_over_h1zys_unit():
+    """The lanes and the combine are derived from the window's own template at K, whose unit must be h1zy's zy unit over
+    an H1 tile: a window of another unit, or a K it has no template at, derives none."""
+    prog = _leaf_window()
+    with pytest.raises(ValueError, match="no lanes"):
+        HW.leaf_unit(prog, 32, LL.LANE)
+    with pytest.raises(ValueError, match="no template at K = 48"):
+        HW.leaf_program(prog, 48, LL.COMBINE)
+    with pytest.raises(ValueError, match="a drawn leaf's statement"):
+        HW.leaf_unit(prog, 32, "tile")
+
+
+@pytest.mark.slow
+def test_a_windows_lanes_and_combine_are_derived_from_its_template_one_unit_each():
+    """At the real zy unit (16 × 8, K = 384, the least the combine takes): K's lane and combine are `h1zy.lane` and
+    `h1zy.combine` over the TILE of the window's own template at K, each the one unit of its one-call Program under its
+    instance query, with its ports (the salt a coin, the position a position, ok a sink) and its statement rows
+    `h1zy.statement_rows`'; each Program is its wrapper's over that TILE alone, whatever the window's layout or prefix, so
+    a period has one of each; and the receipts' row is the combine's ``receipt``, 2 (KS + m) u32. What the stand-in can't show is
+    that the wrappers of the real lane and combine are single-unit Programs: the window traces the tile's seed and noise
+    circuits (about 30 s), and each leaf Program's descriptor takes about 6 s."""
+    k, tile = 384, (16, 8)
+    prog = HW.program((("q_proj", k, 16), ("k_proj", k, 8)), (("q_proj", 0), ("k_proj", 0)), 16, tile, prefix="h1/w/")
+    t = dict(prog.fn.bindings["TILES"])[k].bindings["UNIT"].bindings["TILE"]
+    for kind, d in ((LL.LANE, Z.lane(t)), (LL.COMBINE, Z.combine(t))):
+        assert HW.leaf_unit(prog, k, kind).id == d.id
+        p, q = HW.leaf_program(prog, k, kind)
+        assert HW.leaf_program(prog, k, kind)[0] is p
+        assert P.units(p, q) == 1 and q == P.template_instances_query([d])
+        wrap = HW.PouwH1WindowLane if kind == LL.LANE else HW.PouwH1WindowCombine
+        assert p.fn.id == Program(bind(wrap, UNIT=d, K=k)).fn.id
+        assert [n for n, _t in p.fn.signature()[0]] == [n for n, _t in d.signature()[0]]
+        assert PT.declared(p.fn) == PT.declared(d)
+        rows = [port for port, _ps in Z.statement_rows(d)]
+        assert set(rows) | {LL.OK} == LL.own(*tile, kind, 0 if kind == LL.LANE else None)
+    (_rows, words), = [s for v, s in HW._shapes(prog, 0, 1).items() if v == HW.table(prog, HW.RECEIPTS, 0)]
+    assert words == 2 * LL.words(k) == 4 * (k // 32 + LL.n_digits(k // 32))
+    assert 16 * words == sum(dict(Z.combine(t).signature()[0])["receipt"].leaf_widths())
