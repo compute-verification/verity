@@ -643,20 +643,22 @@ struct alignas(16) WarpSmemJC {
   u32 utab[32][9];
   u32 ring[32][33];
 };
-// immediate barrier ids and counts: a register id has ptxas reserve all 16 of the CTA's barriers
+// immediate barrier ids and counts: a register id has ptxas reserve all 16 of the CTA's barriers. barrier.sync, not
+// bar.sync (barrier.sync.aligned, undefined for a warp that reaches it diverged): a warp can come to it straight from
+// cs_hash's per-lane store
 static_assert(WARPS <= 8, "js_sync names barriers 1 .. WARPS / 2");
 __device__ __forceinline__ void js_sync(const JShare& js) {
   if (js.lr == 0) {
     __syncwarp();
   } else if (js.lr == 2) {
-    if (js.bar == 1) asm volatile("bar.sync 1, 128;" ::: "memory");
-    else asm volatile("bar.sync 2, 128;" ::: "memory");
+    if (js.bar == 1) asm volatile("barrier.sync 1, 128;" ::: "memory");
+    else asm volatile("barrier.sync 2, 128;" ::: "memory");
   } else {
     switch (js.bar) {
-      case 1: asm volatile("bar.sync 1, 64;" ::: "memory"); break;
-      case 2: asm volatile("bar.sync 2, 64;" ::: "memory"); break;
-      case 3: asm volatile("bar.sync 3, 64;" ::: "memory"); break;
-      default: asm volatile("bar.sync 4, 64;" ::: "memory"); break;
+      case 1: asm volatile("barrier.sync 1, 64;" ::: "memory"); break;
+      case 2: asm volatile("barrier.sync 2, 64;" ::: "memory"); break;
+      case 3: asm volatile("barrier.sync 3, 64;" ::: "memory"); break;
+      default: asm volatile("barrier.sync 4, 64;" ::: "memory"); break;
     }
   }
 }
