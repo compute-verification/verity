@@ -566,7 +566,8 @@ PICK_ENV = "SBENCH_PICK"
 PICK_ARMS_ENV = "SBENCH_PICK_ARMS"
 # SBENCH_SMQ_SWEEP=V[,V]: after the gate, each dither-a-so arm's decode TPOT and phases at each units SM share V (q,
 # q/den or q/den/cap, 0 every SM; `dither_so.SoSide.set_units_smq`), in one engine, then back to its own share for the
-# reps: a screen (smq_sweep.json), never a row
+# reps: a screen (smq_sweep.json), never a row.  With --ops sat alone, its tokens/s at saturation (one sat generate a
+# share) in place of the TPOT
 SMQ_SWEEP_ENV = "SBENCH_SMQ_SWEEP"
 
 
@@ -819,10 +820,14 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                 sd.set_units_smq(*smq_of(v))
                 gen(ps, 8)
                 llm.dither_stats()
-                t1, _ = gen(ps, N1)
-                t2, _ = gen(ps, N2)
-                rows.append({"smq": v, "tpot_b32_ms": round(1e3 * (t2 - t1) / (N2 - N1), 4),
-                             "phases_by_m": llm.dither_stats().get("phases_by_m")})
+                if cmd.get("sat"):
+                    t, outs = gen(prompts(SAT_REQS), SAT_TOKENS)
+                    row = {"tokens_per_s": round(sum(len(o.outputs[0].token_ids) for o in outs) / t, 2)}
+                else:
+                    t1, _ = gen(ps, N1)
+                    t2, _ = gen(ps, N2)
+                    row = {"tpot_b32_ms": round(1e3 * (t2 - t1) / (N2 - N1), 4)}
+                rows.append({"smq": v, **row, "phases_by_m": llm.dither_stats().get("phases_by_m")})
             sd.set_units_smq(q0, d0, c0)
             gen(ps, 8)
             conn.send({"sweep": rows})
@@ -942,6 +947,7 @@ def main() -> int:
     smq_sweep = [v for v in (os.environ.get(SMQ_SWEEP_ENV) or "").split(",") if v]
     if not all(re.fullmatch(r"0|\d+(/\d+(/\d+)?)?", v) for v in smq_sweep):
         ap.error(f"${SMQ_SWEEP_ENV}={os.environ[SMQ_SWEEP_ENV]}: comma-separated q, q/den or q/den/cap")
+    sweep_key = "tokens_per_s" if a.ops == "sat" else "tpot_b32_ms"
     ctx = mp.get_context("spawn")
     conns, procs, info = {}, {}, {}
     reps: list[dict] = []
@@ -1066,11 +1072,10 @@ def main() -> int:
             continue
         for arm in arms if smq_sweep else ():
             if base_arm(arm) in DITHER_SO:
-                conns[arm].send({"op": "smq_sweep", "values": smq_sweep})
+                conns[arm].send({"op": "smq_sweep", "values": smq_sweep, "sat": sweep_key == "tokens_per_s"})
                 sweep[arm] = recv(arm, conns[arm], "smq_sweep")["sweep"]
                 recv(arm, conns[arm], "smq_sweep")
-                print(json.dumps({"smq_sweep": arm, "tpot_b32_ms": {x["smq"]: x["tpot_b32_ms"] for x in sweep[arm]}}),
-                      flush=True)
+                print(json.dumps({"smq_sweep": arm, sweep_key: {x["smq"]: x[sweep_key] for x in sweep[arm]}}), flush=True)
                 (out / "smq_sweep.json").write_text(json.dumps(sweep, indent=1) + "\n")
         time_at = wait_time_at()
         if time_at:
@@ -1183,7 +1188,7 @@ def main() -> int:
             p["throughput_overhead_pct"] = round(100 * (1 - p["tokens_per_s"] / base["tokens_per_s"]), 3)
     summary["gate_failed"] = [x for x in gate_doc if x not in arms]
     if sweep:
-        summary["smq_sweep"] = {arm: {x["smq"]: x["tpot_b32_ms"] for x in rows} for arm, rows in sweep.items()}
+        summary["smq_sweep"] = {arm: {x["smq"]: x[sweep_key] for x in rows} for arm, rows in sweep.items()}
     summary["stop"] = {arm: {"error": x.get("error"), "close_error": x.get("close_error"), "fill_steps": x.get("fill_steps"),
                              "end_verdict": (x.get("end") or {}).get("verdict")} for arm, x in stops.items()}
     summary["host_mem_peak_gib"] = mem_peak_gib()
