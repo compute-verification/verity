@@ -14,8 +14,11 @@ draw `c`'s, `W + c`.
 
 * `DrawIsSubset` (`Shared.close`, the draw): the draw's values are the sampler's `min(s, U)`-subset of `[0, U)`, `U`
   the draw's receipts, each mapped to the receipt with that number, and each window of the draw holds its share.
-* `AcceptDrawsOpenable` (`Refused`, per draw): once every window of draw `c` is accepted, each of the sampler's
-  values is an openable receipt of the window it falls in (`receiptsBefore`).
+* `AcceptDrawsOpenable` (`Refused`, per draw): the draw's values are the sampler's, and once each window's check of its
+  share accepts, each value is an openable receipt of the window it falls in (`receiptCount`). Like today's, which is
+  on `verifyWindow` (`draws`, then `checkWindow`), it is on `draws` and `checkWindow` alone, over the records `ws` of
+  the draw's windows, whose passes number its receipts (`lengthsOf`, `passCount`). That a session's draw is over its
+  windows' records (`State.record`, whose passes carry the plans `drawLengths` reads) is not stated here.
 * `OpeningsUnreadUntilDrawn` (`Live`, the coin order): a run that leaves draw `c`'s first window undrawn reads no
   coin at `W + c` or above.
 * `RecordKeptAfterDraw`: once a window is drawn, the rest of the session keeps its draws, its record and its openable
@@ -25,9 +28,10 @@ draw `c`'s, `W + c`.
   openable receipts.
 
 At `g = 1`, `Shared.run 1` is `Session.run` (`RemoteAudit.Shared.run_one`), `c` is the window, and draw `c` is window
-`c` alone (`drawWindows_one`, `drawLengths_one`): `OpeningsUnreadUntilDrawn` and `RecordKeptAfterDraw` give today's, and
-`ReleaseOrder 1` and `LiveUnder 1` are today's (`Properties.Proofs.RemoteAudit.Shared`'s `*_one`). Today's
-`DrawIsSubset` and `AcceptDrawsOpenable` are on `draws` and `verifyWindow` alone; these state them for a session's draw.
+`c` alone (`drawWindows_one`, `drawLengths_one`): `OpeningsUnreadUntilDrawn` and `RecordKeptAfterDraw` give today's,
+`ReleaseOrder 1` and `LiveUnder 1` are today's, and `AcceptDrawsOpenable` on a draw of one window gives today's
+(`Properties.Proofs.RemoteAudit.Shared`'s `*_one`). Today's `DrawIsSubset` is on `draws` alone, which knows no `g`;
+this one states it for `Shared.close`'s draw.
 -/
 
 open RemoteAudit
@@ -48,17 +52,19 @@ draw's. -/
 def passesBefore (s : Session.State) (first u : Nat) : Nat :=
   ((List.range (u - first)).map fun j => s.windows[first + j]!.plans.size).sum
 
-/-- The receipts of the windows from `first` up to window `u`, not counting `u`'s: where `u`'s receipts start among
-its draw's. -/
-def receiptsBefore (s : Session.State) (first u : Nat) : Nat :=
-  ((List.range (u - first)).map fun j => (s.windows[first + j]!.plans.map (·.length)).toList.sum).sum
-
 /-- The draws of `drawn` in passes `base … base + n − 1`, renumbered from `base`: a window's share of its draw. -/
 def shareOf (drawn : Array (Nat × Nat)) (base n : Nat) : Array (Nat × Nat) :=
   drawn.filterMap fun (i, p) => if base ≤ i && i < base + n then some (i - base, p) else none
 
-/-- Window `u`'s verdict in a session, `none` until it has one. -/
-def verdictOf (s : Session.State) (u : Nat) : Option Verdict := (s.windows[u]?).bind (·.verdict)
+/-- The pass lengths of window records `ws`, window by window in order: a draw's numbering of its receipts. -/
+def lengthsOf (ws : List WindowRecord) : Array Nat :=
+  (ws.flatMap fun w => (w.passes.map (·.plan.length)).toList).toArray
+
+/-- The passes of window records `ws`: with `ws` a draw's first `k` windows, where window `k`'s passes start. -/
+def passCount (ws : List WindowRecord) : Nat := (ws.map (·.passes.size)).sum
+
+/-- The receipts of window records `ws`: with `ws` a draw's first `k` windows, where window `k`'s receipts start. -/
+def receiptCount (ws : List WindowRecord) : Nat := (ws.map fun w => (w.passes.map (·.plan.length)).toList.sum).sum
 
 /-- Draw `c` (`t / g` of the window `t` it closes at): its values are `Key.subset`'s `min(s, U)`-subset of `[0, U)`
 on the openings key of `c` and the coin `coins[W + c]`, `U` the draw's receipts (`drawLengths`); each value is mapped to
@@ -79,20 +85,22 @@ def DrawIsSubset : Prop :=
         ∀ u ∈ drawWindows g s.params.windows (t.toNat / g),
           drawnOf s' u = some (shareOf drawn (passesBefore s (t.toNat / g * g) u) s.windows[u]!.plans.size)
 
-/-- Once every window of draw `c` is accepted, the draw's values are the sampler's on its openings key and coin
-`coins[W + c]`, and each value `v` is an openable receipt of the window `u` it falls in, its number there
-`v − receiptsBefore`. -/
+/-- Draw `c` over the records `ws` of its windows, in order, on the coin `coin`: its values `us` are the sampler's on
+its openings key, `U` the windows' receipts (`lengthsOf`). Once window `k`'s check of its share (`shareOf`, from its
+passes' start, `passCount`) accepts its openings, for each `k`, or the share is empty (which the close accepts), each
+value `v` is an openable receipt of the window `k` it falls in, its number there `v − receiptCount (ws.take k)`. -/
 def AcceptDrawsOpenable : Prop :=
-  ∀ (g : Nat) (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat)
-    (events : Array Session.Event) (rs : Array Session.Result) (s : Session.State),
-    Shared.run g (Session.State.init params reg coins appendCoins notBeforeNs) events = .ok (rs, s) →
-    ∀ (c : Nat), 1 ≤ g → 1 ≤ params.minPasses → c * g < params.windows →
-      (∀ u ∈ drawWindows g params.windows c, verdictOf s u = some .accept) →
-      ∃ L us, FlockSoundness.Randomness.subset (openingsKey reg.digest c coins[params.windows + c]!)
-          (min params.samples (drawLengths g s c).toList.sum) (drawLengths g s c).toList.sum [.str "openings"] L =
-          some us ∧
-        ∀ v ∈ us, ∃ u ∈ drawWindows g params.windows c, receiptsBefore s (c * g) u ≤ v ∧
-          Openable reg s.appends (s.record u) (v - receiptsBefore s (c * g) u)
+  ∀ (reg : Registration) (appends : Array Append) (c : Nat) (coin : ByteArray) (samples : Nat)
+    (ws : List WindowRecord) (drawn : Array (Nat × Nat)),
+    draws reg.digest c coin samples (lengthsOf ws) = some drawn →
+      ∃ L us, FlockSoundness.Randomness.subset (openingsKey reg.digest c coin)
+          (min samples (lengthsOf ws).toList.sum) (lengthsOf ws).toList.sum [.str "openings"] L = some us ∧
+        ∀ openings : Nat → Array Opening,
+          (∀ k (hk : k < ws.length), shareOf drawn (passCount (ws.take k)) ws[k].passes.size = #[] ∨
+            checkWindow reg reg.digest appends ws[k] (shareOf drawn (passCount (ws.take k)) ws[k].passes.size)
+              (openings k) = .accept) →
+          ∀ v ∈ us, ∃ k, ∃ hk : k < ws.length, receiptCount (ws.take k) ≤ v ∧
+            Openable reg appends ws[k] (v - receiptCount (ws.take k))
 
 /-- A run from `State.init` that leaves draw `c`'s first window undrawn reads no coin at `W + c` or above: on coins
 `coins'` that agree with `coins` below `W + c`, the same events give the same results and the same state, with

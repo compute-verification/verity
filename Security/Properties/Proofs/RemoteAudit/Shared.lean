@@ -20,8 +20,13 @@ its record (`sdraw_keeps`), and with `t` undrawn so is its draw's first window (
 `OpeningsUnreadUntilDrawn` and `ReleaseOrder` read. It needs `1 ≤ g`: at `g = 0` every window is draw 0, and coins that
 agree below `W` leave every window's openings coin free.
 
-`*_one`: at `g = 1` the session statements are today's (`Shared.run 1` is `Session.run`, `RemoteAudit.Shared.run_one`).
-`AcceptDrawsOpenable` is open.
+`acceptDrawsOpenable` is `Properties.RemoteAudit.acceptDrawsOpenable`'s argument across a draw's windows: each drawn
+`(i, p)` falls in the passes of one window `k` (`locatePass`), its share holds `(i − passCount, p)` (`shareOf_mem`),
+whose opening `checkWindow` passed (`checkWindow_accept`), and its number in the draw is the receipts before window `k`
+plus its number there (`flatMap_split`, `sum_take_mid`).
+
+`*_one`: at `g = 1` the session statements are today's (`Shared.run 1` is `Session.run`, `RemoteAudit.Shared.run_one`),
+and a draw of one window is `verifyWindow`'s (`acceptDrawsOpenable_one`).
 -/
 
 open RemoteAudit RemoteAudit.Session
@@ -213,6 +218,129 @@ theorem drawIsSubset : DrawIsSubset := by
     intro x _
     rw [finalize_plans]
   rw [hp]
+
+/-! ## A draw's accepted windows -/
+
+/-- A window record's pass lengths. -/
+abbrev lens (w : WindowRecord) : List Nat := (w.passes.map (·.plan.length)).toList
+
+theorem length_lens (w : WindowRecord) : (lens w).length = w.passes.size := by simp
+
+theorem passCount_eq (ws : List WindowRecord) : passCount ws = (ws.flatMap lens).length := by
+  induction ws with
+  | nil => rfl
+  | cons w ws ih =>
+    simp only [passCount, List.map_cons, List.sum_cons, List.flatMap_cons, List.length_append] at ih ⊢
+    rw [ih, length_lens]
+
+theorem receiptCount_eq (ws : List WindowRecord) : receiptCount ws = (ws.flatMap lens).sum := by
+  induction ws with
+  | nil => rfl
+  | cons w ws ih =>
+    simp only [receiptCount, List.map_cons, List.sum_cons, List.flatMap_cons, List.sum_append] at ih ⊢
+    rw [ih]
+
+/-- Each of the draw's passes is a pass of one of its windows. -/
+theorem locatePass : ∀ (ws : List WindowRecord) (i : Nat), i < passCount ws →
+    ∃ k, ∃ hk : k < ws.length, passCount (ws.take k) ≤ i ∧ i < passCount (ws.take k) + ws[k].passes.size
+  | [], i, h => by simp [passCount] at h
+  | w :: ws, i, h => by
+    simp only [passCount, List.map_cons, List.sum_cons] at h
+    by_cases hi : i < w.passes.size
+    · exact ⟨0, by simp, by simp [passCount], by simpa [passCount] using hi⟩
+    · obtain ⟨k, hk, h1, h2⟩ := locatePass ws (i - w.passes.size) (by unfold passCount; omega)
+      refine ⟨k + 1, by simpa using hk, ?_, ?_⟩
+      · simp only [passCount, List.take_succ_cons, List.map_cons, List.sum_cons] at h1 ⊢; omega
+      · simp only [passCount, List.take_succ_cons, List.map_cons, List.sum_cons, List.getElem_cons_succ] at h1 h2 ⊢
+        omega
+
+theorem flatMap_split (ws : List WindowRecord) (k : Nat) (hk : k < ws.length) :
+    ws.flatMap lens = (ws.take k).flatMap lens ++ (lens ws[k] ++ (ws.drop (k + 1)).flatMap lens) := by
+  conv => lhs; rw [← List.take_append_drop k ws, List.drop_eq_getElem_cons hk]
+  rw [List.flatMap_append, List.flatMap_cons]
+
+theorem sum_take_mid (A B C : List Nat) (i : Nat) (h1 : A.length ≤ i) (h2 : i < A.length + B.length) :
+    ((A ++ (B ++ C)).take i).sum = A.sum + (B.take (i - A.length)).sum := by
+  rw [List.take_append, List.take_of_length_le h1, List.take_append,
+    show i - A.length - B.length = 0 by omega, List.take_zero, List.append_nil, List.sum_append]
+
+theorem getElem!_mid (A B C : List Nat) (i : Nat) (h1 : A.length ≤ i) (h2 : i < A.length + B.length) :
+    (A ++ (B ++ C)).toArray[i]! = B[i - A.length]'(by omega) := by
+  rw [getElem!_pos (A ++ (B ++ C)).toArray i (by simp; omega), List.getElem_toArray,
+    List.getElem_append_right h1, List.getElem_append_left]
+
+theorem shareOf_mem (drawn : Array (Nat × Nat)) (base n k : Nat) (hk : k < drawn.size) (h1 : base ≤ drawn[k].1)
+    (h2 : drawn[k].1 < base + n) : (drawn[k].1 - base, drawn[k].2) ∈ shareOf drawn base n := by
+  unfold shareOf
+  rw [Array.mem_filterMap]
+  refine ⟨drawn[k], Array.getElem_mem hk, ?_⟩
+  generalize drawn[k] = q at h1 h2 ⊢
+  obtain ⟨a, b⟩ := q
+  simp only at h1 h2 ⊢
+  rw [ite_eq_left (by simp; omega)]
+
+theorem acceptDrawsOpenable : AcceptDrawsOpenable := by
+  intro reg appends c coin samples ws drawn hd
+  obtain ⟨L, us, hs, hsz, -, hrange, -⟩ := Properties.RemoteAudit.drawIsSubset _ _ _ _ _ _ hd
+  refine ⟨L, us, hs, fun openings hacc v hv => ?_⟩
+  obtain ⟨j, hj, rfl⟩ := Array.mem_iff_getElem.1 hv
+  have hjd : j < drawn.size := by omega
+  obtain ⟨hi, hp, hidx⟩ := hrange j hjd
+  rw [getElem!_pos us j hj] at hidx
+  have hsize : (lengthsOf ws).size = passCount ws := by simp [lengthsOf, passCount_eq]
+  obtain ⟨k, hk, hk1, hk2⟩ := locatePass ws drawn[j].1 (by omega)
+  have hsplit := flatMap_split ws k hk
+  have hA : ((ws.take k).flatMap lens).length = passCount (ws.take k) := (passCount_eq _).symm
+  have hB : (lens ws[k]).length = ws[k].passes.size := length_lens _
+  have hlist : (lengthsOf ws).toList = (ws.flatMap lens) := rfl
+  have hmem := shareOf_mem drawn (passCount (ws.take k)) ws[k].passes.size j hjd hk1 hk2
+  rcases hacc k hk with he | hc
+  · rw [he] at hmem; simp at hmem
+  obtain ⟨-, hchk⟩ := checkWindow_accept hc
+  obtain ⟨m, hm, hme⟩ := Array.mem_iff_getElem.1 hmem
+  have hck := hchk m hm
+  simp only [hme] at hck
+  have hi' : drawn[j].1 - passCount (ws.take k) < ws[k].passes.size := by omega
+  refine ⟨k, hk, ?_, drawn[j].1 - passCount (ws.take k), drawn[j].2, (openings k)[m]!, hi', ?_, ?_, hck⟩
+  · rw [← hidx]
+    unfold receiptIndex
+    rw [hlist, hsplit, sum_take_mid _ _ _ _ (by omega) (by omega), receiptCount_eq]
+    omega
+  · have e := getElem!_mid ((ws.take k).flatMap lens) (lens ws[k]) ((ws.drop (k + 1)).flatMap lens) drawn[j].1
+      (by omega) (by omega)
+    have hl : lengthsOf ws =
+        ((ws.take k).flatMap lens ++ (lens ws[k] ++ (ws.drop (k + 1)).flatMap lens)).toArray := by
+      unfold lengthsOf; exact congrArg List.toArray hsplit
+    rw [hl, e] at hp
+    rw [getElem!_pos ws[k].passes _ hi']
+    simpa [lens, hA] using hp
+  · rw [← hidx]
+    unfold receiptIndex
+    rw [hlist, hsplit, sum_take_mid _ _ _ _ (by omega) (by omega), receiptCount_eq, hA]
+    simp only [lens]
+    omega
+
+theorem filterMap_self {f : Nat × Nat → Option (Nat × Nat)} :
+    ∀ (l : List (Nat × Nat)), (∀ x ∈ l, f x = some x) → l.filterMap f = l
+  | [], _ => rfl
+  | x :: l, h => by
+    rw [List.filterMap_cons, h x (by simp), filterMap_self l fun y hy => h y (by simp [hy])]
+
+/-- A window's share of a draw over its passes alone is the whole draw. -/
+theorem shareOf_all (drawn : Array (Nat × Nat)) (n : Nat) (h : ∀ k (hk : k < drawn.size), drawn[k].1 < n) :
+    shareOf drawn 0 n = drawn := by
+  unfold shareOf
+  apply Array.ext'
+  rw [Array.toList_filterMap]
+  apply filterMap_self
+  intro x hx
+  obtain ⟨k, hk, rfl⟩ := Array.mem_iff_getElem.1 (Array.mem_toList_iff.1 hx)
+  have := h k hk
+  generalize drawn[k] = q at this ⊢
+  obtain ⟨a, b⟩ := q
+  simp only at this ⊢
+  rw [ite_eq_left (by simp; omega)]
+  simp
 
 theorem find_none' {p : Nat → Bool} {l : List Nat} (h : ∀ u, l.find? p = some u → False) : l.find? p = none := by
   cases e : l.find? p with
@@ -804,6 +932,26 @@ theorem liveUnder_one (params : Params) (reg : Registration) (appendCoins : Arra
     rw [Nat.div_one] at ht
     subst ht
     exact h coins coins' t k k' rs rs' s s' hag h₁ h₂ hd hd'
+
+/-- A draw of one window is `verifyWindow`'s: its share is the whole draw, and its receipts are numbered from 0. -/
+theorem acceptDrawsOpenable_one (h : AcceptDrawsOpenable) : Properties.RemoteAudit.AcceptDrawsOpenable := by
+  intro reg appends w coin samples openings hv
+  obtain ⟨drawn, hd, hc⟩ := verifyWindow_accept hv
+  have hl : lengthsOf [w] = w.passes.map (·.plan.length) := by apply Array.ext'; simp [lengthsOf]
+  obtain ⟨_, _, _, _, _, hrange, _⟩ := Properties.RemoteAudit.drawIsSubset _ _ _ _ _ _ hd
+  have hsh : shareOf drawn 0 w.passes.size = drawn :=
+    shareOf_all drawn _ fun k hk => by simpa using (hrange k hk).1
+  obtain ⟨L, us, hs, hus⟩ := h reg appends w.index coin samples [w] drawn (by rw [hl]; exact hd)
+  rw [hl] at hs
+  refine ⟨L, us, hs, fun v hv => ?_⟩
+  obtain ⟨k, hk, -, ho⟩ := hus (fun _ => openings) (fun k hk => by
+      have : k = 0 := by simp at hk; omega
+      subst this
+      right
+      simpa [passCount, hsh] using hc) v hv
+  have : k = 0 := by simp at hk; omega
+  subst this
+  simpa [receiptCount] using ho
 
 /-! ## `Live` at `g` windows a draw -/
 
