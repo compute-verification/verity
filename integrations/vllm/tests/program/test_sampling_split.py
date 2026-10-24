@@ -49,8 +49,9 @@ SERVED_V = (32000, 49152, 128256, 151936, 152064, 154880, 256000)
 SERVED_VS = ((128256, 16), (128256, 32))
 #: Boolean Definitions whose served sizes take seconds each to trace: pinned at one served V
 ONE_SERVED_V = ("GumbelSelectF32_v2",)
-#: a Boolean Definition that takes over 5 s to trace at circuit-check's statics (the lane's rounds 8-9, the uniform and the logs)
-SLOW_TRACE = ("GumbelLaneTail_v1",)
+#: the pins that take over 5 s to trace at circuit-check's statics: the lane and its rounds 8-9, the uniform and the logs, the noise
+#: group, NvLogf and the select at a served V; every pin at a served (V, S) pair is slow too (`_params`)
+SLOW_TRACE = ("GumbelLane_v1", "GumbelLaneTail_v1", "GumbelNoiseGroup_v1{G=1}", "NvLogf_v3", "GumbelSelectF32_v2{V=128256}")
 
 
 # --- the family's Definitions ------------------------------------------------------------------------------------------------
@@ -151,14 +152,11 @@ def _load() -> dict:
     return json.loads(FIXTURE.read_text())
 
 
-def _served(key: str) -> bool:
-    return any(isinstance(v, int) and v >= 1000 for v in _statics((re.fullmatch(r"[^{]+(?:\{(.*)\})?", key)[1] or "")).values())
-
-
 def _params():
     if not FIXTURE.exists():
         return []
-    return [pytest.param(k, marks=pytest.mark.slow) if _served(k) or k in SLOW_TRACE else k for k in _load()["pins"]]
+    served = tuple(f"{{V={v},S={s}}}" for v, s in SERVED_VS)
+    return [pytest.param(k, marks=pytest.mark.slow) if k in SLOW_TRACE or k.endswith(served) else k for k in _load()["pins"]]
 
 
 @pytest.fixture(scope="module")
@@ -172,7 +170,8 @@ def test_each_definition_is_constructed_where_it_was(defs):
 
 @pytest.mark.parametrize("key", _params())
 def test_the_definition_id_and_digest_are_unchanged(key, defs):
-    """A served size traces a Boolean Definition's body for seconds, so those keys are slow (with `SLOW_TRACE`); the rest stay quick."""
+    """The keys in `SLOW_TRACE` and those at a served (V, S) pair trace a Boolean Definition's body for over 5 s, so they are slow;
+    the rest, served vocabularies included, stay quick."""
     assert pin(key, defs) == _load()["pins"][key]
 
 

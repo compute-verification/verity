@@ -408,7 +408,7 @@ def test_act_statics_the_kernel_cannot_launch_are_refused() -> None:
         MR.silu_mul_fp8_block_quant_rows(np.zeros((1, 400), np.uint16), G=128)
 
 
-@pytest.mark.parametrize("I,G,specials", [(64, 16, False), (64, 16, True), (256, 128, True)])
+@pytest.mark.parametrize("I,G,specials", [pytest.param(64, 16, False, marks=pytest.mark.slow), (64, 16, True), (256, 128, True)])
 def test_the_act_twin_is_the_definition(I: int, G: int, specials: bool) -> None:
     """`fp8_moe_rows.silu_mul_fp8_block_quant_rows` against `SiluMulFp8BlockQuant_v1` row by row, on rows with the bf16 special words
     (zeros, subnormals, infinities, NaNs) planted at random places when `specials`."""
