@@ -76,7 +76,7 @@ read-only deploy key; if `watch.log` shows `FETCH-FAILED`, remove `--reap` until
 | `/data/chats` | `/workspace/chats` | the chats archive |
 | `/data/research`, `/data/research-control` | `/workspace/research`, `/workspace/research-control` | `research run` state and control worktrees |
 | `/data/infra` | `/workspace/infra` | infra's pod scripts and their logs; `msg-repo` and `msg-notes`, `msg.sh`'s checkout and notes clone |
-| `/data/watchers` | | the watchers supervisor: `run.sh`, `watchers.toml`, `vm_stop.toml`, `src`, `log/`, `status.json`, each loop's state (`vm_stop.json`, `fleet/`, `monitors/`, `agent-watch-offset`, `preflight-probe.json` with `preflight-tree` (its store index is `/root/watchers-preflight-store`, on the pod's own disk), `top-asks.json`, `top-sweep.json`, `challenger/` with `publish.sh` and its `state`), `repo` (a clone without a working tree, for `research deploy drift`'s `RESEARCH_DEPLOY_REPO`; drift fetches it each run), `bin/gh` (GitHub's CLI release, checksum-checked, on every loop's `PATH`; it reads `relay.env`'s `GH_TOKEN`), `extra.d/`, `known_hosts`; `notion.env` (`NOTION_API_KEY`, for `top-asks`) and `nebius-stop.env` (a Nebius account that may stop instances, for `vm-stop`) once placed (root, 0600) |
+| `/data/watchers` | | the watchers supervisor: `run.sh`, `watchers.toml`, `vm_stop.toml`, `src`, `log/`, `status.json`, each loop's state (`vm_stop.json`, `fleet/`, `monitors/`, `agent-watch-offset`, `preflight-probe.json` with `preflight-tree` (its store index is `/root/watchers-preflight-store`, on the pod's own disk), `top-asks.json`, `top-sweep.json`, `queue-watch/` (`queue-watch`'s `state.json`, its own runs dir `runs/`, and `repo`, a clone without a working tree it fetches main and next into each pass), `challenger/` with `publish.sh` and its `state`), `repo` (a clone without a working tree, for `research deploy drift`'s `RESEARCH_DEPLOY_REPO`; drift fetches it each run), `bin/gh` (GitHub's CLI release, checksum-checked, on every loop's `PATH`; it reads `relay.env`'s `GH_TOKEN`), `extra.d/`, `known_hosts`; `notion.env` (`NOTION_API_KEY`, for `top-asks`) and `nebius-stop.env` (a Nebius account that may stop instances, for `vm-stop`) once placed (root, 0600) |
 | `/data/backup`, `/data/tmp` | | backups and transfer bundles |
 
 Secrets stay on the volume and never in git: this README names the files, never their contents.
@@ -110,12 +110,15 @@ $CP "/data/infra/control-disk/run.sh --once --dry-run"      # one pass, posting 
 $CP "cat > /data/infra/msg.sh && chmod +x /data/infra/msg.sh" < infra/control/msg.sh
 ~~~
 
-`monitors-relay`'s `drift` reads git history the tree lacks from `/data/watchers/repo`, cloned once with the pod's deploy key, and
+`monitors-relay`'s `drift` reads git history the tree lacks from `/data/watchers/repo`, and `queue-watch` reads main and next from
+`/data/watchers/queue-watch/repo`, each cloned once with the pod's deploy key, and
 `fixtures-public`, the failed-check posts and the router call `gh`, installed once into `/data/watchers/bin`:
 
 ~~~sh
 $CP 'K="ssh -i /data/state/secrets/verity-deploy -o IdentitiesOnly=yes -o UserKnownHostsFile=/data/state/secrets/known_hosts"; \
   git clone -q --no-checkout -c core.sshCommand="$K" git@github.com:compute-verification/verity.git /data/watchers/repo'
+$CP 'K="ssh -i /data/state/secrets/verity-deploy -o IdentitiesOnly=yes -o UserKnownHostsFile=/data/state/secrets/known_hosts"; \
+  git clone -q --no-checkout -c core.sshCommand="$K" git@github.com:compute-verification/verity.git /data/watchers/queue-watch/repo'
 V=2.102.0; $CP "set -e; d=\$(mktemp -d /data/tmp/gh.XXXX); cd \$d; B=https://github.com/cli/cli/releases/download/v$V; \
   curl -fsSLO \$B/gh_${V}_linux_amd64.tar.gz; curl -fsSLO \$B/gh_${V}_checksums.txt; grep ' gh_${V}_linux_amd64.tar.gz\$' gh_${V}_checksums.txt | sha256sum -c -; \
   tar --no-same-owner -xzf gh_${V}_linux_amd64.tar.gz gh_${V}_linux_amd64/bin/gh; install -D -m 0755 gh_${V}_linux_amd64/bin/gh /data/watchers/bin/gh; cd /; rm -rf \$d"

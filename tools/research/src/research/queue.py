@@ -53,6 +53,9 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
                                                    passed and landed them, oldest first, one a line: each train's head, by drive's
                                                    `landed` labels in the store index (`merge.checked_heads`), less a head whose
                                                    train a later `git revert` names; what an auditor passes as main's line
+    research queue watch [--every S | --once] [--dry-run] ...
+                                                   landing's watchdog beside drive: pages @ci when the landing SLO is breached
+                                                   (`research.queue_watch`, its flags there)
     common flags: [--shadow] [--workdir DIR] [--rules FILE] [--repo OWNER/NAME] [--remote URL]
 
 Admission.  A PR is admitted while it is open against `main`, has an owner, carries no hold label, and is marked ready at its head;
@@ -2031,6 +2034,10 @@ def _checked_heads(a: argparse.Namespace) -> int:
 
 
 def main(argv: list[str]) -> int:
+    if argv[:1] == ["watch"]:
+        from . import queue_watch
+
+        return queue_watch.main(argv[1:])
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
     ap.add_argument("command", choices=["status", "sync", "land", "eject", "ready", "judge", "drive", "report", "open",
                                             "stats", "checked-heads"])
