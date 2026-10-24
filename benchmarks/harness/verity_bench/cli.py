@@ -46,7 +46,7 @@ def _check(args: Any) -> int:
 
 
 def _run(args: Any) -> int:
-    return jobs.dispatch(_make_plan(args), args.spec)
+    return jobs.dispatch(_make_plan(args), args.spec, direct=args.direct)
 
 
 def _point(args: Any) -> int:
@@ -140,6 +140,8 @@ def _parser() -> argparse.ArgumentParser:
 
     run = commands.add_parser("run", help="launch one recorded research run per incomplete point")
     _spec_argument(run)
+    run.add_argument("--direct", metavar="NODE", default=None,
+                     help="launch each point with `research run --on NODE` through a GPU slot of that node, not the queue")
     run.set_defaults(run=_run, command_parser=run)
 
     check = commands.add_parser("check", help="report whether every point has a passing result")
