@@ -27,8 +27,9 @@
 // Both forms load the A and B words H1U_PD segments ahead while the current segment is multiplied and folded (WS always,
 // the fused form with H1U_PF), in a ring of H1U_PD register sets (H1U_RING = 1: H1U_PD + 1 sets, each segment's load
 // going to the set the segment before it read, so a load never waits on the copy out of its set); H1U_L2PF also
-// prefetches into L2 the A and B lines 16 segments ahead and (WS) the next chunk's workspace blocks. H1U_WARPS is the
-// warps a CTA (one a unit).
+// prefetches into L2 the A and B lines 16 segments ahead and (WS) the next chunk's workspace blocks, the A and B lines
+// only in calls of at most H1U_L2PF_MAXM rows where that is set (prefill's M = 2048 reads every B line 64 times a step,
+// so they are L2's already, and the prefetches cost h1um about 2 %). H1U_WARPS is the warps a CTA (one a unit).
 // H1U_SPLIT builds h1p in h1u's place: a pair of warps a unit, for calls whose units leave most of the GPU idle (decode).
 // Warp p of the pair multiplies n-tiles p and p + 2 (T and Y), so it holds exactly the entries chains 4 p .. 4 p + 3 absorb
 // (key t = 2 i + p), and folds those; it hashes (or loads) one of the chunk's two blocks a lane, p = 0 the rows', p = 1 the
@@ -80,6 +81,9 @@ constexpr int WARPS = H1U_WARPS;
 #endif
 #ifndef H1U_L2PF
 #define H1U_L2PF 0
+#endif
+#ifndef H1U_L2PF_MAXM
+#define H1U_L2PF_MAXM 0
 #endif
 #ifndef H1U_SPLIT
 #define H1U_SPLIT 0
@@ -539,6 +543,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
   const u32 ri = u / ncb, cj = DG ? u : u % ncb;
   const u32 ks = K / 32, chunks = ks / 16, rb = chunks + 1, cb = chunks + 1;
   const u32 nwords = 2 * (ks + MD);
+  const bool l2ab = H1U_L2PF && (H1U_L2PF_MAXM == 0 || M <= H1U_L2PF_MAXM);
   u32* o = out + (u64)u * nwords;
   int alive = 0, flags = 0;
   if (OS) {
@@ -733,7 +738,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
       for (int jj = 0; jj < NS; ++jj) {
         const u32 j = j0 + jj, sg = 16 * blk + j;
         uint2 ca[4], cw[4];
-        if (H1U_L2PF && sg % 4 == 0 && sg + 16 < ks) {
+        if (l2ab && sg % 4 == 0 && sg + 16 < ks) {
           prefetch_l2(Ab + (u64)lane * K + 32 * (sg + 16));
           prefetch_l2(Bb + (u64)lane * K + 32 * (sg + 16));
         }
