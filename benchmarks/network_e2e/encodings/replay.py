@@ -25,10 +25,11 @@ connectors, multimodal, LoRA, structured output, aborts and stop strings) rather
 whether it had arrived or not, and when the engine is quiet (nothing running or waiting) the next arrival is what starts
 the next step, so neither costs a bit. So the advice is one binary decision per open step, whether the next request had
 arrived (`decisions`): `gamma_values` sends each request's count of open steps passed over as Elias gamma, and `encode`
-codes the decisions with an adaptive binary arithmetic code, its contexts the request's passes so far and, clocked, its
-certified ingress bucket against the release buckets around the step (`_Clock`), one bit string per certifier window.
-`decode` replays from that advice and the certified I/O alone, and `table` counts the bits per certifier window against
-I1 v0's fields (`v0_widths`).
+codes the decisions with an adaptive binary arithmetic code inside the replay, one bit string per certifier window. Its
+contexts (`CONTEXTS`) are the request's passes so far, its certified ingress bucket against the release buckets around
+the step (`_Clock`), and its certified egress: admitted now, its outputs would leave in step with a running request's,
+which the release buckets of both show (`_Egress`). `decode` replays from that advice and the certified I/O alone, and
+`table` counts the bits per certifier window against I1 v0's (ADV-SPEC's `bits_by_window`, else `v0_widths`).
 """
 
 from __future__ import annotations
@@ -343,9 +344,10 @@ class _Sched:
         return self.kv.allocate_slots(r, n, hit, full_sequence_must_fit=e.scheduler_reserve_full_isl,
                                       has_scheduled_reqs=bool(self.running), dry=True)
 
-    def schedule(self, on_open: Callable[[int, int], bool] | None = None) -> tuple[Step, dict[int, bool]]:
+    def schedule(self, on_open: Callable[[int, int, dict[int, int]], bool] | None = None) -> tuple[Step, dict[int, bool]]:
         """One `schedule()`. When the waiting loop reaches the queue's end with budget left, `on_open(token_budget,
-        input_budget)` may append one more request to the waiting queue (returning True), and the loop goes on."""
+        input_budget, scheduled)` (`scheduled`: the step's rows so far, request -> tokens) may append one more request to
+        the waiting queue (returning True), and the loop goes on."""
         e = self.e
         token_budget = e.max_num_batched_tokens
         input_budget = e.max_num_batched_tokens
@@ -393,7 +395,7 @@ class _Sched:
             skipped_now: deque[_R] = deque()
             while token_budget > 0:
                 if not (self.waiting or self.skipped):
-                    if on_open is None or not on_open(token_budget, input_budget):
+                    if on_open is None or not on_open(token_budget, input_budget, sched):
                         break
                 if input_budget <= 0:
                     break
@@ -517,7 +519,17 @@ class Replay:
     asked: list[list[int]]          # the open steps it was asked about, its admission last
 
 
-Decide = Callable[[int, int], bool]
+@dataclass(frozen=True)
+class Open:
+    """The scheduler where an open step's waiting loop stands: its state, the step's token budget left and its rows so
+    far (request -> tokens), all read only."""
+
+    sched: _Sched
+    budget: int
+    scheduled: dict[int, int]
+
+
+Decide = Callable[[int, int, Open], bool]
 
 
 def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int] | None = None,
@@ -525,8 +537,8 @@ def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int
     """Run the scheduler over `requests` (in the order they reached the engine) and return the executed steps.
 
     Exactly one of: `admit`, each request's `before_step` (it is added before the first `schedule` after `admit[i]`
-    executed steps, as the engine core adds it), or `decide(i, k)`, asked at each open step k whether the next request i
-    has arrived (an arrival into a quiet engine is added without asking)."""
+    executed steps, as the engine core adds it), or `decide(i, k, open)`, asked at each open step k whether the next
+    request i has arrived (an arrival into a quiet engine is added without asking)."""
     n = len(requests)
     if (admit is None) == (decide is None):
         raise ValueError("give exactly one of admit and decide")
@@ -548,11 +560,11 @@ def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int
         out.forced[nxt] = forced
         nxt += 1
 
-    def on_open(token_budget: int, input_budget: int) -> bool:
+    def on_open(token_budget: int, input_budget: int, scheduled: dict[int, int]) -> bool:
         if decide is None or nxt >= n or not s.would_admit(nxt, token_budget, input_budget):
             return False
         out.asked[nxt].append(len(out.steps))
-        if not decide(nxt, len(out.steps)):
+        if not decide(nxt, len(out.steps), Open(s, min(token_budget, input_budget), scheduled)):
             return False
         add(False)
         return True
@@ -625,6 +637,20 @@ class Trace:
 
     def clocked(self) -> bool:
         return all(t is not None for t in self.ingress_t) and all(t is not None for t in self.release_t)
+
+    def kept_steps(self) -> list[list[int]]:
+        """Each request's kept outputs as the steps that emitted them: a row emits when it reaches the request's frontier
+        (its prompt and the outputs kept so far), up to its output length."""
+        kept: list[list[int]] = [[] for _ in self.requests]
+        for s, st in enumerate(self.steps):
+            for i, start, n in st.rows:
+                if start + n == self.requests[i].prompt_len + len(kept[i]) and len(kept[i]) < self.requests[i].output_len:
+                    kept[i].append(s)
+        return kept
+
+    def release_buckets(self, bucket_s: float) -> list[list[int]]:
+        """Each request's kept outputs as the egress certifier saw them: the bucket each left in."""
+        return [[bucket(self.release_t[s], bucket_s) for s in ks] for ks in self.kept_steps()]  # type: ignore[arg-type]
 
 
 def load_step_trace(records: Iterable[dict[str, Any]], *, tokens: dict[str, Sequence[int]] | None = None,
@@ -709,7 +735,8 @@ def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block
         if m is None:
             raise ValueError(f"{d / 'server.log'}: no 'GPU KV cache size' line; give num_gpu_blocks")
         L = int(opt("--max-model-len") or 0)
-        num_gpu_blocks = round(int(m.group(1).replace(",", "")) * cdiv(L, block_size) / L)
+        # vLLM logs int(num_blocks / cdiv(L, block_size) * L) (`get_kv_cache_capacity`), which this inverts exactly
+        num_gpu_blocks = cdiv(int(m.group(1).replace(",", "")) * cdiv(L, block_size), L)
     engine = Engine(max_num_seqs=int(opt("--max-num-seqs") or 0), max_num_batched_tokens=int(opt("--max-num-batched-tokens") or 0),
                     max_model_len=int(opt("--max-model-len") or 0), num_gpu_blocks=num_gpu_blocks, block_size=block_size,
                     enable_chunked_prefill="--no-enable-chunked-prefill" not in argv,
@@ -822,7 +849,7 @@ def decisions(trace: Trace) -> tuple[list[Decision], Replay]:
     first = trace.first_scheduled()
     if any(f < 0 for f in first):
         raise ValueError(f"requests never scheduled: {[trace.ids[i] for i, f in enumerate(first) if f < 0][:8]}")
-    rp = replay(trace.engine, trace.requests, decide=lambda i, k: k >= first[i])
+    rp = replay(trace.engine, trace.requests, decide=lambda i, k, _: k >= first[i])
     m = compare(rp.steps, trace.steps)
     if m.first_mismatch is not None:
         raise ValueError(f"the replay diverges from the trace at step {m.first_mismatch} ({m.matched}/{m.steps} steps match)")
@@ -871,6 +898,70 @@ class _Clock:
         p = self.prev[j] if 0 <= j < len(self.prev) else None
         n = self.next[k] if k < len(self.next) else None
         return (2 if p is None else max(-1, min(1, self.b_in[i] - p)), 2 if n is None else int(self.b_in[i] > n))
+
+
+class _Egress:
+    """Request i's certified egress against a running request's, at an open step. Admitted now, i's outputs would leave
+    one per step with the running request's from the one it emits this step on, `lead` steps later when i's prompt
+    needs more than this step's budget left; admitted next step, with that step's lead. So whether i's release buckets
+    line up with the running request's under each (2: nothing to compare) says, at most open steps, whether i arrived
+    now; when both leads put i's first output at the same step, egress can't tell them apart and both line up. They are compared up to i's first change of bucket, which fixes the shift (the running request's must
+    change there too), so that a later pause of either doesn't count. The running request is the decoding one with the most outputs left; the output it emits this
+    step is the one after those it has kept and has in flight. Everything read is the replay's state and the certified
+    egress."""
+
+    def __init__(self, trace: Trace, bucket_s: float) -> None:
+        if not trace.clocked():
+            raise ValueError("the trace has no certifier clock (ingress_t and release_t)")
+        self.out = trace.release_buckets(bucket_s)
+
+    @staticmethod
+    def lead(o: Open, n: int, delay: int) -> int:
+        """Steps after this one until a prompt of `n` tokens, admitted `delay` steps from now, is computed: each step the
+        running requests go first in order (a decode one token, a prefill its chunk), then it, until the budget runs
+        out."""
+        s, e = o.sched, o.sched.e
+        thr = e.long_prefill_token_threshold or e.max_num_batched_tokens
+        left = n - (min(n, o.budget, thr) if delay == 0 else 0)
+        work = [j.num_tokens + j.placeholders - j.num_computed - o.scheduled.get(j.i, 0) for j in s.running]
+        steps = 0
+        while left > 0 and steps < 4 * e.max_model_len:
+            steps += 1
+            budget = e.max_num_batched_tokens
+            for k, w in enumerate(work):
+                take = min(w or 1, thr, budget)
+                budget -= take
+                work[k] = max(w - take, 0)
+            if steps >= delay:
+                left -= min(left, thr, budget)
+        return steps
+
+    def context(self, i: int, o: Open) -> tuple[int, int]:
+        s, e = o.sched, o.sched.e
+        r = s.reqs[i]
+        n = r.num_tokens - len(s.kv.hit(r)) * e.block_size
+        now, later = self.lead(o, n, 0), self.lead(o, n, 1)
+        best: tuple[int, int] | None = None
+        for j in s.running:
+            if j.num_tokens + j.placeholders - j.num_computed != 1:
+                continue
+            base = j.n_out + j.placeholders
+            if best is None or len(self.out[j.i]) - base > len(self.out[best[0]]) - best[1]:
+                best = (j.i, base)
+        if best is None:
+            return (3, 3)
+        a, (j, base) = self.out[i], best
+        b = self.out[j]
+        edge = next((t for t in range(1, len(a)) if a[t] != a[t - 1]), None)
+
+        def lines_up(d: int) -> int:
+            m = min(len(a) if edge is None else edge, len(b) - base - d)
+            if m <= 0:
+                return 2
+            same = all(a[t] == b[base + d + t] for t in range(m))
+            return int(same and (edge is None or base + d + edge >= len(b) or b[base + d + edge] != a[0]))
+
+        return (lines_up(now), lines_up(later))
 
 
 # --- an adaptive binary arithmetic code for the decisions (Witten, Neal and Cleary's coder, KT estimates per context) --
@@ -979,43 +1070,75 @@ class Code:
     """The residual advice under the adaptive code: one bit string per certifier window (a request's decisions go in its
     ingress window's), and what an ideal coder would spend (`ideal`, bits)."""
 
-    clocked: bool
+    contexts: str                   # one of CONTEXTS
     bucket_s: float
     window_buckets: int
     bits: dict[int, list[int]]
     ideal: dict[int, float]
 
 
-def _context(clock: _Clock | None, i: int, k: int, passed: int) -> tuple[int, ...]:
-    return (min(passed, 2),) + (clock.context(i, k) if clock is not None else ())
+#: the adaptive code's contexts: `plain`, the request's passes so far (`min(passed, 2)`); `clocked`, those and its ingress
+#: bucket against the release buckets around the step (`_Clock`); `egress`, its release buckets against a running
+#: request's (`_Egress`), and the clock's where those can't tell
+CONTEXTS = ("plain", "clocked", "egress")
+_TELLS = {(1, 0), (0, 1), (0, 0)}
 
 
-def encode(trace: Trace, *, clocked: bool, bucket_s: float = 0.1, window_buckets: int = 600) -> Code:
-    """Code each decision with the adaptive binary code, its context the request's passes so far (`min(passed, 2)`) and,
-    clocked, `_Clock.context`."""
-    ds, _ = decisions(trace)
-    clock = _Clock(trace, bucket_s) if clocked else None
+def _coder(trace: Trace, contexts: str, bucket_s: float) -> Callable[[int, int, int, Open], tuple[int, ...]]:
+    if contexts not in CONTEXTS:
+        raise ValueError(f"contexts {contexts!r}: one of {CONTEXTS}")
+    clock = _Clock(trace, bucket_s) if contexts != "plain" else None
+    egress = _Egress(trace, bucket_s) if contexts == "egress" else None
+
+    def context(i: int, k: int, passed: int, o: Open) -> tuple[int, ...]:
+        if clock is None:
+            return (min(passed, 2),)
+        if egress is None:
+            return (min(passed, 2),) + clock.context(i, k)
+        e = egress.context(i, o)
+        return e if e in _TELLS else e + clock.context(i, k)
+
+    return context
+
+
+def encode(trace: Trace, *, contexts: str = "egress", bucket_s: float = 0.1, window_buckets: int = 600) -> Code:
+    """Code each decision, as the replay asks it, with the adaptive binary code in `contexts`. Refuses a trace the replay
+    doesn't reproduce."""
+    first = trace.first_scheduled()
+    if any(f < 0 for f in first):
+        raise ValueError(f"requests never scheduled: {[trace.ids[i] for i, f in enumerate(first) if f < 0][:8]}")
+    context = _coder(trace, contexts, bucket_s)
     rw, _ = windows(trace, bucket_s=bucket_s, window_buckets=window_buckets)
     model, enc, ideal = _KT(), {}, {}
-    for d in ds:
-        ctx = _context(clock, d.request, d.step, d.passed)
+    passed = [0] * len(trace.requests)
+
+    def decide(i: int, k: int, o: Open) -> bool:
+        bit = k >= first[i]
+        ctx = context(i, k, passed[i], o)
         f0, f1 = model.freqs(ctx)
-        w = rw[d.request]
-        enc.setdefault(w, _Encoder()).put(d.arrived, f0, f1)
-        ideal[w] = ideal.get(w, 0.0) - math.log2((f1 if d.arrived else f0) / (f0 + f1))
-        model.update(ctx, d.arrived)
-    return Code(clocked, bucket_s, window_buckets, {w: e.finish() for w, e in enc.items()}, ideal)
+        w = rw[i]
+        enc.setdefault(w, _Encoder()).put(bit, f0, f1)
+        ideal[w] = ideal.get(w, 0.0) - math.log2((f1 if bit else f0) / (f0 + f1))
+        model.update(ctx, bit)
+        passed[i] += 1
+        return bit
+
+    m = compare(replay(trace.engine, trace.requests, decide=decide).steps, trace.steps)
+    if m.first_mismatch is not None:
+        raise ValueError(f"the replay diverges from the trace at step {m.first_mismatch} ({m.matched}/{m.steps} steps match)")
+    return Code(contexts, bucket_s, window_buckets, {w: e.finish() for w, e in enc.items()}, ideal)
 
 
 def decode(trace: Trace, code: Code) -> Replay:
-    """Replay from the residual advice: the trace's certified I/O and clock only (its steps are not read)."""
-    clock = _Clock(trace, code.bucket_s) if code.clocked else None
+    """Replay from the residual advice: the trace's certified I/O and clock only (its steps are read for the release
+    bucket of each kept output, which the egress certifier saw)."""
+    context = _coder(trace, code.contexts, code.bucket_s)
     rw, _ = windows(trace, bucket_s=code.bucket_s, window_buckets=code.window_buckets)
     model, dec = _KT(), {}
     passed = [0] * len(trace.requests)
 
-    def decide(i: int, k: int) -> bool:
-        ctx = _context(clock, i, k, passed[i])
+    def decide(i: int, k: int, o: Open) -> bool:
+        ctx = context(i, k, passed[i], o)
         f0, f1 = model.freqs(ctx)
         w = rw[i]
         if w not in dec:
@@ -1062,7 +1185,8 @@ def v0_advice(trace: Trace, v0: Any, *, bucket_s: float = 0.1) -> Any:
     reqs = tuple(v0.RequestAdvice(id=trace.ids[i], prompt_len=trace.requests[i].prompt_len,
                                   output_len=trace.requests[i].output_len, finish="eos" if trace.requests[i].eos else "length")
                  for i in order)
-    steps, release, kept = [], [], [0] * len(reqs)
+    kept = trace.kept_steps()
+    steps, release, at = [], [], [0] * len(reqs)
     for s, (st, mine) in enumerate(zip(trace.steps, rp.steps)):
         rows = []
         for i, start, n in st.rows:
@@ -1070,8 +1194,8 @@ def v0_advice(trace: Trace, v0: Any, *, bucket_s: float = 0.1) -> Any:
             rows.append(v0.Row(request=idx[i], kind="decode" if n == 1 and start >= q.prompt_len else "prefill", start=start,
                                n=n, cache_hit=mine.cache_hit.get(i, 0), preempted=i in mine.resumed,
                                sources=tuple(v0.Source(idx[o], k) for o, k in mine.sources.get(i, ()))))
-            if start + n == q.prompt_len + kept[idx[i]] and kept[idx[i]] < q.output_len:
-                kept[idx[i]] += 1
+            if at[i] < len(kept[i]) and kept[i][at[i]] == s:
+                at[i] += 1
                 t = trace.release_t[s]
                 release.append(0 if t is None else bucket(t, bucket_s))
         steps.append(v0.StepAdvice(rows=tuple(rows)))
@@ -1086,9 +1210,9 @@ def table(trace: Trace, *, bucket_s: float = 0.1, window_buckets: int = 600, v0:
     charge = v0.bits_by_window(v0_advice(trace, v0, bucket_s=bucket_s), window_buckets) if v0 is not None else None
     ds, rp = decisions(trace)
     g = gamma_values(rp)
-    codes = {"adaptive": encode(trace, clocked=False, bucket_s=bucket_s, window_buckets=window_buckets)}
-    if trace.clocked():
-        codes["adaptive_clocked"] = encode(trace, clocked=True, bucket_s=bucket_s, window_buckets=window_buckets)
+    codes = {"adaptive" if c == "plain" else f"adaptive_{c}": encode(trace, contexts=c, bucket_s=bucket_s,
+                                                                     window_buckets=window_buckets)
+             for c in CONTEXTS if c == "plain" or trace.clocked()}
     decoded = {name: compare(decode(trace, c).steps, trace.steps).__dict__ for name, c in codes.items()}
     rw, sw = windows(trace, bucket_s=bucket_s, window_buckets=window_buckets)
     v0w = v0_widths(trace, window_buckets=window_buckets)
@@ -1150,17 +1274,17 @@ def main(argv: Sequence[str] | None = None) -> None:
     a = ap.parse_args(argv)
     v0 = load_v0(a.v0)
     out: dict[str, Any] = {}
-    print("| trace | requests | steps | replay matched | I1 v0 bits | gamma | adaptive | adaptive clocked | clocked bits/request "
-          "| order bits |\n|---|---|---|---|---|---|---|---|---|---|")
+    print("| trace | requests | steps | replay matched | I1 v0 bits | gamma | adaptive | adaptive clocked | adaptive egress "
+          "| best bits/request | order bits |\n|---|---|---|---|---|---|---|---|---|---|---|")
     for p in a.traces:
         tr = read_any(p)
         tb = out[p.stem if p.is_file() else p.name] = table(tr, bucket_s=a.bucket_ms / 1000, window_buckets=a.window_buckets, v0=v0)
         s = {k: sum(w[k] for w in tb["windows"] if w.get(k) is not None) for k in tb["windows"][0]}
         m = tb["match_before_step"]
+        best = min(s[k] for k in ("adaptive_bits", "adaptive_clocked_bits", "adaptive_egress_bits") if k in s)
         print(f"| {p.stem if p.is_file() else p.name} | {tb['requests']} | {tb['steps']} | {m['matched']}/{m['steps']} | "
               f"{s['v0_bits']} | {s['gamma_bits']} | {s['adaptive_bits']} | {s.get('adaptive_clocked_bits', '-')} | "
-              f"{s.get('adaptive_clocked_bits', s['adaptive_bits']) / max(tb['requests'], 1):.2f} | {tb['order_bits']} |",
-              flush=True)
+              f"{s.get('adaptive_egress_bits', '-')} | {best / max(tb['requests'], 1):.2f} | {tb['order_bits']} |", flush=True)
     if a.out:
         a.out.write_text(json.dumps(out, indent=1))
 

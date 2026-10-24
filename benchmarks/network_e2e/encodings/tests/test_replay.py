@@ -55,10 +55,10 @@ def test_replay_matches_vllm_step_for_step(name):
 
 
 @pytest.mark.parametrize("name", CASES)
-@pytest.mark.parametrize("clocked", [False, True])
-def test_residual_decodes_to_the_trace(name, clocked):
+@pytest.mark.parametrize("contexts", R.CONTEXTS)
+def test_residual_decodes_to_the_trace(name, contexts):
     t = trace(name)
-    code = R.encode(t, clocked=clocked)
+    code = R.encode(t, contexts=contexts)
     m = R.compare(R.decode(t, code).steps, t.steps)
     assert m.first_mismatch is None and m.matched == len(t.steps)
     assert all(len(b) <= code.ideal[w] + 2 for w, b in code.bits.items())
@@ -66,10 +66,27 @@ def test_residual_decodes_to_the_trace(name, clocked):
 
 def test_wrong_advice_changes_the_schedule():
     t = trace("async-light")
-    code = R.encode(t, clocked=True)
+    code = R.encode(t)
     (w, bits), = code.bits.items()
-    flipped = R.Code(code.clocked, code.bucket_s, code.window_buckets, {w: [1 - bits[0]] + bits[1:]}, code.ideal)
+    flipped = R.Code(code.contexts, code.bucket_s, code.window_buckets, {w: [1 - bits[0]] + bits[1:]}, code.ideal)
     assert R.compare(R.decode(t, flipped).steps, t.steps).first_mismatch is not None
+
+
+def test_egress_tells_light_load_arrivals_apart():
+    """At light load a request joins a running batch at an open step; its outputs' release buckets against a running
+    request's say which step, where the ingress clock leaves about log2(steps per bucket) bits."""
+    t = trace("async-light")
+    bits = {c: sum(len(b) for b in R.encode(t, contexts=c).bits.values()) for c in R.CONTEXTS}
+    assert bits["egress"] < bits["clocked"] < bits["plain"]
+
+
+@pytest.mark.parametrize("name", CASES)
+def test_kept_outputs_are_the_replays_emissions(name):
+    t = trace(name)
+    kept = t.kept_steps()
+    assert [len(k) for k in kept] == [r.output_len for r in t.requests]
+    assert all(t.emits[s] for k in kept for s in k)
+    assert all(a < b for k in kept for a, b in zip(k, k[1:]))
 
 
 def test_table_counts_every_request_and_step():
@@ -79,13 +96,70 @@ def test_table_counts_every_request_and_step():
     assert sum(w["steps"] for w in tb["windows"]) == len(t.steps)
     assert all(v["first_mismatch"] is None for v in tb["decoded"].values())
     for w in tb["windows"]:
-        assert w["adaptive_clocked_bits"] < w["v0_bits"] // 100
+        assert w["adaptive_egress_bits"] < w["v0_bits"] // 100
+
+
+def corpus_dir(t, d: Path) -> Path:
+    """`t` written as one TRACE-CORPUS trace (`benchmarks/network_e2e/traces/summary.py`'s joined files), with a step that
+    scheduled nothing, as the hook records one."""
+    seen: set[int] = set()
+    with open(d / "steps.jsonl", "w") as f:
+        f.write(json.dumps({"step": 0, "total_num_scheduled_tokens": 0, "new": [], "cached": []}) + "\n")
+        for k, s in enumerate(t.steps):
+            new, cached = [], []
+            for i, start, n in s.rows:
+                row = {"id": t.ids[i], "num_computed_tokens": start, "num_scheduled_tokens": n, "resumed": i in s.resumed}
+                (cached if i in seen else new).append(row)
+                seen.add(i)
+            f.write(json.dumps({"step": k + 1, "total_num_scheduled_tokens": sum(n for _, _, n in s.rows), "new": new,
+                                "cached": cached, "batch": [t.ids[i] for i, _, _ in s.rows],
+                                "preempted": [t.ids[i] for i in s.preempted], "sampled": [1] if t.emits[k] else [],
+                                "t_output": 1e9 + t.release_t[k]}) + "\n")
+    with open(d / "requests.jsonl", "w") as f:
+        for i, r in enumerate(t.requests):
+            f.write(json.dumps({"id": t.ids[i], "prompt_len": r.prompt_len, "max_tokens": r.max_tokens,
+                                "output_len": r.output_len, "finish_reason": "stop" if r.eos else "length", "eos": r.eos,
+                                "prompt_ids": [3] * r.prompt_len, "output_ids": [4] * r.output_len,
+                                "send_unix": 1e9 + t.ingress_t[i]}) + "\n")
+    e = t.engine
+    argv = ["--max-model-len", str(e.max_model_len), "--max-num-seqs", str(e.max_num_seqs), "--max-num-batched-tokens",
+            str(e.max_num_batched_tokens), "--no-async-scheduling", "--enable-chunked-prefill"]
+    (d / "meta.json").write_text(json.dumps({"server_argv": argv}))
+    L, c = e.max_model_len, R.cdiv(e.max_model_len, e.block_size)
+    (d / "server.log").write_text(f"INFO GPU KV cache size: {int(e.num_gpu_blocks / c * L):,} tokens, Maximum ...\n")
+    return d
+
+
+def test_reads_a_trace_corpus_trace(tmp_path):
+    t = trace("sync-kv-pressure")
+    c = R.read_corpus_trace(corpus_dir(t, tmp_path))
+    assert c.engine == t.engine and c.ids == t.ids and len(c.steps) == len(t.steps)
+    rp = R.replay(c.engine, c.requests, admit=c.before_step)
+    assert R.compare(rp.steps, c.steps).ordered == len(t.steps)
+    assert R.compare(R.decode(c, R.encode(c)).steps, c.steps).first_mismatch is None
+
+
+def test_order_bits_charge_only_reordering():
+    t = trace("sync-kv-pressure")
+    assert sorted(t.ingress_t) == t.ingress_t
+    n = len(t.requests)
+    assert R.order_bits(t) <= 0.5 * R.math.log2(n) + 1
+    t.ingress_t[0], t.ingress_t[-1] = t.ingress_t[-1], t.ingress_t[0]
+    assert R.order_bits(t) > 0.5 * R.math.log2(n) + 1 + R.gamma_bits(n - 1)
+
+
+def test_v0_advice_is_valid_advice_v0():
+    v0 = pytest.importorskip("verity.core.protocols.certifier.advice")
+    for name in CASES:
+        t = trace(name)
+        adv = R.v0_advice(t, v0)
+        assert len(adv.steps) == len(t.steps) and len(adv.release) == sum(r.output_len for r in t.requests)
 
 
 def test_arrivals_into_a_quiet_engine_cost_nothing():
     e = R.Engine(max_num_seqs=4, max_num_batched_tokens=64, max_model_len=256, num_gpu_blocks=64)
     reqs = [R.RequestIO(prompt_len=20, max_tokens=5, output_len=3, eos=True) for _ in range(3)]
-    rp = R.replay(e, reqs, decide=lambda i, k: False)
+    rp = R.replay(e, reqs, decide=lambda i, k, _: False)
     assert rp.forced == [True] * 3 and rp.asked[0] == [] and all(rp.asked[1:])
     assert R.gamma_values(rp) == [None] + [len(a) for a in rp.asked[1:]]
 
@@ -100,7 +174,7 @@ def test_admission_steps_round_trip_through_decide():
             reqs.append(R.RequestIO(prompt_len=rng.randint(4, 90), max_tokens=out + rng.randint(0, 2), output_len=out,
                                     eos=rng.random() < 0.7))
         reqs = [R.RequestIO(r.prompt_len, r.max_tokens, r.output_len if r.eos else r.max_tokens, r.eos) for r in reqs]
-        a = R.replay(e, reqs, decide=lambda i, k: rng.random() < 0.4)
+        a = R.replay(e, reqs, decide=lambda i, k, _: rng.random() < 0.4)
         b = R.replay(e, reqs, admit=a.admitted)
         assert R.compare(a.steps, b.steps).ordered == len(a.steps)
         assert any(s.preempted for s in a.steps)
