@@ -974,8 +974,11 @@ class SoWindow(DO.Window):
             ph["a_tables_ms"] = self.ev_a[0].elapsed_time(self.ev_a[1])
         if units_wait is not None:
             ph["units_wait_ms"] = units_wait
-            ph["tail_mid_ms"] = self.ev_w[1].elapsed_time(self.ev_w[2])
-            ph["tail_round_ms"] = self.ev_w[2].elapsed_time(self.ev_w[3])
+            # under TAIL=2 the root came from the tail's own word, which the host can read before the stream is past
+            # ev_w[2] and ev_w[3]: a step whose stream isn't there yet has no tail times
+            if not zc or self.ev_w[3].query():
+                ph["tail_mid_ms"] = self.ev_w[1].elapsed_time(self.ev_w[2])
+                ph["tail_round_ms"] = self.ev_w[2].elapsed_time(self.ev_w[3])
             if self.hmark:
                 ph["h_tail_ms"] = self.ev_w[1].elapsed_time(self.ev_h[0])
                 ph["h_read_ms"] = self.ev_w[3].elapsed_time(self.ev_h[1])
