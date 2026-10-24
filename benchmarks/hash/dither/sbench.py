@@ -904,7 +904,8 @@ def main() -> int:
         timed += arms
     arms = timed
     (out / "stop.json").write_text(json.dumps(stops, indent=1, default=str) + "\n")
-    summary = {"arms": arms, "info": info, "gate_tokens_equal_ref_arm": gate, "decode_tokens_vs_ref": vs_ref,
+    summary = {"arms": arms, "info": info, "numa": json.loads(os.environ.get("DITHER_NUMA_RECORD") or "null"),
+               "gate_tokens_equal_ref_arm": gate, "decode_tokens_vs_ref": vs_ref,
                "decode_tokens_vs_rep0": vs_rep0, "ref_of": REF_OF, "n1": N1, "n2": N2, "b": B,
                "gate": {arm: {k: v for k, v in d.items() if k not in ("tokens", "picks")} for arm, d in gate_doc.items()},
                "pick": os.environ.get(PICK_ENV) or "timed", "pick_by_arm": {arm: pick_of(arm) or "timed" for arm in info},

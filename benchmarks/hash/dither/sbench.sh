@@ -8,6 +8,9 @@
 # An exact-fused or -xl arm runs only after exactlin's kgate.py passes in the same lease (SBENCH_KGATE=0|1 overrides).
 # DITHER_NCU=REGEX runs it under ncu instead (--clock-control none): the first DITHER_NCU_COUNT (16) launches of kernels
 # matching REGEX, their throughput, occupancy, scheduler, warp-state and instruction sections, as ncu.ncu-rep and ncu.csv.
+# Inside the lease everything runs on the leased GPU's NUMA node (numabind.py: that node's CPUs among the run's, and its
+# memory), or unbound with DITHER_NUMA=0 or without numactl or a node; numa.json, the `numa:` line and summary.json's "numa"
+# say which.
 #   research run --on vy-nebius-2 --project verity --campaign dither-loop --source . --cwd source \
 #     --env GPU_LEASE_WHO=kernels-dither-rtx -- bash benchmarks/hash/dither/sbench.sh
 set -uo pipefail
@@ -156,7 +159,8 @@ SMI=$!
 MAX_MIN=${SBENCH_MAX_MIN:-40}
 # SBENCH_PREEMPTIBLE=1: the lease may be taken back by a non-preemptible one (which ends the run unfinished)
 PRE=(); [ "${SBENCH_PREEMPTIBLE:-}" = 1 ] && PRE=(--preemptible)
-gpu-lease 1 --wait "${PRE[@]}" --max-min "$MAX_MIN" -- bash -c '
+gpu-lease 1 --wait "${PRE[@]}" --max-min "$MAX_MIN" -- "$PY" "$ROOT/benchmarks/hash/dither/numabind.py" "$OUT/numa.json" \
+  bash -c '
   if [ "$KGATE" = 1 ]; then
     timeout 900 "$KGATE_PY" "$KGATE_SCRIPT" --out "$0/kgate" --shapes all --models llama-3.1-8b,qwen3-8b --no-stock \
       > "$0/kgate.log" 2>&1
