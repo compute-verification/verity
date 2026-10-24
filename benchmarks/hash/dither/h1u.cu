@@ -965,20 +965,6 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
   h1u_unit<MD, WS, OS, J10, PL, DG>(A, B, M, N, K, seeds, live, out, ws, oo, u, smem[wp]);
 }
 
-// H1U_SWZ = G (h1um): a call's warps take its units G row blocks at a time, column block by column block, so the G row
-// blocks of one column block read its B lines from L2 together, where row-block-major order (0) reads all of B once a row
-// block (prefill's M = 2048: 64 times a step, and gate_up's B is about L2's size). Unit w of nrb x ncb is still written
-// at its own position: only which warp computes it moves.
-#ifndef H1U_SWZ
-#define H1U_SWZ 0
-#endif
-__device__ __forceinline__ u32 swz_unit(u32 w, u32 nrb, u32 ncb) {
-  if (!H1U_SWZ) return w;
-  const u32 band = (u32)H1U_SWZ * ncb, r0 = w / band * (u32)H1U_SWZ, r = w % band;
-  const u32 rn = min((u32)H1U_SWZ, nrb - r0);
-  return (r0 + r % rn) * ncb + r / rn;
-}
-
 // kh_units_multi's calls: call c's units are warps u0 .. u0 + (M / 32)(N / 32) - 1 of the launch, each h1u's fused
 // receipts-only unit (WS, OS false: its noise hashed by its own lanes, its midstate once) of A [M, K] and B [N, K]
 struct UCall {
@@ -988,6 +974,21 @@ struct UCall {
   u32* out;          // the call's unit 0's receipt
   u32 N, K, u0, md;  // md = n_digits(K / 32), 2 or 3
 };
+
+// H1U_SWZ = G (h1um): a call's warps take its units G row blocks at a time, column block by column block, so the G row
+// blocks of one column block read its B lines from L2 together, where row-block-major order (0) reads all of B once a row
+// block (prefill's M = 2048: 64 times a step, and gate_up's B is about L2's size). Each unit is still written at its own
+// position: only which warp computes it moves.
+#ifndef H1U_SWZ
+#define H1U_SWZ 0
+#endif
+__device__ __forceinline__ u32 swz_unit(const UCall& c, u32 gu, u32 M) {
+  const u32 w = gu - c.u0;
+  if (!H1U_SWZ) return w;
+  const u32 ncb = c.N / 32, band = (u32)H1U_SWZ * ncb, r0 = w / band * (u32)H1U_SWZ, r = w % band;
+  const u32 rn = min((u32)H1U_SWZ, M / 32 - r0);
+  return (r0 + r % rn) * ncb + r / rn;
+}
 
 // every unit of ncalls calls in one launch (calls[ncalls].u0 the total), one warp a unit as h1u; live is every call's
 __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1um(const UCall* __restrict__ calls, u32 ncalls, u32 M,
@@ -1003,11 +1004,10 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1um(const UCall* __rest
     else hi = mid;
   }
   const UCall c = calls[lo];
-  const u32 u = swz_unit(gu - c.u0, M / 32, c.N / 32);
   if (c.md == 3)
-    h1u_unit<3, false, false>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, nullptr, OneOut{}, u, smem[wp]);
+    h1u_unit<3, false, false>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, nullptr, OneOut{}, swz_unit(c, gu, M), smem[wp]);
   else
-    h1u_unit<2, false, false>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, nullptr, OneOut{}, u, smem[wp]);
+    h1u_unit<2, false, false>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, nullptr, OneOut{}, swz_unit(c, gu, M), smem[wp]);
 }
 
 #if H1U_KSPLIT
