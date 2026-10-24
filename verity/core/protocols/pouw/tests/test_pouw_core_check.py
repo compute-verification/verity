@@ -349,6 +349,37 @@ def test_the_public_row_is_the_compiled_programs_salt_position_and_roots():
         assert bits == SD.leaves(salt, True) + SD.position_leaves(pos, True) + SD.leaves(roots[0] + roots[1], True), pos
 
 
+def test_a_j10r_public_row_is_then_its_call_and_blocks():
+    """A J10-R unit's public row (`core_check.public_row` with ``j10r``) is the leaves `PouwH1Tile_v5`'s public parameters
+    take, in order: today's row, then its ``call`` and its two ``blocks``, each a position's leaves
+    (`seeds.position_leaves`, `seeds.POS_BITS`)."""
+    import hashlib
+    import numpy as np
+    from verity.core.protocols.pouw.circuit import seeds as SD
+    salt, roots = hashlib.sha512(b"s").digest(), (hashlib.sha512(b"a").digest(), hashlib.sha512(b"b").digest())
+    for pos, call, blocks in ((5, 0, (0, 64)), (1 << 39, 7, (3, (1 << 33) + 1)), ((1 << 64) - 1, 1 << 63, (1, 2))):
+        row = CC.public_row(salt, pos, roots, (call, blocks))
+        bits = np.unpackbits(np.frombuffer(row, np.uint8), bitorder="little").tolist()
+        assert len(bits) == CC.PUBLIC_ROW_J10R_BITS == CC.PUBLIC_ROW_BITS + 3 * len(SD.position_leaves(0, True))
+        assert bits == (SD.leaves(salt, True) + SD.position_leaves(pos, True) + SD.leaves(roots[0] + roots[1], True)
+                        + SD.position_leaves(call, True) + SD.position_leaves(blocks[0], True)
+                        + SD.position_leaves(blocks[1], True)), pos
+        assert row[:CC.PUBLIC_ROW_BITS // 8] == CC.public_row(salt, pos, roots)
+        assert len(CC.public_words(salt, pos, roots, (call, blocks))) == CC.PUBLIC_ROW_J10R_BITS // 16 == 112
+
+
+def test_the_verifiers_j10r_blocks_are_the_tiles():
+    """`core_check.j10r_blocks`, the verifier's arithmetic, is `h1tile.j10r_blocks` (`h1tile.Layout`'s row and column
+    blocks at call scale) at every slot, K, tile and unit tried, and `core_check.n_digits` is `segment.n_digits`."""
+    from verity.core.protocols.pouw.circuit import h1tile as H
+    for k in (32, 64, 384, 416, 896, 4096, 14336, 1 << 20):
+        assert CC.n_digits(k) == H.SG.n_digits(k // 32), k
+        for m, (r, c) in ((4, (4, 8)), (8, (4, 8)), (32, (32, 32)), (64, (32, 32))):
+            for i in range(m // r):
+                for j in range(3):
+                    assert CC.j10r_blocks(m, k, (r, c), i, j) == H.j10r_blocks(m, k, (r, c), i, j), (m, k, r, c, i, j)
+
+
 def test_the_opening_reads_what_served_zk_writes():
     """`core_check.opening`'s constants are the ones served_zk commits under: one-stage's served domain, and the fp8-p
     A and B rows' schemas."""

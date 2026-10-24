@@ -52,8 +52,10 @@ def _tile_sig(S, row=None, record=None, out=HW.OUTPUTS):
              ("roots", Array(2, Array(4, V16)))), Record((out[0], Array(S.K // 2, BIT)), (out[1], BIT)))
 
 
-def _tile_body(B, S, a, b, zy, salt, position, roots, sig=_tile_sig):
+def _tile_body(B, S, a, b, zy, salt, position, roots, *j10r, sig=_tile_sig):
     x = B.call(XOR1, B.call(XOR1, _first(a[0]), _first(b[0])), B.call(XOR1, B.call(LOW1, position), B.call(LOW1, roots[0][0])))
+    for p in j10r:
+        x = B.call(XOR1, x, Coll(BIT, p.refs.slice(0, 1)))
     w = sig(S)[1].fields[0][1].leaves
     receipt = coll_concat(Array(w, BIT),
                           [B.call(FOLD1, _first(salt), B.call(XOR1, x, Coll(BIT, a[min(1, S.R - 1)].refs.slice(i, i + 1))))
@@ -71,6 +73,19 @@ TestTile = _test_tile("H1WindowTestTile")
 
 def unit(k: int, tile: tuple[int, int] = TILE):
     return bind(TestTile, K=k, R=tile[0], C=tile[1])
+
+
+def _tile_sig_j10r(S):
+    """The stand-in's under J10-R: its call and blocks (`h1window.J10R`, positions of 64 bits) after its roots."""
+    params, ret = _tile_sig(S)
+    return (*params, ("call", Array(64, BIT)), ("blocks", Array(2, Array(64, BIT)))), ret
+
+
+TestTileJ10r = _test_tile("H1WindowTestTileJ10r", _tile_sig_j10r)
+
+
+def unit_j10r(k: int, tile: tuple[int, int] = TILE):
+    return bind(TestTileJ10r, K=k, R=tile[0], C=tile[1])
 
 
 def _words(k: int) -> int:
@@ -133,6 +148,36 @@ def test_a_mixed_k_window_with_shared_b_derives_exactly_each_calls_tiles():
     assert [HW.unit_reads(prog, tp, u) for u in range(tp.population)] == _reads(want)
     steps = [[_b0(HW.unit_reads(prog, tp, u)) for u in range(s * len(want) // 2, (s + 1) * len(want) // 2)] for s in (0, 1)]
     assert steps[0] == steps[1], "every step's units read the linears' one copy of B"
+
+
+def test_a_j10r_window_takes_each_units_call_and_blocks_and_its_public_row_holds_them():
+    """A window of J10-R units (their parameters ending in `h1window.J10R`) takes one row of ``call`` and one of
+    ``blocks`` a unit, and each unit reads its own row of each; its statement's public row is `PUBLIC_J10R`, and
+    `j10r_inputs` is each unit's call's first unit and `h1tile.j10r_blocks` of its tile (I, J) at the window's slot and
+    its K. Every K's unit is in one form: a window mixing J10-R's and today's is refused."""
+    from verity.core.protocols.pouw.circuit import h1tile as H
+    m = HW.slot(5, TILE)
+    prog = HW.program(LINEARS, CALLS, m, TILE, unit=unit_j10r)
+    tp = P.evaluate(prog, HW.query(prog))
+    assert HW.is_j10r(prog) and not HW.is_j10r(HW.program(LINEARS, CALLS, m, TILE, unit=unit))
+    assert [name for name, _t in prog.fn.signature()[0]] == list(HW.roles((32, 64), True))
+    assert [[n for n, _t in t.signature()[0]] for _k, t in prog.fn.bindings["TILES"]] == [
+        ["a_k32", "b_k32", *HW.SHARED_J10R], ["a_k64", "b_k64", *HW.SHARED_J10R]]
+    sig = dict(prog.fn.signature()[0])
+    assert (sig["call"].n, sig["blocks"].n, sig["blocks"].elem.leaves) == (tp.population, tp.population, 128)
+    base = _reads(_expected(LINEARS, CALLS, m))
+    assert [HW.unit_reads(prog, tp, u) for u in range(tp.population)] == [
+        {**r, "call": ("call", u), "blocks": ("blocks", u)} for u, r in enumerate(base)]
+    pub = HW.statement_rows(dict(prog.fn.bindings["TILES"])[32])[-1]
+    assert (pub[0], pub[2], pub[3]) == ("pub", 4 + 16 + 128 + 64 + 128, list(HW.PUBLIC_J10R))
+    calls, blocks = HW.j10r_inputs(prog)
+    k_of, want = {name: (k, n) for name, k, n in LINEARS}, []
+    for (lin, _blk), (u0, n) in zip(CALLS, HW.call_units(prog)):
+        k, nn = k_of[lin]
+        want += [(u0, H.j10r_blocks(m, k, TILE, t // (nn // C), t % (nn // C))) for t in range(n)]
+    assert list(zip(calls, blocks)) == want and len(set(blocks[:4])) == 4
+    with pytest.raises(ValueError, match="takes other"):
+        HW.program(LINEARS, CALLS, m, TILE, unit=lambda k: unit_j10r(k) if k == 32 else unit(k))
 
 
 def test_a_mixed_k_window_registers_in_one_read_each_k_under_its_own_ports():
@@ -561,6 +606,11 @@ def test_the_tile_is_a_parameter_and_each_k_binds_its_own_unit():
     assert [n for n, _t in smoke.signature()[0]] == list(HW.TILE_PARAMS)
     assert [n for n, _t in smoke.signature()[1].fields] == list(HW.OUTPUTS) and smoke.signature()[1].fields[1][1].leaves == 1
     assert HW.tile_unit(14336, (32, 32)).bindings["TILE"].bindings["EXACT"].bindings["K"] == 14336
+    from verity.core.protocols.pouw.circuit import h1tile as H
+    for d in (H.PouwH1Tile5, H.PouwH1Tile6):
+        j10r = HW.tile_unit(64, (4, 8), d)
+        assert [n for n, _t in j10r.signature()[0]] == list(HW.TILE_PARAMS_J10R)
+        assert j10r.signature()[0][:6] == smoke.signature()[0] and j10r.signature()[1] == smoke.signature()[1]
 
 
 @pytest.mark.slow

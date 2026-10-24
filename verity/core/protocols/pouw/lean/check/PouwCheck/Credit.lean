@@ -429,6 +429,8 @@ def WINDOW_FN : String := "PouwH1Window_v3"
 def RECORD : List String := ["TILES", "LINEARS", "CALLS", "M", "PREFIX"]
 def TILE_FN : String := "PouwH1WindowTile_v1"
 def SHARED : List String := ["zy", "salt", "position", "roots"]
+/-- `credit.SHARED_J10R`: a J10-R template's, its call's first position and its unit's blocks after `SHARED`. -/
+def J10R : List String := ["call", "blocks"]
 /-- A window's tile is at a K its proof covers, a multiple of `TILE_K_STEP` below `TILE_K_LIMIT`: the K the tile's
 `GemmAccumulatorS8` binds (its 32-wide step, and `S8_K_LIMIT`, where an s8 sum can leave s32). -/
 def TILE_K_STEP : Nat := 32
@@ -449,7 +451,8 @@ def noTemplate (k : Nat) : String :=
   s!"the window's template at K = {k} is not h1window's: a composite {TILE_FN} bound to its UNIT and K = {k}, " ++
   s!"its id {TILE_FN}\{UNIT=…,K={k}}, whose parameters are a_k{k} and b_k{k}, the tile's R and C rows of K's n " ++
   "chunk rows each (n = weights.chunks(K), each row 8·K/n + 32 bits: K/n codes and the row's scale, h1zy.ROW), " ++
-  "then " ++ ", ".intercalate SHARED ++ ", at the same R × C at every K"
+  "then " ++ ", ".intercalate SHARED ++ " (with J10-R's noise, then " ++ ", ".intercalate J10R ++
+  "), at the same R × C and in the same form at every K"
 
 /-- `credit.tile_k`: why `layoutOf` refuses the window's tile at a K = `k` of at least one that its proof doesn't cover
 (`tile-k`), with its fix: the K to pad its linears' rows to, or past `TILE_K_LIMIT` the split. -/
@@ -491,9 +494,10 @@ def bitsOf : Nat → Json → Nat
     | _ => 0
   | _ + 1, _ => 0
 
-/-- `credit._tile`: the R × C of K = `k`'s template `dj` (its definition, under the id `tid`), or none when it is not
-`h1window.template`'s: its A and B rows are n·R and n·C chunk rows of 8·K/n + 32 bits each, n = `chunks?` K. -/
-def tileOf (dj : Json) (tid : String) (k : Nat) : Option (Nat × Nat) := do
+/-- `credit._tile`: the R × C of K = `k`'s template `dj` (its definition, under the id `tid`) and whether it is J10-R's
+(its parameters end in `SHARED` then `J10R`), or none when it is not `h1window.template`'s: its A and B rows are n·R
+and n·C chunk rows of 8·K/n + 32 bits each, n = `chunks?` K. -/
+def tileOf (dj : Json) (tid : String) (k : Nat) : Option (Nat × Nat × Bool) := do
   let x ← chunks? k
   guard (isObj dj && get dj "form" == Json.str "composite" && get dj "id" == Json.str TILE_FN)
   let b := get dj "bindings"
@@ -507,7 +511,9 @@ def tileOf (dj : Json) (tid : String) (k : Nat) : Option (Nat × Nat) := do
       | [n, t] => some (n, t)
       | _ => none)
     | _ => none)
-  guard (ps.map (·.1) == ([s!"a_k{k}", s!"b_k{k}"] ++ SHARED).map Json.str)
+  let today := ([s!"a_k{k}", s!"b_k{k}"] ++ SHARED).map Json.str
+  let j10r := ps.map (·.1) == today ++ J10R.map Json.str
+  guard (ps.map (·.1) == today || j10r)
   let rows ← (ps.take 2).mapM fun ((_, t) : Json × Json) => (match t with
     | .arr a => (match a.toList with
       | [.str "Array", n, e] =>
@@ -515,7 +521,7 @@ def tileOf (dj : Json) (tid : String) (k : Nat) : Option (Nat × Nat) := do
       | _ => none)
     | _ => none)
   match rows with
-  | [r, c] => some (r / x, c / x)
+  | [r, c] => some (r / x, c / x, j10r)
   | _ => none
 
 /-- `credit._runs`: `(template, count)` pairs with adjacent ones of one template merged. -/
@@ -556,13 +562,13 @@ def layoutOf (descriptor : ByteArray) : R Json := do
       | _ => none) | layoutRefuse NOT_WINDOW
   unless !ts.isEmpty && (str? prefix_).isSome && (ts.zip ts.tail).all (fun (a, b) => a.1 < b.1) do
     layoutRefuse NOT_WINDOW
-  let mut rc : Option (Nat × Nat) := none
+  let mut rc : Option (Nat × Nat × Bool) := none
   for (k, tid) in ts do
     if k % TILE_K_STEP != 0 || TILE_K_LIMIT ≤ k then throw ("tile-k", tileK k)
     let some got := tileOf (get defs tid) tid k | layoutRefuse (noTemplate k)
     if rc.any (· != got) then layoutRefuse (noTemplate k)
     rc := some got
-  let some (r, c) := rc | layoutRefuse NOT_WINDOW
+  let some (r, c, _) := rc | layoutRefuse NOT_WINDOW
   let layout := Json.mkObj [("calls", calls), ("linears", linears), ("m", m),
     ("tile", Json.arr #[Lean.toJson r, Lean.toJson c])]
   discard <| strata layout
@@ -1019,7 +1025,8 @@ def leavesOf : Nat → Json → Nat
 
 /-- K's template, as a statement over its units reads it: its id, K's chunks `n` (`chunks?`: each A and B row n
 leaves) and the 16-bit words of its A leaf, its B leaf, its z/y record and its receipt (its return's `receipt` field,
-the statement's output row o0; 0 when it returns none of whole 16-bit words). -/
+the statement's output row o0; 0 when it returns none of whole 16-bit words), and whether it is J10-R's (its
+parameters end in `J10R`). -/
 structure Tile where
   fn : String
   n : Nat := 1
@@ -1027,6 +1034,7 @@ structure Tile where
   b : Nat
   zy : Nat
   receipt : Nat := 0
+  j10r : Bool := false
 
 /-- `credit.RECEIPT_PORT`: the statement's output row of its units' receipts, which reads its call's receipt table. -/
 def RECEIPT_PORT : String := "o0"
@@ -1048,9 +1056,25 @@ def okSalt (context : String) (position : Nat) : ByteArray :=
 
 /-- `core_check.public_words`: `PouwCheck.publicRow` as a `row/v2` row of 16-bit leaves, word w its bytes 2w (low) and
 2w + 1. -/
-def publicWords (salt : ByteArray) (position : Nat) (roots : ByteArray × ByteArray) : Array Nat :=
-  let x := PouwCheck.publicRow salt position roots
+def publicWords (salt : ByteArray) (position : Nat) (roots : ByteArray × ByteArray)
+    (j10r : Option (Nat × Nat × Nat) := none) : Array Nat :=
+  let x := PouwCheck.publicRow salt position roots j10r
   (Array.range (x.size / 2)).map fun i => (x.get! (2 * i)).toNat + 256 * (x.get! (2 * i + 1)).toNat
+
+/-- `core_check.n_digits`: H1's digit count m at contraction `k`, the least m with 128 KS ≤ 128^m and
+127 KS / 128^(m - 1) ≤ 127 (KS = k / 32), searched up to KS + 1, which always qualifies. -/
+def nDigits (k : Nat) : Nat :=
+  let ks := k / 32
+  ((List.range (ks + 1)).map (· + 1)).find? (fun m => 128 * ks ≤ 128 ^ m && 127 * ks / 128 ^ (m - 1) ≤ 127)
+    |>.getD (ks + 1)
+
+/-- `core_check.j10r_blocks`: unit (I, J) = (`i`, `j`)'s first row block and first column block of its call's one
+stream at call scale, R I RB and M RB + C J CB, for a call of slot `m`, an R × C `tile` and K = `k`: RB =
+⌈(K + 32 (m_K - 1)) / 512⌉ and CB = ⌈(K + 256) / 512⌉. -/
+def j10rBlocks (m k : Nat) (tile : Nat × Nat) (i j : Nat) : Nat × Nat :=
+  let rb := (k + 32 * (nDigits k - 1) + 511) / 512
+  let cb := (k + 256 + 511) / 512
+  (tile.1 * i * rb, m * rb + tile.2 * j * cb)
 
 /-- `credit._receipt_words`: the 16-bit words of a template return's `receipt` field (`["Record", [["receipt", t],
 ...]]`, its first such field), its bits as the statement's output row o0 holds them (`bitsOf`); 0 for another form or
@@ -1068,7 +1092,8 @@ def receiptWords (ret : Json) : Nat :=
   if n % 16 == 0 then n / 16 else 0
 
 /-- `credit.shape_of`: of a descriptor `layoutOf` accepted, its parameters' prefix (`PREFIX`) and each K's `Tile`
-(`TILES`, by ascending K), the widths `h1window.table_reads_file` reads. Its cost is the descriptor's bytes. -/
+(`TILES`, by ascending K), the widths `h1window.table_reads_file` reads and its form. Its cost is the descriptor's
+bytes. -/
 structure Shape where
   pre : String
   tiles : List (Nat × Tile)
@@ -1092,9 +1117,13 @@ def shapeOf (descriptor : ByteArray) : Shape := Id.run do
           let ty := fun (i : Nat) => (match ps[i]? with
             | some (.arr q) => q.getD 1 .null
             | _ => .null)
+          let names := (ps.toList.drop 2).map fun (p : Json) => (match p with
+            | .arr q => q.getD 0 .null
+            | _ => .null)
           pure (k, { fn := fid, n := (chunks? k).getD 1, a := leavesOf TYPE_DEPTH (elem (ty 0)) / 16,
                      b := leavesOf TYPE_DEPTH (elem (ty 1)) / 16,
-                     zy := leavesOf TYPE_DEPTH (ty 2) / 16, receipt := receiptWords (get body "ret_type") })
+                     zy := leavesOf TYPE_DEPTH (ty 2) / 16, receipt := receiptWords (get body "ret_type"),
+                     j10r := names == (SHARED ++ J10R).map Json.str })
         | _ => none)
       | _ => none)
     | _ => []
@@ -1201,7 +1230,9 @@ reads cost the call's units, once a port; only the ok rows' known content is the
 file names at its known content (`known`, `Flock.Registered.checkKnownAll`), the window's Program salt `salt` (hex), the
 position u0 + t and the call's roots, root(`a/<K>@<s>`) and root(`b/<K>`) as the window registers them (`publicWords`),
 each under `publicRowSalt` of `window` and its position, at the root of their registration; a root of the two that is
-no SHA-512 digest is refused. The statement's
+no SHA-512 digest is refused. A J10-R window's row (`Tile.j10r`) then holds the unit's call and blocks, which the
+verifier derives from the layout too: the call's first position u0 and `j10rBlocks` of tile (t / (n/C), t % (n/C)) at
+the slot M, the call's K and the tile. The statement's
 output row `ok` (`OK_PORT`, o1) is the verifier's own too: unit u reads row u of the window's ok rows `<prefix>ok`
 (`OK_VALUE`, one row a unit of the window), named at its known content, the one word 1 (`OK_ROW`) under `okSalt` of
 `window` and u; a window whose entries register those rows themselves is refused. -/
@@ -1283,10 +1314,12 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
   out := out.map fun (p, j) => (p, match params.lookup p, j with
     | some n, .obj kvs => .obj (kvs.insert Flock.Registered.PARAM_KEY (.str n))
     | _, _ => j)
-  let words := PouwCheck.PUBLIC_ROW_BITS / 16
+  let words := (if tile.j10r then PouwCheck.PUBLIC_ROW_J10R_BITS else PouwCheck.PUBLIC_ROW_BITS) / 16
   let sb := (hex? (.str salt)).getD ByteArray.empty
+  let j10r := fun (t : Nat) =>
+    if tile.j10r then some (u0, j10rBlocks m k (r, c) (t / per) (t % per)) else none
   let ks : Array (Array Nat × ByteArray) := (Array.range size).map fun t =>
-    (publicWords sb (u0 + t) (ra, rb), PouwCheck.publicRowSalt window (u0 + t))
+    (publicWords sb (u0 + t) (ra, rb) (j10r t), PouwCheck.publicRowSalt window (u0 + t))
   let d ← (SampledProofs.Registered.domainAt program pv words size 16 (some window)).mapError fun why =>
     ("registration", why)
   let reg : Flock.Registered.Port :=
