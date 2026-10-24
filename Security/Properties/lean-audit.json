@@ -1578,6 +1578,9 @@
    "assumptions": [],
    "type_hash": "90eed93483409e786c68ecf37861604fbc03d72f97d7d1ed12f66bfe5990779e"
   },
+  "Properties.RemoteAudit.receiptsBelowLimit": {
+   "owner": "@memory-accounting"
+  },
   "Properties.RemoteAudit.passesStepped": {
    "owner": "@memory-accounting",
    "signature": ["Properties.RemoteAudit.passesStepped : Properties.RemoteAudit.PassesStepped"],
@@ -2554,6 +2557,10 @@
     "outcome": "accept"
    },
    "Properties.RemoteAudit.passesReadDistinct": {
+    "function": "RemoteAudit.Session.run",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.receiptsBelowLimit": {
     "function": "RemoteAudit.Session.run",
     "outcome": "accept"
    },
