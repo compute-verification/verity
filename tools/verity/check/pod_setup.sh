@@ -40,7 +40,7 @@ if [ -n "${LC_ALL:-}" ] && ! locale -a 2>/dev/null | grep -qix "$(echo "$LC_ALL"
   $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq locales >/dev/null && $SUDO locale-gen "$LC_ALL" >/dev/null
 fi
 if [ "$(uv --version 2>/dev/null | cut -d' ' -f2)" != "$UV_VERSION" ]; then
-  curl -LsSf "https://astral.sh/uv/$UV_VERSION/install.sh" | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh >/dev/null
+  curl -LsSf "https://astral.sh/uv/$UV_VERSION/install.sh" | $SUDO env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh >/dev/null
 fi
 if ! command -v elan >/dev/null; then
   curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
@@ -50,8 +50,18 @@ elan default "$TOOLCHAIN" >/dev/null
 if ! command -v cargo >/dev/null; then
   curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable >/dev/null
 fi
-for bin in /usr/local/bin "$HOME/.elan/bin" "$HOME/.cargo/bin"; do             # non-login shells (research run's) see them too
-  for t in "$bin"/*; do [ -x "$t" ] && [ ! -e "/usr/local/bin/$(basename "$t")" ] && ln -s "$t" /usr/local/bin/ || true; done
+for bin in "$HOME/.elan/bin" "$HOME/.cargo/bin"; do                            # non-login shells (research run's) see them too
+  for t in "$bin"/*; do
+    if [ -x "$t" ] && [ ! -e "/usr/local/bin/$(basename "$t")" ]; then $SUDO ln -s "$t" /usr/local/bin/; fi
+  done
+done
+# A run starts on the system's PATH, not this script's: vy-nebius-3 reported "setup done" with no links (research can't write
+# /usr/local/bin without sudo) and its check preflight then refused every train for an hour (24 Oct).
+for t in uv elan lake cargo; do
+  if ! env -i HOME="$HOME" PATH=/usr/local/bin:/usr/bin:/bin "$t" --version >/dev/null 2>&1; then
+    echo "pod_setup: $t does not run on a run's PATH (/usr/local/bin:/usr/bin:/bin): as root, ln -s $(command -v "$t") /usr/local/bin/" >&2
+    exit 1
+  fi
 done
 # One check slot over the pod's CPUs, so `slot.py` runs one check at a time: with no slots file it runs each check as it comes,
 # and two circuit-checks side by side OOM-killed a 256 GB pod (the layout move's shard 5, 5 Oct). A slots file in place is kept.
