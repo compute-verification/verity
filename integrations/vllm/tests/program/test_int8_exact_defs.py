@@ -166,8 +166,8 @@ def test_the_replay_s8_chain_clamps_each_step():
 def test_the_replay_attention_is_the_definition_and_the_served_attention(n, s, h, g_heads, spread, ks_scale):
     """`kernels.int8_rows.kv_quant` and `lut_attention_row` (the replay of `Int8KvQuant_v1` and `Int8LutAttentionRow_v1`) word for
     word against `engine.int8_attention.kv_quant` / `window_attention` on every KV head and (row, head), and against the Definitions
-    on one KV head and the last row's heads: prefill and decode rows, a window past one k step, K clamped by a small scale and A
-    saturated by a large one, SCALE spelt as a float, the spec text's f64 literal and a decimal string."""
+    on one KV head and the last row's heads: prefill, chunk (1 < n < s) and decode rows, a window past one k step, K clamped by a
+    small scale and A saturated by a large one, SCALE spelt as a float, the spec text's f64 literal and a decimal string."""
     from verity_vllm.program.kernels import int8_rows as Q
     from verity_vllm.program.kernels import rows
 
@@ -203,8 +203,8 @@ def test_the_replay_attention_is_the_definition_and_the_served_attention(n, s, h
                                                            (3, 33, 2, 2, 8.0, 0.25), (2, 6, 2, 1, 1.0, 40.0)])
 def test_int8_lut_attention_is_the_served_attention(n, s, h, g_heads, spread, ks_scale):
     """`Int8KvQuant` per KV head is `kv_quant`'s values, and `Int8LutAttentionRow` per (row, head) over its first pos + 1 rows is
-    `window_attention`: prefill (n = s) and decode rows, keys past one k step (s > 32), K clamped by a small scale (ks_scale < 1)
-    and A saturated by a large one."""
+    `window_attention`: prefill (n = s), chunk (1 < n < s) and decode rows, keys past one k step (s > 32), K clamped by a small
+    scale (ks_scale < 1) and A saturated by a large one."""
     g = torch.Generator().manual_seed(n * 1000 + s)
     d, scale = 32, 32 ** -0.5
     q, k, v = _rows(g, n, h, d, spread=spread), _rows(g, s, g_heads, d, spread=spread), _rows(g, s, g_heads, d, spread=spread)

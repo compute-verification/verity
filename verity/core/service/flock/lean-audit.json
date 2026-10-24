@@ -14,6 +14,7 @@
   "Flock.Test.RecRecord",
   "Flock.Test.RecSchedule",
   "Flock.Test.RecReads",
+  "Flock.Test.RecHeld",
   "Flock.Test.RecOpening",
   "Flock.Test.RecOpenLeaves",
   "Flock.Test.RecSparseRows",
@@ -25,6 +26,7 @@
   "Flock.Test.SharedRows",
   "Flock.Test.RegFormats",
   "Flock.Test.RegComplete",
+  "Flock.Test.RegProgram",
   "Flock.Test.RegKnown",
   "Flock.Test.KnownRead",
   "Flock.Test.RegRows",
@@ -36,6 +38,8 @@
   "Flock.Test.ProofCanon",
   "Flock.Test.Tmpl",
   "Flock.TmplOrder",
+  "Flock.TmplEval",
+  "Flock.Test.TmplEval",
   "Flock.TmplRows",
   "Flock.TmplApart",
   "Flock.TmplUnroll",
@@ -47,6 +51,7 @@
   "Flock.Test.NetAt",
   "Flock.Test.MaskLog",
   "Flock.Test.FrameStep",
+  "Flock.Test.RegionBytes",
   "VStar"
  ],
  "exempt": {

@@ -43,6 +43,27 @@ proxy event by event:
   (`online.Refused`, which a request released by an ingress tick read before its due time can lead to): the egress
   window that declares it is faulted `monitor-unavailable` at its first tick, as a late tick is, and its sync is the
   choice made on the frames read.
+* **The salt** (`Config.salt`, off by default). At PoUW window p's first ingress tick (its first certifier window of
+  `pouwWindow`) the bucketer enqueues the certifier's own frame, `saltFrame p placeholder`, at the head of the queue,
+  ahead of that bucket's arrivals and of any queue carried over, so it leaves in that bucket's slot 0. When the ingress
+  certifier releases it, the proxy queues p's salt
+  (`values[p]`, the certifier's coins, drawn outside the device) in that frame in place of the placeholder for a server
+  connection of its own: the first opens it (`connectSalt`, answered `saltConnected` or `saltRefused`, which is
+  `delivery-refused` on ingress), and each frame is written (`writeSalt`) once the one before it is drained
+  (`saltDelivered`). Nothing is read from it. The reveal and its custody are outside the device.
+* **The restart** (`initAt c start position`): a proxy back from maintenance, its first tick of each grid window
+  `start`'s first bucket and the first egress frame it takes the Program's at `position`, carrying nothing from before.
+* **A served link** (`Config.served`, off by default): the bucketer enqueues arrived frames only as whole requests of
+  the profile's F_in frames that the admission rule admits (`Served.admits`) under the window's declared sync; the rest
+  wait, in order, for the next window.
+* **Ordinals and compact records** (`Config.ordinals`, `Config.compact`, each off by default). Under `ordinals` a
+  stream's server connection opens with `ordinalHeader s`, written as it opens, before its request's bytes. Under
+  `compact` (which takes `ordinals`, and egress frames of at least `compactRecordSize` bytes) the server's bytes are an
+  HTTP response head, then (position, record) units (`CompactUnits.feed`), and each unit's frame is its record
+  zero-filled to B (`compactCell`) at its position: a record that isn't one (`compactOrdinal`) or names another request
+  than its stream's is `malformed`, as are bytes left uncut at the stream's end, an unfinished head included.
+* **Ticks due together.** `step` takes one tick at a time, so a world whose ticks of both grids fall due at one
+  boundary orders them; the proxy runs the ingress tick first (`active.TICK_ORDER`), as `Driver.run` does.
 
 Events the proxy couldn't be waiting for (a second `connected`, bytes on a stream not open, a `delivered` with no write
 waiting, anything after both grids' last ticks) change nothing. Python's floats and Lean's integers agree away from the
@@ -73,6 +94,12 @@ inductive Event where
   | upstream (s now : Nat) (bytes : ByteArray)
   /-- The write to stream `s` that asked for a drain is drained: the request reached the server. -/
   | delivered (s now : Nat)
+  /-- The salt connection opened. -/
+  | saltConnected (now : Nat)
+  /-- The server refused the salt connection. -/
+  | saltRefused (now : Nat)
+  /-- The salt connection's write is drained: the salt reached the server. -/
+  | saltDelivered (now : Nat)
 
 /-- What the proxy does. -/
 inductive Action where
@@ -84,6 +111,10 @@ inductive Action where
   | writeUpstream (s : Nat) (bytes : ByteArray) (drain : Bool)
   /-- A window's record closed, with its grid's parameters. -/
   | publish (record : Record) (params : Params)
+  /-- Open the salt connection to the server; the world answers `saltConnected` or `saltRefused`. -/
+  | connectSalt
+  /-- Write a salt frame on the salt connection; the world answers `saltDelivered` once it is written. -/
+  | writeSalt (bytes : ByteArray)
 
 /-- The online prover's configuration: its rule, envelope, lag (1 … T − 1 buckets) and the history of an earlier run. -/
 structure ProverConfig where
@@ -92,8 +123,22 @@ structure ProverConfig where
   lag : Nat
   prior : Array Past := #[]
 
+/-- The proxy's salt (`Proxy(salt=…)`): one salt of `bits` bits per PoUW window of `pouwWindow` certifier windows, PoUW
+window p's `values[p]`. They are the certifier's own coins (`active.py` draws p's at p's first ingress tick, the driver
+all of them before its first tick); the device reads p's only once p's salt frame is released. -/
+structure SaltSource where
+  values : Array ByteArray
+  bits : Nat := 512
+  pouwWindow : Nat := 1
+
+/-- `_draw_salt`'s frame: at a PoUW window's first certifier window `w`, the certifier's own frame of `B` bytes, the
+placeholder's. -/
+def SaltSource.first (s : SaltSource) (B w : Nat) : Option ByteArray :=
+  if w % s.pouwWindow = 0 then saltFrame (w / s.pouwWindow) placeholder B else none
+
 /-- `Proxy`'s parameters: both grids (windows of the same length, frames of at least a header), Σ_sync, the declared
-syncs or else the online prover, how many windows run, the clock's time of bucket 0 and the slack, in ns. -/
+syncs or else the online prover, how many windows run, the clock's time of bucket 0 and the slack, in ns, and the salt
+and a served link's profile, each off by default. -/
 structure Config where
   egress : Params
   ingress : Params
@@ -105,20 +150,67 @@ structure Config where
   prover : Option ProverConfig := none
   egressLink : String := "responses"
   ingressLink : String := "requests"
+  salt : Option SaltSource := none
+  served : Option ServedProfile := none
+  ordinals : Bool := false
+  compact : Bool := false
 
-/-- `Proxy.__init__`'s checks, and what the frames need: positive parameters, frames of at least a header, the two
-grids' windows of one length, and an online prover declaring every window's sync, with a lag of 1 … T − 1 buckets. -/
-def Config.check (c : Config) : Except String Unit := do
+/-- The slowest of Σ_sync: its largest δ and smallest ρ. -/
+def Config.slowest (c : Config) : ClockSync :=
+  let d := c.syncSet.deltas.foldl max 0
+  let ρ := c.syncSet.rhos.foldl min (c.syncSet.rhos.headD 1)
+  if h : 0 < ρ then ⟨d, ρ, h⟩ else ⟨d, 1, by decide⟩
+
+/-- A served link's admission rule (`served.Admission`): at the egress allocation, under each window's declared sync,
+or the slowest of Σ_sync under an online prover or past the declared syncs. -/
+def Config.admission (c : Config) (p : ServedProfile) : Admission :=
+  { profile := p, allocation := c.egress.allocation, syncs := if c.prover.isSome then #[] else c.syncs,
+    slowest := c.slowest }
+
+/-- `Proxy.__init__`'s checks, and what the frames need, for a proxy that starts at window `start`: positive parameters,
+frames of at least a header (compact egress frames of at least a record, under `ordinals`), the two grids' windows of
+one length, an online prover declaring every window's sync, with
+a lag of 1 … T − 1 buckets, from window 0 on; a salt frame that fits an ingress frame, a salt of a positive whole number
+of bytes for every PoUW window of the run, of a positive number of certifier windows; and a served link's profile, of
+grids that share T and τ_b, counting the salt frame exactly when the salt is on (then at every window), whose window at
+`start` holds its own frames, one request and its response under the admission's sync. -/
+def Config.check (c : Config) (start : Nat := 0) : Except String Unit := do
   for p in [c.egress, c.ingress] do
     if [p.buckets, p.allocation, p.frameBytes, p.bucketMs, p.queueCapacity].any (· = 0) then
       throw "grid parameters must be positive"
-    if p.frameBytes < headerSize then throw s!"a frame holds its {headerSize}-byte header"
+  if c.compact then
+    if !c.ordinals || c.egress.frameBytes < compactRecordSize then
+      throw s!"compact records name their request by its ingress ordinal (ordinals) and fill egress frames of at \
+        least {compactRecordSize} bytes"
+  else if c.egress.frameBytes < headerSize then throw s!"a frame holds its {headerSize}-byte header"
+  if c.ingress.frameBytes < headerSize then throw s!"a frame holds its {headerSize}-byte header"
   if c.egress.buckets * c.egress.bucketMs ≠ c.ingress.buckets * c.ingress.bucketMs then
     throw "the egress and ingress grids have windows of the same length"
   if let some p := c.prover then
     if !c.syncs.isEmpty then throw "an online prover declares every window's sync"
     if p.lag = 0 || p.lag ≥ c.egress.buckets then
       throw "the proxy's online prover chooses off its tick: a lag of 1 … T − 1 buckets"
+  if let some s := c.served then
+    if c.egress.buckets ≠ c.ingress.buckets || c.egress.bucketMs ≠ c.ingress.bucketMs then
+      throw "a served link's grids share T and τ_b: its anchors are ingress buckets"
+    if s.own ≠ (if c.salt.isSome then 1 else 0) || c.salt.any (·.pouwWindow ≠ 1) then
+      throw "a served link's profile counts the salt frame (own 1) exactly when the salt is on, and then every window \
+        has one (a PoUW window of one certifier window)"
+  if let some s := c.salt then
+    if c.ingress.frameBytes < saltFrameBytes then
+      throw s!"a salt frame needs ingress frames of at least {saltFrameBytes} bytes"
+    if s.bits = 0 || s.bits % 8 ≠ 0 then throw "a salt is a positive whole number of bytes"
+    if s.pouwWindow = 0 then throw "a PoUW window is a positive number of certifier windows"
+    if s.values.any (·.size ≠ s.bits / 8) || s.values.size * s.pouwWindow < c.windows then
+      throw "the salt source gives every PoUW window of the run a salt of its bits"
+  if start > c.windows then throw s!"a proxy starts at one of windows 0 … {c.windows}"
+  if start > 0 && c.prover.isSome then
+    throw "an online prover declares from window 0 on: a proxy back from maintenance takes syncs"
+  if let some s := c.served then
+    s.check
+    if !admits #[] (s.own + s.requestFrames) ((c.admission s).sync start) s c.egress.allocation c.ingress.allocation
+        c.ingress.buckets then
+      throw "a served link's window holds its own frames, one request and its response under the admission's sync"
 
 /-- Where a stream's server connection is. -/
 inductive Phase where
@@ -128,7 +220,7 @@ inductive Phase where
   deriving BEq, DecidableEq
 
 /-- `active._Stream`: its request's anchor, ingress window and forwarding deadline, its frames read so far, the frames
-waiting to be written, its event cutter, and when its request was delivered and its ready bucket at its end. -/
+waiting to be written, its event or unit cutter, and when its request was delivered and its ready bucket at its end. -/
 structure Stream where
   phase : Phase := .connecting
   anchor : Option Nat := none
@@ -136,10 +228,18 @@ structure Stream where
   out : Array (ByteArray × Bool) := #[]
   draining : Bool := false
   events : Events := {}
+  units : CompactUnits := {}
   window : Option Nat := none
   deadline : Option Nat := none
   delivered : Option Nat := none
   ended : Option Int := none
+
+/-- `_salt_upstream`'s connection: the salt frames waiting to be written, and whether a write waits for its drain. It is
+written, never read. -/
+structure SaltConn where
+  phase : Phase := .connecting
+  out : Array ByteArray := #[]
+  draining : Bool := false
 
 /-- The proxy's state. `frames` logs every egress frame read as (position, stream, index, anchor, ready). -/
 structure State where
@@ -155,6 +255,9 @@ structure State where
   frames : Array (Nat × Nat × Nat × Nat × Int) := #[]
   linkFramesRead : Nat := 0
   requestsReleased : Nat := 0
+  saltConn : Option SaltConn := none
+  saltsReleased : Nat := 0
+  saltsDelivered : Nat := 0
 
 def nsPerMs : Nat := 1000000
 
@@ -165,7 +268,21 @@ def init (c : Config) : State :=
     if c.windows > 0 then l.start else l
   { config := c,
     shaper := Shaper.make { link := c.egressLink, params := c.egress } c.syncs c.syncSet prover c.windows,
-    bucketer := { certifier := { link := c.ingressLink, params := c.ingress } } }
+    bucketer := { certifier := { link := c.ingressLink, params := c.ingress },
+                  first := match c.salt with
+                    | some s => s.first c.ingress.frameBytes
+                    | none => fun _ => none,
+                  served := c.served.map c.admission } }
+
+/-- The state before window `start`'s first tick, the first egress frame it takes the one at `position`: a proxy back
+from maintenance (`Proxy(start=…, position=…)`), which carries nothing from before and has no online prover. -/
+def initAt (c : Config) (start position : Nat) : State :=
+  let st := init c
+  if start = 0 then { st with shaper := { st.shaper with next := position } } else
+  let shaper := Shaper.make { link := c.egressLink, params := c.egress, window := start } c.syncs c.syncSet none c.windows
+  let certifier := { st.bucketer.certifier with window := start }
+  { st with shaper := { shaper with t := start * c.egress.buckets, next := position },
+            bucketer := { st.bucketer with certifier, t := start * c.ingress.buckets } }
 
 namespace State
 
@@ -257,6 +374,31 @@ def egressTick (st : State) (now backlog : Nat) : State × Array Action := Id.ru
 inductive Started where
   | connect (s : Nat)
   | pump (s : Nat)
+  | saltConnect
+  | saltPump
+
+/-- The salt connection's writer: if it is open and no write waits for its drain, write the next salt frame, which
+waits for its drain. -/
+def saltPump (st : State) : State × Array Action :=
+  match st.saltConn with
+  | some x =>
+    if x.phase == .open && !x.draining && 0 < x.out.size then
+      ({ st with saltConn := some { x with out := x.out.extract 1 x.out.size, draining := true } },
+        #[.writeSalt x.out[0]!])
+    else (st, #[])
+  | none => (st, #[])
+
+/-- `_release_salt`: PoUW window p's salt frame queued for the server, its own frame being released; the first starts
+the salt connection, and one waiting for a frame starts writing. -/
+def releaseSalt (st : State) (p : Nat) : State × Option Started :=
+  let value := (st.config.salt.bind (·.values[p]?)).getD ByteArray.empty
+  let frame := (saltFrame p value (headerSize + 8 + value.size)).getD ByteArray.empty
+  let st := { st with saltsReleased := st.saltsReleased + 1 }
+  match st.saltConn with
+  | none => ({ st with saltConn := some { out := #[frame] } }, some .saltConnect)
+  | some x =>
+    ({ st with saltConn := some { x with out := x.out.push frame } },
+      if x.phase == .open && !x.draining && x.out.isEmpty then some .saltPump else none)
 
 /-- `Proxy._ingress`'s body at one tick. -/
 def ingressTick (st : State) (now : Nat) : State × Array Action := Id.run do
@@ -270,7 +412,12 @@ def ingressTick (st : State) (now : Nat) : State × Array Action := Id.run do
   st := { st with bucketer }
   let anchor := t * p.bucketMs / e.bucketMs
   let mut started := #[]
-  for slot in row.extract 0 (rowCount row) do
+  for (slot, i) in (row.extract 0 (rowCount row)).zipIdx do
+    if let some (_, w) := bucketer.own.find? (·.1 == i) then
+      let salt := st.releaseSalt (w / (st.config.salt.map (·.pouwWindow)).getD 1)
+      st := salt.1
+      if let some x := salt.2 then started := started.push x
+      continue
     let (kind, _, payload) := decodeFrame (slot.getD ByteArray.empty)
     if kind != kindData then continue
     let (requests, s, data, last) := st.requests.feed payload
@@ -296,6 +443,11 @@ def ingressTick (st : State) (now : Nat) : State × Array Action := Id.run do
       let (st', more) := st.pump s
       st := st'
       acts := acts ++ more
+    | .saltConnect => acts := acts.push .connectSalt
+    | .saltPump =>
+      let (st', more) := st.saltPump
+      st := st'
+      acts := acts ++ more
   return (st, acts)
 
 /-- `_read_link` at one read: whole frames are enqueued at the ingress bucket of the read; the rest waits. -/
@@ -311,33 +463,56 @@ def linkRead (st : State) (now : Nat) (data : ByteArray) : State := Id.run do
   return { st with bucketer := b, linkBuffer := buffer.extract whole buffer.size,
                    linkFramesRead := st.linkFramesRead + whole / size }
 
-/-- `_egress_event`: an event at its position, its body framed on `canonicalStream` with its stream's anchor and its
-index there. -/
-def egressEvent (st : State) (s : Nat) (event : ByteArray) (ready : Int) : State :=
+/-- `_egress_frame`: a frame at its position, with its stream's anchor and its index there; malformed on a stream with
+no released request. -/
+def egressFrame (st : State) (s position : Nat) (bytes : ByteArray) (ready : Int) : State :=
   let x := st.stream s
-  let B := st.config.egress.frameBytes
-  match eventPosition event, x.anchor, encodeFrame kindData canonicalStream (eventBody event) B with
-  | some position, some anchor, some bytes =>
+  match x.anchor with
+  | some anchor =>
     let st := st.setStream s { x with count := x.count + 1 }
     { st with frames := st.frames.push (position, s, x.count, anchor, ready),
               shaper := st.shaper.arrive position ⟨bytes, anchor, x.count⟩ ready }
-  | _, _, _ => { st with shaper := st.shaper.fault .malformed }
+  | none => { st with shaper := st.shaper.fault .malformed }
 
-/-- The end of stream `s`'s server connection: bytes left unframed are malformed; the stream's end is its ready bucket. -/
+/-- `_egress_event`: an event at its position, its body framed on `canonicalStream`. -/
+def egressEvent (st : State) (s : Nat) (event : ByteArray) (ready : Int) : State :=
+  match eventPosition event, encodeFrame kindData canonicalStream (eventBody event) st.config.egress.frameBytes with
+  | some position, some bytes => st.egressFrame s position bytes ready
+  | _, _ => { st with shaper := st.shaper.fault .malformed }
+
+/-- `_egress_record`: a compact record at its position, zero-filled to a frame; one that isn't a record or names another
+request than stream `s` is malformed. -/
+def egressRecord (st : State) (s position : Nat) (record : ByteArray) (ready : Int) : State :=
+  match compactOrdinal record == some s, compactCell record st.config.egress.frameBytes with
+  | true, some bytes => st.egressFrame s position bytes ready
+  | _, _ => { st with shaper := st.shaper.fault .malformed }
+
+/-- The end of stream `s`'s server connection: bytes left uncut are malformed; the stream's end is its ready bucket. -/
 def upstreamEnd (st : State) (s : Nat) (now : Nat) : State :=
   let x := st.stream s
-  let st := if x.events.buffer.isEmpty then st else { st with shaper := st.shaper.fault .malformed }
+  let st := if x.events.buffer.isEmpty && x.units.buffer.isEmpty then st
+    else { st with shaper := st.shaper.fault .malformed }
   st.setStream s { x with phase := .closed, draining := false, ended := some (st.bucketReady now) }
 
-/-- One read of stream `s`'s server connection. -/
+/-- One read of stream `s`'s server connection: cut into events, or into compact units under `compact`. -/
 def upstreamRead (st : State) (s : Nat) (now : Nat) (data : ByteArray) : State := Id.run do
   if data.isEmpty then return st.upstreamEnd s now
   let ready := st.bucketReady now
   let x := st.stream s
+  if st.config.compact then
+    let (units, cut) := x.units.feed data
+    let mut st := st.setStream s { x with units }
+    for (position, record) in cut do st := st.egressRecord s position record ready
+    return st
   let (events, cut) := x.events.feed data
   let mut st := st.setStream s { x with events }
   for event in cut do st := st.egressEvent s event ready
   return st
+
+/-- Stream `s`'s server connection opened: its ordinal header first, under `ordinals`, then what `pump` writes. -/
+def opened (st : State) (s : Nat) : State × Array Action :=
+  let (st', acts) := (st.setStream s { st.stream s with phase := .open }).pump s
+  (st', if st.config.ordinals then #[.writeUpstream s (ordinalHeader s) false] ++ acts else acts)
 
 end State
 
@@ -352,9 +527,7 @@ def step (st : State) (ev : Event) : State × List Action :=
       if st.bucketer.t < st.ticks st.config.ingress then st.ingressTick now else (st, #[])
     | .link now bytes => if st.linkOpen then (st.linkRead now bytes, #[]) else (st, #[])
     | .connected s _ =>
-      if st.streams.contains s && (st.stream s).phase == .connecting then
-        (st.setStream s { st.stream s with phase := .open }).pump s
-      else (st, #[])
+      if st.streams.contains s && (st.stream s).phase == .connecting then st.opened s else (st, #[])
     | .refused s now =>
       if st.streams.contains s && (st.stream s).phase == .connecting then
         let st := { st with bucketer := { st.bucketer with
@@ -368,6 +541,26 @@ def step (st : State) (ev : Event) : State × List Action :=
       if st.streams.contains s && x.phase == .open && x.draining then
         (st.setStream s { x with delivered := some now, draining := false }).pump s
       else (st, #[])
+    | .saltConnected _ =>
+      match st.saltConn with
+      | some x => if x.phase == .connecting then { st with saltConn := some { x with phase := .open } }.saltPump
+        else (st, #[])
+      | none => (st, #[])
+    | .saltRefused _ =>
+      match st.saltConn with
+      | some x =>
+        if x.phase == .connecting then
+          ({ st with bucketer := { st.bucketer with certifier := st.bucketer.certifier.doFault .deliveryRefused },
+                     saltConn := some { x with phase := .closed } }, #[])
+        else (st, #[])
+      | none => (st, #[])
+    | .saltDelivered _ =>
+      match st.saltConn with
+      | some x =>
+        if x.phase == .open && x.draining then
+          { st with saltConn := some { x with draining := false }, saltsDelivered := st.saltsDelivered + 1 }.saltPump
+        else (st, #[])
+      | none => (st, #[])
   (st, acts.toList)
 
 end CertifierDevice

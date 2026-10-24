@@ -164,6 +164,8 @@ UNKEYED_PREFIX = "VERITY_SUITE_"
 #: the machine's PYTHONPYCACHEPREFIX. Tests that start runs of their own would inherit them, so a suite run inside a `research
 #: run` would reach another verdict than inside check (test_remote_cwd, r20261008-010104-2b69)
 RUNNER_PREFIX, RUNNER_ENV = "RESEARCH_", ("PYTHONPYCACHEPREFIX",)
+#: check.py's: what its steps get inside a recorded run in place of the RESEARCH_* that named the machine's store (`store_custody`)
+CUSTODY_ENV, STORE_REQUIRED_ENV = "CHECK_STORE_CUSTODY", "VERITY_STORE_REQUIRED"
 #: the suites whose tests run `lake` or what `lake build` builds in the Lean verifier: check runs them after its `lean-build`
 #: step (its `lean-suites`), and on its own this runs that build before them, so they run or skip alike in both
 AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-check", "core-identity", "verity-core-composition",
@@ -1528,6 +1530,20 @@ def sweep_basetemps(tmp: Path | None = None, proc: Path = Path("/proc"), now: fl
     return gone
 
 
+def store_custody() -> None:
+    """Inside a `research run` whose custody key is staged, the tests reach the evidence store through it and require it, as check's
+    steps do (check.py's `env()`, "The evidence store"). `run` drops RESEARCH_*, the machine's store among them, so without this a
+    test that fetches a fixture skipped as "the evidence store is not reachable" under this runner and passed under a bare pytest
+    (r20261024-030225-1ea6: 13 of test_lean_session.py's 39, the firewall's wire-tamper negatives among them). Set here, before
+    `environment()`, so the requirement keys the pass and a pass earned with those skips is never reused for one without."""
+    run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
+    if CUSTODY_ENV in os.environ or not run_dir or not run_id:
+        return
+    d = Path(run_dir).resolve().parent.parent / "requests" / run_id / "custody"
+    if (d / "store.toml").is_file() and (d / "cred.json").is_file():
+        os.environ[CUSTODY_ENV], os.environ[STORE_REQUIRED_ENV] = str(d), "1"
+
+
 def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: int = 1, watch: list[str] = (),
         reuse: list[str] = (), timeout_s: float = 0.0) -> Result:
     slug = suite.path.replace("/", "_") if suite.path != "." else "repository"
@@ -1867,6 +1883,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"suites: {ROOT} is not a git checkout, and suites are keyed from git's view of the tree: run them in a checkout "
               f"(`research run --on` ships one; a tree the archive stream or an older launcher shipped isn't)", file=sys.stderr)
         return 2
+    store_custody()
 
     pkgs, suites = members(), discover()
     if not (a.list or a.explain) and (away := foreign(pkgs, dict(os.environ, PYTHONPATH=tests_pythonpath()))):
