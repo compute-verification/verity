@@ -109,22 +109,27 @@ def parsed (t : String) : Json := (Json.parse t).toOption.getD Json.null
 
 /-- `coined` with its first coin of rep 0's round 1 changed. -/
 def recoined : Record :=
-  change coined "circuit/rep0" 1 fun x => { x with coins := x.coins.mapIdx fun j c => if j = 0 then ⟨c.lo + 1, c.hi⟩ else c }
+  change coined "circuit/rep0" 1 fun x =>
+    { x with coins := x.coins.mapIdx fun j c => if j = 0 then ⟨c.lo + 1, c.hi⟩ else c }
+
+def roundsOf (r : Record) : List (Option (List UInt8) × Option Nat × List F128) :=
+  r.rounds.map fun x => (some x.stream, some x.k, x.coins)
+
+def refusedAt : String := at_ ++ "rounds other than its JSON's (stream, round and coins)"
 
 #guard ((coined.rounds.filter (·.stream == bs "circuit/rep0"))[1]?.map (·.coins.length)) != some 0
 #guard recoined != coined
 -- An honest record with distinct coins passes: `readFull`'s coins are `f128OfHex`'s of the same hex.
 #guard readFull (bs (text coined)) == some coined
 #guard whyAt (text coined) (parsed (text coined)) == ""
-#guard jsonCoins (parsed (text coined)) == .ok (coined.rounds.map (·.coins))
+#guard (jsonRounds (parsed (text coined))).toOption == some (roundsOf coined)
 -- Bytes whose coins differ from what the JSON readers read are refused.
-#guard whyAt (text recoined) (parsed (text coined)) == at_ ++ "rounds whose coins are other than its JSON's"
+#guard whyAt (text recoined) (parsed (text coined)) == refusedAt
 -- A tail that repeats `"rounds"` with other coins: the JSON reads the tail's, the record's own format the first, and
 -- every other field agrees, so only the coins refuse it.
 #guard readFull (bs (textWith coined (restRepeat recoined))) == some coined
-#guard jsonCoins (parsed (textWith coined (restRepeat recoined))) == .ok (recoined.rounds.map (·.coins))
-#guard whyAt (textWith coined (restRepeat recoined)) (parsed (textWith coined (restRepeat recoined))) ==
-  at_ ++ "rounds whose coins are other than its JSON's"
+#guard (jsonRounds (parsed (textWith coined (restRepeat recoined)))).toOption == some (roundsOf recoined)
+#guard whyAt (textWith coined (restRepeat recoined)) (parsed (textWith coined (restRepeat recoined))) == refusedAt
 -- The same tail repeating the record's own rounds passes.
 #guard whyAt (textWith coined (restRepeat coined)) (parsed (textWith coined (restRepeat coined))) == ""
 
