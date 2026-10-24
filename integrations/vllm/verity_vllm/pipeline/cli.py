@@ -27,6 +27,7 @@ PROG = "verity-vllm"
 COMMANDS: dict[str, tuple[str, str]] = {
     "admission-bound": ("verity_vllm.pipeline.admission_bound", "host-retention bound of a --retain host Commit"),
     "admission-planner": ("verity_vllm.pipeline.admission_planner", "resource plan of a Commit launch"),
+    "advice": ("verity_vllm.pipeline.advice", "a served run's advice (I1) for the precommitted compiler, from its step trace and Commit record"),
     "batch-decomp": ("verity_vllm.check.match.batch_decomp", "B>1 Match by per-request decomposition"),
     "boolean-purity": ("verity_vllm.program.boolean", "the Definitions a Program reaches that are not Boolean (or, --dry-run, would)"),
     "boolean-replay": ("verity_vllm.pipeline.boolean_replay", "a deferred Commit's replay with every pick evaluated on bits"),

@@ -38,8 +38,10 @@ SAMPLING = ("temperature", "top_p", "top_k", "min_p", "seed", "max_tokens", "min
 
 
 def scheduler_of(engine: Any) -> Any:
-    """The in-process V1 scheduler of a `vllm.LLM`, a `verity_vllm.LLM` or an `LLMEngine`; refuses by name a multiprocess engine core,
-    whose scheduler lives in another process."""
+    """The in-process V1 scheduler of a `vllm.LLM`, a `verity_vllm.LLM` or an `LLMEngine` (or the scheduler itself); refuses by name a
+    multiprocess engine core, whose scheduler lives in another process."""
+    if hasattr(engine, "update_from_output"):
+        return engine
     eng = getattr(engine, "vllm", engine)
     eng = getattr(eng, "llm_engine", eng)
     core = getattr(eng, "engine_core", None)
