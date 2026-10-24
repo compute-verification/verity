@@ -126,7 +126,6 @@ def test_the_run_is_at_vllms_defaults(monkeypatch):
         assert not S._verdict(doc)
 
 
-@pytest.mark.slow
 def test_check_finds_a_changed_output(tmp_path):
     """`--check` on a capture written from the twin: the Program agrees, except on the one output changed."""
     R = S.rows(7, S.GROUP)

@@ -168,6 +168,7 @@ def test_the_boolean_version_is_boolean_and_its_word_view_is_v1(target) -> None:
     assert SW.boolean_version(word).id == target.id
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("target", AGREEMENT, ids=lambda t: t.id)
 def test_the_boolean_version_agrees_with_its_word_view(target) -> None:
     """Two and three splits, a partial last block: zeros, infinities, NaNs and subnormals through the blocks, each split's end and

@@ -190,7 +190,7 @@ def test_the_rows_quantize_as_quant_py() -> None:
 
 
 @pytest.mark.parametrize("case,quick", [(c, False) for c in DECODE if c not in X.BATCHES] + [(c, True) for c in X.BATCHES]
-                         + [pytest.param(c, False, marks=pytest.mark.slow) for c in X.BATCHES])
+                         + [(c, False) for c in X.BATCHES])
 def test_every_case_plans_and_hands_each_token_its_rows(case: str, quick: bool) -> None:
     """Every case's tokens through the planner port and `token_inputs`: the window's NW rows from the SWA cache then
     ceil64(extra_len) compressed rows, the indices -1 past each length, the lengths, and SPLITS tiling the token's blocks; no
@@ -319,6 +319,7 @@ def test_the_twin_jobs_take_the_kernel_words(swa) -> None:
     assert r["mismatch"] == 1 and [r["first_mismatch"][k] for k in ("token", "head", "word")] == list(FLIP)
 
 
+@pytest.mark.slow
 def test_the_reference_job_is_the_registered_definition(swa) -> None:
     """`FlashMlaDecode_v1{NH=16,...}` itself on a window token of one block (its 16 heads) against the twin."""
     ns, good, _ = swa
@@ -409,7 +410,6 @@ def test_the_prefill_edge_words_land_where_they_are_meant_to() -> None:
     assert x["len"] == 1152 and valid.sum() == 1
 
 
-@pytest.mark.slow
 def test_the_prefill_edge_outputs() -> None:
     """The twin on `edge`: tokens 0 and 2 are finite on every head but the NaN-sink one (token 2's bad and past-length rows are
     masked and zero-filled), token 1's rows that overflow or are NaN make every head NaN, token 5 of length 0 is +0 on every

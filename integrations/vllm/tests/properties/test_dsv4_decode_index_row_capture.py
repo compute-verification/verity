@@ -186,6 +186,7 @@ def _stand_in_cache_utils(monkeypatch, calls: list) -> None:
     monkeypatch.setattr(torch.cuda, "synchronize", lambda: None)
 
 
+@pytest.mark.slow
 def test_launch_hands_the_kernel_the_decodes_operands(tmp_path, monkeypatch) -> None:
     """`launch` on CPU tensors with the kernel the twin: the wrapper gets the [:tokens] top-k slice of a TOPK-wide buffer, the
     whole `token_to_req_indices` buffer, the [:requests] table of stride NB, block size 64 and a bool valid of the tokens' bytes

@@ -233,6 +233,7 @@ def test_the_triton_output_word_from_the_decodes_is_its_word_body() -> None:
     assert np.array_equal(got, _out_word(inv, _f32(x), w))
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("N, EPS", SERVED)
 def test_the_constant_steps_are_their_word_composites(N, EPS) -> None:
     rng = np.random.default_rng(zlib.crc32(f"{N}/{EPS}".encode()))
@@ -332,6 +333,7 @@ def test_the_norms_are_b1s_at_a_small_width() -> None:
     _rows(64, 1e-5, 160, 6)
 
 
+@pytest.mark.slow
 def test_the_norms_on_proofs_boolean_mufu_are_b1s_at_a_small_width() -> None:
     _rows(64, 1e-5, 160, 7, cuda_mufu=CUDA_BITS, triton_mufu=TRITON_BITS)
 

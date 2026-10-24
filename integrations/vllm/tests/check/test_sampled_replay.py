@@ -630,6 +630,7 @@ def test_catch_probability_is_evaluated_over_population_per_stratum(world):
     assert "seed_source" in rep["catch_probability"]["note"]
 
 
+@pytest.mark.slow
 def test_module_strata_cap_floor_and_targets(world):
     """(1) the stratum key carries the module op_path: one stratum per (spec, request, rank, phase, module) so every module of every
     request/phase is sampled; (2) the cap never truncates below one VU per stratum (round-robin order); (3) `--replay-target` pins every VU

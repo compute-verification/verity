@@ -182,6 +182,7 @@ def _root_names(profile) -> set[str]:
     return {e.name for e in _log(profile) if isinstance(e, Root) and e.role == "weight"}
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("form", ["runs", "progressions"])
 def test_a_moduleless_rank_fold_maps_each_layers_weights_apart(rank, form):
     """[04f0af376] Without Root names the moduleless launches hinted every layer's q_a / kv_a / index-K norm and the CUDA norms alike:
@@ -204,6 +205,7 @@ def _verdict(res: dict) -> tuple:
             sorted(collections.Counter(k for s in res["steps"] for k in (s.get("wiring") or {}).get("different_by_spec_arg", {})).items()))
 
 
+@pytest.mark.slow
 def test_the_progressions_compare_reaches_the_runs_verdict(rank):
     """`--operands progressions` (both sides compact, stored as progressions) against the record form: the same verdict on the served
     fold against itself and against the fold whose layer 1 reads layer 0's W_UV (each of its token rows' W_UV operand, and only it,

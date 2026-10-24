@@ -22,6 +22,8 @@ import ast
 from collections import defaultdict
 from functools import lru_cache
 
+import pytest
+
 from . import _ratchet as R
 
 NAME = "p01_core_abstractions"
@@ -140,6 +142,7 @@ def scan() -> tuple[R.Violation, ...]:
     return tuple(out)
 
 
+@pytest.mark.slow
 def test_no_new_violations() -> None:
     R.assert_no_new(NAME, scan(), RULE,
                     "Extend core through its public API (or change core), import its Definitions instead of "

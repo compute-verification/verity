@@ -169,7 +169,6 @@ def test_zero_padding_is_the_zero_bit_broadcast(monkeypatch) -> None:
     assert len(codec.canonical_json(codec.definition_entry(old_head))) > 20 * size[17]
 
 
-@pytest.mark.slow
 def test_a_key_length_adds_no_more_to_the_boolean_descriptor_than_twice_the_word_one() -> None:
     """At Qwen3-0.6B's served statics (`benchmarks/bool_build_cost`'s small case: D = 128, BN = 64, rows of 1 and 65 keys), the
     Definitions a row has one of per key length (`Attention`, `AttentionHead`) or per block width (`AttnBlock`) take at most twice
@@ -189,6 +188,7 @@ def test_a_key_length_adds_no_more_to_the_boolean_descriptor_than_twice_the_word
         assert b[fam] <= 2 * w[fam], (fam, b[fam], w[fam])
 
 
+@pytest.mark.slow
 def test_fa3_inv_sum_agrees_with_fa3_inv_sum_v1() -> None:
     """On random words, the special words (signed zeros, infinities, NaNs, subnormals) and every mantissa at exponent 0x7F."""
     target = bind(BAt.Fa3InvSum)

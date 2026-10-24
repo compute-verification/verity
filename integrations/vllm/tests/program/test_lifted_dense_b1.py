@@ -151,6 +151,7 @@ def _lserve_names(d_max: int, n_eos: int) -> list[str]:
     return names
 
 
+@pytest.mark.slow
 def test_address_stability_modulo_guard_nodes_vs_serve_v2(programs):
     p_u, p_l = programs
     assert p_u.gates > 10**9  # a real shape, not a toy
@@ -185,6 +186,7 @@ def test_address_stability_modulo_guard_nodes_vs_serve_v2(programs):
 # ---------------------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_sampling_event_population_is_cap_and_independent_of_the_eos_set(programs, program_eos2):
     _, p_l = programs
     events = [k for n, k in _body_named(p_l) if n.endswith("/final")]
@@ -205,6 +207,7 @@ def test_sampling_event_population_is_cap_and_independent_of_the_eos_set(program
 # ---------------------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_exact_count_rule_and_the_served_prefix_rule_on_the_real_shape(programs):
     _, p_l = programs
     per_step = 1 + 2 * C["NL"] * C["KVH"] * C["D"]

@@ -195,7 +195,6 @@ def test_the_bindings_and_the_record() -> None:
     assert REGISTRY["glm53_fused_rmsnorm_capture"].schema == X.SCHEMA
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("flip,code,line", [(False, 0, "GLM53-FUSED-RMSNORM GO"), (True, 1, "GLM53-FUSED-RMSNORM NO-GO")])
 def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys, flip, code, line) -> None:
     """`main` with the GPU stood in for (the twin's words as the kernel's in a served and a probe launch of 40 tokens, a fake PTX

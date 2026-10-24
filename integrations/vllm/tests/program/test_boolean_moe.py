@@ -51,7 +51,7 @@ PINS = {
                                                                     "27ac80523ef558eb7d6bb3d98e86fcdf0345e959eca86586de7a3dc7fd478b57bb9fef175ad1b826c88e125c587efb27e62e3c971cd997b20ba6f9fe8b436750"),
 }
 TARGETS = [bind(BM.MoeSumCoordinate, TOPK=8), bind(BM.MoeSum, TOPK=8, H=8), bind(BM.MoeSumV3, TOPK=8, H=136), bind(BM.NvExpf),
-           bind(BM.MoeRouterSigmoidScore),
+           pytest.param(bind(BM.MoeRouterSigmoidScore), marks=pytest.mark.slow),
            pytest.param(bind(BM.MoeRouterTopKOrdered, E=8, TOPK=2, VPT=4), marks=pytest.mark.slow),
            *[pytest.param(bind(BM.MoeRouterSigmoidBias, E=8, TOPK=2, SCALE=2.5, KERNEL=k), marks=pytest.mark.slow)
              for k in ("block", "warp")]]
@@ -160,6 +160,7 @@ def test_the_routed_sum_passes_the_word_querys_cut_check() -> None:
     assert PO.verify(PO.build(prog, PO.query(16, 32)), prog).ok
 
 
+@pytest.mark.slow
 def test_the_chunked_routed_sum_rows() -> None:
     """`MoeSum_v3` at two full chunks and a remainder of 8 columns, over 150 random tokens and 100 of special words: the word
     `MoeSum_v1`."""

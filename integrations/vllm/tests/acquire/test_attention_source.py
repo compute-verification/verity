@@ -311,6 +311,7 @@ def test_the_source_claims_the_attention_bodys_call_boundaries_its_taps_bind_and
         assert AS.claims({**b, **other}) is None, other
 
 
+@pytest.mark.slow
 def test_each_sparse_mla_call_boundary_holds_the_attn_tensor_of_its_layer_and_step(bruns):
     on = bruns[True]
     labels = {n.rsplit("/", 1)[1] for n in on.att.names[AS.ATTN_MQA].values()}
@@ -321,6 +322,7 @@ def test_each_sparse_mla_call_boundary_holds_the_attn_tensor_of_its_layer_and_st
     assert off.att.stats["call_boundaries_held"] == 0 and off.com.errors == [], "off the target the attn tap is not bound, so neither are they"
 
 
+@pytest.mark.slow
 def test_the_binding_map_covers_each_held_call_boundary_exactly_and_names_the_rest(bruns):
     on = bruns[True]
     layouts = {}

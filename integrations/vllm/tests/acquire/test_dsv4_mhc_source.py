@@ -96,6 +96,7 @@ def test_the_source_wraps_the_four_functions_in_the_model_module():
     assert all(getattr(home, f).__name__ == f for f in MS.FUNCTIONS)
 
 
+@pytest.mark.slow
 def test_every_step_binds_the_map_names_of_its_hc_route_once(runs, capsys):
     for target, r in runs.items():
         for k, (_md, routes, phase) in enumerate(STEPS):
@@ -111,6 +112,7 @@ def test_every_step_binds_the_map_names_of_its_hc_route_once(runs, capsys):
     assert sorted(off.names(2)) == sorted(first | {"model/post", "model/head"}), "off the target no TF32 return is bound"
 
 
+@pytest.mark.slow
 def test_each_bound_value_is_the_return_it_names(runs):
     for r in runs.values():
         for k in range(len(STEPS)):
@@ -121,6 +123,7 @@ def test_each_bound_value_is_the_return_it_names(runs):
                 assert t.dtype == v.dtype and torch.equal(t, v), (k, name)
 
 
+@pytest.mark.slow
 def test_each_call_flushes_after_its_returns(runs):
     r = runs[True]
     assert r.mhc.stats["calls"] == len(STEPS) * (2 * L + 2) and r.mhc.stats["unattributed"] == 0
@@ -143,6 +146,7 @@ def test_a_call_with_no_side_s_fn_fails_the_step():
         r.close()
 
 
+@pytest.mark.slow
 def test_the_route_source_admits_a_step_only_with_its_mhc_names(runs, capsys):
     r = runs[True]
     steps = {k: map_names(capsys, routes, phase, binders=OTHERS) + r.names(k) for k, (_md, routes, phase) in enumerate(STEPS)}
@@ -156,6 +160,7 @@ def test_the_route_source_admits_a_step_only_with_its_mhc_names(runs, capsys):
     assert got["ok"] is False and got["violations"][0]["routes_bad_n"] == 2 * 4 * (2 * L - 1)
 
 
+@pytest.mark.slow
 def test_the_arena_bound_counts_one_hc_route():
     side = HC * ENV["H"] * 2 + HC * 4 + HC * HC * 4 + ENV["H"] * 2
     for target in (True, False):

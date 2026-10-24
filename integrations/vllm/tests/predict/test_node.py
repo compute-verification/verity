@@ -90,6 +90,7 @@ def test_tp2_node_is_its_ranks_joined_at_their_collectives(wrapper, shape):
     assert sum(n.gates for n in node.program.fn.body.nodes) == sum(n.gates for rp in ranks for n in rp.program.fn.body.nodes)
 
 
+@pytest.mark.slow
 def test_the_node_reads_only_its_prompt_besides_theta():
     """One IU over the node's computation: its novel reads are the prompt's 4 x 32 bits; the rank Programs' are their peers' too."""
     node = build_node_program(_phi(TINY, tp={"world": 2, "rank": 0}), "request", LP=4, T=2)

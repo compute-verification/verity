@@ -179,6 +179,7 @@ def test_nv_logf_agrees_with_its_word_definition() -> None:
 NvLog1pf = TR.definition("NvLog1pf", 1, GB.nv_log1pf, (("a", F32),), F32, register=False)
 
 
+@pytest.mark.slow
 def test_nv_log1pf_agrees_with_libdevice() -> None:
     """Against `sampling.nv_log1pf_gpu`: around the selector's 0x3F400000 and the toward-zero sum's word 0x3EFFFFFF, -1 (the
     result's -inf and the NaN side), 0 and -0, and +inf."""
@@ -276,7 +277,6 @@ def _lane_args(key: np.ndarray, v: np.ndarray, x: np.ndarray, noisy: np.ndarray)
             np.array([ks for ks, _, _ in vals], np.uint64), np.array([ka for _, ka, _ in vals], np.uint64), noisy]
 
 
-@pytest.mark.slow
 def test_lane_is_the_noise_lane_word() -> None:
     """`GumbelLane_v1` on lane ``v``'s operands (`lane_values`, `lane_index`) is ``add.ftz(x, GumbelNoiseLane_v1(key, v))`` when
     noisy, else ``x``: random keys and lane indices over the whole u32 range and the vocabulary's, with the edges; random and

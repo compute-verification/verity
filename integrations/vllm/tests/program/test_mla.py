@@ -155,7 +155,6 @@ def test_decode_agrees_with_the_model(T: int, kind: str) -> None:
     _agree_decode(T, kind)
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("T", [2, 16, 17, 31, 32, 64, 65])
 @pytest.mark.parametrize("kind", ["spread", "large", "special", "uniform", "tiny"])
 def test_decode_agrees_with_the_model_at_every_mask_shape(T: int, kind: str) -> None:

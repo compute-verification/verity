@@ -327,6 +327,7 @@ def test_boolean_tf32_prenorm_split() -> None:
     _agree(bind(BM.MhcPrenormTf32SplitV2, K=64, OUT=1), a, b)
 
 
+@pytest.mark.slow
 @pytest.mark.boolean_sweep
 def test_boolean_post_and_sinkhorn() -> None:
     rng = np.random.default_rng(12)

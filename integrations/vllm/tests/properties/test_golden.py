@@ -17,6 +17,7 @@ def test_corpus_check_passes():
     assert rep["status"] == "pass" and rep["n_pass"] == 1, rep
 
 
+@pytest.mark.slow
 def test_changed_attribution_fails(tmp_path):
     corpus = golden.load_corpus()
     e = dict(next(x for x in corpus["entries"] if x["name"] == "smollm2-135m-m1"))

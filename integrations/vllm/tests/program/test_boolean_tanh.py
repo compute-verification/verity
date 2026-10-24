@@ -150,6 +150,7 @@ def _pairs(rng) -> tuple[np.ndarray, np.ndarray]:
     return g.astype(np.uint64), u.astype(np.uint64)
 
 
+@pytest.mark.slow
 def test_the_activation_is_the_table_on_every_word() -> None:
     """`gelu_tanh_bf16(g)` at all 65,536 g: `gelu_tanh_bf16`'s words, which hash to its pin. `boolean_dense`'s activation is
     these words too (its `test_the_activation_on_every_word`), and past the activation `GeluTanhMulBf16_v4` and `_v2` are the same

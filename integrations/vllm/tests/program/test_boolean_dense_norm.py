@@ -283,6 +283,7 @@ def test_the_chain_is_gemmas_on_80k_rows(group) -> None:
 
 # --- partition, recompute, purity ------------------------------------------------------------------------------------------------
 
+@pytest.mark.slow
 def test_every_part_partitions_without_recompute_at_small_widths() -> None:
     _assert_partitions(_parts(16) + _parts(1030)[2:5] + [bind(DN.RsqrtF32, N=4, RSQRT=RSQRTS[0])])
     r = QW.unit_rule(bind(DN.RsqrtF32, N=4, RSQRT=P.RsqrtApprox), 16, 32)
@@ -302,7 +303,6 @@ def test_nothing_is_recomputed_across_a_definitions_calls(fn) -> None:
     assert r["ok"] and r["recomputed_gates"] == 0, r["recomputes"]
 
 
-@pytest.mark.slow
 def test_the_mean_recomputes_nothing_at_gemmas_width() -> None:
     r = members_check(bind(DN.MeanTriton, N=H))
     assert r["ok"] and r["recomputed_gates"] == 0, r["recomputes"]

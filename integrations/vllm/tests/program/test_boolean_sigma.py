@@ -150,8 +150,7 @@ def test_the_fused_all_reduce_rms_norm_on_bits_computes_its_word_composite(word)
 #: the word Definitions GLM-5.3 TP8 B1's request Calls as root Calls with no Boolean version of their own, at their descriptors
 #: there, but the embedding shard (19360 x 6144, whose body views its table element by element), which is above at 16 x 2
 GLM53_TP8 = [MP.const(32, 1), MP.const(32, 0x11F), bind(b1.ResidualAdd, N=6144),
-             pytest.param(bind(TA.AllReduceRmsNormMnnvl, WORLD=8, N=6144, SHOT=1, CLUSTER=8, EPS=1e-5, FMA=True),
-                          marks=pytest.mark.slow)]
+             bind(TA.AllReduceRmsNormMnnvl, WORLD=8, N=6144, SHOT=1, CLUSTER=8, EPS=1e-5, FMA=True)]
 
 
 @pytest.mark.parametrize("word", GLM53_TP8, ids=lambda d: d.id)

@@ -854,6 +854,7 @@ def _decode_splits(lens: list[tuple[int, int]], req: int, window: int) -> tuple[
     return FT.request_splits(metas, ns, req, sum(-(-n // SPARSE_BN) for n in lens[req]))
 
 
+@pytest.mark.slow
 def test_a_decode_takes_its_splits_among_the_launchs_decodes(flashmla_small):
     """FlashMLA plans a step's decodes together: the request's decode at position 30, second of 31 decodes beside a prefill, takes
     the splits of its index among their lengths, which differ from its splits alone and from those of the first decode."""
@@ -1172,6 +1173,7 @@ def _derive_marlin(model, xs, monkeypatch, served=MARLIN_SMALL):
     return derive_report(model, inputs, mode="profile", profile=PROFILE_B1_EAGER_V3.name, name="marlin", rules=vllm_ruleset()), inputs
 
 
+@pytest.mark.slow
 def test_the_marlin_moes_align_and_expert_gemms_derive_per_pair_word_for_word_the_twin(served, monkeypatch):
     rng = np.random.default_rng(11)
     model, xs = _MarlinLaunches(rng), _marlin_inputs(rng)

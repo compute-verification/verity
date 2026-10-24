@@ -124,6 +124,7 @@ def test_dsa_rank_step_equals_the_record(rank, tmp_path):
     assert r.digest == json.loads((MANIFESTS / "records.json").read_text())["rows"][GLM53]["programs"][str(rank)]["step"]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("wrapper,shape,digest", [
     ("step", {"M": 8, "pos0": 8}, "6a8ea56b8f7c3f2a4c557d20dd45b86b9eda749f653f4559ee21327ca3bed830254af606c6aee98b123ccc4cb6172fb2283a96be63867331687fa0f5100e4bd2"),
     ("request", {"LP": 11, "T": 12}, "f22d03019ee5c9324134c394b8628cf3bda5fa89d3e9e04b3fe56faf92e856bc5e05eb057ed2adb327e513dc39fa5c93597bfec0011deab079629e3c974c5bcd"),
@@ -136,6 +137,7 @@ def test_dsa_launch_batch_equals_the_traced_build(wrapper, shape, digest, tmp_pa
     assert r.digest == digest
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("row,wrapper,shape,digest", [
     (GLM53_S1, "step", {"M": 1, "pos0": 8},
      "24fae34c8de54a0808878316398bcb7228e39fb073c2df31ba00cda2e17da379c8b66a147e5faa6cc1f44ce9fd3fbabe17567af138a97f3e01c361e72df05821"),

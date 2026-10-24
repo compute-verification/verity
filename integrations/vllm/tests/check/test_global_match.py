@@ -404,6 +404,7 @@ def test_b2_unequal_requests_pass_globally(memory, tmp_path):
     assert not res["eos_truncated_requests"]
 
 
+@pytest.mark.slow
 def test_fast_path_releases_its_caches_when_the_outermost_check_returns(memory, tmp_path, monkeypatch):
     """[R17 mprof unit 4, rev F-r17-06] MATCH_IMPL=fast memoises per Prog / Projection for the duration of ONE check() -- including its
     nested alternate-criterion run -- and holds nothing afterwards, so a process that checks several records does not grow by one
@@ -444,6 +445,7 @@ def test_fast_path_releases_its_caches_when_the_outermost_check_returns(memory, 
     assert json.dumps(strip(res), sort_keys=True, default=str) == json.dumps(strip(ref), sort_keys=True, default=str)
 
 
+@pytest.mark.slow
 def test_fast_path_passes_its_operations_and_rebinds_nothing(memory, tmp_path, monkeypatch):
     """MATCH_IMPL=fast hands GM-01 and its X-09 run `global_match_fast.ops()` explicitly: after a fast check() every Verity core and
     checker-of-record function is the object it was before, the fast run's Programs are its own (MemoProg, progressions), and a record
@@ -517,6 +519,7 @@ def test_eos_truncated_request_is_compared_over_its_executed_prefix_and_labelled
     assert r1["eos_verified"] is True and r1["eos_token"] == EOS and _check(res, "G6")["stop_rule"]["eos_token_ids"] == [EOS]
 
 
+@pytest.mark.slow
 def test_early_stop_without_an_eos_token_fails_g6_whatever_the_driver_says(memory, tmp_path):
     """rev-pm ALERT M-0537 (F-pm-24): a request that stopped before its cap on a NON-EOS token -- an engine that dropped or aborted it, a
     stop string, or a prover that skipped the tail -- was accepted as 'eos-truncated' on the strength of finish_reason alone. The EOS is
@@ -1533,6 +1536,7 @@ def test_served_past_the_first_eos_fails_g6_by_name_f_r17_14(memory, tmp_path):
     assert not e["ok"] and "served past an EOS at index 0" in e["problems"][0] and "F-r17-14" in e["problems"][0]
 
 
+@pytest.mark.slow
 def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_same_scheduler(memory, tmp_path):
     """R17-1 / DP-pad-02 (b) (Daniel, BRIEF s4; supersedes the ruling-21 reader): LAG is the workload Program's DECLARED specialization
     parameter (mock: `lag=`; GP-01: the Workload_v1 `lag` static from TargetProfile.lag()).  vLLM's async scheduling computes ONE more row

@@ -303,6 +303,7 @@ def test_custom_coordinate_on_rows(start: int) -> None:
     _agree(bind(BA.AllReduceCustomCoordinate, WORLD=8, START=start), _rows(np.random.default_rng(90 + start), 5000, 8))
 
 
+@pytest.mark.slow
 def test_rows_on_bits() -> None:
     rng = np.random.default_rng(5)
     _agree(bind(BA.AllReduceMnnvl, WORLD=8, N=8, SHOT=2), rng.integers(0, 1 << 16, (300, 8, 8)).astype(np.uint16))

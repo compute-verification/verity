@@ -88,6 +88,7 @@ def _exact_pow2_ceil(w: int) -> int:
     return (e + 127) << 23
 
 
+@pytest.mark.slow
 def test_ue8m0_bit_form_is_the_kernels_exp2f_ceilf_log2f_on_every_reachable_scale() -> None:
     ys = _reachable_scales()
     got = T.ue8m0_ceil(ys)
@@ -251,6 +252,7 @@ def test_grouped_einsum_matches_its_twin() -> None:
     assert list(evaluate(bind(DG.ScaledMmFp8BlockGrouped, H=H, K=K, N=N, G=G), *map(_words, (xq, sx, w, ws)))) == _words(y)
 
 
+@pytest.mark.slow
 def test_replay_evaluates_the_linears_with_their_row_kernels() -> None:
     """`evaluate_batch`'s default for the three Definitions is their row kernel (`kernels.deepgemm_rows`, registered from `rows`), not
     the plain-integer reference.  The middle row of each batch is one the GEMM twin does not reproduce (DeepGEMM: accumulators past

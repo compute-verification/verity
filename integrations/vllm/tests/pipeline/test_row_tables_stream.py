@@ -46,6 +46,7 @@ def _spec(mine: CS.Window, table: bool = True) -> S.Spec:
     return S.Spec(values, S.Law("stratified:2"), check, public, b"row-table-stream-test")
 
 
+@pytest.mark.slow
 def test_a_row_table_window_runs_through_the_stream_on_the_challengers_coins(tmp_path, signer, monkeypatch):  # noqa: F811
     """The window's record, at row 101 + i for case i, registers on a stream whose Spec declares the `row-table` root
     as a tree over roots of row-seg leaves; drawn from the served challenger's coins after its digest, the honest draw's

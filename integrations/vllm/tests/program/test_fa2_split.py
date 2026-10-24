@@ -181,6 +181,7 @@ def _agrees(target, n: int) -> None:
         assert not bad.size, f"{target.id}: {bad.size} of {len(r)} instances differ from {word.id}, first {bad[:5]}"
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("target", AGREEMENT, ids=lambda t: t.id)
 def test_boolean_agrees_with_its_word_view(target) -> None:
     _agrees(target, 96)

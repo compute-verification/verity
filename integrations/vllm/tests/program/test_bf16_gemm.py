@@ -223,6 +223,7 @@ def test_no_body_on_bits_computes_a_value_twice() -> None:
         assert WQ.Graph(t).recomputed == [], t.id
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("FMA", [1, 0])
 def test_dotprod_agrees_with_the_model(FMA: int) -> None:
     """`LlBf16DotprodGemm_v2` against `dotprod_rows` over two tiles of two warps' lanes, over one tile of one warp, and over one
