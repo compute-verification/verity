@@ -310,6 +310,9 @@ def test_ci_records_a_baseline_only_on_the_control_pod_and_it_clears_an_open_bis
     with pytest.raises(QueueError, match="only ci"):
         Q.baseline(h.q, main, "lane-3")
     monkeypatch.setenv(DRIVE_ENV, "1")
+    with pytest.raises(QueueError, match="not after-landing steps"):
+        Q.baseline(h.q, main, "ci", "nonsense")
+    assert Q.main([*argv, "--steps", "lean-audit"]) == 0 and h.postland()["verified_as"]["steps"] == ["lean-audit"]
     assert Q.main(argv) == 0 and "bisect" not in h.postland()
     assert h.tick().startswith("landed #1")
 

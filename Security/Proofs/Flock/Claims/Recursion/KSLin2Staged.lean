@@ -50,7 +50,7 @@ theorem ksLin2_route_staged (rel relO : _root_.Flock.Readable.Parsed → _root_.
           (∀ decI, Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape) ∧
           (∀ decI, Claims.Recursion.VStarB.StagedB FlockDeploy.sha512 D
             (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape shows cmt) ∧
-          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec relO) L shape shows chk s) ∧
+          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec relO) L shape shows cmt chk s) ∧
           (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec relO) L shape shows cmt s) ∧
           Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
       ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
@@ -113,7 +113,7 @@ theorem ksLin2_deployed_parts (rel : _root_.Flock.Readable.Parsed → _root_.Flo
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
         (∀ decI, Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape) ∧
         (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
-          L shape (showsPart untr b) chk s) ∧
+          L shape (showsPart untr b) (cmtTr untr) chk s) ∧
         (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart untr b) (cmtTr untr) s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
@@ -172,7 +172,7 @@ theorem ksLin2_steps_parts (nextE : Msg → List Msg → List Coin → Claims.OC
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
         (∀ decI, Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape) ∧
         (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
-          L shape (showsPart untr b) chk s) ∧
+          L shape (showsPart untr b) (cmtTr untr) chk s) ∧
         (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart untr b) (cmtTr untr) s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
@@ -207,7 +207,7 @@ theorem ksLin2_deployed_plain_parts (b : Brings) (L : Claims.Recursion.VStarB.La
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
         (∀ decI, Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape) ∧
         (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
-          L shape (showsPart untr b) chk s) ∧
+          L shape (showsPart untr b) (cmtTr untr) chk s) ∧
         (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart untr b) (cmtTr untr) s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →

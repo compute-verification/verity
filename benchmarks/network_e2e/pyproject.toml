@@ -1,7 +1,7 @@
 [project]
 name = "verity-network-e2e"
 version = "0.0.0"
-description = "Network accounting end to end: a certifier-serve rehearsal, N2's verdicts, the proved head checks and the negatives, as one report."
+description = "Network accounting end to end: a certifier-serve rehearsal, N2's verdicts, the proved head checks, the negatives and the chain (advice bits, prove path), as one report."
 requires-python = ">=3.12"
 dependencies = ["verity"]
 
@@ -17,6 +17,8 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# e2e.py runs certifier-serve's rehearsals and N2's verdicts through n2_zk, which it imports from there; the claim's
+# e2e.py runs certifier-serve's rehearsals and N2's verdicts through n2_zk, and the chain NEG's negatives, which it imports
+# from there; the chain's derived bits are ENC-DERIVED's (the encodings suite's module, loaded by path); the claim's
 # zero-knowledge gaps are checked against the certifier README's.
-inputs = ["benchmarks/network_traces", "verity/core/protocols/certifier/README.md"]
+inputs = ["benchmarks/network_traces", "benchmarks/network_e2e/encodings/derived.py",
+          "verity/core/protocols/certifier/README.md"]
