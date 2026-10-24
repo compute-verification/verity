@@ -71,8 +71,8 @@ LEAN=$REPO/verity/core/service/flock/.lake/build/bin/flock-verify; FWL=${LEAN%/*
 sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256
 
 for I in 256 1536 8192 ${PP_SETS:-}; do   # the verifier's lowering: a synthetic input set per template (its values are never read)
-  case $I in */*) SUB=$I D=${I//\//_};; *) SUB=silu-mul-v2/i$I/bf16 D=i$I;; esac
-  $PY -m verity_numerical.bench.generate --subcircuit $SUB --n 4 --seed 1 --out $W/sets/$D > $O/sets-$D.log 2>&1 || exit 9
+  case $I in */*) SUB=$I SET=${I//\//_};; *) SUB=silu-mul-v2/i$I/bf16 SET=i$I;; esac
+  $PY -m verity_numerical.bench.generate --subcircuit $SUB --n 4 --seed 1 --out $W/sets/$SET > $O/sets-$SET.log 2>&1 || exit 9
 done
 TG=(); for t in ${PP_TRANSFER_GATES:-}; do TG+=(--transfer-gate "$t"); done
 CH=()
