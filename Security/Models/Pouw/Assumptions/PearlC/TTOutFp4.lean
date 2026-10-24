@@ -34,7 +34,9 @@ and §5): `TTOutFp4` at `devFp4Sm120`.
 - **The cost model.** `CM` is the sm_120 accounting in FP4 units: W1 at the node-2 prices, where one unit is one dense
   NVFP4 MAC with FP32 accumulation and an instruction is priced by its whole fragment. It charges every operation a
   program executes, and it is the same `CostModel` for the honest reference and for every adversary. That the honest
-  sm_120 program fits `W_ref` under this `CM` is the kernel lane's measured claim, not part of this assumption.
+  sm_120 program fits `W_ref` under this `CM` is the kernel lane's measured claim, not part of this assumption. At W1
+  (`TTOutFp4Sm120W1`, `Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1`) `CM` is the term
+  `W1.w1Priced (W1Device.fp4Sm120 sha fetch) salt`.
 - **The credit.** `creditFp4` less the unit's replayed debit (`Fp4Sem.unitDebit`), whose executable reference is
   #556's `pearl_c4.tile_debit` (`9363e5012`). The debit has D-24's 2:4 row windows (`Fp4Dev.rowWin24`), F1′ (the base
   split's expected saving per row window under the exact noise law, `Fp4Dev.f1Row`, B̃'s at 10 times), the chain's
