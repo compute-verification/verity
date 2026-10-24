@@ -58,7 +58,7 @@ def serve():
 
 @pytest.fixture(scope="module")
 def tokensel():
-    return Program(bind(b1.TokenSelect, V=9))  # a scan node (ArgmaxStep, 7 iterations: lanes 1..7, lane 8 after it)
+    return Program(bind(b1.TokenSelect, V=8))  # a scan node (ArgmaxStep, 7 iterations)
 
 
 # -- helpers ------------------------------------------------------------------------------------------------------

@@ -39,7 +39,7 @@ import math
 import struct
 
 from verity.ml.circuits.defs import PrimitiveDefinition, bind, composite
-from verity.ml.circuits.refs import Coll as _Coll, concat, tuple_of
+from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.ops.scalar import BF16, BIT, BitNot, BitOr, F32, F32Eq, I32, I32Add, SelectF32, SelectI32
 from verity_vllm.program.registry import ref_prims as RP
 from verity.ml.circuits.types import Array, Tuple, Value
@@ -353,27 +353,13 @@ def GumbelSelectStep(B, S, carry, x, key, noisy):
     """One vocabulary lane: y = x + g(key)[i] (add.ftz.f32) when noisy (temp != 0) else x; take (y, i) iff y > best (strict: the
     first maximum wins; NaN never wins); i += 1."""
     best, best_i, i = carry[0], carry[1], carry[2]
-    y, gt = _gumbel_lane(B, carry, x, key, noisy)
+    g = B.call(GumbelNoiseLane, key, i)
+    y = B.call(SelectF32, noisy, B.call(F32AddFtz, x, g), x)
+    gt = B.call(RP.F32GtStrict, y, best)
     nb = B.call(SelectF32, gt, y, best)
     ni = B.call(SelectI32, gt, i, best_i)
     nxt = B.call(I32Add, i, B.call(const(32, 1)))
     return tuple_of(tuple_of(nb, ni, nxt), ni)
-
-
-def _gumbel_lane(B, carry, x, key, noisy):
-    """`GumbelSelectStep_v1`'s lane up to its test: (y, y > best), y = x + g(key)[i] when noisy else x."""
-    g = B.call(GumbelNoiseLane, key, carry[2])
-    y = B.call(SelectF32, noisy, B.call(F32AddFtz, x, g), x)
-    return y, B.call(RP.F32GtStrict, y, carry[0])
-
-
-def _first_max(B, V, init, logits, key, noisy):
-    """The index `GumbelSelectStep_v1`'s scan from `init` over logits[1 .. V-1] ends on: the scan to logits[V-2], then the last lane's
-    step for its index alone (the scan's final best and i + 1 are read by nothing)."""
-    if V == 1:
-        return init[1]
-    c = B.scan(GumbelSelectStep, init, xs=(logits[1:V - 1],), shared=(key, noisy))[0] if V > 2 else init
-    return B.call(SelectI32, _gumbel_lane(B, c, logits[V - 1], key, noisy)[1], c[2], c[1])
 
 
 @composite("GumbelSelectF32", 1, ["V"], lambda S: ((("logits", Array(S.V, F32)), ("seed", I64), ("pos", I64), ("temp", F32)), I32),
@@ -387,7 +373,9 @@ def GumbelSelectF32(B, S, logits, seed, pos, temp):
     noisy = B.call(BitNot, B.call(F32Eq, temp, B.call(const(32, 0))))
     zero = B.call(const(32, 0))
     y0 = B.call(SelectF32, noisy, B.call(F32AddFtz, logits[0], B.call(GumbelNoiseLane, key, zero)), logits[0])
-    return _first_max(B, S.V, tuple_of(y0, zero, B.call(const(32, 1))), logits, key, noisy)
+    init = tuple_of(y0, zero, B.call(const(32, 1)))
+    step = B.scan(GumbelSelectStep, init, xs=(logits[1:S.V],), shared=(key, noisy))
+    return step[0][1]
 
 
 @composite("GumbelTokenSelect", 1, ["V"], lambda S: ((("logits", Array(S.V, BF16)), ("seed", I64), ("pos", I64), ("temp", F32)), I32),
@@ -491,13 +479,8 @@ def bit_at(width: int) -> PrimitiveDefinition:
            conformance="exact-model-tested")
 def TopPMaskStep(B, S, i, x, keep):
     """One lane of `_topp_sb_mask_kernel`'s store: `tl.where(keep, x, -inf)`; i += 1."""
-    y = _mask_lane(B, S.V, i, x, keep)
+    y = B.call(SelectF32, B.call(bit_at(S.V), keep, i), x, B.call(const(32, NEG_INF_BITS)))
     return tuple_of(B.call(I32Add, i, B.call(const(32, 1))), y)
-
-
-def _mask_lane(B, V, i, x, keep):
-    """Lane i's store of `_topp_sb_mask_kernel`: `tl.where(keep, x, -inf)`."""
-    return B.call(SelectF32, B.call(bit_at(V), keep, i), x, B.call(const(32, NEG_INF_BITS)))
 
 
 @composite("TopPMask", 1, ["V"], lambda S: ((("logits", Array(S.V, F32)), ("top_p", F32), ("splits", I32)), Array(S.V, F32)),
@@ -505,14 +488,10 @@ def _mask_lane(B, V, i, x, keep):
 def TopPMask(B, S, logits, top_p, splits):
     """`apply_top_k_top_p_triton` for a row of a batch <= 64 without top-k (`_apply_topp_split`, `splits` splits): the fp32 row with
     every lane outside the top-p nucleus set to -inf, exactly as the three Triton kernels compute it (registry/topp_split.py).  `splits`
-    (i32) is the launch's split count S_t = SplitsFor_v1(|live(t)|, num_SMs), an OPERAND of the event (a derived value of the workload).
-    `TopPMaskStep_v1`'s scan to logits[V-2], then the last lane's store alone (the scan's final i + 1 is read by nothing)."""
+    (i32) is the launch's split count S_t = SplitsFor_v1(|live(t)|, num_SMs), an OPERAND of the event (a derived value of the workload)."""
     keep = B.call(topp_mask_word(S.V), logits, top_p, splits)
-    i, head = B.call(const(32, 0)), []
-    if S.V > 1:
-        res = B.scan(bind(TopPMaskStep, V=S.V), i, xs=(logits[0:S.V - 1],), shared=(keep,))
-        i, head = res[0], [res[1].refs]
-    return _Coll(Array(S.V, F32), concat(head + [_mask_lane(B, S.V, i, logits[S.V - 1], keep).refs]))
+    res = B.scan(bind(TopPMaskStep, V=S.V), B.call(const(32, 0)), xs=(logits,), shared=(keep,))
+    return res[1]
 
 
 @composite("GumbelTopPTokenSelect", 1, ["V"],
@@ -554,7 +533,9 @@ def GumbelSelectF32GivenGreedy(B, S, logits, seed, pos, greedy):
     noisy = B.call(BitNot, greedy)
     zero = B.call(const(32, 0))
     y0 = B.call(SelectF32, noisy, B.call(F32AddFtz, logits[0], B.call(GumbelNoiseLane, key, zero)), logits[0])
-    return _first_max(B, S.V, tuple_of(y0, zero, B.call(const(32, 1))), logits, key, noisy)
+    init = tuple_of(y0, zero, B.call(const(32, 1)))
+    step = B.scan(GumbelSelectStep, init, xs=(logits[1:S.V],), shared=(key, noisy))
+    return step[0][1]
 
 
 @composite("GumbelTokenSelectSharedGreedy", 1, ["V"],

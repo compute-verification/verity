@@ -746,11 +746,11 @@
   },
   "FinalHopper_v1{C={e2f2f43eb046}}": {
    "descriptor_id": "FinalHopper_v1{C={\"dict\":{\"BIAS\":true,\"D\":16,\"EPS\":{\"f64\":\"0x1.4f8b588e368f1p-17\"},\"GU\":64,\"H\":32,\"I\":32,\"KVH\":1,\"MAX_POS\":8,\"NH\":2,\"NL\":2,\"QKV\":64,\"ROPE_THETA\":{\"f64\":\"0x1.3880000000000p+13\"},\"V\":64,\"model\":\"tiny\",\"profile\":{\"dict\":{}},\"revision\":null,\"tie_word_embeddings\":true}}}",
-   "digest": "b714c2a1c83dc679bbb70a5ee9a952cdd5898f8d0210007fa986bce509cb179ee0d0a767e876905ad00a9589d8897affecf2761b38f61f30004389d9f95c9e1d"
+   "digest": "c48693b7ca96414760766ef0825d3378d21982b2a34ae3c2ddbcabdc4b098fbc33895e94174dddfb2cdf688beb35f8b76f37cb1aa7dfeceb4a14b0e062cfb1f9"
   },
   "FinalHopper_v1{C={bbdad8e23e0c}}": {
    "descriptor_id": "FinalHopper_v1{C={\"dict\":{\"BIAS\":true,\"D\":128,\"EPS\":{\"f64\":\"0x1.4f8b588e368f1p-17\"},\"GU\":512,\"H\":256,\"I\":256,\"KVH\":1,\"MAX_POS\":8,\"NH\":2,\"NL\":1,\"QKV\":512,\"ROPE_THETA\":{\"f64\":\"0x1.3880000000000p+13\"},\"V\":16,\"model\":\"tiny\",\"profile\":{\"dict\":{}},\"revision\":null,\"tie_word_embeddings\":true}}}",
-   "digest": "38902a68dee74525fc7c5f7f5e1615e982d7311802df37fe600410bd652627d8141aa8a78341ec0f0f88426c44d205d6cdb7d98e87a3e25265381c1f2d4f0f77"
+   "digest": "0043f0aba2dfe9fc7674e21b9523f40a894ecfbfe45f7fe020919f464c1b69b0d91e9211ee330eae72b336cdc535858bb4661fd0686f07e153ca77850bb71f9a"
   },
   "GemmCoordinateHopper_v1{K=256}": {
    "descriptor_id": "GemmCoordinateHopper_v1{K=256}",
@@ -794,7 +794,7 @@
   },
   "LayerPreHopper_v1{C={e2f2f43eb046},L0=True}": {
    "descriptor_id": "LayerPreHopper_v1{C={\"dict\":{\"BIAS\":true,\"D\":16,\"EPS\":{\"f64\":\"0x1.4f8b588e368f1p-17\"},\"GU\":64,\"H\":32,\"I\":32,\"KVH\":1,\"MAX_POS\":8,\"NH\":2,\"NL\":2,\"QKV\":64,\"ROPE_THETA\":{\"f64\":\"0x1.3880000000000p+13\"},\"V\":64,\"model\":\"tiny\",\"profile\":{\"dict\":{}},\"revision\":null,\"tie_word_embeddings\":true}},L0=true}",
-   "digest": "a01424ce9f6827e2ec03ed3008fa30bfdf5e4486816e4d8508bb8259daec3bccb2c3139e61cc77ea53d7948e62a51b694c341f816648fab29ebf8c3d7ce77a4e"
+   "digest": "a012f512b46355960f096c34a3d79e7e7e8ef6f4e47000caebc45e2488a68b5a4c2eecebe72e2da775e3bffbd54e6b71cd485b37907b7115b8daa13ae7f4814d"
   },
   "MlaBmm_v1{NHEADS=2,K=32,N=3,DOT=HopperBF16WgmmaDot16_v2}": {
    "descriptor_id": "MlaBmm_v1{NHEADS=2,K=32,N=3,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}",
@@ -810,7 +810,7 @@
   },
   "ServeHopper_v1{C={e2f2f43eb046},LP=3,STEPS=2}": {
    "descriptor_id": "ServeHopper_v1{C={\"dict\":{\"BIAS\":true,\"D\":16,\"EPS\":{\"f64\":\"0x1.4f8b588e368f1p-17\"},\"GU\":64,\"H\":32,\"I\":32,\"KVH\":1,\"MAX_POS\":8,\"NH\":2,\"NL\":2,\"QKV\":64,\"ROPE_THETA\":{\"f64\":\"0x1.3880000000000p+13\"},\"V\":64,\"model\":\"tiny\",\"profile\":{\"dict\":{}},\"revision\":null,\"tie_word_embeddings\":true}},LP=3,STEPS=2}",
-   "digest": "37b312710b3cef931f60437fc8ccfdbf7b6a1087ab6cfd08b9d6d2496f711c77cad3e09160f076fb512ffa301dfccc6e49133a43956db86711bfed1a6e0122f2"
+   "digest": "039e8b56c34aa02dc513a2780f5daa8c32ffae5b7d50fd292d720258ad5d39f2a058106dc9cb3ef84fccb69e605d0289c7ad43cda44008690d52a8a76682bd30"
   },
   "SparseMlaBlock_v1{DR=64,DV=512,NVIS=1,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v1,SCALE=0.0625}": {
    "descriptor_id": "SparseMlaBlock_v1{DR=64,DV=512,NVIS=1,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
