@@ -1831,15 +1831,17 @@ def test_a_graphs_scatter_screens_its_rows_into_the_pass_and_copies_its_leaves_a
 @pytest.mark.parametrize("schedule, main", [("deferred", 2), ("deferred-caller", 0)])
 def test_the_deferred_schedule_hashes_tiles_on_the_side_stream_from_rotating_sets(device_run, schedule, main):
     """Under ``deferred`` the call's other steps run on the run's own main lane (the recording stand-in's handle 2), as measured;
-    under ``deferred-caller`` on the caller's stream (0).  The tile hashing is on the side lane (1) either way."""
+    under ``deferred-caller`` on the caller's stream (0).  The tile hashing is on the run's side lanes in turn (1, then 3)
+    either way."""
     make, kernel, weights, *_ = device_run
     run = make(schedule=schedule)
     kernel.dev.log.clear()
     for _ in range(3):
         run.gemm(0, torch.randn(32, 1024).to(torch.bfloat16), weights[0], None)
     log = [(n, st, p) for n, st, p, _ in kernel.dev.log if not n.endswith("_smem")]
-    assert [n for n, st, _ in log if st == run.side.raw] == ["pd_tiles_851"] * 3 and run.side.raw == 1
-    assert {st for n, st, _ in log if st != run.side.raw} == {main}
+    sides = [lane.raw for lane in run.sides]
+    assert [(n, st) for n, st, _ in log if st in sides] == [("pd_tiles_851", 1), ("pd_tiles_851", 3), ("pd_tiles_851", 1)]
+    assert sides == [1, 3] and {st for n, st, _ in log if st not in sides} == {main}
     sets = run.shapes[(32, 256, 1024)].sets
     ptr = lambda j: (sets[j]["c"].data_ptr(), sets[j]["u"].data_ptr())
     gemms = [p[2:4] for n, _, p in log if n == "gemm_pearlc_d"]
@@ -1850,6 +1852,20 @@ def test_the_deferred_schedule_hashes_tiles_on_the_side_stream_from_rotating_set
     run.begin()
     run.poison()
     assert all(bool((t == 0xA5).all()) for st in sets for t in st.values())
+
+
+def test_calls_take_the_side_lanes_in_turn_whatever_their_shape(device_run):
+    """Two shapes' calls, each shape on its own ring, alternate the run's side lanes call by call (1, 3, 1, 3), so a call's
+    side steps run beside the next call's whatever its shape; each call hashes its own shape's set's C~ and U."""
+    make, kernel, weights, *_ = device_run
+    run = make(schedule="deferred")
+    kernel.dev.log.clear()
+    for w in (0, 1, 0, 1):
+        run.gemm(w, torch.randn(32, 1024).to(torch.bfloat16), weights[w], None)
+    tiles = [(st, tuple(p[:2])) for n, st, p, _ in kernel.dev.log if n.startswith("pd_tiles_")]
+    cu = [(lambda s: (s["c"].data_ptr(), s["u"].data_ptr()))(run.shapes[(32, weights[w].shape[0], 1024)].sets[j])
+          for j in (0, 1) for w in (0, 1)]
+    assert tiles == list(zip((1, 3, 1, 3), cu, strict=True)) and len(set(cu)) == 4
 
 
 @pytest.mark.parametrize("deferred", ["deferred", "deferred-caller"])
@@ -1961,9 +1977,9 @@ def test_a_schedule_this_path_the_kernel_or_the_format_cannot_run_is_refused(dev
 def test_deferred_a_builds_as_tree_beside_the_tile_hashing_from_rotating_sets(sm90_run):
     """Under ``deferred-a`` a decode call's main lane (the recording stand-in's handle 2) runs pd_commit in mode 1 (``rows_a``:
     each real row's digest, leaf, seed, line key and E_A line), the forming and the GEMMs; the side lane (1) then runs
-    pd_tree (A's levels, seed_A, line_a and the padding rows' E_A lines) and the tile leaves.  Both lanes use the ring's set
-    for the call: A's tree, seed_A, line_a, E_A's lines, the keys, C~ and U.  The call's keys are uploaded into its set's,
-    and A's root is copied to the pass from its set."""
+    pd_tree (A's levels, seed_A, line_a and the padding rows' E_A lines) and the tile leaves, on the run's side lanes in
+    turn (1, then 3).  Both lanes use the ring's set for the call: A's tree, seed_A, line_a, E_A's lines, the keys, C~ and
+    U.  The call's keys are uploaded into its set's, and A's root is copied to the pass from its set."""
     make, kernel, weights, roots = sm90_run
     run = make()
     sh = run._shape(32, 256, 1024)
@@ -1974,8 +1990,9 @@ def test_deferred_a_builds_as_tree_beside_the_tile_hashing_from_rotating_sets(sm
     for _ in range(3):
         run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
     log = [(n, st, p, i) for n, st, p, i in kernel.dev.log if not n.endswith("_smem")]
-    assert [n for n, st, _, _ in log if st == run.side.raw] == ["pd_tree_851", "pd_tiles_851"] * 3 and run.side.raw == 1
-    assert {st for _, st, _, _ in log if st != run.side.raw} == {2}
+    sides = [lane.raw for lane in run.sides]
+    assert [(n, st) for n, st, _, _ in log if st in sides] == [(n, st) for st in (1, 3, 1) for n in ("pd_tree_851", "pd_tiles_851")]
+    assert {st for _, st, _, _ in log if st not in sides} == {2}
     by = {name: [(p, i) for n, _, p, i in log if n == name] for name in ("pd_commit_851", "pd_tree_851", "eprime",
                                                                           "gemm_pearlc_d", "pd_tiles_851")}
     ptr = lambda j, x: (sh.keys if j == 0 and x == "keys" else sh.sets[j][x]).data_ptr()
@@ -2015,12 +2032,92 @@ def test_deferred_a_runs_as_tree_aside_in_a_retained_pass_too_and_at_m64_has_no_
     assert tree[1] == (64, 0, 0, 64) and tree[0][12] == 0
 
 
+def test_deferred_a_starts_as_tree_early_only_where_a_call_has_no_padding_rows(sm90_run):
+    """A call with no padding rows (m₁₆ = 64, the kernels' tile) starts A's tree on its side lane right after the main
+    lane's pd_commit (the pipeline's ``lane_cuts``: one main step, then one side step), since pd_tree then writes nothing the
+    forming or the GEMM read; a call with padding rows (m₁₆ = 32) runs it after the GEMM, which reads their E_A lines.
+    Under ``deferred`` A's tree stays on the main lane."""
+    make, *_ = sm90_run
+    run = make()
+    for m16 in (32, 64):
+        sh = run._shape(m16, 256, 1024)
+        pipe, _, side = run._pipe(0, sh)
+        assert pipe.lane_cuts == (1, 1) and len(side) == 2 and "a_tree" in run._side_groups(sh)
+        assert run._early(sh, True) == (m16 == 64) and not run._early(sh, False)
+    run.begin(schedule="deferred")
+    sh = run._shape(64, 256, 1024)
+    pipe, _, side = run._pipe(0, sh)
+    assert pipe.lane_cuts == (1, 0) and len(side) == 1 and run._side_groups(sh) == {"tile_hash"}
+
+
+def test_a_lane_graphs_replay_makes_the_eager_calls_driver_calls_in_its_order(sm90_run, monkeypatch):
+    """A replayed call (`_replay_lanes`) keeps `_lanes`'s order and events: the caller waits for the side steps of its set's
+    last call, uploads the slot and hands over to the main lane, which replays its graph; the call's side lane replays A's
+    tree behind the main graph's own event (where the call starts it early), then the rest behind the main lane's end; the
+    caller waits for the main lane.  A set's first call waits for nothing, and its side lane's end becomes the set's event."""
+    from verity_vllm.protocol_options import pouw_pearl_c_host as PPH
+    from verity_vllm.protocol_options import pouw_pearl_c_lanes as PPL
+    make, *_ = sm90_run
+    run = make()
+    calls = []
+
+    class Driver:
+        def __getattr__(self, name):
+            return lambda *a: calls.append((name, *a))
+
+    monkeypatch.setattr(PPH, "_event", lambda: "slot")
+    monkeypatch.setattr(PPL, "_event", lambda: "done0")
+    run.driver = Driver()
+    side0, side1 = (types.SimpleNamespace(raw=raw, event=f"side{raw // 2}") for raw in (1, 3))
+    main, sh = types.SimpleNamespace(raw=2, event="main"), types.SimpleNamespace(done=[None, "done1"])
+    up, i = run.uploads, run.uploads.i
+
+    def src(k):
+        return up.host_ptr + (i + k) % up.slots * up.width
+    run._replay_lanes(types.SimpleNamespace(execs=(10, 11, 12), slot_ptr=4096, ev_tree="tree"), sh, 1, side1, 0, main,
+                      b"k" * 200)
+    run._replay_lanes(types.SimpleNamespace(execs=(20, 0, 22), slot_ptr=8192, ev_tree=None), sh, 0, side0, 0, None, b"k" * 200)
+    assert calls == [
+        ("wait", 0, "done1"), ("copy_in", 4096, src(0), 200, 0), ("record", "slot", 0), ("record", "main", 0),
+        ("wait", 2, "main"), ("launch", 10, 2), ("record", "side1", 2), ("wait", 3, "tree"), ("launch", 11, 3),
+        ("wait", 3, "side1"), ("launch", 12, 3), ("record", "done1", 3), ("record", "main", 2), ("wait", 0, "main"),
+        ("copy_in", 8192, src(1), 200, 0), ("record", "slot", 0), ("launch", 20, 0), ("record", "side0", 0),
+        ("wait", 1, "side0"), ("launch", 22, 1), ("record", "done0", 1)]
+    assert sh.done == ["done0", "done1"] and bytes(up.view[i, :200]) == b"k" * 200
+
+
+def test_the_lane_graphs_driver_calls_take_raw_handles_and_raise_with_the_drivers_code():
+    from verity_vllm.protocol_options import pouw_pearl_c_host as PPH
+    got = []
+
+    def cu(rc=0):
+        def fn(name):
+            def f(*a):
+                got.append((name, *a))
+                return rc
+            return f
+        return types.SimpleNamespace(**{name: fn(name) for name in PPH._Driver.SIGS})
+
+    lib = cu()
+    D, ev = PPH._Driver(lib), types.SimpleNamespace(cuda_event=77)
+    D.launch(5, 9)
+    D.record(ev, 9)
+    D.wait(9, ev)
+    D.copy_in(1 << 40, 4096, 200, 9)
+    assert got == [("cuGraphLaunch", 5, 9), ("cuEventRecord", 77, 9), ("cuStreamWaitEvent", 9, 77, 0),
+                   ("cuMemcpyHtoDAsync_v2", 1 << 40, 4096, 200, 9)]
+    assert lib.cuStreamWaitEvent.argtypes == [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint]
+    assert lib.cuMemcpyHtoDAsync_v2.argtypes[0] is ctypes.c_uint64 and lib.cuGraphLaunch.restype is ctypes.c_int
+    with pytest.raises(RuntimeError, match="cuGraphLaunch failed: CUDA driver error 400"):
+        PPH._Driver(cu(400)).launch(5, 9)
+
+
 def test_the_schedule_changes_between_passes_and_the_ring_grows_poisoned(device_run):
     make, kernel, weights, *_ = device_run
     run = make()
     run.gemm(0, torch.randn(32, 1024).to(torch.bfloat16), weights[0], None)
     sh = run.shapes[(32, 256, 1024)]
-    assert len(sh.sets) == 1 and run.side is None and run.details["schedule"]["name"] == "serial"
+    assert len(sh.sets) == 1 and run.sides == [] and run.details["schedule"]["name"] == "serial"
     run.end()
     run.begin(retain=None, schedule="deferred")
     run.poison()

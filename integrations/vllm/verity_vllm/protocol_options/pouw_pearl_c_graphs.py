@@ -7,9 +7,12 @@ the eager steps, which the e2e's ``graphs`` gate holds.
 Under a schedule with a side lane (`pouw_pearl_c_lanes`), a call of decode's rows keeps its lanes and ring but replays each
 lane's steps as one graph (`_lane_graph`), one pair a pipeline and ring set: the main lane's, ending with a scatter of its
 flags (and A's root, where A's tree stays there), and the side lane's, ending with a scatter of the leaves (and A's root,
-where the tree runs there).  Both read the pair's own slot, the call's keys and offsets in one upload, which waits for the
-side lane's last use of the set, as the set's other buffers do.  So the call's host work is a few launches, and the next
-call's main lane runs beside this one's side lane, as eagerly.
+where the tree runs there); where the call starts A's tree early, the main graph records an external event after the
+per-row keying, and the tree is a graph of its own, which the call's side lane replays behind that event.  Every graph reads
+the pair's own slot, the call's keys and offsets in one upload, which waits for the side steps of the set's last call, as
+the set's other buffers do.  The driver replays them (`_Driver`, on the graphs' executables and the streams' and
+events' handles), so the call's host work is a few launches, and the next call's main lane runs beside this one's side
+lane, as eagerly.
 
 Inside vLLM's own capture of a whole decode forward (`pouw_pearl_c_whole`, between `whole_capture_begin` and
 `whole_capture_end`), a call launches the same steps into vLLM's capture instead, and is recorded; at each replay of that
@@ -66,11 +69,20 @@ class _Graph:
     #: where a deferred whole capture splits `steps` (`_call_cuts`): the end of A's tree, the start of the tile hashing
     cuts: tuple[int, int] = (0, 0)
     #: a lane graph's (`_lane_graph`): the side lane's graph and steps, and the slot both lanes read (dom_a ‖ unit, then the
-    #: call's offsets at `SLOT_BYTES`, `offs`)
+    #: call's offsets at `SLOT_BYTES`, `offs`; its address `slot_ptr`).  Where the call starts A's tree early, the main
+    #: graph records `ev_tree` (an external event) before step `cut`, and the side steps before `side_cut` (A's tree) are a
+    #: graph of their own, `tree`.  `execs` are the graphs' executables the driver launches (main, tree or 0, side), once
+    #: captured
     side: Any = None
     side_steps: list = field(default_factory=list)
     slot: Any = None
     offs: Any = None
+    slot_ptr: int = 0
+    tree: Any = None
+    cut: int | None = None
+    side_cut: int = 0
+    ev_tree: Any = None
+    execs: tuple = ()
 
 
 @dataclass(frozen=True)
@@ -277,13 +289,14 @@ class GraphCalls:
         return self.graphs and bool(side) and sh.m16 <= GRAPH_ROWS and not self.time_gemm
 
     def _lane_graph(self, w: int, sh: Any, pipe: Any, steps: list, side: list, m: int, tiles: int,
-                    aside: bool) -> tuple[_Graph, bool]:
+                    aside: bool, early: bool = False) -> tuple[_Graph, bool]:
         """A call's lane graphs on the ring set it took (`sh.j`), and whether they screen it (`_graph_key`'s rule: no filler
         rows).  Made at their first call, over buffers of their own for y, the leaves and the slot, with `pipe` pointed at
-        those (the caller has pointed it at the set's): the main lane's steps, then (when it screens, or A's tree stays on
-        the main lane) one scatter of the flags and A's root; the side lane's steps, then one scatter of the leaves (and A's
-        root when the tree is there); each scatter at the offsets in the slot.  That call runs the steps eagerly, and
-        `_capture_lanes` captures them."""
+        those (the caller points it at the set's): the main lane's steps, then (when it screens, or A's tree stays on the
+        main lane) one scatter of the flags and A's root; the side lane's steps, then one scatter of the leaves (and A's
+        root when the tree is there); each scatter at the offsets in the slot.  Where the call starts A's tree `early`, the
+        main graph records an external event after the per-row keying, and the tree is a graph of its own (the pipeline's
+        ``lane_cuts``).  That call runs the steps eagerly, and `_capture_lanes` captures them."""
         import torch
         rows = m if m == sh.m16 else 0
         key = ("lanes", w, sh.m16, self.omit, self.hashing, self.schedule.name, rows, aside, sh.j)
@@ -291,7 +304,10 @@ class GraphCalls:
         if g is None:
             g = _Graph(torch.empty((sh.mp, pipe.n), dtype=torch.bfloat16, device=self.device), _zeros(self.nb * tiles, self.device))
             g.slot = _zeros(LANE_SLOT_BYTES, self.device)
-            g.offs = g.slot[SLOT_BYTES:LANE_SLOT_BYTES].view(torch.int64)
+            g.offs, g.slot_ptr = g.slot[SLOT_BYTES:LANE_SLOT_BYTES].view(torch.int64), g.slot.data_ptr()
+            if early:
+                g.cut, g.side_cut = pipe.lane_cuts
+                g.ev_tree = torch.cuda.Event(external=True)
             if self.cur.poison is not None:
                 g.y.view(torch.uint8).fill_(self.cur.poison)
                 g.leaves.fill_(self.cur.poison)
@@ -309,25 +325,33 @@ class GraphCalls:
         return g, rows > 0
 
     def _capture_lanes(self, g: _Graph) -> None:
-        """`g`'s lanes' steps captured as its two graphs, after the call that made it ran them eagerly (their first use syncs:
-        the GEMMs' shared-memory probes)."""
+        """`g`'s lanes' steps captured as its graphs (the main lane's, recording `ev_tree` before step `cut` where it starts
+        A's tree early, then the tree's, and the side lane's), after the call that made it ran them eagerly (their first use
+        syncs: the GEMMs' shared-memory probes), and their executables for the driver."""
         import torch
         capture = torch.cuda.Stream(device=self.device)
         capture.wait_stream(torch.cuda.current_stream(self.device))
+        parts = [(g.steps, g.cut)]
+        if g.side_cut:
+            parts.append((g.side_steps[:g.side_cut], None))
+        parts.append((g.side_steps[g.side_cut:], None))
         made = []
-        for steps in (g.steps, g.side_steps):
+        for steps, cut in parts:
             graph = torch.cuda.CUDAGraph()
             with torch.cuda.stream(capture):
                 graph.capture_begin(capture_error_mode="thread_local")
                 self.kernel.dev.stream = capture.cuda_stream
                 try:
-                    for f in steps:
+                    for i, f in enumerate(steps):
+                        if i == cut:
+                            g.ev_tree.record(capture)
                         f()
                 finally:
                     graph.capture_end()
             made.append(graph)
         torch.cuda.current_stream(self.device).wait_stream(capture)
-        g.graph, g.side = made
+        g.graph, g.side, g.tree = made[0], made[-1], made[1] if g.side_cut else None
+        g.execs = (g.graph.raw_cuda_graph_exec(), g.tree.raw_cuda_graph_exec() if g.tree else 0, g.side.raw_cuda_graph_exec())
 
     def _offsets(self, index: int, tiles_at: int, flags_at: int) -> tuple[int, int, int]:
         """A call's byte offsets in the pass's buffers: its leaves, its flags, its A root."""

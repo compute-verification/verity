@@ -358,8 +358,7 @@ def main(argv: list[str] | None = None) -> int:
     run, weights, kernel, gen = device_run(shapes, a.scheme, a.cubin, a.schedule[0], a.graphs or a.whole)
 
     def join():
-        if run.side is not None and run.side.stream is not None:
-            torch.cuda.current_stream().wait_stream(run.side.stream)
+        run.join_sides(torch.cuda.current_stream())
     head = {"scheme": a.scheme, "schedule": a.schedule, "graphs": a.graphs or a.whole, "whole": a.whole, "epoch": EPOCH,
             "device": torch.cuda.get_device_name(dev), "cubin_sha256": kernel.cubin_sha256,
             "kernel_source_sha256": kernel.source_sha256, "torch": torch.__version__, "reps": a.reps, "inner": INNER,

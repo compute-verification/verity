@@ -56,6 +56,7 @@ is left is the same forming and GEMM without hashing, for the time split.  ``has
 from __future__ import annotations
 
 import hashlib
+import itertools
 import types
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -87,6 +88,7 @@ from .pouw_pearl_c_lanes import (  # noqa: F401 - the schedule's names, kept imp
 )
 from .pouw_pearl_c_host import (
     _bytes,
+    _Driver,
     _Keys,
     _Lane,
     _put,
@@ -321,7 +323,10 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
         self.device = next(iter(weights.values())).device
         self.schedule = schedule_of(schedule, scheme, kernel)
         self.main: _Lane | None = None      # the main lane, when the schedule runs it above the caller's priority
-        self.side: _Lane | None = None      # the side lane, when the schedule has one
+        self.sides: list[_Lane] = []         # the side lanes, as many as the schedule's ring, which calls take in turn
+        self.driver = _Driver(kernel.dev.cu) if self.graphs else None   # a lane graph's replay's driver calls
+        self._side_turn = 0
+        self._side_cache: dict[tuple, frozenset[str]] = {}
         self._launching: Any = None          # the torch stream the current step group launches on (the GEMM's timing events)
         self.const = _constants(scheme, self.device, salt_key)
         self.const_keys = _constant_keys(self.const)
@@ -356,7 +361,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
             "host": {"keys": "native sha512", "screen": "fused (Triton)" if self.fused_screen else "torch"},
             "schedule": None,
             "graphs": (f"calls of at most {GRAPH_ROWS} rows: the serial schedule's one graph a call, a side lane's schedule's "
-                       f"one a lane and ring set"
+                       f"one a lane and ring set (A's tree its own where it starts early), replayed by the driver"
                        + (", a whole capture's tile hashing beside the next call" if whole_defer else "")) if self.graphs else None,
             "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound (red team F4)"}
         self.cur: _Pass | None = None
@@ -374,12 +379,20 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
         self.schedule = schedule
         if schedule.main_priority == "greatest" and self.main is None:
             self.main = _Lane(self.device, "greatest", 2)
-        if schedule.side and self.side is None:
-            self.side = _Lane(self.device, schedule.side_priority, 1)
+        while schedule.side and len(self.sides) < schedule.ring:    # stand-ins 1, then 3, 4, … past the main lane's 2
+            self.sides.append(_Lane(self.device, schedule.side_priority, 1 if not self.sides else 2 + len(self.sides)))
         self.details["schedule"] = {
             "name": schedule.name, "side": sorted(schedule.side), "ring": schedule.ring,
             "main": self.main.priority if schedule.main_priority == "greatest" else "the caller's",
-            "side_lane": self.side.priority if schedule.side else None}
+            "side_lane": self.sides[0].priority if schedule.side else None}
+
+    def join_sides(self, stream: Any = None) -> None:
+        """`stream` (the current stream's torch stream when None) waits for every side lane's work so far."""
+        if self.device.type != "cuda":
+            return
+        stream = self.torch_stream(self.stream()) if stream is None else stream
+        for lane in self.sides:
+            stream.wait_stream(lane.stream)
 
     # ---- the weight side --------------------------------------------------------------------------------------------
 
@@ -479,7 +492,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
 
     def _pipe(self, w: int, sh: _Shape) -> tuple[Any, list[Any], list[Any]]:
         """The call's pipeline and its steps: the main lane's, and (with hashing) the side lane's, by the schedule's groups
-        (`_side_groups`; A's commitment split where A's tree goes there)."""
+        (`_side_groups`; A's commitment split where A's tree goes there).  The pipeline's ``lane_cuts`` are how many of the
+        main lane's steps are its per-row keying, which A's tree reads, and how many of the side lane's are A's tree."""
         side_groups = self._side_groups(sh)
         aside = "a_tree" in side_groups
         key = (w, sh.m16, self.omit, self.hashing, self.schedule.name, self._graphed(sh.m16), aside)
@@ -501,6 +515,9 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
             lane = {x: "side" if STEP_GROUPS[x] in side_groups else "main" for x in present}
             main = [f for x, f in zip(present, steps, strict=True) if lane[x] == "main"]
             aside = [f for x, f in zip(present, steps, strict=True) if lane[x] == "side"]
+            pipe.lane_cuts = tuple(len(list(itertools.takewhile(lambda x, g=g: STEP_GROUPS[x] == g, [x for x in present
+                                                                                                     if lane[x] == ln])))
+                                   for ln, g in (("main", "row_seeds"), ("side", "a_tree")))
             self.pipes[key] = (pipe, main, aside)
         return self.pipes[key]
 
@@ -583,8 +600,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
                 screen_into(flags, sh.xa[:m] if rows is None else rows, sh.b["alpha_a"], sh.b["aux_a"], self.fused_screen)
             cur.flag_rows += m
             if cur.retain is not None:
-                if "a_tree" in self._side_groups(sh) and self.side.stream is not None:   # A's tree is the side lane's
-                    self.torch_stream(self.stream()).wait_stream(self.side.stream)
+                if "a_tree" in self._side_groups(sh) and sh.done[sh.j] is not None:   # A's tree is the call's side lane's
+                    self.torch_stream(self.stream()).wait_event(sh.done[sh.j])
                 self._retained(cur, cur.matmuls[-1], m, flags, *self._kept(sh, pipe))
             cur.tiles += tiles
         out = y[:m] if bias is None else y[:m] + bias
@@ -597,8 +614,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
         """A new pass: its own transcript under the install's epoch, the call indices from 0, under `schedule` (the last one's
         when None; a schedule changes only between passes).  With `retain`, the pass writes what the prover opens from into
         that directory, from poisoned outputs, and its manifest names `run`.  `stepped`: an engine step's end begins it."""
-        if self.side is not None and self.side.stream is not None:     # the last pass's side lane is done before anything new
-            self.torch_stream(self.stream()).wait_stream(self.side.stream)
+        self.join_sides()                   # the last pass's side lanes are done before anything new
         self._use(self.schedule if schedule is None else schedule_of(schedule, self.scheme, self.kernel))
         self.cur = _Pass(Path(retain) if retain else None, run, stepped=stepped)
         if retain and self.hashing:
@@ -625,8 +641,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
         cur, K = self.cur, self.kernel
         out: dict[str, Any] = {"units": len(cur.matmuls), "tiles": cur.tiles, "hashing": self.hashing, "schedule": self.schedule.name}
         if self.hashing and cur.matmuls:
-            if self.side is not None and self.side.stream is not None:
-                self.torch_stream(self.stream()).wait_stream(self.side.stream)
+            self.join_sides()
             epoch = Epoch(Workload(tuple(cur.matmuls)), self.roots, self.salt)
             R, count, nb = K.run, cur.tiles, self.nb
             tree = _zeros(nb * (2 * R.pow2(count) - 1), self.device)
