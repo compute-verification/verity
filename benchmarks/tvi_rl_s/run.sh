@@ -50,6 +50,18 @@ fi
 nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv
 "$PY" -c 'import torch, transformers, vllm; print(torch.__version__, transformers.__version__, vllm.__version__, torch.cuda.get_device_name(0))'
 
+if [ -n "${EVAL_ARGS:-}" ]; then
+  # Checkpoint evaluation instead of training: EVAL_ARGS are evalckpts.py's flags, comma-separated.
+  cp "$IN"/evalckpts.py "$S"/
+  set -f
+  # shellcheck disable=SC2086
+  "$PY" evalckpts.py --root "$CKPT_ROOT" --model "$MODEL" --data "$S/data" --out "$OUT" ${EVAL_ARGS//,/ } > "$OUT/log-evalckpts.txt" 2>&1
+  echo "evalckpts rc=$?"
+  set +f
+  grep '^{' "$OUT/log-evalckpts.txt" | tail -60
+  exit 0
+fi
+
 run_item() {  # task:method:seed:steps[:est_min[:extra]]
   IFS=: read -r task method seed steps est extra <<< "$1"
   # shellcheck disable=SC2086
