@@ -339,11 +339,15 @@ def test_headline_is_a_whole_session_only_when_every_step_ran(tmp_path: Path) ->
 def test_vstage_rows_carry_what_rec_vstage_staged(tmp_path: Path) -> None:
     o = job(tmp_path)
     summ = {"statements": {"alg": {"stage": {"algebra": [{"part": 0, "template": "InnerRepCheck", "build_s": 3.5,
-                                                            "circuit_bytes": 99}]}},
+                                                            "circuit_bytes": 99},
+                                                           {"part": 1, "template": "InnerRepCheck", "build_s": 4.0,
+                                                            "circuit_bytes": 98}]}},
                            "L0": {"stage": {"levels": {"L0": {"template": "RecOpen", "k_log": 20}}}}}}
     (o / "steps" / "vstage" / "r1" / "out" / "summary-vstage.json").write_text(json.dumps(summ))
     assert RP.staged_units(o / "steps" / "vstage" / "r1" / "out" / "summary-vstage.json")["alg-p0"]["circuit_bytes"] == 99
-    assert row(RP.read(o), "stage L0")["extra"]["units"]["template"] == "RecOpen"
+    doc = RP.read(o)
+    assert row(doc, "stage L0")["extra"]["units"]["template"] == "RecOpen"
+    assert sorted(row(doc, "stage alg")["extra"]["units"]) == ["alg-p0", "alg-p1"]
 
 
 def test_the_lease_is_sized_from_the_firewalls_l3_session(capsys) -> None:

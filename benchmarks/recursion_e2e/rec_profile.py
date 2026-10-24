@@ -335,8 +335,11 @@ def read(root: Path) -> dict[str, Any]:
         rows += tool_rows(vs, "vstage", rel)
         units = staged_units(vs[0] / "summary-vstage.json")
         for r in rows:
-            if r.step == "vstage" and r.stage.startswith("stage ") and units.get(r.stage[6:]):
-                r.extra["units"] = units[r.stage[6:]]
+            name = r.stage[6:] if r.step == "vstage" and r.stage.startswith("stage ") else None
+            if name == "alg":
+                r.extra["units"] = {k: v for k, v in units.items() if k.startswith("alg-")} or None
+            elif name and units.get(name):
+                r.extra["units"] = units[name]
     vc = repeats(root, "vcap")
     if vc:
         rows.append(step_row(vc, "vcap", "85 STEP=vcap whole"))
