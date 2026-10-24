@@ -64,7 +64,7 @@ theorem fwTau_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1)
-    (xs : Array _root_.Flock.Claim)
+    (xs : Array _root_.Flock.Claim) (hxsz : xs.size = spec.points * (stAt x j).regions.size)
     (st : _root_.Flock.Setup) (hst : st = _root_.Flock.Setup.ofCircuit (stAt x j)) (tPad : ℕ) (dom : ByteArray)
     (g : Array _root_.Flock.F128) (hg : g = ligTab x w τ j) (cm0 : FlockComplete.Commit)
     (pads : FlockComplete.PadsZk) (hP : pads = innerPadsE x τ j r) (ic : FlockComplete.InnerCommit)
@@ -389,6 +389,7 @@ end Claims.ZKMal
 namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
+open FlockSoundness.Discharge
 open _root_.Flock (V F128 Stmt SessionSpec)
 
 set_option synthInstance.maxSize 100000
@@ -396,7 +397,6 @@ set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as i
 
 namespace Loop
 
-open FlockSoundness.Discharge in
 /-- **Where its rows hold, the views' `τ` is the worker's view's**: table `i`'s rep `r` source from the switched views
 reads the switched view's `τ`, the view's at the workers' values (`Coined.swExe_tau`), whose `τ` reads the base's mask,
 lanes, pads and `μ` alone, as `Masked.swViewE`'s. -/
@@ -410,10 +410,10 @@ theorem finSrc_tau (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce
   rw [dite_eq_left hr]
   try dsimp only
   simp only [RefSession.swViewsAt]
-  rw [ZkView.Coined.swExe_tau ((finS.C x ⟨i, hi⟩).T (finS.cz x (finCoins x ops) ⟨i, hi⟩))
-    (finS.wt x w ⟨i, hi⟩) (vs x w ν (finCoins x ops) ⟨i, hi⟩) (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).1
-    (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).2 hrows]
-  rfl
+  exact congrArg (fun g : Fin 2 → _ => FlockLevel3.GF128.val (g ⟨r, hr⟩))
+    (ZkView.Coined.swExe_tau ((finS.C x ⟨i, hi⟩).T (finS.cz x (finCoins x ops) ⟨i, hi⟩))
+      (finS.wt x w ⟨i, hi⟩) (vs x w ν (finCoins x ops) ⟨i, hi⟩) (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).1
+      (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).2 hrows)
 
 variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
@@ -509,6 +509,26 @@ theorem finRepTau (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.R
         q.vals[i]! + (_root_.Flock.Firewall.Finish.padsOf q.draws).toC.h[i]! := by
     rw [← hlay]
     exact hmk
+  -- as many extra claims as the statement
+  have hxsz : (_root_.Flock.Firewall.Finish.claimsOf q.xs).size =
+      spec.points * (Masked.stAt x ⟨k / 2, hj⟩).regions.size := by
+    have hjs : k / 2 < (Masked.stsOf x).size := by omega
+    have hq := hRep.2.1
+    unfold repInOf at hq
+    obtain ⟨⟨lay, ms⟩, -, hq⟩ := bok hq
+    have hqx : q.xs = _root_.Flock.Firewall.Drive.extras (Masked.stsOf x)[k / 2]!
+        (_root_.Flock.Firewall.Drive.linkPoints (Masked.stsOf x)[k / 2]!
+          (wordsAt x (ops.map fun p => CoinLayer.rd p.2) 0)) := by
+      cases hq
+      rfl
+    rw [linkPoints_wordsAt x w hsc hR hctx.1 hsx hk m₀ ρ₀,
+      show (Masked.stsOf x)[k / 2]! = Masked.stAt x ⟨k / 2, hj⟩ from getElem!_pos (Masked.stsOf x) (k / 2) hjs] at hqx
+    simp only [_root_.Flock.Firewall.Finish.claimsOf, Array.size_map]
+    rw [hqx]
+    unfold _root_.Flock.Firewall.Drive.extras
+    rw [flatMap_size_const _ _ _ fun _ => Array.size_map]
+    simp only [viewPoints, Array.size_map, Array.size_range]
+    exact Nat.mul_comm _ _
   -- the session's rep at table `k / 2`'s rep `k % 2`
   have hl' : l.size = Masked.repBase x (2 * (⟨k / 2, hj⟩ : Fin (Masked.jOf x)).val + (⟨k % 2, hr⟩ : Fin 2).val) := by
     rw [hl]
@@ -519,7 +539,7 @@ theorem finRepTau (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.R
   have ht₀ : (_root_.Flock.Transcript.init #[] (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8).rounds = #[] := rfl
   have e3 := Masked.fwTau_at x hx w hR t (finCoins x ops) (refK x) hnr s0 spec hsx ⟨k / 2, hj⟩ ⟨k % 2, hr⟩
     (vs x w ν (finCoins x ops)) (hRows ν t κ m₀ ρ₀ ops hctx ⟨k / 2, hj⟩) (_root_.Flock.Firewall.Finish.claimsOf q.xs)
-    tb.st hst tb.tPad _ tb.g hg tb.cm0.toC (_root_.Flock.Firewall.Finish.padsOf q.draws).toC hP' ic'.toC q.vals
+    hxsz tb.st hst tb.tPad _ tb.g hg tb.cm0.toC (_root_.Flock.Firewall.Finish.padsOf q.draws).toC hP' ic'.toC q.vals
     tb.extra tb.lanePad _ ht₀ hl' hgo hmk'
   exact e1.trans (e2.trans e3.symm)
 
