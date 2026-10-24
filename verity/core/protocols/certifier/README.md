@@ -63,12 +63,30 @@ A spec-level reference for network accounting's timing channel:
   each step and checks its arrivals and decision bits are the window row's at the heads; `ReplayLoad` runs once a
   window. The windows join by equal openings and the session starts from the empty rows under public salts
   (`check_chain`). Its cost at a shape is `size`;
+- the compile slice (`compile_slice`): `CompileSlice_v1`, a Boolean Definition with `check` its reference, composes
+  `ReplayLoad`, `ReplayStep_v1` and `ReplayAdvance` on shared wires, and the encoder over the scan's asks, for one
+  window. It holds the coded length to the declared charge and the step rows' salted SHA-512 to the public digest. The
+  cache counts are a stand-in held at 0 (`PROTOCOL.md`, "The compile slice"), and
+  `benchmarks/network_traces/compile_slice_zk.py` proves it in zero knowledge. It takes the circuits, their evaluator
+  and SHA-512's gadget from `verity`;
+- the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
+  draw under the run root (each window's salted digest and an hm96 row registration). The verifier's ``pub`` for the
+  slice is the declared charge and the published digest (`served_rows.pub`), never the prover's words, and `leaf_ok`
+  holds a committed row's b‖c to its registered leaf. It takes the advice registration's hm96 rows from `verity`;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
   buckets before;
 - the prefix cache (`cache_step`): `CacheStep_v1`, a Boolean Definition of one scheduled row's pass over a table of
   whole cached units, which checks the row's hit (the longest cached prefix while no block can have been evicted, a
   cached prefix past that) and owns or appends the units the row computes (`PROTOCOL.md`, "Advice v1"). It takes the
   circuits and their evaluator from `verity`;
+- advice v1's arithmetic encoder (`arith_encode`): `ArithEncodeStep_v1{K, BIN}`, `ArithEncodeFinish_v1` and
+  `KTContext_v1{C, NW}`, Boolean Definitions with `reference_step`, `reference_finish` and `reference_kt` their specs.
+  They run ENC-CODE's 32-bit coder forward one symbol at a time, checking each output bit against a segment in the
+  decoder's order, and return the bits it takes: a window's total is its charge, at most its declared c_w, and no
+  codeword is committed. The context and the frequencies are the circuit's, from the replay's position and the
+  registered book's counts, never witness. It is held symbol for symbol to `code.py` and `code_v1` on advice v1's
+  windows and on ENC-DERIVED's still-sent fields (`benchmarks/network_e2e/encodings/arith_vectors.py`), and it is in no
+  proof-service Spec yet (`PROTOCOL.md`, "Advice v1"). It takes the circuits and their evaluator from `verity`;
 - the active warden (`warden`): a relay that knows bytes only, between any client and any server. It forwards each
   direction's bytes unchanged, in B-byte cells, r a bucket each way per connection, and egress cell i goes out in
   bucket s + D + ⌊i/r⌋ from its admission s. A miss fails the connection closed with a `FAIL` cell that carries no

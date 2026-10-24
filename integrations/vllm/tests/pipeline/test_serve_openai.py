@@ -15,11 +15,13 @@ import numpy as np
 import pytest
 import torch
 
+from verity.core.protocols.certifier import compile_slice as CS, served_rows as SRW
 from verity_vllm.commit import served_record as SR
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
+from verity_vllm.pipeline import serve_protocol as proto
 
 CERTIFIER_BODY = {"model": "m", "prompt": [128000, 791, 4062], "max_tokens": 4, "min_tokens": 4, "stream": True,
                   "ignore_eos": True, "temperature": 0}
@@ -28,7 +30,7 @@ CERTIFIER_BODY = {"model": "m", "prompt": [128000, 791, 4062], "max_tokens": 4, 
 # ---------------------------------------------------------------------------------------------------------------- protocol
 
 def test_certifier_body_parses_to_its_sampling():
-    p = so.PlainProtocol()
+    p = proto.PlainProtocol()
     req = p.parse(dict(CERTIFIER_BODY, seed=0))
     assert (req.prompt, req.stream, req.max_tokens, req.include_usage) == ([128000, 791, 4062], True, 4, False)
     sp = p.sampling_params(req, p.max_tokens(req, 512, 3, {"temperature": 0.6}), {"temperature": 0.6})
@@ -37,7 +39,7 @@ def test_certifier_body_parses_to_its_sampling():
 
 
 def test_text_prompt_and_defaults():
-    p = so.PlainProtocol()
+    p = proto.PlainProtocol()
     req = p.parse({"prompt": ["hello"], "stream": False})
     assert (req.prompt, req.stream, req.max_tokens, req.add_special_tokens) == ("hello", False, 16, True)
     assert p.sampling_params(req, 16, {"temperature": 0.6})["temperature"] == 0.6
@@ -45,7 +47,7 @@ def test_text_prompt_and_defaults():
 
 
 def test_max_tokens_as_vllm_bounds_it():
-    p = so.PlainProtocol()
+    p = proto.PlainProtocol()
     assert p.max_tokens(p.parse({"prompt": [1] * 500, "max_tokens": 64}), 512, 500, {}) == 12
     assert p.max_tokens(p.parse({"prompt": [1], "max_tokens": None}), 512, 1, {"max_tokens": 7}) == 7
     with pytest.raises(ValueError, match="exceeds model's maximum context length"):
@@ -56,40 +58,40 @@ def test_max_tokens_as_vllm_bounds_it():
                                   {"prompt": [1], "echo": True}, {"prompt": [1], "logprobs": 1},
                                   {"prompt": [1], "stream_options": {"include_usage": True}}])
 def test_refused_bodies(body):
-    with pytest.raises(so.RequestError):
-        so.PlainProtocol().parse(body)
+    with pytest.raises(proto.RequestError):
+        proto.PlainProtocol().parse(body)
 
 
 def test_usage_rule_is_vllms():
-    assert so.should_include_usage(None, True) == (True, True)
-    assert so.should_include_usage(None, False) == (False, False)
-    assert so.should_include_usage({"include_usage": True}, False) == (True, False)
-    assert so.should_include_usage({"include_usage": True, "continuous_usage_stats": True}, False) == (True, True)
-    assert so.should_include_usage({"include_usage": False, "continuous_usage_stats": True}, False) == (False, False)
+    assert proto.should_include_usage(None, True) == (True, True)
+    assert proto.should_include_usage(None, False) == (False, False)
+    assert proto.should_include_usage({"include_usage": True}, False) == (True, False)
+    assert proto.should_include_usage({"include_usage": True, "continuous_usage_stats": True}, False) == (True, True)
+    assert proto.should_include_usage({"include_usage": False, "continuous_usage_stats": True}, False) == (False, False)
 
 
 def test_frames_are_vllms_serialization():
     """vLLM's `completion_stream_generator` at d9105ea80: a choice chunk is `model_dump_json(exclude_unset=True)` of a
     CompletionStreamResponse whose choice sets every field it names (so its nulls stay), the usage chunk
     `exclude_unset=False, exclude_none=True` with `choices=[]`; UsageInfo's field order is prompt, total, completion."""
-    p = so.PlainProtocol()
+    p = proto.PlainProtocol()
     base = dict(request_id="cmpl-1-0", created=7, model="m")
     assert p.chunk(**base, text=" é", finish_reason=None, stop_reason=None, prompt_token_ids=None, token_ids=None, usage=None) == (
         '{"id":"cmpl-1-0","object":"text_completion","created":7,"model":"m","choices":[{"index":0,"text":" é","logprobs":null,'
         '"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}]}')
     assert p.chunk(**base, text="x", finish_reason="length", stop_reason=None, prompt_token_ids=None, token_ids=[5],
-                   usage=so._usage(3, 4)).endswith('"token_ids":[5]}],"usage":{"prompt_tokens":3,"total_tokens":7,"completion_tokens":4}}')
-    assert p.usage_chunk(**base, usage=so._usage(128, 16)) == (
+                   usage=proto.usage_of(3, 4)).endswith('"token_ids":[5]}],"usage":{"prompt_tokens":3,"total_tokens":7,"completion_tokens":4}}')
+    assert p.usage_chunk(**base, usage=proto.usage_of(128, 16)) == (
         '{"id":"cmpl-1-0","object":"text_completion","created":7,"model":"m","choices":[],'
         '"usage":{"prompt_tokens":128,"total_tokens":144,"completion_tokens":16}}')
-    assert so.sse("{}") == b"data: {}\n\n" and so.SSE_DONE == b"data: [DONE]\n\n"
-    assert so.http_chunk(b"data: x\n\n") == b"9\r\ndata: x\n\n\r\n"
+    assert proto.sse("{}") == b"data: {}\n\n" and proto.SSE_DONE == b"data: [DONE]\n\n"
+    assert proto.http_chunk(b"data: x\n\n") == b"9\r\ndata: x\n\n\r\n"
 
 
 def test_plain_frames_agree_with_vllm():
     """Where vLLM is installed (the GPU nodes' env), the plain frames are its frames."""
     pytest.importorskip("vllm.entrypoints.openai.completion.protocol")
-    got = so.framing_agrees(so.VllmProtocol())
+    got = proto.framing_agrees(proto.VllmProtocol())
     assert got["agrees"], got["differences"]
 
 
@@ -261,13 +263,14 @@ class Serving:
     """The server over the stand-ins, its engine loop on a thread of its own, as `main` runs it."""
 
     def __init__(self, out: Path, *, commit: bool = True, flip: tuple[int, int] | None = None, window_steps: int = 64,
-                 idle_close_steps: int = 1, force_include_usage: bool = True, seed_override: int | None = None) -> None:
+                 idle_close_steps: int = 1, force_include_usage: bool = True, seed_override: int | None = None,
+                 served: dict | None = None, marks: Any = None) -> None:
         self.runner = Runner()
         self.windows = sc.CommitWindows(Committer(self.runner, flip), out, run_id="t", window_steps=window_steps,
                                        idle_close_steps=idle_close_steps, eos_ids=[Tokenizer.eos_token_id],
-                                       clock=lambda: 0.0, wall=lambda: 0.0) if commit else None
+                                       clock=lambda: 0.0, wall=lambda: 0.0, served=served, marks=marks) if commit else None
         self.loop = so.EngineLoop(Engine(self.runner, seed_override), self.windows)
-        self.server = so.Server(proto=so.PlainProtocol(force_include_usage), served_name="m", max_model_len=512, tokenizer=Tokenizer(),
+        self.server = so.Server(proto=proto.PlainProtocol(force_include_usage), served_name="m", max_model_len=512, tokenizer=Tokenizer(),
                                 defaults={"temperature": 1.0}, submit=self.loop.submit, abort=self.loop.abort, clock=lambda: 7)
         self.http = so.HttpThread(self.server, "127.0.0.1", 0)
 
@@ -295,7 +298,7 @@ class Serving:
 
 
 def events(raw: bytes) -> list[str]:
-    assert raw.endswith(so.SSE_DONE)
+    assert raw.endswith(proto.SSE_DONE)
     return [e[len("data: "):] for e in raw.decode().split("\n\n") if e]
 
 
@@ -445,3 +448,85 @@ def test_top_p_below_one_is_refused_naming_the_gap(tmp_path, top_p):
     assert status == 400 and err["param"] == "top_p" and "CIR-87" in err["message"] and f"top_p={top_p}" in err["message"]
     assert "split count" in err["message"] and ok == 200
     assert len(records(tmp_path, "requests.jsonl")) == 1          # the refused request never reached the engine
+
+
+# ---------------------------------------------------------------------------------------------------------------- served rows
+
+ENGINE = {"max_num_seqs": 8, "max_num_batched_tokens": 2048, "max_model_len": 512, "num_gpu_blocks": 64, "block_size": 16}
+
+
+def served_statics(**size_class: int) -> dict:
+    return sc.served_statics(ENGINE, {**dict.fromkeys(sc.SERVED_CLASS, 1), "R": 8, "P": 3, "IW": 6, **size_class})
+
+
+def private(out: Path, w: int) -> dict:
+    return json.loads((out / "served_rows" / f"w{w}.json").read_text())
+
+
+def recommit(statics: dict, by_step: dict, ids: dict, steps: int, run_root: str, priv: dict):
+    return sc.commit_served(statics, by_step, ids, steps, bytes.fromhex(run_root), salts=[bytes.fromhex(s) for s in priv["salts"]],
+                            digest_salts=[bytes.fromhex(s) for s in priv["digest_salts"]])
+
+
+def served_run(out: Path, statics: dict, marks: Any = None) -> tuple[list[dict], list[dict], list[dict]]:
+    bodies = [dict(CERTIFIER_BODY, prompt=[128000, 10 + i, 20 + i], max_tokens=3 + i, min_tokens=3 + i) for i in range(4)]
+    with Serving(out, window_steps=4, served=statics, marks=marks) as s:
+        serve_concurrently(s, bodies)
+        assert s.post("/v1/completions", dict(CERTIFIER_BODY, prompt=[1, 2, 3, 4]))[0] == 200
+    return records(out, "windows.jsonl"), records(out, "requests.jsonl"), records(out, "step_trace.jsonl")
+
+
+def test_each_window_commits_the_rows_it_ran_at_its_close_under_its_run_root(tmp_path):
+    """At each close, before the close is announced (and so before anything can draw over the window), its windows.jsonl
+    line holds the public record of the rows it ran, bound to its run root: exactly step_trace.jsonl's rows under the
+    requests' arrival ids, as `served_rows.register` commits them, each slice window's digest the slice's own. The record
+    holds no row or salt."""
+    statics = served_statics()
+    closed: list[dict] = []
+
+    def marks(w: int, event: str) -> None:
+        if event == "close":
+            line = records(tmp_path, "windows.jsonl")[-1]
+            assert line["window"] == w
+            closed.append(line)
+
+    wins, reqs, trace = served_run(tmp_path, statics, marks)
+    full = [w for w in wins if not w.get("empty")]
+    assert len(full) > 1 and all(w["passed"] for w in wins) and [w["window"] for w in closed] == [w["window"] for w in wins]
+    assert all("served_rows" in w for w in closed if not w.get("empty"))
+    assert sorted(r["arrival"] for r in reqs) == list(range(len(reqs)))
+    arrival = {rid: r["arrival"] for r in reqs for rid in r["runner_ids"]}
+    S = SimpleNamespace(**statics)
+    for w in full:
+        rec, priv = w["served_rows"], private(tmp_path, w["window"])
+        assert rec["binding"] == SRW.binding(bytes.fromhex(w["run_root"])).hex() and rec["statics"] == statics
+        assert rec["count"] == -(-w["steps"] // S.P) == len(rec["digests"])
+        by_step = {t["step"]: [tuple(r) for r in t["rows"]] for t in trace if t["window"] == w["window"]}
+        ids = {rid: arrival[rid] for rows in by_step.values() for rid, *_ in rows}
+        assert priv["ids"] == ids
+        served, session = recommit(statics, by_step, ids, w["steps"], w["run_root"], priv)
+        assert {k: v for k, v in rec.items() if k != "statics"} == served.record()
+        for k, win in enumerate(session):
+            assert served.digests[k] == CS.rows_digest(S, win, served.digest_salts[k])
+        text = json.dumps(w)
+        assert not any(s in text for s in priv["salts"] + priv["digest_salts"])
+
+
+def test_rows_it_cant_commit_fail_their_window_by_name(tmp_path):
+    """An arrival id wider than the class's IW can't be packed: the window that holds it fails, named, and the run fails."""
+    wins, _, _ = served_run(tmp_path, served_statics(IW=1))
+    bad = [w for w in wins if "error" in w.get("served_rows", {})]
+    assert bad and all(not w["passed"] and "doesn't fit its 1 bits" in w["served_rows"]["error"] for w in bad)
+
+
+def test_the_served_class_defaults_to_the_engines_and_refuses_too_few_rows():
+    def opts(*more: str) -> so.Options:
+        return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--max-num-seqs", "8", "--window-steps", "16", *more],
+                         environ={})
+
+    assert so.served_class(opts()) == {**dict.fromkeys(sc.SERVED_CLASS, 1), "R": 8, "P": 16, "IW": 16}
+    assert so.served_class(opts("--served-rows-class", '{"P": 7, "IW": 10}'))["P"] == 7
+    with pytest.raises(cli.UsageError, match="a JSON object of"):
+        so.served_class(opts("--served-rows-class", '{"X": 1}'))
+    with pytest.raises(cli.UsageError, match="under --max-num-seqs 8"):
+        so.preflight(opts("--served-rows-class", '{"R": 4}'), which=lambda _: "/v/bin/ninja")
