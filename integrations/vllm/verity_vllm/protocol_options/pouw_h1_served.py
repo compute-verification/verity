@@ -94,9 +94,10 @@ from verity.ml.circuits.codec import canonical_json, encode_program
 from verity.ml.circuits.program import Program
 
 from verity_vllm.protocol_options import pouw_h1 as PH
-from verity_vllm.protocol_options import pouw_h1_records as ZR
 from verity_vllm.protocol_options import pouw_h1_registered as NR
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
+from verity_vllm.protocol_options.pouw_h1_words import (EMPTY_ID, ids_words, receipt_words, record_words, row_words,
+                                                         zy_words)
 
 #: the rows' format: the tile's port rows
 V2 = G.SCHEMA_V2
@@ -112,8 +113,6 @@ B_NONCE = Wt.B_NONCE
 IDS_NONCE = B_NONCE + (1 << 39)
 #: call c's receipt table's nonce is RECEIPT_NONCE + c, past every round's input-ids table's
 RECEIPT_NONCE = IDS_NONCE + (1 << 38)
-#: an input-ids slot past the step's rows: no token id is 2^32 - 1
-EMPTY_ID = 0xFFFFFFFF
 #: the session round 0's input-ids table binds under in-process coins, where no gate reserved one (such a window credits
 #: nothing)
 LOCAL_SESSION = "in-process"
@@ -128,50 +127,6 @@ def nonce(call: int, table: str) -> int:
 
 def file_name(call: int) -> str:
     return FILE.format(call=int(call))
-
-
-def row_words(codes: np.ndarray, scales: np.ndarray) -> np.ndarray:
-    """int8 code rows ``(n, K)`` and their f32 scales ``(n,)`` as their bit rows' u16 words ``(n, K / 2 + 2)``: code t's
-    bits are leaves 8t .. 8t + 7, then the scale's 32 bits, little-endian (`h1zy.ROW`)."""
-    b = np.ascontiguousarray(np.asarray(codes, dtype=np.int8).view(np.uint8))
-    b = b.reshape(len(b), -1)
-    s = np.ascontiguousarray(np.asarray(scales, "<f4").reshape(len(b))).view(np.uint8).reshape(len(b), 4)
-    return np.ascontiguousarray(np.concatenate([b, s], axis=1)).view("<u2").astype(np.uint16)
-
-
-def ids_words(ids: Sequence[int | None], slots: int) -> np.ndarray:
-    """A step's input token ids over `slots` (M) as u16 words ``(slots, 2)``, each id's u32 little-endian, `EMPTY_ID` for
-    None and past them. ValueError on more ids than slots or an id that isn't a u32 below `EMPTY_ID`."""
-    if len(ids) > slots:
-        raise ValueError(f"{len(ids)} input ids, past the Program's {slots} slots")
-    if any(t is not None and not 0 <= int(t) < EMPTY_ID for t in ids):
-        raise ValueError(f"an input id is not a u32 below {EMPTY_ID}")
-    v = np.full(slots, EMPTY_ID, "<u4")
-    v[:len(ids)] = [EMPTY_ID if t is None else int(t) for t in ids]
-    return v.view("<u2").reshape(slots, 2).astype(np.uint16)
-
-
-def receipt_words(receipts: np.ndarray) -> np.ndarray:
-    """A call's receipts, one a unit in its tile order, as their bit rows' u16 words: u32 words ``(units, nw)`` (the
-    tile's ``receipt``, `h1tile`: per set its lanes' XOR of y, then of z, nw = 2 (KS + m)) each little-endian, low half
-    first, so ``(units, 2 nw)``; u16 words ``(units, w)`` as they are."""
-    r = np.asarray(receipts)
-    if r.ndim != 2 or r.dtype not in (np.uint16, np.uint32):
-        raise ValueError(f"a call's receipts are (units, words) u32 or u16 words, not {r.dtype} {r.shape}")
-    return np.array(np.ascontiguousarray(r, "<u4" if r.dtype == np.uint32 else "<u2").view("<u2"), np.uint16)
-
-
-def record_words(z: np.ndarray, y: np.ndarray, slots: int, tile: tuple[int, int]) -> np.ndarray:
-    """A call's z/y records over ``slots`` rows as their bit rows' u16 words ``(units, 3 R C)``, one a unit in tile order
-    (row block major): its cells' s32 z, row-major, little-endian, then their bf16 y (`h1zy.RECORD`). ``z`` [m, n] s32 and
-    ``y`` [m, n] bf16 bits are the served rows'; every later slot is z = 0, y = +0."""
-    (r, c), (m, n) = tile, np.shape(z)
-    zf, yf = np.zeros((slots, n), "<i4"), np.zeros((slots, n), "<u2")
-    zf[:m], yf[:m] = z, np.asarray(y).astype(np.int16).view(np.uint16)
-
-    def cells(v: np.ndarray) -> np.ndarray:
-        return v.reshape(slots // r, r, n // c, c).transpose(0, 2, 1, 3).reshape(-1, r * c)
-    return np.concatenate([np.ascontiguousarray(cells(zf)).view("<u2"), cells(yf)], axis=1).astype(np.uint16)
 
 
 def layout(shapes: Sequence[tuple[int, int]], calls: Sequence[tuple[int, int]],
@@ -345,7 +300,9 @@ class Served:
     #: each call's receipts, one a unit in its tile order (`receipt_words`' input), from ``(call, codes, s_a, weight
     #: codes, s_w)``: with it, each call's ``receipt@<c>`` is registered (BRIDGE2) at its step's last call of its K, once
     #: the roots its units' seeds take, its step's ``a/<K>@<s>`` and ``b/<K>``, are registered; one with a ``prepare`` is
-    #: first handed those calls together (`_prepare`)
+    #: first handed those calls together (`_prepare`); one with a ``stage`` is handed each served call and its rows ``a``
+    #: where they are on a CUDA device, before they're read to the host (it copies them and keeps no reference to ``a``,
+    #: which the engine reuses; a ValueError refuses the window)
     receipts: Callable[[Any, np.ndarray, np.ndarray, np.ndarray, np.ndarray], np.ndarray] | None = None
     #: with ``receipts``, each open step A table's calls, their served codes and s_a, until their step's last call of K
     _held: dict[str, list[tuple[Any, np.ndarray, np.ndarray]]] = field(default_factory=dict)
@@ -552,10 +509,19 @@ class Served:
         if self.refused:
             return {}
         codes, scales = np.zeros((0, call.k), np.int8), np.zeros(0, "<f4")
-        zv, yv = np.zeros((0, call.n), "<i4"), np.zeros((0, call.n), np.int16)
+        zy_rows = None
         if call.m:
+            stage = getattr(self.receipts, "stage", None)
+            if stage is not None and getattr(a, "is_cuda", False):
+                try:
+                    stage(call, a)
+                except ValueError as e:
+                    self.refused.append(f"call {call.index}: {e}")
+                    return {}
             codes, scales = PH.numpy_of(a).reshape(call.m, call.k), PH.numpy_of(s_a).reshape(-1)
-            zv, yv = ZR.split(records, call.rows, call.n)
+            zy_rows = zy_words(records, call.rows, call.n, self.m, self.tile)
+        else:
+            zy_rows = record_words(np.zeros((0, call.n), "<i4"), np.zeros((0, call.n), np.int16), self.m, self.tile)
         out, value, mine = {}, self.a_table(call.index), self.step_calls(call.index)
         rows = self._a.setdefault(value, [])
         rows.append(self.a_words(call, codes, scales))
@@ -564,7 +530,7 @@ class Served:
             whole = np.concatenate(self._a.pop(value))
             out[value] = self._register(run, value, whole, nonce(mine[0], "a"), self.root)
         zy = HW.table(self.program, "zy", call.index)
-        out[zy] = self._register(run, zy, record_words(zv, yv, self.m, self.tile), nonce(call.index, "zy"), self.root)
+        out[zy] = self._register(run, zy, zy_rows, nonce(call.index, "zy"), self.root)
         if self.tap is not None:
             self.tap.arow(run, self, call, value, whole)
         b = self.program.fn.bindings["PREFIX"] + f"b/{call.k}"
@@ -610,6 +576,8 @@ class Served:
         window's Program salt, u0 + t and (root(a), root(b)), salted `core_check.public_row_salt` of the open root and
         u0 + t, as credit's `registered_file` builds it (`h1window.public_table`); its rows kept, as they are public."""
         units, out = HW.call_units(self.program), {}
+        ctx = self.root.encode()
+        head = CC.PUBLIC_ROW_SALT_DOMAIN + len(ctx).to_bytes(8, "big") + ctx
         x = np.frombuffer(run._salt + bytes(8) + self.registered[a].root + self.registered[b].root, np.uint8)
         for c in calls:
             u0, n = units[c]
@@ -617,7 +585,7 @@ class Served:
             rows[:, len(run._salt):len(run._salt) + 8] = (
                 np.arange(u0, u0 + n, dtype=">u8").view(np.uint8).reshape(n, 8))
             words = np.ascontiguousarray(rows.reshape(n, -1, 4)[:, :, ::-1]).reshape(n, -1).view("<u2")
-            salts = b"".join(CC.public_row_salt(self.root, u) for u in range(u0, u0 + n))
+            salts = NR.public_salts(head, u0, n)
             v = self.pub_table(c)
             out[v] = self._register(run, v, words, 0, self.root, salts)
         return out
