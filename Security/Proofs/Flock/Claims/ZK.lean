@@ -158,6 +158,7 @@ import Proofs.Flock.Claims.ZK.L0PinLive
 import Proofs.Flock.Claims.ZK.L0PinChain
 import Proofs.Flock.Claims.ZK.L0PinLoop
 import Proofs.Flock.Claims.ZK.L0PinCut
+import Proofs.Flock.Claims.ZK.FinHmkLive
 import Proofs.Flock.Claims.ZK.FinishSwInner
 import Proofs.Flock.Claims.ZK.FinishSwTau
 import Proofs.Flock.Claims.ZK.FinishSwRows
@@ -739,6 +740,10 @@ import Proofs.Flock.Claims.ZK.CutPrefix
 * `L0PinCut`: the cut session in rep `2j + r`'s level 0 rounds. Where the reps before it return by the firewall's stop
   and its PIOP returns, the session stopped at `n ∈ [ligP0, ligP0 + k₀ + 4)` sent `l0BodyAt`'s body `n − ligP0` at the
   coins from `ligP0`, basis `ligBasis` and pads `padsL0` (**`Masked.runCut_cutL0`**).
+* `FinHmkLive`: a rep's masked values below `zp 64` from its proofs. The zerocheck and lincheck return every masked
+  value below `zp 64` as their proofs, which `eraseZ` keeps, so where the firewall's rep at `vals` and `pads` and a cut rep
+  from a source return proofs equal up to `eraseZ`, the source's masked values there are `vals + pads.h`
+  (**`HmkLive.masked_of_eraseZ`**).
 * `FinishSwInner`: `repCut_fw`'s `hinner` at that source. The switched view keeps `ρ_in`, `σ_in` (`padShift` moves
   `h_tx`, `h_ty` against the exposed pads; `Table.innerMsg_padShift`) and `Y₂`, and where the rows hold `Y₁`, so the
   switched source's `ρ_in`, `σ_in` and `Y` are the honest source's (`Masked.swSrcE_inner`, `Masked.swSrcE_y`). The
