@@ -550,4 +550,243 @@ theorem segSlice_pos (s : Seg) (hlen : (posAll s.ps).length = s.len) (a b : Nat)
       rw [range'_join _ _ _ (by omega)]
       congr 2; omega
 
+/-! ## Sequences of segments -/
+
+/-- A segment whose pieces name `len` positions. -/
+def SegOk (s : Seg) : Prop := (posAll s.ps).length = s.len
+
+theorem segPos_length (s : Seg) (h : SegOk s) : (segPos s).length = s.count := by
+  unfold segPos Seg.count
+  exact flatMap_range_length _ s.len (fun m => by rw [copy_length]; exact h) s.reps
+
+theorem segsPos_length (ss : List Seg) (h : ∀ g ∈ ss, SegOk g) :
+    (ss.flatMap segPos).length = (ss.map Seg.count).sum := by
+  induction ss with
+  | nil => rfl
+  | cons g gs ih =>
+    rw [List.flatMap_cons, List.length_append, segPos_length g (h g (by simp)),
+      ih (fun g' hg' => h g' (by simp [hg'])), List.map_cons, List.sum_cons]
+
+/-- A sequence's positions: its segments' in order. -/
+def psPos (s : PS) : List (Tgt × Int) := segsPos s.segs
+
+/-- What `PS.of` makes: segments that name their `len` positions, of positive count, each starting where the ones before
+it end. -/
+def PSOk (s : PS) : Prop :=
+  (∀ i < s.segs.size, SegOk s.segs[i]! ∧ 0 < s.segs[i]!.count) ∧ s.starts.size = s.segs.size ∧
+    (∀ i < s.segs.size, s.starts[i]! = ((s.segs.toList.take i).map Seg.count).sum) ∧
+    s.count = (s.segs.toList.map Seg.count).sum
+
+theorem forIn_inv {α σ : Type} (P : σ → Prop) (f : α → σ → Id (ForInStep σ))
+    (hstep : ∀ x st, P st → P (f x st).value) : ∀ (l : List α) (init : σ), P init → P (forIn l init f)
+  | [], init, h => h
+  | x :: l, init, h => by
+    rw [List.forIn_cons]
+    have hx := hstep x init h
+    revert hx
+    cases f x init with
+    | done b => intro hx; exact hx
+    | yield b => intro hx; exact forIn_inv P f hstep l b hx
+
+/-- `PS.slice`'s loop over the segments from the one the bisection found. -/
+def psGo (s : PS) (lo hi : Nat) : List Nat → Array Seg → Array Seg
+  | [], out => out
+  | i :: is, out =>
+    if s.starts[i]! ≥ hi then out
+    else psGo s lo hi is (if s.starts[i]! + s.segs[i]!.count > lo then out ++ s.segs[i]!.slice
+      (max lo s.starts[i]! - s.starts[i]!) (min hi (s.starts[i]! + s.segs[i]!.count) - s.starts[i]!) else out)
+
+theorem psGo_eq (s : PS) (lo hi : Nat) : ∀ (l : List Nat) (out : Array Seg),
+    (forIn l out fun i (r : Array Seg) =>
+      if s.starts[i]! ≥ hi then (pure (ForInStep.done r) : Id _)
+      else if s.starts[i]! + s.segs[i]!.count > lo then
+        pure (ForInStep.yield (r ++ s.segs[i]!.slice (max lo s.starts[i]! - s.starts[i]!)
+          (min hi (s.starts[i]! + s.segs[i]!.count) - s.starts[i]!)))
+      else pure (ForInStep.yield r)) = psGo s lo hi l out
+  | [], _ => rfl
+  | i :: is, out => by
+    rw [List.forIn_cons]
+    simp only [psGo]
+    split
+    · rfl
+    · split
+      · exact psGo_eq s lo hi is _
+      · exact psGo_eq s lo hi is _
+
+theorem psGo_pos (s : PS) (hs : PSOk s) (lo hi : Nat) : ∀ (n a : Nat) (out : Array Seg), a + n = s.segs.size →
+    segsPos (psGo s lo hi (List.range' a n) out) = segsPos out ++
+      sl ((s.segs.toList.drop a).flatMap segPos) (lo - ((s.segs.toList.take a).map Seg.count).sum)
+        (hi - ((s.segs.toList.take a).map Seg.count).sum)
+  | 0, a, out, h => by
+    rw [List.drop_eq_nil_of_le (by simp; omega)]
+    simp [psGo, sl]
+  | n + 1, a, out, h => by
+    have hseg := hs.1
+    have hst := hs.2.2.1
+    have ha : a < s.segs.size := by omega
+    have hga : s.segs[a]! = s.segs.toList[a]'(by simpa using ha) := by
+      rw [getElem!_pos s.segs a ha, Array.getElem_toList]
+    have hpre : ((s.segs.toList.take (a + 1)).map Seg.count).sum =
+        ((s.segs.toList.take a).map Seg.count).sum + s.segs[a]!.count := by
+      rw [List.take_add_one, List.getElem?_eq_getElem (by simpa using ha), hga]
+      simp
+    rw [List.range'_succ]
+    simp only [psGo]
+    rw [hst a ha]
+    generalize ((s.segs.toList.take a).map Seg.count).sum = st at hpre
+    split
+    · rw [sl_empty _ _ _ (Or.inl (by omega)), List.append_nil]
+    · rw [psGo_pos s hs lo hi n (a + 1) _ (by omega), hpre,
+        List.drop_eq_getElem_cons (i := a) (by simpa using ha), ← hga, List.flatMap_cons, sl_append,
+        segPos_length _ (hseg a ha).1, ← List.append_assoc,
+        show lo - st - s.segs[a]!.count = lo - (st + s.segs[a]!.count) by omega,
+        show hi - st - s.segs[a]!.count = hi - (st + s.segs[a]!.count) by omega]
+      congr 1
+      split
+      · rw [segsPos_append, segSlice_pos _ (hseg a ha).1 _ _ (by omega)]
+        congr 2 <;> omega
+      · rw [sl_empty (segPos s.segs[a]!) _ _ (Or.inr (by rw [segPos_length _ (hseg a ha).1]; omega)),
+          List.append_nil]
+
+theorem segOk_of_mem (s : PS) (hs : PSOk s) (g : Seg) (hg : g ∈ s.segs.toList) : SegOk g := by
+  obtain ⟨i, hi, rfl⟩ := List.mem_iff_getElem.1 hg
+  have hi' : i < s.segs.size := by simpa using hi
+  have := (hs.1 i hi').1
+  rwa [getElem!_pos s.segs i hi', ← Array.getElem_toList] at this
+
+theorem bind_id {α β : Type} (x : Id α) (f : α → Id β) : (x >>= f) = f x := rfl
+
+/-- **A slice of a sequence** is its positions `[lo, hi)`. -/
+theorem psSlice_pos (s : PS) (hs : PSOk s) (lo hi : Nat) : segsPos (s.slice lo hi) = sl (psPos s) lo hi := by
+  unfold Desc.PS.slice
+  simp only [Id.run, Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size]
+  split
+  · rename_i h
+    simp only [Bool.or_eq_true, decide_eq_true_eq] at h
+    rcases h with h | h
+    · exact (sl_empty _ _ _ (Or.inl h)).symm
+    · have h0 : s.segs.toList = [] := by simpa using h
+      show [] = (((s.segs.toList.flatMap segPos).drop lo).take (hi - lo))
+      rw [h0]; simp
+  · rename_i h
+    simp only [Bool.or_eq_true, decide_eq_true_eq, not_or] at h
+    have hne : 0 < s.segs.size := by
+      rcases Nat.eq_zero_or_pos s.segs.size with h0 | h0
+      · exfalso; apply h.2; simp [Array.isEmpty, h0]
+      · exact h0
+    generalize hB : (forIn (m := Id) (List.range' 0 _) (0, s.segs.size) _ : Id (Nat × Nat)) = B
+    have hinv : B.1 < s.segs.size ∧ B.2 ≤ s.segs.size ∧ (B.1 = 0 ∨ s.starts[B.1]! ≤ lo) := by
+      rw [← hB]
+      refine forIn_inv (fun x : Nat × Nat => x.1 < s.segs.size ∧ x.2 ≤ s.segs.size ∧ (x.1 = 0 ∨ s.starts[x.1]! ≤ lo))
+        _ ?_ _ _ ⟨hne, Nat.le_refl _, Or.inl rfl⟩
+      intro x st ⟨h1, h2, h3⟩
+      split
+      · exact ⟨h1, h2, h3⟩
+      · rename_i hgt
+        split
+        · rename_i hle
+          exact ⟨by show (st.1 + st.2) / 2 < s.segs.size; omega, h2, Or.inr hle⟩
+        · exact ⟨h1, by show (st.1 + st.2) / 2 ≤ s.segs.size; omega, h3⟩
+    rw [bind_id, psGo_eq, show (s.segs.size - B.1 + 1 - 1) / 1 = s.segs.size - B.1 by omega, bind_id]
+    change segsPos (psGo s lo hi (List.range' B.1 (s.segs.size - B.1)) #[]) = _
+    rw [psGo_pos s hs lo hi (s.segs.size - B.1) B.1 #[] (by omega), segsPos_empty, List.nil_append]
+    obtain ⟨h1, -, h3⟩ := hinv
+    generalize B.1 = a at h1 h3
+    have hpre : ((s.segs.toList.take a).map Seg.count).sum ≤ lo := by
+      rcases h3 with h3 | h3
+      · subst h3; simp
+      · rw [← hs.2.2.1 a h1]; exact h3
+    show _ = sl (s.segs.toList.flatMap segPos) lo hi
+    conv => rhs; rw [← List.take_append_drop a s.segs.toList]
+    have hlen : ((s.segs.toList.take a).flatMap segPos).length = ((s.segs.toList.take a).map Seg.count).sum :=
+      segsPos_length _ fun g hg => segOk_of_mem s hs g (List.mem_of_mem_take hg)
+    rw [List.flatMap_append, sl_append, hlen, sl_empty ((s.segs.toList.take a).flatMap segPos) lo _
+      (Or.inr (by rw [hlen]; exact hpre)), List.nil_append]
+
+theorem posAll_flatMap {β : Type} (xs : Array β) (f : β → Array Piece) :
+    posAll (xs.flatMap f) = xs.toList.flatMap fun x => posAll (f x) := by
+  simp [posAll, Array.toList_flatMap, List.flatMap_assoc]
+
+/-- **A sequence's pieces `[lo, hi)`** are its positions `[lo, hi)`. -/
+theorem pieces_pos (s : PS) (hs : PSOk s) (lo hi : Nat) : posAll (s.pieces lo hi) = sl (psPos s) lo hi := by
+  rw [← psSlice_pos s hs lo hi]
+  unfold Desc.PS.pieces
+  rw [posAll_flatMap]
+  unfold segsPos
+  congr 1; funext g
+  rw [posAll_flatMap, Array.toList_range]
+  rfl
+
+theorem of_fold (l : List Seg) : ∀ (A : Array Nat) (c : Nat),
+    l.foldl (fun (acc : Array Nat × Nat) s => (acc.1.push acc.2, acc.2 + s.count)) (A, c) =
+      (A ++ ((List.range l.length).map fun i => c + ((l.take i).map Seg.count).sum).toArray,
+        c + (l.map Seg.count).sum) := by
+  induction l with
+  | nil => intro A c; simp
+  | cons g gs ih =>
+    intro A c
+    rw [List.foldl_cons, ih]
+    simp only [List.length_cons, List.map_cons, List.sum_cons, Prod.mk.injEq]
+    refine ⟨?_, by omega⟩
+    apply Array.ext'
+    simp only [Array.toList_append, Array.toList_push, List.append_assoc]
+    congr 1
+    rw [List.range_succ_eq_map, List.map_cons, List.map_map]
+    simp only [List.take_zero, List.map_nil, List.sum_nil, Nat.add_zero, List.singleton_append]
+    congr 1
+    apply List.map_congr_left
+    intro i _
+    simp only [Function.comp, List.take_succ_cons, List.map_cons, List.sum_cons]
+    omega
+
+theorem flatMap_filter_count (l : List Seg) (h : ∀ g ∈ l, SegOk g) :
+    (l.filter (fun g => decide (g.count > 0))).flatMap segPos = l.flatMap segPos := by
+  induction l with
+  | nil => rfl
+  | cons g gs ih =>
+    have ih' := ih (fun g' hg' => h g' (by simp [hg']))
+    rw [List.filter_cons]
+    split
+    · rw [List.flatMap_cons, List.flatMap_cons, ih']
+    · rename_i hc
+      have h0 : g.count = 0 := by simpa using hc
+      have : segPos g = [] := List.eq_nil_of_length_eq_zero (by rw [segPos_length g (h g (by simp)), h0])
+      rw [List.flatMap_cons, this, List.nil_append, ih']
+
+theorem of_segs (segs : Array Seg) : (PS.of segs).segs = segs.filter fun g => decide (g.count > 0) := rfl
+
+theorem of_starts_count (segs : Array Seg) :
+    ((PS.of segs).starts, (PS.of segs).count) = (segs.filter fun g => decide (g.count > 0)).foldl
+      (fun (acc : Array Nat × Nat) s => (acc.1.push acc.2, acc.2 + s.count)) (#[], 0) := rfl
+
+/-- **`PS.of`** keeps its segments' positions, and makes a sequence `PS.slice` reads. -/
+theorem of_ok (segs : Array Seg) (h : ∀ g ∈ segs.toList, SegOk g) :
+    PSOk (PS.of segs) ∧ psPos (PS.of segs) = segsPos segs ∧ (PS.of segs).count = (segsPos segs).length := by
+  have hf : ∀ g ∈ (PS.of segs).segs.toList, SegOk g ∧ 0 < g.count := by
+    intro g hg
+    rw [of_segs, Array.toList_filter, List.mem_filter] at hg
+    exact ⟨h g hg.1, by simpa using hg.2⟩
+  have hsc := of_starts_count segs
+  rw [← Array.foldl_toList, of_fold, ← of_segs] at hsc
+  simp only [Prod.mk.injEq] at hsc
+  obtain ⟨hst, hcnt⟩ := hsc
+  have hpos : psPos (PS.of segs) = segsPos segs := by
+    unfold psPos segsPos
+    rw [of_segs, Array.toList_filter, flatMap_filter_count _ h]
+  have hsz : (PS.of segs).segs.size = (PS.of segs).segs.toList.length := by simp
+  refine ⟨⟨?_, ?_, ?_, ?_⟩, hpos, ?_⟩
+  · intro i hi
+    have hi' : i < (PS.of segs).segs.toList.length := by rw [← hsz]; exact hi
+    have := hf _ (List.getElem_mem hi')
+    rwa [getElem!_pos _ i hi, ← Array.getElem_toList]
+  · rw [hst, hsz]; simp
+  · intro i hi
+    have hi' : i < (PS.of segs).segs.toList.length := by rw [← hsz]; exact hi
+    rw [hst, getElem!_pos _ i (by simpa using hi')]
+    simp
+  · rw [hcnt, Nat.zero_add]
+  · rw [hcnt, Nat.zero_add, ← hpos]
+    unfold psPos segsPos
+    rw [segsPos_length _ (fun g hg => (hf g hg).1)]
+
 end NciCheck.Properties.SecurityProofs.ReadsExact
