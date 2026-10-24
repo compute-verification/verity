@@ -152,7 +152,8 @@ STALL = ("-c", "http.lowSpeedLimit=1000", "-c", "http.lowSpeedTime=120")
 #: `gh api`'s limit: gh has no timeout, and a listing of the open PRs held a drive tick on a dead connection for 5 min
 #: (14 Oct 00:46Z) while the same call answered in a second from a fresh one
 GH_TIMEOUT_S = 120
-LANE_RE = re.compile(r"^[ \t>*_]*Lane[:\s]+`?([A-Za-z0-9][A-Za-z0-9._-]*)`?", re.M)
+#: the lane's handle ends on a letter or digit, so a sentence's period (`Lane proofs.`, #3427) isn't part of it
+LANE_RE = re.compile(r"^[ \t>*_]*Lane[:\s]+`?([A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)`?", re.M)
 REGISTRY = Path(".agents/skills/using-slack/registry.json")
 AGENT_RE = re.compile(r"\bbc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b")
 TRAILER_RE = re.compile(r"^(PR|Head|Owner): (.+)$", re.M)
@@ -252,6 +253,16 @@ class GitHub:
         if r.returncode:
             raise QueueError(f"gh api repos/{self.repo}/pulls: {(r.stderr or r.stdout).strip()[-300:]}")
         return [PR.from_api(d) for page in _json_values(r.stdout) for d in (page if isinstance(page, list) else [page])]
+
+    def branch_tip(self, branch: str) -> str | None:
+        """``branch``'s commit as git has it now (the refs API, which a push moves at once; a PR's head lags it by seconds), or
+        None when it can't be read (a fork's branch, no answer)."""
+        try:
+            r = subprocess.run(["gh", "api", f"repos/{self.repo}/git/ref/heads/{branch}", "--jq", ".object.sha"], capture_output=True,
+                               text=True, timeout=GH_TIMEOUT_S)
+        except subprocess.TimeoutExpired:
+            return None
+        return r.stdout.strip() or None if r.returncode == 0 else None
 
 
 # ---- rules and labels ---------------------------------------------------------------------------------------------------------------
@@ -1839,6 +1850,9 @@ def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str |
     ``preflight`` (`Preflight`; None with `--no-preflight`) refuses a head that would break `next`, with the fix.  With ``sha``
     (`--sha`) it marks only that head: GitHub's head lags a push by seconds (20 Oct: `git push && research queue ready 2848 --mark`
     marked the old head), so it reads again, up to `SHA_READS` times, and refuses when GitHub still has another head."""
+    if not sha and number is not None and (p := next((x for x in github.open_prs() if x.number == number), None)) and p.branch \
+            and (tip := getattr(github, "branch_tip", lambda _b: None)(p.branch)):
+        sha = tip                                           # 24 Oct: a mark seconds after a push preflighted GitHub's old head
     for i in range(SHA_READS if sha else 1):
         prs = github.open_prs() if number is not None else []
         pr = next((p for p in prs if p.number == number), None)
