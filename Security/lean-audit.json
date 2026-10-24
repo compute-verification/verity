@@ -1242,9 +1242,17 @@
    "owner": "@compute-accounting",
    "digest": "e6ebf8c35d1ea9d6bf0f036ca670a883e8951c8b882d95bcc0edf8453977b07f"
   },
+  "Pouw.Assumptions.ChargeVF3j16J10R": {
+   "owner": "@compute-accounting",
+   "digest": "54c548c0c497ff3b04cc94b59eee9970f621d8d0459b77e4cf723e650532f9d1"
+  },
   "Pouw.Assumptions.ChargeVF3j16Overlap": {
    "owner": "@compute-accounting",
    "digest": "59afca798aa23b07ead1b93f0aba656a42b7ba8f1a499b20cd3b1b3fb737531b"
+  },
+  "Pouw.Assumptions.ChargeVF3j16OverlapJ10R": {
+   "owner": "@compute-accounting",
+   "digest": "65708df74b82c06f6910adb4a1827feb648f0985642dcaa800dbab6b103b83b4"
   },
   "Pouw.Assumptions.KScopeAffine": {
    "owner": "@compute-accounting",
@@ -1258,6 +1266,10 @@
    "owner": "@compute-accounting",
    "digest": "984bd397611cd9fb9f7a8e46a97e7e314c3915f404d244badaeffab46e292310"
   },
+  "Pouw.Assumptions.KScopeOneSidedJ10R": {
+   "owner": "@compute-accounting",
+   "digest": "4daee897c99b7da1e4ccba287799d3ff7f172e3579ca65187ed039e855afb374"
+  },
   "Pouw.Assumptions.KScopeOverlapAffine": {
    "owner": "@compute-accounting",
    "digest": "4ce967e53d3c25379b7a9e8b093f18dac02bd355051ab5ecf5ffa29907eec6ab"
@@ -1270,13 +1282,25 @@
    "owner": "@compute-accounting",
    "digest": "0a3cf648e4d11f4d81b85f67a7d70511b7218f7bf2db48c077181e66149777a7"
   },
+  "Pouw.Assumptions.KScopeOverlapOneSidedJ10R": {
+   "owner": "@compute-accounting",
+   "digest": "a65c12c575aa911fb0a9e4c6ecaa41448dbb400843f7936024ed8d7eccec92ac"
+  },
   "Pouw.Assumptions.ServiceSoundOverlap": {
    "owner": "@compute-accounting",
    "digest": "5ee992529ffdcc445072394ec6764a48bc9f9b5488fec27e983da1f6f8448ed1"
   },
+  "Pouw.Assumptions.ServiceSoundOverlapJ10R": {
+   "owner": "@compute-accounting",
+   "digest": "8e383bd26191f3c74dfeafd8d21fe1f7d9b232006aebde1773f85b91ffcf4e88"
+  },
   "Pouw.Assumptions.ServiceSoundStaged": {
    "owner": "@compute-accounting",
    "digest": "de76052cf9313ff364e10b49a2e3144b5022b488f4e05788706837af152c829b"
+  },
+  "Pouw.Assumptions.ServiceSoundStagedJ10R": {
+   "owner": "@compute-accounting",
+   "digest": "76d9d685916c2a126a735a11a405235e44abae18b815249b05eea86ab08748da"
   },
   "Pouw.Assumptions.TT": {
    "owner": "@compute-accounting",
@@ -9177,6 +9201,15 @@
    "assumptions": [],
    "type_hash": "4d0c942032033a788d8bab488e85cc5c23c74ceb962e72453393340cbda3cc2f"
   },
+  "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10R": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10R :",
+    "  Pouw.Guarantees.RelativeSecurity.OverlapFloorKOneSidedJ10R"
+   ],
+   "assumptions": [],
+   "type_hash": "c3b5ff51054c93fdd728740c3bdfddd8409df6b8bb84c80f14e95b58317d39f5"
+  },
   "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.RelativeSecurity.StagedFloorK : Pouw.Guarantees.RelativeSecurity.StagedFloorK"],
@@ -9199,6 +9232,15 @@
    ],
    "assumptions": [],
    "type_hash": "4caae5865ffdebabf4d948a2443d3730fc7377d504820c8ef605a31d67471271"
+  },
+  "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedJ10R": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedJ10R :",
+    "  Pouw.Guarantees.RelativeSecurity.StagedFloorKOneSidedJ10R"
+   ],
+   "assumptions": [],
+   "type_hash": "069c46cc9d9d22c2a1a53547f44479f5d910a3c23a678df27aa3bad42a7a11ff"
   },
   "Pouw.SecurityProofs.RelativeSecurity.TheoremSOverlap": {
    "owner": "@compute-accounting",
@@ -10304,7 +10346,11 @@
    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedCall": "frozen (no-function,world-unlisted,scope): It is StagedFloorKOneSided with each stage one J10-R call (RT-ALGO-17), stated over an arbitrary Machine and Service and an analysis map at the call's shape (CallRunMap), not the service's code, and takes three premises about that map: ServiceSoundStaged at the call's shape (live coins, and the proof layer's binding and zero knowledge, with the seed identified with the calls' coins, which under J10-R rests on the random-oracle premise on a call's seed, RT-ALGO-16), KScopeOneSidedCall (KScopeOneSided at the call's shape read by unit, proved equivalent to it: each unit's error at its J10-R slice of the call's coins, charging purity across every unit's cell-blocks, and E3, which no check of the service refuses a run outside of) and ChargeVF3j16Call (the active vector VF3j-16's prices with B_theta complete, for one straight-line program a call over J10-R's call coins, calls that don't overlap). c = 1 on K's proved one-sided scope at the call, the unit floor summed over the call's units; a product shared across two units' cell-blocks is outside it, K1 is not claimed there, and the verifier can't observe which case applies.",
    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedCall": "frozen (no-function,world-unlisted,scope): It is OverlapFloorKOneSided with each draw one J10-R call (RT-ALGO-17), stated over an arbitrary Machine and Service and an analysis map at the calls' shapes (OCallRunMap), not the service's code, and takes three premises about that map: ServiceSoundOverlap at the calls' shapes (live coins, and the proof layer's binding and zero knowledge, with the seed identified with the calls' coins, the check's cell-block uniform among every call's, and each round's run fixed before its first draw, E3), KScopeOverlapOneSidedCall (KScopeOverlapOneSided at the calls' shapes read by unit, proved equivalent to it: one-sided operands of any form per draw, each unit's error at its J10-R slice of its call's coins, charging purity across every unit's cell-blocks of every call, and E3, which no check of the service refuses a run outside of) and ChargeVF3j16CallOverlap (the active vector VF3j-16's prices with B_theta complete, each product of the round's one program over every call's coins counted once). c = 1 on K's proved one-sided scope at the calls; a product shared across two units' cell-blocks is outside it, K1 is not claimed there, and the verifier can't observe which case applies.",
    "Pouw.Guarantees.RelativeSecurity.OverlapFloorKOneSidedCallPerProver": "unstated: OverlapFloorKOneSidedCall restated on ServiceSoundOverlapPerProver at the calls' shapes, each adversary's error its own (breakBound, ecr/sha-512 at its collision finders within budgets computed from its time); it follows from OverlapFloorKOneSidedPerProver at the calls' shapes (overlapFloorKOneSidedCallPerProver_of_unit), which is not proved yet (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover)",
-   "Pouw.Guarantees.RelativeSecurity.StagedFloorKOneSidedCallPerProver": "unstated: StagedFloorKOneSidedCall restated on ServiceSoundStagedPerProver at the call's shape, each adversary's error its own (breakBound, ecr/sha-512 at its collision finders within budgets computed from its time); it follows from StagedFloorKOneSidedPerProver at the call's shape (stagedFloorKOneSidedCallPerProver_of_unit), which is not proved yet (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover)"
+   "Pouw.Guarantees.RelativeSecurity.StagedFloorKOneSidedCallPerProver": "unstated: StagedFloorKOneSidedCall restated on ServiceSoundStagedPerProver at the call's shape, each adversary's error its own (breakBound, ecr/sha-512 at its collision finders within budgets computed from its time); it follows from StagedFloorKOneSidedPerProver at the call's shape (stagedFloorKOneSidedCallPerProver_of_unit), which is not proved yet (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover)",
+   "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedJ10R": "frozen (no-function,world-unlisted,scope): StagedFloorKOneSided at call scope under J10-R (RT-ALGO-17, card bbf40543), each stage a call (JStage), its run one straight-line program over the call's bits, both sides shared across the call and each segment's coin x coin part one <n, L, n'> product. It is stated over an arbitrary Machine and Service and an analysis map (JRunMap), not the service's code, and takes three premises about that map: ServiceSoundStagedJ10R (ServiceSoundStaged with the seed identified with the window's call coins), KScopeOneSidedJ10R (Theorem K's one-sided scope on the call: products one-sided of any form between the rows' dither bits and the columns' coin and U bits, the error the call's int8-wrapped prefix product, and charging purity mod 2 at every segment's row and column frame, which no check of the service refuses a run outside of) and ChargeVF3j16J10R (the active vector VF3j-16's prices with B_theta complete, kappa a product of the call's program). Its floor and luck are StagedFloorKOneSided's: c = 1 on the call's one-sided scope; K1 is not claimed outside it, and the verifier can't observe which case applies.",
+   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10R": "frozen (no-function,world-unlisted,scope): OverlapFloorKOneSided at call scope under J10-R (RT-ALGO-17, card bbf40543), each draw a call of any shape (OJSpot), the round's run one straight-line program over every call's bits, both sides shared across each call and each segment's coin x coin part one <n, L, n'> product. It is stated over an arbitrary Machine and Service and an analysis map (JORunMap), not the service's code, and takes three premises about that map: ServiceSoundOverlapJ10R (ServiceSoundOverlap with the seed identified with the overlapped window's call coins), KScopeOverlapOneSidedJ10R (Theorem K's scope across calls: products one-sided per call at every bit point of the other calls' (OneSidedAtJ), the error each call's int8-wrapped prefix product, and charging purity across calls mod 2 at every segment's frame, which no check of the service refuses a run outside of) and ChargeVF3j16OverlapJ10R (the active vector VF3j-16's prices with B_theta complete, each product counted once). Its floor and luck are OverlapFloorKOneSided's: c = 1 on the calls' one-sided scope; K1 is not claimed outside it, and the verifier can't observe which case applies.",
+   "Pouw.Guarantees.RelativeSecurity.StagedFloorKOneSidedJ10RPerProver": "unstated: StagedFloorKOneSidedJ10R restated on ServiceSoundStagedJ10RPerProver, each adversary's error its own (breakBound, ecr/sha-512 at its collision finders within budgets computed from its time); the per-prover form at call scope under J10-R (RT-ALGO-17), stated beside StagedFloorKOneSidedPerProver and open like it (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover)",
+   "Pouw.Guarantees.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver": "unstated: OverlapFloorKOneSidedJ10R restated on ServiceSoundOverlapJ10RPerProver, each adversary's error its own (breakBound, ecr/sha-512 at its collision finders within budgets computed from its time); the per-prover form at call scope under J10-R (RT-ALGO-17), stated beside OverlapFloorKOneSidedPerProver and open like it (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover)"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -20010,9 +20056,11 @@
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSided",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedCall",
+    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10R",
     "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK",
     "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSided",
     "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedCall",
+    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedJ10R",
     "Pouw.SecurityProofs.RelativeSecurity.TheoremSOverlap",
     "Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged"
    ]
@@ -20037,6 +20085,52 @@
    "guarantees": [
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedCall",
     "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedCall"
+   ]
+  },
+  "Definitions.Pouw.RelativeSecurityJ10R": {
+   "digest": "a8603a8aeabbe27cf97b4b0bdfb922d9f812ac25c0e52c26c13ccee7cc5f3dae",
+   "definitions": {
+    "Pouw.RelativeSecurity.JBits": "013e03399fe1850d37d49f22334c6f6123fdb1915ca921f77f1b25068bbed496",
+    "Pouw.RelativeSecurity.JORunMap": "868672651ad9b92db76077f0a10186bee36e574047a3cc44dd4c266129aec768",
+    "Pouw.RelativeSecurity.JOverlapRun": "90cd627e780c036ac47bc88fd5bd63f7ccf3ae3eeb6356e0eb1b00481a084f29",
+    "Pouw.RelativeSecurity.JOverlapRun.Bind": "394d8d05957ba7e23dadf8289dad3da780700fd47c06f54640df35afbe86e425",
+    "Pouw.RelativeSecurity.JOverlapRun.N": "3666887e3bd9cf2a806f770ed64222d1959efac2b776807c679d4f27c8e2d71c",
+    "Pouw.RelativeSecurity.JOverlapRun.V": "25fdbffdf00f23afb545cc4582c22e32d9cd86e20bda0c07682eb5f42958e167",
+    "Pouw.RelativeSecurity.JOverlapRun.ZK": "343d40704288de454150f793c9c1d04b090327bb1994ab895958a87cf66bc433",
+    "Pouw.RelativeSecurity.JOverlapRun.aq": "ebe546d274ae24297f4872aeb3e7a79ddbe2ebcae8ecf12c68fe297482d30ff3",
+    "Pouw.RelativeSecurity.JOverlapRun.play": "cf998fc0a9d06b2b2f546b54273e88ee54ec43c4ac188f1bd110e3d0d1acb8cb",
+    "Pouw.RelativeSecurity.JOverlapRun.prog": "779d875e7fbfaaf5358dc3294e45a11fdd8c9480e5811eb76e1bfc6b57f23f69",
+    "Pouw.RelativeSecurity.JOverlapRun.word": "2ad687a9c2748011f597e7427f13eb64c5e7f54d0b481fd0f4c1f7ab26e0facf",
+    "Pouw.RelativeSecurity.JOverlapRun.wq": "a505d6da8bc4fdbd42ca212bc410bb979e9b3f1e94ed494cd9656e67970cba44",
+    "Pouw.RelativeSecurity.JRunMap": "e5edb7065749d1c911a460203f481c074e30dc775d1722a61963ff246a75f592",
+    "Pouw.RelativeSecurity.JStage": "d0ea8bac7abb26423ad0075fc50ffecd6ce2b3a8365501b63a38ac89f0e9ec6f",
+    "Pouw.RelativeSecurity.JStagedRun": "da8f4f1b1d8006470ed7a1830ce204de2db66861b2e01efe5c481b2e830beb90",
+    "Pouw.RelativeSecurity.JStagedRun.Bind": "7ee4d9fb2c234451f7afc13a61420e1f652d829080fa7f48a3f8646ccfb1e6e7",
+    "Pouw.RelativeSecurity.JStagedRun.N": "fe4661973ee1d290e1a47ca0d0c694496ed37d13c5bf3aad582239f9b01ec417",
+    "Pouw.RelativeSecurity.JStagedRun.V": "12789d1502c1ed913df6e81a06eda80eb26d05aa9f442aac0421a6f8385381e4",
+    "Pouw.RelativeSecurity.JStagedRun.ZK": "5c5059edc26e962d6720f5563228aac6d7e3af25da1faf5fdfada22161de84d0",
+    "Pouw.RelativeSecurity.JStagedRun.aq": "b4970e2c46047ad7a60a16ab741667dd59f77738b8d25ecf27bd9fef8180cd5a",
+    "Pouw.RelativeSecurity.JStagedRun.play": "fec70c007793c891e9c0040c44f7541acbf12d0cbefbf00073bc2dda638f539e",
+    "Pouw.RelativeSecurity.JStagedRun.prog": "4d5009e6cc0f6790f140e37dc4bed7cd4f0a025d228a98e93f3e912f7c7a4805",
+    "Pouw.RelativeSecurity.JStagedRun.word": "d6ce52b6709e9fca89a62d1e880004edd4d61199af63ec31f2b9575f57946749",
+    "Pouw.RelativeSecurity.JStagedRun.wq": "408df0bcaddd2e11268bdff5510671b031d6d26df8b103a48256ed11c5409c2d",
+    "Pouw.RelativeSecurity.OJBits": "daa3fca5281d5d99e4e785a9f89ff8fcf7d31a1d30ff9ddc18b87f36eb646af9",
+    "Pouw.RelativeSecurity.OJDraws": "f27b5b306157782b51cf3afd23f03c44ebafb66de5829423dc3a0e9646aaa267",
+    "Pouw.RelativeSecurity.OJSpot": "c49cccf8a9b9d9843a1c4bdd7b9450cc2b158d5a215b9cba133daf6d3a806f8b",
+    "Pouw.RelativeSecurity.OneSidedAtJ": "c4491b2bcdf1b65bc572202190c7047390f58c6ba3fb8fcd1138b28c55fee516",
+    "Pouw.RelativeSecurity.SlpG.ChargePureAtJ": "a17ad52b134b391f828c17a96e73bc08e4f02b31c78566d6531c3bbb66011cf7",
+    "Pouw.RelativeSecurity.SlpG.ChargePureJ": "9e13fc5f8e7ecacf5df648c64ca2fc1b905615c478fe8cd74ed6704271145723",
+    "Pouw.RelativeSecurity.jFrame": "6c3bf15a9c90b13f820dd463a9cdf57194dc7bbb6a6636ab3a4ff696c8350d2f",
+    "Pouw.RelativeSecurity.jIncr": "15a2602d7bccaaa187c88ebcf090dfa07fb31583ca81157d9ae08277b46f6e88",
+    "Pouw.RelativeSecurity.jPrefix": "11c7911d9085c4c4a37c598d1044762899424165a138896b7959446ddbb5d26c",
+    "Pouw.RelativeSecurity.jS8": "89cd18ba0edaa47994587d466bb9c9097d712953c5144b031b8ea6bff5b1f739",
+    "Pouw.RelativeSecurity.jU": "7bc05fb00f4d99636854aa9f7620f6b23bf595229b6afeec8b7195026d1fc63c",
+    "Pouw.RelativeSecurity.jW": "ac518d55b5713d0e3e25c62f931c3b0f166e1bfed819553b08d0de6a5d8a07f0",
+    "Pouw.RelativeSecurity.jX": "b388a7ba494cb6837985a7c8e1e756b614649479245ff8b983d715f36df11d86"
+   },
+   "guarantees": [
+    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10R",
+    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedJ10R"
    ]
   },
   "Definitions.Pouw.Window": {
@@ -28762,24 +28856,32 @@
    "guarantees": ["Pouw.SecurityProofs.GammaFromTT"]
   },
   "Models.Pouw.Assumptions.RelativeSecurity": {
-   "digest": "30ed5237c1e72e3287d339074461e240291ae67eca868dd074000f619a94849d",
+   "digest": "efa31f39fb2b9459a2d4a01033d167f1255530e971b0cb6db443908c9547257f",
    "definitions": {
     "Pouw.Assumptions.ChargeVF3j16": "90821a828650e17affb44beb232f6a4b984e257937ba9cf3a5c72b67f99a083a",
+    "Pouw.Assumptions.ChargeVF3j16J10R": "54c548c0c497ff3b04cc94b59eee9970f621d8d0459b77e4cf723e650532f9d1",
     "Pouw.Assumptions.ChargeVF3j16Overlap": "59afca798aa23b07ead1b93f0aba656a42b7ba8f1a499b20cd3b1b3fb737531b",
+    "Pouw.Assumptions.ChargeVF3j16OverlapJ10R": "65708df74b82c06f6910adb4a1827feb648f0985642dcaa800dbab6b103b83b4",
     "Pouw.Assumptions.KScopeAffine": "de21cab460f90bc1dadff420c37dea82eedcd0561dba233b9b224eb0d21bf6c0",
     "Pouw.Assumptions.KScopeOneSided": "98d009b2456f60457cb493099883e49480048387fd1613e4395484db996171dc",
+    "Pouw.Assumptions.KScopeOneSidedJ10R": "4daee897c99b7da1e4ccba287799d3ff7f172e3579ca65187ed039e855afb374",
     "Pouw.Assumptions.KScopeOverlapAffine": "4ce967e53d3c25379b7a9e8b093f18dac02bd355051ab5ecf5ffa29907eec6ab",
     "Pouw.Assumptions.KScopeOverlapOneSided": "286b91792e25f9fb3ef43f27458a26bbd30ce6179d4125f9c778cb31bd571efb",
+    "Pouw.Assumptions.KScopeOverlapOneSidedJ10R": "a65c12c575aa911fb0a9e4c6ecaa41448dbb400843f7936024ed8d7eccec92ac",
     "Pouw.Assumptions.ServiceSoundOverlap": "5ee992529ffdcc445072394ec6764a48bc9f9b5488fec27e983da1f6f8448ed1",
-    "Pouw.Assumptions.ServiceSoundStaged": "de76052cf9313ff364e10b49a2e3144b5022b488f4e05788706837af152c829b"
+    "Pouw.Assumptions.ServiceSoundOverlapJ10R": "8e383bd26191f3c74dfeafd8d21fe1f7d9b232006aebde1773f85b91ffcf4e88",
+    "Pouw.Assumptions.ServiceSoundStaged": "de76052cf9313ff364e10b49a2e3144b5022b488f4e05788706837af152c829b",
+    "Pouw.Assumptions.ServiceSoundStagedJ10R": "76d9d685916c2a126a735a11a405235e44abae18b815249b05eea86ab08748da"
    },
    "guarantees": [
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSided",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedCall",
+    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10R",
     "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK",
     "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSided",
-    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedCall"
+    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedCall",
+    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedJ10R"
    ]
   },
   "Models.Pouw.Assumptions.RelativeSecurityCall": {
@@ -29125,20 +29227,24 @@
    ]
   },
   "Models.Pouw.Guarantees.RelativeSecurity": {
-   "digest": "2067564dc2b07143af40d2735bb4e010303611bff8ca4de4101e569c16e6562c",
+   "digest": "ea1a878e0ec58a833dd848390b22acbb783ec9554cd9b3c21d7e5f5f205d0e38",
    "definitions": {
     "Pouw.Guarantees.RelativeSecurity.OverlapFloorK": "0fc6e6cd6cb0724b367bf1f1fa48995b38a2a98fb592ffbcd8f4d1ba640c5c61",
     "Pouw.Guarantees.RelativeSecurity.OverlapFloorKOneSided": "4c22a35beb34cd8233a8f43d0a00d13a06f2d3e79584a98bf0f592f092fa0548",
+    "Pouw.Guarantees.RelativeSecurity.OverlapFloorKOneSidedJ10R": "ea7dc959ccc2e2f48481c171423885f53cdad5d7b5ff65504d1d424a957e407f",
     "Pouw.Guarantees.RelativeSecurity.StagedFloorK": "a149d9938e6c4451995269463d28cacd57019bb7c9828db0ce1d74c69b6a310a",
     "Pouw.Guarantees.RelativeSecurity.StagedFloorKOneSided": "6136fdf7e3b269039baccd7228e3c5c1ee52f9b2f5bf3ae63c67b23ee19c9b63",
+    "Pouw.Guarantees.RelativeSecurity.StagedFloorKOneSidedJ10R": "d1c6347fea89839494a46c865dde26b0e1fb692653626a1d8fa84c6456bfbea5",
     "Pouw.Guarantees.RelativeSecurity.TheoremSOverlap": "fd03a6cd9a640f357b40e47bf082c556961ed04a94e5f7eb83cf5b74808acf47",
     "Pouw.Guarantees.RelativeSecurity.TheoremSStaged": "d6db5d3663cebed99d35c170e6387cf1c5ef8747946aa6cd85989b44270e431a"
    },
    "guarantees": [
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSided",
+    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10R",
     "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK",
     "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSided",
+    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedJ10R",
     "Pouw.SecurityProofs.RelativeSecurity.TheoremSOverlap",
     "Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged"
    ]

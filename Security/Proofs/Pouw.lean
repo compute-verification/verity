@@ -157,6 +157,7 @@ import Proofs.Pouw.Reduction
 import Proofs.Pouw.RelativeSecurity
 import Proofs.Pouw.RelativeSecurityCall
 import Proofs.Pouw.RelativeSecurityGuarantees
+import Proofs.Pouw.RelativeSecurityJ10R
 import Proofs.Pouw.Sampling
 import Proofs.Pouw.Sanity
 import Proofs.Pouw.SteinerRigidity
