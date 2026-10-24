@@ -52,7 +52,7 @@ def collapse_ratio(path):
     COLLAPSED diverged: it learned (or began to) and then lost it, whatever its reward."""
     if not os.path.exists(path):
         return None
-    a = np.asarray([d["acc_reward"] for d in map(json.loads, open(path)) if d.get("event") == "step"])
+    a = np.asarray([d.get("acc_reward", d["reward"]) for d in map(json.loads, open(path)) if d.get("event") == "step"])
     if len(a) < 20:
         return None
     return float(a[-10:].mean() / np.convolve(a, np.ones(10) / 10, mode="valid").max())
