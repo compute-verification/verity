@@ -487,7 +487,7 @@ def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks
                 "hbm_bytes": float(r.hbm), "hbm_share": float(r.hbm / node_bytes), "filler_bytes": float(r.filler),
                 "filler_share": float(r.filler / node_bytes)}
 
-    return {"groups": groups, "wrong": wrong, "chip_blocks": chip_bytes / b, "burst_blocks": float(burst),
+    return {"groups": groups, "wrong": wrong, "chip_blocks": -(-chip_bytes // b), "burst_blocks": float(burst),
             "node_bytes": node_bytes, "stretches": stretches, "snapshot": worst(AVERAGE), "time": worst(TIME_HELD)}
 
 
@@ -512,23 +512,66 @@ def recorded_rates(session: dict, registration: dict, **node: float) -> line.Rat
                       wire.codec_named(registration["codec"]).encode_squarings, **node)
 
 
+def lean_record(session: dict) -> dict:
+    """The Lean verifier's record of an accepted session in `verifier.json` (its `outcome` request's `record`,
+    `lean_verifier.summary_json`'s form), as the session keeps it (`lean_record`), the Lean's where its verdict is
+    the Lean's (lean or both). A run from before sessions kept it wrote the same record read through
+    `lean_verifier.record_of` (`Pair.record`) as its `record`'s `public` and `profile`, which give back every field
+    but each pass's root's arrival, and its `windows_seen` those stamps: it is read back from them, refused where they
+    don't fit."""
+    if "lean_record" in session:
+        return session["lean_record"]
+    pub, ws, seen = session["record"]["public"], session["record"]["profile"]["windows"], session["windows_seen"]
+    if len(seen) != len(ws) or any(len(x["arrivals_ns"]) != len(w["lengths"]) for w, x in zip(ws, seen)):
+        raise ValueError(f"the session's windows seen are not its record's: {len(seen)} for {len(ws)} windows, or "
+                         "a window's arrivals not one a pass")
+    return {"appended": pub["appended"], "appends": pub["appends"], "blocks": pub["blocks"],
+            "lifetime": pub["lifetime"], "pace": pub["pace"], "registration": pub["registration"],
+            "released": pub["released"],
+            "windows": [{"arrived_ns": list(x["arrivals_ns"]), "deadline_ns": w["deadline_ns"],
+                         "drawn": w["profile"]["drawn"]["receipt"], "heads": w["heads"], "lengths": w["lengths"],
+                         "opened_ns": w["opened_ns"], "post_seed": w["post_seed"], "released_ns": w["released_ns"],
+                         "stale": w["stale"], "steps": w["steps"]} for w, x in zip(ws, seen)]}
+
+
 def recorded_windows(session: dict) -> tuple[list[tuple[int, int]], float]:
     """The pooled bound's inputs (`pooled.bound`) from an accepted session's record in `verifier.json`: each window's
-    receipts and draws, and δ."""
+    receipts and draws, and δ, the ones the line reads off the Lean verifier's record (`lean_record`) and the session."""
     ws = session["record"]["profile"]["windows"]
     return [(sum(w["lengths"]), w["profile"]["drawn"]["receipt"]) for w in ws], ws[0]["profile"]["delta"]
 
 
+def record_seen(mem: dict, seen: list[dict], record: dict, *, block_bytes: int) -> list[line.Seen]:
+    """What the auditor saw of each window beside the Lean verifier's `record` of it (`line.Seen`): its group's times
+    and reads as `paced_groups` reads them, its passes the record's or refused."""
+    gs = paced_groups(mem, seen, block_bytes=block_bytes)
+    if [g.passes for g in gs] != [len(w["lengths"]) for w in record["windows"]]:
+        raise ValueError("the windows seen are not the record's: a group for each of its windows, a pass for each of "
+                         "its passes")
+    return [line.Seen(g.released_ns, g.last_ns, g.least, g.weights, g.hbm, g.host) for g in gs]
+
+
+def recorded_inputs(session: dict, registration: dict, *, host_bytes: int, rates: line.Rates) -> dict:
+    """An accepted paced session's line's inputs in the line's record form (`line.record_inputs_json`, the Lean
+    verifier's `line_record` request reads them): the Lean verifier's record of it (`lean_record`), whose groups'
+    passes, windows and registered blocks the line reads, at the session's `samples` and δ; and what the auditor saw of
+    each window beside it (`record_seen`, on the clock its `windows_seen` read), against its HBM and `host_bytes`, at
+    `rates` (`recorded_rates`). Refused unless the record is of `registration`."""
+    mem, record = session["ledger"]["memory"], lean_record(session)
+    if record["registration"] != registration["digest"]:
+        raise ValueError(f"the Lean's record is of registration {record['registration'][:16]}…, not "
+                         f"{registration['digest'][:16]}…")
+    return line.record_inputs_json(
+        record, samples=session["samples"],
+        seen=record_seen(mem, session["windows_seen"], record, block_bytes=mem["block_bytes"]),
+        per=session["pace"]["groups"], block_bytes=mem["block_bytes"], chip_bytes=mem["chip_bytes"],
+        node_bytes=mem["hbm_bytes"] + host_bytes, delta=session["delta"], rates=rates)
+
+
 def recorded_line(session: dict, registration: dict, *, host_bytes: int, rates: line.Rates) -> line.Line:
-    """An accepted paced session's line in both forms (`line.line`, exact) from its record in `verifier.json`, against
-    its HBM and `host_bytes`, at `rates` (`recorded_rates`); the wrong receipts are the pooled bound of its record's
-    windows (`recorded_windows`)."""
-    mem = session["ledger"]["memory"]
-    windows, delta = recorded_windows(session)
-    return line.line(paced_groups(mem, session["windows_seen"], block_bytes=mem["block_bytes"]),
-                     per=session["pace"]["groups"], blocks=registration["blocks"], block_bytes=mem["block_bytes"],
-                     chip_bytes=mem["chip_bytes"], node_bytes=mem["hbm_bytes"] + host_bytes,
-                     windows=windows, delta=delta, rates=rates)
+    """An accepted paced session's line in both forms (`line.line_of_record`, exact) of its `recorded_inputs`."""
+    return line.line_of_record(**line.of_record_json(recorded_inputs(session, registration, host_bytes=host_bytes,
+                                                                     rates=rates)))
 
 
 class RealClock:
@@ -1358,6 +1401,8 @@ class Verifier:
         if accepted:
             record = session.record()
             out["record"] = {"public": record.public(), "profile": record.profile(), "end_ns": record.end_ns}
+            if session.outcome_json is not None:
+                out["lean_record"] = session.outcome_json["record"]
             out["end_ns"] = record.end_ns
             out["ledger"] = self.ledgers(record, [list(w.arrived_ns) for w in record.windows],
                                          [w.plans for w in session.windows])
