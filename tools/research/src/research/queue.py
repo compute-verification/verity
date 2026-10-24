@@ -30,7 +30,7 @@ eyeball review, and the full check runs after landing); `land` below, and drive'
                          [--first N,...] [--defer STEPS] [--[no-]regenerate-locks] [--per-pr-shadow N]
                          [--landing review|check] [--[no-]after-landing-no-cache] [--dry-run]
                                                    one tick of the landing automation (`research.drive`): with --landing review
-                                                   (drive.toml's `land`), sync and land the reviewed prefix of `next`, a lock
+                                                   (drive.toml's `land`), sync and land the reviewed prefix of `next`, a Lean
                                                    change once its Lean check passed, then check `main` (--after-landing-no-cache:
                                                    reusing no pass); with check, land what passed, sync, check `next` in trains with
                                                    train.sh, eject what one PR broke; either way tell @ci the rest.
@@ -42,10 +42,13 @@ eyeball review, and the full check runs after landing); `land` below, and drive'
                                                    effective flags print once a tick, and --config-from-tree reads this file system's
     research queue review [N (--land [--ref NOTE] | --hold REASON) --by LANE] [--sha SHA] [--json]
                                                    without N: `next`'s members above `main` that no land verdict at their head
-                                                   lands, bottom first (number, head, owner, files, whether it changes a lock);
-                                                   with N: a reviewer's verdict, a `reviewed` label on `pr:N@HEAD` (its head on
-                                                   `next`, or --sha), which drive's review landing counts unless LANE is the
-                                                   PR's owner, refused here
+                                                   lands, bottom first (number, head, owner, files, whether it waits for a Lean
+                                                   check: `lean_change`); with N: a reviewer's verdict, a `reviewed` label on
+                                                   `pr:N@HEAD` (its head on `next`, or --sha), which drive's review landing
+                                                   counts unless LANE is the PR's owner, its handle or its ready mark's author,
+                                                   refused here
+    research queue baseline SHA --by ci             record `main` at SHA as green for the review landing, which otherwise first
+                                                   runs the after-landing run on `main` itself, and lands nothing until it passes
     research queue report --on MACHINE [--max-running N] [--dry-run]
                                                    one tick of the reporter for GitHub's merge queue (`research.mergequeue`): check
                                                    each merge group's head, post its `verity/check` status
@@ -104,7 +107,7 @@ which files conflict and which queued PRs touched them.
 Landing.  `land` walks `next` down from its tip and fast-forwards `main` to the first commit the gate accepts: `main` gets exactly
 the tree that was checked, with no new merge commit.  A push refused because `main` moved leaves `main` alone; the next sync rebuilds
 `next` on the new `main`.  A landing that changes what a guarantee says DMs Daniel what changed (`spec_alert`).  `drive`
-(`research.drive`) is the loop's tick that needs no agent: with `land = "review"` it lands `next`'s reviewed prefix, a lock change
+(`research.drive`) is the loop's tick that needs no agent: with `land = "review"` it lands `next`'s reviewed prefix, a Lean change
 once its Lean check passed, and checks `main` after each landing, reverting what that check fails; with `land = "check"` it
 launches the checks of `next`'s trains, lands what passed (onto a moved `main` too, when the two share no file), ejects the PR a
 failure points at alone; either way it tells `@ci` what it refuses.
@@ -425,20 +428,43 @@ def label_target(pr: int, head: str) -> str:
     return f"pr:{pr}@{head}"
 
 
-def unreviewed(labels: Iterable, owner: str) -> str | None:
+def _who(name: str) -> str:
+    return name.strip().lstrip("@").lower()
+
+
+def unreviewed(labels: Iterable, owners: Iterable[str | None]) -> str | None:
     """Why the `reviewed` ``labels`` on one head don't land it, or None when they do: each reviewer's newest verdict counts, a
-    hold by anyone keeps it, and a land counts only by a reviewer who isn't ``owner``, the PR's owning lane or agent id
-    (`PR.owner`)."""
+    hold by anyone keeps it, and a land counts only by a reviewer who is none of ``owners`` (the PR's owning lane or agent id,
+    that owner's handle, its ready mark's author: `review_owners`), compared without case or a leading `@`."""
+    mine = {_who(o) for o in owners if o}
     newest: dict[str, object] = {}
     for lab in sorted(labels, key=lambda lab: lab.ts):
-        newest[lab.by.lstrip("@")] = lab
-    if held := [f"{by} ({lab.ref or 'no reason'})" for by, lab in newest.items() if lab.value == "hold"]:
+        newest[_who(lab.by)] = lab
+    if held := [f"{lab.by.lstrip('@')} ({lab.ref or 'no reason'})" for lab in newest.values() if lab.value == "hold"]:
         return f"held by {', '.join(held)}"
-    if any(lab.value == "land" and by != owner for by, lab in newest.items()):
+    if any(lab.value == "land" and by not in mine for by, lab in newest.items()):
         return None
-    if owner in newest:
-        return f"no land verdict but its owner's own ({owner}), which doesn't count"
+    if own := [lab.by.lstrip("@") for by, lab in newest.items() if by in mine]:
+        return f"no land verdict but its owner's own ({', '.join(own)}), which doesn't count"
     return "no land verdict"
+
+
+#: a Lake package's lock, and the files of a package its Lean check reads
+LEAN_LOCK = "lean-audit.json"
+LEAN_SOURCES = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "lake-manifest.json")
+
+
+def lean_change(repo: Path, commit: str) -> bool:
+    """Whether ``commit``'s own change (against its first parent) waits for a Lean check before a review landing: it touches a
+    lock, or a Lean source of a Lake package that has one, so neither a guarantee's statement nor a definition it reads reaches
+    `main` without its record (the after-landing lean-audit, `--no-regenerate`, fails on a record difference)."""
+    files = changed(repo, f"{commit}^1", commit)
+    if any(Path(f).name == LEAN_LOCK for f in files):
+        return True
+    if not (lean := [f for f in files if f.endswith(LEAN_SOURCES)]):
+        return False
+    pkgs = {str(Path(f).parent) for f in _out(repo, "ls-tree", "-r", "--name-only", commit).splitlines() if Path(f).name == LEAN_LOCK}
+    return any(p == "." or f.startswith(p + "/") for f in lean for p in pkgs)
 
 
 class StoreLabels:
@@ -477,6 +503,11 @@ class StoreLabels:
     def reviews(self, pr: int, head: str) -> list:
         """The `reviewed` labels on `pr:{n}@{head}` (`research queue review`), pulled as `ready`'s are."""
         return self._labels(pr, head, vocab.REVIEWED)
+
+    def ready_by(self, pr: int, head: str) -> str | None:
+        """Who wrote the newest `ready = true` label on `pr:{n}@{head}`, whenever it was written."""
+        labs = [lab for lab in sorted(self._labels(pr, head, vocab.READY), key=lambda lab: lab.ts) if str(lab.value).lower() == "true"]
+        return labs[-1].by if labs else None
 
     def marked_by(self, pr: int, head: str) -> str | None:
         """Who wrote the newest `ready` label `ready` read on `pr:{n}@{head}`."""
@@ -2024,38 +2055,80 @@ def review(q: Queue, store, labels: StoreLabels, pr: int | None, verdict: str | 
     q.fetch()
     main = _out(q.workdir, "rev-parse", "refs/remotes/origin/main")
     chain = [m for m in q.chain() if _git(q.workdir, "merge-base", "--is-ancestor", m.commit, main, check=False).returncode]
+    opened = {p.number: p for p in q.github.open_prs()}
     if pr is None:
         labels.prefetch([(m.pr, m.head) for m in chain])
         rows = []
         for m in chain:
-            if (why := unreviewed(labels.reviews(m.pr, m.head), m.owner)) is None:
+            if (why := unreviewed(labels.reviews(m.pr, m.head), review_owners(q, labels, m.pr, m.head, m.owner, opened))) is None:
                 continue
             files = sorted(changed(q.workdir, f"{m.commit}^1", m.commit))
-            rows.append({"pr": m.pr, "head": m.head, "owner": m.owner, "lock": any(Path(f).name == "lean-audit.json" for f in files),
-                         "files": files, "why": why})
+            rows.append({"pr": m.pr, "head": m.head, "owner": m.owner, "lean": lean_change(q.workdir, m.commit), "files": files,
+                         "why": why})
         if as_json:
             print(json.dumps(rows, indent=1))
         else:
             for r in rows:
                 shown = ", ".join(r["files"][:8]) + (f" (+{len(r['files']) - 8} more)" if len(r["files"]) > 8 else "")
-                print(f"#{r['pr']} {r['head'][:12]} {r['owner']} lock change: {'yes' if r['lock'] else 'no'}: {r['why']}\n    {shown}")
+                print(f"#{r['pr']} {r['head'][:12]} {r['owner']} waits for a Lean check: {'yes' if r['lean'] else 'no'}: "
+                      f"{r['why']}\n    {shown}")
             print(f"research queue review: {len(rows)} of {len(chain)} member(s) of `{q.branch}` above `main` lack a land verdict")
         return 0
     m = next((m for m in chain if m.pr == pr), None)
     head, owner = (sha or m.head, m.owner) if m and (sha in (None, m.head)) else (sha, None)
     if owner is None:
-        open_pr = next((p for p in q.github.open_prs() if p.number == pr), None)
-        if open_pr is None:
+        if (open_pr := opened.get(pr)) is None:
             raise QueueError(f"review: #{pr} is neither on `{q.branch}` nor open")
         head, owner = head or open_pr.head, open_pr.owner
-    if not owner or by.lstrip("@") == owner:
-        raise QueueError(f"review: #{pr} is {by}'s own PR (or has no owner), and an owner's verdict doesn't count: a reviewer "
-                         "who isn't its owner reviews it")
+    if not owner or _who(by) in {_who(o) for o in review_owners(q, labels, pr, head, owner, opened) if o}:
+        raise QueueError(f"review: #{pr} is {by}'s own PR (its owner, its owner's handle or its ready mark's author; or it has no "
+                         "owner), and an owner's verdict doesn't count: a reviewer who isn't its owner reviews it")
     target = label_target(pr, head)
     store.add_label(target, vocab.REVIEWED, verdict, by, ref=ref or None)
     said, lost = _label_write_through(store, target)
     print(f"research queue: #{pr} reviewed `{verdict}` at {head[:12]} by {by} ({target}); {said}")
     return 1 if lost else 0
+
+
+def review_owners(q: Queue, labels: StoreLabels, pr: int, head: str, owner: str | None,
+                  opened: dict[int, PR] | None = None) -> set[str | None]:
+    """Whose verdict on ``pr`` at ``head`` doesn't count (`unreviewed`): its owner (`PR.owner`, or its merge's `Owner`), that
+    owner's Slack handle through the registry (`Queue.handle`), and who wrote its ready mark (`StoreLabels.ready_by`)."""
+    p = (opened or {}).get(pr) or PR(pr, head, body=f"Lane {owner}")
+    return {owner, q.handle(p), labels.ready_by(pr, head)}
+
+
+def baseline(q: Queue, sha: str, by: str) -> int:
+    """`research queue baseline SHA --by ci`: record `main` at SHA as verified by the after-landing run (`drive["postland"]`),
+    when ci knows it is green, so the review landing lands without first running the after-landing run on `main` itself
+    (`Driver._unbaselined`), and a later failure reverts only a landing above SHA.  Refused while a post-landing run or a
+    bisection of one runs, and for a SHA `main` doesn't hold."""
+    from .drive import AFTER_LANDING
+
+    if _who(by) != "ci":
+        raise QueueError(f"baseline: only ci records a green `main` (--by ci), not {by}")
+    q._clone()
+    q.fetch()
+    full = _git(q.workdir, "rev-parse", "--verify", "-q", f"{sha}^{{commit}}", check=False).stdout.strip()
+    if not full or _git(q.workdir, "merge-base", "--is-ancestor", full, "refs/remotes/origin/main", check=False).returncode:
+        raise QueueError(f"baseline: {sha} is not a commit of `main`")
+    state = q.load_state()
+    pl = state.setdefault("drive", {}).setdefault("postland", {"verified": full, "pending": [], "run": None})
+    if pl.get("run") or pl.get("bisect"):
+        busy = pl.get("run") or pl["bisect"].get("run") or {}
+        raise QueueError(f"baseline: the post-landing run {' '.join(busy.get('ids') or ['(a bisection)'])} is running; its end "
+                         "verifies `main` or acts on it: record a baseline once it has ended")
+    on = lambda a, b: not _git(q.workdir, "merge-base", "--is-ancestor", a, b, check=False).returncode  # noqa: E731
+    pl["verified"] = full
+    pl["verified_as"] = {"steps": list(AFTER_LANDING), "no_cache": None, "by": by,
+                         "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    pl["pending"] = [p for p in pl.get("pending", []) if not on(p, full)]
+    if pl.get("failed") and on(pl["failed"], full):
+        del pl["failed"]
+    q.save_state(state)
+    print(f"research queue: `main` {full[:12]} recorded as verified by the after-landing run, by {by}: the review landing lands "
+          f"on it; {len(pl['pending'])} landing(s) above it wait for their run")
+    return 0
 
 
 def broker_gh(top: Path) -> str:
@@ -2154,8 +2227,9 @@ def _checked_heads(a: argparse.Namespace) -> int:
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
     ap.add_argument("command", choices=["status", "sync", "land", "eject", "ready", "judge", "drive", "report", "open",
-                                            "stats", "checked-heads", "review"])
-    ap.add_argument("pr", nargs="?", help="eject, ready, review: the PR number; judge: the quick tier's run id")
+                                            "stats", "checked-heads", "review", "baseline"])
+    ap.add_argument("pr", nargs="?", help="eject, ready, review: the PR number; judge: the quick tier's run id; baseline: the "
+                    "commit of `main` ci knows is green")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE"),
                     help="eject, ready, judge: who ejects it, the handle its notice is posted as (default merge-queue, which no "
@@ -2206,7 +2280,7 @@ def main(argv: list[str]) -> int:
                                                           "--workdir) in place of drive's log")
     ap.add_argument("--landing", choices=LANDINGS,
                     help="drive: land each train on its own check (check, the default), or each member of `next` on a reviewer's "
-                         "land verdict, a lock change once a Lean check passed, with the full check after landing (review)")
+                         "land verdict, a Lean change once a Lean check passed, with the full check after landing (review)")
     ap.add_argument("--after-landing-no-cache", action=argparse.BooleanOptionalAction,
                     help="drive: with --landing review, run the after-landing check reusing no pass (check.py --no-cache)")
     ap.add_argument("--land", action="store_true", help="review N: the verdict that lands it")
@@ -2286,8 +2360,10 @@ def main(argv: list[str]) -> int:
         ap.error("--land, --hold and --ref are for review N only")
     if a.command == "review" and a.pr and (a.land == (a.hold is not None) or not a.by):
         ap.error("review N records one verdict: --land [--ref NOTE] or --hold REASON, with --by <reviewer lane> (or $RESEARCH_LANE)")
+    if a.command == "baseline" and not (a.pr and a.by):
+        ap.error("baseline SHA records a green `main` for the review landing: pass the commit and --by ci")
     a.by = a.by or "merge-queue"
-    if a.command != "judge" and a.pr is not None:
+    if a.command not in ("judge", "baseline") and a.pr is not None:
         if not a.pr.isdigit():
             ap.error(f"{a.command}: {a.pr!r} is not a PR number")
         a.pr = int(a.pr)
@@ -2343,6 +2419,8 @@ def main(argv: list[str]) -> int:
         if a.command == "review":
             return review(q, store, labels, a.pr, "land" if a.land else "hold" if a.pr else None, a.hold or a.ref, a.by,
                           sha=a.sha, as_json=a.json)
+        if a.command == "baseline":
+            return baseline(q, a.pr, a.by)
         from .merge import off_drive, on_drive
 
         if a.command in ("sync", "land") and not (a.dry_run or on_drive()):
@@ -2357,7 +2435,8 @@ def main(argv: list[str]) -> int:
 
             Driver(q, on=flags.on, max_running=flags.max_running, train_size=flags.train_size, defer=frozenset(flags.defer),
                    regenerate_locks=flags.regenerate_locks, per_pr_shadow=flags.per_pr_shadow, land=flags.land,
-                   after_landing_no_cache=flags.after_landing_no_cache, reviews=labels.reviews).tick(dry_run=a.dry_run)
+                   after_landing_no_cache=flags.after_landing_no_cache, reviews=labels.reviews,
+                   ready_by=labels.ready_by).tick(dry_run=a.dry_run)
             return 0
         if a.command == "report":
             from .mergequeue import Reporter, Statuses

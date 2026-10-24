@@ -37,7 +37,7 @@ def driven(monkeypatch) -> list[dict]:
 
     class Driver:
         def __init__(self, q, **kw):
-            assert callable(kw.pop("reviews"))
+            assert callable(kw.pop("reviews")) and callable(kw.pop("ready_by"))
             built.append({"first": q.first, **kw})
 
         def tick(self, dry_run=False):
