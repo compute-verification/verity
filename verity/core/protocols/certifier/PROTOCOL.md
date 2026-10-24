@@ -1574,33 +1574,76 @@ the next request had arrived.
 
 **Derived, 0 bits**: ENC-DERIVED's walk (#3560) recomputes every start and n and checks them against the replay. It
 gives the batch order (Model Runner V2's stable sort by n), I1's numbering by first row, `kind`, the canonical
-`sources`, and the request records (`prompt_len`, `output_len`, `finish`). Past the cumulative pool bound, the hits and
-resumes the walk would send are the replay's.
+`sources`, and the request records (`prompt_len`, `output_len`, `finish`). While the cumulative pool bound holds (sync
+scheduling, and ⌈(P + O)/B⌉ blocks for each request admitted through the step, that step's included, at most
+NB − 1), nothing has been evicted, and every hit is the longest cached prefix, at 0 bits. The resumes and the new
+requests' order that the walk would otherwise read are the replay's.
 
-**Sent.** Only the decisions are sent, each one symbol of ENC-CODE's arithmetic coder (#3513) at ENC-REPLAY's adaptive
-estimate for its context, plus `num_gpu_blocks` unless the registration pins it. The string is MSB first: Elias-gamma
-of `num_gpu_blocks` unless pinned, then for each window w < W, Elias-gamma(ℓ_w + 1) and an ℓ_w-bit segment holding the
-decisions about the requests whose a falls in w, then zero bits to a byte. W is the record's last bucket // T + 1. A
-window's charge is its frame, with the header charged to window 0 (`bits_by_window`), a function of the string alone.
+**Sent**, as ENC-CODE's v1 windows (#3591, `code_v1.Window`), and nothing else:
+- *The decisions*, one per open step: whether the next request had arrived.
+- *The hits past the bound.* Past the bound, eviction may shorten a hit, so the hit is the prover's choice, and v1
+  sends it. It sends every prefix-cache lookup the replay's scheduler reads at a step past the bound, in the order it
+  reads them. Those are each waiting candidate its loop reaches (the one whose allocation ends the loop included) and
+  the next arrival `would_admit` checks before a decision is asked. Each goes as its shortfall: the longest prefix a
+  cache that never evicts holds, less the hit, in blocks. That is 0 unless the replay evicted. Every lookup is then
+  derived or sent, so no prover choice goes uncharged, and `BitsCount`'s injectivity holds of the whole schedule.
+- `num_gpu_blocks`, unless the registration pins it (vLLM sizes it at startup).
 
-- *The bound.* The frames make the strings prefix-free for every W, so at most 2^c strings are charged c bits or
-  fewer. That is LEAK-LEAN's `BitsCount` by `bitsCount_of_prefixFree` (#3533). Since `decode` takes only the canonical
-  string, at most that many advices decode at that charge.
+*The windows* (A5). Step s's window is the earliest window that releases an output at step s or later (the last window
+when none follows): the first window whose rows a value read at step s can change.
+- A sent hit at step s goes to step s's window.
+- A decision about request i at step k goes to the earlier of step k's window and i's ingress window ⌊a_i / T⌋. The
+  min is never later than either rule, so it is at least as conservative for the leak bound as A5's, and every
+  decision about a request is charged in or before the window the request came in.
+- Both are nondecreasing in the replay's order. So each field's values, window after window, are in the order the
+  replay reads them, and the decoder replays them straight through, with no routing.
+
+*The string*, MSB first: Elias-gamma of `num_gpu_blocks` unless pinned, then `code_v1.encode(windows, book)`, then
+zero bits to a byte. W is the record's last bucket // T + 1.
+- `code_v1` codes each window as one terminated arithmetic segment, its counts before its values. So its decoder finds
+  each window's end, and v1 sends no length prefix (Elias-gamma(ℓ_w + 1) cost 5 to 22 bits a string).
+- A window's charge is its segment's bits (`code_v1.Encoded.lens`), the header's charged to window 0
+  (`bits_by_window`), a function of the string alone.
+- The codebook is `Registered.book`, a `code_v1.Book` fit on other runs, never this one. Its digest (SHA-512 of its
+  canonical JSON) is registered before the first window.
+- `decode` runs `code_v1.decode`, which takes only the canonical segments, then the replay, which consumes the
+  decisions in order. It refuses the string unless its windows are the replay's residual: every hit, and every value's
+  window.
+
+- *The bound.* The header and `code_v1`'s segments are prefix-free (#3591), so the strings are prefix-free for every
+  W, and at most 2^c strings are charged c bits or fewer. That is LEAK-LEAN's `BitsCount` by `bitsCount_of_prefixFree`
+  (#3533). Since `decode` takes only the canonical string, at most that many advices decode at that charge.
 - *v0's per-window parts.* Each window's part is self-delimited, which settles this item of v0's list above.
-- *Measured* (art:a01224669c378e350967084bc4fda1e93259095784132a816deb042a77bafacb, 14 corpus traces of 1,000
-  requests, each round-tripping). The v1 charged, header included, is 49–63 bits on heavy, 207–1,094 on smallkv,
-  2,002–2,082 on chunked, 3,307–3,425 on medium and 4,651–5,569 on light (at most 1,519 in one window). v0 is
-  6.2–7.5 Mbit. These contexts read no release time: the warden's fixed schedule leaves it no engine timing. With
-  today's engine release times as context, v1 is 40–292 bits.
+- *Measured* (art:192413fc108b9b60b5febd9f53493de5418311c49203be56ee280ec40d140013, run r20261024-102751-533a: 14
+  corpus traces of 1,000 requests, each round-tripping, each trace's book fit on the other 13). The v1 charged, header
+  included, is:
+
+  | traces | v1 now | hits sent (short) | v1 before (decisions only) |
+  |---|---|---|---|
+  | heavy, sync | 120 | 0 | 63 |
+  | heavy, async | 707–716 | 1,010–1,011 (0) | 49–63 |
+  | smallkv, sync | 18,792–23,876 | 7,636–8,241 (2,229–3,119) | 218–1,094 |
+  | smallkv, async | 18,610–23,720 | 7,549–8,367 (2,391–3,066) | 207–241 |
+  | chunked | 2,012–2,090 | 0 | 2,002–2,082 |
+  | medium | 3,326–3,451 | 0 | 3,307–3,425 |
+  | light | 4,658–5,633 | 0 | 4,651–5,569 |
+
+  "Before" is art:a01224669c378e350967084bc4fda1e93259095784132a816deb042a77bafacb. At most 12,068 bits fall in one
+  window, and v0 is 6.2–7.5 Mbit. The uniform book charges smallkv 37,525–43,092 bits. Where the bound holds, nothing
+  is sent, and the totals move only by what `code_v1`'s counts cost beyond the length prefixes they replace (sync heavy
+  63 → 120). The smallkv pools fill, and async never derives, so every lookup there is sent.
+  These contexts read no release time: the warden's fixed schedule leaves the engine no timing to read.
 
 **Composition**, all in one ZK proof under the advice's hiding root:
-1. v1's frames: the committed string is at most ℓ bits, and parses into the header and W segments.
-2. The scan of ENC-REPLAY's `ReplayStep_v1` over the session's steps, from the empty engine, with the certified
-   requests in (a, ordinal) order as its arrivals and the decisions as its residual bits, which are witness. The scan
-   also carries the coder's counts and one ENC-CODE encoder: each decision is encoded at its context as the step reads
-   it, and each window's terminated codeword must equal its segment ("The encoder in the circuit" below). Because
-   `decode` takes only the canonical string, this forward encoding is `decode`. The coder can't run ahead of the scan
-   as a parser, since which request a decision is about, and so which window it is coded in, is the replay's cursor.
+1. v1's windows: the committed string is at most ℓ bits, and parses into the header and W windows by `code_v1`'s
+   counts.
+2. The scan of ENC-REPLAY's `ReplayStep_v1` over the session's steps, from the empty engine. Its arrivals are the
+   certified requests in (a, ordinal) order. Its residual is the decisions and the sent shortfalls, which are witness.
+   The scan also carries one `code_v1` encoder and its model. Each window's counts are witness, coded first and checked
+   against the scan's tallies at the window's end. Each decision and each sent shortfall is encoded as the step reads
+   it. Each window's coded length, the bits its terminated segment would hold, must be at most its declared charge c_w;
+   no codeword is committed or compared ("The encoder in the circuit" below). The coder can't run ahead of the scan as
+   a parser, since which value is read next, and so which window it is coded in, is the replay's.
 3. ENC-DERIVED's walk over the rows, which gives I1 v0.
 4. ADV-SPEC's `AdviceCheck_v1{L}` (#3547) is the specification of what 1–3 give. The tests hold every advice v1 decodes,
    from random and bit-flipped strings too, to I1's own `advice.decode`, whose refusals that circuit makes. So it holds
@@ -1608,115 +1651,149 @@ window's charge is its frame, with the header charged to window 0 (`bits_by_wind
 5. `compile_steps(registered, advice, ingress)` (#3504) turns the advice into the Programs, with `ingress` the certified
    bodies by id.
 
+**The encoder in the circuit** (`arith_encode`: `ArithEncodeStep_v1{K, BIN}`, `ArithEncodeFinish_v1` and
+`KTContext_v1{C, NW}`, with `reference_step`, `reference_finish` and `reference_kt` their specs).
+- *The charge is the coded length.* The committed advice is each window's raw decision bits, which the scan reads
+  (item 2), with its sent shortfalls. The encoder runs `code_v1`'s code forward over the same values, once a window in
+  `code_v1`'s order (`code_v1._window`), from `fresh()`. It counts the bits the window's segment would hold: one per
+  scaling (a resolved bit, or a pending one a later resolution writes), the termination's two (none when nothing was
+  used, as code.py's `shifts + 2`) and, in window 0, the header's Elias-gamma. The total must be at most c_w.
+  - No codeword is committed and no segment is compared, so nothing reads a segment at a data-dependent cursor.
+  - The charge is the length of the string `encode` would write, which is prefix-free, and `encode` is injective on
+    the values (`decode` inverts it). So at most 2^c value lists, and so at most that many advices, are accepted at a
+    charge of c or less, as "The bound" above has it.
+  - Any refusal clears the coder's `ok`, and the unit fails: a symbol code.py refuses, more than K scalings or a total
+    past c_w. After the update a symbol's interval keeps at least 2^14 values, so K = 18 never refuses one.
+  - `ArithEncodeStep_v1`'s n, the scalings it takes, is that count: a symbol's scalings depend only on the interval,
+    never on the segment. ADV-SPEC's slice (`compile_slice`, #3661) charges this way, running the step against a
+    witness codeword and reading the position after the finish. ENC-CODE's counting form (`ArithCountStep_v1` and
+    `ArithCountFinish_v1{CW, NB}`, #3660) takes a symbol's scalings at once, with no segment, and holds the total to
+    c_w in the finish.
+- *The context and the frequencies are the circuit's, never witness.*
+  - A decision's context comes from the replay's position. Under `code_v1` it is min(run, 2), with run the decisions
+    since the last arrival: a 2-bit counter the circuit carries, which a 1 (an arrival) resets and a 0 raises,
+    saturating.
+  - Its (f0, f1) are the model's estimate for that context, from counts that start at the registered book's priors
+    (public, fit on history before the run) and that each coded decision raises in the circuit. The counts carry
+    across windows.
+  - An integer's (cum, freq, total) come from the book's public bin tables at the value's bin.
+  - The prover supplies none of them. "The bound" counts the strings of one registered code; a context or a frequency
+    of the prover's choosing would pick the code per value and charge any decisions next to nothing.
+  - ADV-SPEC's slice computes both in the circuit: the context from the queue head's passes, and `KTContext_v1`'s
+    counts from zero.
+- *Per decision*, as built here: `ArithEncodeStep_v1{18, 1}` codes (bit, f0, f1) as code.py does, and with BIN = 0 the
+  step codes `code_v1`'s general (cum, freq, total) symbols. `KTContext_v1{3, 24}` is ENC-REPLAY's scaled estimate,
+  which v1 coded with before `code_v1`. `code_v1.KT` halves its counts in place instead, and its circuit is ENC-CODE's
+  `BookKT_v1{C}` (#3660).
+- *Held to the coders* (`benchmarks/network_e2e/encodings/arith_vectors.py`). It runs `code_v1` over advice v1's
+  windows (`v1.residual`: the decisions and the sent hits, under a book fit to them at v1's registered caps,
+  `v1.TABLE_CAPS`, with v1's header) and over ENC-DERIVED's still-sent fields, each symbol tagged a bit or an
+  integer's.
+  - After every symbol, low and high are code.py's, a pending run is open exactly when code.py has pending bits, and
+    `used` is code.py's. Each step's n is the segment bits code.py consumed, each window's finish ends at its segment's
+    end, and every flipped or cut segment is refused.
+  - Each bit symbol is one the book's model coded, and each decision's context is min(run, 2) of the decisions before
+    it, a function of the bits.
+  - On all 14 corpus traces at T = 600, and the 6 of them that send ENC-DERIVED's fields: 0 mismatches
+    (art:ff4b26d8b4f6a796af9a33734c0a47fae8b50e15c2dee26525d51fece681a2c0, #3660's check, which adds its counting
+    form's cases to these). On ENC-REPLAY's step traces and the TRACE-CORPUS fixture (the certifier's vectors) too.
+- *Cost* (`arith_encode.size`, ANDs, pinned in its circuit-check sidecar).
+  - `ArithEncodeStep_v1{18, 1}` costs 3,244: the interval 1,855 (one 33 × 16-bit product and one division to 32
+    quotient bits), the scalings 1,188 and the segment check 201. `ArithEncodeStep_v1{18, 0}` costs 4,964,
+    `ArithEncodeFinish_v1` 6 and `KTContext_v1{3, 24}` 1,202.
+  - The counting form (#3660) costs 2,580 a decision, the step's 2,243 and `BookKT_v1{3}`'s 337: 2.8% of a
+    `ReplayStep_v1{16,64,16}` step's 92,146.
+
 **The prefix cache in the scan.** `CacheStep_v1` (`cache_step`) is ENC-DERIVED's prefix rules (`Prefixes`) as a Boolean
 Definition: one row's pass over a table of at most N cached units (a unit's U tokens, its parent entry and its owner,
 the lowest-numbered request that computed it), compared on tokens, with no hash in the circuit. Each engine step of the
 scan (item 2) is one `ReplayStep_v1` and the `CacheStep_v1` calls on its rows, which carry the table from call to call
 in `ReplayStep_v1`'s scheduling order:
 - *The calls.* Each running row comes first, from its slot's walk entry `pfx` over the units from its start's: it owns
-  or appends the units it completes. Each candidate (the W waiting slots, then the A arrivals) then gets a lookup from
-  the root (`admit`, nins = 0), which checks the candidate's hit h, the input `ReplayStep_v1` reads with U = B. An
-  admitted candidate gets a second call from the lookup's `pfx`, which owns or appends the units its row completes.
-  So a later candidate's lookup reads an earlier one's units, as vLLM caches a block when it allocates it. The scan
-  skips an empty slot's call: it keeps the table and doesn't read that call's ok. That is R + 2·(W + A) calls a step.
+  or appends the units it completes.
+  - Each candidate (the W waiting slots, then the A arrivals) then gets a lookup from the root (`admit`, nins = 0),
+    always in derive mode (the call's own `sent` = 0). It checks that its wh is the longest cached prefix h*.
+  - The candidate's hit h, the input `ReplayStep_v1` reads with U = B, is h* less its shortfall. The shortfall is 0
+    while the bound holds, and past it the next sent one, at the window row's head `hh`.
+  - An admitted candidate gets a second call, which owns or appends the units its row completes. It starts from its
+    hit's entry: the lookup's `trail` entry at unit h − 1, or ROOT when h = 0.
+  - So a later candidate's lookup reads an earlier one's units, as vLLM caches a block when it allocates it.
+  - The scan skips an empty slot's call: it keeps the table and doesn't read that call's ok. That is R + 2·(W + A)
+    calls a step.
 - *The owner.* A call's r is the row's request id, the arrival ordinal `ReplayStep_v1` carries (RW = IW). FCFS admits
   new requests in arrival order, so the lowest id is the earliest-admitted request, the one I1 numbers lowest. A hit's
   canonical sources are its lookup's trail entries' owners in the table at the step's end (`cache_step.sources`), where
   an owner may have dropped to a lower request later in the step. The walk (item 3) reads them as I1's `sources`.
-- *The derive bit.* Each step's calls take one bit `sent`: 0 while the no-eviction bound holds, when the call refuses
-  any hit but the longest cached prefix. The bound counts the step's own admissions, ⌈(P + O)/B⌉ blocks per admitted
-  request, while the lookups that size those admissions read the bit. So the bit is witness, and the step's end checks
-  it against the count: sent = 0 iff the count through this step is at most NB − 1. The count only grows, so the bit
-  never returns to 0.
-- *The state row.* `replay_chain`'s state row gains one group after its heads, in `CacheStep_v1`'s `_in_fields` order,
-  with EW = bitlen(N):
+- *The derive bit.* Each step takes one bit `sent`: 0 while the no-eviction bound holds, when every shortfall is 0;
+  1 past it, when the step reads one sent shortfall per lookup. The bound counts the step's own admissions,
+  ⌈(P + O)/B⌉ blocks per admitted request, while the lookups that size those admissions read the bit. So the bit is
+  witness, and the step's end checks it against the count: sent = 0 iff the count through this step is at most NB − 1.
+  The count only grows, so the bit never returns to 0. Async scheduling sends from the first step.
+- *The rows.* These are the exact fields the two owners add, each little-endian, with EW = bitlen(N),
+  HW = bitlen(⌈L / B⌉) (`CacheStep_v1`'s), H the sent shortfalls a window (a public cap, like D) and
+  HCW = bitlen(H).
+  - ENC-REPLAY: `ReplayStep_v1`'s state gains `run_pfx R×EW` after `run_comp`, one more running-slot field. Its
+    compaction and placement shifters move it with its slot, and `replay_chain`'s state group, being `_in_fields`,
+    carries it. An admitted row's slot takes its second call's `pfx`. A preempted request drops its own, since it
+    resumes as an admitting row from the root.
+  - ENC-REPLAY: the step also outputs `looked (W + A)×1`, the candidates whose lookup it read: the waiting slots its
+    loop reaches, and the arrival `would_admit` checks.
+  - ADV-SPEC: `replay_chain`'s state row gains `hh 1×HCW` after its heads' `steps`, and then one group in
+    `CacheStep_v1`'s `_in_fields` order:
 
-      cache    c_valid N×1 | c_parent N×EW | c_tok N×(U·TW) | c_owner N×RW | run_pfx R×EW | filled 1×BW | sent 1×1
+        cache    c_valid N×1 | c_parent N×EW | c_tok N×(U·TW) | c_owner N×RW | filled 1×BW | sent 1×1
 
-  `run_pfx` is one more running-slot field, moved with its slot by `ReplayStep_v1`'s compaction and placement. An
-  admitted row's slot takes its second call's `pfx`, and a preempted request drops its own, since it resumes as an
-  admitting row from the root. The empty state's group is all zero bits. While the bound holds, nothing leaves the
-  cache, so N = NB − 1 entries hold every unit computed: 149,212 bits of table a state row at smallkv's
-  (511, 16, 17, 10).
-- *Past the bound* (`sent` = 1), eviction may have shortened a hit, and the call checks only that the hit is a cached
-  prefix: an evicting cache never hits past what a cache that never evicts holds. So the hit is the prover's choice,
-  and v1 must send it, as ENC-DERIVED's residual does (a sparse field of the hits that miss the longest cached prefix).
-  That changes v1's format, which takes the replay's LRU hits there today. On the fixtures, 14 of corpus-smallkv's 46
-  admitting rows past the bound, and 38 of sync-crush's 100, hit less than the longest cached prefix.
+  - ADV-SPEC: the window row gains one group after `dec`:
+
+        hits     hits H×HW | hleft 1×HCW
+
+  - `hh` is how many of the window row's shortfalls the window's steps so far read. `ReplayAdvance` checks that the
+    step's W + A shortfalls are the window row's at `hh`, with the log shifter `dh` uses, and `hh` moves by sent·Σ
+    `looked`. `ReplayLoad` writes the window's decoded shortfalls after the last window row's unread ones, as it does
+    `dec`, and refuses a state row 0 that left any unread.
+  - The empty state's groups are all zero bits. While the bound holds, nothing leaves the cache, so N = NB − 1 entries
+    hold every unit computed: 149,212 bits of table a state row at smallkv's (511, 16, 17, 10).
+- *Past the bound.* The table never evicts, so it holds every unit the session computed, not NB − 1: 961 units on
+  corpus-smallkv's fixture, whose pool is 100 blocks. An evicting cache never hits past what a cache that never evicts
+  holds, so a shortfall is at least 0, and v1's encoder refuses a replay hit past h*. `CacheStep_v1`'s own `sent` = 1
+  mode, a hit checked only as a cached prefix, is then unused.
+  - Of the admitting rows past the bound, 14 of corpus-smallkv's 46 and 38 of sync-crush's 100 hit less than the
+    longest cached prefix.
+  - Counting every lookup the scheduler reads (a blocked candidate is looked up again each step), corpus-smallkv's
+    fixture sends 1,495, 380 of them short, at 7,490 bits under the uniform book.
 - *Cost* (`cache_step.size`): a call walks ⌈L / U⌉ units at about N·(2·(U·TW + EW) + 2·RW) ANDs each. That is 5,856
   ANDs at (N, U, TW, RW, L) = (8, 4, 8, 4, 32), and 38.4M at smallkv's (511, 16, 17, 10, 2048): about 1.1G a step at
   (R, W, A) = (4, 8, 4), where `ReplayStep_v1` is 12,235. The linear table is a slice's size class, and its difftest
-  (`cache_vectors`) runs it over two traces' slices at N = 128, against `Prefixes` over the whole traces. Two levers
-  remain. A static window would let a continuing row's call walk only the units its chunk touches, not all ⌈L / U⌉. And
-  sorting each step's lookups and inserts into the table's order, offline memory checking as `advice_check` sorts its
-  events, costs O(log² E) a unit for E units in all.
-
-**The encoder in the circuit** (`arith_encode`: `ArithEncodeStep_v1{K, BIN}`, `ArithEncodeFinish_v1`,
-`KTContext_v1{C, NW}`, with `reference_step`, `reference_finish` and `reference_kt` their specs). They are held symbol
-for symbol to `code.py`'s encoder (`benchmarks/network_e2e/encodings/arith_vectors.py`). After every symbol, low and
-high are code.py's, and a pending run is open exactly when code.py has pending bits. Each window's finish ends at its
-segment's end, and every changed segment is refused. The streams are v1's decisions on ENC-REPLAY's step traces and on
-all 14 corpus traces, and `code_v1`'s symbols for ENC-DERIVED's still-sent fields (the hits past the pool bound, the
-resumes and async's lag bits) on the 6 corpus traces that send any: 0 mismatches, circuits included
-(art:57999badc194b6f7085c8f445f6965472edf1f750ea67ad323bbdebcaadf3628, with each trace's decisions per replay step).
-- *Per decision.* `KTContext_v1{3, 24}` gives (f0, f1) for the decision's context and adds the decision to that
-  context's counts. `ArithEncodeStep_v1{18, 1}` codes (bit, f0, f1) as code.py does. The counts table starts public, at
-  the registered model's priors (v1's plain contexts have none, so it starts at zero), and KTContext indexes it by the
-  context. The replay gives the context: plain is min(passes, 2), the decisions already asked about the request, which
-  the scan carries as a 2-bit counter. The counts carry across windows; the coder starts each window at `fresh()`.
-- *Where the segment is checked.* The string is the advice's registered hiding rows (#3507,
-  `verity.ml.commitments.advice`): fixed-width bit rows under `hm96-sha512/row/v2` leaves in one `frame-v3-sha512`
-  tree. The compile unit's proof holds the rows privately and proves each row's commit string from the row and its
-  salt; the verifier finishes the tree to the registered advice root natively. Item 1's parse gives each window's
-  segment, ℓ_w bits, as wires of that proof.
-  - Each encoder step reads seg[K], the segment's next K bits at the window's cursor. It checks every bit it consumes
-    in the decoder's order: one per scaling, a resolution's bit or a pending run's complement. It returns n, the bits
-    consumed, and the cursor moves by n.
-  - The window's `ArithEncodeFinish_v1` checks the last two bits, and the cursor must then be at ℓ_w exactly. So every
-    bit of the segment is checked once against the encoder's output, and a segment is accepted only when it is the
-    encoder's whole codeword.
-  - Any refusal clears the coder's `ok`, and the unit fails: a symbol code.py refuses, more than K scalings, or a bit
-    that differs. After the update a symbol's interval keeps at least 2^14 values, so K = 18 never refuses one. On the
-    corpus the most is 6 for a decision and 13 for a field.
-- *One encoder at a time.* Along the replay a decision's window never decreases: the requests are asked about in (a,
-  ordinal) order, and a decision's window is its request's. `arith_vectors.py` checks this on the 14 traces. So when
-  the next decision's window is later than the encoder's, the circuit finishes the encoder's window, checks that each
-  window it skips has ℓ_w = 0, and resets the coder.
-- *One step per decision, not per slot.* On the corpus most open steps ask one decision, and the heaviest ask up to
-  34. Decisions per replay step are 1.06–1.23 on light, medium and chunked, 1.55–1.63 on heavy and 0.14–0.27 on
-  smallkv. Placed in each replay step's A decision slots, the encoder would cost A × 4,446 ANDs a step: 71,136 at A =
-  16, 77% of `ReplayStep_v1{16,64,16}`'s 92,146. One step per decision costs 4,446 a decision, 4.8% of a replay step.
-- *Cost* (`arith_encode.size`, ANDs, pinned in its circuit-check sidecar).
-  - A decision costs 4,446: the step's 3,244 and the model's 1,202. The step's interval is 1,855 (one 33 × 16-bit
-    product and one division to 32 quotient bits), its scalings 1,188 and its check 201.
-  - A window's finish costs 6. `ArithEncodeStep_v1{18, 0}`, for `code_v1`'s general (cum, freq, total) symbols, costs
-    4,964.
-  - At each corpus shape's largest window, against the replay steps taken while that window's decisions are asked:
-
-  | shape (largest window) | decisions | ℓ_w | encoder | replay steps | `ReplayStep_v1{16,64,16}` | encoder / replay |
-  |---|---|---|---|---|---|---|
-  | light (greedy, window 0) | 4,391 | 1,463 | 19.5M | 4,125 | 380M | 5.1% |
-  | medium (greedy) | 4,328 | 3,367 | 19.2M | 3,551 | 327M | 5.9% |
-  | chunked (seeded) | 2,024 | 2,026 | 9.0M | 1,762 | 162M | 5.5% |
-  | smallkv (seeded, window 0) | 1,466 | 904 | 6.5M | 4,215 | 388M | 1.7% |
-  | heavy (greedy) | 1,000 | 19 | 4.4M | 646 | 60M | 7.5% |
+  (`cache_vectors`) runs it over two traces' slices at N = 128, against `Prefixes` over the whole traces. A static
+  window would let a continuing row's call walk only the units its chunk touches, not all ⌈L / U⌉.
+- *Scaling: offline memory checking* (named, not built).
+  - The linear table compares every entry at every unit, and past the bound N is the session's units. On
+    corpus-smallkv's fixture (NB = 100, L = 4,096, 1,934 steps) N = 961 makes a unit about 561K ANDs and a call
+    (256 units) 144M. That is about 4G a step at (R, W, A) = (4, 8, 4), and 7.8e12 for the session.
+  - Offline memory checking replaces the table with the session's E unit operations as records, as `advice_check`
+    sorts its events. A record is the key (parent entry and U tokens, EW + U·TW = 282 bits), the value (entry and
+    owner) and the operation's time, about 320 bits.
+  - A Batcher network in the circuit sorts them by (key, time), so the sort is a permutation by construction. One
+    linear pass then checks each read against the latest write before it, and each append against the absence of one.
+  - The fixture has E = 8,098: 1,518 lookups reading 5,378 hit units plus the unit after each, and 1,202 unit
+    completions. That is (E/4)·log E·(log E − 1) ≈ 315K comparators at about 700 ANDs each: 2.2e8 ANDs for the
+    session, plus a 5.7M-AND pass. That is some 35,000 times less than the linear table.
 
 **Open.**
-- *The encoder's reader.* The cursor is a data-dependent position in the segment's wires, and it isn't built. Both
-  costs below are estimates.
-  - A shift register over the window's remaining bits costs bitlen(K) = 5 mux levels over ℓ_w bits a decision. That
-    is 32M ANDs on light's largest window, more than the encoder.
-  - An order-preserving expansion puts the segment into the decisions' K slots each, its switches set by the steps'
-    scaling flags. It costs about 2·N·log2 N ANDs at N = 18 · decisions: 2.6M there, 13% of the encoder.
-  - Linking the replay's per-step decision slots to the encoder's list of decisions takes the same kind of reader.
-- *Integer fields.* `code_v1`'s integer fields would need a lookup of (cum, freq, total) in the book's public bin
-  tables, which isn't built. v1 sends none. `code_v1.KT` also halves its counts in place, where v1 scales the estimate
-  as it reads it; `KTContext_v1` is v1's.
+- *The charge's pieces* ("The encoder in the circuit").
+  - ENC-CODE: the counting form and `code_v1`'s model (`ArithCountStep_v1`, `ArithCountFinish_v1` and `BookKT_v1`,
+    #3660). Lowering an integer (n_arrived, n_hits and each shortfall) to its `Binned` symbols in the book's public
+    tables isn't built, so the circuit charges the decisions only.
+  - ADV-SPEC's slice codes its asks at ENC-REPLAY's plain contexts with `KTContext_v1` from zero counts, where
+    `code_v1` codes the arrived bits at min(run, 2) with `code_v1.KT` from the book's priors.
 - `ReplayStep_v1` is synchronous FCFS. Async scheduling's lag row is in v1's replay and walk, not yet in the circuit.
 - `ReplayStep_v1` takes the prefix layer (each hit, its evictable blocks, each slot's returns) as witness it bounds.
-  `CacheStep_v1` fixes the hits while the no-eviction bound holds. Past it, the hits are a channel v1 doesn't charge
-  until v1 sends them (above). The evictable counts and the returns stay bounded witness. A reference count per entry
-  in the table would fix both while the bound holds, and past it they need the replay's LRU block pool in the circuit.
+  The hits are fixed: `CacheStep_v1` derives them while the no-eviction bound holds, and past it each is the longest
+  cached prefix less v1's sent, charged shortfall. The evictable counts and the returns stay bounded witness. A
+  reference count per entry in the table would fix both while the bound holds, and past it they need the replay's LRU
+  block pool in the circuit.
+- Past the bound the table holds the session's units, so the scan at a whole session's size needs offline memory
+  checking (above).
 - The corpus records stand in for the warden's: each request's a is the engine's arrival stamp (`replay`'s
   `ingress="warden"`), and the release buckets are the engine's.
 
