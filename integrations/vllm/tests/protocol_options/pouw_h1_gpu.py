@@ -65,7 +65,10 @@ serving GPU by kernels' producer (``benchmarks/pouw/served_h1/producer.py``, `re
 the -hbc build SO (``producer_gpu.sh``'s ``h1u_hbc.so``) over each linear's own int8 weight, its seeds taking the
 registered roots of the call's step's ``a/<K>@<s>`` and ``b/<K>``. The first block's linears' calls at step 0 and at the
 window's last step are kept, and their first unit of each row block is held to `h1tile.reference` word for word
-(`receipts_check`: live row blocks at step 0, dead at the last step).
+(`receipts_check`: live row blocks at step 0, dead at the last step). A ``.cubin`` SO (``served_h1/noise.cu``'s) computes
+them with the producer's torch chain over noise.cu's noise instead. ``--j10r`` declares the period's window Program over
+J10-R's tile unit (`period_unit`, `h1tile.PouwH1Tile5`), so the producer computes J10-R's receipts (one noise stream a call)
+and they are held to `h1tile.j10r_reference`; v1's unit is the default.
 
 ``--credit`` (with ``--commit`` and ``--receipts``) runs core credit's statement steps over the honest Commit window
 (`credit_check`, `pouw_h1_credit`): `credit.registered_file`, `credit._verified` on a stand-in verifier of record that
@@ -128,19 +131,36 @@ PERIOD_DIGEST = """
 import json, resource, sys, time
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity_vllm.protocol_options import pouw_h1_served as SV
-shapes, modules, rows, steps = json.loads(sys.argv[1])
+shapes, modules, rows, steps, j10r = json.loads(sys.argv[1])
+unit = None
+if j10r:
+    from verity.core.protocols.pouw.circuit import h1tile as HT, h1window as HW
+    from verity_vllm.protocol_options import pouw_h1 as PH
+    unit = lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5)
 t = time.monotonic()
-digest = P.program_digest(SV.declared([tuple(s) for s in shapes], {int(w): n for w, n in modules.items()}, rows, steps))
+digest = P.program_digest(SV.declared([tuple(s) for s in shapes], {int(w): n for w, n in modules.items()}, rows, steps,
+                                      unit=unit))
 print(json.dumps({"digest": digest, "s": round(time.monotonic() - t, 1),
                   "peak_gib": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)}))
 """
 
 
-def period_program(model: Any, rows: int, steps: int) -> tuple[Any, str, dict[str, Any]]:
-    """The period's declared Program (`pouw_h1_served.declared` of the shapes and names `pouw._install_h1` gives its run),
-    its digest (the period's ``--circuit``) and what declaring them cost, once before any window, as a period declares
-    them. The digest is taken in a child process, since at FILL it alone takes minutes and tens of GB, which no window
-    pays, so this process's RSS is the windows' own."""
+def period_unit(j10r: bool) -> Any:
+    """The window Program's tile unit at each K (`pouw_h1_served.declared`'s ``unit``, as `PERIOD_DIGEST` builds it): None,
+    v1's (`h1window.tile_unit`'s default), or with ``j10r`` J10-R's, `h1tile.PouwH1Tile5` under `h1zy` (``--j10r``)."""
+    if not j10r:
+        return None
+    from verity.core.protocols.pouw.circuit import h1tile as HT
+    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity_vllm.protocol_options import pouw_h1 as PH
+    return lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5)
+
+
+def period_program(model: Any, rows: int, steps: int, j10r: bool = False) -> tuple[Any, str, dict[str, Any]]:
+    """The period's declared Program (`pouw_h1_served.declared` of the shapes and names `pouw._install_h1` gives its run,
+    over `period_unit`'s tile unit), its digest (the period's ``--circuit``) and what declaring them cost, once before
+    any window, as a period declares them. The digest is taken in a child process, since at FILL it alone takes minutes
+    and tens of GB, which no window pays, so this process's RSS is the windows' own."""
     from verity_vllm.protocol_options import pouw
     from verity_vllm.protocol_options import pouw_h1_hooks as PHK
     from verity_vllm.protocol_options import pouw_h1_served as SV
@@ -148,10 +168,10 @@ def period_program(model: Any, rows: int, steps: int) -> tuple[Any, str, dict[st
     layers = PHK.layers(model, pouw.linear_types())
     shapes = [tuple(int(d) for d in m.weight.shape) for m in layers]
     modules = {w: f"linear {w}" for w in range(len(layers))} | pouw._named(model, layers)
-    child = subprocess.Popen([sys.executable, "-c", PERIOD_DIGEST, json.dumps([shapes, modules, rows, steps])],
+    child = subprocess.Popen([sys.executable, "-c", PERIOD_DIGEST, json.dumps([shapes, modules, rows, steps, j10r])],
                              stdout=subprocess.PIPE, text=True)
     t = time.monotonic()
-    program = SV.declared(shapes, modules, rows, steps)
+    program = SV.declared(shapes, modules, rows, steps, unit=period_unit(j10r))
     declare_s = round(time.monotonic() - t, 1)
     out, _ = child.communicate()
     if child.returncode:
@@ -494,9 +514,10 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     except ValueError as e:
         doc["serve_h1"] = {"prompt_lens": list(lens), "u": None, "why": str(e)}
     cap, served_steps = decl.max_tokens, decl.max_tokens
-    period = period_program(eng.model, decl.rows, decl.steps) if a.served else None
+    period = period_program(eng.model, decl.rows, decl.steps, a.j10r) if a.served else None
     if period is not None:
-        doc["period"] = {k: v for k, v in period[2].items() if k not in ("shapes", "modules")} | {"circuit": period[1]}
+        doc["period"] = {k: v for k, v in period[2].items() if k not in ("shapes", "modules")} | {
+            "circuit": period[1], "noise": "j10r" if a.j10r else "v1"}
         print(f"[fill] period {json.dumps(doc['period'])} rss_gib={rss_gib()}", flush=True)
     gpu_peak()
     t0 = time.monotonic()
@@ -1090,10 +1111,13 @@ def producer() -> Any:
 def receipts_producer(so: str, served: Any, h1: Any, layers: Any, steps: int) -> Any:
     """``--receipts SO``: `served`'s receipts (`Served.receipts`) from the producer (`producer().Receipts`) for the window
     `h1`, h1u.cu's units kernel of the -hbc build `so` over each linear's int8 weight in `layers` in place (no second copy
-    on the GPU), keeping the first block's linears' calls at step 0 and at step `steps` - 1 for `receipts_check`."""
+    on the GPU), or with a ``.cubin`` SO (noise.cu's) receipts.py's torch chain over noise.cu's noise, keeping the first
+    block's linears' calls at step 0 and at step `steps` - 1 for `receipts_check`. The noise is the window Program's form,
+    v1's or J10-R's (``--j10r``)."""
     P = producer()
-    made = P.Receipts(served, h1, P.Units(so), weight=lambda c: layers[c.layer].weight,
-                      keep=lambda c: c.layer < 4 and c.step in (0, steps - 1))
+    kernel = {"cubin": P.RC.Cubin(so)} if so.endswith(".cubin") else {"units": P.Units(so)}
+    made = P.Receipts(served, h1, weight=lambda c: layers[c.layer].weight,
+                      keep=lambda c: c.layer < 4 and c.step in (0, steps - 1), **kernel)
     served.receipts = made
     return made
 
@@ -1336,7 +1360,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--receipts", metavar="SO",
                     help="fill with --served, without --handoff: each call's receipt@<c> from h1u.cu's units kernel of the "
                          "-hbc build SO (benchmarks/pouw/served_h1/producer_gpu.sh's h1u_hbc.so) on the serving GPU, the "
-                         "first block's linears' calls at step 0 and the last step held to h1tile.reference")
+                         "first block's linears' calls at step 0 and the last step held to h1tile.reference; a .cubin SO "
+                         "(served_h1/noise.cu's) takes receipts.py's torch chain over its noise")
+    ap.add_argument("--j10r", action="store_true",
+                    help="fill with --served: declare the period's window Program over J10-R's tile unit "
+                         "(h1tile.PouwH1Tile5: one noise stream a call, seeded by its roots and first position), so its "
+                         "receipts and public rows are J10-R's; v1's unit otherwise")
     ap.add_argument("--declare", metavar="SLOTS,CAP,T,S", type=lambda v: tuple(int(x) for x in v.split(",")),
                     help="fill: serve SLOTS one-token prompts at cap CAP, T rows a call, S steps (pouw_h1.Static) in place "
                          "of pouw_h1.FILL's 64,16,64,18")
@@ -1362,6 +1391,8 @@ def main(argv: list[str] | None = None) -> int:
     if a.receipts and not (a.served and a.workload == "fill" and not a.handoff):
         ap.error("--receipts is the fill workload's, with --served, without --handoff (the close stage has no GPU for "
                  "the units kernel)")
+    if a.j10r and not (a.served and a.workload == "fill"):
+        ap.error("--j10r is the fill workload's, with --served (the period's declared Program)")
     if a.commit and not (a.served and a.workload == "fill" and not a.handoff and not a.challenger):
         ap.error("--commit is the fill workload's, with --served, without --challenger or --handoff")
     if a.negatives and not a.commit:
