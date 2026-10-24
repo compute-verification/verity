@@ -1,6 +1,6 @@
 """Advice v1: I1 v0 (`verity.core.protocols.certifier.advice`) sent as only what the certified record, the scheduler
-replay (ENC-REPLAY, `replay.py`) and the derived rules (ENC-DERIVED, `derived.py`) leave, in ENC-CODE's prefix-free code
-(`code.py`).
+replay (ENC-REPLAY, `replay.py`) and the derived rules (ENC-DERIVED, `derived.py`) leave, in ENC-CODE's prefix-free,
+self-delimiting code (`code_v1.py`) under the registered codebook.
 
 `encode(advice, record, registered) -> bytes` and `decode(bytes, record, registered) -> I1.Advice`, with
 `decode(encode(a)) == a`. `decode` is total: any byte string decodes to one I1 v0 or is refused by name (`V1Error`),
@@ -14,7 +14,7 @@ witness):
 - each request's output ids, its id events' `token_id`s in order, and each output's release bucket (`Request.release`),
   which the warden's fixed schedule sets (egress cell i in bucket s + D + ⌊i/r⌋).
 The engine sees a request once its last ingress frame is out, so its arrival order is the requests by (`end`, ordinal)
-(`engine_order`), and a request's decisions are charged to the window of its `end`.
+(`engine_order`).
 
 **Replayed, 0 bits**: ENC-REPLAY's `replay` runs vLLM's scheduler over those requests under the registered engine
 (`Registered.engine`), and gives every step's rows (request, start, n), new and resumed requests, cache hits (its
@@ -26,24 +26,39 @@ rows, which recomputes every start and n by vLLM's rules and checks them against
 cumulative pool bound to the longest cached prefix, and gives `kind`, the canonical `sources`, and the request records
 (the tie: prompt and output lengths against the certified ids, `finish` by the stop rule).
 
-**Sent**: the replay's decisions, and nothing else: past the pool bound the replay fixes the hits and the resumes the
-walk would otherwise read, and the order the walk would send is the replay's. Each decision is one symbol of ENC-CODE's
-arithmetic coder (`code.ArithEncoder`), at ENC-REPLAY's adaptive estimate for its context (`Registered.contexts`, see
-`replay.CONTEXTS`), with one terminated segment per window. The registered pool's size `num_gpu_blocks` is sent too
-unless the deployment pins it (vLLM sizes it at startup); I1 v0 doesn't carry it, so a string is its advice's encoding
-under the pool its header sends (`registered_of`).
+**Sent**, as `code_v1.Window`s (`residual`), and nothing else:
+- `arrived`: the replay's decisions, one per open step: whether the next request had arrived.
+- `hits`: past the pool bound, every prefix-cache lookup the replay's scheduler reads (`_KV.hit`: each candidate its
+  waiting loop reaches, the one whose allocation ends the loop included, and `would_admit`'s for an open step's
+  arrival), in the order it reads them, as its shortfall: the longest prefix a cache that never evicts holds
+  (`derived.Prefixes.cached` over the rows scheduled before the lookup) less the replay's hit, in whole blocks. Where
+  the bound holds (`derived._walk`'s: sync scheduling, and the blocks of the requests admitted through the step at most
+  the pool less its null block) the shortfall is 0 by the bound and is derived at 0 bits. Past it, the hit is the
+  prover's choice of eviction, so it is sent and charged, and no choice goes uncharged (LEAK-LEAN's `BitsCount`).
+- the registered pool's size `num_gpu_blocks`, unless the deployment pins it (vLLM sizes it at startup); I1 v0 doesn't
+  carry it, so a string is its advice's encoding under the pool its header sends (`registered_of`).
+The resumes and the order of new requests that `derived._walk` would otherwise read are the replay's, so v1 sends none.
+
+**The windows** (the certifier PROTOCOL's A5: no later than the first window whose rows the value changes). Step s's
+window is the earliest window an output at step s or later is released in (the last window where none follows). A
+decision about request i at step k goes to the earlier of step k's window and request i's ingress window (its last
+frame's); a sent hit at step s goes to step s's window. Both are nondecreasing in the replay's order, so each field's
+values, window after window, are the order the replay reads them in, and the decoder replays them straight through.
 
 **The string**, MSB first, then zero bits to a whole byte:
 
     header   Elias-gamma(num_gpu_blocks), unless pinned
-    window   for w = 0 … W − 1: Elias-gamma(ℓ_w + 1) | the window's ℓ_w-bit segment
+    windows  code_v1.encode(the windows, the registered Book)
 
-with W the record's windows (`windows`: its last bucket's, plus one). A window's charge is its frame, Elias-gamma's
-bits and the segment's (`bits_by_window`); the header goes to window 0. So the charge is a function of the string alone,
-never of the record. The frames make the set of strings prefix-free for every W, so a string charged c bits in all is
-one of at most 2^c (LEAK-LEAN's `bitsCount_of_prefixFree`), and window w's frame decodes from the frames before it.
-`decode` takes only the canonical string: a segment that is the coder's own codeword for the symbols it decodes to,
-exactly that long, zero padding of fewer than 8 bits and no byte past it.
+with W the record's windows (`windows`: its last bucket's, plus one). `code_v1` codes each window's counts before its
+values and terminates each window's segment, so the code finds every window's end itself, with no length prefix. A
+window's charge is its segment's bits (`code_v1.Encoded.lens`; `bits_by_window`), and the header's go to window 0, so
+the charge is a function of the string alone, never of the record. The strings are prefix-free for every W, so a string
+charged c bits in all is one of at most 2^c (LEAK-LEAN's `bitsCount_of_prefixFree`). The codebook (`Registered.book`,
+`code_v1.Book`) is fit on other runs, never this one, and its digest is registered before the first window. `decode`
+takes only the canonical string (`code_v1.decode`: each segment the coder's own codeword for the symbols it decodes to),
+zero padding of fewer than 8 bits and no byte past it, and then holds the windows to the replay's: the decisions the
+replay asks, in order, and the hits and windows it gives.
 """
 
 from __future__ import annotations
@@ -54,9 +69,10 @@ import json
 import os
 import sys
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import ProcessPoolExecutor
-from dataclasses import dataclass, replace
+from contextlib import contextmanager
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any, TypeVar
 
@@ -76,7 +92,7 @@ def _load(name: str) -> Any:
     return sys.modules[key]
 
 
-R, C, D = _load("replay"), _load("code"), _load("derived")
+R, C, D, CV = _load("replay"), _load("code"), _load("derived"), _load("code_v1")
 
 ROW_ORDERS = ("batch", "scheduling")
 
@@ -141,13 +157,14 @@ def windows(record: Record, T: int) -> int:
 class Registered:
     """What v1 reads besides the string and the record, fixed before the run: the engine's scheduler config (its
     `num_gpu_blocks` the session's when not `pinned`, and then sent), the stop ids, the runner's row order, the
-    window T in buckets, the decisions' contexts, the largest pool a header may name, and ℓ."""
+    window T in buckets, ENC-CODE's codebook (`code_v1.Book`, whose digest the registration holds; None for the uniform
+    book), the largest pool a header may name, and ℓ."""
 
     engine: Any  # replay.Engine
     stop_ids: tuple[int, ...]
     row_order: str = "batch"
     T: int = 600
-    contexts: str = "plain"
+    book: Any = None
     pinned: bool = False
     max_gpu_blocks: int = 1 << 20
     cap_bits: int = 1 << 23
@@ -155,8 +172,10 @@ class Registered:
     def __post_init__(self) -> None:
         object.__setattr__(self, "stop_ids", tuple(self.stop_ids))
         e = self.engine
-        if not self.stop_ids or self.row_order not in ROW_ORDERS or self.contexts not in R.CONTEXTS or self.T < 1:
-            raise V1Error(f"a registration has stop ids, a row order of {ROW_ORDERS}, contexts of {R.CONTEXTS} and T ≥ 1")
+        if not self.stop_ids or self.row_order not in ROW_ORDERS or self.T < 1:
+            raise V1Error(f"a registration has stop ids, a row order of {ROW_ORDERS} and T ≥ 1")
+        if self.book is not None and type(self.book) is not CV.Book:
+            raise V1Error(f"a registration's book is a code_v1.Book, not a {type(self.book).__name__}")
         if e.max_num_seqs < 1 or e.max_num_batched_tokens < 1 or e.max_model_len < 2 or e.block_size < 1:
             raise V1Error("the engine schedules at least one sequence and token a step")
         if not e.enable_chunked_prefill and e.max_num_batched_tokens < e.max_model_len:
@@ -188,17 +207,7 @@ def _check(record: Record, reg: Registered, engine: Any) -> Any:
     return cfg
 
 
-# --- the decisions -----------------------------------------------------------------------------------------------------
-
-Symbol = tuple[int, int, int]  # (bit, f0, f1)
-
-
-def _scaled(f0: int, f1: int) -> tuple[int, int]:
-    """ENC-REPLAY's estimate within ENC-CODE's coder's total, halved and kept at least 1."""
-    while f0 + f1 > C.MAX_TOTAL:
-        f0, f1 = (f0 + 1) >> 1, (f1 + 1) >> 1
-    return f0, f1
-
+# --- the residual ------------------------------------------------------------------------------------------------------
 
 def _ios(record: Record, engine: Any, order: Sequence[int], stops: frozenset[int]) -> list[Any]:
     out = []
@@ -210,90 +219,202 @@ def _ios(record: Record, engine: Any, order: Sequence[int], stops: frozenset[int
     return out
 
 
-def _run(record: Record, reg: Registered, engine: Any, order: Sequence[int], W: int,
-         bit_of: Callable[[int, int, int, int, int], int]) -> tuple[Any, list[list[Symbol]]]:
-    """The replay, each decision `bit_of(request, step, window, f0, f1)`; and each window's symbols."""
+@dataclass(frozen=True)
+class Lookup:
+    """A prefix-cache lookup the replay's scheduler read: a request (in engine order) with K known tokens, and the hit
+    the replay's block pool gave it, in whole blocks."""
+
+    request: int
+    K: int
+    hit: int
+
+
+Decision = tuple[int, int, bool]  # (request, step, whether it had arrived)
+
+
+@contextmanager
+def _recording() -> Iterator[list[tuple[list[Lookup], Any]]]:
+    """Every lookup the replay's scheduler reads (`_KV.hit`: each candidate the waiting loop reaches, the one whose
+    allocation ends it included, and `would_admit`'s for an open step's arrival), by `schedule()` call, with the step
+    the call made."""
+    calls: list[tuple[list[Lookup], Any]] = []
+    hit0, schedule0 = R._KV.hit, R._Sched.schedule
+
+    def hit(kv: Any, r: Any) -> list[int]:
+        h = hit0(kv, r)
+        if calls:
+            calls[-1][0].append(Lookup(r.i, r.num_tokens, len(h)))
+        return h
+
+    def schedule(sched: Any, on_open: Any = None) -> Any:
+        calls.append(([], None))
+        out = schedule0(sched, on_open)
+        calls[-1] = (calls[-1][0], out[0])
+        return out
+
+    R._KV.hit, R._Sched.schedule = hit, schedule
+    try:
+        yield calls
+    finally:
+        R._KV.hit, R._Sched.schedule = hit0, schedule0
+
+
+def _replay(record: Record, reg: Registered, engine: Any, order: Sequence[int],
+            bit_of: Callable[[int, int], bool]) -> tuple[Any, list[Decision], list[list[Lookup]]]:
+    """The replay, each decision `bit_of(request, step)`: its steps, its decisions in order, and each executed step's
+    lookups in the order the scheduler read them (`would_admit`'s and the waiting loop's own of one request read once;
+    a `schedule()` that scheduled nothing is no step)."""
     ios = _ios(record, engine, order, reg.config(engine).stops)
+    decisions: list[Decision] = []
+
+    def decide(i: int, k: int, _o: Any) -> bool:
+        b = bool(bit_of(i, k))
+        decisions.append((i, k, b))
+        return b
+
+    with _recording() as calls:
+        rp = R.replay(engine, ios, decide=decide)
+    looks = [[x for k, x in enumerate(ls) if k == 0 or x != ls[k - 1]] for ls, step in calls
+             if step is not None and step.rows]
+    if len(looks) != len(rp.steps):
+        raise V1Error(f"{len(looks)} scheduling calls with rows for the replay's {len(rp.steps)} steps")
+    return rp, decisions, looks
+
+
+def _sent(record: Record, engine: Any, order: Sequence[int], rp: Any,
+          looks: Sequence[Sequence[Lookup]]) -> list[tuple[int, int]]:
+    """The hits v1 sends, as (step, shortfall): every lookup of a step the no-eviction bound doesn't cover, as the
+    longest prefix a cache that never evicts holds less the replay's hit, in whole blocks. The bound is
+    `derived._walk`'s: sync scheduling, and the blocks of every request admitted so far, this step's included, at most
+    the pool less its null block. The cache that never evicts is `derived.Prefixes` over the rows scheduled before the
+    lookup, running rows first."""
+    if not engine.enable_prefix_caching:
+        return []
+    B = engine.block_size
     reqs = [record.requests[k] for k in order]
-    cert = R.Certified(engine, ios, 0.0, [q.end for q in reqs], [list(q.release) for q in reqs])
-    context, model = R._coder(cert, reg.contexts), R._model(reg.contexts)
-    win = [q.end // reg.T for q in reqs]
-    passed = [0] * len(reqs)
-    syms: list[list[Symbol]] = [[] for _ in range(W)]
+    prefixes = D.Prefixes([q.prompt + q.output for q in reqs], B)
+    life = [R.cdiv(len(q.prompt) + len(q.output), B) for q in reqs]
+    derive, filled, out = not engine.async_scheduling, 0, []
+    for s, (st, ls) in enumerate(zip(rp.steps, looks, strict=True)):
+        filled += sum(life[i] for i in st.new)
+        derive = derive and filled <= engine.num_gpu_blocks - 1
+        rows = {i: (start, start + n) for i, start, n in st.rows}
+        admitted = [i for i in rows if i in set(st.new) | set(st.resumed)]
+        for i, (start, end) in rows.items():
+            if i not in admitted:
+                prefixes.add(i, start, end)
+        for x in ls:
+            if not derive:
+                short = prefixes.cached(x.request, x.K) // B - x.hit
+                if short < 0:
+                    raise V1Error(f"step {s}: the replay hits {x.hit} blocks for request {x.request}, past the "
+                                  f"{x.hit + short} a cache that never evicts holds")
+                out.append((s, short))
+            if x.request in admitted:
+                prefixes.add(x.request, *rows[x.request])
+                admitted.remove(x.request)
+        for i in admitted:
+            prefixes.add(i, *rows[i])
+    return out
 
-    def decide(i: int, k: int, o: Any) -> bool:
-        ctx = context(i, passed[i], o)
-        f0, f1 = _scaled(*model.freqs(ctx))
-        bit = bit_of(i, k, win[i], f0, f1)
-        syms[win[i]].append((bit, f0, f1))
-        model.update(ctx, bool(bit))
-        passed[i] += 1
-        return bool(bit)
 
-    return R.replay(engine, ios, decide=decide), syms
+def _charged(record: Record, reg: Registered, order: Sequence[int], rp: Any, W: int) -> tuple[list[int], list[int]]:
+    """A5's windows, as I1's `bits_by_window` charges: each step's, the earliest window an output at that step or later
+    is released in (the last window where none follows); and each request's ingress window, its last frame's."""
+    reqs = [record.requests[k] for k in order]
+    kept, own = [0] * len(reqs), []
+    for st in rp.steps:
+        w = None
+        for i, start, n in st.rows:
+            q = reqs[i]
+            if start + n == len(q.prompt) + kept[i] and kept[i] < len(q.output):
+                b = q.release[kept[i]] // reg.T
+                w = b if w is None else min(w, b)
+                kept[i] += 1
+        own.append(w)
+    earliest, at = [W - 1] * len(own), None
+    for s in range(len(own) - 1, -1, -1):
+        if own[s] is not None:
+            at = own[s] if at is None else min(at, own[s])
+        if at is not None:
+            earliest[s] = at
+    return earliest, [q.end // reg.T for q in reqs]
 
 
-def _segment(syms: Sequence[Symbol]) -> bytearray:
-    w = C.BitWriter()
-    enc = C.ArithEncoder(w)
-    for bit, f0, f1 in syms:
-        enc.encode(f0 if bit else 0, f1 if bit else f0, f0 + f1)
-    enc.finish()
-    return w.bits
+def _residual(record: Record, reg: Registered, engine: Any, order: Sequence[int], rp: Any,
+              decisions: Sequence[Decision], looks: Sequence[Sequence[Lookup]], W: int) -> list[Any]:
+    """The windows v1 sends (`code_v1.Window`). A decision goes to the earlier of its request's ingress window and the
+    earliest window that shows its step's rows, and a sent hit's shortfall to the earliest window that shows its step's.
+    Both are nondecreasing in the replay's order, so each field's values, window after window, are the replay's."""
+    earliest, win = _charged(record, reg, order, rp, W)
+    arrived: list[list[bool]] = [[] for _ in range(W)]
+    hits: list[list[int]] = [[] for _ in range(W)]
+    last = 0
+    for i, k, b in decisions:
+        w = min(earliest[k] if k < len(earliest) else W - 1, win[i])
+        if w < last:
+            raise V1Error(f"step {k}: a decision charged to window {w}, after one charged to window {last}")
+        last = w
+        arrived[w].append(b)
+    for s, short in _sent(record, engine, order, rp, looks):
+        hits[earliest[s]].append(short)
+    return [CV.Window(arrived=tuple(a), hits=tuple(h)) for a, h in zip(arrived, hits)]
 
 
-# --- the frames --------------------------------------------------------------------------------------------------------
+# --- the string --------------------------------------------------------------------------------------------------------
 
-def _pack(blocks: int | None, segments: Sequence[bytearray]) -> bytes:
+Frames = tuple[int | None, list[Any]]  # the header's pool, and the windows
+
+
+def _book(reg: Registered) -> Any:
+    return CV.Book.uniform() if reg.book is None else reg.book
+
+
+def _string(blocks: int | None, wins: Sequence[Any], reg: Registered) -> tuple[list[int], list[int]]:
+    """The string's bits, unpadded, and each window's charge: its segment's bits, the header's in window 0."""
     w = C.BitWriter()
     if blocks is not None:
         C.put_gamma(w, blocks)
-    for seg in segments:
-        C.put_gamma(w, len(seg) + 1)
-        w.bits.extend(seg)
-    return w.to_bytes()
+    enc = CV.encode(wins, _book(reg))
+    charge = list(enc.lens)
+    charge[0] += len(w)
+    return list(w.bits) + enc.bitlist(), charge
 
 
-Frames = tuple[int | None, list[bytearray], list[int]]  # the header, each window's segment, each window's charge
-
-
-def _frames(bits: bytearray, reg: Registered, W: int) -> tuple[Frames, int]:
-    """The frames at the start of `bits`, and where they end."""
-    r = C.BitReader(bits)
+def _frames(bits: Sequence[int], reg: Registered, W: int, *, padded: bool) -> Frames:
+    """The header and the windows `bits` codes, refusing any bits but the code's own and, when `padded`, fewer than 8
+    zero bits after them. The code is prefix-free, so at most one padding decodes."""
+    r = C.BitReader(bytearray(bits))
     blocks = None if reg.pinned else C.get_gamma(r)
-    head = r.pos
-    segments, charge = [], []
-    for _ in range(W):
-        at = r.pos
-        n = C.get_gamma(r) - 1
-        if n > len(bits) - r.pos:
-            raise V1Error(f"truncated: a {n}-bit segment in {len(bits) - r.pos} bits")
-        segments.append(bits[r.pos:r.pos + n])
-        r.pos += n
-        charge.append(r.pos - at)
-    charge[0] += head
-    return (blocks, segments, charge), r.pos
+    body = list(bits[r.pos:])
+    err: Exception | None = None
+    for pad in range(8 if padded else 1):
+        if pad > len(body) or any(body[len(body) - pad:]):
+            break
+        data, n = CV.pack(body[:len(body) - pad])
+        try:
+            return blocks, CV.decode(data, n, _book(reg), W)
+        except ValueError as e:
+            err = err or e
+    raise V1Error(f"no {W} windows end the string: {err}")
 
 
 def _parse(data: Any, reg: Registered, W: int) -> Frames:
-    """A byte string's frames; refuses all but the frames and their padding."""
+    """A byte string's header and windows; refuses all but those and their padding."""
     if not isinstance(data, (bytes, bytearray)):
         raise V1Error(f"v1 decodes bytes, not a {type(data).__name__}")
     if 8 * len(data) > reg.cap_bits:
         raise V1Error(f"{8 * len(data)} bits, over the cap ℓ = {reg.cap_bits}")
-    bits = C.BitReader.from_bytes(bytes(data), 8 * len(data)).bits
-    frames, end = _frames(bits, reg, W)
-    if len(bits) - end >= 8 or any(bits[end:]):
-        raise V1Error("bytes past the last window, or nonzero padding")
-    return frames
+    return _frames(C.BitReader.from_bytes(bytes(data), 8 * len(data)).bits, reg, W, padded=True)
 
 
 def bits_by_window(data: bytes, record: Record, reg: Registered) -> dict[int, int]:
-    """Each window's charge: its frame's bits, the header's in window 0. They sum to the string's bits less padding."""
-    try:
-        return dict(enumerate(_parse(data, reg, windows(record, reg.T))[2]))
-    except ValueError as e:
-        raise V1Error(str(e)) from None
+    """Each window's charge: its segment's bits, the header's in window 0, a function of the string alone. They sum to
+    the string's bits less padding."""
+    def run() -> dict[int, int]:
+        blocks, wins = _parse(data, reg, windows(record, reg.T))
+        return dict(enumerate(_string(blocks, wins, reg)[1]))
+    return _total(run)
 
 
 # --- I1 from the replay ------------------------------------------------------------------------------------------------
@@ -366,10 +487,8 @@ def _advice(record: Record, reg: Registered, cfg: Any, order: Sequence[int], rp:
 
 # --- encode and decode -------------------------------------------------------------------------------------------------
 
-def encode(advice: I1.Advice, record: Record, reg: Registered, *, check: bool = True) -> bytes:
-    """The advice's v1 string under the record; refuses an advice v1 can't carry (one whose schedule isn't the
-    replay's under some arrivals, whose rows aren't in the registered order, or whose sources aren't the canonical
-    ones). `check` decodes the string back and holds it to the advice."""
+def _residual_of(advice: I1.Advice, record: Record, reg: Registered) -> tuple[list[Any], Any, list[int]]:
+    """The windows of the advice's residual, the replay that gives them, and the engine order."""
     if type(advice) is not I1.Advice:
         raise V1Error(f"v1 encodes an I1 Advice, not a {type(advice).__name__}")
     engine = reg.engine
@@ -384,10 +503,23 @@ def encode(advice: I1.Advice, record: Record, reg: Registered, *, check: bool = 
             e = index[advice.requests[x.request].id]
             if first[e] < 0:
                 first[e] = s
-    W = windows(record, reg.T)
-    rp, syms = _run(record, reg, engine, order, W, lambda i, k, w, f0, f1: int(k >= first[i]))
-    data = _pack(None if reg.pinned else engine.num_gpu_blocks, [_segment(s) for s in syms])
+    rp, decisions, looks = _replay(record, reg, engine, order, lambda i, k: k >= first[i])
+    return _residual(record, reg, engine, order, rp, decisions, looks, windows(record, reg.T)), rp, order
+
+
+def residual(advice: I1.Advice, record: Record, reg: Registered) -> list[Any]:
+    """The windows `encode` codes (`code_v1.Window`s, the decisions and the sent hits): what a codebook is fit on."""
+    return _total(lambda: _residual_of(advice, record, reg)[0])
+
+
+def encode(advice: I1.Advice, record: Record, reg: Registered, *, check: bool = True) -> bytes:
+    """The advice's v1 string under the record; refuses an advice v1 can't carry (one whose schedule isn't the
+    replay's under some arrivals, whose rows aren't in the registered order, or whose sources aren't the canonical
+    ones). `check` decodes the string back and holds it to the advice."""
+    wins, rp, order = _residual_of(advice, record, reg)
+    data = CV.pack(_string(None if reg.pinned else reg.engine.num_gpu_blocks, wins, reg)[0])[0]
     if check:
+        index = {record.requests[k].id: e for e, k in enumerate(order)}
         theirs = [[(index[advice.requests[x.request].id], x.start, x.n) for x in st.rows] for st in advice.steps]
         m = R.compare(rp.steps, [R.Step(rows=r) for r in theirs])
         if m.first_mismatch is not None:
@@ -409,16 +541,13 @@ def decode(data: bytes, record: Record, reg: Registered) -> I1.Advice:
 
 
 def decode_bits(bits: Sequence[int], record: Record, reg: Registered) -> I1.Advice:
-    """`decode` of the bit string itself, unpadded: refused unless its frames end exactly at its end."""
+    """`decode` of the bit string itself, unpadded: refused unless its windows end exactly at its end."""
     def run() -> I1.Advice:
         if len(bits) > reg.cap_bits:
             raise V1Error(f"{len(bits)} bits, over the cap ℓ = {reg.cap_bits}")
         if any(b not in (0, 1) for b in bits):
             raise V1Error("a bit string holds 0s and 1s")
-        frames, end = _frames(bytearray(bits), reg, windows(record, reg.T))
-        if end != len(bits):
-            raise V1Error(f"{len(bits) - end} bits past the last window")
-        return _decode(frames, record, reg)
+        return _decode(_frames(list(bits), reg, windows(record, reg.T), padded=False), record, reg)
     return _total(run)
 
 
@@ -442,23 +571,28 @@ def _total(run: Callable[[], T]) -> T:
 
 
 def _decode(frames: Frames, record: Record, reg: Registered) -> I1.Advice:
-    W = windows(record, reg.T)
-    blocks, segments, _ = frames
+    blocks, wins = frames
     engine = _with_pool(reg, blocks).engine
     cfg = _check(record, reg, engine)
     order = engine_order(record)
-    decs = [C.ArithDecoder(C.BitReader(seg)) for seg in segments]
+    if any(w.resumes or w.order or w.lag for w in wins):
+        raise V1Error("a window sends resumes, an order or lag bits, which v1 replays or derives")
+    arrived = [b for w in wins for b in w.arrived]
+    used = 0
 
-    def bit_of(i: int, k: int, w: int, f0: int, f1: int) -> int:
-        d = decs[w]
-        bit = int(d.target(f0 + f1) >= f0)
-        d.consume(f0 if bit else 0, f1 if bit else f0, f0 + f1)
-        return bit
+    def bit_of(i: int, k: int) -> bool:
+        nonlocal used
+        if used == len(arrived):
+            raise V1Error(f"the replay asks more than the string's {len(arrived)} decisions")
+        used += 1
+        return arrived[used - 1]
 
-    rp, syms = _run(record, reg, engine, order, W, bit_of)
-    for w, (d, seg) in enumerate(zip(decs, segments)):
-        if d.finish() != len(seg) or _segment(syms[w]) != seg:
-            raise V1Error(f"window {w}: its {len(seg)}-bit segment isn't the code's own for the decisions it decodes to")
+    rp, decisions, looks = _replay(record, reg, engine, order, bit_of)
+    if used != len(arrived):
+        raise V1Error(f"the replay asks {used} of the string's {len(arrived)} decisions")
+    if _residual(record, reg, engine, order, rp, decisions, looks, len(wins)) != list(wins):
+        raise V1Error("the windows aren't the replay's residual: a hit that isn't the replay's, or a value charged to "
+                      "another window than A5's")
     return _advice(record, reg, cfg, order, rp)
 
 
@@ -500,7 +634,7 @@ def advice_of(trace: Any, record: Record) -> I1.Advice:
     reqs = [record.requests[i] for i in order]
     requests = tuple(I1.RequestAdvice(q.id, len(q.prompt), len(q.output), "eos" if trace.requests[i].eos else "length")
                      for i, q in zip(order, reqs))
-    prefixes = D.Prefixes([q.prompt + q.output for q in reqs])
+    prefixes = D.Prefixes([q.prompt + q.output for q in reqs], trace.engine.block_size)
     seen: set[int] = set()
     kept = [0] * len(order)
     steps, release = [], []
@@ -524,56 +658,94 @@ def advice_of(trace: Any, record: Record) -> I1.Advice:
 
 # --- the corpus table --------------------------------------------------------------------------------------------------
 
-TABLE_CONTEXTS = ("plain", "egress")  # v1 charged; and the release buckets of today's engine as ENC-REPLAY's context
-
-
-def measure(label: str, path: str, stop_ids: Sequence[int], T: int = 600) -> dict[str, Any]:
-    """One TRACE-CORPUS trace (`replay.read_corpus_trace`, the warden's ingress) through v1 under each of
-    `TABLE_CONTEXTS`: each string's charge per window, its header's bits, and whether it decodes back to the trace's
-    I1 v0; and I1 v0's own charge (`advice.bits_by_window`) for that advice."""
+def _trace(path: str, stop_ids: Sequence[int]) -> tuple[Any, Record, I1.Advice]:
     tr = R.read_corpus_trace(path, ingress="warden")
     rec = record_of(tr, stop_ids)
-    adv = advice_of(tr, rec)
+    return tr, rec, advice_of(tr, rec)
+
+
+def windows_of(label: str, path: str, stop_ids: Sequence[int], T: int = 600) -> dict[str, Any]:
+    """One TRACE-CORPUS trace's residual windows (`residual`), as JSON: what the other traces' books are fit on."""
+    tr, rec, adv = _trace(path, stop_ids)
+    wins = residual(adv, rec, Registered(tr.engine, tuple(stop_ids), T=T))
+    return {"trace": label, "windows": [asdict(w) for w in wins]}
+
+
+#: the table's registered caps: a window of a full trace sends more decisions and hits than `code_v1.Caps`'s defaults
+TABLE_CAPS = CV.Caps(arrived=1 << 20, hits=1 << 20)
+
+
+def measure(label: str, path: str, stop_ids: Sequence[int], T: int = 600, book: dict | None = None) -> dict[str, Any]:
+    """One TRACE-CORPUS trace (`replay.read_corpus_trace`, the warden's ingress) through v1 under `book` (a
+    `code_v1.Book`'s JSON, fit without this trace) and under the uniform book: each string's charge per window, its
+    header's bits, and whether it decodes back to the trace's I1 v0; the residual's decisions and sent hits; and I1 v0's
+    own charge (`advice.bits_by_window`) for that advice."""
+    tr, rec, adv = _trace(path, stop_ids)
     row: dict[str, Any] = {"trace": label, "requests": len(rec.requests), "steps": len(adv.steps),
                            "windows": windows(rec, T), "v0": sum(I1.bits_by_window(adv, T).values())}
-    for contexts in TABLE_CONTEXTS:
-        reg = Registered(tr.engine, tuple(stop_ids), T=T, contexts=contexts)
+    uniform = CV.Book.uniform(TABLE_CAPS)
+    books = {"held_out": CV.Book.from_json(book) if book is not None else uniform, "uniform": uniform}
+    for name, b in books.items():
+        reg = Registered(tr.engine, tuple(stop_ids), T=T, book=b)
         t0 = time.monotonic()
         data = encode(adv, rec, reg, check=False)
         t1 = time.monotonic()
         back = decode(data, rec, reg) == adv
         by = bits_by_window(data, rec, reg)
-        row[contexts] = {"bits": sum(by.values()), "by_window": by, "max_window": max(by.values()),
-                         "header": C.gamma_len(tr.engine.num_gpu_blocks), "bytes": len(data),
-                         "round_trip": back, "encode_s": round(t1 - t0, 1), "decode_s": round(time.monotonic() - t1, 1)}
+        row[name] = {"bits": sum(by.values()), "by_window": by, "max_window": max(by.values()),
+                     "header": C.gamma_len(tr.engine.num_gpu_blocks), "bytes": len(data), "round_trip": back,
+                     "book": _book(reg).digest(), "encode_s": round(t1 - t0, 1), "decode_s": round(time.monotonic() - t1, 1)}
+    wins = residual(adv, rec, Registered(tr.engine, tuple(stop_ids), T=T))
+    row["decisions"] = sum(len(w.arrived) for w in wins)
+    row["hits_sent"] = sum(len(w.hits) for w in wins)
+    row["hits_short"] = sum(1 for w in wins for h in w.hits if h)
     return row
 
 
 def render(rows: Sequence[dict[str, Any]], T: int) -> str:
-    out = [f"| trace | requests | windows (T = {T}) | I1 v0 | v1 charged (total; per window) | of it the pool's header "
-           "| v1, egress contexts (total; max per window) | decode(encode(a)) == a |",
-           "|---|---|---|---|---|---|---|---|"]
+    out = [f"| trace | requests | windows (T = {T}) | I1 v0 | v1 charged, held-out book (total; per window) | of it the "
+           "pool's header | decisions | hits sent (short of the cached prefix) | v1, uniform book | "
+           "decode(encode(a)) == a |",
+           "|---|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
         if "error" in r:
-            out.append(f"| {r['trace']} | error: {r['error']} |||||||")
+            out.append(f"| {r['trace']} | error: {r['error']} |||||||||")
             continue
-        p, e = r["plain"], r["egress"]
-        per = ", ".join(f"{p['by_window'][w]:,}" for w in sorted(p["by_window"]))
-        out.append(f"| {r['trace']} | {r['requests']} | {r['windows']} | {r['v0']:,} | {p['bits']:,}; {per} | "
-                   f"{p['header']} | {e['bits']:,}; {e['max_window']:,} | {p['round_trip'] and e['round_trip']} |")
+        h, u = r["held_out"], r["uniform"]
+        per = ", ".join(f"{h['by_window'][w]:,}" for w in sorted(h["by_window"]))
+        out.append(f"| {r['trace']} | {r['requests']} | {r['windows']} | {r['v0']:,} | {h['bits']:,}; {per} | "
+                   f"{h['header']} | {r['decisions']:,} | {r['hits_sent']:,} ({r['hits_short']:,}) | {u['bits']:,} | "
+                   f"{h['round_trip'] and u['round_trip']} |")
     return "\n".join(out) + "\n"
 
 
-def _measured(job: tuple[str, str, tuple[int, ...], int]) -> dict[str, Any]:
+def _guarded(f: Callable[..., dict[str, Any]], *job: Any) -> dict[str, Any]:
     try:
-        return measure(*job)
+        return f(*job)
     except (ValueError, RuntimeError) as e:
         return {"trace": job[0], "error": str(e)}
 
 
+def _windows_job(job: tuple) -> dict[str, Any]:
+    return _guarded(windows_of, *job)
+
+
+def _measure_job(job: tuple) -> dict[str, Any]:
+    return _guarded(measure, *job)
+
+
+def held_out_books(residuals: Sequence[dict[str, Any]]) -> list[dict | None]:
+    """For each trace, the book `code_v1.fit_book` fits on every other trace's windows (None where it has none), as a
+    registration would fix it from history before the run."""
+    runs = [None if "error" in r else [CV.Window(**w) for w in r["windows"]] for r in residuals]
+    return [None if mine is None else
+            CV.fit_book([w for j, w in enumerate(runs) if j != k and w is not None], TABLE_CAPS).to_json()
+            for k, mine in enumerate(runs)]
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Advice v1's bits per window over TRACE-CORPUS traces, with its round "
-                                             "trip, against I1 v0's charge.")
+                                             "trip, against I1 v0's charge; each trace's book fit on the others.")
     ap.add_argument("traces", nargs="+", help="LABEL=DIR: a trace's directory (steps.jsonl, requests.jsonl, meta.json, "
                                               "server.log)")
     ap.add_argument("--stops", default="128001", help="the registered stop ids, comma-separated, EOS first")
@@ -584,14 +756,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     stops = tuple(int(s) for s in a.stops.split(","))
     jobs = [(t.split("=", 1)[0], t.split("=", 1)[1], stops, a.T) for t in a.traces]
     workers = a.jobs or min(len(jobs), os.cpu_count() or 1)
-    if workers == 1:
-        rows = [_measured(j) for j in jobs]
-    else:
+
+    def each(f: Callable[[tuple], dict[str, Any]], js: Sequence[tuple]) -> list[dict[str, Any]]:
+        if workers == 1:
+            return [f(j) for j in js]
         with ProcessPoolExecutor(workers) as pool:
-            rows = list(pool.map(_measured, jobs))
+            return list(pool.map(f, js))
+
+    books = held_out_books(each(_windows_job, jobs))
+    rows = each(_measure_job, [(*j, b) for j, b in zip(jobs, books)])
     a.out.write_text(json.dumps({"T": a.T, "stops": stops, "rows": rows}, indent=1) + "\n")
     print(render(rows, a.T), end="")
-    return 0 if all("error" not in r and r["plain"]["round_trip"] and r["egress"]["round_trip"] for r in rows) else 1
+    return 0 if all("error" not in r and r["held_out"]["round_trip"] and r["uniform"]["round_trip"] for r in rows) else 1
 
 
 if __name__ == "__main__":
