@@ -183,6 +183,11 @@ def coins(n: int) -> bytes:
     return bytes.fromhex(body)
 
 
+#: the claim instance naming `coins`'s bytes, which a served challenger reads (`challenger.coin_claim`)
+CLAIM = "uniform/io-getrandombytes"
+coins.claim = CLAIM  # type: ignore[attr-defined]
+
+
 def _canon(x: Any) -> str | None:
     """`x` under `canonical_json`, or None where it isn't JSON (which then equals nothing)."""
     try:

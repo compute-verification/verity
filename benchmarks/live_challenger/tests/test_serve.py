@@ -157,6 +157,15 @@ def test_a_lean_that_cannot_answer_starts_no_session(tmp_path):
     assert not out.exists() and not (tmp_path / "key").exists()
 
 
+def test_a_source_no_claim_instance_names_starts_no_session(tmp_path):
+    """CMP-52: the host's coins are named by a claim instance (the Lean's, `uniform/io-getrandombytes`), or it draws
+    none: a source without one starts no session and asks it for no byte."""
+    proc, out, first = start(tmp_path, env={**os.environ, "COINS_UNNAMED": "1"})
+    code, err = finish(proc)
+    assert (code, first) == (2, "") and "the challenger refused to start" in err and "coins-without-claim" in err
+    assert not out.exists() and not (tmp_path / "coins.log").exists()
+
+
 def test_a_second_session_signs_at_the_keys_next_leaves(tmp_path):
     """Each session's record and close sign at the key's next leaves, after the ledger's open of it and before its end."""
     auditor, leaves = Auditor(tmp_path), []

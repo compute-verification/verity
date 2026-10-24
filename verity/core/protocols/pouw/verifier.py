@@ -117,3 +117,8 @@ def coins(n: int) -> bytes:
     if not (isinstance(body, str) and len(body) == 2 * n and all(c in "0123456789abcdef" for c in body)):
         raise LeanError(f"{EXE} answered other than {n} coin bytes in hex")
     return bytes.fromhex(body)
+
+
+#: the claim instance naming `coins`'s bytes, which a served challenger reads (`sampled_proofs.challenger.coin_claim`)
+CLAIM = "uniform/io-getrandombytes"
+coins.claim = CLAIM  # type: ignore[attr-defined]
