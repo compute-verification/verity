@@ -254,6 +254,23 @@ def sync_weights(llm, named):
     llm.reset_prefix_cache()
 
 
+def load_ckpt(llm, ckpt, model_name):
+    """Write a saved checkpoint's effective bf16 weights into vLLM: a full state dict, or W0 + B A from the LoRA factors."""
+    from safetensors.torch import load_file
+    from transformers import AutoModelForCausalLM
+    d = Path(ckpt)
+    if (d / "model.safetensors").exists():
+        sync_weights(llm, load_file(str(d / "model.safetensors"), device="cuda").items())
+        return
+    lora = load_file(str(d / "adapter_model.safetensors"), device="cuda")
+    base = AutoModelForCausalLM.from_pretrained(model_name, dtype=torch.bfloat16)
+    pairs = []
+    for n, mod in target_linears(base):
+        A, B = lora[f"base_model.model.{n}.lora_A.weight"], lora[f"base_model.model.{n}.lora_B.weight"]
+        pairs.append((n + ".weight", (mod.weight.detach().cuda().float() + B.float() @ A.float()).to(torch.bfloat16)))
+    sync_weights(llm, pairs)
+
+
 def generate(llm, prompts, n, temperature, top_p, max_tokens, seed=None):
     from vllm import SamplingParams
     sp = SamplingParams(n=n, temperature=temperature, top_p=top_p, max_tokens=max_tokens)
@@ -356,6 +373,7 @@ def main():
     ap.add_argument("--tok-budget", type=int, default=8192)
     ap.add_argument("--gpu-mem", type=float, default=0.25)
     ap.add_argument("--mid-eval", type=int, default=1)
+    ap.add_argument("--eval-ckpt", default=None, help="evaluate a saved checkpoint dir (greedy, and pass@k with --passk)")
     args = ap.parse_args()
 
     from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -386,15 +404,25 @@ def main():
         test = test[:args.eval_limit]
 
     tok = AutoTokenizer.from_pretrained(args.model)
-    llm = LLM(model=args.model, dtype="bfloat16", gpu_memory_utilization=args.gpu_mem, max_model_len=2048 + 512,
-              enable_prefix_caching=True, seed=args.seed)
+    eval_only = kind == "base" or args.eval_ckpt
+    llm = LLM(model=args.model, dtype="bfloat16", gpu_memory_utilization=0.6 if eval_only else args.gpu_mem,
+              max_model_len=2048 + 512, enable_prefix_caching=True, seed=args.seed,
+              **({"max_num_seqs": 1024} if eval_only else {}))
     emit(event="vllm_ready")
 
-    if kind == "base":
+    if eval_only:
+        sbits, steps, method = 0, 0, "base"
+        if args.eval_ckpt:
+            meta = json.load(open(Path(args.eval_ckpt) / "meta.json"))
+            sbits, steps, method = meta["S_bits"], meta["step"], meta["method"]
+            label = f"{task}-{method}-seed{meta['seed']}-step{steps}-eval"
+            load_ckpt(llm, args.eval_ckpt, args.model)
+            emit(event="ckpt_loaded", ckpt=args.eval_ckpt)
         per, lens = evaluate(llm, tok, test, task, eval_max)
         acc = sum(c[0] for c in per) / len(per)
-        res = {"label": label, "task": task, "method": "base", "S_bits": 0, "steps": 0, "acc": acc,
-               "per_problem": [c[0] for c in per], "mean_len": sum(lens) / len(lens), "model": args.model}
+        res = {"label": label, "task": task, "method": method, "S_bits": sbits, "steps": steps, "acc": acc,
+               "per_problem": [c[0] for c in per], "mean_len": sum(lens) / len(lens), "model": args.model,
+               "ckpt": args.eval_ckpt}
         emit(event="eval", step=0, acc=acc, mean_len=res["mean_len"])
         if args.passk:
             rows = test[:args.passk_limit] if args.passk_limit else test

@@ -38,10 +38,14 @@ def main(dirs):
         for p in sorted(glob.glob(f"{d}/**/result-*.json", recursive=True)):
             r = json.load(open(p))
             key = (r["task"], r["method"])
+            if r.get("ckpt"):
+                if "passk" in r:
+                    passk[f"{r['task']} {r['method']} step{r['steps']} ({r['label']})"] = r["passk"]
+                continue
             if r["method"] == "base":
                 res[r["task"]]["base"] = [r]
                 if "passk" in r:
-                    passk[r["task"]] = r["passk"]
+                    passk[f"{r['task']} base"] = r["passk"]
                 continue
             if any(x.get("seed") == r.get("seed") for x in res[r["task"]][r["method"]]):
                 continue
@@ -115,7 +119,7 @@ def render(out):
                  if r.get("frac_ci") and r.get("frac_full_gain") is not None else "")
             lines.append(f"| {r['method']} | {fmt_bits(r['S_bits'])} ({r['S_bits']:.3g}) | {r['n_params']:,} | {r['steps']} | {accs} | {a} | {g} | {f} |")
     for task, pk in out["passk"].items():
-        lines.append(f"\n### base pass@k, {task} ({pk['problems']} problems, n = {pk['n']}, T = {pk['temperature']}, top-p = {pk['top_p']})\n")
+        lines.append(f"\n### pass@k, {task} ({pk['problems']} problems, n = {pk['n']}, T = {pk['temperature']}, top-p = {pk['top_p']})\n")
         ks = sorted(pk["pass_at"], key=int)
         lines.append("| " + " | ".join(f"pass@{k}" for k in ks) + " |")
         lines.append("|" + "---|" * len(ks))
