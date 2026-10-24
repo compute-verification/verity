@@ -45,7 +45,9 @@ def traffic(tok, n: int, rng: random.Random, max_prompt: int, gaps: int) -> list
         q = rng.choice(QUESTIONS)
         body = tok.decode(filler[:max(want - 24, 0)]) + "\n\n" + q
         if getattr(tok, "chat_template", None):
-            ids = tok.apply_chat_template([{"role": "user", "content": body}], add_generation_prompt=True, tokenize=True)
+            # enable_thinking is Qwen3's switch (other templates ignore it): off, answers end at EOS within max_tokens
+            ids = tok.apply_chat_template([{"role": "user", "content": body}], add_generation_prompt=True, tokenize=True,
+                                          enable_thinking=False)
         else:
             ids = tok.encode(body + "\nAnswer:")
         stoch = rng.random() < 0.3
@@ -60,8 +62,8 @@ def traffic(tok, n: int, rng: random.Random, max_prompt: int, gaps: int) -> list
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--model", default="TinyLlama/TinyLlama-1.1B-Chat-v1.0")
-    ap.add_argument("--revision", default="fe8a4ea1ffedaf415f4da2f062534de366a451e6")
+    ap.add_argument("--model", default="Qwen/Qwen3-8B")
+    ap.add_argument("--revision", default="b968826d9c46dd6066d109eabc6255188de91218")
     ap.add_argument("--requests", type=int, default=48)
     ap.add_argument("--max-prompt", type=int, default=1024)
     ap.add_argument("--gaps", type=int, default=2)
