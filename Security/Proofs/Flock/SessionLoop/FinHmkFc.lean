@@ -166,7 +166,7 @@ theorem runCut_cutRep {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.
     have e3 : (2 * j.val + r.val) % 2 = r.val := by omega
     simp only [e2, e3] at hp
     obtain ⟨bs, hbs, hR0⟩ := FlockComplete.CutPrefix.go_of_shift
-      (FlockComplete.CutPrefix.repCut_shift _ _ _ _ _ _ _ _ _ _ _ _) (hl.trans hl₀.symm) hR
+      (FlockComplete.CutPrefix.repCut_shift _ _ _ _ _ _ _ _ _ _ _ _ _) (hl.trans hl₀.symm) hR
     refine ⟨e, l₀ ++ bs, ?_, ?_⟩
     · simp only [List.getElem_map, List.getElem_range]
       simp only [e2, e3]
@@ -274,7 +274,7 @@ theorem finalCOf_inner (v : F128) {t : _root_.Flock.Transcript} (hp : t.pending 
   have hl : ((Frame.label _root_.Flock.Zk.LABEL_INNER.toUTF8).enc ++
       (_root_.Flock.Transcript.header 3 1 1).data.toList).length =
       (_root_.Flock.Firewall.Frame.labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8).size + 16 := by
-    rw [List.length_append, FlockSoundness.Refine.header_length, ← labelFrame_data, Array.length_toList]
+    rw [List.length_append, FlockSoundness.Refine.Frame.header_length, ← labelFrame_data, Array.length_toList]
     rfl
   rw [← hl]
   have e : encs [.label _root_.Flock.Zk.LABEL_INNER.toUTF8, .one v] ++ (Frame.sq 1 1).enc =
@@ -286,7 +286,7 @@ theorem finalCOf_inner (v : F128) {t : _root_.Flock.Transcript} (hp : t.pending 
 /-- **The value a rep's frame took at `final_c`'s pad** (`valsOf`): `final_c'` plus its pad. -/
 theorem valsOf_fc (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) (ms : Option _root_.Flock.Firewall.Frame.MaskSlot)
     (M : Array F128) (fc : F128) :
-    (Loop.valsOf (Cfg.ofDraws lay (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b) ms) M fc)[lay.fc]! =
+    (Loop.valsOf (_root_.Flock.Firewall.Frame.Cfg.ofDraws lay (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b) ms) M fc)[lay.fc]! =
       fc + (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b).h[lay.fc]! := by
   have hlt : lay.fc < lay.zp 64 := by
     unfold _root_.Flock.Zk.PadLayout.zp _root_.Flock.Zk.PadLayout.lc
@@ -296,8 +296,8 @@ theorem valsOf_fc (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) (ms : Option
     unfold _root_.Flock.Zk.PadLayout.len _root_.Flock.Zk.PadLayout.tw _root_.Flock.Zk.PadLayout.hab
       _root_.Flock.Zk.PadLayout.zp _root_.Flock.Zk.PadLayout.lc
     omega
-  have hcl : (Cfg.ofDraws lay (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b) ms).lay = lay := rfl
-  have hch : (Cfg.ofDraws lay (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b) ms).h =
+  have hcl : (_root_.Flock.Firewall.Frame.Cfg.ofDraws lay (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b) ms).lay = lay := rfl
+  have hch : (_root_.Flock.Firewall.Frame.Cfg.ofDraws lay (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b) ms).h =
       (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b).h := rfl
   unfold Loop.valsOf
   simp only [hcl, hch]
