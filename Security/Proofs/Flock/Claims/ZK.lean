@@ -149,6 +149,7 @@ import Proofs.Flock.Claims.ZK.FinishSwLig
 import Proofs.Flock.Claims.ZK.FinishSwLigE
 import Proofs.Flock.Claims.ZK.L0Pin
 import Proofs.Flock.Claims.ZK.L0PinCoins
+import Proofs.Flock.Claims.ZK.L0PinFrame
 import Proofs.Flock.Claims.ZK.FinishSwInner
 import Proofs.Flock.Claims.ZK.FinishSwTau
 import Proofs.Flock.Claims.ZK.FinishSwRows
@@ -695,6 +696,11 @@ import Proofs.Flock.Claims.ZK.CutPrefix
 * `L0PinCoins`: the cut PIOP from a source ends where the firewall's does. It splits like `piopFw`
   (**`piopCut_split`**, **`piopCut_at`**), and at a deployed rep's coins its log ends at `ligP0` with basis `ligBasis`
   (**`Masked.piopCut_lig`**), so `repCut_cutL0`'s bodies are at the coins, `p0` and basis that `swSrcE_repCut` reads.
+* `L0PinFrame`: the firewall's scheduled opening, fed the stream's coins, is the cut run. Fed coins one round at a
+  time (`Fed.feedR`), a run over `Drive.OpenM` is the cut run over `PS` at those coins (`Fed.feedSim`), so the opening
+  is (`Fed.asksRel_feed`, `Fed.repOpening_feed`), and past its ring switch it sends level 0's bodies
+  (`Fed.repOpening_cutL0`). Where `openStep` sends anything its PIOP returned, and its level-0 rounds are `l0BodyAt`
+  at zero pads (**`Fed.openStep_l0`**), which reads only its rounds' coins (`Fed.l0BodyAt_congr`).
 * `FinishSwInner`: `repCut_fw`'s `hinner` at that source. The switched view keeps `ρ_in`, `σ_in` (`padShift` moves
   `h_tx`, `h_ty` against the exposed pads; `Table.innerMsg_padShift`) and `Y₂`, and where the rows hold `Y₁`, so the
   switched source's `ρ_in`, `σ_in` and `Y` are the honest source's (`Masked.swSrcE_inner`, `Masked.swSrcE_y`). The
