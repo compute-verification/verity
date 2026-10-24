@@ -42,7 +42,8 @@
 #                (ProvedScope.leafOk); ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s), and
 #                flock-verify statement on the inner statement with the partition object and program vstage wrote. The job
 #                fails unless each statement (staged or proved) and ZK_LEAN's session exited 0 with every VERDICT accepted,
-#                each forgery refused by one of its parts (by Lean, or by the firewall before any session reached Lean),
+#                each forgery refused by Lean at one of its parts (a firewall's refusal, or a session with no proof, is
+#                "not exercised" and fails),
 #                and the inner statement's units were derived from the program (lean_verdicts.py; the inner's session is
 #                not checked)
 # The prover runs on the job's first PCPUS cores, the verifier (proxy, serve, replay) on the rest. Every step writes
