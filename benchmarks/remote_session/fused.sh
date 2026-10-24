@@ -2,13 +2,17 @@
 # fused.cu's one-GPU screen (cwd = the source tree): builds kv.so at the session's codec (run.sh's flags), its FOLD 6
 # twin, fused.cu at both, and session.so; then under one gpu-lease runs fused_bench.py's gate and timing, its ops under
 # Nsight Compute (HBM bytes), and the pass beside the engine stand-in (fused_bench.py --mode serve, fused_beside.py).
-# Results in $RESEARCH_RUN_DIR/out: fused_bench.json, beside.json, ncu.json, their logs and the builds' ptxas.
+# Results in $RESEARCH_RUN_DIR/out: fused_bench.json, ncu.json, beside-CFG/beside.json, their logs and the builds' ptxas.
+# BESIDE (default nomps) runs the beside section once a configuration: nomps, the two processes time-sliced; mps, both
+# clients of a private MPS daemon on the leased GPU (pipe and logs in this run's scratch, started and quit inside the
+# lease); mpsE.P, the same with CUDA_MPS_ACTIVE_THREAD_PERCENTAGE E for the engine stand-in and P for the store.
 #
 #   research run --on vy-nebius-2 --project verity --source . --cwd source --declared-output 'out/*' \
 #     --env GPU_LEASE_WHO=memory-accounting-fused -- bash benchmarks/remote_session/fused.sh
 #
 # SECTIONS (default gate,time,beside,ncu, in that order; beside and ncu after a passed gate, which `gate` writes), MS and ARMS (fused_bench.py's
-# --ms and --arms), PHASES (fused_beside.py's), NCU_MS, MAXMIN (the lease's, default 60), VPY (vLLM's venv: the GEMM
+# --ms and --arms), PHASES (fused_beside.py's), NCU_MS, MAXMIN (the lease's, default 60), LEASE_ARGS (default --wait
+# --preemptible; without --wait the lease takes a free GPU at once or the run ends), VPY (vLLM's venv: the GEMM
 # vLLM runs), PY (the prover's torch venv), ENGINE_CPUS and PROVER_CPUS (taskset lists, default unpinned).
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
@@ -16,8 +20,9 @@ ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
 export PY=${PY:-$ENV_DIR/gpu312-torch2.14.0-cu130/bin/python} VPY=${VPY:-/workspace/jobs/venv312/bin/python}
 [ -x "$PY" ] && [ -x "$VPY" ] || { echo "no venv at $PY or $VPY"; exit 3; }
 export CUDA_HOME=/usr/local/cuda-13.0 PATH=/usr/local/cuda-13.0/bin:$PATH
-export B=$(mktemp -d /tmp/fused.XXXXXX); trap 'rm -rf "$B"' EXIT
-export RS=benchmarks/remote_session SECTIONS=${SECTIONS:-gate,time,beside,ncu}
+export B=$(mktemp -d /tmp/fused.XXXXXX)
+trap '[ -e "$B/mps/pipe/control" ] && echo quit | CUDA_MPS_PIPE_DIRECTORY=$B/mps/pipe nvidia-cuda-mps-control; rm -rf "$B"' EXIT
+export RS=benchmarks/remote_session SECTIONS=${SECTIONS:-gate,time,beside,ncu} BESIDE=${BESIDE:-nomps}
 FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
 KV=(-DKV_FIELD=1024 -DKV_MASK=1)
 P=()
@@ -29,7 +34,7 @@ nvcc "${FLAGS[@]}" -o "$B/session.so" $RS/session.cu > "$O/session.ptxas" 2>&1 &
 for p in "${P[@]}"; do wait "$p" || { tail -30 "$O"/*.ptxas; exit 4; }; done
 sha256sum "$B"/*.so > "$O/libs.sha256"
 # shellcheck disable=SC2016
-/workspace/pouw/infra/bin/gpu-lease 1 --wait --preemptible --max-min "${MAXMIN:-60}" -- bash -c '
+/workspace/pouw/infra/bin/gpu-lease 1 ${LEASE_ARGS---wait --preemptible} --max-min "${MAXMIN:-60}" -- bash -c '
   nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temperature.gpu,memory.used,memory.total \
     --format=csv,noheader -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1
   LIBS=(--lib "kv=$B/kv.so" --lib "kv6=$B/kv6.so" --lib "fused=$B/fused.so" --lib "fused6=$B/fused6.so")
@@ -41,15 +46,38 @@ sha256sum "$B"/*.so > "$O/libs.sha256"
   "$VPY" -c "import json, sys; sys.exit(not json.load(open(\"$O/fused_bench.json\"))[\"gate\"][\"ok\"])" ||
     { echo "no passed gate in $O/fused_bench.json: nothing timed"; exit 4; }
   R=0
+  # Every client names this pipe directory, so with no daemon in it a client runs without MPS, whatever else runs on
+  # the node.
+  export CUDA_MPS_PIPE_DIRECTORY=$B/mps/pipe CUDA_MPS_LOG_DIRECTORY=$B/mps/log
+  mkdir -p "$CUDA_MPS_PIPE_DIRECTORY" "$CUDA_MPS_LOG_DIRECTORY"
+  mps_stop() {
+    [ -e "$CUDA_MPS_PIPE_DIRECTORY/control" ] || return 0
+    echo quit | nvidia-cuda-mps-control
+    for _ in $(seq 150); do [ -e "$CUDA_MPS_PIPE_DIRECTORY/control" ] || return 0; sleep 0.2; done
+    echo "the MPS daemon of $CUDA_MPS_PIPE_DIRECTORY did not quit"; return 1
+  }
+  trap mps_stop EXIT
+  trap "mps_stop; exit 143" TERM
   if [[ ,$SECTIONS, == *,beside,* ]]; then
-    mkdir -p "$B/serve"
-    env -u PYTORCH_CUDA_ALLOC_CONF "${BENCH[@]}" --mode serve --serve-dir "$B/serve" > "$O/serve.log" 2>&1 & S=$!
-    PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True "${PPIN[@]}" "$PY" $RS/fused_beside.py --dir "$B/serve" \
-      --lib "$B/session.so" --kv "$B/kv.so" --out "$O" --wait-s 300 ${PHASES:+--phases "$PHASES"} \
-      > "$O/beside.log" 2>&1; R=$?
-    tail -3 "$O/beside.log"
-    [ $R = 0 ] || kill $S 2> /dev/null
-    wait $S
+    for CFG in ${BESIDE//,/ }; do
+      case $CFG in
+        nomps) mps_stop; EP=; PP= ;;
+        mps*) [ -e "$CUDA_MPS_PIPE_DIRECTORY/control" ] || nvidia-cuda-mps-control -d || { R=6; break; }
+              P=${CFG#mps}; EP=${P%.*}; PP=${P#*.} ;;
+        *) echo "BESIDE: $CFG is not nomps, mps or mpsE.P"; R=6; break ;;
+      esac
+      D=$O/beside-$CFG; mkdir -p "$D" "$B/serve-$CFG"; cp "$O/fused_bench.json" "$D/"
+      env -u PYTORCH_CUDA_ALLOC_CONF ${EP:+CUDA_MPS_ACTIVE_THREAD_PERCENTAGE=$EP} "${BENCH[@]}" --out "$D" \
+        --mode serve --serve-dir "$B/serve-$CFG" > "$D/serve.log" 2>&1 & S=$!
+      env PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True ${PP:+CUDA_MPS_ACTIVE_THREAD_PERCENTAGE=$PP} "${PPIN[@]}" \
+        "$PY" $RS/fused_beside.py --dir "$B/serve-$CFG" --lib "$B/session.so" --kv "$B/kv.so" --out "$D" --wait-s 300 \
+        ${PHASES:+--phases "$PHASES"} > "$D/beside.log" 2>&1; RC=$?
+      tail -3 "$D/beside.log"
+      [ $RC = 0 ] || { kill $S 2> /dev/null; R=$RC; }
+      wait $S
+      cp "$CUDA_MPS_LOG_DIRECTORY"/*.log "$D/" 2> /dev/null
+    done
+    mps_stop || R=6
   fi
   if [[ ,$SECTIONS, == *,ncu,* ]]; then
     ncu --target-processes all --clock-control none --cache-control all --print-units base --csv \
