@@ -19,6 +19,15 @@ kernels' summed durations) and host time (its range), and gives the call's host 
 call (the first call's first kernel to the last call's last, over `CALLS`); ``solo`` gives the GPU's span of one call alone,
 its critical path.  It lists the kernels by name with their mean durations, and names any reference SHA-512 launch
 (`FALLBACKS`) that ran where the fast ones (`HASH_FAST`, `HASH_DECODE`) should.  Writes profile.json, prints a table a call.
+
+  python benchmarks/pouw/pearl_c_sm90/glm53_profile.py stamps --out DIR/stamps.json [--shapes N:K ...] [--m M ...] [--schedule S ...]
+
+``stamps`` (no nsys) reads where A's commitment spends a decode call, inside pd_commit and pd_tree: at each shape, m (default
+`STAMP_M`) and schedule (default serial and deferred-a), after `WARM` calls, `CALLS` calls alone between synchronizations,
+each on the stamp twins (`run.Pipeline.stamps`: each phase's end, hash_decode.cuh's PS_* and PT_*, as the global timer and
+the SM's clock).  Per call: each phase's end since its CTA's start by the SM's clock (median and max over the rows' CTAs),
+the CTAs' start and end on the global timer since the first one's start, and the tail's (A's levels, seed_A, the padding
+rows' lines; pd_tree's entry when it runs apart).
 """
 
 from __future__ import annotations
@@ -45,6 +54,11 @@ MS = (16, 2048)
 HASH_FAST = ("s512_row_segs", "s512_tile_segs", "s512_folds")
 HASH_DECODE = ("pd_commit_", "pd_tiles_", "pd_tree_", "pl_")
 FALLBACKS = ("s512_rows", "s512_tile_leaves")
+STAMP_M = (16, 64)
+#: hash_decode.cuh's stamp slots: a pd_commit CTA's phases (PS_*), and the tail's (PT_*: level l + 1 at PT_LEVEL + l)
+PS = ("start", "segs", "salt", "frame", "sync1", "fold", "sync2", "leaf", "seed")
+PT = {0: "start", **{1 + level: f"level{level + 1}" for level in range(8)}, 9: "seed_a", 10: "fillers", 11: "entry"}
+PT_ROW = 15
 
 
 def _ranged(name: str, f):
@@ -115,6 +129,96 @@ def run_mode(a) -> int:
                       "kernel_source_sha256": kernel.source_sha256, "shapes": shapes, "m": list(a.m or MS), "warm": WARM,
                       "calls": CALLS}), flush=True)
     return 0
+
+
+def stamp_rows(raw: bytes, count: int, slots: int) -> tuple[list[dict], dict]:
+    """The stamps' (timer ns, clock) pairs by phase: each pd_commit CTA's (rows 0 … count − 1, `PS`), and the tail's (row
+    count, `PT`, with ``cta``: the (row, SM) of pd_commit's last CTA when it ran the tail)."""
+    import struct
+    words = struct.unpack(f"<{len(raw) // 8}Q", raw)
+
+    def at(row: int, slot: int) -> tuple[int, int]:
+        return words[2 * (slots * row + slot)], words[2 * (slots * row + slot) + 1]
+    rows = [{nm: at(r, s) for s, nm in enumerate(PS) if at(r, s)[0]} for r in range(count)]
+    tail = {nm: at(count, s) for s, nm in PT.items() if at(count, s)[0]}
+    cta = at(count, PT_ROW)
+    return rows, {**tail, **({"cta": cta} if cta != (0, 0) else {})}
+
+
+def stamp_summary(rows: list[dict], tail: dict) -> dict:
+    """One call's stamps (`stamp_rows`) as the module's docstring gives them, in µs."""
+    rows = [r for r in rows if "start" in r]
+    if not rows:
+        return {"rows": 0}
+    t0 = min(r["start"][0] for r in rows)
+    spans = [(r[e][1] - r["start"][1], r[e][0] - r["start"][0]) for r in rows for e in [max(r, key=lambda nm: r[nm][0])]]
+    spans = [(c, ns) for c, ns in spans if ns > 2000]
+    ghz = statistics.median(c / ns for c, ns in spans) if spans else None
+    phases = {}
+    for nm in PS[1:]:
+        d = [(r[nm][1] - r["start"][1]) / ghz / 1e3 for r in rows if nm in r] if ghz else []
+        if d:
+            phases[nm] = {"median_us": statistics.median(d), "max_us": max(d)}
+    starts = [(r["start"][0] - t0) / 1e3 for r in rows]
+    ends = [(max(v[0] for v in r.values()) - t0) / 1e3 for r in rows]
+    return {"rows": len(rows), "clock_ghz": ghz, "since_cta_start_us": phases,
+            "cta_start_us": {"median": statistics.median(starts), "max": max(starts)},
+            "cta_end_us": {"median": statistics.median(ends), "max": max(ends)},
+            "tail_us": {nm: (v[0] - t0) / 1e3 for nm, v in tail.items() if nm != "cta"},
+            **({"tail_cta": list(tail["cta"])} if "cta" in tail else {})}
+
+
+def stamps_mode(a) -> int:
+    import torch
+    import glm53_timing as T
+
+    shapes = [tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes else sorted(glm53.in_domain(a.scheme))
+    schedules = a.schedule or ["serial", "deferred-a"]
+    run, weights, kernel, gen = T.device_run(shapes, a.scheme, a.cubin, schedules[0])
+    R = kernel.run
+    buf = torch.zeros(R.PD_STAMP_BYTES, dtype=torch.uint8, device=run.device)
+    rows = []
+    for w, W in weights.items():
+        n, k = W.shape
+        for m in a.m or STAMP_M:
+            x = torch.randn(m, k, device=W.device, generator=gen).to(torch.bfloat16)
+            m16 = -(-m // 16) * 16
+            if R.pd_variant(m16, n, k) is None:
+                continue
+            for sc in schedules:
+                run.end_pass(schedule=sc)
+                for _ in range(WARM):
+                    run.gemm(w, x, W, None)
+                pipes = [p for p, _, _ in run.pipes.values()]
+                calls = []
+                try:
+                    for p in pipes:
+                        p.stamps = buf.data_ptr()
+                    for _ in range(CALLS):
+                        buf.zero_()
+                        torch.cuda.synchronize()
+                        run.gemm(w, x, W, None)
+                        torch.cuda.synchronize()
+                        calls.append(stamp_summary(*stamp_rows(buf.cpu().numpy().tobytes(), m16, R.PD_SLOTS)))
+                finally:
+                    for p in pipes:
+                        p.stamps = 0
+                end = sorted(calls, key=lambda c: c["cta_end_us"]["max"])[len(calls) // 2]
+                row = {"n": n, "k": k, "m": m, "schedule": sc, "variant": R.pd_variant(m16, n, k), "median_call": end,
+                       "calls": calls}
+                rows.append(row)
+                ph = end["since_cta_start_us"]
+                print(f"{n}:{k} m{m} {sc}: CTAs end by {end['cta_end_us']['max']:.1f} us (start skew "
+                      f"{end['cta_start_us']['max']:.1f}); phases " + ", ".join(f"{nm} {v['median_us']:.1f}/{v['max_us']:.1f}"
+                                                                                for nm, v in ph.items())
+                      + "; tail " + ", ".join(f"{nm} {v:.1f}" for nm, v in end["tail_us"].items()), flush=True)
+    run.end_pass(schedule="serial")
+    out = {"scheme": a.scheme, "device": torch.cuda.get_device_name(), "cubin_sha256": kernel.cubin_sha256,
+           "kernel_source_sha256": kernel.source_sha256, "warm": WARM, "calls": CALLS, "rows": rows}
+    if a.out:
+        Path(a.out).parent.mkdir(parents=True, exist_ok=True)
+        Path(a.out).write_text(json.dumps(out, indent=1) + "\n")
+    return 0 if rows else 1
 
 
 def _columns(db, table: str) -> set[str]:
@@ -253,16 +357,19 @@ def print_report(out: dict) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    p.add_argument("mode", choices=("run", "report"))
+    p.add_argument("mode", choices=("run", "report", "stamps"))
     p.add_argument("sqlite", nargs="?", help="report: nsys's SQLite export")
-    p.add_argument("--out", help="report: the JSON to write")
+    p.add_argument("--out", help="report, stamps: the JSON to write")
     p.add_argument("--scheme", default=glm53.SCHEME)
     p.add_argument("--cubin")
-    p.add_argument("--shapes", nargs="*", help="N:K (default the two expert shapes)")
+    p.add_argument("--shapes", nargs="*", help="N:K (default run: the two expert shapes; stamps: every in-domain linear)")
     p.add_argument("--m", nargs="*", type=int)
+    p.add_argument("--schedule", nargs="*", help="stamps: the schedules (default serial and deferred-a)")
     a = p.parse_args(argv)
     if a.mode == "run":
         return run_mode(a)
+    if a.mode == "stamps":
+        return stamps_mode(a)
     out = report(*load(a.sqlite))
     print_report(out)
     if a.out:

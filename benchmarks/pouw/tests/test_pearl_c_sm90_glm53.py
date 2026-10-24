@@ -107,6 +107,35 @@ def test_the_profile_gives_each_launch_to_the_step_that_launched_it():
     assert (r["hash_decode"], r["hash_fast"], r["fallbacks"]) == (["pd_commit_851"], [], ["s512_tile_leaves"])
 
 
+def test_the_stamps_give_each_phase_since_its_ctas_start_and_the_tail_since_the_first_start():
+    """glm53_profile's stamps: a pd_commit CTA's phases by its own SM's clock (at the clock's rate over its span on the timer),
+    the CTAs' starts and ends and the tail's slots on the global timer since the first CTA's start, the tail CTA when
+    pd_commit's last CTA ran it, and an unwritten slot left out."""
+    import struct
+    spec = importlib.util.spec_from_file_location("pearl_c_sm90_glm53_profile", HERE / "glm53_profile.py")
+    P = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(P)
+    slots, count = 16, 2
+    words = [0] * (2 * slots * (count + 1))
+
+    def put(row, slot, ns, clock):
+        words[2 * (slots * row + slot):2 * (slots * row + slot) + 2] = [ns, clock]
+    for r, (t0, c0) in enumerate(((1_000_000, 50_000), (1_004_000, 90_000))):   # CTA 1 starts 4 µs later, on another SM
+        for slot, us in ((0, 0), (1, 10), (4, 11), (5, 20), (6, 21), (7, 30), (8, 33)):
+            put(r, slot, t0 + 1000 * us, c0 + 2000 * us)                         # a 2 GHz clock
+    put(count, 0, 1_037_000, 0)
+    put(count, 1, 1_040_000, 0)
+    put(count, 9, 1_050_000, 0)
+    put(count, 15, 1, 7)
+    rows, tail = P.stamp_rows(struct.pack(f"<{len(words)}Q", *words), count, slots)
+    s = P.stamp_summary(rows, tail)
+    assert s["rows"] == 2 and s["clock_ghz"] == 2.0 and "salt" not in s["since_cta_start_us"]
+    assert s["since_cta_start_us"]["segs"] == {"median_us": 10.0, "max_us": 10.0}
+    assert s["since_cta_start_us"]["seed"] == {"median_us": 33.0, "max_us": 33.0}
+    assert s["cta_start_us"] == {"median": 2.0, "max": 4.0} and s["cta_end_us"] == {"median": 35.0, "max": 37.0}
+    assert s["tail_us"] == {"start": 37.0, "level1": 40.0, "seed_a": 50.0} and s["tail_cta"] == [1, 7]
+
+
 def test_h200_session_runs_the_tables_shapes():
     """h200.sh's run.py SHAPES are every in-domain (n, k) (`in_domain`), at decode's 64 and prefill's 8192; it times decode's
     forward whole (--whole, every in-domain shape) and prefill under the h3 chain beside the default one, and checks the
