@@ -1815,13 +1815,6 @@ in `ReplayStep_v1`'s scheduling order:
   (R, W, A) = (4, 8, 4), where `ReplayStep_v1` is 12,235. The linear table is a slice's size class, and its difftest
   (`cache_vectors`) runs it over two traces' slices at N = 128, against `Prefixes` over the whole traces. A static
   window would let a continuing row's call walk only the units its chunk touches, not all ⌈L / U⌉.
-- *In the compile slice* (`cache_step.build_scan_step`, `scan_step` its reference), inside the bound: per output row
-  slot, an admission's lookup from the root checks the hit ReplayStep_v1 read for its candidate, and the row's compute
-  walks from that lookup's entry or its slot's. Then the first candidate left waiting is looked up at the step's last
-  table, so a hit understated to keep it out is refused; FCFS stops there, so no later candidate's hit is read. The
-  units are the request's tokens in ``cert``, picked by id. The table and the slots' entries ride in their own witness
-  rows beside the state rows, the first all zero. A lookup walks min(N + 1, CU) units, exact since no walk from the
-  root matches more than N, and a row reaching past CU units is refused: the slice's size class.
 
 **Scaling: offline memory checking** (the design to build; nothing of it is built). The linear table compares every
 entry at every unit, and past the bound N is the session's units. On corpus-smallkv's fixture (NB = 100, L = 4,096,
@@ -1899,19 +1892,13 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
 
 `CompileSlice_v1` is the compile unit's pieces (PRF-143's statement, "Advice v1" above) composed whole for one window:
 `ReplayLoad`, then per step `ReplayStep_v1`, `ReplayAdvance` and `CacheStep_v1`'s calls on shared wires and the encoder
-over the step's asks, at the circuit's own context and frequencies. The hits ReplayStep_v1 reads are the ones the calls
-check against the table the certified tokens build from the empty cache. The coded length is held to the public charge,
-and the step rows' salted SHA-512 to the public digest. Its rows, verdict flags (`ACCEPT` = 0x3F, ``cache`` the sixth),
-reference (`check`) and stand-ins, the evictable and returned counts held at 0 among them, are `compile_slice`'s
-docstring.
-- *The slice.* Corpus-smallkv's first seven steps, every hit 0: about 7.6M ANDs, 1.06M a step in the cache's calls.
-  Its circuit = reference tests and sidecar are at a synthetic class whose candidates take real hits (127,800 ANDs).
-- *The cache's binding* (REDTEAM phase 9 (4)). A made-up first table gives user-1 a free 16-token hit at step 6, and
-  ``cache`` alone refuses it (0x1F). Made-up tokens give the same hit through a consistent table, and ``rows`` and
-  ``cert``'s b‖c refuse them.
-- *REDTEAM's phase 9* (`phase9`). The prover's context or frequencies are refused by ``code`` and ``charge``, a prefix
-  hit by ``cache`` and ``rows``, and a decision read again or an arrival left queued by ``steps`` and ``rows``. Free
-  returns aren't expressible on the slice.
+over the step's asks, at the circuit's own context and frequencies. Each hit ReplayStep_v1 reads is its lookup's, on
+the certified tokens, from the empty cache. The coded length is held to the public charge, and the step rows' salted
+SHA-512 to the public digest. Its rows, verdict flags, reference (`check`) and stand-ins are `compile_slice`'s docstring.
+- *The slice.* Corpus-smallkv's first seven steps, every hit 0: about 7.6M ANDs.
+- *REDTEAM's phase 9* (`phase9`). The prover's context or frequencies are refused by ``code`` and ``charge``; a prefix
+  hit, a made-up table or made-up tokens by ``cache`` or ``rows``; a decision read again or an arrival left queued by
+  ``steps`` and ``rows``. Free returns aren't expressible on the slice.
 - *In zero knowledge* (`benchmarks/network_traces/compile_slice_zk.py`, run r20261024-140227-8995, before the cache
   was wired). Nine units (the honest one, three negatives and phase 9's five) are proved `--zk` behind the Lean
   firewall and held by Lean `verify --zk`. Each opens to its verdict, and no witness piece is in what the verifier
@@ -2323,12 +2310,10 @@ and seven lemmas, and three more proved lemmas:
     `check_chain` accepts it, and refuses a short window, the empty state or window under a fresh salt or another
     program's, the carried state or window under a fresh salt, and another row of the last window;
   - `size` is the parts' AND counts, which circuit-check pins at the tests' shape and at the sync KV-pressure trace's;
-- **`test_network_certifier_compile_slice.py`:** the corpus slice's scan is the replay's, every hit 0, and its
-  negatives (a made-up table and tokens among them) are refused by exactly the checks `check` names; on a synthetic
-  slice whose candidates take real hits, the circuit's verdict is `check`'s on the honest rows, the negatives and
-  REDTEAM's phase 9 choices; `codeword` is the encoder's, and `size` is pinned;
-- **`test_network_certifier_cache_step_phase9.py`** (REDTEAM's): `CacheStep_v1` alone pins the hit only to the table
-  it's given and leaves the tokens free; the compile slice binds both;
+- **`test_network_certifier_compile_slice.py`:** the corpus slice's scan is the replay's (every hit 0), and its
+  negatives, a made-up table and tokens among them, fail exactly `check`'s checks; the circuit is `check` on a
+  synthetic slice with real hits; `codeword` is the encoder's, and `size` is pinned;
+- **`test_network_certifier_cache_step_phase9.py`:** REDTEAM's: `CacheStep_v1` alone leaves the table and tokens free;
 - **`test_network_certifier_active.py`:** the active certifier over localhost sockets on an injected clock:
   - `Shaper` is `run_shaper`'s rule on random instances;
   - an honest run's records, hand times and wire are the Program's, accepted raw and committed;
