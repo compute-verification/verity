@@ -1,5 +1,6 @@
 """Pearl-C (``pearl-c-sm120-v1-h3``) as a `verity-bench` experimental arm (``--arm-module pearl_c_vllm.bench_arm:PEARL_C``
-with ``benchmarks/pouw`` on ``PYTHONPATH``), on one RTX PRO 6000.
+with ``benchmarks/pouw`` on ``PYTHONPATH``), on one RTX PRO 6000; with ``PEARLC_KERNEL`` the tree's
+``benchmarks/pouw/pearl_c_sm90``, ``pearl-c-h100-v1-h3`` on one H100 or H200.
 
 The arm serves the preset's model in BF16 with every linear computed and committed by `pouw_pearl_c_device.PearlCDeviceRun`,
 installed as `e2e.install` does (sites by type, the kernel directory's cubin, the weight roots, the epoch from a
@@ -13,8 +14,14 @@ arm's gate is Pearl-C's own, `e2e.gate`'s call check: at every distinct (n, k), 
 RMS, the same call's commitment twice bit for bit, and the ``hash_leaf``-omitted negative control changing the
 transcript root.
 
-Env: ``PEARLC_KERNEL`` (default the tree's ``benchmarks/pouw/pearl_c_sm120``), ``PEARLC_CUBIN`` (default the directory's),
-``PEARLC_SCHEDULE`` (default ``deferred``, the served schedule), ``PEARLC_SCHEME``, ``PEARLC_BENCH_EPOCH``.
+Env: ``PEARLC_KERNEL`` (default the tree's ``benchmarks/pouw/pearl_c_sm120``), ``PEARLC_CUBIN`` (default the directory's
+build.sh cubin, ``<directory name>.cubin``), ``PEARLC_SCHEDULE`` (default ``deferred``, the served schedule),
+``PEARLC_SCHEME`` (default the kernel directory's record, `KERNEL_SCHEMES`), ``PEARLC_BENCH_EPOCH``. The salt coin
+is a challenger's held in this process (``in-process``, a cost measurement) unless ``PEARLC_CHALLENGER_GATE`` (infra's gate
+as an ssh command under the lane's gate key) and ``PEARLC_CHALLENGER_PEER`` (this node's name in the challenger host's
+peers) are set: then it is a live session's on the auditor host, reserved at install, opened on the weights' root and its
+salt coin opened after it (`_LiveSession`), which the device run checks (`pouw_pearl_c_host.epoch_of`); the gate's result
+names the session (``coins``), and the arm's close ends it.
 """
 from __future__ import annotations
 
@@ -26,6 +33,8 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 #: `e2e.gate`'s bound on served y against x·Wᵀ (rel RMS), Pearl's FP8 quantization noise
 ERR = 0.08
+#: the scheme each of the tree's kernel directories runs (`pouw_pearl_c_device.SCHEMES`' device records)
+KERNEL_SCHEMES = {"pearl_c_sm120": "pearl-c-sm120-v1-h3", "pearl_c_sm90": "pearl-c-h100-v1-h3"}
 
 
 class _Coins:
@@ -49,6 +58,40 @@ class _Coins:
         return self.opened[label]
 
 
+class _LiveSession:
+    """The epoch's salt coin from a session of the auditor host's challenger, through infra's gate: ``gate`` its argv
+    prefix as one string (``ssh -i KEY -o IdentitiesOnly=yes research@HOST``, the lane's own gate key) and ``peer`` this
+    node's name in the host's peers (``--peer``), whose 127.0.0.1 the challenger reaches through ``ssh -R``. Reserved at
+    construction (`commit_coins.Gate`: ``reserve --peer NAME``, a live epoch's layout with one round coin), opened on the
+    weights' root once they are committed, its salt coin opened after it (`pouw_h1_window.open_session`), closed with the
+    arm."""
+
+    def __init__(self, gate: str, peer: str, epoch: int) -> None:
+        import json
+
+        from verity.core.protocols.pouw import window as Wd
+        from verity_vllm.pipeline.commit_coins import Gate
+
+        self.gate = Gate(gate)
+        families = json.dumps([list(f) for f in Wd.live_families(1)], separators=(",", ":"))
+        self.reserved = self.gate.call("reserve", "--peer", peer, "--scheme", Wd.LIVE_SCHEME, "--families", families,
+                                       "--epoch", str(epoch))
+        self.client = self.commitment = None
+        self.carried: dict[str, Any] = {}
+
+    def open(self, entry: str, root: bytes) -> Any:
+        from verity_vllm.protocol_options import pouw_h1_window as PHW
+
+        self.client, self.commitment, opening, _, _, self.carried = PHW.open_session(
+            entry, self.gate.call, self.reserved["session"], root)
+        return opening
+
+    def close(self) -> None:
+        if self.client is not None:
+            client, self.client = self.client, None
+            client.close()
+
+
 class PearlCArm:
     id = "pouw-pearl-c"
     protocols: tuple[str, ...] = ()
@@ -61,9 +104,13 @@ class PearlCArm:
     def __init__(self) -> None:
         self.kernel_dir = Path(os.environ.get("PEARLC_KERNEL", str(HERE.parent / "pearl_c_sm120")))
         self.cubin = os.environ.get("PEARLC_CUBIN") or None
+        self.scheme = os.environ.get("PEARLC_SCHEME") or KERNEL_SCHEMES.get(self.kernel_dir.name, "pearl-c-sm120-v1-h3")
         self.schedule = os.environ.get("PEARLC_SCHEDULE", "deferred")
         self.epoch = int(os.environ.get("PEARLC_BENCH_EPOCH", "20261014"))
-        self.run = self.stack = self.weights = None
+        self.gate_command = os.environ.get("PEARLC_CHALLENGER_GATE") or None
+        self.peer = os.environ.get("PEARLC_CHALLENGER_PEER") or None
+        self.run = self.stack = self.weights = self.session = None
+        self.coins: dict[str, Any] = {"source": "in-process"}
 
     def install(self, target: Any) -> "PearlCArm":
         return self
@@ -79,7 +126,7 @@ class PearlCArm:
                 "max_num_batched_tokens": int(os.environ.get("PEARLC_STEP_TOKENS", "4096"))}
 
     def kernel_digest(self, target: Any) -> str | None:
-        path = Path(self.cubin) if self.cubin else self.kernel_dir / "pearl_c_sm120.cubin"
+        path = Path(self.cubin) if self.cubin else self.kernel_dir / f"{self.kernel_dir.name}.cubin"
         return hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
 
     def _capacity(self, target: Any, tile: int, row_align: int, ns: list[int],
@@ -100,22 +147,41 @@ class PearlCArm:
         from verity_vllm.linear.api import PassSpec, Stack
         from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
-        scheme = os.environ.get("PEARLC_SCHEME", "pearl-c-sm120-v1-h3")
+        scheme = self.scheme
         sites = vllm_site.discover(target.model)
         weights = {site.weight_id: layer.weight.data for site, layer in sites}
         bad = PPD.refusals(scheme, {w: tuple(t.shape) for w, t in weights.items()})
         if bad:
             raise RuntimeError(f"{scheme} refuses the model: " + "; ".join(bad))
+        if (self.gate_command is None) != (self.peer is None):
+            raise RuntimeError("live coins take PEARLC_CHALLENGER_GATE (the gate's ssh command) and PEARLC_CHALLENGER_PEER "
+                               "(this node's name in the challenger host's peers) together")
         kernel = PPD.Kernel.load(str(self.kernel_dir), self.cubin)
+        if self.gate_command is not None:
+            self.session = _LiveSession(self.gate_command, self.peer, self.epoch)
         salt_key = PPD.new_salt_key(scheme)
         roots = PPD.weight_roots(kernel, weights, scheme, salt_key=salt_key)
-        coins = _Coins(self.epoch)
-        opening = coins.open("salt", weights_root(roots))
+        if self.session is not None:
+            opening = self.session.open(f"pouw:{scheme}", weights_root(roots))
+            commitment = self.session.commitment
+            self.coins = {"source": "challenger", "session": self.session.carried,
+                          "salt_after": weights_root(roots).hex()}
+        else:
+            coins = _Coins(self.epoch)
+            opening, commitment = coins.open("salt", weights_root(roots)), coins.commitment
         tiles, rows = self._capacity(target, kernel.run.TILE, PPD.ROW_ALIGN,
                                      [t.shape[0] for t in weights.values()], PPD.LEAF_CAPACITY, PPD.FLAG_ROWS)
-        run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots,
-                                  coins.commitment, opening, schedule=self.schedule,
-                                  capacity=tiles, flag_rows=rows, salt_key=salt_key, **self.run_options)
+        try:
+            run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots,
+                                      commitment, opening, schedule=self.schedule,
+                                      capacity=tiles, flag_rows=rows, salt_key=salt_key, **self.run_options)
+        except BaseException:
+            if self.session is not None:
+                self.session.close()
+            raise
+        run.commits["coin_source"] = self.coins["source"]
+        if self.session is not None:
+            run.commits["session"] = self.session.carried
         stack = Stack([site for site, _ in sites], PPD.PearlCExecutor(run))
         bad = stack.refusals()
         if bad:
@@ -168,14 +234,18 @@ class PearlCArm:
                                "omitted_leaves_rejected": control, "ok": err < ERR and same and control})
         run.details["passes"].clear()
         return {"passed": all(c["ok"] for c in checks), "scheme": run.scheme.name, "schedule": self.schedule,
-                "checks": checks}
+                "coins": self.coins, "checks": checks}
 
     def spans(self, target: Any) -> dict[str, Any]:
         return {} if self.stack is None else {"passes": float(len(self.stack.passes))}
 
     def close(self, target: Any = None) -> None:
-        if self.stack is not None and self.stack.open_pass is None:
-            self.stack.activate(None)
+        try:
+            if self.stack is not None and self.stack.open_pass is None:
+                self.stack.activate(None)
+        finally:
+            if self.session is not None:
+                self.session.close()
 
 
 class PearlCWholeArm(PearlCArm):

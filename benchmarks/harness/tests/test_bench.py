@@ -1209,6 +1209,39 @@ def test_pearl_cs_whole_step_arm_builds_vllms_full_decode_graphs_beside_the_serv
     assert whole.run_options == {"graphs": True, "whole_defer": True, "whole_defer_a": True} and whole.schedule == "serial"
 
 
+def test_pearl_cs_whole_step_arm_on_an_h200_runs_pearl_c_sm90s_kernels_under_the_h100_record(monkeypatch):
+    """`llama31-8b-1gpu-pearl-c-whole-served-h200` is the whole-served spec's preset on one H200, the whole-step arm beside
+    compiled stock, its setup building pearl_c_sm90's cubin; with PEARLC_KERNEL that directory, the arm takes its record
+    (`pearl-c-h100-v1-h3`, a scheme the device path runs) and its build.sh cubin, and builds the same engine."""
+    from verity_bench.vllm import runner
+    from verity_bench.vllm.arms import plugin
+    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+
+    root = Path(__file__).resolve().parents[3]
+    monkeypatch.syspath_prepend(str(root))
+    spec, rtx = resolve_spec("llama31-8b-1gpu-pearl-c-whole-served-h200"), resolve_spec("llama31-8b-1gpu-pearl-c-whole-served")
+    assert (spec.preset.gpu_id, spec.preset.engine_settings, spec.preset.model) == ("h200", rtx.preset.engine_settings,
+                                                                                     rtx.preset.model)
+    assert (root / spec.setup).is_file() and "pearl_c_sm90/build.sh" in (root / spec.setup).read_text()
+    arms = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
+    assert [(a.id, a.execution, a.experimental) for a in arms] == [("stock-fp8@compiled", "compiled", False),
+                                                                   ("pouw-pearl-c-whole", None, True)]
+    from benchmarks.pouw.pearl_c_vllm import bench_arm
+    assert set(bench_arm.KERNEL_SCHEMES.values()) <= set(PPD.SCHEMES)
+    assert all((root / "benchmarks/pouw" / d).is_dir() for d in bench_arm.KERNEL_SCHEMES)
+    monkeypatch.setenv("PEARLC_KERNEL", str(root / "benchmarks/pouw/pearl_c_sm90"))
+    monkeypatch.delenv("PEARLC_SCHEME", raising=False)
+    monkeypatch.delenv("PEARLC_CUBIN", raising=False)
+    whole = bench_arm.PearlCWholeArm()
+    assert whole.scheme == "pearl-c-h100-v1-h3" and whole.kernel_dir.name == "pearl_c_sm90"
+    assert whole.kernel_digest(None) is None or (whole.kernel_dir / "pearl_c_sm90.cubin").is_file()
+    preset, eager = served(spec.preset, spec.eager)
+    preset, eager = runner.arm_execution(plugin(arms[-1]), preset, eager)
+    built = {**runner.engine_args(preset, "bfloat16", resident=False, eager=eager), **whole.engine_overrides(None)}
+    assert built["compilation_config"]["cudagraph_mode"] == "FULL_DECODE_ONLY"
+    assert whole.run_options == {"graphs": True, "whole_defer": True, "whole_defer_a": True} and whole.schedule == "serial"
+
+
 def test_a_sweep_crosses_samplings_and_greedy_points_keep_their_ids():
     served_points = expand_sweep("served")
     assert [(p.batch, p.sampling) for p in served_points] == [
