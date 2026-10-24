@@ -8,11 +8,12 @@ rows as the words its Definition reads, through a decode per statement (`decL` f
 combine's):
 
 * `LeafChecks` (the 33 circuits; owner @compute-accounting): at a `K` with `32 ∣ K`, `64 ≤ K` and `K < 2^17`, each
-  lane's and the combine's circuit computes its Definition at its port rows, so on every wire assignment its evaluation agrees with at every unit, the decoded `ok`
-  word reads `1` only where `LaneOk` (or `CombineOk`) holds of the decoded inputs. It reads every port row
-  (`portRead`), registered or not, so it is a fact of the circuits alone; that every port they read is registered and
-  opens at its registered root is proved from flock-verify's complete check, part of `leafLayer`'s acceptance
-  (`RowsSession.rowsReg_eq_portRead`, `RowsSession.portRow_opens`, `Flock.Registered.complete_opens`), not assumed.
+  lane's and the combine's circuit computes its Definition at its port rows, so on every wire assignment its
+  evaluation agrees with at every unit, the decoded `ok` word reads `1` only where `LaneOk` (or `CombineOk`) holds of
+  the decoded inputs. It reads every port row (`portRead`), registered or not, so it is a fact of the circuits alone;
+  that every port they read is registered and opens at its registered root is proved from flock-verify's complete
+  check, part of `leafLayer`'s acceptance (`RowsSession.rowsReg_eq_portRead`, `RowsSession.portRow_opens`,
+  `Flock.Registered.complete_opens`), not assumed.
 
 Nothing is asked of the rows the sessions open. The leaf the layer opens and the receipt it checks are the ones those
 rows decode to (`Accounting.TS.Lanes.leafOf`, `receiptOf`); the known ports' rows (the admit bits, the public inputs,
@@ -40,9 +41,8 @@ scheme refuses any other `K` than `32 ∣ K` with `KS = K / 32 ≥ 2`; circuit-c
 tests stage it at multiples of 32 up to 14336), and below `2^17` every cell's `Σ_k a_k b_k` of s8 codes is the circuit's
 s32 `z` (`|a_k b_k| ≤ 2^14`, so `|z| ≤ 2^14 K < 2^31`; an all `-128` dot at `K = 2^17` wraps to `-2^31`). At lane `l`'s
 session `sess (some l)`, whose circuit is `PouwH1LaneZy_v1{TILE}`'s lowering at its tile's `K`, on every wire assignment
-`vals` the key
-program's evaluation agrees with on every unit's wires, if the `ok` word that `decL` reads from `vals`' port rows
-(`portRead`) is `1`, then `decL`'s view of them meets `LaneOk` at `dq` and `part`: its partials row is the honest one at
+`vals` the key program's evaluation agrees with on every unit's wires, if the `ok` word that `decL` reads from `vals`'
+port rows (`portRead`) is `1`, then `decL`'s view of them meets `LaneOk` at `dq` and `part`: its partials row is the honest one at
 its rows, its public inputs and its index, and each of its 32 cells has `z = Σ_k a_k b_k` and `y = dq [z, s_a, s_w]`.
 At the combine's session `sess none`, whose circuit is `PouwH1Combine_v1{TILE}`'s at `K ≥ 384` (`h1zy.LEAST_K`, the
 least `K` at which C-Flock proves the combine), the same holds of `decC`'s view with `CombineOk`: the rows' XOR in lane
