@@ -14,13 +14,16 @@
 # SECTIONS (default gate,time,beside,ncu, in that order; beside and ncu after a passed gate, which `gate` writes), MS and ARMS (fused_bench.py's
 # --ms and --arms), PHASES (fused_beside.py's), NCU_MS, MAXMIN (the lease's, default 60), LEASE_ARGS (default --wait
 # --preemptible; without --wait the lease takes a free GPU at once or the run ends), VPY (vLLM's venv: the GEMM
-# vLLM runs), PY (the prover's torch venv), ENGINE_CPUS and PROVER_CPUS (taskset lists, default unpinned).
+# vLLM runs), PY (the prover's torch venv), ENGINE_CPUS and PROVER_CPUS (taskset lists, default unpinned), GPU_LEASE
+# (default the gpu-lease on PATH, else pouw's). Host threads default to one (OMP_NUM_THREADS, MKL_NUM_THREADS).
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
 export PY=${PY:-$ENV_DIR/gpu312-torch2.14.0-cu130/bin/python} VPY=${VPY:-/workspace/jobs/venv312/bin/python}
 [ -x "$PY" ] && [ -x "$VPY" ] || { echo "no venv at $PY or $VPY"; exit 3; }
 export CUDA_HOME=/usr/local/cuda-13.0 PATH=/usr/local/cuda-13.0/bin:$PATH
+export OMP_NUM_THREADS=${OMP_NUM_THREADS:-1} MKL_NUM_THREADS=${MKL_NUM_THREADS:-1}
+GPU_LEASE=${GPU_LEASE:-$(command -v gpu-lease || echo /workspace/pouw/infra/bin/gpu-lease)}
 export B=$(mktemp -d /tmp/fused.XXXXXX)
 trap '[ -e "$B/mps/pipe/control" ] && echo quit | CUDA_MPS_PIPE_DIRECTORY=$B/mps/pipe nvidia-cuda-mps-control; rm -rf "$B"' EXIT
 export RS=benchmarks/remote_session SECTIONS=${SECTIONS:-gate,time,beside,ncu} BESIDE=${BESIDE:-nomps}
@@ -35,7 +38,7 @@ nvcc "${FLAGS[@]}" -o "$B/session.so" $RS/session.cu > "$O/session.ptxas" 2>&1 &
 for p in "${P[@]}"; do wait "$p" || { tail -30 "$O"/*.ptxas; exit 4; }; done
 sha256sum "$B"/*.so > "$O/libs.sha256"
 # shellcheck disable=SC2016
-/workspace/pouw/infra/bin/gpu-lease 1 ${LEASE_ARGS---wait --preemptible} --max-min "${MAXMIN:-60}" -- bash -c '
+"$GPU_LEASE" 1 ${LEASE_ARGS---wait --preemptible} --max-min "${MAXMIN:-60}" -- bash -c '
   nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temperature.gpu,memory.used,memory.total \
     --format=csv,noheader -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1
   LIBS=(--lib "kv=$B/kv.so" --lib "kv6=$B/kv6.so" --lib "fused=$B/fused.so" --lib "fused6=$B/fused6.so")
