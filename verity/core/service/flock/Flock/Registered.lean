@@ -475,8 +475,7 @@ theorem checkCover_ok {c : Circuit} {b : ByteArray} {partition : Option Json} {o
       | none => rfl
       | some y =>
         obtain ⟨n, ty⟩ := y
-        rw [hm] at h
-        simp at h
+        simp [hm] at h
 
 /-- The registered values that are a round's commitment by an index, `<prefix><i>`: round `i`'s commitment `rec-c<i>`,
 which V*'s algebra reads; level `l`'s committed tops `rec-top-L<l>`, which its opening statement reads; R's registered
