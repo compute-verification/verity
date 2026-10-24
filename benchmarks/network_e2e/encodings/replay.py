@@ -615,7 +615,8 @@ def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int
 class Trace:
     """A served run's step trace (`verity-vllm/step-trace/v1`), its requests in the order they reached the engine, with
     the certifier's view of its timing when the trace has a clock: each request's ingress time and each step's release
-    time (its output's tokens leaving through the egress certifier)."""
+    time (its output's tokens leaving through the egress certifier), or each kept output's own (`output_t`) where the
+    recorder saw them leave one by one."""
 
     engine: Engine
     ids: list[str]
@@ -626,6 +627,7 @@ class Trace:
     ingress_t: list[float | None]
     release_t: list[float | None]
     header: dict[str, Any] = field(default_factory=dict)
+    output_t: list[list[float]] | None = None
 
     def first_scheduled(self) -> list[int]:
         first = [-1] * len(self.requests)
@@ -648,13 +650,19 @@ class Trace:
                     kept[i].append(s)
         return kept
 
+    def output_times(self) -> list[list[float]]:
+        """When each kept output left: its own time where the trace has one, else its step's release."""
+        if self.output_t is not None:
+            return self.output_t
+        return [[self.release_t[s] for s in ks] for ks in self.kept_steps()]  # type: ignore[misc]
+
     def certified(self, bucket_s: float = 0.1) -> Certified:
         """What the verifier holds of this run without advice (`Certified`)."""
         if not self.clocked():
             return Certified(self.engine, list(self.requests), bucket_s, None, None)
         return Certified(self.engine, list(self.requests), bucket_s,
                          [bucket(t, bucket_s) for t in self.ingress_t],                                  # type: ignore[arg-type]
-                         [[bucket(self.release_t[s], bucket_s) for s in ks] for ks in self.kept_steps()])  # type: ignore[arg-type]
+                         [[bucket(t, bucket_s) for t in ts] for ts in self.output_times()])
 
 
 @dataclass(frozen=True)
@@ -739,12 +747,14 @@ def _jsonl(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in lines[:-1] if line.strip()]
 
 
-def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block_size: int = 16) -> Trace:
+def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block_size: int = 16,
+                      egress: str = "engine") -> Trace:
     """One trace of TRACE-CORPUS (`benchmarks/network_e2e/traces`, store kind `vllm-trace-corpus/v1`): its directory's
     `steps.jsonl`, `requests.jsonl` and `meta.json` (the server's argv), and `server.log` for the KV pool's size unless
     `num_gpu_blocks` is given. The hook records no arrivals, so a request's engine order and admission step are its first
     scheduling (FCFS schedules new requests in arrival order); its certifier ingress is the client's send time, and a
-    step's release the time its output was back."""
+    step's release the time its output was back. With `egress="client"` each kept output left when the client got the
+    streamed chunk that carried it (its `chunks`), which is what an egress certifier on the link sees."""
     d = Path(d)
     argv = json.loads((d / "meta.json").read_text())["server_argv"]
 
@@ -802,9 +812,21 @@ def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block
             if first[i] < 0:
                 first[i] = k
     ingress = [reqs[rid].get("send_unix") or reqs[rid].get("arrival") for rid in order]
+    output_t = None
+    if egress == "client":
+        output_t = []
+        for rid, io in zip(order, requests):
+            r = reqs[rid]
+            ts = [r["send_unix"] + float(s) for s, n in r.get("chunks") or () for _ in range(int(n))]
+            if len(ts) != io.output_len:
+                raise ValueError(f"request {rid}: its chunks stream {len(ts)} tokens of {io.output_len}")
+            output_t.append(ts)
+    elif egress != "engine":
+        raise ValueError(f"egress {egress!r}: engine or client")
     return Trace(engine=engine, ids=order, requests=requests, before_step=first, steps=steps, emits=emits,
-                 ingress_t=ingress, release_t=release,
-                 header={"kind": "header", "schema": "vllm-trace-corpus/v1", "config": dict(engine.__dict__), "source": str(d)})
+                 ingress_t=ingress, release_t=release, output_t=output_t,
+                 header={"kind": "header", "schema": "vllm-trace-corpus/v1", "config": dict(engine.__dict__), "source": str(d),
+                         "egress": egress})
 
 
 def order_bits(trace: Trace) -> float:
@@ -1204,7 +1226,7 @@ def v0_advice(trace: Trace, v0: Any, *, bucket_s: float = 0.1) -> Any:
     reqs = tuple(v0.RequestAdvice(id=trace.ids[i], prompt_len=trace.requests[i].prompt_len,
                                   output_len=trace.requests[i].output_len, finish="eos" if trace.requests[i].eos else "length")
                  for i in order)
-    kept = trace.kept_steps()
+    kept, times = trace.kept_steps(), trace.output_times()
     steps, release, at = [], [], [0] * len(reqs)
     for s, (st, mine) in enumerate(zip(trace.steps, rp.steps)):
         rows = []
@@ -1214,8 +1236,8 @@ def v0_advice(trace: Trace, v0: Any, *, bucket_s: float = 0.1) -> Any:
                                n=n, cache_hit=mine.cache_hit.get(i, 0), preempted=i in mine.resumed,
                                sources=tuple(v0.Source(idx[o], k) for o, k in mine.sources.get(i, ()))))
             if at[i] < len(kept[i]) and kept[i][at[i]] == s:
+                t = times[i][at[i]]
                 at[i] += 1
-                t = trace.release_t[s]
                 release.append(0 if t is None else bucket(t, bucket_s))
         steps.append(v0.StepAdvice(rows=tuple(rows)))
     return v0.Advice(requests=reqs, steps=tuple(steps), release=tuple(release))
@@ -1275,9 +1297,11 @@ def load_v0(spec: str | None) -> Any:
         return None
 
 
-def read_any(p: Path) -> Trace:
+def read_any(p: Path, *, egress: str = "engine") -> Trace:
     if p.is_dir():
-        return read_corpus_trace(p)
+        return read_corpus_trace(p, egress=egress)
+    if egress != "engine":
+        raise ValueError(f"{p}: a step trace has only its steps' release times (egress engine)")
     tok = p.with_suffix(".tokens.json")
     return read_step_trace(p, tokens=json.loads(tok.read_text()) if tok.exists() else None)
 
@@ -1290,6 +1314,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     ap.add_argument("--bucket-ms", type=float, default=100.0)
     ap.add_argument("--window-buckets", type=int, default=600)
     ap.add_argument("--v0", help="path to ADV-SPEC's advice.py (default: the installed module, else fixed widths)")
+    ap.add_argument("--egress", choices=("engine", "client"), default="engine",
+                    help="a TRACE-CORPUS output's release time: its step's (engine) or its streamed chunk's (client)")
     ap.add_argument("--out", type=Path, help="write {trace: table} as JSON")
     a = ap.parse_args(argv)
     v0 = load_v0(a.v0)
@@ -1297,12 +1323,24 @@ def main(argv: Sequence[str] | None = None) -> None:
     print("| trace | requests | steps | replay matched | I1 v0 bits | gamma | adaptive | adaptive clocked | adaptive egress "
           "| best bits/request | order bits |\n|---|---|---|---|---|---|---|---|---|---|---|")
     for p in a.traces:
-        tr = read_any(p)
-        tb = out[p.stem if p.is_file() else p.name] = table(tr, bucket_s=a.bucket_ms / 1000, window_buckets=a.window_buckets, v0=v0)
+        name = p.stem if p.is_file() else p.name
+        tr = read_any(p, egress=a.egress)
+        try:
+            tb = out[name] = table(tr, bucket_s=a.bucket_ms / 1000, window_buckets=a.window_buckets, v0=v0)
+        except (ValueError, RuntimeError) as e:
+            try:
+                m = compare(replay(tr.engine, tr.requests, admit=tr.before_step).steps, tr.steps)
+                where = f"{m.matched}/{m.steps} (first mismatch {m.first_mismatch})"
+                match: dict[str, Any] = m.__dict__
+            except (ValueError, RuntimeError) as e2:
+                where, match = f"replay refused: {e2}", {"error": str(e2)}
+            out[name] = {"error": str(e), "requests": len(tr.requests), "steps": len(tr.steps), "match_before_step": match}
+            print(f"| {name} | {len(tr.requests)} | {len(tr.steps)} | {where} | {e} |" + " |" * 6, flush=True)
+            continue
         s = {k: sum(w[k] for w in tb["windows"] if w.get(k) is not None) for k in tb["windows"][0]}
         m = tb["match_before_step"]
         best = min(s[k] for k in ("adaptive_bits", "adaptive_clocked_bits", "adaptive_egress_bits") if k in s)
-        print(f"| {p.stem if p.is_file() else p.name} | {tb['requests']} | {tb['steps']} | {m['matched']}/{m['steps']} | "
+        print(f"| {name} | {tb['requests']} | {tb['steps']} | {m['matched']}/{m['steps']} | "
               f"{s['v0_bits']} | {s['gamma_bits']} | {s['adaptive_bits']} | {s.get('adaptive_clocked_bits', '-')} | "
               f"{s.get('adaptive_egress_bits', '-')} | {best / max(tb['requests'], 1):.2f} | {tb['order_bits']} |", flush=True)
     if a.out:

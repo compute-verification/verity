@@ -115,12 +115,17 @@ def corpus_dir(t, d: Path) -> Path:
                                 "cached": cached, "batch": [t.ids[i] for i, _, _ in s.rows],
                                 "preempted": [t.ids[i] for i in s.preempted], "sampled": [1] if t.emits[k] else [],
                                 "t_output": 1e9 + t.release_t[k]}) + "\n")
+    kept = t.kept_steps()
     with open(d / "requests.jsonl", "w") as f:
         for i, r in enumerate(t.requests):
+            chunks = [[t.release_t[s] - t.ingress_t[i] + 0.001, 1] for s in kept[i]]
+            for k in range(1, len(chunks) - 1, 7):          # the streamer merged two tokens into one chunk
+                chunks[k] = [chunks[k + 1][0], 2]
+                chunks[k + 1] = [chunks[k + 1][0], 0]
             f.write(json.dumps({"id": t.ids[i], "prompt_len": r.prompt_len, "max_tokens": r.max_tokens,
                                 "output_len": r.output_len, "finish_reason": "stop" if r.eos else "length", "eos": r.eos,
                                 "prompt_ids": [3] * r.prompt_len, "output_ids": [4] * r.output_len,
-                                "send_unix": 1e9 + t.ingress_t[i]}) + "\n")
+                                "send_unix": 1e9 + t.ingress_t[i], "chunks": [[0.0, 0]] + chunks}) + "\n")
     e = t.engine
     argv = ["--max-model-len", str(e.max_model_len), "--max-num-seqs", str(e.max_num_seqs), "--max-num-batched-tokens",
             str(e.max_num_batched_tokens), "--no-async-scheduling", "--enable-chunked-prefill"]
@@ -132,11 +137,16 @@ def corpus_dir(t, d: Path) -> Path:
 
 def test_reads_a_trace_corpus_trace(tmp_path):
     t = trace("sync-kv-pressure")
-    c = R.read_corpus_trace(corpus_dir(t, tmp_path))
+    d = corpus_dir(t, tmp_path)
+    c = R.read_corpus_trace(d)
     assert c.engine == t.engine and c.ids == t.ids and len(c.steps) == len(t.steps)
     rp = R.replay(c.engine, c.requests, admit=c.before_step)
     assert R.compare(rp.steps, c.steps).ordered == len(t.steps)
-    assert R.compare(R.decode(c.certified(), R.encode(c)).steps, c.steps).first_mismatch is None
+    client = R.read_corpus_trace(d, egress="client")
+    assert [len(ts) for ts in client.output_times()] == [r.output_len for r in t.requests]
+    assert client.output_times() != c.output_times()
+    for x in (c, client):
+        assert R.compare(R.decode(x.certified(), R.encode(x)).steps, x.steps).first_mismatch is None
 
 
 def test_order_bits_charge_only_reordering():

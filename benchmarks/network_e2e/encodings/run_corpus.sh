@@ -4,8 +4,9 @@
 # advice.py sent along for I1 v0's charge (without it, v0 is `v0_widths`):
 #   research run --on vy-nebius-cpu-1 --mem-gb 8 --mem-wait 3600 --project verity --campaign glm-e2e-demo --cwd source \
 #     --store-read [--send advice.py] -- bash benchmarks/network_e2e/encodings/run_corpus.sh art:...|TRACE...
-# It writes OUT/table.json and OUT/table.md; `research data put --kind advice-encoding/v1 --tree OUT --preserve` runs where
-# `research fetch RUN --all` brought it.
+# It writes OUT/table-<egress>.json (an artifact's twice: outputs released at their step's time, and at their streamed
+# chunk's) and OUT/table.md; `research data put --kind advice-encoding/v1 --tree OUT --preserve` runs where `research fetch
+# RUN --all` brought it.
 set -euo pipefail
 D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out
 [ $# -ge 1 ] || { echo "usage: run_corpus.sh art:ID | TRACE..."; exit 2; }
@@ -21,4 +22,10 @@ else
 fi
 v0=()
 for f in "$D"/inputs/*.py; do [ -f "$f" ] && v0=(--v0 "$f"); done
-python3 -P benchmarks/network_e2e/encodings/replay.py "${traces[@]}" "${v0[@]}" --out "$OUT/table.json" | tee "$OUT/table.md"
+egress=(engine)
+[[ $1 == art:* ]] && egress=(engine client)
+for e in "${egress[@]}"; do
+  echo "## egress: $e" | tee -a "$OUT/table.md"
+  python3 -P benchmarks/network_e2e/encodings/replay.py "${traces[@]}" "${v0[@]}" --egress "$e" --out "$OUT/table-$e.json" \
+    | tee -a "$OUT/table.md"
+done
