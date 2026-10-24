@@ -148,5 +148,5 @@ sha256sum lean-toolchain lakefile.toml lake-manifest.json grade.sh Grader/Regist
   ../../../../../Security/Definitions/Pous.lean \
   ../../../../../Security/Proofs/Pous/Statements.lean ../../../../../Security/Proofs/Pous/Sanity.lean \
   ../../../../../Security/Proofs/Pous/Accounting/Numbers.lean \
-  $(find ../../../../../Security/Definitions/Pous ../../../../../Security/Definitions/Pous -name '*.lean' | LC_ALL=C sort -u) > TRUSTED.sha256
+  $(find ../../../../../Security/Definitions/Pous -name '*.lean' | LC_ALL=C sort -u) > TRUSTED.sha256
 ~~~

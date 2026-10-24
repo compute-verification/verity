@@ -5,7 +5,7 @@ ba6e2d2d4005ac70cb22cbb7924a68e547150694de7c1f883a57556a30593a96  grade.sh
 01e13d29d6a41837ecfa6f10e09ad98358282a3a516fff6b3a69bf48b61cc414  Grader/Registry.lean
 523acb9f1a3d9130b5ba40834aeb6acd44a5e6e4a44924f0f81da99f5bb8cde4  Grader/Main.lean
 8733782dc070a99b312039cda424f601b80f3be6f6f512627da5ba25adc27632  ../../../../../Security/lean-toolchain
-7f635cbaebed26f11d2673c27e952f2a19281528b5bd0b1f20ef10dcfa6d11fb  ../../../../../Security/lakefile.toml
+c8bb54b77da8e87a326e56ebe8c5c4598d5260ef54f1b7a3720b2992b4204850  ../../../../../Security/lakefile.toml
 519a4aef7e29047739fa3a52bedfe931e32c4b37528dce19f4ff10491522dc6f  ../../../../../Security/lake-manifest.json
 da0c064b30f5df1a030467927eaf57f22075a414b02396bb6984e01c3cf6edda  ../../../../../Security/Proofs/lakefile.toml
 dff5d799d07c5962dde6e0967f8925956561be6b011b7e0187188495fcbe8088  ../../../../../Security/Proofs/lake-manifest.json
