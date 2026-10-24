@@ -3333,7 +3333,7 @@ struct Prebuilt {
 /// previous session's device work).
 fn prebuild(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, seed: ProverSeed) -> std::thread::JoinHandle<Prebuilt> {
     let (st, inst, plan) = (st.clone(), inst.clone(), plan.clone());
-    std::thread::spawn(move || {
+    flock_live::spawn(move || {
         let mode = witness_mode(&st, &plan);
         let w0 = wit(&st, &inst, &plan, plan.zero_witness, seed, 0);
         let (wt0, built_s) = witness_uploaded(&st, &w0, mode);
@@ -3470,7 +3470,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let overlap = std::env::var_os("FC_ZK_SEQUENTIAL").is_none();
     let zk_pre = (plan.gpu && is_zk(st) && overlap && plan.lean_frames.is_none()).then(|| {
         let (st, plan, salts, points) = (st.clone(), plan.clone(), salts_t[0].clone(), points_t[0].clone());
-        std::thread::spawn(move || zk_prepare(&st, &plan, seed, lig, &salts, &points))
+        flock_live::spawn(move || zk_prepare(&st, &plan, seed, lig, &salts, &points))
     });
     // every table's witness. Rep 1 proves from rep 0's unless it has its own: the CPU prover consumes a witness, so rep 0 takes a
     // copy and rep 1 the original (two copies at most, never one per rep plus the original)
@@ -3742,12 +3742,12 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                                     Some(g) => {
                                         let (bk, end) = firewalled_end(g, &mut mch, &mut hook, dev)?;
                                         let (t_up, g) = (tp.elapsed().as_secs_f64(), g.clone());
-                                        std::thread::spawn(move || zk_finish_fw(&z, mch, tp, t_up, bk, &g, end))
+                                        flock_live::spawn(move || zk_finish_fw(&z, mch, tp, t_up, bk, &g, end))
                                     }
                                     None => {
                                         let (proof, cm, bk) = dev?;
                                         let (t_up, st2) = (tp.elapsed().as_secs_f64(), st.clone());
-                                        std::thread::spawn(move || zk_finish(&st2, &z, proof, cm, mch, &sent, tp, t_up, bk))
+                                        flock_live::spawn(move || zk_finish(&st2, &z, proof, cm, mch, &sent, tp, t_up, bk))
                                     }
                                 });
                                 Ok((Vec::new(), Value::Null))
@@ -4919,7 +4919,7 @@ fn worker_session(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
     let (mut s, at) = (server(st, inst), log.clone());
     // the verifier logs each request before it answers it, so every request of the session is logged by the time the
     // session's last answer reaches the prover
-    std::thread::spawn(move || {
+    flock_live::spawn(move || {
         let Ok((conn, _)) = l.accept() else { return };
         conn.set_nodelay(true).unwrap();
         let (mut r, mut w) = (BufReader::new(conn.try_clone().unwrap()), BufWriter::new(conn));
@@ -5322,7 +5322,7 @@ fn verify_ahead_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value 
         let ts = Instant::now();
         std::thread::scope(|sc| {
             for (j, (l, (d, a))) in ls.iter().zip(dirs.iter().zip(&addrs)).enumerate() {
-                sc.spawn(move || serve_on(l, d, Some((SESSIONS - j).div_ceil(servers)), (ahead + 1).div_ceil(servers), a, || {
+                flock_live::spawn_scoped(sc, move || serve_on(l, d, Some((SESSIONS - j).div_ceil(servers)), (ahead + 1).div_ceil(servers), a, || {
                     let mut s = server(st, inst);
                     fix_verifier_coins(&mut s, [9; 32]);
                     s
@@ -5470,7 +5470,7 @@ fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[P
                         flock_live::gpu_circuit::HostBuf::prepin(h.zab.len(), depth);
                     }
                 }
-                ahead.push_back((0, std::thread::spawn(move || p)));
+                ahead.push_back((0, flock_live::spawn(move || p)));
             }
             if ahead.front().is_some_and(|(r, _)| *r == run) {
                 let (_, h) = ahead.pop_front().expect("this run's witness");
@@ -5513,7 +5513,7 @@ fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[P
             emit_one(run, finish(), rtt);
             continue;
         }
-        verdicts.push_back((run, rtt, std::thread::spawn(finish)));
+        verdicts.push_back((run, rtt, flock_live::spawn(finish)));
         while verdicts.len() > verify_ahead {
             let (r, rtt, h) = verdicts.pop_front().expect("a session awaiting its verdict");
             emit_one(r, join(h), rtt);
@@ -5651,7 +5651,7 @@ fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>
             let (conn, _) = l.accept().unwrap();
             let s = make();
             let (one, free) = (&one, &free);
-            sc.spawn(move || {
+            flock_live::spawn_scoped(sc, move || {
                 // a session's panic stops the server
                 if catch_unwind(AssertUnwindSafe(|| one(i, conn, s))).is_err() {
                     std::process::exit(101);
@@ -5795,6 +5795,7 @@ fn stacked() {
 }
 
 fn main() {
+    flock_live::init_threads();
     let cmd = std::env::args().nth(1).unwrap_or_default();
     if cmd == "replay-coins" {
         let rec: Value = serde_json::from_str(&std::fs::read_to_string(arg("--record", "session.json")).expect("record")).expect("record JSON");
