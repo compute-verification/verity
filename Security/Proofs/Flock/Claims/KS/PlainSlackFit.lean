@@ -280,13 +280,13 @@ theorem plain_fork_le_fnAtK (keep : Bool → Bool) {x : Claims.Msg} {spec : Sess
     (ha : a ≤ Claims.Flock.simForkPr sha512 (VK keep) P x
       (τ := Fin ((V false).k x) → D → Claims.Bridge.Live.LCoin 65536) (LC := Claims.Bridge.Live.LCoin 65536)
       (fun q => Claims.Bridge.Live.fnAt hL n key q.1 q.2) (fun t => Claims.Flock.FnFork.forkN t) ω
-      (plainJ (tables_head_one h) hsch r ℓ).val) :
+      (plainJ (x := x) (tables_head_one h) hsch r ℓ).val) :
     a ≤ (Claims.Pr fun s : (Fin ((V false).k x) → Coin) × (Fin ((V false).k x) → Coin) =>
         plainForkEvK keep h hsch P r ℓ ω s.1 s.2) +
       Claims.Flock.forkSlack sha512 (VK keep) P x (Claims.Flock.FnFork.δN FlockLevel3.GF128 65536 n)
-        (plainJ (tables_head_one h) hsch r ℓ).val ω :=
+        (plainJ (x := x) (tables_head_one h) hsch r ℓ).val ω :=
   ha.trans (Claims.Flock.slack_of_coupling sha512 (VK keep) P x (fun t => Claims.Flock.FnFork.δN_nonneg n t)
-    (forkCoinCoupling_plainK keep P x ω hL n hk) (plainJ (tables_head_one h) hsch r ℓ))
+    (forkCoinCoupling_plainK keep P x ω hL n hk) (plainJ (x := x) (tables_head_one h) hsch r ℓ))
 
 /-- `plain_fork_le_fnAtK` at the deployed plain verifier (`keep := id`). -/
 theorem plain_fork_le_fnAt {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
