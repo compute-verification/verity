@@ -132,12 +132,15 @@ def test_lock_moves_are_the_shortest_renamed_prefixes(tmp_path):
         "Warden": "NetworkCertifier"}
 
 
-def test_the_recorded_paths_are_the_moves_up_to_their_first_renamed_part():
+def test_the_recorded_paths_are_the_moves_up_to_their_first_renamed_span():
     moves = [("v/warden/a.py", "v/certifier/a.py"), ("v/warden/lean/Warden/B.lean", "v/certifier/lean/NetworkCertifier/B.lean"),
              ("S/Proofs/Warden.lean", "S/Proofs/NetworkCertifier.lean"), ("S/Proofs/Warden/C.lean", "S/Proofs/NetworkCertifier/C.lean")]
     assert M.renamed_paths(moves) == {"S/Proofs/Warden.lean": "S/Proofs/NetworkCertifier.lean",
                                       "S/Proofs/Warden/": "S/Proofs/NetworkCertifier/", "v/warden/": "v/certifier/"}
     assert M.renamed_paths(moves[:1]) == M.renamed_paths(moves[:2])       # a branch's new file under a renamed directory
+    swapped = [("S/Properties/Proofs/Nci.lean", "S/Proofs/Properties/Nci.lean"), ("S/Properties/Proofs/Nci/V.lean",
+                                                                              "S/Proofs/Properties/Nci/V.lean")]
+    assert M.renamed_paths(swapped) == {"S/Properties/Proofs/": "S/Proofs/Properties/"}
     with pytest.raises(SystemExit, match="would move to both"):
         M.renamed_paths([("v/warden/a.py", "v/certifier/a.py"), ("v/warden/b.py", "v/guard/b.py")])
 
