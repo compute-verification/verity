@@ -34,7 +34,8 @@ then runs this. The README says what the report establishes and what it doesn't.
 
 * **Negatives by code** (`negatives.suite`): every tampering of the harness, the shim's from their own runs and the
   others made from honest's (the advice's and the Commit's from ``--advice`` and ``--commit``), each with N2's verdict,
-  the check it names and its refusal code, and whether that code refused it.
+  the check it names and its refusal code, and whether that code refused it; with ``--ids`` too (the run's sampled
+  ids), the I/O tie's verdict on a fake upstream of the advice for each negative the tie reads.
 
 Exit 0 when the honest run is accepted everywhere it was checked, each negative is refused, and no tampering of the
 harness that ran goes unrefused by its code (`report["ok"]`).
@@ -420,8 +421,23 @@ def _cell(x) -> str:
     return "—" if x is None else str(x)
 
 
+def _tie(t: dict) -> str:
+    """A `negatives.suite` row's I/O tie verdict (`tie`, on a fake upstream of the advice and the sampled ids) in words."""
+    if not t["ran"]:
+        return f"the I/O tie: not run ({t['why']})"
+    codes = ", ".join(t["codes"]) or "accepts it"
+    if t["code"] is None:
+        return "the I/O tie accepts it" if t["ok"] else f"the I/O tie: NOT accepted ({codes})"
+    return f"the I/O tie refuses it by `{t['code']}`" if t["ok"] else f"the I/O tie: NOT refused by `{t['code']}` ({codes})"
+
+
 def _by_code(n: dict) -> str:
-    """A `negatives.suite` row's result in words."""
+    """A `negatives.suite` row's result in words, and the I/O tie's when it judged the row."""
+    words = _verdict(n)
+    return f"{words}; {_tie(n['tie'])}" if "tie" in n else words
+
+
+def _verdict(n: dict) -> str:
     pending = f"pending: {', '.join(n['waits'])}" if n["waits"] else ""
     if not n["ran"]:
         return f"not run: {n['why']}" + (f" ({pending})" if pending else "")
@@ -564,7 +580,8 @@ def run(args, rest: list[str], clock=time.monotonic) -> dict:
                 "tokens": served.get("tokens"), "requests": served.get("requests"), **where(runs),
                 "profile": profile, "windows": plan.get("windows"), "served": plan.get("served")}
         by_code = NG.suite({s: x["dir"] for s, x in runs.items()}, work / "negatives",
-                           advice=getattr(args, "advice", None), commit=getattr(args, "commit", None), clock=clock)
+                           advice=getattr(args, "advice", None), commit=getattr(args, "commit", None),
+                           ids=getattr(args, "ids", None), clock=clock)
         r = report(runs, n2, proofs, meta, by_code)
         (out / "report.json").write_text(json.dumps(r, indent=1, default=str) + "\n")
         (out / "report.md").write_text(markdown(r))
@@ -589,6 +606,8 @@ def main(argv=None) -> int:
     ap.add_argument("--delta", type=float, default=2.0 ** -20)
     ap.add_argument("--advice", type=Path, help="the honest run's advice (I1's encode bytes), for the advice negatives")
     ap.add_argument("--commit", type=Path, help="the honest run's Commit record (I3), for the wrong-token negative")
+    ap.add_argument("--ids", type=Path, help="the honest run's sampled ids (ADVICE-SRC's requests.jsonl), with --advice: "
+                                             "the I/O tie's verdicts on a fake upstream of them")
     how = ap.add_mutually_exclusive_group()
     how.add_argument("--no-prove", action="store_true", help="N2's verdicts and the head checks' references only")
     how.add_argument("--proofs", metavar="DIR", help="adopt n2_zk.prove's output of these runs (n2_zk.sh's $OUT/n2zk, or a "

@@ -93,6 +93,18 @@ def test_an_advice_negatives_row_reads_n2_advices_codes_on_the_advice():
     assert e2e._by_code(row | {"honest_codes": ["NetworkAdvisedCounts_v1"]}).startswith("NOT judged")
 
 
+def test_a_rows_io_tie_verdict_follows_its_n2_verdict():
+    """With --ids, a row the I/O tie reads carries the tie's verdict on a fake upstream (`negatives.suite`'s `tie`)."""
+    row = {"ran": False, "why": "no frames kept", "waits": ["IO-TIE"]}
+    tie = {"ran": True, "code": "IoTieWindow.cells_root", "codes": ["IoTieWindow.cells_root"], "ok": True}
+    assert e2e._by_code(row | {"tie": tie}).endswith("; the I/O tie refuses it by `IoTieWindow.cells_root`")
+    assert e2e._by_code(row | {"tie": tie | {"codes": [], "ok": False}}).endswith("NOT refused by "
+                                                                                 "`IoTieWindow.cells_root` (accepts it)")
+    assert e2e._by_code(row | {"tie": {"ran": True, "code": None, "codes": [], "ok": True}}).endswith("tie accepts it")
+    assert "the I/O tie: not run (IO-TIE)" in e2e._by_code(row | {"tie": {"ran": False, "why": "IO-TIE"}})
+    assert "tie" not in e2e._by_code(row)
+
+
 def test_the_claim_is_in_both_files(virtual):
     doc = json.loads((virtual.out / "report.json").read_text())
     md = (virtual.out / "report.md").read_text()
