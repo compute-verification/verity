@@ -312,10 +312,10 @@ def _calls(members: tuple[int, ...]) -> str:
 def partitions(draw) -> tuple[dict, dict, int]:
     """A random partition P = Q(C): a mixed population program of one to four members, each some instances of one of
     `MEMBERS` (rarely of `FORK` or `IDENTITY`; one template's members apart, adjacent or alone), and a template query over
-    it, mostly one that applies (the members' templates, in any order); or, a third of the time, a program of one to five
+    it, mostly one that applies (the members' templates, in any order); or, a twelfth of the time, a program of one to five
     root Calls of `CALLEES` (rarely the 32-bit one or `SHARED`) under `Q_word` or `Q_call`, which one-stage refuses, or
     another query. The program's descriptor, the query and the population, 0 where the query doesn't apply."""
-    if draw(st.integers(0, 2)) == 0:
+    if draw(st.integers(0, 11)) == 0:
         members = tuple(draw(st.lists(st.sampled_from([0, 1, 2, 3] * 6 + [4, 4, 5]), min_size=1, max_size=5)))
         query = draw(st.sampled_from(CALL_QUERIES[:4] * 3 + CALL_QUERIES[4:]) | st.sampled_from(QUERIES))
         desc = json.loads(_calls(members))
