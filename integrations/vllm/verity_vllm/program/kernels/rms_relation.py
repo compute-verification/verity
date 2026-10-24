@@ -159,28 +159,3 @@ RELATION_IDS = {
                              "weighted, contiguous, n_cols % 8 == 0 in the measured family, sm_89), else RelationError('unresolved: ...')."),
 }
 RELATIONS: dict[str, Any] = {rid: fn for rid, (_, fn, _, _) in RELATION_IDS.items()}
-
-
-def register_with_w2(replace: bool = False) -> list[str]:
-    try:
-        from verity_vllm.program.kernels import relations as R
-    except ImportError:
-        return []
-    done = []
-    for rid, (op_type, fn, version, doc) in RELATION_IDS.items():
-        existing = R.REGISTRY.get(rid)
-        if existing is not None and existing.implemented and not replace:
-            continue
-
-        def _wrap(inst, inputs, _fn=fn):
-            try:
-                return _fn(inst, inputs)
-            except GemmRelationError as error:
-                raise R.RelationError(str(error)) from error
-
-        R.register(rid, klass=R.INDEPENDENT, op_type=op_type, includes_full_op=True, version=version, doc=doc, owner="W11", replace=replace)(_wrap)
-        done.append(rid)
-    return done
-
-
-REGISTERED_WITH_W2 = register_with_w2()
