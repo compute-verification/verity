@@ -29,6 +29,8 @@ import Proofs.Nci.Covering
 import Proofs.Nci.CoveringWitness
 import Proofs.Nci.CoveringTwoCosts
 import Proofs.Nci.CoveringTwoCostsWitness
+import Proofs.Nci.CoveringPriced
+import Proofs.Nci.CoveringPricedWitness
 
 /-!
 # Proofs of NCI's guarantees
