@@ -6,8 +6,8 @@ import Definitions.Accounting.RateAuditHorizon
 # The remote rate audit as deployed: one game (trusted)
 
 The game the composed guarantee (`Models/Accounting/Guarantees/RateAuditDeployed.lean`) is about: a session of `n`
-windows on one store, each window `P` chained passes seeded by Fiat–Shamir, which the prover may grind, closed by one
-pooled draw of `d` openings. It puts together what the pieces state separately:
+windows on one store, each window `P` chained passes seeded by Fiat–Shamir (`fiat-shamir`), which the prover may grind,
+closed by one pooled draw of `d` openings. It puts together what the pieces state separately:
 
 * **the chip** (`PIChip`) is `RateAuditInteractive.lean`'s, with sends and side sources that answer what it sent, and
   with `RateAuditPartial.lean`'s partial completion in place of the all-or-nothing rebuild: `complete j x g` obtains

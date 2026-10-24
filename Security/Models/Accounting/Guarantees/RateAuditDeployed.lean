@@ -23,10 +23,11 @@ pooled draw a window. Proofs are in `Security/Proofs/Accounting/RateAudit/Deploy
 * `RemoteSessionConservationRelay`, `RemoteSessionRunConservationRelay`, `RemoteWindowRunConservationRelay`: the three
   readings with side sources that may depend on the oracle (relayed receipts), at `m` relayed words a pass.
 
-It rests on the random oracle (the game's), and on two named assumptions: `Accounting.Assumptions.WorkHardness`
-(completing `x` of a word's `b` bits costs `x/b` of `rounds · c_root`) and `Accounting.Assumptions.SquaringCeiling`
-(a pass's completions cost at most the node's measured squaring capacity `F`). The other measured capacities (the
-on-chip state `S`, the link `L`, the tiers) are the game's bounds, as in every guarantee it composes.
+It rests on the random oracle (the game's; its pass seeds are Fiat–Shamir, `fiat-shamir`), and on two named assumptions:
+`Accounting.Assumptions.WorkHardness` (completing `x` of a word's `b` bits costs `x/b` of `rounds · c_root`) and
+`Accounting.Assumptions.SquaringCeiling` (a pass's completions cost at most the node's measured squaring capacity `F`).
+The other measured capacities (the on-chip state `S`, the link `L`, the tiers) are the game's bounds, as in every
+guarantee it composes.
 
 The receipt here is the oracle's tag of the whole block; the deployed receipt hashes a 16-row sketch of it (the driver
 also supports 64 rows). For the verbatim-sector class the sketch receipt is proved directly:
@@ -68,7 +69,7 @@ pass can complete within its ceiling, and `μ_λ = λ/(N·b)` the compression sl
 on chip, taking it over the link, completing it (whole or in part), or the slack the compression leaves; the draw's
 shortfall is `d̄` over the horizon and `d_w` in each window. The prover is one resource: nothing here says which
 device, machine or party reads, completes or holds a word. Reads are counted over the tiers, so `R·T` is their sum's
-capacity; the term `G` is the grinding the Fiat–Shamir seed allows.
+capacity; the term `G` is the grinding the Fiat–Shamir seed allows (`fiat-shamir`).
 
 **The proof** (`Accounting.SecurityProofs.RemoteSessionConservation`): each pass device is simulated by an interactive
 device of `RatePaidNamedRO`'s class whose side sources also answer the completed bits, so its link carries
@@ -315,11 +316,11 @@ def RemoteWindowRunConservationRelay : Prop :=
             ((Remote.Run.ofDeployedWindow A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a).reads x : ℝ)
 
 /-- **The remote bandwidth audit with deployed tensor-sketch receipts, for the verbatim class.** A session of `n`
-windows draws one `ks × (32·m)` signs matrix per window, runs `P` causal passes with `G` candidate oracles per pass,
-then draws `d` of the window's `P·N` receipts. Every pass is a `RateSketch.Device`: it obtains 32-byte sectors only
-whole and verbatim. If each pass rebuilds at most `X` bits, and the signs' rank tail is
-`Assumptions.SketchRank ks m r ε`, then the probability that every opening passes while the session or some window
-falls below its reading is at most
+windows draws one `ks × (32·m)` signs matrix per window, runs `P` causal passes with `G` candidate oracles per pass (the
+grinding its Fiat–Shamir pass seed allows, `fiat-shamir`), then draws `d` of the window's `P·N` receipts. Every pass is
+a `RateSketch.Device`: it obtains 32-byte sectors only whole and verbatim. If each pass rebuilds at most `X` bits, and
+the signs' rank tail is `Assumptions.SketchRank ks m r ε`, then the probability that every opening passes while the
+session or some window falls below its reading is at most
 
   `(1 − d̄)^(d·n) + (1 − d_w/n)^(d·n) + n·ε + n·P·G·(N/2^h + q/2^(8·r))`.
 
