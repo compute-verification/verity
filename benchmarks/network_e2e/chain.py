@@ -698,7 +698,9 @@ def markdown(c: dict) -> list[str]:
     p = c.get("prove_path")
     if p is not None:
         commit = [(n, a["commit"]) for n, a in p["arms"].items() if "commit" in a]
-        gaps = "".join(f" {n}'s gap: {a['gap']}." for n, a in p["arms"].items() if a.get("gap"))
+        named = {n: a["gap"] for n, a in p["arms"].items() if a.get("gap")}
+        gaps = (f" Every arm's gap: {next(iter(named.values()))}." if len(named) == len(p["arms"]) > 1
+                and len(set(named.values())) == 1 else "".join(f" {n}'s gap: {g}." for n, g in named.items()))
         if served and commit:
             lines += ["", "## Prove path", "",
                       f"`prove_path.py audit --serve-run`'s output adopted from {p['dir']}: each arm a Commit window of "
