@@ -192,17 +192,29 @@ class PearlCWholeArm(PearlCArm):
     The PoUW option refuses this engine (`pouw.refusals`: compiled execution), so the arm installs as `PearlCArm` does;
     the protocol arm reaching it is vllm's change. ``PEARLC_WHOLE_EXECUTION`` is the engine's execution label:
     ``compiled`` (default, vLLM's kernels without batch invariance, as `stock-fp8@compiled` runs) or ``bi-compiled``;
-    ``PEARLC_CAPTURE_SIZES`` overrides the preset's capture sizes (each at most 256 rows); ``PEARLC_WHOLE_DEFER_A=0``
-    keeps each call's A tree on the capturing stream (a kernel whose pipeline doesn't split A's commitment needs it).
+    ``PEARLC_CAPTURE_SIZES`` overrides the preset's capture sizes (each at most 256 rows).  Each of `TOGGLES`' options is
+    turned off by its variable at 0 and on at 1: ``PEARLC_WHOLE_DEFER_A=0`` keeps each call's A tree on the capturing
+    stream (a kernel whose pipeline doesn't split A's commitment needs it); ``PEARLC_LATE_ENDS`` ends each engine step's
+    pass late (`PearlCDeviceRun.end`'s ``late``: the host waits for nothing, so vLLM schedules and launches the next step
+    while the GPU runs this one); ``PEARLC_WHOLE_STATS_A`` forks each call's ``stats_a`` beside its per-row keying;
+    ``PEARLC_WHOLE_PREFETCH_B`` prefetches its B̃ into L2 there (``PEARLC_PREFETCH_FORM``, ``_CTAS``, ``_MB``: run.py's).
     A retained pass's whole capture keeps a stage for each weight and m₁₆, and the whole check runs at the largest size."""
 
     id = "pouw-pearl-c-whole"
-    run_options = {"graphs": True, "whole_defer": True, "whole_defer_a": True}
+    run_options = {"graphs": True, "whole_defer": True, "whole_defer_a": True, "late_ends": True, "whole_stats_a": True}
+    #: the run options the environment turns off (0) or on (1)
+    TOGGLES = {"whole_defer_a": "PEARLC_WHOLE_DEFER_A", "late_ends": "PEARLC_LATE_ENDS", "whole_stats_a": "PEARLC_WHOLE_STATS_A",
+               "whole_prefetch_b": "PEARLC_WHOLE_PREFETCH_B"}
 
     def __init__(self) -> None:
         super().__init__()
-        if os.environ.get("PEARLC_WHOLE_DEFER_A") == "0":
-            self.run_options = {k: v for k, v in self.run_options.items() if k != "whole_defer_a"}
+        opts = dict(self.run_options)
+        for name, var in self.TOGGLES.items():
+            if os.environ.get(var) == "0":
+                opts.pop(name, None)
+            elif os.environ.get(var) == "1":
+                opts[name] = True
+        self.run_options = opts
         self.schedule = "serial"
         self.execution = os.environ.get("PEARLC_WHOLE_EXECUTION", "compiled")
         self.whole, self.totals, self.capture = None, {}, [1, 8, 32, 128]
