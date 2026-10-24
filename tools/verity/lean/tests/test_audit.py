@@ -1243,6 +1243,16 @@ def test_a_premise_defined_anywhere_the_repository_builds_is_listed_and_a_depend
         "with its guarantees' owner and commit the record (Daniel's DM shows it when it lands)"]
 
 
+def test_a_statement_whose_premises_could_not_be_read_fails():
+    """`Facts.lean` writes `premises: null` when `premisesOf` throws on a statement; read as no premises, every premise of it
+    would go unlisted, so it fails instead. Facts without the field (older documents) are not held to it."""
+    pin = fact() | {"premises": None}
+    fails, _ = A.judge(POLICY, facts(pins={"P.t": pin}), FILES, update=True)
+    assert fails == ["guarantees: P.t's premises could not be read (`Facts.lean`'s `premisesOf` failed on its statement), so "
+                     "the lock can't be held to them: make `premisesOf` read this statement's form"]
+    assert A.judge(POLICY, facts(), FILES, update=True)[0] == []
+
+
 def test_the_verifiers_path_has_no_unlisted_compiled_code_and_hashes_through_its_parameter():
     """Daniel's checks (a) and (b) on the verifier's path (`verifier` in the policy): an `@[extern]` or `@[implemented_by]`
     constant its entries reach fails unless `allow` names it (a name prefix, or `module:` for a module), and so does each
