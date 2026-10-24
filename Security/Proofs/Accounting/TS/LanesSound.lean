@@ -474,7 +474,8 @@ open Accounting.TS.Lanes in
 /-- **A leaf's 33 linked C-Flock sessions realize one unit** (`Accounting.Guarantees.TS.LeafLanesSound`):
 `leafLanes_soundAt` at the known content of the path's public inputs (`knownOf`), the ports read in full at the layout
 (`PouwWindow.Lanes.readFull`), the leaf verifier's check of each file at `ownOf` (`roots`, `place`), the layout's decodes at the
-served tile, `LeafChecks` from the circuits computing their Definitions (`leafChecks_of_computes`), and the leaf and
+served tile, `LeafChecks` from the 33 circuits computing their pieces' compositions (`leafChecks_of_computes`,
+`laneComputes_of_lowers`, `combineComputes_of_lowers`), and the leaf and
 receipt the committed rows decode to (`leafOf`, `receiptOf`), whose agreement with the decodes `decodes_of_checks`
 gives from acceptance. -/
 theorem Accounting.SecurityProofs.TS.LeafLanesSound : Accounting.Guarantees.TS.LeafLanesSound := by
@@ -488,5 +489,6 @@ theorem Accounting.SecurityProofs.TS.LeafLanesSound : Accounting.Guarantees.TS.L
     (fun x w i k h => (sess₀ x w i k).servedRegistered_canon (op x w i k) (PouwWindow.Lanes.checkOneRead_ok h))
     (fun x w i k => ⟨#[(PouwWindow.Lanes.okRow, salts x w i k "o0")], by
       cases k <;> simp [knownOf, PouwWindow.Lanes.knownRows]⟩) hδ hδ0
-    (fun x w i => leafChecks_of_computes (servedTile K) chain dqW (sess x w i) (hL x w i) (hC x w i))
+    (fun x w i => leafChecks_of_computes (servedTile K) chain dqW (sess x w i) (laneComputes_of_lowers (hL x w i))
+      (combineComputes_of_lowers (hC x w i)))
     (decodes_of_checks (roots := roots) (place := place))

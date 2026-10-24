@@ -6,8 +6,9 @@ import Proofs.Accounting.TS.Session.Lanes.Holds
 `Accounting.TS.Lanes.leafLanes_soundAt` takes one premise beyond `CheckedSessionSound`'s, the reading of a session's
 rows as the words its Definition reads, through a decode per statement (`decL` for a lane's ports, `decC` for the
 combine's). `Accounting.Guarantees.TS.LeafLanesSound` takes what stays of it once each Definition's `ok = 1` is proved
-to mean `LaneOk` or `CombineOk`, that the circuits compute their Definitions (`Accounting.TS.Lanes.LaneComputes`,
-`CombineComputes`, which give it by `leafChecks_of_computes`):
+to mean `LaneOk` or `CombineOk`, that the lanes' and the combine's circuits compute their pieces' compositions on bits
+(`Accounting.TS.Lanes.LaneLowers`, `CombineLowers`, which give it by `leafChecks_of_computes`, `laneComputes_of_lowers`
+and `combineComputes_of_lowers`):
 
 * `LeafChecks` (the 33 circuits; owner @compute-accounting): each lane's and the combine's circuit computes its
   Definition at its port rows, so on every wire assignment its evaluation agrees with at every unit, the decoded `ok`
