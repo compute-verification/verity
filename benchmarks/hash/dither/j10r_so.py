@@ -74,10 +74,18 @@ class Refs:
         return self.s * self.win.u_step + self.win.offs[w]
 
     def receipts(self, w: int, salt: bytes, root_a: bytes, root_b: bytes) -> np.ndarray:
+        """Call w's receipts (units, 2 sets): each live unit's by j10r_units, a dead row block's the zero receipt (the dead
+        tile, as h1u and h1r write it)."""
         import j10r_units as JU
         key = (w, salt, root_a, root_b)
         if key not in self.cache:
-            self.cache[key] = JU.call_receipts(self.g["a"][w][:self.M], self.win.wt[w], salt, self.base(w), root_a, root_b)
+            ncb = self.win.nk[w][0] // 32
+            units = (self.win.t // 32) * ncb
+            live = [u for u in range(units) if 32 * (u // ncb) < self.g["m"]]
+            rec = JU.call_receipts(self.g["a"][w][:self.M], self.win.wt[w], salt, self.base(w), root_a, root_b, only=live)
+            out = np.zeros((units, rec.shape[1]), dtype=np.uint32)
+            out[live] = rec
+            self.cache[key] = out
         return self.cache[key]
 
     def unit(self, a32: np.ndarray, b32: np.ndarray, salt: bytes, pos: int, roots: tuple[bytes, bytes]) -> dict:
@@ -133,7 +141,8 @@ class Refs:
             words += units * nw
             if off:
                 bad[w] = {"words_off": off, "units_off": int((ref != got).any(axis=1).sum())}
-        return {"reference": "j10r_units.call_receipts (anchored to h1tile.j10r_reference)", "calls": checked_calls(win.L),
+        return {"reference": "j10r_units.call_receipts (anchored to h1tile.j10r_reference) on every live unit, a dead row "
+                             "block's units the zero receipt", "calls": checked_calls(win.L), "live_rows": g["m"],
                 "words": words, "bad": bad, "ok": not bad and words > 0}
 
 
