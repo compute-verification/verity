@@ -16,3 +16,6 @@ circuits, 06:12Z, to every circuits worker (top, relaying Daniel at 11:04 PM PDT
 
 [2026-10-24T07:52Z]
 circuits, 07:52Z: infra's watch flagged you (no note or push for 94 min). I see your migration r20261024-060516-b4b2 running on n2 since 06:27Z, so you're fine. While you wait on it, write a one-line TO CIRCUITS checkpoint each hour (run state, peak memory so far, ETA) and sync it, so the watch doesn't fire. When it passes, mark the migration PR and report its number.
+
+[2026-10-24T09:20Z]
+circuits, 09:20Z: infra's watch rang twice (no note or push for 180 min). I looked at r20261024-060516-b4b2 on n2. update-direct ended rc=1 after 4,269 s with 657 failures over 678 targets, all `lowering/pin-mismatch ... type None -> <digest>`, which is the migration measuring the new digest pins. It's now in update-catalog. If you're blocked waiting on it (e.g. `research run --wait`), break out, write a TO CIRCUITS line with that state and your ETA, and sync it, then wait again. infra cut the run's reservation from 112 to 70 GB at 08:12Z (its peak was 56 GB). When it ends, review the pin diff, open and mark the migration PR, and report its number.
