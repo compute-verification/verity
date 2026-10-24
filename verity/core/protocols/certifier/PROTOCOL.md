@@ -532,9 +532,15 @@ window. It outputs 1 exactly when:
   - the carry-out: the request in progress after the window's last request frame, the next window's carry-in.
 
   At the target the unit reads the view under the advice's hiding root, as the egress map is read.
-- **The statements** (`statements`, `chained`). The verifier computes window w's statement from its own advice: the
-  (root, domain id) the warden registered for w, w and `request_view` of w. A link's statements chain: window 0's
-  carry-in is (0, 0, 0), each carry-out is the next window's carry-in, and the last is between requests. Each
+- **The statements** (`statements`, `chained`). The verifier computes window w's statement from its own advice and
+  the warden's registration of window w as it read it (`Registration`: the link, the registration's digest, and the
+  root and domain id the registration names): the link, w, the digest, the root and domain id, and `request_view` of
+  w. A link's statements chain: one link, each window its own registration, window 0's carry-in (0, 0, 0), each
+  carry-out the next window's carry-in, and the last between requests. So a verdict built from them names the link
+  and the registrations its proofs were verified on, and `advised.view` checks both against its own link's (REDTEAM
+  phase 10 (4): a verdict that names no link passes on another link carrying the same advice). The circuit reads the
+  root and domain id, and the domain id, which the warden derives from the session, link, direction and window, keeps
+  a proof on one link-window's root from opening another's. Each
   IoTieRequest proof is held to its window's statement, so with the carry-out checked, a window's verdict says its
   cells take the request in progress from the carry-in to the carry-out, and a link's verdicts hold every request's
   prompt_len, spanning windows or not. Checked alone, a window would accept a carried prompt-field count with any
