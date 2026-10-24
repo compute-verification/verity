@@ -908,7 +908,7 @@ def compact(request, tmp_path_factory):
 def test_compact_varied_traffic_is_certified_its_io_the_endpoints_and_its_egress_b_bytes_a_frame(compact, varied):
     """On compact records in B-byte cells the honest run is accepted as on id events: every link-window certified, its
     salt revealed, the audit accepting raw and committed. The certified I/O read from the cells is the id-event run's,
-    request for request (the same fields, ordinals, releases and token ids, a stop as `COMPACT_EOS`, and the same
+    request for request (the same fields, ordinals, releases and token ids, each stop's EOS id too, and the same
     finishes, the merged responses' `length` by their count), and its ingress records are the id-event run's. Its
     egress carries the same frames a window, each B bytes: the link's bytes a window are B/4096 of the id-event
     run's."""
@@ -926,8 +926,7 @@ def test_compact_varied_traffic_is_certified_its_io_the_endpoints_and_its_egress
     assert ours.keys() == theirs.keys()
     for name, r in ours.items():
         v = theirs[name]
-        assert {k: r[k] for k in r if k != "frames"} == {k: v[k] for k in v if k != "frames"} | {
-            "output": [active.COMPACT_EOS if t == EOS else t for t in v["output"]]}
+        assert {k: r[k] for k in r if k != "frames"} == {k: v[k] for k in v if k != "frames"}
     egress = check["egress_bytes"]
     assert egress["frame_bytes"] == B and egress["frames_per_window"] == \
         vruns["honest"]["check"]["egress_bytes"]["frames_per_window"]
