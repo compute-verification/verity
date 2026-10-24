@@ -84,7 +84,7 @@ EVALUATORS = {
     "GemmBias_v2": "Gemm_v2's row (the DOT static's k16 chain + f2fp_bf16), then BiasAdd_v1's Bf16Add with the bias slice, per coordinate "
                    "(GemmBiasCoordinate_v2)",
     "TokenSelect_v1": "first-max argmax over the bf16 logits (TokenSelect_v1: Bf16GtStrict scan, lowest index on ties)",
-    "TokenSelect_v3": "first-max argmax over the bf16 logits (TokenSelect_v3 = TokenSelect_v1 word for word, index 0 at V = 1)",
+    **{f"TokenSelect_v{n}": f"first-max argmax over the bf16 logits (TokenSelect_v{n} = TokenSelect_v1 word for word, index 0 at V = 1)" for n in (3, 4)},
     # [R16 stoch, rev F-r16-20(a)] the stochastic selector IS replayed: the registered composite GumbelTopPTokenSelect_v1{V} (TemperatureScale
     # -> TopPMask_v1 with the committed `splits` S as its operand -> GumbelSelectF32: Philox draws from the committed seed + the Const64 pos)
     # evaluated by the core reference (`verity.ml.circuits.evaluation.evaluate` on `sampling_topp_difftest.spec_registered`) on the committed bf16
@@ -191,10 +191,10 @@ def _bf16_to_f32(words: np.ndarray) -> np.ndarray:
 
 
 def token_select_first_max(logits: np.ndarray) -> int:
-    """`TokenSelect_v1{V}`: scan with Bf16GtStrict -- the lowest index of the maximal bf16 logit (NaN never wins: NaN > x is false)."""
+    """`TokenSelect_v1{V}`: scan with Bf16GtStrict from logits[0] -- the lowest index of the maximal bf16 logit.  NaN never wins a
+    comparison (NaN > x and x > NaN are false), so a NaN logits[0] is the token and a later NaN never is."""
     f = _bf16_to_f32(logits).astype(np.float64)
-    f = np.where(np.isnan(f), -np.inf, f)
-    return int(np.argmax(f))          # np.argmax returns the FIRST maximal index
+    return 0 if np.isnan(f[0]) else int(np.argmax(np.where(np.isnan(f), -np.inf, f)))   # np.argmax returns the FIRST maximal index
 
 
 #: the registered stochastic selector's operands, in signature order (verity_vllm.program.registry.sampling.GumbelTopPTokenSelect): word width in bits
@@ -699,7 +699,7 @@ def _check_targets() -> dict[str, list]:
                         bind(gemm_bias.GemmBiasV2, K=32, N=3, DOT=hopper.HopperBF16WgmmaDot16)],
         "Bf16MulScalarTensor_v1": [bind(b1.Bf16MulScalarTensor, N=8)],
         "TokenSelect_v1": [bind(b1.TokenSelect, V=16)],
-        "TokenSelect_v3": [bind(dead_free.TokenSelectV3, V=16), bind(dead_free.TokenSelectV3, V=1)],
+        **{f: [bind(fn, V=v) for v in (16, 130, 1)] for f, fn in (("TokenSelect_v3", dead_free.TokenSelectV3), ("TokenSelect_v4", dead_free.TokenSelectV4))},
         "GumbelTopPTokenSelect_v1": [bind(sampling.GumbelTopPTokenSelect, V=16)],
         "GumbelTopPTokenSelectSharedGreedy_v1": [bind(sampling.GumbelTopPTokenSelectSharedGreedy, V=16)],
         "GumbelTopPTokenSelect_v2": [bind(topp_words.GumbelTopPTokenSelectV2, V=16, S=4)],
@@ -746,8 +746,8 @@ _row("BiasAdd_v1", bias_add, ("0",))
 _row("GemmBias_v1", gemm_bias, ("0",))
 _row("GemmBias_v2", gemm_bias_dot, ("0",))
 _row("Bf16MulScalarTensor_v1", mul_scalar_tensor, ("out",))
-_row("TokenSelect_v1", token_select, (SAMPLED_MEMBER,))
-_row("TokenSelect_v3", token_select, (SAMPLED_MEMBER,))
+for _family in ("TokenSelect_v1", "TokenSelect_v3", "TokenSelect_v4"):
+    _row(_family, token_select, (SAMPLED_MEMBER,))
 _row("GumbelTopPTokenSelect_v1", gumbel_topp, (SAMPLED_MEMBER,), _sample_gumbel)
 _row("GumbelTopPTokenSelectSharedGreedy_v1", gumbel_topp, (SAMPLED_MEMBER,), _sample_gumbel)
 _row("GumbelTopPTokenSelect_v2", gumbel_topp_split, (SAMPLED_MEMBER,), _sample_gumbel_split)

@@ -79,6 +79,21 @@
    "and": 2633,
    "not": 172,
    "xor": 54087
+  },
+  "token-select-chunk/c64/bf16": {
+   "and": 7347,
+   "not": 8524,
+   "xor": 60581
+  },
+  "token-select-combine/v128256-c64/bf16": {
+   "and": 332633,
+   "not": 281304,
+   "xor": 3209215
+  },
+  "token-select-combine/v200-c64/bf16": {
+   "and": 627,
+   "not": 526,
+   "xor": 5788
   }
  }
 }
