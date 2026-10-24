@@ -18,6 +18,7 @@ from verity_vllm.predict.steps import (
     RowRef,
     compare,
     compile_steps,
+    dead_gates_of,
     policy_of,
     trace_commands,
     trace_dir,
@@ -163,6 +164,23 @@ def test_partial_refuses_request_by_request():
     alone = compile_steps(reg, _advice([(8, GREEDY)], [[_row(0, 0, 8)], [_row(0, 8, 1)], [_row(0, 9, 1)], [_row(0, 10, 1)]]))
     assert c.steps == alone.steps and c.programs.keys() == alone.programs.keys()
     assert sorted(c.summary()["refused"]) == ["1", "2", "3"]
+
+
+def test_dead_gates_are_counted_as_circuit_check_counts_them():
+    """The request wrapper's prefill runs the last layer on every prompt row and only the last row reaches the LM head, so
+    today's request Programs have dead gates: `dead_gates_of` counts them as circuit-check does and says under which definitions."""
+    from verity.ml.circuits.liveness import dead_gates
+    c = compile_steps(_registered(), _mixed())
+    got = dead_gates_of(c)
+    assert sorted(got["programs"]) == sorted(c.programs)
+    for d, p in c.programs.items():
+        rep = dead_gates(p, limit=0, transitive=True)
+        rec = got["programs"][d]
+        assert (rec["dead_computed"], rec["unread_inputs"]) == (rep.computed, rep.input) and rep.computed > 0
+        assert sum(rec["by_definition"].values()) == rep.computed + rep.input
+        by = rec["by_definition"]
+        assert next(iter(by)) == "Gemm_v2" and sum(n for k, n in by.items() if k.startswith("Input")) == rep.input
+    assert got["dead_computed"] == sum(r["dead_computed"] for r in got["programs"].values())
 
 
 def test_a_target_without_batch_invariance_is_refused():
