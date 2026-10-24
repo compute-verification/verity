@@ -56,7 +56,8 @@ tables with no window root (``a-call-unbound``) and point a proof at another rou
 over its true rows under the Commit's names; its mutations (`AROW_NAMES`, made before the draw) register one A table
 with every row other (``a-zero``), one row other (``a-row-off``) or its calls' rows offset by one call
 (``a-call-off``), one with a call missing that the Commit registers so too (``a-call-missing``), one ids table with a
-row other (``ids-off``) or none (``ids-missing``), drop one of the Commit's values or register one twice, present
+row other (``ids-off``) or none (``ids-missing``), drop one of the Commit's values or register one twice, drop a MoE
+window's (`expert_layout`) round's A table of its routed experts' downs (``commit-missing-expert``), present
 another Commit record than the one its draw root
 binds (``commit-unbound``) and break the record's form (``credit-commit-form``). Round 0's ids table ``…/ids@0`` binds
 the window's session, not its open root, which contains it: round 0's ``requests`` is `credit.requests_root` of its
@@ -81,8 +82,13 @@ window's session to a logged branch commit off main's first-parent line (``branc
 malformed one, or naming no model credit pins (`MODEL_NAMES`: none, as a bare weights' root, a malformed one, another
 checkpoint, an unpinned role), give one of two or three windows a ``b/<K>`` with one row's s_w changed (``other-sw``)
 or every code zero (``zero-codes``), each registered as the served path registers it (`registered_b`) and that window's
-open root over its own weights' root, and break the forms. Every window of a period shares the weights its open signs;
-the window of another circuit registers them under its own.
+open root over its own weights' root, and break the forms. The period's open records the commit it opened under
+(`credit.PERIOD_PIN_FIELD`, MAIN[-1], older than every window's) and a freshness floor (`credit.STALE_FIELD`); a window
+counts only when its pin is at most the floor of first-parent commits behind that pin, counted from it and never from
+main's head (`credit._pin_hygiene`, after the per-window pin check). ``stale-pin`` records a nearer pin (MAIN[2]) and a
+floor of one and pins one window to MAIN[4], the oldest the pins log records, two first-parent commits before the open
+pin and so past the floor, refusing the period. Every window of a period shares the weights its open signs; the window of
+another circuit registers them under its own.
 
 An `a_link` case is a window's registered entries, among them one or two A values (``…/a/<K>``) whose trees are frame-v3
 SHA-512 trees (`verity.ml.commitments.merkle.tree_levels`) of `steps` equal blocks, and its round log: each round's
@@ -152,9 +158,11 @@ def _draw_root(d: dict) -> str:
 #: each way a window's A tables or input-ids tables are not the served Commit's, made before its draw: one round's A
 #: table of a K every row other (``a-zero``), one row (``a-row-off``) or its calls' rows offset by one call
 #: (``a-call-off``), one missing a call (``a-call-missing``, the Commit's too), one round's ids table one row other
-#: (``ids-off``) or unregistered (``ids-missing``), and a Commit record lacking a table's value or registering it twice
+#: (``ids-off``) or unregistered (``ids-missing``), and a Commit record lacking a table's value or registering it twice;
+#: on a MoE window (`expert_layout`), a Commit record lacking a round's A table of the experts' downs
+#: (``commit-missing-expert``, VLLM-80: their K is the experts' alone, so its calls are expert calls only)
 AROW_NAMES = ["a-zero", "a-row-off", "a-call-off", "a-call-missing", "ids-off", "ids-missing", "commit-missing",
-              "commit-twice"]
+              "commit-twice", "commit-missing-expert"]
 #: the `AROW_NAMES` that need a round's A table of two calls or more
 TWO_CALLS = ("a-call-off", "a-call-missing")
 #: each way round 0's input-ids table is not inside round 0's request table under the window's session, made before the
@@ -268,6 +276,9 @@ def commit_record(rng: random.Random, true: dict[str, dict], steps: int, off: st
     reg = [{**e, "value": names[v]} for v, e in sorted(true.items()) if v in names]
     if reg and off == "commit-missing":
         del reg[rng.randrange(len(reg))]
+    elif reg and off == "commit-missing-expert":
+        gone = rng.choice(sorted(n for n in names.values() if n.endswith(f"/k{EXPERT_K}")))
+        reg = [e for e in reg if e["value"] != gone]
     elif reg and off == "commit-twice":
         reg.append(dict(rng.choice(reg)))
     reg += [{"value": f"{name}/{s}", "root": _hex(rng), "leaves": rng.randint(1, 64), "words": rng.choice([1, 8]),
@@ -453,6 +464,25 @@ def layout(rng: random.Random, big: bool = False) -> dict:
     rng.shuffle(calls)
     m = r << (rng.randint(0, 2) if not big else 9)
     return {"calls": calls, "linears": linears, "m": m, "tile": [r, c]}
+
+
+#: a MoE layer's routed experts, as H1 names each projection (vllm's `pouw_h1_hooks.expert_names`:
+#: ``prefix.expert.projection``), and their downs' K, the intermediate width, which no other linear of `expert_layout` has
+EXPERTS_PREFIX, EXPERT_K = "model.layers.1.mlp.experts", 32
+
+
+def expert_layout(rng: random.Random) -> dict:
+    """A served MoE window's layout, as vllm's H1 lays one out: a dense linear at K = H, then a MoE layer's two to four
+    routed experts, each its gate_up at H then its down at `EXPERT_K`, every one called once a step in that static
+    order (an idle expert's call is its empty slots) over one to three steps."""
+    r, c = rng.choice([(1, 1), (2, 4), (4, 8)])
+    h = rng.choice([64, 4096])
+    linears = [["model.layers.0.self_attn.qkv_proj", h, c * rng.randint(1, 4)]]
+    for e in range(rng.randint(2, 4)):
+        linears += [[f"{EXPERTS_PREFIX}.{e}.gate_up", h, c * rng.randint(1, 4)],
+                    [f"{EXPERTS_PREFIX}.{e}.down", EXPERT_K, c * rng.randint(1, 4)]]
+    calls = [[name, step] for step in range(rng.randint(1, 3)) for name, _k, _n in linears]
+    return {"calls": calls, "linears": linears, "m": r << rng.randint(0, 2), "tile": [r, c]}
 
 
 def _canon(x: object) -> str:
@@ -969,10 +999,9 @@ def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", le
     return d, s
 
 
-def window_instance(rng: random.Random, name: str = "honest") -> dict:
-    """One `window` case: an honest window, then mutation `name`."""
+def window_instance(rng: random.Random, name: str = "honest", lay: dict | None = None) -> dict:
+    """One `window` case: an honest window (of layout `lay` when given), then mutation `name`."""
     credit = name.removeprefix("credit-")
-    lay = None
 
     def call_ks(lay: dict) -> list[int]:
         ks = {lin: k for lin, k, _n in lay["linears"]}
@@ -986,6 +1015,8 @@ def window_instance(rng: random.Random, name: str = "honest") -> dict:
         lay = layout(rng)
         while len(set(call_ks(lay))) == len(lay["calls"]):
             lay = layout(rng)
+    elif name == "commit-missing-expert":
+        lay = expert_layout(rng)
     d, s = honest_window(rng, credit, lay=lay)
     signed: dict | None = {}
     match name:
@@ -1131,11 +1162,14 @@ def _evidence(d: dict) -> dict:
     return {k: d[k] for k in Cr.PROVED_KEYS}
 
 
-def period_instance(rng: random.Random, name: str = "honest", committed_too: dict | None = None) -> dict:
+def period_instance(rng: random.Random, name: str = "honest", committed_too: dict | None = None, *,
+                    period_pin: str | None = None, pin_floor: int | None = None,
+                    stale_window: int | None = None) -> dict:
     """One `period` case: one to three honest windows in one period of the auditor's ledger, each proving the circuit
     whose SHA-512 the period's open committed (one window layout's descriptor, `descriptor`), presented in its close's
     order, and a window of no period opened after the close; then mutation `name`. The period's open commits
-    `committed_too` too."""
+    `committed_too` too.  `period_pin`, `pin_floor` and `stale_window` override the period's open pin, its freshness floor
+    and which window runs the oldest logged pin (MAIN[4]), for the test that pushes main past the floor."""
     n = rng.randint(2 if name in ("order", "other-sw", "zero-codes") else 1, 3)
     pname = rng.choice(rc.PERIODS)
     lay = layout(rng)
@@ -1191,16 +1225,33 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
             for d, _s in wins:
                 if units_of(d["layout"]) >= past:
                     d["proofs"] = _window_proofs(rng, d, _served_units(d, k=past))
-    events = [("period-open", None, {"period": pname, "lane": rc.LANE, "by": rc.LANE, **committed, "pinned": "ab" * 20,
-                                     "key_sha512": hashlib.sha512(pub).hexdigest()})]
+    # the period's open pin P (`credit.committed_pin`) and freshness floor f (`credit.committed_floor`): a window counts
+    # only if its pin is at most f first-parent commits behind P on main's line, counted from P and never from main's
+    # head.  Honest P is MAIN[-1], older than every logged session (PINS pin MAIN[4], [2], [0]), and no floor is recorded
+    # (default 0), so every honest session is at or after P; `stale-pin` records a nearer P (MAIN[2]) and floor 1 and pins
+    # one window to MAIN[4], two first-parent commits before P and so past the floor.
+    if period_pin is None:
+        period_pin = rc.MAIN[2] if name == "stale-pin" else rc.MAIN[-1]
+    if pin_floor is None and name == "stale-pin":
+        pin_floor = 1
+    open_body = {"period": pname, "lane": rc.LANE, "by": rc.LANE, **committed, Cr.PERIOD_PIN_FIELD: period_pin,
+                 "key_sha512": hashlib.sha512(pub).hexdigest()}
+    if pin_floor is not None:
+        open_body[Cr.STALE_FIELD] = pin_floor
+    events = [("period-open", None, open_body)]
     pins = list(rc.PINS)
     branch = rng.randrange(n) if name == "branch-pin" else None
+    # the window pinned to MAIN[4], the oldest the pins log records: the per-window pin check passes (it is logged and on
+    # main) but the period hygiene refuses it when MAIN[4] is past P + f (`credit._pin_hygiene`).
+    stale = stale_window if stale_window is not None else (rng.randrange(n) if name == "stale-pin" else None)
     if branch is not None:
         pins.append(Ch.pin_line(rc.BRANCH, rc.MAIN[0], "2026-10-23T03:05:00Z"))
     for i, ((d, s), end) in enumerate(zip(wins, ends)):
         o = rc._open(rng, d["window"], pub)
         if i == branch:
             o.update(pinned=rc.BRANCH, pins=Ch.pins_seal(pins))
+        if i == stale:
+            o.update(pinned=rc.MAIN[4], pins=Ch.pins_seal(pins))
         events += [("open", s.sid, o), ("end", s.sid, rc._end(s, **end))]
     outcomes = [{"root": d["window"]["root"], "session": s.sid, "complete": end.get("complete", True)}
                 for (d, s), end in zip(wins, ends)]
@@ -1218,7 +1269,7 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
     match name:
         case ("honest" | "incomplete" | "no-close" | "forged-ledger" | "no-circuit" | "no-k" | "k-form" | "k-past-units"
               | "bad-circuit" | "never-received" | "other-circuit" | "branch-pin" | "no-weights" | "weights-form"
-              | "other-sw" | "zero-codes"):
+              | "other-sw" | "zero-codes" | "stale-pin"):
             pass
         case _ if name in MODEL_NAMES:
             pass
@@ -1270,7 +1321,7 @@ PERIOD_NAMES = ["no-close", "incomplete", "missing", "order", "extra", "foreign"
                 "windows-form", "forged-ledger", "key-form", "other-circuit", "no-circuit", "descriptor-form", "no-k",
                 "k-form", "k-past-units", "other-k", "alt-layout", "bad-circuit", "never-received",
                 "proof-other-registration", "branch-pin", "no-weights", "weights-form", *MODEL_NAMES, "other-sw",
-                "zero-codes"]
+                "zero-codes", "stale-pin"]
 PERIOD_KEYS = ("key", "ledger", "pins", "main", "name", "windows")
 
 

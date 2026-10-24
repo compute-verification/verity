@@ -34,7 +34,8 @@
                      a template unit's, in the sidecar of the module that defines it or its file in ``pins/``, `sidecars`; a Boolean
                      Definition's lowering has at most its own And gates, besides its builder's commits), a template unit's
                      circuit digest against its C-Flock module's `PINS`, and the Boolean export's gate lists checked against the
-                     unit circuit (`verity_flock.boolean_export`)
+                     unit circuit (`verity_flock.boolean_export`); a gated Definition's circuit digest (``gated``: a Program
+                     holds it as one gate naming the digest, such as N2's head check) against its ``digests`` pin
 
 Correctness and invariant violations are failures, each with a name (``"<check>/<code> <definition> ..."``); redundant and dead
 gates are warnings with counts (they become failures with the re-baseline's common-subexpression pass).  An unpinned lowering
@@ -846,9 +847,21 @@ def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = 
                               "q_call": q_call(t, opts, F, memo.setdefault("word", {}))}
         entry["redundant_gates"] = {"count": 0}
         entry["dead_gates"] = {"count": 0}
+    if getattr(getattr(t, "defn", t), "gated", False):
+        entry["digest"] = circuit_digest_pin(t, pins, F)
     entry["failures"], entry["warnings"] = F.failures, F.warnings
     done[(t.id, lower_whole, as_call)] = entry
     return entry
+
+
+def circuit_digest_pin(t: Any, pins: dict, F: Findings) -> dict:
+    """A gated Definition's circuit digest, core's `program_digest` of its Program, which the gate a Program holds it as
+    names (`verity.core.protocols.certifier.head_check.gate`), against its ``digests`` pin: the pin a verifier reads in
+    place of the digest is the Definition's."""
+    from verity.ml.circuits.codec import program_digest
+    from verity.ml.circuits.program import Program
+
+    return _counts_against_pin("digests", t.id, {"sha512": program_digest(Program(t))}, pins, F, t.id)
 
 
 # --- one subcircuit -----------------------------------------------------------------------------------------------------------

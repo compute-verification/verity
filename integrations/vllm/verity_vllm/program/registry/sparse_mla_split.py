@@ -40,11 +40,15 @@ Registered functions (all `Name_v1`):
   MufuLg2Ftz                                    (x: f32) -> f32
   F32NeZeroFtz, F32GtZeroFtz                    (x: f32) -> Value<1>   x != 0 (false on NaN), x > 0, a subnormal x read as 0
   SparseMlaSplitEnd{DV,INV,SCALE}               (m, l[4], o[DV]) -> (o_partial[DV], lse)
+  SparseMlaSplitPart{T,DR,DV,BN,DOT,INV,SCALE}  (q_nope: DV bf16, q_rope: DR bf16, kv: T x (DV+DR) bf16) -> (o_partial[DV], lse)
   SparseMlaCombine{NSPLIT,DV,INV}               (lse: NSPLIT f32, o: NSPLIT x DV f32) -> DV bf16
   SparseMlaHeadSplit{T,NS,DR,DV,BN,DOT,INV,SCALE}  (q_nope: DV bf16, q_rope: DR bf16, kv: T x (DV+DR) bf16) -> DV bf16
   SparseMlaSplit{T,NS,NH,DR,DV,BN,DOT,INV,SCALE}   (q_nope: NH x DV, q_rope: NH x DR, kv: T x (DV+DR)) -> NH x DV bf16
 
-NS is the token's split count (`launch_num_splits`), the boundaries `split_blocks(T, NS, BN)`.
+NS is the token's split count (`launch_num_splits`), the boundaries `split_blocks(T, NS, BN)`.  `SparseMlaSplitPart` is one split
+of `SparseMlaHeadSplit` on its own T keys (the split's blocks and its end, `split_part`, the loop the head runs per split): its
+(o_partial, lse) is what FA3's split kernel writes to HBM for the combine kernel to read, so a head at NS > 1 is its splits' parts
+and `SparseMlaCombine` over them.
 """
 from __future__ import annotations
 
@@ -308,33 +312,50 @@ def combine(st: M.Steps, S, INV, lse, o):
     return B.batch(st._defs["cvt"], acc, axes=(0,))
 
 
+def _q(st: M.Steps, KW: int, q_nope, q_rope):
+    return Coll(Array(KW, st.bf16), concat([q_rope.refs, q_nope.refs]))
+
+
+def split_part(st: M.Steps, T: int, BN: int, KW: int, block_of, end, q, kv, b0: int, b1: int):
+    """One split: blocks [b0, b1) of ``kv``'s T keys last to first (``block_of(nvis, first)``, its first visited one FIRST, the
+    keys' last block zero-padded), then ``end``: the split's (o_partial, lse)."""
+    B = st.B
+    m = l = o = None
+    for b in range(b1 - 1, b0 - 1, -1):
+        lo, hi = b * BN, min(T, (b + 1) * BN)
+        kvb = kv[lo:hi]
+        if hi - lo < BN:  # FA3 clears the out-of-bounds rows; their columns are masked and never read
+            row = Coll(Array(KW, st.bf16), concat([st.zero16().refs] * KW))
+            kvb = Coll(Array(BN, Array(KW, st.bf16)), concat([kvb.refs] + [row.refs] * (BN - hi + lo)))
+        first = b == b1 - 1
+        r = B.call(block_of(hi - lo, True), q, kvb) if first else B.call(block_of(hi - lo, False), q, kvb, m, l, o)
+        m, l, o = r[0], r[1], r[2]
+    return B.call(end, m, l, o)
+
+
 def head_split(st: M.Steps, S, block_of, unsplit, end, combine_of, q_nope, q_rope, kv):
-    """`SparseMlaHeadSplit`'s body: ``unsplit`` the token's head when NS = 1; else each split's blocks (``block_of(nvis,
-    first)``), ``end`` and ``combine_of(nsplit)``."""
+    """`SparseMlaHeadSplit`'s body: ``unsplit`` the token's head when NS = 1; else each split's `split_part` (``block_of(nvis,
+    first)``, ``end``) and ``combine_of(nsplit)``."""
     B, T, NS, DR, DV, BN = st.B, S.T, S.NS, S.DR, S.DV, S.BN
     check_split_statics(T, NS)
     if NS == 1:
         return B.call(unsplit, q_nope, q_rope, kv)
     KW = DR + DV
-    q = Coll(Array(KW, st.bf16), concat([q_rope.refs, q_nope.refs]))
-    row = None
+    q = _q(st, KW, q_nope, q_rope)
     lses, parts = [], []
     for b0, b1 in split_blocks(T, NS, BN):
-        m = l = o = None
-        for b in range(b1 - 1, b0 - 1, -1):
-            lo, hi = b * BN, min(T, (b + 1) * BN)
-            kvb = kv[lo:hi]
-            if hi - lo < BN:  # FA3 clears the out-of-bounds rows; their columns are masked and never read
-                if row is None:
-                    row = Coll(Array(KW, st.bf16), concat([st.zero16().refs] * KW))
-                kvb = Coll(Array(BN, Array(KW, st.bf16)), concat([kvb.refs] + [row.refs] * (BN - hi + lo)))
-            first = b == b1 - 1
-            r = B.call(block_of(hi - lo, True), q, kvb) if first else B.call(block_of(hi - lo, False), q, kvb, m, l, o)
-            m, l, o = r[0], r[1], r[2]
-        e = B.call(end, m, l, o)
+        e = split_part(st, T, BN, KW, block_of, end, q, kv, b0, b1)
         parts.append(e[0])
         lses.append(e[1])
     return B.call(combine_of(len(parts)), array_of(lses), array_of(parts))
+
+
+def part(st: M.Steps, S, block_of, end, q_nope, q_rope, kv):
+    """`SparseMlaSplitPart`'s body: `split_part` over all of its T keys."""
+    if S.T < 1:
+        raise ValueError(f"SparseMlaSplitPart: T={S.T} keys")
+    KW = S.DR + S.DV
+    return split_part(st, S.T, S.BN, KW, block_of, end, _q(st, KW, q_nope, q_rope), kv, 0, -(-S.T // S.BN))
 
 
 # --- the Definitions --------------------------------------------------------------------------------------------------------
@@ -348,6 +369,25 @@ def SparseMlaSplitEnd(B, S, m, l, o):
     """A split's end (`Softmax::finalize` at Split): sum = (l0 + l2) + (l1 + l3), the partial output o * INV(sum), and lse =
     sum != 0 ? fma(m, scale_log2 * LN2, MufuLg2Ftz(sum) * LN2) : -inf (`F32NeZeroFtz_v1`, `SelectI32_v1`)."""
     return split_end(word_steps(B), S, S.INV, m, l, o)
+
+
+def _part_type(S, bf16=BF16, f32=F32):
+    return ((("q_nope", Array(S.DV, bf16)), ("q_rope", Array(S.DR, bf16)), ("kv", Array(S.T, Array(S.DR + S.DV, bf16)))),
+            Tuple(Array(S.DV, f32), f32))
+
+
+def part_blocks(S, block):
+    """``block``'s binding for `split_part`'s ``block_of(nvis, first)``."""
+    return lambda nvis, first: bind(block, DR=S.DR, DV=S.DV, NVIS=nvis, FIRST=first, BN=S.BN, DOT=S.DOT, SCALE=S.SCALE)
+
+
+@composite("SparseMlaSplitPart", 1, ["T", "DR", "DV", "BN", "DOT", "INV", "SCALE"], _part_type, conformance=_CONF)
+def SparseMlaSplitPart(B, S, q_nope, q_rope, kv):
+    """One split of `SparseMlaHeadSplit_v1` on its own T keys: its `SparseMlaBlock_v1`s last to first (the first visited one
+    FIRST, the keys' last block zero-padded) and its `SparseMlaSplitEnd_v1`, (o_partial, lse) as FA3's split kernel writes them
+    for the combine kernel."""
+    return part(word_steps(B), S, part_blocks(S, M.SparseMlaBlock), bind(SparseMlaSplitEnd, DV=S.DV, INV=S.INV, SCALE=S.SCALE),
+                q_nope, q_rope, kv)
 
 
 def _combine_type(S, bf16=BF16, f32=F32):
@@ -390,4 +430,4 @@ def SparseMlaSplit(B, S, q_nope, q_rope, kv):
     return B.batch(hd, q_nope, q_rope, kv, axes=(0, 0, None))
 
 
-SPARSE_MLA_SPLIT_COMPOSITES = [SparseMlaSplitEnd, SparseMlaCombine, SparseMlaHeadSplit, SparseMlaSplit]
+SPARSE_MLA_SPLIT_COMPOSITES = [SparseMlaSplitEnd, SparseMlaSplitPart, SparseMlaCombine, SparseMlaHeadSplit, SparseMlaSplit]
