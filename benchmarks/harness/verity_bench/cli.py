@@ -22,15 +22,22 @@ from verity_bench.vllm.table import render
 
 def _spec_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("spec", help="a spec under benchmarks/specs, or its path")
+    parser.add_argument("--local-only", action="store_true",
+                        help="find passing runs in this machine's catalog alone, not the store's remote")
+
+
+def _make_plan(args: Any) -> jobs.Plan:
+    root = jobs.repository_root()
+    return jobs.make_plan(args.spec, root=root, lookup=jobs.StoreCompletion(root=root, local_only=args.local_only))
 
 
 def _plan(args: Any) -> int:
-    print(json.dumps(jobs.plan_json(jobs.make_plan(args.spec)), indent=1, sort_keys=True))
+    print(json.dumps(jobs.plan_json(_make_plan(args)), indent=1, sort_keys=True))
     return 0
 
 
 def _check(args: Any) -> int:
-    plan = jobs.make_plan(args.spec)
+    plan = _make_plan(args)
     done = sum(item.passing_run is not None for item in plan.points)
     print(f"{plan.spec.id}: {done}/{len(plan.points)} points have a passing result")
     for item in plan.points:
@@ -39,8 +46,7 @@ def _check(args: Any) -> int:
 
 
 def _run(args: Any) -> int:
-    plan = jobs.make_plan(args.spec)
-    return jobs.dispatch(plan, args.spec)
+    return jobs.dispatch(_make_plan(args), args.spec)
 
 
 def _point(args: Any) -> int:
