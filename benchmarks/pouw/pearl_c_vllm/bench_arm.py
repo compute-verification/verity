@@ -1,5 +1,6 @@
 """Pearl-C (``pearl-c-sm120-v1-h3``) as a `verity-bench` experimental arm (``--arm-module pearl_c_vllm.bench_arm:PEARL_C``
-with ``benchmarks/pouw`` on ``PYTHONPATH``), on one RTX PRO 6000.
+with ``benchmarks/pouw`` on ``PYTHONPATH``), on one RTX PRO 6000; with ``PEARLC_KERNEL`` the tree's
+``benchmarks/pouw/pearl_c_sm90``, ``pearl-c-h100-v1-h3`` on one H100 or H200.
 
 The arm serves the preset's model in BF16 with every linear computed and committed by `pouw_pearl_c_device.PearlCDeviceRun`,
 installed as `e2e.install` does (sites by type, the kernel directory's cubin, the weight roots, the epoch from a
@@ -13,8 +14,9 @@ arm's gate is Pearl-C's own, `e2e.gate`'s call check: at every distinct (n, k), 
 RMS, the same call's commitment twice bit for bit, and the ``hash_leaf``-omitted negative control changing the
 transcript root.
 
-Env: ``PEARLC_KERNEL`` (default the tree's ``benchmarks/pouw/pearl_c_sm120``), ``PEARLC_CUBIN`` (default the directory's),
-``PEARLC_SCHEDULE`` (default ``deferred``, the served schedule), ``PEARLC_SCHEME``, ``PEARLC_BENCH_EPOCH``. The salt coin
+Env: ``PEARLC_KERNEL`` (default the tree's ``benchmarks/pouw/pearl_c_sm120``), ``PEARLC_CUBIN`` (default the directory's
+build.sh cubin, ``<directory name>.cubin``), ``PEARLC_SCHEDULE`` (default ``deferred``, the served schedule),
+``PEARLC_SCHEME`` (default the kernel directory's record, `KERNEL_SCHEMES`), ``PEARLC_BENCH_EPOCH``. The salt coin
 is a challenger's held in this process (``in-process``, a cost measurement) unless ``PEARLC_CHALLENGER_GATE`` (infra's gate
 as an ssh command under the lane's gate key) and ``PEARLC_CHALLENGER_PEER`` (this node's name in the challenger host's
 peers) are set: then it is a live session's on the auditor host, reserved at install, opened on the weights' root and its
@@ -31,6 +33,8 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 #: `e2e.gate`'s bound on served y against x·Wᵀ (rel RMS), Pearl's FP8 quantization noise
 ERR = 0.08
+#: the scheme each of the tree's kernel directories runs (`pouw_pearl_c_device.SCHEMES`' device records)
+KERNEL_SCHEMES = {"pearl_c_sm120": "pearl-c-sm120-v1-h3", "pearl_c_sm90": "pearl-c-h100-v1-h3"}
 
 
 class _Coins:
@@ -100,6 +104,7 @@ class PearlCArm:
     def __init__(self) -> None:
         self.kernel_dir = Path(os.environ.get("PEARLC_KERNEL", str(HERE.parent / "pearl_c_sm120")))
         self.cubin = os.environ.get("PEARLC_CUBIN") or None
+        self.scheme = os.environ.get("PEARLC_SCHEME") or KERNEL_SCHEMES.get(self.kernel_dir.name, "pearl-c-sm120-v1-h3")
         self.schedule = os.environ.get("PEARLC_SCHEDULE", "deferred")
         self.epoch = int(os.environ.get("PEARLC_BENCH_EPOCH", "20261014"))
         self.gate_command = os.environ.get("PEARLC_CHALLENGER_GATE") or None
@@ -121,7 +126,7 @@ class PearlCArm:
                 "max_num_batched_tokens": int(os.environ.get("PEARLC_STEP_TOKENS", "4096"))}
 
     def kernel_digest(self, target: Any) -> str | None:
-        path = Path(self.cubin) if self.cubin else self.kernel_dir / "pearl_c_sm120.cubin"
+        path = Path(self.cubin) if self.cubin else self.kernel_dir / f"{self.kernel_dir.name}.cubin"
         return hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
 
     def _capacity(self, target: Any, tile: int, row_align: int, ns: list[int],
@@ -142,7 +147,7 @@ class PearlCArm:
         from verity_vllm.linear.api import PassSpec, Stack
         from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
-        scheme = os.environ.get("PEARLC_SCHEME", "pearl-c-sm120-v1-h3")
+        scheme = self.scheme
         sites = vllm_site.discover(target.model)
         weights = {site.weight_id: layer.weight.data for site, layer in sites}
         bad = PPD.refusals(scheme, {w: tuple(t.shape) for w, t in weights.items()})
