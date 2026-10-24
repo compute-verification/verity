@@ -2705,20 +2705,25 @@ __global__ void __launch_bounds__(256) h1jr_cols(const UCallR* __restrict__ call
 #ifndef H1U_JSWZ
 #define H1U_JSWZ 32
 #endif
-// H1U_JSWZQ = PR (with H1U_JSWZ): a block's WARPS units a patch of PR row blocks by WARPS / PR column blocks, the band's
-// patches row by row down it, then across, so the block's warps share A's lines and B's through L1; a band whose row
-// blocks or a call whose column blocks the patch doesn't divide keeps H1U_JSWZ's order
+// H1U_JWARPS: h1umjc's and h1jr_ady's warps a block (WARPS unless set; the other kernels' WarpSmem caps WARPS at 8)
+#ifndef H1U_JWARPS
+#define H1U_JWARPS WARPS
+#endif
+constexpr int JWARPS = H1U_JWARPS;
+// H1U_JSWZQ = PR (with H1U_JSWZ): a block's JWARPS units a patch of PR row blocks by JWARPS / PR column blocks, the
+// band's patches row by row down it, then across, so the block's warps share A's lines and B's through L1; a band whose
+// row blocks or a call whose column blocks the patch doesn't divide keeps H1U_JSWZ's order
 #ifndef H1U_JSWZQ
 #define H1U_JSWZQ 0
 #endif
-static_assert(!H1U_JSWZQ || (H1U_JSWZ && WARPS % H1U_JSWZQ == 0 && H1U_JSWZ % H1U_JSWZQ == 0),
-              "H1U_JSWZQ's patch is PR row blocks of H1U_JSWZ's band by WARPS / PR column blocks");
+static_assert(!H1U_JSWZQ || (H1U_JSWZ && JWARPS % H1U_JSWZQ == 0 && H1U_JSWZ % H1U_JSWZQ == 0),
+              "H1U_JSWZQ's patch is PR row blocks of H1U_JSWZ's band by JWARPS / PR column blocks");
 __device__ __forceinline__ u32 jswz_unit(const UCallR& c, u32 w, u32 M) {
   if (!H1U_JSWZ) return w;
   const u32 ncb = c.N / 32, band = (u32)H1U_JSWZ * ncb, r0 = w / band * (u32)H1U_JSWZ, r = w % band;
   const u32 rn = min((u32)H1U_JSWZ, M / 32 - r0);
 #if H1U_JSWZQ
-  constexpr u32 W = WARPS, PR = H1U_JSWZQ, PC = W / PR;
+  constexpr u32 W = JWARPS, PR = H1U_JSWZQ, PC = W / PR;
   if (rn % PR == 0 && ncb % PC == 0) {
     const u32 q = r % W, p = r / W, hp = rn / PR;
     return (r0 + PR * (p % hp) + q % PR) * ncb + PC * (p / hp) + q / PR;
@@ -2739,11 +2744,11 @@ using JcSmem = WarpSmem;
 #endif
 
 // h1umj with its units' column blocks read (RC)
-__global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umjc(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
-                                                     const uint8_t* __restrict__ live) {
-  __shared__ JcSmem smem[WARPS];
+__global__ void __launch_bounds__(32 * JWARPS, H1U_MINB) h1umjc(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
+                                                      const uint8_t* __restrict__ live) {
+  __shared__ JcSmem smem[JWARPS];
   const u32 wp = threadIdx.x >> 5;
-  const u32 gu = blockIdx.x * WARPS + wp;
+  const u32 gu = blockIdx.x * JWARPS + wp;
   if (gu >= calls[ncalls].u0) return;
   u32 lo = 0, hi = ncalls;
   while (hi - lo > 1) {
@@ -2762,12 +2767,12 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umjc(const UCallR* __r
 }
 
 #if H1U_JRY
-// RY's digits: call blockIdx.y's row block blockIdx.x WARPS + warp, by its column block 0's unit under YO
-__global__ void __launch_bounds__(32 * WARPS) h1jr_ady(const UCallR* __restrict__ calls, u32 M,
-                                                     const uint8_t* __restrict__ live) {
-  __shared__ JcSmem smem[WARPS];
+// RY's digits: call blockIdx.y's row block blockIdx.x JWARPS + warp, by its column block 0's unit under YO
+__global__ void __launch_bounds__(32 * JWARPS) h1jr_ady(const UCallR* __restrict__ calls, u32 M,
+                                                      const uint8_t* __restrict__ live) {
+  __shared__ JcSmem smem[JWARPS];
   const u32 wp = threadIdx.x >> 5;
-  const u32 ri = blockIdx.x * WARPS + wp;
+  const u32 ri = blockIdx.x * JWARPS + wp;
   if (ri >= M / 32) return;
   const UCallR c = calls[blockIdx.y];
   if (c.md == 3)
@@ -2799,11 +2804,12 @@ extern "C" int kh_units_multi_j10rc(const void* calls, unsigned ncalls, unsigned
   }
   if (mode != 1) {
 #if H1U_JRY
-    h1jr_ady<<<dim3((M / 32 + WARPS - 1) / WARPS, ncalls), 32 * WARPS, 0, s>>>((const UCallR*)calls, M,
-                                                                              (const uint8_t*)live);
+    h1jr_ady<<<dim3((M / 32 + JWARPS - 1) / JWARPS, ncalls), 32 * JWARPS, 0, s>>>((const UCallR*)calls, M,
+                                                                                (const uint8_t*)live);
 #endif
     carve<h1umjc>();
-    h1umjc<<<(units + WARPS - 1) / WARPS, 32 * WARPS, 0, s>>>((const UCallR*)calls, ncalls, M, (const uint8_t*)live);
+    h1umjc<<<(units + JWARPS - 1) / JWARPS, 32 * JWARPS, 0, s>>>((const UCallR*)calls, ncalls, M,
+                                                                 (const uint8_t*)live);
   }
   return cudaGetLastError() == cudaSuccess ? 0 : 3;
 }
