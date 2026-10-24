@@ -936,7 +936,7 @@ def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
     the finish rule: at most `max_tokens` tokens, ending at its first EOS (`eos_token_ids`) or at `max_tokens`. On a
     compact plan each egress frame is a compact cell (`active.compact_record_data`), a stop's id in `output` is
     `COMPACT_EOS`, and the finish is the records' own: only the last is marked, a stop at any length up to `max_tokens`,
-    `COMPACT_LAST` at `max_tokens` exactly."""
+    `COMPACT_LAST` at `max_tokens` exactly, and no record carries an EOS id, since a stop is only ever `COMPACT_EOS`."""
     e, i = setup.egress_params, setup.ingress_params
     compact = bool(plan.get("compact"))
     marks: dict[int, list] = defaultdict(list)
@@ -993,6 +993,8 @@ def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
             r["finish"] = "longer than max_tokens"
         elif compact and any(ends[:-1]):
             r["finish"] = "a token after its finish"
+        elif compact and stops:
+            r["finish"] = "an EOS id in a compact response"
         elif compact:
             short = "a length finish short of max_tokens"
             r["finish"] = {"stop": "eos", "length": "length" if len(out) == m else short, None: "no finish"}[ends[-1]]
