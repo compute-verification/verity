@@ -2906,8 +2906,9 @@ def packages(root: Path) -> list[Path]:
 
 
 def controls(toolchain: str, out: Path, install: bool = False, log=print) -> list[str]:
-    """Build the fixture package with ``toolchain``: it must pass clean, and fail each check once a violation is added.
-    ``install`` (`--build`) first installs elan and the toolchain with `setup.sh`."""
+    """Build the fixture package with ``toolchain``: it must pass clean, and fail each check once a violation is added
+    (and with none of the failures its `not` lists, by prefix).  ``install`` (`--build`) first installs elan and the
+    toolchain with `setup.sh`."""
     fails = []
     work = out / f"controls-{re.sub(r'[^A-Za-z0-9]+', '_', toolchain)}"
     shutil.rmtree(work, ignore_errors=True)
@@ -2974,6 +2975,8 @@ def controls(toolchain: str, out: Path, install: bool = False, log=print) -> lis
                 fails.append(f"controls: `{name}` should pass; the audit said:\n" + "\n".join(got))
         elif not any(f.startswith(v["fails"]) for f in got):
             fails.append(f"controls: `{name}` should fail `{v['fails']}`; the audit said:\n" + ("\n".join(got) or "PASS"))
+        if wrong := [f for f in got if any(f.startswith(n) for n in v.get("not", []))]:
+            fails.append(f"controls: `{name}` should not fail these:\n" + "\n".join(wrong))
     log(f"audit: controls with {toolchain}: {'PASS' if not fails else 'FAIL'} (clean, {', '.join(expect)}; builds "
         f"{'in the sandbox' if sandboxed() else 'without a sandbox'})")
     return fails
