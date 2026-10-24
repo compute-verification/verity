@@ -213,9 +213,10 @@ class Serving:
     """The server over the stand-ins, its engine loop on a thread of its own, as `main` runs it."""
 
     def __init__(self, out: Path, *, commit: bool = True, flip: tuple[int, int] | None = None, window_steps: int = 64,
-                 force_include_usage: bool = True) -> None:
+                 idle_close_steps: int = 1, force_include_usage: bool = True) -> None:
         self.runner = Runner()
-        self.windows = sc.CommitWindows(Committer(self.runner, flip), self.runner, out, run_id="t", window_steps=window_steps) if commit else None
+        self.windows = sc.CommitWindows(Committer(self.runner, flip), self.runner, out, run_id="t", window_steps=window_steps,
+                                       idle_close_steps=idle_close_steps, clock=lambda: 0.0) if commit else None
         self.loop = so.EngineLoop(Engine(self.runner), self.windows)
         self.server = so.Server(proto=so.PlainProtocol(force_include_usage), served_name="m", max_model_len=512, tokenizer=Tokenizer(),
                                 defaults={"temperature": 1.0}, submit=self.loop.submit, abort=self.loop.abort, clock=lambda: 7)
@@ -333,6 +334,16 @@ def test_commit_record_maps_and_checks_every_request(tmp_path, window_steps):
     if window_steps == 2:
         assert len([w for w in wins if not w.get("empty")]) > 1 and any(len(r["windows"]) > 1 for r in reqs.values())
     assert s.windows.summary()["passed"]
+
+
+@pytest.mark.parametrize("idle_close_steps, windows", [(1, 3), (100, 1)])
+def test_a_window_closes_at_idle_once_it_holds_idle_close_steps(tmp_path, idle_close_steps, windows):
+    with Serving(tmp_path, idle_close_steps=idle_close_steps) as s:
+        for i in range(3):
+            assert s.post("/v1/completions", dict(CERTIFIER_BODY, prompt=[1, 2 + i]))[0] == 200
+    wins = [w for w in records(tmp_path, "windows.jsonl") if not w.get("empty")]
+    assert len(wins) == windows and all(w["passed"] and w["seconds"] == {"open": 0.0, "close": 0.0} for w in wins)
+    assert s.windows.summary()["passed"] and s.windows.summary()["requests_checked"] == 3
 
 
 def test_check_fails_on_a_committed_id_that_was_not_served(tmp_path):

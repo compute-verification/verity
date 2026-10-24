@@ -2,14 +2,16 @@
 request's record of what was served against what the Commit holds of it.
 
 A window (`CommitWindows`) opens at the first engine step after the engine was idle and closes when the engine is idle
-again, or after ``window_steps`` steps; each is one Commit, with its own run root. At each close it reads back, from the
-committed bytes, each request's rows of the embedding's input ids and of the sampled ids, at the rows the model runner's
-input batch gave it at that step, and `check_request` holds a finished request's committed ids to what was served.
+again (once it holds ``idle_close_steps`` steps), or after ``window_steps`` steps; each is one Commit, with its own run
+root. At each close it reads back, from the committed bytes, each request's rows of the embedding's input ids and of the
+sampled ids, at the rows the model runner's input batch gave it at that step, and `check_request` holds a finished
+request's committed ids to what was served.
 """
 from __future__ import annotations
 
 import json
 import re
+import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -101,10 +103,13 @@ class CommitWindows:
     ``_layouts``, ``_step_index``); ``runner`` the model runner whose ``execute_model`` it patches."""
 
     def __init__(self, committer: Any, runner: Any, out: Path, *, run_id: str, window_steps: int,
-                 ids_names: Sequence[str] = IDS_NAMES, sampled_name: str = SAMPLED_NAME) -> None:
+                 ids_names: Sequence[str] = IDS_NAMES, sampled_name: str = SAMPLED_NAME,
+                 idle_close_steps: int = 1, clock: Callable[[], float] = time.perf_counter) -> None:
         from verity_vllm.engine.hooks import Hooks
 
-        self.com, self.runner, self.out = committer, runner, Path(out)
+        self.com, self.runner, self.out, self.clock = committer, runner, Path(out), clock
+        self.idle_close_steps = int(idle_close_steps)
+        self.open_s = 0.0
         self.run_id, self.window_steps = run_id, int(window_steps)
         self.ids_names, self.sampled_name = tuple(ids_names), sampled_name
         self._Hooks = Hooks
@@ -132,6 +137,11 @@ class CommitWindows:
         if led is not None:
             led.aborted = led.finished = True
 
+    def idle(self) -> None:
+        """The engine has nothing to run: close the open window once it holds ``idle_close_steps`` steps."""
+        if self.is_open and len(self.rows) >= self.idle_close_steps:
+            self.close()
+
     def before_step(self) -> None:
         if self.is_open and len(self.rows) >= self.window_steps:
             self.close()
@@ -140,10 +150,12 @@ class CommitWindows:
 
     # -- windows
     def open(self) -> None:
+        t0 = self.clock()
         self.window += 1
         self.rows = {}
         self.com.reset()
         self.com.install()
+        self.open_s = self.clock() - t0
         self.hooks = self._Hooks(tag=f"serve-openai:{self.run_id}")
         me = self
 
@@ -161,12 +173,14 @@ class CommitWindows:
         self.is_open = True
 
     def close(self) -> dict[str, Any]:
+        t0 = self.clock()
         self.hooks.uninstall()
         rc = self.com.finalize() if int(self.com._step_index) else None    # a window whose one step() only drained outputs
         self.com.uninstall()
         self.is_open = False
         rec = self._absorb(rc) if rc is not None else {"window": self.window, "run_id": f"{self.run_id}/w{self.window}", "steps": 0,
                                                        "empty": True, "requests": [], "passed": True}
+        rec["seconds"] = {"open": round(self.open_s, 4), "close": round(self.clock() - t0, 4)}
         self.records.append(rec)
         with open(self.out / "windows.jsonl", "a") as fh:
             fh.write(json.dumps(rec) + "\n")

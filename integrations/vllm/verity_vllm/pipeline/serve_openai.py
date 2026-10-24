@@ -18,10 +18,11 @@ thread (`EngineLoop`): each HTTP request is admitted with ``add_request`` under 
 request's connection as it comes. The HTTP side is an asyncio server on its own thread, one request per connection.
 
 With the Commit on (the default), `NativeHostCommitter` commits every engine step exactly as it does a declared workload,
-values retained on host. A Commit window (`verity_vllm.pipeline.serve_commit.CommitWindows`) opens at the first engine step after the engine was idle and
-closes when the engine is idle again, or after ``--window-steps`` steps (it reopens before the next step): each window
-is one Commit, with its own run root. At each close the server reads back, from the committed bytes, each request's rows
-of the embedding's input ids (``c00.input/ids`` on the compiled path, ``model.embed_tokens/in`` on the eager one) and of
+values retained on host. A Commit window (`verity_vllm.pipeline.serve_commit.CommitWindows`) opens at the first engine
+step after the engine was idle and closes when the engine is idle again (once it holds ``--idle-close-steps``), or after
+``--window-steps`` steps (it reopens before the next step): each window is one Commit, with its own run root. At each
+close the server reads back, from the committed bytes, each request's rows of the embedding's input ids
+(``c00.input/ids`` on the compiled path, ``model.embed_tokens/in`` on the eager one) and of
 ``runner.sampler/sampled_token_ids``, at the rows the model runner's input batch gave it at that step. Once a request
 has finished, its check (`check_request`) holds those committed ids to what was served: the input ids are exactly its
 prompt ids then every streamed id but the last, and the sampled ids exactly its streamed ids.
@@ -76,6 +77,8 @@ class Options:
     seed: int = option("--seed", type=int, default=0)
     commit: bool = option("--commit", action="boolean_optional", default=True, help="commit every engine step (default on)")
     window_steps: int = option("--window-steps", type=int, default=64, help="engine steps a Commit window holds at most")
+    idle_close_steps: int = option("--idle-close-steps", type=int, default=1,
+                                   help="close a Commit window when the engine idles once it holds this many steps (default 1: at every idle)")
     chunk: int = option("--chunk", type=int, default=65536, help="the committer's leaf, in bytes of the packed step stream (as `commit`'s)")
     hash_threads: int = option("--hash-threads", type=int, default=2, help="the committer's hashlib threads")
     gpu_tree: bool = option("--gpu-tree", action="store_true", default=False, help="the committer's GPU-resident chunk tree (no D2H, no hashlib)")
@@ -400,8 +403,8 @@ class EngineLoop:
         try:
             while running:
                 idle = not self.engine.has_unfinished_requests()
-                if idle and self.commit is not None and self.commit.is_open:
-                    self.commit.close()
+                if idle and self.commit is not None:
+                    self.commit.idle()
                 item = self.q.get() if idle else self._poll()
                 while item is not None:
                     if not self._take(item):
@@ -684,7 +687,8 @@ def main(opts: Options) -> int:
     run_id = opts.run_id
     windows = None
     if com is not None:
-        windows = CommitWindows(com, com.runner, out, run_id=run_id, window_steps=opts.window_steps)
+        windows = CommitWindows(com, com.runner, out, run_id=run_id, window_steps=opts.window_steps,
+                                 idle_close_steps=opts.idle_close_steps)
     loop = EngineLoop(engine, windows)
     served = opts.served_model_name or opts.model
     server = Server(proto=proto, served_name=served, max_model_len=opts.max_model_len, tokenizer=llm.get_tokenizer(),
@@ -700,7 +704,8 @@ def main(opts: Options) -> int:
     bound = [http.address]
     record = {"address": list(bound[0]), "served_model_name": served, "model": opts.model, "revision": opts.revision,
               "precision": opts.precision, "protocol": proto.name, "framing": framing, "defaults": dict(defaults),
-              "commit": opts.commit, "window_steps": opts.window_steps, "committer": getattr(com, "name", None),
+              "commit": opts.commit, "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
+              "committer": getattr(com, "name", None),
               "committer_options": {k: getattr(opts, k) for k in ("chunk", "hash_threads", "gpu_tree", "fast_copy")},
               "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": run_id}
     (out / "serve.json").write_text(json.dumps(record, indent=1, default=str))
