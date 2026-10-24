@@ -15,6 +15,7 @@
   "Properties.Proofs.Nci.DescAgree",
   "Properties.Proofs.Nci.Walk",
   "Properties.Proofs.Nci.Novel",
+  "Properties.Proofs.Nci.BodiesOk",
   "Properties.Proofs.Nci.OperandsResolve",
   "Properties.NciDesc",
   "Properties.NciDesc.Verdict",
@@ -65,26 +66,6 @@
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
-  "Nci.Assumptions.BaselineRegistered": {
-   "owner": "@compute-accounting",
-   "digest": "1e726c0b0d96e66c67519b7726cfdb3ca6faf901f7773d1faa4283870690966c"
-  },
-  "Nci.Assumptions.WeightsIncompressible": {
-   "owner": "@lean",
-   "digest": "a9832cc41ed84cd3c55eccc606483e9c83d87fb29e05d1b1f92bb2680d32f8d8"
-  },
-  "Nci.Assumptions.WeightsIncompressibleSlots": {
-   "owner": "@lean",
-   "digest": "bc370825a2d24097f1a43037b354dac79b31c91c8e1c3fe00f7671516529c399"
-  },
-  "Pous.P2.Assumptions.CoinCommitHides": {
-   "owner": "@memory-accounting",
-   "digest": "cd2e704557c1d6266ff3cb8dde135be3e5538a7c8748cc0f03d743dc30e958cb"
-  },
-  "Pous.P2.Assumptions.P2RingAuditSecure": {
-   "owner": "@memory-accounting",
-   "digest": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3"
-  },
   "Accounting.Remote.Draw.Assumptions.Counted": {
    "owner": "@memory-accounting",
    "digest": "a19f5130ba8a9bf73218b9ea3135acbdb8df3d7d2259c6bde1db14e8ad65480a"
@@ -132,6 +113,26 @@
   "Accounting.Remote.Held.Assumptions.SquaringCeiling": {
    "owner": "@memory-accounting",
    "digest": "ec84a74dad72a577c60f568cc9665016654feb62fad1857aef5f2f8a4bb9f098"
+  },
+  "Nci.Assumptions.BaselineRegistered": {
+   "owner": "@compute-accounting",
+   "digest": "1e726c0b0d96e66c67519b7726cfdb3ca6faf901f7773d1faa4283870690966c"
+  },
+  "Nci.Assumptions.WeightsIncompressible": {
+   "owner": "@lean",
+   "digest": "a9832cc41ed84cd3c55eccc606483e9c83d87fb29e05d1b1f92bb2680d32f8d8"
+  },
+  "Nci.Assumptions.WeightsIncompressibleSlots": {
+   "owner": "@lean",
+   "digest": "bc370825a2d24097f1a43037b354dac79b31c91c8e1c3fe00f7671516529c399"
+  },
+  "Pous.P2.Assumptions.CoinCommitHides": {
+   "owner": "@memory-accounting",
+   "digest": "cd2e704557c1d6266ff3cb8dde135be3e5538a7c8748cc0f03d743dc30e958cb"
+  },
+  "Pous.P2.Assumptions.P2RingAuditSecure": {
+   "owner": "@memory-accounting",
+   "digest": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3"
   }
  },
  "meaning": [
