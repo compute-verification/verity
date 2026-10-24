@@ -32,6 +32,9 @@ round coins, each opened after its recorded round root, read through the challen
 ledger opens and ends for the window, then one mutation each aimed at every refusal), compared output for output: null, or the same refusal.
 Its `salt` against `core_check.salt` likewise, over the live windows' salt coins the same module generates, read through
 the same session, reserved before it opened (opened after the session's open root, `salt.window_open_root`).
+
+Its `chunks` against `weights.chunks` (an H1 lane's chunks along K, the chunk rows a table at K commits a row as): every
+multiple of 32 below 2^17, then drawn integers and non-integers, compared output for output: the count, or the same refusal.
 """
 from __future__ import annotations
 
@@ -55,6 +58,7 @@ import pouw_rounds_cases as rounds_cases
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import verifier as V
+from verity.core.protocols.pouw import weights as W
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -324,8 +328,11 @@ def test_credit(pass_server):
     code zeroed) are not the ones its period's open signed, a period whose open signs no weights' root or names no
     model `models.json` pins (none, malformed, another checkpoint, another role), a round's A table of a K (a row off,
     its calls' rows offset by one call, a call missing) or a round's input-ids table other than the served Commit's or a
-    Commit record the draw root doesn't bind, round 0's input-ids
-    table outside round 0's request table or bound to another session, and every other
+    Commit record the draw root doesn't bind, round 0's input-ids table outside round 0's request table or bound to
+    another session, round 0's request table at another root than request_table, twice, under another PREFIX or bound
+    to another session or to the open root, a call's served rows m_s past the period's T table rows, other than its step's or malformed (an
+    honest window's empty step credits none of its calls), a T whose slot is not the window's M or that is no positive
+    integer, a period whose open commits no T or a malformed one, and every other
     refusal of `credit.window`, `credit.period_credit` and the steps they run."""
     CREDITED.clear()
     stats = {p.fn: D.run(p, examples=n, server=pass_server)
@@ -359,6 +366,12 @@ def test_credit(pass_server):
                  "pad its linears' A and B rows with zero codes to K = #",
                  "split its linears' k range into linears of at most K = # each",
                  "window manifest: the manifest's # rows", "window outcome: unit # has a proof outcome and was not",
+                 "window manifest: manifest row # states no served rows m_s at most the period's T = # table rows",
+                 "window layout: the period's T = # table rows give an A slot of # rows, not the window's M = #",
+                 "window layout: the period's table rows T are not a positive integer",
+                 "period layout: period ", "'s open commits no table rows T (rows, a positive integer",
+                 "so the period earns nothing: layout: the period's T = # table rows give an A slot",
+                 "window manifest: call # states # served rows and call # #, both of step #",
                  "period period: period ", "period missing: window #", "period order: window #",
                  "period period: the windows presented run past", "period period: window ", "period window: window #",
                  "period coin: the auditor's ledger is not trusted", "period circuit: window # of period ",
@@ -416,11 +429,38 @@ def test_credit(pass_server):
                  "which only round # commits",
                  "window arow: round #'s request root (requests, the one the window's open root binds) is not",
                  "window registration: registered value ", "ids@#'s domain is not the one the window's registration",
+                 "requests@#'s domain is not the one the window's registration",
+                 "window arow: the window's request table's root is not round #'s request_table",
+                 "window arow: the window registers request table x/",
                  "or receipt table of the window", "'s receipt table, its round #'s, which only round # commits",
                  "a-link a-link: registered receipt table ", "registered-file registration: the window registers ",
                  "'s template returns no receipt of whole #-bit words", "'s seed reads the roots of ",
                  "its units' ok rows, which are the verifier's own"):
         assert any(part in k for k in CREDITED), part
+
+
+def chunks(k) -> dict:
+    if type(k) is not int or k < 0:
+        raise D.Reject("the input is not a natural number K")
+    try:
+        return {"chunks": W.chunks(k)}
+    except ValueError as e:
+        return {"refused": str(e)}
+
+
+CHUNKS = D.Port("pouw-check-difftest", "chunks", chunks, package=LEAN, of_record=V.RECORD_VERDICT,
+                inputs=st.one_of(st.integers(-64, 1 << 18), st.booleans(), st.text(max_size=2), st.none()))
+
+
+def test_chunks(pass_server):
+    """`PouwCheck.Chunks.chunks` is `weights.chunks` at every multiple of 32 below 2^17 (every served K, the whole lane up to
+    4096 and up to 256 chunks past it, each refusal's message included), then on drawn integers, negative ones a reject,
+    and non-integers."""
+    outs = [json.loads(D.replay(CHUNKS, k, pass_server)[1]) for k in range(0, 1 << 17, 32)]
+    stats = D.run(CHUNKS, examples=500, server=pass_server)
+    print(f"pouw-check-difftest chunks: 4096 Ks swept, then {stats}")
+    assert Counter(next(iter(o)) for o in outs) == {"chunks": 375, "refused": 3721}
+    assert [outs[k // 32] for k in (4096, 6144, 12288, 14336, 16384)] == [{"chunks": n} for n in (1, 2, 3, 4, 4)]
 
 
 ROUNDED: Counter[str] = Counter()

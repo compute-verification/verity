@@ -4,7 +4,7 @@ first coin.
 
     vy-challenger-gate reserve --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE]
     vy-challenger-gate open --session S --root R
-    vy-challenger-gate period-open --name P --cap N --circuit SHA512 [--draw-k K] [--model M | --weights-root W]
+    vy-challenger-gate period-open --name P --cap N --circuit SHA512 [--draw-k K] [--rows T] [--model M | --weights-root W]
                                    [--circuit-files JSON] [--lane LANE] | period-close --name P
     vy-challenger-gate model-register --model M --circuit SHA512 --descriptor FILE --checkpoint DIR
     vy-challenger-gate model-key --model M --circuit SHA512 [--weights-root W]
@@ -63,7 +63,9 @@ first coin.
   commits, before window 0's first coin, the most windows it may hold (`--cap`, a positive integer) and its circuit
   (`--circuit`: the declared circuit's SHA-512, never a Program's id, which the gate records and CHAL1 checks each window
   against), and with `--draw-k K` the draw K the proof service selects each window's units with (`draw_k`, a positive
-  integer at most 2^24, which PoUW's credit reads; an open without it commits none), and with `--model M` (or
+  integer at most 2^24, which PoUW's credit reads; an open without it commits none), with `--rows T` the served tables'
+  rows (`rows`, each round's request and slot tables' leaves, which bound every step's served rows m_s in PoUW's
+  credit and whose `h1window.slot` is each window's A slot M; an open without it credits nothing), and with `--model M` (or
   `--weights-root W`, which must be a registered root) the served model's weights' root from the auditor's model registry
   (`weights_root`, `credit.weights_root` of each K's b/<K> the auditor committed under its own salts, which PoUW's
   credit holds every window's weights to, and `model: {name, checkpoint_sha512}`; a root the registry has no entry of
@@ -381,6 +383,14 @@ def draw_k_of(s: str) -> int:
     return int(s)
 
 
+def rows_of(s: str) -> int:
+    """A period-open's table rows T (`--rows`, written as `rows`): each round's request and slot tables' leaves, the pouw
+    setting ``rows``, a positive integer at most 2^24, or Refused."""
+    if not re.fullmatch(r"[1-9][0-9]{0,7}", s) or int(s) > 1 << 24:
+        raise Refused(f"--rows {s!r}: the served tables' rows T (each round's request and slot tables' leaves), 1 to 2^24")
+    return int(s)
+
+
 def weights_root_of(s: str) -> str:
     """A period-open's weights' root (`--weights-root`, written as `weights_root`): a SHA-512 digest in lowercase hex, or
     Refused."""
@@ -417,7 +427,7 @@ def model_of(s: str) -> str:
 
 #: a period-open's optional fields, as the gate hands them to `period` (``FIELD=VALUE``) and its open records them; `model`
 #: and `weights_root` name a model registry entry, whose root and model the open signs (`models.resolve`)
-PERIOD_FIELDS = {"draw_k": draw_k_of, "weights_root": weights_root_of, "circuit_files": circuit_files_of,
+PERIOD_FIELDS = {"draw_k": draw_k_of, "rows": rows_of, "weights_root": weights_root_of, "circuit_files": circuit_files_of,
                  "model": model_of}
 
 
@@ -1027,7 +1037,7 @@ def certifier_fetch(run: str, host: Host, *, witness: bool = False) -> bytes:
 
 USAGE = ("verbs: reserve --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE: vy-admin's] "
          "| open --session S --root R "
-         "| period-open --name P --cap N --circuit SHA512 [--draw-k K] [--model M | --weights-root W] [--circuit-files JSON] "
+         "| period-open --name P --cap N --circuit SHA512 [--draw-k K] [--rows T] [--model M | --weights-root W] [--circuit-files JSON] "
          "[--lane LANE: vy-admin's] "
          "| period-close --name P "
          "(a lane's own gate key, or vy-admin) "
@@ -1043,7 +1053,7 @@ USAGE = ("verbs: reserve --peer NAME --scheme S --families JSON [--epoch E] [--m
 
 
 def parse_period(verb: str, argv: list[str], *, lane: str | None) -> tuple[str, str | None, list[str]]:
-    """(period, lane, [cap, circuit, then ``draw_k=K`` and ``weights_root=W`` when given] for a period-open) of a
+    """(period, lane, [cap, circuit, then each `PERIOD_FIELDS` field as ``FIELD=VALUE`` when given] for a period-open) of a
     period-open or period-close: a lane key's own lane, or vy-admin's `--lane` (period-open)."""
     p = argparse.ArgumentParser(prog=f"vy-challenger-gate {verb}", exit_on_error=False, add_help=False, allow_abbrev=False)
     p.add_argument("--name", required=True)
@@ -1053,6 +1063,7 @@ def parse_period(verb: str, argv: list[str], *, lane: str | None) -> tuple[str, 
         p.add_argument("--cap", required=True)
         p.add_argument("--circuit", required=True)
         p.add_argument("--draw-k", dest="draw_k", default=None)
+        p.add_argument("--rows", dest="rows", default=None)
         p.add_argument("--weights-root", dest="weights_root", default=None)
         p.add_argument("--circuit-files", dest="circuit_files", default=None)
         p.add_argument("--model", dest="model", default=None)
@@ -1267,10 +1278,10 @@ def admit(host: Host, session: str, *, signer, pinned: str, now: datetime, activ
 
 def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, active: Callable[[str], bool],
            tree: Path = TREE) -> dict:
-    """`period-open NAME LANE BY CAP CIRCUIT [draw_k=K] [weights_root=W] [circuit_files=JSON]` or `period-close NAME LANE|- BY` (LANE - for
+    """`period-open NAME LANE BY CAP CIRCUIT [draw_k=K] [rows=T] [weights_root=W] [circuit_files=JSON]` or `period-close NAME LANE|- BY` (LANE - for
     vy-admin's close of any lane's period): the signed entry, or Refused. A period's name is used once and a lane has one
     period open at a time; its open commits the most windows it may hold (`cap`), its circuit and, when given, its draw
-    K (`draw_k`), its model (`models.opened`: the registry's weights' root and model for the circuit, or for a circuit
+    K (`draw_k`) and table rows (`rows`), its model (`models.opened`: the registry's weights' root and model for the circuit, or for a circuit
     the registry has no entry of the model alone, from core's pin in `tree`) and each K's circuit file's SHA-512
     (`circuit_files`); it closes once none of its windows
     still runs, its close listing each window with its outcome."""

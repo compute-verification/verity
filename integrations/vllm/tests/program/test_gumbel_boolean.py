@@ -103,13 +103,15 @@ def _check_pin(spec: str, pin) -> None:
 
 # --- pins ------------------------------------------------------------------------------------------------------------------
 
-@pytest.mark.parametrize("spec", sorted(PINS))
+@pytest.mark.parametrize("spec", [pytest.param(s, marks=pytest.mark.slow) if s == "NvLogf_v3" else s for s in sorted(PINS)])
 def test_pinned_counts_and_digests(spec) -> None:
     _check_pin(spec, PINS[spec])
 
 
 @pytest.mark.slow
 def test_pinned_counts_and_digests_through_the_lane() -> None:
+    """The Definitions that reach the lane's noise, pinned by gate count and program digest (about 70 s, tracing 6M-AND noise
+    rows). A change to the lane's circuit shows only here: `test_pinned_counts_and_digests` pins the pieces that don't reach it."""
     for spec in sorted(LANE_PINS):
         _check_pin(spec, LANE_PINS[spec])
 
@@ -162,6 +164,7 @@ def _log_inputs(rng, around: tuple[int, ...], n: int) -> np.ndarray:
                            rng.integers(0, 1 << 32, n, dtype=np.uint64)]).astype(np.uint32)
 
 
+@pytest.mark.slow
 def test_nv_logf_agrees_with_its_word_definition() -> None:
     """Around 1 (the result's zero), the binade selector's 0x3F2AAAAB and FLT_MIN (the subnormal rescale), and +inf."""
     target = bind(GB.NvLogf)
@@ -177,6 +180,7 @@ def test_nv_logf_agrees_with_its_word_definition() -> None:
 NvLog1pf = TR.definition("NvLog1pf", 1, GB.nv_log1pf, (("a", F32),), F32, register=False)
 
 
+@pytest.mark.slow
 def test_nv_log1pf_agrees_with_libdevice() -> None:
     """Against `sampling.nv_log1pf_gpu`: around the selector's 0x3F400000 and the toward-zero sum's word 0x3EFFFFFF, -1 (the
     result's -inf and the NaN side), 0 and -0, and +inf."""
@@ -217,6 +221,7 @@ def test_uniform_and_noise_of_a_philox_word() -> None:
     assert not bad.size, f"{bad.size} of {len(w)} words differ, first {[hex(int(w[i])) for i in bad[:5]]}"
 
 
+@pytest.mark.slow
 def test_stream_key_agrees_with_its_word_definition() -> None:
     """Random 64-bit seeds and positions, and each with its halves at the edges."""
     rng = _rng("key")

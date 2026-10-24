@@ -325,9 +325,9 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
         conn["arrivals_ms"][-1] += PARAMS.bucket_ms
 
     problems = refused(lambda: edit_client(late_cell))
-    assert any(p.startswith("connection 1:") and "'in_bucket'" in p for p in problems)
+    assert any(p.startswith("connection 2:") and "'in_bucket'" in p for p in problems)
     problems = refused(lambda: edit_client(lambda c: c.update(data_sha256="0" * 64)))
-    assert any(p.startswith("connection 1:") and "'response_certified': False" in p for p in problems)
+    assert any(p.startswith("connection 2:") and "'response_certified': False" in p for p in problems)
     assert ws.check(out)["accepted"]
 
 
