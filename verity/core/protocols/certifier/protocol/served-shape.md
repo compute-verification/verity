@@ -52,13 +52,18 @@ the session, 20 steps, decisions `[0]*6 + [1] + [0]*6 + [1]`.
   decisions in 32, and 34 idle steps after its 20, whose served rows are zero. The slice takes it as it is: its
   reference accepts the window with the seal's rows (0x3F), and each negative fails the flags it fails at w212's own
   statics (the same tests, over both fixtures).
-- Its circuit isn't built at the class yet. The builder's wires are GF(2) forms over committed bits, and the coding
-  carries the coder's state (`low`, `high`, `x`, `used`), the KT counts and the code position from ask to ask without
-  committing them, so each ask adds about 19 bits to their forms. The class has P·A = 486 asks, so the build's nonzeros
-  are quadratic in the window: nnz_AB is 23.5 million at P = 2 and 97.8 million at P = 4 (82,813 and 193,566 ANDs),
-  and at P = 54 the build passed 352 GB unfinished (run r20261024-184641-e2af). Committed once an ask
-  (`Circuit.commit`), they keep the forms linear in the window: nnz_AB is 4.6 million at P = 2 and 24.3 million at
-  P = 8.
+- `CompileSlice_v1` as it stands can't build its circuit at the class. The builder's wires are GF(2) forms over
+  committed bits, and the coding carries the coder's state (`low`, `high`, `x`, `used`), the KT counts and the code
+  position from ask to ask without committing them, so each ask adds about 19 bits to their forms. The class has
+  P·A = 486 asks, so the build's nonzeros are quadratic in the window: nnz_AB is 23.5 million at P = 2 and 97.8
+  million at P = 4 (82,813 and 193,566 ANDs), and at P = 54 the build passed 352 GB unfinished (run
+  r20261024-184641-e2af).
+- Measured with those words committed once an ask (`Circuit.commit`, a patch of the build that the slice doesn't make
+  yet), the forms stay linear in the window: nnz_AB is 4.6 million at P = 2 and 24.3 million at P = 8. At the class the
+  unit is 3,181,376 ANDs, 66,815 of them the commit rows (3,114,561 without them), with nnz_AB 176.7 million, built in
+  142 s at 15.3 GB. Its circuit is its reference on the window and the four negatives (0x3F, 0x2E, 0x37, 0x2F, 0x2F;
+  run r20261024-201333-a08a). At w212's own statics the same patch adds 5,425 commit rows to the 222,668 ANDs and
+  cuts nnz_AB from 119.6 million to 11.9 million.
 - The statics are public, so a window proved at its own class shows its counts (3 requests, 20 steps). A session
   proves every window at one class, padded with idle steps and empty slots, and that shows only the session's
   maximum: 8eb1's engine class in the table below.
