@@ -10,8 +10,9 @@ forward no call's Python runs, so the forward's host work is done at once, aroun
 `whole_replay` uploads its slots; after it, while the GPU runs the forward, `whole_replayed` appends its matmuls, tiles and
 screened rows to the pass and stages the next forward's slots, which the next `whole_replay` uploads when the pass is where
 they were staged for (else it makes them itself: the same bytes either way).  A retained pass's capture also copies each
-call's A words and tree, as its steps leave them, to its weight's stage, from which `whole_replayed` writes the call's record
-and files, as `_retained` writes them for a call made alone.
+call's A words and tree, as its steps leave them, to its stage (its weight's at its m₁₆: vLLM captures a forward at each of
+its batch sizes, and a call's A words and tree are sized by m₁₆), from which `whole_replayed` writes the call's record and
+files, as `_retained` writes them for a call made alone.
 
 With ``whole_defer`` (and hashing), a whole capture forks each call's tile hashing and scatter, after its GEMM, onto a side
 stream of the run's own, and the next call joins it after its own A tree, so the two run side by side in the forward's graph;
@@ -91,8 +92,8 @@ class GraphCalls:
     _whole: list[WholeCall] | None = None
     #: whether those forwards are a retained pass's, whose capture copies each call's A words and tree to its stage
     _whole_retained: bool = False
-    #: each weight's stage, (A words, A tree) as its call's steps leave them, made at the first retained capture
-    _stages: dict[int, tuple[Any, Any]] | None = None
+    #: each (weight, m₁₆)'s stage, (A words, A tree) as its call's steps leave them, made at its first retained warm-up
+    _stages: dict[tuple[int, int], tuple[Any, Any]] | None = None
     #: the slots the last `whole_replay` uploaded, and those `whole_replayed` staged for the forward after it
     _uploaded: _Slots | None = None
     _next: _Slots | None = None
@@ -114,13 +115,13 @@ class GraphCalls:
             self._whole.append(WholeCall(w, m, sh.k, sh.n, sh.m16, tiles))
             out = self._into(w, sh, pipe, raw, tiles, m)
             if self._whole_retained:
-                for stage, t in zip(self._stages[w], self._kept(sh, pipe), strict=True):
+                for stage, t in zip(self._stages[w, sh.m16], self._kept(sh, pipe), strict=True):
                     stage.copy_(t)
             if self._statement_on():
                 self.statement.stage(w, sh)
             return out
-        if self._whole is not None and self._whole_retained and w not in self._stages:
-            self._stages[w] = tuple(t.new_empty(t.shape) for t in self._kept(sh, pipe))
+        if self._whole is not None and self._whole_retained and (w, sh.m16) not in self._stages:
+            self._stages[w, sh.m16] = tuple(t.new_empty(t.shape) for t in self._kept(sh, pipe))
         if self._whole is not None and self._statement_on():
             self.statement.prepare(w, sh)
         if self.hashing:
@@ -185,7 +186,7 @@ class GraphCalls:
         pass's buffer: each call's from its stage and its flags, as a call made alone keeps them."""
         cur = self.cur
         for mm, c in zip(cur.matmuls[len(cur.matmuls) - len(calls):], calls, strict=True):
-            self._retained(cur, mm, c.m, self.flag_buf[flags_at:flags_at + c.m], *self._stages[c.w])
+            self._retained(cur, mm, c.m, self.flag_buf[flags_at:flags_at + c.m], *self._stages[c.w, c.m16])
             flags_at += c.m
 
     def _graph_buffers(self):
