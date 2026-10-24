@@ -71,7 +71,8 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   it is proved as `chunks`(K) = n statements along K (`lane_statements`): `PouwH1LaneZyChunk_v1{TILE, CHUNKS = n,
   CHUNK = c}` over entries [c K_c, (c + 1) K_c), K_c = K / n a multiple of `CHUNK_ALIGN` (6144: 2 × 3072, 12288: 3 × 4096,
   14336: 4 × 3584, 16384: 4 × 4096). A chunk reads its 4 A and 8 B rows at its entries, each with the row's scale
-  (`ROW`(K_c)), the leaf's salt, position and roots and the index. Its noise is the whole lane's (`h1tile.Layout` at K):
+  (`ROW`(K_c)), the leaf's salt, position and roots and the index. A table at such a K commits each row as those n
+  chunk rows, row r's chunk c its leaf n r + c (`chunk_leaves`, `chunk_words`). Its noise is the whole lane's (`h1tile.Layout` at K):
   its entries' dither and coin bits, and U at offset K of each column's stream, so every chunk derives the same U. Its
   chain is the whole lane's, continued: chunk c > 0 reads ``carry_in``, what chunk c - 1 hands on (`CARRY`: the fx1
   state, each entry's prefix sum T, each row slot's residue sums, each cell's z, the chain's words so far, unmasked, and
@@ -508,6 +509,27 @@ def chunks(k: int) -> int:
                      f"noise blocks")
 
 
+def chunk_leaves(row: bytes, k: int) -> list[bytes]:
+    """A registered A or B row at contraction ``k`` (`ROW`(k)'s bytes: its k codes, then its f32 scale little-endian) as the
+    `chunks`(k) = n leaves a table commits it as: leaf c is the codes [c K_c, (c + 1) K_c), K_c = k / n, then the row's
+    scale again (`ROW`(K_c), what `PouwH1LaneZyChunk` reads), so row r's chunk c is the table's leaf n r + c and each
+    chunk's codes stay contiguous. At k <= `CHUNK_MAX` the one leaf is the row. ValueError on an odd k or a row that isn't
+    k + 4 bytes."""
+    k, row = int(k), bytes(row)
+    if k % 2 or len(row) != k + 4:
+        raise ValueError(f"a row at K = {k} is its K codes and its scale's 4 bytes, whole u16 words, not {len(row)} bytes")
+    n = chunks(k)
+    kc = k // n
+    return [row[c * kc:(c + 1) * kc] + row[k:] for c in range(n)]
+
+
+def chunk_words(rows: Sequence[bytes], k: int) -> list[list[int]]:
+    """A table's leaves over ``rows`` at contraction ``k`` (each `ROW`(k)'s bytes): each row's `chunk_leaves` in turn, each
+    leaf its K_c / 2 + 2 u16 words, its bytes little-endian in pairs (``hm96-sha512/row/v2`` rows, as
+    `registered.Registered.commit` takes them)."""
+    return [[leaf[i] | leaf[i + 1] << 8 for i in range(0, len(leaf), 2)] for row in rows for leaf in chunk_leaves(row, k)]
+
+
 def CARRY(lay: H.Layout, n: int, c: int) -> Record:
     """What chunk c of a lane in n chunks hands chunk c + 1: after its last segment, its fx1 state (16 u32), each entry's
     prefix sum T (32 u32), each row slot's residue sums (4 × 32 u32), each cell's z (32 s32, by row slot then column slot),
@@ -908,7 +930,8 @@ def lane_chunk_reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]],
 
 __all__ = ["BF16", "CARRY", "CHUNK_ALIGN", "CHUNK_MAX", "F32", "LANE", "LEAST_K", "PUBLIC", "S32", "S8", "PouwAndBit",
            "PouwH1Combine", "PouwH1LaneZy", "PouwH1LaneZyChunk", "PouwH1TileZy", "PouwMuxBit", "PouwZyCell", "PouwZyCheck",
-           "PouwZyDequant", "PouwZyDequantWord", "RECORD", "ROW", "TILES", "carry_words", "check", "chunks", "combine",
+           "PouwZyDequant", "PouwZyDequantWord", "RECORD", "ROW", "TILES", "carry_words", "check", "chunk_leaves",
+           "chunk_words", "chunks", "combine",
            "combine_reference", "dequant", "lane", "lane_bits", "lane_cells", "lane_chunk", "lane_chunk_carries",
            "lane_chunk_reference", "lane_partial", "lane_reference", "lane_statements", "records", "reference",
            "statement_ports", "statement_rows", "unit", "zy_cell"]
