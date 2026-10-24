@@ -528,7 +528,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
         head = (dict(prov), dict(ctx.unresolved_module_paths)) if session is not None else None
         rep = _finish_report(flat_sd, ctx, prov, mode=mode, ruleset=ruleset, rank=rank, check_registry=check_registry, dead_free=dead_free)
         if session is not None:
-            session.append(DeriveSession(flat_sd, ctx, *head, name, mode, ruleset, check_registry, rank, rep.family))
+            session.append(DeriveSession(flat_sd, ctx, *head, name, mode, ruleset, check_registry, rank, rep.family, dead_free))
         return rep
     except Refuse as e:
         prov["unsupported"] = e.u.to_json()

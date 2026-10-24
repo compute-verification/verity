@@ -472,10 +472,37 @@ def test_dead_gates_are_counted_as_circuit_check_counts_them():
 def test_a_program_with_a_dead_unit_is_refused(monkeypatch):
     """A request Program holding a node no output reads is refused, with the fix (in the lowering, never the advice) in the message."""
     import verity_vllm.predict.build as PB
-    monkeypatch.setattr(PB, "dead_free", lambda b: (b, list(range(len(b.nodes)))))
+    monkeypatch.setattr(PB, "dead_free_form", lambda b: (b, list(range(len(b.nodes)))))
     with pytest.raises(Unexpressible, match=r"request 0's Program [0-9a-f]{16} holds 56 dead units, node 104 \(RoPE_v1\{NHEADS=4,D=16\}\) first, which no "
                                             r"output reads: drop them in the lowering"):
         compile_steps(_registered(), *_mixed())
+
+
+def test_a_tensor_parallel_rank_compiles_to_its_dead_free_rank_programs(tmp_path):
+    """At TP2 each rank compiles the node's advice to its own rank's request Programs (its shards, a `peers_*` Input per collective)
+    in the registered compiler's form, which the TP2 Build of record isn't: there the last layer's rows before the prefill's last end
+    in units no output reads, its reduces among them. The rows are the one-rank compilation's, and the traces are the rank's
+    `--dead-free` Builds."""
+    from verity_vllm.program.prune import dead_units
+    advice, ingress = _mixed()
+    one = compile_steps(_registered(), advice, ingress)
+    digests = []
+    for rank in (0, 1):
+        reg = _registered(tp={"world": 2, "rank": rank})
+        c = compile_steps(reg, advice, ingress)
+        assert [[(r.request, r.start, r.n, r.samples) for r in rows] for rows in c.steps] == \
+               [[(r.request, r.start, r.n, r.samples) for r in rows] for rows in one.steps]
+        assert c.discarded == one.discarded and dead_gates_of(c)["dead_computed"] == 0
+        for u in {u.digest: u for u in c.requests if u is not None}.values():
+            p = c.programs[u.digest]
+            assert not dead_units(p.fn.body) and any(n.startswith("peers_") for n, _ in p.fn.body.params)
+            kept = build_program(Phi.from_json({**reg.phi.to_json(), "sampling": u.policy}), "request", LP=u.LP, T=u.T).program.fn.body
+            assert {kept.nodes[i].fn.id.split("{")[0] for i in dead_units(kept)} >= {"AllReduce2_v1", "Attention_v5"}
+        digests.append(sorted(c.programs))
+        cmd = trace_commands(c.summary(), reg, str(tmp_path))[0]
+        assert cmd[-5:] == ["--tp", "2", "--rank", str(rank), "--dead-free"]
+    assert len({*digests[0], *digests[1], *one.programs}) == 3 * len(one.programs)
+    assert "--tp" not in trace_commands(one.summary(), _registered(), str(tmp_path))[0]
 
 
 def test_a_target_without_batch_invariance_is_refused():

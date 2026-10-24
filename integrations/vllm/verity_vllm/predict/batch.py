@@ -24,7 +24,8 @@ role's launch statics are held to (b) across the launch shapes the registration 
   Alone, a stand-in computes it from the request's own tokens. Any other hit on another request's KV is refused.
 - R1: GP-01 wiring: a RowRef or a component naming another request's Program, or a request's outputs whose cone (`check.batch.
   separable` over `workload_labels`) reads another request's Inputs or a batch-provenance one (a `prefix` behind no checked
-  hit included).
+  hit included). A tensor-parallel rank's `peers_*` are its request's own: this rests on the node binding each to the same
+  request's partial on the other rank, which the cross-rank transfer must hold request by request.
 """
 
 from __future__ import annotations
@@ -69,15 +70,17 @@ def registered_phi(role: str, target: str, execution: str = "bi-eager") -> Phi:
 
 def workload_labels(wl: Any, checked: frozenset[int] = frozenset()) -> tuple[tuple[Any, ...], Fields]:
     """GP-01's parameters by holder: its shared Input batches `SHARED`; each request's own groups (`OWN_GROUPS`) held by its index,
-    and its `prefix` too when its hit's tokens are checked equal (``checked``, R2); any other request-local group (`splits`, an
-    unchecked `prefix`, `schedule`, `peers_*`, or one unknown here) `BATCH`. Its return: each request's outputs held by its index."""
+    and its `prefix` too when its hit's tokens are checked equal (``checked``, R2); a tensor-parallel rank's `peers_<k>` held by its
+    index too, since the node binds each to the same request's partial of collective k on the other rank (`tp_links.json`; GP-01's
+    `request[<id>].peers_<k>`), a value of that request's own inputs on every rank; any other request-local group (`splits`, an
+    unchecked `prefix`, `schedule`, or one unknown here) `BATCH`. Its return: each request's outputs held by its index."""
     labels: list[Any] = [SHARED] * len(wl.shared_by_request[0])
     for r, sh in zip(wl.requests, wl.shared_by_request):
         groups = r.component.groups
         if len(groups) != len(r.component.params):
             raise BatchDependent(f"request {r.index}: its component names no group for some Input (provenance unknown)")
         mine = OWN_GROUPS + ("prefix",) * (r.index in checked)
-        labels += [own(r.index) if g in mine else BATCH for j, g in enumerate(groups) if j not in set(sh)]
+        labels += [own(r.index) if g in mine or g.startswith("peers_") else BATCH for j, g in enumerate(groups) if j not in set(sh)]
     return tuple(labels), Fields(tuple(own(r.index) for r in wl.requests))
 
 
