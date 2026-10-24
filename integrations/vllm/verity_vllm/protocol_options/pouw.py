@@ -72,6 +72,7 @@ from verity_vllm.protocol_options import pouw_h1 as PH
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC
 from verity_vllm.protocol_options import pouw_h1_hooks as PHK
 from verity_vllm.protocol_options import pouw_h1_settings as PHS
+from verity_vllm.protocol_options.pouw_h1_settings import fills, from_engine  # noqa: F401  (the adapter's hooks)
 from verity_vllm.protocol_options import pouw_h1_window as PHW
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
 from verity_vllm.protocol_options import pouw_native as PN
@@ -250,41 +251,8 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
     return tuple(out)
 
 
-def fills(scheme: str, settings: Mapping[str, Any]) -> tuple[str, ...]:
-    """The pouw settings `from_engine` supplies for ``scheme`` where ``settings`` leave them unset: H1's ``runner`` and,
-    without a ``challenger``, its in-process ``coins`` and ``rounds`` (``rounds`` only once ``steps`` is set); nothing
-    for any other scheme."""
-    if scheme != PH.SCHEME:
-        return ()
-    keys = [] if settings.get("runner") is not None else ["runner"]
-    if settings.get("challenger") is None:
-        keys += [k for k in ("coins", "rounds") if settings.get(k) is None]
-    steps = settings.get("steps")
-    if not (isinstance(steps, int) and not isinstance(steps, bool) and steps >= 1) and "rounds" in keys:
-        keys.remove("rounds")
-    return tuple(keys)
-
-
-def from_engine(scheme: str, settings: Mapping[str, Any], llm: Any, epoch: int = 0) -> dict[str, Any]:
-    """`fills`' settings from the built ``vllm.LLM`` ``llm``: its in-process model runner, where the scheduler's admissions
-    arrive (`engine_profile.get_model_runner`; RuntimeError on an engine without one), and epoch ``epoch``'s coins held in
-    this process, the Lean verifier of record's entropy (`verifier.coins`): its salt coin and ``steps`` round coins.
-    Coins held in the serving process credit nothing (`pouw_h1.IN_PROCESS`)."""
-    keys = fills(scheme, settings)
-    out: dict[str, Any] = {}
-    if "runner" in keys:
-        from verity_vllm.engine.engine_profile import get_model_runner
-        out["runner"] = get_model_runner(llm)
-    if "coins" in keys:
-        out["coins"] = Challenger(epoch, verifier.coins)
-    if "rounds" in keys:
-        out["rounds"] = LiveRecord(Wd.live_challenger(epoch, settings["steps"], verifier.coins), Wd.ROUND)
-    return out
-
-
 def requires_build(scheme: str, ctx: Context) -> bool:
     """The circuit-backed executor is lowered into the row's Build."""
-
     return scheme in pouw_circuit.SCHEMES
 
 
