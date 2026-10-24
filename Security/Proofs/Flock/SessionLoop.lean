@@ -3,6 +3,7 @@ import Proofs.Flock.Claims.ZK.FrameUnrefused
 import Proofs.Flock.SessionLoop.Link
 import Proofs.Flock.SessionLoop.RepSrc
 import Proofs.Flock.SessionLoop.Tables
+import Proofs.Flock.SessionLoop.Files
 
 /-!
 # Proof of C-Flock's zero knowledge at the session loop's own frames
