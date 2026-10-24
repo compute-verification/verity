@@ -613,15 +613,6 @@ static_assert(H1U_JPD >= 1 && (H1U_JRING == 0 || H1U_JRING == 1) && 16 % (H1U_JP
 #if H1U_JXS && !H1U_JX
 #error "H1U_JXS swizzles JX's X, so it needs H1U_JX = 1"
 #endif
-// H1U_JMD1 = 1 (with JX): h1umj and h1umj_sm run every call's units as one instantiation, MD = 3 with the call's md (2 or 3)
-// read at run time, where 0 builds one a digit count. Under JX only the tail and the receipt's length depend on md, and
-// one copy of the unit (its noise_block alone ~49 KB of SASS) is half the instructions the SM's warps fetch; the same words
-#ifndef H1U_JMD1
-#define H1U_JMD1 0
-#endif
-#if H1U_JMD1 && !H1U_JX
-#error "H1U_JMD1 reads md at run time only where JX leaves it to the tail, so it needs H1U_JX = 1"
-#endif
 constexpr u32 JX_AD_WORDS = 3 * 8 * 32;
 __host__ __device__ __forceinline__ u64 jx_x_off(u32 M, u32 K) { return 64ull * M * (K / 512 + 1); }
 __host__ __device__ __forceinline__ u64 jx_ad_off(u32 M, u32 K) { return jx_x_off(M, K) + (u64)M * K; }
@@ -661,7 +652,7 @@ template <int MD, bool WS, bool OS, bool J10 = false, bool PL = false, bool DG =
 __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int8_t* __restrict__ B, u32 M, u32 N, u32 K,
                                          const u64* __restrict__ seeds, const uint8_t* __restrict__ live,
                                          u32* __restrict__ out, const u32* __restrict__ ws, const OneOut oo, const u32 u,
-                                         WarpSmem& S, const u32 mdr = MD) {
+                                         WarpSmem& S) {
   static_assert(!DG || !(WS || OS || J10 || PL), "a gathered diagonal is the fused receipts-only form");
   static_assert(!RW || !(WS || OS || J10 || PL || DG), "J10-R's units are the fused receipts-only form");
   static_assert(!RC || RW, "RC is J10-R's units with their column blocks read");
@@ -676,15 +667,12 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
   static_assert(!PI || (PF && NS % 4 == 0), "H1U_JPI is the prefetch ring's, in whole groups of 4 segments");
   constexpr bool LE = RW && H1U_JLE;
   static_assert(!LE || PF, "H1U_JLE reorders the prefetch ring's loads, so it needs H1U_PF = 1");
-  // MR: the digit count md (<= MD) read at run time, the tail's MD - md last digits skipped
-  constexpr bool MR = JX && H1U_JMD1;
-  const u32 md = MR ? mdr : MD;
   const u32 lane = threadIdx.x & 31;
   const u32 g = lane >> 2, q = lane & 3;
   const u32 ncb = DG ? 1 : N / 32;
   const u32 ri = u / ncb, cj = DG ? u : u % ncb;
   const u32 ks = K / 32, chunks = ks / 16, rb = chunks + 1, cb = chunks + 1;
-  const u32 nwords = 2 * (ks + md);
+  const u32 nwords = 2 * (ks + MD);
   u32* o = out + (u64)u * nwords;
   int alive = 0, flags = 0;
   if (OS) {
@@ -1142,7 +1130,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
 #pragma unroll
       for (int mt = 0; mt < 2; ++mt)
 #pragma unroll
-        for (int r = 0; r < 4; ++r) ad[d][mt][r] = (u32)d < md ? __ldg(src + 32 * (8 * d + 4 * mt + r) + lane) : 0u;
+        for (int r = 0; r < 4; ++r) ad[d][mt][r] = __ldg(src + 32 * (8 * d + 4 * mt + r) + lane);
   } else {
     pack_digits<MD>(Y, g, q, [&](u32 row, int d) { return S.coin[row][d]; }, ad);
   }
@@ -1175,7 +1163,6 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
   ring_put(S, 0, lane, y, z);
 #pragma unroll
   for (int d = 1; d < MD; ++d) {
-    if (MR && (u32)d >= md) break;
 #pragma unroll
     for (int t = 0; t < 8; ++t)
 #pragma unroll
@@ -1194,7 +1181,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
     }
   }
   __syncwarp();
-  if (rcpt && lane < 2 * md) o[2 * ks + lane] = ring_xor(S, lane);
+  if (rcpt && lane < 2 * MD) o[2 * ks + lane] = ring_xor(S, lane);
   if constexpr (DG) lane_tail<MD>(S, lw, nwords, 2 * ks, lane);
   if constexpr (OS) {
     // T[4 mt + nt][e] is cell (16 mt + g + 8 (e >> 1), 8 nt + 2 q + (e & 1)): z there, then y
@@ -2699,10 +2686,9 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj(const UCallR* __re
     else hi = mid;
   }
   const UCallR c = calls[lo];
-  if (H1U_JMD1 || c.md == 3)
+  if (c.md == 3)
     h1u_unit<3, false, false, false, false, false, true, false, (bool)H1U_JX>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out,
-                                                                              c.rws, OneOut{}, gu - c.u0, smem[wp],
-                                                                              c.md == 3 ? 3u : 2u);
+                                                                              c.rws, OneOut{}, gu - c.u0, smem[wp]);
   else
     h1u_unit<2, false, false, false, false, false, true, false, (bool)H1U_JX>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out,
                                                                               c.rws, OneOut{}, gu - c.u0, smem[wp]);
@@ -2718,10 +2704,9 @@ __device__ __forceinline__ void h1umj_one(const UCallR* __restrict__ calls, u32 
     else hi = mid;
   }
   const UCallR c = calls[lo];
-  if (H1U_JMD1 || c.md == 3)
+  if (c.md == 3)
     h1u_unit<3, false, false, false, false, false, true, false, (bool)H1U_JX>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out,
-                                                                              c.rws, OneOut{}, gu - c.u0, S,
-                                                                              c.md == 3 ? 3u : 2u);
+                                                                              c.rws, OneOut{}, gu - c.u0, S);
   else
     h1u_unit<2, false, false, false, false, false, true, false, (bool)H1U_JX>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out,
                                                                               c.rws, OneOut{}, gu - c.u0, S);
