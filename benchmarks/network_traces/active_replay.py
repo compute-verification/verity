@@ -111,10 +111,9 @@ from verity.core.protocols.certifier.active import (
     CANONICAL_STREAM,
     DATA,
     HEADER,
+    ORDINAL,
     SALT,
-    NO_TOKEN,
     TOKEN_BYTES,
-    TOKEN_TEXT_BYTES,
     Events,
     InlineExecutor,
     Proxy,
@@ -127,10 +126,10 @@ from verity.core.protocols.certifier.active import (
     event_body,
     events,
     fresh_salt,
+    id_event,
+    id_request,
     request_frame_count,
     request_frames,
-    request_tag,
-    token_event,
     wait_until,
     worker,
 )
@@ -769,52 +768,30 @@ def canonical_events(sse: bytes) -> list[bytes]:
     return []
 
 
-def chunk_tokens(sse: bytes) -> tuple[list[int], bytes] | None:
-    """A vLLM server-sent event's sampled token ids and text: each choice's `token_ids` (vLLM's `return_token_ids`, or
-    the committing server's), else its logprobs' `token_id:N` tokens (`return_tokens_as_token_ids`); None for `[DONE]`
-    or a line that isn't a chunk."""
+def chunk_tokens(sse: bytes) -> list[int] | None:
+    """A vLLM server-sent event's sampled token ids: each choice's `token_ids` (vLLM's `return_token_ids`, or the
+    committing server's), else its logprobs' `token_id:N` tokens (`return_tokens_as_token_ids`); None for `[DONE]` or
+    a line that isn't a chunk."""
     for line in sse.split(b"\n"):
         if line.startswith(b"data:") and (data := line[5:].strip()) != b"[DONE]":
             try:
                 chunk = json.loads(data)
             except ValueError:
                 return None
-            ids, text = [], ""
+            ids = []
             for c in chunk.get("choices") or []:
                 got = c.get("token_ids")
                 if got is None:
                     got = [int(t.removeprefix("token_id:")) for t in (c.get("logprobs") or {}).get("tokens") or ()]
                 ids += got
-                text += c.get("text") or c.get("delta", {}).get("content") or ""
-            return ids, text.encode()
+            return ids
     return None
 
 
-class TokenEvents:
-    """One response's id-carrying canonical events (`active.token_event`), one a sampled token, each naming the
-    request by `tag`: a chunk's text is cut `TOKEN_TEXT_BYTES` an event across its tokens, what they can't hold carried
-    to the response's next tokens, and what is left at its end goes in `NO_TOKEN` events (`end`)."""
-
-    def __init__(self, tag: bytes) -> None:
-        self.tag, self.text = tag, b""
-
-    def feed(self, sse: bytes) -> list[bytes]:
-        got = chunk_tokens(sse)
-        if got is None:
-            return []
-        ids, text = got
-        self.text += text
-        out = []
-        for t in ids:
-            out.append(token_event(t, self.tag, self.text[:TOKEN_TEXT_BYTES]))
-            self.text = self.text[TOKEN_TEXT_BYTES:]
-        return out
-
-    def end(self) -> list[bytes]:
-        out = [token_event(NO_TOKEN, self.tag, self.text[i : i + TOKEN_TEXT_BYTES])
-               for i in range(0, len(self.text), TOKEN_TEXT_BYTES)]
-        self.text = b""
-        return out
+def id_events(sse: bytes, request: int) -> list[bytes]:
+    """A vLLM server-sent event as id events (`active.id_event`) of request `request`: one a sampled token
+    (`chunk_tokens`), and none for a chunk of none, so neither the endpoint's chunking nor its text reaches the wire."""
+    return [id_event(request, t) for t in chunk_tokens(sse) or ()]
 
 
 async def _http_body(reader: asyncio.StreamReader, head: bytes):
@@ -847,10 +824,9 @@ class LiveServer:
     served plan's, F its body's tokens) a response the endpoint ends after fewer than F canonical events, having sent
     some tokens together in one chunk, gets empty canonical events after its last, up to F, written and logged as the
     endpoint's are, so every response is F events long; one of more than F isn't cut. With `plan["token_ids"]` (a
-    varied plan's, `certifier_serve.varied_plan`) the shim asks the endpoint for each chunk's token ids (the plan's
-    `upstream_fields`, merged into every body it forwards) and writes one id-carrying event a sampled token
-    (`TokenEvents`), tagged with the request's `user`; the text a response's tokens can't hold is counted in
-    `text_overflow`."""
+    varied plan's, `certifier_serve.varied_plan`, whose proxy has `ordinals`) the shim reads each request's ingress
+    ordinal from the header that opens its connection, asks the endpoint for each chunk's token ids (the plan's
+    `upstream_fields`, merged into every body it forwards) and writes one id event a sampled token (`id_events`)."""
 
     def __init__(self, plan: dict, params: dict, clock=time.monotonic, sleep=asyncio.sleep, notify=lambda: None):
         self.clock, self.sleep, self.notify = clock, sleep, notify
@@ -876,18 +852,23 @@ class LiveServer:
         self.writers: set = set()
         self.events: list[tuple[int, str, int, int, bytes]] = []
         self.log = {"receipt_late_ms": [], "batch_late_ms": [], "late_registrations": 0, "requests": 0, "events": 0,
-                    "failed": [], "cut_at_horizon": 0, "first_event_ms": [], "server": "live", "padded": [],
-                    "text_overflow": []}
+                    "failed": [], "cut_at_horizon": 0, "first_event_ms": [], "server": "live", "padded": []}
 
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         self.writers.add(writer)
+        ordinal = None
         try:
             first = await reader.readexactly(1)
             if first[0] == SALT:
                 await read_salts(first, reader, self.log, self.notify)
                 return
+            if first[0] == ORDINAL:
+                ordinal = HEADER.unpack(first + await reader.readexactly(HEADER.size - 1))[1]
+                first = await reader.readexactly(1)
+            if self.token_ids and ordinal is None:
+                raise ValueError("a request without its ingress ordinal, on a plan of id events")
             head = first + await reader.readuntil(b"\r\n\r\n")
-            length = int(re.search(rb"content-length: (\d+)", head, re.IGNORECASE).group(1))
+            length = int(re.search(rb"content-length:\s*(\d+)", head, re.IGNORECASE).group(1))
             body = json.loads(await reader.readexactly(length))
         except (asyncio.IncompleteReadError, ConnectionError, ValueError) as e:
             self.log["failed"].append(repr(e)[:200])
@@ -896,7 +877,7 @@ class LiveServer:
         self.open += 1
         ticket, self.tickets = self.tickets, self.tickets + 1
         try:
-            await self._serve(body, writer, ticket)
+            await self._serve(body, writer, ticket, ordinal)
         except (asyncio.IncompleteReadError, ConnectionError, OSError, ValueError) as e:
             self.log["failed"].append(repr(e)[:200])
         finally:
@@ -918,27 +899,26 @@ class LiveServer:
         finally:
             self.open += 1
 
-    async def _response_events(self, chunks, name: str):
+    async def _response_events(self, chunks, name: str, ordinal: int | None = None):
         """A response's canonical events, one list per chunk of its body as it arrives; under `pad_to`, empty events
         (`active.event(b"")`, what a chunk of no text gives) after its last, up to `pad_to`, counted in `padded`; for
-        the `extra` session, one event more after those. Under `token_ids`, id-carrying events (`TokenEvents`)."""
+        the `extra` session, one event more after those. Under `token_ids`, id events of request `ordinal`
+        (`id_events`)."""
         cutter, n = Events(), 0
-        tokens = TokenEvents(request_tag(name)) if self.token_ids else None
         async for data in chunks:
-            bodies = [b for e in cutter.feed(data) for b in (canonical_events(e) if tokens is None else tokens.feed(e))]
+            bodies = [b for e in cutter.feed(data)
+                      for b in (canonical_events(e) if not self.token_ids else id_events(e, ordinal))]
             n += len(bodies)
             yield bodies
-        if tokens is not None and (tail := tokens.end()):
-            self.log["text_overflow"].append([name, len(tail)])
-            yield tail
         if self.pad_to is not None and n < self.pad_to:
             self.log["padded"].append([name, self.pad_to - n])
             yield [event(b"")] * (self.pad_to - n)
         if name == self.extra:
-            yield ([token_event(0, request_tag(name), b" extra")] if tokens is not None
+            yield ([id_event(ordinal, 0)] if self.token_ids
                    else canonical_events(b'data: {"choices":[{"text":" extra"}]}\n\n'))
 
-    async def _serve(self, body: dict, writer: asyncio.StreamWriter, ticket: int = 0) -> None:
+    async def _serve(self, body: dict, writer: asyncio.StreamWriter, ticket: int = 0,
+                     ordinal: int | None = None) -> None:
         received = self.clock() - self.origin
         self.log["requests"] += 1
         self.log["receipt_late_ms"].append(round((received % self.tau) * 1000, 3))
@@ -957,7 +937,7 @@ class LiveServer:
             planned = None if self.writes is None else [b for b, _ in self.writes.get(name, [])]
             hold = -1
             anchor = math.floor(received / self.tau)
-            async for bodies in self._response_events(_http_body(up_reader, up_head), name):
+            async for bodies in self._response_events(_http_body(up_reader, up_head), name, ordinal):
                 for body in bodies:
                     if k == 0:
                         await self._await_turn(ticket)
@@ -1069,9 +1049,11 @@ class Peer:
 
     def request(self, q: dict) -> bytes:
         name = q["session"] or f"none-{q['stream']}"
+        if (fields := q.get("id_request")) is not None:
+            return id_request(**fields, user=name, frame_bytes=self.B)
         if self.live_model is None:
             return request_bytes(name, q["frames"], self.B)
-        body = q.get("body") or (self.body if self.body is not None else live_body(q["session"], self.live_model))
+        body = self.body if self.body is not None else live_body(q["session"], self.live_model)
         return live_request_bytes(name, body, q["frames"], self.B)
 
     async def read(self, reader: asyncio.StreamReader, origin: float) -> None:
@@ -1306,7 +1288,8 @@ async def _proxy(plan: dict, setup: Setup, upstream: tuple[str, int], conn, out:
             return Proxy(upstream, setup.egress_params, setup.ingress_params, setup.sync_set, syncs, origin=origin,
                          publish=publish, egress_link=setup.egress_link, ingress_link=setup.ingress_link,
                          salt=fresh_salt if salt else None, reveal_deadline=reveal_deadline(plan, window_s),
-                         **advice, **phase_args(plan, start, end), **served_args(plan, salt))
+                         ordinals=bool(plan.get("token_ids")), **advice, **phase_args(plan, start, end),
+                         **served_args(plan, salt))
 
         if k == 0:
             listening = await asyncio.start_server(on_link, host, port)
@@ -1476,7 +1459,7 @@ async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int
     async def connect(k: int) -> tuple:
         """The proxy of the k-th run of served windows, the peer's link to it, and the run and the peer's tasks."""
         (start, end), (_, enqueued) = runs[k], phases[k]
-        args = {"salt": fresh_salt if salt else None,
+        args = {"salt": fresh_salt if salt else None, "ordinals": bool(plan.get("token_ids")),
                 "reveal_deadline": reveal_deadline(plan, e.buckets * e.bucket_ms / 1000)} | proxy_args
         proxy = Proxy(listening.sockets[0].getsockname()[:2], e, i, setup.sync_set, syncs, origin=0.0, clock=clock,
                       sleep=clock.sleep, publish=publish, egress_link=setup.egress_link,

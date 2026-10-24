@@ -16,12 +16,14 @@ header on every frame, then the sender's bytes at a fixed place, then the same b
 frames against that template, and nothing else of a frame is free). On egress a frame is one event (`event`): the
 `DATA` header on stream `CANONICAL_STREAM` with length `EVENT_BYTES`, `EVENT_HEAD`, the base64 of at most
 `TOKEN_BYTES` bytes padded with NUL to `EVENT_TEXT` characters, and `EVENT_TAIL`, so a token is one frame, or one per
-`TOKEN_BYTES` of it (`events`). An id-carrying event (`token_event`) is the same template, the same `EVENT_BYTES`: its
-bytes are one sampled token's id (u32be), its request's tag (`request_tag`, `TAG_BYTES`) and up to `TOKEN_TEXT_BYTES`
-bytes of text, so its first 16 base64 characters are the id and the tag. On ingress a request is its length (u32be)
-and its bytes, cut into `DATA` frames of B − 9 bytes on `CANONICAL_STREAM`, the last zero-filled (`request_frames`): it
-ends where its length says, so every frame's header is the same. `event_placement` and `request_placement` are those
-templates' places.
+`TOKEN_BYTES` of it (`events`). An id event (`id_event`, `ID_EVENT_BYTES`) is that object with no text: its request's
+ingress ordinal and one sampled token's id, each in `ID_DIGITS` decimal characters, so a response is one event a token
+and its frames name their request whatever order the responses interleave in. On ingress a request is its length
+(u32be) and its bytes, cut into `DATA` frames of B − 9 bytes on `CANONICAL_STREAM`, the last zero-filled
+(`request_frames`): it ends where its length says, so every frame's header is the same. An id request (`id_request`) is
+a token-id prompt's `/v1/completions` request whose every field is at a place its prompt's length fixes, and its frames
+(`id_request_frames`) a function of that length alone. `event_placement` and `request_placement` are those templates'
+places.
 
 **Ticks.** Each grid's ticker sleeps once a tick, to the tick's boundary (`origin` + t·τ). The tickers that wake
 together then run their ticks in one step of the event loop, in `TICK_ORDER`, ingress first (`_run_due`): each reads the
@@ -181,6 +183,8 @@ from verity.core.protocols.sampled_proofs.service import Registration
 
 HEADER = struct.Struct(">BII")
 PAD, DATA, SALT = 0, 1, 3
+#: the kind of the header that opens a stream's server connection under `Proxy(ordinals=True)`; never on a link
+ORDINAL = 4
 EVENT_END = b"\n\n"
 CANONICAL_STREAM = 0
 TOKEN_BYTES = 64
@@ -326,37 +330,105 @@ def event_data(body: bytes) -> bytes | None:
     return data if len(data) <= TOKEN_BYTES and event(data) == body else None
 
 
-TOKEN_ID = struct.Struct(">I")
-TAG_BYTES = 8
-TOKEN_TEXT_BYTES = TOKEN_BYTES - TOKEN_ID.size - TAG_BYTES
-#: the token id of an id-carrying event that carries only text left over at its response's end
-NO_TOKEN = 0xFFFF_FFFF
-REQUEST_TAG = "verity-network-certifier/request-tag/v1"
+ID_DIGITS = 10
+ID_EVENT_HEAD = EVENT_HEAD[: EVENT_HEAD.index(b'"delta"')] + b'"request":'
+ID_EVENT_MID = b',"token_id":'
+ID_EVENT_TAIL = b',"finish_reason":null}]}' + EVENT_END
+ID_EVENT_BYTES = len(ID_EVENT_HEAD) + ID_DIGITS + len(ID_EVENT_MID) + ID_DIGITS + len(ID_EVENT_TAIL)
 
 
-def request_tag(request_id: str) -> bytes:
-    """A request's tag in its response's id-carrying events: the first `TAG_BYTES` of the tagged SHA-512 of its id
-    (the request body's `user`), so a frame names its request whatever order the responses interleave in."""
-    return tagged_sha512(REQUEST_TAG, request_id.encode())[:TAG_BYTES]
+def _u32_field(x: int, what: str) -> bytes:
+    if type(x) is not int or not 0 <= x < 1 << 32:
+        raise ValueError(f"{what} is a u32, not {x!r}")
+    return b"%*d" % (ID_DIGITS, x)
 
 
-def token_event(token_id: int, tag: bytes, text: bytes = b"") -> bytes:
-    """The id-carrying canonical event: `event` of the token id (u32be), the request's tag and at most
-    `TOKEN_TEXT_BYTES` bytes of text."""
-    if not (type(token_id) is int and 0 <= token_id <= NO_TOKEN) or len(tag) != TAG_BYTES:
-        raise ValueError(f"a token event carries a u32 token id and a {TAG_BYTES}-byte tag")
-    if len(text) > TOKEN_TEXT_BYTES:
-        raise ValueError(f"a token event carries at most {TOKEN_TEXT_BYTES} bytes of text, not {len(text)}")
-    return event(TOKEN_ID.pack(token_id) + tag + text)
+def id_event(request: int, token_id: int) -> bytes:
+    """The canonical event of one sampled token: `ID_EVENT_HEAD`, its request's ingress ordinal (the stream the
+    request is on the link), `ID_EVENT_MID`, the token's id, each right-aligned in `ID_DIGITS` decimal characters,
+    then `ID_EVENT_TAIL`; `ID_EVENT_BYTES` long whatever the two, and nothing else in it is free."""
+    return (ID_EVENT_HEAD + _u32_field(request, "a request's ordinal") + ID_EVENT_MID +
+            _u32_field(token_id, "a token id") + ID_EVENT_TAIL)
 
 
-def token_event_data(body: bytes) -> tuple[int, bytes, bytes] | None:
-    """(token id, tag, text) of an id-carrying canonical event, or None for bytes that aren't one."""
-    data = event_data(body)
-    n = TOKEN_ID.size + TAG_BYTES
-    if data is None or len(data) < n:
+def id_event_data(body: bytes) -> tuple[int, int] | None:
+    """(request ordinal, token id) of an id event (`id_event`), or None for bytes that aren't one."""
+    a = len(ID_EVENT_HEAD)
+    b = a + ID_DIGITS + len(ID_EVENT_MID)
+    fields = body[a : a + ID_DIGITS], body[b : b + ID_DIGITS]
+    if len(body) != ID_EVENT_BYTES or not all(f.lstrip(b" ").isdigit() for f in fields):
         return None
-    return TOKEN_ID.unpack_from(data)[0], data[TOKEN_ID.size : n], data[n:]
+    request, token_id = (int(f) for f in fields)
+    try:
+        return (request, token_id) if id_event(request, token_id) == body else None
+    except ValueError:
+        return None
+
+
+#: an id request's HTTP head, up to its length (`id_request`)
+ID_REQUEST_HEAD = (b"POST /v1/completions HTTP/1.1\r\nhost: server\r\ncontent-type: application/json\r\n"
+                   b"content-length:")
+#: the room of an id request's `model` and `user`, each its JSON string padded with spaces
+ID_NAME_BYTES = 64
+#: a prompt id's place in an id request: `[` or `,`, then the id in `ID_DIGITS` characters
+ID_FIELD_BYTES = 1 + ID_DIGITS
+
+
+def _ratio_field(x: float, what: str) -> bytes:
+    s = b"%8.6f" % x if isinstance(x, (int, float)) and not isinstance(x, bool) else b""
+    if not (s and 0 <= x < 10 and float(s) == x):
+        raise ValueError(f"{what} is a number in [0, 10) of at most six decimals, not {x!r}")
+    return s
+
+
+def _name_field(s: str, what: str) -> bytes:
+    raw = json.dumps(s).encode() if isinstance(s, str) else b""
+    if not raw or len(raw) > ID_NAME_BYTES:
+        raise ValueError(f"{what} is a string of at most {ID_NAME_BYTES} bytes as JSON, not {s!r}")
+    return raw.ljust(ID_NAME_BYTES)
+
+
+def id_request(*, model: str, user: str, prompt: Sequence[int], max_tokens: int, temperature: float = 0.0,
+               top_p: float = 1.0, seed: int = 0, frame_bytes: int) -> bytes:
+    """A canonical `/v1/completions` request of a token-id prompt, whose every field is at a place fixed by the
+    prompt's length alone, in the link frames `request_frames` puts it in: `ID_REQUEST_HEAD`, its body's length in
+    `ID_DIGITS` characters (HTTP's optional whitespace before it), then the body, streamed, with no stop strings:
+    `max_tokens` and `seed` in `ID_DIGITS` characters, `temperature` and `top_p` in eight (six decimals), `model` and
+    `user` each in `ID_NAME_BYTES`, and each prompt id in its own `ID_FIELD_BYTES`, spaces (JSON's whitespace) before
+    one that would straddle a frame moving it to the next. Every field but the prompt's is in the first frame."""
+    if not prompt or isinstance(prompt, (str, bytes)):
+        raise ValueError("an id request's prompt is at least one token id")
+    body = (b'{"max_tokens":' + _u32_field(max_tokens, "max_tokens") + b',"temperature":' +
+            _ratio_field(temperature, "temperature") + b',"top_p":' + _ratio_field(top_p, "top_p") + b',"seed":' +
+            _u32_field(seed, "a seed") + b',"stop":[],"stream":true,"model":' + _name_field(model, "a model") +
+            b',"user":' + _name_field(user, "a user") + b',"prompt":')
+    room = frame_bytes - HEADER.size
+    at = LENGTH.size + len(ID_REQUEST_HEAD) + ID_DIGITS + 4 + len(body)
+    if at + ID_FIELD_BYTES > room:
+        raise ValueError(f"a {frame_bytes}-byte frame has no room for an id request's fields")
+    parts = [body]
+    for k, t in enumerate(prompt):
+        gap = -at % room if at // room != (at + ID_FIELD_BYTES - 1) // room else 0
+        parts.append(b" " * gap + (b"," if k else b"[") + _u32_field(t, "a prompt id"))
+        at += gap + ID_FIELD_BYTES
+    raw = b"".join(parts) + b"]}"
+    return ID_REQUEST_HEAD + b"%*d" % (ID_DIGITS, len(raw)) + b"\r\n\r\n" + raw
+
+
+def id_request_fields(request: bytes, frame_bytes: int) -> dict | None:
+    """An id request's fields (`id_request`'s keywords but `frame_bytes`), or None for bytes that aren't one."""
+    try:
+        body = json.loads(request.partition(b"\r\n\r\n")[2])
+        fields = {k: body[k] for k in ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")}
+        return fields if id_request(**fields, frame_bytes=frame_bytes) == request else None
+    except (ValueError, KeyError, TypeError):
+        return None
+
+
+def id_request_frames(prompt_len: int, frame_bytes: int) -> int:
+    """The link frames an id request of a `prompt_len`-token prompt takes (`request_frames`)."""
+    return request_frame_count(len(id_request(model="", user="", prompt=[0] * prompt_len, max_tokens=1,
+                                              frame_bytes=frame_bytes)), frame_bytes)
 
 
 def event_placement(frame_bytes: int) -> tuple[int, int, bytes, bytes]:
@@ -804,6 +876,9 @@ class Proxy:
       admission rule (`Bucketer(served=…)`) under each window's declared sync (the slowest of Σ_sync under an online
       prover, or past `syncs`), so that each window ends idle, which N2's served counts check. With `salt` the profile
       counts its frame (`own` 1), at a PoUW window of one certifier window, so that frame heads every window;
+    - with `ordinals`, each stream's server connection opens with a header (`HEADER`, 9 bytes) of kind `ORDINAL`
+      whose stream is the stream's, the request's ingress ordinal, before the request's bytes, so that the server
+      can name the request in its response's id events (`id_event`);
     - `until(predicate)` waits until the proxy's state satisfies it, for a caller that drives a `VirtualClock`."""
 
     def __init__(self, upstream: tuple[str, int], egress: GridParams, ingress: GridParams, sync_set: SyncSet,
@@ -818,7 +893,7 @@ class Proxy:
                  position: int = 0, reveal_deadline: float | None = None, prover_key: PublicKey | None = None,
                  prover_context: bytes = b"", challenger_key: PublicKey | None = None,
                  signer: Signer | None = None, run_nonce: Callable[[int], bytes] = secrets.token_bytes,
-                 served: ServedProfile | None = None) -> None:
+                 served: ServedProfile | None = None, ordinals: bool = False) -> None:
         if (egress.buckets * egress.bucket_ms) != (ingress.buckets * ingress.bucket_ms):
             raise ValueError("the egress and ingress grids have windows of the same length")
         if prover is not None and syncs:
@@ -834,7 +909,7 @@ class Proxy:
             raise ValueError(f"a salt is a positive whole number of bytes, not {salt_bits!r} bits")
         if not (type(pouw_window) is int and pouw_window >= 1):
             raise ValueError(f"a PoUW window is a positive number of certifier windows, not {pouw_window!r}")
-        self.upstream, self.egress, self.ingress = upstream, egress, ingress
+        self.upstream, self.egress, self.ingress, self.ordinals = upstream, egress, ingress, ordinals
         self.origin, self.slack, self.clock, self.sleep = origin, slack, clock, sleep
         self.windows = len(syncs) if windows is None else windows
         if not 0 <= start <= self.windows or position < 0:
@@ -1197,6 +1272,8 @@ class Proxy:
             st.ended = self._bucket_ready(self.clock())
             return
         writer.transport.set_write_buffer_limits(0)
+        if self.ordinals:
+            writer.write(HEADER.pack(ORDINAL, s, 0))
 
         async def pump() -> None:
             while True:

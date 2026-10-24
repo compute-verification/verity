@@ -73,12 +73,14 @@ no fixed response length, no fixed request size, no request-major order, no wind
 or ignore_eos. `--requests` requests arrive as a Poisson process at `--rate` a second (`varied_requests`), each sent in
 the middle of the bucket before the one its arrival falls in. Each prompt is a list of the endpoint's token ids, a chat
 turn (a question that the model answers in a word or at length, and filler) cut to a length log-uniform in
-`--prompt-range`, with `max_tokens` uniform in 1 … `--tokens`, temperature 0 and the model's own EOS. Its session is the
-body's `user`, the request's id. A request takes `request_frames(prompt length)` link frames, a function of its
-length alone, padded with spaces. The shim writes the responses interleaved, in the order the endpoint streams them, as
-id-carrying canonical events (`active.token_event`, one a sampled token, the EOS token included, each tagged with its
-request's `user`): it adds `UPSTREAM_FIELDS` to each body so that every chunk carries its token ids, as the committing
-server's do. The first `--probes` requests are probed straight to the endpoint at their arrival times
+`--prompt-range`, with `max_tokens` uniform in 1 … `--tokens`, a seed of its own, temperature 0 and the model's own
+EOS. Its session is the body's `user`, the request's id. Each is an id request (`active.id_request`): its sampling
+fields at fixed places, each prompt id in a field of its own, in `active.id_request_frames(prompt length)` link frames,
+a function of its length alone. The proxy opens each request's connection to the shim with the request's ingress
+ordinal (`Proxy(ordinals=True)`), and the shim writes the responses interleaved, in the order the endpoint streams
+them, as id events (`active.id_event`: the ordinal and one sampled token's id, the EOS token included, and no text):
+it adds `UPSTREAM_FIELDS` to each body so that every chunk carries its token ids, as the committing server's do. The
+first `--probes` requests are probed straight to the endpoint at their arrival times
 (`probe_varied`). From them the plan models every frame of every request as ready `delta0_buckets` + ⌊k/ρ0⌋ buckets
 after its release, with ρ0 = (cap − 1)/m at most the slowest probed response's rate over `margin` (2) and every probed
 token's latency, times `margin` and plus `extra_s` (0.5 s), covered. Its calibration is that model's at cap frames a
@@ -87,12 +89,13 @@ frame is handed before its last window. N2's profile is `advice`: no egress prof
 derive from the ingress head and the advice, and this check gives no N2 verdict.
 
 **The certified I/O** (`certified_io`, the check on the advice profile), read from the records' frames alone: each
-released request's stream, release bucket, `user`, prompt ids and `max_tokens` from the ingress frames, and its
-response's token ids and text from the egress frames tagged with its `user`, with each frame's canonical position and
-egress bucket. Accepted when every egress frame is an id-carrying event of a released request and every response keeps
-the finish rule: at most `max_tokens` tokens, ending at its first EOS token (the plan's `eos_token_ids`) or at
-`max_tokens`. `extra`'s token after a response's last breaks it. The check writes the I/O to `io.json` for the tie
-(IO-TIE) and N2's advice counts (N2-ADVICE), and compares it with the ids the shim wrote and the prompts the plan sent.
+request's ingress ordinal (its stream on the link), release bucket and id request's fields (`user`, prompt ids,
+`max_tokens`, the sampling fields) from the ingress frames, and its response's token ids from the egress id events
+that name its ordinal, with each frame's canonical position and egress bucket. Accepted when every request is an id
+request, every egress frame is an id event of a request released by its bucket, and every response keeps the finish
+rule: at most `max_tokens` tokens, ending at its first EOS token (the plan's `eos_token_ids`) or at `max_tokens`.
+`extra`'s token after a response's last breaks it. The check writes the I/O to `io.json` for the tie (IO-TIE) and
+N2's advice counts (N2-ADVICE), and compares it with the ids the shim wrote and the requests the plan sent.
 On the advice profile each link-window is registered by its one-stage registration record (its salted root, chained)
 with the check's own receipt, which no proof stream issues since N2 gives no outcome, and its certified records are
 held to the certifier's key and session (`_certified`). The verdict is `accepted` when every window's records are
@@ -121,7 +124,7 @@ certified, the I/O, the audit and the salt accept.
   holds one session of window 0 past every sync (on a varied plan, past every frame written before it is due), which
   the certifier's own audit faults; `extra` writes one event more at the end of the first session's response, after
   its padding (F + 1 in all), on time and logged, so the records are complete and only N2's counts against the profile
-  refuse it (on a varied plan, the certified I/O's finish rule). The key's directory may not be inside `--out`.
+  refuse it (on a varied plan, an id event of token 0, which the certified I/O's finish rule refuses). The key's directory may not be inside `--out`.
 - `client` sends the plan's requests on the link as `active_replay.Peer` does, at the deployment's origin, and reads
   the wire to its end (`peer.json`).
 - `check` is the auditor's offline check of a served run (`check`): per link-window, the certifier's audit of the raw
@@ -170,8 +173,8 @@ from pathlib import Path
 import active_replay as ar
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier import audit as host_audit, calibration
-from verity.core.protocols.certifier.active import DATA, NO_TOKEN, Events, Proxy, RemoteCertifier, Requests, \
-    decode_frame, event_body, fresh_salt, request_frame_count, request_tag, serve_reveals, token_event_data
+from verity.core.protocols.certifier.active import DATA, Events, Proxy, RemoteCertifier, Requests, decode_frame, \
+    event_body, fresh_salt, id_event_data, id_request, id_request_fields, request_frame_count, serve_reveals
 from verity.core.protocols.certifier.certificate import Certificate, CertifiedRecord, Direction, Issuer, LmsKey, \
     LmsSigner, RecordHead, parameters_digest
 from verity.core.protocols.certifier.grid import COMPLETE, Reason, Status, occupancy, row_count
@@ -212,9 +215,6 @@ QUESTIONS = (
 )
 VARIED_FILLER = ("Notes: the meeting moved to Thursday, the printer on the third floor is out of toner, the parking lot "
                  "will be repainted next week, and the cafeteria serves soup on Mondays and Fridays. ")
-#: a varied request's frames (`request_frames`): room for its body's fields, and for each prompt id of up to
-#: `ID_DIGITS` digits and its comma
-REQUEST_OVERHEAD, ID_DIGITS = 512, 6
 #: what the shim and the probe add to each body they send the endpoint, so that each chunk carries its token ids
 UPSTREAM_FIELDS = {"return_token_ids": True}
 CHALLENGER = "certifier-serve-check"
@@ -543,16 +543,17 @@ def tokenize(url: str, model: str, text: str, api_key_env: str | None = None) ->
     return _call(url, "/tokenize", {"model": model, "prompt": text}, api_key_env)["tokens"]
 
 
-def request_frames(prompt_len: int, frame_bytes: int = FRAME_BYTES) -> int:
-    """The link frames a varied request takes, a public function of its prompt's length alone: those of
-    `REQUEST_OVERHEAD` bytes and `ID_DIGITS` + 1 bytes a prompt id, so N2 finds each request's frames in the ingress
-    counts from the advice's prompt lengths."""
-    return request_frame_count(REQUEST_OVERHEAD + (ID_DIGITS + 1) * prompt_len, frame_bytes)
+def varied_fields(model: str, q: dict) -> dict:
+    """A varied request's fields (`active.id_request`'s, less its `user`): its prompt's ids, its `max_tokens` and
+    `seed`, greedy (temperature 0, top_p 1), stopped by the model's EOS."""
+    return {"model": model, "prompt": q["prompt"], "max_tokens": q["max_tokens"], "temperature": 0.0, "top_p": 1.0,
+            "seed": q["seed"]}
 
 
 def varied_body(model: str, q: dict) -> dict:
-    """A varied request's body: its prompt's ids, its `max_tokens`, greedy, streamed, stopped by the model's EOS."""
-    return {"model": model, "prompt": q["prompt"], "max_tokens": q["max_tokens"], "stream": True, "temperature": 0}
+    """The body the shim forwards the endpoint for a varied request (its id request's, less its `user`), streamed,
+    with no stop strings."""
+    return varied_fields(model, q) | {"stop": [], "stream": True}
 
 
 def varied_requests(url: str, model: str, n: int, *, rate: float = 2.0, prompt_tokens: tuple[int, int] = (16, 1024),
@@ -560,8 +561,8 @@ def varied_requests(url: str, model: str, n: int, *, rate: float = 2.0, prompt_t
                     api_key_env: str | None = None) -> list[dict]:
     """`n` requests of varied traffic: Poisson arrivals at `rate` a second from `START_MS`; each prompt a chat turn
     (`CHAT_HEAD`, one of `QUESTIONS`, `VARIED_FILLER` and `CHAT_TAIL`, in the endpoint's tokens, `/tokenize`) cut to a
-    length log-uniform in `prompt_tokens`; `max_tokens` uniform in 1 … `max_tokens`. Its session, the body's `user`, is
-    `name.j` with j its index, five digits."""
+    length log-uniform in `prompt_tokens`; `max_tokens` uniform in 1 … `max_tokens`; a u32 `seed` of its own. Its
+    session, the body's `user`, is `name.j` with j its index, five digits."""
     lo, hi = prompt_tokens
     if not 1 <= lo <= hi or max_tokens < 1 or rate <= 0:
         raise ValueError(f"prompts of 1 ≤ {lo} … {hi} tokens, max_tokens ≥ 1 and a positive rate, not {rate}")
@@ -571,13 +572,13 @@ def varied_requests(url: str, model: str, n: int, *, rate: float = 2.0, prompt_t
     while len(filler) < hi:
         filler, k = tokenize(url, model, VARIED_FILLER * k, api_key_env)[len(bos):], 2 * k
     heads = [tokenize(url, model, CHAT_HEAD + q, api_key_env) for q in QUESTIONS]
-    rng, at, out = random.Random(seed), START_MS, []
+    rng, seeds, at, out = random.Random(seed), random.Random(f"{seed}/seeds"), START_MS, []
     for j in range(n):
         at += rng.expovariate(rate) * 1000
         length = round(lo * (hi / lo) ** rng.random())
         prompt = ((heads[rng.randrange(len(heads))] + filler)[:max(0, length - len(tail))] + tail)[:length]
         out.append({"session": f"{name}.{j:05d}", "at_ms": at, "prompt": prompt,
-                    "max_tokens": rng.randint(1, max_tokens)})
+                    "max_tokens": rng.randint(1, max_tokens), "seed": seeds.randrange(1 << 32)})
     return out
 
 
@@ -602,8 +603,8 @@ def probe_varied(url: str, model: str, requests: list[dict], api_key_env: str | 
                 now = clock() - sent
                 for e in cutter.feed(data):
                     if (got := ar.chunk_tokens(e)) is not None:
-                        ids += got[0]
-                        token_s += [now] * len(got[0])
+                        ids += got
+                        token_s += [now] * len(got)
                         chunk = json.loads(e.partition(b"data:")[2])
                         finish = next((c["finish_reason"] for c in chunk.get("choices") or () if c.get("finish_reason")),
                                       finish)
@@ -636,13 +637,9 @@ def varied_plan(probed: dict, requests: list[dict], *, name: str = "varied", see
     names = [q["session"] for q in requests]
     anchors = [max(2, math.ceil(q["at_ms"] / tau)) for q in requests]
     sends = [(a - 0.5) * tau for a in anchors]
-    frames_in = [request_frames(len(q["prompt"])) for q in requests]
     model = probed["model"]
-    for q, n in zip(requests, frames_in):
-        fewest = request_frame_count(len(ar.live_request_bytes(q["session"], varied_body(model, q), None,
-                                                               FRAME_BYTES)), FRAME_BYTES)
-        if fewest > n:
-            raise ValueError(f"{q['session']} takes {fewest} frames, more than request_frames' {n}")
+    frames_in = [request_frame_count(len(id_request(**varied_fields(model, q), user=q["session"],
+                                                    frame_bytes=FRAME_BYTES)), FRAME_BYTES) for q in requests]
     full = [D0 + lag(k) for k in range(cap)]
     keys = sorted((a + d, a, j, k) for j, a in enumerate(anchors) for k, d in enumerate(full))
     report = calibration.calibrate({
@@ -654,7 +651,7 @@ def varied_plan(probed: dict, requests: list[dict], *, name: str = "varied", see
     e, i, envelope = setup.egress_params, setup.ingress_params, setup.envelope
     sessions = [[s, j + 1, full[:q["max_tokens"]]] for j, (s, q) in enumerate(zip(names, requests))]
     peer = [{"stream": j + 1, "session": s, "frames": n, "trace_ms": q["at_ms"], "enqueue": a, "send_ms": t,
-             "body": varied_body(model, q)}
+             "id_request": varied_fields(model, q)}
             for j, (s, q, n, a, t) in enumerate(zip(names, requests, frames_in, anchors, sends))]
     frames_total, windows = sum(len(ds) for _, _, ds in sessions), anchors[-1] // T + 2
     while True:
@@ -680,7 +677,6 @@ def varied_plan(probed: dict, requests: list[dict], *, name: str = "varied", see
                        "prompt_tokens": [min(len(q["prompt"]) for q in requests),
                                          max(len(q["prompt"]) for q in requests)],
                        "delta0_buckets": D0, "rho0": str(rho), "margin": margin, "extra_s": extra_s,
-                       "request_frames": {"overhead": REQUEST_OVERHEAD, "id_digits": ID_DIGITS},
                        "probes": len(responses), "probe_finish": dict(Counter(r["finish"] for r in responses)),
                        "frames_in": dict(Counter(frames_in))}}
     return report, plan
@@ -749,7 +745,7 @@ async def serve(plan: dict, report: dict, out: Path, *, url: str, upstream: dict
                         [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]], origin=origin, publish=publish,
                         egress_link=setup.egress_link, ingress_link=setup.ingress_link, salt=fresh_salt,
                         reveal_deadline=deadline, challenger_key=challenger_key, signer=signer,
-                        served=served_profile(plan))
+                        served=served_profile(plan), ordinals=bool(plan.get("token_ids")))
     taken, served = loop.create_future(), loop.create_future()
 
     async def on_link(reader, writer) -> None:
@@ -811,10 +807,11 @@ async def client(plan: dict, report: dict, deployment: dict, out: Path, link: tu
 
 def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
     """The certified I/O of a varied run, read from the records' frames alone (the module docstring's "The certified
-    I/O"): each released request's stream, release, `user`, prompt ids and `max_tokens` from the ingress frames, and its
-    response's token ids, text and frames (canonical position, egress bucket) from the egress frames whose tag is its
-    `user`'s. `accepted` when every egress frame is an id-carrying event of a released request and every response
-    keeps the finish rule: at most `max_tokens` tokens, ending at its first EOS (`eos_token_ids`) or at `max_tokens`."""
+    I/O"): each request's ingress ordinal (its stream), release and fields (`active.id_request_fields`) from the
+    ingress frames, and its response's token ids and frames (canonical position, egress bucket) from the egress id
+    events that name its ordinal. `accepted` when every request is an id request, every egress frame is an id event
+    of a request released no later than the frame's bucket, and every response keeps the finish rule: at most
+    `max_tokens` tokens, ending at its first EOS (`eos_token_ids`) or at `max_tokens`."""
     e, i = setup.egress_params, setup.ingress_params
     release, _ = ar.ingress_releases(in_records, i, e)
     data, split = defaultdict(bytes), Requests()
@@ -825,34 +822,30 @@ def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
                 if kind == DATA:
                     stream, chunk, _ = split.feed(payload)
                     data[stream] += chunk
-    requests, by_tag, violations = [], {}, []
+    requests, by_ordinal, violations = [], {}, []
     for stream in sorted(data):
-        try:
-            body = json.loads(data[stream].partition(b"\r\n\r\n")[2])
-        except ValueError:
-            violations.append([stream, "a request that isn't JSON"])
+        fields = id_request_fields(data[stream], i.frame_bytes)
+        if fields is None:
+            violations.append([stream, "a request that isn't an id request"])
             continue
-        r = {"user": body.get("user"), "stream": stream, "release": release.get(stream), "prompt": body.get("prompt"),
-             "max_tokens": body.get("max_tokens"), "output": [], "text": b"", "frames": [], "overflow": 0}
+        r = by_ordinal[stream] = fields | {"stream": stream, "release": release.get(stream), "output": [],
+                                           "frames": []}
         requests.append(r)
-        if isinstance(r["user"], str):
-            by_tag[request_tag(r["user"])] = r
     position = 0
     for rec in sorted(out_records, key=lambda r: r.window):
         for t, row in enumerate(rec.grid):
             for slot in row[:row_count(row)]:
                 kind, _, payload = decode_frame(slot)
-                got = token_event_data(payload) if kind == DATA else None
-                r = by_tag.get(got[1]) if got is not None else None
+                got = id_event_data(payload) if kind == DATA else None
+                r = by_ordinal.get(got[0]) if got is not None else None
+                bucket = rec.window * e.buckets + t
                 if r is None:
-                    violations.append([position, "an egress frame that isn't a token event of a released request"])
-                elif got[0] == NO_TOKEN:
-                    r["text"] += got[2]
-                    r["overflow"] += 1
+                    violations.append([position, "an egress frame that isn't an id event of a released request"])
+                elif r["release"] is None or bucket < r["release"]:
+                    violations.append([position, "an id event before its request's release"])
                 else:
-                    r["output"].append(got[0])
-                    r["text"] += got[2]
-                    r["frames"].append([position, rec.window * e.buckets + t])
+                    r["output"].append(got[1])
+                    r["frames"].append([position, bucket])
                 position += 1
     eos, finish = set(plan["varied"]["eos_token_ids"]), Counter()
     for r in requests:
@@ -860,7 +853,7 @@ def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
         stops = [k for k, t in enumerate(out) if t in eos]
         if not out:
             r["finish"] = "no response"
-        elif not isinstance(m, int) or len(out) > m:
+        elif len(out) > m:
             r["finish"] = "longer than max_tokens"
         elif stops and stops[0] != len(out) - 1:
             r["finish"] = "a token after EOS"
@@ -869,20 +862,18 @@ def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
         finish[r["finish"]] += 1
         if r["finish"] not in ("eos", "length"):
             violations.append([r["stream"], r["finish"]])
-        r["text"] = r["text"].decode(errors="replace")
     return {"accepted": not violations and bool(requests), "requests": len(requests),
-            "tokens": sum(len(r["output"]) for r in requests), "finish": dict(finish),
-            "text_overflow": sum(r["overflow"] for r in requests), "violations": violations[:20],
+            "tokens": sum(len(r["output"]) for r in requests), "finish": dict(finish), "violations": violations[:20],
             "records": requests}
 
 
-def _shim_ids(run: Path) -> dict[str, list[int]]:
-    """Each session's token ids as the shim wrote them (`server.events.gz`), in its order."""
-    out: dict[str, list[int]] = defaultdict(list)
+def _shim_ids(run: Path) -> dict[tuple[str, int], list[int]]:
+    """The token ids the shim wrote (`server.events.gz`), in its order, by each event's session and the ordinal it
+    names."""
+    out: dict[tuple[str, int], list[int]] = defaultdict(list)
     for _, name, _, _, e in sorted(ar.read_events(run / "server.events.gz")):
-        got = token_event_data(event_body(e))
-        if got is not None and got[0] != NO_TOKEN:
-            out[name].append(got[0])
+        if (got := id_event_data(event_body(e))) is not None:
+            out[name, got[0]].append(got[1])
     return dict(out)
 
 
@@ -987,9 +978,10 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
         records = io.pop("records")
         (run / "io.json").write_text(json.dumps({"windows": windows, "requests": records}))
         shim = _shim_ids(run)
-        io["ids_are_the_shims"] = {r["user"]: r["output"] for r in records if r["output"]} == shim
-        bodies = {q["session"]: q["body"] for q in plan["requests"]}
-        io["prompts_are_the_plans"] = all(r["prompt"] == bodies.get(r["user"], {}).get("prompt") for r in records)
+        io["ids_are_the_shims"] = {(r["user"], r["stream"]): r["output"] for r in records if r["output"]} == shim
+        sent = {q["session"]: q["id_request"] | {"user": q["session"]} for q in plan["requests"]}
+        fields = ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")
+        io["requests_are_the_plans"] = all({k: r[k] for k in fields} == sent.get(r["user"]) for r in records)
     by_window: dict[int, dict] = {}
     for r in audited["rows"]:
         by_window.setdefault(r["window"], {})[r["direction"]] = {"raw": r["raw"], "committed": r["committed"]}
@@ -1018,7 +1010,7 @@ def table(result: dict) -> str:
     if (io := result.get("io")) is not None:
         lines.append(f"  certified {result['certified_accepted']}; I/O {io['accepted']}: {io['requests']} requests, "
                      f"{io['tokens']} tokens, finish {io['finish']}, ids are the shim's {io['ids_are_the_shims']}, "
-                     f"prompts are the plan's {io['prompts_are_the_plans']}, violations {io['violations'][:3]}")
+                     f"requests are the plan's {io['requests_are_the_plans']}, violations {io['violations'][:3]}")
     for row in result["rows"]:
         a = row.get("audit", {})
         n2 = row.get("n2")

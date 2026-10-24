@@ -3,12 +3,12 @@ over real localhost sockets, on an injected clock, an honest run is accepted raw
 while a sender that times its writes to signal either leaves the wire byte-identical or is rejected by the audit."""
 
 import asyncio
-import base64
 import dataclasses
 import itertools
 import json
 import math
 import random
+import re
 import resource
 from collections import defaultdict
 from concurrent.futures import Executor, Future
@@ -72,24 +72,79 @@ def test_a_token_is_events_of_one_length_each_its_template(n):
     assert active.event_data(evs[0][:-1]) is None and active.event_data(evs[0].replace(b"verity", b"Verity")) is None
 
 
-def test_an_id_carrying_event_is_an_event_of_the_template_its_id_and_tag_first():
-    """An id-carrying event is `EVENT_BYTES` long on the egress template like any event; its first 16 base64 characters
-    are the token id and its request's tag, whatever text follows, and `token_event_data` gives back all three."""
-    tag = active.request_tag("varied.00007")
-    assert len(tag) == active.TAG_BYTES and tag != active.request_tag("varied.00008")
-    assert active.TOKEN_TEXT_BYTES == active.TOKEN_BYTES - 12
-    p, s, prefix, suffix = active.event_placement(B)
-    for token_id, text in ((0, b""), (128009, b" Paris"), (active.NO_TOKEN, b"x" * active.TOKEN_TEXT_BYTES)):
-        e = active.token_event(token_id, tag, text)
-        frame = active.encode_frame(DATA, active.CANONICAL_STREAM, e, B)
-        assert len(e) == active.EVENT_BYTES and frame[:p] == prefix and frame[s : s + len(suffix)] == suffix
-        assert base64.b64decode(frame[p : p + 16]) == token_id.to_bytes(4, "big") + tag
-        assert active.token_event_data(e) == (token_id, tag, text)
-    for bad in ((-1, tag, b""), (active.NO_TOKEN + 1, tag, b""), (True, tag, b""), (1, tag[:-1], b""),
-                (1, tag, bytes(active.TOKEN_TEXT_BYTES + 1))):
+def test_an_id_event_is_one_template_its_ordinal_and_token_id_at_fixed_places():
+    """An id event is `ID_EVENT_BYTES` long whatever it carries, the bytes around its two fields are the same in
+    every one, it is JSON with the ordinal and the id as numbers, and `id_event_data` gives back exactly the bytes
+    `id_event` writes: no other spelling of the same two numbers, and nothing that isn't one."""
+    a = len(active.ID_EVENT_HEAD)
+    b = a + active.ID_DIGITS + len(active.ID_EVENT_MID)
+    for request, token_id in ((1, 0), (7, 128009), (2**32 - 1, 2**32 - 1)):
+        e = active.id_event(request, token_id)
+        assert len(e) == active.ID_EVENT_BYTES and e.startswith(active.ID_EVENT_HEAD)
+        assert e[a + active.ID_DIGITS : b] == active.ID_EVENT_MID and e.endswith(active.ID_EVENT_TAIL)
+        choice = json.loads(e.removeprefix(b"data: "))["choices"][0]
+        assert (choice["request"], choice["token_id"]) == (request, token_id)
+        assert active.id_event_data(e) == (request, token_id)
+    for bad in ((-1, 0), (0, 2**32), (True, 0), (0, 1.0)):
         with pytest.raises(ValueError):
-            active.token_event(*bad)
-    assert active.token_event_data(active.event(b"a token")) is None and active.token_event_data(b"x") is None
+            active.id_event(*bad)
+    e = active.id_event(7, 42)
+    for other in (e.replace(b"        42", b"0000000042"), e.replace(b"        42", b"42        "), e[:-1],
+                  e.replace(b"verity", b"Verity"), active.event(b"a token"), b"x"):
+        assert active.id_event_data(other) is None
+    assert active.id_event_data(e.replace(b"         7", b"4294967296"[:10])) is None
+
+
+@pytest.mark.parametrize("length", [1, 2, 300, 371, 372, 1024, 2048])
+def test_an_id_requests_fields_are_at_places_its_prompts_length_fixes(length):
+    """Two id requests of one prompt length differ only inside their fields' places, every field but the prompt's
+    is in the first frame and no prompt id straddles a frame, `id_request_frames` is the frames `request_frames`
+    puts it in, and `id_request_fields` gives back its fields and refuses any other spelling of them."""
+    rng = random.Random(length)
+    x = {"model": "llama-3.1-8b-instruct", "user": "varied.00007",
+         "prompt": [rng.randrange(1 << 17) for _ in range(length)], "max_tokens": 64, "temperature": 0.0,
+         "top_p": 1.0, "seed": 7}
+    y = {"model": "m", "user": "u" * 62, "prompt": [2**32 - 1] * length, "max_tokens": 1, "temperature": 1.5,
+         "top_p": 0.95, "seed": 2**32 - 1}
+    rx, ry = (active.id_request(**f, frame_bytes=B) for f in (x, y))
+    assert len(rx) == len(ry)
+    assert active.request_frame_count(len(rx), B) == active.id_request_frames(length, B) == \
+        len(active.request_frames(rx, B)) // B
+    data = active.LENGTH.pack(len(rx)) + rx
+    room = B - active.HEADER.size
+    prompt = data.index(b'"prompt":[') + len(b'"prompt":')
+    assert prompt + active.ID_FIELD_BYTES <= room
+    fields = [(m.start(), m.end()) for m in re.finditer(rb"[\[,] *\d+", data[prompt:])]
+    assert len(fields) == length and all((prompt + s) // room == (prompt + t - 1) // room for s, t in fields)
+    assert all(t - s == active.ID_FIELD_BYTES for s, t in fields)
+    differ = [k for k, (u, v) in enumerate(zip(rx, ry)) if u != v]
+    head = rx.index(b"\r\n\r\n") + 4
+    places = [rx.index(k, head) + len(k) for k in (b'"max_tokens":', b'"temperature":', b'"top_p":', b'"seed":',
+                                                   b'"model":', b'"user":')]
+    widths = [active.ID_DIGITS, 8, 8, active.ID_DIGITS, active.ID_NAME_BYTES, active.ID_NAME_BYTES]
+    allowed = {k for p, w in zip(places, widths) for k in range(p, p + w)}
+    allowed |= {prompt - active.LENGTH.size + s + 1 + j for s, _ in fields for j in range(active.ID_DIGITS)}
+    assert set(differ) <= allowed and active.id_request_fields(rx, B) == x and active.id_request_fields(ry, B) == y
+    body = json.loads(rx.partition(b"\r\n\r\n")[2])
+    assert body == x | {"stop": [], "stream": True}
+    compact = rx.partition(b"\r\n\r\n")[0].rsplit(b":", 1)[0] + b":%10d\r\n\r\n"
+    raw = json.dumps(body, separators=(",", ":")).encode()
+    assert active.id_request_fields(compact % len(raw) + raw, B) is None
+    assert active.id_request_fields(rx.replace(b'"seed":         7', b'"seed":0000000007'), B) is None
+    assert active.id_request_fields(rx[:-1], B) is None and active.id_request_fields(b"\x00\xff", B) is None
+
+
+def test_an_id_request_refuses_what_has_no_fixed_place():
+    """An empty prompt, a name past `ID_NAME_BYTES` as JSON, a number past its field or not a number, and a frame
+    with no room for the fields are refused."""
+    ok = {"model": "m", "user": "u", "prompt": [1], "max_tokens": 1}
+    for bad in ({"prompt": []}, {"prompt": "ab"}, {"user": "u" * 63}, {"model": 7}, {"max_tokens": 2**32},
+                {"max_tokens": True}, {"seed": -1}, {"temperature": 10.0}, {"temperature": 1e-7},
+                {"top_p": float("nan")}, {"prompt": [1, 2**32]}):
+        with pytest.raises(ValueError):
+            active.id_request(**ok | bad, frame_bytes=B)
+    with pytest.raises(ValueError):
+        active.id_request(**ok, frame_bytes=256)
 
 
 @pytest.mark.parametrize("length", [0, 1, 499, 500, 503, 1536])  # B = 512: a frame holds 503 bytes after its header
@@ -454,10 +509,12 @@ STREAM = [row[4] for row in ROWS]
 class Server:
     """An OpenAI-compatible completions server that streams what the test tells it to, when it is told. A connection
     that starts with a salt frame is the salt stream: `salts` keeps its frames, each its header and the length the
-    header gives, and `salted` is set at its end."""
+    header gives, and `salted` is set at its end. One that starts with an `ORDINAL` header puts its request's
+    ordinal in `ordinals`, by its `user`."""
 
     def __init__(self) -> None:
         self.writers: dict[str, asyncio.StreamWriter] = {}
+        self.ordinals: dict[str, int] = {}
         self.changed = asyncio.Event()
         self.salts: list[bytes] = []
         self.salted = asyncio.Event()
@@ -473,9 +530,16 @@ class Server:
                 head += await reader.readexactly(active.HEADER.size - len(head))
             self.salted.set()
             return
+        ordinal = None
+        if first[0] == active.ORDINAL:
+            ordinal = active.HEADER.unpack(first + await reader.readexactly(active.HEADER.size - 1))[1]
+            first = await reader.readexactly(1)
         head = first + await reader.readuntil(b"\r\n\r\n")
         length = int(head.split(b"Content-Length: ")[1].split(b"\r\n")[0])
-        self.writers[json.loads(await reader.readexactly(length))["user"]] = writer
+        user = json.loads(await reader.readexactly(length))["user"]
+        self.writers[user] = writer
+        if ordinal is not None:
+            self.ordinals[user] = ordinal
         self.changed.set()
 
     async def until(self, n: int) -> None:
@@ -607,6 +671,15 @@ def test_an_honest_run_over_sockets_is_accepted_raw_and_committed(honest_run):
     assert wire == expected_wire(FRAMES, SYNCS)
     assert len(wire) == horizon * EGRESS.allocation * B
     assert max(proxy.lateness["egress"]) == 0
+
+
+def test_a_proxy_with_ordinals_names_each_request_to_its_server_and_changes_nothing_on_the_link(honest_run):
+    """Under `ordinals` each stream's server connection opens with an `ORDINAL` header whose stream is the request's
+    ingress ordinal, its stream on the link; the records and the wire are the run's without it."""
+    server = Server()
+    proxy, wire = asyncio.run(replay(honest(), server=server, ordinals=True))
+    assert server.ordinals == {name: stream for name, stream, _, _ in SESSIONS}
+    assert proxy.records == honest_run[0].records and wire == honest_run[1]
 
 
 def test_a_sender_that_signals_by_its_write_times_leaves_the_wire_identical(honest_run):
