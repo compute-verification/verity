@@ -11,19 +11,30 @@ compiler emits, where no gate may be one no output depends on.  Rows of record k
   partial by `TokenSelectChunk_v2` (`b1.TokenSelectChunk_v1` with its last lane's unread index increment gone), reduced with
   logits[0] by `TokenSelectCombine_v2` (`b1.TokenSelectCombine_v1` with each select's branches swapped, as the chunk step's
   are).  Flat, v1 and v3 lower to circuits quadratic in V; this one is linear.
+* `TopPKeepWord_v2{V,S}`: `topp_words.TopPKeepWord_v1{V,S}`'s word gates that its keep bits depend on (`live_replay`).  The keep
+  word's builder applies each operation to whole vectors of lanes, and some lanes of a vector are read by nothing after it.
+* `TopPMask_v4{V,S}` and `GumbelTopPTokenSelect_v3{V,S}`: `TopPMask_v2{V,S}` and `GumbelTopPTokenSelect_v2{V,S}` over
+  `TopPKeepWord_v2` and `GumbelSelectF32_v3`.
+* `GumbelSelectF32_v3`: `GumbelSelectF32_v1`'s scan stops one lane early, as `GumbelSelectF32GivenGreedy_v2`'s does.
 
 Each computes its v1's function word for word, except at V = 1, where v1's zero-length scan returns a wrong carry and these return
 index 0 (`tests/program/test_dead_free.py`).
 """
 from __future__ import annotations
 
-from verity.ml.circuits.defs import Coll, bind, composite
+from collections.abc import Sequence
+
+import numpy as np
+
+from verity.ml.circuits.defs import Coll, PrimitiveDefinition, SpecializedDefinition, bind, composite
+from verity.ml.circuits.intervals import full
+from verity.ml.circuits.liveness import Liveness
 from verity.ml.circuits.ops.fp32 import F32AddFtz
 from verity.ml.circuits.ops.prims import ZERO32, const
-from verity.ml.circuits.ops.scalar import BIT, BitNot, F32, F32Eq, SelectF32, SelectI32
-from verity.ml.circuits.refs import Coll as _Coll, concat, tuple_of
+from verity.ml.circuits.ops.scalar import BIT, BitAnd, BitNot, F32, F32Eq, I32Eq, SelectF32, SelectI32
+from verity.ml.circuits.refs import Affine, Coll as _Coll, Concat, Explicit, Refs, Strided, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple
-from verity_vllm.program.registry import prims as P, ref_prims as RP, sampling as SA
+from verity_vllm.program.registry import prims as P, ref_prims as RP, sampling as SA, topp_words as TW
 from verity_vllm.program.registry.b1 import NEG_INF_BF16, ArgmaxStep, TokenSelectChunkStep, chunks, f32c
 from verity_vllm.program.registry.prims import BF16, I32
 
@@ -184,5 +195,127 @@ def TokenSelectV4(B, S, logits):
     return B.call(bind(TokenSelectCombineV2, V=S.V, C=C), logits[0], best, idx)
 
 
-__all__ = ["CHUNK", "GumbelSelectF32GivenGreedyV2", "GumbelTopPTokenSelectSharedGreedyV2", "RMSNormTritonV5", "TokenSelectChunkV2",
-           "TokenSelectCombineV2", "TokenSelectV3", "TokenSelectV4", "TopPMaskV3", "lane0_butterfly"]
+def _codes(r: Refs) -> np.ndarray:
+    """Each reference of `r` as `topp_words`' int64 code: `idx << 32 | leaf` for a node's leaf, `-1 -` that for a parameter's."""
+    if isinstance(r, Concat):
+        return np.concatenate([_codes(p) for p in r.parts]) if r.parts else np.zeros(0, np.int64)
+    if isinstance(r, Explicit):
+        return np.array([TW._code(x) for x in r.items], np.int64)
+    j = np.arange(r.count, dtype=np.int64)
+    if isinstance(r, Affine):
+        leaf = r.base + j
+    elif isinstance(r, Strided):
+        leaf = r.base + (j // r.inner) * r.outer_stride + (j % r.inner) * r.inner_stride
+    else:
+        raise TypeError(f"a reference sequence of an unknown form, {type(r).__name__}")
+    c = (np.int64(r.idx) << 32) | leaf
+    return -1 - c if r.space == "p" else c
+
+
+def live_replay(B, sd: SpecializedDefinition, args: Sequence[Coll]) -> Coll:
+    """`sd`'s body emitted into `B` over `args` with only the gates its return depends on: a node nothing live reads is left out,
+    and a batch keeps the members something live reads (`liveness.Liveness`, transitive, circuit-check's dead gates).  The body must
+    be primitive calls and batches of primitives (`topp_words.IREngine`'s), so each kept gate is the same primitive on the same
+    operands and the return is `sd`'s, word for word."""
+    body = sd.body
+    lv = Liveness(transitive=True).analyse(sd, full(body.ret_type.leaves))
+    if lv.approximate:
+        raise ValueError(f"{sd.name}: a batch's live members were over-approximated, so its replay would keep dead gates")
+    params = [_codes(a.refs) for a in args]
+    new: dict[int, np.ndarray] = {}
+
+    def moved(codes: np.ndarray) -> Refs:
+        out = np.empty_like(codes)
+        node = codes >= 0
+        key = np.where(node, codes, -1 - codes)
+        idx, leaf = key >> 32, key & TW.M32
+        for i in np.unique(idx[~node]).tolist():
+            at = ~node & (idx == i)
+            out[at] = params[i][leaf[at]]
+        for i in np.unique(idx[node]).tolist():
+            at = node & (idx == i)
+            out[at] = new[i][leaf[at]]
+        assert (out != _GONE).all(), f"{sd.name}: a live gate reads one left out"
+        return TW._refs(out)
+
+    for k, n in enumerate(body.nodes):
+        live = lv.node_live[k]
+        if not live:
+            continue
+        if not isinstance(n.fn, PrimitiveDefinition) or n.form not in ("primitive", "batch"):
+            raise ValueError(f"{sd.name}: node {k} is a {n.form} of {n.fn.name}; live_replay emits primitives and their batches")
+        if n.form == "primitive":
+            new[k] = _codes(B.call(n.fn, *(Coll(a.type, moved(_codes(a.refs))) for a in n.args)).refs)
+            continue
+        R = n.fn.ret.leaves
+        m = np.unique(np.concatenate([np.arange(lo // R, (hi - 1) // R + 1) for lo, hi in live]))
+        colls = []
+        for a, ax in zip(n.args, n.axes):
+            if ax is None:
+                colls.append(Coll(a.type, moved(_codes(a.refs))))
+                continue
+            assert ax == 0, f"{sd.name}: node {k} batches along axis {ax}"
+            L = a.type.elem.leaves
+            colls.append(Coll(Array(len(m), a.type.elem), moved(_codes(a.refs)[(m[:, None] * L + np.arange(L)).reshape(-1)])))
+        out = np.full(n.n * R, _GONE, np.int64)
+        out[(m[:, None] * R + np.arange(R)).reshape(-1)] = _codes(B.batch(n.fn, *colls, axes=n.axes, n=len(m)).refs)
+        new[k] = out
+    return Coll(body.ret_type, moved(_codes(body.ret)))
+
+
+#: a leaf `live_replay` left out (no code `_codes` makes: a node's codes are >= 0, a parameter's > -2^63)
+_GONE = np.iinfo(np.int64).min
+
+
+@composite("TopPKeepWord", 2, ["V", "S"], lambda st: ((("logits", Array(st.V, F32)), ("top_p", F32)), Array(st.V, BIT)),
+           conformance="exact-model-tested")
+def TopPKeepWordV2(B, st, logits, top_p):
+    """`TopPKeepWord_v1{V,S}`'s keep bits from the word gates they depend on: v1's body by `live_replay`."""
+    return live_replay(B, bind(TW.TopPKeepWord, V=st.V, S=st.S), (logits, top_p))
+
+
+@composite("TopPMask", 4, ["V", "S"],
+           lambda st: ((("logits", Array(st.V, F32)), ("top_p", F32), ("splits", I32)), Array(st.V, F32)),
+           conformance="exact-model-tested")
+def TopPMaskV4(B, st, logits, top_p, splits):
+    """`TopPMask_v2{V,S}` over `TopPKeepWord_v2{V,S}`: each lane kept or set to -inf by its keep bit, and no lane kept unless
+    `splits == S`."""
+    keep = B.call(bind(TopPKeepWordV2, V=st.V, S=st.S), logits, top_p)
+    ok = B.call(I32Eq, splits, B.call(const(32, int(st.S))))
+    keep = B.batch(BitAnd, keep, ok, axes=(0, None))
+    return B.batch(SelectF32, keep, logits, B.call(const(32, SA.NEG_INF_BITS)), axes=(0, 0, None))
+
+
+@composite("GumbelSelectF32", 3, ["V"], lambda S: ((("logits", Array(S.V, F32)), ("seed", I64), ("pos", I64), ("temp", F32)), I32),
+           conformance="exact-model-tested")
+def GumbelSelectF32V3(B, S, logits, seed, pos, temp):
+    """`GumbelSelectF32_v1{V}`'s function: `GumbelSelectStep_v1`'s scan to logits[V-2], then the last lane's test for its index
+    alone (y = x + g(key)[i] when temp != 0 else x; its index iff y > best)."""
+    if S.V == 1:
+        return B.call(const(32, 0))
+    key = B.call(SA.GumbelStreamKey, seed, pos)
+    noisy = B.call(BitNot, B.call(F32Eq, temp, B.call(const(32, 0))))
+    zero = B.call(const(32, 0))
+    y0 = B.call(SelectF32, noisy, B.call(F32AddFtz, logits[0], B.call(SA.GumbelNoiseLane, key, zero)), logits[0])
+    init = tuple_of(y0, zero, B.call(const(32, 1)))
+    c = B.scan(SA.GumbelSelectStep, init, xs=(logits[1:S.V - 1],), shared=(key, noisy))[0] if S.V > 2 else init
+    x = logits[S.V - 1]
+    y = B.call(SelectF32, noisy, B.call(F32AddFtz, x, B.call(SA.GumbelNoiseLane, key, c[2])), x)
+    return B.call(SelectI32, B.call(RP.F32GtStrict, y, c[0]), c[2], c[1])
+
+
+@composite("GumbelTopPTokenSelect", 3, ["V", "S"],
+           lambda st: ((("logits", Array(st.V, BF16)), ("top_p", F32), ("seed", I64), ("pos", I64), ("temp", F32), ("splits", I32)), I32),
+           conformance="exact-model-tested")
+def GumbelTopPTokenSelectV3(B, st, logits, top_p, seed, pos, temp, splits):
+    """`GumbelTopPTokenSelect_v2{V,S}`'s function and operands, over `TopPMask_v4{V,S}` and `GumbelSelectF32_v3{V}`."""
+    if st.V == 1:
+        return B.call(const(32, 0))
+    scaled = B.call(bind(SA.TemperatureScale, V=st.V), logits, temp)
+    masked = B.call(bind(TopPMaskV4, V=st.V, S=st.S), scaled, top_p, splits)
+    return B.call(bind(GumbelSelectF32V3, V=st.V), masked, seed, pos, temp)
+
+
+__all__ = ["CHUNK", "GumbelSelectF32GivenGreedyV2", "GumbelSelectF32V3", "GumbelTopPTokenSelectSharedGreedyV2", "GumbelTopPTokenSelectV3",
+           "RMSNormTritonV5", "TokenSelectChunkV2", "TokenSelectCombineV2", "TokenSelectV3", "TokenSelectV4", "TopPKeepWordV2",
+           "TopPMaskV3", "TopPMaskV4", "lane0_butterfly", "live_replay"]
