@@ -83,6 +83,22 @@ def test_a_two_window_charge_is_code_v1s():
     assert CC.evaluate_links(N, [(cb, in0, out0, *wins[0]), (cb, in1, out1, *wins[1])]) == [(1, 23), (1, 23)]
 
 
+def test_a_window_charged_over_its_own_decisions_is_code_v1s():
+    """The load unit's form: each window's decisions in the first slots of `ChargeLink_v1{32}` (the engine class's D),
+    en_i = i < count, are `code_v1`'s charge and carry-out from the same carry-in as its 14 asks, since a slot with en 0
+    changes nothing."""
+    D, windows = 32, 0
+    for source, N, book, wins, _lens in _streams():
+        cb, _prior = AE.charge_book(book, D)
+        for (en, bits), (length, c_in, c_out) in zip(wins, CC.session(N, book, wins)):
+            dec = [b for e, b in zip(en, bits) if e]
+            packed = [1] * len(dec) + [0] * (D - len(dec)), dec + [1] * (D - len(dec))
+            assert AE.reference_charge(D, cb, CC.carry_of(c_in), *packed) == (1, length, CC.carry_of(c_out)), source
+            assert CC.reference_link(D, cb, c_in, c_out, *packed) == (1, length), source
+            windows += 1
+    assert windows == 41
+
+
 def test_a_reset_carry_is_refused():
     """A prover restarting the counts before window 1 (to the priors, 20 bits in place of 23, or to counts fitted to
     the window, 16): window 1's unit alone accepts any carry-in, so the chain refuses it, whether window 1's carry-in

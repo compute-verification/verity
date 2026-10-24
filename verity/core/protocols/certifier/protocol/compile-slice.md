@@ -68,4 +68,13 @@ past the count with en 0, and 34 idle steps), with the seal's rows in ``srv`` (`
 **In zero knowledge** (`benchmarks/network_traces/compile_slice_zk.py --slice w212`, and `--slice demo`), each unit is
 proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify --zk`. The verifier opens only ``pub``
 and the verdict, and runs the bindings, the carry chain's among them, on the units' b‖c. What the verifier received
-holds no witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the ``cin`` and ``cout`` rows whole.
+holds no witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the ``cin`` and ``cout`` rows whole. The
+scan leaves out the pieces with at most one nonzero byte (`sparse_pieces`), which a proof's encoding holds whatever the
+witness.
+
+**The slice's ZK runs with its coder**, before the charge was `ChargeLink_v1`:
+- At the demonstration class (49,113 ANDs a unit), the honest unit and ten negatives, with the made-up table refused
+  by ``cache`` alone (run r20261024-162328-03c7).
+- At corpus-smallkv's first seven steps (7,562,498 ANDs a unit, m = 29), the honest unit and twelve negatives (run
+  r20261024-175616-105c). The made-up table was refused by ``cache`` alone, and the six passes with their own served
+  row by the native ``srv`` check.

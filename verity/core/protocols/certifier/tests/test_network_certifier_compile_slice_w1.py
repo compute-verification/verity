@@ -7,9 +7,8 @@ bits from the priors).
 
 The slice doesn't take the window yet (`protocol/served-shape.md`, "For the 25 async windows"), so the test of what it
 must do is a strict xfail, which its fix turns into a pass:
-- its rows carry no async state: `replay_chain`'s rows have no `fin` or `cap`, and the slice's reference (`_state`,
-  `_row`, `_inputs`, `check`'s arrivals) builds sync tuples, so a request runs on past its last output (request 7 at
-  unit 3);
+- its reference is sync: its rows' entries carry the async fields (`replay_chain`'s at AS = 1), but `_state`, `_row`,
+  `_inputs` and `check`'s arrivals build sync tuples, so `case` raises `MalformedRow` on the window's first state row;
 - its ``rows`` check reads the served rows by batch position (`served_rows.step_rows`' slot), and the runner's batch
   isn't the scheduler's slots at units 0 and 5."""
 from __future__ import annotations
@@ -28,8 +27,8 @@ from verity.core.protocols.certifier.tests.test_network_certifier_compile_slice 
 FIXTURE = Path(__file__).parent / "fixtures" / "compile_slice_w1_class.json"
 #: the session's carry into window 1 (the module's docstring)
 CARRY = AE.Carry(((11, 4), (11, 0), (30, 1)), 0)
-NOT_YET = ("the slice's rows carry no async state (fin, cap) and its rows check reads the served rows by batch position "
-           "(protocol/served-shape.md, 'For the 25 async windows')")
+NOT_YET = ("the slice's reference builds sync entries where its rows' are async, and its rows check reads the served rows "
+           "by batch position (protocol/served-shape.md, 'For the 25 async windows')")
 
 
 @pytest.fixture(scope="module")
