@@ -361,6 +361,32 @@ def test_a_period_open_refuses_circuit_files_it_cant_check(host, signer, files):
         A.circuit_files_of(json.dumps({f"k{i}": "2b" * 64 for i in range(1, 66)}))
 
 
+def test_a_period_open_commits_its_fixed_length_when_given_and_none_otherwise(host, signer):
+    """PoUW's credit holds each window's served rows to the fixed length its period's open committed (`length`,
+    ``{max_tokens, stop}``, credit's `committed_length`; ASK-39), signed before window 0's first coin."""
+    length = {"max_tokens": [3, 1, 2], "stop": "fixed"}
+    opened = ok(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --draw-k 27 "
+                                  f"--length {shlex.quote(json.dumps(length, indent=1))}", "hash"))
+    assert opened["body"]["length"] == length and opened["body"]["draw_k"] == 27
+    ok(ssh(host, signer, "period-close --name p1", "hash"))
+    assert "length" not in ok(admin(host, signer, f"period-open --name v1 --lane vllm --cap 1 --circuit {CIRCUIT}"))[
+        "body"]
+    assert set(checked(host)) == {"p1", "v1"}
+
+
+@pytest.mark.parametrize("length", [
+    "{}", "[]", "nope", '{"max_tokens": []}', '{"max_tokens": [], "stop": "fixed"}',
+    '{"max_tokens": [0], "stop": "fixed"}', '{"max_tokens": [true], "stop": "fixed"}',
+    '{"max_tokens": [1.0], "stop": "fixed"}', '{"max_tokens": [4], "stop": "eos"}',
+    '{"max_tokens": [4], "stop": "fixed", "served": [4]}', '{"max_tokens": [16777217], "stop": "fixed"}',
+])
+def test_a_period_open_refuses_a_length_it_cant_check(host, signer, length):
+    rc, out = ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --length {shlex.quote(length)}",
+                  "hash")
+    assert rc == 3 and "--length" in out["refused"]
+    assert A.read_ledger(host.ledger) == []
+
+
 @pytest.mark.parametrize("args", [
     ["period-open", "p1", "hash", "hash", "2", "ab" * 64, "weights_root=" + "5e" * 64, "weights_root=" + "5e" * 64],
     ["period-open", "p1", "hash", "hash", "2", "ab" * 64, "pinned=" + "5e" * 20],

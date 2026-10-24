@@ -19,7 +19,8 @@
 //                serves it from h1c_a_call2_k, the same table with each compression on its critical path paired, and
 //                h1c_a_form(3) from h1c_a_call3_k, paired with every message built in registers
 //
-// A row is `body` bytes at data + i stride, then len - body bytes at tail + i tail_stride (an A or B row's f32 scale).
+// A row is `body` bytes at data + i stride, then len - body bytes at tail + (i / tdiv) tail_stride (an A or B row's f32
+// scale; tdiv = n past K = 4096, where each of a K row's n chunk leaves ends in the row's one scale).
 // H1C_HB = 1: h1c_build's four kernels hash through Hb (below: the state in registers, the block in shared memory) rather
 // than Hs, the same bytes in the same order.  With it, H1C_LVF = L >= 0 builds every level from L up in one launch (a
 // block a table, h1c_levels), H1C_DOMSEG = 1 the domains in the segments' launch (its first block row), beside them,
@@ -142,6 +143,7 @@ struct H1Tab {
   const u64* xd;
   const uint8_t* rlive;
   int rbw;
+  int tdiv;  // rows a tail: row i's tail is tail i / tdiv (0 or 1: its own)
 };
 __device__ __forceinline__ bool row_dead(const H1Tab& T, long long i) { return T.xd && !T.rlive[i / T.rbw]; }
 
@@ -228,7 +230,7 @@ __device__ int dec(u64 v, uint8_t d[20]) {
 __device__ __forceinline__ u32 bswap32(u32 x) { return __byte_perm(x, 0, 0x0123); }
 
 __device__ __forceinline__ uint8_t row_byte(const H1Tab& T, long long i, int p) {
-  return p < T.body ? T.data[i * T.stride + p] : T.tail[i * T.tail_stride + (p - T.body)];
+  return p < T.body ? T.data[i * T.stride + p] : T.tail[(T.tdiv > 1 ? i / T.tdiv : i) * T.tail_stride + (p - T.body)];
 }
 
 // bytes [off, off + m) of row i

@@ -64,6 +64,21 @@ s's from row s·T), ``requests`` (T headers, read by every round), ``m`` (S rows
 
 So a round's statement that proves ok = 1 at public m on the tables its round root and the open root commit fixes m as rule
 A's count, and one whose m isn't the round's served rows opens no row of ``live-ok``.
+
+**`PouwLiveSlots_v2{T}`** is v1 with one more public port, ``cap``, each request leaf's public cap: the max_tokens its
+period's open commits for request q (credit's fixed length, ``length.max_tokens``), 0 past them.
+
+    PouwLiveSlots_v2{T}   (slot, req, m, s, cap: Array<T, U32>) -> Value<1>
+
+ok = 1 iff v1's ok and, for every leaf q, the leaf is live iff its public cap is nonzero, and a live leaf's header has
+round 0 and cap the public cap. The request table it reads is round 0's, so its requests were admitted in round 0. Under
+v1 the headers' caps and rounds are the prover's hidden choice: with each round's count m_s held to the public schedule,
+a prover could still give request q another's cap, or a later round, and so move a decode row from one request to
+another. Under v2 each request takes a decode row in round s ≥ 1 only when s < its public max_tokens. Its Program
+(`program_v2`, ``PouwLiveWindow_v2``) has a fifth parameter ``caps``, T rows read by every round. Round s's statement reads
+port ``cap_<i>`` at row i of the known ``<prefix>caps`` (`live_reads.caps_table`: T rows, each one u32's two words, under
+`core_check.public_row_salt` of the open root and i), which credit builds from the period's committed max_tokens. Credit
+reads only v2 (`credit.LIVE_FN`). v1 stays unchanged.
 """
 from __future__ import annotations
 
@@ -86,6 +101,7 @@ U32 = Array(32, BL.BIT)
 #: a request leaf's header words: index, round, slot, cap and prompt length
 INDEX, ROUND, CAP, PROMPT = 0, 1, 3, 4
 PORTS = ("slot", "req", "m", "s")
+PORTS_V2 = (*PORTS, "cap")
 
 
 def _check(slot: Sequence[int], req: Sequence[Sequence[int]]) -> None:
@@ -115,6 +131,20 @@ def live_ok(slot: Sequence[int], req: Sequence[Sequence[int]], m: int, s: int) -
                and all(slot.count(q + 1) <= takes(h, s) for q, h in enumerate(req)))
 
 
+def caps_bound(req: Sequence[Sequence[int]], cap: Sequence[int]) -> bool:
+    """v2's binding: leaf q is live iff its public cap ``cap[q]`` is nonzero, and a live leaf's header has round 0 and
+    cap ``cap[q]``."""
+    if len(cap) != len(req):
+        raise ValueError(f"the unit reads T public caps, one a request leaf, not {len(cap)} for {len(req)} leaves")
+    return all((h[PROMPT] != 0) == (c != 0) and (h[PROMPT] == 0 or (h[ROUND] == 0 and h[CAP] == c))
+               for h, c in zip(req, cap))
+
+
+def live_ok_v2(slot: Sequence[int], req: Sequence[Sequence[int]], m: int, s: int, cap: Sequence[int]) -> int:
+    """`PouwLiveSlots_v2` on words: `live_ok` and `caps_bound` at the public caps `cap`."""
+    return int(caps_bound(req, cap) and live_ok(slot, req, m, s) == 1)
+
+
 def admitted(slot: Sequence[int], req: Sequence[Sequence[int]]) -> int:
     """Rule A's count: the slots that name (as q + 1) a request leaf q that is an entry, prompt length ≠ 0. ``live_ok`` at m
     implies it is m (`Pouw.SecurityProofs.LiveCredit.liveOk_admitted`)."""
@@ -124,6 +154,11 @@ def admitted(slot: Sequence[int], req: Sequence[Sequence[int]]) -> int:
 
 def _types(T: int) -> tuple[list[Type], Type]:
     return [Array(T, U32), Array(T, Array(HEADER, U32)), U32, U32], BL.BIT
+
+
+def _types_v2(T: int) -> tuple[list[Type], Type]:
+    ps, ret = _types(T)
+    return [*ps, Array(T, U32)], ret
 
 
 def _onehot(C: Any, bits: Sequence[Any], values: range) -> list:
@@ -137,11 +172,12 @@ def _onehot(C: Any, bits: Sequence[Any], values: range) -> list:
     return [C.AND(lo[v & ((1 << k) - 1)], hi[v >> k]) for v in values]
 
 
-def _build(T: int) -> Any:
+def _build(T: int, v2: bool = False) -> Any:
     w = T.bit_length()  # N ≤ T < 2^w, and m too once m ≤ T
 
     def build(C: Any, *e: Any) -> list:
         slot, m, s = e[:T], e[(HEADER + 1) * T], e[(HEADER + 1) * T + 1]
+        cap = e[(HEADER + 1) * T + 2:(HEADER + 2) * T + 2]
         req = [e[T + HEADER * q:T + HEADER * (q + 1)] for q in range(T)]
         live = [or_reduce(C, h[PROMPT]) for h in req]
         conds = [NOT(sub(C, const_bits(T, 32), m, 32)[1])]
@@ -171,6 +207,12 @@ def _build(T: int) -> Any:
             none, one = NOT(OR(C, count[0], rest)), C.AND(count[0], NOT(rest))
             later = none ^ C.AND(decode, one)
             conds.append(later ^ C.AND(prefill, within ^ later))
+        if v2:
+            for q, (h, c) in enumerate(zip(req, cap)):
+                public = or_reduce(C, c)
+                same = and_reduce(C, [NOT(a ^ b) for a, b in zip(h[CAP], c)] + [NOT(b) for b in h[ROUND]])
+                conds.append(NOT(live[q] ^ public))
+                conds.append(NOT(C.AND(live[q], NOT(same))))
         return [and_reduce(C, conds)]
 
     return build
@@ -180,6 +222,12 @@ def _build(T: int) -> Any:
 def traced(T: int) -> Traced:
     """The unit's gate circuit at T slots."""
     return trace(_build(T), *_types(T))
+
+
+@functools.cache
+def traced_v2(T: int) -> Traced:
+    """`PouwLiveSlots_v2`'s gate circuit at T slots."""
+    return trace(_build(T, v2=True), *_types_v2(T))
 
 
 def _refuse(b: dict) -> str | None:
@@ -236,3 +284,49 @@ def program(T: int, S: int, prefix: str = "") -> Program:
 def query(T: int) -> dict[str, Any]:
     """The live Program's partition query: every instance of its template one unit, unit s round s's."""
     return template_instances_query([template(T)])
+
+
+PouwLiveSlotsV2 = CompositeDefinition(
+    "PouwLiveSlots", 2, ("T",), lambda S: (tuple(zip(PORTS_V2, _types_v2(S.T)[0])), _types_v2(S.T)[1]),
+    lambda B, S, *c: emit(traced_v2(S.T), *_types_v2(S.T), B, *c), conformance="protocol-defined", refuse=_refuse,
+    doc="PouwLiveSlots_v1 with each request leaf's public cap (`circuit.live`): T slot leaves, the T headers of round 0's "
+        "request table (index, round, slot, cap, prompt length), the public m, the public round s and T public caps (the "
+        "max_tokens the period's open commits for request q, 0 past them), to 1 iff v1's ok holds and every leaf is live "
+        "(prompt length nonzero) iff its public cap is nonzero, a live leaf's header having round 0 and cap its public "
+        "cap.")
+
+
+def template_v2(T: int) -> Any:
+    """The v2 live Program's one template: `PouwLiveSlots_v2` at T slots."""
+    return bind(PouwLiveSlotsV2, T=int(T))
+
+
+def _window_signature_v2(S: Any) -> tuple:
+    params, ret = _window_signature(S)
+    return (*params, (S.PREFIX + "caps", _types_v2(S.T)[0][4])), ret
+
+
+def _window_body_v2(B: Any, S: Any, slots: Any, requests: Any, m: Any, rounds: Any, caps: Any) -> Any:
+    unit = template_v2(S.T)
+    outs = [B.call(unit, slots[s * S.T:(s + 1) * S.T], requests, m[s], rounds[s], caps) for s in range(S.S)]
+    return coll_concat(_window_signature_v2(S)[1], outs)
+
+
+PouwLiveWindowV2 = CompositeDefinition(
+    "PouwLiveWindow", 2, ("T", "S", "PREFIX"), _window_signature_v2, _window_body_v2, register=False,
+    doc="A window's S rounds' v2 live units: round s's PouwLiveSlots_v2{T} on rows [s T, (s + 1) T) of PREFIX slots, the T "
+        "request headers PREFIX requests, row s of PREFIX m, row s of PREFIX round and the T public caps PREFIX caps; every "
+        "parameter named PREFIX and its role.")
+
+
+def program_v2(T: int, S: int, prefix: str = "") -> Program:
+    """The v2 live Program, credit's (`program` with each round's unit `PouwLiveSlots_v2` and the parameter ``caps``,
+    `live_reads.ROLES_V2`). Refused (ValueError) when T or S isn't a positive integer."""
+    if not all(isinstance(x, int) and not isinstance(x, bool) and x > 0 for x in (T, S)):
+        raise ValueError(f"the live Program's T and S are positive integers, not {T!r} and {S!r}")
+    return Program(bind(PouwLiveWindowV2, T=T, S=S, PREFIX=str(prefix)))
+
+
+def query_v2(T: int) -> dict[str, Any]:
+    """The v2 live Program's partition query: every instance of its template one unit, unit s round s's."""
+    return template_instances_query([template_v2(T)])

@@ -348,7 +348,18 @@ serves at a public fixed length, ignore_eos at each slot's public max_tokens, wh
 item) and the verifier checks against its own parameters, so W_use is public (Daniel, 19 Oct, ASK-39). PouwCheck refuses
 a row whose stop mode is not `fixed` (`window-form: eos-keyed-row`), a served length or max_tokens other than the
 verifier's (`window-form: length-mismatch`, `window-form: max-tokens`), and a window registered before the rule, with no
-`length` item (`window-form: no-fixed-length`), which is not of record (`window.length_problem`).
+`length` item (`window-form: no-fixed-length`), which is not of record (`window.length_problem`). A served H1 window's
+credit holds it the same way (`credit._length`, `PouwCheck.Credit.Internal.length`): its period's open, which the auditor
+signs before window 0's first coin (`--length`), commits each request's public max_tokens and stop `fixed`
+(`credit.committed_length`), and each step's served rows m_s, which its manifest rows fix under `calls_root` before the
+draw coin (`credit.served_rows`), are that length's schedule, every request admitted in round 0: at least one row a request in round 0, and in round s ≥ 1 one
+decode row for each request whose max_tokens is past s. A round serving more ran a request past its public max_tokens and
+one serving fewer stopped a request at an EOS-keyed done source (`length-mismatch`); a period with no fixed length
+credits nothing (`no-fixed-length`). Each round's live proof (`PouwLiveSlots_v2`, credit's `_live`) proves m_s, and its
+public port `cap` binds each request's hidden cap to its public max_tokens: credit opens it at the known `<prefix>caps`
+of the period's committed max_tokens, and the unit refuses a live request whose header's cap is another or whose round is
+not 0, and a leaf live without a public cap. So a request takes a decode row in round s only when s is below its own
+public max_tokens, and no prover can move a decode row from one request to another while keeping each round's count.
 
 **The window root** (port `entries`) is a frame-v3-sha512 tree of P entries (the public bound, 16 for served windows),
 registered before the draw. The calls come first, then exactly one filler, then empty entries up to P. Entry e is an

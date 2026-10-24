@@ -7,8 +7,9 @@ from typing import Any
 
 def _pouw_roots() -> list[Any]:
     """`PouwZyCheck_v1` at the smoke's 4 × 8 unit (32 `PouwZyDequant_v2` and `PouwZyCell_v2`, then 31 `PouwAndBit_v2`), and
-    `PouwH1TileZy_v1` over `PouwH1Tile_v1` and `PouwH1Tile_v3` at their smallest tile, one lane (4 × 8) at K = 64 on the s8
-    accumulator on bits (`h1tile`'s sidecar's), each the tile and that check. `PouwH1LaneZy_v1` over both at the smallest
+    `PouwH1TileZy_v1` over `PouwH1Tile_v1` and `PouwH1Tile_v3`, and over J10-R's `PouwH1Tile_v5` and `PouwH1Tile_v6` (whose
+    call and blocks it passes on), at their smallest tile, one lane (4 × 8) at K = 64 on the s8 accumulator on bits
+    (`h1tile`'s sidecar's), each the tile and that check. `PouwH1LaneZy_v1` over both at the smallest
     leaf of whole index bits, 8 × 16 (4 lanes, the low 2 bits of a 16-bit index): one lane's seed, 13 noise blocks and its
     key block, each counter picked by `PouwMuxBit_v2` over the index, its fx1 chain, z (v1's exact dots or v3's one-stream
     cells), its 32 record cells picked over the index, that check, the admit gate and the equality of its partials row (8
@@ -35,7 +36,7 @@ def _pouw_roots() -> list[Any]:
         return bind(d, EXACT=exact, R=r, C=c, PAIRS=tuple((i, j) for i in range(r) for j in range(c)))
 
     tiles = (H.PouwH1Tile, H.PouwH1Tile3)
-    return ([bind(Z.PouwZyCheck, R=4, C=8)] + [Z.unit(tile(d, 4, 8)) for d in tiles]
+    return ([bind(Z.PouwZyCheck, R=4, C=8)] + [Z.unit(tile(d, 4, 8)) for d in (*tiles, H.PouwH1Tile5, H.PouwH1Tile6)]
             + [Z.unit_chunks(tile(H.PouwH1Tile, 4, 8), 2)]
             + [bind(Z.PouwH1LaneZy, TILE=tile(d, 8, 16)) for d in tiles]
             + [bind(Z.PouwH1Combine, TILE=tile(H.PouwH1Tile, 8, 16))]

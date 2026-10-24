@@ -5,7 +5,7 @@ first coin.
     vy-challenger-gate reserve --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE]
     vy-challenger-gate open --session S --root R
     vy-challenger-gate period-open --name P --cap N --circuit SHA512 [--draw-k K] [--rows T] [--model M | --weights-root W]
-                                   [--circuit-files JSON] [--lane LANE] | period-close --name P
+                                   [--circuit-files JSON] [--length JSON] [--lane LANE] | period-close --name P
     vy-challenger-gate model-register --model M --circuit SHA512 --descriptor FILE --checkpoint DIR
     vy-challenger-gate model-key --model M --circuit SHA512 [--weights-root W]
     vy-challenger-gate certifier-rehearse --peer NAME --port PORT --minutes M [--tamper late|extra|drop|token]
@@ -73,7 +73,10 @@ first coin.
   verifier tree, is signed as `model` alone, its digest core's pin, `pouw/lean/check/models.json`, and refused when the
   pin lacks it; an open without either commits none), and with `--circuit-files JSON` each K's circuit file (`circuit_files`, `{"k<K>": SHA-512}`:
   the circuit file the auditor's lowering built for K's template, which PoUW's credit verifies each window's statements
-  on; an open without it commits none). Its windows are exactly the reserves (and one-step v2 opens) whose prover (`for`, else `by`) is its
+  on; an open without it commits none), and with `--length JSON` the fixed length its windows serve (`length`,
+  `{"max_tokens": [n, ...], "stop": "fixed"}`: each request's public max_tokens, served to that cap whatever it samples,
+  which PoUW's credit holds each window's served rows to; an open without it commits none, and credit counts none of
+  its windows). Its windows are exactly the reserves (and one-step v2 opens) whose prover (`for`, else `by`) is its
   lane between its open and its close, at most `cap` (the next reserve is refused); every one counts. The close is
   refused while one of them is reserved and unexpired or still runs, and lists each, in order, as {root, session,
   complete} (root null for a reserve never opened; complete when its end is in the ledger and complete), with `complete` true only when it lists at least one window and all are: an
@@ -425,10 +428,26 @@ def model_of(s: str) -> str:
     return s
 
 
+def length_of(s: str) -> dict:
+    """A period-open's fixed length (`--length`, written as `length`): ``{"max_tokens": [...], "stop": "fixed"}``, each
+    request's public max_tokens in admission order (1 to 2^16 requests, each 1 to 2^24) served to that cap whatever it
+    samples (ignore_eos), as PoUW's credit reads it (`committed_length`); or Refused."""
+    try:
+        v = json.loads(s)
+    except (ValueError, RecursionError):
+        v = None
+    m = v.get("max_tokens") if isinstance(v, dict) else None
+    if not (isinstance(v, dict) and sorted(v) == ["max_tokens", "stop"] and v["stop"] == "fixed" and type(m) is list
+            and 0 < len(m) <= 1 << 16 and all(type(n) is int and 1 <= n <= MAX_DRAW_K for n in m)):
+        raise Refused(f"--length {s[:200]!r}: each request's public max_tokens and the public-cap done source, a JSON "
+                      'object {"max_tokens": [n, ...], "stop": "fixed"} of 1 to 2^16 requests, each 1 to 2^24')
+    return v
+
+
 #: a period-open's optional fields, as the gate hands them to `period` (``FIELD=VALUE``) and its open records them; `model`
 #: and `weights_root` name a model registry entry, whose root and model the open signs (`models.resolve`)
 PERIOD_FIELDS = {"draw_k": draw_k_of, "rows": rows_of, "weights_root": weights_root_of, "circuit_files": circuit_files_of,
-                 "model": model_of}
+                 "model": model_of, "length": length_of}
 
 
 def field_text(v: Any) -> str:
@@ -1038,7 +1057,7 @@ def certifier_fetch(run: str, host: Host, *, witness: bool = False) -> bytes:
 USAGE = ("verbs: reserve --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE: vy-admin's] "
          "| open --session S --root R "
          "| period-open --name P --cap N --circuit SHA512 [--draw-k K] [--rows T] [--model M | --weights-root W] [--circuit-files JSON] "
-         "[--lane LANE: vy-admin's] "
+         "[--length JSON] [--lane LANE: vy-admin's] "
          "| period-close --name P "
          "(a lane's own gate key, or vy-admin) "
          "| model-register --model M --circuit SHA512 --descriptor FILE --checkpoint DIR (vy-admin's) "
@@ -1067,6 +1086,7 @@ def parse_period(verb: str, argv: list[str], *, lane: str | None) -> tuple[str, 
         p.add_argument("--weights-root", dest="weights_root", default=None)
         p.add_argument("--circuit-files", dest="circuit_files", default=None)
         p.add_argument("--model", dest="model", default=None)
+        p.add_argument("--length", dest="length", default=None)
 
     def refuse(why: object) -> None:
         raise Refused(f"{verb}: {why}; {' '.join(p.format_usage().split())}")
@@ -1282,7 +1302,8 @@ def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, a
     vy-admin's close of any lane's period): the signed entry, or Refused. A period's name is used once and a lane has one
     period open at a time; its open commits the most windows it may hold (`cap`), its circuit and, when given, its draw
     K (`draw_k`) and table rows (`rows`), its model (`models.opened`: the registry's weights' root and model for the circuit, or for a circuit
-    the registry has no entry of the model alone, from core's pin in `tree`) and each K's circuit file's SHA-512
+    the registry has no entry of the model alone, from core's pin in `tree`), its fixed length (`length`) and each K's
+    circuit file's SHA-512
     (`circuit_files`); it closes once none of its windows
     still runs, its close listing each window with its outcome."""
     if len(args) not in (range(6, 6 + len(PERIOD_FIELDS) + 1) if args[:1] == ["period-open"] else (4,)):

@@ -24,6 +24,7 @@ from verity.ml.circuits.types import Array, Record, Value
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import leaf_lanes as LL
+from verity.core.protocols.pouw import weights as W
 from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.pouw.circuit import h1zy as Z
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
@@ -51,8 +52,10 @@ def _tile_sig(S, row=None, record=None, out=HW.OUTPUTS):
              ("roots", Array(2, Array(4, V16)))), Record((out[0], Array(S.K // 2, BIT)), (out[1], BIT)))
 
 
-def _tile_body(B, S, a, b, zy, salt, position, roots, sig=_tile_sig):
+def _tile_body(B, S, a, b, zy, salt, position, roots, *j10r, sig=_tile_sig):
     x = B.call(XOR1, B.call(XOR1, _first(a[0]), _first(b[0])), B.call(XOR1, B.call(LOW1, position), B.call(LOW1, roots[0][0])))
+    for p in j10r:
+        x = B.call(XOR1, x, Coll(BIT, p.refs.slice(0, 1)))
     w = sig(S)[1].fields[0][1].leaves
     receipt = coll_concat(Array(w, BIT),
                           [B.call(FOLD1, _first(salt), B.call(XOR1, x, Coll(BIT, a[min(1, S.R - 1)].refs.slice(i, i + 1))))
@@ -70,6 +73,19 @@ TestTile = _test_tile("H1WindowTestTile")
 
 def unit(k: int, tile: tuple[int, int] = TILE):
     return bind(TestTile, K=k, R=tile[0], C=tile[1])
+
+
+def _tile_sig_j10r(S):
+    """The stand-in's under J10-R: its call and blocks (`h1window.J10R`, positions of 64 bits) after its roots."""
+    params, ret = _tile_sig(S)
+    return (*params, ("call", Array(64, BIT)), ("blocks", Array(2, Array(64, BIT)))), ret
+
+
+TestTileJ10r = _test_tile("H1WindowTestTileJ10r", _tile_sig_j10r)
+
+
+def unit_j10r(k: int, tile: tuple[int, int] = TILE):
+    return bind(TestTileJ10r, K=k, R=tile[0], C=tile[1])
 
 
 def _words(k: int) -> int:
@@ -95,8 +111,10 @@ def _expected(linears, calls, m, tile=TILE):
 
 
 def _reads(want, tile=TILE):
-    return [{**{f"a_k{k}[{i}]": (f"a/{k}", a0 + i) for i in range(tile[0])},
-             **{f"b_k{k}[{j}]": (f"b/{k}", b0 + j) for j in range(tile[1])},
+    """Each unit's `unit_reads`, written out from `_expected`: at a K of n = `weights.chunks` (K) chunks each A and B row
+    is n leaves, its chunk row i leaf n·row + i."""
+    return [{**{f"a_k{k}[{i}]": (f"a/{k}", W.chunks(k) * a0 + i) for i in range(W.chunks(k) * tile[0])},
+             **{f"b_k{k}[{j}]": (f"b/{k}", W.chunks(k) * b0 + j) for j in range(W.chunks(k) * tile[1])},
              "zy": ("zy", u), "salt": ("salt", 0), "position": ("position", u), "roots": ("roots", 0),
              "receipt": ("receipt", u), "ok": ("ok", u)}
             for u, (k, a0, b0) in enumerate(want)]
@@ -130,6 +148,36 @@ def test_a_mixed_k_window_with_shared_b_derives_exactly_each_calls_tiles():
     assert [HW.unit_reads(prog, tp, u) for u in range(tp.population)] == _reads(want)
     steps = [[_b0(HW.unit_reads(prog, tp, u)) for u in range(s * len(want) // 2, (s + 1) * len(want) // 2)] for s in (0, 1)]
     assert steps[0] == steps[1], "every step's units read the linears' one copy of B"
+
+
+def test_a_j10r_window_takes_each_units_call_and_blocks_and_its_public_row_holds_them():
+    """A window of J10-R units (their parameters ending in `h1window.J10R`) takes one row of ``call`` and one of
+    ``blocks`` a unit, and each unit reads its own row of each; its statement's public row is `PUBLIC_J10R`, and
+    `j10r_inputs` is each unit's call's first unit and `h1tile.j10r_blocks` of its tile (I, J) at the window's slot and
+    its K. Every K's unit is in one form: a window mixing J10-R's and today's is refused."""
+    from verity.core.protocols.pouw.circuit import h1tile as H
+    m = HW.slot(5, TILE)
+    prog = HW.program(LINEARS, CALLS, m, TILE, unit=unit_j10r)
+    tp = P.evaluate(prog, HW.query(prog))
+    assert HW.is_j10r(prog) and not HW.is_j10r(HW.program(LINEARS, CALLS, m, TILE, unit=unit))
+    assert [name for name, _t in prog.fn.signature()[0]] == list(HW.roles((32, 64), True))
+    assert [[n for n, _t in t.signature()[0]] for _k, t in prog.fn.bindings["TILES"]] == [
+        ["a_k32", "b_k32", *HW.SHARED_J10R], ["a_k64", "b_k64", *HW.SHARED_J10R]]
+    sig = dict(prog.fn.signature()[0])
+    assert (sig["call"].n, sig["blocks"].n, sig["blocks"].elem.leaves) == (tp.population, tp.population, 128)
+    base = _reads(_expected(LINEARS, CALLS, m))
+    assert [HW.unit_reads(prog, tp, u) for u in range(tp.population)] == [
+        {**r, "call": ("call", u), "blocks": ("blocks", u)} for u, r in enumerate(base)]
+    pub = HW.statement_rows(dict(prog.fn.bindings["TILES"])[32])[-1]
+    assert (pub[0], pub[2], pub[3]) == ("pub", 4 + 16 + 128 + 64 + 128, list(HW.PUBLIC_J10R))
+    calls, blocks = HW.j10r_inputs(prog)
+    k_of, want = {name: (k, n) for name, k, n in LINEARS}, []
+    for (lin, _blk), (u0, n) in zip(CALLS, HW.call_units(prog)):
+        k, nn = k_of[lin]
+        want += [(u0, H.j10r_blocks(m, k, TILE, t // (nn // C), t % (nn // C))) for t in range(n)]
+    assert list(zip(calls, blocks)) == want and len(set(blocks[:4])) == 4
+    with pytest.raises(ValueError, match="takes other"):
+        HW.program(LINEARS, CALLS, m, TILE, unit=lambda k: unit_j10r(k) if k == 32 else unit(k))
 
 
 def test_a_mixed_k_window_registers_in_one_read_each_k_under_its_own_ports():
@@ -558,6 +606,11 @@ def test_the_tile_is_a_parameter_and_each_k_binds_its_own_unit():
     assert [n for n, _t in smoke.signature()[0]] == list(HW.TILE_PARAMS)
     assert [n for n, _t in smoke.signature()[1].fields] == list(HW.OUTPUTS) and smoke.signature()[1].fields[1][1].leaves == 1
     assert HW.tile_unit(14336, (32, 32)).bindings["TILE"].bindings["EXACT"].bindings["K"] == 14336
+    from verity.core.protocols.pouw.circuit import h1tile as H
+    for d in (H.PouwH1Tile5, H.PouwH1Tile6):
+        j10r = HW.tile_unit(64, (4, 8), d)
+        assert [n for n, _t in j10r.signature()[0]] == list(HW.TILE_PARAMS_J10R)
+        assert j10r.signature()[0][:6] == smoke.signature()[0] and j10r.signature()[1] == smoke.signature()[1]
 
 
 @pytest.mark.slow
@@ -760,3 +813,97 @@ def test_a_windows_lanes_and_combine_are_derived_from_its_template_one_unit_each
     (_rows, words), = [s for v, s in HW._shapes(prog, 0, 1).items() if v == HW.table(prog, HW.RECEIPTS, 0)]
     assert words == 2 * LL.words(k) == 4 * (k // 32 + LL.n_digits(k // 32))
     assert 16 * words == sum(dict(Z.combine(t).signature()[0])["receipt"].leaf_widths())
+
+
+def _chunk_sig(S, out=HW.OUTPUTS):
+    """The stand-in tile's signature over chunk rows: n R and n C rows of K/n codes and their row's scale
+    (`h1zy.ROW` (K/n), n = `weights.chunks` (K)), as `h1zy.PouwH1TileZyChunks` reads them, and a 16-bit receipt."""
+    n = W.chunks(S.K)
+    row = Z.ROW(S.K // n)
+    return ((("a", Array(n * S.R, row)), ("b", Array(n * S.C, row)), ("zy", Z.RECORD(S.R, S.C)), ("salt", Array(4, BIT)),
+             ("position", V16), ("roots", Array(2, Array(4, V16)))), Record((out[0], Array(16, BIT)), (out[1], BIT)))
+
+
+ChunkTile = _test_tile("H1WindowTestChunkTile", sig=_chunk_sig)
+
+
+def chunk_unit(k: int, tile: tuple[int, int] = TILE):
+    return bind(ChunkTile, K=k, R=tile[0], C=tile[1])
+
+
+#: Llama 3 8B's contractions: o_proj and up_proj at the hidden 4096 (a row one leaf), down_proj at the intermediate
+#: 14336 (a row 4 chunk leaves of 3584 codes)
+LLAMA = (("o_proj", 4096, 16), ("up_proj", 4096, 8), ("down_proj", 14336, 8))
+LLAMA_CALLS = tuple((lin, s) for s in range(2) for lin in ("o_proj", "up_proj", "down_proj"))
+
+
+def test_a_llama_window_at_k_4096_and_14336_reads_each_14336_row_as_its_4_chunk_leaves():
+    """A window of K = 4096 and K = 14336 (Llama's mixed contractions): every a/14336 and b/14336 row is
+    `weights.chunks` (14336) = 4 leaves of `weights.leaf_words` (14336) = 1794 words, so those values hold 4 times their
+    rows, a unit reads its 4 R A and 4 C B chunk rows at leaf 4·row + i of them (`unit_reads`), of its step's A table
+    (`table_reads`) and at `place`'s 4·row bases, while K = 4096 keeps whole rows; at one and two steps each call's
+    ``--registered`` file reads what its v0 file did (`_v1_files`) and is the one `credit.registered_file` builds from the
+    descriptor alone, which reads the template's chunk rows (`credit.layout_of`, `shape_of`), and `credit.table_rows`
+    gives each A value, step A table and receipt table the rows the Program does."""
+    m = HW.slot(5, TILE)
+    prog = HW.program(LLAMA, LLAMA_CALLS, m, TILE, unit=chunk_unit)
+    tp = P.evaluate(prog, HW.query(prog))
+    want = _expected(LLAMA, LLAMA_CALLS, m)
+    sig = dict(prog.fn.signature()[0])
+    assert (W.chunks(4096), W.chunks(14336), W.leaf_words(4096), W.leaf_words(14336)) == (1, 4, 2050, 1794)
+    assert (sig["a/4096"].n, sig["b/4096"].n, sig["a/14336"].n, sig["b/14336"].n) == (2 * m, 24, 4 * 2 * m, 4 * 8)
+    assert sig["a/4096"].elem == Z.ROW(4096) and sig["a/14336"].elem == sig["b/14336"].elem == Z.ROW(3584)
+    assert tp.population == len(want) == 2 * (2 * 2 + 2 * 1 + 2 * 1)
+    assert [HW.unit_reads(prog, tp, u) for u in range(tp.population)] == _reads(want)
+    for steps in (1, 2):
+        for u, (k, a0, b0) in enumerate(want):
+            c, _t = HW.call_of(prog, u)
+            n, at, a = W.chunks(k), HW.step_of(prog, c, steps)[2], HW.table(prog, "a", c, steps)
+            base = at + a0 - LLAMA_CALLS[c][1] * m
+            got = HW.table_reads(prog, tp, u, steps)
+            assert {key: v for key, v in got.items() if key.startswith("a_k")} == {
+                f"a_k{k}[{i}]": (a, n * base + i) for i in range(n * R)}
+            assert HW.place(prog, u, steps)[LL.A] == (a, n * base)
+            assert HW.place(prog, u, steps)[LL.B] == (f"b/{k}", n * b0)
+    window, salt = "ab" * 64, "cd" * 64
+    raw = canonical_json({k: v for k, v in encode_program(prog).items() if k != "annotations"})
+    (lay, why), program, shape = Cr.layout_of(raw), hashlib.sha512(raw).hexdigest(), Cr.shape_of(raw)
+    assert why is None and lay["tile"] == list(TILE)
+    assert {k: (t["n"], t["a"], t["b"]) for k, t in shape["tiles"].items()} == {4096: (1, 2050, 2050),
+                                                                               14336: (4, 1794, 1794)}
+    for steps in (1, 2):
+        files = _v1_files(prog, tp, steps, window, salt)
+        roots, rows = {v: [r] for v, r in _roots(prog, steps).items()}, Cr.table_rows(lay, steps, "")
+        assert (rows["a/4096"], rows["a/14336"]) == (sig["a/4096"].n, sig["a/14336"].n)
+        for c, file in enumerate(files):
+            assert Cr.registered_file(program, lay, shape, c, roots, window, steps, salt) == (file, None), (steps, c)
+            assert all(rows[v] == n for v, (n, _w) in HW._shapes(prog, c, steps).items() if v in rows), (steps, c)
+            assert {f"a_k14336_{i}" for i in range(4 * R)} <= set(file["ports"]) or LLAMA_CALLS[c][0] != "down_proj"
+
+
+def test_at_a_chunked_k_the_program_wraps_the_zy_unit_and_refuses_whole_rows_and_a_leafs_whole_row_lanes():
+    """At K = 14336 `program` wraps the bare zy unit in `h1zy.PouwH1TileZyChunks` at 4 chunks (4 R and 4 C rows of
+    3584 codes) and leaves K = 4096's bare; it refuses a unit over whole rows there and a K `weights.chunks` refuses; and
+    a drawn leaf's lanes (`leaf_unit`, `leaf_reads`), which read whole rows, are refused at a chunked K: its lanes are the
+    chunk lanes."""
+    real = HW.tile_unit(14336, (32, 32))
+    wrapped = HW._chunked(14336, real)
+    assert wrapped.defn is Z.PouwH1TileZyChunks and wrapped.bindings["CHUNKS"] == 4 and wrapped.bindings["UNIT"] is real
+    assert [(t.n, t.elem) for _name, t in wrapped.signature()[0][:2]] == [(128, Z.ROW(3584))] * 2
+    assert HW._chunked(4096, (u := HW.tile_unit(4096, (32, 32)))) is u
+    m = HW.slot(5, TILE)
+    with pytest.raises(ValueError, match="4 chunk rows a row"):
+        HW.program(LLAMA, LLAMA_CALLS, m, TILE, unit=unit)
+    with pytest.raises(ValueError, match="no n splits it into chunks"):
+        HW.program((("x", 4100, 8),), (("x", 0),), m, TILE, unit=chunk_unit)
+    prog = HW.program(LLAMA, LLAMA_CALLS, m, TILE, unit=chunk_unit)
+    down = next(u for u in range(16) if LLAMA_CALLS[HW.call_of(prog, u)[0]][0] == "down_proj")
+    with pytest.raises(ValueError, match="the chunk lanes"):
+        HW.leaf_reads(prog, down, LL.LANE, 0, steps=2)
+
+    class Fake:
+        fn = type("Fn", (), {"bindings": {"TILES": ((14336, HW.template(14336, wrapped)),)}})()
+
+    assert HW._tile_of(Fake(), 14336) is real.bindings["TILE"]
+    with pytest.raises(ValueError, match="the chunk lanes"):
+        HW.leaf_unit(Fake(), 14336, LL.LANE)

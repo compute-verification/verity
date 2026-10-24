@@ -23,7 +23,8 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   at the A row's position and the weight row's at the weight row's (`Accounting.Served.DequantOf`: s_a with the A row, s_w
   registered).
 * **The unit** `PouwH1TileZy_v1{TILE}` is ``(a: R rows, b: C rows, zy, salt, position, roots) -> {receipt, ok}``: TILE, the
-  H1 tile (`h1tile.PouwH1Tile` v1 or v3 over the full grid), on the rows' codes gives z and the receipt; `PouwZyCheck_v1`
+  H1 tile (`h1tile.PouwH1Tile` v1 or v3 over the full grid; or J10-R's v5 or v6, `J10R_TILES`, whose ``call`` and
+  ``blocks`` the unit takes after ``roots``), on the rows' codes gives z and the receipt; `PouwZyCheck_v1`
   holds the record to them, ``ok`` 1 exactly when every cell's record z is z and its record y is `PouwZyDequant_v2` of z at
   its row's s_a and its column's s_w. Every cell is dequantized, a padded row's too: an empty slot's y is dq(0, +0, s_w),
   which is +0 only for a finite positive s_w (0x8000 for a negative one, 0x7FFF for an infinite or NaN one), so no cell's
@@ -220,6 +221,8 @@ def PouwZyCheck(B, S, zy, z, sa, sw):
 
 #: the tile units the record check takes: (a, b, salt, position, roots) -> {z, receipt}
 TILES = ("PouwH1Tile_v1", "PouwH1Tile_v3")
+#: the J10-R tile units the unit takes too: (a, b, salt, position, roots, call, blocks) -> {z, receipt}
+J10R_TILES = ("PouwH1Tile_v5", "PouwH1Tile_v6")
 
 
 def _tile(S: Any) -> tuple[int, int, int]:
@@ -227,10 +230,10 @@ def _tile(S: Any) -> tuple[int, int, int]:
     return a.n, b.n, a.elem.n
 
 
-def _refuse_tile(b: dict) -> str | None:
+def _refuse_tile(b: dict, tiles: tuple[str, ...] = TILES) -> str | None:
     t = b.get("TILE")
-    if getattr(getattr(t, "defn", None), "id", None) not in TILES:
-        return f"TILE is an H1 tile ({', '.join(TILES)}) bound to its full grid, not {getattr(t, 'id', t)!r}"
+    if getattr(getattr(t, "defn", None), "id", None) not in tiles:
+        return f"TILE is an H1 tile ({', '.join(tiles)}) bound to its full grid, not {getattr(t, 'id', t)!r}"
     r, c = t.bindings["R"], t.bindings["C"]
     if tuple(t.bindings["PAIRS"]) != tuple((i, j) for i in range(r) for j in range(c)):
         return f"TILE's z is its full {r} × {c} grid in row-major order, the record's cells"
@@ -248,9 +251,9 @@ def _rows(a: Coll, n: int, field: str) -> Coll:
     return Coll(Array(n, a[0].field(field).type), concat([a[i].field(field).refs for i in range(n)]))
 
 
-def _body(B: Any, S: Any, a: Coll, b: Coll, zy: Coll, salt: Coll, position: Coll, roots: Coll) -> Coll:
+def _body(B: Any, S: Any, a: Coll, b: Coll, zy: Coll, *public: Coll) -> Coll:
     r, c, _k = _tile(S)
-    out = B.call(S.TILE, _rows(a, r, "codes"), _rows(b, c, "codes"), salt, position, roots)
+    out = B.call(S.TILE, _rows(a, r, "codes"), _rows(b, c, "codes"), *public)
     ok = B.call(bind(PouwZyCheck, R=r, C=c), zy, out.field("z"), _rows(a, r, "scale"), _rows(b, c, "scale"))
     return Coll(_signature(S)[1], concat([out.field("receipt").refs, ok.refs]))
 
@@ -261,11 +264,12 @@ def _unit_ports(S: Any) -> Any:
 
 
 PouwH1TileZy = CompositeDefinition(
-    "PouwH1TileZy", 1, ("TILE",), _signature, _body, conformance="protocol-defined", refuse=_refuse_tile,
-    register=H.SG is not None, ports=_unit_ports,
+    "PouwH1TileZy", 1, ("TILE",), _signature, _body, conformance="protocol-defined",
+    refuse=lambda b: _refuse_tile(b, TILES + J10R_TILES), register=H.SG is not None, ports=_unit_ports,
     doc="The H1 tile with its z/y record checked (`circuit.h1zy`): TILE on the A and B rows' codes, the salt, position and "
-        "roots gives z and the receipt; the unit returns the receipt and ok, 1 exactly when the record's z is z and its y "
-        "is PouwZyDequant_v2 of z at each cell's row scale s_a and column scale s_w, each the f32 after its row's codes.")
+        "roots (a J10-R TILE's then its call and blocks) gives z and the receipt; the unit returns the receipt and ok, 1 "
+        "exactly when the record's z is z and its y is PouwZyDequant_v2 of z at each cell's row scale s_a and column scale "
+        "s_w, each the f32 after its row's codes.")
 
 
 def unit(tile: Any) -> Any:
@@ -1011,7 +1015,8 @@ def lane_chunk_reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]],
 
 __all__ = ["BF16", "CARRY", "CHUNK_ALIGN", "CHUNK_MAX", "F32", "LANE", "LEAST_K", "PUBLIC", "S32", "S8", "PouwAndBit",
            "PouwH1Combine", "PouwH1LaneZy", "PouwH1LaneZyChunk", "PouwH1TileZy", "PouwH1TileZyChunks", "PouwMuxBit",
-           "PouwZyCell", "PouwZyCheck", "PouwZyDequant", "PouwZyDequantWord", "RECORD", "ROW", "TILES", "carry_words",
+           "PouwZyCell", "PouwZyCheck", "PouwZyDequant", "PouwZyDequantWord", "RECORD", "ROW", "J10R_TILES", "TILES",
+           "carry_words",
            "check", "chunk_leaves", "chunk_words", "chunks", "chunks_reference", "combine", "combine_reference", "dequant",
            "lane", "lane_bits", "lane_cells", "lane_chunk", "lane_chunk_carries", "lane_chunk_reference", "lane_partial",
            "lane_reference", "lane_statements", "records", "reference", "statement_ports", "statement_rows", "unit",
