@@ -95,10 +95,11 @@ def num(x):
 
 
 def staged_units(st: dict | None) -> dict:
-    """What `rec_vstage.stage` printed of each unit it staged: its template, instances, rows, k_log and seconds."""
+    """What `rec_vstage.stage` printed of each unit it staged: its template, instances, rows, k_log, seconds and (the
+    algebra's parts) its lowering's seconds and circuit bytes."""
     if not isinstance(st, dict):
         return {}
-    keep = ("template", "instances", "unit_rows", "unit_log", "k_log", "stage_s")
+    keep = ("template", "instances", "unit_rows", "unit_log", "k_log", "stage_s", "build_s", "circuit_bytes")
     units = {}
     for name, u in (st.get("levels") or {}).items():
         units[name] = {k: u.get(k) for k in keep}
