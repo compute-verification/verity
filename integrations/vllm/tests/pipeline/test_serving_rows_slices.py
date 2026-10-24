@@ -170,9 +170,9 @@ class TokenIndex:
         return "model.embed_tokens.weight", lo, hi, (lo, hi)
 
 
-def token_row(tok: int, dt: str = "i64"):
+def token_row(tok: int, dt: str = "i64", unit: bool = True):
     """EmbeddingShard_v1{VS=5,H=4,START=2}'s row reading the sampler's token ``tok`` as its committed u64 word, its table a
-    registered weight, through the real `_slices`."""
+    registered weight, through the real `_slices`: as its four slice units, or (``unit`` false) as the whole row."""
     family = "EmbeddingShard_v1"
     _tok, table = operands(family, 3)
     y = np.asarray(evaluate_batch(defn(family), np.array([[4]], np.uint64), table.astype(np.uint64).reshape(1, -1))).reshape(-1)
@@ -183,13 +183,14 @@ def token_row(tok: int, dt: str = "i64"):
         def words(self, rid, step, op, member, lo, hi):
             return (np.array([tok], np.uint64) if member == "sampled_token_ids" else y.astype(np.uint16))[lo:hi], None
 
-    (m,) = SRW.members([descriptor_id(defn(family, unit=True))], [[("r0", TokenIndex(dt), r, d)]], [4])
-    return m, ("r0", TokenIndex(dt), r, d), Store(), (lambda _f, lo, hi: table[lo:hi]), y
+    x = ("r0", TokenIndex(dt), r, d)
+    (m,) = SRW.members([descriptor_id(defn(family, unit=True))], [[x]], [4]) if unit else SRW.members([r["spec"]], [[x]])
+    return m, x, Store(), (lambda _f, lo, hi: table[lo:hi]), y
 
 
 def test_the_samplers_i64_token_is_read_by_value_into_the_vocabulary_shards_32_bit_tok():
     """Token ids are 32-bit words: the shard's ``tok`` is the sampler's committed i64's low word, so every unit reads the token's
-    value, low half first, and computes the row's output column."""
+    value, low half first, and computes the row's output column; the whole row, a packed row template, reads it the same way."""
     m, x, store, weights, y = token_row(4)
     data, _entries = SRW.read(m, [x], store, weights)
     assert data["rows"]["in0"].tolist() == [[4, 0]] * 4
@@ -198,11 +199,16 @@ def test_the_samplers_i64_token_is_read_by_value_into_the_vocabulary_shards_32_b
     bits = SRW.template(T).packed
     ref = evaluate_batch(defn("EmbeddingShard_v1", unit=True), *(leaves(data["rows"][f"in{g}"], b) for g, b in enumerate(bits[:-1])))
     assert np.asarray(ref).reshape(-1).tolist() == y.tolist()
+    m, x, store, weights, y = token_row(4, unit=False)
+    assert SRW.template(m.template).layout == "row" and SRW.template(m.template).packed[0] == 32
+    data, _entries = SRW.read(m, [x], store, weights)
+    assert data["rows"]["in0"].tolist() == [[4, 0]] and data["outs"]["out.out"].reshape(-1).tolist() == y.tolist()
 
 
+@pytest.mark.parametrize("unit", [True, False])
 @pytest.mark.parametrize(("tok", "shown"), [(2**32 + 4, 2**32 + 4), (2**64 - 1, -1)])
-def test_a_token_whose_high_word_is_not_zero_is_refused(tok, shown):
-    m, x, store, weights, _y = token_row(tok)
+def test_a_token_whose_high_word_is_not_zero_is_refused(tok, shown, unit):
+    m, x, store, weights, _y = token_row(tok, unit=unit)
     with pytest.raises(ValueError, match=rf"member sampled_token_ids of runner.sampler: element 0 of a uint64 member is {shown}, not in "
                                          rf"a 32-bit port's \[0, 2\^32\)"):
         SRW.read(m, [x], store, weights)
