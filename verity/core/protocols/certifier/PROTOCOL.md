@@ -1530,6 +1530,10 @@ salted record digest, so neither verifies as the other.
 verifier's read of it: every field but the root is the one the schedule and the link-window give, and the certificate
 verifies over the head under the warden's key in the session.
 
+**Ordinals count from 0.** A cell's stream field is its connection's ordinal, and so are `connection_rows`' keys: the
+k-th connection to reach the warden is ordinal k, from 0, as IO-TIE's stream and advice v0 count requests. The active
+certifier's `Requests` counts from 1, so its stream s is the warden's ordinal s − 1.
+
 **How a unit reads it.** The verifier's own `--registered` port (`port`, `verity/registered-reads/v1`) names the value
 `<link>/<direction>/<window>`, the root, N leaves of B/2 words of 16 bits, the domain, the row format and `reads`, the
 row each unit of the population opens. The statement is a shared-row file whose port's table rows are those rows under
