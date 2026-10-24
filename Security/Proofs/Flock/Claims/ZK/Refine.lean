@@ -602,7 +602,8 @@ def LinkRoundEq (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.r
     L.link x w (ν, t) [(m₀, ρ₀)] = S.swMsgAt x (S.wt x w) (vs x w ν) t []
 
 /-- **The `Finish` is the session's**: after every history of `refK x` openings whose rounds all passed, whose
-openings pass and whose last coins the frame takes, `Final.encode` of the record and proof files the firewall builds
+openings pass, whose last coins the frame takes and whose messages are the deferred release's own (`ZkServer.OwnHist`,
+the only histories it meets), `Final.encode` of the record and proof files the firewall builds
 itself is the session's switched last message at the coins the openings open. A live run's `Finish` is one the
 firewall's own `Finish` takes (`LeanRelease.finStops_of_live`), so it says nothing where that stops. A named hypothesis,
 one of the transport's trusts: the proof files in `files` are the session's Lean finish's (`Flock.Firewall.Finish`,
@@ -615,6 +616,7 @@ def FinalRoundEq (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.
     ops.length = refK x → L.toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = true →
     ((allOk (S.refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval H).1 = true →
     L.refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) = false →
+    L.toSrv.OwnHist L.fillOf wk x w (ν, t) κ ((m₀, ρ₀) :: ops) →
     FlockDeploy.Final.encode ⟨x, (L.files x w (ν, t) ((m₀, ρ₀) :: ops)).1, (L.files x w (ν, t) ((m₀, ρ₀) :: ops)).2⟩ =
       S.swMsgAt x (S.wt x w) (vs x w ν) t (ops.map fun p => S.decOf p.2)
 
@@ -625,7 +627,7 @@ theorem ownRefine_withStops (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) �
     (x : Msg) (w : Flock.Wit) (hn : n x = refK x + 2) (hlast : L.last x = refK x + 1) (hR : StopsAt S Rf L H x)
     (hO : OpeningsRefused S L H x) (hLk : LinkRoundEq S vs L x w) (hF : FinalRoundEq S vs L H wk x w) :
     L.OwnRefine H ((S.withStops Rf L.stop).swP vs).prover n wk x w := by
-  intro ρ κ h hk hc
+  intro ρ κ h hk hc hown
   obtain ⟨ν, t⟩ := ρ
   cases h with
   | nil => exact Kind.noConfusion (hk : Kind.own = Kind.recomputed)
@@ -660,7 +662,7 @@ theorem ownRefine_withStops (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) �
             · simp only [List.length_cons, hn] at hc
               omega
             · exact hc
-          exact (hF ν t κ m₀ ρ₀ ops hf hlv hok hr).symm
+          exact (hF ν t κ m₀ ρ₀ ops hf hlv hok hr hown).symm
         · simp only [List.length_cons, hlast] at hif
           have h0 : ops = [] := List.eq_nil_of_length_eq_zero (by omega)
           subst h0
