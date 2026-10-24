@@ -28,6 +28,61 @@ verity bench verifier_cost store RUN                     # its results.json or p
 verity bench verifier_cost plot ART --to PNG             # from the store
 ~~~
 
+`nci_glm.sh` runs `nci-check --policy` on GLM-5.3's registered Programs: the eight per-rank workload Programs of the B1
+Build (vLLM, TP8 on 8×H200, a 256-token prompt and 32 sampled tokens), each checked against the Build's pinned
+digest. A registered Program's root is its inputs and one Call, the request, so the only division `NciCheck.Desc` can
+check on it is that one IU; and its weights are bound per run (`Input<w>_v1`), so θ can't hold them
+(`theta-not-registered`). `nci_glm.py` (its docstring has the cases) derives Programs with the same computed gates and
+wires: rank 0's with its weights bound at registration (θ), one IU per rank; and the eight ranks' requests joined into
+one Definition the node's root calls once, each collective reading the other ranks' partials where it read its
+`peers_*` inputs, one IU per node session. The node's session is checked at the demo's policy, Γ = 2^44 gates and
+α = 2^-25 bits per gate (`GAMMA`, `ALPHA`), and at its four neighbours. Finer divisions of a whole session (per step,
+per layer, per Call) are out of `NciCheck.Desc`'s reach at this size: it holds each root node's reads as pieces of
+gates, about one per leaf on GLM-5.3, so only a Call's internal reads stay small. Three of rank 0's Definitions (the
+router, the fused all-reduce and norm, an FP8 linear layer) go per Call and in all through `--policy`,
+`--policy --unrolled` and the Python reference, which must agree. `$OUT/results.json` (`verity/nci-glm/v1`) has a row
+per check: the Program's SHA-512, bytes, root nodes and gates, the division, the verdict summarised, wall seconds and
+peak RSS; `$OUT/ius/` has each verdict's IUs. A rank's check takes about 21 minutes and 7 GB, the node's (a 2.2 GB
+descriptor) about 2.6 hours and 50 GB, and the whole run about 3 hours (r20261023-064803-3874).
+
+~~~sh
+research data fetch art:32c488d8ca7bb12f80b38e45ec5a97d95312bcb62974a4d776da0b58d1adec35 --to B1 \
+  --path 'build/rank*/build_workload/descriptor.json.gz'    # the Build; its meta's rank_workload_digests are the pins
+research run --project verity --on vy-nebius-cpu-2 --source . --cwd clone --mem-gb 420 --mem-wait 3600 --timeout 6h \
+  --send glm53-b1-pins.json $(for r in 0 1 2 3 4 5 6 7; do echo --send glm53-b1-rank$r.descriptor.json.gz; done) \
+  -- bash benchmarks/verifier_cost/nci_glm.sh --jobs 10 [--case registered|rank|slice|node ...]
+~~~
+
+`--case registered-node` checks the node Program that `verity-vllm predict node` registered, as registered.
+- **Inputs.** Its descriptor, sent as `glm53-b1-node.descriptor.json.gz`. Its registration, from `predict
+  node-registration`'s `--out`: `trusted.json`, `provenance.json` and `registration.json`, sent as
+  `glm53-b1-node.<file>`. Without the registration, only the `--policy` checks run.
+- **Before any check**, it holds the descriptor to what it should be:
+  - its SHA-512 is `--node-digest`;
+  - θ is its root's `RegisteredInput` nodes, and its `annotations.theta` where it has them;
+  - given the registration, it is the program of the record that the trusted input names as the run's own, and
+    there is one provenance entry per θ node, each citing the log's first record.
+- **The IU.** One IU holds every root node that isn't an input, which is the whole node's session (the demo's
+  division).
+- **The checks**, in the order they start (`NODE_POINTS`):
+  - given the registration, the check of record (`nci-check INSTANCE TRUSTED`, `NciCheck.Baseline`), at A: the
+    policy check, then θ's provenance against the registration log;
+  - `--policy` at A (Γ = 2^44, α = 2^-25);
+  - at C (α = 2^-28) with Γ = 2^44 and with Γ = 2^52;
+  - at A's four neighbours.
+- **Each `nci-check`** decodes the whole descriptor (about 50 GB resident for a whole-node session).
+  `--check-mem-gb` caps each one's address space, which runs about 15 GB above its resident peak, so a check that
+  outgrows its share of the run's `--mem-gb` fails rather than the node. A dry run on a root `Desc` can't read ends
+  there.
+- **The root must be inputs and one Call.** `NciCheck.Desc` can't hold a session laid out as the root's own nodes
+  (`root_calls` in `results.json` counts them), for the reason above.
+
+~~~sh
+research run --project verity --on vy-nebius-cpu-4 --source . --cwd clone --mem-gb 120 --timeout 16h \
+  $(for f in descriptor.json.gz trusted.json provenance.json registration.json; do echo --send glm53-b1-node.$f; done) \
+  -- bash benchmarks/verifier_cost/nci_glm.sh --case registered-node --node-digest HEX --jobs 2
+~~~
+
 `flock_read.sh K...` measures C-Flock's Lean verifier (`flock-verify verify --zk`) on #3002's H1 tile unit, step by step:
 `flock_read.py` builds the 4×8 tile's statement circuit at each contraction K with one instance (`h1unit.Shape` in `benchmarks/pouw/h1_prove/h1unit.py`), and `flock_read/Main.lean`, built in a scratch Lake package against the checkout's verifier, times the
 file's read, its SHA-512, `Zk.maskLogOf`, the decode and line split, each section's `Net.parse` (its tokenizer,
@@ -38,6 +93,19 @@ phases-K.jsonl (one row per step: milliseconds, RSS and peak RSS in MB).
 ~~~sh
 research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool proofs --cwd clone -- \
   bash benchmarks/verifier_cost/flock_read.sh 256 1024
+~~~
+
+`registration.sh N...` times the one-stage verifier's R3 against the window's ports: `registration.py` writes, per N, a
+valid v1 audit with N more ports (`test_difftest._many_ports`, a MoE window's shape; TPEVAL's w13 window at chunk cap 64
+is 1,536 members, about 12k ports), and `registration/Main.lean`, built in a scratch Lake package against the checkout's
+verifier, times `Registration.check` (one canonical key per root, `Registration.portIndex`) and `Registration.checkRef`
+(R3 as first written, quadratic in the ports; `check_eq_checkRef` proves them equal) on the parsed input, and fails where
+their codes differ. `checkRef` runs up to `REF_MAX` ports (default 12288). `$OUT` gets registration.jsonl, one row per N
+and function (ports, roots, milliseconds, peak RSS, codes).
+
+~~~sh
+research run --as proofs --project verity --on vy-nebius-cpu-2 --source . --pool proofs --cwd clone -- \
+  bash benchmarks/verifier_cost/registration.sh 1024 4096 12288 49152
 ~~~
 
 `flock_tmpl.sh K...` is the same unit in `flock-ir-tmpl/v2` (`Flock/Tmpl.lean`, PRF-133): `flock_read.py --circuit-only`
@@ -56,6 +124,11 @@ research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool
 `Sparse.ofRows`), the logical `Tmpl.unroll`, and `Net.parse` on the circuit's flat unit. Per K, `$OUT` gets unit-K.tmpl,
 unroll-K.jsonl (every PHASE line, with its step) and each step's `/usr/bin/time -v`.
 
+`qcall.sh CONFIG X...` measures `Q_call` v1 (`Flock.Qcall`, an open walk in `tests/test_verifier_cost.py`) on one Serve_v1
+config's word-level descriptor: `flock-verify qcall-program` at each X, with the output's SHA-256 so two commits' outputs
+compare, a `perf` profile at the first X, and the one-stage `partition` piece under `Q_call` v1 at X = 16. Its header has
+the command.
+
 `results.json` (`verity/verifier-cost/v1`) has one row per config and IR: the description's bytes, Definitions and body
 nodes, the unrolled circuit's gates, and per check its wall seconds (the best of `--repeat`), peak RSS and the verdict.
 `partition.json` (`verity/verifier-cost-partition/v1`) has one row per config, IR, shape and query: the description's
@@ -64,5 +137,5 @@ seconds, peak RSS and the population (null where the verifier refuses the query)
 an `evidence/v1` record naming the run and its commit; it runs where the store's keys are (a VM), since a node's shell
 has none.
 
-Nothing here is a served Program: `on_bits`'s output is this benchmark's construction, and nothing outside this directory
-reads it.
+Apart from `nci_glm`'s inputs, nothing here is a served Program: `on_bits`'s output and `nci_glm`'s derived Programs are
+this benchmark's constructions, and nothing outside this directory reads them.
