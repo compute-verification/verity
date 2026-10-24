@@ -139,12 +139,12 @@ The auditor-host runs of record: infra's gate rehearsals on vy-challenger-1 (INF
 against vllm's Llama-3.1-8B INT8 on vy-nebius-1:18080 (10 minutes, 40 requests, 16 tokens, 11 link-windows), each
 tarball's 21 files matching its `end.json`. Report run r20261024-081948-55d8 (a3e7433969, vy-nebius-cpu-1's network slot n1):
 
-| gate run | strategy | gate | N2 | proved (Lean) |
-|---|---|---|---|---|
-| c20261024T080200Z-0c53 | honest, planned | accepted | accepted, 11/11 | both ends, every link-window accepted |
-| c20261024T080333Z-9cf5 | late | refused | refused at windows 0-1 | not proved (late isn't an `n2_zk` member) |
-| c20261024T080506Z-7590 | extra | refused | refused at window 0 | egress, refused at window 0 |
-| c20261024T080639Z-3c48 | honest, served | accepted | accepted, 11/11 | not proved (`NetworkServedCounts_v1`) |
+| gate run | strategy | gate | N2 | proved (Lean) | decided by proof (N2-ZK) |
+|---|---|---|---|---|---|
+| c20261024T080200Z-0c53 | honest, planned | accepted | accepted, 11/11 | both ends, every link-window accepted | accepted, 11/11 (5300) |
+| c20261024T080333Z-9cf5 | late | refused | refused at windows 0-1 | not proved (late isn't an `n2_zk` member) | refused at windows 0-1 (5300) |
+| c20261024T080506Z-7590 | extra | refused | refused at window 0 | egress, refused at window 0 | refused at window 0 (5300) |
+| c20261024T080639Z-3c48 | honest, served | accepted | accepted, 11/11 | not proved (`NetworkServedCounts_v1`) | accepted, 11/11; its tampered head refused at window 0 (62bd) |
 
 The first three are one report, OK, with the tampered head made from 0c53 refused at window 0, proved; 3c48 is its own
 report (`out/served`), since a report takes one honest run, and is NOT OK only for having no late or extra run.
@@ -153,12 +153,19 @@ The same four against vllm's Llama-3.2-1B on vy-nebius-1:18082 (INF-204, pinned 
 tokens, 11 link-windows), report run r20261024-101818-8c94 (c46c32c2cb, vy-nebius-2), likewise OK, its served report
 likewise NOT OK only for having no late or extra run:
 
-| gate run | strategy | gate | N2 | proved (Lean) |
-|---|---|---|---|---|
-| c20261024T090216Z-e03e | honest, planned | accepted | accepted, 11/11 | both ends, every link-window accepted |
-| c20261024T090349Z-a90a | late | refused | refused at window 0 | not proved (late isn't an `n2_zk` member) |
-| c20261024T090523Z-eb39 | extra | refused | refused at window 0 | egress, refused at window 0 |
-| c20261024T090656Z-0ce6 | honest, served | accepted | accepted, 11/11 | not proved (`NetworkServedCounts_v1`) |
+| gate run | strategy | gate | N2 | proved (Lean) | decided by proof (N2-ZK) |
+|---|---|---|---|---|---|
+| c20261024T090216Z-e03e | honest, planned | accepted | accepted, 11/11 | both ends, every link-window accepted | accepted, 11/11 (9e19) |
+| c20261024T090349Z-a90a | late | refused | refused at window 0 | not proved (late isn't an `n2_zk` member) | refused at window 0 (1a5b) |
+| c20261024T090523Z-eb39 | extra | refused | refused at window 0 | egress, refused at window 0 | refused at window 0 (9e19) |
+| c20261024T090656Z-0ce6 | honest, served | accepted | accepted, 11/11 | not proved (`NetworkServedCounts_v1`) | accepted, 11/11; its tampered head refused at window 0 (fc11) |
+
+"Decided by proof" is N2-ZK's runs of #3597's registered units (`NetworkLinkWindow_v5` planned,
+`NetworkServedLinkWindow_v4` served) on the same gate runs: each link-window's verdict is the one the verifier's own
+Lean `verify --zk` accepted for the registered Program, with the certificates checked in the clear. 8B:
+r20261024-091126-5300 (planned), r20261024-091913-62bd (served). 1B: r20261024-093930-1a5b (planned; its late), its
+rerun r20261024-110735-9e19 (honest and extra), r20261024-093950-fc11 (served). The report reads them once #3597
+lands, whose per-round summary `e2e` then adopts in place of the row adapter's.
 
 An honest run is required, because the tampered head is made from it. Two runs of the same strategy are refused.
 
