@@ -16,9 +16,12 @@ header on every frame, then the sender's bytes at a fixed place, then the same b
 frames against that template, and nothing else of a frame is free). On egress a frame is one event (`event`): the
 `DATA` header on stream `CANONICAL_STREAM` with length `EVENT_BYTES`, `EVENT_HEAD`, the base64 of at most
 `TOKEN_BYTES` bytes padded with NUL to `EVENT_TEXT` characters, and `EVENT_TAIL`, so a token is one frame, or one per
-`TOKEN_BYTES` of it (`events`). On ingress a request is its length (u32be) and its bytes, cut into `DATA` frames of
-B − 9 bytes on `CANONICAL_STREAM`, the last zero-filled (`request_frames`): it ends where its length says, so every
-frame's header is the same. `event_placement` and `request_placement` are those templates' places.
+`TOKEN_BYTES` of it (`events`). An id-carrying event (`token_event`) is the same template, the same `EVENT_BYTES`: its
+bytes are one sampled token's id (u32be), its request's tag (`request_tag`, `TAG_BYTES`) and up to `TOKEN_TEXT_BYTES`
+bytes of text, so its first 16 base64 characters are the id and the tag. On ingress a request is its length (u32be)
+and its bytes, cut into `DATA` frames of B − 9 bytes on `CANONICAL_STREAM`, the last zero-filled (`request_frames`): it
+ends where its length says, so every frame's header is the same. `event_placement` and `request_placement` are those
+templates' places.
 
 **Ticks.** Each grid's ticker sleeps once a tick, to the tick's boundary (`origin` + t·τ). The tickers that wake
 together then run their ticks in one step of the event loop, in `TICK_ORDER`, ingress first (`_run_due`): each reads the
@@ -321,6 +324,39 @@ def event_data(body: bytes) -> bytes | None:
     except binascii.Error:
         return None
     return data if len(data) <= TOKEN_BYTES and event(data) == body else None
+
+
+TOKEN_ID = struct.Struct(">I")
+TAG_BYTES = 8
+TOKEN_TEXT_BYTES = TOKEN_BYTES - TOKEN_ID.size - TAG_BYTES
+#: the token id of an id-carrying event that carries only text left over at its response's end
+NO_TOKEN = 0xFFFF_FFFF
+REQUEST_TAG = "verity-network-certifier/request-tag/v1"
+
+
+def request_tag(request_id: str) -> bytes:
+    """A request's tag in its response's id-carrying events: the first `TAG_BYTES` of the tagged SHA-512 of its id
+    (the request body's `user`), so a frame names its request whatever order the responses interleave in."""
+    return tagged_sha512(REQUEST_TAG, request_id.encode())[:TAG_BYTES]
+
+
+def token_event(token_id: int, tag: bytes, text: bytes = b"") -> bytes:
+    """The id-carrying canonical event: `event` of the token id (u32be), the request's tag and at most
+    `TOKEN_TEXT_BYTES` bytes of text."""
+    if not (type(token_id) is int and 0 <= token_id <= NO_TOKEN) or len(tag) != TAG_BYTES:
+        raise ValueError(f"a token event carries a u32 token id and a {TAG_BYTES}-byte tag")
+    if len(text) > TOKEN_TEXT_BYTES:
+        raise ValueError(f"a token event carries at most {TOKEN_TEXT_BYTES} bytes of text, not {len(text)}")
+    return event(TOKEN_ID.pack(token_id) + tag + text)
+
+
+def token_event_data(body: bytes) -> tuple[int, bytes, bytes] | None:
+    """(token id, tag, text) of an id-carrying canonical event, or None for bytes that aren't one."""
+    data = event_data(body)
+    n = TOKEN_ID.size + TAG_BYTES
+    if data is None or len(data) < n:
+        return None
+    return TOKEN_ID.unpack_from(data)[0], data[TOKEN_ID.size : n], data[n:]
 
 
 def event_placement(frame_bytes: int) -> tuple[int, int, bytes, bytes]:
