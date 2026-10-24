@@ -1123,11 +1123,13 @@ cursor. So:
   log shifter that computes only the A entries it returns: about Q + A·bitlen(Q) muxes an element bit, where moving
   the whole queue would take Q·bitlen(A).
 
-**The rows'** layouts are `replay_chain`'s (`row_fields`, `window_fields`). The state row's first twelve fields are
-ReplayStep_v1's state input and next-state output, bit for bit; it adds the heads `qh` and `dh` and `steps`, the
-window's executed steps still to come. The window row is the queue (at most Q) and the decisions ``dec`` (at most D)
-with ``left``. In every row the valid elements of each group are a prefix and the rest are zero bits, and `decode`
-and `decode_window` refuse any other row.
+**The rows'** layouts are `replay_chain`'s (`row_fields`, `window_fields`). The state row's state group is
+ReplayStep_v1's state input and next-state output, bit for bit, at the shape's AS and EW (`Shape`'s two statics):
+with EW, `run_pfx R×EW` after `run_comp`; with AS, `run_fin R×1 | run_cap R×1 | wait_cap W×1` after `free`. It adds
+the heads `qh` and `dh` and `steps`, the window's executed steps still to come. The window row is the queue (at most
+Q) and the decisions ``dec`` (at most D) with ``left``. With AS an arrival carries its cap (O = max_tokens): `q_cap
+Q×1` after `q_O`, as the step's `arr_cap` and the warden slots' `a_cap`. In every row the valid elements of each
+group are a prefix and the rest are zero bits, and `decode` and `decode_window` refuse any other row.
 
 **A window** is the state rows S_0 … S_{P+1}, with P the public cap on its steps, and two window rows: the last
 window's and its own. Unit 0, `ReplayLoad`, reads state rows 0 and 1 and both window rows. Unit u ≥ 1 is step u:
@@ -1540,12 +1542,9 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
 
 **Open.**
 - *The charge's pieces* (composition item 3, "The encoder in the circuit").
-  - ENC-CODE: lowering an integer (the window's counts, each order entry's position and rank, and each shortfall) to
-    its `Binned` symbols in the book's public tables, about a bin's mux over the table and a 17-bit uniform range. Not
-    built, so the circuit charges the decisions only.
-- `replay_chain`'s rows don't yet carry `ReplayStep_v1`'s walk entries (EW) or AS: the state group needs
-  `run_pfx R×EW` after `run_comp` and, with AS, `run_fin R×1 | run_cap R×1 | wait_cap W×1` after `free`; an arrival
-  carries its cap (O = max_tokens), so the queue needs `q_cap Q×1` after `q_O`.
+  - ENC-CODE: the counting form and `code_v1`'s model (`ArithCountStep_v1`, `ArithCountFinish_v1` and `BookKT_v1`,
+    #3660). Lowering an integer (the window's counts, each order entry and each shortfall) to its `Binned` symbols in
+    the book's public tables isn't built, so the circuit charges the decisions only.
 - `ReplayStep_v1` takes the prefix layer (each hit, its evictable blocks, each slot's returns) as witness it bounds.
   The hits are fixed: `CacheStep_v1` derives them while the no-eviction bound holds, and past it each is the longest
   cached prefix less v1's sent, charged shortfall. The evictable counts and the returns stay bounded witness. A
@@ -1979,8 +1978,10 @@ and seven lemmas, and three more proved lemmas:
   - the pruned sort sorts every 0-1 input up to 12 events, `comparators` counts it, and `size` is the unit's count,
     pinned at L = 240 and at the 60 s window;
 - **`test_network_certifier_replay_chain.py`:** the replay's state chain:
-  - both rows' layouts are pinned field by field. The state row's state part is ReplayStep_v1's fields and bits, and
-    the front is its `arr_*` and `bits` (once `replay_step` is in the tree). The empty rows and random rows round-trip.
+  - both rows' layouts are pinned field by field, sync and with AS and EW. At each shape (8eb1's engine class at
+    AS = 1 among them) the state row's state part is ReplayStep_v1's `_state_fields` and its bits are `arguments`',
+    its circuit's next-state bits are the row's state of the next state it decodes, and the front is its `arr_*` and
+    `bits`. The empty rows and random rows round-trip, and an entry with the wrong fields for the shape is refused.
     `decode` refuses a gap, an empty slot with a bit set, a head past Q or D, steps past P, nonzero padding, a short row
     and a non-bit, and `decode_window` refuses a gap, an empty slot with a bit set, a decision past `left`, `left` past
     D, nonzero padding and a short row;
@@ -1996,7 +1997,10 @@ and seven lemmas, and three more proved lemmas:
   - a two-window session runs through all three parts, with every unit's reads opened under the window's roots.
     `check_chain` accepts it, and refuses a short window, the empty state or window under a fresh salt or another
     program's, the carried state or window under a fresh salt, and another row of the last window;
-  - `size` is the parts' AND counts, which circuit-check pins at the tests' shape and at the sync KV-pressure trace's;
+  - with AS and EW the load writes the arrivals' caps into `q_cap`, the step's arrivals carry them, and the next
+    state's `fin`, `cap` and `pfx` are the next row's, each refusal the circuit's too;
+  - `size` is the parts' AND counts, which circuit-check pins at the tests' shape, at the sync KV-pressure trace's,
+    and at 8eb1's engine class at AS = 1 with and without walk entries;
 - **`test_network_certifier_compile_slice.py`:** the corpus slice's scan is the replay's (every hit 0), and its
   negatives, a made-up table and tokens among them, fail exactly `check`'s checks; the circuit is `check` on the
   demonstration slice with real hits, a cleared enable and a forged carry among the negatives; `size` is pinned;
