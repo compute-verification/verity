@@ -1,0 +1,16 @@
+{
+  "rule": "P13 (the public modules type-check)",
+  "entries": [
+    {"file": "verity_vllm/engine/hooks.py", "kind": "no-any-return", "symbol": "Hooks.append", "detail": "Returning Any from function declared to return \"Appended\""},
+    {"file": "verity_vllm/engine/hooks.py", "kind": "no-any-return", "symbol": "Hooks.patch", "detail": "Returning Any from function declared to return \"Patch\""},
+    {"file": "verity_vllm/engine/hooks.py", "kind": "no-any-return", "symbol": "Hooks.service", "detail": "Returning Any from function declared to return \"Service\""},
+    {"file": "verity_vllm/engine/hooks.py", "kind": "no-any-return", "symbol": "Hooks.wrap", "detail": "Returning Any from function declared to return \"Patch\""},
+    {"file": "verity_vllm/engine/spec.py", "kind": "no-any-return", "symbol": "EngineSpec.digest", "detail": "Returning Any from function declared to return \"str\""},
+    {"file": "verity_vllm/engine/spec.py", "kind": "no-any-return", "symbol": "from_mapping", "detail": "Returning Any from function declared to return \"EngineSpec\""},
+    {"file": "verity_vllm/engine/spec.py", "kind": "no-any-return", "symbol": "load", "detail": "Returning Any from function declared to return \"EngineSpec\""},
+    {"file": "verity_vllm/llm.py", "kind": "assignment", "symbol": "LLM._install", "detail": "Incompatible types in assignment (expression has type \"Composition\", variable has type \"None\")"},
+    {"file": "verity_vllm/llm.py", "kind": "attr-defined", "symbol": "LLM.__init__", "detail": "Module \"verity_vllm.engine.vllm_adapter\" does not explicitly export attribute \"build_engine\""},
+    {"file": "verity_vllm/llm.py", "kind": "attr-defined", "symbol": "LLM.__init__", "detail": "Module \"verity_vllm.engine.vllm_adapter\" does not explicitly export attribute \"execution_label_of\""},
+    {"file": "verity_vllm/llm.py", "kind": "no-any-return", "symbol": "LLM.generate", "detail": "Returning Any from function declared to return \"list[Any]\""}
+  ]
+}
