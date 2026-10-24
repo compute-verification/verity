@@ -35,8 +35,10 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
 - **Parallel proof work runs against fixed statements**: the final theorem's statement and each open piece's statement
   are on the branch before any worker starts. What isn't closed by the deadline is a gap list of exact lemma names, each
   with a size and an owner, with no `sorry` outside them.
-- **Definitions a guarantee reads go in `Definitions/` or `Models/`**, not in a proof file (`reads` in the lock lists
-  where they are; keep it short).
+- **Definitions a guarantee or property reads go in `Definitions/` or `Models/`**, not in a proof file (`reads` in the
+  lock lists where they are; keep it short). The Lean check refuses a statement that reads the proofs tree, and a
+  definitions or properties module that imports it (`trees` in `Security/lean-audit.json`); a lemma's statement over
+  proof-only definitions is not a guarantee.
 - **Build in your own checkout.** Two agents never share a writable `.lake`. A second Lean task on one machine gets its
   own worktree, its dependencies copied (never symlinked) from a checkout with the same manifest and toolchain:
   `mkdir -p WT/PKG/.lake && cp -a --reflink=auto PKG/.lake/packages WT/PKG/.lake/`. A reviewer or red-team subagent is
