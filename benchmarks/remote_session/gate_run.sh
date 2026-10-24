@@ -16,8 +16,8 @@
 #   4. fire        gate.sh fire on GATE_ON: once the prover holds its GPUs, probe again, period-open (circuit of
 #                  COMMIT's remote_bandwidth tree, MODEL), the host's run, period-close, auditor.sh (the line of record,
 #                  its auditor_line.json and credit.md in the fire run's out/).
-#   whatif         gate_whatif.sh on WHATIF_ON over the fire run's artifact (the host run in it, its ledger and pins) and
-#                  the prover's.
+#   whatif         gate_whatif.sh at origin/main's head on WHATIF_ON over the fire run's artifact (the host run in it,
+#                  its ledger and pins) and the prover's; RUN_ART, SUB, AUDITOR_ART and PROVER_ART name others.
 #
 # COMMIT is the commit vy-auditor-1's verifier is pinned at (default origin/main's head; the probe refuses another and
 # names the host's); the steps run from a worktree of it, with this file's gate.sh and checkpoint.sh sent beside. GATE_KEY
@@ -36,7 +36,7 @@ PERIOD=${1:?usage: gate_run.sh [--dry-run] PERIOD | gate_run.sh whatif PERIOD}
 PIN=${PIN:-27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc}
 GATE_ON=${GATE_ON:-vy-nebius-1}
 PROVER_NODE=${PROVER_NODE:-vy-nebius-2}
-WHATIF_ON=${WHATIF_ON:-vy-nebius-cpu-2}
+WHATIF_ON=${WHATIF_ON:-vy-nebius-cpu-4}
 ROLE=${ROLE:-QWEN25_32B_BF16} ENGINES=${ENGINES:-8} PORT=${PORT:-7951}
 PLAN=${PLAN:-honest,skip:0.0625,honest,skip:0.0625}
 VERIFIER_SSH=${VERIFIER_SSH:--o StrictHostKeyChecking=accept-new -i /home/research/.ssh/vy-auditor-tunnel-prover prover@81.85.1.145}
@@ -45,17 +45,18 @@ mkdir -p "$(dirname "$STATE")"
 touch "$STATE"
 # shellcheck disable=SC1090
 . "$STATE"
-if [ -z "${COMMIT:-}" ]; then
-  git -C "$ROOT" fetch -q origin main || exit 3
-  COMMIT=$(git -C "$ROOT" rev-parse origin/main)
-fi
+git -C "$ROOT" fetch -q origin main || exit 3
+MAIN=$(git -C "$ROOT" rev-parse origin/main)
+COMMIT=${COMMIT:-$MAIN}
+TREE=$COMMIT
+[ "$VERB" = whatif ] && TREE=$MAIN
 W=$(mktemp -d)
 trap 'git -C "$ROOT" worktree remove --force "$W" > /dev/null 2>&1; rm -rf "$W"' EXIT
-git -C "$ROOT" worktree add -q --detach "$W" "$COMMIT" || exit 3
+git -C "$ROOT" worktree add -q --detach "$W" "$TREE" || exit 3
 read -r REPO REV < <(python3 -c 'import json, sys
 e = json.load(open(sys.argv[1]))[sys.argv[2]]
 print(e["repo"], e["revision"])' "$W/verity/core/protocols/pouw/lean/check/models.json" "$ROLE") \
-  || { echo "core's pin at $COMMIT has no role $ROLE"; exit 3; }
+  || { echo "core's pin at $TREE has no role $ROLE"; exit 3; }
 SNAP=/workspace/hf/hub/models--${REPO//\//--}/snapshots/$REV
 echo "period $PERIOD, COMMIT $COMMIT, $ROLE at $SNAP on $PROVER_NODE, gate key on $GATE_ON${DRY:+ (dry run)}"
 
