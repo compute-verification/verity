@@ -37,11 +37,11 @@ verifier); the code is what the verifier of record establishes, which `n2` reads
   advised link, `LinkWindows.advised_check`: the egress head's counts the release of the advice's frames, the ingress
   head's the request frames the advice needs; ``.view`` when the advice is malformed, doesn't cover the window or its
   requests aren't the certified ingress's (the tie, IoTieRequest's verdict, `advised.IoTieVerdict`, from the
-  verifier's own tie source), which refuses every window), ``IoTieRequest`` (IO-TIE's ingress tie, a unit at
-  selection All over one ingress link-window, `io_request.reference`: the warden's ingress cells open under their root
-  and the cut from the window's carry-in ends the requests the verifier's statement from the advice names, each with
-  its prompt length, in its request frames, leaving its carry-out; its verdict on every window, under the advice's
-  digest, is the tie N2's advised view needs),
+  verifier's own tie source), which refuses every window), ``IoTieRequest`` (IO-TIE's ingress tie, a unit a bucket
+  row of the warden's ingress link-window at selection All, `io_request.reference`: each lane's cells, read from its
+  carry-in, are its connection's pads and canonical id-request cells, leaving its carry-out, on the verifier's lanes
+  from the advice's prompt lengths and the warden's release; its verdict on every window, under the advice's digest
+  and with the release giving `received`, is the tie N2's advised view needs),
   ``IoTieWindow.{cells_root,port,content}`` (IO-TIE's I/O tie, a unit at selection All over one egress link-window,
   `io_tie.reference_parts`: the warden's cells open under their root, the Commit's port rows of sampled ids open at
   each bucket's steps under the Commit's root, and every cell is the verifier's map's, computed from advice v0 and
@@ -70,12 +70,12 @@ negative the tie reads refused by its part); and
 `stand_ins`, what the tie takes for what the run doesn't keep (`TIE_STAND_INS`). It exits 0 when every run has a
 verdict and none is `ok` false, else 1.
 
-**The ingress tie on a fake upstream** (`advice_suite` with a frame size): the ingress cells a certifier certifies of
-the advice's requests, CERT-VARLEN's id requests at that frame size (each from its record, `--ids` as serve-openai
-writes it: prompt ids, user and what it brought), released as the honest heads count them and committed under fake
-salts (`certified_ingress`). Each advice negative is the verifier's statements from its advice over those cells
-(`request_tie`), whose verdict is the tie source's for `N2_LINK` (`n2_advice`). Without a frame size, the tie is the
-stand-in on the prompt lengths.
+**The ingress tie on a fake upstream** (`advice_suite` with a frame size): the warden's own ingress of the advice's
+requests, id requests at that cell size (each from its record, `--ids` as serve-openai writes it: prompt ids, user and
+what it brought), each window's arriving whole so their request cells are the honest `received`'s
+(`certified_ingress`), under the warden's framing (`link_framing`). Each advice negative is IoTieRequest's reference
+on every bucket row on the verifier's lanes from its advice and the warden's release (`request_tie`), whose verdict is
+the tie source's for `N2_LINK` (`n2_advice`). Without a frame size, the tie is the stand-in on the prompt lengths.
 
 `Negative.waits` names the interfaces a negative waits on; one with none runs today. `table` renders the registry.
 """
@@ -84,6 +84,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import importlib
+import itertools
 import json
 import shutil
 import sys
@@ -104,9 +105,10 @@ import certifier_serve as cs  # noqa: E402
 from verity.core.protocols.certifier import audit as host_audit, head_check as HC  # noqa: E402
 from verity.core.protocols.certifier.active import (CANONICAL_STREAM, DATA, HEADER, ID_NAME_BYTES,  # noqa: E402
                                                      compact_finish_violations, compact_record_data, decode_frame,
-                                                     encode_frame, id_event_data, id_request, id_request_frames)
+                                                     encode_frame, id_event_data, id_request)
 from verity.core.protocols.certifier.certificate import (CertifiedRecord, Direction, frames_root,  # noqa: E402
                                                           real_frames)
+from verity.core.protocols.certifier import tie_service as TS, warden as W  # noqa: E402
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet  # noqa: E402
 from verity.core.protocols.certifier.service import LinkWindows  # noqa: E402
 
@@ -741,9 +743,10 @@ def io_request_module():
 
 
 def link_framing(frame_bytes: int, longest: int) -> tuple[int, ...]:
-    """The link's public framing at `frame_bytes`-byte frames (`advised.AdvisedProfile.request_frames`): entry n − 1
-    the frames CERT-VARLEN's id request of an n-token prompt takes, for prompts of 1 to `longest` tokens."""
-    return tuple(id_request_frames(n, frame_bytes) for n in range(1, max(1, longest) + 1))
+    """The link's public framing at `frame_bytes`-byte cells (`advised.AdvisedProfile.request_frames`): entry n − 1
+    the request cells the warden cuts an id request of an n-token prompt into (`tie_service.framing`, the framing the
+    ingress tie holds the profile to), for prompts of 1 to `longest` tokens."""
+    return TS.framing(frame_bytes, max(1, longest))
 
 
 def read_requests(path: Path) -> dict[str, dict]:
@@ -754,8 +757,9 @@ def read_requests(path: Path) -> dict[str, dict]:
 
 
 def id_requests(advice, records: dict[str, dict] | None, frame_bytes: int, model: str = "") -> list[bytes]:
-    """The id requests (CERT-VARLEN's `active.id_request` at `frame_bytes`-byte frames) of the advice's requests in
-    its order, the ingress a certifier certified: each from its record (`read_requests`: its prompt ids, user, and the
+    """The id requests (`active.id_request` at `frame_bytes`-byte cells and offset 0, as the warden's cells carry
+    them) of the advice's requests in its order, the ingress the warden certified: each from its record
+    (`read_requests`: its prompt ids, user, and the
     max_tokens, temperature, top_p and seed it brought, a seed it brought none of 0, id requests' default), or, for a
     request without one, a prompt of its length of id 0 under its own id. Raises NotApplicable for a record whose
     prompt isn't the advice's length or that no id request carries."""
@@ -774,51 +778,64 @@ def id_requests(advice, records: dict[str, dict] | None, frame_bytes: int, model
                       "temperature": got.get("temperature", 0.0), "top_p": got.get("top_p", 1.0),
                       "seed": got.get("seed", 0)}
         try:
-            out.append(id_request(model=model, frame_bytes=frame_bytes, **fields))
+            out.append(id_request(model=model, frame_bytes=frame_bytes, offset=0, **fields))
         except ValueError as err:
             raise NotApplicable(f"request {q.id} isn't an id request: {err}") from None
     return out
 
 
 class Ingress(NamedTuple):
-    """A link's certified ingress on a fake upstream, as IoTieRequest reads it: its shape (`io_request.Shape`), each
-    window's cells and their salts (witness), and the warden's registration of each window, (root, domain id)."""
+    """A link's ingress through the warden's own ingress on a fake upstream, as IoTieRequest reads it: its shape
+    (`io_request.Shape`), each session bucket's row (witness, the warden's registered row), each connection's release
+    (`io_request.Release`) and T, the buckets a window."""
 
     shape: Any
-    opened: tuple[tuple[tuple[bytes, ...], tuple[bytes, ...]], ...]
-    registered: tuple[tuple[bytes, bytes], ...]
+    rows: tuple[tuple[bytes, ...], ...]
+    releases: tuple[Any, ...]
+    T: int
 
 
-def certified_ingress(Q, requests: list[bytes], counts: list[int], *, T: int, frame_bytes: int,
-                      seed: bytes = b"negatives") -> Ingress:
-    """The ingress a certifier certifies of `requests` (id requests, in arrival order) released `counts[b]` request
-    frames in session bucket b, T buckets a window of R cells, R the most a bucket releases, no own frame: each
-    window's cells (`io_request.windows_of`), committed under fake salts (`io_request.instance`)."""
-    shape = Q.Shape(frame_bytes, T, max([1, *counts]), 0)
-    none = Q.RequestView(Q.Carry(0, 0, 0), (), 0, Q.Carry(0, 0, 0))
-    insts = [Q.instance(shape, cells, none, w, seed) for w, cells in enumerate(Q.windows_of(shape, requests, counts))]
-    return Ingress(shape, tuple((i.cells, i.salts) for i in insts), tuple((i.root, i.domain) for i in insts))
+def certified_ingress(Q, requests: list[bytes], received: list[int], *, T: int, frame_bytes: int) -> Ingress:
+    """The warden's own ingress (`io_request.serve`) of `requests` (id requests at offset 0, in arrival order) at
+    `frame_bytes`-byte cells, T ≥ 2 buckets a window, `len(received)` windows: each request in the window its first
+    cell falls in when the windows take `received`'s request cells in order (the warden's cut), the window's k-th
+    arriving whole at its bucket k mod (T − 1), on a lane of its own and r the most cells a request takes, so all its
+    cells are in the bucket after. A request whose cells straddle two windows' `received` puts them all in the first,
+    which the tie refuses."""
+    if T < 2:
+        raise NotApplicable(f"the warden's ingress releases a request the bucket after it arrives: T = {T} < 2")
+    cells = [len(W.cells(r, frame_bytes, 1)) // frame_bytes for r in requests]
+    ends, at, k, arrivals = list(itertools.accumulate(received)), 0, defaultdict(int), []
+    for c in cells:
+        w = next((w for w, e in enumerate(ends) if at < e), len(ends) - 1)
+        arrivals.append(w * T + k[w] % (T - 1))
+        k[w], at = k[w] + 1, at + c
+    lanes = max([1, *(sum(a <= t <= a + 1 for a in arrivals) for t in range(len(received) * T))])
+    params = W.WardenParams(cell_bytes=frame_bytes, slots=max([1, *cells]), lanes=lanes, window=T, delay=1)
+    link = Q.serve(params, requests, arrivals, [len(r) for r in requests], buckets=len(received) * T)
+    return Ingress(Q.Shape(frame_bytes, lanes, params.slots), tuple(tuple(r) for r in link.rows),
+                   tuple(link.releases), T)
 
 
 def request_tie(Q, cells: Ingress, link) -> tuple[bool, ...]:
-    """IoTieRequest's verdict on each ingress window of `link` (`advised.LinkAdvice`): its reference on the certified
-    `cells` against the verifier's statement of the window from the link's advice (`io_request.statements`: the
-    advice's prompt lengths in order, `received`, and the warden's registration, `io_request.Registration` on
-    `N2_LINK` with `n2_registrations`' stand-in digest, the one the tie names, and the certified root and domain), the
-    statements chained from window 0; every window refused where the advice can't be stated (its requests' frames
-    aren't the windows' total) or the statements don't chain. The verifier of record takes the verdict from
-    IoTieRequest proofs it verified; this is their reference in the clear."""
-    refused = (False,) * len(link.received)
-    regs = [Q.Registration(N2_LINK, bytes.fromhex(d), root, domain)
-            for d, (root, domain) in zip(n2_registrations(len(cells.registered)), cells.registered)]
+    """IoTieRequest's verdict on each ingress window of `link` (`advised.LinkAdvice`): its reference on every bucket
+    row of the window against the verifier's lanes of the bucket (`io_request.lanes`: the advice's prompt lengths in
+    its order and the warden's release); every window refused where the release isn't the warden's schedule for the
+    advice's requests or doesn't put `received`'s request cells in each window (`tie_service.IngressTie.tie`). The
+    verifier of record takes the verdict from IoTieRequest proofs it verified; this is their reference in the
+    clear."""
+    refused, T = (False,) * len(link.received), cells.T
+    lens = [q.prompt_len for q in link.advice.requests]
+    if len(link.received) * T != len(cells.rows):
+        return refused
     try:
-        stmts = Q.statements(cells.shape, [q.prompt_len for q in link.advice.requests], link.received, regs)
+        lanes = [Q.lanes(cells.shape, lens, cells.releases, t) for t in range(len(cells.rows))]
     except ValueError:
         return refused
-    if not Q.chained(stmts):
+    if TS.window_cells(cells.releases, T) != {w: c for w, c in enumerate(link.received) if c}:
         return refused
-    return tuple(bool(Q.reference(cells.shape, Q.Instance(c, salts, s.root, s.domain, s.view, s.window)))
-                 for s, (c, salts) in zip(stmts, cells.opened, strict=True))
+    return tuple(all(Q.reference(cells.shape, Q.Instance(cells.rows[t], lanes[t])) for t in range(w * T, (w + 1) * T))
+                 for w in range(len(link.received)))
 
 
 def n2_advice(advice, request_frames, received: list[int], certified=None, cells: Ingress | None = None):
@@ -897,9 +914,9 @@ def advice_suite(advice, *, T: int, R: int, syncs, request_frames, received: lis
     round-trips through I1's codec, its bits, and N2-ADVICE's codes (`advised_codes`, tied to the certified ingress,
     `n2_advice`) on the heads an honest run of the advice certifies (`honest_heads`, under the link's framing
     `request_frames` with each window's `received` and declared sync; Σ_sync by default the declared syncs' deltas and
-    rhos, `RIN` their largest ingress count). The tie: with `frame_bytes`, whose id requests' framing `request_frames`
-    must be (`link_framing`), IoTieRequest's reference (`request_tie`) on the ingress cells of the advice's id requests
-    (`id_requests`, from `records` and `model`) released as the honest heads count them (`certified_ingress`), each
+    rhos, `RIN` their largest ingress count). The tie: with `frame_bytes`, whose warden's framing `request_frames` must
+    be (`link_framing`), IoTieRequest's reference (`request_tie`) on the warden's ingress of the advice's id requests
+    (`id_requests`, from `records` and `model`), each window's the honest `received`'s (`certified_ingress`), each
     row with its verdict by window (`request_tie`) and ``IoTieRequest`` among its codes when it refuses; else the
     stand-in on the prompt lengths. `untied`: N2-ADVICE's codes under a tie the prover states (`stated`), what N2
     refuses without IoTieRequest. `ok`: the codes are exactly the checks the suite reads among the ones it names, its
@@ -925,7 +942,8 @@ def advice_suite(advice, *, T: int, R: int, syncs, request_frames, received: lis
             for name, n in NEGATIVES.items() if n.tampers == "advice"}
     RIN = RIN or max(1, *(c for i, _ in heads for c in i))
     cells = None if Q is None else certified_ingress(Q, id_requests(advice, records, frame_bytes, model),
-                                                     [c for i, _ in heads for c in i], T=T, frame_bytes=frame_bytes)
+                                                     link_received(advice, request_frames, received), T=T,
+                                                     frame_bytes=frame_bytes)
     read = {ADVISED, f"{ADVISED}.view"} | ({REQUEST_TIE} if cells is not None else set())
 
     def judged(b, certified=None) -> tuple[dict, Any]:

@@ -215,7 +215,7 @@ def test_redteam_phase6_split_is_refused(tmp_path):
     lanes refuse every window and `advised.ends` refuses the link."""
     pl = (40, 5)
     served = Q.serve(PARAMS, _requests(pl), (0, 0), (600, 10 ** 6), buckets=2 * PARAMS.window)
-    received = tuple(TS._window_cells(served.releases, PARAMS.window).get(w, 0) for w in range(2))
+    received = tuple(TS.window_cells(served.releases, PARAMS.window).get(w, 0) for w in range(2))
     assert [r.cells for r in served.releases] == [(0, 1, 1), (0, 1)] and received == (3, 0)
     honest, split = _advice(pl, received), _advice(pl[::-1], received)
     run = Run(tmp_path / "honest", served=served)

@@ -190,7 +190,7 @@ def _sha512(obj: Any) -> str:
     return hashlib.sha512(canonical_json(obj)).hexdigest()
 
 
-def _window_cells(releases: Sequence[Q.Release], T: int) -> dict[int, int]:
+def window_cells(releases: Sequence[Q.Release], T: int) -> dict[int, int]:
     """Each window's request cells under the release, buckets of T, where there are any."""
     out: dict[int, int] = {}
     for rel in releases:
@@ -471,7 +471,7 @@ class IngressTie:
         framed = profile.own == 0 and \
             all(k <= len(frames) and frames[k - 1] == request_cells(k, B) for k in set(lens))
         released = all(self.lanes(advice, releases, w) is not None for w in range(n)) and \
-            _window_cells(releases, self.T) == {w: c for w, c in enumerate(advice.received) if c}
+            window_cells(releases, self.T) == {w: c for w, c in enumerate(advice.received) if c}
         outcomes = {r["registration"]: r for r in stream.records}
         log, ok = stream.log, []
         for w in range(n):
@@ -520,4 +520,4 @@ class Ties:
 
 
 __all__ = ["Delivered", "IngressTie", "OUTPUTS", "PORTS", "PUBLIC", "REGISTERED", "ROWS", "Ties", "VALUE", "VERIFIER",
-           "WITNESS", "framing", "gate", "prompt_lens", "request_cells"]
+           "WITNESS", "framing", "gate", "prompt_lens", "request_cells", "window_cells"]
