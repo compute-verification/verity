@@ -2,7 +2,7 @@
 to references into them, and what v0 cannot compile is refused by name.
 
 The advice here is I1's draft field names on plain namespaces (`Advice(requests, steps)`, `Row(request, kind, start, n,
-cache_hit, preempted)`, each request's `prompt_len` and `sampling`), until I1's dataclasses land.
+cache_hit, preempted)`, each request's `prompt_len`, `output_len` and `sampling`), until I1's dataclasses land.
 """
 from __future__ import annotations
 
@@ -122,6 +122,47 @@ def test_a_steps_preempted_set_is_refused():
     advice.steps[1].preempted = [0]
     with pytest.raises(Unexpressible, match=r"step 1: preempted requests \[0\]"):
         compile_steps(_registered(), advice)
+
+
+def test_the_row_past_a_requests_last_kept_output_is_discarded():
+    """Request 0 kept 3 outputs (its prefill's and two decodes'), and async scheduling ran one row past them, at step 3: the
+    request's Program holds its live rows only."""
+    reg = _registered()
+    advice = _advice([(8, GREEDY)], [[_row(0, 0, 8)], [_row(0, 8, 1)], [_row(0, 9, 1)], [_row(0, 10, 1)]])
+    advice.requests[0].output_len = 3
+    c = compile_steps(reg, advice)
+    d = build_program(Phi.from_json({**reg.phi.to_json(), "sampling": {"kind": "greedy"}}), "request", LP=8, T=2).digest
+    assert (c.requests[0].digest, c.requests[0].T, c.workload.requests[0].cap) == (d, 2, 3)
+    assert c.steps[3] == [] and c.discarded == [(3, 0, 10, 1)] and c.summary()["discarded"] == [[3, 0, 10, 1]]
+    advice.requests[0].output_len = 4
+    c = compile_steps(reg, advice)
+    assert (c.requests[0].T, c.discarded, len(c.steps[3])) == (3, [], 1)
+    advice.requests[0].output_len = 2
+    with pytest.raises(Unexpressible, match="request 0: 4 rows for 2 kept outputs"):
+        compile_steps(reg, advice)
+
+
+def test_partial_refuses_request_by_request():
+    """A measurement over served traffic: request 1's prefix-cache hit, request 2's preemption and request 3's top_k refuse those
+    requests by name, their rows leave the steps, and request 0 compiles as it would alone."""
+    hit = NS(**{**vars(_row(1, 4, 4)), "cache_hit": 4})
+    resumed = NS(**{**vars(_row(2, 0, 9)), "preempted": True})
+    advice = _advice([(8, GREEDY), (8, GREEDY), (8, GREEDY), (5, {**STOCH, "top_k": 50})], [
+        [_row(0, 0, 8), hit, _row(2, 0, 8)],
+        [_row(0, 8, 1), _row(1, 8, 1), _row(2, 8, 1), _row(3, 0, 5)],
+        [_row(0, 9, 1), _row(1, 9, 1), _row(3, 5, 1)],
+        [_row(0, 10, 1), resumed],
+    ])
+    reg = _registered()
+    with pytest.raises(Unexpressible, match="step 3: request 2 preempted"):
+        compile_steps(reg, advice)
+    c = compile_steps(reg, advice, partial=True)
+    assert sorted(c.refused) == [1, 2, 3]
+    assert "prefix-cache hit of 4" in c.refused[1] and "step 3: request 2 preempted" in c.refused[2] and "top_k=50" in c.refused[3]
+    assert [u is not None for u in c.requests] == [True, False, False, False]
+    alone = compile_steps(reg, _advice([(8, GREEDY)], [[_row(0, 0, 8)], [_row(0, 8, 1)], [_row(0, 9, 1)], [_row(0, 10, 1)]]))
+    assert c.steps == alone.steps and c.programs.keys() == alone.programs.keys()
+    assert sorted(c.summary()["refused"]) == ["1", "2", "3"]
 
 
 def test_a_target_without_batch_invariance_is_refused():
