@@ -7,9 +7,9 @@ The statements of PoUS's analysis that are math rather than claims: reductions o
 pebbling and number theory, numeric certificates, the continuous audit's completeness (`ContinuousComplete`), and the
 refuted N10 (`InvExPostFactoTwoLayer`) beside its refutation, and Track A's `M1Meets`, a `Meets` in model M1 that
 is no claim about PoUS's scheme. Each is proved as `Pous.SecurityProofs.X` (`Security/Proofs/Pous.lean`) except
-`A2LemmaAM1`, `A5RabinGcd`, `A7Params` and `M1Meets`, which are open (`Security/Proofs/Pous/Targets.lean`), and
-`InvExPostFactoTwoLayer`, which is false. They keep their names in `Pous.Guarantees`, beside the frozen statements of
-`Security/Models/Pous/Guarantees.lean`. "Pinned as drafted" means the binders and conclusion are the draft's, verbatim.
+`A2LemmaAM1`, `A5RabinGcd`, `A7Params` and `M1Meets`, which are open, and `InvExPostFactoTwoLayer`, which is false.
+They keep their names in `Pous.Guarantees`, beside the frozen statements of `Security/Models/Pous/Guarantees.lean`.
+"Pinned as drafted" means the binders and conclusion are the draft's, verbatim.
 
 This module states and proves nothing else, and imports no proof: `grade.sh` grades `KFloor` and `Theorem1ii` (its
 controls) and the four open statements against it, and a submission may import it.
