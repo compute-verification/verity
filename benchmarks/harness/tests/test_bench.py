@@ -323,6 +323,29 @@ def test_the_bandwidth_spec_runs_memory_accountings_arms_with_receipts_on_and_th
         assert (root / source).is_file(), source
 
 
+def test_the_served_bandwidth_spec_is_the_bandwidth_spec_with_compiled_stock_beside_its_graph_path():
+    from verity_bench.vllm import runner
+
+    graph, served_spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth"), resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served")
+    assert served_spec.arms == (*graph.arms, "stock-fp8@compiled")
+    assert served_spec.arm_settings["stock-fp8@compiled"].control == "none"
+    assert replace(graph.preset, id=served_spec.preset.id) == served_spec.preset
+    same = dict(id=served_spec.id, arms=served_spec.arms, arm_settings=served_spec.arm_settings, preset=served_spec.preset)
+    assert replace(graph, **same) == served_spec
+
+    stock, compiled = resolve_arms("stock-fp8,stock-fp8@compiled", (), served_spec.arm_settings)
+    assert compiled.control is None and compiled.execution == "compiled"
+    built = []
+    for arm in (stock, compiled):
+        preset, eager = runner.arm_execution(arm, served_spec.preset, served_spec.eager)
+        built.append(runner.engine_args(preset, arm.precision, resident=False, eager=eager))
+    assert built[0]["compilation_config"] == {"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY",
+                                              "cudagraph_capture_sizes": [1, 8, 32, 128]}
+    assert "compilation_config" not in built[1] and built[1]["execution"] == "compiled"
+    assert not built[0]["enforce_eager"] and not built[1]["enforce_eager"]
+    assert {b["kv_cache_memory_bytes"] for b in built} == {60129542144}
+
+
 def test_a_queued_point_records_its_identity_as_the_key_param_resume_matches():
     from verity_bench.tool import VLLM_BENCH_POINT
 
