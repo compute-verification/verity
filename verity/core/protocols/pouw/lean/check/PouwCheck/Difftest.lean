@@ -1,5 +1,6 @@
 import Difftest
 import PouwCheck.Check
+import PouwCheck.Chunks
 import PouwCheck.Opening
 import PouwCheck.Pass
 import PouwCheck.Rounds
@@ -29,6 +30,8 @@ harness (`verity/core/difftest`):
   host's published pins log, `main` the auditor's own first-parent list of main, `window` the window's identity,
   `session` the challenger's session's files, `roots` the round roots, `openings` the round coins, each as
   `core_check.rounds` takes it): null, or `{"refused": [code, why]}`.
+* `chunks` (a natural number K, not an object): `PouwCheck.Chunks.chunks` (`weights.chunks`) as `{"chunks": n}`, or
+  `{"refused": why}`; any other input is a reject.
 -/
 
 namespace PouwCheck.Difftest
@@ -103,8 +106,15 @@ def registeredOf (j : Json) : Except String Json := do
     | .ok _ => Json.null
     | .error r => .str r)])
 
+def chunksOf (j : Json) : Except String Json := do
+  let some k := (PouwWindow.strictInt? j).bind fun i => if 0 ≤ i then some i.toNat else none
+    | throw "the input is not a natural number K"
+  pure <| match Chunks.chunks k with
+    | .ok n => Json.mkObj [("chunks", toJson n)]
+    | .error why => Json.mkObj [("refused", Json.str why)]
+
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("opening", openingOf), ("registered", registeredOf), ("pass", passOf), ("draw", drawOf), ("salt", saltOf),
-  ("rounds", roundsOf)]
+  ("rounds", roundsOf), ("chunks", chunksOf)]
 
 end PouwCheck.Difftest

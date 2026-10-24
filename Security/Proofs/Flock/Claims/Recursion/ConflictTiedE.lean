@@ -33,7 +33,7 @@ theorem decodeWithK_rootB (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : S
     {sess : Session} (h : Record.decodeWithK keep hs spec text = .ok sess) :
     ∃ j l, Lean.Json.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧
       List.Forall₂ (Claims.Bridge.Custody.RootField l) spec.tables.toList sess.rootB.toList := by
-  unfold Record.decodeWithK at h
+  unfold Record.decodeWithK Record.decodeJWithK at h
   dsimp only at h
   split at h
   rotate_left

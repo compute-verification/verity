@@ -119,6 +119,14 @@ def rebuilds (O : Oracle N ρ h X Dg) (D : Data N m ρ X) : Chip N m ρ h X Dg �
   | link p k => (k (D p)).rebuilds O D
   | rebuild p k => (k (D (.inl p))).rebuilds O D + 1
 
+/-- The positions a run's reads were answered at: device memory and rebuilding at store sectors, the link at any. -/
+def reads (O : Oracle N ρ h X Dg) (D : Data N m ρ X) : Chip N m ρ h X Dg α → Finset (Pos N m ρ)
+  | done _ => ∅
+  | tag x k => (k (O x)).reads O D
+  | mem p k => insert (.inl p) ((k (D (.inl p))).reads O D)
+  | link p k => insert p ((k (D p)).reads O D)
+  | rebuild p k => insert (.inl p) ((k (D (.inl p))).reads O D)
+
 end Chip
 
 /-- A device: the store sectors it holds on chip when the window opens (`w` bits each, at most `S` bits), and its
@@ -163,6 +171,11 @@ def Accepts {s : ℕ} (A : Device N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin
 def correct (A : Device N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig)
     (O : Oracle N ρ h X Dg) (D : Data N m ρ X) : Finset (Fin N) :=
   Finset.univ.filter fun t => A.tags σ O D t = O (D.stream, t, dig σ (D.tile t))
+
+/-- The positions a run obtained: the sectors held on chip and every position it read. -/
+def obtained (A : Device N m ρ h S L q w X Sig Dg) (σ : Sig) (O : Oracle N ρ h X Dg) (D : Data N m ρ X) :
+    Finset (Pos N m ρ) :=
+  A.held.map Function.Embedding.inl ∪ (A.prog σ D).reads O D
 
 end Device
 

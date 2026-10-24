@@ -148,6 +148,7 @@ def test_the_builds_writer_is_the_row_dicts_text_under_its_name_and_params_overr
         assert gzip.decompress((tmp_path / "instances.json.gz").read_bytes()).decode() == json.dumps({**head, "rows": want})
 
 
+@pytest.mark.slow
 def test_a_dense_dsa_prefills_rows_are_written_from_its_heads_logs(dense):
     """GLM-5.3's dense-MHA prefill (`tests/program/test_dsa_derive.py`'s dense layers): each head's key and value sequences are cuts
     of its logs, which `RowTexts` writes from the logs as the row dicts' own text."""
