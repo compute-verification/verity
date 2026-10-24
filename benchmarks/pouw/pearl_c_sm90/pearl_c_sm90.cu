@@ -556,16 +556,33 @@ extern "C" __global__ void eprime(const Args a) {
 // (8 rows by 4 column pairs) hit distinct banks, and leave as whole 128-byte rows.  MODE 0 is form_s5's cast (two codes per
 // cvt), 1 form_s5_scalar's (one code per cvt), its gate: both write the same codes.  GR (form_s5_g, the grouped calls): p3
 // holds the experts' F lines one after another (k x 32 each) and p5 each 64-row block's expert, whose lines the block takes.
+// EP (form_s5_ep, eprime in the same launch): p2 holds the rows' E codes, p5 beta and p6 the E' codes out; each block makes
+// its rows' E' as eprime does while staging them, and the blocks at depth 0 store them.
 constexpr int FORM_ROW = 144;
-template <int MODE, bool GR = false> DEV void form_body(const Args& a) {
+template <int MODE, bool GR = false, bool EP = false> DEV void form_body(const Args& a) {
+  static_assert(!(GR && EP), "p5 is GR's experts or EP's beta");
   __shared__ __align__(128) uint8_t sE[64 * 32], sF[128 * 32];
   __shared__ __align__(16) uint8_t sO[64 * FORM_ROW];
   const int tid = threadIdx.x, t0 = blockIdx.x * 128, r0 = blockIdx.y * 64, k = a.i[1];
   const uint8_t* E = reinterpret_cast<const uint8_t*>(a.p[2]);
   const uint8_t* F = reinterpret_cast<const uint8_t*>(a.p[3]) +
                      (GR ? (size_t)reinterpret_cast<const int*>(a.p[5])[blockIdx.y] * k * 32 : 0);
-  *reinterpret_cast<uint4*>(sE + core(tid / 2, 16 * (tid % 2))) =
-      *reinterpret_cast<const uint4*>(E + (size_t)(r0 + tid / 2) * 32 + 16 * (tid % 2));
+  const size_t eo = (size_t)(r0 + tid / 2) * 32 + 16 * (tid % 2);
+  uint4 ev = *reinterpret_cast<const uint4*>(E + eo);
+  if constexpr (EP) {
+    const float beta = reinterpret_cast<const float*>(a.p[5])[r0 + tid / 2];
+    uint32_t w[4] = {ev.x, ev.y, ev.z, ev.w};
+#pragma unroll
+    for (int i = 0; i < 4; i++) {
+      uint32_t o = 0;
+#pragma unroll
+      for (int j = 0; j < 4; j++) o |= (uint32_t)e4m3(__fmul_rn(beta, e4m3f((uint8_t)(w[i] >> (8 * j))))) << (8 * j);
+      w[i] = o;
+    }
+    ev = make_uint4(w[0], w[1], w[2], w[3]);
+    if (blockIdx.x == 0) *reinterpret_cast<uint4*>(a.p[6] + eo) = ev;
+  }
+  *reinterpret_cast<uint4*>(sE + core(tid / 2, 16 * (tid % 2))) = ev;
 #pragma unroll
   for (int j = 0; j < 2; j++) {
     const int idx = tid + 128 * j, r = idx / 2, c = idx % 2;
@@ -614,6 +631,7 @@ template <int MODE, bool GR = false> DEV void form_body(const Args& a) {
 extern "C" __global__ void __launch_bounds__(128) form_s5(const Args a) { form_body<0>(a); }
 extern "C" __global__ void __launch_bounds__(128) form_s5_scalar(const Args a) { form_body<1>(a); }
 extern "C" __global__ void __launch_bounds__(128) form_s5_g(const Args a) { form_body<0, true>(a); }
+extern "C" __global__ void __launch_bounds__(128) form_s5_ep(const Args a) { form_body<0, false, true>(a); }
 
 // the adopted quantizer (the model's FP8 path with PoUW off): codes = e4m3(alpha x) row-major, alpha from stats_s5.
 // p0 rows (FP32), p1 alpha, p2 out codes; i0 rows, i1 k.  One thread per 16 elements

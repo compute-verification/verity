@@ -29,7 +29,8 @@ One JSON object per line on stdout as each part finishes, a summary on stderr.
 
   python3 run.py [check.json]   (env: PEARLC_EXPECT_UUID, SHAPES="8192", REPS=5, VARIANTS="h100", PEARLC_CHAIN="pl",
                                  PEARLC_LIBCUDA, PEARLC_LIBNVML, PEARLC_LIVE=0 for decode's 64 x 64 GEMMs storing all m rows,
-                                 PEARLC_WORDS_WIN=0 for A'F_B on one 64 x 32 CTA and pa at 64-row tiles)
+                                 PEARLC_WORDS_WIN=0 for A'F_B on one 64 x 32 CTA and pa at 64-row tiles,
+                                 PEARLC_FORM_EP=0 for A's E' in a launch of its own)
 
 Dry runs on a stand-in driver only: PEARLC_ANY_GPU=1 skips the identity check, and PEARLC_UNGATED=1 (refused without it)
 times regardless of the check and marks every row ungated.
@@ -60,6 +61,8 @@ WINDOW = 128
 #: with 64-row tiles and an af_win buffer, A'F_B is a CTA a window (gemm_words_win_d), which pa_w adds up in gemm_words_d's
 #: order; PEARLC_WORDS_WIN=0 runs gemm_words_d and pa
 WORDS_WIN = os.environ.get("PEARLC_WORDS_WIN", "1") != "0"
+#: A's E' in its forming's launch (form_s5_ep, the step `form_ep_a`); PEARLC_FORM_EP=0 runs eprime and form_s5
+FORM_EP = os.environ.get("PEARLC_FORM_EP", "1") != "0"
 TMAP_UINT8, TMAP_SWIZZLE_128B, TMAP_L2_128B, TMAP_BYTES = 0, 3, 2, 128
 #: every GEMM's operand pair, a set of four tensor maps (A, B, P_A, P_B) each at `tma` + MAP_SET * slot: the chain's (P_A, P_B
 #: the peel's), the words' (A'F_B, B~F_A, G) and the baselines' (A and B again for the tail, which they don't load)
@@ -434,11 +437,12 @@ class Pipeline:
     kernels' padding, which nothing commits)."""
 
     GEMM_SMEM: dict[str, int] = {}
-    #: the steps one launch does under pd: `commit_a` (pd_commit) for A's pads, row digests, tree, seed_A, row seeds and E_A's
-    #: lines; with `split_a`, `rows_a` (pd_commit's mode 1) and `tree_seed_a` (pd_tree) for the same steps (the padding rows'
-    #: E_A lines only with `fillers`)
+    #: the steps one launch does: under pd, `commit_a` (pd_commit) for A's pads, row digests, tree, seed_A, row seeds and E_A's
+    #: lines, and with `split_a`, `rows_a` (pd_commit's mode 1) and `tree_seed_a` (pd_tree) for the same steps (the padding
+    #: rows' E_A lines only with `fillers`); under FORM_EP, `form_ep_a` (form_s5_ep) for A's E' and forming
     FUSED = {"commit_a": ("pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "lines_ea"),
-             "rows_a": ("pad_a", "rowdig_a", "hash_rows_a", "seeds_a", "lines_ea"), "tree_seed_a": ("tree_a", "seed_a")}
+             "rows_a": ("pad_a", "rowdig_a", "hash_rows_a", "seeds_a", "lines_ea"), "tree_seed_a": ("tree_a", "seed_a"),
+             "form_ep_a": ("eprime_a", "form_a")}
     #: SMs a launch running beside the steps holds whole (pd_tree's CTA under PD_WHOLE), which the persistent GEMMs leave
     #: it: a GEMM CTA with no SM free would start only when that launch ends.  A tile's bytes don't depend on its CTA
     beside = 0
@@ -740,14 +744,19 @@ class Pipeline:
             return (f"lines_{tag}", lambda: d.launch("lines", cdiv(count, 128), 128, p=(key, b[codes], t32, t128),
                                                     i=(side, factor, count, norm)))
 
-        def form_side(tag, rows, x, e_codes, f_codes, out):
+        def form_side(tag, rows, x, e_codes, f_codes, out, fused=False):
             ep = f"ep{tag}_codes"
-            return [(f"stats_{tag}", lambda: d.launch("stats_s5", cdiv(rows, 8), 256, p=(b[x], b[f"alpha_{tag}"], b[f"beta_{tag}"],
-                                                                                      b[f"ia_{tag}"], b[f"aux_{tag}"]), i=(rows, k))),
-                     (f"eprime_{tag}", lambda: d.launch("eprime", cdiv(rows, 128), 128, p=(b[e_codes], b[f"beta_{tag}"], b[ep]),
-                                                        i=(rows,))),
-                     (f"form_{tag}", lambda: d.launch("form_s5", (k // 128, rows // 64), 128,
-                                                      p=(b[x], b[f"alpha_{tag}"], b[ep], b[f_codes], b[out]), i=(rows, k)))]
+            stats = (f"stats_{tag}", lambda: d.launch("stats_s5", cdiv(rows, 8), 256, i=(rows, k),
+                                                      p=(b[x], b[f"alpha_{tag}"], b[f"beta_{tag}"], b[f"ia_{tag}"], b[f"aux_{tag}"])))
+            if fused:
+                return [stats, (f"form_ep_{tag}", lambda: d.launch("form_s5_ep", (k // 128, rows // 64), 128,
+                                                                   p=(b[x], b[f"alpha_{tag}"], b[e_codes], b[f_codes], b[out],
+                                                                      b[f"beta_{tag}"], b[ep]), i=(rows, k)))]
+            return [stats,
+                    (f"eprime_{tag}", lambda: d.launch("eprime", cdiv(rows, 128), 128, p=(b[e_codes], b[f"beta_{tag}"], b[ep]),
+                                                       i=(rows,))),
+                    (f"form_{tag}", lambda: d.launch("form_s5", (k // 128, rows // 64), 128,
+                                                     p=(b[x], b[f"alpha_{tag}"], b[ep], b[f_codes], b[out]), i=(rows, k)))]
 
         job = [lines("eb", self.keys["line_b"], 1, 0, n, "eb_codes"),
                lines("fa", self.keys["line_b"], 0, 1, k, "fa_codes", b["faT32"]),
@@ -760,7 +769,7 @@ class Pipeline:
         ea = ("lines_ea", lambda: d.launch("lines", cdiv(m, 128), 128, p=(b["line_a"], b["ea_codes"], 0, 0, b["lkeys_a"]),
                                            i=(0, 0, m, NORM_256, mr)))
         pd = self.pd is not None
-        forming = [ea] * (not pd) + form_side("a", m, "xa", "ea_codes", "fa_codes", "at")
+        forming = [ea] * (not pd) + form_side("a", m, "xa", "ea_codes", "fa_codes", "at", fused=FORM_EP)
         gemm = [("gemm_ct", lambda: self.gemm(ct, "at", "bt", m, n, out=("c2",)))]
         if self.words_win():
             cleanup = [("af", lambda: self.gemm("gemm_words_win_d", "at", "fbT32", m, WORDS_N, out=("af_win",))),

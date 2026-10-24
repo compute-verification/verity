@@ -92,10 +92,10 @@ def test_gemms_fit_h100_shared_memory_and_are_the_runners():
         alone = name.replace("_g_d", "_d")
         assert spec == next((m, tm, bn, g) for n, m, tm, bn, g in gemms() if n == alone), name
         assert RUN.gemm_tile(name) == RUN.gemm_tile(alone) and S.WANT[name] == S.WANT[alone], name
-    assert set(S.WANT) - {"form_s5", "form_s5_scalar", "form_s5_g"} == names | set(grouped)
-    assert S.WANT["form_s5_g"] == S.WANT["form_s5"]
+    assert set(S.WANT) - {"form_s5", "form_s5_scalar", "form_s5_g", "form_s5_ep"} == names | set(grouped)
+    assert S.WANT["form_s5_g"] == S.WANT["form_s5_ep"] == S.WANT["form_s5"]
     assert set(RUN.FORM_ALTS) == {"form_s5_scalar"}
-    assert form_kernels() == ["form_s5", "form_s5_scalar", "form_s5_g"]
+    assert form_kernels() == ["form_s5", "form_s5_scalar", "form_s5_g", "form_s5_ep"]
 
 
 def test_a_persistent_gemm_leaves_a_launch_beside_it_the_sms_it_holds():
@@ -333,7 +333,8 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: 32 * i[0], 1: 4 * i[0], 2: 32 * i[0]}
     if name.startswith("form_"):
         rows, k = i[:2]
-        return {0: 4 * rows * k, 1: 4 * rows, 2: 32 * rows, 3: 32 * k, 4: rows * k}
+        ep = {5: 4 * rows, 6: 32 * rows} if name == "form_s5_ep" else {}
+        return {0: 4 * rows * k, 1: 4 * rows, 2: 32 * rows, 3: 32 * k, 4: rows * k, **ep}
     if name.startswith("gemm_") and not name.endswith("_smem"):
         M, N, K = i[:3]
         need = {0: M * K, 1: N * K, 10: 4 * 128}                 # Maps: A, B, P_A, P_B

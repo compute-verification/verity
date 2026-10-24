@@ -750,6 +750,11 @@ def test_a_fused_step_takes_its_parts_place_and_an_omitted_part_drops_it():
     assert "commit_a" not in run._call_names(pipe) and run._call_names(pipe)[0] == "stats_a"
     run.omit, run.hashing = frozenset(), False
     assert run._call_names(pipe) == ("stats_a", "eprime_a", "form_a", "af", "pa", "gemm_pearlc")
+    ep = ("eprime_a", "form_a")
+    pipe = SimpleNamespace(steps=lambda: [(x, None, None) for x in ("form_ep_a", *PPD.CALL_STEPS) if x not in ep],
+                           FUSED={"form_ep_a": ep})
+    assert run._call_names(pipe) == ("stats_a", "form_ep_a", "af", "pa", "gemm_pearlc")
+    assert PPD.STEP_GROUPS["form_ep_a"] == "forming"
 
 
 def test_a_split_commitments_tree_forks_from_the_step_before_the_first_cut():
