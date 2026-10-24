@@ -96,6 +96,12 @@ constexpr int WARPS = H1U_WARPS;
 #ifndef H1U_NB2
 #define H1U_NB2 0
 #endif
+// H1U_JNB2 = 1: J10-R's unit (RW) hashes its column blocks two chunks at a time as one paired compression
+// (noise_block2): each even iteration hashes the block it reads and the next iteration's, the second into colbits2,
+// which the odd iteration reads; the same blocks
+#ifndef H1U_JNB2
+#define H1U_JNB2 0
+#endif
 // H1U_KSPLIT = P (2 or 4): the one-stream two-launch call (kh_one, kh_one_peel) runs h1k, a CTA a unit, for calls whose
 // live units number at most H1K_MAXU (decode's qkv, o and down); larger calls keep h1u
 #ifndef H1U_KSPLIT
@@ -185,6 +191,9 @@ struct alignas(16) WarpSmem {
   NoiseMid nm;          // seed_j's stream
   u32 rowbits[32][17];  // row i's block: 16 halves (one segment's 32 dither bits each), padded against bank conflicts
   u32 colbits[32][17];
+#if H1U_JNB2
+  u32 colbits2[32][17];  // RW: the next iteration's column blocks
+#endif
   u32 coin[32][2];      // row i's digit coins: half d's bit rho is z_d(i, rho)
   u32 utab[32][9];      // column j's U + 128 bytes, rho = 0..31
   u32 ring[32][33];     // [2 j + (0 y | 1 z)][lane], a chunk's 16 sets
@@ -683,19 +692,43 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
       uint4 rv[4];
 #pragma unroll
       for (int w = 0; w < 4; ++w) rv[w] = ld4<H1U_L2HINT_WS>(src + w);
+#if H1U_JNB2
+      if (!(it & 1)) {
+        // iteration it + 1 reads block it (blk(it + 1) = it)
+        const u64 c0 = (u64)M * rb + (u64)(32 * cj + lane) * cb;
+        u64 s[8];
+        if (it < chunks) {
+          u64 s2[8];
+          noise_block2(S.nm, c0 + blk, c0 + it, s, s2);
+#pragma unroll
+          for (int j = 0; j < 8; ++j) {
+            S.colbits2[lane][2 * j] = (u32)(s2[j] >> 32);
+            S.colbits2[lane][2 * j + 1] = (u32)s2[j];
+          }
+        } else {
+          noise_block(S.nm, c0 + blk, s);
+        }
+#pragma unroll
+        for (int j = 0; j < 8; ++j) {
+          S.colbits[lane][2 * j] = (u32)(s[j] >> 32);
+          S.colbits[lane][2 * j + 1] = (u32)s[j];
+        }
+      }
+#else
       u64 s[8];
       noise_block(S.nm, (u64)M * rb + (u64)(32 * cj + lane) * cb + blk, s);
+#pragma unroll
+      for (int j = 0; j < 8; ++j) {
+        S.colbits[lane][2 * j] = (u32)(s[j] >> 32);
+        S.colbits[lane][2 * j + 1] = (u32)s[j];
+      }
+#endif
 #pragma unroll
       for (int w = 0; w < 4; ++w) {
         S.rowbits[lane][4 * w] = rv[w].x;
         S.rowbits[lane][4 * w + 1] = rv[w].y;
         S.rowbits[lane][4 * w + 2] = rv[w].z;
         S.rowbits[lane][4 * w + 3] = rv[w].w;
-      }
-#pragma unroll
-      for (int j = 0; j < 8; ++j) {
-        S.colbits[lane][2 * j] = (u32)(s[j] >> 32);
-        S.colbits[lane][2 * j + 1] = (u32)s[j];
       }
     } else if constexpr (!WS && !J10 && H1U_NB2) {
       u64 sa[8], sb[8];
@@ -767,7 +800,12 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
       continue;
     }
     const uint8_t* rbits = reinterpret_cast<const uint8_t*>(&S.rowbits[0][0]);
+#if H1U_JNB2
+    const uint8_t* cbits =
+        reinterpret_cast<const uint8_t*>(RW && (it & 1) ? &S.colbits2[0][0] : &S.colbits[0][0]);
+#else
     const uint8_t* cbits = reinterpret_cast<const uint8_t*>(&S.colbits[0][0]);
+#endif
 #pragma unroll 1
     for (u32 j0 = 0; j0 < 16; j0 += NS) {
 #pragma unroll
