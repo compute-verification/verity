@@ -44,7 +44,8 @@
 #   Another TP Commit than GLM-5.3's: A5_ROW its row (the workload integrations/vllm/workloads/$A5_ROW.json), A5_NAME the
 #   audit's name (default glm), A5_SETS the SiluMul_v2 widths its partition reads (default "256 1536"), e.g. LLAMA32_1B TP2:
 #   A5_ROW=llama32-1b__bf16__rtxpro6000__tp2__b2__i256__o32__mixed__greedy__bi-eager A5_PARTITION=benchmarks/one_stage/
-#   llama32_1b_silu_mul_v2_tp2.json A5_SETS=4096.
+#   llama32_1b_silu_mul_v2_tp2.json A5_SETS=4096.  A rank's proved population must keep C-Flock's m = k_log + log2(units) <= 35:
+#   a SiluMul_v2{I=4096} unit is 2^25 bits, so that partition's scope keeps layer 0's decode steps 1..7 (8 units a rank, not 4,736).
 set -uxo pipefail
 REPO=$(pwd); O=${OUT:-$RESEARCH_RUN_DIR/out}; W=$(mktemp -d); trap 'rm -rf "$W"' EXIT; mkdir -p $O
 ROW=${A5_ROW:-glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager}
