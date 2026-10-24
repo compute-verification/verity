@@ -285,10 +285,30 @@ def _one_stage():
                            encode_program=encode_program, V2=V2, CS=CS)
 
 
+def builders() -> tuple:
+    """Give the traced parts the head check calls that carry no builder (`head_check._part`'s and
+    `gates.lms._leaf_definition`'s; `frame_v3._part` and `boolean.trace.definition` keep one) the builder their trace was
+    taken from, so C-Flock lowers each activation by it, commits included (`ir_lower._boolean_activation`, which calls
+    ``build(C, S, *e)`` for a part with statics and ``build(C, *e)`` without). Gate by gate their linear forms grow without
+    bound: one SHA-512 compression passes 1 GB, the unit 108 GB in 3.5 minutes. Returns the parts."""
+    from verity.ml.commitments.gates import lms
+    from verity.ml.commitments.gates.sha512 import compress_gadget
+
+    parts = ((lms.Sha512Compress, lambda C, *e: compress_gadget(C, list(e[:8]), list(e[8:24]))),
+             (lms.LmsEqual, lms._build_equal), (HC.NetworkHeadFields, HC._build_fields),
+             (HC.NetworkHeadCounts, HC._build_counts))
+    for d, build in parts:
+        if getattr(d, "build", None) is None:
+            d.build = build
+    return tuple(d for d, _ in parts)
+
+
 def stager(M, key: tuple[int, int, int], end: str, n: int, out: Path) -> SimpleNamespace:
-    """One end's statement program and partition (one template, n units) and its stager (the unit lowered once)."""
+    """One end's statement program and partition (one template, n units) and its stager (the unit lowered once, its
+    traced parts by their builders, `builders`)."""
     import gc
 
+    builders()
     defn = unit(key)
     bits = row_bits(HC.unit(key[0], key[1], bool(key[2])))
     rows = [(r, M.V2, bits[r], [r]) for r in ROWS]

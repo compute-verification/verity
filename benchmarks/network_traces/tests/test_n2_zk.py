@@ -2,7 +2,8 @@
 honest head check passes its reference; window 0's egress head one count off, committed by the prover, fails on its
 counts and its signed digest; the extra run's egress heads fail on their counts alone. The adapter's rows carry the head
 check's arguments in its signature's order: around an identity of the head check's signature it returns them. The
-verifier's own ``pub`` row is the prover's. Nothing here lowers or proves (`n2_zk.prove` does, on a node)."""
+verifier's own ``pub`` row is the prover's. Each builder `n2_zk.builders` attaches, called as C-Flock's lowering calls
+it, traces to its part's own gates. Nothing here lowers or proves (`n2_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
@@ -10,10 +11,12 @@ import importlib.util
 import sys
 from functools import cache
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.refs import Coll, concat
@@ -68,6 +71,18 @@ def _identity(L: int, T: int, counts: int):
     ret = Array(sum(t.leaves for _, t in params), BL.BIT)
     return bind(CompositeDefinition("N2ZkIdentity", 1, (), lambda S: (tuple(params), ret),
                                     lambda B, S, *args: Coll(ret, concat([a.refs for a in args])), register=False))
+
+
+@pytest.mark.slow
+def test_each_builder_traces_to_its_parts_gates_called_as_c_flock_calls_it():
+    statics = {"LmsEqual": (64,), "NetworkHeadFields": (3,), "NetworkHeadCounts": (2,)}
+    for d in n2.builders():
+        key = statics.get(d.name, ())
+        S = SimpleNamespace(**dict(zip(d.statics, key)))
+        params, ret = d.signature(S)
+        build = (lambda C, *e, d=d, S=S: d.build(C, S, *e)) if d.statics else d.build
+        got, want = TR.trace(build, [t for _, t in params], ret), d.traced(*key)
+        assert (got.gates, got.outputs) == (want.gates, want.outputs), d.name
 
 
 def _bits(words: list[int]) -> list[int]:
