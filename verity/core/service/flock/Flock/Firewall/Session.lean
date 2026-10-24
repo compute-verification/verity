@@ -35,7 +35,8 @@ the prover's bytes:
 * `Finish` leaves only once the schedule's last opening has (`State.request`), as `FINISH`. The proof files are the
   loop's own finish's, a connection to the frames port (`Finish.serveLoop`): it reads each table's level 0 from the
   loop's `Level0` of the table's root, draws each rep's salts for levels ≥ 1 itself, which the prover's trees then take,
-  and keeps each rep's proof file, once (`Frames.Registry.file`).
+  refuses a rep's request whose draws, passed values, extra claims or coins are not its frame's (`Frames.ownOf`,
+  `Finish.RepIn.differs`), and keeps each rep's proof file, once (`Frames.Registry.file`).
 * A `Proof` the prover sends is answered `Resp::Ok` and dropped. The proofs that leave, just before `Finish`, are the
   loop's kept files (`ownProofs`), every rep's of the session's bound level 0 or none, and only once every rep's frame
   ended not stopped (`Frames.finish`). The finish computes none where a constraint fails on the pads. Where a frame
@@ -719,7 +720,9 @@ def level0 (ch : Frame.Chan) (l0s : IO.Ref Level0.Registry) (line : String) : IO
 `Frames.startRep`, the frame then the loop's own in `reg`); a rep's next place or the values its frame took (`place …`,
 `vals …`, `Frames.ask`); one table's level 0 (`level0 …`, `level0`); or a session's
 proof files on the tables' level 0 in `l0s` (`finish …`, `Finish.serveLoop`, at the statement `S`), each rep's salts for
-levels ≥ 1 kept in `reg` for its opening, and its proof file for the session's `Proof` (`Frames.Registry.file`).
+levels ≥ 1 kept in `reg` for its opening, its proof file for the session's `Proof` (`Frames.Registry.file`), and its
+requests refused unless they carry its frame's draws, the values it took, the session's extra claims and the coins the
+stream answered (`Frames.ownOf`).
 Anything else is answered `err WHY`. -/
 def frames (S : Hello.Setup) (specs : Hello.Specs) (srv : Socket.Server) (reg : IO.Ref Frames.Registry)
     (l0s : IO.Ref Level0.Registry) : IO Unit := do
@@ -728,6 +731,8 @@ def frames (S : Hello.Setup) (specs : Hello.Specs) (srv : Socket.Server) (reg : 
   let file := fun (root : ByteArray) (r : Nat) (b : ByteArray) => reg.modifyGet fun R => match R.file root r b with
     | .ok R' => (none, R')
     | .error e => (some e, R)
+  let own := fun (i r : Nat) (root : ByteArray) => do
+    return some (Frames.ownOf (← reg.get) (← l0s.get) i r root)
   repeat
     let c ← srv.accept.block
     let _ ← IO.asTask (prio := .dedicated) do
@@ -736,7 +741,7 @@ def frames (S : Hello.Setup) (specs : Hello.Specs) (srv : Socket.Server) (reg : 
       if first.startsWith "level0 " then
         try level0 ch l0s first catch e => IO.eprintln s!"level 0: {e}"
       else if first.startsWith "finish " then
-        try Finish.serveLoop ch S specs l0s keep file first catch e => IO.eprintln s!"finish: {e}"
+        try Finish.serveLoop ch S specs l0s keep file own first catch e => IO.eprintln s!"finish: {e}"
       else if first.startsWith "rep " then
         try Frames.startRep ch reg l0s first catch e => IO.eprintln s!"rep: {e}"
       else if first.startsWith "place " || first.startsWith "vals " then
