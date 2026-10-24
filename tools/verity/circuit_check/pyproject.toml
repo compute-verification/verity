@@ -48,7 +48,8 @@ worker_gb = 54
 # sidecar anywhere else is read outside these and fails the guard), and the modules they import. Test-only:
 # test_sampled_replay.py (test_circuit_check.py's request Program). Read only to check the catalog's records (conftest.py):
 # pouw/window.py and sampled_proofs/service.py, which the records digest as import sites of the PoUW modules they hold
-# (`units._unchanged`), and which a whole build never imports.
+# (`units._unchanged`), and which a whole build never imports. sampled_proofs/challenger.py and claims/__init__.py:
+# pouw/coins.py names its entropy's claim instance through the challenger's `coin_claim`.
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/ml/__init__.py",
           "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/kernels", "verity/ml/private_circuits",
@@ -56,6 +57,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/pouw/__init__.py", "verity/core/protocols/pouw/audit.py", "verity/core/protocols/pouw/salt.py",
           "verity/core/protocols/pouw/protocol.py",
           "verity/core/protocols/pouw/serving.py", "verity/core/protocols/pouw/registration.py", "verity/core/protocols/pouw/coins.py",
+          "verity/core/protocols/sampled_proofs/challenger.py", "verity/core/claims/__init__.py",
           "verity/core/protocols/pouw/grind.py", "verity/core/protocols/pouw/circuit", "verity/core/protocols/pouw/schemes",
           "verity/core/protocols/pous/__init__.py", "verity/core/protocols/pous/circuit.py",
           "verity/core/protocols/pous/circuit.circuit-check.py", "verity/core/protocols/pous/circuit.circuit-check.json",
