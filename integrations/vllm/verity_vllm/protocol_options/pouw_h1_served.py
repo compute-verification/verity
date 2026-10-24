@@ -631,15 +631,19 @@ class Served:
     def _pubs(self, run: Any, calls: Sequence[int], a: str, b: str) -> dict[str, str]:
         """Each of ``calls``' (a step's calls of one K) public table ``pub@<c>`` (`pub_table`), registered once its step's
         A table ``a`` and the weights' ``b`` are: row t unit u0 + t's public row, `core_check.public_words` of the
-        window's Program salt, u0 + t and (root(a), root(b)), salted `core_check.public_row_salt` of the open root and
-        u0 + t, as credit's `registered_file` builds it (`h1window.public_table`); its rows kept, as they are public."""
-        units, out = HW.call_units(self.program), {}
+        window's Program salt, u0 + t and (root(a), root(b)), and in a J10-R window (`h1window.is_j10r`) u0 and the unit's
+        blocks (`h1window.call_blocks`), salted `core_check.public_row_salt` of the open root and u0 + t, as credit's
+        `registered_file` builds it (`h1window.public_table`); its rows kept, as they are public."""
+        units, out, j10r = HW.call_units(self.program), {}, HW.is_j10r(self.program)
         x = np.frombuffer(run._salt + bytes(8) + self.registered[a].root + self.registered[b].root, np.uint8)
         for c in calls:
             u0, n = units[c]
             rows = np.tile(x, (n, 1))
             rows[:, len(run._salt):len(run._salt) + 8] = (
                 np.arange(u0, u0 + n, dtype=">u8").view(np.uint8).reshape(n, 8))
+            if j10r:
+                tail = np.array([(u0, b0, b1) for b0, b1 in HW.call_blocks(self.program, c)], dtype=">u8")
+                rows = np.concatenate([rows, tail.view(np.uint8).reshape(n, 24)], axis=1)
             words = np.ascontiguousarray(rows.reshape(n, -1, 4)[:, :, ::-1]).reshape(n, -1).view("<u2")
             salts = b"".join(CC.public_row_salt(self.root, u) for u in range(u0, u0 + n))
             v = self.pub_table(c)
