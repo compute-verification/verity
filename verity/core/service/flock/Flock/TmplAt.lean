@@ -76,4 +76,44 @@ def unrollOk (t : Tmpl) (lays : Array Lay) : Bool :=
   t.wellFormed && t.apart && t.ordered && t.inputsT && t.groupsOk &&
     (List.range t.defs.size).all (layApart t lays) && identOk t lays && outsAt t lays
 
+/-- The first of `unrollOk`'s checks `t` fails at `lays`, for the refusal. -/
+def unrollWhy (t : Tmpl) (lays : Array Lay) : String :=
+  if !t.wellFormed then "not well-formed"
+  else if !t.apart then "a Definition's rows or copies overlap or leave its columns"
+  else if !t.ordered then "a row reads a column out of order, or an input column that is not a port bit"
+  else if !t.inputsT then "an input row is not a self row or empty, or an input port bit has no self row"
+  else if !t.groupsOk then
+    "a port group is not an aligned power of two of words holding its ports, the input groups reach the constant, or \
+      an output group overruns the unit's slot"
+  else if !(List.range t.defs.size).all (layApart t lays) then "a layout puts two columns at one position"
+  else if !identOk t lays then "a layout marked ident moves a column, or the input rows move"
+  else "an output group is outside the root's columns or its committed slot (D11)"
+
 end Flock.Tmpl
+
+namespace Flock
+
+/-- A templated unit as the verifier read it: a well-formed template, the layouts `layoutM` gave for its mode, which pass
+`unrollOk`, and its committed net (`Tmpl.unitNet`, whose rows are never built on the verifier's path), the facts
+`Tmpl.foldUnit`'s value rests on. -/
+structure TmplUnit where
+  t : Tmpl.Tmpl
+  mode : Tmpl.Mode
+  lays : Array Tmpl.Lay
+  net : Net
+  wf : t.wellFormed = true
+  laid : Tmpl.layoutM t mode = .ok lays
+  ok : Tmpl.unrollOk t lays = true
+  isNet : net = Tmpl.unitNet t lays
+
+/-- `t` read at `mode`: refused unless well-formed, laid out and passing `unrollOk`. -/
+def TmplUnit.read (t : Tmpl.Tmpl) (mode : Tmpl.Mode) : V TmplUnit :=
+  if wf : t.wellFormed = true then
+    match laid : Tmpl.layoutM t mode with
+    | .error e => throw e
+    | .ok lays =>
+      if ok : Tmpl.unrollOk t lays = true then pure ⟨t, mode, lays, Tmpl.unitNet t lays, wf, laid, ok, rfl⟩
+      else throw s!"template: {Tmpl.unrollWhy t lays}"
+  else throw "template: not well-formed"
+
+end Flock

@@ -68,8 +68,10 @@ def world(tmp_path):
 
 def test_a_tick_launches_its_trains_at_once_each_with_its_rank_for_the_slot_queue(world, monkeypatch):
     """CI-110: the train that lands next takes a node's next free slot (`slot.py --rank`), so drive launches each train's check with
-    CHECK_SLOT_RANK set to its members above `main`, and leaves os.environ as it was.  A tick's launches run at once
-    (`LAUNCH_JOBS`: 21 Oct, seven one after another took 40 min), each thread with its own rank."""
+    CHECK_SLOT_RANK set to its first-parent depth, which keeps its order with a rank sent after `main` moved (24 Oct: d836, ranked
+    17 by its members above `main`, waited 3 h behind higher trains ranked 15 after a landing), and the top tip's right after the
+    lowest train's; it leaves os.environ as it was.  A tick's launches run at once (`LAUNCH_JOBS`: 21 Oct, seven one after another
+    took 40 min), each thread with its own rank."""
     monkeypatch.delenv("CHECK_SLOT_RANK", raising=False)
     pools = []
     each = drive._each
@@ -86,7 +88,26 @@ def test_a_tick_launches_its_trains_at_once_each_with_its_rank_for_the_slot_queu
         world.gh.put(n, world.change({f"{f}.txt": f"{n}\n"}))
     assert h.tick().count("launched") == 3
     assert (3, 4) in pools and "CHECK_SLOT_RANK" not in os.environ
-    assert ranks == {m.commit: str(k) for k, m in enumerate(h.q.chain(), 1)}
+    chain = h.q.chain()
+    depth = {m.commit: int(_git(h.d.repo, "rev-list", "--count", "--first-parent", m.commit)) for m in chain}
+    assert [depth[m.commit] for m in chain] == list(range(depth[chain[0].commit], depth[chain[0].commit] + 3))
+    assert ranks == {m.commit: str(depth[m.commit]) for m in chain[:-1]} | {chain[-1].commit: str(depth[chain[0].commit] + 1)}, \
+        "each train ranks by its depth, and the top tip right after the lowest"
+
+
+def test_the_top_tip_keeps_a_check_of_its_own_while_the_trains_below_it_wait(world, monkeypatch):
+    """23 Oct 19:20Z: the five checks were nested prefixes of the bottom 15 of 50 PRs (cold-circuit-check boundaries at 2, 4,
+    10 and 13), and nothing checked the 35 above them; a pass at the top lands all of `next` in one check."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 1, 3
+    for n in range(1, 7):
+        world.gh.put(n, world.change({f"f{n}.txt": f"{n}\n"}))
+    said = h.tick()
+    chain = h.q.chain()
+    assert [c for c, _, _ in h.launched] == [chain[0].commit, chain[1].commit, chain[-1].commit], said
+    assert "one is kept for the top" in said
+    h.tick()
+    assert len(h.launched) == 3, "the top's check runs; nothing more launches while three run"
 
 
 def test_an_unchecked_tip_is_checked_once_with_agreement_only_for_a_guarantee_change(world, monkeypatch):
@@ -122,6 +143,38 @@ def test_a_passing_tip_fast_forwards_main_and_the_landing_post_names_its_check(w
     assert since == before and set(runs.values()) == {next(iter(runs.values()))} and tip in runs
     lines = merge.landing_lines(h.q.workdir, before, tip, runs=runs)
     assert [ln.split(" ", 4)[-1] for ln in lines] == [f"#1; checked by {runs[tip]}", f"#2; checked by {runs[tip]}"]
+
+
+def test_a_landing_tick_launches_the_next_trains_before_the_landings_after_steps(world, monkeypatch):
+    """23 Oct: a landing's after-steps (`caught_up`: the spec DM, the mirror, post_train, posts and labels; 44 labels at 23:08Z)
+    ran inside the land step, and the tick's launches waited 20-30 min behind them."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 1, 1
+    order = []
+    monkeypatch.setattr(merge, "caught_up", lambda *a, **k: order.append("after"))
+    plain = h.launch
+    h.d.launch = lambda *a: order.append("launch") or plain(*a)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.tick()
+    _check(world, monkeypatch, h.q.chain()[0].commit)
+    order.clear()
+    assert h.tick().startswith("landed #1")
+    assert order == ["launch", "after"], order
+
+
+def test_a_train_that_passes_while_a_tick_runs_lands_in_that_tick_not_the_next(world, monkeypatch):
+    """23 Oct: a passed train waited for the next tick to land, verdict to landed median 0.24 h over 98 PRs. A check whose verdict
+    comes in after the tick's land step (here: that step finds nothing) is landed before the tick ends."""
+    h = Harness(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.tick()
+    tip = _tip(world)
+    _check(world, monkeypatch, tip)
+    real, calls = h.d.land, []
+    h.d.land = lambda drive, dry_run: calls.append(1) or (None if len(calls) == 1 else real(drive, dry_run))
+    said = h.tick()
+    assert len(calls) == 2 and "landed #1 in the same tick" in said and _git(world.origin, "rev-parse", "main") == tip
 
 
 def test_the_steps_after_a_landing_run_with_the_queues_credentials_and_git_never_prompts(world, monkeypatch):
@@ -269,6 +322,25 @@ def test_a_failure_only_one_trains_change_reaches_ejects_that_pr_and_tells_ci_an
     assert "pkg/tests/test_x.py" in h.posts[0] and "@old-circuits-and-proofs" not in h.posts[0]
     h.tick()
     assert [m.pr for m in h.q.chain()] == [1] and len(h.posts) == 1
+
+
+def test_a_failure_only_a_lower_running_trains_change_reaches_ejects_it_without_waiting_on_that_check(world, monkeypatch,
+                                                                                                      tmp_path):
+    """23 Oct 12:05Z: a5ded716d48d failed on files only #3266, in the lower train still checking, changed; drive waited on that
+    check and held every train above it until #3266 was ejected by hand at 12:48Z."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 1, 2
+    world.gh.put(1, world.change({"pkg/tests/test_x.py": "def test_y():\n    _once()\n"}))
+    world.gh.put(2, world.change({"a.txt": "2\n"}))
+    h.tick()
+    lower, upper = (m.commit for m in h.q.chain())
+    assert {lower, upper} <= set(h.d.q.load_state()["drive"]["launched"])
+    _check(world, monkeypatch, upper, ("false",))
+    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
+    h.tick()
+    assert len(h.posts) == 1 and "Ejected #1" in h.posts[0], h.posts
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [2]
 
 
 def test_a_failure_two_changes_reach_ejects_both(world, monkeypatch, tmp_path):
@@ -882,6 +954,20 @@ def test_a_collection_error_names_its_test_module(tmp_path):
     assert "benchmarks/pouw/filler/tests/test_capacity_of.py" in implicated(d)
 
 
+def test_lean_errors_reads_the_audits_orphan_and_layers_failures(tmp_path):
+    """22-23 Oct: #3215's orphan file and #3140's out-of-layer imports named no file drive matched, so it resent each train
+    instead of ejecting the one PR (a hand eject saved each about 30 min)."""
+    from research.drive import lean_errors
+
+    log = ("AUDIT /w/lean-audit-scratch-1-x/verity/core/service/flock: FAIL  14588 declarations in 159 modules\n"
+           "  orphan: Flock/Test/KnownRead.lean is not imported by the roots (Flock, FlockVerify) nor under `exempt`: nothing builds"
+           " or audits it\n  note: 267 definitions of the spec (VStar) are read by no guarantee\n"
+           "AUDIT /w/lean-audit-scratch-1-x/verity/core/protocols/pouw/lean/check: FAIL  944 declarations in 13 modules\n"
+           "  layers: PouwCheck.Credit imports Flock.Program, outside PouwCheck.Credit's layer (Std.Data.HashMap)\n")
+    assert lean_errors(log) == {"verity/core/service/flock/Flock/Test/KnownRead.lean",
+                                "verity/core/protocols/pouw/lean/check/PouwCheck/Credit.lean"}
+
+
 def test_lean_errors_reads_lakes_list_of_failed_modules(tmp_path):
     """17 Oct 15:10Z: three trains' lean-audit failed with the build's error lines scrolled out of the step's log; drive found
     no Lean file, fell back on every PR touching Lean, and ejected nine."""
@@ -908,6 +994,45 @@ def test_a_new_head_keeps_the_running_train_at_the_head_it_checks_and_rejoins_ab
     h.tick()
     chain = h.q.chain()
     assert [(m.pr, m.head) for m in chain[:1]] == [(1, old)] and chain[1].commit == running and h.cancelled == []
+
+
+def test_a_train_that_lands_a_pr_at_an_older_head_than_its_current_one_tells_its_owner(world, monkeypatch):
+    """23 Oct: #3248 landed at its 06:54Z head while it was marked at c4181b70, as the rule says, and nobody was told; its owner
+    found main without the fix it needed by 12:30Z."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 2, 1
+    old = world.change({"a.txt": "1\n"})
+    world.gh.put(1, old)
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.tick()
+    running = h.q.chain()[1].commit
+    new = world.change({"a.txt": "1 fixed\n"}, base=old)
+    world.gh.put(1, new)
+    h.tick()
+    _check(world, monkeypatch, running)
+    assert h.tick().startswith("landed #2")
+    (post,) = [p for p in h.posts if "#1 landed at" in p]
+    assert f"#1 landed at {old[:12]}" in post and f"not at {new[:12]}" in post, post
+    h.tick()
+    assert len([p for p in h.posts if "#1 landed at" in p]) == 1
+
+
+def test_a_running_trains_old_head_whose_mark_is_withdrawn_comes_off_next_at_once(world, monkeypatch):
+    """23 Oct: #3261's 73f5eb82 lost its mark at 14:56Z for failing two lints, but the running trains kept it until the lowest's
+    check failed on it at 16:14Z; all five were then rebuilt."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 2, 1
+    old = world.change({"a.txt": "1\n"})
+    world.gh.put(1, old)
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.tick()
+    running = h.q.chain()[1].commit
+    new = world.change({"a.txt": "1 fixed\n"}, base=old)
+    world.gh.put(1, new)
+    world.gh.ready.discard((1, old))
+    h.tick()
+    chain = h.q.chain()
+    assert [(m.pr, m.head) for m in chain[:1]] == [(1, new)] and running not in [m.commit for m in chain] and h.cancelled
 
 
 def test_a_new_head_after_its_own_train_failed_rebuilds_without_waiting(world, monkeypatch, tmp_path):

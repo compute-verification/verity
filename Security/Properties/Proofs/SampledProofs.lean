@@ -549,22 +549,48 @@ theorem outputRoot_some (log : Array Json) (n : Nat) (d p : String) :
     rw [← hb]
     cases (int? (getD r "leaves") == some (n : Int)) <;> cases (getD r "domain") <;> cases (getD r "root") <;> simp
 
-/-- Rewriting the domain of `v`'s entries keeps every value's entry and its leaf count. -/
+theorem valueRoot_some (log : Array Json) (n w b : Nat) (d u : String) :
+    (∃ x, Registration.valueRoot log n w b d u = some x) ↔ OutputValueIs log n w b d u := by
+  unfold Registration.valueRoot OutputValueIs
+  cases Registration.outputValue log d u with
+  | none => simp
+  | some r =>
+    simp only [Option.bind_some, Option.some.injEq, exists_eq_left']
+    have hb : (int? (getD r "leaves") == some (n : Int) && int? (getD r "words") == some (w : Int)
+        && Registration.widthOf r == some (b : Int)) = true ↔
+        int? (getD r "leaves") = some (n : Int) ∧ int? (getD r "words") = some (w : Int) ∧
+          Registration.widthOf r = some (b : Int) := by
+      simp only [Bool.and_eq_true, beq_iff_eq, and_assoc]
+    rw [← hb]
+    generalize (int? (getD r "leaves") == some (n : Int) && int? (getD r "words") == some (w : Int)
+        && Registration.widthOf r == some (b : Int)) = t
+    cases t <;> cases (getD r "domain") <;> cases (getD r "root") <;> simp
+
+theorem earlierRoot_some (log : Array Json) (want : Registered.Entry) (d : String) (e : Registration.Earlier) :
+    (∃ x, Registration.earlierRoot log want d e = some x) ↔
+      EarlierIs log want.leaves want.words want.wordBits d e := by
+  cases e with
+  | port p => exact outputRoot_some log want.leaves d p
+  | value u => exact valueRoot_some log want.leaves want.words want.wordBits d u
+
+/-- An entry's shape: its leaf count, words and word bits, all an output value's earlier entry is held to. -/
+abbrev shape (e : Registered.Entry) : Nat × Nat × Nat := (e.leaves, e.words, e.wordBits)
+
+/-- Rewriting the domain of `v`'s entries keeps every value's entry and its shape. -/
 theorem find_map_domain (mine : Array Registered.Entry) (v dom u : String) :
-    ((mine.map fun e => if e.value == v then { e with domain := dom } else e).find? (·.value == u)).map (·.leaves) =
-      (mine.find? (·.value == u)).map (·.leaves) := by
+    ((mine.map fun e => if e.value == v then { e with domain := dom } else e).find? (·.value == u)).map shape =
+      (mine.find? (·.value == u)).map shape := by
   have hv : ((fun x : Registered.Entry => x.value == u) ∘
       fun e => if e.value == v then { e with domain := dom } else e) = fun x => x.value == u := by
     funext e; simp only [Function.comp]; split <;> rfl
-  have hl : ((fun x : Registered.Entry => x.leaves) ∘
-      fun e => if e.value == v then { e with domain := dom } else e) = fun x => x.leaves := by
+  have hl : (shape ∘ fun e => if e.value == v then { e with domain := dom } else e) = shape := by
     funext e; simp only [Function.comp]; split <;> rfl
   rw [Array.find?_map, hv, Option.map_map, hl]
 
 theorem find_leaves_congr {m m' : Array Registered.Entry} {u : String}
-    (h : (m'.find? (·.value == u)).map (·.leaves) = (m.find? (·.value == u)).map (·.leaves)) (P : Nat → Prop) :
-    (∀ want, m'.find? (·.value == u) = some want → P want.leaves) ↔
-      ∀ want, m.find? (·.value == u) = some want → P want.leaves := by
+    (h : (m'.find? (·.value == u)).map shape = (m.find? (·.value == u)).map shape) (P : Nat → Nat → Nat → Prop) :
+    (∀ want, m'.find? (·.value == u) = some want → P want.leaves want.words want.wordBits) ↔
+      ∀ want, m.find? (·.value == u) = some want → P want.leaves want.words want.wordBits := by
   revert h
   cases h1 : m'.find? (·.value == u) with
   | none =>
@@ -576,29 +602,30 @@ theorem find_leaves_congr {m m' : Array Registered.Entry} {u : String}
     | none => intro h; simp at h
     | some b =>
       intro h
-      have hab : a.leaves = b.leaves := by simpa using h
+      obtain ⟨h1, h2, h3⟩ : a.leaves = b.leaves ∧ a.words = b.words ∧ a.wordBits = b.wordBits := by
+        simpa [shape] using h
       constructor
-      · intro H w hw; cases hw; rw [← hab]; exact H a rfl
-      · intro H w hw; cases hw; rw [hab]; exact H b rfl
+      · intro H w hw; cases hw; rw [← h1, ← h2, ← h3]; exact H a rfl
+      · intro H w hw; cases hw; rw [h1, h2, h3]; exact H b rfl
 
 theorem applyOutput_step (log : Array Json) (c : Array String) (mine : Array Registered.Entry)
-    (held : Array (String × String)) (v d p : String) :
+    (held : Array (String × String)) (v d : String) (p : Registration.Earlier) :
     ((Registration.applyOutput log (c, mine, held) (v, d, p)).1 = #[] ↔ c = #[] ∧
-      ∀ want, mine.find? (·.value == v) = some want → OutputPortIs log want.leaves d p) ∧
-    ∀ u, ((Registration.applyOutput log (c, mine, held) (v, d, p)).2.1.find? (·.value == u)).map (·.leaves) =
-      (mine.find? (·.value == u)).map (·.leaves) := by
+      ∀ want, mine.find? (·.value == v) = some want → EarlierIs log want.leaves want.words want.wordBits d p) ∧
+    ∀ u, ((Registration.applyOutput log (c, mine, held) (v, d, p)).2.1.find? (·.value == u)).map shape =
+      (mine.find? (·.value == u)).map shape := by
   simp only [Registration.applyOutput]
   cases hf : mine.find? (·.value == v) with
   | none => simp
   | some want =>
     dsimp only
-    cases ho : Registration.outputRoot log want.leaves d p with
+    cases ho : Registration.earlierRoot log want d p with
     | none =>
       dsimp only
       refine ⟨?_, fun _ => rfl⟩
       simp only [addCode_ne_nil, false_iff, not_and]
       intro _ h
-      obtain ⟨x, hx⟩ := (outputRoot_some log want.leaves d p).2 (h want rfl)
+      obtain ⟨x, hx⟩ := (earlierRoot_some log want d p).2 (h want rfl)
       rw [ho] at hx
       cases hx
     | some dr =>
@@ -606,13 +633,14 @@ theorem applyOutput_step (log : Array Json) (c : Array String) (mine : Array Reg
       dsimp only
       refine ⟨⟨fun hc => ⟨hc, fun w hw => ?_⟩, fun h => h.1⟩, fun u => find_map_domain mine v dom u⟩
       cases hw
-      exact (outputRoot_some log want.leaves d p).1 ⟨_, ho⟩
+      exact (earlierRoot_some log want d p).1 ⟨_, ho⟩
 
-/-- `applyOutputs` adds no code exactly when each output value with an entry has its earlier port. -/
-theorem applyOutputs_nil (log : Array Json) (outputs : Array (String × String × String)) (c : Array String)
-    (mine : Array Registered.Entry) (held : Array (String × String)) :
+/-- `applyOutputs` adds no code exactly when each output value with an entry has its earlier port or value. -/
+theorem applyOutputs_nil (log : Array Json) (outputs : Array (String × String × Registration.Earlier))
+    (c : Array String) (mine : Array Registered.Entry) (held : Array (String × String)) :
     (Registration.applyOutputs c mine held outputs log).1 = #[] ↔ c = #[] ∧
-      ∀ o ∈ outputs, ∀ want, mine.find? (·.value == o.1) = some want → OutputPortIs log want.leaves o.2.1 o.2.2 := by
+      ∀ o ∈ outputs, ∀ want, mine.find? (·.value == o.1) = some want →
+        EarlierIs log want.leaves want.words want.wordBits o.2.1 o.2.2 := by
   unfold Registration.applyOutputs
   rw [← Array.foldl_toList]
   have hm : ∀ o, o ∈ outputs ↔ o ∈ outputs.toList := fun o => Array.mem_toList_iff.symm
@@ -633,17 +661,18 @@ theorem applyOutputs_nil (log : Array Json) (outputs : Array (String × String �
     rw [h1]
     simp only [List.mem_cons, forall_eq_or_imp, and_assoc]
     exact and_congr Iff.rfl (and_congr Iff.rfl (forall_congr' fun o => forall_congr' fun _ =>
-      find_leaves_congr (h2 o.1) (fun n => OutputPortIs log n o.2.1 o.2.2)))
+      find_leaves_congr (h2 o.1) (fun n w b => EarlierIs log n w b o.2.1 o.2.2)))
 
-/-- R7 with output values (`checkOutputs`): every output value with an entry has its earlier port, and the rest of R7
+/-- R7 with output values (`checkOutputs`): every output value with an entry has its earlier port or value, and the rest of R7
 holds against the entries and held roots `applyOutputs` leaves. -/
 theorem checkOutputs_nil (c : Array String) (got : Json) (mine : Flock.V (Array Registered.Entry))
     (held : Array (String × String)) (supplied : Array (String × Supplied.Rows))
     (rootOf : String → Supplied.Rows → Registered.Entry → Flock.V String)
-    (outputs : Array (String × String × String)) (log : Array Json) :
+    (outputs : Array (String × String × Registration.Earlier)) (log : Array Json) :
     Registration.checkOutputs c got mine held supplied rootOf outputs log = #[] ↔ c = #[] ∧
       ∃ mine0 es mine' held', mine = .ok mine0 ∧ got = .arr es ∧
-      (∀ o ∈ outputs, ∀ want, mine0.find? (·.value == o.1) = some want → OutputPortIs log want.leaves o.2.1 o.2.2) ∧
+      (∀ o ∈ outputs, ∀ want, mine0.find? (·.value == o.1) = some want →
+        EarlierIs log want.leaves want.words want.wordBits o.2.1 o.2.2) ∧
       (Registration.applyOutputs #[] mine0 held outputs log).2 = (mine', held') ∧
       (∀ e ∈ es, keys? e = some Registered.ENTRY_KEYS ∨
         keys? e = some (sortStrings (Registered.ENTRY_KEYS.push Registered.WIDTH_KEY))) ∧
@@ -767,7 +796,8 @@ theorem id_bind {α β : Type} (x : Id α) (f : α → Id β) : x >>= f = f x :=
 
 theorem registration_nil (rec : Json) (v : Registration.Verifier) :
     Registration.check rec v = #[] ↔ ∃ law, Registered v rec law := by
-  unfold Registration.check
+  rw [Registration.check_eq_checkRef]
+  unfold Registration.checkRef
   extract_lets v2 get c0 w program part partDigest mine roots previous j14 j13 j12 j11 j10 j9 j8 distinct j7 j6 j5 j4 j3 j2 j1 j0
     c1
   have h14 : ∀ c, j14 () c = #[] ↔ c = #[] ∧ True := fun c => ⟨fun h => ⟨h, trivial⟩, fun h => h.1⟩

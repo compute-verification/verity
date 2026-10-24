@@ -10,12 +10,18 @@ second registration of a node the verifier holds live is refused with its reason
 passes, a tick each (`PassClock`)."""
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import queue
 import random
+import socket
+import subprocess
+import sys
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from pathlib import Path
+from xml.etree import ElementTree
 
 import numpy as np
 import pytest
@@ -30,6 +36,7 @@ from .test_registry import CODEC, RECEIPT
 
 P512 = rcodec.Codec(rcodec.P512, 2, False)
 verifier, wire = remote.session_module("verifier"), remote.session_module("wire")
+VLLM = Path(__file__).resolve().parents[2]
 
 
 class PassClock:
@@ -70,6 +77,27 @@ class PassClock:
 
     def busy(self) -> None:
         self.done = False
+
+
+@contextlib.contextmanager
+def verifying(sock: socket.socket, clock: PassClock, **kw) -> Iterator[verifier.Verifier]:
+    """`verifier.Verifier` over the accepted ``sock`` on ``clock``, torn down however the body ends: the socket shut,
+    so a prover waiting on it sees the session end (the verifier's reader thread would hold it open), and the Lean
+    verifier's process (`remote-audit-verifier`) terminated, killed and reaped, so a failing test leaves none waiting
+    on its stdin."""
+    v = None
+    try:
+        v = verifier.Verifier(wire.Conn(sock, clock=clock.now), source=os.urandom(32), delta=2.0 ** -40,
+                              jitter_ns=10 ** 9, clock=clock, log=lambda m: None, **kw)
+        yield v
+    finally:
+        with contextlib.suppress(OSError):
+            sock.shutdown(socket.SHUT_RDWR)
+        sock.close()
+        if v is not None and v.lean is not None:
+            v.lean.proc.terminate()
+            v.lean.proc.kill()
+            v.stop()
 
 
 def store() -> Store:
@@ -153,7 +181,7 @@ def tampering(monkeypatch, tamper) -> None:
 def engine(s: Store, at: int = 0):
     """A serving trace in the binder's order: pages 0 to 2 in turn, each a request's for three steps (slots 0 to 3 at
     its first, 4 to 7 at its second, read at its third), freed before the step that reuses it, which is after the
-    forward of its last step, its last read; page 3 a request's that never finishes, written at steps 0 and 1.  The
+    forward of its last step, its last structural reader; page 3 a request's that never finishes, written at steps 0 and 1.  The
     engine numbers its steps from ``at`` (one whose binder numbered steps before the session)."""
 
     lives, n = {3: 0}, [0]
@@ -186,14 +214,11 @@ def run(plan: str, *, windows: int = 2, window_ns: int = 5, samples: int = 4096,
     th.start()
     sock, _ = lsock.accept()
     lsock.close()
-    v = verifier.Verifier(wire.Conn(sock, clock=clock.now), source=os.urandom(32), windows=windows, window_ns=window_ns,
-                          samples=samples, delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
-                          lifetime=lifetime)
-    v.register()
-    backend.regions = v.regions
-    r = v.session(0, v.allowance(v.ping(4)), None)
-    th.join()
-    sock.close()
+    with verifying(sock, clock, windows=windows, window_ns=window_ns, samples=samples, lifetime=lifetime) as v:
+        v.register()
+        backend.regions = v.regions
+        r = v.session(0, v.allowance(v.ping(4)), None)
+        th.join()
     return r, results[0], s, backend
 
 
@@ -385,31 +410,38 @@ def lockstep(tmp_path, monkeypatch, run_steps: int, windows: int = 2, setup: Cal
     def verify() -> None:
         sock, _ = lsock.accept()
         lsock.close()
-        v = verifier.Verifier(wire.Conn(sock, clock=clock.now), source=os.urandom(32), windows=windows, window_ns=5,
-                              samples=4096, delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
-                              lifetime=2)
-        v.register()
         try:
-            seen.append(v.session(0, v.allowance(v.ping(4)), None, pace=pace))
-        except Exception as e:  # noqa: BLE001  -- a prover that stops mid-session drops the connection
+            with verifying(sock, clock, windows=windows, window_ns=5, samples=4096, lifetime=2) as v:
+                v.register()
+                seen.append(v.session(0, v.allowance(v.ping(4)), None, pace=pace))
+        except Exception as e:  # noqa: BLE001  -- a side that stops mid-session drops the connection (`verifying`)
             seen.append(e)
-        sock.close()
 
     th = threading.Thread(target=verify, daemon=True)
     th.start()
-    lock = cs.begin()
-    if setup is not None:
-        setup()
-    step, steps = (served_engine if served else engine)(cs.store), []
-    def run(k: int):
-        steps.append(k)
-        if each is not None:
-            each(k)
-        return step(k)
+    steps: list[int] = []
+    try:
+        lock = cs.begin()
+        if setup is not None:
+            setup()
+        step = (served_engine if served else engine)(cs.store)
 
-    for k in range(run_steps):
-        lock.step(lambda: run(k))
-    rec = cs.end()
+        def run(k: int):
+            steps.append(k)
+            if each is not None:
+                each(k)
+            return step(k)
+
+        for k in range(run_steps):
+            lock.step(lambda: run(k))
+        rec = cs.end()
+    except BaseException:
+        # a run that fails ends its session, so the verifier's thread ends with it and reaps its process
+        if cs._thread is not None:
+            if cs.record is None:
+                cs.end()
+            th.join()
+        raise
     th.join()
     return rec, seen[0], cs, steps
 
@@ -579,13 +611,72 @@ def test_a_second_registration_of_a_live_node_is_refused_with_the_verifiers_reas
     th.start()
     sock, _ = lsock.accept()
     lsock.close()
-    v = verifier.Verifier(wire.Conn(sock, clock=PassClock().now), source=os.urandom(32), windows=1, window_ns=5,
-                          samples=64, delta=2.0 ** -40, jitter_ns=10 ** 9, clock=PassClock(), log=lambda m: None,
-                          registry=registry)
-    with pytest.raises(audit.RegistryError, match="live registration") as refused:
-        v.register()
-    th.join()
-    sock.close()
+    with verifying(sock, PassClock(), windows=1, window_ns=5, samples=64, registry=registry) as v:
+        with pytest.raises(audit.RegistryError, match="live registration") as refused:
+            v.register()
+        th.join()
     (e,) = raised
     assert e.why == f"refused: {refused.value}" and address in str(e) and e.why in str(e)
     assert registry.refused == {b"test-node": 1} and registry.drawn(b"test-node") == 1
+
+
+FAILING = '''
+import os
+from pathlib import Path
+
+from tests.store import test_remote_session as T
+
+
+def deliberate(*a, **kw):
+    raise AssertionError("deliberate")
+
+
+def test_a_session_that_fails_on_the_tests_thread(monkeypatch):
+    monkeypatch.setattr(T.verifier.Verifier, "session", deliberate)
+    T.run("serve")
+
+
+def test_a_registration_that_fails_on_the_lockstep_verifiers_thread(tmp_path, monkeypatch):
+    monkeypatch.setattr(T.verifier.Verifier, "register", deliberate)
+    _, r, _, _ = T.lockstep(tmp_path, monkeypatch, 3)
+    assert not isinstance(r, Exception), r
+
+
+def test_a_run_that_fails_in_its_first_step(tmp_path, monkeypatch):
+    T.lockstep(tmp_path, monkeypatch, 3, each=deliberate)
+
+
+def test_no_verifier_process_is_left():
+    comm = T.verifier.lv.EXE[:15]
+    left = []
+    for d in Path("/proc").iterdir():
+        try:
+            stat = (d / "stat").read_text() if d.name.isdigit() else ""
+        except OSError:
+            continue
+        name, rest = stat.split("(", 1)[-1].rsplit(")", 1) if stat else ("", "")
+        if name == comm and int(rest.split()[1]) == os.getpid():
+            left.append(int(d.name))
+    assert left == []
+'''
+
+
+def test_a_failing_test_leaves_no_verifier_process(tmp_path):
+    """A pytest whose tests fail with the Lean verifier's process live (the verifier's session raising on the test's
+    thread, its registration raising on `lockstep`'s verifier thread, which hung the suite while the prover waited on
+    the socket, and the run's first step raising) finishes, and leaves no `remote-audit-verifier` child, running or
+    unreaped, to the test after them (VLLM-78)."""
+    (tmp_path / "test_failing.py").write_text(FAILING)
+    r = subprocess.run([sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "-p", "no:xdist",
+                        f"--junitxml={tmp_path / 'report.xml'}", str(tmp_path / "test_failing.py")],
+                       cwd=VLLM, capture_output=True, text=True)
+    out = r.stdout + r.stderr
+    assert r.returncode == 1, out
+    cases = {c.get("name"): [x.get("message", "") for x in c if x.tag == "failure"]
+             for c in ElementTree.parse(tmp_path / "report.xml").iter("testcase")}
+    failed = ["test_a_session_that_fails_on_the_tests_thread",
+              "test_a_registration_that_fails_on_the_lockstep_verifiers_thread",
+              "test_a_run_that_fails_in_its_first_step"]
+    assert set(cases) == {*failed, "test_no_verifier_process_is_left"}, out
+    assert all(len(cases[n]) == 1 and "deliberate" in cases[n][0] for n in failed), cases
+    assert cases["test_no_verifier_process_is_left"] == [], out

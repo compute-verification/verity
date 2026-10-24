@@ -9,7 +9,8 @@ one's word view is its `_v1` composite at the same statics (`elementwise.on_bits
     MoeExpertFp8BlockCoordinate(W)_v4{K,G,KB,SWAP,DOT}, MoeExpertFp8BlockGemm(W)_v4{K,N,G,KB,SWAP,DOT}
                     word view `_v3`, `DOT` a Boolean e4m3 k32 step read as its word view (`BlackwellE4m3QmmaDot32_v2`)
     GatherE4m3x{E}_v2, GatherF32x{E}_v2, MoeExpertFp8Row_v2{E,K}, MoeExpertFp8ScaleRow_v2{E,K},
-    MoeExpertFp8Coordinate(W)_v2{E,K,G,KB,SWAP,DOT}, MoeExpertFp8Gemm(W)_v2{E,K,N,G,KB,SWAP,DOT}
+    MoeExpertFp8Coordinate(W)_v2{E,K,G,KB,SWAP,DOT}, MoeExpertFp8Gemm(W)_v2{E,K,N,G,KB,SWAP,DOT},
+    MoeExpertFp8CoordinateChunk_v2{E,K,G,KB,SWAP,DOT,FIRST,LAST}
                     word view `fp8_moe_experts`' `_v1`; each gather `boolean_gather`'s multiplexer tree over the id's 32 bits (E <= 1024)
 
 The callees are `verity.ml.circuits.ops.boolean.gemm`'s `HopperE4m3QgmmaDot32_v2` and `F2fpBf16_v2`, `verity.ml.circuits.ops.boolean.scalar`'s FP32 pieces,
@@ -47,7 +48,7 @@ I32 = Array(32, BL.BIT)
 
 def _acc(B, S, xq, sx, wrow, sw, dot=BG.HopperE4m3QgmmaDot32):
     c = _Bits(B)
-    return M.triton_block_acc(B, S.K, S.G, S.KB, bool(S.SWAP), xq, sx, wrow, sw, lambda: c.word(0, 32), dot, SC.F32Mul, SC.F32Fma)
+    return M.triton_block_acc(B, S.K, S.G, S.KB, S.SWAP, xq, sx, wrow, sw, lambda: c.word(0, 32), dot, SC.F32Mul, SC.F32Fma)
 
 
 def _coordinate(B, S, xq, sx, wrow, sw):
@@ -210,6 +211,17 @@ MoeExpertFp8GemmV2 = EW.on_bits("MoeExpertFp8Gemm", 2, X.GEMM_STATICS, X.gemm_si
                                 X.MoeExpertFp8Gemm, lifted=["DOT"])
 MoeExpertFp8GemmWV2 = EW.on_bits("MoeExpertFp8GemmW", 2, X.GEMM_STATICS, X.gemm_sig(True, E4M3, F32, I32, BF16), _pair_gemm_w,
                                  X.MoeExpertFp8GemmW, lifted=["DOT"])
+
+
+def _chunk(B, S, xq, sx, e, *rest):
+    """`MoeExpertFp8CoordinateChunk_v1`'s body on bits."""
+    c = _Bits(B)
+    return X.chunk(B, S, xq, sx, e, rest, bind(MoeExpertFp8RowV2, E=S.E, K=S.K), bind(MoeExpertFp8ScaleRowV2, E=S.E, K=S.K // S.G),
+                   lambda: c.word(0, 32), SC.F32Mul, SC.F32Fma, BG.F2fpBf16)
+
+
+MoeExpertFp8CoordinateChunkV2 = EW.on_bits("MoeExpertFp8CoordinateChunk", 2, X.CHUNK_STATICS, X.chunk_sig(E4M3, F32, I32, BF16), _chunk,
+                                           X.MoeExpertFp8CoordinateChunk, lifted=["DOT"])
 
 
 F1 = bits_of(1.0)
