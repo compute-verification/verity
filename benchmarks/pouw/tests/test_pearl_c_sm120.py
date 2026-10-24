@@ -279,8 +279,9 @@ KERNEL = r'extern "C" __global__ void (?:__cluster_dims__\([^)]*\) )?(?:__launch
 #: no pads; the row digests and tile leaves by hash_fast.cuh's kernels (run.py's default, PEARLC_SHA=fast)
 H3_LAUNCHED = {"s512_heads", "s512_row_segs", "s512_tile_segs", "s512_folds", "hm_leaves", "s512_frame_leaves", "s512_nodes",
                "s512_tree_small", "s512_seeds"}
-#: hash_decode.cuh's launches at the check (run.py's check_pd): its tables, and each served variant's commitment and tile leaves
-PD_LAUNCHED = {"pd_heads", *(f"pd_{kind}_{v}" for v in RUN.PD_SERVED for kind in ("commit", "tiles"))}
+#: hash_decode.cuh's launches at the check (run.py's check_pd): its tables, each served variant's tile leaves, and its
+#: commitment on the variant without PD_GROUP
+PD_LAUNCHED = {"pd_heads", *(f"pd_commit_{v & ~RUN.PD_GROUP}" for v in RUN.PD_SERVED), *(f"pd_tiles_{v}" for v in RUN.PD_SERVED)}
 
 
 def form_kernels() -> list[str]:
