@@ -8,7 +8,6 @@ import PouwCheck.Opening
 import PouwCheck.Pass
 import PouwCheck.Rounds
 import PouwWindow.Draw
-import PouwWindow.Length
 import PouwWindow.Rounds
 import SampledProofs.ChallengerSession
 import SampledProofs.PyJson
@@ -83,7 +82,7 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
   `credit.py` reads, embedded here), else the period counts nothing.
 * `Internal.length` is `credit._length` (Daniel, 19 Oct, ASK-39): the open of the window's period commits each
   request's public max_tokens with the public-cap done source (`committedLength`, `{max_tokens, stop}` with stop
-  `PouwWindow.stopFixed`), and the served rows the manifest fixed before the draw coin are that fixed length's schedule:
+  `STOP_FIXED`), and the served rows the manifest fixed before the draw coin are that fixed length's schedule:
   round 0 at least one row a request, round s ≥ 1 one decode row for each request whose max_tokens is past s. A round
   serving more ran a request past its public max_tokens, one serving fewer stopped one at an EOS-keyed done source.
 
@@ -1432,26 +1431,28 @@ private def periodBody (ledger : Json) (name : String) : Option Json :=
   | _ => none
 
 def LENGTH_FIELD : String := "length"
+/-- `window.STOP_FIXED`: circuits' public-cap done source. -/
+def STOP_FIXED : String := "fixed"
 def LENGTH_KEYS : List String := ["max_tokens", "stop"]
 
 def noFixedLength (name : String) : String :=
   s!"no-fixed-length: period {name}'s open commits no fixed length ({LENGTH_FIELD}, \{max_tokens, stop}), so " ++
   "its windows are not of record: a row of record serves each request's public max_tokens whatever it " ++
   "samples (ignore_eos; Daniel, 19 Oct, ASK-39). Open the period with the row's max_tokens and stop " ++
-  PouwWindow.stopFixed
+  STOP_FIXED
 
 def eosKeyedRow (name stop : String) : String :=
-  s!"eos-keyed-row: period {name}'s open commits the stop mode {stop}, not {PouwWindow.stopFixed} (ignore_eos, " ++
+  s!"eos-keyed-row: period {name}'s open commits the stop mode {stop}, not {STOP_FIXED} (ignore_eos, " ++
   "circuits' public-cap done source): a row of record is done only at each request's public max_tokens, " ++
   "never at an EOS token"
 
 def lengthForm (name : String) : String :=
   s!"period {name}'s open commits a fixed length ({LENGTH_FIELD}) that is not \{max_tokens, stop}, max_tokens " ++
   "a non-empty list of positive integers (each request's public max_tokens, in admission order) and stop " ++
-  PouwWindow.stopFixed
+  STOP_FIXED
 
 /-- `credit.committed_length`: each request's public max_tokens period `name`'s open committed (`LENGTH_FIELD`,
-`{max_tokens, stop}` with stop `PouwWindow.stopFixed`) in the auditor's ledger, one the challenger's checks have
+`{max_tokens, stop}` with stop `STOP_FIXED`) in the auditor's ledger, one the challenger's checks have
 trusted; else the refusal (`length`): an open with no fixed length (its windows are not of record), one whose stop mode
 is EOS-keyed, or a malformed one. -/
 def committedLength (ledger : Json) (name : String) : R (List Nat) := do
@@ -1459,8 +1460,8 @@ def committedLength (ledger : Json) (name : String) : R (List Nat) := do
   if let .null := ln then throw ("length", noFixedLength name)
   if let .obj _ := ln then
     if let .str s := get ln "stop" then
-      if s != PouwWindow.stopFixed then throw ("length", eosKeyedRow name s)
-  let m := if keys ln == some LENGTH_KEYS && get ln "stop" == Json.str PouwWindow.stopFixed then
+      if s != STOP_FIXED then throw ("length", eosKeyedRow name s)
+  let m := if keys ln == some LENGTH_KEYS && get ln "stop" == Json.str STOP_FIXED then
       match get ln "max_tokens" with
       | .arr xs => if xs.isEmpty then none else xs.toList.mapM fun x => (nat? x).filter (1 ≤ ·)
       | _ => none
