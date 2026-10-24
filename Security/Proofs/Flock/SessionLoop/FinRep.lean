@@ -1,5 +1,7 @@
 import Proofs.Flock.SessionLoop.FinishParts
 import Proofs.Flock.Claims.ZK.FinishBridge
+import Proofs.Flock.Claims.ZK.FrameReal
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
 
 /-!
 # `FinishParts`' (c), the reps' proof files, in parts
@@ -13,7 +15,7 @@ first round. So (c) is three parts, each named here, none a premise of a guarant
 * **(c.1) `Loop.FinRepCoins`**: the request's coins are the opened coins from the rep's first round
   (`Masked.repBase`), and the rep ends by the last opening.
 * **(c.2) `Loop.FinRepPads`**: the rep's table commits under `hm96-sha512`, and the request's pads have the layout's
-  length, `h_ab = h_a·h_b` and `w = x·y` (`repFw_cut`'s premises).
+  length, `h_ab = h_a·h_b` and `w = x·y` (`repFw_cut`'s premises). It holds in the masked scope (`Loop.finRepPads`).
 * **(c.3) `Loop.FinRepFwView`**: where the firewall's rep answered by the opened coins returns from the rep's first round,
   the rep from the views returns a proof whose file at the session's shape is the firewall's at the table's.
 
@@ -184,6 +186,133 @@ def FinRepPads : Prop :=
       (_root_.Flock.Firewall.Finish.padsOf q.draws).h[(_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0).tw]! =
         (_root_.Flock.Firewall.Finish.padsOf q.draws).h[(_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0).tx]! *
         (_root_.Flock.Firewall.Finish.padsOf q.draws).h[(_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0).ty]!
+
+/-- **A rep's draws are pads `repFw_cut` takes**: `Draws.ofBytes` reads `h` at the layout's length and sets `h_ab := h_a·h_b`
+and `w := x·y`, no index of which the other set moves. -/
+theorem drawsOfBytes_pads (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) :
+    (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b).h.size = lay.len ∧
+      (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b).h[lay.hab]! =
+        (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b).h[lay.fa]! *
+        (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b).h[lay.fb]! ∧
+      (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b).h[lay.tw]! =
+        (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b).h[lay.tx]! *
+        (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b).h[lay.ty]! := by
+  have gs : ∀ (B : Array F128) {i : ℕ} (j : ℕ) (v : F128), i < B.size → (B.set! i v)[j]! = if j = i then v else B[j]! := by
+    intro B i j v hi
+    by_cases hj : j < B.size
+    · have hj' : j < (B.set! i v).size := by simpa using hj
+      rw [getElem!_pos _ j hj', getElem!_pos _ j hj]
+      simp only [Array.set!, Array.getElem_setIfInBounds hj]
+      by_cases h : i = j
+      · simp [h]
+      · simp [h, Ne.symm h]
+    · have hj' : ¬ j < (B.set! i v).size := by simpa using hj
+      have hne : j ≠ i := by omega
+      rw [getElem!_neg _ j hj', getElem!_neg _ j hj, if_neg hne]
+  have hs : (_root_.Flock.Firewall.Frame.words b 0 lay.len).size = lay.len := by
+    unfold _root_.Flock.Firewall.Frame.words
+    rw [Array.size_map, Array.size_range]
+  have hfa : lay.fa + 1 = lay.fb := rfl
+  have hab : lay.fb + 1 < lay.hab := by
+    simp only [_root_.Flock.Zk.PadLayout.hab, _root_.Flock.Zk.PadLayout.zp, _root_.Flock.Zk.PadLayout.lc,
+      _root_.Flock.Zk.PadLayout.fc, _root_.Flock.Zk.PadLayout.fb]
+    omega
+  have htx : lay.tx = lay.hab + 1 := rfl
+  have hty : lay.ty = lay.hab + 2 := rfl
+  have htw : lay.tw = lay.hab + 3 := rfl
+  have hlen : lay.len = lay.tw + 1 := rfl
+  have key : ∀ h0 : Array F128, h0.size = lay.len →
+      ((h0.set! lay.hab (h0[lay.fa]! * h0[lay.fb]!)).set! lay.tw
+          ((h0.set! lay.hab (h0[lay.fa]! * h0[lay.fb]!))[lay.tx]! *
+            (h0.set! lay.hab (h0[lay.fa]! * h0[lay.fb]!))[lay.ty]!)).size = lay.len ∧
+      ((h0.set! lay.hab (h0[lay.fa]! * h0[lay.fb]!)).set! lay.tw
+          ((h0.set! lay.hab (h0[lay.fa]! * h0[lay.fb]!))[lay.tx]! *
+            (h0.set! lay.hab (h0[lay.fa]! * h0[lay.fb]!))[lay.ty]!))[lay.hab]! =
+        ((h0.set! lay.hab (h0[lay.fa]! * h0[lay.fb]!)).set! lay.tw
+          ((h0.set! lay.hab (h0[lay.fa]! * h0[lay.fb]!))[lay.tx]! *
+            (h0.set! lay.hab (h0[lay.fa]! * h0[lay.fb]!))[lay.ty]!))[lay.fa]! *
+        ((h0.set! lay.hab (h0[lay.fa]! * h0[lay.fb]!)).set! lay.tw
+          ((h0.set! lay.hab (h0[lay.fa]! * h0[lay.fb]!))[lay.tx]! *
+            (h0.set! lay.hab (h0[lay.fa]! * h0[lay.fb]!))[lay.ty]!))[lay.fb]! ∧
+      ((h0.set! lay.hab (h0[lay.fa]! * h0[lay.fb]!)).set! lay.tw
+          ((h0.set! lay.hab (h0[lay.fa]! * h0[lay.fb]!))[lay.tx]! *
+            (h0.set! lay.hab (h0[lay.fa]! * h0[lay.fb]!))[lay.ty]!))[lay.tw]! =
+        ((h0.set! lay.hab (h0[lay.fa]! * h0[lay.fb]!)).set! lay.tw
+          ((h0.set! lay.hab (h0[lay.fa]! * h0[lay.fb]!))[lay.tx]! *
+            (h0.set! lay.hab (h0[lay.fa]! * h0[lay.fb]!))[lay.ty]!))[lay.tx]! *
+        ((h0.set! lay.hab (h0[lay.fa]! * h0[lay.fb]!)).set! lay.tw
+          ((h0.set! lay.hab (h0[lay.fa]! * h0[lay.fb]!))[lay.tx]! *
+            (h0.set! lay.hab (h0[lay.fa]! * h0[lay.fb]!))[lay.ty]!))[lay.ty]! := by
+    intro h0 hs0
+    generalize hv1 : h0[lay.fa]! * h0[lay.fb]! = v1
+    generalize hh1 : h0.set! lay.hab v1 = h1
+    have hs1 : h1.size = lay.len := by rw [← hh1, Array.size_set!, hs0]
+    have e1 : ∀ j, h1[j]! = if j = lay.hab then v1 else h0[j]! := fun j => by
+      rw [← hh1]; exact gs h0 j v1 (by omega)
+    generalize hv2 : h1[lay.tx]! * h1[lay.ty]! = v2
+    have e2 : ∀ j, (h1.set! lay.tw v2)[j]! = if j = lay.tw then v2 else h1[j]! := fun j =>
+      gs h1 j v2 (by omega)
+    have n1 : lay.hab ≠ lay.tw := by omega
+    have n2 : lay.fa ≠ lay.tw := by omega
+    have n3 : lay.fb ≠ lay.tw := by omega
+    have n4 : lay.fa ≠ lay.hab := by omega
+    have n5 : lay.fb ≠ lay.hab := by omega
+    have n6 : lay.tx ≠ lay.tw := by omega
+    have n7 : lay.ty ≠ lay.tw := by omega
+    refine ⟨by rw [Array.size_set!, hs1], ?_, ?_⟩
+    · rw [e2, e2, e2, if_neg n1, if_neg n2, if_neg n3, e1, e1, e1, if_pos rfl, if_neg n4, if_neg n5, hv1]
+    · rw [e2, e2, e2, if_pos rfl, if_neg n6, if_neg n7, hv2]
+  first
+  | exact key _ hs
+  | (unfold _root_.Flock.Firewall.Frame.Draws.ofBytes; dsimp only; exact key _ hs)
+
+/-- **(c.2) holds in the masked scope**: there every table commits with `hm96-sha512` (`ZkTables.tables_of_setup`), rep
+stream `k`'s table is `tabOfLevel0` at table `k / 2`'s statement (`Count.tabOfLevel0_sched`), whose `--zk` schedule is
+the frame's (`Drive.start`), and the request's draws are `Draws.ofBytes` at that layout (`drawsOfBytes_pads`). -/
+theorem finRepPads (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x) :
+    FinRepPads L₀ src real wk x w := by
+  have bok : ∀ {α β : Type} {y : V α} {f : α → V β} {b : β}, y >>= f = .ok b → ∃ a, y = .ok a ∧ f a = .ok b := by
+    intro α β y f b hb
+    cases y with
+    | error e => cases hb
+    | ok a => exact ⟨a, rfl, hb⟩
+  intro ν t κ m₀ ρ₀ ops _ s0 spec hsx k hk tb hi q f hR
+  obtain ⟨-, -, hT, hall⟩ := FlockComplete.ZkTables.tables_of_setup hsc hsx
+  have hj : k / 2 < (Masked.stsOf x).size := by omega
+  obtain ⟨hr, hq, -⟩ := hR
+  unfold realOf at hr
+  rw [hsx] at hr
+  try dsimp only at hr
+  obtain ⟨⟨g, d, hi'⟩, -, hr⟩ := bok hr
+  obtain ⟨l, -, hr⟩ := bok hr
+  obtain ⟨tb', htb, hr⟩ := bok hr
+  have htb' : tb' = tb := by cases hr; rfl
+  rw [htb'] at htb
+  obtain ⟨hts, hsch⟩ := Count.tabOfLevel0_sched htb
+  unfold repInOf at hq
+  obtain ⟨⟨lay, ms⟩, hst, hq⟩ := bok hq
+  have hqd : q.draws = _root_.Flock.Firewall.Frame.Draws.ofBytes lay (L₀.draws (ν, t) k) := by
+    cases hq
+    rfl
+  unfold _root_.Flock.Firewall.Drive.start at hst
+  obtain ⟨⟨sch, tPad⟩, hsch', hst⟩ := bok hst
+  obtain ⟨ms', -, hst⟩ := bok hst
+  have hlay : lay = _root_.Flock.Zk.PadLayout.new (Masked.stsOf x)[k / 2]!.m (Masked.stsOf x)[k / 2]!.c.kLog sch.k0 := by
+    cases hst; rfl
+  have hsc2 : (Except.ok (sch, tPad) : V _) = .ok (tb.sch, tb.tPad) := hsch'.symm.trans hsch
+  have hss : sch = tb.sch := (Prod.mk.inj (Except.ok.inj hsc2)).1
+  have hP : (_root_.Flock.Firewall.Finish.padsOf q.draws).h =
+      (_root_.Flock.Firewall.Frame.Draws.ofBytes (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0)
+        (L₀.draws (ν, t) k)).h := by
+    show q.draws.h = _
+    rw [hqd, hlay, hss, hts]
+    try rfl
+  rw [hP]
+  refine ⟨?_, drawsOfBytes_pads _ _⟩
+  rw [hts]
+  show (Masked.stsOf x)[k / 2]!.merkle = _
+  rw [getElem!_pos (Masked.stsOf x) (k / 2) hj]
+  exact (hall (k / 2) hj).2.2
 
 /-- **(c.3) The firewall's rep at the views**: at a `Finish` `FinishIs` reads, at the schedules and level 0's
 commitments (a) gives, rep stream `k`'s extra claims and pads commitment from the views, and a history at its first
