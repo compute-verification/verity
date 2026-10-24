@@ -17,8 +17,9 @@
 #include "../pearl_c/hash_h3.cuh"
 #include "../pearl_c_sm120/hash_fast.cuh"
 // decode's A commitment and tile leaves (run.py's PD_SERVED): the variants the decode shapes take, then their PD_STAMP twins
-// (run.py's PD_STAMPED, the profile's stamps)
+// (run.py's PD_STAMPED, the profile's stamps); PD_PDL: pd_commit lets the call's forming launch behind it (pdl_entry)
 #define PD_VARIANT_LIST(X) X(851) X(979) X(883) X(1011)
+#define PD_PDL
 #include "../pearl_c_sm120/hash_decode.cuh"
 // A's commitment past decode's rows (run.py's chain "pl", PL_VARIANT)
 #include "hash_prefill.cuh"
@@ -85,6 +86,9 @@ DEV void mbar_wait_warp(uint32_t bar, uint32_t parity) {
   __syncwarp();
 }
 // the maps are written before the launch (run.py's encode_maps), so a prefetch is all they need
+// a launch behind the launch before it on its stream (run.py's PDL_KERNELS): every thread waits for that launch to complete
+// before it touches global memory, then lets the next launch start behind this one; both are no-ops in a plain launch
+DEV void pdl_entry() { asm volatile("griddepcontrol.wait;\n\tgriddepcontrol.launch_dependents;" ::: "memory"); }
 DEV void tma_prefetch(const void* map) { asm volatile("prefetch.tensormap [%0];" ::"l"(map) : "memory"); }
 // box (c0 = byte offset along the depth, c1 = row) of `map` into dst, counted on bar
 DEV void tma_load(uint32_t dst, const void* map, uint32_t bar, int c0, int c1) {
@@ -234,6 +238,7 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
     asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
   }
   __syncthreads();
+  pdl_entry();
 
   if (wg == NWG) {
     // the producer exits rather than returns: a path back would join its register budget with the consumers'
@@ -596,6 +601,7 @@ template <int MODE, bool GR = false, bool EP = false> DEV void form_body(const A
   static_assert(!(GR && EP), "p5 is GR's experts or EP's beta");
   __shared__ __align__(128) uint8_t sE[64 * 32], sF[128 * 32];
   __shared__ __align__(16) uint8_t sO[64 * FORM_ROW];
+  pdl_entry();
   const int tid = threadIdx.x, t0 = blockIdx.x * 128, r0 = blockIdx.y * 64, k = a.i[1];
   const uint8_t* E = reinterpret_cast<const uint8_t*>(a.p[2]);
   const uint8_t* F = reinterpret_cast<const uint8_t*>(a.p[3]) +
@@ -768,6 +774,7 @@ extern "C" __global__ void pa(const Args a) {
 // gemm_words_d's total, stored to p2 and into P_A as pa's.  p0 E'_A codes, p1 the windows (i1 slabs of rows x 32), p2 AF
 // words out, p3 out; i0 rows, i1 windows
 extern "C" __global__ void pa_w(const Args a) {
+  pdl_entry();
   const int t = blockIdx.x * blockDim.x + threadIdx.x, rows = a.i[0], wins = a.i[1];
   if (t >= rows * 64) return;
   const int row = t / 64, e = t % 64;

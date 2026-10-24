@@ -174,6 +174,26 @@ def test_kernel_constants_match_the_reference():
     assert C.PearlC(forming="v1", device=H100, hashing="h3").name == "pearl-c-h100-v1-h3"
 
 
+def test_a_programmatic_launch_waits_at_its_entry():
+    """Each of run.py's PDL_KERNELS waits for the launch before it (pdl_entry) before it touches global memory: the GEMMs once
+    their barriers are set up in shared memory, the forming and pa_w first; and pd_commit lets the forming launch behind it."""
+    def body(start):
+        at = SOURCE.index(start)
+        return SOURCE[at:SOURCE.index("\n}\n", at)]
+
+    gemm, form, pa_w = (body(x) for x in ("DEV void gemm_body", "DEV void form_body", 'void pa_w('))
+    head = gemm[:gemm.index("pdl_entry();")]
+    assert "__syncthreads();" in head and "if (wg == NWG)" not in head and "tma_" not in head
+    for b in (form, pa_w):
+        head = b[:b.index("pdl_entry();")]
+        assert "reinterpret_cast" not in head and "return" not in head, head
+    assert {k for k in RUN.PDL_KERNELS if k.startswith("form")} <= set(form_kernels())
+    assert RUN.PDL_KERNELS - set(form_kernels()) == {"gemm_words_win_d", "pa_w", "gemm_pearlc_d"}
+    assert SOURCE.index("#define PD_PDL") < SOURCE.index('#include "../pearl_c_sm120/hash_decode.cuh"')
+    pd = (SM120_DIR / "hash_decode.cuh").read_text()
+    assert "#ifdef PD_PDL\n  asm volatile(\"griddepcontrol.launch_dependents;\"" in pd
+
+
 SASS_OK = "\n".join([
     "Function : gemm_x", "  /*0010*/ QGMMA.64x128x32.F32.E4M3.E4M3 R24, gdesc[UR4], RZ, !UPT, gsb0 ;",
     "  /*0020*/ QGMMA.64x128x32.F32.E4M3.E4M3 R24, gdesc[UR8], R24, gsb0 ;",
@@ -557,6 +577,8 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     # pa_w adds up
     names = {ev["name"] for ev in launched}
     assert {"gemm_pearlc_d", "gemm_ct_d", "gemm_words_win_d", "pa_w", "gemm_words"} <= names
+    # the main lane's PDL_KERNELS start behind the launch before them, and no other launch does
+    assert {ev["name"] for ev in launched if ev.get("pdl")} == RUN.PDL_KERNELS & names >= {"gemm_pearlc_d", "pa_w", "form_s5_ep"}
     wins = [ev for ev in launched if ev["name"] == "gemm_words_win_d"]
     assert wins and all(ev["grid"][0] == min(132, ev["i"][2] // RUN.WINDOW) for ev in wins)
 
