@@ -33,9 +33,20 @@ A spec-level reference for network accounting's timing channel:
   an honest served link is accepted. An egress end with neither profile gets no verdict (`ValueError`, failing
   closed);
 - the I/O tie (`io_tie`), a design (`PROTOCOL.md`, "The I/O tie") and its prototype on a fake upstream, in no Spec:
-  on draws, a served link-window's frame k under the head's frames root is the canonical event of the token id the
-  Commit's token port holds for request ⌊k / F⌋'s output k mod F. It has the reference and one draw's Boolean
-  Definition (`IoTieDraw`: `NetworkFrameRead`, `IoTieEvent`, the port row's `NetworkHidingRead`, `IoTieColumn`);
+  every cell of an egress link-window is opened, each a pad or the canonical event of one token id on the stream the
+  warden set, and each is the output the advice's map names at its place (`window_map`, from advice v0's outputs and
+  release buckets; the verifier computes it in the clear from the opened advice, the named gap, until the map is read
+  in the proof under the advice's hiding root), with the id the Commit sampled for it (the port: one hiding row of
+  ids a step, opened under the Commit's root). The warden commits each bucket's cells as one hiding row. It has the
+  reference and the unit's Boolean Definition (`IoTieWindow`: the cells' root by `NetworkRowsRoot`, the port's rows by
+  `IoTiePort`, then `IoTieContent`: `IoTieCell` on every cell, the prover's Beneš routing of the port's entries
+  `IoTieRoute`, `IoTieMatch`);
+- the ingress tie (`io_request`, `PROTOCOL.md`, "The ingress tie") on a fake upstream: an ingress link-window's
+  cells cut into CERT-VARLEN's id requests, each request's count of prompt fields held to the advice's prompt_len and
+  its ordinal to its place in the cut, which N2-ADVICE's advised verdict is to require. It has the reference and the
+  unit's Boolean Definition (`IoTieRequest`: the cells' root by `NetworkRowsRoot`, the own frame by
+  `IoTieRequestOwn`, one `IoTieRequestFrame` and `IoTieRequestStep` a cell, the prover's routing of the view's prompt
+  lengths by `IoTieRoute`, `IoTieRequestEnd`);
 - the capacity counts;
 - the calibration of honest runs;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
@@ -58,11 +69,15 @@ A spec-level reference for network accounting's timing channel:
   back from maintenance (`Proxy(start=k, position=p)`, off by default) serves from window k on, its first egress frame
   the Program's at position p, and carries nothing from before: a window it was down for has no record. On a served
   link (`Proxy(served=ServedProfile(…))`, off by default; with the salt, `own` 1 at a PoUW window of one certifier
-  window) its ingress admits whole requests by the admission rule (`served.Admission`).
+  window) its ingress admits whole requests by the admission rule (`served.Admission`). On a sealed pair link
+  (`Proxy(pair=active.Pair.of(…))`, off by default), between two of the auditor's certifiers, every slot of the link is
+  sealed after its record and opened before it (`verity.ml.crypto.aead`, SHA-512 counter mode then HMAC-SHA512, a
+  nonce per slot), so the records are the unsealed run's and a unit that doesn't open fails the link closed.
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's
-Definition, and in `active` the proof service's registration and receipt, which `reveal` reads. The certificate's signature scheme is a parameter: the certifier's
+Definition, and in `active` the proof service's registration and receipt, which `reveal` reads, and the pair link's
+AEAD (`verity.ml.crypto.aead`). The certificate's signature scheme is a parameter: the certifier's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
 From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` the circuits
 and their evaluator.
