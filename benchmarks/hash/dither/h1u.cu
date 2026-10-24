@@ -65,7 +65,8 @@
 //              kh_units_multi's receipts under J10-R's call-scale noise (measured only; at the end of this file), with
 //              kh_units_multi_j10r_sm and a served step's seeds from h1r's call table, kh_seeds_j10r_h1r
 //   kh_units_multi_j10rc(calls, ncalls, units, M, live, mode, stream)   (H1U_JRC) kh_units_multi_j10r's receipts with
-//              each call's column blocks hashed once a call too, its workspace kh_j10r_ws_bytes(M, N, K)
+//              each call's column blocks hashed once a call too, its workspace kh_j10r_ws_bytes(M, N, K); built with
+//              H1U_JRY = 1 too, each row block's tail digits computed once a call (h1jr_ady) and read by its units
 //   kh_units_multi_j10rd(calls, ncalls, units, M, live, mode, stream)   (H1U_JRC, H1U_JRD) kh_units_multi_j10rc's
 //              receipts with each call's A and B dithered once a call, its workspace kh_j10rd_ws_bytes(M, N, K)
 //   kh_words(K), kh_digits(K), kh_ws_bytes(M, N, K), kh_j10_ws_bytes(rows, N, K), kh_noise_blocks(K), kh_fault_shift()
@@ -565,8 +566,17 @@ static_assert(H1U_JPD >= 1 && (H1U_JRING == 0 || H1U_JRING == 1) && 16 % (H1U_JP
 #if H1U_JRD && !H1U_JRC
 #error "H1U_JRD is H1U_JRC's units on their dithered operands: build it with H1U_JRC = 1"
 #endif
+// RY (with RC; kh_units_multi_j10rc built with H1U_JRY = 1 too): Y and the coins are the row block's alone, so its tail
+// digits ad are computed once a call (h1jr_ady, h1u_unit's YO: the row block's segments with no B, no T and no receipt)
+// into the call's workspace after its column blocks, and its units read them: no Y mma in their segments
+#ifndef H1U_JRY
+#define H1U_JRY 0
+#endif
+#if H1U_JRY && (!H1U_JRC || H1U_JRD)
+#error "H1U_JRY is H1U_JRC's units with their row blocks' digits read: build it with H1U_JRC = 1 and no H1U_JRD"
+#endif
 template <int MD, bool WS, bool OS, bool J10 = false, bool PL = false, bool DG = false, bool RW = false, bool RC = false,
-          bool RD = false>
+          bool RD = false, bool RY = false, bool YO = false>
 __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int8_t* __restrict__ B, u32 M, u32 N, u32 K,
                                          const u64* __restrict__ seeds, const uint8_t* __restrict__ live,
                                          u32* __restrict__ out, const u32* __restrict__ ws, const OneOut oo, const u32 u,
@@ -575,6 +585,8 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
   static_assert(!RW || !(WS || OS || J10 || PL || DG), "J10-R's units are the fused receipts-only form");
   static_assert(!RC || RW, "RC is J10-R's units with their column blocks read");
   static_assert(!RD || RC, "RD is RC's units on their dithered operands");
+  static_assert(!RY || (RC && !RD), "RY is RC's units with their row blocks' digits read");
+  static_assert(!YO || RY, "YO is RY's row block digits");
   constexpr bool PF = WS || H1U_PF;
   constexpr bool RING = RW ? H1U_JRING : H1U_RING;
   constexpr int PD = RW ? H1U_JPD : H1U_PD, NS = PD + RING;
@@ -593,6 +605,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
   }
   const bool rcpt = !OS || !(flags & F_NW_UNITS);
   if (live && !live[ri]) {
+    if constexpr (YO) return;
     if (rcpt)
       for (u32 w = lane; w < nwords; w += 32) o[w] = 0;
     if (OS) {
@@ -624,7 +637,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
   const u64* sd = seeds + 16 * (u64)u;
 
   u32 y[8], z[8];
-  {
+  if constexpr (!YO) {
     u64 msg[16] = {TAG0, TAG1, TAG2};
 #pragma unroll
     for (int j = 0; j < 8; ++j) msg[3 + j] = __ldg(sd + 8 + j);
@@ -691,7 +704,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
 #pragma unroll
     for (int r = 0; r < 4; ++r) {
       a[r] = ld2<H1U_L2HINT>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs);
-      b[r] = ld2e<H1U_L2HINT, H1U_EVF && H1U_EVFU>(Bb + (u64)(8 * r + g) * K + kofs);
+      if constexpr (!YO) b[r] = ld2e<H1U_L2HINT, H1U_EVF && H1U_EVFU>(Bb + (u64)(8 * r + g) * K + kofs);
     }
   };
   if (PF) {
@@ -712,18 +725,22 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
         const uint4* csrc =
             reinterpret_cast<const uint4*>(ws + 16 * ((u64)M * rb + (u64)(32 * cj + lane) * cb + blk));
         uint4 cv[4];
+        if constexpr (!YO) {
 #pragma unroll
-        for (int w = 0; w < 4; ++w) cv[w] = ld4<H1U_L2HINT_WS>(csrc + w);
+          for (int w = 0; w < 4; ++w) cv[w] = ld4<H1U_L2HINT_WS>(csrc + w);
+        }
 #pragma unroll
         for (int w = 0; w < 4; ++w) {
           S.rowbits[lane][4 * w] = rv[w].x;
           S.rowbits[lane][4 * w + 1] = rv[w].y;
           S.rowbits[lane][4 * w + 2] = rv[w].z;
           S.rowbits[lane][4 * w + 3] = rv[w].w;
-          S.colbits[lane][4 * w] = cv[w].x;
-          S.colbits[lane][4 * w + 1] = cv[w].y;
-          S.colbits[lane][4 * w + 2] = cv[w].z;
-          S.colbits[lane][4 * w + 3] = cv[w].w;
+          if constexpr (!YO) {
+            S.colbits[lane][4 * w] = cv[w].x;
+            S.colbits[lane][4 * w + 1] = cv[w].y;
+            S.colbits[lane][4 * w + 2] = cv[w].z;
+            S.colbits[lane][4 * w + 3] = cv[w].w;
+          }
         }
       } else {
         u64 s[8];
@@ -789,24 +806,28 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
     }
     __syncwarp();
     if (it == 0) {
+      if constexpr (!RY || YO) {
 #pragma unroll
-      for (int d = 0; d < MD - 1; ++d) S.coin[lane][d] = S.rowbits[lane][d];
-#pragma unroll
-      for (int h = 0; h < 8; ++h) {
-        const u32 hv = S.colbits[lane][h];
-        u32 w = 0;
-#pragma unroll
-        for (int b = 0; b < 4; ++b) {
-          const u32 x = (hv >> (8 * b)) & 0xFFu;
-          w |= ((x >= 129 ? x - 129 : x) + 64) << (8 * b);
-        }
-        S.utab[lane][h] = w;
+        for (int d = 0; d < MD - 1; ++d) S.coin[lane][d] = S.rowbits[lane][d];
       }
-      __syncwarp();
+      if constexpr (!YO) {
 #pragma unroll
-      for (int nt = 0; nt < 4; ++nt) {
-        ulo[nt] = S.utab[8 * nt + g][2 * q];
-        uhi[nt] = S.utab[8 * nt + g][2 * q + 1];
+        for (int h = 0; h < 8; ++h) {
+          const u32 hv = S.colbits[lane][h];
+          u32 w = 0;
+#pragma unroll
+          for (int b = 0; b < 4; ++b) {
+            const u32 x = (hv >> (8 * b)) & 0xFFu;
+            w |= ((x >= 129 ? x - 129 : x) + 64) << (8 * b);
+          }
+          S.utab[lane][h] = w;
+        }
+        __syncwarp();
+#pragma unroll
+        for (int nt = 0; nt < 4; ++nt) {
+          ulo[nt] = S.utab[8 * nt + g][2 * q];
+          uhi[nt] = S.utab[8 * nt + g][2 * q + 1];
+        }
       }
       continue;
     }
@@ -827,13 +848,13 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
 #pragma unroll
           for (int r = 0; r < 4; ++r) {
             ca[r] = pa[jj][r];
-            cw[r] = pb[jj][r];
+            if constexpr (!YO) cw[r] = pb[jj][r];
           }
         } else if (PF) {
 #pragma unroll
           for (int r = 0; r < 4; ++r) {
             ca[r] = pa[jj][r];
-            cw[r] = pb[jj][r];
+            if constexpr (!YO) cw[r] = pb[jj][r];
           }
           if (sg + PD < ks) load_seg(sg + PD, pa[jj], pb[jj]);
         } else {
@@ -841,7 +862,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
 #pragma unroll
           for (int r = 0; r < 4; ++r) {
             ca[r] = ld2<H1U_L2HINT>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs);
-            cw[r] = ld2e<H1U_L2HINT, H1U_EVF && H1U_EVFU>(Bb + (u64)(8 * r + g) * K + kofs);
+            if constexpr (!YO) cw[r] = ld2e<H1U_L2HINT, H1U_EVF && H1U_EVFU>(Bb + (u64)(8 * r + g) * K + kofs);
           }
         }
         u32 af[2][4], bf[4][2];
@@ -873,7 +894,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
         }
         u32 wbf[OS ? 4 : 1][2], cf[PL ? 4 : 1][2], b0[PL ? 4 : 1][2];  // PL: c as 0/1 B fragments, B itself
 #pragma unroll
-        for (int nt = 0; nt < 4; ++nt) {
+        for (int nt = 0; nt < (YO ? 0 : 4); ++nt) {
           const u32 col = 8 * nt + g;
           const uint2 b8 = cw[nt];
           const u32 cb8 = RD ? 0u : cbits[col * 68 + 4 * j + q];
@@ -900,8 +921,8 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
         for (int mt = 0; mt < 2; ++mt)
 #pragma unroll
           for (int nt = 0; nt < 4; ++nt) {
-            mma_s8(T[4 * mt + nt], af[mt], bf[nt]);
-            mma_s8(Y[4 * mt + nt], af[mt], idr[nt]);
+            if constexpr (!YO) mma_s8(T[4 * mt + nt], af[mt], bf[nt]);
+            if constexpr (!RY || YO) mma_s8(Y[4 * mt + nt], af[mt], idr[nt]);
             if constexpr (OS) mma_s8(Cw[4 * mt + nt], af[mt], wbf[nt]);
             if constexpr (PL) {
               mma_s8(Pz[4 * mt + nt], af[mt], cf[nt]);
@@ -919,12 +940,14 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
         if constexpr (OS) {
           if ((flags & F_FAULT) && u == 0 && lane == 0 && sg == 0) T[0][0] = (int)((u32)T[0][0] + (1u << FAULT_SHIFT));
         }
-        fold(T, y, z);
-        ring_put(S, j, lane, y, z);
+        if constexpr (!YO) {
+          fold(T, y, z);
+          ring_put(S, j, lane, y, z);
+        }
       }
     }
     __syncwarp();
-    if (rcpt) o[32 * blk + lane] = ring_xor(S, lane);
+    if (!YO && rcpt) o[32 * blk + lane] = ring_xor(S, lane);
     if constexpr (DG) lane_put(S, lw, nwords, 32 * blk, lane);
     __syncwarp();
   }
@@ -932,29 +955,50 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
   // the tail: A_d packed as A fragments in the accumulators' column order (fragment k 4 q' .. of rows g / g + 8 is
   // columns 2 q', 2 q' + 1, 8 + 2 q', 9 + 2 q' of n-tiles 0, 1; k 16 + 4 q' .. those of n-tiles 2, 3)
   u32 ad[MD][2][4];
+  // RY: row block ri's digits in its call's workspace after the column blocks, word (8 d + 4 mt + r) 32 + lane of its MD 256
+  const u32* const adr = RY ? ws + 16ull * ((u64)M + N) * rb + (u64)ri * MD * 256 + lane : nullptr;
+  if constexpr (RY && !YO) {
 #pragma unroll
-  for (int d = 0; d < MD; ++d)
+    for (int d = 0; d < MD; ++d)
 #pragma unroll
-    for (int mt = 0; mt < 2; ++mt)
+      for (int mt = 0; mt < 2; ++mt)
 #pragma unroll
-      for (int r = 0; r < 4; ++r) ad[d][mt][r] = 0;
+        for (int r = 0; r < 4; ++r) ad[d][mt][r] = adr[32 * (8 * d + 4 * mt + r)];
+  } else {
 #pragma unroll
-  for (int t = 0; t < 8; ++t) {
-    const int mt = t >> 2, nt = t & 3;
+    for (int d = 0; d < MD; ++d)
 #pragma unroll
-    for (int e = 0; e < 4; ++e) {
-      const u32 row = 16 * mt + g + 8 * (e >> 1), rho = 8 * nt + 2 * q + (e & 1);
-      int yv = Y[t][e];
-      const int reg = (e >> 1) + 2 * (nt >> 1), sh8 = 8 * (2 * (nt & 1) + (e & 1));
+      for (int mt = 0; mt < 2; ++mt)
 #pragma unroll
-      for (int d = 0; d < MD - 1; ++d) {
-        const int qv = yv >> 7;
-        u32 zd = (S.coin[row][d] >> rho) & 1u;
-        if (d == MD - 2 && qv == 127) zd = 0;
-        ad[d][mt][reg] |= (((u32)yv & 127u) | (zd << 7)) << sh8;
-        yv = qv + (int)zd;
+        for (int r = 0; r < 4; ++r) ad[d][mt][r] = 0;
+#pragma unroll
+    for (int t = 0; t < 8; ++t) {
+      const int mt = t >> 2, nt = t & 3;
+#pragma unroll
+      for (int e = 0; e < 4; ++e) {
+        const u32 row = 16 * mt + g + 8 * (e >> 1), rho = 8 * nt + 2 * q + (e & 1);
+        int yv = Y[t][e];
+        const int reg = (e >> 1) + 2 * (nt >> 1), sh8 = 8 * (2 * (nt & 1) + (e & 1));
+#pragma unroll
+        for (int d = 0; d < MD - 1; ++d) {
+          const int qv = yv >> 7;
+          u32 zd = (S.coin[row][d] >> rho) & 1u;
+          if (d == MD - 2 && qv == 127) zd = 0;
+          ad[d][mt][reg] |= (((u32)yv & 127u) | (zd << 7)) << sh8;
+          yv = qv + (int)zd;
+        }
+        ad[MD - 1][mt][reg] |= ((u32)yv & 0xFFu) << sh8;
       }
-      ad[MD - 1][mt][reg] |= ((u32)yv & 0xFFu) << sh8;
+    }
+    if constexpr (YO) {
+      u32* const adw = const_cast<u32*>(adr);
+#pragma unroll
+      for (int d = 0; d < MD; ++d)
+#pragma unroll
+        for (int mt = 0; mt < 2; ++mt)
+#pragma unroll
+          for (int r = 0; r < 4; ++r) adw[32 * (8 * d + 4 * mt + r)] = ad[d][mt][r];
+      return;
     }
   }
   u32 uf[4][2], nf[4][2];
@@ -2665,21 +2709,40 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umjc(const UCallR* __r
   const UCallR c = calls[lo];
   const u32 u = jswz_unit(c, gu - c.u0, M);
   if (c.md == 3)
-    h1u_unit<3, false, false, false, false, false, true, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws,
-                                                               OneOut{}, u, smem[wp]);
+    h1u_unit<3, false, false, false, false, false, true, true, false, (bool)H1U_JRY>(
+        c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{}, u, smem[wp]);
   else
-    h1u_unit<2, false, false, false, false, false, true, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws,
-                                                               OneOut{}, u, smem[wp]);
+    h1u_unit<2, false, false, false, false, false, true, true, false, (bool)H1U_JRY>(
+        c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{}, u, smem[wp]);
 }
 
-// a call's workspace under kh_units_multi_j10rc: its M RB row blocks, then its N CB column blocks, 16 words each
+#if H1U_JRY
+// RY's digits: call blockIdx.y's row block blockIdx.x WARPS + warp, by its column block 0's unit under YO
+__global__ void __launch_bounds__(32 * WARPS) h1jr_ady(const UCallR* __restrict__ calls, u32 M,
+                                                     const uint8_t* __restrict__ live) {
+  __shared__ WarpSmem smem[WARPS];
+  const u32 wp = threadIdx.x >> 5;
+  const u32 ri = blockIdx.x * WARPS + wp;
+  if (ri >= M / 32) return;
+  const UCallR c = calls[blockIdx.y];
+  if (c.md == 3)
+    h1u_unit<3, false, false, false, false, false, true, true, false, true, true>(
+        c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{}, ri * (c.N / 32), smem[wp]);
+  else
+    h1u_unit<2, false, false, false, false, false, true, true, false, true, true>(
+        c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{}, ri * (c.N / 32), smem[wp]);
+}
+#endif
+
+// a call's workspace under kh_units_multi_j10rc: its M RB row blocks, then its N CB column blocks, 16 words each, then
+// under H1U_JRY its M / 32 row blocks' digits (h1jr_ady), MD KiB each
 extern "C" unsigned long long kh_j10r_ws_bytes(unsigned M, unsigned N, unsigned K) {
-  return 64ull * ((unsigned long long)M + N) * (K / 512 + 1);
+  return 64ull * ((unsigned long long)M + N) * (K / 512 + 1) + (H1U_JRY ? 96ull * M : 0);
 }
 
 // kh_units_multi_j10r with each call's column blocks hashed once a call (h1jr_cols) beside its rows (h1jr_rows), and the
 // units reading both (h1umjc): calls' rws of kh_j10r_ws_bytes(M, N, K) bytes; mode 0 the blocks and the units, 1 the
-// blocks alone, 2 the units alone (on blocks a mode 0 or 1 call wrote)
+// blocks alone, 2 the units alone (on blocks a mode 0 or 1 call wrote; under H1U_JRY the row blocks' digits first)
 extern "C" int kh_units_multi_j10rc(const void* calls, unsigned ncalls, unsigned units, unsigned M, const void* live,
                                     int mode, void* stream) {
   if (!ncalls || ncalls > 65535 || M % 32 || mode < 0 || mode > 2) return 2;
@@ -2690,6 +2753,10 @@ extern "C" int kh_units_multi_j10rc(const void* calls, unsigned ncalls, unsigned
     h1jr_cols<<<dim3(128, ncalls), 256, 0, s>>>((const UCallR*)calls, M);
   }
   if (mode != 1) {
+#if H1U_JRY
+    h1jr_ady<<<dim3((M / 32 + WARPS - 1) / WARPS, ncalls), 32 * WARPS, 0, s>>>((const UCallR*)calls, M,
+                                                                              (const uint8_t*)live);
+#endif
     carve<h1umjc>();
     h1umjc<<<(units + WARPS - 1) / WARPS, 32 * WARPS, 0, s>>>((const UCallR*)calls, ncalls, M, (const uint8_t*)live);
   }
