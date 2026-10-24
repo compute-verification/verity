@@ -144,7 +144,8 @@ def committed_ints(committer: Any, step: int, name: str) -> list[int] | None:
     blk = (getattr(committer, "_gpu_blocks", {}) or {}).get(step, (None, 0))[0]
     if blk is not None:
         off = int(meta.dev_off) if int(getattr(meta, "dev_off", -1)) >= 0 else int(meta.stream_off)
-        raw = blk[off: off + meta.nbytes].cpu().numpy().tobytes()
+        part = blk[off: off + meta.nbytes]
+        raw = (part.cpu() if hasattr(part, "cpu") else part).numpy().tobytes()
     elif getattr(meta, "host", None) is not None:
         raw = bytes(meta.host)
     elif step in (getattr(committer, "_streams", {}) or {}) and int(meta.stream_off) >= 0:

@@ -245,13 +245,17 @@ def requests_check(h1: Any, requests: int) -> dict[str, Any]:
     that admitted it, recorded before that round's coin, at a first slot naming it (`pouw_h1_requests.request_reason`), every slot
     of every step naming the request its row is, under a round no later than its step (`slot_reason`), the log against the
     coins (`rounds_reason`), no served row without an entry (``gaps``), and each call's A table under its round's root
-    (``a_roots``, `pouw_h1_requests.tables_reason`)."""
+    (``a_roots``, `pouw_h1_requests.tables_reason`). With the Commit the request and slot tables are live (VLLM-85): their
+    leaves open in each round's ``live@<s>``, so ``live`` holds each round's verdict (`pouw_h1_live.verdicts`, its unit's
+    circuit evaluated on its statement) in place of the openings."""
+    from verity_vllm.protocol_options import pouw_h1_live as LV
     from verity_vllm.protocol_options import pouw_h1_requests as RQ
     coins = h1.rounds.challenger.commitment
-    why = [w for e in h1.requests if (w := RQ.request_reason(h1.round_log, coins, h1.salt, h1.rows, e, h1.open_request(e.index),
-                                                             h1.open_first(e.index), h1.admission))]
-    manifest, slots = h1.manifest(), []
-    for s in range(len(h1.round_log)):
+    live = LV.verdicts(h1)
+    why = [] if live else [w for e in h1.requests if (w := RQ.request_reason(
+        h1.round_log, coins, h1.salt, h1.rows, e, h1.open_request(e.index), h1.open_first(e.index), h1.admission))]
+    manifest, slots = h1.manifest(), [f"{v['reason']} (m = {v['m']})" for v in live if not v["ok"]]
+    for s in range(0 if live else len(h1.round_log)):
         calls = [m for m in manifest if m["step"] == s]
         for p in range(h1.rows):
             slot = h1.open_slot(s, p)
@@ -266,9 +270,11 @@ def requests_check(h1: Any, requests: int) -> dict[str, Any]:
     out = {**h1.details["requests"], "served": requests, "entries_refused": why[:20], "slots_refused": slots[:20],
            "rounds": rounds, "entries_checked": len(h1.requests), "slots_checked": len(h1.round_log) * h1.rows,
            "slot_owners": owners, "slots_are_rows": [len(o) for o in owners] == h1.step_rows()[:len(owners)],
-           "entries": [[e.index, e.round, e.slot] for e in h1.requests]}
+           "entries": [[e.index, e.round, e.slot] for e in h1.requests], "live": live,
+           "live_accepted": f"{sum(v['ok'] for v in live)}/{h1.steps}" if live else None}
     out["ok"] = bool(out["admitted"] == requests and not out["refused"] and not out["gaps"] and not why and not slots
-                     and rounds is None and out["slots_are_rows"] and str(out.get("a_roots")).startswith("bound"))
+                     and rounds is None and out["slots_are_rows"] and str(out.get("a_roots")).startswith("bound")
+                     and (not live or len(live) == h1.steps))
     return out
 
 
@@ -624,6 +630,9 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                 if tap is not None:
                     out["roots1"] = h1.details["roots1"]
                     out["ok"] = bool(out["ok"] and out["roots1"]["tied"])
+                    if a.live_dump and out["requests"].get("live"):
+                        from verity_vllm.protocol_options import pouw_h1_live as LV
+                        out["live_dump"] = LV.dump(h1, Path(a.live_dump) / name)
         finally:
             SV.NR.commit = nr_commit
             lie.uninstall()
@@ -1277,6 +1286,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--handoff-state", metavar="DIR", help="with --handoff: the prover's scratch the window is saved in")
     ap.add_argument("--prover-dir", metavar="DIR", help="fill with --served: the prover's private directory, kept past the "
                                                        "close, outside --out (pouw_h1_prover: its salt key and values)")
+    ap.add_argument("--live-dump", metavar="DIR", help="with --commit: each Commit window's live@<s> statements, the "
+                                                       "prover's rows and openings (pouw_h1_live.dump), into DIR/<window>, "
+                                                       "outside --out, for benchmarks/pouw/h1_prove/live.sh")
     ap.add_argument("--close-from", metavar="DIR", help="no GPU: close and release the window a --handoff run saved in DIR, "
                                                         "on the session's stream --stream-fd, completing --out's record")
     ap.add_argument("--stream-fd", type=int, metavar="FD", help="with --close-from: the session's stream, as the holder "

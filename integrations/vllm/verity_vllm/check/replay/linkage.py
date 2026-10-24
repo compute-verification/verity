@@ -10,6 +10,7 @@ import numpy as np
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.commit.opened import UnverifiedUnlinked
 from verity_vllm.program.kernels.rows import SAMPLED_MEMBER
+from verity_vllm.program.sampling_event import circuit_token_id
 from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, SEED_PARAM
 from verity_vllm.check.replay.opening import CommittedStore
 
@@ -71,6 +72,11 @@ def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, i
                 unlinked.append({"request_id": rid, "engine_step": s, "kind": "chain", "why": why if w is None else swhy})
                 continue
             tid, sid = int(np.asarray(w).astype(np.int64)[0]), int(np.asarray(sw).astype(np.int64)[0])
+            try:
+                circuit_token_id(sid)
+            except ValueError as err:
+                unlinked.append({"request_id": rid, "engine_step": s, "kind": "chain", "why": f"the committed sampled id of step {s - 1}: {err}"})
+                continue
             if tid == sid:
                 linked += 1
             else:

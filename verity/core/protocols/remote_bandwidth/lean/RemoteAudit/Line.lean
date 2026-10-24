@@ -123,7 +123,7 @@ def stretches (gs : Array Group) (per N b chip : Nat) (W : Rat) (c : Charge) : E
   let e : Array Nat := (Array.range G).map fun g => if g + 1 < G then max gs[g]!.lastNs s[g + 1]! else gs[g]!.lastNs
   let L : Array Nat := (Array.range G).map fun g => e[g]! - s[g]!
   let gap : Array Nat := (Array.range G).map fun g => if g + 1 < G then s[g + 1]! - s[g]! else L[g]!
-  let S : Rat := (chip : Rat) / (b : Rat)
+  let S : Rat := ((chip + b - 1) / b : Nat)
   let mut out : Array Stretch := #[]
   for m in [0:G / per - 1] do
     let lo := m * per
