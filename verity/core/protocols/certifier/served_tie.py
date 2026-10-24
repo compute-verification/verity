@@ -65,10 +65,11 @@ from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.types import Array
 from verity.ml.commitments import hm96
+from verity.ml.commitments.gates.frame_v3 import _part
 from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf
 from verity.core.protocols.certifier import head_check as HC, io_tie as IT, replay_chain as RC
-from verity.core.protocols.certifier.head_check import BIT, _part
+from verity.core.protocols.certifier.head_check import BIT
 
 STATICS = ("R", "P", "G", "IW", "L", "T", "IB", "PB")
 STEP = ("R", "IW", "L", "T", "IB", "PB")
