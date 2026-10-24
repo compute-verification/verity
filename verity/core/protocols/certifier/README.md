@@ -30,8 +30,15 @@ A spec-level reference for network accounting's timing channel:
   certifier's salt frame heading each window, which `own` counts), a
   request-major canonical order, and one T, τ_b and declared sync for a window's anchors (`PROTOCOL.md`, "A served
   link"). The proxy's admission rule (`Proxy(served=…)`) admits a request only while its window still ends idle, so
-  an honest served link is accepted. An egress end with neither profile gets no verdict (`ValueError`, failing
-  closed);
+  an honest served link is accepted;
+- an advised link's counts (`advised`, `LinkWindows(advised=AdvisedProfile(windows, own))`), a served link under
+  arbitrary traffic: N2's advised unit, `NetworkAdvisedLinkWindow`, adds `NetworkAdvisedCounts_v1` (137,990 ANDs at
+  T = 600, R = 6, R_in = 1), which holds the egress head's counts to the release of the prover's advice's frames, handed
+  in its release buckets, and the ingress head's counts to the advice: each hand eligible under the declared sync after
+  its request's frames, and each window's ingress total the advice's. Carry-over between windows is the advice's. With
+  the advice fixed the counts are determined, so the egress timing carries at most the advice's bits (`PROTOCOL.md`,
+  "An advised link"). An egress end with no profile that is neither served nor advised gets no verdict (`ValueError`,
+  failing closed);
 - the capacity counts;
 - the calibration of honest runs;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
@@ -60,8 +67,8 @@ It is pure Python. It imports only the standard library and `verity`: for the re
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's
 Definition, and in `active` the proof service's registration and receipt, which `reveal` reads. The certificate's signature scheme is a parameter: the certifier's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
-From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` the circuits
-and their evaluator.
+From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` and `advised`
+the circuits and their evaluator.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`Security/`, area `NetworkCertifier`).
 `lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's
 definitions, proved equal to them in `Security/Proofs/NetworkCertifier/Code.lean`, and the difftest that holds this

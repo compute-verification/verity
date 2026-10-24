@@ -17,22 +17,26 @@ its `reference`, which the tests hold to the circuit.
 allocation and OWN the ingress certifier's own frames a window (1 with its salt on, else 0), as `served`'s.
 
 **What N2 reads of the advice** (`frames`, `view`), the fields `advice.bits` charges for it:
-- `requests[j].prompt_len` and `requests[j].output_len`, and `requests[j].ingress_frames`, the request's frames on the
-  ingress link (`active.request_frame_count` of its body), the j-th request listed being the link's j-th;
+- `requests[j].prompt_len` and `requests[j].output_len` (the tokens released), and `requests[j].ingress_frames`, the
+  request's frames on the ingress link (`active.request_frame_count` of its body), the j-th request listed being the
+  link's j-th (requests are indexed by their ingress ordinal);
 - each step's rows' `request`, `start` and `n` (`steps[s].rows`);
 - `release[s]`, the egress bucket, on the certifier session's clock from window 0's first bucket, in which step s's
   output frames are handed to the egress certifier;
 - `received[w]`, the request frames the ingress certifier released in window w: the ingress carry between windows.
 
-It reads no `id`, `finish`, `kind`, `cache_hit` or `preempted`. `ingress_frames` and `received` are N2's additions to
-I1's v0 fields, which carry no request's size on the link and no ingress carry.
+It reads no `id`, `finish`, `kind`, `cache_hit`, preemption set, or trailing or recompute mark. `ingress_frames` and
+`received` are N2's additions to I1's v0 fields, which carry no request's size on the link and no ingress carry.
 
 **The frames** (`frames`). A row samples one token, the request's next, when it reaches the request's last known
 token: `start + n` is the prompt's length plus the tokens sampled before it (a decode row, a prefill's last chunk, and
-a preempted request's recomputation's last chunk). Every sampled token is one egress frame (one canonical event, none
-for `[DONE]`), its logical index λ its place in its response, and the link's canonical order is the steps' order, each
-step's frames in its rows' order. Each request samples exactly `output_len` tokens, and no row reaches past its last
-known token, or the advice is malformed and every window refuses.
+a preempted request's recomputation's last chunk). A request's first `output_len` samples are released, each one
+egress frame (one canonical event, none for `[DONE]`), its logical index λ its place in its response; its samples past
+`output_len` are trailing rows' (async scheduling's, a stop string's or an abort's), computed but unreleased, and hand
+no frame, so N2 reads no trailing mark. The link's canonical order is the steps' order, each step's frames in its rows'
+order (Model Runner V2's); N2's counts read only which step hands each frame, so they don't depend on the order within
+a step, which IO-TIE's frame-to-(request, position) map shares. Each request samples at least `output_len` tokens, and
+no row reaches past its last known token, or the advice is malformed and every window refuses.
 
 **The window's view** (`view`), the unit's public inputs, computed by the verifier from the advice and the declared
 syncs:
@@ -66,16 +70,18 @@ free: not the frames, not the ingress timing, not when the server actually wrote
 ingress head: no frame is handed before its request's frames were released by the ingress certifier, δ + ⌊λ/ρ⌋ earlier.
 
 **Premises** of "an honest advised link is accepted", which N2's claim doesn't rest on: the link's canonical order is
-`frames`' (the prover's framer numbers events so, one per sampled token); each step's frames are handed to the egress
+`frames`' (the prover's framer numbers events so, one per released token); each step's frames are handed to the egress
 certifier in one bucket, its `release` (the prover's framer writes a step's events together, away from a bucket's
 edge, and the proxy hands each frame when it is ready, neither shaping nor faulting a late one), or the advice takes
 each step's release bucket from the certified egress record (`releases`), which reproduces it when every frame of a
-step is handed by the bucket that releases the step's first; requests are listed in their ingress order with their
-ingress frames; each window's declared sync has δ and ρ that every frame handed in it meets (a small δ, a ρ at least a
-stream's rate); and both ends share T and τ_b.
+step is handed by the bucket that releases the step's first; the steps' releases fall in the link's windows, each
+with a declared sync; requests are listed in their ingress order with their ingress frames; each window's declared
+sync has δ and ρ that every frame handed in it meets (a small δ, a ρ at least a stream's rate); with the salt on, the
+own frame counts as bucket 0's, so a window that starts with RIN or more request frames carried in under-counts by one
+until the own frame is released, which only a hand at its exact eligibility notices; and both ends share T and τ_b.
 
-**Cost** (`size`): about 250 ANDs a bucket, the release check and the ingress floor, so about 150,000 at T = 600: a
-twentieth of one head check (3,229,371).
+**Cost** (`size`): about 230 ANDs a bucket, the release check and the ingress floor: 137,990 at T = 600, R = 6,
+RIN = 1, OWN = 0 and 139,253 at R = 16, RIN = 4, OWN = 1, a twentieth of one head check (3,229,371).
 """
 from __future__ import annotations
 
@@ -146,10 +152,10 @@ def _nat(x: Any, what: str, least: int = 0) -> int:
 
 
 def frames(advice) -> list[Frame]:
-    """The advice's egress frames in the link's canonical order: each step's sampled tokens, in its rows' order, a row
-    sampling its request's next token when `start + n` is the prompt's length plus the tokens sampled before it.
-    Raises `ValueError` on a malformed advice: a row past its request's last known token, a request sampled past its
-    `output_len` or short of it."""
+    """The advice's egress frames in the link's canonical order: each step's released tokens, in its rows' order, a row
+    sampling its request's next token when `start + n` is the prompt's length plus the tokens sampled before it, and
+    the sample released while the request has released fewer than its `output_len`. Raises `ValueError` on a malformed
+    advice: a row past its request's last known token, or a request that samples fewer than its `output_len`."""
     requests = list(advice.requests)
     prompt = [_nat(r.prompt_len, "prompt_len") for r in requests]
     length = [_nat(r.output_len, "output_len") for r in requests]
@@ -164,11 +170,10 @@ def frames(advice) -> list[Frame]:
             if end > known:
                 raise ValueError(f"step {s}: request {j}'s row reaches position {end}, past its {known} known tokens")
             if end == known:
-                if sampled[j] == length[j]:
-                    raise ValueError(f"step {s}: request {j} samples past its output_len {length[j]}")
-                out.append(Frame(s, j, sampled[j]))
+                if sampled[j] < length[j]:
+                    out.append(Frame(s, j, sampled[j]))
                 sampled[j] += 1
-    short = [j for j in range(len(requests)) if sampled[j] != length[j]]
+    short = [j for j in range(len(requests)) if sampled[j] < length[j]]
     if short:
         raise ValueError(f"requests {short[:8]} sample fewer tokens than their output_len")
     return out
