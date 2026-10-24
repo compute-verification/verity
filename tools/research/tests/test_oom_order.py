@@ -35,9 +35,13 @@ class Node:
             (self.ramlock / f"research-{rid}.json").write_text(json.dumps({"owner": "research", "gb": gb, "pid": runner, "run_id": rid}))
         return str(d.resolve())
 
-    def process(self, pid: int, *, pgid: int, anon_gb: float, shmem_gb: float = 0.0, adj: int = 0, run_dir: str | None = None) -> None:
+    def process(self, pid: int, *, pgid: int, anon_gb: float, shmem_gb: float = 0.0, adj: int = 0, run_dir: str | None = None,
+                pss_gb: float | None = None) -> None:
         d = self.proc / str(pid)
         d.mkdir()
+        if pss_gb is not None:
+            (d / "smaps_rollup").write_text(f"Rss:\t{int(anon_gb * GB) // 1024} kB\nPss:\t{int(pss_gb * GB) // 1024} kB\n"
+                                            f"Pss_Anon:\t{int(pss_gb * GB) // 1024} kB\nPss_File:\t0 kB\nPss_Shmem:\t0 kB\n")
         (d / "stat").write_text(f"{pid} (py thon) S 1 {pgid} {pgid} 0 -1 4194560 0 0 0 0 0 0 0 0 20 0 1 0 100 0 0\n")
         (d / "status").write_text(f"Name:\tpython\nVmRSS:\t{int((anon_gb + shmem_gb + 9) * GB) // 1024} kB\n"
                                   f"RssAnon:\t{int(anon_gb * GB) // 1024} kB\nRssFile:\t{9 * GB // 1024} kB\n"
@@ -123,6 +127,22 @@ def test_a_check_slot_s_reservation_counts_for_its_run_and_the_largest_of_a_run_
     assert node.adj(30) == 0 and node.adj(40) == 0
 
 
+def test_forked_workers_copy_on_write_pages_count_once_so_a_share_within_its_reservation_stays_at_0(node):
+    """24 Oct, n2 03:44Z: a PRF-131 share (345 GB) whose ~278 GB parent forked 8 workers summed to 2,505 GB of RssAnon and was set
+    to 1000, the node's first pick; split among the processes sharing them (Pss), its pages come to 300 GB."""
+    share = node.run("r20261024-011205-2882", pgid=70, gb=345)
+    node.process(70, pgid=70, anon_gb=278, pss_gb=278 / 9 + 10, run_dir=share)
+    for i in range(1, 9):
+        node.process(70 + i, pgid=70, anon_gb=278, pss_gb=278 / 9 + 0.5, run_dir=share)
+    over = node.run("r20261024-011205-3333", pgid=90, gb=10)
+    node.process(90, pgid=90, anon_gb=100, pss_gb=50, run_dir=over)
+    node.process(91, pgid=90, anon_gb=100, run_dir=over)                              # no smaps_rollup: its Rss counts
+    assert node.main() == 0
+    assert all(node.adj(70 + i) == 0 for i in range(9)), "Pss 292 GB, within 345"
+    assert node.adj(90) == node.adj(91) == 500 + round(500 * 140 / 1000), "still over: Pss 50 + Rss 100 against 10"
+    assert {r["run"]: r["use_gb"] for r in node.log()} == {"r20261024-011205-3333": 150.0}
+
+
 def test_a_dry_run_says_what_it_would_set_and_writes_nothing(node, capsys):
     rd = node.run("r20261019-140000-1111", pgid=50)
     node.process(50, pgid=50, anon_gb=10, run_dir=rd)
@@ -139,7 +159,8 @@ def test_the_script_is_stdlib_only_and_deploy_toml_runs_it_as_root_on_the_shared
     import tomllib
     m = tomllib.loads((src.parent / "deploy.toml").read_text())
     rows = {e["path"]: e for e in m["file"]}
-    nodes = {"vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3"}
+    nodes = {"vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4",
+             "vy-nebius-cpu-5"}
     for path in ("/usr/local/lib/vy-monitoring/oom_order.py", "/etc/systemd/system/vy-oom-order.service",
                  "/etc/systemd/system/vy-oom-order.timer"):
         assert set(rows[path]["nodes"]) == nodes and nodes <= set(m["nodes"]), path
