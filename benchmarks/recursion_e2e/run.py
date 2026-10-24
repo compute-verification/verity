@@ -37,7 +37,9 @@ POD = ROOT / "verity/ml/flock/pod/85-rec-reprice.sh"
 SCHEMA = "verity/bench/recursion-e2e/v1"
 RESULT = "recursion_e2e.json"
 STEPS = ("build", "inner", "vstage", "oprove", "lean")
-DEFAULT_WORK = "/workspace/jobs/rec-reprice"
+# FLOCK_WORK unless set: the first of these the job can write (85-rec-reprice.sh's default first; a node's research user
+# may not create /workspace/jobs)
+WORKS = ("/workspace/jobs/rec-reprice", "/workspace/research/cache/rec-reprice", str(Path.home() / ".cache/verity/rec-reprice"))
 
 
 def text(p: Path) -> str:
@@ -214,6 +216,26 @@ def put(out: Path, res: dict) -> None:
                                   f"not stored here (exit {p.returncode}): {(p.stderr or '')[-400:]}; run `store RUN` from a VM") + "\n")
 
 
+def work_dir() -> Path:
+    for d in ([os.environ["FLOCK_WORK"]] if os.environ.get("FLOCK_WORK") else WORKS):
+        try:
+            Path(d).mkdir(parents=True, exist_ok=True)
+        except OSError:
+            continue
+        if os.access(d, os.W_OK):
+            return Path(d)
+    raise SystemExit(f"recursion_e2e: none of {WORKS} is writable here: set FLOCK_WORK")
+
+
+def keep(work: Path, out: Path) -> None:
+    """The build caches this job leaves under ``work`` (the prover and Lean builds, keyed by their sources), recorded."""
+    if shutil.which("research"):
+        p = subprocess.run(["research", "keep", str(work), "--owner", "@proofs", "--expires", "never", "--priority", "normal",
+                            "--why", "recursion_e2e's prover and Lean build caches (85-rec-reprice.sh's, keyed by their sources)"],
+                           capture_output=True, text=True)
+        (out / "keep.txt").write_text(f"exit {p.returncode}\n{p.stdout[-400:]}{p.stderr[-400:]}")
+
+
 def run(a) -> int:
     run_dir = Path(os.environ.get("RESEARCH_RUN_DIR") or a.run_dir).resolve()
     out = run_dir / "out"
@@ -221,7 +243,8 @@ def run(a) -> int:
     if not shutil.which("time") and not Path("/usr/bin/time").exists():
         raise SystemExit("recursion_e2e: needs /usr/bin/time (apt-get install time)")
     tag = a.tag or "recbench-" + (os.environ.get("RESEARCH_RUN_ID") or f"local-{os.getpid()}")
-    work = Path(os.environ.get("FLOCK_WORK") or DEFAULT_WORK)
+    work = work_dir()
+    keep(work, out)
     ncpu = len(os.sched_getaffinity(0))
     pcpus = a.pcpus or max(2, ncpu * 3 // 4)
     inputs = {"commit": git_head(), "k": a.k, "n": a.n, "warm": 0, "runs": a.runs, "neg": a.neg, "baseline": a.baseline,

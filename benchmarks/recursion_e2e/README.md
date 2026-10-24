@@ -40,8 +40,10 @@ What `run` takes:
 - `--pcpus P` (default 3/4 of the job's cores, the rest the verifier's), `--jobs J` (Lean verifications at once, default 2).
 
 The inputs are pinned by the commit, `K` and `N`: the statement, its program, partition and draw are derived from them.
-The prover and Lean builds are cached under `$FLOCK_WORK` (default `/workspace/jobs/rec-reprice`) by their sources, as
-`85-rec-reprice.sh` keys them. A cold node builds C-Flock's prover and `flock-verify` first. A run's staged statements
+The prover and Lean builds are cached under `$FLOCK_WORK` by their sources, as `85-rec-reprice.sh` keys them. Unless
+it is set, `$FLOCK_WORK` is the first of `/workspace/jobs/rec-reprice`, `/workspace/research/cache/rec-reprice` and
+`~/.cache/verity/rec-reprice` that the job can write, recorded with `research keep`. A cold node builds C-Flock's
+prover and `flock-verify` first. A run's staged statements
 and sessions go under `$FLOCK_WORK/data/recbench-RUN_ID` and are removed when it ends, unless `--keep-data`.
 
 `summarize DIR` rebuilds `DIR/recursion_e2e.json` from a fetched run's `out/`.
