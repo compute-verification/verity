@@ -16,7 +16,8 @@ variable {Adv : Type}
 
 /-- **`bits` counts.** At most `2^c` advice values are charged `c` bits or fewer over all windows. It holds when the
 charges sum to at least the length of a prefix-free encoding of the advice (`bitsCount_of_prefixFree`), or to at least
-the length plus one of any injective encoding (`bitsCount_of_lengthSucc`). -/
+the length plus one of any injective encoding (`bitsCount_of_lengthSucc`). Advice v1's charge meets it under any
+registered book (`AdviceV1.bitsCount`, from `Guarantees.EncardChargedLe`). -/
 def BitsCount {W : ℕ} (bits : Adv → Fin W → ℕ) : Prop :=
   ∀ c : ℕ, {a | ∑ w, bits a w ≤ c}.encard ≤ ((2 ^ c : ℕ) : ℕ∞)
 

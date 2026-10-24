@@ -7885,6 +7885,18 @@
    "assumptions": [],
    "type_hash": "1f6fae37b38a9fb93b51665c9c08523c8e03a5ec15ac11f07ae0a3d736096581"
   },
+  "NetTiming.SecurityProofs.EncardChargedLe": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1": {
+   "owner": "@network-accounting"
+  },
   "NetTiming.SecurityProofs.EncardFifoGrids": {
    "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.EncardFifoGrids : NetTiming.Guarantees.EncardFifoGrids"],
@@ -10426,6 +10438,10 @@
    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate": "frozen (no-function): It bounds AccSeqsWithin, the observation sequences an abstract Program accepts with advice within the caps, not runs of the network check's code, and takes BitsCount about an abstract charge; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, an abstract charge and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, BitsCount about the charge, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, an abstract charge and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, BitsCount about the charge, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardChargedLe": "frozen (no-function): It counts the decision streams by AdviceV1.charges, the definitions' mirror of arith_encode.py's reference_charge (ChargeCount_v1{N}'s charge), not a compiled program's code: circuit-check holds ChargeCount_v1's circuit to that reference, and no Lean program of the network check computes the charge yet, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1": "frozen (no-function): It bounds AccSeqsWithin with advice v1's charge (AdviceV1.bits, the mirror of arith_encode.py's reference_charge), the observation sequences an abstract Program accepts with advice within the caps, not runs of the network check's code, and takes no assumption about the charge; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, advice v1's charge (AdviceV1.bits, the mirror of arith_encode.py's reference_charge) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, advice v1's charge (AdviceV1.bits, the mirror of arith_encode.py's reference_charge) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.WardenViewEqClientView": "frozen (no-function,world-unlisted): It is stated over the warden's code as Definitions.NetworkCertifier.Warden states it (wardenCode), run by an arbitrary device on arbitrary server behaviors, and takes trusted-nebius-host (TrustedNebiusHost) for the device; no compiled warden program implements that code yet, so no function names it under shape.properties, and such a program with a proof that it equals wardenCode is the restatement path.",
    "NetTiming.SecurityProofs.EncardWardenViewsLe": "frozen (no-function,world-unlisted): It is stated over the warden's code as Definitions.NetworkCertifier.Warden states it (wardenCode), run by an arbitrary device on arbitrary server behaviors, and takes trusted-nebius-host (TrustedNebiusHost) for the device, a cap on the schedules' cells and the set the data lies in; no compiled warden program implements that code yet, so no function names it under shape.properties, and such a program with a proof that it equals wardenCode is the restatement path.",
    "NetTiming.SecurityProofs.EncardWardenDecodableLe": "frozen (no-function,world-unlisted): It is stated over the warden's code as Definitions.NetworkCertifier.Warden states it (wardenCode), run by an arbitrary device on arbitrary server behaviors, and takes trusted-nebius-host (TrustedNebiusHost) for the device, a cap on the schedules' cells, BitsCount about an abstract charge and the content premise about the data; no compiled warden program implements that code yet, so no function names it under shape.properties, and such a program with a proof that it equals wardenCode is the restatement path.",
