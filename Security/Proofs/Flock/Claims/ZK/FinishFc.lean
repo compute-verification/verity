@@ -131,7 +131,13 @@ theorem replay_fc (st : Setup) (lay : Zk.PadLayout) (cap : Array ByteArray) (par
   unfold Zk.replay
   simp only [map_bind, map_pure]
   all_goals repeat (refine bind_congr fun _ => ?_)
-  all_goals (split <;> simp only [map_pure])
+  all_goals
+    split
+    all_goals
+      first
+        | rfl
+        | (repeat (refine bind_congr fun _ => ?_)
+           exact (map_pure _ _).trans (map_pure _ _).symm)
 
 /-- **The replay returns at zerocheck proofs that differ in `finalC` alone**, at the same transcript. -/
 theorem replay_ok_fc {st : Setup} {lay : Zk.PadLayout} {cap : Array ByteArray} {params : PcsParams}
