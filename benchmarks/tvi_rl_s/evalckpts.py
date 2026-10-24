@@ -43,7 +43,7 @@ def main():
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     ckpts = []
-    for d in sorted(glob.glob(str(Path(args.root) / args.glob))):
+    for d in sorted({d for g in args.glob.split("|") for d in glob.glob(str(Path(args.root) / g))}):
         if not (Path(d) / "DONE").exists():
             continue
         meta = json.load(open(Path(d) / "meta.json"))
