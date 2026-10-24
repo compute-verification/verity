@@ -18,6 +18,7 @@ import Proofs.Flock.Recursive.OsSalts
 import Proofs.Flock.Recursive.Private
 import Proofs.Flock.Recursive.Compile
 import Proofs.Flock.Recursive.Audit
+import Proofs.Flock.Recursive.SoundExec
 import Proofs.Flock.Recursive.Universal
 import Proofs.Flock.Recursive.UniversalClass
 import Proofs.Flock.Recursive.ExecClass
