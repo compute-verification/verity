@@ -115,6 +115,8 @@ Arms:
     ARM-smqQ, ARM-smqQoD  a dither-a-so arm with its units on the SMs whose id % D < Q (DITHER_SO_UNITS_SMQ=Q/D, D 8
                  without it); -smq0 on every SM, whatever the run's environment sets.  These set the arm's own worker's
                  environment, so one run times the units' forms and shares side by side (ARM-j10r-smq9o16)
+    ARM-kcb      a dither-a-hbc arm on a second h1u_kc build ($HB_H1U_KC_B, e.g. hb_served.sh's HB_KC_FLAGS_B), timed beside
+                 ARM on $HB_H1U_KC's
 
 `gate` (--gate, before the reps): exact and dither each generate GATE_TOKENS tokens for the 32 requests; dither's window
 checks one B32 decode step (`dither_fused.check`, its transcript buffers 0xA5 before the kernels wrote them) and refuses
@@ -271,7 +273,14 @@ def env_of(name: str, value: str | None):
     return set_env
 
 
-SUFFIXES = {"-xl": install_exactlin, "-a2": a_form(2), "-a3": a_form(3), "-j10r": env_of("DITHER_SO_UNITS", "j10r")}
+def kc_b() -> None:
+    if not os.environ.get("HB_H1U_KC_B"):
+        raise ValueError("an ARM-kcb arm needs $HB_H1U_KC_B, a second h1u_kc build")
+    os.environ["HB_H1U_KC"] = os.environ["HB_H1U_KC_B"]
+
+
+SUFFIXES = {"-xl": install_exactlin, "-a2": a_form(2), "-a3": a_form(3), "-j10r": env_of("DITHER_SO_UNITS", "j10r"),
+            "-kcb": kc_b}
 # -smqQ / -smqQoD: a dither-a-so arm's units on the SMs whose id % D < Q ($DITHER_SO_UNITS_SMQ=Q/D, D 8 without it;
 # -smq0 every SM, whatever the run's environment says)
 SMQ_SUFFIX = re.compile(r"-smq(\d+)(?:o(\d+))?$")

@@ -8,7 +8,8 @@
 #   build ARCH[,ARCH]  (vy-nebius-2) libh1c.so, libh1f.so and libh1o.so for each arch into $OUT/lib/ARCH, their SASS and resource
 #                      usage, and BUILD.txt: the source commit and arch, and per library the sha256 of the files nvcc -M names
 #                      (and its nvcc flags); with HB_KC_FLAGS set (even empty) the dither-a-hbc arm's h1u_kc.so too, and
-#                      with HB_KC_H1C_FLAGS its libh1c_kc.so, built as sbench.sh builds them (HB_H1U_KC, DITHER_H1C_KC)
+#                      with HB_KC_H1C_FLAGS its libh1c_kc.so, built as sbench.sh builds them (HB_H1U_KC, DITHER_H1C_KC);
+#                      with HB_KC_FLAGS_B a second h1u_kc, h1u_kcb.so (HB_H1U_KC_B: sbench.py's ARM-kcb arms)
 #   run ARCH [ARGS]    (vy-dc-h200 sm_90a, vy-dc-b200 sm_100a) sbench.py through hb_sbench.py on one leased GPU for at most
 #                      14 minutes, every shipped library checked against the source's files first; ARGS go to sbench.py
 #                      (HB_SCRIPT=h1agate.py, or another script of this directory, runs it in hb_sbench.py's place with
@@ -46,7 +47,7 @@
 # inside the lease, default 820), VERITY_BENCH_VENV (default /workspace/cp/venv312), NVCC (default CUDA 13.0's),
 # POUW_CHALLENGER and POUW_CHALLENGER_SESSION, or DITHER_CHALLENGERS (the windows' coins off the node, sessions from
 # infra: sbench.py's "Coins"), J10R_SHA (a DITHER_SO_UNITS=j10r arm's J10R Definition: a sent j10r-SHA.tar.gz, else the
-# repository's git), HB_H1U_KC and DITHER_H1C_KC (the KC builds, each held to its BUILD.txt line).
+# repository's git), HB_H1U_KC, HB_H1U_KC_B and DITHER_H1C_KC (the KC builds, each held to its BUILD.txt line).
 # Exit: sbench's (3 an engine failed to build, 4 the gate failed), 2 a build failed or a shipped library is missing or
 # another source's, 15 a challenger's port never opened or a session lacks its id or address.
 set -uo pipefail
@@ -69,12 +70,13 @@ srchash() { (cd "$ROOT" && cat "$@" | sha256sum | cut -c1-16); }
 [ -n "${HB_H1U_KSPLIT:-}" ] && HB_H1U_KSPLIT=$INPUTS/$(basename "$HB_H1U_KSPLIT")
 [ -n "${HB_H1U_KRONLY:-}" ] && HB_H1U_KRONLY=$INPUTS/$(basename "$HB_H1U_KRONLY") && export HB_H1U_KRONLY
 [ -n "${HB_H1U_KC:-}" ] && HB_H1U_KC=$INPUTS/$(basename "$HB_H1U_KC") && export HB_H1U_KC
+[ -n "${HB_H1U_KC_B:-}" ] && HB_H1U_KC_B=$INPUTS/$(basename "$HB_H1U_KC_B") && export HB_H1U_KC_B
 [ -n "${DITHER_H1C_KC:-}" ] && DITHER_H1C_KC=$INPUTS/$(basename "$DITHER_H1C_KC") && export DITHER_H1C_KC
 # the hb_*.py files: the source tree's where it has them (it is first on sbench's sys.path), else the ones sent
 HB=$ROOT/$DITHER
 [ -f "$HB/hb_sbench.py" ] || HB=$INPUTS
 sha256sum "$0" "$HB"/hb_sbench.py "$HB"/hb_side.py "$HB"/hb_one.py "$HB"/hb_peel.py ${HB_H1U:+"$HB_H1U"} \
-  ${HB_H1U_PEEL:+"$HB_H1U_PEEL"} ${HB_H1U_KSPLIT:+"$HB_H1U_KSPLIT"} ${HB_H1U_KRONLY:+"$HB_H1U_KRONLY"} ${HB_H1U_KC:+"$HB_H1U_KC"} ${DITHER_H1C_KC:+"$DITHER_H1C_KC"} 2>/dev/null | sed "s#$INPUTS/##; s#$ROOT/##" > "$OUT/env/wrapper.txt"
+  ${HB_H1U_PEEL:+"$HB_H1U_PEEL"} ${HB_H1U_KSPLIT:+"$HB_H1U_KSPLIT"} ${HB_H1U_KRONLY:+"$HB_H1U_KRONLY"} ${HB_H1U_KC:+"$HB_H1U_KC"} ${HB_H1U_KC_B:+"$HB_H1U_KC_B"} ${DITHER_H1C_KC:+"$DITHER_H1C_KC"} 2>/dev/null | sed "s#$INPUTS/##; s#$ROOT/##" > "$OUT/env/wrapper.txt"
 echo "source $SHA" >> "$OUT/env/wrapper.txt"
 
 if [ "$MODE" = build ]; then
@@ -95,12 +97,16 @@ if [ "$MODE" = build ]; then
   # (set, even empty), and libh1c_kc.so with HB_KC_H1C_FLAGS (non-empty); HB_H1U_KC and DITHER_H1C_KC name them at run
   read -r -a kc <<< "${HB_KC_FLAGS:-}"
   read -r -a kh <<< "${HB_KC_H1C_FLAGS:-}"
+  read -r -a kcb <<< "${HB_KC_FLAGS_B:-}"
   brc=0
   for arch in ${ARCH//,/ }; do
     mkdir -p "$OUT/lib/$arch"
     for lib in h1c h1f h1o; do build_one "$arch" "lib$lib" "$DITHER/$lib.cu" & done
     if [ -n "${HB_KC_FLAGS+set}" ]; then
       build_one "$arch" h1u_kc "$DITHER/h1u.cu" --expt-relaxed-constexpr -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 "${kc[@]}" &
+    fi
+    if [ -n "${HB_KC_FLAGS_B:-}" ]; then
+      build_one "$arch" h1u_kcb "$DITHER/h1u.cu" --expt-relaxed-constexpr -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 "${kcb[@]}" &
     fi
     if [ ${#kh[@]} -gt 0 ]; then build_one "$arch" libh1c_kc "$DITHER/h1c.cu" "${kh[@]}" & fi
   done
@@ -147,7 +153,8 @@ esac
 cp "$INPUTS/BUILD.txt" "$OUT/env/BUILD.txt"
 read -r bsha barch < "$INPUTS/BUILD.txt"
 [ "$barch" = "$ARCH" ] || { echo "hb_served.sh: the libraries are $barch's, not $ARCH's" >&2; exit 2; }
-for lib in libh1c libh1f libh1o ${HB_H1U_KC:+$(basename "$HB_H1U_KC" .so)} ${DITHER_H1C_KC:+$(basename "$DITHER_H1C_KC" .so)}; do
+for lib in libh1c libh1f libh1o ${HB_H1U_KC:+$(basename "$HB_H1U_KC" .so)} ${HB_H1U_KC_B:+$(basename "$HB_H1U_KC_B" .so)} \
+           ${DITHER_H1C_KC:+$(basename "$DITHER_H1C_KC" .so)}; do
   [ -f "$INPUTS/$lib.so" ] || { echo "hb_served.sh: no inputs/$lib.so: --send the build's lib/$ARCH/$lib.so" >&2; exit 2; }
   read -r _ _ h paths <<< "$(grep "^src $lib " "$INPUTS/BUILD.txt")"
   [ -n "$h" ] && [ "$(srchash $paths)" = "$h" ] || {
