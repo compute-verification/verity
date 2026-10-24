@@ -41,7 +41,7 @@ plt.rcParams.update({
     "xtick.minor.size": 4, "ytick.minor.size": 4, "mathtext.fontset": "dejavusans", "svg.hashsalt": "verity-figures",
 })
 
-#: one colour per leak of 1/D <= s + (min(r̂ + eps' + nu, mu) + chi) / MFU_0 (Okabe-Ito); the residual's two plugs in
+#: one colour per leak of 1/D <= s + (min(r̂ + eps_W W_cert/C + eps' + nu, mu) + chi) / MFU_0 (Okabe-Ito); the residual's two plugs in
 #: two blues
 TERM = {"unmonitored": "#CC79A7", "residual": "#0072B2", "memory": "#56B4E9", "declared": "#009E73",
         "cheat": "#D55E00"}
@@ -98,7 +98,8 @@ BASE = (f"D is the hardware multiple at MFU_0 = {num(P['mfu'])} (tiers.evaluate'
         f"kappa = {num(P['kappa'])}, the structural entry fee d = {num(P['d'])} (a run that trains its embedding reads "
         "Layered's lookup columns as updated weights; the Dot16 conjecture's (d, e) = "
         f"({num(CONJECTURE['d'])}, {num(CONJECTURE['e'])}) is conditional), e = {num(P['e'])}, a one-hour verdict lag "
-        f"and r = r̂ + eps' with the aggregation slack eps' = {num(P['eps_agg'])} (r̂ is tiers.audited_residual); the "
+        f"and r = r̂ + eps_W W_cert/C + eps' with PoUW's deficit eps_W = {num(P['eps_w'])} and the aggregation slack "
+        f"eps' = {num(P['eps_agg'])} (r̂ is tiers.audited_residual, W_cert/C = 1 - r̂); the "
         f"memory rungs by the fit bound at central w_e = {num(W_E)} bits for a {TARGET.upper()}-class target "
         f"(N* = {num(N_STAR)}) and the floors by the PoUW route, as statement.py gives them. Rendered by "
         f"benchmarks/nci/figures.py at commit {COMMIT}.")
@@ -137,7 +138,7 @@ def fit_mu(p: dict, N: float = N_STAR, w_e: float = W_E, b: float | None = None)
 
 def parts(p: dict, tier: str, mu: float = math.inf) -> tuple[float, dict[str, float]]:
     """D at ``tier`` with ``mu`` as the memory cap, as ``statement.capped``, and the terms of 1/D: the monitored one as
-    r = r̂ + eps' and nu, or as the cap."""
+    r = r̂ + eps_W W_cert/C + eps' and nu, or as the cap."""
     r = T.evaluate(p, T.TIERS[tier] | {"wipes": False, "exhaust": False})
     free = r["residual"] + r["declared"]
     cap = p["m"] * p["g"] * (1 - min(p["unmonitored"], 0.999)) * mu
@@ -281,7 +282,7 @@ def ladder(out: Path) -> dict:
                     + ("void (one window holds N*/2 weights; no cap, D = 1)" if r["routed"]["void"] else
                        f"{num(r['routed']['T3'])} ({num(r['routed']['T5'])})") for r in rows if r["routed"])
         + f". Diamonds: both floors by the fit bound, whose cap at 4 GB (mu = {num(mu4)}) is below what the floor "
-        f"leaves (eps', the verdict lag and nu), so the lag doesn't matter there: {num(fits[0])} "
+        f"leaves (eps_W, eps', the verdict lag and nu), so the lag doesn't matter there: {num(fits[0])} "
         f"({num(floor['D_fit']['T5'])}). The dotted line rises to the floor under the Dot16 conjecture's (d, e) = "
         f"({num(CONJECTURE['d'])}, {num(CONJECTURE['e'])}), conditional: {num(floor['conjecture']['T3'], 4)} "
         f"({num(floor['conjecture']['T5'])}). " + BASE)
@@ -376,7 +377,7 @@ def phase(out: Path) -> dict:
         f"{EDGE_GB:.1f} GB the memory cap is the fit bound at central w_e ({TARGET.upper()}-class target), where it "
         "holds; above it the closed form, which needs (d, e)-threading at window scale (false today), so read the top "
         "band as the closed form's claim. Just under the edge a one-period window nearly holds N* weights and the fit "
-        "bound weakens, so D dips there. The dashed white line is where the memory cap equals r̂ plus eps', the "
+        "bound weakens, so D dips there. The dashed white line is where the memory cap equals r̂ plus eps_W W_cert/C, eps', the "
         f"verdict lag and nu ({num(offset)} together): left of it D is set by r̂ (vertical contours), right of it by "
         "memory (horizontal). "
         "Markers are the ladder's rungs: "
@@ -516,7 +517,7 @@ def exposure(out: Path, rung: str, name: str) -> dict:
 
 
 def free_share(p: dict) -> float:
-    """What memory has to cap at T3: r = r̂ + eps', the verdict lag and nu, as a share of compute."""
+    """What memory has to cap at T3: r = r̂ + eps_W W_cert/C + eps', the verdict lag and nu, as a share of compute."""
     r = T.evaluate(p, T.TIERS["T3"] | {"wipes": False, "exhaust": False})
     return r["residual"] + r["declared"]
 
@@ -591,9 +592,9 @@ def memory(out: Path) -> dict:
         f"at central w_e = {num(W_E)} bits, with the band from high w_e ({num(F.BOUNDARY['high'])}, lower cap) to "
         f"low w_e ({num(F.BOUNDARY['low'])}, higher cap); it holds while a one-period window holds fewer than N* "
         f"weights, below {EDGE_GB:.1f} GB. Dashed: routed mixtures at x{ROUTED:g} (N*/2), void above "
-        f"{routed_edge:.1f} GB. Memory caps where mu is below what a rung leaves, r = r̂ + eps' plus the verdict lag "
+        f"{routed_edge:.1f} GB. Memory caps where mu is below what a rung leaves, r = r̂ + eps_W W_cert/C + eps' plus the verdict lag "
         "and nu (gray lines: the floor credit, the floor credit with an attested clock and EPYC hosts, the best PoUW "
-        f"design, and the floor's r̂ = 0, where only eps', the lag and nu are left, {num(levels[-1][0])}); the fit "
+        f"design, and the floor's r̂ = 0, where only eps_W, eps', the lag and nu are left, {num(levels[-1][0])}); the fit "
         f"bound crosses the floor's line at {num(floor_cross)} GB. Markers: the fit bound at the streamed-label rungs' "
         "13 and 6 GB, the floor's 4 GB and power removal's 1 GB. Fit bound (closed form at d = "
         f"{num(P['d'])}, at d = {num(CONJECTURE['d'])}): "
@@ -750,7 +751,7 @@ def schematic(out: Path) -> dict:
     mu6 = fit_mu(six)
     chi = {label: S.cheat(P | {"overhead": x}) for label, x in COSTS}
     r_floor, r_best = T.audited_residual(P), T.audited_residual(P | S.BEST)
-    eps = P["eps_agg"]
+    eps, eps_w = P["eps_agg"], P["eps_w"]
     nu_conj = X.nu(P | CONJECTURE)
     s_lo, s_hi = min(min(v) for v in S.REGIMES.values()), max(max(v) for v in S.REGIMES.values())
     fig = plt.figure()
@@ -776,6 +777,7 @@ def schematic(out: Path) -> dict:
          [rf"{num(s_lo)}–{num(s_hi)} by regime; $\mathcal{{D}} \leq 1/s$"], TERM["unmonitored"]),
         ("r", 4.25, 1.95, r"$\hat r$", "monitored residual",
          [f"PoUW: 1 today → {num(r_floor)} floor credit → {num(r_best)} best design",
+          rf"+ $\varepsilon_W W_{{cert}}/C$ ($\varepsilon_W$ = {sci(eps_w)}): credited work that may not have run",
           rf"+ $\varepsilon'$ = {sci(eps)}: certificates that may be wrong",
           rf"memory: $\mu$ = {sci(mu6)} at 6 GB; $\mathcal{{D}}$ = {num(D6)} for any $\hat r > \mu$"],
          TERM["residual"]),
@@ -817,11 +819,12 @@ def schematic(out: Path) -> dict:
                                          color=color, shrinkA=0, shrinkB=0))
     ax.text(px1 - 0.2, 6.85, "from", fontsize=16, color=GRAY, ha="right")
     caption = (
-        "The bound 1/D <= s + (min(r̂ + eps' + nu, mu) + chi) / MFU_0 as four leaks and what plugs each. s, "
+        "The bound 1/D <= s + (min(r̂ + eps_W W_cert/C + eps' + nu, mu) + chi) / MFU_0 as four leaks and what plugs each. s, "
         f"unmonitored compute ({num(s_lo)} to {num(s_hi)} across the s dossier's regimes), has no plug: it trains at "
-        "full efficiency, so D <= 1/s always. The monitored residual r = r̂ + eps' has two plugs, which substitute: "
+        "full efficiency, so D <= 1/s always. The monitored residual r = r̂ + eps_W W_cert/C + eps' has two plugs, which substitute: "
         f"PoUW credits certified work (the audited residual r̂ = 1 today, {num(r_floor)} under the floor credit, "
-        f"{num(r_best)} at the best plausible design, plus the aggregation slack eps' = {num(eps)}, the share whose "
+        f"{num(r_best)} at the best plausible design, plus PoUW's deficit eps_W = {num(eps_w)} of the credited share "
+        f"W_cert/C = 1 - r̂, and the aggregation slack eps' = {num(eps)}, the share whose "
         "certificates may be wrong, which the theorem's delta needs), and memory caps whatever PoUW leaves "
         f"(mu = {num(mu6)} at 6 GB streamed-label wipes by the fit "
         f"bound, so D = {num(D6)} at T3 for any r̂ above it). NCI plugs the declared "
@@ -835,7 +838,7 @@ def schematic(out: Path) -> dict:
         + BASE)
     return {"files": save(fig, out, "7_schematic"), "title": "Leaks and plugs", "caption": caption,
             "quote": {"s_range": [s_lo, s_hi], "r_hat": {"floor credit": r_floor, "best design": r_best},
-                      "eps_agg": eps,
+                      "eps_w": eps_w, "eps_agg": eps,
                       "mu_6gb": mu6, "nu": X.nu(P), "nu_conjecture": nu_conj, "chi": chi}}
 
 

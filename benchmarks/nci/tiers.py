@@ -9,7 +9,8 @@ proved.
 * s, the unmonitored compute share, trains at full efficiency.
 * r, the monitored compute residual, is the share of monitored capacity outside the compute certificate (1 - W_cert/C):
   idle and uncredited GPU time, plus host CPUs, which PoUW neither credits nor bounds and which count at their datasheet
-  peak. It trains at full efficiency unless the memory cap binds. A
+  peak, plus the credited work that did not run, at most PoUW's deficit eps_W of W_cert, and the capacity whose
+  certificates may be wrong (``residual_share``, as ``Nci.Guarantees.DampenerRemote`` charges them). It trains at full efficiency unless the memory cap binds. A
   spatial unit's window reads its starting state plus its novel intake, K_w = state + lambda_in L, and contains at most
   K_w Lambda(K_w) / b_a counted multiplications (``ThreadedRuntime``, reads counted by width; counting them by
   information, which a wipe would bound, is open: ``ThreadedOfState`` rests on the falsified WeightsSupport,
@@ -85,7 +86,7 @@ REFERENCE_THREADED = (10.0, 37248.0)
 #: products (``REFERENCE_THREADED`` is the conditional (d, e)); injected bits valued with (d, e)-threading no further than
 #: ThreadedOfLayered certifies any at ReferenceLayered's bf16 embedding columns, and every gate of a block countable
 DEFAULTS = {
-    "unmonitored": 0.0, "residual": 0.326, "host_share": 0.118, "clock_share": 0.064, "eps_agg": 1e-4,
+    "unmonitored": 0.0, "residual": 0.326, "host_share": 0.118, "clock_share": 0.064, "eps_w": 0.00744, "eps_agg": 1e-4,
     "pous_rounds": 111.0, "unfilled_gb": 58.0, "sigma": 1e3, "b_w": 2.5, "b_a": 4.0,
     "f": 0.95, "pous_delta": 0.01, "pous_floor": 0.0, "t_read": 1e-3, "wipe_s": 3600.0, "hbm_gb": 768.0,
     "host_gb": 1900.0, "disk_gb": 0.0,
@@ -104,6 +105,7 @@ SPEC = [
     {"key": "unmonitored", "main": True, "label": "Unmonitored compute share", "unit": "", "min": 1e-12, "max": 0.5, "log": True, "zero": True},
     {"key": "g", "main": True, "label": "Compute amplifier g: the developer's algorithmic advantage over the reference recipe (1 against the best known recipe)", "unit": "x", "min": 1, "max": 100, "log": True},
     {"key": "residual", "main": True, "label": "Monitored compute residual r on the GPUs (floor credit at the locked clock 0.326, with an attested clock 0.217; best plausible design 0.01; nothing credited today: 1)", "unit": "", "min": 1e-12, "max": 1, "log": True, "zero": True},
+    {"key": "eps_w", "label": "PoUW's deficit eps_W: the share of a correct certificate's credited work that may not have run, which DampenerRemote charges to r as eps_W W_cert/C (CircuitCredit's live pair 0.744% closed, 0.681% sharp; EPS1's target 1%)", "unit": "", "min": 1e-5, "max": 0.1, "log": True, "zero": True},
     {"key": "eps_agg", "label": "Aggregation slack eps': the share of capacity whose PoUW certificates may be wrong, which Markov's inequality over the windows charges to r (1e-4 with per-window failure 3 x 2^-40 gives the theorem's delta of 2.7e-8; each halving costs about 4e-5 of PoUW's deficit)", "unit": "", "min": 1e-8, "max": 1e-2, "log": True, "zero": True},
     {"key": "clock_share", "label": "GPU capacity above the clock PoUW credits (6.4%: 2,597 MHz against 2,430; 0 once credit uses the true maximum or auditor hardware reads the clock offset)", "unit": "", "min": 1e-4, "max": 0.3, "log": True, "zero": True},
     {"key": "host_share", "main": True, "label": "Host CPUs at datasheet peak, as a share of server compute (Xeon 6776P INT8 AMX 11.8%; hosts without matrix units, two EPYC 9015s, 0.21%)", "unit": "", "min": 1e-6, "max": 0.5, "log": True, "zero": True},
@@ -172,8 +174,9 @@ STATUS = [
      "weight columns."),
     ("Declared computation, partial-sum law", "Off by default (kappa_chain = 0): ContainedTraining and PS' rest on "
      "PartialSumsSupport and ActivationsSupport, which NCI-FALSIFY reproduced as false."),
-    ("Monitored compute residual", "r = r-hat + eps'. PoUW's deficit epsilon_W = 0.74% (CircuitCredit, draft #2638) is "
-     "a share of credited work, evaluated with its premises granted. Under the floor credit r-hat = 0.508: GPU floor "
+    ("Monitored compute residual", "r = r-hat + eps_W W_cert/C + eps', as DampenerRemote charges it (#3646, LEAN-40): "
+     "W_cert/C = 1 - r-hat, and PoUW's deficit eps_W = 0.744% (CircuitCredit's live pair, closed) is a share of credited "
+     "work that a correct certificate may credit without its running, evaluated with its premises granted. Under the floor credit r-hat = 0.508: GPU floor "
      "time 0.326 (honest kernels at 1.72 times the floor; run r20261017-123922-e558 has no published outputs), the "
      "unchecked clock 0.064 and host CPUs at INT8 AMX peak 0.118. eps' = 1e-4 is what the theorem's delta of 2.7e-8 "
      "costs (Markov over the windows)."),
@@ -290,8 +293,11 @@ def audited_residual(p: dict) -> float:
 
 
 def residual_share(p: dict) -> float:
-    """r = r-hat + eps': the audited residual plus the share whose certificates may be wrong."""
-    return min(1.0, audited_residual(p) + p["eps_agg"])
+    """r = r-hat + eps_W W_cert/C + eps' (``Nci.Guarantees.DampenerRemote``'s residual): the audited residual, the credited
+    work a correct certificate may credit without its running, at most PoUW's deficit eps_W of W_cert, with
+    W_cert/C = 1 - r-hat, and the share whose certificates may be wrong."""
+    r_hat = audited_residual(p)
+    return min(1.0, r_hat + p["eps_w"] * (1 - r_hat) + p["eps_agg"])
 
 
 def state_threshold(p: dict, mech: dict) -> float:
