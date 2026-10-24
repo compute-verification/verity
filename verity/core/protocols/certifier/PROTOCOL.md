@@ -1022,10 +1022,12 @@ them.
       this rule as well as to its id. The rehearsal's certified I/O (`certifier_serve.certified_io`) has no advice and
       checks the marks against `max_tokens` and EOS alone, so it can't tell a stop on the last token at `max_tokens`
       from a `length` finish.
-    - **Not of record.** Neither the Lean device port (`CertifierDevice`), the head model nor N3's templates model
-      compact cells yet, and the verifier takes no form its proof doesn't cover, so no verdict of record runs on
-      compact framing: the gate's rehearsal takes no such option, and gains none before the Lean certifier covers
-      compact cells.
+    - **What covers it.** The Lean device port models ordinal headers and compact records (`CertifierDevice`'s
+      `Config.ordinals` and `Config.compact`), and its difftest holds it to this proxy on honest, salted and restarted
+      compact runs at B of 8, 12 and 48 and on each malformed form. The device's Lean properties are stated for every
+      configuration, compact ones included. The head model takes a frame as B opaque bytes, which a compact cell is.
+      N3's templates, a design outside the protocol, don't model compact cells. The gate's rehearsal takes no compact
+      option yet, so no verdict of record runs on compact framing.
   - **Anchor, index and ready bucket.** A frame is anchored at the egress bucket in which ingress released its
     request's last frame. Its logical index is its position in its stream. Read at time s, it is ready at ⌊s/τ_b⌋ + 1.
   - **Handing.** `Shaper` hands it at `max(h(k), ready(k), last)`, `run_shaper`'s rule under the declared sync of its
@@ -1163,7 +1165,7 @@ them.
     and `Proxy(start=w + 1, position=p)`. Its later windows are the full run's if nothing crosses into window w.
   - **Its limits.** An online prover declares from window 0's frames on, so a proxy back from maintenance takes its
     syncs. The certifier's Lean device port (`verity/core/devices/certifier/lean/`) models the restart (`initAt`), the
-    salt and a served link's admission; the device's Lean properties (`Security/Properties/CertifierDevice.lean`) are
+    salt, a served link's admission, ordinal headers and compact records; the device's Lean properties (`Security/Properties/CertifierDevice.lean`) are
     stated from window 0 (`init`), so they don't cover a proxy back from maintenance yet.
 - **Advice:** the declared syncs, one per window, are given before the run, or an online prover (`Proxy(prover=…)`,
   lag 1 … T − 1) declares each at its window's first tick, before anything is handed, from the frames the shaper has
