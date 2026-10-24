@@ -10,7 +10,8 @@
 # commit/replay_bundle_p0/, named in commit/verdict.json's replay_deferred (a TP Commit's are replay_bundle_p0_rank<r>/ and
 # replay_deferred.json). The CPU replay deletes a full bundle once it leaves its slim keep (row_config.replay), so the sealed bundle
 # is hard-linked aside first and put back after it. The row dir, bundle included, goes to the evidence store as one tree
-# (STORED in $OUT/store.txt) and stays on the node under `research keep`; $OUT keeps the records and logs.
+# (STORED in $OUT/store.txt), put with the run's own custody key, and stays on the node under `research keep`; $OUT keeps the
+# records and logs. STORE_ROW=DIR runs none of the stages and only stores an earlier run's row dir DIR.
 set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 ROW=${ROW:-llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager}
@@ -57,6 +58,32 @@ records() {  # the row's records into $OUT (never the bundle, the store or the c
 }
 stop() { records; echo "STOPPED at $1"; exit "$2"; }
 
+put() {  # the row dir as one tree, with this run's custody key (a node's job holds no other store credential), then its keep
+  echo "$(date -u +%H:%M:%SZ) store: put $D ($(du -sh "$D" | cut -f1))" | tee -a "$OUT/steps.txt"
+  local C i art
+  C=$(dirname "$(dirname "${RESEARCH_RUN_DIR:?}")")/requests/${RESEARCH_RUN_ID:?}/custody
+  for i in 1 2 3; do
+    ( if [ -f "$C/cred.json" ]; then
+        export RESEARCH_STORE_CONFIG=$C/store.toml
+        eval "$("$PY" -m verity_vllm.pipeline.cli epoch custody-env "$C")"
+      fi
+      rs data put --kind evidence/v1 --tree "$D" --preserve --json --meta "{\"row\": \"$ROW\", \"commit_run\": \"$(basename "$(dirname "$D")")\",
+        \"what\": \"Llama-3.2-1B TP1 Commit of record (config run, deferred): Build, Match, commit/ with the sealed replay_bundle_p0\"}"
+    ) > "$OUT/put.json" && break
+    sleep $((30 * i))
+  done
+  art=$(grep -o 'art:[0-9a-f]\{64\}' "$OUT/put.json" | head -1)
+  echo "STORED ${art:-none} $D" | tee "$OUT/store.txt"
+  [ -n "$art" ] || return 1
+  rs keep "$(dirname "$D")" --owner @vllm --expires 14d --priority high --art "$art" \
+    --why "PROVE-PATH (VLLM-83): the Llama-3.2-1B TP1 Commit of record and its sealed bundle, stored as $art" | tail -2
+}
+if [ -n "${STORE_ROW:-}" ]; then   # an earlier run's row dir, stored as is
+  D=$STORE_ROW; rmdir "$BASE/sealed" "$BASE/$ROW" "$BASE" 2>/dev/null
+  [ -s "$D/commit/replay_bundle_p0/MANIFEST.json" ] || { echo "no sealed bundle under $D/commit"; exit 2; }
+  records; put; exit
+fi
+
 unset CONFIG_RUN REPLAY_K REPLAY_DEFERRED
 row build --stages build --config-run 1 --replay-k 460 || stop build 10
 row match --stages match --config-run 0 || stop match 11
@@ -68,16 +95,6 @@ row replay --stages replay --config-run 1 --replay-k 460; rr=$?
 [ -d "$B" ] || cp -al "$BASE/sealed/replay_bundle_p0" "$D/commit/" || stop "restoring the sealed bundle" 15
 (cd "$B" && sha256sum MANIFEST.json) | tee "$OUT/bundle.sha256"
 records
-
-echo "$(date -u +%H:%M:%SZ) store: put $D ($(du -sh "$D" | cut -f1))" | tee -a "$OUT/steps.txt"
-for i in 1 2 3; do
-  rs data put --kind evidence/v1 --tree "$D" --meta "{\"row\": \"$ROW\", \"run\": \"${RESEARCH_RUN_ID:-}\", \"what\": \"Llama-3.2-1B TP1 Commit of record (config run, deferred): Build, Match, commit/ with the sealed replay_bundle_p0\"}" \
-    --preserve --json > "$OUT/put.json" && break
-  sleep $((30 * i))
-done
-art=$(grep -o 'art:[0-9a-f]\{64\}' "$OUT/put.json" | head -1)
-echo "STORED ${art:-none} $D" | tee "$OUT/store.txt"
-[ -n "$art" ] && rs keep "$BASE" --owner @vllm --expires 14d --priority high --art "$art" \
-  --why "PROVE-PATH (VLLM-83): the Llama-3.2-1B TP1 Commit of record and its sealed bundle, stored as $art" | tail -2
+put; pr=$?
 tail -8 "$OUT/stages.txt" 2>/dev/null
-exit $(( rr != 0 ? 16 : 0 ))
+exit $(( rr != 0 ? 16 : pr != 0 ? 17 : 0 ))
