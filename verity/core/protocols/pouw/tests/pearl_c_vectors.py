@@ -68,7 +68,11 @@ def salt_key(case: str) -> bytes:
 
 
 def scheme(test: bool, forming: str = "v0", hashing: str = "h0") -> C.PearlC:
-    return C.PearlC(k_min=32, tile=(16, 16), forming=forming, hashing=hashing) if test else C.PearlC(forming=forming, hashing=hashing)
+    """A case's scheme.  A production case is one 64-column unit, under the domain's n floor (`C.N_MIN`), which reads no
+    value of the forming: its instance takes n from 64 so that the pinned arithmetic at production depth stays checked."""
+    if test:
+        return C.PearlC(k_min=32, tile=(16, 16), forming=forming, hashing=hashing)
+    return C.PearlC(forming=forming, hashing=hashing, n_min=C.TILE)
 
 
 def sha(data: bytes) -> str:

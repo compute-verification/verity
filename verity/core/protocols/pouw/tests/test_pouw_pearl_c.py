@@ -22,7 +22,7 @@ from verity.ml.circuits.ops.fp32 import F32DivV2, F32FmaV2, F32MulV2
 from verity.ml.circuits.ops.scalar import F32Fabs, F32Fmaxf, I32Le, SelectI32
 from verity.ml.circuits.silicon.models import HOPPER_BF16_WGMMA_K16
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, PoUWScheme, Shape, Tile
-from verity.core.protocols.pouw.schemes import get
+from verity.core.protocols.pouw.schemes import SCHEMES, get
 from verity.core.protocols.pouw.schemes import pearl_c as C
 from verity.core.protocols.pouw.schemes import pearl_c_debit as D
 from verity.core.protocols.pouw.schemes import pearl_kw as P
@@ -242,10 +242,11 @@ def test_leaf_and_tickets_rebuilt_from_bytes():
 def test_registry_and_domain():
     s = get("pearl-c-h100-v0")
     assert isinstance(s, PoUWScheme) and s.name == "pearl-c-h100-v0" and s.certificate.conjecture == "tt-out"
-    s.check(Matmul(0, Shape(64, 1024, 64), 1))
-    s.check(Matmul(0, Shape(32, 1024, 64), 1))
-    s.check(Matmul(0, Shape(112, 1024, 64), 1))
-    for bad in (Shape(64, 992, 64), Shape(64, 1 << 17, 64), Shape(40, 1024, 64), Shape(64, 1040, 64), Shape(64, 1024, 96)):
+    s.check(Matmul(0, Shape(64, 1024, 1024), 1))
+    s.check(Matmul(0, Shape(32, 1024, 1024), 1))
+    s.check(Matmul(0, Shape(112, 1024, 1024), 1))
+    for bad in (Shape(64, 992, 1024), Shape(64, 1 << 17, 1024), Shape(40, 1024, 1024), Shape(64, 1040, 1024),
+                Shape(64, 1024, 1056), Shape(64, 1024, 64)):
         with pytest.raises(DomainError):
             s.check(Matmul(0, bad, 1))
     sh = Shape(128, 2048, 256)
@@ -261,12 +262,14 @@ def test_vectors_are_pinned(case):
 
 def test_the_h100_h3_vectors_are_the_registered_schemes():
     """`pearl-c-h100-v1-h3` (GLM-5.3's FP8 form on the H200) is the scheme its pinned production case was made under, and
-    the case is in its domain."""
+    the case is in its domain but for the n floor: one 64-column unit, which the registered scheme refuses on n alone."""
     s, case = get("pearl-c-h100-v1-h3"), next(c for c in PINNED["cases"] if c["case"] == "decode-32-v1-h3")
     v = CV.scheme(case["test_instance"], "v1", "h3")
     assert s.name == case["scheme"] == v.name and s.commitment_hash == "hm96-sha512" and s.device is C.H100
     assert (s.k_min, s.tile, s.forming, s.hashing, s.prices) == (v.k_min, v.tile, v.forming, v.hashing, v.prices)
-    s.check(Matmul(case["index"], Shape(*case["shape"]), case["weight"]))
+    v.check(Matmul(case["index"], Shape(*case["shape"]), case["weight"]))
+    with pytest.raises(DomainError, match="n < 1024"):
+        s.check(Matmul(case["index"], Shape(*case["shape"]), case["weight"]))
 
 
 def test_lifecycle_on_a_test_instance():
@@ -792,6 +795,27 @@ def test_check_tile_refuses_a_weight_row_outside_the_rules(clause):
 
 def test_domain_needs_whole_promotion_groups():
     s = get("pearl-c-h100-v1")
-    s.check(Matmul(0, Shape(64, 1152, 64), 1))
+    s.check(Matmul(0, Shape(64, 1152, 1024), 1))
     with pytest.raises(DomainError):
-        s.check(Matmul(0, Shape(64, 1056, 64), 1))
+        s.check(Matmul(0, Shape(64, 1056, 1024), 1))
+
+
+#: the linears `(n, k)` a credited Pearl-C path serves: Llama-3.1-8B's and Qwen3-8B's (Lean `llama31_8bLinears`,
+#: `qwen3_8bLinears`), the headline cubes, and GLM-5.3's at TP8 with k >= 1024 and n >= 1024 (its MoE w13 under EP)
+CREDITED = ((6144, 4096), (4096, 4096), (28672, 4096), (4096, 14336), (24576, 4096), (4096, 12288), (8192, 8192),
+            (16384, 16384), (2624, 6144), (2048, 2048), (6144, 2048), (4096, 2048), (3072, 6144), (6144, 1536),
+            (4096, 6144))
+
+
+@pytest.mark.parametrize("name", [n for n in SCHEMES if n.startswith("pearl-c-") and "nvfp4" not in n])
+def test_the_domain_floors_n_at_1024_and_keeps_every_credited_linear(name):
+    """Lean's `pearlCDomainDev` takes `2^10 <= n` and `64 | n` (CMP-77: below it a unit's output words are cheap to guess),
+    so the scheme refuses a narrow unit, GLM-5.3's n = 512 MoE linears among them, and admits every served linear."""
+    s = get(name)
+    assert s.n_min == C.N_MIN == 1024 and ("n_min", 1024) in s.certificate.parameters
+    for n in (64, 512, 960, 1000, 1056):
+        with pytest.raises(DomainError):
+            s.check(Matmul(0, Shape(32, 6144, n), 1))
+    for n, k in CREDITED:
+        s.check(Matmul(0, Shape(32, k, n), 1))
+    assert C.PearlC(k_min=32, tile=(16, 16)).n_min == 1 and C.PearlC(k_min=32, tile=(16, 16), n_min=64).n_min == 64
