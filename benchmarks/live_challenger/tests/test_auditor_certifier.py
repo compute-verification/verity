@@ -311,6 +311,10 @@ VARIED = REQUEST + ["--traffic", "varied"]
     (["--eos-ids", "128009", "--seed", "7", "--prompt-range", "16:512", "--rate", "1.5", "--tokens", "32"],
      {"tokens": 32, "rate": 1.5, "prompt_range": "16:512", "seed": 7, "eos_ids": [128009]},
      ["--tokens", "32", "--rate", "1.5", "--prompt-range", "16:512", "--seed", "7", "--eos-ids", "128009"]),
+    (["--compact", "8"], {"compact": 8}, ["--compact", "8"]),
+    (["--compact", "4096"], {"compact": 4096}, ["--compact", "4096"]),
+    (["--compact", "16", "--eos-ids", "128009", "--tokens", "32"], {"tokens": 32, "eos_ids": [128009], "compact": 16},
+     ["--tokens", "32", "--eos-ids", "128009", "--compact", "16"]),
 ])
 def test_a_varied_rehearsal_records_its_flags_when_given_and_runs_the_varied_plan_named_for_its_run(host, tmp_path,
                                                                                                    given, recorded,
@@ -354,10 +358,13 @@ def test_a_varied_rehearsal_records_its_flags_when_given_and_runs_the_varied_pla
     (["--traffic", "varied", "--minutes", "1"], "--minutes 1: 400 requests at 2 a second arrive over 200 seconds"),
     (["--traffic", "varied", "--minutes", "1", "--requests", "100", "--rate", "1.5"],
      "--minutes 1: 100 requests at 1.5 a second arrive over 66.6667 seconds"),
+    *[(["--traffic", "varied", "--compact", v], f"--compact {v!r}: 8 to 4096")
+      for v in ("7", "0", "4097", "65536", "-8", "08", "8.0", "B", "")],
     *[([flag, v], f"{flag}: varied traffic's (--traffic varied)")
-      for flag, v in (("--rate", "2"), ("--prompt-range", "16:1024"), ("--seed", "0"), ("--eos-ids", "2"))],
+      for flag, v in (("--rate", "2"), ("--prompt-range", "16:1024"), ("--seed", "0"), ("--eos-ids", "2"),
+                      ("--compact", "8"))],
     *[(["--traffic", "fixed", flag, v], f"{flag}: varied traffic's (--traffic varied)")
-      for flag, v in (("--rate", "2"), ("--seed", "0"))],
+      for flag, v in (("--rate", "2"), ("--seed", "0"), ("--compact", "8"))],
     (["--traffic", "varied", "--name", "x"], "unrecognized arguments: --name"),
 ])
 def test_the_gate_refuses_a_varied_rehearsal_it_cant_check_and_varied_flags_on_fixed_traffic(host, bad, why):

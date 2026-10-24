@@ -1866,7 +1866,7 @@ them.
     frame's content is fixed by the bytes and never by how they were read. Its `id:` is its position in the Program's
     canonical order. An id event (`id_event`, 159 bytes, a 256-byte frame with its header) is one sampled token's
     request ordinal and id in decimal fields of a fixed JSON template.
-  - **Compact records** (`Proxy(compact=True)`, which takes `ordinals`; experimental). After its HTTP response head
+  - **Compact records** (`Proxy(compact=True)`, which takes `ordinals`). After its HTTP response head
     the server writes one 12-byte unit a sampled token (`compact_unit`, cut by `CompactUnits`): u32be its position in
     the canonical order, then its 8-byte record (`compact_record`), u32be the request's ingress ordinal (≥ 1, its
     stream on the link) and u32be the token field:
@@ -1903,8 +1903,9 @@ them.
       `Config.ordinals` and `Config.compact`), and its difftest holds it to this proxy on honest, salted and restarted
       compact runs at B of 8, 12 and 48 and on each malformed form. The device's Lean properties are stated for every
       configuration, compact ones included. The head model takes a frame as B opaque bytes, which a compact cell is.
-      N3's templates, a design outside the protocol, don't model compact cells. The gate's rehearsal takes no compact
-      option yet, so no verdict of record runs on compact framing.
+      N3's templates, a design outside the protocol, don't model compact cells. The gate's rehearsal runs compact
+      framing on the auditor's host (`certifier-rehearse --traffic varied --compact B`), so with this coverage a
+      compact run there gives a verdict of record.
   - **Anchor, index and ready bucket.** A frame is anchored at the egress bucket in which ingress released its
     request's last frame. Its logical index is its position in its stream. Read at time s, it is ready at ⌊s/τ_b⌋ + 1.
   - **Handing.** `Shaper` hands it at `max(h(k), ready(k), last)`, `run_shaper`'s rule under the declared sync of its

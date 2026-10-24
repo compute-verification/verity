@@ -12,7 +12,7 @@ first coin.
                                           [--requests N] [--tokens N]
                                           ([--in-flight N] [--profile planned|served] [--temperature T] [--top-p P]
                                            | --traffic varied [--rate R] [--prompt-range LO:HI] [--seed S]
-                                             [--eos-ids ID,...])
+                                             [--eos-ids ID,...] [--compact B])
     vy-challenger-gate warden-rehearse --peer NAME --port PORT --minutes M [--requests N] [--tokens N] [--temperature T]
                                        [--top-p P]
     vy-challenger-gate status SESSION|RUN | ledger | pins | models | pubkey | fetch SESSION|RUN
@@ -111,13 +111,15 @@ first coin.
   Poisson arrivals of varied prompts as id requests, each ending at the model's EOS or its `max_tokens` (1 to
   `--tokens`, the cap), and the responses written as id events (each sampled token's id), N2 on the advice profile;
   its own flags are `--rate` arrivals a second (above 0, at most 8), `--prompt-range LO:HI` (1 to 2048 tokens),
-  `--seed` and `--eos-ids` (at most 8), each recorded and passed on only when given (`parse_varied`), and it takes no
-  `--in-flight`, `--profile`, `--temperature` or `--top-p` (its requests are greedy, each with a seed of its own),
-  nor a `--minutes` its arrivals outlast. Each request's `user` is `<run>.j` (`--name`, the run), which the shim
-  forwards the endpoint, so a committing endpoint records each request under the name the certified I/O reads, and
-  the run's id events, records and `io.json` are in its `fetch`: `negatives.py tie-run --run TARBALL --ids
-  REQUESTS.jsonl` ties them to the endpoint's committed ids, which refuses `token`. The gate refuses while another
-  rehearsal runs, writes `certifier/<run>/request.json` and starts its unit
+  `--seed`, `--eos-ids` (at most 8) and `--compact B` (8 to 4096: compact egress framing, each sampled token's
+  compact record in a B-byte cell instead of an id event, the certifier PROTOCOL's "Compact records"), each recorded
+  and passed on only when given (`parse_varied`), and it takes no `--in-flight`, `--profile`, `--temperature` or
+  `--top-p` (its requests are greedy, each with a seed of its own), nor a `--minutes` its arrivals outlast. Each
+  request's `user` is `<run>.j` (`--name`, the run), which the shim forwards the endpoint, so a committing endpoint
+  records each request under the name the certified I/O reads, and the run's id events (or compact records), records
+  and `io.json` are in its `fetch`: `negatives.py tie-run --run TARBALL --ids REQUESTS.jsonl` ties them to the
+  endpoint's committed ids, which refuses `token`. The gate refuses while another rehearsal runs, writes
+  `certifier/<run>/request.json` and starts its unit
   (`vy-certifier@<run>.service`), which runs `certifier-run` as `auditor`: an `ssh -N -L` with the auditor's tunnel key
   (the peer's line of /etc/vy/peers) from a free port of this host's loopback to 127.0.0.1:PORT on the peer, then the
   rehearsal through it into `out/`, stopped at `--minutes`, then the tunnel closed and `end.json` written (its exit, why
@@ -218,9 +220,12 @@ CERTIFIER_VARIED_RATE = 2.0
 CERTIFIER_PROMPTS = (1, 2048)
 CERTIFIER_SEED = (1 << 32) - 1
 CERTIFIER_EOS = 8
+#: a compact cell's bytes: at least a compact record's (`active.COMPACT_RECORD`), at most an id event's frame
+#: (`certifier_serve.FRAME_BYTES`)
+CERTIFIER_COMPACT = (8, 4096)
 #: varied traffic's flags the gate passes on when given, each (flag, the request's key)
 CERTIFIER_VARIED = (("--tokens", "tokens"), ("--rate", "rate"), ("--prompt-range", "prompt_range"), ("--seed", "seed"),
-                    ("--eos-ids", "eos_ids"))
+                    ("--eos-ids", "eos_ids"), ("--compact", "compact"))
 #: a rehearsal's `--temperature` bounds; `--top-p` is above 0 and at most 1, and each is a plain decimal (`DECIMAL`)
 TEMPERATURE = (0.0, 2.0)
 DECIMAL = r"[0-9](\.[0-9]{1,4})?"
@@ -861,7 +866,8 @@ def parse_varied(a: argparse.Namespace, minutes: int, requests: int) -> dict:
     """Varied traffic's flags, each recorded only when given (`certifier_serve.py`'s 2 a second, 16:1024, seed 0 and
     the probe's EOS otherwise): `--rate` arrivals a second, above 0 and at most `CERTIFIER_RATE`, a plain decimal;
     `--prompt-range LO:HI` within `CERTIFIER_PROMPTS`; `--seed` 0 to `CERTIFIER_SEED`; `--eos-ids` at most
-    `CERTIFIER_EOS` token ids, comma-separated. Its requests are greedy, each with a seed of its own, and N2's profile
+    `CERTIFIER_EOS` token ids, comma-separated; `--compact B`, B within `CERTIFIER_COMPACT`, compact egress records in
+    B-byte cells instead of id events. Its requests are greedy, each with a seed of its own, and N2's profile
     is the advice, so it takes no `--temperature`, `--top-p`, `--in-flight` or `--profile`; and its arrivals must end
     within `--minutes`."""
     for flag, v in (("--in-flight", a.in_flight), ("--profile", a.profile)):
@@ -891,6 +897,8 @@ def parse_varied(a: argparse.Namespace, minutes: int, requests: int) -> dict:
         if not re.fullmatch(rf"{one}(,{one}){{0,{CERTIFIER_EOS - 1}}}", a.eos_ids):
             raise Refused(f"--eos-ids {a.eos_ids!r}: 1 to {CERTIFIER_EOS} token ids, comma-separated")
         given["eos_ids"] = [int(t) for t in a.eos_ids.split(",")]
+    if a.compact is not None:
+        given["compact"] = bounded("--compact", a.compact, *CERTIFIER_COMPACT)
     rate = given.get("rate", CERTIFIER_VARIED_RATE)
     if (span := requests / rate) > minutes * 60:
         raise Refused(f"--minutes {minutes}: {requests} requests at {rate:g} a second arrive over {span:g} seconds: "
@@ -1037,8 +1045,8 @@ USAGE = ("verbs: reserve --peer NAME --scheme S --families JSON [--epoch E] [--m
          "| model-key --model M --circuit SHA512 [--weights-root W] (a lane's own gate key, or vy-admin) "
          "| certifier-rehearse --peer NAME --port PORT --minutes M [--tamper late|extra|drop|token] [--requests N] "
          "[--in-flight N] [--tokens N] [--profile planned|served] [--temperature T] [--top-p P] "
-         "[--traffic varied [--rate R] [--prompt-range LO:HI] [--seed S] [--eos-ids ID,...]: no --in-flight, "
-         "--profile or sampling] "
+         "[--traffic varied [--rate R] [--prompt-range LO:HI] [--seed S] [--eos-ids ID,...] [--compact B]: "
+         "no --in-flight, --profile or sampling] "
          "| warden-rehearse --peer NAME --port PORT --minutes M [--requests N] [--tokens N] [--temperature T] "
          "[--top-p P] (a lane's own gate key, or vy-admin) "
          "| status SESSION|RUN | ledger | pins | models | pubkey | fetch SESSION|RUN")
