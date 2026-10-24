@@ -46,6 +46,14 @@ rows' lines; pd_tree's entry when it runs apart).
 schedule (default serial, deferred and deferred-a; with hashing, and serial's without), after `WARM` calls, `HOST_CALLS`
 calls back to back, timed by the host's clock (until the last returns) and the GPU's events (until its work ends), then
 as many again under cProfile: each function's own time a call, the `HOST_TOP` largest.
+
+  python benchmarks/pouw/pearl_c_sm90/glm53_profile.py grouped --out DIR/grouped.json [--shapes N:K ...] [--pattern P ...] [--schedule S ...]
+  nsys profile -t cuda,nvtx -o DIR/prof python benchmarks/pouw/pearl_c_sm90/glm53_profile.py grouped --nvtx --calls 12
+
+``grouped`` is ``host`` for the grouped MoE call (`pouw_pearl_c_grouped.gemm_grouped`) as grouped_check.py makes it: its
+experts at each of its shapes, its routed rows (``--pattern``, default decode), under each schedule (default grouped_check's)
+with hashing and the first's without, beside grouped_check's stock arms.  With ``--nvtx`` it makes `CALLS` (``--calls``)
+NVTX-ranged calls an arm back to back instead, for ``lanes`` (labels ``grouped N:K PATTERN ARM``).
 """
 
 from __future__ import annotations
@@ -248,11 +256,39 @@ def stamps_mode(a) -> int:
     return 0 if rows else 1
 
 
-def host_mode(a) -> int:
-    import cProfile
-    import pstats
+def _calls(run, f, n: int) -> tuple[float, float]:
+    """`n` calls of f back to back: µs a call by the host's clock (until the last returns) and by the GPU's events (until its
+    work, the run's side lanes' too, ends)."""
     import time
 
+    import torch
+    s, e = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+    torch.cuda.synchronize()
+    s.record()
+    t = time.perf_counter()
+    for _ in range(n):
+        f()
+    host = (time.perf_counter() - t) * 1e6 / n
+    run.join_sides(torch.cuda.current_stream())
+    e.record()
+    e.synchronize()
+    return host, s.elapsed_time(e) * 1e3 / n
+
+
+def _profiled(run, f, n: int) -> tuple[float, list[dict]]:
+    """`_calls`' host µs a call under cProfile, and the `HOST_TOP` functions by own time a call."""
+    import cProfile
+    import pstats
+    prof = cProfile.Profile()
+    prof.enable()
+    host, _ = _calls(run, f, n)
+    prof.disable()
+    top = sorted(((v[2], v[3], fn) for fn, v in pstats.Stats(prof).stats.items()), reverse=True)[:HOST_TOP]
+    return host, [{"fn": f"{fn[0].rsplit('/', 2)[-1]}:{fn[1]}({fn[2]})", "own": tt * 1e6 / n, "cum": ct * 1e6 / n}
+                  for tt, ct, fn in top]
+
+
+def host_mode(a) -> int:
     import torch
     import glm53_timing as T
 
@@ -261,19 +297,6 @@ def host_mode(a) -> int:
     run, weights, kernel, gen = T.device_run(shapes, a.scheme, a.cubin, schedules[0], a.graphs)
     arms = [(sc, True) for sc in schedules] + [(schedules[0], False)]
     rows = []
-
-    def calls(f, n):
-        s, e = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
-        torch.cuda.synchronize()
-        s.record()
-        t = time.perf_counter()
-        for _ in range(n):
-            f()
-        host = (time.perf_counter() - t) * 1e6 / n
-        run.join_sides(torch.cuda.current_stream())
-        e.record()
-        e.synchronize()
-        return host, s.elapsed_time(e) * 1e3 / n
 
     for w, W in weights.items():
         n, k = W.shape
@@ -287,17 +310,10 @@ def host_mode(a) -> int:
                     run.gemm(w, x, W, None)
                 for _ in range(WARM):
                     f()
-                host_us, gpu_us = calls(f, HOST_CALLS)
-                prof = cProfile.Profile()
-                prof.enable()
-                prof_host_us, _ = calls(f, HOST_CALLS)
-                prof.disable()
-                st = pstats.Stats(prof)
-                top = sorted(((v[2], v[3], fn) for fn, v in st.stats.items()), reverse=True)[:HOST_TOP]
+                host_us, gpu_us = _calls(run, f, HOST_CALLS)
+                prof_host_us, own = _profiled(run, f, HOST_CALLS)
                 row = {"n": n, "k": k, "m": m, "schedule": sc, "hashing": hashing, "graphs": run._graphed(-(-m // 16) * 16),
-                       "host_us": host_us, "events_us": gpu_us, "profiled_host_us": prof_host_us,
-                       "own_us": [{"fn": f"{fn[0].rsplit('/', 2)[-1]}:{fn[1]}({fn[2]})", "own": tt * 1e6 / HOST_CALLS,
-                                   "cum": ct * 1e6 / HOST_CALLS} for tt, ct, fn in top]}
+                       "host_us": host_us, "events_us": gpu_us, "profiled_host_us": prof_host_us, "own_us": own}
                 rows.append(row)
                 print(f"{n}:{k} m{m} {sc} {'hash' if hashing else 'nohash'}{' graphs' if row['graphs'] else ''}: host "
                       f"{host_us:.1f} us a call, events {gpu_us:.1f} (profiled host {prof_host_us:.1f}); own: "
@@ -310,6 +326,61 @@ def host_mode(a) -> int:
         Path(a.out).parent.mkdir(parents=True, exist_ok=True)
         Path(a.out).write_text(json.dumps(out, indent=1) + "\n")
     return 0 if rows else 1
+
+
+def grouped_mode(a) -> int:
+    import torch
+    import glm53_timing as T
+    import grouped_check as GC
+    from verity_vllm.protocol_options import pouw_pearl_c_grouped as PG
+
+    shapes = [tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes else list(GC.SHAPES)
+    schedules = a.schedule or list(GC.SCHEDULES)
+    rows, cubin = [], None
+    for n, k in shapes:
+        run, weights, kernel, gen = T.device_run([(n, k)] * GC.EXPERTS, a.scheme, a.cubin)
+        cubin, ws = kernel.cubin_sha256, tuple(sorted(weights))
+        dense_stock = [T.stock_arms(weights[w]) for w in ws]
+        for pat in a.pattern:
+            counts = GC.COUNTS[pat]
+            x = torch.randn(sum(counts), k, device="cuda", generator=gen).to(torch.bfloat16)
+            stock, errors = GC.stock_arms([weights[w] for w in ws], dense_stock, counts, x)
+            arms = [(sc, True, lambda run=run, ws=ws, x=x, counts=counts: PG.gemm_grouped(run, ws, x, counts))
+                    for sc in schedules]
+            arms += [(schedules[0], False, arms[0][2]), *((nm, None, f) for nm, f in stock.items())]
+            for name, hashing, f in arms:
+                if hashing is not None:
+                    run.end_pass(schedule=name)
+                    run.hashing = hashing
+                label = f"grouped {n}:{k} {pat} {name}{'' if hashing is not False else ' nohash'}"
+                for _ in range(WARM):
+                    f()
+                if a.nvtx:
+                    torch.cuda.synchronize()
+                    for i in range(a.calls or CALLS):
+                        torch.cuda.nvtx.range_push(f"call {label} #{i}")
+                        f()
+                        torch.cuda.nvtx.range_pop()
+                    run.join_sides(torch.cuda.current_stream())
+                    torch.cuda.synchronize()
+                    continue
+                host_us, gpu_us = _calls(run, f, HOST_CALLS)
+                prof_host_us, own = _profiled(run, f, HOST_CALLS)
+                rows.append({"n": n, "k": k, "pattern": pat, "counts": list(counts), "arm": label.split(" ", 3)[3],
+                             "host_us": host_us, "events_us": gpu_us, "profiled_host_us": prof_host_us, "own_us": own})
+                print(f"{label}: host {host_us:.1f} us a call, events {gpu_us:.1f} (profiled host {prof_host_us:.1f}); "
+                      "own: " + ", ".join(f"{t['fn']} {t['own']:.1f}" for t in own[:12]), flush=True)
+            run.end_pass(schedule="serial")
+            run.hashing = True
+            if errors:
+                print(f"grouped {n}:{k} {pat}: stock errors {errors}", flush=True)
+        run.finish()
+    out = {"scheme": a.scheme, "device": torch.cuda.get_device_name(), "cubin_sha256": cubin, "experts": GC.EXPERTS,
+           "warm": WARM, "calls": HOST_CALLS, "nvtx": a.nvtx, "rows": rows}
+    if a.out:
+        Path(a.out).parent.mkdir(parents=True, exist_ok=True)
+        Path(a.out).write_text(json.dumps(out, indent=1) + "\n")
+    return 0 if rows or a.nvtx else 1
 
 
 def _columns(db, table: str) -> set[str]:
@@ -517,10 +588,12 @@ def print_report(out: dict) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    p.add_argument("mode", choices=("run", "report", "lanes", "stamps", "host"))
+    p.add_argument("mode", choices=("run", "report", "lanes", "stamps", "host", "grouped"))
     p.add_argument("sqlite", nargs="?", help="report, lanes: nsys's SQLite export")
-    p.add_argument("--out", help="report, lanes, stamps, host: the JSON to write")
-    p.add_argument("--calls", type=int, help=f"run: back-to-back calls at each point (default {CALLS})")
+    p.add_argument("--out", help="report, lanes, stamps, host, grouped: the JSON to write")
+    p.add_argument("--calls", type=int, help=f"run, grouped --nvtx: back-to-back calls at each point (default {CALLS})")
+    p.add_argument("--pattern", nargs="*", default=["decode"], help="grouped: grouped_check's routed-row patterns")
+    p.add_argument("--nvtx", action="store_true", help="grouped: only the NVTX-ranged back-to-back calls (under nsys)")
     p.add_argument("--scheme", default=glm53.SCHEME)
     p.add_argument("--cubin")
     p.add_argument("--shapes", nargs="*", help="N:K (default run: the two expert shapes; stamps: every in-domain linear)")
@@ -535,6 +608,8 @@ def main(argv: list[str] | None = None) -> int:
         return stamps_mode(a)
     if a.mode == "host":
         return host_mode(a)
+    if a.mode == "grouped":
+        return grouped_mode(a)
     out = (lanes if a.mode == "lanes" else report)(*load(a.sqlite))
     (print_lanes if a.mode == "lanes" else print_report)(out)
     if a.out:
