@@ -1,4 +1,4 @@
-"""Automatic stage telemetry for the sweep runner (R16 BRIEF §5 / §10, lane sys).
+"""Automatic stage telemetry for the sweep runner (BRIEF §5 / §10).
 
 One append-only JSONL file per row attempt (`<row>/timeline.jsonl`, path in `VERITY_TIMELINE`): every process the runner starts
 (row_pod.sh itself, commit_delta, m1_capture, run_config's stages) appends `start` / `end` events with a wall-clock timestamp
@@ -147,7 +147,7 @@ def _union(spans: list[tuple[float, float]]) -> float:
 
 
 def last_attempt(events: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int]:
-    """[R16 sys SYS-01c] The file is append-only across attempts of the same row (reruns, retries, Commit-only repeats), and a report over
+    """The file is append-only across attempts of the same row (reruns, retries, Commit-only repeats), and a report over
     all of them adds every attempt's build / replay together (a 2 h window with 7 engine starts for a 100 s Commit).  The LAST attempt is
     what the row's table is about: events from the last `row start` mark of row_pod on (the python stages write inside that window), plus
     nothing before it.  Returns (events, attempts_seen); a file without a row envelope is one attempt."""
