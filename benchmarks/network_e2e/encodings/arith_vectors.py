@@ -7,8 +7,8 @@ integer's symbols, code.py's state after each (low, high, pending, used) and the
 context, bit) from the book's priors (`kt`), the header (`NB` its width, 0 for none, and `pool`) and each window's charge
 (`charge`). Two sources:
 - `decisions(trace, stops, T=)`: advice v1's windows (`v1.residual`: the replay's decisions and the hits sent past the
-  pool bound) under a book fit to them (a skewed one: the difftest is the coder's, not the book's), with v1's header and
-  charges (`v1._string`). It checks that they are `v1.encode`'s string;
+  pool bound) under a book fit to them at v1's registered caps (`v1.TABLE_CAPS`; a skewed book: the difftest is the
+  coder's, not the book's), with v1's header and charges (`v1._string`). It checks that they are `v1.encode`'s string;
 - `fields(trace)`: ENC-DERIVED's still-sent fields (`derived.residual`: the hits past the pool bound, the resumes, the
   order misses and async's lag bits), each field cut into windows of 64 values, under a book fit to them.
 
@@ -121,7 +121,7 @@ def decisions(trace: Any, stops: Sequence[int], *, T: int, row_order: str = "bat
     adv = V.advice_of(trace, rec)
     reg = V.Registered(trace.engine, tuple(stops), T=T, row_order=row_order)
     wins = V.residual(adv, rec, reg)
-    reg = dataclasses.replace(reg, book=CV.fit_book([wins]))
+    reg = dataclasses.replace(reg, book=CV.fit_book([wins], V.TABLE_CAPS))
     blocks = None if reg.pinned else reg.engine.num_gpu_blocks
     bits, charge = V._string(blocks, wins, reg)
     if CV.pack(bits)[0] != V.encode(adv, rec, reg, check=False):
@@ -321,6 +321,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         except (ValueError, RuntimeError) as e:
             report["streams"][name] = {"skipped": str(e)}
             print(f"{name}: skipped ({e})", flush=True)
+            ok = False
             continue
         if stream is None:
             report["streams"][name] = {"none": "nothing still sent"}
