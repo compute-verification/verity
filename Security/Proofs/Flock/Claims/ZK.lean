@@ -131,6 +131,7 @@ import Proofs.Flock.Claims.ZK.AdmitsOf
 import Proofs.Flock.Claims.ZK.FrameAdmits
 import Proofs.Flock.Claims.ZK.FrameBeta
 import Proofs.Flock.Claims.ZK.FrameOuter
+import Proofs.Flock.Claims.ZK.FrameFree
 import Proofs.Flock.Claims.ZK.FrameRanked
 import Proofs.Flock.Claims.ZK.FrameRankFault
 import Proofs.Flock.Claims.ZK.FrameRho
@@ -643,6 +644,9 @@ import Proofs.Flock.Claims.ZK.CutPrefix
   outer round `m - 13` coins (`Loop.run_outer`), each of which it takes only when its `+ 1` is nonzero
   (`Loop.answer_outer`), so at each rep's `outerSlot` the opened outer coin is never `1`
   (**`LeanRelease.outer_unrefused`**).
+* `FrameFree`: the values a round carries freely, read back off its bytes. Inside the algebraic phase the words at the
+  offsets `roundFree` frees are the round's frames' values in order (`roundFree_vals`), the zerocheck's first round frees
+  none (`roundFree_zcFree`), and the frame takes a round's coins where no outer coin is `1` (`answer_ok`).
 * `FrameRanked`: `FrameUnrefused`' rank fault, at the frame. Before the opening's label the frame stays in the
   algebraic phase, and past it the rank check held at its coins (`Ranked.Good`): every label, round and answer keeps
   that (`Ranked.label_good`, `Ranked.step_round`, `Ranked.answer_keep`). Along a rep's requests the coins it holds are
