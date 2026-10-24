@@ -51,7 +51,6 @@ def virtual(rehearsal, tmp_path_factory):
                            report=e2e.run(_args(rehearsal.runs, out), [], clock=lambda: 0.0))
 
 
-@pytest.mark.slow
 def test_the_honest_run_is_accepted_and_each_negative_refused_for_its_own_reason(virtual):
     r = virtual.report
     windows = virtual.plan["windows"]
@@ -71,7 +70,6 @@ def test_the_honest_run_is_accepted_and_each_negative_refused_for_its_own_reason
     assert r["proofs"]["ran"] is False and r["proofs"]["cost_per_link_window"] is None
 
 
-@pytest.mark.slow
 def test_the_claim_is_in_both_files(virtual):
     doc = json.loads((virtual.out / "report.json").read_text())
     md = (virtual.out / "report.md").read_text()
@@ -153,7 +151,6 @@ def _kept(d: Path, runs: dict) -> Path:
     return d
 
 
-@pytest.mark.slow
 def test_proofs_of_these_runs_are_adopted_and_another_runs_refused(rehearsal, tmp_path):
     runs = e2e.collect([rehearsal.runs], tmp_path)
     kept = _kept(tmp_path / "n2zk", runs)
