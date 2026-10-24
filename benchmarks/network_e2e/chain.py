@@ -11,10 +11,11 @@ stood on; `stubs` lists what is still a stand-in.
   a certified request (its ``user``), once.
 * **Bits per link-window** (`bits`), T the honest run's egress window in buckets (`window_buckets`): v0's (I1's
   `bits_by_window`) and, given the registered serving config (``--serving-config``: `derived.Config`'s fields, or a step
-  trace's ``config``), the residual's (`derived.residual`), unshaped (release sent) and shaped (release derived), charged
-  by I1's rule (`derived.charge`), with the forced fields' share. `derived.reconstruct` must give back every step of the
-  advice and every output length from the residual and the config alone; with the certified I/O, `derived.rebuild` must
-  give back the whole advice (the tie's derivation, in the clear on the rehearsal's published witness).
+  trace's ``config``) and the certified I/O the advice is bound to, whose tokens the residual reads (canonical sources,
+  derived hits), the residual's (`derived.residual`), unshaped (release sent) and shaped (release derived), charged by
+  I1's rule (`derived.charge`), with the forced fields' share. `derived.reconstruct` must give back every step of the
+  advice and every output length from the residual, the config and the tokens, and `derived.rebuild` the whole advice
+  (the tie's derivation, in the clear on the rehearsal's published witness).
 * **The prove path** (`prove_path`, ``--prove-path DIR|TGZ``): `prove_path.py audit`'s output adopted (`run.sh`'s ``$OUT``,
   each arm a directory with its ``summary.json``): an honest arm passes when every rank's audit accepted on the verifier's
   coins and every negative was refused; a forged arm when Lean refused the forged unit it drew. The advice the arm
@@ -100,8 +101,9 @@ def holdings(adv, io: list[dict]):
 
 
 def bits(adv, T: int, windows: int, config: dict | None, io: list[dict] | None) -> dict:
-    """The advice's bits per egress window of T buckets: v0's, and with ``config`` the residual's (the module's
-    docstring); ``io``, the certified I/O, binds the advice to the run and lets the residual rebuild it."""
+    """The advice's bits per egress window of T buckets: v0's, and with ``config`` and an ``io`` it is bound to the
+    residual's (the module's docstring); ``io``, the certified I/O, binds the advice to the run, and its tokens are what
+    the residual reads and rebuilds the advice from."""
     v0 = I1.bits_by_window(adv, T)
     out = {"T": T, "v0_total": I1.total_bits(adv), "config": config, "bound": None, "public_fields": None,
            "rebuilt": None, "why": None}
@@ -114,22 +116,24 @@ def bits(adv, T: int, windows: int, config: dict | None, io: list[dict] | None) 
     dv = ds = None
     if config is None:
         out["why"] = "no registered serving config (--serving-config)"
+    elif held is None:
+        out["why"] = "the residual reads the certified tokens, and the advice isn't bound to a certified I/O"
     else:
         cfg = D.config_of({"config": config})
         try:
-            res, shaped = D.residual(adv, cfg, order=order), D.residual(adv, cfg, order=order, shaped=True)
-            walk = D.reconstruct(res, cfg)
+            res = D.residual(adv, cfg, held, order=order)
+            shaped = D.residual(adv, cfg, held, order=order, shaped=True)
+            walk = D.reconstruct(res, cfg, held)
             dv = D.charge(adv, T, D.derived_records(res, walk, cfg))
             ds = D.charge(adv, T, D.derived_records(shaped, walk, cfg))
         except ValueError as err:
-            out["why"], out["public_fields"] = f"the residual under this config: {err}", False
+            out["why"], out["public_fields"], out["rebuilt"] = f"the residual under this config: {err}", False, False
         else:
             out["public_fields"] = walk.steps == adv.steps and walk.output_len == tuple(q.output_len for q in adv.requests)
-            if held is not None:
-                try:
-                    out["rebuilt"] = D.rebuild(res, cfg, held, ()) == adv
-                except ValueError as err:
-                    out["why"], out["rebuilt"] = f"the rebuild from the certified I/O: {err}", False
+            try:
+                out["rebuilt"] = D.rebuild(res, cfg, held, ()) == adv
+            except ValueError as err:
+                out["why"], out["rebuilt"] = f"the rebuild from the certified I/O: {err}", False
 
     def total(d, w, fields=None):
         return None if d is None else sum(b for f, b in d.get(w, {}).items() if fields is None or f in fields)

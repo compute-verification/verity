@@ -71,10 +71,10 @@ verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic 
   it did name, and isn't the negative's.
 - `--advice FILE`: the advice, as I1 v0's JSON or `encode` bytes, or a prove-path stand-in's from before v0 (its first
   runs'), which is upgraded with each kept output released in its step's bucket. The report gives v0's bits per
-  link-window (`advice.bits_by_window`, T the run's egress window). With `--serving-config` (`derived.Config`'s fields, or
-  a step trace's `config`) it also gives ENC-DERIVED's derived bits, unshaped and shaped. On a varied run the honest run's
-  certified I/O (`io.json`) binds the advice to the run (`bits.bound`), and the residual must rebuild the whole advice
-  from it (`bits.rebuilt`). Where an advice is given, the OK needs both to be true. The serving config is the one the job
+  link-window (`advice.bits_by_window`, T the run's egress window). On a varied run the honest run's certified I/O
+  (`io.json`) binds the advice to the run (`bits.bound`). With `--serving-config` (`derived.Config`'s fields, or a step
+  trace's `config`) and the bound I/O, whose tokens the residual reads (canonical sources, derived hits), it also gives
+  ENC-DERIVED's derived bits, unshaped and shaped, and the residual must rebuild the whole advice (`bits.rebuilt`). Where an advice is given, the OK needs both to be true. The serving config is the one the job
   was given, not one the endpoint registered, so the derived bits and the residual's own check under it
   (`public_fields`) stay out of the OK.
 - `--prove-path DIR`: a `prove_path.py` run's output (PROVE-PATH's `run.sh` `$OUT`, or a tarball of it), adopted. The

@@ -81,15 +81,16 @@ def test_the_advice_is_read_as_v0_json_as_its_bytes_and_as_an_upgraded_standin(t
 
 def test_the_bits_per_window_are_v0s_and_the_residuals_and_the_certified_io_binds_and_rebuilds_the_advice():
     adv = _advice()
-    b = chain.bits(adv, T, 3, CONFIG, None)
+    unbound = chain.bits(adv, T, 3, CONFIG, None)
+    assert unbound["bound"] is None and unbound["public_fields"] is None and unbound["rebuilt"] is None
+    assert "the certified tokens" in unbound["why"] and unbound["windows"][0]["derived_bits"] is None
+    b = chain.bits(adv, T, 3, CONFIG, _io())
     rows = {x["window"]: x for x in b["windows"]}
     assert sorted(rows) == [0, 1, 2] and sum(x["v0_bits"] for x in rows.values()) == I1.total_bits(adv) == b["v0_total"]
     assert {w: x["v0_bits"] for w, x in rows.items() if x["v0_bits"]} == I1.bits_by_window(adv, T)
-    assert b["public_fields"] is True and b["bound"] is None and b["rebuilt"] is None and b["why"] is None
+    assert b["bound"] is True and b["rebuilt"] is True and b["public_fields"] is True and b["why"] is None
     assert 0 < rows[0]["derived_bits"] < rows[0]["v0_bits"] and rows[0]["derived_shaped_bits"] <= rows[0]["derived_bits"]
     assert rows[0]["forced_bits"] <= rows[0]["derived_bits"] and rows[2]["v0_bits"] == 0
-    bound = chain.bits(adv, T, 3, CONFIG, _io())
-    assert bound["bound"] is True and bound["rebuilt"] is True and bound["public_fields"] is True
     swapped = chain.bits(adv, T, 3, CONFIG, _io()[::-1])
     assert swapped["bound"] is True and swapped["rebuilt"] is True
     other = chain.bits(adv, T, 3, CONFIG, _io(("q0", "q9")))
@@ -171,7 +172,7 @@ def test_the_report_carries_every_stage_on_the_planned_profile(virtual, tmp_path
     assert r["ok"] is False and r["why_not"] == ["the advice isn't these runs'",
                                                  "the advice wasn't rebuilt from the certified I/O"]
     c = r["chain"]
-    assert c["advice"]["form"].startswith("a prove-path stand-in's") and c["bits"]["public_fields"] is True
+    assert c["advice"]["form"].startswith("a prove-path stand-in's") and c["bits"]["public_fields"] is None
     assert c["bits"]["bound"] is None and c["prove_path"]["dir"] == str(tmp_path / "pp.tgz") and c["prove_path"]["ok"]
     rows = c["negatives"]["rows"]
     assert c["negatives"]["ok"] and all(rows[k]["ok"] is True for k in ("late", "extra", "head"))
