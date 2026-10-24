@@ -6,14 +6,17 @@ import Proofs.Pouw.Prob
 # A cheap winning W1 program refutes TT_OUT at W1, and W1 charges only the branch a run takes
 
 `TTOutW1` (`Definitions.Pouw.Assumptions.PearlC.TTOutW1`), `Gγ` and `GγPerCoin` bound every adversary by its cost and
-its oracle calls, and nothing else: no bound on the program's text. These lemmas make that exact, as red-team tools for
+its oracle calls. W1 itself bounds a program's text (`W1.Prog.bounded`: at every layout `2^64` code nodes and `2^64`
+constants, W1RT-1's fix F2), and nothing else bounds an adversary. These lemmas make that exact, as red-team tools for
 the TT family restated at `W1.w1Priced`.
 
 - `exec_ite_untaken`: an `ite` runs one branch, so a run is the same whatever its untaken branch is. That branch may be
-  any `Code`, of any size, at no cost: W1 charges only the path a run takes.
+  any `Code` (in a program, any within the text bound) at no cost: W1 charges only the path a run takes.
 - `exec_tree`: a complete tree of `ite`s of depth `n` (`tree`, `2^n` leaves) costs `n` INT32 instructions and the one
-  leaf the memory reaches (`pathOf`), whatever the other leaves are. At `n = 256` on the salt's bits, that is a table of
-  one leaf per salt, selected for 256 INT32.
+  leaf the memory reaches (`pathOf`), whatever the other leaves are. At `n = 256` on the salt's bits, that would be a
+  table of one leaf per salt, selected for 256 INT32.
+- `size_tree`, `tree_not_code`: a tree of depth `n` has at least `2^n` nodes, so no program's code is a tree of depth
+  above 64. W1RT-1's table (`tree leaf 256 []`) is not a W1 program.
 - `not_ttOutW1_of_win`, `not_gγ_of_win`, `not_gγPerCoin_of_win`: one adversary within `T` and `q ≤ 2^64` calls that
   wins with probability above the error refutes each form. They are the forms read at that adversary.
 - `schema_not_ttOutW1` (and `schema_not_gγ`, `schema_not_gγPerCoin`): the forms as schemas carry no guard of their own.
@@ -22,9 +25,25 @@ the TT family restated at `W1.w1Priced`.
   protocol's reference being expensive to produce, which the form does not state.
 
 What these do not do: refute a named form at the deployed protocol. At `NoiseSha512.sha512Sem` with the game's salt the
-reference reads no oracle, so a program may tabulate it per salt in `tree` at depth 256 and pay for one path
-(`exec_tree`). The rest of that program (the salt's bits, the word tables, the leaf's writes) and its transcript are
-the red team's arithmetic, not a theorem here (`note:compute-accounting/20261024T1730Z-report-w1-redteam`, W1RT-1).
+reference reads no oracle. Without the text bound a program could tabulate it per salt in `tree` at depth 256 and pay
+for one path (`exec_tree`). The rest of that program (the salt's bits, the word tables, the leaf's writes) and its
+transcript are the red team's arithmetic (`note:compute-accounting/20261024T1730Z-report-w1-redteam`, W1RT-1). Under
+the bound it is not a program (`tree_not_code`).
+
+**What the bound leaves, an argument and not a theorem here.**
+- A run reads precomputed data only as words of memory: the constant bank (at most `2^64` words), and the preprocessed
+  state, the activations and the weights at the addresses its instructions name. An address is fixed in the code (an
+  instruction names at most a fragment's spans), or it is `(rg, w32 (M r) + off)` for an `ld` with `rg` and `off`
+  compiled in, at most `2^32` addresses per `ld` node. So all of a program's runs together read below `2^97` distinct
+  words of data.
+- The code can have far more paths than nodes, since an `ite`'s continuation follows both branches. But a path holds
+  no data of its own beyond those words and its instructions' few immediates, so the count is of words, not paths.
+- A table that answers a salt holds that salt's reference words, which differ from salt to salt as SHA-512's outputs
+  do. So a program that reads its answers from a table has them for at most about `2^97` of the `2^256` salts. Its
+  success is then at most about `2^-159`, below `εPearlC`'s `2^-128` per unit (W1-RT estimates about `2^-150`).
+
+"Tabulates" isn't defined in Lean, and this counting bound isn't proved. Whatever else a bounded program can do, such
+as compute the reference more cheaply than the honest program, is TT_OUT's own conjecture.
 -/
 
 namespace Pouw.PearlC.W1Tabulate
@@ -36,7 +55,8 @@ variable {Q R S : Type}
 /-! ## W1 charges only the branch a run takes -/
 
 /-- **A run doesn't read an `ite`'s untaken branch.** When the word is zero the run takes `b`, so replacing the `then`
-branch `a` by any `a'` leaves the run, its memory, fetches and cost, unchanged; `a'` may be a code tree of any size. -/
+branch `a` by any `a'` leaves the run, its memory, fetches and cost, unchanged. As a `Code`, `a'` may be of any size;
+a program's is within W1's text bound. -/
 theorem exec_ite_untaken (dv : W1Device) (t : Bool) (p : Addr) (a a' b k : W1.Code) (st : St)
     (h : w32 (st.mem p) = 0) :
     exec dv t (.ite p a b k) st = exec dv t (.ite p a' b k) st := by
@@ -87,6 +107,34 @@ and nothing follows it. -/
 theorem exec_tree_untainted (dv : W1Device) (leaf : List Bool → W1.Code) (n : ℕ) (path : List Bool) (st : St) :
     exec dv false (tree leaf (n + 1) path) st = exec dv true (tree leaf (n + 1) path) st := by
   simp [tree, exec]
+
+/-! ## W1's text bound leaves the tree out (F2) -/
+
+/-- Every code tree has a node. -/
+theorem one_le_codeSize (c : W1.Code) : 1 ≤ c.size := by
+  cases c <;> simp only [W1.Code.size] <;> omega
+
+/-- **A tree of `ite`s of depth `n` has at least `2^n` nodes**: each of its `2^n` paths ends in a leaf of at least one
+node. -/
+theorem size_tree (leaf : List Bool → W1.Code) : ∀ (n : ℕ) (path : List Bool), 2 ^ n ≤ (tree leaf n path).size
+  | 0, path => by simpa [tree] using one_le_codeSize (leaf path)
+  | n + 1, path => by
+      have h1 := size_tree leaf n (true :: path)
+      have h2 := size_tree leaf n (false :: path)
+      have h3 : 2 ^ (n + 1) = 2 ^ n + 2 ^ n := by ring
+      simp only [tree, W1.Code.size]
+      omega
+
+/-- **No W1 program's code is a tree of `ite`s of depth above 64**, at any layout and whatever the tree's leaves: the
+tree has at least `2^n` nodes (`size_tree`), and W1's text bound (`Prog.bounded`) allows `2^64`. W1RT-1's table of one
+leaf per salt, `tree leaf 256 []` on the salt's 256 bits, is one of them. -/
+theorem tree_not_code (leaf : List Bool → W1.Code) {n : ℕ} (hn : 64 < n) (path : List Bool) (pr : Prog)
+    (L : Layout) : pr.code L ≠ tree leaf n path := by
+  intro h
+  have h1 := (pr.bounded L).1
+  rw [h] at h1
+  have h2 : 2 ^ 65 ≤ 2 ^ n := Nat.pow_le_pow_right (by norm_num) (by omega)
+  exact absurd (h2.trans ((size_tree leaf n path).trans h1)) (by norm_num)
 
 /-! ## A cheap winning program refutes each form -/
 
@@ -139,8 +187,8 @@ def tabP : Protocol Unit Unit Unit where
   capOK := fun _ _ _ _ _ => True
   Wref := fun _ _ => 1
 
-/-- The empty program. -/
-def emptyProg : Prog := ⟨fun _ => [], fun _ => .done⟩
+/-- The empty program: one node of text, within W1's bound. -/
+def emptyProg : Prog := ⟨fun _ => [], fun _ => .done, fun _ => by norm_num [W1.Code.size]⟩
 
 /-- The adversary that runs the empty program on zero activations, with no preprocessing. -/
 def emptyAdv (dv : W1Device) : Adversary (W1.w1Priced dv (fun _ : Unit => []) : CostModel Unit Unit Unit) :=
