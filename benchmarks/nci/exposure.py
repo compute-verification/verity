@@ -27,7 +27,8 @@ import tiers as T  # noqa: E402
 #: a bound no parameter file, calibration or measurement gives
 RANGES = {
     "unmonitored": (0.0, 0.1, "guess: none, to a tenth of the fleet's compute hidden"),
-    "residual": (0.01, 1.0, "best plausible design 0.01 (eight conditions); floor credit 0.326 at the locked clock, 0.217 attested (C7 dossier); nothing credited today 1"),
+    "residual": (0.01, 1.0, "best plausible design 0.01 (eight conditions); floor credit 0.323 at the locked clock, 0.213 attested (C7 dossier, its eps left to eps_w); nothing credited today 1"),
+    "eps_w": (6e-4, 0.00917, "best plausible design 0.06% (C7 dossier); CircuitCredit's closed 0.744%, 0.681-0.917% over r = 1-4 (draft #2638)"),
     "host_share": (0.0021, 0.131, "two EPYC 9015s without matrix units 0.21%; Xeon 6776P INT8 AMX 11.8%, 13.1% at fused maximum clocks"),
     "eps_agg": (1e-6, 1e-3, "1e-6 needs per-window failure about 3 x 2^-47 for the same delta; 1e-3 lets delta fall tenfold"),
     "clock_share": (0.0, 0.2, "0 with an attested clock; 6.4% from NVIDIA's dense headline; 0.2 the C4 dossier's adversarial phi = 1.25"),
@@ -124,7 +125,7 @@ CHECKS = [
     ("design", DESIGN, "T5", "chi", "(1, 0) above thread_bits: one block is full at S_1"),
     ("batched proving", DESIGN | {"overhead": 1.6e8}, "T5", "chi", "overhead 1.6e8"),
     ("1,000 servers", DESIGN | {"nodes": 1e3}, "T5", "chi", "the pool doesn't shrink with the fleet"),
-    ("no dark compute", {"residual": 0.0, "host_share": 0.0, "clock_share": 0.0, "eps_agg": 0.0, "lag_s": 0.0, "kappa_chain": 0.0695}, "T4", "nu", "breaks: the partial-sum law binds below nu"),
+    ("no dark compute", {"residual": 0.0, "host_share": 0.0, "clock_share": 0.0, "eps_w": 0.0, "eps_agg": 0.0, "lag_s": 0.0, "kappa_chain": 0.0695}, "T4", "nu", "breaks: the partial-sum law binds below nu"),
     ("served 4 GB, daily wipes", SERVED_4GB | {"wipe_s": 86400.0}, "T4", "mu",
      "breaks: wipe period above R_wipe / lambda_in"),
     ("served, R_wipe 22 MB", {"residual": 0.9, "unfilled_gb": 0.01, "pous_rounds": 1e6, "pous_floor": 0.0,

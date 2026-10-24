@@ -38,8 +38,9 @@ step() {  # NAME CMD...: its output in $OUT/NAME.out
 lease() { "$GPU_LEASE" 1 --wait --max-min "$1" --mem-gb 0 -- "${@:2}"; }
 
 # the sampler Call at V = 128256 is one Q_word unit over the default gate limit, as on every top-p row (the gate-limit decision of
-# 30 Sep, note:20260930T1020Z-decision-from-vllm-coordinator-topp-option3-and-queue)
-G=GumbelTopPTokenSelect_v2=113000000
+# 30 Sep, note:20260930T1020Z-decision-from-vllm-coordinator-topp-option3-and-queue); a one-rank request Build states it as v3, v2
+# without its dead gates (program.prune.dead_free)
+G=GumbelTopPTokenSelect_v2=113000000,GumbelTopPTokenSelect_v3=113000000
 export VERITY_QWORD_MAX_GATES=${VERITY_QWORD_MAX_GATES:-$G} VERITY_QWORD_MAX_GATES_ALLOWED=${VERITY_QWORD_MAX_GATES_ALLOWED:-$G}
 
 rc=0

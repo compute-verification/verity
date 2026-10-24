@@ -2067,16 +2067,18 @@ def sm90_run():
 
 def test_a_schedule_this_path_the_kernel_or_the_format_cannot_run_is_refused(device_run, sm90_run):
     """-h3's row seeds come from A's rows, not its root, so its format lets A's tree leave the main lane; this path moves the
-    tile hashing, which reads C~ and U, and A's tree where the kernel's pipeline splits A's commitment (sm_90a's, not
+    tile hashing, which reads C~ and U, and A's tree where the kernel's pipeline splits A's commitment (sm_90a's and
     sm_120's), each with the buffers it touches rotated.  The screen stays on the caller."""
     from verity.core.protocols.pouw.serving import Schedule
     make, kernel, *_ = device_run
     s = PPD.scheme_of(SCHEME)
-    assert PPD.schedule_of("deferred-a", s).name == "deferred-a"
+    assert PPD.schedule_of("deferred-a", s).name == "deferred-a" and PPD.splits(kernel)
+    assert make(schedule="deferred-a").schedule.name == "deferred-a"
+    whole = types.SimpleNamespace(run=types.SimpleNamespace(Pipeline=types.SimpleNamespace(FUSED={"commit_a": ()})))
     with pytest.raises(ValueError, match="this kernel's pipeline doesn't split A's commitment"):
-        PPD.schedule_of(Schedule("early-a", frozenset({"a_tree", "tile_hash"}), ring=2), s, kernel)
+        PPD.schedule_of(Schedule("early-a", frozenset({"a_tree", "tile_hash"}), ring=2), s, whole)
     with pytest.raises(ValueError, match="doesn't split A's commitment"):
-        make(schedule="deferred-a")
+        PPD.schedule_of("deferred-a", s, whole)
     with pytest.raises(ValueError, match="this path runs only a_tree, tile_hash on a side lane, not screen"):
         PPD.schedule_of(Schedule("screen-aside", frozenset({"tile_hash", "screen"}), ring=2), s)
     with pytest.raises(ValueError, match="a side lane needs ring >= 2"):
@@ -2132,6 +2134,47 @@ def test_deferred_a_builds_as_tree_beside_the_tile_hashing_from_rotating_sets(sm
         assert PPD._bytes(keys[:168]) == PPD.call_keys(F90, run.salt, roots[0], index, 32, run.tree_hash)
     assert [set(PPD._bytes(run.roots_buf[nb * c:nb * (c + 1)])) for c in range(3)] == [{0x11}, {0x22}, {0x11}]
     assert run.end()["schedule"] == "deferred-a"
+
+
+def test_deferred_a_runs_sm120s_split_on_the_lanes(device_run, tmp_path):
+    """sm_120's pipeline splits A's commitment as sm_90a's does (`run.Pipeline`'s ``split_a``), so under ``deferred-a`` a
+    decode call's main lane (handle 2) runs pd_commit in mode 1 and a side lane pd_tree, both on pd_commit's variant (851,
+    also where the tiles take 979), writing no padding rows' E_A lines, over the ring's set for the call: below a full
+    tile of rows the call's side lane runs the tree, then the tile leaves (lanes 1, 3, 1); from a full tile the side lane
+    after the call's runs the tree.  A retained pass's record keeps the tree of the call's set."""
+    make, kernel, weights, *_ = device_run
+    run = make(schedule="deferred-a")
+    sh = run._shape(32, 256, 1024)
+    kernel.dev.log.clear()
+    for _ in range(3):
+        run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
+    log = [(n, st, p, i) for n, st, p, i in kernel.dev.log if not n.endswith("_smem")]
+    sides = [lane.raw for lane in run.sides]
+    assert sides == [1, 3] and [(n, st) for n, st, _, _ in log if st in sides] == [
+        (n, lane) for lane in (1, 3, 1) for n in ("pd_tree_851", "pd_tiles_851")]
+    assert {st for _, st, _, _ in log if st not in sides} == {2}
+    ptr = lambda j, x: (sh.keys if j == 0 and x == "keys" else sh.sets[j][x]).data_ptr()  # noqa: E731
+    commits = [(p, i) for n, _, p, i in log if n == "pd_commit_851"]
+    trees = [(p, i) for n, _, p, i in log if n == "pd_tree_851"]
+    for (cp, ci), (tp, ti), j in zip(commits, trees, (0, 1, 0), strict=True):
+        assert ci == (32, 1024, 1, 64) and ti == (32, 0, 0, 64) and tp[12] == 0
+        assert cp[2] == tp[2] == ptr(j, "tree_a") and (tp[10], tp[11]) == (ptr(j, "seed_a"), ptr(j, "line_a"))
+        assert cp[6] == tp[6] == ptr(j, "keys") and cp[12] == sh.b["ea_codes"].data_ptr()
+    full = make(schedule="deferred-a")
+    kernel.dev.log.clear()
+    for _ in range(3):
+        full.gemm(0, torch.randn(64, 1024).to(torch.bfloat16), weights[0], None)
+    assert [(n, st) for n, st, *_ in kernel.dev.log if st in sides and n.startswith("pd_")] == [
+        (n, st) for tree, tiles in ((3, 1), (1, 3), (3, 1)) for n, st in (("pd_tree_851", tree), ("pd_tiles_979", tiles))]
+    kept_run = make(schedule="deferred-a")
+    kept_run.begin(retain=str(tmp_path / "kept"), run=RUN)
+    kept = []
+    kept_run._retained = lambda cur, mm, m, flags, xa, tree: kept.append(tree.data_ptr())
+    kernel.dev.log.clear()
+    kept_run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
+    pd = [(n, st, p, i) for n, st, p, i in kernel.dev.log if n.startswith("pd_") and not n.endswith("_smem")]
+    assert [(n, st) for n, st, _, _ in pd] == [("pd_commit_851", 2), ("pd_tree_851", 1), ("pd_tiles_851", 1)]
+    assert pd[0][3][2] == 1 and kept == [pd[1][2][2]] and pd[1][2][12] == 0
 
 
 def test_deferred_a_runs_as_tree_aside_in_a_retained_pass_too_and_writes_no_padding_lines(sm90_run, tmp_path):
@@ -2204,23 +2247,27 @@ class H100TwinDev(TwinDev):
 
 @pytest.mark.slow
 @pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")
-def test_deferred_a_commits_what_the_serial_one_commits_and_leaves_the_padding_lines(tmp_path):
+@pytest.mark.parametrize("arch", ["sm90", "sm120"])
+def test_deferred_a_commits_what_the_serial_one_commits_and_leaves_the_padding_lines(tmp_path, arch):
     """Under ``deferred-a`` (A's commitment split, its tree on the side lane, no padding rows' E_A lines) a retained pass
-    commits what the serial one commits, its trees computed on the host (`H100TwinDev`: hash_decode.cuh's host build and
-    simt_twin): the records root, the commitment and each call's A root, at m₁₆ with padding rows (20 and 32 rows of the
-    kernels' 64) and without (64), and the committed rows' E_A lines.  The padding rows' lines are serial's under line_a
-    and deferred-a's the pass's poison, which nothing commits or serves."""
+    commits what the serial one commits, on sm_90a's pipeline and on sm_120's, its trees computed on the host
+    (`H100TwinDev` or `TwinDev`: hash_decode.cuh's host build and simt_twin): the records root, the commitment and each
+    call's A root, at m₁₆ with padding rows (20 and 32 rows of the kernels' 64) and without (64), and the committed rows'
+    E_A lines.  The padding rows' lines are serial's under line_a and deferred-a's the pass's poison, which nothing
+    commits or serves."""
     pd = HD.build(tmp_path)
     rng = np.random.default_rng(23)
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
     xs = [(w, torch.from_numpy(bf16_words(rng, m, 1024).view(np.float32).copy()).to(torch.bfloat16))
           for w, m in ((0, 20), (1, 32), (0, 64), (1, 20), (0, 32))]
-    kernel = PPD.Kernel(R90, F90, H100TwinDev(pd), "0" * 64)
-    roots = PPD.weight_roots(kernel, weights, H100_SCHEME, salt_key=SALT_KEY)
+    scheme = H100_SCHEME if arch == "sm90" else SCHEME
+    kernel = (PPD.Kernel(R90, F90, H100TwinDev(pd), "0" * 64) if arch == "sm90" else
+              PPD.Kernel(R, F, TwinDev(pd), "0" * 64))
+    roots = PPD.weight_roots(kernel, weights, scheme, salt_key=SALT_KEY)
     got = {}
     for schedule in ("serial", "deferred-a"):
-        run = PPD.PearlCDeviceRun(PPD.scheme_of(H100_SCHEME), f"pouw:{H100_SCHEME}", kernel, weights, roots,
+        run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots,
                                   *salt_coin(roots), capacity=1 << 12, schedule=schedule, salt_key=SALT_KEY)
         run.begin(retain=str(tmp_path / schedule), run=RUN)
         lines = []
@@ -2485,7 +2532,7 @@ def test_the_run_behind_the_stack_commits_what_the_run_commits_alone(device_run,
     run = make()
     sites = _stack_sites(weights)
     stack = Stack(sites, PPD.PearlCExecutor(run))
-    assert stack.refusals() == [] and stack.executor.schedules == {"serial", "deferred", "deferred-caller"}
+    assert stack.refusals() == [] and stack.executor.schedules == {"serial", "deferred", "deferred-caller", "deferred-a"}
     stack.activate(E2E.arm_of("pearlc", run, types.SimpleNamespace(schedule="serial")))
     with stack.pass_(dataclasses.replace(stack.active.spec, retain=str(tmp_path / "stack"), run_id=RUN)):
         for w, x in xs:

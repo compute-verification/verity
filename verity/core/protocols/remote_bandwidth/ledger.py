@@ -8,7 +8,7 @@ The memory line's forms are the conclusions of `Accounting.Guarantees.Remote.Hel
 the record.  In the statements' terms, with b a block's bytes and every rate in blocks a ns:
 
 - N, the registered blocks; P, the credited passes; `planned`, their registered receipts (each pass's `lengths` less
-  its post-seed reads); W, the most of them wrong (`audit.pooled`'s, at the record's δ); S, S_chip/b;
+  its post-seed reads); W, the most of them wrong (`audit.pooled`'s, at the record's δ); S, S_chip/b rounded up;
 - X = s/E + β, what can bring a block back into node memory a ns: the node's squaring ceiling over the codec's
   squarings a block (`audit.Rebuild`), plus its disks' read ceiling, plus, link-charged, its boundary links' β_l;
 - B = B_r + B_d, what can come back at once beyond that rate, in blocks: one maximal rebuild batch and one maximal
@@ -285,7 +285,7 @@ def memory(record: audit.Record, node: Node) -> tuple[Line, Line, Line]:
     N, b, P = record.blocks, record.block_bytes, record.passes
     W = audit.pooled(record)[0]
     delta = record.windows[0].profile.delta + P * 2.0 ** -audit.SLACK_LOG2 + sketch(record, node)
-    S = node.chip_bytes / b
+    S = -(-node.chip_bytes // b)
     rebuild = node.rebuild(record.codec)
     X = rebuild.squarings_per_s / record.codec.encode_squarings / 1e9 + node.disk_bytes_per_s / b / 1e9
     X_link = X + node.link_bytes_per_s / b / 1e9

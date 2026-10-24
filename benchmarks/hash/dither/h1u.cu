@@ -1099,6 +1099,8 @@ __device__ __forceinline__ void h1um_one(const UCall* __restrict__ calls, u32 nc
 
 // the _smc launches' per-SM CTA counts, after the unit counter in `next` (a %smid past them shares a count)
 constexpr u32 SMC_SLOTS = 1024;
+// the _sm launches' largest den: past every %smid of these GPUs, so q / SMQ_DEN_MAX keeps the SMs below q, one block
+constexpr u32 SMQ_DEN_MAX = 256;
 
 // whether this CTA takes units: on a kept SM (smid % den < q), and under CAP only the first cap CTAs to reach it
 // (next[1 + smid]); off them only the grid's last CTA while no unit has been taken
@@ -2115,11 +2117,11 @@ extern "C" int kh_units_multi(const void* calls, unsigned ncalls, unsigned units
   return cudaGetLastError() == cudaSuccess ? 0 : 3;
 }
 
-// kh_units_multi on q / den of the SMs (h1um_sm, 1 <= q <= den <= 64): next a device u32 the launch zeroes first, and
-// twice the CTAs that fit at once, so the SMs it keeps get theirs whatever else holds the GPU at the launch
+// kh_units_multi on q / den of the SMs (h1um_sm, 1 <= q <= den <= SMQ_DEN_MAX): next a device u32 the launch zeroes
+// first, and twice the CTAs that fit at once, so the SMs it keeps get theirs whatever else holds the GPU at the launch
 extern "C" int kh_units_multi_sm(const void* calls, unsigned ncalls, unsigned units, unsigned M, const void* live, unsigned q,
                                  unsigned den, void* next, void* stream) {
-  if (!ncalls || M % 32 || !q || q > den || den > 64 || !next) return 2;
+  if (!ncalls || M % 32 || !q || q > den || den > SMQ_DEN_MAX || !next) return 2;
   if (!units) return 0;
   carve<h1um_sm<false>>();
   int dev = 0, sms = 0, per = 0;
@@ -2140,7 +2142,7 @@ extern "C" unsigned kh_smc_words() { return 1 + SMC_SLOTS; }
 // zeroes first
 extern "C" int kh_units_multi_smc(const void* calls, unsigned ncalls, unsigned units, unsigned M, const void* live,
                                   unsigned q, unsigned den, unsigned cap, void* next, void* stream) {
-  if (!ncalls || M % 32 || !q || q > den || den > 64 || !cap || cap > 64 || !next) return 2;
+  if (!ncalls || M % 32 || !q || q > den || den > SMQ_DEN_MAX || !cap || cap > 64 || !next) return 2;
   if (!units) return 0;
   carve<h1um_sm<true>>();
   int dev = 0, sms = 0, per = 0;
@@ -2441,6 +2443,12 @@ __device__ __forceinline__ void h1umj_one(const UCallR* __restrict__ calls, u32 
                                                          gu - c.u0, S);
 }
 
+// H1U_JCTA = 1 (h1umj_sm): a CTA's warps take WARPS units in turn together, warp w the w-th, as h1umj's grid places them,
+// so they read their shared A rows through one SM's L1 rather than each from L2; 0: each warp
+// takes its own, and neighbouring units run on any SMs
+#ifndef H1U_JCTA
+#define H1U_JCTA 0
+#endif
 // h1umj on the SMs whose %smid % den < q alone, its warps taking units from *next in turn (h1um_sm's partition, its last
 // CTA's fallback and its CAP too)
 template <bool CAP>
@@ -2452,13 +2460,27 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj_sm(const UCallR* _
   if (!sm_keep<CAP>(smid, q, den, cap, next)) return;
   __shared__ WarpSmem smem[WARPS];
   const u32 wp = threadIdx.x >> 5, lane = threadIdx.x & 31, total = calls[ncalls].u0;
-  for (;;) {
-    u32 gu = 0;
-    if (lane == 0) gu = atomicAdd(next, 1u);
-    gu = __shfl_sync(0xffffffffu, gu, 0);
-    if (gu >= total) break;
-    h1umj_one(calls, ncalls, M, live, gu, smem[wp]);
-    __syncwarp();
+  if constexpr (H1U_JCTA) {
+    __shared__ u32 claim;
+    for (;;) {
+      __syncthreads();
+      if (threadIdx.x == 0) claim = atomicAdd(next, (u32)WARPS);
+      __syncthreads();
+      const u32 g0 = claim, gu = g0 + wp;
+      if (g0 >= total) break;
+      if (gu >= total) continue;
+      h1umj_one(calls, ncalls, M, live, gu, smem[wp]);
+      __syncwarp();
+    }
+  } else {
+    for (;;) {
+      u32 gu = 0;
+      if (lane == 0) gu = atomicAdd(next, 1u);
+      gu = __shfl_sync(0xffffffffu, gu, 0);
+      if (gu >= total) break;
+      h1umj_one(calls, ncalls, M, live, gu, smem[wp]);
+      __syncwarp();
+    }
   }
 }
 
@@ -2564,7 +2586,7 @@ extern "C" int kh_units_multi_j10r(const void* calls, unsigned ncalls, unsigned 
 // kh_units_multi_j10r's two launches, the units' on q / den of the SMs (h1umj_sm; kh_units_multi_sm's grid and counter)
 extern "C" int kh_units_multi_j10r_sm(const void* calls, unsigned ncalls, unsigned units, unsigned M, const void* live,
                                       unsigned q, unsigned den, void* next, void* stream) {
-  if (!ncalls || ncalls > 65535 || M % 32 || !q || q > den || den > 64 || !next) return 2;
+  if (!ncalls || ncalls > 65535 || M % 32 || !q || q > den || den > SMQ_DEN_MAX || !next) return 2;
   if (!units) return 0;
   carve<h1umj_sm<false>>();
   int dev = 0, sms = 0, per = 0;
@@ -2583,7 +2605,7 @@ extern "C" int kh_units_multi_j10r_sm(const void* calls, unsigned ncalls, unsign
 // launch zeroes first
 extern "C" int kh_units_multi_j10r_smc(const void* calls, unsigned ncalls, unsigned units, unsigned M, const void* live,
                                        unsigned q, unsigned den, unsigned cap, void* next, void* stream) {
-  if (!ncalls || ncalls > 65535 || M % 32 || !q || q > den || den > 64 || !cap || cap > 64 || !next) return 2;
+  if (!ncalls || ncalls > 65535 || M % 32 || !q || q > den || den > SMQ_DEN_MAX || !cap || cap > 64 || !next) return 2;
   if (!units) return 0;
   carve<h1umj_sm<true>>();
   int dev = 0, sms = 0, per = 0;

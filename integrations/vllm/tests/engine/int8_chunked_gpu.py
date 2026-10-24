@@ -1,11 +1,11 @@
 """VLLM-79 (1) on one GPU: the int8 Llama-3.1-8B pin (as `tests/engine/int8_exact_gpu.py` finds or makes it) served with
 `TargetProfile.int8_exact` (linears and attention) at ``--mnbt`` = vLLM's max_num_batched_tokens, greedy, on PROMPTS: two
 512-token prompts, a 300-token one and a short one, batched, then the first 512-token prompt alone.  At 64 every long prompt is
-prefilled in 64-row chunks (`engine.int8_ops._requests` serves a request's m rows as the last m of its s-token window); at
+prefilled in 64-row chunks (`engine.int8_ops.paged_attention` serves a request's m rows as the last m of its s-token window); at
 2048 every prompt is prefilled whole.
 
 One process serves one ``--mnbt`` and writes ``<out>/int8_chunked_<mnbt>.json``: the token ids, and how many int8 attention
-calls (``verity_int8::window_rows``, every layer) were a decode row (m = 1), a whole prompt (m = s) or a chunk (1 < m < s).
+requests (of ``verity_int8::window_rows_batch``, every layer) were a decode row (m = 1), a whole prompt (m = s) or a chunk (1 < m < s).
 ``--compare A B`` writes ``<out>/int8_chunked_compare.json``: whether each generation's token ids are equal, and where they
 first differ.  A chunk is its own window: an earlier chunk's rows read V scaled over the tokens cached by its end, not over the
 whole prompt, so the two serves are equal only where that changes no greedy token.
@@ -57,15 +57,17 @@ def generate(llm: Any, ids: list[list[int]], max_tokens: int) -> list[dict[str, 
 
 
 def count_calls(shapes: Counter):
-    """Wrap `int8_ops.window_rows` (which `_requests` calls by its module name) to count each call's (m, s)."""
+    """Wrap `int8_ops.window_rows_batch` (which `paged_attention` calls by its module name) to count each request's (m, s)."""
     from verity_vllm.engine import int8_ops
-    real = int8_ops.window_rows
+    real = int8_ops.window_rows_batch
 
-    def counted(q, kq, *rest):
-        shapes[(int(q.shape[0]), int(kq.shape[1]))] += 1
-        return real(q, kq, *rest)
+    def counted(query, kq, vq, sv, v0, k_scales, qsl, lens, scale):
+        for r, s in enumerate(lens):
+            if s:
+                shapes[(qsl[r + 1] - qsl[r], s)] += 1
+        return real(query, kq, vq, sv, v0, k_scales, qsl, lens, scale)
 
-    int8_ops.window_rows = counted
+    int8_ops.window_rows_batch = counted
 
 
 def kinds(shapes: Counter) -> dict[str, int]:
