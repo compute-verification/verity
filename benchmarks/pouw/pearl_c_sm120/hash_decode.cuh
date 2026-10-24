@@ -32,8 +32,7 @@
 // the producer one called copy (`pd_serve`), since each inlined paired site is about 7 KB (the producer's 23 KB) fetched
 // cold on the CTA's SM, and the last CTA's tail runs each of its sites once; PD_LATE (with PD_PAIR), pd_commit's salt,
 // templates and frame leaf with its pads during the fold, a warp each (1, 2, 3), rather than beside the segments, whose
-// pairs at cw = 2 they share SMSPs with, the templates' builders in the pairs' idle buffers; PD_FADD and PD_FADD2 (with
-// PD_ROLLED: their two bits F, `pd_round`), some of each round's additions on the FMA pipe.
+// pairs at cw = 2 they share SMSPs with, the templates' builders in the pairs' idle buffers.
 //
 // The builder (WMsg) writes `merkle._message`'s bytes as big-endian words, the data's 64-byte parts left zero and filled
 // later (wm_put64, at any byte offset).  hash_decode_host.cpp builds this file for the host tests.  pearl_c_sm120.cu
@@ -65,9 +64,9 @@ inline uint32_t pd_smid() { return 0; }
 #endif
 
 constexpr int PD_ROUNDS = 1, PD_ROLLED = 2, PD_CALL = 4, PD_PREFETCH = 8, PD_PAIR = 16, PD_STAMP = 32, PD_WHOLE = 64,
-              PD_GROUP = 128, PD_LOOP = 256, PD_LATE = 512, PD_FADD = 1024, PD_FADD2 = 2048;
+              PD_GROUP = 128, PD_LOOP = 256, PD_LATE = 512;
 #ifndef PD_VARIANT_LIST
-#define PD_VARIANT_LIST(X) X(19) X(211) X(307) X(339) X(467) X(819) X(851) X(979) X(1875) X(2899) X(3923)
+#define PD_VARIANT_LIST(X) X(19) X(211) X(307) X(339) X(467) X(819) X(851) X(979)
 #endif
 
 // ---------------------------------------------------------------- tables, once per module (pd_heads)
@@ -156,42 +155,6 @@ DEV void rs_round(uint64_t& a, uint64_t& b, uint64_t& c, uint64_t& d, uint64_t& 
   const uint64_t t2 = (rs_rotr(a, 28) ^ rs_rotr(a, 34) ^ rs_rotr(a, 39)) + ((a & b) ^ (a & c) ^ (b & c));
   h = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
 }
-// F (a variant's PD_FADD bits, `pd_f`): some of a round's 64-bit additions as IMAD.WIDE.U32 and IMAD on the FMA pipe, by
-// PD_ONE (a 1 the compiler can't fold into IADD3), since a lone chain's rounds are bound by the ALU pipe, where SHF, LOP3 and
-// IADD3 issue at half rate (about 30 of a round's instructions).  F 1: h + K_t + W_t and d + that, whose inputs are three
-// rounds old; 2: T1 too, and the new a's last addition; 3: the new e too.  The same words: only the pipe changes
-__device__ uint32_t PD_ONE = 1;
-DEV uint32_t pd_one() { return *reinterpret_cast<volatile uint32_t*>(&PD_ONE); }
-DEV uint64_t pd_fadd(uint64_t x, uint64_t y, uint32_t one) {   // x + y
-#ifndef PD_HOST
-  uint64_t r;
-  asm("{\n\t.reg .u32 xl, xh, rl, rh;\n\t.reg .u64 t;\n\t"
-      "mov.b64 {xl, xh}, %1;\n\t"
-      "mad.wide.u32 t, xl, %3, %2;\n\t"
-      "mov.b64 {rl, rh}, t;\n\t"
-      "mad.lo.u32 rh, xh, %3, rh;\n\t"
-      "mov.b64 %0, {rl, rh};\n\t}"
-      : "=l"(r) : "l"(x), "l"(y), "r"(one));
-  return r;
-#else
-  return x * one + y;
-#endif
-}
-template <int F>
-DEV void pd_round(uint64_t& a, uint64_t& b, uint64_t& c, uint64_t& d, uint64_t& e, uint64_t& f, uint64_t& g, uint64_t& h,
-                  uint64_t kwi, uint32_t one) {
-  if constexpr (F == 0) {
-    rs_round(a, b, c, d, e, f, g, h, kwi);
-  } else {
-    const uint64_t hk = pd_fadd(h, kwi, one), dhk = pd_fadd(d, hk, one);
-    const uint64_t s1 = rs_rotr(e, 14) ^ rs_rotr(e, 18) ^ rs_rotr(e, 41), ch = (e & f) ^ (~e & g);
-    const uint64_t s0 = rs_rotr(a, 28) ^ rs_rotr(a, 34) ^ rs_rotr(a, 39), mj = (a & b) ^ (a & c) ^ (b & c);
-    const uint64_t ne = F >= 3 ? pd_fadd(pd_fadd(s1, dhk, one), ch, one) : dhk + s1 + ch;
-    const uint64_t t1 = F >= 2 ? pd_fadd(pd_fadd(s1, hk, one), ch, one) : hk + s1 + ch;
-    const uint64_t na = F >= 2 ? pd_fadd(s0 + mj, t1, one) : t1 + s0 + mj;
-    h = g; g = f; f = e; e = ne; d = c; c = b; b = a; a = na;
-  }
-}
 DEV void rs_next16(uint64_t* w) {   // W_{t+16} for the ring's 16 words W_t, in place, in order
 #pragma unroll
   for (int i = 0; i < 16; i++) {
@@ -235,50 +198,46 @@ DEV void rs_rounds(uint64_t* st, const uint64_t* kw) {
   for (int i = 0; i < 80; ++i) rs_round(a, b, c, d, e, f, g, h, kw[i]);
   st[0] += a; st[1] += b; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
 }
-template <int F = 0> DEV void rl_rounds(uint64_t* st, const uint64_t* kw) {
+DEV void rl_rounds(uint64_t* st, const uint64_t* kw) {
   uint64_t a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
-  const uint32_t one = F ? pd_one() : 1;
 #pragma unroll 1
   for (int r = 0; r < 80; r += 16) {
 #pragma unroll
-    for (int i = 0; i < 16; i++) pd_round<F>(a, b, c, d, e, f, g, h, kw[r + i], one);
+    for (int i = 0; i < 16; i++) rs_round(a, b, c, d, e, f, g, h, kw[r + i]);
   }
   st[0] += a; st[1] += b; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
 }
-template <int F = 0> DEV void rl_compress(uint64_t* st, const uint64_t* m16) {   // the ring in registers: m16 may be shared
+DEV void rl_compress(uint64_t* st, const uint64_t* m16) {   // the ring in registers: m16 may be shared memory
   uint64_t a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7], w[16];
-  const uint32_t one = F ? pd_one() : 1;
 #pragma unroll
   for (int i = 0; i < 16; i++) w[i] = m16[i];
 #pragma unroll 1
   for (int r = 0;; r += 16) {
 #pragma unroll
-    for (int i = 0; i < 16; i++) pd_round<F>(a, b, c, d, e, f, g, h, RS_K[r + i] + w[i], one);
+    for (int i = 0; i < 16; i++) rs_round(a, b, c, d, e, f, g, h, RS_K[r + i] + w[i]);
     if (r == 64) break;
     rs_next16(w);
   }
   st[0] += a; st[1] += b; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
 }
-// a variant's forms (R: PD_ROLLED's bit, F its PD_FADD bits, rolled forms only), inlined, or (PD_CALL) one copy a kernel;
-// the called compression takes a copy of the message, so the caller's words stay as they were
-template <int R, int F = 0> DEV void pd_compress_in(uint64_t* st, uint64_t* w) {
-  if constexpr (R != 0) rl_compress<F>(st, w); else rs_compress(st, w);
+// a variant's forms (R: PD_ROLLED's bit), inlined, or (PD_CALL) one copy a kernel; the called compression takes a copy of
+// the message, so the caller's words stay as they were
+template <int R> DEV void pd_compress_in(uint64_t* st, uint64_t* w) {
+  if constexpr (R != 0) rl_compress(st, w); else rs_compress(st, w);
 }
-template <int R, int F = 0> DEV void pd_rounds_in(uint64_t* st, const uint64_t* kw) {
-  if constexpr (R != 0) rl_rounds<F>(st, kw); else rs_rounds(st, kw);
+template <int R> DEV void pd_rounds_in(uint64_t* st, const uint64_t* kw) {
+  if constexpr (R != 0) rl_rounds(st, kw); else rs_rounds(st, kw);
 }
 template <int R> DEV void pd_sched_in(const uint64_t* m16, uint64_t* kw) {
   if constexpr (R != 0) rl_sched(m16, kw); else rs_sched(m16, kw);
 }
-template <int R, int F = 0> __device__ __noinline__ void pd_compress_call(uint64_t* st, const uint64_t* w) {
+template <int R> __device__ __noinline__ void pd_compress_call(uint64_t* st, const uint64_t* w) {
   uint64_t x[16];
 #pragma unroll
   for (int i = 0; i < 16; i++) x[i] = w[i];
-  pd_compress_in<R, F>(st, x);
+  pd_compress_in<R>(st, x);
 }
-template <int R, int F = 0> __device__ __noinline__ void pd_rounds_call(uint64_t* st, const uint64_t* kw) {
-  pd_rounds_in<R, F>(st, kw);
-}
+template <int R> __device__ __noinline__ void pd_rounds_call(uint64_t* st, const uint64_t* kw) { pd_rounds_in<R>(st, kw); }
 template <int R> __device__ __noinline__ void pd_sched_call(const uint64_t* m16, uint64_t* kw) { pd_sched_in<R>(m16, kw); }
 
 // ---------------------------------------------------------------- paired compressions (PD_PAIR)
@@ -314,9 +273,8 @@ inline uint64_t* pd_dyn() {
 inline uint32_t pd_dyn_bytes() { return PD_PAIR_SMEM; }
 inline void pd_fence() { __threadfence(); }
 #endif
-template <int F = 0> DEV void pd_pcmp_in(uint64_t* st, const uint64_t* w) {
+DEV void pd_pcmp_in(uint64_t* st, const uint64_t* w) {
   const int lane = threadIdx.x & 31, pi = threadIdx.x >= 32, bar = 1 + 5 * pi;
-  const uint32_t one = F ? pd_one() : 1;
   uint64_t* base = pd_dyn() + PD_PAIR_WORDS * pi;
   uint64_t* x = base + lane;
 #pragma unroll
@@ -334,11 +292,11 @@ template <int F = 0> DEV void pd_pcmp_in(uint64_t* st, const uint64_t* w) {
 #pragma unroll
     for (int i = 0; i < 16; i++) kw[i] = x[32 * (16 * q + i)];
 #pragma unroll
-    for (int i = 0; i < 16; i++) pd_round<F>(a, b, c, d, e, f, g, h, kw[i], one);
+    for (int i = 0; i < 16; i++) rs_round(a, b, c, d, e, f, g, h, kw[i]);
   }
   st[0] += a; st[1] += b; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
 }
-template <int F = 0> __device__ __noinline__ void pd_pcmp_call(uint64_t* st, const uint64_t* w) { pd_pcmp_in<F>(st, w); }
+__device__ __noinline__ void pd_pcmp_call(uint64_t* st, const uint64_t* w) { pd_pcmp_in(st, w); }
 // the producer warp of pair pi: each message's schedule, until the consumer's pd_pstop
 DEV void pd_pserve(int pi) {
   const int lane = threadIdx.x & 31, bar = 1 + 5 * pi;
@@ -370,22 +328,17 @@ DEV void pd_pstop() {   // the consumer warp: its producer returns
 }
 
 // a variant's compression at a site; P: the site is a pair's consumer (pd_pcmp)
-template <int V> constexpr int pd_f = (V & (PD_FADD | PD_FADD2)) / PD_FADD;
 template <int V, int P = 0> DEV void pd_cmp(uint64_t* st, uint64_t* w) {
   if constexpr (P != 0) {
-    if constexpr ((V & PD_CALL) != 0) pd_pcmp_call<pd_f<V>>(st, w); else pd_pcmp_in<pd_f<V>>(st, w);
+    if constexpr ((V & PD_CALL) != 0) pd_pcmp_call(st, w); else pd_pcmp_in(st, w);
   } else if constexpr ((V & PD_CALL) != 0) {
-    pd_compress_call<V & PD_ROLLED, pd_f<V>>(st, w);
+    pd_compress_call<V & PD_ROLLED>(st, w);
   } else {
-    pd_compress_in<V & PD_ROLLED, pd_f<V>>(st, w);
+    pd_compress_in<V & PD_ROLLED>(st, w);
   }
 }
 template <int V> DEV void pd_rnd(uint64_t* st, const uint64_t* kw) {
-  if constexpr ((V & PD_CALL) != 0) {
-    pd_rounds_call<V & PD_ROLLED, pd_f<V>>(st, kw);
-  } else {
-    pd_rounds_in<V & PD_ROLLED, pd_f<V>>(st, kw);
-  }
+  if constexpr ((V & PD_CALL) != 0) pd_rounds_call<V & PD_ROLLED>(st, kw); else pd_rounds_in<V & PD_ROLLED>(st, kw);
 }
 template <int V> DEV void pd_sch(const uint64_t* m16, uint64_t* kw) {
   if constexpr ((V & PD_CALL) != 0) pd_sched_call<V & PD_ROLLED>(m16, kw); else pd_sched_in<V & PD_ROLLED>(m16, kw);
