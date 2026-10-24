@@ -3910,6 +3910,7 @@ gates they resolve to in the member, wherever `down` and `fromCallee` do. -/
 theorem throughSpec_succ (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB : Resolve.BodyOk c.P c.d)
     (hA : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size → ArgOk c k i)
     (hL0 : ∀ k i d L : Nat, ((c.body.nodes[k]!).args[i]!).dims = some (d, L) → L = 0 →
+      i < (c.P.defs[(c.body.nodes[k]!).fn]!).body.params.size →
       ((c.P.defs[(c.body.nodes[k]!).fn]!).body.params[i]!).2.leaves = 0)
     (fuel : Nat) (hD : DownSpec c sc fuel) (hC : CalleeSpec c sc fuel) : ThroughSpec c sc (fuel + 1) := by
   intro k m i g segs hm hg hx h
@@ -3994,6 +3995,7 @@ theorem throughSpec_succ (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = 
         by_contra hlt
         have h1 := (hjx lo le_rfl (by omega)).2
         have h2 := hL0 k i d L (by rw [hnode, hai']; exact hdl) hL
+          (by rw [hnode]; exact (hjx lo le_rfl (by omega)).1)
         rw [hnode] at h2
         omega
       have hms := memberSpans_idx a m lo hi hLz
@@ -4308,6 +4310,7 @@ theorem specs (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB : 
     (hP1 : ∀ f : Nat, (c.P.defs[f]!).prim = true → (c.P.defs[f]!).outLeaves = 1)
     (hA : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size → ArgOk c k i)
     (hL0 : ∀ k i d L : Nat, ((c.body.nodes[k]!).args[i]!).dims = some (d, L) → L = 0 →
+      i < (c.P.defs[(c.body.nodes[k]!).fn]!).body.params.size →
       ((c.P.defs[(c.body.nodes[k]!).fn]!).body.params[i]!).2.leaves = 0)
     (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn)
     (hBatch : ∀ fuel, DownSpec c sc fuel → CalleeSpec c sc fuel → BatchSpec c sc fuel) :
@@ -4687,6 +4690,7 @@ theorem specs_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB
     (hP1 : ∀ f : Nat, (c.P.defs[f]!).prim = true → (c.P.defs[f]!).outLeaves = 1)
     (hA : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size → ArgOk c k i)
     (hL0 : ∀ k i d L : Nat, ((c.body.nodes[k]!).args[i]!).dims = some (d, L) → L = 0 →
+      i < (c.P.defs[(c.body.nodes[k]!).fn]!).body.params.size →
       ((c.P.defs[(c.body.nodes[k]!).fn]!).body.params[i]!).2.leaves = 0)
     (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn)
     (hOL : ∀ k node, c.node k = .ok node → (c.P.defs[node.fn]!).prim = false →
@@ -4699,8 +4703,8 @@ theorem specs_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB
 
 /-- **Open: the decoder's facts the core reads**, as `Flock.Program.getDef` gives every Definition (its private
 `composite` sets them): a primitive returns one leaf, a composite's return has as many leaves as its type, and each
-node's argument is the sequence of its parts, none naming a negative position, a batch's argument of no leaves to a
-member going to a parameter of none. -/
+node's argument is the sequence of its parts, none naming a negative position, a batch's or scan's argument of no leaves
+to a member going to a parameter of none, where its callee's body has that parameter. -/
 def Decoded (P : Prog) : Prop :=
   ∀ d < P.defs.size, ((P.defs[d]!).prim = true → (P.defs[d]!).outLeaves = 1) ∧
     ((P.defs[d]!).prim = false → (P.defs[d]!).outLeaves = (P.defs[d]!).body.ret.count) ∧
@@ -4709,6 +4713,7 @@ def Decoded (P : Prog) : Prop :=
         Seq.ofParts (((P.defs[d]!).body.nodes[k]!).args[i]!).seq.parts ∧
       (∀ q ∈ (((P.defs[d]!).body.nodes[k]!).args[i]!).seq.parts.toList, PartNonneg q) ∧
       ∀ e L : Nat, (((P.defs[d]!).body.nodes[k]!).args[i]!).dims = some (e, L) → L = 0 →
+        i < (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).body.params.size →
         ((P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).body.params[i]!).2.leaves = 0
 
 /-- **`down`, `fromCallee` and `throughArg` keep the gates they read in Definition `d`'s body, at every fuel**, wherever
@@ -4733,11 +4738,11 @@ theorem specs_decoded (P : Prog) (memo : Array Desc.Summary) {d : Nat} (hdP : d 
   · intro k i hk hi
     have := (hDec d hdP).2.2 k hk i hi
     exact ctxOf_arg P memo d k i hk hi this.1 this.2.1
-  · intro k i e L hdims hL
+  · intro k i e L hdims hL hip
     change ((((P.defs[d]!).body.nodes[k]!).args[i]!).dims = some (e, L)) at hdims
     by_cases hk : k < (P.defs[d]!).body.nodes.size
     · by_cases hi : i < ((P.defs[d]!).body.nodes[k]!).args.size
-      · exact ((hDec d hdP).2.2 k hk i hi).2.2 e L hdims hL
+      · exact ((hDec d hdP).2.2 k hk i hi).2.2 e L hdims hL hip
       · rw [getElem!_neg _ i hi] at hdims; cases hdims
     · rw [getElem!_neg _ k hk, getElem!_neg _ i (Nat.not_lt_zero i)] at hdims; cases hdims
   · intro k node hn hp
