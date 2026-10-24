@@ -190,9 +190,16 @@ def fake_tokens(body: dict) -> int:
 async def fake_endpoint(reader: asyncio.StreamReader, writer, *, sleep=asyncio.sleep, first_s: float = 0.1,
                         token_s: float = 0.02) -> None:
     """A stand-in for vLLM's streamed `/v1/completions` for a rehearsal: it reads one request, answers its first token
-    `first_s` after, then one event every `token_s`, its usage, `[DONE]`, and closes."""
+    `first_s` after, then one event every `token_s`, its usage, `[DONE]`, and closes. `GET /v1/models` lists its one
+    model, `fake`, so that a rehearsal that names no model (the gate's `warden-rehearse`) runs against it too."""
     try:
         head = await reader.readuntil(b"\r\n\r\n")
+        if head.startswith(b"GET /v1/models "):
+            doc = json.dumps({"object": "list", "data": [{"id": "fake", "object": "model"}]}).encode()
+            writer.write(b"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\nconnection: close\r\n"
+                         b"content-length: %d\r\n\r\n%s" % (len(doc), doc))
+            await writer.drain()
+            return
         m = re.search(rb"(?im)^content-length:\s*(\d+)", head)
         body = json.loads(await reader.readexactly(int(m.group(1)))) if m else {}
         n, model = fake_tokens(body), body.get("model")

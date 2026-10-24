@@ -91,6 +91,16 @@ def test_the_fake_endpoint_answers_a_request_as_vllm_streams_it():
                                              "finish_reason": "length" if n == body["max_tokens"] else "stop",
                                              "prompt_tokens": None, "completion_tokens": n}
     assert not ws.parse_response(data[:-5])["complete"]
+
+    async def models() -> str:
+        server = await asyncio.start_server(lambda r, w: ws.fake_endpoint(r, w, sleep=_no_sleep), "127.0.0.1", 0)
+        port = server.sockets[0].getsockname()[1]
+        try:
+            return await asyncio.to_thread(ws.cs.served_model, f"http://127.0.0.1:{port}")
+        finally:
+            server.close()
+
+    assert asyncio.run(models()) == "fake"
     assert ws.dechunk(b"3\r\nabc\r\n2\r\nde\r\n0\r\n\r\n") == (b"abcde", True)
     assert ws.dechunk(b"3\r\nabc\r\n2\r\nd") == (b"abcd", False)
 
