@@ -3,6 +3,7 @@ step) — the step boundary `cb_a.compare` / `batch_decomp` / `global_match` seg
 the required-value manifest derives.  Torch-free; the commit and match tooling import it.
 
     TokenSelect_v1{V}                     greedy: first maximum of the bf16 logits row (torch.argmax / greedy _gumbel_sample_kernel)
+    TokenSelect_v3{V}                     TokenSelect_v1 without its dead gates (registry.dead_free; the registered compiler's request)
     GumbelTopPTokenSelect_v1{V,S}         temperature + top-p + seeded Gumbel-max (registry.sampling; vLLM d9105ea80 stochastic path)
     GumbelTokenSelect_v1{V}               temperature + seeded Gumbel-max, top_p == 1 (registry.sampling, X-06)
     Gumbel[TopP]TokenSelectSharedGreedy_v1{V}   the two above with `temp == 0` computed once (`sampler_construction = shared-greedy`)
@@ -14,7 +15,9 @@ Greedy is not stochastic: the families are distinct Definitions with distinct di
 """
 from __future__ import annotations
 
-SAMPLING_EVENT_FAMILIES = ("TokenSelect_v1", "GumbelTopPTokenSelect_v1", "GumbelTokenSelect_v1", "GumbelTopPTokenSelect_v2",
+#: the greedy selects: no runtime input beside the logits
+GREEDY_SELECTS = ("TokenSelect_v1", "TokenSelect_v3")
+SAMPLING_EVENT_FAMILIES = (*GREEDY_SELECTS, "GumbelTopPTokenSelect_v1", "GumbelTokenSelect_v1", "GumbelTopPTokenSelect_v2",
                            "GumbelTopPTokenSelectSharedGreedy_v1", "GumbelTokenSelectSharedGreedy_v1")
 
 
@@ -61,5 +64,5 @@ def program_sampler_construction(program_dirs) -> str | None:
         raise SystemExit(f"{list(program_dirs)}: {e}") from None
 
 
-__all__ = ["SAMPLING_EVENT_FAMILIES", "family_of", "is_sampling_event", "CONSTRUCTION_OF", "sampler_construction_of",
+__all__ = ["GREEDY_SELECTS", "SAMPLING_EVENT_FAMILIES", "family_of", "is_sampling_event", "CONSTRUCTION_OF", "sampler_construction_of",
            "program_sampler_construction"]

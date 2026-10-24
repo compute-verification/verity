@@ -37,7 +37,7 @@ from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.types import Array, Record, Type, Value
-from verity_vllm.program.prune import without_dead_units
+from verity_vllm.program.prune import dead_free
 
 from .common import Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, kind, select_token, served_class
 from .phi import Phi
@@ -771,7 +771,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     if peers.n != len(peers.inputs) or peers.k != words:
         raise AssertionError(f"the collectives read {peers.n} of {len(peers.inputs)} peer Inputs, the aligns {peers.k} of {words} schedule words")
     B.ret_type = out.type
-    body = without_dead_units(B.finish(out))[0] if wrapper == "request" and world == 1 else B.finish(out)
+    body = dead_free(B.finish(out))[0] if wrapper == "request" and world == 1 else B.finish(out)
     t_body = time.time()
     src_class, derive_name = (CACHED_SRC, WRAPPERS[(wrapper, kind)][1]) if C else WRAPPERS[(wrapper, kind)]
     if world > 1:

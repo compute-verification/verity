@@ -496,14 +496,15 @@ def derive(source, example_inputs: Sequence[Any], *, mode: str, profile: str | N
 def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: str | None = None, config: dict | None = None,
                   rules: RuleSet | None = None, allowed_dims: dict | None = None, name: str | None = None,
                   check_registry: bool = True, rank: tuple[int, int] | None = None, exported=None,
-                  registered_values: bool = False, session: list | None = None, drop_dead_units: bool = False) -> DeriveReport:
+                  registered_values: bool = False, session: list | None = None, dead_free: bool = False) -> DeriveReport:
     """`registered_values`: the program's values (the norms' eps, the attention scale) are fields of a registered `values` parameter
     (before `weights`), read by the Definitions that take them as inputs (`TargetProfile.registered_values`); the provenance's
     `supplied` states every field's bits.  `rank=(world, rank)`: the rank coordinate of a tensor-parallel rank Program.  It is written into the runtime correspondence
     (`annotations["correspondence"].rank`, explicit integers) and NOWHERE else: not a static, not a config -- the Program's identity
     (`program_digest`) does not depend on it.  `exported`: the caller's export of `source` (same inputs and shims), derived from.
     `session`: a list that receives the derivation's `DeriveSession` when it succeeds (`relabel.rank_report` reads it).
-    `drop_dead_units`: the flat body without the units no output reads (`program.prune`), and the correspondence's Calls with it."""
+    `dead_free`: the flat body in the registered compiler's form (`program.prune.dead_free`: without the units no output reads, each
+    Definition with dead gates swapped for its version without them), and the correspondence's Calls with it."""
     if mode not in ("profile", "reference"):
         raise ValueError("mode must be 'profile' or 'reference'")
     if rank is not None and not (len(rank) == 2 and 0 <= int(rank[1]) < int(rank[0])):
@@ -525,7 +526,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
                                     name=name, ruleset=ruleset, vocab=vocab, _ctx_holder=holder, exported=exported,
                                     registered_values=registered_values)
         head = (dict(prov), dict(ctx.unresolved_module_paths)) if session is not None else None
-        rep = _finish_report(flat_sd, ctx, prov, mode=mode, ruleset=ruleset, rank=rank, check_registry=check_registry, drop_dead_units=drop_dead_units)
+        rep = _finish_report(flat_sd, ctx, prov, mode=mode, ruleset=ruleset, rank=rank, check_registry=check_registry, dead_free=dead_free)
         if session is not None:
             session.append(DeriveSession(flat_sd, ctx, *head, name, mode, ruleset, check_registry, rank, rep.family))
         return rep
@@ -541,7 +542,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
 
 
 def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode: str, ruleset: RuleSet, rank: tuple[int, int] | None,
-                   check_registry: bool, drop_dead_units: bool = False) -> DeriveReport:
+                   check_registry: bool, dead_free: bool = False) -> DeriveReport:
     """The derivation's tail over the finished flat body: provenance, runtime correspondence, the flat Program and its digest, the
     family claims, `prov["result"]`.  Raises `Refuse` / `FrontendError` (the caller reports them)."""
     prov["weights"] = [w.to_json() for w in ctx.weights]
@@ -562,7 +563,7 @@ def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode
     from verity_vllm.program.frontend.emit import NAMESPACE as _CORR, emit_correspondence
     from verity_vllm.correspondence.runtime import correspondence_digest
     corr_doc = emit_correspondence(ctx, flat_sd.body, rank=rank)
-    body, corr_doc["calls"], hints = kept_records(flat_sd.body, corr_doc["calls"], ctx.node_hints, drop=drop_dead_units)
+    body, corr_doc["calls"], hints = kept_records(flat_sd.body, corr_doc["calls"], ctx.node_hints, registered=dead_free)
     flat_sd = flat_sd if body is flat_sd.body else _flat_definition(flat_sd.defn.name[len("Derived["):-1], body, flat_sd.bindings["SRC"], mode)
     corr_digest = correspondence_digest(corr_doc)
     flat_program = Program(flat_sd, annotations={"derive": prov, "node_hints": {str(k): v for k, v in hints.items()}, _CORR: corr_doc},
