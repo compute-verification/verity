@@ -310,9 +310,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
         The whole capture's options: `whole_options`.  `lag_ends`: an engine step's pass end (`_ExecutorPass.end`,
         `end_pass` with ``step``) leaves its commitment's readback in flight (`end` with ``lag``, `LaneCalls.settle`); with
         `aside_ends` too, its tile tree runs on a stream of its own over a copy of the leaves (`LaneCalls._end_aside`)."""
-        whole_options(entry, kernel, whole_defer, whole_defer_a, whole_fork_stats, whole_tree_sm)
-        if aside_ends and not lag_ends:
-            raise ValueError(f"{entry}: aside_ends runs a lagged end's tree aside, and lag_ends is off")
+        whole_options(entry, kernel, whole_defer, whole_defer_a, whole_fork_stats, whole_tree_sm, lag_ends, aside_ends)
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
         self.nb, self.salt_key = kernel.run.NB, salt_key
         self.graphs = graphs and next(iter(weights.values())).device.type == "cuda"
