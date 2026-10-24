@@ -11,8 +11,10 @@ Nothing here is the warden's but bytes. Tonight's clients send HTTP/1.1 requests
 with `Connection: close`, so the server's end of stream ends egress (the warden never half-closes toward a server).
 
 **What it can't enforce here.**
-- The warden runs on the server's host (`trusted-host` stands for the auditor's host), and the server's host
-  can reach anyone by any other route, which nothing here sees.
+- Run directly, the warden runs on the server's host (`trusted-host` stands for the auditor's host). The gate's
+  `warden-rehearse` (`benchmarks/live_challenger/auditor.py`) runs it on the auditor's host instead, the server reached
+  through an ssh tunnel to the peer's loopback. Either way the server's host can reach anyone by any other route,
+  which nothing here sees.
 - TLS is not terminated: both legs are plain TCP.
 - The rehearsal's client is on the same host, so its link is loopback, and its arrival times are read on the warden's
   host clock (`origin_unix`).
@@ -611,7 +613,7 @@ def rehearse(args) -> int:
     return 0 if result["accepted"] else 1
 
 
-def main(argv=None) -> int:
+def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="warden_serve.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
     k = sub.add_parser("keys", help="make or load an LMS key and write its public.json")
@@ -658,7 +660,11 @@ def main(argv=None) -> int:
     c.add_argument("--deployment", required=True, type=Path)
     c.add_argument("--traffic", required=True, type=Path)
     x.add_argument("--run", required=True, type=Path)
-    args = ap.parse_args(argv)
+    return ap
+
+
+def main(argv=None) -> int:
+    args = parser().parse_args(argv)
 
     if args.command == "keys":
         cs.load_key(args.dir, args.height)
