@@ -12,30 +12,41 @@ from typing import Any
 CUT = ("RoPE_v1", "Gemm_v1", "ScaledMmS8_v1")
 #: the row Definitions whose Calls are split into coordinates of themselves: coordinate n of a row is its Definition at N = 1
 #: (the expert-indexed pair GEMMs, `fp8_moe_experts.pair_rows` at one column; FlashInfer's FP8 linear, `deepgemm`, one output
-#: word with the row's quantisation of its own), the ``coord`` layout; each family's E and G where its statics have none
-COORDS = {"MoeExpertFp8Gemm_v1": {}, "MoeExpertFp8GemmW_v1": {}, "FlashInferFp8Linear_v1": {"E": 1, "G": 128}}
+#: word with the row's quantisation of its own; the block-scaled FP8 GEMM, `fp8.ScaledMmFp8BlockSharedScale`, one output word,
+#: ``w[n]`` and ``ws[n // G]``), the ``coord`` layout; each family's E and G where its statics have none
+COORDS = {"MoeExpertFp8Gemm_v1": {}, "MoeExpertFp8GemmW_v1": {}, "FlashInferFp8Linear_v1": {"E": 1, "G": 128},
+          "ScaledMmFp8BlockSharedScale_v1": {"E": 1}}
 #: the row Definitions elementwise along the last axis of every parameter and of the output, by that axis's static: a row W wide
 #: is W / w units of its Definition at width w (a halving of W), unit j reading and returning columns [jw, jw + w), the ``cols``
-#: layout (`moe.MoeSum`'s top-k sum, `tp_allreduce.AllReduceMnnvl`'s all-reduce and its residual add)
-COLS = {"MoeSum_v1": "H", "AllReduceMnnvl_v1": "N", "AllReduceResidualMnnvl_v1": "N"}
+#: layout (`moe.MoeSum`'s top-k sum, `tp_allreduce.AllReduceMnnvl`'s all-reduce and its residual add, and torch's multimem
+#: all-reduce, `tp_allreduce.AllReduceMultimem`, where `cols_refused` admits its blocks)
+COLS = {"MoeSum_v1": "H", "AllReduceMnnvl_v1": "N", "AllReduceResidualMnnvl_v1": "N", "AllReduceMultimem_v1": "SIZE"}
 #: the row Definitions that are batches along axes of their statics, which some parameters carry and the others don't: a row of
 #: extents a_0, a_1, .. along its axes is a_0 a_1 .. units of its Definition at every axis 1, unit (i_0, i_1, ..) (row-major)
 #: reading element i_k along axis k of each parameter that carries it and the others whole, and returning the output's element
 #: (i_0, i_1, ..), its leading dimensions being the axes in order (the ``slice`` layout).  Per family: its axes, and per parameter
 #: its dimension of each axis (None: it doesn't carry it).  The GEMMs of one token row into W's rows (vLLM's router GEMM, the LM
 #: head, cuBLAS's split-K), torch.bmm into each member's coordinates, DSA's logits into keys, the vocabulary shard's embedding
-#: into columns (every unit reads the token and gathers its column) and the all-gather into its ranks' shards
+#: into columns (every unit reads the token and gathers its column) and the all-gather into its ranks' shards; cuBLAS's split-K
+#: at an f32 output too (the MoE router gate)
 SLICES = {"LlBf16DotprodGemm_v1": (("N",), ((None,), (0,))), "Gemm_v2": (("N",), ((None,), (0,))),
           "CublasSplitKGemm_v1": (("N",), ((None,), (0,))), "BatchedGemm_v1": (("B", "N"), ((0, None), (0, 1))),
           "DsaMqaLogits_v3": (("N",), ((None,), (None,), (0,), (0,))), "EmbeddingShard_v1": (("H",), ((None,), (1,))),
-          "AllGather_v1": (("WORLD",), ((0,),))}
+          "AllGather_v1": (("WORLD",), ((0,),)), "CublasSplitKGemmF32Out_v1": (("N",), ((None,), (0,)))}
 #: the row Definitions whose Calls are split into parts, each a Definition of its own at the row's statics it names: per part, its
 #: family, what it reads in order (``("arg", g)`` the row's argument group g, ``("out", j)`` the row's committed output member j)
 #: and the output members it returns; together they return every output once, and the row computes what they compose to
-#: (tests/program/test_tp_allreduce_parts.py).  A ``COLS`` part is read in column blocks, any other one whole (the ``part``
-#: layout).  `tp_allreduce.AllReduceRmsNormMnnvl`: its all-reduce and residual add (r), then its norm of the committed r.
+#: (tests/program/test_tp_allreduce_parts.py).  A ``COLS`` part is read in column blocks, a ``COORDS`` part in coordinates, any
+#: other one whole (the ``part`` layout).  `tp_allreduce.AllReduceRmsNormMnnvl`: its all-reduce and residual add (r), then its
+#: norm of the committed r.  `deepgemm.DeepGemmFp8Linear`: its quantisation of x (q, s), then its GEMM of the committed q and s
+#: (tests/program/test_deepgemm_parts.py).
 PARTS = {"AllReduceRmsNormMnnvl_v1": (("AllReduceResidualMnnvl_v1", (("arg", 0), ("arg", 1)), (1,)),
-                                      ("RmsNormMnnvl_v1", (("out", 1), ("arg", 2)), (0,)))}
+                                      ("RmsNormMnnvl_v1", (("out", 1), ("arg", 2)), (0,))),
+         "DeepGemmFp8Linear_v1": (("Fp8GroupQuantUe8m0_v1", (("arg", 0),), (0, 1)),
+                                  ("ScaledMmFp8BlockSharedScale_v1", (("out", 0), ("out", 1), ("arg", 1), ("arg", 2)), (2,)))}
+#: the statics a ``PARTS`` row family's parts take that the row has none of: DeepGEMM's linear quantises and scales in
+#: 128-wide blocks (`deepgemm.FP8_BLOCK`)
+PART_STATICS = {"DeepGemmFp8Linear_v1": {"G": 128}}
 PART_OF = {p[0]: (row, p) for row, ps in PARTS.items() for p in ps}
 #: the chunk families that cut a ``COORDS`` family's coordinate along K (the ``kchunk`` layout, `kchunk_rows`), by the row family:
 #: a coordinate of K weights is C = K / k chunks of k (whole scale blocks and tiles), chunk 0 FIRST, chunk C - 1 LAST, each
@@ -59,8 +70,8 @@ class Template:
     ``COORDS`` family at N = 1, ``"cols"`` for a ``COLS`` family, ``"part"`` for any other ``PARTS`` part, ``"slice"`` for a
     ``SLICES`` family at every axis 1, ``"kchunk"`` for a ``KCHUNKS`` chunk family, ``"split"`` for a ``SPLITS`` part or combine
     family; else ``"row"``).
-    ``packed``: a row or coordinate template with a port that is not 16-bit elements, each port's element bits (its parameters', then its
-    return fields'); its ports are committed as their elements' bytes."""
+    ``packed``: a row, coordinate, slice, part, K-chunk or split template with a port that is not 16-bit elements, each port's
+    element bits (its parameters', then its return fields'); its ports are committed as their elements' bytes."""
     id: str
     fn: Any
     word: str
@@ -120,14 +131,38 @@ def template(t: str) -> Template:
     if widths != {16} and layout != "s8":
         ports = [*view[:-1], *(getattr(view[-1], "fields", None) or (view[-1],))]
         elems = [ty.width_set() for ty in ports]
-        if layout not in ("row", "coord", "slice", "kchunk", "split") or any(len(e) != 1 or not e <= PACKED or sum(ty.leaf_widths()) % 16
-                                                 for e, ty in zip(elems, ports)):
+        if layout not in ("row", "coord", "slice", "part", "kchunk", "split") or any(
+                len(e) != 1 or not e <= PACKED or sum(ty.leaf_widths()) % 16 for e, ty in zip(elems, ports)):
             raise ValueError(f"template {t}: the serving rows commit u16 words, and its ports' {'elements' if w is not fn else 'words'} "
                              f"are {sorted(widths)} bits (a row template's port may be elements of one of {sorted(PACKED)} bits, "
                              f"whole u16 words)")
         packed = tuple(next(iter(e)) for e in elems)
     hit = _TEMPLATES[t] = Template(t, fn, word, layout, packed)
     return hit
+
+
+def cols_refused(word: str) -> str | None:
+    """Why ``word``'s ``COLS`` column blocks are not the columns of its family's rows, or None (a family elementwise at every
+    statics).  torch's multimem all-reduce (`tp_allreduce.AllReduceMultimem`) reduces each owner rank's slice of its SIZE
+    elements through that owner's tree, and a block's owners are not the row's: a block computes the row's columns only when
+    every owner's tree is one, and is a Definition only as whole 16-byte vectors (`tp_allreduce.multimem_owners`)."""
+    from verity_vllm.query.program_view import spec_base, spec_statics
+
+    if spec_base(word) != "AllReduceMultimem_v1":
+        return None
+    from verity_vllm.program.registry import tp_allreduce as TA
+
+    S = spec_statics(word)
+    try:
+        world = TA.ranks(S["WORLD"])
+        trees = TA.multimem_trees(S["TREES"], world)
+        TA.multimem_owners(world, int(S["SIZE"]))
+    except (KeyError, TypeError, ValueError) as e:
+        return f"{word}: {type(e).__name__}: {e}"
+    if len(set(trees)) > 1:
+        return (f"{word}: its owners' TREES are {len(set(trees))} trees, and a column block's elements are reduced through "
+                f"other owners' trees than the row's")
+    return None
 
 
 def part(word: str, spec: str) -> tuple | None:
@@ -151,11 +186,12 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
     """The word Definitions a Program row's Definition (its word view's ``spec``) holds instances of, ``(descriptor id, instances)``:
     the row itself, then, for a ``CUT`` family, each Definition its body batches (a batch's members; Input batches are its
     parameters), for a ``COORDS`` family of N > 1, its coordinate (its Definition at N = 1, N of them), for a ``COLS`` family,
-    its Definition at each halving W / k of its width (k of them), for a ``PARTS`` family, each part at the row's statics
-    (a ``COLS`` part also at each halving), for a ``SLICES`` family, its Definition at every axis 1 (the product of its
-    extents of them), for a ``KCHUNKS`` row family, at each chunk width k (`chunk_widths`), its first, middle and
-    last chunks (N, N (K / k - 2) and N of them), and for a ``SPLITS`` row family in NS > 1 splits, its part at each split's
-    key count k (`split_keys`; NH times the splits of k keys) and its combine over the non-empty splits (NH).  None when the
+    its Definition at each halving W / k of its width (k of them) that `cols_refused` admits, for a ``PARTS`` family, each part
+    at the row's statics and its ``PART_STATICS`` (a ``COLS`` part also at each halving, a ``COORDS`` part also at N = 1), for
+    a ``SLICES`` family, its Definition at every axis 1 (the product of its extents of them), for a ``KCHUNKS`` row family, at
+    each chunk width k (`chunk_widths`), its first, middle and last chunks (N, N (K / k - 2) and N of them), and for a
+    ``SPLITS`` row family in NS > 1 splits, its part at each split's key count k (`split_keys`; NH times the splits of k keys)
+    and its combine over the non-empty splits (NH).  None when the
     spec does not bind to exactly its own descriptor id."""
     hit = _UNITS.get(spec)
     if hit is not None:
@@ -179,12 +215,17 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
             hit += ((descriptor_id(c), n),)
         for fam in [spec_base(spec)] + [p[0] for p in PARTS.get(spec_base(spec), ())]:
             own = fam == spec_base(spec)
-            if not own and (c := _bind(spec, fam)) is not None:
+            over = {} if own else PART_STATICS.get(spec_base(spec), {})
+            if not own and (c := _bind(spec, fam, **over)) is not None:
                 hit += ((descriptor_id(c), 1),)
+                n = int(spec_statics(spec).get("N", 1)) if fam in COORDS else 1
+                if n > 1 and (c := _bind(spec, fam, **over, N=1)) is not None:
+                    hit += ((descriptor_id(c), n),)
             if (axis := COLS.get(fam)) is not None:
                 W, k = int(spec_statics(spec)[axis]), 2
                 while W % k == 0:
-                    if (c := _bind(spec, None if own else fam, **{axis: W // k})) is not None:
+                    c = _bind(spec, None if own else fam, **over, **{axis: W // k})
+                    if c is not None and cols_refused(descriptor_id(c)) is None:
                         hit += ((descriptor_id(c), k),)
                     k *= 2
         if (fam := KCHUNKS.get(spec_base(spec))) is not None:
