@@ -1,7 +1,7 @@
 """The served window's registration for its prover (`pouw_h1_served`'s, which re-exports these): its registered trees
 (`trees`), each call's verifier ``--registered`` file (`reads_file`), and one record's ``registered`` entries held to the
-prover's earlier records (`register`). They read `pouw_h1_served.Served` only once a window is closed, so this module
-imports it there, and `pouw_h1_served` imports this one."""
+prover's earlier records (`register`), each file named `file_name`. It imports nothing of `pouw_h1_served`: a run's
+``served`` is its `Served`, read once the window is closed."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -13,12 +13,17 @@ from verity.core.protocols.sampled_proofs.one_stage import partition as P, regis
 from verity.core.protocols.sampled_proofs.one_stage.served import ServedTree
 from verity.ml.circuits.codec import canonical_json
 
+#: a statement's ``--registered`` file, one a call
+FILE = "pouw-h1-registered-c{call}.json"
+
+
+def file_name(call: int) -> str:
+    return FILE.format(call=int(call))
+
 
 def _served(run: Any) -> Any:
-    from verity_vllm.protocol_options import pouw_h1_served as SV
-
     served = getattr(run, "served", None)
-    if not isinstance(served, SV.Served):
+    if getattr(served, "registered", None) is None:
         raise ValueError(f"{run.entry}: the window's rows aren't registered values (the run has no `Served`)")
     if not run.closed:
         raise ValueError(f"{run.entry}: the window isn't closed, so its tables aren't all committed")
@@ -63,8 +68,6 @@ def register(run: Any, calls: Sequence[int] | None = None, log: Sequence[Mapping
     a value an earlier record registered under the same domain with another root is refused), and the ``--registered``
     file of each of ``calls`` (default every call; `reads_file`), written as `file_name` in ``directory`` (default the
     run's ``transcript_dir``)."""
-    from verity_vllm.protocol_options import pouw_h1_served as SV
-
     got, served = trees(run), run.served
     held = R.held_roots(log)
     for t in got:
@@ -77,8 +80,8 @@ def register(run: Any, calls: Sequence[int] | None = None, log: Sequence[Mapping
     if d is not None:
         Path(d).mkdir(parents=True, exist_ok=True)
         for c, doc in files.items():
-            (Path(d) / SV.file_name(c)).write_bytes(canonical_json(doc))
+            (Path(d) / file_name(c)).write_bytes(canonical_json(doc))
     return Registration([t.entry() for t in got], served.root, files)
 
 
-__all__ = ["Registration", "reads_file", "register", "trees"]
+__all__ = ["FILE", "Registration", "file_name", "reads_file", "register", "trees"]

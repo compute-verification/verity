@@ -98,12 +98,10 @@ from verity_vllm.protocol_options import pouw_h1_live as LV
 from verity_vllm.protocol_options import pouw_h1_records as ZR
 from verity_vllm.protocol_options import pouw_h1_registered as NR
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
-from verity_vllm.protocol_options.pouw_h1_served_files import Registration, reads_file, register, trees
+from verity_vllm.protocol_options.pouw_h1_served_files import FILE, Registration, file_name, reads_file, register, trees
 
 #: the rows' format: the tile's port rows
 V2 = G.SCHEMA_V2
-#: a statement's ``--registered`` file, one a call
-FILE = "pouw-h1-registered-c{call}.json"
 #: the window Program's parameter prefix, the same for every window of a period
 PREFIX = "h1/"
 #: the hm96 salt stream's first nonce of the window's registered tables, past every round's and call's tables
@@ -128,10 +126,6 @@ def nonce(call: int, table: str) -> int:
     """The salt nonce of call ``call``'s table ``table`` (`h1window.TABLES`): a step's A table of K takes its first call of
     K's ``a`` nonce, which no other table takes."""
     return NONCE + 2 * int(call) + HW.TABLES.index(table)
-
-
-def file_name(call: int) -> str:
-    return FILE.format(call=int(call))
 
 
 def row_words(codes: np.ndarray, scales: np.ndarray) -> np.ndarray:
