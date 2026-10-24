@@ -17,7 +17,8 @@ EXACT binds at (`32 ∣ K`, `K < 2^17`), with `TileChecks`' `dq` the Definition'
 
 What stays of `TileChecks` is the first two claims, `TileComputes`: on every wire assignment the session's evaluation
 agrees with at a unit, whose `ok` wires carry the `ok` row, the Definition's `ok` is `true` on the words `rd` reads
-from the registered reads. `tileChecks_of_computes` gives `TileChecks` at the view of `rd` from it. Still parameters:
+from the registered reads. `tileChecks_of_computes` gives `TileChecks` at the view of `rd` from it, and
+`Accounting.Guarantees.TS.TileSessionSound` takes it in `TileChecks`' place. Still parameters:
 `rd`, the words the unit's registered reads carry, the v3 noise as a function of the public inputs, and `dqW`'s float
 roundings.
 -/
@@ -67,13 +68,12 @@ def TileComputes {R C K : ℕ} {P : Type} (form : Pouw.H1Zy.TileForm R C K P)
     Pouw.H1Zy.tileOk form dqW (rd (rowsReg s vals) u.val) = true
 
 /-- **`TileChecks` from the circuit computing its Definition**: with `dq` the Definition's (`dqOf dqW`) and the view
-of the words `rd` reads (`tileView`), `TileComputes` gives `Accounting.Assumptions.TS.TileChecks` at a `K` the tile's
-EXACT binds at; that the Definition's `ok = 1` is `TileOk` is `tileOk_of_def`. -/
+of the words `rd` reads (`tileView`), `TileComputes` gives `Accounting.Assumptions.TS.TileChecks`, which asks only at a
+`K` the tile's EXACT binds at; that the Definition's `ok = 1` is `TileOk` is `tileOk_of_def`. -/
 theorem tileChecks_of_computes {R C K : ℕ} {P : Type} (form : Pouw.H1Zy.TileForm R C K P)
     (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16) (s : RowsSession) (ok : String)
-    (rd : (ℕ → ℕ → Option Bool) → ℕ → Pouw.H1Zy.TileIn R C K P) (h : TileComputes form dqW s ok rd)
-    (hK32 : 32 ∣ K) (hK : K < 2 ^ 17) :
+    (rd : (ℕ → ℕ → Option Bool) → ℕ → Pouw.H1Zy.TileIn R C K P) (h : TileComputes form dqW s ok rd) :
     Accounting.Assumptions.TS.TileChecks (Lanes.dqOf dqW) s ok (fun v u => tileView (rd v u)) :=
-  fun vals u hv hok => tileOk_of_def form dqW _ hK32 hK (h vals u hv hok)
+  fun hK32 hK vals u hv hok => tileOk_of_def form dqW _ hK32 hK (h vals u hv hok)
 
 end Accounting.TS.Tile
