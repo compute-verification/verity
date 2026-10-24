@@ -91,6 +91,7 @@ import Definitions.Pouw.Receipt.Duo
 import Definitions.Pouw.Receipt.Li
 import Definitions.Pouw.Receipt.Fx1
 import Definitions.Pouw.RelativeSecurity
+import Definitions.Pouw.RelativeSecurityJ10R
 import Definitions.Pouw.TileBound.AlignedExactDefs
 import Definitions.Pouw.TileBound.Defs
 import Definitions.Pouw.TileBound.Fp8Defs
