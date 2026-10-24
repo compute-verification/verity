@@ -346,7 +346,8 @@ def table(outdir: Path, names: list[str]) -> str:
         for r in sorted(json.loads(p.read_text()), key=lambda r: (r["k"], MODES.index(r["mode"]))):
             lean1 = r["lean_cw1"]
             lm = r.get("lean_measured")
-            rho = f"{r['rho']:.2f}" if "rho" in r else "-"
+            rho = "-" if "rho" not in r else (
+                f"{r['rho']:.2f}" if r["full"]["optimal"] else f"[{r['rho_lb']:.2f}, {r['rho']:.2f}]")
             b = base.get((name, r["k"], r["s"]))
             rho_inf = (f"{b['rho']:.2f}" if b["optimal"] else f"[{b['rho_lb']:.2f}, {b['rho']:.2f}]") if b else "-"
             triv = f"{r['full']['n'] / r['trivial']:.1f}" if r["trivial"] and r.get("full") else "-"
