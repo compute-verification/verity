@@ -97,7 +97,7 @@ _DITHER = "dither-a-hbc-zy-aomn-pt-so8-wea"
 LIVE = (
     Live("RTX PRO 6000", "r20261024-212728-0ee1", f"{_DITHER}@v7tp", "exact", out="out/v7tp/out"),
     Live("H200", "r20261024-212837-2302", f"{_DITHER}-j10r-smq25o32-zy1-rd0-zs-mmc@rcs25", "exact-fused"),
-    Live("B200", "r20261024-202510-0a7f", f"{_DITHER}-j10r-smq126o256-zy1-rd0-zs-mmc@prct", "exact-fused"),
+    Live("B200", "r20261024-214613-f760", f"{_DITHER}-j10r-smq126o256-zy1-rd0-zs-mmc@pcs4p", "exact-fused"),
     Live("B200", "r20261024-212644-f308", f"{_DITHER}-j10r-smq126o256-zy1-rd0-zs-mmc@pcs4p", "exact-fused"),
 )
 
