@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -178,3 +179,25 @@ def test_a_refused_runs_window_moves_the_bit_through_rank_1s_received_partial_on
             else:
                 assert header(wins[r], m)["part0"]["value"] == {"swapped": AT.value_name(0, 0), "other-collective": AT.value_name(0, 1),
                                                                 "own": AT.value_name(1, 0)}[kind]
+
+
+def test_a5s_registered_read_negatives_alter_one_of_a_chunks_two_ports_and_keep_the_other(tmp_path, monkeypatch) -> None:
+    """A chunk reads both ranks' partials, so each of a5's registered-read negatives alters its first port's read and holds
+    the other port's as registered: Lean is to refuse the altered read by its reason, not a port the reads leave out."""
+    import a5
+
+    ports = {f"part{j}": {"value": AT.value_name(j, 0), "root": f"{j}" * 128, "leaves": T, "reads": list(range(T))}
+             for j in AT.RANKS}
+    (tmp_path / "registered.json").write_text(json.dumps({"format": "verity/registered-reads/v1", "ports": ports}))
+    seen = {}
+
+    def lean_verify(lean, st, n, sdir, zk, log):
+        seen[log] = json.loads(st["registered_file"].read_text())["ports"] if "registered_file" in st else None
+        return {"accepted": False, "digest": "d", "why": "setup: registered reads: none"}
+
+    monkeypatch.setattr(a5.a0, "lean_verify", lean_verify)
+    a5.registered_negatives(SimpleNamespace(lean="lean"), {"st": {"registered_file": tmp_path / "registered.json"},
+                                                            "m": SimpleNamespace(n=T)}, tmp_path)
+    assert seen == {"chunk-without-registered-reads": None,
+                    "registered-read-against-another-root": {**ports, "part0": {**ports["part0"], "root": "00" * 64}},
+                    "registered-reads-another-row": {**ports, "part0": {**ports["part0"], "reads": [1, 2, 3, 0]}}}
