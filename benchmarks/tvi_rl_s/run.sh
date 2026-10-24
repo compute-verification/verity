@@ -51,14 +51,20 @@ nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv
 "$PY" -c 'import torch, transformers, vllm; print(torch.__version__, transformers.__version__, vllm.__version__, torch.cuda.get_device_name(0))'
 
 if [ -n "${EVAL_ARGS:-}" ]; then
-  # Checkpoint evaluation instead of training: EVAL_ARGS are evalckpts.py's flags, comma-separated.
+  # Checkpoint evaluation instead of training: EVAL_ARGS are evalckpts.py's flags, comma-separated; several invocations
+  # (e.g. one per model, a later --model overriding MODEL) are separated by ';' and run in turn under the one lease.
   cp "$IN"/evalckpts.py "$S"/
   set -f
-  # shellcheck disable=SC2086
-  "$PY" evalckpts.py --root "$CKPT_ROOT" --model "$MODEL" --data "$S/data" --out "$OUT" ${EVAL_ARGS//,/ } > "$OUT/log-evalckpts.txt" 2>&1
-  echo "evalckpts rc=$?"
+  IFS=';' read -ra EVALS <<< "$EVAL_ARGS"
+  i=0
+  for ea in "${EVALS[@]}"; do
+    i=$((i + 1))
+    # shellcheck disable=SC2086
+    "$PY" evalckpts.py --root "$CKPT_ROOT" --model "$MODEL" --data "$S/data" --out "$OUT" ${ea//,/ } > "$OUT/log-evalckpts-$i.txt" 2>&1
+    echo "evalckpts $i rc=$?"
+  done
   set +f
-  grep '^{' "$OUT/log-evalckpts.txt" | tail -60
+  grep -h '^{' "$OUT"/log-evalckpts-*.txt | tail -80
   exit 0
 fi
 

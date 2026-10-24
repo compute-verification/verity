@@ -35,6 +35,7 @@ def main():
     ap.add_argument("--passk-limit", type=int, default=0)
     ap.add_argument("--out", required=True)
     ap.add_argument("--skip-done", type=int, default=1)
+    ap.add_argument("--prior", default="", help="other runs' out dirs (joined by |) whose ckpteval files count as done")
     ap.add_argument("--unmerged", default="", help="methods (joined by +) whose adapters are served by vLLM's LoRA path "
                     "(W0 x + B A x in bf16, as in training) instead of merged into bf16 weights")
     ap.add_argument("--expect", type=int, default=0, help="keep rescanning until this many checkpoints have been evaluated")
@@ -48,6 +49,7 @@ def main():
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    priors = [Path(p) for p in args.prior.split("|") if p]
     def scan():
         ckpts = []
         for d in sorted({d for g in args.glob.split("|") for d in glob.glob(str(Path(args.root) / g))}):
@@ -76,7 +78,7 @@ def main():
         if d is not None and meta["method"] in unmerged:
             label += "-unmerged"
         dst = out / f"ckpteval-{label}.json"
-        if args.skip_done and dst.exists():
+        if args.skip_done and any((p / dst.name).exists() for p in [out] + priors):
             return
         t0 = time.time()
         grpo.sync_weights(llm, base_sd)
@@ -119,14 +121,20 @@ def main():
         print(json.dumps({"label": label, "greedy": res["greedy_acc"], "sampled": res["sampled"]["acc"],
                           "secs": round(res["secs"], 1)}), flush=True)
 
+    def run_logged(d, meta):
+        try:
+            run(d, meta)
+        except Exception as e:
+            print(json.dumps({"ckpt": d, "method": meta["method"], "error": repr(e)[:500]}), flush=True)
+
     for d, meta in bases:
-        run(d, meta)
+        run_logged(d, meta)
     done = set()
     while True:
         pending = [j for j in scan() if j[0] not in done]
         for d, meta in pending:
             done.add(d)
-            run(d, meta)
+            run_logged(d, meta)
         if len(done) >= args.expect or time.time() > args.wait_until:
             break
         if not pending:

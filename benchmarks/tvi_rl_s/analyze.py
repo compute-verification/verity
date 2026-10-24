@@ -120,13 +120,15 @@ def online(dirs, window=25):
         for p in sorted(glob.glob(f"{d}/**/*-seed*.jsonl", recursive=True)):
             steps = {}
             meta = {}
+            finished = False
             for line in open(p):
                 e = json.loads(line)
                 if e.get("event") == "setup":
                     meta = e
                 if e.get("event") == "step":
                     steps[e["step"]] = e["reward"]
-            if not steps or not meta:
+                finished |= e.get("event") == "done"
+            if not steps or not meta or not finished:
                 continue
             name = p.rsplit("/", 1)[1][:-len(".jsonl")]
             task, method, seed = name.rsplit("-", 2)
