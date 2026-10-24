@@ -1640,12 +1640,19 @@ and seven lemmas, and three more proved lemmas:
   server's send timing; two contents of one length give one wire shape (content is the tie's); a fail frees its lane
   early (coupled, within the charged term);
 - **`test_network_certifier_warden_rows.py`:** the warden's cells as rows (`warden_rows`), on the warden's own runs:
-  - every slot of a link-window is a row, loaded or idle, and a connection's rows are the cells its client got;
+  - a link-window is a row a bucket, loaded, idle or faulted, and the wiring places each connection's cells where its
+    client got them, a bucket's cells sorted by stream;
+  - a wiring that isn't the schedule's, and a record whose cells aren't where the schedule puts them, are refused;
   - every row opens the signed root at its position, and not at another, with a changed bit, another salt or root;
-  - salts are fresh and never shared;
-  - the registration reads back, and any changed field, extra key, root, key, session, link-window or the record's
-    own certificate is refused;
-  - `port` is a `verity/registered-reads/v1` port, and `Issuer.sign` is `certify`'s signature;
+  - salts are fresh and never shared, and the witness reads back;
+  - the registration reads back, and any changed field, extra key, root, wiring, key, session, link-window or the
+    record's own certificate is refused;
+  - `port` is a `verity/registered-reads/v1` port that reads the rows the warden's wiring places, and refuses another
+    wiring, an absent connection, a cell past its connection's or read twice; `Issuer.sign` is `certify`'s signature;
+- **`test_network_certifier_warden_rows_phase8.py`:** REDTEAM's phase 8 cases as regressions: real warden-signed
+  roots and certificates replayed across windows or directions, or a certificate over another digest, are refused;
+  the layout is in the signed head; a crossed, duplicate or padding read, and a wiring the warden didn't sign, are
+  refused;
 - **`test_network_certifier_calibration.py`:** the calibration tool, and the honest prover's choice against its rule by
   brute force, on one link and on several under one clock;
 - **`test_network_certifier_advice.py`:** advice v0, which no Lean statement names yet:
@@ -1810,75 +1817,124 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
 - `audit` reads the records in the clear and refuses a window whose cells aren't the schedule's, whose `FAIL` cells
   and reasons don't match one for one, or in which a connection failed.
 - `benchmarks/network_traces/warden_serve.py` runs the warden live and checks that each client got exactly its egress
-  record's cells, each in its bucket.
+  record's cells, each in its bucket. The auditor gate's `warden-rehearse` (`benchmarks/live_challenger/auditor.py`)
+  runs the same rehearsal on the auditor's host.
 
 **Named gaps:**
 - TLS isn't terminated: both legs are plain TCP.
-- The warden runs on the server's host, and the server gets the ingress bytes over loopback, with no shim on its side.
+- Every recorded run had the warden on the server's host, and the server gets the ingress bytes over loopback, with no
+  shim on its side. `warden-rehearse` puts the warden and its client on the auditor's host and reaches the server
+  through the gate's ssh tunnel to the peer's loopback. No run of it is recorded yet, and the tunnel's far end is still
+  loopback on the prover's host.
+- **The cells' wiring is open to the verifier (owner: network-accounting).** A unit's read is (q, k), connection q's
+  cell k of the link-window. The verifier places it at its bucket's row and slot with the warden's wiring
+  (`Wiring.place`), which the signed head names by a salted digest, so the reads are the warden's and never the
+  prover's (REDTEAM's phase 8 finding, closed). But the wiring is opened to the verifier, and it and the rows the units
+  read give away each connection's first row and cell count, both the prover's. A permutation argument closes it, with
+  no new verifier form. Before the window's coins, the prover registers V′, a value of its own: the link-window's
+  N = T·S cells as pairs (k, cell k of V, the warden's value), reordered into unit order, a fixed number of positions
+  per consuming unit (its cells in wire order, then empty cells), so the population's shape is public and its
+  occupancy isn't. Under two live coins α and γ, a population reads every row of V (a bucket's S cells) and of V′
+  through two registered ports, both in public order. It carries ∏(γ − f(k, V_k)) and ∏(γ − f(V′_m)) over the cells
+  from unit to unit as committed values, and the last unit's one output bit says whether they are equal. Here
+  f(k, x) = k + α·x(α), with x(α) a cell's B/8 words of 64 bits as a polynomial over GF(2^64): at a public α it is XOR
+  gates alone, and each cell costs one GF(2^64) product. Each consuming unit then reads its own positions of V′, which
+  are public, and checks in-circuit that its cells' k are its connection's schedule (bucket s + D + ⌊i/r⌋ for egress
+  cell i), that its cells' stream field is its ordinal and that its spare positions hold B zero bytes, so the wiring
+  stays witness. A wrong V′ passes with probability at most (N·B/8 + N)/2^64 (Schwartz–Zippel). An unproved unit
+  could forge its running product, so every unit of the permutation population is proved, not a sample. The steps,
+  each a PR: (1) V′'s commitment and registration in `warden_rows`; (2) the permutation unit's Definition, its
+  circuit-check sidecar and its cost at the served schedule; (3) the demonstration on `warden_zk.py`, with a wrong
+  wiring refused; (4) the consuming units read V′, the wiring is no longer opened, and this gap closes. IO-TIE's tie,
+  which reads every row of the window in order, needs no wiring.
 - A record's certificate signs certificate v2's SHA-512 frame leaves, one per cell. The same cells are also committed
-  as v3's hm96 rows, a cell a row (8·B transfer gates), under a root the warden signs ("The warden's cells as rows").
+  as v3's hm96 rows, a row a bucket (8·B transfer gates a cell), under a root the warden signs ("The warden's cells as
+  rows").
 - No Lean statement states the bound yet.
 
 ## The warden's cells as rows (`warden_rows`)
 
-Design v3 makes the transfer gates the cells' bits: the sender's proof unit opens a cell as an output and the
-receiver's opens the same cell as an input, under a root the warden signs, through the Lean verifier's registered
+Design v3 makes the transfer gates the cells' bits: the sender's proof unit opens a cell's row as an output and the
+receiver's opens the same row as an input, under a root the warden signs, through the Lean verifier's registered
 reads (`Flock.Registered.checkPort`, `--registered`), with no new verifier form. `warden_rows.py`'s docstring has the
 encodings; this section says what is committed, signed and read.
 
-**The rows.** Each link-window of the wire's two records (link, direction, window w) is N = T·S rows, S = lanes·r, one
-per slot of its grid whatever the load:
-- row (t − w·T)·S + j is slot j of bucket t, in the grid's order (a bucket's cells in ordinal order, a connection's r
-  together);
-- a padding cell is a row, and so is an empty slot, as B zero bytes, so N is the schedule's;
-- a row is `hm96-sha512/row/v2` of the cell's 8·B bits, bit 8k + i being bit i of byte k: B/2 little-endian u16 words
-  at 16 bits, which is how a C-Flock port of 8·B bits lays out the cell.
+**The rows.** Each link-window of the wire's two records (link, direction, window w) is T rows, a row a bucket of its
+grid whatever the load (IO-TIE's layout, "The I/O tie"):
+- row t − w·T is bucket t's S = lanes·r slots in slot order, slot j at bytes j·B to (j + 1)·B, so at words j·B/2
+  onward; at the served schedule a row is 4 KiB;
+- a bucket's cells are sorted by stream, the connection's ordinal, each connection's r cells together and in order,
+  its padding cells among them; a slot no connection holds is B zero bytes, so T and the row's size are the
+  schedule's;
+- a row is `hm96-sha512/row/v2` of its 8·S·B bits, bit 8k + i being bit i of byte k: S·B/2 little-endian u16 words
+  at 16 bits, which is how a C-Flock port of 8·S·B bits lays out the row.
+
+**The wiring** says which connection holds which slots: connection q, live in `cells`/r rows from row `first`, holds
+slots ρ·r … ρ·r + r − 1 of each, ρ its rank by ordinal among the row's live connections, so its cell k of the
+link-window is in row first + ⌊k/r⌋ at slot ρ·r + (k mod r) (`Wiring.place`). The warden reads it off the record
+(`wiring`, which refuses a record not laid out so) and commits it, as (q, first, cells) by q, under a 64-byte salt of
+its own.
 
 **The commitment** is a registered value's: row k's `b‖c` is hm96's commit string of its `sha512/row/v2` digest under
 salt k, 192 bytes the warden draws from the operating system for that row alone, and the leaves form a
 frame-v3-sha512 tree. Its domain is the warden's own, binding the parameters digest, the certifier session, the link,
-direction and window, B, N and the row format, so a root opens under one link-window of one session's schedule. The
-rows and salts are witness, handed to the prover alone.
+direction and window, B, S, T and the row format, so a root opens under one link-window of one session's schedule.
+The rows, their salts and the wiring's are witness, handed to the prover alone. What the warden keeps for the prover
+is the records and, for each link-window, the rows' salts and the wiring's (`cells.salts`, `Cells.witness`): the
+rows and the wiring are read off the records again. The auditor's gate keeps all of it under the run's `witness/`.
 
-**The signed head** names the root: link, direction, window, the parameters digest, B, N, the domain and the root,
-under its own tag (`CellsHead`). The warden signs it with the certifier's signer (`Issuer.sign`: the certifier message
-for the key, the session and the link-window, one LMS leaf). The record's own certificate of that link-window signs its
-salted record digest, so neither verifies as the other.
+**The signed head** names the root and the wiring: link, direction, window, the parameters digest, B, S, T, the
+wiring's digest, the domain and the root, under its own tag (`CellsHead`). The warden signs it with the certifier's
+signer (`Issuer.sign`: the certifier message for the key, the session and the link-window, one LMS leaf). The record's
+own certificate of that link-window signs its salted record digest, so neither verifies as the other.
 
-**The registration** (`registration`, `verity-network-warden/registration/v1`) is the head, the rows' format and order
-(`layout`: T, S and the first bucket w·T) and the certificate, as one public JSON object. `check_registration` is the
-verifier's read of it: every field but the root is the one the schedule and the link-window give, and the certificate
-verifies over the head under the warden's key in the session.
+**The registration** (`registration`, `verity-network-warden/registration/v2`) is the head, the rows' format and order
+(`layout`: T, S, r and the first bucket w·T) and the certificate, as one public JSON object. `check_registration` is
+the verifier's read of it: every field but the wiring's digest and the root is the one the schedule and the
+link-window give, and the certificate verifies over the head under the warden's key in the session.
+
+**Ordinals count from 0.** A cell's stream field is its connection's ordinal, and so is the wiring's q: the k-th
+connection to reach the warden is ordinal k, from 0, as IO-TIE's stream and advice v0 count requests. The active
+certifier's `Requests` counts from 1, so its stream s is the warden's ordinal s − 1.
 
 **How a unit reads it.** The verifier's own `--registered` port (`port`, `verity/registered-reads/v1`) names the value
-`<link>/<direction>/<window>`, the root, N leaves of B/2 words of 16 bits, the domain, the row format and `reads`, the
-row each unit of the population opens. The statement is a shared-row file whose port's table rows are those rows under
-the warden's salts, its header's `registered` entry their positions and paths (`Cells.statement`). An output port
-reads them as the sender's unit's output (its table is the instances' output rows), an input port as the receiver's
-input. A port reads one row a unit, so a unit that reads k cells has k registered ports. Which unit reads which row is
-the wiring: connection q's rows (`connection_rows`) depend on which connections were live, so in the design they are
-private, proved by the wiring's permutation argument. Tonight `reads` opens them to the verifier, as the units' wiring
-is (the named gap).
+`<link>/<direction>/<window>`, the root, T leaves of S·B/2 words of 16 bits, the domain, the row format and `reads`,
+the row each unit of the population opens. A unit's read is (q, k), and the verifier places it with the wiring: the
+row is the cell's bucket, and the cell is at its slot's words. The verifier takes a wiring only when it is the one the
+head names and the schedule's (ordinals and first rows in admission order, r cells a row, at most `lanes` connections
+a row), and refuses a read of a connection the wiring doesn't hold, of a cell past the connection's, or of a cell
+another read opens. So no read opens an empty slot, a foreign connection's cell or a cell twice. The statement is a
+shared-row file whose port's table rows are those rows under the warden's salts, its header's `registered` entry their
+positions and paths (`Cells.statement`). An output port reads them as the sender's unit's output (its table is the
+instances' output rows), an input port as the receiver's input. A port reads one row a unit, so a unit that reads
+cells of k buckets has k registered ports, and reading one cell costs its whole row. Tonight the wiring is opened to
+the verifier, as the units' wiring is: the warden's named gap "The cells' wiring is open to the verifier", which has
+the plan that closes it.
 
 **How the other readers of the certifier's rows differ:**
 - N2's head checks: the prover commits each record head as one row (`LinkWindows.commit`: one-stage's served domain,
   fresh salts). The unit opens it in-circuit (`FrameV3Read`) and recomputes the certificate's salted digest in-circuit.
-- IO-TIE's prototype (`io_tie.py`): one v2 row per bucket of R cells under `domain(binding, count)`, committed by a
-  fake upstream and signed by nobody. The unit recomputes the root in-circuit from every row and salt
-  (`NetworkRowsRoot`), and its cells are token events.
-- Here the warden commits one row per byte cell under its own domain and signs the head, so the certificate names the
+- IO-TIE's prototype (`io_tie.py`): the same layout, one v2 row per bucket of R cells, under `domain(binding, count)`,
+  committed by a fake upstream and signed by nobody. The unit recomputes the root in-circuit from every row and salt
+  (`NetworkRowsRoot`), and its cells are token events. Its pads are B zero bytes after a bucket's data cells; the
+  warden's padding cells carry their connection's ordinal and sit in its r slots, so the tie's parse must take a
+  `PAD` cell on stream q where IO-TIE's takes a zero cell.
+- Here the warden commits one row per bucket under its own domain and signs the head, so the certificate names the
   root in the clear. The opening is the verifier's registered-read check, and no gate of the unit hashes.
 
-**Cost, per window** (`warden-serve`'s `cells.jsonl`). At the served schedule (T = 600, lanes = 8, r = 2, B = 256),
-N = 9,600 rows. The commitment, the tree included, takes 0.3 to 0.4 s in Python on the publisher's thread, never the
-ticker's. The signature takes 4 to 7 ms (LMS H = 10).
+**Cost, per link-window** (`warden-serve`'s `cells.jsonl`). At the served schedule (T = 600, lanes = 8, r = 2,
+B = 256) a link-window is 600 rows of 4 KiB. The commitment, rows, wiring and tree, takes 25 to 38 ms in Python in the
+publisher's process, never the ticker's, where a row a cell (9,600 rows of 256 bytes) took 0.30 to 0.33 s; with every
+slot a data cell it takes 32 to 46 ms. At 256 lanes of 1 KiB cells, 600 rows of 256 KiB take 0.57 to 0.63 s, where
+153,600 cell rows took 5.2 to 5.4 s. The signature takes 2 to 4 ms (LMS H = 10).
 
-**Demonstration** (`benchmarks/network_traces/warden_zk.py`). A toy unit, `WardenCellIdentity{B}`, takes one cell's
-8·B bits through two NOTs. Its port is registered against the warden's egress root of a warden-serve run, proved by
-C-Flock `prove --zk` behind the firewall, and held by Lean `verify --zk --registered`. The members:
+**Demonstration** (`benchmarks/network_traces/warden_zk.py`). A toy unit, `WardenRowIdentity{B}` at B a row's S·B
+bytes, takes one row's bits through two NOTs. Each unit reads one of a connection's cells, so its row is that cell's
+bucket. Its port is registered against the warden's egress root of a warden-serve run, proved by C-Flock `prove --zk`
+behind the firewall, and held by Lean `verify --zk --registered`. The members:
 - the sender's output and the receiver's input are accepted;
 - rows under the prover's own root are refused, and so is the prover's registration of it under the warden's
   certificate;
-- a cell one bit off the warden's is refused.
+- a row one bit off the warden's, in the unit's cell, is refused.
 
-No salt and no cell content reaches the verifier.
+No salt and no row content reaches the verifier.
