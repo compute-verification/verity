@@ -57,7 +57,6 @@ is left is the same forming and GEMM without hashing, for the time split.  ``has
 """
 from __future__ import annotations
 
-import hashlib
 import itertools
 import types
 from dataclasses import dataclass, field
@@ -87,6 +86,7 @@ from .pouw_pearl_c_lanes import (  # noqa: F401 - the schedule's names, kept imp
     rotated,
     schedule_of,
     splits,
+    whole_options,
 )
 from .pouw_pearl_c_host import (
     _bytes,
@@ -304,21 +304,10 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
                  flag_rows: int = FLAG_ROWS, salt_key: bytes | None = None, whole_defer_a: bool = False,
                  whole_fork_stats: bool = False, lag_ends: bool = False, whole_tree_sm: bool = False):
         """`coins` is the challenger's coin commitment of the epoch and `opening` its salt coin, opened after the weights'
-        root (`Epoch.start`, which raises `DomainError` for any other coin): the epoch's salt is the coin's.
-        `whole_defer_a` (with `whole_defer`, on a kernel whose pipeline splits A's commitment) also defers each call's A
-        tree within a whole capture (`pouw_pearl_c_graphs`), and `whole_fork_stats` (with `whole_defer`) runs each call's A
-        scales there beside its A commitment; `whole_tree_sm` (with `whole_defer_a`) launches the call's GEMMs beside its A
-        tree with one persistent CTA fewer, leaving the tree's CTA its SM.  `lag_ends`: an engine step's pass end
-        (`_ExecutorPass.end`, `end_pass` with ``step``) leaves its commitment's readback in flight (`end` with ``lag``), so
-        the host goes on to the next step while the GPU finishes this one."""
-        if whole_defer_a and not (whole_defer and splits(kernel)):
-            raise ValueError(f"{entry}: whole_defer_a defers A's tree within a deferred whole capture (whole_defer), on a kernel "
-                             f"whose pipeline splits A's commitment (`Pipeline.FUSED` tree_seed_a)")
-        if whole_fork_stats and not whole_defer:
-            raise ValueError(f"{entry}: whole_fork_stats forks A's scales within a deferred whole capture (whole_defer)")
-        if whole_tree_sm and not (whole_defer_a and hasattr(kernel.run.Pipeline, "beside")):
-            raise ValueError(f"{entry}: whole_tree_sm leaves a deferred A tree (whole_defer_a) its SM, on a kernel whose "
-                             f"pipeline's GEMMs take `Pipeline.beside`")
+        root (`Epoch.start`, which raises `DomainError` for any other coin): the epoch's salt is the coin's.  The whole
+        capture's options: `whole_options`.  `lag_ends`: an engine step's pass end (`_ExecutorPass.end`, `end_pass` with
+        ``step``) leaves its commitment's readback in flight (`end` with ``lag``, `LaneCalls.settle`)."""
+        whole_options(entry, kernel, whole_defer, whole_defer_a, whole_fork_stats, whole_tree_sm)
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
         self.nb, self.salt_key = kernel.run.NB, salt_key
         self.graphs = graphs and next(iter(weights.values())).device.type == "cuda"
@@ -499,43 +488,6 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
     def _call_steps(self, pipe: Any) -> list[Any]:
         """The call's steps in order (`_call_names`)."""
         return _steps(pipe, self._call_names(pipe))
-
-    def _call_cuts(self, pipe: Any) -> tuple[int, int]:
-        """Where a deferred whole capture (`whole_defer`) splits `_call_steps`: after A's tree, beside which the call before's
-        tile hashing runs, and before the call's own tile hashing, which it forks."""
-        have = {name for name, _, _ in pipe.steps()}
-        groups = [STEP_GROUPS[x] for x in self._call_names(pipe) if x in have]
-        commit = ("row_seeds", "a_tree")
-        a = next((i for i, g in enumerate(groups) if g not in commit), len(groups))
-        b = next((i for i, g in enumerate(groups) if g == "tile_hash"), len(groups))
-        if any(g in commit for g in groups[a:]) or any(g != "tile_hash" for g in groups[b:]):
-            raise RuntimeError(f"{self.entry}: the call's steps {groups} don't start with A's commitment and end with the tile hashing")
-        return a, b
-
-    def _call_tree(self, pipe: Any) -> int | None:
-        """Where a deferred-a whole capture (`whole_defer_a`) forks A's tree from `_call_steps`: ``tree_seed_a``'s place, the
-        last of A's commitment's steps (`_call_cuts`' first cut is after it), or None where the pipeline doesn't split it."""
-        have = {name for name, _, _ in pipe.steps()}
-        present = [x for x in self._call_names(pipe) if x in have]
-        if "tree_seed_a" not in present:
-            return None
-        at = present.index("tree_seed_a")
-        if at + 1 != self._call_cuts(pipe)[0]:
-            raise RuntimeError(f"{self.entry}: the call's steps {present} don't end A's commitment with A's tree")
-        return at
-
-    def _call_stats(self, pipe: Any) -> int | None:
-        """Where a whole capture forking A's scales (`whole_fork_stats`) takes ``stats_a`` from `_call_steps`: its place, a
-        forming step, which `_call_cuts` holds between A's commitment and the tile hashing; or None where the call has none."""
-        have = {name for name, _, _ in pipe.steps()}
-        present = [x for x in self._call_names(pipe) if x in have]
-        return present.index("stats_a") if "stats_a" in present else None
-
-    def _split_whole(self, sh: _Shape) -> bool:
-        """Whether a call of `sh` splits A's commitment for a deferred-a whole capture (`whole_defer_a`, deferring): a call
-        that replays as a graph, at a shape the kernel's pd launches take (`_aside`'s rule)."""
-        return (self._defers_a() and self._graphed(sh.m16)
-                and self.kernel.run.pd_variant(sh.m16, sh.n, sh.k) is not None)
 
     def _pipe(self, w: int, sh: _Shape) -> tuple[Any, list[Any], list[Any]]:
         """The call's pipeline and its steps: the main lane's, and (with hashing) the side lane's, by the schedule's groups
@@ -730,19 +682,6 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
                     out["manifest"] = str(self._write_retained(cur, epoch, roots_a, tree, count))
         self.details["passes"].append(out)
         return out
-
-    def settle(self) -> None:
-        """Complete a lagged end's readback (`end` with ``lag``), waiting for its copies: its commitment, in place."""
-        if self._lagged is None:
-            return
-        (out, done, (roots_a, root, flags), units, count), self._lagged = self._lagged, None
-        done.synchronize()
-        self._ended(out, roots_a.numpy().tobytes(), root.numpy().tobytes(), flags.tolist(), units, count)
-
-    def _ended(self, out: dict[str, Any], roots_a: bytes, root: bytes, flags: list[int], units: int, count: int) -> None:
-        out.update(transcript_root=root.hex(), activation_roots=hashlib.sha512(roots_a).hexdigest(),
-                   failing_rows=int(flags[0]), unsure_rows=int(flags[1]))
-        self.commits.update(transcript_root=out["transcript_root"], units=units, tiles=count)
 
     def end_pass(self, retain: str | None = None, run: str | None = None, schedule: str | Schedule | None = None, *,
                  step: bool = False) -> dict[str, Any]:
