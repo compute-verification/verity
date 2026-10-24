@@ -69,7 +69,9 @@ def max_min(a) -> int:
     oprove = MARGIN * sessions * FW_L3_S * DEV_SUM_S / DEV_L3_S / 60 if "firewall" in a.modes.split(",") else 15
     rest = sum(m * (a.repeat if s in ("icheck", "vstage", "vcap", "oreplay", "lean") else 1)
                for s, m in OTHER_MIN.items() if s in steps(a.steps))
-    return math.ceil((oprove if "oprove" in steps(a.steps) else 0) + rest)
+    # 85's CPU prover built once (oprove under the firewall, OPROVE_GPU=0), and its proofs: a minute a statement
+    cpu = 25 if "firewall" in a.modes.split(",") and a.oprove_gpu != "1" else 0
+    return math.ceil((oprove + cpu if "oprove" in steps(a.steps) else 0) + rest)
 
 
 def steps(arg: str) -> list[str]:
@@ -96,7 +98,7 @@ def job_env(a: argparse.Namespace) -> list[str]:
     lease = a.lease_min or lease_min(a.oprove_warm + a.oprove_runs, "firewall" in a.modes.split(","))
     return [f"K={a.K}", f"N={a.N}", f"STEPS={','.join(steps(a.steps))}", f"REPEAT={a.repeat}", f"MODES={a.modes}",
             f"OPROVE_WARM={a.oprove_warm}", f"OPROVE_RUNS={a.oprove_runs}", f"GPU_MAX_MIN={lease}", f"NEG={','.join(a.neg.split())}",
-            *(["GPU=0"] if a.cpu else []), *a.env]
+            *(["GPU=0"] if a.cpu else []), *([f"OPROVE_GPU={a.oprove_gpu}"] if a.oprove_gpu != "auto" else []), *a.env]
 
 
 def job_command(a: argparse.Namespace, root: Path) -> list[str]:
@@ -230,6 +232,9 @@ def main(argv: list[str] | None = None) -> int:
                        "sized from the firewall's L3 session: lease_min)")
         p.add_argument("--neg", default="challenge,query", help="inner coins the negative flips, space or comma separated ('' for none)")
         p.add_argument("--cpu", action="store_true", help="GPU=0: the CPU prover end to end, no lease (a small K and N)")
+        p.add_argument("--oprove-gpu", choices=["auto", "0", "1"], default="auto",
+                       help="V*'s prover: 0 the CPU prover (auto under the firewall: node 1's lease pool stops a lease whose "
+                            "GPU idles about 10 min, as a firewalled session's does), 1 the GPU one under a lease")
         p.add_argument("--node", default=NODE)
         p.add_argument("--mem-gb", type=int, default=64)
         p.add_argument("--cpus", type=int, default=32)

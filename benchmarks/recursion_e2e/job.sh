@@ -11,6 +11,7 @@
 #      WARM=1 RUNS=3 (the inner's sessions)  OPROVE_WARM=0 OPROVE_RUNS=1 (each V* statement's sessions)
 #      MODES=firewall (oprove's prover sides; the last one's sessions are what oreplay and lean read)
 #      GPU_MAX_MIN=75 (each prove's lease, minutes)  LEAN_JOBS=4 (Lean verifies this many V* sessions at once)
+#      OPROVE_GPU=0 under MODES=firewall, else GPU (V*'s prover: 85's CPU prover, or the GPU one under a lease)
 #      NEG=challenge,query (negative: the inner coins of rep 0 flipped, each verified under every V* statement; empty: none)
 #      TAG=rb-<run id> (85's data/$TAG, removed at the end unless KEEP_DATA=1; a later job's STEPS=oprove,... takes it with
 #      TAG=... KEEP_DATA=1)  FLOCK_WORK=/workspace/jobs/rec-bench
@@ -27,6 +28,10 @@ export K=${K:-4096} N=${N:-2}; export TAG=${TAG:-rb-${RESEARCH_RUN_ID:-$$}} WARM
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/rec-bench}; mkdir -p "$FLOCK_WORK" || { echo "cannot make $FLOCK_WORK" >&2; exit 1; }
 STEPS=${STEPS:-build,inner,icheck,vstage,vcap,oprove,oreplay,lean,negative}; REPEAT=${REPEAT:-3}
 MODES=${MODES:-firewall}; NEG=${NEG-challenge,query}; NEG=${NEG//,/ }
+# OPROVE_GPU=0 (the default under the firewall): V*'s statements proved by 85's CPU prover, no lease. Node 1's lease pool
+# stops a lease at about 10 min while its GPU computes nothing (three firewalled L0 tries, 74 min non-preemptible leases,
+# exit 143 at 10m18s each: r20261024-075309-69be), and a firewalled session's GPU waits on the Lean session loop for minutes
+[[ ,$MODES, == *,firewall,* ]] && OPROVE_GPU=${OPROVE_GPU:-0} || OPROVE_GPU=${OPROVE_GPU:-${GPU:-1}}
 PYTHONPATH=$REPO/tools/research/src python3 -m research keep "$FLOCK_WORK" --owner @benchmarks --expires 7d --priority low \
   --regenerate "bash benchmarks/recursion_e2e/job.sh K=$K N=$N" \
   --why "the recursion bench's builds (and a KEEP_DATA=1 run's data/TAG): a cache, rebuilt by the next run" > "$O/keep.json" 2>&1 \
@@ -41,7 +46,7 @@ REC=verity/ml/flock/pod/85-rec-reprice.sh
 L=$FLOCK_WORK/cache
 LSHA=$(cd verity/core/service/flock && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
 { echo "commit=${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)} K=$K N=$N TAG=$TAG WARM=$WARM RUNS=$RUNS REPEAT=$REPEAT"
-  echo "OPROVE_WARM=${OPROVE_WARM:-0} OPROVE_RUNS=${OPROVE_RUNS:-1} GPU_MAX_MIN=$GPU_MAX_MIN GPU=${GPU:-1}" \
+  echo "OPROVE_WARM=${OPROVE_WARM:-0} OPROVE_RUNS=${OPROVE_RUNS:-1} GPU_MAX_MIN=$GPU_MAX_MIN GPU=${GPU:-1} OPROVE_GPU=$OPROVE_GPU" \
     $(for v in $(compgen -v REPEAT_); do echo "$v=${!v}"; done)
   echo "steps=$STEPS modes=$MODES lean_jobs=${LEAN_JOBS:-4} lean_sources=$LSHA neg=${NEG// /+}"
   echo "cuda_tk=${CUDA_TK:-} warm_from=${WARM_FROM:-}"; nproc; nvidia-smi -L 2>/dev/null; } > "$O/params.txt"
@@ -103,7 +108,13 @@ for s in ${STEPS//,/ }; do
         if firewall; then log "flock-firewall: $FC_FIREWALL_LEAN"
         else log "no flock-firewall: oprove refused (MODES=$M needs it)"; rc=1; continue; fi
       fi
-      step oprove 1 MODES=$M REPLAY=0 WARM=${OPROVE_WARM:-0} RUNS=${OPROVE_RUNS:-1} || rc=1 ;;
+      if [ "$OPROVE_GPU" = 0 ] && [ "${GPU:-1}" != 0 ]; then
+        # 85's CPU prover (bin-…-g0), built beside the GPU one; STAGE_FROM links this run's staged statements into a
+        # throwaway TAG, so the build's staging doesn't restage the ones the inner session was proved against
+        step build 2 GPU=0 TAG=$TAG-g0 STAGE_FROM=$FLOCK_WORK/data/$TAG || { rc=1; continue; }
+        rm -rf "$FLOCK_WORK/data/$TAG-g0"
+      fi
+      step oprove 1 MODES=$M REPLAY=0 WARM=${OPROVE_WARM:-0} RUNS=${OPROVE_RUNS:-1} GPU=$OPROVE_GPU || rc=1 ;;
     icheck|vcap|oreplay) for i in $(reps $s); do step $s $i || { rc=1; break; }; done ;;
     vstage) for i in $(reps vstage); do step vstage $i FORGE= || { rc=1; break; }; done ;;
     lean) for i in $(reps lean); do step lean $i INNER_LEAN=1 JOBS=${LEAN_JOBS:-4} NEG_INNER= || rc=1; done ;;

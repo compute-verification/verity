@@ -28,6 +28,12 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
   from L3, times 1.5: 74 min for one session. `--max-min` defaults to the same model over all ten statements, plus each
   other step's minutes per repeat. The leases are not preemptible (`job.sh`), because a preempted session is a lost
   measurement.
+- **The CPU prover under the firewall** (`--oprove-gpu auto`, which is 0 with `--modes firewall`). Node 1's lease pool
+  stopped every firewalled L0 session at about 10 minutes (exit 143) despite a 74-minute, non-preemptible lease. The
+  run was r20261024-075309-69be, and the GPU computes nothing while the Lean session loop works. So V*'s statements are
+  proved by 85's CPU prover (`GPU=0`, built once beside the GPU one), and no lease is needed. The session's time is then
+  the firewall's, plus a CPU prove where a GPU prove would take about a second. `--oprove-gpu 1` puts the GPU prover back
+  under `--lease-min`.
 - **`--e2e`**, the one-pass mode (RECBENCH's draft): build, inner, vstage, vcap, oprove, lean and negative once each, one
   session per prove and no warm one. With `--cpu --K 64 --N 16 --node <cpu node>` it is the CPU prover end to end
   (`GPU=0`, no lease).

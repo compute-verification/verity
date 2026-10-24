@@ -376,3 +376,12 @@ def test_store_puts_each_result_the_merge_and_the_table(tmp_path: Path, monkeypa
     assert RUN.main(["store", str(tmp_path / "a.json"), "--merge"]) == 0
     assert capsys.readouterr().out.strip() == "art:x"
     assert seen["files"] == ["merged.json", "rA.json", "table.md"] and seen["meta"]["benchmark"] == "recursion_e2e"
+
+
+def test_firewalled_statements_name_the_cpu_prover(tmp_path: Path, capsys) -> None:
+    o = job(tmp_path)
+    (o / "params.txt").write_text("commit=abc K=4096 N=2 WARM=1 RUNS=3 REPEAT=2\nOPROVE_WARM=0 OPROVE_RUNS=1 OPROVE_GPU=0\n")
+    r = next(r for r in RP.read(o)["rows"] if r["stage"] == "outer L0" and r["extra"]["mode"] == "firewall")
+    assert r["what"].endswith(", CPU prover") and r["extra"]["prover"] == "cpu"
+    assert RUN.main(["run", "--dry-run", "--oprove-gpu", "1"]) == 0
+    assert "OPROVE_GPU=1" in capsys.readouterr().out.split()

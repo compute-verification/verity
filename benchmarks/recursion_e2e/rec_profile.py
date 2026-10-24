@@ -341,12 +341,14 @@ def read(root: Path) -> dict[str, Any]:
     if vc:
         rows.append(step_row(vc, "vcap", "85 STEP=vcap whole"))
     rows += tool_rows(vc, "vcap", {"stage cap": ("vstage/time-cap.txt", "RecCap at every level")})
+    cpu_prover = params(root).get("OPROVE_GPU") == "0"
     for o in repeats(root, "oprove")[:1]:
         for d in sorted((p for p in (o / "oprove").glob("*") if p.is_dir()), key=lambda p: p.name):
             mode = next((m for m in ("firewall", "host", "dev") if d.name.endswith("-" + m)), "dev")
             stmt = d.name[: -len(mode) - 1] if d.name.endswith("-" + mode) else d.name
-            rows.append(prover_row(d, f"outer {stmt}", "oprove", f"V*'s {stmt} with --zk, mode {mode}"))
-            rows[-1].extra |= {"mode": mode, "statement": stmt}
+            rows.append(prover_row(d, f"outer {stmt}", "oprove", f"V*'s {stmt} with --zk, mode {mode}"
+                                   + (", CPU prover" if cpu_prover else "")))
+            rows[-1].extra |= {"mode": mode, "statement": stmt, "prover": "cpu" if cpu_prover else "gpu"}
             if mode == "firewall" and rows[-1].wall_s:
                 rows[-1].note = ("the prover's phase buckets include its waits on the Lean session loop (flock-firewall), "
                                  "the reps' overlapping; " + rows[-1].note).rstrip("; ")
