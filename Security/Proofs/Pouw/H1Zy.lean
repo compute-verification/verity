@@ -3,10 +3,16 @@ import Proofs.Pouw.H1Zy.CombineBits
 import Proofs.Pouw.H1Zy.DequantVectors
 import Proofs.Pouw.H1Zy.Lane
 import Proofs.Pouw.H1Zy.LaneBits
+import Proofs.Pouw.H1Zy.Tile
 import Proofs.Pouw.H1Zy.LaneChunk
 
 /-!
 # H1's drawn-leaf statements: their Definitions on words mean what `LeafChecks` reads
+
+`Tile`, a tile unit's one statement: at `32 ∣ K` and `K < 2^17`, `PouwH1TileZy_v1{TILE}`'s `ok = true` gives every
+cell's record z as the exact dot of its rows' codes and its y as the dequant of it, over `PouwH1Tile_v1` or
+`PouwH1Tile_v3` at any noise (`Pouw.H1Zy.tileOk_spec`). `Proofs.Accounting.TS.Session.Tile.Computes` reads it as
+`TileChecks`.
 
 `Combine`: `PouwH1Combine_v1`'s `ok` is `true` exactly when the lanes' partials XOR, in lane order, to the receipt
 (`Pouw.H1Zy.combineOk_iff`). `Proofs.Accounting.TS.Session.Lanes.Combine` reads it as `LeafChecks`' combine field.

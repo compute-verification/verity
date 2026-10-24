@@ -3,10 +3,15 @@ import Definitions.Pouw.H1Zy.CombineBits
 import Definitions.Pouw.H1Zy.Dequant
 import Definitions.Pouw.H1Zy.Lane
 import Definitions.Pouw.H1Zy.LaneBits
+import Definitions.Pouw.H1Zy.Tile
 import Definitions.Pouw.H1Zy.LaneChunk
 
 /-!
 # H1's drawn-leaf statements on words (`verity/core/protocols/pouw/circuit/h1zy.py`)
+
+`Tile`, a tile unit's one statement: `PouwH1TileZy_v1{TILE}`'s `ok` over `PouwH1Tile_v1` (EXACT's z) or
+`PouwH1Tile_v3` (the one-stream's z at its noise), on its primitives' word views, with the dequant's words as a
+parameter. Proved in `Proofs.Pouw.H1Zy` to check the exact z and y.
 
 `Combine`: `PouwH1Combine_v1{TILE}`'s body on its primitives' word views, the receipt check over a leaf's lanes'
 partials. Proved to be the XOR check in `Proofs.Pouw.H1Zy`.
