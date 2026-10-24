@@ -159,6 +159,25 @@ theorem srcV_padQs (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims
   rw [hsp] at s1 s2 s3
   exact ⟨hjN, s1, s2, s3⟩
 
+/-- **A source reads its view's pads columns and salts**: views with the same pads columns and salts at table `i` give
+sources with the same ones at each of its reps. -/
+theorem tabSrcView_padCols (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
+    (v v' : ∀ j, ((tabC P x j).T (cz j)).tab.View) {i r : ℕ} (hi : i < jOf x) (hr : r < 2)
+    (h1 : (v ⟨i, hi⟩).ch = (v' ⟨i, hi⟩).ch) (h2 : (v ⟨i, hi⟩).cm = (v' ⟨i, hi⟩).cm)
+    (h3 : (v ⟨i, hi⟩).saltsP = (v' ⟨i, hi⟩).saltsP) :
+    ((tabSrcView P x cz v i).rep r).ch = ((tabSrcView P x cz v' i).rep r).ch ∧
+      ((tabSrcView P x cz v i).rep r).cm = ((tabSrcView P x cz v' i).rep r).cm ∧
+      ((tabSrcView P x cz v i).rep r).padSalt = ((tabSrcView P x cz v' i).rep r).padSalt := by
+  unfold tabSrcView
+  first
+  | simp only [dite_eq_left hi, dite_eq_left hr, h1, h2, h3, and_self]
+  | (rw [dite_eq_left hi, dite_eq_left hi]
+     dsimp only
+     rw [dite_eq_left hr, dite_eq_left hr]
+     try dsimp only
+     rw [h1, h2, h3]
+     exact ⟨rfl, rfl, rfl⟩)
+
 end Claims.ZKMal.Masked
 
 namespace Claims.ZKServer
@@ -180,8 +199,8 @@ def FinRows (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce) (t : 
 
 open FlockSoundness.Discharge in
 /-- **Where its rows hold, the views' pads columns and salts are the honest views'**: table `i`'s rep `r` source from
-the switched views reads the switched view's pads columns and salts, which are the honest view's
-(`Coined.swExe_padCols`). -/
+the switched views reads the switched view's pads columns and salts (`Masked.tabSrcView_padCols`), which are the honest
+view's (`Coined.swExe_padCols`). -/
 theorem finSrc_padCols (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce) (t : finS.Tape)
     (ops : List (Msg × Msg)) {i r : ℕ} (hi : i < Masked.jOf x) (hr : r < 2) (hrows : FinRows vs x w ν t ops ⟨i, hi⟩) :
     ((finSrc vs x w ν t ops i).rep r).ch = ((Masked.srcV x (finCoins x ops) w t i).rep r).ch ∧
@@ -190,22 +209,9 @@ theorem finSrc_padCols (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.N
   obtain ⟨h1, h2, h3⟩ := ZkView.Coined.swExe_padCols ((finS.C x ⟨i, hi⟩).T (finS.cz x (finCoins x ops) ⟨i, hi⟩))
     (finS.wt x w ⟨i, hi⟩) (vs x w ν (finCoins x ops) ⟨i, hi⟩) (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).1
     (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).2 hrows
-  have e1 : (finS.swViewsAt x (finCoins x ops) (finS.wt x w) (vs x w ν (finCoins x ops)) t ⟨i, hi⟩).ch =
-      (Masked.viewsE x (finCoins x ops) w t ⟨i, hi⟩).ch := h1
-  have e2 : (finS.swViewsAt x (finCoins x ops) (finS.wt x w) (vs x w ν (finCoins x ops)) t ⟨i, hi⟩).cm =
-      (Masked.viewsE x (finCoins x ops) w t ⟨i, hi⟩).cm := h2
-  have e3 : (finS.swViewsAt x (finCoins x ops) (finS.wt x w) (vs x w ν (finCoins x ops)) t ⟨i, hi⟩).saltsP =
-      (Masked.viewsE x (finCoins x ops) w t ⟨i, hi⟩).saltsP := h3
-  unfold finSrc Masked.srcV Masked.tabSrcView
-  first
-  | (rw [dite_eq_left hi, dite_eq_left hi]
-     dsimp only
-     rw [dite_eq_left hr, dite_eq_left hr]
-     try dsimp only
-     rw [e1, e2, e3]
-     exact ⟨rfl, rfl, rfl⟩)
-  | (simp only [dif_pos hi, dif_pos hr, e1, e2, e3]; exact ⟨rfl, rfl, rfl⟩)
-  | simp only [dif_pos hi, dif_pos hr, e1, e2, e3, and_self]
+  exact Masked.tabSrcView_padCols Masked.PE x (Masked.czExe Masked.PE x (finCoins x ops))
+    (finS.swViewsAt x (finCoins x ops) (finS.wt x w) (vs x w ν (finCoins x ops)) t)
+    (Masked.viewsE x (finCoins x ops) w t) hi hr h1 h2 h3
 
 variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
@@ -236,7 +242,7 @@ theorem finRepCut_size (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Fl
           (_root_.Flock.Transcript.init #[] (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8)).run 0 =
         .ok ((p, tr), q.coins.size) →
     ∀ l : Array Msg, l.size = Masked.repBase x k →
-      ((((_root_.Flock.Firewall.Finish.repFwC
+      (((_root_.Flock.Firewall.Finish.repFwC
           (FlockComplete.asksCut (fun k i => Masked.slotAt (finCoins x ops) k i) (refK x))
           (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) tb.st tb.sch tb.tPad (k % 2)
           (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8 tb.g tb.cm0.toC
@@ -427,6 +433,9 @@ theorem finRepOpen (hx : Masked.Live x) (hS : Loop.RepSrc L₀ src x w) (hRows :
         .ok ((Masked.zkTab x ⟨k / 2, hj⟩).sch, (Masked.zkTab x ⟨k / 2, hj⟩).tPad) := by
       rw [hst']
       exact (Masked.zkTab x ⟨k / 2, hj⟩).hz
+    have hk6 : 6 ≤ (Masked.stsOf x)[(2 * (k / 2) + k % 2) / 2]!.c.kLog := by
+      rw [hst']
+      exact (Masked.zkTab x ⟨k / 2, hj⟩).wf.1.hk6
     have hrr : FlockDeploy.repRounds true spec (Masked.stsOf x)[(2 * (k / 2) + k % 2) / 2]! =
         FlockComplete.piopRoundsZk spec (Masked.stsOf x)[(2 * (k / 2) + k % 2) / 2]! +
           ((Masked.zkTab x ⟨k / 2, hj⟩).sch.k0 + 7 + 11 * ((Masked.zkTab x ⟨k / 2, hj⟩).sch.levels.size - 1)) + 4 := by
