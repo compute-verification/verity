@@ -8,9 +8,9 @@ first coin.
                                    [--circuit-files JSON] [--lane LANE] | period-close --name P
     vy-challenger-gate model-register --model M --circuit SHA512 --descriptor FILE --checkpoint DIR
     vy-challenger-gate model-key --model M --circuit SHA512 [--weights-root W]
-    vy-challenger-gate certifier-rehearse --peer NAME --port PORT --minutes M [--tamper late|extra] [--requests N]
-                                          [--in-flight N] [--tokens N] [--profile planned|served] [--temperature T]
-                                          [--top-p P]
+    vy-challenger-gate certifier-rehearse --peer NAME --port PORT --minutes M [--tamper late|extra|drop|token]
+                                          [--requests N] [--in-flight N] [--tokens N] [--profile planned|served]
+                                          [--temperature T] [--top-p P]
     vy-challenger-gate warden-rehearse --peer NAME --port PORT --minutes M [--requests N] [--tokens N] [--temperature T]
                                        [--top-p P]
     vy-challenger-gate status SESSION|RUN | ledger | pins | models | pubkey | fetch SESSION|RUN
@@ -96,12 +96,14 @@ first coin.
 - **A certifier rehearsal** (`certifier-rehearse`, a lane's own gate key or vy-admin): the network certifier in front of
   a served endpoint, `benchmarks/network_traces/certifier_serve.py rehearse`, run here, on the auditor's machine, as the
   auditor's device would. The gate validates the request (`--peer` one of /etc/vy/peers, `--port` the endpoint's on the
-  peer's loopback, `--minutes` 1 to 120, `--tamper late|extra` for a tampering shim instead of an honest one,
-  `--requests` 4 to 400, `--in-flight` 1 to 4 requests sent together and `--tokens` 16 to 64 tokens out of each, each
-  recorded and passed on only when given (`certifier_serve.py`'s 4 and 64 otherwise), `--profile planned|served` N2's
-  profile, planned by default: the planned egress occupancy, or NET-54's served profile, whose egress counts derive from
-  the ingress head's, and the sampling below), refuses while another rehearsal runs, writes
-  `certifier/<run>/request.json` and starts its unit
+  peer's loopback, `--minutes` 1 to 120, `--tamper` one of `TAMPERS` for a tampering shim instead of an honest one
+  (`certifier_serve.py`'s: `late` holds a window-0 session past every sync, `extra` writes one event more and `drop`
+  one fewer, which the rehearsal's check refuses, and `token` writes window 0's tokens with other bytes, a run it
+  accepts, exit 0, since only the I/O tie refuses it), `--requests` 4 to 400, `--in-flight` 1 to 4 requests sent
+  together and `--tokens` 16 to 64 tokens out of each, each recorded and passed on only when given
+  (`certifier_serve.py`'s 4 and 64 otherwise), `--profile planned|served` N2's profile, planned by default: the planned
+  egress occupancy, or NET-54's served profile, whose egress counts derive from the ingress head's, and the sampling
+  below), refuses while another rehearsal runs, writes `certifier/<run>/request.json` and starts its unit
   (`vy-certifier@<run>.service`), which runs `certifier-run` as `auditor`: an `ssh -N -L` with the auditor's tunnel key
   (the peer's line of /etc/vy/peers) from a free port of this host's loopback to 127.0.0.1:PORT on the peer, then the
   rehearsal through it into `out/`, stopped at `--minutes`, then the tunnel closed and `end.json` written (its exit, why
@@ -113,8 +115,9 @@ first coin.
   (`verity.core.protocols.certifier.warden`) as the auditor's device, `benchmarks/network_traces/warden_serve.py
   rehearse`, with the warden and its client here and the server the peer's endpoint, reached through the same tunnel:
   client ──cells──▶ warden (here) ──tunnel──▶ the peer's 127.0.0.1:PORT. The gate validates `--peer`, `--port` and
-  `--minutes` as a certifier rehearsal's, `--requests` 4 to 400 (100 by default) and `--tokens` 16 to 256, the most
-  tokens a request asks for, recorded and passed on only when given (`warden_serve.py`'s 256 otherwise). The traffic
+  `--minutes` as a certifier rehearsal's (it takes no `--tamper`: the warden is the device, with no shim to tamper),
+  `--requests` 4 to 400 (100 by default) and `--tokens` 16 to 256, the most tokens a request asks for, recorded and
+  passed on only when given (`warden_serve.py`'s 256 otherwise). The traffic
   is the gate's (`WARDEN_RATE`, `WARDEN_SEED`, `WARDEN_TAIL_S`), so a request whose `--minutes` is under
   `warden_minutes` of its requests is refused, with the least that fits. Its request carries `device: warden`; it
   shares the certifier rehearsal's directory, run names, unit, `status` and `fetch`, and one of either runs at a time.
@@ -188,7 +191,8 @@ CERTIFIER_MINUTES = (1, 120)
 CERTIFIER_REQUESTS = (4, 400)
 CERTIFIER_IN_FLIGHT = (1, 4)
 CERTIFIER_TOKENS = (16, 64)
-TAMPERS = ("late", "extra")
+#: a certifier rehearsal's tampering shims, each `certifier_serve.py`'s `--tamper` of that name
+TAMPERS = ("late", "extra", "drop", "token")
 CERTIFIER_PROFILES = ("planned", "served")
 #: a rehearsal's `--temperature` bounds; `--top-p` is above 0 and at most 1, and each is a plain decimal (`DECIMAL`)
 TEMPERATURE = (0.0, 2.0)
@@ -944,7 +948,7 @@ USAGE = ("verbs: reserve --peer NAME --scheme S --families JSON [--epoch E] [--m
          "(a lane's own gate key, or vy-admin) "
          "| model-register --model M --circuit SHA512 --descriptor FILE --checkpoint DIR (vy-admin's) "
          "| model-key --model M --circuit SHA512 [--weights-root W] (a lane's own gate key, or vy-admin) "
-         "| certifier-rehearse --peer NAME --port PORT --minutes M [--tamper late|extra] [--requests N] "
+         "| certifier-rehearse --peer NAME --port PORT --minutes M [--tamper late|extra|drop|token] [--requests N] "
          "[--in-flight N] [--tokens N] [--profile planned|served] [--temperature T] [--top-p P] "
          "| warden-rehearse --peer NAME --port PORT --minutes M [--requests N] [--tokens N] [--temperature T] "
          "[--top-p P] (a lane's own gate key, or vy-admin) "
