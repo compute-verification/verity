@@ -50,8 +50,7 @@ WRAPPERS = {("step", "greedy"): ("verity-vllm/engine-step/v1", "vLLMStep"),
             ("request", "greedy"): ("verity-vllm/greedy-request/v1", "vLLMRequest"),
             ("step", "stochastic"): ("verity-vllm/stochastic-engine-step/v1", "vLLMStep"),
             ("request", "stochastic"): ("verity-vllm/stochastic-request/v1", "vLLMRequest")}
-#: `vllm_meta.CachedGreedyRequest.DERIVE_SOURCE`: the greedy request wrapper with a cached prefix
-CACHED_SRC = "verity-vllm/cached-greedy-request/v1"
+CACHED_SRC = "verity-vllm/cached-greedy-request/v1"  # `vllm_meta.CachedGreedyRequest.DERIVE_SOURCE`, with a cached prefix
 I64 = Value(64)
 
 
@@ -419,8 +418,7 @@ class _Model:
         self.plus_one: dict[int, Coll] = {}
 
     def open_with(self, prefix: Coll, C: int) -> None:
-        """Every layer's history opens with its rows of the cached prefix (`rules.vllm_bindings.kv_prefix`): `prefix` bf16
-        [NL, 2, C, KVH*D], layer l's key rows then its value rows; the prefill that follows is the call at P0 = C."""
+        """Every layer's history opens with its rows of `prefix` (`rules.vllm_bindings.kv_prefix`: bf16 [NL, 2, C, KVH*D], keys then values)."""
         rl = self.C.KVH * self.C.D
         for L, (kh, vh) in enumerate(self.hist):
             kh += [prefix.refs.slice(((2 * L) * C + j) * rl, ((2 * L) * C + j + 1) * rl) for j in range(C)]
@@ -694,8 +692,7 @@ def launch_batch(phi: Phi, LP: int, T: int) -> list | None:
 def drive(model, wrapper: str, rows: list[Coll], *, M: int, pos0: int, LP: int | None, T: int | None, policy: _Stochastic | None,
           batch: list | None, C: int = 0) -> list[Coll]:
     """The wrapper's forwards over `model` -> its samples: a `step`'s M rows at pos0.. and its last row's sample, or a `request`'s
-    prefill of LP rows (of rows C.. at positions C.. after a cached prefix of C rows), then T decodes, each fed the previous
-    sample."""
+    prefill of LP rows (rows C.. after a cached prefix of C), then T decodes, each fed the previous sample."""
     if wrapper == "step":
         hid = model.forward(rows, pos0)
         return [model.sample(hid[-1], 0, pos0 + M - 1, policy)]
@@ -713,15 +710,14 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
                   with_desc: bool = True, C: int = 0) -> BuildResult:
     """The Program of the Build's `wrapper` for φ: `step` (one engine step, M token rows at pos0.., the last row sampled) or
     `request` (prefill of LP rows, then T decode steps each fed the previous greedy sample; returns the T+1 samples). `C` > 0: the
-    request's first C prompt rows are its prefix cache's (`vllm_meta.CachedGreedyRequest`, the Build's `--cached C`): a `prefix`
-    input after the request's own holds every layer's C key and value rows, and the prefill computes rows C..LP-1."""
+    first C prompt rows are a prefix-cache hit (`vllm_meta.CachedGreedyRequest`, the Build's `--cached C`) whose every layer's key and
+    value rows a `prefix` input holds after the request's own; the prefill computes rows C..LP-1."""
     t0 = time.time()
     net = decoder(phi, M, pos0 + M if wrapper == "step" else int(LP) + int(T))
     kind = (phi.sampling or {}).get("kind", "greedy")
     if (wrapper, kind) not in WRAPPERS:
         raise Unexpressible(f"wrapper {wrapper!r} (have {sorted({w for w, _ in WRAPPERS})})")
-    world, rank = int(phi.tp.get("world", 1)), int(phi.tp.get("rank", 0))
-    C = int(C)
+    world, rank, C = int(phi.tp.get("world", 1)), int(phi.tp.get("rank", 0)), int(C)
     if C and (wrapper, kind, world, type(net)) != ("request", "greedy", 1, _Decoder):
         raise Unexpressible(f"vocabulary cannot express: a cached prefix on a {kind} {wrapper} at TP{world} of the {net.model_class} decoder "
                             f"(the cached greedy request on one rank of the dense or fused-MoE decoder only)")
@@ -778,9 +774,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     B.ret_type = out.type
     body = B.finish(out)
     t_body = time.time()
-    src_class, derive_name = WRAPPERS[(wrapper, kind)]
-    if C:
-        src_class = CACHED_SRC
+    src_class, derive_name = (CACHED_SRC, WRAPPERS[(wrapper, kind)][1]) if C else WRAPPERS[(wrapper, kind)]
     if world > 1:
         src_class = f"verity-vllm/{'scheduled-with-peers' if words else 'with-peers'}/v1[{src_class}]"
     name = f"{derive_name}[{net.model_class}]"
