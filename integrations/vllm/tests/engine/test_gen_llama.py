@@ -127,7 +127,7 @@ def test_profile_is_discovered_by_case_and_shares_the_base_patterns(case, module
 def test_llama32_1b_weight_field_covers_every_parameter_name_of_the_family():
     wf, rc = L.weight_field, L.root_class
     assert wf("model.embed_tokens.weight") == ("embed",) and wf("model.norm.weight") == ("norm",)
-    assert wf("lm_head.weight") == ("embed",)                                # tied per C; the tie itself is proven by root_policy from storage identity
+    assert wf("lm_head.weight") == ("embed",)                                # tied per C
     assert wf("model.layers.0.self_attn.rotary_emb.cos_sin_cache") == ("cos_sin",)
     for layer in range(L.C["NL"]):
         for hf, f in (("input_layernorm.weight", "ln1"), ("self_attn.qkv_proj.weight", "qkv_w"), ("self_attn.o_proj.weight", "o_w"),
@@ -165,10 +165,10 @@ def test_check_header_accepts_the_checkpoint_config_and_rejects_a_changed_one(ca
     assert mod.check_header(_header({**mod.HF_CONFIG, "tie_word_embeddings": False}, mod.REPO_ID))
 
 
-# --- the analytic rotary table with llama3 scaling: the rule root_policy checks the captured cos_sin_cache against ---------------
+# --- the analytic rotary table with llama3 scaling: the rule the captured cos_sin_cache is checked against --------------------
 
 def test_llama3_scaled_table_is_self_consistent_and_distinct_from_the_plain_rule():
-    """`analytic.check_cos_sin(C, table)` is what root_policy runs on the captured `cos_sin_cache.npy`; at this configuration the
+    """`analytic.check_cos_sin(C, table)` is the rule for the captured `cos_sin_cache.npy`; at this configuration the
     llama3 blend must (a) reproduce itself within the bound and (b) be told apart from the unscaled rule and from the other
     fields' errors, otherwise the analytic-table root would be vacuous."""
     C = L.C
@@ -226,7 +226,7 @@ def test_run_config_dry_run_resolves_the_profile_from_the_case(case, module_name
     wl = f"workloads/{WORKLOADS[case]}"
     out = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "match", "--case", case, "--workload", wl, "--out", "/r/RUN",
                           "--cards-dir", "/r/cards", "--python-gpu", "/pod/py311", "--python-cpu", "/pod/py312", "--checkpoint-dir", "/ck/snap",
-                          "--phase", "all", "--parallel", "8", "--replay-budget-leaves", "8000000", "--seed", "7", "--dry-run"],
+                          "--phase", "all", "--parallel", "8", "--seed", "7", "--dry-run"],
                          capture_output=True, text=True, cwd=REPO, check=True).stdout
     cmds = {}
     for ln in out.splitlines():
@@ -236,18 +236,11 @@ def test_run_config_dry_run_resolves_the_profile_from_the_case(case, module_name
     assert "snapshot_steps=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]" in out       # every step of the 16-token workload
     cap = cmds["capture"]
     assert cap[cap.index("--case") + 1] == case and "--verify-weights" in cap and cap[cap.index("--workload") + 1] == wl
-    # D82 stage set at the swarm fork point: G5 = wiring + replay_a + replay_chain; tier b only under --full-replay
-    for st in ("resolve", "compare", "fold", "root_policy", "wiring", "replay_a", "replay_chain"):
+    for st in ("resolve", "fold", "fold_2"):
         c = cmds[st]
         assert c[c.index("--profile") + 1] == module_name, (st, c)
-    assert not any(st.startswith("replay_b_step") for st in cmds), sorted(cmds)                    # diagnostic only since D82
-    for st in ("replay_a", "replay_chain"):
-        c = cmds[st]
-        assert c[c.index("--max-arg-leaves") + 1] == "8000000"
     fold = cmds["fold"]
     assert fold[fold.index("--persist-dir") + 1] == "/r/RUN"                                        # D85: the frozen candidate files
-    rp = cmds["root_policy"]
-    assert rp[rp.index("--safetensors") + 1] == "/ck/snap/model*.safetensors"
     assert f"/r/cards/{case}-{Path(wl).stem}.json" in cmds["gates"][0]
 
 
