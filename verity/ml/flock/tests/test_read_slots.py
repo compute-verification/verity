@@ -5,8 +5,9 @@ input once, each from a port of its width, each stage reading only earlier stage
 same unit into more stages, none past the cap, computing the same; `net_rows` is every net's laid-out rows, and `ands_cap` the
 most ANDs a slot holds (at the SparseMlaSplitPart T=64 unit's ports: 11,534,336 in 2^24); the automatic caps cut a unit whose
 AND chain overflows its slot into nets of the next slot down, taking no more cells than one cap from the unit's ports
-does, and keep a split no cap shrinks; a unit reading no slot table isn't split. Through `UnitStager`, the composed statement names the slots and the last stage's returned outputs (slotted when
-the output words aren't a power of two times 16 bits), and its staged outputs are the IR reference's."""
+does, and keep a split no cap shrinks; a unit reading no slot table isn't split.
+Through `UnitStager`, the composed statement names the slots and the last stage's returned outputs (slotted when the output
+words aren't a power of two times 16 bits), and its staged outputs are the IR reference's."""
 from __future__ import annotations
 
 import itertools
