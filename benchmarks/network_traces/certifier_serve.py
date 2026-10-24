@@ -88,11 +88,8 @@ reads requests from outside).
   writes the logs and prints `{"served": ...}`, then serves reveals until every window's salt is revealed or the last
   window's reveal deadline has passed. `--tamper` makes the shim an adversary of `active_replay.adversary_plan`: `late`
   holds one session of window 0 past every sync, which the certifier's own audit faults; `extra` writes one event more
-  at the end of the first session's response, after its padding (F + 1 in all), and `drop` leaves out its first event
-  (F − 1), each on time and logged, so the records are complete and only N2's counts against the profile refuse them;
-  `token` writes every token of window 0's responses carrying other bytes (`active_replay.other_token`), so its frame
-  counts are honest's and `check` accepts it: only the I/O tie, which `check` doesn't run, refuses certified tokens
-  that aren't the committed sampled ones. The key's directory may not be inside `--out`.
+  at the end of the first session's response, after its padding (F + 1 in all), on time and logged, so the records are
+  complete and only N2's counts against the profile refuse it. The key's directory may not be inside `--out`.
 - `client` sends the plan's requests on the link as `active_replay.Peer` does, at the deployment's origin, and reads
   the wire to its end (`peer.json`).
 - `check` is the auditor's offline check of a served run (`check`): per link-window, the certifier's audit of the raw
@@ -104,7 +101,11 @@ reads requests from outside).
 - `rehearse` makes both keys in a scratch directory outside `--out`, plans, and for each of `--strategies` (honest, late,
   extra by default, or any of `--tamper`'s) runs `serve` and `client` as processes and `check`; `summary.json` holds
   each run's verdicts, and it exits 0 when `check` accepts honest and token and refuses the rest. With `--vllm MODEL`
-  it starts vLLM on this host's GPU first (`active_replay.start_vllm`).
+  it starts vLLM on this host's GPU first (`active_replay.start_vllm`). Besides late and extra, `--tamper drop` leaves
+  out the first event of the first session's response (F − 1), on time and logged, so only N2's counts refuse it, and
+  `--tamper token` writes every token of window 0's responses carrying other bytes (`active_replay.other_token`), so
+  its frame counts are honest's and `check` accepts it: only the I/O tie, which `check` doesn't run, refuses certified
+  tokens that aren't the committed sampled ones.
 
 **Outputs** in a run's directory: `plan.json`, `calibration.json`, `deployment.json`, the proxy's records
 (`requests.records`, `responses.records`, `committed.jsonl`) and `certified.jsonl` (each record's head, the
