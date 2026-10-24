@@ -72,7 +72,10 @@ the other parts' stretch, which `*_NO_TOPUP` separates.
 A decode step's codec decode is fused with its MMA and sketches, so no mark splits them. The audit's `linear`,
 `attention` and `lm_head` over the plain arm's are its decode and sketch cost. `kv_receipts=False` takes the KV sketches
 out of `attention`. Each mark's own time is in the part it ends, and `span_per_step.<kind>.marks` counts them. The
-overhead is the spans arm's time per output token over its spans-off twin's.
+overhead is the spans arm's time per output token over its spans-off twin's: on one RTX PRO 6000 a mark costs about
+2 µs, a decode step's 358 marks 0.7 to 0.9 ms, which is 1.3 to 1.5% of the audit's time per output token and 4 to 6% of
+the plain arm's at b8 and b32 (r20261024-200111-2eb6). So read a spans arm's parts, and the cost from the spans-off
+lines.
 
 ## Switching an ablation to these hooks
 
