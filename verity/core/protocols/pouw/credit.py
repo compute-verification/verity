@@ -154,7 +154,7 @@ from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.protocol import tagged
-from verity.core.protocols.pouw.weights import b_words, weights_root
+from verity.core.protocols.pouw.weights import CHUNK_ALIGN, CHUNK_MAX, chunks, leaf_words, weights_root
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
@@ -174,7 +174,9 @@ DEPTH = 64
 VERDICTS = ("accept", "reject")
 #: a segment's level is below this
 LEVELS = 64
-#: an A value's rows: the verifier hashes each pad past them, at most as many again
+#: a row's words, and the rows of a value the round roots commit whose rows the layout doesn't fix (an input-ids
+#: table): the verifier hashes each pad past them, at most as many again. Every A value's and receipt table's rows are
+#: the layout's own (`table_rows`), every weights' value's too (`_weights`), and no entry's leaves are bounded otherwise
 MAX_ROWS = 1 << 24
 _DIGEST = re.compile(r"[0-9a-f]{128}")
 #: a contraction K in a registered value's name: a canonical decimal, no leading zero
@@ -348,6 +350,23 @@ def step_row(layout: dict, steps: int, call: int) -> tuple[int, int, int]:
     of K (`step_tables`): ``(s, n, M·j)``."""
     s, n, j = next(((s, len(cs), cs.index(call)) for s, _k, cs in step_tables(layout, steps) if call in cs), (0, 0, 0))
     return s, n, layout["m"] * j
+
+
+def table_rows(layout: dict, steps: int, prefix: str) -> dict[str, int]:
+    """The rows the layout `layout` (one `layout_of` accepted) gives each value the round roots commit but the
+    input-ids tables, by name under `prefix` (the descriptor's ``PREFIX``), over its `steps` rounds: the window's
+    ``a/<K>`` x·blocks·M (its blocks of K, x = `weights.chunks` (K) leaves a row, `h1window`'s), round s's A table of K
+    ``a/<K>@<s>`` x·M·|round s's calls of K| (`step_tables`), and call c's receipt table ``receipt@<c>`` c's units
+    (`call_work`). Empty when `steps` doesn't divide the calls, a window `_arow` refuses. `_a_link` holds each such
+    entry to these rows before it hashes any pad."""
+    calls = layout["calls"]
+    if not (type(steps) is int and steps >= 1 and len(calls) % steps == 0):
+        return {}
+    ks, m = {name: k for name, k, _n in layout["linears"]}, layout["m"]
+    out = {f"{prefix}a/{k}": chunks(k) * m * (1 + max(blk for lin, blk in calls if ks[lin] == k))
+           for k in sorted(set(ks.values()))}
+    out |= {f"{prefix}a/{k}@{s}": chunks(k) * m * len(cs) for s, k, cs in step_tables(layout, steps)}
+    return out | {f"{prefix}receipt@{c}": size for c, (size, _work) in enumerate(call_work(layout))}
 
 
 def requests_root(table: bytes, ids: bytes) -> bytes:
@@ -629,8 +648,17 @@ def _record(fid: str) -> list[tuple[str, str]]:
 
 def no_template(k: int) -> str:
     return (f"the window's template at K = {k} is not h1window's: a composite {TILE_FN} bound to its UNIT and K = {k}, "
-            f"its id {TILE_FN}{{UNIT=…,K={k}}}, whose parameters are a_k{k} and b_k{k}, the tile's R and C rows, then "
-            f"{', '.join(SHARED)}, at the same R × C at every K")
+            f"its id {TILE_FN}{{UNIT=…,K={k}}}, whose parameters are a_k{k} and b_k{k}, the tile's R and C rows of K's n "
+            f"chunk rows each (n = weights.chunks(K), each row 8·K/n + 32 bits: K/n codes and the row's scale, h1zy.ROW), "
+            f"then {', '.join(SHARED)}, at the same R × C at every K")
+
+
+def _chunks(k: int) -> int | None:
+    """`weights.chunks` of `k`, or None for a K it refuses."""
+    try:
+        return chunks(k)
+    except ValueError:
+        return None
 
 
 def tile_k(k: int) -> str:
@@ -646,7 +674,7 @@ def tile_k(k: int) -> str:
 
 def _tile(dj: Any, tid: str, k: int) -> tuple[int, int] | None:
     """The R × C of K = `k`'s template `dj` (its definition, under the id `tid`), or None when it is not
-    `h1window.template`'s."""
+    `h1window.template`'s: its A and B rows are n·R and n·C chunk rows of 8·K/n + 32 bits each, n = `weights.chunks` (K)."""
     if not (isinstance(dj, dict) and dj.get("form") == "composite" and dj.get("id") == TILE_FN):
         return None
     b, body = dj.get("bindings"), dj.get("body")
@@ -657,10 +685,11 @@ def _tile(dj: Any, tid: str, k: int) -> tuple[int, int] | None:
     if not (type(ps) is list and all(type(p) is list and len(p) == 2 for p in ps)
             and [p[0] for p in ps] == [f"a_k{k}", f"b_k{k}", *SHARED]):
         return None
-    rows = [p[1] for p in ps[:2]]
-    if not all(type(t) is list and len(t) == 3 and t[0] == "Array" and _nat(t[1]) and t[1] >= 1 for t in rows):
+    rows, n = [p[1] for p in ps[:2]], _chunks(k)
+    if n is None or not all(type(t) is list and len(t) == 3 and t[0] == "Array" and _nat(t[1]) and t[1] >= 1
+                            and t[1] % n == 0 and _bits(t[2]) == 8 * (k // n) + 32 for t in rows):
         return None
-    return rows[0][1], rows[1][1]
+    return rows[0][1] // n, rows[1][1] // n
 
 
 def _runs(xs: Any) -> list[list]:
@@ -768,8 +797,8 @@ def _leaves(t: Any) -> int:
 
 def shape_of(descriptor: bytes) -> dict:
     """What a statement over the window's units reads of the descriptor `descriptor`, one `layout_of` accepted: its
-    parameters' ``prefix`` (its record's ``PREFIX``) and, for each K, its template's id (``TILES``) and the 16-bit words
-    of its A row, its B row and its z/y record (``a_k<K>``'s element, ``b_k<K>``'s and ``zy``, h1window's widths:
+    parameters' ``prefix`` (its record's ``PREFIX``) and, for each K, its template's id (``TILES``), K's chunks ``n``
+    (`weights.chunks`: each A and B row n leaves) and the 16-bit words of its A leaf, its B leaf and its z/y record (``a_k<K>``'s element, ``b_k<K>``'s and ``zy``, h1window's widths:
     `h1window.table_reads_file`'s), and of its unit's receipt (the ``receipt`` field of its return, the statement's
     output row o0; 0 when it returns none of whole 16-bit words). Its cost is the descriptor's bytes."""
     d = json.loads(descriptor.decode())
@@ -778,7 +807,7 @@ def shape_of(descriptor: bytes) -> dict:
     for k, t in vals["TILES"]:
         body = d["definitions"][t["fn"]]["body"]
         a, b, zy = (p[1] for p in body["params"][:3])
-        tiles[k] = {"fn": t["fn"], "a": _leaves(a[2]) // 16, "b": _leaves(b[2]) // 16, "zy": _leaves(zy) // 16,
+        tiles[k] = {"fn": t["fn"], "n": chunks(k), "a": _leaves(a[2]) // 16, "b": _leaves(b[2]) // 16, "zy": _leaves(zy) // 16,
                     "receipt": _receipt_words(body.get("ret_type"))}
     return {"prefix": vals["PREFIX"], "tiles": tiles}
 
@@ -831,7 +860,9 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
     ti·(n/C) + tj of the call, reads its A row i (port ``a_k<K>_<i>``) at row o + R·ti + i of its round s's A table of
     K ``<prefix>a/<K>@<s>`` (M rows for each of the round's calls of K, o the call's first, `step_row`), its B row j
     (``b_k<K>_<j>``) at row b0 + C·tj + j of the weights' ``<prefix>b/<K>`` (b0 the call's linear's first row in it,
-    its rows each of K's linears' n in turn), and its record (``zy``) at row t of the call's z table ``<prefix>zy@<call>``
+    its rows each of K's linears' n in turn); at a K of x = `weights.chunks` (K) > 1 chunks each row is x leaves, so
+    its chunk row i of x·R (port ``a_k<K>_<i>``) is leaf x·(o + R·ti) + i, its chunk row j of x·C leaf
+    x·(b0 + C·tj) + j, and each of those values has x leaves a row; and its record (``zy``) at row t of the call's z table ``<prefix>zy@<call>``
     (a row a unit of the call); and, when the window registers the call's receipt table ``<prefix>receipt@<call>``,
     the statement's output row o0 (`RECEIPT_PORT`, the unit's receipt, `shape_of`'s width) at its row t, so the
     receipts the round roots commit are the ones the units return; every other unit reads none of them: each port's
@@ -868,11 +899,11 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
             break
         b0 += nn if kk == k else 0
     sizes = [size for size, _work in call_work(layout)]
-    u0, size, per = sum(sizes[:call]), sizes[call], n // c
+    u0, size, per, x = sum(sizes[:call]), sizes[call], n // c, tile["n"]
     s, calls_k, at = step_row(layout, steps, call)
     a, zy, b = f"{prefix}a/{k}@{s}", f"{prefix}zy@{call}", f"{prefix}b/{k}"
-    rows_of = {a: (m * calls_k, tile["a"]), zy: (size, tile["zy"]),
-               b: (sum(nn for _name, kk, nn in layout["linears"] if kk == k), tile["b"])}
+    rows_of = {a: (x * m * calls_k, tile["a"]), zy: (size, tile["zy"]),
+               b: (x * sum(nn for _name, kk, nn in layout["linears"] if kk == k), tile["b"])}
     rc = f"{prefix}receipt@{call}"
     if rc in roots:
         if not tile["receipt"]:
@@ -888,8 +919,8 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
         return None, ("registration", f"call {call}'s seed reads the roots of {a} and {b}, which are not both SHA-512 "
                                       "digests (128 lowercase hex): register each table at its tree's root")
     ports: list[tuple[str, str, Any]] = (
-        [(f"a_k{k}_{i}", a, lambda t, i=i: at + r * (t // per) + i) for i in range(r)]
-        + [(f"b_k{k}_{j}", b, lambda t, j=j: b0 + c * (t % per) + j) for j in range(c)]
+        [(f"a_k{k}_{i}", a, lambda t, i=i: x * (at + r * (t // per)) + i) for i in range(x * r)]
+        + [(f"b_k{k}_{j}", b, lambda t, j=j: x * (b0 + c * (t % per)) + j) for j in range(x * c)]
         + [("zy", zy, lambda t: t)] + ([(RECEIPT_PORT, rc, lambda t: t)] if rc in rows_of else []))
     out = {}
     for port, v, row in ports:
@@ -1089,11 +1120,13 @@ def _outcome(coin: Any, stream: Any, registration: Any, receipt: Any, layout: An
 
 def _entry(e: Any) -> bool:
     """A registered value's entry as one-stage's registration names it (`registered.ENTRY_KEYS`, with ``word_bits`` only
-    when it is not 16): its value printable ASCII, its root a SHA-512 digest, its rows and words from 1 to `MAX_ROWS`."""
+    when it is not 16): its value printable ASCII, its root a SHA-512 digest, its rows at least 1 and its words from 1
+    to `MAX_ROWS`. Its rows have no other bound here: the verifier hashes pads only in `_a_link`, which holds each value
+    it hashes to the layout's rows (`table_rows`) or `MAX_ROWS`."""
     bits = e.get(G.WIDTH_KEY, G.WORD_BITS) if isinstance(e, dict) else None
     return (isinstance(e, dict) and set(G.ENTRY_KEYS) <= set(e) <= {*G.ENTRY_KEYS, G.WIDTH_KEY}
             and _printable(e["value"]) and _digest(e["root"]) is not None and type(e["domain"]) is str
-            and all(_nat(e[k]) and 1 <= e[k] <= MAX_ROWS for k in ("leaves", "words"))
+            and _nat(e["leaves"]) and e["leaves"] >= 1 and _nat(e["words"]) and 1 <= e["words"] <= MAX_ROWS
             and type(bits) is int and bits in G.WIDTHS and e.get(G.WIDTH_KEY) != G.WORD_BITS)
 
 
@@ -1136,7 +1169,7 @@ def _registration(window: str, program: str, prefix: str, entries: list, ss: lis
     def held(v: str, e: dict) -> str | None:
         if not _entry(e):
             return (f"registered value {v}'s entry is not one-stage's {{value, root, leaves, words, domain}} (with "
-                    f"word_bits only when it is not 16), its rows and words from 1 to {MAX_ROWS}")
+                    f"word_bits only when it is not 16), its rows at least 1 and its words from 1 to {MAX_ROWS}")
         return None if e["domain"] == domain_of(program, window, e, session) else other_registration(v)
 
     for e in entries:
@@ -1220,8 +1253,8 @@ def _arow(rounds: list, entries: list, registered: list, layout: dict, prefix: s
     for e in registered:
         if type(e.get("value")) is str:
             theirs.setdefault(e["value"], []).append(e)
-    pairs = [(f"{prefix}a/{k}@{s}", commit_rows(s, k), f"round {s}'s A table of K = {k}", layout["m"] * len(cs))
-             for s, k, cs in step_tables(layout, steps)]
+    pairs = [(f"{prefix}a/{k}@{s}", commit_rows(s, k), f"round {s}'s A table of K = {k}",
+              chunks(k) * layout["m"] * len(cs)) for s, k, cs in step_tables(layout, steps)]
     pairs += [(f"{prefix}ids@{s}", commit_ids(s), f"round {s}'s input-ids table", None) for s in range(steps)]
     for v, name, whose, rows in pairs:
         if v not in ours:
@@ -1229,7 +1262,8 @@ def _arow(rounds: list, entries: list, registered: list, layout: dict, prefix: s
                             "served window registers each round's A table of each K and its input-ids table")
         if rows is not None and ours[v]["leaves"] != rows:
             return "arow", (f"{whose} {v} has {ours[v]['leaves']} rows, not {rows}: it holds the M rows of each of the "
-                            "round's calls of K, call after call, so a call missing from it reads another call's rows (ROOTS1)")
+                            "round's calls of K, call after call, each row K's chunks' leaves (weights.chunks), so a "
+                            "call missing from it reads another call's rows (ROOTS1)")
         got = theirs.get(name, [])
         if len(got) != 1:
             return "arow", (f"the Commit record registers {name} {'twice' if got else 'not'}: the served Commit "
@@ -1355,22 +1389,22 @@ def _window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: A
                     verify)
     if why is not None:
         return None, why
-    why = _a_link(rounds, entries, len(calls))
-    if why is not None:
-        return None, why
     if not (type(descriptor) is str and _HEX.fullmatch(descriptor)):
         return None, ("layout", DESCRIPTOR_HEX)
     layout, why = layout_of(bytes.fromhex(descriptor))
     if why is not None:
         return None, why
     program, prefix = hashlib.sha512(bytes.fromhex(descriptor)).hexdigest(), _prefix(bytes.fromhex(descriptor))
+    if len(calls) != len(layout["calls"]):
+        return None, ("manifest", f"the manifest's {len(calls)} rows are not the circuit's {len(layout['calls'])} "
+                                  "calls: each call of the window's Program is one manifest row, in order")
+    why = _a_link(rounds, entries, len(calls), table_rows(layout, len(rounds), prefix))
+    if why is not None:
+        return None, why
     sid, why = _period_weights(key, ledger, window, rounds, layout, entries, program, prefix, verify)
     if why is not None:
         return None, why
     ss, _ = strata(layout)
-    if len(calls) != len(layout["calls"]):
-        return None, ("manifest", f"the manifest's {len(calls)} rows are not the circuit's {len(layout['calls'])} "
-                                  "calls: each call of the window's Program is one manifest row, in order")
     why = _arow(rounds, entries, commit_of(commit)[0][1], layout, prefix)
     if why is not None:
         return None, why
@@ -1856,7 +1890,7 @@ def is_held(value: Any) -> bool:
     return len(parts) >= 2 and parts[-2] == "b" and bool(_DIGITS.fullmatch(parts[-1]))
 
 
-def _a_link(rounds: Any, entries: Any, calls: int = 0) -> tuple[str, str] | None:
+def _a_link(rounds: Any, entries: Any, calls: int = 0, rows: dict[str, int] | None = None) -> tuple[str, str] | None:
     """None when every registered A value among `entries` (the window's registered entries, ``{value, root, leaves,
     domain, …}``) is the tree over the segments the round log `rounds` commits (each round's ``root``, the one the
     challenger received, over its ``inner`` root and its segments ``a``, `round_root`); else the refusal (``a-link``,
@@ -1864,8 +1898,10 @@ def _a_link(rounds: Any, entries: Any, calls: int = 0) -> tuple[str, str] | None
     ``[s·L/S, (s+1)·L/S)``; round s's A table of K ``…/a/<K>@<s>`` is committed whole by round s, whose segments tile
     all its rows, and no other round lists it. Round s's input-ids table ``…/ids@<s>`` (`ids_step`) is committed whole
     by round s alike, and so is call c's receipt table ``…/receipt@<c>`` (`receipt_call`) by c's round, of the window's
-    `calls` calls (its manifest's rows; 0, the default, admits no receipt table) the rounds' equal blocks. A step of
-    `window`, which first holds the round roots to the ones the challenger received (`core_check.rounds`)."""
+    `calls` calls (its manifest's rows; 0, the default, admits no receipt table) the rounds' equal blocks. Each entry's
+    leaf count is its rows in `rows` (`table_rows`, the layout's) when `rows` names it, else from 1 to `MAX_ROWS`, and
+    every entry's count is checked before the verifier hashes any pad. A step of `window`, which first holds the round
+    roots to the ones the challenger received (`core_check.rounds`) and `layout_of` the layout."""
     if not (isinstance(rounds, list) and rounds):
         return "a-link", LOG_FORM
     segs = []
@@ -1897,12 +1933,18 @@ def _a_link(rounds: Any, entries: Any, calls: int = 0) -> tuple[str, str] | None
             if v not in names:
                 return "a-link", (f"round {r} lists segments of {v}, which is no registered A value, input-ids table "
                                   "or receipt table of the window")
-    steps = len(rounds)
+    steps, rows, plan = len(rounds), rows or {}, []
     for e in a:
         v, root, domain, count = e["value"], _digest(e.get("root")), _digest(e.get("domain")), e.get("leaves")
-        if root is None or domain is None or not _nat(count) or not 1 <= count <= MAX_ROWS:
-            return "a-link", (f"registered {_what(v)} {v}'s entry has no root, domain or leaf count from 1 to {MAX_ROWS} "
-                              "(the verifier hashes its pads)")
+        if root is None or domain is None or not _nat(count):
+            return "a-link", f"registered {_what(v)} {v}'s entry has no root, domain or leaf count"
+        if v in rows and count != rows[v]:
+            return "a-link", (f"registered {_what(v)} {v} has {count} rows, not the {rows[v]} the window's layout gives "
+                              "it (credit.table_rows: each K's blocks or round's calls of M rows, each row K's chunks' "
+                              "leaves, or each call's units)")
+        if v not in rows and not 1 <= count <= MAX_ROWS:
+            return "a-link", (f"registered {_what(v)} {v}'s leaf count {count} is not from 1 to {MAX_ROWS} (the verifier "
+                              "hashes its pads)")
         step, call = ids_step(v), receipt_call(v)
         at = None if step is not None or call is not None else a_value(v)[1]
         if call is not None:
@@ -1923,6 +1965,8 @@ def _a_link(rounds: Any, entries: Any, calls: int = 0) -> tuple[str, str] | None
             if int(at) >= steps:
                 return "a-link", f"registered A value {v} is round {int(at)}'s A table, and the window has {steps} rounds"
             per, own, whose = count, int(at), f"round {int(at)}'s A table"
+        plan.append((v, root, domain, count, per, own, whose))
+    for v, root, domain, count, per, own, whose in plan:
         have = {}
         for r, p in enumerate(segs):
             if own is not None and r != own:
@@ -1959,10 +2003,12 @@ OTHER_WEIGHTS = ("the window's registered weights are not the ones its open root
 
 
 def other_weights_entry(v: str, k: int, n: int) -> str:
+    x = chunks(k)
     return (f"registered weights {v}'s entry is not the registration of K = {k}'s B rows: one-stage's {{value, root, "
-            f"leaves, words, domain}}, its root a SHA-512 digest, its {n} rows (K's linears' n in turn) of {b_words(k)} "
-            f"16-bit words (K codes then s_w, h1zy.ROW) under the registered domain of {v} and the window's circuit (the "
-            "SHA-512 of its descriptor), binding no window (registered.domain)")
+            f"leaves, words, domain}}, its root a SHA-512 digest, its {n} rows (K's linears' n in turn) of {x} leaves "
+            f"each (weights.chunks), {x * n} leaves of {leaf_words(k)} 16-bit words (a chunk's K/{x} codes then the "
+            f"row's s_w, h1zy.ROW) under the registered domain of {v} and the window's circuit (the SHA-512 of its "
+            "descriptor), binding no window (registered.domain)")
 
 
 def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any, program: Any, prefix: Any
@@ -1970,7 +2016,8 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
     """The weights' root the window registered and None; or None and the refusal (``weights`` or ``layout``, and why).
     `entries` (the window's registered entries, ``{value, root, …}``) must register, for each K of the window's
     `layout` (`strata`), exactly ``<prefix>b/<K>`` (`prefix` its descriptor's ``PREFIX``) once, and no other ``…/b/<K>``;
-    each such entry must be the registration of all of K's B rows (K's linears' n in turn, each `b_words(K)` words),
+    each such entry must be the registration of all of K's B rows (K's linears' n in turn, each x = `weights.chunks` (K)
+    leaves of `weights.leaf_words` (K) words, x·Σn leaves),
     under `registered.domain` of its name and the circuit whose descriptor's SHA-512 is `program`, binding no window
     (`other_weights_entry`); and `weights_root` of their roots, the window's round-0 request table's root `requests`
     (hex) and `session` (the id of the session the auditor's ledger opened for `window`, as `core_check.salt` reads it)
@@ -1997,6 +2044,9 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
     rows: dict[int, int] = {}
     for _name, k, n in layout["linears"]:
         rows[k] = rows.get(k, 0) + n
+    if bad := sorted(k for k in rows if _chunks(k) is None):
+        return None, ("layout", f"the window's K = {bad} have no chunks (weights.chunks: K <= {CHUNK_MAX}, or K/n a "
+                                f"multiple of {CHUNK_ALIGN} codes for some n >= K/{CHUNK_MAX}), so no row of them is leaves")
     names = {f"{prefix}b/{k}": k for k in rows}
     if not (isinstance(entries, list) and all(isinstance(e, dict) for e in entries)):
         return no(ENTRIES_FORM)
@@ -2013,10 +2063,10 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
         if k in roots:
             return no(f"the window registers K = {k}'s weights twice ({v}): each K's B rows are one registered value "
                       f"{prefix}b/<K>")
-        h = _digest(e.get("root"))
-        if not (h is not None and sorted(e) == sorted(G.ENTRY_KEYS) and e["leaves"] == n and type(e["leaves"]) is int
-                and e["words"] == b_words(k) and type(e["words"]) is int
-                and e["domain"] == G.domain(program, v, b_words(k), n).domain_id.hex()):
+        h, x, w = _digest(e.get("root")), chunks(k), leaf_words(k)
+        if not (h is not None and sorted(e) == sorted(G.ENTRY_KEYS) and e["leaves"] == x * n and type(e["leaves"]) is int
+                and e["words"] == w and type(e["words"]) is int
+                and e["domain"] == G.domain(program, v, w, x * n).domain_id.hex()):
             return no(other_weights_entry(v, k, n))
         roots[k] = h
     for k in sorted(rows):
@@ -2035,4 +2085,4 @@ __all__ = ["CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "COMMIT_TAG", "CREDIT"
            "call_work", "calls_root", "commit_ids", "commit_of", "commit_rows", "committed_files", "committed_k", "committed_weights", "cover",
            "credited_work", "domain_of", "draw_root", "drawn", "established", "a_value", "ids_step", "is_a", "is_held", "is_tied", "law", "layout_of",
            "merkle_depth", "partition_of", "period", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
-           "served_rows", "served_work", "step_row", "step_tables", "strata", "tree_root", "window"]
+           "served_rows", "served_work", "step_row", "step_tables", "strata", "table_rows", "tree_root", "window"]
