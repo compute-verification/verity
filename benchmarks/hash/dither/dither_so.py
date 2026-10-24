@@ -200,8 +200,10 @@ PUT_ASYNC_ENV = "DITHER_SO_PUT_ASYNC"
 # "1" (without -ov; vLLM's V2 runner, whose sample_tokens calls compute_logits after the step hook's `after`): step s's
 # logits (lm_head) computed in step s's `after` on a stream of their own once step s - D + 1's units are done, so on the
 # SMs the units leave idle while the step's last trees and its root go out, and step s - D + 2's units launched after
-# them; the sampler's compute_logits takes them (`hook_lm`).  "2": as "1", the units' launch not waiting for them.  The
-# same logits: the engine's own compute_logits on the same hidden states, the sampler after them
+# them; the sampler's compute_logits takes them (`hook_lm`).  "2": as "1", the units' launch not waiting for them.  "3":
+# as "1", the host waiting for them before it launches the units, so the units' CTAs take their SMs before the next
+# forward's kernels are launched beside them (under "1" those can be placed first and split the units' SMs).  The same
+# logits: the engine's own compute_logits on the same hidden states, the sampler after them
 LM_GAP_ENV = "DITHER_SO_LM_GAP"
 # "1": a capture's copies go to host memory, not the device (a prefill capture at T = 2048 is ~30 GB); `DA.check` moves
 # each call's tensors to the device as it reads them
@@ -284,8 +286,8 @@ class SoWindow(DO.Window):
         self.clean_from: int | None = None
         self.put_async = os.environ.get(PUT_ASYNC_ENV) == "1"
         self.lm_gap = int(os.environ.get(LM_GAP_ENV) or 0)
-        if self.lm_gap not in (0, 1, 2) or (self.lm_gap and self.overlap):
-            raise RuntimeError(f"${LM_GAP_ENV}={self.lm_gap}: 0, 1 or 2, and serves an -so arm without -ov")
+        if self.lm_gap not in (0, 1, 2, 3) or (self.lm_gap and self.overlap):
+            raise RuntimeError(f"${LM_GAP_ENV}={self.lm_gap}: 0, 1, 2 or 3, and serves an -so arm without -ov")
         # `hook_lm`'s: the runner, the engine's own compute_logits, the logits' stream; a step's logits for its sampler
         self.lm_runner = self.lm_fn = self.lm_stream = None
         self.lm_out: torch.Tensor | None = None
@@ -885,7 +887,7 @@ class SoWindow(DO.Window):
 
     def _lm(self, units_done: torch.cuda.Event | None) -> None:
         """$DITHER_SO_LM_GAP: step s's logits on the lm stream once the units before are done (`units_done`), its
-        forward already waited for, into `lm_out` for its sampler; under "1" the next units' launch after them."""
+        forward already waited for, into `lm_out` for its sampler; under "1" and "3" the next units' launch after them."""
         st = self.lm_runner.execute_model_state
         if st is None or st.hidden_states is None or st.input_batch.num_reqs == 0:
             return
@@ -896,7 +898,7 @@ class SoWindow(DO.Window):
                 ls.wait_event(units_done)
             self.lm_out = self.lm_fn(st.hidden_states[st.input_batch.logits_indices])
             self.lm_done.record(ls)
-        self.lm_wait = self.lm_gap == 1
+        self.lm_wait = self.lm_gap != 2
         self.lm_n["after"] += 1
         self.phase("receipt_leaf")
 
@@ -1004,7 +1006,7 @@ class SoWindow(DO.Window):
                      "capture_stream_priority": getattr(torch.cuda.graph, "so_priority", None)}
         if self.lm_gap:
             lm_n, self.lm_n = self.lm_n, dict.fromkeys(self.lm_n, 0)
-            doc["so"]["lm_gap"] = {"on": self.lm_gap, "units_wait": self.lm_gap == 1, **lm_n,
+            doc["so"]["lm_gap"] = {"on": self.lm_gap, "units_wait": {1: "stream", 2: None, 3: "host"}[self.lm_gap], **lm_n,
                                    "stream_priority": self.lm_stream.priority if self.lm_stream else None}
         if ov is not None:
             doc["so"]["overlap"] = {"order": OV_ORDER, "ring": ov.R, "rounds_built": ov.sent_upto + 1,
@@ -1372,6 +1374,8 @@ class SoSide(DA.Side):
         win = self.win
         p, st = j % win.depth, self.side
         self.salt_host[p].copy_(torch.from_numpy(words(salt)))
+        if win.lm_wait and win.lm_gap == 3:
+            win.lm_done.synchronize()
         with torch.cuda.stream(st):
             st.wait_event(self.ready[p])
             if win.lm_wait:
