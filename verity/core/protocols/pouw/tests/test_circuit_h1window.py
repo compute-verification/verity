@@ -844,7 +844,7 @@ def test_at_a_chunked_k_the_program_wraps_the_zy_unit_and_refuses_whole_rows_and
     m = HW.slot(5, TILE)
     with pytest.raises(ValueError, match="4 chunk rows a row"):
         HW.program(LLAMA, LLAMA_CALLS, m, TILE, unit=unit)
-    with pytest.raises(ValueError, match="no chunks"):
+    with pytest.raises(ValueError, match="no n splits it into chunks"):
         HW.program((("x", 4100, 8),), (("x", 0),), m, TILE, unit=chunk_unit)
     prog = HW.program(LLAMA, LLAMA_CALLS, m, TILE, unit=chunk_unit)
     down = next(u for u in range(16) if LLAMA_CALLS[HW.call_of(prog, u)[0]][0] == "down_proj")

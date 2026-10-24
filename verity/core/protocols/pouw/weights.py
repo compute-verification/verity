@@ -56,10 +56,6 @@ CHUNK_BYTES = 1 << 23
 DEFAULT_WORKERS = max(1, min(4, os.cpu_count() or 1))
 #: hm96_salt's ChaCha20 blocks per leaf (a 192-byte salt)
 _SALT_BLOCKS = _INST.salt_bytes // chacha20.BLOCK_BYTES
-#: a leaf's most codes: a row of K above it is `chunks` (K) leaves
-CHUNK_MAX = 4096
-#: a chunk's codes are a multiple of this (seeds.BLOCK_BITS)
-CHUNK_ALIGN = 512
 
 
 def b_words(k: int) -> int:
@@ -67,18 +63,27 @@ def b_words(k: int) -> int:
     return (k + 5) // 2
 
 
+#: the largest K an H1 lane is proved at whole, and a chunk's largest: K = 4096's lane fills C-Flock's 2^27 block
+CHUNK_MAX = 4096
+#: a chunk is whole blocks of its rows' and columns' noise streams (`circuit.seeds.BLOCK_BITS`, 512 bits)
+CHUNK_ALIGN = 512
+
+
 def chunks(k: int) -> int:
-    """K's chunks n: 1 at K <= `CHUNK_MAX`, else the least n >= K / `CHUNK_MAX` whose chunk K / n is a whole number of
-    `CHUNK_ALIGN`-bit blocks. A row of K is then n leaves, leaf ``n·r + c`` chunk c's K / n codes and the row's s_w
-    (`leaf_words`). ValueError on a K no n chunks."""
-    if type(k) is not int or k < 1:
-        raise ValueError(f"K = {k!r} is no positive integer")
+    """The chunks an H1 lane at contraction ``k`` is proved in (`h1zy.lane_statements`), and so the chunk rows a table at
+    ``k`` commits each row as (`h1zy.chunk_leaves`): 1, the whole lane, at K <= `CHUNK_MAX`; past it the least n >= 2
+    whose chunks K / n are at most `CHUNK_MAX` entries and a multiple of `CHUNK_ALIGN`. ValueError at a K with no such n.
+    `PouwCheck.Chunks.chunks` is its Lean twin."""
+    k = int(k)
+    if k < 1:
+        raise ValueError(f"K = {k}: a lane is proved only at a positive K")
     if k <= CHUNK_MAX:
         return 1
     for n in range(-(-k // CHUNK_MAX), k // CHUNK_ALIGN + 1):
         if k % (n * CHUNK_ALIGN) == 0:
             return n
-    raise ValueError(f"K = {k} > {CHUNK_MAX} has no chunks of a multiple of {CHUNK_ALIGN} codes")
+    raise ValueError(f"K = {k}: no n splits it into chunks of at most {CHUNK_MAX} entries that are whole {CHUNK_ALIGN}-bit "
+                     f"noise blocks")
 
 
 def leaf_words(k: int) -> int:

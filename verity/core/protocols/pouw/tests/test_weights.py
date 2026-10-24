@@ -192,6 +192,6 @@ def test_a_rows_chunks_are_the_least_n_past_4096_whose_chunk_is_whole_512_code_b
         if n > 1:
             assert k // n <= Wt.CHUNK_MAX and k % (n * Wt.CHUNK_ALIGN) == 0, k
             assert not any(k % (x * Wt.CHUNK_ALIGN) == 0 for x in range(-(-k // Wt.CHUNK_MAX), n)), k
-    for bad in (0, -32, 4096 + 32, 5000, True, 6144.0):
+    for bad in (0, -32, 4096 + 32, 5000):
         with pytest.raises(ValueError):
             Wt.chunks(bad)
