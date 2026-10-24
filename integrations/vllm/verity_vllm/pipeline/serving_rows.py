@@ -637,12 +637,12 @@ def _read_part(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
 
 
 def _committed(store: Any, rid: str, arrive: int, r: dict, d: dict, j: int, bits: int) -> np.ndarray:
-    """Row ``r``'s committed output member ``j`` as a packed port of ``bits``-bit elements (`_packed`)."""
-    member, width, _dt = d["members"][j]
+    """Row ``r``'s committed output member ``j`` as a packed port of ``bits``-bit elements (`_packed`, at the member's dtype)."""
+    member, width, dt = d["members"][j]
     w, why = store.words(rid, arrive + d["step"], d["op_path"], member, d["row"] * int(width), (d["row"] + 1) * int(width))
     if w is None:
         raise LookupError(f"row {r['i']} output {member}: {why}")
-    return _packed([w], bits, f"row {r['i']} output {member}")
+    return _packed([w], bits, f"row {r['i']} output {member}", dt)
 
 
 def _as(a: np.ndarray, itemsize: int, n: int, what: str) -> np.ndarray:
