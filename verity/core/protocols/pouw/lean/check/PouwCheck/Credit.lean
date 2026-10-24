@@ -1072,10 +1072,10 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
     let (leaves, words) := lw
     let d ← (SampledProofs.Registered.domainAt program v words leaves 16
       (if isHeld (.str v) then none else some window)).mapError fun why => ("registration", why)
-    out := out ++ [(port, Json.mkObj [("value", Json.str v), ("root", Json.str ((root.lookup v).getD "")),
+    out := out ++ [(port, Json.mkObj ([("value", Json.str v), ("root", Json.str ((root.lookup v).getD "")),
       ("leaves", Lean.toJson leaves), ("words", Lean.toJson words), ("word_bits", Lean.toJson (16 : Nat)),
       ("domain", Json.str (Flock.hexOf d)), (SCHEMA_KEY, Json.str Flock.HmRow.ROW_SCHEMA_V2),
-      ("reads", Json.arr reads.toArray)] ++ named)]
+      ("reads", Json.arr reads.toArray)] ++ named))]
   let pv := s!"{shape.pre}pub@{call}"
   let words := PouwCheck.PUBLIC_ROW_BITS / 16
   let sb := (hex? (.str salt)).getD ByteArray.empty
