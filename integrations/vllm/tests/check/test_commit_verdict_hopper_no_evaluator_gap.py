@@ -19,7 +19,7 @@ from __future__ import annotations
 import pytest
 
 from verity_vllm.check.c2_rules import _complete_replay_population_gap, _no_evaluator_gaps
-from verity_vllm.check.verdict import commit_verdict
+from verity_vllm.check.commit_pass import commit_verdict
 from verity_vllm.check.replay.replay_codes import NOT_YET, why_class
 from verity_vllm.program.kernels.rows import EVALUATORS
 from verity_vllm.program.frontend import targets as T

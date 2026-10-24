@@ -21,7 +21,8 @@ import pytest
 
 from verity_vllm.check.codes import VerificationCode as VC
 
-from verity_vllm.check.verdict import commit_verdict
+from verity_vllm.check.commit_pass import commit_verdict
+from verity_vllm.check.verdict_names import OLD_TO_NEW, mapping_markdown
 from verity_vllm.check import verdict as V
 from verity_vllm.pipeline import cli
 from verity_vllm.check.commit_rules import REJECT
@@ -157,7 +158,7 @@ def test_the_code_is_the_outcome():
 def test_mapping_old_to_new_is_complete_with_no_loss():
     _, _, checks = _both(_base())
     names = {c.name for c in checks}
-    documented_old = {tok.strip() for m in V.OLD_TO_NEW for tok in m["old"].split(" / ")}
+    documented_old = {tok.strip() for m in OLD_TO_NEW for tok in m["old"].split(" / ")}
     emitted_compat = {f for c in checks for f in c.compat}
 
     def documented(f: str) -> bool:
@@ -168,7 +169,7 @@ def test_mapping_old_to_new_is_complete_with_no_loss():
     missing_doc = sorted(f for f in emitted_compat if not documented(f))
     assert not missing_doc, f"compat fields not in OLD_TO_NEW: {missing_doc}"
     # ... and every documented old fact lands on a check / group / Verdict field that exists
-    targets = {m["new"].split(" ")[0].strip("`").rstrip(";,") for m in V.OLD_TO_NEW}
+    targets = {m["new"].split(" ")[0].strip("`").rstrip(";,") for m in OLD_TO_NEW}
     unknown = []
     for t in targets:
         if "/" in t:
@@ -188,11 +189,11 @@ def test_mapping_old_to_new_is_complete_with_no_loss():
     # each old check name of the prompt has its new name
     for old, new in (("linkage", "boundary_linkage"), ("weights_pin", "checkpoint_binding"), ("executed_prefix", "execution_extent"),
                      ("coverage", "required_value_coverage"), ("identity", "program_source_identity")):
-        assert any(old in m["old"] and new in m["new"] for m in V.OLD_TO_NEW), (old, new)
+        assert any(old in m["old"] and new in m["new"] for m in OLD_TO_NEW), (old, new)
     # every group has at least one rule check and a one-sentence claim
     for g, spec in V.GROUPS.items():
         assert spec["claim"].endswith(".") and any(c.name.startswith(g + "/") for c in checks), g
-    assert "| `commit_pass` |" in V.mapping_markdown()
+    assert "| `commit_pass` |" in mapping_markdown()
 
 
 # ---------------------------------------------------------------------------------------------------------------- (3) equivalence

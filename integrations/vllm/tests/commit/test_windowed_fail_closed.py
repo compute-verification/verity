@@ -24,7 +24,7 @@ pytestmark = pytest.mark.skipif(not torch.cuda.is_available() or not os.environ.
 
 from tests.commit import test_windowed_retain_levels as WR  # noqa: E402
 from tests.commit import test_windowed_rows_sha512 as RS  # noqa: E402
-from verity_vllm.check.verdict import commit_verdict  # noqa: E402
+from verity_vllm.check.commit_pass import commit_verdict  # noqa: E402
 from verity_vllm.commit import step_rows as R  # noqa: E402
 
 
