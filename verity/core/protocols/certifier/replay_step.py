@@ -67,19 +67,19 @@ speculative decoding, LoRA, structured output, encoder inputs and KV connectors.
 3. `compile_steps` (`integrations/vllm/verity_vllm/predict/steps.py`): each row (request, start, n) becomes a `RowRef`
    into its request's Program, the rows being exactly I1 v0's `steps`, which v0 carried in the advice.
 
-**The circuit**, traced whole (`_build`): the running loop over static slots with the preemption pairs (i, j > i),
-victims a suffix; a scan of the candidates (W waiting slots, then A arrivals); the admitted placed after the running
-list by two right shifts; close and update per slot; the stopped compacted out by a log-depth shifter (each slot
-moves left by the stopped before it, low bit first, which never collides); the waiting list rebuilt by shifting
-left by the admitted and right by the preempted. `size` counts its ANDs by stage.
+**The circuit**, traced whole (`_build`): the running loop over static slots, each slot's n read off the budget the
+slots before it leave, and a slot kept iff the free blocks plus the returns of the slots after it cover the needs up to
+it (the victims are a suffix and no need or return is negative, so that is the scheduler's pops); a scan of the
+candidates (W waiting slots, then A arrivals); the admitted placed after the running list by two right shifts; close
+and update per slot; the stopped compacted out by a log-depth shifter (each slot moves left by the stopped before it,
+low bit first, which never collides); the waiting list rebuilt by shifting left by the admitted and right by the
+preempted. `size` counts its ANDs by stage.
 
-**Cost** (`size`, on the smallkv engine: T = 2048, NB = 512, chunked prefill and prefix caching): 12,320 ANDs at
-(R, W, A) = (4, 8, 4), 95,247 at (16, 64, 16), 160,803 at (32, 64, 32) and 126,225 at (48, 4, 8). By stage (fitted
-within 2% on 15 classes up to R = 32, W = 128, A = 32, and 6% high at (48, 4, 8), whose running loop it gets within
-0.2%): the running loop's preemption pairs 15.6·R² + 205·R, the requeue's shifts about 104·W·bitlen(R) + 250·R, the
-candidates' scan about 250·W + 290·A, the placing shifters about 96·R·bitlen(R) + 270·min(W, R) and the compaction
-130·R·bitlen(R).
-The running loop is most of a class that covers max_num_seqs = 256: about 1.7M ANDs a step, 1.1M of them the pairs.
+**Cost** (`size`, on the smallkv engine: T = 2048, NB = 512, chunked prefill and prefix caching): 12,235 ANDs at
+(R, W, A) = (4, 8, 4), 92,146 at (16, 64, 16), 123,611 at (64, 4, 8), 250,544 at (128, 4, 8) and 521,358 at
+(256, 4, 8), the class that covers max_num_seqs = 256. Every stage is linear in R up to a shifter's log factor: at
+(256, 4, 8) the compaction is 259k ANDs (about 124·R·bitlen(R)), the placing 82k, the running loop 75k (292·R), the
+requeue 55k (about 131·W·bitlen(R) + 215·R) and the update 43k (168·R); the candidates' scan is about 210·W + 245·A.
 The replay's own waiting list holds only the preempted and the forced arrival (at most 5 on the corpus), since the
 arrivals not yet scheduled stay in the certified stream, so W stays small.
 """
