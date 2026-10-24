@@ -15,9 +15,10 @@ with its codec seed, the verifier's registry (`registry`: registrations, session
 closes, and `registry/v0` both ways), and `store.py`'s binding (`RemoteAudit.Store`: a pin from its file's bytes,
 canonical JSON, `checkpoint_sha512`, a payload salt, the expected root, `Binding.hold`, and `binding`, the binding as
 the verifier's process starts it and holds each hello to it, its `bind` and `hold` requests), `line.py`'s memory
-line (`line`, `RemoteAudit.Line`: rationals as strings `n` or `n/d`), `pooled.py`'s pooled bound, which the line
-reads (`pooled`, `RemoteAudit.Pooled`), and `schedule.py`'s schedule check (`schedule`, `RemoteAudit.Schedule`), whose
-refusals are outputs (`{"refused": why}`), so their reasons are compared. `remote-audit-difftest` serves them.
+line (`line`, `RemoteAudit.Line`: rationals as strings `n` or `n/d`) and `pooled.py`'s pooled bound, which the line
+reads (`pooled`, `RemoteAudit.Pooled`), whose refusals are outputs (`{"refused": why}`),
+so their reasons are compared, as are those of `schedule.py`'s schedule check (`schedule`, `RemoteAudit.Schedule`).
+`remote-audit-difftest` serves them.
 -/
 
 namespace RemoteAudit.Difftest
@@ -549,9 +550,9 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("session", sessionFn), ("registration_digest", registrationDigestFn), ("register", registerFn),
   ("registry", registryFn), ("codec_decode", codecDecodeFn),
   ("plan", planFn), ("plan_changed", planChangedFn), ("receipt", receiptFn), ("verify_opening", verifyOpeningFn),
-  ("leaf_receipt", leafReceiptFn), ("draws", drawsFn),
+  ("leaf_receipt", leafReceiptFn), ("draws", drawsFn), ("schedule", scheduleFn),
   ("pin", pinFn), ("canonical_json", canonicalJsonFn), ("checkpoint_sha512", checkpointFn),
   ("store_salt", storeSaltFn), ("expected_root", expectedRootFn), ("hold", holdFn), ("binding", bindingFn),
-  ("line", lineFn), ("pooled", pooledFn), ("schedule", scheduleFn)]
+  ("line", lineFn), ("pooled", pooledFn)]
 
 end RemoteAudit.Difftest
