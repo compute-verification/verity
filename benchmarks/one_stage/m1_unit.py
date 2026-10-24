@@ -321,8 +321,9 @@ def main() -> int:
     ap.add_argument("--structural", default=None, metavar="LAYOUT", help="the structural stager at this layout mode (iv/hybrid/4)")
     ap.add_argument("--reads", choices=("inline", "slots"), default="inline",
                     help="a flat unit's MUFU table reads: inline rows of the unit, or C-Flock lookup slots (read_slots)")
-    ap.add_argument("--stage-ands", type=int, default=None, metavar="N",
-                    help="with --reads slots: at most N ANDs a net (read_slots.split's stage_ands)")
+    ap.add_argument("--stage-ands", type=lambda v: v if v in ("auto", "none") else int(v), default="auto", metavar="N|auto|none",
+                    help="with --reads slots: at most N ANDs a net, the caps whose nets take the fewest cells (auto), or no cap "
+                         "(read_slots.split's stage_ands)")
     ap.add_argument("--bin", default=None, help="M0's flock-circuit: prove one round")
     ap.add_argument("--lean", default=None, help="the Lean verifier of record (flock-verify)")
     ap.add_argument("--n", type=int, default=1)
@@ -362,14 +363,14 @@ def main() -> int:
     t = time.time()
     with K.no_cyclic_gc():
         st = CS.UnitStager(fn, f"m1/{K.family(fn.id)}", rows, K.out_rows(n_out), circuit=d / "circuit.txt", reads=a.reads,
-                           stage_ands=a.stage_ands,
+                           stage_ands=None if a.stage_ands == "none" else a.stage_ands,
                            **({"layout": a.structural, "structural": True} if a.structural else {}))
     m, c = st.meta, getattr(st.low, "counts", None) or st.low.layout.counts
     cap = int(m["vus_per_block"]) << (M_MAX - int(m["k_log"])) if M_MAX - int(m["k_log"]) >= 3 else 0
     say("built", seconds=round(time.time() - t, 1), structural=a.structural, reads=a.reads, ands=c["ands"], unit_rows=c.get("rows"),
         nnz=c.get("nnz_a", 0) + c.get("nnz_b", 0), lookups=m.get("per_vu", {}), k_log=m["k_log"], unit_log=m["unit_log"],
         vus_per_block=m["vus_per_block"], chunk_cap=cap, pin=st.pin, circuit_bytes=(d / "circuit.txt").stat().st_size,
-        domain=st.low.domain)
+        domain=st.low.domain, stage_ands=getattr(st.low, "caps", None))
     if not a.bin:
         return 0
 

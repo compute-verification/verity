@@ -123,13 +123,170 @@ class ReadSlots(IL.Lowering):
         return res, np.zeros((n, 0), dtype=np.uint64), ok
 
 
+def _pad(bits: int) -> int:
+    """The rows `ir_lower.layout` gives one port group of ``bits`` bits: a power of two 128-bit words, none for no port."""
+    return IL.ceil_pow2(-(-bits // IL.WORD)) * IL.WORD if bits else 0
+
+
+def net_rows(ands: int, asserts: int, in_bits: int, out_bits: int) -> int:
+    """A net's ``useful`` rows as `ir_lower.layout` lays out a `split` net (one input group, one output group): the input
+    group, the ANDs and inline read rows, the assertions, the output group aligned to its own size, and the constant row."""
+    i, o = _pad(in_bits), _pad(out_bits)
+    body = i + ands + asserts
+    return (-(-body // o) * o if o else body) + o + 1
+
+
+def net_log(rows: int) -> int:
+    """The least slot log a net of ``rows`` useful rows takes in `circuit.compose` (`circuit._slot_log`, and a net may not fill
+    its slot)."""
+    return max(7, rows.bit_length())
+
+
+def ands_cap(log: int, asserts: int, in_bits: int, out_bits: int) -> int:
+    """The most ANDs (and inline read rows) a net with these ports and assertions holds in a slot of ``2^log``: the largest
+    ``a`` with ``net_log(net_rows(a, ...)) <= log``; at most 0 when its ports alone don't fit."""
+    i, o = _pad(in_bits), _pad(out_bits)
+    room = (1 << log) - 2 - o
+    return (room // o * o if o else room) - i - asserts
+
+
+class _Plan:
+    """`split`'s placement of ``C``'s live gates in nets under per-net AND caps (``caps[s]``, the last one for every later
+    net; None: no cap): each net's ANDs (``ands``) and ``(ANDs and inline read rows, assertions, input bits, output bits)``
+    (``nets``), which `net_rows` turns into its layout's rows."""
+
+    def __init__(self, C: gf2.Circuit, live, slot: Mapping[int, str], in_names, out_names, caps: Sequence[int] | None,
+                 read_rows) -> None:
+        kind, data, lookups = C.kind, C.data, C.lookups
+        self.caps = None if caps is None else list(caps)
+        depth = self.depth = [0] * len(kind)
+        rd = self.rd = {}
+        inline = self.inline = {}
+        need = self.need = {}        # stage -> the earlier stages' bits it reads
+        need_lk = self.need_lk = {}  # stage -> the slot reads whose values it reads
+        inline_bits: dict[int, set[int]] = {}
+
+        def fd(f) -> int:
+            return max((depth[u] for u in f.s), default=0)
+
+        def note(s: int, f) -> None:
+            for u in f.s:
+                if kind[u] == "lookup" and data[u][0] in slot:
+                    need_lk.setdefault(s, set()).add(data[u][0])
+                elif depth[u] < s:
+                    need.setdefault(s, set()).add(u)
+
+        fill: list[int] = []
+        last = None if caps is None else caps[-1]
+        for v in range(len(kind)):
+            if v not in live or kind[v] == "in":
+                continue
+            if kind[v] == "and":
+                a, b = data[v]
+                s = max(fd(a), fd(b))
+                if caps is not None:
+                    while s < len(fill) and fill[s] >= (caps[s] if s < len(caps) else last):
+                        s += 1
+                    fill.extend([0] * (s + 1 - len(fill)))
+                    fill[s] += 1
+                depth[v] = s
+                note(s, a)
+                note(s, b)
+                continue
+            g = data[v][0]
+            idx = lookups[g][1]
+            if g in slot:
+                if g not in rd:
+                    rd[g] = 1 + max((fd(f) for f in idx), default=0)
+                    for f in idx:
+                        note(rd[g] - 1, f)
+                depth[v] = rd[g]
+            else:
+                if g not in inline:
+                    inline[g] = max((fd(f) for f in idx), default=0)
+                    for f in idx:
+                        note(inline[g], f)
+                inline_bits.setdefault(g, set()).add(data[v][1])
+                depth[v] = inline[g]
+        D = self.D = max(depth[v] for v in live)
+        self.a_at = [(nm, f, fd(f)) for nm, f in C.asserts]
+        for _nm, f, s in self.a_at:
+            note(s, f)
+        for nm in out_names:
+            for f in C.outputs[nm]:
+                note(D, f)
+
+        ands = self.ands = [0] * (D + 1)
+        for v in live:
+            if kind[v] == "and":
+                ands[depth[v]] += 1
+        rows = list(ands)
+        for g, s in inline.items():
+            rows[s] += read_rows(g, inline_bits[g])
+        asserts = [0] * (D + 1)
+        for _nm, _f, s in self.a_at:
+            asserts[s] += 1
+        ins = [sum(len(C.inputs[nm]) for nm in in_names)] + [0] * D
+        outs = [0] * (D + 1)
+        for s, us in need.items():
+            ins[s] += len(us)
+            for u in us:
+                outs[depth[u]] += 1
+        for s, gs in need_lk.items():
+            ins[s] += TL.VALUE_BITS * len(gs)
+        for g, s in rd.items():
+            outs[s - 1] += len(lookups[g][1])
+        outs[D] += sum(len(C.outputs[nm]) for nm in out_names)
+        self.nets = list(zip(rows, asserts, ins, outs))
+        self.logs = [net_log(net_rows(*n)) for n in self.nets]
+        #: the nets' slots' cells, which `circuit.compose` places in the block beside the statement's fixed ranges
+        self.cells = sum(1 << L for L in self.logs)
+
+
+#: how many placements `split`'s ``stage_ands="auto"`` tries a slot size, each capping a net by the last one's ports
+AUTO_ROUNDS = 6
+
+
+def _auto(plan) -> _Plan:
+    """The placement whose nets' slots take the fewest cells (then the fewest nets): no cap, then caps that fit every net in
+    ``2^L`` for L one below the largest net's slot, then one below that, while it shrinks. A cap is `ands_cap` of the net's
+    ports, assertions and inline read rows in the last placement, so it tightens as the cut moves the exports, and never
+    loosens. A cap that would leave a net no AND gives L up."""
+    best = plan(None)
+    L = max(best.logs)
+    while L > 7:
+        L -= 1
+        got, last, caps = None, best, None
+        for _ in range(AUTO_ROUNDS):
+            new = [ands_cap(L, a_ + r - n, i, o) for n, (r, a_, i, o) in zip(last.ands, last.nets)]
+            if caps is not None:
+                new = [min(c, caps[k] if k < len(caps) else caps[-1]) for k, c in enumerate(new)]
+                new += caps[len(new):]
+            caps = new
+            if min(caps) < 1:
+                break
+            last = plan(caps)
+            if max(last.logs) <= L:
+                got = last
+                break
+        if got is None or (got.cells, len(got.nets)) >= (best.cells, len(best.nets)):
+            break
+        best = got
+    return best
+
+
 def split(C: gf2.Circuit, in_names: Sequence[str], out_names: Sequence[str], name: str, definition, units: IL.Units,
-          slots: Mapping[str, int] = SLOT_TABLES, stage_ands: int | None = None) -> ReadSlots | None:
+          slots: Mapping[str, int] = SLOT_TABLES, stage_ands: int | str | None = "auto") -> ReadSlots | None:
     """``C`` (a unit circuit on input ports ``in_names`` and 16-bit output ports ``out_names``, ``units`` its one unit's leaf
     ports) split at its slot reads (the module docstring), or None when it reads no table a slot holds (``slots``: table ->
-    index width; a read's value must be at most `tail.VALUE_BITS` wide). ``C`` is only read. ``stage_ands``: at most that many
-    ANDs a net, each AND in the first net at or after its operands' with room (more stages, each nearer a power of two, since
-    every net's slot is one: a unit whose reads cut it into a few large nets can need a block twice the flat unit's)."""
+    index width; a read's value must be at most `tail.VALUE_BITS` wide). ``C`` is only read.
+
+    ``stage_ands`` caps a net's ANDs, each AND going to the first net at or after its operands' with room: more stages, each
+    nearer a power of two, since every net's slot is one (a unit whose reads cut it into a few large nets can need a block
+    twice the flat unit's). An int is the cap on every net, None no cap, and ``"auto"`` (`_auto`) the per-net caps whose nets'
+    slots take the fewest cells, from each net's ports, exports and assertions (`ands_cap`); the statement's fixed ranges
+    (compressions, lookups, mask) are the same whatever the cut, so the fewest cells is the smallest block. The chosen caps
+    are the result's ``caps``."""
     kind, data, lookups = C.kind, C.data, C.lookups
     slot = {g: t for g, (t, idx, w) in enumerate(lookups) if slots.get(t) == len(idx) and w <= TL.VALUE_BITS}
     live = C.live()
@@ -139,62 +296,25 @@ def split(C: gf2.Circuit, in_names: Sequence[str], out_names: Sequence[str], nam
         raise NotImplementedError(f"{name}: a hint in a unit whose reads go to lookup slots")
     if any(len(C.outputs[nm]) != 16 for nm in out_names) or units.n != 1:
         raise ValueError(f"{name}: one unit an instance, returning 16-bit output words")
-
-    depth = [0] * len(kind)
-    rd: dict[int, int] = {}
-    inline: dict[int, int] = {}
-    need: dict[int, set[int]] = {}      # stage -> the earlier stages' bits it reads
-    need_lk: dict[int, set[int]] = {}   # stage -> the slot reads whose values it reads
-
-    def fd(f) -> int:
-        return max((depth[u] for u in f.s), default=0)
-
-    def note(s: int, f) -> None:
-        for u in f.s:
-            if kind[u] == "lookup" and data[u][0] in slot:
-                need_lk.setdefault(s, set()).add(data[u][0])
-            elif depth[u] < s:
-                need.setdefault(s, set()).add(u)
-
-    if stage_ands is not None and stage_ands < 1:
+    if isinstance(stage_ands, int) and stage_ands < 1:
         raise ValueError(f"{name}: stage_ands {stage_ands}: at least one AND a net")
-    fill: list[int] = []
-    for v in range(len(kind)):
-        if v not in live or kind[v] == "in":
-            continue
-        if kind[v] == "and":
-            a, b = data[v]
-            s = max(fd(a), fd(b))
-            if stage_ands is not None:
-                while s < len(fill) and fill[s] >= stage_ands:
-                    s += 1
-                fill.extend([0] * (s + 1 - len(fill)))
-                fill[s] += 1
-            depth[v] = s
-            note(s, a)
-            note(s, b)
-            continue
-        g = data[v][0]
-        idx = lookups[g][1]
-        if g in slot:
-            if g not in rd:
-                rd[g] = 1 + max((fd(f) for f in idx), default=0)
-                for f in idx:
-                    note(rd[g] - 1, f)
-            depth[v] = rd[g]
-        else:
-            if g not in inline:
-                inline[g] = max((fd(f) for f in idx), default=0)
-                for f in idx:
-                    note(inline[g], f)
-            depth[v] = inline[g]
-    D = max(depth[v] for v in live)
-    a_at = [(nm, f, fd(f)) for nm, f in C.asserts]
-    for _nm, f, s in a_at:
-        note(s, f)
-    for nm in out_names:
-        for f in C.outputs[nm]:
-            note(D, f)
+    if not (stage_ands is None or stage_ands == "auto" or isinstance(stage_ands, int)):
+        raise ValueError(f"{name}: stage_ands {stage_ands!r}: an int, None or 'auto'")
+
+    sized: dict[tuple, int] = {}
+
+    def read_rows(g: int, bits: set[int]) -> int:
+        t, idx, _w = lookups[g]
+        key = (t, len(idx), tuple(sorted(bits)))
+        if key not in sized:
+            sized[key] = IL._Read(C, g, sorted(bits), 0).rows
+        return sized[key]
+
+    def plan(caps):
+        return _Plan(C, live, slot, in_names, out_names, caps, read_rows)
+
+    P = _auto(plan) if stage_ands == "auto" else plan(None if stage_ands is None else [stage_ands])
+    depth, rd, need, need_lk, a_at, D = P.depth, P.rd, P.need, P.need_lk, P.a_at, P.D
     reads = sorted(rd)
     # from_[s][p]: the bits stage s receives from stage p, in order
     from_ = {s: {} for s in range(D + 1)}
@@ -303,4 +423,6 @@ def split(C: gf2.Circuit, in_names: Sequence[str], out_names: Sequence[str], nam
     U = IL.Units(target=units.target, in_widths=list(units.in_widths), out_widths=lays[0].out_bits, in_src=units.in_src,
                  out_src=[[("cut", k) for k in range(len(tags_out[0]))]], signature=units.signature, gates=[], arg_gates=[],
                  ret_gates=[], cut=list(range(len(tags_out[0]))), public=list(units.public), tail_rets=list(range(W)))
-    return ReadSlots(name, definition, U, lays[0], tail, tags_out[0], [(g, slot[g], rd[g] - 1) for g in reads], len(C.asserts))
+    low = ReadSlots(name, definition, U, lays[0], tail, tags_out[0], [(g, slot[g], rd[g] - 1) for g in reads], len(C.asserts))
+    low.caps = P.caps
+    return low
