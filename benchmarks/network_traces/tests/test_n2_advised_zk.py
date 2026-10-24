@@ -2,7 +2,8 @@
 is varied, every window receives, its honest windows' output words are verdict 1 and deadline 1, and each negative (a
 moved release bucket, an output length one short, extra egress) fails in some window on the advised counts alone, its
 head checks passing and every window's unit taking an instance; the verifier's own ``pub`` row, from public fields,
-the certificates and its own view of the public advice, is the prover's, in whole u16 words. At the tests' T = 8 the
+the certificates and its own view of the public advice, is the prover's, in whole u16 words. The --e2e link's advice
+(`joined`) numbers each Commit window's requests after the windows' before it. At the tests' T = 8 the
 proof unit (`LinkWindows.proof_unit`), evaluated on the rows the prover stages, gives the output words the gates'
 references do (`LinkWindows.outputs`) in every window of every member and on a head the prover changed. Each builder
 `n2_advised_zk.builders` attaches, called as C-Flock's lowering calls it, traces to its part's own gates. Nothing here
@@ -71,6 +72,22 @@ def test_honest_passes_and_each_negative_fails_on_the_advised_counts_alone():
     assert all(x.word == 0b11 for x in rounds["honest"].windows)
     assert not n2.expected("moved", [[]] * n2.WINDOWS)
     assert not n2.expected("extra", [["egress/signed", "advised"]] + [[]] * (n2.WINDOWS - 1))
+
+
+def test_joined_advice_numbers_each_windows_requests_after_the_windows_before_and_releases_by_id():
+    """`joined` (the --e2e link's advice from its Commit windows'): the second window's rows and hit sources name its
+    requests after the first's, and each kept output is released where the certified frames of its request say."""
+    a = _link(n2.T)[0].session.link.advice
+    b = ADV.Advice(tuple(n2.replace(q, id=f"b{q.id}") for q in a.requests), a.steps, a.release)
+    frames = {q.id: [1000 * k + 10 * j + i for i in range(q.output_len)]
+              for k, x in enumerate((a, b)) for j, q in enumerate(x.requests)}
+    got, n = n2.joined([a, b], frames), len(a.requests)
+    assert got.requests == a.requests + b.requests and got.steps[:len(a.steps)] == a.steps
+    rows = [r for st in got.steps[len(a.steps):] for r in st.rows]
+    assert [(r.request, [s.request for s in r.sources]) for r in rows] == \
+        [(r.request + n, [s.request + n for s in r.sources]) for st in a.steps for r in st.rows]
+    assert any(r.sources for r in rows)
+    assert all(b_ == frames[got.requests[o.request].id][o.index] for o, b_ in zip(ADV.outputs(got), got.release))
 
 
 def test_the_verifier_derives_the_provers_public_row():
