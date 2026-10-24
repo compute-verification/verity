@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.ZK.FinishStopAt
 import Proofs.Flock.Claims.ZK.FinishTau
+import Proofs.Flock.Claims.ZK.FinishSwRows
 
 /-!
 # A worker's rows from the firewall's own run
@@ -104,6 +105,11 @@ theorem tauFw_vals {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK
     ∃ (rp : Zk.Replayed) (ss : Array (Array Flock.F128)) (lgc : Array (String × Zk.Lin)),
       Flock.Firewall.Finish.failingOn (rp.cons ++ #[("ring switch ab", rp.abValue.addConst (Zk.claimCheck rp.claims[0]!
           ss[0]!)), ("ring switch c", rp.cValue.addConst (Zk.claimCheck rp.claims[1]! ss[1]!))] ++ lgc) pads.h = #[] ∧
+      (rp.cons ++ #[("ring switch ab", rp.abValue.addConst (Zk.claimCheck rp.claims[0]! ss[0]!)),
+          ("ring switch c", rp.cValue.addConst (Zk.claimCheck rp.claims[1]! ss[1]!))] ++ lgc).size = 7 ∧
+      (∀ k < 7, ((rp.cons ++ #[("ring switch ab", rp.abValue.addConst (Zk.claimCheck rp.claims[0]! ss[0]!)),
+          ("ring switch c", rp.cValue.addConst (Zk.claimCheck rp.claims[1]! ss[1]!))] ++ lgc)[k]!).2.a.size =
+          (layOf Tz stm).len) ∧
       ∀ k (hk : k < 7), (ofZk (rp.cons ++ #[("ring switch ab", rp.abValue.addConst (Zk.claimCheck rp.claims[0]!
           ss[0]!)), ("ring switch c", rp.cValue.addConst (Zk.claimCheck rp.claims[1]! ss[1]!))] ++ lgc)[k]!.2 :
           ZkSession.Lin 𝔽 (nE + 4)) = rowsOf Tz stm c r v sh T' ρσ (Fin.castAdd 3 ⟨k, by omega⟩) := by
@@ -147,23 +153,26 @@ theorem tauFw_vals {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK
        obtain ⟨⟨rfl, -⟩, -⟩ := hp
        exact ⟨rfl, rfl⟩)
   rw [hpl.1, hpl.2] at hV
-  refine ⟨rp, ss, lgc, by simpa using hf, fun k hk => ?_⟩
-  by_cases hk5 : k < 5
-  · exact tauFw_at_replay Tz stm c r v sh T' ρσ coin n st sch tPad rep dom g cm0 extras pads ic vals extra lanePad salt
-      ht₀ hm hk6 hSm hSk hkL hlay hmk hz hr hρ hα hβ hτ hr' hfold hsw h₁ h₂ h₃ h₄ hrp lgc k hk5
-  obtain ⟨k', rfl⟩ : ∃ k' : Fin 2, k = 5 + k'.val := ⟨⟨k - 5, by omega⟩, by simp only; omega⟩
   have hrp' : Zk.replay st (layOf Tz stm)
       { cap := cm0.cap, params := pcsParams st.merkle sch, zerocheck := zp, lincheck := lp, ringSwitches := ss,
         ligerito := lg } ic.root (Flock.Transcript.init t₄.rounds dom) = .ok (rp, tt) := by
     rw [hlay]
     exact hrp
-  obtain ⟨hT, hLC⟩ := hrec zp zc t₁ l₁ lp lc t₂ l₂ ss T sws t₃ l₃ lg zl rec t₄ l₄ h₁ h₂ h₃ h₄
-  have hL : _root_.Claims.ZKMal.Masked.LaneAt Tz stm c r v sh T' lg rec zl :=
-    ⟨hT, hLC.ood, hLC.lane, hLC.rho, hV.oodVal, hV.msg, hV.e0, hV.e1, hTP⟩
   have hlgc' : Zk.ligeritoConstraints (layOf Tz stm) rec lg zl = .ok lgc := by
     rw [hlay]
     exact hlgc
-  obtain ⟨hsz2, hrow⟩ := _root_.Claims.ZKMal.Masked.lanesAt Tz stm c r v sh T' hlen lg rec zl hL hlgc'
+  obtain ⟨hT, hLC⟩ := hrec zp zc t₁ l₁ lp lc t₂ l₂ ss T sws t₃ l₃ lg zl rec t₄ l₄ h₁ h₂ h₃ h₄
+  obtain ⟨hsz2, hlA⟩ := _root_.Claims.ZKMal.Masked.lanesA Tz stm c r v sh T' hlen lg rec zl hLC.ood hLC.lane hLC.rho
+    hlgc'
+  obtain ⟨hc7, hasz⟩ := fwCons_asz hm hrp' ss (lgc := lgc) ⟨hsz2, fun k => by rw [(hlA k).1, hlen]⟩
+  refine ⟨rp, ss, lgc, by simpa using hf, hc7, hasz, fun k hk => ?_⟩
+  by_cases hk5 : k < 5
+  · exact tauFw_at_replay Tz stm c r v sh T' ρσ coin n st sch tPad rep dom g cm0 extras pads ic vals extra lanePad salt
+      ht₀ hm hk6 hSm hSk hkL hlay hmk hz hr hρ hα hβ hτ hr' hfold hsw h₁ h₂ h₃ h₄ hrp lgc k hk5
+  obtain ⟨k', rfl⟩ : ∃ k' : Fin 2, k = 5 + k'.val := ⟨⟨k - 5, by omega⟩, by simp only; omega⟩
+  have hL : _root_.Claims.ZKMal.Masked.LaneAt Tz stm c r v sh T' lg rec zl :=
+    ⟨hT, hLC.ood, hLC.lane, hLC.rho, hV.oodVal, hV.msg, hV.e0, hV.e1, hTP⟩
+  obtain ⟨-, hrow⟩ := _root_.Claims.ZKMal.Masked.lanesAt Tz stm c r v sh T' hlen lg rec zl hL hlgc'
   have h3 := ZkExec.replay_cons_size _ _ _ _ hrp'
   rw [ZkExec.append_get!_right _ _ (j := k'.val) (by rw [Array.size_append, h3]; rfl) (by rw [hsz2]; exact k'.isLt),
     hrow k']
