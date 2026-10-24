@@ -2092,3 +2092,62 @@ def test_the_modes_are_arms_and_the_negative_control_is_a_pass_control(device_ru
     assert not names & {"s512_tile_segs", "s512_row_segs", "s512_tile_leaves", "s512_rows", "pd_commit_851", "pd_tiles_851"}
     assert run.omit == frozenset()
     assert all(c <= set(PPD.CALL_STEPS) for c in E2E.CONTROLS.values())
+
+
+# ---- the served step's breakdown ----------------------------------------------------------------------------------
+
+def _served_step_profile(path: Path) -> Path:
+    """An nsys SQLite export's tables as `served_step.analyze` reads them: a prefill step and three decode steps of 8
+    requests, each with three Pearl-C calls (pd_commit, the GEMM, and the tile leaves on a stream of their own), an
+    attention kernel and a pass end whose transcript tree is ``s512_nodes``; 10 ms cycles, each step 9 ms."""
+    import sqlite3
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE StringIds (id INTEGER, value TEXT)")
+    con.execute("CREATE TABLE NVTX_EVENTS (start INT, end INT, text TEXT, globalTid INT, textId INT)")
+    con.execute("CREATE TABLE CUPTI_ACTIVITY_KIND_KERNEL (start INT, end INT, shortName INT, globalPid INT, streamId INT)")
+    con.execute("CREATE TABLE CUPTI_ACTIVITY_KIND_RUNTIME (start INT, end INT, nameId INT, globalTid INT)")
+    names = {1: "pd_commit_851", 2: "gemm_pearlc_d", 3: "flash_fwd", 4: "cudaLaunchKernel", 5: "pd_tiles_851", 6: "s512_nodes"}
+    con.executemany("INSERT INTO StringIds VALUES (?, ?)", names.items())
+    tid, ms = 7, 1_000_000
+    for i in range(4):
+        s = i * 10 * ms
+        con.execute("INSERT INTO NVTX_EVENTS VALUES (?, ?, 'step', ?, NULL)", (s, s + 9 * ms, tid))
+        con.execute("INSERT INTO NVTX_EVENTS VALUES (?, ?, ?, ?, NULL)", (s + ms, s + 8 * ms, f"exec|{8 if i else 40}|8", tid))
+        for j in range(3):
+            c = s + ms + j * 2 * ms
+            con.execute("INSERT INTO NVTX_EVENTS VALUES (?, ?, 'pc', ?, NULL)", (c, c + ms, tid))
+            con.execute("INSERT INTO CUPTI_ACTIVITY_KIND_RUNTIME VALUES (?, ?, 4, ?)", (c, c + 10_000, tid))
+            con.executemany("INSERT INTO CUPTI_ACTIVITY_KIND_KERNEL VALUES (?, ?, ?, 0, ?)",
+                            [(c + 100_000, c + 400_000, 1, 7), (c + 400_000, c + 500_000, 2, 7), (c + 450_000, c + 600_000, 5, 9)])
+        con.execute("INSERT INTO CUPTI_ACTIVITY_KIND_KERNEL VALUES (?, ?, 3, 0, 7)", (s + 7 * ms, s + 7 * ms + 200_000))
+        con.execute("INSERT INTO NVTX_EVENTS VALUES (?, ?, 'pend', ?, NULL)", (s + 7 * ms, s + 8 * ms, tid))
+        con.execute("INSERT INTO CUPTI_ACTIVITY_KIND_KERNEL VALUES (?, ?, 6, 0, 7)", (s + 7_500_000, s + 7_600_000))
+    con.commit()
+    return path
+
+
+def test_the_served_step_profile_splits_each_decode_step_into_kernels_and_host_ranges(tmp_path):
+    S = load("pearl_c_vllm_served_step", KERNEL.parent / "pearl_c_vllm" / "served_step.py")
+    doc = S.analyze(_served_step_profile(tmp_path / "served.sqlite"), 8)
+    assert (doc["batch"], doc["steps"], doc["decode_steps"], doc["full"]["n"], doc["other"]["n"]) == (8, 4, 3, 3, 1)
+    f = doc["full"]
+    got = {k: round(f[k], 6) for k in ("cycle_ms", "step_ms", "gpu_busy_ms", "kernel_sum_ms", "pc_ms", "pc_n", "pend_ms",
+                                        "exec_ms", "launches", "api_ms", "streams")}
+    assert got == {"cycle_ms": 10.0, "step_ms": 9.0, "gpu_busy_ms": 1.8, "kernel_sum_ms": 1.95, "pc_ms": 3.0, "pc_n": 3,
+                   "pend_ms": 1.0, "exec_ms": 7.0, "launches": 3, "api_ms": 0.03, "streams": 2}
+    assert {c: round(v, 6) for c, v in f["by_category_ms"].items()} == {
+        "pearlc:a_commit": 0.9, "pearlc:gemm": 0.3, "pearlc:tile_hash": 0.45, "attention": 0.2, "pearlc:a_tree": 0.1}
+    assert [(k["kernel"], k["per_step"]) for k in doc["top_kernels_full"][:2]] == [("pd_commit_851", 3), ("pd_tiles_851", 3)]
+
+
+def test_the_served_steps_host_records_are_the_timed_reps_decode_steps():
+    S = load("pearl_c_vllm_served_step", KERNEL.parent / "pearl_c_vllm" / "served_step.py")
+    ms = 1_000_000
+    steps = [{"phase": "measure", "rep": 0, "t0": 0, "t1": 9 * ms, "tokens": 8, "reqs": 8, "pc_ns": 3 * ms, "pc_n": 3},
+             {"phase": "measure", "rep": 0, "t0": 0, "t1": 4 * ms, "tokens": 5, "reqs": 5, "pc_ns": ms, "pc_n": 3},
+             {"phase": "measure", "rep": 0, "t0": 0, "t1": 20 * ms, "tokens": 40, "reqs": 8},
+             {"phase": "warmup", "rep": 0, "t0": 0, "t1": 9 * ms, "tokens": 8, "reqs": 8}]
+    got = S.summarize_host(steps, 8)
+    assert got["full"] == {"n": 1, "step_ms": 9.0, "pc_ms": 3.0, "pc_n": 3}
+    assert got["decode"]["n"] == 2 and got["decode"]["pc_ms"] == 2.0
+    assert got["steps"] == {"measured": 3, "decode": 2, "total_ms": 33.0, "decode_ms": 13.0}

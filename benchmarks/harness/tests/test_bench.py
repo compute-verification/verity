@@ -928,6 +928,35 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     assert not wrong["passed"] and wrong["provided"]
 
 
+def test_pearl_cs_whole_step_arm_builds_vllms_full_decode_graphs_beside_the_served_protocol_arm(monkeypatch):
+    """`llama31-8b-1gpu-pearl-c-whole-served` times the whole-step arm beside the protocol arm as served (its settings the
+    protocol row's) and the compiled engine. Under the eager spec, the arm's overrides build vLLM's FULL decode graphs at
+    the preset's capture sizes without torch.compile, at the `compiled` label, which `verity_vllm.LLM` accepts, and its
+    run takes the graph path's options and serial schedule."""
+
+    from verity_bench.vllm import runner
+    from verity_bench.vllm.arms import plugin
+    from verity_vllm.pipeline.llm import resolve_options
+
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
+    spec = resolve_spec("llama31-8b-1gpu-pearl-c-whole-served")
+    pearl = "pouw:pearl-c-sm120-v1-h3"
+    assert spec.arm_settings[pearl] == resolve_spec("llama31-8b-1gpu-pouw-protocol").arm_settings[pearl]
+    arms = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
+    assert [(a.id, a.precision, a.control, a.execution, a.experimental) for a in arms] == [
+        ("stock-fp8", "fp8", None, None, False), (pearl, "bfloat16", None, None, False),
+        ("stock-fp8@compiled", "fp8", None, "compiled", False), ("pouw-pearl-c-whole", "bfloat16", None, None, True)]
+    whole = plugin(arms[-1])
+    preset, eager = served(spec.preset, spec.eager)
+    preset, eager = runner.arm_execution(arms[-1], preset, eager)
+    built = {**runner.engine_args(preset, "bfloat16", resident=False, eager=eager), **whole.engine_overrides(None)}
+    assert built["compilation_config"] == {"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY",
+                                           "cudagraph_capture_sizes": list(spec.preset.engine_settings["capture_sizes"])}
+    opts = resolve_options(built)
+    assert opts["enforce_eager"] is False and opts["execution"] == "compiled"
+    assert whole.run_options == {"graphs": True, "whole_defer": True} and whole.schedule == "serial"
+
+
 def test_an_h1_arm_is_gated_against_exact_int8_and_each_run_gets_a_window_the_adapter_accepts(monkeypatch):
     """`pouw:eps1-sm120-h1fx1` serves the int8_exact arm's own y, so its token control is that engine without PoUW
     (`stock-int8`). Its settings need the built engine's model runner, which `verity_vllm.LLM` validates before building,
