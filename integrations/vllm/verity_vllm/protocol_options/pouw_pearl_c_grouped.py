@@ -32,10 +32,8 @@ The run's schedule places the call's steps on its lanes as it does a dense call'
 run's own at the greatest priority, joined to the caller's stream by events, or the caller's), and with hashing, the run's
 next side lane for the schedule's side groups.  Under ``deferred`` that is the tile leaves, behind an event at the main lane's
 end; under ``deferred-a`` A's tree too, where the cubin has pd_tree_g (`grouped.has_tree`): the commitment is then split
-(`grouped.SPLIT_STEPS`), and behind an event after the per-row keying and the rows' statistics the side lane screens the rows
-into the pass's flags, then runs A's tree, beside the forming and the GEMMs, which read nothing either writes, then scatters
-A's roots into the pass, then the tile leaves; the group's next call rewrites A's rows, α and (s, ρ) only after that screen
-(`_Group.screened`).  Each group rotates
+(`grouped.SPLIT_STEPS`), and the side lane runs A's tree behind an event right after the per-row keying, beside the forming
+and the GEMMs, which read nothing it writes, then scatters A's roots into the pass, then the tile leaves.  Each group rotates
 `Schedule.ring` sets of what the side lane reads or writes (`ROTATED`), a set rewritten only once its last call's side steps
 are done.  The bytes committed and served are the serial schedule's; under the split, a unit's padding rows (m₁₆ to its
 segment's end, outside its matmul) are formed from whatever E_A lines the buffer holds, as a dense call's are.
@@ -76,12 +74,10 @@ CALLS_KEPT = 64
 class _Call:
     """One call layout of a group over one ring set (`_Group.call`): its table's template (`grouped.Grouped.meta` with no
     keys and its leaves at 0, which `_Group.table` fills in a call at a time), its matmuls' shapes, and its steps by lane:
-    ``main`` (A's rows into their segments from the staged x, the main lane's launches, and with hashing, unless A's tree is
-    aside, the scatter of the rows' screen and the units' roots), ``tree`` (where A's tree is aside: the rows' screen and its
-    event ``ev_screen``, A's tree, then its roots' gather and scatter) and ``side`` (the tile leaves), the main lane's event
-    for ``tree`` before step ``cut``, right after the rows' statistics.  The screen reads A's rows, not the staged x, which
-    the next call's caller rewrites.  ``execs`` are its graphs' executables once captured (main, tree or 0, side or 0); off
-    the GPU the scatter takes the call's offsets from ``at``.
+    ``main`` (A's rows into their segments from the staged x, the main lane's launches, and with hashing the scatter of the
+    rows' screen and, unless A's tree is aside, the units' roots), ``tree`` (A's tree, then its roots' gather and scatter)
+    and ``side`` (the tile leaves), the main lane's event for ``tree`` before step ``cut``.  ``execs`` are its graphs'
+    executables once captured (main, tree or 0, side or 0); off the GPU the scatter takes the call's offsets from ``at``.
     ``src`` is each of A's rows' source in the staged x behind its zero row (0, or 1 + its gathered row)."""
 
     def __init__(self, run: Any, g: _Group, us: list, split: bool, side: frozenset[str], b: dict[str, Any]):
@@ -100,7 +96,7 @@ class _Call:
         offs = meta[t:t + OFFS_BYTES].view(torch.int64)
         xa = b["xa"][:4 * g.rows * k].view(torch.float32).view(g.rows, k)
         xz = b["xf"][:4 * (real + 1) * k].view(torch.float32).view(real + 1, k)
-        self.xf = xz[1:]
+        self.xf = xf = xz[1:]
         src = np.zeros(rows, np.int64)
         src[self.template[at:at + 8 * real].view("<i8")] = np.arange(1, real + 1)
         self.src = torch.from_numpy(src).to(run.device)
@@ -112,10 +108,8 @@ class _Call:
         by = dict(g.grouped.steps(us, split))
         names = _steps(run, G, split)
         on_main = [x for x in names if x not in side]
-        after = "stats_a" if "stats_a" in on_main else "rows_a" if "rows_a" in on_main else None
-        self.cut = (on_main.index(after) + 1 if after else 0) + 1 if split else None
+        self.cut = (on_main.index("rows_a") + 1 if "rows_a" in on_main else 0) + 1 if split else None
         self.main = [rows_a, *(by[x] for x in on_main)]
-        self.ev_screen = torch.cuda.Event(external=True) if split and run.device.type == "cuda" else None
         self.tree: list = []
         self.side = [by[x] for x in names if x in side and x != "tree_seed_a"]
         if not run.hashing:
@@ -134,7 +128,7 @@ class _Call:
             if screened:
                 torch.index_select(alpha, 0, idx, out=alpha_s)
                 torch.index_select(aux, 0, idx, out=aux_s)
-                screen_into(run.flag_buf[flag_rows:flag_rows + screened], xa[idx], alpha_s, aux_s, False)
+                screen_into(run.flag_buf[flag_rows:flag_rows + screened], xf, alpha_s, aux_s, False)
             if gathered.numel():
                 roots_to[nb * index:nb * index + gathered.numel()].copy_(gathered)
 
@@ -143,26 +137,20 @@ class _Call:
                 torch.index_select(tree, 0, nodes, out=roots)
             scatter(real, none if split else roots.view(-1))
 
-        def screened():
-            if self.ev_screen is not None:
-                self.ev_screen.record()
-
         def gather():
             torch.index_select(tree, 0, nodes, out=roots)
             scatter(0, roots.view(-1))
+        self.main.append(screen)
         if split:
-            self.tree = [screen, screened, *([by["tree_seed_a"]] if "tree_seed_a" in names else []), gather]
-        else:
-            self.main.append(screen)
+            self.tree = [*([by["tree_seed_a"]] if "tree_seed_a" in names else []), gather]
 
 
 class _Group:
     """One group's stacked weight side and its call buffers (`grouped.sizes` at ``rows`` and ``count``, with the staged x
     ``xf`` behind a zero row, the gathered rows' α and (s, ρ) for the unfused screen, and the units' A roots), with ``sets``
-    of the `ROTATED` ones (the first ``b``'s own), the event after each set's last side steps (``done``), the last split
-    call's ``ev_screen`` (``screened``, which the next call's main lane waits for) and the next call's set (``turn``); its
-    layouts (``calls``), the pinned host slots their tables go up from (``host``) and the driver that uploads them
-    (``driver``, the run's or its own; None off the GPU)."""
+    of the `ROTATED` ones (the first ``b``'s own), the event after each set's last side steps (``done``) and the next call's
+    set (``turn``); its layouts (``calls``), the pinned host slots their tables go up from (``host``) and the driver that
+    uploads them (``driver``, the run's or its own; None off the GPU)."""
 
     def __init__(self, run: Any, G: Any, ws: tuple[int, ...]):
         import torch
@@ -188,7 +176,7 @@ class _Group:
         cuda = run.device.type == "cuda"
         self.driver = run.driver if run.driver is not None or not cuda else _Driver(run.kernel.dev.cu)
         self.host, self.host_np, self.host_ptr, self.width, self.host_ev, self.host_turn = None, None, 0, 0, [], 0
-        self.replays, self.screened = 0, None
+        self.replays = 0
 
     def units(self, counts: tuple[int, ...]) -> list:
         """`grouped.units` of `counts`, kept by counts."""
@@ -410,9 +398,9 @@ def _capture(run: Any, c: _Call) -> None:
 def _replay(run: Any, g: _Group, c: _Call, j: int, slot: int, nbytes: int, b: dict[str, Any], x: Any, raw: int, main: Any,
             lane_raw: int, to: Any) -> None:
     """`c`'s graphs replayed by the driver with `_eager`'s events: the main lane waits for set j's last side steps and
-    uploads the table, waits for the caller's staged x and the last split call's screen, and replays its graph; side lane
-    `to` replays the tree's after the main graph's event past the rows' statistics, then the side graph after the main
-    graph's end; the caller waits for the main lane."""
+    uploads the table, waits for the caller's staged x and replays its graph; side lane `to` replays the tree's after the
+    main graph's event past the per-row keying, then the side graph after the main graph's end; the caller waits for the
+    main lane."""
     D, done = g.driver, g.done[j]
     if done is not None:
         D.wait(lane_raw, done)
@@ -422,8 +410,6 @@ def _replay(run: Any, g: _Group, c: _Call, j: int, slot: int, nbytes: int, b: di
         D.record(main.event, raw)
         D.wait(lane_raw, main.event)
     main_exec, tree_exec, side_exec = c.execs
-    if g.screened is not None:
-        D.wait(lane_raw, g.screened)
     D.launch(main_exec, lane_raw)
     if to is not None:
         D.record(to.event, lane_raw)
@@ -491,24 +477,20 @@ def _gemm_grouped(run: Any, ws: tuple[int, ...], x: Any, counts: tuple[int, ...]
         if cuda and main is not None:                   # the main lane starts after the caller's table and staged x
             main.event.record(caller)
             lane.wait_event(main.event)
-        if cuda and g.screened is not None:             # and after the last split call's screen of A's rows, α and (s, ρ)
-            lane.wait_event(g.screened)
         _eager(run, g, c, j, cuda, caller, lane, lane_raw, main, to)
-        if cuda and main is not None:                   # the caller reads y after it (a split call's flags: `_Call`)
+        if cuda and main is not None:                   # the caller reads y and the pass's flags after it
             main.event.record(lane)
             caller.wait_event(main.event)
         c.seen += 1
         if graphed and c.seen >= 2:
             _capture(run, c)
-    if c.ev_screen is not None:
-        g.screened = c.ev_screen
     mms = [Matmul(index + i, shape, w) for i, (shape, w) in enumerate(c.shapes)]
     cur.matmuls.extend(mms)
     if run.hashing:
         flags = run.flag_buf[cur.flag_rows:cur.flag_rows + real]
         cur.flag_rows += real
         if cur.retain is not None:
-            if split and cuda:                          # A's tree and the rows' screen are the side lane's
+            if split and cuda:                          # A's tree is the side lane's
                 caller.wait_event(g.done[j])
             xa, slot_a = b["xa"][:4 * g.rows * k].view(torch.float32).view(g.rows, k), G.tree_bytes(R)
             for i, (u, mm) in enumerate(zip(us, mms, strict=True)):
