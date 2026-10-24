@@ -92,7 +92,12 @@ A spec-level reference for network accounting's timing channel:
   bit against the window's committed segment in the decoder's order, so a window's segment is accepted exactly when it
   is the coder's codeword. It is held symbol for symbol to `code.py` on the replay's decisions and on ENC-DERIVED's
   still-sent fields (`benchmarks/network_e2e/encodings/arith_vectors.py`), and it is in no proof-service Spec yet
-  (`PROTOCOL.md`, "Advice v1").
+  (`PROTOCOL.md`, "Advice v1");
+- the compile slice (`compile_slice`): `CompileSlice_v1`, a Boolean Definition with `case` its reference, composes
+  `ReplayLoad`, `ReplayStep_v1` and `ReplayAdvance` on shared wires, and the encoder over the scan's asks, for one
+  window. It holds the coded length to the declared charge and the step rows' salted SHA-512 to the public digest. The
+  cache counts are a stand-in held at 0 (`PROTOCOL.md`, "The compile slice"), and
+  `benchmarks/network_traces/compile_slice_zk.py` proves it in zero knowledge.
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's
@@ -100,7 +105,7 @@ Definition, and in `active` the proof service's registration and receipt, which 
 AEAD (`verity.ml.crypto.aead`). The certificate's signature scheme is a parameter: the certifier's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
 From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` and
-`replay_step` and `arith_encode` the circuits and their evaluator.
+`replay_step`, `arith_encode` and `compile_slice` the circuits and their evaluator (`compile_slice` also SHA-512's gadget).
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`Security/`, area `NetworkCertifier`).
 `lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's
 definitions, proved equal to them in `Security/Proofs/NetworkCertifier/Code.lean`, and the difftest that holds this

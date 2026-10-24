@@ -1290,6 +1290,64 @@ resumes and async's lag bits) on the 6 corpus traces that send any: 0 mismatches
 - The corpus records stand in for the warden's: each request's a is the engine's arrival stamp (`replay`'s
   `ingress="warden"`), and the release buckets are the engine's.
 
+## The compile slice (`compile_slice`)
+
+`CompileSlice_v1{R, W, A, M, T, L, B, H, CH, WM, FULL, PC, NB, IW, Q, D, P, K, SEG}` composes the compile unit's
+pieces (PRF-143's statement, "Advice v1" above) whole for one window of P steps, so the composition is proved end to
+end before the chain splits it into a unit a step. It takes four rows and returns one 16-bit verdict:
+- ``pub``, public: the declared charge c and the step rows' hiding digest SHA-512(salt ‖ rows), which the clear
+  recompile gives;
+- ``adv``, the committed advice: the window's raw decision bits, their count and the executed step count, one row of
+  the advice's hiding registration (#3507);
+- ``cert``, the window's certified arrivals (`replay_chain.arrival_fields`), a row the verifier holds to the certified
+  record's commitment;
+- ``wit``: the state rows S_1 … S_{P+1} and the window row W_1, each step's arrivals and decision bits, the window's
+  codeword (SEG bits) and the digest's salt.
+
+The circuit:
+1. `ReplayLoad` from the session's empty rows to S_1 and W_1, with ``cert``'s arrivals and ``adv``'s decisions.
+2. Per step, `ReplayStep_v1` on S_u's state, and `ReplayAdvance` on the same ``arr``/``bits`` wires. The advance holds
+   them to W_1 at S_u's heads, and S_{u+1} to the step's next state.
+3. The step's asks, in the scan's order: per ask, `KTContext_v1{3, 24}` at the plain context, then
+   `ArithEncodeStep_v1{18, 1}` against the codeword at the code's position. The position is a pruned log shifter
+   (`replay_chain._front`) over the SEG codeword bits: the reader "Advice v1" leaves open, here at the slice's size.
+   The plain context is the asked request's passes, min(passes, 2), carried as a 2-bit counter. It is the queue head's
+   for a step's first ask when nothing was forced, else 0, and it moves as `replay.encode`'s ``passed`` does.
+4. `ArithEncodeFinish_v1`. The position after it is the coded length, held to ≤ c.
+5. The step rows (valid, request, kind, start, n), zero on an idle step, hashed under the salt.
+
+The verdict's bits are ``load``, ``steps``, ``code``, ``charge`` and ``rows`` (`ACCEPT` = 0x1F), so a proof of a refused
+unit says which check refused it. `reference` is `case`, which runs the scan in Python (`replay_step.reference`, the
+chain's `load` and `advance`, the plain contexts and `codeword`, ENC-REPLAY's 32-bit coder).
+
+**Stand-ins**, each a piece not yet ready:
+- *The cache counts.* ENC-DERIVED's hit, evictable and returned-block counts are held at 0. That is true of a slice
+  that hits no prefix and stops or preempts nothing. `CacheStep_v1` isn't wired, and on any other slice the rows
+  differ from the clear recompile's, so ``rows`` refuses.
+- *The counting encoder.* ArithEncodeStep_v1 checks a witness codeword, and the count is the positions it consumed. A
+  symbol's scalings depend only on the interval, so the count is the coded length.
+- *The still-sent fields.* ``adv`` holds only the decisions, the count and the step count.
+- *Sync scheduling.* ReplayStep_v1 models no async step.
+- *The bindings.* ``adv`` and ``cert`` are bound by their rows' b‖c, which the verifier checks natively against the
+  advice registration's leaf (its path to the root) and the certified record's commitment. No gate hashes them.
+
+**The slice** is corpus-smallkv's first seven steps at (R 2, W 1, A 2), with Q 3, D 7, P 7, K 3 and SEG 32
+(`tests/fixtures/compile_slice_smallkv.json`, which `compile_slice_zk.py` checks against the corpus).
+- The steps: user-0 is forced in and prefilled over two steps, then decodes. User-1 is asked five times and passed
+  over, then admitted at the sixth ask, and user-2 is asked once.
+- The decisions are 0, 0, 0, 0, 0, 1, 0, at contexts 0, 1, 2, 2, 2, 2, 0. They code to 8 bits.
+- The unit is 139,327 ANDs: 116,140 for the logic and 23,187 for SHA-512's committed words (circuit-check, pinned in
+  the sidecar). Its rows are 528, 16, 112 and 2,416 bits.
+
+**The negatives.** Each one is the prover's own consistent run, and each is refused by the proved verdict:
+- decision 5 flipped in W_1, with ``adv`` still the registered row: ``load``, ``steps`` and ``rows`` fail (0x0C);
+- the charge one below the coded length: ``charge`` fails (0x17);
+- arrival 1's prompt one token longer in ``cert``: ``rows`` fails (0x0F), and its b‖c isn't the certified record's.
+
+**In zero knowledge** (`benchmarks/network_traces/compile_slice_zk.py`, N2-ZK's audit path): one template of four
+units (honest and the three negatives). The verifier opens ``pub`` and the verdict only. The unit is k_log 22, one
+unit a block.
+
 ## The active certifier (`active`)
 
 `active.Proxy` runs the certifiers on one boundary link of a live byte stream. It is an asyncio TCP proxy, the I/O shell
@@ -1696,6 +1754,13 @@ and seven lemmas, and three more proved lemmas:
     `check_chain` accepts it, and refuses a short window, the empty state or window under a fresh salt or another
     program's, the carried state or window under a fresh salt, and another row of the last window;
   - `size` is the parts' AND counts, which circuit-check pins at the tests' shape and at the sync KV-pressure trace's;
+- **`test_network_certifier_compile_slice.py`:** the compile slice on corpus-smallkv's first seven steps:
+  - the reference's scan gives the replay's rows and the plain contexts' symbols, and its digest is the clear rows';
+  - the circuit's verdict is the reference's on the honest rows and on each negative: a decision flipped in the window
+    row, the charge one below the coded length, an arrival not the certified one, a wrong digest and a wrong salt.
+    Each is refused by exactly the checks the reference names;
+  - `codeword` is the segment `arith_encode` accepts, and a flipped bit of it is refused;
+  - `size` is the unit's AND count, which circuit-check pins;
 - **`test_network_certifier_active.py`:** the active certifier over localhost sockets on an injected clock:
   - `Shaper` is `run_shaper`'s rule on random instances;
   - an honest run's records, hand times and wire are the Program's, accepted raw and committed;
