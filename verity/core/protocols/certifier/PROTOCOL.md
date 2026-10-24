@@ -414,12 +414,24 @@ requests, whose frames are a function of the prompt's length alone), for every p
   earlier, under a sync in Σ_sync. Those are request j's and every earlier request's frames when v0's prompt lengths
   are the link's requests', in arrival order, which IO-TIE's tie holds, as it holds the rest of v0's schedule to the
   requests. Without the tie a prover moves the floor only by stating other prompt lengths, which is another advice
-  that `advice.bits` charges whole: the ingress head carries no request's end, so nothing in the unit holds the
-  lengths to the record. A head that carried each bucket's completed requests, signed by the ingress certifier, would.
+  that `advice.bits` charges whole; what would hold them to the record inside the unit is the named gap below.
 - **Bucket 0 is capped at R_in, which holds the own frame.** The ingress certifier releases min(queue, r_in) frames a
   bucket (`grid.Certifier`) with its own frame queued ahead of bucket 0's arrivals (`active.Bucketer`), and a head
   with a count past its allocation doesn't exist (`certificate.RecordHead`): with R_in request frames arriving in
   bucket 0 the certified count is R_in, one of them the own frame, and the last request frame goes out in bucket 1.
+- **The ends are where the signed counts put them** (CERT-VARLEN's rule): request k ends in the first bucket where the
+  ingress head's signed counts, less one own frame a window, reach `ends[k]`, with `request_frames[n − 1]` CERT-VARLEN's
+  `id_request_frames(n, B)`. The floor reads the same prefix sums, so it holds each output to the bucket the signed
+  counts end its request in. The rule is exact while each window's own frame leaves in its first bucket, and always
+  once CERT-VARLEN's FIFO change queues the own frame at the head of each window's queue; until then a window that
+  starts with R_in or more request frames carried in puts an end one bucket late, never early.
+- **Named gap: the record holds neither the prompt lengths nor the syncs the unit reads** (owned by network-accounting).
+  The unit takes v0's prompt lengths through IO-TIE's tie and each window's sync from its declaration, held only to
+  Σ_sync, because neither head signs them. Design: the ingress head signs each bucket's completed requests and the
+  egress head the window's sync (`served.sync_words`), inside `RecordHead.encode`, and the unit reads both from the
+  heads it opens. It changes the head encoding that Lean pins, so it lands with the head check's and the Lean model's
+  change, not before. With CERT-VARLEN's FIFO change the completed requests follow from the signed counts and the
+  certified prompt lengths, so on ingress what's left is holding v0's prompt lengths to the certified bodies.
 - **Premises** of "an honest advised link is accepted", on which N2's claim doesn't rest:
   - `release` is the certified egress record's: each kept output is one egress frame, in the link's canonical order,
     which IO-TIE fixes (within a bucket the order doesn't change the counts);
@@ -431,7 +443,7 @@ requests, whose frames are a function of the prompt's length alone), for every p
     verifier sees);
   - with the salt on, a window's own frame counts as bucket 0's, so a window that starts with R_in or more request
     frames carried in under-counts by one until it is released, which only a release at its exact eligibility
-    notices;
+    notices (CERT-VARLEN's FIFO change, the own frame first in each window's queue, removes this);
   - both ends share T and τ_b (checked by `LinkWindows`).
 
 What this establishes: on every accepted link-window of an advised link, the egress head's counts are the advice's

@@ -70,13 +70,18 @@ prompt lengths. And the advice is held to the ingress head: no frame is released
 released its request's `ends[j]` request frames, max(1, δ + ⌊λ/ρ⌋) buckets earlier, under a sync Σ_sync holds. Those
 are the link's first j + 1 requests whole when v0's prompt lengths are theirs, in arrival order, which IO-TIE's tie
 holds, as it holds the rest of v0's schedule to the requests. Without the tie, a prover who states other lengths moves
-the floor only by stating another advice, which `advice.bits` charges whole; the ingress head carries no request's end,
-so nothing in the unit holds the lengths to the record.
+the floor only by stating another advice, which `advice.bits` charges whole. Neither head signs the prompt lengths or
+the sync a window ran, so nothing in the unit holds them to the record: PROTOCOL.md's named gap, with its design.
 
 **Bucket 0** is capped at RIN, which holds the own frame: the ingress certifier releases min(queue, r_in) frames a
 bucket (`grid.Certifier`), its own frame queued ahead of bucket 0's arrivals (`active.Bucketer`), and a head whose
 count passes its allocation doesn't exist (`certificate.RecordHead`). With RIN request frames arriving in bucket 0,
 the certified count is RIN, one of them the own frame, and the last request frame is released in bucket 1.
+
+**The ends are where the signed counts put them** (CERT-VARLEN's rule): request j ends in the first bucket where the
+ingress head's signed counts, less one own frame a window, reach `ends[j]`, the prefix sums the floor reads. That is
+the bucket that releases its last frame while each window's own frame leaves in its first bucket, always once the own
+frame is queued at the head of each window's queue, and otherwise one bucket late, never early.
 
 **Premises** of "an honest advised link is accepted", which N2's claim doesn't rest on: `release` is the certified
 egress record's (each kept output one egress frame, in the link's canonical order, which IO-TIE fixes); the releases
