@@ -2519,6 +2519,27 @@ fn bit_rows(grp: &[Vec<F128>], words: usize) -> Vec<u64> {
     out
 }
 
+/// The device prover's most nonzeros in one matrix of a slot type: its CSC offsets and counts are 32-bit
+/// (`gpu_circuit::CircuitParams`, `prove_circuit.cuh`). The CPU prover's are 64-bit.
+pub const GPU_NNZ_MAX: u64 = u32::MAX as u64;
+
+/// Refuses a circuit whose A or B side holds more than `limit` nonzeros.
+pub fn nnz_within(name: &str, a: &[Vec<usize>], b: &[Vec<usize>], limit: u64) -> Result<(), String> {
+    let count = |m: &[Vec<usize>]| m.iter().map(|r| r.len() as u64).sum::<u64>();
+    let (na, nb) = (count(a), count(b));
+    if na.max(nb) > limit {
+        return Err(format!("{name}: {na} nonzeros in A and {nb} in B, past the GPU prover's {limit} (32-bit offsets): the CPU prover"));
+    }
+    Ok(())
+}
+
+impl Composite {
+    /// Every circuit within the device prover's nonzero bound ([`GPU_NNZ_MAX`]).
+    pub fn gpu_nnz_ok(&self) -> Result<(), String> {
+        self.nets.iter().try_for_each(|(name, net)| nnz_within(name, &net.a, &net.b, GPU_NNZ_MAX))
+    }
+}
+
 /// Whether host unit slots are evaluated by [`IrUnitNet::eval64_flat`]; `FC_UNIT_FLAT=0`: by `eval64`, the path before it.
 pub fn unit_flat() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
@@ -3216,6 +3237,15 @@ mod tests {
                    ("verity/flock-circuit/types", "verity/flock-circuit/types/sigma", "flock-circuit-types/fast100x2/rep"));
         assert_eq!((TMPL_TAGS.statement, TMPL_TAGS.sigma, TMPL_TAGS.domain),
                    ("verity/flock-circuit/tmpl", "verity/flock-circuit/tmpl/sigma", "flock-circuit-tmpl/fast100x2/rep"));
+    }
+
+    #[test]
+    fn nonzeros_past_the_gpu_bound_are_refused() {
+        let rows = |n: usize| vec![vec![0usize; n], vec![1; n]];
+        assert!(nnz_within("u", &rows(3), &rows(2), 6).is_ok());
+        assert!(nnz_within("u", &rows(4), &rows(2), 6).unwrap_err().contains("8 nonzeros in A"));
+        assert!(nnz_within("u", &rows(1), &rows(4), 6).unwrap_err().contains("8 in B"));
+        assert_eq!(GPU_NNZ_MAX, u32::MAX as u64);
     }
 
     #[test]

@@ -1,67 +1,48 @@
 /-
-`Tmpl.evalDef` against the unrolled rows (`Flock.TmplEval.rows_eval` on one unit): `Flock.Test.Tmpl`'s unit, its column
-values computed in order from the rows `Tmpl.rows` unrolls, its three input bits each way and the constant 1, satisfies
-every row, and at each copy of a pair (at 128 and 131) and of an AND inside it, those values are the copy's Definition's
-`evalDef` on its bound inputs. And `evalDef` on its own: the AND, a pair, and an XOR of two inputs.
+`Flock.TmplEval.SatAt` used as a piece fact and composed: a copy of `Flock.Test.Tmpl`'s AND Definition that holds computes
+the AND of its bound inputs, from its rows alone; and a Definition placing two copies of it on its own inputs and XORing
+them gets `0`, from its row and its calls' copies (`rows_sat` gives `SatAt` at every copy of a unit's root).
 -/
-import Flock.Test.Tmpl
 import Flock.TmplEval
 
 namespace Flock.Test.TmplEval
 
-open Flock Flock.Test.Tmpl
+open Flock.Tmpl Flock.TmplEval
 
-def tmpl : _root_.Flock.Tmpl.Tmpl :=
-  match _root_.Flock.Tmpl.parse tmplLines with
-  | .ok t => t
-  | .error _ => default
+/-- `Flock.Test.Tmpl`'s AND (`DEF 1 2 1 0`, `0 1 2 1 1`): one own column, two inputs, its row `[in 0]·[in 1]`. -/
+def andDef : Def := { cols := 1, ins := 2, rows := #[(0, #[1], #[2])], calls := #[] }
 
-def rows : _root_.Flock.Tmpl.Acc :=
-  match tmpl.rows with
-  | .ok acc => acc
-  | .error _ => _root_.Flock.Tmpl.Acc.empty 0
+/-- `Flock.Test.Tmpl`'s pair (`DEF 3 2 1 1`, `2 2 1 0 1 5`, `CALL 0 2 0 1 1 2 3 0 1 0`): two AND copies at own columns 0
+and 1, each bound to the pair's two inputs, and own column 2 their XOR times the constant. -/
+def pairCall : Call :=
+  { def_ := 0, count := 2, base := 0, stride := 1, segs := #[{ len := 2, at_ := 3, step := 0, reps := 1, rstride := 0 }] }
 
-/-- The unit's column values: input bit `x` from `ins`, the constant 1, every other column its row's value on the ones
-before it. -/
-def honest (ins : Nat → Bool) : Array Bool :=
-  (List.range 400).foldl (fun arr x =>
-    let z := fun y => if y = 399 then true else arr.getD y false
-    arr.push (if x = 399 then true else if x < 3 then ins x
-      else _root_.Flock.Tmpl.rowVal z (x, rows.ra.getD x #[], rows.rb.getD x #[]))) #[]
+def pairDef : Def := { cols := 3, ins := 2, rows := #[(2, #[1, 0], #[5])], calls := #[pairCall] }
 
-def val (ins : Nat → Bool) (y : Nat) : Bool := if y = 399 then true else (honest ins).getD y false
+def defs : Array Def := #[andDef, pairDef]
 
-def inputs : List (Nat → Bool) :=
-  (List.range 8).map fun m i => decide (m / 2 ^ i % 2 = 1)
+/-- **A piece fact from its rows**: a copy of the AND Definition at `o`, bound to `a` and `b`, that holds computes
+`a ∧ b`. -/
+theorem and_sat {k : Nat} {v : Nat → Bool} {fuel o a b : Nat} (h : SatAt defs k v (fuel + 1) 0 o [a, b]) :
+    v o = (v a && v b) := by
+  obtain ⟨df, hdf, hrows, -⟩ := h
+  obtain rfl : df = andDef := by simpa [defs] using hdf.symm
+  simpa [andDef, xorL, xorList, Def.ref] using hrows (0, #[1], #[2]) (by simp [andDef])
 
-/-- Every unrolled row holds at `val ins`. -/
-def holds (ins : Nat → Bool) : Bool :=
-  (List.range 400).all fun x =>
-    val ins x == _root_.Flock.Tmpl.rowVal (val ins) (x, rows.ra.getD x #[], rows.rb.getD x #[])
-
-/-- At each pair, copy `j` at `128 + 3j` bound to input bits `(j, j + 1)`, and at each AND inside it, the values are
-`evalDef`'s. -/
-def composes (ins : Nat → Bool) : Bool :=
-  (List.range 2).all fun j =>
-    let inp := [val ins j, val ins (j + 1)]
-    ((List.range 3).all fun y => val ins (128 + 3 * j + y) == tmpl.evalDef 1 inp true y) &&
-      (List.range 2).all fun i => val ins (128 + 3 * j + i) == tmpl.evalDef 0 inp true 0
-
-#guard (_root_.Flock.Tmpl.parse tmplLines).toOption.isSome
-#guard tmpl.rows.toOption.isSome
-#guard inputs.all holds
-#guard inputs.all composes
--- the AND: own column 0 is `in 1 ∧ in 0`
-#guard [[false, false], [false, true], [true, false], [true, true]].map (tmpl.evalDef 0 · true 0) ==
-  [false, false, false, true]
--- a pair: both ANDs, and their sum (zero) times the constant
-#guard (List.range 3).map (tmpl.evalDef 1 [true, true] true) == [true, true, false]
-#guard (List.range 3).map (tmpl.evalDef 1 [true, false] true) == [false, false, false]
--- an XOR: own column 0 is `(in 0 ⊕ in 1) ∧ const`, so the constant's value enters
-#guard [[false, false], [false, true], [true, false], [true, true]].map
-    (_root_.Flock.Tmpl.eval #[{ cols := 1, ins := 2, rows := #[(0, #[1, 2], #[3])], calls := #[] }] true 1 0 · 0) ==
-  [false, true, true, false]
-#guard _root_.Flock.Tmpl.eval #[{ cols := 1, ins := 2, rows := #[(0, #[1, 2], #[3])], calls := #[] }] false 1 0
-  [true, false] 0 == false
+/-- **Composed**: a copy of the pair that holds, at a constant `1`, has own column 2 equal to `0`: its two AND copies
+agree (`and_sat` at each), and its row XORs them. -/
+example {k : Nat} {v : Nat → Bool} {fuel o a b : Nat} (h : SatAt defs k v (fuel + 2) 1 o [a, b]) (hk : v k = true) :
+    v (o + 2) = false := by
+  obtain ⟨df, hdf, hrows, hcalls⟩ := h
+  obtain rfl : df = pairDef := by simpa [defs] using hdf.symm
+  have hc := hcalls pairCall (by simp [pairDef])
+  have hb : ∀ j, pairCall.bound (pairDef.ref o [a, b] k) j = [a, b] := fun _ => rfl
+  have h0 : v o = (v a && v b) := and_sat (o := o) (by have := hc 0 (by decide); rw [hb] at this; exact this)
+  have h1 : v (o + 1) = (v a && v b) := and_sat (o := o + 1) (by have := hc 1 (by decide); rw [hb] at this; exact this)
+  have hr := hrows (2, #[1, 0], #[5]) (by simp [pairDef])
+  simp only [pairDef, xorL, xorList, Def.ref] at hr
+  simp at hr
+  rw [hr, h0, h1, hk]
+  cases v a <;> cases v b <;> rfl
 
 end Flock.Test.TmplEval
