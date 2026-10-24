@@ -10,6 +10,7 @@ It keeps no state of its own.  The queue's lease keeps a message invisible while
 - A post routed by the names it starts with needs no line: its doorbells are its record.
 - A post through Verity's bot by an `external_posters` name (no `research msg` sender delivered it), in
   `#agent-coordination` too, rings by the rule alone: no routing line, and nothing when it names no one.
+- A `canary` (the watchdog's synthetic event, hourly) stamps canary_done_at and touches nothing else.
 - A `team_join` of someone `chat expect` published opens their chat (`newcomer`)."""
 from __future__ import annotations
 
@@ -18,7 +19,7 @@ import re
 from typing import Any
 
 from . import router
-from .deps import DEAD, DEAD_TOPIC, LAST_DONE, LAST_SUCCESS, Deps, error
+from .deps import CANARY_DONE, DEAD, DEAD_TOPIC, LAST_DONE, LAST_SUCCESS, Deps, error
 
 MAX_DELIVERIES = 5
 ASK_CHANNELS = ("ask-the-team", "resource-accounting")          # a registry channel by these keys routes as #ask-the-team
@@ -87,6 +88,9 @@ def process(deps: Deps, payload: dict) -> str:
         # only a card's asker can reach (Cursor OIDC); `ring_decision` needs that record. README "Needs".
         deps.log("interactivity-unhandled", event_id=payload.get("event_id"), type=(payload.get("payload") or {}).get("type"))
         return "interactivity-unhandled"
+    if payload.get("kind") == "canary":                          # the watchdog's, proving the queue has a working consumer
+        deps.write(CANARY_DONE, deps.clock())
+        return "canary"
     if payload.get("kind") != "event":
         return "ignored: unknown kind"
     ev = payload.get("event") or {}

@@ -128,6 +128,7 @@ def test_health_reports_what_the_cache_holds_with_its_bearer_and_refuses_without
     cache.set(LAST_ENQUEUED, T0 - 60)
     assert health(c) == {"oldest_unprocessed_age_s": 30.0, "dead_letter_count": 1, "dead_letter_since": T0 - 86400,
                          "last_success_at": T0 - 2, "last_done_at": T0 - 600, "last_enqueued_at": T0 - 60,
+                         "canary_sent_at": None, "canary_done_at": None,
                          "queue": "slack-events", "dead_letter": "slack-events-dead"}
     cache.set(OLDEST, {"ts": None, "at": T0})
     assert health(c)["oldest_unprocessed_age_s"] == 0.0
@@ -139,8 +140,8 @@ def test_health_reports_what_the_cache_holds_with_its_bearer_and_refuses_without
 
 def test_a_cold_or_unreachable_cache_reads_as_unknown_not_as_down(world):
     unknown = {"oldest_unprocessed_age_s": None, "dead_letter_count": None, "dead_letter_since": None,
-               "last_success_at": None, "last_done_at": None, "last_enqueued_at": None, "queue": "slack-events",
-               "dead_letter": "slack-events-dead"}
+               "last_success_at": None, "last_done_at": None, "last_enqueued_at": None, "canary_sent_at": None,
+               "canary_done_at": None, "queue": "slack-events", "dead_letter": "slack-events-dead"}
     assert health(client(world)) == unknown
     world.deps.cache.set(LAST_SUCCESS, T0)
     world.deps.cache.fail = True
