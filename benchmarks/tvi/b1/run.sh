@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # B1 on one GPU. Mode sweep (default): for each of MODELS, retrain console's conditions (train.py) and run counted.py on the
 # snapshots SNAPS keeps, deleting them after. Mode ckpt: run counted.py against BASE on the checkpoint dirs listed in CKPTS.
+# Mode watch: watch.py, A2's and A3's checkpoints as they finish (send the eval texts, DEADLINE).
 set -euo pipefail
 IN="$RESEARCH_RUN_DIR/inputs"
 mkdir -p /workspace/jobs/tvi/scratch
@@ -17,6 +18,11 @@ export PYTHONPATH="$S/extra:$S"
 if [ -d /workspace/hf/hub ] && [ -w /workspace/hf/hub ]; then export HF_HUB_CACHE=/workspace/hf/hub; else export HF_HOME="$S/hf"; fi
 nvidia-smi --query-gpu=name,memory.total,memory.used --format=csv
 quiet() { grep --line-buffered -v -E 'Loading weights|unauthenticated|Writing model' || true; }
+
+if [ "${MODE:-sweep}" = watch ]; then
+  TEXTS="$S" "$PY" watch.py 2>&1 | quiet | tee -a "$OUT/watch.log"
+  exit 0
+fi
 
 if [ "${MODE:-sweep}" = ckpt ]; then
   # CKPTS lines: "DIR NAME TEXT" (TEXT a sent eval-text file, or - for the stdlib held-out tokens); one counted.py per TEXT
