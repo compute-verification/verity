@@ -237,8 +237,19 @@ def test_a_residual_with_values_left_over_or_missing_is_refused(case) -> None:
 CORPUS = HERE / "fixtures" / "corpus-smallkv"
 
 
-def _corpus(**kw):
-    return D.load_corpus_trace(CORPUS, eos_token_id=128009, stop_token_ids=(128001, 128008), **kw)
+def _corpus(d=CORPUS, **kw):
+    return D.load_corpus_trace(d, eos_token_id=128009, stop_token_ids=(128001, 128008), **kw)
+
+
+def _corpus_with(tmp_path, change):
+    """The corpus fixture with `change` applied to each joined step record."""
+    steps = [json.loads(line) for line in gzip.decompress((CORPUS / "steps.jsonl.gz").read_bytes()).decode().splitlines()]
+    for s in steps:
+        change(s)
+    for f in ("requests.jsonl.gz", "meta.json", "server.log"):
+        shutil.copy(CORPUS / f, tmp_path / f)
+    (tmp_path / "steps.jsonl").write_text("".join(json.dumps(s) + "\n" for s in steps))
+    return _corpus(tmp_path)
 
 
 def test_a_trace_corpus_trace_rebuilds_from_the_runners_batch_order(tmp_path) -> None:
@@ -249,24 +260,46 @@ def test_a_trace_corpus_trace_rebuilds_from_the_runners_batch_order(tmp_path) ->
     (a request mid-prefill is the running list's newest), so the batches are also rotated, last row first where no two
     requests are new: from either order the walk derives every n, budget-bound steps and resumes included, at the bits it
     costs from vLLM's scheduling order."""
-    lines = gzip.decompress((CORPUS / "steps.jsonl.gz").read_bytes()).decode().splitlines()
-    steps = [json.loads(line) for line in lines]
-    for s in steps:
+    def rotate(s):
         if s.get("batch") and sum(not r["resumed"] for r in s["new"]) <= 1:
             s["batch"] = s["batch"][-1:] + s["batch"][:-1]
-    for f in ("requests.jsonl.gz", "meta.json", "server.log"):
-        shutil.copy(CORPUS / f, tmp_path / f)
-    (tmp_path / "steps.jsonl").write_text("".join(json.dumps(s) + "\n" for s in steps))
-    sched, batch = _corpus(row_order="scheduling"), _corpus()
-    rotated = D.load_corpus_trace(tmp_path, eos_token_id=128009, stop_token_ids=(128001, 128008))
+
+    sched, batch, rotated = _corpus(row_order="scheduling"), _corpus(), _corpus_with(tmp_path, rotate)
     assert sched["config"]["num_gpu_blocks"] == 100
     budget = sched["config"]["max_num_batched_tokens"]
     assert sum([r["request"] for r in a["rows"]] != [r["request"] for r in b["rows"]] and sum(r["n"] for r in a["rows"]) == budget
                for a, b in zip(sched["steps"], rotated["steps"])) > 10
     tables = [D.bits_table(t, T=600) for t in (sched, batch, rotated)]
+
+    def unchunked(t):
+        return {f: b for f, b in t["by_field"]["derived"].items() if f != "chunk"}
+
+    assert tables[0]["by_field"]["derived"].get("chunk", 0) == 0
     for t in tables:
         assert t["explicit_n"] == 0 and not t["order_sent"] and t["resumed_rows"] > 0 and t["sources"] > 0
-        assert t["totals"] == tables[0]["totals"]
+        assert t["totals"]["v0_bits"] == tables[0]["totals"]["v0_bits"] and unchunked(t) == unchunked(tables[0])
+
+
+def test_prefills_by_size_name_the_row_vllm_cut_short(tmp_path) -> None:
+    """Model Runner V2's batch on the GPU (TRACE-CORPUS's smoke, r20261024-045656-4c66): decodes first, then the prefill
+    rows by size, so a step's new requests leave arrival order and the one vLLM chunked, the last admitted, needn't be
+    last. The residual names it where two or more new rows overrun the budget; any other name is refused."""
+    def by_size(s):
+        if s.get("batch"):
+            rows = {r["id"]: r for r in s["new"] + s["cached"]}
+            s["batch"] = sorted(s["batch"], key=lambda i: (rows[i]["kind"] != "decode", rows[i]["num_scheduled_tokens"]))
+
+    trace = _corpus_with(tmp_path, by_size)
+    t = D.bits_table(trace, T=600)
+    assert t["explicit_n"] == 0 and t["by_field"]["derived"].get("chunk", 0) > 0
+    cfg, held = D.config_of(trace), D.holdings_of(trace)
+    adv, order = D.advice_of(trace)
+    res = D.residual(adv, cfg, order=order)
+    walk = D.reconstruct(res, cfg)
+    for j, (s, m) in enumerate(walk.chunked[:8]):
+        for other in {(res.chunks[j] + 1) % m, m}:
+            bad = dataclasses.replace(res, chunks=res.chunks[:j] + (other,) + res.chunks[j + 1:])
+            assert _refused(lambda: D.rebuild(bad, cfg, held, ()), adv)
 
 
 def test_a_trace_corpus_trace_off_the_config_is_refused() -> None:

@@ -33,8 +33,11 @@ its verdict, derivation, checker and cost.
   one ran after the stop (the async scheduler schedules a request's next decode before it reads the sample, and then
   drops that decode's), which `output_len` subtracts; forced by the committed ids (a lag follows a stop id);
 - `order`: each request's certified ingress index, only when it isn't the request's own (I1 numbers requests by first
-  row, and vLLM's FCFS admits them in arrival order, so the two differ only if the engine got them out of ingress order);
+  row, and vLLM's FCFS admits them in arrival order, so the two differ only if the engine got them out of ingress order,
+  or the batch order puts a step's new requests out of it, as Model Runner V2 does);
 - `ns`: n where the walk can't derive it: only when the scheduling order is unknown (`row_order` "explicit");
+- `chunks`: in batch order, for a step whose new rows overrun the budget left, which of them vLLM admitted last and cut
+  short, by position among them (only where there are two or more);
 - `release`: each kept output's egress bucket on an unshaped egress, where its choices are the timing channel; none on a
   shaped one, where `served.derive` fixes them from the ingress anchors, the output lengths and the declared sync.
 
@@ -117,6 +120,7 @@ class Residual:
     order: tuple[int, ...] | None = None                # None: request i is the i-th certified one
     ns: tuple[int, ...] = ()
     release: tuple[int, ...] | None = None
+    chunks: tuple[int, ...] = ()                        # batch order: which new row vLLM cut short, where it is unclear
 
 
 # --- traces ----------------------------------------------------------------------------------------------------------
@@ -320,26 +324,32 @@ def pool_bound(rows: Sequence[Sequence[tuple[int, int, int]]], cfg: Config) -> b
 @dataclass(frozen=True)
 class Walk:
     """What the walk gives back in the clear: I1's steps, each request's output length, the step of each explicit n it
-    read, and the requests it read a lag bit for."""
+    read, the requests it read a lag bit for, and each step it read a chunked new row for (with its new rows' count)."""
     steps: tuple[StepAdvice, ...]
     output_len: tuple[int, ...]
     explicit_n: tuple[int, ...]
     lag_requests: tuple[int, ...]
+    chunked: tuple[tuple[int, int], ...] = ()
 
 
 def _walk(rows: Sequence[Sequence[int]], prompt_len: Sequence[int], cfg: Config, *, pool: bool,
           hit_of: Callable[[int, int], int], sources_of: Callable[[int, int], tuple[Source, ...]],
-          resumed_of: Callable[[int, int], bool], n_of: Callable[[int, int], int], lag_of: Callable[[int], bool]) -> Walk:
+          resumed_of: Callable[[int, int], bool], n_of: Callable[[int, int], int], lag_of: Callable[[int], bool],
+          chunk_of: Callable[[int, list[tuple[int, int]]], int]) -> Walk:
     """The one derivation (the module's docstring). The callbacks give, for step s's row k, what the residual holds:
     `hit_of` an admitting row's hit in hit units, `sources_of` a nonzero hit's sources, `resumed_of` whether a row after its
     request's first resumes it (read unless `pool`, which instead checks the pool bound), `n_of` n where the walk can't
     derive it; `lag_of(i)` whether request i's last sampling row ran after its stop, asked in async mode only of a request
-    whose last two sampling rows are in consecutive steps (only there can the scheduler have run a decode past a stop).
+    whose last two sampling rows are in consecutive steps (only there can the scheduler have run a decode past a stop);
+    `chunk_of(s, new)` which of step s's new rows (row, full n) vLLM chunked, by position, asked only where they don't all
+    fit the budget left and there are two or more.
 
     n takes the budget in vLLM's scheduling order: the rows' own (`row_order` "scheduling"), or, for rows in the runner's
     batch order ("batch"), the order vLLM's FCFS lists give them: the running requests in the running list's order (each
     appended when admitted), then the waiting ones, resumed requests first (each prepended when preempted, the latest
-    preemption foremost) and then new ones in arrival order."""
+    preemption foremost) and then new ones in arrival order. The batch order doesn't keep the new ones' arrival order
+    (Model Runner V2 puts prefills by size), but only the last of them can be cut short: each takes its whole prefill,
+    unless together they overrun the budget, when the one vLLM admitted last takes what is left."""
     end: dict[int, int] = {}
     samples: dict[int, int] = {}
     sample_steps: dict[int, list[int]] = {}
@@ -347,7 +357,7 @@ def _walk(rows: Sequence[Sequence[int]], prompt_len: Sequence[int], cfg: Config,
     admitted: dict[int, int] = {}                   # each request's place in the running list: its latest admission
     last: dict[int, int] = {}                       # each request's latest step
     admissions = 0
-    steps, explicit = [], []
+    steps, explicit, chunked = [], [], []
     for s, step in enumerate(rows):
         if len(set(step)) != len(step):
             raise ValueError(f"step {s}: a request in two rows")
@@ -362,28 +372,31 @@ def _walk(rows: Sequence[Sequence[int]], prompt_len: Sequence[int], cfg: Config,
             resumed = not first and not pool and resumed_of(s, k)
             hit = hit_of(s, k) * cfg.unit if first or resumed else 0
             adm.append((first, resumed, hit, sources_of(s, k) if hit else ()))
-        order: Sequence[int] = range(len(step))
+        order: list[int] = list(range(len(step)))
+        fresh: list[int] = []
         if cfg.row_order == "batch":
-            order = sorted(order, key=lambda k: (2, step[k]) if adm[k][0] else (1, -last[step[k]], admitted[step[k]])
+            fresh = [k for k in order if adm[k][0]]
+            order = sorted((k for k in order if not adm[k][0]), key=lambda k: (1, -last[step[k]], admitted[step[k]])
                            if adm[k][1] else (0, admitted[step[k]]))
         used, out = 0, [None] * len(step)
-        for k in order:
-            i, (first, resumed, hit, sources), P = step[k], adm[k], prompt_len[step[k]]
-            start = hit if first or resumed else end[i]
-            K = P + samples.get(i, 0)
+
+        def bounds(k: int) -> tuple[int, int, int]:
+            """Row k's start, its request's known tokens, and the n it takes when the budget doesn't bind."""
+            i, (first, resumed, hit, _) = step[k], adm[k]
+            start, K = hit if first or resumed else end[i], prompt_len[i] + samples.get(i, 0)
             if K - start <= 0:
                 raise ValueError(f"step {s} row {k}: request {i} has nothing left to compute")
-            if K - start == 1:
-                n = 1
-            elif cfg.row_order == "explicit":
-                n = n_of(s, k)
-                explicit.append(s)
-            else:
-                n = min(K - start, cfg.max_num_batched_tokens - used)
-                if cfg.long_prefill_token_threshold > 0:
-                    n = min(n, cfg.long_prefill_token_threshold)
-                if not (first or resumed):
-                    n = min(n, cfg.max_model_len - 1 - start)
+            want = K - start
+            if cfg.long_prefill_token_threshold > 0:
+                want = min(want, cfg.long_prefill_token_threshold)
+            if not (first or resumed):
+                want = min(want, cfg.max_model_len - 1 - start)
+            return start, K, want
+
+        def emit(k: int, n: int) -> None:
+            nonlocal used
+            i, (_, resumed, hit, sources) = step[k], adm[k]
+            start, K, _ = bounds(k)
             if not 0 < n <= cfg.max_num_batched_tokens - used:
                 raise ValueError(f"step {s} row {k}: n = {n} with {cfg.max_num_batched_tokens - used} of the budget left")
             used += n
@@ -391,7 +404,30 @@ def _walk(rows: Sequence[Sequence[int]], prompt_len: Sequence[int], cfg: Config,
                 samples[i] = samples.get(i, 0) + 1
                 sample_steps.setdefault(i, []).append(s)
             end[i] = start + n
-            out[k] = Row(i, "decode" if n == 1 and start >= P else "prefill", start, n, hit, resumed, sources)
+            out[k] = Row(i, "decode" if n == 1 and start >= prompt_len[i] else "prefill", start, n, hit, resumed, sources)
+
+        for k in order:
+            start, K, want = bounds(k)
+            if K - start == 1:
+                n = 1
+            elif cfg.row_order == "explicit":
+                n = n_of(s, k)
+                explicit.append(s)
+            else:
+                n = min(want, cfg.max_num_batched_tokens - used)
+            emit(k, n)
+        if fresh:
+            full = {k: bounds(k)[2] for k in fresh}
+            left = cfg.max_num_batched_tokens - used
+            if sum(full.values()) > left:
+                c = fresh[chunk_of(s, [(k, full[k]) for k in fresh])] if len(fresh) > 1 else fresh[0]
+                if len(fresh) > 1:
+                    chunked.append((s, len(fresh)))
+                full[c] = left - (sum(full.values()) - full[c])
+                fresh = [k for k in fresh if k != c] + [c]
+            for k in fresh:
+                emit(k, full[k])
+            order += fresh
         for k in order:
             if adm[k][0] or adm[k][1]:
                 admitted[step[k]] = admissions
@@ -409,7 +445,7 @@ def _walk(rows: Sequence[Sequence[int]], prompt_len: Sequence[int], cfg: Config,
         output_len.append(samples[i] - lag)
     if pool and not pool_bound([[(r.request, r.start, r.n) for r in st.rows] for st in steps], cfg):
         raise ValueError("no preemption sent, but the rows don't keep within the KV pool")
-    return Walk(tuple(steps), tuple(output_len), tuple(explicit), tuple(lagged))
+    return Walk(tuple(steps), tuple(output_len), tuple(explicit), tuple(lagged), tuple(chunked))
 
 
 def _sampling_rows(advice: Advice, i: int) -> int:
@@ -459,19 +495,28 @@ def residual(advice: Advice, cfg: Config, *, order: Sequence[int] | None = None,
         lags.append(_sampling_rows(advice, i) - advice.requests[i].output_len == 1)
         return lags[-1]
 
+    def chunk_of(s: int, new: list[tuple[int, int]]) -> int:
+        short = [j for j, (k, full) in enumerate(new) if advice.steps[s].rows[k].n < full]
+        if len(short) != 1:
+            raise ValueError(f"step {s}: {len(short)} new rows cut short; vLLM cuts only the last it admits")
+        chunks.append(short[0])
+        return chunks[-1]
+
+    chunks: list[int] = []
     rows = tuple(tuple(r.request for r in st.rows) for st in advice.steps)
     prompt_len = tuple(q.prompt_len for q in advice.requests)
     _walk(rows, prompt_len, cfg, pool=pool, hit_of=hit_of, sources_of=sources_of, resumed_of=resumed_of, n_of=n_of,
-          lag_of=lag_of)
+          lag_of=lag_of, chunk_of=chunk_of)
     own = order is None or tuple(order) == tuple(range(len(advice.requests)))
     return Residual(rows, prompt_len, tuple(hits), tuple(sources), None if pool else tuple(resumes),
                     tuple(lags) if cfg.scheduler == "async" else None, None if own else tuple(order), tuple(ns),
-                    None if shaped else tuple(advice.release))
+                    None if shaped else tuple(advice.release), tuple(chunks))
 
 
 def reconstruct(res: Residual, cfg: Config) -> Walk:
     """The public fields from the residual and the config alone: what the compiler and N2-ADVICE read."""
-    held = {"hit": iter(res.hits), "sources": iter(res.sources), "n": iter(res.ns), "lag": iter(res.lag or ())}
+    held = {"hit": iter(res.hits), "sources": iter(res.sources), "n": iter(res.ns), "lag": iter(res.lag or ()),
+            "chunk": iter(res.chunks)}
     resumes = iter(res.resumes or ())
     later, resume = [0], [next(resumes, None)]
 
@@ -488,9 +533,15 @@ def reconstruct(res: Residual, cfg: Config) -> Walk:
         resume[0] = next(resumes, None)
         return True
 
+    def chunk_of(s: int, new: list[tuple[int, int]]) -> int:
+        j = take("chunk")
+        if not 0 <= j < len(new):
+            raise ValueError(f"residual: step {s}'s chunked row {j} of {len(new)} new ones")
+        return j
+
     walk = _walk(res.rows, res.prompt_len, cfg, pool=res.resumes is None, hit_of=lambda s, k: take("hit"),
                  sources_of=lambda s, k: take("sources"), resumed_of=resumed_of, n_of=lambda s, k: take("n"),
-                 lag_of=lambda i: take("lag"))
+                 lag_of=lambda i: take("lag"), chunk_of=chunk_of)
     if resume[0] is not None or any(next(it, None) is not None for it in held.values()):
         raise ValueError("residual: more values than the rows read, or resumes out of order")
     return walk
@@ -575,8 +626,9 @@ def derived_records(res: Residual, walk: Walk, cfg: Config) -> Records:
     units, a flag each for order, resumes and release being sent, and when resumes are, their width and count); a
     request's prompt_len, its order (when sent) and its lag bit (when asked); a step's row count and requests, each
     resumed row's position (when sent), a hit flag for each admitting row with the hit's units when nonzero and then its
-    sources (I1's: a count, and each a request and its units), and an explicit n where read; a kept output's release (when
-    sent). The hit unit is the registered config's, so it costs nothing here."""
+    sources (I1's: a count, and each a request and its units), an explicit n where read, and the chunked new row's
+    position where read; a kept output's release (when sent). The hit unit is the registered config's, so it costs
+    nothing here."""
     bs = cfg.unit
     w_req = max(len(res.prompt_len) - 1, 0).bit_length()
     w_len = max((*res.prompt_len, *res.ns), default=0).bit_length()
@@ -592,11 +644,12 @@ def derived_records(res: Residual, walk: Walk, cfg: Config) -> Records:
     explicit: dict[int, int] = {}
     for s in walk.explicit_n:
         explicit[s] = explicit.get(s, 0) + 1
+    chunk = {s: (m - 1).bit_length() for s, m in walk.chunked}
     seen: set[int] = set()
     steps = []
     for s, st in enumerate(walk.steps):
         d = {"rows_in_step": w_req, "request": w_req * len(st.rows), "resumes": 0, "hits": 0, "sources": 0,
-             "n": w_len * explicit.get(s, 0)}
+             "n": w_len * explicit.get(s, 0), "chunk": chunk.get(s, 0)}
         for r in st.rows:
             first = r.request not in seen
             seen.add(r.request)
@@ -736,11 +789,13 @@ FIELDS = [
     {"field": "start", "verdict": "derived", "bits": "0", "from": "rows' history, cache_hit",
      "derivation": "the request's previous row's end; an admitting row's (its first, or a resumed one) is its hit",
      "checker": "compiler", "cost": "0"},
-    {"field": "n", "verdict": "derived", "bits": "0 (w_len a non-decode row when the scheduling order is unknown)",
+    {"field": "n", "verdict": "derived", "bits": "0 (w_len a non-decode row when the scheduling order is unknown; in batch "
+     "order, bitlen(new rows - 1) a step whose new rows overrun the budget left)",
      "from": "rows' history, prompt_len, max_num_batched_tokens, max_model_len",
      "derivation": "min(K - start, the step's budget left, the long-prefill threshold; a running row's max_model_len - 1 - "
      "start), K = prompt_len + sampling rows so far, the budget taken in vLLM's scheduling order (in batch order: running "
-     "rows by admission, then resumed, then new)", "checker": "compiler", "cost": "0"},
+     "rows by admission, then resumed, then new; the new rows each whole but the one vLLM admitted last, which takes what "
+     "is left when they overrun it, and which the residual names)", "checker": "compiler", "cost": "0"},
     {"field": "kind", "verdict": "derived", "bits": "0", "from": "start, n, prompt_len",
      "derivation": "decode iff n = 1 and start >= prompt_len (I1's rule)", "checker": "compiler", "cost": "0"},
     {"field": "cache_hit", "verdict": "stays on admitting rows only, forced (not checked yet)",
