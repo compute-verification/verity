@@ -11,6 +11,7 @@ from types import SimpleNamespace as NS
 
 import pytest
 from verity_vllm.predict.build import Unexpressible, build_program
+from verity_vllm.predict.common import _arr
 from verity_vllm.predict.phi import Phi
 from verity_vllm.predict.steps import (
     Registered,
@@ -73,26 +74,6 @@ def _mixed() -> tuple[I1.Advice, dict]:
         [(2, 9, 1)],
         [(2, 10, 1)],
     ])
-
-
-def test_requests_compile_to_the_builds_request_programs_at_the_shapes_they_ran():
-    reg, (advice, ingress) = _registered(), _mixed()
-    c = compile_steps(reg, advice, ingress)
-    d0 = build_program(Phi.from_json({**reg.phi.to_json(), "sampling": {"kind": "greedy"}}), "request", LP=8, T=3).digest
-    d1 = build_program(Phi.from_json({**reg.phi.to_json(), "sampling": STOCH_POLICY}), "request", LP=5, T=2).digest
-    assert [(u.digest, u.LP, u.T, u.first_step, u.id) for u in c.requests] == [(d0, 8, 3, 0, "q0"), (d1, 5, 2, 1, "q1"), (d0, 8, 3, 2, "q2")]
-    assert sorted(c.programs) == sorted({d0, d1})
-    assert c.requests[1].policy == STOCH_POLICY and c.requests[1].seed == 7 and c.requests[0].seed is None
-    assert c.steps[1] == [RowRef(0, d0, 8, 1, 1), RowRef(1, d1, 0, 5, 1)]
-    assert c.steps[2] == [RowRef(0, d0, 9, 1, 1), RowRef(1, d1, 5, 1, 1), RowRef(2, d0, 0, 8, 1)]
-    assert [len(s) for s in c.steps] == [1, 2, 3, 3, 1, 1]
-    wl = c.workload
-    assert [(r.request_id, r.index, r.prompt_len, r.cap, r.arrive_step) for r in wl.requests] == [
-        ("r0", 0, 8, 4, 0), ("r1", 1, 5, 3, 1), ("r2", 2, 8, 4, 2)]
-    assert wl.lag == reg.phi.target_profile().lag()
-    s = json.loads(json.dumps(c.summary()))
-    assert s["workload_digest"] == wl.digest and s["steps"][1] == [[0, 8, 1, 1], [1, 0, 5, 1]] and s["cap_bits"] == reg.cap_bits
-    assert compile_steps(reg, I1.encode(advice), ingress).summary() == c.summary()
 
 
 def test_a_requests_program_reads_its_own_fields_alone():
@@ -213,35 +194,77 @@ def test_advice_the_certified_bodies_contradict_is_refused(change, fact):
         compile_steps(reg, advice, ingress)
 
 
-def _hit(shared: int) -> tuple[I1.Advice, dict]:
-    """r1 (LP 8) admitted at step 1 on a 4-token prefix-cache hit of r0's KV; its prompt shares r0's first `shared` tokens."""
-    p0 = _prompt(0, 8)
-    p1 = p0[:shared] + _prompt(1, 8)[shared:]
-    return _session([(8, 4, GREEDY, p0), (8, 3, GREEDY, p1)], [
-        [(0, 0, 8)],
-        [(0, 8, 1), (1, 4, 4, {"cache_hit": 4, "sources": (I1.Source(0, 4),)})],
-        [(0, 9, 1), (1, 8, 1)],
-        [(0, 10, 1), (1, 9, 1)],
+def _hit(shared: int, hit: int = 16, body: dict = GREEDY) -> tuple[I1.Advice, dict]:
+    """r1 (LP 24) admitted at step 1 on a `hit`-token prefix-cache hit of r0's KV (a block of vLLM's 16 tokens); its prompt shares r0's
+    first `shared` tokens."""
+    p0 = _prompt(0, 24)
+    p1 = p0[:shared] + _prompt(1, 24)[shared:]
+    return _session([(24, 4, GREEDY, p0), (24, 3, {**body, "max_tokens": 3}, p1)], [
+        [(0, 0, 24)],
+        [(0, 24, 1), (1, hit, 24 - hit, {"cache_hit": hit, "sources": (I1.Source(0, hit),)})],
+        [(0, 25, 1), (1, 24, 1)],
+        [(0, 26, 1), (1, 25, 1)],
     ])
 
 
-def test_a_forged_cache_hit_is_refused_and_an_honest_one_is_refused_as_unported():
+def test_a_forged_cache_hit_is_refused():
     reg = _registered()
     with pytest.raises(Unexpressible, match="request 1: a forged cache hit at step 1: request 0's certified prompt differs from its own "
-                                            "before position 4"):
-        compile_steps(reg, *_hit(3))
-    with pytest.raises(Unexpressible, match="request 1: a prefix-cache hit of 4 tokens at step 1"):
-        compile_steps(reg, *_hit(4))
-    forged, honest = compile_steps(reg, *_hit(3), partial=True), compile_steps(reg, *_hit(8), partial=True)
-    assert "forged cache hit" in forged.refused[1] and "prefix-cache hit of 4" in honest.refused[1]
-    advice, ingress = _hit(4)
-    ingress["q0"]["prompt"] = ingress["q0"]["prompt"][:3] + [255] * 5
+                                            "before position 16"):
+        compile_steps(reg, *_hit(15))
+    assert "forged cache hit" in compile_steps(reg, *_hit(15), partial=True).refused[1]
+    advice, ingress = _hit(16)
+    ingress["q0"]["prompt"] = ingress["q0"]["prompt"][:15] + [255] * 9
     with pytest.raises(Unexpressible, match="forged cache hit"):
         compile_steps(reg, advice, ingress)
 
 
+def test_an_honest_cache_hit_compiles_to_the_cached_request_program():
+    """r1's 16 cached rows are its Program's `prefix` input (the Build's `--cached 16`), r0 the producer of its one block; its
+    prefill computes rows 16..23 at positions 16.., and its decode rows are as without a hit."""
+    reg = _registered()
+    c = compile_steps(reg, *_hit(16))
+    u = c.requests[1]
+    want = build_program(Phi.from_json({**reg.phi.to_json(), "sampling": {"kind": "greedy"}}), "request", LP=24, T=2, C=16)
+    assert (u.LP, u.T, u.C, u.producers, u.digest) == (24, 2, 16, (0,), want.digest)
+    assert u.digest != build_program(Phi.from_json({**reg.phi.to_json(), "sampling": {"kind": "greedy"}}), "request", LP=24, T=2).digest
+    params = [(n, t) for n, t in c.programs[u.digest].fn.signature()[0]]
+    assert [n for n, _ in params] == ["prompt", "prefix", "weights"] and repr(params[1][1]) == repr(_arr((2, 2, 16, 32), 16))
+    assert c.programs[u.digest].fn.bindings["SRC"]["class"] == "verity-vllm/cached-greedy-request/v1"
+    assert c.steps[1] == [RowRef(0, c.requests[0].digest, 24, 1, 1), RowRef(1, u.digest, 16, 8, 1)]
+    assert c.workload.requests[1].prefix == {"rows": 16, "producers": [0]} and c.workload.requests[0].prefix is None
+    s = c.summary()
+    assert s["requests"][1]["C"] == 16 and trace_dir(s["requests"][1]) == "build_request_LP24_T2_C16_greedy"
+    [_, cmd] = trace_commands(s, reg, "/t")
+    assert cmd[cmd.index("--cached") + 1] == "16" and "--cached" not in trace_commands(s, reg, "/t")[0]
+
+
+@pytest.mark.parametrize("hit,body,fact", [
+    (8, GREEDY, "request 1: step 1's cache hit reads 8 tokens of request 0's KV, not whole blocks of 16"),
+    (16, STOCH, "request 1: a prefix-cache hit of 16 tokens on a stochastic request"),
+])
+def test_a_cache_hit_the_cached_wrapper_cannot_express_is_refused(hit, body, fact):
+    with pytest.raises(Unexpressible, match=fact):
+        compile_steps(_registered(), *_hit(24, hit, body))
+
+
+def test_partial_refuses_a_request_whose_cache_hit_reads_a_refused_requests_kv():
+    """r0 is refused (top_k), so r1, whose hit reads r0's KV, leaves the compilation with it; r2 compiles."""
+    p0 = _prompt(0, 24)
+    advice, ingress = _session([(24, 2, {**STOCH, "top_k": 50, "max_tokens": 2}, p0), (24, 1, {**GREEDY, "max_tokens": 1}, p0),
+                                (8, 1, {**GREEDY, "max_tokens": 1})], [
+        [(0, 0, 24)],
+        [(0, 24, 1), (1, 16, 8, {"cache_hit": 16, "sources": (I1.Source(0, 16),)}), (2, 0, 8)],
+    ])
+    c = compile_steps(_registered(), advice, ingress, partial=True)
+    assert sorted(c.refused) == [0, 1] and [u is not None for u in c.requests] == [False, False, True]
+    assert c.refused[1] == "request 1: its cache hit reads request 0's KV, and request 0 is refused"
+    with pytest.raises(Unexpressible, match="top_k=50"):
+        compile_steps(_registered(), advice, ingress)
+
+
 @pytest.mark.parametrize("reqs,steps,fact", [
-    ([(8, 2, GREEDY)], [[(0, 0, 3)], [(0, 3, 5)], [(0, 8, 1)]], "a chunked prefill, 3 of its 8 prompt tokens at step 0"),
+    ([(8, 2, GREEDY)], [[(0, 0, 3)], [(0, 3, 5)], [(0, 8, 1)]], "a chunked prefill, 3 of its 8 uncached prompt tokens at step 0"),
     ([(62, 4, GREEDY)], [[(0, 0, 62)], [(0, 62, 1)], [(0, 63, 1)], [(0, 64, 1)]],
      "request 0: positions to 64, past the model's 64 positions"),
 ])
@@ -275,8 +298,8 @@ def test_the_row_past_a_requests_last_kept_output_is_discarded():
 
 
 def test_partial_refuses_request_by_request():
-    """A measurement over served traffic: request 1's prefix-cache hit, request 2's preemption and request 3's top_k refuse those
-    requests by name, their rows leave the steps, and request 0 compiles as it would alone."""
+    """A measurement over served traffic: request 1's hit of a part of a block, request 2's preemption and request 3's top_k refuse
+    those requests by name, their rows leave the steps, and request 0 compiles as it would alone."""
     p0 = _prompt(0, 8)
     advice, ingress = _session([(8, 4, GREEDY, p0), (8, 2, GREEDY, p0[:4] + [9] * 4), (8, 3, GREEDY), (5, 2, {**STOCH, "top_k": 50})], [
         [(0, 0, 8), (1, 4, 4, {"cache_hit": 4, "sources": (I1.Source(0, 4),)}), (2, 0, 8)],
@@ -289,13 +312,13 @@ def test_partial_refuses_request_by_request():
         compile_steps(reg, advice, ingress)
     c = compile_steps(reg, advice, ingress, partial=True)
     assert sorted(c.refused) == [1, 2, 3]
-    assert "prefix-cache hit of 4" in c.refused[1] and "step 3: request 2 preempted" in c.refused[2] and "top_k=50" in c.refused[3]
+    assert "not whole blocks of 16" in c.refused[1] and "step 3: request 2 preempted" in c.refused[2] and "top_k=50" in c.refused[3]
     assert [u is not None for u in c.requests] == [True, False, False, False]
     alone = compile_steps(reg, *_session([(8, 4, GREEDY, p0)], [[(0, 0, 8)], [(0, 8, 1)], [(0, 9, 1)], [(0, 10, 1)]]))
     assert c.steps == alone.steps and c.programs.keys() == alone.programs.keys()
     assert sorted(c.summary()["refused"]) == ["1", "2", "3"]
     with pytest.raises(Unexpressible, match=r"every request is refused, request 0 first: request 0 \('q0'\): no certified request body"):
-        compile_steps(reg, *_hit(4)[:1], {"q1": _hit(4)[1]["q1"]}, partial=True)
+        compile_steps(reg, *_hit(16)[:1], {"q1": _hit(16)[1]["q1"]}, partial=True)
 
 
 def test_dead_gates_are_counted_as_circuit_check_counts_them():

@@ -116,6 +116,7 @@ def test_the_strict_lift_of_a_table_read_holds_its_widths_as_runs():
     assert lp.evaluate(L.enc_bot(16), *words) == L.enc_bot(16)
 
 
+@pytest.mark.slow
 def test_gelu_tanh_mul_v3_is_v1_on_every_gate_word():
     """One batch over all 65,536 bf16 gate words (random up words), plus the special up words, against `GeluTanhMulBf16_v1`."""
     rng = np.random.default_rng(13)
