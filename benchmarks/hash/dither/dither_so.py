@@ -205,6 +205,10 @@ PUT_ASYNC_ENV = "DITHER_SO_PUT_ASYNC"
 # forward's kernels are launched beside them (under "1" those can be placed first and split the units' SMs).  The same
 # logits: the engine's own compute_logits on the same hidden states, the sampler after them
 LM_GAP_ENV = "DITHER_SO_LM_GAP"
+# with $DITHER_SO_LM_GAP: the serving stream held this many µs (a one-thread spin, torch.cuda._sleep, at the 2092 MHz SM
+# clock these RTXs run at) after it takes the logits, so the next forward's kernels reach the GPU after the units' CTAs
+# hold their SMs.  A screen of where the units' launch and the forward's meet; no value changes
+LM_HOLD_ENV = "DITHER_SO_LM_HOLD_US"
 # "1": a capture's copies go to host memory, not the device (a prefill capture at T = 2048 is ~30 GB); `DA.check` moves
 # each call's tensors to the device as it reads them
 CAP_HOST_ENV = "DITHER_SO_CAP_HOST"
@@ -294,6 +298,9 @@ class SoWindow(DO.Window):
         self.lm_done = torch.cuda.Event()
         self.lm_wait = False
         self.lm_n = {"after": 0, "taken": 0}
+        self.lm_hold_us = int(os.environ.get(LM_HOLD_ENV) or 0)
+        if self.lm_hold_us and not self.lm_gap:
+            raise RuntimeError(f"${LM_HOLD_ENV}: needs ${LM_GAP_ENV}")
         super().__init__(*args, **kwargs)
         if self.a_step:
             self._a_step_set()
@@ -1007,7 +1014,8 @@ class SoWindow(DO.Window):
         if self.lm_gap:
             lm_n, self.lm_n = self.lm_n, dict.fromkeys(self.lm_n, 0)
             doc["so"]["lm_gap"] = {"on": self.lm_gap, "units_wait": {1: "stream", 2: None, 3: "host"}[self.lm_gap], **lm_n,
-                                   "stream_priority": self.lm_stream.priority if self.lm_stream else None}
+                                   "stream_priority": self.lm_stream.priority if self.lm_stream else None,
+                                   "hold_us": self.lm_hold_us}
         if ov is not None:
             doc["so"]["overlap"] = {"order": OV_ORDER, "ring": ov.R, "rounds_built": ov.sent_upto + 1,
                                     "units_dispatched": ov.dispatched_upto + 1,
@@ -2011,6 +2019,8 @@ def hook_lm(llm, win: SoWindow) -> None:
                                f"{h.shape[0]}")
         main = torch.cuda.current_stream()
         main.wait_event(win.lm_done)
+        if win.lm_hold_us:
+            torch.cuda._sleep(2092 * win.lm_hold_us)
         out.record_stream(main)
         win.lm_n["taken"] += 1
         return out
