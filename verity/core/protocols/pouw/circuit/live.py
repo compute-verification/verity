@@ -39,6 +39,31 @@ tiles, so a dead tile is never drawn. The Lean statement is `Pouw.SecurityProofs
 (``Security/Proofs/Pouw/LiveCredit.lean``), whose `liveOk` is `live_ok`.
 
 `live_ok` is the unit on words, and `traced(T)` its gate circuit.
+
+**The live Program** (`program`) is a window's S rounds' units: one template, `PouwLiveSlots_v1{T}`, called once a round,
+unit s round s's. It is a Program of its own beside the window's (`h1window.program`), so the window's tile Program, its
+partition and its draw are untouched. Its parameters are named `PREFIX` and their role: ``slots`` (S·T slot leaves, round
+s's from row s·T), ``requests`` (T headers, read by every round), ``m`` (S rows) and ``round`` (S rows, row s the unit's
+``s``). Its circuit file is the period-open's
+``circuit_files["live"]``, and its partition is ``Q_template_instances`` over its template (`query`).
+
+**Round s's statement** ``live@<s>`` reads registered values (`live_reads.reads_file`; the names below are
+`live_reads`', which builds no Program), each under the window Program's digest:
+
+* port ``slot_<i>`` reads row i of round s's slot table ``<prefix>slots@<s>`` (`SLOTS`: T rows of `SLOT_WORDS` u16 words,
+  the leaf's u32 little-endian), bound to the window's open root, its root round s's ``slots``;
+* port ``req_<i>`` reads row i of round 0's request table ``<prefix>requests@0`` (`REQUESTS`: T rows of `HEADER_WORDS`
+  words, the header's five u32 little-endian), bound to the window's session (its root, round 0's ``request_table``, is
+  inside the open root, as ``ids@0``'s is);
+* port ``m`` reads ``<prefix>m@<s>`` (`M_ROWS`) at its known content (`m_table`): one row, m's two words, under
+  `core_check.public_row_salt` of the open root and s;
+* port ``s`` reads ``<prefix>round@<s>`` (`ROUND_ROWS`) at its known content (`round_table`): one row, s's two words,
+  under `core_check.public_row_salt` of the open root and s;
+* the output row ``o0`` (`OK_PORT`) reads row s of ``<prefix>live-ok`` (`OK_VALUE`) at its known content (`ok_table`):
+  S rows of `core_check.OK_ROW`, row s under `core_check.ok_salt` of the open root and s.
+
+So a round's statement that proves ok = 1 at public m on the tables its round root and the open root commit fixes m as rule
+A's count, and one whose m isn't the round's served rows opens no row of ``live-ok``.
 """
 from __future__ import annotations
 
@@ -49,12 +74,16 @@ from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.forms import (NOT, OR, ZERO, add, and_reduce, compress_columns, const_bits, or_reduce,
                                               sub)
 from verity.ml.circuits.boolean.trace import Traced, emit, trace
-from verity.ml.circuits.defs import CompositeDefinition
+from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.partition_object import template_instances_query
+from verity.ml.circuits.program import Program
+from verity.ml.circuits.refs import coll_concat
 from verity.ml.circuits.types import Array, Type
+
+from verity.core.protocols.pouw.circuit.live_reads import HEADER
 
 U32 = Array(32, BL.BIT)
 #: a request leaf's header words: index, round, slot, cap and prompt length
-HEADER = 5
 INDEX, ROUND, CAP, PROMPT = 0, 1, 3, 4
 PORTS = ("slot", "req", "m", "s")
 
@@ -169,3 +198,41 @@ PouwLiveSlots = CompositeDefinition(
         "prefix [0, N) each at its own index, every slot below m is in [1, N], every slot from m on is 0, and each request "
         "is named by at most its prompt length's slots in its own round, one in each of the cap - 1 rounds after, and none "
         "in any other.")
+
+
+def template(T: int) -> Any:
+    """The live Program's one template: `PouwLiveSlots_v1` at T slots."""
+    return bind(PouwLiveSlots, T=int(T))
+
+
+def _window_signature(S: Any) -> tuple:
+    slot, req, m, s = _types(S.T)[0]
+    params = ((S.PREFIX + "slots", Array(S.S * S.T, slot.elem)), (S.PREFIX + "requests", req),
+              (S.PREFIX + "m", Array(S.S, m)), (S.PREFIX + "round", Array(S.S, s)))
+    return params, Array(S.S, BL.BIT)
+
+
+def _window_body(B: Any, S: Any, slots: Any, requests: Any, m: Any, rounds: Any) -> Any:
+    unit = template(S.T)
+    outs = [B.call(unit, slots[s * S.T:(s + 1) * S.T], requests, m[s], rounds[s]) for s in range(S.S)]
+    return coll_concat(_window_signature(S)[1], outs)
+
+
+PouwLiveWindow = CompositeDefinition(
+    "PouwLiveWindow", 1, ("T", "S", "PREFIX"), _window_signature, _window_body, register=False,
+    doc="A window's S rounds' live units: round s's PouwLiveSlots_v1{T} on rows [s T, (s + 1) T) of PREFIX slots, the T "
+        "request headers PREFIX requests, row s of PREFIX m and row s of PREFIX round; every parameter named PREFIX and its "
+        "role.")
+
+
+def program(T: int, S: int, prefix: str = "") -> Program:
+    """The live Program of a window of S rounds whose tables have T leaves, its parameters named ``prefix`` and their roles
+    (`ROLES`). Refused (ValueError) when T or S isn't a positive integer."""
+    if not all(isinstance(x, int) and not isinstance(x, bool) and x > 0 for x in (T, S)):
+        raise ValueError(f"the live Program's T and S are positive integers, not {T!r} and {S!r}")
+    return Program(bind(PouwLiveWindow, T=T, S=S, PREFIX=str(prefix)))
+
+
+def query(T: int) -> dict[str, Any]:
+    """The live Program's partition query: every instance of its template one unit, unit s round s's."""
+    return template_instances_query([template(T)])
