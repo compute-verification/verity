@@ -48,6 +48,13 @@ A spec-level reference for network accounting's timing channel:
   reference and the unit's Boolean Definition (`IoTieWindow`: the cells' root by `NetworkRowsRoot`, the port's rows by
   `IoTiePort`, then `IoTieContent`: `IoTieCell` on every cell, the prover's Beneš routing of the port's entries
   `IoTieRoute`, `IoTieMatch`);
+- the ingress tie (`io_request`, `PROTOCOL.md`, "The ingress tie") on a fake upstream: an ingress link-window's
+  cells cut into CERT-VARLEN's id requests, each request's count of prompt fields held to the advice's prompt_len and
+  its ordinal to its place in the cut, which N2-ADVICE's advised verdict (`advised.IoTieVerdict`) is built from. It
+  has the reference, the verifier's per-window statements, chained from window 0 by each window's carry-out
+  (`statements`, `chained`), and the unit's Boolean Definition (`IoTieRequest`: the cells' root by
+  `NetworkRowsRoot`, the own frame by `IoTieRequestOwn`, one `IoTieRequestFrame` and `IoTieRequestStep` a cell, the
+  prover's routing of the view's prompt lengths by `IoTieRoute`, the totals and the carry-out by `IoTieRequestEnd`);
 - the capacity counts;
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
