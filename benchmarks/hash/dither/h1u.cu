@@ -66,8 +66,6 @@
 //              kh_units_multi_j10r_sm and a served step's seeds from h1r's call table, kh_seeds_j10r_h1r
 //   kh_units_multi_j10rc(calls, ncalls, units, M, live, mode, stream)   (H1U_JRC) kh_units_multi_j10r's receipts with
 //              each call's column blocks hashed once a call too, its workspace kh_j10r_ws_bytes(M, N, K)
-//   kh_units_multi_j10rd(calls, ncalls, units, M, live, mode, stream)   (H1U_JRC, H1U_JRD) kh_units_multi_j10rc's
-//              receipts with each call's A and B dithered once a call, its workspace kh_j10rd_ws_bytes(M, N, K)
 //   kh_words(K), kh_digits(K), kh_ws_bytes(M, N, K), kh_j10_ws_bytes(rows, N, K), kh_noise_blocks(K), kh_fault_shift()
 #include "h1sha.cuh"
 #include <cuda_bf16.h>
@@ -556,17 +554,7 @@ static_assert(H1U_JPD >= 1 && (H1U_JRING == 0 || H1U_JRING == 1) && 16 % (H1U_JP
 #ifndef H1U_JRC
 #define H1U_JRC 0
 #endif
-// RD (with RC; kh_units_multi_j10rd, built with H1U_JRD = 1 too): A and B are the call's dithered operands h1jr_dith
-// wrote, A's rows plus their row bits (add01) and B's columns plus c + U (addw), so the unit's segments dither nothing and
-// it stages only its last blocks (the coins and U its tail reads)
-#ifndef H1U_JRD
-#define H1U_JRD 0
-#endif
-#if H1U_JRD && !H1U_JRC
-#error "H1U_JRD is H1U_JRC's units on their dithered operands: build it with H1U_JRC = 1"
-#endif
-template <int MD, bool WS, bool OS, bool J10 = false, bool PL = false, bool DG = false, bool RW = false, bool RC = false,
-          bool RD = false>
+template <int MD, bool WS, bool OS, bool J10 = false, bool PL = false, bool DG = false, bool RW = false, bool RC = false>
 __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int8_t* __restrict__ B, u32 M, u32 N, u32 K,
                                          const u64* __restrict__ seeds, const uint8_t* __restrict__ live,
                                          u32* __restrict__ out, const u32* __restrict__ ws, const OneOut oo, const u32 u,
@@ -574,7 +562,6 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
   static_assert(!DG || !(WS || OS || J10 || PL), "a gathered diagonal is the fused receipts-only form");
   static_assert(!RW || !(WS || OS || J10 || PL || DG), "J10-R's units are the fused receipts-only form");
   static_assert(!RC || RW, "RC is J10-R's units with their column blocks read");
-  static_assert(!RD || RC, "RD is RC's units on their dithered operands");
   constexpr bool PF = WS || H1U_PF;
   constexpr bool RING = RW ? H1U_JRING : H1U_RING;
   constexpr int PD = RW ? H1U_JPD : H1U_PD, NS = PD + RING;
@@ -701,9 +688,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
 #pragma unroll 1
   for (u32 it = 0; it <= chunks; ++it) {
     const u32 blk = it == 0 ? chunks : it - 1;
-    if (RD && it) {
-      // RD's segments read no block
-    } else if constexpr (RW) {
+    if constexpr (RW) {
       const uint4* src = reinterpret_cast<const uint4*>(ws + 16 * ((u64)(32 * ri + lane) * rb + blk));
       uint4 rv[4];
 #pragma unroll
@@ -852,10 +837,10 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
           for (int h = 0; h < 2; ++h) {
             const u32 row = 16 * mt + g + 8 * h;
             const uint2 a8 = ca[2 * mt + h];
-            const u32 nb8 = RD ? 0u : rbits[row * 68 + 4 * j + q];
+            const u32 nb8 = rbits[row * 68 + 4 * j + q];
             const u32 e0 = expand4(nb8 & 15u), e1 = expand4(nb8 >> 4);
-            af[mt][h] = RD ? a8.x : add01(a8.x, e0);
-            af[mt][2 + h] = RD ? a8.y : add01(a8.y, e1);
+            af[mt][h] = add01(a8.x, e0);
+            af[mt][2 + h] = add01(a8.y, e1);
             if constexpr (PL) {
               bb[mt][h] = e0;
               bb[mt][2 + h] = e1;
@@ -876,11 +861,11 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
         for (int nt = 0; nt < 4; ++nt) {
           const u32 col = 8 * nt + g;
           const uint2 b8 = cw[nt];
-          const u32 cb8 = RD ? 0u : cbits[col * 68 + 4 * j + q];
+          const u32 cb8 = cbits[col * 68 + 4 * j + q];
           const u32 c0 = expand4(cb8 & 15u), c1 = expand4(cb8 >> 4);
           const u32 v0 = ulo[nt] + c0, v1 = uhi[nt] + c1;
-          bf[nt][0] = RD ? b8.x : addw(b8.x, v0);
-          bf[nt][1] = RD ? b8.y : addw(b8.y, v1);
+          bf[nt][0] = addw(b8.x, v0);
+          bf[nt][1] = addw(b8.y, v1);
           if constexpr (OS) {
             wbf[nt][0] = wrapw(b8.x, v0);
             wbf[nt][1] = wrapw(b8.y, v1);
@@ -2695,116 +2680,4 @@ extern "C" int kh_units_multi_j10rc(const void* calls, unsigned ncalls, unsigned
   }
   return cudaGetLastError() == cudaSuccess ? 0 : 3;
 }
-
-#if H1U_JRD
-// a call's dithered operands under kh_units_multi_j10rd: A's M rows, then B's N columns, K bytes each, after its blocks
-__device__ __forceinline__ int8_t* jrd_ops(const UCallR& c, u32 M) {
-  return reinterpret_cast<int8_t*>(c.rws + 16ull * (M + c.N) * (c.K / 512 + 1));
-}
-
-// call blockIdx.y's dithered operands from its blocks, one thread a 32-byte segment s (row r = s / KS's bytes 32 (s % KS)
-// .., KS = K / 32), the grid's x threads striding: A's live rows (s < M KS) by their row bits as the unit's add01 takes
-// them (segment byte 8 q + i by bit 8 q + i of word s % 16 of the row's block s % KS / 16), then B's columns by their
-// column bits and U (the column's last block's words 0 .. 7 as the unit's utab) as its addw takes them
-__global__ void __launch_bounds__(256) h1jr_dith(const UCallR* __restrict__ calls, u32 M, const uint8_t* __restrict__ live) {
-  const UCallR c = calls[blockIdx.y];
-  const u32 ks = c.K / 32, rb = c.K / 512 + 1;
-  const u64 na = (u64)M * ks, n = na + (u64)c.N * ks;
-  int8_t* const ops = jrd_ops(c, M);
-#pragma unroll 1
-  for (u64 t = blockIdx.x * (u64)blockDim.x + threadIdx.x; t < n; t += (u64)gridDim.x * blockDim.x) {
-    const bool col = t >= na;
-    const u64 s = col ? t - na : t;
-    const u32 r = (u32)(s / ks), sg = (u32)(s % ks);
-    if (!col && live && !live[r / 32]) continue;
-    const u32* blocks = c.rws + 16 * ((col ? (u64)M * rb : 0) + (u64)r * rb);
-    const u32 bw = blocks[16 * (sg / 16) + sg % 16];
-    const uint4* src = reinterpret_cast<const uint4*>((col ? c.B : c.A) + (u64)r * c.K + 32 * sg);
-    uint4 v[2] = {src[0], src[1]};
-    u32* w = reinterpret_cast<u32*>(v);
-    if (!col) {
-#pragma unroll
-      for (int q = 0; q < 4; ++q) {
-        const u32 nb8 = (bw >> (8 * q)) & 0xFFu;
-        w[2 * q] = add01(w[2 * q], expand4(nb8 & 15u));
-        w[2 * q + 1] = add01(w[2 * q + 1], expand4(nb8 >> 4));
-      }
-    } else {
-      const u32* last = blocks + 16 * (rb - 1);
-#pragma unroll
-      for (int q = 0; q < 4; ++q) {
-        u32 uw[2];
-#pragma unroll
-        for (int hh = 0; hh < 2; ++hh) {
-          const u32 hv = last[2 * q + hh];
-          u32 x4 = 0;
-#pragma unroll
-          for (int b = 0; b < 4; ++b) {
-            const u32 x = (hv >> (8 * b)) & 0xFFu;
-            x4 |= ((x >= 129 ? x - 129 : x) + 64) << (8 * b);
-          }
-          uw[hh] = x4;
-        }
-        const u32 cb8 = (bw >> (8 * q)) & 0xFFu;
-        w[2 * q] = addw(w[2 * q], uw[0] + expand4(cb8 & 15u));
-        w[2 * q + 1] = addw(w[2 * q + 1], uw[1] + expand4(cb8 >> 4));
-      }
-    }
-    uint4* dst = reinterpret_cast<uint4*>(ops + (col ? (u64)M * c.K : 0) + (u64)r * c.K + 32 * sg);
-    dst[0] = v[0];
-    dst[1] = v[1];
-  }
-}
-
-// h1umjc on its call's dithered operands (RD)
-__global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umjd(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
-                                                     const uint8_t* __restrict__ live) {
-  __shared__ WarpSmem smem[WARPS];
-  const u32 wp = threadIdx.x >> 5;
-  const u32 gu = blockIdx.x * WARPS + wp;
-  if (gu >= calls[ncalls].u0) return;
-  u32 lo = 0, hi = ncalls;
-  while (hi - lo > 1) {
-    const u32 mid = (lo + hi) >> 1;
-    if (calls[mid].u0 <= gu) lo = mid;
-    else hi = mid;
-  }
-  const UCallR c = calls[lo];
-  const u32 u = jswz_unit(c, gu - c.u0, M);
-  const int8_t* const ad = jrd_ops(c, M);
-  const int8_t* const bd = ad + (u64)M * c.K;
-  if (c.md == 3)
-    h1u_unit<3, false, false, false, false, false, true, true, true>(ad, bd, M, c.N, c.K, c.seeds, live, c.out, c.rws,
-                                                                     OneOut{}, u, smem[wp]);
-  else
-    h1u_unit<2, false, false, false, false, false, true, true, true>(ad, bd, M, c.N, c.K, c.seeds, live, c.out, c.rws,
-                                                                     OneOut{}, u, smem[wp]);
-}
-
-// kh_j10r_ws_bytes(M, N, K) and then the call's dithered A [M, K] and B [N, K]
-extern "C" unsigned long long kh_j10rd_ws_bytes(unsigned M, unsigned N, unsigned K) {
-  return kh_j10r_ws_bytes(M, N, K) + ((unsigned long long)M + N) * K;
-}
-
-// kh_units_multi_j10rc with each call's operands dithered once a call (h1jr_dith) after its blocks, and the units on them
-// (h1umjd): calls' rws of kh_j10rd_ws_bytes(M, N, K) bytes; mode 0 the blocks, the operands and the units, 1 the blocks
-// alone, 2 the operands and the units (on blocks a mode 0 or 1 call wrote), 3 the blocks and the operands
-extern "C" int kh_units_multi_j10rd(const void* calls, unsigned ncalls, unsigned units, unsigned M, const void* live,
-                                    int mode, void* stream) {
-  if (!ncalls || ncalls > 65535 || M % 32 || mode < 0 || mode > 3) return 2;
-  if (!units) return 0;
-  cudaStream_t s = (cudaStream_t)stream;
-  if (mode != 2) {
-    h1jr_rows<<<dim3((M * 33 + 255) / 256, ncalls), 256, 0, s>>>((const UCallR*)calls, M, (const uint8_t*)live);
-    h1jr_cols<<<dim3(128, ncalls), 256, 0, s>>>((const UCallR*)calls, M);
-  }
-  if (mode != 1)
-    h1jr_dith<<<dim3(512, ncalls), 256, 0, s>>>((const UCallR*)calls, M, (const uint8_t*)live);
-  if (mode == 0 || mode == 2) {
-    carve<h1umjd>();
-    h1umjd<<<(units + WARPS - 1) / WARPS, 32 * WARPS, 0, s>>>((const UCallR*)calls, ncalls, M, (const uint8_t*)live);
-  }
-  return cudaGetLastError() == cudaSuccess ? 0 : 3;
-}
-#endif
 #endif
