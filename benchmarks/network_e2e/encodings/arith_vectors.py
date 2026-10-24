@@ -4,11 +4,11 @@ coders (`code.py`, `code_v1`), over what v1 actually codes.
 Every stream is `code_v1`'s: a list of windows, each one `code.py` `ArithEncoder` segment with the symbols it took,
 tagged `[1, bit, f0, f1]` for a bit `code_v1.Encoder.bit` coded at its KT estimate and `[0, cum, freq, total]` for an
 integer's symbols, code.py's state after each (low, high, pending, used) and the segment. With it come each bit's (name,
-context, bit) from the book's priors (`kt`), the header (`NB` its width, 0 for none, and `pool`) and each window's charge
-(`charge`). Two sources:
+context, bit) from the book's priors (`kt`), the header (`NB` its width and `pool`, 0 since v1 registers the pool) and
+each window's charge (`charge`). Two sources:
 - `decisions(trace, stops, T=)`: advice v1's windows (`v1.residual`: the replay's decisions and the hits sent past the
   pool bound) under a book fit to them at v1's registered caps (`v1.TABLE_CAPS`; a skewed book: the difftest is the
-  coder's, not the book's), with v1's header and charges (`v1._string`). It checks that they are `v1.encode`'s string;
+  coder's, not the book's), with v1's charges (`v1._string`). It checks that they are `v1.encode`'s string;
 - `fields(trace)`: ENC-DERIVED's still-sent fields (`derived.residual`: the hits past the pool bound, the resumes, the
   order misses and async's lag bits), each field cut into windows of 64 values, under a book fit to them.
 
@@ -121,12 +121,11 @@ def decisions(trace: Any, stops: Sequence[int], *, T: int, row_order: str = "bat
     reg = V.Registered(trace.engine, tuple(stops), T=T, row_order=row_order)
     wins = V.residual(adv, rec, reg)
     reg = dataclasses.replace(reg, book=CV.fit_book([wins], V.TABLE_CAPS))
-    blocks = None if reg.pinned else reg.engine.num_gpu_blocks
-    bits, charge = V._string(blocks, wins, reg)
+    bits, charge = V._string(wins, reg)
     if CV.pack(bits)[0] != V.encode(adv, rec, reg, check=False):
         raise AssertionError("the windows aren't v1.encode's")
     s = _stream(wins, reg.book)
-    s.update(NB=0 if blocks is None else reg.max_gpu_blocks.bit_length(), pool=blocks or 0, charge=charge)
+    s.update(charge=charge)
     return s
 
 

@@ -1584,7 +1584,7 @@ composition below): what the bound counts is the charge, not the committed lengt
   (item 2), with its sent shortfalls. The encoder runs `code_v1`'s code forward over the same values, once a window in
   `code_v1`'s order (`code_v1._window`), from `fresh()`. It counts the bits the window's segment would hold: one per
   scaling (a resolved bit, or a pending one a later resolution writes), the termination's two (none when nothing was
-  used, as code.py's `shifts + 2`) and, in window 0, the header's Elias-gamma. The total must be at most c_w.
+  used, as code.py's `shifts + 2`). The total must be at most c_w.
   - No codeword is committed and no segment is compared, so nothing reads a segment at a data-dependent cursor.
   - The charge is the length of the string `encode` would write, which is prefix-free, and `encode` is injective on
     the values (`decode` inverts it). So at most 2^c value lists, and so at most that many advices, are accepted at a
@@ -1614,8 +1614,8 @@ composition below): what the bound counts is the charge, not the committed lengt
   `BookKT_v1{C}` (#3660).
 - *Held to the coders* (`benchmarks/network_e2e/encodings/arith_vectors.py`). It runs `code_v1` over advice v1's
   windows (`v1.residual`: the decisions and the sent hits, under a book fit to them at v1's registered caps,
-  `v1.TABLE_CAPS`, with v1's header) and over ENC-DERIVED's still-sent fields, each symbol tagged a bit or an
-  integer's.
+  `v1.TABLE_CAPS`, with no header, since the pool is registered) and over ENC-DERIVED's still-sent fields, each symbol
+  tagged a bit or an integer's.
   - After every symbol, low and high are code.py's, a pending run is open exactly when code.py has pending bits, and
     `used` is code.py's. Each step's n is the segment bits code.py consumed, each window's finish ends at its segment's
     end, and every flipped or cut segment is refused.
