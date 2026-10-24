@@ -618,6 +618,35 @@ def test_the_served_compiler_is_what_the_registration_must_name(tmp_path, monkey
     assert json.loads(capsys.readouterr().out)["digest"] == doc["digest"]
 
 
+def test_a_served_compiler_listing_transfer_gates_is_the_servers_beside_them(tmp_path, monkeypatch, capsys):
+    """Its inner digest covers the server's registered one and the list, so a registration under the server's compiler alone is
+    refused before any commit (its advice tree's domain is another compiler's too), and one `verity-vllm advice` makes under the
+    name and digest `compiler --transfer-gate` prints passes."""
+    from verity_vllm.pipeline import advice as ADV
+
+    s, tg = _served(tmp_path, monkeypatch), "RoPEHead_v1{D=64}"
+    doc = PP.compiler_doc(str(s.run), None, None, PP.CAP_BITS, [tg])
+    assert doc["served"] == {"name": SERVER[0], "digest": SERVER[1]} and doc["transfer_gates"] == [tg]
+    assert doc["inner"]["name"] == SERVER[0] and doc["inner"]["digest"] != SERVER[1] and doc["digest"] != s.bound["compiler"]["digest"]
+    gated = PP.Capped(PP.i2_of_serve(str(s.run), 0, s.a.row_dir, None, None, transfer_gates=(tg, tg)))
+    assert gated.transfer_gates == (tg,) and {"name": PP.CAPPED, "digest": gated.digest} == {"name": doc["name"], "digest": doc["digest"]}
+    capsys.readouterr()
+    assert PP.main(["compiler", "--serve-run", str(s.run), "--transfer-gate", tg]) == 0
+    assert json.loads(capsys.readouterr().out)["inner"] == doc["inner"]
+    s.a.transfer_gate = [tg]
+    _c, _r, bound, _o = PP.compiled(s.a)
+    assert bound["compiler"] == {"name": doc["name"], "digest": doc["digest"]}
+    assert PP.serve_check_of(s.a, bound)["codes"] == ["compiler", "advice"]
+    with pytest.raises(ValueError, match=r"published records are refused \(compiler, advice\)"):
+        PP.served_advice(s.a)
+    _q, bound, reg = AW.of_advice(ADV.registered_compiler(doc["inner"]["name"], doc["inner"]["digest"], PP.CAP_BITS), s.data)
+    adv = s.run / "advice" / "w0"
+    (adv / "registration.json").write_text(json.dumps({**json.loads((adv / "registration.json").read_text()), "binding": bound}))
+    (adv / "private" / "opening.json").write_text(json.dumps(AW.opening(s.data, reg)))
+    requests, held, _o = PP.served_advice(s.a)
+    assert held == bound and PP.serve_check_of(s.a, held)["ok"] and [q["digest"] for q in requests] == ["d0" * 64, "d1" * 64]
+
+
 def test_the_prover_commits_a_served_window_under_the_published_binding(tmp_path, monkeypatch):
     """The server committed the advice once: the prover's requests are I2's from the opened advice and its binding is the published
     one (no re-commit, so no fresh root), and the window's records pass `serve_check`."""

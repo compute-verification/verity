@@ -36,7 +36,7 @@ Two kinds of committed run:
     prove_path.py audit (the same committed run) [--opening FILE] --windows WINDOWS --partition F --template-sets DIR \\
         --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall --out DIR [--cap-bits L] \\
         [--ranks 0,1] [--jobs N] [--forged] [--transfer-gate T ...] [--challenger local --main FILE]
-    prove_path.py compiler --serve-run DIR [--hf-config F] [--target F] [--cap-bits L]
+    prove_path.py compiler --serve-run DIR [--hf-config F] [--target F] [--cap-bits L] [--transfer-gate T ...]
     prove_path.py serve-standin --bundle DIR --row-dir DIR --workload F --out RUN [--hf-config F] [--cap-bits L]
 
 * **advice**: a declared run's I1 advice from its workload file (`advice_windows.advice_of_workload`), its canonical encoding.
@@ -53,7 +53,9 @@ Two kinds of committed run:
   (`forged_row`).
 * **compiler**: the binding's compiler for a served run (its name, digest and ℓ, the compiler it wraps, and the φ I2 compiles
   under), the one `verity-vllm advice` registers. The inner digest names the tree's code (`source_identity.code_identity`:
-  ``integrations/vllm`` and ``verity`` by content), so the audit runs on a tree whose two are the server's.
+  ``integrations/vllm`` and ``verity`` by content), so the audit runs on a tree whose two are the server's. With
+  ``--transfer-gate T``, the inner compiler is the server's listing those templates (`I2Compiler.digest`), the name and digest
+  ``verity-vllm advice --compiler-name N --compiler-digest D`` then registers the window's advice under.
 * **serve-standin**: a served run's dir laid out from a single-GPU Commit of record (one window, ``w0``, under the record's run
   root; the declared run's advice committed under the served compiler), a stand-in for serve-openai's until its sealed windows.
 
@@ -63,9 +65,11 @@ every byte string: the requests, or a `ValueError` naming why, the same one on e
 **Transfer gates** (``--transfer-gate T``, repeatable, the same on both sides): the templates the registered compiler lists as
 holding transfer gates (`advice_windows`: the I/O shell's units, proved with selection All, never sampled), which its digest
 covers (`I2Compiler`, `advice_windows.Traced`). The window's ``work:K`` law then draws every unit of theirs beside K of the rest
-(`serving_rows.work_table_of`), and the stream registers with that work table. Until COMPILER lists the I/O shell's units, the
-run names a stand-in template, at TP1 ``RoPEHead_v1{D=64}`` (``llama32_1b_tg_*.json``). Their negatives are a5's
-`transfer_gate_negatives` and the registration under the compiler listing none (`more_negatives`).
+(`serving_rows.work_table_of`), and the stream registers with that work table. A served window's I2 lists them beside the
+server's registered name and digest (`I2Compiler.digest`), and its advice is registered under that compiler (``compiler``).
+Until COMPILER lists the I/O shell's units, the run names a stand-in template, at TP1 ``RoPEHead_v1{D=64}``
+(``llama32_1b_tg_*.json``). Their negatives are a5's `transfer_gate_negatives` and the registration under the compiler listing
+none (`more_negatives`).
 
 **Coins**: each window's `service.Stream` draws on the verifier's own coins, or with ``--challenger local --main FILE`` on the
 auditor's challenger's (`a5_coins`: the run root's one session, committed to each registration before any coin is read;
@@ -153,7 +157,7 @@ class I2Compiler:
     Programs. ``transfer_gates`` are the templates it lists as holding transfer gates (module docstring), the run's stand-in until
     I2 lists the I/O shell's own. Its digest names I2's code (`code_identity`: ``verity`` and ``verity_vllm`` as git lists them,
     so a node's ignored build outputs don't move it), φ, the default seed, ℓ and that list; a served window's I2 is named as the
-    server registered it instead (``registered_digest``, `served_identity`)."""
+    server registered it instead (``registered_digest``, `served_identity`), with that list beside it where it lists any."""
 
     registered: Any
     ingress: Mapping[str, Mapping[str, Any]]
@@ -165,12 +169,16 @@ class I2Compiler:
 
     @functools.cached_property
     def digest(self) -> str:
+        gates = sorted(self.transfer_gates)
         if self.registered_digest is not None:
-            return self.registered_digest
+            if not gates:
+                return self.registered_digest
+            return hashlib.sha512(canonical_json({"name": self.name, "registered": self.registered_digest,
+                                                  "transfer_gates": gates})).hexdigest()
         r = self.registered
         return hashlib.sha512(canonical_json({"name": self.name, "code": code_identity(), "phi": r.phi.to_json(),
                                               "default_seed": r.default_seed, "cap_bits": r.cap_bits,
-                                              "transfer_gates": sorted(self.transfer_gates)})).hexdigest()
+                                              "transfer_gates": gates})).hexdigest()
 
     def requests(self, data: bytes) -> list[dict]:
         """I2's requests for the advice ``data``: each request's id, first step, prompt length, ``max_tokens`` (its kept outputs)
@@ -345,14 +353,14 @@ def registered_of_serve(serve: Mapping[str, Any], hf_config: str | None, target:
 
 
 def i2_of_serve(run: str, window: int, row_dir: str, hf_config: str | None, target: str | None,
-                cap_bits: int = CAP_BITS) -> I2Compiler:
+                cap_bits: int = CAP_BITS, transfer_gates: Sequence[str] = ()) -> I2Compiler:
     """I2 over a served window: φ of the served engine (`phi_of_serve`), the server's default seed, the bodies the window's
     requests brought (`serve_ingress`), each Program's body from the Build's files under the row dir, named as the server
-    registers it (`served_identity`)."""
+    registers it (`served_identity`), listing ``transfer_gates``."""
     serve = json.loads((Path(run) / "serve.json").read_text())
     name, digest = served_identity()
     return I2Compiler(registered_of_serve(serve, hf_config, target, cap_bits), serve_ingress(serve_requests(run, window)), str(row_dir),
-                      name=name, registered_digest=digest)
+                      name=name, transfer_gates=tuple(dict.fromkeys(map(str, transfer_gates))), registered_digest=digest)
 
 
 @functools.lru_cache(maxsize=1)
@@ -378,10 +386,7 @@ def compiler_of(tp_commit: str, build_root: str, cap_bits: int = CAP_BITS, trans
 def compiler_of_args(a: argparse.Namespace) -> Capped:
     gates = getattr(a, "transfer_gate", None) or ()
     if served(a):
-        if gates:
-            raise ValueError("--transfer-gate: a served window's compiler is the one the server registered, and its transfer "
-                             "gates are the ones it lists, not the audit's")
-        return Capped(i2_of_serve(a.serve_run, a.window, a.row_dir, a.hf_config, a.target, a.cap_bits), a.cap_bits)
+        return Capped(i2_of_serve(a.serve_run, a.window, a.row_dir, a.hf_config, a.target, a.cap_bits, gates), a.cap_bits)
     if single(a):
         return Capped(i2_of_record(a.bundle, a.row_dir, a.workload, a.hf_config, a.cap_bits, gates), a.cap_bits)
     return compiler_of(a.tp_commit, a.build_root, a.cap_bits, gates)
@@ -917,13 +922,17 @@ def audit(a: argparse.Namespace) -> int:
     return 0 if summary["ok"] else 1
 
 
-def compiler_doc(serve_run: str, hf_config: str | None, target: str | None, cap_bits: int) -> dict[str, Any]:
-    """A served run's registered compiler, `Capped` over the server's (`served_identity`): the name and digest its windows'
-    bindings must carry, ℓ and the compiler it wraps, and the φ and default seed I2 compiles each window's Programs under."""
+def compiler_doc(serve_run: str, hf_config: str | None, target: str | None, cap_bits: int,
+                 transfer_gates: Sequence[str] = ()) -> dict[str, Any]:
+    """A served run's registered compiler, `Capped` over the server's (`served_identity`) listing ``transfer_gates``: the name and
+    digest its windows' bindings must carry, ℓ and the compiler it wraps (``inner``, what `verity-vllm advice --compiler-name
+    --compiler-digest` takes), the server's own, and the φ and default seed I2 compiles each window's Programs under."""
     name, digest = served_identity()
-    c = Capped(SimpleNamespace(name=name, digest=digest), cap_bits)
     reg = registered_of_serve(json.loads((Path(serve_run) / "serve.json").read_text()), hf_config, target, cap_bits)
-    return {"name": c.name, "digest": c.digest, "cap_bits": c.cap_bits, "inner": {"name": name, "digest": digest},
+    inner = I2Compiler(reg, {}, "", name=name, transfer_gates=tuple(dict.fromkeys(map(str, transfer_gates))), registered_digest=digest)
+    c = Capped(inner, cap_bits)
+    return {"name": c.name, "digest": c.digest, "cap_bits": c.cap_bits, "inner": {"name": name, "digest": inner.digest},
+            "served": {"name": name, "digest": digest}, "transfer_gates": list(inner.transfer_gates),
             "phi": reg.phi.to_json(), "default_seed": reg.default_seed}
 
 
@@ -1013,6 +1022,8 @@ def main(argv: list[str] | None = None) -> int:
                    "--first-parent origin/main), which must hold the commit the session's host pins")
     p = sub.add_parser("compiler", help="a served run's registered compiler: what verity-vllm advice --compiler-name/--compiler-digest takes")
     p.add_argument("--serve-run", required=True)
+    p.add_argument("--transfer-gate", action="append", default=[], help="a template the compiler lists as holding transfer gates "
+                   "(repeatable; the audit's --transfer-gate)")
     p = sub.add_parser("serve-standin", help="a served run's dir laid out from a single-GPU Commit of record")
     for flag in ("--bundle", "--row-dir", "--workload", "--out"):
         p.add_argument(flag, required=True)
@@ -1022,7 +1033,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.choices["compiler"].add_argument("--target")
     a = ap.parse_args(argv)
     if a.cmd == "compiler":
-        print(json.dumps(compiler_doc(a.serve_run, a.hf_config, a.target, a.cap_bits), sort_keys=True))
+        print(json.dumps(compiler_doc(a.serve_run, a.hf_config, a.target, a.cap_bits, a.transfer_gate), sort_keys=True))
         return 0
     if a.cmd == "serve-standin":
         print(json.dumps(serve_standin(a), sort_keys=True))
