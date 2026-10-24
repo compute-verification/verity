@@ -20,7 +20,8 @@ its finish gives v1's charge), and the book's model (`BookKT_v1`) at each bit. O
 `ChargeCount_v1`, one window's charge from its decisions alone, to `code_v1` (`check_charges`): its reference on each
 window's decisions and on the decisions cut again into windows of at most `--cut` slots with gaps, and with `--circuit`
 the Definition at that N on the cut. `--steps` takes the
-replay's step traces in `tests/fixtures` (`test_v1`'s, at T = 20, so they span windows) and the TRACE-CORPUS fixture's
+replay's step traces in `tests/fixtures` (`test_v1`'s, at T = 20, so they span windows, their decisions cut at the compile
+slice's P·A = 14 whatever `--cut` says) and the TRACE-CORPUS fixture's
 fields, and `--fixture PATH` writes them as the vectors the certifier's test reads
 (`verity/core/protocols/certifier/tests/fixtures/arith_encode_vectors.json`). LABEL=DIR are TRACE-CORPUS traces
 (`replay.read_corpus_trace`; `derived.load_corpus_trace`), each read twice: with the warden's ingress, where the
@@ -58,8 +59,8 @@ V, R, C, D, CV = _load("v1"), _load("replay"), _load("code"), _load("derived"), 
 
 #: the step's scaling slots (`arith_encode.K_MAX`), the binding the vectors are cut for
 K = 18
-#: `ChargeCount_v1`'s slots a window in the corpus difftest (`--cut`); the fixture's are the compile slice's, P·A = 14
-CUT = 64
+#: `ChargeCount_v1`'s slots a window in the corpus difftest (`--cut`), and in the fixture's streams, the compile slice's P·A
+CUT, SLICE_CUT = 64, 14
 EOS = 2
 FIXTURE = HERE.parents[2] / "verity" / "core" / "protocols" / "certifier" / "tests" / "fixtures" / "arith_encode_vectors.json"
 
@@ -354,7 +355,7 @@ def sources(corpus: Sequence[str], steps: bool, stops: Sequence[int], T: int,
     if steps:
         for p in sorted(FIXTURES.glob("*.jsonl")):
             yield f"{p.stem} (decisions, T=20)", lambda p=p: decisions(
-                step_trace(p.stem), (EOS,), T=20, row_order="scheduling", cut=cut, rng=random.Random(p.stem))
+                step_trace(p.stem), (EOS,), T=20, row_order="scheduling", cut=SLICE_CUT, rng=random.Random(p.stem))
         yield "corpus-smallkv (fields)", lambda: fields(D.load_corpus_trace(
             FIXTURES / "corpus-smallkv", eos_token_id=128009, stop_token_ids=(128001, 128008)))
     for spec in corpus:
