@@ -677,8 +677,10 @@ class Record:
     them to (`Params.lifetime`, None
     in a record no session made), and the chain over its appends in the order received (`append_head`, None without
     one), which, with each pass's head (`WindowRecord.heads`), the memory-map unit's verdict is on
-    (`RequirementLink.mapped`).  `public` is what acceptance makes public;
-    `profile` is the protocol's profile, each window's schedule and openings law (the γ terms need the node's
+    (`RequirementLink.mapped`), and the draws every window requested (`Params.samples`, None in a record no session
+    made): window t drew min(`samples`, U_t), so `samples` is the k_t of the draw's rejection Σ_t k_t/2^64
+    (`ledger.rejection`), which a window opening all its receipts doesn't show.  `public` is what acceptance makes
+    public; `profile` is the protocol's profile, each window's schedule and openings law (the γ terms need the node's
     capacities: `ledger`)."""
 
     registration: bytes
@@ -696,6 +698,17 @@ class Record:
     lifetime: int | None = None
     appends: bytes | None = None
     pace: Pace | None = None
+    samples: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.samples is None:
+            return
+        if type(self.samples) is not int or self.samples < 1:
+            raise ValueError("a record's samples, the draws every window requested, is a positive integer")
+        for w in self.windows:
+            if w.profile.drawn["receipt"] != min(self.samples, w.receipts):
+                raise ValueError(f"window {w.window} drew {w.profile.drawn['receipt']} of its {w.receipts} receipts, "
+                                 f"not min({self.samples}, {w.receipts}) at the record's samples")
 
     @property
     def start_ns(self) -> int:
@@ -733,7 +746,7 @@ class Record:
                 "post_seed": [sum(w.post_seed) for w in self.windows], "protocol": PROTOCOL_ID,
                 "receipt": self.receipt, "receipts": [w.receipts for w in self.windows],
                 "registration": self.registration.hex(), "released": self.released, "rows": self.rows,
-                "span_ns": self.span_ns}
+                "samples": self.samples, "span_ns": self.span_ns}
 
     def profile(self) -> dict:
         return {"windows": [w.to_json() for w in self.windows]}
@@ -1160,7 +1173,7 @@ class Session:
         return Record(self.registration.digest, self.commitment.root, self.params.blocks, BLOCK_BYTES, tuple(out),
                       self.registration.receipt, self.registration.bind, self.registration.codec,
                       self.registration.layout, self.registration.rows, self.extent - self.params.blocks, self.released,
-                      self.params.lifetime, self._head, self.params.pace)
+                      self.params.lifetime, self._head, self.params.pace, self.params.samples)
 
 
 REGISTRY_SCHEMA = "verity/remote-bandwidth/registry/v0"
