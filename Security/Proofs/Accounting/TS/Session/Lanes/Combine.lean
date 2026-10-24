@@ -52,7 +52,7 @@ theorem leafChecks_of_combineComputes {K nw : ℕ} {Pub : Type} (dq : List ℤ �
     (sess : Option (Fin 32) → RowsSession)
     (decL : RowsSession → (ℕ → ℕ → Option Bool) → LaneView K nw Pub)
     (decC : RowsSession → (ℕ → ℕ → Option Bool) → CombineView nw)
-    (hL : ∀ l (vals : Fin (sess (some l)).Circ.N → Bool),
+    (hL : 32 ∣ K → K < 2 ^ 17 → ∀ l (vals : Fin (sess (some l)).Circ.N → Bool),
       (∀ u, ∀ g ∈ (sess (some l)).P.io u, (sess (some l)).Circ.eval vals g = vals g) →
       (decL (sess (some l)) (portRead (sess (some l)) vals)).ok = true →
       LaneOk dq part (decL (sess (some l)) (portRead (sess (some l)) vals)))
