@@ -14,8 +14,13 @@ each 64-row block of A names its expert (``ex``).  The steps, one launch each (`
 * ``af``, ``gemm_pearlc``: gemm_words_g_d and gemm_pearlc_g_d over A, each 64-row block's B side its expert's;
 * ``hash_leaf``: pd_tiles_g, unit u's tile leaves on CTA row u, into the pass's leaves at its first tile.
 
-pd_commit_g and pd_tiles_g run hash_decode.cuh's bodies on each unit's Args, and the rest compute each row, and each output, as
-the ungrouped kernels do, so a unit's bytes are its own call's."""
+With ``split`` (`SPLIT_STEPS`, as `run.Pipeline`'s ``split_a`` without ``fillers``), A's commitment is two launches of the same
+bytes: ``rows_a``, pd_commit_g in mode 1 (each unit's pads, row digests, leaves, seeds, line keys and E_A lines), then
+``tree_seed_a``, pd_tree_g, unit u's pd_tree on CTA u (A's levels, seed_A and line_a), which writes nothing the forming reads:
+a unit's padding rows (m₁₆ to its segment's end, outside its matmul) keep the E_A lines the buffer holds.
+
+pd_commit_g, pd_tree_g and pd_tiles_g run hash_decode.cuh's bodies on each unit's Args, and the rest compute each row, and
+each output, as the ungrouped kernels do, so a unit's bytes are its own call's."""
 
 from __future__ import annotations
 
@@ -29,14 +34,15 @@ PD = 851
 #: a unit's segment rows divide by it: the grouped GEMMs' tile rows (run.BM_D) and the tile leaves' (run.TILE)
 SEG = 64
 STEPS = ("commit_a", "stats_a", "eprime_a", "form_a", "af", "pa", "gemm_pearlc", "hash_leaf")
+SPLIT_STEPS = ("rows_a", "tree_seed_a", *STEPS[1:])
 #: the steps that hash, which a call without hashing skips
-HASH_STEPS = frozenset({"commit_a", "hash_leaf"})
+HASH_STEPS = frozenset({"commit_a", "rows_a", "tree_seed_a", "hash_leaf"})
 #: the weight side's buffers the grouped kernels read stacked, each expert's at its position
 STACKED = ("bt", "pb_t", "ia_b", "fbT32", "fa_codes")
 #: pearl_c_sm90.cu's Args
 ARGS = np.dtype([("p", "<u8", 16), ("i", "<i4", 16)])
-#: a unit's record in `meta`: its pd_commit Args, its pd_tiles Args, then its keys (dom_a ‖ unit, 168 bytes)
-REC, TILES_AT, KEYS_AT, KEY_BYTES = 576, 192, 384, 168
+#: a unit's record in `meta`: its pd_commit Args, its pd_tiles Args, its keys (dom_a ‖ unit, 168 bytes), then its pd_tree Args
+REC, TILES_AT, KEYS_AT, TREE_AT, KEY_BYTES = 768, 192, 384, 576, 168
 NB = 64
 
 
@@ -86,18 +92,41 @@ def sizes(R, rows: int, count: int, n: int, k: int) -> dict[str, int]:
             "pd_count": 16 * count, "meta": REC * count + 4 * (rows // SEG) + 8 + 8 * rows + 8 * count}
 
 
-def setup(R, dev) -> None:
-    """`run.pd_setup`, and pd_commit_g's dynamic shared memory as `run.pd_setup` gives pd_commit's."""
-    R.pd_setup(dev)
-    if getattr(dev, "pd_smem_g", None) is not None:
-        return
-    fn = dev.fn(f"pd_commit_g_{PD}")
+def pd_smem(R, dev, name: str) -> int:
+    """Kernel `name`'s dynamic shared memory as `run.pd_setup` gives pd_commit's and pd_tree's, set as its maximum."""
+    fn = dev.fn(name)
     optin = dev.get("cuDeviceGetAttribute", R.MAX_SHARED_OPTIN, dev.dev)
     smem = optin - dev.get("cuFuncGetAttribute", R.SHARED_SIZE, fn) if PD & R.PD_WHOLE else R.PD_PAIR_SMEM
     if smem < R.PD_PAIR_SMEM:
-        raise RuntimeError(f"pd_commit_g_{PD} gets {smem} bytes of dynamic shared memory, not its {R.PD_PAIR_SMEM}")
+        raise RuntimeError(f"{name} gets {smem} bytes of dynamic shared memory, not its {R.PD_PAIR_SMEM}")
     dev.ck("cuFuncSetAttribute", fn, R.MAX_DYN, smem)
-    dev.pd_smem_g = smem
+    return smem
+
+
+def setup(R, dev) -> None:
+    """`run.pd_setup`, and pd_commit_g's dynamic shared memory (`pd_smem`)."""
+    R.pd_setup(dev)
+    if getattr(dev, "pd_smem_g", None) is None:
+        dev.pd_smem_g = pd_smem(R, dev, f"pd_commit_g_{PD}")
+
+
+def has_tree(dev) -> bool:
+    """Whether the cubin has pd_tree_g (one built before it runs only unsplit calls), looked up once."""
+    got = getattr(dev, "has_tree_g", None)
+    if got is None:
+        try:
+            dev.fn(f"pd_tree_g_{PD}")
+            got = True
+        except RuntimeError:
+            got = False
+        dev.has_tree_g = got
+    return got
+
+
+def tree_setup(R, dev) -> None:
+    """pd_tree_g's dynamic shared memory (`pd_smem`), at a split call's first use."""
+    if getattr(dev, "pd_tree_smem_g", None) is None:
+        dev.pd_tree_smem_g = pd_smem(R, dev, f"pd_tree_g_{PD}")
 
 
 def gemm_smem(R, dev, name: str) -> int:
@@ -136,27 +165,33 @@ class Grouped:
     def free(self) -> None:
         self.dev.free(self.tma)
 
-    def meta(self, us: list[Unit], keys: bytes, leaves: int) -> bytes:
-        """A call's ``meta``: each unit's record (its pd_commit and pd_tiles Args, then its 168 key bytes from `keys`, the units'
-        in order), the expert map, each gathered row's row of A and each unit's A root as a node of ``tree_a`` (int64s, for
-        the caller's gathers); `leaves` the address of the call's first tile leaf."""
+    def meta(self, us: list[Unit], keys: bytes, leaves: int, split: bool = False) -> bytes:
+        """A call's ``meta``: each unit's record (its pd_commit and pd_tiles Args, its 168 key bytes from `keys`, the units' in
+        order, and with `split` its pd_tree Args, pd_commit's then in mode 1), the expert map, each gathered row's row of A and
+        each unit's A root as a node of ``tree_a`` (int64s, for the caller's gathers); `leaves` the address of the call's
+        first tile leaf."""
         if len(us) > self.count or sum(u.seg for u in us) > self.rows or len(keys) != KEY_BYTES * len(us):
             raise ValueError(f"{len(us)} units of {sum(u.seg for u in us)} rows, {len(keys)} key bytes: past the call's "
                              f"{self.count} units and {self.rows} rows, or not {KEY_BYTES} key bytes a unit")
         b, k, n, kk, R = self.b, self.k, self.n, self.keys, self.R
         rec = np.zeros((len(us), REC), np.uint8)
-        commit, tiles = np.zeros(len(us), ARGS), np.zeros(len(us), ARGS)
+        commit, tiles, tree = np.zeros(len(us), ARGS), np.zeros(len(us), ARGS), np.zeros(len(us), ARGS)
         for j, u in enumerate(us):
             key = b["meta"] + REC * j + KEYS_AT
             commit["p"][j, :13] = (b["xa"] + 4 * k * u.row, b["rowdig_a"] + 64 * u.row, b["tree_a"] + tree_bytes(R) * j,
                                    b["seeds_a"] + 32 * u.row, b["lkeys_a"] + 32 * u.row, key + 64, key, kk["salt_key"], kk["hm"],
                                    b["pd_count"] + 16 * j, b["seed_a"] + 32 * j, b["line_a"] + 32 * j, b["ea_codes"] + 32 * u.row)
-            commit["i"][j, :4] = (u.m16, k, 0, u.seg)
+            commit["i"][j, :4] = (u.m16, k, int(split), u.seg)
             tiles["p"][j, :3] = (b["c"] + 4 * n * u.row, b["u"] + 4 * n * u.row, leaves + NB * u.tile)
             tiles["i"][j, :2] = (u.m16, n)
+            if split:
+                tree["p"][j, :12] = (0, 0, b["tree_a"] + tree_bytes(R) * j, 0, 0, key + 64, key, 0, 0, 0, b["seed_a"] + 32 * j,
+                                     b["line_a"] + 32 * j)
+                tree["i"][j, :4] = (u.m16, 0, 0, u.seg)
         rec[:, :TILES_AT] = commit.view(np.uint8).reshape(len(us), -1)
         rec[:, TILES_AT:KEYS_AT] = tiles.view(np.uint8).reshape(len(us), -1)
         rec[:, KEYS_AT:KEYS_AT + KEY_BYTES] = np.frombuffer(keys, np.uint8).reshape(len(us), KEY_BYTES)
+        rec[:, TREE_AT:] = tree.view(np.uint8).reshape(len(us), -1)
         ex = np.repeat(np.array([u.pos for u in us], "<i4"), [u.seg // SEG for u in us])
         rows = np.concatenate([np.arange(u.row, u.row + u.m, dtype="<i8") for u in us])
         nodes = np.array([root_at(R, j, u) // NB for j, u in enumerate(us)], "<i8")
@@ -168,14 +203,23 @@ class Grouped:
         ex = sum(u.seg for u in us) // SEG
         return REC * len(us) + 4 * ex + (-ex * 4 % 8)
 
-    def steps(self, us: list[Unit]) -> list[tuple[str, object]]:
-        """A call's launches (`STEPS`), its `meta` uploaded."""
+    def steps(self, us: list[Unit], split: bool = False) -> list[tuple[str, object]]:
+        """A call's launches (`STEPS`, or with `split` `SPLIT_STEPS`), its `meta` (`meta`'s, at the same `split`) uploaded."""
         d, b, k, n, R = self.dev, self.b, self.k, self.n, self.R
         rows, count, meta = sum(u.seg for u in us), len(us), b["meta"]
         ex, s = meta + REC * count, k // 256
-        return list(zip(STEPS, (
-            lambda: d.launch(f"pd_commit_g_{PD}", (max(u.m16 for u in us), count), 32 * (R.cdiv(s, 32) * 2 + 2), d.pd_smem_g,
-                             p=(meta,), i=(REC,)),
+
+        def commit():
+            d.launch(f"pd_commit_g_{PD}", (max(u.m16 for u in us), count), 32 * (R.cdiv(s, 32) * 2 + 2), d.pd_smem_g, p=(meta,),
+                     i=(REC,))
+
+        def tree():
+            d.launch(f"pd_tree_g_{PD}", (1, count), 128, d.pd_tree_smem_g, p=(meta + TREE_AT,), i=(REC,))
+
+        if split:
+            tree_setup(R, d)
+        return list(zip(SPLIT_STEPS if split else STEPS, (
+            commit, *((tree,) if split else ()),
             lambda: d.launch("stats_s5", R.cdiv(rows, 8), 256, p=(b["xa"], b["alpha_a"], b["beta_a"], b["ia_a"], b["aux_a"]),
                              i=(rows, k)),
             lambda: d.launch("eprime", R.cdiv(rows, 128), 128, p=(b["ea_codes"], b["beta_a"], b["epa_codes"]), i=(rows,)),

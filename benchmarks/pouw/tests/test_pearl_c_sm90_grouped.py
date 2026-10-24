@@ -97,20 +97,23 @@ def grouped(n=128, k=1024, experts=4, rows=1024, count=16):
     return G.Grouped(R, dev, n, k, experts, rows, count, b, keys), dev, b, keys
 
 
-def test_each_units_record_is_its_own_calls_launches():
+@pytest.mark.parametrize("split", [False, True])
+def test_each_units_record_is_its_own_calls_launches(split):
     """Unit j's pd_commit and pd_tiles Args are what `run.Pipeline` passes for its m₁₆ rows of its segment called alone, its
     buffers at the unit's offsets (A's rows, row digests, seeds and lines at its first row, its tree and counter at its slot,
     C~ and U at its rows, its leaves at its first tile), its keys at its record; the table's expert map, gathered rows and
-    root nodes are the units'."""
+    root nodes are the units'.  With `split` the record holds pd_commit's Args in mode 1 and pd_tree's, as the pipeline
+    passes them with ``split_a`` and no ``fillers`` (no padding rows' E_A lines); without, its pd_tree Args are zero."""
     n, k = 128, 1024
     g, dev, b, kk = grouped(n, k)
     us = G.units([3, 0, 300, 64], n, R.PD_MAX_ROWS)
     keys = np.random.default_rng(1).bytes(G.KEY_BYTES * len(us))
     leaves = 9 << 40
-    meta = g.meta(us, keys, leaves)
+    meta = g.meta(us, keys, leaves, split)
     rec = np.frombuffer(meta[:G.REC * len(us)], np.uint8).reshape(len(us), G.REC)
     commit = rec[:, :G.TILES_AT].copy().view(G.ARGS).ravel()
     tiles = rec[:, G.TILES_AT:G.KEYS_AT].copy().view(G.ARGS).ravel()
+    tree = rec[:, G.TREE_AT:].copy().view(G.ARGS).ravel()
     for j, u in enumerate(us):
         key = b["meta"] + G.REC * j + G.KEYS_AT
         bufs = {"rowdig_a": b["rowdig_a"] + 64 * u.row, "tree_a": b["tree_a"] + G.tree_bytes(R) * j,
@@ -118,15 +121,24 @@ def test_each_units_record_is_its_own_calls_launches():
                 "seed_a": b["seed_a"] + 32 * j, "line_a": b["line_a"] + 32 * j, "ea_codes": b["ea_codes"] + 32 * u.row,
                 "c": b["c"] + 4 * n * u.row, "u": b["u"] + 4 * n * u.row, "leaves": leaves + 64 * u.tile}
         full = {"dom_a": key, "unit": key + 64, "dom_b": 0, "dom_t": 0, "line_b": 0, **kk}
-        pipe = R.Pipeline(dev, u.seg, n, k, "h100", full, b["xa"] + 4 * k * u.row, 0, bufs=bufs, m_real=u.m16)
+        pipe = R.Pipeline(dev, u.seg, n, k, "h100", full, b["xa"] + 4 * k * u.row, 0, bufs=bufs, m_real=u.m16,
+                          split_a=split, fillers=not split)
         assert pipe.pd == R.pd_variant(u.m16, n, k)
         dev.log.clear()
-        pipe.pd_commit()
+        pipe.pd_commit(int(split))
+        if split:
+            pipe.pd_tree()
         pipe.pd_tiles()
-        (_, _, _, _, _, cp, ci), (_, _, _, _, _, tp, ti) = dev.log
+        (*_, cp, ci), *mid, (*_, tp, ti) = dev.log
         assert tuple(commit["p"][j][:len(cp)]) == cp and tuple(commit["i"][j][:len(ci)]) == ci, j
         assert tuple(tiles["p"][j][:len(tp)]) == tp and tuple(tiles["i"][j][:len(ti)]) == ti, j
         assert not commit["p"][j][len(cp):].any() and not tiles["p"][j][len(tp):].any()
+        if split:
+            ((*_, rp, ri),) = mid
+            assert tuple(tree["p"][j][:len(rp)]) == rp and tuple(tree["i"][j][:len(ri)]) == ri and rp[12] == 0, j
+            assert not tree["p"][j][len(rp):].any()
+        else:
+            assert not mid and not tree["p"][j].any() and not tree["i"][j].any()
         assert rec[j, G.KEYS_AT:G.KEYS_AT + G.KEY_BYTES].tobytes() == keys[G.KEY_BYTES * j:G.KEY_BYTES * (j + 1)]
     blocks = sum(u.seg for u in us) // G.SEG
     ex = np.frombuffer(meta, "<i4", blocks, G.REC * len(us))
@@ -169,33 +181,70 @@ def test_a_call_is_eight_launches_whatever_its_experts(counts):
     assert by["gemm_pearlc_g_d"][5][:9] == (b["at"], b["bt"], b["c"], b["u"], b["y"], b["pa_t"], b["pb_t"], b["ia_a"], b["ia_b"])
 
 
-def device_run(experts: int, n: int = 128, k: int = 1024, retain=None):
+def test_a_split_call_runs_as_tree_from_its_record_after_the_per_row_keying():
+    """With `split` a call is `grouped.SPLIT_STEPS`: pd_commit_g as unsplit (its records then in mode 1), pd_tree_g on one
+    CTA of 128 threads a unit, reading its record's pd_tree Args, with pd_tree's dynamic shared memory, then the rest as
+    unsplit."""
+    n, k = 128, 1024
+    g, dev, b, _ = grouped(n, k, experts=6)
+    us = G.units([3, 0, 300, 64, 17, 1], n, R.PD_MAX_ROWS)
+    dev.log.clear()
+    steps = g.steps(us, split=True)
+    assert [x for x, _ in steps] == list(G.SPLIT_STEPS)
+    for _, f in steps:
+        f()
+    got = launches(dev)
+    assert [x[0] for x in got] == [STEPS[0], "pd_tree_g_851", *STEPS[1:]]
+    assert got[1][1:4] == ((1, len(us)), 128, dev.pd_tree_smem_g) and dev.pd_tree_smem_g == dev.pd_tree_smem[G.PD]
+    assert got[1][5:] == ((b["meta"] + G.TREE_AT,), (G.REC,))
+    dev.log.clear()
+    for _, f in g.steps(us):
+        f()
+    assert launches(dev) == got[:1] + got[2:]
+
+
+class OldCubinDev(RecordingDev):
+    """A cubin built before pd_tree_g: looking it up fails as `run.Dev.fn`'s does."""
+
+    def fn(self, name):
+        if name.startswith("pd_tree_g_"):
+            raise RuntimeError("cuModuleGetFunction returned CUresult 500 (named symbol not found)")
+        return name
+
+
+def device_run(experts: int, n: int = 128, k: int = 1024, retain=None, schedule="serial", dev=None):
     rng = np.random.default_rng(5)
     weights = {w: torch.from_numpy((rng.standard_normal((n, k)).astype(np.float32) * 0.05)).to(torch.bfloat16)
                for w in range(experts)}
-    kernel = PPD.Kernel(R, F, RecordingDev(), "0" * 64)
+    kernel = PPD.Kernel(R, F, dev or RecordingDev(), "0" * 64)
     roots = PPD.weight_roots(kernel, weights, SCHEME, salt_key=SALT_KEY)
     ch = Challenger(0, np.random.default_rng(7).bytes)
     coins = ch.commitment, ch.open("salt", weights_root(roots))
     run = PPD.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, *coins, capacity=1 << 12,
-                              salt_key=SALT_KEY)
+                              schedule=schedule, salt_key=SALT_KEY)
     run.begin(retain=retain)
     return run, weights
 
 
-def test_the_vllm_call_commits_each_unit_as_its_call_alone(tmp_path):
-    """`gemm_grouped` over experts (1, 3, 0) with (3, 300, 20) rows, and each unit's rows called alone through
-    `PearlCDeviceRun.gemm` in unit order on another run: the same matmuls, tiles, screened rows, records and retained rows,
-    and each unit's keys in the table are the ones its call alone uploads.  The call is eight launches, y is x's rows
-    by n, and an expert's dense call after grouping reads its stacked B̃."""
+def lane_steps(split: bool) -> list[str]:
+    """A call's launches in the order a side lane's schedule makes them: the main lane's, then A's tree and the tile leaves."""
+    return [*STEPS[:-1], *(["pd_tree_g_851"] if split else []), STEPS[-1]]
+
+
+@pytest.mark.parametrize("schedule", ["serial", "deferred", "deferred-a"])
+def test_the_vllm_call_commits_each_unit_as_its_call_alone(tmp_path, schedule):
+    """`gemm_grouped` over experts (1, 3, 0) with (3, 300, 20) rows under each schedule, and each unit's rows called alone
+    through `PearlCDeviceRun.gemm` in unit order on another run under the serial one: the same matmuls, tiles, screened
+    rows, records and retained rows, and each unit's keys in the table are the ones its call alone uploads.  The call is a
+    launch a step, y is x's rows by n, and an expert's dense call after grouping reads its stacked B̃."""
     ws, counts, n, k = (1, 3, 0), [3, 300, 20], 128, 1024
     x = torch.randn(sum(counts), k).to(torch.bfloat16)
-    run, weights = device_run(4, n, k, tmp_path / "grouped")
+    run, weights = device_run(4, n, k, tmp_path / "grouped", schedule)
     dev = run.kernel.dev
     dev.log.clear()
     y = PG.gemm_grouped(run, ws, x, counts)
     assert y.shape == (sum(counts), n) and y.dtype == torch.bfloat16
-    assert [x[0] for x in launches(dev)] == STEPS
+    assert [x[0] for x in launches(dev)] == lane_steps(schedule == "deferred-a")
     us = G.units(counts, n, R.PD_MAX_ROWS)
     g = run._groups[ws]
     meta = PPD._bytes(g.b["meta"])
@@ -217,6 +266,56 @@ def test_the_vllm_call_commits_each_unit_as_its_call_alone(tmp_path):
     run.gemm(3, x[:5], weights[3], None)
     bt = next(p[1] for name, *_, p, _ in dev.log if name == "gemm_pearlc_d")
     assert bt == g.stacked["bt"].data_ptr() + ws.index(3) * n * k
+
+
+@pytest.mark.parametrize("schedule", ["deferred", "deferred-caller", "deferred-a"])
+def test_the_vllm_call_runs_on_the_schedules_lanes_from_rotating_sets(schedule):
+    """A grouped call's main lane (the recording stand-in's handle 2, or the caller's 0 under ``deferred-caller``) runs every
+    step but the side ones, which run on the run's side lanes in turn (1, then 3): the tile leaves, and under ``deferred-a``
+    first A's tree, pd_commit_g then in mode 1.  Calls take the ring's sets in turn (C~, U, the table and A's tree), and A's
+    roots are gathered into the pass from the call's set."""
+    ws, counts, n, k = (1, 3, 0), [3, 300, 20], 128, 1024
+    run, _ = device_run(4, n, k, schedule=schedule)
+    dev, nb = run.kernel.dev, run.nb
+    us = G.units(counts, n, R.PD_MAX_ROWS)
+    g = PG.group(run, ws)
+    g.fit(run, sum(u.seg for u in us), run.schedule.ring)
+    for j, st in enumerate(g.sets):                     # stand-in trees, since the recording stand-in writes nothing
+        st["tree_a"].fill_(0x11 * (j + 1))
+    split, main = schedule == "deferred-a", 0 if schedule == "deferred-caller" else 2
+    dev.log.clear()
+    for _ in range(3):
+        PG.gemm_grouped(run, ws, torch.randn(sum(counts), k).to(torch.bfloat16), counts)
+    log = launches(dev)
+    side = ("pd_tree_g_851", "pd_tiles_g_851")
+    assert [(x[0], x[4]) for x in log] == [(x, lane if x in side else main) for lane in (1, 3, 1) for x in lane_steps(split)]
+    by = {name: [x[5] for x in log if x[0] == name] for name in lane_steps(True)}
+    ptr = lambda j, x: g.sets[j][x].data_ptr()
+    for c, j in enumerate((0, 1, 0)):
+        assert by["pd_commit_g_851"][c] == (ptr(j, "meta"),) and by["pd_tiles_g_851"][c] == (ptr(j, "meta") + G.TILES_AT,)
+        assert by["gemm_pearlc_g_d"][c][2:4] == (ptr(j, "c"), ptr(j, "u"))
+        assert by["pd_tree_g_851"][c:c + 1] == ([(ptr(j, "meta") + G.TREE_AT,)] if split else [])
+    for j in (0, 1):
+        rec = np.frombuffer(PPD._bytes(g.sets[j]["meta"])[:G.REC * len(us)], np.uint8).reshape(len(us), G.REC)
+        commit, tree = (rec[:, a:z].copy().view(G.ARGS).ravel() for a, z in ((0, G.TILES_AT), (G.TREE_AT, G.REC)))
+        assert commit["i"][:, 2].tolist() == [int(split)] * len(us)
+        assert tree["p"][:, 2].tolist() == [ptr(j, "tree_a") + G.tree_bytes(R) * i if split else 0 for i in range(len(us))]
+    assert len({ptr(j, x) for j in (0, 1) for x in PG.ROTATED}) == 2 * len(PG.ROTATED)
+    assert [set(PPD._bytes(run.roots_buf[nb * i:nb * (i + 1)])) for i in range(3 * len(us))] == [
+        {0x11 * (j + 1)} for j in (0, 1, 0) for _ in us]
+
+
+def test_the_vllm_call_runs_unsplit_on_a_cubin_without_pd_tree_g():
+    """A ship built before pd_tree_g (`grouped.has_tree` false) runs ``deferred-a``'s grouped calls as ``deferred``'s: A's
+    whole commitment in pd_commit_g's mode 0 on the main lane, the tile leaves on the side lane."""
+    run, _ = device_run(4, schedule="deferred-a", dev=OldCubinDev())
+    dev = run.kernel.dev
+    dev.log.clear()
+    PG.gemm_grouped(run, (1, 3), torch.randn(40, 1024).to(torch.bfloat16), [30, 10])
+    assert [(x[0], x[4]) for x in launches(dev)] == [(x, 1 if x == "pd_tiles_g_851" else 2) for x in STEPS]
+    assert not G.has_tree(dev) and G.has_tree(RecordingDev())
+    rec = np.frombuffer(PPD._bytes(run._groups[(1, 3)].b["meta"])[:2 * G.REC], np.uint8).reshape(2, G.REC)
+    assert rec[:, :G.TILES_AT].copy().view(G.ARGS).ravel()["i"][:, 2].tolist() == [0, 0]
 
 
 def test_the_vllm_call_refuses_what_it_cant_run():
