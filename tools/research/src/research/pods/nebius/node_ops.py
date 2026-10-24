@@ -161,7 +161,9 @@ class Guard:
 LEASE_DIR = Path(os.environ.get("GPU_LEASE_DIR", "/run/gpu-lease"))
 BUILD = {"lake", "lean", "leanc", "cargo", "rustc", "cc1", "cc1plus", "ld", "ld.lld", "make", "ninja", "nvcc", "ptxas", "cicc", "xz"}
 QUIET_MATCH = re.compile(os.environ["QUIET_MATCH"]) if os.environ.get("QUIET_MATCH") else None
-QUIET_EXEMPT = re.compile(r"-m research |research launch-request|/workspace/pouw/fill/running/|timeout ")
+# a train check (slot.py's group, check.py under it) runs straight through a timed window (top 24 Oct 04:44Z, landing first): on
+# n2 at 05:16Z one --timed lease froze train eda3's check and c567's post-landing check for 28 min
+QUIET_EXEMPT = re.compile(r"-m research |research launch-request|/workspace/pouw/fill/running/|timeout |tools/verity/check/(check|slot)\.py")
 # `research run`'s per-run sampler polls nvidia-smi every 5 s for the whole life of a run, the timed run's own included,
 # so every one is paused for a window whatever its CPU use (the pous root, 17:19Z); its run records the gap.
 SAMPLER = re.compile(r"-m research\.telemetry sample ")
@@ -172,7 +174,7 @@ class Quiet:
     process groups other than the window's own, and continue them once it ends.  CPU-heavy: at least one core busy over the last
     tick, or a build, Lean or cargo process in the group.  Left running: the window's process tree, research runners, fill jobs
     (their runner pauses them), fill's timing jobs (a pause voids their chunk, and nothing stops them before their max_min),
-    anything under GNU `timeout` (it would lose the paused time), and PROTECT's daemons.  Measured
+    anything under GNU `timeout` (it would lose the paused time), train checks (slot.py, check.py), and PROTECT's daemons.  Measured
     reason: CPU load on the other NUMA node slows decode-shape GEMM timing by 0.3-1.4% (run r20260930-075259-37cc)."""
 
     STATE = OUT / "logs" / "quiet-paused.json"
