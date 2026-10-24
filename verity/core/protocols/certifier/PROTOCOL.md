@@ -544,7 +544,9 @@ reads the Commit's root as public.
 steps of P = 64 from a session of 2^10 (E = M = 8,192). Served is `SERVED`'s shape, L = 9, T = 600, r = 1,686 (N =
 1,011,600), with S = 4,096 steps of P = 256 from a session of 2^23 (E = M = 2^20). Egress cells are 256 bytes and
 ingress frames 4,096. Each part's formula is exact, checked against `HC.ands` at two sizes or more and the whole window
-at T = 3, R = 4, P = 4, S = 4, DS = 3, and extrapolated from there; nothing at these sizes is built.
+at T = 3, R = 4, P = 4, S = 4, DS = 3 (`IoTieWindow{256, 3, 4, 4, 4, 3}`, 6,721,770 ANDs: `IoTiePort` 3,534,423,
+`NetworkRowsRoot` 3,139,634, `IoTieContent` 47,711 and 2 joining them), and extrapolated from there; nothing at these
+sizes is built.
 
 | Part | Rehearsal | Served | From |
 |---|---|---|---|
