@@ -135,6 +135,9 @@ LANE_REFS_ENV = "DITHER_LANE_REFS"
 # "N,K,MMAX=CFG+..." (exactlin's Cfg text): call (N, K)'s GEMM config in place of exactlin.pick's at the M its CONFIGS
 # entry (MMAX, ..) takes.  A split K's int32 partial sums add up to the same z, so z and y are the same bits
 MM_CFG_ENV = "DITHER_MM_CFG"
+# P (measured only): the units' stream at CUDA priority P (lower is higher; the A tables', the trees' and under
+# DITHER_SO_PRIO the serving stream's are -1), where unset it is 0
+UNITS_PRIO_ENV = "DITHER_UNITS_PRIO"
 UNIT = (32, 32)     # (UR, UC): the receipts' units; a narrower down_proj unit changes only this
 H1R_BLOCK, H1R_SPLIT = 3, 4     # h1r_launch's versions: a unit a block, a unit six warps
 M32 = DO.M32
@@ -373,7 +376,7 @@ class Side:
         self.ycmp: torch.Tensor | None = None
         # under YCMP_ENV each capture's calls refused by the byte compare and by the roots' (`y_leaves`)
         self.ycmp_at: dict[str, dict] = {}
-        self.side = torch.cuda.Stream(device=dev)
+        self.side = torch.cuda.Stream(device=dev, priority=int(os.environ.get(UNITS_PRIO_ENV) or 0))
         self.fork, self.join = torch.cuda.Event(), torch.cuda.Event()
         if pt:
             win.tree_streams = (torch.cuda.Stream(device=dev), torch.cuda.Stream(device=dev))
