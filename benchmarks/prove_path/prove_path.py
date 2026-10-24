@@ -503,16 +503,17 @@ def forged_row(s: dict, forged: dict | None) -> dict:
 
 
 def per_unit(s: dict) -> dict[str, dict]:
-    """Each drawn member's session timing per proved unit: proving (C-Flock's ``prove_total_s`` and the session's wall), M0's and
-    Lean's verify, and the proof's bytes."""
+    """Each drawn member's session timing per drawn unit (the units its one statement proves, ``draw_counts``; C-Flock's own
+    ``units`` count its virtual units): proving (C-Flock's ``prove_total_s`` and the session's wall), M0's and Lean's verify,
+    and the proof's bytes over its reps."""
     out = {}
     for key, t in (s.get("timing") or {}).items():
-        tm = t.get("timing") or {}
-        n = tm.get("units") or 0
-        out[key] = {"units": n, "k_log": tm.get("k_log"), **{f"{x}_per_unit": round(v / n, 2) if n and isinstance(v, int | float) else None
-                    for x, v in (("prove_s", tm.get("prove_total_s")), ("session_s", t.get("session_s")),
-                                 ("verify_s", t.get("verify_s")), ("lean_verify_s", t.get("lean_verify_s")),
-                                 ("proof_bytes", tm.get("proof_bytes")))}}
+        tm, n = t.get("timing") or {}, (s.get("draw_counts") or {}).get(key) or 0
+        pb = tm.get("proof_bytes")
+        out[key] = {"units": n, "k_log": tm.get("k_log"), "proof_bytes": sum(pb) if isinstance(pb, list) else pb,
+                    **{f"{x}_per_unit": round(v / n, 2) if n and isinstance(v, int | float) else None
+                       for x, v in (("prove_s", tm.get("prove_total_s")), ("session_s", t.get("session_s")),
+                                    ("verify_s", t.get("verify_s")), ("lean_verify_s", t.get("lean_verify_s")))}}
     return out
 
 

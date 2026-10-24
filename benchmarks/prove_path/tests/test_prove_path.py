@@ -352,3 +352,11 @@ def test_a_run_is_one_committed_run_and_a_single_gpu_runs_one_window_is_rank_0()
     assert PP.ranks_of(argparse.Namespace(bundle="b", ranks=None)) == (1, [0])
     with pytest.raises(SystemExit, match=r"ranks \[1\] are not ranks of the world of 1"):
         PP.ranks_of(argparse.Namespace(bundle="b", ranks="0,1"))
+
+
+def test_per_unit_timing_is_over_the_members_drawn_units_not_c_flocks_virtual_units():
+    s = {"draw_counts": {"T": 2}, "timing": {"T": {"session_s": 501.2, "verify_s": 6.2, "lean_verify_s": 47.0,
+                                                   "timing": {"prove_total_s": 428.9, "units": 16384, "k_log": 26,
+                                                              "proof_bytes": [830330, 830330]}}}}
+    assert PP.per_unit(s) == {"T": {"units": 2, "k_log": 26, "proof_bytes": 1660660, "prove_s_per_unit": 214.45,
+                                    "session_s_per_unit": 250.6, "verify_s_per_unit": 3.1, "lean_verify_s_per_unit": 23.5}}
