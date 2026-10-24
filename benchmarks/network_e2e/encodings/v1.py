@@ -500,7 +500,7 @@ def advice_of(trace: Any, record: Record) -> I1.Advice:
     reqs = [record.requests[i] for i in order]
     requests = tuple(I1.RequestAdvice(q.id, len(q.prompt), len(q.output), "eos" if trace.requests[i].eos else "length")
                      for i, q in zip(order, reqs))
-    prefixes = D.Prefixes([q.prompt + q.output for q in reqs])
+    prefixes = D.Prefixes([q.prompt + q.output for q in reqs], trace.engine.block_size)
     seen: set[int] = set()
     kept = [0] * len(order)
     steps, release = [], []

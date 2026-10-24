@@ -448,12 +448,45 @@ def test_advice_chunk_serves_the_same_positions_in_other_step_shapes():
         NG.chunk_split(one)
 
 
+def test_advice_prompt_split_swaps_two_prompts_and_keeps_every_row_and_output_where_it_was():
+    """REDTEAM phase 6's split on the stand-in: r0's prompt of 5 advised as 2, cut from the front of its two chunks
+    (each keeping a token), r1's of 2 as 5, its one chunk longer, each decode moved with its prompt; every row stays in
+    its step, so each output is kept where it was and released in its bucket. Under the tests' framing r0's end moves a
+    frame earlier and the frames' total stays. Without a pair whose first prompt is the longer, the first whose
+    prompts differ. It needs two prompts of different lengths, rows that read no cached KV, and as many tokens as the
+    shorter prompt has chunks."""
+    a = _advice()
+    b = NG.prompt_split(a)
+    assert [(q.id, q.prompt_len) for q in b.requests] == [("r0", 2), ("r1", 5)] and b.release == a.release
+    assert [[(r.request, r.kind, r.start, r.n) for r in st.rows] for st in b.steps] == [
+        [(0, "prefill", 0, 1)], [(0, "prefill", 1, 1), (1, "prefill", 0, 5)],
+        [(0, "decode", 2, 1), (1, "decode", 5, 1)], [(0, "decode", 3, 1)]]
+    assert _check(b) == _check(a)
+
+    def ends(x):
+        return [sum(FRAMING[q.prompt_len - 1] for q in x.requests[:k + 1]) for k in range(len(x.requests))]
+
+    assert ends(a) == [2, 3] and ends(b) == [1, 3]
+    back = NG.prompt_split(b)
+    assert [q.prompt_len for q in back.requests] == [5, 2] and _check(back) == _check(a) and ends(back) == [2, 3]
+    one = V.Advice((V.RequestAdvice("x", 1, 1, "eos"),), (V.StepAdvice((V.Row(0, "prefill", 0, 1),)),), (0,))
+    with pytest.raises(NG.NotApplicable, match="no request's prompt length differs"):
+        NG.prompt_split(one)
+    with pytest.raises(NG.NotApplicable, match="KV"):
+        NG.prompt_split(NG.start_shifted(a))
+    three = _advice([[(0, "prefill", 0, 2)], [(0, "prefill", 2, 2)], [(0, "prefill", 4, 1), (1, "prefill", 0, 2)],
+                     [(0, "decode", 5, 1), (1, "decode", 2, 1)], [(0, "decode", 6, 1)]])
+    with pytest.raises(NG.NotApplicable, match="3 chunks"):
+        NG.prompt_split(three)
+
+
 FRAMING = (1, 1, 2, 2, 2)  # the link's request frames by prompt length: r0's prompt of 5 two, r1's of 2 one
 
 
-def _n2(b, received=(3,), tie=None):
-    """`b` as N2-ADVICE reads it (`n2_advice`), under `FRAMING`."""
-    return NG.n2_advice(b, FRAMING, list(received), tie)
+def _n2(b, received=(3,), certified=None):
+    """`b` as N2-ADVICE reads it (`n2_advice`), under `FRAMING`, tied to `certified`'s requests (`b`'s own by
+    default)."""
+    return NG.n2_advice(b, FRAMING, list(received), certified)
 
 
 def test_the_declared_received_is_the_advices_requests_frames_under_the_links_framing():
@@ -466,11 +499,15 @@ def test_the_declared_received_is_the_advices_requests_frames_under_the_links_fr
 
 
 def test_n2s_advised_counts_refuse_the_advice_negatives_and_accept_the_step_units():
-    """Against N2-ADVICE's `advised` (skipped until it lands), on heads an honest run of the advice certifies: the
-    honest advice is accepted; length and release are refused by the advised counts, missing and extra (each under the
-    honest run's tie to the certified ingress) by the view; start and chunk are accepted, their frames honest's, so
-    only the step unit can refuse them; a link without the tie is refused by the view, an extra request under its own
-    tie by the counts, or by the view once its frames pass the egress allocation R in a bucket."""
+    """Against N2-ADVICE's `advised` (skipped until it lands), on heads an honest run of the advice certifies, each
+    advice tied to the certified ingress, the honest advice's requests (IoTieRequest's verdict, `n2_advice`'s
+    stand-in): the honest advice is accepted; length and release are refused by the advised counts, each well formed,
+    and missing and extra by the view (the verdict refuses them), and by the counts too under a verdict on an ingress
+    of their own requests; prompt-split by the view alone: under a verdict on its own requests the counts accept it,
+    its frames honest's and r0's end a frame earlier (REDTEAM phase 7), so only the tie refuses it; start and chunk are
+    accepted, their frames honest's, so only the step unit can refuse them; a link without the verdict, a `received`
+    that isn't the requests' frames, and an extra request whose frames pass the egress allocation R in a bucket, are
+    refused by the view."""
     AD = pytest.importorskip(NG.ADVISED_MODULE)
     from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 
@@ -484,12 +521,16 @@ def test_n2s_advised_counts_refuse_the_advice_negatives_and_accept_the_step_unit
                        for c in NG.advised_codes(link, w, syncs, sigma, FRAMING, T, R, RIN, OWN, i, e)})
 
     assert codes(_n2(a)) == []
+    read = {NG.ADVISED, f"{NG.ADVISED}.view"}
     for name, n in NG.NEGATIVES.items():
         if n.tampers == "advice":
-            want = [] if n.code.startswith("StepUnit") else [n.code]
-            assert codes(_n2(n.make.edit(a), tie=NG.prompt_tie(a))) == want, name
-    assert codes(AD.LinkAdvice(a, (3,))) == [f"{NG.ADVISED}.view"]
-    assert codes(_n2(NG.extra_request(a))) == [NG.ADVISED]
+            b, tied = n.make.edit(a), sorted(c for c in {n.code, *n.also} if c in read)
+            assert codes(_n2(b, certified=a)) == tied, name
+            assert codes(_n2(b)) == ([] if not tied or name == "prompt-split" else [NG.ADVISED]), name
+    assert codes((AD.LinkAdvice(a, (3,)), None)) == [f"{NG.ADVISED}.view"]
+    four = AD.LinkAdvice(a, (4,))
+    assert codes((four, AD.IoTieVerdict(NG.N2_LINK, NG.n2_registrations(1), AD.digest(four), (True,)))) == \
+        [f"{NG.ADVISED}.view"]
     assert NG.advised_codes(_n2(NG.extra_request(a)), 0, syncs, sigma, FRAMING, T, 4, RIN, OWN,
                             *heads[0]) == [f"{NG.ADVISED}.view"]
 
@@ -510,13 +551,16 @@ def test_the_advice_suite_makes_each_advice_negative_and_names_n2s_codes_on_it()
     assert set(made) == {k for k, n in NG.NEGATIVES.items() if n.tampers == "advice"}
     assert all(r["ran"] and r["valid"] and r["ok"] for r in made.values()), made
     assert {k for k, r in made.items() if r["codes"]} == {"advice-length", "advice-missing", "advice-extra",
-                                                           "advice-release"}
+                                                           "advice-release", "prompt-split"}
+    assert made["prompt-split"]["codes"] == [f"{NG.ADVISED}.view"] and made["prompt-split"]["untied"] == []
+    assert made["prompt-split"]["prompt_lens"] == {0: [5, 2], 1: [2, 5]} and "request_tie" not in made["prompt-split"]
 
 
-def test_an_advice_that_releases_in_its_requests_own_bucket_runs_no_negative_until_shifted(tmp_path):
-    """N2-ADVICE's floor wants every output a bucket after its request's: an honest advice that releases in bucket 0
-    is refused by the view, which its row says, and no negative runs; `advice_run`'s shift moves every release later,
-    and then honest is accepted and the negatives run."""
+def test_an_advice_that_releases_before_its_declared_sync_runs_no_negative_until_shifted(tmp_path):
+    """N2-ADVICE's floor is the Program's eligibility under the declared sync: an honest advice that releases in its
+    requests' bucket 0 under δ = 1 is refused by the view, which its row says, and no negative runs; `advice_run`'s
+    shift moves every release later, and then honest is accepted and the negatives run. Under δ = 0, `advice_run`'s
+    default, the same advice is accepted unshifted, as a served first token in its request's own bucket is."""
     pytest.importorskip(NG.ADVISED_MODULE)
     if V is sys.modules[__name__]:
         pytest.skip(f"{NG.ADVICE_MODULE} (I1) isn't importable")
@@ -527,10 +571,85 @@ def test_an_advice_that_releases_in_its_requests_own_bucket_runs_no_negative_unt
     assert rows["honest"]["codes"] == [f"{NG.ADVISED}.view"] and "before its request" in rows["honest"]["why"]
     assert all(not r["ran"] for k, r in rows.items() if k != "honest")
     (tmp_path / "advice.bin").write_bytes(V.encode(early))
-    assert not NG.advice_run(tmp_path / "advice.bin", T=8, R=8)["negatives"]["honest"]["ok"]
-    doc = NG.advice_run(tmp_path / "advice.bin", T=8, R=8, shift=1)
-    assert doc["shift"] == 1 and doc["negatives"]["honest"]["ok"]
-    assert all(r["ran"] and r["ok"] for k, r in doc["negatives"].items() if k != "honest"), doc
+    assert not NG.advice_run(tmp_path / "advice.bin", T=8, R=8, delta=1)["negatives"]["honest"]["ok"]
+    for doc in (NG.advice_run(tmp_path / "advice.bin", T=8, R=8, delta=1, shift=1),
+                NG.advice_run(tmp_path / "advice.bin", T=8, R=8)):
+        assert doc["negatives"]["honest"]["ok"]
+        assert all(r["ran"] and r["ok"] for k, r in doc["negatives"].items() if k != "honest"), doc
+        assert doc["frame_bytes"] == cs.FRAME_BYTES and doc["received"] == [2]
+
+
+def test_the_ingress_tie_reads_each_requests_record_by_its_user_and_states_the_rest(tmp_path):
+    """serve-openai's rows by user (by http id without one) where they carry the prompt; each advice request's id
+    request is its record's (its prompt ids, user and what it brought, seed 0 when it brought none), and one without a
+    record a prompt of its length under its own id; a record whose prompt isn't the advice's length can't be tied."""
+    from verity.core.protocols.certifier.active import id_request
+
+    brought = {"max_tokens": 3, "temperature": 0.5, "top_p": 0.9}
+    (tmp_path / "requests.jsonl").write_text("".join(json.dumps(r) + "\n" for r in [
+        {"http_id": "cmpl-0", "user": "r0", "prompt_ids": [1, 2, 3, 4, 5], "streamed_ids": [7, 8, 9],
+         "ingress": {"brought": brought}},
+        {"http_id": "cmpl-1", "user": None, "prompt_ids": [6, 6]},
+        {"request": "q2", "user": "r1", "output_ids": [21, 22]}]))
+    records = NG.read_requests(tmp_path / "requests.jsonl")
+    assert sorted(records) == ["cmpl-1", "r0"]
+    a = _advice()
+    assert NG.id_requests(a, records, 404, "m") == [
+        id_request(model="m", user="r0", prompt=[1, 2, 3, 4, 5], frame_bytes=404, seed=0, **brought),
+        id_request(model="m", user="r1", prompt=[0, 0], max_tokens=2, frame_bytes=404)]
+    with pytest.raises(NG.NotApplicable, match="2-token prompt, the advice 5"):
+        NG.id_requests(a, {"r0": records["cmpl-1"]}, 404)
+    assert NG.link_framing(404, 5) == FRAMING
+
+
+def test_io_tie_request_refuses_the_prompt_split_that_n2s_counts_accept():
+    """IoTieRequest's reference (`io_request`, skipped until it's importable) on the certified ingress of the advice's
+    id requests at 404-byte frames, whose framing is the tests': the honest advice's requests are the cells', so every
+    window is accepted; prompt-split, its frames honest's, is refused by IoTieRequest's verdict alone (N2's advised
+    view needs it; under a tie the prover states, N2's counts accept it, REDTEAM phase 7); missing and extra by it
+    too, their requests not the cells'; length and release, their requests honest's, by the advised counts, and
+    start and chunk by neither."""
+    pytest.importorskip(NG.IO_REQUEST_MODULE)
+    pytest.importorskip(NG.ADVISED_MODULE)
+    if V is sys.modules[__name__]:
+        pytest.skip(f"{NG.ADVICE_MODULE} (I1) isn't importable")
+    from verity.core.protocols.certifier.schedule import ClockSync
+
+    rows = NG.advice_suite(_advice(), T=8, R=8, syncs=[ClockSync(1, Fraction(1))], request_frames=FRAMING,
+                           received=[3], frame_bytes=404)
+    assert rows["honest"] == {"bits": V.total_bits(_advice()), "codes": [], "request_tie": [True], "ok": True}
+    assert all(r["ran"] and r["ok"] for k, r in rows.items() if k != "honest"), rows
+    view, tie = f"{NG.ADVISED}.view", NG.REQUEST_TIE
+    assert {k: (r["codes"], r["request_tie"]) for k, r in rows.items() if k != "honest"} == {
+        "advice-length": ([NG.ADVISED], [True]), "advice-release": ([NG.ADVISED], [True]),
+        "advice-missing": ([tie, view], [False]), "advice-extra": ([tie, view], [False]),
+        "prompt-split": ([tie, view], [False]), "advice-start": ([], [True]), "advice-chunk": ([], [True])}
+    assert rows["prompt-split"]["untied"] == [] and rows["prompt-split"]["prompt_lens"] == {0: [5, 2], 1: [2, 5]}
+
+
+def test_phase_6s_split_of_338_and_16_token_prompts_is_refused_by_the_ingress_tie_alone():
+    """REDTEAM phase 6's literal split at the link's 4096-byte frames: prompts of 338 and 16 tokens served (two
+    request frames, then one), advised as 16 and 338. The frames' total is honest's and the first request's end a
+    frame earlier, so N2's advised counts accept it under a tie the prover states (the acausal release); IoTieRequest's
+    reference on the certified ingress refuses it, and with it N2's advised view."""
+    pytest.importorskip(NG.IO_REQUEST_MODULE)
+    pytest.importorskip(NG.ADVISED_MODULE)
+    if V is sys.modules[__name__]:
+        pytest.skip(f"{NG.ADVICE_MODULE} (I1) isn't importable")
+    from verity.core.protocols.certifier.schedule import ClockSync
+
+    a = V.Advice((V.RequestAdvice("u0", 338, 2, "length"), V.RequestAdvice("u1", 16, 1, "length")),
+                 (V.StepAdvice((V.Row(0, "prefill", 0, 338),)), V.StepAdvice((V.Row(0, "decode", 338, 1),
+                                                                             V.Row(1, "prefill", 0, 16)))),
+                 (3, 3, 3))
+    framing = NG.link_framing(cs.FRAME_BYTES, 338)
+    assert (framing[15], framing[337]) == (1, 2)
+    rows = NG.advice_suite(a, T=8, R=8, syncs=[ClockSync(1, Fraction(1))], request_frames=framing, received=[3],
+                           frame_bytes=cs.FRAME_BYTES)
+    split = rows["prompt-split"]
+    assert rows["honest"]["ok"] and rows["honest"]["request_tie"] == [True]
+    assert split["prompt_lens"] == {0: [338, 16], 1: [16, 338]} and split["untied"] == []
+    assert split["codes"] == [NG.REQUEST_TIE, f"{NG.ADVISED}.view"] and split["request_tie"] == [False] and split["ok"]
 
 
 def test_an_advice_negative_waits_for_its_codec(tmp_path, monkeypatch):
@@ -593,7 +712,7 @@ def test_the_suites_advice_rows_are_n2_advices_codes_on_the_given_advice(runs, t
         return
     assert all(r["ran"] and r["valid"] and r["ok"] and r["honest_codes"] == [] for r in advice.values()), advice
     assert {k for k, r in advice.items() if r["codes"]} == {"advice-length", "advice-missing", "advice-extra",
-                                                           "advice-release"}
+                                                           "advice-release", "prompt-split"}
 
 
 # --- the I/O tie on a fake upstream (IO-TIE's `io_tie`) ----------------------------------------------------------------

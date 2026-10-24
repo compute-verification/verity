@@ -255,12 +255,16 @@ It does not cover:
 - **The model's size.** The report names the model as the plan does. The plan doesn't say whether the model was cut:
   GLM-M4's endpoint (r20261024-021333-0ca6) is GLM-5.3 INT8 cut to 5 of 78 layers, at 16 tokens a response.
 
-Zero-knowledge gaps, from `verity/core/protocols/certifier/README.md` ("Not yet zero-knowledge"):
+Zero-knowledge gaps, from `verity/core/protocols/certifier/README.md` ("Zero knowledge: what N2's verdict reads, and
+what's open"):
 
-- N2's verdict of record is still `LinkWindows.verify` on the host, which reads the heads and the certifier's salts. The
-  proofs run beside it, on the roots it registered.
-- The proofs are of `n2_zk`'s row adapter, not of N2's registered unit, so `LinkWindows.proved` (which refuses a proof
-  of any other Program, NET-43) doesn't take them. Lean holds each proof to the program and partition that `n2_zk` wrote.
+- N2's verdicts here are decided in the clear (`LinkWindows.unproved_outcome`, as for any run that proves nothing),
+  which reads the heads and the certifier's salts. `n2_zk` now decides each link-window on a `--zk` proof of N2's
+  registered unit, one member a round; this report doesn't read that summary yet, so it proves nothing itself and
+  refuses to adopt such a run (``--no-prove`` takes N2's verdicts only).
+- The proofs an adopted earlier `n2_zk` summary holds are of its row adapter, not of N2's registered unit, so
+  `LinkWindows.proved` (which refuses a proof of any other Program, NET-43) doesn't take them. Lean holds each proof to
+  the program and partition that `n2_zk` wrote.
 - NET-42: the certificate's link to its head is checked on the host (`CertifiedRecord.verify`).
 
 ## Cost
