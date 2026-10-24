@@ -67,6 +67,12 @@ speculative decoding, LoRA, structured output, encoder inputs and KV connectors.
 3. `compile_steps` (`integrations/vllm/verity_vllm/predict/steps.py`): each row (request, start, n) becomes a `RowRef`
    into its request's Program, the rows being exactly I1 v0's `steps`, which v0 carried in the advice.
 
+What step 1 decodes is open. The decision bits themselves can be the advice (one bit per ask, up to 4,391 in a 60 s
+window on the corpus), and then step 1 is only the length check. The replay's clocked code (up to 2,598 bits a window)
+needs an arithmetic decoder whose contexts read the certified buckets around the step. Its egress code (7 to 213 bits a
+window) also reads, per ask, the replay forked and run on with the request arriving now or a step later, so in the
+circuit each ask costs two more scans to the request's outputs.
+
 **The circuit**, traced whole (`_build`): the running loop over static slots, each slot's n read off the budget the
 slots before it leave, and a slot kept iff the free blocks plus the returns of the slots after it cover the needs up to
 it (the victims are a suffix and no need or return is negative, so that is the scheduler's pops); a scan of the
