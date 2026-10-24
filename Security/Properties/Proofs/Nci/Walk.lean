@@ -19,8 +19,9 @@ input node called with no arguments (`Desc.bodiesLaidOut`, `bodiesLaidOut_spec`)
 returns one value and an input's gate reads nothing (`gate_reads_of`).
 
 So `GatesLocated` holds wherever two smaller statements do, each a named `Prop` here, open (`gatesLocated_of`):
-`OperandsResolve` (operands resolve in every activation the walk visits) and `OperandsEarlier` (every operand the walk
-locates is an earlier gate; `Resolve.operandsEarlier_of` proves it from `Resolve.BodiesOk`). `descAgrees_of_gaps` gives
+`OperandsResolve` (operands resolve in every activation the walk visits; `OperandsResolve.operandsResolve_of` proves it
+from `Resolve.BodiesOk`) and `OperandsEarlier` (every operand the walk locates is an earlier gate;
+`Resolve.operandsEarlier_of` proves it from `Resolve.BodiesOk`). `descAgrees_of_gaps` gives
 `DescAgrees` from those two and `NovelExact`.
 -/
 
