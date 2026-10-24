@@ -314,17 +314,17 @@ REGISTERED_FILE = _port("registered-file", registered_file, credit_cases.registe
 
 def test_credit(pass_server):
     """Generated served windows' credited sets, drawn units and their outcomes, whole windows and periods, and A rows,
-    then each mutation over a few seeds (`replay`): a credit bit flipped after the draw coin, units the prover chose, a
-    drawn unit failed or missing, a period unclosed or a window of it missing or out of order, an A tree the round roots
+    then each mutation over a few seeds (`replay`): a window's tile at a K its proof doesn't cover (2^17 or past, or no
+    multiple of 32), a credit bit flipped after the draw coin, units the prover chose, a drawn unit failed or missing,
+    a period unclosed or a window of it missing or out of order, an A tree the round roots
     didn't commit, a window's round log the challenger never received, entries or a drawn unit's proof of another
     registration than the window's or an entry whose root is not its sessions', B rows other than the ones a window's
     open root binds or registered under another domain, name or rows, a window whose B rows (one row's s_w, or every
     code zeroed) are not the ones its period's open signed, a period whose open signs no weights' root or names no
     model `models.json` pins (none, malformed, another checkpoint, another role), a call's A table or a round's
     input-ids table other than the served Commit's or a Commit record the draw root doesn't bind, round 0's input-ids
-    table outside round 0's request table or bound to another session, a window's tile at a K its proof doesn't cover
-    (2^17 or past, or no multiple of 32), and every other refusal of `credit.window`, `credit.period_credit` and the
-    steps they run."""
+    table outside round 0's request table or bound to another session, and every other
+    refusal of `credit.window`, `credit.period_credit` and the steps they run."""
     CREDITED.clear()
     stats = {p.fn: D.run(p, examples=n, server=pass_server)
              for p, n in ((CREDIT, 300), (DRAWN, 300), (OUTCOME, 300), (WINDOW, 150), (PERIOD, 100), (A_LINK, 400),

@@ -1179,10 +1179,12 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
     i = rng.randrange(n)
     match name:
         case ("honest" | "incomplete" | "no-close" | "forged-ledger" | "no-circuit" | "no-k" | "k-form" | "k-past-units"
-              | "bad-circuit" | "tile-k" | "never-received" | "other-circuit" | "branch-pin" | "no-weights"
-              | "weights-form" | "other-sw" | "zero-codes"):
+              | "bad-circuit" | "never-received" | "other-circuit" | "branch-pin" | "no-weights" | "weights-form"
+              | "other-sw" | "zero-codes"):
             pass
         case _ if name in MODEL_NAMES:
+            pass
+        case "tile-k":
             pass
         case "other-k":
             d = wins[i][0]
