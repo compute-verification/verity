@@ -356,10 +356,15 @@ def test_the_frame_circuit_is_its_reference():
     assert HC.ands(bind(Q.IoTieRequestFrame, B=B)) == 20_924
 
 
+@pytest.mark.slow
 def test_redteam_phase6_frames_read_their_prompt_lengths():
     """REDTEAM phase 6's cells at B = 4,096 through `IoTieRequestFrame`: the 338-token request's first frame doesn't end
     it and holds 337 prompt fields, its second ends it with 1 more, and the 16-token request's one frame ends it with
-    16. So the forged split's first request, 16 fields ending in one frame, is not in these cells."""
+    16. So the forged split's first request, 16 fields ending in one frame, is not in these cells.
+
+    Slow (about 7 s, the served frame's 170,994 ANDs traced and evaluated): the one test of the circuit on REDTEAM's
+    own cells at the served frame size, which the reference's quick test reads in the clear and the unit's slow test
+    reads at B = 512."""
     shape = Q.Shape(4096, 4, 9)
     [cells], _ = _link(shape, (338, 16), (1, 1, 1, 0))
     frames = [cells[0], cells[9], cells[18]]
