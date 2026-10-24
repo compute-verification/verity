@@ -210,7 +210,7 @@ def run(*, seed: int = 0, rate: float = 3.0, seconds: float = 150.0, num_blocks:
               "block_size": block_size, "num_gpu_blocks": num_blocks, "max_num_seqs": max_num_seqs,
               "max_num_batched_tokens": max_num_batched_tokens, "max_model_len": max_model_len,
               "long_prefill_token_threshold": 0, "enable_prefix_caching": enable_prefix_caching, "watermark": 0.0,
-              "eos_token_id": EOS, "stop_token_ids": STOP_IDS, "rows_in_scheduling_order": True}
+              "eos_token_id": EOS, "stop_token_ids": STOP_IDS, "row_order": "scheduling"}
     workload_desc = {"seed": seed, "rate_per_s": rate, "seconds": seconds, "stop_rate": stop_rate, "base_ms": base_ms,
                      "per_token_ms": per_token_ms, "system_prompts": list(SYSTEM_PROMPTS)}
     return {"kind": "enc-derived/sched-trace/v2", "config": config, "workload": workload_desc, "requests": reqs, "steps": steps}

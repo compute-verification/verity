@@ -21,7 +21,7 @@ long-prefill threshold) tokens (vLLM d9105ea8's running and waiting loops), and 
 discard rule). `kind` is I1's: decode exactly when n = 1 at or past the prompt. `FIELDS` is the table of every I1 field:
 its verdict, derivation, checker and cost.
 
-**The residual** (`Residual`): each step's requests in scheduling order (the scheduler's choice, ENC-REPLAY's), and
+**The residual** (`Residual`): each step's requests in I1's row order (the scheduler's choice, ENC-REPLAY's), and
 - `prompt_len`, one a request: the compiled Programs' shapes read it (a request's final prefill chunk is P − start), so
   it is sent, forced by the certified id count;
 - `hits` and `sources`: each admitting row's prefix-cache hit, in blocks, and the requests that computed its KV, forced
@@ -33,7 +33,7 @@ its verdict, derivation, checker and cost.
   drops that decode's), which `output_len` subtracts; forced by the committed ids (a lag follows a stop id);
 - `order`: each request's certified ingress index, only when it isn't the request's own (I1 numbers requests by first
   row, and vLLM's FCFS admits them in arrival order, so the two differ only if the engine got them out of ingress order);
-- `ns`: n where the walk can't derive it: only when the rows aren't in scheduling order (the budget left is unknown);
+- `ns`: n where the walk can't derive it: only when the scheduling order is unknown (`row_order` "explicit");
 - `release`: each kept output's egress bucket on an unshaped egress, where its choices are the timing channel; none on a
   shaped one, where `served.derive` fixes them from the ingress anchors, the output lengths and the declared sync.
 
@@ -70,7 +70,7 @@ class Config:
     long_prefill_token_threshold: int = 0
     max_num_seqs: int = 256
     enable_prefix_caching: bool = True
-    rows_in_scheduling_order: bool = True
+    row_order: str = "scheduling"                    # I1's rows: "scheduling", "batch" (the runner's) or "explicit" (n sent)
 
     @property
     def stops(self) -> frozenset[int]:
@@ -125,7 +125,7 @@ def config_of(trace: dict) -> Config:
                   max_model_len=c["max_model_len"], eos_token_id=c["eos_token_id"], stop_token_ids=tuple(c["stop_token_ids"]),
                   scheduler=c.get("scheduler", "sync"), long_prefill_token_threshold=c.get("long_prefill_token_threshold", 0),
                   max_num_seqs=c.get("max_num_seqs", 256), enable_prefix_caching=c.get("enable_prefix_caching", True),
-                  rows_in_scheduling_order=c.get("rows_in_scheduling_order", True))
+                  row_order=c.get("row_order", "scheduling" if c.get("rows_in_scheduling_order", True) else "explicit"))
 
 
 def holdings_of(trace: dict) -> Holdings:
@@ -209,38 +209,56 @@ def _walk(rows: Sequence[Sequence[int]], prompt_len: Sequence[int], cfg: Config,
     `hit_of` an admitting row's hit in blocks, `sources_of` a nonzero hit's sources, `resumed_of` whether a row after its
     request's first resumes it (read unless `pool`, which instead checks the pool bound), `n_of` n where the walk can't
     derive it; `lag_of(i)` whether request i's last sampling row ran after its stop, asked in async mode only of a request
-    whose last two sampling rows are in consecutive steps (only there can the scheduler have run a decode past a stop)."""
+    whose last two sampling rows are in consecutive steps (only there can the scheduler have run a decode past a stop).
+
+    n takes the budget in vLLM's scheduling order: the rows' own (`row_order` "scheduling"), or, for rows in the runner's
+    batch order ("batch"), the order vLLM's FCFS lists give them: the running requests in the running list's order (each
+    appended when admitted), then the waiting ones, resumed requests first (each prepended when preempted, the latest
+    preemption foremost) and then new ones in arrival order."""
     end: dict[int, int] = {}
     samples: dict[int, int] = {}
     sample_steps: dict[int, list[int]] = {}
+    opened: set[int] = set()
+    admitted: dict[int, int] = {}                   # each request's place in the running list: its latest admission
+    last: dict[int, int] = {}                       # each request's latest step
+    admissions = 0
     steps, explicit = [], []
     for s, step in enumerate(rows):
-        used, out = 0, []
+        if len(set(step)) != len(step):
+            raise ValueError(f"step {s}: a request in two rows")
+        adm = []
         for k, i in enumerate(step):
             if not 0 <= i < len(prompt_len):
                 raise ValueError(f"step {s} row {k}: request {i} of {len(prompt_len)}")
-            first = i not in end
-            if first and i != len(end):
-                raise ValueError(f"step {s} row {k}: request {i} before request {len(end)}: requests are numbered by first row")
+            first = i not in opened
+            if first and i != len(opened):
+                raise ValueError(f"step {s} row {k}: request {i} before request {len(opened)}: requests are numbered by first row")
+            opened.add(i)
             resumed = not first and not pool and resumed_of(s, k)
-            P = prompt_len[i]
-            if first or resumed:
-                hit = hit_of(s, k) * cfg.block_size
-                sources, start = (sources_of(s, k) if hit else ()), hit
-            else:
-                hit, sources, start = 0, (), end[i]
+            hit = hit_of(s, k) * cfg.block_size if first or resumed else 0
+            adm.append((first, resumed, hit, sources_of(s, k) if hit else ()))
+        order: Sequence[int] = range(len(step))
+        if cfg.row_order == "batch":
+            order = sorted(order, key=lambda k: (2, step[k]) if adm[k][0] else (1, -last[step[k]], admitted[step[k]])
+                           if adm[k][1] else (0, admitted[step[k]]))
+        used, out = 0, [None] * len(step)
+        for k in order:
+            i, (first, resumed, hit, sources), P = step[k], adm[k], prompt_len[step[k]]
+            start = hit if first or resumed else end[i]
             K = P + samples.get(i, 0)
             if K - start <= 0:
                 raise ValueError(f"step {s} row {k}: request {i} has nothing left to compute")
             if K - start == 1:
                 n = 1
-            elif cfg.rows_in_scheduling_order:
+            elif cfg.row_order == "explicit":
+                n = n_of(s, k)
+                explicit.append(s)
+            else:
                 n = min(K - start, cfg.max_num_batched_tokens - used)
                 if cfg.long_prefill_token_threshold > 0:
                     n = min(n, cfg.long_prefill_token_threshold)
-            else:
-                n = n_of(s, k)
-                explicit.append(s)
+                if not (first or resumed):
+                    n = min(n, cfg.max_model_len - 1 - start)
             if not 0 < n <= cfg.max_num_batched_tokens - used:
                 raise ValueError(f"step {s} row {k}: n = {n} with {cfg.max_num_batched_tokens - used} of the budget left")
             used += n
@@ -248,7 +266,12 @@ def _walk(rows: Sequence[Sequence[int]], prompt_len: Sequence[int], cfg: Config,
                 samples[i] = samples.get(i, 0) + 1
                 sample_steps.setdefault(i, []).append(s)
             end[i] = start + n
-            out.append(Row(i, "decode" if n == 1 and start >= P else "prefill", start, n, hit, resumed, sources))
+            out[k] = Row(i, "decode" if n == 1 and start >= P else "prefill", start, n, hit, resumed, sources)
+        for k in order:
+            if adm[k][0] or adm[k][1]:
+                admitted[step[k]] = admissions
+                admissions += 1
+            last[step[k]] = s
         steps.append(StepAdvice(tuple(out)))
     output_len, lagged = [], []
     for i in range(len(prompt_len)):
@@ -587,10 +610,11 @@ FIELDS = [
     {"field": "start", "verdict": "derived", "bits": "0", "from": "rows' history, cache_hit",
      "derivation": "the request's previous row's end; an admitting row's (its first, or a resumed one) is its hit",
      "checker": "compiler", "cost": "0"},
-    {"field": "n", "verdict": "derived", "bits": "0 (w_len a non-decode row when rows aren't in scheduling order)",
-     "from": "rows' history, prompt_len, max_num_batched_tokens",
-     "derivation": "min(K - start, the step's budget left, the long-prefill threshold), K = prompt_len + sampling rows so far",
-     "checker": "compiler", "cost": "0"},
+    {"field": "n", "verdict": "derived", "bits": "0 (w_len a non-decode row when the scheduling order is unknown)",
+     "from": "rows' history, prompt_len, max_num_batched_tokens, max_model_len",
+     "derivation": "min(K - start, the step's budget left, the long-prefill threshold; a running row's max_model_len - 1 - "
+     "start), K = prompt_len + sampling rows so far, the budget taken in vLLM's scheduling order (in batch order: running "
+     "rows by admission, then resumed, then new)", "checker": "compiler", "cost": "0"},
     {"field": "kind", "verdict": "derived", "bits": "0", "from": "start, n, prompt_len",
      "derivation": "decode iff n = 1 and start >= prompt_len (I1's rule)", "checker": "compiler", "cost": "0"},
     {"field": "cache_hit", "verdict": "stays on admitting rows only, forced (not checked yet)",

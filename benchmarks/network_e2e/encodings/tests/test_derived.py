@@ -1,6 +1,7 @@
 """ENC-DERIVED's residual against real schedules: the fixtures are vLLM d9105ea8's own `Scheduler` and `AsyncScheduler`
-driven on CPU by `sched_trace.py` (a 200-block pool, so a request is preempted), and the residual must give I1's advice
-back exactly from the config and the tie's witness."""
+driven on CPU by `sched_trace.py` (`--seconds 8 --rate 12 --num-blocks 160 --max-num-batched-tokens 256`: about 20
+preemptions and 77 steps the token budget binds), and the residual must give I1's advice back exactly from the config and
+the tie's witness."""
 
 from __future__ import annotations
 
@@ -28,7 +29,7 @@ def _load():
 D = _load()
 
 
-@pytest.fixture(scope="module", params=("sync-stress", "async-stress"))
+@pytest.fixture(scope="module", params=("sync-crush", "async-crush"))
 def case(request):
     trace = D.load_trace(HERE / "fixtures" / f"{request.param}.json.gz")
     cfg = D.config_of(trace)
@@ -85,17 +86,44 @@ def test_rows_out_of_order_send_n_and_rebuild(case) -> None:
         steps.append(st)
     assert bound
     shuffled = I1.Advice(adv.requests, tuple(steps), adv.release)
-    loose = dataclasses.replace(cfg, rows_in_scheduling_order=False)
+    loose = dataclasses.replace(cfg, row_order="explicit")
     res = D.residual(shuffled, loose)
     assert 0 < len(res.ns) == len(D.reconstruct(res, loose).explicit_n) < sum(len(st.rows) for st in steps)
     assert D.rebuild(res, loose, held, ()) == shuffled
     assert _refused(lambda: D.rebuild(D.residual(shuffled, cfg), cfg, held, ()), shuffled)
 
 
+def _batch_order(adv, rng):
+    """Each step's rows shuffled as a runner's batch might hold them, new requests kept in first-row order."""
+    seen, steps = set(), []
+    for st in adv.steps:
+        rows = rng.sample(st.rows, len(st.rows))
+        slots = [j for j, r in enumerate(rows) if r.request not in seen]
+        for j, r in zip(slots, sorted((r for r in rows if r.request not in seen), key=lambda r: r.request)):
+            rows[j] = r
+        seen |= {r.request for r in rows}
+        steps.append(I1.StepAdvice(tuple(rows)))
+    return I1.Advice(adv.requests, tuple(steps), adv.release)
+
+
+def test_rows_in_batch_order_take_vllms_scheduling_order_from_history(case) -> None:
+    """vLLM's own scheduling order is what the walk derives from admissions alone (rows in scheduling order rebuild under
+    `row_order` "batch", budget-bound steps and the resume included), so a batch order costs no n."""
+    _, cfg, adv, _, held, _ = case
+    batch = dataclasses.replace(cfg, row_order="batch")
+    assert D.rebuild(D.residual(adv, batch), batch, held, ()) == adv
+    for seed in range(3):
+        shuffled = _batch_order(adv, random.Random(seed))
+        assert shuffled != adv
+        res = D.residual(shuffled, batch)
+        assert res.ns == () and D.rebuild(res, batch, held, ()) == shuffled
+
+
 def test_a_resume_is_sent_and_checked(case) -> None:
     _, cfg, adv, _, held, res = case
-    assert res.resumes is not None and len(res.resumes) == sum(r.preempted for st in adv.steps for r in st.rows) == 1
-    for bad in (None, (), res.resumes + (res.resumes[0] + 1,), (res.resumes[0] + 1,)):
+    assert res.resumes is not None and len(res.resumes) == sum(r.preempted for st in adv.steps for r in st.rows) > 10
+    r = res.resumes
+    for bad in (None, (), r[:-1], r[1:], r + (r[-1] + 1,), (r[0] + 1,) + r[1:], tuple(x + 1 for x in r)):
         assert _refused(lambda: D.rebuild(dataclasses.replace(res, resumes=bad), cfg, held, ()), adv)
 
 
@@ -154,7 +182,8 @@ def test_a_flipped_lag_bit_is_refused(case) -> None:
         return
     walk = D.reconstruct(res, cfg)
     assert any(res.lag) and not all(res.lag)
-    for j, i in enumerate(walk.lag_requests):
+    some = [j for lag in (True, False) for j in [j for j, x in enumerate(res.lag) if x == lag][:6]]
+    for j, i in ((j, walk.lag_requests[j]) for j in some):
         flipped = dataclasses.replace(res, lag=res.lag[:j] + (not res.lag[j],) + res.lag[j + 1:])
         ids = held.outputs[order[i]]
         for witness in (held, _with_outputs(held, order[i], ids + (ids[-1],) if res.lag[j] else ids[:-1])):
