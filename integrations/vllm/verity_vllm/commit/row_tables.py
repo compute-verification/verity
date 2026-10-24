@@ -176,13 +176,16 @@ def registered_reads(window: CS.Window, publics: Mapping[str, bytes]) -> dict[st
     """The Lean verifier's ``--registered`` file of each linked member (``registered-reads/v1``, by member key): its ``x``
     port reads its one row table, under the table's root recomputed from the members' public strings (the root
     ``check_row_tables`` ties to the registration and serving's step roots, so call it after that passes) and its serve-time
-    domain, and unit ``m.base + i`` reads the table row its ``i``-th unit links.  The header's ``registered`` entry
+    domain, and unit ``m.base + i`` reads the table row its ``i``-th unit links; a member linking rows of two tables is refused,
+    whatever built it.  The header's ``registered`` entry
     (``serving_rows.registered_entry``) must give each of the chunk's ``x`` rows a path to that root at that position."""
     strings, bad = _linked_strings(window, publics)
     out: dict[str, dict[str, Any]] = {}
     for m in window.members:
         if not m.links:
             continue
+        if len({t for t, _ in m.links}) != 1:
+            raise ValueError(f"{m.key}: its {CS.LINKED} rows are rows of several row tables, which no one registered root opens")
         k = m.links[0][0]
         t, ss = window.row_tables[k], strings[k]
         if m.key in bad or t.port in bad or any(s is None for s in ss):
