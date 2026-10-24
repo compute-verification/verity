@@ -577,8 +577,11 @@ def rho_attack(cfg: Config, S: float, F: float, k: float, c: float, beta: Beta, 
     return {"best": best_any, "best_exact": best_exact, "all": live, "hybrid": hyb}
 
 
+BELOW = 1 - 1e-6  # an attack counts as below the bound under this ratio, past rounding
+
+
 def _breaks(best: Attack, b: dict, full: bool) -> str | None:
-    if best.rho >= b["rho"]:
+    if best.rho >= BELOW * b["rho"]:
         return None
     if best.breaks:
         return best.breaks
@@ -750,7 +753,7 @@ def main(argv: list[str] | None = None) -> int:
         if not args.no_plots:
             for prec in inputs.precisions:
                 plot(curves, out / f"rho_attack_{tag}_{prec}.png", prec)
-        n_below = sum(1 for r in rows if r["ratio"] is not None and r["ratio"] < 1)
+        n_below = sum(1 for r in rows if r["ratio"] is not None and r["ratio"] < BELOW)
         print(f"{tag}: {len(rows)} rows, attack below the bound in {n_below}")
     return 0
 
