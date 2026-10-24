@@ -87,4 +87,6 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "integrations/vllm/tests/check/test_sampled_replay.py", "benchmarks/numerical/python/verity_numerical",
           "verity/core/protocols/sampled_proofs/__init__.py",
           "verity/core/protocols/certifier/cache_step.py", "verity/core/protocols/certifier/cache_step.circuit-check.py",
-          "verity/core/protocols/certifier/cache_step.circuit-check.json"]
+          "verity/core/protocols/certifier/cache_step.circuit-check.json",
+          "verity/core/protocols/certifier/cache_step_v2.py", "verity/core/protocols/certifier/cache_step_v2.circuit-check.py",
+          "verity/core/protocols/certifier/cache_step_v2.circuit-check.json"]
