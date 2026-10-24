@@ -116,12 +116,13 @@ class Node:
 
 
 def sketch(record: audit.Record, node: Node) -> float:
-    """`RateAuditSketch`'s failure probability for a sketch-sha512 record, every compression the node could make over
-    the span a guess or a key (`timing.sketch_failure`); 0 for another receipt kind."""
+    """`SketchBound`'s δ for a sketch-sha512 record (`Accounting.Guarantees.Remote.SketchBoundDeployed`), every
+    compression the node could make over the span a guess or a key (`timing.sketch_failure`); 0 for another receipt
+    kind."""
     if record.receipt != receipts.SKETCH_SHA512:
         return 0.0
     compressions = math.ceil(node.sha512_per_s * record.span_ns / 1e9)
-    return float(timing.sketch_failure(compressions, record.passes, record.rows))
+    return float(timing.sketch_failure(compressions, record.passes, record.rows, blocks=record.blocks))
 
 
 def windows(record: audit.Record) -> list[tuple[int, int]]:
