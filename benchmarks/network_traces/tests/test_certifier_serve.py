@@ -7,19 +7,33 @@ and each window's salt is revealed once. The same holds four in flight against a
 last two tokens in one event, as vLLM does: the plan's F is the body's tokens, and the shim pads a short response. On
 N2's served profile (`--profile served`) the plan fixes no egress counts: the proxy admits requests by NET-54's rule,
 a group sent in a window's first bucket goes behind the salt frame, and N2's served counts accept honest traffic on
-every window and refuse the extra event."""
+every window and refuse the extra event. Against an endpoint that streams GLM-5.3's tokens (multi-byte, and tokens
+that split a character's UTF-8, which vLLM sends as chunks of no text) both profiles accept honest traffic with F the
+body's tokens, and a token of more than 64 bytes needs F declared (`--response-frames`). On varied traffic
+(`--traffic varied`: Poisson arrivals, prompts of varied lengths as token ids, varied `max_tokens`, the model's own
+EOS) the shim writes one id event a sampled token, tagged with its request's ingress ordinal and interleaved as the
+endpoint streams them, and the certified I/O read from the records alone gives back every request's fields and every
+response's token ids: honest traffic is certified on every window and its I/O accepted, the late shim is refused by
+the audit and the extra token by the I/O's finish rule. The I/O tie on those runs (`negatives.py tie-run`), given the
+endpoint's sampled ids, accepts honest traffic and refuses the token shim by its content."""
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import codecs
 import importlib.util
 import itertools
 import json
+import math
 import re
+import shutil
 import sys
+import tarfile
 from collections import defaultdict
+from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from verity.core.protocols.certifier import active
@@ -59,10 +73,14 @@ class _SideBySide:
     each group's responses wait for the whole group, then write their chunks in turn, one each, so the shim reads them
     interleaved (`writes`: (request, chunk) in write order). `/v1/models` lists one model and `/tokenize` makes 200
     tokens of any prompt. For the requests `merges` picks (by arrival), the last two tokens share one chunk, as vLLM
-    v1's output collector merges a request's deltas the API server hasn't read yet."""
+    v1's output collector merges a request's deltas the API server hasn't read yet. Token k's bytes are `token(k)`,
+    detokenized as vLLM's detokenizer does: bytes that end inside a UTF-8 character are held back, so their chunk has
+    no text and the next carries them, and an incomplete character at the end is never sent; the text goes in the
+    chunk as UTF-8, not escaped, as vLLM's JSON writes it."""
 
-    def __init__(self, group: int, merges=lambda request: False) -> None:
+    def __init__(self, group: int, merges=lambda request: False, token=lambda k: b" t%d" % k) -> None:
         self.group, self.arrived, self.writes, self.bodies, self.merges = group, 0, [], [], merges
+        self.token = token
         self.turns: dict = defaultdict(asyncio.Event)
 
     async def __call__(self, reader, writer):
@@ -84,12 +102,13 @@ class _SideBySide:
         if i == self.group - 1:
             self.turns[(g, 0, 0)].set()
         writer.write(b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ntransfer-encoding: chunked\r\n\r\n")
-        text, n = b"", body["max_tokens"]
+        text, n, detokenize = "", body["max_tokens"], codecs.getincrementaldecoder("utf-8")()
         for k in range(n):
             await self.turns[(g, k, i)].wait()
-            text += b" t%d" % k
+            text += detokenize.decode(self.token(k))
             if not (k == n - 2 and self.merges(me)):
-                p, text = b'data: {"choices":[{"text":"%s"}]}\n\n' % text, b""
+                chunk = json.dumps({"choices": [{"text": text}]}, ensure_ascii=False, separators=(",", ":"))
+                p, text = b"data: %s\n\n" % chunk.encode(), ""
                 writer.write(b"%x\r\n%s\r\n" % (len(p), p))
                 await writer.drain()
                 self.writes.append((me, k))
@@ -119,7 +138,14 @@ def _run(run: Path, plan: dict, report: dict, url: str, upstream: tuple, certifi
         out["revealed"] = sorted(proxies[0]._revealed)
         reveals.close()
 
-    publish = cs.CertifyingPublisher(run, setup, Issuer(certifier, SESSION), cs.N2_LINK, threaded=False)
+    out["published"] = []
+
+    class Recording(cs.CertifyingPublisher):
+        def keep(self, record, params) -> None:
+            out["published"].append((record, params))
+            super().keep(record, params)
+
+    publish = Recording(run, setup, Issuer(certifier, SESSION), cs.N2_LINK, threaded=False)
     ar.run_virtual(shim, report, run, upstream, salt=True, publish=publish, after=after,
                    proxy_args={"challenger_key": challenger.public_key(), "signer": certifier,
                                "served": cs.served_profile(plan)})
@@ -207,15 +233,36 @@ def test_a_window_that_faults_drops_its_requests_and_the_audit_follows_the_relea
     assert all(r["raw"] == r["committed"] == "status:delivery-refused" for r in faulted)
 
 
+def test_the_gates_certifier_rehearsal_parses_here_with_its_sampling(tmp_path):
+    """`certifier-rehearse`'s command (`benchmarks/live_challenger/auditor.py`) is a `rehearse` this parser takes, its
+    temperature and top_p (0 and 1 by default) always among it, and they are the body every request sends."""
+    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    import auditor as A
+    req = {"requests": 8, "tamper": None, "profile": "served", "in_flight": 2, "tokens": 32, "temperature": 0.6,
+           "top_p": 0.9}
+    args = cs.parser().parse_args(A.certifier_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
+    assert (args.command, args.upstream, args.requests, args.in_flight, args.tokens, args.temperature, args.top_p,
+            args.profile, args.strategies) == ("rehearse", "http://127.0.0.1:40001", 8, 2, 32, 0.6, 0.9, "served",
+                                               "honest")
+    body = cs.request_body("m", args.tokens, cs.PROMPT, args.temperature, args.top_p)
+    assert (body["temperature"], body["top_p"]) == (0.6, 0.9)
+    plain = cs.parser().parse_args(A.certifier_command({"requests": 8, "tamper": None}, tmp_path, "u")[2:])
+    assert (plain.temperature, plain.top_p) == (0.0, 1.0)
+    assert {k: cs.request_body("m", 16)[k] for k in ("temperature", "top_p")} == {"temperature": 0.0, "top_p": 1.0}
+
+
 def test_four_in_flight_the_endpoints_shape_is_sent_and_the_shim_writes_request_major(tmp_path):
     """The plan sends the endpoint's shape (its one model, a prompt of exactly 128 of its tokens, `min_tokens` =
-    `max_tokens`, `ignore_eos`, greedy, streamed) four at a time, the ingress releasing them two a bucket, and the
+    `max_tokens`, `ignore_eos`, streamed, the given temperature and top_p on every request, the probes' and the run's
+    alike, so that an endpoint's own generation config never applies) four at a time, the ingress releasing them two a
+    bucket, and the
     endpoint interleaves the responses of each two released together chunk by chunk; the shim still writes each
     response whole, in the order their requests reached it, so the egress counts are the planned profile's and honest
     traffic is accepted on every link-window."""
     endpoint = _SideBySide(2)
-    args = argparse.Namespace(model=None, api_key_env=None, prompt_tokens=128, tokens=TOKENS, probes=4, in_flight=4,
-                              requests=REQUESTS, delta_buckets=None, profile="planned")
+    args = argparse.Namespace(model=None, api_key_env=None, prompt_tokens=128, tokens=TOKENS, response_frames=None,
+                              probes=4, in_flight=4, requests=REQUESTS, delta_buckets=None, profile="planned",
+                              temperature=0.6, top_p=0.9)
 
     async def go():
         server = await asyncio.start_server(endpoint, "127.0.0.1", 0)
@@ -237,7 +284,8 @@ def test_four_in_flight_the_endpoints_shape_is_sent_and_the_shim_writes_request_
 
     probed, plan, out = asyncio.run(go())
     assert probed["body"] == {"model": "stub-model", "prompt": list(range(128)), "max_tokens": TOKENS,
-                              "min_tokens": TOKENS, "stream": True, "ignore_eos": True, "temperature": 0}
+                              "min_tokens": TOKENS, "stream": True, "ignore_eos": True, "temperature": 0.6,
+                              "top_p": 0.9}
     assert all(b == probed["body"] for b in endpoint.bodies) and len(endpoint.bodies) == 4 + 4 + REQUESTS
     assert plan["served"]["in_flight"] == 4 and plan["request_major"]
     sends = [q["send_ms"] for q in plan["requests"]]
@@ -266,6 +314,49 @@ def test_honest_served_traffic_is_accepted_on_every_link_window(served):
     assert check["salt"] == {"accepted": True, "violations": [], "ingress_salt_frames": [1, 1],
                              "egress_salt_frames": 0, "egress_holds_salt": False, "block_received": True}
     assert check["issuer_refused"] == [] and check["comparisons"]["wire_is_the_records"]
+
+
+def test_the_certifier_process_keeps_and_signs_as_the_inline_publisher_does(served, tmp_path):
+    """`serve`'s `CertifierProcess`, on a copy of one key, writes the honest run's records and commitments byte for
+    byte as `CertifyingPublisher` inline does, and the same heads, each certificate at the same leaf and valid under its
+    own fresh salt; a reveal signed between two records takes the same leaf: its calls run in the order they are
+    made."""
+    import certifier_serve  # by name, so that the spawned process finds its functions
+
+    _, report, _, runs = served
+    published = runs["honest"]["published"]
+    cs.load_key(tmp_path / "inline", 6)
+    shutil.copytree(tmp_path / "inline", tmp_path / "process")
+    (tmp_path / "inline-run").mkdir()
+    (tmp_path / "process-run").mkdir()
+    own = cs.signer(tmp_path / "inline")
+    inline = cs.CertifyingPublisher(tmp_path / "inline-run", ar.Setup(report), Issuer(own, SESSION), cs.N2_LINK,
+                                    threaded=False)
+    process = certifier_serve.CertifierProcess(tmp_path / "process", tmp_path / "process-run", report, SESSION,
+                                               cs.N2_LINK)
+    try:
+        signed = []
+        for k, (record, params) in enumerate(published):
+            if k == len(published) // 2:
+                signed.append((own.sign(b"reveal"), process.sign(b"reveal")))
+            inline(record, params)
+            process(record, params)
+        process.close()
+        assert process.refused()[0] == inline.issuer.refused == []
+        assert process.public_key() == own.public_key()
+    finally:
+        process.shutdown()
+        own.close()
+    assert len(published) == 4 and signed[0][0] == signed[0][1]
+    for name in ("requests.records", "responses.records", "committed.jsonl"):
+        assert (tmp_path / "process-run" / name).read_bytes() == (tmp_path / "inline-run" / name).read_bytes(), name
+    inline_docs, process_docs = ([json.loads(line) for line in
+                                  (tmp_path / run / "certified.jsonl").read_text().splitlines()]
+                                 for run in ("inline-run", "process-run"))
+    assert [d["head"] for d in process_docs] == [d["head"] for d in inline_docs]
+    leaves = [[bytes.fromhex(d["certificate"]["signature"])[:4] for d in docs] for docs in (inline_docs, process_docs)]
+    assert leaves[0] == leaves[1] and len(set(leaves[0])) == len(published)
+    assert all(cs.certified_from_json(d).verify(process.public_key(), SESSION) for d in process_docs)
 
 
 def test_each_salt_is_revealed_once_to_the_challengers_signed_request(served):
@@ -325,6 +416,11 @@ def test_the_served_plan_takes_f_from_the_bodys_tokens_and_refuses_a_response_lo
             cs.served_plan(probed(*lengths), 4, delta_buckets=20)
     with pytest.raises(ValueError, match="exactly its tokens"):
         cs.served_plan(probed(TOKENS) | {"body": body | {"min_tokens": 1}}, 4, delta_buckets=20)
+    _, plan = cs.served_plan(probed(TOKENS, TOKENS + 1), 4, delta_buckets=20, frames=TOKENS + 1)
+    assert plan["pad_to"] == plan["served"]["response_frames"] == TOKENS + 1 and plan["served"]["tokens"] == TOKENS
+    assert sum(map(sum, plan["occupancy"]["egress"])) == 4 * (TOKENS + 1)
+    with pytest.raises(ValueError, match="at least the body's"):
+        cs.served_plan(probed(TOKENS), 4, delta_buckets=20, frames=TOKENS - 1)
 
 
 MERGED_TOKENS = 64
@@ -359,8 +455,9 @@ def merged(tmp_path_factory):
     every other response's last two tokens in one chunk: honest, late and extra, each checked."""
     tmp = tmp_path_factory.mktemp("merged")
     endpoint = _SideBySide(2, merges=lambda request: request % 2 == 1)
-    args = argparse.Namespace(model=None, api_key_env=None, prompt_tokens=128, tokens=MERGED_TOKENS, probes=4,
-                              in_flight=4, requests=REQUESTS, delta_buckets=None, profile="planned")
+    args = argparse.Namespace(model=None, api_key_env=None, prompt_tokens=128, tokens=MERGED_TOKENS,
+                              response_frames=None, probes=4, in_flight=4, requests=REQUESTS, delta_buckets=None,
+                              profile="planned", temperature=0.0, top_p=1.0)
     challenger = cs.signer(tmp / "keys" / "challenger", 6)
 
     async def go():
@@ -436,8 +533,9 @@ def served_profile(tmp_path_factory):
     server holds is answered, so an endpoint that held one for its partner would never answer it."""
     tmp = tmp_path_factory.mktemp("served-profile")
     endpoint = _SideBySide(1, merges=lambda request: request % 2 == 1)
-    args = argparse.Namespace(model=None, api_key_env=None, prompt_tokens=128, tokens=MERGED_TOKENS, probes=4,
-                              in_flight=4, requests=REQUESTS, delta_buckets=30, profile="served")
+    args = argparse.Namespace(model=None, api_key_env=None, prompt_tokens=128, tokens=MERGED_TOKENS,
+                              response_frames=None, probes=4, in_flight=4, requests=REQUESTS, delta_buckets=30,
+                              profile="served", temperature=0.0, top_p=1.0)
     challenger = cs.signer(tmp / "keys" / "challenger", 6)
 
     async def go():
@@ -540,3 +638,564 @@ def test_each_salt_is_revealed_once_under_the_served_profile(served_profile):
         assert check["salt_again"].startswith("refused: the certifier refused window 0's salt")
         assert runs[strategy]["revealed"] == [0, 1, 2]
         assert len({r["salt_fingerprint"] for r in check["rows"]}) == 3
+
+
+#: Tokens of GLM-5.3's tokenizer (zai-org/GLM-5.3 at aca966e4, their ids beside them): words and punctuation of two
+#: and three bytes a character, and tokens that split a character's UTF-8, as 🦙 (three tokens) and 龘 (two) are split;
+#: the tokenizer has 1095 tokens that aren't whole UTF-8.
+GLM_TOKENS = ("数据".encode(),  # 99080
+              " 计算".encode(),  # 118648
+              "，".encode(),  # 3837
+              b"\xf0\x9f", b"\xa6", b"\x99",  # 9281, 99, 247: 🦙
+              "模型".encode(),  # 100484
+              b"\xe9\xbe", b"\x98",  # 82225, 246: 龘
+              "。".encode(),  # 1773
+              b" GL", b"M")  # 5588, 44
+#: GLM-5.3's token 96598, 80 spaces: one of its 124 tokens of more than `active.TOKEN_BYTES` (64) bytes
+LONG_TOKEN = b" " * 80
+
+
+def _glm_token(k: int) -> bytes:
+    return GLM_TOKENS[k % len(GLM_TOKENS)]
+
+
+def _rehearse(tmp: Path, endpoint, args, strategies=cs.STRATEGIES) -> tuple[dict, dict, dict, dict]:
+    """(probe, calibration, plan, runs): `endpoint` on a port, planned by `plan_of` with `args`, then each of
+    `strategies` run on the injected clock and checked."""
+    challenger = cs.signer(tmp / "keys" / "challenger", 6)
+
+    async def go():
+        server = await asyncio.start_server(endpoint, "127.0.0.1", 0)
+        upstream = server.sockets[0].getsockname()[:2]
+        url = "http://%s:%d" % upstream
+        try:
+            probed, report, plan = await asyncio.to_thread(cs.plan_of, args, url, lambda: 0.0)
+            runs = {}
+            for strategy in strategies:
+                certifier = cs.signer(tmp / "keys" / strategy, 6)
+                try:
+                    runs[strategy] = await asyncio.to_thread(_run, tmp / strategy, plan, report, url, upstream,
+                                                             certifier, challenger, strategy)
+                finally:
+                    certifier.close()
+        finally:
+            server.close()
+        return probed, report, plan, runs
+
+    try:
+        return asyncio.run(go())
+    finally:
+        challenger.close()
+
+
+def _glm_args(profile: str, response_frames: int | None = None) -> argparse.Namespace:
+    return argparse.Namespace(model=None, api_key_env=None, prompt_tokens=128, tokens=MERGED_TOKENS,
+                              response_frames=response_frames, probes=4, in_flight=4, requests=REQUESTS,
+                              delta_buckets=30, profile=profile, temperature=0.0, top_p=1.0)
+
+
+@pytest.fixture(scope="module", params=cs.PROFILES)
+def glm(request, tmp_path_factory):
+    """The gate's shape (four in flight, 64 tokens, every other response's last two tokens in one chunk, D = 30) on
+    each of N2's profiles, against an endpoint that streams GLM-5.3's tokens: honest, late and extra, each checked."""
+    tmp = tmp_path_factory.mktemp(f"glm-{request.param}")
+    endpoint = _SideBySide(1, merges=lambda r: r % 2 == 1, token=_glm_token)
+    return (tmp, *_rehearse(tmp, endpoint, _glm_args(request.param)))
+
+
+def test_a_glm_token_is_one_event_and_the_shim_carries_the_text_byte_for_byte(glm):
+    """F is still the body's tokens: a token that ends inside a character is a chunk of no text, so an empty event,
+    and the next event carries the character whole; each response's events, joined, are the UTF-8 text the endpoint
+    sent, byte for byte."""
+    tmp, probed, _, plan, _ = glm
+    assert sorted({r["events"] for r in probed["responses"]}) == [MERGED_TOKENS - 1, MERGED_TOKENS]
+    assert plan["pad_to"] == plan["served"]["response_frames"] == plan["served"]["tokens"] == MERGED_TOKENS
+    detokenize = codecs.getincrementaldecoder("utf-8")()
+    text = "".join(detokenize.decode(_glm_token(k)) for k in range(MERGED_TOKENS)).encode()
+    carried: dict = defaultdict(list)
+    for _, name, _, _, e in sorted(ar.read_events(tmp / "honest" / "server.events.gz")):
+        carried[name].append(active.event_data(active.event_body(e)))
+    assert len(carried) == REQUESTS
+    for c in carried.values():
+        assert len(c) == MERGED_TOKENS and b"".join(c) == text
+        assert c[:10] == [w.encode() for w in ("数据", " 计算", "，", "", "", "🦙", "模型", "", "龘", "。")]
+
+
+def test_honest_glm_traffic_is_accepted_and_late_and_extra_are_refused(glm):
+    """On each of N2's profiles, honest GLM traffic is accepted on every link-window, the late shim is refused on its
+    window-0 egress record, the extra one on N2's counts alone, and each window's salt is revealed once."""
+    *_, plan, runs = glm
+    honest = runs["honest"]["check"]
+    assert honest["verdict"] == "accepted", cs.table(honest)
+    assert honest["profile"] == plan["occupancy"]["kind"] and honest["network_verdict"]["refused"] == []
+    assert all(r["n2"]["accepted"] for r in honest["rows"])
+    late = runs["late"]["check"]
+    assert late["verdict"] == "refused" and 0 in late["network_verdict"]["refused"]
+    assert late["rows"][0]["audit"]["egress"]["raw"] == "status:coverage-never-established"
+    extra = runs["extra"]["check"]
+    assert extra["verdict"] == "refused" and extra["network_verdict"]["refused"] == [0] and extra["audit_accepted"]
+    for strategy in cs.STRATEGIES:
+        check = runs[strategy]["check"]
+        assert all(r["salt"] == "revealed" for r in check["rows"]) and check["salt_again"].startswith("refused")
+        assert runs[strategy]["revealed"] == list(range(plan["windows"]))
+
+
+def test_a_glm_token_longer_than_an_event_needs_a_declared_f(tmp_path):
+    """GLM-5.3's token of 80 spaces is two events, so a response that holds one is one event longer than its tokens:
+    the default plan refuses it, naming `--response-frames`; with F declared one more, every response is padded to it,
+    and on the served profile honest traffic is accepted on every window and the extra event refused."""
+    endpoint = _SideBySide(1, merges=lambda r: r % 2 == 1, token=lambda k: LONG_TOKEN if k == 10 else _glm_token(k))
+    with pytest.raises(ValueError, match=r"\[64, 65\] events long.*--response-frames"):
+        _rehearse(tmp_path / "default", endpoint, _glm_args("served"), strategies=())
+    tmp = tmp_path / "declared"
+    probed, _, plan, runs = _rehearse(tmp, endpoint, _glm_args("served", MERGED_TOKENS + 1), ("honest", "extra"))
+    assert sorted({r["events"] for r in probed["responses"]}) == [MERGED_TOKENS, MERGED_TOKENS + 1]
+    assert plan["pad_to"] == plan["occupancy"]["response_frames"] == MERGED_TOKENS + 1
+    carried: dict = defaultdict(list)
+    for _, name, _, _, e in sorted(ar.read_events(tmp / "honest" / "server.events.gz")):
+        carried[name].append(active.event_data(active.event_body(e)))
+    assert all(len(c) == MERGED_TOKENS + 1 and c[10:12] == [b" " * 64, b" " * 16] for c in carried.values())
+    honest, extra = runs["honest"]["check"], runs["extra"]["check"]
+    assert honest["verdict"] == "accepted", cs.table(honest)
+    assert all(r["n2"]["accepted"] and r["served_counts"] for r in honest["rows"])
+    assert extra["verdict"] == "refused" and extra["network_verdict"]["refused"] == [0] and extra["audit_accepted"]
+
+
+# Varied traffic (`plan --traffic varied`).
+
+EOS, VARIED_TOKENS = 2, 8
+
+
+def _answer(prompt: list[int], max_tokens: int) -> tuple[list[int], list[str], str]:
+    """The stub's response to a prompt, greedy: its token ids, each token's text and its finish reason. It stops at its
+    EOS (`EOS`, no text) after 0 … 8 tokens, or at `max_tokens`; unless its prompt's ids sum to 1 mod 3, the text of its
+    last token before EOS is 150 bytes, more than an event of text holds, which no id event carries."""
+    s = sum(prompt)
+    ids = ([100 + (s + k) % 50 for k in range(s % 9)] + [EOS])[:max_tokens]
+    texts = ["" if t == EOS else f" w{t}" for t in ids]
+    if s % 3 != 1 and ids[0] != EOS:
+        texts[max(k for k, t in enumerate(ids) if t != EOS)] = "x" * 150
+    return ids, texts, "stop" if ids[-1] == EOS else "length"
+
+
+class _Varied:
+    """An OpenAI endpoint of varied responses (`_answer`), each chunk carrying its token ids (`return_token_ids`, which
+    every request must ask for) and the first its prompt's (`prompt_token_ids`), as vLLM's do. `/v1/models` lists one
+    model and `/tokenize` makes one id a character, with no BOS. It serves `group` requests (by arrival) side by side:
+    each waits for its whole group, then they write one chunk each in turn, a finished response leaving the turn, so
+    the shim reads them interleaved (`writes`: (request, chunk) in write order). For the requests `merges` picks, the
+    last two tokens share one chunk and the finish reason comes in a chunk of no tokens, as vLLM v1 merges a
+    request's deltas the API server hasn't read yet."""
+
+    def __init__(self, group: int = 1, merges=lambda request: False) -> None:
+        self.group, self.merges, self.arrived, self.bodies, self.writes = group, merges, 0, [], []
+        self.turns: dict = defaultdict(asyncio.Event)
+        self.done: dict = defaultdict(set)
+
+    def _pass(self, g: int, i: int) -> None:
+        for j in [*range(i + 1, self.group), *range(i + 1)]:
+            if j not in self.done[g]:
+                self.turns[(g, j)].set()
+                return
+
+    async def __call__(self, reader, writer):
+        head = await reader.readuntil(b"\r\n\r\n")
+        n = re.search(rb"content-length: (\d+)", head, re.IGNORECASE)
+        body = json.loads(await reader.readexactly(int(n.group(1)))) if n else None
+        if not head.startswith(b"POST /v1/completions "):
+            doc = ({"data": [{"id": "stub-model"}]} if head.startswith(b"GET /v1/models ")
+                   else {"tokens": [ord(c) for c in body["prompt"]], "model": body["model"]})
+            data = json.dumps(doc).encode()
+            writer.write(b"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: %d\r\n\r\n%s"
+                         % (len(data), data))
+            await writer.drain()
+            writer.close()
+            return
+        assert body["return_token_ids"] is True and not {"ignore_eos", "min_tokens"} & set(body)
+        assert isinstance(body.get("user", ""), str)
+        assert body["temperature"] == 0 and body["top_p"] == 1 and body["stop"] == [] and type(body["seed"]) is int
+        self.bodies.append(body)
+        me, self.arrived = self.arrived, self.arrived + 1
+        g, i = divmod(me, self.group)
+        if i == self.group - 1:
+            self.turns[(g, 0)].set()
+        ids, texts, finish = _answer(body["prompt"], body["max_tokens"])
+        chunks = [[k] for k in range(len(ids))]
+        merged = self.merges(me) and len(ids) > 1
+        if merged:
+            chunks[-2:] = [chunks[-2] + chunks[-1]]
+        choices = [{"index": 0, "text": "".join(texts[k] for k in ks), "token_ids": [ids[k] for k in ks],
+                    "finish_reason": None} for ks in chunks] + ([{"index": 0, "text": "", "token_ids": []}] * merged)
+        choices[0]["prompt_token_ids"] = body["prompt"]
+        choices[-1]["finish_reason"] = finish
+        writer.write(b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ntransfer-encoding: chunked\r\n\r\n")
+        for c, choice in enumerate(choices):
+            await self.turns[(g, i)].wait()
+            self.turns[(g, i)].clear()
+            p = b"data: %s\n\n" % json.dumps({"object": "text_completion", "choices": [choice]}).encode()
+            writer.write(b"%x\r\n%s\r\n" % (len(p), p))
+            await writer.drain()
+            self.writes.append((me, c))
+            if c == len(choices) - 1:
+                self.done[g].add(i)
+            self._pass(g, i)
+        writer.write(b"%x\r\n%s\r\n0\r\n\r\n" % (len(b"data: [DONE]\n\n"), b"data: [DONE]\n\n"))
+        await writer.drain()
+        writer.close()
+
+
+def _sse(choice: dict) -> bytes:
+    return b"data: %s\n\n" % json.dumps({"choices": [choice]}).encode()
+
+
+def test_a_chunk_is_one_id_event_a_sampled_token_and_none_of_its_text():
+    """One id event a sampled token, merged chunks included, none for a chunk of no tokens, and nothing of a chunk's
+    text: the ids come from `token_ids`, or from logprobs' `token_id:N` tokens."""
+    got = ar.id_events(_sse({"text": "a" * 70, "token_ids": [5, 6], "prompt_token_ids": [1, 2, 3]}), 9)
+    got += ar.id_events(_sse({"text": "", "token_ids": []}), 9)
+    got += ar.id_events(_sse({"text": "b" * 100, "logprobs": {"tokens": ["token_id:7"]}}), 9)
+    assert got == [active.id_event(9, t) for t in (5, 6, 7)]
+    assert ar.id_events(b"data: [DONE]\n\n", 9) == [] and ar.chunk_tokens(b": keep-alive\n\n") is None
+
+
+@pytest.mark.parametrize("length", [1, 16, 500, 513, 1024, 2048])
+def test_a_varied_request_is_an_id_request_in_frames_its_prompts_length_fixes(length):
+    """A varied request is the id request of its fields and its session, in `id_request_frames` of its prompt's length
+    whatever the fields, and its body is what the shim forwards the endpoint, with its `user`."""
+    q = {"prompt": [128255] * length, "max_tokens": 64, "seed": 2**32 - 1}
+    fields = cs.varied_fields("meta-llama/Llama-3.1-8B-Instruct", q)
+    raw = active.id_request(**fields, user="varied.99999", frame_bytes=cs.FRAME_BYTES)
+    assert active.request_frame_count(len(raw), cs.FRAME_BYTES) == active.id_request_frames(length, cs.FRAME_BYTES)
+    assert active.id_request_fields(raw, cs.FRAME_BYTES) == fields | {"user": "varied.99999"}
+    assert json.loads(raw.partition(b"\r\n\r\n")[2]) == cs.varied_body(fields["model"], q) | {"user": "varied.99999"}
+
+
+def _no_sleep(seconds: float) -> None:
+    pass
+
+
+def _varied_runs(tmp: Path, endpoint: _Varied, plan_of, strategies) -> tuple:
+    """The plan `plan_of(url)` makes against `endpoint`, then each of `strategies` run on it and checked."""
+    challenger = cs.signer(tmp / "keys" / "challenger", 6)
+
+    async def go():
+        server = await asyncio.start_server(endpoint, "127.0.0.1", 0)
+        upstream = server.sockets[0].getsockname()[:2]
+        url = "http://{}:{}".format(*upstream)
+        probed, report, plan = await asyncio.to_thread(plan_of, url)
+        runs = {}
+        for strategy in strategies:
+            certifier = cs.signer(tmp / "keys" / strategy, 6)
+            try:
+                runs[strategy] = await asyncio.to_thread(_run, tmp / strategy, plan, report, url, upstream, certifier,
+                                                         challenger, strategy)
+            finally:
+                certifier.close()
+        server.close()
+        return probed, report, plan, runs
+
+    try:
+        return (tmp, *asyncio.run(go()))
+    finally:
+        challenger.close()
+
+
+@pytest.fixture(scope="module")
+def varied(tmp_path_factory):
+    """`plan --traffic varied` against `_Varied`: 16 requests, Poisson at 2 a second, prompts of 16 … 1024 ids, at most
+    8 tokens out, 4 probed, every other response's last two tokens in one chunk; honest, late, extra, drop and token,
+    each checked."""
+    endpoint = _Varied(merges=lambda request: request % 2 == 1)
+    args = argparse.Namespace(model=None, api_key_env=None, traffic="varied", requests=16, rate=2.0,
+                              prompt_range="16:1024", tokens=VARIED_TOKENS, seed=3, probes=4, eos_ids=None)
+    out = _varied_runs(tmp_path_factory.mktemp("varied"), endpoint,
+                       lambda url: cs.plan_of(args, url, lambda: 0.0, _no_sleep), (*cs.STRATEGIES, "drop", "token"))
+    return (*out, endpoint)
+
+
+def _io(run: Path) -> dict:
+    return {r["user"]: r for r in json.loads((run / "io.json").read_text())["requests"]}
+
+
+def test_the_varied_plan_sends_poisson_arrivals_of_varied_prompts_and_plans_no_egress_profile(varied):
+    """No served-profile premise holds of the plan: its requests' prompts (ids), lengths in frames, `max_tokens` and
+    seeds vary, nothing asks for exactly its tokens, the canonical order isn't request-major and no response is padded;
+    each request is sent mid-bucket in the bucket before its arrival's, as the id request of its fields, in
+    `id_request_frames` of its prompt's length, and its stream is its place in the plan, its ingress ordinal; the shim
+    forwards it with its `user`, its session, for an endpoint that records it. N2's
+    profile is the advice: no egress counts are planned. The EOS is the one the probed responses stopped at."""
+    _, probed, report, plan, runs, endpoint = varied
+    T, tau = cs.WINDOW_BUCKETS, cs.BUCKET_MS
+    assert plan["occupancy"] == {"kind": cs.ADVICE, "egress": None, "ingress": None}
+    assert not plan["request_major"] and plan["token_ids"] and "pad_to" not in plan and "body" not in plan
+    assert plan["varied"]["eos_token_ids"] == [EOS] and plan["varied"]["max_tokens"] == VARIED_TOKENS
+    fields = [q["id_request"] for q in plan["requests"]]
+    assert all(set(f) == {"model", "prompt", "max_tokens", "temperature", "top_p", "seed"} and f["temperature"] == 0
+               and f["top_p"] == 1 and 1 <= f["max_tokens"] <= VARIED_TOKENS for f in fields)
+    assert len({len(f["prompt"]) for f in fields}) > 8 and len({f["max_tokens"] for f in fields}) > 3
+    assert len({f["seed"] for f in fields}) == len(fields)
+    assert len({q["frames"] for q in plan["requests"]}) > 1
+    assert all(q["frames"] == active.id_request_frames(len(f["prompt"]), cs.FRAME_BYTES)
+               for q, f in zip(plan["requests"], fields))
+    assert [q["stream"] for q in plan["requests"]] == list(range(1, len(fields) + 1))
+    assert all(q["send_ms"] == (q["enqueue"] - 0.5) * tau and q["enqueue"] == max(2, math.ceil(q["trace_ms"] / tau))
+               for q in plan["requests"])
+    assert plan["windows"] >= 3 and len({q["enqueue"] // T for q in plan["requests"]}) >= 2
+    assert {r["finish"] for r in probed["responses"]} == {"stop", "length"}
+
+    def key(body):
+        return json.dumps({k: v for k, v in body.items() if k != "return_token_ids"}, sort_keys=True)
+
+    bodies = [key(f | {"stop": [], "stream": True}) for f in fields]
+    live = [key(f | {"stop": [], "stream": True, "user": q["session"]}) for f, q in zip(fields, plan["requests"])]
+    sent = [key(b) for b in endpoint.bodies]
+    assert sorted(sent[:4]) == sorted(bodies[:4]) and all(b in sent[4:] for b in live)
+    setup = ar.Setup(report)
+    assert plan["syncs"] == [[setup.envelope.delta, str(setup.envelope.rho)]] * plan["windows"]
+    assert runs["honest"]["check"]["comparisons"]["releases_off_model"] == 0
+
+
+def test_honest_varied_traffic_is_certified_on_every_window_and_its_io_read_from_the_frames(varied):
+    """Every link-window's records are certified under the certifier's key and session and its salt revealed; N2 gives
+    no verdict on the advice profile. The certified I/O, read from the records' frames alone, is each request's fields
+    as the plan sent them, under its ingress ordinal, and each response's token ids as the endpoint streamed them, EOS
+    included, one id event a token and no other egress frame."""
+    tmp, _, _, plan, runs, _ = varied
+    check = runs["honest"]["check"]
+    assert check["verdict"] == "accepted", cs.table(check)
+    assert check["certified_accepted"] and check["audit_accepted"] and check["salt_accepted"]
+    assert check["network_verdict"] == {"accepted": None, "windows": plan["windows"], "error": cs.NO_N2}
+    assert all(r["certified"] and r["n2"] == cs.NO_N2 and r["salt"] == "revealed" for r in check["rows"])
+    assert all(r["audit"] == {d: {"raw": None, "committed": None} for d in ("egress", "ingress")} for r in check["rows"])
+    io = check["io"]
+    assert io["accepted"] and io["violations"] == [] and io["ids_are_the_shims"] and io["requests_are_the_plans"]
+    assert io["requests"] == len(plan["requests"]) and set(io["finish"]) == {"eos", "length"}
+    records = _io(tmp / "honest")
+    for q in plan["requests"]:
+        f = q["id_request"]
+        r, (ids, _, finish) = records[q["session"]], _answer(f["prompt"], f["max_tokens"])
+        assert {k: r[k] for k in f} == f and r["stream"] == q["stream"]
+        assert r["output"] == ids and len(r["frames"]) == len(ids)
+        assert r["finish"] == {"stop": "eos", "length": "length"}[finish]
+        assert r["release"] == int(plan["model_release"][str(r["stream"])]) < min(b for _, b in r["frames"])
+    assert sum(len(r["output"]) for r in records.values()) == io["tokens"] == runs["honest"]["events"]
+
+
+def test_a_late_shim_is_refused_by_the_audit_and_an_extra_token_by_the_finish_rule(varied):
+    """The late shim's window-0 egress record is not established, which the certifier's audit refuses. The extra
+    shim's token after its first response's last is on time and logged, so the records are complete, certified, and
+    the audit accepts them: only the certified I/O's finish rule refuses it, the response going past its EOS or its
+    `max_tokens`."""
+    tmp, _, _, plan, runs, _ = varied
+    late = runs["late"]["check"]
+    assert late["verdict"] == "refused" and not late["audit_accepted"]
+    assert late["rows"][0]["audit"]["egress"]["raw"] == "status:coverage-never-established"
+    extra = runs["extra"]["check"]
+    assert runs["extra"]["events"] == runs["honest"]["events"] + 1
+    assert extra["verdict"] == "refused" and extra["certified_accepted"] and extra["audit_accepted"]
+    assert extra["salt_accepted"] and extra["comparisons"]["wire_is_the_records"]
+    first = plan["sessions"][0][0]
+    r = _io(tmp / "extra")[first]
+    assert r["output"][-1] == 0 and r["finish"] in ("a token after EOS", "longer than max_tokens")
+    assert extra["io"]["violations"] == [[r["stream"], r["finish"]]]
+    for strategy in cs.STRATEGIES:
+        check = runs[strategy]["check"]
+        assert all(row["salt"] == "revealed" for row in check["rows"]) and check["salt_again"].startswith("refused")
+
+
+def test_a_token_shim_on_varied_traffic_changes_window_0s_ids_and_nothing_the_check_reads(varied):
+    """The token shim's id events of the requests enqueued in window 0 carry other ids (`active_replay.other_id`),
+    their EOS ids left as they are, so every response keeps its length and finish, and `check` accepts it as it does
+    on fixed traffic: only a tie of the frames' ids to the committed sampled ones refuses it."""
+    tmp, _, _, plan, runs, _ = varied
+    assert runs["token"]["check"]["verdict"] == "accepted", cs.table(runs["token"]["check"])
+    assert runs["token"]["events"] == runs["honest"]["events"]
+    window0 = {q["session"] for q in plan["requests"] if q["enqueue"] // cs.WINDOW_BUCKETS == 0}
+    honest, token = _io(tmp / "honest"), _io(tmp / "token")
+    assert window0 and any(t != EOS for name in window0 for t in honest[name]["output"])
+    for name, r in honest.items():
+        t = token[name]
+        assert len(t["output"]) == len(r["output"]) and t["finish"] == r["finish"]
+        assert [a != b for a, b in zip(r["output"], t["output"])] == [name in window0 and a != EOS for a in r["output"]]
+        assert EOS not in t["output"][:-1]
+
+
+@pytest.fixture(scope="module")
+def negatives():
+    spec = importlib.util.spec_from_file_location("network_traces_negatives", HERE / "negatives.py")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod  # its dataclasses look their module up
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _ids(out: Path, plan: dict) -> Path:
+    """The endpoint's sampled ids of the plan's requests (`_answer`'s), by user, as `negatives.read_ids` reads them."""
+    path = out / "ids.jsonl"
+    path.write_text("".join(json.dumps({"user": q["session"], "output_ids": _answer(
+        q["id_request"]["prompt"], q["id_request"]["max_tokens"])[0]}) + "\n" for q in plan["requests"]))
+    return path
+
+
+def test_the_io_tie_accepts_honest_varied_traffic_and_refuses_the_token_shims_ids_by_its_content(varied, negatives):
+    """`negatives.tie_run` on each varied run, given the endpoint's sampled ids: every window's frames hold to their
+    certified heads, both ends, and every id event is a data cell placed on a committed output. Honest's ids are their
+    port entries' (accepted); the token shim's are not in exactly the windows its changed ids fall in, each refused by
+    IoTieWindow.content alone; so is the extra shim's token past a response's end, which no committed output is, and
+    the drop shim's response without its first token, whose later ids each sit one output early and whose last
+    committed output no cell carries. The late shim's held frames never reach a certified record. A committed output no
+    cell carries is refused by content at window -1, since no advice places it in a window."""
+    pytest.importorskip(negatives.IO_TIE_MODULE)
+    tmp, _, _, plan, runs, _ = varied
+    ids = negatives.read_ids(_ids(tmp, plan))
+    got = {s: negatives.tie_run(tmp / s, ids) for s in runs}
+    tokens, W = sum(map(len, ids.values())), plan["windows"]
+    for row in got.values():
+        assert row["held"] == {"egress": W, "ingress": W} and row["missing"] == {} and row["outputs"] == tokens
+    honest, token, extra = got["honest"], got["token"], got["extra"]
+    assert honest["verdict"] == "accepted" and honest["failing"] == {} and honest["codes"] == []
+    assert honest["id_events"] == honest["placed"] == tokens and honest["unplaced"] == 0
+    h, t = _io(tmp / "honest"), _io(tmp / "token")
+    changed = {b // cs.WINDOW_BUCKETS for name, r in t.items()
+               for (_, b), x, y in zip(r["frames"], r["output"], h[name]["output"]) if x != y}
+    assert changed and token["verdict"] == "refused" and token["codes"] == ["IoTieWindow.content"]
+    assert token["failing"] == {w: ["content"] for w in changed} and token["placed"] == tokens
+    assert extra["verdict"] == "refused" and extra["codes"] == ["IoTieWindow.content"]
+    assert extra["id_events"] == tokens + 1 and extra["placed"] == tokens and len(extra["failing"]) == 1
+    drop = got["drop"]
+    assert drop["verdict"] == "refused" and drop["codes"] == ["IoTieWindow.content"] and -1 in drop["failing"]
+    assert drop["id_events"] == drop["placed"] == tokens - 1 and drop["unplaced"] == 1
+    late = got["late"]
+    assert late["verdict"] == "refused" and late["failing"] == {-1: ["content"]}
+    assert 0 < late["unplaced"] == tokens - late["id_events"] and runs["late"]["events"] == tokens
+    assert all(negatives.tie_ok(s, got[s]) for s in ("honest", "token", "drop"))
+
+
+def test_a_frame_other_than_the_certified_one_is_refused_by_the_tie_on_the_cells_root(varied, negatives, tmp_path):
+    """The honest run with one id event in the prover's copy of the frames carrying another id, the certified heads
+    kept: that window's frames no longer hold to its certified head (IoTieWindow.cells_root), and the cell no longer
+    carries its port entry's id (content); every other window is accepted."""
+    pytest.importorskip(negatives.IO_TIE_MODULE)
+    tmp, _, report, plan, _, _ = varied
+    run, e = shutil.copytree(tmp / "honest", tmp_path / "frame"), ar.Setup(report).egress_params
+    records = [ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
+    k = next(k for k, r in enumerate(records) if any(row[0] is not None for row in r.grid))
+    t = next(t for t, row in enumerate(records[k].grid) if row[0] is not None)
+    q, x = active.id_event_data(active.decode_frame(records[k].grid[t][0])[2])
+    row = (active.encode_frame(active.DATA, active.CANONICAL_STREAM, active.id_event(q, x ^ 1), e.frame_bytes),
+           *records[k].grid[t][1:])
+    records[k] = replace(records[k], grid=records[k].grid[:t] + (row,) + records[k].grid[t + 1:])
+    (run / "responses.records").unlink()
+    for r in records:
+        ar.write_blobs(run / "responses.records", ar.pack_record(r))
+    got = negatives.tie_run(run, negatives.read_ids(_ids(tmp_path, plan)))
+    w = records[k].window
+    assert got["held"] == {"egress": plan["windows"] - 1, "ingress": plan["windows"]}
+    assert got["verdict"] == "refused" and got["failing"] == {w: ["cells_root", "content"]}
+    assert negatives.tie_ok("frame", got)
+
+
+def test_tie_run_prints_each_runs_verdict_from_a_gate_runs_tarball(varied, negatives, tmp_path, capsys):
+    """`negatives.py tie-run --run TARBALL --ids FILE` on a tarball laid out as the gate preserves a run
+    (`c…/out/STRATEGY/`) prints its document: each strategy's verdict, `ok` and codes, exit 0. Without the ids each run
+    has no verdict, the Commit's rows missing, exit 1."""
+    pytest.importorskip(negatives.IO_TIE_MODULE)
+    tmp, _, _, plan, _, _ = varied
+    gate = tmp_path / "c20261024T000000Z-tie"
+    for s in ("honest", "token"):
+        shutil.copytree(tmp / s, gate / "out" / s)
+    tgz = tmp_path / f"{gate.name}.tgz"
+    with tarfile.open(tgz, "w:gz") as tf:
+        tf.add(gate, arcname=gate.name)
+    assert negatives.main(["tie-run", "--run", str(tgz), "--ids", str(_ids(tmp_path, plan))]) == 0
+    doc = json.loads(capsys.readouterr().out)
+    assert doc["format"] == negatives.TIE_RUN and doc["check"] == "IoTieWindow" and doc["source"] == str(tgz)
+    assert set(doc["stand_ins"]) == {"cells_root", "cells", "port", "map"}
+    assert {s: (r["verdict"], r["ok"], r["codes"]) for s, r in doc["runs"].items()} == {
+        "honest": ("accepted", True, []), "token": ("refused", True, ["IoTieWindow.content"])}
+    assert negatives.main(["tie-run", "--run", str(tgz)]) == 1
+    doc = json.loads(capsys.readouterr().out)
+    assert {s: (r["verdict"], r["ok"], list(r["missing"])) for s, r in doc["runs"].items()} == {
+        s: ("not-applicable", None, ["commit"]) for s in ("honest", "token")}
+
+
+def test_the_certified_io_reads_each_response_by_its_ordinal_wherever_its_frames_fall(varied):
+    """`certified_io` reads a response from the id events that name its request's ingress ordinal, in any
+    interleaving: the honest run's egress frames dealt round-robin over their requests, after every release, give back
+    the same responses; a frame that names no request is a violation, and so is one before its request's release."""
+    tmp, _, report, plan, _, _ = varied
+    run, setup = tmp / "honest", ar.Setup(report)
+    e, i = setup.egress_params, setup.ingress_params
+    ins = [ar.unpack_record(b, i.frame_bytes) for b in ar.read_blobs(run / "requests.records")]
+    outs = [ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
+    frames = [s for rec in sorted(outs, key=lambda r: r.window) for row in rec.grid for s in row if s is not None]
+    by_ordinal: dict = defaultdict(list)
+    for f in frames:
+        by_ordinal[active.id_event_data(active.decode_frame(f)[2])[0]].append(f)
+    dealt = [f for group in itertools.zip_longest(*by_ordinal.values()) for f in group if f is not None]
+    assert dealt != frames and sorted(by_ordinal) == [q["stream"] for q in plan["requests"]]
+    start = 1 + max(plan["model_release"].values())
+
+    def one_record(fs, early=()):
+        return [SimpleNamespace(window=0, grid=[[f] for f in early] + [[]] * (start - len(early)) + [[f] for f in fs])]
+
+    def responses(io):
+        return {r["user"]: (r["stream"], r["output"], r["finish"]) for r in io["records"]}
+
+    honest, mixed = cs.certified_io(plan, setup, ins, outs), cs.certified_io(plan, setup, ins, one_record(dealt))
+    assert honest["accepted"] and mixed["accepted"] and responses(mixed) == responses(honest)
+    stray = active.encode_frame(active.DATA, active.CANONICAL_STREAM, active.id_event(len(plan["requests"]) + 1, 7),
+                                e.frame_bytes)
+    refused = cs.certified_io(plan, setup, ins, one_record(dealt + [stray]))
+    assert not refused["accepted"] and refused["violations"] == [
+        [len(dealt), "an egress frame that isn't an id event of a released request"]]
+    early = cs.certified_io(plan, setup, ins, one_record(dealt, early=[by_ordinal[len(plan["requests"])][0]]))
+    assert not early["accepted"] and early["violations"] == [[0, "an id event before its request's release"]]
+
+
+def test_the_certified_io_refuses_two_requests_with_one_user(varied):
+    """A request's `user` is its own id, never its session's: with the second request's `user` rewritten in its
+    certified ingress frame to the first's (the field's place and every frame's template kept), the certified I/O
+    refuses that request, and still reads each response by its ordinal."""
+    tmp, _, report, plan, _, _ = varied
+    run, setup = tmp / "honest", ar.Setup(report)
+    e, i = setup.egress_params, setup.ingress_params
+    ins = [ar.unpack_record(b, i.frame_bytes) for b in ar.read_blobs(run / "requests.records")]
+    outs = [ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
+    first, second = (json.dumps(q["session"]).encode() for q in plan["requests"][:2])
+    shared = [SimpleNamespace(window=r.window, grid=[[f if f is None else f.replace(second, first) for f in row]
+                                                     for row in r.grid]) for r in ins]
+    assert sum(f != g for r, s in zip(ins, shared) for row, other in zip(r.grid, s.grid)
+               for f, g in zip(row, other)) == 1
+    honest, refused = cs.certified_io(plan, setup, ins, outs), cs.certified_io(plan, setup, shared, outs)
+    assert honest["accepted"] and len({r["user"] for r in honest["records"]}) == len(plan["requests"])
+    assert not refused["accepted"] and refused["violations"] == [[2, "a request whose user names request 1 too"]]
+    assert [(r["stream"], r["output"]) for r in refused["records"]] == \
+        [(r["stream"], r["output"]) for r in honest["records"]]
+
+
+def test_interleaved_responses_are_recovered_by_their_requests_ordinals(tmp_path):
+    """Requests sent four at a time are released two a bucket, and the endpoint streams each two released together
+    chunk by chunk: in whatever order the shim reads them, each id event names its request's ingress ordinal, and
+    honest traffic's certified I/O gives back every response."""
+    endpoint = _Varied(group=2)
+
+    def plan_of(url):
+        reqs = cs.varied_requests(url, "stub-model", 8, prompt_tokens=(16, 300), max_tokens=VARIED_TOKENS, seed=5)
+        reqs = [q | {"at_ms": reqs[j - j % 4]["at_ms"]} for j, q in enumerate(reqs)]
+        probed = cs.probe_varied(url, "stub-model", reqs[:4], clock=lambda: 0.0, sleep=_no_sleep)
+        report, plan = cs.varied_plan(probed, reqs, eos=[EOS])
+        release = [plan["model_release"][str(q["stream"])] for q in plan["requests"]]
+        assert ar.Setup(report).ingress_params.allocation == 2 and release[::2] == release[1::2]
+        assert len(set(release)) == 4 and {q["frames"] for q in plan["requests"]} == {1}
+        return probed, report, plan
+
+    _, _, _, plan, runs = _varied_runs(tmp_path, endpoint, plan_of, ["honest"])
+    check = runs["honest"]["check"]
+    assert check["verdict"] == "accepted", cs.table(check)
+    records = _io(tmp_path / "honest")
+    for q in plan["requests"]:
+        ids, _, _ = _answer(q["id_request"]["prompt"], q["id_request"]["max_tokens"])
+        assert records[q["session"]]["output"] == ids and records[q["session"]]["stream"] == q["stream"]
+    run = [w for w in endpoint.writes if w[0] >= 4]
+    assert any(a[0] != b[0] for a, b in itertools.pairwise(run) if a[0] // 2 == b[0] // 2)
