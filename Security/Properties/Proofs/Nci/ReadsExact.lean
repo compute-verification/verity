@@ -15,17 +15,21 @@ gates of one width) and an index, and holds each of `Desc`'s operations on them 
   (`ofSeq_pos`, `partsPos_get`), where no strided part names a negative position, which the decoder ensures
   (`parsePartsIn_nonneg`), and `memberSpans` are a batch member's indices into its argument (`memberSpans_idx`);
 * a context's arguments name their references (`ctxOf_arg`), and a loop appending segments names its elements'
-  positions in order (`forIn_append_pos`, `forIn_pos`);
+  positions in order, each segment it adds from its element (`forIn_append_pos`, `forIn_pm`);
 * `nodeReads` gives a primitive's node its arguments' positions read whole (`nodeReads_prim`), and a composite's those
   its callee's `used` names, member by member where needed, then a scan's carries, kept by `keep` (`nodeReads_comp`),
-  each read piece by piece through `down` (`readPos`, `downPos`, `calleePos`);
+  each read piece by piece through `down` (`readPos`, `downPos`, `calleePos`), every segment one `down` gives a piece
+  of an argument (`FromDown`) or `fromCallee` a carry (`FromCarry`);
 * `argSpans` is a member's used leaves' indices into its argument (`argSpans_batch`, `argSpans_xs`, `argSpans_other`);
 * `Array.qsort` by a key sorts by it (`qsort_sorted`), so `Desc.Ivs.norm` keeps exactly its intervals' leaves
   (`norm_mem`), and `Desc.Ivs.covers` checks every leaf is in an interval (`covers_mem`);
 * a segment's gates (`Width.segGates`) are its gate positions (`segGates_pos`).
 
-So `ReadsExact` holds wherever one statement about the positions `Desc.nodeReads` gives each root node does, a named
-`Prop` here, open (`readsExact_of_rootReads`): `RootReads`.
+So `ReadsExact` holds wherever one statement about the segments `Desc.nodeReads` gives each root node does
+(`readsExact_of_rootReads`): `RootReads`. That holds wherever two smaller ones do (`rootReads_of`), named `Prop`s here,
+open: `RootSegs`, that every segment `down` or `fromCallee` gives a root node names gates of one root node with their
+widths, and `RootSet`, that the positions the node reads (`rootRead`) name exactly the gates outside the node that its
+gates read; a composite's segment `keep` keeps is then one outside the node (`keep_iff`).
 -/
 
 namespace NciCheck.Properties.SecurityProofs.ReadsExact
@@ -1767,20 +1771,38 @@ def calleePos (c : Desc.Ctx) (k m a b : Nat) : List (Tgt × Int) :=
 def readPos (c : Desc.Ctx) (k i : Nat) (spans : Array (Nat × Nat)) : List (Tgt × Int) :=
   spans.toList.flatMap fun x => ((c.arg k i).pieces x.1 x.2).toList.flatMap (downPos c)
 
-/-- A loop that adds `D x`'s positions to its segments' for each element `x`. -/
-theorem forIn_pos {β : Type} (D : β → List (Tgt × Int)) (f : β → Array Seg → Except String (ForInStep (Array Seg)))
-    (hf : ∀ x r y, f x r = .ok y → ∃ r', y = .yield r' ∧ segsPos r' = segsPos r ++ D x) :
-    ∀ (l : List β) (acc out : Array Seg), forIn l acc f = .ok out → segsPos out = segsPos acc ++ l.flatMap D
+/-- A loop that adds `D x`'s positions to its segments' for each element `x`, each segment it adds one `Q x` holds of. -/
+theorem forIn_pm {β : Type} (D : β → List (Tgt × Int)) (Q : β → Seg → Prop)
+    (f : β → Array Seg → Except String (ForInStep (Array Seg)))
+    (hf : ∀ x r y, f x r = .ok y → ∃ r', y = .yield r' ∧ segsPos r' = segsPos r ++ D x ∧ ∀ s ∈ r', s ∈ r ∨ Q x s) :
+    ∀ (l : List β) (acc out : Array Seg), forIn l acc f = .ok out →
+      segsPos out = segsPos acc ++ l.flatMap D ∧ ∀ s ∈ out, s ∈ acc ∨ ∃ x ∈ l, Q x s
   | [], acc, out, h => by
     simp only [List.forIn_nil, pure, Except.pure, Except.ok.injEq] at h
     subst h
-    simp
+    exact ⟨by simp, fun s hs => Or.inl hs⟩
   | x :: l, acc, out, h => by
     rw [List.forIn_cons] at h
     rcases hx : f x acc with e | y <;> rw [hx] at h
     · exact absurd h (by intro h; cases h)
-    obtain ⟨r', rfl, hr'⟩ := hf x acc _ hx
-    rw [forIn_pos D f hf l r' out h, hr', List.flatMap_cons, List.append_assoc]
+    obtain ⟨r', rfl, hr', hm⟩ := hf x acc _ hx
+    obtain ⟨h1, h2⟩ := forIn_pm D Q f hf l r' out h
+    refine ⟨by rw [h1, hr', List.flatMap_cons, List.append_assoc], fun s hs => ?_⟩
+    rcases h2 s hs with h | ⟨x', hx', hq⟩
+    · rcases hm s h with h | h
+      · exact Or.inl h
+      · exact Or.inr ⟨x, List.mem_cons_self, h⟩
+    · exact Or.inr ⟨x', List.mem_cons_of_mem _ hx', hq⟩
+
+/-- A segment `down` gives a piece of argument `i` of node `k`. -/
+def FromDown (c : Desc.Ctx) (k i : Nat) (s : Seg) : Prop :=
+  ∃ lo hi, ∃ q ∈ (c.arg k i).pieces lo hi, ∃ segs, Desc.down c Flock.Steps.FUEL q = .ok segs ∧ s ∈ segs
+
+/-- A segment `fromCallee` gives for a scan's carry into an iteration after the first. -/
+def FromCarry (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (s : Seg) : Prop :=
+  ∃ m lo hi, m + 1 < node.n ∧ ∃ segs, Desc.fromCallee c Flock.Steps.FUEL k m lo hi = .ok segs ∧ s ∈ segs
+
+theorem mem_append_or {s : Seg} {r lift : Array Seg} (h : s ∈ r ++ lift) : s ∈ r ∨ s ∈ lift := Array.mem_append.1 h
 
 theorem ok_bind_pure {α : Type} {x : Except String α} {y : α} (h : (x >>= fun r => pure r) = Except.ok y) :
     x = .ok y := by
@@ -1795,18 +1817,31 @@ theorem readLoop_pos (c : Desc.Ctx) (k i : Nat) (spans : Array (Nat × Nat)) (ac
           let __do_lift ← Desc.down c Flock.Steps.FUEL q
           pure (ForInStep.yield (__s ++ __do_lift))
         pure (ForInStep.yield __s)) = .ok out) :
-    segsPos out = segsPos acc ++ readPos c k i spans := by
+    segsPos out = segsPos acc ++ readPos c k i spans ∧ ∀ s ∈ out, s ∈ acc ∨ FromDown c k i s := by
   rw [← Array.forIn_toList] at h
-  refine forIn_pos _ _ (fun x r y hy => ?_) _ acc out h
-  obtain ⟨r', hr', hy⟩ := Walk.except_bind_ok hy
-  simp only [pure, Except.pure, Except.ok.injEq] at hy
-  refine ⟨r', hy.symm, ?_⟩
-  rw [← Array.forIn_toList] at hr'
-  refine forIn_pos (downPos c) _ (fun q r y hy => ?_) _ r r' hr'
-  obtain ⟨segs, hs, hy⟩ := Walk.except_bind_ok hy
-  simp only [pure, Except.pure, Except.ok.injEq] at hy
-  refine ⟨r ++ segs, hy.symm, ?_⟩
-  rw [segsPos_append, downPos, hs]
+  obtain ⟨h1, h2⟩ := forIn_pm (fun x => ((c.arg k i).pieces x.1 x.2).toList.flatMap (downPos c))
+    (fun x s => ∃ q ∈ (c.arg k i).pieces x.1 x.2, ∃ segs, Desc.down c Flock.Steps.FUEL q = .ok segs ∧ s ∈ segs) _
+    (fun x r y hy => by
+      obtain ⟨r', hr', hy⟩ := Walk.except_bind_ok hy
+      simp only [pure, Except.pure, Except.ok.injEq] at hy
+      refine ⟨r', hy.symm, ?_⟩
+      rw [← Array.forIn_toList] at hr'
+      obtain ⟨g1, g2⟩ := forIn_pm (downPos c)
+        (fun q s => ∃ segs, Desc.down c Flock.Steps.FUEL q = .ok segs ∧ s ∈ segs) _ (fun q r y hy => by
+          obtain ⟨segs, hs, hy⟩ := Walk.except_bind_ok hy
+          simp only [pure, Except.pure, Except.ok.injEq] at hy
+          refine ⟨r ++ segs, hy.symm, by rw [segsPos_append, downPos, hs], fun s h => ?_⟩
+          rcases mem_append_or h with h | h
+          · exact Or.inl h
+          · exact Or.inr ⟨segs, hs, h⟩) _ r r' hr'
+      refine ⟨g1, fun s h => ?_⟩
+      rcases g2 s h with h | ⟨q, hq, h⟩
+      · exact Or.inl h
+      · exact Or.inr ⟨q, Array.mem_toList_iff.1 hq, h⟩) _ acc out h
+  refine ⟨h1, fun s hs => ?_⟩
+  rcases h2 s hs with h | ⟨x, -, hx⟩
+  · exact Or.inl h
+  · exact Or.inr ⟨x.1, x.2, hx⟩
 
 /-- A read from no segments. -/
 theorem readBlock_pos (c : Desc.Ctx) (k i : Nat) (spans : Array (Nat × Nat)) (out : Array Seg)
@@ -1815,17 +1850,22 @@ theorem readBlock_pos (c : Desc.Ctx) (k i : Nat) (spans : Array (Nat × Nat)) (o
             let __do_lift ← Desc.down c Flock.Steps.FUEL q
             pure (ForInStep.yield (__s ++ __do_lift))
           pure (ForInStep.yield __s)) >>= fun __s => pure __s) = .ok out) :
-    segsPos out = readPos c k i spans := by
-  rw [readLoop_pos c k i spans #[] out (ok_bind_pure h), segsPos_empty, List.nil_append]
+    segsPos out = readPos c k i spans ∧ ∀ s ∈ out, FromDown c k i s := by
+  obtain ⟨h1, h2⟩ := readLoop_pos c k i spans #[] out (ok_bind_pure h)
+  refine ⟨by rw [h1, segsPos_empty, List.nil_append], fun s hs => ?_⟩
+  rcases h2 s hs with h | h
+  · simp at h
+  · exact h
 
 theorem range'_size (n : Nat) : List.range' 0 ((n - 0 + 1 - 1) / 1) = List.range n := by
   rw [List.range_eq_range']; congr 1; omega
 
-/-- **A primitive's node reads its arguments whole**, unless it is a batch of no members. -/
+/-- **A primitive's node reads its arguments whole**, unless it is a batch of no members, each segment from `down`. -/
 theorem nodeReads_prim (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (hn : c.node k = .ok node)
     (hp : (c.P.defs[node.fn]!).prim = true) (rs : Array Seg) (h : Desc.nodeReads c k = .ok rs) :
-    segsPos rs = if (node.form == .batch && node.n == 0) = true then [] else
-      (List.range node.args.size).flatMap fun i => readPos c k i #[(0, (c.arg k i).count)] := by
+    segsPos rs = (if (node.form == .batch && node.n == 0) = true then [] else
+      (List.range node.args.size).flatMap fun i => readPos c k i #[(0, (c.arg k i).count)]) ∧
+      ∀ s ∈ rs, ∃ i, FromDown c k i s := by
   unfold Desc.nodeReads at h
   simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at h
   obtain ⟨node', hn', h⟩ := Walk.except_bind_ok h
@@ -1837,14 +1877,21 @@ theorem nodeReads_prim (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (hn 
   · rename_i hb
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
-    rw [if_pos hb, segsPos_empty]
+    exact ⟨by rw [if_pos hb, segsPos_empty], fun s hs => by simp at hs⟩
   · rename_i hb
     rw [if_neg hb, ← range'_size]
-    have := ok_bind_pure h
-    refine (forIn_pos _ _ (fun i r y hy => ?_) _ #[] rs this).trans (by rw [segsPos_empty, List.nil_append])
-    obtain ⟨lift, hl, hy⟩ := Walk.except_bind_ok hy
-    simp only [pure, Except.pure, Except.ok.injEq] at hy
-    exact ⟨r ++ lift, hy.symm, by rw [segsPos_append, readBlock_pos c k i _ lift hl]⟩
+    obtain ⟨h1, h2⟩ := forIn_pm _ (fun i s => FromDown c k i s) _ (fun i r y hy => by
+      obtain ⟨lift, hl, hy⟩ := Walk.except_bind_ok hy
+      simp only [pure, Except.pure, Except.ok.injEq] at hy
+      obtain ⟨b1, b2⟩ := readBlock_pos c k i _ lift hl
+      refine ⟨r ++ lift, hy.symm, by rw [segsPos_append, b1], fun s h => ?_⟩
+      rcases mem_append_or h with h | h
+      · exact Or.inl h
+      · exact Or.inr (b2 s h)) _ #[] rs (ok_bind_pure h)
+    refine ⟨by rw [h1, segsPos_empty, List.nil_append], fun s hs => ?_⟩
+    rcases h2 s hs with h | ⟨i, -, h⟩
+    · simp at h
+    · exact ⟨i, h⟩
 
 /-- The segments `nodeReads` keeps of a composite's node `k`: those not starting at a gate of the node. -/
 def keep (c : Desc.Ctx) (k : Nat) (s : Seg) : Bool :=
@@ -1876,12 +1923,13 @@ def carryPos (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) : List (Tgt ×
   else []
 
 /-- **A composite's node reads its arguments where its callee reads its parameters**, and a scan's carries, keeping the
-segments that don't start in the node. -/
+segments that don't start in the node; each segment from `down` or a carry's `fromCallee`. -/
 theorem nodeReads_comp (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (hn : c.node k = .ok node)
     (hp : (c.P.defs[node.fn]!).prim = false) (rs : Array Seg) (h : Desc.nodeReads c k = .ok rs) :
     if node.members = 0 then rs = #[] else
       ∃ out : Array Seg, rs = out.filter (keep c k) ∧
-        segsPos out = (List.range node.args.size).flatMap (argPos c k node) ++ carryPos c k node := by
+        segsPos out = (List.range node.args.size).flatMap (argPos c k node) ++ carryPos c k node ∧
+        ∀ s ∈ out, (∃ i, FromDown c k i s) ∨ FromCarry c k node s := by
   unfold Desc.nodeReads at h
   simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at h
   obtain ⟨node', hn', h⟩ := Walk.except_bind_ok h
@@ -1897,7 +1945,7 @@ theorem nodeReads_comp (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (hn 
   · rename_i hm
     rw [if_neg (by simpa using hm)]
     obtain ⟨r1, h1, h⟩ := Walk.except_bind_ok h
-    have hr1 := forIn_pos (argPos c k node) _ (fun i r y hy => by
+    obtain ⟨hr1, hm1⟩ := forIn_pm (argPos c k node) (fun _ s => ∃ i, FromDown c k i s) _ (fun i r y hy => by
       rw [argPos]
       rcases hform : node.form with _ | _ | _ | _ <;> simp only [hform] at hy ⊢
       all_goals
@@ -1905,51 +1953,234 @@ theorem nodeReads_comp (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (hn 
         · rename_i hs
           obtain ⟨lift, hl, hy⟩ := Walk.except_bind_ok hy
           simp only [pure, Except.pure, Except.ok.injEq] at hy
-          refine ⟨r ++ lift, hy.symm, ?_⟩
-          rw [segsPos_append, readBlock_pos c k 0 _ lift hl, if_pos hs]
+          obtain ⟨b1, b2⟩ := readBlock_pos c k 0 _ lift hl
+          refine ⟨r ++ lift, hy.symm, by rw [segsPos_append, b1, if_pos hs], fun s h => ?_⟩
+          rcases mem_append_or h with h | h
+          · exact Or.inl h
+          · exact Or.inr ⟨0, b2 s h⟩
         · rename_i hs
           split at hy
           · rename_i hpm
             obtain ⟨lift, hl, hy⟩ := Walk.except_bind_ok hy
             simp only [pure, Except.pure, Except.ok.injEq] at hy
-            refine ⟨r ++ lift, hy.symm, ?_⟩
-            rw [segsPos_append, readBlock_pos c k i _ lift hl, if_neg hs, if_pos hpm]
+            obtain ⟨b1, b2⟩ := readBlock_pos c k i _ lift hl
+            refine ⟨r ++ lift, hy.symm, by rw [segsPos_append, b1, if_neg hs, if_pos hpm], fun s h => ?_⟩
+            rcases mem_append_or h with h | h
+            · exact Or.inl h
+            · exact Or.inr ⟨i, b2 s h⟩
           · rename_i hpm
             split at hy
             · rename_i hcv
               obtain ⟨lift, hl, hy⟩ := Walk.except_bind_ok hy
               simp only [pure, Except.pure, Except.ok.injEq] at hy
-              refine ⟨r ++ lift, hy.symm, ?_⟩
-              rw [segsPos_append, readBlock_pos c k i _ lift hl, if_neg hs, if_neg hpm, if_pos hcv]
+              obtain ⟨b1, b2⟩ := readBlock_pos c k i _ lift hl
+              refine ⟨r ++ lift, hy.symm, by rw [segsPos_append, b1, if_neg hs, if_neg hpm, if_pos hcv],
+                fun s h => ?_⟩
+              rcases mem_append_or h with h | h
+              · exact Or.inl h
+              · exact Or.inr ⟨i, b2 s h⟩
             · rename_i hcv
               obtain ⟨r', hr', hy⟩ := Walk.except_bind_ok hy
               simp only [pure, Except.pure, Except.ok.injEq] at hy
-              refine ⟨r', hy.symm, ?_⟩
-              rw [if_neg hs, if_neg hpm, if_neg hcv, ← range'_size]
-              refine forIn_pos _ _ (fun m r y hy => ?_) _ r r' hr'
-              obtain ⟨lift, hl, hy⟩ := Walk.except_bind_ok hy
-              simp only [pure, Except.pure, Except.ok.injEq] at hy
-              exact ⟨r ++ lift, hy.symm, by rw [segsPos_append, readBlock_pos c k i _ lift hl]⟩) _ #[] r1 h1
+              obtain ⟨g1, g2⟩ := forIn_pm _ (fun _ s => FromDown c k i s) _ (fun m r y hy => by
+                obtain ⟨lift, hl, hy⟩ := Walk.except_bind_ok hy
+                simp only [pure, Except.pure, Except.ok.injEq] at hy
+                obtain ⟨b1, b2⟩ := readBlock_pos c k i _ lift hl
+                refine ⟨r ++ lift, hy.symm, by rw [segsPos_append, b1], fun s h => ?_⟩
+                rcases mem_append_or h with h | h
+                · exact Or.inl h
+                · exact Or.inr (b2 s h)) _ r r' hr'
+              refine ⟨r', hy.symm, by rw [g1, if_neg hs, if_neg hpm, if_neg hcv, range'_size], fun s h => ?_⟩
+              rcases g2 s h with h | ⟨m, -, h⟩
+              · exact Or.inl h
+              · exact Or.inr ⟨i, h⟩) _ #[] r1 h1
     rw [segsPos_empty, List.nil_append, range'_size] at hr1
+    have hm1' : ∀ s ∈ r1, ∃ i, FromDown c k i s := fun s hs => by
+      rcases hm1 s hs with h | ⟨i, -, h⟩
+      · simp at h
+      · exact h
     split at h
     · rename_i hsc
       obtain ⟨r2, h2, h⟩ := Walk.except_bind_ok h
       simp only [pure, Except.pure, Except.ok.injEq] at h
       refine ⟨r2, h.symm, ?_⟩
-      have hr := forIn_pos _ _ (fun m r y hy => by
+      obtain ⟨hr, hm2⟩ := forIn_pm _ (fun m s => ∃ lo hi, ∃ segs,
+          Desc.fromCallee c Flock.Steps.FUEL k (m - 1) lo hi = .ok segs ∧ s ∈ segs) _ (fun m r y hy => by
         obtain ⟨r', hr', hy⟩ := Walk.except_bind_ok hy
         simp only [pure, Except.pure, Except.ok.injEq] at hy
         refine ⟨r', hy.symm, ?_⟩
         rw [← Array.forIn_toList] at hr'
-        exact forIn_pos (fun x => calleePos c k (m - 1) x.1 x.2) _ (fun x r y hy => by
+        obtain ⟨g1, g2⟩ := forIn_pm (fun x => calleePos c k (m - 1) x.1 x.2) (fun x s => ∃ segs,
+            Desc.fromCallee c Flock.Steps.FUEL k (m - 1) x.1 x.2 = .ok segs ∧ s ∈ segs) _ (fun x r y hy => by
           obtain ⟨lift, hl, hy⟩ := Walk.except_bind_ok hy
           simp only [pure, Except.pure, Except.ok.injEq] at hy
-          exact ⟨r ++ lift, hy.symm, by rw [segsPos_append, calleePos, hl]⟩) _ r r' hr') _ r1 r2 h2
-      rw [hr, hr1, carryPos, if_pos hsc, show (node.n - 1 + 1 - 1) / 1 = node.n - 1 by omega]
+          refine ⟨r ++ lift, hy.symm, by rw [segsPos_append, calleePos, hl], fun s h => ?_⟩
+          rcases mem_append_or h with h | h
+          · exact Or.inl h
+          · exact Or.inr ⟨lift, hl, h⟩) _ r r' hr'
+        refine ⟨g1, fun s h => ?_⟩
+        rcases g2 s h with h | ⟨x, -, h⟩
+        · exact Or.inl h
+        · exact Or.inr ⟨x.1, x.2, h⟩) _ r1 r2 h2
+      refine ⟨by rw [hr, hr1, carryPos, if_pos hsc, show (node.n - 1 + 1 - 1) / 1 = node.n - 1 by omega],
+        fun s hs => ?_⟩
+      rcases hm2 s hs with h | ⟨m, hml, lo, hi, segs, hs', h⟩
+      · exact Or.inl (hm1' s h)
+      · rw [List.mem_range'_1] at hml
+        exact Or.inr ⟨m - 1, lo, hi, by omega, segs, hs', h⟩
     · rename_i hsc
       simp only [pure, Except.pure, Except.ok.injEq] at h
-      refine ⟨r1, h.symm, ?_⟩
-      rw [hr1, carryPos, if_neg hsc, List.append_nil]
+      exact ⟨r1, h.symm, by rw [hr1, carryPos, if_neg hsc, List.append_nil], fun s hs => Or.inl (hm1' s hs)⟩
+
+
+/-! ## `RootReads` from the segments `down` gives at the root and the positions read
+
+`nodeReads` gives each root node's segments from `down` and a scan's carries (`nodeReads_prim`, `nodeReads_comp`), so
+`RootReads` holds wherever two smaller statements do (`rootReads_of`): `RootSegs`, that each such segment names gates of
+one root node with their widths, and `RootSet`, that the positions read name exactly the gates outside the node that
+its gates read. A composite's segment `keep` keeps is then one outside the node (`keep_iff`). -/
+
+/-- A segment as `RootReads` speaks of it: of no count, it names no positions; else its pieces have positive count and
+it names gates `a` of one root node, each of width `c.w[a]`. -/
+def SegGood (P : Prog) (c : Circuit) (s : Seg) : Prop :=
+  (s.count = 0 → segPos s = []) ∧
+    (s.count ≠ 0 → (∀ q ∈ s.ps.toList, 0 < q.count) ∧
+      ∃ k' < nodeCount P, ∀ x ∈ segPos s, ∃ a : Nat, x = (.gate c.w[a]!, (a : Int)) ∧ a ∈ nodeGates P k')
+
+/-- The positions root node `k` reads (`nodeReads_prim`, `nodeReads_comp`), a composite's before `keep`. -/
+def rootRead (P : Prog) (memo : Array Desc.Summary) (node : Flock.Program.Node) (k : Nat) : List (Tgt × Int) :=
+  if (P.defs[node.fn]!).prim = true then
+    (if (node.form == .batch && node.n == 0) = true then [] else
+      (List.range node.args.size).flatMap fun i =>
+        readPos (rootCtx P memo) k i #[(0, ((rootCtx P memo).arg k i).count)])
+  else if node.members = 0 then []
+  else (List.range node.args.size).flatMap (argPos (rootCtx P memo) k node) ++ carryPos (rootCtx P memo) k node
+
+/-- **Open: the segments `down` gives at the root.** On a Program `Desc.analyze` reads, with its summaries `memo` and
+`circuitOf`'s circuit `c`: for root node `k`, whose segments (`Desc.nodeReads`) have pieces naming gates only, every
+segment `down` gives a piece of one of its arguments, or `fromCallee` a carry of its scan, is `SegGood`. -/
+def RootSegs : Prop :=
+  ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : Circuit),
+    Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
+    Desc.inputsAtRoot P = true → memoOf P = .ok memo → circuitOf P = .ok c →
+    ∀ k < nodeCount P, ∀ node rs, (rootCtx P memo).node k = .ok node → Desc.nodeReads (rootCtx P memo) k = .ok rs →
+      (∀ s ∈ rs, ∀ q ∈ s.ps, ∃ w, q.tgt = .gate w) →
+      ∀ s, ((∃ i, FromDown (rootCtx P memo) k i s) ∨ FromCarry (rootCtx P memo) k node s) → SegGood P c s
+
+/-- **Open: the positions a root node reads.** With `RootSegs`' premises: the gates the positions root node `k` reads
+name (`rootRead`), outside the node where its callee is a composite, are exactly the gates outside the node that its
+gates read. -/
+def RootSet : Prop :=
+  ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : Circuit),
+    Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
+    Desc.inputsAtRoot P = true → memoOf P = .ok memo → circuitOf P = .ok c →
+    ∀ k < nodeCount P, ∀ node rs, (rootCtx P memo).node k = .ok node → Desc.nodeReads (rootCtx P memo) k = .ok rs →
+      (∀ s ∈ rs, ∀ q ∈ s.ps, ∃ w, q.tgt = .gate w) →
+      ∀ a : Nat, ((∃ w, (Tgt.gate w, (a : Int)) ∈ rootRead P memo node k) ∧
+          ((P.defs[node.fn]!).prim = false → a ∉ nodeGates P k)) ↔
+        ∃ g ∈ nodeGates P k, a ∈ c.reads[g]! ∧ a ∉ nodeGates P k
+
+theorem node_of_reads (c : Desc.Ctx) (k : Nat) (rs : Array Seg) (h : Desc.nodeReads c k = .ok rs) :
+    ∃ node, c.node k = .ok node := by
+  unfold Desc.nodeReads at h
+  obtain ⟨node, hn, -⟩ := Walk.except_bind_ok h
+  exact ⟨node, hn⟩
+
+/-- A segment naming a position has a first piece. -/
+theorem first_piece {s : Seg} {x : Tgt × Int} (h : x ∈ segPos s) : ∃ q, s.ps[0]? = some q := by
+  rcases hq : s.ps[0]? with _ | q
+  · exfalso
+    have he : s.ps = #[] := Array.eq_empty_of_size_eq_zero (by have := Array.getElem?_eq_none_iff.1 hq; omega)
+    unfold segPos at h
+    obtain ⟨m, -, hm⟩ := List.mem_flatMap.1 h
+    rw [copy_pos, he] at hm
+    simp [posAll] at hm
+  · exact ⟨q, rfl⟩
+
+/-- `keep` keeps a segment whose first piece names gate `a0` exactly when `a0` is outside the node. -/
+theorem keep_gate (P : Prog) (memo : Array Desc.Summary) (k : Nat) (s : Seg) (q : Piece) (hq : s.ps[0]? = some q)
+    (w a0 : Nat) (ht : q.tgt = .gate w) (hb : q.base = (a0 : Int)) :
+    keep (rootCtx P memo) k s = true ↔ a0 ∉ nodeGates P k := by
+  have ho : (rootCtx P memo).body.offsets = rootOffs P := rfl
+  unfold keep
+  rw [hq]
+  simp only [ht, hb, ho, DescAgree.mem_nodeGates, Bool.not_eq_true', Bool.and_eq_false_iff, decide_eq_false_iff_not,
+    Int.ofNat_le, Int.ofNat_lt, not_and_or]
+
+/-- **A `SegGood` segment of positive count is kept exactly when a gate it names is outside the node**: its gates are
+one root node's, its first piece's among them. -/
+theorem keep_iff (P : Prog) (memo : Array Desc.Summary) (c : Circuit) (hl : Desc.rootLaidOut P = true) {k : Nat}
+    (hk : k < nodeCount P) {s : Seg} (hg : SegGood P c s) (hc0 : s.count ≠ 0) {w a : Nat}
+    (hw : (Tgt.gate w, (a : Int)) ∈ segPos s) : keep (rootCtx P memo) k s = true ↔ a ∉ nodeGates P k := by
+  obtain ⟨-, -, -, hmono⟩ := DescAgree.rootLaidOut_spec P hl
+  obtain ⟨hpos, k', hk', hx⟩ := hg.2 hc0
+  obtain ⟨a', ha', hak'⟩ := hx _ hw
+  simp only [Prod.mk.injEq, Nat.cast_inj] at ha'
+  rw [← ha'.2] at hak'
+  obtain ⟨q, hq⟩ := first_piece hw
+  have hq0 := first_mem_segPos (reps_ne_zero hc0) hq
+    (hpos q (by obtain ⟨h0, rfl⟩ := Array.getElem?_eq_some_iff.1 hq; exact Array.getElem_mem_toList h0))
+  obtain ⟨a0, ha0, ha0k⟩ := hx _ hq0
+  simp only [Prod.mk.injEq] at ha0
+  rw [keep_gate P memo k s q hq _ a0 ha0.1 ha0.2]
+  have hu : ∀ b b', b ∈ nodeGates P k' → b' ∈ nodeGates P k' → b ∈ nodeGates P k → b' ∈ nodeGates P k := by
+    intro b b' hb hb' hbk
+    have e := DescAgree.node_unique (rootOffs P) (nodeCount P) hmono hk hk' ((DescAgree.mem_nodeGates P k b).1 hbk)
+      ((DescAgree.mem_nodeGates P k' b).1 hb)
+    subst e
+    exact hb'
+  exact ⟨fun h ha => h (hu a a0 hak' ha0k ha), fun h ha => h (hu a0 a ha0k hak' ha)⟩
+
+/-- **`RootReads` from `RootSegs` and `RootSet`.** -/
+theorem rootReads_of (hS : RootSegs) (hE : RootSet) : RootReads := by
+  intro bytes P memo c hd ho hl hi hm hc k hk rs hrs hg
+  obtain ⟨node, hn⟩ := node_of_reads _ k rs hrs
+  have hS' := hS bytes P memo c hd ho hl hi hm hc k hk node rs hn hrs hg
+  have hE' := hE bytes P memo c hd ho hl hi hm hc k hk node rs hn hrs hg
+  suffices H : (∀ s ∈ rs, SegGood P c s) ∧ ∀ a : Nat,
+      (∃ s ∈ rs, s.count ≠ 0 ∧ ∃ w, (Tgt.gate w, (a : Int)) ∈ segPos s) ↔
+        ((∃ w, (Tgt.gate w, (a : Int)) ∈ rootRead P memo node k) ∧
+          ((P.defs[node.fn]!).prim = false → a ∉ nodeGates P k)) from
+    ⟨fun s hs hc0 => (H.1 s hs).2 hc0, fun a => (H.2 a).trans (hE' a)⟩
+  rcases hp : (P.defs[node.fn]!).prim with _ | _
+  · have hcomp := nodeReads_comp (rootCtx P memo) k node hn hp rs hrs
+    by_cases hm0 : node.members = 0
+    · rw [if_pos hm0] at hcomp
+      subst hcomp
+      refine ⟨fun s hs => by simp at hs, fun a => ?_⟩
+      rw [rootRead, if_neg (by rw [hp]; decide), if_pos hm0]
+      simp
+    · rw [if_neg hm0] at hcomp
+      obtain ⟨out, rfl, hpos, hsrc⟩ := hcomp
+      have hgood : ∀ s ∈ out, SegGood P c s := fun s hs => hS' s (hsrc s hs)
+      have hR : rootRead P memo node k = segsPos out := by
+        rw [rootRead, if_neg (by rw [hp]; decide), if_neg hm0, hpos]
+      refine ⟨fun s hs => hgood s (Array.mem_filter.1 hs).1, fun a => ?_⟩
+      rw [hR]
+      constructor
+      · rintro ⟨s, hs, hc0, w, hw⟩
+        obtain ⟨hso, hkeep⟩ := Array.mem_filter.1 hs
+        exact ⟨⟨w, List.mem_flatMap.2 ⟨s, Array.mem_toList_iff.2 hso, hw⟩⟩,
+          fun _ => (keep_iff P memo c hl hk (hgood s hso) hc0 hw).1 hkeep⟩
+      · rintro ⟨⟨w, hw⟩, hout⟩
+        obtain ⟨s, hs, hw⟩ := List.mem_flatMap.1 hw
+        have hso := Array.mem_toList_iff.1 hs
+        have hc0 : s.count ≠ 0 := fun h0 => by rw [(hgood s hso).1 h0] at hw; simp at hw
+        exact ⟨s, Array.mem_filter.2 ⟨hso, (keep_iff P memo c hl hk (hgood s hso) hc0 hw).2 (hout rfl)⟩, hc0, w, hw⟩
+  · obtain ⟨hpos, hsrc⟩ := nodeReads_prim (rootCtx P memo) k node hn hp rs hrs
+    have hgood : ∀ s ∈ rs, SegGood P c s := fun s hs => hS' s (Or.inl (hsrc s hs))
+    have hR : rootRead P memo node k = segsPos rs := by rw [rootRead, if_pos hp, hpos]
+    refine ⟨hgood, fun a => ?_⟩
+    rw [hR]
+    constructor
+    · rintro ⟨s, hs, -, w, hw⟩
+      exact ⟨⟨w, List.mem_flatMap.2 ⟨s, Array.mem_toList_iff.2 hs, hw⟩⟩, fun h => absurd h (by simp)⟩
+    · rintro ⟨⟨w, hw⟩, -⟩
+      obtain ⟨s, hs, hw⟩ := List.mem_flatMap.1 hw
+      have hs' := Array.mem_toList_iff.1 hs
+      refine ⟨s, hs', fun h0 => ?_, w, hw⟩
+      rw [(hgood s hs').1 h0] at hw
+      simp at hw
 
 
 /-- **A batch member's spans** (`Desc.argSpans`) are its used parameter leaves' indices into the argument. -/
