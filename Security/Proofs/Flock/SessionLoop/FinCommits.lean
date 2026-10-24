@@ -56,7 +56,8 @@ theorem padsTreeCut_ok (n : ℕ) (src : RepSrc) :
     (#[(Array.range n).map src.padLeaf], (Array.range n).map src.padLeaf)
     (fun _ (_ : Array (Array ByteArray) × Array ByteArray) => True) trivial (by
       intro i _ p _
-      refine ⟨_, ?_, trivial⟩
+      refine ⟨(p.1.push ((Array.range (p.2.size / 2)).map fun i => Sha512.hash (p.2[2 * i]! ++ p.2[2 * i + 1]!)),
+        (Array.range (p.2.size / 2)).map fun i => Sha512.hash (p.2[2 * i]! ++ p.2[2 * i + 1]!)), ?_, trivial⟩
       rw [mapM_ok _ fun i => (rfl : (MerkleOps.hm96With (Hashes.ofSha512 Sha512.hash : Hashes V)).node
         p.2[2 * i]! p.2[2 * i + 1]! = .ok (Sha512.hash (p.2[2 * i]! ++ p.2[2 * i + 1]!)))]
       rfl) hF
@@ -91,15 +92,16 @@ theorem finSrc_leaf0 (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Non
         ⟨i, hi⟩ := by
     simp only [finSrc, Masked.tabSrcView, Masked.tabSrcCut, hi, ↓reduceDIte]
   rw [e1]
+  have h0 := congrArg FlockSoundness.ZK.Table.Cut.leaves0
+    (congrFun (finS.cutV_swViewsAt x (finCoins x ops) (finS.wt x w) (vs x w ν (finCoins x ops)) t) ⟨i, hi⟩)
   have h : (Masked.viewCut (finS.swViewsAt x (finCoins x ops) (finS.wt x w) (vs x w ν (finCoins x ops)) t
       ⟨i, hi⟩)).leaves0 =
       (swCutAt (Masked.tabC Masked.PE x) (Masked.czExe Masked.PE x (finCoins x ops)) (Masked.wtOf Masked.PE x w)
         (vs x w ν (finCoins x ops)) (Masked.UE.tape x t).1
         (swExeOf (Masked.tabC Masked.PE x) (Masked.czExe Masked.PE x (finCoins x ops)) (Masked.wtOf Masked.PE x w)
-          (vs x w ν (finCoins x ops)) (Masked.UE.tape x t).1 (Masked.UE.tape x t).2.1) ⟨i, hi⟩).leaves0 :=
-    congrArg FlockSoundness.ZK.Table.Cut.leaves0
-      (congrFun (finS.cutV_swViewsAt x (finCoins x ops) (finS.wt x w) (vs x w ν (finCoins x ops)) t) ⟨i, hi⟩)
-  simp only [Masked.leafAt, h]
+          (vs x w ν (finCoins x ops)) (Masked.UE.tape x t).1 (Masked.UE.tape x t).2.1) ⟨i, hi⟩).leaves0 := h0
+  unfold Masked.leafAt
+  rw [h]
 
 variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))

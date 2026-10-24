@@ -68,9 +68,7 @@ theorem viewPoints_eq (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flo
   rw [List.take_length] at hw
   have hge : (wordsAt x (ops.map fun e => CoinLayer.rd e.2) 0).getD (p * spec.mPts + j) 0 =
       (wordsAt x (ops.map fun e => CoinLayer.rd e.2) 0)[p * spec.mPts + j]! := by
-    first
-      | (simp only [Array.getD, dif_pos hlt]; exact (getElem!_pos _ _ hlt).symm)
-      | simp [Array.getD, hlt, getElem!_pos]
+    simp [Array.getD, hlt, getElem!_pos]
   exact hw.symm.trans hge.symm
 
 /-- **(b) where the regions carry their bytes**: at a statement in the masked scope with a witness whose tables' regions
