@@ -381,7 +381,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
             from verity_vllm.program.frontend.export_compat import select_cuda_platform
             print(f"[derive_step] declared target {target.sm_arch} x{tp}: vLLM platform {select_cuda_platform(tp, device_name)}", file=sys.stderr)
         _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
-                   tp=tp, rank=rank, launch=launch, emit=emit, engine_args=engine_args, C=cached)
+                   tp=tp, rank=rank, launch=launch, emit=emit, engine_args=engine_args, C=cached, dead_free=dead_free)
     except _Refused:
         pass
     res = _finish(out, res, t_start)
@@ -399,7 +399,8 @@ class _Refused(Exception):
 
 
 def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
-               tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None, engine_args: dict | None = None, C: int = 0) -> None:
+               tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None, engine_args: dict | None = None, C: int = 0,
+               dead_free: bool = False) -> None:
     from verity_vllm.program.frontend.target_profile import ArtifactIdentity, applied_kernels, profile_mismatches
     with InputsTrace(os.path.join(out, "inputs.json")), contextlib.ExitStack() as tp_stack:
         from verity_vllm.program.frontend import loader_parity, vllm_meta as vm
