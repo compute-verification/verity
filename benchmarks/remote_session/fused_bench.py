@@ -569,7 +569,7 @@ def ncu_report(csv_path: Path, ops_path: Path) -> dict:
 # --- serve -------------------------------------------------------------------------------------------------------------
 
 def serve(torch, model: Model, d: Path, out: Path, hz: float, m: int, failed: set[str], log) -> None:
-    info = {"bytes": model.buf.numel(), "pid": os.getpid(), **export(model.buf.data_ptr())}
+    info = {"bytes": model.buf.numel(), "pid": os.getpid(), "sms": model.sms, **export(model.buf.data_ptr())}
     write_json(d / "engine.json", info)
     log(f"serve: arena exported ({model.buf.numel()} bytes)")
     interval, seq, arm, steps = 1.0 / hz, -1, None, 0

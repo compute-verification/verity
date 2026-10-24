@@ -11,7 +11,9 @@ first dropped), their GPU times, the slowest adjacent pair (which sets a stretch
 passes plus 2.3 ms), the stand-in's step GPU times, the host's load and every other process on the GPU. Every phase
 chains from one fixed challenge and previous root over an arena nothing writes, so pass i's root is the same in every
 phase: each root is checked against the same pass's in the phases before (and in --reference's, another run's
-beside.json), and pass 0, the pass whose root came slowest and the last pass are checked as a verifier would: the
+beside.json, when its arena's payload root is this one's: the stand-in fills the arena with torch's CUDA generator,
+whose output follows the SM count the process sees, which an MPS split lowers), and pass 0, the pass whose root came
+slowest and the last pass are checked as a verifier would: the
 device's seed is the chain's, the root and every kept level equal the plain pass's (`DeviceStore.plain_root`), the
 signs the reference's, and --openings random positions' receipts are the receipter's on the opened blocks, their leaves
 opening to the root. Writes OUT/beside.json.
@@ -179,18 +181,26 @@ def main() -> int:
     s = dev.store
     rng = np.random.default_rng(3)
     ctl(arm=None)
-    dev.payload_root(b"fused-beside")
+    payload = dev.payload_root(b"fused-beside").hex()
     warm = s.warmup(int(a.warm_s * 1e9))
     reference: list[bytes] = []
+    arena_as_reference = None
     if a.reference is not None:
         ref = json.loads(a.reference.read_text())
-        reference = [bytes.fromhex(x) for x in max((ph.get("roots", []) for ph in ref["phases"]), key=len, default=[])]
+        arena_as_reference = ref.get("payload_root", payload) == payload
+        if arena_as_reference:
+            reference = [bytes.fromhex(x)
+                         for x in max((ph.get("roots", []) for ph in ref["phases"]), key=len, default=[])]
     out = {"schema": "verity/remote-session/fused-beside/v1", "bytes": arena.numel(), "warmup": warm,
            "read_ms": dev.read_ms([0]), "shape": dev.shape, "challenge": CHALLENGE.hex(), "previous": PREVIOUS.hex(),
-           "reference": str(a.reference) if a.reference else None, "reference_roots": len(reference),
-           "mps_active_thread_percentage": os.environ.get("CUDA_MPS_ACTIVE_THREAD_PERCENTAGE"), "phases": []}
-    print(f"beside: {arena.numel()} bytes, bare read {out['read_ms']:.2f} ms, warmup {warm}, "
-          f"{len(reference)} reference roots", flush=True)
+           "payload_root": payload, "sms": torch.cuda.get_device_properties(0).multi_processor_count,
+           "engine_sms": export.get("sms"), "reference": str(a.reference) if a.reference else None,
+           "arena_as_reference": arena_as_reference, "reference_roots": len(reference),
+           "mps_active_thread_percentage": os.environ.get("CUDA_MPS_ACTIVE_THREAD_PERCENTAGE"),
+           "pass_sm": os.environ.get("PASS_SM"), "phases": []}
+    print(f"beside: {arena.numel()} bytes, payload root {payload[:16]}, SMs {out['sms']} (the stand-in's "
+          f"{out['engine_sms']}), bare read {out['read_ms']:.2f} ms, warmup {warm}, {len(reference)} reference roots"
+          f"{'' if arena_as_reference is not False else ' (none: the reference arena is another)'}", flush=True)
     for spec in a.phases.split(","):
         *arm, secs = spec.split(":")
         alone = arm[0] == "alone"
