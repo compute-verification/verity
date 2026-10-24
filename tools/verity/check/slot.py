@@ -88,6 +88,9 @@ RUN_SLOT = "slot.json"
 SLOT_MEM_ENV = "CHECK_SLOT_MEM_GB"
 #: the check's own scope unit (a `scope=1` slot), which spans.py reads its memory from
 SCOPE_ENV = "CHECK_SCOPE_UNIT"
+#: the GB (10^9 bytes) a run asks of its slot (`research run --pool --mem-gb`): a slot whose mem= is smaller waits for and reserves
+#: this instead (24 Oct: a 450 GB run in proofs' 193 GB slot p5 reserved 193, and the ledger under-reported it)
+RUN_MEM_ENV = "CHECK_RUN_MEM_GB"
 USAGE = "usage: slot.py [--priority [--rank N]] [--by NAME] [--twin PAIR[@HOME]] [--wait-max SECONDS] [--run-max SECONDS] -- CMD..."
 #: the claims of twins (`--twin`), one directory per pair, beside SLOTS on the machine that holds them; a week old, removed
 TWINS = "twins"
@@ -234,6 +237,16 @@ def upcoming(slot: dict, now: datetime, hours: int = AHEAD_H) -> list[dict]:
 def window_text(w: dict) -> str:
     when = "open now" if w["starts_in_min"] < 0 else f"starts in {w['starts_in_min']} min"
     return f"window {w['start']} ({w['minutes']} min), {when}" + (f": {w['note']}" if w["note"] else "")
+
+
+def asking(slots: list[dict]) -> list[dict]:
+    """``slots`` with each mem= raised to what the run asks (RUN_MEM_ENV, GB), in GiB as mem= is; unchanged without it."""
+    try:
+        gb = float(os.environ.get(RUN_MEM_ENV) or 0)
+    except ValueError:
+        gb = 0.0
+    want = -(-int(gb * 1e9) // 2 ** 30) if gb > 0 else 0
+    return [{**s, "mem": max(s.get("mem") or 0, want)} if want else s for s in slots]
 
 
 def take(slots: list[dict], lock_dir: Path, now: datetime) -> tuple[dict, int] | None:
@@ -659,7 +672,7 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     if pair:
         print(f"slot: twin {pair}: runs only if it takes a slot before its twins do", file=sys.stderr, flush=True)
     while True:
-        slots = usable(reread(slots)) or slots
+        slots = asking(usable(reread(slots)) or slots)
         if pair and ("@" not in pair or peeked is None or (now() - peeked).total_seconds() >= TWIN_PEEK_S):
             state, info = twin("peek", pair, me)
             peeked = now()
