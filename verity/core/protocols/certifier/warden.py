@@ -70,7 +70,7 @@ from typing import Any
 
 from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
 from verity.core.protocols.certifier.active import DATA, HEADER, PAD, decode_frame, encode_frame, precise_sleep
-from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, Record, row_count
+from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, Record, Row, row_count
 
 PARAMETERS_TAG = "verity-network-warden/parameters/v2"
 #: the warden's cell kinds, beside `active`'s PAD and DATA
@@ -240,12 +240,16 @@ class Warden:
     - `publish(record, params)` receives each window's records, ingress, egress, then fails, as they close (by
       default they are kept in `records`); `log` has one entry a connection once it ends, `refused` the ordinal-less
       refusals' count, `lateness` each tick's in seconds;
+    - `release(link, row)`, when given, receives each grid's row as it ticks, ingress, egress, then fails, before
+      that tick's `publish`: a publisher in another process builds each record from them as it fills, so that the
+      tick never hands it a whole window at once;
     - `until(predicate)` waits until the warden's state satisfies it, for a caller that drives a `VirtualClock`."""
 
     def __init__(self, params: WardenParams, connect: Callable[[], Awaitable[tuple[Any, Any]]], *, origin: float,
                  windows: int, clock: Callable[[], float] = time.monotonic,
                  sleep: Callable[[float], Awaitable[None]] = precise_sleep,
-                 publish: Callable[[Record, GridParams], None] | None = None, slack: float = 0.025,
+                 publish: Callable[[Record, GridParams], None] | None = None,
+                 release: Callable[[str, Row], None] | None = None, slack: float = 0.025,
                  egress_link: str = "responses", ingress_link: str = "requests", fails_link: str = "fails") -> None:
         self.params, self.connect = params, connect
         self.origin, self.windows, self.clock, self.sleep, self.slack = origin, windows, clock, sleep, slack
@@ -254,6 +258,7 @@ class Warden:
         self.fails = Certifier(fails_link, params.fails_grid)
         self.records: list[Record] = []
         self.publish = publish or (lambda record, grid: self.records.append(record))
+        self.release = release
         self.queue: deque[_Connection] = deque()
         self.active: list[_Connection] = []
         self.ordinals = 0
@@ -324,7 +329,9 @@ class Warden:
                 self._end(c)
         self.active = [c for c in self.active if c.ended is None]
         for grid in (self.ingress, self.egress, self.fails):
-            grid.tick()
+            row = grid.tick()
+            if self.release is not None:
+                self.release(grid.link, row)
         if (t + 1) % self.params.window == 0:
             self.publish(self.ingress.close_window(), self.params.grid)
             self.publish(self.egress.close_window(), self.params.grid)

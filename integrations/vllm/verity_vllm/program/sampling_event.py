@@ -7,7 +7,7 @@ the required-value manifest derives.  Torch-free; the commit and match tooling i
     GumbelTokenSelect_v1{V}               temperature + seeded Gumbel-max, top_p == 1 (registry.sampling, X-06)
     Gumbel[TopP]TokenSelectSharedGreedy_v1{V}   the two above with `temp == 0` computed once (`sampler_construction = shared-greedy`)
     GumbelTopPTokenSelect_v2{V,S}         GumbelTopPTokenSelect_v1 at a constant split count S, its keep word as word gates
-                                          (registry.topp_words; a single-request workload)
+                                          (registry.topp_words; S = topp_geometry.registered_splits, every workload)
 
 Greedy is not stochastic: the families are distinct Definitions with distinct digests; this module only says which families are
 "the sampling event of a step".  A spec may carry a `prefix:` (the fold's `spec` strings) and statics `{...}`.

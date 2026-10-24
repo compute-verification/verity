@@ -50,7 +50,9 @@ word bits, domain and row schema, and `reads`, the row each unit of the populati
 
 **Which unit opens which row** is the wiring: connection q's rows (`connection_rows`, its cells in order) depend on which
 connections were live in each bucket, so in the design they are private, proved by the wiring's permutation argument.
-Tonight they are opened to the verifier as the units' wiring is (the named gap), and `reads` is that opening.
+Tonight they are opened to the verifier as the units' wiring is (the named gap, whose plan is in PROTOCOL.md), and
+`reads` is that opening. q is the cells' stream field, the warden's ordinal: the k-th connection to reach it is q = k,
+from 0, as IO-TIE's stream and advice v0 count requests, and the active certifier's `Requests` stream s is q = s − 1.
 """
 
 from __future__ import annotations
