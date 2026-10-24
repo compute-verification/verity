@@ -619,6 +619,44 @@ theorem next_coin_fst (H : Msg → Msg) (x : Msg) (as : List Msg) (cs : List Coi
     (h : FlockDeploy.act false x as cs = .coin c) : ((FlockDeploy.next false x as cs).eval H).1 = .msg c.bytes := by
   rw [FlockDeploy.next_coin H h]
 
+/-- **The deployment's inventory of the element-level checks**: the setup and the tags to the statement, the verdict's
+checks as the code side gives them (`ownR`). -/
+def ownDeploy {R : Type} (ownR : Msg → R → Option ℕ) (x : Msg) : DeployCheck R → Option ℕ
+  | .setup => none
+  | .tag _ => none
+  | .last r => ownR x r
+
+/-- **The deployment's split and the default inventory own `PartComputes`** wherever the verdict's owners are among the
+statement's parts. -/
+theorem ownedBy_deploy (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
+    (nextE : Msg → List Msg → List Coin → Claims.OC Out)
+    (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
+    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
+    (hcoin : ∀ x as cs c, FlockDeploy.act false x as cs = .coin c → ((nextE x as cs).eval H).1 = .msg c.bytes)
+    {R : Type} (LS : LastSplit H nextE R) (ownR : Msg → R → Option ℕ) (D : Claims.Recursion.Deploy Coin)
+    (L : LayoutB) (shape : Claims.Recursion.Form → Prop)
+    (hR : ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → shape st.form →
+      ∀ r ∈ LS.checks (Claims.Recursion.xI D x), ∀ s, ownR x r = some s → s < D.nS x) :
+    let S := deploySplit H rel nextE colsE wE join rowIn final w hcoin LS
+    OwnedBy H D (bdDeployed rel nextE colsE wE join rowIn final w) shape S (ownHolders D L (ownDeploy ownR))
+      (PartComputes H D (bdDeployed rel nextE colsE wE join rowIn final w) S (ownHolders D L (ownDeploy ownR))) := by
+  intro S
+  refine ownedBy_holders H D _ L shape S _ fun x st hx hf q hq s ho => ?_
+  cases q with
+  | setup => cases ho
+  | tag _ => cases ho
+  | last r =>
+    have hr : r ∈ LS.checks (Claims.Recursion.xI D x) := by
+      rcases List.mem_cons.1 hq with h | hq
+      · cases h
+      rcases List.mem_append.1 hq with hq | hq
+      · obtain ⟨_, _, h⟩ := List.mem_map.1 hq
+        cases h
+      · obtain ⟨r', hr', h⟩ := List.mem_map.1 hq
+        cases h
+        exact hr'
+    exact hR x st hx hf r hr s ho
+
 /-! ## The dense corollaries, from the parts' lowering facts -/
 
 /-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)` and the coin server's record, from
