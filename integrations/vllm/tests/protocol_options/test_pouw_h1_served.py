@@ -84,8 +84,9 @@ def _body(B, S, a, b, zy, salt, position, roots):
     return coll_concat(OUT, [receipt, ok])
 
 
-PORTS = Ports(params={"salt": In(kind="coin"), "position": In(kind="position")}, ret={"receipt": Out(sink=True)})
-StandIn = CompositeDefinition("H1ServedTestTile", 0, ("K", "R", "C"), _sig, _body, register=False, ports=PORTS)
+StandIn = CompositeDefinition("H1ServedTestTile", 0, ("K", "R", "C"), _sig, _body, register=False,
+                              ports=Ports(params={"salt": In(kind="coin"), "position": In(kind="position")},
+                                          ret={"receipt": Out(sink=True)}))
 
 
 def _j10r_sig(S):
@@ -99,7 +100,7 @@ def _j10r_body(B, S, a, b, zy, salt, position, roots, call, blocks):
 
 #: the stand-in under J10-R: `h1window.TILE_PARAMS_J10R`, its call and blocks typed as `h1tile.PouwH1Tile5`'s
 StandInJ10R = CompositeDefinition("H1ServedTestTileJ10R", 0, ("K", "R", "C"), _j10r_sig, _j10r_body, register=False,
-                                  ports=PORTS)
+                                  ports=StandIn.ports)
 
 
 def _unit(tile=TILE, defn=StandIn):
