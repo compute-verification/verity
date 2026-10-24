@@ -14,11 +14,9 @@ hold to `pouw_h1_registered.commit`'s NumPy path on machines without a GPU. Buil
 from __future__ import annotations
 
 import ctypes
-import os
 import shutil
 import warnings
 from functools import cache
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -62,12 +60,10 @@ def table(n: int, row_bytes: int, key: bytes, nonce: int, salted: bool, domain_i
 
 
 def nvcc() -> str | None:
-    """nvcc on the path, else ``$CUDA_HOME/bin/nvcc`` or ``/usr/local/cuda/bin/nvcc``."""
-    found = shutil.which("nvcc")
-    if found:
-        return found
-    home = Path(os.environ.get("CUDA_HOME") or "/usr/local/cuda") / "bin" / "nvcc"
-    return str(home) if home.is_file() else None
+    """`pouw_device`'s nvcc: its configured `TOOLCHAIN`'s, or nvcc on the path."""
+    from verity_vllm.protocol_options import pouw_device
+
+    return pouw_device.nvcc()
 
 
 _vp, _u64 = ctypes.c_void_p, np.ctypeslib.ndpointer(np.uint64, flags="C_CONTIGUOUS")
@@ -171,10 +167,8 @@ def _device(torch: Any) -> _Device:
 def available() -> bool:
     """Whether this process can hash on the GPU: torch with CUDA, and the kernels built for its current device (a warning
     says why not when CUDA is there)."""
-    try:
-        import torch
-    except ImportError:
-        return False
+    import torch
+
     if not torch.cuda.is_available():
         return False
     try:
