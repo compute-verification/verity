@@ -1,35 +1,40 @@
 """Prove path: a committed TP run and its advice through the proof service, for network accounting under arbitrary vLLM usage.
 
 Each rank's step units are Programs a registered compiler made from the advice (`pipeline.advice_windows`), not a declared
-workload's. The prover commits each rank's window over them from the rank's sealed bundle, its registration binding the compiler's
-and the advice's digests. The verifier compiles the same advice with its own copy of the compiler, derives its own window and
-audits the rank through the one-stage audit's per-rank `service.Stream` (`benchmarks/one_stage/a5.py`'s `audit`): register,
-select on the verifier's own live coins (read only after the receipt), C-Flock `--zk` behind the Lean firewall on the drawn
-units, Lean's verdicts, and the outcome, which the Lean verifier of record's `Run.run` must agree with. README.md states what
-changes when Programs come from advice.
+workload's. The advice is private: the prover commits I1's canonical encoding under hiding rows (`advice_windows.commit_advice`),
+and each rank's registration binds the compiler's digest and that commitment's root, before any coin. The prover commits each
+rank's window over the compiler's Programs from the rank's sealed bundle. The verifier, handed the commitment's opening (the
+named gap: the advice is opened to the verifier until the compile unit exists, README.md), compiles the advice with its own copy
+of the compiler, derives its own window and audits the rank through the one-stage audit's per-rank `service.Stream`
+(`benchmarks/one_stage/a5.py`'s `audit`): register, select on the verifier's own live coins (read only after the receipt),
+C-Flock `--zk` behind the Lean firewall on the drawn units, Lean's verdicts, and the outcome, which the Lean verifier of record's
+`Run.run` must agree with. It then checks that the advice was fixed before the draw (`advice_before_draw`).
 
-    prove_path.py advice --workload F --out DIR
-    prove_path.py commit --tp-commit DIR --build-root DIR --advice DIR --partition F --out WINDOWS [--ranks 0,1] [--jobs N] \\
-        [--forge MEMBER:UNIT]
-    prove_path.py audit --tp-commit DIR --build-root DIR --advice DIR --windows WINDOWS --partition F --template-sets DIR \\
+    prove_path.py advice --workload F --out FILE
+    prove_path.py commit --tp-commit DIR --build-root DIR --advice FILE --opening FILE --partition F --out WINDOWS \\
+        [--cap-bits L] [--ranks 0,1] [--jobs N] [--forge MEMBER:UNIT]
+    prove_path.py audit --tp-commit DIR --build-root DIR --opening FILE --windows WINDOWS --partition F --template-sets DIR \\
         --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall --out DIR \\
-        [--ranks 0,1] [--jobs N] [--forged]
+        [--cap-bits L] [--ranks 0,1] [--jobs N] [--forged]
 
-* **advice**: a declared run's advice from its workload file (`declared_advice`), ``DIR/advice.json``. A served run's advice
-  comes from its step trace instead (`verity-vllm advice`, I1); this driver reads either through `read_advice`.
-* **commit** (the prover): each rank's stand-in window from its bundle over the compiler's Programs for the advice
-  (`advice_windows.commit_window`), ``WINDOWS/rank<r>/``. ``--forge MEMBER:UNIT`` commits that unit with bit 0 of its first
-  output word flipped (`forging`): its rows, commit strings and roots all agree with the flipped word, so only the proof can
-  refuse it.
-* **audit** (the verifier): each rank's window from the record, the advice and its own compiler (`advice_windows.
-  window_of_advice`), audited by a5 on the verifier's coins, with the advice's negatives (`advice_negatives`) beside a5's;
+* **advice**: a declared run's I1 advice from its workload file (`advice_windows.advice_of_workload`), its canonical encoding.
+  A served run's comes from its step trace instead (ADVICE-SRC); `compile_advice` reads either.
+* **commit** (the prover): the advice compiled (`compile_advice`) and committed, its opening (the advice and its salts) written to
+  ``--opening``, the prover's private file, never under the run's out/; then each rank's stand-in window from its bundle over
+  the compiler's Programs for it (`advice_windows.commit_window`), ``WINDOWS/rank<r>/``. ``--forge MEMBER:UNIT`` commits that
+  unit with bit 0 of its first output word flipped (`forging`): its rows, commit strings and roots all agree with the flipped
+  word, so only the proof can refuse it.
+* **audit** (the verifier): each rank's window from the record, the opened advice and its own compiler (`open_advice`,
+  `advice_windows.window_of_advice`), audited by a5 on the verifier's coins with a5's advice negatives and this driver's beside
+  them, then `advice_before_draw` on the draw's receipt and the advice-root-after-the-draw negative (`advice_after_draw`);
   ``OUT/summary.json`` over the ranks. ``--forged``: the prover runs with its self-check skipped (``FC_ZK_SELF_CHECK=skip``) so it
   sends proofs of the false witness, and a rank passes when its registration passed every check before the draw and Lean
   refused the outcome (`forged_row`).
 
-The compiler is `advice_windows.Traced`, the Build's Programs of record, refused unless of record, until the ahead-of-time compiler
-(`verity_vllm.predict.steps.compile_steps`) makes a TP rank's Programs. The advice's encoding is its canonical JSON
-(`encode`) until I1's encoding lands; its digest is SHA-512 over the encoding and its length the encoding's bits.
+The compiler is `Capped` over `advice_windows.Traced` (the Build's Programs of record, refused unless of record), until the
+ahead-of-time compiler (`verity_vllm.predict.steps.compile_steps`) makes a TP rank's Programs. `Capped` adds the public cap ℓ on
+the advice's length to the compiler's registered digest, and `compile_advice` is total on every byte string: the requests, or
+a `ValueError` naming why, the same one on every run.
 """
 from __future__ import annotations
 
@@ -41,89 +46,94 @@ import multiprocessing
 import os
 import sys
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
+from verity.core.protocols.sampled_proofs.one_stage import registration as R  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
 from verity_vllm.pipeline.tp import serving_rows as SRT  # noqa: E402
 
-ADVICE = "advice.json"
+CAPPED = "verity/prove-path/capped-compiler/v0"
+#: ℓ, the public cap on the advice's encoding in bits: 1 MiB, far above a TP Commit's few hundred requests (I1 spends tens of
+#: bits a row)
+CAP_BITS = 1 << 23
 
 
-def encode(advice: dict) -> bytes:
-    return canonical_json(advice)
+@dataclass(frozen=True)
+class Capped:
+    """A registered compiler with ℓ, the public cap on the advice's length in bits. Its digest names the inner compiler's and ℓ,
+    so the registration's ``compiler`` fixes ℓ before the draw as it fixes the code; `load` is the inner compiler's."""
+
+    inner: Any
+    cap_bits: int = CAP_BITS
+    name: str = CAPPED
+
+    def __post_init__(self) -> None:
+        if isinstance(self.cap_bits, bool) or not isinstance(self.cap_bits, int) or self.cap_bits < 8:
+            raise ValueError(f"the cap ℓ is a whole number of bits, at least 8, not {self.cap_bits!r}")
+
+    @property
+    def digest(self) -> str:
+        return hashlib.sha512(canonical_json({"name": self.name, "cap_bits": self.cap_bits,
+                                              "compiler": {"name": str(self.inner.name), "digest": self.inner.digest}})).hexdigest()
+
+    def load(self, rank: int, world: int, requests: Any) -> Any:
+        return self.inner.load(rank, world, requests)
 
 
-def read_advice(d: str | os.PathLike) -> tuple[dict, bytes]:
-    """The advice in ``d`` (``advice.json``) and its encoding, refused unless the file is that encoding."""
-    data = (Path(d) / ADVICE).read_bytes()
-    doc = json.loads(data)
-    if encode(doc) != data:
-        raise ValueError(f"{Path(d) / ADVICE} is not the advice's canonical encoding")
-    return doc, data
+def compiler_of(tp_commit: str, build_root: str, cap_bits: int = CAP_BITS) -> Capped:
+    return Capped(AW.Traced.for_commit(tp_commit, build_root), cap_bits)
 
 
-def declared_advice(workload_file: str | os.PathLike) -> dict:
-    """A declared run's advice in I1's fields: request i is ``r<i>`` (tp-commit's name for it), its prompt whole at its arrival
-    step from position 0, then one decode row a step until its cap, finishing by length."""
-    doc = json.loads(Path(workload_file).read_text())
-    reqs, rows = [], {}
-    for i, q in enumerate(doc["requests"]):
-        lp, cap, s0 = len(q["prompt_token_ids"]), int(q["max_tokens"]), int(q.get("arrive_step") or 0)
-        reqs.append({"id": f"r{i}", "prompt_len": lp, "output_len": cap, "finish": "length"})
-        rows.setdefault(s0, []).append({"request": i, "kind": "prefill", "start": 0, "n": lp, "cache_hit": 0, "preempted": False})
-        for k in range(1, cap):
-            rows.setdefault(s0 + k, []).append({"request": i, "kind": "decode", "start": lp + k - 1, "n": 1, "cache_hit": 0,
-                                                "preempted": False})
-    return {"requests": reqs, "steps": [{"rows": rows.get(s, [])} for s in range(max(rows) + 1 if rows else 0)], "release": []}
+def compile_advice(compiler: Capped, data: Any, codec: Any = None) -> list[dict]:
+    """The compiler on any input: the requests it compiles (`advice_windows.requests_of`), or a `ValueError` naming why it refuses
+    the input, a function of the input alone. Refused in order: not bytes; over the cap ℓ (before any of it is read); not I1
+    advice (`MalformedAdvice`, the codec's first broken rule); not its canonical encoding; a request the compiler can't run (a
+    chunked prefill, a prefix-cache hit, a preemption, a gap)."""
+    if not isinstance(data, bytes):
+        raise ValueError(f"the advice is a byte string, not a {type(data).__name__}")
+    if 8 * len(data) > compiler.cap_bits:
+        raise ValueError(f"the advice is {8 * len(data)} bits, over the registered cap ℓ = {compiler.cap_bits} bits")
+    c = AW.codec_of(codec)
+    advice = c.decode(data)
+    if c.encode(advice) != data:
+        raise ValueError("the advice's bytes are not its canonical encoding")
+    return AW.requests_of(advice)
 
 
-def requests_of(advice: dict) -> list[dict]:
-    """The compiler's requests (`advice_windows`: ``request_id``, ``arrive_step``, ``prompt_len``, ``max_tokens``) from the advice:
-    each request that ran a row, arriving at its first row's step, at the shape its rows ran (``max_tokens`` one more than its
-    decode rows, which include any trailing rows past its finish). Refused by name where the rows are not a whole prompt from
-    position 0 and then one decode row a step, as I2 v0 refuses them (`predict.steps.shape_of`): a prefix-cache hit, a chunked
-    prefill, a preemption, a gap or a recompute."""
-    reqs = advice["requests"]
-    ran: dict[int, list[tuple[int, dict]]] = {i: [] for i in range(len(reqs))}
-    for s, step in enumerate(advice["steps"]):
-        for row in step["rows"]:
-            i = int(row["request"])
-            if not 0 <= i < len(reqs):
-                raise ValueError(f"step {s}: a row of request {i}, outside the advice's {len(reqs)} requests")
-            if row.get("preempted"):
-                raise ValueError(f"step {s}: request {reqs[i]['id']} preempted (each request runs from its prefill without preemption)")
-            ran[i].append((s, row))
-    out = []
-    for i, q in enumerate(reqs):
-        if not ran[i]:
-            continue
-        lp, (s0, first) = int(q["prompt_len"]), ran[i][0]
-        if first.get("cache_hit") or first["start"]:
-            raise ValueError(f"request {q['id']}: a prefix-cache hit at step {s0} (prefix caching must be off)")
-        if first["n"] != lp:
-            raise ValueError(f"request {q['id']}: a chunked prefill, {first['n']} of its {lp} prompt tokens at step {s0}")
-        for k, (s, row) in enumerate(ran[i][1:], start=1):
-            if (s, row["start"], row["n"]) != (s0 + k, lp + k - 1, 1):
-                raise ValueError(f"request {q['id']}: its row {k} is (step, start, n) = {(s, row['start'], row['n'])}, not the decode "
-                                 f"{(s0 + k, lp + k - 1, 1)}")
-        out.append({"request_id": str(q["id"]), "arrive_step": s0, "prompt_len": lp, "max_tokens": len(ran[i])})
-    if not out:
-        raise ValueError("no request of the advice ran a row")
-    return out
+def commit_advice(compiler: Capped, data: bytes) -> tuple[list[dict], dict, dict]:
+    """The prover's side: the requests compiled from the advice (`compile_advice`), the window's binding (the compiler's digest
+    and the root of the advice's hiding commitment, `advice_windows.of_advice`) and the opening (`advice_windows.opening`)."""
+    requests = compile_advice(compiler, data)
+    _reqs, bound, reg = AW.of_advice(compiler, data)
+    return requests, bound, AW.opening(data, reg)
 
 
-def compiled(tp_commit: str, build_root: str, advice_dir: str) -> tuple[Any, list[dict], dict]:
-    """The registered compiler, the requests it compiles from the advice, and the window's binding (`advice_windows.binding`)."""
-    compiler = AW.Traced.for_commit(tp_commit, build_root)
-    advice, data = read_advice(advice_dir)
-    return compiler, requests_of(advice), AW.binding(compiler, hashlib.sha512(data).hexdigest(), 8 * len(data))
+def open_advice(compiler: Capped, doc: Any) -> tuple[list[dict], dict]:
+    """The verifier's side of the opening (the named gap): the requests it compiles from the opened advice and the binding the
+    registration must carry (`advice_windows.of_opening`: the root recomputed from the advice and its salts). A malformed opening is
+    a ValueError, as `compile_advice`'s refusals are."""
+    if not isinstance(doc, Mapping) or doc.get("scheme") != AW.SCHEME or not isinstance(doc.get("advice"), str):
+        raise ValueError(f"an advice opening is a {AW.SCHEME} document with the advice in hex")
+    try:
+        data = bytes.fromhex(doc["advice"])
+    except ValueError as e:
+        raise ValueError(f"an advice opening holds the advice in hex: {e}") from e
+    return compile_advice(compiler, data), AW.of_opening(compiler, doc)[1]
+
+
+def compiled(a: argparse.Namespace) -> tuple[Capped, list[dict], dict, dict]:
+    """The verifier's compiler, requests and binding from the opening ``a.opening``, and the opening."""
+    compiler = compiler_of(a.tp_commit, a.build_root, a.cap_bits)
+    opening = json.loads(Path(a.opening).read_text())
+    return (compiler, *open_advice(compiler, opening), opening)
 
 
 @contextlib.contextmanager
@@ -165,9 +175,9 @@ def in_processes(fn, jobs: int, items: list) -> Iterator[tuple[Any, Any]]:
             yield futures[f], f.result()
 
 
-def commit_rank(job: tuple[argparse.Namespace, int]) -> dict:
-    a, r = job
-    compiler, requests, bound = compiled(a.tp_commit, a.build_root, a.advice)
+def commit_rank(job: tuple[argparse.Namespace, int, list[dict], dict]) -> dict:
+    a, r, requests, bound = job
+    compiler = compiler_of(a.tp_commit, a.build_root, a.cap_bits)
     forge = [int(x) for x in a.forge.split(":")] if a.forge else None
     with forging(*forge) if forge else contextlib.nullcontext():
         got = AW.commit_window(a.tp_commit, r, a.partition, Path(a.out) / f"rank{r}", compiler, requests, bound, workers=a.workers)
@@ -175,31 +185,70 @@ def commit_rank(job: tuple[argparse.Namespace, int]) -> dict:
 
 
 def commit(a: argparse.Namespace) -> int:
+    """The advice committed once, so every rank's registration binds one root, then each rank's window."""
     _world, ranks = ranks_of(a.tp_commit, a.ranks)
+    requests, bound, opening = commit_advice(compiler_of(a.tp_commit, a.build_root, a.cap_bits), Path(a.advice).read_bytes())
+    Path(a.opening).write_text(json.dumps(opening) + "\n")
     rows = {}
-    for (_a, r), got in in_processes(commit_rank, a.jobs, [(a, r) for r in ranks]):
+    for (_a, r, _q, _b), got in in_processes(commit_rank, a.jobs, [(a, r, requests, bound) for r in ranks]):
         rows[str(r)] = got
         print(f"[prove-path commit] rank {r}: {json.dumps(got, sort_keys=True, default=str)}", flush=True)
-    Path(a.out, "commit.json").write_text(json.dumps(rows, indent=1, sort_keys=True, default=str))
+    Path(a.out, "commit.json").write_text(json.dumps({"binding": bound, "ranks": rows}, indent=1, sort_keys=True, default=str))
     return 0
 
 
-def advice_negatives(r: int, world: int, mine: Any, held: dict, served: Path) -> dict[str, dict]:
-    """What the verifier refuses before any draw about the advice: the rank's registration naming another compiler, other advice,
-    no binding at all (a window over Programs of record passed off as the advice's), and another rank's registration."""
+def more_negatives(a: argparse.Namespace, r: int, world: int, compiler: Capped, mine: Any, held: dict, served: Path,
+                   opening: dict) -> dict[str, dict]:
+    """What the verifier refuses before any draw about the advice: a5's (`a5.advice_negatives`: another compiler, another advice
+    root, the opening under another salt), a registration binding no compiler or advice (a window over Programs of record passed
+    off as the advice's), one whose compiler names another cap ℓ, and another rank's registration."""
+    import a5 as A5
+
+    neg = A5.advice_negatives(argparse.Namespace(**{**vars(a), "other_advice_opening": None, "other_windows": None}), r, compiler,
+                              mine, held, served, opening)
     w = json.loads((served / "registration.json").read_text())["window"]
-    other = hashlib.sha512(b"other advice").hexdigest()
-    cases = {"registration-names-another-compiler (source)": {**w, "compiler": {**w["compiler"], "digest": other}},
-             "registration-names-other-advice (source)": {**w, "advice": {**w["advice"], "digest": other}},
-             "registration-binds-no-compiler-or-advice (source)": {k: v for k, v in w.items() if k not in SRT.BINDING}}
+    cases = {"registration-binds-no-compiler-or-advice (source)": {k: v for k, v in w.items() if k not in SRT.BINDING},
+             "registration-names-another-cap (source)": {**w, "compiler": {
+                 "name": CAPPED, "digest": Capped(compiler.inner, 2 * compiler.cap_bits).digest}}}
     theirs = served.parent / f"rank{(r + 1) % world}" / "registration.json"
     if world > 1 and theirs.exists():
         cases["registration-of-another-rank (source)"] = json.loads(theirs.read_text())["window"]
-    out = {}
     for name, x in cases.items():
         v = SRT.source(x, mine, held)
-        out[name] = {"refused": not v["ok"], "codes": v["codes"]}
-    return out
+        neg[name] = {"refused": not v["ok"], "codes": v["codes"]}
+    return neg
+
+
+def advice_before_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound: Mapping[str, Any]) -> dict:
+    """That the advice was fixed before the coins, checked rather than assumed, as `pouw.credit.draw_root` checks the credit bits:
+    the digest of the registration the verifier holds the opening to (`registration.digest`, which covers the window's
+    ``compiler`` and ``advice`` root) must be the one the draw's receipt names, the receipt the stream wrote when it received the
+    registration and before its select read any coin (a5's ``verifier-coins-before-the-registration``: a select on a
+    registration the stream never received reads none); and that registration must bind the compiler and the root the verifier
+    opened. -> {ok, codes, detail}: ``after-the-draw`` where the draw followed another registration, ``compiler`` or ``advice``
+    where the registration binds another."""
+    import a5 as A5
+
+    w = rec.get("window") or {}
+    ok = {"after-the-draw": receipt.get("registration") == R.digest(rec) and receipt.get("verifier") == A5.VERIFIER,
+          "compiler": w.get("compiler") == bound["compiler"], "advice": w.get("advice") == bound["advice"]}
+    return {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v],
+            "detail": {"drawn_after": receipt.get("registration"), "registration": R.digest(rec), "received": receipt.get("received")}}
+
+
+def advice_after_draw(compiler: Capped, receipt: Mapping[str, Any], rec: Mapping[str, Any], opening: Mapping[str, Any], mine: Any,
+                      held: dict) -> dict:
+    """The negative: once the coins are read, the prover commits the same advice again (fresh salts, so a fresh root) and hands
+    in a registration binding that root, with its opening. Every check before the draw passes on it (`source` against the new
+    opening: the root is a true commitment of the advice), and `advice_before_draw` refuses it (``after-the-draw``): the draw
+    followed the registration received first."""
+    data = bytes.fromhex(opening["advice"])
+    late = AW.opening(data, AW.commit_advice(compiler, data))
+    _reqs, bound = open_advice(compiler, late)
+    late_rec = {**rec, "window": {**rec["window"], "advice": bound["advice"]}}
+    src = SRT.source(late_rec["window"], mine, {**held, **bound})
+    v = advice_before_draw(receipt, late_rec, bound)
+    return {"refused": not v["ok"], "codes": v["codes"], "before_draw_checks_pass": src["ok"]}
 
 
 def forged_row(s: dict, forged: dict | None) -> dict:
@@ -222,22 +271,30 @@ def audit_rank(job: tuple[argparse.Namespace, int, int]) -> dict:
 
     a, world, r = job
     t0 = time.time()
-    compiler, requests, bound = compiled(a.tp_commit, a.build_root, a.advice)
+    compiler, requests, bound, opening = compiled(a)
     mine, held = AW.window_of_advice(a.tp_commit, r, a.partition, compiler, requests, bound)
     window_s = round(time.time() - t0, 2)
-    served = Path(a.windows) / f"rank{r}"
-    more = advice_negatives(r, world, mine, held, served)
-    s, ok = A5.audit(a, A5.template_sets(Path(a.template_sets)), Path(a.out) / f"rank{r}", mine, served,
+    served, out = Path(a.windows) / f"rank{r}", Path(a.out) / f"rank{r}"
+    more = more_negatives(a, r, world, compiler, mine, held, served, opening)
+    s, ok = A5.audit(a, A5.template_sets(Path(a.template_sets)), out, mine, served,
                      lambda w: SRT.source(w, mine, held), a.port + A5.RANK_PORTS * r,
-                     {"rank": r, "tp": held["tp"], "compiler": bound["compiler"], "advice": bound["advice"],
-                      "requests": requests, "verifier_window_s": window_s}, more, rank=r)
+                     {"rank": r, "tp": held["tp"], "binding": bound, "requests": requests, "verifier_window_s": window_s}, more, rank=r)
     row = {"ok": ok, "seconds": round(time.time() - t0, 1),
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
                                     "audit", "draw", "draw_counts", "negatives", "coins")}}
+    if s.get("draw") is not None:
+        rec, receipt = (json.loads((out / f).read_text()) for f in ("registration.json", "receipt.json"))
+        row["advice_before_draw"] = advice_before_draw(receipt, rec, bound)
+        row["negatives"] = {**(row["negatives"] or {}),
+                            "advice-root-after-the-draw": advice_after_draw(compiler, receipt, rec, opening, mine, held)}
+        ordered = row["advice_before_draw"]["ok"] and row["negatives"]["advice-root-after-the-draw"]["refused"]
+    else:
+        ordered = False
+    row["ok"] = ok and ordered
     if a.forged:
-        forged = (json.loads((Path(a.windows) / "commit.json").read_text()).get(str(r)) or {}).get("forged")
+        forged = ((json.loads((Path(a.windows) / "commit.json").read_text())["ranks"]).get(str(r)) or {}).get("forged")
         row["forged"] = {"unit": forged, **forged_row(s, forged)}
-        row["ok"] = row["forged"]["ok"]
+        row["ok"] = row["forged"]["ok"] and ordered
     return row
 
 
@@ -248,10 +305,12 @@ def audit(a: argparse.Namespace) -> int:
     a.rule = json.loads(Path(a.partition).read_text()).get("law")
     if a.forged:
         os.environ["FC_ZK_SELF_CHECK"] = "skip"
-    _compiler, requests, bound = compiled(a.tp_commit, a.build_root, a.advice)
+    compiler, requests, bound, _opening = compiled(a)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     summary: dict = {"tp_run_root": rec["tp_run_root"], "world": world, "compiler": bound["compiler"], "advice": bound["advice"],
+                     "cap_bits": compiler.cap_bits, "inner_compiler": {"name": compiler.inner.name, "digest": compiler.inner.digest},
+                     "gap": "the advice is opened to the verifier until the compile unit exists (README.md)",
                      "requests": requests, "rule": a.rule, "delta": a.delta, "forged": a.forged,
                      "coins": {"source": "verifier", "what": "each rank's service.Stream on the verifier's own live coins (the "
                                                              "Lean's IO.getRandomBytes), read once the stream received the rank's "
@@ -263,6 +322,7 @@ def audit(a: argparse.Namespace) -> int:
     summary["ok"] = sorted(summary["ranks"]) == sorted(map(str, ranks)) and all(x["ok"] for x in summary["ranks"].values())
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     shown = {r: {x: s.get(x) for x in ("ok", "population", "draw", "draw_counts", "seconds")}
+             | {"advice_before_draw": (s.get("advice_before_draw") or {}).get("ok")}
              | ({"forged": s["forged"]} if a.forged else {"accepted": (s.get("audit") or {}).get("accepted"),
                                                          "negatives_refused": all((s.get("negatives") or {"none": False}).values())})
              for r, s in summary["ranks"].items()}
@@ -274,19 +334,23 @@ def audit(a: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    p = sub.add_parser("advice", help="a declared run's advice from its workload file")
+    p = sub.add_parser("advice", help="a declared run's I1 advice from its workload file")
     p.add_argument("--workload", required=True)
-    p.add_argument("--out", required=True)
+    p.add_argument("--out", required=True, help="the advice's file: I1's canonical encoding")
     for name in ("commit", "audit"):
         p = sub.add_parser(name)
         p.add_argument("--tp-commit", required=True, help="the TP Commit's record (its --out: runs.jsonl, versions.json)")
         p.add_argument("--build-root", required=True, help="each rank's Programs of record in rank<r>/ (the stand-in compiler's)")
-        p.add_argument("--advice", required=True, help="the advice's dir (advice.json)")
+        p.add_argument("--opening", required=True, help="the advice's opening (advice_windows.opening): commit writes it, the "
+                       "prover's private file; audit reads it, the named gap")
+        p.add_argument("--cap-bits", type=int, default=CAP_BITS, help="ℓ, the public cap on the advice's length in bits, "
+                       "registered in the compiler's digest")
         p.add_argument("--partition", required=True, help="the verifier's partition file: {templates, law, scope?}")
         p.add_argument("--ranks", default=None, help="comma-separated (default every rank)")
         p.add_argument("--jobs", type=int, default=1, help="ranks at once, each in its own process")
         p.add_argument("--out", required=True)
     p = sub.choices["commit"]
+    p.add_argument("--advice", required=True, help="the advice's file: I1's canonical encoding (the prover's, private)")
     p.add_argument("--forge", help="MEMBER:UNIT: commit that unit with bit 0 of its first output word flipped")
     p.add_argument("--workers", type=int, default=None, help="commit workers per rank (default min(16, CPUs))")
     p = sub.choices["audit"]
@@ -302,12 +366,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--forged", action="store_true", help="the windows hold a forged unit (commit --forge): every rank must be refused")
     a = ap.parse_args(argv)
     if a.cmd == "advice":
-        Path(a.out).mkdir(parents=True, exist_ok=True)
-        doc = declared_advice(a.workload)
-        requests_of(doc)
-        (Path(a.out) / ADVICE).write_bytes(encode(doc))
-        print(json.dumps({"advice": str(Path(a.out) / ADVICE), "requests": len(doc["requests"]), "steps": len(doc["steps"]),
-                          "digest": hashlib.sha512(encode(doc)).hexdigest(), "bits": 8 * len(encode(doc))}))
+        c = AW.codec_of()
+        advice = AW.advice_of_workload(json.loads(Path(a.workload).read_text()), c)
+        data = c.encode(advice)
+        AW.requests_of(advice)
+        Path(a.out).parent.mkdir(parents=True, exist_ok=True)
+        Path(a.out).write_bytes(data)
+        print(json.dumps({"advice": a.out, "requests": len(advice.requests), "steps": len(advice.steps), "bits": c.total_bits(advice)}))
         return 0
     return commit(a) if a.cmd == "commit" else audit(a)
 
