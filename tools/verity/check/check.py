@@ -450,6 +450,49 @@ def choose(names: list[str], docs: dict[str, dict | str], priority: bool = False
     return name, f"{lead} ({why})", skipped
 
 
+#: the checks `--on auto` or `--on M1,M2` placed from this launcher and hasn't yet seen in their machine's check line, by commit:
+#: until one shows there (or PLACED_S passes: train.sh's wait for a launch), it counts as a priority waiter on its machine, so
+#: checks placed at once go to different machines (23 Oct 13:04Z: drive's four parallel launches all read cpu-1's one free
+#: slot as theirs, and three queued there for an hour while cpu-4's stood free)
+PLACED = Path(tempfile.gettempdir()) / "verity-check-placed.json"
+PLACED_S = 1800
+
+
+def _trees(doc: dict) -> set[str]:
+    """The shortened commits a machine's check slots hold or wait for."""
+    check = doc.get("check") or {}
+    who = [s["holder"] for s in check.get("slots") or [] if s.get("holder")] + list(check.get("waiters") or [])
+    return {Path(h["tree"]).name[:12] for h in who if h.get("tree")}
+
+
+def place(names: list[str], commit: str, priority: bool = False, read=None, path: Path | None = None,
+          now=time.time) -> tuple[dict[str, dict | str], str | None, str, list[str]]:
+    """`read_slots` and `choose` for ``commit``, one launcher process at a time, with the other checks this launcher placed and
+    no machine shows yet (PLACED) as waiters on theirs; ``commit`` is recorded on its pick."""
+    import fcntl
+
+    path = path or PLACED
+    with open(path.with_name(path.name + ".lock"), "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        docs = (read or read_slots)(names)
+        try:
+            placed = json.loads(path.read_text())
+        except (OSError, ValueError):
+            placed = {}
+        t = now()
+        placed = {c: p for c, p in placed.items() if c != commit and t - p["at"] < PLACED_S
+                  and not (isinstance(d := docs.get(p["on"]), dict) and c[:12] in _trees(d))}
+        for c, p in placed.items():
+            if isinstance(d := docs.get(p["on"]), dict) and isinstance((d.get("check") or {}).get("waiters"), list):
+                d["check"]["waiters"].append({"priority": True, "pid": 0, "since": time.strftime("%Y-%m-%dT%H:%MZ", time.gmtime(p["at"])),
+                                              "minutes": int((t - p["at"]) // 60), "tree": c, "by": "a launch placed here"})
+        got, why, skipped = choose(names, docs, priority)
+        if got:
+            placed[commit] = {"on": got, "at": t}
+            path.write_text(json.dumps(placed))
+    return docs, got, why, skipped
+
+
 def _who(h: dict) -> str:
     """A holder or waiter in a few words: since when, its run, its tree (a commit's, shortened) and who asked (a URL's last part)."""
     parts = [f"since {h['since']} ({h['minutes']} min)" if h.get("since") else f"pid {h['pid']}"]
@@ -836,8 +879,8 @@ def record(argv: list[str]) -> int:
     pair, both = None, []
     if on == "auto" or (on and "," in on):
         names = list(AUTO) if on == "auto" else on.split(",")
-        docs = read_slots(names)
-        got, why, skipped = choose(names, docs, priority)
+        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+        docs, got, why, skipped = place(names, head, priority)
         for s in skipped:
             print(f"check: --on {on}: skipping {s}", flush=True)
         if got is None:

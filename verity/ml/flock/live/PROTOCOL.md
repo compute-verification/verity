@@ -781,7 +781,14 @@ auditor's draw (or `null`) is answered `ok N` and the `Hello`, or `refused WHY`,
 
 The session itself goes through Lean: one `flock-firewall session` process (`Flock.Firewall.Session`,
 `firewall::LeanSession`) per verifier address and table count, on the same statement arguments, listens on loopback and
-holds the auditor's connection for every session the prover opens to it. It relays the prover's frames, but sends its own
+holds the auditor's connection for every session the prover opens to it. No byte the prover sends reaches the auditor:
+every frame that leaves is the loop's own encoding of what it decided (`Session.roundFrame`, `Session.commitFrame`,
+`Session.State.wire`). `Register` and `Finish` leave as their tags, a `Ping` as the prover's probe of 64 zero bytes, a
+`Link` as zeros at the session's link points, an `Open` as its rep stream's at the stream's domain, a `Round` as the
+schedule's stream and count around the frame's release (bytes after its count dropped), and a `Commit` as the session's
+Σ, its tables' level-0 roots and no public words. A `Proof` the prover sends is answered `Ok` and dropped: the proofs
+that leave are the loop's finish's files. A `Prime`, a frame of a tag it doesn't know, a `Link` before the `Hello` and an
+`Open` of a stream the session doesn't have are refused. It sends its own
 `Hello` (the Lean `Hello` at the auditor's draw and a nonce it draws from the OS) in place of the prover's, checks
 `Hello`'s answer (20 words, key bit 2047 clear) and every coin opening against the root, and hands the prover only the
 coins, as `coin_tree::Checked` does. The tree, link count and nonce it checks them under are the values it set up and
@@ -815,16 +822,18 @@ the loop isn't serving is refused. The session's `Commit` leaves only when its r
 root the loop drew for that session at its table's statement's `m` (`Level0.commit`; a root drawn at a smaller `m` would
 pad too few positions). Every `Level0` drawn for a session, committed or not, is freed when it ends
 (`Level0.Registry.close`).
-The proofs leave just before `Finish`, and only once every rep's frame ended not stopped; where one stopped, `Finish`
+The proofs leave just before `Finish`, the loop's finish's file of each table's rep 0 and rep 1 on the level 0 the
+`Commit` bound (`Session.ownProofs`, kept once a rep, `Frames.Registry.file`), every rep's or none, and only once every
+rep's frame ended not stopped; where one stopped, `Finish`
 leaves without them once the schedule's last opening has, and the prover's `Finish` is refused (`PROVER-STOPPED: the Lean
 frame stopped table I rep R`). The analysis's release is this loop
 (`Claims.ZKServer.LeanRelease.loop`, `Flock.zk_server_lean_loop`): its `Hello`, requests, last request and the coins its
 frames take are proved (`loop_coinsRead`), and its link (`LinkRoundEq`) and the frames' state (`ProgReads`: the `prior` coins and the
 rounds Rust hands them) are still assumed. So are the bytes it releases, which the theorem reads only through named
 hypotheses: the worker's passed rounds and the stand-in rounds are the session's (`LiveRoundEq`, `FillRoundEq`), and so
-are the `Finish`'s record and proof files (`FinishIs`), and the frames refuse every coin fault (`FrameUnrefused`), from
-which with the tables admitting unrefused coins, proved at the deployed tables, `FinalRoundEq` follows
-(`finalRoundEq_ofLoop`).
+are the `Finish`'s record and proof files (`FinishIs`). The frames refusing every coin fault is proved at the loop's own
+frames (`frameUnrefused_ofLoop`), and from it, `FinishIs` and the tables admitting unrefused coins, proved at the deployed
+tables, `FinalRoundEq` follows (`finalRoundEq_ofLoop`).
 None of them is proved about the live path yet, so the ZK server is not yet proved zero-knowledge.
 
 The frame's protocol, which the loop steps on its own requests (`Frame.Req`) and `flock-firewall frame` serves on its
@@ -877,7 +886,9 @@ prover. After the rep's end check the firewall sends the finish the rep's reques
 constraints it replayed (`cons LEN`, which the firewall evaluates on the pads: `constraints_failing_on_pads`) and then
 each round of its inner proof, which leaves through the rep's frame. Then the finish gets the rep's request again with
 every round's coins (`rep J R LEN`: the rep's draws, the values the firewall passed, the extra claims' points and the
-coins) and computes the rep's whole proof file from them and its own salts. That file is the one that leaves; Rust
+coins) and computes the rep's whole proof file from them and its own salts: where that request's inputs and coins are
+the ones the `inner` request took, the file encodes the proof that request computed (`Finish.Kept`), which is the same
+proof. That file is the one that leaves; Rust
 computes no opening, inner proof or proof file of a firewalled rep. A rep that a check failed, or whose frame stopped
 it, leaves no proof file, so the finish never gets its `rep` request. The bucket's `t.lean_finish` is the request's wall
 seconds, and `t.zk_inner` the inner proof's.
@@ -932,6 +943,17 @@ session: cut at the table's third, half-way and last device round (`cut-tree` at
 gets the honest session's every request up to its `Finish`, in the same order and at the same sizes, with no proof. It
 runs through the Lean session loop (`FC_FIREWALL_LEAN`), the verifier logging each request behind it, and skips without
 it.
+
+`FC_WIRE_TAMPER` doctors the prover's frames on the wire to the loop instead, and the selftest's `zk_worker_wire` holds
+each mode to the loop's own encoding, beside an honest firewalled session, the verifier logging a frame that is not its
+request's own encoding as `noncanonical`:
+
+| `FC_WIRE_TAMPER` | the prover's frames | outcome |
+|---|---|---|
+| `round-trailing` | bytes after every `Round`'s count | dropped: accepted, the verifier's every request the honest session's |
+| `commit-doctored` | the `Commit` with a `root_F` that is not Σ, a public word and bytes after it | dropped: the same |
+| `proof-worker` | each `Proof` one byte of junk | dropped: the same, the proofs the loop's |
+| `unknown` | a frame of tag 99 before `Finish` | `PROVER-STOPPED: a request the session loop does not serve`; the verifier gets the honest session's requests up to its proofs, then nothing |
 
 The outer phase's rounds are the loop's own, so it has no transcript for the contract (`flock-firewall contract`)
 to decide after the fact.
@@ -1004,10 +1026,10 @@ starts it as its Lean session loop (§10.4's `flock-firewall session` with a hol
 `test_firewall_release_agreement.py` run. Like the relay, the
 loop answers a session's `Ping`s itself, and at its first other request takes the slot, then records the slot and the
 admission in one read of the record (`Core.Firewall.seat`: the statements' order is enforced there), before anything of
-the session reaches the challenger. It relays the session's rounds as §10.4 says, holds its proofs and `Finish`, and at
-`Finish` decides (`Decision.after`, at the wall clock's time): the loop's own refusal of the session is a stop, as is a
-`Finish` with fewer than the session's proofs (two a table; the send check refused, and `flock-circuit` then sends
-`Finish` at once) and a missed release time. A session that goes waits for its release time; its proofs, then `Finish`,
+the session reaches the challenger. It relays the session's rounds as §10.4 says, holds its `Finish` and the loop's own
+proofs, and at `Finish` decides (`Decision.after`, at the wall clock's time): the loop's own refusal of the session is a
+stop, as is a `Finish` with fewer than the session's proofs (two a table, the loop's finish's: where a check refused, the
+finish computed none) and a missed release time. A session that goes waits for its release time; its proofs, then `Finish`,
 leave, and serve's verdict is its release or its stop. `verity/core/service/firewall/tests` holds these stages to
 Python's record and to the cases frozen from the Rust release side the loop replaced (`tests/fixtures/`). Every stop the
 loop makes, and a fault of its own, cuts the challenger's connection before `Finish`, and the worker gets the loop's own

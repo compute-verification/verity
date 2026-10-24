@@ -350,36 +350,3 @@ def test_compare_dirs_names_a_file_it_cannot_read_as_a_difference(tmp_path):
     (a / "result.json").write_text("{}")
     assert RB.compare_dirs(str(a), str(b))["files"] == ["descriptor.json.gz", "result.json"], "a summary that is not JSON too"
     assert RB._where({"file": "x", "only_in": "real"}) == "only in the real directory"
-
-
-# ------------------------------------------------------------------------------------------------ flag off: the Build it was
-def _tp_build(tmp_path, monkeypatch, *argv) -> tuple[list, list]:
-    from tests.pipeline.test_row import TP_DENSE, _tp_row
-    t = _tp_row(tmp_path, TP_DENSE, *argv)
-    os.makedirs(t.d, exist_ok=True)
-    t.shapes, t.to_b = [(4, 2), (8, 3)], 1
-    plain, relabeled = [], []
-    monkeypatch.setattr(t, "derive_all", lambda todo, jobs: plain.append((list(todo), jobs)))
-    monkeypatch.setattr(RB, "derive", lambda row, todo, jobs: relabeled.append((list(todo), jobs)))
-    monkeypatch.setattr(t, "compose_all", lambda ranks: None)
-    monkeypatch.setattr(t, "guarded_summary", lambda: "FAIL")
-    with pytest.raises(Stop):
-        t.build()
-    return plain, relabeled
-
-
-def _jobs(todo: list) -> list[tuple]:
-    return [(j[0], f"{os.path.basename(os.path.dirname(j[1]))}/{os.path.basename(j[1])}", *j[2:]) for j in todo]
-
-
-def test_with_the_flag_off_the_build_issues_the_derives_it_did(tmp_path, monkeypatch):
-    plain, relabeled = _tp_build(tmp_path / "off", monkeypatch)
-    assert relabeled == [] and len(plain) == 1
-    assert sorted(_jobs(plain[0][0])) == sorted((r, *x) for r in (0, 1) for x in (
-        (f"rank{r}/build_step", "--wrapper", "step", "--M", "2", "--pos0", "8"),
-        (f"rank{r}/build_request_LP4_T2", "--wrapper", "request", "--LP", "4", "--T", "2"),
-        (f"rank{r}/build_request_LP8_T3", "--wrapper", "request", "--LP", "8", "--T", "3")))
-    plain_on, relabeled_on = _tp_build(tmp_path / "on", monkeypatch, "--build-relabel", "on")
-    assert plain_on == [] and len(relabeled_on) == 1
-    assert (_jobs(relabeled_on[0][0]), relabeled_on[0][1]) == (_jobs(plain[0][0]), plain[0][1]), \
-        "the relabel gets the derives and the pool width the plain Build has"

@@ -192,15 +192,31 @@ theorem range_map_getElem! (f : F128 → F128) (t : Array F128) :
 theorem parMap_eq (f : F128 → F128) (t : Array F128) : parMap f t = t.map f := by
   rw [parMap, parGen_eq, range_map_getElem!]
 
-/-- `mulMap` in tasks. -/
+/-- `parGen f` with each task building its own `ctx ()` first, which `f` reads. What a task builds is its own, so
+reading it touches no reference count other tasks touch: entries of one table shared by every task are counted
+atomically by all of them at once. -/
+@[specialize] def parGenWith {β : Type} (ctx : Unit → β) (f : β → Nat → F128) (n : Nat) : Array F128 :=
+  let a := n / 4096
+  ((Array.range a).map fun i => Task.spawn fun _ =>
+      let c := ctx (); (Array.range 4096).map fun j => f c (i * 4096 + j)).foldl (fun acc t => acc ++ t.get) #[] ++
+    (let c := ctx (); (Array.range (n - a * 4096)).map fun j => f c (a * 4096 + j))
+
+theorem parGenWith_eq {β : Type} (ctx : Unit → β) (f : β → Nat → F128) (n : Nat) :
+    parGenWith ctx f n = parGen (f (ctx ())) n := rfl
+
+/-- `mulMap` in tasks, each with its own table of `r`, expanded from one `nibTable r` they share. -/
 def mulMapPar (t : Array F128) (r : F128) : Array F128 :=
-  if t.size < 2048 then parMap (· * r) t else let tb := F128.mulTable r; parMap (F128.mulBy tb ·) t
+  if t.size < 2048 then parMap (· * r) t else
+    let nb := F128.nibTable r
+    parGenWith (fun _ => F128.expandNib nb) (fun tb i => F128.mulBy tb t[i]!) t.size
 
 theorem mulMapPar_eq (t : Array F128) (r : F128) : mulMapPar t r = t.map (· * r) := by
   unfold mulMapPar
   split
   · exact parMap_eq _ t
-  · rw [parMap_eq]
+  · rw [parGenWith_eq]
+    show parMap (F128.mulBy (F128.expandNib (F128.nibTable r))) t = _
+    rw [parMap_eq, F128.expandNib_nibTable]
     exact Array.map_congr_left fun v _ => F128.mulBy_mulTable r v
 
 /-- `eqTable` with each step in tasks: bit 1's half by `mulMapPar`, then bit 0's as bit 1's plus the table
@@ -548,6 +564,65 @@ def innerLive (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : Rep
       cons
   let _ ← prog.run (Transcript.init #[] dom)
 
+/-- **A rep's inner proof, live, kept**: `innerLive`, returning `repFw`'s proof where no constraint fails on the pads
+(`innerLiveK_discard`): `repFw` on `q` with every coin this took, which is the proof `proofFile` computes on a `rep`
+request with those inputs and coins (`Kept`). -/
+def innerLiveK (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : RepIn) : LiveM (Option Zk.ZkProof) := do
+  let pads := padsOf q.draws
+  let ic ← (monadLift (innerCommitP (Hashes.ofSha512 Sha512.hash) pads (saltAt q.draws.salts) : V InnerCommit) : LiveM InnerCommit)
+  let hs : Hashes LiveM := Hashes.ofSha512 Sha512.hash
+  let commit : Level → Array F128 → (Nat → ByteArray) → LiveM Commit := fun lv g salt => pure (commitFw lv g salt)
+  let salt : Nat → Nat → ByteArray := fun l => saltAt (q.hiSalts.getD (l - 1) ByteArray.empty)
+  let prog : TMW LiveM (Option Zk.ZkProof) := do
+    let (p, zl, cons) ← repCons (liveAsks ch q.coins false) commit t.st t.sch t.tPad rep dom t.g t.cm0 (claimsOf q.xs)
+      pads ic q.vals t.extra t.lanePad salt
+    let k := (← getThe (Array (Array F128))).size
+    if k != q.coins.size then throwThe String s!"finish: the rep's PIOP and opening took {k} of its {q.coins.size} rounds of coins"
+    let b := consBytes cons
+    ch.write ((s!"cons {b.size}\n").toUTF8 ++ b)
+    ch.flush
+    let inner ← innerP (liveAsks ch q.coins true) hs (Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) pads ic p.zerocheck.finalC
+      cons
+    return if (failingOn cons pads.h).isEmpty then some { proof := p, level0 := zl, inner } else none
+  return (← prog.run (Transcript.init #[] dom)).1
+
+instance instLawfulEST {ε σ : Type} : LawfulMonad (EST ε σ) := LawfulMonad.mk' (EST ε σ)
+  (id_map := fun x => by funext s; show EST.bind x (fun a => EST.pure (id a)) s = x s; unfold EST.bind EST.pure; cases x s <;> rfl)
+  (pure_bind := fun _ _ => rfl)
+  (bind_assoc := fun x f g => by
+    funext s; show EST.bind (EST.bind x f) g s = EST.bind x (fun a => EST.bind (f a) g) s
+    unfold EST.bind; cases x s <;> rfl)
+
+instance instLawfulEIO {ε : Type} : LawfulMonad (EIO ε) := inferInstanceAs (LawfulMonad (EST ε IO.RealWorld))
+
+/-- `innerLiveK` is `innerLive` with its result kept: the same rounds, the same bytes to the firewall, the same coins. -/
+theorem innerLiveK_discard (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : RepIn) :
+    (do let _ ← innerLiveK ch t rep dom q) = innerLive ch t rep dom q := by
+  unfold innerLiveK innerLive
+  simp only [StateT.run_bind, map_bind, bind_pure_comp]
+  congr 1; funext ic; congr 1; funext a; congr 1; funext b
+  have h : ∀ {α} (X : TMW LiveM α) s,
+      (fun _ => ()) <$> Prod.fst <$> X.run s = (fun _ => ()) <$> ((fun _ => ()) <$> X).run s := by
+    intros; simp only [StateT.run_map, Functor.map_map]
+  rw [h]; congr 2
+  split <;> simp only [map_bind, Functor.map_map]
+
+/-- **What a rep's `inner` request leaves for its `rep` request**: table `i`'s rep `r`, its request `q`, every round's
+coins it took, and `repFw`'s proof on them (`innerLiveK`). -/
+structure Kept where
+  i : Nat
+  r : Nat
+  q : RepIn
+  coins : Array (Array F128)
+  proof : Zk.ZkProof
+
+/-- Whether `k` is `repFw`'s proof on table `i`'s rep `r` at the request `q`: everything of `q` that `proofFile` reads is
+`k`'s, and `q`'s coins are every coin `k`'s rep took. -/
+def Kept.answers (k : Kept) (i r : Nat) (q : RepIn) : Bool :=
+  k.i == i && k.r == r && q.coins == k.coins && q.vals == k.q.vals && q.xs == k.q.xs && q.hiSalts == k.q.hiSalts &&
+    q.draws.h == k.q.draws.h && q.draws.mu == k.q.draws.mu && q.draws.padH == k.q.draws.padH &&
+    q.draws.padMu == k.q.draws.padMu && q.draws.tauSalt == k.q.draws.tauSalt && q.draws.salts == k.q.draws.salts
+
 /-- **A rep's opening request**, every byte little-endian: the extra claims (a count, then each as a count and its words)
 and the algebraic phase's coins (a round count, then each round as a count and its words), as `parseRep` reads them;
 nothing after. -/
@@ -579,11 +654,14 @@ followed by `LEN` bytes, answered `ok N` followed by `N` bytes:
 * `inner I R LEN`: rep `R`'s request (`parseRep`) with the coins of its PIOP and opening: its constraints, then its inner
   proof's rounds, live (`innerLive`); answered `ok 0` after the last. Its proof file is then `rep`'s on every round's coins.
 * `rep I R LEN`: rep `R`'s request (`parseRep`) on table `I`, after its salts; the answer is its proof file
-  (`proofFile`).
+  (`proofFile`), encoded from the proof the rep's last `inner` request computed where that request's inputs and coins
+  are this one's (`Kept.answers`). Another rep's requests may come between the two. The file is handed to `file` with
+  the table's level-0 root before it is answered, and where `file` refuses it, so does this.
 Anything else, or a request it refuses, is answered `err WHY` and ends it, with exit code `1`. -/
 def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) (setups : Array Setup)
     (level0Of : ByteArray → IO (Option Level0.Level0))
-    (keep : ByteArray → Nat → Array ByteArray → IO Unit := fun _ _ _ => pure ()) : IO UInt32 := do
+    (keep : ByteArray → Nat → Array ByteArray → IO Unit := fun _ _ _ => pure ())
+    (file : ByteArray → Nat → ByteArray → IO (Option String) := fun _ _ _ => pure none) : IO UInt32 := do
   let refuse := fun (why : String) => do
     ch.write (s!"err {why.replace "\n" " "}\n").toUTF8
     ch.flush
@@ -594,6 +672,7 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
     ch.flush
   let mut tabs : Array (Option Tab) := Array.replicate setups.size none
   let mut hi : Array (Array (Option (Array ByteArray))) := Array.replicate setups.size #[none, none]
+  let mut kept : Array Kept := #[]
   repeat
     let line := (← ch.getLine).replace "\n" ""
     if line.isEmpty then break
@@ -610,6 +689,7 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
       | .ok t =>
         tabs := tabs.set! i (some t)
         hi := hi.set! i #[none, none]
+        kept := kept.filter (·.i != i)
         answer (flat t.cm0.cap)
       | .error e => return (← refuse e)
     | ["salts", i, r, len] =>
@@ -629,8 +709,14 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
       let some name := spec.tables[i]? | return (← refuse s!"table {i} of the session's {spec.tables.size}")
       if r > 1 then return (← refuse s!"rep {r}: a table has reps 0 and 1")
       let some s := (hi[i]!)[r]! | return (← refuse s!"table {i} rep {r} before its salts for levels ≥ 1")
-      match parseRep t s b >>= proofFile t r (spec.domain name r).toUTF8 with
-      | .ok p => answer p
+      let pf : V ByteArray := parseRep t s b >>= fun q => match kept.find? (·.answers i r q) with
+        | some k => pure (encZk (shapeZk t.st t.sch (claimsOf q.xs).size) k.proof)
+        | none => proofFile t r (spec.domain name r).toUTF8 q
+      kept := kept.filter fun k => !(k.i == i && k.r == r)
+      match pf with
+      | .ok p =>
+        if let some why ← file (flat t.cm0.cap) r p then return (← refuse why)
+        answer p
       | .error e => return (← refuse e)
     | ["open", i, r, len] | ["inner", i, r, len] =>
       let (some i, some r, some len) := (i.toNat?, r.toNat?, len.toNat?) | return (← refuse s!"a request `{line}`")
@@ -640,14 +726,20 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
       if r > 1 then return (← refuse s!"rep {r}: a table has reps 0 and 1")
       let some s := (hi[i]!)[r]! | return (← refuse s!"table {i} rep {r} before its salts for levels ≥ 1")
       let dom := (spec.domain name r).toUTF8
-      let run : V (LiveM Unit) := if line.startsWith "open " then
-          (parseOpen b).map fun (xs, coins) => openLive ch t r dom xs s coins
-        else (parseRep t s b).map (innerLive ch t r dom)
+      kept := kept.filter fun k => !(k.i == i && k.r == r)
+      let run : V (LiveM (Option Kept)) := if line.startsWith "open " then
+          (parseOpen b).map fun (xs, coins) => do openLive ch t r dom xs s coins; return none
+        else (parseRep t s b).map fun q => do
+          let z ← innerLiveK ch t r dom q
+          let coins ← getThe (Array (Array F128))
+          return z.map fun proof => ({ i, r, q, coins, proof } : Kept)
       match run with
       | .error e => return (← refuse e)
       | .ok m =>
         match ← (m.run' #[]).run with
-        | .ok () => answer ByteArray.empty
+        | .ok k =>
+          kept := kept ++ k.toArray
+          answer ByteArray.empty
         | .error e => return (← refuse e)
     | _ => return (← refuse s!"a request `{line}`")
   return 0
@@ -684,9 +776,11 @@ def cmd (args : List String) : IO UInt32 := do
 the `LEN` bytes of the session's draw (`Hello.drawOf`'s JSON, `null` for none) sets the session's statement up as the
 loop's `Hello` does (`Hello.Setup.setupAt`), is answered `ok 0`, and then `serve`s, every salt drawn from the operating
 system and each `level0 I LEN` read from the loop's own level 0 of that root (`Level0.Registry`, `l0s`), each rep's salts
-for levels ≥ 1 handed to `keep`, the loop's frames' copy. -/
+for levels ≥ 1 handed to `keep`, the loop's frames' copy, and each rep's proof file to `file`, the proof the loop sends
+(`Session.relay`). -/
 def serveLoop (ch : Frame.Chan) (S : Hello.Setup) (specs : Hello.Specs) (l0s : IO.Ref Level0.Registry)
-    (keep : ByteArray → Nat → Array ByteArray → IO Unit) (line : String) : IO Unit := do
+    (keep : ByteArray → Nat → Array ByteArray → IO Unit) (file : ByteArray → Nat → ByteArray → IO (Option String))
+    (line : String) : IO Unit := do
   let say := fun (s : String) => do
     ch.write (s ++ "\n").toUTF8
     ch.flush
@@ -702,7 +796,7 @@ def serveLoop (ch : Frame.Chan) (S : Hello.Setup) (specs : Hello.Specs) (l0s : I
       | .ok (spec, sts) =>
         say "ok 0"
         let _ ← serve ch IO.getRandomBytes spec (sts.map Setup.ofCircuit)
-          (fun r => do return ((← l0s.get).slots.find? (·.l0.root == r)).map (·.l0)) keep
+          (fun r => do return ((← l0s.get).slots.find? (·.l0.root == r)).map (·.l0)) keep file
   | _ => say s!"err a request `{line.trim}`"
 
 end Flock.Firewall.Finish

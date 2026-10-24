@@ -9,18 +9,18 @@ import Proofs.Flock.Claims.Recursion.VStarBDeploy
 `RunPairs`. `VstarShowsB` is false at `deployRec` (`vstarShowsB_deployed_rejects`: with `HeldB`, it leaves the compiled
 verifier no accepted run at any statement with a part). What the route reads of it is `StagedB`, the staging at an
 accepted run's pairs, which holds at the coin server's transcript read by a reader wherever that reader reads it back
-at an accepted run (`ReadsBack`, `stagedB_deployRec`), and `RunPairs` holds at `decCoin` (`runPairs_deployRec`).
+at an accepted run (`ReadsBackB`, `stagedB_deployRec_part`), and `RunPairs` holds at `decCoin` (`runPairs_deployRec`).
 
 * `ksLin2_route_staged`: `ksLin2_route` with `StagedB` for `VstarShowsB`, no `RunPairs` and, at a layout whose held
   rounds have no pieces (`HeldWhole`), no `ReadersRunPlayed`, as `ksBoundRoute_heldWhole` is `ksBoundRoute_of_bridge`
   (`vstarAccepts_boundW` for `vstarAccepts_bound`, the forks through `pick`).
-* `ksLin2_deployed_parts`: at the intended choice (`ksLin2_deployed`'s), with the staging at `showsTr`, `cmtTr` of a
-  reader `untr`.
+* `ksLin2_deployed_parts`: at the intended choice (`ksLin2_deployed`'s), with the staging at `showsPart`, `cmtTr` of a
+  reader `untr`: the parts' facts only at the V\* statements staged as V\* stages them (`StagedPart`).
 * `ksLin2_deployed_plain_parts`: at the deployed relation and caps `CpDep`, with `KSFlockLin` at `DE` from
   `plain_KSFlockLin_DE`. What stays is the decoder's canonicity (`CanonicalProofFiles`), the calls half of the plain
-  verifier's last-message binding (`PlainCallsBindOrSlack`), the reader reading the transcript back (`ReadsBack`), at
-  the dense form `HeldB`, `PartChecksB`, `PartOpensB` and `DecompB` for some inner check, and the readers' two facts
-  (`ReadersTrue`, `ReadersLogColl`).
+  verifier's last-message binding (`PlainCallsBindOrSlack`), the reader reading the transcript back (`ReadsBackB`), at
+  the dense form `HeldB`, `PartChecksB`, `PartOpensB` and `DecompB` for some inner check, and the readers'
+  `ReadersTrue` (`ReadersLogCollS` is proved at `IVStar`, `readersLogCollS_ivstar`).
 -/
 
 namespace RecDeploy
@@ -54,7 +54,7 @@ theorem ksLin2_route_staged (rel relO : _root_.Flock.Readable.Parsed → _root_.
           (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec relO) L shape shows cmt s) ∧
           Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
       ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
-      ReadersLogColl FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
+      Bd.StepsLogFree FlockDeploy.sha512 →
       Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt rel b L) Bd (deployZkRec relO) Cp DenseAt := by
   intro nextE colsE wE join rowIn final w Bd D bL hKS hBinds hEC hCF hF hshapes hT hL decI hdI decO hdO x hx Ω _ _ P M
     R
@@ -69,9 +69,10 @@ theorem ksLin2_route_staged (rel relO : _root_.Flock.Readable.Parsed → _root_.
   have hTc := callsTrue FlockDeploy.sha512 I ivScope bL (deployZkRec relO) hT
   have hA := Claims.Recursion.innerAcceptsCollAt_of_dense (refuses I.V ivScope bL FlockDeploy.sha512) hTc
     (hacc _ (by simp)) hx
-  have hLc := callsLogColl FlockDeploy.sha512 I ivScope bL (deployZkRec relO) hT hL
+  have hLc := callsLogCollS FlockDeploy.sha512 I ivScope bL (deployZkRec relO) hT
+    (readersLogCollS_ivstar hL bL (deployZkRec relO))
   obtain ⟨-, shows, cmt, hHe, hSt, -, hOp, -⟩ := hshapes _ (List.mem_singleton_self _)
-  have hFk := forksBindAt_C_pick FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO) L.pick hEC hCF hTc hLc x
+  have hFk := forksBindAt_C_pick_setup FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO) L.pick hEC hCF hTc hLc x
     (fun decO Ω P ω r c ws hg => by
       obtain ⟨st, hst, -⟩ := refuses I.V ivScope bL FlockDeploy.sha512 x Ω P ω r hg.1
       exact readers_run FlockDeploy.sha512 I ivScope b L (deployZkRec relO) _ shows cmt hHW (hHe decI) hOp hst
@@ -81,21 +82,22 @@ theorem ksLin2_route_staged (rel relO : _root_.Flock.Readable.Parsed → _root_.
     (congrArg (FlockDeploy.decCoin _) (bdDeployed_ans rel nextE colsE wE join rowIn final w c)).trans
       (Function.leftInverse_invFun Claims.Bridge.coin_bytes_injective c)
   have hM := roundsMargin_deployRec FlockDeploy.sha512 I ivScope bL fun x => V_k_pos_flock false x
-  have hLn := callsLogColl_C FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO) hCF hLc
+  have hLn := callsLogColl_C_setup FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO) hCF hLc
   have hAn := innerAcceptsCollAt_C FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO) hCF x hA
-  have hbody := Claims.Recursion.Bound.ksLin2_of_flockLin_binds (Bd := Bd) (decI := decI)
+  have hbody := Claims.Recursion.Bound.ksLin2_of_flockLin_binds_setup (Bd := Bd) (decI := decI)
     (H := FlockDeploy.sha512) (D := deployRecC Bd ivScope bL) (DO := deployZkRec relO) (decO := decO) (P := P)
     (x := x) FlockDeploy.decCoin Cp hF hKS hdI hdO hdecC hBinds (refuses I.V ivScope bL FlockDeploy.sha512)
     (innerRounds I ivScope bL) (sessionNums I.V ivScope bL relO) (tableErrNonneg I.V ivScope bL)
     (sessionRounds I ivScope bL relO) (sessionAccepts I.V ivScope bL) (sessionRuns_sha512 I ivScope bL relO)
     (innerViewRun_C FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO)) hTc hLn hFk hAn hM
     (callsNil I.V ivScope bL FlockDeploy.sha512) M R
-  exact ksLin2_of_C FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO) decO hCF Cp x P M R hbody
+  exact ksLin2_of_C_setup FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO) decO hCF Cp x P M R hbody
 
 /-- **`KSLin2` at the intended choice with V\*'s staging discharged**: `ksLin2_route_staged` at `ksLin2_deployed`'s
-choice, with the staging at the coin server's transcript read by `untr` (`showsTr`, `cmtTr`), where `StagedB` holds
-wherever `untr` reads it back at an accepted run (`ReadsBack`, `stagedB_deployRec`). What V*'s parts still owe at the
-dense form is `HeldB`, `PartChecksB`, `PartOpensB` and `DecompB`, for some inner check `chk`. -/
+choice, with the staging at the coin server's transcript read by `untr` at the staged V\* statements (`showsPart`,
+`cmtTr`), where `StagedB` holds wherever `untr` reads it back at an accepted run (`ReadsBackB`,
+`stagedB_deployRec_part`). What V*'s parts still owe at the dense form is `HeldB`, `PartChecksB`, `PartOpensB` and
+`DecompB`, for some inner check `chk`, the two parts' facts only at staged statements. -/
 theorem ksLin2_deployed_parts (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (hHW : L.HeldWhole) (Cp : Claims.Recursion.Caps Coin) (wE : Msg → ℝ)
     (join : List Msg → Msg)
@@ -105,30 +107,29 @@ theorem ksLin2_deployed_parts (rel : _root_.Flock.Readable.Parsed → _root_.Flo
       final w
     let D := recBound rel b L Bd.IVStar
     let bL : Brings := { b with rd := L.readers }
-    ReadsBack FlockDeploy.sha512 Bd.IVStar bL (fun _ => True) untr →
+    ReadsBackB FlockDeploy.sha512 Bd.IVStar bL (fun _ => True) untr →
     Claims.Recursion.KSFlockLin FlockDeploy.sha512 Bd.DE Cp →
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
         (∀ decI, Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape) ∧
         (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
-          L shape (showsTr untr) chk s) ∧
+          L shape (showsPart untr b) chk s) ∧
         (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
-          L shape (showsTr untr) (cmtTr untr) s) ∧
+          L shape (showsPart untr b) (cmtTr untr) s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    ReadersLogColl FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt rel b L) Bd
       (deployZkRec _root_.Flock.Readable.relation) Cp DenseAt := by
-  intro Bd D bL hrb hKS hparts hT hL
+  intro Bd D bL hrb hKS hparts hT
   refine ksLin2_route_staged rel _root_.Flock.Readable.relation b L hHW Cp (FlockDeploy.V false).next
     (FlockDeploy.deployPlainTrim rel).cols wE join rowInDeployed final w hKS
     (binds_deployed rel _ _ wE join final w) (lastBindsEC_deployed_sha512 rel wE join final w hC hK)
     (lastCoinFree_deployed rel _ wE join rowInDeployed final w FlockDeploy.sha512) FlockDeploy.KS.zk_KS_outer
-    ?_ hT hL
+    ?_ hT (stepsLogFree_deployed rel _ wE join rowInDeployed final w FlockDeploy.sha512)
   intro shape hs
   obtain ⟨chk, hHe, hCk, hOp, hDc⟩ := hparts shape hs
-  exact ⟨chk, showsTr untr, cmtTr untr, hHe,
-    fun decI => stagedB_deployRec FlockDeploy.sha512 (Claims.Recursion.Inner.ofFlock Bd.deploy decI)
+  exact ⟨chk, showsPart untr b, cmtTr untr, hHe,
+    fun decI => stagedB_deployRec_part FlockDeploy.sha512 (Claims.Recursion.Inner.ofFlock Bd.deploy decI)
       (FlockDeploy.deployPlain rel).scopeCheck bL untr L shape (fun x st hst _ => hrb x st hst trivial) (hHe decI),
     hCk, hOp, hDc⟩
 
@@ -142,17 +143,16 @@ theorem ksLin2_deployed_plain_parts (b : Brings) (L : Claims.Recursion.VStarB.La
       (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE join rowInDeployed final w
     let D := recBound _root_.Flock.Readable.relation b L Bd.IVStar
     let bL : Brings := { b with rd := L.readers }
-    ReadsBack FlockDeploy.sha512 Bd.IVStar bL (fun _ => True) untr →
+    ReadsBackB FlockDeploy.sha512 Bd.IVStar bL (fun _ => True) untr →
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
         (∀ decI, Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape) ∧
         (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
-          L shape (showsTr untr) chk s) ∧
+          L shape (showsPart untr b) chk s) ∧
         (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
-          L shape (showsTr untr) (cmtTr untr) s) ∧
+          L shape (showsPart untr b) (cmtTr untr) s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    ReadersLogColl FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation b L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := fun hrb =>
   ksLin2_deployed_parts _root_.Flock.Readable.relation b L hHW FlockDeploy.KS.CpDep wE join final w hC hK untr hrb

@@ -1212,6 +1212,10 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         if not set(f["axioms"]) <= allowed:
             fails.append(Failure("guarantees.axioms", name, f"guarantees: {name} uses "
                                  f"{', '.join(sorted(set(f['axioms']) - allowed))}"))
+        if "premises" in f and f["premises"] is None:
+            fails.append(Failure("guarantees.premises", name, f"guarantees: {name}'s premises could not be read "
+                                 f"(`Facts.lean`'s `premisesOf` failed on its statement), so the lock can't be held to "
+                                 f"them: make `premisesOf` read this statement's form"))
         for pr in f.get("premises") or []:
             if "Assumptions" in (m := pr.get("module") or "").split(".") or m in own:
                 premised.setdefault(pr["head"], set()).add(name)

@@ -48,7 +48,7 @@ def test_a_lane_key_starts_a_rehearsal_and_a_second_waits_for_it_to_end(host):
                    started=started)
     doc = json.loads(out)
     assert rc == 0 and doc == {"run": "c20261023T110000Z-ab12", "peer": "vy-nebius-1", "port": 8011, "minutes": 30,
-                               "tamper": "extra", "requests": 400, "by": "network-accounting",
+                               "tamper": "extra", "requests": 400, "profile": "planned", "by": "network-accounting",
                                "requested_utc": "2026-10-23T11:00:00Z", "unit": "vy-certifier@c20261023T110000Z-ab12.service"}
     assert started == [doc["run"]]
     request = json.loads((host.certifier / doc["run"] / "request.json").read_text())
@@ -61,6 +61,8 @@ def test_a_lane_key_starts_a_rehearsal_and_a_second_waits_for_it_to_end(host):
     rc, out = gate(host, REQUEST, started=started, token="cd34")
     assert rc == 0 and started == [doc["run"], "c20261023T110000Z-cd34"]
     assert json.loads(out)["tamper"] is None and json.loads(out)["by"] == "network-accounting"
+    rc, out = gate(host, REQUEST + ["--profile", "served"], started=started, token="ef56")
+    assert rc == 0 and json.loads(out)["profile"] == "served"
 
 
 @pytest.mark.parametrize("bad, why", [
@@ -75,6 +77,8 @@ def test_a_lane_key_starts_a_rehearsal_and_a_second_waits_for_it_to_end(host):
     (["--requests", "3"], "--requests '3': 4 to 400"),
     (["--requests", "401"], "--requests"),
     (["--tamper", "burst"], "--tamper 'burst'"),
+    (["--profile", "both"], "--profile 'both': one of ['planned', 'served']"),
+    (["--profile", "Served"], "--profile 'Served'"),
     (["--upstream", "http://10.0.0.2:8011"], "unrecognized arguments: --upstream"),
     (["--command", "id"], "unrecognized arguments: --command"),
 ])
@@ -170,11 +174,15 @@ def test_a_rehearsal_past_its_minutes_is_stopped_and_a_tunnel_that_never_came_up
     assert set(end["files"]) == {"tunnel.log"}
 
 
-def test_the_rehearsal_runs_certifier_serve_on_the_requests_shim_through_the_tunnels_local_end(tmp_path):
-    req = {"requests": 400, "tamper": None}
+def test_the_rehearsal_runs_certifier_serve_on_the_requests_shim_and_profile_through_the_tunnels_local_end(tmp_path):
+    """N2's profile is the request's, planned for a request.json written before the gate took `--profile`."""
+    req = {"requests": 400, "tamper": None, "profile": "planned"}
     argv = A.certifier_command(req, tmp_path, "http://127.0.0.1:40001", tree=Path("/opt/vy-challenger") / PIN)
     assert argv[1:] == [f"/opt/vy-challenger/{PIN}/benchmarks/network_traces/certifier_serve.py", "rehearse",
                         "--upstream", "http://127.0.0.1:40001", "--out", str(tmp_path), "--requests", "400",
-                        "--strategies", "honest"]
+                        "--profile", "planned", "--strategies", "honest"]
     assert A.certifier_command(req | {"tamper": "late"}, tmp_path, "u")[-2:] == ["--strategies", "late"]
+    assert A.certifier_command(req | {"profile": "served"}, tmp_path, "u")[-4:-2] == ["--profile", "served"]
+    del req["profile"]
+    assert A.certifier_command(req, tmp_path, "u")[-4:-2] == ["--profile", "planned"]
     assert A.certifier_env(Path("/opt/vy-challenger") / PIN)["PYTHONPATH"] == f"/opt/vy-challenger/{PIN}"
