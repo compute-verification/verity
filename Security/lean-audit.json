@@ -21855,7 +21855,7 @@
    ]
   },
   "Flock.HmRow": {
-   "digest": "1196319dd875bee3adeacf9758896b108f8a9f6cc98663f999941e5f0443748d",
+   "digest": "c49728773d82e6281f7e113fa3872e8ad39df6e4dabcd738f84bafda96c16755",
    "definitions": {
     "Flock.HmIn.FORMAT": "d170c17911f12935b7c639f768d2a51f2df2f502c139d50dafcd92acca7de79a",
     "Flock.HmIn.Ports": "215bbcb52a5c9b82ffa0c34ab9a1e63f466d28f12cb80b3227186587ecca5d72",
@@ -21991,9 +21991,9 @@
     "Flock.HmRow.unitsEntry": "03054d192ffec12347bd48a370d2502d9c6ab38bd1cefb6ca702cc04ffc23d4b",
     "Flock.HmRow.workLaw": "efb93a2ae6398da29d22cc33c23b9339b5d372711de510dbbb9433230d779fd0",
     "Flock.HmRow.zeroRowBc": "70914d394be7bc1eb39db8688cfc653ec4fa9eaa394b9a4e18acdce1feb9ea3f",
-    "Flock.Stmt.setupH": "8984403d03339167cd3ce89c4dab49441b6de161bcef0de979d5cac8a905262d",
+    "Flock.Stmt.setupH": "03851d5cef424a2669e8283c06476b616860761edf5055ccfaae563b9eefd3c7",
     "Flock.Stmt.setupH._sparseCasesOn_5": "d7fa2775d3f894d247b591b627dbe1dd5ebfde6070f3edf2d7aa1afbbfa0d77b",
-    "Flock.Stmt.setupHidden": "339f04e6728e64fd51e3f5790c8b3c0d1174079e54c5f29c86815fa44e8d8728",
+    "Flock.Stmt.setupHidden": "740f3d08c1f4ba6145070e9c89797a58c12879e50b4fb479bfd4b1b3d6164a0e",
     "Flock.Stmt.setupTables": "80776bd21e06c9026c9213d4035f4541af6d41fc221ca17b91010a9c6670c93b",
     "Flock.Stmt.setupTables._sparseCasesOn_16": "56ea21fd4f73f92f1da9c2c4e69df2807862751397ac9b294c499a5db7357a11",
     "Flock.Stmt.setupTables._sparseCasesOn_3": "b9beebeb51c735d270108a9b6098482a6bfab1be9da211c9eb94313e817d5695",
@@ -24975,7 +24975,7 @@
    ]
   },
   "Flock.Statement": {
-   "digest": "c59ce6c197c71d99e36dbf78afa1e523ae822f5c987b85dca7c381f6e025eee8",
+   "digest": "9f42b714689d9af99389f3ff647b66d3b390b01390fe2116b26f5863ae933f3d",
    "definitions": {
     "Flock.Circuit.delta._sparseCasesOn_3": "d98f2aae193ad64cda368c8a7b171f3fc9d5fccebbdbe6027cf5041084d0d5e8",
     "Flock.Circuit.delta.match_6": "c96c7c9d41ff86bdf3de864f1f206c94e5563938d77176c397af2805c7a20508",
@@ -25030,6 +25030,7 @@
     "Flock.Stmt.unitShare._sparseCasesOn_1": "eb22d2866388f15507d194f97803d387c9067141d8e12eb9010d25e9445662a4",
     "Flock.Tags.withCoins": "6445738b2df4f7ec12c91eda219ea8c37598295c44a85ee62112d9ed7fd9ae80",
     "Flock.checkInRange": "af916f3d8a80fd126a8ab2c23e640312ee6e2805bf9c39038e26b57296a5ef41",
+    "Flock.checkRegionBytes": "fd9ee558fd6e1251b4990ac06dcc008f14d7049fe15e04764a52189ad46d8dac",
     "Flock.helloOf": "cc5bfd4b18bb49b382b0aae5cb74875effb598946aa8405d714f808eee835700",
     "Flock.instBEqCoins": "437d448d5f0a5d790fe77116d7da4d798db2b015b4fbf5a47f4911a60bdc5960",
     "Flock.instBEqCoins.beq": "17c73fec09529c1858f2b8bc41284cfd6f1c663621a0c05bfdc422aa21e22fb6",
