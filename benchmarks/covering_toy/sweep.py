@@ -216,6 +216,81 @@ def _br(sol: dict | None) -> str:
     return f"{sol['n']}" if sol["optimal"] else f"[{sol['lb']}, {sol['n']}]"
 
 
+def _within(a: dict, b: dict) -> bool:
+    """Every `(s, k)`-block of point `a` is one of point `b`."""
+    return a["k"] <= b["k"] and (b["s"] is None or (a["s"] is not None and a["s"] <= b["s"]))
+
+
+def merge(dirs: list[Path], outdir: Path, names: list[str]) -> None:
+    """One result per point from several sweeps' outputs, each covering problem's bracket tightened by every sound
+    argument: the smallest covering any sweep found, the largest lower bound any proved, `ceil(|T| / cap)` with `cap` the
+    proven per-block cap, and monotonicity: an `(s, k)`-block is an `(s', k')`-block for `s' >= s`, `k' >= k`, so `n*`
+    only falls as either grows. `M*` changes with `k`, so `M`'s bracket is carried only across `s`."""
+    outdir.mkdir(parents=True, exist_ok=True)
+    for name in names:
+        pts: dict[tuple, list[dict]] = {}
+        meta = None
+        for d in dirs:
+            p = d / f"{name}.json"
+            if p.exists():
+                for r in json.loads(p.read_text()):
+                    pts.setdefault((r["k"], r["mode"]), []).append(r)
+            if meta is None and (d / f"{name}.meta.json").exists():
+                meta = json.loads((d / f"{name}.meta.json").read_text())
+        if not pts:
+            continue
+        G = build(name)
+        merged = []
+        for rs in pts.values():
+            r = dict(max(rs, key=len))
+            for prob in ("full", "V", "M", "M_measured"):
+                sols = [x[prob] for x in rs if x.get(prob)]
+                if sols:
+                    best = min(sols, key=lambda x: x["n"])
+                    r[prob] = {**best, "lb": max(x["lb"] for x in sols), "via": None}
+            cap: dict[str, dict] = {}
+            for x in rs:
+                for key, c in (x.get("cap") or {}).items():
+                    if key not in cap or c["ub"] < cap[key]["ub"]:
+                        cap[key] = {**c, "n": max(c["n"] or 0, (cap.get(key) or {}).get("n") or 0)}
+            r["cap"] = cap
+            for prob, key, size in (("full", "inner", r["inner"]), ("V", "V", len(G.values)),
+                                    ("M", "M", r["lean_cw1"]["M_star"])):
+                if r.get(prob) and cap.get(key) and cap[key]["ub"] > 0:
+                    r[prob]["lb"] = max(r[prob]["lb"], math.ceil(size / cap[key]["ub"]))
+            if r.get("full") and r["s"]:
+                r["full"]["lb"] = max(r["full"]["lb"], math.ceil(r["inner"] / r["s"]))
+            merged.append(r)
+        changed = True
+        while changed:
+            changed = False
+            for a in merged:
+                for b in merged:
+                    if a is b or not _within(a, b):
+                        continue
+                    for prob in ("full", "V", "M"):
+                        if not (a.get(prob) and b.get(prob)) or (prob == "M" and a["k"] != b["k"]):
+                            continue
+                        if b[prob]["lb"] > a[prob]["lb"]:
+                            a[prob]["lb"] = b[prob]["lb"]
+                            changed = True
+                        if a[prob]["n"] < b[prob]["n"]:
+                            b[prob] = {**a[prob], "lb": b[prob]["lb"], "via": [a["k"], a["mode"]]}
+                            changed = True
+        for r in merged:
+            for prob in ("full", "V", "M", "M_measured"):
+                if r.get(prob):
+                    r[prob]["optimal"] = r[prob]["lb"] >= r[prob]["n"]
+            if r["s"] is not None and r.get("full"):
+                r["rho"] = r["s"] * r["full"]["n"] / r["gates"]
+                r["rho_lb"] = r["s"] * r["full"]["lb"] / r["gates"]
+        merged.sort(key=lambda r: (r["k"], MODES.index(r["mode"])))
+        (outdir / f"{name}.json").write_text(json.dumps(merged, indent=1))
+        if meta:
+            (outdir / f"{name}.meta.json").write_text(json.dumps(meta, indent=1))
+    (outdir / "table.md").write_text(table(outdir, names))
+
+
 def why(G: TG.Graph, comp: set[int], ins: set[int], targets: set[int]) -> str:
     """Which section-4 assumption a block that beats a word-per-value count breaks, from the gates it computes."""
     steps = {G.tag[g]["step"] for g in comp & targets}
@@ -239,11 +314,12 @@ def flags(r: dict) -> list[str]:
     out = []
     k = r["k"]
     V = set(G.values)
-    dV = why(G, *densest(G, r["V"], V), V)
-    if r["V"]["n"] < r["production_beta1"]["n_lb"] - 1e-9:
-        out.append("P-total: " + dV)
-    if r["cap"]["V"]["n"] and r["cap"]["V"]["n"] > k:
-        out.append(f"P-block: one block computes {r['cap']['V']['n']} values from {k} words; densest V-block: " + dV)
+    if r.get("V"):
+        dV = why(G, *densest(G, r["V"], V), V)
+        if r["V"]["n"] < r["production_beta1"]["n_lb"] - 1e-9:
+            out.append("P-total: " + dV)
+        if r["cap"].get("V") and r["cap"]["V"]["n"] and r["cap"]["V"]["n"] > k:
+            out.append(f"P-block: one block computes {r['cap']['V']['n']} values from {k} words; densest V-block: " + dV)
     if r.get("M") and r["M"]["n"] < r["lean_cw1"]["n_lb"] - 1e-9:
         M = set(BD.chained(G, r["lean_cw1"]["D"]))
         out.append("L-c_w=1: " + why(G, *densest(G, r["M"], M), M))
@@ -266,12 +342,13 @@ def table(outdir: Path, names: list[str]) -> str:
             lean1 = r["lean_cw1"]
             lm = r.get("lean_measured")
             rho = f"{r['rho']:.2f}" if "rho" in r else "-"
-            triv = f"{r['full']['n'] / r['trivial']:.1f}" if r["trivial"] else "-"
+            triv = f"{r['full']['n'] / r['trivial']:.1f}" if r["trivial"] and r.get("full") else "-"
             cw = f"{r['cw']['cw']:.2f}" if r.get("cw") else "-"
             lms = f"{lm['n_lb']:.2f} (D={lm['D']}, M*={lm['M_star']}, n*_M={_br(r.get('M_measured'))})" if lm else "-"
+            capV = r["cap"]["V"]["ub"] if r["cap"].get("V") else "-"
             lines.append(
-                f"| {name} | {r['k']} | {r['s'] if r['s'] is not None else 'inf'} | {_br(r['full'])} | {rho} | {triv} | "
-                f"{_br(r['V'])} | {r['production_beta1']['n_lb']:.2f} | {r['cap']['V']['ub']} | "
+                f"| {name} | {r['k']} | {r['s'] if r['s'] is not None else 'inf'} | {_br(r.get('full'))} | {rho} | "
+                f"{triv} | {_br(r.get('V'))} | {r['production_beta1']['n_lb']:.2f} | {capV} | "
                 f"{lean1['M_star']} ({lean1['D']}) | {_br(r['M'])} | {lean1['n_lb']:.2f} | {cw} | {lms} | "
                 f"{'; '.join(f.split(':')[0] for f in flags(r)) or '-'} |"
             )
@@ -314,8 +391,12 @@ def main() -> None:
     ap.add_argument("--modes", type=lambda t: tuple(t.split(",")), help="override the gate budgets (eta1,eta2,inf)")
     ap.add_argument("--problems", type=lambda t: set(t.split(",")), help="solve only these (full,V,M)")
     ap.add_argument("--caps", action="store_true", help="only the per-block cap test (`caps`), from OUT's meta files")
+    ap.add_argument("--merge", type=Path, action="append", help="merge these sweeps' outputs into OUT (`merge`)")
     a = ap.parse_args()
     names = a.instance or list(INSTANCES)
+    if a.merge:
+        merge(a.merge, a.out, names)
+        return
     if a.problems:
         PROBLEMS.intersection_update(a.problems)
     for name in names:
