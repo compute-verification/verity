@@ -289,8 +289,8 @@ theorem fwTau_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (
        obtain ⟨⟨rfl, -⟩, -⟩ := hp
        exact (FinTau.innerP_cut_tau h₈).2)
     | (obtain ⟨_, t₈, l₈, hu, hc'⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hc
-       simp only [StateT.run_pure, FlockComplete.JsonRT.go_pure, Prod.mk.injEq, Except.ok.injEq] at hu
-       obtain ⟨⟨-, rfl⟩, rfl⟩ := hu
+       simp only [StateT.run_pure, FlockComplete.JsonRT.go_pure] at hu
+       cases hu
        obtain ⟨ip, t₉, l₉, h₉, hp⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hc'
        simp only [StateT.run_pure, FlockComplete.JsonRT.go_pure, Prod.mk.injEq, Except.ok.injEq] at hp
        obtain ⟨⟨rfl, -⟩, -⟩ := hp
