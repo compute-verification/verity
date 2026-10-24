@@ -696,13 +696,14 @@ def _chunk_rows(rows: list[bytes], k: int) -> list[bytes]:
 def test_chunk_words_are_the_specs_leaf_bytes(k, n):
     """SPLITK §1: `chunk_words` at n = `weights.chunks` (K) gives row r's chunk c at leaf n r + c, its words the bytes
     ``codes[r, c K_c : (c + 1) K_c] ‖ scale[r]`` little-endian, `weights.leaf_words` (K) of them; at K <= 4096 it is
-    `row_words`. An n that doesn't cut K into whole u16 words is refused."""
+    `row_words`, and word for word core's `h1zy.chunk_words`. An n that doesn't cut K into whole u16 words is refused."""
     rng = np.random.default_rng(k)
     codes, scales = rng.integers(-128, 128, (3, k), dtype=np.int8), (rng.random(3) + 0.5).astype("<f4")
     got = SV.chunk_words(codes, scales, Wt.chunks(k))
     assert Wt.chunks(k) == n and got.dtype == np.uint16 and got.shape == (3 * n, Wt.leaf_words(k))
     rows = [codes[r].tobytes() + scales[r].tobytes() for r in range(3)]
     assert [w.astype("<u2").tobytes() for w in got] == _chunk_rows(rows, k)
+    assert got.tolist() == Z.chunk_words(rows, k)
     assert (n == 1) == np.array_equal(got, SV.row_words(codes, scales))
     with pytest.raises(ValueError, match="chunks of whole u16 words"):
         SV.chunk_words(codes, scales, 3 if k % 3 else 7)
