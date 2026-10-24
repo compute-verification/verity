@@ -45,7 +45,14 @@
 #   Another TP Commit than GLM-5.3's: A5_ROW its row (the workload integrations/vllm/workloads/$A5_ROW.json), A5_NAME the
 #   audit's name (default glm), A5_SETS the SiluMul_v2 widths its partition reads (default "256 1536"), e.g. LLAMA32_1B TP2:
 #   A5_ROW=llama32-1b__bf16__rtxpro6000__tp2__b2__i256__o32__mixed__greedy__bi-eager A5_PARTITION=benchmarks/one_stage/
-#   llama32_1b_silu_mul_v2_tp2.json A5_SETS=4096.
+#   llama32_1b_silu_mul_v2_tp2.json A5_SETS=4096.  A rank's proved population must keep C-Flock's m = k_log + log2(units) <= 35:
+#   a SiluMul_v2{I=4096} unit is 2^25 bits, so that partition's scope keeps layer 0's decode steps 1..7 (8 units a rank, not 4,736).
+#   An A5_SETS entry with a / is a subcircuit spec of its own (rope-head/d64/bf16), any other a SiluMul_v2 width.
+# A5_TRANSFER_GATES="T ..." (with A5_ADVICE): the templates the stand-in compiler lists as holding transfer gates, every unit of
+#   theirs proved (selection All) beside the rest drawn by the partition's work:K (advice_windows: `verity-vllm advice-windows
+#   --transfer-gate`, a5.py --transfer-gate and its transfer-gate negatives). The stand-in's partition holds them before its
+#   SiluMul_v2{I} (served_tp --template), e.g. STANDIN=256:work:2 A5_TRANSFER_GATES='RoPEHead_v1{D=64}'
+#   A5_SETS='256 rope-head/d64/bf16': the toy's 32 RoPE heads a rank proved whole beside 2 of its 8 SiluMul rows.
 set -uxo pipefail
 REPO=$(pwd); O=${OUT:-$RESEARCH_RUN_DIR/out}; W=$(mktemp -d); trap 'rm -rf "$W"' EXIT; mkdir -p $O
 ROW=${A5_ROW:-glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager}
@@ -70,8 +77,12 @@ sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256
 
 # the verifier's lowering: a synthetic input set per template (its values are never read)
 for I in ${A5_SETS:-256 1536}; do
-  $PY -m verity_numerical.bench.generate --subcircuit silu-mul-v2/i$I/bf16 --n 4 --seed 1 --out $W/sets/i$I > $O/sets-i$I.log 2>&1 || exit 9
+  case $I in */*) SUB=$I D=${I//\//_};; *) SUB=silu-mul-v2/i$I/bf16 D=i$I;; esac
+  $PY -m verity_numerical.bench.generate --subcircuit $SUB --n 4 --seed 1 --out $W/sets/$D > $O/sets-$D.log 2>&1 || exit 9
 done
+TG=(); TPL=()
+for t in ${A5_TRANSFER_GATES:-}; do TG+=(--transfer-gate "$t"); TPL+=(--template "$t"); done
+[ ${#TG[@]} -eq 0 ] || [ -n "${A5_ADVICE:-}" ] || { echo "A5_TRANSFER_GATES lists the advice compiler's transfer gates: set A5_ADVICE=workload"; exit 3; }
 M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm
 export RAYON_NUM_THREADS=$(nproc)
 MAIN=${A5_MAIN:-}
@@ -136,9 +147,9 @@ advice_pair() {  # COMMIT BUILD PARTITION WORKLOAD WINDOWS LOGS: windows under t
   [ "$A5_ADVICE" = workload ] && [ "${A5_WINDOWS:-served}" = bundles ] \
     || { echo "A5_ADVICE=workload commits each rank's window from its bundle: set A5_WINDOWS=bundles"; exit 3; }
   local d=$(dirname $5) last=$($PY -c "import json, sys; print('r%d' % (len(json.load(open(sys.argv[1]))['requests']) - 1))" $4)
-  advice_windows $1 $2 $3 $5 $d/advice.bin $6 --write-from-workload $4 || exit 8
-  advice_windows $1 $2 $3 $d/other-windows $d/other-advice.bin $6 --write-from-workload $4 --drop $last || exit 8
-  ADV=(--advice-opening $d/advice.opening.json --other-advice-opening $d/other-advice.opening.json --other-windows $d/other-windows)
+  advice_windows $1 $2 $3 $5 $d/advice.bin $6 --write-from-workload $4 "${TG[@]}" || exit 8
+  advice_windows $1 $2 $3 $d/other-windows $d/other-advice.bin $6 --write-from-workload $4 --drop $last "${TG[@]}" || exit 8
+  ADV=(--advice-opening $d/advice.opening.json --other-advice-opening $d/other-advice.opening.json --other-windows $d/other-windows "${TG[@]}")
   public $d/other-windows $6/other-window
 }
 
@@ -166,7 +177,7 @@ else
     fi
     I=${e%%:*}; LAW=${e#*:}; S=$W/served-i$I
     DEFERRED=$([ "${A5_WINDOWS:-served}" = bundles ] && echo --deferred)
-    (cd integrations/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I $I --law $LAW $DEFERRED) \
+    (cd integrations/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I $I --law $LAW $DEFERRED "${TPL[@]}") \
       > $O/standin-i$I.json 2> $O/standin-i$I.err || { tail -20 $O/standin-i$I.err; exit 8; }
     WL=$S/workload.json; ADV=()
     if [ -n "${A5_ADVICE:-}" ]; then

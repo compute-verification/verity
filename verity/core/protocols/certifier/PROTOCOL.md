@@ -1267,16 +1267,23 @@ shaping delay (hand time minus ready time, over every frame), the capacity per d
 
 Network accounting for arbitrary vLLM usage runs a precommitted AOT compiler. It takes an **advice** string, which
 encodes everything serving made unpredictable, and compiles each engine step's circuit from it. The certifier
-certifies the I/O, and sampled proofs hold the committed values to the compiled circuits and to the certified I/O. The
-advice's length is the content advice `A_c` of the accepted-runs bound, `A_c + W·log2 #Σ_sync + n·log2 D`. v0 is the
-interface the compiler, the encoders and the tie to the certified I/O code against; its schema id is
-`verity/advice/v0`. The module's docstring carries the same layout and charge.
+certifies the I/O, and sampled proofs hold the committed values to the compiled circuits and to the certified I/O. v0 is
+the interface the compiler, the encoders and the tie to the certified I/O code against; its schema id is
+`verity/advice/v0`. The module's docstring carries the same layout and its split by window.
+
+**The charge, and what is committed.** The content advice `A_c` of the accepted-runs bound, `A_c + W·log2 #Σ_sync +
+n·log2 D`, is the advice's length under ENC-CODE's compression, not v0's. v0 is the committed form, as hm96 hiding
+rows, and the form the compiler reads. The red team measured v0 at 10.6 Mbit for a 60 s llama8b-shape window, 3.5 times
+the egress token ids. The advice is private: a compile unit, always proved in zero knowledge, states that the committed
+Programs are compile(advice) under the advice's hiding root, with the compiler's digest registered (PRF-143). The
+advice's root is registered before the live draw, and the compiler refuses every ill-formed advice up to the public cap
+deterministically; v0's validity is that unit's first part (`advice_check`, below).
 
 **Interface.** The `Advice`, `RequestAdvice`, `StepAdvice`, `Row` and `Source` dataclasses are frozen, and construction
 refuses (`MalformedAdvice`) anything that isn't a schedule vLLM could have run. The module's functions are:
 - `encode(advice) -> bytes` and `decode(data) -> Advice`;
 - `total_bits(advice)`;
-- `bits(advice, window, T)` and `bits_by_window(advice, T)`, the charge;
+- `bits(advice, window, T)` and `bits_by_window(advice, T)`, v0's bits by egress window;
 - `outputs(advice)`, the kept samples;
 - `to_json` and `from_json`, a strict JSON form for debugging.
 
@@ -1374,37 +1381,139 @@ a version other than 0, and every invalid advice. The tests' fixture of two requ
 bytes): a 43-bit header, 22 bits for each request, the steps at 13, 29, 25, 25 and 13, and 3 bits for each of five
 releases.
 
-**The charge** (`bits_by_window`). Each record goes to the earliest egress window it can show in:
+**By window** (`bits_by_window`). v0's own bits, not the charge, split so that each record goes to the earliest
+egress window it can show in:
 - an output's release goes to its own window, bucket // T;
 - a step's bits go to the earliest window of an output at that step or later, and a step that no output follows goes
   to the last window;
 - a request goes to the window of its first step, and the header to step 0's.
 
-So windows 0 … m − 1 are charged every record their frames read, and the charges sum to `total_bits`. An advice with
-no outputs is charged wholly to window 0. The accepted-runs bound for a run's first m windows reads `A_c` as Σ_{w<m}
-`bits(advice, w, T)`.
+So windows 0 … m − 1 hold every record their frames read, and the parts sum to `total_bits`. An advice with no outputs
+is wholly window 0's. A per-window charge over the first m windows covers at least these records. The charge itself
+is ENC-CODE's (above).
 
 **Left to the other workstreams**, which v0 doesn't settle:
 - **Per-window parts.** v0 is one string, and `bits_by_window` divides its records among windows by a rule computed
   from the decoded advice, so the prover can't choose the split. But the header's counts and widths depend on later
-  windows, and the records a window is charged aren't one contiguous, self-delimiting part. A per-window bound that
+  windows, and the records a window holds aren't one contiguous, self-delimiting part. A per-window bound that
   counts each window's part as its own string (the red team's A5 and attack 9, #3489) needs an encoding that sends
   each window's part self-delimited (its step and request counts as `uvar`s, with widths registered or per part). That
-  costs a few bits a window, and it is the encoders' and N2's advice mode's to choose.
+  costs a few bits a window, and it is ENC-CODE's and N2-ADVICE's to choose.
 - **The order within a bucket.** Several requests' frames released in one bucket can go out in any order, a channel of
-  up to log2 n_t! bits a bucket that neither the advice nor the timing term charges. The tie to the certified I/O has
-  to fix a canonical order, for example by id then output index.
+  up to log2 n_t! bits a bucket that neither the advice nor the timing term charges. The tie to the certified I/O
+  (IO-TIE) has to fix a canonical order, for example by id then output index.
 - **One frame per kept output.** Each kept output is to be one egress frame, the HTTP head folded into the first and
   `[DONE]` into the last, and a chunk into which vLLM merged tokens split back per token (the variable-length served
-  link).
-- **The id.** The shim's `user` names the session today; it has to name the request, unique within a session.
+  link, CERT-VARLEN).
+- **The id.** The shim's `user` names the session today; it has to name the request, unique within a session
+  (CERT-VARLEN).
 - **Equal tokens at a source.** The compiler has to hold a source run's tokens equal to the hitting request's, or the
-  hit wires in another prompt's KV.
+  hit wires in another prompt's KV (circuits' COMPILER).
 - **Arrival before admission.** A request's first row has to follow its certified arrival, which the tie to the
   certified ingress checks.
-- **What the advice tells the auditor.** If the compiled circuits are public, the advice reveals lengths, batching
-  and, through `sources`, which requests share a prompt prefix. Whether that is protocol structure or has to be
-  committed is for the red team, and for Daniel through the lead.
+
+## The replay's state chain (`replay_chain`)
+
+Under advice v1 (the next section's end) the compile unit replays the scheduler one step unit per engine step. Each
+unit is ENC-REPLAY's `ReplayStep_v1` (`replay_step`): the committed queue state, the next A certified arrivals and the
+next A decisions go in, and the step's rows and next state come out. The chain hands the state from unit to unit as
+the state rows of one produced value a window (`one_stage.produced`, value `replay-state`, `hm96-sha512/row/v2` bit
+rows), beside a window row (value `replay-window`). Each unit reads its rows at public positions, and no gate hashes a
+row: the Lean verifier checks each read's path.
+
+**The step's cursors are private.** The step reads its arrivals and decisions at the scan's cursors, which move by its
+`taken` and `used`, and where a step stands in the certified arrivals or the window's decisions is the schedule
+itself. A registered read sits at a position the verifier derives, so no unit can read the arrival record at the
+cursor. So:
+- once a window, `ReplayLoad` writes the window row: the certified arrivals not yet taken, then the window's own (K
+  warden slots), as `queue` (at most Q), and the window's decoded decisions as `dec` (at most D), all read at public
+  positions;
+- every step unit reads that one row, and its state row carries the cursors as private heads `qh` and `dh`.
+  `ReplayAdvance` checks the step's A arrivals and A decision bits are the window row's at the heads. It finds them with a
+  log shifter that computes only the A entries it returns: about Q + A·bitlen(Q) muxes an element bit, where moving
+  the whole queue would take Q·bitlen(A).
+
+**The rows'** layouts are `replay_chain`'s (`row_fields`, `window_fields`). The state row's first twelve fields are
+ReplayStep_v1's state input and next-state output, bit for bit; it adds the heads `qh` and `dh` and `steps`, the
+window's executed steps still to come. The window row is the queue (at most Q) and the decisions ``dec`` (at most D)
+with ``left``. In every row the valid elements of each group are a prefix and the rest are zero bits, and `decode`
+and `decode_window` refuse any other row.
+
+**A window** is the state rows S_0 … S_{P+1}, with P the public cap on its steps, and two window rows: the last
+window's and its own. Unit 0, `ReplayLoad`, reads state rows 0 and 1 and both window rows. Unit u ≥ 1 is step u:
+ReplayStep_v1 on state row u, with `ReplayAdvance` checking the step's arrivals and bits against window row 1 and
+checking state row u + 1. Steps past the window's executed count are idle: the next row is the row, and
+`ReplayAdvance`'s `active` = 0 drops the unit's rows.
+- The load refuses a state row 0 that leaves decisions or steps unread, a queue past Q, more than D decisions or P
+  steps, and decisions with no step. A step refuses arrivals taken past what is left or past A, and decisions read
+  past what is left or past A. The window's last executed step must read its last decision.
+- **The carry.** Window w's state row 0 is window w − 1's last state row, and its window row 0 is window w − 1's window
+  row 1, each under the same salt (`commit_window(carry=…)`), so the verifier checks that their openings b‖c are equal
+  (`check_chain`, `C-carry`).
+- **The start.** The session's first rows are the empty engine (`empty`, with NB − 1 free blocks) and the empty
+  window, under the public salts `empty_salts`, whose openings the verifier computes (`C-first`).
+
+**Cost** (`size`). A step costs `ReplayAdvance`'s ANDs: the two fronts, about (Q + A·QW)·(1 + IW + 2·LW) and
+D + A·DW, and about 2·width for the idle select and the equality. It also costs three reads and one state row. A
+window costs P steps and one `ReplayLoad`, P + 2 state rows and two window rows, and 3P + 4 reads, each a frame-v3
+path of depth ⌈log2(P + 2)⌉, or 1 for a window row.
+
+**On the corpus** (run `r20261024-091809-297f`): on all 15 of TRACE-CORPUS's sync traces, cut into the certifier's
+60 s windows and walked from the empty rows, every state row and front is the replay's, and both circuits match
+their specifications on the sampled units. A step costs 16,569 ANDs (8B light: R = 19, A = 4, Q = 145) to 80,959
+(heavy: R = 256, A = 35, Q = 1000), against ReplayStep_v1's 521,358 at R = 256; moving the queue and the decisions
+in every state row instead cost 2.3 to 4 times as much a step (run `r20261024-085627-c66d`).
+
+## Advice v0's validity (`advice_check`)
+
+The compile unit's first part ("The charge, and what is committed", above), that the committed bit string decodes to
+a well-formed v0 advice, is the Boolean Definition
+
+    AdviceCheck_v1{L} (bits: Array<L, Value<1>>, length: Array<LW, Value<1>>) -> Value<1>
+
+with L the public cap in bits, a multiple of 40, and LW = bitlen(L / 8). `bits` is the string in stream order and
+`length` its byte count, least significant bit first; bits past 8·length aren't read. The output is 1 exactly when
+`advice_check.reference` holds: length ≤ L / 8, and `decode` takes the bytes up to three refusals the circuit doesn't
+make yet (`DEFERRED`). It makes every other refusal of `decode`: the grammar (version, minimal `uvar`s, the least
+widths, no truncation, zero padding under a byte, no trailing byte), UTF-8 ids, the lengths ≥ 1, first-row order, every
+request admitted, a first row that doesn't resume and starts at its hit, hits only on admitting rows and their sources
+summing to them, adjacent sources of different requests, own KV only on a resume, sources admitted by their step's end,
+continuity, no row past the known tokens (so at most one past the last output), the derived `kind`, no resume of a
+finished request, no request twice in a step, and exactly `output_len` kept outputs.
+
+**Deferred**, refused by `decode` and not yet by the circuit:
+- **Unique ids.** Exact equality of variable-length strings needs the ids sorted lexicographically (prefix doubling, a
+  sort per doubling of the longest id), or a digest, which would hold only computationally.
+- **A source's KV computed there** (`advice._covered`): whether a run of positions lies in one interval its request
+  had computed by that step, a query over position and time per request.
+- **Release buckets non-decreasing per request.** The k-th release belongs to the k-th kept output in stream order,
+  which only the replay knows: matching them takes a second sort, by position, and up to five releases can end in one
+  block.
+
+**Under advice v1 this isn't what the compile unit proves.** At 8.7 × 10^10 ANDs for a 60 s window's 10.6 Mbit, v0's
+validity is too costly to be the compile unit's proof. ENC-REPLAY replays vLLM's scheduler exactly on every corpus trace
+(#3555). ENC-DERIVED's advice v1 is what the certified record, the replay and the derived fields leave, a residual of a
+few hundred bits a window coded prefix-free, and `v1.decode(bytes, certified record)` gives I1 v0. So the compile unit
+takes v1 and produces v0 by replay, and most of v0's validity holds by construction. The three deferred rules are then:
+- unique ids are certified, by the warden's admission order and the request records;
+- a source's KV is ENC-DERIVED's canonical source rule, checked against the tokens;
+- release order is the warden's fixed schedule.
+
+`AdviceCheck` stays as v0's reference check, and as the fallback for advice that comes without a replay.
+
+**The circuit**, three stages:
+1. `AdviceParse` scans the bits five at a time through a bit-serial parser. Its state is the field being read, its bits
+   left and value so far, the header's counts and widths, the counters of the records left, and the in-stream checks.
+   A row is at least five bits, so each block ends at most one request record or row, which it emits as an event.
+2. Batcher's odd-even merge sort orders the L / 5 events by (request, position), one batch of `AdviceSwap` per layer:
+   the network on the next power of two, less the comparators that reach past the events.
+3. `AdviceReplay` scans the sorted events with one request's state, as `advice._replay` replays it: each request's
+   record, then its rows in stream order.
+
+**Cost** (`size`): ANDs = (L / 5)·(parse + replay) + C(L / 5)·swap + the ends, with C(n) ≈ n·log2(n)² / 4
+comparators: 470,116 at L = 240 and 1.49 × 10^8 at 40,000. The 60 s llama8b-shape window's v0 advice, 10.6 Mbit,
+would cost 8.67 × 10^10, 70% of it the sort. A public cap on the rows, the sort's permutation as a private input or a
+narrower w_len would each cut that, each a change to what the Definition states.
 
 ## Advice v1 (`benchmarks/network_e2e/encodings/v1.py`)
 
@@ -1771,6 +1880,16 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
   `ingress="client"`), and the release buckets are the engine's. The two warden traces' `.released` views carry the
   warden's (a, ordinal).
 
+## The compile slice (`compile_slice`)
+
+`CompileSlice_v1` is the compile unit's pieces ("Advice v1" above) composed whole for one window. Its circuit, verdict
+flags, reference (`check`), stand-ins (the cache counts held at 0 among them) and REDTEAM's phase 9 cases (`phase9`)
+are `compile_slice`'s docstring. Its step rows are held to the committed ``srv`` row, which the verifier holds by b‖c
+to the served rows the Commit side registers before the draw (`served_rows`), so REDTEAM phase 10's six passes are
+refused. `benchmarks/network_traces/compile_slice_zk.py` proves eleven units of corpus-smallkv's first seven steps
+`--zk`, held by Lean `verify --zk` (run r20261024-153220-c97c): the honest one, three negatives, phase 9's five and the six passes
+with the served row and with its own, each opening to its verdict, with no witness piece in what the verifier received.
+
 ## The active certifier (`active`)
 
 `active.Proxy` runs the certifiers on one boundary link of a live byte stream. It is an asyncio TCP proxy, the I/O shell
@@ -2021,7 +2140,7 @@ sealed under an AEAD built from SHA-512 alone.
   - **The premise:** every link between two spatial units is a sealed pair link between two of the auditor's
     certifiers. The AEAD's security rests on `prf/sha-512`, and its keys' custody on `trusted-nebius-host`.
   - **What it changes:** A1's units are then the facility, not each block.
-- **What it costs** (run `r20261024-014147-3886`, `benchmarks/network_sim/mockdc.py seal`, on vy-nebius-cpu-2: an AMD
+- **What it costs** (run `r20261024-014147-3886`, `benchmarks/network_sim/mockdc.py seal`, on a CPU node: an AMD
   EPYC Genoa, 256 cores at a load of about 30, with `sha_ni` but no SHA-512 instructions, and OpenSSL 3.0.13).
   Figures are bytes of frames a second on one core, on its CPU seconds. Line rate is 400 Gb/s, 50 GB/s, per uplink in
   each direction; its column is the cores one direction takes at each end.
@@ -2134,13 +2253,54 @@ and seven lemmas, and three more proved lemmas:
   - encode, decode and the JSON form round-trip on 50 random schedules from a small vLLM-like scheduler (chunked
     prefill, same-step and multi-run hits, preemption with resumes that hit their own KV, the row past an EOS,
     shuffled batch order), and the simulator's schedules hold every one of those decisions;
-  - the charge per window sums to the total at five values of T, equals the rule recomputed from the documented
-    records, and charges windows 0 … w at least what their outputs read;
+  - the split by window sums to the total at five values of T, equals the rule recomputed from the documented
+    records, and puts in windows 0 … w at least what their outputs read;
   - each of 38 malformed advices is refused, and so are a kind flipped, a start moved and two requests swapped in
     random schedules;
   - decode refuses non-canonical strings (a wider width or length prefix, nonzero padding, a trailing byte,
     truncation, another version, an id that isn't UTF-8), and every single-bit flip and random corruption of an
     encoding is refused or is itself an advice's canonical encoding;
+- **`test_network_certifier_advice_adversarial.py`:** the red team's cases against advice v0, each named for the
+  attack or assumption it pins (A2, A5, attacks 2 and 7):
+  - the encoding is canonical: every accepted mutation is its own advice's encoding, and wider fields, padding,
+    trailing bytes and another version or type are refused;
+  - the split is causal: windows 0 … m − 1 hold every record their frames read, and an empty session its header;
+  - one writer per value read: rows that read unwritten or rewritten positions, hits on KV no request wrote, a resume
+    reading positions its request never computed, own KV off a resume, a second row past a stop or a resume after it,
+    a flipped `kind`, outputs or releases that aren't the steps', and requests out of first-row order or sharing an id
+    are refused;
+  - schedule choices that leave the outputs unchanged are distinct advices, each with its own bits;
+- **`test_network_certifier_advice_check.py`:** advice v0's validity circuit against `decode`:
+  - the circuit computes `reference` on the fixture, its bit flips and truncations, garbage past the length and a
+    length past L / 8 at L = 240, and (slow) on about 3000 strings at L = 1520: the simulated schedules, their flips,
+    byte corruptions, unchecked mutations encoded field by field, wider widths, padding, trailing bytes and random
+    strings;
+  - over the same strings, decode takes ⇒ `reference` takes, `reference` refuses ⇒ decode refuses, and where they
+    differ decode's reason is a `DEFERRED` one; each deferred refusal is one named string the circuit takes;
+  - the pruned sort sorts every 0-1 input up to 12 events, `comparators` counts it, and `size` is the unit's count,
+    pinned at L = 240 and at the 60 s window;
+- **`test_network_certifier_replay_chain.py`:** the replay's state chain:
+  - both rows' layouts are pinned field by field. The state row's state part is ReplayStep_v1's fields and bits, and
+    the front is its `arr_*` and `bits` (once `replay_step` is in the tree). The empty rows and random rows round-trip.
+    `decode` refuses a gap, an empty slot with a bit set, a head past Q or D, steps past P, nonzero padding, a short row
+    and a non-bit, and `decode_window` refuses a gap, an empty slot with a bit set, a decision past `left`, `left` past
+    D, nonzero padding and a short row;
+  - the front's pruned log shifter is a slice, at every shift its bits express;
+  - `ReplayAdvance` and `ReplayLoad` compute `advance` and `load` on random rows, each with its next rows right and
+    one bit wrong, and on each refusal. For `ReplayAdvance` these are the step's ok, an arrival or a decision bit
+    that isn't the window row's at the heads, an arrival left out, arrivals taken past what is left or past A,
+    decisions read past what is left or past A, or left at the window's last step, and the idle step. For
+    `ReplayLoad` they are the last window's decisions or steps left, a queue past Q, steps past P, decisions with no
+    step, a decision past the count, a count past D and a gap in the arrivals;
+  - a two-window session runs through both parts, with every unit's reads opened under the window's roots.
+    `check_chain` accepts it, and refuses a short window, the empty state or window under a fresh salt or another
+    program's, the carried state or window under a fresh salt, and another row of the last window;
+  - `size` is the parts' AND counts, which circuit-check pins at the tests' shape and at the sync KV-pressure trace's;
+- **`test_network_certifier_compile_slice.py`:** the compile slice's scan is the replay's, and the circuit's verdict
+  is `check`'s on the honest rows, four negatives and REDTEAM's phase 9 choices, each refused by exactly the checks
+  `check` names; `codeword` is the encoder's, and `size` is pinned;
+- **`test_network_certifier_served_rows.py`:** the runner's rows are the slice's ``srv`` row, REDTEAM phase 10's six
+  passes are refused at ``rows`` with the registered row and their own row isn't its leaf, and the record is public only;
 - **`test_network_certifier_active.py`:** the active certifier over localhost sockets on an injected clock:
   - `Shaper` is `run_shaper`'s rule on random instances;
   - an honest run's records, hand times and wire are the Program's, accepted raw and committed;

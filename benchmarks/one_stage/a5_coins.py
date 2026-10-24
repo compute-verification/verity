@@ -81,16 +81,17 @@ def served_h1():
     return _module("a5_served_h1_coins", TREE / "benchmarks/pouw/served_h1/coins.py")
 
 
-def need(rule: str, program: Program, query: Mapping[str, Any], population: int) -> int:
+def need(rule: str, program: Program, query: Mapping[str, Any], population: int,
+         work_table: Mapping[str, Any] | None = None) -> int:
     """The most coins one rank's draw reads, known from its window before anything opens. The window gives the stream's law:
-    the rule over its N (`service.selection_law`), expanded over its program and query (`draw.derive`), as
-    `Stream.register` expands it. The stream's own sampler (`service.select_draw`) draws that law on bytes that reject no
+    the rule over its N (`service.selection_law`), expanded over its program and query (`draw.derive`) under the work table
+    the rank registers with (a ``work`` law's), as `Stream.register` expands it. The stream's own sampler (`service.select_draw`) draws that law on bytes that reject no
     word (zeros: a zero word is below every largest multiple), and the need is what it reads plus its longest stream once
     more. `coins.draw_first` reads each stream (the law's one, or one per stratum) once, 2 k width(n) + 64 bytes. It reads
     a stream again only when the stream's words run out, which takes k + 1 of them rejected, each with probability below
     2^-64 (`coins.OwnRandomness`). The margin covers one such rerun, so a draw reads past its need only after two."""
     selection = S.Law(rule)
-    law = D.derive(program, query, S.selection_law(selection, population))
+    law = D.derive(program, query, S.selection_law(selection, population), work_table)
     reads: list[int] = []
 
     def zeros(n: int) -> bytes:
