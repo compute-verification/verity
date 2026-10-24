@@ -10,6 +10,7 @@ first coin.
     vy-challenger-gate model-key --model M --circuit SHA512 [--weights-root W]
     vy-challenger-gate certifier-rehearse --peer NAME --port PORT --minutes M [--tamper late|extra] [--requests N]
                                           [--in-flight N] [--tokens N] [--profile planned|served]
+    vy-challenger-gate warden-rehearse --peer NAME --port PORT --minutes M [--requests N] [--tokens N]
     vy-challenger-gate status SESSION|RUN | ledger | pins | models | pubkey | fetch SESSION|RUN
 
 - **Who reaches it.** Every key in `research`'s authorized_keys on the host is forced to `vy-challenger-gate` (`command=`),
@@ -20,7 +21,7 @@ first coin.
   session; it never names code. Infra's `vy-admin` runs the same gate (`sudo vy-challenger-gate VERB ...`, `by` vy-admin),
   and it alone may reserve a window for a lane that has no key of its own (`--for LANE`: the reserve records `for` and
   keeps `by` vy-admin, and the window's prover is LANE). Nothing else runs as `research` there, and nothing runs as
-  `auditor` but the session unit, `reserve`, `admit` and a certifier rehearsal's unit.
+  `auditor` but the session unit, `reserve`, `admit` and a rehearsal's unit (the certifier's or the warden's).
 - **What runs.** `/opt/vy-challenger/current` -> `/opt/vy-challenger/<commit>`, a root-owned `git archive` of that commit
   (`pin.sh`); the commit is the directory's name, and every entry names it (`pinned`). pin.sh pins only a commit on
   origin/main's first-parent history, which it fetches from GitHub itself, and appends `pin_line(commit, main, utc)` to
@@ -105,6 +106,22 @@ first coin.
   salt and what a second reveal of window 0's salt got). `status RUN` and `fetch RUN` return it. The rehearsal's keys are made in a scratch directory and removed, and `out/` holds no salt. A rehearsal is
   no window of the challenger's: it takes no coin and writes no ledger entry (the ledger's kinds are the verifier's,
   `verify_ledger`'s).
+- **A warden rehearsal** (`warden-rehearse`, a lane's own gate key or vy-admin): the byte-cell warden
+  (`verity.core.protocols.certifier.warden`) as the auditor's device, `benchmarks/network_traces/warden_serve.py
+  rehearse`, with the warden and its client here and the server the peer's endpoint, reached through the same tunnel:
+  client ──cells──▶ warden (here) ──tunnel──▶ the peer's 127.0.0.1:PORT. The gate validates `--peer`, `--port` and
+  `--minutes` as a certifier rehearsal's, `--requests` 4 to 400 (100 by default) and `--tokens` 16 to 256, the most
+  tokens a request asks for, recorded and passed on only when given (`warden_serve.py`'s 256 otherwise). The traffic
+  is the gate's (`WARDEN_RATE`, `WARDEN_SEED`, `WARDEN_TAIL_S`), so a request whose `--minutes` is under
+  `warden_minutes` of its requests is refused, with the least that fits. Its request carries `device: warden`; it
+  shares the certifier rehearsal's directory, run names, unit, `status` and `fetch`, and one of either runs at a time.
+  The warden writes to `witness/` (0700): its three records, `certified.jsonl` (each record's head and certifier salt
+  with its certificate), the cells' salts, the traffic, the client's log and the check, all the prover's. Its unit
+  publishes to `out/` only what isn't: `deployment.json` (the warden's key, session and schedule), `cells.jsonl` (each
+  link-window's registration, `warden_rows`, and its cost) and `certificates.jsonl` (the certificates alone).
+  `end.json` adds `device`, the check's verdict (`warden_outcome`: accepted, the number of problems and the counts
+  `WARDEN_COUNTS` names), each registration's root by value and each witness file by name and size. `fetch RUN` gives
+  `witness/` only to the run's own lane key (the request's `by`) and to vy-admin.
 
 Every signature of the key (`reserve`'s, `admit`'s, a period's, `end`'s, and `serve.py`'s record and close,
 `--sign-lock`) is taken under `sign.lock`, each opening the key's leaf state only to sign, so `lms.LeafState`, which
@@ -122,6 +139,7 @@ import os
 import re
 import secrets
 import shlex
+import shutil
 import signal
 import subprocess
 import sys
@@ -163,6 +181,15 @@ CERTIFIER_IN_FLIGHT = (1, 4)
 CERTIFIER_TOKENS = (16, 64)
 TAMPERS = ("late", "extra")
 CERTIFIER_PROFILES = ("planned", "served")
+WARDEN_REQUESTS = (4, 400)
+WARDEN_TOKENS = (16, 256)
+#: the warden rehearsal's traffic, which the gate fixes so that `warden_minutes` bounds it: Poisson arrivals at
+#: `WARDEN_RATE` a second drawn from `WARDEN_SEED`, the run lasting `WARDEN_TAIL_S` past the last
+WARDEN_RATE, WARDEN_TAIL_S, WARDEN_SEED = 0.5, 60, 0
+#: what a warden rehearsal publishes in `out/`, beside its certificates (`certificates.jsonl`); everything else
+#: `warden_serve.py rehearse` writes is witness and stays in `witness/`, which `fetch` gives the run's own lane alone
+WARDEN_PUBLIC = ("deployment.json", "cells.jsonl")
+WITNESS = "witness"
 TUNNEL_SSH = ["ssh", "-N", "-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes", "-o", "ServerAliveInterval=15"]
 READ_ONLY = "-"
 HOST_ACCOUNTS = ("root", "vy-admin", "research", "auditor")
@@ -751,22 +778,7 @@ def parse_certifier(argv: list[str], host: Host) -> dict:
     p.add_argument("--tokens", default=None)
     p.add_argument("--profile", default=CERTIFIER_PROFILES[0])
 
-    def refuse(why: object) -> None:
-        raise Refused(f"certifier-rehearse: {why}; {' '.join(p.format_usage().split())}")
-
-    p.error = refuse
-    try:
-        a = p.parse_args(argv)
-    except argparse.ArgumentError as e:
-        refuse(e)
-    if a.peer not in peers(host):
-        raise Refused(f"--peer {a.peer!r}: one of {peers(host)} (/etc/vy/peers)")
-
-    def bounded(flag: str, v: str, lo: int, hi: int) -> int:
-        if not re.fullmatch(r"[1-9][0-9]{0,4}", v) or not lo <= int(v) <= hi:
-            raise Refused(f"{flag} {v!r}: {lo} to {hi}")
-        return int(v)
-
+    a = _parse_rehearsal(p, argv, host)
     port = bounded("--port", a.port, 1024, 65535)
     minutes = bounded("--minutes", a.minutes, *CERTIFIER_MINUTES)
     requests = bounded("--requests", a.requests, *CERTIFIER_REQUESTS)
@@ -783,19 +795,76 @@ def parse_certifier(argv: list[str], host: Host) -> dict:
             "profile": a.profile} | given
 
 
+def _parse_rehearsal(p: argparse.ArgumentParser, argv: list[str], host: Host) -> argparse.Namespace:
+    """A rehearsal verb's arguments, refused (with the verb's usage) when they don't parse or `--peer` isn't a peer."""
+    def refuse(why: object) -> None:
+        raise Refused(f"{p.prog.split()[-1]}: {why}; {' '.join(p.format_usage().split())}")
+
+    p.error = refuse
+    try:
+        a = p.parse_args(argv)
+    except argparse.ArgumentError as e:
+        refuse(e)
+    if a.peer not in peers(host):
+        raise Refused(f"--peer {a.peer!r}: one of {peers(host)} (/etc/vy/peers)")
+    return a
+
+
+def bounded(flag: str, v: str, lo: int, hi: int) -> int:
+    if not re.fullmatch(r"[1-9][0-9]{0,4}", v) or not lo <= int(v) <= hi:
+        raise Refused(f"{flag} {v!r}: {lo} to {hi}")
+    return int(v)
+
+
+def warden_minutes(requests: int) -> int:
+    """The fewest minutes a warden rehearsal of `requests` requests takes: its traffic's last arrival (1/`WARDEN_RATE`
+    seconds a request), the tail, the rest of the 60-second window it ends in, the key and the check."""
+    return -(-(round(requests / WARDEN_RATE) + 3 * WARDEN_TAIL_S) // 60)
+
+
+def parse_warden(argv: list[str], host: Host) -> dict:
+    """A warden rehearsal's request: the peer, the endpoint's port on its loopback, the minutes it may run (at least
+    `warden_minutes` of its requests), how many requests its traffic sends and, when given, the most tokens a request
+    asks for (`warden_serve.py`'s 256 otherwise)."""
+    p = argparse.ArgumentParser(prog="vy-challenger-gate warden-rehearse", exit_on_error=False, add_help=False,
+                                allow_abbrev=False)
+    p.add_argument("--peer", required=True)
+    p.add_argument("--port", required=True)
+    p.add_argument("--minutes", required=True)
+    p.add_argument("--requests", default="100")
+    p.add_argument("--tokens", default=None)
+    a = _parse_rehearsal(p, argv, host)
+    port = bounded("--port", a.port, 1024, 65535)
+    minutes = bounded("--minutes", a.minutes, *CERTIFIER_MINUTES)
+    requests = bounded("--requests", a.requests, *WARDEN_REQUESTS)
+    given = {} if a.tokens is None else {"tokens": bounded("--tokens", a.tokens, *WARDEN_TOKENS)}
+    if minutes < (least := warden_minutes(requests)):
+        raise Refused(f"--minutes {minutes}: {requests} requests take {least} minutes (arrivals at {WARDEN_RATE} a "
+                      f"second, a {WARDEN_TAIL_S} s tail, the window they end in and the check): give --minutes "
+                      f"{least} or more, or fewer --requests")
+    return {"device": "warden", "peer": a.peer, "port": port, "minutes": minutes, "requests": requests} | given
+
+
+#: each rehearsal verb's request parser
+REHEARSALS = {"certifier-rehearse": parse_certifier, "warden-rehearse": parse_warden}
+
+
 def certifier_runs(host: Host) -> list[str]:
     return sorted(d.name for d in host.certifier.iterdir() if CERTIFIER_RUN.fullmatch(d.name)) \
         if host.certifier.is_dir() else []
 
 
 def gate_certifier(argv: list[str], host: Host, *, by: str, now: datetime, token: str, start: Callable[[str], None],
-                   own: Callable[[Path], None], active: Callable[[str], bool]) -> dict:
-    """Validate a certifier rehearsal's request, refused while another runs (under the gate's lock), and `start` its
-    unit, which runs `certifier-run` as `auditor`. Returns at once: `status RUN` follows it."""
-    req = parse_certifier(argv, host)
+                   own: Callable[[Path], None], active: Callable[[str], bool],
+                   parse: Callable[[list[str], Host], dict] = parse_certifier) -> dict:
+    """Validate a rehearsal's request (`parse`: the certifier's or the warden's), refused while another of either runs
+    (under the gate's lock), and `start` its unit, which runs `certifier-run` as `auditor`. Returns at once: `status
+    RUN` follows it."""
+    req = parse(argv, host)
     with locked(host.root / "gate.lock"):
         if (running := next((r for r in certifier_runs(host) if active(r)), None)) is not None:
-            raise Refused(f"certifier rehearsal {running} still runs: one at a time (status {running})")
+            raise Refused(f"rehearsal {running} still runs: one at a time, a certifier's or a warden's "
+                          f"(status {running})")
         if not host.certifier.is_dir():
             host.certifier.mkdir(mode=0o755)
             own(host.certifier)
@@ -820,12 +889,17 @@ def certifier_status(run: str, host: Host, active: Callable[[str], bool]) -> dic
     return {"run": run, "request": read(d / "request.json"), "end": end, "active": end is None and active(run)}
 
 
-def certifier_fetch(run: str, host: Host) -> bytes:
-    """The rehearsal's directory (its request, out/ and end) as a gzipped tar."""
+def certifier_fetch(run: str, host: Host, *, witness: bool = False) -> bytes:
+    """The rehearsal's directory (its request, out/ and end) as a gzipped tar, with a warden rehearsal's `witness/`
+    only when `witness` (the gate's: the run's own lane, or vy-admin)."""
     certifier_status(run, host, lambda _: False)
+    hidden = f"{run}/{WITNESS}"
+
+    def keep(info: tarfile.TarInfo) -> tarfile.TarInfo | None:
+        return info if witness or (info.name != hidden and not info.name.startswith(hidden + "/")) else None
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
-        tar.add(host.certifier / run, arcname=run)
+        tar.add(host.certifier / run, arcname=run, filter=keep)
     return buf.getvalue()
 
 
@@ -838,7 +912,9 @@ USAGE = ("verbs: reserve --peer NAME --scheme S --families JSON [--epoch E] [--m
          "| model-register --model M --circuit SHA512 --descriptor FILE --checkpoint DIR (vy-admin's) "
          "| model-key --model M --circuit SHA512 [--weights-root W] (a lane's own gate key, or vy-admin) "
          "| certifier-rehearse --peer NAME --port PORT --minutes M [--tamper late|extra] [--requests N] "
-         "[--in-flight N] [--tokens N] [--profile planned|served] (a lane's own gate key, or vy-admin) "
+         "[--in-flight N] [--tokens N] [--profile planned|served] "
+         "| warden-rehearse --peer NAME --port PORT --minutes M [--requests N] [--tokens N] "
+         "(a lane's own gate key, or vy-admin) "
          "| status SESSION|RUN | ledger | pins | models | pubkey | fetch SESSION|RUN")
 
 
@@ -937,20 +1013,21 @@ def gate(argv: list[str], host: Host = Host(), **hooks: Any) -> tuple[int, bytes
             if by is None:
                 raise Refused("this key reads only: a model's salt key goes to a lane's own gate key, or vy-admin")
             doc = gate_model_key(rest, host)
-        elif verb == "certifier-rehearse":
+        elif verb in REHEARSALS:
             if by is None:
-                raise Refused("this key reads only: a certifier rehearsal is started with a lane's own gate key, or by "
-                              "vy-admin")
+                raise Refused(f"this key reads only: a {verb.removesuffix('-rehearse')} rehearsal is started with a "
+                              "lane's own gate key, or by vy-admin")
             doc = gate_certifier(rest, host, by=by, now=now, token=hooks.get("token") or secrets.token_hex(2),
                                  start=hooks.get("start_certifier") or start_certifier_unit,
                                  own=hooks.get("own") or own_by_auditor,
-                                 active=hooks.get("certifier_active") or certifier_unit_active)
+                                 active=hooks.get("certifier_active") or certifier_unit_active, parse=REHEARSALS[verb])
         elif verb == "models" and not rest:
             return 0, host.models.read_bytes() if host.models.exists() else b""
         elif verb == "status" and len(rest) == 1 and CERTIFIER_RUN.fullmatch(rest[0]):
             doc = certifier_status(rest[0], host, hooks.get("certifier_active") or certifier_unit_active)
         elif verb == "fetch" and len(rest) == 1 and CERTIFIER_RUN.fullmatch(rest[0]):
-            return 0, certifier_fetch(rest[0], host)
+            request = certifier_status(rest[0], host, lambda _: False)["request"]
+            return 0, certifier_fetch(rest[0], host, witness=admin or (by is not None and by == request.get("by")))
         elif verb == "status" and len(rest) == 1:
             doc = gate_status(rest[0], host, active, now)
         elif verb == "ledger" and not rest:
@@ -1268,22 +1345,73 @@ def certifier_env(tree: Path = TREE) -> dict[str, str]:
             "PYTHONDONTWRITEBYTECODE": "1", "PYTHONPATH": str(tree)}
 
 
+def warden_command(req: dict, out: Path, url: str, tree: Path = TREE) -> list[str]:
+    """`warden_serve.py rehearse` of the request: the warden and its client here, the warden's upstream the endpoint
+    at `url` (the tunnel's local end), the request's number of requests on the gate's traffic (`WARDEN_RATE`,
+    `WARDEN_SEED`, `WARDEN_TAIL_S`), and the most tokens a request asks for only when the request has it."""
+    given = ["--max-tokens", str(req["tokens"])] if "tokens" in req else []
+    return [sys.executable, str(tree / "benchmarks" / "network_traces" / "warden_serve.py"), "rehearse",
+            "--upstream", url.removeprefix("http://"), "--out", str(out), "--requests", str(req["requests"]),
+            "--rate", str(WARDEN_RATE), "--seed", str(WARDEN_SEED), "--tail", str(WARDEN_TAIL_S), *given]
+
+
+#: the counts of `warden_serve.py check`'s summary a warden rehearsal's end carries: none is a cell's content or a
+#: connection's own
+WARDEN_COUNTS = ("requests", "ended", "refused", "failed", "windows", "certified_windows", "certificates",
+                 "signer_refused", "cell_rows", "cells", "wire_bits", "cells_in_their_bucket", "tick_lateness_ms")
+
+
+def warden_outcome(out: Path, witness: Path) -> dict:
+    """A warden rehearsal's public outcome, from what `warden_serve.py rehearse` wrote to `witness`:
+    `WARDEN_PUBLIC`'s files copied to `out`, `certified.jsonl`'s certificates without the heads and salts they sign
+    (`out/certificates.jsonl`), each registration's root by value, the check's verdict (`accepted`, how many problems,
+    `WARDEN_COUNTS`), and each witness file by name and size alone."""
+    for name in WARDEN_PUBLIC:
+        if (witness / name).is_file():
+            shutil.copyfile(witness / name, out / name)
+    if (witness / "certified.jsonl").is_file():
+        docs = [json.loads(x) for x in (witness / "certified.jsonl").read_text().splitlines()]
+        (out / "certificates.jsonl").write_text("".join(
+            json.dumps({k: doc[k] for k in ("certificate", "refused") if k in doc}, sort_keys=True) + "\n"
+            for doc in docs))
+    cells = (out / "cells.jsonl").read_text().splitlines() if (out / "cells.jsonl").is_file() else []
+    registrations = {r["value"]: r["root"] for r in (json.loads(x).get("registration") for x in cells) if r}
+    try:
+        check = json.loads((witness / "check.json").read_text())
+    except (OSError, ValueError):
+        check = None
+    verdict = None
+    if isinstance(check, dict):
+        summary = check.get("summary") or {}
+        verdict = {"accepted": check.get("accepted"), "problems": len(check.get("problems") or []),
+                   **{k: summary[k] for k in WARDEN_COUNTS if k in summary}}
+    sizes = {str(p.relative_to(witness)): p.stat().st_size for p in sorted(witness.rglob("*")) if p.is_file()}
+    return {"verdict": verdict, "registrations": registrations, "witness": sizes}
+
+
 def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], datetime],
                   tunnel_argv: Callable[[list[str], int], list[str]] | None = None,
                   up: Callable[[subprocess.Popen, int], bool] = tunnel_up,
-                  command: Callable[[dict, Path, str], list[str]] = certifier_command,
+                  command: Callable[[dict, Path, str], list[str]] | None = None,
                   wait: Callable[[subprocess.Popen, float], int] | None = None) -> dict:
-    """Run the requested rehearsal (the module docstring's "A certifier rehearsal"), as `auditor`: open the tunnel to
-    the peer's endpoint, run the rehearsal through it for at most the request's minutes, close the tunnel, and write
-    `end.json`."""
+    """Run the requested rehearsal (the module docstring's "A certifier rehearsal" and "A warden rehearsal"), as
+    `auditor`: open the tunnel to the peer's endpoint, run the rehearsal through it for at most the request's minutes,
+    close the tunnel, and write `end.json`. A warden rehearsal writes to `witness/`, and its public outcome
+    (`warden_outcome`) to `out/` and the end."""
     if not CERTIFIER_RUN.fullmatch(run):
         raise Refused(f"no certifier rehearsal {run!r}")
     d = host.certifier / run
     req = json.loads((d / "request.json").read_text())
+    warden = req.get("device") == "warden"
+    command = command or (warden_command if warden else certifier_command)
     out = d / "out"
     if out.exists():
         raise Refused(f"certifier rehearsal {run} has run already")
     out.mkdir(mode=0o755)
+    work = out
+    if warden:
+        work = d / WITNESS
+        work.mkdir(mode=0o700)
     sys.path.insert(0, str(HERE))
     import serve
     local = free_local_port()
@@ -1298,7 +1426,7 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
             why = f"the tunnel to {req['peer']}'s 127.0.0.1:{req['port']} didn't come up (tunnel.log)"
         else:
             with open(out / "rehearse.log", "wb") as log:
-                proc = subprocess.Popen(command(req, out, f"http://127.0.0.1:{local}"), stdin=subprocess.DEVNULL,
+                proc = subprocess.Popen(command(req, work, f"http://127.0.0.1:{local}"), stdin=subprocess.DEVNULL,
                                         stdout=log, stderr=subprocess.STDOUT, env=certifier_env(),
                                         start_new_session=True)
             rc = (wait or _wait)(proc, req["minutes"] * 60)
@@ -1307,17 +1435,22 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
     finally:
         tunnel.terminate()
         tunnel.wait()
-    try:
-        summary = json.loads((out / "summary.json").read_text())
-    except (OSError, ValueError):
-        summary = {}
+    if warden:
+        outcome = {"device": "warden", **warden_outcome(out, work)}
+    else:
+        try:
+            summary = json.loads((out / "summary.json").read_text())
+        except (OSError, ValueError):
+            summary = {}
+        outcome = {"runs": {s: {"verdict": r.get("verdict"),
+                                "network": (r.get("network_verdict") or {}).get("accepted"),
+                                "audit": r.get("audit_accepted"), "salt": r.get("salt_accepted"),
+                                "salt_again": r.get("salt_again")}
+                            for s, r in summary.get("runs", {}).items()}}
     files = {str(p.relative_to(out)): hashlib.sha512(p.read_bytes()).hexdigest()
              for p in sorted(out.rglob("*")) if p.is_file()}
-    runs = {s: {"verdict": r.get("verdict"), "network": (r.get("network_verdict") or {}).get("accepted"),
-                "audit": r.get("audit_accepted"), "salt": r.get("salt_accepted"), "salt_again": r.get("salt_again")}
-            for s, r in summary.get("runs", {}).items()}
     end = {"run": run, "rc": rc, "ended": why or ("the rehearsal ended" if rc == 0 else f"the rehearsal exited {rc}"),
-           "pinned": pinned, "runs": runs, "files": files, "ended_utc": utc(now())}
+           "pinned": pinned, **outcome, "files": files, "ended_utc": utc(now())}
     (d / "end.json").write_text(json.dumps(end, indent=1, sort_keys=True) + "\n")
     return end
 

@@ -11,8 +11,10 @@ Nothing here is the warden's but bytes. Tonight's clients send HTTP/1.1 requests
 with `Connection: close`, so the server's end of stream ends egress (the warden never half-closes toward a server).
 
 **What it can't enforce here.**
-- The warden runs on the server's host (`trusted-host` stands for the auditor's host), and the server's host
-  can reach anyone by any other route, which nothing here sees.
+- Run directly, the warden runs on the server's host (`trusted-host` stands for the auditor's host). The gate's
+  `warden-rehearse` (`benchmarks/live_challenger/auditor.py`) runs it on the auditor's host instead, the server reached
+  through an ssh tunnel to the peer's loopback. Either way the server's host can reach anyone by any other route,
+  which nothing here sees.
 - TLS is not terminated: both legs are plain TCP.
 - The rehearsal's client is on the same host, so its link is loopback, and its arrival times are read on the warden's
   host clock (`origin_unix`).
@@ -188,9 +190,16 @@ def fake_tokens(body: dict) -> int:
 async def fake_endpoint(reader: asyncio.StreamReader, writer, *, sleep=asyncio.sleep, first_s: float = 0.1,
                         token_s: float = 0.02) -> None:
     """A stand-in for vLLM's streamed `/v1/completions` for a rehearsal: it reads one request, answers its first token
-    `first_s` after, then one event every `token_s`, its usage, `[DONE]`, and closes."""
+    `first_s` after, then one event every `token_s`, its usage, `[DONE]`, and closes. `GET /v1/models` lists its one
+    model, `fake`, so that a rehearsal that names no model (the gate's `warden-rehearse`) runs against it too."""
     try:
         head = await reader.readuntil(b"\r\n\r\n")
+        if head.startswith(b"GET /v1/models "):
+            doc = json.dumps({"object": "list", "data": [{"id": "fake", "object": "model"}]}).encode()
+            writer.write(b"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\nconnection: close\r\n"
+                         b"content-length: %d\r\n\r\n%s" % (len(doc), doc))
+            await writer.drain()
+            return
         m = re.search(rb"(?im)^content-length:\s*(\d+)", head)
         body = json.loads(await reader.readexactly(int(m.group(1)))) if m else {}
         n, model = fake_tokens(body), body.get("model")
@@ -611,7 +620,7 @@ def rehearse(args) -> int:
     return 0 if result["accepted"] else 1
 
 
-def main(argv=None) -> int:
+def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="warden_serve.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
     k = sub.add_parser("keys", help="make or load an LMS key and write its public.json")
@@ -658,7 +667,11 @@ def main(argv=None) -> int:
     c.add_argument("--deployment", required=True, type=Path)
     c.add_argument("--traffic", required=True, type=Path)
     x.add_argument("--run", required=True, type=Path)
-    args = ap.parse_args(argv)
+    return ap
+
+
+def main(argv=None) -> int:
+    args = parser().parse_args(argv)
 
     if args.command == "keys":
         cs.load_key(args.dir, args.height)
