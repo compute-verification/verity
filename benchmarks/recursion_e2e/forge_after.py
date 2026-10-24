@@ -102,7 +102,7 @@ def forge(stmt: Path, inner: Path, port: str, out: Path) -> dict:
     if sorted(pos) != list(range(int(port_["leaves"]))):
         return skip(f"the table reads positions {pos}, not all {port_['leaves']} of the value's rows")
     meta = json.loads(text.split("\n", 2)[1][5:])
-    progs = [c for c in (O.session_program((inner / "public.json").read_bytes()), meta.get("program"))
+    progs = [c for c in (O.session_program((inner / "public.json").read_bytes()), meta.get("program_sha512"))
              if c and RG.domain(c, port_["value"], len(rows[0]), int(port_["leaves"]), wb).domain_id.hex() == port_["domain"]]
     if not progs:
         return skip("neither the session's program nor the statement's names the value's domain")
