@@ -15,7 +15,10 @@ gates of one width) and an index, and holds each of `Desc`'s operations on them 
   (`ofSeq_pos`, `partsPos_get`), where no strided part names a negative position, which the decoder ensures
   (`parsePartsIn_nonneg`), and `memberSpans` are a batch member's indices into its argument (`memberSpans_idx`);
 * a context's arguments name their references (`ctxOf_arg`), and a loop appending segments names its elements'
-  positions in order (`forIn_append_pos`);
+  positions in order (`forIn_append_pos`, `forIn_pos`);
+* `nodeReads` gives a primitive's node its arguments' positions read whole (`nodeReads_prim`), and a composite's those
+  its callee's `used` names, member by member where needed, then a scan's carries, kept by `keep` (`nodeReads_comp`),
+  each read piece by piece through `down` (`readPos`, `downPos`, `calleePos`);
 * `argSpans` is a member's used leaves' indices into its argument (`argSpans_batch`, `argSpans_xs`, `argSpans_other`);
 * `Array.qsort` by a key sorts by it (`qsort_sorted`), so `Desc.Ivs.norm` keeps exactly its intervals' leaves
   (`norm_mem`), and `Desc.Ivs.covers` checks every leaf is in an interval (`covers_mem`);
@@ -1740,6 +1743,213 @@ theorem forIn_append_pos {β : Type} (F : β → Except String (Array Seg)) (D :
     obtain ⟨segs, hs, rfl⟩ := hf x acc _ hx
     rw [forIn_append_pos F D f hf hF l (acc ++ segs) out h, segsPos_append, hF x segs hs, List.flatMap_cons,
       List.append_assoc]
+
+
+/-! ## What `Desc.nodeReads` gives, block by block
+
+`nodeReads` reads each argument of node `k` over spans of its positions, piece by piece through `down`, and a scan's later
+iterations' carries through `fromCallee`. Its segments' positions are those reads' positions laid end to end
+(`nodeReads_prim`, `nodeReads_comp`), a composite's kept where `keep` keeps their segments. -/
+
+/-- The positions of `down`'s segments for a piece, where it gives them. -/
+def downPos (c : Desc.Ctx) (q : Piece) : List (Tgt × Int) :=
+  match Desc.down c Flock.Steps.FUEL q with
+  | .ok segs => segsPos segs
+  | .error _ => []
+
+/-- The positions of `fromCallee`'s segments, where it gives them. -/
+def calleePos (c : Desc.Ctx) (k m a b : Nat) : List (Tgt × Int) :=
+  match Desc.fromCallee c Flock.Steps.FUEL k m a b with
+  | .ok segs => segsPos segs
+  | .error _ => []
+
+/-- The positions `nodeReads` reads argument `i` of node `k` at over `spans`. -/
+def readPos (c : Desc.Ctx) (k i : Nat) (spans : Array (Nat × Nat)) : List (Tgt × Int) :=
+  spans.toList.flatMap fun x => ((c.arg k i).pieces x.1 x.2).toList.flatMap (downPos c)
+
+/-- A loop that adds `D x`'s positions to its segments' for each element `x`. -/
+theorem forIn_pos {β : Type} (D : β → List (Tgt × Int)) (f : β → Array Seg → Except String (ForInStep (Array Seg)))
+    (hf : ∀ x r y, f x r = .ok y → ∃ r', y = .yield r' ∧ segsPos r' = segsPos r ++ D x) :
+    ∀ (l : List β) (acc out : Array Seg), forIn l acc f = .ok out → segsPos out = segsPos acc ++ l.flatMap D
+  | [], acc, out, h => by
+    simp only [List.forIn_nil, pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    simp
+  | x :: l, acc, out, h => by
+    rw [List.forIn_cons] at h
+    rcases hx : f x acc with e | y <;> rw [hx] at h
+    · exact absurd h (by intro h; cases h)
+    obtain ⟨r', rfl, hr'⟩ := hf x acc _ hx
+    rw [forIn_pos D f hf l r' out h, hr', List.flatMap_cons, List.append_assoc]
+
+theorem ok_bind_pure {α : Type} {x : Except String α} {y : α} (h : (x >>= fun r => pure r) = Except.ok y) :
+    x = .ok y := by
+  obtain ⟨r, hr, h⟩ := Walk.except_bind_ok h
+  simp only [pure, Except.pure, Except.ok.injEq] at h
+  rw [hr, h]
+
+/-- `nodeReads`' read of argument `i` over `spans`, from the segments `acc`. -/
+theorem readLoop_pos (c : Desc.Ctx) (k i : Nat) (spans : Array (Nat × Nat)) (acc out : Array Seg)
+    (h : forIn spans acc (fun (x : Nat × Nat) __s => do
+        let __s ← forIn ((c.arg k i).pieces x.1 x.2) __s fun q __s => do
+          let __do_lift ← Desc.down c Flock.Steps.FUEL q
+          pure (ForInStep.yield (__s ++ __do_lift))
+        pure (ForInStep.yield __s)) = .ok out) :
+    segsPos out = segsPos acc ++ readPos c k i spans := by
+  rw [← Array.forIn_toList] at h
+  refine forIn_pos _ _ (fun x r y hy => ?_) _ acc out h
+  obtain ⟨r', hr', hy⟩ := Walk.except_bind_ok hy
+  simp only [pure, Except.pure, Except.ok.injEq] at hy
+  refine ⟨r', hy.symm, ?_⟩
+  rw [← Array.forIn_toList] at hr'
+  refine forIn_pos (downPos c) _ (fun q r y hy => ?_) _ r r' hr'
+  obtain ⟨segs, hs, hy⟩ := Walk.except_bind_ok hy
+  simp only [pure, Except.pure, Except.ok.injEq] at hy
+  refine ⟨r ++ segs, hy.symm, ?_⟩
+  rw [segsPos_append, downPos, hs]
+
+/-- A read from no segments. -/
+theorem readBlock_pos (c : Desc.Ctx) (k i : Nat) (spans : Array (Nat × Nat)) (out : Array Seg)
+    (h : ((forIn spans #[] fun (x : Nat × Nat) __s => do
+          let __s ← forIn ((c.arg k i).pieces x.1 x.2) __s fun q __s => do
+            let __do_lift ← Desc.down c Flock.Steps.FUEL q
+            pure (ForInStep.yield (__s ++ __do_lift))
+          pure (ForInStep.yield __s)) >>= fun __s => pure __s) = .ok out) :
+    segsPos out = readPos c k i spans := by
+  rw [readLoop_pos c k i spans #[] out (ok_bind_pure h), segsPos_empty, List.nil_append]
+
+theorem range'_size (n : Nat) : List.range' 0 ((n - 0 + 1 - 1) / 1) = List.range n := by
+  rw [List.range_eq_range']; congr 1; omega
+
+/-- **A primitive's node reads its arguments whole**, unless it is a batch of no members. -/
+theorem nodeReads_prim (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (hn : c.node k = .ok node)
+    (hp : (c.P.defs[node.fn]!).prim = true) (rs : Array Seg) (h : Desc.nodeReads c k = .ok rs) :
+    segsPos rs = if (node.form == .batch && node.n == 0) = true then [] else
+      (List.range node.args.size).flatMap fun i => readPos c k i #[(0, (c.arg k i).count)] := by
+  unfold Desc.nodeReads at h
+  simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at h
+  obtain ⟨node', hn', h⟩ := Walk.except_bind_ok h
+  rw [hn] at hn'
+  injection hn' with e
+  subst e
+  rw [if_pos hp] at h
+  split at h
+  · rename_i hb
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    rw [if_pos hb, segsPos_empty]
+  · rename_i hb
+    rw [if_neg hb, ← range'_size]
+    have := ok_bind_pure h
+    refine (forIn_pos _ _ (fun i r y hy => ?_) _ #[] rs this).trans (by rw [segsPos_empty, List.nil_append])
+    obtain ⟨lift, hl, hy⟩ := Walk.except_bind_ok hy
+    simp only [pure, Except.pure, Except.ok.injEq] at hy
+    exact ⟨r ++ lift, hy.symm, by rw [segsPos_append, readBlock_pos c k i _ lift hl]⟩
+
+/-- The segments `nodeReads` keeps of a composite's node `k`: those not starting at a gate of the node. -/
+def keep (c : Desc.Ctx) (k : Nat) (s : Seg) : Bool :=
+  match s.ps[0]? with
+  | some q => match q.tgt with
+    | .gate _ => !(decide ((c.body.offsets[k]! : Int) ≤ q.base) && decide (q.base < (c.body.offsets[k + 1]! : Int)))
+    | _ => true
+  | none => false
+
+/-- The positions `nodeReads` reads argument `i` of a composite's node `k` at: those its callee's `used` names, member
+by member where the argument is mapped and not read whole, and a scan's initial carry. -/
+def argPos (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (i : Nat) : List (Tgt × Int) :=
+  if (node.form == .scan && i == 0) = true then readPos c k 0 ((c.memo[node.fn]!).used[i]?.getD #[])
+  else if (!match node.form with
+      | .batch => node.args[i]!.dims.isSome
+      | .scan => decide (1 ≤ i) && decide (i ≤ node.nxs)
+      | _ => false) = true then readPos c k i ((c.memo[node.fn]!).used[i]?.getD #[])
+  else if ((c.memo[node.fn]!).used[i]?.getD #[]).covers
+      (((c.P.defs[node.fn]!).params[i]?.map (·.2.leaves)).getD 0) = true then
+    readPos c k i #[(0, (c.arg k i).count)]
+  else (List.range node.members).flatMap fun m =>
+    readPos c k i (Desc.argSpans node i m ((c.memo[node.fn]!).used[i]?.getD #[]))
+
+/-- The positions a scan's iterations after the first read their carries at, from the iteration before. -/
+def carryPos (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) : List (Tgt × Int) :=
+  if (node.form == .scan) = true then
+    (List.range' 1 (node.n - 1)).flatMap fun m =>
+      ((c.memo[node.fn]!).used[0]?.getD #[]).toList.flatMap fun x => calleePos c k (m - 1) x.1 x.2
+  else []
+
+/-- **A composite's node reads its arguments where its callee reads its parameters**, and a scan's carries, keeping the
+segments that don't start in the node. -/
+theorem nodeReads_comp (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (hn : c.node k = .ok node)
+    (hp : (c.P.defs[node.fn]!).prim = false) (rs : Array Seg) (h : Desc.nodeReads c k = .ok rs) :
+    if node.members = 0 then rs = #[] else
+      ∃ out : Array Seg, rs = out.filter (keep c k) ∧
+        segsPos out = (List.range node.args.size).flatMap (argPos c k node) ++ carryPos c k node := by
+  unfold Desc.nodeReads at h
+  simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at h
+  obtain ⟨node', hn', h⟩ := Walk.except_bind_ok h
+  rw [hn] at hn'
+  injection hn' with e
+  subst e
+  rw [if_neg (by rw [hp]; decide)] at h
+  split at h
+  · rename_i hm
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    rw [if_pos (by simpa using hm)]
+    exact h.symm
+  · rename_i hm
+    rw [if_neg (by simpa using hm)]
+    obtain ⟨r1, h1, h⟩ := Walk.except_bind_ok h
+    have hr1 := forIn_pos (argPos c k node) _ (fun i r y hy => by
+      rw [argPos]
+      rcases hform : node.form with _ | _ | _ | _ <;> simp only [hform] at hy ⊢
+      all_goals
+        split at hy
+        · rename_i hs
+          obtain ⟨lift, hl, hy⟩ := Walk.except_bind_ok hy
+          simp only [pure, Except.pure, Except.ok.injEq] at hy
+          refine ⟨r ++ lift, hy.symm, ?_⟩
+          rw [segsPos_append, readBlock_pos c k 0 _ lift hl, if_pos hs]
+        · rename_i hs
+          split at hy
+          · rename_i hpm
+            obtain ⟨lift, hl, hy⟩ := Walk.except_bind_ok hy
+            simp only [pure, Except.pure, Except.ok.injEq] at hy
+            refine ⟨r ++ lift, hy.symm, ?_⟩
+            rw [segsPos_append, readBlock_pos c k i _ lift hl, if_neg hs, if_pos hpm]
+          · rename_i hpm
+            split at hy
+            · rename_i hcv
+              obtain ⟨lift, hl, hy⟩ := Walk.except_bind_ok hy
+              simp only [pure, Except.pure, Except.ok.injEq] at hy
+              refine ⟨r ++ lift, hy.symm, ?_⟩
+              rw [segsPos_append, readBlock_pos c k i _ lift hl, if_neg hs, if_neg hpm, if_pos hcv]
+            · rename_i hcv
+              obtain ⟨r', hr', hy⟩ := Walk.except_bind_ok hy
+              simp only [pure, Except.pure, Except.ok.injEq] at hy
+              refine ⟨r', hy.symm, ?_⟩
+              rw [if_neg hs, if_neg hpm, if_neg hcv, ← range'_size]
+              refine forIn_pos _ _ (fun m r y hy => ?_) _ r r' hr'
+              obtain ⟨lift, hl, hy⟩ := Walk.except_bind_ok hy
+              simp only [pure, Except.pure, Except.ok.injEq] at hy
+              exact ⟨r ++ lift, hy.symm, by rw [segsPos_append, readBlock_pos c k i _ lift hl]⟩) _ #[] r1 h1
+    rw [segsPos_empty, List.nil_append, range'_size] at hr1
+    split at h
+    · rename_i hsc
+      obtain ⟨r2, h2, h⟩ := Walk.except_bind_ok h
+      simp only [pure, Except.pure, Except.ok.injEq] at h
+      refine ⟨r2, h.symm, ?_⟩
+      have hr := forIn_pos _ _ (fun m r y hy => by
+        obtain ⟨r', hr', hy⟩ := Walk.except_bind_ok hy
+        simp only [pure, Except.pure, Except.ok.injEq] at hy
+        refine ⟨r', hy.symm, ?_⟩
+        rw [← Array.forIn_toList] at hr'
+        exact forIn_pos (fun x => calleePos c k (m - 1) x.1 x.2) _ (fun x r y hy => by
+          obtain ⟨lift, hl, hy⟩ := Walk.except_bind_ok hy
+          simp only [pure, Except.pure, Except.ok.injEq] at hy
+          exact ⟨r ++ lift, hy.symm, by rw [segsPos_append, calleePos, hl]⟩) _ r r' hr') _ r1 r2 h2
+      rw [hr, hr1, carryPos, if_pos hsc, show (node.n - 1 + 1 - 1) / 1 = node.n - 1 by omega]
+    · rename_i hsc
+      simp only [pure, Except.pure, Except.ok.injEq] at h
+      refine ⟨r1, h.symm, ?_⟩
+      rw [hr1, carryPos, if_neg hsc, List.append_nil]
 
 
 /-- **A batch member's spans** (`Desc.argSpans`) are its used parameter leaves' indices into the argument. -/
