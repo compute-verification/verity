@@ -15,7 +15,8 @@ skipped while one of FILE's windows (`START_UTC MINUTES`, the node-2 fill runner
 minutes: a check there would run into a whole-node timed measurement. A slot with only=trains is taken only by a `--priority` waiter
 (the lander's train checks), so a lane's long check or quick tier never holds the slot a train needs (a slot.py from before it
 reads the key as unknown and the slot as any other). A slot with mem=GB is skipped while less than GB is free to this process
-(`memory_gb`: the least of MemAvailable and what each cgroup v2 memory limit over it leaves, the user slice's on a VM), so a
+(`memory_gb`: the least of MemAvailable and what each cgroup v2 memory limit over it leaves, the user slice's on a VM, less what
+live research.mem reservations hold but don't use yet, `reserved_gb`), so a
 check starts only when its measured peak fits and queues instead of being killed with the others under the slice (node 1,
 8 Oct 02:00Z: two OOM kills at 1,605 of 1,716 GB across ~8 runs), and CMD gets GB as SLOT_MEM_ENV, which check.py makes
 circuit-check's budget, so two checks' circuit-checks never each budget all the memory free when they began (node 2, 10 Oct
@@ -166,6 +167,57 @@ def memory_gb(root: Path = Path("/")) -> int:
     return max(0, min(left)) >> 30 if left else 0
 
 
+#: the run states that end a research.mem reservation (research.mem's TERMINAL)
+ENDED = ("done", "failed", "cancelled")
+
+
+def _rss_tree(pid: int, proc: Path) -> int | None:
+    """Resident bytes of ``pid`` and its descendants, or None when it isn't in ``proc`` (research.mem's `_rss_tree`)."""
+    parent, rss = {}, {}
+    for e in (x for x in os.listdir(proc) if x.isdigit()) if proc.is_dir() else ():
+        try:
+            parent[int(e)] = int((proc / e / "stat").read_text().rsplit(")", 1)[1].split()[1])
+            rss[int(e)] = next((int(ln.split()[1]) * 1024 for ln in (proc / e / "status").read_text().splitlines()
+                                if ln.startswith("VmRSS:")), 0)
+        except (OSError, IndexError, ValueError):
+            continue
+    if pid not in parent:
+        return None
+    tree, todo = {pid}, [pid]
+    while todo:
+        p = todo.pop()
+        kids = [c for c, pp in parent.items() if pp == p and c not in tree]
+        tree.update(kids)
+        todo += kids
+    return sum(rss.get(p, 0) for p in tree)
+
+
+def reserved_gb(proc: Path = Path("/proc")) -> int:
+    """GiB that live research.mem reservations in RAMLOCK hold but don't use yet, each run's largest once, as research.mem's
+    `reserved_bytes` counts them: a reserved run lowering toward its peak isn't in MemAvailable yet (23 Oct 23:16Z, top: when a
+    check ended on cpu-4, proofs' waiting 345 GB shares and a train's twins would race for the freed memory, and a twin admitted
+    beside a lowering share reads well over 560 GB free)."""
+    by: dict[str, float] = {}
+    for f in sorted(RAMLOCK.glob("*.json")) if RAMLOCK.is_dir() else ():
+        try:
+            doc = json.loads(f.read_text())
+            gb = float(doc["gb"]) * 1e9
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+        try:
+            if doc.get("run_dir") and json.loads((Path(doc["run_dir"]) / "status.json").read_text()).get("state") in ENDED:
+                continue
+        except (OSError, ValueError, AttributeError):
+            pass
+        pid = doc.get("pid") if isinstance(doc.get("pid"), int) else None
+        if pid is not None and not (proc / str(pid)).exists():
+            continue
+        used = _rss_tree(pid, proc) if pid is not None else None
+        key = doc.get("run_id") or f.name
+        by[key] = max(by.get(key, 0.0), max(0.0, gb - min(used or 0, gb)))
+    return int(sum(by.values())) >> 30
+
+
 def reserve(slot: dict, now: datetime) -> str | None:
     """A slot with mem=GB holds a research.mem reservation of that size while its check runs: `check-NAME.json` in RAMLOCK, in
     research.mem's format and under its admission lock, naming this process (CMD, after the exec) and its run. research.mem counts
@@ -209,8 +261,9 @@ def blocked(slot: dict, now: datetime) -> str | None:
     for raw, start, minutes, _note in _windows(slot):
         if start - timedelta(minutes=slot["lead"]) < now < start + timedelta(minutes=minutes):
             return f"window {raw} ({minutes} min) is open or starts within {slot['lead']} min"
-    if slot.get("mem") and (free := memory_gb()) < slot["mem"]:
-        return f"{free} GB of memory free, under the {slot['mem']} GB a check here may peak at"
+    if slot.get("mem") and (free := memory_gb() - (held := reserved_gb())) < slot["mem"]:
+        return (f"{free} GB of memory free" + (f" ({held} GB more is reserved by live runs that haven't reached it)" if held else "")
+                + f", under the {slot['mem']} GB a check here may peak at")
     return None
 
 

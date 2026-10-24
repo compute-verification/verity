@@ -16,11 +16,13 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from starlette.concurrency import run_in_threadpool
 
 from . import crons, subscriber
-from .deps import DEAD, DEAD_TOPIC, LAST_SUCCESS, OLDEST, TOPIC, Deps, error, production
+from .deps import DEAD, DEAD_TOPIC, LAST_DONE, LAST_ENQUEUED, LAST_SUCCESS, OLDEST, TOPIC, Deps, error, production
 
 MAX_SKEW_S = 300
 HEALTH_NOTE = ("from Vercel's Runtime Cache, best effort: null is unknown (a cold or evicted cache), not down; "
-               "oldest_unprocessed_age_s is reconcile's last finding, dead_letter_count counts since dead_letter_since")
+               "oldest_unprocessed_age_s is reconcile's last finding, dead_letter_count counts since dead_letter_since; "
+               "last_done_at is the consumer's alone (last_success_at counts the crons too), and a last_enqueued_at "
+               "after it means events wait")
 
 
 def signed(secret: str | None, ts: str | None, sig: str | None, body: bytes, now: float) -> str | None:
@@ -63,6 +65,7 @@ def create_app(deps: Callable[[], Deps] = production) -> FastAPI:
         except Exception as e:  # noqa: BLE001 - Slack retries a 5xx, keyed on the same id
             d.log("publish-failed", event_id=eid, error=error(e))
             return JSONResponse({"error": "publish failed"}, status_code=503)
+        await run_in_threadpool(d.write, LAST_ENQUEUED, d.clock())
         d.log("enqueued", event_id=eid, kind=payload["kind"])
         return JSONResponse({"ok": True})
 
@@ -111,7 +114,8 @@ def create_app(deps: Callable[[], Deps] = production) -> FastAPI:
             return JSONResponse({"error": "HEALTH_TOKEN is not set"}, status_code=503)
         if not bearer(request, token):
             return JSONResponse({"error": "unauthorized"}, status_code=401)
-        oldest, dead, last = [await run_in_threadpool(d.read, k) for k in (OLDEST, DEAD, LAST_SUCCESS)]
+        oldest, dead, last, done, enq = [await run_in_threadpool(d.read, k)
+                                         for k in (OLDEST, DEAD, LAST_SUCCESS, LAST_DONE, LAST_ENQUEUED)]
         age = None
         if isinstance(oldest, dict) and "ts" in oldest:
             age = round(max(0.0, d.clock() - float(oldest["ts"])), 3) if oldest["ts"] else 0.0
@@ -119,6 +123,8 @@ def create_app(deps: Callable[[], Deps] = production) -> FastAPI:
         return JSONResponse({"oldest_unprocessed_age_s": age, "dead_letter_count": dead.get("count"),
                              "dead_letter_since": dead.get("since"),
                              "last_success_at": float(last) if isinstance(last, (int, float)) else None,
+                             "last_done_at": float(done) if isinstance(done, (int, float)) else None,
+                             "last_enqueued_at": float(enq) if isinstance(enq, (int, float)) else None,
                              "queue": TOPIC, "dead_letter": DEAD_TOPIC, "note": HEALTH_NOTE})
 
     def cron(name: str, run: Callable[[Deps], dict]):
