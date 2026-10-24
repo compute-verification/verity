@@ -168,6 +168,8 @@ import Proofs.Flock.Claims.ZK.FinishSwFw
 import Proofs.Flock.Claims.ZK.FinishSwPts
 import Proofs.Flock.Claims.ZK.FinishSwBit
 import Proofs.Flock.Claims.ZK.FinishSwRep
+import Proofs.Flock.Claims.ZK.FinishClaimsX
+import Proofs.Flock.Claims.ZK.FinishSwVals
 import Proofs.Flock.Claims.ZK.FinishRows
 import Proofs.Flock.Claims.ZK.FinishZc
 import Proofs.Flock.Claims.ZK.FinishTau
@@ -786,6 +788,12 @@ import Proofs.Flock.Claims.ZK.CutPrefix
   firewall's packed table is the witness's (`hg`, a host-input trust as `LinkIs` is for the link), the coins are
   admitted, and level 0's clear values are `l0Clear` (`hB`). The rep's base being before the stop comes from its PIOP
   having returned (`repFwC_piopFw`), and no refusal from the admitted coins (`not_refused_of_admits`).
+* `FinishSwVals`: `swSrcE_repCut` at any clear values (**`Masked.swSrcE_repCut_v`**), with what `valsFw` supplied as
+  premises: the masked values below `zp 64` are the request's values plus its pads (`hmkV`), and, where the source's
+  PIOP returns, level 0's from `zp 64` to `h_ab` are `l0Clear` plus the pads (`hl0`). So the views' source at the
+  workers' values takes the firewall's rep's place.
+* `FinishClaimsX`: the firewall's rep reads the extra claims' coordinates alone, through the ring switch
+  (**`Flock.Firewall.Finish.repFwC_claims_x`**), so it is one run at `claimsOf xs` and at any extra claims at `xs`.
 * `FinishRows`: the replay's rows on a view's masked values, constants included. Where the proof's masked messages are
   the view's, the coins `c`'s and the switched vectors `ŝ`'s, `Zk.replay`'s three constraints and the two ring-switch
   rows are `rowsOf`'s first five as whole forms (**`Composed.replay_rows`**), as the firewall's stop reads them.
