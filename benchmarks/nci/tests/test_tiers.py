@@ -37,6 +37,28 @@ def test_without_memory_mechanisms_the_residual_trains_at_full_efficiency():
     assert r["residual"] == pytest.approx(T.residual_share(p), rel=1e-3)
 
 
+def test_pouws_deficit_joins_the_residual_as_dampener_remote_charges_it():
+    """r = r-hat + eps_W W_cert/C + eps' (#3646, LEAN-40): r-hat = 0.2 + 0.05 + 0.05 = 0.3, so W_cert/C = 0.7, and
+    eps_W = 0.01 adds 0.007: r = 0.3 + 0.007 + 1e-4 = 0.3071. The residual T1 trains at full efficiency carries it."""
+    p = T.DEFAULTS | {"residual": 0.2, "host_share": 0.05, "clock_share": 0.05, "eps_w": 0.01, "eps_agg": 1e-4,
+                      "lag_s": 0.0}
+    assert T.audited_residual(p) == pytest.approx(0.3, abs=1e-15)
+    assert T.residual_share(p) == pytest.approx(0.3071, abs=1e-15)
+    with_deficit, without = (T.evaluate(p | {"eps_w": e}, T.TIERS["T1"])["residual"] for e in (0.01, 0.0))
+    assert with_deficit - without == pytest.approx(0.007, rel=1e-6)
+    assert T.residual_share(T.DEFAULTS) == pytest.approx(0.508 + 0.00744 * 0.492 + 1e-4, abs=1e-12)
+
+
+def test_pouws_deficit_adds_nothing_at_eps_w_zero():
+    """At eps_W = 0 the residual is r-hat + eps' exactly, whatever W_cert/C, the form before #3646; the term needs eps_W
+    given (no default hides it)."""
+    for r_hat in ((0.2, 0.05, 0.05), (0.0, 0.0, 0.0), (0.326, 0.118, 0.064)):
+        p = T.DEFAULTS | dict(zip(("residual", "host_share", "clock_share"), r_hat)) | {"eps_w": 0.0}
+        assert T.residual_share(p) == min(1.0, T.audited_residual(p) + p["eps_agg"])
+    with pytest.raises(KeyError, match="eps_w"):
+        T.residual_share({k: v for k, v in T.DEFAULTS.items() if k != "eps_w"})
+
+
 def test_unmonitored_compute_trains_at_full_efficiency():
     r = T.evaluate(T.DEFAULTS | {"residual": 0.0, "host_share": 0.0, "clock_share": 0.0, "unmonitored": 0.3}, T.TIERS["T5"])
     assert r["unmonitored"] == pytest.approx(0.3, rel=1e-6)
@@ -51,8 +73,8 @@ def test_the_residual_voids_the_partial_sum_law():
 def test_without_dark_compute_the_declared_side_is_the_chain_bound():
     """At zero residual and zero unmonitored compute nothing absorbs partial sums, so efficiency is the inverse of the
     calculator's chain bound for pretrain-full."""
-    p = T.DEFAULTS | {"residual": 0.0, "host_share": 0.0, "clock_share": 0.0, "eps_agg": 0.0, "unmonitored": 0.0,
-                      "lag_s": 0.0, "kappa_chain": 0.0695}
+    p = T.DEFAULTS | {"residual": 0.0, "host_share": 0.0, "clock_share": 0.0, "eps_w": 0.0, "eps_agg": 0.0,
+                      "unmonitored": 0.0, "lag_s": 0.0, "kappa_chain": 0.0695}
     r = T.evaluate(p, T.TIERS["T4"])
     alpha = p["K"] / p["Gamma"]
     chain = p["kappa_chain"] * S.read_factor(p["K"], p["b_w"], p["b_a"], p["d_chain"]) / (2 * alpha)

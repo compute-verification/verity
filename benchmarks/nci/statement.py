@@ -210,7 +210,8 @@ def symbols() -> list[dict]:
         ("r̂ GPU", "the GPUs' residual at the locked clock", p["residual"]),
         ("r̂ clock", "GPU capacity above the credited clock", p["clock_share"]),
         ("r̂ host", "host CPUs at INT8 AMX peak", p["host_share"]),
-        ("ε′", "aggregation slack, in r = r̂ + ε′ (δ_win / ε′ = 2.7e-8 at δ_win = 3·2^-40)", p["eps_agg"]),
+        ("ε_W", "PoUW's deficit, in r = r̂ + ε_W W_cert/C + ε′ with W_cert/C = 1 − r̂ (DampenerRemote, #3646)", p["eps_w"]),
+        ("ε′", "aggregation slack, in r = r̂ + ε_W W_cert/C + ε′ (δ_win / ε′ = 2.7e-8 at δ_win = 3·2^-40)", p["eps_agg"]),
         ("GPU / r̂", "share of r̂", p["residual"] / r),
         ("clock / r̂", "share of r̂", p["clock_share"] / r),
         ("host / r̂", "share of r̂", p["host_share"] / r),
@@ -290,13 +291,15 @@ def substitutes() -> list[dict]:
 
 def floor() -> list[dict]:
     """The floor's limits as the verdict lag goes to 0, with ε′ and as ε′ goes to 0 too, and what evaluate would give at
-    zero lag and ε′ if the partial-sum law held, where with no residual to relay through it binds below nu."""
+    zero lag, ε_W and ε′ if the partial-sum law held, where with no residual to relay through it binds below nu. At r̂ = 0 the
+    credited share W_cert/C is 1, so PoUW's deficit ε_W stays in full."""
     p = T.DEFAULTS
     return rows([
-        ("MFU_0 / (ν + ε′), the floor's limit as the verdict lag goes to 0", p["mfu"] / (X.nu(p) + p["eps_agg"])),
-        ("MFU_0 / ν, the same as ε′ goes to 0 too (δ_win / ε′ then needs δ_win → 0)", p["mfu"] / X.nu(p)),
-        ("D at zero lag and ε′, r̂ = 0, T3, if the partial-sum law held (its support premises are falsified)",
-         dampener(p | FLOOR | {"lag_s": 0.0, "eps_agg": 0.0, "kappa_chain": 0.0695}, "T3")),
+        ("MFU_0 / (ν + ε_W + ε′), the floor's limit as the verdict lag goes to 0",
+         p["mfu"] / (X.nu(p) + p["eps_w"] + p["eps_agg"])),
+        ("MFU_0 / (ν + ε_W), the same as ε′ goes to 0 too (δ_win / ε′ then needs δ_win → 0)", p["mfu"] / (X.nu(p) + p["eps_w"])),
+        ("D at zero lag, ε_W and ε′, r̂ = 0, T3, if the partial-sum law held (its support premises are falsified)",
+         dampener(p | FLOOR | {"lag_s": 0.0, "eps_w": 0.0, "eps_agg": 0.0, "kappa_chain": 0.0695}, "T3")),
     ])
 
 
