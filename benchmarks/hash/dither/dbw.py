@@ -123,11 +123,9 @@ def median(xs: list[float]) -> float | None:
     return round(statistics.median(xs), 4) if xs else None
 
 
-def report(rows: list[dict], sides: list[dict], arms: list[str]) -> dict:
-    """The run's numbers beside the passes: each arm's TPOT off and on (medians over the reps), each dither arm's γ over
-    each other arm off and on, each side's pass latency idle and by what ran beside it, its sessions' verdicts, whether
-    every on block lay inside its session's passes, and the memory lines."""
-    dec = [x for x in rows if x["op"] == "decode" and "bw" in x]
+def tpot_gamma(dec: list[dict], arms: list[str]) -> dict:
+    """Each arm's TPOT off and on over decode rows `dec` (medians over the reps), and each dither arm's γ over each
+    other arm off and on."""
     tpot = {arm: {ph: median([x["tpot_b32_ms"] for x in dec if x["arm"] == arm and x["bw"] == ph])
                   for ph in ("off", "on")} for arm in arms}
     for arm, t in tpot.items():
@@ -140,6 +138,14 @@ def report(rows: list[dict], sides: list[dict], arms: list[str]) -> dict:
             if tpot[d]["on"] and tpot[base]["off"]:
                 g["dither_on_over_base_off"] = round(tpot[d]["on"] / tpot[base]["off"], 4)
             gamma[f"{d}/{base}"] = g
+    return {"tpot_b32_ms": tpot, "gamma": gamma}
+
+
+def report(rows: list[dict], sides: list[dict], arms: list[str]) -> dict:
+    """The run's numbers beside the passes: each arm's TPOT off and on and each dither arm's γ (`tpot_gamma`), over
+    every side's blocks and each side's own, each side's pass latency idle and by what ran beside it, its sessions'
+    verdicts, whether every on block lay inside its session's passes, and the memory lines."""
+    dec = [x for x in rows if x["op"] == "decode" and "bw" in x]
     out_sides = []
     for side in sides:
         if "ready" not in side:
@@ -168,6 +174,7 @@ def report(rows: list[dict], sides: list[dict], arms: list[str]) -> dict:
         cal = side["ready"]["calibration"]
         out_sides.append({
             "i": side["i"], "prover_args": side["prover_args"], "gib": side["ready"]["gib"],
+            **tpot_gamma([x for x in dec if x.get("side") == side["i"]], arms),
             "blocks": side["ready"]["blocks"], "allowance_ms": round(side["ready"]["allowance_ns"] / 1e6, 3),
             "calibration_pass_ms": {q: round(cal["pass_ns"][q] / 1e6, 4) for q in ("p50", "p99", "p999", "max")
                                     if q in cal.get("pass_ns", {})},
@@ -186,4 +193,4 @@ def report(rows: list[dict], sides: list[dict], arms: list[str]) -> dict:
             "memory": {k: {"memory": s["memory"], "paced": s["paced"]} for k, s in sorted(sessions.items())
                        if s["accepted"]},
             "stopped": side.get("stopped")})
-    return {"tpot_b32_ms": tpot, "gamma": gamma, "sides": out_sides}
+    return {**tpot_gamma(dec, arms), "sides": out_sides}
