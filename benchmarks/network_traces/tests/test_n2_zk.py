@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 
 import numpy as np
@@ -61,7 +61,7 @@ def test_honest_heads_pass_and_a_head_one_count_off_fails_on_its_counts(runs):
     assert runs["tampered"].windows[0].opening.records[0].certificate == honest.windows[0].opening.records[0].certificate
 
 
-@lru_cache(maxsize=None)
+@cache
 def _identity(L: int, T: int, counts: int):
     """A Definition of the head check's signature that returns its arguments' bits, in order."""
     params, _ = HC.unit(L, T, bool(counts)).signature()

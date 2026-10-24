@@ -481,6 +481,11 @@ def prove(a) -> int:
                        "profile": rounds["honest"][0].plan["occupancy"]["kind"],
                        "planned_windows": rounds["honest"][0].plan["windows"]}
     summary["instances_s"] = round(time.time() - t, 1)
+    summary["host"] = {name: {"windows": [{"window": x.window, "registration": x.digest, **(x.host or {})} for x in rd.windows],
+                              "network": rd.network} for name, (rd, _) in rounds.items()}
+    for name, h in summary["host"].items():
+        log(f"{name}: N2's host verdict of record per link-window "
+            f"{[(x.get('accepted'), x.get('codes')) for x in h['windows']]}, network {(h['network'] or {}).get('accepted')}")
     members = {}
     for name, (rd, ends) in rounds.items():
         if len(rd.windows) != n:
