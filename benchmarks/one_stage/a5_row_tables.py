@@ -80,7 +80,7 @@ def main() -> int:
         return {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v], "detail": {"kind": w.get("kind"), "run": w.get("run")}}
 
     a.rule, a.window_root = RULE, ROOT
-    manager, a.coins, finisher, sid = AC.start("local", ROOT, [0], out / "challenger", a.main)
+    manager, a.coins, finisher = AC.start("local", ROOT, [0], out / "challenger", a.main)
     try:
         s, ok = a5.audit(a, {}, out / "rank0", mine, out / "window", source, a.port, {"rank": 0, "standin": OF}, rank=0,
                          step_roots=live)
@@ -89,7 +89,7 @@ def main() -> int:
         finisher.join()
         published = a.coins.evidence()
         manager.shutdown()
-    summary = {"root": ROOT, "session": sid, "window": {"population": mine.population, "members": len(mine.members),
+    summary = {"root": ROOT, "session": (published.get("plan") or {}).get("session"), "window": {"population": mine.population, "members": len(mine.members),
                                                         "row_tables": [t.port for t in mine.row_tables],
                                                         "steps": {str(k): v.hex() for k, v in live.items()}},
                "challenger": {x: published.get(x) for x in ("trusted", "error")},
