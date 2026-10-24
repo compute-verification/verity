@@ -1,6 +1,7 @@
 """`circuit.live`: `PouwLiveSlots_v1{T}` on bits is `live_ok` on words, ok = 1 iff exactly the slots [0, m) name an admitted
 request of a prefix-ordered request table, none past what its request can take in round s (`takes`), and then m is rule
-A's count (`admitted`)."""
+A's count (`admitted`). `PouwLiveSlots_v2{T}` on bits is `live_ok_v2`: v1's ok with each request's cap and round bound to
+the public caps, so a request takes a decode row only within its public max_tokens."""
 from __future__ import annotations
 
 import random
@@ -278,3 +279,144 @@ def test_the_live_tables_are_named_by_round():
     assert LR.table("h1/", LR.REQUESTS) == "h1/requests@0" and LR.table("", LR.OK_VALUE) == "live-ok"
     with pytest.raises(ValueError, match="requests@0"):
         LR.table("h1/", LR.REQUESTS, 1)
+
+
+def _bits_v2(slot, req, m, s, cap):
+    (ok,) = evaluate(bind(L.PouwLiveSlotsV2, T=len(slot)), sum(map(_b, slot), []),
+                     sum((_b(x) for h in req for x in h), []), _b(m), _b(s), sum(map(_b, cap), []))
+    return ok
+
+
+def _admitted_in_round_0(rng, T, s=None):
+    """A round s the v2 unit accepts: `_valid`'s with every live request admitted in round 0, and its public caps."""
+    s = rng.choice([0, 1, 2, 5]) if s is None else s
+    slot, req, m, _s = _valid(rng, T, s=s)
+    req = [[h[0], 0, *h[2:]] if h[L.PROMPT] else h for h in req]
+    pool = [q + 1 for q, h in enumerate(req) if h[L.PROMPT] for _ in range(min(L.takes(h, s), rng.randrange(T + 1)))]
+    rng.shuffle(pool)
+    m = rng.randrange(min(len(pool), T) + 1)
+    cap = [h[L.CAP] if h[L.PROMPT] else 0 for h in req]
+    if any(h[L.PROMPT] and h[L.CAP] == 0 for h in req):
+        req = [[*h[:3], max(h[L.CAP], 1), h[4]] if h[L.PROMPT] else h for h in req]
+        cap = [max(c, 1) if h[L.PROMPT] else 0 for c, h in zip(cap, req)]
+    return pool[:m] + [0] * (T - m), req, m, s, cap
+
+
+@pytest.mark.parametrize("T", [1, 2, 5, 8])
+def test_v2_bits_are_the_word(T):
+    rng = random.Random(1000 + T)
+    for _ in range(60):
+        slot, req, m, s, cap = _admitted_in_round_0(rng, T)
+        assert L.live_ok_v2(slot, req, m, s, cap) == _bits_v2(slot, req, m, s, cap) == L.live_ok(slot, req, m, s) == 1
+        for _ in range(rng.randrange(1, 4)):
+            if rng.random() < 0.4:
+                cap = list(cap)
+                q = rng.randrange(T)
+                cap[q] = rng.choice([0, 1, cap[q] + 1, max(cap[q] - 1, 0), M32, rng.randrange(1 << 32)])
+            elif rng.random() < 0.3:
+                req = [list(h) for h in req]
+                q = rng.randrange(T)
+                req[q][L.ROUND] = rng.choice([1, 2, 1 << 31, rng.randrange(1 << 32)])
+            else:
+                slot, req, m, s = _mutate(rng, slot, req, m, s)
+        assert _bits_v2(slot, req, m, s, cap) == L.live_ok_v2(slot, req, m, s, cap)
+
+
+def _fixed():
+    """T = 8, a fixed length of max_tokens [3, 1, 2], every request admitted in round 0: round 0 their prompts (3, 4 and 5
+    tokens), round 1 one decode row for requests 0 and 2 (max_tokens past 1), round 2 one for request 0."""
+    req = [[q, 0, q, cap, 3 + q] for q, cap in enumerate((3, 1, 2))] + [[0] * L.HEADER] * 5
+    return req, [3, 1, 2, 0, 0, 0, 0, 0]
+
+
+@pytest.mark.parametrize("s, slot", [(0, [1, 1, 1, 2, 2, 2, 2, 3]), (1, [1, 3, 0, 0, 0, 0, 0, 0]),
+                                     (2, [1, 0, 0, 0, 0, 0, 0, 0])])
+def test_an_honest_fixed_length_round_is_accepted(s, slot):
+    req, cap = _fixed()
+    m = sum(1 for x in slot if x)
+    assert L.live_ok_v2(slot, req, m, s, cap) == _bits_v2(slot, req, m, s, cap) == 1
+
+
+@pytest.mark.parametrize("s, slot, edit", [
+    # request 1 takes request 0's decode row in round 1, its hidden cap swapped with request 0's: v1 accepts it
+    (1, [2, 3, 0, 0, 0, 0, 0, 0], lambda r: [[0, 0, 0, 1, 3], [1, 0, 1, 3, 4]] + r[2:]),
+    # ... and in round 2
+    (2, [2, 0, 0, 0, 0, 0, 0, 0], lambda r: [[0, 0, 0, 1, 3], [1, 0, 1, 3, 4]] + r[2:]),
+    # request 1 takes round 1's second row as a prefill, its hidden round 1
+    (1, [1, 2, 0, 0, 0, 0, 0, 0], lambda r: r[:1] + [[1, 1, 1, 1, 4]] + r[2:]),
+    # a fourth request the fixed length doesn't have
+    (1, [1, 4, 0, 0, 0, 0, 0, 0], lambda r: r[:3] + [[3, 0, 3, 2, 1]] + r[4:]),
+])
+def test_a_swapped_request_to_row_assignment_is_refused(s, slot, edit):
+    """The rows a round serves are the public schedule's count (#3590, #3827's `credit._length`), and v1 holds each
+    request to its hidden header's cap and round. A prover who keeps the counts but rewrites those headers moves a decode
+    row from one request to another, and v1 accepts it; v2 reads the public caps and refuses it."""
+    req, cap = _fixed()
+    req = edit(req)
+    m = sum(1 for x in slot if x)
+    assert L.live_ok(slot, req, m, s) == _bits(slot, req, m, s) == 1
+    assert L.live_ok_v2(slot, req, m, s, cap) == _bits_v2(slot, req, m, s, cap) == 0
+
+
+@pytest.mark.parametrize("cap", [[3, 1, 0, 0, 0, 0, 0, 0], [3, 1, 2, 1, 0, 0, 0, 0], [1, 3, 2, 0, 0, 0, 0, 0],
+                                 [3, 1, 2, 0, 0, 0, 0, 1 << 31]])
+def test_the_live_requests_are_exactly_the_public_caps(cap):
+    """A leaf is live iff its public cap is nonzero, a live leaf's cap the public one: fewer public requests, one more, or
+    caps in another order are refused at the honest round."""
+    req, _cap = _fixed()
+    slot = [1, 3, 0, 0, 0, 0, 0, 0]
+    assert L.live_ok_v2(slot, req, 2, 1, cap) == _bits_v2(slot, req, 2, 1, cap) == 0
+
+
+def test_v2_reads_v1s_ports_and_the_public_caps():
+    """v2's ports are v1's and then T public caps, its one output the ok bit; v1's Definition is unchanged."""
+    params, ret = bind(L.PouwLiveSlotsV2, T=8).signature()
+    assert [n for n, _ in params] == list(L.PORTS_V2) == [*L.PORTS, "cap"] and ret == L.BL.BIT
+    assert [t.leaves for _, t in params] == [8 * 32, 8 * 5 * 32, 32, 32, 8 * 32]
+    assert bind(L.PouwLiveSlots, T=8).id == "PouwLiveSlots_v1{T=8}" and bind(L.PouwLiveSlotsV2, T=8).id == "PouwLiveSlots_v2{T=8}"
+    assert [n for n, _ in bind(L.PouwLiveSlots, T=8).signature()[0]] == list(L.PORTS)
+    with pytest.raises(ValueError, match="refuses this binding"):
+        bind(L.PouwLiveSlotsV2, T=0)
+
+
+@pytest.mark.parametrize("T, S", [(4, 1), (8, 3)])
+def test_the_v2_live_program_is_one_unit_a_round_that_reads_the_caps(T, S):
+    prog = L.program_v2(T, S, "h1/")
+    params, ret = prog.fn.signature()
+    assert [n for n, _ in params] == [f"h1/{r}" for r in LR.ROLES_V2] and ret.leaves == S
+    assert P.evaluate(prog, L.query_v2(T)).population == S
+    n = max(T // 2, 1)
+    req = [[q, 0, q, S + 1, 1] if q < n else [0] * L.HEADER for q in range(T)]
+    cap = [S + 1 if q < n else 0 for q in range(T)]
+    rounds = [([q + 1 for q in range(n)] + [0] * (T - n), n) for _s in range(S)]
+    args = (sum((_b(v) for slot, _m in rounds for v in slot), []), sum((_b(x) for h in req for x in h), []),
+            sum((_b(m) for _slot, m in rounds), []), sum((_b(s) for s in range(S)), []), sum(map(_b, cap), []))
+    assert list(evaluate(prog.fn, *args)) == [L.live_ok_v2(slot, req, m, s, cap) for s, (slot, m) in enumerate(rounds)]
+    assert list(evaluate(prog.fn, *args)) == [1] * S
+    cap[0] += 1
+    args = (*args[:4], sum(map(_b, cap), []))
+    assert list(evaluate(prog.fn, *args)) == [0] * S
+
+
+def test_a_v2_rounds_live_file_reads_the_known_public_caps():
+    """With max_tokens, ``live@<s>`` also reads row i of the known ``<prefix>caps`` at each ``cap_<i>``: T rows, leaf q the
+    public max_tokens of request q and 0 past them, under `core_check.public_row_salt` of the open root and q; other
+    max_tokens give another root."""
+    T, S, s = 4, 3, 1
+    prog, window, session, regs = _window(T, S, random.Random(6))
+    roots = {v: r.root.hex() for v, r in regs.items()}
+    doc = LR.reads_file(prog, T, S, s, roots, window, session, 2, "h1/", [5, 2])
+    ports = doc["ports"]
+    assert sorted(ports) == sorted([p for p, *_ in LR.statement_rows(T, v2=True)] + [LR.OK_PORT])
+    rows, salts, reg = LR.caps_table(prog, "h1/", window, T, [5, 2])
+    assert rows == LR.slot_words([5, 2, 0, 0]) and LR.caps([5, 2, 7, 1, 9], T) == [5, 2, 7, 1]
+    for i in range(T):
+        assert ports[f"cap_{i}"]["value"] == "h1/caps" and ports[f"cap_{i}"]["root"] == reg.root.hex()
+        assert ports[f"cap_{i}"]["reads"] == [None] * s + [i]
+        assert ports[f"cap_{i}"]["known"] == {"rows": rows, "salts": [x.hex() for x in salts]}
+    for other in ([2, 5], [5, 2, 1], [5], [5, 3]):
+        assert LR.caps_table(prog, "h1/", window, T, other)[2].root != reg.root
+    assert "cap_0" not in LR.reads_file(prog, T, S, s, roots, window, session, 2, "h1/")["ports"]
+    rows = {p: (b, ps) for p, _s, b, ps in LR.statement_rows(4, v2=True)}
+    assert list(rows)[-4:] == [f"cap_{i}" for i in range(4)] and rows["cap_1"] == (32, ["cap[1]"])
+    assert LR.table("h1/", LR.CAPS) == "h1/caps"

@@ -355,9 +355,11 @@ signs before window 0's first coin (`--length`), commits each request's public m
 draw coin (`credit.served_rows`), are that length's schedule, every request admitted in round 0: at least one row a request in round 0, and in round s ≥ 1 one
 decode row for each request whose max_tokens is past s. A round serving more ran a request past its public max_tokens and
 one serving fewer stopped a request at an EOS-keyed done source (`length-mismatch`); a period with no fixed length
-credits nothing (`no-fixed-length`). The served rows are the prover's word until the per-round live proofs bind them, and
-the per-request live bound (`PouwLiveSlots_v1`) caps each slot's decode rows at its hidden entry's cap, which no public
-check yet ties to the public max_tokens.
+credits nothing (`no-fixed-length`). Each round's live proof (`PouwLiveSlots_v2`, credit's `_live`) proves m_s, and its
+public port `cap` binds each request's hidden cap to its public max_tokens: credit opens it at the known `<prefix>caps`
+of the period's committed max_tokens, and the unit refuses a live request whose header's cap is another or whose round is
+not 0, and a leaf live without a public cap. So a request takes a decode row in round s only when s is below its own
+public max_tokens, and no prover can move a decode row from one request to another while keeping each round's count.
 
 **The window root** (port `entries`) is a frame-v3-sha512 tree of P entries (the public bound, 16 for served windows),
 registered before the draw. The calls come first, then exactly one filler, then empty entries up to P. Entry e is an

@@ -1146,26 +1146,33 @@ LIVE_TABLE_NAMES = ["live-no-slots", "live-slots-rows", "live-no-requests", "liv
 #: (``live-body``), a live Program at another T, S or PREFIX, and its rounds' proof outcomes: one missing, twice, past the
 #: rounds, rejected, verified against another circuit, opening ``m@<s>`` at another m than the manifest's m_s
 #: (``live-m-other``), ``round@<s>`` at another round than s (``live-round-other``), another round's slot table
-#: (``live-slots-other``) or other ok rows than ``live-ok`` (``live-ok-off``, a unit that computed 0), and their form
+#: (``live-slots-other``), public caps other than the max_tokens its period's open committed (``live-caps-swapped``: the
+#: requests' max_tokens in reverse order, so a hidden header could take another request's cap and its decode rows;
+#: ``live-caps-other``: one changed, one more or one fewer, or another value) or other ok rows than ``live-ok``
+#: (``live-ok-off``, a unit that computed 0), and their form; and an honest v1 live Program (``live-v1``), whose units
+#: don't bind each request's cap to its public max_tokens
 LIVE_NAMES = [*LIVE_TABLE_NAMES, "live-form", "live-descriptor-form", "live-not-live", "live-body", "live-t-other",
               "live-s-other", "live-prefix", "live-missing", "live-twice", "live-past", "live-failed",
-              "live-other-circuit", "live-m-other", "live-round-other", "live-slots-other", "live-ok-off", "live-proofs-form"]
+              "live-other-circuit", "live-m-other", "live-round-other", "live-slots-other", "live-caps-swapped", "live-caps-other",
+              "live-ok-off", "live-proofs-form", "live-v1"]
 
 
-def live_program(t: int, steps: int, prefix: str) -> dict:
-    """A live Program's descriptor (`circuit.live.program`'s encoding as far as `credit.live_of` reads it): its program
-    function's record T, S and PREFIX, its unit ``PouwLiveSlots_v1{T=<T>}`` (a composite bound to T alone) and its
-    root's input batches (S·T slot words, T headers, S m's, S rounds, as bits) then S calls of the unit, round s's unit
-    s."""
-    fn = f"{Cr.LIVE_FN}{{T={t},S={steps},PREFIX={Cr._canonical(prefix)}}}"
-    unit, root = f"{Cr.LIVE_UNIT}{{T={t}}}", f"Root[{Cr.LIVE_FN}]_v1"
-    nodes = [{"form": "batch", "fn": 0, "n": n} for n in (steps * t * 32, t * 160, steps * 32, steps * 32)]
+def live_program(t: int, steps: int, prefix: str, version: int = 2) -> dict:
+    """A live Program's descriptor (`circuit.live.program_v2`'s encoding as far as `credit.live_of` reads it, or
+    `circuit.live.program`'s at `version` 1): its program function's record T, S and PREFIX, its unit
+    ``PouwLiveSlots_v2{T=<T>}`` (a composite bound to T alone) and its root's input batches (S·T slot words, T headers,
+    S m's, S rounds and, at v2, T caps, as bits) then S calls of the unit, round s's unit s."""
+    fn_id, unit_id = f"PouwLiveWindow_v{version}", f"PouwLiveSlots_v{version}"
+    fn = f"{fn_id}{{T={t},S={steps},PREFIX={Cr._canonical(prefix)}}}"
+    unit, root = f"{unit_id}{{T={t}}}", f"Root[{fn_id}]_v1"
+    batches = (steps * t * 32, t * 160, steps * 32, steps * 32) + ((t * 32,) if version == 2 else ())
+    nodes = [{"form": "batch", "fn": 0, "n": n} for n in batches]
     nodes += [{"form": "call", "fn": 1} for _s in range(steps)]
     return {"schema": Cr.SCHEMA, "callees": ["Input1_v1", unit], "program_fn": fn, "root": root,
             "definitions": {"Input1_v1": {"form": "primitive", "id": "Input1_v1"},
                             root: {"form": "composite", "id": root, "bindings": {},
                                    "body": {"nodes": nodes, "params": []}},
-                            unit: {"form": "composite", "id": Cr.LIVE_UNIT, "bindings": {"T": t},
+                            unit: {"form": "composite", "id": unit_id, "bindings": {"T": t},
                                    "body": {"nodes": [], "params": []}}}}
 
 
@@ -1180,10 +1187,12 @@ def _live_ms(d: dict, steps: int) -> list[int]:
     return [m if type(m) is int and 0 <= m < 1 << 32 else 0 for m in ms]
 
 
-def live_proof(rng: random.Random, d: dict, desc: str, s: int, m: int, prefix: str | None = None) -> dict:
+def live_proof(rng: random.Random, d: dict, desc: str, s: int, m: int, prefix: str | None = None,
+               max_tokens: list[int] | None = None) -> dict:
     """Round s's accepted live@<s> proof outcome, as the verifier of record gives it on the ``--registered`` file
     `live_reads.reads_file` builds for the window `d` of PREFIX `prefix` (its descriptor's when None) at served rows
-    `m`: each port at its value and root (a random root for a table the window doesn't register)."""
+    `m` and the public caps of `max_tokens` (its period's fixed length when None): each port at its value and root (a
+    random root for a table the window doesn't register)."""
     steps, t = len(d["rounds"]), d["rows"]
     prefix = Cr._prefix(bytes.fromhex(d["descriptor"])) if prefix is None else prefix
     program = hashlib.sha512(bytes.fromhex(d["descriptor"])).hexdigest()
@@ -1191,7 +1200,8 @@ def live_proof(rng: random.Random, d: dict, desc: str, s: int, m: int, prefix: s
     for v in [LR.table(prefix, LR.SLOTS, x) for x in range(steps)] + [LR.table(prefix, LR.REQUESTS)]:
         if v not in roots:
             roots[v] = _hex(rng)
-    reg = LR.reads_file(program, t, steps, s, roots, d["window"]["root"], d["sid"], m, prefix)
+    mt = d["length"]["max_tokens"] if max_tokens is None else max_tokens
+    reg = LR.reads_file(program, t, steps, s, roots, d["window"]["root"], d["sid"], m, prefix, mt)
     return {"unit": s, "verdict": "accept", "program": hashlib.sha512(bytes.fromhex(desc)).hexdigest(),
             "registered": {port: {"value": x["value"], "root": x["root"]} for port, x in reg["ports"].items()}}
 
@@ -1223,7 +1233,7 @@ def _break_live_desc(rng: random.Random, d: dict, name: str) -> str:
                                           f"{Cr.LIVE_FN}{{T={t},S={steps},PREFIX=5}}",
                                           f"{Cr.LIVE_FN}{{S={steps},T={t},PREFIX={pre}}}",
                                           f"{Cr.LIVE_FN}{{T={t},S=0{steps},PREFIX={pre}}}",
-                                          f"PouwLiveWindow_v2{{T={t},S={steps},PREFIX={pre}}}"])
+                                          f"PouwLiveWindow_v1{{T={t},S={steps},PREFIX={pre}}}"])
             if rng.random() < 0.3:
                 return d["descriptor"]
         case "live-body":
@@ -1234,7 +1244,7 @@ def _break_live_desc(rng: random.Random, d: dict, name: str) -> str:
                 case 1:
                     p["definitions"][unit]["bindings"] = {"T": t + 1}
                 case 2:
-                    p["definitions"][unit]["id"] = "PouwLiveSlots_v2"
+                    p["definitions"][unit]["id"] = "PouwLiveSlots_v1"
                 case 3:
                     nodes.append({"form": "call", "fn": 1}) if rng.random() < 0.5 else nodes.pop()
                 case 4:
@@ -1295,6 +1305,36 @@ def _mutate_live(rng: random.Random, d: dict, name: str) -> None:
             for port in rng.sample(ports, rng.randint(1, len(ports))):
                 p["registered"][port] = ({"value": others[0]["value"], "root": others[0]["root"]} if others
                                          else {**p["registered"][port], "root": _hex(rng)})
+        case "live-caps-swapped":
+            mt, i = list(d["length"]["max_tokens"]), rng.randrange(len(proofs))
+            other = mt[::-1] if mt[::-1] != mt else [mt[0] + 1, *mt[1:]]
+            proofs[i] = live_proof(rng, d, live["descriptor"], proofs[i]["unit"], _live_ms(d, steps)[proofs[i]["unit"]],
+                                   max_tokens=other)
+        case "live-caps-other":
+            mt, i = list(d["length"]["max_tokens"]), rng.randrange(len(proofs))
+            q = rng.randrange(len(mt))
+            others = [mt[:q] + [mt[q] + 1] + mt[q + 1:]] + ([mt + [1]] if len(mt) < d["rows"] else [])
+            others += [mt[:q] + [mt[q] - 1] + mt[q + 1:]] if mt[q] > 1 else []
+            others += [mt[:-1]] if len(mt) > 1 else []
+            others += [mt[::-1]] if mt[::-1] != mt else []
+            proofs[i] = live_proof(rng, d, live["descriptor"], proofs[i]["unit"], _live_ms(d, steps)[proofs[i]["unit"]],
+                                   max_tokens=rng.choice(others))
+            if rng.random() < 0.3:
+                p = proofs[i]
+                port = rng.choice([x for x in p["registered"] if x.startswith("cap_")])
+                p["registered"][port] = rng.choice([{**p["registered"][port], "root": _hex(rng)},
+                                                    {**p["registered"][port], "value": p["registered"]["m"]["value"]}])
+        case "live-v1":
+            prefix = Cr._prefix(bytes.fromhex(d["descriptor"]))
+            desc = live_hex(live_program(d["rows"], steps, prefix, version=1))
+            program = hashlib.sha512(bytes.fromhex(d["descriptor"])).hexdigest()
+            roots = {e["value"]: e["root"] for e in d["entries"] if isinstance(e, dict) and "value" in e}
+            ps = []
+            for s, m in enumerate(_live_ms(d, steps)):
+                reg = LR.reads_file(program, d["rows"], steps, s, roots, d["window"]["root"], d["sid"], m, prefix)
+                ps.append({"unit": s, "verdict": "accept", "program": hashlib.sha512(bytes.fromhex(desc)).hexdigest(),
+                           "registered": {port: {"value": x["value"], "root": x["root"]} for port, x in reg["ports"].items()}})
+            d["live"] = {"descriptor": desc, "proofs": ps}
         case "live-ok-off":
             rng.choice(proofs)["registered"][LR.OK_PORT]["root"] = _hex(rng)
         case "live-proofs-form":
