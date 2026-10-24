@@ -48,7 +48,10 @@ makes that source the certifier's signed record.
   declared sync off the signed one refused, phase 11's δ = 0 against a signed δ = 1 among them; and unsigned and
   wrongly signed syncs refused. `benchmarks/network_traces/tests/test_certifier_serve.py` checks that the served proxy
   hands its certifier its shaper's syncs, and that the certifier process signs them as the inline publisher does.
-- **Not yet:**
-  - The Lean CertifierDevice's issuer signs records only; the clock certificate is the Python issuer's until the
-    device mirrors `Issuer.clock`.
-  - A run made before `clocks.jsonl` has no clock certificates, so the source of record refuses its advised links.
+- **The Lean device** signs it too: `CertifierDevice.Issuer.clock`, and `clockWith` against the world, beside `certify`
+  in `verity/core/devices/certifier/lean/CertifierDevice/Issuer.lean`, with `ClockCertificate.verify`. The issuer
+  difftest holds both to `certificate.Issuer` (`verity/core/devices/certifier/lean/scripts/issuer_vectors.py`):
+  honest clock certificates, ones tampered or signed again for another window, direction or key, a record certificate
+  passed as a clock, and the syncs and link-windows it refuses.
+- **Not yet:** a run made before `clocks.jsonl` has no clock certificates, so the source of record refuses its advised
+  links.
