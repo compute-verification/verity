@@ -1,13 +1,15 @@
 """`compose_circuit.py --cache`: the ranks a machine audits compose each template once. A circuit composed bound to one partition
 and program, kept, and taken bound to another (`restamp`) is byte for byte, with compose's line, the circuit composed bound to
 that one, its caller never composing, whatever the reads' chunks split; a cache key moves with the template, the reads' layout
-and any composing file, compose_circuit's own among them, and with nothing else; and a kept circuit that changed, a binding
+and any composing file, compose_circuit's own among them, and with nothing else; a circuit whose reads are in slots gets its
+MUFU tables beside it whether composed or restamped; and a kept circuit that changed, a binding
 not in the file once, or a binding that is not two SHA-512 digests is refused, writing nothing. A toy unit Definition."""
 
 from __future__ import annotations
 
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -90,6 +92,29 @@ def test_a_cache_key_moves_with_the_template_and_with_any_composing_file(tmp_pat
     with pytest.raises(SystemExit) as e:
         CC.main()
     assert e.value.code == 2
+
+
+@pytest.mark.slow
+def test_a_slots_circuit_gets_its_tables_composed_or_restamped(tmp_path, monkeypatch, capsys):
+    """``--template --reads slots --cache`` writes the MUFU tables beside the circuit when it composes and when it restamps a
+    kept circuit, which copies circuit.txt alone; ``--reads inline`` writes none. The toy as the template."""
+    from verity_vllm.pipeline import chunk_rows as CR, serving_rows as SRW
+
+    monkeypatch.setattr(SRW, "template", lambda tid: SimpleNamespace(fn=TOY))
+    monkeypatch.setattr(CR, "unit_rows", lambda tp: (ROWS, [(V2, (0,))]))
+    monkeypatch.setattr(CC, "cache_key", lambda t, reads="inline": f"{t}-{reads}")
+
+    def tables(out: Path, binding: dict, reads: str) -> list[str]:
+        monkeypatch.setattr(sys, "argv", ["compose_circuit.py", "--template", "Toy", "--out", str(out), "--reads", reads,
+                                          "--cache", str(tmp_path / "cache"), *(f"--{k}={v}" for k, v in binding.items())])
+        assert CC.main() == 0
+        return sorted(p.name for p in (out.parent / "tables").glob("*"))
+
+    want = sorted(f"{name}.u32" for name in CC.FC.IL.TABLES)
+    assert tables(tmp_path / "r0" / "circuit.txt", B1, "slots") == want
+    assert tables(tmp_path / "r1" / "circuit.txt", B2, "slots") == want
+    assert "restamped" in capsys.readouterr().err
+    assert tables(tmp_path / "r2" / "circuit.txt", B1, "inline") == []
 
 
 @pytest.mark.slow

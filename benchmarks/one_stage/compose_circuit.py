@@ -9,7 +9,8 @@ the statement binds the given partition and program digests. Run in the circuit 
 template the partition's ``chunk_cap`` names), composed by C-Flock's `UnitStager` on the rows the window commits
 (`verity_vllm.pipeline.chunk_rows.unit_rows`), bound to the partition and program; no input set is read. ``--reads slots``:
 `UnitStager`'s ``reads``, a unit reading a pinned MUFU table laid out in lookup slots (``MoeRouterSigmoidBias``'s sigmoid
-inline is about 5e10 nonzeros); a unit reading none keeps its flat circuit. The default, ``inline``, is the circuit a5 composes.
+inline is about 5e10 nonzeros), with the MUFU tables the prover reads written beside the circuit (``tables/``); a unit reading
+none keeps its flat circuit. The default, ``inline``, is the circuit a5 composes.
 """
 from __future__ import annotations
 
@@ -156,7 +157,10 @@ def template(a: argparse.Namespace) -> int:
                         reads=a.reads)
         return {"subcircuit": st.meta.get("subcircuit"), "pin": st.pin, "class_sha512": st.class_sha512, "k_log": st.meta["k_log"]}
 
-    print(json.dumps(cached(Path(a.cache), cache_key(a.template, a.reads), Path(a.out), bind, compose) if a.cache else compose()))
+    made = cached(Path(a.cache), cache_key(a.template, a.reads), Path(a.out), bind, compose) if a.cache else compose()
+    if a.reads == "slots":  # on a restamp too, which copies circuit.txt alone
+        FC.IL.write_tables(Path(a.out).parent / "tables")
+    print(json.dumps(made))
     return 0
 
 
