@@ -131,8 +131,9 @@ row's verdict and deadline bits are 1, the certificates verify on their public f
 the window's sync is declared. It reads no head, salt or sibling. `benchmarks/network_traces/n2_zk.py` proves a
 certifier-serve run's link-windows this way through the link's own stream, and scans what the verifier received. The
 in-the-clear check, `LinkWindows.clear`, is a debug comparison, off by default. What's open:
-- **The certificates aren't a Spec item.** The verifier receives them from the certifier, the auditor's device, beside
-  the proof service, whose public kinds have none for a trusted device's signature over a hiding commitment.
+- **The certificates aren't a Spec item.** The verifier receives them in the clear from the certifier, the auditor's
+  device, beside the proof service, whose public kinds have none for a trusted device's signature over a hiding
+  commitment. That is a provisional exception to the four public kinds (decided 24 Oct, option A), not a fifth kind.
 - **A run that proves nothing** (a rehearsal, the simulator) is decided in the clear (`LinkWindows.unproved_outcome`,
   its verdict `"decided_by": "clear"`), which is never zero-knowledge.
 

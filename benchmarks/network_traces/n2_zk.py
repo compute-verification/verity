@@ -115,13 +115,17 @@ def link(run: Path) -> tuple[LinkWindows, dict]:
     return lw, plan
 
 
-def link_windows(run: Path, edit=None) -> SimpleNamespace:
+def link_windows(run: Path, edit=None, clock=None) -> SimpleNamespace:
     """Every link-window of the run with both certified records, as the prover holds it before it registers: its opening
     (fresh salts), the root it commits (`LinkWindows.root`), the unit's arguments under that root (None where the unit
     takes no instance), each end's head check's failed parts (`head_check.reference_parts`) and the unit's output word by
     the gates' references (`LinkWindows.outputs`); and the certifier's certificates, which the verifier receives from
     the certifier. ``edit(lw, w, pair)``: the records the prover commits in place of the certified ones. ``expect``: the
-    verdict the verifier of record should reach on an honest proof of the opening."""
+    verdict the verifier of record should reach on an honest proof of the opening.
+
+    With ``clock``, for a report on runs nothing is proved for (network_e2e), also on N2's stream as certifier-serve's
+    check takes it: each link-window registered (``digest``), selected (Selection All) and decided before the next by
+    `LinkWindows.unproved_outcome`, in the clear (``host``), and the link's network verdict (``network``)."""
     lw, plan = link(run)
     syncs = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
     certified, refused = cs.read_certified(run / "certified.jsonl")
@@ -144,7 +148,18 @@ def link_windows(run: Path, edit=None) -> SimpleNamespace:
             failed={e: None if i is None else [k for k, ok in HC.reference_parts(i).items() if not ok]
                     for e, i in zip(ENDS, insts)},
             expect=int(word == 0b11 and others), statement=None))
-    return SimpleNamespace(lw=lw, plan=plan, syncs=syncs, windows=out, issuer_refused=refused)
+    rd = SimpleNamespace(lw=lw, plan=plan, syncs=syncs, windows=out, issuer_refused=refused)
+    if clock is not None:
+        st = lw.stream(budget=plan["windows"], delta=cs.DELTA, challenger="n2-zk", coins=cs._no_coins, clock=clock)
+        previous = None
+        for x in out:
+            reg = lw.register(st, lw.registration(x.opening, previous))
+            previous = x.digest = reg.digest
+            draw = st.select(reg)
+            outcome = st.deliver(draw, [lw.session(x.opening, draw)]) or lw.unproved_outcome(st, draw, x.opening, syncs)
+            x.host = {"accepted": outcome.accepted, "codes": list(outcome.verdict.codes), "public": dict(outcome.public)}
+        rd.network = lw.network_verdict(st, plan["windows"])
+    return rd
 
 
 def one_count(lw: LinkWindows, w: int, pair: tuple[CertifiedRecord, CertifiedRecord]):

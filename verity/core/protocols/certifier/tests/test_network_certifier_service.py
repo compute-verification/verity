@@ -28,6 +28,7 @@ from verity.core.protocols.certifier.service import (HEADS, OUTPUTS, PUBLIC, SCH
                                                                       rows)
 from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
+from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 from verity.core.protocols.sampled_proofs.one_stage.proofs import Finding
 
 from test_network_certifier_audit import FRAMES, P as PARAMS, SYNC_SET, SYNCS, honest_ready, ingress_run
@@ -341,6 +342,12 @@ def test_the_proof_unit_is_the_registered_template(tmp_path):
     assert lw.proof_unit.id == lw.unit.id and lw.proof_unit.signature() == lw.unit.signature()
     assert codec.descriptor_id(lw.proof_unit) == codec.descriptor_id(lw.unit) == P.template_id(lw.unit)
     assert lw.proof_unit.defn is not lw.unit.defn and lw.partition is lw._partition
+
+
+def test_n2s_program_reads_no_registered_value(tmp_path):
+    """N2's verifier of record runs Lean without registered reads (`proofs.verify` with `registered` None), which
+    `proofs.verify` refuses for a program that reads registered values; N2's unit reads none, so its proofs reach Lean."""
+    assert not PF.reads_registered(Run(tmp_path).lw.program)
 
 
 def test_the_verdict_of_record_is_the_proofs(tmp_path):

@@ -20,8 +20,8 @@ conditions, each of which holds:
 N2 compares no grid (NET-38), and the network claim is counts only until N3 is a proof-service unit on every window
 (ASK-70, counts-first). N2's verifier of record decides each link-window on a `--zk` proof of its registered unit and
 public inputs alone, and reads no head, salt or sibling ("Its verifier of record" below). What stays open is in the
-README: the certificates reach the verifier beside the proof service, and a run that proves nothing is decided in the
-clear.
+README: the certificates reach the verifier in the clear beside the proof service, a provisional exception to the four
+public kinds, and a run that proves nothing is decided in the clear.
 
 A proof is held to the unit's circuits: each gate names its Definition's pinned circuit digest, so the unit's Program
 binds them, and the verifier refuses a proof of any other Program ("The check" below).
