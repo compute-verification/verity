@@ -351,6 +351,8 @@ side isn't built. The unit outputs 1 exactly when:
 So a duplicated, dropped, reordered, moved or altered cell, a byte anywhere outside the id, a cell on another
 request's stream, an output in the wrong bucket, a fabricated output, a wrong id and a port row that isn't the
 Commit's each refuse the window. Nothing is drawn within the window, so there is no ε: the verdict covers every cell.
+In proofs' sampled-audit statement (`SampledAuditAccepted`, #3608), a class drawn `All` has error 0. That statement
+doesn't yet model the transfer gates' tie to the certifier's signed rows, so this unit's place in it is still to state.
 
 **No value of the prover's says what a cell must be.** v3 held the cells to a table the prover committed, so the table
 was a free input: REDTEAM (`cursor/redteam-phase4-io-061a`) forged a wrong id and a fabricated response, each with a
@@ -358,7 +360,10 @@ matching table, and both were accepted. Now the map is a function of the advice,
 and each id is an entry of the Commit's rows, opened under the Commit's registered root. The prover's values are the
 witness that opens those: the cells' and rows' salts, the rows' paths and the routing. Both of REDTEAM's cases are regressions, refused
 (`test_network_certifier_io_tie_phase4.py`), and so is a two-sided tamper of the routing: two ids swapped together
-with the switches that route each cell the entry carrying its new id.
+with the switches that route each cell the entry carrying its new id. This also closes NETREV's finding on v3: the
+table's binding to the token port was outside the tie and load-bearing, and had to be an `All` unit's egress transfer
+gates. v4 has no table. `IoTiePort` opens each id from the Commit's own rows under the Commit's registered root,
+inside this unit, and `IoTieMatch` holds each routed entry's index to the one the map names.
 
 **(a) Decision: the token's id in the frame, not its text.** Each egress event carries one sampled id, and the user
 decodes it with the public tokenizer.
@@ -368,6 +373,12 @@ decodes it with the public tokenizer.
   `return_tokens_as_token_ids` with logprobs) and writes one event per id of each chunk's `token_ids`, so neither
   vLLM's chunking nor its UTF-8 holdback reaches the wire. `pad_to`'s empty events and `events`' 64-byte cut go. A
   response is one event per kept output, of any number.
+- **CERT-VARLEN's event** (`active.id_event(request, token_id)`, #3552) is this one with the request's ordinal ahead
+  of the id (`"request":%10d,"token_id":%10d`): 159 bytes, with the ordinal at frame byte 110 and the id at 132.
+  `io_tie.id_event` is 138 bytes, with the id at 111. On egress the ordinal is the warden's stream, so the server's copy
+  of it is redundant, and a field the server writes is a channel unless it is checked. With CERT-VARLEN's event, the
+  cell holds the ordinal to q too: one more 10-digit decode and a compare, at B ≥ 168. The prototype keeps the
+  138-byte event. The shim writes one of the two, to be settled with CERT-VARLEN, and `IoTieCell` follows it.
 - **Ingress** carries ids too: a request is a canonical `/v1/completions` body whose prompt is token ids, each in an
   11-byte field (`[` or `,`, then `%10d`; 11 spaces past the prompt's length, which JSON reads as whitespace), placed so
   no field straddles a frame. The server adds nothing to a token-id prompt, so `c00.input/ids` is the request's ids.
@@ -429,6 +440,15 @@ the window's steps, sorted and padded to S. The unit reads the map as 8 bytes a 
 **(c) Decision: the stream is the warden's, and a bucket has one order.**
 - **The stream** is warden framing: the request's ingress ordinal, which the warden writes from the connection it
   terminated. The server writes only the id, and a cell on another request's stream is refused by the map.
+- **The numbering, under a real engine.** The ordinal is the warden's release order: the order in which the requests'
+  last ingress cells land on the link. TRACE-CORPUS found that the engine admits in the API server's body-read order,
+  not in the release order: 2,970 inversions on its heavy trace and 3 on smallkv. Advice v0 numbers requests by first
+  row, the engine's admission, so on such a link the honest advice's q differs from the stream, and the unit refuses
+  honest traffic. That is a gap in completeness, not in soundness. It closes either way:
+  - the map carries a public permutation from the advice's numbering to the release ordinal (advice v1's certified
+    order, `PromptTie.order`), and the unit holds each cell's stream to order[q], with the deviation charged as advice
+    (TRACE-CORPUS: 2,194 bits on the heavy trace, 30 on smallkv);
+  - or the server admits in release order (a serve-openai change, vllm's), which makes the charge zero.
 - **The order within a bucket.** W4 releases a bucket's frames in queue order, a channel of up to log2 n_t! bits a
   bucket that neither advice v0 nor the timing term charges (advice v0's "The order within a bucket"). The warden
   instead releases each bucket's frames sorted by stream, each stream's in its order. This changes W4's order within
@@ -536,11 +556,38 @@ window. It outputs 1 exactly when:
 
 A row's digest costs a compression per 128 bytes and one more, and its hm96 leaf, frame-v3 leaf and node about 8.5
 more, whatever its length. With a row a cell at B = 256, each cell's 2 compressions of bytes cost 11.5. With a row a
-bucket, the cells' rows cost 1.05 times their bytes at the rehearsal and 1.004 times served. The proof service's
-registered reads (the flock verifier's §16.10, the unit drawn in full) would take the trees above the rows out of the
-circuit, but each row's digest and hm96 leaf stay in it. For the cells' tree that saves 1.7% at the rehearsal and 0.2%
-served. For the port's paths it saves 22% and 11% (2.28 × 10^8 and 1.62 × 10^10), which makes it one of the port's
-levers ("The compact-framing lever").
+bucket, the cells' rows cost 1.05 times their bytes at the rehearsal and 1.004 times served.
+
+**On registered reads** (the flock verifier's §16.10, `--registered`, which WARDEN's #3594 uses to read the warden's
+rows), the statement's own `sha512x3` and `hm96` slots prove each registered row's digest and hiding commit: 58,120
+ANDs a compression, and three compressions for hm96. They must, since the row hides a private value. The verifier
+checks the row's frame-v3 leaf and path from its public b ‖ c. So a registered read takes the tree above the rows out
+of the proof, but not the rows' hashing: no gate of the unit hashes, yet the proof still hashes every byte once. With
+both the cells and the Commit's step rows read as registered rows, by the warden's row layout:
+
+| The warden's rows | Rehearsal | Served | Served, compact B = 16 | Rows and public b ‖ c, served |
+|---|---|---|---|---|
+| v4 as built (both roots in the unit) | 1.020 × 10^9 | 1.419 × 10^11 | 2.85 × 10^10 | none |
+| A row a bucket (S·B bytes) | 7.58 × 10^8 (−25.6%) | 1.252 × 10^11 (−11.7%) | 1.15 × 10^10 (−59.6%) | 600, 77 KB |
+| Rows of 4 KiB | 8.13 × 10^8 (−20.3%) | 1.361 × 10^11 (−4.0%) | 1.21 × 10^10 (−57.4%) | 63,225, 8.1 MB |
+| A row a cell (#3594's) | 1.77 × 10^9 (+73.9%) | 3.015 × 10^11 (+112.5%) | 1.805 × 10^11 (+534%) | 1,011,600, 129 MB |
+
+- **The saving** is what it was: the port's paths (`FrameV3Read{DS}`, 3.96 × 10^6 of a served step's 4.70 × 10^6) and
+  the cells' tree (1.7% at the rehearsal, 0.2% served). The bytes' floor is 90% of the registered window at the
+  rehearsal and 94% served.
+- **A row a cell** multiplies the cells' hashing by the cost of a row: 290,600 for a 256-byte cell (5 compressions
+  for 2 of bytes), and 174,360 for a 16-byte one (3 compressions for an eighth of one). The verifier then climbs a
+  path a cell and reads 128 bytes of b ‖ c a cell.
+- **At WARDEN's schedule** (T = 600, 16 slots, B = 256), a bucket is 4 KiB. The cells cost 1.22 × 10^9 a window as
+  bucket rows, 2.79 × 10^9 as cell rows, and 1.56 × 10^9 as v4's bucket rows in the unit.
+- **Reading one cell** costs its whole row: 2.9 × 10^5 in a cell row, 2.0 × 10^6 in a 4 KiB row and 2.0 × 10^8 in a
+  served bucket row.
+
+So the layout to register is a row a bucket. Row t − w·T holds bucket t's S slots in slot order, slot j at bytes
+j·B to (j + 1)·B: WARDEN's row (t − w·T)·S + j becomes words j·B/2 onward of row t − w·T. At WARDEN's schedule that
+row is 4 KiB. The unit then reads T + S registered rows and recomputes no root; its parse, routing and match are
+unchanged. Not built: `IoTieWindow` still recomputes both roots, and a statement with T + S registered ports this
+large hasn't been measured.
 
 **What the map and the port must be.** For advice v0's output k = (step, row, request, index), released in the window
 (`release[k] // T = w`):
@@ -548,6 +595,10 @@ levers ("The compact-framing lever").
 - q is `request`, advice v0's number, which the unit holds to the warden's stream ("The two ingress ties");
 - e = σ·P + `row`, with σ the place of `step` among the window's steps;
 - the id is port row `step`'s `row`-th id: `runner.sampler/sampled_token_ids` of step `step` at batch row `row`.
+
+So each `release[k]` is output k's frame bucket in the warden's certified egress record, which is what N2-ADVICE's
+advised floor reads. The unit checks this by position: a cell's bucket is its row in the warden's registered tree,
+and the map puts output k's cell in row `release[k]` − w·T and nowhere else.
 
 `window_map` computes the map and the steps. vllm and compute own the port's layout and its binding to
 `c00.input/ids` and `sampled_token_ids`, in zero knowledge what `check/commit_tokens.py` does in the clear. The tie
@@ -557,7 +608,9 @@ reads the Commit's root as public.
 steps of P = 64 from a session of 2^10 (E = M = 8,192). Served is `SERVED`'s shape, L = 9, T = 600, r = 1,686 (N =
 1,011,600), with S = 4,096 steps of P = 256 from a session of 2^23 (E = M = 2^20). Egress cells are 256 bytes and
 ingress frames 4,096. Each part's formula is exact, checked against `HC.ands` at two sizes or more and the whole window
-at T = 3, R = 4, P = 4, S = 4, DS = 3, and extrapolated from there; nothing at these sizes is built.
+at T = 3, R = 4, P = 4, S = 4, DS = 3 (`IoTieWindow{256, 3, 4, 4, 4, 3}`, 6,721,770 ANDs: `IoTiePort` 3,534,423,
+`NetworkRowsRoot` 3,139,634, `IoTieContent` 47,711 and 2 joining them), and extrapolated from there; nothing at these
+sizes is built.
 
 | Part | Rehearsal | Served | From |
 |---|---|---|---|
@@ -723,7 +776,7 @@ are a function of the map and the port, so the prover rebuilds them, and it comp
 **Composition.**
 - **N2** (`All`) holds the head's fields and counts and the certificate that signs them.
 - **The cells' root** is the warden's own per-window value, registered by the auditor's device
-  (`trusted-nebius-host`). It isn't the head's frames root, which is an unsalted tree that can't be opened outside a
+  (`trusted-host`). It isn't the head's frames root, which is an unsalted tree that can't be opened outside a
   proof. The head's counts and the cells come from one grid of the warden's: bucket t holds n_t data cells. The tie
   doesn't read the head; tying the cells' root into it (a record v3 field) is open.
 - **N3** (`All`, a design) holds every frame under the head's root to its template, which on a served link's egress
