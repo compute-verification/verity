@@ -29,6 +29,22 @@ SAMPLING_FIELDS = ("temperature", "top_p", "top_k", "min_p", "seed", "max_tokens
                    "stop_token_ids", "presence_penalty", "frequency_penalty", "repetition_penalty")
 
 
+def user_of(body: Any) -> str | None:
+    """A request body's ``user`` (a dict, or vLLM's ``CompletionRequest``), None when it sent none."""
+    u = body.get("user") if isinstance(body, Mapping) else getattr(body, "user", None)
+    return None if u is None else str(u)
+
+
+def advice_trace(out: Path, engine: Any) -> Any:
+    """The scheduler step trace (`engine.step_trace.StepTrace`) of ``engine`` for the server's lifetime, at ``out/advice_trace.jsonl``
+    (`step_trace.SERVED`, beside the committer's step_trace.jsonl), under the engine ids requests.jsonl records (vLLM's internal
+    suffix dropped): what `verity-vllm advice OUT` reads, with each window's open and close (``CommitWindows(marks=trace.window)``)."""
+    from verity_vllm.engine.engine_driver import external_id
+    from verity_vllm.engine.step_trace import SERVED, StepTrace
+
+    return StepTrace(Path(out) / SERVED, request_id=external_id, clock=time.time).install(engine)
+
+
 def param_of(params: Any, name: str) -> Any:
     """One field of the engine's sampling parameters: vLLM's ``SamplingParams`` or `PlainProtocol`'s dict."""
     return params.get(name) if isinstance(params, Mapping) else getattr(params, name, None)

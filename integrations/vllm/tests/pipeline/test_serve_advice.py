@@ -1,6 +1,7 @@
 """`verity-vllm serve-openai` records what `verity-vllm advice` reads, and the advice of each of its Commit windows compiles back to
 the steps it served: a stand-in server (its HTTP side and engine loop as `main` runs them, the scheduler `tests.engine.fake_scheduler`
-under the committer stand-in of `test_serve_openai`) serves two waves of requests, each its own Commit window; requests.jsonl
+under the committer stand-in of `test_serve_openai`) serves two waves of requests, the engine idle between them, so in at least
+two Commit windows; requests.jsonl
 carries each body's `user`, advice_trace.jsonl the scheduler's steps and each window's open and close, and each window's advice,
 committed under w<k>/, compiles (`predict.steps.compile_steps`) to the rows the trace recorded, each request at the shape it ran."""
 from __future__ import annotations
@@ -89,7 +90,7 @@ class Server:
     def __init__(self, out: Path) -> None:
         self.runner = Runner()
         self.engine = SchedEngine(self.runner)
-        self.trace = so.advice_trace(out, self.engine.sched)
+        self.trace = sc.advice_trace(out, self.engine.sched)
         self.windows = sc.CommitWindows(Committer(self.runner), out, run_id="t", window_steps=64, eos_ids=[Tokenizer.eos_token_id],
                                         clock=lambda: 0.0, wall=lambda: 0.0, marks=self.trace.window)
         self.loop = so.EngineLoop(self.engine, self.windows)
@@ -143,7 +144,7 @@ def test_the_server_records_each_requests_user_and_the_scheduler_trace_with_its_
     recs = ST.load(out / ST.SERVED)
     marks = [(r["window"], r["event"]) for r in recs if r["kind"] == "window"]
     wins = [w["window"] for w in records(out, "windows.jsonl") if not w.get("empty")]
-    assert len(wins) == 2 and all((w, "open") in marks and (w, "close") in marks for w in wins)
+    assert len(wins) >= len(WAVES) and all((w, "open") in marks and (w, "close") in marks for w in wins)
     assert {r["request"] for r in recs if r["kind"] == "arrive"} == {r["engine_id"] for r in reqs}
     assert records(out, "step_trace.jsonl")[0]["step_root"]          # the committer's trace is still its own file
 
@@ -170,7 +171,8 @@ def test_each_commit_windows_advice_is_committed_and_compiles_to_the_steps_it_se
         ingress = {q.id: bodies.get(q.id) or {**bodies[None], "user": q.id} for q in advice.requests}
         c = compile_steps(reg_, data, ingress)
         steps = ST.steps(split[int(w)])
-        index_of = {reqs[e]["user"] or reqs[e]["http_id"]: i for i, e in enumerate(dict.fromkeys(row[0] for st in steps for row in st["rows"]))}
+        order = dict.fromkeys(row[0] for st in steps for row in st["rows"])
+        index_of = {reqs[e]["user"] or reqs[e]["http_id"]: i for i, e in enumerate(order)}
         engine_of = {reqs[e]["user"] or reqs[e]["http_id"]: e for e in reqs}
         assert [q.id for q in advice.requests] == list(index_of)
         assert [[(r.request, r.start, r.n) for r in s] for s in c.steps] == \
