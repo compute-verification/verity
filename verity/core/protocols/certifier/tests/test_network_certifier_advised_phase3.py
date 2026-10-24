@@ -4,7 +4,8 @@ and the advice's validity and digest (`advised.LinkAdvice`, `advised.digest`), t
 prover reaches.
 
 - The ingress ends are derived from v0's prompt lengths through the link's public framing, request j the link's j-th,
-  the last the certified total, and the tie (`advised.PromptTie`) holds those lengths to the certified prompts', so
+  the last the certified total, and the tie (IoTieRequest's verdict, `advised.IoTieVerdict`, here its stand-in)
+  holds those lengths to the certified prompts', so
   on one record one split passes, and an output released before its request's frames is refused whatever lengths
   the advice states.
 - A declared sync is one of Σ_sync, and the floor is at least a bucket after the request's end (the certifier's
@@ -23,6 +24,8 @@ from verity.core.protocols.certifier.certificate import Direction, RecordHead
 from verity.core.protocols.certifier.grid import COMPLETE, Certifier, GridParams, fill, occupancy
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 
+from advised_traffic import tied
+
 T, R, RIN, OWN = 8, 2, 4, 0
 ONE = ClockSync(1, Fraction(1, 1))
 ONLY_ONE = SyncSet((1,), (1,))
@@ -40,27 +43,19 @@ def _advice(release, n=1, prompts=None):
     return A.Advice(reqs, steps, tuple(release))
 
 
-def _tie(prompts):
-    """The certified tie of requests of `prompts` tokens, in arrival order."""
-    return AD.PromptTie(tuple(prompts), tuple(range(len(prompts))))
+def _link(adv, received, certified=None):
+    """`adv` on the link, with IoTieRequest's verdict (its stand-in, `advised_traffic.tied`) on a record of the
+    prompts `certified`, by default `adv`'s own: what passes with no tie to the record."""
+    return tied(AD.LinkAdvice(adv, received), certified)
 
 
-def _tie_of(adv):
-    """The tie `adv` states: what passes with no tie to the record."""
-    return _tie([q.prompt_len for q in adv.requests])
+def _view(adv, received, sync=ONE, sync_set=ONLY_ONE, T_=T, certified=None):
+    return AD.view(_link(adv, received, certified), 0, T_, R, [sync], sync_set, FRAMING)
 
 
-def _link(adv, received, tie=None):
-    return AD.LinkAdvice(adv, received, _tie_of(adv) if tie is None else tie)
-
-
-def _view(adv, received, sync=ONE, sync_set=ONLY_ONE, T_=T, tie=None):
-    return AD.view(_link(adv, received, tie), 0, T_, R, [sync], sync_set, FRAMING)
-
-
-def _accepts(adv, received, ingress, egress, sync=ONE, sync_set=ONLY_ONE, own=OWN, tie=None):
+def _accepts(adv, received, ingress, egress, sync=ONE, sync_set=ONLY_ONE, own=OWN, certified=None):
     try:
-        v = _view(adv, received, sync, sync_set, tie=tie)
+        v = _view(adv, received, sync, sync_set, certified=certified)
     except ValueError:
         return False
     return AD.reference(T, RIN, own, ingress, egress, v.released, v.floor, v.received)
@@ -82,7 +77,7 @@ def test_an_output_released_before_its_requests_frames_is_refused_whatever_promp
     link's first request's output at 3 and its second's at 5 are causal and accepted. The second's at 3, before its
     frames were in, is refused: the advice has no ingress end to state (only v0's fields, `received` and the tie), and
     the last request's end is the link's certified total whatever its prompt lengths say, so no split of the 4 frames
-    between the two requests passes, even under a tie that states the split's lengths. Which body an output answers is
+    between the two requests passes, even under a verdict on a record of the split's lengths. Which body an output answers is
     IO-TIE's to tie: advice request j is the link's j-th."""
     ingress, egress, received = CAUSAL
     assert [f.name for f in fields(AD.LinkAdvice)] == ["advice", "received", "tie"]
@@ -97,20 +92,20 @@ def test_an_output_released_before_its_requests_frames_is_refused_whatever_promp
 def test_on_one_record_only_the_certified_split_passes():
     """On one certified record of two 4-token prompts, the advices whose stated lengths would pass (each a distinct v0
     string and digest) differ only in v0's prompt lengths; under the record's tie only the certified split does, and
-    every other is refused by the tie before any floor is computed. A view is a function of v0's encoding, `received`
-    and the tie, so one v0 string has one floor."""
+    every other is refused by the tie (IoTieRequest's verdict) before any floor is computed. A view is a function of
+    v0's encoding, `received` and the tie, so one v0 string has one floor."""
     ingress, egress, received = CAUSAL
-    certified = _tie((4, 4))
+    certified = (4, 4)
     candidates = [_advice((3, 5), 2, s) for s in _two_frame_splits()]
     stated = [a for a in candidates if _accepts(a, received, ingress, egress)]
     assert len(stated) >= 2
     assert len({A.encode(a) for a in stated}) == len(stated)
     assert len({AD.digest(_link(a, received)) for a in stated}) == len(stated)
-    assert [a for a in candidates if _accepts(a, received, ingress, egress, tie=certified)] == [_advice((3, 5), 2)]
+    assert [a for a in candidates if _accepts(a, received, ingress, egress, certified=certified)] == [_advice((3, 5), 2)]
     for a in candidates:
         if a != _advice((3, 5), 2):
-            with pytest.raises(ValueError, match="isn't its certified prompt's"):
-                _view(a, received, tie=certified)
+            with pytest.raises(ValueError, match="doesn't accept"):
+                _view(a, received, certified=certified)
     for a in stated:
         assert _view(A.decode(A.encode(a)), received) == _view(a, received)
 
@@ -162,8 +157,8 @@ def test_bucket_zero_is_capped_at_rin_with_the_certifiers_own_frame():
 def test_the_advice_digest_distinguishes_every_input_so_cross_window_swaps_are_refused():
     """Every window reports `advised.digest` of the whole advice, and `network_verdict` holds every window to the
     first's. The digest moves with `release`, with the prompt lengths the ends are derived from, and with `received`,
-    so a window can't carry a different advice under the first window's digest. The tie isn't in it: the host derives
-    it from the certified I/O, the same for every window."""
+    so a window can't carry a different advice under the first window's digest. The tie isn't in it: it is
+    IoTieRequest's verdict on the advice of that digest."""
     base = AD.digest(AD.LinkAdvice(_advice((3, 5), 2), (4,)))
     assert AD.digest(_link(_advice((3, 5), 2), (4,))) == base
     assert AD.digest(AD.LinkAdvice(_advice((4, 5), 2), (4,))) != base

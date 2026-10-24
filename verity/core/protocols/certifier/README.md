@@ -30,16 +30,8 @@ A spec-level reference for network accounting's timing channel:
   certifier's salt frame heading each window, which `own` counts), a
   request-major canonical order, and one T, τ_b and declared sync for a window's anchors (`PROTOCOL.md`, "A served
   link"). The proxy's admission rule (`Proxy(served=…)`) admits a request only while its window still ends idle, so
-  an honest served link is accepted;
-- an advised link's counts (`advised`, `LinkWindows(advised=AdvisedProfile(windows, request_frames, own))`), a
-  served link under arbitrary traffic: N2's advised unit, `NetworkAdvisedLinkWindow`, adds `NetworkAdvisedCounts_v1`
-  (63,031 ANDs at T = 600, R_in = 1), which holds the egress head's counts to the releases of the prover's advice
-  (`LinkAdvice`: I1's `advice.Advice` and each window's request frames), and the ingress head's counts to the advice:
-  each release eligible under a declared sync in Σ_sync, and at least a bucket, after its request's frames, whose end
-  on the ingress link `advised.ends` derives from v0's prompt lengths and the link's public framing, and each window's
-  ingress total the advice's. Carry-over between windows is the advice's. With the advice fixed the counts are
-  determined, so the egress timing carries at most `advice.bits` (`PROTOCOL.md`, "An advised link").
-  An egress end with no profile that is neither served nor advised gets no verdict (`ValueError`, failing closed);
+  an honest served link is accepted. An egress end with no profile gets no verdict (`ValueError`, failing
+  closed);
 - the capacity counts;
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
@@ -73,7 +65,17 @@ A spec-level reference for network accounting's timing channel:
   window) its ingress admits whole requests by the admission rule (`served.Admission`). On a sealed pair link
   (`Proxy(pair=active.Pair.of(…))`, off by default), between two of the auditor's certifiers, every slot of the link is
   sealed after its record and opened before it (`verity.ml.crypto.aead`, SHA-512 counter mode then HMAC-SHA512, a
-  nonce per slot), so the records are the unsealed run's and a unit that doesn't open fails the link closed.
+  nonce per slot), so the records are the unsealed run's and a unit that doesn't open fails the link closed;
+- an advised link's counts (`advised`, `LinkWindows(advised=AdvisedProfile(windows, request_frames, own))`), a
+  served link under arbitrary traffic: N2's advised unit, `NetworkAdvisedLinkWindow`, adds `NetworkAdvisedCounts_v1`
+  (63,031 ANDs at T = 600, R_in = 1), which holds the egress head's counts to the releases of the prover's advice
+  (`LinkAdvice`: I1's `advice.Advice` and each window's request frames), and the ingress head's counts to the advice:
+  each release eligible under a declared sync in Σ_sync, and at least a bucket, after its request's frames, whose end
+  on the ingress link `advised.ends` derives from v0's prompt lengths and the link's public framing, and each window's
+  ingress total the advice's. Carry-over between windows is the advice's. With the advice fixed the counts are
+  determined, so the egress timing carries at most `advice.bits` (`PROTOCOL.md`, "An advised link"). The prompt
+  lengths are tied to the certified ones only by IO-TIE's `IoTieRequest` verdict (`advised.IoTieVerdict`), which
+  isn't in the proof service yet, so every advised link is refused (fail closed).
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's

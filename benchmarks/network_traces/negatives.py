@@ -32,8 +32,8 @@ verifier); the code is what the verifier of record establishes, which `n2` reads
 - pending checks, by the names their drafts give them: ``NetworkAdvisedCounts_v1`` (N2-ADVICE's advised counts on an
   advised link, `LinkWindows.advised_check`: the egress head's counts the release of the advice's frames, the ingress
   head's the request frames the advice needs; ``.view`` when the advice is malformed, doesn't cover the window or its
-  requests aren't the certified ingress's (the prompt-length tie, `advised.PromptTie`), which refuses every window),
-  ``NetworkIoTie_v1`` (IO-TIE's tie of a drawn frame's token id to the Commit's at its (request,
+  requests aren't the certified ingress's (the tie, IoTieRequest's verdict, `advised.IoTieVerdict`), which refuses
+  every window), ``NetworkIoTie_v1`` (IO-TIE's tie of a drawn frame's token id to the Commit's at its (request,
   position)) and ``NetworkFrameRead`` (its read of a frame under the record's frames root); and, until their owners
   name them, ``IoUnit.render`` (under the attested-edge design, the egress unit rendering committed outputs to bytes),
   ``StepUnit`` (PROVE-PATH: the compiled step Program's digest against the committed trace's, and the committed values
@@ -458,10 +458,10 @@ NEGATIVES = {n.name: n for n in [
              "its next row keeping the sample", "N2's advised counts", ADVISED, advice_edit(output_length),
              waits=("ADV-SPEC", "N2-ADVICE")),
     Negative("advice-missing", "advice", "advice", "a certified request missing from the advice, with its rows",
-             "N2's advised view (the prompt-length tie)", f"{ADVISED}.view", advice_edit(missing_request),
+             "N2's advised view (the tie, IoTieRequest's verdict)", f"{ADVISED}.view", advice_edit(missing_request),
              waits=("ADV-SPEC", "N2-ADVICE"), also=(TIE,)),
     Negative("advice-extra", "advice", "advice", "a request in the advice that the ingress didn't certify",
-             "N2's advised view (the prompt-length tie)", f"{ADVISED}.view", advice_edit(extra_request),
+             "N2's advised view (the tie, IoTieRequest's verdict)", f"{ADVISED}.view", advice_edit(extra_request),
              waits=("ADV-SPEC", "N2-ADVICE"), also=(TIE,)),
     Negative("advice-release", "advice", "advice", "a kept output released one bucket later than certified",
              "N2's advised counts", ADVISED, advice_edit(release_moved), waits=("ADV-SPEC", "N2-ADVICE")),
@@ -552,13 +552,16 @@ def link_received(advice, request_frames, received: list[int]) -> list[int]:
 
 def n2_advice(advice, request_frames, received: list[int], certified=None):
     """I1 v0 advice as N2-ADVICE's `advised` reads it (`advised.LinkAdvice`: the advice, each window's `received`,
-    `link_received`'s, and the tie of its requests to the certified ingress, `advised.PromptTie`: the prompt lengths of
-    `certified`'s requests in arrival order, `advice`'s own by default; a tampering of the advice leaves the certified
-    ingress, so its tie is the honest advice's). Raises ModuleNotFoundError until N2-ADVICE lands."""
+    `link_received`'s, and the tie, IoTieRequest's verdict on the link, `advised.IoTieVerdict`). The verifier of
+    record takes the verdict only from IoTieRequest proofs it verified, so until IoTieRequest runs here this is its
+    stand-in, its reference in the clear on the prompt lengths: every ingress window accepted when the advice's prompt
+    lengths are `certified`'s requests', in arrival order, else every one refused. A tampering of the advice leaves the
+    certified ingress, so `certified` is the honest advice; by default `advice` itself. Raises ModuleNotFoundError
+    until N2-ADVICE lands."""
     AD = importlib.import_module(ADVISED_MODULE)
-    requests = (advice if certified is None else certified).requests
-    tie = AD.PromptTie(tuple(q.prompt_len for q in requests), tuple(range(len(requests))))
-    return AD.LinkAdvice(advice, tuple(link_received(advice, request_frames, received)), tie)
+    link = AD.LinkAdvice(advice, tuple(link_received(advice, request_frames, received)))
+    ok = certified is None or [q.prompt_len for q in advice.requests] == [q.prompt_len for q in certified.requests]
+    return replace(link, tie=AD.IoTieVerdict(AD.digest(link), (ok,) * len(link.received)))
 
 
 def advised_codes(link, window: int, syncs, sync_set, request_frames, T: int, R: int, RIN: int, OWN: int, ingress,
