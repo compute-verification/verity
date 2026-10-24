@@ -66,9 +66,9 @@ def plainForkEvK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionSpec} {s
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) {Ω : Type} (P : Claims.Prover Ω)
     (r : Fin 2) (ℓ : Fin (l₀ :: l₁ :: rest).length) (ω : Ω) (s s' : Fin ((V false).k x) → Coin) : Prop :=
   (Claims.run sha512 P (VK keep) x ω s).out = .acc ∧
-    (Claims.run sha512 P (VK keep) x ω (Claims.forkCoins (plainJ (tables_head_one h) hsch r ℓ) s s')).out = .acc ∧
+    (Claims.run sha512 P (VK keep) x ω (Claims.forkCoins (plainJ (x := x) (tables_head_one h) hsch r ℓ) s s')).out = .acc ∧
     Claims.TiedColl sha512 ((Claims.run sha512 P (VK keep) x ω s).vLog ++
-      (Claims.run sha512 P (VK keep) x ω (Claims.forkCoins (plainJ (tables_head_one h) hsch r ℓ) s s')).vLog)
+      (Claims.run sha512 P (VK keep) x ω (Claims.forkCoins (plainJ (x := x) (tables_head_one h) hsch r ℓ) s s')).vLog)
 
 /-- **A live event at `P'`'s outcome gives an accepting run of `P` with a collision**: wherever `pL` holds at the live
 outcome of `P'` at the tape `(ω, u)` and the live coins `r'`, `V false` accepts `P` at `Φ (u, r')` with a collision
