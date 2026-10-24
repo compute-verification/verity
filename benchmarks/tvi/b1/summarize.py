@@ -11,8 +11,9 @@ cheapest boundary (the attacker picks where to split). Readings:
   rho_2x     two crossings, each the exact fresh forward residual (bit-exact recipe);
   rho_fb     one forward and one backward crossing, each exact, at the same boundary;
   rho_apx    two crossings of a rank-r correction (basis free, coefficients at fp8 or int4 with a 16-bit per-token scale)
-             that keeps >= 90% of KL(theta'||theta) on the eval text, at the cheapest of the three probed boundaries
-             (L/4, L/2, 3L/4): the capability version. ">256" means no probed rank kept 90%.
+             that keeps >= 90% of KL(theta'||theta) on the eval text: the capability version. "min" is the cheapest probed
+             boundary (rank 0 there means the shift up to it hardly matters, not that the attack is free), "mid" the one
+             nearest L/2. Each is [layer, rank, F, rho]; ">512" means no probed rank kept 90%.
 
 beta_w_S = S_bits / N_w: the trained parameterization (public structure) codes the update in S_bits, so where S is the
 trainable state (A2's methods, the sweep's LoRA) it bounds beta_w; bw_min is the smaller of it and the compressors'.
@@ -123,17 +124,24 @@ def entry(r):
                 "Ff_min": round(x["F_fwd_min"]), "Ff_med": round(x["F_fwd_median"]), "Fb_min": round(x["F_bwd_min"]),
                 "Ffb_min": round(min(fb)), "rho_2x": sig((2 / 3) * 2 * x["F_fwd_min"] / H),
                 "rho_fb": sig((2 / 3) * min(fb) / H)}
+    def reading(layer, kind, bits):
+        """[layer, rank, F bits per token, rho] for a rank-r correction at this boundary; ">" when no probed rank kept 90%"""
+        v = ret[layer][kind]
+        if v["rank"] is not None:
+            F = bits * v["rank"] + (SCALE_BITS if v["rank"] else 0)
+            return [layer, v["rank"], F, sig((2 / 3) * 2 * F / H)]
+        top = int(max(v["keep"], key=int))
+        F = bits * top + SCALE_BITS
+        return [layer, f">{top}", f">{F}", f">{sig((2 / 3) * 2 * F / H)}"]
+
     apx = {}
-    for kind, bits in (("fp8", 8), ("int4", 4)):
-        ranks = [v[kind]["rank"] for v in ret.values() if v[kind]["rank"] is not None]
-        if ranks:
-            rk = min(ranks)
-            F = bits * rk + (SCALE_BITS if rk else 0)
-            apx[kind] = {"rank": rk, "F": F, "rho": sig((2 / 3) * 2 * F / H)}
-        elif ret:
-            top = max(max(v[kind]["keep"], key=int) for v in ret.values())
-            apx[kind] = {"rank": f">{top}", "F": f">{bits * int(top) + SCALE_BITS}",
-                         "rho": f">{sig((2 / 3) * 2 * (bits * int(top) + SCALE_BITS) / H)}"}
+    if ret:
+        mid = min(ret, key=lambda i: abs(i - r["n_layers"] // 2))
+        for kind, bits in (("fp8", 8), ("int4", 4)):
+            rows = [reading(i, kind, bits) for i in sorted(ret)]
+            ok = [x for x in rows if not isinstance(x[1], str)]
+            apx[kind] = {"min": min(ok, key=lambda x: x[2]) if ok else max(rows, key=lambda x: int(x[1][1:])),
+                         "mid": reading(mid, kind, bits)}
     e["rho_apx"] = apx
     layers = {"name": r["name"], "code_sha256": r.get("code_sha256"), "eval_text": r.get("eval_text"),
               "tokens": r["tokens"], "r90": s["r90_per_layer"], "r99": s["r99_per_layer"],
@@ -165,14 +173,17 @@ def cliff(entries):
         if e["S_bits"] is None:
             continue
         task = e["cond"].split(":")[0] if e["fam"] != "sweep" else e["model"]
+        a = e["rho_apx"]
         out.setdefault(f"{e['fam']}:{task}", []).append(
             [e["S_bits"], e["cond"], e["step"], e["kl"], e["fp8t"]["Ff_min"], e["nvfp4"]["Ff_min"],
-             e["rho_apx"].get("fp8", {}).get("rank"), e["fp8t"]["rho_2x"], e["nvfp4"]["rho_2x"],
-             e["rho_apx"].get("fp8", {}).get("rho"), e["rho_apx"].get("int4", {}).get("rho")])
+             e["fp8t"]["rho_2x"], e["nvfp4"]["rho_2x"]]
+            + ([a["fp8"]["min"][1], a["fp8"]["min"][3], a["fp8"]["mid"][1], a["fp8"]["mid"][3], a["int4"]["mid"][3]]
+               if a else [None] * 5))
     for v in out.values():
         v.sort(key=lambda row: (row[0], str(row[1]), row[2] or 0))
-    return {"columns": ["S_bits", "cond", "step", "kl", "Ff_min_fp8", "Ff_min_nvfp4", "keep90_rank_fp8", "rho_2x_fp8",
-                        "rho_2x_nvfp4", "rho_apx_fp8", "rho_apx_int4"], "rows": out}
+    return {"columns": ["S_bits", "cond", "step", "kl", "Ff_min_fp8", "Ff_min_nvfp4", "rho_2x_fp8", "rho_2x_nvfp4",
+                        "apx_min_rank_fp8", "rho_apx_min_fp8", "apx_mid_rank_fp8", "rho_apx_mid_fp8",
+                        "rho_apx_mid_int4"], "rows": out}
 
 
 def main():
@@ -205,12 +216,13 @@ def main():
         "keys": {"bv_gx": "output given theta's weights on theta''s input", "bv_rm": "per map, cheaper of output and "
                  "input route", "bw_S": "S_bits / N_w_updated", "cheapest": "fp8-cheapest boundary and its fresh "
                  "residual's effective rank (90%/99% energy)", "keep90_rank": "per probed boundary, [fp8, int4] "
-                 "smallest rank keeping 90% of KL(theta'||theta); null = none up to 256"},
+                 "smallest rank keeping 90% of KL(theta'||theta); null = none up to the largest probed (256, or 512 from code "
+                 "83822f13)"},
         "precisions": {"bf16": "bfloat16", "fp8t": "FP8 E4M3, per-tensor scale from theta",
                        "nvfp4": "NVFP4 (E2M1, 16-blocks, E4M3 scales)"},
         "h_bits_per_token": H,
         "rho": "(2/3) * crossings * F / h at the cheapest boundary: rho_2x exact fwd twice, rho_fb exact fwd+bwd, "
-               "rho_apx rank-r correction keeping 90% of the shift (see summarize.py)",
+               "rho_apx rank-r correction keeping 90% of the shift, {min, mid}: [layer, rank, F, rho] (see summarize.py)",
         "beta_ranges": rng,
         "cliff": clf,
         "entry_format_columns": list(FMT_COLS),
