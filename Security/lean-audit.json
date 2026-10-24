@@ -1247,7 +1247,8 @@
    "digest": "ced89634e9db6fdf35056042abc1585d42fbc0c75d24629b867f57c774bdf22c"
   },
   "Pouw.Adversary.BoundedBy": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "digest": "e1e59f7569d7baa02fa14dca3be9f25d1ee520b7975c05df13083b151eb78739"
   },
   "Pouw.Assumptions.ChargeVF3j16": {
    "owner": "@compute-accounting",
@@ -1274,7 +1275,8 @@
    "digest": "65708df74b82c06f6910adb4a1827feb648f0985642dcaa800dbab6b103b83b4"
   },
   "Pouw.Assumptions.HonestClock": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "digest": "b834a5b2456ac78c2c5b98a872a1ee0d833cfb9b8f26a63e562596e7ff5bbd1a"
   },
   "Pouw.Assumptions.KScopeAffine": {
    "owner": "@compute-accounting",
@@ -1437,10 +1439,12 @@
    "digest": "6e1c94b133f0936f2204620b0d3768b543cb0bbd21fd0440a115b65ccf71ae79"
   },
   "Pouw.PearlC.Adversary.BoundedBy": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "digest": "a5b5bff4710605b5b183730c17860dfaf922415160258b902d1d7244133e3a73"
   },
   "Pouw.PearlC.Assumptions.HonestClock": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "digest": "1a8887962f5cb3a27b40e5ac7e29aea164b786ecaaeb358379f617e50b3be2ba"
   },
   "Pouw.PearlC.Assumptions.TTOut": {
    "owner": "@compute-accounting",
@@ -1555,7 +1559,8 @@
    "digest": "4e5d6b88e220e3282d010ee330a5cee1bbe1e0587b3533f1d3d0785e1466fc0c"
   },
   "Pouw.PearlC.GγSampled": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "digest": "9279ec55cc7369b92f405866f30c59640610f26feb40111325cdad9ef8020a35"
   },
   "Pouw.PearlC.GγU": {
    "owner": "@compute-accounting",
@@ -8274,7 +8279,10 @@
    "type_hash": "634038ce1fa6952b39ccf282424305f598ac7c0932327b6a4d69703ae2b5c6f6"
   },
   "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.NCP.GammaFromTTNCP_U : Pouw.NCP.RouteU.GammaFromTTNCP_U"],
+   "assumptions": [],
+   "type_hash": "a2e61d27cee7eafdf52f5c7fcb5a7cea96afae484e5e976f96cbfd62872ad673"
   },
   "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2": {
    "owner": "@compute-accounting",
@@ -9088,19 +9096,44 @@
    "type_hash": "e57381cb5ec70754de5727e83fd659312830ca151e3abe1da5c28e8c03580b3b"
   },
   "Pouw.SecurityProofs.PearlCSampledByDeadline": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.PearlCSampledByDeadline : Pouw.Guarantees.PearlCSampledByDeadline"],
+   "assumptions": [],
+   "type_hash": "746b126f892a61cc8de0e4ddd67553bb0a219bb089c1caa0cb120afd9c255a68"
   },
   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384 : Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_16384"
+   ],
+   "assumptions": [],
+   "type_hash": "7e7c94650e7907b062351bef5f110c0fb8003dc5c6d91ee66673fbdc6a247cea"
   },
   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192 : Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_8192"
+   ],
+   "assumptions": [],
+   "type_hash": "33d62aa0ada7e5b4271924247b387ae663be075789d2a0a285f149f697c2e9e8"
   },
   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b :",
+    "  Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b"
+   ],
+   "assumptions": [],
+   "type_hash": "1c86a1eeaf0d1cade5918bf743e5fd50320e363c7e9d94263f53d3f4a51ea0f4"
   },
   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b :",
+    "  Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
+   ],
+   "assumptions": [],
+   "type_hash": "6db2b5f14eaa50ef363440f397e8532266bf9830364718fb5fd44faa6e14a9c2"
   },
   "Pouw.SecurityProofs.Receipt.DuoCheckpointNoKernel": {
    "owner": "@compute-accounting",
@@ -9331,7 +9364,10 @@
    "type_hash": "1e679ec8c0e50fa88bfd9f987eb3de9f651b1316ddbcdafad82b042393c126fb"
   },
   "Pouw.SecurityProofs.SpareCapacityAtDeadline": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.SpareCapacityAtDeadline : Pouw.Guarantees.SpareCapacityAtDeadline"],
+   "assumptions": [],
+   "type_hash": "3594d8805abf1f58d5952a6080b16acb0ce96995d0d67a7d5c820e099b09dc45"
   },
   "Pouw.SecurityProofs.Theorem1": {
    "owner": "@compute-accounting",
@@ -9340,7 +9376,10 @@
    "type_hash": "e6732e29262cf85d911761ff4fe2600b68d006d5f040ac74e4c98ca358d8e8f5"
   },
   "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.WorkBetweenSaltAndDeadline : Pouw.Guarantees.WorkBetweenSaltAndDeadline"],
+   "assumptions": [],
+   "type_hash": "91340f91f97e76024fe99b6313f85175f771c69ba355cd042cf23d1d01d660cf"
   },
   "Pouw.SecurityProofs.WorkWeightedSampling": {
    "owner": "@compute-accounting",
@@ -16278,6 +16317,7 @@
     "Pouw.SecurityProofs.NCP.Cancel",
     "Pouw.SecurityProofs.NCP.CheckedUEq",
     "Pouw.SecurityProofs.NCP.CheckedUFinal",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
     "Pouw.SecurityProofs.NCP.IndependentWitness",
@@ -16294,7 +16334,9 @@
     "Pouw.SecurityProofs.NCP.WrapU",
     "Pouw.SecurityProofs.NCP.WrapWordFloorIndU",
     "Pouw.SecurityProofs.NCP.YUChecked",
-    "Pouw.SecurityProofs.Theorem1"
+    "Pouw.SecurityProofs.SpareCapacityAtDeadline",
+    "Pouw.SecurityProofs.Theorem1",
+    "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline"
    ]
   },
   "Definitions.Pouw.Basic.Prob": {
@@ -16347,6 +16389,7 @@
     "Pouw.SecurityProofs.Barrier.Generic",
     "Pouw.SecurityProofs.EndToEnd",
     "Pouw.SecurityProofs.GammaFromTT",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
     "Pouw.SecurityProofs.NCP.NCPWordFloorIndU",
@@ -16433,7 +16476,14 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
+    "Pouw.SecurityProofs.PearlCSampledByDeadline",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b",
+    "Pouw.SecurityProofs.SpareCapacityAtDeadline",
     "Pouw.SecurityProofs.Theorem1",
+    "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline",
     "Pouw.SecurityProofs.WorkWeightedSampling"
    ]
   },
@@ -16473,6 +16523,7 @@
     "Pouw.SecurityProofs.Barrier.Generic",
     "Pouw.SecurityProofs.EndToEnd",
     "Pouw.SecurityProofs.GammaFromTT",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
     "Pouw.SecurityProofs.NCP.TTNCPUIff",
@@ -16557,7 +16608,14 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
-    "Pouw.SecurityProofs.Theorem1"
+    "Pouw.SecurityProofs.PearlCSampledByDeadline",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b",
+    "Pouw.SecurityProofs.SpareCapacityAtDeadline",
+    "Pouw.SecurityProofs.Theorem1",
+    "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline"
    ]
   },
   "Definitions.Pouw.D1": {
@@ -16568,6 +16626,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.TileUnpredictableOfNCPU",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
     "Pouw.SecurityProofs.NCP.TTNCPUIff",
@@ -16795,7 +16854,12 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
     "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
-    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
+    "Pouw.SecurityProofs.PearlCSampledByDeadline",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.Fp8Atom.E4M3": {
@@ -16902,7 +16966,11 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
     "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
-    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.Fp8Atom.Fp32": {
@@ -17009,7 +17077,12 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
     "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
-    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
+    "Pouw.SecurityProofs.PearlCSampledByDeadline",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.Fp8Atom.H1T": {
@@ -17105,6 +17178,27 @@
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline"
    ]
   },
+  "Definitions.Pouw.Game.Deadline": {
+   "digest": "5536c2433ec0cf835b20e6ee638e233db5052b022359c9c6d3f4bbf2c1f50e40",
+   "definitions": {
+    "Pouw.AcceptsBy": "f9e97cc1f6f88a76a1b9bf9672ce5b1a58dce08f6237dbd87ac6a30a9d72b2c9",
+    "Pouw.Adversary.BoundedBy": "e1e59f7569d7baa02fa14dca3be9f25d1ee520b7975c05df13083b151eb78739",
+    "Pouw.TimedRun": "6176b0efd647693ac6d1788b00f147d317e510cdce8bc4438efdd11a6858272a",
+    "Pouw.TimedRun.spent": "afbcb7de60d2d4aeaf3190357473d8d435f777ecbac881b02141ef61aa3a8b63",
+    "Pouw.TimedRun.spentIn": "94d3aecdabd767d55e312ed286d207c50e36f895b7ccdebc8b19edf88fee4253",
+    "Pouw.TimedRun.tr": "a5bad4b8942944dbaf69e86e30029b571091990fded18b1f0a415848dd433b2f",
+    "Pouw.TimedRun.ts": "40f75470edae3373b3b01069f7c534314a1fee16b56ea16bc0b51866618cbc74"
+   },
+   "guarantees": [
+    "Pouw.SecurityProofs.PearlCSampledByDeadline",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b",
+    "Pouw.SecurityProofs.SpareCapacityAtDeadline",
+    "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline"
+   ]
+  },
   "Definitions.Pouw.Game.Defs": {
    "digest": "58b56dd0d334b1d128502e86299fa8399332d65ed7fb8d2c739d8bfc94fa1d4c",
    "definitions": {
@@ -17184,6 +17278,7 @@
     "Pouw.SecurityProofs.Barrier.Generic",
     "Pouw.SecurityProofs.EndToEnd",
     "Pouw.SecurityProofs.GammaFromTT",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
     "Pouw.SecurityProofs.NCP.TTNCPUIff",
@@ -17218,7 +17313,14 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlCSampledByDeadline",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b",
+    "Pouw.SecurityProofs.SpareCapacityAtDeadline",
     "Pouw.SecurityProofs.Theorem1",
+    "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline",
     "Pouw.SecurityProofs.WorkWeightedSampling"
    ]
   },
@@ -17236,9 +17338,12 @@
     "Pouw.NCP.GameProofs.gammaFromTTNCP",
     "Pouw.SecurityProofs.EndToEnd",
     "Pouw.SecurityProofs.GammaFromTT",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
-    "Pouw.SecurityProofs.NCP.TTNCPUWitness"
+    "Pouw.SecurityProofs.NCP.TTNCPUWitness",
+    "Pouw.SecurityProofs.SpareCapacityAtDeadline",
+    "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline"
    ]
   },
   "Definitions.Pouw.H1Zy.Combine": {
@@ -17425,6 +17530,7 @@
     "Pouw.SecurityProofs.NCP.Cancel",
     "Pouw.SecurityProofs.NCP.CheckedUEq",
     "Pouw.SecurityProofs.NCP.CheckedUFinal",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
     "Pouw.SecurityProofs.NCP.IndependentWitness",
@@ -17465,6 +17571,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.TileUnpredictableOfNCPU",
     "Pouw.SecurityProofs.NCP.BiasU8Iff",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
     "Pouw.SecurityProofs.NCP.IndependentWitness",
@@ -17519,6 +17626,7 @@
     "Pouw.SecurityProofs.NCP.BiasU8Iff",
     "Pouw.SecurityProofs.NCP.CheckedUEq",
     "Pouw.SecurityProofs.NCP.CheckedUFinal",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
     "Pouw.SecurityProofs.NCP.Int7Int32UPos",
@@ -17655,7 +17763,24 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
-    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
+   ]
+  },
+  "Definitions.Pouw.PearlC.Deadline": {
+   "digest": "ec8e500d4015183ba30f4fb488b31532fe08b7bd9b32137c74b8a0499df7ae96",
+   "definitions": {
+    "Pouw.PearlC.Adversary.BoundedBy": "a5b5bff4710605b5b183730c17860dfaf922415160258b902d1d7244133e3a73"
+   },
+   "guarantees": [
+    "Pouw.SecurityProofs.PearlCSampledByDeadline",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.PearlC.Defs": {
@@ -17803,11 +17928,16 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
     "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
-    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
+    "Pouw.SecurityProofs.PearlCSampledByDeadline",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.PearlC.Device": {
-   "digest": "9aa55079d9549a5b2b25c49ddb1d4cdf643f8efcbe30bbeb20b20aaeb1ab5e07",
+   "digest": "d1c027d87916528726810af9379dcae4416feefb7f04828239d02892bf703d4f",
    "definitions": {
     "Pouw.PearlC.PearlCDevice": "49b0746e634512b0ba15501dae4a8e1e7f5a92906eccf6db5291f7ed68f2dfd0",
     "Pouw.PearlC.PearlCDevice.G": "dbfc86330607b7c4760f02bf16a71635ec8b1b7775a76ee3bb4ebfcdf645e58b",
@@ -17837,6 +17967,7 @@
     "Pouw.PearlC.pearlCDomainDevShapes": "78adc7a7c4a1a04f003481193b6567586db39739f903d0da828e54908278bcfe",
     "Pouw.PearlC.pearlCProtocolDev": "db4659dcb7475e15f899edf4f1b866458a6152293660334714d9c8a8e97af9ff",
     "Pouw.PearlC.pearlCTilesDev": "0e25aa0c49d11e687cbf95864f1817864224d98d3442299d12ce99cab12b3698",
+    "Pouw.PearlC.qwen3_8bLinears": "e25b770eeb457e844d90861406541e27a7f86b9b6de54aecbf0e3be954c0fc31",
     "Pouw.PearlC.wrefDev": "122d664caedfadd83fb8bdb36749da7e283172c9bfb7c98db59652e72191d649"
    },
    "guarantees": [
@@ -17921,7 +18052,11 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
-    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.PearlC.DeviceChainOnly": {
@@ -18149,7 +18284,11 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384",
-    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192"
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.PearlC.DevicePrices": {
@@ -18241,7 +18380,11 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384",
-    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192"
+    "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.PearlC.DeviceRev1": {
@@ -18321,7 +18464,11 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_8192",
-    "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut"
+    "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.PearlC.FormingPDefs": {
@@ -18403,7 +18550,11 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
-    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.PearlC.Fp4": {
@@ -18653,7 +18804,12 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
     "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
-    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
+    "Pouw.SecurityProofs.PearlCSampledByDeadline",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.PearlC.Hidden": {
@@ -18791,7 +18947,11 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
     "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
-    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.PearlC.PeelExact": {
@@ -18912,7 +19072,11 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
-    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.PearlC.PeelExactP": {
@@ -18996,7 +19160,11 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
-    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.PearlC.Row4Circuit": {
@@ -19286,7 +19454,11 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
-    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.PearlC.Skip": {
@@ -19389,7 +19561,11 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
-    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.PearlC.SkipP": {
@@ -19482,7 +19658,11 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
-    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.PearlC.Sm120": {
@@ -19566,7 +19746,11 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
-    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192"
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.PearlC.Tile": {
@@ -19634,7 +19818,12 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
     "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
-    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
+    "Pouw.SecurityProofs.PearlCSampledByDeadline",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.PearlC.Tile4Circuit": {
@@ -28516,6 +28705,13 @@
    },
    "guarantees": ["Pous.SecurityProofs.StreamedWipe", "Pous.SecurityProofs.StreamedWipeMeets2600GB"]
   },
+  "Models.Pouw.Assumptions.Deadline": {
+   "digest": "efde32e6e0055ddbe420d8f4b410840f185cbf92a03b58e3e2e3c54dcbf0cd03",
+   "definitions": {
+    "Pouw.Assumptions.HonestClock": "b834a5b2456ac78c2c5b98a872a1ee0d833cfb9b8f26a63e562596e7ff5bbd1a"
+   },
+   "guarantees": ["Pouw.SecurityProofs.SpareCapacityAtDeadline", "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline"]
+  },
   "Models.Pouw.Assumptions.Dimension.Assumptions": {
    "digest": "1297f1b2528152e153cfe6ff04366d220e61c35f5e8ce834b6cd261861ad6876",
    "definitions": {
@@ -28657,7 +28853,9 @@
     "Accounting.SecurityProofs.TileUnpredictableOfTT",
     "Accounting.SecurityProofs.pouwRow",
     "Pouw.SecurityProofs.EndToEnd",
-    "Pouw.SecurityProofs.GammaFromTT"
+    "Pouw.SecurityProofs.GammaFromTT",
+    "Pouw.SecurityProofs.SpareCapacityAtDeadline",
+    "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline"
    ]
   },
   "Models.Pouw.Assumptions.NCP.Assumptions": {
@@ -28681,6 +28879,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.TileUnpredictableOfNCPU",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
     "Pouw.SecurityProofs.NCP.TTNCPUIff",
@@ -28698,6 +28897,19 @@
     "Pouw.SecurityProofs.NCP.NCPWordFloorIndU",
     "Pouw.SecurityProofs.NCP.WrapFinalOnlyIndU",
     "Pouw.SecurityProofs.NCP.WrapWordFloorIndU"
+   ]
+  },
+  "Models.Pouw.Assumptions.PearlC.Deadline": {
+   "digest": "94237cb299b4507820d41fd89d79cb236308b75d88630b926a6b2c812f29aa47",
+   "definitions": {
+    "Pouw.PearlC.Assumptions.HonestClock": "1a8887962f5cb3a27b40e5ac7e29aea164b786ecaaeb358379f617e50b3be2ba"
+   },
+   "guarantees": [
+    "Pouw.SecurityProofs.PearlCSampledByDeadline",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Models.Pouw.Assumptions.PearlC.DeviceChainCap": {
@@ -28821,7 +29033,11 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
-    "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut"
+    "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Models.Pouw.Assumptions.PearlC.TTOutChainOnly": {
@@ -28920,7 +29136,11 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_8192",
-    "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut"
+    "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Models.Pouw.Assumptions.PearlC.TTOutRowSeed": {
@@ -29036,6 +29256,27 @@
    },
    "guarantees": ["Pouw.SecurityProofs.Barrier.Generic"]
   },
+  "Models.Pouw.Guarantees.Deadline": {
+   "digest": "e79145f5fee4b2ec8f89a049051ddf3e5640603df74f696dda584fc52ced4d09",
+   "definitions": {
+    "Pouw.Guarantees.PearlCSampledByDeadline": "3a86f2ea9e2f778fce619faebcdbfa13b544082c767b89e03b4db16763ec141e",
+    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_16384": "acf0c465c4ba8e09344972583d14a9d31b8b15bd6eee04ce28738c3080fd26c7",
+    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_8192": "499e71472679b027802333f39822ecd66ca0afdf0bbfbc9e8f39e8323bb3a63b",
+    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b": "cb100deb8f0fb464079bee549a4e86a3cb7566e8a3d5d9ecd34d69a151dffbe9",
+    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b": "3c51cce69f00c1502d090052146702472addd3a576cb5bdbeb87404b868d2e35",
+    "Pouw.Guarantees.SpareCapacityAtDeadline": "fce79a1b3a99f37d1c77ca7e75afdd39bcf01d5aca010d24d79196206e28fd4b",
+    "Pouw.Guarantees.WorkBetweenSaltAndDeadline": "3788462f2fdf84cd3f392455f2a420582c649e83cbe274c773123fee66e690df"
+   },
+   "guarantees": [
+    "Pouw.SecurityProofs.PearlCSampledByDeadline",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b",
+    "Pouw.SecurityProofs.SpareCapacityAtDeadline",
+    "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline"
+   ]
+  },
   "Models.Pouw.Guarantees.Dimension": {
    "digest": "1902ba1b713c7dd692bfd23543bf99626e6b1dd6b72929569372266e86784a38",
    "definitions": {
@@ -29072,7 +29313,7 @@
    ]
   },
   "Models.Pouw.Guarantees.NCP": {
-   "digest": "6b4bdb6135edeae5070cea859e5b95d15bdd337e01ea62f67ea41fd6e171206c",
+   "digest": "be54c6a5b3fe0c6c86071e5434478114b71f57d8b5987416ac78dc119f6d4521",
    "definitions": {
     "Pouw.Guarantees.NCP.BiasU8Iff": "151516e1e4ee87903f8f14ac1c567a5e551c88a0c5b90f9319f383faf2e09389",
     "Pouw.Guarantees.NCP.Cancel": "f94583533f0111a6bbcaa3c9623947cab329b9b707c7584f6ecd2e552f8c578b",
@@ -29093,13 +29334,15 @@
     "Pouw.Guarantees.NCP.WrapFinalOnlyIndU": "cc7a0f435ecd4a059382d982f6063b1245867e20cf96149d61e455fe812f8b9a",
     "Pouw.Guarantees.NCP.WrapU": "a90fc27845cfe2e8e13559319ff9fa97f28a89a14efc4597f588f68bfa5064dc",
     "Pouw.Guarantees.NCP.WrapWordFloorIndU": "ceb18366b36e8a5c047ec418b0288b9514b861c57b85b91d4fc024a3d63f98a4",
-    "Pouw.Guarantees.NCP.YUChecked": "b27908d27a7947b8f55b3d7e3c6965afa85a2b6475ee20dd01dee53f1ac3b6a2"
+    "Pouw.Guarantees.NCP.YUChecked": "b27908d27a7947b8f55b3d7e3c6965afa85a2b6475ee20dd01dee53f1ac3b6a2",
+    "Pouw.NCP.RouteU.GammaFromTTNCP_U": "72c6154e6ece8ab1208142a09ecab8405c1b6ce449aa1fa167691332a5e4e015"
    },
    "guarantees": [
     "Pouw.SecurityProofs.NCP.BiasU8Iff",
     "Pouw.SecurityProofs.NCP.Cancel",
     "Pouw.SecurityProofs.NCP.CheckedUEq",
     "Pouw.SecurityProofs.NCP.CheckedUFinal",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
     "Pouw.SecurityProofs.NCP.IndependentWitness",
