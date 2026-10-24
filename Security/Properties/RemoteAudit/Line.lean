@@ -18,7 +18,8 @@ the record:
   (`VerdictOfRecord`, `Registered`, `WindowsOfRecord`, `DrawsOfRecord`, `DeltaOfNode`, `DrawFits`,
   `Properties.RemoteAudit.Line.Premises`), the probability that the Lean verifier accepts the record's session and the
   record's line credits a stretch more than the trace held over its span (`Credits`) is at most
-  `δs + (δ + Σ_t k_t / 2^64 + Σ_t advantage (prf t))`, `δ` the one the line reads its pooled bound at (`Node.delta`).
+  `δs + (δ + Σ_t k_t / 2^64 + Σ_t adv_t)`, `δ` the one the line reads its pooled bound at (`Node.delta`) and `adv_t`
+  the advantage on `prf t` of window `t`'s distinguisher at that `δ` (`Session.distinguisher`).
   The rates are the node's in the model's units, a tick a nanosecond (`Node.squarings` … `Node.chipBlocks`), and the
   openings are the deployed draw's (`Accounting.Remote.Draw`: `Key.subset` on the first blocks `prf t` gives window
   `t`'s coin, at most `m < 2^448` receipts a window (`DrawFits`), the sampler's fallbacks `rest` free), at the error
@@ -109,7 +110,7 @@ def HeldAt {Ω : Type} (T : Trace Ω) (ω : Ω) (node : Node) (r : Record) (form
 meeting the memory model's premises at the node's rates and the record's groups, and the record's code-to-model
 premises, the probability that the Lean verifier accepts the record's session and a stretch of the record's
 link-charged line credits more than the trace held over its span is at most `δs + (δ + Σ_t k_t / 2^64 +
-Σ_t advantage (prf t))`, `δ` the line's. -/
+Σ_t adv_t)`, `δ` the line's and `adv_t` the advantage on `prf t` of window `t`'s distinguisher at it. -/
 def LineHeld : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (κ : ℕ) (X : Type) [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : Coins n κ X → Fin n → ℕ → ℕ) (D : Session n m k κ X) (T : Trace (Coins n κ X)) (node : Node)
@@ -120,7 +121,8 @@ def LineHeld : Prop :=
     VerdictOfRecord T rec → Registered T node → WindowsOfRecord T node rec → DrawsOfRecord D T rec →
     DeltaOfNode node →
     Pouw.pr (fun ω => Verified (rec ω) ∧ ¬ HeldAt T ω node (rec ω) 1) ≤
-      δs + ((node.delta : ℝ) + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 64 + (∑ t, advantage (prf t)).toReal)
+      δs + ((node.delta : ℝ) + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 64 +
+        (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (D.distinguisher prf (node.delta : ℝ) t)).toReal)
 
 /-- **The memory line of record, time-held, under Identity.** `LineHeld` for the record's time-held line, with no
 block coming in over the node's boundary links (`Identity`) in place of their ceiling. -/
@@ -134,6 +136,7 @@ def LineHeldIdentity : Prop :=
     VerdictOfRecord T rec → Registered T node → WindowsOfRecord T node rec → DrawsOfRecord D T rec →
     DeltaOfNode node →
     Pouw.pr (fun ω => Verified (rec ω) ∧ ¬ HeldAt T ω node (rec ω) 0) ≤
-      δs + ((node.delta : ℝ) + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 64 + (∑ t, advantage (prf t)).toReal)
+      δs + ((node.delta : ℝ) + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 64 +
+        (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (D.distinguisher prf (node.delta : ℝ) t)).toReal)
 
 end Properties.RemoteAudit.Line

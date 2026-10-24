@@ -21,15 +21,26 @@ the `U_t` (`RemoteAudit.draws`, `Session.close`): `Key.subset(s'_t, U_t, "openin
   when the sampler rejects it (what it then draws from the stream's later words, left free).
 * `arrange j i`: the partial Fisher–Yates' arrangement after `i` swaps, positions to receipts, as `Key.subset` keeps it
   (`swapped`); `openings U k b r` is the set of the receipts at its first `k` positions, the window's openings.
-* `test U k C`: the window test, a distinguisher of one window's first blocks in `Pous.StreamedWipe.prfAdvantage`'s form:
-  when the sampler accepts each of the `k` draws' first words at `U` it outputs whether the openings lie in `C`, and
-  otherwise true. It reads `k` first words and runs the Fisher–Yates, nothing else. `advantage prf` is the most any
-  window test gains on `prf`.
+* `test U k C b`: the window test on first blocks `b`: when the sampler accepts each of the `k` draws' first words at
+  `U`, whether the openings lie in `C`, and otherwise true. It reads `b`'s first `k` blocks and runs the Fisher–Yates.
+* `below δ P u`: the threshold coin. `u`, 512 uniform bits, falls below `min(1, δ/P)` rounded down to a multiple of
+  `2^-512`, and always when `P ≤ δ`.
 * `Coins n κ X`: a session's coins, the other coins `x` (the prover's, the world's, every window's challenge) and each
   window's `κ`-bit openings coin.
 * `Session`: each window's size `U_t` and correct receipts, read off the coins. The prover is sent every coin once it is
   released (`coins.coin_reason`), so it may read an earlier window's whole coin, not only its openings. That window
-  `t`'s are read only off the earlier windows' openings coins is `Assumptions.Live`.
+  `t`'s are read only off the earlier windows' openings coins is `Assumptions.Live`. `Session.lands t ω b` is window
+  `t`'s test at its own `U_t`, `s'_t` and correct receipts, and `Session.bound t ω` the most it lands on uniform
+  blocks, `(g_t/U_t)^(s'_t)` with `g_t` its correct receipts, `0` when `g_t < s'_t`.
+* `Session.distinguisher prf δ t`: **window `t`'s distinguisher**, in `Pous.StreamedWipe.prfAdvantage`'s form, one a
+  window and fixed by the session. On coins `(ω, u)` and blocks `b` it runs the session through window `t`: windows
+  `j < t` on `prf j` at their own coins in `ω`, which it computes itself, window `t` on `b`. It outputs whether every
+  one of them lands in its correct receipts and `u` falls below `∏_{j ≤ t} bound j`. It reads `ω`'s other coins and
+  the earlier windows' coins (window `t`'s and the later ones' are unread, by `Live`), and `b`'s first `s'_t ≤ s_t`
+  blocks: a distinguisher with `s_t` queries to window `t`'s stream, as efficient as the session's prover and verifier.
+  It is the hybrid over windows, the earlier windows real and window `t` given, with the later windows replaced by
+  their bound as a coin: they read window `t`'s whole coin, which a distinguisher given `b` instead of a key doesn't
+  have, and on uniform blocks each lands with probability at most its bound given the windows before.
 * `pooled n U s' δ`: `audit.pooled`'s horizon reading, the most wrong receipts `Σ_t f_t·U_t` over the shares `f_t` with
   `0 ≤ f_t ≤ 1 − s'_t/U_t` and `Σ_t s'_t·f_t ≤ budget S δ = S·(1 − δ^(1/S))`, `S = Σ_t s'_t`. `audit.pooled` computes it
   greedily, the windows taken by `U_t/s'_t` falling (the fractional knapsack's optimum); that the greedy order reaches
@@ -79,12 +90,11 @@ def accepted {m : ℕ} (U k : ℕ) (b : Blocks m) : Prop :=
 
 /-- **The window test**: on first blocks whose `k` first words at `U` the sampler accepts, whether the openings lie in
 `C`; true when it rejects one. -/
-def test {m : ℕ} (U k : ℕ) (C : Finset ℕ) (y : Unit × Blocks m) : Prop :=
-  accepted U k y.2 → openings U k y.2 (fun _ => 0) ⊆ C
+def test {m : ℕ} (U k : ℕ) (C : Finset ℕ) (b : Blocks m) : Prop :=
+  accepted U k b → openings U k b (fun _ => 0) ⊆ C
 
-/-- The most a window test gains on `prf`: `Pous.StreamedWipe.prfAdvantage prf (test U k C)` over every `U`, `k`, `C`. -/
-noncomputable def advantage {m κ : ℕ} (prf : Pous.Bits κ → Blocks m) : ℝ≥0∞ :=
-  ⨆ (U : ℕ) (k : ℕ) (C : Finset ℕ), Pous.StreamedWipe.prfAdvantage prf (test U k C)
+/-- **The threshold coin**: `u` read as a number below `2^512` is below `⌊δ·2^512/P⌋`, or `P ≤ δ`. -/
+def below (δ P : ℝ) (u : Pous.Bits 512) : Prop := P ≤ δ ∨ Pous.bitsVal u < ⌊δ * 2 ^ 512 / P⌋₊
 
 /-- A session's coins: the other coins and window `t`'s openings coin. -/
 abbrev Coins (n κ : ℕ) (X : Type) : Type := X × (Fin n → Pous.Bits κ)
@@ -121,6 +131,22 @@ def opened (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → 
 /-- Window `t`'s correct receipts among its `U_t`. -/
 def good (t : Fin n) (ω : Coins n κ X) : ℕ :=
   ((range (D.size t ω)).filter (· ∈ D.correct t ω)).card
+
+/-- Window `t`'s bound on uniform first blocks: `(g_t/U_t)^(s'_t)`, `0` when `g_t < s'_t`. -/
+noncomputable def bound (t : Fin n) (ω : Coins n κ X) : ℝ :=
+  if D.draws t ω ≤ D.good t ω then ((D.good t ω : ℝ) / (D.size t ω : ℕ)) ^ D.draws t ω else 0
+
+/-- Window `t`'s test at outcome `ω` on first blocks `b`: its draw of `s'_t` of its `U_t` lands in its correct
+receipts. -/
+def lands (t : Fin n) (ω : Coins n κ X) (b : Blocks m) : Prop :=
+  test (D.size t ω) (D.draws t ω) (D.correct t ω) b
+
+/-- **Window `t`'s distinguisher** on coins `y.1 = (ω, u)` and first blocks `y.2`: windows `j < t` land on `prf j` at
+their coins in `ω`, window `t` lands on `y.2`, and the threshold coin `u` falls below `∏_{j ≤ t} bound j`. -/
+def distinguisher (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : Fin n)
+    (y : (Coins n κ X × Pous.Bits 512) × Blocks m) : Prop :=
+  (∀ j, j < t → D.lands j y.1.1 (prf j (y.1.1.2 j))) ∧ D.lands t y.1.1 y.2 ∧
+    below δ (∏ j ∈ univ.filter (· ≤ t), D.bound j y.1.1) y.1.2
 
 /-- The session's wrong receipts, `Σ_t (U_t − good_t)`. -/
 def wrong (ω : Coins n κ X) : ℕ := ∑ t, ((D.size t ω : ℕ) - D.good t ω)
