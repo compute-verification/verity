@@ -147,7 +147,7 @@ def test_pd_writes_pearl_c_h3s_bytes_and_the_no_write_control_fails(host, m, mr,
         host.array(bufs[name])[:m * n * 4] = np.frombuffer(words.astype("<u4").tobytes(), np.uint8)
     pipe = R.Pipeline(host, m, n, k, "sm120", {name: host.put(v) for name, v in keys.items()}, host.put(b"".join(a_rows)), 0,
                       bufs=bufs, m_real=mr)
-    assert pipe.pd == R.pd_variant(mr, n, k) and host.pd_smem == dict.fromkeys(SERVED, host.OPTIN)
+    assert pipe.pd == R.pd_variant(mr, n, k) and host.pd_smem == dict.fromkeys({v & ~R.PD_GROUP for v in SERVED}, host.OPTIN)
     by = {name: step for name, _, step in pipe.steps()}
     assert "commit_a" in by and not set(R.Pipeline.FUSED["commit_a"]) & set(by)
 
@@ -183,7 +183,7 @@ def test_pd_writes_pearl_c_h3s_bytes_and_the_no_write_control_fails(host, m, mr,
         assert got == dict.fromkeys(want, True), (v, got)
         assert host.read(bufs["pd_count"], 16) == bytes(16)
         launches = {name: (grid, block, smem, i) for name, grid, block, smem, i in host.log}
-        commit, tile = launches[f"pd_commit_{v}"], launches[f"pd_tiles_{v}"]
+        commit, tile = launches[f"pd_commit_{v & ~R.PD_GROUP}"], launches[f"pd_tiles_{v}"]
         assert commit == (mr, 32 * (R.cdiv(k // 256, 32) * 2 + 2), host.OPTIN, (mr, k, 0, m))
         group = bool(v & R.PD_GROUP)
         assert tile == ((R.cdiv(mr, 64) * R.cdiv(n // 64, R.PD_G), 32 * R.PD_G, R.PD_PAIR_SMEM // 2) if group
