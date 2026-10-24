@@ -1,5 +1,5 @@
 """One-stage audit, run A5, on a sparse-MLA split stand-in: `integrations/vllm/tests/pipeline/test_serving_rows_splits.py`'s
-window (one ``SparseMlaSplit_v1{T=40,NS=3,NH=2,DR=16,DV=16,BN=16}`` row in its split units: four 16-key parts, in two chunks, two
+window (one ``SparseMlaSplit_v1{T=40,NS=3,NH=2,DR=16,DV=32,BN=16}`` row in its split units: four 16-key parts, in two chunks, two
 8-key parts and two three-split combines, each combine slot wired to the output rows of the part unit that wrote it), its run
 ``<ROOT>/rank0``, committed as serving commits it (`pipeline.serving_rows.read_all` on the fixture's served values, each part's
 partial and lse by the twin, `commit.serving_rows.commit`) and audited by `a5.audit` as rank 0 of a one-rank step on a local

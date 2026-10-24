@@ -39,7 +39,9 @@ from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
 BOOL = {"DOT": BX.SPARSE_MLA_GLM53["DOT"], "INV": BX.SPARSE_MLA_GLM53["INV"]}
-TOY = {"T": 40, "NS": 3, "NH": 2, "DR": 16, "DV": 16, "BN": 16, "SCALE": 0.0625}
+#: DV = 32 is the least at which a combine's partial row (4 DV bytes) takes a compression before its last block, which C-Flock's
+#: compose needs some row of a circuit to have (the pin's sha512x3 slot)
+TOY = {"T": 40, "NS": 3, "NH": 2, "DR": 16, "DV": 32, "BN": 16, "SCALE": 0.0625}
 GLM = {"T": 272, "NS": 5, "NH": 8, "DR": 64, "DV": 512, "BN": 64, "SCALE": 0.0625}
 #: step 16's sparse-MLA row (`glm53_rows.sparse_mla_split`), 78 of them at TP 8
 SERVED = ('SparseMlaSplit_v1{T=272,NS=5,NH=8,DR=64,DV=512,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},INV={"fn":"Fa3InvSum_v1"},'
