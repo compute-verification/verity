@@ -1,4 +1,4 @@
-"""Batch invariance of a template: what a request's outputs read, and whether its batch picks the Definition (CIR-87).
+"""Batch invariance of a template: what a request's outputs read, and whether its batch picks the Definition.
 
 A template is batch-invariant when no request's outputs depend on its batch-mates. Two properties, checked in the clear:
 

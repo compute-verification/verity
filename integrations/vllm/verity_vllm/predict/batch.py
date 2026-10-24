@@ -1,4 +1,4 @@
-"""Batch invariance of the request-major compiler (CIR-87): the templates a registration's compilations call, for `circuit-check
+"""Batch invariance of the request-major compiler: the templates a registration's compilations call, for `circuit-check
 --batch`, and the rule `steps.compile_steps` holds every compilation to (`check_compiled`).
 
 A request's outputs may depend on its own certified inputs (its prompt, its seed) and on what the registration fixes (weights,
@@ -38,8 +38,6 @@ from .phi import Phi
 
 #: the request-local Input groups a request's own certified body fixes; any other request-local group is the batch's
 OWN_GROUPS = ("prompt", "seed")
-#: the RTX PRO 6000 (sm_120) as `target_profile` reads it
-RTXPRO6000 = {"compute_capability": [12, 0], "num_sms": 188}
 
 
 class BatchDependent(Unexpressible):
@@ -49,14 +47,20 @@ class BatchDependent(Unexpressible):
 # --- the templates ---------------------------------------------------------------------------------------------------------------
 
 
-def v0_phi() -> Phi:
-    """The frozen v0 registration: Llama-3.2-1B, bf16, bi-eager on the RTX PRO 6000."""
+def registered_phi(role: str, target: str, execution: str = "bi-eager") -> Phi:
+    """A registration of ``role``'s model, its config as the engine profile ships it (`find_hf_config`), on the device class the
+    row-id token ``target`` names (`config.TARGETS`, `config.TARGET_NUM_SMS`)."""
     import json
 
-    from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR
-    cfg = json.loads((HF_CONFIG_DIR / "LLAMA32_1B.config.json").read_text())
-    return Phi(model={"repo": "meta-llama/Llama-3.2-1B", "revision": "registered", "hf_config": cfg}, workload={"requests": []},
-               target=dict(RTXPRO6000), execution="bi-eager")
+    from verity_vllm.config import TARGET_NUM_SMS, TARGETS
+    from verity_vllm.engine.profiles.dense_generic import find_hf_config
+    found = find_hf_config(role)
+    if found is None or target not in TARGET_NUM_SMS:
+        raise Unexpressible(f"{role!r} on {target!r}: no shipped config, or a device class whose SM count varies")
+    cfg = json.loads(found[0].read_text())
+    return Phi(model={"repo": (found[2] or {}).get("repo", role), "revision": "registered", "hf_config": cfg},
+               workload={"requests": []}, target={"compute_capability": list(TARGETS[target]), "num_sms": TARGET_NUM_SMS[target]},
+               execution=execution)
 
 
 def workload_labels(wl: Any) -> tuple[tuple[Any, ...], Fields]:
@@ -94,12 +98,11 @@ def _grid(lo: int, hi: int, *marks: int) -> list[int]:
     return sorted({x for x in (lo, lo + 1, *marks, hi - 1, hi) if lo <= x <= hi})
 
 
-def templates(phi: Phi | None = None, *, max_tokens: int = 2048, max_seqs: int = 64, max_model_len: int = 2048,
+def templates(phi: Phi, *, max_tokens: int = 2048, max_seqs: int = 64, max_model_len: int = 2048,
               composition: tuple[tuple[int, int], ...] = ((4, 2), (3, 1))) -> list[Template]:
-    """Every template a request-major compilation of ``phi`` (default `v0_phi`) calls, each with its labels, the launch shapes
-    the registration allows (launches of up to ``max_tokens`` rows, ``max_seqs`` sampled rows, ``max_model_len`` positions) and its
-    declared verdicts; then GP-01 over ``composition``'s (LP, T) requests, greedy and under a derived split count."""
-    phi = phi or v0_phi()
+    """Every template a request-major compilation of ``phi`` calls, each with its labels, the launch shapes the registration
+    allows (launches of up to ``max_tokens`` rows, ``max_seqs`` sampled rows, ``max_model_len`` positions) and its declared
+    verdicts; then GP-01 over ``composition``'s (LP, T) requests, greedy and under a derived split count."""
     tp, C = phi.target_profile(), model_shape(phi.model["hf_config"])
     if not tp.batch_invariant:
         raise Unexpressible(f"{phi.execution!r}: the request-major compiler serves batch-invariant targets only")

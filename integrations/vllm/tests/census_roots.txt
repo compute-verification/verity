@@ -43,3 +43,4 @@ verity_vllm.program.registry.moe_difftest      # properties-admission --adapter:
 verity_vllm/protocol_options/      # the adapters, imported by name when a run enables their protocol (protocol_options.adapter)
 tests/regression/
 verity_vllm/store/      # the node's store, imported by the protocol driver and the benchmarks (benchmarks/vllm_hooks)
+verity_vllm.predict.batch      # the compiler's batch-invariance templates and rule, imported by circuit-check --batch

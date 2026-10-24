@@ -1,9 +1,9 @@
 """verity_vllm.predict.batch: the request-major compiler's templates hold their declared batch-invariance verdicts, and
 `check_compiled` refuses by name a compilation in which a request's outputs could depend on its batch-mates.
 
-I1 v0 and `steps.plan_steps` land with #3499 and #3504, so the rule's tests run it against stand-ins: advice classes with I1's
-fields and its kept-output rule, and a planner with v0's shapes. `test_compile_steps_passes_its_own_rule` runs it on the real
-compiler once that lands.
+I1 v0 (`verity.core.protocols.certifier.advice`) and `steps.plan_steps` aren't on main yet, so the rule's tests run it against
+stand-ins: advice classes with I1's fields and its kept-output rule, and a planner with v0's shapes.
+`test_compile_steps_passes_its_own_rule` runs it on the real compiler once both are importable.
 """
 from __future__ import annotations
 
@@ -17,17 +17,19 @@ from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bi
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Tuple, Value
 from verity_vllm.check.batch import BATCH, SHARED, check, own, report
-from verity_vllm.predict.batch import RTXPRO6000, BatchDependent, check_compiled, templates, workload_labels
+from verity_vllm.predict.batch import BatchDependent, check_compiled, registered_phi, templates, workload_labels
 from verity_vllm.predict.build import Unexpressible
 from verity_vllm.predict.phi import Phi
 
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
         "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5, "tie_word_embeddings": True,
         "max_position_embeddings": 512, "hidden_act": "silu"}
+#: the RTX PRO 6000 (cc 12.0, 188 SMs)
+RTX = {"compute_capability": [12, 0], "num_sms": 188}
 
 
 def _phi(cfg: dict = TINY) -> Phi:
-    return Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, workload={"requests": []}, target=dict(RTXPRO6000),
+    return Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, workload={"requests": []}, target=dict(RTX),
                execution="bi-eager")
 
 
@@ -59,8 +61,7 @@ def test_templates_hold_their_declared_verdicts():
 def test_the_frozen_v0_models_templates_hold_their_declared_verdicts():
     """The frozen v0 registration's own kinds (Llama-3.2-1B, V 128,256, on the RTX PRO 6000): a vocabulary change that moves one of
     them (a launch static on a GEMM at its N, a sampler construction at its V) shows only at the model's shapes (about 60 s)."""
-    from verity_vllm.predict.batch import v0_phi
-    vs = _verdicts(v0_phi())
+    vs = _verdicts(registered_phi("LLAMA32_1B", "rtxpro6000"))
     assert sum(1 for v in vs if v.got == (True, True)) == 13
 
 
@@ -350,7 +351,7 @@ def test_compile_steps_passes_its_own_rule():
     steps = pytest.importorskip("verity_vllm.predict.steps")
     I1 = pytest.importorskip("verity.core.protocols.certifier.advice")
     cfg = {**TINY, "max_position_embeddings": 64}
-    reg = steps.Registered.of(Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, target=dict(RTXPRO6000)), default_seed=7)
+    reg = steps.Registered.of(Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, target=dict(RTX)), default_seed=7)
     greedy = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "seed": None, "max_tokens": 3}
     topp = {"temperature": 0.8, "top_p": 0.95, "top_k": 0, "seed": None, "max_tokens": 2}
 
