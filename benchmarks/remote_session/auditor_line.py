@@ -41,7 +41,10 @@ the auditor's.
 - *credited*: its window reads through `challenger.credited_session` (its pin first, as *pinned* reads it) with the
   descriptor of the verifier that ran it, `verity/remote-bandwidth/v0 verifier tree <tree>`, `<tree>` being
   `git rev-parse COMMIT:verity/core/protocols/remote_bandwidth` of the run's recorded commit (`--commit`), so it counts
-  only toward a period that committed that verifier (PRF-126);
+  only toward a period that committed that verifier (PRF-126); and that commit is on the auditor's first-parent list
+  of main (`--main`), as the challenger host's pin must be, so the verdict is that of a tree main's check ran on. A host
+  run's request.json beside OUT records the commit its verifier ran at (`pinned`), and a `--commit` other than it is
+  refused;
 - *complete*: its window's end, and its period's close, are complete: the challenger released every coin it committed
   to, in every window of the period (PRF-132);
 - *accepted*: the Lean's verdict (the record's `verdict` lean or both, no disagreement) accepted it, since a refused
@@ -123,14 +126,25 @@ def descriptor(tree: str) -> bytes:
     return f"{audit.PROTOCOL_ID} verifier tree {tree}".encode()
 
 
-def verifier_tree(commit: str, repo: Path = HERE.parents[1]) -> str:
-    """`VERIFIER_TREE`'s git tree at `commit`, the verifier run's recorded commit, read in `repo`'s git."""
-    p = subprocess.run(["git", "-C", str(repo), "rev-parse", "--verify", "--quiet",
-                        f"{commit}^{{commit}}:{VERIFIER_TREE}"], capture_output=True, text=True)
-    if p.returncode or len(p.stdout.strip()) != 40:
-        raise SystemExit(f"auditor_line: {repo}'s git has no {VERIFIER_TREE} at commit {commit}: run where git has the "
-                         "verifier run's commit (`git fetch origin COMMIT`), or pass --repo")
-    return p.stdout.strip()
+def verifier_tree(commit: str, repo: Path = HERE.parents[1]) -> tuple[str, str]:
+    """The verifier run's recorded commit `commit` in full, and `VERIFIER_TREE`'s git tree there, read in `repo`'s
+    git."""
+    got = []
+    for rev in (f"{commit}^{{commit}}", f"{commit}^{{commit}}:{VERIFIER_TREE}"):
+        p = subprocess.run(["git", "-C", str(repo), "rev-parse", "--verify", "--quiet", rev], capture_output=True,
+                           text=True)
+        if p.returncode or len(p.stdout.strip()) != 40:
+            raise SystemExit(f"auditor_line: {repo}'s git has no {VERIFIER_TREE} at commit {commit}: run where git has "
+                             "the verifier run's commit (`git fetch origin COMMIT`), or pass --repo")
+        got.append(p.stdout.strip())
+    return got[0], got[1]
+
+
+def requested_pin(out: Path) -> str | None:
+    """The commit a host run's verifier ran at: the `pinned` of the request.json beside `out` (host.py `gate_run`,
+    which runs it only from that tree), or None for a run with no request."""
+    req = out.parent / "request.json"
+    return json.loads(req.read_text()).get("pinned") if req.is_file() else None
 
 
 def peer_of(out: Path, v: dict) -> str:
@@ -386,9 +400,11 @@ def ledger_check(heads: list[Path], key: Ch.ChallengerKey, period: str, lane: st
 
 
 def credit_check(s: dict, R: str, lines: list[str], windows: dict, periods: dict, *, key: Ch.ChallengerKey,
-                 period: str, desc: bytes, pins: list[str] | None, main: list[str] | None, bound: dict) -> dict:
+                 period: str, desc: bytes, commit: str, pins: list[str] | None, main: list[str] | None,
+                 bound: dict) -> dict:
     """Whether session `s`, whose window root is R, earns credit: its window credited toward the audit's period for
-    the verifier `desc` describes (`credited_session`), its window and its period closed complete, its verdict the
+    the verifier `desc` describes (`credited_session`), that verifier's `commit` on `main`, its window and its period
+    closed complete, its verdict the
     Lean's acceptance, its open's pin one the host's pins log `pins` records on the auditor's first-parent list of
     main `main` (`pinned_session`; None: no log, or no copy of main), and the run's store bound to the model (`bound`,
     `bound_check`'s); each check with its reason, and `zero` the
@@ -399,6 +415,11 @@ def credit_check(s: dict, R: str, lines: list[str], windows: dict, periods: dict
         got = Ch.credited_session(lines, {"root": R}, key, pins, main, desc, CH.lms_verify)
         credited.update(period=got.period, ok=got.period == period, reason=None if got.period == period else (
             f"its window counts toward period {got.period}, not the audit's period {period}"))
+        if credited["ok"] and commit not in (main or ()):
+            credited.update(ok=False, reason=(
+                f"its verifier ran commit {commit}, which is not on main's first-parent line in the auditor's copy "
+                "(`git rev-list --first-parent origin/main`), so no tree main's check ran on: repin the verifier "
+                "host to a commit on main's first-parent line (vy-verifier-pin) and rerun the window there"))
     except Ch.CoinError as e:
         credited.update(ok=False, reason=str(e))
     end = ((windows.get(R) or {}).get("end") or {}).get("body") or {}
@@ -498,8 +519,8 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
             lane: str = LANE, peer: str | None = None, rates: dict | None = None,
             desc: bytes | None = None, commit: str | None = None, pins: list[str] | None = None,
             main: list[str] | None = None, model: dict | None = None, lean: lv.Lean | None = None) -> dict:
-    """The run's line: `desc` is the descriptor of the verifier that ran it (`descriptor` of `commit`'s tree), `pins`
-    the challenger host's pins log, its lines (None: the gate served none), `main` the auditor's first-parent list of
+    """The run's line: `desc` is the descriptor of the verifier that ran it (`descriptor` of `commit`'s tree, `commit`
+    in full), `pins` the challenger host's pins log, its lines (None: the gate served none), `main` the auditor's first-parent list of
     main (None: none given), `model` the model the store must be bound to ({name, checkpoint_sha512},
     `--model-pin`'s) when the audit's period signs none, `peer` the gate sessions' peer (None: the record's,
     `peer_of`), `rates` the node's (`rates_at`; None: its defaults), and `lean` the Lean verifier that computes every
@@ -518,9 +539,13 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
                  "pins": None if pins is None else {"lines": len(pins), "sha512": Ch.log_digest(pins)},
                  "verifier_rtt_ms": {k: x / 1e6 for k, x in v.get("rtt", {}).items() if k.endswith("_ns")}}
     if "gate" in kinds:
-        if pin is None or period is None or desc is None:
+        if pin is None or period is None or desc is None or commit is None:
             raise SystemExit("auditor_line: a gate run's line needs --pin, --period and --commit (the verifier run's "
                              "recorded commit, whose verifier the period must have committed)")
+        ran = requested_pin(out)
+        if ran is not None and ran != commit:
+            raise SystemExit(f"auditor_line: the host run's request.json ran its verifier at {ran} (`pinned`), not "
+                             f"--commit {commit}: pass --commit {ran}, the commit whose verifier decided its sessions")
         doc["peer"] = {"name": peer, "from": "--peer"} if peer else {"name": peer_of(out, v), "from": "record"}
         peer = doc["peer"]["name"]
         heads = [*(heads or []), *sorted(ch_dir.glob("*.ledger.jsonl"))]
@@ -547,8 +572,8 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
         rows.append(row)
         if c.get("challenger") == "gate":
             row["ledger"] = session_check(s, k, R, windows, periods, period=period, lane=lane, peer=peer, pin=pin)
-            row["credit"] = credit_check(s, R, lines, windows, periods, key=key, period=period, desc=desc, pins=pins,
-                                         main=main, bound=bound)
+            row["credit"] = credit_check(s, R, lines, windows, periods, key=key, period=period, desc=desc,
+                                         commit=commit, pins=pins, main=main, bound=bound)
             d = ch_dir / c["session"] / "out"
         elif c.get("challenger") == "serve":
             row["credit"] = no_credit("a served challenger (the verifier's machine) has no auditor's ledger, so no "
@@ -693,7 +718,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--lean-exe", type=Path, metavar="PATH",
                     help="the remote-audit-verifier executable (default: `lake build` it in the remote audit's package)")
     a = ap.parse_args(argv)
-    desc = None if a.commit is None else descriptor(verifier_tree(a.commit, a.repo))
+    commit, desc = None, None
+    if a.commit is not None:
+        commit, tree = verifier_tree(a.commit, a.repo)
+        desc = descriptor(tree)
     pins = None if a.pins is None else [x for x in a.pins.read_text().split("\n") if x]
     first_parent = None if a.main is None else remote.main_lines(a.main)
     model = None
@@ -713,7 +741,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         doc = analyse(a.out, host_bytes=a.host_bytes, pin=a.pin, period=a.period, heads=a.ledger, lane=a.lane,
                       peer=a.peer, rates=rates_at(a.disk_bytes_per_s, a.link_bytes_per_s, a.bursts), desc=desc,
-                      commit=a.commit, pins=pins, main=first_parent, model=model, lean=lean)
+                      commit=commit, pins=pins, main=first_parent, model=model, lean=lean)
     except (Disagree, lv.LeanError) as e:
         raise SystemExit(f"auditor_line: no line: {e}") from None
     finally:

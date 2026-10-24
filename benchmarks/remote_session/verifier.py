@@ -51,11 +51,13 @@ every file the pin names is held to its SHA-512 and the arena the checkpoint lay
 then E arenas of A blocks, weights and zero filler each, and the rest host filler, and its payload root must be that
 store's under the key sent, else the hello is refused with the reason before the registry draws anything. Under
 `--verdict lean` or `both` the Lean verifier decides it: it takes the pin's bytes and the weights blocks' digests at
-startup (`bind_lean`, `RemoteAudit.Store.bind`) and holds the hello to them (`Verifier.hold`, `Store.hold`, its root's
+startup (`bind_lean`, `RemoteAudit.Store.bind`) and holds the hello to them (`hold_store`, `Store.hold`, its root's
 subtrees on `--layout-workers` threads), `Binding.hold` beside it as the reference (its root in as many processes),
-and a hello on which the two differ is refused as `disagreement`; under `python` `Binding` alone decides. The regions
+the two computing their roots at once on the same cores and the hello decided once both have answered, and a hello on
+which the two differ is refused as `disagreement`; under `python` `Binding` alone decides. The regions
 are then the binding's, and verifier.json keeps the binding (`binding`: the pin's name and checkpoint_sha512, the
-store's shape, both roots, the Lean's answer and `bound`), which `auditor_line.py` credits on.
+store's shape, both roots, the Lean's answer and `bound`), which `auditor_line.py` credits on. A process takes one
+hello, so its sessions share the one root it held; another process's payload key is fresh, so its root is another.
 
 The verdicts are the verifier of record's, the Lean process `remote-audit-verifier` (`lean_verifier.py`), under
 `--verdict lean` (the default, `VERDICT`) or `both`: it holds the registry and every session, and each registration,
@@ -588,6 +590,42 @@ def bind_lean(lean: lv.Lean, b: rstore.Binding) -> dict:
         return {"error": str(e)}
 
 
+def hold_store(lean: lv.Lean | None, bound: dict | None, b: rstore.Binding, node: bytes, blocks, root: bytes,
+               key: bytes, layout) -> tuple[tuple[str, str, int, int], ...]:
+    """The hello's store held to the pinned model's under the payload key `key`: the binding's regions, else
+    `remote_bandwidth.store.Refused` with why. Given `lean`, the Lean verifier decides (`hold`, on the binding
+    `bind_lean` started and answered `bound`), `Binding.hold` beside it as the reference: the Lean's request goes out
+    first and its root is computed on its threads while `Binding.hold` computes store.py's in its processes, and the
+    hello is decided once both have answered, whichever is first. Where the two answer otherwise, the regions, the
+    reason or the expected root, the hello is refused as `disagreement`, and `bound` is the Lean's only where they
+    agree. The binding's record keeps the Lean's answer (`lean`) and its time from request to answer (`lean_s`)."""
+    if lean is None:
+        return b.hold(node, blocks, root, key, layout)
+    answer: queue.SimpleQueue = queue.SimpleQueue()
+    t0 = time.monotonic()
+    if bound != {"pin": b.pin, "weights_blocks": b.arena.weights_blocks}:
+        answer.put(({"bind": bound}, t0))
+    else:
+        lean.send({"op": "hold", "node": node.hex(), "blocks": blocks, "payload_root": root.hex(), "key": key.hex(),
+                   "layout": None if layout is None else [list(r) for r in layout]},
+                  answered=lambda got: answer.put((got, time.monotonic())))
+    regions = None
+    try:
+        regions = b.hold(node, blocks, root, key, layout)
+        mine = {"regions": [list(r) for r in regions], "expected_root": b.state["expected_root"]}
+    except ValueError as e:
+        mine, why = {"refused": str(e), "expected_root": b.state.get("expected_root")}, e
+    got, t1 = answer.get()
+    b.state.update(lean=got, lean_s=t1 - t0)
+    if got != mine:
+        b.state["bound"] = False
+        raise rstore.Refused(f"disagreement: the Lean verifier's binding is {json.dumps(got)}, store.py's "
+                             f"{json.dumps(mine)}")
+    if regions is None:
+        raise why
+    return regions
+
+
 class Pair:
     """Session k through the verifiers, with `audit.Session`'s interface: each event goes to `s`, the driver's books,
     and, given `lean`, to the Lean process's session k, at one reading of the verifier's clock. The result is the one
@@ -930,49 +968,13 @@ class Verifier:
                                     "lean-settled", "lean-disagree"):
                 self.log(f"verifier: skipped a {head['type']} while waiting for {kind}")
 
-    def hold(self, node: bytes, blocks, root: bytes) -> tuple[tuple[str, str, int, int], ...]:
-        """The hello's store held to the pinned model's under the payload key sent: the binding's regions, else
-        `remote_bandwidth.store.Refused` with why. Under `lean` or `both` the Lean verifier decides (`hold`, on the
-        binding `bind_lean` started), `Binding.hold` beside it as the reference: where the two answer otherwise, the
-        regions, the reason or the expected root, the hello is refused as `disagreement`, and `bound` is the Lean's
-        only where they agree. The binding's record keeps the Lean's answer (`lean`) and its time (`lean_s`)."""
-        b = self.binding
-        regions = None
-        try:
-            regions = b.hold(node, blocks, root, self.payload_key, self.regions)
-            mine = {"regions": [list(r) for r in regions], "expected_root": b.state["expected_root"]}
-        except ValueError as e:
-            mine, why = {"refused": str(e), "expected_root": b.state.get("expected_root")}, e
-        if self.lean is None:
-            if regions is None:
-                raise why
-            return regions
-        t0 = time.monotonic()
-        if self.bound != {"pin": b.pin, "weights_blocks": b.arena.weights_blocks}:
-            got = {"bind": self.bound}
-        else:
-            try:
-                got = self.lean.call({"op": "hold", "node": node.hex(), "blocks": blocks, "payload_root": root.hex(),
-                                      "key": self.payload_key.hex(),
-                                      "layout": None if self.regions is None else [list(r) for r in self.regions]})
-            except lv.LeanError as e:
-                got = {"error": str(e)}
-        b.state.update(lean=got, lean_s=time.monotonic() - t0)
-        if got != mine:
-            b.state["bound"] = False
-            raise rstore.Refused(f"disagreement: the Lean verifier's binding is {json.dumps(got)}, store.py's "
-                                 f"{json.dumps(mine)}")
-        if regions is None:
-            raise why
-        return regions
-
     def register(self) -> tuple[audit.Registration, dict]:
         """The payload salt key sent (`payload-key`, the verifier's own), then the hello's registration, drawn through
         the registry: refused, with `bye` and the reason, for a node with a live registration (`audit.RegistryError`,
         raised), with a malformed layout (`regions_of`'s ValueError), deferring residency under a lifetime of one
         window (`audit.Params`'s ValueError), asking for receipts that bind PoUW's tile outputs (`bind`, which the Lean
         covers none of: ValueError), or, with a `binding`, a store that isn't the pinned model's under that key
-        (`hold`'s Refused), all before the registry draws anything. Both registries draw it
+        (`hold_store`'s Refused), all before the registry draws anything. Both registries draw it
         under one nonce: one on which they differ is refused as `disagreement` (`audit.RegistryError`), and closed
         where it went live."""
         self.conn.send({"type": "payload-key", "key": self.payload_key.hex()})
@@ -984,8 +986,9 @@ class Verifier:
                 raise ValueError("the hello's appends says whether the prover's sessions append, true or false")
             self.appending = hello.get("appends", True)
             if self.binding is not None:
-                self.regions = self.hold(bytes.fromhex(hello["node"]), hello["blocks"],
-                                         bytes.fromhex(hello["payload_root"]))
+                self.regions = hold_store(self.lean, self.bound, self.binding, bytes.fromhex(hello["node"]),
+                                          hello["blocks"], bytes.fromhex(hello["payload_root"]), self.payload_key,
+                                          self.regions)
         except ValueError as e:
             self.conn.send({"type": "bye", "why": f"refused: {e}"})
             raise
@@ -1606,7 +1609,8 @@ def main() -> int:
                     help="--model's store: each arena's blocks, its weights then zero filler; the store's blocks "
                          "past the arenas are host filler")
     ap.add_argument("--layout-workers", type=int, default=len(os.sched_getaffinity(0)),
-                    help="processes hashing the pinned files and recomputing the expected payload root")
+                    help="processes hashing the pinned files and recomputing the expected payload root, and the Lean "
+                         "verifier's threads recomputing it at the same time")
     a = ap.parse_args()
     if a.memory_of is not None:
         v = json.loads(a.memory_of.read_text())

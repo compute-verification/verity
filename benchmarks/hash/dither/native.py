@@ -124,6 +124,7 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     doc: dict = {"schema": "dither-hb/native/v1", "arm": a.arm, "role": ROLE, "pin": pin_entry().get("revision"),
                  "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                 "numa": json.loads(os.environ.get("DITHER_NUMA_RECORD") or "null"),
                  "workload": {"decode": {"batch": 32, "prompt": 128, "out": [1, 256]},
                               "saturation": {"requests": a.sat_requests, "prompt": 512, "out": 256, "max_num_seqs": SEQS}}}
     path = out / f"native-{a.arm}.json"
