@@ -80,10 +80,8 @@ error.** On every hidden template of the class whose statement no witness satisf
 satisfy `G`, play the compiled table to outcomes that clash (a collision of `H`), or the compiled table accepts a
 transcript satisfying `G` with probability at most `tableError`, which `flock_inner_sound` bounds `flockInner` by.
 
-Its proof is open: the schedule's simulation (`sched_sound` for the compiled table, a mixture over the coin coordinates a
-round does not read and the rounds whose messages are ill-typed), and the plurality extraction of
-`table_sound_compiledL` restricted to the runs satisfying `G`, with every off-plurality opening a clash of two such runs
-at a commitment node, in place of its square-root collision terms. -/
+Its proof is `compiled_runs_sound` (`CompileRuns`): two runs satisfying `G` whose outcomes clash, read as a fork of the
+prover's own strategy (`Inner.fork_of_outcomes`), or the bound. -/
 theorem flock_inner_sound_compiled (A : Arith F K) (hA : A.Correct) [Inhabited D] [Inhabited Sl]
     (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass)
     (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : Schedule) (hsch : fast100 cls.m = some sch)
@@ -173,10 +171,9 @@ def InnerForkRec (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : 
 message whole) and `InnerSoundForkOn` in place of `InnerSound`: a registrant fork (`regFinder`), a round fork, a session
 fork, an inner fork of `σ`'s own runs (`InnerForkRec`), or the same bound.
 
-Its proof is open: `commit_and_prove_upto` read at `G` := the inner transcripts some accepted outer proof decodes at a
-leaf of `σ` with their coins, so that its inner term is `prob (accepts ∧ G)` against `refStrat` (`leafAvg_relabel`) and
-a fork of `refStrat` on two such transcripts is one of `σ`'s (`InnerForkRec`), then the same through
-`recursive_sound_upto`, `zk_sessions_recursive_upto`, `zk_sessions_recursive_full` and `zk_sessions_recursive_fork`. -/
+Its proof is `zk_sessions_recursive_fork_on` with the inner term read at the leaves of `σ`
+(`innerAtLeavesV_of_forkOn`, `ForkInner`): a fork of the reference strategy on two decoded transcripts is one of
+`σ`'s (`InnerForkRec`). -/
 theorem zk_sessions_recursive_fork_inner
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
