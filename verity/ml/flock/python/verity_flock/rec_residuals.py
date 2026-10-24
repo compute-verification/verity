@@ -302,10 +302,13 @@ def _recombine() -> tuple[tuple[int, ...], ...]:
     return tuple(tuple(sorted(-1 - x for x in o.s)) for o in out)
 
 
-def _leaves(a: list, b: list) -> list[tuple]:
-    rec = _Pairs()
-    G.karatsuba(rec, a, b)
-    return rec.pairs
+def _leaf_operands(a: list) -> list:
+    """One side's operands of `gf2k.karatsuba`'s ANDs, in its order: its leaf pairs are this on a zipped with this on b."""
+    n = len(a)
+    if n == 1:
+        return [a[0]]
+    h = n // 2
+    return _leaf_operands(a[:h]) + _leaf_operands(a[h:]) + _leaf_operands([x ^ y for x, y in zip(a[:h], a[h:])])
 
 
 def _port_words(S: dict) -> tuple[int, ...]:
@@ -354,7 +357,7 @@ def residual_forms(C, S: dict, W: list, V: list) -> list:
 
     def op(k):
         if k not in ops:
-            ops[k] = xor(term(t) for t in S["ops"][k])
+            ops[k] = _leaf_operands(xor(term(t) for t in S["ops"][k]))
         return ops[k]
 
     rec = _recombine()
@@ -364,7 +367,7 @@ def residual_forms(C, S: dict, W: list, V: list) -> list:
         if r["mul"]:
             sums, consts = [set() for _ in range(LEAVES)], [0] * LEAVES
             for a, b in r["mul"]:
-                for i, (x, y) in enumerate(_leaves(op(a), op(b))):
+                for i, (x, y) in enumerate(zip(op(a), op(b))):
                     z = C.AND(x, y)
                     sums[i].symmetric_difference_update(z.s)
                     consts[i] ^= z.c
