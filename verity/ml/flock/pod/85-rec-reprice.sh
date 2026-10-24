@@ -30,9 +30,9 @@
 #                level's tops under the firewall's salts, no running sums) into data/$TAG/v/cap (level 0) and v/cap/L<l>,
 #                beside the statements vstage staged, whose sessions stay valid (then oprove LEVELS=cap,cap-L1,..)
 #   STEP=oprove  (GPU leases) each staged statement proved with --zk on loopback, WARM + RUNS sessions per MODES (dev host
-#                firewall; a forgery's: one, by a prover that sends its proofs though the witness fails,
-#                FC_ZK_SELF_CHECK=skip), and upstream's replay --zk of the last (REPLAY=0: STEP=oreplay's); CONTROLS=DIR: the
-#                firewall's negative controls on that statement; OPROVE_JOBS=4 statements at once while their estimated
+#                firewall; a forgery's: one, in dev mode whatever MODES says, by a prover that sends its proofs though the
+#                witness fails, FC_ZK_SELF_CHECK=skip), and upstream's replay --zk of the last (REPLAY=0: STEP=oreplay's);
+#                CONTROLS=DIR: the firewall's negative controls on that statement; OPROVE_JOBS=4 statements at once while their estimated
 #                peaks sum to at most OPROVE_MEM_GB=48. MODES=firewall alone, WARM=0 RUNS=1: each statement fixed before
 #                any session starts gets exactly one independent session, never drawn again, every exit recorded
 #                (out/oprove/statements.sha512, exits.tsv)
@@ -44,7 +44,8 @@
 #                (ProvedScope.leafOk); ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s), and
 #                flock-verify statement on the inner statement with the partition object and program vstage wrote. The job
 #                fails unless each statement (staged or proved) and ZK_LEAN's session exited 0 with every VERDICT accepted,
-#                each forgery refused by one of its parts (by Lean, or by the firewall before any session reached Lean),
+#                each forgery refused by Lean at one of its parts (a firewall's refusal, or a session with no proof, is
+#                "not exercised" and fails),
 #                and the inner statement's units were derived from the program (lean_verdicts.py; INNER_LEAN=1: the
 #                inner's session too)
 # The prover runs on the job's first PCPUS cores, the verifier (proxy, serve, replay) on the rest. Every step writes
@@ -66,7 +67,8 @@
 #      NEG_INNER="challenge query" (lean: each honest V* session verified again over a copy of the inner session with one
 #              coin of rep 0 flipped in its session.json and its coin server's record alike, rec_inner.py forge --what W,
 #              as part forged-inner-W-<name>; the parts that read the flipped coin refuse it, and lean_verdicts.py requires
-#              one to; empty: none)
+#              one to; the step refuses a W none of the parts it checks reads: challenge needs an alg part, query L0;
+#              empty: none)
 #      REC_COINS=0 (lean; 1: the inner statement set up once per inner session, flock-verify rec-coins, and each verify given
 #              that record, --rec-inner-coins, rather than the inner circuit it would parse again)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -681,10 +683,12 @@ oprove)
   : > $O/oprove/exits.tsv
   W0=$WARM R0=$RUNS
   oprove_one() {
-    local C=$1 l=${1//\//-} n mode rc=0
-    case $l in forged-*) WARM=0 RUNS=1 SELF_CHECK=skip ;; *) WARM=$W0 RUNS=$R0 SELF_CHECK=stop ;; esac; NS=$((WARM + RUNS))
+    local C=$1 l=${1//\//-} n mode rc=0 LM=$MODES
+    # a forgery's one session is the dev prover's, a dishonest prover running no firewall: a firewall would hold it back,
+    # leaving Lean nothing to check (lean_verdicts.py: "not exercised")
+    case $l in forged-*) WARM=0 RUNS=1 SELF_CHECK=skip LM=dev ;; *) WARM=$W0 RUNS=$R0 SELF_CHECK=stop ;; esac; NS=$((WARM + RUNS))
     hello_at $V/$C
-    for mode in $MODES; do
+    for mode in $LM; do
       case $mode in dev) PENV= ;; host) PENV=FC_HOST_WITNESS=1 ;; firewall) PENV="FC_FIREWALL=1 FC_HOST_WITNESS=1" ;; esac
       n=$l; [ "$MODES" = dev ] || n=$l-$mode
       LAST=; again loopback $n $V/$C/pub.bin $V/$C/inst.bin $V/$C/circuit.txt --zk || rc=$?
@@ -789,6 +793,13 @@ lean)
   rm -f $INNER/rec-coins.json; rec_coins $INNER inner || exit 1
   REC_INNER=$(rec_inner_at $INNER)
   NEGS=
+  # a forged inner coin only the parts that read it can refuse (lean_verdicts.py's COVERS): without one among the parts
+  # this step checks, the step refuses to run it rather than judge it
+  VPARTS=$(ls -d $DD/v-sess/*/ 2>/dev/null | sed 's:/$::' | xargs -rn1 basename | grep -v '^forged-' | while read -r l; do want $l && echo $l; done)
+  for w in ${NEG_INNER-challenge query}; do
+    [ -z "$VPARTS" ] || python3 verity/ml/flock/pod/lean_verdicts.py --cover inner-$w $VPARTS \
+      || { echo "lean: NEG_INNER=$w: include a part that reads it in LEVELS, or leave $w out of NEG_INNER"; exit 1; }
+  done
   for w in ${NEG_INNER-challenge query}; do
     FI=$DD/inner-neg-$w; rm -rf $FI; mkdir -p $FI && cp -r $INNER/session $INNER/public.json $INNER/private.json $FI/ \
       && python3 verity/ml/flock/pod/rec_inner.py forge --what $w --inner $FI > $O/lean/forge-inner-$w.json || exit 1
