@@ -91,6 +91,7 @@ theorem append_coins (s : State) (c : Array ByteArray) (root : ByteArray) (count
   repeat' (split <;> try dsimp only)
   all_goals try rfl
 
+-- `receive` splits into many branches, each run twice (on `s` and on `C c s`)
 set_option maxHeartbeats 2000000 in
 theorem receive_coins {s : State} {c : Array ByteArray} {t i : Int} {root : ByteArray}
     {runs : Option (Array (Int × Int))} {change : Option (Array (Int × Int) × Array (Int × Int))} {st : Option Int}
@@ -213,21 +214,19 @@ theorem keep_fail (s : State) (t : Nat) (f : Failure) (a : Option (Nat × Nat)) 
   · exact keep_modify _ _ _ (fun _ => rfl)
   · exact keep_refl _
 
-macro "keep_tac" : tactic => `(tactic| first
-  | exact keep_refl _
-  | exact keep_fail _ _ _ _
-  | (refine keep_push _ _ ?_; rfl)
-  | (refine keep_modify _ _ _ ?_; intro; rfl)
-  | (refine keep_trans (keep_modify _ _ _ ?_) (keep_push _ _ ?_) <;> (intros; rfl))
-  | (refine keep_trans (keep_modify _ _ _ ?_) (keep_modify _ _ _ ?_) <;> (intros; rfl))
-  | (refine keep_trans (keep_modify _ _ _ ?_) (keep_fail _ _ _ _); intro; rfl))
-
 theorem keep_start {s : State} {now : Nat} {r : Result} {s' : State} (he : start s now = (r, s')) :
     Keep s.windows s'.windows := by
   unfold start State.releaseCoin at he
   repeat' split at he
   all_goals cases he
-  all_goals keep_tac
+  all_goals first
+    | exact keep_refl _
+    | exact keep_fail _ _ _ _
+    | (refine keep_push _ _ ?_; rfl)
+    | (refine keep_modify _ _ _ ?_; intro; rfl)
+    | (refine keep_trans (keep_modify _ _ _ ?_) (keep_push _ _ ?_) <;> (intros; rfl))
+    | (refine keep_trans (keep_modify _ _ _ ?_) (keep_modify _ _ _ ?_) <;> (intros; rfl))
+    | (refine keep_trans (keep_modify _ _ _ ?_) (keep_fail _ _ _ _); intro; rfl)
 
 theorem keep_boundary {s : State} {now : Nat} {r : Result} {s' : State} (he : boundary s now = (r, s')) :
     Keep s.windows s'.windows := by
@@ -235,7 +234,14 @@ theorem keep_boundary {s : State} {now : Nat} {r : Result} {s' : State} (he : bo
   simp only [Id.run] at he
   repeat' split at he
   all_goals cases he
-  all_goals keep_tac
+  all_goals first
+    | exact keep_refl _
+    | exact keep_fail _ _ _ _
+    | (refine keep_push _ _ ?_; rfl)
+    | (refine keep_modify _ _ _ ?_; intro; rfl)
+    | (refine keep_trans (keep_modify _ _ _ ?_) (keep_push _ _ ?_) <;> (intros; rfl))
+    | (refine keep_trans (keep_modify _ _ _ ?_) (keep_modify _ _ _ ?_) <;> (intros; rfl))
+    | (refine keep_trans (keep_modify _ _ _ ?_) (keep_fail _ _ _ _); intro; rfl)
 
 theorem keep_append {s : State} {root : ByteArray} {count : Int} {r : Result} {s' : State}
     (he : append s root count = .ok (r, s')) : Keep s.windows s'.windows := by
@@ -243,7 +249,14 @@ theorem keep_append {s : State} {root : ByteArray} {count : Int} {r : Result} {s
   repeat' split at he
   all_goals (try dsimp only at he)
   all_goals cases he
-  all_goals keep_tac
+  all_goals first
+    | exact keep_refl _
+    | exact keep_fail _ _ _ _
+    | (refine keep_push _ _ ?_; rfl)
+    | (refine keep_modify _ _ _ ?_; intro; rfl)
+    | (refine keep_trans (keep_modify _ _ _ ?_) (keep_push _ _ ?_) <;> (intros; rfl))
+    | (refine keep_trans (keep_modify _ _ _ ?_) (keep_modify _ _ _ ?_) <;> (intros; rfl))
+    | (refine keep_trans (keep_modify _ _ _ ?_) (keep_fail _ _ _ _); intro; rfl)
 
 theorem keep_release {s : State} {runs withdrawn : Array (Int × Int)} {r : Result} {s' : State}
     (he : release s runs withdrawn = (r, s')) : Keep s.windows s'.windows := by
@@ -252,7 +265,14 @@ theorem keep_release {s : State} {runs withdrawn : Array (Int × Int)} {r : Resu
   repeat' split at he
   all_goals (try dsimp only at he)
   all_goals cases he
-  all_goals keep_tac
+  all_goals first
+    | exact keep_refl _
+    | exact keep_fail _ _ _ _
+    | (refine keep_push _ _ ?_; rfl)
+    | (refine keep_modify _ _ _ ?_; intro; rfl)
+    | (refine keep_trans (keep_modify _ _ _ ?_) (keep_push _ _ ?_) <;> (intros; rfl))
+    | (refine keep_trans (keep_modify _ _ _ ?_) (keep_modify _ _ _ ?_) <;> (intros; rfl))
+    | (refine keep_trans (keep_modify _ _ _ ?_) (keep_fail _ _ _ _); intro; rfl)
 
 theorem keep_verify {s : State} {t : Int} {openings : Array Opening} {r : Result} {s' : State}
     (he : verify s t openings = (r, s')) : Keep s.windows s'.windows := by
@@ -261,7 +281,14 @@ theorem keep_verify {s : State} {t : Int} {openings : Array Opening} {r : Result
   repeat' split at he
   all_goals (try dsimp only at he)
   all_goals cases he
-  all_goals keep_tac
+  all_goals first
+    | exact keep_refl _
+    | exact keep_fail _ _ _ _
+    | (refine keep_push _ _ ?_; rfl)
+    | (refine keep_modify _ _ _ ?_; intro; rfl)
+    | (refine keep_trans (keep_modify _ _ _ ?_) (keep_push _ _ ?_) <;> (intros; rfl))
+    | (refine keep_trans (keep_modify _ _ _ ?_) (keep_modify _ _ _ ?_) <;> (intros; rfl))
+    | (refine keep_trans (keep_modify _ _ _ ?_) (keep_fail _ _ _ _); intro; rfl)
 
 theorem keep_receive {s : State} {t i : Int} {root : ByteArray} {runs : Option (Array (Int × Int))}
     {change : Option (Array (Int × Int) × Array (Int × Int))} {st : Option Int} {now : Nat} {r : Result}

@@ -150,31 +150,54 @@ theorem keepsF_draw (ws : Array Win) (u : Nat) (d : Array (Nat × Nat)) (now : N
   have : ws[u]!.drawn = none := by cases h : ws[u]!.drawn <;> simp_all
   exact keepW_draw this rfl
 
-macro "kf_tac" : tactic => `(tactic| first
-  | exact keepsF_refl _
-  | (refine keepsF_push _ _ ?_; rfl)
-  | (refine keepsF_modify _ _ _ (keepW_of ?_ ?_) <;> first | exact ⟨rfl, rfl, rfl, rfl, rfl⟩ | exact id | (intro; rfl))
-  | (refine keepsF_trans (keepsF_modify _ _ _ (keepW_of ?_ ?_)) (keepsF_push _ _ ?_) <;>
-      first | exact ⟨rfl, rfl, rfl, rfl, rfl⟩ | exact id | rfl))
-
-macro "frz_tac" : tactic => `(tactic| first
-  | exact frz_refl _
-  | exact frz_fail _ _ _ _
-  | (refine frz_of ?_ rfl rfl; kf_tac)
-  | (refine frz_trans (frz_of ?_ rfl rfl) (frz_fail _ _ _ _); kf_tac))
-
 theorem frz_start {s : State} {now : Nat} {r : Result} {s' : State} (he : start s now = (r, s')) : Frz s s' := by
   unfold start State.releaseCoin at he
   repeat' split at he
   all_goals cases he
-  all_goals frz_tac
+  all_goals first
+    | exact frz_refl _
+    | exact frz_fail _ _ _ _
+    | (refine frz_of ?_ rfl rfl
+       first
+         | exact keepsF_refl _
+         | (refine keepsF_push _ _ ?_; rfl)
+         | (refine keepsF_modify _ _ _ (keepW_of ?_ ?_) <;>
+             first | exact ⟨rfl, rfl, rfl, rfl, rfl⟩ | exact id | (intro; rfl))
+         | (refine keepsF_trans (keepsF_modify _ _ _ (keepW_of ?_ ?_)) (keepsF_push _ _ ?_) <;>
+             first | exact ⟨rfl, rfl, rfl, rfl, rfl⟩ | exact id | rfl))
+    | (refine frz_trans (frz_of ?_ rfl rfl) (frz_fail _ _ _ _)
+       first
+         | exact keepsF_refl _
+         | (refine keepsF_push _ _ ?_; rfl)
+         | (refine keepsF_modify _ _ _ (keepW_of ?_ ?_) <;>
+             first | exact ⟨rfl, rfl, rfl, rfl, rfl⟩ | exact id | (intro; rfl))
+         | (refine keepsF_trans (keepsF_modify _ _ _ (keepW_of ?_ ?_)) (keepsF_push _ _ ?_) <;>
+             first | exact ⟨rfl, rfl, rfl, rfl, rfl⟩ | exact id | rfl))
 
 theorem frz_boundary {s : State} {now : Nat} {r : Result} {s' : State} (he : boundary s now = (r, s')) : Frz s s' := by
   unfold boundary State.releaseCoin at he
   simp only [Id.run] at he
   repeat' split at he
   all_goals cases he
-  all_goals frz_tac
+  all_goals first
+    | exact frz_refl _
+    | exact frz_fail _ _ _ _
+    | (refine frz_of ?_ rfl rfl
+       first
+         | exact keepsF_refl _
+         | (refine keepsF_push _ _ ?_; rfl)
+         | (refine keepsF_modify _ _ _ (keepW_of ?_ ?_) <;>
+             first | exact ⟨rfl, rfl, rfl, rfl, rfl⟩ | exact id | (intro; rfl))
+         | (refine keepsF_trans (keepsF_modify _ _ _ (keepW_of ?_ ?_)) (keepsF_push _ _ ?_) <;>
+             first | exact ⟨rfl, rfl, rfl, rfl, rfl⟩ | exact id | rfl))
+    | (refine frz_trans (frz_of ?_ rfl rfl) (frz_fail _ _ _ _)
+       first
+         | exact keepsF_refl _
+         | (refine keepsF_push _ _ ?_; rfl)
+         | (refine keepsF_modify _ _ _ (keepW_of ?_ ?_) <;>
+             first | exact ⟨rfl, rfl, rfl, rfl, rfl⟩ | exact id | (intro; rfl))
+         | (refine keepsF_trans (keepsF_modify _ _ _ (keepW_of ?_ ?_)) (keepsF_push _ _ ?_) <;>
+             first | exact ⟨rfl, rfl, rfl, rfl, rfl⟩ | exact id | rfl))
 
 theorem frz_append {s : State} {root : ByteArray} {count : Int} {r : Result} {s' : State}
     (he : append s root count = .ok (r, s')) : Frz s s' := by
@@ -183,7 +206,24 @@ theorem frz_append {s : State} {root : ByteArray} {count : Int} {r : Result} {s'
   all_goals (try dsimp only at he)
   all_goals cases he
   all_goals first
-    | frz_tac
+    | exact frz_refl _
+    | exact frz_fail _ _ _ _
+    | (refine frz_of ?_ rfl rfl
+       first
+         | exact keepsF_refl _
+         | (refine keepsF_push _ _ ?_; rfl)
+         | (refine keepsF_modify _ _ _ (keepW_of ?_ ?_) <;>
+             first | exact ⟨rfl, rfl, rfl, rfl, rfl⟩ | exact id | (intro; rfl))
+         | (refine keepsF_trans (keepsF_modify _ _ _ (keepW_of ?_ ?_)) (keepsF_push _ _ ?_) <;>
+             first | exact ⟨rfl, rfl, rfl, rfl, rfl⟩ | exact id | rfl))
+    | (refine frz_trans (frz_of ?_ rfl rfl) (frz_fail _ _ _ _)
+       first
+         | exact keepsF_refl _
+         | (refine keepsF_push _ _ ?_; rfl)
+         | (refine keepsF_modify _ _ _ (keepW_of ?_ ?_) <;>
+             first | exact ⟨rfl, rfl, rfl, rfl, rfl⟩ | exact id | (intro; rfl))
+         | (refine keepsF_trans (keepsF_modify _ _ _ (keepW_of ?_ ?_)) (keepsF_push _ _ ?_) <;>
+             first | exact ⟨rfl, rfl, rfl, rfl, rfl⟩ | exact id | rfl))
     | exact ⟨keepsF_refl _, rfl, #[_], Array.push_eq_append⟩
 
 theorem frz_release {s : State} {runs withdrawn : Array (Int × Int)} {r : Result} {s' : State}
@@ -193,7 +233,25 @@ theorem frz_release {s : State} {runs withdrawn : Array (Int × Int)} {r : Resul
   repeat' split at he
   all_goals (try dsimp only at he)
   all_goals cases he
-  all_goals frz_tac
+  all_goals first
+    | exact frz_refl _
+    | exact frz_fail _ _ _ _
+    | (refine frz_of ?_ rfl rfl
+       first
+         | exact keepsF_refl _
+         | (refine keepsF_push _ _ ?_; rfl)
+         | (refine keepsF_modify _ _ _ (keepW_of ?_ ?_) <;>
+             first | exact ⟨rfl, rfl, rfl, rfl, rfl⟩ | exact id | (intro; rfl))
+         | (refine keepsF_trans (keepsF_modify _ _ _ (keepW_of ?_ ?_)) (keepsF_push _ _ ?_) <;>
+             first | exact ⟨rfl, rfl, rfl, rfl, rfl⟩ | exact id | rfl))
+    | (refine frz_trans (frz_of ?_ rfl rfl) (frz_fail _ _ _ _)
+       first
+         | exact keepsF_refl _
+         | (refine keepsF_push _ _ ?_; rfl)
+         | (refine keepsF_modify _ _ _ (keepW_of ?_ ?_) <;>
+             first | exact ⟨rfl, rfl, rfl, rfl, rfl⟩ | exact id | (intro; rfl))
+         | (refine keepsF_trans (keepsF_modify _ _ _ (keepW_of ?_ ?_)) (keepsF_push _ _ ?_) <;>
+             first | exact ⟨rfl, rfl, rfl, rfl, rfl⟩ | exact id | rfl))
 
 theorem frz_verify {s : State} {t : Int} {openings : Array Opening} {r : Result} {s' : State}
     (he : verify s t openings = (r, s')) : Frz s s' := by
@@ -202,7 +260,25 @@ theorem frz_verify {s : State} {t : Int} {openings : Array Opening} {r : Result}
   repeat' split at he
   all_goals (try dsimp only at he)
   all_goals cases he
-  all_goals frz_tac
+  all_goals first
+    | exact frz_refl _
+    | exact frz_fail _ _ _ _
+    | (refine frz_of ?_ rfl rfl
+       first
+         | exact keepsF_refl _
+         | (refine keepsF_push _ _ ?_; rfl)
+         | (refine keepsF_modify _ _ _ (keepW_of ?_ ?_) <;>
+             first | exact ⟨rfl, rfl, rfl, rfl, rfl⟩ | exact id | (intro; rfl))
+         | (refine keepsF_trans (keepsF_modify _ _ _ (keepW_of ?_ ?_)) (keepsF_push _ _ ?_) <;>
+             first | exact ⟨rfl, rfl, rfl, rfl, rfl⟩ | exact id | rfl))
+    | (refine frz_trans (frz_of ?_ rfl rfl) (frz_fail _ _ _ _)
+       first
+         | exact keepsF_refl _
+         | (refine keepsF_push _ _ ?_; rfl)
+         | (refine keepsF_modify _ _ _ (keepW_of ?_ ?_) <;>
+             first | exact ⟨rfl, rfl, rfl, rfl, rfl⟩ | exact id | (intro; rfl))
+         | (refine keepsF_trans (keepsF_modify _ _ _ (keepW_of ?_ ?_)) (keepsF_push _ _ ?_) <;>
+             first | exact ⟨rfl, rfl, rfl, rfl, rfl⟩ | exact id | rfl))
 
 theorem frz_close {s : State} {t : Int} {now : Nat} {r : Result} {s' : State}
     (he : close s t now = .ok (r, s')) : Frz s s' := by
