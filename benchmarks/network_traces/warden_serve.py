@@ -207,6 +207,34 @@ async def fake_endpoint(reader: asyncio.StreamReader, writer, *, sleep=asyncio.s
         writer.close()
 
 
+async def probe(upstream: tuple[str, int], traffic: list[dict], in_flight: int = 4, clock=time.monotonic) -> dict:
+    """Each request of `traffic` straight to the server, `in_flight` at a time, no warden: per request the seconds to
+    its first byte and to the server's close, its bytes, and the bytes a second between them (what r·P a bucket and
+    D must stay under and cover)."""
+    host, gate = "%s:%d" % upstream, asyncio.Semaphore(in_flight)
+
+    async def one(item: dict) -> dict:
+        async with gate:
+            start = clock()
+            reader, writer = await asyncio.open_connection(*upstream)
+            writer.write(http_request(item["body"], host))
+            data, first = bytearray(), None
+            while chunk := await reader.read(1 << 16):
+                first = first or clock()
+                data += chunk
+            end = clock()
+            writer.close()
+        rate = len(data) / (end - first) if first and end > first else None
+        return {"first_s": first and round(first - start, 3), "closed_s": round(end - start, 3), "bytes": len(data),
+                "bytes_per_s": rate and round(rate), **parse_response(bytes(data))}
+
+    rows = await asyncio.gather(*(one(item) for item in traffic))
+    return {"upstream": list(upstream), "in_flight": in_flight, "requests": rows,
+            "first_s": _quantiles([r["first_s"] for r in rows if r["first_s"] is not None]),
+            "bytes_per_s": _quantiles([r["bytes_per_s"] for r in rows if r["bytes_per_s"]]),
+            "statuses": sorted({str(r["status"]) for r in rows})}
+
+
 # The warden's run.
 
 class Publisher:
@@ -413,6 +441,11 @@ def table(result: dict) -> str:
 
 # The rehearsal.
 
+def traffic_of(args, model: str) -> list[dict]:
+    return varied_traffic(args.requests, model=model, rate=args.rate, seed=args.seed,
+                          prompt_tokens=(16, args.prompt_max), max_tokens=(16, args.max_tokens))
+
+
 def _params(args) -> WardenParams:
     return WardenParams(**{f.name: getattr(args, f.name) for f in dataclasses.fields(WardenParams)})
 
@@ -440,8 +473,7 @@ def rehearse(args) -> int:
         else:
             upstream = args.upstream
             model = args.model or cs.served_model("http://%s:%d" % upstream)
-        traffic = varied_traffic(args.requests, model=model, rate=args.rate, seed=args.seed,
-                                 max_tokens=(16, args.max_tokens))
+        traffic = traffic_of(args, model)
         (out / "traffic.json").write_text(json.dumps(traffic))
         window_s = params.window * params.bucket_ms / 1000
         windows = math.ceil((traffic[-1]["at"] + args.tail) / window_s)
@@ -481,18 +513,20 @@ def main(argv=None) -> int:
     c = sub.add_parser("client", help="the traffic, through the shim")
     x = sub.add_parser("check", help="the offline check of a run")
     r = sub.add_parser("rehearse", help="traffic, then serve, client and check")
+    pr = sub.add_parser("probe", help="the traffic's first requests straight to the server, no warden")
     for q in (k,):
         q.add_argument("--dir", required=True, type=Path)
     for q in (k, r):
         q.add_argument("--height", type=int, default=cs.HEIGHT, help="the LMS key's tree height")
-    for q in (t, s, c, r):
+    for q in (t, s, c, r, pr):
         q.add_argument("--out", required=True, type=Path)
-    for q in (t, r):
+    for q in (t, r, pr):
         q.add_argument("--model", help="the endpoint's model name (default: the one /v1/models lists)")
         q.add_argument("--requests", type=int, default=100)
         q.add_argument("--rate", type=float, default=0.5, help="Poisson arrivals a second")
         q.add_argument("--seed", type=int, default=0)
         q.add_argument("--max-tokens", type=int, default=256, help="the most max_tokens a request draws")
+        q.add_argument("--prompt-max", type=int, default=1024, help="the most prompt tokens a request draws")
     t.set_defaults(model="model")
     for q in (f, s):
         q.add_argument("--listen", required=True, type=cs._address, help="HOST:PORT (port 0: any)")
@@ -510,6 +544,8 @@ def main(argv=None) -> int:
     up = r.add_mutually_exclusive_group(required=True)
     up.add_argument("--upstream", type=cs._address, help="the server's HOST:PORT (an OpenAI endpoint)")
     up.add_argument("--fake", action="store_true", help="start the fake endpoint and use it")
+    pr.add_argument("--upstream", required=True, type=cs._address, help="the server's HOST:PORT (an OpenAI endpoint)")
+    pr.add_argument("--in-flight", type=int, default=4)
     r.add_argument("--tail", type=float, default=60.0, help="seconds the run lasts past the last request's time")
     c.add_argument("--deployment", required=True, type=Path)
     c.add_argument("--traffic", required=True, type=Path)
@@ -521,8 +557,13 @@ def main(argv=None) -> int:
         print((args.dir / "public.json").read_text())
         return 0
     if args.command == "traffic":
-        args.out.write_text(json.dumps(varied_traffic(args.requests, model=args.model, rate=args.rate, seed=args.seed,
-                                                      max_tokens=(16, args.max_tokens))))
+        args.out.write_text(json.dumps(traffic_of(args, args.model)))
+        return 0
+    if args.command == "probe":
+        model = args.model or cs.served_model("http://%s:%d" % args.upstream)
+        result = asyncio.run(probe(args.upstream, traffic_of(args, model), args.in_flight))
+        args.out.write_text(json.dumps(result, indent=1))
+        print(json.dumps({k: result[k] for k in ("first_s", "bytes_per_s", "statuses")}))
         return 0
     if args.command == "fake":
         async def fake() -> None:
