@@ -749,6 +749,149 @@ The report has the per-link bandwidth, the utilization and padding share, the cl
 range the honest prover declared, the first-frame latency it declared (the p50 and p99 of its declared δ, in ms), the
 shaping delay (hand time minus ready time, over every frame), the capacity per day, and the K charge by span.
 
+## Advice v0 (`advice`)
+
+Network accounting for arbitrary vLLM usage runs a precommitted AOT compiler. It takes an **advice** string, which
+encodes everything serving made unpredictable, and compiles each engine step's circuit from it. The certifier
+certifies the I/O, and sampled proofs hold the committed values to the compiled circuits and to the certified I/O. The
+advice's length is the content advice `A_c` of the accepted-runs bound, `A_c + W·log2 #Σ_sync + n·log2 D`. v0 is the
+interface the compiler, the encoders and the tie to the certified I/O code against; its schema id is
+`verity/advice/v0`. The module's docstring carries the same layout and charge.
+
+**Interface.** The `Advice`, `RequestAdvice`, `StepAdvice`, `Row` and `Source` dataclasses are frozen, and construction
+refuses (`MalformedAdvice`) anything that isn't a schedule vLLM could have run. The module's functions are:
+- `encode(advice) -> bytes` and `decode(data) -> Advice`;
+- `total_bits(advice)`;
+- `bits(advice, window, T)` and `bits_by_window(advice, T)`, the charge;
+- `outputs(advice)`, the kept samples;
+- `to_json` and `from_json`, a strict JSON form for debugging.
+
+**What vLLM decides, and where the advice says it** (the pinned `0.28.1rc1.dev472`, v1's `Scheduler.schedule`):
+- v1 has no prefill or decode phase. Each step's `SchedulerOutput` gives each scheduled request
+  `num_scheduled_tokens` tokens from its `num_computed_tokens` on. That pair is a `Row`'s (`n`, `start`), and the
+  model runner's input batch order is the order of the step's `rows`.
+- `scheduled_new_reqs` is a request's first row. `scheduled_cached_reqs` holds the continuing rows, and the resumes
+  among them, `resumed_req_ids`, are `preempted`.
+- Preemption is recompute: `num_computed_tokens` goes back to 0, and the request returns to the front of the waiting
+  queue. `preempted_req_ids` isn't recorded as such: a preempted request has no row until its resume.
+- A waiting request with no computed tokens looks up the prefix cache, on admission and on a resume alike. A hit holds
+  at most `num_tokens − 1` tokens and may end mid-block, the partial tail being copy-on-write. Blocks are cached when
+  `allocate_slots` schedules them, so a hit can be on KV that another row of the same step computes. This is
+  `cache_hit`, `start = cache_hit` and `sources`.
+- A row's sample is kept exactly when the row reaches the request's known tokens, the prompt plus its kept outputs.
+  Otherwise it is discarded (the runner's `discard_request_mask`): a partial prefill chunk, or the one row
+  `async_scheduling` (on by default) runs past an EOS.
+- `finished_req_ids`, and the reason, are `finish` and `output_len`.
+
+**What I1's draft missed, and v0 adds:**
+- `Row.sources`. The compiler has to wire a hit's KV, and nothing public says whose KV it is: a run of positions
+  names the request that computed them, in this step or an earlier one.
+- `release` per kept output, not per step. A step's frames straddle buckets: streams interleave, and vLLM can merge
+  tokens into one chunk.
+- `bits` takes T: a window is T buckets of `release`.
+- `kind` is derived (decode exactly when n = 1 and start ≥ prompt_len) and checked.
+- At most one row past a request's last output, the async one. The position rules admit it and refuse a second.
+- `requests` are in order of first row, with unique ids.
+
+**Out of scope for v0**, so a deployment that uses one of them isn't described by v0: speculative decoding
+(`scheduled_spec_decode_tokens`), LoRA, structured output (the grammar bitmask), multimodal encoder inputs, KV
+connectors and external hits (`num_external_computed_tokens`), cascade attention (`num_common_prefix_blocks`; set
+`disable_cascade_attn`), pipeline and data parallelism (tensor parallelism is in scope, since every rank runs the same
+`SchedulerOutput`), n > 1 and best_of, stop strings (a finish other than `eos` or `length` is refused), aborts and
+client disconnects, unseeded stochastic sampling, CUDA-graph padding (the advice names the rows that ran, not padding,
+so either the runner is eager or the compiler models the padding), and Mamba or hybrid models.
+
+**Fields.** Each field's chooser and bit cost are below; w_req = bitlen(#requests − 1), and the widths w_len, w_rel and
+w_src are the least that hold their largest values. A **determined** field is fixed by the certified I/O, the
+committed values or the rest of the advice, and the encoders (ENC-*) remove it. The **free** fields are the real
+`A_c`: what the serving engine, which is the prover, chooses.
+
+| Field | Chosen by | Bits | Determined? |
+|---|---|---|---|
+| version | protocol | 8 | yes: structure |
+| #requests | clients | 6 + L | yes: certified ingress |
+| #steps | engine | 6 + L | free |
+| w_len, w_rel, w_src | (derived) | 18 | yes: the rest of the advice |
+| `id` | client (the body's `user`) | 6 + L + 8·bytes | yes: certified ingress |
+| `prompt_len` | client | w_len | yes: certified ingress (the precommitted tokenizer) |
+| `output_len` | model, or the client's `max_tokens` | w_len | yes: committed outputs, and the egress frame count |
+| `finish` | model (EOS), or the client's cap | 1 | yes: committed outputs (is the last kept token EOS) |
+| a step's rows − 1 | engine | w_req | free |
+| `Row.request` | engine | w_req per row | free: batch membership and order |
+| `Row.kind` | (derived) | 1 per row | yes: start, n, prompt_len |
+| `Row.start` | engine | w_len per row | yes: cache_hit on an admitting row, the previous row's end otherwise |
+| `Row.n` | engine (chunk size, token budget) | w_len per row | free on prefill chunks; 1 at known − 1 |
+| `Row.cache_hit` | engine (prefix cache state) | w_len per row | free on admitting rows; 0 otherwise |
+| `Row.preempted` | engine | 1 per row | free |
+| `Row.sources` | engine (prefix cache's block map) | w_src + #sources·(w_req + w_len), hit rows only | free; their sum is cache_hit |
+| `release` | engine's timing, inside the sync | w_rel per output | yes: certified egress records and committed frames |
+
+What's left free are the step count, which requests each step runs and in what order, the chunk sizes, the
+preemptions, the cache hits and their sources, and whether the row past an EOS ran. `release` is determined, and the
+timing term `W·log2 #Σ_sync + n·log2 D` charges it. The advice carries it only so that the compiler and the tie to the
+certified egress know which output each frame is.
+
+**Validity.** `Advice` replays the schedule, keeping for each request the positions computed (`num_computed_tokens`),
+the known tokens and the kept outputs, and refuses:
+- a request that is out of first-row order, has no row, or keeps more or fewer than `output_len` outputs;
+- a first row that resumes, or one that doesn't start at its hit;
+- a continuing row that doesn't start where the last one ended;
+- a row past the known tokens, or whose `kind` isn't the derived one;
+- a hit on a row that doesn't admit its request;
+- a resume of a finished request;
+- a source on positions its request hadn't computed by that step, or a request's own KV except on a resume;
+- per request, release buckets that aren't non-decreasing;
+- an empty step, or a request twice in one step;
+- types, ranges below 2^63, duplicate ids and ids that aren't UTF-8.
+
+**Canonical.** An advice has one encoding and a byte string at most one advice, because any second form would be a
+covert channel. The layout (MSB first, `uvar` a u6 width L then u(L), L the value's bit length) is:
+
+    header     version u8 (0) | n_requests uvar | n_steps uvar | w_len u6 | w_rel u6 | w_src u6
+    request    id_bytes uvar (≥ 1) | id, id_bytes × u8, UTF-8 | prompt_len u(w_len) | output_len u(w_len) | finish u1 (0 eos)
+    step       rows − 1 u(w_req) | rows × [ request u(w_req) | kind u1 (0 prefill) | start u(w_len) | n u(w_len)
+               | cache_hit u(w_len) | preempted u1 | when cache_hit > 0: sources − 1 u(w_src),
+               sources × (request u(w_req) | n u(w_len)) ]
+    release    Σ output_len × u(w_rel)
+    padding    zero bits to a whole byte, never charged
+
+`decode` refuses everything else: a non-minimal width or length prefix, nonzero padding, a trailing byte, truncation,
+a version other than 0, and every invalid advice. The tests' fixture of two requests and five steps is 207 bits (26
+bytes): a 43-bit header, 22 bits for each request, the steps at 13, 29, 25, 25 and 13, and 3 bits for each of five
+releases.
+
+**The charge** (`bits_by_window`). Each record goes to the earliest egress window it can show in:
+- an output's release goes to its own window, bucket // T;
+- a step's bits go to the earliest window of an output at that step or later, and a step that no output follows goes
+  to the last window;
+- a request goes to the window of its first step, and the header to step 0's.
+
+So windows 0 … m − 1 are charged every record their frames read, and the charges sum to `total_bits`. An advice with
+no outputs is charged wholly to window 0. The accepted-runs bound for a run's first m windows reads `A_c` as Σ_{w<m}
+`bits(advice, w, T)`.
+
+**Left to the other workstreams**, which v0 doesn't settle:
+- **Per-window parts.** v0 is one string, and `bits_by_window` divides its records among windows by a rule computed
+  from the decoded advice, so the prover can't choose the split. But the header's counts and widths depend on later
+  windows, and the records a window is charged aren't one contiguous, self-delimiting part. A per-window bound that
+  counts each window's part as its own string (the red team's A5 and attack 9, #3489) needs an encoding that sends
+  each window's part self-delimited (its step and request counts as `uvar`s, with widths registered or per part). That
+  costs a few bits a window, and it is the encoders' and N2's advice mode's to choose.
+- **The order within a bucket.** Several requests' frames released in one bucket can go out in any order, a channel of
+  up to log2 n_t! bits a bucket that neither the advice nor the timing term charges. The tie to the certified I/O has
+  to fix a canonical order, for example by id then output index.
+- **One frame per kept output.** Each kept output is to be one egress frame, the HTTP head folded into the first and
+  `[DONE]` into the last, and a chunk into which vLLM merged tokens split back per token (the variable-length served
+  link).
+- **The id.** The shim's `user` names the session today; it has to name the request, unique within a session.
+- **Equal tokens at a source.** The compiler has to hold a source run's tokens equal to the hitting request's, or the
+  hit wires in another prompt's KV.
+- **Arrival before admission.** A request's first row has to follow its certified arrival, which the tie to the
+  certified ingress checks.
+- **What the advice tells the auditor.** If the compiled circuits are public, the advice reveals lengths, batching
+  and, through `sources`, which requests share a prompt prefix. Whether that is protocol structure or has to be
+  committed is for the red team, and for Daniel through the lead.
+
 ## The active certifier (`active`)
 
 `active.Proxy` runs the certifiers on one boundary link of a live byte stream. It is an asyncio TCP proxy, the I/O shell
@@ -928,6 +1071,102 @@ The clock and the sleep are injected (`VirtualClock` serves a run driven event b
 I/O, so the tests drive real sockets without reading the wall clock. `benchmarks/network_traces/active_replay.py`
 replays recorded traces through the proxy in real time, and on an injected clock.
 
+## Sealed pair links (`active.Pair`, `verity.ml.crypto.aead`)
+
+The leaf and spine switches between blocks are the prover's, so they can copy every frame that crosses from one block's
+certifier to another's. On a sealed pair link (`Proxy(pair=active.Pair.of(…))`, off by default, and with it off every
+record, wire and verdict is as above) the two ends are both the auditor's certifiers, and every frame between them is
+sealed under an AEAD built from SHA-512 alone.
+
+- **Where it sits.** The sending certifier seals each egress slot after its egress certifier records it, and the
+  receiving certifier opens each unit before its ingress certifier takes it. Every slot is sealed, padding too, so the
+  link carries r units of B + 64 bytes a bucket whatever the occupancy. The records, the occupancy, the commitments and
+  the certificates are the unsealed run's, so N2, N3 and the timing bound read the same grids
+  (`test_a_sealed_pair_link_carries_only_ciphertext_and_every_record_is_the_unsealed_runs`).
+- **The construction** (`verity.ml.crypto.aead`, the standard library's SHA-512 with its whole output; no new hash).
+  H is SHA-512, HMAC is HMAC-SHA512 (RFC 2104), and [x] is u16be len(x) ‖ x.
+  - Keys, by HKDF-Expand (RFC 5869) with one output block. S is 64 uniform bytes, so there is no extract step:
+    `K_enc = HMAC(S, "verity-network-certifier/pair/v1/enc" ‖ [σ] ‖ [ℓ] ‖ 0x01)`, and `K_mac` is the same under
+    `…/mac`. σ is the session id and ℓ the direction's name (`"a>b"`), so each direction of each pair in each session
+    has keys of its own, and a unit reflected back to its sender doesn't open.
+  - The nonce of slot j of bucket t of window w of the sender's egress grid is `N = u64be w ‖ u32be t ‖ u32be j`.
+  - A frame f is sealed as follows: `KS = H(K_enc ‖ N ‖ u64be 0) ‖ H(K_enc ‖ N ‖ u64be 1) ‖ …`, cut to B bytes;
+    `C = f ⊕ KS`; `tag = HMAC(K_mac, N ‖ C)`. The unit is `C ‖ tag`.
+  - A unit is opened by recomputing its tag, comparing it in constant time, and giving `C ⊕ KS`, or nothing.
+  - Why each piece is standard:
+    - Each keystream input is 88 bytes, inside one compression block, with the key in it. That is SHA-512's compression
+      function as a dual PRF keyed by the secret bytes of its first block: the claim `prf/sha-512`
+      (`verity.core.claims`), on which `verity.ml.randomness`'s keyed streams already rest. Every input has one
+      length, so length extension doesn't arise.
+    - Counter mode over a PRF is IND-CPA while no nonce repeats under a key (Bellare, Desai, Jokipii and Rogaway, 1997).
+    - HMAC-SHA512 is a PRF under the same assumption (Bellare, 2006; FIPS 198-1), so it is a strongly unforgeable MAC.
+    - Encrypt-then-MAC with the nonce under the tag is IND-CCA and INT-CTXT (Bellare and Namprempre, 2000; scheme N2 of
+      Namprempre, Rogaway and Shrimpton, 2014).
+    - Every unit under one key has one length, so `N ‖ C` needs no length field. No new claim id is needed.
+- **Keys.** There is one secret S per certifier pair per session: 64 bytes of one certifier host's own randomness
+  (`fresh_pair_secret`), drawn again for each new session σ.
+  - SHA-512 alone gives no key agreement, so S reaches the pair's other certifier host the way the certifier's keys and
+    run id reach their consumers: through the auditor's deployment channel.
+  - S and its keys live only in the two certifier processes and on their hosts, never in a record, a log or the
+    prover's configuration.
+  - They are protocol keys, which seal frames, not access keys.
+  - Their custody joins `trusted-nebius-host`, which now also covers each pair's secret on its two hosts and the
+    deployment channel that installs it.
+  - A leaked S opens that pair's link for that session. It changes no record and no verdict: the account only loses
+    the premise below, and the link is charged as an unsealed one.
+- **Randomness and leakage.** The only coins are S, and nonces are public structure. Each nonce is used once under its
+  key:
+  - the sender refuses a slot at or before the last it sealed (`Sealer`);
+  - a certifier back from maintenance keeps its sealer;
+  - each session and direction has keys of its own.
+
+  The leakage argument: a nonce is a function of the link, the window, the bucket and the slot, which the path sees
+  already, so it adds nothing. With each nonce used once under keys the path never holds, every unit is
+  indistinguishable from B + 64 uniform bytes (`prf/sha-512`). Since every slot is sealed, padding too, at r units a
+  bucket, what the path sees is a function of public parameters and time alone: neither the frames nor which slots
+  are padding.
+- **Fail closed.** The receiver opens the k-th unit it reads as slot k of its peer's grid, from the peer's start
+  window on (`Opener`). A unit that doesn't open (tampered, replayed, reordered, missing, which shifts every unit after
+  it, or sealed under another session's or direction's keys) faults its ingress window `malformed`. The opener stays
+  refused, so every later window is `malformed` too, until a new session. Nothing is retried or redrawn.
+- **The account.** Once every link between two blocks' certifiers is sealed, a crossing from one block to another is
+  ciphertext off the two certifiers. So the export charge (λ_out, #2780) applies at the facility boundary only. In
+  `benchmarks/datacenter` this switches at `Datacenter(sealed=True)` (off by default), which `Placement._exported`
+  reads to count only the crossings to a reader off every block.
+- **The analysis.** `Security/` doesn't change. WX's A1 (EgressMediated(s), `note:proofs/20261019T0125Z-report-wx-model`)
+  restated with encryption as its premise is a claim, not a proof:
+  - **The restatement (A1 at the facility boundary, sealed):** every bit that leaves the facility is an egress slot
+    value certified equal to the committed output at a certifier on the facility boundary, or one of s side-channel
+    bits per window.
+  - **The premise:** every link between two spatial units is a sealed pair link between two of the auditor's
+    certifiers. The AEAD's security rests on `prf/sha-512`, and its keys' custody on `trusted-nebius-host`.
+  - **What it changes:** A1's units are then the facility, not each block.
+- **What it costs** (run `r20261024-014147-3886`, `benchmarks/network_sim/mockdc.py seal`, on vy-nebius-cpu-2: an AMD
+  EPYC Genoa, 256 cores at a load of about 30, with `sha_ni` but no SHA-512 instructions, and OpenSSL 3.0.13).
+  Figures are bytes of frames a second on one core, on its CPU seconds. Line rate is 400 Gb/s, 50 GB/s, per uplink in
+  each direction; its column is the cores one direction takes at each end.
+
+  | Path | B | Seal | Open | Cores at line rate |
+  |---|---|---|---|---|
+  | Python, one process (`Sealer`, `Opener`) | 512 | 52.7 MB/s | 53.4 MB/s | 948 |
+  | Python, one process | 4096 | 81.5 MB/s | 81.5 MB/s | 614 |
+  | Python, certifier to certifier across the fabric | 512 | 52.2 MB/s | 50.0 MB/s | 999 |
+  | Python, certifier to certifier across the fabric | 4096 | 82.7 MB/s | 80.8 MB/s | 619 |
+  | C over OpenSSL's SHA-512 (`seal_fast.c`, the Python's units) | 512 | 195.5 MB/s | 194.8 MB/s | 257 |
+  | C over OpenSSL's SHA-512 | 4096 | 224.1 MB/s | 223.0 MB/s | 224 |
+
+  A 4096-byte frame costs 98 SHA-512 compressions: 64 for the keystream and 34 for the tag. The C path runs at about
+  5.4 million compressions a second, four fifths of OpenSSL's own rate on long inputs (847 MB/s). So no CPU path on this
+  node reaches line rate. One direction needs about 1.2 × 10⁹ compressions a second.
+  - The construction is parallel (its keystream blocks and its frames are independent), so cores scale it. But 224
+    cores at each end of each direction isn't a certifier.
+  - What would reach line rate:
+    - SHA-512 instructions (x86's SHA512 extension, ARMv8.2's SHA512), which this node lacks and which are unmeasured
+      here;
+    - a GPU kernel (C-Flock has SHA-512 in CUDA, `verity/ml/flock/cuda/sha512.cuh`);
+    - or a pipeline on the uplink's NIC, DPU or FPGA.
+  - The Python path is the reference and the tests' path, not a fast path.
+
 ## Tests
 
 `uv run tools/verity/check/suites.py verity/core/protocols/certifier`. The tests enumerate small
@@ -998,6 +1237,18 @@ and seven lemmas, and three more proved lemmas:
   reference (slow);
 - **`test_network_certifier_calibration.py`:** the calibration tool, and the honest prover's choice against its rule by
   brute force, on one link and on several under one clock;
+- **`test_network_certifier_advice.py`:** advice v0, which no Lean statement names yet:
+  - the fixture's bytes are pinned and equal the documented layout rebuilt field by field;
+  - encode, decode and the JSON form round-trip on 50 random schedules from a small vLLM-like scheduler (chunked
+    prefill, same-step and multi-run hits, preemption with resumes that hit their own KV, the row past an EOS,
+    shuffled batch order), and the simulator's schedules hold every one of those decisions;
+  - the charge per window sums to the total at five values of T, equals the rule recomputed from the documented
+    records, and charges windows 0 … w at least what their outputs read;
+  - each of 38 malformed advices is refused, and so are a kind flipped, a start moved and two requests swapped in
+    random schedules;
+  - decode refuses non-canonical strings (a wider width or length prefix, nonzero padding, a trailing byte,
+    truncation, another version, an id that isn't UTF-8), and every single-bit flip and random corruption of an
+    encoding is refused or is itself an advice's canonical encoding;
 - **`test_network_certifier_active.py`:** the active certifier over localhost sockets on an injected clock:
   - `Shaper` is `run_shaper`'s rule on random instances;
   - an honest run's records, hand times and wire are the Program's, accepted raw and committed;
@@ -1019,6 +1270,14 @@ and seven lemmas, and three more proved lemmas:
     instances. A proxy can't start past its windows or with an online prover;
   - the served bucketer admits whole requests while the window ends idle, holds the rest for the next window, and
     every record it publishes derives; it refuses an own frame and a window that can't hold one request;
+  - on a sealed pair link, the records and every verdict are the unsealed run's. The wire is sealed units, padding
+    included, with no frame's bytes in it, and opened in order it is the unsealed wire. A unit with a ciphertext or tag
+    bit flipped, a replayed one, and one sealed at another slot, in another session, under another secret or under the
+    receiver's own direction each make their window and every later one `malformed`;
+- **`test_network_certifier_seal.py`:** the AEAD as the section "Sealed pair links" states it, recomputed from `hashlib`
+  and `hmac` alone and pinned; a unit opens only whole (every bit flip refused) at its own nonce under its own
+  direction's keys of its own session; the sender never seals a slot twice; and the receiver refuses a dropped,
+  replayed, swapped, cut or flipped unit and every unit after it;
 
 No test mirrors the other eight statements of Theorems 1(b) and 3 (`SecurityProofs.EncardAcceptedRunsLe`,
 `SecurityProofs.EncardDecodableLe`, `SecurityProofs.NoFaultOfAccepted`, `SecurityProofs.RecordedRowEqFill`,

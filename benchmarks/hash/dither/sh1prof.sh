@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # SERVE-H1's served step, phase by phase (sh1prof.py around serve.py, unchanged), under nsys on one leased GPU for at most
-# 28 minutes, then nsys's NVTX, NVTX-GPU-projection and kernel summaries.  Extra arguments go to serve.py.
+# 28 minutes, then nsys's NVTX, NVTX-GPU-projection and kernel summaries.  Extra arguments go to serve.py.  It runs on the
+# leased GPU's NUMA node as sbench.sh does (numabind.py, DITHER_NUMA=0 unbound; numa.json says which).
 #   research run --on vy-nebius-2 --project verity --campaign dither-loop --source . --cwd source \
 #     --env GPU_LEASE_WHO=kernels-dither-rtx -- bash benchmarks/hash/dither/sh1prof.sh --max-tokens 4 --coins live --skip-timing
 set -uo pipefail
@@ -19,7 +20,8 @@ PY=${PY:-/workspace/jobs/venv312/bin/python3}
 export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/benchmarks/pouw/served_h1:$ROOT/benchmarks/hash/dither
 export HF_HOME=${HF_HOME:-/workspace/hf} FLASHINFER_CUDA_ARCH_LIST=12.0f
 echo "sh1prof: asking for one GPU at $(date -u +%H:%M:%SZ)"
-gpu-lease 1 --wait --max-min 28 -- timeout 1650 "$NSYS" profile -t cuda,nvtx --sample=none --cpuctxsw=none \
+gpu-lease 1 --wait --max-min 28 -- "$PY" "$ROOT/benchmarks/hash/dither/numabind.py" "$OUT/numa.json" \
+  timeout 1650 "$NSYS" profile -t cuda,nvtx --sample=none --cpuctxsw=none \
   -o "$S/sh1" --force-overwrite true "$PY" "$ROOT/benchmarks/hash/dither/sh1prof.py" --phases "$OUT/phases.json" -- \
   --out "$OUT/serve" --cubin "$S/noise.cubin" --scratch "$S" --at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --by kernels "$@"
 rc=$?
