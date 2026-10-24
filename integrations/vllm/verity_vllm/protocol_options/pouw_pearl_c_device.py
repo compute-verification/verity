@@ -298,18 +298,22 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
     def __init__(self, scheme: C.PearlC, entry: str, kernel: Kernel, weights: dict[int, Any], roots: dict[int, bytes],
                  coins: CoinCommitment, opening: CoinOpening, hashing: bool = True, capacity: int = LEAF_CAPACITY,
                  time_gemm: bool = False, schedule: str | Schedule = SERIAL, graphs: bool = False, whole_defer: bool = False,
-                 flag_rows: int = FLAG_ROWS, salt_key: bytes | None = None, whole_defer_a: bool = False):
+                 flag_rows: int = FLAG_ROWS, salt_key: bytes | None = None, whole_defer_a: bool = False,
+                 whole_fork_stats: bool = False):
         """`coins` is the challenger's coin commitment of the epoch and `opening` its salt coin, opened after the weights'
         root (`Epoch.start`, which raises `DomainError` for any other coin): the epoch's salt is the coin's.
         `whole_defer_a` (with `whole_defer`, on a kernel whose pipeline splits A's commitment) also defers each call's A
-        tree within a whole capture (`pouw_pearl_c_graphs`)."""
+        tree within a whole capture (`pouw_pearl_c_graphs`), and `whole_fork_stats` (with `whole_defer`) runs each call's A
+        scales there beside its A commitment."""
         if whole_defer_a and not (whole_defer and splits(kernel)):
             raise ValueError(f"{entry}: whole_defer_a defers A's tree within a deferred whole capture (whole_defer), on a kernel "
                              f"whose pipeline splits A's commitment (`Pipeline.FUSED` tree_seed_a)")
+        if whole_fork_stats and not whole_defer:
+            raise ValueError(f"{entry}: whole_fork_stats forks A's scales within a deferred whole capture (whole_defer)")
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
         self.nb, self.salt_key = kernel.run.NB, salt_key
         self.graphs = graphs and next(iter(weights.values())).device.type == "cuda"
-        self.whole_defer, self.whole_defer_a = whole_defer, whole_defer_a
+        self.whole_defer, self.whole_defer_a, self.whole_fork_stats = whole_defer, whole_defer_a, whole_fork_stats
         self._graphs: dict[tuple, _Graph] = {}
         self.variant = scheme.device.name
         self.time_gemm, self.events, self.omit = time_gemm, [], frozenset()
@@ -365,7 +369,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
             "graphs": (f"calls of at most {GRAPH_ROWS} rows: the serial schedule's one graph a call, a side lane's schedule's "
                        f"one a lane and ring set (A's tree its own where it is aside), replayed by the driver"
                        + (", a whole capture's tile hashing beside the next call" if whole_defer else "")
-                       + (" and its A tree beside its forming and GEMM" if whole_defer_a else "")) if self.graphs else None,
+                       + (" and its A tree beside its forming and GEMM" if whole_defer_a else "")
+                       + (", its A scales beside its A commitment" if whole_fork_stats else "")) if self.graphs else None,
             "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound (red team F4)"}
         self.cur: _Pass | None = None
         self.begin()
@@ -504,6 +509,13 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
         if at + 1 != self._call_cuts(pipe)[0]:
             raise RuntimeError(f"{self.entry}: the call's steps {present} don't end A's commitment with A's tree")
         return at
+
+    def _call_stats(self, pipe: Any) -> int | None:
+        """Where a whole capture forking A's scales (`whole_fork_stats`) takes ``stats_a`` from `_call_steps`: its place, a
+        forming step, which `_call_cuts` holds between A's commitment and the tile hashing; or None where the call has none."""
+        have = {name for name, _, _ in pipe.steps()}
+        present = [x for x in self._call_names(pipe) if x in have]
+        return present.index("stats_a") if "stats_a" in present else None
 
     def _split_whole(self, sh: _Shape) -> bool:
         """Whether a call of `sh` splits A's commitment for a deferred-a whole capture (`whole_defer_a`, deferring): a call
