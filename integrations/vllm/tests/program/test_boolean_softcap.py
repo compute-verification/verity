@@ -158,6 +158,7 @@ def test_the_word_views_and_word_statics() -> None:
                           MASKED_FROM=1).id
 
 
+@pytest.mark.slow
 def test_the_switch_binds_tanh_and_ex2_to_mufus_boolean_versions() -> None:
     """The switch (`verity_vllm.program.boolean`) takes the word chain to these: ``TANH`` and ``EX2`` bound through
     ``word_statics`` to `MufuTanh_v2` and `MufuEx2Ftz_v2`, and nothing left on words."""
@@ -167,6 +168,7 @@ def test_the_switch_binds_tanh_and_ex2_to_mufus_boolean_versions() -> None:
         assert bits.id == target.id and BL.is_boolean(bits)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("target", PINNED, ids=lambda t: t.id)
 def test_pinned_counts_and_digests(target) -> None:
     ands, xors, nots, digest = PINS[target.id]
@@ -208,6 +210,7 @@ def _composite_calls(fn) -> list:
     return [(nd.fn.name, nd.form, nd.n, nd.axes) for nd in fn.body.nodes if nd.fn.name in ("AttnBlockSoftcap", "AttentionHeadSoftcap")]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("target", [PINNED[2], AGREEMENT[-1], PINNED[3]], ids=lambda t: t.id)
 def test_the_blocks_and_heads_are_the_words(target) -> None:
     """A head Calls its blocks, and the attention batches its heads, in the word chain's order and forms, each Call the Boolean

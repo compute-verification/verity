@@ -329,7 +329,8 @@ TARGETS = [bind(BA.AllReduceMnnvlCoordinate, WORLD=8, SHOT=1), bind(BA.AllReduce
            bind(BA.AllReduceNcclTree, WORLD=4, SIZE=8, CHAIN=TP4)]
 
 
-@pytest.mark.parametrize("target", TARGETS, ids=lambda t: t.id)
+@pytest.mark.parametrize("target", [pytest.param(t, marks=pytest.mark.slow) if t.id == "AllReduceCustom_v2{WORLD=8,SIZE=64,STAGE=2}" else t for t in TARGETS],
+                         ids=lambda t: t.id)
 def test_pinned_counts_and_digests(target) -> None:
     ands, xors, nots, digest = PINS[target.id]
     assert BL.is_boolean(target)

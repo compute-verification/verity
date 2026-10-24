@@ -187,7 +187,8 @@ def test_boolean_agrees_with_its_word_view(target) -> None:
     _agrees(target, 96)
 
 
-@pytest.mark.parametrize("target", [pytest.param(HEADS[0], marks=pytest.mark.slow), *HEADS[1:]], ids=lambda t: t.id)
+@pytest.mark.slow
+@pytest.mark.parametrize("target", HEADS, ids=lambda t: t.id)
 def test_boolean_head_agrees_with_its_word_view(target) -> None:
     """Minutes each (two blocks, the ends and a combine traced as one circuit): what the word-level tests can't see is the
     Boolean pieces' agreement on special words through a split's blocks, an empty split and the combine."""

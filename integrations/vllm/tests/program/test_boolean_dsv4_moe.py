@@ -140,6 +140,7 @@ def test_the_hash_weight_on_special_edge_and_random_words() -> None:
     _agree(bind(BD.Dsv4HashWeight), _words(np.random.default_rng(0x4A5), 3000, -100, 100))
 
 
+@pytest.mark.slow
 def test_the_sqrtsoftplus_score_on_special_edge_and_random_words() -> None:
     _agree(bind(BD.Dsv4SqrtSoftplus), _words(np.random.default_rng(0x5F), 3000, -110, 40))
 
@@ -188,6 +189,7 @@ def _hash_rows(rng, n: int, E_: int) -> tuple[np.ndarray, np.ndarray]:
     return x, ids
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("E_", [8, 6])
 def test_the_hash_router(E_) -> None:
     """At 8 experts and at 6 (the pick tree padded), 200 rows of each kind, rows of -inf (no weight) and of a +inf logit."""

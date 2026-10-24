@@ -88,6 +88,7 @@ def test_fa2_check_inf_attention_scale_input(masked_from):
     assert _const_id(scale) not in _held(new)
 
 
+@pytest.mark.slow
 def test_derive_registered_values_evaluates_like_the_constants_program():
     """A tiny greedy serve derived with `registered_values`: the norms' eps and the attention scale are the fields of the registered
     `values` parameter, held as no constant, and the Program computes what the constants derivation's flat Program computes."""

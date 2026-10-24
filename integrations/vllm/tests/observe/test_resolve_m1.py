@@ -28,6 +28,7 @@ def test_header_matches_profile(resolved):
     assert check_header(header) == []
 
 
+@pytest.mark.slow
 def test_zero_unsupported_over_all_steps(resolved):
     _, results, _ = resolved
     assert len(results) == 16, [r.step for r in results]

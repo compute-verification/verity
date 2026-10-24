@@ -14,7 +14,7 @@ import os
 
 import pytest
 
-#: the opt-in random Boolean-vs-word sweeps: about 40 minutes of test time, on top of the suite's own
+#: the opt-in random Boolean-vs-word sweeps: about 19 minutes of test time (5 minutes on 12 workers), on top of the suite's own
 SWEEPS = os.environ.get("VERITY_VLLM_BOOLEAN_SWEEPS") == "1"
 
 KNOWN_FAILURES = {
@@ -51,7 +51,7 @@ def pytest_configure(config) -> None:
 
 @pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(items) -> None:
-    sweep = pytest.mark.skip(reason="VERITY_VLLM_BOOLEAN_SWEEPS=1: a random Boolean-vs-word sweep (all of them: about 40 minutes "
+    sweep = pytest.mark.skip(reason="VERITY_VLLM_BOOLEAN_SWEEPS=1: a random Boolean-vs-word sweep (all of them: about 19 minutes "
                                     "of test time)")
     for item in items:
         if reason := KNOWN_FAILURES.get(item.nodeid):

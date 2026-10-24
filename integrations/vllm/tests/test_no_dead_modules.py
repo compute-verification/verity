@@ -39,6 +39,7 @@ def test_every_roots_entry_matches():
     assert not unmatched, f"census_roots.txt entries that match no tracked shell, directory or module: {unmatched}"
 
 
+@pytest.mark.slow
 def test_negatives_runners_are_roots():
     g, by_shell, _, non_live, _ = _state()
     negatives = [s for s in census.shell_files() if fnmatch.fnmatchcase(s.rsplit("/", 1)[-1], "*_negative*.sh")]

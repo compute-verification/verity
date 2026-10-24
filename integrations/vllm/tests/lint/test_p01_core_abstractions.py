@@ -149,6 +149,7 @@ def test_no_new_violations() -> None:
                     "re-registering their ids, and do not reach into its _private names.")
 
 
+@pytest.mark.slow
 def test_allowlist_has_no_stale_entries() -> None:
     R.assert_no_stale(NAME, scan(), RULE)
 

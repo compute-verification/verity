@@ -485,6 +485,7 @@ def test_the_commits_session_arms_its_first_window_once_its_runs_first_step_has_
     assert steps[0] == rec["memory_map"]["first_step"] == 0
 
 
+@pytest.mark.slow
 def test_a_paced_commits_session_runs_a_step_a_coin_and_tags_each_pass_with_its_step(tmp_path, monkeypatch):
     """At ``--paced 1:…`` each window is one pass under a coin of its own, its engine step inside it (no pass moves into
     the next window); the session's record tags each pass with the step the verifier's record has for it, a step of

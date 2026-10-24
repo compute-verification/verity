@@ -254,6 +254,7 @@ def test_the_compact_load_splices_each_aliased_weight_read(rank, monkeypatch):
     assert calls[0] <= first_reads, (calls[0], first_reads)
 
 
+@pytest.mark.slow
 def test_the_dag_hashes_take_one_trie_step_per_weight_progression(rank):
     """[8dec947cf] GM-01's fast DAG hashes walk a compact W_UV read in one trie step per progression (~2048), not per run (131,072 a
     read, ~5e9 steps a rank), and partition the instances as the runs-form load does."""

@@ -330,6 +330,7 @@ def _agree2(target, args, word=None) -> None:
     assert not bad.size, f"{target.id}: {bad.size} of {n} rows differ from {word.id}, first {bad[:5]}"
 
 
+@pytest.mark.slow
 def test_the_sigmoid_score_on_special_random_and_in_range_words() -> None:
     _agree2(bind(BM.MoeRouterSigmoidScore), _score_words(np.random.default_rng(0x51), 2000))
 

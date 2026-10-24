@@ -99,6 +99,7 @@ def test_the_select_at_a_constant_split_count_is_v1_there():
                 evaluate(bind(SM.GumbelTopPTokenSelect, V=V), *args, spl)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("fam,V,S", [("TopPKeepWord", 300, 8), ("TopPKeepWord", 1025, 32), ("GumbelTopPTokenSelectV2", 300, 8)])
 def test_the_codec_round_trips_it(fam, V, S):
     """The Definition as one Call of a Program, through `encode_program` and `decode_program` as a Build's workload compose reads it.

@@ -348,6 +348,7 @@ def test_the_native_commitment_is_the_ir_evaluators_leaf_for_leaf(which, request
     assert _recommitted(w, ir) == w.commitment
 
 
+@pytest.mark.slow
 def test_the_honest_run_is_accepted(world):
     rep, pw, issues = _verdict(world)
     assert rep["result"] is True and rep["grade"] == "complete", rep["why"]

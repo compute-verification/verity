@@ -307,6 +307,7 @@ def test_struct_parser_declaration_order_and_counts():
     assert [(n, c, s) for n, c, s, _b in fs] == [("a", 6, [3, 2]), ("b", 4, [4]), ("c", 1, [])]
 
 
+@pytest.mark.slow
 def test_honest_program_replays_bit_exactly_across_all_strata(world):
     bmap, committed = world.bmap_and_reader()
     rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=2, seed=3)
@@ -1245,6 +1246,7 @@ def test_attention_v3_flipped_value_word_of_the_prefill_is_named_at_every_row_th
     assert {("Attention_v3", 0), ("Attention_v3", 1), ("Attention_v3", 2)} <= fams, fams
 
 
+@pytest.mark.slow
 def test_attention_v3_program_naming_the_wrong_position_for_a_key_is_a_mismatch_and_a_short_history_is_refused_by_name(attn_world):
     """[rev M-0136 sign condition] the history is the Program's refs, never inferred: a Program whose last attention row names the key of
     position 2 in position 1's slot (a duplicated ref) evaluates F over THAT history != the committed output -> mismatch at exactly that

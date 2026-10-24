@@ -92,7 +92,8 @@ def _entry():
     return f"pouw:{PH.SCHEME}"
 
 
-@pytest.mark.parametrize("k,n,m", [pytest.param(*SHAPES[0], marks=pytest.mark.slow), *SHAPES[1:]], ids=["decode-1", "partial-5", "rows-33-cols-40"])
+@pytest.mark.slow
+@pytest.mark.parametrize("k,n,m", SHAPES, ids=["decode-1", "partial-5", "rows-33-cols-40"])
 def test_every_served_shape_compiles_to_full_warp_tiles(k, n, m):
     """Decode's one row, a partial block and a column count off the tile: every unit is a full 32 x 32 grid, the call one
     site and one seed group covering its units."""
@@ -104,6 +105,7 @@ def test_every_served_shape_compiles_to_full_warp_tiles(k, n, m):
     assert {u.defn.base_id for u in c.units} == {"PouwH1Tile_v1"}
 
 
+@pytest.mark.slow
 def test_the_site_rows_are_the_tap_rows_then_distinct_pad_rows():
     """A's first m rows are the call's s8 rows (parameter x) in order and its B rows the weight's (parameter w); each pad row
     reads a constant of its own, so the 32 rows are distinct and the tile a grid."""
@@ -276,6 +278,7 @@ def test_units_are_in_row_block_then_column_block_order():
     assert all(list(u.rows) == list(range(u.rows[0], u.rows[0] + 32)) for u in c.units)
 
 
+@pytest.mark.slow
 def test_z_is_the_exact_product_on_each_units_cells():
     rng = np.random.default_rng(5)
     xq = rng.integers(-127, 128, (33, K), dtype=np.int8)

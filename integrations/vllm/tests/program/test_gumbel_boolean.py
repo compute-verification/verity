@@ -279,6 +279,7 @@ def _lane_args(key: np.ndarray, v: np.ndarray, x: np.ndarray, noisy: np.ndarray)
             np.array([ks for ks, _, _ in vals], np.uint64), np.array([ka for _, ka, _ in vals], np.uint64), noisy]
 
 
+@pytest.mark.slow
 def test_lane_is_the_noise_lane_word() -> None:
     """`GumbelLane_v1` on lane ``v``'s operands (`lane_values`, `lane_index`) is ``add.ftz(x, GumbelNoiseLane_v1(key, v))`` when
     noisy, else ``x``: random keys and lane indices over the whole u32 range and the vocabulary's, with the edges; random and

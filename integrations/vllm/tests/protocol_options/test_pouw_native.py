@@ -54,6 +54,7 @@ def test_every_unit_is_the_programs_outputs_numbering_and_wiring(three_strips):
         assert flat == [tr[g] for g in tp.inputs(u)], (u, role, where)
 
 
+@pytest.mark.slow
 def test_every_y_unit_is_the_weight_programs_outputs_numbering_and_wiring(three_strips):
     call = three_strips[0]
     c, tr = PC.evaluate_weight_ir("ncp-v2", call)

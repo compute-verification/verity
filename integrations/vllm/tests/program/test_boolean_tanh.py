@@ -128,6 +128,7 @@ def _act() -> np.ndarray:
     return np.array(T.gelu_tanh_bf16_words(), np.uint32)
 
 
+@pytest.mark.slow
 def test_tanh_is_the_word_definition_at_the_edges_every_exponent_and_random_words() -> None:
     words = _tanh_words(np.random.default_rng(21))
     got, want = _bits(bind(BT.TanhF32Rn), words), np.array([D.tanh_f32_bits(int(w)) for w in words], np.uint64)
@@ -174,6 +175,7 @@ def test_every_gate_word(u: int) -> None:
     _agree(bind(BT.GeluTanhMulBf16), g, np.full(g.shape, u, np.uint64))
 
 
+@pytest.mark.slow
 def test_gelu_is_the_word_definition_on_special_random_and_edge_pairs() -> None:
     _agree(bind(BT.GeluTanhMulBf16), *_pairs(np.random.default_rng(23)))
 
