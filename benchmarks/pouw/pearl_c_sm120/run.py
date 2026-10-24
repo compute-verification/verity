@@ -70,9 +70,10 @@ LIVE = os.environ.get("PEARLC_LIVE", "1") != "0"
 #: replaces (gemm_pearlc4_d), the same words
 DEEP = os.environ.get("PEARLC_DEEP", "1") != "0"
 #: B~'s prefetch into L2 ahead of a decode call's chain (`Pipeline.prefetch_b`): prefetch_l2's form (PEARLC_PREFETCH_FORM: 0 a
-#: line a thread, 1 the same evict_last, 2 a 16 KiB bulk prefetch a thread), its blocks, and B~'s leading bytes it takes
-#: (PEARLC_PREFETCH_MB, 0 all of them)
-PREFETCH_FORM = int(os.environ.get("PEARLC_PREFETCH_FORM", "0"))
+#: line a thread, 1 the same evict_last, 2 a 16 KiB bulk prefetch a thread, the default: served b8's whole step at an ITL p50
+#: of 20.61 ms against 21.42 in form 0 and 21.85 without it, r20261024-193651-3ef1), its blocks, and B~'s leading bytes it
+#: takes (PEARLC_PREFETCH_MB, 0 all of them)
+PREFETCH_FORM = int(os.environ.get("PEARLC_PREFETCH_FORM", "2"))
 PREFETCH_CTAS = int(os.environ.get("PEARLC_PREFETCH_CTAS", "64"))
 PREFETCH_MB = int(os.environ.get("PEARLC_PREFETCH_MB", "0"))
 PREFETCH_FORMS = (0, 1, 2)
