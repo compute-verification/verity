@@ -277,6 +277,52 @@ def check (c : Circuit) (pub : Public) (own : Option (Array Port)) (derived : Bo
   let indices ← unitIndices pub
   own.toList.forM (checkPort c pub t indices)
 
+/-- The callees of the verifier's own program bound at registration: each `RegisteredInput<w>_v1`
+(`Program.inputId?`'s `registration`) among its descriptor's callees, which every node of every Definition names its
+callee in (`TemplateQuery.Desc`, the descriptor as the template queries read it). A node reads a registered input exactly
+when its callee is one of these, wherever it sits. -/
+def programInputs (d : TemplateQuery.Desc) : Array String :=
+  d.callees.filter fun id => (Program.inputId? id).map (·.1) == some Program.REGISTRATION
+
+/-- **A program that reads a registered value is verified only against registered roots** (PROTOCOL.md §16.10): with the
+verifier's own program (`program`, `--program`), a statement whose program has a `RegisteredInput<w>_v1` callee
+(`programInputs`) is refused unless the verifier holds its own registered reads (`registered`, `--registered`), whatever
+the statement's files say. The public file's header `registered` is the prover's, and the circuit marks no port
+registered, so neither can tell the verifier its rows of a registered value must open a registered root: a statement that
+names none would commit them afresh. With the registered reads, `check` opens every port of them, header or not. A
+program that does not parse is refused. -/
+def checkProgram (program : Option ByteArray) (registered : Bool) : V Unit :=
+  match program, registered with
+  | none, _ => .ok ()
+  | some _, true => .ok ()
+  | some b, false =>
+    match TemplateQuery.Desc.parse b with
+    | .error e => .error e
+    | .ok d =>
+      match (programInputs d)[0]? with
+      | none => .ok ()
+      | some id =>
+        .error s!"registered reads: the verifier's program reads a registered value ({id}), and the verifier holds no registered roots (--registered): its rows would be committed afresh, whatever the statement's public file names"
+
+/-- `checkProgram` accepts the verifier's program `b` only with its registered reads, or when `b` parses to a program
+with no registered input. -/
+theorem checkProgram_ok {b : ByteArray} {registered : Bool} (h : checkProgram (some b) registered = .ok ()) :
+    registered = true ∨ ∃ d, TemplateQuery.Desc.parse b = .ok d ∧ programInputs d = #[] := by
+  cases registered with
+  | true => exact .inl rfl
+  | false =>
+    refine .inr ?_
+    simp only [checkProgram] at h
+    split at h
+    · cases h
+    · next P hd =>
+      refine ⟨P, hd, ?_⟩
+      split at h
+      · next hn =>
+        have : (programInputs P).size ≤ 0 := Array.getElem?_eq_none_iff.mp hn
+        exact Array.eq_empty_of_size_eq_zero (by omega)
+      · cases h
+
 /-- The file's `complete` (`COMPLETE_KEY`), false when absent. -/
 def completeOf (j : Json) : V Bool :=
   match j.getObjVal? COMPLETE_KEY with

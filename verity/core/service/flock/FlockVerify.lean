@@ -703,7 +703,8 @@ names the statement's tags (`verity/flock-circuit` by default, or `verity/flock-
 pinned compression circuit; `J` (default 1) is the tables of every session (§16.12). A session with a work draw needs the
 verifier's own `--work K`, `--work-table`, `--program` and `--partition`, one with a stratified draw its own
 `--stratified K`, `--program` and `--partition`, a closure draw its own `--closure F`, a statement that reads registered
-values its own `--registered F` (`Registered.check`), a circuit with public input ports its own `--public-inputs F`, and
+values its own `--registered F` (`Registered.check`; a verifier whose own `--program` has a `RegisteredInput<w>_v1` node
+refuses every session without it, whatever the public file's header names, `Registered.checkProgram`), a circuit with public input ports its own `--public-inputs F`, and
 a public file whose header names an identifier its own `--identifier F` (§16.10), one of V*'s statements its own inner
 shape `--rec-inner F` (under which `--statement` must be `verity/flock-circuit`, V*'s, and no lookup table is held), which of V*'s statements the session is `--rec-part J` (`J` indexing the list `rec-statements`
 prints from 0: the levels, then the algebra's parts, then candidate 3's, then the level-0 cap) and its own bindings `--rec-bindings F` (from
@@ -838,6 +839,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
     else ProvedScope.checkOf parsed tags zk pubB count publicInputs.isSome registered.isSome
   let setupOf := fun (draw : Option Lean.Json) =>
     match (do
+        Registered.checkProgram program registered.isSome
         RecSetup.checkInner recInner recCoins recBound
         let r ← buildSessionOf parsed tags circuitB pubB compB coins tables count draw partition program work stratified closure
           registered publicInputs (identifier.map Prod.snd)
