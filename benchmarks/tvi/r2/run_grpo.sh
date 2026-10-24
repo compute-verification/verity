@@ -4,8 +4,9 @@
 # claims the first unclaimed item in $QDIR (mkdir is atomic) and skips one that would end past $DEADLINE (epoch seconds).
 # Sent inputs: grpo.py and the gsm8k_{train,test}.jsonl A2 uses. Results and logs go to $OUT; a TinyLoRA item's trained
 # state (state.pt, meta.json: the 2,492 fp32 coefficients) is copied to $OUT/state/; checkpoints are scratch.
-set -uo pipefail
+set -euo pipefail
 IN="$RESEARCH_RUN_DIR/inputs"
+mkdir -p /workspace/jobs/tvi
 S=$(mktemp -d -p /workspace/jobs/tvi .r2-run.XXXXXX)
 trap 'rm -rf "$S"' EXIT
 trap 'exit 143' TERM INT
@@ -33,7 +34,8 @@ SVD=/workspace/jobs/tvi/cache/R2
 mkdir -p "$SVD"
 research keep "$SVD" --owner @training --expires 2026-10-27 --priority low --why 'training-vs-inference program (R2 SVD cache)' >/dev/null 2>&1 || true
 nvidia-smi -i "${CUDA_VISIBLE_DEVICES:-0}" --query-gpu=index,name,memory.used,memory.total --format=csv
-"$PY" -c 'import torch, transformers, vllm; print(torch.__version__, transformers.__version__, vllm.__version__, torch.cuda.get_device_name(0))' | tee -a "$OUT/versions.txt"
+"$PY" -c 'import torch, transformers, vllm, math_verify; print(torch.__version__, transformers.__version__, vllm.__version__, torch.cuda.get_device_name(0))' | tee -a "$OUT/versions.txt"
+set +e
 
 run_item() {  # M:method:reward:seed:steps
   IFS=: read -r m method reward seed steps <<< "$1"
@@ -46,6 +48,7 @@ run_item() {  # M:method:reward:seed:steps
     ${variant:+--variant $variant} --data "$S/data" --out "$OUT" --ckpt-root "$S/ckpt" --svd-cache "$SVD" > "$log" 2>&1
   local rc=$?
   echo "$(date -u +%H:%MZ) $1 rc=$rc"
+  [ $rc -eq 0 ] || { echo "rc=$rc ${RESEARCH_RUN_ID:-}" > "$QDIR/$name/failed"; tail -20 "$log"; }
   grep -h '"event": "\(eval\|done\)"' "$log" | tail -3
   for st in "$S"/ckpt/*/step*/state.pt; do
     [ -e "$st" ] || continue
@@ -53,10 +56,12 @@ run_item() {  # M:method:reward:seed:steps
     mkdir -p "$d" && cp "$st" "$(dirname "$st")/meta.json" "$d/"
   done
   rm -rf "${S:?}"/ckpt/*
+  return $rc
 }
 
 : "${QDIR:?set QDIR=/workspace/jobs/tvi/r2-queue/NAME}"
 mkdir -p "$QDIR"
+fails=0
 while :; do
   picked=""
   for item in $ITEMS; do
@@ -72,7 +77,9 @@ while :; do
     fi
   done
   [ -z "$picked" ] && break
-  run_item "$picked"
+  if run_item "$picked"; then fails=0; else fails=$((fails + 1)); fi
   touch "$QDIR/$name/finished"
+  # Two failures in a row on this GPU: stop rather than drain the queue the other GPUs share.
+  [ $fails -lt 2 ] || { echo "two failed items in a row; stopping"; exit 4; }
 done
 echo "queue empty $(date -u +%FT%TZ)"
