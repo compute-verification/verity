@@ -119,11 +119,10 @@ takes as its ``sync`` parameter. The in-the-clear check runs `served_check` too.
 
 **An advised link** (`LinkWindows(advised=advised.AdvisedProfile(…))`) is a served link under arbitrary traffic:
 responses of any length, batched and timed as serving chose, carried across windows. The prover's advice
-(`advised.LinkAdvice`: I1's `advice.Advice`, one per certifier session, after serving, charged by `advice.bits`, each
-window's request frames, and the tie of its requests to the certified ingress, `advised.IoTieVerdict`, IoTieRequest's
-verdict from proofs the verifier verified, which nothing builds until IoTieRequest runs in the proof service, so every
-advised link is refused until then) states what serving chose, the profile's public framing says where each request
-ends on the ingress link (`advised.ends`, which refuses a link without the tie), and its unit is
+(`advised.LinkAdvice`: I1's `advice.Advice`, one per certifier session, after serving, charged by `advice.bits`, and
+each window's request frames) states what serving chose, the profile's public framing says where each request ends on
+the ingress link (`advised.ends`, which refuses a link without the tie of its requests to the certified ingress), and
+its unit is
 `NetworkAdvisedLinkWindow` v2{EGRESS, INGRESS, ADVISED}: the checks above, and one gate naming
 `advised.NetworkAdvisedCounts_v1` and its pinned circuit digest (`advised.gate`, pinned in
 `advised.circuit-check.json`), in its verdict bit, which holds the egress head's counts to the advice's releases and
@@ -131,8 +130,12 @@ the ingress head's counts to the advice (`advised`'s docstring has the fields it
 premises). Its public inputs, in the ``pub`` row, are the window's view of the advice (`advised.view`: ``released``,
 ``floor`` and ``received``, `ADVICE`), which the verifier computes from the public advice, the framing and the
 declared syncs, each held to Σ_sync; the heads' counts stay witness. Its public items are `PUBLIC_ADVISED`. Its
-verifier of record takes the delivered advice (`verify(advice=…)`), refusing a window without one or one whose view
-`advised.view` refuses, and reports the advice it read as a third public output, `advice` (`advised.digest`); the
+verifier of record takes the delivered advice (`verify(advice=…)`) and the tie only from its own tie source
+(`LinkWindows.ties`, `advised.TieSource`: `advised.IoTieVerdict`, IoTieRequest's verdict from proofs it verified,
+naming the link and its ingress registrations), never beside the advice; nothing in this package is a source until
+IoTieRequest runs in the proof service, so every advised link is refused until then. It refuses a window without an
+advice or one whose view `advised.view` refuses, and reports the advice it read as a third public output, `advice`
+(`advised.digest`); the
 network verdict refuses a window that names another advice than the first accepted window's, so every window's counts
 are one advice's. The in-the-clear check runs `advised_check` too.
 
@@ -164,7 +167,7 @@ from __future__ import annotations
 import hashlib
 import json
 import struct
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cached_property, lru_cache
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -494,7 +497,10 @@ class LinkWindows:
     network certifier's public key, the run that names the served domains, the certifier session's id (the 32 bytes the
     challenger drew for the certifier's session, which every certificate signs), the proof deadline in seconds, and the
     occupancy profile: for each end (egress, ingress), each window's counts, or None for an end without one. A served
-    link (`served`, FIXLEN) or an advised one (`advised`, arbitrary traffic under the advice) has no egress profile."""
+    link (`served`, FIXLEN) or an advised one (`advised`, arbitrary traffic under the advice) has no egress profile.
+    `ties` is no public field but the verifier's own source of an advised link's tie (`advised.TieSource`), the only
+    place `_view` takes IoTieRequest's verdict from: None, as nothing in this package is one until IoTieRequest runs
+    in the proof service, refuses every advised link."""
 
     link: str
     params: GridParams
@@ -507,6 +513,7 @@ class LinkWindows:
     occupancy: tuple[Sequence[Sequence[int]] | None, Sequence[Sequence[int]] | None] = (None, None)
     served: SV.ServedProfile | None = None
     advised: AD.AdvisedProfile | None = None
+    ties: AD.TieSource | None = field(default=None, compare=False, repr=False)
 
     def __post_init__(self) -> None:
         if len(self.occupancy) != 2:
@@ -763,12 +770,16 @@ class LinkWindows:
             return None
 
     def _view(self, window: int, syncs: Sequence[ClockSync], advice: Any) -> AD.WindowView | None:
-        """On an advised link, the window's view of `advice` (`advised.view`), None where it refuses the advice."""
-        if self.advised is None:
+        """On an advised link, the window's view of `advice` (`advised.view`) under the tie from the verifier's own
+        tie source (`ties`), held to this link and the ingress registrations that source records for it; None
+        without a source or an `advised.LinkAdvice`, and where `view` refuses."""
+        if self.advised is None or self.ties is None or type(advice) is not AD.LinkAdvice:
             return None
         try:
+            tie = self.ties.verdict(self.link, advice, self.advised)
             return AD.view(advice, window, self.params.buckets, self.params.allocation, syncs, self.sync_set,
-                           self.advised.request_frames)
+                           self.advised.request_frames, tie=tie, link_name=self.link,
+                           registrations=self.ties.registrations(self.link))
         except ValueError:
             return None
 
@@ -895,8 +906,8 @@ class LinkWindows:
           unit;
         - the proof's public row opens, under the salt delivered, to the verifier's own copy (`public_arguments`: the
           registered root, the public fields and both certificates' signed digests, and on an advised link the window's
-          view of `advice`, the link's advice, which `advised.view` takes), and its output row to the word delivered
-          (`_opened`), whose verdict bit and deadline bit are both 1;
+          view of `advice`, the link's advice, which `advised.view` takes under the tie from `ties` alone), and its
+          output row to the word delivered (`_opened`), whose verdict bit and deadline bit are both 1;
         - the certificates' check accepts (`certified`), and the window's declared sync is one of Σ_sync.
         The verdict reports the public outputs, the proved deadline bit among them, on an advised link the advice it
         read (`advised.digest`), and never a violation's kind. `opening` (the witness) is for a debug comparison only,
@@ -968,8 +979,9 @@ class LinkWindows:
         """The advised counts' check on the link-window (`advised.reference`, which the tests hold to the circuit): the
         egress head's counts are the advice's releases in the window's buckets (`advised.view`), and the ingress head's
         counts release the request frames that view needs by each bucket, under the declared syncs, and the window's
-        `received`. False without an `advised.LinkAdvice`, or on one `view` refuses: not covering the window, without
-        the tie or not under it, with requests whose ends under the profile's framing aren't the windows' total,
+        `received`. False without an `advised.LinkAdvice` or a tie source (`ties`), or on an advice `view` refuses: not
+        covering the window, without the tie from that source or not under it, with requests whose ends under the
+        profile's framing aren't the windows' total,
         releasing more than R frames in a bucket, or releasing a frame in a window with no declared sync or one outside
         Σ_sync, or before its request."""
         v = self._view(opening.window, syncs, advice)
