@@ -134,9 +134,10 @@ theorem padsTreeCut_go (N : ℕ) (src : FlockComplete.RepSrc) :
 /-- **The cut session in rep `2j + r`'s level 0 rounds**: at a live statement, the session's setup, schedules and
 level 0's commitments from the sources `src`, where each rep `k < 2j + r` returns from any history at its first round,
 answered by the opened coins up to the firewall's stop, with rep `0`'s claim points `ptsOpen` (`hprev`), and rep
-`2j + r`'s PIOP returns from a history at its first round (`hpiop`), the cut session stopped at `n`, for `n` from `ligP0`
-up to level 0's last body and `n ≤ refK x`, sent at `n` level 0's body `n − ligP0`: at the coins from `ligP0`, the
-PIOP's transcript and target, level 0's cap, the basis `ligBasis`, any table `t`, and the pads `padsL0` of the source. -/
+`2j + r`'s PIOP returns from a history at its first round (`hpiop`), the cut session stopped at `n`, for `n` from
+`ligP0` up to level 0's last body and `n ≤ refK x`, sent at `n` level 0's body `n − ligP0`: at the coins from `ligP0`,
+the PIOP's transcript and target, level 0's cap, the basis `ligBasis`, any table `t`, and the pads `padsL0` of the
+source. -/
 theorem runCut_cutL0 {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) (src : ℕ → FlockComplete.TabSrc) {s0 : _}
     {spec : _root_.Flock.SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, stsOf x))
