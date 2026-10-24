@@ -162,6 +162,7 @@ def _softmax_with_sink(q, nope, scale, rope, idx, lens, sink, NW: int) -> np.nda
     return (w @ k) / (w.sum(axis=1) + np.exp(sk - m))[:, None]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("seed", range(3))
 def test_the_decode_is_softmax_with_the_sink(seed):
     """A token's 16 heads over the 128-row window and 512 compressed rows, in one split and in the 10 a lone request gets: each
@@ -253,7 +254,7 @@ SMALL = [BF.F32GeuV2, BF.U32GeV2, BF.E8m0ToBf16V2, BF.FlashMlaRowValidV2, bind(B
          bind(BF.NvFdividefRcpV2)]
 
 
-@pytest.mark.parametrize("target", SMALL, ids=[t.id for t in SMALL])
+@pytest.mark.parametrize("target", [pytest.param(t, marks=pytest.mark.slow) if t.id == 'NvLog2f_v2' else t for t in SMALL], ids=[t.id for t in SMALL])
 def test_the_small_boolean_definitions_are_their_words(target):
     word = word_of(target)
     assert SW.boolean_version(word).id == target.id

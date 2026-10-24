@@ -1,0 +1,25 @@
+{
+ "schema": "verity-vllm/advice-registration/v1",
+ "scheme": "verity-vllm/advice-windows/advice/v1",
+ "binding": {
+  "compiler": {
+   "name": "verity_vllm.predict.steps.compile_steps",
+   "digest": "8a6a4aea8cffb459d6432d50a250d4f7423ae18a79ab3418d4a8eecc50544872f4f1735a674844137f3d41e3151531e4c8957bb2abbd3e339112270097c30e43"
+  },
+  "advice": {
+   "root": "b2ea9ca32f4a669d881aa00affbe7919813025885bdb900404aec5727060232ccca0d7a5b1f6932eda2450464d75d485d8c32b82257534ca3acd9f36c0674206",
+   "bits": 2392
+  }
+ },
+ "rows": 10,
+ "row_bits": 256,
+ "T": 600,
+ "bits_by_window": {
+  "0": 2392
+ },
+ "window": 2,
+ "commit": {
+  "run_id": "r20261024-094558-6d6a/w2",
+  "run_root": "b9d184848c0022a6252853b57b791e96662c71f18fecd8086cf53b8d1f99f917"
+ }
+}
