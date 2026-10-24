@@ -1544,14 +1544,6 @@
   "RecDeploy.PlainLeavesAdmitted": {
    "owner": "@proofs"
   },
-  "Verity.Circuit.InputsAgree": {
-   "owner": "@proofs",
-   "digest": "cf654f484182486a9c4bded7e33bb67077ec7112c33fd7f3bff30edeb0bd1492"
-  },
-  "Verity.Declaration.Contains": {
-   "owner": "@lean",
-   "digest": "6c8b0ffd3222a58091c7755158d171c1f1f37b959832b0ad5b40c4452c431481"
-  },
   "Verity.Advice.Framing.Separated": {
    "owner": "@proofs",
    "digest": "dc1f4d0a4a15ace01f66c01cd5abecd294a034b491eb78f2f8d3bce689b6c1fb"
@@ -1571,6 +1563,14 @@
   "Verity.Assumptions.StepInputs": {
    "owner": "@proofs",
    "digest": "5fda9d81977beec15d1c065e80343e09939aaa17ea6a91b79ee8765188e9a36d"
+  },
+  "Verity.Circuit.InputsAgree": {
+   "owner": "@proofs",
+   "digest": "cf654f484182486a9c4bded7e33bb67077ec7112c33fd7f3bff30edeb0bd1492"
+  },
+  "Verity.Declaration.Contains": {
+   "owner": "@lean",
+   "digest": "6c8b0ffd3222a58091c7755158d171c1f1f37b959832b0ad5b40c4452c431481"
   },
   "Verity.Partition.Fits": {
    "owner": "@proofs",
