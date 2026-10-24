@@ -2,9 +2,10 @@
 (time-held and link-charged, each read held over time and at the passes, exact) with its groups' times read from what
 the auditor's host signed rather than from the verifier's stamps.
 
-**Who computes it** (`line_by`, `LINE_BY`). The Lean verifier (`remote-audit-verifier`'s `line` request,
-`RemoteAudit.Line.line` with its W from `RemoteAudit.Pooled`) computes each session's line from the inputs
-`verifier.recorded_inputs` reads from the record, and `remote_bandwidth.line` computes it beside it from the same JSON:
+**Who computes it** (`line_by`, `LINE_BY`). The Lean verifier (`remote-audit-verifier`'s `line_record` request,
+`RemoteAudit.Line.lineOfRecord` with its W from `RemoteAudit.Pooled`) computes each session's line off its record from
+the inputs `verifier.recorded_inputs` reads, and `remote_bandwidth.line` computes it beside it from the same JSON
+(`line.line_of_record`):
 the two are compared exactly, every rational as text in lowest terms and every integer, and a session where they
 differ refuses the run's line, naming both values (`Disagree`). Floats appear only as the exact shares correctly
 rounded for display. `--line-by python` computes it in `line.py` alone, a reading that is never of record: the
@@ -19,9 +20,11 @@ and whose close, record and refused hellos the auditor's ledger sealed at the se
 So L_g = max(A_g, s_(g+1)) − s_g on the challenger's clock holds group g's reads: they come after its coin, whose seed
 they take, and before its last root, which chains them.
 
-Beside the times the line reads the verifier's record of the session (`verifier.json`): its verdict, each group's
-passes and held bytes (`ledger.memory`), and its windows' receipts and draws, whose pooled bound
-(`remote_bandwidth.pooled`) is its wrong receipts. The verifier runs on the audit's machine, not
+Beside the times the line reads the Lean verifier's record of the session (`verifier.lean_record`, `verifier.json`'s
+`lean_record`): each group's passes, its windows' receipts and draws, whose pooled bound (`remote_bandwidth.pooled`)
+is its wrong receipts, and its registered blocks, the registration's; and the verifier's verdict, and each group's
+held bytes by kind (`ledger.memory`), which the record doesn't hold (they need each pass's plan and the store's
+regions). The verifier runs on the audit's machine, not
 the auditor's host, so these rest on its verdict, which the session's transcript (`verifier.py --transcript`) lets the
 auditor replay offline (the remote audit's `lean/tests/replay.py transcript`). The verifier's stamps are read only to
 cross-check the challenger's: each coin interval on both clocks, their rates, and each group's L on both.
@@ -259,13 +262,16 @@ def differ(lean: object, python: object, at: str = "") -> tuple[str, object, obj
 
 
 def line_of_record(inputs: dict, lean: lv.Lean | None) -> dict:
-    """The line of `inputs` (`line.inputs_json`'s form) as `line.run_json` writes it: with `lean`, the Lean verifier's
-    answer to `line`, held exactly to `line.py`'s on the same inputs (`differ`), or `Disagree` naming both values;
-    with none, `line.py`'s alone. A line both refuse, with the same reason, is `line.Refused`."""
-    python = line.run_json(inputs)
+    """The line of `inputs` as `line.run_json` writes it, read off the Lean verifier's record in the record form
+    (`line.record_inputs_json`'s, the Lean verifier's `line_record`), or of groups and windows given
+    (`line.inputs_json`'s, its `line`): with `lean`, the Lean verifier's answer, held exactly to `line.py`'s on the
+    same inputs (`differ`), or `Disagree` naming both values; with none, `line.py`'s alone. A line both refuse, with
+    the same reason, is `line.Refused`."""
+    op, run = ("line_record", line.record_run_json) if "record" in inputs else ("line", line.run_json)
+    python = run(inputs)
     got = python
     if lean is not None:
-        got = lean.call({"op": "line", **inputs})
+        got = lean.call({"op": op, **inputs})
         if not isinstance(got, dict) or ("refused" in got) != ("refused" in python):
             raise Disagree(f"the Lean's line and line.py's disagree: the Lean's {outcome(got)}, line.py's "
                            f"{outcome(python)}")
@@ -605,7 +611,7 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
             continue
         seen, row["named"] = auditor_seen(log, s["windows_seen"])
         a = copy.deepcopy(s)
-        a["windows_seen"] = seen
+        a["lean_record"], a["windows_seen"] = V.lean_record(s), seen
         row["groups"] = len(seen)
         row["shares_auditor_clock"] = shares(a, reg, host_bytes, rates, lean)
         row["shares_verifier_clock"] = shares(s, reg, host_bytes, rates, lean)
