@@ -49,6 +49,7 @@ import json
 import os
 import secrets
 import shutil
+import socket
 import sys
 import tempfile
 import time
@@ -410,10 +411,18 @@ def _certificate(c) -> dict:
     return {k: (v.hex() if isinstance(v, bytes) else getattr(v, "code", v)) for k, v in asdict(c).items()}
 
 
+def _free_port() -> int:
+    """A loopback port the OS has free now. A pool's slots share a machine, so a fixed port collides across runs."""
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
 def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path, port: int) -> dict:
     """The member's link-windows on its own stream, in order: register, select, prove the statement live behind the
     firewall, deliver, and decide on the proof (`LinkWindows.outcome`); then its network verdict. Writes what the
-    verifier receives under ``out / "verifier"`` (`RECEIVED`), each file prefixed by its window."""
+    verifier receives under ``out / "verifier"`` (`RECEIVED`), each file prefixed by its window. Window j's session
+    listens on ``port + j``, or with ``port`` 0 on a port the OS picks free."""
     lw = rd.lw
     stream = lw.stream(budget=rd.plan["windows"], delta=cs.DELTA, challenger="n2-zk", coins=cs._no_coins,
                        clock=time.monotonic)
@@ -432,7 +441,7 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
             raise SystemExit(f"{name} window {x.window}: the stream drew {list(draw.units)}, not the one unit")
         sdir = wdir / "session"
         m = {"dir": x.statement.dir, "n": 1, "pin": sg.st.pin}
-        record, live, proc = M.a8.session(av, m, sdir, [0], port + j, env=env)
+        record, live, proc = M.a8.session(av, m, sdir, [0], port + j if port else _free_port(), env=env)
         sessions = tuple(sorted(p.parent for p in (sdir / "sessions").glob("*/session.json")))
         delivered = SVC.Delivered(M.PF.Proof(sg.circuit, x.statement.dir / "pub-1.bin", sessions), x.statement.salts,
                                   x.statement.output)
@@ -545,7 +554,7 @@ def prove(a) -> int:
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
 
     def go(k: int, name: str) -> tuple[str, dict]:
-        res = member(M, a, sg, name, members[name], out / name, a.port + 100 * k)
+        res = member(M, a, sg, name, members[name], out / name, a.port + 100 * k if a.port else 0)
         res["received"] = _member_scan(M, sg, members[name], out / name)
         return name, res
 
@@ -584,7 +593,8 @@ def main(argv=None) -> int:
     p.add_argument("--bin")
     p.add_argument("--lean")
     p.add_argument("--out", required=True)
-    p.add_argument("--port", type=int, default=7681)
+    p.add_argument("--port", type=int, default=0,
+                   help="member k's window j listens on PORT + 100k + j; 0 (the default): a free port for each session")
     p.add_argument("--jobs", type=int, default=4, help="members proved at once")
     p.add_argument("--debug-clear", action="store_true",
                    help="each verdict also carries the in-the-clear check on the opening, which decides nothing")
