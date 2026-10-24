@@ -43,35 +43,39 @@ theorem depends_of_read {C : Prog} {g : ℕ} {x : BGate} (hx : C.gates[g]? = som
     Depends C i g :=
   Relation.ReflTransGen.single (by simp [hx, hi])
 
-theorem valOver_eq (C : Prog) (inp : ℕ → Bool) (free : ℕ → Option Bool) (g : ℕ) :
-    valOver C inp free g =
-      match free g with
-      | some b => b
-      | none =>
-        match C.gates[g]? with
-        | some x =>
-          (x.val (fun i => if _h : i < g then some (valOver C inp free i) else some false) (some (inp g))).getD false
-        | none => false := by
+theorem valOver_of_some (C : Prog) (inp : ℕ → Bool) {free : ℕ → Option Bool} {g : ℕ} {b : Bool}
+    (hf : free g = some b) : valOver C inp free g = b := by
   rw [valOver]
+  simp only [hf]
+
+theorem valOver_of_none_none (C : Prog) (inp : ℕ → Bool) {free : ℕ → Option Bool} {g : ℕ}
+    (hf : free g = none) (hx : C.gates[g]? = none) : valOver C inp free g = false := by
+  rw [valOver]
+  simp only [hf, hx]
+
+theorem valOver_of_none_some (C : Prog) (inp : ℕ → Bool) {free : ℕ → Option Bool} {g : ℕ} {x : BGate}
+    (hf : free g = none) (hx : C.gates[g]? = some x) :
+    valOver C inp free g =
+      (x.val (fun i => if _h : i < g then some (valOver C inp free i) else some false) (some (inp g))).getD false := by
+  rw [valOver]
+  simp only [hf, hx]
 
 /-- Inputs that agree on every gate `g` depends on give `g` one value. -/
 theorem valOver_congr_inp (C : Prog) {inp inp' : ℕ → Bool} (free : ℕ → Option Bool) (g : ℕ)
     (h : ∀ i, Depends C i g → inp i = inp' i) : valOver C inp free g = valOver C inp' free g := by
   induction g using Nat.strong_induction_on with
   | _ g ih =>
-    rw [valOver_eq C inp free g, valOver_eq C inp' free g]
     rcases hf : free g with _ | b
     · rcases hx : C.gates[g]? with _ | x
-      · rfl
-      · simp only
-        rw [h g Relation.ReflTransGen.refl]
+      · rw [valOver_of_none_none C inp hf hx, valOver_of_none_none C inp' hf hx]
+      · rw [valOver_of_none_some C inp hf hx, valOver_of_none_some C inp' hf hx, h g Relation.ReflTransGen.refl]
         congr 1
         apply bgate_val_congr x
         intro i hi
         split_ifs with hig
         · rw [ih i hig fun j hj => h j (hj.trans (depends_of_read hx hi))]
         · rfl
-    · rfl
+    · rw [valOver_of_some C inp hf, valOver_of_some C inp' hf]
 
 /-! ### Causality: a step's egress reads no later ingress -/
 
@@ -134,18 +138,17 @@ theorem valOver_hold (C : Prog) (inp inpF : ℕ → Bool) (free : ℕ → Option
   induction g using Nat.strong_induction_on with
   | _ g ih =>
     by_cases hgG : g ∈ G
-    · rw [valOver_eq C inp free' g]
-      simp only [hfree', hgG, ↓reduceIte]
+    · have hf' : free' g = some (valOver C inpF free g) := by simp only [hfree', hgG, ↓reduceIte]
+      rw [valOver_of_some C inp hf']
       exact valOver_congr_inp C free g fun i hi => hagree i (hi.trans hg)
     · have hf : free g = none := by
         rcases hfg : free g with _ | b
         · rfl
         · exact absurd (hG g b hfg) hgG
-      rw [valOver_eq C inp free g, valOver_eq C inp free' g]
-      simp only [hf, hfree', hgG, ↓reduceIte]
+      have hf' : free' g = none := by simp only [hfree', hgG, ↓reduceIte]
       rcases hx : C.gates[g]? with _ | x
-      · rfl
-      · simp only
+      · rw [valOver_of_none_none C inp hf hx, valOver_of_none_none C inp hf' hx]
+      · rw [valOver_of_none_some C inp hf hx, valOver_of_none_some C inp hf' hx]
         congr 1
         apply bgate_val_congr x
         intro i hi
