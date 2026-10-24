@@ -47,15 +47,11 @@ the session, 20 steps, decisions `[0]*6 + [1] + [0]*6 + [1]`.
   (`verity/core/protocols/certifier/tests/test_network_certifier_compile_slice_w212.py`).
 - `ReplayStep_v1` at AS = 1 is w212's served scheduler on all 22 of its async units, circuit and reference
   (`benchmarks/network_e2e/encodings/tests/test_served_window.py`).
-- The statics are public, so a window proved at its own class shows its counts (3 requests, 20 steps). A session
-  proves every window at one class, padded with idle steps and empty slots, and that shows only the session's
-  maximum: 8eb1's engine class in the table below.
-
-**w212 at the class** (`verity/core/protocols/certifier/tests/fixtures/compile_slice_w212_class.json`, from
-`--slice 212 --served SEAL --R 8 --W 1 --A 9 --Q 4 --D 32 --P 54 --K 4`) is w212 padded into 8eb1's engine class: its 3
-arrivals in 4 slots, its 14 decisions in 32, and 34 idle steps after its 20, whose served rows are zero.
-- The slice takes it as it is: its reference accepts the window with the seal's rows (0x1F), and each negative fails
-  the flags it fails at w212's own statics (the same tests, over both fixtures).
+- At 8eb1's engine class, w212 is `verity/core/protocols/certifier/tests/fixtures/compile_slice_w212_class.json`
+  (`--slice 212 --served SEAL --R 8 --W 1 --A 9 --Q 4 --D 32 --P 54 --K 4`): its 3 arrivals in 4 slots, its 14
+  decisions in 32, and 34 idle steps after its 20, whose served rows are zero. The slice takes it as it is: its
+  reference accepts the window with the seal's rows (0x1F), and each negative fails the flags it fails at w212's own
+  statics (the same tests, over both fixtures).
 - Its circuit isn't built at the class yet. The builder's wires are GF(2) forms over committed bits, and the coding
   carries the coder's state (`low`, `high`, `x`, `used`), the KT counts and the code position from ask to ask without
   committing them, so each ask adds about 19 bits to their forms. The class has P·A = 486 asks, so the build's nonzeros
@@ -63,6 +59,9 @@ arrivals in 4 slots, its 14 decisions in 32, and 34 idle steps after its 20, who
   and at P = 54 the build passed 352 GB unfinished (run r20261024-184641-e2af). Committed once an ask
   (`Circuit.commit`), they keep the forms linear in the window: nnz_AB is 4.6 million at P = 2 and 24.3 million at
   P = 8.
+- The statics are public, so a window proved at its own class shows its counts (3 requests, 20 steps). A session
+  proves every window at one class, padded with idle steps and empty slots, and that shows only the session's
+  maximum: 8eb1's engine class in the table below.
 
 **Cost at the served shapes** (run r20261024-175929-6f49). A step unit is `ReplayStep_v1` and `ReplayAdvance`, and a
 window is P step units and one `ReplayLoad`. Under async scheduling a unit is a `schedule()` and the update of the
