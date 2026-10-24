@@ -465,11 +465,16 @@ def _wires(low: IL.Lowering, tail) -> list:
 
 
 def _ret_ports(st) -> list:
-    """META ``out_net_ports``: each output word's port of the last stage, in output order; a repeated stage's as ``[slot, port]``."""
+    """META ``out_net_ports``: each output word's port of the last stage, in output order; as ``[slot, port]`` for a repeated
+    stage, or for a one-slot stage whose ports aren't its only outputs or number no power of two (the verifier's plain form
+    is the stage's whole output group, ``16 * words`` a power of two; the slotted form, of a statement with hidden outputs,
+    asks neither)."""
     at = {tag[1]: (s, j) for s in range(st.count) for j, tag in enumerate(st.tags(s)[1]) if tag[0] == "ret"}
     if sorted(at) != list(range(len(at))):
         raise ValueError("the last stage's returned outputs are not each output word once")
-    return [at[o][1] if st.count == 1 else list(at[o]) for o in range(len(at))]
+    n = len(at)
+    plain = st.count == 1 and [at[o][1] for o in range(n)] == list(range(len(st.tags(0)[1]))) and n & (n - 1) == 0
+    return [at[o][1] if plain else list(at[o]) for o in range(n)]
 
 
 def _row_slots(ports: list[Port]) -> tuple[int, list[list[tuple[int, int]]]]:

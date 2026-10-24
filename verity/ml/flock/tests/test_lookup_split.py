@@ -2,7 +2,8 @@
 and the reads' values evaluated in turn), reads a depth-0 bit as a cut word and hands a later bit on as a pass port; a read
 of a table without a lookup slot is refused; and `UnitStager` with ``lookups`` composes the general instance form (META's
 lookups, the last stage returning the outputs, every wire's source and destination ports one width) and stages the IR
-reference's outputs."""
+reference's outputs; the last stage's returned words are `[slot, port]` pairs where the verifier's plain form
+(every output of the stage, a power of two of them) does not fit."""
 from __future__ import annotations
 
 import json
@@ -104,3 +105,17 @@ def test_a_stager_with_lookup_slots_composes_the_instance_form_and_stages_the_re
     assert json.loads((tmp_path / "circuit.txt").read_text().split("\n", 2)[1][5:])["lookups"]["ex2"]["in_bits"] == 23
     counts = LS.counts(st.low)
     assert counts["lookup:ex2"]["per_vu"] == 2 and counts["nnz"] < 1 << 32
+
+
+def test_the_last_stages_returned_words_are_slotted_where_the_plain_form_does_not_fit():
+    from verity_flock import tail as TL
+
+    def stage(outs):
+        st = TL.Stage(None)
+        st.outs = outs
+        return st
+
+    assert FC._ret_ports(stage([("ret", 0), ("ret", 1)])) == [0, 1]
+    assert FC._ret_ports(stage([("ret", 1), ("ret", 0)])) == [[0, 1], [0, 0]]
+    assert FC._ret_ports(stage([("ret", o) for o in range(3)])) == [[0, 0], [0, 1], [0, 2]]
+    assert FC._ret_ports(stage([("pass", 0), ("ret", 0), ("ret", 1)])) == [[0, 1], [0, 2]]
