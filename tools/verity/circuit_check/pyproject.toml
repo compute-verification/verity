@@ -49,10 +49,13 @@ worker_gb = 54
 # test_sampled_replay.py (test_circuit_check.py's request Program). Read only to check the catalog's records (conftest.py):
 # pouw/window.py and sampled_proofs/service.py, which the records digest as import sites of the PoUW modules they hold
 # (`units._unchanged`), and which a whole build never imports. pouw/weights.py and sampled_proofs/__init__.py: h1zy reads an
-# H1 lane's chunks along K from weights (`chunks`), and weights imports one_stage.
+# H1 lane's chunks along K from weights (`chunks`), and weights imports one_stage. The certifier and sampled proofs are whole
+# directories, with protocols/profile.py: a certifier sidecar's module imports across both (io_tie's: certifier/active.py, audit,
+# commitment, online, profile.py, sampled_proofs/{challenger,coins,remote}), so a new sidecar there needs no line of its own.
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/ml/__init__.py",
           "verity/core/protocols/sampled_proofs/__init__.py",
+          "verity/core/protocols/certifier", "verity/core/protocols/sampled_proofs", "verity/core/protocols/profile.py",
           "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/kernels", "verity/ml/private_circuits",
           "verity/ml/randomness", "verity/ml/flock/python/verity_flock",
           "verity/core/protocols/pouw/__init__.py", "verity/core/protocols/pouw/audit.py", "verity/core/protocols/pouw/salt.py",
