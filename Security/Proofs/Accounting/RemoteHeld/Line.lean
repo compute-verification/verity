@@ -167,10 +167,12 @@ theorem wrong_le_line {n m : ℕ} {k : Fin n → ℕ} {X : Fin n → Type} {D : 
     ∀ l, lineOf node (rec ω) = .ok l → (T.wrong ω : ℝ) ≤ l.wrong := fun l hline => by
   unfold lineOf at hline
   rw [hD ω ha] at hline
-  exact hw.trans (Properties.RemoteAudit.lineCoversSession n m k X D ω node.delta _ _ _ _ _ _ _ l hline)
+  have hc := Properties.RemoteAudit.lineCoversSession n m k X D ω node.delta _ _ _ _ _ _ _ l hline
+  rw [Rat.cast_nnratCast] at hc
+  exact hw.trans hc
 
 /-- The node's `δ` is nonnegative, in the reals. -/
-theorem delta_nonneg (node : Node) : (0 : ℝ) ≤ (node.delta : ℝ) := Rat.cast_nonneg.2 node.delta_mem.1.le
+theorem delta_nonneg (node : Node) : (0 : ℝ) ≤ (node.delta : ℝ) := NNRat.cast_nonneg _
 
 /-- **The memory line of record, link-charged** (`LineHeld`), proved. -/
 theorem lineHeld : LineHeld := by

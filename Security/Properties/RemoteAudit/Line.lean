@@ -18,8 +18,8 @@ the record:
   `SketchBound` at `δs`, and the draw's `Live`, `Refused`, `Counted`) and the record's code-to-model premises
   (`Registered`, `WindowsOfRecord`, `DrawsOfRecord`, `Properties.RemoteAudit.Line.Premises`), the probability that the
   Lean verifier accepts the record's session and the record's line credits a stretch more than the trace held over its
-  span (`Credits`) is at most `δs + δ`, `δ` the one the line reads its pooled bound at (`Node.delta`, above 0 and below
-  1 as the line requires). The rates are the node's in the model's units, a tick a
+  span (`Credits`) is at most `δs + δ`, `δ` the one the line reads its pooled bound at (`Node.delta`, a nonnegative
+  rational; the line computes at none outside `(0, 1)`). The rates are the node's in the model's units, a tick a
   nanosecond (`Node.squarings` … `Node.chipBlocks`), and the openings' law is the model's
   (`Accounting.Remote.Draw.Openings`).
 * **LineHeldIdentity** (time-held, `forms[0]`): the same under Identity, no block coming in over the links.

@@ -11,8 +11,8 @@ What a gate run's memory line (`RemoteAudit.Line.line`) reads of one session, an
 * `Node`: what is fixed before the coins: the session's windows (one group each), the groups a stretch, the registered
   blocks, a block's bytes, the node's on-chip storage and memory in bytes, its rates (`RemoteAudit.Line.Rates`) and the
   δ the line reads its pooled bound at. `Node.squarings` … `Node.chipBlocks` are those rates in the model's units: a
-  tick is a nanosecond on the record's clock and a block is `blockBytes`. Its δ is above 0 and below 1 (`delta_mem`),
-  the only δ the line computes at.
+  tick is a nanosecond on the record's clock and a block is `blockBytes`. Its δ is a nonnegative rational (`ℚ≥0`):
+  the line computes at no δ outside `(0, 1)`.
 * `Record`: what one outcome gives the line: the verifier's inputs (its parameters, registration, coins, the earliest
   coin release and the session's events in order), the groups (`RemoteAudit.Line.Group`: each window's coin release and
   last root, its passes and their reads by kind) and the windows' receipts and draws, from which the line computes
@@ -43,10 +43,9 @@ structure Node where
   chipBytes : ℕ
   nodeBytes : ℕ
   rates : Rates
-  /-- the δ the line reads its pooled bound at -/
-  delta : ℚ
-  /-- the line reads its pooled bound at no other δ (`Pooled.pooled` refuses it, `line_delta`) -/
-  delta_mem : 0 < delta ∧ delta < 1
+  /-- the δ the line reads its pooled bound at, a nonnegative rational: the line computes at none outside `(0, 1)`
+  (`Pooled.pooled` refuses it, `line_delta`) -/
+  delta : ℚ≥0
 
 /-- What the line reads of one outcome: the verifier's inputs, the groups and each window's receipts and draws. -/
 structure Record where
