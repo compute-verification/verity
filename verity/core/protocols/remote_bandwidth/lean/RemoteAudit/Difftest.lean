@@ -1,4 +1,5 @@
 import Difftest
+import RemoteAudit.Line
 import RemoteAudit.Registry
 import RemoteAudit.Store
 
@@ -12,8 +13,9 @@ opening, a leaf's receipt, a window's draws and a registration's digest), the re
 with its codec seed, the verifier's registry (`registry`: registrations, sessions over them and their events,
 closes, and `registry/v0` both ways), and `store.py`'s binding (`RemoteAudit.Store`: a pin from its file's bytes,
 canonical JSON, `checkpoint_sha512`, a payload salt, the expected root, `Binding.hold`, and `binding`, the binding as
-the verifier's process starts it and holds each hello to it, its `bind` and `hold` requests), whose refusals are
-outputs (`{"refused": why}`), so their reasons are compared. `remote-audit-difftest` serves them.
+the verifier's process starts it and holds each hello to it, its `bind` and `hold` requests), and `line.py`'s memory
+line (`line`, `RemoteAudit.Line`: rationals as strings `n` or `n/d`), whose refusals are outputs (`{"refused": why}`),
+so their reasons are compared. `remote-audit-difftest` serves them.
 -/
 
 namespace RemoteAudit.Difftest
@@ -433,12 +435,71 @@ def bindingFn (j : Json) : V Json := do
     | .error _ => pure #[]
   pure (Json.mkObj [("bind", boundJ b), ("holds", .arr holds)])
 
+private def ratIn (j : Json) (k ctx : String) : V Rat := do
+  match ← J.get j k ctx with
+  | .num n => pure ((← J.asInt (.num n) s!"{ctx}.{k}" : Int) : Rat)
+  | .str s => match Line.ratOf? s with
+    | some q => pure q
+    | none => throw s!"{ctx}.{k}: a rational is a string n or n/d, d positive"
+  | _ => throw s!"{ctx}.{k}: not an integer or a string"
+
+private def groupOf (j : Json) : V Line.Group := do
+  pure
+    { releasedNs := ← J.nat j "released_ns" "group"
+      lastNs := ← J.nat j "last_ns" "group"
+      passes := ← J.nat j "passes" "group"
+      least := ← J.nat j "least" "group"
+      weights := ← J.nat j "weights" "group"
+      hbm := ← J.nat j "hbm" "group"
+      host := ← J.nat j "host" "group" }
+
+private def ratJ (q : Rat) : Json := .str (toString q)
+
+private def readingJ (r : Line.Reading) : Json :=
+  Json.mkObj [("filler", ratJ r.filler), ("hbm", ratJ r.hbm), ("lost_blocks", ratJ r.lost), ("weights", ratJ r.weights)]
+
+private def stretchJ (x : Line.Stretch) : Json :=
+  Json.mkObj [("fill", ratJ x.fill),
+    ("held", Json.mkObj [("hbm", ratJ x.hbm), ("host", ratJ x.host), ("weights", ratJ x.weights)]),
+    ("hi", toJson x.hi), ("l_max_ns", toJson x.lMaxNs), ("l_sum_ns", toJson x.lSumNs), ("lo", toJson x.lo),
+    ("passes", toJson x.passes), ("rebuild_blocks", ratJ x.rebuild), ("snapshot", readingJ x.snapshot),
+    ("span_ns", toJson x.spanNs), ("stretch", toJson x.stretch), ("time", readingJ x.time)]
+
+private def formJ (nodeBytes : Nat) (f : Line.Form) : Json :=
+  let reading (time : Bool) : Json :=
+    let x := Line.worst f.stretches time
+    let r := x.reading time
+    let share (q : Rat) : Json := ratJ (q / (nodeBytes : Rat))
+    Json.mkObj [("filler_share", share r.filler), ("hbm_share", share r.hbm), ("stretch", toJson x.stretch),
+      ("weights_share", share r.weights)]
+  Json.mkObj [("burst", ratJ f.charge.burst), ("rate", ratJ f.charge.rate),
+    ("stretches", .arr (f.stretches.map stretchJ)), ("time", reading true), ("snapshot", reading false)]
+
+/-- `line.run_json`: the line of `{"groups", "per", "blocks", "block_bytes", "chip_bytes", "node_bytes", "wrong",
+"rates"}` in both forms, or why it has none. -/
+def lineFn (j : Json) : V Json := do
+  let groups ← (← J.arr j "groups" "input").mapM groupOf
+  let r ← J.get j "rates" "input"
+  let rates : Line.Rates :=
+    { squaringsPerS := ← ratIn r "squarings_per_s" "rates"
+      encodeSquarings := ← J.nat r "encode_squarings" "rates"
+      diskBytesPerS := ← ratIn r "disk_bytes_per_s" "rates"
+      linkBytesPerS := ← ratIn r "link_bytes_per_s" "rates"
+      rebuildBurstBytes := ← ratIn r "rebuild_burst_bytes" "rates"
+      diskBurstBytes := ← ratIn r "disk_burst_bytes" "rates"
+      linkBurstBytes := ← ratIn r "link_burst_bytes" "rates" }
+  let got := Line.line groups (← nat j "per") (← nat j "blocks") (← nat j "block_bytes") (← nat j "chip_bytes")
+    (← nat j "node_bytes") (← ratIn j "wrong" "input") rates
+  pure (refusedOr ((fun (l : Line.Line) => Json.mkObj (l.forms.toList.map fun (f : Line.Form) =>
+    (f.name, formJ l.nodeBytes f))) <$> got))
+
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("session", sessionFn), ("registration_digest", registrationDigestFn), ("register", registerFn),
   ("registry", registryFn), ("codec_decode", codecDecodeFn),
   ("plan", planFn), ("plan_changed", planChangedFn), ("receipt", receiptFn), ("verify_opening", verifyOpeningFn),
   ("leaf_receipt", leafReceiptFn), ("draws", drawsFn),
   ("pin", pinFn), ("canonical_json", canonicalJsonFn), ("checkpoint_sha512", checkpointFn),
-  ("store_salt", storeSaltFn), ("expected_root", expectedRootFn), ("hold", holdFn), ("binding", bindingFn)]
+  ("store_salt", storeSaltFn), ("expected_root", expectedRootFn), ("hold", holdFn), ("binding", bindingFn),
+  ("line", lineFn)]
 
 end RemoteAudit.Difftest

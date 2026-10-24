@@ -117,13 +117,14 @@ import secrets
 import sys
 import threading
 import time
+from fractions import Fraction
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.core.protocols.remote_bandwidth import audit, coins, ledger, timing  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit, coins, ledger, line, timing  # noqa: E402
 from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
 
 import challengers  # noqa: E402
@@ -410,6 +411,27 @@ def pace_of(spec: str, pass_ms: float) -> dict:
             "draws": math.ceil(draws_t / groups), "pass_ms": pass_ms}
 
 
+def paced_groups(mem: dict, seen: list[dict], *, block_bytes: int) -> list[line.Group]:
+    """A paced session's groups as its line reads them (`line.Group`), from its memory windows (`memory`'s, one a
+    group) and the windows it saw: each one's coin's release, its last root's arrival (its coin's, with no root),
+    its passes, the registered blocks its least pass read (`held`), and each kind's blocks its passes read in all,
+    which their mean a pass (`average`'s `held`) gives back exactly or the group is refused."""
+    b = block_bytes
+    if len(mem["windows"]) != len(seen):
+        raise ValueError(f"a memory window for each group: {len(mem['windows'])} for {len(seen)} groups")
+    out = []
+    for g, (x, w) in enumerate(zip(mem["windows"], seen)):
+        n, least, mean = w["passes"], x["held"]["hbm"] + x["held"]["host"], x["average"]["held"]
+        read = {k: round(mean[k] * n / b) for k in ("weights", "hbm", "host")}
+        if least % b or any(read[k] * b / n != mean[k] for k in read):
+            raise ValueError(f"group {g}'s held bytes are no whole number of blocks: its least pass's {least} and "
+                             f"its mean a pass {mean} over {n} passes of {b}-byte blocks")
+        released = w["released_ns"]
+        out.append(line.Group(released, w["arrivals_ns"][-1] if w["arrivals_ns"] else released, n, least // b,
+                              read["weights"], read["hbm"], read["host"]))
+    return out
+
+
 def ingress_bursts(ingress_bytes_per_s: float, disk_bytes_per_s: float = DISK_BYTES_PER_S) -> float:
     """B, the bytes the routes back into node memory bring at once beyond their rates at an ingress charge of
     `ingress_bytes_per_s`, `ledger.Node.stated`'s bursts: one rebuild batch in flight (S_chip), one second at the disks'
@@ -424,90 +446,47 @@ def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks
                chip_bytes: int, block_bytes: int, node_bytes: int, burst_bytes: float,
                ingress_per_ns: float = 0.0) -> dict:
     """A paced session's memory line over each stretch of `groups` groups (all but the closing stretch), on the
-    verifier's clock, in two forms.
-
-    Group g's coin left at s_g (its `released_ns`) and its seeds take it, so its reads come after s_g, and before its
-    last root's arrival, by the chain.  So L_g = max(its last root's arrival, s_(g+1)) − s_g holds every read of g and
-    the gaps around them, and a block read in passes p < p' lies absent between them for at most the L of every group
-    from p's to p''s.  Snapshot (`AVERAGE`): the mean bytes of each kind a pass read, less `wrong`/P (`wrong`, the
-    session's pooled wrong receipts, `audit.pooled`), the rebuilds over its passes and the chip.  The stretch's reads
-    lie in [s_lo, e_(hi−1)], up to L_max outside Σ at either end, so the rebuilds that serve them are X_r·(Σ + 2·L_max).
-
-    Held over time (`TIME_HELD`): at each instant a block is in node memory, on chip (at most S_chip blocks at once), or
-    absent.  An absent stretch of a block lies between a pass of group a and its next correct read, in group c, every
-    pass between them reading it wrong, so it lasts at most e_c − s_a = Δ_a + L_c + Σ Δ_g over the groups a < g < c,
-    each of whose n_g passes read the block wrong (Δ_g = s_(g+1) − s_g ≤ L_g, e_g = s_g + L_g).  Its next correct read
-    is a rebuild, at most X_r·(Σ + 2·L_max) of them, each ending one absent stretch of at most 2·L_max plus those
-    groups; a stretch still absent at the stretch's end ends in no rebuild, so the group after it (`hi`) is all wrong
-    and pays its L_max.  Those wrong reads pay Δ_g/n_g each, L_max/n_hi in `hi`, and the session's `wrong` receipts are
-    spread over the groups at those rates, highest first, at most N a pass.  So the time a block is absent, summed over
-    blocks, is at most 2·L_max·X_r·(Σ + 2·L_max) plus that fill.  It is averaged over the stretch, from the first
-    group's end for the first stretch (before its reads a block may never have been there) to the next stretch's coin,
-    whose reads back it.
+    verifier's clock, in two forms: `line.stretches`' readings held over time (`TIME_HELD`) and at the passes
+    (`AVERAGE`), of its groups (`paced_groups`) with `wrong` the session's pooled wrong receipts (`audit.pooled`), in
+    floats for display.
 
     A block also comes back into node memory, or onto the chip, without a rebuild from the node's own disks, which
     Identity leaves in (they are inside the node), and over its boundary links, which Identity takes as carrying no
-    block.  `ingress_per_ns`, those routes' read ceiling in blocks a ns, counts as rebuilds in both forms: in the
-    time-held one each such block ends an absent stretch of up to 2·L_max, not the τ of the snapshot.  Each route also
-    brings up to its burst at once beyond its rate (`burst_bytes`, B: `SquaringCeiling`, `Disks` and `Links` hold as
-    rate·length + burst, and a burst of 0 states the rate down to one nanosecond), so B/b more blocks come back over the
-    stretch in both forms, each ending an absent stretch of up to 2·L_max in the time-held one: `HeldOverTime`'s
-    2·L·(X·(Σ + 2·L) + B) and `Held`'s X·(e − s₀) + B.
+    block.  `ingress_per_ns`, those routes' read ceiling in blocks a ns, is charged with the rebuilds at
+    `rebuild_per_ns` in both forms, and `burst_bytes` (B, `ingress_bursts`) beyond them: `SquaringCeiling`, `Disks`
+    and `Links` hold as rate·length + burst, and a burst of 0 states the rate down to one nanosecond.  This is the
+    verifier's diagnostic; the line of record (`recorded_line`, `auditor_line.py`) charges each form its own rates and
+    bursts.
 
-    Both forms need every pass to read every registered block: a block a pass leaves out can be absent across that
-    pass with neither a wrong read nor a rebuild.  A session any of whose passes leaves one out (a group's least pass,
-    `memory`'s `held`, short of the store) is refused."""
-    b, N, chip, burst = block_bytes, blocks, chip_bytes / block_bytes, burst_bytes / block_bytes
-    if len(mem["windows"]) != len(seen):
-        raise ValueError(f"a memory window for each group: {len(mem['windows'])} for {len(seen)} groups")
-    for g, x in enumerate(mem["windows"]):
-        if (read := x["held"]["hbm"] + x["held"]["host"]) != N * b:
-            raise ValueError(f"group {g}'s least pass read {read / b:.0f} of the {N} registered blocks: the paced line "
-                             "needs every pass to read every registered block, since a block a pass leaves out can be "
-                             "absent across it with neither a wrong read nor a rebuild")
-    s, n = [w["released_ns"] for w in seen], [w["passes"] for w in seen]
-    ends = [max(w["arrivals_ns"][-1] if w["arrivals_ns"] else s[g], s[g + 1] if g + 1 < len(s) else 0)
-            for g, w in enumerate(seen)]
-    L = [e - x for e, x in zip(ends, s)]
-    gap = [s[g + 1] - s[g] if g + 1 < len(s) else L[g] for g in range(len(seen))]
-    held = [x["average"]["held"] for x in mem["windows"]]
-    stretches = []
-    for m in range(len(seen) // groups - 1):
-        lo, hi = m * groups, (m + 1) * groups
-        start, end = ends[0] if m == 0 else s[lo], s[hi]
-        span, P = end - start, sum(n[lo:hi])
-        l_max = max(L[g] for g in range(max(0, lo - 1), hi + 1))
-        rebuilds = (rebuild_per_ns + ingress_per_ns) * (span + 2 * l_max)
-        v = {g: (l_max if g == hi else gap[g]) / n[g] for g in range(lo, hi + 1)}
-        left, fill = wrong, 0.0
-        for g in sorted(range(lo, hi + 1), key=lambda g: v[g], reverse=True):
-            took = min(left, n[g] * N)
-            fill, left = fill + took * v[g], left - took
-            if left <= 0:
-                break
-        mean = {k: sum(h[k] * c for h, c in zip(held[lo:hi], n[lo:hi])) / P for k in ("weights", "hbm", "host")}
-        lost = {AVERAGE: (wrong + rebuilds + burst) / P + chip,
-                TIME_HELD: chip + (2 * l_max * (rebuilds + burst) + fill) / span}
-        stretches.append({"stretch": m, "groups": [lo, hi], "span_ns": span, "passes": P, "l_max_ns": l_max,
-                          "l_mean_ns": sum(L[lo:hi]) / (hi - lo), "rebuild_blocks": rebuilds,
-                          "ingress_blocks": ingress_per_ns * (span + 2 * l_max), "burst_blocks": burst,
-                          "rebuild_absent_blocks": 2 * l_max * rebuilds / span,
-                          "burst_absent_blocks": 2 * l_max * burst / span, "wrong_absent_blocks": fill / span,
-                          "held": mean, **{form: {"lost_blocks": x, "credited": {
-                              k: max(0.0, mean[k] - x * b) for k in ("weights", "hbm")} | {
-                              "filler": max(0.0, mean["hbm"] - mean["weights"] + mean["host"] - x * b)}}
-                              for form, x in lost.items()}})
+    Both forms need every pass to read every registered block, so a session any of whose passes leaves one out (a
+    group's least pass, `memory`'s `held`, short of the store) is refused (`line.Refused`)."""
+    b, ingress, burst = block_bytes, line.number(ingress_per_ns), line.number(burst_bytes) / block_bytes
+    xs = line.stretches(paced_groups(mem, seen, block_bytes=b), per=groups, blocks=blocks, block_bytes=b,
+                        chip_bytes=chip_bytes, wrong=wrong, node_bytes=node_bytes,
+                        charge=line.Charge(line.number(rebuild_per_ns) + ingress, burst))
+    readings = {AVERAGE: line.SNAPSHOT, TIME_HELD: line.TIME}
+    stretches = [{"stretch": x.stretch, "groups": [x.lo, x.hi], "span_ns": x.span_ns, "passes": x.passes,
+                  "l_max_ns": x.l_max_ns, "l_mean_ns": x.l_sum_ns / (x.hi - x.lo),
+                  "rebuild_blocks": float(x.rebuild_blocks - burst),
+                  "ingress_blocks": float(ingress * (x.span_ns + 2 * x.l_max_ns)), "burst_blocks": float(burst),
+                  "rebuild_absent_blocks": float(2 * x.l_max_ns * (x.rebuild_blocks - burst) / x.span_ns),
+                  "burst_absent_blocks": float(2 * x.l_max_ns * burst / x.span_ns),
+                  "wrong_absent_blocks": float(x.fill / x.span_ns),
+                  "held": {k: float(v * b) for k, v in zip(("weights", "hbm", "host"), x.held)},
+                  **{form: {"lost_blocks": float(r.lost_blocks), "credited": {
+                      "weights": float(r.weights), "hbm": float(r.hbm), "filler": float(r.filler)}}
+                     for form, r in ((form, x.reading(k)) for form, k in readings.items())}} for x in xs]
 
-    def line(form: str) -> dict:
-        worst = min(stretches, key=lambda x: x[form]["credited"]["weights"])
-        w, filler = worst[form]["credited"]["weights"], worst[form]["credited"]["filler"]
-        return {"form": form, "stretch": worst["stretch"], "lost_blocks": worst[form]["lost_blocks"],
-                "weights_bytes": w, "share": w / node_bytes, "hbm_bytes": worst[form]["credited"]["hbm"],
-                "hbm_share": worst[form]["credited"]["hbm"] / node_bytes, "filler_bytes": filler,
-                "filler_share": filler / node_bytes}
+    def worst(form: str) -> dict:
+        x = line.worst(xs, readings[form])
+        r = x.reading(readings[form])
+        return {"form": form, "stretch": x.stretch, "lost_blocks": float(r.lost_blocks),
+                "weights_bytes": float(r.weights), "share": float(r.weights / node_bytes),
+                "hbm_bytes": float(r.hbm), "hbm_share": float(r.hbm / node_bytes), "filler_bytes": float(r.filler),
+                "filler_share": float(r.filler / node_bytes)}
 
-    return {"groups": groups, "wrong": wrong, "chip_blocks": chip, "burst_blocks": burst, "node_bytes": node_bytes,
-            "stretches": stretches, "snapshot": line(AVERAGE), "time": line(TIME_HELD)}
+    return {"groups": groups, "wrong": wrong, "chip_blocks": chip_bytes / b, "burst_blocks": float(burst),
+            "node_bytes": node_bytes, "stretches": stretches, "snapshot": worst(AVERAGE), "time": worst(TIME_HELD)}
 
 
 def recorded_paced(session: dict, registration: dict, *, host_bytes: int, ingress_bytes_per_s: float = 0.0) -> dict:
@@ -518,9 +497,27 @@ def recorded_paced(session: dict, registration: dict, *, host_bytes: int, ingres
     b, codec = mem["block_bytes"], wire.codec_named(registration["codec"])
     return paced_line(mem, session["windows_seen"], groups=session["pace"]["groups"], wrong=lg["paced"]["wrong"],
                       blocks=registration["blocks"],
-                      rebuild_per_ns=lg["inputs"]["squarings_per_s"] / codec.encode_squarings / 1e9,
+                      rebuild_per_ns=line.number(lg["inputs"]["squarings_per_s"]) / codec.encode_squarings / line.NS,
                       chip_bytes=mem["chip_bytes"], block_bytes=b, node_bytes=mem["hbm_bytes"] + host_bytes,
-                      burst_bytes=ingress_bursts(ingress_bytes_per_s), ingress_per_ns=ingress_bytes_per_s / b / 1e9)
+                      burst_bytes=ingress_bursts(ingress_bytes_per_s),
+                      ingress_per_ns=line.number(ingress_bytes_per_s) / b / line.NS)
+
+
+def recorded_rates(session: dict, registration: dict, **node: float) -> line.Rates:
+    """The node's ways back into memory as the line of record reads them (`line.Rates`): the record's squaring ceiling
+    and its codec's encode, and `node`'s disks' and links' ceilings and bursts (`line.RATES`' others)."""
+    return line.Rates(session["ledger"]["inputs"]["squarings_per_s"],
+                      wire.codec_named(registration["codec"]).encode_squarings, **node)
+
+
+def recorded_line(session: dict, registration: dict, *, host_bytes: int, rates: line.Rates) -> line.Line:
+    """An accepted paced session's line in both forms (`line.line`, exact) from its record in `verifier.json`, against
+    its HBM and `host_bytes`, at `rates` (`recorded_rates`); the pooled wrong receipts are the recorded line's."""
+    lg, mem = session["ledger"], session["ledger"]["memory"]
+    return line.line(paced_groups(mem, session["windows_seen"], block_bytes=mem["block_bytes"]),
+                     per=session["pace"]["groups"], blocks=registration["blocks"], block_bytes=mem["block_bytes"],
+                     chip_bytes=mem["chip_bytes"], node_bytes=mem["hbm_bytes"] + host_bytes,
+                     wrong=lg["paced"]["wrong"], rates=rates)
 
 
 class RealClock:
@@ -1358,11 +1355,11 @@ class Verifier:
                     out["ledger"]["paced"] = paced_line(
                         out["ledger"]["memory"], out["windows_seen"], groups=pace["groups"],
                         wrong=audit.pooled(record)[0], blocks=reg.blocks,
-                        rebuild_per_ns=rebuild.squarings_per_s / record.codec.encode_squarings / 1e9,
+                        rebuild_per_ns=line.number(rebuild.squarings_per_s) / record.codec.encode_squarings / line.NS,
                         chip_bytes=timing.CHIP_BYTES, block_bytes=record.block_bytes,
                         node_bytes=self.hbm_bytes + self.host_bytes,
                         burst_bytes=ingress_bursts(self.ingress_bytes_per_s),
-                        ingress_per_ns=self.ingress_bytes_per_s / record.block_bytes / 1e9)
+                        ingress_per_ns=line.number(self.ingress_bytes_per_s) / record.block_bytes / line.NS)
                 except ValueError as e:
                     out["ledger"]["paced"] = {"refused": str(e)}
         return out
