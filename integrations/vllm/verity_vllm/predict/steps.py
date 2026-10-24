@@ -51,7 +51,6 @@ from pathlib import Path
 from typing import Any
 
 from verity.core.protocols.certifier import advice as I1
-
 from verity_vllm.program import prefix_plan as PP
 
 from .build import Unexpressible, build_program, model_shape
