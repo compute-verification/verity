@@ -17,7 +17,8 @@ Timing (CUDA graphs, builds interleaved rep by rep): each call's units alone (`u
 build's), and the step's units stream: 32 layers x the four calls' units in order on two alternating weight copies
 (`step`, 128 launches, what the served units stream runs apart from the z tables). --profile skips the timing and runs
 each gated build's four calls once between torch.cuda.profiler.start and stop (for ncu --profile-from-start off),
-and writes its gates to units-prof.json.
+and writes its gates to units-prof.json; with --multi, each multi-gated build's one layer in one kh_units_multi launch
+after them.
 
 --j10r (with --multi) also gates and times each build's J10-R units (kh_units_multi_j10r, where a build has it) over the
 same calls: every live unit's receipt against j10r_units.py's (J10R's h1tile.j10r_reference receipt), every dead unit's
@@ -465,6 +466,8 @@ def main() -> int:
     timed = [nm for nm in names if nm not in failed]
     if args.profile:
         for nm in timed:
+            mu = Multi(libs[nm], [(calls[x][nm], calls[x][nm].b, calls[x][nm].out) for x in linears]) \
+                if nm in multi_ok else None
             for name in linears:
                 calls[name][nm].run_units()
             torch.cuda.synchronize()
@@ -473,6 +476,10 @@ def main() -> int:
             for name in linears:
                 torch.cuda.nvtx.range_push(f"{nm}/{name}")
                 calls[name][nm].run_units()
+                torch.cuda.nvtx.range_pop()
+            if mu is not None:
+                torch.cuda.nvtx.range_push(f"{nm}/multi")
+                mu.run()
                 torch.cuda.nvtx.range_pop()
             torch.cuda.synchronize()
             torch.cuda.profiler.stop()

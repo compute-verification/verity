@@ -197,6 +197,14 @@ PUT_ASYNC_ENV = "DITHER_SO_PUT_ASYNC"
 # salt is written: the same order (round s, coin, units), without the host's dispatch between them and the units' start.
 # Graph steps only, and never a step that holds a capture or a fault, nor a window's last step's units
 PREQ_ENV = "DITHER_SO_PREQ"
+# "1": a capture's copies go to host memory, not the device (a prefill capture at T = 2048 is ~30 GB); `DA.check` moves
+# each call's tensors to the device as it reads them
+CAP_HOST_ENV = "DITHER_SO_CAP_HOST"
+
+
+def keep(x: torch.Tensor) -> torch.Tensor:
+    """A capture's copy of x: on the host under CAP_HOST_ENV, else a device clone."""
+    return x.to("cpu") if os.environ.get(CAP_HOST_ENV) == "1" else x.clone()
 
 
 def end_steps(depth: int) -> int:
@@ -817,13 +825,13 @@ class SoWindow(DO.Window):
             leaves = [unwords(pre["round"].leaf(0, k)) for k in range(len(kinds))]
             if cap in self.caps:
                 self.caps[cap].update(
-                    root=root, index=i, a=[x.clone() for x in self.slot], sa=[x.clone() for x in self.scale],
-                    z=[x.clone() for x in self.z], y=[x[:m].clone() for x in self.ydump] if self.ydump else None,
+                    root=root, index=i, a=[keep(x) for x in self.slot], sa=[keep(x) for x in self.scale],
+                    z=[keep(x) for x in self.z], y=[keep(x[:m]) for x in self.ydump] if self.ydump else None,
                     a_roots=[unwords(pre["mid"].leaf(0, w)) for w in range(self.L)],
                     admit_roots=[unwords(pre["mid"].leaf(1, w)) for w in range(self.L)],
                     z_roots=[unwords(pre["mid"].leaf(2, w)) for w in range(self.L)], leaves=leaves,
                     b_roots=[unwords(self.bset.root(w)) for w in range(self.L)],
-                    zy=[x.clone() for x in sd.zy], ysv=[x.clone() for x in sd.ysv], y_root_bad=bad,
+                    zy=[keep(x) for x in sd.zy], ysv=[keep(x) for x in sd.ysv], y_root_bad=bad,
                     y_roots=[unwords(pre["mid"].leaf(yi, w)) for w in range(self.L)],
                     yu_roots=[unwords(sd.yuset.root(w)) for w in range(self.L)])
             if late in self.caps:
@@ -1396,7 +1404,7 @@ class SoSide(DA.Side):
                 raise RuntimeError(f"dither-a-so step {j}'s units: a launch returned {rc}")
             self.warm.add(m)
             if g is not None:
-                g["receipts"], g["r_roots"] = win.plan.out.clone(), win.rset.roots.clone()
+                g["receipts"], g["r_roots"] = keep(win.plan.out), keep(win.rset.roots)
                 g["units_graph"] = graph
             self.ev_u[p][1].record(st)
             self.udone[p].record(st)

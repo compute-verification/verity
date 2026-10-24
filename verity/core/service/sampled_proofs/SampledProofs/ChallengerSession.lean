@@ -44,9 +44,10 @@ to the circuit the period's open committed (`creditedSession`, `credited_session
 only when the host's pins log, whose first lines its open seals (`pins: {lines, sha512}`), pins the open's `pinned`
 commit (`pinsReason`) and the verifier's own copy of main's first-parent history (`main`, the auditor's
 `git rev-list --first-parent origin/main`) holds it (`firstParentReason`): a branch commit merged into main is in
-main's history but on no tree main's check ran (`pinnedSession`, `pinned_session`). Every path that credits a session
-reads it there: `creditedSession` (the pin first, then the circuit) and `trustedSessionOf`. Each refusal throws
-Python's `CoinError` text.
+main's history but on no tree main's check ran (`pinnedSession`, `pinned_session`). Only the open's pin is held: a repin
+of the host after the open neither helps nor harms the session, credited by the commit its open sealed. Every path that
+credits a session reads it there: `creditedSession` (the pin first, then the circuit) and `trustedSessionOf`. Each
+refusal throws Python's `CoinError` text.
 
 The difftest's pieces: `challenger_close` (`ChallengerClose.from_json` and `close_message`), `challenger_released`
 (`log_chain` and `released_roots_of`), `challenger_ledger` (`audited_session`), `challenger_head` (`ledger_head`),
@@ -619,6 +620,7 @@ structure Audited where
   recordLeaf : Nat
   commitment : String
   refusedHellos : Nat
+  pinned : String
   period : Option String
   cap : Json
   circuit : Json
@@ -651,8 +653,9 @@ def auditedOpen (ledger window : Json) (key : ChallengerKey) : V (Audited × Jso
     if p.cap == Json.null || p.circuit == Json.null then
       throw s!"the auditor's ledger's period {p.name}, which holds session {s}, commits no cap or circuit"
   return ({ session := s, host := strOf (getD o.body "host"), prover := laneOf o.body, files, recordLeaf,
-            commitment := strOf (getD b "commitment"), refusedHellos, period := p.map (·.name),
-            cap := (p.map (·.cap)).getD Json.null, circuit := (p.map (·.circuit)).getD Json.null }, o.body)
+            commitment := strOf (getD b "commitment"), refusedHellos, pinned := strOf (getD o.body "pinned"),
+            period := p.map (·.name), cap := (p.map (·.cap)).getD Json.null,
+            circuit := (p.map (·.circuit)).getD Json.null }, o.body)
 
 /-- `audited_session` (module docstring): `auditedOpen`'s session. -/
 def auditedSession (ledger window : Json) (key : ChallengerKey) : V Audited :=
@@ -838,7 +841,7 @@ def releasedPiece (j : Json) : V Json := do
 private def auditedJson (a : Audited) : Json :=
   Json.mkObj [("cap", a.cap), ("circuit", a.circuit), ("commitment", Json.str a.commitment),
     ("files", a.files), ("host", Json.str a.host), ("period", a.period.elim Json.null Json.str),
-    ("prover", Json.str a.prover), ("record_leaf", Lean.toJson a.recordLeaf),
+    ("pinned", Json.str a.pinned), ("prover", Json.str a.prover), ("record_leaf", Lean.toJson a.recordLeaf),
     ("refused_hellos", Lean.toJson a.refusedHellos), ("session", Json.str a.session)]
 
 /-- `{"key", "ledger", "window"}` to `audited_session`'s `Audited`, its fields by Python's names. -/
