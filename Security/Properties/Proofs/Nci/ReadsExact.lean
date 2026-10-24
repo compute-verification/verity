@@ -1683,4 +1683,57 @@ theorem readsExact_of_rootReads (h : RootReads) : Novel.ReadsExact := by
       rw [segGates_pos s (reps_ne_zero hcnt) (rows_ok (h1 s hs hcnt).1)]
       exact List.mem_filterMap.2 ⟨_, hw, rfl⟩
 
+
+/-! ## Building blocks for `RootReads` -/
+
+/-- The context `Desc.summarize` and `Desc.analyze` read Definition `d`'s body in. -/
+def ctxOf (P : Prog) (memo : Array Desc.Summary) (d : Nat) : Desc.Ctx :=
+  { P, memo, d, args := (P.defs[d]!).body.nodes.map fun n => n.args.map (Desc.ofSeq ·.seq) }
+
+theorem rootCtx_eq (P : Prog) (memo : Array Desc.Summary) : rootCtx P memo = ctxOf P memo P.root := rfl
+
+/-- **Argument `i` of node `k`, as the context holds it**, names the argument's references in order, when its sequence
+is its parts' and none of them names a negative position (`ofSeq_pos`, `partsPos_get`). -/
+theorem ctxOf_arg (P : Prog) (memo : Array Desc.Summary) (d k i : Nat)
+    (hk : k < (P.defs[d]!).body.nodes.size) (hi : i < ((P.defs[d]!).body.nodes[k]!).args.size)
+    (hs : (((P.defs[d]!).body.nodes[k]!).args[i]!).seq =
+      Seq.ofParts (((P.defs[d]!).body.nodes[k]!).args[i]!).seq.parts)
+    (hn : ∀ q ∈ (((P.defs[d]!).body.nodes[k]!).args[i]!).seq.parts.toList, PartNonneg q) :
+    PSOk ((ctxOf P memo d).arg k i) ∧
+      psPos ((ctxOf P memo d).arg k i) =
+        (List.range (((P.defs[d]!).body.nodes[k]!).args[i]!).seq.count).map
+          fun t => refPos ((((P.defs[d]!).body.nodes[k]!).args[i]!).seq.get t) := by
+  have harg : (ctxOf P memo d).arg k i = Desc.ofSeq (((P.defs[d]!).body.nodes[k]!).args[i]!).seq := by
+    unfold Desc.Ctx.arg ctxOf
+    dsimp only
+    generalize (P.defs[d]!).body.nodes = ns at hk hi ⊢
+    rw [getElem!_pos ns k hk] at hi ⊢
+    rw [Array.getElem?_map, Array.getElem?_eq_getElem hk, Option.map_some, Option.bind_some, Array.getElem?_map,
+      Array.getElem?_eq_getElem hi, Option.map_some, Option.getD_some, getElem!_pos _ i hi]
+  obtain ⟨h1, h2, -⟩ := ofSeq_pos _ hn
+  rw [harg]
+  refine ⟨h1, ?_⟩
+  rw [h2]
+  generalize (((P.defs[d]!).body.nodes[k]!).args[i]!).seq = s at hs ⊢
+  rw [hs, partsPos_get, (Walk.ofParts_spec _).1]
+
+/-- **A loop that appends each element's segments** names, in order, each element's positions, when each element's
+segments name `D` of it. -/
+theorem forIn_append_pos {β : Type} (F : β → Except String (Array Seg)) (D : β → List (Tgt × Int))
+    (f : β → Array Seg → Except String (ForInStep (Array Seg)))
+    (hf : ∀ x r y, f x r = .ok y → ∃ segs, F x = .ok segs ∧ y = .yield (r ++ segs))
+    (hF : ∀ x segs, F x = .ok segs → segsPos segs = D x) :
+    ∀ (l : List β) (acc out : Array Seg), forIn l acc f = .ok out → segsPos out = segsPos acc ++ l.flatMap D
+  | [], acc, out, h => by
+    simp only [List.forIn_nil, pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    simp
+  | x :: l, acc, out, h => by
+    rw [List.forIn_cons] at h
+    rcases hx : f x acc with e | y <;> rw [hx] at h
+    · exact absurd h (by intro h; cases h)
+    obtain ⟨segs, hs, rfl⟩ := hf x acc _ hx
+    rw [forIn_append_pos F D f hf hF l (acc ++ segs) out h, segsPos_append, hF x segs hs, List.flatMap_cons,
+      List.append_assoc]
+
 end NciCheck.Properties.SecurityProofs.ReadsExact
