@@ -25,7 +25,7 @@ open FlockSoundness (execArith)
 
 /-- **Level 0's values read at the view**: its out-of-domain value, lane messages and pair's sums are the view's masked
 values (`LaneAt`'s value fields). -/
-structure LaneVals {mPts : ℕ} (Tz : ZkSession.TabZK FlockLevel3.GF128 mPts) (st : _root_.Flock.Stmt) {nE : ℕ}
+structure LaneVals {mPts : ℕ} (Tz : FlockSoundness.Discharge.ZkSession.TabZK FlockLevel3.GF128 mPts) (st : _root_.Flock.Stmt) {nE : ℕ}
     (v : Fin nE → FlockLevel3.GF128) (lg : _root_.Flock.LigeritoProof) (zl : _root_.Flock.Zk.Level0Msgs) : Prop where
   oodVal : fOf lg.oodValues[0]! = FlockSoundness.Discharge.Composed.msgAt v
     ((FlockSoundness.Discharge.Composed.layOf Tz st).lgOod 0)
