@@ -464,10 +464,11 @@ partial def fieldPremises (env : Environment) (meaning : Array Name) (moduleOf :
 
 /-- The premises a statement takes (`plain`): the `Prop` hypotheses of each conjunct, each named by its head after
 reducible unfolding (so a `Premises` abbrev names the assumption it stands for) and by the assumptions it mentions, and
-the assumptions the fields of a structure a binder ranges over mention (`fieldPremises`); also those of each conjunct,
-disjunct, `if` branch and `∃` body of a conclusion, and under the statement definitions (a `Guarantees` namespace's) a
-conclusion applies. Under any other definition under `meaning` a conclusion applies (outside an assumptions module), only
-the assumptions its hypotheses mention (`only`): its other hypotheses are what the conclusion means, not premises. -/
+the assumptions the fields of a structure a binder ranges over mention (`fieldPremises`); also those under the statement
+definitions (a `Guarantees` namespace's) a conclusion applies. In each conjunct, disjunct, `if` branch and `∃` body of a
+conclusion, and under any other definition under `meaning` a conclusion applies (outside an assumptions module), only the
+assumptions its hypotheses mention (`only`): its other hypotheses (an acceptance event, a target) are what the conclusion
+means, not premises. -/
 partial def premisesOf (env : Environment) (meaning : Array Name) (moduleOf : Name → Option Name) (only : Bool)
     (e : Expr) : MetaM (Array Json) := do
   let mut out := #[]
@@ -484,10 +485,10 @@ partial def premisesOf (env : Environment) (meaning : Array Name) (moduleOf : Na
             ("head", toJson h.toString), ("module", toJson ((moduleOf h).map toString))]
       if body.isAppOfArity ``And 2 || body.isAppOfArity ``Or 2 || body.isAppOfArity ``ite 5 then
         for b in body.getAppArgs.extract (body.getAppNumArgs - 2) body.getAppNumArgs do
-          ps := ps ++ (← premisesOf env meaning moduleOf only b)
+          ps := ps ++ (← premisesOf env meaning moduleOf true b)
       else if body.isAppOfArity ``Exists 2 then
         if let .lam n ty b bi := body.appArg! then
-          ps := ps ++ (← withLocalDecl n bi ty fun y => premisesOf env meaning moduleOf only (b.instantiate1 y))
+          ps := ps ++ (← withLocalDecl n bi ty fun y => premisesOf env meaning moduleOf true (b.instantiate1 y))
       else if let .const d us := body.getAppFn then
         let some (.defnInfo dv) := env.find? d | return ps
         let some m := moduleOf d | return ps
