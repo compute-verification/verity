@@ -34,6 +34,7 @@ os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 import torch  # noqa: E402
 
 TARGETS = ("q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj")
+STOP_IDS = [151645, 151643]  # <|im_end|>, <|endoftext|> (the base model's generation config stops only at the second)
 SUFFIX = "\nPlease reason step by step, and put your final answer within \\boxed{}."
 
 METHODS = {
@@ -273,7 +274,7 @@ def load_ckpt(llm, ckpt, model_name):
 
 def generate(llm, prompts, n, temperature, top_p, max_tokens, seed=None):
     from vllm import SamplingParams
-    sp = SamplingParams(n=n, temperature=temperature, top_p=top_p, max_tokens=max_tokens)
+    sp = SamplingParams(n=n, temperature=temperature, top_p=top_p, max_tokens=max_tokens, stop_token_ids=STOP_IDS)
     outs = llm.generate(prompts, sp, use_tqdm=False)
     return outs
 
@@ -374,7 +375,10 @@ def main():
     ap.add_argument("--gpu-mem", type=float, default=0.25)
     ap.add_argument("--mid-eval", type=int, default=1)
     ap.add_argument("--eval-ckpt", default=None, help="evaluate a saved checkpoint dir (greedy, and pass@k with --passk)")
+    ap.add_argument("--variant", default="", help="appended to the task in labels, checkpoint dirs and results (e.g. 'B' for the base model)")
     args = ap.parse_args()
+    if Path(args.svd_cache).is_dir():
+        args.svd_cache = str(Path(args.svd_cache) / f"svd16_{args.model.replace('/', '_')}.pt")
 
     from transformers import AutoModelForCausalLM, AutoTokenizer
     from vllm import LLM
@@ -384,9 +388,10 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     kind, r, u, grouping, lr0 = METHODS[args.method]
     lr = args.lr if args.lr is not None else lr0
-    task = args.task
-    max_tokens = args.max_tokens or (512 if task == "gsm8k" else 1024)
-    eval_max = args.eval_max_tokens or (1024 if task == "gsm8k" else 1536)
+    data_task = args.task
+    max_tokens = args.max_tokens or (512 if data_task == "gsm8k" else 1024)
+    eval_max = args.eval_max_tokens or (1024 if data_task == "gsm8k" else 1536)
+    task = data_task + args.variant
     label = f"{task}-{args.method}-seed{args.seed}"
     log = open(out / f"{label}.jsonl", "a")
 
@@ -398,8 +403,8 @@ def main():
 
     random.seed(args.seed)
     torch.manual_seed(args.seed)
-    train = load_jsonl(Path(args.data) / f"{task}_train.jsonl")
-    test = load_jsonl(Path(args.data) / f"{task}_test.jsonl")
+    train = load_jsonl(Path(args.data) / f"{data_task}_train.jsonl")
+    test = load_jsonl(Path(args.data) / f"{data_task}_test.jsonl")
     if args.eval_limit:
         test = test[:args.eval_limit]
 
@@ -418,7 +423,7 @@ def main():
             label = f"{task}-{method}-seed{meta['seed']}-step{steps}-eval"
             load_ckpt(llm, args.eval_ckpt, args.model)
             emit(event="ckpt_loaded", ckpt=args.eval_ckpt)
-        per, lens = evaluate(llm, tok, test, task, eval_max)
+        per, lens = evaluate(llm, tok, test, data_task, eval_max)
         acc = sum(c[0] for c in per) / len(per)
         res = {"label": label, "task": task, "method": method, "S_bits": sbits, "steps": steps, "acc": acc,
                "per_problem": [c[0] for c in per], "mean_len": sum(lens) / len(lens), "model": args.model,
@@ -427,7 +432,7 @@ def main():
         if args.passk:
             rows = test[:args.passk_limit] if args.passk_limit else test
             t0 = time.time()
-            per_k, lens_k = evaluate(llm, tok, rows, task, eval_max, n=args.passk, temperature=0.6, top_p=0.95, seed=args.seed)
+            per_k, lens_k = evaluate(llm, tok, rows, data_task, eval_max, n=args.passk, temperature=0.6, top_p=0.95, seed=args.seed)
             counts = [int(sum(c)) for c in per_k]
             ks = [k for k in (1, 2, 4, 8, 16, 32, 64) if k <= args.passk]
             res["passk"] = {"n": args.passk, "temperature": 0.6, "top_p": 0.95, "problems": len(rows), "counts": counts,
@@ -458,7 +463,7 @@ def main():
     emit(event="setup", method=args.method, n_params=n_params, S_bits=sbits, lr=lr, model=args.model)
     opt = torch.optim.AdamW(params, lr=lr, betas=(0.9, 0.99), weight_decay=0.0, eps=1e-8)
     pad_id = tok.pad_token_id if tok.pad_token_id is not None else tok.eos_token_id
-    score = SCORERS[task]
+    score = SCORERS[data_task]
     order = list(range(len(train)))
     random.shuffle(order)
     ptr = 0
@@ -520,7 +525,7 @@ def main():
         return str(d)
 
     def do_eval(step):
-        per, lens = evaluate(llm, tok, test, task, eval_max)
+        per, lens = evaluate(llm, tok, test, data_task, eval_max)
         acc = sum(c[0] for c in per) / len(per)
         emit(event="eval", step=step, acc=acc, mean_len=sum(lens) / len(lens))
         return {"step": step, "acc": acc, "per_problem": [c[0] for c in per], "mean_len": sum(lens) / len(lens)}

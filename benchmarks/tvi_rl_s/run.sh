@@ -16,6 +16,20 @@ if [ "${PY_PREF:-auto}" != venv312 ] && [ -f /workspace/jobs/tvi/venv/READY ] \
    && /workspace/jobs/tvi/venv/bin/python -c 'import vllm, transformers, torch' 2>/dev/null; then
   PY=/workspace/jobs/tvi/venv/bin/python
 fi
+if [ ! -x "$PY" ]; then
+  # No node env: build one for this worker under the program's tree, once per node (the second job waits on the lock).
+  V=/workspace/jobs/tvi/venv-A2
+  mkdir -p /workspace/jobs/tvi
+  (
+    flock 9
+    if [ ! -f "$V/READY" ]; then
+      rm -rf "$V"
+      uv venv -q -p 3.12 "$V" && uv pip install -q --python "$V/bin/python" vllm math-verify ninja && touch "$V/READY"
+    fi
+  ) 9>/workspace/jobs/tvi/.venv-A2.lock
+  command -v research >/dev/null && research keep "$V" --owner @training --expires 2026-10-27 --priority normal --why 'training-vs-inference program' || true
+  PY="$V/bin/python"
+fi
 echo "python: $PY"
 export PATH="$(dirname "$PY"):$PATH" VLLM_USE_FLASHINFER_SAMPLER=0
 if ! "$PY" -c 'import math_verify' 2>/dev/null; then
@@ -26,7 +40,7 @@ if [ -d /workspace/hf/hub ] && [ -w /workspace/hf/hub ]; then export HF_HUB_CACH
 MODEL="${MODEL:-Qwen/Qwen2.5-1.5B-Instruct}"
 export MODEL DATA="$S/data"
 mkdir -p /workspace/jobs/tvi/cache/A2
-export SVD_CACHE="/workspace/jobs/tvi/cache/A2/svd16_${MODEL//\//_}.pt"
+export SVD_CACHE=/workspace/jobs/tvi/cache/A2
 CKPT_ROOT="${CKPT_ROOT:-/workspace/jobs/tvi/ckpt/A2}"
 mkdir -p "$CKPT_ROOT"
 if command -v research >/dev/null; then
