@@ -76,7 +76,7 @@ def _summary(man: dict, *, with_rows: bool) -> dict:
 
 
 def _member_class(member: str) -> str:
-    """`op_path/output_member` with the layer index folded to `<k>` (the fold `verity_vllm.query.compare._sig` uses)."""
+    """`op_path/output_member` with the layer index folded to `<k>`."""
     op, _, mem = member.rpartition("/")
     return ".".join("<k>" if p.isdigit() else p for p in op.split(".")) + "/" + mem
 
