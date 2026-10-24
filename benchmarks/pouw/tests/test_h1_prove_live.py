@@ -47,7 +47,8 @@ def dump(out: Path) -> dict:
     (out / "window.json").write_text(json.dumps(pub))
     for s, m in enumerate(served):
         reads = {f"slot_{i}": (slots[s], i) for i in range(T)} | {f"req_{i}": (req, i) for i in range(T)}
-        reads |= {"m": (LR.m_table(PROGRAM, PREFIX, WINDOW, s, m)[2], 0), "o0": (LR.ok_table(PROGRAM, PREFIX, WINDOW, S)[2], s)}
+        reads |= {"m": (LR.m_table(PROGRAM, PREFIX, WINDOW, s, m)[2], 0), "s": (LR.round_table(PROGRAM, PREFIX, WINDOW, s)[2], 0),
+                  "o0": (LR.ok_table(PROGRAM, PREFIX, WINDOW, S)[2], s)}
         z = {"units": np.array([s])}
         for p, (reg, i) in reads.items():
             z |= {f"w_{p}": np.asarray([reg.rows[i]], np.uint16), f"s_{p}": np.frombuffer(reg.salts[i], np.uint8).reshape(1, -1),
@@ -61,8 +62,9 @@ def dump(out: Path) -> dict:
 
 def test_the_dump_is_live_ok_at_the_served_rows_only():
     heads = HEADERS + [(0,) * LR.HEADER] * (T - len(HEADERS))
-    assert [L.live_ok(SLOTS[s], heads, m) for s, m in enumerate((3, 2))] == [1, 1]
-    assert [L.live_ok(SLOTS[s], heads, m) for s, m in enumerate((4, 3))] == [0, 0]
+    assert [L.live_ok(SLOTS[s], heads, m, s) for s, m in enumerate((3, 2))] == [1, 1]
+    assert [L.live_ok(SLOTS[s], heads, m, s) for s, m in enumerate((4, 3))] == [0, 0]
+    assert L.live_ok(SLOTS[0], heads, 3, 1) == 0
     assert list(CC.OK_ROW) == LR.ok_table(PROGRAM, PREFIX, WINDOW, S)[0][0]
 
 
@@ -76,7 +78,7 @@ def prepared(tmp_path_factory):
 
 def test_prepare_stages_every_round_as_the_verifiers_own_file(prepared):
     """Each round's statement, staged on the prover's rows and bound to the live Program, is the verifier's own public file
-    (from the opened ``b || c`` and its own ``m@<s>`` and ``live-ok`` rows) with ok 1 at m_s; ``m-claimed`` stages ok 0 at
+    (from the opened ``b || c`` and its own ``m@<s>``, ``round@<s>`` and ``live-ok`` rows) with ok 1 at m_s; ``m-claimed`` stages ok 0 at
     m_0 + 1; the plan holds every honest round, ``m-other``, ``m-claimed`` and ``other-round``."""
     base, pub, rc = prepared
     work = base / "work"
@@ -92,6 +94,7 @@ def test_prepare_stages_every_round_as_the_verifiers_own_file(prepared):
                                                           "honest-1": "ACCEPT", "other-round": "REJECT"}
     reg = json.loads((work / "verifier" / "m-other.registered.json").read_text())
     assert reg["ports"]["m"]["known"]["rows"] == [LR.slot_words([4])[0]]
+    assert json.loads((work / "verifier" / "honest-1.registered.json").read_text())["ports"]["s"]["known"]["rows"] == [LR.slot_words([1])[0]]
     assert (work / "verifier" / "m-other.pub.bin").read_bytes() != (work / "verifier" / "honest-0.pub.bin").read_bytes()
     assert record["program_sha512"] == json.loads((work / "verifier" / "partition.json").read_text())["program"]
 

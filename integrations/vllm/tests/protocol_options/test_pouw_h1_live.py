@@ -147,7 +147,7 @@ def test_the_provers_live_dump_opens_every_row_its_statement_reads(tmp_path):
     """`pouw_h1_live.dump`: window.json holds only what the verifier may read (T, S, the prefix, the window Program's
     digest, the open root, the session, the live roots and m_s), and each round's rows.npz and opening.json give every
     port's words, salt, value, position and path, each opening its registered root (`registered.verify_read`) under the
-    row format its reads file names; ``m`` and ``o0`` are the known ``m@<s>`` and ``live-ok`` rows."""
+    row format its reads file names; ``m``, ``s`` and ``o0`` are the known ``m@<s>``, ``round@<s>`` and ``live-ok`` rows."""
     import json
 
     import numpy as np

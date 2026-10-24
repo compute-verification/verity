@@ -15,8 +15,8 @@ and DIR/<s>/ the prover's rows and openings of round s.
    is round s's ``live@<s>``. Each round's ``--registered`` file is `live_reads.reads_file` at the round's served rows m_s.
 2. The verifier checks each opened row of DIR/<s>/opening.json against its registered root, at the position its file
    reads (`registered.verify_read`): the slot rows ``slots@<s>``'s and the header rows ``requests@0``'s. It then builds its
-   own public file of the round (`h1unit.verifier_pub`) from the opened ``b || c`` and its own rows of ``m@<s>`` and
-   ``live-ok`` (`live_reads.m_table`, `ok_table`, all public).
+   own public file of the round (`h1unit.verifier_pub`) from the opened ``b || c`` and its own rows of ``m@<s>``,
+   ``round@<s>`` and ``live-ok`` (`live_reads.m_table`, `round_table`, `ok_table`, all public).
 3. The prover stages each round as a one-instance shared-row statement on its rows (`UnitStager` of `live.template(T)`,
    bound to the live Program and partition, the instance unit s). Its pub.bin must be the verifier's byte for byte, and the
    staged ok must be `live.live_ok`'s on the round's words.
@@ -67,9 +67,9 @@ def files(pub: dict, s: int, m: int) -> dict:
 
 
 def known_rows(pub: dict, s: int, m: int) -> dict[str, tuple[G.Registered, int]]:
-    """The verifier's own registered rows of round s: ``m@<s>`` at m (row 0) and ``live-ok`` (row s)."""
+    """The verifier's own registered rows of round s: ``m@<s>`` at m (row 0), ``round@<s>`` (row 0) and ``live-ok`` (row s)."""
     prog, prefix, window = pub["program"], pub["prefix"], pub["window"]
-    return {"m": (LR.m_table(prog, prefix, window, s, m)[2], 0),
+    return {"m": (LR.m_table(prog, prefix, window, s, m)[2], 0), "s": (LR.round_table(prog, prefix, window, s)[2], 0),
             LR.OK_PORT: (LR.ok_table(prog, prefix, window, pub["S"])[2], s)}
 
 
@@ -109,12 +109,12 @@ def claimed(z: dict, pub: dict, s: int, m: int) -> dict:
 
 
 def live_reference(T: int):
-    """`UnitStager.reference_check`: the staged ok is `live.live_ok` of the instance's slot leaves, headers and m."""
+    """`UnitStager.reference_check`: the staged ok is `live.live_ok` of the instance's slot leaves, headers, m and round s."""
     def check(rows: dict, outs: dict) -> None:
         u32 = lambda w: [int(w[2 * j]) | int(w[2 * j + 1]) << 16 for j in range(len(w) // 2)]  # noqa: E731
         slot = [u32(rows[f"slot_{i}"][0])[0] for i in range(T)]
         req = [u32(rows[f"req_{i}"][0]) for i in range(T)]
-        want = L.live_ok(slot, req, u32(rows["m"][0])[0])
+        want = L.live_ok(slot, req, u32(rows["m"][0])[0], u32(rows["s"][0])[0])
         if int(outs["o0"][0][0]) != want:
             raise AssertionError(f"{NAME}: the lowered circuit's ok is {int(outs['o0'][0][0])}, live_ok's {want}")
     return check

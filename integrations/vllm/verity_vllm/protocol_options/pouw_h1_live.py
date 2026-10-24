@@ -197,7 +197,7 @@ def dump(run: Any, out: Path) -> dict[str, Any]:
         rows, _doc = statement(run, s)
         reads = {f"slot_{i}": (served.live[value(served, LR.SLOTS, s)], i) for i in range(T)}
         reads |= {f"req_{i}": (req, i) for i in range(T)}
-        reads |= {"m": (LR.m_table(prog, prefix, window, s, m)[2], 0), LR.OK_PORT: (LR.ok_table(prog, prefix, window, run.steps)[2], s)}
+        reads |= {"m": (LR.m_table(prog, prefix, window, s, m)[2], 0), "s": (LR.round_table(prog, prefix, window, s)[2], 0), LR.OK_PORT: (LR.ok_table(prog, prefix, window, run.steps)[2], s)}
         rows[LR.OK_PORT] = np.asarray([CC.OK_ROW], np.uint16)
         z: dict[str, Any] = {"units": np.array([s])}
         for p, (reg, i) in reads.items():
