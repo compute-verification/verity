@@ -198,10 +198,11 @@ def registered_reads(window: CS.Window, publics: Mapping[str, bytes]) -> dict[st
 
 
 def reported_reads(reads: Mapping[str, Mapping[str, Any]], verdicts: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
-    """The audit record's ``row_table_reads``: for each drawn linked chunk (``verdicts[key]``, its Lean verifier of record's
-    verdict), the row table its ``x`` port reads and the root the verifier's own ``--registered`` file named (``reads[key]``,
-    ``registered_reads``), beside the ``registered`` finding the verdict reports opening the chunk's rows against.  ``ok``
-    when every chunk's verdict accepted it and reports exactly its file's ports, values and roots."""
+    """The audit record's ``registered_reads``: for each drawn chunk with registered reads (``verdicts[key]``, its Lean verifier
+    of record's verdict), the value each registered port reads (a linked chunk's ``x``, its row table) and the root the
+    verifier's own ``--registered`` file named (``reads[key]``: `registered_reads`, or an outside value's), beside the
+    ``registered`` finding the verdict reports opening the chunk's rows against.  ``ok`` when every chunk's verdict accepted it
+    and reports exactly its file's ports, values and roots."""
     chunks = {}
     for key, v in verdicts.items():
         want = {p: {"value": e["value"], "root": e["root"]} for p, e in (reads.get(key) or {}).get("ports", {}).items()}
