@@ -59,15 +59,20 @@ gates of one width) and an index, and holds each of `Desc`'s operations on them 
 * `throughArg`'s step: a member's parameter leaves, read through its node's argument (whole, a batch member's spans, or
   a scan iteration's slice, or its carry through `carry`), keep the gates they resolve to in the member wherever
   `down` and `carry` do (`CarrySpec`, `one_agree`, `throughSpec_succ`);
+* a scan's piece of one row, wherever its output is its final carry's leaves and then its ys (`ScanOut`, which the
+  decoder's `buildNode` gives): stride 1 reads the carry's leaves through `carry` and the ys iteration by iteration
+  through `fromCallee` (`down_scan_head`, `scanOne`, `ys_agree`, `scanYs_agree`), any other stride position by
+  position (`scanPts`); `scanSpec_of`;
 * a batch of a composite's piece in its one-run case, the node's leaf `m·L + t` being the run's gate for member `m`'s
   return leaf `t` (`batchAffine`, `batchSpec_of`), with helpers toward the rest (`members_agree`, member by member
   through `fromCallee`; `copies_seg_agree`, whole members as copies of one member's return); so `down`, `fromCallee`,
   `throughArg` and `carry` keep the gates they read at every fuel (`specs`, `specs_of`) wherever the callees' summaries
-  hold `RetOk`, a composite's return has as many leaves as its type, a primitive returns one leaf, the decoder's facts
-  on the body hold (`Resolve.BodyOk`, `ArgOk`, a batch's dims), and so do the steps open here (`OpenSteps`): a batch
-  of a composite's piece past its one-run case (`BatchRest`), a scan's piece of one row (`ScanSpec`), `carry` one
-  step up (`CarrySpec`) and `throughArg`'s segments each of a copy at least (`ThroughReps`); in a Definition's body, wherever its references (`Resolve.BodyOk`), its callees' summaries
-  (`RetOk`), the decoder's facts its private `composite` sets (`Decoded`) and `OpenSteps` do (`specs_decoded`).
+  hold `RetOk`, a composite's return has as many leaves as its type, a primitive returns one leaf, a scan's output is
+  `ScanOut`'s, the decoder's facts on the body hold (`Resolve.BodyOk`, `ArgOk`, a batch's dims), and so do the steps
+  open here (`OpenSteps`): a batch of a composite's piece past its one-run case (`BatchRest`), `carry` one step up
+  (`CarrySpec`) and `throughArg`'s segments each of a copy at least (`ThroughReps`); in a Definition's body, wherever
+  its references (`Resolve.BodyOk`), its callees' summaries (`RetOk`), the decoder's facts its private `composite`
+  sets (`Decoded`, `ScanOut`) and `OpenSteps` do (`specs_decoded`).
 
 So `ReadsExact` holds wherever one statement about the segments `Desc.nodeReads` gives each root node does
 (`readsExact_of_rootReads`): `RootReads`. That holds wherever two smaller ones do (`rootReads_of`), named `Prop`s here,
@@ -3025,6 +3030,61 @@ theorem down_scan_ret (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.
     · exact absurd hre (hret a b)
     · intro h; cases h
 
+/-- A scan's piece of one row and stride 1, `cl` carry leaves and `yl` leaves of `y`: the final carry's leaves together
+(`carry`), then the ys iteration by iteration (`fromCallee`). -/
+def scanOne (c : Desc.Ctx) (fuel k : Nat) (node : Flock.Program.Node) (cl yl : Nat) (q : Piece) :
+    Except String (Array Seg) := do
+  let mut out := #[]
+  let (a, b) := (q.base.toNat, q.base.toNat + q.len)
+  if a < cl then out := out ++ (← Desc.carry c fuel k (node.n - 1) a (min b cl))
+  if cl < b && yl > 0 then
+    let (lo, hi) := (max a cl - cl, b - cl)
+    Desc.walkAtMost "iterations of a scan whose ys are read one by one" ((hi - 1) / yl + 1 - lo / yl)
+    for m in [lo / yl:(hi - 1) / yl + 1] do
+      out := out ++ (← Desc.fromCallee c fuel k m (cl + max lo (m * yl) - m * yl) (cl + min hi ((m + 1) * yl) - m * yl))
+  return out
+
+/-- A scan's piece of one row and another stride: position by position, a carry leaf through `carry`, a `y` leaf
+through `fromCallee`. -/
+def scanPts (c : Desc.Ctx) (fuel k : Nat) (node : Flock.Program.Node) (cl yl : Nat) (q : Piece) :
+    Except String (Array Seg) := do
+  let mut out := #[]
+  Desc.walkAtMost "leaves of a scan's output read one by one" q.len
+  for t in [0:q.len] do
+    let j := (q.at t).toNat
+    if j < cl then out := out ++ (← Desc.carry c fuel k (node.n - 1) j (j + 1))
+    else
+      let (m, jj) := ((j - cl) / yl, cl + (j - cl) % yl)
+      out := out ++ (← Desc.fromCallee c fuel k m jj (jj + 1))
+  return out
+
+theorem down_scan_head (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
+    (hff : q.flat = q) {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .scan)
+    (hn0 : node.n ≠ 0) (h0 : q.count ≠ 0) (hr : ¬ q.rows > 1) {carry y : Flock.Program.Ty}
+    (hret : (c.P.defs[node.fn]!).ret = .tuple #[carry, y]) :
+    Desc.down c (fuel + 1) q = (if q.stride = 1 then scanOne c fuel k node carry.leaves y.leaves q
+      else scanPts c fuel k node carry.leaves y.leaves q) := by
+  delta Desc.down
+  conv => lhs; whnf
+  rw [ht, hff]
+  dsimp only
+  rw [if_neg (show ¬ ((q.count == 0) = true) by simpa using h0), hn]
+  dsimp only [bind, Except.bind]
+  rw [hform]
+  dsimp only
+  rw [if_neg (show ¬ ((node.n == 0) = true) by simpa using hn0), if_neg hr]
+  conv => lhs; whnf
+  rw [hret]
+  cases hsb : (q.stride == 1) with
+  | true =>
+    rw [if_pos (by simpa using hsb)]
+    delta scanOne Desc.fromCallee Desc.carry
+    rfl
+  | false =>
+    rw [if_neg (by simpa using hsb)]
+    delta scanPts Desc.fromCallee Desc.carry
+    rfl
+
 /-- A node's piece of positive count needs the node. -/
 theorem down_node (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k) (h0 : q.count ≠ 0)
     {e : String} (hn : c.node k = .error e) (x : Array Seg) : Desc.down c (fuel + 1) q ≠ .ok x := by
@@ -3367,8 +3427,8 @@ def BatchSpec (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) : Prop :=
     (∀ x ∈ pos q, Fits c x) → Desc.down c (fuel + 1) q = .ok segs →
     Agree c.P sc (segsPos segs) ((pos q).map (den c.P sc))
 
-/-- **Open: what `down` keeps of a scan's piece of one row**, one step up: the final carry's leaves through `carry`,
-the `ys` through `fromCallee` iteration by iteration, together or position by position. -/
+/-- **What `down` keeps of a scan's piece of one row**, one step up: the final carry's leaves through `carry`, the
+`ys` through `fromCallee` iteration by iteration, together or position by position (`scanSpec_of`). -/
 def ScanSpec (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) : Prop :=
   ∀ q segs k node (carry y : Flock.Program.Ty), q.tgt = .ref false k → c.node k = .ok node → node.form = .scan →
     node.n ≠ 0 → q.count ≠ 0 → q.flat = q → ¬ q.rows > 1 → (c.P.defs[node.fn]!).ret = .tuple #[carry, y] →
@@ -4296,6 +4356,266 @@ theorem batch_den (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (q
   rw [child_eq c sc hd hn, callee_eq c hn, show q.base.toNat + t = (q.base + (t : Int) * 1).toNat by omega]
   exact e
 
+/-- `fromCallee` iteration by iteration over a scan's `y` leaves `[lo, hi)` past its `cl` carry leaves, `yl` leaves to
+an iteration: `y` leaf `j` is iteration `j / yl`'s return leaf `cl + j % yl`. -/
+theorem ys_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (hC : CalleeSpec c sc fuel)
+    {k cl yl lo hi : Nat} (hyl : yl ≠ 0) (hlh : lo < hi) (hm : (hi - 1) / yl < (c.body.nodes[k]!).members)
+    (hj : ∀ j, lo ≤ j → j < hi → cl + j % yl < (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count)
+    {out0 segs : Array Seg}
+    (h : forIn (List.range' (lo / yl) ((hi - 1) / yl + 1 - lo / yl)) out0 (fun m (s : Array Seg) => do
+        let v ← Desc.fromCallee c fuel k m (cl + max lo (m * yl) - m * yl) (cl + min hi ((m + 1) * yl) - m * yl)
+        pure (ForInStep.yield (s ++ v))) = .ok segs) :
+    ∃ segs2, segs = out0 ++ segs2 ∧ Agree c.P sc (segsPos segs2) ((List.range' lo (hi - lo)).map fun j =>
+      Flock.Program.resolve c.P (c.P.child sc k (j / yl))
+        ((c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.get (cl + j % yl))) := by
+  let V : Nat → Nat → Except String Nat := fun m e =>
+    Flock.Program.resolve c.P (c.P.child sc k m) ((c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.get e)
+  obtain ⟨segs2, hs2, hA⟩ := forIn_ext (P := c.P) (sc := sc)
+    (fun m => (List.range' (cl + max lo (m * yl) - m * yl)
+      ((cl + min hi ((m + 1) * yl) - m * yl) - (cl + max lo (m * yl) - m * yl))).map (V m))
+    _ _ (fun m hmm r y hy => by
+      rw [List.mem_range'_1] at hmm
+      obtain ⟨v, hv, hy⟩ := Walk.except_bind_ok hy
+      simp only [pure, Except.pure, Except.ok.injEq] at hy
+      refine ⟨v, hy.symm, hC k m _ _ v (by omega) (fun hlt => ?_) hv⟩
+      have hmL : (m + 1) * yl = m * yl + yl := by rw [Nat.add_mul, Nat.one_mul]
+      have := hj (m * yl + (min hi ((m + 1) * yl) - m * yl - 1)) (by omega) (by omega)
+      rw [show m * yl + (min hi ((m + 1) * yl) - m * yl - 1) = (min hi ((m + 1) * yl) - m * yl - 1) + m * yl by omega,
+        Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt (by omega)] at this
+      omega) out0 segs h
+  refine ⟨segs2, hs2, ?_⟩
+  have e1 : ∀ m ∈ List.range' (lo / yl) ((hi - 1) / yl + 1 - lo / yl),
+      (List.range' (cl + max lo (m * yl) - m * yl)
+        ((cl + min hi ((m + 1) * yl) - m * yl) - (cl + max lo (m * yl) - m * yl))).map (V m) =
+      (List.range' (max lo (m * yl)) (min hi ((m + 1) * yl) - max lo (m * yl))).map
+        fun j => V (j / yl) (cl + j % yl) := by
+    intro m hmm
+    rw [List.mem_range'_1] at hmm
+    have hmL : (m + 1) * yl = m * yl + yl := by rw [Nat.add_mul, Nat.one_mul]
+    have hle : m * yl ≤ (hi - 1) / yl * yl := Nat.mul_le_mul_right _ (by omega)
+    have hdl := Nat.div_mul_le_self (hi - 1) yl
+    rw [show cl + max lo (m * yl) - m * yl = cl + (max lo (m * yl) - m * yl) by omega,
+      show (cl + min hi ((m + 1) * yl) - m * yl) - (cl + (max lo (m * yl) - m * yl)) =
+        (min hi ((m + 1) * yl) - m * yl) - (max lo (m * yl) - m * yl) by omega,
+      ← List.map_add_range', List.map_map]
+    exact block_shift (fun m e => V m (cl + e)) hyl lo hi m
+  rw [flatMap_congr e1, ← List.map_flatMap, List.range'_eq_map_range, List.flatMap_map,
+    blocks_cover yl lo hi (lo / yl) (Nat.div_mul_le_self lo yl)] at hA
+  have h1 : lo / yl ≤ (hi - 1) / yl := Nat.div_le_div_right (by omega)
+  have h2 : hi ≤ ((hi - 1) / yl + 1) * yl := by
+    have e := Nat.div_add_mod' (hi - 1) yl
+    have := Nat.mod_lt (hi - 1) (Nat.pos_of_ne_zero hyl)
+    rw [Nat.add_mul, Nat.one_mul]
+    omega
+  rwa [show lo / yl + ((hi - 1) / yl + 1 - lo / yl) = (hi - 1) / yl + 1 by omega, Nat.min_eq_left h2] at hA
+
+/-- A scan's `y` leaves `[max a cl, b)` of a piece `[a, b)` of its output, read past its `cl` carry leaves iteration by
+iteration onto `out0`: none where `b` is within the carry. -/
+theorem scanYs_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (hC : CalleeSpec c sc fuel)
+    {k cl yl a b : Nat} (hab : a < b) (hy0 : yl = 0 → b ≤ cl)
+    (hm : cl < b → (b - 1 - cl) / yl < (c.body.nodes[k]!).members)
+    (hj : ∀ j, max a cl ≤ j → j < b → cl + (j - cl) % yl < (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count)
+    {out0 segs : Array Seg}
+    (h : (if (decide (cl < b) && decide (yl > 0)) = true then do
+        Desc.walkAtMost "iterations of a scan whose ys are read one by one" ((b - cl - 1) / yl + 1 - (max a cl - cl) / yl)
+        (forIn [(max a cl - cl) / yl:(b - cl - 1) / yl + 1] out0 fun m s => do
+          let v ← Desc.fromCallee c fuel k m (cl + max (max a cl - cl) (m * yl) - m * yl)
+            (cl + min (b - cl) ((m + 1) * yl) - m * yl)
+          pure (ForInStep.yield (s ++ v))) >>= fun s => pure s
+      else pure out0) = .ok segs) :
+    ∃ s2, segs = out0 ++ s2 ∧ Agree c.P sc (segsPos s2) ((List.range' (max a cl) (b - max a cl)).map fun j =>
+      Flock.Program.resolve c.P (c.P.child sc k ((j - cl) / yl))
+        ((c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.get (cl + (j - cl) % yl))) := by
+  split at h
+  · rename_i hc
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hc
+    have h := walkAtMost_bind _ _ _ h
+    obtain ⟨v, hv, h⟩ := Walk.except_bind_ok h
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size, Nat.add_sub_cancel,
+      Nat.div_one] at hv
+    obtain ⟨s2, hs2, hA⟩ := ys_agree c sc fuel hC (k := k) (cl := cl) (yl := yl) (by omega)
+      (show max a cl - cl < b - cl by omega)
+      (by rw [show b - cl - 1 = b - 1 - cl by omega]; exact hm hc.1) (fun j h1 h2 => by
+        have := hj (cl + j) (by omega) (by omega)
+        rwa [show cl + j - cl = j by omega] at this) hv
+    refine ⟨s2, hs2, ?_⟩
+    rw [show max a cl = cl + (max a cl - cl) by omega,
+      show b - (cl + (max a cl - cl)) = b - cl - (max a cl - cl) by omega, ← List.map_add_range', List.map_map]
+    exact agree_mono hA fun x _ a h => by simpa only [Function.comp, Nat.add_sub_cancel_left] using h
+  · rename_i hc
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    refine ⟨#[], by simp, ?_⟩
+    have : b - max a cl = 0 := by
+      simp only [Bool.and_eq_true, decide_eq_true_eq, not_and] at hc
+      by_cases hyl : yl = 0
+      · have := hy0 hyl; omega
+      · have := mt (hc · ) (by omega : ¬ ¬ (yl > 0)); omega
+    rw [this]
+    exact List.Forall₂.nil
+
+/-- **Open: a scan node's output**, as the decoder computes it (`buildNode`, `(carry, array n y)`): the final carry's
+leaves, then `n` iterations' `y` leaves. -/
+def ScanOut (c : Desc.Ctx) : Prop :=
+  ∀ k node (carry y : Flock.Program.Ty), c.node k = .ok node → node.form = .scan →
+    (c.P.defs[node.fn]!).ret = .tuple #[carry, y] → node.out.leaves = carry.leaves + node.n * y.leaves
+
+/-- **A scan's piece of one row**, one step up: its final carry's leaves through `carry`, its ys through `fromCallee`,
+leaf `j` of the node being the last iteration's return leaf `j` below the carry's `cl` leaves, else iteration
+`(j - cl) / yl`'s return leaf `cl + (j - cl) % yl`. -/
+theorem scanSpec_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB : Resolve.BodyOk c.P c.d)
+    (hSO : ScanOut c) (fuel : Nat) (hC : CalleeSpec c sc fuel) (hK : CarrySpec c sc fuel) : ScanSpec c sc fuel := by
+  intro q segs k node carry y ht hn hform hn0 h0 hff hr hret hq hf h
+  have hdo := downOk_of hB hn
+  have h1 := rows_one h0 hr
+  have hnode : c.body.nodes[k]! = node := node_get hn
+  let M : Nat → Nat × Nat := fun j => if j < carry.leaves then (node.n - 1, j)
+    else ((j - carry.leaves) / y.leaves, carry.leaves + (j - carry.leaves) % y.leaves)
+  suffices hA : Agree c.P sc (segsPos segs) ((List.range q.len).map fun t =>
+      Flock.Program.resolve c.P (c.P.child sc k (M (q.at t).toNat).1)
+        ((c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.get (M (q.at t).toNat).2)) by
+    apply agree_weaken hA
+    rw [pos_eq_map, List.map_map, count_one h1]
+    apply forall₂_range_map
+    intro t ht' a ha
+    have hp := ppt_one h1 (t := t) (by rw [count_one h1]; exact ht')
+    have hnn := hq (q.tgt, ppt q t)
+      (by rw [pos_eq_map]; exact List.mem_map.2 ⟨t, List.mem_range.2 (by rw [count_one h1]; exact ht'), rfl⟩)
+    simp only [Function.comp, den, ht] at ha
+    simp only at hnn
+    rw [if_neg (by omega), hp] at ha
+    have hnode' : (c.P.defs[sc.d]!).body.nodes[k]! = node := by rw [hd]; exact hnode
+    have e := den_scan c.P sc hnode' hform hn0 hret ha
+    rw [child_eq c sc hd hn, callee_eq c hn]
+    exact e
+  have hbd : ∀ j, j < node.out.leaves →
+      (M j).1 < node.n ∧ (M j).2 < (c.P.defs[node.fn]!).body.ret.count := by
+    intro j hj
+    have hdk := hdo j hj
+    simp only [hform] at hdk
+    obtain ⟨carry', y', hr', hmn, hj'⟩ := hdk.2 hn0
+    rw [hret] at hr'
+    injection hr' with e
+    obtain ⟨rfl, rfl⟩ : carry = carry' ∧ y = y' := by simpa using e
+    by_cases hlt : j < carry.leaves
+    · simp only [M, if_pos hlt]; rw [if_pos hlt] at hmn hj'; exact ⟨hmn, hj'⟩
+    · simp only [M, if_neg hlt]; rw [if_neg hlt] at hmn hj'; exact ⟨hmn, hj'⟩
+  have hpt : ∀ t < q.len, 0 ≤ q.at t ∧ (q.at t).toNat < node.out.leaves := by
+    intro t ht'
+    have hm := at_mem_pos h1 ht'
+    have hb := hq _ hm
+    have hfl := hf _ hm k ht
+    simp only [hnode] at hb hfl
+    exact ⟨hb, by omega⟩
+  rw [down_scan_head c fuel q ht hff hn hform hn0 h0 hr hret] at h
+  split at h
+  · rename_i hs
+    unfold scanOne at h
+    dsimp only at h
+    have hlen : 0 < q.len := by rw [← count_one h1]; omega
+    have hat : ∀ t, (q.at t).toNat = q.base.toNat + t := fun t => by
+      have := (hpt 0 hlen).1
+      simp only [Desc.Piece.at, hs] at this ⊢
+      omega
+    have hbl : q.base.toNat + q.len ≤ node.out.leaves := by
+      have := (hpt (q.len - 1) (by omega)).2
+      rw [hat] at this
+      omega
+    have hout := hSO k node carry y hn hform hret
+    have hy0 : y.leaves = 0 → q.base.toNat + q.len ≤ carry.leaves := fun h0 => by
+      rw [h0, Nat.mul_zero, Nat.add_zero] at hout; omega
+    have hmB : carry.leaves < q.base.toNat + q.len →
+        (q.base.toNat + q.len - 1 - carry.leaves) / y.leaves < (c.body.nodes[k]!).members := by
+      intro hcb
+      have := (hbd (q.base.toNat + q.len - 1) (by omega)).1
+      simp only [M, if_neg (show ¬ (q.base.toNat + q.len - 1 < carry.leaves) by omega)] at this
+      rw [hnode, members_scan hform]
+      exact this
+    have hjB : ∀ j, max q.base.toNat carry.leaves ≤ j → j < q.base.toNat + q.len →
+        carry.leaves + (j - carry.leaves) % y.leaves < (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count := by
+      intro j h1 h2
+      have := (hbd j (by omega)).2
+      simp only [M, if_neg (show ¬ (j < carry.leaves) by omega)] at this
+      rw [hnode]
+      exact this
+    rw [show (List.range q.len).map (fun t => Flock.Program.resolve c.P (c.P.child sc k (M (q.at t).toNat).1)
+        ((c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.get (M (q.at t).toNat).2)) =
+        (List.range' q.base.toNat (q.base.toNat + q.len - q.base.toNat)).map (fun j =>
+          Flock.Program.resolve c.P (c.P.child sc k (M j).1) ((c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.get (M j).2))
+      by
+        rw [show q.base.toNat + q.len - q.base.toNat = q.len by omega, List.range'_eq_map_range, List.map_map]
+        apply List.map_congr_left
+        intro t _
+        simp only [Function.comp, hat]]
+    split at h
+    · rename_i hac
+      obtain ⟨v1, hv1, h⟩ := Walk.except_bind_ok h
+      obtain ⟨s2, rfl, hA2⟩ := scanYs_agree c sc fuel hC (by omega) hy0 hmB hjB h
+      have hA1 := hK k (node.n - 1) _ _ v1 (by rw [hnode]; exact hform)
+        (by rw [hnode, members_scan hform]; omega) (fun hlt => by
+          have := (hbd (min (q.base.toNat + q.len) carry.leaves - 1) (by omega)).2
+          simp only [M, if_pos (show min (q.base.toNat + q.len) carry.leaves - 1 < carry.leaves by omega)] at this
+          rw [hnode]
+          omega) hv1
+      rw [Array.empty_append, segsPos_append,
+        range'_split _ (min (q.base.toNat + q.len) carry.leaves) _ (by omega) (by omega), List.map_append]
+      refine agree_append (agree_mono hA1 fun j hj a' ha' => ?_) ?_
+      · rw [List.mem_range'_1] at hj
+        simpa only [M, if_pos (show j < carry.leaves by omega)] using ha'
+      · rw [show List.range' (min (q.base.toNat + q.len) carry.leaves)
+            (q.base.toNat + q.len - min (q.base.toNat + q.len) carry.leaves) =
+            List.range' (max q.base.toNat carry.leaves) (q.base.toNat + q.len - max q.base.toNat carry.leaves) by
+          by_cases hb : q.base.toNat + q.len ≤ carry.leaves
+          · rw [show q.base.toNat + q.len - min (q.base.toNat + q.len) carry.leaves = 0 by omega,
+              show q.base.toNat + q.len - max q.base.toNat carry.leaves = 0 by omega]
+            rfl
+          · rw [show min (q.base.toNat + q.len) carry.leaves = max q.base.toNat carry.leaves by omega]]
+        refine agree_mono hA2 fun j hj a' ha' => ?_
+        rw [List.mem_range'_1] at hj
+        simpa only [M, if_neg (show ¬ j < carry.leaves by omega)] using ha'
+    · rename_i hac
+      obtain ⟨s2, rfl, hA2⟩ := scanYs_agree c sc fuel hC (by omega) hy0 hmB hjB h
+      rw [Array.empty_append]
+      rw [show max q.base.toNat carry.leaves = q.base.toNat by omega] at hA2
+      refine agree_mono hA2 fun j hj a' ha' => ?_
+      rw [List.mem_range'_1] at hj
+      simpa only [M, if_neg (show ¬ j < carry.leaves by omega)] using ha'
+  · rename_i hs
+    unfold scanPts at h
+    dsimp only at h
+    have h := walkAtMost_bind _ _ _ h
+    obtain ⟨v, hv, h⟩ := Walk.except_bind_ok h
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at hv
+    rw [range'_size] at hv
+    obtain ⟨segs', hsegs, hA⟩ := forIn_ext (P := c.P) (sc := sc) (fun t =>
+      [Flock.Program.resolve c.P (c.P.child sc k (M (q.at t).toNat).1)
+        ((c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.get (M (q.at t).toNat).2)]) _ (List.range q.len)
+      (fun t htm r y' hy => by
+        obtain ⟨hb0, hlt⟩ := hpt t (List.mem_range.1 htm)
+        obtain ⟨hmn, hjr⟩ := hbd _ hlt
+        split at hy
+        · rename_i hc
+          obtain ⟨v', hv', hy⟩ := Walk.except_bind_ok hy
+          simp only [pure, Except.pure, Except.ok.injEq] at hy
+          refine ⟨v', hy.symm, ?_⟩
+          simp only [M, if_pos hc] at hmn hjr ⊢
+          have := hK k (node.n - 1) (q.at t).toNat ((q.at t).toNat + 1) v' (by rw [hnode]; exact hform)
+            (by rw [hnode, members_scan hform]; exact hmn) (fun _ => by rw [hnode]; omega) hv'
+          simpa using this
+        · rename_i hc
+          obtain ⟨v', hv', hy⟩ := Walk.except_bind_ok hy
+          simp only [pure, Except.pure, Except.ok.injEq] at hy
+          refine ⟨v', hy.symm, ?_⟩
+          simp only [M, if_neg hc] at hmn hjr ⊢
+          have := hC k _ _ _ v' (by rw [hnode, members_scan hform]; exact hmn) (fun _ => by rw [hnode]; omega) hv'
+          simpa using this) #[] v hv
+    rw [hsegs, Array.empty_append]
+    rwa [← List.map_eq_flatMap] at hA
+
 /-- **A batch of a composite's piece in its one-run case** (`affineOf`, every member returning one run of its gates and
 the members' runs making one), which `batchAffine` proves wherever the callees' summaries hold `RetOk` and a
 composite's return has as many leaves as its type. -/
@@ -4584,17 +4904,15 @@ theorem batchSpec_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (hAf
     exact hAff q k node p ht hn hform hp hL h0 hq hf ha
 
 /-- **Open: `down`'s steps past what is proved here**, each one step up from the specs at its fuel: a batch of a
-composite's piece past its one-run case (`BatchRest`), a scan's piece of one row (`ScanSpec`), and `carry`
-(`CarrySpec`), which follows a scan's carry back through its iterations; and that `throughArg`'s segments are each of
-a copy at least (`ThroughReps`). -/
+composite's piece past its one-run case (`BatchRest`) and `carry` (`CarrySpec`), which follows a scan's carry back
+through its iterations; and that `throughArg`'s segments are each of a copy at least (`ThroughReps`). -/
 def OpenSteps (c : Desc.Ctx) (sc : Flock.Program.Scope) : Prop :=
   (∀ fuel, DownSpec c sc fuel → CalleeSpec c sc fuel → BatchRest c sc fuel) ∧
-    (∀ fuel, CalleeSpec c sc fuel → CarrySpec c sc fuel → ScanSpec c sc fuel) ∧
     (∀ fuel, CalleeSpec c sc fuel → ThroughSpec c sc fuel → CarrySpec c sc (fuel + 1)) ∧ ThroughReps c
 
 /-- **`down`, `fromCallee`, `throughArg` and `carry` keep the gates they read, at every fuel**, wherever the callees'
-summaries hold (`RetOk`), a composite's return has as many leaves as its type, the decoder's facts on the body do, and
-so do `down`'s open steps (`OpenSteps`). -/
+summaries hold (`RetOk`), a composite's return has as many leaves as its type, a scan's output is its final carry's
+leaves and then its ys (`ScanOut`), the decoder's facts on the body do, and so do `down`'s open steps (`OpenSteps`). -/
 theorem specs_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB : Resolve.BodyOk c.P c.d)
     (hP1 : ∀ f : Nat, (c.P.defs[f]!).prim = true → (c.P.defs[f]!).outLeaves = 1)
     (hA : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size → ArgOk c k i)
@@ -4603,10 +4921,12 @@ theorem specs_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB
       ((c.P.defs[(c.body.nodes[k]!).fn]!).body.params[i]!).2.leaves = 0)
     (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn)
     (hOL : ∀ k node, c.node k = .ok node → (c.P.defs[node.fn]!).prim = false →
-      (c.P.defs[node.fn]!).outLeaves = (c.P.defs[node.fn]!).body.ret.count) (hO : OpenSteps c sc) :
+      (c.P.defs[node.fn]!).outLeaves = (c.P.defs[node.fn]!).body.ret.count) (hSO : ScanOut c)
+    (hO : OpenSteps c sc) :
     ∀ fuel, DownSpec c sc fuel ∧ CalleeSpec c sc fuel ∧ ThroughSpec c sc fuel ∧ CarrySpec c sc fuel :=
   specs c sc hd hB hP1 hA hL0 hR
-    (fun fuel hD hC => batchSpec_of c sc fuel (batchAffine c sc hd hR hOL) (hO.1 fuel hD hC)) hO.2.1 hO.2.2.1 hO.2.2.2
+    (fun fuel hD hC => batchSpec_of c sc fuel (batchAffine c sc hd hR hOL) (hO.1 fuel hD hC))
+    (fun fuel hC hK => scanSpec_of c sc hd hB hSO fuel hC hK) hO.2.1 hO.2.2
 
 
 /-! ## The decoder's facts the core reads -/
@@ -4627,10 +4947,12 @@ def Decoded (P : Prog) : Prop :=
         ((P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).body.params[i]!).2.leaves = 0
 
 /-- **`down`, `fromCallee` and `throughArg` keep the gates they read in Definition `d`'s body, at every fuel**, wherever
-the decoder's facts (`Decoded`), the body's references (`Resolve.BodyOk`) and its callees' summaries (`RetOk`) hold. -/
+the decoder's facts (`Decoded`, `ScanOut`), the body's references (`Resolve.BodyOk`) and its callees' summaries
+(`RetOk`) hold. -/
 theorem specs_decoded (P : Prog) (memo : Array Desc.Summary) {d : Nat} (hdP : d < P.defs.size) (hDec : Decoded P)
     (hB : Resolve.BodyOk P d) (hR : ∀ k node, (ctxOf P memo d).node k = .ok node → RetOk P memo node.fn)
-    (sc : Flock.Program.Scope) (hd : sc.d = d) (hO : OpenSteps (ctxOf P memo d) sc) :
+    (hSO : ScanOut (ctxOf P memo d)) (sc : Flock.Program.Scope) (hd : sc.d = d)
+    (hO : OpenSteps (ctxOf P memo d) sc) :
     ∀ fuel, DownSpec (ctxOf P memo d) sc fuel ∧ CalleeSpec (ctxOf P memo d) sc fuel ∧
       ThroughSpec (ctxOf P memo d) sc fuel ∧ CarrySpec (ctxOf P memo d) sc fuel := by
   have hfn : ∀ k node, (ctxOf P memo d).node k = .ok node → node.fn < P.defs.size := by
@@ -4639,7 +4961,7 @@ theorem specs_decoded (P : Prog) (memo : Array Desc.Summary) {d : Nat} (hdP : d 
     have := (hB.1 k hk).1
     have hg : (P.defs[d]!).body.nodes[k]! = node := node_get hn
     rwa [hg] at this
-  refine specs_of (ctxOf P memo d) sc hd hB ?_ ?_ ?_ hR ?_ hO
+  refine specs_of (ctxOf P memo d) sc hd hB ?_ ?_ ?_ hR ?_ hSO hO
   · intro f hf
     by_cases hlt : f < P.defs.size
     · exact (hDec f hlt).1 hf
