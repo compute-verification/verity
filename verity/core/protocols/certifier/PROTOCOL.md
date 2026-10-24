@@ -1173,9 +1173,10 @@ release order.
     end, and every flipped or cut segment is refused.
   - Each bit symbol is one the book's model coded, and each decision's context is min(run, 2) of the decisions before
     it, a function of the bits.
-  - On all 14 corpus traces at T = 600, and the 6 of them that send ENC-DERIVED's fields: 0 mismatches
-    (art:ff4b26d8b4f6a796af9a33734c0a47fae8b50e15c2dee26525d51fece681a2c0, #3660's check, which adds its counting
-    form's cases to these). On ENC-REPLAY's step traces and the TRACE-CORPUS fixture (the certifier's vectors) too.
+  - On ENC-REPLAY's step traces and the TRACE-CORPUS fixture (the certifier's vectors): 0 mismatches. On all 14
+    corpus traces at T = 600, and the 6 of them that send ENC-DERIVED's fields, under v1 before its order entries
+    (#3642's): 0 mismatches (art:ff4b26d8b4f6a796af9a33734c0a47fae8b50e15c2dee26525d51fece681a2c0, #3660's check,
+    which adds its counting form's cases to these).
 - *Cost* (`arith_encode.size`, ANDs, pinned in its circuit-check sidecar).
   - `ArithEncodeStep_v1{18, 1}` costs 3,244: the interval 1,855 (one 33 × 16-bit product and one division to 32
     quotient bits), the scalings 1,188 and the segment check 201. `ArithEncodeStep_v1{18, 0}` costs 4,964,
