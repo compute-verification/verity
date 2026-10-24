@@ -29,8 +29,9 @@ Lean verifier, through the one-stage audit as `benchmarks/one_stage/a8.py` prove
 * **What the verifier opens.** Of each unit its ``pub`` row, to its own copy (`public_words`, from the link's public
   fields, the registered root and the certificate's signed digest), and its verdict row ``o0``, under the salts the
   prover sends for those two rows; never ``wit``. A link-window's head checks pass when both ends' units open with
-  verdict 1. What the verifier received is scanned for every head, head salt, sibling and certifier salt
-  (`a8.received`); the prover's instance file, which holds the heads, is the control.
+  verdict 1. What the verifier received is scanned for every piece of every head, head salt, sibling and certifier salt
+  (`a8.received`) but the pieces the public circuit holds (`public_pieces`); the prover's instance file, which holds the
+  heads, is the control.
 * **Cost** (``--points``): sessions on the honest members whose verifier draws its first k units, behind the firewall
   (`a8.cost`), for the prover's time and proof bytes per unit.
 """
@@ -486,6 +487,25 @@ def blobs_of(rd: SimpleNamespace, d: int) -> tuple[dict[str, bytes], set[str]]:
     return blobs, held
 
 
+def public_pieces(a8, blobs: dict[str, bytes], held: set[str], public: bytes) -> tuple[dict[str, bytes], set[str], list[str]]:
+    """`blobs` cut into the scan's aligned pieces (`a8.needles`'s), each distinct piece once under its first name
+    (``"<blob> @<offset>"``), less the pieces `public` holds raw or as hex. `public` is the staged circuit, which the
+    stager writes from the Definition before any instance, so what it holds the verifier has whatever the witness: a head's
+    empty buckets are sixteen zero bytes, which the circuit holds too. Returns the pieces to scan for, the held ones (pieces
+    of a blob in `held`) and the excluded pieces' hex."""
+    pieces: dict[str, bytes] = {}
+    seen: set[bytes] = set()
+    for name, b in blobs.items():
+        for o in range(0, len(b) - a8.PIECE + 1, a8.PIECE):
+            x = b[o:o + a8.PIECE]
+            if x not in seen:
+                seen.add(x)
+                pieces[f"{name} @{o}"] = x
+    out = {pieces[k] for k in a8.find(public, a8.needles(pieces))}
+    kept = {k: x for k, x in pieces.items() if x not in out}
+    return kept, {k for k in kept if k.rsplit(" @", 1)[0] in held}, sorted(x.hex() for x in out)
+
+
 def prove(a) -> int:
     M = _one_stage()
     out = Path(a.out)
@@ -556,8 +576,9 @@ def prove(a) -> int:
     for j, (k, mb) in enumerate(members.items()):
         m, sg = staged[k], stagers[mb.end]
         res = audit_member(M, av, sg, m, mb.rd, mb.d, out / k, a.port + j)
-        blobs, held = blobs_of(mb.rd, mb.d)
-        res["received"] = M.a8.received(out / k / "verifier", m["dir"] / f"inst-{n}.bin", blobs, held)
+        blobs, held, public = public_pieces(M.a8, *blobs_of(mb.rd, mb.d), (m["dir"] / "circuit.txt").read_bytes())
+        res["received"] = {**M.a8.received(out / k / "verifier", m["dir"] / f"inst-{n}.bin", blobs, held),
+                           "public_pieces": public}
         summary["members"][k].update(res)
         verdicts = [u["verdict"] for u in res.get("units", [])]
         good = (res["accepted"] and all(res["verdicts"].values()) and verdicts == ["accept" if r else "reject" for r in mb.ref]
@@ -565,8 +586,8 @@ def prove(a) -> int:
         ok &= good
         log(f"member {k}: proofs {res['verdicts']}, audit {res['audit']}, units {verdicts}, per unit {res['per_unit']}, "
             f"verifier received {res['received']['verifier_bytes']} bytes, witness pieces found there: "
-            f"{res['received']['verifier_found'] or 'none'}, control {res['received']['control']['blobs_found']}/"
-            f"{len(blobs)}; {'as expected' if good else 'UNEXPECTED'}")
+            f"{res['received']['verifier_found'] or 'none'} (of {len(blobs)}; {len(public)} the public circuit holds, "
+            f"left out), control {res['received']['control']['blobs_found']}; {'as expected' if good else 'UNEXPECTED'}")
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
 
     table = {}
