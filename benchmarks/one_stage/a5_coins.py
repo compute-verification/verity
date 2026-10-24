@@ -50,7 +50,9 @@ from verity.ml.crypto import lms
 TREE = Path(__file__).resolve().parents[2]
 SCHEME = "verity/one-stage/a5-draw/v1"
 FAMILY = "draw"
-COINS_PER_RANK = 16
+#: a stratified:K draw reads 2·K·w + 64 bytes a stratum (`coins.draw_first`, w = 11 below 2^24 units), so a rank's 64 coins
+#: of 64 bytes hold about 47 strata at K = 1
+COINS_PER_RANK = 64
 LOCAL_PARAMS = (4, 5)
 LOCAL_HOST, LOCAL_PEER = "local-challenger", "local"
 MINUTES = 240
