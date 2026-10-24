@@ -23,6 +23,8 @@ from pathlib import Path
 import pytest
 
 from verity.core.protocols.pouw import credit as Cr
+from verity.core.protocols.pouw.circuit import live_reads as LR
+from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
 PKG = Path(__file__).resolve().parents[1] / "lean/check/tests"
@@ -66,9 +68,57 @@ def circuit(k: int) -> bytes:
     return f"circuit file of K = {k}'s template\n".encode()
 
 
+LIVE_CIRCUIT = b"circuit file of the live Program's template\n"
+
+
 def files_of(layout: dict) -> dict:
-    """The period-open's `credit.CIRCUIT_FILES`: each K's circuit file's SHA-512."""
-    return {f"k{k}": hashlib.sha512(circuit(k)).hexdigest() for _n, k, _c in layout["linears"]}
+    """The period-open's `credit.CIRCUIT_FILES`: each K's circuit file's SHA-512, and the live template's."""
+    return {**{f"k{k}": hashlib.sha512(circuit(k)).hexdigest() for _n, k, _c in layout["linears"]},
+            Cr.LIVE: hashlib.sha512(LIVE_CIRCUIT).hexdigest()}
+
+
+def _session(d: dict) -> str:
+    return Ch.audited_session(d["ledger"], d["window"], Ch.ChallengerKey.from_json(d["key"]), rc.lms_verify).session
+
+
+def _bind(base: Path, files: list[bytes], drew: list[int]) -> None:
+    bound = hashlib.sha512(b"".join(hashlib.sha512(f).digest() for f in files)).digest()
+    (base / "session" / "session.json").write_text(json.dumps(
+        {"unit_draw": {"units": drew}, "proof": hashlib.sha512(bound + json.dumps(drew).encode()).hexdigest()}))
+
+
+def live_reads(d: dict, s: int, m: int | None = None) -> dict:
+    """Round s's live@<s> ``--registered`` file (`live_reads.reads_file`) at the window's tables, its session, and the
+    manifest's m_s (or `m`)."""
+    raw, live = bytes.fromhex(d["descriptor"]), Cr.live_of(bytes.fromhex(d["live"]["descriptor"]))[0]
+    program, prefix, steps = hashlib.sha512(raw).hexdigest(), Cr._prefix(raw), len(d["rounds"])
+    roots = {e["value"]: e["root"] for e in d["entries"]}
+    ms = m if m is not None else d["calls"][s * (len(d["calls"]) // steps)][Cr.SERVED_ROWS]
+    return LR.reads_file(program, live["T"], steps, s, roots, d["window"]["root"], _session(d), ms, prefix)
+
+
+def prove_live(d: dict, to: Path, m: dict[int, int] | None = None) -> dict:
+    """The window's live evidence as an honest prover delivers it (`credit.LIVE_STATEMENTS`): its live descriptor and
+    each round's statement, the live template's circuit file, a public file whose one instance is unit s, and one session
+    drawing it, its proof bound to the files the verifier is handed (round s's ``--registered`` file at the manifest's
+    m_s, or ``m[s]``)."""
+    desc = d["live"]["descriptor"]
+    raw = bytes.fromhex(desc)
+    unit = Cr.live_of(raw)[0]["unit"]
+    partition = {"format": Cr.PARTITION_FORMAT, "program": hashlib.sha512(raw).hexdigest(),
+                 "query": {"name": Cr.QUERY[0], "version": Cr.QUERY[1], "params": {"templates": [unit]}}}
+    out = []
+    for s in range(len(d["rounds"])):
+        base = to / f"live-{s}"
+        (base / "session").mkdir(parents=True)
+        (base / "circuit.txt").write_bytes(LIVE_CIRCUIT)
+        (base / "pub.bin").write_bytes(json.dumps({"units": {"indices": [s]}}).encode() + b"\n")
+        reg = live_reads(d, s, (m or {}).get(s))
+        _bind(base, [LIVE_CIRCUIT, base.joinpath("pub.bin").read_bytes(), raw, json.dumps(partition).encode(),
+                     json.dumps(reg).encode()], [0])
+        out.append({"round": s, "circuit": str(base / "circuit.txt"), "public": str(base / "pub.bin"),
+                    "sessions": [str(base / "session")]})
+    return {"descriptor": desc, "statements": out}
 
 
 def _layout(d: dict) -> dict:
@@ -118,13 +168,14 @@ def prove(d: dict, k: int, to: Path) -> list[dict]:
 
 
 def window(seed: int, tmp: Path) -> tuple[dict, list[dict]]:
+    """An honest window, its ``live`` evidence its live statements (`prove_live`), and its calls' statements."""
     d = cases.window_instance(random.Random(f"statements/{seed}"), "honest")
-    return d, prove(d, d["k"], tmp)
+    return {**d, "live": prove_live(d, tmp)}, prove(d, d["k"], tmp)
 
 
-def credit(d: dict, statements, files=None):
-    return Cr.window(*(d[k] for k in cases.WINDOW_ARGS[:-3]), statements,
-                     files_of(_layout(d)) if files is None else files, d["k"], d["rows"], rc.lms_verify)
+def credit(d: dict, statements, files=None, run=PF.verify):
+    return Cr.window(*(d[k] for k in cases.WINDOW_ARGS[:-4]), statements, d["live"],
+                     files_of(_layout(d)) if files is None else files, d["k"], d["rows"], rc.lms_verify, run=run)
 
 
 def _credited(d: dict) -> list[int]:
@@ -319,8 +370,7 @@ def test_a_session_that_opened_another_public_table_root_is_refused(seed, tmp_pa
             "value": pub["value"], "root": "ab" * 64}} if kw["registered"] == reg else f.registered, f.units)
             for f in got or []], why
 
-    got, refused = Cr.window(*(d[x] for x in cases.WINDOW_ARGS[:-3]), statements, files_of(_layout(d)), d["k"],
-                             d["rows"], rc.lms_verify, run=run)
+    got, refused = credit(d, statements, run=run)
     assert got is None and refused == ("registration", (
         f"call {s['call']}'s session {s['sessions'][0]} opened a public table at another port, value or root than the "
         f"verifier's own {pub['value']} at port {Cr.PUB_PORT}: a unit's public row is the window's salt, its position "
@@ -391,8 +441,7 @@ def test_a_session_that_opened_another_ok_root_is_refused(seed, opened, tmp_path
         return [PF.Finding(f.session, f.accepted, f.why, f.program, found(f) if kw["registered"] == reg else f.registered,
                            f.units) for f in got or []], why
 
-    got, refused = Cr.window(*(d[x] for x in cases.WINDOW_ARGS[:-3]), statements, files_of(_layout(d)), d["k"],
-                             d["rows"], rc.lms_verify, run=run)
+    got, refused = credit(d, statements, run=run)
     assert got is None and refused == ("registration", (
         f"call {s['call']}'s session {s['sessions'][0]} opened the ok rows at another port, value or root than the "
         f"verifier's own {ok['value']} at port {Cr.OK_PORT}, or not at all: a unit's ok row is the one word 1 under its "
@@ -420,7 +469,8 @@ def _period(seed: int, tmp: Path, files: dict | None = "own"):
     windows = []
     for i, w in enumerate(d["windows"]):
         statements = prove({**w, "k": k}, k, tmp / f"w{i}")
-        windows.append({**{x: v for x, v in w.items() if x != "proofs"}, "statements": statements})
+        live = prove_live({**w, "key": d["key"], "ledger": d["ledger"]}, tmp / f"w{i}")
+        windows.append({**{x: v for x, v in w.items() if x != "proofs"}, "statements": statements, "live": live})
     return d, windows
 
 
@@ -443,3 +493,59 @@ def test_a_period_committing_no_circuit_files_earns_nothing(seed, tmp_path, veri
     got, refused = Cr.period_credit(d["key"], d["ledger"], d["pins"], d["main"], d["name"], windows, rc.lms_verify)
     assert got is None and refused[0] == "window" and "circuit: the period's open commits no circuit file for K = " in \
         refused[1], refused
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_a_live_statement_proved_at_another_m_is_rejected(seed, tmp_path, verifier):
+    """Credit builds round s's live ``--registered`` file itself, its ``m@<s>`` at the manifest's m_s: a live statement
+    the prover proved against an ``m@<s>`` of another m (the serving process stated m_s, the live unit counted another)
+    was proved against another file, so the verifier rejects its session and the window is refused (``live``)."""
+    d, statements = window(seed, tmp_path)
+    assert credit(d, statements) == (_credited(d), None)
+    s = random.Random(seed).randrange(len(d["rounds"]))
+    m = d["calls"][s * (len(d["calls"]) // len(d["rounds"]))][Cr.SERVED_ROWS]
+    d = {**d, "live": prove_live(d, tmp_path / "other-m", {s: m + 1 if m < d["rows"] else m - 1})}
+    got, refused = credit(d, statements)
+    assert got is None and refused[0] == "live" and refused[1].startswith(f"round {s}'s live@{s} session "), refused
+    assert "was rejected by the verifier of record" in refused[1]
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_live_evidence_carrying_outcomes_or_no_committed_file_is_refused(seed, tmp_path, verifier, monkeypatch):
+    """The live evidence carries each round's proof files, never verdicts (`credit.LIVE_STATEMENTS`), on the circuit
+    file the period's open committed for the live template (``circuit_files.live``); a round proved twice or past the
+    window's rounds, or a session that proved another unit than its round's, refuses the window."""
+    d, statements = window(seed, tmp_path)
+    outcomes = cases.window_instance(random.Random(f"statements/{seed}"), "honest")["live"]
+    assert credit({**d, "live": outcomes}, statements) == (None, ("live", Cr.LIVE_STATEMENTS_FORM))
+    files = {x: v for x, v in files_of(_layout(d)).items() if x != Cr.LIVE}
+    assert credit(d, statements, files) == (None, ("circuit", Cr.no_live_files()))
+    live = d["live"]["statements"]
+    steps = len(d["rounds"])
+    for extra in ([*live, live[0]], [*live, {**live[0], "round": steps}]):
+        got, refused = credit({**d, "live": {**d["live"], "statements": extra}}, statements)
+        assert got is None and refused[0] == "live" and "each round's live@<s> is one statement" in refused[1]
+    got, refused = credit({**d, "live": {**d["live"], "statements": live[1:]}}, statements)
+    assert got is None and refused == ("live", refused[1]) and "round 0's live@0 has no proof outcome" in refused[1]
+    pub = Path(live[0]["public"])
+    pub.write_bytes(json.dumps({"units": {"indices": [steps]}}).encode() + b"\n")
+    reg = live_reads(d, 0)
+    raw = bytes.fromhex(d["live"]["descriptor"])
+    partition = {"format": Cr.PARTITION_FORMAT, "program": hashlib.sha512(raw).hexdigest(),
+                 "query": {"name": Cr.QUERY[0], "version": Cr.QUERY[1],
+                           "params": {"templates": [Cr.live_of(raw)[0]["unit"]]}}}
+    _bind(pub.parent, [LIVE_CIRCUIT, pub.read_bytes(), raw, json.dumps(partition).encode(), json.dumps(reg).encode()], [0])
+    got, refused = credit(d, statements)
+    assert got is None and refused[0] == "live" and f"proved units [{steps}], not unit 0" in refused[1], refused
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_a_period_whose_live_statement_fails_earns_nothing(seed, tmp_path, verifier):
+    d, windows = _period(seed, tmp_path)
+    i = random.Random(seed).randrange(len(windows))
+    p = Path(windows[i]["live"]["statements"][0]["sessions"][0]) / "session.json"
+    rec = json.loads(p.read_text())
+    rec["proof"] = ("0" if rec["proof"][0] != "0" else "1") + rec["proof"][1:]
+    p.write_text(json.dumps(rec))
+    got, refused = Cr.period_credit(d["key"], d["ledger"], d["pins"], d["main"], d["name"], windows, rc.lms_verify)
+    assert got is None and refused[0] == "window" and "live: round 0's live@0 session " in refused[1], refused

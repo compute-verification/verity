@@ -70,6 +70,7 @@ NO_SERVED = "states no served rows m_s at most the period's T = "
 NO_ROWS = "'s open commits no table rows T (rows, a positive integer"
 OTHER_SLOT = "the period's T = "
 OTHER_SERVED = "every dense call of a step serves the step's m_s rows"
+LIVE_FINDING = "proof opened other ports, values or roots than its statement reads"
 DRAWN_EXPECT = {
     "coin-form": ("draw", Cr.COIN_FORM), "args-form": ("draw", Cr.DRAW_ARGS), "layout-form": ("layout", Cr.LAYOUT_FORM),
     "named-twice": ("layout", "is named twice"), "unknown-linear": ("layout", "which is no linear of the window"),
@@ -124,6 +125,18 @@ WINDOW_EXPECT = {
     "commit-unbound": ("draw", Cr.DRAW_ROOT), "credit-commit-form": ("commit", Cr.COMMIT_FORM),
     "rows-past": ("manifest", NO_SERVED), "rows-form": ("manifest", NO_SERVED), "rows-other": ("manifest", OTHER_SERVED),
     "t-other": ("layout", OTHER_SLOT), "t-form": ("layout", Cr.ROWS_FORM),
+    "live-no-slots": ("live", "each registered once"), "live-no-requests": ("live", "each registered once"),
+    "live-slots-rows": ("live", "16-bit words its live unit reads"),
+    "live-requests-rows": ("live", "16-bit words its live unit reads"),
+    "live-form": ("live", "live evidence is not {descriptor, proofs}"),
+    "live-descriptor-form": ("live", Cr.LIVE_DESCRIPTOR_FORM), "live-not-live": ("live", Cr.NOT_LIVE),
+    "live-body": ("live", Cr.LIVE_BODY), "live-t-other": ("live", "live Program is at T = "),
+    "live-s-other": ("live", "rounds, not the window's"), "live-prefix": ("live", Cr.LIVE_PREFIX),
+    "live-missing": ("live", "has no proof outcome"), "live-twice": ("live", "has two proof outcomes"),
+    "live-past": ("live", "has a proof outcome and the window has"), "live-failed": ("live", "proof was rejected"),
+    "live-other-circuit": ("live", "against another circuit than the window's live Program"),
+    "live-m-other": ("live", LIVE_FINDING), "live-slots-other": ("live", LIVE_FINDING),
+    "live-ok-off": ("live", LIVE_FINDING), "live-proofs-form": ("live", Cr.LIVE_PROOFS_FORM),
 }
 PERIOD_EXPECT = {
     "no-close": ("period", "present the ledger after its close"), "incomplete": ("period", "closed incomplete"),
@@ -151,6 +164,7 @@ PERIOD_EXPECT = {
     "other-model": ("weights", "which is no checkpoint role credit pins: " + Cr.MODEL_FIX),
     "other-sw": ("window", "so the period earns nothing: weights: the window's registered weights' root "),
     "zero-codes": ("window", "so the period earns nothing: weights: the window's registered weights' root "),
+    "live-refused": ("window", "so the period earns nothing: live: round "),
 }
 A_LINK_EXPECT = {
     "untied": UNTIED, "late-rows": UNTIED, "rewritten": UNTIED, "round-root": "`credit.round_root`", "gap": "`credit.cover`",
@@ -571,16 +585,14 @@ def test_round_0s_request_table_is_its_request_table_under_the_session():
     """The live unit's ``req`` reads ``<prefix>requests@0`` (`circuit.live`), whose root is round 0's ``request_table``,
     inside round 0's request root and so inside the window's open root: its domain binds the window's session, as
     ids@0's does, not the open root that contains it (`domain_of`). A window registering it at another root, twice,
-    under another PREFIX, or bound to another session or to the open root is refused (`REQ0_NAMES`); one registering
-    none is accepted, as nothing reads it then."""
+    under another PREFIX, or bound to another session or to the open root is refused (`REQ0_NAMES`), and so is one
+    registering none, since each round's live unit reads it (``live-no-requests``)."""
     found = 0
     for seed in range(12):
         d = cases.window_instance(random.Random(f"honest/{seed}"))
         prefix = Cr._prefix(bytes.fromhex(d["descriptor"]))
         req = [e for e in d["entries"] if Cr.is_requests(e["value"])]
         assert Cr._window_outcomes(*cases.window_args(d))[1] is None, seed
-        if not req:
-            continue
         found += 1
         (e,) = req
         assert e["value"] == f"{prefix}{Cr.REQUESTS_TABLE}" and e["root"] == d["rounds"][0]["request_table"]
@@ -597,6 +609,34 @@ def test_round_0s_request_table_is_its_request_table_under_the_session():
         got, refused = Cr._window_outcomes(*cases.window_args(cases.window_instance(random.Random(f"{name}/0"), name)))
         assert got is None and refused == (WINDOW_EXPECT[name][0], refused[1]) and WINDOW_EXPECT[name][1] in refused[1], \
             (name, refused)
+
+
+def test_the_live_program_is_read_from_its_compiled_descriptor():
+    """`credit.live_of` reads the compiled `live.program`'s T, S and PREFIX back from its descriptor (canonical JSON
+    without annotations, the bytes its program digest hashes), its unit the one template its query draws, unit s round
+    s's; the cases' stand-in descriptor (`live_program`) reads the same."""
+    from verity.core.protocols.pouw.circuit import live as LV
+    for t, s, prefix in ((4, 3, "h1/w-1/"), (1, 1, ""), (32, 2, "x/y/")):
+        prog = LV.program(t, s, prefix)
+        raw = codec.canonical_json({k: v for k, v in codec.encode_program(prog).items() if k != "annotations"})
+        got, why = Cr.live_of(raw)
+        assert why is None and (got["T"], got["S"], got["prefix"]) == (t, s, prefix)
+        assert LV.query(t) == {"name": Cr.QUERY[0], "version": Cr.QUERY[1], "params": {"templates": [got["unit"]]}}
+        assert hashlib.sha512(raw).hexdigest() == h1.P.program_digest(prog)
+        assert Cr.live_of(bytes.fromhex(cases.live_hex(cases.live_program(t, s, prefix)))) == (got, None)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_each_steps_served_rows_are_proved_by_its_live_unit(seed):
+    """Each round's live@<s> proof outcome opens ``m@<s>`` at the known rows of the manifest's m_s: a window whose
+    serving process stated another m_s than its live unit proved (the statement's m, the count of round s's slots
+    assigned to round 0's admitted requests) is refused, and so is its period."""
+    d = cases.window_instance(random.Random(f"honest/{seed}"))
+    assert Cr._window_outcomes(*cases.window_args(d))[1] is None
+    got, refused = _window("live-m-other", seed)
+    assert got is None and refused[0] == "live" and LIVE_FINDING in refused[1]
+    got, refused = _period("live-refused", seed)
+    assert got is None and refused[0] == "window" and "live: round " in refused[1]
 
 
 def test_the_commit_record_is_bound_under_calls_root():
