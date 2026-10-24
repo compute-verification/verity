@@ -3495,27 +3495,30 @@
    "guarantees": ["Properties.Requirement.held", "Properties.Requirement.read", "Properties.Requirement.stepRegion"]
   },
   "Definitions.Accounting.Remote.Draw": {
-   "digest": "d70d2eebcce8362707ff5a463a973a9decb46f9768782aef143fe290bd22e1ea",
+   "digest": "2aef326bd1ab0dd686824ce2554151eea234440143a0a1baafb28dbf8bedd454",
    "definitions": {
     "Accounting.Remote.Draw.Blocks": "c039d32ff0024407a58df4ca4cd9489e00cd3968a16cc2b29cd83ff475aad5c8",
     "Accounting.Remote.Draw.Coins": "2f7cc1f6aba6148b468add0d9e19c65c8fbc3c14c0869a701c2eb8a47b114f0e",
     "Accounting.Remote.Draw.Session": "941ba13f9bb572a8f393d61cc00f47748ebe85bf7586ec44acd7b4e409f7378f",
+    "Accounting.Remote.Draw.Session.bound": "dfa9fc1a0ba16e75c1c165d86ad380feeca3d05fdd11c215284a4323ad0ea2f0",
     "Accounting.Remote.Draw.Session.correct": "7a758b411d408715105f90ace2ed209efb98671de7d88223d7f6bef9f5abb26c",
+    "Accounting.Remote.Draw.Session.distinguisher": "2277e41b92a7d95b7e8868a4406dbd68d592fb455b989253d4399a7427ab2510",
     "Accounting.Remote.Draw.Session.draws": "3a3c71ad3dc37205ce78594cccca71a2234e09f617c28734cf8b05751a177269",
     "Accounting.Remote.Draw.Session.good": "fb29a33028e55af9026cbc6bc18b6726bde81230430f17db6a93e2735ef9aae2",
+    "Accounting.Remote.Draw.Session.lands": "46b48e256df60ccc26559997409f520b337a023fa4a4f5360db410a0e5e00dde",
     "Accounting.Remote.Draw.Session.opened": "099546d4ec6c4501eb30a14545212cbfa9e971b9cd8a9c7d4b7c86fc4c8b44a1",
     "Accounting.Remote.Draw.Session.pooled": "da515c7764fc56368be00b250a02164eaaf56a1eeefbaa8027b150f93b1104fd",
     "Accounting.Remote.Draw.Session.size": "0eea821c86033cda6df2dacba304e9084e642040e5868e872fd12059353d3992",
     "Accounting.Remote.Draw.Session.wrong": "6f669c00ea5f96e2ebc5d63abe8515c635ddf600f6bc00a1247a5b98e954b12c",
     "Accounting.Remote.Draw.accepted": "b0a92a5e05c26a8037ed70a16b94ff1287fdac2e513330dbe5679c1d499b94c6",
-    "Accounting.Remote.Draw.advantage": "c83095e4a44e431d121c718cde54b38b7c679d2b13e5c3a90ae2007f2e6c712d",
     "Accounting.Remote.Draw.arrange": "f1709389a2de9004f1be097b693bdf7ddf7568ba0e8b09a06057a361baf40880",
+    "Accounting.Remote.Draw.below": "4697905d5580aa26e8537bb1832747d8ac1b905c8bf98fd7380f9f1b9c61c95d",
     "Accounting.Remote.Draw.budget": "f2420d149470daf39805deb86dc8c1dbf4fe053a01569f29dd24bfb4b6137302",
     "Accounting.Remote.Draw.offset": "795755fad153056dd737dfe6ad9dfae7f23914343aaf79dc839d225419c4f2d2",
     "Accounting.Remote.Draw.offsets": "986b9c49b7bd390877b5ba71588876f203728a830718a30c3af059d6a860bb48",
     "Accounting.Remote.Draw.openings": "47cc9ba6cd4841ef58d296e8ebd98e680845aaa74d6705da0f65170169012425",
     "Accounting.Remote.Draw.pooled": "b1043e9ddcda2923acc1f24f1baf2e37ae4131aaee95e75685bbd11e97ef9371",
-    "Accounting.Remote.Draw.test": "62a0c0a6e07c4da9a8813fcc8151427edfb6d6d262bc75ff5cc7e72f1c885c42",
+    "Accounting.Remote.Draw.test": "b1a2f0e138861d3806439f5d5e809c014243c32978534143063cf633d1899d74",
     "Accounting.Remote.Draw.width": "5ba583f4de89a5631bf424804829c778f2fb72d857b5200727facdc3dd153a68",
     "Accounting.Remote.Draw.word": "e893db4572ca10eb2322426a1da412d2dbedba5f6464461cfdc8e1d346fde663"
    },
@@ -8023,13 +8026,13 @@
    ]
   },
   "Properties.RemoteAudit.Line": {
-   "digest": "35101bd3805f7fa479669f5c93dd212c675c1a2ea2475bb7c3416b70c4243b9e",
+   "digest": "420ef95f5e53c0143facab006dee7e3c560f863d8da325e0101d87b6b98b5227",
    "definitions": {
     "Properties.RemoteAudit.Line.Credits": "9eec9eb1330187d597bef59966923e5ccf2461e6b517b9ffe07fbd35fba6844d",
     "Properties.RemoteAudit.Line.HeldAt": "5af243528466ee1f818da31f0b9632e466c6bef20c824495d5d167eff2579285",
     "Properties.RemoteAudit.Line.LineChecked": "1c5505e0b300c71854bafd0ede4feac0aea5016477e28030deb3bc4f7989742a",
-    "Properties.RemoteAudit.Line.LineHeld": "d9a5e804de250260376c04df3f1d9ec0aa6f4707a437c96cec6525d0ee0302d7",
-    "Properties.RemoteAudit.Line.LineHeldIdentity": "dfca22830c352b4f6b1777c5961de7c7489f6b6541d1e2cd8b0ecd61ce454c01",
+    "Properties.RemoteAudit.Line.LineHeld": "85edce10d70e7b6df929d0ec18855925339ba3c363769c3a704f0b1e9e4836a8",
+    "Properties.RemoteAudit.Line.LineHeldIdentity": "b49a251934397a55039c66777b3bec651046e9116e74b26a13eb2f9c9b51ac5a",
     "Properties.RemoteAudit.Line.StretchBound": "d2fd1511c22acab992d17179d4063bc8e30948b86d21f2b7efb8275a13b59b95"
    },
    "guarantees": [
