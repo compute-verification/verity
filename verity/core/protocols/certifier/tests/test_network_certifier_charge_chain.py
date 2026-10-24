@@ -48,7 +48,7 @@ def _chain(book, rows_out, start=None):
 def test_the_chain_is_code_v1s_over_the_whole_stream():
     """Each stream's windows chained: the carry each window reads is committed by the last, the verifier's check
     passes, and every window's `ChargeLink_v1{14}` on its committed rows is ok at `code_v1`'s charge over the whole
-    stream, which the priors alone (a restart every window) would get wrong."""
+    stream, which the priors alone (a restart every window) would undercharge on 6 of the 41 windows."""
     windows = carried = restarted = 0
     for source, N, book, wins, lens in _streams():
         ses = CC.session(N, book, wins)
@@ -61,9 +61,9 @@ def test_the_chain_is_code_v1s_over_the_whole_stream():
         assert CC.evaluate_links(N, cases) == [(1, length) for length in lens], source
         windows += len(wins)
         carried += sum(s[1] != CC.encode(prior) for s in ses)
-        restarted += sum(AE.reference_charge(N, cb, prior, en, bits)[1] != length
+        restarted += sum(AE.reference_charge(N, cb, prior, en, bits)[1] < length
                          for (en, bits), length in zip(wins, lens))
-    assert windows >= 30 and carried >= 30 and restarted >= 5
+    assert (windows, carried, restarted) == (41, 35, 6)
 
 
 def _two_windows():
