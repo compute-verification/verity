@@ -150,8 +150,8 @@ def test_detectors_on_examples() -> None:
     )
     got = {(v.kind, v.detail) for v in file_violations(bad, "verity_vllm/check/x.py")}
     assert got == {("if-ladder", "fam"), ("rng", "numpy.random.default_rng"), ("rng", "random.Random")}, got
-    assert file_violations(bad, "verity_vllm/program/kernels/x.py") == [
-        v for v in file_violations(bad, "verity_vllm/program/kernels/x.py") if v.kind == "rng"]
+    assert file_violations(bad, "verity_vllm/program/kernels/relations.py") == [
+        v for v in file_violations(bad, "verity_vllm/program/kernels/relations.py") if v.kind == "rng"]
     siblings = "def g(family):\n" + "".join(f"    if family == 'F{i}_v1':\n        return {i}\n" for i in range(LADDER_MIN))
     assert [(v.kind, v.symbol, v.detail) for v in file_violations(siblings, "verity_vllm/check/x.py")] == [
         ("if-ladder", "g", "family")]

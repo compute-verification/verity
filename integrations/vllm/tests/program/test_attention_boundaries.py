@@ -25,7 +25,7 @@ MOVES = {"fa2_check_inf": ("KBLOCK_M", "fa2_masked_from"), "fa3_check_inf": ("fa
 #: another family's registry module -> the names a family Definition module may take from it (None: the whole module), and why
 OTHER_FAMILIES = {
     "prims": (None, "the word primitives (F32MaxFtz, MufuEx2Ftz, F2fpBf16, ...) and their types (A16, BF16, F32, I32, bits_of)"),
-    "b1": ({"ZERO16", "_lane", "_scale_log2_bits", "AttnBlockV2", "AttnBlockV3", "AttentionHeadV2", "AttentionHeadV3", "AttentionV2",
+    "b1": ({"ZERO16", "_lane", "scale_log2_bits", "AttnBlockV2", "AttnBlockV3", "AttentionHeadV2", "AttentionHeadV3", "AttentionV2",
             "AttentionV3"},
            "Const16's zero, the mma accumulator's lane map and the softmax scale's word constant the bodies read, and the "
            "accepted chains the Boolean versions lower"),

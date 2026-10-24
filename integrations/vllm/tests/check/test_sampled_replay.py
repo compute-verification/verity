@@ -106,7 +106,7 @@ def _program(bias: bool = False, rope: bool = False, attn: bool = False, scale: 
     vfields = [("eps", int(np.float32(float.fromhex(json.loads(EPS)["f64"])).view(np.uint32)))]
     if attn:
         from verity_vllm.program.registry import b1
-        vfields.append((f"scale_log2_d{DH}", b1._scale_log2_bits(DH)))
+        vfields.append((f"scale_log2_d{DH}", b1.scale_log2_bits(DH)))
     VAL = {n: [["p", 1, k, k + 1]] for k, (n, _b) in enumerate(vfields)}
     norm_t, norm_f = (f"RMSNormTriton_v3{{N={H}}}", f"RMSNormFusedCuda_v4{{N={H}}}") if registered else \
         (f"RMSNormTriton_v1{{N={H},EPS={EPS}}}", f"RMSNormFusedCuda_v2{{N={H},EPS={EPS}}}")

@@ -263,24 +263,26 @@ def new_violations(name: str, violations: Iterable[Violation]) -> list[str]:
     return out
 
 
-def _left_the_package(key: tuple) -> bool:
-    """Whether a layout move took the entry out of ``verity_vllm``: its file is outside it, or, for a package-level entry (a
-    module cycle), a module its detail names (``program.registry.sampling``, short for ``verity_vllm.program.registry.sampling``)
-    is no longer the package's."""
-    if key[0] != PKG.name:
-        return not key[0].startswith(PKG.name + "/")
+def left_the_package(key: tuple) -> bool:
+    """Whether a layout move took the entry out of ``verity_vllm``: its file is outside it, or a module its detail's import
+    edge or cycle names (``program.registry.sampling``, short for ``verity_vllm.program.registry.sampling``) is no longer
+    the package's."""
+    if key[0] != PKG.name and not key[0].startswith(PKG.name + "/"):
+        return True
+    if "->" not in key[3]:
+        return False
     names = [t for t in key[3].replace("<->", " ").replace("->", " ").split() if "." in t]
     return any(not (PKG.joinpath(*t.split(".")).with_suffix(".py").is_file() or PKG.joinpath(*t.split(".")).is_dir())
                for t in names)
 
 
 def stale_entries(name: str, violations: Iterable[Violation]) -> list[str]:
-    """Entries no violation matches.  An entry a layout move took out of ``verity_vllm`` (`_left_the_package`) is the move's to
+    """Entries no violation matches.  An entry a layout move took out of ``verity_vllm`` (`left_the_package`) is the move's to
     delete, not stale here: a pure move rewrites its path but can't drop it."""
     found = Counter(v.key for v in violations)
     out = []
     for k, n in sorted(load_allowlist(name).items()):
-        if _left_the_package(k):
+        if left_the_package(k):
             continue
         have = found.get(k, 0)
         if have < n:

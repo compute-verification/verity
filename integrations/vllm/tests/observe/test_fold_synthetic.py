@@ -289,7 +289,7 @@ def p_attention(node, ctx):
         operands = (Gather(q3, (i,)), GatherMany(_kv_flat(kc), (slots,)), GatherMany(_kv_flat(vc), (slots,)))
         if ctx.profile.registered_values:
             spec = bind(VI.AttentionV10, T=T, NH=C["NH"], KVH=C["KVH"], D=C["D"], BN=BN)
-            operands += (Supplied("registration", f"scale_log2_d{C['D']}", 32, b1._scale_log2_bits(C["D"])),)
+            operands += (Supplied("registration", f"scale_log2_d{C['D']}", 32, b1.scale_log2_bits(C["D"])),)
         parts.append(Compute(spec, 1, operands, (Gather(out, (i,)),), (), node.enter.module or "", attribution=((req, p),)))
     return Group(tuple(parts), (node.id, ch.id), node.enter.module or "")
 
@@ -489,7 +489,7 @@ def test_registered_values_are_inputs_of_the_program(memory):
     legacy = fold(toy_log(), toy_profile(), strict=True)
     assert r.report.unsupported == 0 and not r.errors and r.digest != legacy.digest
     assert [n for n, _ in r.params] == ["prompt", "run", "values", "weights"]
-    eps, scale = int(P.bits_of(np.float32(C["EPS"]))), b1._scale_log2_bits(C["D"])
+    eps, scale = int(P.bits_of(np.float32(C["EPS"]))), b1.scale_log2_bits(C["D"])
     assert r.params[2][1] == Record(("eps", Value(32)), ("scale_log2_d8", Value(32))) and r.params[1][1] == Record()
     assert r.supplied == {"registration": {"param": 2, "name": "values", "fields": [
                               {"name": "eps", "width": 32, "bits": f"0x{eps:08x}", "offset": 0},

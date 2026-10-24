@@ -7,12 +7,12 @@ from functools import lru_cache
 
 
 @lru_cache(maxsize=None)
-def _fa2():
+def fa2_twin():
     from verity_vllm.program.kernels import fa2_model, fa2_relation
     return fa2_model, fa2_relation.tables()
 
 
 @lru_cache(maxsize=None)
-def _rms():
+def rms_twin():
     from verity_vllm.program.kernels import rms_relation, rms_triton_model
     return rms_triton_model, rms_relation.tables("cuda")

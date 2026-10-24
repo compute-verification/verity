@@ -1,5 +1,5 @@
 """Vectorised numpy twins of `RMSNormFusedCuda`'s two variance-summation trees and its epilogue: f32 is IEEE RN-even in numpy,
-and MUFU.RSQ goes through the registered primitive's table (`prims_twins._rms`).
+and MUFU.RSQ goes through the registered primitive's table (`prims_twins.rms_twin`).
 
 * `variance_v1` — `RMSNormFusedCuda_v1`: `fused_add_rms_norm_kernel<bf16, 8>` (N/8 threads x one 8-vector, pairs summed
   sequentially).
@@ -77,8 +77,8 @@ def variance_v2(z: np.ndarray, block: int = FUSED_RMS_BLOCK) -> np.ndarray:
 
 def rsqrt_approx(x: np.ndarray) -> np.ndarray:
     """`rsqrt.approx.f32` through the registered primitive's table (same model the IR gate evaluates)."""
-    from verity_vllm.program.kernels.prims_twins import _rms
-    rm, t = _rms()
+    from verity_vllm.program.kernels.prims_twins import rms_twin
+    rm, t = rms_twin()
     return np.asarray(rm.rsqrt_f32(np.ascontiguousarray(x, dtype=np.float32), t), dtype=np.float32)
 
 

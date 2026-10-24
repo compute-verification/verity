@@ -67,7 +67,7 @@ def test_an_unguarded_block_leaves_only_the_rescale_unguarded():
     on = evaluate(_block(True), q, k, v, NEG_INF, [0] * 4, [0] * D)
     v2 = evaluate(bind(b1.AttnBlockV2, D=D, NVIS=BN, FIRST=False, BN=BN, DOT=hopper.HopperBF16WgmmaDot16), q, k, v, NEG_INF, [0] * 4, [0] * D)
     assert off[0] == on[0] == NEG_INF and all(_is_nan(w) for w in off[1:]) and set(on[1:]) == {0} and on == v2
-    scale = b1._scale_log2_bits(D)
+    scale = b1.scale_log2_bits(D)
     p = {name: int(evaluate(P.MufuEx2Ftz, int(evaluate(P.F32FmaSubFtz, NEG_INF, scale, max_scaled)[0]))[0])
          for name, max_scaled in (("fa2", int(evaluate(P.F32MulFtz, int(evaluate(P.GuardNegInfZero, NEG_INF)[0]), scale)[0])),
                                   ("fa3", int(evaluate(P.F32MulFtz, NEG_INF, scale)[0])))}

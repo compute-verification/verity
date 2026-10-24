@@ -113,14 +113,14 @@ def _tc_lib() -> ctypes.CDLL:
     return _TC_LIB
 
 
-def _fa2():
-    fa2, tabs = prims_twins._fa2()
+def fa2_twin():
+    fa2, tabs = prims_twins.fa2_twin()
     LIBRARIES["fa2_model"] = str(fa2.LIB)
     return fa2, tabs
 
 
-def _rms():
-    rm, tabs = prims_twins._rms()
+def rms_twin():
+    rm, tabs = prims_twins.rms_twin()
     LIBRARIES["rms_triton_model"] = str(rm.LIB)
     return rm, tabs
 
@@ -131,8 +131,8 @@ def preload() -> dict[str, Any]:
     this before the fold's Program and the checkpoint fields are resident keeps the process high-water mark lower and
     lets the freed transient space be reused (laptop: 1.4 GB -> ~1.1 GB on M1 tier b)."""
     _tc_lib()
-    _fa2()
-    _rms()
+    fa2_twin()
+    rms_twin()
     silu_table()
     return dict(LIBRARIES)
 
@@ -539,7 +539,7 @@ class RMSNormTritonTwin(Twin):
         x, w = _words16(args[0]), _words16(args[1])
         if x.size != N or w.size != N:
             raise ValueError(f"{self.spec.id}: operands {x.size}, {w.size} words")
-        rm, tabs = _rms()
+        rm, tabs = rms_twin()
         out = rm.rms_norm_rows(x.reshape(1, N), w, float(self.s.EPS), tabs, variant=0, kernel="triton")
         return np.asarray(out).reshape(-1).astype(U64)
 
@@ -579,7 +579,7 @@ class RMSNormFusedTwin(Twin):
         r = _bf16_rn(_f32(x) + _f32(res), P.BF16_NAN_F2FP)
         rf = _f32(r)
         var = _fused_variance(rf, N)
-        rm, tabs = _rms()
+        rm, tabs = rms_twin()
         mean = (var / np.float32(N)).astype(F32)
         arg = (mean + np.float32(float(self.s.EPS))).astype(F32)
         sc = np.asarray(rm.rsqrt_f32(arg.reshape(1), tabs), dtype=F32)[0]
@@ -652,14 +652,14 @@ class AttentionTwin(Twin):
             raise ValueError(f"{self.spec.id}: operands {q.size}, {kc.size}, {vc.size} words")
         if _nonfinite16(q).any() or _nonfinite16(kc).any() or _nonfinite16(vc).any():
             raise Declined("non-finite q/K/V words: the FA2 model saturates where the registered body follows its inf/NaN extension")
-        fa2, tabs = _fa2()
+        fa2, tabs = fa2_twin()
         G = NH // KVH
         kvh = (np.arange(NH, dtype=np.int32) // G).astype(np.int32)
         col = np.full(NH, T, dtype=np.int32)
         nbm = np.full(NH, -(-T // BN), dtype=np.int32)
         out = np.empty(NH * D, dtype=U16)
         flags = np.zeros(NH, dtype=np.uint8)
-        scale = float(np.array([b1._scale_log2_bits(D)], dtype=U32).view(F32)[0])
+        scale = float(np.array([b1.scale_log2_bits(D)], dtype=U32).view(F32)[0])
         fa2.lib().fa2_rows(q.ctypes.data, kc.ctypes.data, vc.ctypes.data, KVH, D, kvh.ctypes.data, col.ctypes.data, nbm.ctypes.data,
                            NH, BN, ctypes.c_float(scale), tabs.ex2.ctypes.data, tabs.rcp.ctypes.data, out.ctypes.data,
                            None, None, None, None, None, None, 0, 0, flags.ctypes.data)

@@ -54,7 +54,7 @@ def test_attention_v12_scale_input():
     st = dict(T=T, NH=NH, KVH=KVH, D=D, BN=BN, INV=P.Fa2InvSum, **HOP)
     old, new = bind(b1.AttentionV2, **st), bind(VI.AttentionV12, **st)
     assert new.id.startswith("Attention_v12{")
-    _twins(old, new, (b1._scale_log2_bits(D),), T, NH, KVH, D, 11)
+    _twins(old, new, (b1.scale_log2_bits(D),), T, NH, KVH, D, 11)
 
 
 @pytest.mark.parametrize("masked_from", [0, 1])
@@ -64,7 +64,7 @@ def test_attention_v13_scale_input(masked_from):
     st = dict(T=T, NH=NH, KVH=KVH, D=D, BN=BN, INV=hopper.Fa3InvSum, MASKED_FROM=masked_from, **HOP)
     old, new = bind(F3.AttentionV4, **st), bind(VI.AttentionV13, **st)
     assert new.id.startswith("Attention_v13{")
-    _twins(old, new, (b1._scale_log2_bits(D),), T, NH, KVH, D, 12 + masked_from)
+    _twins(old, new, (b1.scale_log2_bits(D),), T, NH, KVH, D, 12 + masked_from)
 
 
 @pytest.mark.parametrize("cap", [30.0, 50.0])

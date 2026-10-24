@@ -491,7 +491,7 @@ M_LOG2E = 1.4426950408889634  # <math.h> M_LOG2E (double), as FA2 uses it
 
 def softcap_mul_bits(D: int, CAP: float) -> int:
     """`params.softcap = softmax_scale / softcap`: both `float`, one RN32 division.  `softmax_scale` reaches FA2 as `float(D ** -0.5)`
-    (vLLM passes the Python double, the binding narrows it) — the same narrowing `b1._scale_log2_bits` uses."""
+    (vLLM passes the Python double, the binding narrows it) — the same narrowing `b1.scale_log2_bits` uses."""
     return P.bits_of(np.float32(np.float32(D ** -0.5) / np.float32(CAP)))
 
 

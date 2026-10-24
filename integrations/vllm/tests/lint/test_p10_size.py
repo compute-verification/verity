@@ -72,7 +72,7 @@ def test_recorded_sizes_are_current() -> None:
     have = sizes()
     stale = []
     for k, cap in sorted(R.load_allowlist(NAME).items()):
-        if k not in have:
+        if k not in have and not R.left_the_package(k):
             stale.append(f"  delete {R.entry_line(k, cap)}")
     assert not stale, (f"{RULE}: {len(stale)} entr(y/ies) in allowlists/{NAME}.json for code now within the limit or gone: "
                        "delete them:\n" + "\n".join(stale))

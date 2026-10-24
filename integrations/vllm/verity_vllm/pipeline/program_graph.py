@@ -37,7 +37,7 @@ from verity.ml.circuits.defs import bind
 from verity_vllm.config import option
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.pipeline.vu_export import template_of
-from verity_vllm.program.encoding import WORD_EXACT, WORD_SAMPLES, _encoded, _word_values, definition_digest  # noqa: F401
+from verity_vllm.program.encoding import WORD_EXACT, WORD_SAMPLES, encode_specialization, word_values, definition_digest  # noqa: F401
 from verity_vllm.query import word as word_query
 from verity_vllm.query.program_view import ProgramView, _read_instance_header, from_instances, iter_instance_rows, spec_base, spec_statics
 
@@ -460,7 +460,7 @@ def definitions(roots: Iterable[tuple[str, dict[str, Any]]]) -> tuple[dict[str, 
             continue
         memo[key] = None
         try:
-            fid, defs = _encoded(_specialization(fam, st))
+            fid, defs = encode_specialization(_specialization(fam, st))
         except (KeyError, TypeError, ValueError, AttributeError) as e:
             out[key] = {"form": "unresolved", "id": fam, "why": f"{type(e).__name__}: {e}"[:300]}
             ids.append(None)
@@ -547,7 +547,7 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
             calls = {int(v): k for v, k in x["varying_calls"].items()}
             vals = sorted(calls)
             bn = x["statics"].get("BN") if a == "T" else None
-            pts = _word_values(vals, int(bn) if isinstance(bn, int) else None)
+            pts = word_values(vals, int(bn) if isinstance(bn, int) else None)
             rules = {v: word_query.unit_rule(spec(x, dict(x["statics"], **{a: v})), X, W, extras, memo=memo, max_gates=limits)
                      for v in pts}
             per = {f: [float(rules[v].get(f, 0)) for v in pts] for f in _WORD_FIELDS}

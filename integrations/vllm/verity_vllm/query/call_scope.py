@@ -37,22 +37,22 @@ def spec_base(spec: str) -> str:
     return head.rsplit(":", 1)[-1]
 
 
-def _spec_record_id(spec: str) -> str:
+def spec_record_id(spec: str) -> str:
     head, sep, rec = spec.partition("{")
     return head.rsplit(":", 1)[-1] + sep + rec
 
 
-def _static_value(v: Any) -> Any:
+def static_value(v: Any) -> Any:
     if isinstance(v, dict):
         if set(v) == {"f64"}:
             return float.fromhex(v["f64"])
         if set(v) == {"fn"}:
             return v["fn"]
         if set(v) == {"dict"}:
-            return {k: _static_value(x) for k, x in v["dict"].items()}
-        return {k: _static_value(x) for k, x in v.items()}
+            return {k: static_value(x) for k, x in v["dict"].items()}
+        return {k: static_value(x) for k, x in v.items()}
     if isinstance(v, list):
-        return tuple(_static_value(x) for x in v)
+        return tuple(static_value(x) for x in v)
     return v
 
 
@@ -60,9 +60,9 @@ def spec_statics(spec: str) -> dict[str, Any]:
     """The binding record of a spec id as Python values (`{"f64": hex}` -> float, lists -> tuples), in id order."""
     from verity.ml.circuits.codec import _split_record
     out: dict[str, Any] = {}
-    for k, v in _split_record(_spec_record_id(spec)):
+    for k, v in _split_record(spec_record_id(spec)):
         try:
-            out[k] = _static_value(json.loads(v))
+            out[k] = static_value(json.loads(v))
         except ValueError:
             out[k] = v
     return out

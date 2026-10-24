@@ -800,7 +800,7 @@ BN = b1.BN  # `AttnBlock_v1`'s block (64).  [E7 D54] `attn_block` reads the bloc
 
 def attn_block(q, kb, vb, m_prev, l_prev, o_prev, *, D: int, NVIS: int, FIRST: bool, dot16=None, check: bool = True, rescale_only: bool = False, scale_bits: int | None = None):
     """`AttnBlock_v1{D, NVIS, FIRST}` vectorised over rows (`AttnBlock_v2{..., BN, DOT}` with ``dot16`` = the DOT step's twin,
-    `TC_DOT16_BY_PRIM[DOT]`; default the Ampere `tc_dot16`; `AttnBlock_v4{..., CHECK}` with ``check``: False reads m unguarded; `AttnBlock_v5` also ``rescale_only``; ``scale_bits`` the f32 word of `scale_log2` when the block reads it as an input (`AttnBlock_v10`/`_v11`), else `b1._scale_log2_bits(D)`).
+    `TC_DOT16_BY_PRIM[DOT]`; default the Ampere `tc_dot16`; `AttnBlock_v4{..., CHECK}` with ``check``: False reads m unguarded; `AttnBlock_v5` also ``rescale_only``; ``scale_bits`` the f32 word of `scale_log2` when the block reads it as an input (`AttnBlock_v10`/`_v11`), else `b1.scale_log2_bits(D)`).
 
     q (R, D), kb/vb (R, BN, D) bf16 words (rows past NVIS must be zero — `Clear_OOB_MN` padding);
     m_prev (R,), l_prev (R, 4), o_prev (R, D) f32 words (ignored when FIRST).
@@ -817,7 +817,7 @@ def attn_block(q, kb, vb, m_prev, l_prev, o_prev, *, D: int, NVIS: int, FIRST: b
         bmax = max_fmnmx(bmax, s[:, c])
     m_new = bmax if FIRST else max_fmnmx(m_prev, bmax)
     m_use = guard_neg_inf_zero(m_new) if check else m_new
-    scale = np.full(R, b1._scale_log2_bits(D) if scale_bits is None else int(scale_bits), dtype=np.uint32)
+    scale = np.full(R, b1.scale_log2_bits(D) if scale_bits is None else int(scale_bits), dtype=np.uint32)
     if not FIRST:
         scores_scale = mufu_ex2_ftz(mul_ftz(sub_ftz(m_prev, m_use), scale))
     max_scaled = mul_ftz(guard_neg_inf_zero(m_new) if rescale_only else m_use, scale)

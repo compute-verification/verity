@@ -50,7 +50,7 @@ def LayerNormRefV2(B, S, x, g, b, eps):
 
 
 # Attention with the softmax scale an input: `scale_log2` is the f32 word FA2's `set_params_fprop` hands the kernel
-# (`scale_softmax_log2`, `_scale_log2_bits(D)` on vLLM's `D**-0.5`), which the program registers; the chain is v3's otherwise.
+# (`scale_softmax_log2`, `scale_log2_bits(D)` on vLLM's `D**-0.5`), which the program registers; the chain is v3's otherwise.
 
 
 @composite("AttnBlock", 10, ["D", "NVIS", "FIRST", "BN"],

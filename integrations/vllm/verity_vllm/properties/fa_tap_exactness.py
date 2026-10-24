@@ -244,7 +244,7 @@ def scale_log2_bits(c: dict[str, Any], D: int) -> int:
     softcap * log2(e) with a softcap."""
     from verity_vllm.program.registry import b1, dense
 
-    return dense.softcap_scale_log2_bits(c["softcap"]) if c["softcap"] else b1._scale_log2_bits(D)
+    return dense.softcap_scale_log2_bits(c["softcap"]) if c["softcap"] else b1.scale_log2_bits(D)
 
 
 def ir_max_scaled(m: int, scale_log2: int, check: bool = True) -> int:

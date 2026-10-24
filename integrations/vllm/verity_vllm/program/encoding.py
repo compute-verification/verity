@@ -1,5 +1,5 @@
-"""A specialization's Definitions in the codec's v0 form (`_encoded`), a Definition's digest (`definition_digest`), and the
-values of a varying static a row's graph is partitioned at (`_word_values`): what a row's Program graph
+"""A specialization's Definitions in the codec's v0 form (`encode_specialization`), a Definition's digest (`definition_digest`), and the
+values of a varying static a row's graph is partitioned at (`word_values`): what a row's Program graph
 (`verity_vllm.pipeline.program_graph`) and C-Flock's statements (`verity_flock.boolean_export`, `class_statement`) share.
 """
 from __future__ import annotations
@@ -8,7 +8,7 @@ import hashlib
 from typing import Any
 
 
-def _encoded(fn) -> tuple[str, dict[str, dict[str, Any]]]:
+def encode_specialization(fn) -> tuple[str, dict[str, dict[str, Any]]]:
     """(the specialization's id, every definition it uses in the codec's v0 form): `verity.ml.circuits.codec.encode_program` of a one-node
     Program that calls it, keeping the definitions reachable from it (not the wrapper, its lowered root or their Input gates)."""
     from verity.ml.circuits.codec import SCHEMA_V0, encode_program
@@ -46,7 +46,7 @@ WORD_EXACT = 320
 WORD_SAMPLES = 12
 
 
-def _word_values(vals: list[int], block: int | None = None) -> list[int]:
+def word_values(vals: list[int], block: int | None = None) -> list[int]:
     if len(vals) <= WORD_EXACT:
         return vals
     if block:

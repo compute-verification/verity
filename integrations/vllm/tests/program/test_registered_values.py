@@ -62,7 +62,7 @@ def test_attention_scale_input():
     """Two key blocks (T = BN + 4): the second block rescales, so every use of the scale is exercised."""
     rng = np.random.default_rng(3)
     T, NH, KVH, D, BN = 20, 2, 1, 16, 16
-    scale = b1._scale_log2_bits(D)
+    scale = b1.scale_log2_bits(D)
     old = bind(b1.AttentionV3, T=T, NH=NH, KVH=KVH, D=D, BN=BN)
     new = bind(VI.AttentionV10, T=T, NH=NH, KVH=KVH, D=D, BN=BN)
     for _ in range(2):
@@ -77,7 +77,7 @@ def test_fa2_check_inf_attention_scale_input(masked_from):
     """The FA2 per-iteration Check_inf chain (`Attention_v5`, the RTX PRO 6000's) over two key blocks, block 0 guarded or not."""
     rng = np.random.default_rng(4)
     T, NH, KVH, D, BN = 20, 2, 1, 16, 16
-    scale = b1._scale_log2_bits(D)
+    scale = b1.scale_log2_bits(D)
     st = dict(T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=hopper.HopperBF16WgmmaDot16, INV=P.Fa2InvSum, MASKED_FROM=masked_from)
     old, new = bind(F2.AttentionV5, **st), bind(F2.AttentionV11, **st)
     assert new.id.startswith("Attention_v11{")
@@ -105,7 +105,7 @@ def test_derive_registered_values_evaluates_like_the_constants_program():
     const = derive_report(m, inputs, mode="profile", profile="b1-eager", config=C, name="Serve")
     reg = derive_report(m, inputs, mode="profile", profile="b1-eager", config=C, name="Serve", registered_values=True)
     assert const.ok and reg.ok, reg.unsupported
-    eps, scale = P.bits_of(np.float32(C["EPS"])), b1._scale_log2_bits(C["D"])
+    eps, scale = P.bits_of(np.float32(C["EPS"])), b1.scale_log2_bits(C["D"])
     fields = reg.provenance["supplied"]["registration"]["fields"]
     assert [(f["name"], f["width"], int(f["bits"], 16)) for f in fields] == [("eps", 32, eps), ("scale_log2_d16", 32, scale)]
     prog, twin = reg.program, Program(const.flat_definition)
