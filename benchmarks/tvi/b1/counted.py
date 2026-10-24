@@ -358,7 +358,7 @@ def analyze(base_name, model0, ids, local, ckpt, name, extra):
     model1.to(DEV).eval()
     nl = len(layers_of(model0))
     sampled = sample_layers(nl, int(os.environ.get("LAYERS_SAMPLE", "8")))
-    lz_layers = {sampled[0], sampled[len(sampled) // 2], sampled[-1]}
+    lz_layers = {sampled[len(sampled) // 2]}  # lzma (CPU) never beat the context coder in console's sweep: one check layer
     code = hashlib.sha256(open(__file__, "rb").read()).hexdigest()[:16]
     res = {"model": base_name, "name": name, "ckpt": ckpt, "meta": meta, **extra, "code_sha256": code, "tokens": ids.numel(),
            "n_layers": nl, "layers_sampled": sampled, "maps": {}, "inputs": {}, "weights": {}, "boundary": {},
@@ -450,7 +450,7 @@ def analyze(base_name, model0, ids, local, ckpt, name, extra):
              "counted": len(rows) * min(d_in, d_out), "input": g,
              "r90": eff_rank(svd[2], 0.90), "r99": eff_rank(svd[2], 0.99),
              "rel_dnorm": float((Y1 - Y0).norm() / Y0.norm())}
-        m["y"] = fresh(Y0, Y1, ref, svd=svd, lz=(i in lz_layers and d_out <= 4096))
+        m["y"] = fresh(Y0, Y1, ref, svd=svd, lz=(i in lz_layers and d_out <= d_in))
         del svd
         with torch.no_grad():
             P = X1 @ mod.weight.T + (mod.bias if mod.bias is not None else 0)
