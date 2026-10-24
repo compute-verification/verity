@@ -177,6 +177,20 @@ def test_certified_tokens_that_arent_the_endpoints_pass_n2_and_wait_for_the_tie(
     assert n.code == NG.TIE and "IO-TIE" in n.waits
 
 
+def test_the_suite_reports_each_negative_for_the_one_command(runs, tmp_path):
+    """From a rehearsal's runs: each certifier-side negative refused by its code, token passing N2 (its check pending),
+    the head made from honest's, and the advice and Commit negatives not run, saying what they need."""
+    rs, _ = runs["planned"]
+    rows = NG.suite({s: rs[s] for s in STRATEGIES}, tmp_path, clock=lambda: 0.0)
+    assert list(rows) == list(NG.NEGATIVES)
+    assert {k for k, r in rows.items() if r.get("ok")} == {"late", "extra", "drop", "head", "token"}
+    assert rows["head"]["run"] == str(tmp_path / "head") and rows["head"]["refused_windows"] == [0]
+    assert rows["token"]["n2_accepted"] and rows["token"]["waits"] == ["IO-TIE", "CERT-VARLEN"]
+    assert all(not r["ran"] and ("--advice" in r["why"] or "--commit" in r["why"])
+               for r in rows.values() if r["tampers"] in ("advice", "commit"))
+    assert not NG.suite({"honest": rs["honest"]}, tmp_path / "again", clock=lambda: 0.0)["late"]["ran"]
+
+
 def test_every_negative_names_a_check_and_a_code_and_the_table_lists_each():
     rows = NG.table().splitlines()
     assert len(rows) == 2 + len(NG.NEGATIVES)

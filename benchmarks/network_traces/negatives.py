@@ -491,6 +491,40 @@ def judge(name: str, verdict: dict) -> dict:
             "pending": list(n.waits)}
 
 
+def suite(runs: dict[str, Path], work: Path, *, advice: Path | None = None, commit: Path | None = None,
+          clock=time.monotonic) -> dict[str, dict]:
+    """Every negative's row for the one command's report, from a rehearsal's runs by strategy (`runs`, which must hold
+    honest): a shim negative is its own run (`rehearse --strategies`), any other is made from honest's under `work`.
+    A row says what the negative tampers, the check and code it names and what it waits on; whether it ran, and if so
+    N2's verdict, its refused link-windows and their codes, and `ok`: refused by its code; for a shim negative whose
+    check is pending (token), N2's accepting it, since only that check may refuse it; else None."""
+    out = {}
+    for name, n in NEGATIVES.items():
+        row = {"family": n.family, "tampers": n.tampers, "check": n.check, "code": n.code, "waits": list(n.waits)}
+        run = runs.get(name)
+        if run is None and n.tampers != "plan":
+            try:
+                run = make(name, runs["honest"], work / name, advice=advice, commit=commit)
+            except NotApplicable as err:
+                row |= {"ran": False, "why": str(err)}
+        elif run is None:
+            row |= {"ran": False, "why": f"no run of it: rehearse --strategies honest,{name},..."}
+        if run is not None:
+            v = n2(run, clock=clock)
+            got = judge(name, v)
+            row |= {"ran": True, "run": str(run), "code": got["code"], "n2_accepted": v["accepted"],
+                    "refused_windows": [r["window"] for r in v["windows"] if r["codes"]], "codes": v["codes"],
+                    "by_code": got["by_code"]}
+            if not n.pending:
+                row["ok"] = got["by_code"]
+            elif n.tampers == "plan":
+                row["ok"] = v["accepted"]
+            else:
+                row["ok"] = None
+        out[name] = row
+    return out
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="negatives.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
