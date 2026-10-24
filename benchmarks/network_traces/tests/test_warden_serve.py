@@ -68,6 +68,29 @@ def test_the_gates_warden_rehearsal_is_a_rehearse_and_its_least_minutes_cover_ev
         assert took <= A.warden_minutes(n) * 60, n
 
 
+def test_the_gates_sampling_is_on_every_request_and_moves_nothing_else_of_the_traffic(tmp_path):
+    """`warden-rehearse` always passes its temperature and top_p (0 and 1 by default), and `rehearse` puts both on
+    every request, so an endpoint's own generation config never applies; the arrivals, prompts, lengths and seeds stay
+    the seed's, so `warden_minutes` still bounds the run."""
+    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    import auditor as A
+    given = ws.parser().parse_args(
+        A.warden_command({"requests": 7, "temperature": 0.6, "top_p": 0.9}, tmp_path, "http://h:1")[2:])
+    plain = ws.parser().parse_args(A.warden_command({"requests": 7}, tmp_path, "http://h:1")[2:])
+    assert (plain.temperature, plain.top_p, given.temperature, given.top_p) == (0.0, 1.0, 0.6, 0.9)
+    varied = ws.varied_traffic(7, model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED)
+
+    def rest(traffic):
+        return [{**x, "body": {k: v for k, v in x["body"].items() if k not in ("temperature", "top_p")}}
+                for x in traffic]
+
+    for args, want in ((plain, (0.0, 1.0)), (given, (0.6, 0.9))):
+        traffic = ws.traffic_of(args, "m")
+        assert {(x["body"]["temperature"], x["body"]["top_p"]) for x in traffic} == {want}
+        assert rest(traffic) == rest(varied)
+    assert all("top_p" not in x["body"] for x in varied)
+
+
 def test_the_fake_endpoint_answers_a_request_as_vllm_streams_it():
     """Over loopback: the request's bytes reach the endpoint, which answers a chunked event stream and closes; the
     response parses to the endpoint's tokens, its finish reason and usage, and a cut response isn't complete."""

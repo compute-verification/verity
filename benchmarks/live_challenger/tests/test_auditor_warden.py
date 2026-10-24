@@ -47,7 +47,8 @@ def test_a_lane_key_starts_a_warden_rehearsal_and_one_rehearsal_of_either_device
     rc, out = gate(host, REQUEST, started=started)
     doc = json.loads(out)
     assert rc == 0 and doc == {"run": "c20261024T110000Z-ab12", "device": "warden", "peer": "vy-nebius-1", "port": 8011,
-                               "minutes": 20, "requests": 100, "by": LANE, "requested_utc": "2026-10-24T11:00:00Z",
+                               "minutes": 20, "requests": 100, "temperature": 0.0, "top_p": 1.0, "by": LANE,
+                               "requested_utc": "2026-10-24T11:00:00Z",
                                "unit": "vy-certifier@c20261024T110000Z-ab12.service"}
     assert started == [doc["run"]]
     assert json.loads((host.certifier / doc["run"] / "request.json").read_text()) == \
@@ -91,6 +92,14 @@ def test_a_lane_key_starts_a_warden_rehearsal_and_one_rehearsal_of_either_device
     (["--upstream", "10.0.0.2:8011"], "unrecognized arguments: --upstream"),
     (["--rate", "5"], "unrecognized arguments: --rate"),
     (["--command", "id"], "unrecognized arguments: --command"),
+    (["--temperature", "2.5"], "--temperature '2.5': 0 to 2"),
+    (["--temperature", "-0.1"], "--temperature '-0.1': 0 to 2"),
+    (["--temperature", "nan"], "--temperature 'nan': 0 to 2"),
+    (["--temperature", "1e-1"], "--temperature '1e-1': 0 to 2"),
+    (["--top-p", "0"], "--top-p '0': above 0, at most 1"),
+    (["--top-p", "1.01"], "--top-p '1.01': above 0, at most 1"),
+    (["--top-p", ".9"], "--top-p '.9': above 0, at most 1"),
+    (["--top-p", "0.99999"], "--top-p '0.99999': above 0, at most 1"),
 ])
 def test_the_gate_refuses_a_warden_rehearsal_it_cant_check(host, bad, why):
     good = dict(zip(REQUEST[1::2], REQUEST[2::2]))
@@ -223,5 +232,21 @@ def test_the_warden_rehearsal_runs_warden_serve_on_the_gates_traffic_through_the
     argv = A.warden_command(req, tmp_path, "http://127.0.0.1:40001", tree=Path("/opt/vy-challenger") / PIN)
     assert argv == [sys.executable, f"/opt/vy-challenger/{PIN}/benchmarks/network_traces/warden_serve.py", "rehearse",
                     "--upstream", "127.0.0.1:40001", "--out", str(tmp_path), "--requests", "100", "--rate", "0.5",
-                    "--seed", "0", "--tail", "60"]
+                    "--seed", "0", "--tail", "60", "--temperature", "0.0", "--top-p", "1.0"]
     assert A.warden_command(req | {"tokens": 64}, tmp_path, "http://127.0.0.1:1")[-2:] == ["--max-tokens", "64"]
+
+
+def test_a_warden_rehearsals_sampling_is_recorded_and_passed_on_every_request(host, tmp_path):
+    """The defaults, temperature 0 and top_p 1, and given values alike are recorded and passed on, so that every request
+    of the traffic carries both (`warden_serve.varied_traffic`) and an endpoint's own generation config never applies;
+    a request.json written before the gate took them runs at the defaults."""
+    for k, (given, recorded) in enumerate((([], (0.0, 1.0)), (["--temperature", "0.6", "--top-p", "0.9"], (0.6, 0.9)),
+                                          (["--temperature", "2", "--top-p", "0.0001"], (2.0, 0.0001)))):
+        rc, out = gate(host, REQUEST + given, started=[], token=f"{k:04x}")
+        assert rc == 0, out
+        request = json.loads((host.certifier / json.loads(out)["run"] / "request.json").read_text())
+        assert (request["temperature"], request["top_p"]) == recorded
+        argv = A.warden_command(request, tmp_path, "http://127.0.0.1:1")
+        assert argv[argv.index("--temperature"):][:4] == ["--temperature", str(recorded[0]), "--top-p", str(recorded[1])]
+    older = {k: v for k, v in request.items() if k not in ("temperature", "top_p")}
+    assert A.warden_command(older, tmp_path, "u")[-4:] == ["--temperature", "0.0", "--top-p", "1.0"]
