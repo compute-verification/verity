@@ -62,10 +62,11 @@ def gemms(macro: str = "GEMM") -> list[tuple[str, str, int, int, int]]:
 
 
 def tile_smem(tm: int, bn: int) -> int:
-    """Tile<TM, BN>::SMEM: the stages from a 1,024-aligned base, STAGES = min(MAX_STAGES, SMEM_BUDGET / STAGE), and a
-    barrier pair of 16 bytes a stage."""
+    """Tile<TM, BN>::SMEM: the stages from a 1,024-aligned base, STAGES = min(CAP, SMEM_BUDGET / STAGE) (CAP: the 64-row
+    tiles' D_STAGES, PC_D_STAGES by default, else MAX_STAGES), and a barrier pair of 16 bytes a stage."""
     stage = (tm + bn) * const("BK")
-    stages = min(const("MAX_STAGES"), 200 * 1024 // stage)
+    cap = int(re.search(r"#define PC_D_STAGES (\d+)", SOURCE).group(1)) if tm == 64 else const("MAX_STAGES")
+    stages = min(cap, 200 * 1024 // stage)
     return 1024 + stages * stage + 16 * stages
 
 
@@ -73,6 +74,7 @@ def test_gemms_fit_h100_shared_memory_and_are_the_runners():
     """Every GEMM fits the H100's 227 KB at its tile, the runner gives each its tile and block (a consumer warpgroup per 64
     rows, then the producer), the gate knows each one at its N, and the peel's tail stage is exactly one stage."""
     assert "SMEM = 1024 + STAGES * STAGE + 16 * STAGES" in SOURCE and "STAGE = (TM + BN) * BK" in SOURCE
+    assert "CAP = NWG == 1 ? D_STAGES : MAX_STAGES" in SOURCE
     assert "SMEM_BUDGET = 200 * 1024" in SOURCE and const("PEEL_ROW") == const("BK") == RUN.PEEL_ROW == 128
     names = {n for n, *_ in gemms()}
     assert names == {f"{g}{t}" for g in ("gemm_plain", "gemm_fast", "gemm_ct", "gemm_pearlc", "gemm_pearlc_s")
@@ -85,7 +87,7 @@ def test_gemms_fit_h100_shared_memory_and_are_the_runners():
         if not name.startswith("gemm_words"):
             base = name.removesuffix(RUN.tile_suffix(tm, bn))
             assert base in ("gemm_plain", "gemm_fast", "gemm_ct", "gemm_pearlc", "gemm_pearlc_s"), name
-    assert {tile_smem(*t) for t in ((128, 128), (128, 64), (64, 64), (128, 32), (64, 32))} == {197728, 197760, 132224, 164992, 99456}
+    assert {tile_smem(*t) for t in ((128, 128), (128, 64), (64, 64), (128, 32), (64, 32))} == {197728, 197760, 197824, 164992, 148672}
     grouped = {n: (m, tm, bn, g) for n, m, tm, bn, g in gemms("GEMM_G")}
     assert set(grouped) == {"gemm_pearlc_g_d", "gemm_words_g_d"}
     for name, spec in grouped.items():                   # each is its ungrouped kernel's mode, tile and gate
