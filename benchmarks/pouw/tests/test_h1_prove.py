@@ -206,12 +206,14 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
         U.registered_reads(win.program, win.tp, 0, roots, "w", wr, win.obj["program"])
     roots["ok"], leaves = okr.root.hex(), {**tables, "ok": T}
     docs = {}
+    params = {port: key for key, port in U.window_ports(win.program).items() if port != key}
     for c, (first, n) in enumerate(U.HW.call_units(win.program)):
         reads = U.registered_reads(win.program, win.tp, c, roots, "w", wr, win.obj["program"])
         assert sorted(reads["ports"]) == sorted([*U.Shape(K).in_rows, "o1"])
         for p, e in reads["ports"].items():
             v = U.unit_reads(win.program, win.tp, first)[p][0]
-            assert {x: e[x] for x in e if x not in ("reads", G.READS_FROM, "known")} == {
+            assert e.get(G.PARAM_KEY) == params.get(p), "a renamed A or B row names the parameter it reads"
+            assert {x: e[x] for x in e if x not in ("reads", G.READS_FROM, "known", G.PARAM_KEY)} == {
                 "value": v, "root": roots[v], "leaves": leaves[v], "words": U.value_words(v), "word_bits": 16,
                 "domain": G.domain(win.obj["program"], v, U.value_words(v), leaves[v],
                                    window=None if v == f"b/{K}" else wr).domain_id.hex(), "row_schema": U.V2}
