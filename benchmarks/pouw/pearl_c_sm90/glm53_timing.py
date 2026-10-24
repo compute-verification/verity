@@ -40,6 +40,7 @@ import argparse
 import json
 import statistics
 import sys
+import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -134,16 +135,20 @@ def stock_arms(W) -> tuple[dict, dict]:
     return arms, errors
 
 
-def timed(f, before=None, after=None, join=None) -> float:
+def timed(f, before=None, after=None, join=None, host=None) -> float:
     """One sample: `INNER` calls of f between events on the current stream, ms a call; `before` and `after` untimed.  `join`
-    makes the current stream wait for any other lane the calls left work on, before the closing event."""
+    makes the current stream wait for any other lane the calls left work on, before the closing event.  `host` gets the
+    host's ms a call issuing them (the calls' Python and launches, until the last returns)."""
     import torch
     if before:
         before()
     s, e = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
     s.record()
+    t = time.perf_counter()
     for _ in range(INNER):
         f()
+    if host is not None:
+        host.append((time.perf_counter() - t) * 1e3 / INNER)
     if join:
         join()
     e.record()
@@ -407,7 +412,7 @@ def main(argv: list[str] | None = None) -> int:
             names = list(calls)
             for f, before, after in calls.values():       # warm-up: buffers, graphs of torch's allocator, autotuning
                 timed(f, before, after)
-            samples = {nm: [] for nm in names}
+            samples, host = {nm: [] for nm in names}, {nm: [] for nm in names}
             pass_end, ends = {nm: [] for nm in pearls}, {nm: [] for nm in pearls}
             y_equal = {nm: True for nm in pearls}
             for rep in range(a.reps):
@@ -416,18 +421,18 @@ def main(argv: list[str] | None = None) -> int:
                     f, before, after = calls[nm]
                     if nm in pearls:
                         before()
-                        samples[nm].append(timed(f, join=join))
+                        samples[nm].append(timed(f, join=join, host=host[nm]))
                         s, e = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
                         s.record()
-                        out = run.end_pass()
+                        ended = run.end_pass()
                         e.record()
                         e.synchronize()
                         pass_end[nm].append(s.elapsed_time(e))
-                        ends[nm].append(commitment(out))
+                        ends[nm].append(commitment(ended))
                         if "pearlc" in ys:
                             y_equal[nm] = y_equal[nm] and same_bits(ys[nm], ys["pearlc"])
                     else:
-                        samples[nm].append(timed(f, before, after))
+                        samples[nm].append(timed(f, before, after, host=host[nm]))
             want, y_want = ends["pearlc"][0], ys["pearlc"].clone()
             agree = {}
             for nm, sc in pearls.items():
@@ -446,6 +451,7 @@ def main(argv: list[str] | None = None) -> int:
             best = min(stock, key=stock.get) if stock else None
             ok = all(all(v.values()) for v in agree.values())
             row = {"name": lin["name"] if lin else None, "n": n, "k": k, "m": m, "ms": med, "runs": samples,
+                   "host_ms": {nm: statistics.median(v) for nm, v in host.items()},
                    "pass_end_ms": statistics.median(pass_end["pearlc"]),
                    "pass_end_ms_by_arm": {nm: statistics.median(v) for nm, v in pass_end.items()},
                    "schedules": pearls, "stock_errors": errors, "fastest_stock": best,
