@@ -1,5 +1,6 @@
-"""`registry.io_shell` (ingress v0): the encoder's bytes in the layout, `IngressPrompt_v1` as `reference` on bodies in the schema
-and on each way out of it, the statics it refuses, and the Boolean Definition against its word."""
+"""`registry.io_shell` (ingress v0): the encoder's bytes in the layout, padded to whole SHA-512 blocks, `IngressPrompt_v1` as
+`reference` on bodies in the schema and on each way out of it (other padding among them), the statics it refuses, and the
+Boolean Definition against its word."""
 from __future__ import annotations
 
 import json
@@ -28,16 +29,23 @@ def _bodies(st: dict, n: int, seed: int) -> list[bytes]:
     return out
 
 
+def _pad(body: bytes) -> bytes:
+    return body + b" " * (-len(body) % X.BLOCK)
+
+
 def _corrupt(st: dict, body: bytes) -> list[bytes]:
     """Each byte of the first field, the separator after it and max_tokens' field set to a space, '0', '9', 'a', '/', ':' and
-    0xB0; and the model's last byte and the closing brace changed."""
+    0xB0; the model's last byte and the closing brace changed; and the padding's first and last spaces made other JSON
+    whitespace, the closing brace moved to the end, and a NUL."""
     _, fields, _ = X.layout(**st)
     (f0, w), (mt, mw) = fields[0], fields[-1]
     out = []
     for i in [*range(f0, f0 + w + 1), *range(mt, mt + mw)]:
         out += [body[:i] + bytes([c]) + body[i + 1:] for c in b" 09a/:\xb0" if c != body[i]]
-    m_end = body.index(b'","prompt"') - 1
-    return out + [body[:m_end] + b"M" + body[m_end + 1:], body[:-1] + b" "]
+    m_end, end = body.index(b'","prompt"') - 1, body.rindex(b"}")
+    assert end < len(body) - 1 and set(body[end + 1:]) == {0x20}
+    return out + [body[:m_end] + b"M" + body[m_end + 1:], body[:end] + b" " + body[end + 1:], body[:end] + body[end + 1:] + b"}",
+                  body[:end + 1] + b"\n" + body[end + 2:], body[:-1] + b"\t", body[:-1] + b"\r", body[:-1] + b"\0"]
 
 
 def _word(st: dict, bodies: list[bytes]) -> np.ndarray:
@@ -56,6 +64,22 @@ def test_a_body_is_valid_json_in_the_layout_and_its_length_depends_on_the_static
     assert X.reference(a, MODEL, 3, V) == (1, [128000, 9, 0], 64)
 
 
+@pytest.mark.parametrize("st", [SMALL, {"MODEL": "a b", "LP": 1, "V": 10}, {"MODEL": MODEL, "LP": 16, "V": V},
+                                {"MODEL": MODEL, "LP": 200, "V": V}], ids=["small", "w1", "served", "served-200"])
+def test_a_body_is_whole_sha512_blocks_of_fewest_trailing_spaces(st):
+    """The body is a whole number of 128-byte SHA-512 blocks: the request's JSON then the fewest spaces that get there, so a
+    body one block shorter couldn't hold the JSON.  A body without its padding, or with a block more, has no layout."""
+    body = X.encode(st["MODEL"], [st["V"] - 1] * st["LP"], 7, st["V"])
+    unpadded = body.rstrip(b" ")
+    assert len(body) % X.BLOCK == 0 and len(body) - X.BLOCK < len(unpadded) <= len(body) == X.length(**st)
+    lits = dict(X.layout(**st)[0])
+    assert all(lits.get(i) == 0x20 for i in range(len(unpadded), len(body)))
+    assert [X.reference(b, **st)[0] for b in _corrupt(st, body)[-6:]] == [0] * 6
+    for other in (unpadded, body + b" " * X.BLOCK):
+        with pytest.raises(ValueError, match="the body is"):
+            X.reference(other, **st)
+
+
 @pytest.mark.parametrize("st", [SMALL, {"MODEL": "a b", "LP": 1, "V": 10}, {"MODEL": MODEL, "LP": 2, "V": V}], ids=["small", "w1", "served"])
 def test_the_definition_is_the_reference_in_and_out_of_the_schema(st):
     bodies = _bodies(st, 24, 0)
@@ -66,12 +90,12 @@ def test_the_definition_is_the_reference_in_and_out_of_the_schema(st):
 
 
 @pytest.mark.parametrize("body, why", [
-    (b'{"model":"m","prompt":[ 01,  2,  3],"max_tokens":     5,"temperature":0,"stream":true}', "a leading zero"),
-    (b'{"model":"m","prompt":[ 1 ,  2,  3],"max_tokens":     5,"temperature":0,"stream":true}', "a space after a digit"),
-    (b'{"model":"m","prompt":[   ,  2,  3],"max_tokens":     5,"temperature":0,"stream":true}', "no digit"),
-    (b'{"model":"m","prompt":[  1,  2,  3],"max_tokens":     0,"temperature":0,"stream":true}', "max_tokens 0"),
-    (b'{"model":"m","prompt":[  1,  2,  3],"max_tokens":     5,"temperature":1,"stream":true}', "temperature 1"),
-    (b'{"model":"n","prompt":[  1,  2,  3],"max_tokens":     5,"temperature":0,"stream":true}', "another model"),
+    (_pad(b'{"model":"m","prompt":[ 01,  2,  3],"max_tokens":     5,"temperature":0,"stream":true}'), "a leading zero"),
+    (_pad(b'{"model":"m","prompt":[ 1 ,  2,  3],"max_tokens":     5,"temperature":0,"stream":true}'), "a space after a digit"),
+    (_pad(b'{"model":"m","prompt":[   ,  2,  3],"max_tokens":     5,"temperature":0,"stream":true}'), "no digit"),
+    (_pad(b'{"model":"m","prompt":[  1,  2,  3],"max_tokens":     0,"temperature":0,"stream":true}'), "max_tokens 0"),
+    (_pad(b'{"model":"m","prompt":[  1,  2,  3],"max_tokens":     5,"temperature":1,"stream":true}'), "temperature 1"),
+    (_pad(b'{"model":"n","prompt":[  1,  2,  3],"max_tokens":     5,"temperature":0,"stream":true}'), "another model"),
 ])
 def test_a_body_out_of_the_schema_is_not_ok(body, why):
     assert X.reference(body, **SMALL)[0] == 0, why

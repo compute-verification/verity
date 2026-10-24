@@ -2,18 +2,21 @@
 the prompt's token ids and ``max_tokens``.
 
 Ingress schema v0 is one OpenAI completions request with the prompt as token ids, as compact JSON in a fixed key order with every
-integer right-aligned in a fixed-width field of leading spaces (JSON whitespace, so vLLM's OpenAI server reads it as it is):
+integer right-aligned in a fixed-width field of leading spaces, then trailing spaces to a whole number of `BLOCK`-byte SHA-512
+blocks (all JSON whitespace, so vLLM's OpenAI server reads it as it is):
 
-    {"model":"<MODEL>","prompt":[<id>,<id>,...],"max_tokens":<m>,"temperature":0,"stream":true}
+    {"model":"<MODEL>","prompt":[<id>,<id>,...],"max_tokens":<m>,"temperature":0,"stream":true}<spaces>
 
-An id's field is `id_width(V)` characters (6 for a 128,256-entry vocabulary), ``max_tokens``' is `MAX_TOKENS_WIDTH`.  So the byte
+An id's field is `id_width(V)` characters (6 for a 128,256-entry vocabulary), ``max_tokens``' is `MAX_TOKENS_WIDTH`, and the
+padding is the fewest spaces that bring the body to a multiple of 128 bytes (1,024 bits), so the warden's attested blocks and the
+parse unit's input rows line up and a registered read opens whole blocks (128 B divides the warden's 4 KiB cells).  So the byte
 layout is a function of (MODEL, LP, V) alone, never of the prompt's digits: a template's statics carry no prompt content.  Greedy
 only (``"temperature":0``); the seeded top-p schema comes next.
 
 `IngressPrompt_v1{MODEL, LP, V}` (body: Array<N, Value<8>>) -> (ok: bit, ids: Array<LP, i32>, max_tokens: i32) checks every byte
-against the layout and decodes the fields.  ``ok`` is 1 exactly when the body is in the schema: each literal byte is the layout's,
-each field is spaces then decimal digits with at least one digit and no leading zero, each id is below V and ``max_tokens`` is at
-least 1.  A field's value is the sum of its characters' low nibbles at their decimal places (a space's low nibble is 0, and a
+against the layout and decodes the fields.  ``ok`` is 1 exactly when the body is in the schema: each literal byte is the layout's
+(the padding's included: exactly those spaces, no other whitespace and no other length), each field is spaces then decimal digits
+with at least one digit and no leading zero, each id is below V and ``max_tokens`` is at least 1.  A field's value is the sum of its characters' low nibbles at their decimal places (a space's low nibble is 0, and a
 digit's is its value), so on a body that isn't in the schema the ids are still that sum: `reference` is the function exactly.
 The body is written once over its steps (`parse`); `boolean_io_shell.IngressPrompt_v2` is it on gates.
 
@@ -34,6 +37,8 @@ from verity_vllm.program.registry.prims import BIT, I32
 from verity_vllm.program.registry.sampling import bit_at
 
 MAX_TOKENS_WIDTH = 6
+#: one SHA-512 block in bytes (1,024 bits): the body is padded with spaces to a whole number of them
+BLOCK = 128
 
 #: the element types of a signature: these words, and their bits in `boolean_io_shell`
 WORDS = SimpleNamespace(U8=Value(8), BIT=BIT, I32=I32)
@@ -59,9 +64,9 @@ def refuse(S: dict) -> str | None:
 
 
 def length(MODEL: str, LP: int, V: int) -> int:
-    """The body's length in bytes: `layout`'s, without building it."""
+    """The body's length in bytes, its padding included: `layout`'s, without building it."""
     fixed = len(f'{{"model":"{MODEL}","prompt":[],"max_tokens":,"temperature":0,"stream":true}}') + MAX_TOKENS_WIDTH
-    return fixed + max(LP * (id_width(V) + 1) - 1, 0)
+    return -(-(fixed + max(LP * (id_width(V) + 1) - 1, 0)) // BLOCK) * BLOCK
 
 
 def layout(MODEL: str, LP: int, V: int) -> tuple[list[tuple[int, int]], list[tuple[int, int]], int]:
@@ -88,6 +93,7 @@ def layout(MODEL: str, LP: int, V: int) -> tuple[list[tuple[int, int]], list[tup
     lit('],"max_tokens":')
     field(MAX_TOKENS_WIDTH)
     lit(',"temperature":0,"stream":true}')
+    lit(" " * (-n % BLOCK))
     return lits, fields, n
 
 
@@ -98,8 +104,9 @@ def encode(MODEL: str, ids, max_tokens: int, V: int) -> bytes:
     if not all(0 <= int(t) < V for t in ids) or not 1 <= max_tokens < 10 ** MAX_TOKENS_WIDTH:
         raise ValueError(f"ingress v0: ids must be in [0, {V}) and max_tokens in [1, 10^{MAX_TOKENS_WIDTH})")
     w = id_width(V)
-    return (f'{{"model":"{MODEL}","prompt":[' + ",".join(f"{int(t):>{w}}" for t in ids)
+    body = (f'{{"model":"{MODEL}","prompt":[' + ",".join(f"{int(t):>{w}}" for t in ids)
             + f'],"max_tokens":{max_tokens:>{MAX_TOKENS_WIDTH}},"temperature":0,"stream":true}}').encode()
+    return body + b" " * (-len(body) % BLOCK)
 
 
 def reference(body: bytes, MODEL: str, LP: int, V: int) -> tuple[int, list[int], int]:

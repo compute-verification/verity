@@ -104,6 +104,8 @@ def test_byte_ingress_compiles_to_the_same_programs_with_a_parse_unit_each():
     (lambda b: b, None, "names no served model"),
     (lambda b: b.replace(b'"temperature":0', b'"temperature":1'), SERVED, "aren't in ingress schema v0"),
     (lambda b: b[:-1] + b" }", SERVED, "not ingress v0's"),
+    (lambda b: b.rstrip(b" "), SERVED, "not ingress v0's"),
+    (lambda b: b[:-1] + b"\n", SERVED, "aren't in ingress schema v0"),
 ])
 def test_byte_ingress_without_a_served_model_or_out_of_the_schema_is_refused(edit, served, why):
     advice, ingress = _mixed()
