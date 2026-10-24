@@ -199,9 +199,10 @@ PUT_ASYNC_ENV = "DITHER_SO_PUT_ASYNC"
 PREQ_ENV = "DITHER_SO_PREQ"
 # "1": a step's mid and round trees through h1c's `Tail`: their domains, pads and node Snaps (no leaf read) before the
 # serving stream's wait on the units, every level of both in one launch after it, not two h1c_builds after it; the same
-# bytes.  "2": as "1", and the round's root written by that launch into pinned host memory as well, the root read the
-# launch's event and that memory rather than a copy (the step's ybad copy queued before the wait).  A step that
-# withholds or replaces its z/y round leaves (fault_zlate and the step after it) builds them as before
+# bytes.  "2": as "1", and the round's root written by that launch into pinned host memory as well, read there once
+# the launch's number is, and the step's ybad put there by a kernel before the wait: no copy engine (whose queue the
+# spill's transfers hold) between the units and the root read.  A step that withholds or replaces its z/y round leaves
+# (fault_zlate and the step after it) builds them as before
 TAIL_ENV = "DITHER_SO_TAIL"
 # "1" (a diagnostic): the host's progress as events on an idle stream, so a step's phases place it against the GPU's:
 # h_tail_ms (the tail's launch after the units' end), h_read_ms (the root read after the tail), h_ret_ms (the root
@@ -790,7 +791,7 @@ class SoWindow(DO.Window):
         if tail:
             self.tail.pre(self.stepv[0:1])
         if zc:
-            self._ybad_copy(sd)
+            self._ybad_copy(sd, put=True)
         self.phase("receipt_leaf")
         o = pre["mid"].level_off[kinds.index("receipt-step")]
         lv = pre["mid"].level[o:o + 8 * self.L]
@@ -854,7 +855,9 @@ class SoWindow(DO.Window):
             if self.hmark:
                 self.ev_h[1].record(self.hm_stream)
             if zc:
-                self.ev_w[2].synchronize()
+                # the stream past its wait on the units, then a spin on the tail's own word: the wake-up's latency
+                # rides the tail's launch
+                (self.ev_w[1] if waited else self.ev_w[2]).synchronize()
                 root = self.tail.root(0)
             else:
                 root = unwords(pre["round"].root(0))
@@ -936,10 +939,15 @@ class SoWindow(DO.Window):
         self.steps += 1
         self._step_end(s)
 
-    def _ybad_copy(self, sd) -> None:
+    def _ybad_copy(self, sd, put: bool = False) -> None:
+        """sd.ybad into ybad_pin on the serving stream: a copy, or (put) h1c's kernel stores, which no other stream's
+        transfers hold up."""
         if self.ybad_pin is None:
             self.ybad_pin = torch.empty(sd.ybad.shape, dtype=sd.ybad.dtype).pin_memory()
-        self.ybad_pin.copy_(sd.ybad, non_blocking=True)
+        if put:
+            self.c.put(sd.ybad.contiguous(), self.ybad_pin)
+        else:
+            self.ybad_pin.copy_(sd.ybad, non_blocking=True)
 
     def _y_refused(self, s: int, cap: str | None) -> list[int]:
         """Step s's calls whose y root the commit refused, from the pinned copy that rode its root read."""
