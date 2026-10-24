@@ -99,6 +99,19 @@ theorem Loop.Level0Src.realOf {src : Msg → Flock.Wit →
       rw [← hin]
       exact ⟨hg, he, hp, hg.trans ((congrArg _root_.Flock.Firewall.Link.In.g hin).trans (Masked.linkIn_g x w t j))⟩
 
+/-- **The loop's table's extra lanes and lane paddings are the tape's** (`swSrcE_repCut`'s `extra` and `lanePad`), where
+`src` draws the tape's level 0. -/
+theorem Loop.Level0Src.realOf_lanes {src : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Array F128 × ByteArray × Array ByteArray)} {x : Msg} {w : Flock.Wit}
+    (hS : Loop.Level0Src src x w) (ν : (CoinLayer.session Loop.loopNr Masked.dataE).Nonce)
+    (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape) (j : Fin (Masked.jOf x)) (r : Fin 2)
+    {tb : _root_.Flock.Firewall.Finish.Tab} {hi : Array ByteArray}
+    (h : Loop.realOf src x w (ν, t) (2 * j.val + r.val) = .ok (tb, hi)) :
+    tb.extra = (Masked.UE.tapeZk t).extra j.val ∧ tb.lanePad = (Masked.UE.tapeZk t).lanePad j.val := by
+  obtain ⟨-, he, hp, -⟩ := hS.realOf ν t j r h
+  exact ⟨he, hp⟩
+
 /-- **The loop's rep salts are the source's**: where the loop's table and salts at rep stream `k` are `(tb, hi)`, the source
 drew `hi` there. -/
 theorem Loop.realOf_src {R : Type} {src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray)}
