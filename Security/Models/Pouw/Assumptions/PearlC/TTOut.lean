@@ -124,7 +124,7 @@ def TTOutTilePearlC [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Co
 
 /-- **TT_OUT(1/400) for Pearl-C at a device record** `d`: `TTOut` at `pearlCProtocolDev d sem ρ`,
 `pearlCDomainDev d`, `γ₀ = 1/400` and `εPearlC`. At `devH100` it is `TTOutPearlC` at `Costs.adopted` on that
-domain narrowed to `n ≥ 2^10` with `64 ∣ n` (`pearlCDomainDev_h100`), so `TTOutPearlC` gives it (`ttOutPearlCDev_h100`);
+domain narrowed to `n ≥ 64` with `64 ∣ n` (`pearlCDomainDev_h100`), so `TTOutPearlC` gives it (`ttOutPearlCDev_h100`);
 the narrowing keeps out units whose output words are cheaper to guess than `εPearlC` (`pearlCDomainDev`). At another record it is another named assumption: the same game, charging rule, error and
 falsifiers, on that device's ticket chain, U, flags, salt-dead predicate and prices. `CM` is that device's W1 accounting
 (`w1-complete/<device>`), which charges a tensor-core instruction its whole fragment shape, never per output word. -/

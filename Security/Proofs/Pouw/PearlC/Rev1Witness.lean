@@ -72,7 +72,7 @@ theorem laterZeroPromos_eq_zero_of_le (d : PearlCDevice) {m n k : ℕ} (A : Matr
 
 /-! ## A workload in the device domain
 
-`witnessWorkload`'s one column is outside `pearlCDomainDev`, which needs `2^10 ≤ n` and `64 ∣ n`; the rows below are
+`witnessWorkload`'s one column is outside `pearlCDomainDev`, which needs `64 ≤ n` and `64 ∣ n`; the rows below are
 witnessed on one unit of shape `1 × 1024 × 128`, every word `1.0`. Its flags, debit and rules are `witnessWorkload`'s,
 column by column. -/
 

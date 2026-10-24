@@ -5,7 +5,7 @@ import Proofs.Pouw.PearlC.TileGamma
 
 Staged; nothing pinned.
 * **The H100 record is the granted statement on a narrower domain:** `pearlCProtocolDev_h100` and
-  `pearlCTilesDev_h100`, and `pearlCDomainDev_h100` (the granted domain with `n ≥ 2^10`, `64 ∣ n`), so
+  `pearlCTilesDev_h100`, and `pearlCDomainDev_h100` (the granted domain with `n ≥ 64`, `64 ∣ n`), so
   `TTOutPearlC CM · Costs.adopted` gives `TTOutPearlCDev CM devH100` (`ttOutPearlCDev_h100`), and likewise per tile
   (`ttOutTilePearlCDev_h100`).
 * **γ at any device record,** on the one-shape domain where `wrefDev = ω·(1 − ρ)·creditDev`: `G_γ` from TT_OUT
@@ -57,7 +57,7 @@ theorem pearlCProtocolDev_h100 (sem : PearlCSem Q R S) (ρ : ℚ) :
 
 /-- The H100 record's domain is the granted one with `n`'s floor (`pearlCDomainDev`). -/
 theorem pearlCDomainDev_h100 (L : Layout) : pearlCDomainDev devH100 L ↔
-    pearlCDomain Params.pi L ∧ ∀ u < L.N, 2 ^ 10 ≤ (L.shape u).n ∧ 64 ∣ (L.shape u).n := by
+    pearlCDomain Params.pi L ∧ ∀ u < L.N, 64 ≤ (L.shape u).n ∧ 64 ∣ (L.shape u).n := by
   simp only [pearlCDomainDev, pearlCDomain, Shape.Tiled, devH100, Params.pi]
   constructor
   · intro h
