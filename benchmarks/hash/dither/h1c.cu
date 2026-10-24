@@ -1313,7 +1313,8 @@ __device__ __forceinline__ void tail_levels(const H1Tab& T, const u64* snaps, ui
 }
 extern "C" __global__ void __launch_bounds__(LT) h1c_tail_k(const H1Tab* __restrict__ mid, int nmid,
                                                            const H1Tab* __restrict__ rnd, int nrnd,
-                                                           const u64* __restrict__ snaps, unsigned* __restrict__ done) {
+                                                           const u64* __restrict__ snaps, unsigned* __restrict__ done,
+                                                           u64* __restrict__ host_root) {
   __shared__ __align__(16) uint8_t bf[LT * HB];
   __shared__ bool last;
   uint8_t* b = bf + threadIdx.x * HB;
@@ -1328,6 +1329,10 @@ extern "C" __global__ void __launch_bounds__(LT) h1c_tail_k(const H1Tab* __restr
   if (!last) return;
   if (threadIdx.x == 0) *done = 0;
   for (int r = 0; r < nrnd; ++r) tail_levels(rnd[r], snaps + (size_t)(nmid + r) * NMAXD * NSNAP, b);
+  if (host_root) {
+    for (int k = threadIdx.x; k < 8 * nrnd; k += LT) host_root[k] = rnd[k >> 3].root[k & 7];
+    __threadfence_system();
+  }
 }
 #endif
 #endif
@@ -2153,8 +2158,10 @@ extern "C" int h1c_build(const H1Tab* tabs, H1Tab* tabs_dev, int ntab, const int
 
 // h1c_build(mid); h1c_build(rnd) as two calls: h1c_tail_pre, which reads no leaf, then h1c_tail, every level.  Both sets'
 // tables are given (no data), 1 to NMAXD levels deep, and rnd's leaves are written by mid's roots or before h1c_tail;
-// snaps holds (nmid + nrnd) NMAXD NSNAP words, done one u32, zero before the first h1c_tail and left zero by each.
-// h1c_tail_words: snaps' words a table.
+// snaps holds (nmid + nrnd) NMAXD NSNAP words, done one u32, zero before the first h1c_tail and left zero by each;
+// host_root, if not null, 8 nrnd words of the caller's pinned host memory (cudaHostAlloc's, which a kernel writes
+// through its host pointer under unified addressing) that rnd's roots go into as well, so the host reads them once the
+// launch is done, with no copy.  h1c_tail_words: snaps' words a table.
 extern "C" int h1c_tail_words() {
 #if H1C_HB && H1C_NMID
   return NMAXD * NSNAP;
@@ -2178,10 +2185,10 @@ extern "C" int h1c_tail_pre(const H1Tab* mid, H1Tab* mid_dev, int nmid, const H1
 #endif
 }
 extern "C" int h1c_tail(const H1Tab* mid_dev, int nmid, const H1Tab* rnd_dev, int nrnd, const u64* snaps, unsigned* done,
-                        cudaStream_t stream) {
+                        u64* host_root, cudaStream_t stream) {
 #if H1C_HB && H1C_NMID
   if (nmid <= 0 || nrnd <= 0) return 99;
-  h1c_tail_k<<<nmid, LT, 0, stream>>>(mid_dev, nmid, rnd_dev, nrnd, snaps, done);
+  h1c_tail_k<<<nmid, LT, 0, stream>>>(mid_dev, nmid, rnd_dev, nrnd, snaps, done, host_root);
   return (int)cudaGetLastError();
 #else
   return 98;

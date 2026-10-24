@@ -209,14 +209,14 @@ def no_poison(st: Step) -> bool:
 def tail_check(lib: H1C, st: Step, step, ref: dict, reps: int) -> dict:
     """The step's mid and round trees through `Tail` (h1c_tail), from poison, against `ref`; and the time from the
     leaves on of h1c_build's two builds and of `Tail.levels`."""
-    tl = Tail(lib, st.mid, st.round)
+    tl = Tail(lib, st.mid, st.round, host_root=True)
     st.poison()
     lib.build(st.calls, step)
     tl.pre(step)
     tl.levels()
     st.post(lib, step)
     torch.cuda.synchronize()
-    c = {**compare(st, ref), "no_poison_left": no_poison(st)}
+    c = {**compare(st, ref), "no_poison_left": no_poison(st), "host_root": tl.root(0) == ref["round"]}
     e = [torch.cuda.Event(enable_timing=True) for _ in range(4)]
     ms = {"build": [], "pre": [], "levels": []}
     for _ in range(reps):
@@ -310,7 +310,8 @@ def main() -> int:
         step.fill_(7)
         doc["tail"] = tail_check(lib, st, step, ref, a.reps)
         print(json.dumps({"tail": doc["tail"]}), flush=True)
-        tail_ok = pre_ok(doc["tail"]) and pre_ok(doc["tail"]["again"]) and doc["tail"]["no_poison_left"]
+        tail_ok = (pre_ok(doc["tail"]) and pre_ok(doc["tail"]["again"]) and doc["tail"]["no_poison_left"]
+                   and doc["tail"]["host_root"])
     ok = (pre_ok(doc["pre"]) and not doc["receipts"]["bad"] and doc["no_poison_left"] and all(doc["control"].values())
           and all(pre_ok(r) and not r["receipts_bad"] and r["no_poison_left"] for r in replays) and doc["b_tables"]["ok"]
           and tail_ok)

@@ -199,11 +199,14 @@ PUT_ASYNC_ENV = "DITHER_SO_PUT_ASYNC"
 PREQ_ENV = "DITHER_SO_PREQ"
 # "1": a step's mid and round trees through h1c's `Tail`: their domains, pads and node Snaps (no leaf read) before the
 # serving stream's wait on the units, every level of both in one launch after it, not two h1c_builds after it; the same
-# bytes.  A step that withholds or replaces its z/y round leaves (fault_zlate and the step after it) builds them as before
+# bytes.  "2": as "1", and the round's root written by that launch into pinned host memory as well, the root read the
+# launch's event and that memory rather than a copy (the step's ybad copy queued before the wait).  A step that
+# withholds or replaces its z/y round leaves (fault_zlate and the step after it) builds them as before
 TAIL_ENV = "DITHER_SO_TAIL"
 # "1" (a diagnostic): the host's progress as events on an idle stream, so a step's phases place it against the GPU's:
-# h_tail_ms (the tail's launch after the units' end), h_read_ms (the root read after the tail), h_udone_ms (the units'
-# end to the serving stream past its wait) and h_flag_ms (the units' flag set to their start, the step before's)
+# h_tail_ms (the tail's launch after the units' end), h_read_ms (the root read after the tail), h_ret_ms (the root
+# read's return after the tail), h_udone_ms (the units' end to the serving stream past its wait) and h_flag_ms (the
+# units' flag set to their start, the step before's)
 HMARK_ENV = "DITHER_SO_HMARK"
 # "1": a capture's copies go to host memory, not the device (a prefill capture at T = 2048 is ~30 GB); `DA.check` moves
 # each call's tensors to the device as it reads them
@@ -295,15 +298,18 @@ class SoWindow(DO.Window):
         self.ev_w = [torch.cuda.Event(enable_timing=True) for _ in range(4)]
         self.ev_fwd = torch.cuda.Event()
         self.tail: H1CM.Tail | None = None
-        if os.environ.get(TAIL_ENV) == "1":
+        tm = os.environ.get(TAIL_ENV) or "0"
+        if tm not in ("0", "1", "2"):
+            raise RuntimeError(f"${TAIL_ENV}={tm}: 0, 1 or 2")
+        if tm != "0":
             if self.overlap:
-                raise RuntimeError(f"${TAIL_ENV}=1 serves an -so arm without -ov (whose rounds build on the sender's ring)")
-            self.tail = H1CM.Tail(self.c, self.pre["mid"], self.pre["round"])
+                raise RuntimeError(f"${TAIL_ENV}={tm} serves an -so arm without -ov (whose rounds build on the sender's ring)")
+            self.tail = H1CM.Tail(self.c, self.pre["mid"], self.pre["round"], host_root=tm == "2")
         self.hmark = os.environ.get(HMARK_ENV) == "1"
         if self.hmark:
             self.hm_stream = torch.cuda.Stream()
-            # 0 the tail's launch, 1 the root read, 2 + s % 2 step s's units' flag
-            self.ev_h = [torch.cuda.Event(enable_timing=True) for _ in range(4)]
+            # 0 the tail's launch, 1 the root read, 2 + s % 2 step s's units' flag, 4 the root read's return
+            self.ev_h = [torch.cuda.Event(enable_timing=True) for _ in range(5)]
             self.h_flagged: set[int] = set()
         self.root_lag = int(os.environ.get(ROOT_LAG_ENV) or 0)
         if self.root_lag not in (0, 1, 2):
@@ -780,8 +786,11 @@ class SoWindow(DO.Window):
         if self.deferred is not None:
             t_late = self._late_dispatch()
         tail = self.tail is not None and cap != "fault_zlate" and self.zlate is None
+        zc = tail and self.tail.root_host is not None
         if tail:
             self.tail.pre(self.stepv[0:1])
+        if zc:
+            self._ybad_copy(sd)
         self.phase("receipt_leaf")
         o = pre["mid"].level_off[kinds.index("receipt-step")]
         lv = pre["mid"].level[o:o + 8 * self.L]
@@ -840,12 +849,17 @@ class SoWindow(DO.Window):
                     and ju in self.m_of):
                 sd.prequeue(ju, self.m_of[ju])
             # ybad rides the root read's sync rather than a nonzero's own
-            if self.ybad_pin is None:
-                self.ybad_pin = torch.empty(sd.ybad.shape, dtype=sd.ybad.dtype).pin_memory()
-            self.ybad_pin.copy_(sd.ybad, non_blocking=True)
+            if not zc:
+                self._ybad_copy(sd)
             if self.hmark:
                 self.ev_h[1].record(self.hm_stream)
-            root = unwords(pre["round"].root(0))
+            if zc:
+                self.ev_w[2].synchronize()
+                root = self.tail.root(0)
+            else:
+                root = unwords(pre["round"].root(0))
+            if self.hmark:
+                self.ev_h[4].record(self.hm_stream)
             t_root = time.perf_counter()
             self.phase("record_host")
             i = self.pipe.send(root)
@@ -904,6 +918,7 @@ class SoWindow(DO.Window):
             if self.hmark:
                 ph["h_tail_ms"] = self.ev_w[1].elapsed_time(self.ev_h[0])
                 ph["h_read_ms"] = self.ev_w[3].elapsed_time(self.ev_h[1])
+                ph["h_ret_ms"] = self.ev_w[3].elapsed_time(self.ev_h[4])
                 ph["h_udone_ms"] = sd.ev_u[p][1].elapsed_time(self.ev_w[1])
                 if s - 1 in self.h_flagged:
                     ph["h_flag_ms"] = self.ev_h[2 + (s - 1) % 2].elapsed_time(sd.ev_u[p][0])
@@ -920,6 +935,11 @@ class SoWindow(DO.Window):
         self.s += 1
         self.steps += 1
         self._step_end(s)
+
+    def _ybad_copy(self, sd) -> None:
+        if self.ybad_pin is None:
+            self.ybad_pin = torch.empty(sd.ybad.shape, dtype=sd.ybad.dtype).pin_memory()
+        self.ybad_pin.copy_(sd.ybad, non_blocking=True)
 
     def _y_refused(self, s: int, cap: str | None) -> list[int]:
         """Step s's calls whose y root the commit refused, from the pinned copy that rode its root read."""
