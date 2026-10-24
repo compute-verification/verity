@@ -134,6 +134,13 @@ def member_rows(name: str, at: SimpleNamespace) -> SimpleNamespace:
     return SimpleNamespace(cell=cell, salts=salts, entry=entry, own=own)
 
 
+def opened(at: SimpleNamespace, mr: SimpleNamespace) -> list[bool]:
+    """The host's read of a member's registered port, as Lean's registered reads make it: whether each unit's row,
+    committed under the member's salt, climbs its path to the warden's signed root at the unit's position."""
+    return [WR.opens(at.dom, at.head.root, p, WR.bc(r, s), bytes.fromhex(path))
+            for p, r, s, path in zip(at.positions, mr.cell, mr.salts, mr.entry["paths"])]
+
+
 # --- the audit (N2-ZK's flow on one-stage's a0, a7 and a8) --------------------------------------------------------------
 
 def _one_stage():
@@ -199,9 +206,7 @@ def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
     os.link(sg.out / "circuit.txt", out / "circuit.txt")
     reads = WR.reads_file({port: WR.port(at.head, at.positions, sg.base)})
     (out / "registered.json").write_text(json.dumps(reads, sort_keys=True))
-    rows_of_port = mr.cell
-    predicted = [WR.opens(at.dom, at.head.root, p, WR.bc(r, s), bytes.fromhex(path))
-                 for p, r, s, path in zip(at.positions, rows_of_port, mr.salts, mr.entry["paths"])]
+    predicted = opened(at, mr)
     m = {"tag": name, "name": name, "dir": out, "meta": st.meta, "pin": st.pin, "class": st.class_sha512, "set": set_name,
          "n": n, "base": sg.base, "defn": sg.defn, "ands": got["ands"], "unit_nnz": got["unit_nnz"], "salts": got["salts"],
          "ports": st.ports, "port": port, "cells": mr.cell, "own": mr.own, "partition_file": sg.partition_file,
