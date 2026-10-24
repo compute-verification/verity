@@ -1,5 +1,5 @@
 """Pearl-C's records: what the prover declares for each matmul before the draws, and the root that binds them (statement
-review item 5).  vLLM's Pearl-C prover writes them (`verity_vllm.protocol_options.pouw_pearl_c_device`).  The work law
+review item 5).  vLLM's Pearl-C prover writes them (`verity_vllm.protocols.pouw.pearl_c`).  The work law
 that credits, draws and checks by them, with its clear audit, is a reference tool, not a verifier:
 ``benchmarks/pouw/clear/clear_work.py``.
 
