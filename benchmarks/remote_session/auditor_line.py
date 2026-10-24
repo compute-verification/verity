@@ -4,7 +4,7 @@ and at the passes) with its groups' times read from what the auditor's host sign
 stamps.
 
 Group g's coin σ_g left the challenger at its release log's `released_at` for challenge coin g, and window g's last
-root reached it at the first `received_at` of a request naming that root (`auditor_seen`). Openings coin g's request
+root reached it at the first `received_at` of a request naming it by place (`auditor_seen`). Openings coin g's request
 names it (`audit.Session.close` asks for the coin after the window's last root), and a paced window is drawn at its
 k-th root (its boundary leaves before it), so that request leaves as the root arrives; for k = 1, σ_(g+2)'s request names the same root too. Both
 times are the challenger's monotonic clock in its release log, whose lines its close signs (`challenger.session_of`),
@@ -167,22 +167,21 @@ def release_log(lines: list[str]) -> dict[str, dict[str, list]]:
 
 def auditor_seen(lines: list[str], seen: list[dict]) -> tuple[list[dict], dict]:
     """`seen` (a session's `windows_seen`) with each group's coin and last root on the challenger's clock: `released_ns`
-    challenge coin g's release, `arrivals_ns` the first receipt of a request naming openings coin g's root, the
-    window's last; and which family's request named each last root first."""
+    challenge coin g's release, `arrivals_ns` the first receipt of the requests that name the window's last root by
+    their place, openings coin g's and, when it names the same root, σ_(g+2)'s; and which family's came first. Both
+    leave only once that root has come, so a root the prover repeats can't make A_g early, as an earlier request
+    naming the same value (σ_(g+1)'s, or another window's) would."""
     fam = release_log(lines)
     ch, op = fam.get("challenge"), fam.get("openings")
     n = len(seen)
     if ch is None or op is None or len(ch["released"]) < n or len(op["after"]) < n:
         raise ValueError(f"the release log holds {len((ch or {}).get('released', ()))} challenge and "
                          f"{len((op or {}).get('after', ()))} openings coins, not one of each for each of {n} groups")
-    first: dict[str, tuple[int, str]] = {}
-    for label, f in fam.items():
-        for root, t in zip(f["after"], f["received"]):
-            if root not in first or t < first[root][0]:
-                first[root] = (t, label)
     out, by = [], {}
     for g, w in enumerate(seen):
-        t, label = first[op["after"][g]]
+        t, label = op["received"][g], "openings"
+        if g + 2 < len(ch["after"]) and ch["after"][g + 2] == op["after"][g] and ch["received"][g + 2] < t:
+            t, label = ch["received"][g + 2], "challenge"
         by[label] = by.get(label, 0) + 1
         out.append({**w, "released_ns": ch["released"][g], "arrivals_ns": [t] if w["arrivals_ns"] else []})
     return out, {"last_root_first_named_by": by}
