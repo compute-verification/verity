@@ -366,9 +366,9 @@ decodes it with the public tokenizer.
 - **What it proves:** at the drawn positions, the bytes the user receives are `event(id)` for the id the Commit sampled
   there, so the text the user's client shows is the public tokenizer's decode of committed ids, holdback included,
   and a function of committed values alone.
-- **What it costs:** an equality over the frame's other 8B − 80 bits (32,687 ANDs at B = 4,096), which makes the tie
-  stand alone and which it drops once N3 is a unit on `All`, and the id's decode, about 800 (digits after spaces, below
-  the vocabulary's size V).
+- **What it costs:** `IoTieEvent` is 33,470 ANDs at B = 4,096: an equality over the frame's other 8B − 80 bits
+  (32,687), which makes the tie stand alone and which it drops once N3 is a unit on `All`, and the id's decode, 783
+  (spaces then digits, no leading zero, below 2^32, so each id has one frame).
 
 Measured on canonical frames (the real-vLLM rehearsal `r20261024-021333-0ca6`: 40 requests of F = 16, 640 events a
 profile; the GLM-4.5 tokenizer, V = 151,329):
@@ -412,12 +412,15 @@ sound one.
 
 **The Commit's value: a token port.**
 - **Variant P, recommended.** Before the window's coins, the prover commits through the proof service one value per
-  link-window, `tokens`: request g's P prompt ids, then its F sampled ids, 32 u32be ids a row (128 bytes); request g's
-  slot s is row g·C + ⌊s / 32⌋, column s mod 32, C = ⌈(P + F) / 32⌉. Each row is an `hm96-sha512/row/v2` leaf under its
-  own fresh salt, in one `frame-v3-sha512` tree under the served-domain rule (`registration.served_domain`). It has
-  R_max·C rows, R_max the window's public request capacity, so its leaf count says nothing of R_w; rows past R_w·C are
-  zero rows, salted like the rest and never read. The tie reads the row at a hidden position
-  (`NetworkHidingRead{1024, DT}`, DT = ⌈log2(R_max·C)⌉) and its column by a 32-way mux. The port must equal the Commit:
+  link-window, `tokens`: request g's F sampled ids, then its P prompt ids, 32 u32be ids a row (128 bytes); request g's
+  slot s is row g·C + ⌊s / 32⌋, column s mod 32, C ≥ (F + P) / 32 a power of two. Each row is an
+  `hm96-sha512/row/v2` leaf under its own fresh salt, in one `frame-v3-sha512` tree under the served-domain rule
+  (`registration.served_domain`). It has R_max·C rows, R_max the window's public request capacity, so its leaf count
+  says nothing of R_w; rows past R_w·C are zero rows, salted like the rest and never read. The tie reads the row at a
+  hidden position (`NetworkHidingRead{1024, DT}`, DT = log2(R_max·C)) and its column by a 32-way mux (`IoTieColumn`,
+  992 ANDs). With F ≥ 32 and R_max = 2^(D − log2 F), the most requests the window's tree can hold, egress frame k's
+  row and column are k's own bits, so the position is wiring; the rehearsal's F = 16 needs a small adder. The port
+  must equal the Commit:
   its prompt slots `c00.input/ids`, its output slots `runner.sampler/sampled_token_ids` (int32 [num_reqs, 1] a step)
   of the steps that served request g. That tie is compute's, in zero knowledge what `check/commit_tokens.py` does in
   the clear by identity (step, op path, output member, invocation), and its share adds to this unit's.
@@ -462,13 +465,13 @@ of P ≤ 48 and F = 16 (DT = 8). Served is `SERVED`'s shape, L = 9, T = 600, r =
 | Head opening, once a unit | 890,971 | 1,876,070 | `NetworkHidingRead` at D = 2, `head_check.size` |
 | Position | ~7K | ~25K | Σ n_t (32·T bits), u·N, the map (estimate) |
 | Frame opening | 3,426,040 | 4,240,882 | (33 + 2D) compressions of 57,947, 512·D for the path's order, 511 for the root's equality |
-| Frame parse | ~33.5K | ~33.5K | 8B − 80 bits of template, the id's decode |
-| Commit opening, P | ~1.77M | 3,284,100 | the row's digest (2 compressions), `Hm96Sha512Leaf` (215,597), `FrameV3Read` at DT (about 1.44M at 8, interpolated; 2,951,509 at 17), the column, ~1.1K |
-| Compare and join | 32 | 32 | |
+| Frame parse | 33,470 | 33,470 | `IoTieEvent`: 8B − 80 bits of template, the id's decode |
+| Commit opening, P | 1,774,919 | 3,283,992 | `NetworkHidingRead{1024, DT}` (1,773,927 at 8, 3,283,000 at 17: the row's digest, `Hm96Sha512Leaf`, `FrameV3Read`), and `IoTieColumn` |
+| Join | 2 | 2 | |
 | The first draw | ≈ 6.13M | ≈ 9.46M | |
-| Each further draw | ≈ 5.24M | ≈ 7.58M | the head shared |
+| Each further draw | ≈ 5.23M | 7,558,346 | the head shared; served is `IoTieDraw{4096, 20, 1024, 128}`, measured |
 
-Per link-day at the served shape and K = 20, that is 1,440 × (9.46M + 19 × 7.58M) ≈ 2.2 × 10^11 ANDs: about 24 times
+Per link-day at the served shape and K = 20, that is 1,440 × (9.46M + 19 × 7.56M) ≈ 2.2 × 10^11 ANDs: about 24 times
 N2's 9.30 × 10^9, and 1/2,000 to 1/4,000 of N3's 4.9 to 9.2 × 10^14. Variant H adds about 10.4M a draw. An egress B of
 256 (the id event fits) cuts the frame opening to (3 + 2D) compressions, 1,687,630 and 2,502,472, saving about 1.7M a
 draw. An ingress draw at the rehearsal's D_in = 7 is about 5.43M: the head, the frame (2,727,604), its template and an
@@ -486,9 +489,15 @@ becomes ids. The tie (sampled) holds each drawn frame's id to the Commit's, whic
 values on a served link. The three read one head leaf, 2 + direction, under one registered root.
 
 **Reuse.** `NetworkHidingRead` (the head, and the port's row at N_BITS = 1,024), `Sha512Compress`, `Hm96Sha512Leaf`,
-`FrameV3Read` and `LmsEqual`. The new Definitions are composites of those, with no new hash: `NetworkFrameRead{B, D}`
-(the frame tree's leaf, path and root), `IoTieEvent{B}` and `IoTieRequest{B, M}` (template and decode),
-`IoTiePosition{T, F}`, and the unit.
+`FrameV3Read` and `LmsEqual`. The new Definitions are composites of those, with no new hash.
+
+**The prototype** (`io_tie`, on a fake upstream) has the reference (`io_tie.reference`: the head's opening, the draws,
+the frames, the ids and the port's rows, in the clear) and one draw's circuit, `IoTieDraw{B, D, FOUT, C}`:
+`NetworkFrameRead{B, D}` (the frame tree's leaf, path and root, with `NetworkFrameSwap` ordering each level),
+`IoTieEvent{B}`, the port row's `NetworkHidingRead` and `IoTieColumn`. Its tests hold the circuits to the reference,
+on honest windows and on a duplicated frame, swapped responses, a wrong port id, a zero-padded id, another path and
+another root. Still to build: `IoTiePosition{T, FOUT}` (k = ⌊u·N / 2^64⌋ and k < N, N the head's counts' sum), the
+head's opening inside the unit and the K draws' AND, and the ingress side (`IoTieRequest{B, M}`).
 
 **Open for proofs.**
 - Variant P or H, and who owns the port's binding to the step rows.
