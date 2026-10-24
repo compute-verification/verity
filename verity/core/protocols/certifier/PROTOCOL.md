@@ -690,7 +690,8 @@ Definitions above, and their tests:
   cells.
 
 Still to build: the warden writing and committing cells (`active`), the cells' registration, the port's real layout
-and registration (vllm's Commit), the target's map registration and its range read, the ingress tie (`IoTieRequest{B, M}`, "The two ingress ties"), and the ingress side.
+and registration (vllm's Commit), the target's map registration and its range read, the ingress tie
+(`IoTieRequest{B, M}`, "The two ingress ties"), and the ingress side.
 
 **Open for proofs.**
 - Hidden-position reads (frame and port) under the one soundness theorem. In v4 every read is at a public position
