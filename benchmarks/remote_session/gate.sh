@@ -179,11 +179,18 @@ leased() {
   [ ${#to[@]} -gt 0 ] || { echo "no $PROVER_NODE in /etc/vy/peers and no PROVER_SSH" >&2; return 3; }
   # no waiter leaves no wait file, so only the status decides the rc
   st=$(ssh -o BatchMode=yes -o ConnectTimeout=20 "${to[@]}" \
-    "/workspace/pouw/infra/bin/gpu-lease status && { cat /run/gpu-lease/wait.* 2> /dev/null; true; }" 2>&1) \
+    "/workspace/pouw/infra/bin/gpu-lease status && { cat /run/gpu-lease/wait.* 2> /dev/null;
+      python3 -c 'import json, sys; print(\"state=\" + json.load(open(sys.argv[1]))[\"state\"])' \
+        /workspace/research/runs/${PROVER_RUN:?}/status.json 2> /dev/null; true; }" 2>&1) \
     || { tail -n 3 <<< "$st" >&2; return 3; }
   local held
   held=$(grep -E "^[0-9]+ held .* run=${PROVER_RUN:?}( |$)" <<< "$st" | grep -c .)
-  if [ "$held" = 0 ] && ! grep -q "run=$PROVER_RUN\b" <<< "$st"; then echo gone; else echo "$held"; fi
+  # a lease waiting unqueued (out of a booked window) writes no wait file, so a run still running counts as waiting
+  if [ "$held" = 0 ] && ! grep -q "run=$PROVER_RUN\b" <<< "$st" && ! grep -qx "state=running" <<< "$st"; then
+    echo gone
+  else
+    echo "$held"
+  fi
 }
 
 fire() {
