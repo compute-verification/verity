@@ -13,6 +13,8 @@
 //                frame leaf (rank, rank, "hm96-sha512/row-seg/v1", h); a pad above the count; a given table's leaves are
 //                another table's roots, so only its pads
 //   h1c_level    one thread a node of level d of every table (`merkle.tree_levels`); the top one is the table's root
+//   h1c_tail     (H1C_NMID) h1c_build of given tables, then of the given table over their roots: what reads no leaf
+//                (domains, pads, each level's Snap) in h1c_tail_pre's launch, every level of both in h1c_tail's one
 //   h1c_a_*      a served call's A table in one launch, its row-independent parts once a step (below); h1c_a_form(2)
 //                serves it from h1c_a_call2_k, the same table with each compression on its critical path paired, and
 //                h1c_a_form(3) from h1c_a_call3_k, paired with every message built in registers
@@ -1273,6 +1275,61 @@ extern "C" __global__ void __launch_bounds__(LT) h1c_levels(const H1Tab* __restr
     __syncthreads();
   }
 }
+
+#if H1C_NMID
+// h1c_tail: two sets of given tables, mid's roots another's (rnd's) leaves.  h1c_tail_pre_k is what reads no leaf, a block
+// a table (mid's, then rnd's): its domain, its pads and each level's Snap into snaps (NMAXD Snaps a table); h1c_tail_k a
+// block a mid table, its levels from those Snaps, and the last block to finish rnd's levels, so the part that waits on
+// the leaves is one launch
+extern "C" __global__ void __launch_bounds__(LT) h1c_tail_pre_k(H1Tab* __restrict__ mid, int nmid, H1Tab* __restrict__ rnd,
+                                                               const int* __restrict__ step, u64* __restrict__ snaps) {
+  __shared__ __align__(16) uint8_t bf[LT * HB];
+  const int t = blockIdx.x;
+  H1Tab& T = t < nmid ? mid[t] : rnd[t - nmid];
+  uint8_t* b = bf + threadIdx.x * HB;
+  if (threadIdx.x == 0) hb_domain(T, (u64)(long long)*step, b);
+  __syncthreads();
+  const long long width = 1LL << T.depth;
+  for (long long i = T.count + threadIdx.x; i < width; i += LT) {
+    Hb s;
+    hb_init(s, b);
+    hb_frame(s, "pad", 3);
+    hb_be(s, 64, 8);
+    hb_words(s, T.dom, 8);
+    hb_uint(s, (u64)i);
+    u64 out[8];
+    hb_final(s, out);
+#pragma unroll
+    for (int k = 0; k < 8; ++k) T.level[i * 8 + k] = out[k];
+  }
+  for (int q = threadIdx.x; q < T.depth; q += LT) node_snap(T, q, b, snaps + ((size_t)t * NMAXD + q) * NSNAP);
+}
+__device__ __forceinline__ void tail_levels(const H1Tab& T, const u64* snaps, uint8_t* b) {
+  for (int lv = 0; lv < T.depth; ++lv) {
+    const long long nodes = (1LL << T.depth) >> (lv + 1);
+    for (long long idx = threadIdx.x; idx < nodes; idx += LT) hb_node_snap(T, b, lv, idx, snaps + lv * NSNAP);
+    __syncthreads();
+  }
+}
+extern "C" __global__ void __launch_bounds__(LT) h1c_tail_k(const H1Tab* __restrict__ mid, int nmid,
+                                                           const H1Tab* __restrict__ rnd, int nrnd,
+                                                           const u64* __restrict__ snaps, unsigned* __restrict__ done) {
+  __shared__ __align__(16) uint8_t bf[LT * HB];
+  __shared__ bool last;
+  uint8_t* b = bf + threadIdx.x * HB;
+  tail_levels(mid[blockIdx.x], snaps + (size_t)blockIdx.x * NMAXD * NSNAP, b);
+  // cooperative groups' grid barrier, one way: every mid root is out before the last block reads rnd's leaves
+  if (threadIdx.x == 0) {
+    __threadfence();
+    last = atomicAdd(done, 1u) == (unsigned)nmid - 1;
+    __threadfence();
+  }
+  __syncthreads();
+  if (!last) return;
+  if (threadIdx.x == 0) *done = 0;
+  for (int r = 0; r < nrnd; ++r) tail_levels(rnd[r], snaps + (size_t)(nmid + r) * NMAXD * NSNAP, b);
+}
+#endif
 #endif
 
 extern "C" __global__ void __launch_bounds__(32) h1c_a_init_k(const H1Tab* __restrict__ tabs, u64* __restrict__ pre, int wpt) {
@@ -2092,4 +2149,41 @@ extern "C" int h1c_build(const H1Tab* tabs, H1Tab* tabs_dev, int ntab, const int
   if (lvf < max_depth) h1c_levels<<<ntab, LT, 0, stream>>>(tabs_dev, ntab, lvf);
 #endif
   return (int)cudaGetLastError();
+}
+
+// h1c_build(mid); h1c_build(rnd) as two calls: h1c_tail_pre, which reads no leaf, then h1c_tail, every level.  Both sets'
+// tables are given (no data), 1 to NMAXD levels deep, and rnd's leaves are written by mid's roots or before h1c_tail;
+// snaps holds (nmid + nrnd) NMAXD NSNAP words, done one u32, zero before the first h1c_tail and left zero by each.
+// h1c_tail_words: snaps' words a table.
+extern "C" int h1c_tail_words() {
+#if H1C_HB && H1C_NMID
+  return NMAXD * NSNAP;
+#else
+  return 0;
+#endif
+}
+extern "C" int h1c_tail_pre(const H1Tab* mid, H1Tab* mid_dev, int nmid, const H1Tab* rnd, H1Tab* rnd_dev, int nrnd,
+                            const int* step_dev, u64* snaps, cudaStream_t stream) {
+#if H1C_HB && H1C_NMID
+  if (nmid <= 0 || nrnd <= 0 || nmid + nrnd > 65535) return 99;
+  for (int t = 0; t < nmid + nrnd; ++t) {
+    const H1Tab& T = t < nmid ? mid[t] : rnd[t - nmid];
+    if (T.data || T.depth < 1 || T.depth > NMAXD || T.count > (1LL << T.depth) || (T.count << 1) <= (1LL << T.depth))
+      return 100 + t;
+  }
+  h1c_tail_pre_k<<<nmid + nrnd, LT, 0, stream>>>(mid_dev, nmid, rnd_dev, step_dev, snaps);
+  return (int)cudaGetLastError();
+#else
+  return 98;
+#endif
+}
+extern "C" int h1c_tail(const H1Tab* mid_dev, int nmid, const H1Tab* rnd_dev, int nrnd, const u64* snaps, unsigned* done,
+                        cudaStream_t stream) {
+#if H1C_HB && H1C_NMID
+  if (nmid <= 0 || nrnd <= 0) return 99;
+  h1c_tail_k<<<nmid, LT, 0, stream>>>(mid_dev, nmid, rnd_dev, nrnd, snaps, done);
+  return (int)cudaGetLastError();
+#else
+  return 98;
+#endif
 }

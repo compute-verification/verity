@@ -5,6 +5,7 @@
     lib.build(st, step)                          # domains, segments, leaves, levels on the current stream; step (1,) int32
     st.root(i)                                   # table i's root: 8 int64 big-endian words, a device view
     lib.build(lib.union([st, st2]), step)        # both sets in one h1c_build (`Union`), into each set's own buffers
+    tl = Tail(lib, mid, rnd); tl.pre(step); tl.levels()  # build(mid), build(rnd) of given tables, split at the leaves
 
 A table's domain is `commit.domain(fields, count, kind)`, with `splice` naming the fields that move with the step (each
 a s + b), so a step's sequence is the same launches with the step read from the device.  Its label is `lab[0]` + str(s)
@@ -227,6 +228,36 @@ class Union:
                     raise ValueError(f"a table's root goes into a union table's levels ({r:#x}): build those sets apart")
         self.host = (_Tab * self.n)(*[st.host[i] for st in sets for i in range(st.n)])
         self.dev = torch.frombuffer(bytearray(bytes(self.host)), dtype=torch.uint8).to(dev)
+
+
+class Tail:
+    """`H1C.build(mid)` then `H1C.build(rnd)`, rnd's leaves mid's roots (or written before `levels`), split at the
+    leaves (h1c.cu's h1c_tail): `pre(step)` what reads no leaf (domains, pads, each level's Snap), `levels()` every
+    level of both in one launch.  Every table of both sets is given (no rows); an H1C_NMID build's."""
+
+    def __init__(self, c: H1C, mid: Set, rnd: Set):
+        lib = c.lib
+        if not hasattr(lib, "h1c_tail") or not lib.h1c_tail_words():
+            raise RuntimeError("this h1c library has no h1c_tail (an H1C_HB=1 H1C_NMID=1 build has)")
+        lib.h1c_tail_pre.argtypes = [C.c_void_p, C.c_void_p, C.c_int, C.c_void_p, C.c_void_p, C.c_int, C.c_void_p,
+                                     C.c_void_p, C.c_void_p]
+        lib.h1c_tail.argtypes = [C.c_void_p, C.c_int, C.c_void_p, C.c_int, C.c_void_p, C.c_void_p, C.c_void_p]
+        self.lib, self.mid, self.rnd = lib, mid, rnd
+        self.snaps = torch.empty((mid.n + rnd.n) * lib.h1c_tail_words(), dtype=torch.int64, device=c.dev)
+        self.done = torch.zeros(1, dtype=torch.int32, device=c.dev)
+
+    def pre(self, step: torch.Tensor) -> None:
+        rc = self.lib.h1c_tail_pre(C.addressof(self.mid.host), self.mid.dev.data_ptr(), self.mid.n,
+                                   C.addressof(self.rnd.host), self.rnd.dev.data_ptr(), self.rnd.n, step.data_ptr(),
+                                   self.snaps.data_ptr(), torch.cuda.current_stream().cuda_stream)
+        if rc:
+            raise RuntimeError(f"h1c_tail_pre returned {rc}")
+
+    def levels(self) -> None:
+        rc = self.lib.h1c_tail(self.mid.dev.data_ptr(), self.mid.n, self.rnd.dev.data_ptr(), self.rnd.n,
+                               self.snaps.data_ptr(), self.done.data_ptr(), torch.cuda.current_stream().cuda_stream)
+        if rc:
+            raise RuntimeError(f"h1c_tail returned {rc}")
 
 
 class H1C:

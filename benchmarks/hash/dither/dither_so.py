@@ -197,6 +197,10 @@ PUT_ASYNC_ENV = "DITHER_SO_PUT_ASYNC"
 # salt is written: the same order (round s, coin, units), without the host's dispatch between them and the units' start.
 # Graph steps only, and never a step that holds a capture or a fault, nor a window's last step's units
 PREQ_ENV = "DITHER_SO_PREQ"
+# "1": a step's mid and round trees through h1c's `Tail`: their domains, pads and node Snaps (no leaf read) before the
+# serving stream's wait on the units, every level of both in one launch after it, not two h1c_builds after it; the same
+# bytes.  A step that withholds or replaces its z/y round leaves (fault_zlate and the step after it) builds them as before
+TAIL_ENV = "DITHER_SO_TAIL"
 # "1": a capture's copies go to host memory, not the device (a prefill capture at T = 2048 is ~30 GB); `DA.check` moves
 # each call's tensors to the device as it reads them
 CAP_HOST_ENV = "DITHER_SO_CAP_HOST"
@@ -282,9 +286,15 @@ class SoWindow(DO.Window):
             self._a_step_set()
         # the gate's generation runs past its last capture until that step's receipts are in a round
         self.gate_extra = self.depth + 8 + (1 if self.overlap else 0)
-        # the serving stream's wait on the units (0 to 1), then its mid (to 2) and round (to 3) builds
+        # the serving stream's wait on the units (0 to 1), then its mid (to 2) and round (to 3) builds; under TAIL_ENV
+        # both trees' levels are 1 to 2
         self.ev_w = [torch.cuda.Event(enable_timing=True) for _ in range(4)]
         self.ev_fwd = torch.cuda.Event()
+        self.tail: H1CM.Tail | None = None
+        if os.environ.get(TAIL_ENV) == "1":
+            if self.overlap:
+                raise RuntimeError(f"${TAIL_ENV}=1 serves an -so arm without -ov (whose rounds build on the sender's ring)")
+            self.tail = H1CM.Tail(self.c, self.pre["mid"], self.pre["round"])
         self.root_lag = int(os.environ.get(ROOT_LAG_ENV) or 0)
         if self.root_lag not in (0, 1, 2):
             raise RuntimeError(f"${ROOT_LAG_ENV}={self.root_lag}: 0, 1 or 2")
@@ -759,6 +769,9 @@ class SoWindow(DO.Window):
             f()
         if self.deferred is not None:
             t_late = self._late_dispatch()
+        tail = self.tail is not None and cap != "fault_zlate" and self.zlate is None
+        if tail:
+            self.tail.pre(self.stepv[0:1])
         self.phase("receipt_leaf")
         o = pre["mid"].level_off[kinds.index("receipt-step")]
         lv = pre["mid"].level[o:o + 8 * self.L]
@@ -777,19 +790,23 @@ class SoWindow(DO.Window):
                 lv.copy_(sd.rroots[p])
         if ads is not None:
             main.wait_event(ev[7])
-        self.c.build(pre["mid"], self.stepv[0:1])
-        self.ev_w[2].record()
-        rl = pre["round"].level
         zi, yi = kinds.index("z-step"), kinds.index("y-step")
-        if cap == "fault_zlate":
-            self.zlate = (rl[8 * zi:8 * zi + 8].clone(), rl[8 * yi:8 * yi + 8].clone())
-            for i in (zi, yi):
-                rl[8 * i:8 * i + 8].view(torch.uint8).fill_(DF.POISON)
-        elif self.zlate is not None:
-            rl[8 * zi:8 * zi + 8].copy_(self.zlate[0])
-            rl[8 * yi:8 * yi + 8].copy_(self.zlate[1])
-            self.zlate = None
-        self.c.build(pre["round"], self.stepv[0:1])
+        if tail:
+            self.tail.levels()
+            self.ev_w[2].record()
+        else:
+            self.c.build(pre["mid"], self.stepv[0:1])
+            self.ev_w[2].record()
+            rl = pre["round"].level
+            if cap == "fault_zlate":
+                self.zlate = (rl[8 * zi:8 * zi + 8].clone(), rl[8 * yi:8 * yi + 8].clone())
+                for i in (zi, yi):
+                    rl[8 * i:8 * i + 8].view(torch.uint8).fill_(DF.POISON)
+            elif self.zlate is not None:
+                rl[8 * zi:8 * zi + 8].copy_(self.zlate[0])
+                rl[8 * yi:8 * yi + 8].copy_(self.zlate[1])
+                self.zlate = None
+            self.c.build(pre["round"], self.stepv[0:1])
         self.ev_w[3].record()
         prev = self.cap_of.get(s - 1)
         late = self.cap_of.pop(j, None) if j >= self.s0 else None
