@@ -117,6 +117,11 @@ theorem pearlCDomainDev_split {d : PearlCDevice} {L : Layout} (h : pearlCDomainD
   have hw := h _ (unitOfRow_lt hv)
   ⟨Nat.one_pos, hw.2.1, hw.2.2.1, hw.2.2.2.1, hw.2.2.2.2.1, hw.2.2.2.2.2⟩
 
+/-- An in-domain unit has positive `m` and `n`. -/
+theorem pearlCDomainDev_pos {d : PearlCDevice} {L : Layout} (h : pearlCDomainDev d L) {u : ℕ} (hu : u < L.N) :
+    0 < (L.shape u).m ∧ 0 < (L.shape u).n :=
+  ⟨(h u hu).1, lt_of_lt_of_le (by norm_num) (h u hu).2.1.1⟩
+
 /-- A one-row unit at either headline depth is in v1's domain. -/
 theorem devSm120v1_domain_row (s : Shape) (hs : s = sh8192 ∨ s = sh16384) :
     pearlCDomainDev (devSm120v1 Prices.sm120) ⟨1, fun _ => ⟨1, s.n, s.k⟩, fun _ => 0⟩ := by
@@ -918,7 +923,7 @@ theorem split_tileCredit_le {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNo
                 ((gridTiles 64 64 U.layout).getD g (0, 0, 0)).2.2))) := by
     intro g hg
     obtain ⟨u, bi, bj, hb, hu, hbj⟩ := tile_facts (mem_range.mp (mem_filter.mp hg).1)
-    have hdom := hU u hu
+    have hdom := pearlCDomainDev_pos hU hu
     show (pearlCTilesDevRev1 d sem' ρ).credit H s U g _ = _
     rw [tilesCredit_eq, hb, tile_unit hb, tile_rows hb, tile_cols hb, tileCredit_rows d ρ _ hdom.1 hdom.2.1,
       Rat.cast_sum]
@@ -971,7 +976,7 @@ theorem split_tileCredit_le {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNo
     dsimp only at hg hi ⊢
     obtain ⟨hgr, c, hc, hcap, hwts, hwords⟩ := mem_filter.mp hg
     obtain ⟨u, bi, bj, hb, hu, hbj⟩ := tile_facts (mem_range.mp hgr)
-    have hdom := hU u hu
+    have hdom := pearlCDomainDev_pos hU hu
     have hc' : τ u = some c := by
       have h' : τ ((auditTiling 64 64 U.layout).unit g) = some c := hc
       rwa [tile_unit hb] at h'
@@ -1109,7 +1114,7 @@ theorem pearlCGammaDevRev1RowSeedWAt (CM : CostModel Q R S) (d : PearlCDevice) (
     (ttOut_of_ttOutRowSeed (ttOutRowSeed_wref (fun L u => (W (L.shape u) : ℝ)) hTT))
   intro U hU H s' u hu act _ hcap
   have hsh : U.layout.shape u = s := hU.2.1.2 u hu
-  have hdom := hU.2.1.1 u hu
+  have hdom := pearlCDomainDev_pos hU.2.1.1 hu
   have hc : sem.unitDebitRev1 d H s' U u act ≤ ρ * creditDevRev1 d (U.layout.shape u) :=
     rowCap_agg sem d ρ H s' U u act hdom.1 hdom.2.1 hcap
   show (W (U.layout.shape u) : ℝ) ≤

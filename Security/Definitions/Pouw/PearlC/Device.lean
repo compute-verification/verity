@@ -138,12 +138,19 @@ noncomputable def pearlCProtocolDev (d : PearlCDevice) (sem : PearlCSem Q R S) (
   capOK := fun H s U u act => debitDev d (sem.unitDebitDev d H s U u act) ≤ ρ * creditDev d (U.layout.shape u)
   Wref := fun L u => (wrefDev d (L.shape u) : ℝ)
 
-/-- Pearl-C's shape domain at a device: positive dimensions, k a whole number of 128-deep kernel tiles and, when the
-record promotes, of promotion groups, and `k ≤ 2^16`. Without promotion (`G = 0`) the group condition is void: read as
-`32·0 ∣ k` it would force `k = 0` and leave the domain empty. At the H100 record it is `pearlCDomain Params.pi`. -/
+/-- Pearl-C's shape domain at a device: positive `m`, `n ≥ 2^10` a multiple of 64, k a whole number of 128-deep kernel
+tiles and, when the record promotes, of promotion groups, and `k ≤ 2^16`. Without promotion (`G = 0`) the group condition
+is void: read as `32·0 ∣ k` it would force `k = 0` and leave the domain empty. At the H100 record it is
+`pearlCDomain Params.pi` with `n`'s floor (`pearlCDomainDev_h100`).
+
+The floor on `n` is what TT_OUT's `εPearlC` needs: a unit whose credited words carry fewer bits than its seeds is guessed
+more cheaply than they are. A `1 × 1 × k` unit has two 32-bit output words, which a program that reads no salt guesses
+with probability at least `Pr[E]/2^64` at a W1 cost of two constant-bank fetches, above `εPearlC 0 1 = 2^-128` whenever
+`Pr[E] > 2^-64` (CMP-77, lean's red team of the named assumptions, finding 1). With `n ≥ 2^10` and `64 ∣ n`, a one-row unit (RowSeed's) and every audit tile's
+credited row has at least 64 columns. `m` stays free, so a one-row unit is in the domain (`pearlCDomainDev_split`). -/
 def pearlCDomainDev (d : PearlCDevice) (L : Layout) : Prop :=
-  ∀ u < L.N, 0 < (L.shape u).m ∧ 0 < (L.shape u).n ∧ 0 < (L.shape u).k ∧ 128 ∣ (L.shape u).k ∧
-    (d.G = 0 ∨ 32 * d.G ∣ (L.shape u).k) ∧ (L.shape u).k ≤ 2 ^ 16
+  ∀ u < L.N, 0 < (L.shape u).m ∧ (2 ^ 10 ≤ (L.shape u).n ∧ 64 ∣ (L.shape u).n) ∧ 0 < (L.shape u).k ∧
+    128 ∣ (L.shape u).k ∧ (d.G = 0 ∨ 32 * d.G ∣ (L.shape u).k) ∧ (L.shape u).k ≤ 2 ^ 16
 
 /-- The domain restricted to one shape. -/
 def pearlCDomainDevAt (d : PearlCDevice) (s : Shape) (L : Layout) : Prop :=
