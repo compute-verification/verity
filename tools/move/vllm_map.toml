@@ -38,6 +38,8 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 "integrations/vllm/verity_vllm/protocol_options/pouw_h1_commit.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/commit.py"
 "integrations/vllm/verity_vllm/protocol_options/pouw_h1_handoff.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/handoff.py"
 "integrations/vllm/verity_vllm/protocol_options/pouw_h1_hooks.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/hooks.py"
+# not on main yet: #3611's, #3684's, #3574's, #3509's, #3707's and #3590's branches add it, and its restack needs the row
+"integrations/vllm/verity_vllm/protocol_options/pouw_h1_live.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/live.py"
 "integrations/vllm/verity_vllm/protocol_options/pouw_h1_prover.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/prover.py"
 "integrations/vllm/verity_vllm/protocol_options/pouw_h1_ranks.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/ranks.py"
 "integrations/vllm/verity_vllm/protocol_options/pouw_h1_records.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/records.py"
@@ -46,9 +48,13 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 "integrations/vllm/verity_vllm/protocol_options/pouw_h1_registered_device.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/registered_device.py"
 "integrations/vllm/verity_vllm/protocol_options/pouw_h1_requests.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/requests.py"
 "integrations/vllm/verity_vllm/protocol_options/pouw_h1_served.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/served.py"
+# not on main yet: the same six branches add it, and its restack needs the row
+"integrations/vllm/verity_vllm/protocol_options/pouw_h1_served_files.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/served_files.py"
 "integrations/vllm/verity_vllm/protocol_options/pouw_h1_settings.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/settings.py"
 "integrations/vllm/verity_vllm/protocol_options/pouw_h1_static.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/static.py"
 "integrations/vllm/verity_vllm/protocol_options/pouw_h1_window.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/window.py"
+# not on main yet: #3569's branch (cursor/vllm-h1-stage-a1f5) adds it, and its restack needs the row
+"integrations/vllm/verity_vllm/protocol_options/pouw_h1_words.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/words.py"
 # PoUW's Pearl-C device path (sm_120, and sm_90's grouped call)
 "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_device.py" = "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/__init__.py"
 "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_graphs.py" = "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/graphs.py"
@@ -126,6 +132,7 @@ paths = []
 "verity_vllm.protocol_options.pouw_h1_commit" = "verity_vllm.protocols.pouw.h1.commit"
 "verity_vllm.protocol_options.pouw_h1_handoff" = "verity_vllm.protocols.pouw.h1.handoff"
 "verity_vllm.protocol_options.pouw_h1_hooks" = "verity_vllm.protocols.pouw.h1.hooks"
+"verity_vllm.protocol_options.pouw_h1_live" = "verity_vllm.protocols.pouw.h1.live"
 "verity_vllm.protocol_options.pouw_h1_prover" = "verity_vllm.protocols.pouw.h1.prover"
 "verity_vllm.protocol_options.pouw_h1_ranks" = "verity_vllm.protocols.pouw.h1.ranks"
 "verity_vllm.protocol_options.pouw_h1_records" = "verity_vllm.protocols.pouw.h1.records"
@@ -133,9 +140,11 @@ paths = []
 "verity_vllm.protocol_options.pouw_h1_registered_device" = "verity_vllm.protocols.pouw.h1.registered_device"
 "verity_vllm.protocol_options.pouw_h1_requests" = "verity_vllm.protocols.pouw.h1.requests"
 "verity_vllm.protocol_options.pouw_h1_served" = "verity_vllm.protocols.pouw.h1.served"
+"verity_vllm.protocol_options.pouw_h1_served_files" = "verity_vllm.protocols.pouw.h1.served_files"
 "verity_vllm.protocol_options.pouw_h1_settings" = "verity_vllm.protocols.pouw.h1.settings"
 "verity_vllm.protocol_options.pouw_h1_static" = "verity_vllm.protocols.pouw.h1.static"
 "verity_vllm.protocol_options.pouw_h1_window" = "verity_vllm.protocols.pouw.h1.window"
+"verity_vllm.protocol_options.pouw_h1_words" = "verity_vllm.protocols.pouw.h1.words"
 "verity_vllm.protocol_options.pouw_native" = "verity_vllm.protocols.pouw.native"
 "verity_vllm.protocol_options.pouw_pass" = "verity_vllm.protocols.pouw.pearl_c.passes"
 "verity_vllm.protocol_options.pouw_pearl_c_device" = "verity_vllm.protocols.pouw.pearl_c"
