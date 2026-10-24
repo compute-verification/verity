@@ -14,7 +14,11 @@ each window below `W` of its draw or an earlier one (`sstep`). With draw `c`'s f
 draw `c` or later is drawn, so no close has read `coins[W + c]` or above, and the run is the same on coins that
 agree below it (`sclose_coins`, `sfold_coins`, `openingsUnreadUntilDrawn`). And `Frozen`'s argument goes through
 with `Shared.close` (`frz_sclose`): under `DP` the windows a draw draws are undrawn before it, and it makes them final;
-it draws windows in order (`sclose_prefix`), so a drawn window's record is kept (`recordKeptAfterDraw`).
+it draws windows in order (`sclose_prefix`), so a drawn window's record is kept (`recordKeptAfterDraw`). `liveUnder`
+is `Order`'s argument over `Shared.run g` (`srunL`): the event that draws window `t` is its draw's close, which keeps
+its record (`sdraw_keeps`), and with `t` undrawn so is its draw's first window (`undrawn_first`), which is what
+`OpeningsUnreadUntilDrawn` and `ReleaseOrder` read. It needs `1 ≤ g`: at `g = 0` every window is draw 0, and coins that
+agree below `W` leave every window's openings coin free.
 
 `*_one`: each statement at `g = 1` is today's (`Shared.run 1` is `Session.run`, `RemoteAudit.Shared.run_one`).
 -/
@@ -799,5 +803,293 @@ theorem liveUnder_one (params : Params) (reg : Registration) (appendCoins : Arra
     rw [Nat.div_one] at ht
     subst ht
     exact h coins coins' t k k' rs rs' s s' hag h₁ h₂ hd hd'
+
+/-! ## `Live` at `g` windows a draw -/
+
+/-- `Shared.run g` over a list of events. -/
+def srunL (g : Nat) (s : State) (l : List Event) : Except String (Array Result × State) := l.foldlM (sAcc g) (#[], s)
+
+theorem srun_srunL (g : Nat) (s : State) (events : Array Event) :
+    Shared.run g s events = srunL g s events.toList := by
+  unfold Shared.run srunL
+  rw [← Array.foldlM_toList]
+
+theorem sAcc_ok {g : Nat} {acc : Array Result × State} {e : Event} {r : Result} {s' : State}
+    (he : Shared.step g acc.2 e = .ok (r, s')) : sAcc g acc e = .ok (acc.1.push r, s') := by
+  simp only [sAcc, he]; rfl
+
+theorem sAcc_error {g : Nat} {acc : Array Result × State} {e : Event} {err : String}
+    (he : Shared.step g acc.2 e = .error err) : sAcc g acc e = .error err := by
+  simp only [sAcc, he]; rfl
+
+theorem sfold_state {g : Nat} : ∀ (l : List Event) (acc out : Array Result × State) (b : Array Result),
+    l.foldlM (sAcc g) acc = .ok out → ∃ rs, l.foldlM (sAcc g) (b, acc.2) = .ok (rs, out.2) := by
+  intro l
+  induction l with
+  | nil => intro acc out b h; simp only [List.foldlM_nil] at h; cases h; exact ⟨b, rfl⟩
+  | cons e l ih =>
+    intro acc out b h
+    rw [List.foldlM_cons] at h ⊢
+    cases he : Shared.step g acc.2 e with
+    | error err => rw [sAcc_error he] at h; cases h
+    | ok p =>
+      obtain ⟨r, s'⟩ := p
+      rw [sAcc_ok he] at h
+      obtain ⟨rs, hrs⟩ := ih (acc.1.push r, s') out (b.push r) h
+      exact ⟨rs, by rw [sAcc_ok (acc := (b, acc.2)) he]; exact hrs⟩
+
+theorem srunL_append {g : Nat} {s s' : State} {xs ys : List Event} {rs : Array Result}
+    (h : srunL g s (xs ++ ys) = .ok (rs, s')) :
+    ∃ rs₁ s₁ rs₂, srunL g s xs = .ok (rs₁, s₁) ∧ srunL g s₁ ys = .ok (rs₂, s') := by
+  unfold srunL at h ⊢
+  rw [List.foldlM_append] at h
+  cases h₁ : xs.foldlM (sAcc g) (#[], s) with
+  | error err => rw [h₁] at h; cases h
+  | ok mid =>
+    rw [h₁] at h
+    obtain ⟨rs₂, h₂⟩ := sfold_state ys mid (rs, s') #[] h
+    exact ⟨mid.1, mid.2, rs₂, rfl, h₂⟩
+
+theorem srunL_snoc {g : Nat} {s s' : State} {xs : List Event} {e : Event} {rs : Array Result}
+    (h : srunL g s (xs ++ [e]) = .ok (rs, s')) :
+    ∃ rs₁ s₁ r, srunL g s xs = .ok (rs₁, s₁) ∧ Shared.step g s₁ e = .ok (r, s') := by
+  obtain ⟨rs₁, s₁, rs₂, h₁, h₂⟩ := srunL_append h
+  refine ⟨rs₁, s₁, ?_⟩
+  unfold srunL at h₂
+  rw [List.foldlM_cons] at h₂
+  cases he : Shared.step g s₁ e with
+  | error err => rw [sAcc_error (acc := (#[], s₁)) he] at h₂; cases h₂
+  | ok p =>
+    obtain ⟨r, s₂⟩ := p
+    rw [sAcc_ok (acc := (#[], s₁)) he] at h₂
+    have h₃ : (Except.ok (#[].push r, s₂) : Except String (Array Result × State)) = .ok (rs₂, s') := h₂
+    injection h₃ with h₃
+    injection h₃ with _ h₃
+    exact ⟨r, h₁, by rw [h₃]⟩
+
+theorem srunL_det {g : Nat} {s : State} {l : List Event} {a b : Array Result × State}
+    (h₁ : srunL g s l = .ok a) (h₂ : srunL g s l = .ok b) : a = b := by
+  rw [h₁] at h₂; injection h₂
+
+theorem srunL_prefix {g : Nat} {s s' : State} {l : List Event} {rs : Array Result}
+    (h : srunL g s l = .ok (rs, s')) (k : Nat) : ∃ rs₁ s₁, srunL g s (l.take k) = .ok (rs₁, s₁) := by
+  rw [← List.take_append_drop k l] at h
+  obtain ⟨rs₁, s₁, -, h₁, -⟩ := srunL_append h
+  exact ⟨rs₁, s₁, h₁⟩
+
+theorem srunL_drawn {g : Nat} (hg : 2 ≤ g) {s s' : State} {l : List Event} {rs : Array Result} (hi : Inv s)
+    (h : srunL g s l = .ok (rs, s')) {t : Nat} (hd : (drawnOf s t).isSome) : (drawnOf s' t).isSome :=
+  (sfold_inv g (fun x => Inv x ∧ (dr x.windows t).isSome)
+    (fun _ _ _ _ hx he => ⟨(sstep hg hx.1 he).1, (sstep hg hx.1 he).2.2.2.1 _ hx.2⟩) l (#[], s) (rs, s')
+    ⟨hi, hd⟩ h).2
+
+theorem srun_extract (g : Nat) (s : State) (a : Array Event) (k : Nat) :
+    Shared.run g s (a.extract 0 k) = srunL g s (a.toList.take k) := by
+  rw [srun_srunL, extract_toList]
+
+theorem srun_toArray (g : Nat) (s : State) (l : List Event) : Shared.run g s l.toArray = srunL g s l := by
+  rw [srun_srunL, List.toList_toArray]
+
+/-- A state a run from `State.init` reaches keeps the invariant, the parameters, and `DP`. -/
+theorem sreach {g : Nat} (hg : 2 ≤ g) {params : Params} {reg : Registration} {coins appendCoins : Array ByteArray}
+    {notBeforeNs : Nat} {l : List Event} {rs : Array Result} {s : State}
+    (h : srunL g (State.init params reg coins appendCoins notBeforeNs) l = .ok (rs, s)) :
+    Inv s ∧ s.params = params ∧ DP g params.windows s.windows := by
+  unfold srunL at h
+  refine sfold_inv g (fun x => Inv x ∧ x.params = params ∧ DP g params.windows x.windows)
+    (fun _ _ _ _ hx he => ?_) l (#[], State.init params reg coins appendCoins notBeforeNs) (rs, s) ?_ h
+  · obtain ⟨hx, hpx, hD⟩ := hx
+    obtain ⟨hx', ⟨hp', -, -⟩, -, -, hD'⟩ := sstep hg hx he
+    refine ⟨hx', hp'.trans hpx, ?_⟩
+    rw [← hpx] at hD ⊢; exact hD' hD
+  · exact ⟨inv_init .., rfl, fun u h => by simp [dr, State.init] at h, fun u j h => by simp [dr, State.init] at h⟩
+
+/-- Under `DP`, an undrawn window below `W` leaves its draw's first window undrawn. -/
+theorem undrawn_first {g W : Nat} (hg : 0 < g) {ws : Array Win} (hD : DP g W ws) {t : Nat} (ht : t < W)
+    (h : dr ws t = none) : dr ws (t / g * g) = none := by
+  cases e : dr ws (t / g * g) with
+  | none => rfl
+  | some _ =>
+    have := hD.2 (t / g * g) t (by rw [e]; rfl) (by rw [Nat.mul_div_cancel _ hg]; exact Nat.le_refl _) ht
+    rw [h] at this; cases this
+
+theorem sameW_finalize (first m : Nat) (ws : Array Win) (v : Nat) :
+    SameW ws[v]! (finalize ((List.range m).map (first + ·)) ws)[v]! := by
+  rw [finalize_range]; split <;> exact ⟨rfl, rfl, rfl, rfl⟩
+
+/-- `Shared.close` keeps the record of each window it draws, and the appends. -/
+theorem sclose_keeps {g : Nat} {s : State} {t' : Int} {now : Nat} {r : Result} {s₁ : State}
+    (he : Shared.close g s t' now = .ok (r, s₁)) {t : Nat} (h0 : dr s.windows t = none)
+    (h1 : (dr s₁.windows t).isSome) : s₁.record t = s.record t ∧ s₁.appends = s.appends := by
+  rcases sclose_spec he with ⟨-, rfl⟩ | ⟨u, f, -, rfl⟩ | ⟨d, -, ht0, hts, hund, hm, hpre, hfew, hdraws, rfl⟩
+  · rw [h0] at h1; cases h1
+  · exfalso
+    rw [dr_fail] at h1
+    unfold grp at h1
+    dsimp only at h1
+    rw [dr_finalize, h0] at h1; cases h1
+  · refine ⟨?_, rfl⟩
+    apply record_of
+    · rfl
+    intro v
+    show SameW s.windows[v]! ((grp g t'.toNat).foldl (drawStep d now) (finalize (grp g t'.toNat) s.windows, 0)).1[v]!
+    unfold grp
+    refine sameW_trans (sameW_finalize (t'.toNat / g * g) (t'.toNat + 1 - t'.toNat / g * g) s.windows v) ?_
+    obtain ⟨-, -, h3⟩ := drawFold_range d now (t'.toNat / g * g) 0
+      (finalize ((List.range (t'.toNat + 1 - t'.toNat / g * g)).map (t'.toNat / g * g + ·)) s.windows)
+      (t'.toNat + 1 - t'.toNat / g * g)
+    rw [h3 v]
+    split <;> exact ⟨rfl, rfl, rfl, rfl⟩
+
+/-- The event that draws window `t` is the close of its draw, so it keeps the window's record and the appends. -/
+theorem sdraw_keeps {g : Nat} (hg : 2 ≤ g) {s : State} {e : Event} {r : Result} {s₁ : State}
+    (he : Shared.step g s e = .ok (r, s₁)) {t : Nat} (h0 : drawnOf s t = none) (h1 : (drawnOf s₁ t).isSome) :
+    s₁.record t = s.record t ∧ s₁.appends = s.appends := by
+  rcases sstep_of hg he with ⟨t', now, rfl, hc⟩ | ⟨hn, hs⟩
+  · exact sclose_keeps hc h0 h1
+  · exact (no_draw (keep_nonclose hn hs) h0 h1).elim
+
+/-- Up to the draw of window `t` on `coins`, the events on `coins'` are the same. -/
+theorem stake_agree {g : Nat} (hg : 2 ≤ g) (params : Params) (reg : Registration) (appendCoins : Array ByteArray)
+    (notBeforeNs : Nat) (D : Array ByteArray → Array Event) (hD : ReleaseOrder g params reg appendCoins notBeforeNs D)
+    {coins coins' : Array ByteArray} {t : Nat} (ht : t < params.windows)
+    (hag : ∀ j, j < params.windows + t / g → coins'[j]! = coins[j]!) :
+    ∀ (k : Nat) (rs : Array Result) (s : State),
+      srunL g (State.init params reg coins appendCoins notBeforeNs) ((D coins).toList.take k) = .ok (rs, s) →
+      drawnOf s t = none → (D coins').toList.take k = (D coins).toList.take k := by
+  intro k
+  induction k with
+  | zero => intros; simp
+  | succ k ih =>
+    intro rs s h hnd
+    rw [List.take_add_one] at h
+    obtain ⟨rs₁, s₁, rs₂, h₁, h₂⟩ := srunL_append h
+    have hR := sreach hg h₁
+    have hnd₁ : drawnOf s₁ t = none := by
+      cases hx : drawnOf s₁ t with
+      | none => rfl
+      | some d =>
+        have := srunL_drawn hg hR.1 h₂ (t := t) (by rw [hx]; rfl)
+        rw [hnd] at this; cases this
+    have e₂ := hD coins coins' (t / g) k rs₁ s₁ hag (by rw [srun_extract]; exact h₁)
+      (undrawn_first (by omega) hR.2.2 ht hnd₁)
+    rw [List.take_add_one, List.take_add_one, ih rs₁ s₁ h₁ hnd₁, Array.getElem?_toList, Array.getElem?_toList,
+      e₂]
+
+/-- `Live` at `g ≥ 1` windows a draw, from `OpeningsUnreadUntilDrawn`, `RecordKeptAfterDraw` and the release order. -/
+theorem liveUnder (g : Nat) (params : Params) (reg : Registration) (appendCoins : Array ByteArray)
+    (notBeforeNs : Nat) (D : Array ByteArray → Array Event) (hg : 1 ≤ g) (hW : 1 ≤ params.windows)
+    (hm : 1 ≤ params.minPasses) (hD : ReleaseOrder g params reg appendCoins notBeforeNs D) :
+    LiveUnder g params reg appendCoins notBeforeNs D := by
+  rcases Nat.lt_or_ge g 2 with hg1 | hg2
+  · obtain rfl : g = 1 := by omega
+    exact (liveUnder_one params reg appendCoins notBeforeNs D).2
+      (Properties.RemoteAudit.liveUnder params reg appendCoins notBeforeNs D hW hm
+        ((releaseOrder_one params reg appendCoins notBeforeNs D).1 hD))
+  intro coins coins' c k₁ k₂ rs₁ rs₂ s₁ s₂ hag h₁ h₂ t htc hd₁ hd₂
+  subst htc
+  rw [srun_extract] at h₁ h₂
+  have hag' : ∀ j, j < params.windows + t / g → coins[j]! = coins'[j]! := fun j hj => (hag j hj).symm
+  have ht : t < params.windows := (sreach hg2 h₁).2.2.1 t hd₁
+  have T2 := openingsUnreadUntilDrawn
+  have T3 := recordKeptAfterDraw
+  obtain ⟨m, hk₁, ⟨rsA, sA, hA, hdA⟩, hmin'⟩ := exists_first (Q := fun k => ∃ rs s,
+      srunL g (State.init params reg coins appendCoins notBeforeNs) ((D coins).toList.take k) = .ok (rs, s) ∧
+        (drawnOf s t).isSome)
+    (by
+      rintro ⟨rs0, s0, h0, hd0⟩
+      rw [List.take_zero] at h0
+      have e := srunL_det h0 rfl
+      injection e with _ e
+      subst e
+      simp [drawnOf, State.init] at hd0)
+    k₁ ⟨k₁, Nat.le_refl _, rs₁, s₁, h₁, hd₁⟩
+  have hmin : ∀ k, k ≤ m → ∀ rs s,
+      srunL g (State.init params reg coins appendCoins notBeforeNs) ((D coins).toList.take k) = .ok (rs, s) →
+      drawnOf s t = none := by
+    intro k hk rs s h
+    cases hx : drawnOf s t with
+    | none => rfl
+    | some d => exact (hmin' k hk ⟨rs, s, h, by rw [hx]; rfl⟩).elim
+  have hmL : m < (D coins).toList.length := by
+    rcases Nat.lt_or_ge m (D coins).toList.length with hc | hc
+    · exact hc
+    have e : (D coins).toList.take (m + 1) = (D coins).toList.take m := by
+      rw [List.take_of_length_le (by omega), List.take_of_length_le (by omega)]
+    rw [e] at hA
+    rw [hmin m (Nat.le_refl _) _ _ hA] at hdA
+    cases hdA
+  obtain ⟨e, he⟩ : ∃ e, (D coins).toList[m]? = some e := ⟨_, List.getElem?_eq_getElem hmL⟩
+  have htake : (D coins).toList.take (m + 1) = (D coins).toList.take m ++ [e] := by
+    rw [List.take_add_one, he]; rfl
+  rw [htake] at hA
+  obtain ⟨rsm, sm, r, hsm, hstep⟩ := srunL_snoc hA
+  have hndm : drawnOf sm t = none := hmin m (Nat.le_refl _) _ _ hsm
+  have hRm := sreach hg2 hsm
+  have hL'm := stake_agree hg2 params reg appendCoins notBeforeNs D hD ht hag m rsm sm hsm hndm
+  have hL'e : (D coins').toList[m]? = (D coins).toList[m]? := by
+    rw [Array.getElem?_toList, Array.getElem?_toList]
+    exact hD coins coins' (t / g) m rsm sm hag (by rw [srun_extract]; exact hsm)
+      (undrawn_first (by omega) hRm.2.2 ht hndm)
+  have htake' : (D coins').toList.take (m + 1) = (D coins).toList.take m ++ [e] := by
+    rw [List.take_add_one, hL'm, hL'e, he]; rfl
+  have hT2 : ∀ k, k ≤ m → ∀ rs s,
+      srunL g (State.init params reg coins appendCoins notBeforeNs) ((D coins).toList.take k) = .ok (rs, s) →
+      srunL g (State.init params reg coins' appendCoins notBeforeNs) ((D coins).toList.take k) =
+        .ok (rs, { s with coins := coins' }) := by
+    intro k hk rs s h
+    have := T2 g params reg coins appendCoins notBeforeNs ((D coins).toList.take k).toArray rs s
+      (by rw [srun_toArray]; exact h) (t / g) coins' hW
+      (undrawn_first (by omega) (sreach hg2 h).2.2 ht (hmin k hk rs s h)) hag
+    rwa [srun_toArray] at this
+  have hk₂ : m + 1 ≤ k₂ := by
+    rcases Nat.lt_or_ge m k₂ with hc | hle
+    · exact hc
+    obtain ⟨rsk, sk, hsk⟩ := srunL_prefix hsm k₂
+    rw [List.take_take, Nat.min_eq_left hle] at hsk
+    have hndk := hmin k₂ hle _ _ hsk
+    rw [stake_agree hg2 params reg appendCoins notBeforeNs D hD ht hag k₂ rsk sk hsk hndk] at h₂
+    have e := srunL_det h₂ (hT2 k₂ hle rsk sk hsk)
+    injection e with _ e
+    rw [e] at hd₂
+    rw [show drawnOf { sk with coins := coins' } t = drawnOf sk t from rfl, hndk] at hd₂
+    cases hd₂
+  rw [take_split _ hk₂, htake'] at h₂
+  obtain ⟨rsB, sB, rsB₂, hB, hB₂⟩ := srunL_append h₂
+  obtain ⟨rsy, y, r', hy, hstep'⟩ := srunL_snoc hB
+  have hy' := srunL_det hy (hT2 m (Nat.le_refl _) rsm sm hsm)
+  injection hy' with _ hy'
+  subst hy'
+  have hdB : (drawnOf sB t).isSome := by
+    cases hx : drawnOf sB t with
+    | some d => rfl
+    | none =>
+      exfalso
+      have := T2 g params reg coins' appendCoins notBeforeNs ((D coins).toList.take m ++ [e]).toArray rsB sB
+        (by rw [srun_toArray]; exact hB) (t / g) coins hW (undrawn_first (by omega) (sreach hg2 hB).2.2 ht hx) hag'
+      rw [srun_toArray] at this
+      have e := srunL_det hA this
+      injection e with _ e
+      rw [e, show drawnOf { sB with coins := coins } t = drawnOf sB t from rfl, hx] at hdA
+      cases hdA
+  obtain ⟨hrA, haA⟩ := sdraw_keeps hg2 hstep hndm hdA
+  obtain ⟨hrB, haB⟩ := sdraw_keeps hg2 hstep' (s := { sm with coins := coins' }) hndm hdB
+  rw [take_split _ hk₁, htake] at h₁
+  obtain ⟨rsA', sA', rsA₂, hA', hA₂⟩ := srunL_append h₁
+  have eA := srunL_det hA' hA
+  injection eA with _ eA
+  subst eA
+  obtain ⟨dA, hdA'⟩ := Option.isSome_iff_exists.1 hdA
+  obtain ⟨dB, hdB'⟩ := Option.isSome_iff_exists.1 hdB
+  obtain ⟨-, r₁, o₁⟩ := T3 g params reg coins appendCoins notBeforeNs ((D coins).toList.take m ++ [e]).toArray
+    (((D coins).toList.take k₁).drop (m + 1)).toArray rsA' rsA₂ sA' s₁ (by rw [srun_toArray]; exact hA')
+    (by rw [srun_toArray]; exact hA₂) t dA hm hdA'
+  obtain ⟨-, r₂, o₂⟩ := T3 g params reg coins' appendCoins notBeforeNs ((D coins).toList.take m ++ [e]).toArray
+    (((D coins').toList.take k₂).drop (m + 1)).toArray rsB rsB₂ sB s₂ (by rw [srun_toArray]; exact hB)
+    (by rw [srun_toArray]; exact hB₂) t dB hm hdB'
+  have hrec : s₂.record t = s₁.record t := by rw [r₂, r₁, hrA, hrB]; rfl
+  refine ⟨hrec, fun u => ?_⟩
+  rw [o₂ u, o₁ u, hrB, haB, hrA, haA]
+  exact Iff.rfl
 
 end Properties.RemoteAudit.Shared
