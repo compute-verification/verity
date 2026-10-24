@@ -458,11 +458,16 @@ def _owner_names(root: Any, n: int) -> Callable[[int], str]:
 
 def lowering_type(C: Any) -> str:
     """A lowering's digest pin (a pin's ``type``): the digest of the gf2 circuit ``C`` as a flat ``program`` circuit type
-    (`verity_flock.circuit_types.from_gf2`, ``SHA-512("verity/circuit-type/v1" ‖ 0 ‖ canon(content))``, which Lean's
-    `Flock.CircuitType.digest` computes from the same content), so it reads nothing but ``C``. Its input ports are ``C``'s named
-    inputs in order, ``[1, bits]`` each; its items the ANDs and table reads the outputs and assertions reach, in the order ``C``
-    made them; its output ports ``C``'s named outputs, ``[1, bits]`` each, then its assertion forms (each 0 on an accepted
-    input) as one port ``[n, 1]`` when it has any; a table is named by the SHA-512 of its words."""
+    (`circuit_type`; ``SHA-512("verity/circuit-type/v1" ‖ 0 ‖ canon(content))``, which Lean's `Flock.CircuitType.digest`
+    computes from the same content), so it reads nothing but ``C``."""
+    return circuit_type(C).digest()
+
+
+def circuit_type(C: Any) -> Any:
+    """The gf2 circuit ``C`` as a flat ``program`` circuit type (`verity_flock.circuit_types.from_gf2`), validated. Its input
+    ports are ``C``'s named inputs in order, ``[1, bits]`` each; its items the ANDs and table reads the outputs and assertions
+    reach, in the order ``C`` made them; its output ports ``C``'s named outputs, ``[1, bits]`` each, then its assertion forms
+    (each 0 on an accepted input) as one port ``[n, 1]`` when it has any; a table is named by the SHA-512 of its words."""
     from verity_flock import circuit_types as CT
     from verity_flock import tail_pieces as TP
     from verity_flock import type_trace as TT
@@ -475,7 +480,7 @@ def lowering_type(C: Any) -> str:
     t = CT.from_gf2(C, [b for w in ins for b in w], [b for w in outs for b in w] + asserts, [(1, len(w)) for w in ins],
                     [(1, len(w)) for w in outs] + ([(len(asserts), 1)] if asserts else []), "program", tables)
     CT.validate(t, lambda d: None)
-    return t.digest()
+    return t
 
 
 def _shown(v: Any) -> Any:
