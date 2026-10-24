@@ -11,6 +11,7 @@ import asyncio
 import importlib.util
 import json
 import math
+import os
 import sys
 from pathlib import Path
 
@@ -372,3 +373,15 @@ def test_a_windows_commit_and_signatures_move_no_tick_past_its_slack_in_the_publ
 
     with pytest.raises(RuntimeError, match="a refusing commit"):
         _run(runs["refusing"], tmp_path / "refusing-key", requests, responses, commit=refusing_commit, process=True)
+
+
+def test_reserve_fds_grows_the_descriptor_table_and_leaves_every_descriptor_as_it_was():
+    """`serve`'s process holds a table for every connection before its origin (`prepare_process`), so that no tick
+    waits on the kernel growing it (`reserve_fds`); the table's size is `FDSize` in /proc/self/status."""
+    def table() -> int:
+        status = Path("/proc/self/status").read_text().splitlines()
+        return int(next(x.split()[1] for x in status if x.startswith("FDSize:")))
+
+    held = sorted(os.listdir("/proc/self/fd"))
+    n = ws.reserve_fds(table() + 1)
+    assert table() >= n and sorted(os.listdir("/proc/self/fd")) == held
