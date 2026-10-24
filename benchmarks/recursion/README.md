@@ -7,9 +7,12 @@ has numbers before the whole recursive session runs end to end.
 
 ~~~text
 verity bench recursion profile plan  [--K 4096] [--N 2] [--steps S,..]         the stages, their commands and the launch
-verity bench recursion profile run   [--K 4096] [--N 2] [--steps S,..] [--repeat 3] [--dry-run]   one recorded job on vy-nebius-1
+verity bench recursion profile run   [--K 4096] [--N 2] [--steps S,..] [--repeat 3] [--modes M,..] [--env K=V ..] [--dry-run]
+                                                                                one recorded job on vy-nebius-1
 verity bench recursion profile result --dir OUT [--out FILE]                    the profile's result from a job's out/
-verity bench recursion profile table RESULT... [--json]                         the table, from results (a file or a run id)
+verity bench recursion profile table RESULT... [--merge] [--json] [--put]       the table, from results (a file or a run id;
+                                                                                --merge: one table, a later run's row replacing
+                                                                                an earlier one's for the same stage and mode)
 ~~~
 
 ## The pipeline today (stage map)
@@ -26,7 +29,7 @@ the big files under `$FLOCK_WORK/data/$TAG` for the next step. Each GPU step lea
 | 2 | `icheck` | `flock-circuit replay` of the last inner session, `python -m verity_flock.rec_vstar` (V*'s hashing reference), the schedule and tree-top controls | `inner/` | records only | n1, CPU | as 0 |
 | 3 | `vstage` | `rec_vstage points`, `inner-fold` (`verity/ml/flock/tests/lean/InnerFold.lean` as an executable), `rec_vstage stage` per statement: each Ligerito level's `RecOpen`, the algebra's `InnerRepCheck` parts, the forgeries | `inner/`, `stage/` | `v/L<l>/`, `v/alg/p<j>/`, `v/forged-*/` | n1, CPU | as 0 |
 | 3b | `vcap` | `rec_vstage.stage_cap`: `RecCap` over each level's committed tops | `inner/`, `v/` | `v/cap/`, `v/cap/L<l>/` | n1, CPU | `r20261020-002938-635a` (20 Oct) |
-| 4 | `oprove` | per V* statement: `flock-circuit serve --zk` (loopback) and `prove --zk --gpu`, per mode: `dev` (the device's witness), `host` (`FC_HOST_WITNESS=1`), `firewall` (`FC_FIREWALL=1`: the Lean session loop, live PROTOCOL.md §10.4) | `v/` | `v-sess/<stmt>/` | n1, GPU | `dev` as 0; `firewall` last priced before the Lean finish held the opening (PROTOCOL.md §10.4 "What it cost") |
+| 4 | `oprove` | per V* statement: `flock-circuit serve --zk` (loopback) and `prove --zk --gpu`, per mode: `dev` (the device's witness), `host` (`FC_HOST_WITNESS=1`), `firewall` (`FC_FIREWALL=1`: the Lean session loop, live PROTOCOL.md §10.4) | `v/` | `v-sess/<stmt>/` | n1, GPU | `dev` as 0; `firewall` (24 Oct, `r20261024-054739-343d`): no V* session finishes inside 85's 10-minute lease at K = 4096 (the Lean session loop, `flock-firewall`, holds the prover: 1300 CPU s in 7 min on the prover's 16 cores) |
 | 5 | `oreplay` | `flock-circuit replay --zk` of each V* session (upstream's verifier) | `v-sess/` | records only | n1, CPU | as 0 |
 | 6 | `lean` | `flock-verify rec-inner`, `rec-statements`, then `flock-verify verify --zk` on each V* session with V*'s own inputs (`--rec-inner-*`, `--rec-rows`, `--rec-bindings`); `INNER_LEAN=1` also the inner session (`--coins os --stratified N`); `flock-verify statement` on the inner statement; `lean_verdicts.py` fails closed | `v-sess/`, `stage/`, `inner/` | records only | n1, CPU | as 0 |
 
