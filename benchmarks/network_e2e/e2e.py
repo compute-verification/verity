@@ -32,7 +32,12 @@ then runs this. The README says what the report establishes and what it doesn't.
   so far (``max_child_rss_gb``, `RUSAGE_CHILDREN`, which only grows: n2_zk proves the honest members first, so the cost,
   read from the honest run, is theirs); the driver's own peak (the unit's lowering) beside them.
 
-Exit 0 when the honest run is accepted everywhere it was checked and each negative is refused (`report["ok"]`).
+* **Negatives by code** (`negatives.suite`): every tampering of the harness, the shim's from their own runs and the
+  others made from honest's (the advice's and the Commit's from ``--advice`` and ``--commit``), each with N2's verdict,
+  the check it names and its refusal code, and whether that code refused it.
+
+Exit 0 when the honest run is accepted everywhere it was checked, each negative is refused, and no tampering of the
+harness that ran goes unrefused by its code (`report["ok"]`).
 """
 from __future__ import annotations
 
@@ -57,6 +62,7 @@ ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT / "benchmarks" / "network_traces"))
 
 import n2_zk  # noqa: E402
+import negatives as NG  # noqa: E402
 from verity.core.protocols.certifier import head_check as HC  # noqa: E402
 from verity.core.protocols.certifier.certificate import Direction  # noqa: E402
 from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
@@ -64,6 +70,8 @@ from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
 FORMAT = "verity-network-e2e/report/v1"
 HONEST, TAMPERED = "honest", "tampered"
 NEGATIVES = ("late", "extra", TAMPERED)
+#: the negatives the shim serves (`negatives.NEGATIVES` whose `tampers` is ``plan``), which the rehearsal runs
+SHIM = tuple(name for name, n in NG.NEGATIVES.items() if n.tampers == "plan")
 README = "verity/core/protocols/certifier/README.md"
 
 CLAIM = {
@@ -185,9 +193,11 @@ def where(runs: dict[str, dict]) -> dict:
 
 
 def rehearse(args, rest: list[str], out: Path) -> Path:
-    """`certifier_serve.py rehearse` into ``out``, honest, late and extra unless ``rest`` names its strategies."""
+    """`certifier_serve.py rehearse` into ``out``, honest and every shim negative (`SHIM`) unless ``rest`` names its
+    strategies."""
+    strategies = [] if "--strategies" in rest else ["--strategies", ",".join((HONEST, *SHIM))]
     me = [sys.executable, str(ROOT / "benchmarks" / "network_traces" / "certifier_serve.py"), "rehearse", "--out",
-          str(out), *(["--upstream", args.upstream] if args.upstream else ["--vllm", args.vllm]), *rest]
+          str(out), *(["--upstream", args.upstream] if args.upstream else ["--vllm", args.vllm]), *strategies, *rest]
     log(f"rehearsal: {' '.join(me[2:])}")
     rc = subprocess.run(me, cwd=ROOT).returncode
     log(f"rehearsal exited {rc} (1: a verdict not as expected; the report says which)")
@@ -320,9 +330,13 @@ def _member(m: dict) -> dict:
             "control_holds_all": (rec.get("control") or {}).get("holds_all")}
 
 
-def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict) -> dict:
+def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict,
+           by_code: dict[str, dict] | None = None) -> dict:
     """The report (`FORMAT`): per run its network verdict, per link-window N2's verdict and the proofs' with their cost,
-    the negatives' refusals and the claim. ``proofs``: `prove`'s result, or ``{"ran": False, "why": ...}``."""
+    the negatives' refusals, every negative of the harness by the code it names (``by_code``, `negatives.suite`'s rows:
+    one that ran and isn't refused by its code makes the report not OK) and the claim. ``proofs``: `prove`'s result, or
+    ``{"ran": False, "why": ...}``."""
+    by_code = by_code or {}
     summary = proofs.get("summary") or {}
     members = summary.get("members") or {}
     names = [HONEST] + [s for s in NEGATIVES if s in n2] + sorted(set(n2) - {HONEST, *NEGATIVES})
@@ -355,9 +369,10 @@ def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict)
         and all(r["head_checks"] == "pass" for r in honest_rows))
     ok = (bool(honest["network"]["accepted"]) and bool(honest_rows) and all(r["n2"] == "accept" for r in honest_rows)
           and (honest["check"] is None or honest["check"]["verdict"] == "accepted") and proved_ok
-          and len(negatives) == len(NEGATIVES) and all(n["refused"] for n in negatives.values()))
+          and len(negatives) == len(NEGATIVES) and all(n["refused"] for n in negatives.values())
+          and all(n.get("ok") is not False for n in by_code.values()))
     return {"format": FORMAT, **meta, "claim": CLAIM, "ok": ok, "runs": out_runs, "link_windows": rows,
-            "negatives": negatives,
+            "negatives": negatives, "by_code": by_code,
             "proofs": {"ran": bool(proofs.get("ran")), "adopted": proofs.get("adopted"), "why": proofs.get("why"),
                        "rc": proofs.get("rc"), "extra_proved": proofs.get("extra_proved"), "n2_zk_ok": summary.get("ok"),
                        "stagers": summary.get("stagers"), "driver_peak_gb": proofs.get("driver_peak_gb"),
@@ -404,6 +419,18 @@ def _cell(x) -> str:
     return "—" if x is None else str(x)
 
 
+def _by_code(n: dict) -> str:
+    """A `negatives.suite` row's result in words."""
+    pending = f"pending: {', '.join(n['waits'])}" if n["waits"] else ""
+    if not n["ran"]:
+        return f"not run: {n['why']}" + (f" ({pending})" if pending else "")
+    if n["by_code"]:
+        return f"refused by its code (link-windows {n['refused_windows']})"
+    if n["waits"]:
+        return f"N2 {'accepts' if n['n2_accepted'] else 'refuses'} ({', '.join(n['codes']) or 'no code'}); {pending}"
+    return f"NOT refused by its code: N2 {'accepts' if n['n2_accepted'] else 'refuses'} ({', '.join(n['codes'])})"
+
+
 def markdown(r: dict) -> str:
     """The report as Markdown: the verdicts, one row per link-window, the negatives and the claim."""
     p = r.get("proofs") or {}
@@ -442,6 +469,13 @@ def markdown(r: dict) -> str:
     for name, n in r["negatives"].items():
         lines.append(f"- **{name}**: {'refused' if n['refused'] else 'NOT refused'} by "
                      f"{'; '.join(n['by']) or 'nothing'}{'' if n['proved'] else ' (not proved: N2 only)'}")
+    if r.get("by_code"):
+        lines += ["", "## Negatives by refusal code", "",
+                  "Each tampering of the harness (`benchmarks/network_traces/negatives.py`), the check that must refuse "
+                  "it and that check's code; a pending check's owners have yet to land it.", "",
+                  "| negative | tampers | check | code | result |", "|---|---|---|---|---|"]
+        lines += [f"| {name} | {n['tampers']} | {n['check']} | `{n['code']}` | {_by_code(n)} |"
+                  for name, n in r["by_code"].items()]
     c = p.get("cost_per_link_window")
     if c:
         lines += ["", "## Cost per link-window (honest, both ends)", "",
@@ -510,7 +544,9 @@ def run(args, rest: list[str], clock=time.monotonic) -> dict:
         meta = {"from": [str(s) for s in sources], "commit": _commit(), "model": plan.get("live_model"),
                 "tokens": served.get("tokens"), "requests": served.get("requests"), **where(runs),
                 "profile": profile, "windows": plan.get("windows"), "served": plan.get("served")}
-        r = report(runs, n2, proofs, meta)
+        by_code = NG.suite({s: x["dir"] for s, x in runs.items()}, work / "negatives",
+                           advice=getattr(args, "advice", None), commit=getattr(args, "commit", None), clock=clock)
+        r = report(runs, n2, proofs, meta, by_code)
         (out / "report.json").write_text(json.dumps(r, indent=1, default=str) + "\n")
         (out / "report.md").write_text(markdown(r))
         log(f"report {out / 'report.md'}: {'ok' if r['ok'] else 'NOT ok'}")
@@ -532,6 +568,8 @@ def main(argv=None) -> int:
     ap.add_argument("--bin", help="C-Flock's flock-circuit (run.sh builds it)")
     ap.add_argument("--lean", help="the Lean flock-verify (run.sh builds it)")
     ap.add_argument("--delta", type=float, default=2.0 ** -20)
+    ap.add_argument("--advice", type=Path, help="the honest run's advice (I1's encode bytes), for the advice negatives")
+    ap.add_argument("--commit", type=Path, help="the honest run's Commit record (I3), for the wrong-token negative")
     how = ap.add_mutually_exclusive_group()
     how.add_argument("--no-prove", action="store_true", help="N2's verdicts and the head checks' references only")
     how.add_argument("--proofs", metavar="DIR", help="adopt n2_zk.prove's output of these runs (n2_zk.sh's $OUT/n2zk, or a "

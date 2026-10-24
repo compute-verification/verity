@@ -7,7 +7,11 @@ network certifier in front of a served endpoint, `benchmarks/network_traces/cert
 - head checks proved with C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify --zk`
   (`benchmarks/network_traces/n2_zk.py`): every honest link-window at both ends, and the egress ends of the tampered
   and extra runs;
-- the negatives, each refused: `late`, `extra` and a tampered head (the honest run's window 0 egress head, one count off).
+- the negatives, each refused: `late`, `extra` and a tampered head (the honest run's window 0 egress head, one count off);
+- every tampering of the negatives harness (`benchmarks/network_traces/negatives.py`), each with the check that must
+  refuse it and that check's refusal code: refused by its code, or, for a check its owners have yet to land, what it
+  waits on (`negatives.suite`). `--advice` and `--commit` give the honest run's advice and Commit record, for the
+  advice and wrong-token negatives.
 
 It writes `report.json` and `report.md` under `--out` (`$OUT` under `research run`). `e2e.py` is the driver, and its
 docstring has the details. It reuses the rehearsal and N2-ZK's driver and re-implements neither.
@@ -40,7 +44,8 @@ the `--from` runs' record for that end and link-window (`e2e.adopt`).
 
 To rehearse first, pass `--upstream URL` (an OpenAI streaming endpoint) or `--vllm MODEL` (vLLM started on this host's
 GPU) instead of `--from`. Every option `e2e.py` doesn't take goes to `certifier_serve.py rehearse` (for example
-`--requests 40 --profile served`). The rehearsal runs honest, late and extra into `DIR/rehearsal`.
+`--requests 40 --profile served`). The rehearsal runs honest and the shim's negatives (late, extra, drop and token)
+into `DIR/rehearsal`.
 
 ## Inputs: rehearsals and gate runs
 
@@ -67,10 +72,12 @@ An honest run is required, because the tampered head is made from it. Two runs o
   the head-check parts that fail (a diagnostic, evaluated in the clear on the rehearsal's witness), and the prove seconds,
   Lean verify seconds, proof bytes and peak memory;
 - per negative: refused or not, and by what (N2, the rehearsal's check, the proved head checks);
+- `by_code`: every tampering of the harness, its check and code, and whether it was refused by that code;
 - the cost per link-window, and the claim (below).
 
 `report.md` renders the same thing as tables. OK means: the honest run was accepted on every link-window by N2 and, where
-proofs ran, by every proved head check held by Lean; and each negative was refused by everything that checked it.
+proofs ran, by every proved head check held by Lean; each negative was refused by everything that checked it; and no
+tampering of the harness that ran went unrefused by its code.
 
 ## What it proves, and what it doesn't
 

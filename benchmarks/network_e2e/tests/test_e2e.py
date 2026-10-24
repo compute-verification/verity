@@ -40,7 +40,7 @@ def _args(src, out) -> SimpleNamespace:
 @pytest.fixture(scope="module")
 def rehearsal(tmp_path_factory):
     runs = tmp_path_factory.mktemp("runs")
-    plan = e2e.n2_zk.virtual(runs, requests=8, tokens=4, strategies=("honest", "late", "extra"))
+    plan = e2e.n2_zk.virtual(runs, requests=8, tokens=4, strategies=("honest", "late", "extra", "drop", "token"))
     return SimpleNamespace(plan=plan, runs=runs)
 
 
@@ -56,7 +56,7 @@ def test_the_honest_run_is_accepted_and_each_negative_refused_for_its_own_reason
     r = virtual.report
     windows = virtual.plan["windows"]
     assert r["format"] == e2e.FORMAT and r["ok"] is True and r["profile"] == "planned" and windows >= 2
-    assert list(r["runs"]) == ["honest", "late", "extra", "tampered"]
+    assert list(r["runs"]) == ["honest", "late", "extra", "tampered", "drop", "token"]
     honest = r["runs"]["honest"]
     assert honest["network"]["accepted"] is True and honest["network"]["windows"] == windows
     rows = {(x["run"], x["window"]): x for x in r["link_windows"]}
@@ -69,6 +69,18 @@ def test_the_honest_run_is_accepted_and_each_negative_refused_for_its_own_reason
         assert rows[(name, 0)]["failed_parts"] == {"egress": failed, "ingress": []}, name
         assert all(rows[(name, w)]["n2"] == "accept" for w in range(1, windows)), name
     assert r["proofs"]["ran"] is False and r["proofs"]["cost_per_link_window"] is None
+
+
+@pytest.mark.slow
+def test_every_negative_of_the_harness_is_in_the_report_by_its_code(virtual):
+    """negatives.suite's rows: the shim's late, extra, drop and the head refused by their codes, token passing N2 (only
+    the I/O tie, pending, may refuse it), and the advice and Commit negatives not run until their artifacts exist."""
+    by, md = virtual.report["by_code"], (virtual.out / "report.md").read_text()
+    assert list(by) == list(e2e.NG.NEGATIVES)
+    assert {k for k, n in by.items() if n.get("ok")} == {"late", "extra", "drop", "head", "token"}
+    assert all(not n["ran"] and n.get("ok") is None for n in by.values() if n["tampers"] in ("advice", "commit"))
+    assert "## Negatives by refusal code" in md and "| drop | plan |" in md and "pending: IO-TIE" in md
+    assert virtual.report["ok"] is True
 
 
 @pytest.mark.slow
