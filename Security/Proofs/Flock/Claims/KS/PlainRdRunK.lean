@@ -92,7 +92,7 @@ theorem mem_rdAtK (keepV : Bool → Bool) {Ω A : Type} {P : Claims.Prover Ω} {
       (Claims.run sha512 P (VK keepV) x ω d.1).out = .acc ∧
       ∃ a, (q, a) ∈ plainRawLevelCols (Claims.run sha512 P (VK keepV) x ω d.1).seen r (ℓ + 1) ∧
         rowFin lanes a = u := by
-  unfold rdAtK keepV
+  unfold rdAtK
   by_cases hacc : (Claims.Recursion.abortRun sha512 P (VK keepV) x keep ω d).out = .acc
   · obtain ⟨hk, hr⟩ := Claims.Recursion.abortRun_acc_iff.1 hacc
     rw [if_pos hacc, Claims.Recursion.abortRun_of_keep hk]
