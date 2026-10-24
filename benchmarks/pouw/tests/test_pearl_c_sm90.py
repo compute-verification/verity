@@ -175,15 +175,18 @@ def test_kernel_constants_match_the_reference():
 
 
 def test_a_programmatic_launch_waits_at_its_entry():
-    """Each of run.py's PDL_KERNELS waits for the launch before it (pdl_entry) before it touches global memory: the GEMMs once
-    their barriers are set up in shared memory, the forming and pa_w first; and pd_commit lets the forming launch behind it."""
+    """Each of run.py's PDL_KERNELS waits for the launch before it (pdl_entry) before it reads anything into the CTA: the GEMMs
+    once their barriers are set up in shared memory, having sent only B's first boxes toward L2 (tma_prefetch_l2, which can't
+    read a stale line), the forming and pa_w first; and pd_commit lets the forming launch behind it."""
     def body(start):
         at = SOURCE.index(start)
         return SOURCE[at:SOURCE.index("\n}\n", at)]
 
     gemm, form, pa_w = (body(x) for x in ("DEV void gemm_body", "DEV void form_body", 'void pa_w('))
     head = gemm[:gemm.index("pdl_entry();")]
-    assert "__syncthreads();" in head and "if (wg == NWG)" not in head and "tma_" not in head
+    assert "__syncthreads();" in head and "if (wg == NWG)" not in head and "b_row(" not in head
+    assert set(re.findall(r"\btma_\w+", head)) == {"tma_prefetch_l2"}
+    assert "cp.async.bulk.prefetch.tensor.2d.L2.global" in body("DEV void tma_prefetch_l2")
     for b in (form, pa_w):
         head = b[:b.index("pdl_entry();")]
         assert "reinterpret_cast" not in head and "return" not in head, head

@@ -105,9 +105,20 @@ DEV uint64_t l2_evict_first() {
   asm volatile("createpolicy.fractional.L2::evict_first.b64 %0, 1.0;" : "=l"(p));
   return p;
 }
+DEV uint64_t l2_evict_normal() {
+  uint64_t p;
+  asm volatile("createpolicy.fractional.L2::evict_normal.b64 %0, 1.0;" : "=l"(p));
+  return p;
+}
 DEV void tma_load_hint(uint32_t dst, const void* map, uint32_t bar, int c0, int c1, uint64_t policy) {
   asm volatile("cp.async.bulk.tensor.2d.shared::cluster.global.mbarrier::complete_tx::bytes.L2::cache_hint"
                " [%0], [%1, {%3, %4}], [%2], %5;" ::"r"(dst), "l"(map), "r"(bar), "r"(c0), "r"(c1), "l"(policy)
+               : "memory");
+}
+// the box into L2 alone: nothing reaches the CTA, and L2 is where every write lands, so it may run before griddepcontrol.wait
+DEV void tma_prefetch_l2(const void* map, int c0, int c1, uint64_t policy) {
+  asm volatile("cp.async.bulk.prefetch.tensor.2d.L2.global.tile.L2::cache_hint [%0, {%1, %2}], %3;" ::"l"(map), "r"(c0),
+               "r"(c1), "l"(policy)
                : "memory");
 }
 // registers per thread for the rest of the warpgroup's life (all 4 warps of the warpgroup execute it)
@@ -229,6 +240,18 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
     for (int s = 0; s < STAGES; s++) { mbar_init(bars + 8 * s, 1); mbar_init(bars + 8 * (STAGES + s), NWG * 4); }
     asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
   }
+  // one row block: every B box is read once, by one tile
+  const bool once = tiles_m == 1;
+  const uint64_t first = l2_evict_first();
+  // under PDL the launch before this one may still be running: the first tile's first STAGES B boxes start toward L2 meanwhile
+  // (B is the weights, and the maps are written before the launch; GR's rows wait, as they read p12)
+  if (!GR && tid == NWG * 128 && (int)blockIdx.x < tiles) {
+    const Maps* maps = reinterpret_cast<const Maps*>(a.p[10]);
+    int tm, tn;
+    raster(blockIdx.x / wins, tiles_m, tiles_n, group, tm, tn);
+    const int k0 = MODE == M_WIN ? blockIdx.x % wins : 0, k1 = MODE == M_WIN ? k0 + 1 : min(KB, STAGES);
+    for (int kb = k0; kb < k1; kb++) tma_prefetch_l2(maps->b, kb * BK, tn * BN, once ? first : l2_evict_normal());
+  }
   __syncthreads();
   pdl_entry();
 
@@ -240,9 +263,6 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
       tma_prefetch(maps->a);
       tma_prefetch(maps->b);
       if (PEEL) { tma_prefetch(maps->pa); tma_prefetch(maps->pb); }
-      // one row block: every B box is read once, by one tile
-      const bool once = tiles_m == 1;
-      const uint64_t first = l2_evict_first();
       int s = 0;
       uint32_t ph = 0;
       for (int t = blockIdx.x; t < tiles; t += gridDim.x) {
@@ -278,6 +298,20 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
   for (int t = blockIdx.x; t < tiles; t += gridDim.x) {
     int tm, tn;
     raster(t / wins, tiles_m, tiles_n, group, tm, tn);
+    const int row = tm * TM + wg * 64 + 16 * (x / 32) + (x % 32) / 4, col0 = tn * BN + 2 * (x % 4);
+    // y's scales, read before the windows so their latency is under them
+    float r0 = 0.0f, r1 = 0.0f, sc[NA / 2];
+    if constexpr (MODE == M_PLAIN || PEEL) {
+      const float* rs = reinterpret_cast<const float*>(a.p[7]);
+      const float* cs = reinterpret_cast<const float*>(a.p[8]) + b_row(tm);
+      r0 = rs[row];
+      r1 = rs[row + 8];
+#pragma unroll
+      for (int j = 0; j < NA / 4; j++) {
+        sc[2 * j] = cs[col0 + 8 * j];
+        sc[2 * j + 1] = cs[col0 + 8 * j + 1];
+      }
+    }
     if constexpr (MODE == M_WIN) {
       mbar_wait_warp(bars + 8 * s, ph);
       const uint32_t a0 = base + s * T::STAGE + wg * 64 * BK, b0 = base + s * T::STAGE + T::A_BYTES;
@@ -291,7 +325,6 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
       acc_fence<NA>(d);
       if (lane == 0) mbar_arrive(bars + 8 * (STAGES + s));
       if (++s == STAGES) { s = 0; ph ^= 1; }
-      const int row = tm * TM + wg * 64 + 16 * (x / 32) + (x % 32) / 4, col0 = tn * BN + 2 * (x % 4);
       float* W = reinterpret_cast<float*>(a.p[2]) + (size_t)(t % wins) * M * N;
 #pragma unroll
       for (int j = 0; j < NA / 4; j++) {
@@ -378,19 +411,15 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
       }
     }
 
-    const int row = tm * TM + wg * 64 + 16 * (x / 32) + (x % 32) / 4, col0 = tn * BN + 2 * (x % 4);
     const bool live0 = row < live, live1 = row + 8 < live;
     float* C = reinterpret_cast<float*>(a.p[2]);
     float* U = reinterpret_cast<float*>(a.p[3]);
     uint16_t* Y = reinterpret_cast<uint16_t*>(a.p[4]);
-    const float* rs = reinterpret_cast<const float*>(a.p[7]);
-    const float* cs = reinterpret_cast<const float*>(a.p[8]) + b_row(tm);
     if constexpr (MODE == M_PLAIN) {
-      const float r0 = rs[row], r1 = rs[row + 8];
 #pragma unroll
       for (int j = 0; j < NA / 4; j++) {
         const int col = col0 + 8 * j;
-        const float c0 = cs[col], c1 = cs[col + 1];
+        const float c0 = sc[2 * j], c1 = sc[2 * j + 1];
         if (live0) store_y(Y + (size_t)row * N + col, total[4 * j], total[4 * j + 1], r0, c0, c1);
         if (live1) store_y(Y + (size_t)(row + 8) * N + col, total[4 * j + 2], total[4 * j + 3], r1, c0, c1);
       }
@@ -415,11 +444,10 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
       acc_fence<NA>(total);
       if (lane == 0) mbar_arrive(bars + 8 * (STAGES + s));
       if (++s == STAGES) { s = 0; ph ^= 1; }
-      const float r0 = rs[row], r1 = rs[row + 8];
 #pragma unroll
       for (int j = 0; j < NA / 4; j++) {
         const int col = col0 + 8 * j;
-        const float c0 = cs[col], c1 = cs[col + 1];
+        const float c0 = sc[2 * j], c1 = sc[2 * j + 1];
         if constexpr (STORE_U) {
           if (live0) store2(U + (size_t)row * N + col, total[4 * j], total[4 * j + 1]);
           if (live1) store2(U + (size_t)(row + 8) * N + col, total[4 * j + 2], total[4 * j + 3]);
