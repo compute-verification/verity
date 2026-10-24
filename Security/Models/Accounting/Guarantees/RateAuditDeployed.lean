@@ -167,7 +167,8 @@ most the two routes' errors summed:
 **The reading.** `Accounting.SecurityProofs.Remote.Conservation` gives `(1 − d̄ − λ)·C` of payments at every
 location; the run's payments other than its tier reads are its state, its side link beyond the stream and its
 completed bits, which are `μ_chip`, `μ_link` and `μ_rebuild` of `C`, and the remote model's `λ` share
-(`Accounting.Remote.muLambda`) is `μ_λ`. So this is `RemoteSessionConservation`'s horizon reading, the same `γ̄`, with the window's term dropped.
+(`Accounting.Remote.muLambda`) is `μ_λ`. So this is `RemoteSessionConservation`'s horizon reading, the same `γ̄`, with
+the window's term dropped.
 
 Frozen (no-function, hash): as `RemoteSessionConservation`. -/
 def RemoteSessionRunConservation : Prop :=
