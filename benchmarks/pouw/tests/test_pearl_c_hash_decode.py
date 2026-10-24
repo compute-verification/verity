@@ -219,7 +219,7 @@ def test_pd_commits_zero_form_writes_its_bytes_without_reading_the_zero_rows(hos
         for x in out:
             host.array(bufs[x])[:] = R.POISON
         if z:
-            grid, block, smem, p, i = host.args[f"pd_commit_{pipe.pd}"]
+            grid, block, smem, p, i = host.args[f"pd_commit_{pipe.pd & ~R.PD_GROUP}"]
             assert len(p) <= 14 and len(i) == 4
             host.launch(name, grid, block, smem, p=(*p, *[0] * (14 - len(p)), z[0]), i=(*i, z[1]))
         else:
