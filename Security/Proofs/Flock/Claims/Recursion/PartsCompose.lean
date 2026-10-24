@@ -582,7 +582,7 @@ theorem bdDeployed_next (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
     (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
     (bdDeployed rel nextE colsE wE join rowIn final w).DE.V.next = nextE := rfl
 
-theorem bdDeployed_ans (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
+theorem bdDeployed_ans_fun (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
     (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
@@ -608,7 +608,7 @@ noncomputable def deploySplit (H : Msg → Msg) (rel : _root_.Flock.Readable.Par
       exact List.mem_range.1 hj
     show StepOk H (bdDeployed rel nextE colsE wE join rowIn final w) x ms cs j
     unfold StepOk
-    rw [bdDeployed_next, bdDeployed_ans]
+    rw [bdDeployed_next, bdDeployed_ans_fun]
     by_cases hl : j + 1 < ms.length
     · rw [ite_eq_left hl]
       obtain ⟨⟨s, spec, sts⟩, hsp⟩ := Option.isSome_iff_exists.1 (h .setup (List.mem_cons_self ..))
