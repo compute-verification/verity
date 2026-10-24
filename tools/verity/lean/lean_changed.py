@@ -23,7 +23,13 @@ what the audit keeps. That bounds Lake's own writes, not compile-time code: chec
 machine allows one, and without it that code can write anything this user can, the audit's kept dependencies and passes
 included, as any build this user runs by hand can. `--update` writes the record back into this checkout, but not in a recorded
 run, whose source tree the commit's other runs share: there it is in the run's `lean-audit/audit-*/`, and on either path a
-record that changed is also kept as `lean-audit/record/lean-audit.json`.
+record that changed is also kept as `lean-audit/record/lean-audit.json`. A run marks the tree (`DIRTY`: its id, package and
+phase) while it works there and clears the mark when it ends without a check.py killed, so the next run knows a tree left
+mid-way (a run cancelled, timed out or killed for memory) and says so. Before each build it `repair`s the tree: a module an
+interrupted build left half-written (an output its trace lists missing, an `.olean` that is not one) loses its trace, so
+Lake rebuilds it, and after a run left mid-way, a package's fetched dependencies that run was taking, or that hold such a
+module or a checkout other than the manifest's, are taken again. A spec whose `proved_in` package's build did not pass
+never reads that package's `.lake` (`check.proved`), which an earlier or interrupted build left.
 
 Then it audits, the same way but never with `--update`, every package whose guarantees' records read PKG's build
 (`requirers`: PKG is in its `closure`, by path or by `proved_in`), each after those it requires, its reports under
@@ -342,6 +348,105 @@ def hold_tree(held, tree: Path, log=print) -> bool:
     return True
 
 
+#: beside the packages in a `--records` tree while a run works on it: the run, the package and the phase it is in. The tree's
+#: lock is held while it exists, so a run that takes the lock and finds it took the tree from one that ended mid-way (killed,
+#: cancelled, timed out, out of memory, its node stopped), and `repair`s it first
+DIRTY = "dirty.json"
+
+
+def mark(tree: Path, **what) -> None:
+    """`DIRTY`, replaced whole: this run and ``what`` (`package`, `phase`)."""
+    doc = {"run": os.environ.get("RESEARCH_RUN_ID") or "a run", "pid": os.getpid(),
+           "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **what}
+    tmp = tree / f"{DIRTY}.tmp"
+    tmp.write_text(json.dumps(doc, sort_keys=True) + "\n")
+    os.replace(tmp, tree / DIRTY)
+
+
+def left_by(tree: Path) -> dict | None:
+    """The `DIRTY` a run left in ``tree`` (``{}`` when it can't be read), or None when the last run ended cleanly."""
+    try:
+        doc = json.loads((tree / DIRTY).read_text())
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError):
+        return {}
+    return doc if isinstance(doc, dict) else {}
+
+
+def damaged(lib: Path) -> list[Path]:
+    """The traces under ``lib`` (a `.lake/build/lib/lean`) whose module an interrupted build left half-written: an output
+    the trace lists that is missing, an `.olean` without the olean header, an output whose `.hash` is not the trace's, or
+    a trace that is not JSON. Lake rebuilds a module whose outputs are missing, but takes one whose trace matches and whose
+    files exist as built, half-written or not, so each loses its trace for Lake to rebuild it."""
+    out = []
+    for trace in sorted(lib.rglob("*.trace")) if lib.is_dir() else []:
+        base = trace.with_suffix("")
+        try:
+            doc = json.loads(trace.read_text())
+            outputs = doc.get("outputs") if isinstance(doc, dict) else None
+            names = [n for k, v in outputs.items() if k in ("o", "i") for n in (v if isinstance(v, list) else [v])
+                     if isinstance(n, str)] if isinstance(outputs, dict) else []
+            for name in names:
+                digest, _, ext = name.partition(".")
+                f = base.with_name(f"{base.name}.{ext}")
+                if not f.is_file() or (ext == "olean" and f.open("rb").read(5) != b"olean"):
+                    raise ValueError(f"{f.name} missing or not an olean")
+                if (h := f.with_name(f"{f.name}.hash")).is_file() and h.read_text().strip() != digest:
+                    raise ValueError(f"{h.name} is not the trace's")
+        except (OSError, ValueError, UnicodeDecodeError):
+            out.append(trace)
+    return out
+
+
+def repair(tree: Path, pkgs: list[str], links: dict[str, str], left: dict | None, log=print) -> None:
+    """Make ``tree``'s copy of ``pkgs`` one Lake builds from, whatever a run left there: each module whose outputs `damaged`
+    finds loses its trace, so Lake rebuilds it. Where a run ended mid-way (``left``, its `DIRTY`), also each package whose
+    fetched dependencies hold a damaged module or a checkout that is not its manifest's, and the one whose dependencies it
+    was taking (`phase` `deps`), has them dropped, so they are taken again."""
+    if left is not None:
+        what = f"{left.get('package', '?')} in phase {left.get('phase', '?')}" if left else "an unreadable record"
+        log(f"lean-records: {tree} was left mid-way by {left.get('run', 'a run')} (pid {left.get('pid', '?')}, "
+            f"{what}, {left.get('at', '?')}"
+            + (f", check.py exit {left['killed']}" if "killed" in left else "") + "): checking it before it is built")
+    for p in pkgs:
+        bad = damaged(tree / p / ".lake" / "build" / "lib" / "lean")
+        for t in bad:
+            t.unlink(missing_ok=True)
+        if bad:
+            names = [str(t.relative_to(tree / p / ".lake" / "build" / "lib" / "lean").with_suffix("")) for t in bad]
+            log(f"lean-records: {p}: {len(bad)} module(s) half-written by an earlier build, rebuilt: "
+                f"{', '.join(names[:8])}{' ...' if len(names) > 8 else ''}")
+        if left is None:
+            continue
+        why = "the run was taking them" if left.get("phase") == "deps" and left.get("package") == p else None
+        packages = tree / p / ".lake" / "packages"
+        for d in sorted(packages.iterdir()) if why is None and packages.is_dir() else []:
+            if damaged(d / ".lake" / "build" / "lib" / "lean"):
+                why = f"{d.name} holds a module half-written"
+            elif (want := checkout(p, tree, d.name)) and (d / ".git").exists() and git_head(d) != want:
+                why = f"{d.name} is not the checkout its manifest pins ({want[:12]})"
+            if why:
+                break
+        if why and packages.exists():
+            unlink(p, tree, links)
+            log(f"lean-records: {p}: its fetched dependencies were dropped ({why}); they are taken again")
+
+
+def checkout(pkg: str, tree: Path, name: str) -> str | None:
+    """The revision ``tree/pkg``'s manifest pins for its fetched dependency ``name``."""
+    try:
+        doc = json.loads((tree / pkg / "lake-manifest.json").read_text())
+    except (OSError, ValueError):
+        return None
+    return next((d.get("rev") for d in doc.get("packages", []) if d.get("name") == name and d.get("type") == "git"), None)
+
+
+def git_head(d: Path) -> str | None:
+    r = subprocess.run(["git", "-c", "safe.directory=*", "-C", str(d), "rev-parse", "HEAD"], capture_output=True, text=True)
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
 def records_tree() -> Path:
     """The tree of the Lean slot this process holds (LEAN_SLOT, `build/1` -> `build-1`), else `local`."""
     return LA.COMMON.cache_dir() / RECORDS / (os.environ.get(LEAN_SLOT.HELD) or "local").replace("/", "-")
@@ -419,19 +524,33 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 return 2
             links = read_links(tree)
             committed = (ROOT / pkg / "lean-audit.json").read_bytes()
+            left, killed = left_by(tree), {}
             for p in todo:
                 t0 = time.monotonic()
+                mark(tree, package=p, phase="sync")
                 n = sync(closure(p), files, tree)
+                if left is not None:
+                    there = [q for q in [*(c for t in todo for c in closure(t)), left.get("package")]
+                             if isinstance(q, str) and (tree / q).is_dir()]
+                    repair(tree, list(dict.fromkeys(there)), links, left, log)
+                    write_links(tree, links)
+                    left = None
+                else:
+                    repair(tree, closure(p), links, None, log)
+                mark(tree, package=p, phase="deps")
                 for other in [q for q in links if q not in todo and LA.deps_key(tree / p)]:
                     unlink(other, tree, links)
                 if not link(p, tree, deps, links, log, copy=True) and (k := LA.deps_key(tree / p)):
                     links[p] = k
                     log(f"lean-records: {p}: its dependencies are fetched cold, once for this tree")
                 write_links(tree, links)
+                mark(tree, package=p, phase="check")
                 mine_out = reports(out, pkg, p)
                 got = subprocess.run(check_argv(p, pkg, tree / p, mine_out, update, moved), cwd=tree,
                                      env={**os.environ, "LEAN_NUM_THREADS": str(LA.COMMON.cores())},
                                      pass_fds=() if slot is None else (slot,)).returncode
+                if AUDIT.killed(got):
+                    killed[p] = got
                 label(mine_out)
                 log(f"lean-records: {p}: check.py exit {got} in {time.monotonic() - t0:.0f} s on {tree} ({n} files changed "
                     f"there), without the kernel replay or the tests: a {FAST_KIND} result, which check and research merge "
@@ -441,6 +560,13 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 # record a lane must commit survives nowhere the run keeps (LEAN-10).
                 checked(p, pkg, got, tree / pkg / "lean-audit.json", committed, update, out, log)
                 rc = rc or got
+            if killed:
+                p, got = next(iter(killed.items()))
+                mark(tree, package=p, phase="check", killed=got)
+                log(f"lean-records: check.py on {', '.join(killed)} was killed (exit {got}): the next run on {tree} checks "
+                    "it before it is built")
+            else:
+                (tree / DIRTY).unlink(missing_ok=True)
             if run_dir and run_id:
                 write_result(Path(run_dir), run_id, pkg, rc, out, update)
     finally:

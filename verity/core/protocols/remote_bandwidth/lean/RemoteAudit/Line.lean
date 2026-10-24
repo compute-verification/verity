@@ -3,7 +3,8 @@ import RemoteAudit.Pooled
 /-!
 # The memory line held over time
 
-`line.py`'s line, the line of record a gate run publishes: the conclusions of
+The line of record a gate run publishes (the verifier process's `line` request, which `auditor_line.py` holds to
+`line.py`'s): the conclusions of
 `Accounting.Guarantees.Remote.HeldOverTime` (time-held) and `HeldOverTimeLinks` (link-charged),
 `Security/Models/Accounting/Guarantees/RemoteHeld.lean`, read over each stretch of a paced session's groups in exact
 rationals, every refusal the Python's word for word. The wrong receipts W are the pooled bound of the session's record
@@ -122,7 +123,7 @@ def stretches (gs : Array Group) (per N b chip : Nat) (W : Rat) (c : Charge) : E
   let e : Array Nat := (Array.range G).map fun g => if g + 1 < G then max gs[g]!.lastNs s[g + 1]! else gs[g]!.lastNs
   let L : Array Nat := (Array.range G).map fun g => e[g]! - s[g]!
   let gap : Array Nat := (Array.range G).map fun g => if g + 1 < G then s[g + 1]! - s[g]! else L[g]!
-  let S : Rat := (chip : Rat) / (b : Rat)
+  let S : Rat := ((chip + b - 1) / b : Nat)
   let mut out : Array Stretch := #[]
   for m in [0:G / per - 1] do
     let lo := m * per

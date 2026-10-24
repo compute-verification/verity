@@ -258,7 +258,7 @@ class StochasticServe(nn.Module):
     `pos` is the logits row's position (LP-1+k for the k-th sample).  `literal_seed` (negative): the seed created inside forward —
     hidden state, refused.  `literal_splits` (negative): S as a tensor literal / a Python int inside forward — refused likewise (S is
     the workload's derived value, never the wrapper's).  `temperature=0` (negative): the rule refuses (greedy is TokenSelect_v1).
-    `constant_S`: the single-request workload's split count, passed to every select as `S` (no `splits` input)."""
+    `constant_S`: the registered split count, passed to every select as `S` (no `splits` input)."""
 
     def __init__(self, C: dict, steps: int, temperature: float = 0.8, top_p: float = 0.95, literal_seed: bool = False,
                  literal_splits: int | None = None, constant_S: int | None = None) -> None:
