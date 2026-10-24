@@ -11,6 +11,7 @@ from __future__ import annotations
 import random
 import sys
 import tempfile
+import threading
 from pathlib import Path
 
 import pytest
@@ -167,6 +168,35 @@ def test_the_local_challenger_opens_on_the_needs_reserve_and_the_draw_holds(tmp_
     assert plan["needs"] == {"0": 25} and plan["families"] == [[AC.FAMILY, 26]] and plan["session"]
     assert published["trusted"]["released"] == {AC.FAMILY: 1 + 24} and len(coins.read) == 1496
     assert CC.coins_reason(AC.evidence(published, segment), ROOT, AFTER, bytes(coins.read), AC.lms_verify) is None
+
+
+def test_two_ranks_open_the_session_once_both_have_planned(tmp_path, monkeypatch):
+    """Rank 1's plan waits for rank 0's; then the session opens on both needs' layout (16 coins a rank and one, 33), and each
+    rank draws in its turn, 4 coins for SiluMul's 226 bytes, as 38b2's gate run did on each of its 8 ranks."""
+    rule, law, n = "stratified:4", law_of("stratified:4", SILU_MUL), sum(SILU_MUL)
+    manager, draws, opener = local(tmp_path, monkeypatch, [0, 1])
+    segments: dict[int, dict] = {}
+
+    def rank(r: int) -> None:
+        coins = AC.RankCoins(draws, r)
+        coins.plan(need_of(rule, SILU_MUL))
+        coins.commit(bytes([r]) * Ch.COIN_BYTES)
+        S.select_draw(S.Law(rule), law, n, coins)
+        segments[r] = coins.drawn()
+        draws.skip(r)
+    try:
+        other = threading.Thread(target=rank, args=(1,))
+        other.start()
+        rank(0)
+        other.join()
+        opener.join()
+        published = draws.evidence()
+    finally:
+        manager.shutdown()
+    assert "error" not in published, published.get("error")
+    assert published["plan"]["needs"] == {"0": 6, "1": 6} and published["plan"]["families"] == [[AC.FAMILY, 33]]
+    assert sorted(segments) == [0, 1] and all(len(s["openings"]) == 4 for s in segments.values())
+    assert published["trusted"]["released"] == {AC.FAMILY: 1 + 4 + 4}
 
 
 def test_a_too_small_reserve_is_refused_before_the_session_opens(tmp_path, monkeypatch):
