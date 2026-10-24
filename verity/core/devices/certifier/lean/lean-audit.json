@@ -41,8 +41,13 @@
    "except": [],
    "why": "the device is code: Lean core, C-Flock's bytes, certifier_program and network_check only, no Mathlib and nothing of Security"
   },
+  "CertifierDevice.Served": {
+   "imports": ["NetworkCertifier.Schedule"],
+   "except": [],
+   "why": "the device is code: Lean core, C-Flock's bytes, certifier_program and network_check only, no Mathlib and nothing of Security"
+  },
   "CertifierDevice.Shaper": {
-   "imports": ["CertifierDevice.Certifier", "CertifierDevice.Online"],
+   "imports": ["CertifierDevice.Certifier", "CertifierDevice.Online", "CertifierDevice.Served"],
    "except": [],
    "why": "the device is code: Lean core, C-Flock's bytes, certifier_program and network_check only, no Mathlib and nothing of Security"
   },
