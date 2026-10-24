@@ -67,7 +67,7 @@ namespace Flock
 and zero at every position of its slot no column is placed at. -/
 theorem TmplUnit.rowsSat (tu : TmplUnit) {n : Net} (hn : Tmpl.unroll tu.t = .ok n) (hu : n.unitLog ≤ 32)
     (hlog : tu.net.unitLog ≤ 32) {z : ℕ → Bool} (hs : FlockSoundness.NetSat tu.net (2 ^ tu.net.unitLog) z) :
-    (FlockSoundness.Audit.Rows.ofNet (FlockSoundness.TmplValue.unroll_built hn)).Sat
+    (FlockSoundness.Rows.ofNet (FlockSoundness.TmplValue.unroll_built hn)).Sat
         (fun c => z ((Tmpl.posMap tu.t tu.lays).getD c.val 0)) ∧
       ∀ p < 2 ^ tu.net.unitLog,
         (∀ x < (tu.t.defs.getD tu.t.root default).cols, (Tmpl.posMap tu.t tu.lays).getD x 0 ≠ p) → z p = false := by
