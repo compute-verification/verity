@@ -46,6 +46,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import bisect
+import fcntl
 import gc
 import gzip
 import hashlib
@@ -120,6 +121,8 @@ WARDEN = {"warden-heavy": ("heavy", 300), "warden-smallkv": ("smallkv", 1200)}
 WARDEN_WHERE = "warden beside the server, not on the auditor host"
 #: a stall of the client's event loop it records (`drive_warden`), in seconds: a fifth of a bucket
 LOOP_LAG_S = 0.02
+#: the descriptors the client holds beside its connections' (the server's and warden's pipes, the loop's, the logs')
+FD_MARGIN = 256
 #: the warden's schedule less D: lanes and queue hold every request of a 1000-request plan at once, so the warden never
 #: throttles the load nor refuses; one 1 KiB cell a bucket each way keeps the padding of a thousand connections' D in memory
 WARDEN_SCHEDULE = {"cell_bytes": 1024, "slots": 1, "bucket_ms": 100, "lanes": 1024, "queue": 1024, "window": 600,
@@ -403,9 +406,11 @@ async def drive_warden(deployment: dict, served: str, requests: list[dict], arri
     warden/client.json the shim's record of every connection in `warden_serve.connection_log`'s form, for its `check`.
 
     The shim times each cell when the event loop reads it, so the loop must not stall: on `cpus` when given (`cpu_plan`),
-    with the garbage collector off and every object made before the drive frozen out of its reach (in art:d5380875's heavy
-    trace, stalls every connection shared put 6,820 cell reads 135-255 ms late). warden/client_loop.json records what the
-    loop did: every stall of `LOOP_LAG_S` or more ([seconds after the origin, ms]) and every collection that still ran."""
+    every thread of the process with it (numpy's among them), with the garbage collector off and every object made
+    before the drive frozen out of its reach (in art:d5380875's heavy trace, stalls every connection shared put 6,820 cell
+    reads 135-255 ms late), and the descriptor table grown to hold every connection before the first is opened
+    (`reserve_fds`). warden/client_loop.json records what the loop did: every stall of `LOOP_LAG_S` or more ([seconds
+    after the origin, ms]), every collection that still ran, and the table's size."""
     from warden_probe import Collections
 
     warden, ws = warden_modules()
@@ -415,7 +420,8 @@ async def drive_warden(deployment: dict, served: str, requests: list[dict], arri
     loop = asyncio.get_running_loop()
     affinity = os.sched_getaffinity(0)
     if cpus:
-        os.sched_setaffinity(0, cpus)
+        pin_threads(cpus)
+    fds = reserve_fds(len(requests) + FD_MARGIN)
     gc.collect()
     gc.freeze()
     gc.disable()
@@ -485,10 +491,34 @@ async def drive_warden(deployment: dict, served: str, requests: list[dict], arri
         gc.callbacks.remove(collections)
         gc.enable()
         gc.unfreeze()
-        os.sched_setaffinity(0, affinity)
+        if cpus:
+            pin_threads(affinity)
         (out.parent / "warden" / "client_loop.json").write_text(json.dumps(
             {"cpus": cpus, "gc": "off, everything before the drive frozen", "watch_ms": 10, "lag_ms_at_least": LOOP_LAG_S * 1000,
-             "lags": lags, "max_lag_ms": max((ms for _, ms in lags), default=None), **collections.doc(origin)}))
+             "fds": fds, "lags": lags, "max_lag_ms": max((ms for _, ms in lags), default=None), **collections.doc(origin)}))
+
+
+def reserve_fds(n: int) -> int:
+    """Grow the process's descriptor table to hold `n` descriptors (at most RLIMIT_NOFILE's soft limit) now; returns its
+    size. The kernel grows it as descriptors pass 64, 128, 256 …, and in a process of more than one thread each growth
+    waits for an RCU grace period (`expand_fdtable`), the growing thread asleep in D: on a loaded node, every connection's
+    cell read a bucket late (`warden_serve.reserve_fds`, #3919). The table never shrinks."""
+    n = min(n, resource.getrlimit(resource.RLIMIT_NOFILE)[0])
+    fd = os.open(os.devnull, os.O_RDONLY)
+    try:
+        os.close(fcntl.fcntl(fd, fcntl.F_DUPFD, n - 1))
+    finally:
+        os.close(fd)
+    return n
+
+
+def pin_threads(cpus) -> None:
+    """Every thread of this process on `cpus` (`sched_setaffinity` of pid 0 moves only the calling thread)."""
+    for tid in os.listdir("/proc/self/task"):
+        try:
+            os.sched_setaffinity(int(tid), cpus)
+        except ProcessLookupError:
+            pass
 
 
 def cpu_plan(cpus: list[int]) -> dict | None:

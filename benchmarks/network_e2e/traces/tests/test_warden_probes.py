@@ -7,7 +7,9 @@ import gc
 import itertools
 import json
 import os
+import threading
 import types
+from pathlib import Path
 from types import SimpleNamespace as NS
 
 import pytest
@@ -137,6 +139,26 @@ def test_cpu_plan_gives_the_warden_and_the_client_cores_of_their_own(mod):
     assert corpus.taskset([4, 5]) == ["taskset", "-c", "4,5"]
     assert corpus.egress_base(types.ModuleType("w", "PAD in every slot before a + D")).startswith("release a")
     assert corpus.egress_base(types.ModuleType("w", "PAD in every slot before s + D")).startswith("admission s")
+
+
+def test_the_client_grows_its_descriptor_table_first_and_pins_every_thread(mod):
+    corpus = mod("corpus")
+    n = corpus.reserve_fds(700)
+    status = dict(line.split(":", 1) for line in Path("/proc/self/status").read_text().splitlines() if ":" in line)
+    assert 0 < n <= 700 and int(status["FDSize"]) >= n
+    mine = os.sched_getaffinity(0)
+    one = {min(mine)}
+    stop = threading.Event()
+    other = threading.Thread(target=stop.wait)
+    other.start()
+    try:
+        corpus.pin_threads(one)
+        assert os.sched_getaffinity(other.native_id) == one and os.sched_getaffinity(0) == one
+    finally:
+        corpus.pin_threads(mine)
+        stop.set()
+        other.join()
+    assert os.sched_getaffinity(0) == mine
     assert corpus.egress_base(types.ModuleType("w")).startswith("unknown")
 
 
