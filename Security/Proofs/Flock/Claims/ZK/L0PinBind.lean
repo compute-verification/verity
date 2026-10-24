@@ -17,6 +17,8 @@ rep's schedule so far:
 * **Their counts** (`sched_count`, `openList_lt`, `openList_at`): `7` a claim, then `claims` for `γ`.
 * **The flags** (`repState_opened`): the switch's first round is the opening's (`Flags.PcsRound`), the rest quiet, so
   `Flags.sched_flags` carries the frame there, and the coins keep it.
+* **Level 0's rounds** (`sched_binding`, `sched_l0`): fed level 0's first `j` coins as well, the schedule's next
+  rounds are level 0's first `j + 1` bodies at zero pads (`openStep_l0`), the binding first, with the opening's counts.
 -/
 
 namespace Claims.ZKServer.Bind

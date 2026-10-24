@@ -154,6 +154,7 @@ import Proofs.Flock.Claims.ZK.L0PinQuiet
 import Proofs.Flock.Claims.ZK.L0PinFlags
 import Proofs.Flock.Claims.ZK.L0PinSwitch
 import Proofs.Flock.Claims.ZK.L0PinBind
+import Proofs.Flock.Claims.ZK.L0PinLive
 import Proofs.Flock.Claims.ZK.FinishSwInner
 import Proofs.Flock.Claims.ZK.FinishSwTau
 import Proofs.Flock.Claims.ZK.FinishSwRows
@@ -719,7 +720,11 @@ import Proofs.Flock.Claims.ZK.CutPrefix
   (`Bind.schedSoFar_sentQ`, `Bind.feed_part`); cut at `γ`, its first rounds are the ring switch's
   (`Bind.openStep_switch`), squeezing `7` a claim and then the claims' count (`Bind.sched_count`), so at `γ`'s coins
   the loop's state is outside every masked phase at `c.nPiop`, before level 0, owing nothing
-  (**`Bind.repState_opened`**).
+  (**`Bind.repState_opened`**). Fed level 0's first coins too, its next rounds are the binding and level 0's bodies at
+  zero pads (`Bind.sched_binding`, **`Bind.sched_l0`**).
+* `L0PinLive`: on a live history whose messages are the release's own, a round scheduled with no free value is the
+  frame's release of the scheduled round (`LeanRelease.msg_sched`), so a sent level-0 round is its body at the pads
+  (**`LeanRelease.msg_l0`**) and the binding is itself (`LeanRelease.msg_openBind`).
 * `FinishSwInner`: `repCut_fw`'s `hinner` at that source. The switched view keeps `ρ_in`, `σ_in` (`padShift` moves
   `h_tx`, `h_ty` against the exposed pads; `Table.innerMsg_padShift`) and `Y₂`, and where the rows hold `Y₁`, so the
   switched source's `ρ_in`, `σ_in` and `Y` are the honest source's (`Masked.swSrcE_inner`, `Masked.swSrcE_y`). The
