@@ -59,10 +59,41 @@ done
 grep "SERVE-OPENAI listening" "$OUT/serve.log" || { tail -40 "$OUT/serve.log"; echo "SERVER NOT LISTENING"; kill "$SRV"; exit 11; }
 cp "$D/serve.json" "$OUT/" 2>/dev/null
 
+# Each window's advice committed once, at serve time, as its windows.jsonl line lands: `advice --window K` into advice/.w<K>,
+# moved to advice/w<K>, and advice/windows.json the union of every window's index (committed and refused).
+closed() { "$PY" -c "import json,sys; [print(json.loads(l)['window']) for l in open(sys.argv[1]) if l.strip()]" "$D/windows.jsonl" 2>/dev/null; }
+advice_pass() {
+  for k in $(closed); do
+    [ -f "$D/advice/.w$k/windows.json" ] && continue
+    vv advice "$D" --window "$k" --cap "$CAP" --out "$D/advice/.w$k" >> "$OUT/advice.log" 2>&1; rc=$?
+    [ -f "$D/advice/.w$k/windows.json" ] || continue        # not yet in the step trace: next pass
+    [ -d "$D/advice/.w$k/w$k" ] && mv "$D/advice/.w$k/w$k" "$D/advice/w$k"
+    "$PY" - "$D/advice" "$k" "$rc" <<'EOF' | tee -a "$OUT/advice_windows.jsonl"
+import json, sys, time
+from pathlib import Path
+a, k, rc = Path(sys.argv[1]), sys.argv[2], int(sys.argv[3])
+idx = {"windows": {}, "refused": {}}
+for p in sorted(a.glob(".w*/windows.json")):
+    d = json.loads(p.read_text())
+    idx = {**d, "windows": {**idx["windows"], **d["windows"]}, "refused": {**idx["refused"], **d["refused"]}}
+idx.pop("open", None)
+(a / "windows.json").write_text(json.dumps(idx, indent=1) + "\n")
+w = idx["windows"].get(k)
+print(json.dumps({"window": int(k), "at": time.strftime("%H:%M:%SZ", time.gmtime()), "rc": rc,
+                  "root": w and w["root"], "bits": w and w["bits"], "refused": idx["refused"].get(k)}))
+EOF
+  done
+}
+( while kill -0 "$SRV" 2>/dev/null; do advice_pass; sleep 10; done; advice_pass ) &
+ADV=$!
+
 "$PY" tools/serve_load.py --port "$PORT" --model "$REPO" --bursts "$BURSTS" --per-burst "$PER_BURST" --out "$D/load.jsonl" \
   2>&1 | tee "$OUT/load.log"
 sleep 5
-vv advice "$D" --cap "$CAP" 2>&1 | tee "$OUT/advice.log"
+for _ in $(seq 1 120); do                                   # the load's windows' advice, before they compile
+  pending=0; for k in $(closed); do [ -f "$D/advice/.w$k/windows.json" ] || pending=1; done
+  [ "$pending" = 0 ] && break; sleep 5
+done
 cp "$D/windows.jsonl" "$D/requests.jsonl" "$D/advice/windows.json" "$OUT/" 2>/dev/null
 WS=$("$PY" -c "import json,sys; print(' '.join(sorted(json.load(open('$D/advice/windows.json'))['windows'], key=int)))" 2>/dev/null)
 FIRST=${WINDOW:-5}
@@ -119,7 +150,8 @@ raw = sorted({e["identity"]["op_path"] + "/" + e["identity"]["output_member"] fo
 first = pairs[0] if pairs else None
 print(json.dumps({"window": int(k), "committer": json.loads((w / "commit" / "runs.jsonl").read_text())["commit"]["committer"],
                   "aliases": len((r.manifest or {}).get("op_path_aliases") or {}), "request_steps": len(pairs), "found": have,
-                  "fa2_in_first_8": fa2, "observation": dict(how), "raw_slot_members": raw[:6],
+                  "fa2_in_first_8": fa2, "embed_tokens_in": dict(Counter(e.get("name") for e in bmap["entries"]
+                                                          if (e["identity"]["op_path"], e["identity"]["output_member"]) == ("model.embed_tokens", "in"))), "observation": dict(how), "raw_slot_members": raw[:6],
                   "lookup": None if first is None else {"request": first[0], "step": first[1] + 1,
                                                        "gate_up_proj/out": store.words(first[0], first[1] + 1, *reads["gemm_out"], 0, 1)[1]
                                                        if not store.has(first[0], first[1] + 1, *reads["gemm_out"]) else "bound"}}))
@@ -130,6 +162,7 @@ echo "READY $D" | tee -a "$OUT/steps.txt"
 end=$(date -u -d "today $UNTIL" +%s)
 while [ "$(date -u +%s)" -lt "$end" ] && [ ! -e "$D/stop" ] && kill -0 "$SRV" 2>/dev/null; do sleep 30; done
 kill -TERM "$SRV" 2>/dev/null; wait "$SRV"; rc=$?
+wait "$ADV"
 cp "$D/summary.json" "$D/windows.jsonl" "$D/requests.jsonl" "$OUT/" 2>/dev/null
 tail -3 "$OUT/serve.log"
 exit $rc
