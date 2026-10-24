@@ -24,6 +24,9 @@ from verity_vllm.acquire.sources import mhc_source as MS
 from verity_vllm.acquire.sources import route_source as RS
 from verity_vllm.commit import capture_map as CM
 
+#: nearly every test here builds and serves a DeepSeek-V4 stand-in, seconds to minutes each, so the whole module is slow
+pytestmark = pytest.mark.slow
+
 OTHERS = tuple(b for b in RS.BINDERS if b != MS.BINDER)
 TAPS_ = [t for t in CMAP["taps"] if (t.get("commit") or {}).get("binder") == MS.BINDER]
 #: committed name -> (the value it is: `<module>/<side>`, which return)
