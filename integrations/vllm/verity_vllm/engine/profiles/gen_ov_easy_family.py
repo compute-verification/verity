@@ -4,7 +4,7 @@
 `b1.weights_type(C)` gives an untied checkpoint (`C["tie_word_embeddings"] is False`: Qwen2.5-7B, Mistral-7B, Phi-3-mini) its own
 `lm_head` field after `cos_sin`, and `b1.lm_head_of` makes `Serve_v4`'s two `Final` calls read it where a tied one reads `embed`, so
 one registered family covers both (`tests/engine/test_gen_ov_easy.py`).  Dense profiles expose `serve_family` as `SERVE_FAMILY`
-(`generic.py`), the `family=` a structure comparison (`verity_vllm.check.fold_compare.compare_structure`) may be given.
+(`generic.py`).
 """
 
 from __future__ import annotations
