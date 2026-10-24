@@ -27,7 +27,7 @@ theorem roundFree_out {c : Cfg} {s : Masker} {xb : ByteArray} {n : ℕ} {q : Byt
     (h : roundFree c s xb n = .ok q) : ∃ o k, q.1 = o ++ header 4 k n := by
   by_cases hs : s.inner = some INNER_ROUNDS
   · unfold roundFree at h
-    rw [if_pos (by simp [hs])] at h
+    rw [ite_eq_left (by simp [hs])] at h
     cases h
   unfold roundFree at h
   simp only [show (s.inner == some INNER_ROUNDS) = false from by simpa using hs, Bool.false_eq_true, ↓reduceIte,
@@ -45,10 +45,10 @@ theorem roundFree_out {c : Cfg} {s : Masker} {xb : ByteArray} {n : ℕ} {q : Byt
     intro i x z hx hz r hr
     beta_reduce at hz
     by_cases h1 : x.2.2.2.2 + 16 > xb.size
-    · rw [ite_cond_eq_true _ _ (eq_true h1)] at hz
+    · rw [ite_eq_left h1] at hz
       rw [ite_eq_iff] at hz
       rcases hz with ⟨_, hz⟩ | ⟨_, hz⟩ <;> obtain ⟨_, h, _⟩ := bindV_ok hz <;> cases h
-    · rw [ite_cond_eq_false _ _ (eq_false h1)] at hz
+    · rw [ite_eq_right h1] at hz
       split at hz
       all_goals
         repeat' (first
@@ -56,12 +56,7 @@ theorem roundFree_out {c : Cfg} {s : Masker} {xb : ByteArray} {n : ℕ} {q : Byt
           | (rw [ite_eq_iff] at hz; rcases hz with ⟨_, hz⟩ | ⟨_, hz⟩)
           | (split at hz))
       all_goals first | (cases hz; cases hr; done) | (cases hz; done) | contradiction | skip
-      all_goals first
-        | (cases hz; cases hr; exact ⟨_, _, rfl⟩)
-        | (rename_i j hj hz0 _ hio
-           rw [hio] at hz0
-           cases hz0; cases hr
-           exact ⟨_, _, rfl⟩)
+      all_goals (cases hz; cases hr; exact ⟨_, _, rfl⟩)
 
 end Out
 
@@ -79,8 +74,11 @@ theorem release_out_of_takes {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : 
   | ok p =>
     obtain ⟨out, m⟩ := p
     obtain ⟨m₀, -, hr⟩ := bindV_ok hs
-    obtain ⟨fr, hf⟩ := roundFree_round hr
-    obtain ⟨o, k, ho⟩ := roundFree_out hf
+    unfold _root_.Flock.Firewall.Frame.round at hr
+    obtain ⟨q, hq, hr⟩ := bindV_ok hr
+    obtain ⟨o, k, ho⟩ := roundFree_out hq
+    obtain ⟨o', s', f'⟩ := q
+    cases hr
     exact ⟨o, k, by simp only at ho; rw [ho]⟩
 
 /-- **Each frame round of a `Finish` `FinishIs` reads is the session's switched message** at the coins the openings
@@ -113,6 +111,7 @@ theorem msg_of_liveRoundEq (S : RefSession) (vs : S.SwVals)
   obtain ⟨v, hv, -⟩ := L.live_some wk x w (ν, t) κ _ hk hl'
   have hu : L.toSrv.wkD L.fillOf wk κ x w (ν, t) (((m₀, ρ₀) :: ops).take j) 0 = some (v, false) := by
     simp only [ZkServer.wkD, hl', ↓reduceIte, hv]
+    rfl
   have hr := L.refusesCoins_of_live wk x w (ν, t) κ _ hk hl'
   refine (hown j hj').trans ?_
   rw [L.frameD_toSrv L.fillOf wk x w (ν, t) κ _ hk hu]
@@ -158,7 +157,7 @@ theorem msg_of_swCausal (S : RefSession) (vs : S.SwVals)
           congr 1
           omega
   have hlt : j - 1 < refK x := by omega
-  rw [e, S.swMsgAt_take vs x w ν hc t (S.pad (ops.map fun p => S.decOf p.2)) (j - 1) (by omega), if_pos hlt]
+  rw [e, S.swMsgAt_take vs x w ν hc t (S.pad (ops.map fun p => S.decOf p.2)) (j - 1) (by omega), ite_eq_left hlt]
 
 /-- Rounds `2` to `refK x` are frame rounds, with the `Finish` one past the last coin. -/
 theorem kindAt_mid {W R : Type} {L : LeanRelease W R} {x : Msg} (hlast : L.last x = refK x + 1) {j : ℕ}
@@ -195,9 +194,11 @@ theorem msg_cons {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : M
   obtain ⟨v, hv, -, -, ht⟩ := L.live_some wk x w ρ κ _ hk' hl'
   have hu : L.toSrv.wkD L.fillOf wk κ x w ρ (h.take j) 0 = some (v, false) := by
     simp only [ZkServer.wkD, hl', ↓reduceIte, hv]
-  refine (hown j hj).trans ?_
+    rfl
+  obtain ⟨b, hb⟩ := L.release_cons_of_takes x ρ _ v ht
+  refine ⟨b, (hown j hj).trans ?_⟩
   rw [L.frameD_toSrv L.fillOf wk x w ρ κ _ hk' hu]
-  exact L.release_cons_of_takes x ρ _ v ht
+  exact hb
 
 end LeanRelease
 
@@ -219,7 +220,7 @@ theorem enc_finS {x : Msg} (c : Fin (refK x) → finS.Coin) {n : ℕ} (hn : n �
   split_ifs with hR
   · exact .inl rfl
   · unfold Masked.encExe
-    rw [if_neg hn]
+    rw [ite_eq_right hn]
     cases hsx : FlockDeploy.setupOf true x with
     | none => exact .inl rfl
     | some v =>
@@ -252,14 +253,13 @@ theorem msg_runCut (vs : finS.SwVals) (L : LeanRelease Flock.Wit Tp) (H : Msg �
   have e := LeanRelease.msg_of_swCausal finS vs L H wk x w hE hc hlast ν t κ m₀ ρ₀ ops hlen hl hok hown j h2 hj
   obtain ⟨b, hb⟩ := LeanRelease.msg_cons L wk x w (ν, t) κ _ hl hown j
     (by simp only [List.length_cons]; omega) (LeanRelease.kindAt_mid hlast h2 hj)
-  have h' := e.symm.trans hb
-  unfold finCoins
-  rcases enc_finS (finS.pad (K := refK x) (ops.map fun p => finS.decOf p.2)) (n := j - 1) (by omega)
-      (finS.swCutOf x (finS.pad (ops.map fun p => finS.decOf p.2)) (finS.wt x w)
-        (vs x w ν (finS.pad (ops.map fun p => finS.decOf p.2))) t) with h0 | ⟨s, spec, hsx, he⟩
-  · rw [h0] at h'
+  rcases enc_finS (finCoins x ops) (n := j - 1) (by omega)
+      (finS.swCutOf x (finCoins x ops) (finS.wt x w) (vs x w ν (finCoins x ops)) t) with h0 | ⟨s, spec, hsx, he⟩
+  · have h' : dropDom (finS.enc x (finCoins x ops) (j - 1)
+        (finS.swCutOf x (finCoins x ops) (finS.wt x w) (vs x w ν (finCoins x ops)) t)) = 0 :: b := e.symm.trans hb
+    rw [h0] at h'
     simp [dropDom] at h'
-  · exact ⟨s, spec, hsx, e.trans (by rw [he])⟩
+  · exact ⟨s, spec, hsx, e.trans (congrArg dropDom he)⟩
 
 end Loop
 
