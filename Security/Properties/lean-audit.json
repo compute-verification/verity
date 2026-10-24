@@ -49,6 +49,7 @@
   "Properties.Proofs.RemoteAudit",
   "Properties.RemoteAudit.Coins",
   "Properties.Proofs.RemoteAudit.Coins",
+  "Properties.Proofs.RemoteAudit.Frozen",
   "Properties.Accounting.Compose",
   "Properties.Accounting.Served",
   "Properties.Proofs.Accounting.Served"
@@ -243,7 +244,7 @@
    "why": "the guarantees join the device's statements and the check's, with the network lane's premise (`Definitions.NetworkCertifier.Premises`) and the reference Program they are read against: stated over their definitions, never a proof"
   },
   "Properties.RemoteAudit": {
-   "imports": ["RemoteAudit"],
+   "imports": ["RemoteAudit", "Properties.RemoteAudit"],
    "except": [],
    "why": "the properties are stated against the verifier's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
@@ -1397,6 +1398,9 @@
    "assumptions": [],
    "type_hash": "d58f00149a369b5ec1020e9aea876e2297ca72f1b599e37357479afaffadf1ad"
   },
+  "Properties.RemoteAudit.acceptDrawsOpenable": {
+   "owner": "@memory-accounting"
+  },
   "Properties.RemoteAudit.acceptOpensDraws": {
    "owner": "@memory-accounting",
    "signature": ["Properties.RemoteAudit.acceptOpensDraws : Properties.RemoteAudit.AcceptOpensDraws"],
@@ -1433,6 +1437,9 @@
    "assumptions": [],
    "type_hash": "81238c57be0d96899fa06e143efbd005767864b21d0ba703b1341cb980a9a0d7"
   },
+  "Properties.RemoteAudit.openingsUnreadUntilDrawn": {
+   "owner": "@memory-accounting"
+  },
   "Properties.RemoteAudit.passesChained": {
    "owner": "@memory-accounting",
    "signature": ["Properties.RemoteAudit.passesChained : Properties.RemoteAudit.PassesChained"],
@@ -1456,6 +1463,9 @@
    "signature": ["Properties.RemoteAudit.planReadsDistinct : Properties.RemoteAudit.PlanReadsDistinct"],
    "assumptions": [],
    "type_hash": "9071e783cf3cfda7e59180292d7380a8d105a2c9411f27877df8bdc87bee8691"
+  },
+  "Properties.RemoteAudit.recordKeptAfterDraw": {
+   "owner": "@memory-accounting"
   },
   "Properties.RemoteAudit.releasedStayOut": {
    "owner": "@memory-accounting",
@@ -2415,6 +2425,18 @@
     "outcome": "accept"
    },
    "Properties.RemoteAudit.lifetimeCapped": {
+    "function": "RemoteAudit.Session.run",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.acceptDrawsOpenable": {
+    "function": "RemoteAudit.verifyWindow",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.openingsUnreadUntilDrawn": {
+    "function": "RemoteAudit.Session.run",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.recordKeptAfterDraw": {
     "function": "RemoteAudit.Session.run",
     "outcome": "accept"
    },

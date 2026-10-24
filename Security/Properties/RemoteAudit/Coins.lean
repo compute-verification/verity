@@ -15,15 +15,21 @@ A session's coins are `coins[0 … W − 1]`, window `t`'s challenge at `t` (`re
 * `OpeningsUnreadUntilDrawn` (`Live`, the coin order): a run, on the same events, gives the same results and the same
   state, whatever the coins at `W + t` and above, as long as window `t` is not drawn by its end. Every challenge and
   the earlier windows' openings coins may be read; window `t`'s openings coin and the later ones are not.
+* `RecordKeptAfterDraw` (`Live`, the receipts fixed at the draw): once window `t` is drawn, the rest of the session
+  keeps its draws, its record (what `verify` checks the openings against: its challenge, the previous window's last
+  root and its passes' roots, plans and heads, so its size `U_t`) and which of its receipts are openable, whatever
+  events follow. A later append doesn't move the append a drawn receipt's block is in.
 
-What the code cannot give is the order the deployment releases coins in: that the events up to window `t`'s draw are
-themselves fixed by the coins below `W + t`, the challenger releasing `coins[W + t]` only to `close t`'s draw and the
-prover seeing nothing else of it. And `Counted` reads the trace's held blocks, which the code never sees: that a
-credited pass's wrong registered blocks are receipts no opening passes is the hash binding of the receipts and the
-store's commitments, not a property of the verifier's functions.
+So the code gives `Live` once the events up to window `t`'s draw are fixed by the coins below `W + t`, and that is
+what it cannot give: the order the deployment releases coins in, the challenger releasing `coins[W + t]` only to
+`close t`'s draw and the prover seeing nothing of it before. `ReleaseOrder` names it, a premise of the deployment's,
+which no property here takes. And `Counted` reads the trace's held blocks, which the code never sees: that a credited
+pass's wrong registered blocks are receipts no opening passes is the hash binding of the receipts and the store's
+commitments, not a property of the verifier's functions.
 
-The statements need `1 ≤ W` (with no window, `start` reads `coins[0]`, window 0's openings coin), which `audit.py`'s
-`Params` and the difftest's `positive` check (`windows`).
+The statements need `1 ≤ W` (with no window, `start` reads `coins[0]`, window 0's openings coin) and
+`1 ≤ min_passes` (with none, an empty window drawn on its deadline could take a root afterwards, once the window
+before it is drawn), which `audit.py`'s `Params` and the difftest's `positive` check.
 -/
 
 open RemoteAudit
@@ -61,5 +67,28 @@ def OpeningsUnreadUntilDrawn : Prop :=
       (∀ j, j < params.windows + t → coins'[j]! = coins[j]!) →
       Session.run (Session.State.init params reg coins' appendCoins notBeforeNs) events =
         .ok (rs, { s with coins := coins' })
+
+/-- Once a run from `State.init` has drawn window `t` (at `s`), any events after it keep the window's draws, its record
+and its openable receipts: at `s'` they are those at `s`. -/
+def RecordKeptAfterDraw : Prop :=
+  ∀ (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat)
+    (events events' : Array Session.Event) (rs rs' : Array Session.Result) (s s' : Session.State),
+    Session.run (Session.State.init params reg coins appendCoins notBeforeNs) events = .ok (rs, s) →
+    Session.run s events' = .ok (rs', s') →
+    ∀ (t : Nat) (d : Array (Nat × Nat)), 1 ≤ params.minPasses → drawnOf s t = some d →
+      drawnOf s' t = some d ∧ s'.record t = s.record t ∧
+        ∀ u, Openable reg s'.appends (s'.record t) u ↔ Openable reg s.appends (s.record t) u
+
+/-- **The release order** (the deployment's, which the code cannot give): `D` gives the events a session sees on its
+coins (the prover's and the world's choices fixed), and window `t`'s openings coin reaches none of them before the
+one that draws the window. While the first `k` events leave window `t` undrawn, the next is the same on coins that
+agree below `W + t`. It is what `Live` needs beyond `OpeningsUnreadUntilDrawn`, up to the draw, and
+`RecordKeptAfterDraw`, after it. -/
+def ReleaseOrder (params : Session.Params) (reg : Registration) (appendCoins : Array ByteArray) (notBeforeNs : Nat)
+    (D : Array ByteArray → Array Session.Event) : Prop :=
+  ∀ (coins coins' : Array ByteArray) (t k : Nat) (rs : Array Session.Result) (s : Session.State),
+    (∀ j, j < params.windows + t → coins'[j]! = coins[j]!) →
+    Session.run (Session.State.init params reg coins appendCoins notBeforeNs) ((D coins).extract 0 k) = .ok (rs, s) →
+    drawnOf s t = none → (D coins')[k]? = (D coins)[k]?
 
 end Properties.RemoteAudit
