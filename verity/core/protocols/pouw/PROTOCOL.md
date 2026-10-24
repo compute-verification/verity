@@ -866,7 +866,8 @@ useful    U/(α_A·α_B), glue
     credit, as well as per tile. It is (C2) of `TTOutRowSeed.lean`, under which `ttOutRowSeed_of_ttOut` reduces the
     row-seeded TT_OUT to rev1's per-unit one at error (q + R)/2^128 over the R declared rows. An aggregate cap doesn't
     transfer. The work sampling design checks it on every credited A row of a drawn tile, over its credited columns,
-    after the tile's cap (`clear_work.row_cap`), and `volunteer` gives up a row over it first.
+    after the tile's cap (`clear_work.row_cap`), and `volunteer` gives up a row over it first. The hidden cap checks it
+    in gates (`circuit.cap`'s v2 templates, `cap.served`).
   - `pearl-c-sm120-v1-h3` is registered (the served default, `pouw_pearl_c_device`), and so is `pearl-c-h100-v1-h3`,
     `PearlC(hashing="h3")` on the H100 record (GLM-5.3's FP8 form on the H200, Daniel 22 Oct). The `test-16-v1-h3` and
     `decode-32-v1-h3` vectors pin a call end to end, with A's row root and row 0's leaf, digest, seed and E_A line, and a
@@ -1057,6 +1058,12 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
     - The cap's rows are `sd`, `cap-word`, `cap-flags`, `cap-chunks`, `cap-sums` and `cap-rows` (under `circuit.pc4`
       below).
     - The cap takes whole tiles only: `Shape.check` refuses a short last tile row under the cap.
+    - **The per-row cap** (`pc8.Shape.row_rho`, under the cap only) is v2 of `Pc8TileCap`, `Pc8CapTally`,
+      `Pc8CallCap` and `Pc8CheckCap`, each with the static RHOR (v1 stays byte for byte): the verdict also holds each
+      passing row's own sums to the cap's inequality on that one row at ρr = 1/RHOR, the clear path's row cap
+      (`clear_work.cap_failure`, which `test_pearlc_cap_agreement` holds it to tile by tile). `cap.served(scheme,
+      shape)` is a scheme's hiding cap shape: under -h3, ρr is `row_cap_at(k)`, 4ρ (RHOR = 100) at
+      `pearl-c-h100-v1-h3`'s census k = 256 and ρ at every other k; under -h0 it is v1, the tile's cap alone.
   - The row cut along k (``Shape.row_k``, `circuit.rowk`) is `pc4`'s, below, on each of the three records. It takes
     whole tiles only: `Shape.check` refuses a short last tile row under the cut.
   - Not in it yet: the cap in a run. Until it is, Pearl-C's runs are checked by its reference audit, a development
