@@ -104,8 +104,9 @@ class RankRun(PH.H1Run):
 class RankTap(CT.CommitTap):
     """A rank's tap on its Commit (`acquire.h1_commit.RankCommit.h1rank_commit`): what the holder's `pouw_h1_commit.CommitTap` reads of what
     the Commit acquired, each H1 linear's x_q (``/0``) and s_a (``/1``) at its site and the embedding's input ids, copied
-    to the host with the engine step, each site under the window's name of its linear (``names``: the rank's module name
-    to the window's), kept until the holder's next pull (`drain`)."""
+    to the host with the engine step, each site under the window's name of its linear (``names``: the rank's module name,
+    or a routed expert's H1 name ``prefix.expert.projection``, to the window's), kept until the holder's next pull
+    (`drain`)."""
 
     names: dict[str, str] = field(default_factory=dict)
     out: list[tuple[str, int, np.ndarray]] = field(default_factory=list)

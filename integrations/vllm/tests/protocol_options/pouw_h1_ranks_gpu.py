@@ -19,13 +19,16 @@ rank (`pouw_h1_ranks.install`'s ``commit``) in place of the bare one, each windo
 core's ROOTS1 steps (`pouw_h1_gpu.core_tie`: one manifest under calls_root, each table committed by its round, each the
 Commit's value of its rows). With ``--negatives`` each `NEGATIVES` window hands H1 other codes than the arm's on rank
 ``--edit-tp`` only (one call's all zero, or one row's first code off by one), its Commit honest, and must be refused at
-``arow`` (`pouw_h1_gpu.negative_verdict`). ``--windows`` serves a subset, so a run splits its windows across GPU leases."""
+``arow`` (`pouw_h1_gpu.negative_verdict`). ``--windows`` serves a subset, so a run splits its windows across GPU leases;
+on a MoE (``--role OLMOE_INT8 --int8-exact linears``) it may name ``commit-a-zero-expert`` (`EXPERT_NEGATIVE`), the rank's
+first routed expert down call with rows handed all-zero codes, and each window counts its expert calls (`expert_calls`)."""
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
 import os
+import re
 import sys
 import tempfile
 import time
@@ -65,6 +68,13 @@ def summary(h1: Any) -> dict[str, Any]:
 
 #: ``--negatives``' windows: H1 handed one call's A codes all zero, or one row's first code off by one, on one rank
 NEGATIVES = ("a-zero", "a-row-off")
+#: the negative a MoE adds (``--windows``): the rank's first routed expert down call with rows handed all-zero codes
+#: (`pouw_h1_gpu.editor`'s)
+EXPERT_NEGATIVE = "a-zero-expert"
+#: every negative ``--windows`` may name
+KINDS = (*NEGATIVES, EXPERT_NEGATIVE)
+#: a routed expert's call in the window's names (`int8_experts.ExpertSite.name` at its rank, ``…experts.3.down@tp1``)
+EXPERT_CALL = re.compile(r"\.\d+\.(gate_up|down)(@tp\d+)?$")
 
 
 def _edit_of(kind: str) -> Callable[[Any], Any]:
@@ -86,30 +96,43 @@ def _edit_of(kind: str) -> Callable[[Any], Any]:
 
 
 def _w_edit(worker: Any, kind: str, tp: int) -> dict[str, Any] | None:
-    """On tensor-parallel rank ``tp`` only: each of its H1 linears' ``observe`` handed `_edit_of(kind)` of the arm's codes,
-    outside H1's own (`pouw_h1_ranks.wire_rank`), so the Commit acquires the arm's codes and the served y is the arm's."""
-    from vllm.distributed.parallel_state import get_tp_group
+    """On tensor-parallel rank ``tp`` only (`pouw_h1_ranks.RankExtension._h1rank_rank`): each of its H1 linears'
+    ``observe`` handed `_edit_of(kind)` of the arm's codes (`EXPERT_NEGATIVE`: `pouw_h1_gpu.editor`'s), outside H1's own
+    (`pouw_h1_ranks.wire_rank`), so the Commit acquires the arm's codes and the served y is the arm's."""
+    from tests.protocol_options import pouw_h1_gpu as GPU
     from verity_vllm.engine.hooks import Hooks
-    if get_tp_group().rank_in_group != tp:
+    if worker._h1rank_rank()[1] != tp:
         return None
     _model, layers = worker._h1rank_layers()
-    edit, hooks = _edit_of(kind), Hooks(tag=f"roots1-{kind}-tp{tp}")
-
-    def edited(orig: Any) -> Any:
-        def observe(layer: Any, xq: Any, s_a: Any, y: Any, z: Any = None) -> Any:
-            return orig(layer, edit(xq), s_a, y, z)
-        return observe
+    if kind == EXPERT_NEGATIVE:
+        edit = GPU.editor(GPU.EXPERT_NEGATIVE)
+    else:
+        codes = _edit_of(kind)
+        edit = lambda _layer, xq: codes(xq)  # noqa: E731
+        edit.at = None
+    hooks = Hooks(tag=f"roots1-{kind}-tp{tp}")
     for m in layers:
-        hooks.wrap(m.quant_method, "observe", edited)
-    worker._h1rank_edit = hooks
+        hooks.wrap(m.quant_method, "observe", lambda orig: GPU.edited(orig, edit))
+    worker._h1rank_edit = (hooks, edit)
     return {"tp": tp, "linears": len(layers), "first_linear": worker._h1rank["run"].lo}
 
 
-def _w_unedit(worker: Any) -> None:
-    hooks = getattr(worker, "_h1rank_edit", None)
-    if hooks is not None:
-        hooks.uninstall()
-        worker._h1rank_edit = None
+def _w_unedit(worker: Any) -> dict[str, Any] | None:
+    """The rank's edit removed; returns the expert site it zeroed (``at``, its rank-local name), on the edited rank."""
+    got = getattr(worker, "_h1rank_edit", None)
+    if got is None:
+        return None
+    hooks, edit = got
+    hooks.uninstall()
+    worker._h1rank_edit = None
+    return {"tp": worker._h1rank_rank()[1], "at": edit.at}
+
+
+def expert_calls(h1: Any) -> dict[str, Any]:
+    """The window's routed expert calls (`EXPERT_CALL`): how many, how many had rows, and on which ranks."""
+    got = [c for c in h1.calls if EXPERT_CALL.search(c.module or "")]
+    return {"calls": len(got), "with_rows": sum(bool(c.m) for c in got),
+            "ranks": sorted({c.module.rpartition("@")[2] for c in got if "@" in c.module})}
 
 
 def commit_window(a: argparse.Namespace, llm: Any, prompts: list[int], plain: list[dict[str, Any]], decl: Any, out: Path,
@@ -140,7 +163,8 @@ def commit_window(a: argparse.Namespace, llm: Any, prompts: list[int], plain: li
         w["serve_s"] = round(time.monotonic() - t0, 1)
     finally:
         if edit is not None:
-            holder.executor.collective_rpc(_w_unedit)
+            at = [x for x in holder.executor.collective_rpc(_w_unedit) if x is not None]
+            w["edit"]["at"], w["edited"] = at, next((x["at"] for x in at if x["at"]), None)
         t0 = time.monotonic()
         holder.finish()
         w["release_s"] = round(time.monotonic() - t0, 1)
@@ -148,7 +172,7 @@ def commit_window(a: argparse.Namespace, llm: Any, prompts: list[int], plain: li
     tap = served.tap
     w.update(same_tokens=[g["token_ids"] for g in got] == [g["token_ids"] for g in plain],
              tokens_digest=GPU.tokens_digest(got), static_schedule=GPU.static_check(got, decl.max_tokens),
-             h1=summary(h1), roots1=h1.details.get("roots1"), committed=holder.committed,
+             h1=summary(h1), experts=expert_calls(h1), roots1=h1.details.get("roots1"), committed=holder.committed,
              served={"refused": served.refused[:8], "registered": len(served.registered)},
              arow_sites={v: sorted({s.rpartition("@")[2].partition("/")[0] for s in at.get("sites") or ()})
                          for v, at in sorted(tap.where.items()) if "sites" in at},
@@ -158,7 +182,8 @@ def commit_window(a: argparse.Namespace, llm: Any, prompts: list[int], plain: li
     tied = bool(w["core"]["tied"] and (w["roots1"] or {}).get("tied"))
     w["ok"] = bool(w["same_tokens"] and w["h1"]["static"] and w["static_schedule"]["ok"] and not w["served"]["refused"]
                    and all(not c.get("errors_n") for c in holder.committed.values())
-                   and (tied if edit is None else GPU.negative_verdict(w)["refused"] and bool(w.get("edit", {}).get("ranks"))))
+                   and (tied if edit is None else GPU.negative_verdict(w)["refused"] and bool(w.get("edit", {}).get("ranks"))
+                        and (edit != EXPERT_NEGATIVE or bool(w.get("edited")))))
     print(f"{tag} ok={w['ok']} serve_s={w['serve_s']} release_s={w['release_s']} roots1={json.dumps(w['roots1'])[:600]} "
           f"core={json.dumps(w['core'], default=str)[:800]} committed={json.dumps(w['committed'])[:600]} host={w['host']}",
           flush=True)
@@ -175,7 +200,7 @@ def serve(a: argparse.Namespace) -> dict[str, Any]:
 
     decl, out = declared_of(a), Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    target = TargetProfile.from_device().with_overrides(int8_exact="all")
+    target = TargetProfile.from_device().with_overrides(int8_exact=a.int8_exact)
     tag = f"[pp{a.pp}tp{a.tp}]"
     doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "pp": a.pp, "tp": a.tp, "torch": torch.__version__,
                            "devices": [torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())],
@@ -354,13 +379,15 @@ def main(argv: list[str] | None = None) -> int:
                     help="with --commit: the windows to serve, of commit and commit-<NEGATIVES kind> (default: commit, and "
                          "with --negatives each negative)")
     ap.add_argument("--edit-tp", type=int, default=1, help="the tensor-parallel rank a negative's edit is on")
+    ap.add_argument("--int8-exact", default="all",
+                    help="the int8_exact row's parts (TargetProfile; a MoE such as OLMOE_INT8 serves linears)")
     a = ap.parse_args(argv)
     if a.windows is None:
         a.windows = ["commit", *(f"commit-{k}" for k in NEGATIVES if a.negatives)]
-    if a.commit and (a.tp < 2 or a.pp != 1 or any(w != "commit" and w.removeprefix("commit-") not in NEGATIVES
+    if a.commit and (a.tp < 2 or a.pp != 1 or any(w != "commit" and w.removeprefix("commit-") not in KINDS
                                                    for w in a.windows)):
         ap.error("--commit is at TP N > 1 and PP 1 (one GPU's is pouw_h1_gpu --commit), its windows commit and "
-                 f"commit-<{'|'.join(NEGATIVES)}>")
+                 f"commit-<{'|'.join(KINDS)}>")
     if a.compare:
         doc = compare(Path(a.compare[0]), Path(a.compare[1]))
         Path(a.out).parent.mkdir(parents=True, exist_ok=True)

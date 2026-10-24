@@ -4,7 +4,9 @@ Commit runs on every rank, each rank's tap ships what it acquired, and the holde
 core's ROOTS1 steps (`pouw_h1_gpu.core_verdict`, the GPU run's check) tie the window. One rank's call handed other codes
 than its Commit acquired is refused at ``arow``, and a rank whose input ids aren't the first rank's leaves the window
 untied. The ranks are stand-ins: each worker an `acquire.h1_commit.RankCommit` over two linears on the int8 arm with z/y records
-(`test_pouw_h1_commit.Arm`), its committer the int8 source's face (`acquire.h1_commit.source`)."""
+(`test_pouw_h1_commit.Arm`), or a linear and a MoE layer's routed experts (`MoEModel`), its committer the int8 source's
+face (`acquire.h1_commit.source`). On the MoE each rank's expert sites are renamed to the window's names of them
+(``…experts.0.down@tp1``), so each step's AROW of the experts' K spans both ranks' expert calls."""
 from __future__ import annotations
 
 import hashlib
@@ -20,14 +22,18 @@ from torch import nn  # noqa: E402
 from verity.core.protocols.pouw import credit as CR  # noqa: E402
 from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
 from verity_vllm.acquire import h1_commit as HC  # noqa: E402
+from verity_vllm.engine import int8_experts as X  # noqa: E402
+from verity_vllm.protocol_options import pouw  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1 as PH  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_commit as CT  # noqa: E402
+from verity_vllm.protocol_options import pouw_h1_hooks as PHK  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_ranks as PHR  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_requests as RQ  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_served as SV  # noqa: E402
 
 from tests.protocol_options import pouw_h1_gpu as G  # noqa: E402
-from tests.protocol_options.test_pouw_h1_commit import EMBED, FIRST, K, PROMPTS, Arm, Linear, _ids  # noqa: E402
+from tests.protocol_options import pouw_h1_ranks_gpu as RG  # noqa: E402
+from tests.protocol_options.test_pouw_h1_commit import EMBED, EXPERTS, FIRST, I, K, MOE, PROMPTS, Arm, Linear, MoE, _ids  # noqa: E402
 from tests.protocol_options.test_pouw_h1_ranks import Executor, _rounds, _so  # noqa: E402
 from tests.protocol_options.test_pouw_h1_served import _unit  # noqa: E402
 
@@ -46,6 +52,17 @@ class Model(nn.Module):
         self.model = nn.Module()
         self.model.embed_tokens = nn.Module()
         self.model.layers = nn.ModuleList([Linear(64, seed, Arm(edit, calls)), Linear(32, seed + 1, Arm(edit, calls))])
+
+
+class MoEModel(nn.Module):
+    """One rank's shards of a dense linear and a MoE layer of `EXPERTS` experts (`test_pouw_h1_commit.MoE`, top-1 routed
+    by its ``ROUTES``, as every rank routes): its H1 linears the linear then each expert's gate_up and down, 7 a rank."""
+
+    def __init__(self, seed, edit=None):
+        super().__init__()
+        self.model = nn.Module()
+        self.model.embed_tokens = nn.Module()
+        self.model.layers = nn.ModuleList([Linear(64, seed, Arm(edit)), MoE(seed + 1)])
 
 
 class Committer:
@@ -80,9 +97,9 @@ def _attach(engine, layers, tap=None, **committer):
 class Rank(HC.RankCommit):
     """A worker of a TP engine: its (pp, tp) rank and its model's two shards, named as vLLM names them."""
 
-    def __init__(self, tp, edit=None):
-        self.rank, self.model = (0, tp), Model(10 * tp + 1, edit)
-        self.layers = list(self.model.model.layers)
+    def __init__(self, tp, edit=None, moe=False):
+        self.rank, self.model = (0, tp), (MoEModel if moe else Model)(10 * tp + 1, edit)
+        self.layers = PHK.layers(self.model, (Linear,))
         self.model_runner, self.vllm_config = SimpleNamespace(decode_query_len=1), None
 
     def _h1rank_layers(self):
@@ -92,16 +109,20 @@ class Rank(HC.RankCommit):
         return self.rank
 
 
-def _window(monkeypatch, edits=(None, None), ids=lambda tp, s, x: x, served=None):
+def _window(monkeypatch, edits=(None, None), ids=lambda tp, s, x: x, served=None, moe=False, negative=None):
     """A served window at TP 2 with the Commit on each rank: the holder and its ranks. ``edits`` makes each rank's codes H1
-    is handed of what its arm quantized; ``ids`` the input ids rank tp's Commit acquires at step s of the honest ones."""
+    is handed of what its arm quantized; ``ids`` the input ids rank tp's Commit acquires at step s of the honest ones;
+    ``moe`` serves `MoEModel`'s ranks; ``negative`` (a `pouw_h1_ranks_gpu.KINDS` kind) is the GPU harness's edit on rank
+    1 (`pouw_h1_ranks_gpu._w_edit`), the site it zeroed in ``holder.edited``."""
     monkeypatch.setattr(HC, "attach", _attach)
-    workers = [Rank(1, edits[1]), Rank(0, edits[0])]
+    workers = [Rank(1, edits[1], moe), Rank(0, edits[0], moe)]
     executor = Executor(workers)
     served = served or SV.Served(PH.TILE, _unit(), window=hashlib.sha512(b"w").digest())
     holder = PHR.install(None, executor=executor, rows=ROWS, steps=STEPS, coins=Challenger(0, random.Random(0).randbytes),
                          rounds=_rounds(), key=KEY, entry="t", admission=RQ.ROUND0, served=served,
                          commit={"cp": {"repo": "r", "revision": "v"}, "run_id": "t"})
+    if negative is not None:
+        executor.collective_rpc(RG._w_edit, kwargs={"kind": negative, "tp": 1})
     run, g = holder.run, torch.Generator().manual_seed(9)
     for s, so in enumerate(SCHEDULE):
         executor.execute_model(so)
@@ -111,9 +132,11 @@ def _window(monkeypatch, edits=(None, None), ids=lambda tp, s, x: x, served=None
             com._cur = SimpleNamespace(step=FIRST + s)
             com.src.on_step_begin()
             com._acquire(f"{EMBED}/in", torch.tensor(ids(w.rank[1], s, honest)), com._cur)
-            for layer, x in zip(w.layers, xs):
+            for layer, x in zip(w.model.model.layers, xs):
                 layer(x)
             com._cur = None
+    if negative is not None:
+        holder.edited = [x for x in executor.collective_rpc(RG._w_unedit) if x is not None]
     holder.finish()
     return holder, workers
 
@@ -197,3 +220,57 @@ def test_the_commit_extension_names_the_rank_with_the_commit():
     module, _, name = PHR.COMMIT_EXTENSION.rpartition(".")
     assert getattr(importlib.import_module(module), name) is HC.RankCommit
     assert issubclass(HC.RankCommit, PHR.RankExtension) and not hasattr(PHR.RankExtension, "h1rank_commit")
+
+
+def _rank_experts(projection, tp):
+    return [f"{MOE}.{e}.{projection}@tp{tp}" for e in range(EXPERTS)]
+
+
+def test_a_moes_expert_calls_on_both_ranks_are_in_their_steps_a_tables_and_the_commits_arow(monkeypatch):
+    """A MoE at TP 2: each rank's routed expert sites (no modules, `int8_experts.ExpertSite`) are named by their rank in
+    the window (``…experts.0.down@tp1``) and the rank's tap ships what its Commit acquired at them under those names, so
+    each step's AROW of the experts' K = I is both ranks' downs, rank 0's then rank 1's, an idle expert's zero rows
+    included; core's ROOTS1 steps tie the window with the expert calls in it."""
+    holder, _ = _window(monkeypatch, moe=True)
+    run, tap = holder.run, holder.run.served.tap
+    assert [run.modules[w] for w in range(7, 14)] == ["model.layers.0@tp1", *(f"{MOE}.{e}.{p}@tp1" for e in range(EXPERTS)
+                                                                             for p in X.PROJECTIONS)]
+    assert run.details["roots1"] == {"tied": True, "reason": None, "values": 3 * STEPS, "own_trees": 0,
+                                     "steps": {"0": FIRST, "1": FIRST + 1}}
+    for s, rows in ((0, [2, 3, 0]), (1, [0, 1, 1])):
+        assert tap.where[CR.commit_rows(s, I)] == {
+            "round": s, "calls": [14 * s + w for w in (2, 4, 6, 9, 11, 13)], "steps": [FIRST + s] * 6,
+            "sites": [CT.site(n) for tp in (0, 1) for n in _rank_experts(X.DOWN, tp)], "rows": rows * 2}
+        assert tap.where[CR.commit_rows(s, K)]["calls"] == [14 * s + w for w in (0, 1, 3, 5, 7, 8, 10, 12)]
+        assert tap.where[CR.commit_rows(s, K)]["sites"][4:] == [CT.site(n) for n in ["model.layers.0@tp1",
+                                                                                     *_rank_experts(X.GATE_UP, 1)]]
+    assert not tap.refused and not tap._x
+    assert RG.expert_calls(run) == {"calls": 12 * STEPS, "with_rows": 16, "ranks": ["tp0", "tp1"]}
+    core = _verdict(holder)
+    assert core["tied"] and core["commit_values"] == 3 * STEPS, core
+    assert _reasons(run) == {None}
+
+
+def test_a_zero_on_one_expert_call_on_rank_1_is_refused_at_arow(monkeypatch):
+    """The GPU harness's ``a-zero-expert`` on rank 1 (`pouw_h1_ranks_gpu._w_edit`): H1 handed all-zero codes at rank 1's
+    first routed expert down call with rows (expert 0's, step 0, call 9), every Commit honest. The window's A table of
+    step 0 and K = I holds the zero rows where its AROW holds what rank 1's Commit acquired at ``…experts.0.down@tp1``,
+    so the serving process credits nothing and core refuses the window at ``arow``, as the harness's verdict reads it."""
+    holder, _ = _window(monkeypatch, moe=True, negative=RG.EXPERT_NEGATIVE)
+    run = holder.run
+    assert holder.edited == [{"tp": 1, "at": f"{MOE}.0.down"}]
+    assert run.details["roots1"]["reason"].startswith(
+        f"roots1: round 0's A table h1/a/{I}@0 of calls [2, 4, 6, 9, 11, 13] is not the Commit's row-table/0/k{I} ")
+    assert run.served.tap.own == 1 and _reasons(run) == {CT.UNTIED}
+    v = G.negative_verdict({"core": _verdict(holder), "roots1": run.details["roots1"], "edited": holder.edited[0]["at"]})
+    assert v["refused"] and v["arow"][1].startswith(f"round 0's A table of K = {I} h1/a/{I}@0 is not the Commit's "), v
+
+
+def test_a_rank_whose_commit_acquires_a_site_the_window_cannot_name_is_refused(monkeypatch):
+    """A rank's expert sites the window has no name for would reach the holder's tap under their rank-local names, which
+    no call reads and every rank shares: `acquire.h1_commit.RankCommit.h1rank_commit` refuses the rank's Commit."""
+    named = pouw._named
+    monkeypatch.setattr(pouw, "_named", lambda model, layers: {
+        w: n for w, n in named(model, layers).items() if not isinstance(layers[w], X.ExpertSite)})
+    with pytest.raises(ValueError, match=r"acquires 6 sites the window has no name for, \['model.layers.1.experts.0.down'"):
+        _window(monkeypatch, moe=True)
