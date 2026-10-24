@@ -119,6 +119,23 @@ def test_todays_reserve_runs_out_on_the_18_family_draw_and_its_need_does_not():
     assert len(drawn["units"]) == 18 and len(coins.segments[-1].openings) == 24
 
 
+def test_a_work_laws_need_is_its_draw_under_the_work_table_the_rank_registers_with():
+    """A window whose first template holds transfer gates (32 units at work 0 and floor 32, drawn whole) beside 8 drawn by
+    ``work:2``: its draw reads 640 bytes for the whole stratum and 100 for the rest, so the need is 22 coins, and its reserve
+    holds the draw. A work law has no need without the table (`draw.derive` refuses it)."""
+    program, query, n = window([32, 8])
+    t0, t1 = (P.template_id(template(i)) for i in range(2))
+    table = {t0: {"work": 0, "floor": 32}, t1: {"work": 1, "floor": 1}}
+    law = D.derive(program, query, S.selection_law(S.Law("work:2"), n), table)
+    assert [s["k"] for s in law["strata"]] == [32, 2]
+    need = AC.need("work:2", program, query, n, table)
+    assert need == -(-(640 + 100 + 640) // Ch.COIN_BYTES) == 22
+    drawn = S.select_draw(S.Law("work:2"), law, n, challenger_coins(AC.families({0: need})))
+    assert set(range(32)) <= set(drawn["units"]) and len(drawn["units"]) == 34
+    with pytest.raises(ValueError, match="work table"):
+        AC.need("work:2", program, query, n)
+
+
 def test_a_reserve_that_cant_cover_the_draws_is_refused_naming_need_and_reserve():
     """`reserve_reason` names the need (the coin after the root, then each rank's) and the reserve when the reserve is
     short, and the challenger's own limit when the layout is past it."""
