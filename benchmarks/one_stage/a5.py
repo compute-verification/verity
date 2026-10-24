@@ -573,10 +573,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     by_template: dict[str, list] = {}
     for mm in members:
         by_template.setdefault(mm["m"].template, [mm["defn"], 0])[1] += mm["m"].n
-    defs = [tuple(x) for x in by_template.values()]
-    fewer = P.mixed_population_program([(d, n - (1 if i == 0 else 0)) for i, (d, n) in enumerate(defs)]) if len(defs) > 1 \
-        else P.population_program(defs[0][0], defs[0][1] - 1)
-    v = V.check(rec, fewer, query, law, CS.SCHEME, want, leaf_layer=leaf_layer)
+    v = V.check(rec, resized_program([tuple(x) for x in by_template.values()]), query, law, CS.SCHEME, want,
+                leaf_layer=leaf_layer)
     neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
     other = CS.expected_ports(replace(mine, run="00" * 32))
     v = V.check(rec, program, query, law, CS.SCHEME, other, leaf_layer=leaf_layer)
@@ -614,6 +612,13 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         shown["coins"] = {x: summary["coins"].get(x) for x in ("source", "coins_reason", "outcome", "run")}
     print("A5 " + json.dumps(shown, sort_keys=True, default=str))
     return summary, ok
+
+
+def resized_program(defs: list[tuple]) -> Program:
+    """R2's other partition: the window's population, `(template, n)` per template, with its first template one instance
+    short, or one over where it has a single instance (a population has at least one)."""
+    resized = [(d, (n - 1 if n > 1 else 2) if i == 0 else n) for i, (d, n) in enumerate(defs)]
+    return P.mixed_population_program(resized) if len(resized) > 1 else P.population_program(*resized[0])
 
 
 def streamed(a: argparse.Namespace) -> bool:
