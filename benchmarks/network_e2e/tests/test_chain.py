@@ -193,14 +193,18 @@ def _apart(d: Path, w: int, adv=None) -> str:
     return root
 
 
-def _serve_arm(d: Path, name: str, w: int, bits: int, *, forged=False, root=None, codes=(), advice_root=None) -> None:
+def _serve_arm(d: Path, name: str, w: int, bits: int, *, forged=False, root=None, codes=(), advice_root=None,
+               before_draw=True) -> None:
     """A `prove_path.py audit --serve-run` arm of the endpoint fixture's Commit window ``w``: its summary's ``serve``
-    names the window, its run id and the root it found sealed while serving (``codes`` its refusals), and its committed
-    advice the report's own registration of ``w`` unless ``advice_root`` names another."""
+    names the window, its run id and the root it found sealed while serving (``codes`` its refusals), its committed
+    advice the report's own registration of ``w`` unless ``advice_root`` names another, and its rank's
+    `advice_before_draw` (the verifier's receipt of the registration before any coin) ``before_draw``, absent when None."""
     c = next(x for x in chain._jsonl(EP / "windows.jsonl") if int(x["window"]) == w)
     _arm(d, name, {}, forged=forged)
     s = json.loads((d / name / "summary.json").read_text())
     adv = {"root": advice_root or _reg(w)["binding"]["advice"]["root"], "bits": bits}
+    if before_draw is not None:
+        s["ranks"]["0"]["advice_before_draw"] = {"ok": before_draw, "codes": [] if before_draw else ["after-the-draw"]}
     s |= {"run_root": root or c["run_root"], "advice": adv,
           "serve": {"ok": not codes, "codes": list(codes), "window": w,
                     "detail": {"window": w, "run_id": c["run_id"], "published_root": root or c["run_root"],
@@ -249,25 +253,29 @@ def test_a_serve_run_audit_is_bound_to_the_runs_by_the_endpoints_commit_window_i
         "opens": True, "tied": True, "tied_why": None,
         "registered": {"by": "the lane", "ref": "r-reg", "first_draw": registered["1"]["first_draw"],
                        "at": chain._utc(closed[1] + 1503.6), "closed": chain._utc(closed[1]), "after_close_s": 1503.6,
+                       "next_closed": chain._utc(closed[2]), "before_next_close_s": -1502.9, "before_draw": True,
                        "at_serve_time": False}}
     w0c = got["arms"]["w0 served"]["commit"]
     assert w0c["the_endpoints"] is True and w0c["of_the_honest_run"] is False and w0c["the_reports_root"] is None
     assert w0c["tied"] is True and w0c["registration"] == str(ep / "advice" / "w0")
     assert w0c["registered"]["at_serve_time"] is True and w0c["registered"]["after_close_s"] == -0.5
+    assert w0c["registered"]["before_next_close_s"] == 1.2 and w0c["registered"]["before_draw"] is True
     md = "\n".join(chain.markdown({"advice": info, "bits": b, "prove_path": got}))
     assert "\n## Prove path\n" in md and "fixed workload" not in md and "Bound to these runs: True (every arm's" in md
     assert (f"| w1 served | 1 | {commits[1]['run_id']} | {commits[1]['run_root'][:16]}… | True | True | True | "
             f"{apart[:16]}… | {row[1]['v0_bits']} | False | True | True | True | after serving, by the lane (r-reg), "
-            "25.1 min after its Commit window closed, 14.2 min before the first draw |") in md
+            "1503.6 s after its Commit window closed, 1502.9 s after the next window closed, 852.6 s before the first "
+            "draw |") in md
     assert f"| w0 served | 0 | {commits[0]['run_id']} |" in md
-    assert md.count("| — | True | True | True | by vllm at serve time, 0.5 s before its Commit window closed |") == 2
+    assert md.count("| — | True | True | True | by vllm at serve time, 0.5 s before its Commit window closed, before "
+                    "its draw and 1.2 s before the next window closed |") == 2
     stub = [x for x in chain.stubs({"chain": {"advice": info, "bits": b, "prove_path": got}}, True)
             if x.startswith("Prove path")]
     assert stub == [f"Prove path: the served run's own Commit windows (w0, w1), adopted from {w1}, {w0}; w1's advice "
-                    "was registered after serving, by the lane (r-reg), 25.1 min after its Commit window closed, 14.2 "
-                    "min before the first draw, not by the endpoint while serving; the advice w1's arms committed is a "
-                    "registration of its own, held to the report's advice by its opening, which the report reads in "
-                    "the clear."]
+                    "was registered after serving, by the lane (r-reg), 1503.6 s after its Commit window closed, "
+                    "1502.9 s after the next window closed, 852.6 s before the first draw, not by the endpoint while "
+                    "serving; the advice w1's arms committed is a registration of its own, held to the report's advice "
+                    "by its opening, which the report reads in the clear."]
 
     def why(*dirs, given=registered) -> str | None:
         p = chain.prove_path(list(dirs), info, b["bound"], b, ep, given)
