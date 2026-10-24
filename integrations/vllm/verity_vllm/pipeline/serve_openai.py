@@ -84,7 +84,7 @@ class Options:
     chunk: int = option("--chunk", type=int, default=65536, help="the committer's leaf, in bytes of the packed step stream (as `commit`'s)")
     hash_threads: int = option("--hash-threads", type=int, default=2, help="the committer's hashlib threads")
     gpu_tree: bool = option("--gpu-tree", action="store_true", default=False, help="the committer's GPU-resident chunk tree (no D2H, no hashlib)")
-    fast_copy: bool = option("--fast-copy", action="store_true", default=False, help="the committer's snapshots by cudaMemcpyAsync")
+    cudart_copy: bool = option("--cudart-copy", action="store_true", default=False, help="the committer's snapshots by cudaMemcpyAsync")
     force_include_usage: bool = option("--force-include-usage", action="boolean_optional", default=True,
                                        help="vLLM's --enable-force-include-usage: the usage chunk on every stream, and usage on each "
                                             "chunk (default on)")
@@ -670,7 +670,7 @@ def build(opts: Options) -> tuple[Any, Any]:
     eng = SimpleNamespace(llm=llm.vllm, runner=get_model_runner(llm.vllm), model=llm.model,
                           cp={"repo": llm.pin.model, "revision": llm.pin.revision})
     com = NativeHostCommitter(eng, run_id=f"serve-openai:{opts.run_id}", arena_bytes=None, chunk=opts.chunk, hash_threads=opts.hash_threads,
-                              gpu_tree=opts.gpu_tree, fast_copy=opts.fast_copy)
+                              gpu_tree=opts.gpu_tree, fast_copy=opts.cudart_copy)
     tokens = int(opts.max_num_batched_tokens)
     com.arena_sizing_record = com.size_arena({"batch": opts.max_num_seqs, "max_prompt": tokens, "max_new": 1,
                                               "max_num_batched_tokens": tokens, "max_model_len": opts.max_model_len})
@@ -709,7 +709,7 @@ def main(opts: Options) -> int:
               "precision": opts.precision, "protocol": proto.name, "framing": framing, "defaults": dict(defaults),
               "commit": opts.commit, "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
               "committer": getattr(com, "name", None),
-              "committer_options": {k: getattr(opts, k) for k in ("chunk", "hash_threads", "gpu_tree", "fast_copy")},
+              "committer_options": {k: getattr(opts, k) for k in ("chunk", "hash_threads", "gpu_tree", "cudart_copy")},
               "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": run_id}
     (out / "serve.json").write_text(json.dumps(record, indent=1, default=str))
     print(f"SERVE-OPENAI listening on {bound[0][0]}:{bound[0][1]} model={served} commit={opts.commit} protocol={proto.name}", flush=True)
