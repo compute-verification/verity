@@ -151,5 +151,5 @@ def test_a_checkpoint_not_on_this_host_is_refused_by_name(tmp_path) -> None:
 
 def test_serving_and_the_build_put_a_shared_expert_on_one_stream() -> None:
     """A Build orders a shared expert on the main stream, so a served run must run it there too: on two streams, its log's order
-    is not the execution order, and wiring (operand_provenance) fails."""
+    is not the execution order the fold takes it to be."""
     assert env.ENGINE["VLLM_DISABLE_SHARED_EXPERTS_STREAM"] == env.EXPORT["VLLM_DISABLE_SHARED_EXPERTS_STREAM"] == "1"

@@ -36,7 +36,7 @@ try:  # share W4b's node adaptation + error base when its module imports (it nee
 
     GemmRelationError = _R4.GemmRelationError
     _words, _node_of, _extra, _const, _arg_cols = _R4._words, _R4._node_of, _R4._extra, _R4._const, _R4._arg_cols
-except Exception:  # noqa: BLE001  -- e.g. the pod's Python 3.11: the same helpers, copied verbatim from relations.py
+except Exception:  # noqa: BLE001  -- e.g. the pod's Python 3.11: the same helpers as gemm_relation's
     _R4 = None
 
     class GemmRelationError(ValueError):  # type: ignore[no-redef]
@@ -243,28 +243,3 @@ RELATION_IDS = {
                           "t+1 <= 4096, finite operands), else RelationError('unresolved: ...')."),
 }
 RELATIONS: dict[str, Any] = {rid: fn for rid, (_, fn, _) in RELATION_IDS.items()}
-
-
-def register_with_w2(replace: bool = False) -> list[str]:
-    try:
-        from verity_vllm.program.kernels import relations as R
-    except ImportError:
-        return []
-    done = []
-    for rid, (op_type, fn, doc) in RELATION_IDS.items():
-        existing = R.REGISTRY.get(rid)
-        if existing is not None and existing.implemented and not replace:
-            continue
-
-        def _wrap(inst, inputs, _fn=fn):
-            try:
-                return _fn(inst, inputs)
-            except GemmRelationError as error:
-                raise R.RelationError(str(error)) from error
-
-        R.register(rid, klass=R.INDEPENDENT, op_type=op_type, includes_full_op=True, version=MODEL_VERSION, doc=doc, owner="W11", replace=replace)(_wrap)
-        done.append(rid)
-    return done
-
-
-REGISTERED_WITH_W2 = register_with_w2()

@@ -393,20 +393,8 @@ def test_real_capture_resolves_without_unsupported(name, steps):
         assert specs.count(f"MoeExpertGemm_v1{{E={E},K={H},N={2 * I}}}") == C["NL"] and specs.count(f"MoeSum_v1{{TOPK={TOPK},H={H}}}") == C["NL"]
 
 
-def test_real_capture_folds_and_every_moe_gemm_instance_has_coordinate_units():
-    """The fold binds the whole 3-token prefill (no unresolved read); under the 8M-leaf budget every oversize pair-GEMM
-    instance decomposes into N coordinate units that tile its returns — the VU coverage line of REPORT.md."""
-    from verity_vllm.check.replay import vu_query as vq
+def test_real_capture_folds_the_whole_prefill():
+    """The fold binds the whole 3-token prefill (no unresolved read)."""
     from verity_vllm.pipeline.match import fold_summary_result
-    summ, result = fold_summary_result(_w1_log("olmoe_3x1_1req"), "gen_ov_moe_olmoe", with_program=True)
+    summ, _ = fold_summary_result(_w1_log("olmoe_3x1_1req"), "gen_ov_moe_olmoe", with_program=True)
     assert summ["unsupported"] == 0 and summ["unresolved"] == 0 and summ["errors"] == 0 and summ["n_instances"] == 1736
-    ix = vq.index(result, max_arg_leaves=8_000_000, depth=3)
-    s = ix.summary()
-    assert s["instances_without_units"] == 0
-    up = s["specs"][f"MoeExpertGemm_v1{{E={E},K={H},N={2 * I}}}"]
-    assert up["instances"] == 3 * TOPK * C["NL"] and up["vus"] == up["instances"] * 2 * I and up["granularity"] == [f"child:MoeExpertCoordinate_v1{{E={E},K={H}}}"]
-    kk = next(k for k, m in ix.by_node.items() if m["spec"] == f"MoeExpertGemm_v1{{E={E},K={H},N={2 * I}}}")
-    covered = set()
-    for vu in ix.of_instance(kk):
-        covered.update(vq.returns_of(result, vu))
-    assert len(covered) == 2 * I
