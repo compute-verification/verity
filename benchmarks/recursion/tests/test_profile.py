@@ -138,7 +138,7 @@ def test_outer_rows_by_mode_and_the_summary(tmp_path: Path) -> None:
     assert s["outer"]["firewall"] == {"prove_s": 6.0, "e2e_s": 6.5, "proof_bytes": 2000, "statements": 1}
     assert s["outer"]["dev"]["prove_s"] == 3.0 and s["outer"]["dev"]["statements"] == 2
     assert s["slowest"]["stage"] == "lean L0"                                             # 61.5 s, the largest median
-    assert s["pipeline"]["outer prove (firewall) e2e_s"] == 6.5
+    assert s["pipeline"]["outer prove (dev) e2e_s"] == 4.0    # dev proved both statements, firewall one
     assert s["pipeline"]["V* staging_s (vstage + vcap steps)"] == 75.0     # the step's wall, not its parallel stages' sum
     assert s["pipeline"]["Lean step_s"] == 75.0
     assert "outer alg-p0 (dev)" in s["not_ok"] and "lean alg-p0" in s["not_ok"]
@@ -220,7 +220,7 @@ def test_markdown_has_one_line_per_row(tmp_path: Path) -> None:
     assert len(table) == len(doc["rows"])
     assert "| inner M0 | inner |" in md and "2 [1–3] (n=3)" in md and "t.ligerito 1.2 s (48% of e2e_s)" in md
     assert "| 4.67 |" in md
-    assert "Slowest repeated stage: lean L0" in md
+    assert "Slowest stage (a session's e2e, else a tool's wall): lean L0" in md
 
 
 def test_result_command_writes_both_files(tmp_path: Path) -> None:

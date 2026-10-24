@@ -415,7 +415,9 @@ def summary(rows: list[Row]) -> dict[str, Any]:
     """Totals over V*'s statements per mode (sums of each statement's median), the slowest repeated stage, and the
     pipeline's sum of medians along one recursive session (the inner, V*'s staging, every outer proof, Lean's V* checks)."""
     def med(r: Row) -> float:
-        return r.wall_s.median if r.wall_s else 0.0
+        """How long the stage takes: a session's e2e (its reps' prove times can overlap), else the tool's wall."""
+        s = r.e2e_s or r.wall_s
+        return s.median if s else 0.0
 
     outer: dict[str, dict[str, float]] = {}
     for r in rows:
@@ -429,7 +431,8 @@ def summary(rows: list[Row]) -> dict[str, Any]:
     slow = max(timed, key=med, default=None)
     whole = {r.step: med(r) for r in rows if r.stage == f"{r.step} step" and r.wall_s}
     inner = next((r for r in rows if r.stage == "inner M0"), None)
-    mode = "firewall" if "firewall" in outer else next(iter(outer), None)
+    # the mode that proved the most statements (firewall on a tie): a mode measured on one statement is no session's path
+    mode = max(outer, key=lambda m: (outer[m]["statements"], m == "firewall"), default=None)
     # one recursive session's path, each part as long as an auditor waits for it: the inner session, V*'s staging (the
     # vstage and vcap steps' whole walls: their stages run in parallel), V*'s statements proved one after another, and
     # Lean's checks (the lean step's whole wall, the inner session's and statement's checks included)
@@ -511,7 +514,8 @@ def markdown(doc: dict[str, Any]) -> str:
         f"{m}: prove {v['prove_s']:.3g} s, session e2e {v['e2e_s']:.3g} s, proofs {_bytes(int(v['proof_bytes']))} over "
         f"{v['statements']} statements" for m, v in s["outer"].items()) if s["outer"] else "Outer: not run."]
     if s.get("slowest"):
-        lines.append(f"Slowest repeated stage: {s['slowest']['stage']} ({s['slowest']['step']}), {s['slowest']['median_s']:.3g} s.")
+        lines.append(f"Slowest stage (a session's e2e, else a tool's wall): {s['slowest']['stage']} ({s['slowest']['step']}), "
+                     f"{s['slowest']['median_s']:.3g} s.")
     if s.get("pipeline_sum_s"):
         lines.append("One recursive session, sum of medians along its path: " + ", ".join(
             f"{k} {v:.3g}" for k, v in s["pipeline"].items() if v) + f"; total {s['pipeline_sum_s']:.3g} s.")
