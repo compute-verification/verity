@@ -801,7 +801,9 @@ def check_lm_head(ck, D, h, Q, rows: Rows, log) -> dict:
 def shares(map_doc: dict, unreached: set[str], lm_padded: dict[str, bool]) -> dict:
     """The credit map's shares, then Pearl-C's with `unreached` uncredited and lm_head credited where its padded shape is
     admitted (`lm_padded`, by scheme), and the mixes."""
-    steps = {"decode": ("both", "decode"), "prefill": ("both", "prefill"), "decode+mtp": ("both", "decode", "mtp")}
+    # glm53_credit_map's steps: prefill leaves lm_head out (one row per sequence)
+    steps = {"decode": (("both", "decode"), ()), "prefill": (("both", "prefill"), ("lm_head",)),
+             "decode+mtp": (("both", "decode", "mtp"), ())}
     pearls = ("pearl-c-h100-v1-h3", "pearl-c-sm120-v1-h3")
     mixes = {"mix H200": ("pearl-c-h100-v1-h3", "h1-sm_90"), "mix RTX PRO 6000": ("pearl-c-sm120-v1-h3", "h1-sm_120")}
     rows = map_doc["linears"]
@@ -819,8 +821,8 @@ def shares(map_doc: dict, unreached: set[str], lm_padded: dict[str, bool]) -> di
     out = {}
     for new in (False, True):
         tab = {}
-        for step, routes in steps.items():
-            rs = [r for r in rows if r["route"] in routes]
+        for step, (routes, left_out) in steps.items():
+            rs = [r for r in rows if r["route"] in routes and r["id"] not in left_out]
             tot = sum(r["macs"] for r in rs)
             v = {s: sum(r["macs"] for r in rs if credited(r, s, new)) / tot for s in rows[0]["schemes"]}
             for m, (a, b) in mixes.items():
@@ -941,8 +943,10 @@ def main() -> int:
     log(json.dumps(doc["verdict"], default=float))
     log(f"admitted but unreached: {doc['admitted_unreached']}")
     if "shares" in doc:
+        log(f"reproduces the map: {doc['shares']['reproduces_the_map']}")
         for k_, tab in doc["shares"].items():
-            log(f"{k_}: " + json.dumps({s: {m: (round(x, 4) if isinstance(x, float) else x) for m, x in t.items()} for s, t in tab.items()}))
+            if isinstance(tab, dict):
+                log(f"{k_}: " + json.dumps({s: {m: (round(x, 4) if isinstance(x, float) else x) for m, x in t.items()} for s, t in tab.items()}))
     meas = [("function_worst_rel", worst, "1"), ("latent_worst_rel", lat_worst, "1"), ("vo_worst_rel", vo_worst, "1")]
     for c in doc["checked"]:
         meas += [(f"cast_update_rel_L{c['layer']}_unrotated", c["cast"]["unrotated"], "1"),
