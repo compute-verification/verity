@@ -688,7 +688,7 @@ def advice_negatives(a: argparse.Namespace, r: int, compiler: AW.Traced, mine: C
     for key, field in (("compiler", "digest"), ("advice", "root")):
         v = SRT.source({**w, key: {**(w.get(key) or {}), field: "00" * 64}}, mine, held)
         neg[f"registration-naming-another-{key} (source)"] = {"refused": not v["ok"], "codes": v["codes"]}
-    if compiler.transfer_gates:
+    if AW.transfer_gates_of(compiler):
         bare = replace(compiler, transfer_gates=())
         v = SRT.source({**w, "compiler": {**(w.get("compiler") or {}), "digest": bare.digest}}, mine, held)
         neg["registration-under-the-compiler-listing-no-transfer-gates (source)"] = {"refused": not v["ok"], "codes": v["codes"]}
