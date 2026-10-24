@@ -29,11 +29,14 @@ export FOLD_WORKERS=${FOLD_WORKERS:-1} FOLD_RANK_WORKERS=${FOLD_RANK_WORKERS:-1}
 step() { echo "$(date -u +%FT%TZ) [full] $*"; }
 fail() { step "$1"; [ "$FULL" != 1 ] || OUT=$O NAME=match-cpu MSG="$1" SW=$SW bash "$J/store_tar.sh" fail; exit "$2"; }
 W0=/workspace/cp/circuits
-# store_tar.sh needs the venv before anything is fetched; a node that has it is left alone (its other jobs share the venv)
+# store_tar.sh needs the venv before anything is fetched; a node that has it is left alone (its other jobs share the venv). Jobs
+# started together on a fresh node take turns: the first readies it and the others find it ready.
+mkdir -p "$W0" && exec 9>"$W0/.stage_cpu.lock" && flock 9 || fail "no lock $W0/.stage_cpu.lock" 3
 if [ ! -x "$W0/venv312/bin/python" ] || [ ! -d "$SNAP" ] || ! { ldconfig -p | grep -q 'libcuda\.so\.1 ' || [ -e "$W0/cuda-driver/libcuda.so.1" ]; }; then
   step "readying the node (stage_cpu.sh, CUDA_DRIVER_ART=${CUDA_DRIVER_ART:-})"
   mkdir -p "$O/stage" && OUT=$O/stage W=$W0 bash "$J/stage_cpu.sh" || fail "stage_cpu.sh failed (rc $?)" 5
 fi
+exec 9>&-
 
 if [ "$FULL" = 1 ]; then
   : "${LEGS:?LEGS}" "${RANK_SETS:?RANK_SETS}"
