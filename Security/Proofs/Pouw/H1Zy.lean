@@ -3,6 +3,7 @@ import Proofs.Pouw.H1Zy.CombineBits
 import Proofs.Pouw.H1Zy.DequantVectors
 import Proofs.Pouw.H1Zy.Lane
 import Proofs.Pouw.H1Zy.LaneBits
+import Proofs.Pouw.H1Zy.LaneChunk
 
 /-!
 # H1's drawn-leaf statements: their Definitions on words mean what `LeafChecks` reads
@@ -23,4 +24,8 @@ lane field.
 
 `LaneBits`: the lane's body on bits computes it on words (`Pouw.H1Zy.laneBits_bv`), each restated piece's lowering its
 word view (the multiply's, `Pouw.H1Zy.immaS8Bits_bv`, from Baugh–Wooley and the clamp).
+
+`LaneChunk`: a lane's `n` chunk statements, each `ok = true`, chunk `c + 1`'s carry in chunk `c`'s carry out, give the
+whole lane's `ok = true` at the chain machine's words on the rows they read joined (`Pouw.H1Zy.laneOk_of_chunks`), and so
+`laneOk_spec`'s exact z, dequant and partials over the whole `K` (`Pouw.H1Zy.chunks_spec`). No guarantee reads it yet.
 -/

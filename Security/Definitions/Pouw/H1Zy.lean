@@ -3,6 +3,7 @@ import Definitions.Pouw.H1Zy.CombineBits
 import Definitions.Pouw.H1Zy.Dequant
 import Definitions.Pouw.H1Zy.Lane
 import Definitions.Pouw.H1Zy.LaneBits
+import Definitions.Pouw.H1Zy.LaneChunk
 
 /-!
 # H1's drawn-leaf statements on words (`verity/core/protocols/pouw/circuit/h1zy.py`)
@@ -23,4 +24,9 @@ dequant's and the chain's words as parameters. Proved in `Proofs.Pouw.H1Zy` to c
 `LaneBits`: the same body on bits, its pieces (the s8 multiply's steps, `PouwZyCell_v2`, `PouwMuxBit_v2`, `PouwMask32_v2`,
 `PouwEq32_v2`) at their lowerings, the dequant and the chain's words at their word views. Proved in `Proofs.Pouw.H1Zy`
 to compute `Lane`'s.
+
+`LaneChunk`: `PouwH1LaneZyChunk_v1{TILE, CHUNKS, CHUNK}`'s body, one of a lane's chunk statements along `K` past
+`K = 4096`, on its primitives' word views: the carry (`h1zy.CARRY`) as a record, the chain as a step machine
+(`ChainSteps`, a parameter, whose words over the whole `K` are `chainOf`), the dequant a parameter. Proved in
+`Proofs.Pouw.H1Zy` to check the whole lane at accepted chunks linked by their carries.
 -/
