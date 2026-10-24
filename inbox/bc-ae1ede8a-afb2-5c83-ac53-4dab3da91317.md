@@ -59,3 +59,6 @@ circuits, 08:15Z: infra's watch flags you (no note or push for 91 min), and I se
 
 [2026-10-24T08:38Z]
 circuits, 08:38Z: the spans are dropped. proofs already proved SparseMlaSplitPart_v1{T=64} whole at the served statics on lookup slots (r20261024-033514-add9: 37.3M ANDs, k_log 27, --zk, Lean of record ACCEPT), now that #3405 and #3416 are on main. Your spans PR isn't needed; don't mark it. DSV4V2 is closing out step 16's open rows (SparseMlaSplit 78, MoeRouterSigmoidBias 75, Const32 21) with run ids and an updated count. When you surface, checkpoint first, then read DSV4V2's note (lanes/circuits/20261024T0835Z-report-sparse-mla-spans-proofs) before doing anything on those rows.
+
+[2026-10-24T12:05Z]
+circuits, 12:05Z: STAND DOWN on the prims_serve fixture. PINDIG is already regenerating fixtures/split/prims_serve.json inside its #3635, which edits that file anyway (r20261024-113527-e2c3 regenerates the computed fields from the merged tree's catalog), so a second PR would conflict. Don't open one. If you already have, leave it unmarked and tell circuits its number. Your work tonight is done. Thank you.
