@@ -35,7 +35,7 @@ statement (`none`). Take any per-part predicates `PC` such that each check given
 every witnesses whose calls are true (`StmtFixes`). Then `DecompB` holds at `PC`: wherever every part's `PC` holds at
 the readers' messages, `IVStar` accepts them. With per-part lowering facts, `PartAccepts → PC` at each part, that is
 `DecompB` at `PartAccepts` (`decompB_partAccepts_of_parts`), and the dense corollaries take the facts in its place
-(`RecDeploy.ksLin2_deployed_parts`, `RecDeploy.bitsLin2_deployed_parts`).
+(`RecDeploy.ksLin2_deployed_composed`, `RecDeploy.bitsLin2_deployed_composed`).
 
 `PartComputes`, part `s`'s share of the checks, is the least such `PC` (`ownedBy_partComputes`), and the default
 inventory (`ownHolders`) gives each commit string's salt and row checks to the round's first holder, the part whose
@@ -123,7 +123,7 @@ inductive IVCheck (Q : Type) where
   | elem (q : Q)
 
 /-- Round message `a`'s `i`-th commit string, as `Bound.opensRound` cuts it. -/
-def cstr (a : Msg) (i : ℕ) : Msg := (a.drop (128 * i)).take 128
+def commitAt (a : Msg) (i : ℕ) : Msg := (a.drop (128 * i)).take 128
 
 /-- **What each check says** at the inner statement `x`, the coins `c` and the messages `ms` (`IVStar`'s `k` of them,
 read with `getD`, as its run reads them). -/
@@ -134,9 +134,9 @@ def IVCheck.Holds {Q : Type} (H : Msg → Msg) (Bd : Bound Coin Col T) (S : Elem
   | .len j => ∀ os last, Bd.final (ms.getD (Bd.DE.V.k x - 1) []) = some (os, last) →
       (ms.getD j []).length = 128 * (os.getD j []).length
   | .salt j i => ∀ os last, Bd.final (ms.getD (Bd.DE.V.k x - 1) []) = some (os, last) → ∀ o,
-      (os.getD j [])[i]? = some o → H (Bd.saltPrefix ++ List.ofFn o.2) = (cstr (ms.getD j []) i).drop 64
+      (os.getD j [])[i]? = some o → H (Bd.saltPrefix ++ List.ofFn o.2) = (commitAt (ms.getD j []) i).drop 64
   | .row j i => ∀ os last, Bd.final (ms.getD (Bd.DE.V.k x - 1) []) = some (os, last) → ∀ o,
-      (os.getD j [])[i]? = some o → H (Bd.rowIn o.1) = xorMask ((cstr (ms.getD j []) i).take 64) (Bd.mask o.2)
+      (os.getD j [])[i]? = some o → H (Bd.rowIn o.1) = xorMask ((commitAt (ms.getD j []) i).take 64) (Bd.mask o.2)
   | .elem q => ∀ os last, Bd.final (ms.getD (Bd.DE.V.k x - 1) []) = some (os, last) →
       S.holds q x (Bd.opened os last) ((List.range (Bd.DE.V.k x)).map c)
 
@@ -145,6 +145,11 @@ length and each of its `nAt` commit strings' salt and row; then the split's chec
 def ivChecks {Q : Type} {H : Msg → Msg} (Bd : Bound Coin Col T) (S : ElemSplit H Bd Q) (x : Msg) : List (IVCheck Q) :=
   .shape :: ((List.range (Bd.DE.V.k x - 1)).flatMap fun j =>
     .len j :: (List.range (Bd.nAt x j)).flatMap fun i => [.salt j i, .row j i]) ++ (S.checks x).map .elem
+
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
+theorem mem_ivChecks_elem {Q : Type} {H : Msg → Msg} (Bd : Bound Coin Col T) (S : ElemSplit H Bd Q) (x : Msg) {q : Q} :
+    IVCheck.elem q ∈ ivChecks Bd S x ↔ q ∈ S.checks x := by
+  simp [ivChecks]
 
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
 /-- **`IVStar` accepts where its opening layer and the element-level verifier do**: at messages of its `k` rounds
@@ -167,10 +172,10 @@ theorem ivstar_next_acc (H : Msg → Msg) (Bd : Bound Coin Col T) (x : Msg) (as 
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
 /-- **A round opens where its length and each commit string's salt and row check.** -/
-theorem opensRound_true (H : Msg → Msg) (Bd : Bound Coin Col T) (a : Msg)
+theorem opensRound_of_checks (H : Msg → Msg) (Bd : Bound Coin Col T) (a : Msg)
     (os : List (Msg × (Fin Bd.saltLen → UInt8))) (hl : a.length = 128 * os.length)
-    (hs : ∀ i o, os[i]? = some o → H (Bd.saltPrefix ++ List.ofFn o.2) = (cstr a i).drop 64)
-    (hr : ∀ i o, os[i]? = some o → H (Bd.rowIn o.1) = xorMask ((cstr a i).take 64) (Bd.mask o.2)) :
+    (hs : ∀ i o, os[i]? = some o → H (Bd.saltPrefix ++ List.ofFn o.2) = (commitAt a i).drop 64)
+    (hr : ∀ i o, os[i]? = some o → H (Bd.rowIn o.1) = xorMask ((commitAt a i).take 64) (Bd.mask o.2)) :
     ((Bd.opensRound a os).eval H).1 = true := by
   unfold Bound.opensRound
   rw [ite_eq_left hl]
@@ -217,7 +222,7 @@ theorem ivstar_acc_of_checks {Q : Type} (H : Msg → Msg) (Bd : Bound Coin Col T
         IVCheck.row j i]) → q.Holds H Bd S x c ms := fun q hq =>
       hmem q (List.mem_flatMap.2 ⟨j, List.mem_range.2 hjk, hq⟩)
     have hnj : (os.getD j []).length = Bd.nAt x j := hcnt j hjo
-    refine opensRound_true H Bd _ _ (hjm _ (List.mem_cons_self ..) os last hfin) ?_ ?_
+    refine opensRound_of_checks H Bd _ _ (hjm _ (List.mem_cons_self ..) os last hfin) ?_ ?_
     · intro i o hi
       have hil : i < Bd.nAt x j := hnj ▸ (List.getElem?_eq_some_iff.1 hi).1
       exact hjm (.salt j i) (List.mem_cons_of_mem _ (List.mem_flatMap.2 ⟨i, List.mem_range.2 hil, by simp⟩))
@@ -329,3 +334,185 @@ theorem firstHolder_lt {D : Deploy Coin} {L : LayoutB} {x : Msg} {j s : ℕ} (h 
 end Compose
 
 end Claims.Recursion.VStarB
+
+namespace Claims.Recursion.VStarB
+
+open Claims
+
+section Inventory
+
+variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
+/-- **The default inventory owns `PartComputes`** wherever the code side's element-level owners are among the
+statement's parts: the salt and row checks' owner, a first holder, always is (`firstHolder_lt`). -/
+theorem ownedBy_holders {Q : Type} (H : Msg → Msg) (D : Deploy Coin) (Bd : Bound Coin Col T) (L : LayoutB)
+    (shape : Form → Prop) (S : ElemSplit H Bd Q) (ownE : Msg → Q → Option ℕ)
+    (hE : ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ q ∈ S.checks (xI D x), ∀ s,
+      ownE x q = some s → s < D.nS x) :
+    OwnedBy H D Bd shape S (ownHolders D L ownE) (PartComputes H D Bd S (ownHolders D L ownE)) := by
+  refine ownedBy_partComputes H D Bd shape S _ fun x st hx hf q hq s ho => ?_
+  cases q with
+  | shape => cases ho
+  | len _ => cases ho
+  | salt j _ => exact firstHolder_lt ho
+  | row j _ => exact firstHolder_lt ho
+  | elem q =>
+    exact hE x st hx hf q ((mem_ivChecks_elem Bd S _).1 hq) s ho
+
+end Inventory
+
+end Claims.Recursion.VStarB
+
+namespace RecDeploy
+
+open Flock
+open Claims (Msg Out)
+open FlockDeploy (Coin)
+open Claims.Recursion.VStarB
+
+/-! ## The element-level verifier's checks at the deployment -/
+
+/-- **A split of the element-level verdict, `DE`'s last step**: checks the inner statement fixes, each holding or not at
+the opened messages and the coins, and the proof that together they make the last step accept (`sound`). It is the
+code side's: a split into the element-level checks each V\* part computes. -/
+structure LastSplit (H : Msg → Msg) (nextE : Msg → List Msg → List Coin → Claims.OC Out) (R : Type) where
+  checks : Msg → List R
+  holds : R → Msg → List Msg → List Coin → Prop
+  sound : ∀ (x : Msg) (ms : List Msg) (cs : List Coin), ms.length = (FlockDeploy.V false).k x →
+    cs.length = ms.length → (∀ r ∈ checks x, holds r x ms cs) → ((nextE x ms cs).eval H).1 = .acc
+
+/-- **A check of the element-level verifier at the deployment**: the inner statement sets up (`setup`), opened round `j`
+before the last is tagged `0` (`tag j`), or the verdict's check `r` (`last r`). -/
+inductive DeployCheck (R : Type) where
+  | setup
+  | tag (j : ℕ)
+  | last (r : R)
+
+/-- What each check says at the inner statement `x`, the opened messages `ms` and the coins `cs`. -/
+def DeployCheck.Holds {H : Msg → Msg} {nextE : Msg → List Msg → List Coin → Claims.OC Out} {R : Type}
+    (LS : LastSplit H nextE R) (x : Msg) (ms : List Msg) (cs : List Coin) : DeployCheck R → Prop
+  | .setup => (FlockDeploy.setupOf false x).isSome
+  | .tag j => ∃ a, ms[j]? = some (0 :: a)
+  | .last r => LS.holds r x ms cs
+
+theorem getLast?_take_succ {α : Type} (l : List α) {j : ℕ} (hj : j < l.length) :
+    (l.take (j + 1)).getLast? = l[j]? := by
+  rw [List.getLast?_eq_getElem?, List.length_take, Nat.min_eq_left (by omega : j + 1 ≤ l.length), Nat.add_sub_cancel,
+    List.getElem?_take_of_lt (by omega)]
+
+/-- **The split at the deployment**: at an element-level verifier whose steps answer a coin as the deployed plain
+verifier's do (`hcoin`), every step before the last is proved from two checks, the statement's setup and the opened
+round's tag, and the last from the verdict's split `LS`. -/
+noncomputable def deploySplit (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
+    (nextE : Msg → List Msg → List Coin → Claims.OC Out)
+    (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
+    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
+    (hcoin : ∀ x as cs c, FlockDeploy.act false x as cs = .coin c → ((nextE x as cs).eval H).1 = .msg c.bytes)
+    {R : Type} (LS : LastSplit H nextE R) :
+    ElemSplit H (bdDeployed rel nextE colsE wE join rowIn final w) (DeployCheck R) where
+  checks x := .setup :: ((List.range ((FlockDeploy.V false).k x - 1)).map .tag ++ (LS.checks x).map .last)
+  holds q x ms cs := q.Holds LS x ms cs
+  sound x ms cs hk hc h := by
+    refine (stepSplit H (bdDeployed rel nextE colsE wE join rowIn final w)).sound x ms cs hk hc fun j hj => ?_
+    have hk' : ms.length = (FlockDeploy.V false).k x := hk
+    have hj' : j < ms.length := by
+      rw [hk']
+      exact List.mem_range.1 hj
+    show ((nextE x (ms.take (j + 1)) (cs.take (j + 1))).eval H).1 =
+      if j + 1 < ms.length then .msg (cs.getD j default).bytes else .acc
+    by_cases hl : j + 1 < ms.length
+    · rw [ite_eq_left hl]
+      obtain ⟨⟨s, spec, sts⟩, hsp⟩ := Option.isSome_iff_exists.1 (h .setup (List.mem_cons_self ..))
+      have hjk : j < (FlockDeploy.V false).k x - 1 := by omega
+      obtain ⟨a, ha⟩ := h (.tag j) (List.mem_cons_of_mem _ (List.mem_append_left _
+        (List.mem_map.2 ⟨j, List.mem_range.2 hjk, rfl⟩)))
+      have hjc : j < cs.length := by omega
+      have hcj : cs[j]? = some (cs.getD j default) := by
+        rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hjc]
+        rfl
+      have hm1 : (ms.take (j + 1)).getLast? = some (0 :: a) := (getLast?_take_succ ms hj').trans ha
+      have hc1 : (cs.take (j + 1)).getLast? = some (cs.getD j default) := (getLast?_take_succ cs hjc).trans hcj
+      refine hcoin x _ _ _ ?_
+      simp only [FlockDeploy.act, hsp, hm1, hc1]
+    · rw [ite_eq_right hl]
+      have e1 : ms.take (j + 1) = ms := List.take_of_length_le (by omega)
+      have e2 : cs.take (j + 1) = cs := List.take_of_length_le (by omega)
+      rw [e1, e2]
+      exact LS.sound x ms cs hk hc fun r hr =>
+        h (.last r) (List.mem_cons_of_mem _ (List.mem_append_right _ (List.mem_map.2 ⟨r, hr, rfl⟩)))
+
+/-- **A round's tag is the join's**: where every join of rows is tagged `0`, so is every opened round before the last. -/
+theorem tag_of_join {join : List Msg → Msg} (hj : ∀ rs, ∃ a, join rs = 0 :: a) {saltLen : ℕ}
+    (os : List (List (Msg × (Fin saltLen → UInt8)))) (last : Msg) {j : ℕ} (hjo : j < os.length) :
+    ∃ a, (os.map (fun o => join (o.map Prod.fst)) ++ [last])[j]? = some (0 :: a) := by
+  obtain ⟨a, ha⟩ := hj ((os[j]).map Prod.fst)
+  refine ⟨a, ?_⟩
+  rw [List.getElem?_append_left (by simpa using hjo), List.getElem?_map, List.getElem?_eq_getElem hjo]
+  simp [ha]
+
+/-- **The deployed plain verifier's steps answer a coin with its bytes.** -/
+theorem next_coin_fst (H : Msg → Msg) (x : Msg) (as : List Msg) (cs : List Coin) (c : Coin)
+    (h : FlockDeploy.act false x as cs = .coin c) : ((FlockDeploy.next false x as cs).eval H).1 = .msg c.bytes := by
+  rw [FlockDeploy.next_coin H h]
+
+/-! ## The dense corollaries, from the parts' lowering facts -/
+
+/-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)` and the coin server's record, from
+the parts' lowering facts**: `ksLin2_deployed_partAccepts` with `DecompB` at `PartAccepts` from the composition
+(`decompB_partAccepts_of_parts`). At a split `S` of the element-level verifier's acceptance (proved by its
+construction), an inventory `own` and per-part predicates `PC`, what it takes in `DecompB`'s place: at each part, its
+circuit accepting implies `PC` (`hlow`, the lowering facts); `own` gives each check to a part whose `PC` implies it
+(`OwnedBy`) or to the statement, which fixes it (`StmtFixes`). Then the readers' `ReadersTrue` and `recRead` reading the
+coin server's transcript back (`ReadsBackB`). This bounds no number by itself: those premises are open. -/
+theorem ksLin2_deployed_composed (b : Brings)
+    (rest : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
+    (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
+    let L := layoutBTops (finOpen rest)
+    let Bd := bdDeployed _root_.Flock.Readable.relation (FlockDeploy.V false).next
+      (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE join rowInDeployed final w
+    let D := recBound _root_.Flock.Readable.relation b L Bd.IVStar
+    let bL : Brings := { b with rd := L.readers }
+    ∀ {Q : Type} (S : ElemSplit FlockDeploy.sha512 Bd Q) (own : Msg → IVCheck Q → Option ℕ)
+      (PC : ℕ → Msg → (ℕ → Coin) → List Msg → Prop),
+    ReadsBackB FlockDeploy.sha512 Bd.IVStar bL (fun _ => True) recRead →
+    (∀ s x c ms, PartAccepts FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation) L
+      Claims.Recursion.Form.Dense (showsPart recRead b) s x c ms → PC s x c ms) →
+    OwnedBy FlockDeploy.sha512 D Bd Claims.Recursion.Form.Dense S own PC →
+    StmtFixes FlockDeploy.sha512 D Bd L Claims.Recursion.Form.Dense S own →
+    ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
+    Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation b L) Bd
+      (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
+  intro L Bd D bL Q S own PC hrb hlow hown hfix hRT
+  refine ksLin2_deployed_partAccepts b rest wE join final w hrb (fun shape hsh => ?_) hRT
+  obtain rfl := List.mem_singleton.1 hsh
+  exact decompB_partAccepts_of_parts _ _ _ _ _ _ _ S own PC hlow hown hfix
+
+/-- **`BitsLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)` and the coin server's record,
+from the parts' lowering facts**: `bitsLin2_deployed_partAccepts` with `DecompB` at `PartAccepts` from the composition.
+It reads `StrictBirthday` and `ExpectedCR`, the named SHA-512 collision assumptions, and `ksLin2_deployed_composed`'s open
+premises: a bound on a number under named premises, not a proved security level. -/
+theorem bitsLin2_deployed_composed (b : Brings)
+    (rest : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
+    (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
+    let L := layoutBTops (finOpen rest)
+    let Bd := bdDeployed _root_.Flock.Readable.relation (FlockDeploy.V false).next
+      (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE join rowInDeployed final w
+    let D := recBound _root_.Flock.Readable.relation b L Bd.IVStar
+    let bL : Brings := { b with rd := L.readers }
+    ∀ {Q : Type} (S : ElemSplit FlockDeploy.sha512 Bd Q) (own : Msg → IVCheck Q → Option ℕ)
+      (PC : ℕ → Msg → (ℕ → Coin) → List Msg → Prop),
+    ReadsBackB FlockDeploy.sha512 Bd.IVStar bL (fun _ => True) recRead →
+    (∀ s x c ms, PartAccepts FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation) L
+      Claims.Recursion.Form.Dense (showsPart recRead b) s x c ms → PC s x c ms) →
+    OwnedBy FlockDeploy.sha512 D Bd Claims.Recursion.Form.Dense S own PC →
+    StmtFixes FlockDeploy.sha512 D Bd L Claims.Recursion.Form.Dense S own →
+    ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
+    Claims.Recursion.BitsLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation b L) Bd
+      (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
+  intro L Bd D bL Q S own PC hrb hlow hown hfix hRT
+  refine bitsLin2_deployed_partAccepts b rest wE join final w hrb (fun shape hsh => ?_) hRT
+  obtain rfl := List.mem_singleton.1 hsh
+  exact decompB_partAccepts_of_parts _ _ _ _ _ _ _ S own PC hlow hown hfix
+
+end RecDeploy
