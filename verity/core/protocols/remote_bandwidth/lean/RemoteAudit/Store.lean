@@ -1,5 +1,5 @@
 import Flock.Canon
-import Flock.Keccak
+import RemoteAudit.Unboxed
 import RemoteAudit.Window
 
 /-!
@@ -8,8 +8,10 @@ import RemoteAudit.Window
 What the verifier decides of a registered store bound to a pinned model (`verifier.py --model`), from what `store.py`
 reads of the files: the pin from its file's bytes (`pinOf`, `read_pin`'s decision, and `modelPin`, the binding's,
 whose pin must be the role's), the checkpoint's digest (`checkpointSha512`), the store's payload salts (`storeSalt`),
-the payload root the store has under the verifier's key (`expectedRoot`, from the weights blocks' digests), and the
-hello's decision (`hold`). Every refusal is `store.py`'s, word for word.
+the payload root the store has under the verifier's key (`expectedRoot`, from the weights blocks' digests, each
+subtree of `2^CHUNK_LOG2` leaves a task's), the binding the verifier starts with (`bind`: the pin and the store's
+shape) and the hello's decision (`hold`). Every refusal is `store.py`'s, word for word. The verifier's process decides
+the binding with these (`RemoteAudit.Verifier`'s `bind` and `hold`), `store.Binding` beside it as the reference.
 
 ~~~text
 pin        UTF-8; JSON, else JSON lines (split at "\n", a line of spaces, tabs and "\r" skipped), a registry's lines of
@@ -31,8 +33,8 @@ not JSON on either side (`loneSurrogate`). No number enters a decision: a pin ho
 
 What stays Python (`store.py` alone): reading the files (the pin's bytes; `check`, each pinned file's SHA-512; the
 safetensors headers and the tensors' bytes), the arena's layout from config.json and those headers (`tensors`,
-`arena`), and the weights blocks' digests (`weight_digests`, `codec.digest` over the arena's bytes). `hold` takes the
-arena as its digests.
+`arena`), and the weights blocks' digests (`weight_digests`, `codec.digest` over the arena's bytes). `bind` and `hold`
+take the arena as its digests, 64 bytes a block.
 -/
 
 namespace RemoteAudit.Store
@@ -43,9 +45,9 @@ open Flock
 def SALT_DOMAIN : ByteArray := tag0 "verity/store/salt/v0"
 def PAYLOAD_LABEL : ByteArray := sha512 "verity/remote-session/payload-salts/v0".toUTF8
 
-/-- `store_salt(key, label, c)`. -/
+/-- `store_salt(key, label, c)`, SHAKE256 with its lanes unboxed (`Unboxed.shake256`): one a block of the store. -/
 def storeSalt (key label : ByteArray) (c : Nat) : ByteArray :=
-  Keccak.shake256 (SALT_DOMAIN ++ key ++ label ++ be 8 c) SALT_BYTES
+  Unboxed.shake256 (SALT_DOMAIN ++ key ++ label ++ be 8 c) SALT_BYTES
 
 private def hex4 (n : Nat) : String :=
   let d := fun (k : Nat) => let x := (n >>> (4 * k)) % 16; if x < 10 then Char.ofNat (48 + x) else Char.ofNat (87 + x)
@@ -262,26 +264,56 @@ def payloadDomain (node : ByteArray) (blocks : Nat) : FrameV3.Domain :=
 /-- `codec.digest` of a block of zeros. -/
 def ZERO_DIGEST : ByteArray := Codec.digest (zeros Codec.BLOCK_BYTES)
 
-/-- `expected_root(Store(arena, engines, arena_blocks, host_blocks), node, key, digests)`: the payload root of
-`engines` arenas of `arenaBlocks`, each its weights blocks (`digests`, one a block) then zeros, then `hostBlocks` of
-zeros, salted under `key`. -/
-def expectedRoot (engines arenaBlocks hostBlocks : Nat) (digests : Array ByteArray) (node key : ByteArray) :
-    ByteArray := Id.run do
+/-- `store.CHUNK_LOG2`: a subtree's leaves, as a power of two. -/
+def CHUNK_LOG2 : Nat := 16
+
+/-- The weights blocks `digests` holds, 64 bytes a block. -/
+def weightsOf (digests : ByteArray) : Nat := digests.size / 64
+
+/-- Leaf `j` of the payload tree over `N` blocks, `engines` arenas of `arenaBlocks` (each its weights blocks, `digests`
+64 bytes a block, then zeros) and then zeros, salted under `key`; a pad leaf past `N`. -/
+def payloadLeaf (d : FrameV3.Domain) (engines arenaBlocks N : Nat) (digests key : ByteArray) (j : Nat) : ByteArray :=
+  if j ≥ N then d.pad j
+  else
+    let W := weightsOf digests
+    let r := if j < engines * arenaBlocks then j % arenaBlocks else W
+    let x := if r < W then digests.extract (64 * r) (64 * r + 64) else ZERO_DIGEST
+    d.leaf j j SCHEMA (Unboxed.hiddenDigest x (storeSalt key PAYLOAD_LABEL j))
+
+/-- `store._up(dom, level, height, first)`: a level of nodes at `height`, the first of them under leaf `first`,
+climbed to its root. -/
+def climbUp (d : FrameV3.Domain) (level : Array ByteArray) (height first : Nat) : ByteArray := Id.run do
+  let mut level := level
+  let mut h := height
+  for _ in [0:level.size] do
+    if level.size ≤ 1 then break
+    let base := first >>> (h + 1)
+    level := (Array.range (level.size / 2)).map fun i => d.node h (base + i) level[2 * i]! level[2 * i + 1]!
+    h := h + 1
+  return level[0]!
+
+/-- `store._subtree`: the root of the subtree over leaves `first … first + 2^log2 − 1`. -/
+def subtree (d : FrameV3.Domain) (engines arenaBlocks N : Nat) (digests key : ByteArray) (first log2 : Nat) :
+    ByteArray :=
+  climbUp d ((Array.range (2 ^ log2)).map fun i => payloadLeaf d engines arenaBlocks N digests key (first + i)) 0 first
+
+/-- `expected_root(Store(arena, engines, arena_blocks, host_blocks), node, key, digests, workers, chunk_log2)`: the
+payload root of `engines` arenas of `arenaBlocks`, each its weights blocks (`digests`, 64 bytes a block) then zeros,
+then `hostBlocks` of zeros, salted under `key`. Each subtree of `2^chunkLog2` leaves is a task's, on `workers` threads
+(subtree `i` on thread `i mod workers`), and their roots are climbed to the tree's. -/
+def expectedRoot (engines arenaBlocks hostBlocks : Nat) (digests node key : ByteArray) (workers : Nat := 1)
+    (chunkLog2 : Nat := CHUNK_LOG2) : ByteArray :=
   let N := engines * arenaBlocks + hostBlocks
   let d := payloadDomain node N
-  let leaves := (Array.range (2 ^ FrameV3.depth N)).map fun j =>
-    if j ≥ N then d.pad j
-    else
-      let r := if j < engines * arenaBlocks then j % arenaBlocks else digests.size
-      let x := if r < digests.size then digests[r]! else ZERO_DIGEST
-      d.leaf j j SCHEMA (hiddenDigest x (storeSalt key PAYLOAD_LABEL j))
-  let mut level := leaves
-  let mut height := 0
-  for _ in [0:leaves.size] do
-    if level.size ≤ 1 then break
-    level := (Array.range (level.size / 2)).map fun i => d.node height i level[2 * i]! level[2 * i + 1]!
-    height := height + 1
-  return level[0]!
+  let height := FrameV3.depth N
+  let c := min chunkLog2 height
+  let chunks := 2 ^ (height - c)
+  let w := max 1 (min workers chunks)
+  let tasks := (Array.range w).map fun t => Task.spawn (prio := .dedicated) fun _ =>
+    (Array.range ((chunks - t + w - 1) / w)).map fun q =>
+      subtree d engines arenaBlocks N digests key ((t + q * w) <<< c) c
+  let parts := tasks.map Task.get
+  climbUp d ((Array.range chunks).map fun i => parts[i % w]![i / w]!) c 0
 
 /-- `Store(arena, engines, arena_blocks)`, as the binding starts: one or more arenas, each holding the weights. -/
 def shape (engines arenaBlocks : Int) (weightsBlocks : Nat) : Except String Unit := do
@@ -297,26 +329,49 @@ structure Held where
   expectedRoot : Option ByteArray
 
 /-- `Binding.hold(node, blocks, root, key, layout)` of the binding of `role`'s pin, its arena's weights blocks'
-digests `digests` and its `engines` arenas of `arenaBlocks` (`shape`'s): bound when the hello's store of `blocks` is
-the arenas then host filler, its layout (if any) that store's regions and its payload root `root` that store's under
-the verifier's key `key`. -/
-def hold (role : String) (digests : Array ByteArray) (engines arenaBlocks : Nat) (node : ByteArray) (blocks : Int)
-    (root key : ByteArray) (layout : Option (Array Region)) : Held := Id.run do
+digests `digests` (64 bytes a block) and its `engines` arenas of `arenaBlocks` (`shape`'s): bound when the hello's
+store of `blocks` is the arenas then host filler, its layout (if any) that store's regions and its payload root `root`
+that store's under the verifier's key `key`, the root on `workers` threads. -/
+def hold (role : String) (digests : ByteArray) (engines arenaBlocks : Nat) (node : ByteArray) (blocks : Int)
+    (root key : ByteArray) (layout : Option (Array Region)) (workers : Nat := 1) : Held := Id.run do
   if blocks < ((engines * arenaBlocks : Nat) : Int) then
     return ⟨.error s!"the hello's store is {blocks} blocks, fewer than the pinned model's {engines} arenas of {arenaBlocks}",
       none⟩
   let host := (blocks - ((engines * arenaBlocks : Nat) : Int)).toNat
-  let rs := regions engines arenaBlocks digests.size host
+  let W := weightsOf digests
+  let rs := regions engines arenaBlocks W host
   if let some l := layout then
     if l != rs then
       return ⟨.error s!"the hello's layout {reprRegions l}... is not the pinned model {role}'s {reprRegions rs}...", none⟩
   if !(1 ≤ node.size && node.size ≤ 64) then return ⟨.error "a node's id is 1 to 64 bytes", none⟩
-  let want := expectedRoot engines arenaBlocks host digests node key
+  let want := expectedRoot engines arenaBlocks host digests node key workers
   if want != root then
     return ⟨.error (s!"the hello's payload root {short (hexOf root)}... is not the pinned model {role}'s store " ++
-      s!"({engines} arenas of {arenaBlocks} blocks, {digests.size} of weights each, then {host} host filler blocks) " ++
+      s!"({engines} arenas of {arenaBlocks} blocks, {W} of weights each, then {host} host filler blocks) " ++
       s!"under this verifier's payload key, whose root is {short (hexOf want)}...: register the store " ++
       "`remote_bandwidth.store` lays out, salted with the key the verifier sent"), some want⟩
   return ⟨.ok rs, some want⟩
+
+/-- A binding as the verifier starts it (`Binding(role, …)` past what it reads of the files): `role`'s pin, its
+arena's weights blocks' digests (64 bytes a block) and its `engines` arenas of `arenaBlocks`. -/
+structure Binding where
+  role : String
+  pin : Pin
+  digests : ByteArray
+  engines : Nat
+  arenaBlocks : Nat
+
+/-- The binding of `--model role` from its pin file's bytes `data` (read from `path`) and its arena's weights blocks'
+digests, or why not: the pin (`modelPin`), then the store's shape (`shape`), in `Binding`'s order. -/
+def bind (data : ByteArray) (path role : String) (digests : ByteArray) (engines arenaBlocks : Int) :
+    Except String Binding := do
+  let pin ← modelPin data path role
+  shape engines arenaBlocks (weightsOf digests)
+  pure { role, pin, digests, engines := engines.toNat, arenaBlocks := arenaBlocks.toNat }
+
+/-- `Binding.hold` of the binding `b`. -/
+def Binding.hold (b : Binding) (node : ByteArray) (blocks : Int) (root key : ByteArray) (layout : Option (Array Region))
+    (workers : Nat := 1) : Held :=
+  Store.hold b.role b.digests b.engines b.arenaBlocks node blocks root key layout workers
 
 end RemoteAudit.Store
