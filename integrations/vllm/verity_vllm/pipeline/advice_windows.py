@@ -5,29 +5,33 @@ binding both.
 The binding is two keys of the registration's window provenance (`binding`, `tp.serving_rows.BINDING`), beside the served Programs:
 
     compiler   {"name", "digest"}   the registered compiler: model and code fixed before the run
-    advice     {"digest", "bits"}   the advice it read: the digest of its encoding, and its length in bits, the leak
+    advice     {"root", "bits"}     the advice it read, private: the root of its hiding commitment, and its length in bits
 
 Core's ``verity/registration/v1`` record carries the window's provenance as one public item (``window``), which the record's digest
-covers and the coins commit to before the draw, so the draw comes after both are fixed and the record gains no field.  Both are
-public: the compiler is registered, and the certifier charges the advice as the leak.
+covers and the coins commit to before the draw, so the draw comes after both are fixed and the record gains no field.  The advice
+is not published (Daniel, 24 Oct): its canonical encoding is committed as hiding rows (`commit_advice`: ``ROW_BITS``-bit rows,
+zero-padded, under `verity.ml.commitments.advice`, hm96-sha512 leaves in one frame-v3-sha512 tree, its domain bound to the
+compiler), and only the root and the length are public.  The rows and their salts are the prover's (`opening`).
 
 * **The prover** commits the window from a rank's sealed bundle over the compiler's Programs for the advice (`commit_window`:
   `tp.serving_rows.from_bundle` with ``programs`` and ``binding``).  Advice naming a request the Commit didn't serve fails there by
   name: the committed store holds none of its values.
-* **The verifier** derives its own window from the record, the advice and its own copy of the compiler alone (`window_of_advice`:
-  `tp.serving_rows.window_of`), and `tp.serving_rows.source` holds the registration's window to it, ``compiler`` and ``advice``
-  among its codes.  It reads no committed value.
+* **The verifier** derives its own window from the record, the advice's opening and its own copy of the compiler alone
+  (`of_opening`, `window_of_advice`: `tp.serving_rows.window_of`), holding the root it recomputes from the opening, and
+  `tp.serving_rows.source` holds the registration's window to it, ``compiler`` and ``advice`` among its codes.  It reads no
+  committed value.  The opening shows the verifier the advice: that is the named gap, until the wiring between the compiler's
+  public units is proved in zero knowledge instead.
 
 A compiler is what the window path reads of it: ``name``, ``digest`` and ``load(rank, world, requests)``, the rank's
 `rank_replay.Loaded` for the requests the advice states (`requests_of`), each ``{"request_id", "arrive_step", "prompt_len",
 "max_tokens"}`` with its output length as ``max_tokens``.  `Traced` is today's stand-in: the Build's Programs of record, by the
 manifest's lookup of record.  The ahead-of-time compiler takes its place under its own registered digest.
 
-The advice is I1's (``codec``, default `I1`): `of_advice` reads its bytes, which must be its canonical encoding, and binds their
-SHA-512 and the advice's length, ``total_bits`` (the session's content advice).  `advice_of_workload` is the stand-in's advice, the prover's, for a fixed-length
-workload; a served run's is ADVICE-SRC's, from the scheduler's step trace.
+The advice is I1's (``codec``, default `I1`): `of_advice` reads its bytes, which must be its canonical encoding, commits them and
+binds the root and the advice's length, ``total_bits``.  `advice_of_workload` is the stand-in's advice, the prover's, for a
+fixed-length workload; a served run's is ADVICE-SRC's, from the scheduler's step trace.
 
-    verity-vllm advice-windows COMMIT_OUT --advice FILE --partition F --out O [--ranks 0,1] [--build-root B]
+    verity-vllm advice-windows COMMIT_OUT --advice FILE --opening FILE --partition F --out O --build-root B [--ranks 0,1]
         [--write-from-workload WORKLOAD [--drop r1 ...]]
 """
 from __future__ import annotations
@@ -44,10 +48,13 @@ from pathlib import Path
 from typing import Any
 
 from verity.ml.circuits.codec import canonical_json
+from verity.ml.commitments import advice as AC
 from verity_vllm.config import option
 
 TRACED = "verity-vllm/advice-windows/traced-of-record/v0"
 I1 = "verity.core.protocols.certifier.advice"
+SCHEME = "verity-vllm/advice-windows/advice/v1"
+ROW_BITS = 256
 _DIGEST = re.compile(r"^[0-9a-f]{128}$")
 
 
@@ -68,14 +75,53 @@ def requests_of(advice: Any) -> list[dict[str, Any]]:
             for i, q in enumerate(advice.requests)]
 
 
-def of_advice(compiler: Any, data: bytes, codec: Any = None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """The advice's bytes read by ``codec`` (`codec_of`): the compiler's requests (`requests_of`) and the binding (`binding`), the
-    SHA-512 of the bytes, refused unless they are the advice's canonical encoding, and its length, ``codec.total_bits``."""
+def commitment_binding(compiler: Any) -> bytes:
+    """The advice tree's domain binding: the scheme and the registered compiler, so a root opens only under the compiler it names."""
+    return hashlib.sha512(canonical_json({"scheme": SCHEME, "compiler": {"name": str(compiler.name), "digest": compiler.digest}})).digest()
+
+
+def advice_rows(data: bytes) -> list[bytes]:
+    """The advice's encoding as ``ROW_BITS``-bit rows, the last zero-padded: ``ceil(bits / ROW_BITS)`` rows, which its public
+    length fixes."""
+    w = ROW_BITS // 8
+    return [bytes(data[i:i + w]).ljust(w, b"\0") for i in range(0, max(len(data), 1), w)]
+
+
+def commit_advice(compiler: Any, data: bytes, salts: Sequence[bytes] | None = None) -> AC.Registration:
+    """The advice's hiding commitment (`advice_rows` under `commitment_binding`), fresh salts unless ``salts`` is given."""
+    return AC.register(advice_rows(data), ROW_BITS, commitment_binding(compiler), salts)
+
+
+def of_advice(compiler: Any, data: bytes, codec: Any = None,
+              salts: Sequence[bytes] | None = None) -> tuple[list[dict[str, Any]], dict[str, Any], AC.Registration]:
+    """The advice's bytes read by ``codec`` (`codec_of`), refused unless they are its canonical encoding: the compiler's requests
+    (`requests_of`), the binding (`binding`: the root of `commit_advice` and the length, ``codec.total_bits``) and the commitment,
+    whose rows and salts are the prover's."""
     c = codec_of(codec)
     advice = c.decode(data)
     if c.encode(advice) != data:
         raise ValueError("the advice's bytes are not its canonical encoding")
-    return requests_of(advice), binding(compiler, hashlib.sha512(data).hexdigest(), int(c.total_bits(advice)))
+    reg = commit_advice(compiler, data, salts)
+    return requests_of(advice), binding(compiler, reg.root.hex(), int(c.total_bits(advice))), reg
+
+
+def opening(data: bytes, reg: AC.Registration) -> dict[str, Any]:
+    """The advice's opening: its encoding and every row's salt, the prover's private file.  Handing it to the verifier stands in
+    for the proof that the compiler's units are wired as the committed advice says (the named gap)."""
+    return {"scheme": SCHEME, "advice": bytes(data).hex(), "salts": [s.hex() for s in reg.salts]}
+
+
+def of_opening(compiler: Any, doc: Mapping[str, Any], codec: Any = None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """The verifier's side of `opening`: the requests of the advice it opens and the binding it recomputes (`of_advice` under the
+    opening's salts), which `tp.serving_rows.source` holds the registration's to.  A malformed opening is a ValueError."""
+    if not isinstance(doc, Mapping) or doc.get("scheme") != SCHEME:
+        raise ValueError(f"an advice opening is a {SCHEME} document")
+    try:
+        data, salts = bytes.fromhex(doc["advice"]), [bytes.fromhex(s) for s in doc["salts"]]
+    except (KeyError, TypeError, ValueError) as e:
+        raise ValueError(f"an advice opening holds the advice and its salts in hex: {e}") from e
+    reqs, bound, _reg = of_advice(compiler, data, codec, salts)
+    return reqs, bound
 
 
 def advice_of_workload(doc: Mapping[str, Any], codec: Any = None, drop: Sequence[str] = ()) -> Any:
@@ -132,15 +178,15 @@ class Traced:
                         "requests": [dict(q) for q in requests]}, int(rank), int(world), definitions=False)
 
 
-def binding(compiler: Any, advice_digest: str, advice_bits: int) -> dict[str, Any]:
-    """The window provenance's binding (`tp.serving_rows.BINDING`): the registered compiler's name and digest, and the advice's
-    digest and length in bits."""
-    for what, d in (("compiler", compiler.digest), ("advice", advice_digest)):
+def binding(compiler: Any, advice_root: str, advice_bits: int) -> dict[str, Any]:
+    """The window provenance's binding (`tp.serving_rows.BINDING`): the registered compiler's name and digest, and the root of the
+    advice's hiding commitment (`commit_advice`) and its length in bits."""
+    for what, d in (("compiler's digest", compiler.digest), ("advice's root", advice_root)):
         if not (isinstance(d, str) and _DIGEST.match(d)):
-            raise ValueError(f"the {what}'s digest is a SHA-512, 128 hex digits, not {d!r}")
+            raise ValueError(f"the {what} is 64 bytes, 128 hex digits, not {d!r}")
     if isinstance(advice_bits, bool) or not isinstance(advice_bits, int) or advice_bits < 0:
         raise ValueError(f"the advice's length is a whole number of bits, not {advice_bits!r}")
-    return {"compiler": {"name": str(compiler.name), "digest": compiler.digest}, "advice": {"digest": advice_digest, "bits": advice_bits}}
+    return {"compiler": {"name": str(compiler.name), "digest": compiler.digest}, "advice": {"root": advice_root, "bits": advice_bits}}
 
 
 def _loaded(commit_dir: str | os.PathLike, rank: int, compiler: Any, requests: Sequence[Mapping[str, Any]]) -> tuple[dict[str, Any], Any]:
@@ -174,10 +220,12 @@ def commit_window(commit_dir: str | os.PathLike, rank: int, partition_file: str 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Options:
-    """verity-vllm advice-windows COMMIT_OUT --advice FILE --partition F --out O: a deferred TP Commit's stand-in windows, ``O/rank<r>/``
-    each, from its ranks' sealed bundles over the stand-in compiler's Programs (`Traced`) for the advice (`commit_window`)."""
+    """verity-vllm advice-windows COMMIT_OUT --advice FILE --opening FILE --partition F --out O: a deferred TP Commit's stand-in
+    windows, ``O/rank<r>/`` each, from its ranks' sealed bundles over the stand-in compiler's Programs (`Traced`) for the advice
+    (`commit_window`), their registrations binding the advice's hiding commitment, whose opening goes to ``--opening``."""
     commit_out: str = option("commit_out", help="the deferred TP Commit's --out (runs.jsonl, versions.json, replay_deferred.json, its bundles)")
-    advice: str = option("--advice", help="the advice: I1's canonical encoding")
+    advice: str = option("--advice", help="the advice: I1's canonical encoding (the prover's, private)")
+    opening: str = option("--opening", help="write the advice's opening here (its encoding and salts, `opening`): the prover's, private")
     partition: str = option("--partition", help="the verifier's partition file: {templates, law, scope?}")
     out: str = option("--out", help="the windows' directory: rank<r>/ each")
     build_root: str = option("--build-root", help="the stand-in compiler's Programs: each rank's Programs of record in rank<r>/")
@@ -198,11 +246,13 @@ def main(o: Options) -> int:
             Path(o.advice).write_bytes(c.encode(advice_of_workload(json.loads(Path(o.write_from_workload).read_text()), c, o.drop)))
         rec = SRT.record(o.commit_out)
         compiler = Traced.for_commit(o.commit_out, o.build_root)
-        reqs, bound = of_advice(compiler, Path(o.advice).read_bytes(), c)
+        data = Path(o.advice).read_bytes()
+        reqs, bound, reg = of_advice(compiler, data, c)
+        Path(o.opening).write_text(json.dumps(opening(data, reg)) + "\n")
         for r in [int(x) for x in o.ranks.split(",")] if o.ranks else range(int(rec["world"])):
             got = commit_window(o.commit_out, r, o.partition, Path(o.out) / f"rank{r}", compiler, reqs, bound, workers=o.workers)
-            print(f"[advice-windows] rank {r}: stand-in window of {got['population']} units over {len(reqs)} requests, advice "
-                  f"{bound['advice']['digest'][:16]} ({bound['advice']['bits']} bits), compiler {compiler.digest[:16]}, registration "
+            print(f"[advice-windows] rank {r}: stand-in window of {got['population']} units over {len(reqs)} requests, advice root "
+                  f"{bound['advice']['root'][:16]} ({bound['advice']['bits']} bits), compiler {compiler.digest[:16]}, registration "
                   f"{str(got['registration_digest'])[:16]}", flush=True)
     except (CR.Refused, LookupError, ValueError, RuntimeError) as e:
         print(f"[advice-windows] REFUSED: {e}", flush=True)

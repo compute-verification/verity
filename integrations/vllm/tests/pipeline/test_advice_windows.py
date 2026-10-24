@@ -1,6 +1,7 @@
 """Advice-driven serving-rows windows (`pipeline.advice_windows`) on the CPU TP Commit of `tests.pipeline.served_tp`, deferred: each
 rank's stand-in from its sealed bundle over the stand-in compiler's Programs for the advice's requests, its registration binding the
-compiler's and the advice's digests, held to the verifier's own window from the record, the advice (I1) and the compiler alone."""
+compiler's digest and the root of the advice's hiding commitment, held to the verifier's own window from the record, the advice's
+opening (I1) and the compiler alone."""
 from __future__ import annotations
 
 import hashlib
@@ -28,10 +29,6 @@ def _requests(c, drop=(), extra=()) -> list[dict]:
     return [q for q in reqs if q["request_id"] not in drop] + [dict(reqs[0], **x) for x in extra]
 
 
-def _bound(compiler, advice: bytes) -> dict:
-    return AW.binding(compiler, hashlib.sha512(advice).hexdigest(), 8 * len(advice))
-
-
 def _advice(c, drop=()) -> bytes:
     return A.encode(AW.advice_of_workload(json.loads(c["workload"].read_text()), drop=drop))
 
@@ -47,7 +44,10 @@ def advice_tp(tmp_path_factory):
     c = ST.commit(root / "tp", world=2, I=256, law="subset:2", deferred=True)
     c["compiler"] = AW.Traced.for_commit(c["commit"], c["build"])
     c["bytes"] = {"A": _advice(c), "A'": _advice(c, drop=("r1",))}
-    c["advice"] = {name: AW.of_advice(c["compiler"], data) for name, data in c["bytes"].items()}
+    c["advice"], c["reg"], c["opening"] = {}, {}, {}
+    for name, data in c["bytes"].items():
+        reqs, bound, reg = AW.of_advice(c["compiler"], data)
+        c["advice"][name], c["reg"][name], c["opening"][name] = (reqs, bound), reg, AW.opening(data, reg)
     c["windows"] = {name: root / name for name in c["advice"]}
     for name, (reqs, bound) in c["advice"].items():
         for r in range(2):
@@ -59,9 +59,15 @@ def _registered(c, name: str, rank: int) -> dict:
     return json.loads((c["windows"][name] / f"rank{rank}" / "registration.json").read_text())
 
 
-def _mine(c, name: str, rank: int):
-    reqs, bound = c["advice"][name]
+def _mine(c, name: str, rank: int, opening: dict | None = None):
+    """The verifier's window of rank ``rank`` from the opening of advice ``name`` (or ``opening``)."""
+    reqs, bound = AW.of_opening(c["compiler"], opening if opening is not None else c["opening"][name])
     return AW.window_of_advice(c["commit"], rank, c["partition"], c["compiler"], reqs, bound)
+
+
+def _resalted(opening: dict) -> dict:
+    s = opening["salts"]
+    return {**opening, "salts": [f"{int(s[0][:2], 16) ^ 1:02x}{s[0][2:]}", *s[1:]]}
 
 
 def _check(rec: dict, mine, publics: dict[str, bytes]):
@@ -81,11 +87,48 @@ def test_each_ranks_advice_window_is_held_to_the_verifiers_window_from_the_advic
         w = rec["window"]
         assert (w["kind"], w["run"], w["compiler"], w["advice"]) == ("stand-in", mine.run, bound["compiler"], bound["advice"])
         assert w["compiler"] == {"name": AW.TRACED, "digest": c["compiler"].digest}
-        assert w["advice"] == {"digest": hashlib.sha512(c["bytes"]["A"]).hexdigest(), "bits": A.total_bits(A.decode(c["bytes"]["A"]))}
+        assert w["advice"] == {"root": c["reg"]["A"].root.hex(), "bits": A.total_bits(A.decode(c["bytes"]["A"]))}
         assert 8 * len(c["bytes"]["A"]) - 8 < w["advice"]["bits"] <= 8 * len(c["bytes"]["A"])
         assert SRT.source(w, mine, held)["ok"]
         assert _check(rec, mine, _publics(c["windows"]["A"] / f"rank{r}", mine)).ok
         assert [(m.template, m.n) for m in mine.members] == [("SiluMul_v2{I=256}", 8)]
+
+
+def test_the_advice_is_committed_hiding_and_none_of_its_bytes_is_public(advice_tp):
+    """The registration binds a root of hiding rows, not a digest of the advice: the same advice under fresh salts has another root,
+    each opening to the same requests, neither the SHA-512 of the advice, and no window file holds the advice."""
+    c = advice_tp
+    data = c["bytes"]["A"]
+    again_reqs, again, again_reg = AW.of_advice(c["compiler"], data)
+    assert again["advice"]["root"] != c["advice"]["A"][1]["advice"]["root"] and again["advice"]["bits"] == c["advice"]["A"][1]["advice"]["bits"]
+    assert AW.of_opening(c["compiler"], AW.opening(data, again_reg)) == (again_reqs, again) and again_reqs == c["advice"]["A"][0]
+    assert hashlib.sha512(data).hexdigest() not in {again["advice"]["root"], c["advice"]["A"][1]["advice"]["root"]}
+    assert len(AW.advice_rows(data)) == -(-again["advice"]["bits"] // AW.ROW_BITS) == len(again_reg.salts)
+    for f in (c["windows"]["A"] / "rank0").iterdir():
+        if f.suffix == ".json" or f.name.endswith("-public.bin"):
+            assert data.hex() not in f.read_bytes().hex() and data.hex() not in f.read_text(errors="replace"), f.name
+
+
+def test_an_opening_under_another_salt_opens_no_registered_root(advice_tp):
+    """The advice A opened under one salt changed recomputes another root: the verifier's window is A's, and the registration is
+    refused on its advice alone."""
+    c = advice_tp
+    mine, held = _mine(c, "A", 0, _resalted(c["opening"]["A"]))
+    assert mine.population == 8 and held["advice"]["root"] != c["reg"]["A"].root.hex()
+    got = SRT.source(_registered(c, "A", 0)["window"], mine, held)
+    assert (got["ok"], got["codes"]) == (False, ["advice"])
+
+
+@pytest.mark.parametrize("alter, why", [
+    (lambda o: {**o, "scheme": "verity-vllm/advice-windows/advice/v0"}, "advice opening is a"),
+    (lambda o: {k: v for k, v in o.items() if k != "salts"}, "in hex"),
+    (lambda o: {**o, "salts": o["salts"] + o["salts"]}, "one salt per row"),
+    (lambda o: {**o, "salts": [s[:-2] for s in o["salts"]]}, "salt is"),
+    (lambda o: {**o, "advice": o["advice"] + "00"}, "past the advice"),
+], ids=["other-scheme", "no-salts", "a-salt-too-many", "a-short-salt", "non-canonical-advice"])
+def test_a_malformed_opening_is_refused(advice_tp, alter, why):
+    with pytest.raises(ValueError, match=why):
+        AW.of_opening(advice_tp["compiler"], alter(advice_tp["opening"]["A"]))
 
 
 def test_the_advice_window_commits_the_rows_of_the_ranks_window_of_record(advice_tp, tmp_path):
@@ -108,7 +151,7 @@ def test_the_advice_window_commits_the_rows_of_the_ranks_window_of_record(advice
 @pytest.mark.parametrize("alter, codes", [
     (lambda w: {**w, "compiler": {**w["compiler"], "digest": "00" * 64}}, ["compiler"]),
     (lambda w: {**w, "compiler": {**w["compiler"], "name": "another compiler"}}, ["compiler"]),
-    (lambda w: {**w, "advice": {**w["advice"], "digest": hashlib.sha512(b"advice A'").hexdigest()}}, ["advice"]),
+    (lambda w: {**w, "advice": {**w["advice"], "root": "00" * 64}}, ["advice"]),
     (lambda w: {**w, "advice": {**w["advice"], "bits": w["advice"]["bits"] - 1}}, ["advice"]),
     (lambda w: {k: v for k, v in w.items() if k not in SRT.BINDING}, ["compiler", "advice"]),
 ], ids=["other-compiler", "other-compiler-name", "other-advice", "other-advice-bits", "no-binding"])
@@ -153,7 +196,7 @@ def test_advice_naming_rows_the_commit_did_not_commit_commits_no_window(advice_t
     c = advice_tp
     reqs = [q for q in _requests(c) if q["request_id"] != extra["request_id"]] + _requests(c, drop=("r0", "r1"), extra=(extra,))
     with pytest.raises(LookupError, match=why):
-        AW.commit_window(c["commit"], 0, c["partition"], tmp_path / "w", c["compiler"], reqs, _bound(c["compiler"], b"bad"), workers=1)
+        AW.commit_window(c["commit"], 0, c["partition"], tmp_path / "w", c["compiler"], reqs, AW.binding(c["compiler"], "00" * 64, 8), workers=1)
     assert not (tmp_path / "w" / "registration.json").exists()
 
 
@@ -206,18 +249,21 @@ def test_the_stand_in_advice_refuses_a_workload_that_leaves_a_step_idle():
 
 
 def test_the_command_writes_the_stand_in_advice_and_commits_its_windows(advice_tp, tmp_path):
-    """``verity-vllm advice-windows`` with ``--write-from-workload --drop r1``: A' written, and each rank's window bound to it."""
+    """``verity-vllm advice-windows`` with ``--write-from-workload --drop r1``: A' written, its opening written, and each rank's
+    window bound to the root that opening opens, under its own fresh salts."""
     from verity_vllm.pipeline import cli
 
     c = advice_tp
-    o = cli.parse("advice-windows", [str(c["commit"]), "--advice", str(tmp_path / "a.bin"), "--partition", str(c["partition"]),
-                                     "--out", str(tmp_path / "w"), "--build-root", str(c["build"]), "--write-from-workload",
-                                     str(c["workload"]), "--drop", "r1", "--workers", "1"], environ={})
+    o = cli.parse("advice-windows", [str(c["commit"]), "--advice", str(tmp_path / "a.bin"), "--opening", str(tmp_path / "a.opening.json"),
+                                     "--partition", str(c["partition"]), "--out", str(tmp_path / "w"), "--build-root", str(c["build"]),
+                                     "--write-from-workload", str(c["workload"]), "--drop", "r1", "--workers", "1"], environ={})
     assert AW.main(o) == 0 and (tmp_path / "a.bin").read_bytes() == c["bytes"]["A'"]
+    reqs, opened = AW.of_opening(c["compiler"], json.loads((tmp_path / "a.opening.json").read_text()))
+    assert reqs == c["advice"]["A'"][0]
     for r in range(2):
         got, want = (json.loads((d / f"rank{r}" / "registration.json").read_text()) for d in (tmp_path / "w", c["windows"]["A'"]))
-        assert (got["window"]["compiler"], got["window"]["advice"], got["population"]) == \
-            (want["window"]["compiler"], want["window"]["advice"], want["population"]) == (want["window"]["compiler"], want["window"]["advice"], 4)
+        assert (got["window"]["compiler"], got["window"]["advice"], got["population"]) == (want["window"]["compiler"], opened["advice"], 4)
+        assert got["window"]["advice"]["root"] != want["window"]["advice"]["root"]
 
 
 def test_the_stand_in_compilers_digest_names_its_programs_of_record(advice_tp):
@@ -226,11 +272,11 @@ def test_the_stand_in_compilers_digest_names_its_programs_of_record(advice_tp):
     assert len(c.digest) == 128 and other.digest != c.digest and AW.Traced(dict(c.programs), dict(c.of_record)).digest == c.digest
 
 
-@pytest.mark.parametrize("digest, bits, why", [
-    ("00" * 32, 8, "advice's digest is a SHA-512"),
+@pytest.mark.parametrize("root, bits, why", [
+    ("00" * 32, 8, "advice's root is 64 bytes"),
     ("00" * 64, -1, "whole number of bits"),
     ("00" * 64, True, "whole number of bits"),
 ])
-def test_a_binding_is_two_sha512_digests_and_a_length(advice_tp, digest, bits, why):
+def test_a_binding_is_a_compiler_digest_an_advice_root_and_a_length(advice_tp, root, bits, why):
     with pytest.raises(ValueError, match=why):
-        AW.binding(advice_tp["compiler"], digest, bits)
+        AW.binding(advice_tp["compiler"], root, bits)

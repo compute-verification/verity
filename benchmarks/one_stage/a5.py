@@ -25,8 +25,8 @@ before the draw (`a5_tp.sh` with `A5_WINDOWS=bundles`).
       python benchmarks/one_stage/a5.py --tp-commit DIR --build-root DIR --workload F --windows DIR [--ranks 0,1,...] [--jobs N] \\
         --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
         --firewall flock-firewall --out DIR [--delta 0.5]
-      python benchmarks/one_stage/a5.py --tp-commit DIR --build-root DIR --advice F [--other-advice F --other-windows DIR] \\
-        --windows DIR --coins verifier ...
+      python benchmarks/one_stage/a5.py --tp-commit DIR --build-root DIR --advice-opening F \\
+        [--other-advice-opening F --other-windows DIR] --windows DIR --coins verifier ...
 
 A deferred Commit's run takes its window in the other form too, `served` (`a5.sh` with `WINDOW=served`): the in-Commit hook's
 (`commit --serving-rows`, `serving_rows.readers`), serving's own commitment, made before any draw. A5 takes it only over a
@@ -59,14 +59,17 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   names, with no stand-in link. A TP rank's is `tp.serving_rows.source`: `served`, or a stand-in whose `of` and `link` are
   `tp.serving_rows.stand_in` over the bundle the record names for the rank, under a SHA-512 TP run root, its run, `tp` and served
   Programs the record's.
-* **Advice windows** (``--advice``, a TP Commit, network accounting under arbitrary vLLM usage): the verifier derives rank r's
-  window from the record, the advice (I1's canonical encoding: everything serving made unpredictable) and its own copy of the
-  registered compiler alone (`advice_windows.window_of_advice`; ``--compiler traced``, the stand-in, the Build's Programs of
-  record), not from the workload; `source` holds the registration's ``compiler`` and ``advice`` (name and digest; the advice's
-  SHA-512 and its bits) to the verifier's, so the stream's registration, which the draw comes after, fixes both. The prover's
-  windows come from the bundles (`verity-vllm advice-windows`). Negatives (`advice_negatives`), each refused before the draw:
-  the registration naming another compiler or other advice, the verifier holding other advice (``--other-advice``: `source`
-  and R2), and a unit committed under other advice (``--other-windows``: R4 and its roots).
+* **Advice windows** (``--advice-opening``, a TP Commit, network accounting under arbitrary vLLM usage): the advice (I1's
+  canonical encoding: everything serving made unpredictable) is private, and the registration binds the root of its hiding
+  commitment and its bits (`advice_windows.commit_advice`). The verifier is handed the commitment's opening, the named gap until
+  the compiler's wiring is proved in zero knowledge, and derives rank r's window from the record, the advice it opens and its own
+  copy of the registered compiler alone (`advice_windows.of_opening`, `window_of_advice`; ``--compiler traced``, the stand-in,
+  the Build's Programs of record), not from the workload; `source` holds the registration's ``compiler`` (name and digest) and
+  ``advice`` (root and bits) to the verifier's, so the stream's registration, which the draw comes after, fixes both. The
+  prover's windows come from the bundles (`verity-vllm advice-windows`). Negatives (`advice_negatives`), each refused before the
+  draw: the registration naming another compiler or another advice root, the opening under another salt, the verifier opening
+  other advice (``--other-advice-opening``: `source` and R2), and a unit committed under other advice (``--other-windows``: R4
+  and its roots).
 * **One draw per window** by the registered law (the partition file's `subset:k`) over the window's whole population, made by the
   verifier's Lean `flock-verify draw`; a TP Commit draws each rank's window on its own. Each member's server serves its share (`serve
   --draw-file`). The sessions are `--zk` (the masked protocol), because Lean accepts a subset draw only under `--zk` (verifier
@@ -581,20 +584,27 @@ def deferred(a: argparse.Namespace, sets: dict, out: Path) -> bool:
     return ok
 
 
-def advice_negatives(a: argparse.Namespace, r: int, compiler: AW.Traced, mine: CS.Window, held: dict, served: Path) -> dict[str, dict]:
-    """An advice window's refusals, each before the draw: its registration's window naming another compiler or other advice
-    (`source`); the verifier holding other advice (``--other-advice``), whose window from it the registration fails (`source`
-    and R2); and a unit committed under other advice (``--other-windows``: member 0's public file from that window in place of
-    serving's), which the registration's leaf layer refuses (R4) and whose roots are not the registered ones."""
+def advice_negatives(a: argparse.Namespace, r: int, compiler: AW.Traced, mine: CS.Window, held: dict, served: Path,
+                     opening: dict) -> dict[str, dict]:
+    """An advice window's refusals, each before the draw: its registration's window naming another compiler or another advice
+    root (`source`); the advice's opening under another salt, which opens no registered root (`source`); the verifier opening other
+    advice (``--other-advice-opening``), whose window from it the registration fails (`source` and R2); and a unit committed under
+    other advice (``--other-windows``: member 0's public file from that window in place of serving's), which the registration's
+    leaf layer refuses (R4) and whose roots are not the registered ones."""
     rec = json.loads((served / "registration.json").read_text())
     w = rec.get("window") or {}
     neg: dict[str, dict] = {}
-    for key in SRT.BINDING:
-        v = SRT.source({**w, key: {**(w.get(key) or {}), "digest": "00" * 64}}, mine, held)
+    for key, field in (("compiler", "digest"), ("advice", "root")):
+        v = SRT.source({**w, key: {**(w.get(key) or {}), field: "00" * 64}}, mine, held)
         neg[f"registration-naming-another-{key} (source)"] = {"refused": not v["ok"], "codes": v["codes"]}
+    salts = list(opening["salts"])
+    salts[0] = f"{int(salts[0][:2], 16) ^ 1:02x}{salts[0][2:]}"
+    _reqs, resalted = AW.of_opening(compiler, {**opening, "salts": salts})
+    v = SRT.source(w, mine, {**held, **resalted})
+    neg["opening-under-another-salt (source)"] = {"refused": not v["ok"], "codes": v["codes"]}
     publics = {m.key: (served / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)}
-    if a.other_advice:
-        reqs, bound = AW.of_advice(compiler, Path(a.other_advice).read_bytes())
+    if a.other_advice_opening:
+        reqs, bound = AW.of_opening(compiler, json.loads(Path(a.other_advice_opening).read_text()))
         theirs, theirs_held = AW.window_of_advice(a.tp_commit, r, a.partition, compiler, reqs, bound)
         src = SRT.source(w, theirs, theirs_held)
         v = V.check(rec, theirs.program, theirs.query, theirs.law, CS.SCHEME, CS.expected_ports(theirs), leaf_layer=CS.leaf_layer(publics))
@@ -613,19 +623,20 @@ def advice_negatives(a: argparse.Namespace, r: int, compiler: AW.Traced, mine: C
 
 
 def tp_rank(a: argparse.Namespace, sets: dict, out: Path, world: int, r: int) -> dict:
-    """Rank ``r``'s window of record (``tp.serving_rows.window_of_record``; with ``--advice``, the compiler's Programs for the
-    advice, ``advice_windows.window_of_advice``, and `advice_negatives`) audited under ``out/rank<r>``, on its own ports; -> its
+    """Rank ``r``'s window of record (``tp.serving_rows.window_of_record``; with ``--advice-opening``, the compiler's Programs for
+    the advice it opens, ``advice_windows.window_of_advice``, and `advice_negatives`) audited under ``out/rank<r>``, on its own ports; -> its
     row of the summary. With ``a.coins``, a rank that ends without its draw (refused before it, or failed) says so, so the
     step's session closes once every other rank has drawn."""
     t0 = time.time()
     try:
         windows = Path(a.windows)
         more: dict[str, dict] = {}
-        if a.advice:
+        if a.advice_opening:
             compiler = AW.Traced.for_commit(a.tp_commit, a.build_root)
-            reqs, bound = AW.of_advice(compiler, Path(a.advice).read_bytes())
+            opening = json.loads(Path(a.advice_opening).read_text())
+            reqs, bound = AW.of_opening(compiler, opening)
             mine, held = AW.window_of_advice(a.tp_commit, r, a.partition, compiler, reqs, bound)
-            more.update(advice_negatives(a, r, compiler, mine, held, windows / f"rank{r}"))
+            more.update(advice_negatives(a, r, compiler, mine, held, windows / f"rank{r}", opening))
         else:
             mine, held = SRT.window_of_record(a.tp_commit, r, a.partition, a.build_root, a.workload)
         window_s = round(time.time() - t0, 2)
@@ -635,7 +646,7 @@ def tp_rank(a: argparse.Namespace, sets: dict, out: Path, world: int, r: int) ->
             more["registration-of-another-rank (source)"] = {"refused": not v["ok"], "codes": v["codes"]}
         s, ok = audit(a, sets, out / f"rank{r}", mine, windows / f"rank{r}", lambda w: SRT.source(w, mine, held),
                       a.port + RANK_PORTS * r, {"rank": r, "tp": held["tp"], "verifier_window_s": window_s,
-                                                **({"binding": {k: held[k] for k in SRT.BINDING}} if a.advice else {})}, more, rank=r)
+                                                **({"binding": {k: held[k] for k in SRT.BINDING}} if a.advice_opening else {})}, more, rank=r)
     finally:
         if a.coins is not None:
             a.coins.skip(r)
@@ -714,14 +725,16 @@ def main() -> int:
     ap.add_argument("--build-root", help="with --tp-commit: each rank's Programs of record in rank<r>/")
     ap.add_argument("--workload", help="with --tp-commit: the workload file the Commit served")
     ap.add_argument("--windows", help="with --tp-commit: serving's windows, rank<r>/ each (the --serving-rows request's dir)")
-    ap.add_argument("--advice", help="with --tp-commit, instead of --workload: the advice (I1's canonical encoding); each rank's window is "
-                    "the registered compiler's Programs for it (advice_windows.window_of_advice), its registration naming the compiler's "
-                    "and the advice's digests")
-    ap.add_argument("--compiler", choices=["traced"], default="traced", help="with --advice: the registered compiler (traced: the stand-in, "
-                    "each rank's Programs of record under --build-root, advice_windows.Traced)")
-    ap.add_argument("--other-advice", help="with --advice: advice that disagrees with the registered, held by the verifier (a negative)")
-    ap.add_argument("--other-windows", help="with --advice: the windows committed under --other-advice, rank<r>/ each (a negative: "
-                    "a unit committed under other advice)")
+    ap.add_argument("--advice-opening", help="with --tp-commit, instead of --workload: the opening of the advice's hiding commitment "
+                    "(advice_windows.opening: I1's canonical encoding and its rows' salts, the named gap); each rank's window is the "
+                    "registered compiler's Programs for it (advice_windows.window_of_advice), its registration naming the compiler's "
+                    "digest and the advice's root")
+    ap.add_argument("--compiler", choices=["traced"], default="traced", help="with --advice-opening: the registered compiler (traced: the "
+                    "stand-in, each rank's Programs of record under --build-root, advice_windows.Traced)")
+    ap.add_argument("--other-advice-opening", help="with --advice-opening: the opening of advice that disagrees with the registered, "
+                    "given to the verifier (a negative)")
+    ap.add_argument("--other-windows", help="with --advice-opening: the windows committed under the other advice, rank<r>/ each (a "
+                    "negative: a unit committed under other advice)")
     ap.add_argument("--ranks", default=None, help="with --tp-commit: the ranks to audit, comma-separated (default every rank)")
     ap.add_argument("--jobs", type=int, default=1, help="with --tp-commit: audit up to this many ranks at once, each in its own process")
     ap.add_argument("--partition", required=True, help="the verifier's partition file: {templates, law, scope?}")
@@ -752,13 +765,13 @@ def main() -> int:
     a = ap.parse_args()
     if bool(a.bundle) == bool(a.tp_commit):
         ap.error("give either --bundle (a deferred Commit) or --tp-commit (a TP Commit)")
-    need = ("row_dir", "window") if a.bundle else ("build_root", "windows", *(() if a.advice else ("workload",)))
+    need = ("row_dir", "window") if a.bundle else ("build_root", "windows", *(() if a.advice_opening else ("workload",)))
     if missing := [f"--{x.replace('_', '-')}" for x in need if not getattr(a, x)]:
         ap.error(f"{'--bundle' if a.bundle else '--tp-commit'} needs {' '.join(missing)}")
-    if a.bundle and a.advice:
-        ap.error("--advice draws a TP Commit's ranks (--tp-commit)")
-    if (a.other_advice or a.other_windows) and not a.advice:
-        ap.error("--other-advice and --other-windows are an advice window's negatives: give --advice")
+    if a.bundle and a.advice_opening:
+        ap.error("--advice-opening draws a TP Commit's ranks (--tp-commit)")
+    if (a.other_advice_opening or a.other_windows) and not a.advice_opening:
+        ap.error("--other-advice-opening and --other-windows are an advice window's negatives: give --advice-opening")
     a.coins, a.rule, a.window_root, a.verifier_coins = None, None, None, a.coin_source == "verifier"
     if a.challenger and a.verifier_coins:
         ap.error("--challenger and --coins verifier are two coin sources: give one")

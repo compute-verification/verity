@@ -37,8 +37,10 @@
 #   the rank's registration), no challenger session, so A5_JOBS takes any number of ranks. Its record says source: verifier.
 # A5_ADVICE=stand-in (the stand-in, with A5_WINDOWS=bundles): advice windows. The stand-in's advice A (I1, its fixed-length
 #   workload's schedule) and A' (A less its last request) are written beside it, each rank's window is committed from its bundle
-#   over the stand-in compiler's Programs for A, and for A' (`verity-vllm advice-windows`), and a5 derives its own from the
-#   record, A and the compiler, never the workload (a5.py --advice; --other-advice and --other-windows its negatives).
+#   over the stand-in compiler's Programs for A, and for A', its registration binding the advice's hiding root (`verity-vllm
+#   advice-windows`), and a5 derives its own from the record, the advice's opening and the compiler, never the workload (a5.py
+#   --advice-opening; --other-advice-opening and --other-windows its negatives). The advice and its openings are the prover's:
+#   never kept.
 set -uxo pipefail
 REPO=$(pwd); O=${OUT:-$RESEARCH_RUN_DIR/out}; W=$(mktemp -d); trap 'rm -rf "$W"' EXIT; mkdir -p $O
 ROW=glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager
@@ -113,11 +115,11 @@ bundle_windows() {  # COMMIT BUILD PARTITION OUT LOGS: each rank's stand-in wind
 }
 
 advice_windows() {  # COMMIT BUILD PARTITION OUT ADVICE LOGS [ARGS...]: each rank's stand-in window from its sealed bundle over the
-                    # stand-in compiler's Programs for the advice
+                    # stand-in compiler's Programs for the advice, its opening written to ADVICE.opening.json
   local log=$6/advice-windows-$(basename $4).log
   mkdir -p $6
-  $TIME $REPO/.venv/bin/verity-vllm advice-windows $1 --build-root $2 --partition $3 --out $4 --advice $5 ${A5_RANKS:+--ranks $A5_RANKS} "${@:7}" \
-    > $log 2>&1 || { tail -20 $log; return 1; }
+  $TIME $REPO/.venv/bin/verity-vllm advice-windows $1 --build-root $2 --partition $3 --out $4 --advice $5 --opening ${5%.bin}.opening.json \
+    ${A5_RANKS:+--ranks $A5_RANKS} "${@:7}" > $log 2>&1 || { tail -20 $log; return 1; }
   grep -h '^\[advice-windows\]' $log
 }
 
@@ -153,8 +155,8 @@ else
       advice_windows $S/commit $S/build $S/partition.json $S/serving-rows $S/advice.bin $O/standin-i$I --write-from-workload $WL || exit 8
       advice_windows $S/commit $S/build $S/partition.json $S/other-windows $S/other-advice.bin $O/standin-i$I --write-from-workload $WL \
         --drop $LAST || exit 8
-      ADV=(--advice $S/advice.bin --other-advice $S/other-advice.bin --other-windows $S/other-windows); WL=
-      public $S/other-windows $O/standin-i$I/other-window && cp $S/advice.bin $S/other-advice.bin $O/standin-i$I/
+      ADV=(--advice-opening $S/advice.opening.json --other-advice-opening $S/other-advice.opening.json --other-windows $S/other-windows); WL=
+      public $S/other-windows $O/standin-i$I/other-window
     elif [ -n "$DEFERRED" ]; then
       bundle_windows $S/commit $S/build $S/partition.json $S/serving-rows $O/standin-i$I || exit 8
     fi
