@@ -38,9 +38,9 @@ def _tokens(step):
 def x():
     fx = json.loads(FIXTURE.read_text())
     S = SimpleNamespace(**CS.statics(fx["R"], fx["W"], fx["A"], fx["engine"], fx["IW"], Q=fx["Q"], D=fx["D"], P=fx["P"],
-                                     K=fx["K"], SEG=fx["SEG"]))
+                                     K=fx["K"], SEG=fx["SEG"], CN=fx["CN"], CTW=fx["CTW"], CU=fx["CU"]))
     st = ST.statics(S)
-    sl = CS.Slice(tuple(map(tuple, fx["arrivals"])), tuple(fx["decisions"]), fx["steps"])
+    sl = CS.Slice(tuple(map(tuple, fx["arrivals"])), tuple(fx["decisions"]), fx["steps"], tuple(map(tuple, fx["tokens"])))
     rows = [tuple(map(tuple, r)) for r in fx["rows"]]
     batch = [_tokens(r) for r in rows]
     honest = ST.case(SimpleNamespace(**st), SR.window_bits(S, rows), batch)
@@ -62,7 +62,7 @@ def test_six_passes_are_refused_against_the_batch_the_server_ran(x):
     server ran admitted user-1 at step 6, 29 prefill tokens beside user-0's decode, and those positions are committed;
     the cheap rows end step 6 at 1 token of its 30 and leave 29 uncovered, so the tie refuses on both bits."""
     S, sl = x.S, x.sl
-    cheap = CS.case(S, CS.Slice(sl.arrivals, (0,) * 6, sl.steps))
+    cheap = CS.case(S, CS.Slice(sl.arrivals, (0,) * 6, sl.steps, sl.tokens))
     assert cheap.verdict == CS.ACCEPT and cheap.length == 5 and list(cheap.steps) != x.rows
     served = SR.register(S, [list(cheap.steps)], bytes(64))
     assert served.registration.rows[0] == SR._row(cheap.rows["srv"])[0]

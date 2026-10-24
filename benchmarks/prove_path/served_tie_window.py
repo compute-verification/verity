@@ -56,6 +56,12 @@ def load(run_dir: Path, w: int) -> SimpleNamespace:
                            reqs=[json.loads(l) for l in (run_dir / "requests.jsonl").read_text().splitlines() if l.strip()])
 
 
+def statics_of(x: SimpleNamespace) -> SimpleNamespace:
+    """The run's compile-slice statics. A run sealed before the cache's statics served without prefix caching, so its CN,
+    CTW and CU are 0."""
+    return SimpleNamespace(**{"CN": 0, "CTW": 0, "CU": 0, **x.priv["statics"]})
+
+
 def _session(priv: dict) -> list[list[tuple | None]]:
     return [[None if s is None else tuple(map(tuple, s)) for s in win] for win in priv["session"]]
 
@@ -189,7 +195,7 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     t0 = time.monotonic()
     x = load(a.serve_run, a.window)
-    S = SimpleNamespace(**x.priv["statics"])
+    S = statics_of(x)
     st = ST.statics(S, IB=x.ctx["served_window"]["step_input_port"]["IB"], PB=x.ctx["served_window"]["step_input_port"]["PB"])
     St, st1 = SimpleNamespace(**st), {**st, "P": 1}
     ok, steps, native = bindings(x, S, St)
