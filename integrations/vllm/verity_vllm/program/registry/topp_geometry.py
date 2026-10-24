@@ -54,6 +54,15 @@ def splits_for_v1(n_live: int, num_sms: int) -> int:
     return s
 
 
+def registered_splits(num_sms: int) -> int:
+    """The registered split count: the S every served `_apply_topp_split` launch runs with, whatever its sampler batch.  The kernels'
+    keep set depends on S (the slice partials, the per-slice pivot ladder, the two Z groups), so an S that follows the live batch lets
+    a request's batch-mates pick its nucleus at top_p < 1.  It is SplitsFor_v1(1, num_SMs), the S vLLM picks for a lone row: the engine
+    pins vLLM to it (`engine.topp_pin`), the Build declares it (`sampling.splits`, the select's `Const32[S]`) and the Match holds every
+    launch's S to it (`check.match.sampler_geometry`).  Only num_SMs, a target-profile constant, enters it."""
+    return splits_for_v1(1, num_sms)
+
+
 def spt_for(V: int, S: int) -> int:
     """sizePerThread of the 1-D [BLOCK] logits load in all three kernels (Triton's coalescing pass, from AxisInfo):
     the row pointer `LOGITS + row * LOGITS_STRIDE_0` is 16-byte aligned only when the stride (= V for contiguous logits) carries
@@ -87,4 +96,5 @@ def z_group(lane: np.ndarray, S: int) -> np.ndarray:
     return ((lane % S) >= (S // 2)).astype(np.int64)
 
 
-__all__ = ["SPLIT_MAX_BATCH", "SPLIT_MAX_SPLITS", "splits_for", "SPLITS_FOR_V1_WIDTH", "splits_for_v1", "spt_for", "z_group"]
+__all__ = ["SPLIT_MAX_BATCH", "SPLIT_MAX_SPLITS", "splits_for", "SPLITS_FOR_V1_WIDTH", "splits_for_v1", "registered_splits", "spt_for",
+           "z_group"]

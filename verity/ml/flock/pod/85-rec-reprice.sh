@@ -3,7 +3,7 @@
 # dense rollup's K = 4096 GEMM coordinate, r20261002-062836-96bb's shape 430e5aad). One step per job (research run --queue
 # --cwd source); the big files stay under $FLOCK_WORK/data/$TAG for the next step, out/ gets the records:
 #   STEP=build   (CPU) the GPU prover (60-circuit.sh's build, keyed by its sources as 70-class-sweep.sh keys it), Lean's
-#                flock-verify and flock-firewall (rec-env.sh's, keyed by its sources), and the inner statement staged (class_statement
+#                flock-verify (rec-env.sh's, keyed by its sources), and the inner statement staged (class_statement
 #                --program-module rec_reprice.py:program --partition q-template-instance --stage-only, BATCH=fixed N,
 #                untiled, every instance's own rows: FLOCK_OWN_ROWS=1) twice: with plain SHA-512 leaves (FLOCK_PLAIN_LEAVES=1, the
 #                recursive session's) into data/$TAG/stage, and with hm96 leaves (today's --zk) into data/$TAG/stage-zk
@@ -30,7 +30,10 @@
 #   STEP=oprove  (GPU leases) each staged statement proved with --zk on loopback, WARM + RUNS sessions per MODES (dev host
 #                firewall; a forgery's: one, by a prover that sends its proofs though the witness fails,
 #                FC_ZK_SELF_CHECK=skip), and upstream's replay --zk of the last (REPLAY=0: STEP=oreplay's); CONTROLS=DIR: the
-#                firewall's negative controls on that statement
+#                firewall's negative controls on that statement; OPROVE_JOBS=4 statements at once while their estimated
+#                peaks sum to at most OPROVE_MEM_GB=48. MODES=firewall alone, WARM=0 RUNS=1: each statement fixed before
+#                any session starts gets exactly one independent session, never drawn again, every exit recorded
+#                (out/oprove/statements.sha512, exits.tsv)
 #   STEP=oreplay (CPU) upstream's replay --zk of each statement's session oprove kept
 #   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session, with V*'s own inputs (the inner
 #                shape, the statement's index and bindings, the shared rows, the inner transcript) (INNER_LEAN=1: also the inner's,
@@ -50,11 +53,12 @@
 #      CUDA_TK= (default: CUDA_REDIST=13.3.1's archives under FLOCK_WORK)  SM=120  WARM=1  RUNS=3  PCPUS=16
 #      LEVELS= (comma-separated statement names, default every one: L3,alg; oprove and lean also forged-sum-L6, alg-p1,
 #              ..; a name without its part, alg, names every part)
-#      FORGE="message sum comb top top-salt coef dirs" (vstage)  JOBS=4 (vstage, lean)  INNER_LOOPBACK=1 (inner)
-#      GPU_MAX_MIN=10 (90 for a firewalled prover, whose Lean session loop holds the lease) GPU_MEM_GB=32 (each prove's lease)
-#      GPU_PREEMPTIBLE=1 (empty: not preemptible)  GPU_TRIES=3
-#      GPU_LEASE= (the lease command; default the queue's for this node, else gpu-lease on the PATH)  GPU_ON= (the GPUs a
-#              lease may take, gpu-lease --on: a NUMA node's, beside the job's taskset)
+#      FORGE="message sum comb top top-salt coef dirs" (vstage)  JOBS=4 (vstage)  INNER_LOOPBACK=1 (inner)
+#      LEAN_JOBS= LEAN_MEM_GB=48 (lean: verifications at once, default LEAN_MEM_GB / 5 up to the job's cores)
+#      REC_CIRCUIT_CACHE=$FLOCK_WORK/rec-circuits (V*'s circuit texts kept per shape, rec_circuits.py; empty: none kept)
+#      GPU_MAX_MIN=10 GPU_MEM_GB=32 (each prove's lease)  GPU_PREEMPTIBLE=1 (empty: not preemptible)  GPU_TRIES=3
+#      GPU_LEASE= (the lease command; default the queue's for this node)
+#      GPU_ON= (the GPUs a lease may take, gpu-lease --on: a NUMA node's, beside the job's taskset)
 #      SHIP=1 (build: the binaries also into out/ship, each named by its cache key, for a node that builds nothing)
 #      PREBUILT=DIR (another node's out/ship, e.g. research run --send's inputs/: each binary copied into its cache, and a
 #              step that would build one refuses instead)
@@ -64,7 +68,8 @@
 #      NEG_INNER="challenge query" (lean: each honest V* session verified again over a copy of the inner session with one
 #              coin of rep 0 flipped in its session.json and its coin server's record alike, rec_inner.py forge --what W,
 #              as part forged-inner-W-<name>; the parts that read the flipped coin refuse it, and lean_verdicts.py requires
-#              one to; empty: none)
+#              one to; the step refuses a W none of the parts it checks reads: challenge needs an alg part, query L0;
+#              empty: none)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 STEP=${STEP:?STEP=build|inner|icheck|vstage|vcap|oprove|oreplay|lean}
@@ -141,6 +146,7 @@ UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $W/py/bin/python ] || { $UV venv -q --python 3.12 $W/py && $UV pip install -q --python $W/py/bin/python numpy blake3; } || exit 1
 export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src
 export FC_COINS=os FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
+export REC_CIRCUIT_CACHE=${REC_CIRCUIT_CACHE-$FW/rec-circuits}
 # the lease command: GPU_LEASE, else the queue's own for this node (infra/cluster's submit.wrappers: node 1's pool where its tool
 # and pool file are, else gpu-lease's default)
 if [ $GPU = 0 ]; then LEASE=(); elif [ -n "${GPU_LEASE:-}" ]; then read -ra LEASE <<< "$GPU_LEASE"; else mapfile -t LEASE < <(python3 - <<'EOF'
@@ -150,7 +156,7 @@ from cluster.submit import GPU_LEASE, GPU_LEASE_N1, N1_LEASE_ENV
 pool = dict(e.split("=", 1) for e in N1_LEASE_ENV)["GPU_LEASE_ALLOWED_FILE"]
 print(*(["env", *N1_LEASE_ENV, GPU_LEASE_N1] if os.access(GPU_LEASE_N1, os.X_OK) and os.path.exists(pool) else [GPU_LEASE]), sep="\n")
 EOF
-); [ -x "${LEASE[-1]}" ] || LEASE=(gpu-lease); fi
+); fi
 
 free_port() { python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
 # want NAME: NAME is in LEVELS (comma-separated names; empty: every one)
@@ -168,8 +174,7 @@ on_gpu() {
   : > $d/prove.err
   if [ $GPU = 0 ]; then "$@" 2> $d/prove.err; return $?; fi
   gpu_mib $d & local s=$!
-  local mm=10; [[ " $* " == *" FC_FIREWALL=1 "* ]] && mm=90
-  "${LEASE[@]}" 1 --wait ${GPU_ON:+--on $GPU_ON} --max-min ${GPU_MAX_MIN:-$mm} --mem-gb ${GPU_MEM_GB:-32} ${pre:+--preemptible} -- "$@" 2> $d/prove.err
+  "${LEASE[@]}" 1 --wait ${GPU_ON:+--on $GPU_ON} --max-min ${GPU_MAX_MIN:-10} --mem-gb ${GPU_MEM_GB:-32} ${pre:+--preemptible} -- "$@" 2> $d/prove.err
   local rc=$?
   kill $s; wait $s 2>/dev/null
   return $rc
@@ -407,7 +412,6 @@ print(json.dumps(s))
 EOF
 }
 
-# lean_build: flock-verify and the firewall's flock-firewall (FC_FIREWALL_LEAN), from the one Lean package, keyed by its sources
 lean_build() {
   [ -x $LEAN_BIN ] && [ -x $FC_FIREWALL_LEAN ] && return 0
   no_build "flock-verify-$LSHA or flock-firewall-$LSHA"
@@ -417,8 +421,8 @@ lean_build() {
     exec 9>$L/lean.lock; flock 9
     if [ ! -x $LEAN_BIN ] || [ ! -x $FC_FIREWALL_LEAN ]; then
       rm -rf $L/lean-src && mkdir -p $L/lean-src && cp -r verity/core/service/flock/. $L/lean-src/ \
-        && (cd $L/lean-src && lake build flock-verify flock-firewall) && mkdir -p $L/lean-$LSHA || exit 1
-      for x in flock-verify flock-firewall; do [ -x $L/lean-$LSHA/$x ] || cp $L/lean-src/.lake/build/bin/$x $L/lean-$LSHA/$x || exit 1; done
+        && (cd $L/lean-src && lake build flock-verify flock-firewall) && mkdir -p $L/lean-$LSHA \
+        && cp $L/lean-src/.lake/build/bin/flock-verify $L/lean-src/.lake/build/bin/flock-firewall $L/lean-$LSHA/
     fi
   )
 }
@@ -432,9 +436,7 @@ fold_build() {
     command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
     exec 9>$L/fold.lock; flock 9
     if [ ! -x $FOLD_BIN ]; then
-      # lean_build's tree, built, starts it warm (lake rebuilds whatever these sources changed)
-      C=$L/fold-src; rm -rf $C && mkdir -p $C && { [ ! -d $L/lean-src/.lake ] || cp -a $L/lean-src/.lake $C/; } \
-        && cp -r verity/core/service/flock/. $C/ && cp verity/ml/flock/tests/lean/InnerFold.lean $C/ \
+      C=$L/fold-src; rm -rf $C && mkdir -p $C && cp -r verity/core/service/flock/. $C/ && cp verity/ml/flock/tests/lean/InnerFold.lean $C/ \
         && printf '\n[[lean_exe]]\nname = "inner-fold"\nroot = "InnerFold"\n' >> $C/lakefile.toml \
         && (cd $C && lake build inner-fold) && mkdir -p $L/fold-$FSHA && cp $C/.lake/build/bin/inner-fold $FOLD_BIN
     fi
@@ -677,29 +679,42 @@ oprove)
   # statement: dev (the device's witness, rec-reprice's), host (FC_HOST_WITNESS=1, no firewall) and firewall (FC_FIREWALL=1
   # on the host witness: the send check and the level-0 recheck, PROTOCOL.md §10); the firewall's cost is firewall's minus
   # host's. The last mode's last session is the one oreplay and lean read.
+  # Statements are proved OPROVE_JOBS at once, the largest first, while their estimated peaks (oprove_gb) sum to at most
+  # OPROVE_MEM_GB; each in a subshell of its own (its WARM, RUNS, PENV, LAST and hello_at's exports), its log
+  # $O/oprove/<name>.log.
   MODES=${MODES:-dev}; MODES=${MODES//,/ }
-  # the firewall releases through the Lean flock-firewall built from this checkout's Lean sources (FC_FIREWALL_LEAN)
-  if [[ " $MODES " == *" firewall "* ]] || [ -n "${CONTROLS:-}" ]; then
-    lean_build > $O/build-lean.log 2>&1 || { tail -20 $O/build-lean.log; exit 1; }
-    sha256sum $FC_FIREWALL_LEAN | tee $O/firewall.sha
+  for mode in $MODES; do case $mode in dev|host|firewall) ;; *) echo "MODES: dev host firewall"; exit 1 ;; esac; done
+  [[ " $MODES " != *" firewall "* ]] || [ -x $FC_FIREWALL_LEAN ] || lean_build > $O/build-lean.log 2>&1 \
+    || { tail -20 $O/build-lean.log; exit 1; }
+  mkdir -p $DD/v-sess $O/oprove
+  # Outer proofs through the firewall are independent sessions (AGENTS.md, Daniel's provisional batch of 24 Oct): every
+  # staged statement is fixed before any session draws coins (statements.sha512, checked again once all have ended), gets
+  # exactly one session, with its own loopback verifier, live coins and firewall pass, never a second one (no lease retry,
+  # no preemption: a failed session is its statement's failure), and every statement's exit is recorded (exits.tsv), an
+  # honest one's failure failing the step.
+  if [[ " $MODES " == *" firewall "* ]]; then
+    [ "$MODES" = firewall ] || { echo "REFUSED: MODES=$MODES: a firewalled oprove gives each staged statement exactly one session; run MODES=dev or host in a job of its own"; exit 2; }
+    [ $((WARM + RUNS)) = 1 ] || { echo "REFUSED: WARM=$WARM RUNS=$RUNS: a firewalled oprove gives each staged statement exactly one session (WARM=0 RUNS=1)"; exit 2; }
+    export GPU_TRIES=1 GPU_PREEMPTIBLE=
   fi
-  FWENV="FC_FIREWALL=1 FC_HOST_WITNESS=1 FC_FIREWALL_LEAN=$FC_FIREWALL_LEAN"
-  mkdir -p $DD/v-sess
+  (cd $V && find . \( -name circuit.txt -o -name pub.bin -o -name inst.bin -o -name partition.json -o -name program.json \
+    -o -name registered.json \) | LC_ALL=C sort | xargs sha512sum) > $O/oprove/statements.sha512
+  : > $O/oprove/exits.tsv
   W0=$WARM R0=$RUNS
-  for C in $(cd $V && find . -name inst.bin -printf '%h\n' | sed 's:^\./::' | sort -V); do
-    l=${C//\//-}; want $l || continue
+  oprove_one() {
+    local C=$1 l=${1//\//-} n mode rc=0
     case $l in forged-*) WARM=0 RUNS=1 SELF_CHECK=skip ;; *) WARM=$W0 RUNS=$R0 SELF_CHECK=stop ;; esac; NS=$((WARM + RUNS))
     hello_at $V/$C
     for mode in $MODES; do
-      case $mode in dev) PENV= ;; host) PENV=FC_HOST_WITNESS=1 ;; firewall) PENV=$FWENV ;; *) echo "MODES: dev host firewall"; exit 1 ;; esac
+      case $mode in dev) PENV= ;; host) PENV=FC_HOST_WITNESS=1 ;; firewall) PENV="FC_FIREWALL=1 FC_HOST_WITNESS=1" ;; esac
       n=$l; [ "$MODES" = dev ] || n=$l-$mode
-      LAST=; again loopback $n $V/$C/pub.bin $V/$C/inst.bin $V/$C/circuit.txt --zk
+      LAST=; again loopback $n $V/$C/pub.bin $V/$C/inst.bin $V/$C/circuit.txt --zk || rc=$?
     done
     PENV=
     # the last mode's LIVE verdicts, which STEP=lean reads for a FIREWALL-REFUSED stop when no session reached it
     grep -h $'\tLIVE\t' $O/oprove/$n/prove.tsv 2>/dev/null | cut -f3- > $DD/v-sess/$l.live
     du -sb $V/$C/inst.bin $V/$C/pub.bin $V/$C/circuit.txt ${LAST:+$LAST/*.bin} > $O/oprove/$n/sizes.txt
-    [ -n "${LAST:-}" ] || { echo "$n: no session"; continue; }
+    [ -n "${LAST:-}" ] || { echo "$n: no session"; return 1; }
     # REPLAY=0: upstream's replay waits for STEP=oreplay (CPU), outside the GPU lease
     if [ "${REPLAY:-1}" = 1 ]; then
       taskset -c $VCPU /usr/bin/time -v -o $O/oprove/$n/time-replay.txt $B replay --zk --instances $V/$C/pub.bin \
@@ -707,15 +722,55 @@ oprove)
       echo "$n replay exit $?"
     fi
     rm -rf $DD/v-sess/$l && cp -r $LAST $DD/v-sess/$l && echo $V/$C > $DD/v-sess/$l.stmt && echo $mode > $DD/v-sess/$l.mode
+    return $rc
+  }
+  # oprove_gb: each statement's estimated peak GB, largest first. The fit to the CPU prover's peaks at K=64 N=64
+  # (r20261024-055050-962e: RecOpen 6.4 to 32.5, InnerRepCheck 22.3, RecCap 2.3) is linear in the circuit text's GB, 2^(k_log
+  # - 20) and the instances; with a quarter's margin, at least 2
+  mapfile -t TODO < <(python3 - $V <<'EOF'
+import json, math, sys
+from pathlib import Path
+out = []
+for d in Path(sys.argv[1]).rglob("inst.bin"):
+    d = d.parent
+    with open(d / "circuit.txt") as f:
+        f.readline()
+        meta = json.loads(f.readline()[5:])
+    with open(d / "inst.bin", "rb") as f:
+        n = json.loads(f.readline())["instances"]
+    gb = 25.4 * (d / "circuit.txt").stat().st_size / 1e9 + 0.3 * 2 ** (meta["k_log"] - 20) + 0.06 * n - 7.5
+    out.append((max(2, math.ceil(1.25 * gb)), str(d.relative_to(sys.argv[1]))))
+for gb, c in sorted(out, key=lambda x: (-x[0], x[1])):
+    print(gb, c)
+EOF
+)
+  echo "oprove: ${#TODO[@]} statements, OPROVE_JOBS=${OPROVE_JOBS:-4} OPROVE_MEM_GB=${OPROVE_MEM_GB:-48}: ${TODO[*]}"
+  declare -A RUNNING=(); USED=0
+  for t in "${TODO[@]}"; do
+    gb=${t%% *} C=${t#* }; l=${C//\//-}; want $l || continue
+    while [ ${#RUNNING[@]} -gt 0 ] && { [ ${#RUNNING[@]} -ge ${OPROVE_JOBS:-4} ] || [ $((USED + gb)) -gt ${OPROVE_MEM_GB:-48} ]; }; do
+      wait -n -p FIN; [ -n "${RUNNING[$FIN]:-}" ] && USED=$((USED - ${RUNNING[$FIN]%% *})) && echo "oprove ${RUNNING[$FIN]#* } done" && unset "RUNNING[$FIN]"
+    done
+    { oprove_one $C > $O/oprove/$l.log 2>&1; printf '%s\t%s\n' $l $? >> $O/oprove/exits.tsv; } &
+    RUNNING[$!]="$gb $l"; USED=$((USED + gb)); echo "oprove $l started (${gb} GB est, ${USED} GB running)"
   done
+  wait
   WARM=$W0 RUNS=$R0 NS=$((W0 + R0))
+  (cd $V && sha512sum --quiet -c $O/oprove/statements.sha512) || { echo "a staged statement changed while sessions ran"; exit 1; }
+  python3 - $O/oprove/exits.tsv "${TODO[@]#* }" <<'EOF' || exit 1
+import sys
+got = dict(l.rstrip("\n").split("\t") for l in open(sys.argv[1]) if l.strip())
+bad = [f"{l}: exit {got[l]}" for l in (c.replace("/", "-") for c in sys.argv[2:]) if got.get(l, "0") != "0" and not l.startswith("forged-")]
+print(f"oprove: {len(got)} statements, one session each: exits {dict(sorted(got.items()))}")
+sys.exit(f"oprove: an honest statement's session failed, and none is drawn again: {', '.join(bad)}" if bad else 0)
+EOF
   # CONTROLS=DIR (a statement's directory under data/$TAG/v, e.g. L6): on that statement, one firewalled session per
   # FC_FIREWALL_TAMPER control (the device's side dishonest in one named way), each of which the firewall must refuse by name
   # without the tampered message leaving, the session stopping at its Finish (live PROTOCOL.md §10.1)
   if [ -n "${CONTROLS:-}" ]; then
     C=$V/$CONTROLS; hello_at $C
     for w in root witness label opening algebra algebra-proof shape; do
-      PENV="$FWENV FC_FIREWALL_TAMPER=$w" WARM=0 RUNS=1 NS=1 again loopback neg-${CONTROLS//\//-}-$w $C/pub.bin $C/inst.bin $C/circuit.txt --zk
+      PENV="FC_FIREWALL=1 FC_HOST_WITNESS=1 FC_FIREWALL_TAMPER=$w" WARM=0 RUNS=1 NS=1 again loopback neg-${CONTROLS//\//-}-$w $C/pub.bin $C/inst.bin $C/circuit.txt --zk
     done
   fi
   ;;
@@ -735,6 +790,9 @@ oreplay)
 lean)
   [ -x $LEAN_BIN ] || lean_build > $O/build-lean.log 2>&1 || { tail -20 $O/build-lean.log; exit 1; }
   mkdir -p $O/lean
+  # LEAN_JOBS verifications at once, the largest circuit first: one core each, at most 4.3 GB at K=64 N=64
+  # (r20261024-055050-962e), so by default one per 5 GB of LEAN_MEM_GB, at most the job's cores
+  JOBS=${LEAN_JOBS:-$(( ${LEAN_MEM_GB:-48} / 5 < NC ? ${LEAN_MEM_GB:-48} / 5 : NC ))}
   # V*'s values against the verifier's own coins (verify --rec-inner-*, RecCoins.check): the inner statement and the inner
   # session STEP=vstage staged every statement from, a forgery's too, with the coin server's transcript of it, whose
   # root_B, later tops and link points every statement's tops and check 5 are held to (RecVStar.checkTopRows,
@@ -743,6 +801,13 @@ lean)
   rec_inner_at() { echo "--rec-inner-circuit $DD/stage/circuit.txt --rec-inner-public $DD/stage/pub-$N.bin --rec-inner-partition $DD/stage/partition.json --rec-inner-statement verity/flock-circuit+plain-leaves --rec-inner-statement-coins os --rec-inner-draw $DD/stage/draw.json --rec-inner-session $1/session --rec-inner-transcript $1/public.json"; }
   REC_INNER=$(rec_inner_at $INNER)
   NEGS=
+  # a forged inner coin only the parts that read it can refuse (lean_verdicts.py's COVERS): without one among the parts
+  # this step checks, the step refuses to run it rather than judge it
+  VPARTS=$(ls -d $DD/v-sess/*/ 2>/dev/null | sed 's:/$::' | xargs -rn1 basename | grep -v '^forged-' | while read -r l; do want $l && echo $l; done)
+  for w in ${NEG_INNER-challenge query}; do
+    [ -z "$VPARTS" ] || python3 verity/ml/flock/pod/lean_verdicts.py --cover inner-$w $VPARTS \
+      || { echo "lean: NEG_INNER=$w: include a part that reads it in LEVELS, or leave $w out of NEG_INNER"; exit 1; }
+  done
   for w in ${NEG_INNER-challenge query}; do
     FI=$DD/inner-neg-$w; rm -rf $FI; mkdir -p $FI && cp -r $INNER/session $INNER/public.json $INNER/private.json $FI/ \
       && python3 verity/ml/flock/pod/rec_inner.py forge --what $w --inner $FI > $O/lean/forge-inner-$w.json || exit 1
@@ -792,7 +857,7 @@ for s in sorted(p for p in vs.iterdir() if p.is_dir()):
     print(s.name, unit, " ".join(flags))
 EOF
   fi
-  for S in $(ls -d $DD/v-sess/*/ 2>/dev/null | sed 's:/$::' | sort -V); do l=$(basename $S); C=$(cat $S.stmt)
+  for S in $(for s in $(ls -d $DD/v-sess/*/ 2>/dev/null | sed 's:/$::'); do echo "$(stat -c %s $(cat $s.stmt)/circuit.txt) $s"; done | sort -k1,1nr -k2V | cut -d' ' -f2); do l=$(basename $S); C=$(cat $S.stmt)
     want $l || continue
     OWN=$(cat $O/lean/own-$l.txt)
     echo "/usr/bin/time -v -o $O/lean/time-$l.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin --partition $C/partition.json --program $C/program.json --registered $C/registered.json $OWN $REC_INNER --session $S > $O/lean/$l.log 2> $O/lean/$l.err; echo $l lean exit \$?"

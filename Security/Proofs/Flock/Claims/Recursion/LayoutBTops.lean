@@ -48,10 +48,12 @@ level 0's last. -/
 def capsFrom (r : XR) (rs : Array RecVStar.SchedRound) : ℕ := r.w.parts.length - 1 - (RecVStar.topSizes rs).length
 
 /-- **A top as its cap's part holds it**: at part `s`, the commit strings of rep `rep`'s `n` instances (`rep · n + t`)
-in order, each port `top`'s hm96 slot's output `b ‖ c`. -/
+in order, each port `top`'s hm96 slot's output `b ‖ c`. At a part with no circuit or no port `top` it is read at the
+default circuit and port 0 instead, so every top's piece is `128 · n` bytes (`pieceLen_topPiece`) wherever it sits; a
+staged cap has both (`RecCoins.checkCap`). -/
 def topPiece (r : XR) (s n rep : ℕ) : List (Msg × List HmNets.Lin) :=
-  ((r.w.parts[s]?.bind partCircuit).bind fun c => (capPort c).map fun q =>
-    (List.range n).map fun t => (([] : Msg), hmCommit c q (rep * n + t))).getD []
+  let c := (r.w.parts[s]?.bind partCircuit).getD default
+  (List.range n).map fun t => (([] : Msg), hmCommit c ((capPort c).getD 0) (rep * n + t))
 
 /-- **The row stream round `j` absorbs**: the first part with a held row of round `j` (`heldRows`), as that port's hm96
 slot's output. None where no part has one. -/
@@ -437,7 +439,7 @@ theorem ksLin2_deployed_tops (b : Brings) (fin : Msg → List (ℕ × List (Msg 
           (∀ decI, Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape
             decC shows cmt) ∧
           (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
-            L shape shows chk s) ∧
+            L shape shows cmt chk s) ∧
           (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
             L shape shows cmt s) ∧
           Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →

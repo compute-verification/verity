@@ -414,7 +414,7 @@ fn serve_loop(make: impl Fn() -> Server) {
         let rec = s.record_json();
         let d = out.join(&id);
         std::fs::create_dir_all(&d).unwrap();
-        std::fs::write(d.join("session.json"), serde_json::to_string_pretty(&rec).unwrap()).unwrap();
+        std::fs::write(d.join("session.json"), flock_live::record_text::canonical_json(&rec)).unwrap();
         let line = json!({"session": id, "accepted": rec["verdict"]["accepted"], "aborted": rec["aborted"],
                           "rounds": rec["verdict"]["rounds"], "streams": rec["verdict"]["streams"]});
         use std::io::Write;
@@ -519,6 +519,7 @@ fn bench(st: Arc<Stmt>) {
 }
 
 fn main() {
+    flock_live::init_threads();
     let cmd = std::env::args().nth(1).unwrap_or_default();
     let n: usize = arg("--n", "4096").parse().unwrap();
     if cmd == "serve-gpu" {

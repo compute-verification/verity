@@ -264,7 +264,7 @@ def periodic(tmp_path, monkeypatch):
     def make(draw_k, model=True, files=None, registry=None):
         leaves = itertools.count()
         ledger = CH.Ledger(tmp_path / "auditor.jsonl", 1, leaves, registry=registry or _registry())
-        ledger.period_open(PERIOD, circuit=_circuit(), draw_k=draw_k, circuit_files=files,
+        ledger.period_open(PERIOD, circuit=_circuit(), draw_k=draw_k, rows=ROWS, circuit_files=files,
                            model=CH.MODEL if model else None)
         host = CH.Host(tmp_path / "auditor", Wd.live_challenger(0, 1, CH.entropy(1)), 1, leaves=leaves, ledger=ledger,
                        gated=True)
@@ -284,12 +284,13 @@ def _commit(tap, x, ids):
     tap.take(f"{CT.site('q')}/1", s_a, 0)
 
 
-def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True, served=None, ids=None):
+def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True, served=None, ids=None, pad=0, graphs=()):
     """One small call (m rows of K, N = `n`) through `arm` with H1 installed (T = `ROWS`), its request admitted with an
     m-token prompt (with none: prompt embeddings, so no entry); the run closed and its y and run returned, the served y
     the plain linear's when `exact`. Its coins are the auditor host's challenger's with `remote` (the `auditor` fixture),
     else held in this process; with `served` (`pouw_h1_served.Served`) its rows are the window Program's values and the
-    Commit is in its engine (`_commit`, its input ids `ids`, else the prompt's)."""
+    Commit is in its engine (`_commit`, its input ids `ids`, else the prompt's). With `pad` the call runs `pad` rows past
+    the m scheduled, as a CUDA graph of the engine's capture sizes `graphs` pads it, its padded input ids 0."""
     layer = Linear(n, 1, arm)
     if served is not None:
         served.tap = CT.CommitTap("embed")
@@ -300,7 +301,7 @@ def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True, serv
         coins = {"coins": Challenger(0, random.Random(0).randbytes),
                  "rounds": LiveRecord(Wd.live_challenger(0, 1, random.Random(1).randbytes), Wd.ROUND, clock=lambda: 0.0)}
     ctx = PO.Context(stage="serve", enabled=(ENTRY,), settings={"pouw": {"rows": ROWS, "steps": 1, "retain_steps": retain,
-                                                                         "runner": runner, **coins,
+                                                                         "runner": runner, **coins, "graphs": graphs,
                                                                          **({"served": served} if served else {})}})
     comp = PO.install(Model(layer), ctx)
     try:
@@ -308,9 +309,9 @@ def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True, serv
                               sampling_params=SimpleNamespace(max_tokens=1))
         runner.execute_model(SimpleNamespace(scheduled_new_reqs=[req], num_scheduled_tokens={"r": m},
                                              total_num_scheduled_tokens=m))
-        x = (torch.randn(m, K, generator=torch.Generator().manual_seed(9)) * 3).bfloat16()
+        x = (torch.randn(m + pad, K, generator=torch.Generator().manual_seed(9)) * 3).bfloat16()
         if served is not None:
-            _commit(served.tap, x, list(range(m)) if ids is None else ids)
+            _commit(served.tap, x, (list(range(m)) if ids is None else ids) + [0] * pad)
         y = layer.quant_method.apply(layer, x)
         run = pouw.h1_run(ENTRY)
         run.close()
@@ -675,8 +676,8 @@ def _one_row(xq):
 
 
 @pytest.mark.parametrize("arm,ids,want", [
-    (lambda: EditArm(torch.zeros_like), None, "call 0's A table h1/a/64@0 is not the Commit's row-table/0/q"),
-    (lambda: EditArm(_one_row), None, "call 0's A table h1/a/64@0 is not the Commit's row-table/0/q"),
+    (lambda: EditArm(torch.zeros_like), None, "h1/a/64@0 is not the Commit's row-table/0/k64"),
+    (lambda: EditArm(_one_row), None, "h1/a/64@0 is not the Commit's row-table/0/k64"),
     (lambda: ZyArm(), [0, 7, 2], "round 0's input-ids table h1/ids@0 is not the Commit's input-ids/0"),
 ], ids=["a-all-zero", "one-a-row-off", "ids-off-the-prompt"])
 def test_a_window_whose_tables_are_not_the_commits_is_refused_by_core(periodic, monkeypatch, arm, ids, want):
@@ -768,7 +769,7 @@ def test_round_0s_input_ids_bind_the_windows_session(periodic, monkeypatch, othe
     assert auditor.ended() is None and not run.served.refused
     c = _record(run)["commitment"]
     why = CR._registration(c["session"]["root"], run.served.program_digest, "h1/", c["served"]["entries"], [],
-                           CR.layout_of(_descriptor())[0], [], auditor.session_id)
+                           CR.layout_of(_descriptor())[0], 1, [], auditor.session_id)
     assert why == (("registration", CR.other_registration("h1/ids@0")) if other else None), why
 
 
@@ -776,7 +777,7 @@ def test_the_serving_process_credits_nothing_in_a_window_off_the_commit(auditor)
     """The same zero A with the serving process's own check (`pouw_h1_commit.roots1`): its calls' credit bits are
     false (`UNTIED`), naming the call."""
     _y, run = _serve(EditArm(torch.zeros_like), remote=True, n=64, served=_served())
-    assert run.details["roots1"]["reason"].startswith("roots1: call 0's A table h1/a/64@0 is not the Commit's")
+    assert run.details["roots1"]["reason"].startswith("roots1: round 0's A table h1/a/64@0 of calls [0] is not the Commit's")
     assert {v["reason"] for v in run.gated().values() if not v["credit"]} == {CT.UNTIED}
 
 
@@ -924,7 +925,11 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     st, seen = [_statement(tmp_path / "c0", 0, len(drawn))], []
     out = _credit(auditor, rec, st, run=_verifier(drawn, seen=seen))
     assert out["manifest"] is None and out["window"] is None, out
-    assert out["calls"] == out["credit"] == [0] and out["eps"] == str(CR.established(LAYOUT, [0], k))
+    served = [row[CR.SERVED_ROWS] for row in rec["calls"]]
+    eps = CR.established(LAYOUT, [0], served, k)
+    assert out["calls"] == out["credit"] == [0] and out["eps"] == (None if eps is None else str(eps))
+    assert 0 < served[0] < LAYOUT["m"]
+    assert CR.credited_work(LAYOUT, [0], served) == served[0] * LAYOUT["linears"][0][1] * LAYOUT["linears"][0][2]
     (got,) = seen
     assert got["circuit_sha512"] == FILES[f"k{K}"]
     root, digest = auditor.window["root"], _circuit()
@@ -940,7 +945,8 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     ledger = PHC.Ledger.load([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path], main=CH.MAIN)
     evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, st, _descriptor())
     got, why = PHC.period_credit(ledger, PERIOD, [evidence], run=_verifier(drawn))
-    assert why is None and got == {"windows": [[0]], "k": k, "delta": str(CR.DELTA), "eps": [out["eps"]]}, why
+    assert why is None and got == {"windows": [[0]], "work": [CR.credited_work(LAYOUT, [0], served)], "k": k,
+                                   "delta": str(CR.DELTA), "eps": [out["eps"]]}, why
     unpinned = PHC.Ledger.load([auditor.ledger.path], auditor.key, main=CH.MAIN)
     assert PHC.period_credit(unpinned, PERIOD, [evidence], run=_verifier(drawn))[1] == (
         "circuit", f"window 0 of period {PERIOD} doesn't count toward it, so the period earns nothing: {LC.NO_PINS}")

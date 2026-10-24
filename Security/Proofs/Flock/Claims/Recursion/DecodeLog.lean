@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Recursion.LogWalk
+import Flock.With.VerifyE
 
 /-!
 # The record decoder's SHA-512 calls
@@ -35,8 +36,10 @@ theorem size_zero_of_not {p : ByteArray} {b : Bool} (h : ¬(!(p.size == 0 && b))
   exact h (by simp [hne])
 
 open Lean (Json) in
-theorem decode_log {h : ByteArray → ByteArray} {spec : SessionSpec} {text : String} {l₀ : Array ByteArray} :
-    RetL (Record.decodeWith (Hashes.logged h) spec text) l₀ fun sess l' =>
+/-- `decode_log` at `Record.decodeWithK keep`: `keep` wraps only comparisons, so every digest is still computed. -/
+theorem decodeK_log (keep : Bool → Bool) {h : ByteArray → ByteArray} {spec : SessionSpec} {text : String}
+    {l₀ : Array ByteArray} :
+    RetL (Record.decodeWithK keep (Hashes.logged h) spec text) l₀ fun sess l' =>
       ∃ ds : List (List ByteArray), l'.toList = l₀.toList ++ (sess.rootB.toList.flatMap (dgl spec) ++
         dgl spec sess.rootF ++ ds.flatten ++ sess.streams.toList.flatMap (streamLog spec) ++
         spec.repStreams.toList.flatMap (fun x => dgl spec sess.rootB[x.1]!) ++ dgl spec (lbOf spec sess)) ∧
@@ -46,7 +49,7 @@ theorem decode_log {h : ByteArray → ByteArray} {spec : SessionSpec} {text : St
       sess.streams.size = spec.repStreams.size ∧
       ∀ x ∈ spec.repStreams.toList,
         ∃ s, sess.streams.find? (·.name == x.2.2) = some s ∧ 0 < s.rounds.size := by
-  unfold Record.decodeWith
+  unfold Record.decodeWithK Record.decodeJWithK
   retl_walk [Record.check]
   all_goals
     subst_vars
@@ -98,5 +101,19 @@ theorem decode_log {h : ByteArray → ByteArray} {spec : SessionSpec} {text : St
       exact forall₂_fst_snd f7
     · show rootB.size = _
       rw [← Array.length_toList, e5, List.length_map, ← f5.length_eq, Array.length_toList]
+
+open Lean (Json) in
+theorem decode_log {h : ByteArray → ByteArray} {spec : SessionSpec} {text : String} {l₀ : Array ByteArray} :
+    RetL (Record.decodeWith (Hashes.logged h) spec text) l₀ fun sess l' =>
+      ∃ ds : List (List ByteArray), l'.toList = l₀.toList ++ (sess.rootB.toList.flatMap (dgl spec) ++
+        dgl spec sess.rootF ++ ds.flatten ++ sess.streams.toList.flatMap (streamLog spec) ++
+        spec.repStreams.toList.flatMap (fun x => dgl spec sess.rootB[x.1]!) ++ dgl spec (lbOf spec sess)) ∧
+      List.Forall₂ (fun p d => d = dgl spec p ∨ d = [] ∧ p.size = 0) sess.publics.toList ds ∧
+      sess.rootB.size = spec.tables.size ∧ sess.rootF = spec.sigma ∧
+      sess.y.size = spec.points * spec.tables.size ∧ (∀ c ∈ sess.y, c.isZero = true) ∧
+      sess.streams.size = spec.repStreams.size ∧
+      ∀ x ∈ spec.repStreams.toList,
+        ∃ s, sess.streams.find? (·.name == x.2.2) = some s ∧ 0 < s.rounds.size :=
+  decodeK_log id
 
 end FlockDeploy.KS
