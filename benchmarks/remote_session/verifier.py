@@ -245,7 +245,7 @@ def average_line(windows: list[dict]) -> dict:
 
 
 def memory(record: audit.Record, plans, regions, *, hbm_bytes: int, rebuild: audit.Rebuild, chip_bytes: int = 0,
-           credit_post_seed: audit.PostSeedVerdict | None = None) -> dict:
+           credit_post_seed: audit.PostSeedVerdict | None = None, schedule: audit.Scheduled | None = None) -> dict:
     """The node's memory a session's record shows held, against its HBM, in two forms.
 
     Held at every pass (`WORST_PASS`, the worst pass's): each window's passes each read the distinct blocks of their
@@ -261,14 +261,17 @@ def memory(record: audit.Record, plans, regions, *, hbm_bytes: int, rebuild: aud
 
     A registered block counts as the layout labels it (`regions_of`; None, the drivers' stores: the whole store
     filler in HBM), HBM only toward the share; an appended block
-    (index N and up) is KV the session wrote, in HBM, and is credited only on the property's verdict, less the most
-    its carriers hold (`credit_post_seed`, as `audit.ledger`'s μ_carrier).  Weights and KV are each credited on their
+    (index N and up) is KV the session wrote, in HBM, and is credited only on the property's verdict and the session's
+    schedule check (`schedule`, `audit.Session.scheduled`, as `audit.ledger` requires them), less the most its carriers
+    hold (`credit_post_seed`, as `audit.ledger`'s μ_carrier).  Weights and KV are each credited on their
     own: the lost blocks come off each.  The session's line is its worst window's: `credited_bytes`, `share` of
     `hbm_bytes` and `residual` = 1 − share, the HBM it doesn't show used, with ε, the share of the window's held
     basis the losses took, at δ.  ε is this reading's (the floor and rebuilds against held blocks), not a composed
     guarantee's."""
     if credit_post_seed is not None and credit_post_seed.holds is not True:
         raise ValueError("a verdict that the property fails credits nothing after the seed: pass None")
+    if credit_post_seed is not None and (type(schedule) is not audit.Scheduled or not schedule.of(record)):
+        raise ValueError("KV is credited only on this session's schedule check (`audit.Session.scheduled`)")
     if len(plans) != len(record.windows) or any(len(p) != w.passes for p, w in zip(plans, record.windows)):
         raise ValueError("a plan for each pass of each window of the record")
     if rebuild.codec != record.codec:
