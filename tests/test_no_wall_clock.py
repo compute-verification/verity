@@ -56,6 +56,8 @@ ALLOWED: dict[str, str] = {
     "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::fill": "the GPU run records its serve and step seconds; nothing reads them",
     "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::period_program":
         "the GPU run records the period Program's declare and digest seconds; nothing reads them",
+    "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::await_end":
+        "the live run polls the live gate's status for a window's session end entry before reserving the next: it has no wait verb",
     "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::await_listener":
         "the live run waits for the challenger's ssh -R listener (ss -ltn) once a second; a probe connect would take its one client",
     "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::served_measures":
