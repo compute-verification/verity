@@ -97,79 +97,75 @@ def _runs(tmp: Path, profile: str, strategies) -> dict[str, Path]:
     return {s: tmp / s for s in strategies}
 
 
-@pytest.fixture(scope="module")
-def planned(tmp_path_factory):
-    tmp = tmp_path_factory.mktemp("planned")
-    runs = _runs(tmp, "planned", ("honest", "late", "extra", "drop", "token"))
-    runs["head"] = NG.make("head", runs["honest"], tmp / "head")
-    return runs, {s: NG.n2(r, clock=lambda: 0.0) for s, r in runs.items()}
+STRATEGIES = ("honest", "late", "extra", "drop", "token")
+PROFILES = ("planned", "served")
 
 
 @pytest.fixture(scope="module")
-def served(tmp_path_factory):
-    tmp = tmp_path_factory.mktemp("served")
-    runs = _runs(tmp, "served", ("honest", "extra", "drop"))
-    return runs, {s: NG.n2(r, clock=lambda: 0.0) for s, r in runs.items()}
+def runs(tmp_path_factory):
+    """Per N2 profile: each strategy's run, the tampered head of honest's, and N2's verdict on each."""
+    out = {}
+    for profile in PROFILES:
+        tmp = tmp_path_factory.mktemp(profile)
+        rs = _runs(tmp, profile, STRATEGIES)
+        rs["head"] = NG.make("head", rs["honest"], tmp / "head")
+        out[profile] = rs, {s: NG.n2(r, clock=lambda: 0.0) for s, r in rs.items()}
+    return out
 
 
 def _egress(run: Path, window: int = 0):
     return cs.read_certified(run / "certified.jsonl")[0][(Direction.EGRESS, window)].head
 
 
-@pytest.mark.slow
-def test_honest_is_accepted_on_every_window_with_no_code(planned, served):
-    for runs, verdicts in (planned, served):
-        v = verdicts["honest"]
-        assert v["accepted"] and v["codes"] == [] and all(r["accepted"] for r in v["windows"])
-        assert len(v["windows"]) == json.loads((runs["honest"] / "plan.json").read_text())["windows"]
+@pytest.mark.parametrize("profile", PROFILES)
+def test_honest_is_accepted_on_every_window_with_no_code(runs, profile):
+    rs, verdicts = runs[profile]
+    v = verdicts["honest"]
+    assert v["accepted"] and v["codes"] == [] and all(r["accepted"] for r in v["windows"])
+    assert len(v["windows"]) == json.loads((rs["honest"] / "plan.json").read_text())["windows"] and v["profile"] == profile
 
 
-@pytest.mark.slow
+@pytest.mark.parametrize("profile", PROFILES)
 @pytest.mark.parametrize("name", ["late", "extra", "drop", "head"])
-def test_each_certifier_side_negative_is_refused_by_the_code_it_names(planned, name):
-    _, verdicts = planned
+def test_each_certifier_side_negative_is_refused_by_the_code_it_names(runs, profile, name):
+    """Window 0's, where the tampering is, and no other window's: the served counts on a served link for extra and
+    drop, the counts against the profile on a planned one."""
+    _, verdicts = runs[profile]
     got = NG.judge(name, verdicts[name])
     assert got["refused"] and got["by_code"], got
-    assert verdicts[name]["windows"][0]["codes"], "the code is window 0's, where the tampering is"
+    assert got["code"] == (NG.SERVED if profile == "served" and name in ("extra", "drop") else NG.NEGATIVES[name].code)
+    assert [r["window"] for r in verdicts[name]["windows"] if r["codes"]] == [0]
+    today = {c for c in NG.NEGATIVES[name].also if c.split(".")[0] in NG.CHECKS_TODAY}
+    assert today <= set(verdicts[name]["codes"])
 
 
-@pytest.mark.slow
-@pytest.mark.parametrize("name", ["extra", "drop"])
-def test_on_a_served_link_extra_and_drop_are_refused_by_the_served_counts(served, name):
-    _, verdicts = served
-    got = NG.judge(name, verdicts[name])
-    assert got["code"] == NG.SERVED and got["refused"] and got["by_code"], got
+def test_drop_and_extra_certify_one_frame_fewer_and_one_more_than_honest(runs):
+    rs, _ = runs["planned"]
+    honest = sum(_egress(rs["honest"]).counts)
+    assert sum(_egress(rs["drop"]).counts) == honest - 1
+    assert sum(_egress(rs["extra"]).counts) == honest + 1
 
 
-@pytest.mark.slow
-def test_drop_and_extra_certify_one_frame_fewer_and_one_more_than_honest(planned):
-    runs, _ = planned
-    honest = sum(_egress(runs["honest"]).counts)
-    assert sum(_egress(runs["drop"]).counts) == honest - 1
-    assert sum(_egress(runs["extra"]).counts) == honest + 1
-
-
-@pytest.mark.slow
-def test_a_tampered_head_fails_its_signed_digest_and_its_counts_under_the_original_certificate(planned):
-    runs, verdicts = planned
-    honest, head = (cs.read_certified(runs[s] / "certified.jsonl")[0] for s in ("honest", "head"))
+def test_a_tampered_head_fails_its_signed_digest_and_its_counts_under_the_original_certificate(runs):
+    rs, verdicts = runs["planned"]
+    honest, head = (cs.read_certified(rs[s] / "certified.jsonl")[0] for s in ("honest", "head"))
     assert [k for k in honest if honest[k] != head[k]] == [(Direction.EGRESS, 0)]
     assert head[(Direction.EGRESS, 0)].certificate == honest[(Direction.EGRESS, 0)].certificate
-    assert verdicts["head"]["windows"][0]["codes"] == [f"{NG.HEAD}.counts", f"{NG.HEAD}.signed"]
-    assert all(r["accepted"] for r in verdicts["head"]["windows"][1:])
+    assert verdicts["head"]["windows"][0]["codes"] == [f"{NG.HEAD}.counts", f"{NG.HEAD}.signed", "audit.signature"]
 
 
-@pytest.mark.slow
-def test_a_certified_token_that_isnt_the_endpoints_passes_n2_and_waits_for_the_tie(planned):
+@pytest.mark.parametrize("profile", PROFILES)
+def test_a_certified_token_that_isnt_the_endpoints_passes_n2_and_waits_for_the_tie(runs, profile):
     """token's one changed frame is certified, under honest's counts: N2 accepts every window, and only the I/O tie
     (IO-TIE, pending) can refuse it, which the registry says."""
-    runs, verdicts = planned
-    honest, token = _egress(runs["honest"]), _egress(runs["token"])
+    rs, verdicts = runs[profile]
+    honest, token = _egress(rs["honest"]), _egress(rs["token"])
     assert token.counts == honest.counts and token.root != honest.root
     assert verdicts["token"]["accepted"] and verdicts["token"]["codes"] == []
-    events = [ar.read_events(runs[s] / "server.events.gz") for s in ("honest", "token")]
+    events = [ar.read_events(rs[s] / "server.events.gz") for s in ("honest", "token")]
     differ = [(a[1], a[2]) for a, b in zip(*events, strict=True) if a[4] != b[4]]
-    assert differ == [(json.loads((runs["honest"] / "plan.json").read_text())["sessions"][0][0], 0)]
+    assert differ == [(json.loads((rs["honest"] / "plan.json").read_text())["sessions"][0][0], 0)]
+    assert not NG.judge("token", verdicts["token"])["refused"]
     n = NG.NEGATIVES["token"]
     assert n.code == "IoTie.token" and "IO-TIE" in n.waits
 

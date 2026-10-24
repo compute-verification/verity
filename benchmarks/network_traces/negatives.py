@@ -63,6 +63,7 @@ ADVICE_MODULE = "verity.core.protocols.certifier.advice"
 SAMPLED = "runner.sampler/sampled_token_ids"
 HEAD = "NetworkHeadCheck_v2"
 SERVED = "NetworkServedCounts_v1"
+CHECKS_TODAY = (HEAD, SERVED, "audit")  # the checks `n2` runs; every other code's check is pending
 ENDS = ("egress", "ingress")
 
 
@@ -278,14 +279,15 @@ class Negative:
 
 NEGATIVES = {n.name: n for n in [
     Negative("late", "io", "plan", "the shim holds a window-0 session past every sync; the certifier faults the window",
-             "N2's head check (the record's status)", f"{HEAD}.fields", shim("late"), also=("audit.no-verdict",)),
+             "N2's head check (the record's status)", f"{HEAD}.fields", shim("late"),
+             also=("audit.status:coverage-never-established",)),
     Negative("extra", "io", "plan", "the shim writes one event more than the endpoint sent; certified",
              "N2's counts against the profile", f"{HEAD}.counts", shim("extra"), served=SERVED),
     Negative("drop", "io", "plan", "the shim drops the first event of a response; certified",
              "N2's counts against the profile", f"{HEAD}.counts", shim("drop"), served=SERVED,
              also=("N2Advice.output_len",)),
     Negative("head", "io", "certified", "window 0's egress head one count off, its certificate the original's",
-             "N2's head check (the signed digest)", f"{HEAD}.signed", tampered_head),
+             "N2's head check (the signed digest)", f"{HEAD}.signed", tampered_head, also=("audit.signature",)),
     Negative("token", "io", "plan", "the shim writes a response's first frame with other bytes than the endpoint "
              "sent: certified, its counts honest's", "the I/O tie", "IoTie.token", shim("token"),
              waits=("IO-TIE", "CERT-VARLEN")),
