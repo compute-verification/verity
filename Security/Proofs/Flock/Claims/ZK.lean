@@ -155,6 +155,7 @@ import Proofs.Flock.Claims.ZK.L0PinFlags
 import Proofs.Flock.Claims.ZK.L0PinSwitch
 import Proofs.Flock.Claims.ZK.L0PinBind
 import Proofs.Flock.Claims.ZK.L0PinLive
+import Proofs.Flock.Claims.ZK.L0PinChain
 import Proofs.Flock.Claims.ZK.FinishSwInner
 import Proofs.Flock.Claims.ZK.FinishSwTau
 import Proofs.Flock.Claims.ZK.FinishSwRows
@@ -725,6 +726,10 @@ import Proofs.Flock.Claims.ZK.CutPrefix
 * `L0PinLive`: on a live history whose messages are the release's own, a round scheduled with no free value is the
   frame's release of the scheduled round (`LeanRelease.msg_sched`), so a sent level-0 round is its body at the pads
   (**`LeanRelease.msg_l0`**) and the binding is itself (`LeanRelease.msg_openBind`).
+* `L0PinChain`: level 0's places in the absorbed vector (`l0Off`, `l0_size`) and its sent bodies as `L0Sent` there
+  (`LigLock.l0Sent_at`). On a live history whose rounds from a binding on are masked, at one rep, scheduled as the
+  binding and level 0's bodies at zero pads, the sent rounds are the binding and the bodies at the rep's draws
+  (**`LeanRelease.l0_chain`**).
 * `FinishSwInner`: `repCut_fw`'s `hinner` at that source. The switched view keeps `ρ_in`, `σ_in` (`padShift` moves
   `h_tx`, `h_ty` against the exposed pads; `Table.innerMsg_padShift`) and `Y₂`, and where the rows hold `Y₁`, so the
   switched source's `ρ_in`, `σ_in` and `Y` are the honest source's (`Masked.swSrcE_inner`, `Masked.swSrcE_y`). The
