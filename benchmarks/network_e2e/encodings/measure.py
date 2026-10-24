@@ -240,7 +240,15 @@ def by_field(windows: list, cb, family: str) -> dict[str, float]:
 FIELDS = (("v0", "cond"), ("residual", "static"), ("residual", "cond"))
 
 
+def _timed(f, *args):
+    t0 = time.perf_counter()
+    out = f(*args)
+    return out, time.perf_counter() - t0
+
+
 def measure(test: list[dict], cb) -> dict:
+    """Each test trace's bits per window under every subject and code, after decoding each back (and the decoder's
+    seconds, this module's pure Python, which the verifier's port would run in a small fraction of)."""
     A = adv_spec()
     rows = []
     for t in test:
@@ -250,23 +258,26 @@ def measure(test: list[dict], cb) -> dict:
         entry = {"name": t["name"], "windows": pub.W, "requests": len(adv.requests), "steps": len(adv.steps),
                  "rows": sum(len(s.rows) for s in adv.steps), "outputs": len(adv.release),
                  "arrivals_per_window": [len(pub.requests_in(w)) for w in range(pub.W)],
-                 "resumes_per_window": [len(rep.resumes_in(w)) for w in range(pub.W)], "bits": {}, "fields": {}}
+                 "resumes_per_window": [len(rep.resumes_in(w)) for w in range(pub.W)], "bits": {}, "fields": {},
+                 "decode_seconds": {}}
         for fam in C.FAMILIES:
             bits, lens = C.encode_v0(adv, pub, cb, fam)
-            back = C.decode_v0(C.BitReader(bits.bits), pub, cb, fam)
+            back, dt = _timed(C.decode_v0, C.BitReader(bits.bits), pub, cb, fam)
             if back.steps != adv.steps or back.release != adv.release or \
                     [(r.prompt_len, r.output_len, r.finish) for r in back.requests] != \
                     [(r.prompt_len, r.output_len, r.finish) for r in adv.requests]:
                 raise SystemExit(f"{t['name']}: v0 under {fam} does not round-trip")
-            entry["bits"][f"v0/{fam}"] = lens
+            entry["bits"][f"v0/{fam}"], entry["decode_seconds"][f"v0/{fam}"] = lens, dt
             bits, lens = C.encode_admit(admit, pub, cb, fam, rep)
-            if C.decode_admit(C.BitReader(bits.bits), pub, cb, fam, rep) != list(admit):
+            back, dt = _timed(C.decode_admit, C.BitReader(bits.bits), pub, cb, fam, rep)
+            if back != list(admit):
                 raise SystemExit(f"{t['name']}: admit under {fam} does not round-trip")
-            entry["bits"][f"admit/{fam}"] = lens
+            entry["bits"][f"admit/{fam}"], entry["decode_seconds"][f"admit/{fam}"] = lens, dt
             bits, lens = C.encode_residual(res, pub, cb, fam, rep)
-            if C.decode_residual(C.BitReader(bits.bits), pub, cb, fam, rep) != res:
+            back, dt = _timed(C.decode_residual, C.BitReader(bits.bits), pub, cb, fam, rep)
+            if back != res:
                 raise SystemExit(f"{t['name']}: the residual under {fam} does not round-trip")
-            entry["bits"][f"residual/{fam}"] = lens
+            entry["bits"][f"residual/{fam}"], entry["decode_seconds"][f"residual/{fam}"] = lens, dt
         for subj, fam in FIELDS:
             syms = C.symbols_v0(adv, pub, cb, fam) if subj == "v0" else C.symbols_residual(res, pub, cb, fam, rep)
             entry["fields"][f"{subj}/{fam}"] = by_field(syms, cb, fam)
@@ -308,10 +319,12 @@ def summarize(result: dict, cb, T: int) -> dict:
             caps_arrivals * worst_admit_arrival(cb, T, fam) + tail[fam] if subj == "admit" else
             worst_residual_window(cb, T, fam, caps_arrivals, 0) if subj == "residual" else
             worst_v0_window(cb, T, fam, caps_arrivals))
+        decode = [t["decode_seconds"][key] for t in result["traces"] if key in t.get("decode_seconds", {})]
         rows.append({
             "subject": subj, "code": fam, "windows": len(vals),
             "mean_bits": statistics.fmean(vals), "p50_bits": statistics.median(vals), "max_bits": max(vals),
             "mean_bits_per_arrival": sum(vals) / max(sum(arr), 1),
+            "decode_ms_per_window": 1000 * sum(decode) / sum(t["windows"] for t in result["traces"]) if decode else None,
             "worst_bits_public_counts_max": max(worst_pub) if worst_pub else None, "worst_bits_caps": caps_worst,
             "worst_bits_per_resume": _worst_hit(cb, fam, "rehit", cb.caps.prompt_max + cb.caps.output_max)
             if subj == "residual" else None})
@@ -335,12 +348,14 @@ def render(summary: dict, meta: dict) -> str:
     lines = [f"# Advice bits per window ({meta['corpus']})", "",
              f"Codebook `{meta['codebook_digest'][:16]}…` (SHA-512), fit on {meta['train']}; measured on {meta['test']}. "
              f"T = {meta['T']} buckets of {meta['tau_us'] // 1000} ms. Step-time model {meta['steptime']}.", "",
-             "| subject | code | windows | mean bits/window | p50 | max | bits/arrival | worst, public counts (max) | worst, caps |",
-             "|---|---|---|---|---|---|---|---|---|"]
+             "| subject | code | windows | mean bits/window | p50 | max | bits/arrival | worst, public counts (max) | "
+             "worst, caps | decode ms/window (Python) |",
+             "|---|---|---|---|---|---|---|---|---|---|"]
     for r in summary["rows"]:
+        ms = r.get("decode_ms_per_window")
         lines.append(f"| {r['subject']} | {r['code']} | {r['windows']} | {r['mean_bits']:,.0f} | {r['p50_bits']:,.0f} | "
                      f"{r['max_bits']:,} | {r['mean_bits_per_arrival']:,.2f} | {_num(r['worst_bits_public_counts_max'])} | "
-                     f"{_num(r['worst_bits_caps'])} |")
+                     f"{_num(r['worst_bits_caps'])} | {'–' if ms is None else f'{ms:,.1f}'} |")
     per_resume = {r["code"]: r["worst_bits_per_resume"] for r in summary["rows"] if r["subject"] == "residual"}
     lines += ["", "The residual's worst case at the caps counts no resume; each resume adds at most "
               + ", ".join(f"{_num(v)} ({k})" for k, v in per_resume.items()) + " bits.", "",
