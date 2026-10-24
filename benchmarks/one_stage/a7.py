@@ -79,6 +79,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
+import r2_population as R2  # noqa: E402
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, memory_map as MM, opening as C3, receipts  # noqa: E402
 from verity.core.protocols.remote_bandwidth.receipts import Plan  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
@@ -1459,7 +1460,7 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
             a.lean, last, last["n"], sdir, out / "neg-altered-public", dict(rec, leaf_layer=leaf_layer), check, zk=True),
             "member": last["name"], "row": f"instance {last['n'] - 1}, port {last['ports'][-1].name}"}
     # the sampled-proofs registration and draw, as A6 checks them
-    fewer = P.mixed_population_program([(plan_m["defn"], plan_m["n"] - 1), (map_m["defn"], map_m["n"])])
+    fewer = R2.program([(plan_m["defn"], plan_m["n"]), (map_m["defn"], map_m["n"])], mixed=True)
     v = V.check(rec, fewer, query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check(rec, program, query, D.parse_law(f"stratified:{a.k // 2 if a.k > 1 else a.k + 1}"), a0.SCHEME, want,

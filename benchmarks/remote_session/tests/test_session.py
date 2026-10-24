@@ -242,7 +242,7 @@ def test_the_ledgers_are_the_nodes_whatever_share_of_it_the_store_is_on(monkeypa
     assert lg["inputs"]["reported_read_bytes_per_s"] == timing.GPU_READ_BYTES_PER_S
     assert lg["measured"]["capacity_bytes_per_s"] == lg["inputs"]["measured_read_bytes_per_s"] == node_read
     assert lg["spec"]["capacity_bytes_per_s"] == lg["inputs"]["spec_bytes_per_s"] == node_spec
-    assert lg["inputs"]["chip_bytes"] == timing.GPUS * timing.GPU_CHIP_BYTES + timing.HOST_CHIP_BYTES == 3_045_746_688
+    assert lg["inputs"]["chip_bytes"] == timing.GPUS * timing.GPU_CHIP_BYTES + timing.HOST_CHIP_BYTES == 3_105_652_736
     assert lg["inputs"]["squarings_per_s"] == timing.GPUS * timing.GPU_SQUARINGS_PER_S["p512"]
     assert lg["spec"]["certified_bytes"] == pytest.approx(lg["measured"]["certified_bytes"], rel=1e-9)
 
@@ -737,6 +737,7 @@ def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot
     assert lg["memory"]["error"] == verifier.memory_error(lg) == pytest.approx(
         reading["error"]["horizon"] + 2.0 ** lg["sketch_failure"]["log2"])
     assert lg["memory"]["error"] > lg["memory"]["delta"] + record.passes * 2.0 ** -audit.SLACK_LOG2 * 0.99
+    assert lg["inputs"]["slack_log2"] == audit.SLACK_LOG2
 
     def same(x, y) -> bool:
         if isinstance(x, dict):
@@ -879,6 +880,61 @@ def test_the_auditor_line_reads_each_groups_coin_and_last_root_off_the_challenge
     assert how == {"last_root_first_named_by": {"challenge": n - 2, "openings": 2}}
     with pytest.raises(ValueError, match="not one of each for each of"):
         al.auditor_seen(log(0, False)[:-4], seen)
+
+
+def test_the_line_of_record_reads_the_lean_verifiers_record_of_the_session():
+    """`verifier.recorded_inputs`: the line's groups' passes, windows and registered blocks are the Lean verifier's
+    record of the session (`lean_record`, which a run from before sessions kept it reads back from its `record` and
+    `windows_seen`, field for field), and its line is the line of the same groups and windows given. The pooled
+    bound's inputs its record's profile gives (`recorded_windows`) are the ones the line reads off the Lean's record
+    and the session. A record of another registration, or windows seen that aren't the record's, is refused."""
+    line = verifier.line
+    got = {}
+    (r,), _ = run("honest", paces=[verifier.pace_of("1:4:40:2", 1.0)],
+                  then=lambda v: got.update(reg=wire.registration_json(v.registration)))
+    assert r["accepted"] and r["verdict"] == "lean" and r["lean_record"]["registration"] == got["reg"]["digest"]
+    old = {k: v for k, v in r.items() if k != "lean_record"}
+    assert verifier.lean_record(old) == r["lean_record"]
+    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=4.4e9, link_bytes_per_s=5e10)
+    mem = r["ledger"]["memory"]
+    windows = [(sum(w["lengths"]), w["drawn"]) for w in r["lean_record"]["windows"]]
+    given = line.inputs_json(
+        verifier.paced_groups(mem, r["windows_seen"], block_bytes=mem["block_bytes"]), per=r["pace"]["groups"],
+        blocks=got["reg"]["blocks"], block_bytes=mem["block_bytes"], chip_bytes=mem["chip_bytes"],
+        node_bytes=mem["hbm_bytes"], delta=r["delta"], rates=rates, windows=windows)
+    want = line.run_json(given)
+    assert "refused" not in want
+    for s in (r, old):
+        assert verifier.recorded_windows(s) == (windows, s["delta"])
+        assert line.record_run_json(verifier.recorded_inputs(s, got["reg"], host_bytes=0, rates=rates)) == want
+        assert verifier.recorded_line(s, got["reg"], host_bytes=0, rates=rates).to_json() == want
+    with pytest.raises(ValueError, match="of registration"):
+        verifier.recorded_inputs(r, {**got["reg"], "digest": "00" * 64}, host_bytes=0, rates=rates)
+    with pytest.raises(ValueError, match="not its record's"):
+        verifier.lean_record({**old, "windows_seen": old["windows_seen"][:-1]})
+
+
+def test_the_auditor_line_reads_a_last_root_by_its_request_not_by_its_value():
+    """A prover that repeats a root doesn't make a group's last root early on the challenger's clock: window 2's last
+    root is also its boundary σ_3's (asked before it came), and window 4's is window 1's, but `auditor_seen` reads each
+    at its openings request, so every L is the honest 1.5 coin intervals (red team (g)1,
+    note:20261024T0330Z-report-redteam-night)."""
+    import json
+
+    import auditor_line as al
+
+    n, X, Y = 6, "a" * 128, "b" * 128
+    seen = [{"released_ns": 1000 * g + 1000, "arrivals_ns": [1000 * g + 2500]} for g in range(n)]
+    lines = [json.dumps({"event": "commitment", "root": "0" * 128})]
+    for g in range(n):
+        for label, after, at in (("challenge", X if g == 3 else f"{2 * g:0128x}", 1000 * g + 999),
+                                 ("openings", {2: X, 4: Y, 1: Y}.get(g, f"{2 * g + 1:0128x}"), 1000 * g + 2500)):
+            lines.append(json.dumps({"event": "root", "label": label, "index": g, "root": after, "received_at": at}))
+            lines.append(json.dumps({"event": "release", "label": label, "index": g, "after": after,
+                                     "released_at": at + 1}))
+    got, how = al.auditor_seen(lines, seen)
+    assert [w["arrivals_ns"] for w in got] == [[1000 * g + 2500] for g in range(n)]
+    assert al.group_l(got) == [1500] * (n - 1) and how == {"last_root_first_named_by": {"openings": n}}
 
 
 def test_a_paced_session_whose_openings_come_beside_its_passes_gets_the_same_verdicts_from_both_verifiers():

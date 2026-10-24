@@ -11,7 +11,9 @@ lane no handle owns (nor its parent's) leads with @infra and says its lane is un
 and no push) leads with the record's handle and rings it the same way. A `research run` that ended on a node leads with its
 sender's handle (a coordinator's own, a worker's launcher's, for a run whose sender is a lane, the lane's), and its doorbell is
 `research msg ring-run` (INF-140), the one sender of run-end doorbells: `from runs, run R rc N (AGENT): ...`, once per run however
-often it is called, with `--to` the watch's resolved handle for all but a coordinator's own run. The runs of one read whose sender
+often it is called, with `--to` the watch's resolved handle for all but a coordinator's own run. A worker's run that ended rc 0
+is posted but rings no one: the watch resumes the worker itself, and rings its coordinator only if it stays idle (INF-216: run
+ends were 47% of all doorbells, most of them workers' successes). The runs of one read whose sender
 no handle owns are one post that leads with @infra, naming each run's sender, rung as an alert. A record this relay can't render
 (a kind it doesn't know, or one missing what its sentence needs) is posted as its raw JSON to @infra, never as a sentence of ?s.
 A record the watch marks `quiet` (a run its own lane cancelled, a worker relaunch it declined) is posted with no handle and
@@ -75,8 +77,8 @@ SAY = {"held": "was held after a finished tool call or the end of its turn since
        "worker_long": "has been ACTIVE since {since} ({hours} h); if it isn't working, stop it and resume it with Task",
        "silent": "has been ACTIVE {active_minutes} min with no note and no push for {minutes} min; check on it",
        "run_ended": "ended rc={rc} after {after} on {node}",
-       "stalled": "streamed nothing for {minutes} min since {since} while RUNNING (a hung call or a suspended VM); the watch "
-                  "{action}",
+       "stalled": "streamed nothing for {minutes} min since {since}, its agent not moving either (a hung call or a suspended "
+                  "VM); the watch {action}",
        "idle_after_run": "sat idle after its run {ended_run} ended ({result}), with nothing resuming it for {minutes} min; the "
                          "watch {action}",
        "relaunch": "needs a fresh launch ({reason}); the watch {action}",
@@ -335,7 +337,9 @@ def once() -> None:
             ts = slack._post(api, ALERTS, "infra", post := text(rec))
             sent[key] = time.time()
             save_sent(sent)
-            if to := rung(rec):
+            if (to := rung(rec)) and rec.get("kind") == "run_ended" and rec.get("role") == "worker" and rec.get("rc") == 0:
+                log(f"run {rec.get('run')}: a worker's run ended rc 0, posted unrung (the watch resumes the worker)")
+            elif to:
                 try:
                     if rec.get("kind") == "run_ended" and rec.get("role") != "unknown" and renderable(rec):
                         ring_run(rec, to, ts)

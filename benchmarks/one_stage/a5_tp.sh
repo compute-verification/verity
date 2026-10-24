@@ -13,6 +13,8 @@
 #     of record, without its shard sha256 (each tensor read is held to the committed weights root).
 #   The stand-in (no A5_TP): the CPU TP Commit tests/pipeline/served_tp, world 2, once per STANDIN entry I:LAW (its SiluMul_v2{I}
 #     rows, its partition's law); with A5_WINDOWS=bundles it is served_tp --deferred and its windows come from its bundles.
+#     The STANDIN entry sparse-mla is a5_sparse_mla.py: test_serving_rows_splits' window (one SparseMlaSplit row's split parts
+#     and combines, each combine slot wired to its part), run as the entry row-tables is.
 #     The STANDIN entry row-tables is a5_row_tables.py: test_row_tables' window (ScaledMmS8Coordinate chunks whose x rows link
 #     its row tables) as rank 0 of a one-rank step, on a local challenger's coins (it needs A5_CHALLENGER for --main).
 #   A5_FLOCK_WORK=DIR keeps M0's build there across runs (default: scratch); A5_RANKS=0,3 audits those ranks only; A5_JOBS=N
@@ -100,8 +102,9 @@ if [ -n "${A5_CHALLENGER:-}" ] && [ -z "$MAIN" ]; then
 fi
 
 TIME=$([ -x /usr/bin/time ] && echo "/usr/bin/time -v")
-keep() {  # NAME: $W/NAME's records into $O/NAME
-  (cd $W/$1 && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -path './*/archive/*' -print0 \
+keep() {  # NAME: $W/NAME's records into $O/NAME (never the MUFU tables a circuit with lookups reads: ir_lower.TABLES pins them)
+  (cd $W/$1 && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -path './*/archive/*' \
+    ! -path '*/tables/*.u32' -print0 \
     | xargs -0 -r -I{} cp --parents {} $O/$1/)
 }
 audit() {  # NAME TP_COMMIT BUILD WORKLOAD WINDOWS PARTITION [A5 ARGS...]: WORKLOAD empty under --advice
@@ -169,13 +172,14 @@ if [ -n "${A5_TP:-}" ]; then
   audit $N $A5_TP/commit ${A5_BUILD:-$A5_TP/build} "$WL" $WIN $PART "${ADV[@]}" || rc=1
 else
   for e in ${STANDIN:-256:subset:4 1536:subset:4}; do   # a rank's stand-in window holds 8 units; a draw of all leaves no negative
-    if [ "$e" = row-tables ]; then
-      [ -n "$MAIN" ] || { echo "STANDIN row-tables draws from a challenger's coins: set A5_CHALLENGER=local"; exit 3; }
-      mkdir -p $O/row-tables
-      $TIME $PY benchmarks/one_stage/a5_row_tables.py --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --main $MAIN \
-        ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} --out $W/row-tables > $O/row-tables/a5.log 2> $O/row-tables/a5.err || rc=1
-      grep '^A5' $O/row-tables/a5.log | cut -c1-4000; tail -25 $O/row-tables/a5.err
-      keep row-tables
+    if [ "$e" = row-tables ] || [ "$e" = sparse-mla ]; then
+      [ -n "$MAIN" ] || { echo "STANDIN $e draws from a challenger's coins: set A5_CHALLENGER=local"; exit 3; }
+      mkdir -p $O/$e
+      $TIME $PY benchmarks/one_stage/a5_${e//-/_}.py --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --main $MAIN \
+        ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} ${A5_COMPOSE_CACHE:+--compose-cache $A5_COMPOSE_CACHE} \
+        --out $W/$e > $O/$e/a5.log 2> $O/$e/a5.err || rc=1
+      grep '^A5' $O/$e/a5.log | cut -c1-4000; tail -25 $O/$e/a5.err
+      keep $e
       continue
     fi
     I=${e%%:*}; LAW=${e#*:}; S=$W/served-i$I

@@ -149,7 +149,7 @@ def test_nv_sigmoid_saturates_and_is_symmetric_where_the_sass_is():
 
 
 @pytest.mark.parametrize("launch", ["block", "warp"])
-@pytest.mark.parametrize("E,TOPK,n", [(8, 2, 60), (16, 8, 40), (256, 8, 4)])
+@pytest.mark.parametrize("E,TOPK,n", [(8, 2, 60), (16, 8, 40), pytest.param(256, 8, 4, marks=pytest.mark.slow)])
 def test_the_program_is_the_kernel(launch, E, TOPK, n):
     d = bind(moe.MoeRouterSigmoidBias, E=E, TOPK=TOPK, SCALE=2.5, KERNEL=launch)
     for x, b in rows(E, n, seed=E * 31 + TOPK):

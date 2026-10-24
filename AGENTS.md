@@ -145,7 +145,10 @@ the standing rulings stated nowhere else.
     μ^m a try (Daniel, 18 Oct).
 
   There are no retries: a failed proof is a visible failure, and a retry never redraws. Outer proofs go through the
-  firewall one at a time.
+  firewall as independent sessions: each staged statement is fixed before any session draws coins and gets exactly one
+  session; each session draws its own live coins in its own firewall pass; no statement reads another session's
+  transcript or coins; every session is recorded and every verdict counts (Daniel's provisional batch, 24 Oct;
+  https://app.notion.com/p/403399515d9e81298f49e4b6b78634e7).
 - **Verifier cost: O(circuit description), never O(unrolled circuit)** (Daniel, 18 Oct). A verifier of record may do
   work proportional to the descriptor it reads (its Definitions, nodes and references), never to the circuit it unrolls
   to: no walk over every gate, batch member or scan iteration. Summarize once per specialized Definition and multiply
@@ -251,7 +254,10 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
   (drive ejects the PR that broke one). A PR that changes Lean (a `.lean` file of a package with a `lean-audit.json` lock, or
   the lock) waits for its Lean check: a `lean-audit` that passed on a commit of `next` at or above it, which drive launches on
   the reviewed prefix's top (`train.sh TOP MACHINES --deferred lean-audit`), and after a failure there on the PR's own commit;
-  only a failure at its own commit goes to its owner. Any recorded run whose `lean-audit` passed there counts too.
+  only a failure at its own commit goes to its owner. Any recorded run whose `lean-audit` passed there counts too. The top
+  stops below a PR that came onto `next` in the last three ticks; a rebuilt `next` with the same PRs at the same heads keeps
+  the check, and an eject from its prefix rebuilds `next` only once it ends. A PR containing an unmarked PR of the same owner,
+  or one its owner withdrew, carries that change and doesn't wait for it.
 - After each landing one run checks `main`'s tip with every check step (`train.sh MAIN MACHINES --deferred JOBS
   --no-regenerate`, with `--no-cache` while `after_landing_no_cache = true`), and nothing lands before one such run of `main`
   itself has ended, its baseline (or ci records `main` green on the control pod: `/data/infra/drive.sh queue baseline SHA
@@ -301,6 +307,11 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
     in a trusted module (a definition's proof field) may; the Lean check replays it like any proof. C-Flock has no
     `Definitions/` area yet: its guarantees are `Models/Flock/Guarantees`, and the rest of its analysis is in `Proofs/Flock`
     until its spec is extracted.
+  - `Security/` is three trees (Daniel, 24 Oct): definitions (what Daniel reads: vocabulary, named assumptions,
+    guarantee statements), properties (statements about the code, reading only the definitions and that code) and
+    proofs (every proof, lemma and proof-only definition). The Lean check refuses a guarantee or property whose
+    statement reads a definition of the proofs tree, and a module of the definitions or properties tree that imports
+    one (`trees` in `Security/lean-audit.json` names the trees; its `except`, one reason each, is the cleanup's to-do).
   - All packages share one toolchain and one Mathlib revision (`tests/test_lean_packages.py`). Bump them together, in a
     PR of their own.
 - **The Lean check.** Every Lake package has a lock, `lean-audit.json`, and `check` runs the Lean check on every declaration

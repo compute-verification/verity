@@ -50,8 +50,9 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   `--jobs N` audits up to N ranks at once, each in its own process. Either
   window is the population program and partition over the served Programs, the law and the run of record. The verifier composes
   each member's circuit itself from an input set of its template under `--template-sets` (the lowering is all it reads; the values
-  are never used), or, for a template whose units are bit rows in chunks (`serving_rows.CHUNKED`: a MoE pair GEMM's coordinate,
-  `COORDS`, a MoeSum or all-reduce column block, `COLS`, or a w13 coordinate's K-chunk, `KCHUNKS`), by C-Flock's `UnitStager` on the rows the window lays out
+  are never used), or, for a member of bit rows in chunks (`serving_rows.chunked`: a MoE pair GEMM's coordinate,
+  `COORDS`, a MoeSum or all-reduce column block, `COLS`, a w13 coordinate's K-chunk, `KCHUNKS`, a sparse-MLA row's split part or
+  combine, `SPLITS`, or a row template the partition's `chunk_cap` names), by C-Flock's `UnitStager` on the rows the window lays out
   (`compose_circuit.py --template`, once per template, every chunk on that circuit, read and hashed once,
   `flock_inputs.flock_circuit`), bound to its partition and program. It holds every public file to that circuit, its unit indices and classes, and
   the registered roots and served domains. Then R1-R7 run over the registration with the leaf layer over the public bodies it holds
@@ -126,7 +127,9 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   (`pipeline.kchunk_rows`) are three templates, each chunk's ``acc`` row the output row of the chunk before it, committed under
   that row's salt. Lean's links hold only inside a statement, so before the draw every wire is held on the public bodies the leaf
   layer binds (`wiring.check`: the two rows' strings are one), and a drawn chunk's ``acc`` is then the committed output of the
-  chunk that wrote it, drawn or not. The negative wires a chunk to another unit.
+  chunk that wrote it, drawn or not. A sparse-MLA row's combine reads its splits' partials and lses the same way
+  (`pipeline.split_rows`, `a5_sparse_mla.py` its stand-in). The negatives (`wiring_negatives`) wire a unit to another unit, swap
+  two of a combine's slots, and flip a wired row's string in its reader's public body.
 """
 from __future__ import annotations
 
@@ -350,6 +353,35 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
     return result, neg, record
 
 
+def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) -> dict[str, dict]:
+    """The verifier's wiring check (§16.13) on altered wires: the first wire's writers rotated (each unit reading another unit's
+    row), two wires of one output swapped (a split's partial read into another combine slot), and a wired row's string flipped
+    in its reader's public body (a partial that is not the one its writer committed)."""
+    neg: dict[str, dict] = {}
+    k = next((k for k, m in enumerate(members) if m.wired), None)
+    if k is None:
+        return neg
+
+    def rewired(j: int, wired: tuple) -> list[CS.Member]:
+        return [replace(m, wired=wired) if i == j else m for i, m in enumerate(members)]
+
+    (p, o, ws), *rest = members[k].wired
+    neg["chunk-wired-to-another-unit (§16.13)"] = {"refused": bool(WI.check(rewired(k, ((p, o, ws[1:] + ws[:1]), *rest)), publics))}
+    swap = next(((j, a, b) for j, m in enumerate(members) for a in range(len(m.wired)) for b in range(a + 1, len(m.wired))
+                 if m.wired[a][1] == m.wired[b][1] and m.wired[a][2] != m.wired[b][2]), None)
+    if swap is not None:
+        j, a, b = swap
+        w = list(members[j].wired)
+        w[a], w[b] = (w[a][0], w[a][1], w[b][2]), (w[b][0], w[b][1], w[a][2])
+        neg["partial-wired-to-another-combine-slot (§16.13)"] = {"refused": bool(WI.check(rewired(j, tuple(w)), publics))}
+    m = members[k]
+    names = [q for q, _ in m.all_rows]
+    body = bytearray(publics[m.key])
+    body[names.index(p) * WI.BC_BYTES] ^= 1
+    neg["wired-row-not-its-writer-s-output (§16.13)"] = {"refused": bool(WI.check(members, {**publics, m.key: bytes(body)}))}
+    return neg
+
+
 def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path) -> dict[str, dict]:
     """A drawn row-table chunk's honest session re-verified by Lean against registered reads it must refuse: none (its header
     names registered reads the verifier holds no root for), its table's root replaced, and (a table of more than one row)
@@ -378,6 +410,9 @@ def stage(served: Path, mm: dict, files: tuple[dict, dict]) -> None:
     m, st_dir = mm["m"], mm["st"]["dir"]
     if mm["circuit"] != st_dir / "circuit.txt":
         link(mm["circuit"], st_dir / "circuit.txt")
+        for f in sorted((mm["circuit"].parent / "tables").glob("*.u32")):    # a circuit with lookups reads the MUFU tables
+            (st_dir / "tables").mkdir(exist_ok=True)
+            link(f, st_dir / "tables" / f.name)
     got = FI.flock_input_files(served, mm["k"], mm["circ"], st_dir / "prover", write=("inst",), files=files)
     link(Path(got["inst"]), st_dir / f"inst-{m.n}.bin")
     with open(got["inst"], "rb") as f:
@@ -419,7 +454,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     members, publics, checks, composed, programs_ok = [], {}, {}, {}, {}
     t_stage = time.time()
     for k, m in enumerate(mine.members):
-        chunked = m.template not in sets and SRW.template(m.template).layout in SRW.CHUNKED
+        chunked = bool(m.schemas)
         if m.template not in sets and not chunked:
             summary["refused"] = {"no-template-set": m.template}
             (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
@@ -594,7 +629,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     for mm in members:
         by_template.setdefault(mm["m"].template, [mm["defn"], 0])[1] += mm["m"].n
     defs = [tuple(x) for x in by_template.values()]
-    fewer = P.mixed_population_program([(d, n - (1 if i == 0 else 0)) for i, (d, n) in enumerate(defs)]) if len(defs) > 1 \
+    fewer = resized_program(defs) if len(defs) > 1 or defs[0][1] == 1 \
         else P.population_program(defs[0][0], defs[0][1] - 1)
     v = V.check(rec, fewer, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table)
     neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
@@ -607,10 +642,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     neg["public-body-not-the-registered-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check_draw({**union_draw, "units": union_draw["units"][:-1] + [n_all]}, rec, drawn_law)
     neg["draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}
-    if (k := next((k for k, m in enumerate(mine.members) if m.wired), None)) is not None:
-        p_name, o, ws = mine.members[k].wired
-        rewired = [replace(m, wired=(p_name, o, ws[1:] + ws[:1])) if j == k else m for j, m in enumerate(mine.members)]
-        neg["chunk-wired-to-another-unit (§16.13)"] = {"refused": bool(WI.check(rewired, publics))}
+    neg.update(wiring_negatives(mine.members, publics))
     if proved:
         v = V.check_proved(union_draw, proved[1:], len(proved) - 1)
         neg["proved-set-short-of-the-draw"] = {"refused": not v.ok, "codes": list(v.codes)}
@@ -671,6 +703,13 @@ def streamed(a: argparse.Namespace) -> bool:
     """Each rank draws through its own `service.Stream`: on the auditor's challenger's coins (``--challenger``) or on the
     verifier's own (``--coins verifier``)."""
     return a.coins is not None or a.verifier_coins
+
+
+def resized_program(defs: list[tuple]) -> Program:
+    """R2's other partition: the window's population, `(template, n)` per template, with its first template one instance
+    short, or one over where it has a single instance (a population has at least one)."""
+    resized = [(d, (n - 1 if n > 1 else 2) if i == 0 else n) for i, (d, n) in enumerate(defs)]
+    return P.mixed_population_program(resized) if len(resized) > 1 else P.population_program(*resized[0])
 
 
 def deferred(a: argparse.Namespace, sets: dict, out: Path) -> bool:

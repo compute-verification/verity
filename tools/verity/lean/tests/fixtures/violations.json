@@ -69,9 +69,20 @@
   "fails": "layers: Control.Defs imports Control.Assumptions"
  },
  "reads_outside_spec": {
+  "write": {"Control/Extra.lean": "namespace Control\n\ndef twice (n : Nat) : Nat := n + n\n\nend Control\n"},
+  "replace": {"Control/Thms.lean": ["import Control.Defs\n\nnamespace Control\n\ntheorem main_thm (h : Control.Hyp) (n : Nat) : double n = n + n := by\n  unfold double",
+                                    "import Control.Defs\nimport Control.Extra\n\nnamespace Control\n\ntheorem main_thm (h : Control.Hyp) (n : Nat) : double n = twice n := by\n  unfold double twice"]},
+  "fails": "reads: Control.main_thm read Control.twice in Control.Extra, outside the spec"
+ },
+ "trees_reads": {
   "replace": {"Control/Thms.lean": ["theorem main_thm (h : Control.Hyp) (n : Nat) : double n = n + n := by\n  unfold double",
                                     "def twice (n : Nat) : Nat := n + n\n\ntheorem main_thm (h : Control.Hyp) (n : Nat) : double n = twice n := by\n  unfold double twice"]},
-  "fails": "reads: Control.main_thm read Control.twice in Control.Thms, outside the spec"
+  "fails": "trees: Control.main_thm read Control.twice in Control.Thms, a module of the proofs tree (Control.Thms)"
+ },
+ "trees_imports": {
+  "write": {"Control/Thms/Lemma.lean": "theorem Control.lemma : True := trivial\n"},
+  "replace": {"Control/Defs.lean": ["/-! What", "import Control.Thms.Lemma\n/-! What"]},
+  "fails": "trees: Control.Defs, of the definitions tree, imports Control.Thms.Lemma, of the proofs tree (Control.Thms)"
  },
  "reads_unlocked": {
   "policy": {"meaning": ["Control.Assumptions"]},

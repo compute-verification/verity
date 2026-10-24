@@ -8,7 +8,7 @@ from conftest import BOT, CHAT, DANIEL, LUKE, TEAM
 from slack_events import crons
 from slack_events.consumer import NO_MODEL, consume, post_line
 from slack_events.crons import DAILY_HEAD, ESCALATE_S, ESCALATED, ESCALATION, REMIND_S, REMINDER, SETTLE_S
-from slack_events.deps import DEAD, LAST_DONE, LAST_ENQUEUED, LAST_SUCCESS, OLDEST, STALL_RUNG, TOPIC
+from slack_events.deps import CANARY_DONE, CANARY_SENT, DEAD, LAST_DONE, LAST_ENQUEUED, LAST_SUCCESS, OLDEST, STALL_RUNG, TOPIC
 
 
 def private(ts: str, reminder: str | None = None) -> str:
@@ -40,7 +40,7 @@ def test_eyes_or_a_lane_reply_stops_the_reminder(world):
     answered = routed(world, "@circuits and the Lean side?")
     world.slack.add(CHAT, text="it is", username="circuits", bot_id=BOT, thread_ts=answered["ts"])
     world.clock.t += REMIND_S + 60
-    assert crons.watchdog(world.deps) == {"open": 1, "reminded": 0, "escalated": 0, "stalled": False}
+    assert crons.watchdog(world.deps) == {"open": 1, "reminded": 0, "escalated": 0, "canary": True, "stalled": False}
     assert world.rung("circuits") == [private(eyed["ts"]), private(answered["ts"])]
 
 
@@ -153,6 +153,7 @@ def test_a_queue_with_events_waiting_and_nothing_done_rings_comms_hourly_and_a_w
     add_route(Path(world.deps.rs.notes_root()) / world.deps.rs.ROUTES_DIR, "comms", box["ts"])
     stalls = lambda: [m["text"] for m in world.slack.thread(COORD, box["ts"]) if m["ts"] != box["ts"]]
     now = world.clock()
+    world.deps.write(CANARY_SENT, now)                                           # this hour's canary went out already
     world.deps.write(LAST_ENQUEUED, now - crons.STALL_S + 60)                    # nine minutes waiting: not yet
     assert crons.watchdog(world.deps)["stalled"] is False and stalls() == []
     world.clock.t += 60
@@ -172,3 +173,22 @@ def test_the_consumer_stamps_its_own_done_and_the_app_its_publish(world):
     post = world.slack.add(CHAT, text="@circuits is the sweep done?", user=LUKE)
     assert consume(world.deps, world.event(CHAT, post), 1) == "rule"
     assert world.deps.cache.get(LAST_DONE) == world.clock()
+
+
+def test_the_hourly_canary_proves_the_consumer_on_a_quiet_day_and_its_loss_rings_comms(world):
+    """No person posted in the people's channels for the drain's first two days, so nothing proved it; the canary is a
+    synthetic event only the consumer can stamp done."""
+    from conftest import COORD, add_route
+    box = world.slack.add(COORD, text=f"{world.deps.rs.INBOX_HEAD}comms. pointers", username="comms", bot_id=BOT)
+    add_route(Path(world.deps.rs.notes_root()) / world.deps.rs.ROUTES_DIR, "comms", box["ts"])
+    rung = lambda: [m for m in world.slack.thread(COORD, box["ts"]) if m["ts"] != box["ts"]]
+    assert crons.watchdog(world.deps)["canary"] is True and crons.watchdog(world.deps)["canary"] is False
+    [payload] = [p for p in world.deps.queue.on(TOPIC) if p["kind"] == "canary"]
+    assert consume(world.deps, payload, 1) == "canary" and world.deps.cache.get(CANARY_DONE) == world.clock()
+    world.clock.t += crons.STALL_S
+    assert crons.watchdog(world.deps)["stalled"] is False and rung() == []                 # consumed: nothing to say
+    world.clock.t += crons.CANARY_EVERY_S                                                    # the next one, never consumed
+    assert crons.watchdog(world.deps)["canary"] is True
+    world.clock.t += crons.STALL_S
+    assert crons.watchdog(world.deps)["stalled"] is True and len(rung()) == 1
+    assert world.rung("top") == []                                                          # a canary rings no lane

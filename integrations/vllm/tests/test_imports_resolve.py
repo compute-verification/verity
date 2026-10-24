@@ -11,6 +11,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 FIRST_PARTY = ("verity_vllm", "verity_capture", "verity_vllm_adapter", "verity_vllm_numerics")
 
@@ -20,6 +22,7 @@ def _resolves(mod: str) -> bool:
     return base.with_suffix(".py").is_file() or (base / "__init__.py").is_file()
 
 
+@pytest.mark.slow
 def test_first_party_imports_resolve_to_modules_of_the_tree():
     unresolved = []
     for top in ("verity_vllm", "tests"):

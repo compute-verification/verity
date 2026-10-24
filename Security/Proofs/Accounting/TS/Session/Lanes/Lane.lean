@@ -1,6 +1,7 @@
 import Proofs.Accounting.TS.Session.Lanes.Combine
 import Proofs.Pouw.H1Zy.Lane
 import Proofs.Pouw.H1Zy.LaneBits
+import Definitions.Pouw.H1Zy.Chain
 
 /-!
 # A lane's part of `LeafChecks` from its Definition
@@ -22,8 +23,9 @@ proved here for every input, at a `K` the lane's tile binds at (`32 ∣ K`, `K <
 What stays of the field is the first two claims, `LaneComputes`: on every wire assignment the session's evaluation
 agrees with, the decoded `ok` is the Definition's on `laneIn`. `leafChecks_of_computes` gives `LeafChecks` from it and
 `CombineComputes`. Everything here is generic in `dqW` and `chain`; `Accounting.Guarantees.TS.LeafLanesSound` takes
-`dqW` to be the Definition's, `Pouw.H1Zy.zyDequant` (`PouwZyDequant_v1`). Still a parameter there: `chain`, the lane's
-chain words, which are to be `h1zy.lane_partial`'s fold (the fx1 chain over the noise from σ_J and the keys from σ_R).
+`dqW` to be the Definition's, `Pouw.H1Zy.zyDequant` (`PouwZyDequant_v1`), and `chain` to be `laneChain K nw`, the words
+of `h1tile._chain` (`Pouw.H1Zy.h1Chain K`: the fx1 chain over the noise from σ_J, keyed from σ_R) at the seeds the
+`pub` row holds.
 
 `LaneComputes` is in turn split at the lane's pieces: `LaneLowers` says the circuit computes the body on bits, its pieces
 at their lowerings (`Pouw.H1Zy.laneBits`: the s8 multiply's Baugh–Wooley steps and clamp, `PouwZyCell_v2`,
@@ -66,6 +68,12 @@ def partOf {K nw : ℕ}
   fun P l a b w => Pouw.H1Zy.mask32
     (chain P l (fun s k => BitVec.ofInt 8 ((a s).codes k)) (fun t k => BitVec.ofInt 8 ((b t).codes k)) w)
     (Pouw.H1Zy.tree Pouw.H1Zy.orBit false (List.ofFn P.admit))
+
+/-- **The lane's chain words** at contraction `K`: `Pouw.H1Zy.h1Chain K`'s words (`h1tile._chain`) on lane `l`'s rows'
+codes, its seeds the salt, position and roots of the `pub` row `P`. -/
+def laneChain (K nw : ℕ) :
+    LanePub → Fin 32 → (Fin 4 → Fin K → BitVec 8) → (Fin 8 → Fin K → BitVec 8) → Fin nw → BitVec 32 :=
+  fun P l a b => Pouw.H1Zy.chainOf (Pouw.H1Zy.h1Chain K nw) ⟨P.salt, P.position, P.roots⟩ l a b
 
 /-! ### Fields' bits as words -/
 
