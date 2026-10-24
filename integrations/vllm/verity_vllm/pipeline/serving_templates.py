@@ -1,7 +1,7 @@
 """The templates of the serving rows (`pipeline.serving_rows`, whose module text states their rules): a template read through its
 word link (:func:`template`), and the templates a Program row's Definition holds instances of (:func:`unit_templates`: the row
 itself, a ``CUT`` family's batched members, a ``COORDS`` family's coordinates, a ``COLS`` family's column blocks, a ``PARTS``
-family's parts, a ``SLICES`` family's slices and a ``KCHUNKS`` row's K-chunks)."""
+family's parts, a ``SLICES`` family's slices, a ``KCHUNKS`` row's K-chunks and a ``SPLITS`` row's split parts and combine)."""
 from __future__ import annotations
 
 import math
@@ -41,6 +41,11 @@ PART_OF = {p[0]: (row, p) for row, ps in PARTS.items() for p in ps}
 #: a coordinate of K weights is C = K / k chunks of k (whole scale blocks and tiles), chunk 0 FIRST, chunk C - 1 LAST, each
 #: continuing the one before's f32 accumulator (`fp8_moe_experts.MoeExpertFp8CoordinateChunk_v1`, the w13 launch)
 KCHUNKS = {"MoeExpertFp8Gemm_v1": "MoeExpertFp8CoordinateChunk_v1"}
+#: the row Definitions whose heads are cut along their keys into split parts and a combine (the ``split`` layout, `split_rows`), by
+#: the row family: its part family, one split's (o_partial, lse) at each split's key count, and its combine family over the row's
+#: non-empty splits (`sparse_mla_split.SparseMlaSplitPart_v1` and `SparseMlaCombine_v1`: FA3's split kernel and its combine)
+SPLITS = {"SparseMlaSplit_v1": ("SparseMlaSplitPart_v1", "SparseMlaCombine_v1")}
+SPLIT_OF = {f: row for row, fs in SPLITS.items() for f in fs}
 #: a member's layout by the family of its template's word; any other template is the row itself
 LAYOUTS = {"RoPEHead_v1": "rope", "GemmCoordinate_v1": "gemm", "ScaledMmS8Coordinate_v1": "s8"}
 #: a row template's element widths whose ports the rows commit as their little-endian bytes
@@ -52,7 +57,8 @@ class Template:
     """A partition's template as the rows are read for it: its descriptor id and Definition (the population program's), the id of
     the word Definition it computes (its own for a word Definition), and its member layout (``LAYOUTS``; ``"coord"`` for a
     ``COORDS`` family at N = 1, ``"cols"`` for a ``COLS`` family, ``"part"`` for any other ``PARTS`` part, ``"slice"`` for a
-    ``SLICES`` family at every axis 1, ``"kchunk"`` for a ``KCHUNKS`` chunk family; else ``"row"``).
+    ``SLICES`` family at every axis 1, ``"kchunk"`` for a ``KCHUNKS`` chunk family, ``"split"`` for a ``SPLITS`` part or combine
+    family; else ``"row"``).
     ``packed``: a row or coordinate template with a port that is not 16-bit elements, each port's element bits (its parameters', then its
     return fields'); its ports are committed as their elements' bytes."""
     id: str
@@ -108,12 +114,13 @@ def template(t: str) -> Template:
     sl = SLICES.get(spec_base(word))
     layout = ("coord" if spec_base(word) in COORDS and int(spec_statics(word)["N"]) == 1 else "cols" if spec_base(word) in COLS
               else "part" if spec_base(word) in PART_OF else "slice" if sl and all(int(spec_statics(word)[a]) == 1 for a in sl[0])
-              else "kchunk" if spec_base(word) in KCHUNKS.values() else LAYOUTS.get(spec_base(word), "row"))
+              else "kchunk" if spec_base(word) in KCHUNKS.values() else "split" if spec_base(word) in SPLIT_OF
+              else LAYOUTS.get(spec_base(word), "row"))
     packed = None
     if widths != {16} and layout != "s8":
         ports = [*view[:-1], *(getattr(view[-1], "fields", None) or (view[-1],))]
         elems = [ty.width_set() for ty in ports]
-        if layout not in ("row", "coord", "slice", "kchunk") or any(len(e) != 1 or not e <= PACKED or sum(ty.leaf_widths()) % 16
+        if layout not in ("row", "coord", "slice", "kchunk", "split") or any(len(e) != 1 or not e <= PACKED or sum(ty.leaf_widths()) % 16
                                                  for e, ty in zip(elems, ports)):
             raise ValueError(f"template {t}: the serving rows commit u16 words, and its ports' {'elements' if w is not fn else 'words'} "
                              f"are {sorted(widths)} bits (a row template's port may be elements of one of {sorted(PACKED)} bits, "
@@ -146,8 +153,10 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
     parameters), for a ``COORDS`` family of N > 1, its coordinate (its Definition at N = 1, N of them), for a ``COLS`` family,
     its Definition at each halving W / k of its width (k of them), for a ``PARTS`` family, each part at the row's statics
     (a ``COLS`` part also at each halving), for a ``SLICES`` family, its Definition at every axis 1 (the product of its
-    extents of them), and for a ``KCHUNKS`` row family, at each chunk width k (`chunk_widths`), its first, middle and
-    last chunks (N, N (K / k - 2) and N of them).  None when the spec does not bind to exactly its own descriptor id."""
+    extents of them), for a ``KCHUNKS`` row family, at each chunk width k (`chunk_widths`), its first, middle and
+    last chunks (N, N (K / k - 2) and N of them), and for a ``SPLITS`` row family in NS > 1 splits, its part at each split's
+    key count k (`split_keys`; NH times the splits of k keys) and its combine over the non-empty splits (NH).  None when the
+    spec does not bind to exactly its own descriptor id."""
     hit = _UNITS.get(spec)
     if hit is not None:
         return hit
@@ -185,8 +194,24 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
                 for first, last, n in ((True, False, 1), (False, False, C - 2), (False, True, 1)):
                     if n and (c := _bind(spec, fam, K=kc, FIRST=first, LAST=last)) is not None:
                         hit += ((descriptor_id(c), n * int(S["N"])),)
+        if (fams := SPLITS.get(spec_base(spec))) is not None and int(spec_statics(spec)["NS"]) > 1:
+            S = spec_statics(spec)
+            ks = split_keys(int(S["T"]), int(S["NS"]), int(S["BN"]))
+            for k in dict.fromkeys(ks):
+                if (c := _bind(spec, fams[0], T=k)) is not None:
+                    hit += ((descriptor_id(c), ks.count(k) * int(S["NH"])),)
+            if (c := _bind(spec, fams[1], NSPLIT=len(ks))) is not None:
+                hit += ((descriptor_id(c), int(S["NH"])),)
     _UNITS[spec] = hit
     return hit
+
+
+def split_keys(T: int, NS: int, BN: int) -> list[int]:
+    """Each non-empty split's key count, in split order, of a ``SPLITS`` row of T keys in NS splits of BN-key blocks
+    (`sparse_mla_split.split_blocks`: only the token's last block is partial)."""
+    from verity_vllm.program.registry.sparse_mla_split import split_blocks
+
+    return [min(T, b1 * BN) - b0 * BN for b0, b1 in split_blocks(T, NS, BN)]
 
 
 def _bind(spec: str, family: str | None = None, **over: Any) -> Any:
