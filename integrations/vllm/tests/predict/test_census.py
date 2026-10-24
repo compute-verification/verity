@@ -132,7 +132,8 @@ def test_glm53_dsa_served_macs_by_precision(served):
 @pytest.mark.parametrize("wrapper,kw", [("step", {"M": 1, "pos0": 8}), ("request", {"LP": 4, "T": 3})])
 def test_the_census_path_is_the_expansion_on_tiny(wrapper, kw):
     """`TINY`'s step and a request of four prompt rows and three decode steps (105 k and 181 k gates): `from_census` gives the
-    explicit expansion's live gates and bounded reads at every step."""
+    explicit expansion's live gates and bounded reads at every step. About 70 s for the request: only the request has more than
+    one step, so only it shows the census path's live gates and reads across decode steps."""
     P, c = _registered(build_program(_phi(TINY), wrapper, **kw))
     by_census, by_gates = from_census(c), upper_bound(P, census_schedule(c))
     for t in range(by_gates.steps):

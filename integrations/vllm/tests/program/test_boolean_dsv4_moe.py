@@ -228,6 +228,7 @@ def test_the_triton_router(E_) -> None:
                          ids=lambda t: t.id)
 def test_the_routers_pass_the_word_querys_cut_check(target) -> None:
     """Each value a router reads is decoded in one of its Calls (each expert's MUFUs and pieces, the pick or the slots, the hash
-    router's renormalisation): the cut check finds no value computed twice."""
+    router's renormalisation): the cut check finds no value computed twice. About 80 s for the sqrt-softplus router; no
+    evaluation can show a value computed twice, since a recomputed value still agrees with its word."""
     prog, _ = standalone_call(target)
     assert PO.verify(PO.build(prog, PO.query(16, 32)), prog).ok

@@ -110,6 +110,8 @@ def test_pinned_counts_and_digests(spec) -> None:
 
 @pytest.mark.slow
 def test_pinned_counts_and_digests_through_the_lane() -> None:
+    """The Definitions that reach the lane's noise, pinned by gate count and program digest (about 70 s, tracing 6M-AND noise
+    rows). A change to the lane's circuit shows only here: `test_pinned_counts_and_digests` pins the pieces that don't reach it."""
     for spec in sorted(LANE_PINS):
         _check_pin(spec, LANE_PINS[spec])
 

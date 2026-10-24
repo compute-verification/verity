@@ -123,7 +123,8 @@ AGAINST = np.array([0x0000, 0x8000, 0x3F80, 0xBF80, 0x0001, 0x7F7F, 0xFF80, 0x7F
 
 @pytest.mark.slow
 def test_two_slots_on_special_pairs_every_word_and_random_pairs() -> None:
-    """Every pair of special words, every word against 8 special words in either slot, and 100,000 random pairs (about 30 s)."""
+    """Every pair of special words, every word against 8 special words in either slot, and 100,000 random pairs (about 60 s): the
+    only exhaustive check of the two-slot sum's rounding, which the random and special rows at eight slots sample."""
     rng = np.random.default_rng(0x5E2)
     grid = np.array(list(itertools.product(SPECIALS, repeat=2)), np.uint16)
     every = np.stack([np.repeat(EVERY, len(AGAINST)), np.tile(AGAINST, len(EVERY))], axis=1)

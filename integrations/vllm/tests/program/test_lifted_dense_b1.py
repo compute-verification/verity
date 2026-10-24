@@ -119,6 +119,9 @@ def test_refusals_fire_eagerly_in_the_builder_and_lazily_on_a_direct_bind_both_b
 
 @pytest.mark.slow
 def test_program_and_digest_are_functions_of_the_manifest(programs, program_eos2):
+    """The lifted request's Program is a function of its manifest: a second build is the same Program, and the EOS set, the cap
+    and the prompt length each change it. About 70 s (four more builds of the lifted B1 request): a pinned digest of one build
+    can't show that the build is deterministic or which manifest facts it reads."""
     _, p_l = programs
     d = program_digest(p_l)
     again = Program(L.lifted_request(C, LP, CAP, EOS, attention=ATT, lag=0))
