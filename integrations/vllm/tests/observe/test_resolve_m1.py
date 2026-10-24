@@ -21,12 +21,14 @@ def resolved():
     return header, results, roots
 
 
+@pytest.mark.slow
 def test_header_matches_profile(resolved):
     header, results, roots = resolved
     assert header is not None
     assert check_header(header) == []
 
 
+@pytest.mark.slow
 def test_zero_unsupported_over_all_steps(resolved):
     _, results, _ = resolved
     assert len(results) == 16, [r.step for r in results]

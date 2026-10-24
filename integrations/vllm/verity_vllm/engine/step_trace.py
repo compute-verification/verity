@@ -17,7 +17,8 @@ Under async scheduling the scheduler schedules step s+1 before step s's output i
 the schedule that made it, so rows that compute a token of a request that finished at the step before are recorded as run.
 
 The trace is one JSON document per line (`SCHEMA`): a ``header`` (the scheduler's configuration), then ``arrive``, ``step`` and
-``finish`` records in the order they happened.  `load` reads it back.  `verity_vllm.pipeline.advice` turns a trace and the run's
+``finish`` records in the order they happened, and on a server whose Commit runs in windows, each window's ``open`` and ``close``
+(`StepTrace.window`).  `load` reads it back.  `verity_vllm.pipeline.advice` turns a trace and the run's
 Commit record into the compiler's advice.
 """
 from __future__ import annotations
@@ -30,6 +31,8 @@ from typing import Any
 from verity_vllm.engine.hooks import Hooks
 
 SCHEMA = "verity-vllm/step-trace/v1"
+#: the trace's file in a `verity-vllm serve-openai` run, beside the committer's step_trace.jsonl
+SERVED = "advice_trace.jsonl"
 #: `FinishReason` (vllm/v1/engine/__init__.py) by value
 FINISH = {0: "stop", 1: "length", 2: "abort", 3: "error", 4: "repetition"}
 #: the sampling parameters a request carries into the engine core, as `SamplingParams` names them
@@ -117,8 +120,13 @@ class StepTrace:
         self.records.append(rec)
         if self._fh is not None:
             self._fh.write(json.dumps(rec, separators=(",", ":")) + "\n")
-            if rec["kind"] in ("step", "header"):
+            if rec["kind"] in ("step", "header", "window"):
                 self._fh.flush()
+
+    def window(self, window: int, event: str) -> None:
+        """A Commit window's ``open`` or ``close`` (`pipeline.serve_commit.CommitWindows`): the steps it holds are those scheduled
+        from its open's ``before_step`` up to its close's."""
+        self._emit({"kind": "window", "window": int(window), "event": event, "before_step": self.scheduled})
 
     def install(self, engine: Any) -> StepTrace:
         sched = self.sched = scheduler_of(engine)
