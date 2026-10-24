@@ -405,6 +405,9 @@ def stage(served: Path, mm: dict, files: tuple[dict, dict]) -> None:
     m, st_dir = mm["m"], mm["st"]["dir"]
     if mm["circuit"] != st_dir / "circuit.txt":
         link(mm["circuit"], st_dir / "circuit.txt")
+        for f in sorted((mm["circuit"].parent / "tables").glob("*.u32")):    # a circuit with lookups reads the MUFU tables
+            (st_dir / "tables").mkdir(exist_ok=True)
+            link(f, st_dir / "tables" / f.name)
     got = FI.flock_input_files(served, mm["k"], mm["circ"], st_dir / "prover", write=("inst",), files=files)
     link(Path(got["inst"]), st_dir / f"inst-{m.n}.bin")
     with open(got["inst"], "rb") as f:

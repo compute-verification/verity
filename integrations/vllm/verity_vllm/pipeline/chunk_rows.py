@@ -29,7 +29,8 @@ def fields(tp: Any) -> list[Any]:
 
 def reads(tp: Any) -> str:
     """How `UnitStager` lays out chunked template ``tp``'s MUFU table reads: in lookup slots for a ``SPLITS`` part or combine
-    (`read_slots`; a 64-key part's reads inline are 4.5 times the nonzeros), else inline."""
+    (`read_slots`, each table folded once per statement; inline, an EX2 read is about 1e8 matrix entries, and step 16's
+    64-key part's reads 4.5 times its other nonzeros), else inline."""
     return "slots" if tp.layout == "split" else "inline"
 
 

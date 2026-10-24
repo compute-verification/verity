@@ -28,6 +28,8 @@ def template(a: argparse.Namespace) -> int:
     in_rows, out_rows = CR.unit_rows(tp)
     st = UnitStager(tp.fn, "unit/serving-rows", in_rows, out_rows, circuit=Path(a.out),
                     bind={"partition": a.partition, "program": a.program}, reads=CR.reads(tp))
+    if st.meta.get("lookups"):
+        FC.IL.write_tables(Path(a.out).parent / "tables")
     print(json.dumps({"subcircuit": st.meta.get("subcircuit"), "pin": st.pin, "class_sha512": st.class_sha512, "k_log": st.meta["k_log"]}))
     return 0
 
