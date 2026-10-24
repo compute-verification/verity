@@ -53,11 +53,34 @@ CHUNK_BYTES = 1 << 23
 DEFAULT_WORKERS = max(1, min(4, os.cpu_count() or 1))
 #: hm96_salt's ChaCha20 blocks per leaf (a 192-byte salt)
 _SALT_BLOCKS = _INST.salt_bytes // chacha20.BLOCK_BYTES
+#: a leaf's most codes: a row of K above it is `chunks` (K) leaves
+CHUNK_MAX = 4096
+#: a chunk's codes are a multiple of this (seeds.BLOCK_BITS)
+CHUNK_ALIGN = 512
 
 
 def b_words(k: int) -> int:
     """A B row's 16-bit words: its K int8 codes, then the 4 bytes of its f32 s_w."""
     return (k + 5) // 2
+
+
+def chunks(k: int) -> int:
+    """K's chunks n: 1 at K <= `CHUNK_MAX`, else the least n >= K / `CHUNK_MAX` whose chunk K / n is a whole number of
+    `CHUNK_ALIGN`-bit blocks. A row of K is then n leaves, leaf ``n·r + c`` chunk c's K / n codes and the row's s_w
+    (`leaf_words`). ValueError on a K no n chunks."""
+    if type(k) is not int or k < 1:
+        raise ValueError(f"K = {k!r} is no positive integer")
+    if k <= CHUNK_MAX:
+        return 1
+    for n in range(-(-k // CHUNK_MAX), k // CHUNK_ALIGN + 1):
+        if k % (n * CHUNK_ALIGN) == 0:
+            return n
+    raise ValueError(f"K = {k} > {CHUNK_MAX} has no chunks of a multiple of {CHUNK_ALIGN} codes")
+
+
+def leaf_words(k: int) -> int:
+    """A leaf's 16-bit words at K: one chunk's K / `chunks` (K) codes, then the row's f32 s_w."""
+    return b_words(k // chunks(k))
 
 
 def value(prefix: str, k: int) -> str:
@@ -269,5 +292,5 @@ def weights_root(roots: Mapping[int, bytes]) -> bytes:
     return tagged(WEIGHTS_TAG, *(p for k in sorted(roots) for p in (k, roots[k])))
 
 
-__all__ = ["B_NONCE", "CHUNK_BYTES", "DEFAULT_WORKERS", "SCHEMA", "WEIGHTS_TAG", "b_words", "chunk_bits", "entry", "ks",
-           "row_bytes", "row_words", "value", "weights_root", "weights_roots"]
+__all__ = ["B_NONCE", "CHUNK_ALIGN", "CHUNK_BYTES", "CHUNK_MAX", "DEFAULT_WORKERS", "SCHEMA", "WEIGHTS_TAG", "b_words",
+           "chunk_bits", "chunks", "entry", "ks", "leaf_words", "row_bytes", "row_words", "value", "weights_root", "weights_roots"]

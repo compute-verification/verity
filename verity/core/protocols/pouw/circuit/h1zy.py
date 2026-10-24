@@ -244,6 +244,61 @@ def unit(tile: Any) -> Any:
     return bind(PouwH1TileZy, TILE=tile)
 
 
+# -- the unit at chunked K -------------------------------------------------------------------------------------------------
+
+def _refuse_chunks(b: dict) -> str | None:
+    u, n = b.get("UNIT"), b.get("CHUNKS")
+    if getattr(u, "defn", None) is not PouwH1TileZy or u.bindings["TILE"].defn.id != "PouwH1Tile_v1":
+        return f"UNIT is PouwH1TileZy_v1 over PouwH1Tile_v1 (the chunk lanes' tile), not {getattr(u, 'id', u)!r}"
+    k = u.signature()[0][0][1].elem.fields[0][1].n
+    if type(n) is not int or n < 2 or k % n:
+        return f"CHUNKS is an integer n >= 2 dividing UNIT's K = {k}, not {n!r}"
+    return None
+
+
+def _chunks_signature(S: Any) -> tuple:
+    params, ret = S.UNIT.signature()
+    (_, a), (_, b) = params[:2]
+    n, k = S.CHUNKS, a.elem.fields[0][1].n
+    return (("a", Array(n * a.n, ROW(k // n))), ("b", Array(n * b.n, ROW(k // n))), *params[2:]), ret
+
+
+def _whole(n: int, rows: int, k: int, a: Coll) -> Coll:
+    """Rows 0 .. rows - 1 of K from chunk rows: row i chunk rows n i .. n i + n - 1's codes, then chunk row n i's scale."""
+    return Coll(Array(rows, ROW(k)), concat([r for i in range(rows) for r in (
+        *(a[n * i + c].field("codes").refs for c in range(n)), a[n * i].field("scale").refs)]))
+
+
+def _chunks_body(B: Any, S: Any, a: Coll, b: Coll, *rest: Coll) -> Coll:
+    (_, ta), (_, tb) = S.UNIT.signature()[0][:2]
+    n, k = S.CHUNKS, ta.elem.fields[0][1].n
+    out = B.call(S.UNIT, _whole(n, ta.n, k, a), _whole(n, tb.n, k, b), *rest)
+    lhs, rhs = [], []
+    for x, rows in ((a, ta.n), (b, tb.n)):
+        for i in range(rows):
+            for c in range(1, n):
+                lhs.append(x[n * i + c].field("scale").refs)
+                rhs.append(x[n * i].field("scale").refs)
+    eq = B.batch(H.SG.PouwEq32, Coll(Array(len(lhs), F32), concat(lhs)), Coll(Array(len(rhs), F32), concat(rhs)),
+                 axes=(0, 0))
+    ok = _and_all(B, [out.field("ok")] + [eq[t] for t in range(len(lhs))])
+    return Coll(_chunks_signature(S)[1], concat([out.field("receipt").refs, ok.refs]))
+
+
+PouwH1TileZyChunks = CompositeDefinition(
+    "PouwH1TileZyChunks", 1, ("UNIT", "CHUNKS"), _chunks_signature, _chunks_body, conformance="protocol-defined",
+    refuse=_refuse_chunks, register=H.SG is not None, ports=_unit_ports,
+    doc="UNIT (PouwH1TileZy_v1 over PouwH1Tile_v1) on chunk rows (`circuit.h1zy`): each of its R A rows and C B rows of K is "
+        "CHUNKS rows of K / CHUNKS codes and the row's f32 scale, row i chunk rows CHUNKS i .. CHUNKS i + CHUNKS - 1. The "
+        "unit's row i is their codes in order and chunk row CHUNKS i's scale; it returns UNIT's receipt and ok AND, for "
+        "every chunk row, its scale equal to its row's chunk 0's (PouwEq32_v2).")
+
+
+def chunk_unit(zy: Any, n: int) -> Any:
+    """`PouwH1TileZyChunks` over ``zy`` (a `PouwH1TileZy` unit) at ``n`` chunks."""
+    return bind(PouwH1TileZyChunks, UNIT=zy, CHUNKS=n)
+
+
 # -- a leaf's lanes and their combine ------------------------------------------------------------------------------------------
 
 PouwMuxBitWord = PrimitiveDefinition("PouwMuxBit", 1, (("s", Value(1)), ("a", Value(1)), ("b", Value(1))), Value(1),
@@ -582,6 +637,7 @@ def combine_reference(partials: Sequence[Sequence[int]], receipt: Sequence[int])
 
 
 __all__ = ["BF16", "F32", "LANE", "LEAST_K", "PUBLIC", "S32", "S8", "PouwAndBit", "PouwH1Combine", "PouwH1LaneZy",
-           "PouwH1TileZy", "PouwMuxBit", "PouwZyCell", "PouwZyCheck", "PouwZyDequant", "PouwZyDequantWord", "RECORD", "ROW",
-           "TILES", "check", "combine", "combine_reference", "dequant", "lane", "lane_bits", "lane_cells", "lane_partial",
-           "lane_reference", "records", "reference", "statement_ports", "statement_rows", "unit", "zy_cell"]
+           "PouwH1TileZy", "PouwH1TileZyChunks", "PouwMuxBit", "PouwZyCell", "PouwZyCheck", "PouwZyDequant",
+           "PouwZyDequantWord", "RECORD", "ROW", "TILES", "check", "chunk_unit", "combine", "combine_reference", "dequant",
+           "lane", "lane_bits", "lane_cells", "lane_partial", "lane_reference", "records", "reference", "statement_ports",
+           "statement_rows", "unit", "zy_cell"]
