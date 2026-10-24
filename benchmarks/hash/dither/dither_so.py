@@ -155,6 +155,11 @@ UNITS_ENV = "DITHER_SO_UNITS"
 UNITS_FORMS = {"today": "each unit's own seed_j stream", "j10r": "J10-R: each call's seed_c stream at call scale"}
 # J10-R's layout rows of a call (h1tile.j10r_blocks' m; j10r_so.M_MODES), open until J10R rules: "slot" (default) or "live"
 J10R_M_ENV = "DITHER_SO_J10R_M"
+# "1" (with $DITHER_SO_UNITS=j10r): a row block wholly past the step's live rows is skipped, h1tile's canonical dead tile
+# (PouwH1Tile_v4's: the zero receipt, no noise derived), as today's units always do; unset, every unit of the call's M
+# layout rows is computed in full, as J10R's PouwH1Tile_v5 / v6 define it (compute-accounting on CMP-76, 24 Oct: the
+# skip stays off by default until CREDITFIX and LIVEUNIT land).  Unset, $DITHER_SO_RDEAD's zero-receipt rows don't hold
+SKIP_DEAD_ENV = "DITHER_UNITS_SKIP_DEAD"
 ROUNDS_ENV = "DITHER_ROUNDS"            # the window's layout (its round coins), the session's when off the node
 MF_CHUNK = 64                           # manifest rows a pinned host chunk
 # -we's spill (`Spill`): what each step keeps past the ring until its window's draw, so the prover can open a drawn unit
@@ -914,6 +919,20 @@ class SoSide(DA.Side):
         self.j10r = self.units_form == "j10r"
         if self.units_form not in UNITS_FORMS:
             raise ValueError(f"${UNITS_ENV}={self.units_form}: one of {tuple(UNITS_FORMS)}")
+        self.skip_dead = not self.j10r or os.environ.get(SKIP_DEAD_ENV) == "1"
+        if os.environ.get(SKIP_DEAD_ENV) and not self.j10r:
+            raise ValueError(f"${SKIP_DEAD_ENV}: needs ${UNITS_ENV}=j10r (today's units are PouwH1Tile_v4's, whose dead "
+                             "tile is always the zero receipt)")
+        if not self.skip_dead and self.rdead:
+            raise ValueError(f"${UNITS_ENV}=j10r without ${SKIP_DEAD_ENV}=1 computes a dead row block's units in full, "
+                             f"not the zero receipt ${RDEAD_ENV}=1 hashes those rows as: set ${RDEAD_ENV}=0, or "
+                             f"${SKIP_DEAD_ENV}=1")
+        self.units_live = self.ring_live
+        if not self.skip_dead:
+            all_live = torch.ones_like(win.live)
+            self.units_live = [all_live] * D
+            self.tables = [win.r.plan([dataclasses.replace(c, live=all_live) for c in tab.calls], seeds=win.plan.seeds,
+                                      out=win.plan.out) for tab in self.tables]
         if self.j10r:
             import j10r_so as JS
             JS.rows(self.j10r_m, win.t, win.t)
@@ -1069,11 +1088,11 @@ class SoSide(DA.Side):
             M = JS.rows(self.j10r_m, win.t, m)
             if self.units_smq:
                 rc = rc or self.h.kh_units_multi_j10r_sm(self.mtab[p].data_ptr(), L, self.m_units, M,
-                                                         self.ring_live[p].data_ptr(), self.units_smq, self.units_smd,
+                                                         self.units_live[p].data_ptr(), self.units_smq, self.units_smd,
                                                          self.unit_next.data_ptr(), st.cuda_stream)
             else:
                 rc = rc or self.h.kh_units_multi_j10r(self.mtab[p].data_ptr(), L, self.m_units, M,
-                                                      self.ring_live[p].data_ptr(), 0, st.cuda_stream)
+                                                      self.units_live[p].data_ptr(), 0, st.cuda_stream)
         elif self.fused and self.units_smq:
             rc = rc or self.h.kh_units_multi_sm(self.mtab[p].data_ptr(), L, self.m_units, win.t,
                                                 self.ring_live[p].data_ptr(), self.units_smq, self.units_smd,
@@ -1151,7 +1170,8 @@ class SoSide(DA.Side):
     def _j10r_info(self) -> dict:
         import j10r_so as JS
         return {"label": JS.LABEL, "rows_mode": self.j10r_m, "rows": JS.M_MODES[self.j10r_m],
-                "slot_rows": self.win.t, "rows_workspace_bytes": self.j10r_ws.numel()}
+                "slot_rows": self.win.t, "rows_workspace_bytes": self.j10r_ws.numel(),
+                "dead_tiles": JS.DEAD[self.skip_dead]}
 
     def info(self) -> dict:
         return {**super().info(), "order": ORDER, "depth": self.win.depth, "a_tables": AO[self.so_ao],
@@ -1730,7 +1750,7 @@ def check(win: SoWindow, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3
     sd = DA.SIDE[0] if DA.SIDE else None
     if getattr(sd, "j10r", False):
         import j10r_so as JS
-        doc = JS.check(win, lib_h1o, which, n_cpu_units, {**g, "salt": salt}, r_round, sd.j10r_m)
+        doc = JS.check(win, lib_h1o, which, n_cpu_units, {**g, "salt": salt}, r_round, sd.j10r_m, sd.skip_dead)
     else:
         doc = DA.check(win, lib_h1o, which, n_cpu_units, g={**g, "salt": salt}, r_round=r_round)
     doc["order"], doc["depth"] = order, win.depth
@@ -1893,9 +1913,10 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
     sd = DA.SIDE[0] if DA.SIDE else None
     if getattr(sd, "j10r", False):
         import j10r_so as JS
-        JS.RefH1R.M = JS.rows(sd.j10r_m, t, m)
+        JS.RefH1R.M, JS.RefH1R.SKIP = JS.rows(sd.j10r_m, t, m), sd.skip_dead
         r = JS.RefH1R(lib_h1o)
-        doc["j10r"] = {"label": JS.LABEL, "rows": JS.RefH1R.M, "receipts_reference": "h1r.cu's h1r_launch_j10r (version 1)"}
+        doc["j10r"] = {"label": JS.LABEL, "rows": JS.RefH1R.M, "receipts_reference": "h1r.cu's h1r_launch_j10r (version 1)",
+                       "dead_tiles": JS.DEAD[sd.skip_dead]}
     else:
         r = H1R(lib_h1o)
     live = torch.from_numpy((np.arange(t // 32) * 32 < m).astype(np.uint8)).to(win.dev)

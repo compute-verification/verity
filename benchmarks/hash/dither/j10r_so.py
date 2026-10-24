@@ -14,6 +14,7 @@ M, the calls' layout rows (`h1tile.j10r_blocks`' m), is `rows` of the step's liv
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import os
 
 import numpy as np
@@ -29,6 +30,9 @@ LABEL = ("J10-R units (J10R's Definition: h1tile.j10r_reference, PouwH1Tile_v5's
          f"{J10R_SHA}; measured only)")
 M_MODES = {"slot": "each call's A slot, T rows (j10r_blocks' docstring: the call's slot)",
            "live": "the step's live rows rounded up to 32"}
+# dither_so's $DITHER_UNITS_SKIP_DEAD: a row block wholly past the live rows computed in full (unset), or skipped ("1")
+DEAD = {False: "computed in full (PouwH1Tile_v5 / v6)",
+        True: "skipped: the zero receipt (h1tile's canonical dead tile, $DITHER_UNITS_SKIP_DEAD=1)"}
 
 
 def rows(mode: str, t: int, m: int) -> int:
@@ -46,8 +50,15 @@ def checked_calls(L: int) -> list[int]:
 
 
 class RefH1R(H1R):
-    """h1r.py's H1R whose version 1 is h1r_launch_j10r at the class's layout rows M."""
+    """h1r.py's H1R whose version 1 is h1r_launch_j10r at the class's layout rows M; unless SKIP, every call's row blocks
+    all live (a dead one's units computed in full)."""
     M = 0
+    SKIP = True
+
+    def plan(self, calls, seeds=None, out=None):
+        if not self.SKIP:
+            calls = [dataclasses.replace(c, live=torch.ones_like(c.live)) for c in calls]
+        return super().plan(calls, seeds, out)
 
     def launch(self, plan, salt, nowrite=False, version=2, step_base=None) -> None:
         if version != 1 or not self.M:
@@ -59,8 +70,8 @@ class Refs:
     """dither_a.check's references under J10-R for capture g of step s at layout rows M (`swapped`), and after it the gate
     step's whole calls against j10r_units (`definition`)."""
 
-    def __init__(self, win, g: dict, M: int):
-        self.win, self.g, self.M, self.s = win, g, M, g["s"]
+    def __init__(self, win, g: dict, M: int, skip: bool = True):
+        self.win, self.g, self.M, self.s, self.skip = win, g, M, g["s"], skip
         self.cache: dict[tuple, np.ndarray] = {}
         self.itself0 = DO.h1v3_itself
 
@@ -74,14 +85,14 @@ class Refs:
         return self.s * self.win.u_step + self.win.offs[w]
 
     def receipts(self, w: int, salt: bytes, root_a: bytes, root_b: bytes) -> np.ndarray:
-        """Call w's receipts (units, 2 sets): each live unit's by j10r_units, a dead row block's the zero receipt (the dead
-        tile, as h1u and h1r write it)."""
+        """Call w's receipts (units, 2 sets): each live unit's by j10r_units, and a dead row block's by j10r_units too, or
+        under `skip` the zero receipt (the dead tile, as h1u and h1r then write it)."""
         import j10r_units as JU
         key = (w, salt, root_a, root_b)
         if key not in self.cache:
             ncb = self.win.nk[w][0] // 32
             units = (self.win.t // 32) * ncb
-            live = [u for u in range(units) if 32 * (u // ncb) < self.g["m"]]
+            live = [u for u in range(units) if not self.skip or 32 * (u // ncb) < self.g["m"]]
             rec = JU.call_receipts(self.g["a"][w][:self.M], self.win.wt[w], salt, self.base(w), root_a, root_b, only=live)
             out = np.zeros((units, rec.shape[1]), dtype=np.uint32)
             out[live] = rec
@@ -119,7 +130,7 @@ class Refs:
 
     @contextlib.contextmanager
     def swapped(self):
-        RefH1R.M = self.M
+        RefH1R.M, RefH1R.SKIP = self.M, self.skip
         h1r0, unit0, itself0 = DA.H1R, DO.h1v3_unit, DO.h1v3_itself
         self.itself0 = itself0
         DA.H1R, DO.h1v3_unit, DO.h1v3_itself = RefH1R, self.unit, self.itself
@@ -142,17 +153,18 @@ class Refs:
             if off:
                 bad[w] = {"words_off": off, "units_off": int((ref != got).any(axis=1).sum())}
         return {"reference": "j10r_units.call_receipts (anchored to h1tile.j10r_reference) on every live unit, a dead row "
-                             "block's units the zero receipt", "calls": checked_calls(win.L), "live_rows": g["m"],
+                             f"block's units {DEAD[self.skip]}", "calls": checked_calls(win.L), "live_rows": g["m"],
                 "words": words, "bad": bad, "ok": not bad and words > 0}
 
 
-def check(win, lib_h1o: str, which: str, n_cpu_units: int, g: dict, r_round: dict, mode: str) -> dict:
+def check(win, lib_h1o: str, which: str, n_cpu_units: int, g: dict, r_round: dict, mode: str, skip: bool = True) -> dict:
     """dither_a.check of capture g under J10-R's references; on the gate step also `Refs.definition`."""
     M = rows(mode, win.t, g["m"])
-    refs = Refs(win, g, M)
+    refs = Refs(win, g, M, skip)
     with refs.swapped():
         doc = DA.check(win, lib_h1o, which, n_cpu_units, g=g, r_round=r_round)
-    j = {"label": LABEL, "rows": M, "rows_mode": mode, "receipts_reference": "h1r.cu's h1r_launch_j10r (version 1)"}
+    j = {"label": LABEL, "rows": M, "rows_mode": mode, "receipts_reference": "h1r.cu's h1r_launch_j10r (version 1)",
+         "dead_tiles": DEAD[skip]}
     if which == "gate" and doc.get("complete"):
         with torch.inference_mode():
             j["definition"] = refs.definition(g["salt"])
