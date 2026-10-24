@@ -1001,9 +1001,11 @@ window's charge is its frame, with the header charged to window 0 (`bits_by_wind
   fewer. That is LEAK-LEAN's `BitsCount` by `bitsCount_of_prefixFree` (#3533). Since `decode` takes only the canonical
   string, at most that many advices decode at that charge.
 - *v0's per-window parts.* Each window's part is self-delimited, which settles this item of v0's list above.
-- *Measured.* On the five greedy corpus traces, the v1 charged is heavy 63, chunked 2,002, smallkv 218, medium 3,425
-  and light 5,569 bits, against v0's 6.9–7.5 Mbit; the contexts read no release time, which the warden's fixed schedule
-  makes carry no engine timing.
+- *Measured* (art:a01224669c378e350967084bc4fda1e93259095784132a816deb042a77bafacb, 14 corpus traces of 1,000
+  requests, each round-tripping). The v1 charged, header included, is 49–63 bits on heavy, 207–1,094 on smallkv,
+  2,002–2,082 on chunked, 3,307–3,425 on medium and 4,651–5,569 on light (at most 1,519 in one window). v0 is
+  6.2–7.5 Mbit. These contexts read no release time: the warden's fixed schedule leaves it no engine timing. With
+  today's engine release times as context, v1 is 40–292 bits.
 
 **Composition**, all in one ZK proof under the advice's hiding root:
 1. v1's frames: the committed string is at most ℓ bits, and parses into the header and W segments.
