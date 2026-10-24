@@ -79,7 +79,7 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Proofs.Nci.Resolve", "Properties.Proofs.Nci.BodiesOk", "Properties.Proofs.Nci.Width", "Properties.Proofs.Nci.Novel",
   "Properties.SampledProofs", "Properties.Proofs.SampledProofs", "Properties.SampledProofs.Draw",
   "Properties.SampledProofs.Halt", "Properties.Proofs.SampledProofs.Halt",
-  "Properties.Evaluate", "Properties.Proofs.Evaluate",
+  "Properties.Evaluate", "Properties.Proofs.Evaluate", "Properties.Proofs.Nci.ReadsExact",
   "Properties.NetworkRecords", "Properties.Proofs.NetworkRecords", "Properties.Accounting.Requirement",
   "Properties.Proofs.Accounting.Requirement", "Properties.Accounting.Compose", "Properties.RemoteAudit",
   "Properties.Proofs.RemoteAudit", "Properties.RemoteAudit.Coins", "Properties.Proofs.RemoteAudit.Coins",
