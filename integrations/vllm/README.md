@@ -241,6 +241,15 @@ parameters, prompt and generated token ids per request) to `llm.records`; `llm.p
 reports, the protocol composition record).  `llm.vllm` is the wrapped `vllm.LLM` (for driving its engine step by step) and
 `llm.model` the served model in this process, the object protocol options install on.
 
+A protocol option's settings that come from the engine are filled from the built one (`protocol_options.from_engine`),
+and one that can't be filled there is refused by name.  PoUW's H1 needs only its public parameters: on an int8 pin, with
+the int8_exact parts registered (`engine.int8_ranks.register(("linears", "attention"))`),
+`LLM(model, revision=..., quantization="verity_int8", attention_backend="CUSTOM", max_num_batched_tokens=T,
+protocols="pouw:eps1-sm120-h1fx1", protocols_config={"pouw": {"rows": T, "steps": S}})` installs it with the engine's
+model runner and, without a `challenger`, in-process coins, which credit nothing (`pouw_h1.IN_PROCESS`).
+`llm.reinstall(protocols_config=None)` closes the installed set and installs it afresh, with the next epoch's coins: one
+H1 window per call; `pouw.h1_run(entry)` reads the window until the next install.
+
 ## Hook interface
 
 What a caller may attach to the engine, in what order, and what it may read back.  The names below are the surface other
