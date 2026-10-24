@@ -566,6 +566,12 @@ struct OneOut {
 #endif
 static_assert(H1U_JPD >= 1 && (H1U_JRING == 0 || H1U_JRING == 1) && 16 % (H1U_JPD + H1U_JRING) == 0,
               "a chunk's 16 segments are whole rings of H1U_JPD (+ 1 with H1U_JRING) sets");
+// H1U_JPI = 1 (RW, with H1U_PF, H1U_JRING and a ring of 4 or 8 sets): the ring's loads and L2 prefetches at immediate
+// offsets from row pointers advanced once a ring (the segments run in order across the chunks), where 0 computes every
+// row's address each segment; the same loads
+#ifndef H1U_JPI
+#define H1U_JPI 0
+#endif
 // RC (with RW; kh_units_multi_j10rc, built with H1U_JRC = 1): the column blocks come from the call's workspace too, at
 // their stream positions M RB + (32 cj + lane) CB + c (h1jr_cols hashes each once a call), so the unit hashes no block
 // and reads no seed_c. At prefill's m a column block is every row tile's (64 at M = 2048), and RW hashes it in each of
@@ -661,6 +667,8 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
   constexpr bool PF = WS || H1U_PF;
   constexpr bool RING = RW ? H1U_JRING : H1U_RING;
   constexpr int PD = RW ? H1U_JPD : H1U_PD, NS = PD + RING;
+  constexpr bool PI = RW && H1U_JPI;
+  static_assert(!PI || (PF && RING && NS % 4 == 0), "H1U_JPI is the prefetch ring's, in whole groups of 4 segments");
   const u32 lane = threadIdx.x & 31;
   const u32 g = lane >> 2, q = lane & 3;
   const u32 ncb = DG ? 1 : N / 32;
@@ -785,6 +793,37 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
         a[r] = ld2<H1U_L2HINT>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs);
       }
       b[r] = ld2e<H1U_L2HINT, H1U_EVF && H1U_EVFU>(Bb + (u64)(8 * r + g) * K + kofs);
+    }
+  };
+  // PI: the rows' pointers at segment PD of the ring pass to come (A's one under XS), the L2 prefetches' at segment 16
+  const int8_t* par[PI && !XS ? 4 : 1];
+  const int8_t* pbr[PI ? 4 : 1];
+  const int8_t *pfa = nullptr, *pfb = nullptr;
+  constexpr u32 ASEG = XS ? 1024 : 32;
+  if constexpr (PI) {
+#pragma unroll
+    for (int r = 0; r < 4; ++r) {
+      if constexpr (!XS) par[r] = Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + 8 * q + 32 * PD;
+      pbr[r] = Bb + (u64)(8 * r + g) * K + 8 * q + 32 * PD;
+    }
+    if constexpr (XS) par[0] = Ab + 1024 * PD + 16 * lane;
+    pfa = XS ? Ab + 1024 * 16 + 128 * lane : Ab + (u64)lane * K + 32 * 16;
+    pfb = Bb + (u64)lane * K + 32 * 16;
+  }
+  // PI: the segment jo past the pointers'
+  const auto load_at = [&](int jo, uint2(&a)[4], uint2(&b)[4]) {
+#pragma unroll
+    for (int r = 0; r < 4; ++r) {
+      if constexpr (XS) {
+        if (r % 2 == 0) {
+          const uint4 v = ld4<H1U_L2HINT>(par[0] + 1024 * jo + 256 * r);
+          a[r] = make_uint2(v.x, v.z);
+          a[r + 1] = make_uint2(v.y, v.w);
+        }
+      } else {
+        a[r] = ld2<H1U_L2HINT>(par[r] + 32 * jo);
+      }
+      b[r] = ld2e<H1U_L2HINT, H1U_EVF && H1U_EVFU>(pbr[r] + 32 * jo);
     }
   };
   if (PF) {
@@ -956,12 +995,20 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
       for (int jj = 0; jj < NS; ++jj) {
         const u32 j = j0 + jj, sg = 16 * blk + j;
         uint2 ca[4], cw[4];
-        if (H1U_L2PF && sg % 4 == 0 && sg + 16 < ks) {
-          prefetch_l2(XS ? Ab + 1024ull * (sg + 16) + 128 * lane : Ab + (u64)lane * K + 32 * (sg + 16));
-          prefetch_l2(Bb + (u64)lane * K + 32 * (sg + 16));
+        if (H1U_L2PF && (PI ? jj % 4 == 0 : sg % 4 == 0) && sg + 16 < ks) {
+          if constexpr (PI) {
+            prefetch_l2(pfa + ASEG * jj);
+            prefetch_l2(pfb + 32 * jj);
+          } else {
+            prefetch_l2(XS ? Ab + 1024ull * (sg + 16) + 128 * lane : Ab + (u64)lane * K + 32 * (sg + 16));
+            prefetch_l2(Bb + (u64)lane * K + 32 * (sg + 16));
+          }
         }
         if (PF && RING) {
-          if (sg + PD < ks) load_seg(sg + PD, pa[(jj + PD) % NS], pb[(jj + PD) % NS]);
+          if (sg + PD < ks) {
+            if constexpr (PI) load_at(jj, pa[(jj + PD) % NS], pb[(jj + PD) % NS]);
+            else load_seg(sg + PD, pa[(jj + PD) % NS], pb[(jj + PD) % NS]);
+          }
 #pragma unroll
           for (int r = 0; r < 4; ++r) {
             ca[r] = pa[jj][r];
@@ -1064,6 +1111,14 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
         }
         fold(T, y, z);
         ring_put(S, j, lane, y, z);
+      }
+      if constexpr (PI) {
+#pragma unroll
+        for (int r = 0; r < (XS ? 1 : 4); ++r) par[r] += ASEG * NS;
+#pragma unroll
+        for (int r = 0; r < 4; ++r) pbr[r] += 32 * NS;
+        pfa += ASEG * NS;
+        pfb += 32 * NS;
       }
     }
     __syncwarp();
