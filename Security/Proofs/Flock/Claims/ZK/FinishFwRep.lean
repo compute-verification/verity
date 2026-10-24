@@ -284,6 +284,9 @@ theorem fwRows_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) 
         rw [tabsOf_stAt]
         rfl
       rw [hpk, FlockComplete.switchVec_packed (by omega) tr _ hx6, FlockComplete.Replay.switchVec_x hxk, swSrcE_sv]
+      have hl₃ := (FlockComplete.ringSwitchCut_sws (ligCoin c) n _ _
+        (by rw [Array.size_append, FlockComplete.abcClaims_size]; omega) h₃).2
+      rw [Array.size_append, FlockComplete.abcClaims_size] at hl₃
       exact src_sv_abc c hw τ j r hx hnr hs xs k hk2 (by rw [hfk]; omega)
     have hss := FlockComplete.ringSwitchCut_ss (ligCoin c) n _ _ h₃
     have hsz : 2 ≤ (_root_.Flock.abcClaims st.m st.kLog zc lc ++ xs).size := by
