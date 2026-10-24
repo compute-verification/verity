@@ -293,8 +293,8 @@ def whole_check(run, weights: dict, m: int | None = None) -> dict:
     twice in one pass, then captured whole in one CUDA graph after a warm-up outside it (as vLLM captures a decode forward)
     and replayed twice in each of two fresh passes on poisoned outputs, between `whole_replay` and `whole_replayed`, as vLLM's
     decode steps replay it: each pass must give the eager pass's A roots, tile root, screen flags and outputs, bit for bit,
-    and each pass's second replay must upload the slots the first one staged (with hashing).  A retained capture's stages
-    are a weight's, sized by the first retained capture's m₁₆, so a run whose vLLM graphs captured them checks at that m."""
+    and each pass's second replay must upload the slots the first one staged (with hashing).  A retained capture keeps a
+    stage for each weight and m₁₆, so the check runs at any m beside the sizes vLLM's graphs captured."""
     import torch
     m = BATCH if m is None else m
     dev = next(iter(weights.values())).device

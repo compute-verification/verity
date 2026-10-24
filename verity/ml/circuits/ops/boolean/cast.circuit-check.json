@@ -1,10 +1,12 @@
 {
  "definitions": {
   "Bf16ToF32_v2": {
-   "and": 0
+   "and": 0,
+   "type": "449835965b76be253d581cf802f2fc1d2b58b1cccdccf099fec0afa96971307fe20b3320c833e57cea645804ff52ef292015a9e2409baa9401f52f1c6f3496da"
   },
   "F32ToBf16Rn_v2": {
-   "and": 66
+   "and": 66,
+   "type": "4dea57ac301b037a3bd1bbcb8d6148bfe1f30ef39fe9887d3c8fd52b13b8e667bb09fd7200fdc73321be62c86d951446b22118599f9768c5132c70575192ff14"
   }
  }
 }
