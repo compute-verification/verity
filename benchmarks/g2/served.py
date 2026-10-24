@@ -12,8 +12,9 @@ Commit is an arm of COMMIT_MODULES:
 An arm's execution is its own (`identity.arms`), else the spec's. A run holds any of these arms, at most one per role; every
 ratio below whose two arms it holds is read from it.
 
-Each ratio is one arm over another in the same run, paired by rep (rep k of every arm ran in the same interleaved round), as the
-median with [min, max] over the pairs:
+Each ratio is one arm over another in the same run, paired by rep (rep k of every arm ran in the same interleaved round, or for
+a model whose engines don't fit one GPU together, Qwen3-30B-A3B's, in the same cycle of the harness's alternating blocks), as
+the median with [min, max] over the pairs:
   served        compiled Commit / compiled stock: the overhead as served
   eager-served  eager Commit / compiled stock: the overhead as served for a Commit that runs only eager
   eager         eager Commit / batch-invariant eager stock: the mode of GLM-5.3's points on G2's curve
@@ -28,7 +29,7 @@ is rows-sha512, the run's GPU is its preset's, and a ratio with a compiled arm r
 (`served_arm.sh` PIN_BUILD: every arm's process compiled into one Inductor dir seeded with the Build of record's autotune
 winners) says the dir's winners are the Build's. An uncounted ratio is mechanism evidence, its reason in the tables. The
 RTX PRO 6000's Builds of record are `integrations/vllm/verity_vllm/pins/served/*.NVIDIA_RTX_PRO_6000_Blackwell_Server_Edition.json`'s
-(Llama-3.2-1B, Qwen3-8B); the served Build has no FP8 path, so no FP8 compiled ratio counts.
+(Llama-3.2-1B, Qwen3-8B, Qwen3-30B-A3B); the served Build has no FP8 path, so no FP8 compiled ratio counts.
 
     uv run --no-project --with matplotlib python3 benchmarks/g2/served.py RUN... [--tail RUN=FIXED]... [--runs-dir DIR] [--out DIR]
 
