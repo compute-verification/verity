@@ -31,8 +31,9 @@ verifier); the code is what the verifier of record establishes, which `n2` reads
 - ``audit.VIOLATION``: N2's audit of both records (`audit.Audit`, the Python reference of the Lean check of record);
 - pending checks, by the names their drafts give them: ``NetworkAdvisedCounts_v1`` (N2-ADVICE's advised counts on an
   advised link, `LinkWindows.advised_check`: the egress head's counts the release of the advice's frames, the ingress
-  head's the request frames the advice needs; ``.view`` when the advice is malformed or doesn't cover the window, which
-  refuses every window), ``NetworkIoTie_v1`` (IO-TIE's tie of a drawn frame's token id to the Commit's at its (request,
+  head's the request frames the advice needs; ``.view`` when the advice is malformed, doesn't cover the window or its
+  requests aren't the certified ingress's (the prompt-length tie, `advised.PromptTie`), which refuses every window),
+  ``NetworkIoTie_v1`` (IO-TIE's tie of a drawn frame's token id to the Commit's at its (request,
   position)) and ``NetworkFrameRead`` (its read of a frame under the record's frames root); and, until their owners
   name them, ``IoUnit.render`` (under the attested-edge design, the egress unit rendering committed outputs to bytes),
   ``StepUnit`` (PROVE-PATH: the compiled step Program's digest against the committed trace's, and the committed values
@@ -457,11 +458,11 @@ NEGATIVES = {n.name: n for n in [
              "its next row keeping the sample", "N2's advised counts", ADVISED, advice_edit(output_length),
              waits=("ADV-SPEC", "N2-ADVICE")),
     Negative("advice-missing", "advice", "advice", "a certified request missing from the advice, with its rows",
-             "N2's advised counts", ADVISED, advice_edit(missing_request), waits=("ADV-SPEC", "N2-ADVICE"),
-             also=(TIE,)),
+             "N2's advised view (the prompt-length tie)", f"{ADVISED}.view", advice_edit(missing_request),
+             waits=("ADV-SPEC", "N2-ADVICE"), also=(TIE,)),
     Negative("advice-extra", "advice", "advice", "a request in the advice that the ingress didn't certify",
-             "N2's advised counts", ADVISED, advice_edit(extra_request), waits=("ADV-SPEC", "N2-ADVICE"),
-             also=(TIE,)),
+             "N2's advised view (the prompt-length tie)", f"{ADVISED}.view", advice_edit(extra_request),
+             waits=("ADV-SPEC", "N2-ADVICE"), also=(TIE,)),
     Negative("advice-release", "advice", "advice", "a kept output released one bucket later than certified",
              "N2's advised counts", ADVISED, advice_edit(release_moved), waits=("ADV-SPEC", "N2-ADVICE")),
     Negative("advice-start", "advice", "advice", "a request's first row starting one position later, claiming a "
@@ -549,11 +550,15 @@ def link_received(advice, request_frames, received: list[int]) -> list[int]:
     return got
 
 
-def n2_advice(advice, request_frames, received: list[int]):
-    """I1 v0 advice as N2-ADVICE's `advised` reads it (`advised.LinkAdvice`: the advice and each window's `received`,
-    `link_received`'s). Raises ModuleNotFoundError until N2-ADVICE lands."""
+def n2_advice(advice, request_frames, received: list[int], certified=None):
+    """I1 v0 advice as N2-ADVICE's `advised` reads it (`advised.LinkAdvice`: the advice, each window's `received`,
+    `link_received`'s, and the tie of its requests to the certified ingress, `advised.PromptTie`: the prompt lengths of
+    `certified`'s requests in arrival order, `advice`'s own by default; a tampering of the advice leaves the certified
+    ingress, so its tie is the honest advice's). Raises ModuleNotFoundError until N2-ADVICE lands."""
     AD = importlib.import_module(ADVISED_MODULE)
-    return AD.LinkAdvice(advice, tuple(link_received(advice, request_frames, received)))
+    requests = (advice if certified is None else certified).requests
+    tie = AD.PromptTie(tuple(q.prompt_len for q in requests), tuple(range(len(requests))))
+    return AD.LinkAdvice(advice, tuple(link_received(advice, request_frames, received)), tie)
 
 
 def advised_codes(link, window: int, syncs, sync_set, request_frames, T: int, R: int, RIN: int, OWN: int, ingress,
@@ -593,12 +598,13 @@ def honest_heads(link, T: int, R: int, syncs, sync_set, request_frames,
 def advice_suite(advice, *, T: int, R: int, syncs, request_frames, received: list[int], sync_set=None,
                  RIN: int | None = None) -> dict[str, dict]:
     """Every advice negative made from a run's `advice` (I1's): whether it applies to it, whether it's valid advice that
-    round-trips through I1's codec, its bits, and N2-ADVICE's codes (`advised_codes`) on the heads an honest run of the
-    advice certifies (`honest_heads`, under the link's framing `request_frames` with each window's `received` and
-    declared sync; Σ_sync by default the declared syncs' deltas and rhos, `RIN` their largest ingress count). `ok`: the
-    codes are exactly the one it names, or none for a step-unit negative, which N2 must accept (its check is
-    pending). A negative that releases more than R frames in a bucket is refused by the view (``.view``) instead. An
-    honest advice the view refuses has no honest heads, so its row says why and no negative runs."""
+    round-trips through I1's codec, its bits, and N2-ADVICE's codes (`advised_codes`, tied to the honest advice's
+    requests, `n2_advice`) on the heads an honest run of the advice certifies (`honest_heads`, under the link's framing
+    `request_frames` with each window's `received` and declared sync; Σ_sync by default the declared syncs' deltas and
+    rhos, `RIN` their largest ingress count). `ok`: the codes are exactly the one it names, or none for a step-unit
+    negative, which N2 must accept (its check is pending). A negative that releases more than R frames in a bucket is
+    refused by the view (``.view``) instead. An honest advice the view refuses has no honest heads, so its row says why
+    and no negative runs."""
     mod = advice_module()
     if mod is None:
         raise NotApplicable(f"no advice codec yet: {ADVICE_MODULE} (I1, ADV-SPEC) hasn't landed")
@@ -627,7 +633,7 @@ def advice_suite(advice, *, T: int, R: int, syncs, request_frames, received: lis
         except NotApplicable as err:
             out[name] = row | {"ran": False, "why": str(err)}
             continue
-        got = codes(n2_advice(b, request_frames, received))
+        got = codes(n2_advice(b, request_frames, received, advice))
         want = [] if n.code.startswith("StepUnit") else [n.code]
         out[name] = row | {"ran": True, "valid": mod.decode(mod.encode(b)) == b, "bits": mod.total_bits(b),
                            "steps": len(b.steps), "outputs": len(b.release), "codes": got, "ok": got == want}
