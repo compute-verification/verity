@@ -60,8 +60,9 @@ discharge it.
 The record is a prover message, so the success of parsing its text is no check the statement fixes, and no part
 computes `Json.parse`. The last step is therefore taken at the record's parsed value (`FlockDeploy.nextJ`,
 `RecDeploy.decompB_nextJ`), where parse success is no check and the reading, the record value's fields and shapes, is
-one check given to the reader part of the last round (`RecDeploy.ownJ`). **Open gap:** the proof files' decoding inside
-`verifyRepWith` stays among the verdict's checks, and no reader part owns it; no premise is taken for it.
+one check given to the reader part of the last round (`RecDeploy.ownJ`). There the proof files' decoding inside
+`verifyRepWith` stays among the verdict's checks, owned by no reader part; at `FlockDeploy.nextS`
+(`RecDeploy.decompB_nextS`) the last message carries the decoded proofs and the decision decodes no proof file.
 -/
 
 namespace Claims.Recursion.VStarB
