@@ -1,6 +1,6 @@
 """One served Pearl-C run through `verity_vllm.LLM` alone, every pass it commits retained, then each replay-verified on its
-own: `pouw.install`'s pass boundaries under serving (`pouw_pass`: each engine step's end, and before a call the open pass
-can't hold).
+own: `pouw.install`'s pass boundary under serving (`pouw_pass`: each engine step's end, a step held to one pass's
+``max_step_tokens``).
 
   served_passes.py serve --passes DIR --out served.json [--spec SPEC] [--requests 32] [--prompt-tokens 512]
                          [--output-tokens 16] [--max-num-batched-tokens N]
@@ -11,8 +11,9 @@ in-process challenger is the epoch's coins) and the pouw setting ``transcript_di
 own ``DIR/pass-NNNNN``; the challenger's coin commitment goes to ``DIR/coins.json`` before the engine starts.  One
 ``generate`` call serves R requests of P seeded random prompt tokens and O output tokens each (greedy, EOS ignored): vLLM's
 scheduler steps the engine, and nothing but the option ends a pass.  It writes each pass's counts, commitment and
-manifest, the engine steps, the caps and whether every pass is within them, to ``--out`` and ``DIR/served.json``, and
-exits non-zero unless at least three passes hold calls (two boundaries crossed) and every pass is within its caps.
+manifest, the engine steps, the caps, the install's ``max_step_tokens`` and whether every pass is within the caps, to ``--out``
+and ``DIR/served.json``, and exits non-zero unless at least three passes hold calls (two boundaries crossed) and every pass
+is within its caps.
 
 ``verify`` runs `verify_run.py` on each pass's manifest that ``DIR/served.json`` names, in order, against
 ``DIR/coins.json``, and exits 0 only when every one is accepted.  An ACCEPT is replay-verified (development shortcut; the
@@ -84,7 +85,7 @@ def serve(args: argparse.Namespace) -> int:
            "engine": {k: v for k, v in engine.items() if isinstance(v, (int, float, str, bool))},
            "requests": args.requests, "prompt_tokens": args.prompt_tokens, "output_tokens": args.output_tokens,
            "served_tokens": sum(len(o.outputs[0].token_ids) for o in outs), "engine_steps": steps[0],
-           "pass_ends": run.details.get("pass_ends"), "caps": caps, "passes": got, "passes_with_calls": len(held),
+           "pass_ends": run.details.get("pass_ends"), "max_step_tokens": run.details.get("max_step_tokens"), "caps": caps, "passes": got, "passes_with_calls": len(held),
            "over_caps": over, "ok": len(held) >= 3 and not over and all(p.get("manifest") for p in held)}
     for path in (Path(args.out), passes / "served.json"):
         path.parent.mkdir(parents=True, exist_ok=True)

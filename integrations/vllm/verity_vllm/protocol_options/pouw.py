@@ -20,7 +20,7 @@ layer's weight root); `commitment` is the scheme, the salt, the weights root the
 commitment and its salt coin's opening and, once closed,
 the transcript root with its unit and tile counts.  Pearl-C's also says what it claims of the weights (``registration``,
 `weights_claim`): the executor applies no keyed rotation and reads no curated list, so it claims nothing about which
-weights were served.  Pearl-C commits one pass per engine step, and more where a call won't fit (`pouw_pass`), each
+weights were served.  Pearl-C commits one pass per engine step, a step held to what one pass takes (`pouw_pass`), each
 retained in its own directory under ``transcript_dir`` when given.  The audit (drawing tiles, opening
 them) is `verity.core.protocols.pouw.audit`'s, after the run.  Beside sampled proofs the composition asks
 `verity.core.protocols.pouw.circuit` (`protocol_options.CIRCUITS`), and only ``ncp-v2`` has a circuit.  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
@@ -714,7 +714,7 @@ def install(scheme: str, target: Target) -> Option:
         h = target.hooks(entry)
         for w, layer in enumerate(layers):
             h.wrap(layer.quant_method, "apply", lambda orig, w=w: _executor(run, w))
-        PP.hook_steps(h, run, settings.transcript_dir)
+        PP.hook_steps(h, run, PPD.CALL_CAPACITY, settings.transcript_dir)
         return Option(name=entry, hooks=h, commits=run.commits, details=run.details, release=run.finish,
                       end_pass=run.end_pass)
     else:

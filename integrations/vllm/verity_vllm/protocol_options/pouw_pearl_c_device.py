@@ -33,7 +33,7 @@ torch's current stream, in the device's primary context:
   The liveness is screened in FP32 with a 2⁻¹⁰ band (`screen`), and a row inside the band is decided exactly by
   `pearl_c.live_row` from its retained words.
 * **Each pass** (`begin`, `end`; `end_pass` ends one and begins the next, which the PoUW option does at each engine step's
-  end and before a call the open pass can't hold, `pouw_pass`): the transcript is every call's A root and one tile tree over
+  end, `pouw_pass`, holding a step to what one pass takes): the transcript is every call's A root and one tile tree over
   every leaf, in call order, under `audit.transcript_domain` (the audit `Prover`'s layout).  With a retain directory, the
   pass also writes what the prover opens from: A's rows (BF16, exact) and tree levels per call, B's rows and tree levels per
   weight (linked to the first retained pass's), the leaves, the tile tree and the manifest (`write_manifest`) that the reference verifier reads
@@ -304,7 +304,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
         """`coins` is the challenger's coin commitment of the epoch and `opening` its salt coin, opened after the weights'
         root (`Epoch.start`, which raises `DomainError` for any other coin): the epoch's salt is the coin's."""
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
-        self.nb, self.salt_key, self.retain_dir, self.retained, self.split_full, self._weight_files = kernel.run.NB, salt_key, None, 0, False, {}
+        self.nb, self.salt_key, self.retain_dir, self.retained, self._weight_files = kernel.run.NB, salt_key, None, 0, {}
         self.graphs = graphs and next(iter(weights.values())).device.type == "cuda"
         self.whole_defer = whole_defer
         self._graphs: dict[tuple, _Graph] = {}
