@@ -13,5 +13,6 @@ Nothing in `verity` reads this directory.
 | `cover.py` | the cheapest covering: a direct MILP (`min_blocks`, small cases only) and column generation (`colgen`): a set-cover LP priced by a one-block MILP, with Farley's bound as the certified lower bound |
 | `run.py` | the grid: `python run.py --out DIR [--workers N]`, writing `results.jsonl` and `summary.md` |
 | `price.py` | what a split value costs at its consumer, by brute force: one-way cost and log-rank bound of an exact norm, an elementwise nonlinearity and a linear map on the sum of two pieces, for each kind of split (`python price.py [--n 4] [--b 2]`) |
+| `bound_check.py` | the locality lemma's algebra on random supports: an exact norm's character matrix factors through the inner product's, and its log-rank is at least `log|S_A| + log|S_B| - n ell` |
 
 Results go to the evidence store, not here.
