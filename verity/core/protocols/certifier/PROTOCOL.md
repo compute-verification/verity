@@ -730,14 +730,14 @@ steps of P = 64 from a session of 2^10 (E = M = 8,192). Served is `SERVED`'s sha
 ingress frames 4,096. The table is v4's window unit, one a link-window with both roots in it and one routing over
 the window's N cells, the comparison the bucket unit (below the table) is priced against. Each part's formula is
 exact, checked against `HC.ands` at two sizes or more and the whole window at T = 3, R = 4, P = 4, S = 4, DS = 3
-(6,721,770 ANDs: `IoTiePort` 3,534,423, `NetworkRowsRoot` 3,139,634, the content 47,711 and 2 joining them), and
+(6,721,770 ANDs: `IoTiePort` 3,534,423, the cells' rows root 3,139,634, the content 47,711 and 2 joining them), and
 extrapolated from there; nothing at these sizes is built.
 
 | Part | Rehearsal | Served | From |
 |---|---|---|---|
 | Cells' rows: digests | 684,933,540 | 117,273,138,600 | T × ⌈(R·B + 17) / 128⌉ compressions of 57,947 (`NetworkRowDigest`) |
 | Cells' rows: hm96 leaves | 12,935,820 | 129,358,200 | T × `Hm96Sha512Leaf`, 215,597 |
-| Cells' tree | 17,487,788 | 282,689,596 | T `FrameV3Leaf`s, the pads to a power of two (`FrameV3Pad`), the nodes, `LmsEqual` |
+| Cells' tree | 17,487,788 | 282,689,596 | T `FrameV3Leaf`s, the frame-v3 pads to a power of two, the nodes, `LmsEqual` |
 | The port's rows and reads | 277,345,151 | 19,256,418,303 | `IoTiePort`: S × (`NetworkRowDigest{32P}`, `Hm96Sha512Leaf`, `FrameV3Read{DS}`) + S − 1; 2,166,758 and 4,701,273 a step |
 | Cells' parse | 21,626,640 | 3,720,664,800 | N × `IoTieCell`, 3,678 |
 | Routing | 4,608,000 | 1,063,256,064 | `IoTieRoute`, W = 32 + D ANDs a switch |
@@ -931,9 +931,9 @@ are a function of the map and the port, so the prover rebuilds them, and it comp
   compute's and vllm's.
 
 **Reuse.** `Sha512Compress`, `NetworkRowDigest`, `Hm96Sha512Leaf`, `FrameV3Leaf`, `FrameV3Node`, `FrameV3Read` and
-`LmsEqual`. The new Definitions (`IoTieCell`, `IoTieRoute`, `IoTieMatch`, `IoTieContent`, `IoTiePort`, `FrameV3Pad`,
-`NetworkRowsRoot`, `IoTieBucket`) are composites of those, with no new hash. `NetworkRowsRoot` is the ingress tie's
-(`io_request`), which still recomputes its cells' root.
+`LmsEqual`. The new Definitions (`IoTieCell`, `IoTieRoute`, `IoTieMatch`, `IoTieContent`, `IoTiePort`,
+`IoTieBucket`) are composites of those, with no new hash. No unit recomputes a rows root: both ties read the warden's
+registered rows.
 
 **The prototype** (`io_tie`, on the warden's own egress and a fake upstream's port) has the reference
 (`io_tie.reference`, in the clear), the Boolean Definitions above, and their tests:
