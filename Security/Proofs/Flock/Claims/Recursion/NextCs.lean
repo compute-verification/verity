@@ -47,20 +47,20 @@ open Lean (Json)
 /-! ## Reading the record at a parsed value -/
 
 /-- A recorded round as `liveOf` reads it. -/
-def roundJ (r : Json) : V Round := do
+def roundJ (r : Json) : Flock.V Round := do
   let n ← Record.nat r "n"
   let coins ← Record.f128s (← Record.arr r "coins")
   let bytes ← if Record.isNull r "msg" then pure none else some <$> unhex (← Record.str r "msg")
   pure (⟨n, ByteArray.empty, coins, bytes⟩ : Round)
 
 /-- Rep stream `name`'s rounds as `liveOf` reads them: the first stream of that name's. -/
-def streamJ (recs : Array Json) (name : String) : V (Array Round) := do
+def streamJ (recs : Array Json) (name : String) : Flock.V (Array Round) := do
   let some s := recs.find? (fun s => (s.getObjValAs? String "stream").toOption == some name)
     | throw s!"S11: no stream {name}"
   (← Record.arr s "rounds").mapM fun r => roundJ r
 
 /-- **`liveOf` at the record's parsed value `j`.** -/
-def liveOfJ (spec : SessionSpec) (j : Json) : V Live := do
+def liveOfJ (spec : SessionSpec) (j : Json) : Flock.V Live := do
   let l ← Record.fld j "link"
   let rootB ← spec.tables.mapM fun t => do unhex (← Record.str (← Record.fld l "root_b") t)
   let pubs ← Record.fld l "publics"
@@ -80,11 +80,11 @@ theorem liveOf_of_parse (spec : SessionSpec) {record : String} {j : Json} (h : J
   rfl
 
 /-- The shipped verdict at the record's parsed value `j`. -/
-def verdictJM {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (zk : Bool) (hs : Hashes M)
+def verdictJM {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT Flock.V M] (zk : Bool) (hs : Hashes M)
     (spec : SessionSpec) (tabs : Array Setup) (j : Json) (proofs : Array ByteArray) : M Unit :=
   if zk then Zk.verifyJWithM hs spec tabs j proofs else verifyJWithM hs spec tabs j proofs
 
-theorem verdictM_of_parse {M : Type → Type} [Monad M] [LawfulMonad M] [MonadExceptOf String M] [MonadLiftT V M]
+theorem verdictM_of_parse {M : Type → Type} [Monad M] [LawfulMonad M] [MonadExceptOf String M] [MonadLiftT Flock.V M]
     (zk : Bool) (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) {record : String} {j : Json}
     (proofs : Array ByteArray) (h : Json.parse record = .ok j) :
     verdictM zk hs spec tabs record proofs = verdictJM zk hs spec tabs j proofs := by
@@ -93,7 +93,7 @@ theorem verdictM_of_parse {M : Type → Type} [Monad M] [LawfulMonad M] [MonadEx
 
 /-- `checks` with custody reading the parsed value `j`; the statement and draw checks read the record's text. -/
 def checksJ (zk : Bool) (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : List ByteArray × List ByteArray)
-    (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (f : Final) (j : Json) : V Unit := do
+    (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (f : Final) (j : Json) : Flock.V Unit := do
   Record.check (f.stmt == x) "live: the last message's statement is not the statement"
   Record.check (drawEq (FlockSoundness.Discharge.Exec.recordDraw f.record) s.read.draw)
     "live: the record's draw is not the statement's"
@@ -327,7 +327,7 @@ section Custody
 
 open FlockComplete.JsonRT (f128s_map array_mapM_ok_of)
 
-theorem bind_ok {α β : Type} {x : V α} {f : α → V β} {b : β} (h : (x >>= f) = .ok b) :
+theorem bind_ok {α β : Type} {x : Flock.V α} {f : α → Flock.V β} {b : β} (h : (x >>= f) = .ok b) :
     ∃ a, x = .ok a ∧ f a = .ok b := by
   cases x with
   | error e => cases h
@@ -393,7 +393,7 @@ theorem getObjValAs_mapKey_ne {k k' : String} (g : Json → Json) (j : Json) (hk
   unfold Json.getObjValAs? Json.getObjValD
   rw [getObjVal?_mapKey_ne g j hk]
 
-theorem list_mapM_ok_inv {α β : Type} (f : α → V β) :
+theorem list_mapM_ok_inv {α β : Type} (f : α → Flock.V β) :
     ∀ (l : List α) (ys : List β), l.mapM f = .ok ys →
       ∃ hl : ys.length = l.length, ∀ (i : ℕ) (h : i < l.length), f l[i] = .ok (ys[i]'(hl ▸ h))
   | [], ys, h => by
@@ -417,7 +417,7 @@ theorem list_mapM_ok_inv {α β : Type} (f : α → V β) :
         | zero => exact ha
         | succ i => exact hf i (by simpa using hi)
 
-theorem array_mapM_ok_inv {α β : Type} (f : α → V β) (a : Array α) (ys : Array β) (h : a.mapM f = .ok ys) :
+theorem array_mapM_ok_inv {α β : Type} (f : α → Flock.V β) (a : Array α) (ys : Array β) (h : a.mapM f = .ok ys) :
     ∃ hl : ys.size = a.size, ∀ (i : ℕ) (h : i < a.size), f a[i] = .ok (ys[i]'(hl ▸ h)) := by
   rw [Array.mapM_eq_mapM_toList] at h
   cases hl : a.toList.mapM f with
@@ -682,7 +682,7 @@ theorem custody_coinSubJ (spec : SessionSpec) (link : List ByteArray × List Byt
         "live: the record's rounds are not the round messages"
       Record.check (((lv.streams.toList.flatMap fun s : Array Round => s.toList).zip mids).all
           fun q => q.1.bytes == some ⟨q.2.1.toArray⟩)
-        "live: a recorded round is not its message and coin" : V Unit) := by
+        "live: a recorded round is not its message and coin" : Flock.V Unit) := by
   have hp : (lv.points == pointsOf spec c₁) = true := by rw [liveOfJ_points spec c₁ mids j h]; exact beq_self_eq_true _
   unfold custody
   dsimp only
