@@ -24,7 +24,7 @@ if [ -n "${CKPT_ROOT:-}" ]; then
 fi
 nvidia-smi --query-gpu=name,memory.total --format=csv
 "$PY" -c 'import torch, transformers; print(torch.__version__, transformers.__version__, torch.cuda.get_device_name(0))'
-"$PY" facts.py | head -4 | tee "$OUT/facts.txt"
+"$PY" facts.py > "$OUT/facts.txt"
 cp "${PLAN:-plan.json}" "$OUT/plan.json"
 "$PY" driver.py "${PLAN:-plan.json}" 2>&1 | tee "$OUT/driver.log"
 "$PY" table.py "$OUT" | tee "$OUT/table.md"
