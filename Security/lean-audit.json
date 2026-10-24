@@ -1175,9 +1175,25 @@
    "owner": "@network-accounting",
    "digest": "310f208fce13c24995d809d75f36e717d519a690cb6ca0f056a8064689056666"
   },
+  "NetTiming.AcceptedWithin": {
+   "owner": "@network-accounting",
+   "digest": "61264f5cd461a948f1f6b64479ce28fb69e6e225329d812866525ab659ac8aa7"
+  },
   "NetTiming.Allocated": {
    "owner": "@network-accounting",
    "digest": "a414edcfc0295b87863d6548e751f60b429bf55d55cdcd9791ef92d93c02ea94"
+  },
+  "NetTiming.BitsCount": {
+   "owner": "@network-accounting",
+   "digest": "d4e0da6a318e51d835db13cda094605ffcd9569955bbc4a27f01e021375f1f5b"
+  },
+  "NetTiming.CompilerDeterministic": {
+   "owner": "@network-accounting",
+   "digest": "a3885e87bc70035c2b57e25c218870889da0a4197bfc059a90a23d1122bfe6ba"
+  },
+  "NetTiming.CompilerPrecommitted": {
+   "owner": "@network-accounting",
+   "digest": "789f1bc116d4abd0f277dc8273cc6b357d59f49e5b918ffc734aeec3bd4acef2"
   },
   "NetTiming.FramesReadNoTimingAdvice": {
    "owner": "@network-accounting",
@@ -1545,21 +1561,9 @@
    "owner": "@lean",
    "digest": "6c8b0ffd3222a58091c7755158d171c1f1f37b959832b0ad5b40c4452c431481"
   },
-  "NetTiming.AcceptedWithin": {
+  "Verity.Assumptions.TrustedNebiusHost": {
    "owner": "@network-accounting",
-   "digest": "61264f5cd461a948f1f6b64479ce28fb69e6e225329d812866525ab659ac8aa7"
-  },
-  "NetTiming.BitsCount": {
-   "owner": "@network-accounting",
-   "digest": "d4e0da6a318e51d835db13cda094605ffcd9569955bbc4a27f01e021375f1f5b"
-  },
-  "NetTiming.CompilerDeterministic": {
-   "owner": "@network-accounting",
-   "digest": "a3885e87bc70035c2b57e25c218870889da0a4197bfc059a90a23d1122bfe6ba"
-  },
-  "NetTiming.CompilerPrecommitted": {
-   "owner": "@network-accounting",
-   "digest": "789f1bc116d4abd0f277dc8273cc6b357d59f49e5b918ffc734aeec3bd4acef2"
+   "digest": "569bbee988e0e2575ef74370bda4650cfe18814bac8fc43aa7329cade6b5b23a"
   }
  },
  "meaning": [
@@ -7859,10 +7863,16 @@
    "type_hash": "13ea83921034e1ee1dc0cb725f2a74c0c928d20fccf7e71f6d962b726f735fa1"
   },
   "NetTiming.SecurityProofs.EncardWardenDecodableLe": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.EncardWardenDecodableLe : NetTiming.Guarantees.EncardWardenDecodableLe"],
+   "assumptions": [],
+   "type_hash": "f652ef6d0e0b6ac58e33d5ba4f7f26d4ccb5c9db7156cb9ca7c5b50b8bff4bb3"
   },
   "NetTiming.SecurityProofs.EncardWardenViewsLe": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.EncardWardenViewsLe : NetTiming.Guarantees.EncardWardenViewsLe"],
+   "assumptions": [],
+   "type_hash": "d6974fee407458e73267a6a10bb63f96db93ba6a1694f632f3d133c831879026"
   },
   "NetTiming.SecurityProofs.ExpectedRowCausal": {
    "owner": "@network-accounting",
@@ -7871,7 +7881,10 @@
    "type_hash": "5677dc78b1098f4956a21084ff940de6f71c34bf2f38bc3f2950cd7abe39ed89"
   },
   "NetTiming.SecurityProofs.WardenViewEqClientView": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.WardenViewEqClientView : NetTiming.Guarantees.WardenViewEqClientView"],
+   "assumptions": [],
+   "type_hash": "b6f79294b8555ef604979d0178cb818abc5d0cc785b14c56841ad73ce13321f6"
   },
   "Pous.SecurityProofs.BandMultiMeetsFamily": {
    "owner": "@memory-accounting",
@@ -15309,7 +15322,8 @@
    "guarantees": [
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow"
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow",
+    "NetTiming.SecurityProofs.EncardWardenDecodableLe"
    ]
   },
   "Definitions.NetworkCertifier.Grid": {
@@ -15461,6 +15475,35 @@
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow",
     "NetTiming.SecurityProofs.ExpectedRowCausal"
+   ]
+  },
+  "Definitions.NetworkCertifier.Warden": {
+   "digest": "44483d6d7b90ee894c8893c859b277c18696789fc671a62a68405cfb2d0a9a17",
+   "definitions": {
+    "NetTiming.Arrivals": "a9855f1bf335813d6e9e14389bc8ab6a12f280930f67aa9b05a90a5a61349651",
+    "NetTiming.Arrivals.ready": "9072fe2fb441f0c20173208efd9171d9488df5c1e74d998285fa06303bda783a",
+    "NetTiming.Arrivals.stream": "90546fb93b6d8fc796e2cee2d1a1a9cd0f1e6facb321853afa41ebbc51c1a909",
+    "NetTiming.CellView": "3a34aa0796a8f300a192ccfcccdf919b49d79e9b5f84677f63b2b6df7f32165d",
+    "NetTiming.CellView.data": "18a876d450ecca9b40059bf145040aaf84898393b339fd2c0d3531a0f865866c",
+    "NetTiming.CellView.fail": "515a3655259e4d93419efd8142ce0f4c535df44a77a2519c13539e0172cb650b",
+    "NetTiming.CellView.pad": "97f36790f87b13e6d3933331f3fd77a067668562d8a8e939dc6e367f4ed6e1ae",
+    "NetTiming.WardenSchedule": "0594721fc552a82a6bed7582412823279ec82a1909ddbb414c6c4fdccded6959",
+    "NetTiming.WardenSchedule.D": "a218dd7a11661b14d49161b2ffe854f147b79b40769719ae73cbf0c3e752373c",
+    "NetTiming.WardenSchedule.adm": "5a30fe3ffcae51310b781b92592b4c917b3a884e1f3b3c0e4454698599f465ed",
+    "NetTiming.WardenSchedule.bucket": "e0ce0ff6f053a2e4387e402d84e7a74bf9ea9602b7b00d476186ed8e2fc8820d",
+    "NetTiming.WardenSchedule.cells": "f2d947c4b4976dc66943a86b6225976ddc342fbc55ca6ce51caa06937c74aa68",
+    "NetTiming.WardenSchedule.r": "945a3aa14d2585cf9cfcdd40e7a5c7699431cb29efe7115d4943315d0b7b8e2f",
+    "NetTiming.cellView": "ad3d6ac110b9552babae7054a6bccf9254038a208b06ec5ab49cc8ccd3c37dbe",
+    "NetTiming.clientView": "3f296e1831810a4a6dfe6346d75fea4f7321da3ce8c1597912aeb08acba7821c",
+    "NetTiming.failCell": "097fda151d174bc94cf33e7ba03e552958cfb91184001f9a4a2d1f95ccc5a664",
+    "NetTiming.streamCell": "5099c8817f9762186ef5b7b163aeb9d09fbbd6106b964dacc1f3d757cdfbdd21",
+    "NetTiming.wardenCode": "5e86c0bb2c509e1a3cfb9bfa856d1d78a8cb7848d92efa2c0ee0e078bc20cef8",
+    "NetTiming.wardenLane": "589292a58aa331c6b10ec7993a4d55215213036b1b0a7f560deac23b35bc65c6"
+   },
+   "guarantees": [
+    "NetTiming.SecurityProofs.EncardWardenDecodableLe",
+    "NetTiming.SecurityProofs.EncardWardenViewsLe",
+    "NetTiming.SecurityProofs.WardenViewEqClientView"
    ]
   },
   "Definitions.Pous.Accounting.Params": {
@@ -27389,6 +27432,17 @@
     "Accounting.SecurityProofs.Tag.PolyUnpredictable"
    ]
   },
+  "Models.Core.Assumptions": {
+   "digest": "8361f31da49dfc00e47e05b1b83a759a88e79d2cae9881ceb39aa25d0d16fbdb",
+   "definitions": {
+    "Verity.Assumptions.TrustedNebiusHost": "569bbee988e0e2575ef74370bda4650cfe18814bac8fc43aa7329cade6b5b23a"
+   },
+   "guarantees": [
+    "NetTiming.SecurityProofs.EncardWardenDecodableLe",
+    "NetTiming.SecurityProofs.EncardWardenViewsLe",
+    "NetTiming.SecurityProofs.WardenViewEqClientView"
+   ]
+  },
   "Models.Core.Guarantees.Circuit": {
    "digest": "d4008286fc1153df1918c255903210428f32dc769d4631f93a6a0f9be9c51f15",
    "definitions": {
@@ -27922,7 +27976,8 @@
    "guarantees": [
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow"
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow",
+    "NetTiming.SecurityProofs.EncardWardenDecodableLe"
    ]
   },
   "Models.NetworkCertifier.Guarantees": {
@@ -27987,6 +28042,19 @@
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow"
+   ]
+  },
+  "Models.NetworkCertifier.Guarantees.Warden": {
+   "digest": "46625366a15801feb0a95444017b294af2e8540511ee7e414aae0cba11ae2a5f",
+   "definitions": {
+    "NetTiming.Guarantees.EncardWardenDecodableLe": "499d1254ccb1a7b0b0dd2c8ea713698023b0358e8ca5eb6e07ce0cfdecf87429",
+    "NetTiming.Guarantees.EncardWardenViewsLe": "1cf76130c401d8a182befc4f1d0923988bd5a64edebc4e18d4e36ca276183ba7",
+    "NetTiming.Guarantees.WardenViewEqClientView": "4c48a9ac12c5e2dfd6c67d490ae6164407e56e7d9d96085fb086c7aa828e09ec"
+   },
+   "guarantees": [
+    "NetTiming.SecurityProofs.EncardWardenDecodableLe",
+    "NetTiming.SecurityProofs.EncardWardenViewsLe",
+    "NetTiming.SecurityProofs.WardenViewEqClientView"
    ]
   },
   "Models.Pous.Assumptions.P2": {
