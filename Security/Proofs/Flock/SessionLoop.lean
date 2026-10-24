@@ -4,6 +4,8 @@ import Proofs.Flock.SessionLoop.Link
 import Proofs.Flock.SessionLoop.RepSrc
 import Proofs.Flock.SessionLoop.Tables
 import Proofs.Flock.SessionLoop.FinishParts
+import Proofs.Flock.SessionLoop.FinCommits
+import Proofs.Flock.SessionLoop.FinPoints
 import Proofs.Flock.SessionLoop.FinRep
 
 /-!
