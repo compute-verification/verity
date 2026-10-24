@@ -79,6 +79,15 @@ def test_the_cap_is_in_the_compilers_registered_digest():
             PP.Capped(Inner(), bad)
 
 
+def test_the_capped_compiler_lists_its_inner_compilers_transfer_gates():
+    assert PP.Capped(Inner()).transfer_gates == ()
+
+    class WithGates(Inner):
+        transfer_gates = ("RoPEHead_v1{D=64}", "TokenSelect_v1{V=128256}")
+
+    assert PP.Capped(WithGates()).transfer_gates == WithGates.transfer_gates
+
+
 def test_advice_over_the_cap_is_refused_before_it_is_read(tmp_path):
     data = _advice(tmp_path)
     assert _outcome(PP.compile_advice, PP.Capped(Inner(), 8 * len(data)), data)[0] == "ok"
