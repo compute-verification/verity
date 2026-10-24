@@ -129,7 +129,7 @@ theorem rep_ok {inn : RecCoins.Inner} {sh : Flock.Shape} {extras : Array Flock.C
       obtain ⟨v, info, kappa⟩ := t
       simp only [hv, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
       subst h
-      exact ⟨hr, hv⟩
+      exact ⟨rfl, hv⟩
 
 /-- **The rep check 5 builds is at the coins the transcript shows**: at a staged part whose statement shows coins `c`,
 wherever check 5 loads the inner statement from its source and builds rep `r` (`Inner.rep`, the rep whose
