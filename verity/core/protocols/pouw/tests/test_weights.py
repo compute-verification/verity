@@ -175,3 +175,23 @@ def test_progress_and_workers():
         with pytest.raises(ValueError, match="positive integer"):
             Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: rows[w], KEY, workers=bad)
     assert 1 <= Wt.DEFAULT_WORKERS <= 4
+
+
+def test_a_rows_chunks_are_the_least_n_past_4096_whose_chunk_is_whole_512_code_blocks():
+    """`chunks` at the served Ks (Llama's 4096 and 14336, GLM's 6144, 12288 and 16384) and every multiple of 32 below
+    2^17 against its definition, and `leaf_words` a chunk's codes and the row's scale."""
+    assert [Wt.chunks(k) for k in (1, 32, 448, 4096, 6144, 8192, 12288, 14336, 16384)] == [1, 1, 1, 1, 2, 2, 3, 4, 4]
+    assert [Wt.leaf_words(k) for k in (64, 4096, 6144, 14336)] == [34, 2050, 1538, 1794]
+    for k in range(32, 1 << 17, 32):
+        try:
+            n = Wt.chunks(k)
+        except ValueError:
+            assert k > Wt.CHUNK_MAX and all(k % (n * Wt.CHUNK_ALIGN) for n in range(1, k // Wt.CHUNK_ALIGN + 1)), k
+            continue
+        assert (n == 1) == (k <= Wt.CHUNK_MAX), k
+        if n > 1:
+            assert k // n <= Wt.CHUNK_MAX and k % (n * Wt.CHUNK_ALIGN) == 0, k
+            assert not any(k % (x * Wt.CHUNK_ALIGN) == 0 for x in range(-(-k // Wt.CHUNK_MAX), n)), k
+    for bad in (0, -32, 4096 + 32, 5000):
+        with pytest.raises(ValueError):
+            Wt.chunks(bad)

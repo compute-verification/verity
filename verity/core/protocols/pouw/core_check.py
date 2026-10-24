@@ -69,6 +69,7 @@ from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
 from verity.core.protocols.pouw.protocol import U64, tagged
 from verity.ml.commitments import Commitment, Opening, VerificationLimits, verify_opening
@@ -679,6 +680,22 @@ def ok_salt(context: str, position: int) -> bytes:
     the one the verifier accepts (`OK_ROW`), so the salt hides nothing. SHAKE-256 of `OK_SALT_TAG` ‖ context ‖ 0 ‖
     u64be(position), `SALT_BYTES` bytes."""
     return hashlib.shake_256(OK_SALT_TAG + context.encode() + b"\0" + int(position).to_bytes(8, "big")).digest(SALT_BYTES)
+
+
+def call_reads(u0: int, rows: list[int | None]) -> dict[str, Any]:
+    """A ``--registered`` port's reads (`registered.READS_V1`) for a statement over one call's units from unit `u0`:
+    ``reads_from`` `u0` and ``reads`` the row each of the call's units reads, in unit order, trailing nones dropped, so
+    the file is as long as the call, not the window (Flock's `Registered.Port.readAt`: none below ``reads_from``)."""
+    rows = list(rows)
+    while rows and rows[-1] is None:
+        rows.pop()
+    return {G.READS_FROM: u0, "reads": rows}
+
+
+def port_reads(entry: dict[str, Any]) -> list[int | None]:
+    """The row every unit from unit 0 reads at a ``--registered`` port, of either format (Flock's
+    `Registered.Port.reads`): none below its ``reads_from`` (absent: 0), then its ``reads``."""
+    return [None] * entry.get(G.READS_FROM, 0) + list(entry["reads"])
 
 
 def public_bc(context: str, salt: bytes, position: int, roots: tuple[bytes, bytes]) -> bytes:

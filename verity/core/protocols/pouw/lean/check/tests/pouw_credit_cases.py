@@ -204,11 +204,11 @@ def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: 
         mine: dict[int, int] = {}
         for k in calls[st * (len(calls) // steps):(st + 1) * (len(calls) // steps)]:
             mine[k] = mine.get(k, 0) + 1
-        tables += [(f"{prefix}a/{k}@{st}", k // 2, n, st) for k, n in mine.items()]
+        tables += [(f"{prefix}a/{k}@{st}", Wt.leaf_words(k), n, st, Wt.chunks(k)) for k, n in mine.items()]
     if calls and off in ("a-zero", "a-row-off"):
         target = rng.choice(tables)[0]
     elif calls and off in TWO_CALLS:
-        target = rng.choice([v for v, _w, n, _s in tables if n > 1])
+        target = rng.choice([v for v, _w, n, _s, _x in tables if n > 1])
     elif calls and off in ("ids-off", "ids-missing"):
         target = f"{prefix}ids@{rng.randrange(steps)}"
 
@@ -247,8 +247,8 @@ def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: 
                  **({G.WIDTH_KEY: 32} if rng.random() < 0.3 else {})}
             entries.append({**b, "domain": Cr.domain_of(program, window, b)})
     entries += [dict(e) for e in weights or ()]
-    for v, words, n, st in tables:
-        a(v, words, (n - (v == target and off == "a-call-missing")) * m, st)
+    for v, words, n, st, x in tables:
+        a(v, words, (n - (v == target and off == "a-call-missing")) * m * x, st)
     for c, k in enumerate(calls or []):
         zy = {"value": f"{prefix}zy@{c}", "root": _hex(rng), "leaves": rng.randint(1, 8), "words": 3}
         entries.append({**zy, "domain": G.domain(prog, zy["value"], 3, zy["leaves"], window=own).domain_id.hex()})
@@ -456,7 +456,7 @@ def layout(rng: random.Random, big: bool = False) -> dict:
     of the tile's C, called once a step over one to three steps (A block s at step s) in a shuffled order; ``big``, a
     population past `credit.RECORD_K`."""
     r, c = rng.choice([(1, 1), (2, 4), (4, 8), (8, 8), (16, 16)])
-    ks = rng.sample([32, 64, 4096, 14336], rng.randint(1, 2))
+    ks = rng.sample([32, 64, 4096, 6144, 14336], rng.randint(1, 2))
     names = rng.sample(LINEARS, rng.randint(len(ks), 4))
     linears = [[name, ks[i] if i < len(ks) else rng.choice(ks), c * (rng.randint(1, 4) if not big else 64)]
                for i, name in enumerate(names)]
@@ -493,12 +493,18 @@ def _template_id(k: int, unit: dict) -> str:
     return f"{Cr.TILE_FN}{{UNIT={_canon(unit)},K={k}}}"
 
 
+def row_type(k: int) -> list:
+    """`h1zy.ROW` (K) as the codec writes it: K s8 codes, then the row's f32 scale, each its bits."""
+    return ["Record", [["codes", ["Array", k, ["Array", 8, ["Value", 1]]]], ["scale", ["Array", 32, ["Value", 1]]]]]
+
+
 def _template(k: int, r: int, c: int, unit: dict, receipt: object = None) -> dict:
     """K's template as `h1window.template` encodes it: a composite over the tile unit `unit`, its A and B rows
-    ``a_k<K>`` and ``b_k<K>``, then the unit's z/y record ``zy``, the salt, its position and the roots; returning
-    ``{receipt, ok}`` with ``receipt`` the type `receipt` when one is given, else a word."""
-    word = ["Value", 16]
-    params = [[f"a_k{k}", ["Array", r, ["Array", 2, word]]], [f"b_k{k}", ["Array", c, ["Array", 2, word]]],
+    ``a_k<K>`` and ``b_k<K>`` (n·R and n·C chunk rows, `row_type` of K/n, n = `weights.chunks` (K): the zy unit's, or at
+    n > 1 `h1zy.PouwH1TileZyChunks`'), then the unit's z/y record ``zy``, the salt, its position and the roots;
+    returning ``{receipt, ok}`` with ``receipt`` the type `receipt` when one is given, else a word."""
+    word, n = ["Value", 16], Wt.chunks(k)
+    params = [[f"a_k{k}", ["Array", n * r, row_type(k // n)]], [f"b_k{k}", ["Array", n * c, row_type(k // n)]],
               ["zy", ["Array", 3 * r * c, word]], ["salt", ["Array", 4, word]], ["position", word],
               ["roots", ["Array", 2, ["Array", 4, word]]]]
     ret = word if receipt is None else ["Record", [["receipt", receipt], ["ok", ["Value", 1]]]]
@@ -513,13 +519,20 @@ def record(tiles: list, lay: dict, prefix: str = "") -> str:
     return Cr.WINDOW_FN + "{" + ",".join(f"{k}={_canon(vals[k])}" for k in Cr.RECORD) + "}"
 
 
+def _unit_fn(k: int, r: int, c: int) -> str:
+    """K's unit id in the descriptor: the tile's, wrapped in `h1zy.PouwH1TileZyChunks_v1` at a chunked K."""
+    tile, n = f"H1Tile_v1{{K={k},R={r},C={c}}}", Wt.chunks(k)
+    return tile if n == 1 else f"PouwH1TileZyChunks_v1{{UNIT={tile},CHUNKS={n}}}"
+
+
 def window_desc(rng: random.Random, lay: dict, prefix: str = "", receipt: object = None) -> dict:
     """A served window's circuit as `h1window.program(linears, calls, m, tile)` encodes it (`codec.encode_program`), as
     far as `credit.layout_of` reads it: its program function's record, each K's template, and the root's input batches,
     then each call's (m/R)·(n/C) tiles, each a call of K's template or, at random, a run of them one batch; each
-    template returning a receipt of type `receipt` (`_template`) when one is given."""
+    template returning a receipt of type `receipt` (`_template`) when one is given. At a chunked K (`weights.chunks`
+    n > 1) the unit is `h1zy.PouwH1TileZyChunks_v1` {UNIT, CHUNKS = n} over the tile, as `h1window.program` wraps it."""
     (r, c), ks = lay["tile"], sorted({k for _name, k, _n in lay["linears"]})
-    units = {k: {"fn": f"H1Tile_v1{{K={k},R={r},C={c}}}"} for k in ks}
+    units = {k: {"fn": _unit_fn(k, r, c)} for k in ks}
     tids = {k: _template_id(k, units[k]) for k in ks}
     callees = ["Input16_v1", *(u["fn"] for u in units.values()), *tids.values()]
     defs = {u["fn"]: {"form": "primitive", "id": u["fn"], "params": [], "ret": ["Value", 16]} for u in units.values()}
@@ -615,7 +628,13 @@ def _break_desc(rng: random.Random, lay: dict, name: str) -> str:
                 case "params":
                     body["params"] = body["params"][:4]
                 case "rows":
-                    body["params"][rng.randrange(2)][1] = rng.choice([["Array", 0, ["Value", 16]], ["Value", 16]])
+                    n, x = Wt.chunks(k), rng.randrange(2)
+                    rows = body["params"][x][1][1]
+                    body["params"][x][1] = rng.choice([
+                        ["Array", 0, ["Value", 16]], ["Value", 16], ["Array", rows, ["Array", 2, ["Value", 16]]],
+                        ["Array", rows, row_type(k // n + 1)], ["Array", rows, row_type(k)] if n > 1 else ["Value", 16],
+                        ["Array", rows // n, row_type(k)] if n > 1 else ["Array", rows, row_type(2 * k)],
+                        ["Array", rows + 1, row_type(k // n)] if n > 1 else ["Array", rows, ["Value", 16]]])
                 case "unit":
                     t["bindings"]["UNIT"] = {"fn": "Other_v1"}
                 case "missing":
@@ -924,11 +943,19 @@ def b_row_words(codes: bytes, sw: float) -> list[int]:
     return Wt.row_words(Wt.row_bytes(bytes(codes), struct.pack("<f", sw)))
 
 
+def b_leaf_words(codes: bytes, sw: float) -> list[list[int]]:
+    """A B row of K's leaves' u16 words: x = `weights.chunks` (K) leaves, leaf c chunk c's K/x codes then the row's s_w
+    (`b_row_words` of each)."""
+    x = Wt.chunks(len(codes))
+    kc = len(codes) // x
+    return [b_row_words(codes[c * kc:(c + 1) * kc], sw) for c in range(x)]
+
+
 def registered_b(program: str, v: str, rows: list[tuple[bytes, float]]) -> dict:
     """The entry of `rows` registered as the served path registers each K's B rows (`registered.Registered`, each row
-    `b_row_words`, salts drawn once, binding no window)."""
-    words = [b_row_words(codes, sw) for codes, sw in rows]
-    return G.Registered.commit(program, v, words, G.supplied_salts(program, v, len(rows)), schema=G.SCHEMA_V2).entry()
+    its `b_leaf_words`, salts drawn once, binding no window)."""
+    words = [w for codes, sw in rows for w in b_leaf_words(codes, sw)]
+    return G.Registered.commit(program, v, words, G.supplied_salts(program, v, len(words)), schema=G.SCHEMA_V2).entry()
 
 
 def _rehome(weights: list[dict], program: str, prefix: str) -> list[dict]:
@@ -1393,7 +1420,10 @@ def a_link_instance(rng: random.Random, name: str = "honest") -> dict:
     ``…/a/<K>@<s>``, each committed whole by its round; and at random (always under the ``ids-`` mutations) some
     rounds' input-ids tables ``…/ids@<s>``, each committed whole by its round; and at random (always under the
     ``receipt-`` mutations) some calls' receipt tables ``…/receipt@<c>``, each committed whole by its call's round, of
-    the window's ``calls`` (the rounds' equal blocks)."""
+    the window's ``calls`` (the rounds' equal blocks). At random (always under ``layout-rows``) its ``rows`` give each
+    A value's and receipt table's leaf count as a layout would (`credit.table_rows`); ``leaves-cap`` gives an entry no
+    ``rows`` name a count past `credit.MAX_ROWS`, and ``layout-rows`` one that ``rows`` names another count than its
+    own, at random 2^40, which the verifier refuses before it hashes any pad."""
     calling, tying, receipts = name.startswith("table-"), name.startswith("ids-"), name.startswith("receipt-")
     steps = rng.choice([2, 3, 4] if name in ("blocks", "swapped", "table-other-round", "ids-other-round",
                                              "receipt-other-round") else [1, 2, 3, 4])
@@ -1407,7 +1437,7 @@ def a_link_instance(rng: random.Random, name: str = "honest") -> dict:
         entries.append({"value": v, "root": levels[-1][0].hex(), "leaves": count, "words": 96, "domain": domain})
 
     sizes = [2, 3, 4, 5] if name == "swapped" else [1, 2, 3, 4, 5, 8]
-    ks = rng.sample([64, 4096, 14336], rng.randint(1, 2))
+    ks = rng.sample([64, 4096, 6144, 14336], rng.randint(1, 2))
     for k in ks:
         a(f"{window}/a/{k}", steps * rng.choice(sizes), None)
     if calling or rng.random() < 0.5:
@@ -1424,7 +1454,10 @@ def a_link_instance(rng: random.Random, name: str = "honest") -> dict:
     rng.shuffle(entries)
     log = _log(steps, values, [_hex(rng) for _ in range(steps)])
     tied = [e for e in entries if Cr.is_tied(e["value"])]
-    e = rng.choice([x for x in tied if Cr.ids_step(x["value"]) is not None] if tying
+    sized = [x for x in tied if Cr.ids_step(x["value"]) is None]
+    rows = ({x["value"]: x["leaves"] for x in sized}
+            if name == "layout-rows" or (name not in ("leaves-cap", "blocks") and rng.random() < 0.5) else None)
+    e = rng.choice(sized if name == "layout-rows" else [x for x in tied if Cr.ids_step(x["value"]) is not None] if tying
                    else [x for x in tied if Cr.receipt_call(x["value"]) is not None] if receipts
                    else [x for x in tied if Cr.is_a(x["value"]) and (values[x["value"]][2] is not None) == calling]
                    if calling or name == "blocks" else tied)
@@ -1470,8 +1503,12 @@ def a_link_instance(rng: random.Random, name: str = "honest") -> dict:
             entries.append(dict(e))
         case "entry-form":
             k, bad = rng.choice([("root", None), ("root", "zz"), ("domain", None), ("domain", e["domain"].upper()),
-                                 ("leaves", 0), ("leaves", True), ("leaves", Cr.MAX_ROWS + 1), ("leaves", "4")])
+                                 ("leaves", -1), ("leaves", True), ("leaves", None), ("leaves", "4")])
             e[k] = bad
+        case "leaves-cap":
+            e["leaves"] = rng.choice([0, Cr.MAX_ROWS + 1, 1 << 40])
+        case "layout-rows":
+            e["leaves"] = rng.choice([e["leaves"] + 1, e["leaves"] - 1 or 2, 1 << 40])
         case "blocks":
             e["leaves"] += 1 if (e["leaves"] + 1) % steps else 2 if (e["leaves"] + 2) % steps else 3
         case "log-form":
@@ -1516,18 +1553,20 @@ def a_link_instance(rng: random.Random, name: str = "honest") -> dict:
             _reroot(log)
         case _:
             raise ValueError(name)
-    return {"rounds": log, "entries": entries, "calls": calls}
+    return {"rounds": log, "entries": entries, "calls": calls, "rows": rows}
 
 
 A_LINK_NAMES = ["untied", "late-rows", "rewritten", "round-root", "gap", "extra", "swapped", "misaligned", "unknown",
-                "no-a", "twice", "entry-form", "blocks", "log-form", "round-form", "segments-form", "entries-form",
+                "no-a", "twice", "entry-form", "leaves-cap", "layout-rows", "blocks", "log-form", "round-form", "segments-form", "entries-form",
                 "table-other-round", "table-past", "ids-other-round", "ids-past", "receipt-other-round", "receipt-past",
                 "receipt-calls", "receipt-unknown"]
 
 
 def _b_entry(program: str, v: str, k: int, n: int, rng: random.Random) -> dict:
-    return {"value": v, "root": _hex(rng), "leaves": n, "words": Wt.b_words(k),
-            "domain": G.domain(program, v, Wt.b_words(k), n).domain_id.hex()}
+    """K's ``b/<K>`` of `n` rows: `weights.chunks` (K) leaves a row of `weights.leaf_words` (K) words."""
+    x, w = Wt.chunks(k), Wt.leaf_words(k)
+    return {"value": v, "root": _hex(rng), "leaves": x * n, "words": w,
+            "domain": G.domain(program, v, w, x * n).domain_id.hex()}
 
 
 def weights_instance(rng: random.Random, name: str = "honest") -> dict:
