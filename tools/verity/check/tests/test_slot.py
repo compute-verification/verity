@@ -912,6 +912,26 @@ def test_a_slot_with_mem_holds_a_research_mem_reservation_that_research_mem_coun
     assert [f.name for f in (tmp_path / "ramlock").glob("*.json")] == ["check-a.json"]
 
 
+def test_a_run_that_asks_for_more_than_its_slots_mem_waits_for_and_reserves_that(tmp_path, monkeypatch):
+    """24 Oct (proofs): a `research run --pool proofs --mem-gb 450` in the 193 GB slot p5 reserved 193, and the ledger under-reported
+    it. The run's --mem-gb reaches slot.py as CHECK_RUN_MEM_GB; the slot waits for and reserves the larger."""
+    slot = SLOT.parse("p5 0 mem=180")[0]
+    monkeypatch.delenv(SLOT.RUN_MEM_ENV, raising=False)
+    assert SLOT.asking([slot]) == [slot]
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "450")
+    (raised,) = SLOT.asking([slot])
+    assert raised["mem"] == -(-int(450e9) // 2 ** 30) == 420
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "100")
+    assert SLOT.asking([slot])[0]["mem"] == 180, "a smaller ask keeps the slot's mem="
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "450")
+    monkeypatch.setattr(SLOT, "memory_gb", lambda: 300)
+    monkeypatch.setattr(SLOT, "reserved_gb", lambda: 0, raising=False)
+    assert "under the 420 GB" in SLOT.blocked(raised, NOW)
+    monkeypatch.setattr(SLOT, "memory_gb", lambda: 500)
+    assert SLOT.blocked(raised, NOW) is None
+    assert "holds a 451 GB research.mem reservation" in SLOT.reserve(raised, NOW)
+
+
 def test_a_slot_with_mem_counts_what_live_reservations_hold_but_dont_use_yet(tmp_path, monkeypatch):
     """23 Oct 23:16Z (top): when a check ended on cpu-4, proofs' waiting 345 GB shares and a train's twins raced for the freed
     memory, and a twin admitted beside a lowering share read well over 560 GB free: that share's reservation wasn't counted."""
