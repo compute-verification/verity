@@ -44,7 +44,7 @@ def metrics(r):
     p64 = sum(1 for c in r["sampled_npass"] if c > 0)
     s1 = [c / k for c in r["sampled_npass"]]
     return {"n": n, "pass1_greedy": g / n, "pass1_greedy_ci": cp(g, n), "pass1_sampled": float(np.mean(s1)),
-            "pass1_sampled_ci": boot(s1), f"pass{k}": p64 / n, f"pass{k}_ci": cp(p64, n),
+            "pass1_sampled_ci": boot(s1) if p64 else cp(0, n), f"pass{k}": p64 / n, f"pass{k}_ci": cp(p64, n),
             "pos_greedy": float(np.mean(r["greedy_pos"])), "pos_greedy_ci": boot(r["greedy_pos"]),
             "pos_sampled": float(np.mean(r["sampled_pos"])), "pos_sampled_ci": boot(r["sampled_pos"])}
 
@@ -76,6 +76,7 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--which", default="best", choices=["best", "final"])
     ap.add_argument("--a3", nargs="*", default=[], help="A3's run dirs (each with out/results/*.json)")
+    ap.add_argument("--val", nargs="*", default=[], help="log.json of arms with no test report: their validation records")
     ap.add_argument("--procs-per-gpu", type=int, default=2, help="arms that shared one GPU; GPU-h is training wall time over this")
     a = ap.parse_args()
     rows = []
@@ -124,6 +125,32 @@ def main():
     json.dump(rows, open(os.path.join(a.out, "rows.json"), "w"), indent=1)
     if a.a3:
         a3_table(a.a3, a.out)
+    if a.val:
+        val_table(a.val, a.out)
+
+
+def val_table(logs, out, n=256):
+    """Arms stopped before their test report, on the 256 validation strings their log records (greedy): exact match with a
+    Clopper-Pearson interval, letters with the conservative normal interval of a [0, 1] mean (variance at most p(1 - p))."""
+    lines = ["| arm | run | at | FLOPs | val pass@1 greedy % | val letters right, greedy % | best at | best val pass@1 % | best val letters % |",
+             "|---|---|---|---|---|---|---|---|---|"]
+
+    def cells(x):
+        k = round(x["val_exact"] * n)
+        lo, hi = cp(k, n)
+        p = x["val_pos"]
+        h = 1.96 * math.sqrt(p * (1 - p) / n)
+        return f"{100 * k / n:.1f} [{100 * lo:.1f}, {100 * hi:.1f}]", f"{100 * p:.1f} [{100 * max(0, p - h):.1f}, {100 * min(1, p + h):.1f}]"
+
+    for path in logs:
+        ev = [x for x in json.load(open(path)) if "val_pos" in x]
+        last, best = ev[-1], max(ev, key=lambda x: (x["val_exact"], x["val_pos"]))
+        at = lambda x: x.get("it", x.get("step"))
+        arm, run = os.path.basename(os.path.dirname(path)), os.path.basename(os.path.dirname(os.path.dirname(os.path.dirname(path))))
+        lines.append(f"| {arm} | {run} | {at(last)} | {last['flops']:.2e} | {' | '.join(cells(last))} | {at(best)} | {' | '.join(cells(best))} |")
+    table = "\n".join(lines)
+    print(table)
+    open(os.path.join(out, "table_val.md"), "w").write(table + "\n")
 
 
 def a3_table(dirs, out):
