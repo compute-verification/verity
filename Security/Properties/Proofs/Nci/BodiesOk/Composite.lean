@@ -387,8 +387,9 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
   · simpa using hcnt
   · intro k hk
     obtain ⟨h1, h2, -, h4⟩ := hn5 k hk
-    refine ⟨h1, h2, fun a ha t ht => ?_⟩
+    refine ⟨h1, h2, fun a ha => ?_⟩
     obtain ⟨ps', hps', hv'⟩ := h4 a ha
+    refine ⟨⟨ps', hps'⟩, fun t ht => ?_⟩
     rw [hps'] at ht ⊢
     exact refIn_of params outs retType nodes _ offsets hsz hout ps' hv' t ht
   · intro t ht
