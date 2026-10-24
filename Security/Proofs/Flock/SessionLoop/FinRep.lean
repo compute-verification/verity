@@ -58,9 +58,7 @@ theorem proofFile_ok {t : Tab} {rep : ℕ} {dom : ByteArray} {q : RepIn} {f : By
       · subst hk
         refine ⟨ic, p, tr, hic, hrun, ?_⟩
         simp at h
-        first
-        | exact h.symm
-        | exact h
+        exact (Except.ok.inj h).symm
       · exfalso
         simp [hk] at h
 
