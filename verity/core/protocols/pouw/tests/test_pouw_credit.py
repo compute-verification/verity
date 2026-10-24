@@ -122,6 +122,11 @@ WINDOW_EXPECT = {
     "ids0-other-session": ("registration", "ids@0" + OTHER_REGISTRATION),
     "a-call-off": ("arow", NOT_COMMITS + "row-table/"), "a-call-missing": ("arow", "rows, not "),
     "commit-unbound": ("draw", Cr.DRAW_ROOT), "credit-commit-form": ("commit", Cr.COMMIT_FORM),
+    "length-none": ("length", "no-fixed-length"), "length-eos": ("length", "eos-keyed-row"),
+    "length-form": ("length", "is not {max_tokens, stop}"), "length-past": ("length", "ran past its public max_tokens"),
+    "length-early": ("length", "its done source is not the public cap"),
+    "length-slots": ("length", "more than the window's"),
+    "length-served-form": ("length", "served rows are not a natural number"),
 }
 PERIOD_EXPECT = {
     "no-close": ("period", "present the ledger after its close"), "incomplete": ("period", "closed incomplete"),
@@ -148,7 +153,7 @@ PERIOD_EXPECT = {
     "other-model": ("weights", "which is no checkpoint role credit pins: " + Cr.MODEL_FIX),
     "other-sw": ("window", "so the period earns nothing: weights: the window's registered weights' root "),
     "zero-codes": ("window", "so the period earns nothing: weights: the window's registered weights' root "),
-    "stale-pin": ("pin", "past its freshness floor"),
+    "stale-pin": ("pin", "past its freshness floor"), "length-none": ("window", "length: no-fixed-length"),
 }
 A_LINK_EXPECT = {
     "untied": UNTIED, "late-rows": UNTIED, "rewritten": UNTIED, "round-root": "`credit.round_root`", "gap": "`credit.cover`",
