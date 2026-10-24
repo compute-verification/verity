@@ -41,8 +41,7 @@
 #                flock-verify statement on the inner statement with the partition object and program vstage wrote. The job
 #                fails unless each statement (staged or proved) and ZK_LEAN's session exited 0 with every VERDICT accepted,
 #                a forgery's refused, and the inner statement's units were derived from the program (lean_verdicts.py;
-#                INNER_LEAN=1: the inner's session too, and with a served lane's own reads, stage/reads.json, the inner's
-#                verify and statement check read them and forged-inner-reads, a0's root one bit off, must be refused)
+#                INNER_LEAN=1: the inner's session too)
 # The prover runs on the job's first PCPUS cores, the verifier (proxy, serve, replay) on the rest. Every step writes
 # out/summary-$STEP.json. Only a prove invocation holds a GPU, leased for it alone (on_gpu), so every STEP is launched without
 # --gpus (a CPU phase): staging, the proxy, serve, replay and Lean never hold one.
@@ -713,9 +712,6 @@ lean)
     else echo "$(rec_inner_files $1) --rec-inner-transcript $1/public.json"; fi; }
   rm -f $INNER/rec-coins.json; rec_coins $INNER inner || exit 1
   REC_INNER=$(rec_inner_at $INNER)
-  # a served lane's own registered reads (stage/reads.json, 91-rec-lane.sh): V*'s --rec-inner-* inputs set the inner statement
-  # up without them (RecCoins.Files.stmt), so the inner's verify and statement check below hold it to them
-  IREG=; [ -s $DD/stage/reads.json ] && IREG="--registered $DD/stage/reads.json"
   NEGS=
   for w in ${NEG_INNER-challenge query}; do
     FI=$DD/inner-neg-$w; rm -rf $FI; mkdir -p $FI && cp -r $INNER/session $INNER/public.json $INNER/private.json $FI/ \
@@ -778,25 +774,9 @@ EOF
   done | xargs -d '\n' -P ${JOBS:-4} -I{} sh -c "{}"
   if [ "${INNER_LEAN:-0}" = 1 ]; then
     /usr/bin/time -v -o $O/lean/time-inner.txt $LEAN_BIN verify --statement verity/flock-circuit+plain-leaves --circuit $DD/stage/circuit.txt \
-      --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json --program $DD/stage/program.json --stratified $N --coins os $IREG \
+      --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json --program $DD/stage/program.json --stratified $N --coins os \
       --session $DD/inner/s$((NS - 1))/session > $O/lean/inner.log 2> $O/lean/inner.err
     echo "inner lean exit $?"
-    # a served lane's control: its reads with one bit of a0's registered root off, which the pub's openings no longer
-    # verify against (part forged-inner-reads, which Lean must refuse)
-    if [ -n "$IREG" ]; then
-      python3 - $DD/stage/reads.json $DD/stage/reads-forged.json <<'EOF2' || exit 1
-import json, sys
-r = json.load(open(sys.argv[1]))
-e = r["ports"]["a0"]
-e["root"] = "%02x" % (int(e["root"][:2], 16) ^ 1) + e["root"][2:]
-json.dump(r, open(sys.argv[2], "w"))
-EOF2
-      /usr/bin/time -v -o $O/lean/time-forged-inner-reads.txt $LEAN_BIN verify --statement verity/flock-circuit+plain-leaves \
-        --circuit $DD/stage/circuit.txt --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json \
-        --program $DD/stage/program.json --stratified $N --coins os --registered $DD/stage/reads-forged.json \
-        --session $DD/inner/s$((NS - 1))/session > $O/lean/forged-inner-reads.log 2> $O/lean/forged-inner-reads.err
-      echo "forged-inner-reads lean exit $? (1: refused)"
-    fi
   fi
   # ZK_LEAN=1: today's --zk on the same statement (the inner step's last loopback --zk session), for Lean's like-for-like
   if [ "${ZK_LEAN:-0}" = 1 ]; then
@@ -810,7 +790,7 @@ EOF2
   if [ -f $DD/stage/circuit.txt ]; then
     /usr/bin/time -v -o $O/lean/time-inner-statement.txt $LEAN_BIN statement --statement verity/flock-circuit+plain-leaves \
       --circuit $DD/stage/circuit.txt --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json \
-      --program $DD/stage/program.json --coins os $IREG > $O/lean/inner-statement.log 2> $O/lean/inner-statement.err
+      --program $DD/stage/program.json --coins os > $O/lean/inner-statement.log 2> $O/lean/inner-statement.err
     echo "inner-statement lean exit $?"
   fi
   # fail closed: every statement vstage staged or oprove kept a session of, ZK_LEAN's, and the inner statement's
@@ -821,7 +801,7 @@ EOF2
     want $l && for w in $NEGS; do PARTS="$PARTS forged-inner-$w-$l"; done
   done
   [ "${ZK_LEAN:-0}" = 1 ] && PARTS="$PARTS zk"
-  [ "${INNER_LEAN:-0}" = 1 ] && PARTS="$PARTS inner" && [ -n "$IREG" ] && PARTS="$PARTS forged-inner-reads"
+  [ "${INNER_LEAN:-0}" = 1 ] && PARTS="$PARTS inner"
   [ -f $DD/stage/circuit.txt ] && PARTS="$PARTS inner-statement"
   if [ "${LEVELS:-}" = none ] && [ -z "$PARTS" ]; then echo "lean: LEVELS=none and no ZK_LEAN: no part to check"
   else python3 verity/ml/flock/pod/lean_verdicts.py $O/lean $PARTS; LEAN_RC=$?; fi

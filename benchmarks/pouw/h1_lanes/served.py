@@ -63,6 +63,9 @@ from verity.core.protocols.sampled_proofs.one_stage import registration as R  # 
 
 RC = L.RC
 EXPECT = {"tampered-zy": "REJECT", "other-call-a": "REJECT"}
+#: H1S_OWN_ROWS=1: each lane staged with its own rows, no shared rows and no registered reads (a recursive session's inner
+#: statement, which the Lean verifier covers ZK off only so), its public file held to the window's roots by `own_pub`
+OWN_ROWS = os.environ.get("H1S_OWN_ROWS") == "1"
 #: the record word flipped in ``tampered-zy``: cell 2's z, its low half (cell 2, row 0 column 2, is lane 1's)
 TAMPER_WORD = 4
 
@@ -276,8 +279,9 @@ def statement(ctx, ln: int, tag: str, sw: Served, ins: dict, entries: dict) -> d
            if "value" in o}
     t0 = time.time()
     d = ctx.work / "st" / tag
+    shared = {} if OWN_ROWS else {"tables": rows, "refs": {p: [0] for p in rows}, "registered": reg}
     got = st.stage(rows, d, os.urandom(32), salts={p: [o["salt"]] for p, o in opened.items()}, indices=[0],
-                   set_name=f"h1-served-{tag}", tables=rows, refs={p: [0] for p in rows}, registered=reg)
+                   set_name=f"h1-served-{tag}", **shared)
     (d / "circuit.txt").unlink(missing_ok=True)
     (d / "circuit.txt").symlink_to(st.circuit)
     (d / "pin.txt").write_text(st.pin)
@@ -288,8 +292,17 @@ def statement(ctx, ln: int, tag: str, sw: Served, ins: dict, entries: dict) -> d
     vreads = [{p: (o["value"], reads["ports"][p]["reads"][0], o["path"]) for p, o in opened.items() if "value" in o}]
     if set(vreads[0]) != set(reads["ports"]) or set(reads["ports"]) != LL.own(*RC, LL.LANE, ln):
         raise AssertionError(f"{tag}: the opened ports {sorted(vreads[0])} are not the verifier's {sorted(reads['ports'])}")
-    pub = U.verifier_pub({"meta": st.meta, "pin": st.pin, "class": st.class_sha512}, f"h1-served-{tag}", st.sub.id, [mine],
-                         [0], vreads)
+    if OWN_ROWS:
+        pub = (d / "pub.bin").read_bytes()
+        names = [p.name for p in st.ports]
+        bad = own_pub(pub, names, mine, vreads[0], reads)
+        if bad or json.loads(pub[:pub.index(b"\n")])["circuit_sha512"] != st.pin:
+            raise AssertionError(f"{tag}: the own-rows public file: {bad or 'not of the circuit'}")
+        (ctx.work / "verifier" / f"{tag}.held.json").write_text(json.dumps(
+            {"ports": names, "mine": {p: x.hex() for p, x in mine.items()}, "reads": vreads[0]}))
+    else:
+        pub = U.verifier_pub({"meta": st.meta, "pin": st.pin, "class": st.class_sha512}, f"h1-served-{tag}", st.sub.id,
+                             [mine], [0], vreads)
     vd = ctx.work / "verifier"
     (vd / f"{tag}.pub.bin").write_bytes(pub)
     (vd / f"{tag}.registered.json").write_text(json.dumps(reads))
@@ -298,6 +311,47 @@ def statement(ctx, ln: int, tag: str, sw: Served, ins: dict, entries: dict) -> d
             "partition": str(vd / "lane.partition.json"), "ands": got["ands"], "circuit_sha512": got["circuit_sha512"],
             "ok": np.asarray(got["outs"]["o0"][0]).tolist(), "want": want,
             "binding": {p: committed[p] == mine[p] for p in ins}, "seconds": round(time.time() - t0, 1)}
+
+
+def own_pub(raw: bytes, ports: list[str], mine: dict, vread: dict, reads: dict) -> list[str]:
+    """An own-rows lane statement's public file ``raw`` (``H1S_OWN_ROWS=1``: no shared rows and no registered reads, the
+    form a recursive session's inner statement takes) against what the verifier holds: one instance at unit 0, the
+    statement's ``ports`` (META's order) each with the verifier's ``b || c`` (``mine``), and each of those, as its value's
+    row at the position the verifier's Program reads (``vread``: port -> (value, row, path)), opening that value's
+    registered root (``reads``, `registered.verify_read`). The check the Lean verifier makes of a registered port, made here
+    outside it: the Lean verifier reads no registered root of an own-rows file. Returns the failures, empty when it holds."""
+    from verity.ml.commitments.indexed import RangeIndexedDomain
+    from verity.ml.commitments.merkle import CommitmentDomain
+
+    nl = raw.index(b"\n")
+    head, body = json.loads(raw[:nl]), raw[nl + 1:]
+    bad = []
+    if (head.get("rows") is not False or "shared_rows" in head or "registered" in head or head.get("instances") != 1
+            or head.get("units", {}).get("indices") != [0]):
+        bad.append("not an own-rows public file of one instance at unit 0")
+    if set(vread) != set(ports) or set(mine) != set(ports):
+        bad.append(f"the verifier reads {sorted(vread)}, the statement's ports are {ports}")
+        return bad
+    if body != b"".join(mine[p] for p in ports):
+        bad.append("the row commitments are not the verifier's")
+    for p, (_value, row, path_hex) in vread.items():
+        e = reads["ports"][p]
+        dom = CommitmentDomain(bytes.fromhex(e["domain"]), G.OWNER, RangeIndexedDomain(0, int(e["leaves"])), hash="sha512")
+        if not G.verify_read(dom, bytes.fromhex(e["root"]), int(row), mine[p], bytes.fromhex(path_hex),
+                             e.get(G.SCHEMA_KEY, G.SCHEMA)):
+            bad.append(f"port {p}'s row does not open {e['value']}'s registered root at row {row}")
+    return bad
+
+
+def bind(a) -> int:
+    """``bind --pub F --work DIR --tag T``: `own_pub` on public file F, against what lane ``T``'s prepare left the verifier
+    (``verifier/T.registered.json`` and ``T.held.json``); exit 1 when it fails."""
+    vd = Path(a.work) / "verifier"
+    held = json.loads((vd / f"{a.tag}.held.json").read_text())
+    bad = own_pub(Path(a.pub).read_bytes(), held["ports"], {p: bytes.fromhex(x) for p, x in held["mine"].items()},
+                  held["reads"], json.loads((vd / f"{a.tag}.registered.json").read_text()))
+    print("BIND " + json.dumps({"pub": a.pub, "accepted": not bad, "why": bad}))
+    return 1 if bad else 0
 
 
 CTX = None
@@ -503,7 +557,7 @@ def merge(a) -> int:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=("extract", "smoke", "prepare", "summarize", "merge"))
+    ap.add_argument("cmd", choices=("extract", "smoke", "prepare", "summarize", "merge", "bind"))
     ap.add_argument("summaries", nargs="*")
     ap.add_argument("--seed", type=int, default=20261023)
     ap.add_argument("--calls")
@@ -520,6 +574,8 @@ def main() -> None:
     ap.add_argument("--skip", default="")
     ap.add_argument("--wait", type=int, default=0, help="prepare: wait up to this many seconds for --opened (K from --k)")
     ap.add_argument("--name", default="h1-served-local")
+    ap.add_argument("--pub")
+    ap.add_argument("--tag", default="lane0")
     a = ap.parse_args()
     if a.cmd == "extract":
         extract(a)
@@ -529,6 +585,8 @@ def main() -> None:
         prepare(a)
     elif a.cmd == "merge":
         sys.exit(merge(a))
+    elif a.cmd == "bind":
+        sys.exit(bind(a))
     else:
         sys.exit(summarize(a))
 
