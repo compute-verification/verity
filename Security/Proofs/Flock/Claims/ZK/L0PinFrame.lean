@@ -425,6 +425,11 @@ theorem sentQ_run' {α : Type} (p : _root_.Flock.TMW OpenM α) (t : _root_.Flock
   rw [e, sentQ_bind_done, sentQ_bind_done]
   rfl
 
+theorem sentQ_pure_tail {α : Type} (X : Step ((α × _root_.Flock.Transcript) × Got)) (cs : List (Array F128)) :
+    sentQ (feedR (X.bind fun p => ((pure () : _root_.Flock.TMW OpenM Unit).run p.1.2).run p.2) cs) =
+      sentQ (feedR X cs) :=
+  sentQ_bind_done X (fun p => (((), p.1.2), p.2)) cs
+
 theorem sentQ_fail {α β : Type} (e : String) (g : α → Step β) (cs : List (Array F128)) :
     sentQ (feedR ((Step.fail e).bind g) cs) = [] := by
   cases cs <;> rfl
@@ -468,7 +473,7 @@ theorem openStep_sent (t : _root_.Flock.Firewall.Finish.Tab) (rep : Nat) (dom : 
       right
       refine ⟨r, rfl, hne, ?_⟩
       rw [StateT.run_bind, StateT.run_bind, step_bind_eq]
-      exact sentQ_bind_done _ (fun p => (((), p.1.2), p.2)) cs
+      exact sentQ_pure_tail _ cs
   · left
     rw [step_bind_eq, sentQ_fail]
   · rw [hp] at hna
