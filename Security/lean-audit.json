@@ -1518,6 +1518,18 @@
   "Verity.Declaration.Contains": {
    "owner": "@lean",
    "digest": "6c8b0ffd3222a58091c7755158d171c1f1f37b959832b0ad5b40c4452c431481"
+  },
+  "Accounting.Remote.Draw.Assumptions.Counted": {
+   "owner": "@memory-accounting",
+   "digest": "a19f5130ba8a9bf73218b9ea3135acbdb8df3d7d2259c6bde1db14e8ad65480a"
+  },
+  "Accounting.Remote.Draw.Assumptions.Live": {
+   "owner": "@memory-accounting",
+   "digest": "ceea8ba161dd0632c33464693131d92143d0d8b805621e536a14ca5ff356a56f"
+  },
+  "Accounting.Remote.Draw.Assumptions.Refused": {
+   "owner": "@memory-accounting",
+   "digest": "e0b9ba0564a6e3b8c9ac2fe4e31b5af599109fd9258506cf68cd5d1292a48f97"
   }
  },
  "meaning": [
@@ -3268,7 +3280,10 @@
    "type_hash": "156e45cf5c184510b4e81f318c0b50e17b6cab0af1582be40fc592c055f0eac2"
   },
   "Accounting.SecurityProofs.Remote.HeldDrawn": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Remote.HeldDrawn : Accounting.Guarantees.Remote.HeldDrawn"],
+   "assumptions": [],
+   "type_hash": "685e5bd206b6879fbbfd5669afd9a917561e573683bb6c36ff5e4fde00e1cd2d"
   },
   "Accounting.SecurityProofs.Remote.HeldOverTime": {
    "owner": "@memory-accounting",
@@ -3277,7 +3292,10 @@
    "type_hash": "78904f53bd36d6f11d5a17e9f1a3a28d63a1f716e2b228a43538ae06c43b112c"
   },
   "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Remote.HeldOverTimeDrawn : Accounting.Guarantees.Remote.HeldOverTimeDrawn"],
+   "assumptions": [],
+   "type_hash": "f57a0f1a08706e8381996664592393fe0cfc2e925d3a2e1a5593908437b50475"
   },
   "Accounting.SecurityProofs.Remote.HeldOverTimeLinks": {
    "owner": "@memory-accounting",
@@ -3286,13 +3304,24 @@
    "type_hash": "1d80b85ac63a83d13745f1efaaa3b28b669426784b4c01aa4e864f3291c0b344"
   },
   "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn : Accounting.Guarantees.Remote.HeldOverTimeLinksDrawn"
+   ],
+   "assumptions": [],
+   "type_hash": "0e6e35df262547cab6588bbbcc02c230fc6691525a67f2aecb6cc5d3a62e60d4"
   },
   "Accounting.SecurityProofs.Remote.LiveCoinsDrawn": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Remote.LiveCoinsDrawn : Accounting.Guarantees.Remote.LiveCoinsDrawn"],
+   "assumptions": [],
+   "type_hash": "676cea5384e44d46e9ff924d15b724db8f6d985734ba845fa44bf013ae0ec7d4"
   },
   "Accounting.SecurityProofs.Remote.PooledDraw": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Remote.PooledDraw : Accounting.Guarantees.Remote.PooledDraw"],
+   "assumptions": [],
+   "type_hash": "e11bd8f0d7411ecef278283d438e8bb82499aa76458b00817ae5109a7008ad97"
   },
   "Accounting.SecurityProofs.RemoteSessionConservation": {
    "owner": "@memory-accounting",
@@ -12448,6 +12477,30 @@
     "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
    ]
   },
+  "Definitions.Accounting.Remote.Draw": {
+   "digest": "ffc38a976e0a98fcbbc94602fb1b9f33ef8490a0ed7075d6d67c4b6192f986fb",
+   "definitions": {
+    "Accounting.Remote.Draw.Coins": "86cb361614110c7a5d23b683487116d9219dac0957814271cda04a54c01fdc31",
+    "Accounting.Remote.Draw.Openings": "64eaab174e341ad82838a0e71d46c4a7838ef54d1b06335532ed85e059390fae",
+    "Accounting.Remote.Draw.Session": "0b87f825ff43e5bdd1a893220f737f782d2342702b4a33492ab97c5ae62eecfc",
+    "Accounting.Remote.Draw.Session.correct": "1fad3629238c60050794387727a123c369e5445aaf7b556b154b127e6c0b8327",
+    "Accounting.Remote.Draw.Session.drawn": "3c9188bfadd2323443e7b3d894e75dbf8dd1d6c916a749be690e6bcfd9ac58dd",
+    "Accounting.Remote.Draw.Session.draws": "5454c4e53a58ae059895c5ef4bf6d7f19fdd67d8b284c96b47fd1bbd2ce5ff00",
+    "Accounting.Remote.Draw.Session.good": "7949b6fc9ae12d2c954d856870b4fd8cb5811d2515da4eb13979a07c9ea7375b",
+    "Accounting.Remote.Draw.Session.pooled": "09693adaa765b2ffadf164752dceaf86c53aa7960b617068cd0f9ad514a77de5",
+    "Accounting.Remote.Draw.Session.size": "3a2f111e968e84defa8d6e6735225592817d91623e62abead6ff15e671e2d2e7",
+    "Accounting.Remote.Draw.Session.wrong": "19cd7b83b3d570b20432502dd97fc2b9ce642d6f5b947b9d91568bbc3f9afd5e",
+    "Accounting.Remote.Draw.budget": "f2420d149470daf39805deb86dc8c1dbf4fe053a01569f29dd24bfb4b6137302",
+    "Accounting.Remote.Draw.pooled": "b1043e9ddcda2923acc1f24f1baf2e37ae4131aaee95e75685bbd11e97ef9371"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Remote.HeldDrawn",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
+    "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
+    "Accounting.SecurityProofs.Remote.PooledDraw"
+   ]
+  },
   "Definitions.Accounting.Remote.Held": {
    "digest": "e29ed9ab7210982fc05209cd8213180f489ac4aaba346f6344914943a182c120",
    "definitions": {
@@ -12485,8 +12538,13 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Remote.Held",
+    "Accounting.SecurityProofs.Remote.HeldDrawn",
     "Accounting.SecurityProofs.Remote.HeldOverTime",
-    "Accounting.SecurityProofs.Remote.HeldOverTimeLinks"
+    "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeLinks",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
+    "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
+    "Accounting.SecurityProofs.Remote.PooledDraw"
    ]
   },
   "Definitions.Accounting.Remote.Node": {
@@ -16062,8 +16120,13 @@
     "Accounting.SecurityProofs.PouwEndToEndPerRun",
     "Accounting.SecurityProofs.PouwLocalOff",
     "Accounting.SecurityProofs.Remote.Held",
+    "Accounting.SecurityProofs.Remote.HeldDrawn",
     "Accounting.SecurityProofs.Remote.HeldOverTime",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn",
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinks",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
+    "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
+    "Accounting.SecurityProofs.Remote.PooledDraw",
     "Accounting.SecurityProofs.RemoteSessionRoutes",
     "Accounting.SecurityProofs.RemoteSessionRunConservation",
     "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
@@ -26172,6 +26235,21 @@
     "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
    ]
   },
+  "Models.Accounting.Assumptions.RemoteDraw": {
+   "digest": "1066ca89c14c4bd69d06f4226ca43698b70554476e4f2e412206e4f0de08ecdc",
+   "definitions": {
+    "Accounting.Remote.Draw.Assumptions.Counted": "a19f5130ba8a9bf73218b9ea3135acbdb8df3d7d2259c6bde1db14e8ad65480a",
+    "Accounting.Remote.Draw.Assumptions.Live": "ceea8ba161dd0632c33464693131d92143d0d8b805621e536a14ca5ff356a56f",
+    "Accounting.Remote.Draw.Assumptions.Refused": "e0b9ba0564a6e3b8c9ac2fe4e31b5af599109fd9258506cf68cd5d1292a48f97"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Remote.HeldDrawn",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
+    "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
+    "Accounting.SecurityProofs.Remote.PooledDraw"
+   ]
+  },
   "Models.Accounting.Assumptions.RemoteHeld": {
    "digest": "a145a7c71c38f972f8afe65900e0f5d33a6ea42e48b987756536f332a40d9773",
    "definitions": {
@@ -26189,8 +26267,12 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Remote.Held",
+    "Accounting.SecurityProofs.Remote.HeldDrawn",
     "Accounting.SecurityProofs.Remote.HeldOverTime",
-    "Accounting.SecurityProofs.Remote.HeldOverTimeLinks"
+    "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeLinks",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
+    "Accounting.SecurityProofs.Remote.LiveCoinsDrawn"
    ]
   },
   "Models.Accounting.Assumptions.Sheet": {
@@ -26967,6 +27049,23 @@
     "Accounting.SecurityProofs.RateTensorSketchTable",
     "Accounting.SecurityProofs.SketchBinds",
     "Accounting.SecurityProofs.SketchRankFiber"
+   ]
+  },
+  "Models.Accounting.Guarantees.RemoteDraw": {
+   "digest": "d17a08e16c40eebf89aa3d4dbe66f9d9c1fa6c6cafc6baacc78ca81b18d656cd",
+   "definitions": {
+    "Accounting.Guarantees.Remote.HeldDrawn": "c467d1941270d395ffd4512c6bce479e2b9259879924a3e96ea8ffef63166f42",
+    "Accounting.Guarantees.Remote.HeldOverTimeDrawn": "29f2c3e20ef0fa59f5a37a2073ce43ea02247af6a26367a0163595bbbce094cd",
+    "Accounting.Guarantees.Remote.HeldOverTimeLinksDrawn": "b78a97f5edb98414af9c28a45f08d799229a21a7853335aec77bd70c2cead4d1",
+    "Accounting.Guarantees.Remote.LiveCoinsDrawn": "1224571a2f81d7652fabf7389317edbce72afa9492776e9c168bb44165ff5c34",
+    "Accounting.Guarantees.Remote.PooledDraw": "d6a8840c4b2227dce03b8a0cfd7c69e698de4a85e7066e0e75a6f491c64d01cb"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Remote.HeldDrawn",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
+    "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
+    "Accounting.SecurityProofs.Remote.PooledDraw"
    ]
   },
   "Models.Accounting.Guarantees.RemoteHeld": {
