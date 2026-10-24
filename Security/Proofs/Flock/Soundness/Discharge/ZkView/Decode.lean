@@ -337,6 +337,18 @@ theorem Reads.u64s (xs : Array UInt64) {want : ℕ} (what : String) (hw : xs.siz
     Reads (Reader.vecExact want Reader.u64 what) (wVec le64 xs) xs :=
   Reads.vecExact xs what hw (fun x _ => by rw [le64_size]; omega) fun x _ => Reads.u64 x
 
+theorem Reads.nonce0 (w : String) : Reads (Reader.nonce0 w) (le64 0) 0 := by
+  unfold Reader.nonce0
+  refine Reads.congr (Reads.bind (Reads.u64 _) ?_) ByteArray.append_empty rfl
+  simp only [show ((0 : UInt64) != 0) = false from rfl, Bool.false_eq_true, ite_false]
+  exact Reads.pure _
+
+theorem Reads.zeros (xs : Array UInt64) {want : ℕ} (what w : String) (hw : xs.size = want) (hz : ∀ x ∈ xs, x = 0) :
+    Reads (Reader.vecExact want (Reader.nonce0 w) what) (wVec le64 xs) xs :=
+  Reads.vecExact xs what hw (fun x _ => by rw [le64_size]; omega) fun x hx => by
+    obtain rfl := hz x hx
+    exact Reads.nonce0 w
+
 theorem Reads.hashes (sh : Shape) (hL : 0 < sh.hashLen) (xs : Array ByteArray) {want : ℕ} (what : String)
     (hw : xs.size = want) (hx : ∀ s ∈ xs, s.size = sh.hashLen) :
     Reads (Reader.vecExact want (Reader.bytes sh.hashLen) what) (wVec id xs) xs :=
@@ -412,7 +424,7 @@ theorem reads_reader (sh : Shape) (p : Zk.ZkProof) (hp : Shaped sh p) : Reads (Z
     ⟨icap, ⟨rows0, sib0, salt0⟩, rcaps, rps, ⟨yr, rowsR, sibR, saltR⟩, msgs, qn, ood, cbn, con⟩⟩,
     ⟨e0, e1, tP, ybar⟩, inner⟩ := p
   obtain ⟨hL, hR, -, hcap, h1ab, h1c, hrounds, hlr, hzp, hrs, hrs128, hicap, hl0, hrcs, hrc, hrps, hrp, hyr, hfin,
-    hmsg, hqn, hood, hcbn, hcon, hsalts, hpaths⟩ := hp
+    hmsg, hqn, hood, hcbn, hcon, hsalts, hpaths, hzq, hzc, hzk⟩ := hp
   dsimp only at *
   unfold Zk.reader
   simp only [encZk, wProof, wParams, wLigerito, wLevel, wLevel0, ByteArray.append_assoc]
@@ -492,11 +504,11 @@ theorem reads_reader (sh : Shape) (p : Zk.ZkProof) (hp : Shaped sh p) : Reads (Z
     refine Reads.bind (Reads.vecExact msgs _ hmsg
       (fun x _ => by simp only [wF256, ByteArray.size_append, toBytes_size]; omega)
       fun x _ => Reads.pair256 x) ?_
-    refine Reads.bind (Reads.u64s qn _ hqn) ?_
+    refine Reads.bind (Reads.zeros qn _ _ hqn hzq) ?_
     refine Reads.bind (Reads.f128s ood _ hood) ?_
     refine Reads.bind (Reads.vec0 _ _) ?_
-    refine Reads.bind (Reads.u64s cbn _ hcbn) ?_
-    refine Reads.bind (Reads.u64s con _ hcon) ?_
+    refine Reads.bind (Reads.zeros cbn _ _ hcbn hzc) ?_
+    refine Reads.bind (Reads.zeros con _ _ hcon hzk) ?_
     refine Reads.bind (Reads.u8 1) ?_
     simp only [pure_bind]
     refine Reads.bind (Reads.f256 e0) ?_

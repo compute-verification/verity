@@ -127,11 +127,11 @@ def reader (sh : Shape) : M ZkProof := do
     ← vecExact lR.q (vecExact 16 f128 "row") "opened_rows", ← vecExact (lR.q * (lR.d - lR.cap)) hash "merkle_proof", ← salts lR.q⟩
   let _ ← vecExact 0 (do let _ ← f128; let _ ← f128; pure ()) "sumcheck_transcript"
   let msgs ← vecExact (s.k0 + 8 + 7 * (R - 1)) (do let a ← f256; let b ← f256; pure (a, b)) "sumcheck_transcript_f256"
-  let qn ← vecExact (R + 1) u64 "grinding_nonces"
+  let qn ← vecExact (R + 1) (nonce0 "grinding_nonce") "grinding_nonces"
   let ood ← vecExact (1 + 2 * R) f128 "ood_values"
   let _ ← vecExact 0 u64 "fold_grinding_nonces"
-  let cbn ← vecExact (3 * R + 2) u64 "claim_batch_grinding_nonces"
-  let con ← vecExact (R + 1) u64 "consistency_batch_grinding_nonces"
+  let cbn ← vecExact (3 * R + 2) (nonce0 "claim_batch_grinding_nonce") "claim_batch_grinding_nonces"
+  let con ← vecExact (R + 1) (nonce0 "consistency_batch_grinding_nonce") "consistency_batch_grinding_nonces"
   let level0 ← match ← u8 with
     | 1 => pure (⟨← f256, ← f256, ← f256, ← vecAny 32 f256 "ybar"⟩ : Level0Msgs)
     | 0 => throw "zk: level 0's hiding messages are missing"

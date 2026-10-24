@@ -37,17 +37,17 @@ theorem pow_half {k : ℕ} (hk : 1 ≤ k) : 2 ^ k / 2 = 2 ^ (k - 1) := by
   rw [Nat.pow_succ, Nat.mul_div_cancel _ (by norm_num), Nat.add_sub_cancel]
 
 /-- The level-0 challenges: `k0` of them, the last splitting. -/
-theorem challenges0_H (resp : ℕ → Claims.Msg) (k0 n : ℕ) (hk : 1 ≤ k0) (hkn : k0 ≤ n) (a b c d e : ℕ) :
+theorem challenges0_H (resp : ℕ → Claims.Msg) (k0 n : ℕ) (hk : 1 ≤ k0) (hkn : k0 ≤ n) (a b c d e : ℕ) (z : Bool) :
     totT.H (forIn [:k0] PUnit.unit fun j (_ : PUnit) => do
         let _ ← challengeP (asksS resp) (j + 1 == k0)
         pure (ForInStep.yield PUnit.unit) : LP PS PUnit)
-      (fun s => meas s = ⟨a, b, c, d, e, 2 ^ n⟩) fun _ s => meas s = ⟨a + k0, b, c, d, e, 2 ^ (n - k0 + 1)⟩ := by
+      (fun s => meas s = ⟨a, b, c, d, e, 2 ^ n, z⟩) fun _ s => meas s = ⟨a + k0, b, c, d, e, 2 ^ (n - k0 + 1), z⟩ := by
   refine Total.H.pre (Total.H.mono (Total.H.forIn_upto k0 PUnit.unit
-    (fun j _ s => meas s = ⟨a + j, b, c, d, e, if j < k0 then 2 ^ (n - j) else 2 ^ (n - k0 + 1)⟩) ?_) ?_) ?_
+    (fun j _ s => meas s = ⟨a + j, b, c, d, e, if j < k0 then 2 ^ (n - j) else 2 ^ (n - k0 + 1), z⟩) ?_) ?_) ?_
   · intro j hj u
     refine Total.H.bind (challengeP_H resp _ _) fun _ => Total.H.pure _ fun s hs => ⟨_, rfl, ?_⟩
     rw [hs]
-    simp only [show j < k0 from hj, ↓reduceIte, Ms.mk.injEq, true_and]
+    simp only [show j < k0 from hj, ↓reduceIte, Ms.mk.injEq, true_and, and_true]
     refine ⟨by omega, ?_⟩
     rw [pow_half (by omega)]
     by_cases hj1 : j + 1 = k0
@@ -101,8 +101,14 @@ theorem Total.H.fact_l {M : Type → Type} [Monad M] [MonadLiftT V M] {C : Total
     C.H x (fun s => p ∧ pre s) post :=
   fun s hs => h hs.1 s hs.2
 
-theorem Ms.eq {a b c d e f a' b' c' d' e' f' : ℕ} (h1 : a = a') (h2 : b = b') (h3 : c = c') (h4 : d = d')
-    (h5 : e = e') (h6 : f = f') : (⟨a, b, c, d, e, f⟩ : Ms) = ⟨a', b', c', d', e', f'⟩ := by
+theorem Ms.eq {a b c d e f a' b' c' d' e' f' : ℕ} {z : Bool} (h1 : a = a') (h2 : b = b') (h3 : c = c') (h4 : d = d')
+    (h5 : e = e') (h6 : f = f') : (⟨a, b, c, d, e, f, z⟩ : Ms) = ⟨a', b', c', d', e', f', z⟩ := by
+  subst_vars
+  rfl
+
+theorem Ms.eq' {a b c d e f a' b' c' d' e' f' : ℕ} {z z' : Bool} (h7 : z = z') (h1 : a = a') (h2 : b = b')
+    (h3 : c = c') (h4 : d = d') (h5 : e = e') (h6 : f = f') :
+    (⟨a, b, c, d, e, f, z⟩ : Ms) = ⟨a', b', c', d', e', f', z'⟩ := by
   subst_vars
   rfl
 
@@ -133,7 +139,7 @@ def LigOk (sh : Shape) (lg : LigeritoProof) : Prop :=
     lg.finalProof.yr.size = 2 ^ (s.ext + 1) ∧
     ZkView.LevelOk sh (lvl R) 16 ⟨lg.finalProof.rows, lg.finalProof.siblings, lg.finalProof.salts⟩ ∧
     lg.messages.size = s.k0 + 8 + 7 * (R - 1) ∧ lg.queryNonces.size = R + 1 ∧ lg.oodValues.size = 1 + 2 * R ∧
-    lg.claimNonces.size = 3 * R + 2 ∧ lg.consistencyNonces.size = R + 1
+    lg.claimNonces.size = 3 * R + 2 ∧ lg.consistencyNonces.size = R + 1 ∧ ZkView.NoncesZero lg
 
 theorem ligeritoP_shape (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) {sh : Shape} {ms : MerkleScheme}
     (hn : ∀ l r v, (ms.opsWith (Hashes.ofSha512 h : Hashes V)).node l r = .ok v → v.size = sh.hashLen)
@@ -149,13 +155,13 @@ theorem ligeritoP_shape (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray
   refine Total.bind' _ (Total.liftTM _ _ fun _ => ⟨_, rfl⟩) fun _ => ?_
   refine Total.bind' _ (Total.liftTM _ _ fun _ => ⟨_, rfl⟩) fun _ => ?_
   refine Total.bind' _ (Total.liftTM _ _ fun _ => ⟨_, rfl⟩) fun _ => ?_
-  have hprog : totT.H prog (fun s => meas s = ⟨0, 0, 0, 0, 0, 2 ^ n⟩) fun r s =>
+  have hprog : totT.H prog (fun s => meas s = ⟨0, 0, 0, 0, 0, 2 ^ n, true⟩) fun r s =>
       ZkView.LevelOk sh (lv 0) (2 ^ (lv 0).lanes) r.2.2.2 ∧ r.1.size = R ∧
       (∀ i (h : i < r.1.size), ZkView.CapOk sh (lv (i + 1)) r.1[i]) ∧ r.2.1.size = R - 1 ∧
       (∀ i (h : i < r.2.1.size), ZkView.LevelOk sh (lv (i + 1)) 16 r.2.1[i]) ∧
       r.2.2.1.yr.size = 2 ^ (sh.sched.ext + 1) ∧
       ZkView.LevelOk sh (lv R) 16 ⟨r.2.2.1.rows, r.2.2.1.siblings, r.2.2.1.salts⟩ ∧
-      ∃ tb, meas s = ⟨sh.sched.k0 + 8 + 7 * (R - 1), R + 1, R + 1, 3 * R + 2, 1 + 2 * R, tb⟩ := by
+      ∃ tb, meas s = ⟨sh.sched.k0 + 8 + 7 * (R - 1), R + 1, R + 1, 3 * R + 2, 1 + 2 * R, tb, true⟩ := by
     dsimp only [prog]
     have hc : ∀ i < sh.sched.levels.size, ∀ g sl, totS.T (commitP (Hashes.ofSha512 h : Hashes PS) ms (lv i) g sl)
         fun cm => CommitOk sh.hashLen ms.saltBytes (lv i) cm := fun i hi g sl =>
@@ -173,12 +179,12 @@ theorem ligeritoP_shape (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray
     refine Total.H.bind (H_modify _ id (by intro s; rfl) _) fun _ => ?_
     refine Total.H.get_bind fun st => ?_
     refine Total.H.bind (sendMsg_H _ _) fun _ => ?_
-    refine Total.H.bind (challenges0_H resp _ n hk (by omega) _ _ _ _ _) fun _ => ?_
+    refine Total.H.bind (challenges0_H resp _ n hk (by omega) _ _ _ _ _ _) fun _ => ?_
     refine Total.H.bind Total.H.get fun dl => ?_
     refine Total.H.bind (H_liftTQ (Total.lift_stQ _ (hc 1 (by omega) _ (salt 1)))) fun cm1 => ?_
     refine Total.H.fact fun hcm1 => ?_
     refine Total.H.pre
-      (pre := fun s => meas s = ⟨0 + 1 + sh.sched.k0, 0, 0, 0 + 1, 0 + 1, 2 ^ (n - sh.sched.k0 + 1)⟩) ?_
+      (pre := fun s => meas s = ⟨0 + 1 + sh.sched.k0, 0, 0, 0 + 1, 0 + 1, 2 ^ (n - sh.sched.k0 + 1), true⟩) ?_
       fun s hs => hs.2
     refine Total.H.bind (H_liftTM _ fun _ => ⟨_, rfl⟩) fun _ => ?_
     refine Total.H.bind (oodIntroP_H resp nonce _ _ _) fun _ => ?_
@@ -193,7 +199,7 @@ theorem ligeritoP_shape (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray
     refine Total.H.bind (Total.H.pre (Total.H.forIn_upto R _
       (fun i (q : ℕ × Commit × Array (Array ByteArray) × Array LevelProof × FinalProof) s =>
         (i < R ∧ q.1 = sh.sched.ext + 3 * (R - i) + 1 ∧
-          meas s = ⟨sh.sched.k0 + 4 + 7 * i, 1 + i, 1 + i, 4 + 3 * i, 3 + 2 * i, 2 ^ q.1⟩ ∧
+          meas s = ⟨sh.sched.k0 + 4 + 7 * i, 1 + i, 1 + i, 4 + 3 * i, 3 + 2 * i, 2 ^ q.1, true⟩ ∧
           CommitOk sh.hashLen ms.saltBytes (lv (i + 1)) q.2.1 ∧ q.2.2.1.size = i + 1 ∧
           (∀ j (h : j < q.2.2.1.size), ZkView.CapOk sh (lv (j + 1)) q.2.2.1[j]) ∧ q.2.2.2.1.size = i ∧
           (∀ j (h : j < q.2.2.2.1.size), ZkView.LevelOk sh (lv (j + 1)) 16 q.2.2.2.1[j])) ∨
@@ -201,14 +207,15 @@ theorem ligeritoP_shape (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray
           q.2.2.2.1.size = R - 1 ∧ (∀ j (h : j < q.2.2.2.1.size), ZkView.LevelOk sh (lv (j + 1)) 16 q.2.2.2.1[j]) ∧
           q.2.2.2.2.yr.size = 2 ^ (sh.sched.ext + 1) ∧
           ZkView.LevelOk sh (lv R) 16 ⟨q.2.2.2.2.rows, q.2.2.2.2.siblings, q.2.2.2.2.salts⟩ ∧
-          ∃ tb, meas s = ⟨sh.sched.k0 + 8 + 7 * (R - 1), R + 1, R + 1, 3 * R + 2, 1 + 2 * R, tb⟩)) ?_) ?_) fun q => ?_
+          ∃ tb, meas s = ⟨sh.sched.k0 + 8 + 7 * (R - 1), R + 1, R + 1, 3 * R + 2, 1 + 2 * R, tb, true⟩)) ?_) ?_)
+        fun q => ?_
     · intro i hi q
       refine Total.H.intro fun s0 hI => ?_
       rcases hI with ⟨-, hsd, -, hcm, hcs, hca, hrs, hrp⟩ | ⟨hiR, -⟩
       swap
       · omega
       refine Total.H.pre (pre := fun s =>
-          meas s = ⟨sh.sched.k0 + 4 + 7 * i, 1 + i, 1 + i, 4 + 3 * i, 3 + 2 * i, 2 ^ q.1⟩) ?_ fun s hs => by
+          meas s = ⟨sh.sched.k0 + 4 + 7 * i, 1 + i, 1 + i, 4 + 3 * i, 3 + 2 * i, 2 ^ q.1, true⟩) ?_ fun s hs => by
         rcases hs with h | h
         · exact h.2.2.1
         · exact absurd h.1 (by omega)
@@ -216,7 +223,7 @@ theorem ligeritoP_shape (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray
       refine Total.H.bind (Total.H.pre (Total.H.forIn_upto 4 f0
         (fun j (f : Array F256) s => (j = 4 → f.size = 2 ^ (q.1 - 4)) ∧
           meas s = ⟨sh.sched.k0 + 4 + 7 * i + j, 1 + i, 1 + i, 4 + 3 * i, 3 + 2 * i,
-            if j < 4 then 2 ^ (q.1 - j) else 2 ^ (q.1 - 3)⟩) ?_) ?_) fun f => ?_
+            if j < 4 then 2 ^ (q.1 - j) else 2 ^ (q.1 - 3), true⟩) ?_) ?_) fun f => ?_
       · intro j hj g
         refine Total.H.fact_l fun _ => ?_
         split
@@ -255,7 +262,7 @@ theorem ligeritoP_shape (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray
       refine Total.H.fact_l fun hf => ?_
       have hf := hf rfl
       refine Total.H.pre (pre := fun s =>
-          meas s = ⟨sh.sched.k0 + 8 + 7 * i, 1 + i, 1 + i, 4 + 3 * i, 3 + 2 * i, 2 ^ (q.1 - 3)⟩) ?_ fun s hs => by
+          meas s = ⟨sh.sched.k0 + 8 + 7 * i, 1 + i, 1 + i, 4 + 3 * i, 3 + 2 * i, 2 ^ (q.1 - 3), true⟩) ?_ fun s hs => by
         rw [hs]
         simp only [Ms.mk.injEq, lt_self_iff_false, ↓reduceIte, and_true]
         omega
@@ -333,11 +340,12 @@ theorem ligeritoP_shape (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray
       rcases hs with ⟨hlt, -⟩ | ⟨-, h1, h2, h3, h4, h5, h6, h7⟩
       · omega
       · exact ⟨hop0, h1, h2, h3, h4, h5, h6, h7⟩
-  refine totT.bind (hprog _ (by simp [meas, embedF_size, ht, n])) fun p hp => ?_
+  refine totT.bind (hprog _ (by simp [meas, embedF_size, ht, n, Array.all_empty])) fun p hp => ?_
   obtain ⟨⟨caps, rps, fin, op0⟩, st⟩ := p
   obtain ⟨h0, h1, h2, h3, h4, h5, h6, tb, h7⟩ := hp
+  have hz := zeros_of_meas (congrArg Ms.z h7)
   simp only [meas, Ms.mk.injEq] at h7
   obtain ⟨e1, e2, e3, e4, e5, -⟩ := h7
-  exact totT.pure _ ⟨⟨hc0.2.2.2.2.2.1, hc0.2.2.2.2.2.2⟩, h0, h1, h2, h3, h4, h5, h6, e1, e2, e5, e4, e3⟩
+  exact totT.pure _ ⟨⟨hc0.2.2.2.2.2.1, hc0.2.2.2.2.2.2⟩, h0, h1, h2, h3, h4, h5, h6, e1, e2, e5, e4, e3, hz⟩
 
 end FlockComplete.JsonRT

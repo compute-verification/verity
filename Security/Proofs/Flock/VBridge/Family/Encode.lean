@@ -54,7 +54,7 @@ def Lengths (sh : Shape) (p : Proof) : Prop :=
     lg.finalProof.yr.size = 2 ^ (s.ext + 1) ∧
     ZkView.LevelOk sh (lvl R) 16 ⟨lg.finalProof.rows, lg.finalProof.siblings, lg.finalProof.salts⟩ ∧
     lg.messages.size = s.k0 + 8 + 7 * (R - 1) ∧ lg.queryNonces.size = R + 1 ∧ lg.oodValues.size = 1 + 2 * R ∧
-    lg.claimNonces.size = 3 * R + 2 ∧ lg.consistencyNonces.size = R + 1
+    lg.claimNonces.size = 3 * R + 2 ∧ lg.consistencyNonces.size = R + 1 ∧ ZkView.NoncesZero lg
 
 /-- **A proof of the shape**: the lengths `decodeProof sh` checks, a schedule of at least two levels, digests of positive
 width, and a file whose length fits a `u64`. -/
@@ -74,7 +74,7 @@ theorem decodeProof_encodeProof (sh : Shape) (p : Proof) (hp : ProofShaped sh p)
   obtain ⟨cap, ⟨m, lir, lbs, prof, nl, mh⟩, ⟨r1ab, r1c, rounds, fa, fb, fc⟩, ⟨lr, zp⟩, rs,
     ⟨icap, ⟨rows0, sib0, salt0⟩, rcaps, rps, ⟨yr, rowsR, sibR, saltR⟩, msgs, qn, ood, cbn, con⟩⟩ := p
   obtain ⟨hL, hR, hfit, hcap, h1ab, h1c, hrounds, hlr, hzp, hrs, hrs128, hicap, hl0, hrcs, hrc, hrps, hrp, hyr, hfin,
-    hmsg, hqn, hood, hcbn, hcon⟩ := hp
+    hmsg, hqn, hood, hcbn, hcon, hzq, hzc, hzk⟩ := hp
   dsimp only at *
   rw [encodeProof] at hfit ⊢
   refine Flock.decodeProof_of_read ?_
@@ -160,11 +160,11 @@ theorem decodeProof_encodeProof (sh : Shape) (p : Proof) (hp : ProofShaped sh p)
     refine ZkView.Reads.bind (ZkView.Reads.vecExact msgs _ hmsg
       (fun x _ => by simp only [ZkView.wF256, ByteArray.size_append, ZkView.toBytes_size]; omega)
       fun x _ => ZkView.Reads.pair256 x) ?_
-    refine ZkView.Reads.bind (ZkView.Reads.u64s qn _ hqn) ?_
+    refine ZkView.Reads.bind (ZkView.Reads.zeros qn _ _ hqn hzq) ?_
     refine ZkView.Reads.bind (ZkView.Reads.f128s ood _ hood) ?_
     refine ZkView.Reads.bind (ZkView.Reads.vec0 _ _) ?_
-    refine ZkView.Reads.bind (ZkView.Reads.u64s cbn _ hcbn) ?_
-    exact ZkView.Reads.last (ZkView.Reads.u64s con _ hcon) rfl
+    refine ZkView.Reads.bind (ZkView.Reads.zeros cbn _ _ hcbn hzc) ?_
+    exact ZkView.Reads.last (ZkView.Reads.zeros con _ _ hcon hzk) rfl
 
 /-! ## The table's proof files -/
 
@@ -174,8 +174,8 @@ def CapShaped (st : Setup) (sch : Flock.Schedule) (cap : Array ByteArray) : Prop
   ZkView.CapOk (shapeOf st sch 0) (sch.levels.getD 0 default) cap
 
 /-- **The Ligerito openings have the schedule's shape**: each level's openings, the recursive caps and the three nonce
-vectors at the lengths `decodeProof` checks (Proof.lean:120-151). The openings V*'s layers hold (`lig`, defined by the
-join). -/
+vectors at the lengths `decodeProof` checks (Proof.lean:120-151), every nonce `0`. The openings V*'s layers hold (`lig`,
+defined by the join). -/
 def LigShaped (st : Setup) (sch : Flock.Schedule) (lig : LigeritoProof) : Prop :=
   let sh := shapeOf st sch 0
   let R := sch.levels.size - 1
@@ -186,7 +186,8 @@ def LigShaped (st : Setup) (sch : Flock.Schedule) (lig : LigeritoProof) : Prop :
     lig.recursiveProofs.size = R - 1 ∧
     (∀ i (h : i < lig.recursiveProofs.size), ZkView.LevelOk sh (lvl (i + 1)) 16 lig.recursiveProofs[i]) ∧
     ZkView.LevelOk sh (lvl R) 16 ⟨lig.finalProof.rows, lig.finalProof.siblings, lig.finalProof.salts⟩ ∧
-    lig.queryNonces.size = R + 1 ∧ lig.claimNonces.size = 3 * R + 2 ∧ lig.consistencyNonces.size = R + 1
+    lig.queryNonces.size = R + 1 ∧ lig.claimNonces.size = 3 * R + 2 ∧ lig.consistencyNonces.size = R + 1 ∧
+    ZkView.NoncesZero lig
 
 theorem shl_two (e : ℕ) : 2 <<< e = 2 ^ (e + 1) := by
   rw [Nat.shiftLeft_eq, Nat.pow_succ, Nat.mul_comm]
@@ -198,8 +199,8 @@ theorem proofOf_lengths {st : Setup} {sch : Flock.Schedule} {sh : Shape} {n : �
     (hcap : CapShaped st sch cap) (hlig : LigShaped st sch lig) :
     Lengths (shapeOf st sch n) (proofOf sh params cap lig d) := by
   obtain ⟨hm, hk, rfl⟩ := hsh
-  obtain ⟨hl0, hrcs, hrc, hrps, hrp, hfin, hqn, hcbn, hcon⟩ := hlig
-  refine ⟨hcap, ?_, ?_, ?_, ?_, ?_, ?_, ?_, hcap, hl0, hrcs, hrc, hrps, hrp, ?_, hfin, ?_, hqn, ?_, hcbn, hcon⟩
+  obtain ⟨hl0, hrcs, hrc, hrps, hrp, hfin, hqn, hcbn, hcon, hz⟩ := hlig
+  refine ⟨hcap, ?_, ?_, ?_, ?_, ?_, ?_, ?_, hcap, hl0, hrcs, hrc, hrps, hrp, ?_, hfin, ?_, hqn, ?_, hcbn, hcon, hz⟩
   all_goals simp [proofOf, decoded, RecAlgebra.Messages.map, RecAlgebra.symbolic, shapeOf, hm, hk, hcl, shl_two]
 
 /-! ## The file's length -/
@@ -291,7 +292,7 @@ theorem encodeProof_size_le (sh : Shape) (p : Proof) (hp : Lengths sh p) : (enco
   obtain ⟨cap, params, ⟨r1ab, r1c, rounds, fa, fb, fc⟩, ⟨lr, zp⟩, rs,
     ⟨icap, l0, rcaps, rps, ⟨yr, rowsR, sibR, saltR⟩, msgs, qn, ood, cbn, con⟩⟩ := p
   obtain ⟨hcap, h1ab, h1c, hrounds, hlr, hzp, hrs, hrs128, hicap, hl0, hrcs, hrc, hrps, hrp, hyr, hfin,
-    hmsg, hqn, hood, hcbn, hcon⟩ := hp
+    hmsg, hqn, hood, hcbn, hcon, -⟩ := hp
   dsimp only at *
   have ht : ∀ a : F128, a.toBytes.size = 16 := ZkView.toBytes_size
   have hw0 : (ZkView.wLen 0).size = 8 := ZkView.le64_size _
