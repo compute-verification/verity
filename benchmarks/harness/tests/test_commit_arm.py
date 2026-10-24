@@ -1,7 +1,7 @@
 """The Commit arms (`verity_bench.vllm.commit_arm`) against a fake committer: their runs open and close one Commit each, the gate
 and warm-up runs are learn-only, a measured run without a root or with a collector or source error fails the point, the custom
-gate reads the runs, and each arm commits the deployed scheme or refuses. ``commit@compiled`` builds its engine compiled. No
-engine."""
+gate reads the runs, and each arm commits the deployed scheme or refuses. ``commit@compiled`` builds its engine compiled. Both
+give the committer an engine of the LLM's public names, a local checkpoint's included. No engine."""
 from __future__ import annotations
 
 import sys
@@ -113,17 +113,44 @@ def test_each_arm_commits_the_deployed_scheme_or_refuses(monkeypatch, scheme):
     eager, compiled = CommitArm("commit"), CompiledCommitArm("commit@compiled")
     attached = []
     compiled.source = SimpleNamespace(note_engine=attached.append, attach=attached.append, summary=dict)
-    monkeypatch.setattr(CompiledCommitArm, "engine", lambda self, target: _engine())
-    for arm, target in ((eager, SimpleNamespace(engine=SimpleNamespace(_engine=_engine()))), (compiled, None)):
+    monkeypatch.setattr(CommitArm, "engine", lambda self, target: _engine())
+    for arm in (eager, compiled):
         if scheme != "rows-sha512":
             with pytest.raises(RuntimeError, match="commits 'vllm-v1', not the deployed 'rows-sha512'"):
-                arm.ready(target)
+                arm.ready(None)
             continue
-        arm.ready(target)
+        arm.ready(None)
         assert arm.committer.kw["native_hooks"] and arm.per_token_bytes == 7
         assert arm.gate(None)["commit_scheme"] == "rows-sha512"
     if scheme == "rows-sha512":
         assert attached == ["model", compiled.committer]
+
+
+def _vllm(path: str):
+    """A ``vllm.LLM`` as far as `committer_engine` reads it: the in-process runner (`get_model_runner`'s path) and the model
+    config; the LLM and its runner."""
+    runner = SimpleNamespace(model=object())
+    runner.get_model = lambda: runner.model
+    core = SimpleNamespace(model_executor=SimpleNamespace(driver_worker=SimpleNamespace(model_runner=runner)))
+    vc = SimpleNamespace(model_config=SimpleNamespace(model=path, revision=None))
+    return SimpleNamespace(llm_engine=SimpleNamespace(engine_core=core, vllm_config=vc)), runner
+
+
+def test_both_arms_take_the_committers_engine_from_the_llms_public_names():
+    from verity_bench.vllm.runner import _DirectLLM
+
+    vllm, runner = _vllm("/hf/snapshots/4e20de3624")
+    pinned = SimpleNamespace(vllm=vllm, model=runner.model, pin=SimpleNamespace(model="meta-llama/Llama-3.2-1B", revision="4e20de3"))
+    local_vllm, local_runner = _vllm("/models/local")
+    local = _DirectLLM(local_vllm, {})
+    assert not hasattr(local, "_engine")
+    for arm in (CommitArm("commit"), CompiledCommitArm("commit@compiled")):
+        got = arm.engine(SimpleNamespace(engine=pinned))
+        assert (got.llm, got.runner, got.model) == (vllm, runner, runner.model)
+        assert got.cp == {"repo": "meta-llama/Llama-3.2-1B", "revision": "4e20de3"}
+        got = arm.engine(SimpleNamespace(engine=local))
+        assert (got.llm, got.runner, got.model) == (local_vllm, local_runner, local_runner.model)
+        assert got.cp == {"repo": "/models/local", "revision": None}
 
 
 class _Source:
