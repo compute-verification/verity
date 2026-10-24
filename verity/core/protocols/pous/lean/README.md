@@ -145,8 +145,8 @@ and running the audit (`bash check.sh`):
 sha256sum lean-toolchain lakefile.toml lake-manifest.json grade.sh Grader/Registry.lean Grader/Main.lean \
   ../../../../../Security/lean-toolchain ../../../../../Security/lakefile.toml ../../../../../Security/lake-manifest.json \
   ../../../../../Security/Proofs/lakefile.toml ../../../../../Security/Proofs/lake-manifest.json \
-  ../../../../../Security/Definitions/Pous.lean ../../../../../Security/Models/Pous/Assumptions.lean ../../../../../Security/Models/Pous/Guarantees.lean \
+  ../../../../../Security/Definitions/Pous.lean \
   ../../../../../Security/Proofs/Pous/Statements.lean ../../../../../Security/Proofs/Pous/Sanity.lean \
   ../../../../../Security/Proofs/Pous/Accounting/Numbers.lean \
-  $(find ../../../../../Security/Definitions/Pous ../../../../../Security/Models/Pous/Assumptions ../../../../../Security/Models/Pous/Guarantees -name '*.lean' | LC_ALL=C sort) > TRUSTED.sha256
+  $(find ../../../../../Security/Definitions/Pous ../../../../../Security/Models/Pous -name '*.lean' | LC_ALL=C sort -u) > TRUSTED.sha256
 ~~~
