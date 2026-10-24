@@ -493,6 +493,20 @@ def down (c : Ctx) : Nat → Piece → Except String (Array Seg)
             out := out ++ (← fromCallee c fuel k m (max a (m * L) - m * L) (min b ((m + 1) * L) - m * L))
           return out
         else
+          -- a stride of whole members reads leaf `j` of every `stride / L`-th member: copies of one member's leaf
+          if q.len > 1 && q.stride % (L : Int) == 0 && q.base ≥ 0 then
+            let j := q.base.toNat % L
+            let m0 := q.base.toNat / L
+            let leaf := r.slice j (j + 1)
+            if leaf.all (·.reps ≤ 1) then
+              let ps := leaf.flatMap (·.ps)
+              if ps.all fun g => match g.tgt with | .gate _ => true | _ => false then
+                return #[{ ps := shiftGates (o + m0 * G) ps, len := 1, reps := q.len, shift := q.stride / L * G }]
+              if ps.all fun g => match g.tgt with
+                  | .ref true i => (node.args[i]?.map (·.dims.isNone)).getD false
+                  | _ => false then
+                let one ← fromCallee c fuel k m0 j (j + 1)
+                if one.all (·.reps ≤ 1) then return #[{ ps := one.flatMap (·.ps), len := 1, reps := q.len, shift := 0 }]
           walkAtMost "leaves of a batch's output read one by one" q.len
           let mut out := #[]
           for t in [0:q.len] do
