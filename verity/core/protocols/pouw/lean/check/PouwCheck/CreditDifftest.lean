@@ -17,7 +17,8 @@ Beside `PouwCheck.Difftest`'s, behind the same `pouw-check-difftest` (`PouwCheck
   `Credit.Internal`'s: null, or `{"refused": [code, why]}`.
 * `leaf-words` (`k`): `{"leaf_words": w}`, `Credit.leafWords` (`weights.leaf_words`), or `{"leaf_words": null}` for a K
   `Credit.chunks?` refuses (`PouwCheck.Difftest`'s `chunks` holds the count itself).
-* `window` (`credit`'s, `descriptor` in hex, `entries`, `proofs`, `k` and `rows`, as `credit._window_outcomes` takes them): `{"credited": [indices]}`,
+* `window` (`credit`'s, `descriptor` in hex, `entries`, `proofs`, `live`, `k` and `rows`, as `credit._window_outcomes`
+  takes them): `{"credited": [indices]}`,
   and `period` (`key`, `ledger`, `pins`, `main`, `name`, `windows`, as `credit._period_outcomes` takes them, each window's evidence
   `window`'s): `{"credited": …}`; or
   `{"refused": [code, why]}`.
@@ -55,7 +56,7 @@ def windowOf (j : Json) : Except String Json := do
   PouwCheck.Difftest.refusal (fun out => Json.mkObj [("credited", toJson out)])
     (Credit.window (← f "key") (← f "ledger") (← f "pins") (← f "main") (← f "window") (← f "session") (← f "salt")
       (← f "calls") (← f "served") (← f "commit") (← f "rounds") (← f "draw") (← f "descriptor") (← f "entries")
-      (← f "proofs") (← f "k") (← f "rows"))
+      (← f "proofs") (← f "live") (← f "k") (← f "rows"))
 
 def periodOf (j : Json) : Except String Json := do
   let f := PouwCheck.Difftest.get j
