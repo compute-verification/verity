@@ -598,9 +598,10 @@ window. It outputs 1 exactly when:
     16,064, the sort 182,784 and the chain 32,202. At REDTEAM's RIN (N = 5,400, B = 4,096, NK = 2.0 × 10^6
     slots, at least 245 rows of 8,192 ids opened): the slots 1.09 × 10^9 (201,004 a cell), the routing 1.81 × 10^9,
     the keys 1.5 × 10^8, the sort 4.87 × 10^9 (over 2^22 members of 54 bits), the chain 3.4 × 10^8 and the rows
-    4.22 × 10^9 (1.72 × 10^7 each): about 1.25 × 10^10 a window on IoTieRequest's 1.14 × 10^10. A cheaper split has PROVE-PATH also register the
-    session's prompt stream, the requests' prompt ids in arrival order, and hold every computation and cache hit to it
-    in the Commit's units; the tie would then read the window's stream entries in order with no map or sort.
+    4.22 × 10^9 (1.72 × 10^7 each): about 1.25 × 10^10 a window on IoTieRequest's 1.14 × 10^10. A cheaper split
+    has PROVE-PATH also register the session's prompt stream, the requests' prompt ids in arrival order, and hold
+    every computation and cache hit to it in the Commit's units; the tie would then read the window's stream entries
+    in order with no map or sort.
 - **Cost.** The unit is its parts: `IoTieRequest{512, 4, 2, 1}` is 4,042,173 ANDs, of which the rows are 3,888,916,
   the own frame 4,095, each of the 7 frames 20,924, each step 265 or 267, the routing 700 and the totals and carry-out
   129.
