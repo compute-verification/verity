@@ -244,12 +244,13 @@ def run(engine: Engine, jobs: Sequence[Job], *, model: str, timing: StepTime = S
 
 def workload(n: int, *, rate: float, prompt: tuple[int, int], output: tuple[int, int], max_tokens: int | None = None,
              p_eos: float = 0.8, shared_prefix: int = 0, vocab: int = 50, ingress_delay: tuple[float, float] = (0.003, 0.03),
-             seed: int = 0) -> list[Job]:
+             fifo: bool = True, seed: int = 0) -> list[Job]:
     """`n` Poisson arrivals at `rate` per second, prompt and output lengths uniform in their ranges; a fraction `p_eos` stop on
     EOS before `max_tokens` (default: the output range's top). With `shared_prefix` > 0 every prompt starts with the same
-    tokens, over a small vocabulary, so prefix caching has hits."""
+    tokens, over a small vocabulary, so prefix caching has hits. Each request reaches the engine `ingress_delay` after the
+    ingress certifier saw it; `fifo` keeps the certified order the engine's (a frontend that reorders makes `fifo` False)."""
     rng = random.Random(seed)
-    t, jobs = 0.0, []
+    t, jobs, seen = 0.0, [], float("-inf")
     system = [3 + rng.randrange(vocab) for _ in range(shared_prefix)]
     for _ in range(n):
         t += rng.expovariate(rate)
@@ -264,8 +265,10 @@ def workload(n: int, *, rate: float, prompt: tuple[int, int], output: tuple[int,
             if stop_at is not None:
                 outs[stop_at] = EOS
             toks = tuple(body + outs)
-        jobs.append(Job(arrival=t, prompt_len=P, max_tokens=mt, stop_at=stop_at, tokens=toks,
-                        ingress_delay=rng.uniform(*ingress_delay)))
+        ingress = t - rng.uniform(*ingress_delay)
+        if fifo:
+            ingress = seen = max(seen, ingress)
+        jobs.append(Job(arrival=t, prompt_len=P, max_tokens=mt, stop_at=stop_at, tokens=toks, ingress_delay=t - ingress))
     return jobs
 
 

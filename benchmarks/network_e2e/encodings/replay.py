@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from collections import OrderedDict, deque
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
@@ -109,6 +110,7 @@ class Step:
     resumed: list[int] = field(default_factory=list)
     preempted: list[int] = field(default_factory=list)
     cache_hit: dict[int, int] = field(default_factory=dict)
+    sources: dict[int, list[tuple[int, int]]] = field(default_factory=dict)   # a hit's runs (request, tokens) by owner
 
     def key(self) -> tuple[Row, ...]:
         return tuple(sorted(self.rows))
@@ -139,6 +141,7 @@ class _KV:
         self.by_hash: dict[int, OrderedDict[int, None]] = {}
         self.req_blocks: dict[int, list[int]] = {}
         self.num_cached: dict[int, int] = {}
+        self.owner: list[int | None] = [None] * engine.num_gpu_blocks     # the request that computes a block's KV
 
     def _pop_hash(self, b: int) -> None:
         h = self.block_hash[b]
@@ -212,7 +215,10 @@ class _KV:
             self.num_cached[r.i] = len(blocks)
         k = cdiv(need_slot, self.B) - len(blocks)
         if k > 0:
-            blocks.extend(self._new_blocks(k))
+            new = self._new_blocks(k)
+            for b in new:
+                self.owner[b] = r.i
+            blocks.extend(new)
         if self.caching:
             self.cache_blocks(r, min(total + n, r.num_tokens))
         return True
@@ -417,6 +423,15 @@ class _Sched:
                 (step.new if r.status == _W else step.resumed).append(r.i)
                 if hit:
                     step.cache_hit[r.i] = len(hit) * e.block_size
+                    runs: list[tuple[int, int]] = []
+                    for b in hit:
+                        o = self.kv.owner[b]
+                        assert o is not None
+                        if runs and runs[-1][0] == o:
+                            runs[-1] = (o, runs[-1][1] + e.block_size)
+                        else:
+                            runs.append((o, e.block_size))
+                    step.sources[r.i] = runs
                 sched[r.i] = n
                 starts[r.i] = num_computed
                 token_budget -= n
@@ -670,6 +685,97 @@ def load_step_trace(records: Iterable[dict[str, Any]], *, tokens: dict[str, Sequ
 
 def read_step_trace(path: str | Path, **kw: Any) -> Trace:
     return load_step_trace((json.loads(line) for line in Path(path).read_text().splitlines() if line.strip()), **kw)
+
+
+def _jsonl(path: Path) -> list[dict[str, Any]]:
+    lines = path.read_text(encoding="utf-8").split("\n")
+    return [json.loads(line) for line in lines[:-1] if line.strip()]
+
+
+def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block_size: int = 16) -> Trace:
+    """One trace of TRACE-CORPUS (`benchmarks/network_e2e/traces`, store kind `vllm-trace-corpus/v1`): its directory's
+    `steps.jsonl`, `requests.jsonl` and `meta.json` (the server's argv), and `server.log` for the KV pool's size unless
+    `num_gpu_blocks` is given. The hook records no arrivals, so a request's engine order and admission step are its first
+    scheduling (FCFS schedules new requests in arrival order); its certifier ingress is the client's send time, and a
+    step's release the time its output was back."""
+    d = Path(d)
+    argv = json.loads((d / "meta.json").read_text())["server_argv"]
+
+    def opt(name: str) -> str | None:
+        return argv[argv.index(name) + 1] if name in argv else None
+
+    if num_gpu_blocks is None:
+        m = re.search(r"GPU KV cache size: ([\d,]+) tokens", (d / "server.log").read_text(errors="replace"))
+        if m is None:
+            raise ValueError(f"{d / 'server.log'}: no 'GPU KV cache size' line; give num_gpu_blocks")
+        L = int(opt("--max-model-len") or 0)
+        num_gpu_blocks = round(int(m.group(1).replace(",", "")) * cdiv(L, block_size) / L)
+    engine = Engine(max_num_seqs=int(opt("--max-num-seqs") or 0), max_num_batched_tokens=int(opt("--max-num-batched-tokens") or 0),
+                    max_model_len=int(opt("--max-model-len") or 0), num_gpu_blocks=num_gpu_blocks, block_size=block_size,
+                    enable_chunked_prefill="--no-enable-chunked-prefill" not in argv,
+                    enable_prefix_caching="--enable-prefix-caching" in argv,
+                    async_scheduling="--no-async-scheduling" not in argv,
+                    long_prefill_token_threshold=int(opt("--long-prefill-token-threshold") or 0))
+    raw = [s for s in _jsonl(d / "steps.jsonl") if s["total_num_scheduled_tokens"]]
+    reqs = {r["id"]: r for r in _jsonl(d / "requests.jsonl")}
+    order, seen = [], set()
+    for s in raw:
+        for r in s["new"]:
+            if r["id"] not in seen and not r.get("resumed"):
+                seen.add(r["id"])
+                order.append(r["id"])
+    if missing := [rid for rid in order if rid not in reqs]:
+        raise ValueError(f"{len(missing)} scheduled requests the engine never freed (unfinished at the drain?): {missing[:4]}")
+    index = {rid: k for k, rid in enumerate(order)}
+    requests = []
+    for rid in order:
+        r = reqs[rid]
+        if r["finish_reason"] not in ("stop", "length") or (r["finish_reason"] == "stop") != bool(r["eos"]):
+            raise ValueError(f"request {rid}: finish {r['finish_reason']!r} (eos {r['eos']}); the replay models EOS and length")
+        requests.append(RequestIO(prompt_len=int(r["prompt_len"]), max_tokens=int(r["max_tokens"]), output_len=int(r["output_len"]),
+                                  eos=bool(r["eos"]), tokens=tuple(r["prompt_ids"]) + tuple(r["output_ids"])))
+    steps, emits, release = [], [], []
+    for s in raw:
+        rows = {r["id"]: (index[r["id"]], int(r["num_computed_tokens"]), int(r["num_scheduled_tokens"]))
+                for r in s["new"] + s["cached"] if r["num_scheduled_tokens"]}
+        batch = [rid for rid in s.get("batch") or () if rid in rows]
+        ids = batch if sorted(batch) == sorted(rows) else list(rows)
+        steps.append(Step(rows=[rows[rid] for rid in ids],
+                          new=[index[r["id"]] for r in s["new"] if not r.get("resumed")],
+                          resumed=[index[r["id"]] for r in s["new"] + s["cached"] if r.get("resumed")],
+                          preempted=[index[rid] for rid in s.get("preempted") or () if rid in index],
+                          cache_hit={index[r["id"]]: int(r["num_computed_tokens"]) for r in s["new"]
+                                     if not r.get("resumed") and r["num_computed_tokens"]}))
+        emits.append(any(s.get("sampled") or ()))
+        release.append(s.get("t_output"))
+    first = [-1] * len(order)
+    for k, st in enumerate(steps):
+        for i, _, _ in st.rows:
+            if first[i] < 0:
+                first[i] = k
+    ingress = [reqs[rid].get("send_unix") or reqs[rid].get("arrival") for rid in order]
+    return Trace(engine=engine, ids=order, requests=requests, before_step=first, steps=steps, emits=emits,
+                 ingress_t=ingress, release_t=release,
+                 header={"kind": "header", "schema": "vllm-trace-corpus/v1", "config": dict(engine.__dict__), "source": str(d)})
+
+
+def order_bits(trace: Trace) -> float:
+    """What the engine's arrival order costs beyond the certified ingress order: per request in engine order, an adaptive
+    bit for whether it is the earliest certified ingress not yet admitted, and Elias gamma of its rank among those when
+    not (ideal code length, bits)."""
+    if not trace.clocked():
+        return 0.0
+    left = sorted(range(len(trace.requests)), key=lambda i: (trace.ingress_t[i], i))
+    model, cost = _KT(), 0.0
+    for i in range(len(trace.requests)):
+        rank = left.index(i)
+        f0, f1 = model.freqs(())
+        cost -= math.log2((f1 if rank == 0 else f0) / (f0 + f1))
+        model.update((), rank == 0)
+        if rank:
+            cost += gamma_bits(rank)
+        left.pop(rank)
+    return cost
 
 
 # --- the residual advice ----------------------------------------------------------------------------------------------------
@@ -942,10 +1048,42 @@ def v0_widths(trace: Trace, *, window_buckets: int) -> dict[str, int]:
     return {"request": req, "row": row, "step": step}
 
 
-def table(trace: Trace, *, bucket_s: float = 0.1, window_buckets: int = 600) -> dict[str, Any]:
-    """Per certifier window: I1 v0's bits, the steps the replay matched, and the residual advice's bits under each code
-    (Elias gamma; the adaptive code, unclocked and clocked), each code checked by decoding it back to the trace's steps."""
+def v0_advice(trace: Trace, v0: Any, *, bucket_s: float = 0.1) -> Any:
+    """The trace as ADV-SPEC's advice v0, built with its module `v0` (`verity.core.protocols.certifier.advice`): the
+    trace's rows in its batch order, each hit's sources from the replay's block map, and each kept output released in its
+    step's release bucket. v0 validates it as it builds it."""
+    rp = replay(trace.engine, trace.requests, admit=trace.before_step)
+    m = compare(rp.steps, trace.steps)
+    if m.first_mismatch is not None:
+        raise ValueError(f"the replay diverges from the trace at step {m.first_mismatch}, so it has no sources to give")
+    first = trace.first_scheduled()
+    order = sorted(range(len(trace.requests)), key=lambda i: (first[i], [r[0] for r in trace.steps[first[i]].rows].index(i)))
+    idx = {i: k for k, i in enumerate(order)}
+    reqs = tuple(v0.RequestAdvice(id=trace.ids[i], prompt_len=trace.requests[i].prompt_len,
+                                  output_len=trace.requests[i].output_len, finish="eos" if trace.requests[i].eos else "length")
+                 for i in order)
+    steps, release, kept = [], [], [0] * len(reqs)
+    for s, (st, mine) in enumerate(zip(trace.steps, rp.steps)):
+        rows = []
+        for i, start, n in st.rows:
+            q = reqs[idx[i]]
+            rows.append(v0.Row(request=idx[i], kind="decode" if n == 1 and start >= q.prompt_len else "prefill", start=start,
+                               n=n, cache_hit=mine.cache_hit.get(i, 0), preempted=i in mine.resumed,
+                               sources=tuple(v0.Source(idx[o], k) for o, k in mine.sources.get(i, ()))))
+            if start + n == q.prompt_len + kept[idx[i]] and kept[idx[i]] < q.output_len:
+                kept[idx[i]] += 1
+                t = trace.release_t[s]
+                release.append(0 if t is None else bucket(t, bucket_s))
+        steps.append(v0.StepAdvice(rows=tuple(rows)))
+    return v0.Advice(requests=reqs, steps=tuple(steps), release=tuple(release))
+
+
+def table(trace: Trace, *, bucket_s: float = 0.1, window_buckets: int = 600, v0: Any = None) -> dict[str, Any]:
+    """Per certifier window: I1 v0's bits (ADV-SPEC's `bits_by_window` when its module is given as `v0`, else
+    `v0_widths`), the steps the replay matched, and the residual advice's bits under each code (Elias gamma; the adaptive
+    code, unclocked and clocked), each code checked by decoding it back to the trace's steps."""
     truth = replay(trace.engine, trace.requests, admit=trace.before_step)
+    charge = v0.bits_by_window(v0_advice(trace, v0, bucket_s=bucket_s), window_buckets) if v0 is not None else None
     ds, rp = decisions(trace)
     g = gamma_values(rp)
     codes = {"adaptive": encode(trace, clocked=False, bucket_s=bucket_s, window_buckets=window_buckets)}
@@ -953,7 +1091,7 @@ def table(trace: Trace, *, bucket_s: float = 0.1, window_buckets: int = 600) -> 
         codes["adaptive_clocked"] = encode(trace, clocked=True, bucket_s=bucket_s, window_buckets=window_buckets)
     decoded = {name: compare(decode(trace, c).steps, trace.steps).__dict__ for name, c in codes.items()}
     rw, sw = windows(trace, bucket_s=bucket_s, window_buckets=window_buckets)
-    v0 = v0_widths(trace, window_buckets=window_buckets)
+    v0w = v0_widths(trace, window_buckets=window_buckets)
     rows = []
     for w in sorted(set(rw) | set(sw)):
         ks = [k for k, x in enumerate(sw) if x == w]
@@ -961,14 +1099,72 @@ def table(trace: Trace, *, bucket_s: float = 0.1, window_buckets: int = 600) -> 
         row = {"window": w, "requests": len(rs), "steps": len(ks), "rows": sum(len(trace.steps[k].rows) for k in ks),
                "matched": sum(1 for k in ks if k < len(truth.steps) and truth.steps[k].key() == trace.steps[k].key()),
                "forced": sum(1 for i in rs if rp.forced[i]), "decisions": sum(1 for d in ds if rw[d.request] == w),
-               "v0_bits": len(rs) * v0["request"] + sum(v0["step"] + len(trace.steps[k].rows) * v0["row"] for k in ks),
+               "v0_bits": charge.get(w, 0) if charge is not None else
+                          len(rs) * v0w["request"] + sum(v0w["step"] + len(trace.steps[k].rows) * v0w["row"] for k in ks),
                "gamma_bits": sum(gamma_bits(g[i] + 1) for i in rs if g[i] is not None)}
         for name, c in codes.items():
             row[f"{name}_bits"] = len(c.bits.get(w, []))
             row[f"{name}_ideal"] = round(c.ideal.get(w, 0.0), 2)
         rows.append(row)
     return {"engine": dict(trace.engine.__dict__), "requests": len(trace.requests), "steps": len(trace.steps),
-            "match_before_step": compare(truth.steps, trace.steps).__dict__, "decoded": decoded, "v0_widths": v0,
-            "bucket_s": bucket_s, "window_buckets": window_buckets, "windows": rows,
+            "match_before_step": compare(truth.steps, trace.steps).__dict__, "decoded": decoded,
+            "v0": "advice.bits_by_window" if charge is not None else {"widths": v0w}, "bucket_s": bucket_s,
+            "window_buckets": window_buckets, "windows": rows, "order_bits": round(order_bits(trace), 2),
             "passed": [x for x in g if x is not None]}
+
+
+def load_v0(spec: str | None) -> Any:
+    """ADV-SPEC's advice module: `spec` a path to its `advice.py`, else `verity.core.protocols.certifier.advice` when
+    importable, else None (`table` falls back to `v0_widths`)."""
+    import importlib
+    import importlib.util
+    import sys
+    if spec:
+        s = importlib.util.spec_from_file_location("advice_v0", spec)
+        assert s is not None and s.loader is not None
+        sys.modules["advice_v0"] = mod = importlib.util.module_from_spec(s)
+        s.loader.exec_module(mod)
+        return mod
+    try:
+        return importlib.import_module("verity.core.protocols.certifier.advice")
+    except ImportError:
+        return None
+
+
+def read_any(p: Path) -> Trace:
+    if p.is_dir():
+        return read_corpus_trace(p)
+    tok = p.with_suffix(".tokens.json")
+    return read_step_trace(p, tokens=json.loads(tok.read_text()) if tok.exists() else None)
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    import argparse
+    ap = argparse.ArgumentParser(description="Bits per certifier window: I1 v0 against the replay's residual advice.")
+    ap.add_argument("traces", nargs="+", type=Path,
+                    help="step traces (*.jsonl; <name>.tokens.json beside one with prefix caching) or TRACE-CORPUS trace dirs")
+    ap.add_argument("--bucket-ms", type=float, default=100.0)
+    ap.add_argument("--window-buckets", type=int, default=600)
+    ap.add_argument("--v0", help="path to ADV-SPEC's advice.py (default: the installed module, else fixed widths)")
+    ap.add_argument("--out", type=Path, help="write {trace: table} as JSON")
+    a = ap.parse_args(argv)
+    v0 = load_v0(a.v0)
+    out: dict[str, Any] = {}
+    print("| trace | requests | steps | replay matched | I1 v0 bits | gamma | adaptive | adaptive clocked | clocked bits/request "
+          "| order bits |\n|---|---|---|---|---|---|---|---|---|---|")
+    for p in a.traces:
+        tr = read_any(p)
+        tb = out[p.stem if p.is_file() else p.name] = table(tr, bucket_s=a.bucket_ms / 1000, window_buckets=a.window_buckets, v0=v0)
+        s = {k: sum(w[k] for w in tb["windows"] if w.get(k) is not None) for k in tb["windows"][0]}
+        m = tb["match_before_step"]
+        print(f"| {p.stem if p.is_file() else p.name} | {tb['requests']} | {tb['steps']} | {m['matched']}/{m['steps']} | "
+              f"{s['v0_bits']} | {s['gamma_bits']} | {s['adaptive_bits']} | {s.get('adaptive_clocked_bits', '-')} | "
+              f"{s.get('adaptive_clocked_bits', s['adaptive_bits']) / max(tb['requests'], 1):.2f} | {tb['order_bits']} |",
+              flush=True)
+    if a.out:
+        a.out.write_text(json.dumps(out, indent=1))
+
+
+if __name__ == "__main__":
+    main()
 
