@@ -1,6 +1,6 @@
 """Programs for `nci-desc-fuzz`, one `{"id", "family", "program"}` object per line.
 
-    python gen/programs.py random --seed S --count N --out FILE [--mutate P]
+    python gen/programs.py random|chain|copies|unwalk --seed S --count N --out FILE [--mutate P]
     python gen/programs.py hand --out FILE
 
 `random` writes descriptor v1 JSON directly, not through `verity.ml.circuits`' Builder, so that every reference form the
@@ -11,6 +11,8 @@ composites calling each other in batches and scans, composites keyed with an inp
 decoder checks a reference's count against its type and not its leaves' widths, so any leaves of the right count fill an
 argument. With `--mutate P`, each Program is also written once more with one to three random edits (a count, an axis, a
 reference, a type index) with probability `P`; the decoder refuses most of them, and the rest are what it lets through.
+`unwalk` is `random`'s Program of the same seed with `tower` at the end of its root, so `Desc.walkable` refuses it and
+`ReadsExact`, which doesn't assume `walkable`, is checked on it (`"force": true`).
 
 `hand` writes the worked shapes: the Programs on which `Walk.OperandsResolve` fails as stated (a composite node's
 argument that its callee never reads names a scan of no iterations, at the root, in a callee, and as a scan's shared
@@ -376,7 +378,19 @@ def composite(P: Program, budget: int) -> None:
     P.composite(body, t, r, rng.choice([None] * 15 + ["Input8_v1"]) if "Input8_v1" not in P.defs else None)
 
 
-def program(seed: int) -> str:
+def tower(P: Program, body: Body) -> None:
+    """A node at the end of `body`: a batch of `WIDE` members of `Z1`, a batch of `WIDE` members of `Z0`, neither with
+    gates, nodes or return. Its activations put `Desc.walkBound` past `Steps.FUEL / 2`; it adds no gate and no read."""
+    z0 = P.composite(Body(P, [], 0), Tup(), {"concat": []}, "Z0_v1")
+    b1 = Body(P, [], 0)
+    b1.push({"args": [], "axes": [], "fn": P.fn(z0), "form": "batch", "n": WIDE, "out": P.ty(A(WIDE, Tup()))},
+            A(WIDE, Tup()), [], 0, "batch")
+    z1 = P.composite(b1, Tup(), {"concat": []}, "Z1_v1")
+    body.push({"args": [], "axes": [], "fn": P.fn(z1), "form": "batch", "n": WIDE, "out": P.ty(A(WIDE, Tup()))},
+              A(WIDE, Tup()), [], 0, "batch")
+
+
+def program(seed: int, unwalk: bool = False) -> str:
     rng = random.Random(seed)
     P = Program(rng)
     budget = rng.choice([8, 32, 128, 512])
@@ -396,6 +410,8 @@ def program(seed: int) -> str:
     for _ in range(rng.randint(1, 8)):
         root.add_random()
     t, r = ret_of(root, 12)
+    if unwalk:
+        tower(P, root)
     P.composite(root, t, r, "R_v1")
     return P.text("R_v1")
 
@@ -720,7 +736,7 @@ def hand() -> list[dict]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("what", choices=["random", "chain", "copies", "hand"])
+    ap.add_argument("what", choices=["random", "chain", "copies", "unwalk", "hand"])
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--count", type=int, default=1000)
     ap.add_argument("--mutate", type=float, default=0.0)
@@ -731,13 +747,15 @@ def main() -> None:
             for x in hand():
                 f.write(json.dumps(x) + "\n")
             return
+        force = {"force": True} if a.what == "unwalk" else {}
         for s in range(a.seed, a.seed + a.count):
-            text = {"random": program, "chain": chain, "copies": copies}[a.what](s)
-            f.write(json.dumps({"id": f"{a.what}-{s}", "family": a.what, "program": text}) + "\n")
+            text = {"random": program, "chain": chain, "copies": copies,
+                    "unwalk": lambda s: program(s, unwalk=True)}[a.what](s)
+            f.write(json.dumps({"id": f"{a.what}-{s}", "family": a.what, "program": text, **force}) + "\n")
             rng = random.Random(~s)
             if rng.random() < a.mutate:
                 f.write(json.dumps({"id": f"{a.what}-mutant-{s}", "family": f"{a.what}-mutant",
-                                    "program": mutate(rng, text)}) + "\n")
+                                    "program": mutate(rng, text), **force}) + "\n")
 
 
 if __name__ == "__main__":

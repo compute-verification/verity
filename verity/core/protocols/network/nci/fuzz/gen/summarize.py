@@ -35,7 +35,8 @@ def summarize(paths: list[str]) -> dict:
                 refusals[f"{r['pre']}: {r['why'][:90]}"] += 1
             if r["pre"] == "walkable" and "s3" in r:
                 s3 = r["s3"]
-                key = "hold" if "segs" in s3 and s3.get("fail") is None else "fail" if s3.get("fail") else "other"
+                key = ("hold" if "segs" in s3 and s3.get("fail") is None else "fail" if s3.get("fail")
+                       else f"{s3['pre']} refused" if "pre" in s3 else f"skipped: {s3.get('skipped')}")
                 s["s3_unwalkable"][key] += 1
                 if key == "fail":
                     fails["s3_unwalkable"].append({"id": r["id"], "fail": s3["fail"]})
