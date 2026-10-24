@@ -133,6 +133,7 @@ Arms:
     ARM-ue       a dither-a-so arm whose units are dispatched at the start of `after`, beside the step's trees
                  (DITHER_SO_UNITS_EARLY=1)
     ARM-zs       a dither-a-so arm whose z tables build on a tree stream beside its A tables (DITHER_SO_ZSIDE=1)
+    ARM-mmc      a dither-a arm whose GEMMs take $SBENCH_MM_CFG's configs ($DITHER_MM_CFG, dmmsweep.py's best.json)
 
 `gate` (--gate, before the reps): exact and dither each generate GATE_TOKENS tokens for the 32 requests; dither's window
 checks one B32 decode step (`dither_fused.check`, its transcript buffers 0xA5 before the kernels wrote them) and refuses
@@ -295,13 +296,19 @@ def kc_b() -> None:
     os.environ["HB_H1U_KC"] = os.environ["HB_H1U_KC_B"]
 
 
+def mm_cfg() -> None:
+    if not os.environ.get("SBENCH_MM_CFG"):
+        raise ValueError("an ARM-mmc arm needs $SBENCH_MM_CFG, a $DITHER_MM_CFG text (dmmsweep.py's best.json)")
+    os.environ["DITHER_MM_CFG"] = os.environ["SBENCH_MM_CFG"]
+
+
 SUFFIXES = {"-xl": install_exactlin, "-a2": a_form(2), "-a3": a_form(3), "-j10r": env_of("DITHER_SO_UNITS", "j10r"),
             "-kcb": kc_b, "-zy1": env_of("DITHER_ZY1_KC", "1"), "-cgp": env_of("DITHER_SO_CAPTURE_PRIO", "1"),
             "-mc32": env_of("CUDA_DEVICE_MAX_CONNECTIONS", "32"), "-skip": env_of("DITHER_UNITS_SKIP_DEAD", "1"),
             "-rd0": env_of("DITHER_SO_RDEAD", "0"), "-lag1": env_of("DITHER_SO_ROOT_LAG", "1"),
             "-lag2": env_of("DITHER_SO_ROOT_LAG", "2"), "-ug0": env_of("DITHER_SO_GRAPH", "0"),
             "-cgn": env_of("DITHER_SO_CAPTURE_PRIO", "2"), "-ue": env_of("DITHER_SO_UNITS_EARLY", "1"),
-            "-zs": env_of("DITHER_SO_ZSIDE", "1")}
+            "-zs": env_of("DITHER_SO_ZSIDE", "1"), "-mmc": mm_cfg}
 # -smqQ / -smqQoD / -smqQoDcC: a dither-a-so arm's units on the SMs whose id % D < Q, at most C CTAs on each
 # ($DITHER_SO_UNITS_SMQ=Q/D/C, D 8 and no cap without them; -smq0 every SM, whatever the run's environment says)
 SMQ_SUFFIX = re.compile(r"-smq(\d+)(?:o(\d+))?(?:c(\d+))?$")
