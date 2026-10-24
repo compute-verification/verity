@@ -15,8 +15,9 @@ the same way: byte k of a direction is in its cell ⌊k/P⌋, so a cell's conten
 they were read. The client speaks cells both ways through a thin, workload-blind shim (`cells`, `Shim`); the server
 gets the ingress payloads as bytes (co-located tonight; deployed, its own shim strips the cells as the client's does).
 
-**Admission.** The k-th connection to arrive has ordinal k. At most `lanes` connections are served at once; one that
-arrives with every lane taken waits in a FIFO queue of at most `queue`, else it gets one `REFUSED` cell and is closed.
+**Admission.** The k-th connection to arrive, from 0, has ordinal k + 1, as the active certifier's `Requests` streams
+it: ordinal 0 is no connection's. At most `lanes` connections are served at once; one that arrives with every lane
+taken waits in a FIFO queue of at most `queue`, else it gets one `REFUSED` cell, on ordinal 0, and is closed.
 The queue's head is admitted at the first bucket with a free lane, and holds that lane, r cells a bucket each way,
 until its last bucket. Nothing admitted is dropped or reordered.
 
@@ -283,7 +284,7 @@ class Warden:
             writer.close()
             self._changed.set()
             return
-        connection = _Connection(self.ordinals, reader, writer, asyncio.get_running_loop().create_future(),
+        connection = _Connection(self.ordinals + 1, reader, writer, asyncio.get_running_loop().create_future(),
                                  self._bucket())
         self.ordinals += 1
         self.queue.append(connection)
@@ -531,7 +532,7 @@ def audit(params: WardenParams, ingress: Sequence[Record], egress: Sequence[Reco
     for n, o in enumerate(sorted(per)):
         ing, eg = per[o]["ingress"], per[o]["egress"]
         s = min([*ing, *eg])
-        problems = [f"connection {o} where {n} is next"] if o != n else []
+        problems = [f"connection {o} where {n + 1} is next"] if o != n + 1 else []
         if s < last_admitted:
             problems.append(f"admitted at {s}, before connection {o - 1}")
         last_admitted = s

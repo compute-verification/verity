@@ -538,10 +538,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "int8_scaled_mm": "ScaledMmS8_v1{K,N,DOT=BlackwellS8ImmaDot32_v1}: verity_int8::scaled_mm on one quantized row -> "
                              "y bf16[N], ScaledMmS8Coordinate_v1 per output: K/32 satfinite s8 IMMA steps, y = bf16(RN32(RN32(f32(acc)·s_a)·s_w)); "
                              "W s8 [N,K] + s_w f32 [N] Inputs (ml.circuits.ops.gemm)",
-           "int8_kv_quant": "Int8KvQuant_v1{S,D}: verity_int8::kv_quant on one KV head of one request's S-key window -> (K' s8 [S,D] under "
+           "int8_kv_quant": "Int8KvQuant_v1{S,D}: verity_int8::kv_quant_batch's slice for one KV head of one request's S-key window -> (K' s8 [S,D] under "
                             "the layer's K scale (a Const32), V' s8 [S,D] per channel over the window, s_v f32 [D], f32(V'_0) [D]) "
                             "(registry.int8_exact)",
-           "int8_attention_row": "Int8LutAttentionRow_v1{D,S,SCALE}: verity_int8::window_rows on one (query row, head) over its S keys "
+           "int8_attention_row": "Int8LutAttentionRow_v1{D,S,SCALE}: verity_int8::window_rows_batch on one (query row, head) over its S keys "
                                  "-- Q' per row, S = Q'K'ᵀ, fattn's uint32 A and 256-entry exp2 LUT (Exp2Lut127_v1), P V', the sink "
                                  "term; K', V', s_v, f32(V'_0) its KV head's Int8KvQuant_v1 rows (registry.int8_exact)",
            "int8_attention_row_table": "Int8LutAttentionRow_v2{D,S,SCALE}(.., exp2_lut127): Int8LutAttentionRow_v1 with the exp2 LUT "
