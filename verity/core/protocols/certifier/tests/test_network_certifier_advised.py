@@ -18,7 +18,7 @@ from verity.core.protocols.certifier import advised as AD, head_check as HC, ser
 from verity.core.protocols.certifier.certificate import Direction, Issuer, parameters_digest
 from verity.core.protocols.certifier.grid import Certifier, GridParams, occupancy
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
-from verity.core.protocols.certifier.service import PUBLIC_ADVISED, LinkWindows
+from verity.core.protocols.certifier.service import OUTPUTS_ADVISED, PUBLIC_ADVISED, LinkWindows
 from verity.core.protocols.sampled_proofs import service as S
 
 import signers
@@ -232,6 +232,7 @@ class Run:
         verdict = self.lw.network_verdict(self.stream)
         assert verdict["accepted"] is all(accepted) and verdict["windows"] == WINDOWS
         assert verdict["refused"] == [w for w, a in enumerate(accepted) if not a]
+        assert verdict["advice"] == (AD.digest(advice) if any(accepted) else None)
         return accepted
 
 
@@ -276,6 +277,24 @@ def test_honest_advised_traffic_is_accepted_in_every_window(tmp_path, own):
         assert check(session, own=own) == [True] * WINDOWS
         (tmp_path / str(seed)).mkdir()
         assert Run(tmp_path / str(seed), own).link(session) == [True] * WINDOWS
+
+
+def test_every_window_is_held_to_one_advice(tmp_path):
+    """Each window reports the advice it read (`advised.digest`, its `advice` output): a window checked against another
+    advice that agrees with the link's on that window's view (one more request, received in the last window) is
+    accepted alone, but the network verdict refuses it, so the link's counts are one advice's."""
+    session = serve(SEEDS[0])
+    a = session.advice
+    other = replace(a, requests=a.requests + (RequestAdvice("u-extra", 2, 0, "length", 1),),
+                    received=a.received[:-1] + (a.received[-1] + 1,))
+    assert AD.digest(other) != AD.digest(a)
+    assert [AD.view(other, w, T, R, SYNCS) == AD.view(a, w, T, R, SYNCS) for w in range(WINDOWS)] == \
+        [True] * (WINDOWS - 1) + [False]
+    run = Run(tmp_path)
+    outs = [run.round(w, session.egress[w], session.ingress[w], other if w == 2 else a) for w in range(WINDOWS)]
+    assert [o.accepted for o in outs] == [True] * WINDOWS
+    verdict = run.lw.network_verdict(run.stream)
+    assert not verdict["accepted"] and verdict["refused"] == [2] and verdict["advice"] == AD.digest(a)
 
 
 def test_a_salted_session_under_an_unsalted_profile_is_refused(tmp_path):
@@ -500,6 +519,7 @@ def test_the_advised_unit_is_n2s_beside_the_advised_counts(tmp_path):
     lw = Run(tmp_path).lw
     assert lw.unit.id == "NetworkAdvisedLinkWindow_v1{EGRESS=(9,8,0),INGRESS=(9,8,0),ADVISED=(8,3,2,0)}"
     assert lw.spec.public == PUBLIC_ADVISED and {"advice", "advised", "sync"} <= {p.item for p in lw.spec.public}
+    assert lw.spec.check.public_outputs == OUTPUTS_ADVISED == ("verdict", "deadline", "advice")
     assert "served" not in {p.item for p in lw.spec.public} and lw.windows == WINDOWS
     assert lw.spec.digest() != replace(lw, advised=AD.AdvisedProfile(WINDOWS + 1)).spec.digest()
     assert replace(lw, advised=AD.AdvisedProfile(WINDOWS, 1)).unit.id.endswith("ADVISED=(8,3,2,1)}")

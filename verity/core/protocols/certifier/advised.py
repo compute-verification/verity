@@ -63,11 +63,13 @@ certifier released before window w.
 
 **Soundness.** With the advice fixed, the counts are determined. On an accepted window w, the egress counts are
 `derive(view(advice, w))`, a function of the advice alone: the ingress counts and the syncs only accept or refuse, and
-change no count. So on a link whose every window is accepted, the egress counts of all its windows are a function of
-the advice, and the egress timing channel of accepted runs carries at most the advice's bits (`advice.bits`, the
-accepted-runs bound's A_c), beside the log2 #Σ_sync bits a window the sync charge already counts. Nothing else is left
-free: not the frames, not the ingress timing, not when the server actually wrote. And the advice is held to the
-ingress head: no frame is handed before its request's frames were released by the ingress certifier, δ + ⌊λ/ρ⌋ earlier.
+change no count. Each window reports the advice it read (`digest`, its `advice` output), and the network verdict
+refuses a window that names another than the first accepted window's. So on a link whose every window is accepted, the
+egress counts of all its windows are a function of one advice, and the egress timing channel of accepted runs carries
+at most the advice's bits (`advice.bits`, the accepted-runs bound's A_c), beside the log2 #Σ_sync bits a window the
+sync charge already counts. Nothing else is left free: not the frames, not the ingress timing, not when the server
+actually wrote. And the advice is held to the ingress head: no frame is handed before its request's frames were
+released by the ingress certifier, δ + ⌊λ/ρ⌋ earlier.
 
 **Premises** of "an honest advised link is accepted", which N2's claim doesn't rest on: the link's canonical order is
 `frames`' (the prover's framer numbers events so, one per released token); each step's frames are handed to the egress
@@ -85,6 +87,7 @@ RIN = 1, OWN = 0 and 139,253 at R = 16, RIN = 4, OWN = 1, a twentieth of one hea
 """
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -93,6 +96,7 @@ from typing import Any, Sequence
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.forms import ONE, ZERO, add, and_reduce, const_bits, mux, sub
+from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.types import Array, Tuple
@@ -104,6 +108,7 @@ from verity.core.protocols.certifier.served import _le_const, _lt, _same, _u32
 
 U32_MAX = (1 << 32) - 1
 COUNT = Array(4, BYTE)
+DIGEST = "verity-network-certifier/advised-advice/v1"
 
 
 @dataclass(frozen=True)
@@ -240,6 +245,15 @@ def view(advice, window: int, T: int, R: int, syncs: Sequence[ClockSync]) -> Win
     if max([*out.handed, *out.floor, out.queued, out.received]) > U32_MAX:
         raise ValueError("a view's counts are u32s")
     return out
+
+
+def digest(advice) -> str:
+    """The SHA-512 of what N2 reads of the advice (the module docstring's fields), the `advice` output each window of an
+    advised link reports, by which `service.LinkWindows.network_verdict` holds every window to one advice."""
+    body = {"format": DIGEST, "requests": [[r.prompt_len, r.output_len, r.ingress_frames] for r in advice.requests],
+            "steps": [[[row.request, row.start, row.n] for row in step.rows] for step in advice.steps],
+            "release": list(advice.release), "received": list(advice.received)}
+    return hashlib.sha512(canonical_json(body)).hexdigest()
 
 
 def derive(handed: Sequence[int], queued: int, R: int) -> list[int]:
@@ -454,5 +468,5 @@ def size(T: int, R: int, RIN: int, OWN: int) -> int:
     return ands(unit(T, R, RIN, OWN))
 
 
-__all__ = ["AdvisedProfile", "Frame", "NetworkAdvisedCounts", "PINS", "WindowView", "arguments", "derive", "evaluate",
-           "frames", "gate", "hands", "reference", "releases", "size", "unit", "view"]
+__all__ = ["AdvisedProfile", "Frame", "NetworkAdvisedCounts", "PINS", "WindowView", "arguments", "derive", "digest",
+           "evaluate", "frames", "gate", "hands", "reference", "releases", "size", "unit", "view"]

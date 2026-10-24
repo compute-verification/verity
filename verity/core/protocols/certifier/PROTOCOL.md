@@ -387,17 +387,21 @@ so N2 takes them from the prover's advice (I1: one per certifier session, after 
   `advised.derive`'s, the release FIFO at R, left-packed, of `handed` from a queue of `queued`. About 230 ANDs a
   bucket: 137,990 at T = 600, R = 6, R_in = 1, OWN = 0, and 139,253 at R = 16, R_in = 4, OWN = 1.
 - **Public** (`PUBLIC_ADVISED`): `PUBLIC_SERVED`'s items but the served sizes, with the advised ones (the link's
-  windows and OWN), each window's declared sync, and the advice as a protocol output. The heads' counts stay witness.
+  windows and OWN), each window's declared sync, and the advice as a protocol output (`OUTPUTS_ADVISED`: the verdict,
+  the deadline bit and the advice's digest). The heads' counts stay witness.
 - **The verifier of record** is `LinkWindows.verify(…, advice=A)`, which on an advised link also runs `advised_check`:
   `advised.reference` over the opened heads' counts and `view(A, w)`. Without an advice, or on one `view` refuses, the
-  window is refused. `network_verdict` takes the advised profile's windows.
+  window is refused. Each window reports a third public output, `advice`, the SHA-512 of what N2 reads of A
+  (`advised.digest`). `network_verdict` takes the advised profile's windows and refuses a window that names another
+  advice than the first accepted window's, so every window is checked against one advice.
 - **Carry-over is stated by the advice, not forbidden.** The egress queue a window starts with, `queued`, is a function
   of the advice, and so a response may span any windows. The ingress carry is `received`: each window holds its own
   ingress total to it exactly, so by induction from window 0 (B_0 = 0) on a link whose every window is accepted, B_w is
   the request frames released before window w, and each window's floor is the link's.
 - **Soundness: with the advice fixed, the counts are determined.** On an accepted window w the egress counts are
   `derive(view(A, w))`, a function of A (and the declared syncs) alone: the ingress counts only accept or refuse and
-  change no count. So on a link whose every window is accepted, the egress timing of accepted runs carries at most
+  change no count. So on a link whose every window is accepted, all naming one advice, the egress timing of accepted
+  runs carries at most
   `advice.bits` (the accepted-runs bound's A_c) beside the log2 #Σ_sync bits a window the sync charge counts, and
   nothing else is left free: not the frames' timing within the counts, not the ingress timing, not when the server
   wrote. The advice is held to the ingress head: no frame is handed before the ingress certifier released its
