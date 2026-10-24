@@ -7,7 +7,6 @@ from __future__ import annotations
 import functools
 from typing import Any, Sequence
 
-from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 #: a request header's u32 fields: index, round, first slot, cap and prompt length
@@ -27,6 +26,14 @@ STATEMENT_OUT_ROWS = ((G.SCHEMA_V2, (0,)),)
 #: content is
 REQUEST_SCHEMA = G.SCHEMA_SEG
 SLOTS, REQUESTS, M_ROWS, ROUND_ROWS = "slots", "requests", "m", "round"
+
+
+def _cc() -> Any:
+    """`core_check`, imported only when a known table is built: `circuit` (which circuit-check loads) imports this module
+    for `HEADER`, and core_check brings the verifier's challenger with it."""
+    from verity.core.protocols.pouw import core_check
+
+    return core_check
 
 
 def table(prefix: str, name: str, s: int = 0) -> str:
@@ -56,7 +63,7 @@ def m_table(program: str, prefix: str, window: str, s: int, m: int) -> tuple[lis
     open root `window` and s, registered under `program` binding `window`. Every input is public."""
     if not (isinstance(m, int) and 0 <= m < 1 << 32):
         raise ValueError(f"m is a u32, not {m!r}")
-    rows, salts = slot_words([m]), [CC.public_row_salt(window, int(s))]
+    rows, salts = slot_words([m]), [_cc().public_row_salt(window, int(s))]
     return rows, salts, G.Registered.commit(program, table(prefix, M_ROWS, s), rows, salts, G.WORD_BITS, G.SCHEMA_V2,
                                             window=window)
 
@@ -67,7 +74,7 @@ def round_table(program: str, prefix: str, window: str, s: int) -> tuple[list[li
     Every input is public."""
     if not (isinstance(s, int) and not isinstance(s, bool) and 0 <= s < 1 << 32):
         raise ValueError(f"s is a u32, not {s!r}")
-    rows, salts = slot_words([s]), [CC.public_row_salt(window, s)]
+    rows, salts = slot_words([s]), [_cc().public_row_salt(window, s)]
     return rows, salts, G.Registered.commit(program, table(prefix, ROUND_ROWS, s), rows, salts, G.WORD_BITS,
                                             G.SCHEMA_V2, window=window)
 
@@ -76,8 +83,8 @@ def round_table(program: str, prefix: str, window: str, s: int) -> tuple[list[li
 def ok_table(program: str, prefix: str, window: str, rounds: int) -> tuple[list[list[int]], list[bytes], G.Registered]:
     """The live units' ok rows ``<prefix>live-ok``: row s the one word 1 (`core_check.OK_ROW`) under `core_check.ok_salt` of
     the window's open root `window` and s, registered under `program` binding `window`. Every input is public."""
-    rows = [list(CC.OK_ROW) for _s in range(rounds)]
-    salts = [CC.ok_salt(window, s) for s in range(rounds)]
+    rows = [list(_cc().OK_ROW) for _s in range(rounds)]
+    salts = [_cc().ok_salt(window, s) for s in range(rounds)]
     return rows, salts, G.Registered.commit(program, table(prefix, OK_VALUE), rows, salts, G.WORD_BITS, G.SCHEMA_V2,
                                             window=window)
 

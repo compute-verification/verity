@@ -1,8 +1,8 @@
 """`line.py`'s memory line held to its Lean (`RemoteAudit.Line`, served by `remote-audit-difftest`'s `line`), refusals
 as outputs so that both sides' reasons are compared word for word: sessions of zero, one and many groups at every
-stretch length, with bursts, the host tier, filler, wrong receipts that fill one group or spill into the next, ties
-between stretches, and each refusal (the node's inputs, a group's, a stretch's empty span), with malformed inputs
-rejected by both. `auditor_line.py` runs the Python (`README.md`), so the Python is of record here."""
+stretch length, with bursts, the host tier, filler, wrong receipts (the pooled bound of drawn windows, `pooled`) that
+fill one group or spill into the next, ties between stretches, and each refusal (the windows', the node's inputs, a
+group's, a stretch's empty span), with malformed inputs rejected by both. `auditor_line.py` runs the Python (`README.md`), so the Python is of record here."""
 
 from __future__ import annotations
 
@@ -39,8 +39,20 @@ def rational(top: int) -> st.SearchStrategy:
                      st.floats(0, top, allow_nan=False).map(lambda x: line.text(line.number(x))))
 
 
-FAULTS = ("least", "read", "weights", "passes", "last", "coin", "rate", "wrong", "encode_squarings", "per",
+FAULTS = ("least", "read", "weights", "passes", "last", "coin", "rate", "windows", "delta", "encode_squarings", "per",
           "block_bytes", "blocks", "node_bytes")
+DELTAS = ("1/1099511627776", line.text(Fraction(1e-9)), "1/3", "999/1000")
+
+
+@st.composite
+def windows(draw, top: int) -> list[list[int]]:
+    """A record's windows, each [U, s] with 1 ≤ s ≤ U ≤ `top`: s small enough that some receipts may be wrong, or
+    every receipt drawn (none can be)."""
+    out = []
+    for _ in range(draw(st.integers(1, 3))):
+        u = draw(st.integers(1, top))
+        out.append([u, draw(st.one_of(st.integers(1, min(u, 30)), st.just(u)))])
+    return out
 
 
 @st.composite
@@ -62,7 +74,8 @@ def inputs(draw) -> dict:
              **{k: draw(rational(10)) for k in line.RATES[3:]}}
     v = {"groups": groups, "per": per, "blocks": blocks, "block_bytes": b,
          "chip_bytes": draw(st.integers(0, 3 * b)), "node_bytes": draw(st.integers(1, 10 ** 6)),
-         "wrong": draw(st.one_of(rational(blocks), rational(4 * 3 * blocks * (per + 1)))), "rates": rates}
+         "windows": draw(st.one_of(windows(blocks), windows(4 * 3 * blocks * (per + 1)))),
+         "delta": draw(st.sampled_from(DELTAS)), "rates": rates}
     fault = {4: draw(st.sampled_from(FAULTS)), 5: "malformed"}.get(draw(st.integers(0, 5)))
     g = draw(st.integers(0, max(n_groups - 1, 0)))
     if fault in ("per", "block_bytes", "blocks", "node_bytes"):
@@ -71,12 +84,17 @@ def inputs(draw) -> dict:
         rates["encode_squarings"] = 0
     elif fault == "rate":
         rates[draw(st.sampled_from(line.RATES))] = draw(st.sampled_from([-1, "-1/3"]))
-    elif fault == "wrong":
-        v["wrong"] = draw(st.sampled_from([-2, "-5/7"]))
+    elif fault == "windows":
+        t = draw(st.integers(0, len(v["windows"]) - 1))
+        v["windows"] = draw(st.sampled_from([[], v["windows"][:t] + [[3, 0]], v["windows"][:t] + [[2, 3]]]))
+    elif fault == "delta":
+        v["delta"] = draw(st.sampled_from([0, 1, "-1/3", "3/2"]))
     elif fault == "malformed":
-        k = draw(st.sampled_from(["per", "wrong", "rates", "groups", "group", "squarings_per_s"]))
+        k = draw(st.sampled_from(["per", "windows", "delta", "window", "rates", "groups", "group", "squarings_per_s"]))
         bad = draw(st.sampled_from([-1, "1/0", "1.5", "+3", None, True, [], {}]))
-        if k == "group" and groups:
+        if k == "window":
+            v["windows"] = [*v["windows"][:-1], draw(st.sampled_from([[1], [1, 2, 3], [bad, 1], [2, bad]]))]
+        elif k == "group" and groups:
             groups[g] = {**groups[g], draw(st.sampled_from(line.GROUP)): bad}
         elif k == "squarings_per_s":
             rates[k] = bad
@@ -115,28 +133,29 @@ def test_line(server) -> None:
     assert stats.rejects > 20 and told["line"] > 100 and told["credited"] > 15 and told["refused"] > 100, (stats, told)
 
 
-def session(stretch: int = 1, *, weights: int = 600, host: int = 0, n: int = 12, wrong: object = 0,
-            rates: line.Rates = line.Rates(0, 1), **over) -> dict:
+def session(stretch: int = 1, *, weights: int = 600, host: int = 0, n: int = 12, windows=((1, 1),),
+            delta: object = 2.0 ** -40, rates: line.Rates = line.Rates(0, 1), **over) -> dict:
     """`n` groups of two passes over N blocks, 10 ns apart but group 5, `stretch` times that, each one's last root at
-    the next coin."""
+    the next coin, its record's `windows` at `delta` (by default one opened whole, so no receipt is wrong)."""
     gs, t = [], 0
     for g in range(n):
         span = 10 * (stretch if g == 5 else 1)
         gs.append(line.Group(t, t + span, 2, N, 2 * weights, 2 * (N - host), 2 * host))
         t += span
-    return line.inputs_json(gs, per=4, blocks=N, block_bytes=B, chip_bytes=0, node_bytes=10 * N * B, wrong=wrong,
-                            rates=rates) | over
+    return line.inputs_json(gs, per=4, blocks=N, block_bytes=B, chip_bytes=0, node_bytes=10 * N * B, windows=windows,
+                            delta=delta, rates=rates) | over
 
 
 def test_the_line_is_the_leans_at_its_edges(server) -> None:
     """A burst in one group, bursts and every rate charged, the host tier and filler only, wrong receipts that fill
     the stretch's slowest groups and spill, stretches that tie, and the shortest session with a line."""
     for v in (session(9, rates=line.Rates(10 ** 6, 1)),
-              session(9, wrong=Fraction(4001, 1), rates=line.Rates(3 * 10 ** 6, 3, 4.4e9, 5e10, B, 4.4e9, 6291456)),
-              session(1, weights=0, host=400, wrong=10 ** 7, rates=line.Rates(0, 1, 0, 0, 7, 0, 3)),
+              session(9, windows=[(5000, 10)], rates=line.Rates(3 * 10 ** 6, 3, 4.4e9, 5e10, B, 4.4e9, 6291456)),
+              session(1, weights=0, host=400, windows=[(10 ** 7, 1)], rates=line.Rates(0, 1, 0, 0, 7, 0, 3)),
               session(1), session(1, n=8, chip_bytes=5 * B)):
         out = D.replay(port(), v, server)
         assert out[0] == "output" and "refused" not in json.loads(out[1]), v
+    assert line.run_json(session(9, windows=[(5000, 10)]))["wrong"] == "9375/2"
 
 
 @pytest.mark.parametrize("over,why", [
@@ -150,7 +169,11 @@ def test_the_line_is_the_leans_at_its_edges(server) -> None:
     (dict(rates=line.Rates(1, 1, rebuild_burst_bytes=-1).to_json()), "rebuild_burst_bytes is nonnegative"),
     (dict(rates=line.Rates(1, 1, disk_burst_bytes=-1).to_json()), "disk_burst_bytes is nonnegative"),
     (dict(rates=line.Rates(1, 1, link_burst_bytes=-1).to_json()), "link_burst_bytes is nonnegative"),
-    (dict(wrong="-1/3"), "the wrong receipts are nonnegative"),
+    (dict(windows=[]), "a session has one or more windows"),
+    (dict(delta="0"), "δ is above 0 and below 1"),
+    (dict(delta=1), "δ is above 0 and below 1"),
+    (dict(windows=[[5, 2], [3, 0]]), "window 1 draws no receipt"),
+    (dict(windows=[[5, 2], [2, 3]], per=0), "window 1 draws 3 receipts of its 2"),
     (dict(per=0), "a stretch is one or more groups"),
     (dict(per=1), "stretch 0's span is empty: group 1's coin left no later than group 0's end"),
     (dict(per=7), "the session's 12 groups at 7 a stretch leave no stretch before the closing one"),

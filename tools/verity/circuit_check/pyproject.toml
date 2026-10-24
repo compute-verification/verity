@@ -51,6 +51,7 @@ worker_gb = 54
 # (`units._unchanged`), and which a whole build never imports.
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/ml/__init__.py",
+          "verity/core/protocols/sampled_proofs/__init__.py",
           "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/kernels", "verity/ml/private_circuits",
           "verity/ml/randomness", "verity/ml/flock/python/verity_flock",
           "verity/core/protocols/pouw/__init__.py", "verity/core/protocols/pouw/audit.py", "verity/core/protocols/pouw/salt.py",
@@ -67,6 +68,9 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/certifier/head_check.circuit-check.json",
           "verity/core/protocols/certifier/served.py", "verity/core/protocols/certifier/served.circuit-check.py",
           "verity/core/protocols/certifier/served.circuit-check.json",
+          "verity/core/protocols/certifier/advice.py", "verity/core/protocols/certifier/advice_check.py",
+          "verity/core/protocols/certifier/advice_check.circuit-check.py",
+          "verity/core/protocols/certifier/advice_check.circuit-check.json",
           "verity/core/protocols/sampled_proofs/one_stage",
           "verity/core/protocols/pouw/window.py", "verity/core/protocols/sampled_proofs/service.py",
           "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py", "integrations/vllm/verity_vllm/program",

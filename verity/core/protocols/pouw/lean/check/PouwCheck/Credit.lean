@@ -56,7 +56,9 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
 * `layoutOf` is `credit.layout_of`: the window's layout is its committed circuit's, read from the descriptor whose
   SHA-512 the period's open committed: its program function's record (`TILES`, `LINEARS`, `CALLS`, `M`), each K's
   template's A and B rows (R and C), and its root's nodes other than inputs, which must be each call's (M/R)·(n/C)
-  instances of K's template in order. Never a layout the window's evidence hands in.
+  instances of K's template in order. Never a layout the window's evidence hands in. Each K of its `TILES` is one the
+  tile's proof covers, a multiple of 32 below 2^17 (`TILE_K_STEP`, `TILE_K_LIMIT`), else the window is refused
+  (`tile-k`, `tileK`).
 * `Internal.outcome` is `credit._outcome`: every unit `drawn` draws has exactly one proof outcome and it is an accept,
   else the whole window is refused (no partial credit). `window` is `credit.window`: `Internal.credited`, `roundsCheck`
   on the round log's roots and coins, `Internal.aLink` on that log and the window's registered entries, `layoutOf` of
@@ -413,6 +415,10 @@ def WINDOW_FN : String := "PouwH1Window_v3"
 def RECORD : List String := ["TILES", "LINEARS", "CALLS", "M", "PREFIX"]
 def TILE_FN : String := "PouwH1WindowTile_v1"
 def SHARED : List String := ["zy", "salt", "position", "roots"]
+/-- A window's tile is at a K its proof covers, a multiple of `TILE_K_STEP` below `TILE_K_LIMIT`: the K the tile's
+`GemmAccumulatorS8` binds (its 32-wide step, and `S8_K_LIMIT`, where an s8 sum can leave s32). -/
+def TILE_K_STEP : Nat := 32
+def TILE_K_LIMIT : Nat := 2 ^ 17
 def DESCRIPTOR_FORM : String :=
   "the window's descriptor is not a verity-ir/descriptor/v1 descriptor in canonical JSON (keys sorted, compact, " ++
   "ASCII: the bytes program_digest hashes) with its callees, definitions, program function and root"
@@ -429,6 +435,16 @@ def noTemplate (k : Nat) : String :=
   s!"the window's template at K = {k} is not h1window's: a composite {TILE_FN} bound to its UNIT and K = {k}, " ++
   s!"its id {TILE_FN}\{UNIT=…,K={k}}, whose parameters are a_k{k} and b_k{k}, the tile's R and C rows, then " ++
   ", ".intercalate SHARED ++ ", at the same R × C at every K"
+
+/-- `credit.tile_k`: why `layoutOf` refuses the window's tile at a K = `k` of at least one that its proof doesn't cover
+(`tile-k`), with its fix: the K to pad its linears' rows to, or past `TILE_K_LIMIT` the split. -/
+def tileK (k : Nat) : String :=
+  let up := (k + TILE_K_STEP - 1) / TILE_K_STEP * TILE_K_STEP
+  let fix := if up < TILE_K_LIMIT then s!"pad its linears' A and B rows with zero codes to K = {up}"
+    else s!"split its linears' k range into linears of at most K = {TILE_K_LIMIT - TILE_K_STEP} each, each padded " ++
+      s!"with zero codes to a multiple of {TILE_K_STEP}"
+  s!"the window's tile at K = {k} is outside the K its proof covers, multiples of {TILE_K_STEP} below " ++
+    s!"{TILE_K_LIMIT} (the K its GemmAccumulatorS8 binds): {fix}"
 
 /-- `credit._loads`: `text` read as JSON, when it is that value's canonical JSON (`SampledProofs.PyJson.canonical`,
 Python's `canonical_json`), so every reading of it is the same. -/
@@ -472,11 +488,12 @@ def runs (xs : List (String × Nat)) : List (String × Nat) :=
 
 /-- `credit.layout_of`: the layout (`{calls, linears, m, tile}`, `strata`'s) of the H1 window whose circuit's
 descriptor is `descriptor` (its bytes, canonical JSON without annotations, the bytes the period's `circuit` is the
-SHA-512 of), else the refusal (`layout`). The calls, linears and slot are its program function's record (`WINDOW_FN`'s
-`CALLS`, `LINEARS` and `M`), each K's template (`TILES`) is `h1window.template`'s, whose A and B rows give R and C, and
-the root's nodes other than inputs are each call's (M/R)·(n/C) instances of its K's template, in the calls' order: a
-call one instance and a batch its members, as the template query counts units. Its cost is the descriptor's bytes,
-never the gates its nodes unroll to. -/
+SHA-512 of), else the refusal (`layout` or `tile-k`). The calls, linears and slot are its program function's record
+(`WINDOW_FN`'s `CALLS`, `LINEARS` and `M`), each K's template (`TILES`) is `h1window.template`'s, whose A and B rows
+give R and C, at a K its tile's proof covers (else `tile-k`, `tileK`: a multiple of `TILE_K_STEP` below
+`TILE_K_LIMIT`), and the root's nodes other than inputs are each call's (M/R)·(n/C) instances of its K's template, in
+the calls' order: a call one instance and a batch its members, as the template query counts units. Its cost is the
+descriptor's bytes, never the gates its nodes unroll to. -/
 def layoutOf (descriptor : ByteArray) : R Json := do
   let some d := (String.fromUTF8? descriptor).bind loads? | layoutRefuse DESCRIPTOR_FORM
   let defs := get d "definitions"
@@ -505,6 +522,7 @@ def layoutOf (descriptor : ByteArray) : R Json := do
   for (k, tid) in ts do
     let some got := tileOf (get defs tid) tid k | layoutRefuse (noTemplate k)
     if rc.any (· != got) then layoutRefuse (noTemplate k)
+    if k % TILE_K_STEP != 0 || TILE_K_LIMIT ≤ k then throw ("tile-k", tileK k)
     rc := some got
   let some (r, c) := rc | layoutRefuse NOT_WINDOW
   let layout := Json.mkObj [("calls", calls), ("linears", linears), ("m", m),
@@ -1063,8 +1081,10 @@ def partitionOf (program : String) (shape : Shape) : Json :=
       ("params", Json.mkObj [("templates",
         Json.arr ((shape.tiles.mergeSort (·.1 ≤ ·.1)).map (Json.str ·.2.fn)).toArray)])])]
 
-/-- `registered.READS`: a `--registered` file's format. -/
-def READS : String := "verity/registered-reads/v0"
+/-- `registered.READS_V1`: a `--registered` file's format, each port's reads from unit `reads_from` (`READS_FROM`). -/
+def READS : String := Flock.Registered.FORMAT
+/-- `registered.READS_FROM`: a port's first unit; every unit below it reads nothing (`Flock.Registered.Port.readAt`). -/
+def READS_FROM : String := Flock.Registered.READS_FROM_KEY
 def SCHEMA_KEY : String := "row_schema"
 
 /-- `credit.step_tables`: each round's A tables of a layout `strata` accepted, over its `steps` rounds (its calls the
@@ -1110,11 +1130,12 @@ each of the round's calls of K, o the call's first, `stepRow`), its B row j (`b_
 row b0 + C·tj + j of the weights' `<prefix>b/<K>` (b0 the call's linear's first row in it), and its record (`zy`) at row
 t of the call's z table `<prefix>zy@<call>`; and, when the window registers the call's receipt table
 `<prefix>receipt@<call>`, the statement's output row o0 (`RECEIPT_PORT`, the unit's receipt, `shapeOf`'s width) at its
-row t, so the receipts the round roots commit are the ones the units return; every other unit reads none of them, and
-the file lists no unit past the call's last (`Flock.Registered.badInstance` reads none past `reads`). Each value is a
+row t, so the receipts the round roots commit are the ones the units return; every other unit reads none of them: each
+port's reads start at the call's first unit u0 (`READS_FROM`) and end at its last (`Flock.Registered.Port.readAt` reads
+none below `reads_from` or past `reads`). Each value is a
 row/v2 value of 16-bit leaves under `SampledProofs.Registered.domainAt` of its name, rows and words, binding the
 window's open root `window` but for the weights' (`isHeld`), at the root `roots` (`{value: [root, ...]}`) gives it. Its
-cost is the window's units up to the call's last, once a port: the reads file's form. The statement's public row `pub`
+reads cost the call's units, once a port; only the ok rows' known content is the window's. The statement's public row `pub`
 (`PUB_PORT`) is the verifier's own: unit u0 + t reads row t of the call's public table `<prefix>pub@<call>`, which the
 file names at its known content (`known`, `Flock.Registered.checkKnownAll`), the window's Program salt `salt` (hex), the
 position u0 + t and the call's roots, root(`a/<K>@<s>`) and root(`b/<K>`) as the window registers them (`publicWords`),
@@ -1184,8 +1205,7 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
     [("zy", zy, fun t => t)] ++ (if receipted then [(RECEIPT_PORT, rc, fun t => t)] else [])
   let mut out : List (String × Json) := []
   for (port, v, row) in ports do
-    let reads := (List.range (u0 + size)).map fun u =>
-      if u0 ≤ u && u < u0 + size then Lean.toJson (row (u - u0)) else Json.null
+    let reads := (List.range size).map fun t => Lean.toJson (row t)
     let lw : Nat × Nat := ((shapes.find? (·.1 == v)).map (·.2)).getD (0, 0)
     let (leaves, words) := lw
     let d ← (SampledProofs.Registered.domainAt program v words leaves 16
@@ -1193,7 +1213,7 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
     out := out ++ [(port, Json.mkObj [("value", Json.str v), ("root", Json.str ((root.lookup v).getD "")),
       ("leaves", Lean.toJson leaves), ("words", Lean.toJson words), ("word_bits", Lean.toJson (16 : Nat)),
       ("domain", Json.str (Flock.hexOf d)), (SCHEMA_KEY, Json.str Flock.HmRow.ROW_SCHEMA_V2),
-      ("reads", Json.arr reads.toArray)])]
+      ("reads", Json.arr reads.toArray), (READS_FROM, Lean.toJson u0)])]
   let pv := s!"{shape.pre}pub@{call}"
   let words := PouwCheck.PUBLIC_ROW_BITS / 16
   let sb := (hex? (.str salt)).getD ByteArray.empty
@@ -1208,7 +1228,7 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
   out := out ++ [(PUB_PORT, Json.mkObj [("value", Json.str pv), ("root", Json.str (Flock.hexOf pr)),
     ("leaves", Lean.toJson size), ("words", Lean.toJson words), ("word_bits", Lean.toJson (16 : Nat)),
     ("domain", Json.str (Flock.hexOf d)), (SCHEMA_KEY, Json.str Flock.HmRow.ROW_SCHEMA_V2),
-    ("reads", Json.arr ((List.range u0).map (fun _ => Json.null) ++ (List.range size).map Lean.toJson).toArray),
+    ("reads", Json.arr ((List.range size).map Lean.toJson).toArray), (READS_FROM, Lean.toJson u0),
     ("known", Json.mkObj [("rows", Lean.toJson (ks.map (·.1))),
       ("salts", Json.arr (ks.map fun k => Json.str (Flock.hexOf k.2)))])])]
   let population := sizes.foldl (· + ·) 0
@@ -1222,8 +1242,7 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
   out := out ++ [(OK_PORT, Json.mkObj [("value", Json.str ov), ("root", Json.str (Flock.hexOf opr)),
     ("leaves", Lean.toJson population), ("words", Lean.toJson OK_ROW.size), ("word_bits", Lean.toJson (16 : Nat)),
     ("domain", Json.str (Flock.hexOf od)), (SCHEMA_KEY, Json.str Flock.HmRow.ROW_SCHEMA_V2),
-    ("reads", Json.arr ((List.range u0).map (fun _ => Json.null) ++
-      (List.range size).map (fun t => Lean.toJson (u0 + t))).toArray),
+    ("reads", Json.arr ((List.range size).map (fun t => Lean.toJson (u0 + t))).toArray), (READS_FROM, Lean.toJson u0),
     ("known", Json.mkObj [("rows", Lean.toJson (oks.map (·.1))),
       ("salts", Json.arr (oks.map fun k => Json.str (Flock.hexOf k.2)))])])]
   pure (Json.mkObj [("format", Json.str READS), ("ports", Json.mkObj out)])
