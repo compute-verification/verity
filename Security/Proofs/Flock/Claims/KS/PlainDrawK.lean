@@ -1,4 +1,4 @@
-import Proofs.Flock.Claims.KS.PlainDraw
+import Proofs.Flock.Claims.KS.PlainDrawKDefs
 import Proofs.Flock.Claims.Recursion.FlockKSDeployK
 import Proofs.Flock.Claims.Recursion.CallsBridgeE
 import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
@@ -6,22 +6,23 @@ import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
 /-!
 # The plain verdict at the statement's draw, at `VK keep`
 
-`PlainDraw`'s verdict at every `keep`: flock-verify's acceptance is `verifyWithMK keep` at SHA-512 (`With.std`), the
-record decodes through `Record.decodeWithK keep`, and a recorded round is the live outcome's up to its digest
-(`Round.erase`), since at `keep := fun _ => true` the decoder drops S12's comparison of a retained round's bytes with
-its recorded digest (`decodeWithK_live`). Every reader of the rounds here reads their coin counts, coins and bytes
-only (`plainRepColsOf` reads the coins), so nothing below reads a round's digest.
+`PlainDraw`'s verdict at every `keep`, the facts about `PlainDrawKDefs`' definitions: flock-verify's acceptance is
+`verifyWithMK keep` at SHA-512 (`With.std`), the record decodes through `Record.decodeWithK keep`, and a recorded round
+is the live outcome's up to its digest (`Round.erase`), since at `keep := fun _ => true` the decoder drops S12's
+comparison of a retained round's bytes with its recorded digest (`decodeWithK_live`). Every reader of the rounds here
+reads their coin counts, coins and bytes only (`plainRepColsOf` reads the coins), so nothing below reads a round's
+digest.
 
-* `AcceptsAtDK`, `RecordsLiveAtDK`, `TxNoOffAtK`, `wrPDK`: `AcceptsAtD`, `RecordsLiveAtD`, `TxNoOffAt` and `wrPD`
-  through `keep`. At `keep := id` acceptance and the reader's premise are `PlainDraw`'s
+* `AcceptsAtDK`, `RecordsLiveAtDK`, `TxNoOffAtK`, `wrPDK` (`PlainDrawKDefs`): at `keep := id` acceptance and the
+  reader's premise are `PlainDraw`'s
   (`acceptsAtD_iff_acceptsAtDK_id`, `txNoOffAt_iff_txNoOffAtK_id`), and a record of the outcome there is one here
   (`recordsLiveAtDK_id_of`); the element-level acceptance holds wherever the shipped one does
   (`acceptsAtDK_true_of_acceptsAtD`).
 * `recordsLiveAtDK_of_checks`, `acceptsAtDK_of_decide`: an accepting decision of `VK keep` at SHA-512 is accepted at the
   setup at its statement's draw and records its live outcome there up to the rounds' digests.
 * `cols_plainK`: `cols_plain` with the verdict read through `keep`.
-* `plainVerdictAtK`, `plainVerdictAtK_of_run`: `plainVerdictAt` at `wrPDK`, which every accepting run of `VK keep` with
-  no column off `C` has at its live outcome, on every draw-carrying record. At `keep := id` the run is one of
+* `plainVerdictAtK_of_run`: `plainVerdictAtK` (`plainVerdictAt` at `wrPDK`), which every accepting run of `VK keep`
+  with no column off `C` has at its live outcome, on every draw-carrying record. At `keep := id` the run is one of
   `V false` (`VK_id`), and at `keep := fun _ => true` one of `VE` (`VK_true`).
 -/
 
@@ -33,12 +34,6 @@ open FlockSoundness.Refine (ptsOf shapeOf)
 open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
-
-/-- **flock-verify accepts at the setup at the draw `dr`, its digest comparisons read through `keep`**: `AcceptsAtD`
-with `verifyWithMK keep` at SHA-512 for `verify`. -/
-def AcceptsAtDK (keep : Bool → Bool) (I : Exec.Inputs) (dr : Option Json) (t : Exec.Transcript) : Prop :=
-  ∃ spec sts, setupAtD I dr = .ok (spec, sts) ∧
-    verifyWithMK keep With.std spec (sts.map _root_.Flock.Setup.ofCircuit) t.record t.proofs = .ok ()
 
 theorem named_of_setupAtD {I : Exec.Inputs} {dr : Option Json} {spec : SessionSpec} {sts : Array _root_.Flock.Stmt}
     (h : setupAtD I dr = .ok (spec, sts)) : ∀ s ∈ sts.map _root_.Flock.Setup.ofCircuit, s.merkle.Named :=
@@ -59,21 +54,6 @@ theorem acceptsAtDK_true_of_acceptsAtD {I : Exec.Inputs} {dr : Option Json} {t :
   obtain ⟨spec, sts, hs, hv⟩ := (acceptsAtD_iff_acceptsAtDK_id I dr t).1 h
   exact ⟨spec, sts, hs, verifyWithE_of_verifyWith _ _ _ _ _ hv⟩
 
-/-- **`RecordsLiveAtD` through `keep`, up to the rounds' digests**: where `verifyWithMK keep` accepts the transcript `t`
-at the session it sets up at `d`, its proof files are the outcome `o`'s, and the session its record decodes to through
-`keep` there has `o`'s link points and, at each of `o`'s tables, `o`'s `root_B` and rep streams' rounds up to their
-digests (`Round.erase`). -/
-def RecordsLiveAtDK (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) {J mPts : ℕ} (o : Tables.LiveOutJ J mPts)
-    (t : Exec.Transcript) : Prop :=
-  AcceptsAtDK keep I (some d) t →
-    t.proofs = o.proofs ∧
-    ∀ spec sts sess, setupAtD I (some d) = .ok (spec, sts) →
-      Record.decodeWithK keep With.std spec t.record = .ok sess →
-      ptsOf mPts sess.points = o.pts ∧
-      ∀ j : Fin J, sess.rootB[j.val]! = o.rootB[j.val]! ∧ ∀ r : Fin 2, ∃ s : StreamRec,
-        sess.streams.find? (fun x => x.name == toString spec.tables[j.val]! ++ toString "/rep" ++ toString r.val) =
-          some s ∧ s.rounds.toList.map Round.erase = (o.reps j r).map Round.erase
-
 /-- **A record of the outcome at `d` is one at `keep := id`**: `RecordsLiveAtD`'s rounds are the outcome's, so they
 are up to their digests. -/
 theorem recordsLiveAtDK_id_of {I : Exec.Inputs} {d : Json} {J mPts : ℕ} {o : Tables.LiveOutJ J mPts}
@@ -87,31 +67,10 @@ theorem recordsLiveAtDK_id_of {I : Exec.Inputs} {d : Json} {J mPts : ℕ} {o : T
   obtain ⟨s, hs, hr⟩ := (hj j).2 r
   exact ⟨s, hs, by rw [hr]⟩
 
-/-- **`TxNoOffAt` through `keep`**: no column off `C` at the session the record decodes to through `keep`. -/
-def TxNoOffAtK (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) {N : ℕ} (C : Fin N → List 𝔽) (t : Exec.Transcript) :
-    Prop :=
-  ∀ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : Session) (sch : _root_.Flock.Schedule) (s₀ s₁ : StreamRec),
-    setupAtD I (some d) = .ok (spec, #[st]) → Record.decodeWithK keep With.std spec t.record = .ok sess →
-    _root_.Flock.fast100 st.m = some sch →
-    sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString 0) = some s₀ →
-    sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString 1) = some s₁ →
-    ¬ ∃ (p : Fin N) (u : List 𝔽), Claims.Flock.lookCol (Claims.Flock.distinctBelow (sch.levels.getD 0 default).d
-      (Claims.Flock.plainRepColsOf (shapeOf (Setup.ofCircuit st) sch (2 * st.regions.size)) s₀.rounds t.proofs[0]! ++
-        Claims.Flock.plainRepColsOf (shapeOf (Setup.ofCircuit st) sch (2 * st.regions.size)) s₁.rounds
-          t.proofs[1]!)) p.val = some u ∧ u ≠ C p
-
 theorem txNoOffAt_iff_txNoOffAtK_id (I : Exec.Inputs) (d : Json) {N : ℕ} (C : Fin N → List 𝔽) (t : Exec.Transcript) :
     TxNoOffAt I d C t ↔ TxNoOffAtK id I d C t := by
   unfold TxNoOffAt TxNoOffAtK
   simp only [decodeWithK_id_std]
-
-open Classical in
-/-- **The record writer at the draw `d`, through `keep`**: at the live outcome `o`, a transcript `verifyWithMK keep`
-accepts at the setup at `d` that records `o` there up to the rounds' digests (`RecordsLiveAtDK`), where one exists,
-else a session without proof files, which the verdict refuses at every `keep` (`verifyWithMK_nil`). -/
-noncomputable def wrPDK (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) {J mPts : ℕ} (o : Tables.LiveOutJ J mPts) :
-    Exec.Transcript :=
-  if h : ∃ t, AcceptsAtDK keep I (some d) t ∧ RecordsLiveAtDK keep I d o t then h.choose else ⟨"", #[]⟩
 
 /-- **The verdict refuses a session without proof files, at every `keep`** (`verify_nil_plain`'s proof). -/
 theorem verifyWithMK_nil (keep : Bool → Bool) (hs : Hashes _root_.Flock.V) (spec : SessionSpec) (tabs : Array Setup)
@@ -281,13 +240,6 @@ theorem cols_plainK (keep : Bool → Bool) (hs : Hashes Flock.V) {seen : Claims.
   simp only [Bool.false_eq_true, ↓reduceIte, Claims.Flock.plainRunCols, Claims.Flock.ZkRun.plainShape,
     Claims.Flock.plainLevel0, hsched, FlockDeploy.plainProofShape_eq hsched, hx, List.flatMap_cons, List.flatMap_nil,
     List.append_nil]
-
-/-- **The plain verdict at the draw `d`, through `keep`**: `verifyWithMK keep` accepts what `wrPDK` writes for the
-outcome at the setup at `d`, the outcome's root is `rootB₀`'s, and the deployed plain reader looks up no column off
-`C` in that transcript there (`TxNoOffAtK`). `plainVerdictAt` at every `keep`. -/
-def plainVerdictAtK (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) {N mPts : ℕ} (C : Fin N → List 𝔽)
-    (rootB₀ : Array ByteArray) (o : Tables.LiveOutJ 1 mPts) : Prop :=
-  AcceptsAtDK keep I (some d) (wrPDK keep I d o) ∧ o.rootB[0]! = rootB₀[0]! ∧ TxNoOffAtK keep I d C (wrPDK keep I d o)
 
 theorem coins_getElem?_of_erase {xs ys : List Round} (h : xs.map Round.erase = ys.map Round.erase) (j : ℕ) :
     xs[j]?.map (fun rd : Round => rd.coins) = ys[j]?.map (fun rd : Round => rd.coins) := by
