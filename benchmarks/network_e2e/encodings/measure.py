@@ -4,12 +4,15 @@
     python measure.py corpus TRACE.jsonl ... --out DIR [--train-share 0.5]
 
 Each run fits the codebook on the training traces (the step-time model, its phase, and every table), registers it
-(`codebook.json`, with its SHA-512 digest), and on every test trace encodes both subjects (v0's fields and the admission
-residual) under every code, decodes them back (a mismatch fails the run), and records each window's bits. It writes
-`table.json` (per trace and window, and the summary) and `table.md`, for `research data put --kind advice-encoding`.
+(`codebook.json`, with its SHA-512 digest), and on every test trace encodes each subject (v0's fields, the admission
+steps, and the residual) under every code, decodes it back (a mismatch fails the run), and records each window's bits,
+with the static and conditional codes' bits per field. Where ADV-SPEC's module is installed it also builds each trace's
+advice there (which checks its meaning) and records ADV-SPEC's own layout and charge as a reference row. It writes
+`table.json` (per trace and window, and the summary) and `table.md`, for `research data put --kind advice-encoding/v1`.
 
-The worst case of each code, per window, is reported two ways: at the window's public counts (its certified arrivals,
-with every advice field at its registered cap), and at the caps (`arrivals_per_bucket · T` arrivals too).
+The worst case of each code, per window, is reported two ways: at the window's public counts (its certified arrivals
+and replayed resumes, with every advice field at its registered cap), and at the caps (`arrivals_per_bucket · T`
+arrivals too).
 """
 
 from __future__ import annotations
@@ -38,7 +41,24 @@ def _load(name: str):
 
 C = _load("code")
 
-SUBJECTS = ("v0", "admit")
+SUBJECTS = ("v0", "admit", "residual")
+
+
+def adv_spec():
+    """ADV-SPEC's advice module (I1 v0's canonical layout and its charge), or None where it isn't installed."""
+    try:
+        import verity.core.protocols.certifier.advice as A
+    except ImportError:
+        return None
+    return A
+
+
+def to_adv_spec(A, adv):
+    """ADV-SPEC's `Advice` for this module's, which checks the advice's meaning as it is built."""
+    return A.Advice(tuple(A.RequestAdvice(q.id, q.prompt_len, q.output_len, q.finish) for q in adv.requests),
+                    tuple(A.StepAdvice(tuple(A.Row(x.request, x.kind, x.start, x.n, x.cache_hit, x.preempted,
+                                                   tuple(A.Source(r, n) for r, n in x.sources)) for x in s.rows))
+                          for s in adv.steps), adv.release)
 
 
 # ------------------------------------------------------------------------------------------------- the step time
@@ -87,13 +107,19 @@ def steptime_samples(trace: dict) -> list[tuple[float, float, float, float]]:
 
 
 def training_symbols(traces: list[dict], cb) -> dict[str, list]:
+    """Each family's windows of symbols on the training traces, each value once: v0's, then the residual's fields v0
+    doesn't code (hits, re-hits, admission; the admit subject's symbols are the residual's admission symbols)."""
     out: dict[str, list] = {"static": [], "cond": [], "cond+adapt": []}
     for t in traces:
-        rep = C.TraceReplay(t["advice"])
+        rep = C.TraceReplay(t["advice"], t["public"])
+        res = C.residual_of(t["advice"], t["admit"])
         for fam in ("static", "cond"):
             out[fam] += C.symbols_v0(t["advice"], t["public"], cb, fam)
         for fam in ("static", "cond", "cond+adapt"):
-            out[fam] += C.symbols_admit(t["admit"], t["public"], cb, fam, rep)
+            wins = C.symbols_residual(res, t["public"], cb, fam, rep)
+            if fam != "cond+adapt":
+                wins = [[x for x in win if not x[0].startswith(("prompt_len", "source"))] for win in wins]
+            out[fam] += wins
     return out
 
 
@@ -128,44 +154,96 @@ def worst_admit_arrival(cb, T: int, family: str) -> float:
                for gh in (0, 1, 4, 16, 64, 1024, cap // 2)) + C.OVERHEAD_PER_SYMBOL
 
 
-def worst_v0_window(cb, T: int, family: str, arrivals: int) -> float:
-    """The most bits a window of `arrivals` requests costs under v0's fields, every step and row at its cap."""
+def _worst_hit(cb, family: str, name: str, known_max: int) -> float:
+    """The most bits a cache hit below `known_max` tokens costs with its most sources, without the segment's tail."""
     caps = cb.caps
-    span = caps.prompt_max + caps.output_max - 1
-    req = [("prompt_len", 0, 1, caps.prompt_max), ("output_len", 0, 1, caps.output_max)]
-    S, R = caps.steps_window(T), caps.seqs_max
-    if family == "fixed":
-        row = [("request", 0, 0, caps.requests_max - 1), ("kind", 0, 0, 1), ("start", 0, 0, span),
-               ("n", 0, 0, caps.tokens_max), ("cache_hit", 0, 0, caps.prompt_max), ("preempted", 0, 0, 1)]
-        per_req = C.worst_bits(req + [("finish", 0, 0, 1)], cb, family)
-        per_step = C.worst_bits([("rows", 0, 0, R), ("release", 0, 0, T - 1)], cb, family) + R * C.worst_bits(row, cb, family)
-        return arrivals * per_req + C.worst_bits([("steps", 0, 0, S)], cb, family) + S * per_step
+    H, Q = caps.sources_max, caps.requests_max
+    src = [("source", 0, 0, Q - 1)] if family == "fixed" else [("source_delta", 0, -Q, Q)]
+    syms = [(name, 0, 0, (known_max - 1) // caps.block_size), ("sources_more", 0, 0, H - 1)]
+    syms += H * (src + [("source_n", 0, 0, caps.prompt_max - 1)])
+    return C.worst_bits(syms, cb, family) - (2 if family not in ("fixed", "gamma") else 0)
+
+
+def worst_residual_window(cb, T: int, family: str, arrivals: int, resumes: int) -> float:
+    """The most bits a window of `arrivals` requests and `resumes` resumes (both public: the certified ingress and the
+    replay) costs under the residual: each field at its cap, each hit with the most sources."""
+    caps = cb.caps
+    prompt = C.worst_bits([("prompt_len", 0, 1, caps.prompt_max)], cb, family) - (2 if family not in ("fixed", "gamma") else 0)
+    per_arrival = prompt + _worst_hit(cb, family, "hit", caps.prompt_max) + worst_admit_arrival(cb, T, family)
+    per_resume = _worst_hit(cb, family, "rehit", caps.prompt_max + caps.output_max)
+    return arrivals * per_arrival + resumes * per_resume + (2 if family not in ("fixed", "gamma") else 0)
+
+
+def worst_v0_window(cb, T: int, family: str, arrivals: int) -> float:
+    """The most bits a window of `arrivals` requests costs under v0's fields: every step and row at its cap, each row
+    keeping an output and hitting the cache with the most sources a hit can have."""
+    caps = cb.caps
     fam = "cond" if family.startswith("cond") else family
-    row = [("request_delta", 0, -caps.requests_max, caps.requests_max), ("kind", 0, 0, 1), ("start_delta", 0, -span, span),
-           ("n_prefill", 0, 0, caps.tokens_max), ("cache_hit", 0, 0, caps.prompt_max), ("preempted", 0, 0, 1)]
-    if fam == "cond":
-        per_req = C.worst_bits(req + [("finish_at_cap", 0, 0, 1)], cb, fam) - 2
-        rel = max(C.worst_bits([(f"release_res_{q}", 0, -g, T - 1 - g)], cb, fam)
-                  for q in range(C.PHASES + 1) for g in (0, T - 1)) - 2
-        per_step = C.worst_bits([("canon", 0, 0, 1), ("rows", 0, 0, R)], cb, fam) - 2 + rel
+    span, H, G, Q = caps.prompt_max + caps.output_max - 1, caps.prompt_max, caps.sources_max, caps.requests_max
+    S, R, rel = caps.steps_window(T), caps.seqs_max, caps.windows_max * T - 1
+
+    def seg(syms: list) -> float:  # a part of one segment: the arithmetic coder's two terminating bits are added once
+        return C.worst_bits(syms, cb, fam) - (2 if fam not in ("fixed", "gamma") else 0)
+
+    req = [("prompt_len", 0, 1, caps.prompt_max), ("output_len", 0, 1, caps.output_max)]
+    if fam == "fixed":
+        per_req = seg(req + [("finish", 0, 0, 1)])
+        per_step = seg([("rows", 0, 0, R)])
+        per_row = seg([("request", 0, 0, Q - 1), ("kind", 0, 0, 1), ("start", 0, 0, span), ("n", 0, 0, caps.tokens_max),
+                       ("cache_hit", 0, 0, H), ("preempted", 0, 0, 1), ("sources_more", 0, 0, G - 1),
+                       ("release", 0, 0, rel)]) + G * seg([("source", 0, 0, Q - 1), ("source_n", 0, 0, H - 1)])
     else:
-        per_req = C.worst_bits(req + [("finish", 0, 0, 1)], cb, fam) - (2 if fam == "static" else 0)
-        per_step = C.worst_bits([("rows", 0, 0, R), ("release_gap", 0, 0, T - 1)], cb, fam) - (2 if fam == "static" else 0)
-    per_row = C.worst_bits(row, cb, fam) - (2 if fam != "gamma" else 0)
-    return arrivals * per_req + C.worst_bits([("steps", 0, 0, S)], cb, fam) + S * (per_step + R * per_row)
+        per_req = seg(req + [("finish_at_cap" if fam == "cond" else "finish", 0, 0, 1)])
+        per_row = seg([("request_delta", 0, -Q, Q), ("kind", 0, 0, 1), ("start_delta", 0, -span, span),
+                       ("n_prefill", 0, 0, caps.tokens_max), ("cache_hit", 0, 0, H), ("preempted", 0, 0, 1)])
+        sources = seg([("sources_more", 0, 0, G - 1)]) + G * seg([("source_delta", 0, -Q, Q), ("source_n", 0, 0, H - 1)])
+        if fam == "cond":
+            per_step = seg([("canon", 0, 0, 1), ("rows", 0, 0, R)])
+            per_row = max(per_row, seg([("cont_prefill", 0, 0, 1), ("chunk_cont", 0, -caps.tokens_max, 0)]),
+                          seg([("new_rows_0", 0, 0, R), ("new_request", 0, 0, Q), ("cache_hit_new", 0, 0, H),
+                               ("chunk_new", 0, -caps.tokens_max, 0)])) + sources
+            per_row += max(seg([(name, 0, -g, rel - g)]) for name in [f"release_res_{q}" for q in range(C.PHASES + 1)]
+                           + ["release_same"] for g in (0, rel // 2, rel))
+        else:
+            per_step = seg([("rows", 0, 0, R)])
+            per_row += sources + seg([("release_gap", 0, -rel, rel)])
+    tail = 2 if fam not in ("fixed", "gamma") else 0
+    return arrivals * per_req + seg([("steps", 0, 0, S)]) + S * (per_step + R * per_row) + tail
 
 
 # ---------------------------------------------------------------------------------------------------- measure
 
 
+def _field(name: str) -> str:
+    for p in ("release_res_", "admit_res_", "new_rows_"):
+        if name.startswith(p):
+            return p[:-1]
+    return name
+
+
+def by_field(windows: list, cb, family: str) -> dict[str, float]:
+    """The model's bits per field over these windows of symbols (the arithmetic coder comes within rounding of them)."""
+    tables, out = C._tables_for(cb, family), {}
+    for win in windows:
+        for name, v, lo, hi in win:
+            out[_field(name)] = out.get(_field(name), 0.0) + tables[name].cost(v, lo, hi)
+    return out
+
+
+FIELDS = (("v0", "cond"), ("residual", "static"), ("residual", "cond"))
+
+
 def measure(test: list[dict], cb) -> dict:
+    A = adv_spec()
     rows = []
     for t in test:
         adv, pub, admit = t["advice"], t["public"], t["admit"]
-        rep = C.TraceReplay(adv)
-        counts = [len(pub.requests_in(w)) for w in range(pub.W)]
+        rep = C.TraceReplay(adv, pub)
+        res = C.residual_of(adv, admit)
         entry = {"name": t["name"], "windows": pub.W, "requests": len(adv.requests), "steps": len(adv.steps),
-                 "rows": sum(len(s.rows) for s in adv.steps), "arrivals_per_window": counts, "bits": {}}
+                 "rows": sum(len(s.rows) for s in adv.steps), "outputs": len(adv.release),
+                 "arrivals_per_window": [len(pub.requests_in(w)) for w in range(pub.W)],
+                 "resumes_per_window": [len(rep.resumes_in(w)) for w in range(pub.W)], "bits": {}, "fields": {}}
         for fam in C.FAMILIES:
             bits, lens = C.encode_v0(adv, pub, cb, fam)
             back = C.decode_v0(C.BitReader(bits.bits), pub, cb, fam)
@@ -178,47 +256,94 @@ def measure(test: list[dict], cb) -> dict:
             if C.decode_admit(C.BitReader(bits.bits), pub, cb, fam, rep) != list(admit):
                 raise SystemExit(f"{t['name']}: admit under {fam} does not round-trip")
             entry["bits"][f"admit/{fam}"] = lens
+            bits, lens = C.encode_residual(res, pub, cb, fam, rep)
+            if C.decode_residual(C.BitReader(bits.bits), pub, cb, fam, rep) != res:
+                raise SystemExit(f"{t['name']}: the residual under {fam} does not round-trip")
+            entry["bits"][f"residual/{fam}"] = lens
+        for subj, fam in FIELDS:
+            syms = C.symbols_v0(adv, pub, cb, fam) if subj == "v0" else C.symbols_residual(res, pub, cb, fam, rep)
+            entry["fields"][f"{subj}/{fam}"] = by_field(syms, cb, fam)
+        if A is not None:
+            by = A.bits_by_window(to_adv_spec(A, adv), pub.T)
+            entry["reference"] = {"v0/adv-spec": [by.get(w, 0) for w in range(pub.W)]}
         rows.append(entry)
     return {"traces": rows}
 
 
-def summarize(result: dict, cb, T: int) -> list[dict]:
-    """One row per subject and code over every test window with an arrival or a step."""
-    out = []
+def _counted(t: dict, key: str) -> list[int]:
+    """The windows a row counts: those with an arrival or any bits under `key`."""
+    return [w for w, b in enumerate(t["bits"].get(key) or t["reference"][key]) if b or t["arrivals_per_window"][w]]
+
+
+def summarize(result: dict, cb, T: int) -> dict:
+    """One row per subject and code over every test window with an arrival or any bits; the conditional and static
+    codes' bits per field; ADV-SPEC's own layout where it is installed."""
+    rows = []
     caps_arrivals = cb.caps.arrivals_per_bucket * T
-    for subj in SUBJECTS:
-        for fam in C.FAMILIES:
-            vals, worst_pub = [], []
-            for t in result["traces"]:
-                for w, b in enumerate(t["bits"][f"{subj}/{fam}"]):
-                    a = t["arrivals_per_window"][w]
-                    if b == 0 and a == 0:
-                        continue
-                    vals.append(b)
-                    worst_pub.append(a * worst_admit_arrival(cb, T, fam) + (2 if fam not in ("fixed", "gamma") else 0)
-                                     if subj == "admit" else worst_v0_window(cb, T, fam, a))
-            arr = [a for t in result["traces"] for w, a in enumerate(t["arrivals_per_window"])
-                   if a or t["bits"][f"{subj}/{fam}"][w]]
-            caps_worst = (caps_arrivals * worst_admit_arrival(cb, T, fam) if subj == "admit"
-                          else worst_v0_window(cb, T, fam, caps_arrivals))
-            out.append({
-                "subject": subj, "code": fam, "windows": len(vals),
-                "mean_bits": statistics.fmean(vals), "p50_bits": statistics.median(vals), "max_bits": max(vals),
-                "mean_bits_per_arrival": sum(vals) / max(sum(arr), 1),
-                "worst_bits_public_counts_max": max(worst_pub), "worst_bits_caps": caps_worst})
-    return out
+    tail = {f: 2 if f not in ("fixed", "gamma") else 0 for f in C.FAMILIES}
+    keys = [(s, f) for s in SUBJECTS for f in C.FAMILIES]
+    if all("reference" in t for t in result["traces"]):
+        keys.append(("v0", "adv-spec"))
+    for subj, fam in keys:
+        key = f"{subj}/{fam}"
+        vals, arr, worst_pub = [], [], []
+        for t in result["traces"]:
+            lens = t["bits"].get(key) or t["reference"][key]
+            for w in _counted(t, key):
+                a, m = t["arrivals_per_window"][w], t["resumes_per_window"][w]
+                vals.append(lens[w])
+                arr.append(a)
+                if fam != "adv-spec":
+                    worst_pub.append(a * worst_admit_arrival(cb, T, fam) + tail[fam] if subj == "admit" else
+                                     worst_residual_window(cb, T, fam, a, m) if subj == "residual" else
+                                     worst_v0_window(cb, T, fam, a))
+        caps_worst = None if fam == "adv-spec" else (
+            caps_arrivals * worst_admit_arrival(cb, T, fam) + tail[fam] if subj == "admit" else
+            worst_residual_window(cb, T, fam, caps_arrivals, 0) if subj == "residual" else
+            worst_v0_window(cb, T, fam, caps_arrivals))
+        rows.append({
+            "subject": subj, "code": fam, "windows": len(vals),
+            "mean_bits": statistics.fmean(vals), "p50_bits": statistics.median(vals), "max_bits": max(vals),
+            "mean_bits_per_arrival": sum(vals) / max(sum(arr), 1),
+            "worst_bits_public_counts_max": max(worst_pub) if worst_pub else None, "worst_bits_caps": caps_worst,
+            "worst_bits_per_resume": _worst_hit(cb, fam, "rehit", cb.caps.prompt_max + cb.caps.output_max)
+            if subj == "residual" else None})
+    fields = {}
+    for subj, fam in FIELDS:
+        key = f"{subj}/{fam}"
+        n = sum(len(_counted(t, key)) for t in result["traces"])
+        tot: dict[str, float] = {}
+        for t in result["traces"]:
+            for name, b in t["fields"][key].items():
+                tot[name] = tot.get(name, 0.0) + b
+        fields[key] = {name: b / n for name, b in sorted(tot.items(), key=lambda kv: -kv[1])}
+    return {"rows": rows, "fields_mean_bits_per_window": fields}
 
 
-def render(summary: list[dict], meta: dict) -> str:
+def _num(v) -> str:
+    return "–" if v is None else f"{v:,.0f}" if v < 1e9 else f"{v:.2e}"
+
+
+def render(summary: dict, meta: dict) -> str:
     lines = [f"# Advice bits per window ({meta['corpus']})", "",
              f"Codebook `{meta['codebook_digest'][:16]}…` (SHA-512), fit on {meta['train']}; measured on {meta['test']}. "
              f"T = {meta['T']} buckets of {meta['tau_us'] // 1000} ms. Step-time model {meta['steptime']}.", "",
              "| subject | code | windows | mean bits/window | p50 | max | bits/arrival | worst, public counts (max) | worst, caps |",
              "|---|---|---|---|---|---|---|---|---|"]
-    for r in summary:
+    for r in summary["rows"]:
         lines.append(f"| {r['subject']} | {r['code']} | {r['windows']} | {r['mean_bits']:,.0f} | {r['p50_bits']:,.0f} | "
-                     f"{r['max_bits']:,} | {r['mean_bits_per_arrival']:,.2f} | {r['worst_bits_public_counts_max']:,.0f} | "
-                     f"{r['worst_bits_caps']:,.0f} |")
+                     f"{r['max_bits']:,} | {r['mean_bits_per_arrival']:,.2f} | {_num(r['worst_bits_public_counts_max'])} | "
+                     f"{_num(r['worst_bits_caps'])} |")
+    per_resume = {r["code"]: r["worst_bits_per_resume"] for r in summary["rows"] if r["subject"] == "residual"}
+    lines += ["", "The residual's worst case at the caps counts no resume; each resume adds at most "
+              + ", ".join(f"{_num(v)} ({k})" for k, v in per_resume.items()) + " bits.", "",
+              "Mean bits per window by field (the model's ideal lengths; each segment adds at most 2 bits):", "",
+              "| field | " + " | ".join(summary["fields_mean_bits_per_window"]) + " |",
+              "|---|" + "---|" * len(summary["fields_mean_bits_per_window"])]
+    names = list(dict.fromkeys(n for f in summary["fields_mean_bits_per_window"].values() for n in f))
+    for n in names:
+        lines.append(f"| {n} | " + " | ".join(f"{f[n]:,.1f}" if n in f else "" for f in
+                                             summary["fields_mean_bits_per_window"].values()) + " |")
     lines += ["", f"Reference: the step clock coded per bucket at the caps is T·log2(s_max + 1) = "
                   f"{meta['T'] * math.log2(meta['steps_per_bucket'] + 1):,.0f} bits per window; the clock sync is "
                   f"log2 #Σ_sync = 7 bits per window."]
@@ -272,7 +397,7 @@ def main(argv: list[str] | None = None) -> int:
         test = synth_corpus(rates, a.windows, list(range(a.test)))
         p = S.Params()
         caps = C.Caps(prompt_max=p.prompt_max, output_max=p.max_tokens, seqs_max=p.max_num_seqs,
-                      tokens_max=p.max_batched_tokens, steps_per_bucket=32)
+                      tokens_max=p.max_batched_tokens, steps_per_bucket=32, block_size=16)
         res = run(train, test, caps, p.T, p.tau_us, a.out, f"synthetic vLLM-V1-like engine, rates {a.rates} req/s")
         print((a.out / "table.md").read_text())
         print(f"{res['meta']['seconds']} s")

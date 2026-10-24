@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 import itertools
 import random
@@ -200,7 +201,7 @@ def corpus():
     p = dict(rate=1.5, windows=2, T=600, prompt_max=1024, max_tokens=256, max_batched_tokens=1024)
     train = M.synth_corpus_params([S.Params(seed=11, **p)])
     test = M.synth_corpus_params([S.Params(seed=12, **p)])
-    caps = C.Caps(prompt_max=1024, output_max=256, seqs_max=256, tokens_max=1024, steps_per_bucket=32)
+    caps = C.Caps(prompt_max=1024, output_max=256, seqs_max=256, tokens_max=1024, steps_per_bucket=32, block_size=16)
     cb = M.fit(train, caps, 600, 100_000)
     return cb, test[0]
 
@@ -208,7 +209,8 @@ def corpus():
 def test_every_code_round_trips(corpus):
     cb, t = corpus
     adv, pub, admit = t["advice"], t["public"], t["admit"]
-    rep = C.TraceReplay(adv)
+    rep = C.TraceReplay(adv, pub)
+    res = C.residual_of(adv, admit)
     for fam in C.FAMILIES:
         bits, lens = C.encode_v0(adv, pub, cb, fam)
         assert sum(lens) == len(bits)
@@ -219,57 +221,117 @@ def test_every_code_round_trips(corpus):
         bits, lens = C.encode_admit(admit, pub, cb, fam, rep)
         assert sum(lens) == len(bits)
         assert C.decode_admit(C.BitReader(bits.bits), pub, cb, fam, rep) == admit
+        bits, lens = C.encode_residual(res, pub, cb, fam, rep)
+        assert sum(lens) == len(bits)
+        assert C.decode_residual(C.BitReader(bits.bits), pub, cb, fam, rep) == res
 
 
 #: Bits per window on the test trace (seed 12) under the codebook fit on seed 11. A change here changes what the
 #: table reports: rerun `measure.py` and restate the table.
 PINNED = {
-    "v0/fixed": [980172, 762122, 23884],
-    "v0/gamma": [165816, 129240, 3751],
-    "v0/static": [32252, 25187, 465],
-    "v0/cond": [2484, 2195, 47],
+    "v0/fixed": [1086277, 818008, 25654],
+    "v0/gamma": [174887, 134474, 3928],
+    "v0/static": [32982, 25695, 480],
+    "v0/cond": [2515, 2220, 47],
     "admit/fixed": [2450, 2075, 0],
     "admit/gamma": [992, 947, 0],
     "admit/static": [724, 661, 0],
     "admit/cond": [302, 259, 0],
     "admit/cond+adapt": [316, 258, 0],
+    "residual/fixed": [4000, 3411, 0],
+    "residual/gamma": [2566, 2289, 0],
+    "residual/static": [1691, 1495, 0],
+    "residual/cond": [1269, 1092, 0],
+    "residual/cond+adapt": [1282, 1093, 0],
 }
+
+
+def _lens(subj: str, fam: str, cb, t: dict) -> list[int]:
+    rep = C.TraceReplay(t["advice"], t["public"])
+    if subj == "v0":
+        return C.encode_v0(t["advice"], t["public"], cb, fam)[1]
+    if subj == "admit":
+        return C.encode_admit(t["admit"], t["public"], cb, fam, rep)[1]
+    return C.encode_residual(C.residual_of(t["advice"], t["admit"]), t["public"], cb, fam, rep)[1]
 
 
 def test_bit_counts_are_pinned(corpus):
     cb, t = corpus
-    rep = C.TraceReplay(t["advice"])
-    got = {}
-    for key in PINNED:
-        subj, fam = key.split("/")
-        if subj == "v0":
-            got[key] = C.encode_v0(t["advice"], t["public"], cb, fam)[1]
-        else:
-            got[key] = C.encode_admit(t["admit"], t["public"], cb, fam, rep)[1]
-    assert got == PINNED
+    assert {key: _lens(*key.split("/"), cb, t) for key in PINNED} == PINNED
 
 
 def test_each_window_is_within_its_worst_case(corpus):
     cb, t = corpus
-    rep = C.TraceReplay(t["advice"])
+    pub = t["public"]
+    rep = C.TraceReplay(t["advice"], pub)
+    res = C.residual_of(t["advice"], t["admit"])
     for fam in C.FAMILIES:
-        lens = C.encode_admit(t["admit"], t["public"], cb, fam, rep)[1]
-        for w, syms in enumerate(C.symbols_admit(t["admit"], t["public"], cb, fam, rep)):
+        lens = _lens("admit", fam, cb, t)
+        for w, syms in enumerate(C.symbols_admit(t["admit"], pub, cb, fam, rep)):
             assert lens[w] <= C.worst_bits(syms, cb, fam) + 1e-9
-            assert lens[w] <= len(syms) * M.worst_admit_arrival(cb, t["public"].T, fam) + 2
-        lens = C.encode_v0(t["advice"], t["public"], cb, fam)[1]
-        for w, syms in enumerate(C.symbols_v0(t["advice"], t["public"], cb, fam)):
+            assert lens[w] <= len(syms) * M.worst_admit_arrival(cb, pub.T, fam) + 2
+        lens = _lens("residual", fam, cb, t)
+        for w, syms in enumerate(C.symbols_residual(res, pub, cb, fam, rep)):
+            assert lens[w] <= C.worst_bits(syms, cb, fam) + 1e-9
+            assert lens[w] <= M.worst_residual_window(cb, pub.T, fam, len(pub.requests_in(w)), len(rep.resumes_in(w)))
+        lens = _lens("v0", fam, cb, t)
+        for w, syms in enumerate(C.symbols_v0(t["advice"], pub, cb, fam)):
             assert lens[w] <= C.worst_bits(syms, cb, C._v0_family(fam) if fam != "fixed" else fam) + 1e-9
+            assert lens[w] <= M.worst_v0_window(cb, pub.T, fam, len(pub.requests_in(w)))
 
 
 def test_the_conditional_codes_shrink_the_advice(corpus):
     cb, t = corpus
-    rep = C.TraceReplay(t["advice"])
-    v0 = {f: sum(C.encode_v0(t["advice"], t["public"], cb, f)[1]) for f in ("fixed", "gamma", "static", "cond")}
-    ad = {f: sum(C.encode_admit(t["admit"], t["public"], cb, f, rep)[1]) for f in ("fixed", "gamma", "static", "cond")}
-    assert v0["fixed"] > v0["gamma"] > v0["static"] > v0["cond"]
-    assert ad["fixed"] > ad["gamma"] > ad["static"] > ad["cond"]
-    assert v0["fixed"] > 100 * v0["cond"]
+    total = {s: {f: sum(_lens(s, f, cb, t)) for f in ("fixed", "gamma", "static", "cond")} for s in M.SUBJECTS}
+    for s in M.SUBJECTS:
+        assert total[s]["fixed"] > total[s]["gamma"] > total[s]["static"] > total[s]["cond"]
+    assert total["v0"]["fixed"] > 100 * total["v0"]["cond"]
+
+
+def _general_advice():
+    """I1 v0 in the forms the synthetic engine never makes: a resume after preemption reusing its own KV, a hit on
+    another request's KV, and releases out of order across requests (in order within each)."""
+    R, S = C.Row, C.StepAdvice
+    reqs = (C.RequestAdvice("a", 4, 3, "length"), C.RequestAdvice("b", 3, 2, "eos"))
+    steps = (S((R(0, "prefill", 0, 4),)),
+             S((R(0, "decode", 4, 1), R(1, "prefill", 2, 1, 2, False, ((0, 2),)))),
+             S((R(0, "prefill", 2, 4, 2, True, ((0, 2),)), R(1, "decode", 3, 1))))
+    return C.Advice(reqs, steps, (1, 6, 5, 7, 6)), C.Public((0, 1), 4, 2)
+
+
+def test_general_advice_round_trips(corpus):
+    cb = dataclasses.replace(corpus[0], caps=dataclasses.replace(corpus[0].caps, block_size=2))
+    adv, pub = _general_advice()
+    rep = C.TraceReplay(adv, pub)
+    res = C.residual_of(adv, [0, 1])
+    assert C.kept_outputs(adv) == [(0, 0), (1, 0), (1, 1), (2, 0), (2, 1)]
+    assert C._steps_by_window(adv, pub) == [range(0, 1), range(1, 3)]
+    assert [rep.resumes_in(w) for w in range(2)] == [[], [(0, 6)]] and res.resumes == (C.Hit(2, ((0, 2),)),)
+    for fam in C.FAMILIES:
+        bits, lens = C.encode_v0(adv, pub, cb, fam)
+        back = C.decode_v0(C.BitReader(bits.bits), pub, cb, fam)
+        assert back.steps == adv.steps and back.release == adv.release and sum(lens) == len(bits)
+        bits, _ = C.encode_residual(res, pub, cb, fam, rep)
+        assert C.decode_residual(C.BitReader(bits.bits), pub, cb, fam, rep) == res
+
+
+def test_refuses_a_hit_of_part_of_a_block(corpus):
+    cb, _ = corpus
+    adv, pub = _general_advice()
+    with pytest.raises(ValueError, match="cache hit 2 is not whole blocks of 16"):
+        C.encode_residual(C.residual_of(adv, [0, 1]), pub, cb, "cond", C.TraceReplay(adv, pub))
+
+
+def test_synthetic_advice_is_adv_spec_advice(corpus):
+    """ADV-SPEC's `Advice` refuses advice without meaning (positions, sources, kept outputs, release order), so the
+    synthetic traces and the hand-made advice above are I1 v0 as the certifier defines it."""
+    A = pytest.importorskip("verity.core.protocols.certifier.advice")
+    for adv in (corpus[1]["advice"], _general_advice()[0]):
+        spec = A.Advice(tuple(A.RequestAdvice(q.id, q.prompt_len, q.output_len, q.finish) for q in adv.requests),
+                        tuple(A.StepAdvice(tuple(A.Row(x.request, x.kind, x.start, x.n, x.cache_hit, x.preempted,
+                                                       tuple(A.Source(r, n) for r, n in x.sources)) for x in s.rows))
+                              for s in adv.steps), adv.release)
+        assert C.as_advice(A.decode(A.encode(spec))).steps == adv.steps
 
 
 def test_codebook_json_round_trip(corpus):
@@ -283,14 +345,21 @@ def test_codebook_json_round_trip(corpus):
 
 
 def test_refuses_a_field_past_its_cap(corpus):
-    cb, t = corpus
-    adv = t["advice"]
-    q = adv.requests[0]
-    bad = C.Advice((C.RequestAdvice(q.id, cb.caps.prompt_max + 1, q.output_len, q.finish),) + adv.requests[1:],
-                   adv.steps, adv.release)
+    cb, _ = corpus
+    adv, pub = _general_advice()
+    small = dataclasses.replace(cb, caps=dataclasses.replace(cb.caps, prompt_max=3))
     for fam in C.FAMILIES:
-        with pytest.raises(ValueError, match="prompt_len 1025 outside its feasible range"):
-            C.encode_v0(bad, t["public"], cb, fam)
+        with pytest.raises(ValueError, match=r"prompt_len 4 outside its feasible range \[1, 3\]"):
+            C.encode_v0(adv, pub, small, fam)
+
+
+def test_refuses_a_release_before_its_requests_previous(corpus):
+    cb, _ = corpus
+    adv, pub = _general_advice()
+    bad = C.Advice(adv.requests, adv.steps, (1, 6, 5, 4, 6))  # request a's third output before its second
+    for fam in C.FAMILIES:
+        with pytest.raises(ValueError, match="outside its feasible range"):
+            C.encode_v0(bad, pub, cb, fam)
 
 
 def test_refuses_truncated_advice(corpus):

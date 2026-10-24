@@ -5,8 +5,8 @@ unpredictable, and its length is the leak, charged as `A_c` in the certifier's a
 (`SecurityProofs.EncardAccSeqsLeConstantRate`: at most `#Ac · #Σ_sync^W · D^n` observation sequences). This module codes
 two subjects, each with four codes, all prefix-free and all fixed before the run by a registered `Codebook`:
 
-- **v0**: I1 v0's fields as drafted (`requests`, `steps` with their rows, `release`), the request ids aside (they are the
-  certified ingress's `user` fields);
+- **v0**: I1 v0's fields as ADV-SPEC defines them (`requests`; `steps` with their rows, a cache hit with its sources;
+  `release`, one bucket per kept output), the request ids aside (they are the certified ingress's `user` fields);
 - **admit**: the residual left once the fields that the certified I/O already determines are dropped (ENC-DERIVED)
   and the scheduler is replayed (ENC-REPLAY): each request's admission step, the engine step before which it joined.
 
@@ -16,12 +16,14 @@ The codes:
 - `static`: the same symbols through an arithmetic coder with registered static tables, fit to historical traffic;
 - `cond`: an arithmetic coder whose tables are conditioned on public data. For v0, the step's rows are predicted from
   the previous step's (the public schedule: a running request continues, a prefill chunk fills the token budget, new rows
-  are first come, first served); for admit, the step count between two arrivals is predicted from their certified
-  arrival buckets and a registered step-time model run over the replayed schedule. `cond+adapt` also rescales the
-  step-time model online from the decoded past (a public, adaptive model).
+  are first come, first served), and a step's first release from a release clock (the registered step-time model run
+  over the decoded rows, from the previous step's end or an idle engine's next delivery); for admit, the step count
+  between two arrivals is predicted from their certified arrival buckets and the step-time model run over the replayed
+  schedule. `cond+adapt` also rescales the step-time model online from the decoded past (a public, adaptive model).
 
 **What a window is charged.** Window w's segment codes the requests whose certified arrival bucket is in w and the steps
-whose release bucket is in w, conditioned only on earlier segments and public data. Each segment is prefix-free (the
+charged to w (ADV-SPEC's charge: the earliest window of an output at that step or later) with their outputs' releases,
+conditioned only on earlier segments and public data. Each segment is prefix-free (the
 arithmetic coder's segments are terminated), so the concatenation of the first m segments is, and Kraft's inequality
 gives `#{advice prefixes whose first m segments total at most L bits} ≤ 2^L`. So either charge is an instance of the
 existing bound, with `Ac` the set of codewords it admits:
@@ -46,7 +48,7 @@ import math
 from collections import deque
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
-from typing import Any, Protocol
+from typing import Any, NamedTuple, Protocol
 
 FAMILIES = ("fixed", "gamma", "static", "cond", "cond+adapt")
 
@@ -469,6 +471,7 @@ class Row:
     n: int
     cache_hit: int = 0
     preempted: bool = False
+    sources: tuple[tuple[int, int], ...] = ()  # (request, n): runs of positions 0 … cache_hit − 1 and whose KV each is
 
 
 @dataclass(frozen=True, slots=True)
@@ -478,7 +481,8 @@ class StepAdvice:
 
 @dataclass(frozen=True, slots=True)
 class Advice:
-    """I1 v0 as drafted (the plan, 04:29Z). ADV-SPEC's classes, read by attribute name, work in its place (`as_advice`)."""
+    """I1 v0 (ADV-SPEC, `verity/core/protocols/certifier/advice.py`): `release` holds one egress bucket per kept output,
+    in step then row order. ADV-SPEC's classes, read by attribute name, work in its place (`as_advice`)."""
 
     requests: tuple[RequestAdvice, ...]
     steps: tuple[StepAdvice, ...]
@@ -493,8 +497,25 @@ def as_advice(a: Any) -> Advice:
         tuple(RequestAdvice(str(r.id), int(r.prompt_len), int(r.output_len), str(getattr(r.finish, "value", r.finish)))
               for r in a.requests),
         tuple(StepAdvice(tuple(Row(int(x.request), str(getattr(x.kind, "value", x.kind)), int(x.start), int(x.n),
-                                   int(x.cache_hit), bool(x.preempted)) for x in s.rows)) for s in a.steps),
+                                   int(x.cache_hit), bool(x.preempted),
+                                   tuple((int(y.request), int(y.n)) for y in getattr(x, "sources", ())))
+                               for x in s.rows)) for s in a.steps),
         tuple(int(b) for b in a.release))
+
+
+def kept_outputs(adv: Any) -> list[tuple[int, int]]:
+    """Each kept output's (step, request), in `release` order: a row keeps its sample exactly when it reaches its
+    request's known tokens (the prompt and the outputs kept so far) and the request has outputs left (ADV-SPEC)."""
+    adv = as_advice(adv)
+    kept = [0] * len(adv.requests)
+    out = []
+    for k, s in enumerate(adv.steps):
+        for x in s.rows:
+            q = adv.requests[x.request]
+            if x.start + x.n == q.prompt_len + kept[x.request] and kept[x.request] < q.output_len:
+                kept[x.request] += 1
+                out.append((k, x.request))
+    return out
 
 
 @dataclass(frozen=True)
@@ -523,6 +544,8 @@ class Caps:
     steps_per_bucket: int = 15  # s_max
     arrivals_per_bucket: int = 34  # r_in: at most one request per ingress frame
     windows_max: int = 1440  # windows per run (a day of one-minute windows)
+    sources_max: int = 16  # runs per cache hit
+    block_size: int = 1  # the prefix cache's block: a cache hit is whole blocks
 
     def steps_window(self, T: int) -> int:
         return self.steps_per_bucket * T
@@ -684,14 +707,23 @@ class _V0State:
     steps: list[StepAdvice] = field(default_factory=list)
     release: list[int] = field(default_factory=list)
     pos: list[int] = field(default_factory=list)  # each request's next position
+    kept: list[int] = field(default_factory=list)  # each request's outputs kept so far
+    last_rel: list[int] = field(default_factory=list)  # each request's latest release, 0 before its first
     started: list[bool] = field(default_factory=list)
     active: set[int] = field(default_factory=set)  # started and not done
     first_unstarted: int = 0
-    phase: int = 0  # the release clock: µs from the last release bucket's start to the predicted end of its step
+    # the release clock: the bucket the last step ended in (its first output's release, or predicted when it kept none)
+    # and the µs from that bucket's start to the step's predicted end
+    clock: tuple[int, int] = (0, 0)
+    last_src: int = 0  # the last cache-hit source's request
 
     def done(self, r: int) -> bool:
-        q = self.requests[r]
-        return self.pos[r] >= q.prompt_len + q.output_len - 1
+        return self.kept[r] >= self.requests[r].output_len
+
+    def keeps(self, rows: Sequence[Row]) -> list[int]:
+        """The requests whose rows in this step keep an output, in row order (before `apply`)."""
+        return [x.request for x in rows if x.start + x.n == self.requests[x.request].prompt_len + self.kept[x.request]
+                and not self.done(x.request)]
 
     def unstarted(self, k: int) -> list[int]:
         while self.first_unstarted < len(self.requests) and self.started[self.first_unstarted]:
@@ -704,6 +736,8 @@ class _V0State:
         return out
 
     def apply(self, rows: Sequence[Row]) -> None:
+        for r in self.keeps(rows):
+            self.kept[r] += 1
         for x in rows:
             self.pos[x.request] = x.start + x.n
             self.started[x.request] = True
@@ -723,7 +757,41 @@ def _requests_window(st: Stream, family: str, caps: Caps, idx: range, adv: Advic
         F = st.sym(name, FINISH.index(q.finish) if q else None, 0, 1)
         s.requests.append(RequestAdvice(q.id if q else f"#{i}", P, O, FINISH[F]))
         s.pos.append(0)
+        s.kept.append(0)
+        s.last_rel.append(0)
         s.started.append(False)
+
+
+def _sources(st: Stream, raw: bool, caps: Caps, c: int, x: Row | None, s: Any, nreq: int | None = None
+             ) -> tuple[tuple[int, int], ...]:
+    """A cache hit's sources, the runs that cover positions 0 … c − 1: their count, then each one's request (`raw`: at
+    the registered width; else from the last source's, `s.last_src`) and length (the last run's is what remains). A
+    source is one of the first `nreq` requests (default: every request decoded)."""
+    if c == 0:
+        return ()
+    nreq = len(s.requests) if nreq is None else nreq
+    src = x.sources if x else None
+    if raw:
+        m = 1 + st.sym("sources_more", len(src) - 1 if x else None, 0, caps.sources_max - 1)
+    else:
+        m = 1 + st.sym("sources_more", len(src) - 1 if x else None, 0, max(min(c, nreq, caps.sources_max) - 1, 0))
+    if m > c:
+        raise ValueError(f"{m} sources for a {c}-token hit")
+    out, at = [], 0
+    for j in range(m):
+        y = src[j] if x else None
+        if raw:
+            r = st.sym("source", y[0] if x else None, 0, caps.requests_max - 1)
+        else:
+            pred = min(s.last_src, nreq - 1)
+            r = pred + st.sym("source_delta", y[0] - pred if x else None, -pred, nreq - 1 - pred)
+        if r >= nreq:
+            raise ValueError(f"a source names request {r}, which has not arrived")
+        n = c - at if j == m - 1 else 1 + st.sym("source_n", y[1] - 1 if x else None, 0, c - at - (m - j))
+        out.append((r, n))
+        at += n
+        s.last_src = r
+    return tuple(out)
 
 
 def _row_raw(st: Stream, caps: Caps, x: Row | None, s: _V0State) -> Row:
@@ -736,7 +804,7 @@ def _row_raw(st: Stream, caps: Caps, x: Row | None, s: _V0State) -> Row:
     p = st.sym("preempted", int(x.preempted) if x else None, 0, 1)
     if r >= len(s.requests):
         raise ValueError(f"a row names request {r}, which has not arrived")
-    return Row(r, PREFILL if k else DECODE, start, n, c, bool(p))
+    return Row(r, PREFILL if k else DECODE, start, n, c, bool(p), _sources(st, True, caps, c, x, s))
 
 
 def _row_delta(st: Stream, caps: Caps, x: Row | None, s: _V0State, pred: int) -> Row:
@@ -750,7 +818,7 @@ def _row_delta(st: Stream, caps: Caps, x: Row | None, s: _V0State, pred: int) ->
     n = st.sym("n_prefill" if k else "n_decode", x.n if x else None, 0, caps.tokens_max)
     c = st.sym("cache_hit", x.cache_hit if x else None, 0, caps.prompt_max)
     p = st.sym("preempted", int(x.preempted) if x else None, 0, 1)
-    return Row(r, PREFILL if k else DECODE, start, n, c, bool(p))
+    return Row(r, PREFILL if k else DECODE, start, n, c, bool(p), _sources(st, False, caps, c, x, s))
 
 
 def _rows_delta(st: Stream, caps: Caps, x: StepAdvice | None, s: _V0State) -> tuple[Row, ...]:
@@ -798,17 +866,18 @@ def _step_cond(st: Stream, caps: Caps, x: StepAdvice | None, s: _V0State, prev: 
             raise ValueError("a new row outside the candidates")
         r = cands.pop(st.sym("new_request", cands.index(y.request) if x else None, 0, len(cands) - 1))
         q = s.requests[r]
-        c = 0
+        c, src = 0, ()
         if s.started[r]:
             start = s.pos[r]
         else:
             c = st.sym("cache_hit_new", y.cache_hit if x else None, 0, q.prompt_len - 1)
+            src = _sources(st, False, caps, c, y, s)
             start = c
         prefill, n = start < q.prompt_len, 1
         if prefill:
             room = min(q.prompt_len - start, budget)
             n = room + st.sym("chunk_new", y.n - room if x else None, 1 - room, 0)
-        rows.append(Row(r, PREFILL if prefill else DECODE, start, n, c))
+        rows.append(Row(r, PREFILL if prefill else DECODE, start, n, c, False, src))
         budget -= n
     if x is not None and tuple(rows) != tuple(x.rows):
         raise ValueError("the step is not in the predicted form")
@@ -816,35 +885,58 @@ def _step_cond(st: Stream, caps: Caps, x: StepAdvice | None, s: _V0State, prev: 
 
 
 def _canonical(x: StepAdvice, s: _V0State, prev: Sequence[int], caps: Caps, waiting: int) -> bool:
+    last_src = s.last_src
     try:
         _step_cond(CountStream(), caps, x, s, prev, waiting)
     except (ValueError, KeyError):
         return False
+    finally:
+        s.last_src = last_src
     return True
 
 
 #: The release clock's contexts: where a step's predicted end falls in its bucket, in sixteenths, and one for a prediction
-#: behind the window's start.
+#: behind the earliest bucket the release may take.
 PHASES = 16
 
 
-def _release_clock(cb: Codebook, pub: Public, s: _V0State, rows: Sequence[Row], idle: bool, prev_rel: int) -> tuple[int, int, int]:
-    """The step's predicted release from the public schedule: it starts where the previous step ended (the tracked
-    phase `s.phase` in the previous release bucket) or, after an idle engine, at its first request's delivery (the end
-    of that request's anchor bucket, phase 0), and runs the registered step time of its rows. Returns the predicted gap
-    from `prev_rel`, the context, and the predicted end in µs from the start of bucket `base` with `base`."""
-    base, start = (s.release[-1], s.phase) if s.release else (0, 0)
+def _release_clock(cb: Codebook, pub: Public, s: _V0State, rows: Sequence[Row], idle: bool) -> int:
+    """The step's predicted end, in µs from the run's start, from the public schedule: it starts where the previous step
+    ended (`s.clock`) or, after an idle engine, at its first request's delivery (the end of that request's anchor bucket)
+    if that is later, and runs the registered step time of its rows."""
+    b, phase = s.clock
+    start = b * cb.tau_us + phase
     if idle and rows:
-        base, start = max((base, start), (pub.anchors[rows[0].request] + 1, 0))
-    end = start + cb.steptime.us(sum(x.n for x in rows), sum(x.start + x.n for x in rows))
-    pred = base + end // cb.tau_us
-    ctx = PHASES if pred < prev_rel else ((end % cb.tau_us) * PHASES) // cb.tau_us
-    return max(pred - prev_rel, 0), ctx, end - (prev_rel - base) * cb.tau_us
+        start = max(start, (pub.anchors[rows[0].request] + 1) * cb.tau_us)
+    return start + cb.steptime.us(sum(x.n for x in rows), sum(x.start + x.n for x in rows))
 
 
-def _tokens_bin(rows: Sequence[Row]) -> int:
-    t = sum(x.n for x in rows)
-    return 0 if t <= 1 else 1 if t <= 8 else 2 if t <= 64 else 3 if t <= 512 else 4
+def _releases(st: Stream, family: str, cb: Codebook, pub: Public, w: int, adv: Advice | None, s: _V0State,
+              outs: Sequence[int], end: int | None) -> list[int]:
+    """The release buckets of a step's kept outputs (`outs`, their requests in row order). Each is feasible from the
+    window's first bucket, and its request's previous release, to the run's last bucket. `fixed` codes each at that
+    range's width; `gamma` and `static` the signed gap from the previous release; `cond` the first against the release
+    clock (`end`, the step's predicted end) and the rest against the first."""
+    hi, out = pub.W * pub.T - 1, []
+    for i, r in enumerate(outs):
+        lo = max(w * pub.T, s.last_rel[r])
+        v = adv.release[len(s.release) + i] if adv else None
+        if family == "fixed":
+            b = st.sym("release", v, lo, hi)
+        else:
+            if family in ("gamma", "static"):
+                name, base = "release_gap", (out[-1] if out else s.release[-1] if s.release else 0)
+            elif i == 0:
+                pred = end // cb.tau_us
+                name = f"release_res_{PHASES if pred < lo else ((end % cb.tau_us) * PHASES) // cb.tau_us}"
+                base = pred
+            else:
+                name, base = "release_same", out[0]
+            base = min(max(base, lo), hi)
+            b = base + st.sym(name, v - base if adv else None, lo - base, hi - base)
+        out.append(b)
+        s.last_rel[r] = b
+    return out
 
 
 def _v0_window(st: Stream, family: str, cb: Codebook, pub: Public, w: int, adv: Advice | None, s: _V0State,
@@ -855,57 +947,61 @@ def _v0_window(st: Stream, family: str, cb: Codebook, pub: Public, w: int, adv: 
     for j in range(nsteps):
         k = steps_idx[j] if adv else None
         x = adv.steps[k] if adv else None
-        prev_rel = max(s.release[-1], w * T) if s.release else w * T
+        end = None
         if family == "fixed":
             m = st.sym("rows", len(x.rows) if x else None, 0, caps.seqs_max)
             rows = tuple(_row_raw(st, caps, x.rows[i] if x else None, s) for i in range(m))
-            rel = w * T + st.sym("release", adv.release[k] - w * T if adv else None, 0, T - 1)
-            if rel < prev_rel:
-                raise ValueError("releases go back in time")
         elif family in ("gamma", "static"):
             rows = _rows_delta(st, caps, x, s)
-            rel = prev_rel + st.sym("release_gap", adv.release[k] - prev_rel if adv else None, 0, (w + 1) * T - 1 - prev_rel)
         else:
             prev = [y.request for y in s.steps[-1].rows] if s.steps else []
             unst = s.unstarted(1)
             idle = not s.active
             # a request is delivered at its anchor bucket's end, so it waits for this step once the previous step ended
             # in a later bucket
-            waiting = 2 if idle else int(bool(unst) and bool(s.release) and pub.anchors[unst[0]] < s.release[-1])
+            waiting = 2 if idle else int(bool(unst) and bool(s.steps) and pub.anchors[unst[0]] < s.clock[0])
             if st.sym("canon", int(_canonical(x, s, prev, caps, waiting)) if x else None, 0, 1):
                 rows = _step_cond(st, caps, x, s, prev, waiting)
             else:
                 rows = _rows_delta(st, caps, x, s)
-            hi = (w + 1) * T - 1 - prev_rel
-            ghat, ctx, end = _release_clock(cb, pub, s, rows, idle, prev_rel)
-            ghat = min(ghat, hi)
-            gap = ghat + st.sym(f"release_res_{ctx}", adv.release[k] - prev_rel - ghat if adv else None, -ghat, hi - ghat)
-            rel = prev_rel + gap
-            s.phase = min(max(end - gap * cb.tau_us, 0), cb.tau_us - 1)
+            end = _release_clock(cb, pub, s, rows, idle)
         if x is not None and rows != tuple(x.rows):
             raise ValueError(f"step {k} does not round-trip under {family}")
+        rels = _releases(st, family, cb, pub, w, adv, s, s.keeps(rows), end)
+        if end is not None:
+            s.clock = (rels[0], min(max(end - rels[0] * cb.tau_us, 0), cb.tau_us - 1)) if rels else divmod(end, cb.tau_us)
         s.steps.append(StepAdvice(rows))
-        s.release.append(rel)
+        s.release.extend(rels)
         s.apply(rows)
 
 
 def _steps_by_window(adv: Advice, pub: Public) -> list[range]:
+    """Each window's steps: a step is charged to the earliest window of an output at that step or later (ADV-SPEC's
+    charge), which never decreases from step to step."""
+    outs = kept_outputs(adv)
+    if len(outs) != len(adv.release):
+        raise ValueError(f"{len(adv.release)} releases for {len(outs)} kept outputs")
+    first = [pub.W] * (len(adv.steps) + 1)
+    for (k, _), b in zip(outs, adv.release):
+        first[k] = min(first[k], b // pub.T)
+    for k in range(len(adv.steps) - 1, -1, -1):
+        first[k] = min(first[k], first[k + 1])
+    if adv.steps and first[len(adv.steps) - 1] >= pub.W:
+        raise ValueError("a step is charged after the last window (or follows the last kept output)")
     out, k = [], 0
     for w in range(pub.W):
         a = k
-        while k < len(adv.release) and adv.release[k] < (w + 1) * pub.T:
+        while k < len(adv.steps) and first[k] == w:
             k += 1
         out.append(range(a, k))
-    if k != len(adv.release):
-        raise ValueError("a step is released after the last window")
     return out
 
 
 def _check_public(adv: Advice, pub: Public) -> None:
-    if len(pub.anchors) != len(adv.requests) or len(adv.release) != len(adv.steps):
-        raise ValueError("one anchor per request and one release per step")
-    if any(b < a for a, b in zip(pub.anchors, pub.anchors[1:])) or any(b < a for a, b in zip(adv.release, adv.release[1:])):
-        raise ValueError("anchors and releases are non-decreasing")
+    if len(pub.anchors) != len(adv.requests):
+        raise ValueError("one anchor per request")
+    if any(b < a for a, b in zip(pub.anchors, pub.anchors[1:])):
+        raise ValueError("anchors are non-decreasing")
     if pub.anchors and pub.anchors[-1] >= pub.W * pub.T:
         raise ValueError("a request arrives after the last window")
 
@@ -955,19 +1051,23 @@ def symbols_v0(adv: Any, pub: Public, cb: Codebook, family: str) -> list[list[tu
 
 class Replay(Protocol):
     """The replayed public schedule of the requests already decoded: for request i, the last step at which any request
-    before i runs (`end(i)`, −1 for none), and step k's load from those requests (`load(i, k)`: tokens, context)."""
+    before i runs (`end(i)`, −1 for none), and step k's load from those requests (`load(i, k)`: tokens, context); and
+    the resumes after preemption at the steps charged to window w (`resumes_in(w)`: each one's request and known
+    tokens, prompt plus kept outputs)."""
 
     def end(self, i: int) -> int: ...
 
     def load(self, i: int, k: int) -> tuple[int, int]: ...
 
+    def resumes_in(self, w: int) -> list[tuple[int, int]]: ...
+
 
 class TraceReplay:
     """ENC-REPLAY's replay, stood in for by a trace's own rows of the requests before i. Exact while a later arrival
     doesn't change an earlier request's rows, which vLLM's scheduler gives (running requests first, waiting ones first
-    come, first served) unless a preemption intervenes."""
+    come, first served) unless a preemption intervenes. `resumes_in` needs the trace's `Public`."""
 
-    def __init__(self, adv: Any) -> None:
+    def __init__(self, adv: Any, pub: Public | None = None) -> None:
         adv = as_advice(adv)
         last: dict[int, int] = {}
         self.rows = [[(x.request, x.n, x.start + x.n) for x in s.rows] for s in adv.steps]
@@ -978,6 +1078,22 @@ class TraceReplay:
         for i in range(len(adv.requests)):
             self._end.append(m)
             m = max(m, last.get(i, -1))
+        self._resumes: list[list[tuple[int, int]]] | None = None
+        if pub is not None:
+            kept = [0] * len(adv.requests)
+            known = []
+            for s in adv.steps:
+                known.append({x.request: adv.requests[x.request].prompt_len + kept[x.request] for x in s.rows})
+                for x in s.rows:
+                    if x.start + x.n == known[-1][x.request] and kept[x.request] < adv.requests[x.request].output_len:
+                        kept[x.request] += 1
+            self._resumes = [[(x.request, known[k][x.request]) for k in idx for x in adv.steps[k].rows if x.preempted]
+                             for idx in _steps_by_window(adv, pub)]
+
+    def resumes_in(self, w: int) -> list[tuple[int, int]]:
+        if self._resumes is None:
+            raise ValueError("TraceReplay needs the trace's Public for its resumes")
+        return self._resumes[w]
 
     def end(self, i: int) -> int:
         return self._end[i]
@@ -1038,29 +1154,33 @@ def predict_gap(cb: Codebook, replay: Replay, i: int, s_prev: int, dbuckets: int
     return g
 
 
+def _admit_one(st: Stream, family: str, cb: Codebook, pub: Public, i: int, admit: Sequence[int] | None,
+               out: list[int], replay: Replay | None, adapt: _Adapt | None) -> None:
+    if i == 0:
+        out.append(0)  # request 0 joins before step 0
+        return
+    s_prev = out[-1]
+    v = admit[i] - s_prev if admit is not None else None
+    if family == "fixed":
+        g = st.sym("admit", v, 0, cb.caps.steps_run(pub.T))
+    elif family in ("gamma", "static"):
+        g = st.sym("admit_gap", v, 0, cb.caps.steps_run(pub.T))
+    else:
+        gmax = max(replay.end(i) + 1 - s_prev, 0)
+        db = pub.anchors[i] - pub.anchors[i - 1]
+        ghat = predict_gap(cb, replay, i, s_prev, db, gmax, adapt)
+        ctx = "same" if db == 0 else "idle" if ghat >= gmax else f"g{_gap_bin(ghat)}"
+        g = ghat + st.sym(f"admit_res_{ctx}", v - ghat if v is not None else None, -ghat, gmax - ghat)
+        if adapt is not None and db and 0 < g < gmax:
+            adapt.add(db * cb.tau_us - cb.steptime.phase,
+                      sum(cb.steptime.us(*replay.load(i, s_prev + j)) for j in range(g)))
+    out.append(s_prev + g)
+
+
 def _admit_window(st: Stream, family: str, cb: Codebook, pub: Public, w: int, admit: Sequence[int] | None,
                   out: list[int], replay: Replay | None, adapt: _Adapt | None) -> None:
-    cap = cb.caps.steps_run(pub.T)
     for i in pub.requests_in(w):
-        if i == 0:
-            out.append(0)  # request 0 joins before step 0
-            continue
-        s_prev = out[-1]
-        v = admit[i] - s_prev if admit is not None else None
-        if family == "fixed":
-            g = st.sym("admit", v, 0, cap)
-        elif family in ("gamma", "static"):
-            g = st.sym("admit_gap", v, 0, cap)
-        else:
-            gmax = max(replay.end(i) + 1 - s_prev, 0)
-            db = pub.anchors[i] - pub.anchors[i - 1]
-            ghat = predict_gap(cb, replay, i, s_prev, db, gmax, adapt)
-            ctx = "same" if db == 0 else "idle" if ghat >= gmax else f"g{_gap_bin(ghat)}"
-            g = ghat + st.sym(f"admit_res_{ctx}", v - ghat if v is not None else None, -ghat, gmax - ghat)
-            if adapt is not None and db and 0 < g < gmax:
-                adapt.add(db * cb.tau_us - cb.steptime.phase,
-                          sum(cb.steptime.us(*replay.load(i, s_prev + j)) for j in range(g)))
-        out.append(s_prev + g)
+        _admit_one(st, family, cb, pub, i, admit, out, replay, adapt)
 
 
 def _check_admit(admit: Sequence[int], pub: Public) -> None:
@@ -1108,6 +1228,108 @@ def symbols_admit(admit: Sequence[int], pub: Public, cb: Codebook, family: str,
     return out
 
 
+# ----------------------------------------------------------------------------- residual: what the replay can't fix
+
+
+class Hit(NamedTuple):
+    cache_hit: int
+    sources: tuple[tuple[int, int], ...]
+
+
+@dataclass(frozen=True)
+class Residual:
+    """What remains of the advice on a shaped egress (whose releases are derived from public data) once the fields the
+    certified I/O fixes are dropped (ENC-DERIVED) and the scheduler is replayed (ENC-REPLAY): each request's prompt
+    length, its first row's cache hit with its sources, and its admission step; and each resume's re-hit with its
+    sources, in step order. The hits are whole blocks of `Caps.block_size` tokens, as vLLM's prefix cache makes them."""
+
+    prompt_len: tuple[int, ...]
+    hit: tuple[Hit, ...]
+    admit: tuple[int, ...]
+    resumes: tuple[Hit, ...]
+
+
+def residual_of(adv: Any, admit: Sequence[int]) -> Residual:
+    adv = as_advice(adv)
+    first: dict[int, Hit] = {}
+    resumes = []
+    for s in adv.steps:
+        for x in s.rows:
+            if x.request not in first:
+                first[x.request] = Hit(x.cache_hit, x.sources)
+            elif x.preempted:
+                resumes.append(Hit(x.cache_hit, x.sources))
+    return Residual(tuple(q.prompt_len for q in adv.requests), tuple(first[i] for i in range(len(adv.requests))),
+                    tuple(admit), tuple(resumes))
+
+
+@dataclass
+class _ResState:
+    prompt_len: list[int] = field(default_factory=list)
+    hit: list[Hit] = field(default_factory=list)
+    admit: list[int] = field(default_factory=list)
+    resumes: list[Hit] = field(default_factory=list)
+    last_src: int = 0
+
+
+def _hit(st: Stream, name: str, raw: bool, caps: Caps, x: Hit | None, known: int, s: _ResState, nreq: int) -> Hit:
+    """A cache hit below `known` tokens, in blocks, and its sources among the first `nreq` requests."""
+    if x is not None and x.cache_hit % caps.block_size:
+        raise ValueError(f"cache hit {x.cache_hit} is not whole blocks of {caps.block_size}")
+    c = caps.block_size * st.sym(name, x.cache_hit // caps.block_size if x else None, 0, (known - 1) // caps.block_size)
+    return Hit(c, _sources(st, raw, caps, c, x, s, nreq))
+
+
+def _residual_window(st: Stream, family: str, cb: Codebook, pub: Public, w: int, res: Residual | None, s: _ResState,
+                     replay: Replay, adapt: _Adapt | None) -> None:
+    caps, raw = cb.caps, family == "fixed"
+    for i in pub.requests_in(w):
+        P = st.sym("prompt_len", res.prompt_len[i] if res else None, 1, caps.prompt_max)
+        s.prompt_len.append(P)
+        s.hit.append(_hit(st, "hit", raw, caps, res.hit[i] if res else None, P, s, i))
+        _admit_one(st, family, cb, pub, i, res.admit if res else None, s.admit, replay, adapt)
+    for r, known in replay.resumes_in(w):
+        s.resumes.append(_hit(st, "rehit", raw, caps, res.resumes[len(s.resumes)] if res else None, known, s,
+                              len(s.prompt_len)))
+
+
+def _residual_segments(res: Residual | None, pub: Public, cb: Codebook, family: str, replay: Replay,
+                       w: BitWriter | None = None, r: BitReader | None = None, count: bool = False) -> tuple[_ResState, list]:
+    s, out = _ResState(), []
+    adapt = _Adapt() if family == "cond+adapt" else None
+    for k in range(pub.W):
+        st = CountStream() if count else _stream(family, cb, w=w, r=r)
+        n0 = len(w) if w is not None else 0
+        _residual_window(st, family, cb, pub, k, res, s, replay, adapt)
+        if count:
+            out.append(st.seen)
+        else:
+            st.finish()
+            out.append(len(w) - n0 if w is not None else 0)
+    return s, out
+
+
+def encode_residual(res: Residual, pub: Public, cb: Codebook, family: str, replay: Replay) -> tuple[BitWriter, list[int]]:
+    """The residual under `family`: the bits and each window's segment length."""
+    _check_admit(res.admit, pub)
+    out = BitWriter()
+    s, lens = _residual_segments(res, pub, cb, family, replay, w=out)
+    if (s.prompt_len, s.hit, s.admit, s.resumes) != (list(res.prompt_len), list(res.hit), list(res.admit), list(res.resumes)):
+        raise ValueError(f"the residual does not round-trip under {family}")
+    return out, lens
+
+
+def decode_residual(r: BitReader, pub: Public, cb: Codebook, family: str, replay: Replay) -> Residual:
+    s, _ = _residual_segments(None, pub, cb, family, replay, r=r)
+    return Residual(tuple(s.prompt_len), tuple(s.hit), tuple(s.admit), tuple(s.resumes))
+
+
+def symbols_residual(res: Residual, pub: Public, cb: Codebook, family: str,
+                     replay: Replay) -> list[list[tuple[str, int, int, int]]]:
+    _check_admit(res.admit, pub)
+    return _residual_segments(res, pub, cb, family, replay, count=True)[1]
+
+
 # ---------------------------------------------------------------------------------------- schema, fit, worst case
 
 
@@ -1118,21 +1340,25 @@ def schema(caps: Caps, T: int) -> dict[str, tuple]:
     rows = {"rows": ("binned", caps.seqs_max), "request_delta": ("table", -64, 64), "kind": ("table", 0, 1),
             "start_delta": ("table", -64, 64), "n_prefill": ("binned", caps.tokens_max),
             "n_decode": ("binned", caps.tokens_max), "cache_hit": ("binned", caps.prompt_max),
-            "preempted": ("table", 0, 1)}
+            "preempted": ("table", 0, 1), "sources_more": ("table", 0, 4), "source_delta": ("table", -64, 64),
+            "source_n": ("binned", caps.prompt_max)}
     reqs = {"prompt_len": ("binned", caps.prompt_max), "output_len": ("binned", caps.output_max),
             "steps": ("binned", caps.steps_window(T))}
-    out = {f"s:{k}": v for k, v in {**reqs, **rows, "finish": ("table", 0, 1), "release_gap": ("binned", T - 1),
+    out = {f"s:{k}": v for k, v in {**reqs, **rows, "finish": ("table", 0, 1), "release_gap": ("table", -4, 128),
                                      "admit_gap": ("binned", caps.steps_run(T))}.items()}
     cond = {**reqs, **rows, "finish_at_cap": ("table", 0, 1), "finish_below_cap": ("table", 0, 1),
             "canon": ("table", 0, 1), "cont_prefill": ("table", 0, 1), "cont_decode": ("table", 0, 1),
             "chunk_cont": ("table", -64, 0), "chunk_new": ("table", -64, 0), "new_rows_0": ("table", 0, 16),
             "new_rows_1": ("table", 0, 16), "new_rows_2": ("table", 0, 16), "new_request": ("table", 0, 16),
-            "cache_hit_new": ("binned", caps.prompt_max),
+            "cache_hit_new": ("binned", caps.prompt_max), "release_same": ("table", -2, 2),
             **{f"release_res_{q}": ("table", -8, 8) for q in range(PHASES + 1)}}
     out.update({f"c:{k}": v for k, v in cond.items()})
+    residual = {"prompt_len": reqs["prompt_len"], "hit": ("table", 0, 64), "rehit": ("binned", span),
+                **{k: rows[k] for k in ("sources_more", "source_delta", "source_n")}}
+    for pre in ("s:", "c:", "a:"):
+        out.update({f"{pre}{k}": v for k, v in residual.items()})
     for pre in ("c:", "a:"):
         out.update({f"{pre}admit_res_{ctx}": ("table", -64, 64) for ctx in ADMIT_CONTEXTS})
-    assert span > 0
     return out
 
 
@@ -1140,9 +1366,9 @@ def fit_codebook(caps: Caps, T: int, tau_us: int, steptime: StepTime,
                  symbols: dict[str, Sequence[Sequence[tuple[str, int, int, int]]]], escape_share: float = 2 ** -12,
                  admit_escape_share: float = 2 ** -8) -> Codebook:
     """A codebook fit to historical traffic: `symbols[family]` is that family's windows of symbols on the training
-    traces (`symbols_v0`, `symbols_admit`). Every table of the schema is made, a name never seen as near uniform. The
-    admission residual's escape is wider (`admit_escape_share`): its uniform floor is what bounds an arrival's worst
-    case, at about `log2(1/share)` bits over the fixed code's."""
+    traces (`symbols_v0`, `symbols_admit`, `symbols_residual`). Every table of the schema is made, a name never seen as
+    near uniform. The admission residual's escape is wider (`admit_escape_share`): its uniform floor is what bounds an
+    arrival's worst case, at about `log2(1/share)` bits over the fixed code's."""
     pre = {"static": "s:", "cond": "c:", "cond+adapt": "a:"}
     seen: dict[str, list[int]] = {}
     for family, wins in symbols.items():

@@ -7,11 +7,11 @@ A vLLM-V1-like engine on the bucket clock:
   an idle engine starts a step at the next delivery.
 - **The scheduler**, per step, under a token budget (`max_num_batched_tokens`) and a sequence cap (`max_num_seqs`): the
   running requests first, in order, a prefill chunk taking as much of its prompt as the budget leaves and a decode one
-  token; then the waiting ones, first come, first served. A prompt that shares a registered system prefix with a request
-  whose prefill finished hits the prefix cache for that prefix.
+  token; then the waiting ones, first come, first served. A prompt that shares a registered system prefix hits the
+  prefix cache for that prefix once a request has computed it, and that request is the hit's source.
 - **Lengths**: prompts log-uniform over [16, 1024]; outputs end at EOS (geometric, mean `eos_mean`) under `max_tokens`.
 - **Step time**: `a + b·tokens + c·context/1024` µs, times a lognormal jitter, plus a rare stall (a GC pause, say).
-- **Release**: a step's tokens are released in the bucket its end falls in.
+- **Release**: a step's kept outputs are released in the bucket its end falls in.
 
 The trace is a function of its parameters and seed alone (`random.Random(seed)`).
 """
@@ -62,13 +62,13 @@ def generate(p: Params, code):
         sys_prefix = rng.random() < p.system_share and P > p.system_prefix
         O = min(1 + int(rng.expovariate(1 / p.eos_mean)), p.max_tokens)
         reqs.append({"anchor": a // p.tau_us, "deliver": (a // p.tau_us + 1) * p.tau_us, "P": P, "O": O,
-                     "sys": sys_prefix, "pos": 0, "admit": None, "cache": 0})
+                     "sys": sys_prefix, "pos": 0, "kept": 0, "admit": None, "cache": 0})
     steps, release, durations = [], [], []
     running: list[int] = []
     waiting: list[int] = []
     nxt = 0
     now = 0
-    cached = False  # whether the system prefix is in the prefix cache
+    cache_src = None  # the request that computed the system prefix's KV, once one has
     while nxt < len(reqs) or running or waiting:
         if not running and not waiting:
             now = max(now, reqs[nxt]["deliver"])
@@ -91,11 +91,13 @@ def generate(p: Params, code):
         while waiting and budget >= 1 and len(running) < p.max_num_seqs:
             r = waiting.pop(0)
             q = reqs[r]
-            if q["sys"] and cached:
+            src = ()
+            if q["sys"] and cache_src is not None:
                 q["cache"] = p.system_prefix
                 q["pos"] = p.system_prefix
+                src = ((cache_src, p.system_prefix),)
             n = min(q["P"] - q["pos"], budget)
-            rows.append(code.Row(r, "prefill", q["pos"], n, q["cache"]))
+            rows.append(code.Row(r, "prefill", q["pos"], n, q["cache"], False, src))
             running.append(r)
             budget -= n
         tokens = sum(x.n for x in rows)
@@ -106,14 +108,16 @@ def generate(p: Params, code):
         d = int(d)
         now += d
         steps.append(code.StepAdvice(tuple(rows)))
-        release.append(now // p.tau_us)
         durations.append(d)
         for x in rows:
             q = reqs[x.request]
+            if x.start + x.n == q["P"] + q["kept"]:
+                q["kept"] += 1
+                release.append(now // p.tau_us)
             q["pos"] = x.start + x.n
-            if q["sys"] and q["pos"] >= p.system_prefix:
-                cached = True
-        running = [r for r in running if reqs[r]["pos"] < reqs[r]["P"] + reqs[r]["O"] - 1]
+            if q["sys"] and cache_src is None and q["pos"] >= p.system_prefix:
+                cache_src = x.request
+        running = [r for r in running if reqs[r]["kept"] < reqs[r]["O"]]
     adv = code.Advice(
         tuple(code.RequestAdvice(f"u{j}", q["P"], q["O"], "length" if q["O"] == p.max_tokens else "eos")
               for j, q in enumerate(reqs)),
