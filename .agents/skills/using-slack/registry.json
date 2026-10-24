@@ -127,6 +127,7 @@
         "benchmarks/verifier_cost/",
         "benchmarks/proof_throughput/",
         "benchmarks/sampling_plan/",
+        "benchmarks/recursion_e2e/",
         "integrations/vllm/verity_vllm/protocol_options/sampled_proofs.py",
         "Security/Definitions/Hash/",
         "Security/Models/Hash/",
