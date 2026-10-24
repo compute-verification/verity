@@ -1606,16 +1606,21 @@ flags, reference (`check`), stand-ins and REDTEAM's phase 9 cases (`phase9`) are
 rows are held to the committed ``srv`` row, which the verifier holds by b‖c to the served rows the Commit side
 registers before the draw (`served_rows`), so REDTEAM phase 10's six passes are refused.
 `benchmarks/network_traces/compile_slice_zk.py` proves it `--zk`, held by Lean `verify --zk`, each unit opening to its
-verdict with no witness piece leaked into what the verifier received (`classify`: a piece found is leaked unless it is
-low-entropy and sits only on the proof streams' own fields, the format's integers or a field valued afresh in each
-repetition; no piece is left out by its content, since a decision bit or a hit can look like padding): at the
-demonstration class (`compile_slice.demo`, 49,113 ANDs a unit), the honest unit and ten negatives, the made-up table
-refused by ``cache`` alone (run r20261024-162328-03c7); at corpus-smallkv's first seven steps (7,562,498 ANDs a unit,
-m = 29), the honest unit and twelve negatives, the made-up table refused by ``cache`` alone and the six passes with
-their own served row by the native ``srv`` check among them (run r20261024-175616-105c; its leak scan rerun under
-`classify`, art:053fc5fb0a62260c6ab0f80cf43f36f2821dc51e3afcaca66efe2d241c532a4b: three low-entropy pieces found, a
-cache table's token and two walk entries, all on the format's own fields; the run's 66 low-entropy pieces set every
-witness class, hits and decision bits among them).
+verdict, and scans what the verifier received for every witness piece (`zk_scan`, every ZK driver's scan: a piece found
+is excluded only when its value occurs, raw or as nibble-aligned hex, in the bytes the statement fixes, which are the
+committed circuit, the public rows, the transcript's framing and the proof container's own fields; any other piece
+found is leaked, whatever its content, since a decision bit or a hit can look like padding): at the demonstration class
+(`compile_slice.demo`, 49,113 ANDs a unit), the honest unit and ten negatives, the made-up table refused by ``cache``
+alone (run r20261024-162328-03c7); at corpus-smallkv's first seven steps (7,562,498 ANDs a unit, m = 29), the honest
+unit and twelve negatives, the made-up table refused by ``cache`` alone and the six passes with their own served row by
+the native ``srv`` check among them (run r20261024-175616-105c). Both runs' scans, rerun under `zk_scan`
+(art:b3ef4d952b0e87880b00ac874a6ea567c06448c8947d0a700f729bdb19a9fe32), find witness pieces in the proof streams and
+the transcript. At the demonstration class the one piece found, all zero, is held by the circuit and the container's
+fields, and none is leaked. At the corpus class two of the four found are leaked, so that run fails the scan. One is a
+cache table's token, ``05`` and fifteen zeros, found where each stream holds a Ligerito nonce list's length (5) and its
+first nonce: the query and consistency nonces are messages the verifier never checks
+([C-Flock's §8.3](../../../ml/flock/verifier/PROTOCOL.md)), which Verity's prover sets to 0. The other is a walk entry,
+fifteen zeros and ``c0``: the tail of an all-zero element and the next element's first byte, a one-in-256 match.
 
 ## The replay at the served shape
 
