@@ -244,8 +244,8 @@ def boundEntries {Q R S : Type} (P : Pouw.Protocol Q R S) (keep : Pouw.Shape →
 (the k-slice accumulators, inside Pearl-C's domain `D`): for every in-domain workload, every adversary within compute
 `T` and `q` oracle calls, and every unit `u` whose credit is more than `T/(1 − γ₀)`, the probability over the oracle and
 the salt that `u` is correct (`Pouw.PearlC.correctSet`) is at most `ε(q, N)`. It is the hypothesis `TileUnpredictable`
-is, for a named assumption on those accumulators to discharge: `TileUnpredictablePearlCOfTTOut` derives it from one of
-`TT_OUT`'s shape at that protocol. -/
+is, for a named assumption on those accumulators to discharge: `TileUnpredictablePearlCOfTTOut` derives it at W1 from
+one of `TT_OUT`'s shape at W1 at that protocol. -/
 def TileUnpredictablePearlC {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : Pouw.PearlC.CostModel Q R S) (P : Pouw.PearlC.Protocol Q R S) (credit : Pouw.PearlC.Shape → ℝ)
     (D : Pouw.PearlC.Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
@@ -265,7 +265,7 @@ accumulators.
 
 Proof: `Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut`.
 
-Frozen (conjecture, no-function, hash): as `TileUnpredictableOfTT`, for an assumption of `TT_OUT`'s shape at any
+Frozen (conjecture, no-function, hash): as `TileUnpredictableOfTT`, for an assumption of `TT_OUT`'s shape at W1 at any
 Pearl-C protocol. -/
 def TileUnpredictablePearlCOfTTOut : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : Pouw.PearlC.W1.W1Device)
