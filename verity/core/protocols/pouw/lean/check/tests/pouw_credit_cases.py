@@ -361,12 +361,14 @@ def bad_rows(rng: random.Random, t: int) -> object:
     return rng.choice([0, -1, True, None, str(t), [t]])
 
 
-def served_rows(rng: random.Random, t: int, calls: int, steps: int, name: str = "honest") -> list:
-    """Each call's served rows m_s, one a step of `steps` over `calls` calls (call c at step ``c // (C/S)``): the
-    tables' T rows, some of them or none (an empty step, whose calls are no credit), then mutation `name`
-    (`ROWS_NAMES`)."""
+def served_rows(rng: random.Random, t: int, calls: int, steps: int, name: str = "honest",
+                each: list[int] | None = None) -> list:
+    """Each call's served rows m_s, one a step of `steps` over `calls` calls (call c at step ``c // (C/S)``): `each`'s
+    (a fixed length's schedule, `length_rows`) or, when None, the tables' T rows, some of them or none (an empty step,
+    whose calls are no credit), then mutation `name` (`ROWS_NAMES`)."""
     m = t
-    each = [rng.choice([m, m, rng.randint(1, m), rng.randint(0, max(1, m // 8)), 0]) for _ in range(steps)]
+    if each is None:
+        each = [rng.choice([m, m, rng.randint(1, m), rng.randint(0, max(1, m // 8)), 0]) for _ in range(steps)]
     per = calls // steps
     out: list = [each[c // per] for c in range(calls)]
     match name:
@@ -442,6 +444,25 @@ def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = N
     else:
         d["draw"]["coin"] = s.draw[0].to_json()
     return {"key": s.key(), "pins": list(rc.PINS), "main": list(rc.MAIN), "window": window, "session": s.files(), **d}, s
+
+
+def length_rows(rng: random.Random, max_tokens: list[int], steps: int, t: int) -> list[int]:
+    """Each step's served rows m_s in a window of `steps` steps and T = `t` table rows that serves the fixed length
+    `max_tokens`: step 0 each request's prompt (one row or more, at most `t` in all), step s ≥ 1 one decode row for each
+    request whose max_tokens is past s."""
+    return [rng.randint(len(max_tokens), t) if s == 0 else sum(1 for n in max_tokens if n > s) for s in range(steps)]
+
+
+def fixed_length(rng: random.Random, t: int, rounds: int, aim: str | None = None) -> list[int]:
+    """Each request's public max_tokens in a window of T = `t` table rows and `rounds` rounds: one to `t` requests,
+    often four or fewer, each served to its cap inside the window; aimed at ``length-past`` one runs two rounds or more,
+    at ``length-early`` one ends before the window's last round (`rounds` ≥ 2 for both)."""
+    out = [rng.randint(1, rounds) for _ in range(rng.choice([rng.randint(1, min(t, 4)), rng.randint(1, t)]))]
+    if aim == "length-past":
+        out[rng.randrange(len(out))] = rng.randint(2, rounds)
+    elif aim == "length-early":
+        out[rng.randrange(len(out))] = rng.randint(1, rounds - 1)
+    return out
 
 
 def _flip_bit(d: dict, rng: random.Random, to: bool | None = None) -> None:
@@ -1107,6 +1128,15 @@ def _rehome(weights: list[dict], program: str, prefix: str) -> list[dict]:
     return out
 
 
+def round_choices(lay: dict, name: str = "honest") -> list[int]:
+    """The round counts an honest window of layout `lay` may have under mutation `name`: its calls the rounds' equal
+    blocks, each calling every linear at most once (`_once`; two calls a round or more under ``rows-other``), at most
+    three when one is."""
+    lins = [lin for lin, _blk in lay["calls"]]
+    once = [s for s in _once(lins) if name != "rows-other" or len(lins) // s > 1]
+    return [s for s in once if s <= 3] or once[:1]
+
+
 #: each way the tables a window's live units read are not its registration's, made before its draw: one round's slot
 #: table unregistered (``live-no-slots``) or of other than T rows (``live-slots-rows``), and round 0's request table
 #: unregistered (``live-no-requests``) or of other than T rows (``live-requests-rows``)
@@ -1286,7 +1316,7 @@ def _mutate_live(rng: random.Random, d: dict, name: str) -> None:
 
 def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", leaf: int = rc.RECORD_LEAF,
                   lay: dict | None = None, desc: str | None = None, prefix: str | None = None,
-                  weights: list[dict] | None = None, t: int | None = None,
+                  weights: list[dict] | None = None, t: int | None = None, length: list[int] | None = None,
                   j10r: bool = False) -> tuple[dict, rc.Session]:
     """An honest served window (`honest_credit`) of the circuit `desc` (`descriptor` of its layout `lay`, a random one
     when None), its weights `weights` (`weights_of` when None, its open root over them, ``d["weights"]``), a K it can be
@@ -1297,7 +1327,9 @@ def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", le
     registers them
     (`h1window.table`), beside each round's input-ids table, over rounds that call each linear once (one round under
     `TWO_CALLS`), and its Commit record registers each of them (`commit_record`); under `AROW_NAMES`
-    one of them is not the Commit's. ``layout`` is the layout, which the verifier
+    one of them is not the Commit's. Its calls' served rows are the schedule of the fixed length `length`
+    (`fixed_length` when None, aimed at ``length-past`` and ``length-early``; `length_rows`), then `ROWS_NAMES`'
+    mutation, ``d["length"]`` the ``{max_tokens, stop}`` its period's open commits. ``layout`` is the layout, which the verifier
     reads from the descriptor. Its values are named `prefix` (a random ``h1/w-<n>/`` when None) and their roles, and so
     are its circuit's parameters (``PREFIX``) when `desc` is None, as a served path names them, over J10-R units when
     `j10r`."""
@@ -1308,15 +1340,19 @@ def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", le
     weights = weights_of(rng, lay, program, prefix) if weights is None else weights
     other = {"other-registration": rng.choice(["window", "program"]), "a-call-unbound": "unbound"}.get(name)
     k_of = {lin: k for lin, k, _n in lay["linears"]}
-    lins = [lin for lin, _blk in lay["calls"]]
     t = table_rows(rng, lay) if t is None else t
-    once = [s for s in _once(lins) if name != "rows-other" or len(lins) // s > 1]
-    steps = 1 if name in TWO_CALLS else rng.choice([s for s in once if s <= 3] or once[:1])
+    aim = name if name in ("length-past", "length-early") else None
+    choices = [s for s in round_choices(lay, name) if s >= 2] if aim else round_choices(lay, name)
+    steps = 1 if name in TWO_CALLS else rng.choice(choices)
+    if length is None:
+        length = fixed_length(rng, t, steps, aim)
     d, s = honest_credit(rng, name if name in [*CREDIT_NAMES, "never-received"] else "honest", rows=len(lay["calls"]),
                          sid=sid, leaf=leaf, ks=sorted(set(k_of.values())), program=program, other=other,
                          calls=[k_of[lin] for lin, _blk in lay["calls"]], prefix=prefix, weights=weights,
                          off=name if name in [*AROW_NAMES, *IDS0_NAMES, *REQ0_NAMES, *LIVE_TABLE_NAMES] else None,
-                         m=lay["m"], rounds=steps, served=served_rows(rng, t, len(lins), steps, name), t=t)
+                         m=lay["m"], rounds=steps, t=t,
+                         served=served_rows(rng, t, len(lay["calls"]), steps, name, length_rows(rng, length, steps, t)))
+    d["length"] = {"max_tokens": length, "stop": Wd.STOP_FIXED}
     d["layout"], d["k"], d["descriptor"], d["weights"], d["rows"] = lay, _k(rng, lay), desc, weights, t
     d["proofs"] = _window_proofs(rng, d, _served_units(d))
     d["sid"] = sid
@@ -1347,14 +1383,40 @@ def window_instance(rng: random.Random, name: str = "honest", lay: dict | None =
             lay = layout(rng)
     elif name == "commit-missing-expert":
         lay = expert_layout(rng)
+    elif name in ("length-past", "length-early"):
+        lay = layout(rng)
+        while max(round_choices(lay)) < 2:
+            lay = layout(rng)
     elif name == "j10r":
         lay = layout(rng)
         lay["m"] = 2 * lay["tile"][0]
     d, s = honest_window(rng, credit, lay=lay, j10r=name == "j10r")
     signed: dict | None = {}
+    committed: object = "same"
+    mt = list(d["length"]["max_tokens"])
     match name:
         case "honest" | "j10r":
             pass
+        case "length-none":
+            committed = rng.choice([None, "absent"])
+        case "length-eos":
+            committed = {**d["length"], "stop": rng.choice(["eos-token", "eos", "stop", ""])}
+        case "length-form":
+            committed = rng.choice([{"max_tokens": []}, {"max_tokens": [], "stop": Wd.STOP_FIXED},
+                                    {"max_tokens": [0], "stop": Wd.STOP_FIXED},
+                                    {"max_tokens": [True], "stop": Wd.STOP_FIXED},
+                                    {"max_tokens": [-1], "stop": Wd.STOP_FIXED},
+                                    {"max_tokens": "4", "stop": Wd.STOP_FIXED},
+                                    {"max_tokens": mt, "stop": 5}, {"max_tokens": mt, "stop": None},
+                                    {**d["length"], "served": mt}, {"stop": Wd.STOP_FIXED}, 5, [mt], "fixed"])
+        case "length-past":
+            q = next(q for q, t in enumerate(mt) if t >= 2)
+            committed = {**d["length"], "max_tokens": mt[:q] + [mt[q] - 1] + mt[q + 1:]}
+        case "length-early":
+            q = mt.index(min(mt))
+            committed = {**d["length"], "max_tokens": mt[:q] + [mt[q] + 1] + mt[q + 1:]}
+        case "length-slots":
+            committed = {**d["length"], "max_tokens": mt + [1] * (d["layout"]["m"] + 1 - len(mt))}
         case _ if (name in AROW_NAMES or name in IDS0_NAMES or name in REQ0_NAMES or name in ROWS_NAMES
                    or name in LIVE_TABLE_NAMES):
             pass
@@ -1469,6 +1531,8 @@ def window_instance(rng: random.Random, name: str = "honest", lay: dict | None =
     if "ledger" not in d:
         if signed == {}:
             signed = signs(d["weights"])
+        if signed is not None and committed != "absent":
+            signed = {**signed, Cr.LENGTH_FIELD: dict(d["length"]) if committed == "same" else committed}
         events = rc.ledger_events(rng, d["window"], s, period=signed or {})
         if signed is None:
             events = [x for x in events if not x[0].startswith("period-")]
@@ -1479,6 +1543,11 @@ def window_instance(rng: random.Random, name: str = "honest", lay: dict | None =
 #: each way a window's registered weights are not the ones its period's open signed and its open root binds
 WINDOW_WEIGHTS_NAMES = ["weights-period", "weights-unsigned", "weights-model", "weights-no-period", "weights-requests",
                         "weights-no-requests", "weights-leaves"]
+#: each way a window does not serve its period's fixed length (ASK-39): its period's open commits none (absent or null),
+#: an EOS-keyed stop mode or a malformed one; a request ran past its public max_tokens (``length-past``: the open's
+#: max_tokens of a request served two rounds or more is one less) or stopped before it (``length-early``: one more);
+#: and more requests than the window's slots
+LENGTH_NAMES = ["length-none", "length-eos", "length-form", "length-past", "length-early", "length-slots"]
 #: each way a window's entries or its drawn units' proofs are not its registration's
 REGISTRATION_NAMES = ["other-registration", "a-call-unbound", "proof-other-registration", "entry-root",
                       "proof-other-circuit", "proof-other-call", "proof-no-a", "proof-no-b", "proof-unregistered",
@@ -1487,7 +1556,7 @@ WINDOW_NAMES = ["manifest-count", "chosen", "failed", "missing", "descriptor-hex
                 "credit-changed", "credit-no-draw", "credit-forged-ledger", "credit-branch-pin", "k-form", "k-past-units",
                 "never-received", "round-coin", "a-untied", "no-a", *REGISTRATION_NAMES, *WINDOW_WEIGHTS_NAMES,
                 *AROW_NAMES, *IDS0_NAMES, *REQ0_NAMES, "commit-unbound", "credit-commit-form", *ROWS_NAMES, "t-other",
-                "t-form", *LIVE_NAMES, "j10r"]
+                "t-form", *LIVE_NAMES, "j10r", *LENGTH_NAMES]
 WINDOW_KEYS = ("key", "ledger", "pins", "main", *Cr.PROVED_KEYS, "k", "rows")
 #: `credit.window`'s arguments, in order
 WINDOW_ARGS = ("key", "ledger", "pins", "main", "window", "session", "salt", "calls", "served", "commit", "rounds",
@@ -1534,11 +1603,14 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
                  else [(bytes(k), sw) for _codes, sw in b])
         weights = [registered_b(program, v, b) if e["value"] == v else e for e in weights]
         odd_weights = [registered_b(program, v, other) if e["value"] == v else e for e in weights]
+    length = fixed_length(rng, t, min(round_choices(lay)))
     wins = [honest_window(rng, "never-received" if i == bad and name == "never-received" else "honest", sid=f"s-{i + 1}",
                           leaf=4 * i + 2, lay=lay, desc=odd if i == bad else desc,
-                          prefix=odd_prefix if i == bad else prefix, weights=odd_weights if i == bad else weights, t=t)
+                          prefix=odd_prefix if i == bad else prefix, weights=odd_weights if i == bad else weights, t=t,
+                          length=length)
             for i in range(n)]
-    foreign = honest_window(rng, sid="o-1", leaf=4 * n + 3, lay=lay, desc=desc, prefix=prefix, weights=weights, t=t)
+    foreign = honest_window(rng, sid="o-1", leaf=4 * n + 3, lay=lay, desc=desc, prefix=prefix, weights=weights, t=t,
+                            length=length)
     pub = wins[0][1].pub
     descriptor_ = bytes.fromhex(desc)
     least = units_of(lay)
@@ -1549,10 +1621,12 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
     if name == "incomplete":
         ends[rng.randrange(n)] = {"complete": False}
     committed = {"cap": 4, "circuit": program, Cr.K_FIELD: big_k, Cr.ROWS_FIELD: t, **signs(weights),
-                 **(committed_too or {})}
+                 Cr.LENGTH_FIELD: {"max_tokens": length, "stop": Wd.STOP_FIXED}, **(committed_too or {})}
     match name:
         case "no-circuit":
-            committed = {Cr.K_FIELD: big_k, Cr.ROWS_FIELD: t, **signs(weights)}
+            committed = {Cr.K_FIELD: big_k, Cr.ROWS_FIELD: t, **signs(weights), Cr.LENGTH_FIELD: committed[Cr.LENGTH_FIELD]}
+        case "length-none":
+            del committed[Cr.LENGTH_FIELD]
         case "no-weights":
             del committed[Cr.WEIGHTS_FIELD]
         case "weights-form":
@@ -1619,7 +1693,7 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
     match name:
         case ("honest" | "incomplete" | "no-close" | "forged-ledger" | "no-circuit" | "no-k" | "k-form" | "k-past-units"
               | "no-rows" | "t-form" | "t-other" | "bad-circuit" | "never-received" | "other-circuit" | "branch-pin" | "no-weights" | "weights-form"
-              | "other-sw" | "zero-codes" | "stale-pin"):
+              | "other-sw" | "zero-codes" | "stale-pin" | "length-none"):
             pass
         case _ if name in MODEL_NAMES:
             pass
@@ -1680,7 +1754,7 @@ PERIOD_NAMES = ["no-close", "incomplete", "missing", "order", "extra", "foreign"
                 "k-form", "k-past-units", "other-k", "no-rows", "t-form", "t-other", "alt-layout", "bad-circuit", "tile-k",
                 "never-received",
                 "proof-other-registration", "branch-pin", "no-weights", "weights-form", *MODEL_NAMES, "other-sw",
-                "zero-codes", "live-refused", "stale-pin"]
+                "zero-codes", "live-refused", "stale-pin", "length-none"]
 PERIOD_KEYS = ("key", "ledger", "pins", "main", "name", "windows")
 
 

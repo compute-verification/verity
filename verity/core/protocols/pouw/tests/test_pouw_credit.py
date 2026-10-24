@@ -132,6 +132,10 @@ WINDOW_EXPECT = {
     "a-call-off": ("arow", NOT_COMMITS + "row-table/"), "a-call-missing": ("a-link", "the window's layout gives it"),
     "commit-unbound": ("draw", Cr.DRAW_ROOT), "credit-commit-form": ("commit", Cr.COMMIT_FORM),
     "rows-past": ("manifest", NO_SERVED), "rows-form": ("manifest", NO_SERVED), "rows-other": ("manifest", OTHER_SERVED),
+    "length-none": ("length", "no-fixed-length"), "length-eos": ("length", "eos-keyed-row"),
+    "length-form": ("length", "is not {max_tokens, stop}"), "length-past": ("length", "ran past its public max_tokens"),
+    "length-early": ("length", "its done source is not the public cap"),
+    "length-slots": ("length", "more than the window's"),
     "t-other": ("layout", OTHER_SLOT), "t-form": ("layout", Cr.ROWS_FORM),
     "live-no-slots": ("live", "each registered once"), "live-no-requests": ("live", "each registered once"),
     "live-slots-rows": ("live", "16-bit words its live unit reads"),
@@ -175,7 +179,7 @@ PERIOD_EXPECT = {
     "other-sw": ("window", "so the period earns nothing: weights: the window's registered weights' root "),
     "zero-codes": ("window", "so the period earns nothing: weights: the window's registered weights' root "),
     "live-refused": ("window", "so the period earns nothing: live: round "),
-    "stale-pin": ("pin", "past its freshness floor"),
+    "stale-pin": ("pin", "past its freshness floor"), "length-none": ("window", "length: no-fixed-length"),
 }
 A_LINK_EXPECT = {
     "untied": UNTIED, "late-rows": UNTIED, "rewritten": UNTIED, "round-root": "`credit.round_root`", "gap": "`credit.cover`",

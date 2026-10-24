@@ -122,6 +122,16 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   which contains it (`domain_of`). The window's request table ``<prefix>requests@0`` (`is_requests`, the live unit's
   ``req``), when it registers one, is round 0's: its root is ``request_table`` and its domain binds the session alike.
   That the Commit's values are the model's computation is the Commit's draw's, not credit's.
+* **The window serves its period's fixed length** (`committed_length`, `_length`; Daniel, 19 Oct, ASK-39): correct
+  tokens served past the honest run's end of sequence are not useful work, so a row of record serves each request's
+  public max_tokens whatever it samples (ignore_eos, circuits' ``public-cap`` done source). The period's open commits
+  them before any window (`LENGTH_FIELD`, ``{max_tokens, stop}``, stop `window.STOP_FIXED`), so they are the verifier's
+  own; an open with none (``no-fixed-length``) or an EOS-keyed stop mode (``eos-keyed-row``) credits nothing. Every
+  request is admitted in round 0, so round s ≥ 1 serves one decode row for each request whose max_tokens is past s,
+  and each step's served rows m_s (`served_rows`, its calls' ``served``, fixed under `calls_root` before the draw coin)
+  must be that in every round: a round serving more ran a request past its public max_tokens, and one serving fewer stopped a
+  request early (``length-mismatch``). Each round's live statement proves its m_s (`_live`), so the rows credited are
+  the public schedule's.
 * **The proofs are the window's registration's** (`_registration`): each drawn unit's proof outcome is the verifier of
   record's verdict for its session (`PROOF_KEYS`): the SHA-512 of the descriptor it verified the session against
   (``program``) and the session's own registered finding (``registered``, flock-verify's: each registered port's value
@@ -247,6 +257,11 @@ PERIOD_PIN_FIELD = "pinned"
 #: pin, never from main's head, so main moving on never refuses a window fresh at its open, CMP74-FOLLOW). Optional,
 #: default 0 when the open pins but records no floor; infra sets it generously, about a day of first-parent commits
 STALE_FIELD = "pin_floor"
+#: the period-open's field holding the rows of record's fixed length (Daniel, 19 Oct, ASK-39): ``{max_tokens, stop}``,
+#: each request's public max_tokens in admission order and the stop mode `window.STOP_FIXED` (ignore_eos, circuits'
+#: ``public-cap`` done source), signed before any window, so it is the verifier's own and never the prover's
+LENGTH_FIELD = "length"
+LENGTH_KEYS = ("max_tokens", "stop")
 K_FORM = f"the draw's K is not a positive integer at most 2^24 (the K its period's open committed as {K_FIELD})"
 #: a window's layout: `circuit.h1window.program`'s arguments
 LAYOUT_KEYS = ("calls", "linears", "m", "tile")
@@ -1756,7 +1771,7 @@ def _window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: A
     why = _a_link(rounds, entries, len(calls), table_rows(layout, len(rounds), prefix))
     if why is not None:
         return None, why
-    sid, why = _period_weights(key, ledger, window, rounds, layout, entries, program, prefix, verify)
+    (sid, period), why = _period_weights(key, ledger, window, rounds, layout, entries, program, prefix, verify)
     if why is not None:
         return None, why
     ss, _ = strata(layout)
@@ -1764,6 +1779,11 @@ def _window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: A
     if why is not None:
         return None, why
     rows, why = served_rows(calls, layout, len(rounds), t)
+    if why is not None:
+        return None, why
+    max_tokens, why = committed_length(ledger, period)
+    if why is None:
+        why = _length(max_tokens, rows, layout, len(rounds))
     if why is not None:
         return None, why
     units, why = _drawn(Ch.LiveOpening.from_json(draw["coin"]).coin, window["root"], draw["root"],
@@ -1805,32 +1825,103 @@ def other_checkpoint(name: str, model: str) -> str:
 
 
 def _period_weights(key: Any, ledger: Any, window: dict, rounds: list, layout: dict, entries: Any, program: str,
-                    prefix: str, verify: Ch.Verify) -> tuple[str | None, tuple[str, str] | None]:
-    """The session the auditor's ledger opened for the window and None when the window's registered weights
-    (`_weights`, over round 0's ``requests`` in its round log and that session) fold to the weights' root its period's
-    open signed (`committed_weights`); else None and the refusal (``weights``, ``layout`` or ``coin``). A step of
-    `window`, after `_credited` trusted the ledger."""
+                    prefix: str, verify: Ch.Verify) -> tuple[tuple[str, str] | tuple[None, None], tuple[str, str] | None]:
+    """The session the auditor's ledger opened for the window and the period holding it, and None, when the window's
+    registered weights (`_weights`, over round 0's ``requests`` in its round log and that session) fold to the weights'
+    root its period's open signed (`committed_weights`); else (None, None) and the refusal (``weights``, ``layout`` or
+    ``coin``). A step of `window`, after `_credited` trusted the ledger."""
     try:
         audited = Ch.audited_session(ledger, window, Ch.ChallengerKey.from_json(key), verify)
     except Ch.CoinError as e:
-        return None, ("coin", f"the challenger's session is not trusted: {e}")
+        return (None, None), ("coin", f"the challenger's session is not trusted: {e}")
     if audited.period is None:
-        return None, ("weights", (f"the window is in no period of the auditor's ledger, so no period-open signed the "
-                                  f"weights' root it opens ({WEIGHTS_FIELD}): reserve its session inside a period whose "
-                                  "open signs it"))
+        return (None, None), ("weights", (f"the window is in no period of the auditor's ledger, so no period-open signed "
+                                          f"the weights' root it opens ({WEIGHTS_FIELD}): reserve its session inside a "
+                                          "period whose open signs it"))
     signed, why = committed_weights(ledger, audited.period)
     if why is not None:
-        return None, why
+        return (None, None), why
     requests = rounds[0].get("requests") if rounds else None
     w, why = _weights(window, layout, entries, requests, audited.session, program, prefix)
     if why is not None:
-        return None, why
+        return (None, None), why
     if w.hex() != signed:
-        return None, ("weights", (f"the window's registered weights' root {w.hex()[:16]}... is not {signed[:16]}..., "
-                                  f"the one period {audited.period}'s open signed: a B row's codes or s_w differ from "
-                                  "the ones the period registered before its first window's salt. Open every window of "
-                                  "a period on its registered B rows"))
-    return audited.session, None
+        return (None, None), ("weights", (f"the window's registered weights' root {w.hex()[:16]}... is not "
+                                          f"{signed[:16]}..., the one period {audited.period}'s open signed: a B row's "
+                                          "codes or s_w differ from the ones the period registered before its first "
+                                          "window's salt. Open every window of a period on its registered B rows"))
+    return (audited.session, audited.period), None
+
+
+def no_fixed_length(name: str) -> str:
+    return (f"no-fixed-length: period {name}'s open commits no fixed length ({LENGTH_FIELD}, {{max_tokens, stop}}), so "
+            "its windows are not of record: a row of record serves each request's public max_tokens whatever it "
+            f"samples (ignore_eos; Daniel, 19 Oct, ASK-39). Open the period with the row's max_tokens and stop "
+            f"{Wd.STOP_FIXED}")
+
+
+def eos_keyed_row(name: str, stop: str) -> str:
+    return (f"eos-keyed-row: period {name}'s open commits the stop mode {stop}, not {Wd.STOP_FIXED} (ignore_eos, "
+            "circuits' public-cap done source): a row of record is done only at each request's public max_tokens, "
+            "never at an EOS token")
+
+
+def length_form(name: str) -> str:
+    return (f"period {name}'s open commits a fixed length ({LENGTH_FIELD}) that is not {{max_tokens, stop}}, max_tokens "
+            f"a non-empty list of positive integers (each request's public max_tokens, in admission order) and stop "
+            f"{Wd.STOP_FIXED}")
+
+
+def committed_length(ledger: list, name: str) -> tuple[list[int] | None, tuple[str, str] | None]:
+    """Each request's public max_tokens period `name`'s open committed (`LENGTH_FIELD`, ``{max_tokens, stop}`` with stop
+    `window.STOP_FIXED`) in the auditor's ledger `ledger`, one the challenger's checks have trusted, and None; or None
+    and the refusal (``length``): an open with no fixed length (its windows are not of record), one whose stop mode is
+    EOS-keyed, or a malformed one."""
+    body = next((e["body"] for e in map(json.loads, ledger)
+                 if e["kind"] == "period-open" and e["body"]["period"] == name), {})
+    ln = body.get(LENGTH_FIELD)
+    if ln is None:
+        return None, ("length", no_fixed_length(name))
+    if isinstance(ln, dict) and type(ln.get("stop")) is str and ln["stop"] != Wd.STOP_FIXED:
+        return None, ("length", eos_keyed_row(name, ln["stop"]))
+    m = ln.get("max_tokens") if isinstance(ln, dict) else None
+    if not (isinstance(ln, dict) and sorted(ln) == list(LENGTH_KEYS) and ln["stop"] == Wd.STOP_FIXED
+            and type(m) is list and m and all(type(n) is int and n >= 1 for n in m)):
+        return None, ("length", length_form(name))
+    return list(m), None
+
+
+def _length(max_tokens: list[int], rows: list[int], layout: dict, steps: int) -> tuple[str, str] | None:
+    """None when the window serves its period's fixed length, `max_tokens` each request's public max_tokens
+    (`committed_length`), at its calls' served rows `rows` (`served_rows`': one m_s a step, fixed before the draw coin);
+    else the refusal (``length``). The window's `layout` calls are its `steps` rounds' equal blocks (`_arow` held them
+    so), every request is admitted in round 0, and a request of max_tokens n holds its prompt's rows in round 0 and one
+    decode row in each round 1 … n − 1. So round 0 serves at least one row a request, and round s ≥ 1 serves exactly the
+    requests whose max_tokens is past s. A round serving more rows than that ran a request past its public max_tokens,
+    and one serving fewer stopped a request before it (an EOS-keyed done source, not the public cap)."""
+    big_m, n = layout["m"], len(max_tokens)
+    if n > big_m:
+        return "length", (f"length-mismatch: the fixed length's {n} requests are more than the window's {big_m} slots, "
+                          "so round 0 can't hold a row of each")
+    q = max_tokens.index(max(max_tokens))
+    if max_tokens[q] > steps:
+        return "length", (f"length-mismatch: request {q}'s max_tokens {max_tokens[q]} is past the window's {steps} "
+                          "rounds, so the window can't serve it to its public cap")
+    per = len(rows) // steps
+    if rows[0] < n:
+        return "length", (f"length-mismatch: round 0 served {rows[0]} rows, fewer than the fixed length's {n} "
+                          "requests, each admitted there with its prompt")
+    for s in range(1, steps):
+        got, want = rows[s * per], sum(1 for t in max_tokens if t > s)
+        if got > want:
+            return "length", (f"length-mismatch: round {s} served {got} rows, past the {want} the fixed length "
+                              f"schedules there (one decode row for each request whose max_tokens is past {s}): a "
+                              "request ran past its public max_tokens")
+        if got < want:
+            return "length", (f"length-mismatch: round {s} served {got} rows, short of the {want} the fixed length "
+                              f"schedules there (one decode row for each request whose max_tokens is past {s}): a "
+                              "request stopped before its public max_tokens, so its done source is not the public cap")
+    return None
 
 
 def window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any,
@@ -1884,7 +1975,8 @@ def _window_outcomes(key: Any, ledger: Any, pins: Any, main: Any, window: Any, s
        of one whose open signs no weights' root, is refused before any of its proofs is read;
     6. the manifest one row per call of the layout (``manifest``), `_arow` (each round's A tables and its
        input-ids table the Commit record `commit`'s value of the same rows), `served_rows` (each call's served rows
-       m_s at most the period's T table rows `rows`, one m_s a step, ``manifest``; a credited call with m_s = 0 is no credit), and
+       m_s at most the period's T table rows `rows`, one m_s a step, ``manifest``; a credited call with m_s = 0 is no
+       credit), `_length` (each step's m_s the fixed length the period's open committed, `committed_length`), and
        `_outcome`'s rule on the draw coin
        `_credited` read, at its period's committed K `k`, under the served window's
        arguments: the stream is the window's root (``window.root``, the root the auditor's ledger opens its session
@@ -2483,10 +2575,11 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
     return w, None
 
 
-__all__ = ["CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "COMMIT_TAG", "CREDIT", "DELTA", "DEPTH", "DRAW_TAG", "K_FIELD", "LAYOUT_KEYS", "ROWS_FIELD", "LEVELS",
+__all__ = ["CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "COMMIT_TAG", "CREDIT", "DELTA", "DEPTH", "DRAW_TAG", "K_FIELD", "LAYOUT_KEYS", "LENGTH_FIELD",
+           "LENGTH_KEYS", "ROWS_FIELD", "LEVELS",
            "LIVE", "LIVE_FN", "LIVE_KEYS", "LIVE_RECORD", "LIVE_STATEMENT_KEYS", "LIVE_STATEMENTS", "LIVE_UNIT", "MAX_K", "MODEL_FIELD", "MODEL_KEYS", "MODELS", "PARTITION_FORMAT", "PERIOD_KEYS", "PINNED_MODELS", "PROOF_KEYS", "PROVED_KEYS", "QUERY", "RECORD", "REQUESTS_IDS_TAG", "REQUESTS_OUTSIDE", "REQUESTS_TABLE", "ROUND_TAG",
            "SCHEMA", "SERVED_ROWS", "STATEMENT_KEYS", "TILE_FN", "VERDICTS", "WEIGHTS_FIELD", "WINDOW_FN", "WINDOW_KEYS",
-           "call_work", "calls_root", "commit_ids", "commit_of", "commit_rows", "committed_files", "committed_k", "committed_rows", "committed_weights", "cover",
+           "call_work", "calls_root", "commit_ids", "commit_of", "commit_rows", "committed_files", "committed_k", "committed_length", "committed_rows", "committed_weights", "cover",
            "credited_work", "domain_of", "draw_root", "drawn", "established", "a_value", "ids_step", "is_a", "is_held", "is_requests", "is_tied", "law", "layout_of", "live_of",
            "merkle_depth", "partition_of", "period", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
            "served_rows", "served_work", "slots_step", "step_row", "step_tables", "strata", "table_rows", "tree_root",
