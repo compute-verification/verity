@@ -30,7 +30,7 @@ A spec-level reference for network accounting's timing channel:
   certifier's salt frame heading each window, which `own` counts), a
   request-major canonical order, and one T, τ_b and declared sync for a window's anchors (`PROTOCOL.md`, "A served
   link"). The proxy's admission rule (`Proxy(served=…)`) admits a request only while its window still ends idle, so
-  an honest served link is accepted. An egress end with neither profile gets no verdict (`ValueError`, failing
+  an honest served link is accepted. An egress end with no profile gets no verdict (`ValueError`, failing
   closed);
 - one vLLM v1 scheduler step (`replay_step`): `ReplayStep_v1`, a Boolean Definition with `reference` its spec, takes the
   committed queue state, the certified arrivals and the committed decision bits to the step's rows (request, kind,
@@ -147,15 +147,27 @@ A spec-level reference for network accounting's timing channel:
   window) its ingress admits whole requests by the admission rule (`served.Admission`). On a sealed pair link
   (`Proxy(pair=active.Pair.of(…))`, off by default), between two of the auditor's certifiers, every slot of the link is
   sealed after its record and opened before it (`verity.ml.crypto.aead`, SHA-512 counter mode then HMAC-SHA512, a
-  nonce per slot), so the records are the unsealed run's and a unit that doesn't open fails the link closed.
+  nonce per slot), so the records are the unsealed run's and a unit that doesn't open fails the link closed;
+- an advised link's counts (`advised`, `LinkWindows(advised=AdvisedProfile(windows, request_frames, own))`), a
+  served link under arbitrary traffic: N2's advised unit, `NetworkAdvisedLinkWindow`, adds `NetworkAdvisedCounts_v1`
+  (63,031 ANDs at T = 600, R_in = 1), which holds the egress head's counts to the releases of the prover's advice
+  (`LinkAdvice`: I1's `advice.Advice` and each window's request frames), and the ingress head's counts to the advice:
+  each release eligible under a declared sync in Σ_sync, and at least a bucket, after its request's frames, whose end
+  on the ingress link `advised.ends` derives from v0's prompt lengths and the link's public framing, and each window's
+  ingress total the advice's. Carry-over between windows is the advice's. With the advice fixed the counts are
+  determined, so the egress timing carries at most `advice.bits` (`PROTOCOL.md`, "An advised link"). The prompt
+  lengths are tied to the certified ones only by IO-TIE's `IoTieRequest` verdict (`advised.IoTieVerdict`, naming the
+  link and its ingress registrations), which the verifier takes from its own tie source (`LinkWindows.ties`), never
+  beside the advice; IoTieRequest isn't in the proof service yet, so there is no source and every advised link is
+  refused (fail closed).
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's
 Definition, and in `active` the proof service's registration and receipt, which `reveal` reads, and the pair link's
 AEAD (`verity.ml.crypto.aead`). The certificate's signature scheme is a parameter: the certifier's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
-From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` the circuits
-and their evaluator.
+From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` and `advised`
+the circuits and their evaluator.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`Security/`, area `NetworkCertifier`).
 `lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's
 definitions, proved equal to them in `Security/Proofs/NetworkCertifier/Code.lean`, and the difftest that holds this
