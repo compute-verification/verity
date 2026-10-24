@@ -17,8 +17,8 @@ references. -/
 def Def.rowsAt (df : Def) (c : Nat) : Option (List Nat × List Nat) :=
   (df.rows.toList.find? (·.1 == c)).map fun r => (r.2.1.toList, r.2.2.toList)
 
-/-- **Definition `d` of `t` computes `spec` on its columns `outs`**: on inputs `x` (its first `ins`), with the constant 1,
-its column `outs[o]` is bit `o` of `spec x`. -/
+/-- **Definition `d` of `t` computes `spec` on its columns `outs`**: on inputs `x` (its first `ins`), with the constant
+1, its column `outs[o]` is bit `o` of `spec x`. -/
 def Tmpl.DefComputes (t : Tmpl) (d : Nat) (outs : List Nat) (spec : (Nat → Bool) → List Bool) : Prop :=
   ∀ (x : Nat → Bool), ∀ o < outs.length,
     t.evalDef d ((List.range (t.defs.getD d default).ins).map x) true (outs.getD o 0) = (spec x).getD o false
@@ -29,9 +29,9 @@ namespace Flock.TmplValue
 
 open Flock.Tmpl
 
-/-- **`eval` satisfies a Definition's own rows**: read through its references' values (`refV`), the row `rowsAt` gives for
-column `c` holds at `eval`, when each row reads only earlier columns, the inputs and the constant, and writes inside the
-Definition's columns. -/
+/-- **`eval` satisfies a Definition's own rows**: read through its references' values (`refV`), the row `rowsAt` gives
+for column `c` holds at `eval`, when each row reads only earlier columns, the inputs and the constant, and writes inside
+the Definition's columns. -/
 theorem eval_rowsAt {defs : Array Def} {kv : Bool} {fuel d : Nat} {inp : List Bool}
     (hord : ∀ r ∈ (defs.getD d default).rows.toList, ∀ w ∈ r.2.1.toList ++ r.2.2.toList,
       (defs.getD d default).cols ≤ w ∨ w < r.1)
@@ -74,8 +74,8 @@ theorem eval_rowsAt {defs : Array Def} {kv : Bool} {fuel d : Nat} {inp : List Bo
     rw [xorAt_congr fun w hw => below w (by rw [← hrc]; exact hord r' hr' w (List.mem_append_left _ hw)),
       xorAt_congr fun w hw => below w (by rw [← hrc]; exact hord r' hr' w (List.mem_append_right _ hw))]
 
-/-- **A leaf proved on its rows computes**: if any column values that satisfy Definition `d`'s rows, with the constant at
-1, carry `spec` of their inputs on `outs`, then `d` computes `spec` on `outs`. -/
+/-- **A leaf proved on its rows computes**: if any column values that satisfy Definition `d`'s rows, with the constant
+at 1, carry `spec` of their inputs on `outs`, then `d` computes `spec` on `outs`. -/
 theorem defComputes_of_rows {t : Tmpl} {d : Nat} {outs : List Nat} {spec : (Nat → Bool) → List Bool}
     (hd : d < t.defs.size)
     (hord : ∀ r ∈ (t.defs.getD d default).rows.toList, ∀ w ∈ r.2.1.toList ++ r.2.2.toList,
