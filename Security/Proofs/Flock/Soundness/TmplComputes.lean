@@ -37,7 +37,7 @@ theorem defComputes_of_layout {t : Tmpl} {d : ℕ} (hd : d < t.defs.size)
         (done.getD j default).outCols.getD o 0 := fun o ho => by
     rw [List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_range ho]
     rfl
-  refine defComputes_of_rows hd hord hcols (fun o ho => ?_)
+  refine Flock.TmplValue.defComputes_of_rows hd hord hcols (fun o ho => ?_)
     (fun x y hxy => evalT_congr types words F ty fun i hi => hxy i (by omega)) ?_
   · simp only [List.length_map, List.length_range] at ho
     rw [hg o ho]
