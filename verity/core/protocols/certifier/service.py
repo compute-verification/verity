@@ -94,12 +94,14 @@ of record runs `served_check` too.
 
 **An advised link** (`LinkWindows(advised=advised.AdvisedProfile(…))`) is a served link under arbitrary traffic:
 responses of any length, batched and timed as serving chose, carried across windows. The prover's advice
-(`advised.LinkAdvice`: I1's `advice.Advice`, one per certifier session, after serving, charged by `advice.bits`, and
-each window's request frames) states what serving chose, the profile's public framing says where each request ends
-on the ingress link (`advised.ends`), and its unit is `NetworkAdvisedLinkWindow` v1{EGRESS, INGRESS, ADVISED}:
-the checks above, and one gate naming `advised.NetworkAdvisedCounts_v1` and its pinned circuit digest (`advised.gate`,
-pinned in `advised.circuit-check.json`), which holds the egress head's counts to the advice's releases and the ingress
-head's counts to the advice (`advised`'s docstring has the fields it reads, the soundness argument and the premises).
+(`advised.LinkAdvice`: I1's `advice.Advice`, one per certifier session, after serving, charged by `advice.bits`, each
+window's request frames, and the tie of its requests to the certified ingress, `advised.PromptTie`, checked on the
+host: PROTOCOL.md's named host-side premise) states what serving chose, the profile's public framing says where each
+request ends on the ingress link (`advised.ends`, which refuses a link without the tie), and its unit is
+`NetworkAdvisedLinkWindow` v1{EGRESS, INGRESS, ADVISED}: the checks above, and one gate naming
+`advised.NetworkAdvisedCounts_v1` and its pinned circuit digest (`advised.gate`, pinned in
+`advised.circuit-check.json`), which holds the egress head's counts to the advice's releases and the ingress head's
+counts to the advice (`advised`'s docstring has the fields it reads, the soundness argument and the premises).
 Its public inputs are the window's view of the advice (`advised.view`), which the verifier computes from the public
 advice, the framing and the declared syncs, each held to Σ_sync; the heads' counts stay witness. Its public items are
 `PUBLIC_ADVISED`. Its verifier of record runs `advised_check` on the delivered advice (`verify(advice=…)`), refusing a
@@ -304,7 +306,8 @@ PUBLIC_ADVISED = tuple(p for p in PUBLIC_SERVED if p.item not in ("served", "syn
     S.Public("advice", "output", "the advice (`advised.LinkAdvice`, one per certifier session, after serving): I1's, "
              "charged by `advice.bits`, and its windows' received request frames, which the unit holds to the "
              "ingress heads. The unit reads its window view, `advised.view` of its kept outputs' release buckets, its "
-             "requests' ingress ends (`advised.ends`, from its prompt lengths and the framing) and its windows' "
+             "requests' ingress ends (`advised.ends`, from its prompt lengths, which the host holds to the certified "
+             "ingress's by the tie, and the framing) and its windows' "
              "received request frames; each window reports the SHA-512 of the advice's encoding and those frames "
              "(`advised.digest`), which the network verdict holds to one advice"),
 )
