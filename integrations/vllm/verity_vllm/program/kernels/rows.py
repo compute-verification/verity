@@ -93,8 +93,8 @@ EVALUATORS = {
                                 "TopPMask_v1 (S = the committed `splits` operand) -> GumbelSelectF32 on the committed seed + Const64 pos)",
     "GumbelTopPTokenSelectSharedGreedy_v1": "GumbelTopPTokenSelect_v1's row (the same function, registry.sampling.SHARED_GREEDY; "
                                             "TargetProfile.sampler_construction = shared-greedy)",
-    "GumbelTopPTokenSelect_v2": "GumbelTopPTokenSelect_v1's row at the split count S (registry.topp_words, a single-request Program's select): "
-                                "`splits` = S as v1 reads it, any other value as an unlaunched count, where v1 keeps no lane either",
+    **{f"GumbelTopPTokenSelect_v{n}": "GumbelTopPTokenSelect_v1's row at the split count S (registry.topp_words, a single-request Program's select; "
+                                      "v3 = v2 word for word): `splits` = S as v1 reads it, any other value as an unlaunched count, where v1 keeps no lane either" for n in (2, 3)},
     # [R16 fp8] the block-scaled FP8 linear (Qwen3-4B-FP8, CutlassFp8BlockScaledMMKernel): the quant is INTERIOR (members [], composed
     # from the committed bf16 row), the GEMM row is the VU -- registered e4m3 weight + f32 `weight_scale_inv` slices (8- and 32-bit fields)
     "Fp8GroupQuant_v1": "verity_vllm.program.kernels.derived_rows.fp8_group_quant_row (per-token-group(128) e4m3 quant: exact fmaxf fold from eps, div.rn, cvt.rn.satfinite.e4m3)",
@@ -413,7 +413,7 @@ def gumbel_topp(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str,
 
 
 def gumbel_topp_split(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
-    """`GumbelTopPTokenSelect_v2{V,S}`: v1 wherever `splits` is S; any other value keeps no lane, as v1 at the unlaunched count 0 does."""
+    """`GumbelTopPTokenSelect_v2{V,S}` and v3: v1 wherever `splits` is S; any other value keeps no lane, as v1 at the unlaunched count 0 does."""
     ops = list(ops)
     s = np.asarray(ops[5])
     ops[5] = np.where(s == int(statics["S"]), s, 0).astype(s.dtype)
@@ -695,14 +695,13 @@ def _check_targets() -> dict[str, list]:
         "Embedding_v1": [bind(b1.Embedding, V=5, H=4)],
         "BiasAdd_v1": [bind(b1.BiasAdd, N=8)],
         "GemmBias_v1": [bind(gemm_bias.GemmBias, K=32, N=3)],
-        "GemmBias_v2": [bind(gemm_bias.GemmBiasV2, K=32, N=3, DOT=P.AmpereBF16TcDot16),
-                        bind(gemm_bias.GemmBiasV2, K=32, N=3, DOT=hopper.HopperBF16WgmmaDot16)],
+        "GemmBias_v2": [bind(gemm_bias.GemmBiasV2, K=32, N=3, DOT=d) for d in (P.AmpereBF16TcDot16, hopper.HopperBF16WgmmaDot16)],
         "Bf16MulScalarTensor_v1": [bind(b1.Bf16MulScalarTensor, N=8)],
         "TokenSelect_v1": [bind(b1.TokenSelect, V=16)],
         **{f: [bind(fn, V=v) for v in (16, 130, 1)] for f, fn in (("TokenSelect_v3", dead_free.TokenSelectV3), ("TokenSelect_v4", dead_free.TokenSelectV4))},
         "GumbelTopPTokenSelect_v1": [bind(sampling.GumbelTopPTokenSelect, V=16)],
         "GumbelTopPTokenSelectSharedGreedy_v1": [bind(sampling.GumbelTopPTokenSelectSharedGreedy, V=16)],
-        "GumbelTopPTokenSelect_v2": [bind(topp_words.GumbelTopPTokenSelectV2, V=16, S=4)],
+        **{f: [bind(fn, V=16, S=4)] for f, fn in (("GumbelTopPTokenSelect_v2", topp_words.GumbelTopPTokenSelectV2), ("GumbelTopPTokenSelect_v3", dead_free.GumbelTopPTokenSelectV3))},
         "Fp8GroupQuant_v1": [bind(fp8.Fp8GroupQuant, K=256, G=128)],
         "ScaledMmFp8Block_v1": [bind(fp8.ScaledMmFp8Block, K=128, N=n, G=128) for n in (128, 192)],
         "ScaledMmFp8BlockSharedScale_v1": [bind(fp8.ScaledMmFp8BlockSharedScale, K=128, N=n, G=128) for n in (128, 192)],
@@ -750,7 +749,8 @@ for _family in ("TokenSelect_v1", "TokenSelect_v3", "TokenSelect_v4"):
     _row(_family, token_select, (SAMPLED_MEMBER,))
 _row("GumbelTopPTokenSelect_v1", gumbel_topp, (SAMPLED_MEMBER,), _sample_gumbel)
 _row("GumbelTopPTokenSelectSharedGreedy_v1", gumbel_topp, (SAMPLED_MEMBER,), _sample_gumbel)
-_row("GumbelTopPTokenSelect_v2", gumbel_topp_split, (SAMPLED_MEMBER,), _sample_gumbel_split)
+for _family in ("GumbelTopPTokenSelect_v2", "GumbelTopPTokenSelect_v3"):
+    _row(_family, gumbel_topp_split, (SAMPLED_MEMBER,), _sample_gumbel_split)
 _row("Fp8GroupQuant_v1", fp8_group_quant, ("0", "1"))
 _row("ScaledMmFp8Block_v1", scaled_mm_fp8_block, ("0",))
 _row("ScaledMmFp8BlockSharedScale_v1", scaled_mm_fp8_block, ("0",))

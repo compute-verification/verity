@@ -15,7 +15,7 @@ from verity.ml.circuits.liveness import dead_gates
 from verity.ml.circuits.program import Program
 from verity_flock import ir_lower as IL
 from verity_flock.gf2 import Circuit
-from verity_vllm.program.registry import b1, dead_free as DF, sampling as SA
+from verity_vllm.program.registry import b1, dead_free as DF, sampling as SA, topp_words as TW
 
 RNG = np.random.default_rng(20261024)
 #: bf16 words at the edges: ±0, ±inf, NaNs, the largest finite, the smallest subnormal, ±1, one ulp above 1
@@ -168,9 +168,49 @@ def test_gumbel_top_p_shared_greedy_v2_equals_v1(V):
         _same(new, old, row, TOP_P[i % 4], seed, pos, TEMPS[(i // 4) % 4], SPLITS[(i // 16) % 4])
 
 
+@pytest.mark.parametrize("V,S,dead", [(2, 1, 561), (3, 2, 1013), (16, 32, 3787)])
+def test_topp_keep_word_v2_equals_v1(V, S, dead):
+    """v1's dead gates are lanes of its vector operations that nothing reads after them."""
+    new, old = bind(DF.TopPKeepWordV2, V=V, S=S), bind(TW.TopPKeepWord, V=V, S=S)
+    assert (_dead(new), _dead(old)) == (0, dead)
+    for i, row in enumerate(_f32_rows(V)):
+        _same(new, old, row, TOP_P[i % 4])
+
+
+@pytest.mark.parametrize("V,S", [(3, 2)])
+def test_topp_mask_v4_equals_v2(V, S):
+    """At the split count S and at two counts it is not, where neither keeps a lane (the sampler's test runs it at S = 32)."""
+    new, old = bind(DF.TopPMaskV4, V=V, S=S), bind(TW.TopPMaskV2, V=V, S=S)
+    assert _dead(new) == 0 < _dead(old)
+    for i, row in enumerate(_f32_rows(V)):
+        _same(new, old, row, TOP_P[i % 4], (S, 3, 0)[i % 3])
+
+
+@pytest.mark.parametrize("V", VOCABS)
+def test_gumbel_select_f32_v3_equals_v1(V):
+    new, old = bind(DF.GumbelSelectF32V3, V=V), bind(SA.GumbelSelectF32, V=V)
+    assert (_dead(new), _dead(old)) == (0, 3)
+    for i, row in enumerate(_f32_rows(V)):
+        seed, pos = int(RNG.integers(0, 1 << 63)), int(RNG.integers(0, 1 << 20))
+        _same(new, old, row, seed, pos, TEMPS[i % 4])
+
+
+@pytest.mark.parametrize("V,S,dead", [(3, 2, 1016), (16, 32, 3790)])
+def test_gumbel_top_p_v3_equals_v2(V, S, dead):
+    """The registered compiler's sampler (`prune.dead_free_versions`): v2's dead gates are its keep word's and the Gumbel scan's
+    last 3."""
+    new, old = bind(DF.GumbelTopPTokenSelectV3, V=V, S=S), bind(TW.GumbelTopPTokenSelectV2, V=V, S=S)
+    assert (_dead(new), _dead(old)) == (0, dead)
+    for i, row in enumerate(_logit_rows(V)):
+        seed, pos = int(RNG.integers(0, 1 << 63)), int(RNG.integers(0, 1 << 20))
+        _same(new, old, row, TOP_P[i % 4], seed, pos, TEMPS[(i // 4) % 4], (S, S, 3)[(i // 16) % 3])
+
+
 def test_one_logit_selects_index_0():
-    for fn in (DF.TokenSelectV3, DF.TokenSelectV4, DF.GumbelSelectF32GivenGreedyV2, DF.GumbelTopPTokenSelectSharedGreedyV2):
+    for fn in (DF.TokenSelectV3, DF.TokenSelectV4, DF.GumbelSelectF32GivenGreedyV2, DF.GumbelTopPTokenSelectSharedGreedyV2,
+               DF.GumbelSelectF32V3):
         assert _dead(bind(fn, V=1)) == 0
+    assert _dead(bind(DF.GumbelTopPTokenSelectV3, V=1, S=32)) == 0
     for (w,) in _logit_rows(1):
         seed, pos = int(RNG.integers(0, 1 << 63)), int(RNG.integers(0, 1 << 20))
         assert evaluate(bind(DF.TokenSelectV3, V=1), [w]) == (0,) == evaluate(bind(DF.TokenSelectV4, V=1), [w])
@@ -178,3 +218,5 @@ def test_one_logit_selects_index_0():
             assert evaluate(bind(DF.GumbelSelectF32GivenGreedyV2, V=1), [w << 16], seed, pos, greedy) == (0,)
         for temp in TEMPS:
             assert evaluate(bind(DF.GumbelTopPTokenSelectSharedGreedyV2, V=1), [w], TOP_P[1], seed, pos, temp, 32) == (0,)
+            assert evaluate(bind(DF.GumbelSelectF32V3, V=1), [w << 16], seed, pos, temp) == (0,)
+            assert evaluate(bind(DF.GumbelTopPTokenSelectV3, V=1, S=32), [w], TOP_P[1], seed, pos, temp, 32) == (0,)
