@@ -1,9 +1,10 @@
 """``verity bench recursion_e2e COMMAND``: the recursive session through pod 85's steps, timed stage by stage (README.md).
 
-    plan   [POINT]                 the stages, the lease, and the job's launch command
+    plan   [POINT]                 the stages, each statement's lease, and the job's launch command
     run    [POINT] [--e2e] [--dry-run] [--here]
-                                   one research run of job.sh on vy-nebius-1 (--here: job.sh in this shell, e.g. inside a
-                                   run); --e2e: one pass, every stage once, no warm session (RECBENCH's single-run mode)
+                                   one research run of job.sh: a firewalled run (85's CPU prover) or --cpu a plain run on
+                                   vy-nebius-cpu-2 pinned to --cores, a GPU run vy-nebius-1's queue (--here: job.sh in this
+                                   shell, e.g. inside a run); --e2e: one pass, every stage once, no warm session
     result --dir OUT [--out FILE] [--md FILE]
                                    the result from a job's out/ (the job runs it last, into out/recursion_e2e.json)
     table  RESULT... [--merge] [--json]
@@ -11,7 +12,8 @@
     store  RESULT... [--merge]     the results and their table as one art (research data put); prints its art: id
 
 POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 --lease-min M --neg challenge,query
-       --cpu (GPU=0: the CPU prover, no lease) --node vy-nebius-1 --mem-gb 64 --cpus 32 --max-min M --env KEY=VALUE ...
+       --cpu (GPU=0: the CPU prover, no lease) --on MACHINE --cores 0-31 --mem-gb G --cpus 32 --max-min M
+       --env KEY=VALUE ...
 """
 from __future__ import annotations
 
@@ -36,13 +38,21 @@ E2E = (*RP.E2E_STEPS, "negative")
 KIND = "bench/recursion-e2e/v1"
 RUN_ID = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
 
-# The lease (GPU_MAX_MIN) and the job's --max-min, from the firewall's one measured session at K = 4096, N = 2: V*'s L3
-# took 519 s end to end with the firewall on (r20261024-071656-66cb) against 2.46 s on the device's witness (dev,
-# r20261024-063425-1ec5), and the firewall's time follows the dev session's (L1, 3.02 s dev, outran a 10 min lease). The
-# largest statement (alg-p1) is 13.99 s dev and the ten together 46.7 s, so one firewalled session of alg-p1 is about
-# 2950 s and of all ten about 9850 s; a lease holds MARGIN times its statement's sessions.
-FW_L3_S, DEV_L3_S, DEV_MAX_S, DEV_SUM_S, MARGIN = 519.2, 2.464, 13.99, 46.68, 1.5
-OTHER_MIN = {"build": 6, "inner": 3, "icheck": 1, "vstage": 6, "vcap": 1, "oreplay": 2, "lean": 10, "negative": 25}
+# Each V* statement's firewalled session at K = 4096, N = 2, end to end (s): r20261024-094937-6572, the CPU prover, one at a
+# time. No one ratio to the dev session fits (L0 626x, L1-L3 190-315x, alg-p0 62x), so each statement has its own. A
+# session's time is the Lean session loop's; L3 took 519 s with the GPU prover (r20261024-071656-66cb) against 469 s here.
+# A lease or a run holds MARGIN times its statements' sessions.
+FW_S = {"L0": 3738, "L1": 894, "L2": 836, "L3": 469, "alg-p0": 815, "alg-p1": 847,
+        "cap": 63, "cap-L1": 86, "cap-L2": 74, "cap-L3": 51}
+MARGIN = 1.5
+SETUP_MIN = 5  # the job's start, its retention record and its result
+OTHER_MIN = {"build": 6, "inner": 3, "icheck": 1, "vstage": 6, "vcap": 1, "oreplay": 2, "lean": 12, "negative": 30}
+
+# Where a run goes. 85's CPU prover needs no GPU, so a firewalled run (and --cpu) goes straight to a CPU node that takes
+# plain runs, pinned to CORES (infra, 24 Oct 13:08Z); vy-nebius-1/2/3 and vy-nebius-cpu-1 take runs only through slots.
+CPU_NODE, PLAIN_CPU_NODES = "vy-nebius-cpu-2", ("vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5")
+SLOT_ONLY = ("vy-nebius-1", "vy-nebius-2", "vy-nebius-3", "vy-nebius-cpu-1")
+CPU_WORK = "/workspace/cache/rec-bench"
 
 STAGES = {
     "build": "the CUDA prover (60-circuit.sh), flock-verify (lake build), the inner statement staged with plain and hm96 leaves",
@@ -57,21 +67,53 @@ STAGES = {
 }
 
 
-def lease_min(sessions: int, firewall: bool = True) -> int:
-    """A lease (minutes) that holds the largest statement's ``sessions`` firewalled sessions with MARGIN; 85's default 10
-    without the firewall."""
-    return math.ceil(MARGIN * sessions * FW_L3_S * DEV_MAX_S / DEV_L3_S / 60) if firewall else 10
+def statements(levels: str = "") -> list[str]:
+    """V*'s statements 85 proves under ``LEVELS`` (its ``want``: a name, or the name less its ``-p<N>`` part)."""
+    want = {x for x in levels.split(",") if x}
+    return [s for s in FW_S if not want or s in want or re.sub(r"-p\d+$", "", s) in want]
+
+
+def stmt_lease_min(stmt: str, sessions: int = 1) -> int:
+    """A lease (minutes) that holds ``sessions`` firewalled sessions of ``stmt`` with MARGIN."""
+    return math.ceil(MARGIN * sessions * FW_S[stmt] / 60)
+
+
+def lease_min(sessions: int, firewall: bool = True, levels: str = "") -> int:
+    """The job's one lease (85's GPU_MAX_MIN covers every prove of an invocation): its largest statement's; 85's default
+    10 without the firewall."""
+    return max((stmt_lease_min(s, sessions) for s in statements(levels)), default=10) if firewall else 10
+
+
+def levels(a) -> str:
+    """LEVELS as --env passes it to 85 (the last one wins)."""
+    return next((e.split("=", 1)[1] for e in reversed(a.env) if e.startswith("LEVELS=")), "")
 
 
 def max_min(a) -> int:
-    """The job's --max-min: every statement's firewalled sessions (with MARGIN) plus each other step's minutes per repeat."""
+    """The job's limit: its statements' firewalled sessions (with MARGIN) plus each other step's minutes per repeat."""
     sessions = a.oprove_warm + a.oprove_runs
-    oprove = MARGIN * sessions * FW_L3_S * DEV_SUM_S / DEV_L3_S / 60 if "firewall" in a.modes.split(",") else 15
+    fw = "firewall" in a.modes.split(",")
+    oprove = MARGIN * sessions * sum(FW_S[s] for s in statements(levels(a))) / 60 if fw else 15
     rest = sum(m * (a.repeat if s in ("icheck", "vstage", "vcap", "oreplay", "lean") else 1)
                for s, m in OTHER_MIN.items() if s in steps(a.steps))
     # 85's CPU prover built once (oprove under the firewall, OPROVE_GPU=0), and its proofs: a minute a statement
-    cpu = 25 if "firewall" in a.modes.split(",") and a.oprove_gpu != "1" else 0
-    return math.ceil((oprove + cpu if "oprove" in steps(a.steps) else 0) + rest)
+    cpu = 25 if fw and a.oprove_gpu != "1" else 0
+    return math.ceil(SETUP_MIN + (oprove + cpu if "oprove" in steps(a.steps) else 0) + rest)
+
+
+def cpu_run(a) -> bool:
+    """A run with no GPU prove: --cpu, or a firewalled one on 85's CPU prover (the default)."""
+    return a.cpu or ("firewall" in a.modes.split(",") and a.oprove_gpu != "1")
+
+
+def on(a) -> str:
+    """The machine: --on, else a plain CPU node for a CPU run and vy-nebius-1's queue for a GPU one."""
+    m = a.on or (CPU_NODE if cpu_run(a) else NODE)
+    if m in PLAIN_CPU_NODES and not cpu_run(a):
+        raise SystemExit(f"--on {m}: a CPU node has no GPU; --oprove-gpu 1 and GPU modes need a GPU node")
+    if m in SLOT_ONLY and cpu_run(a):
+        raise SystemExit(f"--on {m}: takes runs only through its slots; a CPU run goes to one of {', '.join(PLAIN_CPU_NODES)}")
+    return m
 
 
 def mem_gb(a) -> int:
@@ -97,24 +139,35 @@ def preset(a: argparse.Namespace) -> argparse.Namespace:
     return a
 
 
+def direct(a) -> bool:
+    """A plain run on a CPU node (``research run --on``, pinned to --cores), not a queued job."""
+    return on(a) in PLAIN_CPU_NODES
+
+
 def job_env(a: argparse.Namespace) -> list[str]:
     bad = [e for e in a.env if not re.fullmatch(r"[A-Z_][A-Z0-9_]*=.*", e)]
     if bad:
         raise SystemExit(f"--env: {', '.join(bad)} is not KEY=VALUE")
-    lease = a.lease_min or lease_min(a.oprove_warm + a.oprove_runs, "firewall" in a.modes.split(","))
+    lease = a.lease_min or lease_min(a.oprove_warm + a.oprove_runs, "firewall" in a.modes.split(","), levels(a))
+    # a CPU node has no GPU, and /workspace/jobs isn't the research user's there
+    node = ["GPU=0", f"FLOCK_WORK={CPU_WORK}"] if direct(a) else ["GPU=0"] if a.cpu else []
     return [f"K={a.K}", f"N={a.N}", f"STEPS={','.join(steps(a.steps))}", f"REPEAT={a.repeat}", f"MODES={a.modes}",
             f"OPROVE_WARM={a.oprove_warm}", f"OPROVE_RUNS={a.oprove_runs}", f"GPU_MAX_MIN={lease}", f"NEG={','.join(a.neg.split())}",
-            *(["GPU=0"] if a.cpu else []), *([f"OPROVE_GPU={a.oprove_gpu}"] if a.oprove_gpu != "auto" else []), *a.env]
+            *node, *([f"OPROVE_GPU={a.oprove_gpu}"] if a.oprove_gpu != "auto" else []), *a.env]
 
 
 def job_command(a: argparse.Namespace, root: Path) -> list[str]:
-    env = job_env(a)
-    return ["research", "run", "--queue", "--on", a.node, *([] if a.cpu else ["--gpu-host"]),
+    env, m, limit = job_env(a), on(a), a.max_min or max_min(a)
+    job = ["bash", "benchmarks/recursion_e2e/job.sh", *env]
+    if direct(a):
+        return ["research", "run", "--on", m, "--project", "verity", "--campaign", "recursion-e2e", "--source", str(root),
+                "--cwd", "source", "--mem-gb", str(mem_gb(a)), "--timeout", f"{limit}m", "--", "taskset", "-c", a.cores, *job]
+    return ["research", "run", "--queue", "--on", m, *([] if a.cpu else ["--gpu-host"]),
             *(["--preemptible"] if a.preemptible else []), "--project", "verity",
             "--campaign", "recursion-e2e", "--source", str(root), "--cwd", "source", "--mem-gb", str(mem_gb(a)),
-            "--cpus", str(a.cpus), "--max-min", str(a.max_min or max_min(a)),
+            "--cpus", str(a.cpus), "--max-min", str(limit),
             "--question", f"recursion_e2e: 85-rec-reprice's stages at K = {a.K}, N = {a.N}, oprove {a.modes}, timed and repeated",
-            "--", "bash", "benchmarks/recursion_e2e/job.sh", *env]
+            "--", *job]
 
 
 def root() -> Path:
@@ -127,10 +180,13 @@ def root() -> Path:
 def cmd_plan(a) -> int:
     a = preset(a)
     env = dict(e.split("=", 1) for e in job_env(a))
-    print(f"K = {a.K}, N = {a.N}: 85-rec-reprice.sh's steps on {a.node}, CPU steps {a.repeat}x, oprove {a.modes} "
+    print(f"K = {a.K}, N = {a.N}: 85-rec-reprice.sh's steps on {on(a)}, CPU steps {a.repeat}x, oprove {a.modes} "
           f"with {a.oprove_warm} warm + {a.oprove_runs} timed sessions per statement, each prove's lease {env['GPU_MAX_MIN']} min")
     for s in steps(a.steps):
         print(f"  {s:<8} {STAGES[s]}")
+    if "oprove" in steps(a.steps) and "firewall" in a.modes.split(","):
+        n = a.oprove_warm + a.oprove_runs
+        print("  leases (min): " + ", ".join(f"{s} {stmt_lease_min(s, n)}" for s in statements(levels(a))))
     print(" ".join(job_command(a, root())))
     return 0
 
@@ -242,7 +298,10 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--oprove-gpu", choices=["auto", "0", "1"], default="auto",
                        help="V*'s prover: 0 the CPU prover (auto under the firewall: node 1's lease pool stops a lease whose "
                             "GPU idles about 10 min, as a firewalled session's does), 1 the GPU one under a lease")
-        p.add_argument("--node", default=NODE)
+        p.add_argument("--on", "--node", dest="on", default="", metavar="MACHINE",
+                       help=f"default {CPU_NODE} for a CPU run (firewalled on the CPU prover, or --cpu), a plain run there; "
+                            f"else {NODE}'s queue")
+        p.add_argument("--cores", default="0-31", help="a plain run's cores on its CPU node (taskset -c; default 0-31)")
         p.add_argument("--preemptible", action="store_true",
                        help="queue the run preemptible (a guest on another lane's node, vy-nebius-2's rule)")
         p.add_argument("--mem-gb", type=int, default=0, help="the run's memory (default mem_gb: 128 with a firewalled oprove, else 64)")

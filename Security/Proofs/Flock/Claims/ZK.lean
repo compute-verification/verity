@@ -137,6 +137,7 @@ import Proofs.Flock.Claims.ZK.FrameRho
 import Proofs.Flock.Claims.ZK.FrameUnrefused
 import Proofs.Flock.Claims.ZK.FinishSrc
 import Proofs.Flock.Claims.ZK.FinishBridge
+import Proofs.Flock.Claims.ZK.FinishTrunc
 import Proofs.Flock.Claims.ZK.FinishLive
 import Proofs.Flock.Claims.ZK.FinishStop
 import Proofs.Flock.Claims.ZK.FinishStopAt
@@ -588,6 +589,10 @@ import Proofs.Flock.Claims.ZK.CutPrefix
   a log of `base + k` sends, and every prover the rep calls is walked once, generic in its `Sim`, so a `repFw` run that
   returns at round `k'` is `repFwC` answered by `asksCut` at its coins from round `base` (`coinsFrom`), returning the
   same with a log of `base + k'` (**`Flock.Firewall.Finish.repFw_cut`**).
+* `FinishTrunc`: the same at coins that agree with the rep's only below each round's count, as the session's opened
+  coins do. A squeeze below `2^64` coins reads only those (`squeezeP_br`), and Ligerito's recursive levels keep their
+  sizes through its loop (`loopG_bridge`), so `repFwC` at the rep's coins and at such coins is related, given `m − 13`,
+  the claims, `n + 1` and every level's `q + 1` bounded (**`Flock.Firewall.Finish.repFwC_br`**).
 * `FinishLive`: the served rep's live rounds as `repFw`'s. Answered by `liveAsks` at recorded coins `C`, a rep's
   rounds within `C` do no channel IO and are the rounds under `asksOf C` (`liveSim`, `liveAsks_rel`), so `repCons`
   run live is `repFw`'s `repCons` with the same result, transcript and coins (`repCons_live`); where `repFw` returns,

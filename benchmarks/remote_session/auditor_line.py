@@ -73,6 +73,11 @@ measured, credited or not, is `measured`. `--table` writes each session's five c
 Each session's `sketch` is its δs at the outside-compute factor F its verifier charged, Q = F·C (`verifier.sketch_at`),
 and `sketch_outside` every F the run's sessions were charged at.
 
+**Error.** Each accepted paced session's line fails, crediting more than the node held, with probability at most its
+`error`'s total (`session_error`): δ, the pooled bound's, plus δs, the sketch's, each exact. The line at each T, and the
+line of record over every T (`credit`'s `error`), fail with at most the sum of their credited sessions' totals: the
+least share is read off whichever session the run made least, so the union bound holds where a maximum wouldn't.
+
     python auditor_line.py OUT --host-bytes B [--pin SHA512 --period P --commit SHA [--pins LOG --main FILE]]
         [--ledger HEAD ...] [--peer NAME] [--model-pin FILE] [--disk-bytes-per-s B/S] [--link-bytes-per-s B/S]
         [--bursts stated|none] [--line-by lean|python] [--lean-exe PATH] [--table FILE]
@@ -86,6 +91,7 @@ import json
 import statistics
 import subprocess
 import sys
+from fractions import Fraction
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -95,7 +101,7 @@ sys.path.insert(0, str(HERE.parents[1]))
 import challengers as CH  # noqa: E402
 import lean_verifier as lv  # noqa: E402
 import verifier as V  # noqa: E402
-from verity.core.protocols.remote_bandwidth import audit, coins, ledger, line  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit, coins, ledger, line, pooled, receipts, timing  # noqa: E402
 from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
 from verity.core.protocols.sampled_proofs import challenger as Ch  # noqa: E402
 from verity.core.protocols.sampled_proofs import remote  # noqa: E402
@@ -316,6 +322,33 @@ def shares_of(got: dict) -> dict:
                   "worst_stretch": worst["stretch"], "worst_l_max_ms": worst["l_max_ns"] / 1e6,
                   "worst_span_s": worst["span_ns"] / 1e9}
     return row
+
+
+def session_error(session: dict, registration: dict) -> dict:
+    """An accepted session's failure probability, the chance its line credits more than the node held: `delta`, the
+    pooled bound's δ (`recorded_windows`', the float's exact value as the line reads it), plus `delta_sketch`, δs,
+    `SketchBoundDeployed`'s for a sketch-sha512 record (`ledger.sketch` exactly: `timing.sketch_failure` of the
+    compressions the verifier charged, `ledger.sketch_failure`'s, over the record's passes, rows and store blocks; 0
+    for another receipt kind), and their `total`; each in floats and exact beside them (`exact`), and the total's
+    log2."""
+    delta = pooled.number(V.recorded_windows(session)[1])
+    sketch = Fraction(0)
+    if registration["receipt"] == receipts.SKETCH_SHA512:
+        inputs = session["ledger"]["inputs"]
+        sketch = timing.sketch_failure(session["ledger"]["sketch_failure"]["compressions"], inputs["passes"],
+                                       inputs["rows"], blocks=session["record"]["public"]["blocks"])
+    exact = {"delta": delta, "delta_sketch": sketch, "total": delta + sketch}
+    return {**{k: float(x) for k, x in exact.items()}, "exact": {k: line.text(x) for k, x in exact.items()},
+            "log2_total": timing.log2(exact["total"])}
+
+
+def union_error(rows: list[dict]) -> dict:
+    """The chance some session of `rows` fails (`session_error`), at most the sum of their totals: the sessions, the
+    sum and its exact value, and its log2 (None for none)."""
+    rows = sorted(rows, key=lambda r: r["k"])
+    total = sum((line.number(r["error"]["exact"]["total"]) for r in rows), Fraction(0))
+    return {"sessions": [r["k"] for r in rows], "total": float(total), "exact": line.text(total),
+            "log2": timing.log2(total) if total else None}
 
 
 def bound_check(v: dict, model: dict | None, source: str | None) -> dict:
@@ -616,6 +649,7 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
         row["groups"] = len(seen)
         row["shares_auditor_clock"] = shares(a, reg, host_bytes, rates, lean)
         row["shares_verifier_clock"] = shares(s, reg, host_bytes, rates, lean)
+        row["error"] = session_error(s, reg)
         row["cross_check"] = cross_check(s["windows_seen"], seen)
         for clock in ("auditor", "verifier"):
             for f, x in row[f"shares_{clock}_clock"].items():
@@ -639,11 +673,14 @@ def no_credit(why: str, bound: dict | None = None) -> dict:
 def credited_line(rows: list[dict]) -> tuple[dict, dict]:
     """The line of record, on the auditor's clock: at each T and in each form the least share of weights held among
     the credited sessions there (exact, the first on a tie), with that session's filler held beside it, or zero with
-    every session's reasons; and who earned credit, who didn't and why, in a sentence."""
+    every session's reasons, and its error (`union_error` of those sessions); and who earned credit, who didn't and
+    why, in a sentence, with the error of the line over every T."""
     out: dict = {}
+    lined = []
     for t in sorted({r["T"] for r in rows if r.get("T")}):
         at = [r for r in rows if r.get("T") == t]
         ok = [r for r in at if r["credit"]["ok"]]
+        lined += ok
         if ok:
             out[t] = {f: min(({"k": r["k"], **{n: r["shares_auditor_clock"][f][n] for n in (*SHARES, "exact")}}
                               for r in ok), key=lambda x: line.number(x["exact"]["time"])) for f in line.FORMS}
@@ -651,6 +688,7 @@ def credited_line(rows: list[dict]) -> tuple[dict, dict]:
         else:
             out[t] = {**{f: {**dict.fromkeys(SHARES, 0.0), "exact": dict.fromkeys(SHARES, "0")} for f in line.FORMS},
                       "credited_sessions": [], "zero": {r["k"]: r["credit"]["zero"] for r in at}}
+        out[t]["error"] = union_error(ok)
     credited = [r["k"] for r in rows if r["credit"]["ok"]]
     zero = {r["k"]: r["credit"]["zero"] for r in rows if not r["credit"]["ok"]}
     if not credited:
@@ -658,14 +696,15 @@ def credited_line(rows: list[dict]) -> tuple[dict, dict]:
     else:
         said = (f"the line credits session(s) {', '.join(map(str, credited))}"
                 + (f"; session(s) {', '.join(map(str, zero))} earn none" if zero else ""))
-    return out, {"credited_sessions": credited, "zero": zero, "summary": said + "".join(
+    return out, {"credited_sessions": credited, "zero": zero, "error": union_error(lined), "summary": said + "".join(
         f"; session {k}: {'; '.join(why)}" for k, why in zero.items())}
 
 
 def table(doc: dict) -> str:
     """`analyse`'s doc as Markdown: each session's five checks (`CHECKS`), with the reason of each that failed, and
-    its credit, weights held then filler held; then the line at each T, time-held / link-charged with the snapshot
-    forms, weights and filler apart."""
+    its credit, weights held then filler held; then the line at each T, time-held (labelled as under Identity, which
+    nothing the verifier checks establishes) / link-charged with the snapshot forms, weights and filler apart, and its
+    error when it credits a session."""
     b = line.FORMS
     out = ["| session | T | " + " | ".join(CHECKS) + " | credit |", "|---|---|" + "---|" * len(CHECKS) + "---|"]
     for s in doc["sessions"]:
@@ -678,11 +717,14 @@ def table(doc: dict) -> str:
         out.append(f"| {s['k']} | {s.get('T') or '-'} | " + " | ".join(cells) + f" | {credit} |")
     out.append("")
     for t, row in doc["line"].items():
-        out.append(f"line {t}: credited {row['credited_sessions']}, time-held / link-charged weights "
+        out.append(f"line {t}: credited {row['credited_sessions']}, time-held (under Identity: no block over the "
+                   "boundary links) / link-charged weights "
                    + " / ".join(f"{row[x]['time']:.4%}" for x in b) + ", filler "
                    + " / ".join(f"{row[x]['filler_time']:.4%}" for x in b) + " (snapshot weights "
                    + " / ".join(f"{row[x]['snapshot']:.4%}" for x in b) + ", filler "
-                   + " / ".join(f"{row[x]['filler_snapshot']:.4%}" for x in b) + ")")
+                   + " / ".join(f"{row[x]['filler_snapshot']:.4%}" for x in b) + ")"
+                   + (f", error {row['error']['total']:.3g} (2^{row['error']['log2']:.2f}): δ + δs summed over the "
+                      "credited sessions" if row["error"]["sessions"] else ""))
     out.append(f"line by {doc['line_by']}; {doc['credit']['summary']}")
     return "\n".join(out) + "\n"
 

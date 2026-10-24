@@ -20,6 +20,7 @@ import shlex
 import sys
 import threading
 from datetime import datetime, timezone
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -407,6 +408,9 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
                           for x in ("time", "filler_time"))
         assert (f"| 0 | {t} | yes | yes | yes | yes | yes | credited: weights {shares}, filler {filler} |"
                 in al.table(doc).splitlines())
+        assert honest["error"] == al.session_error(sessions[0], reg) and "error" not in dropper
+        assert doc["line"][t]["error"] == doc["credit"]["error"] == al.union_error([honest])
+        assert al.table(doc).splitlines()[-2].endswith("): δ + δs summed over the credited sessions")
         by = al.lv.Lean(al.lv.build(), lambda _: None)
         try:
             assert doc["line_by"] == "python" and analysed(out, host, sessions, reg, desc, line_by=by) == {
@@ -421,7 +425,7 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
                             r"incomplete\)", dropper["credit"]["complete"]["reason"])
         assert doc["line"][t][al.line.TIME_HELD] == {**dict.fromkeys(al.SHARES, 0.0),
                                                      "exact": dict.fromkeys(al.SHARES, "0")}
-        assert doc["line"][t]["credited_sessions"] == []
+        assert doc["line"][t]["credited_sessions"] == [] and doc["line"][t]["error"]["sessions"] == []
         assert doc["credit"]["summary"].startswith("the line credits zero: no session is credited, complete, accepted, "
                                                    "pinned and bound; session 0: not complete: period p-1 closed "
                                                    "incomplete")
@@ -597,3 +601,36 @@ def test_the_clock_rate_beside_the_line_doesnt_read_the_first_coins_round_trip()
     assert al.clock_rate_ppm(Rv, Ra) == pytest.approx(30, abs=0.01)
     assert ((Ra[-1] - Ra[0]) / (Rv[-1] - Rv[0]) - 1) * 1e6 < -14_000
     assert al.clock_rate_ppm(Rv[:3], Ra[:3]) is None
+
+
+def test_the_line_records_delta_the_sketchs_delta_and_their_sum_over_its_credited_sessions():
+    """Each accepted paced session's error is the pooled bound's δ (its record's float, exactly) plus the sketch's δs
+    (`timing.sketch_failure` of the compressions the verifier charged over the record's passes, rows and store blocks,
+    as `ledger.sketch` reads it, and 0 for a block-sha512 record), exactly; the line at each T, and over every T, fails
+    with at most the sum over its credited sessions, and a T that credits none has error 0."""
+    def session(delta: float, compressions: int) -> dict:
+        return {"record": {"public": {"blocks": 1 << 20},
+                           "profile": {"windows": [{"lengths": [8], "profile": {"delta": delta,
+                                                                                "drawn": {"receipt": 2}}}]}},
+                "ledger": {"inputs": {"passes": 700, "rows": 16}, "sketch_failure": {"compressions": compressions}}}
+
+    sketch = {"receipt": al.receipts.SKETCH_SHA512}
+    ds = al.timing.sketch_failure(10 ** 12, 700, 16, blocks=1 << 20)
+    assert ds > al.timing.sketch_failure(10 ** 12, 700, 16)
+    a, b = al.session_error(session(2.0 ** -40, 10 ** 12), sketch), al.session_error(session(2.0 ** -30, 0), sketch)
+    total = Fraction(1, 2 ** 40) + ds
+    assert a["exact"] == {"delta": "1/1099511627776", "delta_sketch": str(ds), "total": str(total)}
+    assert a["total"] == float(total) and a["log2_total"] == al.timing.log2(total)
+    blocks = al.session_error(session(2.0 ** -40, 10 ** 12), {"receipt": al.receipts.BLOCK_SHA512})
+    assert blocks["exact"] == {"delta": "1/1099511627776", "delta_sketch": "0", "total": "1/1099511627776"}
+    held = {f: {**dict.fromkeys(al.SHARES, 0.5), "exact": dict.fromkeys(al.SHARES, "1/2")} for f in al.line.FORMS}
+
+    def row(k: int, t: str, ok: bool, error: dict) -> dict:
+        return {"k": k, "T": t, "shares_auditor_clock": held, "error": error,
+                "credit": {"ok": ok, "zero": [] if ok else ["not accepted: the Lean refused it (receipt)"]}}
+
+    out, credit = al.credited_line([row(0, "T=1s", True, a), row(1, "T=1s", True, b), row(2, "T=60s", False, a)])
+    both = total + Fraction(1, 2 ** 30) + al.timing.sketch_failure(0, 700, 16, blocks=1 << 20)
+    assert out["T=1s"]["error"] == credit["error"] == {"sessions": [0, 1], "total": float(both), "exact": str(both),
+                                                       "log2": al.timing.log2(both)}
+    assert out["T=60s"]["error"] == {"sessions": [], "total": 0.0, "exact": "0", "log2": None}

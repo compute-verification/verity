@@ -298,13 +298,18 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
     def __init__(self, scheme: C.PearlC, entry: str, kernel: Kernel, weights: dict[int, Any], roots: dict[int, bytes],
                  coins: CoinCommitment, opening: CoinOpening, hashing: bool = True, capacity: int = LEAF_CAPACITY,
                  time_gemm: bool = False, schedule: str | Schedule = SERIAL, graphs: bool = False, whole_defer: bool = False,
-                 flag_rows: int = FLAG_ROWS, salt_key: bytes | None = None):
+                 flag_rows: int = FLAG_ROWS, salt_key: bytes | None = None, whole_defer_a: bool = False):
         """`coins` is the challenger's coin commitment of the epoch and `opening` its salt coin, opened after the weights'
-        root (`Epoch.start`, which raises `DomainError` for any other coin): the epoch's salt is the coin's."""
+        root (`Epoch.start`, which raises `DomainError` for any other coin): the epoch's salt is the coin's.
+        `whole_defer_a` (with `whole_defer`, on a kernel whose pipeline splits A's commitment) also defers each call's A
+        tree within a whole capture (`pouw_pearl_c_graphs`)."""
+        if whole_defer_a and not (whole_defer and splits(kernel)):
+            raise ValueError(f"{entry}: whole_defer_a defers A's tree within a deferred whole capture (whole_defer), on a kernel "
+                             f"whose pipeline splits A's commitment (`Pipeline.FUSED` tree_seed_a)")
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
         self.nb, self.salt_key = kernel.run.NB, salt_key
         self.graphs = graphs and next(iter(weights.values())).device.type == "cuda"
-        self.whole_defer = whole_defer
+        self.whole_defer, self.whole_defer_a = whole_defer, whole_defer_a
         self._graphs: dict[tuple, _Graph] = {}
         self.variant = scheme.device.name
         self.time_gemm, self.events, self.omit = time_gemm, [], frozenset()
@@ -359,7 +364,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
             "schedule": None,
             "graphs": (f"calls of at most {GRAPH_ROWS} rows: the serial schedule's one graph a call, a side lane's schedule's "
                        f"one a lane and ring set (A's tree its own where it is aside), replayed by the driver"
-                       + (", a whole capture's tile hashing beside the next call" if whole_defer else "")) if self.graphs else None,
+                       + (", a whole capture's tile hashing beside the next call" if whole_defer else "")
+                       + (" and its A tree beside its forming and GEMM" if whole_defer_a else "")) if self.graphs else None,
             "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound (red team F4)"}
         self.cur: _Pass | None = None
         self.begin()
@@ -487,14 +493,33 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
             raise RuntimeError(f"{self.entry}: the call's steps {groups} don't start with A's commitment and end with the tile hashing")
         return a, b
 
+    def _call_tree(self, pipe: Any) -> int | None:
+        """Where a deferred-a whole capture (`whole_defer_a`) forks A's tree from `_call_steps`: ``tree_seed_a``'s place, the
+        last of A's commitment's steps (`_call_cuts`' first cut is after it), or None where the pipeline doesn't split it."""
+        have = {name for name, _, _ in pipe.steps()}
+        present = [x for x in self._call_names(pipe) if x in have]
+        if "tree_seed_a" not in present:
+            return None
+        at = present.index("tree_seed_a")
+        if at + 1 != self._call_cuts(pipe)[0]:
+            raise RuntimeError(f"{self.entry}: the call's steps {present} don't end A's commitment with A's tree")
+        return at
+
+    def _split_whole(self, sh: _Shape) -> bool:
+        """Whether a call of `sh` splits A's commitment for a deferred-a whole capture (`whole_defer_a`, deferring): a call
+        that replays as a graph, at a shape the kernel's pd launches take (`_aside`'s rule)."""
+        return (self._defers_a() and self._graphed(sh.m16)
+                and self.kernel.run.pd_variant(sh.m16, sh.n, sh.k) is not None)
+
     def _pipe(self, w: int, sh: _Shape) -> tuple[Any, list[Any], list[Any]]:
         """The call's pipeline and its steps: the main lane's, and (with hashing) the side lane's, by the schedule's groups
-        (`_side_groups`; A's commitment split where A's tree goes there).  The pipeline's ``lane_cuts`` are how many of the
-        main lane's steps are its per-row keying, which A's tree reads, and how many of the side lane's are A's tree; its
-        ``main_names`` name the main lane's steps."""
+        (`_side_groups`; A's commitment split where A's tree goes there, or where a deferred-a whole capture forks it,
+        `_split_whole`).  The pipeline's ``lane_cuts`` are how many of the main lane's steps are its per-row keying, which A's
+        tree reads, and how many of the side lane's are A's tree; its ``main_names`` name the main lane's steps."""
         side_groups = self._side_groups(sh)
         aside = "a_tree" in side_groups
-        key = (w, sh.m16, self.omit, self.hashing, self.schedule.name, self._graphed(sh.m16), aside)
+        split = aside or self._split_whole(sh)
+        key = (w, sh.m16, self.omit, self.hashing, self.schedule.name, self._graphed(sh.m16), split)
         if key not in self.pipes:
             wt, K = self.weights[w], self.kernel
             bufs = {**{x: t.data_ptr() for x, t in wt.b.items()}, **{x: t.data_ptr() for x, t in sh.b.items()}, "y": 0,
@@ -503,7 +528,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
             keys = {"line_b": wt.keys.data_ptr(), "dom_b": wt.keys.data_ptr() + 64, "dom_a": kp, "unit": kp + self.nb,
                     **self.const_keys}
             pipe = _pipeline(K, sh.mp, sh.n, sh.k, bufs, 0, keys, sh.xa.data_ptr(), sh.m16, variant=self.variant,
-                             split_a=aside)
+                             split_a=split)
             names = self._call_names(pipe)
             present = [x for x in names if x in {n for n, _, _ in pipe.steps()}]
             steps = _steps(pipe, names)

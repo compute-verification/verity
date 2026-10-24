@@ -22,7 +22,9 @@ hm96-sha512 rows under `verity.ml.commitments.advice`, the tree's domain bound t
 the advice's length go public, as the binding a window's registration carries (`advice_windows.binding`, the window provenance's
 ``binding``, which `serving_rows.after_commit(binding=…)` takes).  Under ``--out``:
 
-    registration.json     public: the binding (the compiler's name and digest, the advice's root and ``total_bits``), and the bits
+    registration.json     public: the binding (the compiler's name and digest, the advice's root and ``total_bits``), the
+                          registered compiler, `advice_windows.Capped` with ℓ (the cap on the advice's length its digest covers)
+                          and the compiler it wraps (``compiler``), and the bits
                           I1 charges each egress window of `--T` buckets (``bits_by_window``)
     private/advice.bin    the prover's: the advice, I1's canonical encoding
     private/advice.json   the same advice, I1's `to_json`
@@ -35,7 +37,7 @@ close, and its ``requests.jsonl``, whose ``user`` names each request) gets one a
 under ``w<k>/`` with its registration naming the window's Commit (run id and run root), listed in ``windows.json``; a window still
 open is left for a later call, and a window the advice refuses is named there.
 
-    verity-vllm advice RUN [--trace FILE] [--io FILE] [--out DIR] [--window K] [--T 600] [--tau 0.1] [--compiler-name N --compiler-digest D]
+    verity-vllm advice RUN [--trace FILE] [--io FILE] [--out DIR] [--window K] [--T 600] [--tau 0.1] [--compiler-name N --compiler-digest D] [--cap BITS]
 """
 from __future__ import annotations
 
@@ -59,21 +61,31 @@ SERVED = "verity-vllm/advice-windows-index/v1"
 COMPILER = "verity_vllm.predict.steps.compile_steps"
 
 
+#: ℓ when the registration names none (`advice_windows.CAP_BITS`, `predict.steps.CAP_BITS`: 1 MiB of advice)
+CAP_BITS = AW.CAP_BITS
+
+
 @dataclass(frozen=True)
 class Compiler:
-    """The registered compiler as the binding names it: ``name`` and ``digest`` (128 hex digits)."""
+    """The compiler the cap wraps (`advice_windows.Capped`): ``name`` and ``digest`` (128 hex digits)."""
     name: str
     digest: str
 
 
-def registered_compiler(name: str = COMPILER, digest: str | None = None) -> Compiler:
-    """The compiler the advice is bound to; without ``digest``, the SHA-512 of `name` and the tree's code identity
+def compiler_digest(name: str, code: str) -> str:
+    """The inner compiler's digest: SHA-512 of its name and its code identity."""
+    return hashlib.sha512(canonical_json({"name": name, "code": code})).hexdigest()
+
+
+def registered_compiler(name: str = COMPILER, digest: str | None = None, cap_bits: int = CAP_BITS) -> AW.Capped:
+    """The compiler the advice is bound to: `advice_windows.Capped` (PROVE-PATH's, whose digest names the inner compiler's and ℓ =
+    ``cap_bits``) over ``name``, whose digest is ``digest``, else `compiler_digest` over `name` and the tree's code identity
     (`source_identity.code_identity`)."""
     if digest is None:
         # TODO: COMPILER's own registered digest once compile_steps lands with one
         from verity_vllm.pipeline import source_identity as SI
-        digest = hashlib.sha512(canonical_json({"name": name, "code": SI.code_identity(SI.TREE)["sha256"]})).hexdigest()
-    return Compiler(name, digest)
+        digest = compiler_digest(name, SI.code_identity(SI.TREE)["sha256"])
+    return AW.Capped(Compiler(name, digest), cap_bits)
 
 
 def finish_of(rid: str, rec: dict[str, Any] | None) -> str:
@@ -280,13 +292,19 @@ def registration(compiler: Any, a: I1.Advice, root: bytes, rows: int, T: int) ->
     """What goes public of the advice: the binding (the compiler, the root of the advice's hiding commitment and its length in
     bits) and the bits I1 charges each egress window of ``T`` buckets.  Nothing of the advice itself."""
     return {"schema": REGISTRATION, "scheme": AW.SCHEME, "binding": AW.binding(compiler, root.hex(), int(I1.total_bits(a))),
+            "compiler": {"name": str(compiler.name), "digest": compiler.digest, "cap_bits": int(compiler.cap_bits),
+                         "inner": {"name": str(compiler.inner.name), "digest": compiler.inner.digest}},
             "rows": rows, "row_bits": AW.ROW_BITS, "T": int(T),
             "bits_by_window": {str(w): int(n) for w, n in sorted(I1.bits_by_window(a, int(T)).items())}}
 
 
 def commit(compiler: Any, a: I1.Advice, T: int = 600, salts: list[bytes] | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
-    """The advice committed: its public registration (`registration`) and its private opening (`advice_windows.opening`)."""
+    """The advice committed: its public registration (`registration`) and its private opening (`advice_windows.opening`).  Advice
+    over the compiler's ℓ (``compiler``: an `advice_windows.Capped`) is refused: the compiler is total only up to it."""
     data = I1.encode(a)
+    cap = int(compiler.cap_bits)
+    if 8 * len(data) > cap:
+        raise ValueError(f"the advice is {8 * len(data)} bits, over the registered cap ℓ = {cap} bits")
     reg = AW.commit_advice(compiler, data, salts)
     return registration(compiler, a, reg.root, len(reg.rows), T), AW.opening(data, reg)
 
@@ -426,6 +444,9 @@ class Options:
     compiler_name: str = option("--compiler-name", default=COMPILER, help="the registered compiler the advice is bound to")
     compiler_digest: str | None = option("--compiler-digest", default=None,
                                          help="its digest, 128 hex digits (default: SHA-512 of the name and the tree's code identity)")
+    cap: int = option("--cap", type=int, default=CAP_BITS,
+                      help="ℓ, the cap on the advice's length in bits the compiler is total up to (PRF-143): the registered compiler is "
+                           "advice_windows.Capped over the one named, whose digest covers ℓ (default 2^23, 1 MiB)")
     T: int = option("--T", type=int, default=600, help="egress buckets per window, for the bits I1 charges each window")
     tau: float = option("--tau", type=float, default=0.1, help="the egress bucket's width in seconds, for each output's release bucket")
 
@@ -443,7 +464,7 @@ def _say(rep: dict[str, Any], where: str = "") -> bool:
 def main(a: Options) -> int:
     try:
         rep = write(a.run, a.out, trace=a.trace, io=a.io, T=a.T, tau=a.tau, window=a.window,
-                    compiler=registered_compiler(a.compiler_name, a.compiler_digest))
+                    compiler=registered_compiler(a.compiler_name, a.compiler_digest, a.cap))
     except ValueError as e:
         raise UsageError(f"{a.run}: {e}") from e
     if rep.get("schema") != SERVED:
