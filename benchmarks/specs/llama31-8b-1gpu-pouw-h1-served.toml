@@ -15,7 +15,7 @@ id = "llama31-8b-1gpu-pouw-h1-served"
 # from exact int8's, so it has no control and is timed on its own gated tokens.
 arms = ["stock-fp8@compiled", "stock-int8", "pouw:eps1-sm120-h1fx1"]
 sweep = "quick"
-reps = 1
+reps = 3
 eager = true
 setup = "benchmarks/harness/setup/int8_pin.sh"
 
