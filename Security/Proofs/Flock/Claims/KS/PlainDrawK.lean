@@ -30,7 +30,8 @@ namespace Claims.Bridge.PlainDraw
 
 open _root_.Flock FlockDeploy FlockSoundness FlockSoundness.Discharge Claims.Bridge.Custody Claims.Bridge.CustodyPlain
 open FlockSoundness.Discharge.Exec (decodeWithK_id_std)
-open FlockSoundness.Refine (ptsOf shapeOf)
+open FlockSoundness.Refine (ptsOf shapeOf ebind_ok)
+open FlockDeploy.KS (decodeWithK_live)
 open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
