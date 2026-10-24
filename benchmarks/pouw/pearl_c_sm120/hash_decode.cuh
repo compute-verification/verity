@@ -158,9 +158,8 @@ DEV void rs_round(uint64_t& a, uint64_t& b, uint64_t& c, uint64_t& d, uint64_t& 
 }
 // F (a variant's PD_FADD bits, `pd_f`): some of a round's 64-bit additions as IMAD.WIDE.U32 and IMAD on the FMA pipe, by
 // PD_ONE (a 1 the compiler can't fold into IADD3), since a lone chain's rounds are bound by the ALU pipe, where SHF, LOP3 and
-// IADD.64 issue at half rate (26 of a round's instructions, 6 of them additions).  F 1: h + K_t + W_t and d + that, whose
-// inputs are three rounds old, leaving 5 additions on the ALU pipe; 2: T1 too, and the new a's last addition (3 left); 3: the
-// new e too (2 left).  The same words: only the pipe changes
+// IADD3 issue at half rate (about 30 of a round's instructions).  F 1: h + K_t + W_t and d + that, whose inputs are three
+// rounds old; 2: T1 too, and the new a's last addition; 3: the new e too.  The same words: only the pipe changes
 __device__ uint32_t PD_ONE = 1;
 DEV uint32_t pd_one() { return *reinterpret_cast<volatile uint32_t*>(&PD_ONE); }
 DEV uint64_t pd_fadd(uint64_t x, uint64_t y, uint32_t one) {   // x + y
@@ -187,10 +186,9 @@ DEV void pd_round(uint64_t& a, uint64_t& b, uint64_t& c, uint64_t& d, uint64_t& 
     const uint64_t hk = pd_fadd(h, kwi, one), dhk = pd_fadd(d, hk, one);
     const uint64_t s1 = rs_rotr(e, 14) ^ rs_rotr(e, 18) ^ rs_rotr(e, 41), ch = (e & f) ^ (~e & g);
     const uint64_t s0 = rs_rotr(a, 28) ^ rs_rotr(a, 34) ^ rs_rotr(a, 39), mj = (a & b) ^ (a & c) ^ (b & c);
-    const uint64_t x = s1 + ch, y = s0 + mj;
-    const uint64_t ne = F >= 3 ? pd_fadd(dhk, x, one) : dhk + x;
-    const uint64_t t1 = F >= 2 ? pd_fadd(hk, x, one) : hk + x;
-    const uint64_t na = F >= 2 ? pd_fadd(t1, y, one) : t1 + y;
+    const uint64_t ne = F >= 3 ? pd_fadd(pd_fadd(s1, dhk, one), ch, one) : dhk + s1 + ch;
+    const uint64_t t1 = F >= 2 ? pd_fadd(pd_fadd(s1, hk, one), ch, one) : hk + s1 + ch;
+    const uint64_t na = F >= 2 ? pd_fadd(s0 + mj, t1, one) : t1 + s0 + mj;
     h = g; g = f; f = e; e = ne; d = c; c = b; b = a; a = na;
   }
 }
