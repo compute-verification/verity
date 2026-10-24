@@ -27,7 +27,8 @@ not charged, as for `EncardChargedLe`.
 **What is left, the one hypothesis.** That `ChargeCount_v2`'s circuit computes `WindowCharge.window`. It is not proved
 in Lean: circuit-check holds the circuit to the Python reference (`window_charge.py`'s `reference_window`), and the
 Lean functions are that reference one for one, held to it by the window charge's difftest (the certifier program's
-`NetworkCertifier.WindowCharge`, proved equal to these by `CodeChargesWhole`, against `reference_window`).
+`NetworkCertifier.WindowCharge`, proved equal to these by `CodeChargesWhole`, against `reference_window` on 4,000
+random instances, accepted and refused).
 -/
 
 namespace NetTiming.Guarantees

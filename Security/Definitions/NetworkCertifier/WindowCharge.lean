@@ -28,7 +28,8 @@ window that sends either), so the two are coded as 0. With no hits and no order 
 
 **What is left.** That `ChargeCount_v2`'s circuit computes `window` is not proved in Lean. circuit-check holds the
 circuit to the Python reference, and these definitions are held to that reference by the window charge's difftest
-(the certifier program's `NetworkCertifier.WindowCharge`, against `reference_window`).
+(the certifier program's `NetworkCertifier.WindowCharge`, which `Proofs.NetworkCertifier.Code` proves equal to these
+(`CodeChargesWhole`), against `reference_window`).
 
 **Refusals.** The reference refuses (ok 0) where the Python does, and then specifies nothing else, so each function here
 returns `none` there.

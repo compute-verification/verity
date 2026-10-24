@@ -79,20 +79,20 @@ SampledCharge.lean  the leak bound under a sampled audit: by the layout's causal
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
-                               definitions above: five theorems, not guarantees (below)
+                               definitions above: six theorems, not guarantees (below)
 Accepted.lean   an accepted run of the network certificate check is a run of the constant-rate Program
                                (`security_properties`' `AcceptedRunsAreProgramRuns`, through Code.lean), and
                                Theorem 3's count of what accepted runs can carry (`EncardAcceptedObservationsLe`),
                                each unless the run yields a SHA-512 collision or an LMS forgery
 ../../lean-audit.json          the guarantee records (`security`'s lock) for tools/verity/lean/check.py
-CheckAxioms.lean               one #print axioms line per statement and witness, then eight more lemmas
+CheckAxioms.lean               one #print axioms line per statement and witness, then 13 more lemmas
 ~~~
 
 ~~~bash
 lake exe cache get                                          # Mathlib's prebuilt oleans; never build Mathlib from source
 lake build                                                  # NetTiming (the default target)
 python3 ../../../tools/verity/lean/check.py .                      # Verity's Lean check
-lake env lean CheckAxioms.lean                              # the axioms of the 46 statements, 16 witnesses and 8 lemmas
+lake env lean CheckAxioms.lean                              # the axioms of the 54 statements, 16 witnesses, 6 agreements and 13 lemmas
 # the difftest is the certifier program's: see its package, ../../../verity/core/protocols/certifier/lean/
 ~~~
 
@@ -107,8 +107,9 @@ as `docs/…` and `internal/…` name network accounting's project store, where 
 `NetTiming.Assumptions` and `NetTiming.Guarantees` import only one another and Mathlib, never a proof), the dependency
 record, a kernel replay, and the guarantees' records, whose meaning it follows through those three (`meaning`) and the
 certifier program's modules. The difftests (`runs` in the certifier program's own `lean-audit.json`) check that on 10,000
-random instances the program gives what the Python audit gives, and on 4,000 that its advice v1 charge gives what
-`arith_encode.reference_charge` gives; `Code.lean` proves the program equal to these definitions.
+random instances the program gives what the Python audit gives, on 4,000 that its advice v1 charge gives what
+`arith_encode.reference_charge` gives, and on 4,000 that its whole-window charge gives what
+`window_charge.reference_window` gives; `Code.lean` proves the program equal to these definitions.
 When a changed record lands on `main`, Daniel gets a DM showing it (Verity's `AGENTS.md`).
 
 ## The model
@@ -231,8 +232,8 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
   ingress, the faulty units' committed bits and the choice of faulty set. An accepted sampled audit reaches it except
   with probability `δ + ε_ks + ε_bind`.
 
-**The program's agreements, proved and audited, not guarantees.** Five theorems tie the difftests to these definitions
-(`NetTiming.SecurityProofs.Code`): the difftests hold the Python audit and advice v1's charge reference
+**The program's agreements, proved and audited, not guarantees.** Six theorems tie the difftests to these definitions
+(`NetTiming.SecurityProofs.Code`): the difftests hold the Python audit and advice v1's charge references
 to the certifier program (`verity/core/protocols/certifier/lean/`, Lean core only, `NetworkCertifier`), and
 these say the program computes what the definitions above define. Each is stated in `Code.lean` over both sides'
 definitions, relating them by their fields, since `security` requires nothing but Mathlib
@@ -247,7 +248,10 @@ definitions, relating them by their fields, since `security` requires nothing bu
   (`complete`);
 - `CodeSyncSet`: every sync set of the program has a reference sync set with the same values and conversely (`advice`);
 - `CodeChargesV1`: `NetworkCertifier.AdviceV1.charges` of the windows' decision streams is `AdviceV1.charges` for books
-  with the same fields (the charge difftest's `charges`), the charge `BitsCount` for advice v1 is proved of.
+  with the same fields (the charge difftest's `charges`), the charge `BitsCount` for advice v1 is proved of;
+- `CodeChargesWhole`: `NetworkCertifier.WindowCharge.charges` of the windows is `WindowCharge.charges` for books with
+  the same tables and priors and windows with the same decisions, hits and order entries (the window difftest's
+  `charges`), the charge `EncardChargedLeWhole` is proved of.
 
 They aren't guarantees because `four_names` holds every `NetTiming` guarantee to `SecurityProofs.G : Guarantees.G`,
 and a `Guarantees` module can't state them: it would have to import the program. They are built and checked like every
