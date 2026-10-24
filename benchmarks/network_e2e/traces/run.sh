@@ -13,6 +13,9 @@
 # alike (a variant and its async- twin).
 # The node has no store credentials: custody uploads OUT, and `research data put --kind vllm-trace-corpus/v1 --tree
 # OUT/corpus/<model>-<variant> --preserve` runs where `research fetch RUN --all` brought it.
+# The hostile-scheduler test serves corpus.HOSTILE's traces, honest first, synchronous and async, e.g.
+#   CORPORA="llama32_1b/greedy:honest,refuse-1,refuse-2,refuse-3,shortest-4;llama32_1b/async-greedy:honest,refuse-5,shortest-6"
+# and the same for seeded; its OUT (corpus/ and compare/) goes in whole as one vllm-adversarial-schedule/v1 tree.
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out
 VENV=${VENV:-/workspace/jobs/venv312}

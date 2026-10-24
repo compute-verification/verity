@@ -12,6 +12,10 @@ per trace in `TRACES`, each on a fresh server (so every trace starts with a cold
 ``steps.jsonl`` and ``requests.jsonl``, compares every trace's output ids request by request, and writes DIR/summary.json
 and DIR/README.md. `compare` does the same comparison across corpora that serve the same plan.
 
+`HOSTILE`'s traces test batch invariance against a malicious scheduler. Each serves heavy's load on one server (chunked
+prefill, an 8192-token budget): ``honest`` under vLLM's own scheduler, the others under `vllm_adversarial_plugin`'s hostile
+one, with its seed and prefix-cache mode. If a request's output ids moved with the hostile choices, `compare` shows it.
+
 Every model runs the integration's batch-invariant eager engine (the ``bi-eager`` execution, `verity_vllm.engine.served`):
 ``VLLM_BATCH_INVARIANT=1``, eager, Model Runner V2 and the integration's other engine switches
 (`verity_vllm.engine.env.ENGINE`) but the in-process engine core, which the OpenAI server does not have. A corpus's
@@ -76,6 +80,17 @@ TRACES = {
                 f"chunked prefill and a {KV_SMALL_TOKENS}-token KV cache, so the scheduler preempts"),
 }
 ORDER = ("heavy", "chunked", "smallkv", "medium", "light")
+#: adversarial trace -> its scheduler: None, the honest one, or (VERITY_ADV_CACHE, VERITY_ADV_SEED) of a hostile one
+#: (`vllm_adversarial_plugin`); every one serves heavy's load with chunked prefill on, so that a hostile scheduler may
+#: split any prefill
+HOSTILE = {"honest": None, "refuse-1": ("refuse", 1), "refuse-2": ("refuse", 2), "refuse-3": ("refuse", 3),
+           "shortest-4": ("shortest", 4), "refuse-5": ("refuse", 5), "shortest-6": ("shortest", 6)}
+CACHE_WHAT = {"refuse": "prefix-cache hits refused at random", "shortest": "prefix-cache hits cut to their first block"}
+TRACES |= {name: (["--enable-chunked-prefill", "--max-num-batched-tokens", "8192"],
+                  "heavy's load, chunked prefill (8192-token budget), the honest scheduler" if h is None else
+                  f"heavy's load, chunked prefill (8192-token budget), a hostile scheduler (seed {h[1]}: random "
+                  f"preemptions, hold-backs, order and prefill splits; {CACHE_WHAT[h[0]]})")
+           for name, h in HOSTILE.items()}
 
 
 @dataclass(frozen=True)
@@ -154,11 +169,14 @@ def load_docs(c4: Path, tokenizer: Path, n: int) -> list[list[int]]:
 
 
 def plugin_site(site: Path) -> Path:
-    """A directory whose .dist-info declares `vllm_trace_plugin.register` as a vLLM general plugin."""
+    """A directory whose .dist-info declares `vllm_adversarial_plugin.register` and `vllm_trace_plugin.register` as vLLM
+    general plugins, in that order: vLLM calls them in the file's order, so the tracer wraps the adversary's `schedule`
+    and records the step after the adversary has put back what it held."""
     d = site / "verity_trace_corpus-0.0.dist-info"
     d.mkdir(parents=True, exist_ok=True)
     (d / "METADATA").write_text("Metadata-Version: 2.1\nName: verity-trace-corpus\nVersion: 0.0\n")
-    (d / "entry_points.txt").write_text("[vllm.general_plugins]\nverity_trace = vllm_trace_plugin:register\n")
+    (d / "entry_points.txt").write_text("[vllm.general_plugins]\nverity_adversary = vllm_adversarial_plugin:register\n"
+                                        "verity_trace = vllm_trace_plugin:register\n")
     return site
 
 
@@ -265,7 +283,9 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
               args: argparse.Namespace) -> dict:
     server_args, why = TRACES[name]
     sampling, async_scheduling = VARIANTS[args.variant]
-    rate = model.rates[name]
+    rate = model.rates["heavy" if name in HOSTILE else name]
+    hostile = HOSTILE.get(name)
+    adversary = {"VERITY_ADV_CACHE": hostile[0], "VERITY_ADV_SEED": str(hostile[1])} if hostile else {}
     if name == "smallkv":
         server_args = [*server_args, "--kv-cache-memory-bytes", str(KV_SMALL_TOKENS * kv_bytes_per_token(checkpoint))]
     d = out / name
@@ -275,12 +295,13 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
             model.served, "--host", "127.0.0.1", "--port", str(port), *model.args, *BASE_ARGS,
             "--async-scheduling" if async_scheduling else "--no-async-scheduling", *server_args]
     engine_env = {**ENGINE_ENV, **model.env}
-    env = dict(os.environ, **engine_env, VERITY_TRACE_DIR=str(d / "raw"),
+    env = dict(os.environ, **engine_env, **adversary, VERITY_TRACE_DIR=str(d / "raw"),
                PYTHONPATH=os.pathsep.join([str(site), str(HERE), str(ROOT / "integrations/vllm"), str(ROOT),
                                            *filter(None, [os.environ.get("PYTHONPATH")])]))
     arr = traffic.arrivals(requests, rate)
     ids = [request_id(r["i"]) for r in requests]
     meta = {"trace": name, "rate": rate, "why": why, "server_argv": argv[1:], "engine_env": engine_env,
+            "adversary": {"cache": hostile[0], "seed": hostile[1]} if hostile else None,
             "requests": len(requests), "arrivals_span_s": round(arr[-1], 3)}
     t = clock()
     with open(d / "server.log", "wb") as log:

@@ -13,7 +13,8 @@ entry point visible by writing a ``.dist-info`` beside this module on the server
 
   - ``steps.PID.jsonl``, one line per ``schedule()`` call that scheduled a token or reported a preempted or finished request:
     the step's new and cached requests with their ``num_computed_tokens`` (the first position scheduled) and
-    ``num_scheduled_tokens``, the prefix-cache hit of a request's first scheduling, and the preempted and finished ids;
+    ``num_scheduled_tokens``, the prefix-cache hit of a request's first scheduling, the preempted and finished ids, and
+    the scheduler's ``current_step`` (``sched_step``, which `vllm_adversarial_plugin`'s records carry too);
   - ``outputs.PID.jsonl``, one line per recorded step once its model output is back: the model runner's batch order and the
     tokens it sampled for each row;
   - ``requests.PID.jsonl``, one line per request when the scheduler frees it: arrival time, prompt and output ids, finish
@@ -104,7 +105,8 @@ class Tracer:
             if req is not None:
                 row["prompt_len"] = int(req.num_prompt_tokens)
             cached.append(row)
-        self.write("steps", {"step": k, "t": time.time(), "new": new, "cached": cached,
+        self.write("steps", {"step": k, "sched_step": getattr(sched, "current_step", None), "t": time.time(), "new": new,
+                             "cached": cached,
                              "total_num_scheduled_tokens": int(so.total_num_scheduled_tokens),
                              "preempted": [client_id(r) for r in preempted], "finished": [client_id(r) for r in finished],
                              "waiting": len(sched.waiting), "running": len(sched.running), "empty_before": self.empty})
