@@ -9,12 +9,12 @@ the bits it would write are the window's charge.
 Under advice v1 (the certifier PROTOCOL's "Advice v1") each certifier window is one terminated segment of ENC-CODE's
 32-bit Witten–Neal–Cleary arithmetic coder (`benchmarks/network_e2e/encodings/code.py`, `ArithEncoder`), as `code_v1`
 codes it under the registered book: the window's counts, then its values (the replay's decisions, each a bit at the
-book's estimate for its context, and the hits sent past the pool bound). The committed advice is the values themselves,
-which the replay scan reads, and the charge is their coded length: the encoder runs over the same symbols, and the
-window's segment length, its steps' n and its finish's, must be at most the declared charge. No codeword is committed
-or compared. A symbol's scalings, and so n, depend only on the interval, so these Definitions, which check a segment,
-count the same bits as a counter with no segment. The compile unit runs the encoder forward, since which value is read
-next, and so its window, is the replay's position.
+book's estimate for its context, the arrival order's deviations and the hits sent past the pool bound). The committed
+advice is the values themselves, which the replay scan reads, and the charge is their coded length: the encoder runs
+over the same symbols, and the window's segment length, its steps' n and its finish's, must be at most the declared
+charge. No codeword is committed or compared. A symbol's scalings, and so n, depend only on the interval, so these
+Definitions, which check a segment, count the same bits as a counter with no segment. The compile unit runs the encoder
+forward, since which value is read next, and so its window, is the replay's position.
 
 **What the circuit computes, never witness.** A decision's context is the replay's position (under `code_v1`
 min(run, 2), with run the decisions since the last arrival), carried in the circuit. Its (f0, f1) are the model's, from
