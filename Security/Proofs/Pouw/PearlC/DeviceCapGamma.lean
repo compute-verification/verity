@@ -6,7 +6,7 @@ import Models.Pouw.Guarantees.PearlC
 # The unpromoted record, the cap, and γ at sm_120's prices (the TT_OUT restatements lane's file)
 
 Staged; nothing pinned.
-* **The unpromoted domain is not empty:** `pearlCDomainDev_unpromoted` puts a `1 × 1 × 128` layout in `pearlCDomainDev d`
+* **The unpromoted domain is not empty:** `pearlCDomainDev_unpromoted` puts a `1 × 64 × 128` layout in `pearlCDomainDev d`
   at any record with `G = 0`. Before the domain's group condition became `G = 0 ∨ 32·G ∣ k`, `32·0 ∣ k` forced `k = 0`,
   so every statement at `devSm120v2` was vacuous.
 * **A stricter cap asserts less, per unit:** `ttOutPearlCDev_cap_anti` gives TT_OUT at `ρ'` from TT_OUT at `ρ` for
@@ -25,9 +25,9 @@ namespace Pouw.PearlC
 
 open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
 
-/-- A record without promotion admits a `1 × 1 × 128` unit. -/
+/-- A record without promotion admits a `1 × 64 × 128` unit (`m n k`). -/
 theorem pearlCDomainDev_unpromoted (d : PearlCDevice) (hG : d.G = 0) :
-    pearlCDomainDev d ⟨1, fun _ => ⟨1, 1, 128⟩, fun _ => 0⟩ := by
+    pearlCDomainDev d ⟨1, fun _ => ⟨1, 64, 128⟩, fun _ => 0⟩ := by
   intro u _
   exact ⟨by norm_num, by norm_num, by norm_num, by norm_num, Or.inl hG, by norm_num⟩
 

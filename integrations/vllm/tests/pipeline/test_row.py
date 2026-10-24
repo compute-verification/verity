@@ -504,6 +504,7 @@ def _built(r: SingleRow, monkeypatch, **kw) -> dict:
     return man
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(not _GNU_TIMEOUT, reason="GNU timeout (coreutils) required -- the pods have it, macOS does not")
 def test_a_call_boundary_without_a_source_stops_the_row_after_its_build_by_name(tmp_path, monkeypatch):
     r = _row(tmp_path, "--stages", "build,match")

@@ -60,15 +60,16 @@ def test_a_link_window_is_a_row_a_bucket_whatever_the_load(traffic):
 
 def test_the_wiring_places_each_connections_cells_where_its_client_got_them(traffic):
     """Connection q's cell k of the link-window is at its row's slot `place` gives: the cells its client got that
-    window, in order. Ordinals count connections from 0 in the order they reached the warden (IO-TIE's and advice v0's
-    numbering; the active certifier's `Requests` stream s is ordinal s − 1). A bucket's cells are sorted by stream."""
+    window, in order. Ordinals count connections from 1 in the order they reached the warden (the wire's ingress
+    ordinal: the active certifier's `Requests` and IO-TIE's map number them so). A bucket's cells are sorted by
+    stream."""
     warden, clients = traffic
     seen, ordinals, shared = 0, set(), 0
     for record in records(warden)[1]:
         rows, first = W.window_rows(record, PARAMS), record.window * T
         wiring = W.wiring(record, PARAMS)
         for q, _, n in wiring.connections:
-            wire = b"".join(d for t, d in clients[q].writes if first <= t < first + T)
+            wire = b"".join(d for t, d in clients[q - 1].writes if first <= t < first + T)
             placed = wiring.place(PARAMS, [(q, k) for k in range(n)])
             assert [rows[t][j * B:(j + 1) * B] for t, j in placed] == [wire[i:i + B] for i in range(0, len(wire), B)]
             seen += n
@@ -78,7 +79,7 @@ def test_the_wiring_places_each_connections_cells_where_its_client_got_them(traf
             assert live == sorted(live) and all(f is None for f in row[len(live):])
             shared += len({x for x in live}) > 1
     assert seen == sum(len(c.cells()) for c in clients) > 0 and shared > 0
-    assert sorted(ordinals) == list(range(len(clients)))
+    assert sorted(ordinals) == list(range(1, len(clients) + 1))
 
 
 def test_the_wiring_is_the_schedules_and_only_a_record_laid_out_by_it_has_one(traffic):

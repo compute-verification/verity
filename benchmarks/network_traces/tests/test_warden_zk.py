@@ -53,7 +53,7 @@ def test_the_driver_reads_the_registration_and_the_busiest_connections_cells(at)
     assert at.opening.head == at.head and at.registration["root"] == at.head.root.hex()
     assert at.registration["wiring"] == at.opening.wiring.digest().hex()
     cells = [wz.cell_of(at, at.opening.rows[t], i) for i, t in enumerate(at.positions)]
-    assert len(at.reads) == UNITS and {q for q, _ in at.reads} == {at.connection} == {0}
+    assert len(at.reads) == UNITS and {q for q, _ in at.reads} == {at.connection} == {1}
     assert all(HEADER.unpack_from(c)[1] == at.connection for c in cells)
     assert all(c[0] in (DATA, END) for c in cells[:at.data_rows]) and at.data_rows >= UNITS
     assert len(set(at.positions)) < UNITS, "a bucket's r cells of the connection share its row"

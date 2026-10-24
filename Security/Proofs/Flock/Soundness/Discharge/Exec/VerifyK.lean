@@ -128,7 +128,7 @@ set_option maxHeartbeats 1000000 in
 theorem decodeWithK_points (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
     {sess : Session} (h : Record.decodeWithK keep hs spec text = .ok sess) :
     sess.points.size = spec.points ∧ ∀ p ∈ sess.points.toList, p.size = spec.mPts := by
-  unfold Record.decodeWithK at h
+  unfold Record.decodeWithK Record.decodeJWithK at h
   dsimp only at h
   repeat' (first | (obtain ⟨_, _, h⟩ := ebind_ok h) | (split at h))
   all_goals
@@ -141,7 +141,7 @@ set_option maxHeartbeats 1000000 in
 theorem decodeWithK_roundsWF (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
     {sess : Session} (h : Record.decodeWithK keep hs spec text = .ok sess) :
     ∀ s ∈ sess.streams.toList, RoundsWF s.rounds := by
-  unfold Record.decodeWithK at h
+  unfold Record.decodeWithK Record.decodeJWithK at h
   dsimp only at h
   repeat' (first | (obtain ⟨_, _, h⟩ := ebind_ok h) | (split at h))
   all_goals
@@ -171,7 +171,7 @@ presence check, which `keep` leaves alone). -/
 theorem decodeWithK_retained (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
     {sess : Session} (hr : spec.retainRounds = true) (h : Record.decodeWithK keep hs spec text = .ok sess) :
     ∀ s ∈ sess.streams.toList, ∀ r ∈ s.rounds.toList, ∃ b, r.bytes = some b := by
-  unfold Record.decodeWithK at h
+  unfold Record.decodeWithK Record.decodeJWithK at h
   dsimp only at h
   repeat' (first | (obtain ⟨_, _, h⟩ := ebind_ok h) | (split at h))
   all_goals

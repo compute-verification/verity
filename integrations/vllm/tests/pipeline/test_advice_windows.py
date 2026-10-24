@@ -301,10 +301,132 @@ def test_the_command_writes_the_stand_in_advice_and_commits_its_windows(advice_t
         assert got["window"]["advice"]["root"] != want["window"]["advice"]["root"]
 
 
-def test_the_stand_in_compilers_digest_names_its_programs_of_record(advice_tp):
+def test_the_stand_in_compilers_digest_names_its_programs_of_record_and_its_transfer_gates(advice_tp):
     c = advice_tp["compiler"]
     other = AW.Traced(c.programs, {**c.of_record, "0": ["00" * 32]})
     assert len(c.digest) == 128 and other.digest != c.digest and AW.Traced(dict(c.programs), dict(c.of_record)).digest == c.digest
+    gated = AW.Traced(c.programs, c.of_record, transfer_gates=(ROPE,))
+    assert gated.digest not in (c.digest, other.digest) and gated.digest == AW.Traced(c.programs, c.of_record, transfer_gates=(ROPE,)).digest
+
+
+ROPE = "RoPEHead_v1{D=64}"
+SILU = "SiluMul_v2{I=256}"
+
+
+@pytest.fixture(scope="module")
+def gated_tp(tmp_path_factory):
+    """The deferred TP Commit whose partition holds the toy's RoPE heads before its SiluMul rows under ``work:2``, the stand-in
+    compiler listing the RoPE heads as its transfer gates (and the same compiler listing none), and rank 0's window under the
+    workload's advice from each."""
+    pytest.importorskip("torch")
+    from tests.pipeline import served_tp as ST
+
+    root = tmp_path_factory.mktemp("gated-tp")
+    c = ST.commit(root / "tp", world=2, I=256, law="work:2", deferred=True, templates=(ROPE,))
+    data = _advice(c)
+    for name, gates in (("gated", (ROPE,)), ("bare", ())):
+        comp = AW.Traced.for_commit(c["commit"], c["build"], gates)
+        reqs, bound, reg = AW.of_advice(comp, data)
+        AW.commit_window(c["commit"], 0, c["partition"], root / name / "rank0", comp, reqs, bound, workers=1)
+        c[name] = {"compiler": comp, "opening": AW.opening(data, reg), "dir": root / name / "rank0",
+                   "rec": json.loads((root / name / "rank0" / "registration.json").read_text())}
+    return c
+
+
+def _gated_mine(c, name: str = "gated"):
+    comp = c[name]["compiler"]
+    return AW.window_of_advice(c["commit"], 0, c["partition"], comp, *AW.of_opening(comp, c[name]["opening"]))
+
+
+class _Coins:
+    """Deterministic coin bytes for a test's draw: SHA-512 in counter mode."""
+
+    def __init__(self) -> None:
+        self.at = 0
+
+    def __call__(self, n: int) -> bytes:
+        out = b""
+        while len(out) < n:
+            out += hashlib.sha512(self.at.to_bytes(8, "big")).digest()
+            self.at += 1
+        return out[:n]
+
+
+def _draw(rec: dict, law: dict) -> dict:
+    from verity.core.protocols.sampled_proofs import service as S
+
+    return S.select_draw(S.Law(f"work:{law['k']}"), law, rec["population"], _Coins())
+
+
+def test_the_compilers_transfer_gate_units_are_drawn_whole_beside_the_drawn_rest(gated_tp):
+    """The window's work law proves every RoPE head (work 0, its floor all 32: an All stratum) and draws 2 of the 8 SiluMul rows, as
+    the registration's law states and the verifier's own window derives; a draw by it holds every transfer-gate unit."""
+    from verity.core.protocols.sampled_proofs.one_stage import draw as D
+
+    c = gated_tp
+    mine, held = _gated_mine(c)
+    rec = c["gated"]["rec"]
+    assert [(m.template, m.n) for m in mine.members] == [(ROPE, 32), (SILU, 8)]
+    assert mine.work_table == {ROPE: {"work": 0, "floor": 32}, SILU: {"work": 1, "floor": 1}}
+    assert rec["law"] == {"law": "work", "k": 2, "strata": [{"template": ROPE, "units": [[0, 32]], "work": 0, "floor": 32, "k": 32},
+                                                            {"template": SILU, "units": [[32, 40]], "work": 1, "floor": 1, "k": 2}]}
+    assert json.loads((c["gated"]["dir"] / "partition.json").read_text())["work_table"] == mine.work_table
+    assert SRT.source(rec["window"], mine, held)["ok"]
+    v = R.check(rec, mine.program, mine.query, mine.law, CS.SCHEME, CS.expected_ports(mine), CS.leaf_layer(_publics(c["gated"]["dir"], mine)),
+                work_table=mine.work_table)
+    assert v.ok, v.codes
+    draw = _draw(rec, rec["law"])
+    assert set(range(32)) <= set(draw["units"]) and len(draw["units"]) == 34 and D.check_draw(draw, rec, rec["law"]).ok
+
+
+def test_a_transfer_gate_unit_left_out_of_the_proved_set_is_refused(gated_tp):
+    """Each way of leaving a RoPE head unproved: the proved set less one (`check_proved`), a draw trading one for an undrawn SiluMul
+    row (`check_draw`, the stratum's count), and a registration whose law draws the RoPE heads as the rest is (R1)."""
+    from verity.core.protocols.sampled_proofs.one_stage import draw as D
+
+    c = gated_tp
+    mine, _held = _gated_mine(c)
+    rec = c["gated"]["rec"]
+    draw = _draw(rec, rec["law"])
+    left = [u for u in draw["units"] if u != 0]
+    assert not D.check_proved(draw, left, len(left)).ok and D.check_proved(draw, draw["units"], len(draw["units"])).ok
+    spare = next(u for u in range(32, 40) if u not in draw["units"])
+    v = D.check_draw({**draw, "units": sorted(set(draw["units"]) - {0} | {spare})}, rec, rec["law"])
+    assert (v.ok, list(v.codes)) == (False, ["strata-count"])
+    sampled = {t: {"work": 1, "floor": 1} for t in mine.work_table}
+    v = R.check({**rec, "law": D.derive(mine.program, mine.query, mine.law, sampled)}, mine.program, mine.query, mine.law, CS.SCHEME,
+                CS.expected_ports(mine), CS.leaf_layer(_publics(c["gated"]["dir"], mine)), work_table=mine.work_table)
+    assert (v.ok, list(v.codes)) == (False, ["R1-law"])
+
+
+def test_a_window_under_the_compiler_listing_no_transfer_gates_is_refused(gated_tp):
+    """The prover's window committed under the same Programs by a compiler that lists no transfer gates draws 2 of the RoPE heads and
+    1 SiluMul row: the verifier, holding the registered compiler that lists them, refuses it on the compiler's digest, on the advice's
+    root (its tree's domain binds the compiler, `commitment_binding`) and on R1."""
+    c = gated_tp
+    mine, held = _gated_mine(c)
+    bare = c["bare"]["rec"]
+    assert [s["k"] for s in bare["law"]["strata"]] == [2, 1]
+    got = SRT.source(bare["window"], mine, held)
+    assert (got["ok"], got["codes"]) == (False, ["compiler", "advice"])
+    v = R.check(bare, mine.program, mine.query, mine.law, CS.SCHEME, CS.expected_ports(mine), CS.leaf_layer(_publics(c["bare"]["dir"], mine)),
+                work_table=mine.work_table)
+    assert not v.ok and "R1-law" in v.codes
+
+
+def test_a_partition_that_leaves_out_or_samples_a_transfer_gate_template_is_refused(gated_tp, tmp_path):
+    from verity_vllm.pipeline import serving_rows as SRW
+
+    c = gated_tp
+    comp, opening = c["gated"]["compiler"], c["gated"]["opening"]
+    for doc, why in (({"templates": [SILU], "law": "work:2"}, "would be left out of the proved set"),
+                     ({"templates": [ROPE, SILU], "law": "stratified:2"}, r"work law's draw \(law work:K\)"),
+                     ({"templates": [ROPE], "law": "work:2"}, "its selection is all")):
+        (pf := tmp_path / "partition.json").write_text(json.dumps(doc))
+        with pytest.raises(ValueError, match=why):
+            AW.window_of_advice(c["commit"], 0, pf, comp, *AW.of_opening(comp, opening))
+    assert SRW.work_table_of({"law": "work", "k": 2}, {ROPE: 32, SILU: 8}) == {ROPE: {"work": 1, "floor": 1}, SILU: {"work": 1, "floor": 1}}
+    assert SRW.work_table_of({"law": "subset", "k": 2}, {ROPE: 32, SILU: 8}) is None
 
 
 @pytest.mark.parametrize("root, bits, why", [
@@ -315,3 +437,14 @@ def test_the_stand_in_compilers_digest_names_its_programs_of_record(advice_tp):
 def test_a_binding_is_a_compiler_digest_an_advice_root_and_a_length(advice_tp, root, bits, why):
     with pytest.raises(ValueError, match=why):
         AW.binding(advice_tp["compiler"], root, bits)
+
+
+def test_a_compiler_without_transfer_gates_lists_none():
+    class Bare:
+        name, digest = "bare", "ab" * 64
+
+    class Listing(Bare):
+        transfer_gates = ["RoPEHead_v1{D=64}"]
+
+    assert AW.transfer_gates_of(Bare()) == ()
+    assert AW.transfer_gates_of(Listing()) == ("RoPEHead_v1{D=64}",)

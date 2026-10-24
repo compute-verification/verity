@@ -80,7 +80,9 @@ or ignore_eos. `--requests` requests arrive as a Poisson process at `--rate` a s
 the middle of the bucket before the one its arrival falls in. Each prompt is a list of the endpoint's token ids, a chat
 turn (a question that the model answers in a word or at length, and filler) cut to a length log-uniform in
 `--prompt-range`, with `max_tokens` uniform in 1 … `--tokens`, a seed of its own, temperature 0 and the model's own
-EOS. Its session is the body's `user`, the request's id. Each is an id request (`active.id_request`): its sampling
+EOS. Its session is the body's `user`, the request's id, `--name`.j (j its index, five digits), which the shim forwards
+the endpoint, so a run named apart from every other one the endpoint served names each of its requests there as the
+certified I/O does. Each is an id request (`active.id_request`): its sampling
 fields at fixed places, each prompt id in a field of its own, in `active.id_request_frames(prompt length)` link frames,
 a function of its length alone. The proxy opens each request's connection to the shim with the request's ingress
 ordinal (`Proxy(ordinals=True)`), and the shim writes the responses interleaved, in the order the endpoint streams
@@ -88,7 +90,7 @@ them, as id events (`active.id_event`: the ordinal and one sampled token's id, t
 it adds `UPSTREAM_FIELDS` to each body so that every chunk carries its token ids, as the committing server's do. The
 first `--probes` requests are probed straight to the endpoint at their arrival times
 (`probe_varied`). From them the plan models every frame of every request as ready `delta0_buckets` + ⌊k/ρ0⌋ buckets
-after its release, with ρ0 = (cap − 1)/m at most the slowest probed response's rate over `margin` (2) and every probed
+after its release, with ρ0 = (cap − 1)/m at most the slowest probed response's rate over `--margin` (2) and every probed
 token's latency, times `margin` and plus `extra_s` (0.5 s), covered. Its calibration is that model's at cap frames a
 request, so the envelope it declares in every window meets every modelled frame. The run lasts until every modelled
 frame is handed before its last window. N2's profile is `advice`: no egress profile, the counts are N2-ADVICE's to
@@ -114,9 +116,10 @@ certified, the I/O, the audit and the salt accept.
         [--temperature 0] [--top-p 1]
         [--tokens 64] [--response-frames F] [--prompt-tokens 128] [--probes 8] [--delta-buckets D]
         [--profile planned|served] [--traffic fixed|varied] [--rate 2] [--prompt-range 16:1024] [--seed 0]
-        [--eos-ids ID,...]
+        [--eos-ids ID,...] [--name varied]
     python certifier_serve.py serve --plan PLAN --calibration REPORT --upstream URL --out DIR --link HOST:PORT
-        --reveal HOST:PORT --key KEYDIR --challenger-key PUBLIC.json --session HEX [--start-in 10] [--tamper late|extra]
+        --reveal HOST:PORT --key KEYDIR --challenger-key PUBLIC.json --session HEX [--start-in 10]
+        [--tamper late|extra|drop|token]
     python certifier_serve.py client --plan PLAN --calibration REPORT --deployment DEPLOYMENT.json --out DIR
     python certifier_serve.py check --run DIR --challenger KEYDIR [--expect accepted|refused]
     python certifier_serve.py rehearse (--upstream URL | --vllm MODEL) --out DIR [plan's options] [--strategies S,...]
@@ -191,8 +194,9 @@ from pathlib import Path
 import active_replay as ar
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier import audit as host_audit, calibration
-from verity.core.protocols.certifier.active import DATA, Events, Proxy, RemoteCertifier, Requests, decode_frame, \
-    event_body, fresh_salt, id_event_data, id_request, id_request_fields, request_frame_count, serve_reveals
+from verity.core.protocols.certifier.active import COMPACT_EOS, COMPACT_RECORD, DATA, HEADER, ID_EVENT_BYTES, \
+    Events, Proxy, RemoteCertifier, Requests, compact_record_data, decode_frame, event_body, fresh_salt, \
+    id_event_data, id_request, id_request_fields, request_frame_count, serve_reveals
 from verity.core.protocols.certifier.certificate import Certificate, CertifiedRecord, Direction, Issuer, LmsKey, \
     LmsSigner, RecordHead, parameters_digest
 from verity.core.protocols.certifier.grid import COMPLETE, Reason, Status, occupancy, row_count
@@ -727,8 +731,13 @@ def probe_varied(url: str, model: str, requests: list[dict], api_key_env: str | 
 
 
 def varied_plan(probed: dict, requests: list[dict], *, name: str = "varied", seed: int = 0, margin: float = 2.0,
-                extra_s: float = 0.5, eos: Sequence[int] | None = None) -> tuple[dict, dict]:
-    """The calibration report and the plan of a varied run of `requests` (the module docstring's "The varied plan")."""
+                extra_s: float = 0.5, eos: Sequence[int] | None = None,
+                compact: int | None = None) -> tuple[dict, dict]:
+    """The calibration report and the plan of a varied run of `requests` (the module docstring's "The varied plan");
+    with `compact` = B, of compact egress records in B-byte cells (the report's `egress_frame_bytes`), ingress
+    unchanged."""
+    if compact is not None and compact < COMPACT_RECORD.size:
+        raise ValueError(f"a compact cell holds a {COMPACT_RECORD.size}-byte record, not {compact} bytes")
     T, tau = WINDOW_BUCKETS, BUCKET_MS
     responses = probed["responses"]
     if not requests or any(r["tokens"] < 1 for r in responses):
@@ -757,6 +766,10 @@ def varied_plan(probed: dict, requests: list[dict], *, name: str = "varied", see
         "configurations": [{"name": name, "egress": [{"link": EGRESS, "frames": [
             {"session": names[j], "index": k, "anchor": a, "ready": rd} for rd, a, j, k in keys]}],
             "ingress": [{"link": INGRESS, "arrival_ms": [t for t, n in zip(sends, frames_in) for _ in range(n)]}]}]})
+    if compact is not None:
+        report["grid"]["egress_frame_bytes"] = compact
+        for link in report["egress"]:
+            link |= {"frame_bytes": compact, "bandwidth_bps": link["allocation"] * compact * 8 / (tau / 1000)}
     setup = ar.Setup(report)
     e, i, envelope = setup.egress_params, setup.ingress_params, setup.envelope
     sessions = [[s, j + 1, full[:q["max_tokens"]]] for j, (s, q) in enumerate(zip(names, requests))]
@@ -782,7 +795,7 @@ def varied_plan(probed: dict, requests: list[dict], *, name: str = "varied", see
             "syncs": [[envelope.delta, str(envelope.rho)]] * windows, "sync_policy": "envelope",
             "model_syncs": [[s.delta, str(s.rho)] for s in chosen], "live_model": model, "seed": seed,
             "occupancy": {"kind": ADVICE, "egress": None, "ingress": None}, "request_major": False,
-            "token_ids": True, "upstream_fields": probed["upstream_fields"],
+            "token_ids": True, "upstream_fields": probed["upstream_fields"], "compact": compact,
             "varied": {"requests": len(requests), "max_tokens": cap, "eos_token_ids": stops,
                        "prompt_tokens": [min(len(q["prompt"]) for q in requests),
                                          max(len(q["prompt"]) for q in requests)],
@@ -855,7 +868,8 @@ async def serve(plan: dict, report: dict, out: Path, *, url: str, upstream: dict
                         [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]], origin=origin, publish=certifier,
                         egress_link=setup.egress_link, ingress_link=setup.ingress_link, salt=fresh_salt,
                         reveal_deadline=deadline, challenger_key=challenger_key, signer=certifier,
-                        served=served_profile(plan), ordinals=bool(plan.get("token_ids")))
+                        served=served_profile(plan), ordinals=bool(plan.get("token_ids")),
+                        compact=bool(plan.get("compact")))
     taken, served = loop.create_future(), loop.create_future()
 
     async def on_link(reader, writer) -> None:
@@ -928,8 +942,13 @@ def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
     ingress frames, and its response's token ids and frames (canonical position, egress bucket) from the egress id
     events that name its ordinal. `accepted` when every request is an id request whose `user` no other request has,
     every egress frame is an id event of a request released no later than the frame's bucket, and every response keeps
-    the finish rule: at most `max_tokens` tokens, ending at its first EOS (`eos_token_ids`) or at `max_tokens`."""
+    the finish rule: at most `max_tokens` tokens, ending at its first EOS (`eos_token_ids`) or at `max_tokens`. On a
+    compact plan each egress frame is a compact cell (`active.compact_record_data`), a stop's id in `output` is
+    `COMPACT_EOS`, and the finish is the records' own: only the last is marked, a stop at any length up to `max_tokens`,
+    `COMPACT_LAST` at `max_tokens` exactly, and no record carries an EOS id, since a stop is only ever `COMPACT_EOS`."""
     e, i = setup.egress_params, setup.ingress_params
+    compact = bool(plan.get("compact"))
+    marks: dict[int, list] = defaultdict(list)
     release, _ = ar.ingress_releases(in_records, i, e)
     data, split = defaultdict(bytes), Requests()
     for rec in sorted(in_records, key=lambda r: r.window):
@@ -954,8 +973,13 @@ def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
     for rec in sorted(out_records, key=lambda r: r.window):
         for t, row in enumerate(rec.grid):
             for slot in row[:row_count(row)]:
-                kind, _, payload = decode_frame(slot)
-                got = id_event_data(payload) if kind == DATA else None
+                if compact:
+                    c = compact_record_data(slot)
+                    got = None if c is None else (c[0], COMPACT_EOS if c[2] == "stop" else c[1], c[2])
+                else:
+                    kind, _, payload = decode_frame(slot)
+                    d = id_event_data(payload) if kind == DATA else None
+                    got = None if d is None else (*d, None)
                 r = by_ordinal.get(got[0]) if got is not None else None
                 bucket = rec.window * e.buckets + t
                 if r is None:
@@ -965,15 +989,24 @@ def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
                 else:
                     r["output"].append(got[1])
                     r["frames"].append([position, bucket])
+                    marks[r["stream"]].append(got[2])
                 position += 1
     eos, finish = set(plan["varied"]["eos_token_ids"]), Counter()
     for r in requests:
         out, m = r["output"], r["max_tokens"]
         stops = [k for k, t in enumerate(out) if t in eos]
+        ends = marks[r["stream"]]
         if not out:
             r["finish"] = "no response"
         elif len(out) > m:
             r["finish"] = "longer than max_tokens"
+        elif compact and any(ends[:-1]):
+            r["finish"] = "a token after its finish"
+        elif compact and stops:
+            r["finish"] = "an EOS id in a compact response"
+        elif compact:
+            short = "a length finish short of max_tokens"
+            r["finish"] = {"stop": "eos", "length": "length" if len(out) == m else short, None: "no finish"}[ends[-1]]
         elif stops and stops[0] != len(out) - 1:
             r["finish"] = "a token after EOS"
         else:
@@ -986,14 +1019,32 @@ def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
             "records": requests}
 
 
-def _shim_ids(run: Path) -> dict[tuple[str, int], list[int]]:
+def _shim_ids(run: Path, compact: bool = False) -> dict[tuple[str, int], list[int]]:
     """The token ids the shim wrote (`server.events.gz`), in its order, by each event's session and the ordinal it
-    names."""
+    names; its compact records' under `compact`, a stop as `COMPACT_EOS`."""
     out: dict[tuple[str, int], list[int]] = defaultdict(list)
     for _, name, _, _, e in sorted(ar.read_events(run / "server.events.gz")):
-        if (got := id_event_data(event_body(e))) is not None:
+        if compact:
+            if (c := compact_record_data(e[-COMPACT_RECORD.size :])) is not None:
+                out[name, c[0]].append(COMPACT_EOS if c[2] == "stop" else c[1])
+        elif (got := id_event_data(event_body(e))) is not None:
             out[name, got[0]].append(got[1])
     return dict(out)
+
+
+def egress_bytes(setup: ar.Setup, out_records) -> dict:
+    """Per egress window, the link's bytes (T·r·B, at the constant rate) and its frames' (Σ counts · B), at the run's
+    B and, for the same frames (one a token either way), at an id event's cell (`ID_EVENT_BYTES` and its header in a
+    256-byte frame) and at the rehearsal's id-event frame (`FRAME_BYTES`)."""
+    e = setup.egress_params
+    frames = [sum(occupancy(r.grid)) for r in sorted(out_records, key=lambda r: r.window)]
+    mean = sum(frames) / len(frames) if frames else 0.0
+    sizes = {"run": e.frame_bytes, "id_event_cell": 1 << (HEADER.size + ID_EVENT_BYTES - 1).bit_length(),
+             "id_event_frame": FRAME_BYTES}
+    return {"frame_bytes": e.frame_bytes, "windows": len(frames), "frames_per_window": round(mean, 3),
+            "frames_max": max(frames, default=0),
+            "wire_per_window": {k: e.buckets * e.allocation * b for k, b in sizes.items()},
+            "frames_bytes_per_window": {k: round(mean * b, 1) for k, b in sizes.items()}}
 
 
 def _certified(lw: LinkWindows, opening, syncs: Sequence[ClockSync]) -> bool:
@@ -1096,7 +1147,7 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
         io = certified_io(plan, setup, in_records, out_records)
         records = io.pop("records")
         (run / "io.json").write_text(json.dumps({"windows": windows, "requests": records}))
-        shim = _shim_ids(run)
+        shim = _shim_ids(run, bool(plan.get("compact")))
         io["ids_are_the_shims"] = {(r["user"], r["stream"]): r["output"] for r in records if r["output"]} == shim
         sent = {q["session"]: q["id_request"] | {"user": q["session"]} for q in plan["requests"]}
         fields = ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")
@@ -1117,7 +1168,8 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
     out = {"verdict": "accepted" if accepted else "refused", "windows": windows,
            "network_verdict": network, "audit_accepted": audit_ok, "salt_accepted": salt_ok,
            "salt_again": again, "salt": salt, "profile": profile.get("kind"), "issuer_refused": refused,
-           "rows": rows, "comparisons": audited["comparisons"], "timing": audited["timing"]}
+           "rows": rows, "comparisons": audited["comparisons"], "timing": audited["timing"],
+           "egress_bytes": egress_bytes(setup, out_records)}
     return out if not advice else out | {"certified_accepted": certified_ok, "io": io}
 
 
@@ -1190,15 +1242,17 @@ def plan_of(args, url: str, clock=time.monotonic, sleep=time.sleep) -> tuple[dic
     """(probe, calibration, plan) of the endpoint at `url` (`plan`'s): each request `--tokens` tokens out of a prompt of
     exactly `--prompt-tokens` tokens (`PROMPT` as text with 0), probed and planned `--in-flight` at a time; or, with
     `--traffic varied`, `--requests` requests of varied traffic (`varied_requests`: `--rate`, `--prompt-range`,
-    `--tokens` the cap, `--seed`), the first `--probes` of them probed at their arrival times."""
+    `--tokens` the cap, `--seed`, `--name` the users'), the first `--probes` of them probed at their arrival times."""
     model = args.model or served_model(url, args.api_key_env)
     if getattr(args, "traffic", TRAFFIC[0]) == "varied":
         lo, _, hi = args.prompt_range.partition(":")
+        name = getattr(args, "name", None) or "varied"
         requests = varied_requests(url, model, args.requests, rate=args.rate, prompt_tokens=(int(lo), int(hi)),
-                                   max_tokens=args.tokens, seed=args.seed, api_key_env=args.api_key_env)
+                                   max_tokens=args.tokens, seed=args.seed, name=name, api_key_env=args.api_key_env)
         probed = probe_varied(url, model, requests[:args.probes], args.api_key_env, clock, sleep)
         eos = [int(t) for t in args.eos_ids.split(",")] if args.eos_ids else None
-        report, plan = varied_plan(probed, requests, seed=args.seed, eos=eos)
+        report, plan = varied_plan(probed, requests, seed=args.seed, eos=eos, compact=getattr(args, "compact", None),
+                                   margin=getattr(args, "margin", 2.0))
         return probed, report, plan
     prompt = prompt_tokens(url, model, args.prompt_tokens, args.api_key_env) if args.prompt_tokens else PROMPT
     probed = probe(url, request_body(model, args.tokens, prompt, args.temperature, args.top_p), args.probes,
@@ -1247,8 +1301,9 @@ def rehearse(args) -> int:
     summary = {"upstream": url, "vllm": args.vllm, "model": plan["live_model"], "lms_height": args.height,
                "served": plan.get("served"), "varied": plan.get("varied"), "windows": plan["windows"],
                "profile": plan["occupancy"]["kind"],
+               "compact": plan.get("compact"),
                "runs": {s: {k: r.get(k) for k in ("verdict", "network_verdict", "audit_accepted", "salt_accepted",
-                                                  "salt_again", "certified_accepted", "io", "exit")}
+                                                  "salt_again", "certified_accepted", "io", "exit", "egress_bytes")}
                         | {"windows": [{k: row.get(k) for k in ("window", "n2", "served_counts", "certified", "salt",
                                                                  "audit")}
                                        for row in r["rows"]]}
@@ -1299,9 +1354,18 @@ def parser() -> argparse.ArgumentParser:
                             "profile)")
         q.add_argument("--rate", type=float, default=2.0, help="varied: arrivals a second")
         q.add_argument("--prompt-range", default="16:1024", help="varied: LO:HI, the prompts' lengths in tokens")
+        q.add_argument("--name", default="varied",
+                       help="varied: the users' prefix: request j's user, its session, is NAME.j (j five digits)")
         q.add_argument("--seed", type=int, default=0, help="varied: the traffic's seed")
         q.add_argument("--eos-ids", help="varied: the model's EOS token ids, comma-separated (default: the last ids "
                                          "of the probe's responses that stopped)")
+        q.add_argument("--compact", type=int, metavar="B",
+                       help="varied: compact egress records (`active.compact_record`) in cells of B >= 8 bytes, "
+                            "the shim writing each token's record (default: id events in 4096-byte frames); the "
+                            "gate's certifier-rehearse --traffic varied --compact B runs it on the auditor's host")
+        q.add_argument("--margin", type=float, default=2.0,
+                       help="varied: the plan's margin over the probed rates and latencies (an endpoint that slows "
+                            "under load the probes didn't meet needs more)")
     for q in (p, s, c, r):
         q.add_argument("--out", required=True, type=Path)
     for q in (s, c):

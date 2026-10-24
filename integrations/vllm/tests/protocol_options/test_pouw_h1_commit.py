@@ -157,23 +157,25 @@ def _ids(run, s):
 
 
 class _Laid(dict):
-    """`Served`'s open step tables (``_a``) laid out by ``lay`` when a step's table of K is taken whole: the rows the
-    window registers and hands the tap as its table, the Commit's own rows untouched."""
+    """`Served`'s open step tables (``_a``, each call's block by call) laid out by ``lay`` when a step's table of K is
+    taken whole: the rows the window registers and hands the tap as its table, the Commit's own rows untouched."""
 
     def __init__(self, lay):
         super().__init__()
         self.lay = lay
 
     def pop(self, key, *default):
-        return self.lay(super().pop(key, *default))
+        return dict(enumerate(self.lay([b for _c, b in sorted(super().pop(key, *default).items())])))
 
 
-def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, model=None, lie=None, com=None):
+def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, model=None, lie=None, com=None,
+            order=None):
     """A served two-step window with the Commit in its engine: the record (`pouw_h1.CALLS_FILE`), the run and the tap.
     ``edit`` makes the codes H1 is handed of what the arm quantized; ``ids`` the input ids the Commit acquires at step s
     of the honest ones; ``lay`` the blocks of a step's A table of K (one a call, in call order) as the window lays them
     out (`_Laid`). ``model`` is the two-linear `Model` unless given (`MoEModel`), H1's linears `pouw_h1_hooks.layers`
-    of it; ``lie`` wraps them once H1 is installed (the GPU harness's `edited`)."""
+    of it; ``lie`` wraps them once H1 is installed (the GPU harness's `edited`); ``order`` the model's layers in the
+    order the forward calls them (module order unless given)."""
     _host(tmp_path, monkeypatch, rounds=STEPS)
     model, com, tap = model or Model(edit), com or Committer(), CT.CommitTap(EMBED)
     layers = PHK.layers(model, (Linear,))
@@ -197,7 +199,7 @@ def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, mode
             com._cur = SimpleNamespace(step=FIRST + s)
             src.on_step_begin()
             com._acquire(f"{EMBED}/in", torch.tensor(ids(s, _ids(run, s))), com._cur)
-            for layer in model.model.layers:
+            for layer in (model.model.layers if order is None else [model.model.layers[w] for w in order]):
                 layer((torch.randn(len(run.owners[s]), K, generator=g) * 3).bfloat16())
             com._cur = None
     finally:
@@ -408,6 +410,43 @@ def test_the_source_takes_every_linears_site_at_every_engine_step():
     assert G.negatives_of(list(model.model.layers)) == G.NEGATIVES
 
 
+class FusedEmbed(nn.Module):
+    """vLLM's DeepseekV32Model at TP1 (GLM-5.3's): its table whole on the rank, it gathers the embedding from its weight
+    (`fused_embed_norm`) and calls the embedding only for ``inputs_embeds``' runner path, never on its own."""
+
+    def __init__(self, replicated=True):
+        super().__init__()
+        self.embed_tokens, self.replicated_embed = nn.Module(), replicated
+
+    def forward(self, input_ids, positions, intermediate_tensors=None, inputs_embeds=None):
+        return positions
+
+
+def test_a_model_that_gathers_its_embedding_fused_gives_the_commit_its_ids_at_its_forward():
+    """r20261024-015257-abac: GLM-5.3 at TP1 never calls its embedding, so the committer's pre-hook on it acquired no
+    step's ids and ROOTS1 refused every round (``the Commit acquired no input ids at engine step 0``). `fused_embed`
+    acquires them at the model's forward under the embedding's name, outside a step and for ``inputs_embeds`` (whose
+    embedding call the committer's own pre-hook takes) nothing, and hooks nothing on a model that calls its embedding."""
+    model, com, tap = nn.Module(), Committer(), CT.CommitTap(EMBED)
+    model.model = FusedEmbed()
+    tap.tap(com)
+    h = HC.fused_embed(com, model, EMBED)
+    try:
+        model.model(torch.tensor([5, 6, 7]), torch.arange(3))
+        com._cur = SimpleNamespace(step=FIRST)
+        model.model(torch.tensor([5, 6, 7]), torch.arange(3))
+        model.model(input_ids=torch.tensor([8]), positions=torch.arange(1), inputs_embeds=torch.zeros(1, 4))
+        model.model(torch.tensor([9]), torch.arange(1), None, torch.zeros(1, 4))
+    finally:
+        h.remove()
+        tap.untap()
+    assert com.got == [(FIRST, f"{EMBED}/in")] and com.errors == []
+    assert tap._ids[FIRST].tolist() == [5, 6, 7]
+    plain = nn.Module()
+    plain.model = FusedEmbed(replicated=False)
+    assert HC.fused_embed(com, plain, EMBED) is None
+
+
 def test_the_gpu_harness_holds_each_window_to_cores_roots1_steps(tmp_path, monkeypatch):
     """`pouw_h1_gpu.core_verdict`, the GPU run's check of each Commit window under in-process coins: the honest window's
     record is one manifest under calls_root, its tables committed by their rounds (`credit._a_link`) and each the
@@ -425,3 +464,28 @@ def test_the_gpu_harness_holds_each_window_to_cores_roots1_steps(tmp_path, monke
         v = G.negative_verdict(got[name])
         assert v["refused"] and v["arow"][1].startswith("round 0's A table of K = 64 h1/a/64@0 is not the Commit's "), v
     assert G.core_from(str(tmp_path / "ev"), str(tmp_path / "out"))["ok"]
+
+
+def test_a_forward_out_of_module_order_ties_and_its_a_zero_is_refused_at_arow(tmp_path, monkeypatch):
+    """A forward that calls linear 1 before linear 0, as GLM-5.3's DSA attention runs fused_qkv_a_proj and q_b_proj before
+    its indexer's wq_b, which module order puts first (r20261023-224227-ea5a, refused on layout): each call sits at its
+    (step, linear) index, each round's root is over its step's calls, and step s maps to the Commit's engine step at its
+    first call, whichever linear that is. The two share K, so step s's A table of K is taken whole at linear 0's call,
+    the last to come, with its rows (and the Commit's) in call order, linear 0's first. Core ties the honest window, and
+    refuses its all-zero A at ``arow``."""
+    from tests.protocol_options import pouw_h1_gpu as G
+    got = {}
+    for name, edit in (("commit", None), ("commit-a-zero", _zero)):
+        (tmp_path / name).mkdir()
+        record, run, tap = _window(tmp_path / name, monkeypatch, edit, order=(1, 0))
+        assert [(c["index"], c["step"], c["layer"]) for c in record["calls"]] == [(0, 0, 0), (1, 0, 1), (2, 1, 0), (3, 1, 1)]
+        assert run.refused == [] and run.static() and run.order_ok
+        got[name] = {"core": G.core_tie(record, run.served.program, tmp_path / "ev" / name),
+                     "roots1": run.details["roots1"]}
+    for s in range(STEPS):
+        assert tap.where[CR.commit_rows(s, K)]["calls"] == [2 * s, 2 * s + 1]
+        assert tap.where[CR.commit_rows(s, K)]["sites"] == [CT.site(f"model.layers.{w}") for w in range(2)]
+    assert got["commit"]["roots1"]["tied"] and got["commit"]["roots1"]["steps"] == {"0": FIRST, "1": FIRST + 1}
+    assert got["commit"]["core"]["tied"] and got["commit"]["core"]["commit_values"] == 4
+    v = G.negative_verdict(got["commit-a-zero"])
+    assert v["refused"] and v["arow"][1].startswith("round 0's A table of K = 64 h1/a/64@0 is not the Commit's "), v
