@@ -18,7 +18,13 @@ Poisson traffic. Plain vLLM's OpenAI server on one RTX PRO 6000, with the integr
   `corpus.request_seed`), and whether async scheduling is on. `corpus.py summarize` writes the joined `steps.jsonl` and
   `requests.jsonl`, `summary.json`, and the corpus's own README, which says what each field is. The summary also has
   whether every trace gave each request the same output ids, and the rows that sample past a request's last output.
-  `corpus.py compare` checks the same across corpora of one plan.
+  `corpus.py compare` checks the same across corpora of one plan, with the bits per request a schedule steered (log2 of
+  the distinct output-id sequences) and where a trace first diverged.
+- `vllm_adversarial_plugin.py`: a hostile scheduler, another general plugin. From `VERITY_ADV_SEED` it makes adversarial
+  but valid choices every step: random forced preemptions, a shuffled running list and waiting queue, random hold-backs
+  of waiting requests, random prefill splits, and prefix-cache hits refused at random or cut to one block
+  (`VERITY_ADV_CACHE`). It records its choices beside the tracer's files. `corpus.HOSTILE`'s traces serve heavy's load
+  under the honest scheduler and under hostile ones, which tests whether a request's outputs depend on its batch-mates.
 - `run.sh`: the job on a leased GPU of a node (its header has the command).
 
 For the 8B model, attention is vLLM's own, not the int8 attention: `verity_vllm.engine.int8_ops._requests` refuses a
