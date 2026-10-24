@@ -302,13 +302,16 @@ def late_ticks(w: Path, origin_unix: float, cores: list[int]) -> dict | None:
     for each tick later than the slack (the `LATE_SHOWN` latest), what ran around it: the tick before's work, the
     publishes and collections between that tick's deadline and this one's start, and the host samples whose period
     overlaps it (the warden's and the client's CPU seconds and involuntary switches, the busy share of the warden's
-    `cores`, the host's load and CPU pressure).
+    `cores`, the host's load and CPU pressure). A spawned publisher's keeps count as publishes, and its pace is
+    `publisher` (`publisher_pace`).
     Seconds count from the warden's origin. None for a trace without the probe."""
     if not (w / "ticks.json").exists():
         return None
     t = json.loads((w / "ticks.json").read_text())
     late, work, tau, n = t["lateness_ms"], t.get("tick_ms", []), t["bucket_ms"] / 1000, t["window"]
     counts = Counter(sum(x >= e for e in LATE_EDGES) for x in late)
+    pub = t.get("publisher")
+    publishes = sorted(t.get("publish", []) + (pub or {}).get("keep", []))
     host = read_jsonl(w / "host.jsonl")
     for h in host:
         h["t"] = round(h["t"] - origin_unix, 3)
@@ -318,11 +321,12 @@ def late_ticks(w: Path, origin_unix: float, cores: list[int]) -> dict | None:
         near = [h for h in host if h["t"] > start and h["t"] - HOST_PERIOD_S < ran]
         return {"tick": i, "window": i // n, "bucket": i % n, "late_ms": late[i],
                 "tick_before_ms": work[i - 1] if 0 < i <= len(work) else None,
-                "publish": [p for p in t.get("publish", []) if p[0] < ran and p[0] + p[1] / 1000 > start],
+                "publish": [p for p in publishes if p[0] < ran and p[0] + p[1] / 1000 > start],
                 "gc": [g for g in t.get("gc", []) if start <= g[0] <= ran],
                 "host": [{"t": h["t"], "load": h.get("load"), "busy": h.get("busy"), "psi_ms": h.get("psi"),
                           "warden_cores_busy": {c: v for c, v in (h.get("cpus") or {}).items() if int(c) in cores},
-                          **{k: h["procs"].get(k) for k in ("warden", "client")}} for h in near]}
+                          **{k: h["procs"].get(k) for k in ("warden", "client", "publisher") if k in h["procs"]}}
+                         for h in near]}
 
     over = [i for i, x in enumerate(late) if x > t["slack_ms"]]
     shown = sorted(sorted(over, key=lambda i: -late[i])[:LATE_SHOWN])
@@ -332,14 +336,38 @@ def late_ticks(w: Path, origin_unix: float, cores: list[int]) -> dict | None:
 
     return {"ticks": len(late), "slack_ms": t["slack_ms"], "over_slack": len(over), "gc_enabled": t.get("gc_enabled"),
             "switch_ms": t.get("switch_ms"), "lateness_ms": {b: counts.get(k, 0) for k, b in enumerate(LATE_LABELS)},
-            "lateness": stats(late), "tick_ms": stats(work), "publish_ms": stats([p[1] for p in t.get("publish", [])]),
-            "gc_counts": t.get("gc_counts"), "gc_ms": stats([g[2] for g in t.get("gc", [])]),
+            "lateness": stats(late), "tick_ms": stats(work), "publish_ms": stats([p[1] for p in publishes]),
+            "gc_counts": t.get("gc_counts"), "gc_ms": stats([g[2] for g in t.get("gc", [])]), "cpus": t.get("cpus"),
+            "publisher": None if pub is None else publisher_pace(pub, n * tau, len(late) * tau),
             "host": {"samples": len(host), "load_1m": series(lambda h: (h.get("load") or [None])[0]),
                      "busy": series(lambda h: (h.get("busy") or [None])[0]), "psi_ms": series(lambda h: h.get("psi")),
                      "warden_cpu_s": series(lambda h: (h["procs"].get("warden") or {}).get("cpu_s")),
                      "warden_invol": series(lambda h: (h["procs"].get("warden") or {}).get("invol")),
-                     "client_cpu_s": series(lambda h: (h["procs"].get("client") or {}).get("cpu_s"))},
+                     "client_cpu_s": series(lambda h: (h["procs"].get("client") or {}).get("cpu_s")),
+                     "publisher_cpu_s": series(lambda h: (h["procs"].get("publisher") or {}).get("cpu_s"))},
             "late": [around(i) for i in shown]}
+
+
+def publisher_pace(pub: dict, window_s: float, end_s: float) -> dict:
+    """Whether a spawned publisher (`warden_probe`'s `publisher`) kept up: each record's lag, from the warden's handing
+    its close over to the publisher's having kept it (packed, certified, and for the wire's links committed and signed),
+    the most behind, how many lagged a whole window or more, the share of each window's span its keeps took (every link's
+    keeps of that window, summed), and serve's wait in `close` for the last records, which ended the run that long past
+    `end_s`, its last tick's end. Seconds from the warden's origin."""
+    handed = {(link, w): t for t, link, w in pub["handoff"]}
+    lag = {(link, w): round(s + ms / 1000 - handed[link, w], 3) for s, ms, link, w in pub["keep"] if (link, w) in handed}
+    worst = max(lag, key=lag.get, default=None)
+    busy = Counter()
+    for _, ms, _, w in pub["keep"]:
+        busy[w] += ms / 1000 / window_s
+    close = pub.get("close")
+    return {"pid": pub.get("pid"), "handed": len(handed), "kept": len(pub["keep"]),
+            "keep_ms": stats([k[1] for k in pub["keep"]]), "lag_s": stats(list(lag.values())),
+            "most_behind": None if worst is None else {"link": worst[0], "window": worst[1], "lag_s": lag[worst]},
+            "behind_a_window": sum(x >= window_s for x in lag.values()),
+            "window_busy": stats([round(b, 3) for b in busy.values()]),
+            "close_wait_s": None if close is None else close[1],
+            "end_past_last_tick_s": None if close is None else round(close[0] + close[1] - end_s, 3)}
 
 
 def client_loop(w: Path) -> dict | None:
@@ -770,7 +798,8 @@ FIELDS = """\
   `responses.records`, #3553's warden's `fails.records`, `certified.jsonl`, `warden.json` with every connection's
   buckets and outcome), its `serve.log`, the client shim's record of every connection (`client.json`) and
   `warden_serve.py check`'s `check.json` and `check.log`; where the trace probed them, the warden's every tick,
-  publish and collection (`ticks.json`, `warden_probe.py`), the host's load every 100 ms (`host.jsonl`,
+  publish and collection (`ticks.json`, `warden_probe.py`, with a spawned publisher's keeps as it wrote them in
+  `publisher_keeps.jsonl` and its pid in `publisher.pid`), the host's load every 100 ms (`host.jsonl`,
   `host_sample.py`) and the client's event loop (`client_loop.json`, `corpus.drive_warden`); `<trace>.admitted/`,
   `<trace>.released/`: the trace with the warden's order as its certified ingress (`summary.warden_views`).
 """
@@ -855,7 +884,7 @@ def readme(s: dict) -> str:
         if probed:
             lines += ["", "Where the trace probed them (`warden_probe.py`, `host_sample.py`, `corpus.drive_warden`), the "
                       "warden's ticks and the client's event loop: each tick's lateness in ms, its own work (`_tick`), the "
-                      "publisher thread's pack and sign of each record, the warden's collections, the host's 1-minute load "
+                      "publisher's keep of each record (pack, sign and commit), the warden's collections, the host's 1-minute load "
                       "and CPU pressure, and the client loop's stalls of 20 ms or more. The late ticks one by one, with what "
                       "ran around each, are the trace's `warden.ticks.late` in summary.json.", "",
                       "| trace | cores (server / client / warden) | ticks | lateness ms: " +
@@ -873,6 +902,21 @@ def readme(s: dict) -> str:
                              f"{(t.get('publish_ms') or {}).get('max')} | {t.get('gc_counts')} | "
                              f"{(h.get('load_1m') or {}).get('p50')} / {(h.get('load_1m') or {}).get('max')} | "
                              f"{(h.get('psi_ms') or {}).get('max')} | {c.get('stalls')} ({c.get('max_lag_ms')}) |")
+        paced = {name: w["ticks"]["publisher"] for name, w in probed.items() if (w.get("ticks") or {}).get("publisher")}
+        if paced:
+            lines += ["", ("Where the warden's publisher is a process of its own (`PublisherProcess`), whether it kept up "
+                           "(`summary.publisher_pace`): each record's lag from the warden's handing its close over to its "
+                           "having been kept, the share of each window's span the publisher spent keeping that window's "
+                           "records, and how long the run's end waited for the last ones past its last tick."), "",
+                      ("| trace | records handed / kept | keep ms p50 / max | window busy p50 / max | lag s p50 / max "
+                       "(most behind) | a window or more behind | run end past its last tick s |"),
+                      "|---|---|---|---|---|---|---|"]
+            for name, p in paced.items():
+                k, b, g, m = p["keep_ms"], p["window_busy"], p["lag_s"], p["most_behind"] or {}
+                lines.append(f"| {name} | {p['handed']} / {p['kept']} | {k.get('p50')} / {k.get('max')} | "
+                             f"{b.get('p50')} / {b.get('max')} | {g.get('p50')} / {g.get('max')} "
+                             f"({m.get('link')} window {m.get('window')}) | {p['behind_a_window']} | "
+                             f"{p['end_past_last_tick_s']} |")
     ordered = {name: t["arrival_order"] for name, t in s["traces"].items() if t.get("arrival_order")}
     if ordered:
         lines += ["", "## Arrival order", "",
