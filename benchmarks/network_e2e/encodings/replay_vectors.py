@@ -259,11 +259,11 @@ def served_window(records: Sequence[Mapping[str, Any]], window: int) -> tuple[li
     return out, sum(1 for r in arrivals if r["before_step"] < lo)
 
 
-def slice_inputs(trace: RP.Trace, *, R: int, W: int, A: int, SEG: int, base: int = 0, session: int | None = None,
+def slice_inputs(trace: RP.Trace, *, R: int, W: int, A: int, base: int = 0, session: int | None = None,
                  Q: int | None = None, D: int | None = None, P: int | None = None,
                  K: int | None = None) -> dict[str, Any]:
     """CompileSlice_v1's inputs for `trace`, one window from the empty engine (`served_window`'s), at size class
-    (R, W, A) and codeword cap SEG, in `compile_slice_smallkv.json`'s layout. A request's id is `base` plus its index in
+    (R, W, A), in `compile_slice_smallkv.json`'s layout. A request's id is `base` plus its index in
     the trace (with `served_window`'s base, its index in the session), and IW holds the ids of a session of `session`
     requests (default the window's last). Q and K default to the window's arrivals, D to its decisions and P to its
     executed steps; a public class larger than the window pads it (empty arrival slots, decisions past the count, idle
@@ -285,7 +285,7 @@ def slice_inputs(trace: RP.Trace, *, R: int, W: int, A: int, SEG: int, base: int
         raise ValueError(f"the class is smaller than the window: {', '.join(small)}")
     engine = {k: v for k, v in dataclasses.asdict(e).items() if k not in ("async_scheduling", "policy")}
     return {"engine": engine, "R": R, "W": W, "A": A,
-            "IW": max((session if session is not None else base + len(reqs)) - 1, 1).bit_length(), **cls, "SEG": SEG,
+            "IW": max((session if session is not None else base + len(reqs)) - 1, 1).bit_length(), **cls,
             "arrivals": [[base + i, r.prompt_len, r.output_len] for i, r in enumerate(reqs)], "decisions": decisions,
             "steps": len(vs),
             "rows": [[[slot, base + i, kind, start, n] for slot, i, kind, start, n in out.rows] for _s, _i, out in vs]}
@@ -327,7 +327,6 @@ def main(argv: Sequence[str] | None = None) -> None:
                     "the one trace (`served_window`, `slice_inputs`)")
     ap.add_argument("--served", type=Path, help="with --slice: the Commit's seal, whose rows for the window go in `served`")
     ap.add_argument("--max-model-len", type=int, help="with --slice: the engine's, where the trace's header lacks it")
-    ap.add_argument("--SEG", type=int, default=64, help="with --slice: the codeword's cap in bits")
     for k, what in (("Q", "pending arrivals"), ("D", "decisions"), ("P", "steps"), ("K", "certified arrival slots")):
         ap.add_argument(f"--{k}", type=int, help=f"with --slice: the public class's {what} (default the window's own)")
     ap.add_argument("--out", type=Path)
@@ -343,7 +342,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         cls = {k: getattr(a, k) for k in ("Q", "D", "P", "K") if getattr(a, k) is not None}
         at = ", ".join(f"{k} {v}" for k, v in {"R": a.R, "W": a.W, "A": a.A, **cls}.items())
         fx = {"source": f"{name} window {a.slice} (replay_vectors.py --slice {a.slice} at {at})",
-              **slice_inputs(tr, R=a.R, W=a.W, A=a.A, SEG=a.SEG, base=base,
+              **slice_inputs(tr, R=a.R, W=a.W, A=a.A, base=base,
                              session=sum(r.get("kind") == "arrive" for r in recs), **cls)}
         if a.served:
             fx["served"], fx["ids"] = served_record(RP.records(a.served), a.slice, tr.ids, base)

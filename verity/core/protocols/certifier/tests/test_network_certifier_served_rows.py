@@ -12,6 +12,7 @@ from types import SimpleNamespace
 import pytest
 
 from verity.core.protocols.certifier import compile_slice as CS, served_rows as SR
+from verity.core.protocols.certifier.tests.test_network_certifier_compile_slice import BOOK
 
 FIXTURE = Path(__file__).parent / "fixtures" / "compile_slice_smallkv.json"
 ROWS = 1 << CS.FLAGS.index("rows")
@@ -22,7 +23,7 @@ RUN_ROOT = bytes(range(64))
 def x():
     fx = json.loads(FIXTURE.read_text())
     st = CS.statics(fx["R"], fx["W"], fx["A"], fx["engine"], fx["IW"], Q=fx["Q"], D=fx["D"], P=fx["P"], K=fx["K"],
-                    SEG=fx["SEG"], CN=fx["CN"], CTW=fx["CTW"], CU=fx["CU"])
+                    CN=fx["CN"], CTW=fx["CTW"], CU=fx["CU"])
     S = SimpleNamespace(**st)
     sl = CS.Slice(tuple(map(tuple, fx["arrivals"])), tuple(fx["decisions"]), fx["steps"], tuple(map(tuple, fx["tokens"])))
     rows = [tuple(map(tuple, r)) for r in fx["rows"]]
@@ -43,22 +44,22 @@ def x():
 
 def test_the_runner_rows_are_the_slices(x):
     assert len(x.session) == 1 and list(x.session[0]) == x.rows
-    assert x.served.registration.rows[0] == SR._row(CS.case(x.S, x.sl).rows["srv"])[0]
+    assert x.served.registration.rows[0] == SR._row(CS.case(x.S, x.sl, BOOK).rows["srv"])[0]
 
 
 def test_the_slice_refuses_six_passes_under_the_served_rows(x):
     """The honest run with the registered row in ``srv`` is accepted under the verifier's own ``pub``; REDTEAM's cheap run,
-    six passes and a 5-bit code, is accepted at 0x3F with its own rows in ``srv`` (a row that isn't the registered one,
-    which the b‖c check refuses) and refused at ``rows`` with the registered row. These are the reference's verdicts:
-    the corpus class is past what a test evaluates, and the circuit is its reference at the demonstration class
-    (`test_network_certifier_compile_slice.py`)."""
+    six passes charged 17 bits against the honest 22, is accepted at 0x3F with its own rows in ``srv`` (a row that
+    isn't the registered one, which the b‖c check refuses) and refused at ``rows`` with the registered row. These are
+    the reference's verdicts: the corpus class is past what a test evaluates, and the circuit is its reference at the
+    demonstration class (`test_network_certifier_compile_slice.py`)."""
     S, sl, reg = x.S, x.sl, x.served.registration
-    honest = CS.case(S, sl, served=x.session[0])
-    assert CS.words(honest.rows["pub"]) == CS.pub(S, honest.length)
+    honest = CS.case(S, sl, BOOK, served=x.session[0])
+    assert CS.words(honest.rows["pub"]) == CS.pub(S, honest.length, BOOK)
     cheap_sl = CS.Slice(sl.arrivals, (0,) * 6, sl.steps, sl.tokens)
-    own = CS.case(S, cheap_sl)
-    held = CS.case(S, cheap_sl, served=x.session[0])
-    assert own.length == held.length == 5 < honest.length
+    own = CS.case(S, cheap_sl, BOOK)
+    held = CS.case(S, cheap_sl, BOOK, served=x.session[0])
+    assert own.length == held.length == 17 < honest.length == 22
     assert [SR._row(c.rows["srv"])[0] == reg.rows[0] for c in (honest, own, held)] == [True, False, True]
     assert [c.verdict for c in (honest, own, held)] == [CS.ACCEPT, CS.ACCEPT, CS.ACCEPT & ~ROWS]
 
@@ -69,7 +70,7 @@ def test_the_row_is_bound_by_bc_to_its_leaf_run_and_index(x):
     assert SR.leaf_ok(x.record, RUN_ROOT, 0, x.served.bc(0), path)
     assert not SR.leaf_ok(x.record, bytes(64), 0, x.served.bc(0), path)
     assert not SR.leaf_ok(x.record, RUN_ROOT, 1, x.served.bc(0), path)
-    cheap = CS.case(x.S, CS.Slice(x.sl.arrivals, (0,) * 6, x.sl.steps, x.sl.tokens))
+    cheap = CS.case(x.S, CS.Slice(x.sl.arrivals, (0,) * 6, x.sl.steps, x.sl.tokens), BOOK)
     forged = SR.register(x.S, [list(cheap.steps)], RUN_ROOT, salts=reg.salts)
     assert forged.registration.rows != reg.rows
     assert not SR.leaf_ok(x.record, RUN_ROOT, 0, forged.bc(0), path)

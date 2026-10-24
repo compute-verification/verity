@@ -95,7 +95,7 @@ def test_the_slice_fixture_is_w212s(recs, tmp_path):
     served rows for the window with the runner's ids."""
     out = tmp_path / "w212.json"
     RV.main([str(RUN / "advice_trace.jsonl.gz"), "--slice", "212", "--served",
-             str(RUN / "seal-w212.jsonl"), "--R", "2", "--W", "1", "--A", "2", "--SEG", "64", "--out", str(out)])
+             str(RUN / "seal-w212.jsonl"), "--R", "2", "--W", "1", "--A", "2", "--out", str(out)])
     assert json.loads(out.read_text()) == json.loads(SLICE.read_text())
     fx = json.loads(SLICE.read_text())
     assert [a[0] for a in fx["arrivals"]] == [308, 309, 310] and fx["IW"] == 9
@@ -116,11 +116,11 @@ def test_the_class_fixture_is_w212_padded(tmp_path):
     assert got == json.loads(CLASS.read_text())
     assert {k: got[k] for k in ("R", "W", "A", "Q", "D", "P", "K")} == {"R": 8, "W": 1, "A": 9, "Q": 4, "D": 32, "P": 54,
                                                                        "K": 4}
-    assert {k: got[k] for k in ("arrivals", "decisions", "steps", "served", "ids", "IW", "SEG")} == \
-        {k: own[k] for k in ("arrivals", "decisions", "steps", "served", "ids", "IW", "SEG")}
+    assert {k: got[k] for k in ("arrivals", "decisions", "steps", "served", "ids", "IW")} == \
+        {k: own[k] for k in ("arrivals", "decisions", "steps", "served", "ids", "IW")}
 
 
 def test_a_class_smaller_than_the_window_is_refused(recs):
     sub, base = RV.served_window(recs, 212)
     with pytest.raises(ValueError, match="smaller than the window: D = 13 < 14, P = 19 < 20"):
-        RV.slice_inputs(RP.load_step_trace(sub), R=2, W=1, A=2, SEG=64, base=base, D=13, P=19)
+        RV.slice_inputs(RP.load_step_trace(sub), R=2, W=1, A=2, base=base, D=13, P=19)

@@ -7,8 +7,8 @@ from typing import Any
 
 def _network_compile_slice_roots() -> list[Any]:
     """The compile slice at its demonstration class (`compile_slice.demo`): four steps at (R 2, W 1, A 2) of 4-token
-    blocks, three arrivals, five decisions, a 32-bit codeword, a 6-entry prefix cache of 4-bit tokens and 4 units a
-    request. The corpus slice's class (`tests/fixtures/compile_slice_smallkv.json`) is about 7.6M ANDs, past what
+    blocks, three arrivals, five decisions charged by ChargeLink_v1{5}, a 6-entry prefix cache of 4-bit tokens and 4
+    units a request. The corpus slice's class (`tests/fixtures/compile_slice_smallkv.json`) is about 7.6M ANDs, past what
     circuit-check traces."""
     from verity.core.protocols.certifier.compile_slice import demo, unit
 
