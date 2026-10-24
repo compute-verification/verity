@@ -110,6 +110,7 @@ WINDOW_EXPECT = {
     "a-zero": ("arow", NOT_COMMITS + "row-table/"), "a-row-off": ("arow", NOT_COMMITS + "row-table/"),
     "ids-off": ("arow", NOT_COMMITS + "input-ids/"), "ids-missing": ("arow", "'s input-ids table "),
     "commit-missing": ("arow", "the Commit record registers "), "commit-twice": ("arow", "the Commit record registers "),
+    "commit-missing-expert": ("arow", f"/k{cases.EXPERT_K} not: the served Commit registers each round's A table"),
     "ids0-outside": ("arow", Cr.IDS_OUTSIDE), "ids0-root-off": ("arow", Cr.IDS_OUTSIDE),
     "ids0-other-session": ("registration", "ids@0" + OTHER_REGISTRATION),
     "a-call-off": ("arow", NOT_COMMITS + "row-table/"), "a-call-missing": ("arow", "rows, not "),
@@ -139,6 +140,7 @@ PERIOD_EXPECT = {
     "other-model": ("weights", "which is no checkpoint role credit pins: " + Cr.MODEL_FIX),
     "other-sw": ("window", "so the period earns nothing: weights: the window's registered weights' root "),
     "zero-codes": ("window", "so the period earns nothing: weights: the window's registered weights' root "),
+    "stale-pin": ("pin", "past its freshness floor"),
 }
 A_LINK_EXPECT = {
     "untied": UNTIED, "late-rows": UNTIED, "rewritten": UNTIED, "round-root": "`credit.round_root`", "gap": "`credit.cover`",
@@ -522,6 +524,26 @@ def test_a_table_the_served_commit_did_not_commit_refuses(seed):
 
 
 @pytest.mark.parametrize("seed", SEEDS)
+def test_an_expert_call_whose_rows_the_commit_lacks_refuses(seed):
+    """VLLM-80 (ROOTS1 for MoE): a served MoE window lays out its routed experts' calls as H1 names them
+    (``prefix.expert.projection``), each expert's down at the intermediate width K, which only expert calls have. With
+    every table the Commit's, the window is credited; with the Commit record lacking one round's A table of that K,
+    whose calls are expert calls only, `_arow` refuses the window before any proof is read (``commit-missing-expert``)."""
+    d = cases.window_instance(random.Random(f"moe/{seed}"), lay=cases.expert_layout(random.Random(f"layout/{seed}")))
+    got, refused = Cr._window_outcomes(*cases.window_args(d))
+    assert refused is None and got == [i for i, row in enumerate(d["calls"]) if row[Cr.CREDIT]]
+    d = cases.window_instance(random.Random(f"commit-missing-expert/{seed}"), "commit-missing-expert")
+    lay, steps = Cr.layout_of(bytes.fromhex(d["descriptor"]))[0], len(d["rounds"])
+    names = {e["value"] for e in Cr.commit_of(d["commit"])[0][1]}
+    gone = [(s, cs) for s, k, cs in Cr.step_tables(lay, steps) if Cr.commit_rows(s, k) not in names]
+    assert len(gone) == 1 and all(lay["calls"][c][0].startswith(cases.EXPERTS_PREFIX + ".") and
+                                  lay["calls"][c][0].endswith(".down") for c in gone[0][1]), gone
+    got, refused = Cr._window_outcomes(*cases.window_args(d))
+    assert got is None and refused == ("arow", refused[1]) and refused[1].startswith(
+        f"the Commit record registers {Cr.commit_rows(gone[0][0], cases.EXPERT_K)} not"), refused
+
+
+@pytest.mark.parametrize("seed", SEEDS)
 def test_round_0s_input_ids_are_inside_its_request_table(seed):
     """ROOTS1's ids@0: the window's open root binds round 0's request root, which is `requests_root` of the request
     table's root and ids@0's, so ids@0's rows are fixed before the salt coin; its domain binds the window's session,
@@ -677,6 +699,29 @@ def test_a_window_whose_session_ran_a_branch_commit_refuses_the_period(seed):
     on_main = {**d, "main": [rc.BRANCH, *d["main"]]}
     got, refused = Cr._period_outcomes(*(on_main[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
     assert refused is None and len(got["windows"]) == len(d["windows"])
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_the_freshness_floor_counts_from_the_open_pin_not_mains_head(seed):
+    """CMP74-FOLLOW: a period's open records the commit it opened under (`credit.committed_pin`) and a freshness floor
+    (`credit.committed_floor`, first-parent commits, default 0 when the open records no floor). A window counts only when
+    its pin is at most the floor behind the open pin on main's line, counted from that pin and never from main's head
+    (`credit._pin_hygiene`): a window past the open pin plus the floor is refused, but a window within it stays credited
+    after main moves on, since nothing reads main's head. The honest period, whose open pin is older than every window,
+    earns."""
+    got, refused = _period("stale-pin", seed)
+    assert got is None and refused[0] == "pin" and "past its freshness floor" in refused[1], refused
+    # fresh at open (MAIN[4] is four first-parent commits behind the open pin MAIN[0], within a floor of four), and still
+    # fresh after main gains five commits, since the floor counts from the open pin and nothing reads main's head.
+    d = cases.period_instance(random.Random(f"floor/{seed}"), period_pin=rc.MAIN[0], pin_floor=4, stale_window=0)
+    assert Cr.committed_pin(d["ledger"], d["name"]) == rc.MAIN[0] and Cr.committed_floor(d["ledger"], d["name"]) == 4
+    assert Cr._period_outcomes(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)[1] is None
+    ahead = [hashlib.sha1(b"ahead %d" % j).hexdigest() for j in range(5)]
+    moved = {**d, "main": [*ahead, *d["main"]]}
+    assert Cr._period_outcomes(*(moved[k] for k in cases.PERIOD_KEYS), rc.lms_verify)[1] is None
+    h = cases.period_instance(random.Random(f"honest/{seed}"))
+    assert Cr.committed_pin(h["ledger"], h["name"]) == rc.MAIN[-1] and Cr.committed_floor(h["ledger"], h["name"]) is None
+    assert Cr._period_outcomes(*(h[k] for k in cases.PERIOD_KEYS), rc.lms_verify)[1] is None
 
 
 def _work(layout: dict) -> int:

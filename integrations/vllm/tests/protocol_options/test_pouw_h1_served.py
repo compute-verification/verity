@@ -549,17 +549,19 @@ def test_round_r_lists_step_rs_a_tables_whole_under_its_root():
 
 class _Receipts(dict):
     """A stand-in receipt producer: each unit of the call one receipt of the stand-in's width (one u16 word), drawn from
-    the call's served codes and weight, kept by call so a test recomputes each table from them."""
+    the call's served codes and weight, kept by call (with the codes it was given, and the order it was asked in) so a
+    test recomputes each table from them."""
 
     def __init__(self, dtype=np.uint16, width=1):
         super().__init__()
-        self.dtype, self.width = dtype, width
+        self.dtype, self.width, self.order, self.codes = dtype, width, [], {}
 
     def __call__(self, call, codes, s_a, w, s_w):
         seed = hashlib.sha512(b"%d" % call.index + np.asarray(codes).tobytes() + np.asarray(w).tobytes()).digest()
         got = np.random.default_rng(int.from_bytes(seed[:8], "little")).integers(
             0, np.iinfo(self.dtype).max, ((T // TILE[0]) * (call.n // TILE[1]), self.width), dtype=self.dtype)
-        self[call.index] = got
+        self[call.index], self.codes[call.index] = got, np.array(codes)
+        self.order.append(call.index)
         return got
 
 
@@ -571,30 +573,36 @@ def test_receipt_words_are_each_u32_word_little_endian_low_half_first():
         SV.receipt_words(np.zeros(3, np.uint32))
 
 
-def test_each_calls_receipts_are_its_receipt_table_beside_its_z_table():
-    """With a receipt producer, each call's ``receipt@<c>`` (BRIDGE2) is registered beside its ``zy@<c>``: one ``row/v2``
-    row a unit of the call in its tile order, the unit's receipt (the stand-in's 16 bits, one u16 word), its root recomputed here
-    from the call's receipts under row j's salt at `RECEIPT_NONCE` + c, its domain the registered-value domain of the
-    Program's digest bound to the window's open root (as ``zy@<c>``'s), and its root in the call's manifest row. Round r
-    lists step r's calls' receipt tables whole under its root, which core's `credit._a_link` ties to the call's round,
-    `tables` lists every call's, and each call's ``--registered`` file names it at its output row o0
-    (`h1window.RECEIPT_PORT`), unit u of its t-th tile at row t."""
+def test_each_calls_receipts_are_its_receipt_table_once_its_roots_are_registered():
+    """With a receipt producer, each call's ``receipt@<c>`` (BRIDGE2) is registered at its step's last call of its K, after
+    the roots its units' seeds take (its step's ``a/<K>@<s>`` and ``b/<K>``), the producer asked for each of the step's
+    calls of K in call order with that call's own served codes: one ``row/v2`` row a unit of the call in its tile order,
+    the unit's receipt (the stand-in's 16 bits, one u16 word), its root recomputed here from the call's receipts under row
+    j's salt at `RECEIPT_NONCE` + c, its domain the registered-value domain of the Program's digest bound to the window's
+    open root (as ``zy@<c>``'s), and its root in the manifest row of the call that registered it. Round r lists step r's
+    calls' receipt tables whole under its root, which core's `credit._a_link` ties to the call's round, `tables` lists
+    every call's, and each call's ``--registered`` file names it at its output row o0 (`h1window.RECEIPT_PORT`), unit u
+    of its t-th tile at row t."""
     made = _Receipts()
-    run, _ws, _got = _window(W1, receipts=made)
+    run, _ws, got = _window(W1, receipts=made)
     served, pre = run.served, SV.PREFIX
     prog, digest = served.program, P.program_digest(served.program)
     assert not served.refused and sorted(made) == list(range(len(run.calls)))
     names = list(served.registered)
+    assert made.order == sorted(range(len(run.calls)), key=lambda c: (served.step_calls(c)[-1], c))
     for c in run.calls:
-        rc = served.registered[pre + f"receipt@{c.index}"]
-        assert names.index(rc.value) == names.index(pre + f"zy@{c.index}") + 1
+        rc, last = served.registered[pre + f"receipt@{c.index}"], served.step_calls(c.index)[-1]
+        assert names.index(rc.value) > max(names.index(served.a_table(c.index)), names.index(pre + f"b/{c.k}"),
+                                           names.index(pre + f"zy@{last}"))
+        assert np.array_equal(made.codes[c.index], _served_call(got, c.index, c.n, c.k)[0].numpy())
         assert (rc.leaves, rc.words) == (HW.call_units(prog)[c.index][1], 1) == served.receipt_shape(c.index)
         assert rc.root.hex() == _tree(rc, [w.tobytes() for w in made[c.index].astype("<u2")], run._key,
                                       SV.RECEIPT_NONCE + c.index)
         assert rc.domain.domain_id == G.domain(digest, rc.value, rc.words, rc.leaves, window=W1.hex()).domain_id
         assert rc.domain.domain_id != G.domain(digest, rc.value, rc.words, rc.leaves).domain_id
         assert served.root == W1.hex() and rc.window == served.registered[pre + f"zy@{c.index}"].window == W1.hex()
-        assert run.tables[c.index]["registered"][rc.value] == rc.root.hex()
+        assert run.tables[last]["registered"][rc.value] == rc.root.hex()
+        assert all(rc.value not in run.tables[d]["registered"] for d in range(len(run.calls)) if d != last)
     assert served.tables()[-len(run.calls):] == [pre + f"receipt@{c}" for c in range(len(run.calls))]
     for r, log in enumerate(run.round_log):
         segs = served.segments(run, r)
