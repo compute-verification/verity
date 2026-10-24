@@ -24,7 +24,7 @@ if grep -q staged_sources "$TREE/integrations/vllm/verity_vllm/commit/committer/
 fi
 rs() { "$PY" -m research "$@" 2>&1 || research "$@" 2>&1; }
 { id; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; echo "base $BASE"; nvidia-smi -L; } | tee "$OUT/machine.txt"
-rs keep "$ROOT" --owner @vllm --expires 7d --why "CIR-87 (1): the top-p split pin's rows (Build, Match, Commit)" | tail -2
+rs keep "$ROOT" --owner @vllm --expires 7d --priority normal --why "CIR-87 (1): the top-p split pin's rows (Build, Match, Commit)" | tail -2
 
 step() {  # NAME CMD...: its output in $OUT/NAME.out
   local name=$1; shift
