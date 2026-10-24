@@ -41,16 +41,18 @@ nins past the window; an append to a full table.
 L max_model_len. Widths: EW = bitlen(N) (an entry or ROOT), KU = ⌈L / U⌉, HW = bitlen(KU), LW = bitlen(L). Every field
 is little-endian.
 
-**Composition**: PROTOCOL.md, "Advice v1". `ReplayStep_v1` calls it once per scheduled row in its scheduling order, the
-running rows first. An admitting candidate's call (nins = 0) gives the hit before the scheduler sizes the row, and a
-second call computes the units the row completes. The engine-step scan carries the table and each running slot's pfx,
-and N = num_gpu_blocks − 1 holds every unit computed while the bound holds.
+**Composition** (PROTOCOL.md, "Advice v1"): the calls follow `ReplayStep_v1`'s scheduling order, the running rows first.
+An admitting candidate's call (nins = 0) checks the hit `ReplayStep_v1` reads, and a second call, from that call's pfx,
+computes the units the row completes. r is the row's I1 request number. The replay's state chain (`replay_chain`)
+carries the table and each running slot's pfx in its state row, and N = num_gpu_blocks − 1 holds every unit computed
+while the bound holds.
 
 **Cost** (`size`): a unit costs about N·(2·(U·TW + EW) + 2·RW) ANDs. That is a comparison against every entry and a
-masked write to every entry. A call costs KU units plus its range checks: 24,839 ANDs at (N, U, TW, RW, L) =
-(8, 4, 8, 4, 32), and 307,416 a unit (39.6M a call) at smallkv's (511, 16, 17, 10, 2048). A linear table is the size
-class of a slice. The full session scales by sorting each step's lookups and inserts into the table's order, offline
-memory checking as `advice_check` sorts its events, at O(log² E) a unit for E units in all.
+masked write to every entry. A call costs KU units plus its range checks: 5,856 ANDs at (N, U, TW, RW, L) =
+(8, 4, 8, 4, 32) (5,701 lowered), 18,658 at (8, 16, 17, 10, 64), 5.42M at the difftest's (128, 16, 17, 7, 1168), and
+at smallkv's (511, 16, 17, 10, 2048) 300,049 a unit and 38.4M a call. A linear table is the size class of a slice. The
+full session scales by sorting each step's lookups and inserts into the table's order, offline memory checking as
+`advice_check` sorts its events, at O(log² E) a unit for E units in all.
 """
 from __future__ import annotations
 

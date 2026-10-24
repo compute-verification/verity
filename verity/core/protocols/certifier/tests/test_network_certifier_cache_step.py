@@ -173,12 +173,14 @@ def test_the_difftest_vectors(name) -> None:
 
 
 def test_size() -> None:
-    """The pinned class's ANDs (`cache_step.circuit-check.json`, its C-Flock lowering's, which merges the ANDs a unit
+    """Each pinned class's ANDs (`cache_step.circuit-check.json`, its C-Flock lowering's, which merges the ANDs a unit
     repeats on identical operands) within 3% of the Definition's, and a unit's growth in N: a comparison against each
     entry and a masked write to it, 2·(U·TW + EW) + 2·RW ANDs and a few more."""
     pins = json.loads((Path(CS.__file__).with_name("cache_step.circuit-check.json")).read_text())["definitions"]
-    key = "CacheStep_v1{" + ",".join(f"{k}={SMALL[k]}" for k in CS.STATICS) + "}"
-    assert pins[key]["and"] <= CS.size(**SMALL)["ands"] <= 1.03 * pins[key]["and"]
+    assert "CacheStep_v1{" + ",".join(f"{k}={SMALL[k]}" for k in CS.STATICS) + "}" in pins
+    for key, pin in pins.items():
+        st = {k: int(v) for k, v in (kv.split("=") for kv in key[key.index("{") + 1:-1].split(","))}
+        assert pin["and"] <= CS.size(**st)["ands"] <= 1.03 * pin["and"], key
     a, b = (CS.size(**{**SMALL, "N": n})["unit"] for n in (16, 24))
     per = 2 * (S.U * S.TW + CS.widths(SimpleNamespace(**{**SMALL, "N": 16})).EW) + 2 * S.RW
     assert per <= (b - a) / 8 <= per + 8
