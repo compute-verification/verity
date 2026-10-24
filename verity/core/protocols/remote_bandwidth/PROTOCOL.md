@@ -995,11 +995,12 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
   may be sent as its change from the previous pass's plan (§4, `Plan.changed`). A decode step at batch 64 allocates
   or frees about 4 pages a layer, 128 runs over 32 layers, about 4 KB a step. The reference applies a change in
   \(O(R + \text{changes})\), in Python; deployed, the verifier updates its sorted copy and checks distinctness in
-  \(O(\text{changes} \cdot \log R)\). Checked whole, a plan of 245k runs takes about 300 ms as
-  `Plan` on tuples, more than a 7–120 ms pass, and about 11 ms as `Plan.from_array` on the store's (R, 2) array,
-  about 5 ms of it the digest. Its checks and encoding are numpy in `verity.ml.kernels.plans`, since a protocol
-  imports no third-party package, and the suite holds it to `Plan`'s digests and refusals on the same rows.
-  `Session.receive` takes any of the three.
+  \(O(\text{changes} \cdot \log R)\). Checked whole on one core, a plan of 245k runs takes about 230–340 ms as
+  `Plan` on tuples, more than a 7–120 ms pass, and as `Plan.from_array` on the store's (R, 2) array about 55 ms in
+  store order and 150 ms shuffled, with about 5 ms more for the digest (r20261024-144454-33aa). `Plan.from_array`
+  reads the array through the buffer protocol and checks it column by column in the standard library, since a
+  protocol imports no third-party package and a verifier no `verity.ml` code, and the suite holds it to `Plan`'s
+  digests and refusals on the same rows. `Session.receive` takes any of the three.
 - **What the plan shows.** v0's plans are in the clear, so the verifier sees which KV pages were live in each pass: the
   batch's shape and context lengths over time, not their contents. Hiding them goes with the zero-knowledge openings:
   the plan committed, its distinctness and each opening's \(j = \text{plan}[p]\) proved, only \(L\) public (the draws

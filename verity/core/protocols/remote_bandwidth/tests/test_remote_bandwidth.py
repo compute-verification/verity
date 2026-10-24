@@ -213,7 +213,8 @@ def test_a_session_of_partial_plans_is_accepted_and_certifies_its_receipts(store
 
 
 def test_plans_sent_as_arrays_are_received_as_their_runs_are(store) -> None:
-    """The verifier takes a plan as the store holds it, an (R, 2) array, and checks it in numpy (`Plan.from_array`)."""
+    """The verifier takes a plan as the store holds it, an (R, 2) array, and checks it from the array's buffer
+    (`Plan.from_array`)."""
     s, prover, passes, clock = drive(store, params(samples=1000), SCHEDULE, plan=partial,
                                      sent=lambda ps: np.array(ps.plan.runs, np.int64))
     assert all(v.accepted for v in finish(s, prover, passes, clock))
