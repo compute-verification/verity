@@ -209,7 +209,8 @@ def lowered_wire_of(x: dict) -> dict | None:
 def _leaf(rng: random.Random) -> dict:
     r = rng.choice((4, 8, 8, 16, 32, 32, 64, rng.choice((0, 3, 12, 20))))
     c = rng.choice((8, 16, 16, 32, 32, 64, 128, rng.choice((0, 12, 24, 40))))
-    k = rng.choice((0, 32, 64, 384, 448, 896, 4096, 14336, 32 * rng.randint(1, 512), rng.randint(1, 20000)))
+    k = rng.choice((0, 32, 64, 384, 448, 896, 4096, 14336, 32 * rng.randint(1, 512), rng.randint(1, 20000),
+                    (1 << 17) - 32, 1 << 17, 32 * rng.randint(4090, 4200)))
     return {"r": r, "c": c, "k": k}
 
 
