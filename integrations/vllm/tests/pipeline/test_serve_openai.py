@@ -280,10 +280,11 @@ class Serving:
         self.windows = sc.CommitWindows(Committer(self.runner, flip), out, run_id="t", window_steps=window_steps,
                                        idle_close_steps=idle_close_steps, eos_ids=[Tokenizer.eos_token_id],
                                        clock=lambda: 0.0, wall=lambda: 0.0) if commit else None
-        self.loop = so.EngineLoop(Engine(self.runner, seed_override, block), self.windows)
+        self.loop = so.EngineLoop(Engine(self.runner, seed_override), self.windows)
         self.server = so.Server(proto=so.PlainProtocol(force_include_usage), served_name="m", max_model_len=512, tokenizer=Tokenizer(),
                                 defaults={"temperature": 1.0}, submit=self.loop.submit, abort=self.loop.abort, clock=lambda: 7)
         self.http = so.HttpThread(self.server, "127.0.0.1", 0)
+        self.loop.engine.block = block
 
     def __enter__(self) -> Serving:
         self.engine_thread = threading.Thread(target=self.loop.run, daemon=True)
