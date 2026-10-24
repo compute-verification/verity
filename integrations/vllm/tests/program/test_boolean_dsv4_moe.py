@@ -39,8 +39,8 @@ PINS = {
     "MoeRouterSqrtSoftplus_v2{E=8,SCALE=2.5}": (435870, 808659, 32308, "0b3e11c44e7883154b4b03c058455257c801435ad6c08407357061e3fe7a13238e9400038f38c6324ba345892217526f7e93141fa3257c2f3e0efc07f342b9e1"),
 }
 TARGETS = [bind(BD.MufuLg2Mantissa), bind(BD.SiluMulClampBf16, LIMIT=10.0), bind(BD.SiluMulClamp, I=4, LIMIT=10.0),
-           *[pytest.param(t, marks=pytest.mark.slow) for t in (bind(BD.Ex2Approx), bind(BD.Dsv4HashWeight),
-                                                               bind(BD.MoeRouterHash, E=8, SCALE=2.5), bind(BD.Dsv4SqrtSoftplus),
+           bind(BD.Ex2Approx), bind(BD.Dsv4HashWeight),
+           *[pytest.param(t, marks=pytest.mark.slow) for t in (bind(BD.MoeRouterHash, E=8, SCALE=2.5), bind(BD.Dsv4SqrtSoftplus),
                                                                bind(BD.MoeRouterSqrtSoftplus, E=8, SCALE=2.5))]]
 
 NEG_INF = 0xFF800000
@@ -120,7 +120,6 @@ def test_lg2_where_measured_and_on_every_exponent_and_sign() -> None:
     _agree(bind(BD.MufuLg2Mantissa), x)
 
 
-@pytest.mark.slow
 def test_lg2_on_every_mantissa_is_the_measured_unit() -> None:
     """All 2^23 words of [1, 2) against `LG2_MEASURED`'s SHA-256 (about 10 s): the Boolean interpolator is the measured unit, not
     only its word view.  Its exponent field is 0 exactly at m = 0, which `Dsv4HashWeightOut_v1` reads as m = 0."""
@@ -133,12 +132,10 @@ def test_lg2_on_every_mantissa_is_the_measured_unit() -> None:
     assert h.hexdigest() == D.LG2_MEASURED["sha256"]
 
 
-@pytest.mark.slow
 def test_ex2_approx_on_special_edge_and_random_words() -> None:
     _agree(bind(BD.Ex2Approx), _words(np.random.default_rng(0xE2), 3000, -160, 130))
 
 
-@pytest.mark.slow
 def test_the_hash_weight_on_special_edge_and_random_words() -> None:
     _agree(bind(BD.Dsv4HashWeight), _words(np.random.default_rng(0x4A5), 3000, -100, 100))
 
@@ -228,6 +225,7 @@ def test_the_triton_router(E_) -> None:
                          ids=lambda t: t.id)
 def test_the_routers_pass_the_word_querys_cut_check(target) -> None:
     """Each value a router reads is decoded in one of its Calls (each expert's MUFUs and pieces, the pick or the slots, the hash
-    router's renormalisation): the cut check finds no value computed twice."""
+    router's renormalisation): the cut check finds no value computed twice. About 80 s for the sqrt-softplus router; no
+    evaluation can show a value computed twice, since a recomputed value still agrees with its word."""
     prog, _ = standalone_call(target)
     assert PO.verify(PO.build(prog, PO.query(16, 32)), prog).ok

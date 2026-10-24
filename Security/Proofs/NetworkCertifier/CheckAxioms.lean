@@ -4,7 +4,7 @@ import Models.NetworkCertifier.Guarantees
 import Proofs.NetworkCertifier
 open NetTiming
 
--- The 38 statements' proofs (25 of them `lean-audit.json`'s `guarantees`, 13 lemmas), then the 16 witnesses.
+-- The 42 statements' proofs (29 of them `lean-audit.json`'s `guarantees`, 13 lemmas), then the 16 witnesses.
 #print axioms SecurityProofs.CardFree
 #print axioms SecurityProofs.CardLeftPacked
 #print axioms SecurityProofs.FillInjective
@@ -43,6 +43,10 @@ open NetTiming
 #print axioms SecurityProofs.EncardAccSeqsWithinLeConstantRate
 #print axioms SecurityProofs.EncardDecodableWithinLeCompiled
 #print axioms SecurityProofs.EncardDecodableWithinLeCompiledPerWindow
+#print axioms SecurityProofs.EncardAccSeqsSampledLe
+#print axioms SecurityProofs.WardenViewEqClientView
+#print axioms SecurityProofs.EncardWardenViewsLe
+#print axioms SecurityProofs.EncardWardenDecodableLe
 #print axioms witnessCertifier_assumptions
 #print axioms witnessCertifier_jitter_varies
 #print axioms witnessProgram_conditions
@@ -72,3 +76,5 @@ open NetTiming
 #print axioms leftPacked_fifoGrid
 #print axioms bitsCount_of_prefixFree
 #print axioms bitsCount_of_lengthSucc
+#print axioms wardenLane_eq
+#print axioms eq_empty_of_mem_faultySets

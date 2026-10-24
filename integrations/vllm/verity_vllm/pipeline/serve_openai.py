@@ -1,7 +1,8 @@
 """`verity-vllm serve-openai`: an OpenAI-compatible HTTP server whose engine is the in-process committing vLLM engine.
 
-    verity-vllm serve-openai --model REPO --revision SHA --out DIR [--port 18082] [--precision int8_exact|verity_int8|pin]
-        [--protocol vllm|plain] [--no-commit] [--window-steps 64] [--force-include-usage | --no-force-include-usage]
+    verity-vllm serve-openai --model REPO --revision SHA --out DIR [--port 18082] [--precision verity_int8|int8_exact|pin]
+        [--protocol vllm|plain] [--no-commit] [--no-gpu-tree] [--window-steps 64] [--force-include-usage | --no-force-include-usage]
+        [--scheme vllm-v1|rows-sha512] [--seal]
 
 It serves what network-accounting's certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
 ``/tokenize`` and ``/v1/completions``, the prompt as token ids or text, streamed as vLLM's own server streams it (one
@@ -12,47 +13,66 @@ validation, ``to_sampling_params``) and every chunk is its ``CompletionStreamRes
 (``--protocol plain``) is the same framing without vLLM, for the CPU tests; `framing_agrees` holds the two to each
 other and the server records the result at start.
 
+Sampling parameters are values the request brings (network-accounting, 24 Oct 07:33Z): the server applies vLLM's neutral
+defaults, never the model's ``generation_config``, and records each request's ingress (the sampling fields it sent, the
+engine's resulting parameters, the seed and its rule). A request without a ``seed`` is sampled under the public default,
+`engine.served_seed.DEFAULT_SEED`. A ``top_p`` below 1 is refused (`TOP_P_REFUSAL`): the top-p sampler's split count is not
+pinned yet, so its draw is not a function of the committed values (CIR-87).
+
+The default precision is ``verity_int8`` (int8 linears, vLLM's attention) with the committer's GPU tree: the one setting
+whose 16-token probe (0.81 s at 4 in flight) fits the certifier's plan (about 2.6 s); ``int8_exact`` takes 12.9 s even
+without the Commit. The ``verity_int8`` quantization method is registered under every precision, so a pin whose checkpoint
+names it loads under ``--precision pin`` too.
+
 The engine is `verity_vllm.LLM` (in-process engine core, Model Runner V2), stepped by one thread, the process's main
 thread (`EngineLoop`): each HTTP request is admitted with ``add_request`` under the engine id ``cmpl-<hex>-0`` (vLLM's
 ``f"{request_id}-{i}"``), and vLLM's scheduler batches whatever is admitted; each engine output goes back to its
 request's connection as it comes. The HTTP side is an asyncio server on its own thread, one request per connection.
 
 With the Commit on (the default), `NativeHostCommitter` commits every engine step exactly as it does a declared workload,
-values retained on host. A Commit window (`verity_vllm.pipeline.serve_commit.CommitWindows`) opens at the first engine
-step after the engine was idle and closes when the engine is idle again (once it holds ``--idle-close-steps``), or after
-``--window-steps`` steps (it reopens before the next step): each window is one Commit, with its own run root. At each
-close the server reads back, from the committed bytes, each request's rows of the embedding's input ids
-(``c00.input/ids`` on the compiled path, ``model.embed_tokens/in`` on the eager one) and of
-``runner.sampler/sampled_token_ids``, at the rows the model runner's input batch gave it at that step. Once a request
-has finished, its check (`check_request`) holds those committed ids to what was served: the input ids are exactly its
-prompt ids then every streamed id but the last, and the sampled ids exactly its streamed ids.
+values retained on host, and a `commit.served_record.SamplerInputsSource` binds each sampled row's seed and position. A
+Commit window (`verity_vllm.pipeline.serve_commit.CommitWindows`) opens at the first engine step after the engine was idle
+and closes when the engine is idle again (once it holds ``--idle-close-steps``), or after ``--window-steps`` steps (it
+reopens before the next step): each window is one Commit, with its own run root. At each close the server reads the
+window back from the committed bytes into the served record (`commit.served_record.Record`, COMMIT-ARB's): each request's
+committed input ids (``c00.input/ids`` on the compiled path, ``model.embed_tokens/in`` on the eager one), sampled ids and
+seeds, by position. Once a request has finished, `Record.check` holds them to what was served: its prompt ids and
+streamed ids, the seed it carried, and where its finish says the stream ends.
 
 Under ``--out`` the server writes ``serve.json`` (the engine, the protocol in use, the address), ``windows.jsonl`` (one
-line a Commit: its run root, step roots, the committer's errors and identity check, the requests it holds) and
-``requests.jsonl`` (one line a request: the HTTP id, the engine id, the runner's id, the prompt ids, the streamed ids,
-every (window, step, row range) it was committed at, and its check). SIGTERM or SIGINT stops it: the open window is
-closed and its requests checked, and ``summary.json`` counts the requests and checks.
+line a Commit: its run root, step roots, the committer's errors and identity check, the requests it holds), ``requests.jsonl``
+(one line a request: the HTTP id, the engine id, the body's ``user``, the runner's ids, the prompt ids, the streamed ids, its
+ingress, its finish, its committed rows and seeds, and its check) and `serve_commit.advice_trace`'s file. ``--scheme rows-sha512``
+commits as a declared Commit does and ``--seal`` seals each closed window as a deferred Commit's row dir (`serve_seal`). SIGTERM or SIGINT
+stops it: the open window is closed and its requests checked, and ``summary.json`` counts the requests and checks.
 """
 from __future__ import annotations
 
 import asyncio
 import json
 import queue
+import shutil
 import signal
 import threading
 import time
 import uuid
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import UsageError, option
-from verity_vllm.pipeline.serve_commit import CommitWindows
+from verity_vllm.engine.served_seed import DEFAULT_SEED, seeded
+from verity_vllm.pipeline import serve_seal as SS
+from verity_vllm.pipeline.serve_commit import SAMPLING_FIELDS, CommitWindows, advice_trace, ingress_of, param_of, user_of
 
-PRECISIONS = ("int8_exact", "verity_int8", "pin")
-#: precision -> (the int8 parts it registers, the int8 scope its layers must then run)
-INT8_PARTS = {"int8_exact": (("linears", "attention"), "all"), "verity_int8": (("linears",), "linears")}
+PRECISIONS = ("verity_int8", "int8_exact", "pin")
+#: precision -> (the int8 parts it registers, the int8 scope its layers must then run; None: not checked). Every precision
+#: registers the linears, which is the ``verity_int8`` quantization method a pin's checkpoint may name.
+INT8_PARTS = {"int8_exact": (("linears", "attention"), "all"), "verity_int8": (("linears",), "linears"), "pin": (("linears",), None)}
+TOP_P_REFUSAL = ("serve-openai refuses top_p={top_p} < 1: vLLM's top-p sampler runs with a split count the engine does not pin, "
+                 "so a top-p draw is not a function of the committed values (CIR-87). Send top_p 1 (top_k and temperature are "
+                 "served); the refusal lifts once the split count is pinned.")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -67,9 +87,10 @@ class Options:
     run_id: str = option("--run-id", env="RESEARCH_RUN_ID", default="local", help="the Commit's run id (default $RESEARCH_RUN_ID)")
     protocol: str = option("--protocol", choices=("vllm", "plain"), default="vllm",
                            help="vllm: vLLM's own request and response classes; plain: the same framing without them")
-    precision: str = option("--precision", choices=PRECISIONS, default="int8_exact",
-                            help="int8_exact: int8 linears and attention (quantization verity_int8, attention CUSTOM); verity_int8: "
-                                 "int8 linears only, as vLLM's own server serves the int8 pin; pin: the pin's engine profile")
+    precision: str = option("--precision", choices=PRECISIONS, default="verity_int8",
+                            help="verity_int8 (default): int8 linears only, as vLLM's own server serves the int8 pin, the one that fits "
+                                 "the certifier's plan; int8_exact: int8 linears and attention (quantization verity_int8, attention "
+                                 "CUSTOM); pin: the pin's engine profile")
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
     max_model_len: int = option("--max-model-len", type=int, default=512)
     max_num_batched_tokens: int = option("--max-num-batched-tokens", type=int, default=2048,
@@ -83,8 +104,14 @@ class Options:
                                    help="close a Commit window when the engine idles once it holds this many steps (default 1: at every idle)")
     chunk: int = option("--chunk", type=int, default=65536, help="the committer's leaf, in bytes of the packed step stream (as `commit`'s)")
     hash_threads: int = option("--hash-threads", type=int, default=2, help="the committer's hashlib threads")
-    gpu_tree: bool = option("--gpu-tree", action="store_true", default=False, help="the committer's GPU-resident chunk tree (no D2H, no hashlib)")
+    gpu_tree: bool = option("--gpu-tree", action="boolean_optional", default=True,
+                            help="the committer's GPU-resident chunk tree, no D2H and no hashlib (default on; its kernel is JIT-built "
+                                 "with ninja, which must be on PATH)")
     cudart_copy: bool = option("--cudart-copy", action="store_true", default=False, help="the committer's snapshots by cudaMemcpyAsync")
+    scheme: str = option("--scheme", choices=SS.SCHEMES, default="vllm-v1",
+                         help="the Commit's scheme: vllm-v1 (NativeHostCommitter, 32-byte roots) or rows-sha512 (the declared Commit's)")
+    seal: bool = option("--seal", action="boolean_optional", default=False,
+                        help="seal each closed window as a deferred Commit's row dir, OUT/windows/w<k>/ (serve_seal.seal_window)")
     force_include_usage: bool = option("--force-include-usage", action="boolean_optional", default=True,
                                        help="vLLM's --enable-force-include-usage: the usage chunk on every stream, and usage on each "
                                             "chunk (default on)")
@@ -178,10 +205,21 @@ class PlainProtocol:
 
     def sampling_params(self, req: Completion, max_tokens: int, defaults: Mapping[str, Any]) -> dict[str, Any]:
         b = req.raw
-        temperature = b.get("temperature")
+        temperature, top_p = b.get("temperature"), b.get("top_p")
+        if top_p is not None and (isinstance(top_p, bool) or not isinstance(top_p, (int, float)) or not 0 < top_p <= 1):
+            raise RequestError(f"top_p must be in (0, 1], got {top_p!r}", param="top_p")
         return {"max_tokens": max_tokens, "min_tokens": int(b.get("min_tokens") or 0), "ignore_eos": bool(b.get("ignore_eos", False)),
-                "temperature": defaults.get("temperature", 1.0) if temperature is None else temperature, "seed": b.get("seed"),
-                "output_kind": "delta" if req.stream else "final_only"}
+                "temperature": defaults.get("temperature", 1.0) if temperature is None else temperature,
+                "top_p": defaults.get("top_p", 1.0) if top_p is None else top_p, "top_k": int(b.get("top_k") or 0),
+                "seed": b.get("seed"), "output_kind": "delta" if req.stream else "final_only"}
+
+    def brought(self, req: Completion) -> dict[str, Any]:
+        """The sampling fields the request sent, as it sent them."""
+        return {k: req.raw[k] for k in SAMPLING_FIELDS if k in req.raw}
+
+    def seeded(self, params: dict[str, Any]) -> dict[str, Any]:
+        """``params`` with the served default seed when the request sent none (`engine.served_seed`)."""
+        return {**params, "seed": DEFAULT_SEED} if params.get("seed") is None else params
 
     def max_tokens(self, req: Completion, max_model_len: int, prompt_len: int, defaults: Mapping[str, Any]) -> int:
         """vLLM's ``get_max_tokens`` without truncation or an override (and no platform limit, which CUDA hasn't)."""
@@ -246,6 +284,12 @@ class VllmProtocol(PlainProtocol):
 
     def sampling_params(self, req: Completion, max_tokens: int, defaults: Mapping[str, Any]) -> Any:
         return req.raw.to_sampling_params(max_tokens, dict(defaults))
+
+    def brought(self, req: Completion) -> dict[str, Any]:
+        return req.raw.model_dump(include=set(SAMPLING_FIELDS), exclude_unset=True)
+
+    def seeded(self, params: Any) -> Any:
+        return seeded(params)
 
     def chunk(self, *, request_id: str, created: int, model: str, text: str, finish_reason: str | None, stop_reason: Any,
               prompt_token_ids: list[int] | None, token_ids: list[int] | None, usage: dict[str, int] | None) -> str:
@@ -332,6 +376,8 @@ class Admission:
     prompt_ids: list[int]
     params: Any
     deliver: Callable[[Delta], None]
+    ingress: dict[str, Any]
+    user: str | None = None
 
 
 def engine_id_of(http_id: str) -> str:
@@ -395,7 +441,7 @@ class EngineLoop:
             d = Delta(list(c.token_ids), c.text or "", c.finish_reason, c.stop_reason,
                       list(out.prompt_token_ids) if out.prompt_token_ids is not None else None)
             if self.commit is not None:
-                self.commit.streamed(adm.engine_id, d.token_ids, d.finished)
+                self.commit.streamed(adm.engine_id, d.token_ids, d.finish_reason, d.stop_reason)
             adm.deliver(d)
         if out.finished:
             self.live.pop(out.request_id, None)
@@ -419,6 +465,8 @@ class EngineLoop:
                     self.commit.before_step()
                 for out in self.engine.step():
                     self._deliver(out)
+                if self.commit is not None:
+                    self.commit.stepped()
                 self.steps += 1
         except BaseException as e:
             self.error = f"{type(e).__name__}: {e}"
@@ -539,9 +587,16 @@ class Server:
             max_tokens = self.proto.max_tokens(req, self.max_model_len, len(prompt_ids), self.defaults)
         except ValueError as e:
             raise RequestError(str(e)) from e
-        params = self.proto.sampling_params(req, max_tokens, self.defaults)
+        try:
+            params = self.proto.seeded(self.proto.sampling_params(req, max_tokens, self.defaults))
+        except ValueError as e:                              # SamplingParams' own validation
+            raise RequestError(str(e)) from e
+        top_p = param_of(params, "top_p")
+        if top_p is not None and float(top_p) < 1:
+            raise RequestError(TOP_P_REFUSAL.format(top_p=top_p), param="top_p")
         http_id = new_http_id()
-        return req, Admission(http_id, engine_id_of(http_id), prompt_ids, params, deliver)
+        return req, Admission(http_id, engine_id_of(http_id), prompt_ids, params, deliver, ingress_of(self.proto.brought(req), params),
+                              user_of(req.raw))
 
     async def completions(self, b: Any, writer: asyncio.StreamWriter) -> None:
         loop = asyncio.get_running_loop()
@@ -642,17 +697,39 @@ def engine_options(opts: Options) -> dict[str, Any]:
     return kw
 
 
+def register_int8(precision: str, register: Callable[[Sequence[str]], Any] | None = None) -> str | None:
+    """Register ``precision``'s int8 parts (`engine.int8_ranks.register`, or ``register``) before the engine is built, the
+    ``verity_int8`` quantization method under every precision; returns the int8 scope its layers must then run (None: not
+    checked)."""
+    parts, scope = INT8_PARTS[precision]
+    if register is None:
+        from verity_vllm.engine.int8_ranks import register
+    register(parts)
+    return scope
+
+
+def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which) -> None:
+    """What would fail after the model has loaded, refused before it."""
+    if opts.window_steps < 1:
+        raise UsageError("--window-steps is at least 1")
+    if opts.seal and not opts.commit:
+        raise UsageError("--seal seals each Commit window: it needs the Commit (drop --no-commit)")
+    if opts.scheme == "rows-sha512" and not opts.gpu_tree:
+        raise UsageError("--scheme rows-sha512 is the windowed collector's, which hashes its rows on the GPU: drop --no-gpu-tree")
+    if opts.commit and opts.gpu_tree and which("ninja") is None:
+        raise UsageError("--gpu-tree JIT-builds its kernel with ninja, which is not on PATH: put the environment's bin (where its "
+                         "ninja is) on PATH, or pass --no-gpu-tree")
+
+
 def build(opts: Options) -> tuple[Any, Any]:
-    """The engine (`verity_vllm.LLM`) and, with the Commit on, its committer, sized from the engine's envelope."""
+    """The engine (`verity_vllm.LLM`) and, with the Commit on, its committer, sized from the engine's envelope, with a
+    `served_record.SamplerInputsSource` attached."""
     from verity_vllm.engine import env as engine_env
 
     engine_env.apply_engine(opts.hf_home)
     if opts.commit:
         engine_env.apply_target({"VERITY_RETAIN": "host"})
-    parts, scope = INT8_PARTS.get(opts.precision, ((), None))
-    if parts:
-        from verity_vllm.engine import int8_ranks
-        int8_ranks.register(parts)
+    scope = register_int8(opts.precision)
     from verity_vllm.pipeline.llm import LLM
 
     llm = LLM(opts.model, revision=opts.revision, **engine_options(opts))
@@ -662,39 +739,29 @@ def build(opts: Options) -> tuple[Any, Any]:
             raise RuntimeError(f"a {opts.precision} engine whose layers run int8 scope {got!r}, not {scope!r}")
     if not opts.commit:
         return llm, None
-    from types import SimpleNamespace
-
-    from verity_vllm.commit.committer.native_host import NativeHostCommitter
-    from verity_vllm.engine.engine_profile import get_model_runner
-
-    eng = SimpleNamespace(llm=llm.vllm, runner=get_model_runner(llm.vllm), model=llm.model,
-                          cp={"repo": llm.pin.model, "revision": llm.pin.revision})
-    com = NativeHostCommitter(eng, run_id=f"serve-openai:{opts.run_id}", arena_bytes=None, chunk=opts.chunk, hash_threads=opts.hash_threads,
-                              gpu_tree=opts.gpu_tree, fast_copy=opts.cudart_copy)
-    tokens = int(opts.max_num_batched_tokens)
-    com.arena_sizing_record = com.size_arena({"batch": opts.max_num_seqs, "max_prompt": tokens, "max_new": 1,
-                                              "max_num_batched_tokens": tokens, "max_model_len": opts.max_model_len})
-    return llm, com
+    return llm, SS.committer(opts, llm)
 
 
 def main(opts: Options) -> int:
-    if opts.window_steps < 1:
-        raise UsageError("--window-steps is at least 1")
+    preflight(opts)
     out = Path(opts.out)
     out.mkdir(parents=True, exist_ok=True)
     llm, com = build(opts)
     engine = llm.vllm.llm_engine
     proto = PROTOCOLS[opts.protocol](opts.force_include_usage)
     framing = framing_agrees(proto) if isinstance(proto, VllmProtocol) else None
-    defaults = engine.vllm_config.model_config.get_diff_sampling_param()
-    run_id = opts.run_id
+    defaults: dict[str, Any] = {}                            # vLLM's neutral defaults: the request brings its sampling
+    tok = llm.get_tokenizer()
+    trace = advice_trace(out, llm)
     windows = None
     if com is not None:
-        windows = CommitWindows(com, com.runner, out, run_id=run_id, window_steps=opts.window_steps,
-                                 idle_close_steps=opts.idle_close_steps)
+        windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
+                                eos_ids=[int(tok.eos_token_id)] if tok.eos_token_id is not None else [],
+                                decode=lambda ids: tok.decode(list(ids), skip_special_tokens=True), marks=trace.window,
+                                seal=SS.seal_of(opts) if opts.seal else None)
     loop = EngineLoop(engine, windows)
     served = opts.served_model_name or opts.model
-    server = Server(proto=proto, served_name=served, max_model_len=opts.max_model_len, tokenizer=llm.get_tokenizer(),
+    server = Server(proto=proto, served_name=served, max_model_len=opts.max_model_len, tokenizer=tok,
                     defaults=defaults, submit=loop.submit, abort=loop.abort, model_root=opts.model)
     http = HttpThread(server, opts.host, opts.port)
     http.start()
@@ -707,10 +774,14 @@ def main(opts: Options) -> int:
     bound = [http.address]
     record = {"address": list(bound[0]), "served_model_name": served, "model": opts.model, "revision": opts.revision,
               "precision": opts.precision, "protocol": proto.name, "framing": framing, "defaults": dict(defaults),
-              "commit": opts.commit, "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
-              "committer": getattr(com, "name", None),
+              "generation_config_not_applied": engine.vllm_config.model_config.get_diff_sampling_param(),
+              "default_seed": DEFAULT_SEED, "top_p": "refused below 1 (CIR-87)", "committer": getattr(com, "name", None),
+              "commit": opts.commit, "scheme": getattr(com, "commit_scheme", "vllm-v1") if com is not None else None,
+              "sealed": "windows/w<k>/" if windows is not None and windows.seal is not None else None,
+              "weights": getattr(com, "weights", None), "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
               "committer_options": {k: getattr(opts, k) for k in ("chunk", "hash_threads", "gpu_tree", "cudart_copy")},
-              "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": run_id}
+              "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id,
+              **SS.target_of()}
     (out / "serve.json").write_text(json.dumps(record, indent=1, default=str))
     print(f"SERVE-OPENAI listening on {bound[0][0]}:{bound[0][1]} model={served} commit={opts.commit} protocol={proto.name}", flush=True)
     try:
@@ -721,6 +792,7 @@ def main(opts: Options) -> int:
                    "commit": windows.summary() if windows is not None else None}
         (out / "summary.json").write_text(json.dumps(summary, indent=1))
         print(f"SERVE-OPENAI stopped: {json.dumps(summary)}", flush=True)
+        trace.uninstall()
         if com is not None:
             com.close()
     return 0 if loop.error is None and (windows is None or windows.summary()["passed"] or not server.served) else 1

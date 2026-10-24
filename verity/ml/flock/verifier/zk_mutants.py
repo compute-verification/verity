@@ -158,7 +158,7 @@ def write(out, name, rec, src, files):
     """Case `name`: `rec`, every proof file of `src`, and `files` (`{file name: bytes}`) in their place."""
     d = out / name
     d.mkdir(parents=True, exist_ok=True)
-    (d / "session.json").write_text(json.dumps(rec))
+    (d / "session.json").write_text(rd.session_text(rec))
     for f in src.glob("*.rep*.bin"):
         if f.name not in files:
             shutil.copy(f, d / f.name)
