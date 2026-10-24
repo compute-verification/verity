@@ -16942,6 +16942,29 @@
    },
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
+  "Definitions.Pouw.H1Zy.Dequant": {
+   "digest": "fa6c93c43daebecdc9ca93ba549ca0141d8c4e999ca7ba08e3bbee117a6a789d",
+   "definitions": {
+    "Pouw.H1Zy.bitLen": "c3baf01d73fa0ab5a93108ef91dd908498e0d34888ae0b151db89ed2488fe036",
+    "Pouw.H1Zy.bitLen.go": "4261da3f621b108d85569d39b9e4f5bab361a60b4407dd1e61d24d32d8010212",
+    "Pouw.H1Zy.f2fpBf16": "73dece3ae0908689bb1425e55705c579c2f48a26997fd59c497a1a42ccf68058",
+    "Pouw.H1Zy.f32Exp": "ba781e92ee637409f83a41f6515df86ec8f79527e705fcaafecfeb734597b328",
+    "Pouw.H1Zy.f32Frac": "9185d844a013596fe0ae9d71eb5c99253000022f06ed3f37205e2ed41b7eb780",
+    "Pouw.H1Zy.f32IsInf": "80ee76ed6839a0ec6fd7399ae1f0c0c752b5587997dd5312d010e7aac3520aac",
+    "Pouw.H1Zy.f32IsNaN": "1bfefb3491df63ef6d6b9e7ff0e3ad236c63f671235aab72b2a71839653d4cbe",
+    "Pouw.H1Zy.f32IsZero": "1c5ba4740a3d76adc0c59a827b0fc6ba97f18a1b565b5f1db8a369768f770149",
+    "Pouw.H1Zy.f32Mul": "367a94b8c22fbd438e6b3b8438d98b5281b693d734b9fd06cadd38131539624e",
+    "Pouw.H1Zy.f32NanPtx": "4632501e5643ff7f37a0b0d7084db956e14020fac557795d11191f6d14b45981",
+    "Pouw.H1Zy.f32Scale": "f700593d0baa191ea82ab8385238da33dc08c1c02e4ca285a9af568c7dbbefc5",
+    "Pouw.H1Zy.f32Sig": "4ae184927b441fc5b4dffa161cb68f012816888f8af1e6f547dc92c0c84fc2ec",
+    "Pouw.H1Zy.f32Sign": "e7edf6559f484d5611970b2e58d0fd058fb179086bc55beb0751cd59a655a1bd",
+    "Pouw.H1Zy.rneShift": "b49ac9b6ff19a0e3cff54c839e8c6dbf5e81c9c668c606f53e68416163c24739",
+    "Pouw.H1Zy.roundF32": "cb016e0dedc0af7926294b34791dfd7636c54c336717e28367a37a41ecd81399",
+    "Pouw.H1Zy.s32ToF32Rn": "0f32801814367ff2e6297aa1a24428e5c873f88a1960bd807b836e28a87a687f",
+    "Pouw.H1Zy.zyDequant": "c1bc1c1eab21bb108334861df35b2a29b6397799601ebca67b1c1bedb22ed5ab"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
+  },
   "Definitions.Pouw.H1Zy.Lane": {
    "digest": "84da35836e5b85e509886c522948375707a41154d1b8346aa72cd517a3d697f0",
    "definitions": {
@@ -28350,9 +28373,9 @@
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "Proofs.Accounting.TS.Session.Lanes.Guarantees": {
-   "digest": "77c1c41a700625a87d287b68d02931fc5d686dead79f35007650790c6a784907",
+   "digest": "af968b0a59d9fa70bd81df03af3090dd67462dbca7a48cff54ed1315dac74ea4",
    "definitions": {
-    "Accounting.Guarantees.TS.LeafLanesSound": "bb8e3a56006b3d5026437d7e76a67167299584a16a5caf87ebc4b14023da5526"
+    "Accounting.Guarantees.TS.LeafLanesSound": "cde934c9a491016073d46dbcd9e51471ec6ebe03ff8692bb9decdb493e523af6"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
