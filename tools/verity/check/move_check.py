@@ -598,11 +598,12 @@ def _rename():
     return mod
 
 
-def word_maps(base: Tree, renamed: list[tuple[str, str]], lmods: dict[str, str]) -> list:
+def word_maps(base: Tree, renamed: list[tuple[str, str]], lmods: dict[str, str], pmap: dict[str, str]) -> list:
     """The move scripts' word maps at BASE, each cut to the words that rename what the range moved: a word is kept when it
-    renames a path (or a Lean module) that its map, applied whole, renames to where the range moved it."""
+    renames a path, a directory the range moved whole (as `dir/`) or a Lean module that its map, applied whole, renames to
+    where the range moved it."""
     R = _rename()
-    names = [*renamed, *lmods.items()]
+    names = [*renamed, *lmods.items(), *((o + "/", n + "/") for o, n in pmap.items())]
     out = []
     for p in base.files:
         if not (p.startswith(MAPS) and p.endswith(".toml") and "/" not in p[len(MAPS):]):
@@ -672,7 +673,7 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             if bp is not None and hp is not None and not B.is_package(hp):
                 dests.setdefault(hp, set()).add(bp)
     moved = dict(renamed)
-    maps = word_maps(B, renamed, lmods)
+    maps = word_maps(B, renamed, lmods, pmap)
     moves: dict[str, tuple[str, str]] = {}                  # a module that changed package: (its package at BASE, at HEAD)
     for o, n in renamed:
         if o.endswith(".lean") and n.endswith(".lean"):
