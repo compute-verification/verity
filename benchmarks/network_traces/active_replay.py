@@ -127,6 +127,7 @@ from verity.core.protocols.certifier.active import (
     fresh_salt,
     request_frame_count,
     request_frames,
+    wait_until,
     worker,
 )
 from verity.core.protocols.certifier.lean_audit import Audit
@@ -148,6 +149,7 @@ from verity.core.protocols.certifier.schedule import (
     handing_buckets,
     run_shaper,
 )
+from verity.core.protocols.certifier.served import Admission, ServedProfile, admits
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.core.protocols.sampled_proofs.service import Registration
 
@@ -421,16 +423,27 @@ def plan_configuration(cfg: dict, setup: Setup, live_model: str | None = None, s
     return out
 
 
-def model_releases(requests: Sequence[dict], params: GridParams, windows: int, egress_bucket_ms: int) -> dict[int, int]:
+def model_releases(requests: Sequence[dict], params: GridParams, windows: int, egress_bucket_ms: int,
+                   admission: Admission | None = None) -> dict[int, int]:
     """Each request's release as the ingress certifier's rule gives it: its frames enqueued at their bucket, in send
-    order, and released r_in per bucket; the egress bucket of its last frame's release."""
+    order, and released r_in per bucket; the egress bucket of its last frame's release. With `admission`, a served
+    link's admission rule (`active.Bucketer(served=…)`): a request is enqueued only while its window, with it, still
+    ends idle (`served.admits`), behind the certifier's own frame where the profile counts one."""
     pending = sorted((q["enqueue"], q["send_ms"], q["stream"], q["frames"]) for q in requests)
-    out, queue, k = {}, [], 0
-    for t in range(windows * params.buckets):
+    out, queue, k, counts, T = {}, [], 0, [], params.buckets
+    for t in range(windows * T):
+        if t % T == 0:
+            counts = []
+            if admission is not None and admission.profile.own:
+                queue.append((None, False))
         while k < len(pending) and pending[k][0] <= t:
             _, _, s, n = pending[k]
+            if admission is not None and not admits(counts, len(queue) + n, admission.sync(t // T), admission.profile,
+                                                    admission.allocation, params.allocation, T):
+                break
             queue += [(s, j == n - 1) for j in range(n)]
             k += 1
+        counts.append(min(len(queue), params.allocation))
         for s, last in queue[: params.allocation]:
             if last:
                 out[s] = t * params.bucket_ms // egress_bucket_ms
@@ -517,8 +530,9 @@ def adversary_plan(plan: dict, setup: Setup, strategy: str, seed: int = 0) -> di
     sender that steers the online prover's declared sync with a random message), with the symbols it sent kept for
     the audit's `covert` measurement. Under syncs fixed before the run (`envelope`, `model`) the covert sender steers
     nothing: the control. On a live server the plan carries the sender's parameters, and the shim's
-    `covert.LiveSender` draws the symbols as it serves. `extra`, on a live shim only, writes one event more than the
-    endpoint sent at the end of the first session's response, on time and logged."""
+    `covert.LiveSender` draws the symbols as it serves. `extra`, on a live shim only, writes one event more at the end
+    of the first session's response, after what the endpoint sent and the shim's padding (`pad_to`), on time and
+    logged."""
     if strategy == "extra":
         return plan | {"strategy": strategy, "seed": seed, "extra": plan["sessions"][0][0]}
     if strategy != "covert":
@@ -694,8 +708,8 @@ class Server:
         self.origin = origin
         for b in range(self.horizon - 1):
             deadline = origin + b * self.tau + self.tau / 2
-            if (delay := deadline - self.clock()) > 0:
-                await self.sleep(delay)
+            if deadline > self.clock():
+                await wait_until(deadline, self.clock, self.sleep)
             self.log["batch_late_ms"].append(round((self.clock() - deadline) * 1000, 3))
             for item in sorted(self.batches.pop(b, []), key=lambda x: x[0]):
                 self._write(item)
@@ -754,12 +768,6 @@ async def _http_body(reader: asyncio.StreamReader, head: bytes):
             yield data
 
 
-async def _then(chunks, last: bytes):
-    async for data in chunks:
-        yield data
-    yield last
-
-
 class LiveServer:
     """A live OpenAI endpoint inside the boundary, behind a shim: `handle` serves one stream's connection by sending its
     request (less its padding and `user`, which names the session) to the endpoint at `upstream`, and writing back the
@@ -772,7 +780,13 @@ class LiveServer:
     the `covert` strategy, `covert.LiveSender` holds each stream's first event until the bucket its symbol names.
     `open` counts the streams whose response hasn't ended and aren't held, and `held` the deadlines of the held ones,
     for a driver on a virtual clock. The endpoint is plain HTTP at `params["upstream"]`, or HTTPS with `tls`, under the
-    path `prefix`, sent the bearer key in the environment variable `api_key_env` names, if any."""
+    path `prefix`, sent the bearer key in the environment variable `api_key_env` names, if any. With
+    `plan["request_major"]` (a served plan's) the endpoint serves streams side by side but the shim writes them in the
+    order it received their requests, each stream's first event only after the stream before it has ended, so the
+    canonical order is request-major however the endpoint interleaves its responses. With `plan["pad_to"]` = F (a
+    served plan's, F its body's tokens) a response the endpoint ends after fewer than F canonical events, having sent
+    some tokens together in one chunk, gets empty canonical events after its last, up to F, written and logged as the
+    endpoint's are, so every response is F events long; one of more than F isn't cut."""
 
     def __init__(self, plan: dict, params: dict, clock=time.monotonic, sleep=asyncio.sleep, notify=lambda: None):
         self.clock, self.sleep, self.notify = clock, sleep, notify
@@ -782,10 +796,12 @@ class LiveServer:
         key = os.environ[params["api_key_env"]] if params.get("api_key_env") else None
         self.authorization = b"" if key is None else b"authorization: Bearer %s\r\n" % key.encode()
         self.tau, self.horizon = params["bucket_ms"] / 1000, plan["windows"] * params["buckets"]
-        self.writes, self.extra = plan.get("writes"), plan.get("extra")
+        self.writes, self.extra, self.pad_to = plan.get("writes"), plan.get("extra"), plan.get("pad_to")
         self.held: Counter = Counter()
         self.windows = plan["windows"]
         self.position, self.origin, self.open = 0, None, 0
+        self.serial, self.tickets, self.turn, self.ended = bool(plan.get("request_major")), 0, 0, set()
+        self.turns: defaultdict = defaultdict(asyncio.Event)
         self.sender = None
         if (c := plan.get("covert")) is not None:
             rule = online.rule(plan["sync_rule"]) if "sync_rule" in plan else None
@@ -795,7 +811,7 @@ class LiveServer:
         self.writers: set = set()
         self.events: list[tuple[int, str, int, int, bytes]] = []
         self.log = {"receipt_late_ms": [], "batch_late_ms": [], "late_registrations": 0, "requests": 0, "events": 0,
-                    "failed": [], "cut_at_horizon": 0, "first_event_ms": [], "server": "live"}
+                    "failed": [], "cut_at_horizon": 0, "first_event_ms": [], "server": "live", "padded": []}
 
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         self.writers.add(writer)
@@ -812,16 +828,46 @@ class LiveServer:
             writer.close()
             return
         self.open += 1
+        ticket, self.tickets = self.tickets, self.tickets + 1
         try:
-            await self._serve(body, writer)
+            await self._serve(body, writer, ticket)
         except (asyncio.IncompleteReadError, ConnectionError, OSError, ValueError) as e:
             self.log["failed"].append(repr(e)[:200])
         finally:
+            self.ended.add(ticket)
+            while self.turn in self.ended:
+                self.turn += 1
+            self.turns[self.turn].set()
             self.open -= 1
             writer.close()
             self.notify()
 
-    async def _serve(self, body: dict, writer: asyncio.StreamWriter) -> None:
+    async def _await_turn(self, ticket: int) -> None:
+        if not self.serial or ticket <= self.turn:
+            return
+        self.open -= 1
+        self.notify()
+        try:
+            await self.turns[ticket].wait()
+        finally:
+            self.open += 1
+
+    async def _response_events(self, chunks, name: str):
+        """A response's canonical events, one list per chunk of its body as it arrives; under `pad_to`, empty events
+        (`active.event(b"")`, what a chunk of no text gives) after its last, up to `pad_to`, counted in `padded`; for
+        the `extra` session, one event more after those."""
+        cutter, n = Events(), 0
+        async for data in chunks:
+            bodies = [b for e in cutter.feed(data) for b in canonical_events(e)]
+            n += len(bodies)
+            yield bodies
+        if self.pad_to is not None and n < self.pad_to:
+            self.log["padded"].append([name, self.pad_to - n])
+            yield [event(b"")] * (self.pad_to - n)
+        if name == self.extra:
+            yield canonical_events(b'data: {"choices":[{"text":" extra"}]}\n\n')
+
+    async def _serve(self, body: dict, writer: asyncio.StreamWriter, ticket: int = 0) -> None:
         received = self.clock() - self.origin
         self.log["requests"] += 1
         self.log["receipt_late_ms"].append(round((received % self.tau) * 1000, 3))
@@ -836,15 +882,14 @@ class LiveServer:
             if not up_head.startswith((b"HTTP/1.1 200", b"HTTP/1.0 200")):
                 self.log["failed"].append(up_head.split(b"\r\n")[0].decode(errors="replace"))
                 return
-            cutter, k, cutoff = Events(), 0, self.origin + (self.horizon - 1.5) * self.tau
+            k, cutoff = 0, self.origin + (self.horizon - 1.5) * self.tau
             planned = None if self.writes is None else [b for b, _ in self.writes.get(name, [])]
             hold = -1
             anchor = math.floor(received / self.tau)
-            chunks = _http_body(up_reader, up_head)
-            if name == self.extra:
-                chunks = _then(chunks, b'data: {"choices":[{"text":" extra"}]}\n\n')
-            async for data in chunks:
-                for body in (b for e in cutter.feed(data) for b in canonical_events(e)):
+            async for bodies in self._response_events(_http_body(up_reader, up_head), name):
+                for body in bodies:
+                    if k == 0:
+                        await self._await_turn(ticket)
                     if planned is not None:
                         hold = max(hold, planned[k] if k < len(planned) else hold)
                         await self._hold(self.origin + hold * self.tau + self.tau / 2)
@@ -869,13 +914,13 @@ class LiveServer:
             up_writer.close()
 
     async def _hold(self, deadline: float) -> None:
-        if (delay := deadline - self.clock()) <= 0:
+        if deadline <= self.clock():
             return
         self.held[deadline] += 1
         self.open -= 1
         self.notify()
         try:
-            await self.sleep(delay)
+            await wait_until(deadline, self.clock, self.sleep)
         finally:
             self.open += 1
             self.held[deadline] -= 1
@@ -941,8 +986,8 @@ class Peer:
             if not qs:
                 continue
             deadline = origin + t / 1000
-            if (delay := deadline - self.clock()) > 0:
-                await self.sleep(delay)
+            if deadline > self.clock():
+                await wait_until(deadline, self.clock, self.sleep)
             self.log["send_late_ms"].append(round((self.clock() - deadline) * 1000, 3))
             data = b"".join(request_frames(self.request(q), self.B) for q in qs)
             writer.write(data)
@@ -1095,8 +1140,9 @@ def prover_args(plan: dict, setup: Setup, background: bool = True) -> dict:
 class Stalls(asyncio.Event):
     """Test-only (`--stall`): the proxy's change event, which pauses the proxy right after an ingress tick has released
     a request and before the proxy writes it upstream, once for each (bucket, seconds): at the first such tick at or
-    after the bucket whose egress tick has already run, so the pause falls between two ticks. `pause(seconds)` stops
-    the proxy; `done` lists each stall with how long the proxy's clock saw it last."""
+    after the bucket, once that boundary's egress tick has run too (`active.TICK_ORDER` runs it after the ingress
+    tick), so the pause falls between two boundaries' ticks. `pause(seconds)` stops the proxy; `done` lists each stall
+    with how long the proxy's clock saw it last."""
 
     def __init__(self, proxy: Proxy, stalls: Sequence[tuple[int, float]], pause) -> None:
         super().__init__()
@@ -1105,16 +1151,16 @@ class Stalls(asyncio.Event):
 
     def set(self) -> None:
         p = self.proxy
-        if self.todo and p.requests_released > self.released:
-            t = len(p.lateness["ingress"]) - 1
-            if t >= self.todo[0][0] and len(p.lateness["egress"]) > t:
+        t = len(p.lateness["ingress"]) - 1
+        if len(p.lateness["egress"]) > t:
+            if self.todo and p.requests_released > self.released and t >= self.todo[0][0]:
                 bucket, seconds = self.todo.pop(0)
                 start = p.clock()
                 self.pause(seconds)
                 self.done.append({"bucket": bucket, "tick": t, "ms": seconds * 1000,
                                   "at_ms": round((start - p.origin) * 1000, 3),
                                   "paused_ms": round((p.clock() - start) * 1000, 3)})
-        self.released = p.requests_released
+            self.released = p.requests_released
         super().set()
 
 
@@ -1148,6 +1194,15 @@ def proxy_process(plan: dict, setup_report: dict, upstream: tuple[str, int], con
     asyncio.run(_proxy(plan, Setup(setup_report), upstream, conn, Path(out), stalls, pause, host, port))
 
 
+def served_args(plan: dict, salt: bool = False) -> dict:
+    """A served link's profile for its proxy (`active.Proxy(served=…)`, which admits requests by the admission rule),
+    from the plan's `served` (none otherwise), counting the salt frame when the salt is on."""
+    if "served" not in plan:
+        return {}
+    s = plan["served"]
+    return {"served": ServedProfile(s["response_frames"], s["request_frames"], plan["windows"], int(salt))}
+
+
 def phase_args(plan: dict, start: int, end: int) -> dict:
     """The arguments of the proxy that serves windows `start` … `end` − 1 of an outage plan (none otherwise)."""
     if "outage" not in plan:
@@ -1179,7 +1234,7 @@ async def _proxy(plan: dict, setup: Setup, upstream: tuple[str, int], conn, out:
             return Proxy(upstream, setup.egress_params, setup.ingress_params, setup.sync_set, syncs, origin=origin,
                          publish=publish, egress_link=setup.egress_link, ingress_link=setup.ingress_link,
                          salt=fresh_salt if salt else None, reveal_deadline=reveal_deadline(plan, window_s),
-                         **advice, **phase_args(plan, start, end))
+                         **advice, **phase_args(plan, start, end), **served_args(plan, salt))
 
         if k == 0:
             listening = await asyncio.start_server(on_link, host, port)
@@ -1651,7 +1706,9 @@ def audit_configuration(plan: dict, report: dict, run: Path, audit=Audit) -> dic
     if live:
         timing |= {"server_first_event_ms": percentiles_ms(server["first_event_ms"]),
                    "server_failed": len(server["failed"]), "server_failures": server["failed"][:20],
-                   "server_cut_at_horizon": server["cut_at_horizon"], "server_requests": server["requests"]}
+                   "server_cut_at_horizon": server["cut_at_horizon"], "server_requests": server["requests"],
+                   "server_padded": {"responses": len(padded := server.get("padded", [])),
+                                     "events": sum(n for _, n in padded)}}
     out = {"config": plan["name"], "windows": windows, "rows": rows, "comparisons": comparisons, "timing": timing,
            "egress": {"real": real, "slots": slots, "frames": len(frames)},
            "hist": {k: {str(x): n for x, n in v.items()} for k, v in hist.items()},

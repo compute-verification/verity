@@ -16,6 +16,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     return [
         # the split path at the served statics: T = 130 in two splits (two blocks, then the partial one), sixteen splits combined
         ("SparseMlaSplitEnd_v1", lambda: bind(sparse_mla_split.SparseMlaSplitEnd, DV=glm["DV"], INV=glm["INV"], SCALE=glm["SCALE"])),
+        # the token's last split at step 16 (T = 272 in five splits of a block): its 16 keys zero-padded to the block
+        ("SparseMlaSplitPart_v1", lambda: bind(sparse_mla_split.SparseMlaSplitPart, T=16, **head)),
         ("SparseMlaCombine_v1", lambda: bind(sparse_mla_split.SparseMlaCombine, NSPLIT=16, DV=glm["DV"], INV=glm["INV"])),
         ("SparseMlaHeadSplit_v1", lambda: bind(sparse_mla_split.SparseMlaHeadSplit, T=130, NS=2, **head)),
         ("SparseMlaSplit_v1", lambda: bind(sparse_mla_split.SparseMlaSplit, T=130, NS=2, **glm)),

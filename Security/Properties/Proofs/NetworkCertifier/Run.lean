@@ -4,7 +4,8 @@ import Properties.Proofs.NetworkCertifier.Extract
 /-!
 # What a certificate's digest and message pin down
 
-Where SHA-512 has no collision on the strings both hash, two heads with one digest are one (`head_inj`), and a
+Where SHA-512 has no collision on the strings both hash, two heads with one digest are one (`head_inj`), two heads
+whose digests are signed as one, each under its own salt, have one digest (`certificateDigest_inj`), and a
 certificate message's input names one certifier session, link-window and digest (`messageInput_inj`, with
 `link_short` for the link's length). `Properties.Proofs.CertifierNetwork.Runs` uses them to match each record an
 accepted unit holds to the one the certifier device issued.
@@ -50,6 +51,21 @@ theorem head_inj {X : ByteArray → Prop} (hX : CF X) {h h' : RecordHead} {dg : 
   have := taggedInput_inj hx hx'
   subst this
   exact encode_inj he he'
+
+theorem digest_size {h : RecordHead} {dg : ByteArray} (e : h.digest = .ok dg) : dg.size = 64 := by
+  obtain ⟨-, x, -, -, rfl⟩ := digest_ok e
+  exact hash_size x
+
+/-- Two heads whose digests are signed as one, each under its own salt, where SHA-512 has no collision on the strings
+both hash, have one digest: the salt comes before the 64-byte record digest in `certificateInput`. -/
+theorem certificateDigest_inj {X : ByteArray → Prop} (hX : CF X) {s s' : ByteArray} {h h' : RecordHead}
+    {dg dg' : ByteArray} (hs : ∀ x, SaltedString s h x → X x) (hs' : ∀ x, SaltedString s' h' x → X x)
+    (e : h.digest = .ok dg) (e' : h'.digest = .ok dg') (hd : certificateDigest s dg = certificateDigest s' dg') :
+    dg = dg' := by
+  have hxx := hX _ _ (hs _ ⟨dg, e, rfl⟩) (hs' _ ⟨dg', e', rfl⟩) hd
+  have hb := congrArg bs hxx
+  simp only [certificateInput, bs_append] at hb
+  exact bs_inj (List.append_inj_right' hb (by rw [bs_length, bs_length, digest_size e, digest_size e']))
 
 theorem link_short {h : RecordHead} {dg : ByteArray} (e : h.digest = .ok dg) : h.link.toUTF8.size < 2 ^ 16 := by
   obtain ⟨enc, -, he, -⟩ := digest_ok e

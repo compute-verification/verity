@@ -1,8 +1,8 @@
-"""The HTTP side (`api/index.py`): Slack's Events and Interactivity requests, the health route and the two crons.
+"""The HTTP side (`api/index.py`): Slack's Events and Interactivity requests, the health route and the three crons.
 
 Slack's requests are checked (HMAC SHA-256 of `v0:{timestamp}:{raw body}` with SLACK_SIGNING_SECRET, at most MAX_SKEW_S
 old), published to the queue synchronously, keyed on Slack's id, and answered 200; a publish that fails answers 503, so
-Slack retries.  Nothing runs after the answer: the queue's consumer does the work."""
+Slack retries.  Nothing runs after the answer: the `drain` cron consumes the queue (`subscriber.py`)."""
 from __future__ import annotations
 
 import hashlib
@@ -15,12 +15,14 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 from starlette.concurrency import run_in_threadpool
 
-from . import crons
-from .deps import DEAD, DEAD_TOPIC, LAST_SUCCESS, OLDEST, TOPIC, Deps, error, production
+from . import crons, subscriber
+from .deps import DEAD, DEAD_TOPIC, LAST_DONE, LAST_ENQUEUED, LAST_SUCCESS, OLDEST, TOPIC, Deps, error, production
 
 MAX_SKEW_S = 300
 HEALTH_NOTE = ("from Vercel's Runtime Cache, best effort: null is unknown (a cold or evicted cache), not down; "
-               "oldest_unprocessed_age_s is reconcile's last finding, dead_letter_count counts since dead_letter_since")
+               "oldest_unprocessed_age_s is reconcile's last finding, dead_letter_count counts since dead_letter_since; "
+               "last_done_at is the consumer's alone (last_success_at counts the crons too), and a last_enqueued_at "
+               "after it means events wait")
 
 
 def signed(secret: str | None, ts: str | None, sig: str | None, body: bytes, now: float) -> str | None:
@@ -63,6 +65,7 @@ def create_app(deps: Callable[[], Deps] = production) -> FastAPI:
         except Exception as e:  # noqa: BLE001 - Slack retries a 5xx, keyed on the same id
             d.log("publish-failed", event_id=eid, error=error(e))
             return JSONResponse({"error": "publish failed"}, status_code=503)
+        await run_in_threadpool(d.write, LAST_ENQUEUED, d.clock())
         d.log("enqueued", event_id=eid, kind=payload["kind"])
         return JSONResponse({"ok": True})
 
@@ -111,7 +114,8 @@ def create_app(deps: Callable[[], Deps] = production) -> FastAPI:
             return JSONResponse({"error": "HEALTH_TOKEN is not set"}, status_code=503)
         if not bearer(request, token):
             return JSONResponse({"error": "unauthorized"}, status_code=401)
-        oldest, dead, last = [await run_in_threadpool(d.read, k) for k in (OLDEST, DEAD, LAST_SUCCESS)]
+        oldest, dead, last, done, enq = [await run_in_threadpool(d.read, k)
+                                         for k in (OLDEST, DEAD, LAST_SUCCESS, LAST_DONE, LAST_ENQUEUED)]
         age = None
         if isinstance(oldest, dict) and "ts" in oldest:
             age = round(max(0.0, d.clock() - float(oldest["ts"])), 3) if oldest["ts"] else 0.0
@@ -119,6 +123,8 @@ def create_app(deps: Callable[[], Deps] = production) -> FastAPI:
         return JSONResponse({"oldest_unprocessed_age_s": age, "dead_letter_count": dead.get("count"),
                              "dead_letter_since": dead.get("since"),
                              "last_success_at": float(last) if isinstance(last, (int, float)) else None,
+                             "last_done_at": float(done) if isinstance(done, (int, float)) else None,
+                             "last_enqueued_at": float(enq) if isinstance(enq, (int, float)) else None,
                              "queue": TOPIC, "dead_letter": DEAD_TOPIC, "note": HEALTH_NOTE})
 
     def cron(name: str, run: Callable[[Deps], dict]):
@@ -135,4 +141,15 @@ def create_app(deps: Callable[[], Deps] = production) -> FastAPI:
 
     cron("watchdog", crons.watchdog)
     cron("reconcile", crons.reconcile)
+
+    @app.get("/api/cron/drain")
+    async def drain(request: Request):
+        d = deps()
+        if not bearer(request, d.env.get("CRON_SECRET")):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        try:
+            return JSONResponse(await subscriber.drain(d))
+        except Exception as e:  # noqa: BLE001 - the next minute's run polls again
+            d.log("drain-failed", error=error(e))
+            return JSONResponse({"error": error(e)}, status_code=500)
     return app

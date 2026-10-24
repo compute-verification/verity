@@ -32,7 +32,7 @@ from verity_vllm.store.registry import Store  # noqa: E402
 
 from .test_memory_map import kv_payload  # noqa: E402
 from .test_registry import RECEIPT  # noqa: E402
-from .test_remote_session import PassClock, verifier, wire  # noqa: E402
+from .test_remote_session import PassClock, verifying, wire  # noqa: E402
 
 BLOCK = rcodec.BLOCK_BYTES
 LAYERS, PAGES, SLOTS, HEADS, DIM = 2, 6, 8, 4, 128      # a slot 1 KiB of K, 1 KiB of V; a plane-page 2 blocks
@@ -118,15 +118,13 @@ def run(plan: str, *, windows: int = 3, copies: bool = True, **kw):
     th.start()
     sock, _ = lsock.accept()
     lsock.close()
-    v = verifier.Verifier(wire.Conn(sock, clock=clock.now), source=os.urandom(32), windows=windows, window_ns=5,
-                          samples=512, delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None, lifetime=60)
-    v.register()
-    try:
-        r = v.session(0, v.allowance(v.ping(4)), None)
-    except Exception as e:  # noqa: BLE001  -- a prover that fails drops the connection
-        r = {"accepted": False, "error": e}
-    th.join()
-    sock.close()
+    with verifying(sock, clock, windows=windows, window_ns=5, samples=512, lifetime=60) as v:
+        v.register()
+        try:
+            r = v.session(0, v.allowance(v.ping(4)), None)
+        except Exception as e:  # noqa: BLE001  -- a prover that fails drops the connection
+            r = {"accepted": False, "error": e}
+        th.join()
     return r, got[0], s, b
 
 
