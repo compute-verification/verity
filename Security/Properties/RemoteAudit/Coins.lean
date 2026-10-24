@@ -23,9 +23,13 @@ A session's coins are `coins[0 … W − 1]`, window `t`'s challenge at `t` (`re
 So the code gives `Live` once the events up to window `t`'s draw are fixed by the coins below `W + t`, and that is
 what it cannot give: the order the deployment releases coins in, the challenger releasing `coins[W + t]` only to
 `close t`'s draw and the prover seeing nothing of it before. `ReleaseOrder` names it, a premise of the deployment's,
-which no property here takes. And `Counted` reads the trace's held blocks, which the code never sees: that a credited
-pass's wrong registered blocks are receipts no opening passes is the hash binding of the receipts and the store's
-commitments, not a property of the verifier's functions.
+which no property here takes. `LiveUnder` is `Live` as the code states it, on the events a session sees on its
+coins: two sessions on coins that agree below `W + t`, wherever each has drawn window `t`, see the same record and
+the same openable receipts. `Properties.Proofs.RemoteAudit.Order` derives it from the three properties and
+`ReleaseOrder` (`liveUnder`), a lemma rather than a property since its premise is the deployment's. And `Counted`
+reads the trace's held blocks, which the code never sees: that a credited pass's wrong registered blocks are receipts
+no opening passes is the hash binding of the receipts and the store's commitments, not a property of the verifier's
+functions.
 
 The statements need `1 ≤ W` (with no window, `start` reads `coins[0]`, window 0's openings coin) and
 `1 ≤ min_passes` (with none, an empty window drawn on its deadline could take a root afterwards, once the window
@@ -90,5 +94,19 @@ def ReleaseOrder (params : Session.Params) (reg : Registration) (appendCoins : A
     (∀ j, j < params.windows + t → coins'[j]! = coins[j]!) →
     Session.run (Session.State.init params reg coins appendCoins notBeforeNs) ((D coins).extract 0 k) = .ok (rs, s) →
     drawnOf s t = none → (D coins')[k]? = (D coins)[k]?
+
+/-- **`Live`, as the code states it**, on the events `D` a session sees on its coins: two sessions on coins that agree
+below `W + t`, each run to a point where window `t` is drawn, see the same record of it and the same openable
+receipts. -/
+def LiveUnder (params : Session.Params) (reg : Registration) (appendCoins : Array ByteArray) (notBeforeNs : Nat)
+    (D : Array ByteArray → Array Session.Event) : Prop :=
+  ∀ (coins coins' : Array ByteArray) (t k k' : Nat) (rs rs' : Array Session.Result) (s s' : Session.State),
+    (∀ j, j < params.windows + t → coins'[j]! = coins[j]!) →
+    Session.run (Session.State.init params reg coins appendCoins notBeforeNs) ((D coins).extract 0 k) = .ok (rs, s) →
+    Session.run (Session.State.init params reg coins' appendCoins notBeforeNs) ((D coins').extract 0 k') =
+      .ok (rs', s') →
+    (drawnOf s t).isSome → (drawnOf s' t).isSome →
+      s'.record t = s.record t ∧
+        ∀ u, Openable reg s'.appends (s'.record t) u ↔ Openable reg s.appends (s.record t) u
 
 end Properties.RemoteAudit

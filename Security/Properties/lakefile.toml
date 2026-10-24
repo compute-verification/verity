@@ -83,4 +83,5 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.NetworkRecords", "Properties.Proofs.NetworkRecords", "Properties.Accounting.Requirement",
   "Properties.Proofs.Accounting.Requirement", "Properties.Accounting.Compose", "Properties.RemoteAudit",
   "Properties.Proofs.RemoteAudit", "Properties.RemoteAudit.Coins", "Properties.Proofs.RemoteAudit.Coins",
-  "Properties.Proofs.RemoteAudit.Frozen", "Properties.Accounting.Served", "Properties.Proofs.Accounting.Served"]
+  "Properties.Proofs.RemoteAudit.Frozen", "Properties.Proofs.RemoteAudit.Order",
+  "Properties.Accounting.Served", "Properties.Proofs.Accounting.Served"]

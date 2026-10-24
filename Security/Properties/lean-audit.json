@@ -50,6 +50,7 @@
   "Properties.RemoteAudit.Coins",
   "Properties.Proofs.RemoteAudit.Coins",
   "Properties.Proofs.RemoteAudit.Frozen",
+  "Properties.Proofs.RemoteAudit.Order",
   "Properties.Accounting.Compose",
   "Properties.Accounting.Served",
   "Properties.Proofs.Accounting.Served"
