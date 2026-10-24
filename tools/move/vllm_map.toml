@@ -94,6 +94,7 @@ paths = ["integrations/vllm/verity_vllm/protocol_options/", "integrations/vllm/v
 paths = []
 
 [split]
+"integrations/vllm/tests/store/int8_store_gpu.py: integrations/vllm" = "its usage line's `PYTHONPATH=.:../..` is relative to `cd integrations/vllm`; at the same depth the rewrite leaves it `../..`"
 
 [modules]
 # the renames [paths] and [roots] imply (`layout.py --modules`); every module under one follows it unless a longer entry
