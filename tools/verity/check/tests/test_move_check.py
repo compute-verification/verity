@@ -108,7 +108,7 @@ def test_non_path_edit_in_pyproject_is_refused(tmp_path):
                   PYPROJECT.replace("protocols/pous/data", "security_proofs/pous/data").replace('"pous"', '"pous2"')})
     r = _check(repo, base)
     [f] = r["refusals"]
-    assert f["path"] == "security_proofs/pous/pyproject.toml" and f["reason"] == "edit beyond path strings"
+    assert f["path"] == "security_proofs/pous/pyproject.toml" and f["reason"] == "edit beyond moved paths and module names"
     assert f["hunk"].splitlines()[1:] == ['-name = "pous"', '+name = "pous2"']
 
 
@@ -118,7 +118,7 @@ def test_import_line_rewrite_is_certified(tmp_path):
     _write(repo, {"tests/test_pous.py": BASE_FILES["tests/test_pous.py"].replace("verity_pous", "pous")})
     r = _check(repo, base)
     assert r["certified"], r["refusals"]
-    assert r["edits"] == [{"path": "tests/test_pous.py", "kind": "import"}]
+    assert r["edits"] == [{"path": "tests/test_pous.py", "kind": "python"}]
 
 
 def test_import_of_a_module_that_did_not_move_is_refused(tmp_path):
@@ -126,7 +126,7 @@ def test_import_of_a_module_that_did_not_move_is_refused(tmp_path):
     _move(repo, "protocols/pous/src/verity_pous", "security_proofs/pous/src/pous")
     _write(repo, {"tests/test_pous.py": BASE_FILES["tests/test_pous.py"].replace("verity_pous.codec", "pous.other")})
     [f] = _check(repo, base)["refusals"]
-    assert f["path"] == "tests/test_pous.py" and f["reason"] == "edit beyond import lines"
+    assert f["path"] == "tests/test_pous.py" and f["reason"] == "edit beyond moved paths and module names"
 
 
 def test_a_new_file_is_refused(tmp_path):
@@ -310,8 +310,8 @@ def test_spec_lock_proved_in_that_names_no_package_is_refused(tmp_path):
     assert "`proved_in` entry" in f["reason"]
 
 
-#: the numerical bench's lowerings, a registry move-check reads wherever the tree keeps it
-LOWERINGS = next(p for p in MC.PY_PATH_FILES if p.endswith("/bench/lowerings.py"))
+#: the numerical bench's lowerings, which name a directory in a pathlib chain
+LOWERINGS = "benchmarks/numerical/python/verity_numerical/bench/lowerings.py"
 REGISTRY = 'REGISTRY = {\n    "flock_pure": "backends.flock.tool:FLOCK_PURE",\n    "pouw_vllm": "benchmarks.pouw.tool:POUW_VLLM",\n}\n'
 REGISTRY_FILES = {"backends/flock/tool.py": "FLOCK_PURE = 1\n", "backends/flock/prove.py": "",
                   "benchmarks/pouw/tool.py": "POUW_VLLM = 1\n",
@@ -346,12 +346,12 @@ def test_tools_registry_non_path_change_is_refused(tmp_path):
     assert f["path"] == "tools/research/src/research/store/tools_registry.py" and "FLOCK_FAST" in f["hunk"]
 
 
-def test_module_argument_outside_a_dash_m_line_is_refused(tmp_path):
+def test_dotted_name_no_rename_explains_is_refused(tmp_path):
     repo, base = _repo(tmp_path, {**REGISTRY_FILES, "tools/research/src/research/x.py": 'NAME = "backends.flock.tool"\n'})
     _move(repo, "backends/flock", "catalog/flock")
-    _write(repo, {"tools/research/src/research/x.py": 'NAME = "catalog.flock.tool"\n'})
+    _write(repo, {"tools/research/src/research/x.py": 'NAME = "catalog.other.tool"\n'})
     [f] = _check(repo, base)["refusals"]
-    assert f["path"] == "tools/research/src/research/x.py"
+    assert f["path"] == "tools/research/src/research/x.py" and "catalog.other.tool" in f["hunk"]
 
 
 WORKSPACE = '[tool.uv.workspace]\nmembers = ["protocols/pous", "protocols/pouw"]\n\n[tool.uv.sources]\npous = { workspace = true }\n'
@@ -389,7 +389,7 @@ def test_lean_packages_entry_for_a_new_lake_package_is_certified(tmp_path):
     _, _, r = _split(tmp_path, base={"tests/test_lean_packages.py": LEAN_PACKAGES},
                      files={"tests/test_lean_packages.py": LEAN_PACKAGES.replace("]\n", entry + "]\n")})
     assert r["certified"], r["refusals"]
-    assert {"path": "tests/test_lean_packages.py", "kind": "path"} in r["edits"]
+    assert {"path": "tests/test_lean_packages.py", "kind": "python"} in r["edits"]
 
 
 def test_lean_packages_entry_for_an_existing_package_is_refused(tmp_path):
@@ -446,3 +446,133 @@ def test_runs_entry_with_a_changed_data_hash_is_refused(tmp_path):
 def test_runs_entry_duplicated_into_two_locks_is_refused(tmp_path):
     r = _runs_split(tmp_path, {"CoreProofs.Difftest": RUN}, spec_runs={"CoreProofs.Difftest": RUN})
     assert any("locks at HEAD" in f["reason"] for f in r["refusals"])
+
+
+#: a package below `pkg/` that moves deeper, the shape of the vLLM integration's first move
+APP = {"pkg/app/__init__.py": "", "pkg/app/store/__init__.py": "", "pkg/app/store/remote.py": "class Session:\n    pass\n",
+       "pkg/app/store/host.py": "x = 1\n", "pkg/app/linear/__init__.py": "", "pkg/app/linear/api.py": "y = 2\n",
+       "pkg/tests/store/__init__.py": "", "pkg/tests/store/test_remote.py": "ROOT = Path(__file__).resolve().parents[2]\n",
+       ".gitignore": "pkg/tests/store/fixtures/periods\n"}
+APP_MOVES = [("pkg/app/store", "pkg/app/protocols/bandwidth"), ("pkg/app/linear", "pkg/app/protocols/linear"),
+             ("pkg/tests/store", "pkg/tests/protocols/bandwidth")]
+
+
+def _app(tmp_path: Path, files: dict[str, str], edits: dict[str, str]) -> dict:
+    repo, base = _repo(tmp_path, {**APP, **files})
+    for old, new in APP_MOVES:
+        _move(repo, old, new)
+    _write(repo, edits)
+    return _check(repo, base)
+
+
+def test_prose_paths_and_module_names_in_any_text_file_are_certified(tmp_path):
+    r = _app(tmp_path, {
+        "README.md": "The store (`pkg/app/store/`, `app/store/remote.py`) is `app.store.remote.Session`.\n"
+                     "Its test is `tests/store/test_remote.py`.\n",
+        "run.sh": 'git show "$SHA:pkg/app/store/host.py" > host.py  # app.linear.api\n',
+        "keep.json": '{"app.linear.api": "pkg/app/linear/api.py"}\n',
+        "pkg/app/doc.py": '"""Through `app.store.remote.Session` (pkg/app/store/remote.py)."""\n'}, {
+        "README.md": "The store (`pkg/app/protocols/bandwidth/`, `app/protocols/bandwidth/remote.py`) is "
+                     "`app.protocols.bandwidth.remote.Session`.\nIts test is `tests/store/test_remote.py`.\n",
+        "run.sh": 'git show "$SHA:pkg/app/protocols/bandwidth/host.py" > host.py  # app.protocols.linear.api\n',
+        "keep.json": '{"app.protocols.linear.api": "pkg/app/protocols/linear/api.py"}\n',
+        "pkg/app/doc.py": '"""Through `app.protocols.bandwidth.remote.Session` (pkg/app/protocols/bandwidth/remote.py)."""\n',
+        "pkg/tests/protocols/bandwidth/test_remote.py": "ROOT = Path(__file__).resolve().parents[3]\n",
+        ".gitignore": "pkg/tests/protocols/bandwidth/fixtures/periods\n"})
+    assert r["certified"], r["refusals"]
+    assert {e["path"]: e["kind"] for e in r["edits"]} == {
+        "README.md": "text", "run.sh": "text", "keep.json": "text", "pkg/app/doc.py": "python", ".gitignore": "text",
+        "pkg/tests/protocols/bandwidth/test_remote.py": "python"}
+
+
+PY_OLD = ("from app import linear, store as ST\nfrom app.store import remote as R\n\n"
+          'HOST = Path(__file__).resolve().parents[0] / "store" / "host.py"\nUP = Path(R.__file__).parents[1]\n')
+PY_NEW = ("from app.protocols import linear\nfrom app.protocols import bandwidth as ST\nfrom app.protocols.bandwidth import remote as R\n\n"
+          'HOST = Path(__file__).resolve().parents[0] / "protocols" / "bandwidth" / "host.py"\nUP = Path(R.__file__).parents[2]\n')
+
+
+def test_moved_modules_imported_by_name_and_anchors_with_a_path_are_certified(tmp_path):
+    r = _app(tmp_path, {"pkg/app/use.py": PY_OLD}, {"pkg/app/use.py": PY_NEW})
+    assert r["certified"], r["refusals"]
+
+
+def test_imports_in_a_shell_heredoc_and_in_a_string_literal_are_certified(tmp_path):
+    r = _app(tmp_path, {"run.sh": "python - <<'EOF'\nfrom app import linear, store as ST\nEOF\n",
+                        "pkg/app/gen.py": 'SRC = (\n    "from app.store import remote as R\\n"\n)\n'},
+             {"run.sh": "python - <<'EOF'\nfrom app.protocols import linear\nfrom app.protocols import bandwidth as ST\nEOF\n",
+              "pkg/app/gen.py": 'SRC = (\n    "from app.protocols.bandwidth import remote as R\\n"\n)\n'})
+    assert r["certified"], r["refusals"]
+
+
+def test_an_import_in_a_string_literal_that_binds_another_name_is_refused(tmp_path):
+    [f] = _app(tmp_path, {"pkg/app/gen.py": 'SRC = (\n    "from app.store import remote as R\\n"\n)\n'},
+               {"pkg/app/gen.py": 'SRC = (\n    "from app.protocols.bandwidth import remote as S\\n"\n)\n'})["refusals"]
+    assert f["path"] == "pkg/app/gen.py" and "as S" in f["hunk"]
+
+
+def test_an_import_that_binds_another_name_is_refused(tmp_path):
+    [f] = _app(tmp_path, {"pkg/app/use.py": PY_OLD},
+               {"pkg/app/use.py": PY_NEW.replace("bandwidth as ST", "bandwidth as BW")})["refusals"]
+    assert f["path"] == "pkg/app/use.py" and "BW" in f["hunk"]
+
+
+def test_a_module_anchor_that_names_another_directory_is_refused(tmp_path):
+    [f] = _app(tmp_path, {"pkg/app/use.py": PY_OLD},
+               {"pkg/app/use.py": PY_NEW.replace("parents[2]", "parents[3]")})["refusals"]
+    assert f["path"] == "pkg/app/use.py" and "parents[3]" in f["hunk"]
+
+
+def test_a_word_that_names_no_moved_path_is_refused_in_prose(tmp_path):
+    [f] = _app(tmp_path, {"README.md": "The store is `app.store`.\n"},
+               {"README.md": "The store is `app.protocols.storage`.\n"})["refusals"]
+    assert f["path"] == "README.md" and f["reason"] == "edit beyond moved paths and module names"
+
+
+def test_anchor_that_names_another_directory_is_refused(tmp_path):
+    [f] = _app(tmp_path, {}, {"pkg/tests/protocols/bandwidth/test_remote.py": "ROOT = Path(__file__).resolve().parents[4]\n"})[
+        "refusals"]
+    assert f["path"] == "pkg/tests/protocols/bandwidth/test_remote.py" and "parents[4]" in f["hunk"]
+
+
+def test_relative_import_rewritten_absolute_is_certified(tmp_path):
+    body = "".join(f"\n\ndef f{i}():\n    return put({i})\n" for i in range(8))
+    files = {"pkg/app/options/__init__.py": "", "pkg/app/options/pearl.py": "from .pearl_host import put\n" + body,
+             "pkg/app/options/pearl_host.py": "def put():\n    pass\n"}
+    repo, base = _repo(tmp_path, {**APP, **files})
+    _move(repo, "pkg/app/options/pearl.py", "pkg/app/protocols/pearl/__init__.py")
+    _move(repo, "pkg/app/options/pearl_host.py", "pkg/app/protocols/pearl/host.py")
+    _move(repo, "pkg/app/options/__init__.py", "pkg/app/protocols/__init__.py")
+    _write(repo, {"pkg/app/protocols/pearl/__init__.py": "from app.protocols.pearl.host import put\n" + body})
+    r = _check(repo, base)
+    assert r["certified"], r["refusals"]
+    _write(repo, {"pkg/app/protocols/pearl/__init__.py": "from app.protocols.pearl.other import put\n" + body})
+    assert _check(repo, base)["refusals"]
+
+
+def test_identical_files_git_pairs_across_directories_follow_their_directory():
+    renames = [("a/__init__.py", "y/b/__init__.py"), ("b/__init__.py", "x/a/__init__.py"),
+               ("a/m.py", "x/a/m.py"), ("b/n.py", "y/b/n.py")]
+    base = ["a/__init__.py", "a/m.py", "b/__init__.py", "b/n.py"]
+    added = {"x/a/__init__.py", "x/a/m.py", "y/b/__init__.py", "y/b/n.py"}
+    assert MC.derive_map(renames, base, set(base), added) == {"a": "x/a", "b": "y/b"}
+
+
+MOVES_DOC = {"about": "the moves", "moves": [{"paths": {"old/": "older/"}}]}
+
+
+def _moves(tmp_path: Path, paths: dict[str, str]) -> dict:
+    files = {MC.MOVES: json.dumps(MOVES_DOC, indent=2) + "\n"}
+    return _app(tmp_path, files, {MC.MOVES: json.dumps({**MOVES_DOC, "moves": [*MOVES_DOC["moves"], {"paths": paths}]},
+                                                       indent=2) + "\n"})
+
+
+def test_moves_entry_the_range_agrees_with_is_certified(tmp_path):
+    r = _moves(tmp_path, {"pkg/app/store/": "pkg/app/protocols/bandwidth/", "pkg/app/linear/api.py": "pkg/app/protocols/linear/api.py",
+                          "pkg/app/store/added_on_a_branch.py": "pkg/app/protocols/bandwidth/added_on_a_branch.py"})
+    assert r["certified"], r["refusals"]
+    assert {"path": MC.MOVES, "kind": "moves"} in r["edits"]
+
+
+def test_moves_entry_the_range_contradicts_is_refused(tmp_path):
+    [f] = _moves(tmp_path, {"pkg/app/store/": "pkg/app/protocols/storage/"})["refusals"]
+    assert f["path"] == MC.MOVES and "pkg/app/protocols/storage/" in f["reason"]

@@ -42,10 +42,11 @@ CORRESPOND = [  # the zero-row / initial-state broadcasts: TA1 writes `Concat`/`
     ("Attention{T=5,KVH=2}", A.Attention, b1.Attention, {"T": 5, "NH": 4, "KVH": 2, "D": 16}),
     ("Serve{TINY,LP=3,STEPS=2}", A.Serve, b1.Serve, {"C": TINY, "LP": 3, "STEPS": 2}),
 ]
+SLOW_EQUAL = ("RMSNormTriton{N=1088}", "RMSNormFusedCuda{N=1536}")
 
 
-@pytest.mark.parametrize("label,front,ta1,statics", EQUAL, ids=[e[0] for e in EQUAL])
-@pytest.mark.slow
+@pytest.mark.parametrize("label,front,ta1,statics",
+                         [pytest.param(*e, marks=pytest.mark.slow) if e[0] in SLOW_EQUAL else e for e in EQUAL], ids=[e[0] for e in EQUAL])
 def test_authored_digest_equals_ta1(label, front, ta1, statics):
     rep = export_report(front, static=statics, dead_gates="ignore")
     P_t = Program(bind(ta1, **statics))

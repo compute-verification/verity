@@ -35,10 +35,11 @@ SALTS = [tuple(bytes([4 * w + k + 1]) * 192 for k in range(4)) for w in range(WI
 SEEDS = (1, 2, 3, 5, 7, 8)
 
 
-def _view(link, w, syncs=SYNCS, certified=None):
+def _view(link, w, syncs=SYNCS, certified=None, clocks=None):
     """`advised.view` under the stand-in tie on an ingress that certified the prompts `certified` (by default the
-    advice's own), on windows the certifier ran under the declared `syncs`."""
-    return AD.view(link, w, T, R, syncs, SYNC_SET, FRAMING, clocks=syncs, **held(link, certified))
+    advice's own), on windows the certifier ran under `clocks` (by default the declared `syncs`)."""
+    return AD.view(link, w, T, R, syncs, SYNC_SET, FRAMING, clocks=syncs if clocks is None else clocks,
+                   **held(link, certified))
 
 
 def check(session: Session, link=None, own=0, egress=None, ingress=None, certified=None) -> list[bool]:
@@ -210,26 +211,24 @@ def _signed_end(counts, own, end):
 @pytest.mark.parametrize("own", [0, 1])
 def test_the_ingress_ends_are_where_the_signed_counts_put_them(own):
     """CERT-VARLEN's rule: request k ends in the first bucket where the ingress head's signed counts, less one own frame
-    a window, reach `advised.ends`'s k-th, Σ_{i ≤ k} request_frames[prompt_len_i − 1]. In every session that is the
-    bucket that releases request k's last frame: under today's queueing wherever each window's own frame leaves in its
-    first bucket (and never earlier elsewhere), and always once the own frame goes to the head of each window's queue
-    (CERT-VARLEN's FIFO change), under which every window is accepted. Salted, today's queueing puts some end late."""
-    late = 0
-    for salt_first in (False, True):
-        for seed in SEEDS:
-            s = serve(seed, own, salt_first=salt_first)
-            sizes = [e - p for p, e in zip((0,) + s.ends, s.ends)]
-            records, anchor = ingress_records(s.arrive, sizes, own, salt_first=salt_first)
-            assert counts(records) == counts(s.ingress)
-            got = [_signed_end([n for row in counts(records) for n in row], own, e)
-                   for e in AD.ends(s.link, FRAMING, **held(s.link, s.certified))]
-            assert all(g >= a for g, a in zip(got, anchor))
-            if salt_first or all(not own or b"s" in r.grid[0] for r in records):
-                assert got == anchor
-            if salt_first:
-                assert check(s, own=own) == [True] * WINDOWS
-            late += got != anchor
-    assert bool(late) is bool(own)
+    a window, reach `advised.ends`'s k-th, Σ_{i ≤ k} request_frames[prompt_len_i − 1]. With each window's own frame at
+    the head of its queue, ahead of carried request frames (`active.Bucketer`), that is the bucket that releases
+    request k's last frame in every session, salted sessions whose windows start with frames carried in among them, and
+    every window is accepted."""
+    carried = 0
+    for seed in SEEDS:
+        s = serve(seed, own)
+        sizes = [e - p for p, e in zip((0,) + s.ends, s.ends)]
+        records, anchor = ingress_records(s.arrive, sizes, own)
+        assert counts(records) == counts(s.ingress)
+        got = [_signed_end([n for row in counts(records) for n in row], own, e)
+               for e in AD.ends(s.link, FRAMING, **held(s.link, s.certified))]
+        assert got == anchor
+        assert check(s, own=own) == [True] * WINDOWS
+        released = list(itertools.accumulate(sum(row.count(b"q") for row in r.grid) for r in records))
+        arrived = [sum(n for a, n in zip(s.arrive, sizes) if a < w * T) for w in range(1, WINDOWS)]
+        carried += any(a > r for a, r in zip(arrived, released))
+    assert carried
 
 
 def _one_more(link):
@@ -440,9 +439,9 @@ def test_no_advice_or_a_malformed_one_is_refused(tmp_path):
     verifier of record on the proof; a `LinkAdvice` takes no tie at all, and a `received` that isn't u32s and a
     verdict that doesn't name a link, registration digests and an advice digest with one bool a registration can't be
     built; and every window refuses an advice that releases more than R frames in a bucket (all in the last), a frame
-    before its request could be (the first in bucket 0), or one in a window with no declared sync (the last past the
-    link's), and a declared sync outside Σ_sync in any window the advice releases in, which the floor of an earlier
-    window may read and that window's audit doesn't check."""
+    before its request could be (the first in bucket 0), or one past the link's windows; and a window that declares no
+    sync, or one outside Σ_sync, is refused, and only that window: every other window's view is the honest one, since
+    every floor reads the sync the certifier ran (REDTEAM phase 15)."""
     session = serve(SEEDS[0])
     run = Run(tmp_path, ties=StandInTie(session.certified))
     opening = run.lw.commit(0, run.issuer.certify(session.egress[0], Direction.EGRESS, P,
@@ -463,7 +462,8 @@ def test_no_advice_or_a_malformed_one_is_refused(tmp_path):
     d, regs, every = good.advice, good.registrations, good.accepted
     for name, registrations, advice, accepted in (
             ("", regs, d, every), (b"x", regs, d, every), (LINK, regs[0], d, every),
-            (LINK, (d[:-1],) * WINDOWS, d, every), (LINK, regs, d.upper(), every), (LINK, regs, bytes.fromhex(d), every), (LINK, regs, d, (1,) * WINDOWS),
+            (LINK, (d[:-1],) * WINDOWS, d, every), (LINK, regs, d.upper(), every),
+            (LINK, regs, bytes.fromhex(d), every), (LINK, regs, d, (1,) * WINDOWS),
             (LINK, regs, d, "yes"), (LINK, regs, d, every[:-1]), (LINK, regs[:-1], d, every)):
         with pytest.raises(ADV.MalformedAdvice):
             AD.IoTieVerdict(name, registrations, advice, accepted)
@@ -489,21 +489,26 @@ def test_no_advice_or_a_malformed_one_is_refused(tmp_path):
         out = Run(tmp_path / f"run-{k}", ties=ties).round(0, session.egress[0], session.ingress[0], bad)
         assert not out.accepted
     over, early, late = (WINDOWS * T - 1,) * len(a.release), (0,) + a.release[1:], a.release[:-1] + (WINDOWS * T,)
-    for release, why in ((over, "past the allocation"), (early, "before its request"), (late, "declares no sync")):
+    for release, why in ((over, "past the allocation"), (early, "before its request"), (late, "past the link's")):
         bad = AD.LinkAdvice(replace(a, release=release), got)
         for w in range(WINDOWS):
             with pytest.raises(ValueError, match=why):
                 _view(bad, w, certified=session.certified)
         assert not run.lw.advised_check(opening, SYNCS, bad)
-    windows = sorted({b // T for b in a.release})
-    assert windows[-1] > 0
-    for v in windows:
+    assert sorted({b // T for b in a.release})[-1] > 0
+    honest = [_view(link, w) for w in range(WINDOWS)]
+    for v in range(WINDOWS):
         for sync in (ClockSync(0, 2), ClockSync(1, 1), ClockSync(3, 4)):
             off = SYNCS[:v] + [sync] + SYNCS[v + 1:]
             for w in range(WINDOWS):
-                with pytest.raises(ValueError, match="Σ_sync"):
-                    _view(link, w, off)
-            assert not run.lw.advised_check(opening, off, link)
+                if w == v:
+                    with pytest.raises(ValueError, match="Σ_sync"):
+                        _view(link, w, off, clocks=SYNCS)
+                else:
+                    assert _view(link, w, off, clocks=SYNCS) == honest[w], (v, sync, w)
+            assert run.lw.advised_check(opening, off, link) is (v != 0)
+        with pytest.raises(ValueError, match="declares no sync"):
+            _view(link, v, SYNCS[:v], clocks=SYNCS)
     with pytest.raises(ValueError, match="receives in"):
         _view(link, WINDOWS)
 
