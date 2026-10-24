@@ -1114,6 +1114,35 @@ def test_an_h1_window_passes_its_gate_only_static_credited_and_entered():
     assert not gate["passed"] and gate["provided"] and gate["failed"] == [bad[0]] and "credits nothing" in gate["coins"]
 
 
+def test_pearl_cs_whole_step_arm_builds_vllms_full_decode_graphs_beside_the_served_protocol_arm(monkeypatch):
+    """`llama31-8b-1gpu-pearl-c-whole-served` times the whole-step arm beside the protocol arm as served (its settings the
+    protocol row's) and the compiled engine. Under the eager spec, the arm's overrides build vLLM's FULL decode graphs at
+    the preset's capture sizes without torch.compile, at the `compiled` label, which `verity_vllm.LLM` accepts, and its
+    run takes the graph path's options and serial schedule."""
+
+    from verity_bench.vllm import runner
+    from verity_bench.vllm.arms import plugin
+    from verity_vllm.pipeline.llm import resolve_options
+
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
+    spec = resolve_spec("llama31-8b-1gpu-pearl-c-whole-served")
+    pearl = "pouw:pearl-c-sm120-v1-h3"
+    assert spec.arm_settings[pearl] == resolve_spec("llama31-8b-1gpu-pouw-protocol").arm_settings[pearl]
+    arms = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
+    assert [(a.id, a.precision, a.control, a.execution, a.experimental) for a in arms] == [
+        ("stock-fp8", "fp8", None, None, False), (pearl, "bfloat16", None, None, False),
+        ("stock-fp8@compiled", "fp8", None, "compiled", False), ("pouw-pearl-c-whole", "bfloat16", None, None, True)]
+    whole = plugin(arms[-1])
+    preset, eager = served(spec.preset, spec.eager)
+    preset, eager = runner.arm_execution(arms[-1], preset, eager)
+    built = {**runner.engine_args(preset, "bfloat16", resident=False, eager=eager), **whole.engine_overrides(None)}
+    assert built["compilation_config"] == {"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY",
+                                           "cudagraph_capture_sizes": list(spec.preset.engine_settings["capture_sizes"])}
+    opts = resolve_options(built)
+    assert opts["enforce_eager"] is False and opts["execution"] == "compiled"
+    assert whole.run_options == {"graphs": True, "whole_defer": True} and whole.schedule == "serial"
+
+
 def test_a_sweep_crosses_samplings_and_greedy_points_keep_their_ids():
     served_points = expand_sweep("served")
     assert [(p.batch, p.sampling) for p in served_points] == [
