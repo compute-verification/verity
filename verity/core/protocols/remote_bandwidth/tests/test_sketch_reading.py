@@ -114,17 +114,42 @@ def test_the_readings_and_thresholds_the_protocol_states() -> None:
         assert f == Fraction(1, 2 ** (8 * r)) + 128 * timing.sign_rank_at_most(rows, r - 1)
         for bits, want in ((40, c40), (64, c64)):
             c = math.floor(Fraction(1, 2 ** bits) / f)
-            assert timing.sketch_failure(c, 0, rows) <= Fraction(1, 2 ** bits) < timing.sketch_failure(c + 1, 0, rows)
+            assert (timing.sketch_failure(c, 0, rows, outside=1) <= Fraction(1, 2 ** bits)
+                    < timing.sketch_failure(c + 1, 0, rows, outside=1))
             assert round(math.log2(c), 2) == want
     assert timing.sketch_rate(16, 11) == Fraction(1, 2 ** 88) + 128 * timing.sign_rank_at_most(16, 10)
     node_day, passes = round(timing.SHA512_PER_S * 86400), 86400 * 50
-    assert timing.sketch_failure(node_day, passes) == timing.sketch_failure(node_day, passes, r=12)
-    assert lg(timing.sketch_failure(node_day, passes)) == -43.02
-    assert timing.sketch_failure(30 * node_day, 30 * passes) > Fraction(1, 2 ** 40)
+    assert (timing.sketch_failure(node_day, passes, outside=1)
+            == timing.sketch_failure(node_day, passes, r=12, outside=1))
+    assert lg(timing.sketch_failure(node_day, passes, outside=1)) == -43.02
+    assert timing.sketch_failure(30 * node_day, 30 * passes, outside=1) > Fraction(1, 2 ** 40)
     blocks = 1 << 30
-    guess = timing.sketch_failure(node_day, passes, blocks=blocks) - timing.sketch_failure(node_day, passes)
+    guess = (timing.sketch_failure(node_day, passes, blocks=blocks, outside=1)
+             - timing.sketch_failure(node_day, passes, outside=1))
     assert guess == (node_day + passes) * Fraction(blocks, 2 ** 512)
-    assert lg(timing.sketch_failure(node_day, passes, blocks=blocks)) == -43.02
+    assert lg(timing.sketch_failure(node_day, passes, blocks=blocks, outside=1)) == -43.02
+
+
+def test_the_outside_factor_multiplies_the_queries_the_bound_charges() -> None:
+    """RD-5: grinding reads no block, so `sketch_failure` charges Q = F·C, C the node's compressions and F the
+    outside-compute factor, 2^20 by default.  At gate run 8's session 0 (C = 12,708,215,084,432 over 226.9 s, P = 2,118,
+    N = 97,517,568, its recorded δs 2^-51.59 at F = 1) F = 2^10 gives 2^-41.59, the red team's reading, and 2^20 gives
+    2^-31.59; δs < 2^-50 at F = 2^20 takes 64 rows.  The line's δ there, 2^-40 of profile δ plus AuditRO's 2^-41 a pass
+    plus δs, moves 0.4 bits from F = 1 to 2^20, since the slack dominates."""
+    assert timing.SKETCH_OUTSIDE == 2 ** 20
+    c, p, n = 12_708_215_084_432, 2118, 97_517_568
+    assert timing.sketch_failure(c, p, blocks=n) == timing.sketch_failure(c, p, blocks=n, outside=2 ** 20)
+    for f in (2, 2 ** 10, 2 ** 20):
+        assert timing.sketch_failure(c, p, blocks=n, outside=f) == timing.sketch_failure(f * c, p, blocks=n, outside=1)
+    assert [lg(timing.sketch_failure(c, p, blocks=n, outside=2 ** e)) for e in (0, 10, 20, 30)] == [
+        -51.59, -41.59, -31.59, -21.59]
+    assert lg(timing.sketch_failure(c, p, rows=64, blocks=n)) < -50
+    line = [Fraction(1, 2 ** 40) + Fraction(p, 2 ** 41) + timing.sketch_failure(c, p, blocks=n, outside=f)
+            for f in (1, 2 ** 20)]
+    assert [lg(x) for x in line] == [-29.95, -29.55]
+    for bad in (0, -1, 1.5):
+        with pytest.raises(ValueError, match="outside-compute factor"):
+            timing.sketch_failure(c, p, outside=bad)
 
 
 class Counting:
