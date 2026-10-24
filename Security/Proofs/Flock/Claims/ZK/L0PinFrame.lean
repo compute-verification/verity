@@ -295,6 +295,8 @@ theorem fr_link (coin : Nat → Nat → F128) (n : Nat) (coins : Got) (a b : Arr
 def cutAsks (coin : Nat → Nat → F128) (n : Nat) : _root_.Flock.Firewall.Finish.Asks PS :=
   ⟨(asksCut coin n).link, (asksCut coin n).round⟩
 
+theorem cutAsks_toC (coin : Nat → Nat → F128) (n : Nat) : (cutAsks coin n).toC = asksCut coin n := rfl
+
 /-- **The opening's channel, fed, is the cut's.** -/
 theorem asksRel_feed (coin : Nat → Nat → F128) (n : Nat) (coins : Got) :
     AsksRel (feedSim coin n coins) (stepAsks coins true).toC (cutAsks coin n).toC :=
@@ -304,7 +306,7 @@ theorem asksRel_feed (coin : Nat → Nat → F128) (n : Nat) (coins : Got) :
 
 section Opening
 
-open _root_.Flock.Firewall.Finish (repOpening repOpening_rel commitFw switchVec basisVals ligeritoPZk_fw ringSwitchP_eq)
+open _root_.Flock.Firewall.Finish (repOpening repOpening_rel commitFw ligeritoPZk_fw ringSwitchP_eq)
 
 /-- **A rep's opening, fed, is its cut run.** -/
 theorem repOpening_feed (coin : Nat → Nat → F128) (n : Nat) (coins : Got) (st : _root_.Flock.Setup)
@@ -329,7 +331,8 @@ theorem repOpening_cutL0 (coin : Nat → Nat → F128) (st : _root_.Flock.Setup)
     (l : Array Claims.Msg) {j : Nat} (hj : j < sch.k0 + 4) (hk : 1 ≤ sch.k0) (hn : sch.n ≠ 0)
     {ss : Array (Array F128)} {T : F128} {sws : Array _root_.Flock.Switched} {tr₂ : _root_.Flock.Transcript}
     {l₂ : Array Claims.Msg}
-    (hrs : ((ringSwitchCut (asksCut coin (l₂.size + j)) (fun k => switchVec g claims[k]!) claims).run tr).go l =
+    (hrs : ((ringSwitchCut (asksCut coin (l₂.size + j))
+      (fun k => _root_.Flock.Firewall.Finish.switchVec g claims[k]!) claims).run tr).go l =
       (.ok ((ss, T, sws), tr₂), l₂)) :
     CutStop (fun L => L.toList = l₂.toList ++ (List.range (j + 1)).map
         (l0BodyAt coin l₂.size tr₂.pending.data.toList T (flat cm0.toC.cap) sch g (basisVals sws (st.m - 7)) lay h rep
@@ -337,9 +340,9 @@ theorem repOpening_cutL0 (coin : Nat → Nat → F128) (st : _root_.Flock.Setup)
       (((repOpening (cutAsks coin (l₂.size + j)) (fun lv g s => pure (commitFw lv g s)) st sch lay tPad rep g cm0
         claims h extra lanePad salt).run tr).go l) := by
   unfold repOpening
-  rw [ringSwitchP_eq, bind_go hrs, hm]
+  rw [ringSwitchP_eq, cutAsks_toC, Replay.bind_go hrs, hm]
   dsimp only
-  rw [ligeritoPZk_fw]
+  rw [ligeritoPZk_fw, cutAsks_toC]
   exact cutStop_bind (ligeritoPZk_cutL0 coin (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash)
     _root_.Flock.MerkleScheme.hm96Sha512 sch T cm0.toC g _ lay h rep tPad extra lanePad salt (fun _ _ => 0) tr₂ l₂ hj
     hk hn)
@@ -403,7 +406,7 @@ end Congr
 
 section Sched
 
-open _root_.Flock.Firewall.Finish (repOpening repPiop commitFw switchVec basisVals claimsOf)
+open _root_.Flock.Firewall.Finish (repOpening repPiop commitFw claimsOf)
 open _root_.Flock.Firewall.Drive (openStep)
 
 theorem step_bind_eq {α β : Type} (s : Step α) (g : α → Step β) : s >>= g = s.bind g := rfl
@@ -486,7 +489,8 @@ theorem openStep_l0 (t : _root_.Flock.Firewall.Finish.Tab) (rep : Nat) (dom : By
       ∀ {j : Nat} {ss : Array (Array F128)} {T : F128} {sws : Array _root_.Flock.Switched}
         {tr₂ : _root_.Flock.Transcript} {l₂ : Array Claims.Msg}, j < t.sch.k0 + 4 → 1 ≤ t.sch.k0 → t.sch.n ≠ 0 →
         l.size ≤ l₂.size →
-        ((ringSwitchCut (asksCut coin (l₂.size + j)) (fun k => switchVec t.g r.1.1.2.2[k]!) r.1.1.2.2).run
+        ((ringSwitchCut (asksCut coin (l₂.size + j))
+          (fun k => _root_.Flock.Firewall.Finish.switchVec t.g r.1.1.2.2[k]!) r.1.1.2.2).run
           r.1.2).go l = (.ok ((ss, T, sws), tr₂), l₂) →
         l₂.size + j < l.size + (sentQ (feedR (openStep t rep dom xs hi coins) cs)).length →
         l.toList ++ ((sentQ (feedR (openStep t rep dom xs hi coins) cs)).take (l₂.size + j + 1 - l.size)).map
