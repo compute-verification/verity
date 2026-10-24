@@ -287,6 +287,19 @@ def test_a_point_refuses_a_local_checkpoint_whose_files_differ_from_the_spec_dig
     assert f"not the spec's model_digest {digest}" in capsys.readouterr().err
 
 
+def test_a_local_checkpoint_is_bound_by_the_files_a_loader_reads_not_the_hub_snapshots_metadata(tmp_path):
+    preset = load_spec("llama31-8b-fp8-1gpu").preset
+    checkpoint = tmp_path / "model"
+    checkpoint.mkdir()
+    (checkpoint / "config.json").write_text("{}")
+    digest = local_checkpoint(preset, checkpoint).model_digest
+    (checkpoint / ".gitattributes").write_text("*.safetensors filter=lfs\n")
+    (checkpoint / "README.md").write_text("# a model card\n")
+    assert local_checkpoint(preset, checkpoint).model_digest == digest
+    (checkpoint / "generation_config.json").write_text("{}")
+    assert local_checkpoint(preset, checkpoint).model_digest != digest
+
+
 def test_the_launcher_sources_the_setup_before_the_point_runs(tmp_path):
     root = Path(__file__).resolve().parents[3]
     setup = tmp_path / "setup.sh"
@@ -322,6 +335,29 @@ def test_the_bandwidth_spec_runs_memory_accountings_arms_with_receipts_on_and_th
         assert f"{name}=" in setup, name
     for source in re.findall(r"benchmarks/[\w/]+\.cu", setup):
         assert (root / source).is_file(), source
+
+
+def test_the_served_bandwidth_spec_is_the_bandwidth_spec_with_compiled_stock_beside_its_graph_path():
+    from verity_bench.vllm import runner
+
+    graph, served_spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth"), resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served")
+    assert served_spec.arms == (*graph.arms, "stock-fp8@compiled")
+    assert served_spec.arm_settings["stock-fp8@compiled"].control == "none"
+    assert replace(graph.preset, id=served_spec.preset.id) == served_spec.preset
+    same = dict(id=served_spec.id, arms=served_spec.arms, arm_settings=served_spec.arm_settings, preset=served_spec.preset)
+    assert replace(graph, **same) == served_spec
+
+    stock, compiled = resolve_arms("stock-fp8,stock-fp8@compiled", (), served_spec.arm_settings)
+    assert compiled.control is None and compiled.execution == "compiled"
+    built = []
+    for arm in (stock, compiled):
+        preset, eager = runner.arm_execution(arm, served_spec.preset, served_spec.eager)
+        built.append(runner.engine_args(preset, arm.precision, resident=False, eager=eager))
+    assert built[0]["compilation_config"] == {"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY",
+                                              "cudagraph_capture_sizes": [1, 8, 32, 128]}
+    assert "compilation_config" not in built[1] and built[1]["execution"] == "compiled"
+    assert not built[0]["enforce_eager"] and not built[1]["enforce_eager"]
+    assert {b["kv_cache_memory_bytes"] for b in built} == {60129542144}
 
 
 def test_a_queued_point_records_its_identity_as_the_key_param_resume_matches():

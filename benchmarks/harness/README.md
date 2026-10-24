@@ -22,8 +22,8 @@ vLLM pin, engine settings), its arms and the modules of its experimental arms, i
 `benchmarks/specs/`, `verity-bench/vllm-sweep/v0`), reps, eager or CUDA graphs, and admission (`max_minutes` and friends,
 which never enter identity). Loading is strict: an unknown key, a wrong type or an unknown GPU id is an error before
 anything runs. A preset's model is a Hugging Face id at a pinned `revision`, or a node-local directory with its
-`model_digest` (`presets.local_checkpoint`'s hash of its files), which a dispatched point recomputes and refuses to run on
-when it differs.
+`model_digest` (`presets.local_checkpoint`'s hash of its files but a Hub snapshot's dot-files and Markdown, which no loader
+reads), which a dispatched point recomputes and refuses to run on when it differs.
 
 A protocol arm (`pouw:SCHEME`, `pous:SCHEME`, `sampled-proofs:SCHEME`) runs the preset's precision with stock FP8 as its
 control, unless the spec's `[arm_settings."ARM"]` table says otherwise: its `precision` (PoUW's Pearl-C loads the BF16
