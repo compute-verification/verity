@@ -11,7 +11,7 @@ How much of a fine-tuned `theta'_s` (and of its linear-map outputs) a block can 
   other half) and two conditionals (layer l-1's fresh update; each map's fresh inputs). Bits are the sweep's
   estimators (`quant.py`, unchanged): the best of context entropy, lzma (middle layer) and low-rank MDL, with every
   coefficient fit on the target charged at 32 bits.
-- `table.py` and `summary.py` render a run's `b2_<model>.json` as Markdown.
+- `table.py`, `summary.py` and `condensed.py` render a run's `b2_<model>.json` as Markdown.
 
 Launch from a checkout, on a GPU node of the program, with every file sent as an input:
 
