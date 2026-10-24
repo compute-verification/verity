@@ -121,7 +121,8 @@ kernels inside the range only).  The decode gate compares each arm's
 tokens with its reference arm's (dither: exact; any other: the first arm); a dither arm's are a second GATE_TOKENS
 generation after its checks with nothing armed, since its fault steps move served values on purpose (fault_wb moves
 column 0 of every call's y at one step), the capture run's kept as tokens_capture.  A failed gate times nothing (exit 4); a worker
-that errs or dies ends the run (exit 5, its gates so far in gate.json).  Each dither arm's gate captures are freed once
+that errs or dies ends the run (exit 5, its gates so far in gate.json), except that under --time-passed one that errs in its
+warm or gate is dropped, its error in gate.json, and the rest timed (exit 5 still).  Each dither arm's gate captures are freed once
 checked, so N arms need N engines' memory plus one arm's captures.
 
 `prof` (an op, for any arm; under DITHER_NSYS=1 or prof): generates PROF_N[0] and then PROF_N[1] tokens for the 32 requests
@@ -678,16 +679,18 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             return
 
 
-def recv(arm: str, conn, op: str) -> dict:
+def recv(arm: str, conn, op: str, keep: bool = False) -> dict:
     """ARM's next message.  A worker that reports an error or exits ends the run (exit 5, its result kept: the gates so
-    far in gate.json, the reps in reps.jsonl); sys.exit terminates the daemon workers, so no engine outlives it."""
+    far in gate.json, the reps in reps.jsonl); sys.exit terminates the daemon workers, so no engine outlives it.  With
+    KEEP the error is returned instead, the worker gone and the run going on without it."""
     try:
         msg = conn.recv()
     except EOFError:
         msg = {"error": f"{op}: the worker exited"}
     if "error" in msg:
         print(json.dumps({"arm": arm, "op": op, "error": msg["error"], "timed": False}), flush=True)
-        sys.exit(5)
+        if not keep:
+            sys.exit(5)
     return msg
 
 
@@ -737,9 +740,6 @@ def main() -> int:
         msg = recv(arm, here, "build")
         conns[arm], procs[arm], info[arm] = here, p, msg
         print(json.dumps({"arm": arm, **msg}), flush=True)
-    for arm in arms:
-        conns[arm].send({"op": "warm"})
-        recv(arm, conns[arm], "warm"), recv(arm, conns[arm], "warm")
     reps: list[dict] = []
     rc = 0
     ref_tokens: dict = {}
@@ -747,22 +747,34 @@ def main() -> int:
     vs_ref: dict = {}
     vs_rep0: dict = {}
     gate_doc: dict = {}
+    for arm in arms:
+        conns[arm].send({"op": "warm"})
+        res = recv(arm, conns[arm], "warm", a.time_passed)
+        if "error" not in res:
+            res = recv(arm, conns[arm], "warm", a.time_passed)
+        if "error" in res:
+            gate_doc[arm], rc = {"error": res["error"]}, 5
+    arms = [x for x in arms if x not in gate_doc]
     if a.gate:
-        for arm in arms:
+        for arm in list(arms):
             conns[arm].send({"op": "gate"})
-            res = recv(arm, conns[arm], "gate")
+            res = recv(arm, conns[arm], "gate", a.time_passed)
+            if "error" in res:
+                gate_doc[arm], rc = {"error": res["error"]}, 5
+                arms.remove(arm)
+                continue
             msg = recv(arm, conns[arm], "gate")
             res["stats"], res["picks_summary"] = msg["stats"], msg.get("picks")
             gate_doc[arm] = res
             (out / "gate.json").write_text(json.dumps(gate_doc, indent=1) + "\n")
         for arm in arms:
             ref = REF_OF.get(arm, arms[0])
-            if ref in gate_doc and ref != arm:
+            if "tokens" in gate_doc.get(ref, {}) and ref != arm:
                 gate_doc[arm]["tokens_equal_" + ref] = gate_doc[arm]["tokens"] == gate_doc[ref]["tokens"]
                 if "tokens_capture" in gate_doc[arm]:
                     gate_doc[arm]["tokens_capture_requests_equal_" + ref] = sum(
                         x == y for x, y in zip(gate_doc[arm]["tokens_capture"], gate_doc[ref]["tokens"]))
-            if "stock" in gate_doc and arm != "stock":
+            if "tokens" in gate_doc.get("stock", {}) and arm != "stock":
                 gate_doc[arm]["tokens_equal_stock"] = gate_doc[arm]["tokens"] == gate_doc["stock"]["tokens"]
                 gate_doc[arm]["tokens_requests_equal_stock"] = sum(
                     x == y for x, y in zip(gate_doc[arm]["tokens"], gate_doc["stock"]["tokens"]))
@@ -785,7 +797,9 @@ def main() -> int:
             if not a.time_passed:
                 return 4
             arms = [x for x in arms if x not in failed]
-            rc = 4
+            rc = rc or 4
+    if not arms:
+        return rc
     time_at = wait_time_at()
     if time_at:
         print(json.dumps({"time_at": time_at}), flush=True)
