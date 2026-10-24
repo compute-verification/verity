@@ -28,9 +28,12 @@
 #                level's tops under the firewall's salts, no running sums) into data/$TAG/v/cap (level 0) and v/cap/L<l>,
 #                beside the statements vstage staged, whose sessions stay valid (then oprove LEVELS=cap,cap-L1,..)
 #   STEP=oprove  (GPU leases) each staged statement proved with --zk on loopback, WARM + RUNS sessions per MODES (dev host
-#                firewall; a forgery's: one, by a prover that sends its proofs though the witness fails,
-#                FC_ZK_SELF_CHECK=skip), and upstream's replay --zk of the last (REPLAY=0: STEP=oreplay's); CONTROLS=DIR: the
-#                firewall's negative controls on that statement
+#                firewall; a forgery's: one, in dev mode whatever MODES says, by a prover that sends its proofs though the
+#                witness fails, FC_ZK_SELF_CHECK=skip), and upstream's replay --zk of the last (REPLAY=0: STEP=oreplay's);
+#                CONTROLS=DIR: the firewall's negative controls on that statement; OPROVE_JOBS=4 statements at once while their estimated
+#                peaks sum to at most OPROVE_MEM_GB=48. MODES=firewall alone, WARM=0 RUNS=1: each statement fixed before
+#                any session starts gets exactly one independent session, never drawn again, every exit recorded
+#                (out/oprove/statements.sha512, exits.tsv)
 #   STEP=oreplay (CPU) upstream's replay --zk of each statement's session oprove kept
 #   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session, with V*'s own inputs (the inner
 #                shape, the statement's index and bindings, the shared rows, the inner transcript) (INNER_LEAN=1: also the inner's,
@@ -39,7 +42,8 @@
 #                (ProvedScope.leafOk); ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s), and
 #                flock-verify statement on the inner statement with the partition object and program vstage wrote. The job
 #                fails unless each statement (staged or proved) and ZK_LEAN's session exited 0 with every VERDICT accepted,
-#                each forgery refused by one of its parts (by Lean, or by the firewall before any session reached Lean),
+#                each forgery refused by Lean at one of its parts (a firewall's refusal, or a session with no proof, is
+#                "not exercised" and fails),
 #                and the inner statement's units were derived from the program (lean_verdicts.py; the inner's session is
 #                not checked)
 # The prover runs on the job's first PCPUS cores, the verifier (proxy, serve, replay) on the rest. Every step writes
@@ -645,25 +649,44 @@ oprove)
   # statement: dev (the device's witness, rec-reprice's), host (FC_HOST_WITNESS=1, no firewall) and firewall (FC_FIREWALL=1
   # on the host witness: the send check and the level-0 recheck, PROTOCOL.md §10); the firewall's cost is firewall's minus
   # host's. The last mode's last session is the one oreplay and lean read.
+  # Statements are proved OPROVE_JOBS at once, the largest first, while their estimated peaks (oprove_gb) sum to at most
+  # OPROVE_MEM_GB; each in a subshell of its own (its WARM, RUNS, PENV, LAST and hello_at's exports), its log
+  # $O/oprove/<name>.log.
   MODES=${MODES:-dev}; MODES=${MODES//,/ }
+  for mode in $MODES; do case $mode in dev|host|firewall) ;; *) echo "MODES: dev host firewall"; exit 1 ;; esac; done
   [[ " $MODES " != *" firewall "* ]] || [ -x $FC_FIREWALL_LEAN ] || lean_build > $O/build-lean.log 2>&1 \
     || { tail -20 $O/build-lean.log; exit 1; }
-  mkdir -p $DD/v-sess
+  mkdir -p $DD/v-sess $O/oprove
+  # Outer proofs through the firewall are independent sessions (AGENTS.md, Daniel's provisional batch of 24 Oct): every
+  # staged statement is fixed before any session draws coins (statements.sha512, checked again once all have ended), gets
+  # exactly one session, with its own loopback verifier, live coins and firewall pass, never a second one (no lease retry,
+  # no preemption: a failed session is its statement's failure), and every statement's exit is recorded (exits.tsv), an
+  # honest one's failure failing the step.
+  if [[ " $MODES " == *" firewall "* ]]; then
+    [ "$MODES" = firewall ] || { echo "REFUSED: MODES=$MODES: a firewalled oprove gives each staged statement exactly one session; run MODES=dev or host in a job of its own"; exit 2; }
+    [ $((WARM + RUNS)) = 1 ] || { echo "REFUSED: WARM=$WARM RUNS=$RUNS: a firewalled oprove gives each staged statement exactly one session (WARM=0 RUNS=1)"; exit 2; }
+    export GPU_TRIES=1 GPU_PREEMPTIBLE=
+  fi
+  (cd $V && find . \( -name circuit.txt -o -name pub.bin -o -name inst.bin -o -name partition.json -o -name program.json \
+    -o -name registered.json \) | LC_ALL=C sort | xargs sha512sum) > $O/oprove/statements.sha512
+  : > $O/oprove/exits.tsv
   W0=$WARM R0=$RUNS
-  for C in $(cd $V && find . -name inst.bin -printf '%h\n' | sed 's:^\./::' | sort -V); do
-    l=${C//\//-}; want $l || continue
-    case $l in forged-*) WARM=0 RUNS=1 SELF_CHECK=skip ;; *) WARM=$W0 RUNS=$R0 SELF_CHECK=stop ;; esac; NS=$((WARM + RUNS))
+  oprove_one() {
+    local C=$1 l=${1//\//-} n mode rc=0 LM=$MODES
+    # a forgery's one session is the dev prover's, a dishonest prover running no firewall: a firewall would hold it back,
+    # leaving Lean nothing to check (lean_verdicts.py: "not exercised")
+    case $l in forged-*) WARM=0 RUNS=1 SELF_CHECK=skip LM=dev ;; *) WARM=$W0 RUNS=$R0 SELF_CHECK=stop ;; esac; NS=$((WARM + RUNS))
     hello_at $V/$C
-    for mode in $MODES; do
-      case $mode in dev) PENV= ;; host) PENV=FC_HOST_WITNESS=1 ;; firewall) PENV="FC_FIREWALL=1 FC_HOST_WITNESS=1" ;; *) echo "MODES: dev host firewall"; exit 1 ;; esac
+    for mode in $LM; do
+      case $mode in dev) PENV= ;; host) PENV=FC_HOST_WITNESS=1 ;; firewall) PENV="FC_FIREWALL=1 FC_HOST_WITNESS=1" ;; esac
       n=$l; [ "$MODES" = dev ] || n=$l-$mode
-      LAST=; again loopback $n $V/$C/pub.bin $V/$C/inst.bin $V/$C/circuit.txt --zk
+      LAST=; again loopback $n $V/$C/pub.bin $V/$C/inst.bin $V/$C/circuit.txt --zk || rc=$?
     done
     PENV=
     # the last mode's LIVE verdicts, which STEP=lean reads for a FIREWALL-REFUSED stop when no session reached it
     grep -h $'\tLIVE\t' $O/oprove/$n/prove.tsv 2>/dev/null | cut -f3- > $DD/v-sess/$l.live
     du -sb $V/$C/inst.bin $V/$C/pub.bin $V/$C/circuit.txt ${LAST:+$LAST/*.bin} > $O/oprove/$n/sizes.txt
-    [ -n "${LAST:-}" ] || { echo "$n: no session"; continue; }
+    [ -n "${LAST:-}" ] || { echo "$n: no session"; return 1; }
     # REPLAY=0: upstream's replay waits for STEP=oreplay (CPU), outside the GPU lease
     if [ "${REPLAY:-1}" = 1 ]; then
       taskset -c $VCPU /usr/bin/time -v -o $O/oprove/$n/time-replay.txt $B replay --zk --instances $V/$C/pub.bin \
@@ -671,8 +694,48 @@ oprove)
       echo "$n replay exit $?"
     fi
     rm -rf $DD/v-sess/$l && cp -r $LAST $DD/v-sess/$l && echo $V/$C > $DD/v-sess/$l.stmt && echo $mode > $DD/v-sess/$l.mode
+    return $rc
+  }
+  # oprove_gb: each statement's estimated peak GB, largest first. The fit to the CPU prover's peaks at K=64 N=64
+  # (r20261024-055050-962e: RecOpen 6.4 to 32.5, InnerRepCheck 22.3, RecCap 2.3) is linear in the circuit text's GB, 2^(k_log
+  # - 20) and the instances; with a quarter's margin, at least 2
+  mapfile -t TODO < <(python3 - $V <<'EOF'
+import json, math, sys
+from pathlib import Path
+out = []
+for d in Path(sys.argv[1]).rglob("inst.bin"):
+    d = d.parent
+    with open(d / "circuit.txt") as f:
+        f.readline()
+        meta = json.loads(f.readline()[5:])
+    with open(d / "inst.bin", "rb") as f:
+        n = json.loads(f.readline())["instances"]
+    gb = 25.4 * (d / "circuit.txt").stat().st_size / 1e9 + 0.3 * 2 ** (meta["k_log"] - 20) + 0.06 * n - 7.5
+    out.append((max(2, math.ceil(1.25 * gb)), str(d.relative_to(sys.argv[1]))))
+for gb, c in sorted(out, key=lambda x: (-x[0], x[1])):
+    print(gb, c)
+EOF
+)
+  echo "oprove: ${#TODO[@]} statements, OPROVE_JOBS=${OPROVE_JOBS:-4} OPROVE_MEM_GB=${OPROVE_MEM_GB:-48}: ${TODO[*]}"
+  declare -A RUNNING=(); USED=0
+  for t in "${TODO[@]}"; do
+    gb=${t%% *} C=${t#* }; l=${C//\//-}; want $l || continue
+    while [ ${#RUNNING[@]} -gt 0 ] && { [ ${#RUNNING[@]} -ge ${OPROVE_JOBS:-4} ] || [ $((USED + gb)) -gt ${OPROVE_MEM_GB:-48} ]; }; do
+      wait -n -p FIN; [ -n "${RUNNING[$FIN]:-}" ] && USED=$((USED - ${RUNNING[$FIN]%% *})) && echo "oprove ${RUNNING[$FIN]#* } done" && unset "RUNNING[$FIN]"
+    done
+    { oprove_one $C > $O/oprove/$l.log 2>&1; printf '%s\t%s\n' $l $? >> $O/oprove/exits.tsv; } &
+    RUNNING[$!]="$gb $l"; USED=$((USED + gb)); echo "oprove $l started (${gb} GB est, ${USED} GB running)"
   done
+  wait
   WARM=$W0 RUNS=$R0 NS=$((W0 + R0))
+  (cd $V && sha512sum --quiet -c $O/oprove/statements.sha512) || { echo "a staged statement changed while sessions ran"; exit 1; }
+  python3 - $O/oprove/exits.tsv "${TODO[@]#* }" <<'EOF' || exit 1
+import sys
+got = dict(l.rstrip("\n").split("\t") for l in open(sys.argv[1]) if l.strip())
+bad = [f"{l}: exit {got[l]}" for l in (c.replace("/", "-") for c in sys.argv[2:]) if got.get(l, "0") != "0" and not l.startswith("forged-")]
+print(f"oprove: {len(got)} statements, one session each: exits {dict(sorted(got.items()))}")
+sys.exit(f"oprove: an honest statement's session failed, and none is drawn again: {', '.join(bad)}" if bad else 0)
+EOF
   # CONTROLS=DIR (a statement's directory under data/$TAG/v, e.g. L6): on that statement, one firewalled session per
   # FC_FIREWALL_TAMPER control (the device's side dishonest in one named way), each of which the firewall must refuse by name
   # without the tampered message leaving, the session stopping at its Finish (live PROTOCOL.md §10.1)

@@ -103,20 +103,28 @@ def _live(d: Path, name: str, stopped: str | None) -> None:
     (d / f"{name}.live").write_text(json.dumps({"accepted": False, "why": stopped or "", "prover_stopped": stopped}) + "\n")
 
 
-def test_a_forgery_the_firewall_refused_before_lean_counts_as_refused(tmp_path, capsys):
-    """MODES=firewall: the firewall may hold a forgery's proofs back, so no session reaches Lean; its LIVE verdict's
-    FIREWALL-REFUSED stop is that part's refusal. Any other stop, or none, leaves the part without a verdict, and a firewall
-    refusal never passes an honest part."""
+def test_a_forgery_the_firewall_held_back_is_not_exercised(tmp_path, capsys):
+    """MODES=firewall: the firewall may hold a forgery's proofs back, so no session reaches Lean. The firewall is the
+    prover's own check, which a dishonest prover doesn't run, so its FIREWALL-REFUSED stop leaves the verifier unexercised:
+    the forgery fails the step as not exercised, never counts as refused. Any other stop, or none, leaves the part without
+    a verdict, and a firewall refusal never passes an honest part."""
     for p in ("L0", "alg-p0"):
         _part(tmp_path, p, 0, True)
     _live(tmp_path, "forged-comb-alg-p0", "FIREWALL-REFUSED: alg-p0: the constraints [3] fail on a rep's pads")
     _part(tmp_path, "forged-comb-L0", 0, True)
     parts = ("L0", "alg-p0", "forged-comb-alg-p0", "forged-comb-L0")
     rc, out = _run(tmp_path, *parts, capsys=capsys)
-    assert rc == 0 and out[-1] == "lean: 2/2 accepted, 1/1 forgeries refused"
+    assert rc == 1 and out[-1] == "lean: 2/2 accepted, 0/1 forgeries refused, 1 not exercised (no proof produced): the step fails"
     assert out[2].startswith("lean forged-comb-alg-p0 (forgery comb: one of its parts must be refused): refused by the "
-                             "firewall before Lean, why \"FIREWALL-REFUSED: alg-p0: the constraints [3]")
-    assert "lean forgery comb: refused by ['forged-comb-alg-p0'] of 2" in out
+                             "firewall before Lean, no proof produced (not exercised), why \"FIREWALL-REFUSED: alg-p0: the "
+                             "constraints [3]")
+    assert ("lean forgery comb: no proof produced (not exercised) at ['forged-comb-alg-p0'] of 2, so the verifier never "
+            "checked it  <- FAILS") in out
+    _part(tmp_path, "forged-comb-alg-p0", 1, False, why="rec-v row")
+    rc, out = _run(tmp_path, *parts, capsys=capsys)
+    assert rc == 0 and "lean forgery comb: refused by ['forged-comb-alg-p0'] of 2" in out
+    for f in ("forged-comb-alg-p0.log", "time-forged-comb-alg-p0.txt"):
+        (tmp_path / f).unlink()
     _live(tmp_path, "forged-comb-alg-p0", "PROVER-STOPPED: the verifier hung up")
     assert _run(tmp_path, *parts, capsys=capsys)[0] == 1
     _live(tmp_path, "forged-comb-alg-p0", None)
@@ -126,6 +134,31 @@ def test_a_forgery_the_firewall_refused_before_lean_counts_as_refused(tmp_path, 
     _live(tmp_path, "alg-p0", "FIREWALL-REFUSED: alg-p0's level-0 root")
     rc, out = _run(tmp_path, "L0", "alg-p0", capsys=capsys)
     assert rc == 1 and out[1].endswith("<- FAILS") and out[-1] == "lean: 1/2 accepted: the step fails"
+
+
+def test_a_forgery_with_no_proof_is_not_exercised_not_refused(tmp_path, capsys):
+    """ecd2's forged-coef-L0: the firewall's prover produced no proof (R7, a lone rep), so Lean refused the session for a
+    missing file before any check. That is "no proof produced (not exercised)": it fails the step, never counts as refused,
+    and a forgery another part of it refused is still refused."""
+    missing = "session files: no such file or directory (error code: 2)\n  file: /v-sess/forged-coef-L0/circuit.rep0.bin"
+    for p in ("L0", "alg-p0"):
+        _part(tmp_path, p, 0, True)
+    _part(tmp_path, "forged-coef-L0", 1, False, why=missing)
+    _part(tmp_path, "forged-sum-L0", 1, False, why="zerocheck")
+    parts = ("L0", "alg-p0", "forged-coef-L0", "forged-sum-L0")
+    rc, out = _run(tmp_path, *parts, capsys=capsys)
+    assert rc == 1
+    assert out[2].startswith("lean forged-coef-L0 (forgery coef: one of its parts must be refused): exit 1, no proof produced "
+                             "(not exercised), why 'session files: no such file")
+    assert ("lean forgery coef: no proof produced (not exercised) at ['forged-coef-L0'] of 1, so the verifier never checked "
+            "it  <- FAILS") in out
+    assert out[-1] == "lean: 2/2 accepted, 1/2 forgeries refused, 1 not exercised (no proof produced): the step fails"
+    _part(tmp_path, "forged-coef-alg-p0", 1, False, why="rec-v row")
+    rc, out = _run(tmp_path, *parts, "forged-coef-alg-p0", capsys=capsys)
+    assert rc == 0 and "lean forgery coef: refused by ['forged-coef-alg-p0'] of 2" in out
+    _part(tmp_path, "L0", 1, False, why=missing)
+    rc, out = _run(tmp_path, "L0", capsys=capsys)
+    assert rc == 1 and "no proof produced (not exercised)" in out[0] and out[0].endswith("<- FAILS")
 
 
 def _statement(d: Path, rc: int, line: str) -> None:
