@@ -27,10 +27,12 @@ then runs this. The README says what the report establishes and what it doesn't.
   own copy and its verdict row. With ``--proofs`` they are a run's of its own, adopted (`adopt`: each proved unit's
   certificate digest must be these runs'), so that what N2-ZK's run proved isn't proved again. On the served profile
   nothing is proved: its count check is `NetworkServedCounts_v1`, which `n2_zk` doesn't prove (the claim says so).
-* **Cost.** Each member's session: the prover's time (``prove_total_s``), Lean's ``verify --zk`` time and the proof's
-  bytes, each divided by its n units for a link-window's end, and the peak RSS of the largest process the driver has run
-  so far (``max_child_rss_gb``, `RUSAGE_CHILDREN`, which only grows: n2_zk proves the honest members first, so the cost,
-  read from the honest run, is theirs); the driver's own peak (the unit's lowering) beside them.
+* **Cost.** A member proves all n of its link-windows in one session, one statement and one pair of proofs, so a
+  link-window has no time or proof of its own. Per session: the prover's time (``prove_total_s``), Lean's ``verify --zk``
+  time, the bytes of its two proofs (``circuit.rep0.bin``, ``circuit.rep1.bin``) and the peak RSS of the largest process
+  the driver had run by its end (``max_child_rss_gb``, `RUSAGE_CHILDREN`, which only grows: n2_zk proves the honest
+  members first). Beside them, n2_zk's cost pass (``summary.json``'s ``cost``): one honest link-window proved alone, per
+  end (`alone`); and the driver's own peak (the unit's lowering).
 
 Exit 0 when the honest run is accepted everywhere it was checked and each negative is refused (`report["ok"]`).
 """
@@ -61,7 +63,7 @@ from verity.core.protocols.certifier import head_check as HC  # noqa: E402
 from verity.core.protocols.certifier.certificate import Direction  # noqa: E402
 from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
 
-FORMAT = "verity-network-e2e/report/v1"
+FORMAT = "verity-network-e2e/report/v2"
 HONEST, TAMPERED = "honest", "tampered"
 NEGATIVES = ("late", "extra", TAMPERED)
 README = "verity/core/protocols/certifier/README.md"
@@ -308,14 +310,20 @@ def _proof(unit: dict | None) -> str | None:
     return {"accept": "accept", "reject": "refuse"}.get(unit["verdict"], "malformed")
 
 
+def _round(x, places: int = 3):
+    return None if x is None else round(x, places)
+
+
 def _member(m: dict) -> dict:
-    """One n2_zk member's proofs: held by Lean or not, what the verifier received, and the session's cost."""
+    """One n2_zk member's proofs: held by Lean or not, what the verifier received, and its session's cost (all n
+    link-windows in one session and one pair of proofs)."""
     t, rec = m.get("timing") or {}, m.get("received") or {}
+    proofs = (t.get("timing") or {}).get("proof_bytes")
     return {"held": bool(m.get("accepted")) and all((m.get("verdicts") or {}).values()), "lean": m.get("verdicts"),
             "audit": m.get("audit"), "n": m.get("n"), "ands": m.get("ands"), "stage_s": m.get("stage_s"),
-            "session_s": t.get("session_s"), "prove_total_s": (t.get("timing") or {}).get("prove_total_s"),
-            "lean_verify_s": m.get("lean_verify_s"), "per_unit": m.get("per_unit"),
-            "peak_child_rss_gb": (t.get("process") or {}).get("max_child_rss_gb"),
+            "session_s": t.get("session_s"), "prove_s": _round((t.get("timing") or {}).get("prove_total_s")),
+            "verify_s": m.get("lean_verify_s"), "proof_bytes": sum(proofs) if proofs else None,
+            "proof_files": len(proofs) if proofs else None, "peak_gb": (t.get("process") or {}).get("max_child_rss_gb"),
             "verifier_bytes": rec.get("verifier_bytes"), "witness_found_at_verifier": rec.get("verifier_found"),
             "public_pieces_left_out": None if rec.get("public_pieces") is None else len(rec["public_pieces"]),
             "control_holds_all": (rec.get("control") or {}).get("holds_all")}
@@ -337,17 +345,13 @@ def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict)
                           "network": {k: (h["network"] or {}).get(k) for k in ("accepted", "windows", "refused", "digest")},
                           "issuer_refused": h.get("issuer_refused"),
                           "proofs": {e: {k: v for k, v in m.items() if k != "units"} for e, m in ends.items()} or None}
-        peak = max((m["peak_child_rss_gb"] for m in ends.values() if m["peak_child_rss_gb"] is not None), default=None)
         for x in h["windows"]:
             w = x["window"]
             proved = {e: _proof(next((u for u in m["units"] if u["window"] == w), None)) for e, m in ends.items()}
-            per = [m.get("per_unit") or {} for m in ends.values()]
             rows.append({
                 "run": name, "window": w, "n2": _n2_row(x), "failed_parts": x.get("parts"), "proof": proved or None,
                 "head_checks": None if not proved else "pass" if all(v == "accept" for v in proved.values())
-                else "malformed" if None in proved.values() or "malformed" in proved.values() else "refuse",
-                "prove_s": _sum(p.get("prove_total_s") for p in per), "verify_s": _sum(p.get("lean_verify_s") for p in per),
-                "proof_bytes": _sum(p.get("proof_bytes") for p in per), "peak_gb": peak})
+                else "malformed" if None in proved.values() or "malformed" in proved.values() else "refuse"})
     negatives = {name: negative(out_runs[name], [r for r in rows if r["run"] == name])
                  for name in NEGATIVES if name in out_runs}
     honest, honest_rows = out_runs[HONEST], [r for r in rows if r["run"] == HONEST]
@@ -362,22 +366,25 @@ def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict)
             "proofs": {"ran": bool(proofs.get("ran")), "adopted": proofs.get("adopted"), "why": proofs.get("why"),
                        "rc": proofs.get("rc"), "extra_proved": proofs.get("extra_proved"), "n2_zk_ok": summary.get("ok"),
                        "stagers": summary.get("stagers"), "driver_peak_gb": proofs.get("driver_peak_gb"),
-                       "cost_per_link_window": cost(honest_rows)}}
+                       "alone": alone(summary, proofs.get("dir"))}}
 
 
-def _sum(xs) -> float | None:
-    xs = [x for x in xs if x is not None]
-    return round(sum(xs), 3) if xs else None
-
-
-def cost(rows: list[dict]) -> dict | None:
-    """The honest link-windows' cost, both ends: the mean prover seconds, Lean verify seconds and proof bytes."""
-    got = [r for r in rows if r["prove_s"] is not None]
-    if not got:
-        return None
-    mean = {k: _sum(r[k] for r in got) for k in ("prove_s", "verify_s", "proof_bytes")}
-    return {"link_windows": len(got), **{k: None if v is None else round(v / len(got), 3) for k, v in mean.items()},
-            "peak_gb": max((r["peak_gb"] for r in got if r["peak_gb"] is not None), default=None)}
+def alone(summary: dict, d: Path | None) -> dict | None:
+    """n2_zk's cost pass, per end: one honest link-window proved by itself (a session whose verifier draws one unit of
+    the n staged), with its prover and Lean seconds, its two proofs' bytes (read from ``d``, n2_zk's output, when
+    there) and the peak, as the report's sessions."""
+    out = {}
+    for end, rows in (summary.get("cost") or {}).items():
+        x = next((r for r in rows if r.get("units") == 1 and "lean" in r), None)
+        if x is None:
+            continue
+        files = sorted((Path(d) / "cost" / end / f"{x['arm']}-k{x['k']}-r{x['rep']}").glob("sessions/*/*.rep*.bin")) \
+            if d else []
+        out[end] = {"held": bool(x.get("accepted")) and x["lean"].get("accepted") is True, "staged": x.get("staged"),
+                    "prove_s": _round(x.get("prove_total_s")), "verify_s": x["lean"].get("verify_s"),
+                    "proof_bytes": sum(f.stat().st_size for f in files) or None, "proof_files": len(files) or None,
+                    "peak_gb": x.get("max_child_rss_gb")}
+    return out or None
 
 
 def negative(run: dict, rows: list[dict]) -> dict:
@@ -426,24 +433,41 @@ def markdown(r: dict) -> str:
     lines += ["", "## Link-windows", "",
               "N2: the verdict of record (host). Proof: each end's head check proved --zk and held by Lean, accept or "
               "refuse as its opened verdict row says. Failed parts: the head check's parts that fail, evaluated in the "
-              "clear on the rehearsal's published witness (a diagnostic, not the verdict). Prove and verify seconds and "
-              "proof bytes: the member session's divided by its units, summed over the proved ends (a session proves "
-              "every link-window of an end at once); peak: the largest process the driver had run by the end of the "
-              "run's last session (RUSAGE_CHILDREN only grows, so the tampered and extra rows' include the honest "
-              "sessions').",
-              "", "| run | window | N2 | proof egress | proof ingress | head checks | failed parts | prove s | verify s "
-              "| proof bytes | peak GB |", "|---|---|---|---|---|---|---|---|---|---|---|"]
+              "clear on the rehearsal's published witness (a diagnostic, not the verdict). Each run's end proves all its "
+              "link-windows in one session, so a link-window has no proving time or proof of its own: the sessions' "
+              "are under Proving sessions.",
+              "", "| run | window | N2 | proof egress | proof ingress | head checks | failed parts |",
+              "|---|---|---|---|---|---|---|"]
     for x in r["link_windows"]:
         pr = x["proof"] or {}
         failed = "; ".join(f"{e} {'+'.join(f)}" for e, f in (x["failed_parts"] or {}).items() if f) or None
         lines.append(f"| {x['run']} | {x['window']} | {_cell(x['n2'])} | {_cell(pr.get('egress'))} | "
-                     f"{_cell(pr.get('ingress'))} | {_cell(x['head_checks'])} | {_cell(failed)} | {_cell(x['prove_s'])} "
-                     f"| {_cell(x['verify_s'])} | {_cell(x['proof_bytes'])} | {_cell(x['peak_gb'])} |")
+                     f"{_cell(pr.get('ingress'))} | {_cell(x['head_checks'])} | {_cell(failed)} |")
     lines += ["", "## Negatives", ""]
     for name, n in r["negatives"].items():
         lines.append(f"- **{name}**: {'refused' if n['refused'] else 'NOT refused'} by "
                      f"{'; '.join(n['by']) or 'nothing'}{'' if n['proved'] else ' (not proved: N2 only)'}")
     scanned = [(name, e, m) for name, x in r["runs"].items() for e, m in (x.get("proofs") or {}).items()]
+    if scanned:
+        lines += ["", "## Proving sessions", "",
+                  "One session per run and end: its link-windows are one statement, proved --zk in one pair of proofs "
+                  "and verified by Lean at once. Proof bytes: the pair's. Peak: the largest process n2_zk had run by "
+                  "the session's end (RUSAGE_CHILDREN only grows, and n2_zk runs the honest sessions first, so the "
+                  "tampered and extra sessions' include theirs).",
+                  "", "| run | end | link-windows | held (Lean) | prove s | Lean verify s | proof bytes | peak GB |",
+                  "|---|---|---|---|---|---|---|---|"]
+        lines += [f"| {name} | {e} | {_cell(m['n'])} | {m['held']} | {_cell(m['prove_s'])} | {_cell(m['verify_s'])} | "
+                  f"{_cell(m['proof_bytes'])} | {_cell(m['peak_gb'])} |" for name, e, m in scanned]
+    one = p.get("alone")
+    if one:
+        lines += ["", "## One link-window proved alone", "",
+                  "n2_zk's cost pass: a session on the honest run's statement whose verifier draws one link-window, "
+                  "per end.", "", "| end | link-windows staged | held (Lean) | prove s | Lean verify s | proof bytes "
+                  "| peak GB |", "|---|---|---|---|---|---|---|"]
+        lines += [f"| {e} | {_cell(m['staged'])} | {m['held']} | {_cell(m['prove_s'])} | {_cell(m['verify_s'])} | "
+                  f"{_cell(m['proof_bytes'])} | {_cell(m['peak_gb'])} |" for e, m in one.items()]
+    if p.get("driver_peak_gb") is not None:
+        lines += ["", f"The driver's own peak (lowering): {p['driver_peak_gb']} GB."]
     if scanned:
         lines += ["", "## What the verifier received", "",
                   "Each member's verifier directory, scanned for every piece of every head, head salt, sibling and "
@@ -452,13 +476,6 @@ def markdown(r: dict) -> str:
         lines += [f"- {name} {e}: {_cell(m['verifier_bytes'])} bytes; witness pieces found: "
                   f"{m['witness_found_at_verifier'] or 'none'}; left out as public: {_cell(m['public_pieces_left_out'])}; "
                   f"control holds all: {_cell(m['control_holds_all'])}" for name, e, m in scanned]
-    c = p.get("cost_per_link_window")
-    if c:
-        lines += ["", "## Cost per link-window (honest, both ends)", "",
-                  f"{c['prove_s']} s proving, {c['verify_s']} s Lean verify, {c['proof_bytes']} proof bytes "
-                  f"(each session's divided by its {c['link_windows']} link-windows); peak {c['peak_gb']} GB (the largest "
-                  f"process by the end of the honest sessions); the driver's own peak (lowering) "
-                  f"{_cell(p.get('driver_peak_gb'))} GB."]
     if p.get("adopted"):
         lines += ["", f"Proofs: adopted from {p['adopted']}, n2_zk's output of its own run, each proved unit's "
                       "certificate digest matched to these runs' certified records."]

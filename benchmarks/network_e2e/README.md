@@ -59,15 +59,14 @@ An honest run is required, because the tampered head is made from it. Two runs o
 
 ## The report
 
-`report.json` (`verity-network-e2e/report/v1`) holds:
+`report.json` (`verity-network-e2e/report/v2`) holds:
 
 - per run: the rehearsal's own check, the gate's `end.json` verdict, N2's network verdict and its refused link-windows,
-  and whether each proved end was held by Lean;
+  and, per proved end, whether Lean held it and its proving session's cost (below);
 - per link-window: N2's verdict, each end's proved verdict (accept or refuse, from the verdict row the verifier opens),
-  the head-check parts that fail (a diagnostic, evaluated in the clear on the rehearsal's witness), and the prove seconds,
-  Lean verify seconds, proof bytes and peak memory;
+  and the head-check parts that fail (a diagnostic, evaluated in the clear on the rehearsal's witness);
 - per negative: refused or not, and by what (N2, the rehearsal's check, the proved head checks);
-- the cost per link-window, and the claim (below).
+- one link-window proved alone (`n2_zk`'s cost pass), and the claim (below).
 
 `report.md` renders the same thing as tables. OK means: the honest run was accepted on every link-window by N2 and, where
 proofs ran, by every proved head check held by Lean; and each negative was refused by everything that checked it.
@@ -104,7 +103,10 @@ Zero-knowledge gaps, from `verity/core/protocols/certifier/README.md` ("Not yet 
 ## Cost
 
 Each end of a link-window is one unit of its member's statement. All of an end's link-windows are proved in one session,
-so the report divides each session's prover seconds, Lean verify seconds and proof bytes by its units. Peak memory is
-the largest process the driver had run by the end of the session (`RUSAGE_CHILDREN`, which only grows). `n2_zk` proves the
-honest members first, so the cost, read from the honest run, is theirs. The driver's own peak (the unit's lowering) is
-shown beside it.
+one statement and one pair of proofs (`circuit.rep0.bin`, `circuit.rep1.bin`), and Lean verifies them at once, so a
+link-window has no proving time or proof of its own. The report gives each session's prover seconds, Lean verify seconds,
+proof bytes and peak memory, undivided. Peak memory is the largest process the driver had run by the end of the session
+(`RUSAGE_CHILDREN`, which only grows). `n2_zk` proves the honest members first, so the tampered and extra sessions' peaks
+include theirs. Beside the sessions is `n2_zk`'s cost pass: a session on the honest statement whose verifier draws one
+link-window, per end, which is what one link-window costs proved alone. The driver's own peak (the unit's lowering)
+is shown when it proved.
