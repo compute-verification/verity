@@ -1,46 +1,60 @@
-"""I2, the compiler: a served run's advice -> the Programs its committed rows must pass (v0, request-major).
+"""I2, the compiler: a served session's advice -> the Programs its committed rows must pass (v0, request-major).
 
-`compile_steps(registered, advice)` reads the registration's static part (`Registered`: φ without workload or sampling, and the
-server's public default seed) and the advice (I1, `verity.core.protocols.certifier.advice`: what serving decided that nothing
-registered predicts), and nothing else of the run.
+`compile_steps(registered, advice, ingress)` reads these three and nothing else of the run:
+- `registered` (`Registered`): φ without workload or sampling (the model, target, TP, engine, execution and profile), the public
+  default seed a request without one is sampled under (`engine.served_seed`), and ℓ, the public cap on the advice's length in bits.
+- `advice`: I1 v0 (`verity.core.protocols.certifier.advice`), private: what serving decided that nothing registered predicts. Its
+  canonical bytes, or an `Advice`, which is held to its encoding. Nothing else is advice.
+- `ingress`: each request's certified body by its id (I1's `RequestAdvice.id`, the body's `user`), the fixed ingress schema: an
+  OpenAI completions request with `prompt` as token ids. Sampling parameters are values the request brings, never advice.
 
 - A request's Program is the Build's request wrapper at the shape the advice ran it at, `build.build_program(φ_r, "request", LP,
-  T)`, under its own sampling policy (`policy_of`): LP its prompt length, T its live decode rows, the ones whose sample it kept
-  (I1's `output_len` − 1).  The one row async scheduling runs past a request's last kept output samples nothing kept: it is
-  `discarded`, in no Program.  Advice without `output_len` keeps every decode row.  Requests of one (LP, T, policy) share one
-  Program.
+  T)`, under the policy its body names (`policy_of`): LP its prompt length, T its live decode rows, the ones whose sample it kept
+  (`output_len` − 1). The one row async scheduling runs past a request's last kept output samples nothing kept: it is
+  `discarded`, in no Program. A request's (LP, T, policy) reads its own advice record and body alone, never its batch; requests of
+  one (LP, T, policy) share one Program.
 - On a batch-invariant target a request's Program does not read its batch, so the advice's steps only place rows: each live row
   is a `RowRef` into its request's Program (positions start..start+n-1; `samples` the tokens the row samples), in I1's row order.
-- GP-01 (`program.workload.WorkloadProgram`) composes the request Programs that ran, each at its first scheduled step and with
-  cap T + 1 (the executed prefix), under the target's lag.
+- GP-01 (`program.workload.WorkloadProgram`) composes the request Programs side by side, sharing only the weights, each at its
+  first scheduled step and with cap T + 1 (the executed prefix), under the target's lag.
 
-v0 compiles what the Build traces, and refuses the rest by name (`Unexpressible`), never approximated:
-- a target without batch invariance, whose launches would come from the advice (`launch=`);
-- a prompt not prefilled whole in one row from position 0: a prefix-cache hit (the cached request wrapper is not ported) or a
-  chunked prefill (no chunked request wrapper on either side);
-- a preemption, or decode rows that are not one position a step in consecutive steps;
-- sampling other than greedy or seeded top-p with top_k 0: min_p, the penalties, logit_bias, min_tokens, n > 1, or a parameter
-  this compiler does not know.
+The compiler is total: it compiles its input or refuses it by name (`Unexpressible`), deterministically. Refused, in order:
+- advice that isn't I1's bytes or an `Advice`, is over ℓ (before any of it is read), or isn't I1 v0 (`MalformedAdvice`: I1's
+  validity, its types, ranges, order and the schedule's position rules);
+- a target without batch invariance, whose launches would come from the advice (v1);
+- a request whose body is missing or off the ingress schema, whose prompt isn't `prompt_len` token ids of the vocabulary, or
+  whose `output_len` and `finish` its `max_tokens` contradicts;
+- a cache hit whose `sources` don't hold the request's own KV: through each run, the source's certified prompt must equal the
+  request's (the KV at a position reads every token up to it);
+- what v0 doesn't compile: a prefix-cache hit (the cached request wrapper isn't ported) or a chunked prefill (no chunked request
+  wrapper on either side); a preemption (whose resume's sources go unchecked, as the request compiles to nothing), or decode rows
+  that aren't one position a step in consecutive steps; positions past the model's; sampling other than greedy or seeded top-p
+  with top_k 0 (min_p, the penalties, logit_bias, min_tokens, n > 1, or a parameter this compiler doesn't know).
 
-A refusal refuses the session.  `partial=True` (a measurement over served traffic, never a registration) refuses request by
+A refusal refuses the session. `partial=True` (a measurement over served traffic, never a registration) refuses request by
 request instead: a refused request's rows and Program leave the compilation, and `refused` names why.
 
-The compiler digest is `score.code_version()`.  `trace_commands` lists the Build traces (`verity-vllm build --wrapper request`) of a
-compilation's Programs, and `compare` holds the compiled digests to them.
+The compiler digest is `score.code_version()`, with ℓ beside it. `trace_commands` lists the Build traces (`verity-vllm build
+--wrapper request`) of a compilation's Programs, and `compare` holds the compiled digests to them.
 """
 from __future__ import annotations
 
 import json
+import math
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass, field, fields, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from .build import Unexpressible, build_program
+from verity.core.protocols.certifier import advice as I1
+
+from .build import Unexpressible, build_program, model_shape
 from .phi import Phi
 
-SCHEMA = "verity-vllm/compiled-steps/v1"
+SCHEMA = "verity-vllm/compiled-steps/v2"
+#: ℓ when a registration names none: 1 MiB of advice (PROVE-PATH's `CAP_BITS`), far above a session's few thousand rows
+CAP_BITS = 1 << 23
 #: vLLM's `_SAMPLING_EPS`: a temperature below it samples greedily; the Build's policy is greedy only at 0
 SAMPLING_EPS = 1e-5
 #: the sampling parameters (`engine.step_trace.SAMPLING`) that leave a request's Program unchanged at these values
@@ -50,23 +64,29 @@ _INERT = {"min_p": (None, 0, 0.0), "presence_penalty": (None, 0, 0.0), "frequenc
 #: the parameters that only finish a request (its T, which the advice's rows carry), and the ones the policy reads
 _FINISH = ("max_tokens", "stop", "stop_token_ids", "ignore_eos")
 _READ = ("temperature", "top_p", "seed")
+#: a body's fields that compute nothing: the prompt (read apart) and how the response travels
+_TRANSPORT = ("prompt", "model", "user", "stream", "stream_options", "return_token_ids")
 
 
 @dataclass(frozen=True)
 class Registered:
-    """The registration's static part: φ without workload or sampling (the model, target, TP, engine, execution and profile), and
-    the default seed the server samples a request with when its client sends none."""
+    """The registration's static part: φ without workload or sampling (the model, target, TP, engine, execution and profile), the
+    default seed a request without one is sampled under (the public rule, `engine.served_seed`), and ℓ, the cap on the advice's
+    length in bits."""
 
     phi: Phi
     default_seed: int
+    cap_bits: int = CAP_BITS
 
     def __post_init__(self) -> None:
         if self.phi.requests:
             raise ValueError("a registered φ carries no workload: the advice brings the requests")
+        if type(self.cap_bits) is not int or self.cap_bits < 8:
+            raise ValueError(f"the cap ℓ is a whole number of bits, at least 8, not {self.cap_bits!r}")
 
     @classmethod
-    def of(cls, phi: Phi, default_seed: int) -> Registered:
-        return cls(Phi.from_json({**phi.to_json(), "workload": {}, "sampling": {"kind": "greedy"}}), int(default_seed))
+    def of(cls, phi: Phi, default_seed: int, cap_bits: int = CAP_BITS) -> Registered:
+        return cls(Phi.from_json({**phi.to_json(), "workload": {}, "sampling": {"kind": "greedy"}}), int(default_seed), cap_bits)
 
 
 @dataclass(frozen=True)
@@ -82,7 +102,7 @@ class RowRef:
 
 @dataclass(frozen=True)
 class RequestUnit:
-    """A request that ran: its Program's shape and digest, its policy, the seed its `seed` Input takes, and its first step."""
+    """A request that ran: its Program's shape and digest, its policy, the seed its `seed` Input takes, its first step and its id."""
 
     request: int
     digest: str
@@ -91,6 +111,7 @@ class RequestUnit:
     policy: dict
     seed: int | None
     first_step: int
+    id: str = ""
 
     def key(self) -> str:
         return json.dumps([self.LP, self.T, self.policy], sort_keys=True)
@@ -99,93 +120,129 @@ class RequestUnit:
 @dataclass
 class Compiled:
     programs: dict[str, Any]              # request Program digest -> Program
-    requests: list[RequestUnit | None]    # by advice request index; None for a request with no row, or refused
+    requests: list[RequestUnit | None]    # by advice request index; None for a refused request
     workload: Any                         # GP-01's WorkloadProgram over the requests that ran
     steps: list[list[RowRef]]             # per advice step, its live rows in I1's order
     discarded: list[tuple[int, int, int, int]] = field(default_factory=list)  # (step, request, start, n) of rows no Program holds
     refused: dict[int, str] = field(default_factory=dict)                     # request -> why (partial=True only)
+    cap_bits: int = CAP_BITS
 
     def summary(self) -> dict:
         from .score import code_version
-        return {"schema": SCHEMA, "compiler": code_version(), "workload_digest": self.workload.digest, "lag": self.workload.lag,
-                "programs": sorted(self.programs),
-                "requests": [None if u is None else {"request": u.request, "digest": u.digest, "LP": u.LP, "T": u.T, "policy": u.policy,
-                                                     "seed": u.seed, "first_step": u.first_step} for u in self.requests],
+        return {"schema": SCHEMA, "compiler": code_version(), "cap_bits": self.cap_bits, "workload_digest": self.workload.digest,
+                "lag": self.workload.lag, "programs": sorted(self.programs),
+                "requests": [None if u is None else {"request": u.request, "id": u.id, "digest": u.digest, "LP": u.LP, "T": u.T,
+                                                     "policy": u.policy, "seed": u.seed, "first_step": u.first_step} for u in self.requests],
                 "steps": [[[r.request, r.start, r.n, r.samples] for r in rows] for rows in self.steps],
                 "discarded": [list(d) for d in self.discarded], "refused": {str(i): why for i, why in sorted(self.refused.items())}}
 
 
-def _get(obj: Any, name: str, default: Any = None) -> Any:
-    return obj.get(name, default) if isinstance(obj, Mapping) else getattr(obj, name, default)
+def _number(x: Any) -> bool:
+    return type(x) in (int, float) and math.isfinite(x)
 
 
-def policy_of(i: int, sampling: Mapping | None, default_seed: int) -> tuple[dict, int | None]:
-    """Request `i`'s sampling policy as φ.sampling takes it, and its seed Input's value (the client's, else `default_seed`; None when
-    greedy), from the parameters it carried (`SamplingParams` names), refused where its Program would not be the Build's."""
-    if sampling is None or _get(sampling, "temperature") is None:
-        raise Unexpressible(f"request {i}: no temperature among its sampling parameters (the policy cannot be read)")
-    s = dict(sampling) if isinstance(sampling, Mapping) else {f.name: getattr(sampling, f.name) for f in fields(sampling)}
+def policy_of(i: int, sampling: Any, default_seed: int) -> tuple[dict, int | None]:
+    """Request `i`'s sampling policy as φ.sampling takes it, and its seed Input's value (the body's, else `default_seed`; None when
+    greedy), from the parameters its body carries (`SamplingParams` names), refused where its Program wouldn't be the Build's."""
+    if not isinstance(sampling, Mapping) or any(type(k) is not str for k in sampling):
+        raise Unexpressible(f"request {i}: its sampling parameters aren't an object of named values")
+    s = dict(sampling)
+    if s.get("temperature") is None:
+        raise Unexpressible(f"request {i}: no temperature among its sampling parameters (the policy can't be read)")
+    t, p, seed = s["temperature"], 1.0 if s.get("top_p") is None else s["top_p"], s.get("seed")
+    if not (_number(t) and t >= 0 and _number(p) and 0 < p <= 1 and (seed is None or (type(seed) is int and 0 <= seed < 1 << 64))):
+        raise Unexpressible(f"request {i}: temperature {t!r}, top_p {p!r} and seed {seed!r} aren't a number ≥ 0, a number in (0, 1] "
+                            f"and an integer in [0, 2^64)")
     facts = [f"{k}={v!r}" for k, v in sorted(s.items()) if k in _INERT and v not in _INERT[k]]
-    facts += [f"{k} (a parameter this compiler does not know)" for k in sorted(s) if s[k] is not None and k not in (*_INERT, *_FINISH, *_READ)]
-    t, p = float(s["temperature"]), float(s.get("top_p") if s.get("top_p") is not None else 1.0)
+    facts += [f"{k} (a parameter this compiler doesn't know)" for k in sorted(s) if s[k] is not None and k not in (*_INERT, *_FINISH, *_READ)]
     if 0 < t < SAMPLING_EPS:
         facts.append(f"temperature {t!r} (vLLM samples it greedily, the Build's policy is greedy at 0 only)")
     if facts:
-        raise Unexpressible(f"request {i}: sampling the vocabulary cannot express: {'; '.join(facts)}")
+        raise Unexpressible(f"request {i}: sampling the vocabulary can't express: {'; '.join(facts)}")
     if t == 0:
         return {"kind": "greedy"}, None
-    seed = s.get("seed")
-    return ({"kind": "stochastic", "temperature": t, "top_p": p, "top_k": 0, "seeded": True, "splits": "derived"},
+    return ({"kind": "stochastic", "temperature": float(t), "top_p": float(p), "top_k": 0, "seeded": True, "splits": "derived"},
             int(default_seed if seed is None else seed))
 
 
-def _rows_of(advice: Any) -> tuple[dict[int, list[tuple[int, Any]]], dict[int, str]]:
-    """Each request's (step, row) pairs in step order, and why a preemption refuses a request; a step that names a request twice or
-    one the advice lacks is refused."""
-    n = len(advice.requests)
-    rows: dict[int, list[tuple[int, Any]]] = {i: [] for i in range(n)}
-    preempted: dict[int, str] = {}
-    why = "v0 runs each request from its prefill without preemption"
-    for s, step in enumerate(advice.steps):
-        if pre := sorted(_get(step, "preempted", None) or ()):
-            for r in pre:
-                preempted.setdefault(int(r), f"step {s}: preempted requests {pre} ({why})")
-        seen = set()
-        for row in _get(step, "rows"):
-            r = int(_get(row, "request"))
-            if not 0 <= r < n or r in seen:
-                raise Unexpressible(f"step {s}: a row of request {r} {'twice' if r in seen else f'outside the advice’s {n} requests'}")
-            if _get(row, "preempted", False):
-                preempted.setdefault(r, f"step {s}: request {r} preempted ({why})")
-            seen.add(r)
-            rows[r].append((s, row))
-    return rows, preempted
+def advice_of(registered: Registered, advice: Any) -> I1.Advice:
+    """The advice as I1 v0: its canonical bytes within ℓ, or an `Advice` whose encoding is; anything else refused by name."""
+    if isinstance(advice, I1.Advice):
+        try:
+            data = I1.encode(advice)
+        except Exception as e:  # noqa: BLE001 -- an Advice built around its checks has no encoding: a refusal like any other
+            raise Unexpressible(f"ill-formed advice: an Advice with no I1 encoding ({type(e).__name__}: {e})") from None
+    elif type(advice) is bytes:
+        data = advice
+    else:
+        raise Unexpressible(f"the advice is I1's bytes or an I1 Advice, not a {type(advice).__name__}: nothing else is advice")
+    if 8 * len(data) > registered.cap_bits:
+        raise Unexpressible(f"the advice is {8 * len(data)} bits, over the registered cap ℓ = {registered.cap_bits} bits")
+    try:
+        return I1.decode(data)
+    except Exception as e:  # noqa: BLE001 -- I1's refusal is MalformedAdvice; any other failure on these bytes refuses them too
+        raise Unexpressible(f"ill-formed advice: {e}" if isinstance(e, I1.MalformedAdvice) else
+                            f"ill-formed advice: I1's decode failed ({type(e).__name__}: {e})") from None
 
 
-def shape_of(i: int, prompt_len: int, rows: list[tuple[int, Any]], output_len: int | None = None) -> tuple[int, int, int]:
+def request_of(i: int, q: I1.RequestAdvice, body: Any, vocab: int) -> tuple[tuple[int, ...], dict]:
+    """Request `i`'s certified prompt and sampling parameters, held to its advice record: the prompt is `prompt_len` token ids of
+    the vocabulary, and its `max_tokens` bounds `output_len`, reached exactly when it finished on length."""
+    if not isinstance(body, Mapping) or any(type(k) is not str for k in body):
+        raise Unexpressible(f"request {i} ({q.id!r}): no certified request body carries its id")
+    prompt = body.get("prompt")
+    if not isinstance(prompt, (list, tuple)) or not all(type(t) is int and 0 <= t < vocab for t in prompt):
+        raise Unexpressible(f"request {i}: its certified prompt isn't a list of token ids below {vocab} (the ingress schema carries "
+                            f"the prompt as token ids)")
+    if len(prompt) != q.prompt_len:
+        raise Unexpressible(f"request {i}: the advice says {q.prompt_len} prompt tokens, its certified prompt has {len(prompt)}")
+    params = {k: v for k, v in body.items() if k not in _TRANSPORT}
+    m = params.get("max_tokens")
+    if type(m) is not int or m < 1:
+        raise Unexpressible(f"request {i}: max_tokens {m!r} (v0 needs the cap in the body, a positive integer)")
+    if q.output_len > m or (q.finish == "length" and q.output_len != m):
+        raise Unexpressible(f"request {i}: {q.output_len} kept outputs, finished on {q.finish}, against its max_tokens {m}")
+    if q.finish == "eos" and params.get("ignore_eos") is True:
+        raise Unexpressible(f"request {i}: finished on a stop token with ignore_eos set")
+    return tuple(prompt), params
+
+
+def check_sources(s: int, row: I1.Row, prompts: Mapping[int, tuple[int, ...]]) -> None:
+    """A cache hit's sources hold the KV of the request's own tokens: through each run, the source's certified prompt equals the
+    hitting request's (the KV at a position reads every token up to it). Refused otherwise, or where a run leaves a prompt."""
+    r, at = row.request, 0
+    for src in row.sources:
+        end, a, b = at + src.n, prompts.get(row.request), prompts.get(src.request)
+        if a is None or b is None:
+            raise Unexpressible(f"request {r}: step {s}'s cache hit reads request {src.request}'s KV, and one of the two has no certified "
+                                f"prompt")
+        if end > min(len(a), len(b)):
+            raise Unexpressible(f"request {r}: step {s}'s cache hit reads request {src.request}'s KV at positions {at} … {end - 1}, past "
+                                f"a certified prompt (v0 checks sources against prompts only)")
+        if a[:end] != b[:end]:
+            raise Unexpressible(f"request {r}: a forged cache hit at step {s}: request {src.request}'s certified prompt differs from its "
+                                f"own before position {end}, so that KV isn't its own")
+        at = end
+
+
+def shape_of(i: int, prompt_len: int, rows: list[tuple[int, I1.Row]], output_len: int) -> tuple[int, int, int]:
     """Request `i`'s (LP, T, first step) from its rows: the whole prompt at its first step from position 0, then one decode row a
-    step; anything else refused by name.  T counts the live decode rows: `output_len` − 1 when the advice gives it (one row past
-    the last kept output may follow, discarded), else every decode row."""
+    step; anything else refused by name. T counts the live decode rows, `output_len` − 1 (one row past the last kept output may
+    follow, discarded)."""
     LP = int(prompt_len)
     s0, first = rows[0]
-    hit, start, n = int(_get(first, "cache_hit", 0) or 0), int(_get(first, "start")), int(_get(first, "n"))
-    if hit or start:
-        raise Unexpressible(f"request {i}: a prefix-cache hit of {hit or start} tokens at step {s0} (the cached request wrapper is not "
-                            f"ported: v0 needs prefix caching off)")
-    if n != LP:
-        raise Unexpressible(f"request {i}: a chunked prefill, {n} of its {LP} prompt tokens at step {s0} (no chunked request wrapper: "
-                            f"v0 needs chunked prefill off)")
+    if first.cache_hit or first.start:
+        raise Unexpressible(f"request {i}: a prefix-cache hit of {first.cache_hit or first.start} tokens at step {s0} (the cached request "
+                            f"wrapper isn't ported: v0 needs prefix caching off)")
+    if first.n != LP:
+        raise Unexpressible(f"request {i}: a chunked prefill, {first.n} of its {LP} prompt tokens at step {s0} (no chunked request "
+                            f"wrapper: v0 needs chunked prefill off)")
     for k, (s, row) in enumerate(rows[1:], start=1):
-        got, want = (s, int(_get(row, "start")), int(_get(row, "n"))), (s0 + k, LP + k - 1, 1)
+        got, want = (s, row.start, row.n), (s0 + k, LP + k - 1, 1)
         if got != want:
             raise Unexpressible(f"request {i}: its row {k} is (step, start, n) = {got}, not the decode {want} (a gap, a recompute or a "
                                 f"chunk: v0 runs each request one position a step from its prefill)")
-    for k, (s, row) in enumerate(rows):
-        if (kind := _get(row, "kind")) is not None and kind != ("prefill" if k == 0 else "decode"):
-            raise Unexpressible(f"request {i}: its row at step {s} is marked {kind!r} at position {_get(row, 'start')}")
-    if output_len is None:
-        return LP, len(rows) - 1, s0
-    if not int(output_len) <= len(rows) <= int(output_len) + 1:
+    if not output_len <= len(rows) <= output_len + 1:
         raise Unexpressible(f"request {i}: {len(rows)} rows for {output_len} kept outputs (a row each, and at most one past the last)")
     return LP, int(output_len) - 1, s0
 
@@ -216,15 +273,15 @@ def request_program(registered: Registered, unit: RequestUnit) -> Any:
     return build_program(Phi.from_json({**registered.phi.to_json(), "sampling": unit.policy}), "request", LP=unit.LP, T=unit.T)
 
 
-def compile_steps(registered: Registered, advice: Any, *, partial: bool = False) -> Compiled:
-    """The Programs of `advice`'s run (module docstring): each request's at its (LP, T, policy), GP-01 over them, and each step's
-    live rows as `RowRef`s.  Pure and deterministic: it reads `registered` and `advice` only.  `partial` refuses request by request
-    (`Compiled.refused`) where a refusal would otherwise refuse the session."""
+def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bool = False) -> Compiled:
+    """The Programs of `advice`'s session (module docstring): each request's at its (LP, T, policy), GP-01 over them, and each step's
+    live rows as `RowRef`s. Total and deterministic: it reads `registered`, `advice` and `ingress` only, and compiles them or raises
+    `Unexpressible`. `partial` refuses request by request (`Compiled.refused`) where a refusal would otherwise refuse the session."""
     from verity_vllm.pipeline.global_program import request_id_of
     from verity_vllm.program import workload as W
 
     from .score import request_component
-    plan = plan_steps(registered, advice, partial=partial)
+    plan = plan_steps(registered, advice, ingress, partial=partial)
     programs: dict[str, Any] = {}
     comps: dict[str, Any] = {}
     digests: dict[str, str] = {}
@@ -237,47 +294,75 @@ def compile_steps(registered: Registered, advice: Any, *, partial: bool = False)
     wl = W.WorkloadProgram([W.WorkloadRequest(request_id_of(u.request), u.request, u.LP, u.T + 1, u.first_step, comps[u.key()], T=u.T)
                             for u in units if u is not None], manifest_digest=None, lag=int(registered.phi.target_profile().lag()))
     steps = [[RowRef(r, units[r].digest, start, n, k) for r, start, n, k in rows] for rows in plan.steps]
-    return Compiled(programs=programs, requests=units, workload=wl, steps=steps, discarded=plan.discarded, refused=plan.refused)
+    return Compiled(programs=programs, requests=units, workload=wl, steps=steps, discarded=plan.discarded, refused=plan.refused,
+                    cap_bits=registered.cap_bits)
 
 
-def plan_steps(registered: Registered, advice: Any, *, partial: bool = False) -> Plan:
+def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bool = False) -> Plan:
     """`compile_steps` up to building Programs: every refusal, each request's shape and policy, and each step's live rows."""
+    adv = advice_of(registered, advice)
     phi0 = registered.phi
     if not phi0.target_profile().batch_invariant:
         raise Unexpressible(f"a target without batch invariance ({phi0.execution!r}): its requests' launches would come from the advice (v1)")
-    rows, refused = _rows_of(advice)
-    if refused and not partial:
-        raise Unexpressible(next(iter(refused.values())))
-    units: list[RequestUnit | None] = []
-    for i, req in enumerate(advice.requests):
-        if i in refused or not rows[i]:
-            units.append(None)
-            continue
+    if not isinstance(ingress, Mapping):
+        raise Unexpressible(f"the ingress is each request's certified body by its id, not a {type(ingress).__name__}")
+    if not adv.requests:
+        raise Unexpressible("the advice has no request")
+    ids = {q.id for q in adv.requests}
+    if not partial and (extra := [k for k in ingress if k not in ids]):
+        raise Unexpressible(f"{len(extra)} certified requests have no row in the advice, {extra[0]!r} first")
+    shape = model_shape(phi0.model["hf_config"])
+    refused: dict[int, str] = {}
+
+    def refuse(i: int, why: str) -> None:
+        if not partial:
+            raise Unexpressible(why)
+        refused.setdefault(i, why)
+
+    prompts, params = {}, {}
+    for i, q in enumerate(adv.requests):
         try:
-            LP, T, s0 = shape_of(i, _get(req, "prompt_len"), rows[i], _get(req, "output_len"))
-            policy, seed = policy_of(i, _get(req, "sampling"), registered.default_seed)
+            prompts[i], params[i] = request_of(i, q, ingress.get(q.id), shape.V)
         except Unexpressible as e:
-            if not partial:
-                raise
-            refused[i] = str(e)
-            units.append(None)
-            continue
-        units.append(RequestUnit(i, "", LP, T, policy, seed, s0))
-    if not any(u is not None for u in units):
-        raise Unexpressible(f"every request that ran is refused, request {min(refused)}: {refused[min(refused)]}" if refused
-                            else "no request of the advice ran a row")
+            refuse(i, str(e))
+    rows: dict[int, list[tuple[int, I1.Row]]] = {i: [] for i in range(len(adv.requests))}
+    for s, step in enumerate(adv.steps):
+        for row in step.rows:
+            rows[row.request].append((s, row))
+            if row.preempted:
+                refuse(row.request, f"step {s}: request {row.request} preempted (v0 runs each request from its prefill without preemption)")
+            elif row.sources:
+                try:
+                    check_sources(s, row, prompts)
+                except Unexpressible as e:
+                    refuse(row.request, str(e))
+    units: list[RequestUnit | None] = []
+    for i, q in enumerate(adv.requests):
+        if i not in refused:
+            try:
+                LP, T, s0 = shape_of(i, q.prompt_len, rows[i], q.output_len)
+                if LP + T > shape.max_pos:
+                    raise Unexpressible(f"request {i}: positions to {LP + T - 1}, past the model's {shape.max_pos} positions")
+                policy, seed = policy_of(i, params[i], registered.default_seed)
+            except Unexpressible as e:
+                refuse(i, str(e))
+            else:
+                units.append(RequestUnit(i, "", LP, T, policy, seed, s0, q.id))
+                continue
+        units.append(None)
+    if all(u is None for u in units):
+        raise Unexpressible(f"every request is refused, request {min(refused)} first: {refused[min(refused)]}")
     steps: list[list[tuple[int, int, int, int]]] = []
     discarded: list[tuple[int, int, int, int]] = []
-    for s, step in enumerate(advice.steps):
+    for s, step in enumerate(adv.steps):
         live = []
-        for row in _get(step, "rows"):
-            r, start, n = int(_get(row, "request")), int(_get(row, "start")), int(_get(row, "n"))
-            if (u := units[r]) is None:
+        for row in step.rows:
+            if (u := units[row.request]) is None:
                 continue
-            if start >= u.LP + u.T:
-                discarded.append((s, r, start, n))
+            if row.start >= u.LP + u.T:
+                discarded.append((s, row.request, row.start, row.n))
             else:
-                live.append((r, start, n, int(start + n >= u.LP)))
+                live.append((row.request, row.start, row.n, int(row.start + row.n >= u.LP)))
         steps.append(live)
     return Plan(units, steps, discarded, dict(sorted(refused.items())))
 
