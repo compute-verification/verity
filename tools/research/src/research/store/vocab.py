@@ -323,7 +323,9 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(KERNEL_REASON, GROUP_RESULT, TEXT, "on a kernel-attempt/v1 record: the kernel_outcome's reason, one line"),
     _k(MEMORY_LINE_OF_RECORD, GROUP_RESULT, ENUM, "on a gate run's verifier run, by its lane: its memory line of record is the "
        "auditor_line.json of --ref's auditor_line.py run, and that file's line_by, which must be lean (the Lean verifier's line, held "
-       "exactly to line.py's); a line.py-only line is not of record. Gate runs 5-7's labels (credited-..., off-vocab) predate the rule",
+       "exactly to line.py's); a line.py-only line is not of record. The file must carry conditional_on naming NoOutsideCompute "
+       "(statement C in full, a premise of LineHeld): the line is conditional on it until certifiers cover the gate node's boundary, "
+       "and a file without the field is not of record. Gate runs 5-7's labels (credited-..., off-vocab) predate the rule",
        MEMORY_LINE_OF_RECORD_VALUES),
     # verification
     _k(COMMIT_MAP, GROUP_VERIFICATION, ENUM, "on a commit-map/v1 artifact, by its approver (research.commitmap.ACCEPTORS): whether the rewrite it "
