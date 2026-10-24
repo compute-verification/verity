@@ -251,11 +251,8 @@ def device_run(experts: int, n: int = 128, k: int = 1024, retain=None, schedule=
 
 
 def lane_steps(split: bool) -> list[str]:
-    """A call's launches in the order a side lane's schedule makes them: the main lane's (split, stats_s5 forked before the
-    per-row keying), then A's tree and the tile leaves."""
-    if split:
-        return [STEPS[1], STEPS[0], *STEPS[2:-1], "pd_tree_g_851", STEPS[-1]]
-    return [*STEPS[:-1], STEPS[-1]]
+    """A call's launches in the order a side lane's schedule makes them: the main lane's, then A's tree and the tile leaves."""
+    return [*STEPS[:-1], *(["pd_tree_g_851"] if split else []), STEPS[-1]]
 
 
 @pytest.mark.parametrize("schedule", ["serial", "deferred", "deferred-a"])
@@ -299,9 +296,8 @@ def test_the_vllm_call_commits_each_unit_as_its_call_alone(tmp_path, schedule):
 def test_the_vllm_call_runs_on_the_schedules_lanes_from_rotating_sets(schedule):
     """A grouped call's main lane (the recording stand-in's handle 2, or the caller's 0 under ``deferred-caller``) runs every
     step but the side ones, which run on the run's side lanes in turn (1, then 3): the tile leaves, and under ``deferred-a``
-    first A's tree, pd_commit_gm then in mode 1, with stats_s5 forked before it onto the group's fork lane (`FORK_STANDIN`).
-    Calls take the ring's sets in turn (C~, U, the table and A's tree), and A's roots are gathered into the pass from the call's
-    set."""
+    first A's tree, pd_commit_gm then in mode 1.  Calls take the ring's sets in turn (C~, U, the table and A's tree), and A's
+    roots are gathered into the pass from the call's set."""
     ws, counts, n, k = (1, 3, 0), [3, 300, 20], 128, 1024
     run, _ = device_run(4, n, k, schedule=schedule)
     dev, nb = run.kernel.dev, run.nb
@@ -316,8 +312,7 @@ def test_the_vllm_call_runs_on_the_schedules_lanes_from_rotating_sets(schedule):
         PG.gemm_grouped(run, ws, torch.randn(sum(counts), k).to(torch.bfloat16), counts)
     log = launches(dev)
     side = ("pd_tree_g_851", "pd_tiles_g_979")
-    on = lambda x, lane: lane if x in side else PG.FORK_STANDIN if split and x == "stats_s5" else main
-    assert [(x[0], x[4]) for x in log] == [(x, on(x, lane)) for lane in (1, 3, 1) for x in lane_steps(split)]
+    assert [(x[0], x[4]) for x in log] == [(x, lane if x in side else main) for lane in (1, 3, 1) for x in lane_steps(split)]
     by = {name: [x[5] for x in log if x[0] == name] for name in lane_steps(True)}
     ptr = lambda j, x: g.sets[j][x].data_ptr()
     for c, j in enumerate((0, 1, 0)):

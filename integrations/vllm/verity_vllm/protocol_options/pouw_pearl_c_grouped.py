@@ -33,9 +33,7 @@ run's own at the greatest priority, joined to the caller's stream by events, or 
 next side lane for the schedule's side groups.  Under ``deferred`` that is the tile leaves, behind an event at the main lane's
 end; under ``deferred-a`` A's tree too, where the cubin has pd_tree_g (`grouped.has_tree`): the commitment is then split
 (`grouped.SPLIT_STEPS`), and the side lane runs A's tree behind an event right after the per-row keying, beside the forming
-and the GEMMs, which read nothing it writes, then scatters A's roots into the pass, then the tile leaves; and the group's
-fork lane (`_Group.fork`, at the greatest priority) runs A's row statistics and the screen beside the per-row keying, which
-writes nothing they read, joining the main lane after it.  Each group rotates
+and the GEMMs, which read nothing it writes, then scatters A's roots into the pass, then the tile leaves.  Each group rotates
 `Schedule.ring` sets of what the side lane reads or writes (`ROTATED`), a set rewritten only once its last call's side steps
 are done.  The bytes committed and served are the serial schedule's; under the split, a unit's padding rows (m₁₆ to its
 segment's end, outside its matmul) are formed from whatever E_A lines the buffer holds, as a dense call's are.
@@ -51,7 +49,7 @@ from typing import Any
 
 from verity.core.protocols.pouw.protocol import Matmul, Shape
 
-from .pouw_pearl_c_host import _Driver, _event, _Lane, _put, _zeros
+from .pouw_pearl_c_host import _Driver, _event, _put, _zeros
 from .pouw_pearl_c_kernel import _load
 from .pouw_pearl_c_screen import scatter_into, screen_into
 
@@ -71,16 +69,13 @@ OFFS_BYTES = 24
 HOST_SLOTS = 8
 #: the layouts a group keeps (`_Group.call`), with their graphs; past it they are dropped
 CALLS_KEPT = 64
-#: the recording stand-in's handle for a group's fork lane, past the main lane's 2 and the side lanes' 1, 3, 4, …
-FORK_STANDIN = 9
 
 
 class _Call:
     """One call layout of a group over one ring set (`_Group.call`): its table's template (`grouped.Grouped.meta` with no
     keys and its leaves at 0, which `_Group.table` fills in a call at a time), its matmuls' shapes, and its steps by lane:
     ``main`` (A's rows into their segments from the staged x, the main lane's launches, and with hashing the scatter of the
-    rows' screen and, unless A's tree is aside, the units' roots; where it is, stats_s5 and the screen go on the group's fork
-    lane after A's rows and join the main lane after the per-row keying), ``tree`` (A's tree, then its roots' gather and scatter)
+    rows' screen and, unless A's tree is aside, the units' roots), ``tree`` (A's tree, then its roots' gather and scatter)
     and ``side`` (the tile leaves), the main lane's event for ``tree`` before step ``cut``.  ``execs`` are its graphs'
     executables once captured (main, tree or 0, side or 0); off the GPU the scatter takes the call's offsets from ``at``.
     ``src`` is each of A's rows' source in the staged x behind its zero row (0, or 1 + its gathered row)."""
@@ -145,12 +140,7 @@ class _Call:
         def gather():
             torch.index_select(tree, 0, nodes, out=roots)
             scatter(0, roots.view(-1))
-        if split and "rows_a" in on_main and "nofork" not in G.PLACE:   # stats_s5 and the screen read nothing the keying writes
-            aside = [*([by["stats_a"]] if "stats_a" in on_main else []), screen]
-            body = [by[x] for x in on_main if x not in ("rows_a", "stats_a")]
-            self.main, self.cut = [rows_a, g.forked(run, aside), by["rows_a"], g.joined, *body], 3
-        else:
-            self.main.append(screen)
+        self.main.append(screen)
         if split:
             self.tree = [*([by["tree_seed_a"]] if "tree_seed_a" in names else []), gather]
 
@@ -159,9 +149,8 @@ class _Group:
     """One group's stacked weight side and its call buffers (`grouped.sizes` at ``rows`` and ``count``, with the staged x
     ``xf`` behind a zero row, the gathered rows' α and (s, ρ) for the unfused screen, and the units' A roots), with ``sets``
     of the `ROTATED` ones (the first ``b``'s own), the event after each set's last side steps (``done``) and the next call's
-    set (``turn``); its layouts (``calls``), the pinned host slots their tables go up from (``host``), the driver that
-    uploads them (``driver``, the run's or its own; None off the GPU) and the lane a split call forks its row statistics
-    and screen onto (``fork``)."""
+    set (``turn``); its layouts (``calls``), the pinned host slots their tables go up from (``host``) and the driver that
+    uploads them (``driver``, the run's or its own; None off the GPU)."""
 
     def __init__(self, run: Any, G: Any, ws: tuple[int, ...]):
         import torch
@@ -188,33 +177,6 @@ class _Group:
         self.driver = run.driver if run.driver is not None or not cuda else _Driver(run.kernel.dev.cu)
         self.host, self.host_np, self.host_ptr, self.width, self.host_ev, self.host_turn = None, None, 0, 0, [], 0
         self.replays = 0
-        self.fork = _Lane(run.device, "greatest", FORK_STANDIN)
-
-    def forked(self, run: Any, steps: list) -> Any:
-        """A step that runs `steps` on the fork lane after the current stream's work so far (in a capture, as the capture's
-        branch)."""
-        import torch
-        lane = self.fork
-
-        def step() -> None:
-            dev = run.kernel.dev
-            raw = dev.stream
-            if lane.stream is not None:
-                lane.stream.wait_stream(torch.cuda.current_stream(run.device))
-            dev.stream = lane.raw
-            try:
-                with torch.cuda.stream(lane.stream) if lane.stream is not None else nullcontext():
-                    for f in steps:
-                        f()
-            finally:
-                dev.stream = raw
-        return step
-
-    def joined(self) -> None:
-        """The current stream waits for the fork lane's work so far."""
-        if self.fork.stream is not None:
-            import torch
-            torch.cuda.current_stream(self.fork.stream.device).wait_stream(self.fork.stream)
 
     def units(self, counts: tuple[int, ...]) -> list:
         """`grouped.units` of `counts`, kept by counts."""
