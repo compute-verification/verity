@@ -2,6 +2,7 @@ import Proofs.Flock.Claims.KS.PlainStep
 import Proofs.Flock.Claims.KS.PlainDrawSim
 import Proofs.Flock.Claims.KS.PlainSlackFit
 import Proofs.Flock.Claims.KS.PlainClashL
+import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The plain chain from the concrete simulator's parts
@@ -42,16 +43,37 @@ def PlainRawClashL {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
       PlainLevelClash ms lv lanes (Claims.run sha512 P (V false) x ω c).vLog) ∨
     Claims.TiedColl sha512 (Claims.run sha512 P (V false) x ω c).vLog
 
+/-- **A raw clash in `P`'s run at coins `c`**: two different columns its reps open at one level-0 position, two
+openings of one position to different rows against one root at a later level, or a collision among the verifier's
+calls (`PlainRawClashRunL`'s outcome). -/
+def PlainRawClashLK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (c : Fin ((V false).k x) → Coin) :
+    Prop :=
+  (∃ (q : ℕ) (a b : List 𝔽), (q, a) ∈ plainRawCols (Claims.run sha512 P (VK keep) x ω c).seen ∧
+      (q, b) ∈ plainRawCols (Claims.run sha512 P (VK keep) x ω c).seen ∧ a ≠ b) ∨
+    (∃ (ms : MerkleScheme) (lv : Flock.Level) (lanes : ℕ),
+      PlainLevelClash ms lv lanes (Claims.run sha512 P (VK keep) x ω c).vLog) ∨
+    Claims.TiedColl sha512 (Claims.run sha512 P (VK keep) x ω c).vLog
+
 /-- **The raw clash at any level from the abort and the accepting runs' clash**: `PlainRawClashRunL` where `P'`
 aborts on rejected runs and, at the accepting ones, the live event gives a raw clash. -/
+theorem plainRawClashRunL_of_abortK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {mPts : ℕ}
+    {N : Claims.Msg → ℕ} {dg : ByteArray → ByteArray} {w : Claims.Msg → Wire 65536 1 mPts} {τ : Type}
+    {P' : Claims.Prover (Ω × τ)} {Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V false).k x) → Coin}
+    {pL : LiveOutJ 1 mPts → Prop} (habort : PlainSimAbortK keep P x ω mPts N dg w P' Φ pL)
+    (hclash : ∀ u r', pL (liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r') →
+      (Claims.run sha512 P (VK keep) x ω (Φ (u, r'))).out = .acc → PlainRawClashLK keep P x ω (Φ (u, r'))) :
+    PlainRawClashRunLK keep P x ω mPts N dg w P' Φ pL := fun u r' hp =>
+  ⟨plain_acc_of_abortK keep habort hp, hclash u r' hp (plain_acc_of_abortK keep habort hp)⟩
+
+/-- `plainRawClashRunL_of_abortK` at the deployed plain verifier (`keep := id`). -/
 theorem plainRawClashRunL_of_abort {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {mPts : ℕ}
     {N : Claims.Msg → ℕ} {dg : ByteArray → ByteArray} {w : Claims.Msg → Wire 65536 1 mPts} {τ : Type}
     {P' : Claims.Prover (Ω × τ)} {Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V false).k x) → Coin}
     {pL : LiveOutJ 1 mPts → Prop} (habort : PlainSimAbort P x ω mPts N dg w P' Φ pL)
     (hclash : ∀ u r', pL (liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r') →
       (Claims.run sha512 P (V false) x ω (Φ (u, r'))).out = .acc → PlainRawClashL P x ω (Φ (u, r'))) :
-    PlainRawClashRunL P x ω mPts N dg w P' Φ pL := fun u r' hp =>
-  ⟨plain_acc_of_abort habort hp, hclash u r' hp (plain_acc_of_abort habort hp)⟩
+    PlainRawClashRunL P x ω mPts N dg w P' Φ pL :=
+  plainRawClashRunL_of_abortK id (Ω := Ω) (P := P) (x := x) (ω := ω) (mPts := mPts) (N := N) (dg := dg) (w := w) (τ := τ) (P' := P') (Φ := Φ) (pL := pL) (habort := habort) (hclash := hclash)
 
 /-- **A live outcome decoded at the verdict at the draw, with a property `Q` of table 0's output**: the verdict
 `plainVerdictAt I d C rootB₀` holds, the reps' decoded tapes play to pendings, and the output at them and the

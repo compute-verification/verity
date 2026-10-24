@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.KS.ForkCoupling
 import Proofs.Flock.Claims.KS.PlainSimW
 import Proofs.Flock.Level3.ArithFacts
+import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The slack fits the plain weight at the coupling's chances
@@ -269,6 +270,25 @@ theorem plain_slack_fits {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
 coins are `Claims.Bridge.Live.fnAt` at a prefix key is at most the accepting fork with a collision there
 (`plainForkEv`) and the slack at the coupling's chances `FnFork.δN GF128 65536 n` (`slack_of_coupling` at
 `forkCoinCoupling_plain`), the fork bound `PlainSimWrPAtD` asks for. -/
+theorem plain_fork_le_fnAtK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
+    {m k0 : ℕ} {l₀ l₁ : FlockSoundness.Accounting.Level} {rest : List FlockSoundness.Accounting.Level} {ext : ℕ}
+    (hsch : FlockSoundness.Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) {D : Type} [Fintype D]
+    [DecidableEq D] {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) {L : ℕ} (hL : L = (V false).k x)
+    (n : Fin ((V false).k x) → ℕ)
+    {key : Fin ((V false).k x) → (Fin ((V false).k x) → Claims.Bridge.Live.LCoin 65536) → D}
+    (hk : Claims.Flock.FnFork.PrefixKey n key) (r : Fin 2) (ℓ : Fin (l₀ :: l₁ :: rest).length) {a : ℝ}
+    (ha : a ≤ Claims.Flock.simForkPr sha512 (VK keep) P x
+      (τ := Fin ((V false).k x) → D → Claims.Bridge.Live.LCoin 65536) (LC := Claims.Bridge.Live.LCoin 65536)
+      (fun q => Claims.Bridge.Live.fnAt hL n key q.1 q.2) (fun t => Claims.Flock.FnFork.forkN t) ω
+      (plainJ (x := x) (tables_head_one h) hsch r ℓ).val) :
+    a ≤ (Claims.Pr fun s : (Fin ((V false).k x) → Coin) × (Fin ((V false).k x) → Coin) =>
+        plainForkEvK keep h hsch P r ℓ ω s.1 s.2) +
+      Claims.Flock.forkSlack sha512 (VK keep) P x (Claims.Flock.FnFork.δN FlockLevel3.GF128 65536 n)
+        (plainJ (x := x) (tables_head_one h) hsch r ℓ).val ω :=
+  ha.trans (Claims.Flock.slack_of_coupling sha512 (VK keep) P x (fun t => Claims.Flock.FnFork.δN_nonneg n t)
+    (forkCoinCoupling_plainK keep P x ω hL n hk) (plainJ (x := x) (tables_head_one h) hsch r ℓ))
+
+/-- `plain_fork_le_fnAtK` at the deployed plain verifier (`keep := id`). -/
 theorem plain_fork_le_fnAt {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
     {m k0 : ℕ} {l₀ l₁ : FlockSoundness.Accounting.Level} {rest : List FlockSoundness.Accounting.Level} {ext : ℕ}
     (hsch : FlockSoundness.Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) {D : Type} [Fintype D]
@@ -284,7 +304,6 @@ theorem plain_fork_le_fnAt {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h 
         plainForkEv h hsch P r ℓ ω s.1 s.2) +
       Claims.Flock.forkSlack sha512 (V false) P x (Claims.Flock.FnFork.δN FlockLevel3.GF128 65536 n)
         (plainJ (tables_head_one h) hsch r ℓ).val ω :=
-  ha.trans (Claims.Flock.slack_of_coupling sha512 (V false) P x (fun t => Claims.Flock.FnFork.δN_nonneg n t)
-    (forkCoinCoupling_plain P x ω hL n hk) (plainJ (tables_head_one h) hsch r ℓ))
+  plain_fork_le_fnAtK id (x := x) (spec := spec) (st := st) (h := h) (m := m) (k0 := k0) (l₀ := l₀) (l₁ := l₁) (rest := rest) (ext := ext) (hsch := hsch) (D := D) (Ω := Ω) (P := P) (ω := ω) (L := L) (hL := hL) (n := n) (key := key) (hk := hk) (r := r) (ℓ := ℓ) (a := a) (ha := ha)
 
 end FlockDeploy.KS

@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.KS.PlainSimW
+import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The plain wire, and the lockstep a simulator owes
@@ -97,6 +98,17 @@ def PlainDecides {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {
         ((List.range ((Claims.run sha512 P (V false) x ω (Φ (u, r'))).msgs.map Prod.fst).length).map
           (Claims.coinSeq (Φ (u, r')))) = .decide s spec sts link c₁ mids f
 
+/-- **`P`'s run at the coins `Φ (u, r')` accepts, deciding** at the setup `s, spec, sts`, the link `link` and its coin
+`c₁`, the round messages `mids` and the last message `f`: where `PlainSimRun` asks for the view. -/
+def PlainDecidesK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {nMax : ℕ} {N : ℕ} {τ : Type}
+    (Φ : τ × (Fin (N + 2) → LCoin nMax) → Fin ((V false).k x) → Coin) (u : τ) (r' : Fin (N + 2) → LCoin nMax)
+    (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (link : List ByteArray × List ByteArray) (c₁ : Coin)
+    (mids : List (Claims.Msg × Coin)) (f : Final) : Prop :=
+  (Claims.run sha512 P (VK keep) x ω (Φ (u, r'))).out = .acc ∧
+    act false x ((Claims.run sha512 P (VK keep) x ω (Φ (u, r'))).msgs.map Prod.fst)
+        ((List.range ((Claims.run sha512 P (VK keep) x ω (Φ (u, r'))).msgs.map Prod.fst).length).map
+          (Claims.coinSeq (Φ (u, r')))) = .decide s spec sts link c₁ mids f
+
 /-- **The roots**: where `P`'s run decides, `P'`'s live outcome has the link's roots. -/
 def PlainSimRoot {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) {nMax : ℕ}
     (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire nMax 1 mPts) {τ : Type}
@@ -105,11 +117,27 @@ def PlainSimRoot {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (
     (liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r').rootB =
       (Claims.Bridge.Custody.viewOf 1 mPts spec link c₁ f).rootB
 
+/-- **The roots**: where `P`'s run decides, `P'`'s live outcome has the link's roots. -/
+def PlainSimRootK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) {nMax : ℕ}
+    (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire nMax 1 mPts) {τ : Type}
+    (P' : Claims.Prover (Ω × τ)) (Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V false).k x) → Coin) : Prop :=
+  ∀ u r' s spec sts link c₁ mids f, PlainDecidesK keep P x ω Φ u r' s spec sts link c₁ mids f →
+    (liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r').rootB =
+      (Claims.Bridge.Custody.viewOf 1 mPts spec link c₁ f).rootB
+
 /-- **The link's points**: where `P`'s run decides, `P'`'s live outcome has the points of the link's coin `c₁`. -/
 def PlainSimPts {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) {nMax : ℕ}
     (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire nMax 1 mPts) {τ : Type}
     (P' : Claims.Prover (Ω × τ)) (Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V false).k x) → Coin) : Prop :=
   ∀ u r' s spec sts link c₁ mids f, PlainDecides P x ω Φ u r' s spec sts link c₁ mids f →
+    (liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r').pts =
+      (Claims.Bridge.Custody.viewOf 1 mPts spec link c₁ f).pts
+
+/-- **The link's points**: where `P`'s run decides, `P'`'s live outcome has the points of the link's coin `c₁`. -/
+def PlainSimPtsK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) {nMax : ℕ}
+    (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire nMax 1 mPts) {τ : Type}
+    (P' : Claims.Prover (Ω × τ)) (Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V false).k x) → Coin) : Prop :=
+  ∀ u r' s spec sts link c₁ mids f, PlainDecidesK keep P x ω Φ u r' s spec sts link c₁ mids f →
     (liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r').pts =
       (Claims.Bridge.Custody.viewOf 1 mPts spec link c₁ f).pts
 
@@ -122,6 +150,15 @@ def PlainSimReps {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (
     (liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r').reps =
       (Claims.Bridge.Custody.viewOf 1 mPts spec link c₁ f).reps
 
+/-- **The lockstep**: where `P`'s run decides, each rep's rounds in `P'`'s live outcome are the record's, round by
+round `P`'s round message's retained bytes with the used part of its coin, which the live coin is. -/
+def PlainSimRepsK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) {nMax : ℕ}
+    (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire nMax 1 mPts) {τ : Type}
+    (P' : Claims.Prover (Ω × τ)) (Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V false).k x) → Coin) : Prop :=
+  ∀ u r' s spec sts link c₁ mids f, PlainDecidesK keep P x ω Φ u r' s spec sts link c₁ mids f →
+    (liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r').reps =
+      (Claims.Bridge.Custody.viewOf 1 mPts spec link c₁ f).reps
+
 /-- **The proof files**: where `P`'s run decides, `P'`'s live outcome has the last message's proof files. -/
 def PlainSimProofs {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) {nMax : ℕ}
     (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire nMax 1 mPts) {τ : Type}
@@ -130,15 +167,32 @@ def PlainSimProofs {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
     (liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r').proofs =
       (Claims.Bridge.Custody.viewOf 1 mPts spec link c₁ f).proofs
 
+/-- **The proof files**: where `P`'s run decides, `P'`'s live outcome has the last message's proof files. -/
+def PlainSimProofsK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) {nMax : ℕ}
+    (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire nMax 1 mPts) {τ : Type}
+    (P' : Claims.Prover (Ω × τ)) (Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V false).k x) → Coin) : Prop :=
+  ∀ u r' s spec sts link c₁ mids f, PlainDecidesK keep P x ω Φ u r' s spec sts link c₁ mids f →
+    (liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r').proofs =
+      (Claims.Bridge.Custody.viewOf 1 mPts spec link c₁ f).proofs
+
 /-- **The simulation from its four parts**: the live outcome is the view where each part is. -/
+theorem plainSimRun_of_partsK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {mPts nMax : ℕ}
+    {N : Claims.Msg → ℕ} {dg : ByteArray → ByteArray} {w : Claims.Msg → Wire nMax 1 mPts} {τ : Type}
+    {P' : Claims.Prover (Ω × τ)} {Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V false).k x) → Coin}
+    (h₁ : PlainSimRootK keep P x ω mPts N dg w P' Φ) (h₂ : PlainSimPtsK keep P x ω mPts N dg w P' Φ)
+    (h₃ : PlainSimRepsK keep P x ω mPts N dg w P' Φ) (h₄ : PlainSimProofsK keep P x ω mPts N dg w P' Φ) :
+    PlainSimRunK keep P x ω mPts N dg w P' Φ := fun u r' hacc s spec sts link c₁ mids f hact =>
+  liveOutJ_ext' (h₁ u r' s spec sts link c₁ mids f ⟨hacc, hact⟩) (h₂ u r' s spec sts link c₁ mids f ⟨hacc, hact⟩)
+    (h₃ u r' s spec sts link c₁ mids f ⟨hacc, hact⟩) (h₄ u r' s spec sts link c₁ mids f ⟨hacc, hact⟩)
+
+/-- `plainSimRun_of_partsK` at the deployed plain verifier (`keep := id`). -/
 theorem plainSimRun_of_parts {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {mPts nMax : ℕ}
     {N : Claims.Msg → ℕ} {dg : ByteArray → ByteArray} {w : Claims.Msg → Wire nMax 1 mPts} {τ : Type}
     {P' : Claims.Prover (Ω × τ)} {Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V false).k x) → Coin}
     (h₁ : PlainSimRoot P x ω mPts N dg w P' Φ) (h₂ : PlainSimPts P x ω mPts N dg w P' Φ)
     (h₃ : PlainSimReps P x ω mPts N dg w P' Φ) (h₄ : PlainSimProofs P x ω mPts N dg w P' Φ) :
-    PlainSimRun P x ω mPts N dg w P' Φ := fun u r' hacc s spec sts link c₁ mids f hact =>
-  liveOutJ_ext' (h₁ u r' s spec sts link c₁ mids f ⟨hacc, hact⟩) (h₂ u r' s spec sts link c₁ mids f ⟨hacc, hact⟩)
-    (h₃ u r' s spec sts link c₁ mids f ⟨hacc, hact⟩) (h₄ u r' s spec sts link c₁ mids f ⟨hacc, hact⟩)
+    PlainSimRun P x ω mPts N dg w P' Φ :=
+  plainSimRun_of_partsK id (Ω := Ω) (P := P) (x := x) (ω := ω) (mPts := mPts) (nMax := nMax) (N := N) (dg := dg) (w := w) (τ := τ) (P' := P') (Φ := Φ) (h₁ := h₁) (h₂ := h₂) (h₃ := h₃) (h₄ := h₄)
 
 /-! ## The roots -/
 
@@ -204,21 +258,29 @@ theorem liveOut_rootB {nMax mPts : ℕ} (N : Claims.Msg → ℕ) (dg : ByteArray
 
 /-- **The roots, where `P'` sends `P`'s first message**: at the plain wire, the live outcome's roots are the deployed
 link's (`liveOut_rootB`, `act_decide_link`). -/
-theorem plainSimRoot_of_first {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {mPts : ℕ}
+theorem plainSimRoot_of_firstK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {mPts : ℕ}
     (hm : 2 * mPts ≤ 65536) {N : Claims.Msg → ℕ} {dg : ByteArray → ByteArray} {τ : Type}
     {P' : Claims.Prover (Ω × τ)} {Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V false).k x) → Coin}
     (h1 : ∀ u, ((P'.next x [] (ω, u)).eval sha512).1 = ((P.next x [] ω).eval sha512).1) :
-    PlainSimRoot P x ω mPts N dg (fun _ => plainWire mPts hm) P' Φ := by
+    PlainSimRootK keep P x ω mPts N dg (fun _ => plainWire mPts hm) P' Φ := by
   intro u r' s spec sts link c₁ mids f hd
   obtain ⟨hacc, hact⟩ := hd
   rw [liveOut_rootB, h1]
-  obtain ⟨rest, hhead⟩ := run_head sha512 P (V false) x ω (Φ (u, r')) hacc
+  obtain ⟨rest, hhead⟩ := run_head sha512 P (VK keep) x ω (Φ (u, r')) hacc
   obtain ⟨_, _, hlink⟩ := act_decide_link hact
   rw [hhead] at hlink
   have hl : linkOf ((P.next x [] ω).eval sha512).1 = some link := hlink
   show ((linkOf ((P.next x [] ω).eval sha512).1).getD default).1.toArray = link.1.toArray
   rw [hl]
   rfl
+
+/-- `plainSimRoot_of_firstK` at the deployed plain verifier (`keep := id`). -/
+theorem plainSimRoot_of_first {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {mPts : ℕ}
+    (hm : 2 * mPts ≤ 65536) {N : Claims.Msg → ℕ} {dg : ByteArray → ByteArray} {τ : Type}
+    {P' : Claims.Prover (Ω × τ)} {Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V false).k x) → Coin}
+    (h1 : ∀ u, ((P'.next x [] (ω, u)).eval sha512).1 = ((P.next x [] ω).eval sha512).1) :
+    PlainSimRoot P x ω mPts N dg (fun _ => plainWire mPts hm) P' Φ :=
+  plainSimRoot_of_firstK id (Ω := Ω) (P := P) (x := x) (ω := ω) (mPts := mPts) (hm := hm) (N := N) (dg := dg) (τ := τ) (P' := P') (Φ := Φ) (h1 := h1)
 
 /-! ## The link's points -/
 
@@ -265,14 +327,23 @@ theorem liveOut_pts {nMax mPts : ℕ} (N : Claims.Msg → ℕ) (dg : ByteArray �
 
 /-- **The link's points from the coins alone**: where `P`'s run decides, the first live coin's points are the
 deployed link coin's, whatever `P'` sends (`liveOut_pts`). -/
+theorem plainSimPts_of_coinsK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {mPts nMax : ℕ}
+    {N : Claims.Msg → ℕ} {dg : ByteArray → ByteArray} {w : Claims.Msg → Wire nMax 1 mPts} {τ : Type}
+    {P' : Claims.Prover (Ω × τ)} {Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V false).k x) → Coin}
+    (h : ∀ u r' s spec sts link c₁ mids f, PlainDecidesK keep P x ω Φ u r' s spec sts link c₁ mids f →
+      (ptsIf (w x)).proj (Claims.coinSeq r' 0) = (Claims.Bridge.Custody.viewOf 1 mPts spec link c₁ f).pts) :
+    PlainSimPtsK keep P x ω mPts N dg w P' Φ := fun u r' s spec sts link c₁ mids f hd => by
+  rw [liveOut_pts]
+  exact h u r' s spec sts link c₁ mids f hd
+
+/-- `plainSimPts_of_coinsK` at the deployed plain verifier (`keep := id`). -/
 theorem plainSimPts_of_coins {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {mPts nMax : ℕ}
     {N : Claims.Msg → ℕ} {dg : ByteArray → ByteArray} {w : Claims.Msg → Wire nMax 1 mPts} {τ : Type}
     {P' : Claims.Prover (Ω × τ)} {Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V false).k x) → Coin}
     (h : ∀ u r' s spec sts link c₁ mids f, PlainDecides P x ω Φ u r' s spec sts link c₁ mids f →
       (ptsIf (w x)).proj (Claims.coinSeq r' 0) = (Claims.Bridge.Custody.viewOf 1 mPts spec link c₁ f).pts) :
-    PlainSimPts P x ω mPts N dg w P' Φ := fun u r' s spec sts link c₁ mids f hd => by
-  rw [liveOut_pts]
-  exact h u r' s spec sts link c₁ mids f hd
+    PlainSimPts P x ω mPts N dg w P' Φ :=
+  plainSimPts_of_coinsK id (Ω := Ω) (P := P) (x := x) (ω := ω) (mPts := mPts) (nMax := nMax) (N := N) (dg := dg) (w := w) (τ := τ) (P' := P') (Φ := Φ) (h := h)
 
 /-! ## The abort -/
 
@@ -285,15 +356,33 @@ def PlainSimAbort {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) 
   ∀ u r', (Claims.run sha512 P (V false) x ω (Φ (u, r'))).out ≠ .acc →
     ¬ pL (liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r')
 
+/-- **`P'` aborts where `P`'s run is rejected**: at every tape and live coins at which `VK keep` does not accept `P` at
+`Φ`, the live event `pL` fails at `P'`'s outcome. -/
+def PlainSimAbortK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) {nMax : ℕ}
+    (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire nMax 1 mPts) {τ : Type}
+    (P' : Claims.Prover (Ω × τ)) (Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V false).k x) → Coin)
+    (pL : LiveOutJ 1 mPts → Prop) : Prop :=
+  ∀ u r', (Claims.run sha512 P (VK keep) x ω (Φ (u, r'))).out ≠ .acc →
+    ¬ pL (liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r')
+
 /-- **The live event at an aborting simulator gives an accepting run.** -/
+theorem plain_acc_of_abortK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {mPts nMax : ℕ}
+    {N : Claims.Msg → ℕ} {dg : ByteArray → ByteArray} {w : Claims.Msg → Wire nMax 1 mPts} {τ : Type}
+    {P' : Claims.Prover (Ω × τ)} {Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V false).k x) → Coin}
+    {pL : LiveOutJ 1 mPts → Prop} (h : PlainSimAbortK keep P x ω mPts N dg w P' Φ pL) {u : τ}
+    {r' : Fin (N x + 2) → LCoin nMax} (hp : pL (liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r')) :
+    (Claims.run sha512 P (VK keep) x ω (Φ (u, r'))).out = .acc := by
+  by_contra hn
+  exact h u r' hn hp
+
+/-- `plain_acc_of_abortK` at the deployed plain verifier (`keep := id`). -/
 theorem plain_acc_of_abort {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {mPts nMax : ℕ}
     {N : Claims.Msg → ℕ} {dg : ByteArray → ByteArray} {w : Claims.Msg → Wire nMax 1 mPts} {τ : Type}
     {P' : Claims.Prover (Ω × τ)} {Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V false).k x) → Coin}
     {pL : LiveOutJ 1 mPts → Prop} (h : PlainSimAbort P x ω mPts N dg w P' Φ pL) {u : τ}
     {r' : Fin (N x + 2) → LCoin nMax} (hp : pL (liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r')) :
-    (Claims.run sha512 P (V false) x ω (Φ (u, r'))).out = .acc := by
-  by_contra hn
-  exact h u r' hn hp
+    (Claims.run sha512 P (V false) x ω (Φ (u, r'))).out = .acc :=
+  plain_acc_of_abortK id (Ω := Ω) (P := P) (x := x) (ω := ω) (mPts := mPts) (nMax := nMax) (N := N) (dg := dg) (w := w) (τ := τ) (P' := P') (Φ := Φ) (pL := pL) (h := h) (u := u) (r' := r') (hp := hp)
 
 /-- **The raw clash from the abort and the accepting runs' clash**: `PlainRawClashRun` where `P'` aborts on rejected
 runs and, at the accepting ones, the live event gives two different columns at one position or a collision. -/
