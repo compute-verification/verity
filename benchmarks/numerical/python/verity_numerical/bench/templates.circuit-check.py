@@ -24,4 +24,5 @@ TEMPLATE_PARAMS = {
     "moe-expert-coordinate": [{"E": 4, "K": 64}],
     "moe-expert-coordinate-weighted": [{"E": 4, "K": 64}],
     "scaled-mm-fp8-block-coordinate": [{"K": 256, "G": 128}],
+    "ingress-prompt": [{"MODEL": "m", "LP": 3, "V": 1000}, {"MODEL": "served-model", "LP": 16, "V": 128256}],
 }
