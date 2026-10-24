@@ -561,7 +561,7 @@ def _record(run):
 def _credit(host, rec, statements=(), k=None, descriptor=None, run=None):
     return PHC.credit_reason(rec, host.directory, [host.ledger.path], host.window, host.key,
                              _descriptor() if descriptor is None else descriptor, statements, k, run=run,
-                             pins=[host.ledger.pins_path])
+                             pins=[host.ledger.pins_path], main=CH.MAIN)
 
 
 def _statement(d, call, n):
@@ -637,7 +637,7 @@ def test_an_honest_served_windows_weights_are_its_periods_and_its_evidence_carri
     assert out["drawn"] == PHC.drawn_of(rec, auditor.window, k, _descriptor())[0] == [0, 1]
     assert out["window"][0] == "missing" and out["credit"] is None, out
     unpinned = PHC.credit_reason(rec, auditor.directory, [auditor.ledger.path], auditor.window, auditor.key,
-                                 _descriptor(), pins=None)
+                                 _descriptor(), pins=None, main=CH.MAIN)
     assert unpinned["window"] == ("coin", f"the window's coins, session or salt can't be read ({LC.NO_PINS})")
     assert unpinned["credit"] is None
     ev = PHC.window_evidence(rec, auditor.directory, auditor.window, [], _descriptor())
@@ -937,13 +937,17 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     other = _descriptor(((64, K), (32, K)), ("q", "k"))
     assert _credit(auditor, rec, st, descriptor=other, run=_verifier(drawn))["credit"] is None
     auditor.ledger.period_close(PERIOD)
-    ledger = PHC.Ledger.load([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path])
+    ledger = PHC.Ledger.load([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path], main=CH.MAIN)
     evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, st, _descriptor())
     got, why = PHC.period_credit(ledger, PERIOD, [evidence], run=_verifier(drawn))
     assert why is None and got == {"windows": [[0]], "k": k, "delta": str(CR.DELTA), "eps": [out["eps"]]}, why
-    unpinned = PHC.Ledger.load([auditor.ledger.path], auditor.key)
+    unpinned = PHC.Ledger.load([auditor.ledger.path], auditor.key, main=CH.MAIN)
     assert PHC.period_credit(unpinned, PERIOD, [evidence], run=_verifier(drawn))[1] == (
-        "coin", f"window 0 of period {PERIOD}: the window's session can't be read ({LC.NO_PINS})")
+        "circuit", f"window 0 of period {PERIOD} doesn't count toward it, so the period earns nothing: {LC.NO_PINS}")
+    off_main = PHC.Ledger.load([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path], main=CH.MAIN[:1])
+    assert PHC.period_credit(off_main, PERIOD, [evidence], run=_verifier(drawn))[1] == (
+        "circuit", f"window 0 of period {PERIOD} doesn't count toward it, so the period earns nothing: "
+                   f"{LC.first_parent_reason(auditor.session_id, CH.PINNED, list(CH.MAIN[:1]))}")
     assert PHC.period_credit(ledger, PERIOD, [{**evidence, "descriptor": other.hex()}], run=_verifier(drawn))[1][0] == \
         "circuit"
     b = SV.register_weights(_circuit(), [(64, K)], {0: _rows("s_w")}, _model_key().key).registered[K].entry()
@@ -965,7 +969,7 @@ def test_a_period_open_without_draw_k_is_refused(periodic):
     assert out["k"] is None and out["credit"] is None
     assert out["window"][0] == "budget" and "commits no draw K" in out["window"][1]
     auditor.ledger.period_close(PERIOD)
-    ledger = PHC.Ledger.load([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path])
+    ledger = PHC.Ledger.load([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path], main=CH.MAIN)
     reasons = PHC.period_reason(ledger, PERIOD, [auditor.session_id], [auditor.window["root"]])
     assert len(reasons) == 1 and reasons[0].startswith(f"budget: period {PERIOD}'s open commits no draw K"), reasons
     evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, [], _descriptor())
@@ -1046,7 +1050,7 @@ def _two_window_period(tmp_path):
         sessions.append(s)
         roots.append(root)
     ledger.period_close(PERIOD)
-    return PHC.Ledger.of([ledger.lines], ledger.key, pins=[CH.PINS]), sessions, roots
+    return PHC.Ledger.of([ledger.lines], ledger.key, pins=[CH.PINS], main=CH.MAIN), sessions, roots
 
 
 def test_a_window_presented_outside_its_periods_close_or_out_of_order_is_refused(tmp_path):
