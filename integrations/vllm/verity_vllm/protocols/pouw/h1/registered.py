@@ -17,7 +17,7 @@ salts, ``b || c`` strings, tree and entry, computed from the rows' NumPy words i
   Python ints held some 36 bytes a word. The period's `Weights` keeps its rows, two bytes a word, for `Weights.matches`.
 
 * **On the GPU** (VLLM-79): where this process has CUDA, `commit` hashes the same strings, leaves and levels on the device
-  (`pouw_h1_registered_device`, `../pouw_cuda/registered_rows.cu`), a thread a row and a node, and only the domain id and
+  (`pouw_h1_registered_device`, `pouw_cuda/registered_rows.cu`), a thread a row and a node, and only the domain id and
   the result's bytes touch the host (`path`, `MODE`). The NumPy path above is the reference the device is held to
   (``tests/protocol_options/test_pouw_h1_registered_device.py``) and the fallback everywhere else.
 
