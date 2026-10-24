@@ -1,5 +1,6 @@
 import Proofs.Pouw.H1Zy.Combine
 import Proofs.Pouw.H1Zy.CombineBits
+import Proofs.Pouw.H1Zy.DequantVectors
 import Proofs.Pouw.H1Zy.Lane
 import Proofs.Pouw.H1Zy.LaneBits
 
@@ -11,6 +12,9 @@ import Proofs.Pouw.H1Zy.LaneBits
 
 `CombineBits`: the combine's body on bits computes it on words (`Pouw.H1Zy.combineBits_bitsOf`), each piece's lowering
 its word view.
+
+`DequantVectors`: `Pouw.H1Zy.zyDequant` and its three primitives on words the Python evaluators compute, checked by
+the kernel.
 
 `Lane`: at `32 ∣ K` and `K < 2^17` (the bind's range), `PouwH1LaneZy_v1`'s `ok = true` gives the low index bits only,
 every lane cell's record z as the exact dot of its rows' codes and its y as the dequant of it, and every partial word as
