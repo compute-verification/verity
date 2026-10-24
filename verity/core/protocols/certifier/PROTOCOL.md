@@ -1753,9 +1753,11 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
 
 `CompileSlice_v1` is the compile unit's pieces ("Advice v1" above) composed whole for one window. Its circuit, verdict
 flags, reference (`check`), stand-ins (the cache counts held at 0 among them) and REDTEAM's phase 9 cases (`phase9`)
-are `compile_slice`'s docstring. `benchmarks/network_traces/compile_slice_zk.py` proves nine units of corpus-smallkv's
-first seven steps `--zk`, held by Lean `verify --zk` (run r20261024-140227-8995): the honest one, three negatives
-and phase 9's five, each opening to its verdict, with no witness piece in what the verifier received.
+are `compile_slice`'s docstring. Its step rows are held to the committed ``srv`` row, which the verifier holds by b‖c
+to the served rows the Commit side registers before the draw (`served_rows`), so REDTEAM phase 10's six passes are
+refused. `benchmarks/network_traces/compile_slice_zk.py` proves eleven units of corpus-smallkv's first seven steps
+`--zk`, held by Lean `verify --zk` (run r20261024-153220-c97c): the honest one, three negatives, phase 9's five and the six passes
+with the served row and with its own, each opening to its verdict, with no witness piece in what the verifier received.
 
 ## The active certifier (`active`)
 
@@ -2246,8 +2248,10 @@ and seven lemmas, and three more proved lemmas:
     program's, the carried state or window under a fresh salt, and another row of the last window;
   - `size` is the parts' AND counts, which circuit-check pins at the tests' shape and at the sync KV-pressure trace's;
 - **`test_network_certifier_compile_slice.py`:** the compile slice's scan is the replay's, and the circuit's verdict
-  is `check`'s on the honest rows, five negatives and REDTEAM's phase 9 choices, each refused by exactly the checks
+  is `check`'s on the honest rows, four negatives and REDTEAM's phase 9 choices, each refused by exactly the checks
   `check` names; `codeword` is the encoder's, and `size` is pinned;
+- **`test_network_certifier_served_rows.py`:** the runner's rows are the slice's ``srv`` row, REDTEAM phase 10's six
+  passes are refused at ``rows`` with the registered row and their own row isn't its leaf, and the record is public only;
 - **`test_network_certifier_active.py`:** the active certifier over localhost sockets on an injected clock:
   - `Shaper` is `run_shaper`'s rule on random instances;
   - an honest run's records, hand times and wire are the Program's, accepted raw and committed;

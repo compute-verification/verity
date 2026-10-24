@@ -2,17 +2,20 @@
 PROTOCOL's "Advice v1") composed whole for one window of a few steps, so the composition is proved end to end before the
 chain splits it into one unit a step.
 
-    CompileSlice_v1{R, W, A, M, T, L, B, H, CH, WM, FULL, PC, NB, IW, Q, D, P, K, SEG} (pub, adv, cert, wit) -> verdict[16]
+    CompileSlice_v1{R, W, A, M, T, L, B, H, CH, WM, FULL, PC, NB, IW, Q, D, P, K, SEG} (pub, adv, cert, srv, wit)
+        -> verdict[16]
 
 **The rows**, each a field list (elements least significant bit first) zero-padded to whole 16-bit words:
-- ``pub``, the public inputs: the declared charge ``c`` (16 bits) and ``digest``, the step rows' hiding digest
-  SHA-512(salt ‖ rows) (64 bytes), which the clear recompile gives (`rows_digest`);
+- ``pub``, the public input: the declared charge ``c`` (16 bits);
 - ``adv``, the committed advice, a row under the advice's hiding root (`verity.ml.commitments.advice`): the window's raw
   decision bits ``dec`` (D), their ``count`` and the window's executed step count ``steps``;
 - ``cert``, the window's certified arrivals (`replay_chain.arrival_fields`: K slots of valid, id, P, O), a row the
   verifier holds to the certified record's commitment (its b‖c);
+- ``srv``, the served rows: the step rows the served window ran (P steps of `rows_bits`, idle ones zero; `srv_row`), a
+  row the verifier holds by its b‖c to the window's row of the served rows' registration (`served_rows`), committed on
+  the Commit side before the draw;
 - ``wit``, the witness: the state rows S_1 … S_{P+1} and the window row W_1 (`replay_chain`'s layouts), each step's
-  arrivals ``arr`` and decision bits ``bits``, the window's codeword ``seg`` (SEG bits) and the digest's salt (32 bytes).
+  arrivals ``arr`` and decision bits ``bits`` and the window's codeword ``seg`` (SEG bits).
 
 **The circuit.** `replay_chain.ReplayLoad` from the session's empty rows (S_0 and W_0, constants) to S_1 and W_1 with
 ``cert``'s arrivals and ``adv``'s decisions. Then per step u = 1 … P: `replay_step.ReplayStep_v1` on S_u's state with
@@ -22,25 +25,28 @@ order: per ask `arith_encode.KTContext_v1{C=3, NW=24}` under the plain context (
 min(passes, 2): the queue head's ``pc`` for the first ask of a step that forced nothing, else 0) and
 `arith_encode.ArithEncodeStep_v1{K=18, BIN=1}` against ``seg`` at the code's position; then
 `arith_encode.ArithEncodeFinish_v1`. The position after the finish is the coded length, the charge. Each step's rows
-(valid, request, kind, start, n), zero on an idle step, packed in `_out_fields`' order (`rows_bits`), are hashed under
-the salt with one SHA-512 per 128 bytes. ``pc`` moves as `replay.encode`'s ``passed`` does: after a step whose last ask was
+(valid, request, kind, start, n), zero on an idle step, packed in `_out_fields`' order (`rows_bits`), are held equal
+to ``srv``'s. ``pc`` moves as `replay.encode`'s ``passed`` does: after a step whose last ask was
 a 0 it is min(pc + 1, 2) when that was the step's one ask and nothing was forced (the head passed once more), else 1 (a
 new head passed once); otherwise it is 0 when the step took an arrival and unchanged when it took none.
 
 **The verdict** (16 bits, the unit's one output; `ACCEPT` = 0x1F): bit 0 ``load``, ReplayLoad's ok; bit 1 ``steps``,
 every ReplayAdvance's ok (with each active step's ReplayStep ok); bit 2 ``code``, every model's and coder's ok and the
-finish's, the code within SEG bits; bit 3 ``charge``, the coded length ≤ c; bit 4 ``rows``, the rows' digest is
-``pub``'s. The rest are 0.
+finish's, the code within SEG bits; bit 3 ``charge``, the coded length ≤ c; bit 4 ``rows``, the steps' rows are
+``srv``'s. The rest are 0.
 
 **The reference** is `check`, the flags the circuit's pieces' references give any unit's rows; `case` builds the rows of
 a prover's run (`scan`, with the choices REDTEAM's phase 9 found free in a piece alone: the codeword, the prefix hits
-and the heads' moves) and `check`'s verdict on them. No witness field carries a context, a frequency, a cache count or a
-consumed count: the context is the plain counter's, the frequencies KTContext_v1's outputs, and the heads move by
-ReplayStep_v1's own ``taken`` and ``used``. On corpus-smallkv's first seven steps (140,090 ANDs) a context or
-frequencies of the prover's choosing are refused by ``code`` and ``charge`` (0x13); a prefix hit, a decision read again
-and an arrival left queued by ``steps`` and ``rows`` (0x0D), the hit by the stand-in below until CacheStep_v1's derived
-hit is wired. A fabricated cache table and free returns aren't expressible on the slice: it has no table input and no
-stopping request.
+and the heads' moves) against the served rows it puts in ``srv``, and `check`'s verdict on them. No witness field
+carries a context, a frequency, a cache count or a consumed count: the context is the plain counter's, the frequencies
+KTContext_v1's outputs, and the heads move by ReplayStep_v1's own ``taken`` and ``used``. On corpus-smallkv's first
+seven steps (60,574 ANDs) a context or frequencies of the prover's choosing are refused by ``code`` and ``charge``
+(0x13); a prefix hit, a decision read again and an arrival left queued by ``steps`` and ``rows`` (0x0D), the hit by the
+stand-in below until CacheStep_v1's derived hit is wired. A fabricated cache table and free returns aren't expressible
+on the slice: it has no table input and no stopping request. REDTEAM phase 10's six passes (advice that registers six
+passes where the served window admitted user-1 at the sixth ask, a 5-bit code against the honest 8) are refused by
+``rows`` (0x0F) with the served rows in ``srv``; with its own rows there, the circuit accepts and the native b‖c check
+refuses ``srv``.
 
 **Stand-ins** (named, each a piece not ready):
 - *the cache counts*: ENC-DERIVED's hit, evictable and returned-block counts are held at 0 (ReplayStep_v1's ``hit``,
@@ -53,15 +59,15 @@ stopping request.
   codeword, whose consumed positions are the count (a symbol's scalings depend only on the interval);
 - *the still-sent fields*: ``adv`` holds only the decisions, the count and the step count;
 - *sync scheduling*: ReplayStep_v1 models no async step;
-- *the binding of ``adv`` and ``cert``*: their rows' b‖c, which the verifier checks natively against the advice
-  registration's leaf and the certified record's commitment; no gate hashes them.
+- *the binding of ``adv``, ``cert`` and ``srv``*: their rows' b‖c, which the verifier checks natively against the
+  advice registration's leaf, the certified record's commitment and the served rows' leaf; no gate hashes them. That
+  the served rows are the rows the served compute ran is the step tree's to bind (`served_rows`).
 
 **Statics**: ReplayStep_v1's (R, W, A and the engine's M, T, L, B, H, CH, WM, FULL, PC, NB, and IW), the chain's Q, D,
 P, K (`replay_chain.Shape`) and SEG, the codeword's cap in bits.
 """
 from __future__ import annotations
 
-import hashlib
 import itertools
 from dataclasses import dataclass, replace
 from functools import lru_cache
@@ -73,17 +79,15 @@ from verity.ml.circuits.boolean.forms import ONE, ZERO, Circuit, add, and_reduce
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.types import Array
-from verity.ml.commitments.gates.sha512 import IV, compress_gadget, pad_tail
 from verity.core.protocols.certifier import arith_encode as AE, replay_chain as RC, replay_step as RS
-from verity.core.protocols.certifier.head_check import BIT, _part, _words as _sha_words
+from verity.core.protocols.certifier.head_check import BIT, _part
 
 STATICS = RS.STATICS + ("Q", "D", "P", "K", "SEG")
 CW = 16
-SALT = 32
 EK, EC, ENW = AE.K_MAX, 3, 24
 FLAGS = ("load", "steps", "code", "charge", "rows")
 ACCEPT = (1 << len(FLAGS)) - 1
-ROWS = ("pub", "adv", "cert", "wit")
+ROWS = ("pub", "adv", "cert", "srv", "wit")
 ROW_FIELDS = ("row_valid", "row_id", "row_kind", "row_start", "row_n")
 WORD = 16
 
@@ -111,12 +115,12 @@ def _coder():
 def fields(S) -> dict[str, list[tuple[str, int, int]]]:
     Sc = chain(S)
     Z = RC.widths(Sc)
-    return {"pub": [("c", 1, CW), ("digest", 64, 8)],
+    return {"pub": [("c", 1, CW)],
             "adv": [("dec", S.D, 1), ("count", 1, Z.DW), ("steps", 1, Z.PW)],
             "cert": RC.arrival_fields(Sc),
+            "srv": [("rows", S.P, step_row_bits(S))],
             "wit": [("state", S.P + 1, RC.width(Sc)), ("window", 1, RC.window_width(Sc)),
-                    ("arr", S.P, RC._bits_of(RC.front_fields(Sc))), ("bits", S.P, S.A), ("seg", 1, S.SEG),
-                    ("salt", SALT, 8)]}
+                    ("arr", S.P, RC._bits_of(RC.front_fields(Sc))), ("bits", S.P, S.A), ("seg", 1, S.SEG)]}
 
 
 def row_bits(S) -> dict[str, int]:
@@ -140,11 +144,11 @@ def _consts(bits: Sequence[int]) -> list:
     return [ONE if b else ZERO for b in bits]
 
 
-def _build(C, S, pub, adv, cert, wit):
+def _build(C, S, pub, adv, cert, srv, wit):
     Sc, St = chain(S), step_statics(S)
     ZS = RS.widths(St)
     F = fields(S)
-    p, a, c, w = (RC._split(x, F[r]) for x, r in zip((pub, adv, cert, wit), ROWS))
+    p, a, c, v, w = (RC._split(x, F[r]) for x, r in zip((pub, adv, cert, srv, wit), ROWS))
     states, win = w["state"], w["window"][0]
     load_ok = RC._build_load(C, Sc, _consts(RC.encode(RC.empty(Sc), Sc)), _consts(RC.encode_window(RC.Window(), Sc)),
                              RC._flat(c, F["cert"]), [e[0] for e in a["dec"]], a["count"][0], a["steps"][0], states[0],
@@ -203,14 +207,7 @@ def _build(C, S, pub, adv, cert, wit):
     code_ok += [fin[0][0], RC._lt(C, const_bits(S.SEG, PW), count).inv()]
     charge_ok = RC._lt(C, p["c"][0], count).inv()
 
-    rows += [ZERO] * (-len(rows) % 8)
-    msg = list(w["salt"]) + [rows[k:k + 8] for k in range(0, len(rows), 8)]
-    words = _sha_words(msg + [const_bits(b, 8) for b in pad_tail(len(msg))])
-    cv = [const_bits(v, 64) for v in IV]
-    for k in range(0, len(words), 16):
-        cv = compress_gadget(C, cv, words[k:k + 16])
-    digest = [x for k in range(8) for i in range(8) for x in cv[k][8 * (7 - i):8 * (8 - i)]]
-    rows_ok = RC._eq(C, digest, [x for e in p["digest"] for x in e])
+    rows_ok = RC._eq(C, rows, [x for e in v["rows"] for x in e])
 
     flags = [load_ok, and_reduce(C, steps_ok), and_reduce(C, code_ok), charge_ok, rows_ok]
     return [flags + [ZERO] * (16 - len(flags))]
@@ -225,8 +222,8 @@ CompileSlice = _part(
     "CompileSlice", STATICS, _sig, _build,
     "a slice of the compile unit, one window whole: ReplayLoad, then per step ReplayStep_v1 and ReplayAdvance on the "
     "same arrival and decision wires, the asks coded under the plain contexts against the window's codeword, the coded "
-    "length held to the declared charge and the step rows' salted SHA-512 to the public digest (verdict bits load, "
-    "steps, code, charge, rows)")
+    "length held to the declared charge and the step rows to the committed served rows (verdict bits load, steps, "
+    "code, charge, rows)")
 CompileSlice.build = _build  # type: ignore[attr-defined]
 
 
@@ -315,15 +312,12 @@ def rows_bits(S, rows: Sequence[tuple[int, int, int, int, int]] | None) -> list[
     return out
 
 
-def _bytes(bits: Sequence[int]) -> bytes:
-    bits = list(bits) + [0] * (-len(bits) % 8)
-    return bytes(sum(bits[8 * k + j] << j for j in range(8)) for k in range(len(bits) // 8))
-
-
-def rows_digest(S, steps: Sequence, salt: bytes) -> bytes:
-    """SHA-512(salt ‖ the window's step rows), each step's `rows_bits` in turn (P steps, idle ones zero)."""
+def srv_row(S, steps: Sequence) -> list[int]:
+    """The ``srv`` row of a window's step rows: each step's `rows_bits` in turn (P steps, idle ones zero, None)."""
+    if len(steps) > S.P:
+        raise ValueError(f"a window of {len(steps)} steps is over P = {S.P}")
     bits = [b for s in list(steps) + [None] * (S.P - len(steps)) for b in rows_bits(S, s)]
-    return hashlib.sha512(bytes(salt) + _bytes(bits)).digest()
+    return bits + [0] * (row_bits(S)["srv"] - len(bits))
 
 
 def _bits(v: int, w: int) -> list[int]:
@@ -406,13 +400,14 @@ def check(S, rows: dict) -> dict[str, bool | None]:
     session's empty rows; per active step `replay_step.reference` on the witness state row with the witness arrivals and
     bits (the cache counts 0) and `advance` with that step's own taken and used, against the next witness row, and an
     idle step's row kept; the step's asks under the plain contexts (`reference_kt`) through `reference_step` against the
-    witness codeword; `reference_finish`, the count within SEG and c; SHA-512 over the salt and the active steps' rows.
+    witness codeword; `reference_finish`, the count within SEG and c; the active steps' rows against ``srv``'s.
 
     For well-formed rows (`replay_chain.decode`'s, each field in range); `MalformedRow` otherwise. A flag is None where
     a step's ReplayStep refuses and the circuit's later outputs are its own: ``steps`` is then False."""
     Sc, St = chain(S), step_statics(S)
     F = fields(S)
     p, a, w = (RC._split(rows[r], F[r]) for r in ("pub", "adv", "wit"))
+    served = RC._bits_of(F["srv"])
     states = [RC.decode(e, Sc) for e in w["state"]]
     win = RC.decode_window(w["window"][0], Sc)
     cert = RC._items(RC._unflatten(rows["cert"], RC.arrival_fields(Sc))[0], "a", ("id", "P", "O"))
@@ -447,9 +442,8 @@ def check(S, rows: dict) -> dict[str, bool | None]:
         out_rows.append(out.rows)
     ok, m = AE.reference_finish(coder, (seg[pos:pos + 2] + [0, 0])[:2])
     length = pos + m
-    salt = bytes(_int(e) for e in w["salt"])
     flags.update(steps=steps_ok, code=code_ok and bool(ok) and length <= S.SEG, charge=length <= _int(p["c"][0]),
-                 rows=rows_digest(S, out_rows, salt) == bytes(_int(e) for e in p["digest"]))
+                 rows=srv_row(S, out_rows)[:served] == [int(b) for b in rows["srv"][:served]])
     return flags
 
 
@@ -460,34 +454,39 @@ def verdict(flags: dict[str, bool | None]) -> int | None:
     return sum(int(flags[f]) << k for k, f in enumerate(FLAGS))
 
 
-def case(S, sl: Slice, salt: bytes, *, digest: bytes | None = None, charge: int | None = None,
+def pub(S, charge: int) -> list[int]:
+    """The verifier's own ``pub`` row (u16 words): the declared charge."""
+    return words(_pack(S, "pub", {"c": [charge]}))
+
+
+def case(S, sl: Slice, *, served: Sequence | None = None, charge: int | None = None,
          window: Sequence[int] | None = None, cert: Sequence[RC.Arrival] | None = None,
          hits: dict[int, Sequence[int]] | None = None, consume: dict[int, tuple[int, int]] | None = None,
          seg: Sequence[int] | None = None) -> Case:
     """A unit's rows for the prover's run of `sl` (`scan`'s, with `window`, `cert`, `hits` and `consume`) and `check`'s
-    verdict on them. `digest` and `charge` are ``pub``'s (default the run's own: its rows' digest under `salt` and its
-    coded length); `seg` is the codeword it puts in ``wit`` (default its symbols' `codeword`). ``length`` is the
-    codeword's."""
+    verdict on them. `served` is the window's step rows it puts in ``srv`` (default the run's own) and `charge`
+    ``pub``'s (default its coded length); `seg` is the codeword it puts in ``wit`` (default its symbols' `codeword`).
+    ``length`` is the codeword's."""
     Sc = chain(S)
     Z = RC.widths(Sc)
     sc = scan(S, sl, window, cert, hits=hits, consume=consume)
     seg = list(codeword(sc.symbols) if seg is None else seg)
     length = len(seg)
-    digest = rows_digest(S, sc.steps, salt) if digest is None else bytes(digest)
     charge = length if charge is None else charge
     if length > S.SEG:
         seg = seg[:S.SEG]
     width = row_bits(S)
-    rows = {"pub": _pack(S, "pub", {"c": [charge], "digest": list(digest)}),
+    rows = {"pub": _pack(S, "pub", {"c": [charge]}),
             "adv": _pack(S, "adv", {"dec": list(sl.decisions) + [0] * (S.D - len(sl.decisions)),
-                                    "count": [len(sl.decisions)], "steps": [sl.steps]})}
+                                    "count": [len(sl.decisions)], "steps": [sl.steps]}),
+            "srv": srv_row(S, sc.steps if served is None else served)}
     cert_bits = RC.load_arguments(Sc, RC.empty(Sc), RC.Window(), sc.arrivals, sl.decisions, len(sl.decisions), sl.steps,
                                   RC.encode(sc.states[0], Sc), RC.encode_window(sc.window, Sc))[2]
     rows["cert"] = cert_bits + [0] * (width["cert"] - len(cert_bits))
     wit = [b for st in sc.states for b in RC.encode(st, Sc)] + list(RC.encode_window(sc.window, Sc))
     wit += [b for arr, _b in sc.fronts for b in RC.front_bits(Sc, arr)]
     wit += [b for _a, bits in sc.fronts for b in bits]
-    wit += seg + [0] * (S.SEG - len(seg)) + [b for x in salt for b in _bits(x, 8)]
+    wit += seg + [0] * (S.SEG - len(seg))
     rows["wit"] = wit + [0] * (width["wit"] - len(wit))
     assert Z.DW and all(len(rows[r]) == width[r] for r in ROWS)
     flags = check(S, rows)
@@ -503,8 +502,8 @@ def phase9(S, sl: Slice) -> dict[str, dict]:
     ``context``, each decision coded at the context that makes the codeword shortest, the charge that length;
     ``frequency``, each decision coded as near certain (2^16 − 1 to 1), the charge that length; ``hit``, the first
     step's first candidate takes a 2-block prefix hit; ``reread``, step 2 leaves the decision head in place, so step 3
-    reads its decision again; ``untaken``, step 0 leaves the arrival head in place. ``pub``'s digest is the caller's
-    (the clear recompile's); in the first two the run's step rows are the honest ones too."""
+    reads its decision again; ``untaken``, step 0 leaves the arrival head in place. ``srv``'s rows are the caller's
+    (the served ones); in the first two the run's step rows are the honest ones too."""
 
     def coded(ctxs):
         n, syms = ((0, 0),) * EC, []

@@ -11,18 +11,22 @@ path (`n2_zk.py`: its stager, firewall and received-pieces scan).
   decision 5 flipped in its window row (the advice row stays the registered one); unit 2 declares the charge one below
   the coded length; unit 3 has arrival 1's prompt one token longer in its ``cert`` row (an arrival not in the certified
   record); units 4 to 8 are REDTEAM's phase 9 choices (`compile_slice.phase9`: a context, frequencies, a prefix hit, a
-  decision read again, an arrival left in the queue); the rest are honest, enough of them that the statement fits
-  `--zk`'s shape (`stage`). Every ``pub`` digest is the clear recompile's: the replay's rows (the fixture's) under the
-  unit's digest salt.
+  decision read again, an arrival left in the queue); units 9 and 10 are REDTEAM phase 10's six passes (advice of six
+  passes where the served window admitted user-1 at the sixth ask, the charge its 5-bit code), with the served rows in
+  ``srv`` and with its own; the rest are honest, enough of them that the statement fits `--zk`'s shape (`stage`).
+* **The served rows** (`served_rows`): the Commit side registers each unit's window, the replay's rows (the fixture's),
+  under the run root (a stand-in: the partition's digest) before the draw. Every unit's ``srv`` row is its window's,
+  but unit 10's, which is its own run's.
 * **The bindings**, checked natively by the verifier on the row commitments b‖c the public file holds: each unit's
   ``adv`` row is row i of the advice's hiding registration (`verity.ml.commitments.advice`: its leaf from b‖c, its path
-  to the registered root), and its ``cert`` row is the certified record's commitment (a stand-in: one ``cert`` row under
-  the certifier's salt, b‖c as `a7.opens` recomputes it).
-* **The verifier** opens each unit's ``pub`` row to its own copy (the charge and the digest) and its verdict ``o0``,
-  under the salts the prover sends for those two rows; never ``adv``, ``cert`` or ``wit``. A unit passes when its
-  verdict is `compile_slice.ACCEPT` and its bindings hold. What the verifier received is scanned for every piece of each
-  unit's witness row, every row's salt and the digest's salt (`a8.received`), less the pieces the public circuit holds;
-  the prover's instance file, which holds the witness rows, is the control.
+  to the registered root), its ``srv`` row is row i of the served rows' registration (`served_rows.leaf_ok`), and its
+  ``cert`` row is the certified record's commitment (a stand-in: one ``cert`` row under the certifier's salt, b‖c as
+  `a7.opens` recomputes it).
+* **The verifier** opens each unit's ``pub`` row to its own copy (the declared charge, `compile_slice.pub`) and its
+  verdict ``o0``, under the salts the prover sends for those two rows; never ``adv``, ``cert``, ``srv`` or ``wit``. A
+  unit passes when its verdict is `compile_slice.ACCEPT` and its bindings hold. What the verifier received is scanned
+  for every piece of each unit's witness row, its ``srv`` row and every row's salt (`a8.received`), less the pieces the
+  public circuit holds; the prover's instance file, which holds those rows, is the control.
 * **Cost** (``--points``): sessions whose verifier draws the first k units, behind the firewall (`a8.cost`).
 """
 from __future__ import annotations
@@ -42,16 +46,16 @@ sys.path.insert(0, str(HERE))
 
 import n2_zk as N2  # noqa: E402
 from verity.core.protocols.certifier import compile_slice as CS  # noqa: E402
-from verity.core.protocols.certifier import replay_chain as RC  # noqa: E402
+from verity.core.protocols.certifier import served_rows as SR  # noqa: E402
 from verity.ml.commitments import advice as ADV  # noqa: E402
 from verity.ml.commitments.frame_v3 import BitRowLeaf  # noqa: E402
 from verity.ml.commitments.rowleaf import bit_row, row_leaf  # noqa: E402
 
 FIXTURE = REPO / "verity/core/protocols/certifier/tests/fixtures/compile_slice_smallkv.json"
-KINDS = ("honest", "flip", "charge", "arrival") + CS.PHASE9
+KINDS = ("honest", "flip", "charge", "arrival") + CS.PHASE9 + ("sixpass", "sixpass-own")
 REFUSED = {"honest": set(), "flip": {"load", "steps", "rows"}, "charge": {"charge"}, "arrival": {"rows"},
            "context": {"code", "charge"}, "frequency": {"code", "charge"}, "hit": {"steps", "rows"},
-           "reread": {"steps", "rows"}, "untaken": {"steps", "rows"}}
+           "reread": {"steps", "rows"}, "untaken": {"steps", "rows"}, "sixpass": {"rows"}, "sixpass-own": set()}
 OPENED = ("o0", "pub")
 
 
@@ -118,26 +122,30 @@ def corpus_check(x: SimpleNamespace) -> None:
         raise SystemExit("the fixture isn't corpus-smallkv's first steps")
 
 
-def cases(x: SimpleNamespace, n: int, secret: bytes) -> list[SimpleNamespace]:
-    """The statement's n units (the module's docstring): kind, the unit's rows and the reference's verdict."""
+def cases(x: SimpleNamespace, n: int) -> list[SimpleNamespace]:
+    """The statement's n units (the module's docstring): kind, the unit's rows, its declared charge and the reference's
+    verdict."""
     out, red = [], CS.phase9(x.S, x.sl)
+    six = CS.Slice(x.sl.arrivals, (0,) * 6, x.sl.steps)
     for i in range(n):
         kind = KINDS[i] if i < len(KINDS) else "honest"
-        salt = hashlib.sha512(secret + b"digest salt" + i.to_bytes(4, "big")).digest()[:CS.SALT]
-        digest = CS.rows_digest(x.S, x.rows, salt)
-        kw = dict(red.get(kind, {}))
+        kw = {"served": x.rows, **red.get(kind, {})}
+        sl = six if kind.startswith("sixpass") else x.sl
         if kind == "flip":
             flip = list(x.sl.decisions)
             flip[5] ^= 1
             kw["window"] = flip
         elif kind == "charge":
-            kw["charge"] = CS.case(x.S, x.sl, salt).length - 1
+            kw["charge"] = CS.case(x.S, x.sl).length - 1
         elif kind == "arrival":
             cert = list(x.sl.arrivals)
             cert[1] = (cert[1][0], cert[1][1] + 1, cert[1][2])
             kw["cert"] = cert
-        c = CS.case(x.S, x.sl, salt, digest=digest, **kw)
-        out.append(SimpleNamespace(kind=kind, case=c, salt=salt, words={r: CS.words(c.rows[r]) for r in CS.ROWS}))
+        elif kind == "sixpass-own":
+            kw["served"] = None
+        c = CS.case(x.S, sl, **kw)
+        out.append(SimpleNamespace(kind=kind, case=c, charge=kw.get("charge", c.length),
+                                   words={r: CS.words(c.rows[r]) for r in CS.ROWS}))
     return out
 
 
@@ -158,8 +166,8 @@ def stager(M, x: SimpleNamespace, n: int, out: Path) -> SimpleNamespace:
     st.pin
     (tid, base, cnt), = M.P.ranges(program, query)
     assert tid == M.P.template_id(defn) and cnt == n
-    return SimpleNamespace(defn=defn, rows=rows, program=program, query=query, n=n, base=base, st=st, out=out, part=part,
-                           lower_s=round(time.time() - t, 1), partition_file=out / "partition.json",
+    return SimpleNamespace(S=x.S, defn=defn, rows=rows, program=program, query=query, n=n, base=base, st=st, out=out,
+                           part=part, lower_s=round(time.time() - t, 1), partition_file=out / "partition.json",
                            program_file=out / "program.json")
 
 
@@ -207,7 +215,8 @@ def stage(M, sg: SimpleNamespace, units: list[SimpleNamespace], salt_key: bytes,
 def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Path, port: int) -> dict:
     """The statement registered, every unit drawn by the verifier's Lean, proved --zk behind the firewall and held by
     Lean; then the verifier's side per unit: ``pub`` opened to its own copy, the verdict read, the bindings checked on
-    b‖c (`advice_leaf_ok`, `certified`). Writes what the verifier received under ``out / "verifier"``."""
+    b‖c (`advice_leaf_ok`, `served_rows.leaf_ok`, `certified`). Writes what the verifier received under
+    ``out / "verifier"``."""
     a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V
     out.mkdir(parents=True, exist_ok=True)
     n, name = m["n"], m["name"]
@@ -257,15 +266,18 @@ def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Pat
     port_ = {x.name: x for x in m["ports"]}
     bcs = a7.public_bcs(m["dir"] / f"pub-{n}.bin", m["ports"])
     rows, sent = [], []
+    served, record = binds["served"], binds["served"].record()
     for i, u in enumerate(units):
         word = m["oks"][i]
-        opened = ((m["base"] + i) in held and a7.opens(port_["pub"], u.words["pub"], m["salts"]["pub"][i], bcs[i]["pub"])
+        opened = ((m["base"] + i) in held and a7.opens(port_["pub"], CS.pub(sg.S, u.charge), m["salts"]["pub"][i], bcs[i]["pub"])
                   and a7.opens(port_["o0"], [word], m["salts"]["o0"][i], bcs[i]["o0"]))
         adv_ok = advice_leaf_ok(binds["advice"], binds["binding"], n, i, bcs[i]["adv"], binds["n_bits"])
+        srv_ok = SR.leaf_ok(record, binds["run_root"], i, bcs[i]["srv"], served.registration.open(i).path)
         cert_ok = bcs[i]["cert"] == binds["certified"]
-        verdict = ("malformed" if not opened else "accept" if word == CS.ACCEPT and adv_ok and cert_ok else "reject")
+        bound = adv_ok and srv_ok and cert_ok
+        verdict = ("malformed" if not opened else "accept" if word == CS.ACCEPT and bound else "reject")
         rows.append({"unit": m["base"] + i, "kind": u.kind, "verdict_word": word, "flags": u.case.flags, "adv_bound": adv_ok,
-                     "cert_bound": cert_ok, "verdict": verdict})
+                     "srv_bound": srv_ok, "cert_bound": cert_ok, "verdict": verdict})
         sent.append({"unit": m["base"] + i, "verdict": word, **{f"salt/{r}": m["salts"][r][i].hex() for r in OPENED}})
 
     vdir = out / "verifier"
@@ -277,10 +289,11 @@ def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Pat
         if f.is_file():
             os.link(f, vdir / f"session-{f.parent.name}-{f.name}")
     (vdir / "openings.json").write_text(json.dumps(sent, indent=1))
-    (vdir / "bindings.json").write_text(json.dumps({"advice_root": binds["advice"].root.hex(),
-                                                    "certified": binds["certified"].hex(),
-                                                    "paths": [[s.hex() for s in binds["advice"].open(i).path] for i in range(n)]},
-                                                   indent=1))
+    (vdir / "bindings.json").write_text(json.dumps({
+        "advice_root": binds["advice"].root.hex(), "certified": binds["certified"].hex(),
+        "paths": [[s.hex() for s in binds["advice"].open(i).path] for i in range(n)],
+        "served": record, "run_root": binds["run_root"].hex(),
+        "served_paths": [[s.hex() for s in served.registration.open(i).path] for i in range(n)]}, indent=1))
     proofs = (live or {}).get("proof_bytes") or []
     return {**res, "accepted": bool(result.get("accepted")), "units": rows,
             "audit": {k: result.get(k) for k in ("accepted", "complete", "wrong_units")},
@@ -293,14 +306,14 @@ def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Pat
 
 
 def blobs_of(units: list[SimpleNamespace], salts: dict) -> tuple[dict[str, bytes], set[str]]:
-    """The witness pieces the verifier must not receive: each unit's ``wit`` row as the instance file holds it (u16
-    little-endian), its ``adv``, ``cert`` and ``wit`` salts and its digest salt; the rows are what the control holds."""
+    """The witness pieces the verifier must not receive: each unit's ``wit`` and ``srv`` rows as the instance file holds
+    them (u16 little-endian) and its ``adv``, ``cert``, ``srv`` and ``wit`` salts; the rows are what the control holds."""
     blobs, held = {}, set()
     for i, u in enumerate(units):
-        blobs[f"wit {i}"] = b"".join(w.to_bytes(2, "little") for w in u.words["wit"])
-        held.add(f"wit {i}")
-        blobs[f"digest salt {i}"] = u.salt
-        for r in ("adv", "cert", "wit"):
+        for r in ("wit", "srv"):
+            blobs[f"{r} {i}"] = b"".join(w.to_bytes(2, "little") for w in u.words[r])
+            held.add(f"{r} {i}")
+        for r in ("adv", "cert", "srv", "wit"):
             blobs[f"{r} salt {i}"] = salts[r][i]
     return blobs, held
 
@@ -316,7 +329,7 @@ def prove(a) -> int:
     summary: dict = {"statics": x.st, "size": CS.size(**x.st), "slice": x.fx}
     secret = os.urandom(32)
     if a.dry:
-        units = cases(x, len(KINDS), secret)
+        units = cases(x, len(KINDS))
         summary["reference"] = [{"kind": u.kind, "verdict": u.case.verdict, "flags": u.case.flags} for u in units]
         log(f"dry: {summary['reference']}")
         Path(a.out).mkdir(parents=True, exist_ok=True)
@@ -332,20 +345,22 @@ def prove(a) -> int:
     sg = stager(M, x, n, out / "stager")
     summary["stager"] = {"lower_s": sg.lower_s, "k_log": sg.st.meta["k_log"], "vus_per_block": sg.st.meta["vus_per_block"],
                          "pin": sg.st.pin, "rows": {r: b for r, _s, b, _p in sg.rows}, "n": n}
-    units = cases(x, n, secret)
+    units = cases(x, n)
     for u in units:
         if not expected(u.kind, u.case.flags):
             raise SystemExit(f"{u.kind}: the reference's flags {u.case.flags} are not the kind's")
     salt_key = hashlib.sha512(secret + b"row salts").digest()[:32]
     SB = M.CS.FC.SALT_BYTES
     cert_salt = os.urandom(SB)
-    salts = {"adv": [os.urandom(SB) for _ in range(n)], "cert": [cert_salt] * n}
+    salts = {"adv": [os.urandom(SB) for _ in range(n)], "cert": [cert_salt] * n, "srv": [os.urandom(SB) for _ in range(n)]}
     port_ = {p.name: p for p in sg.st.ports}
     honest = units[0].words
     n_bits = 16 * len(honest["adv"])
     binding = bytes.fromhex(M.P.digest(sg.part))
     reg = ADV.register([bit_row((u.words["adv"], 16))[0] for u in units], n_bits, binding, salts["adv"])
-    binds = {"advice": reg, "binding": binding, "n_bits": n_bits, "certified": certified(M, port_["cert"], honest["cert"], cert_salt)}
+    served = SR.register(x.S, [x.rows] * n, binding, salts=salts["srv"])
+    binds = {"advice": reg, "binding": binding, "n_bits": n_bits, "served": served, "run_root": binding,
+             "certified": certified(M, port_["cert"], honest["cert"], cert_salt)}
     m = stage(M, sg, units, salt_key, salts)
     refs = [u.case.verdict for u in units]
     if m["oks"] != refs:
@@ -354,10 +369,14 @@ def prove(a) -> int:
     same = all(bcs[i]["adv"] == ADV.INST.commit_string(ADV.INST.default_key,
                                                        BitRowLeaf(n_bits).layout().digest(bit_row((u.words["adv"], 16))[0]),
                                                        salts["adv"][i]) for i, u in enumerate(units))
+    srv_same = [bcs[i]["srv"] == served.bc(i) for i in range(n)]
+    srv_want = [u.kind != "sixpass-own" for u in units]
     summary["staged"] = {"n": n, "ands": m["ands"], "unit_nnz": m["unit_nnz"], "stage_s": m["stage_s"], "k_log": m["meta"]["k_log"],
-                         "pin": m["pin"], "verdict_words": m["oks"], "adv_bc_is_the_advice_leafs": same}
+                         "pin": m["pin"], "verdict_words": m["oks"], "adv_bc_is_the_advice_leafs": same,
+                         "srv_bc_is_the_served_leafs": srv_same}
     log(f"staged: {n} units, {m['ands']} ANDs a unit, k_log {m['meta']['k_log']}, verdicts {m['oks'][:len(KINDS)]}..., "
-        f"adv b‖c is advice's: {same}, {m['stage_s']} s")
+        f"adv b‖c is advice's: {same}, srv b‖c is the served rows' but sixpass-own's: {srv_same == srv_want}, {m['stage_s']} s")
+    same &= srv_same == srv_want
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
 
     av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta, points=a.points, arms=["fw"], cold=1)
@@ -369,8 +388,9 @@ def prove(a) -> int:
     want = ["accept" if u.kind == "honest" else "reject" for u in units]
     got = [r["verdict"] for r in res.get("units", [])]
     ok = (res["accepted"] and all(res["verdicts"].values()) and got == want and same
+          and [r["srv_bound"] for r in res.get("units", [])] == srv_want
           and not res["received"]["verifier_found"] and res["received"]["control"]["holds_all"])
-    log(f"proofs {res['verdicts']}, audit {res['audit']}, first units {[(r['kind'], hex(r['verdict_word']), r['adv_bound'], r['cert_bound'], r['verdict']) for r in res.get('units', [])[:len(KINDS)]]}, "
+    log(f"proofs {res['verdicts']}, audit {res['audit']}, first units {[(r['kind'], hex(r['verdict_word']), r['adv_bound'], r['srv_bound'], r['cert_bound'], r['verdict']) for r in res.get('units', [])[:len(KINDS)]]}, "
         f"per unit {res['per_unit']}, verifier received {res['received']['verifier_bytes']} bytes, witness pieces found "
         f"there: {res['received']['verifier_found'] or 'none'} (of {len(blobs)}), control {res['received']['control']['blobs_found']}; "
         f"{'as expected' if ok else 'UNEXPECTED'}")

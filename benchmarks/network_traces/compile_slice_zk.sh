@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # The compile slice in zero knowledge (compile_slice_zk.py) on a CPU machine, on hidden_zk's builds (its job.sh, sourced:
 # C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean frame and the sampled-proofs verifier built
-# in the tree. From a clone:
-#   research run --on vy-nebius-3 --pool research --source . --project verity --as LANE --cwd clone --cpus 32 --mem-gb 96 \
-#     --env CS_MEM_GB=96 -- bash benchmarks/network_traces/compile_slice_zk.sh
+# in the tree. From a clone, in one of the network pool's pinned slots:
+#   research run --on vy-nebius-cpu-1 --source . --project verity --as LANE --cwd clone --mem-gb 64 --timeout 180m \
+#     --env CS_MEM_GB=64 -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \
+#     --by LANE -- bash benchmarks/network_traces/compile_slice_zk.sh
 # env: CS_MEM_GB (what job.sh's stages may take, within the slot's)  CS_POINTS (compile_slice_zk.py's --points, 1 by
 #      default)  CS_CACHE (the build cache, kept across runs where writable; default pouw-hidden-zk's)  CS_DRY=1 (the
 #      slice and its references only)
