@@ -163,6 +163,15 @@ same way, allowing only `config.point_identity`.
 
 ## Dispatch and resume
 
+`verity-bench run` queues each missing point, as below. `verity-bench run SPEC --direct NODE` launches each missing point
+on NODE itself instead, for a node whose launcher takes a run only through a slot: vy-nebius-2 has refused every queued GPU
+point since about 11:50Z on 24 Oct (INF-217 tracks the queue-side fix). Each point is `research run --on NODE` with the queued point's tool, identity and environment, so `plan` and `check`
+find it the same way, and its command takes one of the node's GPU slots (`/workspace/research/locks/gpu/slots`, one per GPU)
+through `tools/verity/check/slot.py`, then its GPUs from the node's `gpu-lease`, preemptible. The spec's admission
+`max_minutes` bounds the run, its slot and its lease, so `--direct` refuses a spec without it, and it refuses any node but the
+GPU nodes in `verity_bench.jobs.DIRECT_NODES` (vy-nebius-1, -2 and -3). A preempted direct point is a failed run, which the
+next `run --direct` launches again. Use the queue otherwise: it places each point on whichever node has a free GPU.
+
 `verity-bench run` launches each missing point as one queued, preemptible job of the kind registered for the spec's GPU
 count in `infra/cluster/kinds/benchmarks.toml` (`vllm-bench-1gpu`, `vllm-bench-8gpu`). The job runs
 `benchmarks/harness/run_point.sh`, which uses the node's pinned-vLLM environment (`benchmarks/harness/env.sh`, which a
@@ -178,15 +187,6 @@ the attempts this store lacks among those started since a day before the commit'
 can't start before its commit exists, and a run id begins with its UTC start), so a fresh machine finds the points
 other machines ran. Without a usable remote it refuses rather than report them missing; `--local-only` reads the
 catalog alone.
-
-`verity-bench run SPEC --direct NODE` launches each missing point on NODE itself, for a node whose launcher takes a run only
-through a slot: vy-nebius-2 has refused every queued GPU point since about 11:50Z on 24 Oct (INF-217 tracks the queue-side
-fix). Each point is `research run --on NODE` with the queued point's tool, identity and environment, so `plan` and `check`
-find it the same way, and its command takes one of the node's GPU slots (`/workspace/research/locks/gpu/slots`, one per GPU)
-through `tools/verity/check/slot.py`, then its GPUs from the node's `gpu-lease`, preemptible. The spec's admission
-`max_minutes` bounds the run, its slot and its lease, so `--direct` refuses a spec without it, and it refuses any node but the
-GPU nodes in `verity_bench.jobs.DIRECT_NODES` (vy-nebius-1, -2 and -3). A preempted direct point is a failed run, which the
-next `run --direct` launches again. Use the queue otherwise: it places each point on whichever node has a free GPU.
 
 ## Out of scope here
 
