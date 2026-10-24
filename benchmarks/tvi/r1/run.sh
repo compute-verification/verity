@@ -7,6 +7,8 @@ S=$(mktemp -d /tmp/r1.XXXXXX)
 trap 'rm -rf "$S"' EXIT
 trap 'exit 143' TERM INT
 cp "$IN"/es.py "$IN"/newskill.py "$S"/
+# an eval arm's state.pt and log.json, sent beside es.py under distinct names, are read relative to the scratch dir
+find "$IN" -maxdepth 1 \( -name '*.pt' -o -name '*.json' \) -exec cp {} "$S"/ \;
 cd "$S"
 V=/workspace/jobs/tvi/venv-r1
 PY=$V/bin/python
