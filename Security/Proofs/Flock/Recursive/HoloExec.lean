@@ -144,12 +144,14 @@ names `stacked` under its `program`, and the entry's five structural fields are 
 rows under (`registrant-holds-openings`: they hold them, and the guarantee is applied at the held salts); no choice is
 hidden in this relation.
 
-Assumption record. Claim: `registrant-holds-openings`. Its first two conjuncts are checks the verifier makes on its own
-inputs: where it holds the inner transcript, R's stream's first top makes the registered `stacked` entry
-(`FlockC3.RegLevels.stackedTop_of_innerCommits` derives them). What it assumes is `TopOf`: `cap` and `salt` are a tree
-and salts whose commit strings are `bcs`. Those are the prover's workers' own tree and salts, behind the firewall, which
-they hold. That is reasonable because an honest registrant committed exactly those rows. A prover that registers
-strings it can't open is outside the guarantee. No hash premise. -/
+Assumption record. Claim: `registrant-holds-openings`. It assumes that the registrant holds the commit strings `bcs`
+it registered. The registered `stacked` entry is the one computed from `bcs` (the first two conjuncts), and `cap` and
+`salt` are a tree and salts whose commit strings are `bcs` (`TopOf`). Those are the prover's workers' own tree and
+salts, behind the firewall. That is reasonable because an honest registrant registers the entry of the rows it
+committed and holds them. A prover that registers strings it can't open is outside the guarantee. The first two
+conjuncts are the verifier's checks only at a transcript's own top (`FlockC3.RegLevels.stackedTop_of_innerCommits`).
+At the held `bcs` they are part of the premise: `TopColl.collision` reads them to turn a held top other than `bcs` into
+a SHA-512 collision, so the premise doesn't narrow to `TopOf`. No hash premise. -/
 def StackedTopAt (lv : Level) (st : Flock.Stmt) (reg : Lean.Json) (cap : Cap Refine.Dig) (salt : ℕ → ByteArray)
     (bcs : Array ByteArray) : Prop :=
   ∃ (prog : String) (e : Lean.Json),
