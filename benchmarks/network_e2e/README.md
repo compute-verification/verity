@@ -46,10 +46,12 @@ GPU) instead of `--from`. Every option `e2e.py` doesn't take goes to `certifier_
 
 **G-A's live report of record: r20261024-201847-5246.** It is OK with nothing pending, and every row is from vllm's
 live Llama-3.2-1B serving run r20261024-191722-ddad, driven while it served: the live run r20261024-192612-4460
-(honest, late, extra, drop and token, `--probes 40`, against vy-nebius-1:18084 through the nodes' ssh forward). It
-re-makes 4460's report from 4460's outputs on 4460's tree with this PR merged (42bd54226a), its prove path the
-`--serve-run` audits of two of the honest run's own Commit windows. r20261024-205806-6408 rebuilt it from the same
-records at `next` (250fa54c2b), and every verdict is 5246's.
+(honest, late, extra, drop and token, `--probes 40`, on vy-nebius-cpu-1's network slot n3, against vy-nebius-1:18084
+through the nodes' ssh forward). It re-makes 4460's report from 4460's outputs on 4460's tree with this PR merged
+(42bd54226a), its prove path the `--serve-run` audits of two of the honest run's own Commit windows.
+r20261024-205806-6408 rebuilt it from the same records at `next` (250fa54c2b), and every verdict is 5246's. N2's
+advised verifier refuses this run's honest traffic: vLLM admitted two prefill pairs out of certified release order
+(VLLM-89); a release-order rerun follows. 5246 lists N2's verdicts as not run, so its OK claims nothing about them.
 
 - e2e: honest accepted (40 requests, 597 tokens, 38 ending at max_tokens and 2 at EOS); late, extra, drop and token
   refused by their own codes. The advice is ddad's Commit windows w37-w66: 30 windows, 40 requests, 528 steps, every
