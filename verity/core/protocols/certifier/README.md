@@ -83,7 +83,8 @@ A spec-level reference for network accounting's timing channel:
   (63,031 ANDs at T = 600, R_in = 1), which holds the egress head's counts to the releases of the prover's advice
   (`LinkAdvice`: I1's `advice.Advice` and each window's request frames), and the ingress head's counts to the advice:
   each release eligible under its window's declared sync, one of Σ_sync and the one the certifier ran the window
-  under (the verifier's own clock source, `LinkWindows.clocks`), so never before the bucket of its request's last
+  under (the verifier's own clock source, `LinkWindows.clock_source`: the certifier's clock certificates,
+  `certificate.ClockCertificate`), so never before the bucket of its request's last
   frame (the request's end on the ingress link, which `advised.ends` derives from v0's prompt lengths and the link's
   public framing), and each window's ingress total the advice's. Carry-over between windows is the advice's. With the
   advice fixed the counts are determined, so the egress timing carries at most `advice.bits` (`PROTOCOL.md`, "An

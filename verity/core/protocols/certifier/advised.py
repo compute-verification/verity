@@ -34,7 +34,8 @@ ingress certifier's own frames a window (1 with its salt on, else 0), as `served
   VARLEN's id requests, whose frames are a function of the prompt's length alone), fixed before the run;
 - each window's declared sync, one of Σ_sync, which the certified egress head's parameters digest binds, and the sync
   the network certifier ran that window under (`clocks`), which the declared one must be: the verifier takes it only
-  from its own clock source (`ClockSource`, `service.LinkWindows.clocks`), never from the prover's declaration.
+  from its own clock source (`ClockSource`, `service.LinkWindows.clock_source`: `SignedClocks`, the certifier's clock
+  certificates), never from the prover's declaration.
 
 **The ingress ends** (`ends`) are derived, not advised: advice request j is the link's j-th request, and its prompt
 length is the certified prompt's, both of which the tie holds (`ends` refuses a link without IoTieRequest's accepted
@@ -92,10 +93,11 @@ is no such source: every advised link is refused (PROTOCOL.md, fail closed). The
 a δ below the one the window's traffic was certified under loosens the floor (REDTEAM phase 11: δ = 0 declared for a
 window the certifier ran at δ = 1 accepted an output in its request's own bucket), so `view` refuses a window whose
 declared sync isn't the one the certifier ran it under, which the verifier takes only from its own clock source
-(`ClockSource`, `service.LinkWindows.clocks`: the certifier's report of the syncs its shaper ran), never from the
-prover; until the certifier reports them to the verifier there is no such source, and every advised link is refused.
-Neither head signs the prompt lengths or the sync a window ran, so the unit itself holds neither to the record, only
-the verifier's tie and clock sources do: PROTOCOL.md's named gap, with its design.
+(`ClockSource`, `service.LinkWindows.clock_source`), never from the prover: `SignedClocks`, the sync the certifier
+signed for each egress window beside its record (`certificate.ClockCertificate`), checked under the verifier's own
+certifier key and session; without one every advised link is refused. The sync is public, so the verifier holds the
+declared one to the signed one in the clear. Neither head signs the prompt lengths, so the unit itself doesn't hold
+them to the record, only the verifier's tie source does: PROTOCOL.md's named gap, with its design.
 
 **Bucket 0** is capped at RIN, which holds the own frame: the ingress certifier releases min(queue, r_in) frames a
 bucket (`grid.Certifier`), its own frame queued ahead of bucket 0's arrivals (`active.Bucketer`), and a head whose
@@ -138,6 +140,7 @@ from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bi
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.types import Array, Tuple
 from verity.core.protocols.certifier.advice import Advice, MalformedAdvice, encode, outputs
+from verity.core.protocols.certifier.certificate import ClockCertificate, PublicKey
 from verity.core.protocols.certifier.head_check import (BIT, BYTE, _coll, _Consts, _part, _refs, ands, gate_of,
                                                         pinned_digest)
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
@@ -231,12 +234,39 @@ class TieSource(Protocol):
 
 class ClockSource(Protocol):
     """The verifier's own record of the sync each of a link's windows was certified under
-    (`service.LinkWindows.clocks`), never the prover's declaration: `syncs(link)`, window by window, the sync the
-    network certifier, the auditor's device, ran it under (its shaper's, `active.Shaper.syncs`), as the certifier
-    reports it. `view` refuses a window that declares another. Nothing in this package is one until the certifier
-    reports its syncs to the verifier, so every advised link is refused (PROTOCOL.md, fail closed)."""
+    (`service.LinkWindows.clock_source`), never the prover's declaration: `syncs(link)`, window by window, the sync the
+    network certifier, the auditor's device, ran it under (its shaper's, `active.Shaper.syncs`). `view` refuses a
+    window that declares another. The verifier of record's is `SignedClocks`, the certifier's signed syncs."""
 
     def syncs(self, link: str) -> Sequence[ClockSync]: ...
+
+
+@dataclass(frozen=True)
+class SignedClocks:
+    """The verifier of record's clock source (`ClockSource`): the syncs the network certifier signed, one clock
+    certificate an egress window (`certificate.ClockCertificate`, `certificate.Issuer.clock`), each held to the
+    verifier's own certifier `key` and `session`. `syncs(link)` is window 0's on, each the sync of the certificates that
+    name `link`, egress and the window and verify (`ClockCertificate.verify`), up to the first window without exactly
+    one such sync: a window unsigned, signed under another key, session, link, window or direction, or whose sync
+    isn't the one its certificate signs, has none, which refuses it and every window after. Whoever delivers the
+    certificates, the prover included, can't forge one."""
+
+    key: PublicKey
+    session: bytes
+    certificates: Sequence[ClockCertificate]
+
+    def __post_init__(self) -> None:
+        signed: dict[str, dict[int, set[ClockSync]]] = {}
+        for c in self.certificates:
+            if type(c) is ClockCertificate and c.verify(self.key, self.session):
+                signed.setdefault(c.link, {}).setdefault(c.window, set()).add(c.sync)
+        object.__setattr__(self, "_signed", signed)
+
+    def syncs(self, link: str) -> tuple[ClockSync, ...]:
+        windows, out = self._signed.get(link, {}), []
+        while len(got := windows.get(len(out), ())) == 1:
+            out.extend(got)
+        return tuple(out)
 
 
 @dataclass(frozen=True)
@@ -531,5 +561,6 @@ def size(T: int, RIN: int, OWN: int) -> int:
     return ands(unit(T, RIN, OWN))
 
 
-__all__ = ["AdvisedProfile", "ClockSource", "IoTieVerdict", "LinkAdvice", "NetworkAdvisedCounts", "PINS", "TieSource",
-           "WindowView", "arguments", "digest", "ends", "evaluate", "gate", "reference", "size", "unit", "view"]
+__all__ = ["AdvisedProfile", "ClockSource", "IoTieVerdict", "LinkAdvice", "NetworkAdvisedCounts", "PINS",
+           "SignedClocks", "TieSource", "WindowView", "arguments", "digest", "ends", "evaluate", "gate", "reference",
+           "size", "unit", "view"]

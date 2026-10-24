@@ -410,7 +410,8 @@ requests, whose frames are a function of the prompt's length alone), for every p
     reused;
   - the framing, and each window's declared sync, which must be one of Σ_sync, the set the certified egress head's
     parameters digest binds (outside it the advice is refused), and the sync the certifier ran that window under,
-    which the verifier takes only from its own clock source (`LinkWindows.clocks`, `advised.ClockSource`).
+    which the verifier takes only from its own clock source (`LinkWindows.clock_source`, `advised.ClockSource`): the
+    certifier's signed clock sync ([protocol/clock-certificate.md](protocol/clock-certificate.md)).
 - **The ingress ends are derived** (`advised.ends`), not advised: advice request j is the link's j-th request and its
   prompt length is the certified prompt's, which the tie holds (FCFS admission meets the order, since v0's first-row
   order is then the arrival order), so it ends at request frame `ends[j]` = Σ_{i ≤ j} `request_frames[prompt_len_i −
@@ -432,8 +433,10 @@ requests, whose frames are a function of the prompt's length alone), for every p
     on a certified path the proxy hands a frame read in bucket t on at t + 1, so its honest syncs have δ ≥ 1. A
     window whose declared sync isn't the one the certifier ran it under refuses the advice: a δ below the traffic's
     loosens the floor, and REDTEAM phase 11 accepted an output in its request's own bucket under δ = 0 declared for a
-    window run at δ = 1 (regressions in `test_network_certifier_advised_phase11_floor.py`). Until the certifier
-    reports its syncs to the verifier there is no clock source, and every advised link is refused;
+    window run at δ = 1 (regressions in `test_network_certifier_advised_phase11_floor.py`). The verifier takes the
+    sync the certifier ran each window under only from the certifier's clock certificate of the window, verified
+    under its key and session, and a window without a valid one is refused
+    ([protocol/clock-certificate.md](protocol/clock-certificate.md));
   - `received`, `received[w]`.
 - **The unit** is `NetworkAdvisedLinkWindow` v2{EGRESS, INGRESS, ADVISED}: `NetworkLinkWindow`'s checks, and one gate
   (`advised.gate`) naming `advised.NetworkAdvisedCounts_v1{T, RIN, OWN}` and its circuit digest pinned in
@@ -452,7 +455,7 @@ requests, whose frames are a function of the prompt's length alone), for every p
   link: it computes `view(A, w)` itself, under the tie from its own tie source alone (`LinkWindows.ties`; no entry
   point takes one beside the advice), and opens the proof's public row only to its own copy, so a proof made on
   another advice's view of the window is refused. Without a `LinkAdvice`, a tie source or a clock source
-  (`LinkWindows.clocks`), or on an advice `view`
+  (`LinkWindows.clock_source`), or on an advice `view`
   refuses, the unit takes no instance and the window is refused. The in-the-clear check (`clear`, the debug comparison) runs `advised_check`:
   `advised.reference` over the opened heads' counts and `view(A, w)`. Each window reports a third public output,
   `advice`, the SHA-512 of A's canonical
@@ -500,20 +503,21 @@ requests, whose frames are a function of the prompt's length alone), for every p
   counts end its request in. The rule is exact while each window's own frame leaves in its first bucket, and always
   once CERT-VARLEN's FIFO change queues the own frame at the head of each window's queue; until then a window that
   starts with R_in or more request frames carried in puts an end one bucket late, never early.
-- **Named gap: the record holds neither the prompt lengths nor the syncs the unit reads** (owned by network-accounting).
-  The unit takes v0's prompt lengths, held to the certified ones only by IoTieRequest's verdict (the tie above), and
-  each window's sync from its declaration, held to Σ_sync and to the sync the certifier reports it ran (the clock
-  source above), a trusted device's report rather than a signed record, because neither head signs them. Design: the
-  ingress head
-  signs each bucket's completed requests and the egress head the window's sync (`served.sync_words`), inside
-  `RecordHead.encode`, and the unit reads both from the heads it opens. It changes the head encoding that Lean pins, so it lands with the head check's and the Lean model's
-  change, not before. With CERT-VARLEN's FIFO change the completed requests follow from the signed counts and the
-  certified prompt lengths, so on ingress what's left is holding v0's prompt lengths to the certified bodies.
+- **Named gap: the record doesn't hold the prompt lengths the unit reads** (owned by network-accounting). The unit
+  takes v0's prompt lengths, held to the certified ones only by IoTieRequest's verdict (the tie above), because the
+  ingress head doesn't sign them. Design: the ingress head signs each bucket's completed requests inside
+  `RecordHead.encode`, and the unit reads them from the head it opens. It changes the head encoding that Lean pins, so
+  it lands with the head check's and the Lean model's change, not before. With CERT-VARLEN's FIFO change the
+  completed requests follow from the signed counts and the certified prompt lengths, so on ingress what's left is
+  holding v0's prompt lengths to the certified bodies. Each window's sync is signed: the certifier's clock certificate
+  beside its egress record, which the verifier holds the public declared sync to in the clear, so it needs no head
+  change ([protocol/clock-certificate.md](protocol/clock-certificate.md)).
 - **Premises** of "an honest advised link is accepted", on which N2's claim doesn't rest:
   - `release` is the certified egress record's: each kept output is one egress frame, in the link's canonical order,
     which IO-TIE fixes (within a bucket the order doesn't change the counts);
   - the releases fall in the link's windows, each of which declares a sync in Σ_sync, the one the certifier ran it
-    under, which the certifier reports to the verifier (until it does, no advised link is accepted);
+    under, whose clock certificate the certifier signed and the verifier holds (without it, no advised link is
+    accepted);
   - `received` is the ingress record's;
   - the link's j-th request is advice request j (FCFS admission: IoTieRequest's ordinals are the verifier's, so an
     advice numbered in another order, as a runner's batch order numbers v0 and ENC-DERIVED's `walk.order` maps back,
