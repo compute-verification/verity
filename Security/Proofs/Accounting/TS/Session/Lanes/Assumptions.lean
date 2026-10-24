@@ -7,12 +7,13 @@ import Proofs.Accounting.TS.Session.Lanes.Holds
 rows as the words its Definition reads, through a decode per statement (`decL` for a lane's ports, `decC` for the
 combine's):
 
-* `LeafChecks` (the 33 circuits; owner @compute-accounting): each lane's and the combine's circuit computes its
-  Definition at its port rows, so on every wire assignment its evaluation agrees with at every unit, the decoded `ok`
-  word reads `1` only where `LaneOk` (or `CombineOk`) holds of the decoded inputs. It reads every port row
-  (`portRead`), registered or not, so it is a fact of the circuits alone; that every port they read is registered and
-  opens at its registered root is proved from flock-verify's complete check, part of `leafLayer`'s acceptance
-  (`RowsSession.rowsReg_eq_portRead`, `RowsSession.portRow_opens`, `Flock.Registered.complete_opens`), not assumed.
+* `LeafChecks` (the 33 circuits; owner @compute-accounting): at a `K` with `32 ∣ K`, `64 ≤ K` and `K < 2^17`, each
+  lane's and the combine's circuit computes its Definition at its port rows, so on every wire assignment its
+  evaluation agrees with at every unit, the decoded `ok` word reads `1` only where `LaneOk` (or `CombineOk`) holds of
+  the decoded inputs. It reads every port row (`portRead`), registered or not, so it is a fact of the circuits alone;
+  that every port they read is registered and opens at its registered root is proved from flock-verify's complete
+  check, part of `leafLayer`'s acceptance (`RowsSession.rowsReg_eq_portRead`, `RowsSession.portRow_opens`,
+  `Flock.Registered.complete_opens`), not assumed.
 
 Nothing is asked of the rows the sessions open. The leaf the layer opens and the receipt it checks are the ones those
 rows decode to (`Accounting.TS.Lanes.leafOf`, `receiptOf`); the known ports' rows (the admit bits, the public inputs,
@@ -35,10 +36,13 @@ open Pouw.RelativeSecurity (Paths)
 
 /-- `accounting-ts-leaf-checks` (a fact of `h1zy.PouwH1LaneZy_v1` and `PouwH1Combine_v1`'s circuits at their tile's
 `K`, backed by circuit-check and `h1zy`'s tests, not proved; owner @compute-accounting). **Each of a leaf's 33 circuits
-computes its Definition at its port rows**: at lane `l`'s session `sess (some l)`, whose circuit is
-`PouwH1LaneZy_v1{TILE}`'s lowering at its tile's `K` (any positive `K`), on every wire assignment `vals` the key
-program's evaluation agrees with on every unit's wires, if the `ok` word that `decL` reads from `vals`' port rows
-(`portRead`) is `1`, then `decL`'s view of them meets `LaneOk` at `dq` and `part`: its partials row is the honest one at
+computes its Definition at its port rows**, at a `K` with `32 ∣ K`, `64 ≤ K` and `K < 2^17`: the H1 layout's (`h1tile`'s
+scheme refuses any other `K` than `32 ∣ K` with `KS = K / 32 ≥ 2`; circuit-check binds the lane at `K = 64` and `h1zy`'s
+tests stage it at multiples of 32 up to 14336), and below `2^17` every cell's `Σ_k a_k b_k` of s8 codes is the circuit's
+s32 `z` (`|a_k b_k| ≤ 2^14`, so `|z| ≤ 2^14 K < 2^31`; an all `-128` dot at `K = 2^17` wraps to `-2^31`). At lane `l`'s
+session `sess (some l)`, whose circuit is `PouwH1LaneZy_v1{TILE}`'s lowering at its tile's `K`, on every wire assignment
+`vals` the key program's evaluation agrees with on every unit's wires, if the `ok` word that `decL` reads from `vals`'
+port rows (`portRead`) is `1`, then `decL`'s view of them meets `LaneOk` at `dq` and `part`: its partials row is the honest one at
 its rows, its public inputs and its index, and each of its 32 cells has `z = Σ_k a_k b_k` and `y = dq [z, s_a, s_w]`.
 At the combine's session `sess none`, whose circuit is `PouwH1Combine_v1{TILE}`'s at `K ≥ 384` (`h1zy.LEAST_K`, the
 least `K` at which C-Flock proves the combine), the same holds of `decC`'s view with `CombineOk`: the rows' XOR in lane
@@ -61,6 +65,7 @@ def LeafChecks {K nw : ℕ} {Pub : Type} (dq : List ℤ → ℤ)
     (sess : Option (Fin 32) → RowsSession)
     (decL : RowsSession → (ℕ → ℕ → Option Bool) → LaneView K nw Pub)
     (decC : RowsSession → (ℕ → ℕ → Option Bool) → CombineView nw) : Prop :=
+  32 ∣ K → 64 ≤ K → K < 2 ^ 17 →
   (∀ l (vals : Fin (sess (some l)).Circ.N → Bool),
       (∀ u, ∀ g ∈ (sess (some l)).P.io u, (sess (some l)).Circ.eval vals g = vals g) →
       (decL (sess (some l)) (portRead (sess (some l)) vals)).ok = true →

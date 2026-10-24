@@ -24,7 +24,7 @@ and only the rows, salts and paths the registrants committed come from them. It 
 hypotheses at each session, but port uniqueness and the `ok` port, which that acceptance gives (the known-read check's
 names, at known content naming `o0`), full checking (`kd = n`) and a unit (`0 < n`), which the draw check gives, and
 registered served roots (`RowsSession.ServedRegistered`), which the reads built from `own` and the one-read check
-give, and one named premise: the
+give, and, at a `K` with `32 ∣ K`, `64 ≤ K` and `K < 2^17`, one named premise: the
 circuits compute their Definitions at their port rows, read through the layout's decodes
 (`Accounting.Assumptions.TS.LeafChecks` at `Lanes.decL`, `Lanes.decC`; the complete check makes those rows the
 registered reads). The leaf the layer opens is the one the lanes' committed rows decode to, and the receipt it checks
@@ -84,7 +84,7 @@ of the sessions' registrants' records, `LeafColl`, or a collision of a session's
 given at every one of the 33 sessions `CheckedSessionSound`'s hypotheses (`RowsSession.CR`, the
 window's law `Accounting.Assumptions.TS.WindowLaw`, and
 $$n \cdot (\varepsilon_{ks} + \delta_{link} + \delta_{rows} + q_R^2/2^{513}) \le \delta,$$
-`δ ≥ 0`), the 33 circuits computing
+`δ ≥ 0`), at a `K` with `32 ∣ K`, `64 ≤ K` and `K < 2^17` (the K the premise covers), the 33 circuits computing
 their Definitions at their port rows through the layout's decodes at the served
 tile (`Accounting.Assumptions.TS.LeafChecks` at `decL K nw (servedTile K)`, `decC nw (servedTile K)`; under the complete
 check every port the decodes read is registered and opens at its registered root), each
@@ -115,6 +115,7 @@ def LeafLanesSound : Prop :=
     (∀ x w i k, (sess x w i k).CR) →
     (∀ k, Accounting.Assumptions.TS.WindowLaw (fun x w i => sess x w i k) (fun x w i => out x w i k)) →
     (∀ x w i k, ((sess x w i k).n : ℝ≥0∞) * (sess x w i k).bound ≤ ENNReal.ofReal δ) → 0 ≤ δ →
+    32 ∣ K → 64 ≤ K → K < 2 ^ 17 →
     (∀ x w i, Accounting.Assumptions.TS.LeafChecks dq part (sess x w i) (decL K nw (servedTile K))
       (decC nw (servedTile K))) →
     (leafLayer sess out (fun x w i k => knownOf (pub x w i) (salts x w i k) k)
