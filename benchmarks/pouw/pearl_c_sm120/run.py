@@ -28,7 +28,7 @@
 One JSON object per line on stdout as each part finishes, a summary on stderr.
 
   python3 run.py [check.json]   (env: PEARLC_EXPECT_UUID, SHAPES="8192", REPS=5, VARIANTS="sm120 sm120-unpromoted",
-                                 PEARLC_LIBCUDA, PEARLC_LIBNVML)
+                                 PEARLC_LIBCUDA, PEARLC_LIBNVML, PEARLC_SPLIT=0 for decode on words and stats_s5)
 
 Dry runs on a stand-in driver only: PEARLC_ANY_GPU=1 skips the identity check, and PEARLC_UNGATED=1 (refused without it)
 times regardless of the check and marks every row ungated.
@@ -52,6 +52,8 @@ NT, BM, BM_D, RASTER = 256, 128, 64, 8
 ML_NT = 384                  # mainloop_sm120.cuh's block: a TMA producer warpgroup and 8 consumer warps
 WK_WARPS = 16                # words_k's block: warps per m16 x n8 tile (pearl_c_sm120.cu)
 SR_ROWS, SR_MAX_K = 256, 32768   # stats_r (a block a row) for at most SR_ROWS rows of k <= SR_MAX_K, else stats_s5
+#: decode's split kernels (words_k, stats_r); PEARLC_SPLIT=0 runs the kernels they replace (words, stats_s5), the same words
+SPLIT = os.environ.get("PEARLC_SPLIT", "1") != "0"
 VARIANT_G = {"sm120": 4, "sm120-unpromoted": 0}
 TMAP_UINT8, TMAP_SWIZZLE_128B, TMAP_L2_128B, TMAP_BYTES = 0, 3, 2, 128
 #: the mainloop GEMMs' operand pairs, a set of four tensor maps (A, B, P_A, P_B) each at `tma` + ML_SET * slot
@@ -597,14 +599,14 @@ class Pipeline:
         """The kernels the split ones replace at decode, on the same buffers: `af_warps`, A'F_B on `words` (a warp a tile over
         all of K) where `af` runs words_k, and `stats_a_warps`, stats_s5 (a warp a row) where `stats_a` runs stats_r."""
         d, b, m, k, out = self.dev, self.b, self.m, self.k, {}
-        if self.g:
+        if self.g and SPLIT:
             out["af_warps"] = lambda: d.launch("words", m // 16, 128, p=(b["at"], b["fbT32"], b["af"]), i=(m, 32, k))
         if self.stats_kernel(m) == "stats_r":
             out["stats_a_warps"] = lambda: self.stats("a", m, "xa", "stats_s5")
         return out
 
     def stats_kernel(self, rows: int) -> str:
-        return "stats_r" if rows <= SR_ROWS and self.k <= SR_MAX_K else "stats_s5"
+        return "stats_r" if SPLIT and rows <= SR_ROWS and self.k <= SR_MAX_K else "stats_s5"
 
     def stats(self, tag: str, rows: int, x: str, kernel: str | None = None) -> None:
         """A side's row statistics (`stats_<tag>`) over its FP32 rows x: stats_s5, a warp a row, or for few rows stats_r, a
@@ -618,10 +620,10 @@ class Pipeline:
         words_k, a block of WK_WARPS warps a m16 x n8 tile, K split among them (unpromoted, on `words_u`, a warp a tile)."""
         if M % BM == 0 and not warps:
             self.gemm("gemm_words" + self.suffix, a, b, M, 32, out=(out,))
-        elif self.g:
+        elif self.g and SPLIT:
             self.dev.launch("words_k", M // 16 * 4, 32 * WK_WARPS, p=(self.b[a], self.b[b], self.b[out]), i=(M, 32, self.k))
         else:
-            self.dev.launch("words_u", M // 16, 128, p=(self.b[a], self.b[b], self.b[out]), i=(M, 32, self.k))
+            self.dev.launch("words" + self.suffix, M // 16, 128, p=(self.b[a], self.b[b], self.b[out]), i=(M, 32, self.k))
 
     def steps(self) -> list[tuple[str, str, object]]:
         d, b, m, n, k, sx = self.dev, self.b, self.m, self.n, self.k, self.suffix

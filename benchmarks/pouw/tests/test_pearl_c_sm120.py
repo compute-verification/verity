@@ -485,6 +485,21 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     assert {("words_k", 64), ("words", 64), ("stats_r", 64), ("stats_s5", 64), ("stats_s5", 1024)} <= rows
     assert ("stats_r", 1024) not in rows
 
+    # PEARLC_SPLIT=0 (the A/B rows' before): decode on the kernels words_k and stats_r replace, and no split timed beside them
+    log = tmp_path / "launches_unsplit.jsonl"
+    r = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")],
+                       env=dry_env(ship, log, PEARLC_ANY_GPU="1", PEARLC_UNGATED="1", SHAPES="16x1024x3072", VARIANTS="sm120",
+                                   PEARLC_SPLIT="0"), capture_output=True, text=True)
+    assert r.returncode == 4, r.stderr
+    (t,) = [x for x in map(json.loads, r.stdout.splitlines()) if x["kind"] == "timing"]
+    assert {"af", "stats_a"} <= set(t["ms"]) and not {"af_warps", "stats_a_warps"} & set(t["ms"])
+    launched, timed = [], False
+    for ev in map(json.loads, log.read_text().splitlines()):
+        timed = timed or ev.get("name") == "gen_f32"
+        if timed and ev["op"] == "launch":
+            launched.append((ev["name"], ev["i"][0]))
+    assert {("words", 64), ("stats_s5", 64)} <= set(launched) and not {n for n, _ in launched} & {"words_k", "stats_r"}
+
 
 def room(allocs: dict[int, int], ptr: int) -> int:
     """Bytes from ptr to the end of the live allocation holding it (0 if none): a tree's root is its buffer's last node."""
