@@ -92,6 +92,18 @@ DEV void tma_load(uint32_t dst, const void* map, uint32_t bar, int c0, int c1) {
                "l"(map), "r"(bar), "r"(c0), "r"(c1)
                : "memory");
 }
+// the same box under an L2 policy (createpolicy's): where a launch reads each B box once, its B stream goes first out of L2,
+// so a decode call's weights (25 to 117 MB at Llama-3.1-8B's linears) don't evict the next call's hashing code and tables
+DEV uint64_t l2_evict_first() {
+  uint64_t p;
+  asm volatile("createpolicy.fractional.L2::evict_first.b64 %0, 1.0;" : "=l"(p));
+  return p;
+}
+DEV void tma_load_hint(uint32_t dst, const void* map, uint32_t bar, int c0, int c1, uint64_t policy) {
+  asm volatile("cp.async.bulk.tensor.2d.shared::cluster.global.mbarrier::complete_tx::bytes.L2::cache_hint"
+               " [%0], [%1, {%3, %4}], [%2], %5;" ::"r"(dst), "l"(map), "r"(bar), "r"(c0), "r"(c1), "l"(policy)
+               : "memory");
+}
 // registers per thread for the rest of the warpgroup's life (all 4 warps of the warpgroup execute it)
 template <int R> DEV void regs_dec() { asm volatile("setmaxnreg.dec.sync.aligned.u32 %0;" ::"n"(R)); }
 template <int R> DEV void regs_inc() { asm volatile("setmaxnreg.inc.sync.aligned.u32 %0;" ::"n"(R)); }
@@ -213,6 +225,9 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
       tma_prefetch(maps->a);
       tma_prefetch(maps->b);
       if (PEEL) { tma_prefetch(maps->pa); tma_prefetch(maps->pb); }
+      // one row block: every B box is read once, by one tile
+      const bool once = tiles_m == 1;
+      const uint64_t first = l2_evict_first();
       int s = 0;
       uint32_t ph = 0;
       for (int t = blockIdx.x; t < tiles; t += gridDim.x) {
@@ -225,7 +240,10 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
           mbar_expect_tx(full, T::STAGE);
           if (kb < KB) {
             tma_load(st, maps->a, full, kb * BK, tm * TM);
-            tma_load(st + T::A_BYTES, maps->b, full, kb * BK, br);
+            if (once)
+              tma_load_hint(st + T::A_BYTES, maps->b, full, kb * BK, br, first);
+            else
+              tma_load(st + T::A_BYTES, maps->b, full, kb * BK, br);
           } else {
             tma_load(st, maps->pa, full, 0, tm * TM);
             tma_load(st + T::A_BYTES, maps->pb, full, 0, br);
