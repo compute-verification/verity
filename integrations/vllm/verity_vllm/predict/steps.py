@@ -35,7 +35,8 @@ The compiler is total: it compiles its input or refuses it by name (`Unexpressib
   the hit (a resume's run of its own KV is I1's replay's to hold);
 - what v0 doesn't compile: a prefix-cache hit on a stochastic request (the cached stochastic wrapper isn't ported); positions
   past the model's; sampling other than greedy or seeded top-p with top_k 0 (min_p, the penalties, logit_bias, min_tokens, n > 1,
-  or a parameter this compiler doesn't know).
+  or a parameter this compiler doesn't know);
+- a request Program with a dead unit (`program.prune`: a node no output reads), whose fix is in the lowering, never the advice.
 
 A refusal refuses the session. `partial=True` (a measurement over served traffic, never a registration) refuses request by
 request instead: a refused request's rows and Program leave the compilation, and so does every request whose cache hit reads its
@@ -56,6 +57,7 @@ from typing import Any
 
 from verity.core.protocols.certifier import advice as I1
 from verity_vllm.program import prefix_plan as PP
+from verity_vllm.program.prune import dead_units
 
 from .build import Unexpressible, build_program, model_shape
 from .phi import Phi
@@ -333,6 +335,10 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial:
     canon: dict = {}
     for u in plan.distinct():
         r = request_program(registered, u)
+        if dead := dead_units(body := r.program.fn.body):
+            raise Unexpressible(f"request {u.request}'s Program {r.digest[:16]} holds {len(dead)} dead units, node {dead[0]} "
+                                f"({body.nodes[dead[0]].fn.id}) first, which no output reads: drop them in the lowering, on the "
+                                f"Build's side and predict's alike (`program.prune.without_dead_units` drops a one-rank request wrapper's)")
         programs[r.digest], digests[u.key()] = r.program, r.digest
         comps[u.key()] = request_component(r, canon)
     units = [None if u is None else replace(u, digest=digests[u.key()]) for u in plan.requests]

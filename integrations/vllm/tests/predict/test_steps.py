@@ -389,20 +389,31 @@ def test_partial_refuses_request_by_request():
 
 
 def test_dead_gates_are_counted_as_circuit_check_counts_them():
-    """The request wrapper's prefill runs the last layer on every prompt row and only the last row reaches the LM head, so
-    today's request Programs have dead gates: `dead_gates_of` counts them as circuit-check does and says under which definitions."""
+    """The request wrapper drops its dead units, but gates inside live units still reach no sample (the final norm on the prompt rows
+    before the last, the query columns of the last layer's fused qkv on those rows), so today's request Programs have dead gates:
+    `dead_gates_of` counts them as circuit-check does and says under which definitions."""
     from verity.ml.circuits.liveness import dead_gates
+    from verity_vllm.program.prune import dead_units
     c = compile_steps(_registered(), *_mixed())
     got = dead_gates_of(c)
     assert sorted(got["programs"]) == sorted(c.programs)
     for d, p in c.programs.items():
         rep = dead_gates(p, limit=0, transitive=True)
         rec = got["programs"][d]
-        assert (rec["dead_computed"], rec["unread_inputs"]) == (rep.computed, rep.input) and rep.computed > 0
+        assert (rec["dead_computed"], rec["unread_inputs"]) == (rep.computed, rep.input) and rep.computed > 0 and not dead_units(p.fn.body)
         assert sum(rec["by_definition"].values()) == rep.computed + rep.input
         by = rec["by_definition"]
-        assert next(iter(by)) == "Gemm_v2" and sum(n for k, n in by.items() if k.startswith("Input")) == rep.input
+        assert next(iter(by)) == "RMSNormTriton_v1" and "Gemm_v2" in by and sum(n for k, n in by.items() if k.startswith("Input")) == rep.input
     assert got["dead_computed"] == sum(r["dead_computed"] for r in got["programs"].values())
+
+
+def test_a_program_with_a_dead_unit_is_refused(monkeypatch):
+    """A request Program holding a node no output reads is refused, with the fix (in the lowering, never the advice) in the message."""
+    import verity_vllm.predict.build as PB
+    monkeypatch.setattr(PB, "without_dead_units", lambda b: (b, list(range(len(b.nodes)))))
+    with pytest.raises(Unexpressible, match=r"request 0's Program [0-9a-f]{16} holds 56 dead units, node 104 \(RoPE_v1\{NHEADS=4,D=16\}\) first, which no "
+                                            r"output reads: drop them in the lowering"):
+        compile_steps(_registered(), *_mixed())
 
 
 def test_a_target_without_batch_invariance_is_refused():
