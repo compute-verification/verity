@@ -44,6 +44,24 @@ GPU) instead of `--from`. Every option `e2e.py` doesn't take goes to `certifier_
 
 ## The chain: varied traffic, the advice, the prove path and the negatives
 
+**G-A's report of record: r20261024-163242-7e60.** It is OK with nothing pending, and every row is from vllm's sealed
+Llama-3.2-1B serving run r20261024-141912-8eb1. It re-makes GA-CLOSER's closer r20261024-150521-0551 (ded16ce22b,
+`--probes 40`, against vy-nebius-1:18084) from that run's outputs, on this tree with #3566's `io_tie` merged. It reads
+8eb1's records, whose sha256 equal 0551's copy, and drives no endpoint.
+
+- e2e: honest accepted (40 requests, 597 tokens, 38 ending at max_tokens and 2 at EOS); late, extra and drop refused
+  by their own codes. The advice is 8eb1's Commit windows w191-w220: 30 windows, 40 requests, 527 steps, every window
+  opened, bound and rebuilt; 23,690 v0 bits (3,851 derived, 2,412 shaped, 340 forced).
+- token: refused by the I/O tie, `IoTieWindow.content` at link-windows 1 and 2, the two its 23 changed ids fall in.
+  The tie accepted honest: 597 outputs placed, frames held on all 17 windows at both ends. NEG's `tie-run` on each
+  member, with the ids of 8eb1's requests that arrived in its link-windows, agrees (the run's `out/tie-run/`).
+- prove path: GA-AUDIT's `--serve-run` audits of 8eb1's w212 (r20261024-154338-7679), one of the honest run's own
+  Commit windows, and w5 (r20261024-143655-ccc8), adopted in place of the fixed workload. Every honest arm was accepted
+  and every forged arm refused by Lean. w212's advice was registered after serving, by the lane from the run's records
+  (r20261024-153328-5776), 14.2 min before the first draw. w5's was registered by vllm at serve time. 7679 committed its
+  own registration of w212's advice, whose opening opens it to the report's w212 advice (the run's
+  `out/advice-check.json`).
+
 The plan's target (G-A) is one command from serving to the Lean verdict: serve, certify, advice, compile, sampled ZKPs,
 Lean, with the advice's bits per link-window. `chain.py` holds the stages after N2 and the proofs, each on what exists now:
 
@@ -132,7 +150,7 @@ committing endpoint, the chain ran on a PROVE-PATH run of a declared workload as
 (its CLI from 01ea29e10f on), with `prove_path.py advice --workload out/standin/workload.json` as `--advice` and its
 `out/` as `--prove-path`; before it, r20261024-052710-8932 (GLM-5.3 TP8 B1).
 
-G-A's run of record on the endpoint's own advice: r20261024-111424-88c9 (d5e3b1055d, vy-nebius-2), the varied chain
+Before r20261024-163242-7e60, G-A's run of record on the endpoint's own advice was r20261024-111424-88c9 (d5e3b1055d, vy-nebius-2), the varied chain
 against vllm's Llama-3.2-1B serving run r20261024-094558-6d6a on vy-nebius-1:18083 (40 requests at 0.5/s, max_tokens
 up to 32, EOS 128001, 16 link-windows), report OK. honest accepted (597 tokens, 38 ending at max_tokens and 2 at EOS);
 late, extra and drop refused by their own codes. Token, which the rehearsal's check accepted, is refused by the I/O tie
