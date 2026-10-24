@@ -39,13 +39,11 @@ does not compute what the row computes is no match), or when the template's word
 row is split into its N coordinates), or at a halving of its width (``COLS``: the row is split into column blocks), or when it
 is a part of the row's Definition (``PARTS``: the row is split into Definitions of its own, one member per part), or when it
 is the row's Definition at every axis of a batch 1 (``SLICES``: the row is split into its slices along those axes), or when it
-is a K-chunk of the row's coordinate (``KCHUNKS``: each coordinate is split along K, one template per chunk place), or when it
-is a split part or the combine of the row's Definition (``SPLITS``: each head is split into its splits' parts and their
-combine, one template per part key count and one for the combine, `split_rows`).  A Boolean
-Program's rows are its word view (`pipeline.build_instances`: each
-row the word Definition its Call's Boolean Definition computes, that Boolean Definition its ``bits``), so a template matches the
-same rows under either IR, and the members, their rows and every committed word are the same; the population program is over the
-template as the partition names it.  The rows commit u16 words: a template's every port is 16-bit elements in its word view (a
+is a K-chunk of the row's coordinate (``KCHUNKS``, `kchunk_rows`) or a split part or the combine of the row's Definition
+(``SPLITS``, `split_rows`).  A Boolean Program's rows are its word view (`pipeline.build_instances`: each row the word Definition
+its Call's Boolean Definition computes, that Boolean Definition its ``bits``), so a template matches the same rows under either IR,
+and the members, their rows and every committed word are the same; the population program is over the template as the partition
+names it.  The rows commit u16 words: a template's every port is 16-bit elements in its word view (a
 Boolean element's bit j is bit j of its word, `boolean.elements`), or, for a row or coordinate template, elements of ``PACKED`` widths with each
 port whole u16 words (``Template.packed``): a port's words are then its elements' little-endian bytes, two to a word, which are
 the port's bits in M0's row order (an 8-bit element is half a word, a 32-bit one two words, low half first); refused otherwise.
@@ -69,18 +67,9 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    (FlashInfer's linear: ``w[n]`` and ``ws[n // 128]``) -> ``out.<member>``, the row's output
                                    word n (`_read_coord`); packed ports, one index entry per row; chunked (``chunk_cap``),
                                    v2 bit rows (`chunk_rows.unit_rows`) -> ``o0``
-  ``MoeExpertFp8CoordinateChunk_v1{K=k,FIRST=..,LAST=..}``  chunk c of every coordinate n of the ``MoeExpertFp8Gemm_v1`` rows
-                                   (``KCHUNKS``, `kchunk_rows`: FIRST c = 0, LAST c = K/k - 1, else the chunks between):
-                                   ``in<g>`` per parameter, ``xq``, ``sx``, ``e``, ``acc`` (the twin's chain; wired to chunk
-                                   c - 1's ``o0``), the slab and scale columns of its k weights -> ``o0`` (the accumulator, LAST
-                                   the served word n); always chunked, v2 bit rows; one index entry per row
-  ``SparseMlaSplitPart_v1{T=k,..}``, ``SparseMlaCombine_v1{NSPLIT=n,..}``  each split of k keys of every head of the
-                                   ``SparseMlaSplit_v1`` rows in n non-empty splits, and each head's combine (``SPLITS``,
-                                   `split_rows`): a part ``in0``, ``in1``, ``in2`` (the head's q_nope and q_rope, the split's kv
-                                   rows) -> ``o0``, ``o1`` (the twin's partial and lse); a combine ``in0.<s>``, ``in1.<s>`` (wired
-                                   to split s's part's ``o1`` and ``o0``) -> ``o0`` (the served head); always chunked, v2 bit
-                                   rows, a whole-block part's MUFU reads in lookup slots (`chunk_rows.reads`); one index
-                                   entry per row
+  ``MoeExpertFp8CoordinateChunk_v1{K=k,..}``, ``SparseMlaSplitPart_v1{T=k,..}``, ``SparseMlaCombine_v1{NSPLIT=n,..}``  K-chunks
+                                   (``KCHUNKS``) and split parts and combines (``SPLITS``), laid out by `kchunk_rows`, `split_rows`
+                                   and `chunk_rows.reads`; always chunked, v2 bit rows, one index entry per row
   ``MoeSum_v1{H=w,..}``, ``AllReduceMnnvl_v1{N=w,..}``  every block j of w columns of the rows of that Definition W wide, W / w
                                    a power of two (``COLS``): ``in<g>`` per argument group, each of its rows' columns [jw, jw + w)
                                    in order -> ``out.<member>``, the row's output columns [jw, jw + w); one index entry per row;
@@ -132,6 +121,8 @@ from verity_vllm.program.compact import runs_from_file_items
 
 #: the layouts whose units are bit rows as C-Flock's `UnitStager` stages them (`chunk_rows`), in chunks of at most a chunk cap
 CHUNKED = ("s8", "coord", "cols", "slice", "kchunk", "split")
+#: the chunked layouts read by a module of their own: a row's unit count, and the reader of a member's rows
+READERS = {"slice": (SL.extent, SL.read), "kchunk": (KC.units, KC.read), "split": (SP.units, SP.read)}
 #: the committed signed integer dtypes a narrower packed port reads by value (`_packed`): torch's int64 indices
 BY_VALUE = frozenset(("i64", "int64"))
 PARTITION_FORMAT = "verity-vllm/serving-rows/partition/v1"
@@ -201,9 +192,8 @@ def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope
             if steps is not None and not int(steps[0]) <= int(d["step"]) < int(steps[1]):
                 continue
             ps = [part(ts[k].word, r["spec"]) for k, _ in hits]
-            chain = {KC.chain(ts[k])[0] if ts[k].layout == "kchunk" else None for k, _ in hits}
-            if (len(hits) > 1 and (None in ps or len({p[0] for p in ps}) < len(ps)) and (None in chain or len(chain) > 1)
-                    and any(ts[k].layout != "split" for k, _ in hits)):
+            chain = {KC.chain(ts[k])[0] if ts[k].layout == "kchunk" else "split" if ts[k].layout == "split" else None for k, _ in hits}
+            if len(hits) > 1 and (None in ps or len({p[0] for p in ps}) < len(ps)) and (None in chain or len(chain) > 1):
                 raise ValueError(f"row {i} ({r['spec']}) holds instances of {[tmpls[k] for k, _ in hits]}: one member reads a row, "
                                  f"or one member per part of it (PARTS), or one per K-chunk template of one chain (KCHUNKS), or one "
                                  f"per split part and combine template of it (SPLITS)")
@@ -239,12 +229,8 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
         if layout == "cols":
             axis = COLS[spec_base(template(t).word)]
             n = sum(int(x[3]["statics"][axis]) // int(spec_statics(template(t).word)[axis]) for x in rs)
-        elif layout == "slice":
-            n = sum(SL.extent(template(t), x[3]["statics"]) for x in rs)
-        elif layout == "split":
-            n = sum(SP.units(template(t), x[3]["statics"]) for x in rs)
-        elif layout == "kchunk":
-            n = sum(KC.units(template(t), x[3]["statics"]) for x in rs)
+        elif layout in READERS:
+            n = sum(READERS[layout][0](template(t), x[3]["statics"]) for x in rs)
         elif layout in CHUNKED:
             n = sum(int(x[3]["statics"]["N"]) for x in rs)
         if layout in CHUNKED and (layout in ("s8", "kchunk", "split") or caps is not None):
@@ -446,12 +432,8 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
         return _read_gemm(m, rows, store, weights, arrivals)
     if layout == "coord":
         return _read_coord(m, rows, store, weights, arrivals)
-    if layout == "slice":
-        return SL.read(m, rows, store, weights, arrivals, _slices)
-    if layout == "kchunk":
-        return KC.read(m, rows, store, weights, arrivals, _slices)
-    if layout == "split":
-        return SP.read(m, rows, store, weights, arrivals, _slices)
+    if layout in READERS:
+        return READERS[layout][1](m, rows, store, weights, arrivals, _slices)
     cols: dict[str, list[np.ndarray]] = {p: [] for p, _ in m.rows + m.outs}
     D = dict(m.rows).get("x", 0)
     entries: list[list[Any]] = []
