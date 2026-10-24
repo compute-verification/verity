@@ -275,9 +275,11 @@ def _constant_keys(t: Any) -> dict[str, int]:
 
 def _pipeline(kernel: Kernel, m: int, n: int, k: int, bufs: dict[str, int], xb: int, keys: dict[str, int], xa: int = 0,
               m_real: int | None = None, *, variant: str, weight: int = 0, split_a: bool = False) -> Any:
+    """The kernel's pipeline over the caller's buffers; with `split_a` (A's tree on a side lane) A's commitment split and
+    the padding rows' E_A lines left unwritten (`run.Pipeline`'s ``fillers``)."""
     full = {"dom_a": 0, "dom_b": 0, "dom_t": 0, "line_b": 0, "unit": 0, "salt_key": 0, "hm": 0, **keys}
     return kernel.run.Pipeline(kernel.dev, m, n, k, variant, full, xa, xb, bufs=bufs, m_real=m_real, weight=weight,
-                               **({"split_a": True} if split_a else {}))
+                               **({"split_a": True, "fillers": False} if split_a else {}))
 
 
 def _steps(pipe: Any, names: tuple[str, ...]) -> list[Any]:
@@ -361,7 +363,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
             "host": {"keys": "native sha512", "screen": "fused (Triton)" if self.fused_screen else "torch"},
             "schedule": None,
             "graphs": (f"calls of at most {GRAPH_ROWS} rows: the serial schedule's one graph a call, a side lane's schedule's "
-                       f"one a lane and ring set (A's tree its own where it starts early), replayed by the driver"
+                       f"one a lane and ring set (A's tree its own where it is aside), replayed by the driver"
                        + (", a whole capture's tile hashing beside the next call" if whole_defer else "")) if self.graphs else None,
             "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound (red team F4)"}
         self.cur: _Pass | None = None

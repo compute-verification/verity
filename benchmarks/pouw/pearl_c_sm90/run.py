@@ -424,18 +424,21 @@ class Pipeline:
 
     GEMM_SMEM: dict[str, int] = {}
     #: the steps one launch does under pd: `commit_a` (pd_commit) for A's pads, row digests, tree, seed_A, row seeds and E_A's
-    #: lines; with `split_a`, `rows_a` (pd_commit's mode 1) and `tree_seed_a` (pd_tree) for the same steps
+    #: lines; with `split_a`, `rows_a` (pd_commit's mode 1) and `tree_seed_a` (pd_tree) for the same steps (the padding rows'
+    #: E_A lines only with `fillers`)
     FUSED = {"commit_a": ("pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "lines_ea"),
              "rows_a": ("pad_a", "rowdig_a", "hash_rows_a", "seeds_a", "lines_ea"), "tree_seed_a": ("tree_a", "seed_a")}
 
     def __init__(self, dev: Dev, m: int, n: int, k: int, variant: str, keys: dict[str, int], xa: int, xb: int,
                  bufs: dict[str, int] | None = None, m_real: int | None = None, bm: int | None = None, weight: int = 0,
                  sha: str | None = None, bn: int | None = None, widen: tuple[str, int, int] | None = None,
-                 chain: str | None = None, split_a: bool = False):
+                 chain: str | None = None, split_a: bool = False, fillers: bool = True):
         """`bufs` names the buffers when the caller owns them (only those its steps touch); `m_real` rows of A are the
-        matmul's, committed and hashed, the rest filler that only the products see."""
+        matmul's, committed and hashed, the rest filler that only the products see.  With `split_a`, `fillers` False leaves
+        the filler rows' E_A lines as the buffer holds them: pd_tree then writes A's levels, seed_A and line_a alone, nothing
+        the forming reads."""
         self.dev, self.m, self.n, self.k, self.variant, self.keys = dev, m, n, k, variant, keys
-        self.widen, self.split_a, self.stamps = widen, split_a, 0
+        self.widen, self.split_a, self.fillers, self.stamps = widen, split_a, fillers, 0
         self.sha = sha or os.environ.get("PEARLC_SHA", "fast")
         if self.sha not in ("fast", "ref"):
             raise ValueError(f"sha is 'fast' or 'ref', not {self.sha!r}")
@@ -611,10 +614,10 @@ class Pipeline:
                  i=(self.m_real, self.k, mode, self.m))
 
     def pd_tree(self) -> None:
-        """`split_a`'s `tree_seed_a`: pd_tree, one CTA, A's levels above level 0, seed_A, line_a, and the padding rows' E_A
-        lines under it (rows m_real..m - 1, where there are any)."""
+        """`split_a`'s `tree_seed_a`: pd_tree, one CTA, A's levels above level 0, seed_A, line_a, and with `fillers` the
+        padding rows' E_A lines under it (rows m_real..m - 1, where there are any)."""
         d, b, kk, v = self.dev, self.b, self.keys, self.pd | (PD_STAMP if self.stamps else 0)
-        ea = b["ea_codes"] if self.m_real < self.m else 0
+        ea = b["ea_codes"] if self.m_real < self.m and self.fillers else 0
         d.launch(f"pd_tree_{v}", 1, 128, d.pd_tree_smem[v],
                  p=(0, 0, b["tree_a"], 0, 0, kk["unit"], kk["dom_a"], 0, 0, 0, b["seed_a"], b["line_a"], ea, self.stamps),
                  i=(self.m_real, 0, 0, self.m))

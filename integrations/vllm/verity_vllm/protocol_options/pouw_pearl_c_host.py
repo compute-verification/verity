@@ -141,7 +141,7 @@ class _Driver:
 class _Lane:
     """A stream the run owns, at a schedule's priority, and its handle; off the GPU a stand-in handle (``standin``) for the
     recording device's log.  ``priority`` is the one the device gave it.  Its events hand work over to it (``event``) and,
-    on a side lane, start A's tree early (``tree_event``)."""
+    on a side lane, start A's tree after the main lane's per-row keying (``tree_event``)."""
 
     def __init__(self, device: Any, priority: str, standin: int):
         import torch
