@@ -59,7 +59,7 @@ def test_replay_matches_vllm_step_for_step(name):
 def test_residual_decodes_to_the_trace(name, contexts):
     t = trace(name)
     code = R.encode(t, contexts=contexts)
-    m = R.compare(R.decode(t, code).steps, t.steps)
+    m = R.compare(R.decode(t.certified(code.bucket_s), code).steps, t.steps)
     assert m.first_mismatch is None and m.matched == len(t.steps)
     assert all(len(b) <= code.ideal[w] + 2 for w, b in code.bits.items())
 
@@ -69,7 +69,7 @@ def test_wrong_advice_changes_the_schedule():
     code = R.encode(t)
     (w, bits), = code.bits.items()
     flipped = R.Code(code.contexts, code.bucket_s, code.window_buckets, {w: [1 - bits[0]] + bits[1:]}, code.ideal)
-    assert R.compare(R.decode(t, flipped).steps, t.steps).first_mismatch is not None
+    assert R.compare(R.decode(t.certified(), flipped).steps, t.steps).first_mismatch is not None
 
 
 def test_egress_tells_light_load_arrivals_apart():
@@ -136,7 +136,7 @@ def test_reads_a_trace_corpus_trace(tmp_path):
     assert c.engine == t.engine and c.ids == t.ids and len(c.steps) == len(t.steps)
     rp = R.replay(c.engine, c.requests, admit=c.before_step)
     assert R.compare(rp.steps, c.steps).ordered == len(t.steps)
-    assert R.compare(R.decode(c, R.encode(c)).steps, c.steps).first_mismatch is None
+    assert R.compare(R.decode(c.certified(), R.encode(c)).steps, c.steps).first_mismatch is None
 
 
 def test_order_bits_charge_only_reordering():

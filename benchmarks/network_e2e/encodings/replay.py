@@ -648,9 +648,30 @@ class Trace:
                     kept[i].append(s)
         return kept
 
-    def release_buckets(self, bucket_s: float) -> list[list[int]]:
-        """Each request's kept outputs as the egress certifier saw them: the bucket each left in."""
-        return [[bucket(self.release_t[s], bucket_s) for s in ks] for ks in self.kept_steps()]  # type: ignore[arg-type]
+    def certified(self, bucket_s: float = 0.1) -> Certified:
+        """What the verifier holds of this run without advice (`Certified`)."""
+        if not self.clocked():
+            return Certified(self.engine, list(self.requests), bucket_s, None, None)
+        return Certified(self.engine, list(self.requests), bucket_s,
+                         [bucket(t, bucket_s) for t in self.ingress_t],                                  # type: ignore[arg-type]
+                         [[bucket(self.release_t[s], bucket_s) for s in ks] for ks in self.kept_steps()])  # type: ignore[arg-type]
+
+
+@dataclass(frozen=True)
+class Certified:
+    """What the verifier holds without advice: the registered engine, each request's certified I/O in the order it reached
+    the engine, and, with a clock, each request's ingress bucket and the bucket each of its kept outputs left in. The
+    decoder reads nothing else."""
+
+    engine: Engine
+    requests: list[RequestIO]
+    bucket_s: float
+    ingress: list[int] | None
+    release: list[list[int]] | None
+
+    def windows(self, window_buckets: int) -> list[int]:
+        """Each request's certifier window (its ingress bucket's); one window without a clock."""
+        return [0] * len(self.requests) if self.ingress is None else [b // window_buckets for b in self.ingress]
 
 
 def load_step_trace(records: Iterable[dict[str, Any]], *, tokens: dict[str, Sequence[int]] | None = None,
@@ -870,33 +891,31 @@ def gamma_values(rp: Replay) -> list[int | None]:
     return [None if f and not a else len(a) - (0 if f else 1) for a, f in zip(rp.asked, rp.forced)]
 
 
+def _clocked(cert: Certified) -> tuple[list[int], list[list[int]]]:
+    if cert.ingress is None or cert.release is None:
+        raise ValueError("the trace has no certifier clock (ingress_t and release_t)")
+    return cert.ingress, cert.release
+
+
 class _Clock:
-    """The certified timing a decision is coded in: request i's ingress bucket against the release buckets around step k.
-    The engine core scheduled step k after processing step k - lag's output (lag 1, or 2 under async scheduling) and
-    before any step from k on had emitted, so the newest step at or before k - lag that emitted a token left at about
-    when k was scheduled or before (`prev`), and the first step from k on that emitted left after it (`next`)."""
+    """The certified timing a decision is coded in: request i's ingress bucket against the release buckets around the
+    step. The engine core scheduled it after processing the outputs it has (those of every step but the one in flight
+    under async scheduling) and before any later output left, so the newest output it has processed left at about when it
+    scheduled or before (`prev`), and the first output it hasn't, of a request in the engine or of i, after (`next`)."""
 
-    def __init__(self, trace: Trace, bucket_s: float) -> None:
-        if not trace.clocked():
-            raise ValueError("the trace has no certifier clock (ingress_t and release_t)")
-        self.lag = 2 if trace.engine.async_scheduling else 1
-        self.b_in = [bucket(t, bucket_s) for t in trace.ingress_t]                          # type: ignore[arg-type]
-        rel = [bucket(t, bucket_s) if e else None for t, e in zip(trace.release_t, trace.emits)]  # type: ignore[arg-type]
-        self.prev: list[int | None] = []
-        last = None
-        for b in rel:
-            last = b if b is not None else last
-            self.prev.append(last)
-        self.next: list[int | None] = [None] * len(rel)
-        nxt = None
-        for k in range(len(rel) - 1, -1, -1):
-            nxt = rel[k] if rel[k] is not None else nxt
-            self.next[k] = nxt
+    def __init__(self, cert: Certified) -> None:
+        self.b_in, self.out = _clocked(cert)
 
-    def context(self, i: int, k: int) -> tuple[int, int]:
-        j = k - self.lag
-        p = self.prev[j] if 0 <= j < len(self.prev) else None
-        n = self.next[k] if k < len(self.next) else None
+    def context(self, i: int, o: Open) -> tuple[int, int]:
+        s = o.sched
+        p = max((self.out[r.i][min(r.n_out, len(self.out[r.i])) - 1] for r in s.reqs if r.n_out and self.out[r.i]),
+                default=None)
+        ahead = [self.out[i][0]] if self.out[i] else []
+        for r in (*s.running, *s.waiting, *s.skipped):
+            m = r.n_out + r.placeholders
+            if m < len(self.out[r.i]):
+                ahead.append(self.out[r.i][m])
+        n = min(ahead, default=None)
         return (2 if p is None else max(-1, min(1, self.b_in[i] - p)), 2 if n is None else int(self.b_in[i] > n))
 
 
@@ -905,15 +924,13 @@ class _Egress:
     one per step with the running request's from the one it emits this step on, `lead` steps later when i's prompt
     needs more than this step's budget left; admitted next step, with that step's lead. So whether i's release buckets
     line up with the running request's under each (2: nothing to compare) says, at most open steps, whether i arrived
-    now; when both leads put i's first output at the same step, egress can't tell them apart and both line up. They are compared up to i's first change of bucket, which fixes the shift (the running request's must
-    change there too), so that a later pause of either doesn't count. The running request is the decoding one with the most outputs left; the output it emits this
-    step is the one after those it has kept and has in flight. Everything read is the replay's state and the certified
-    egress."""
+    now; when both leads put i's first output at the same step, egress can't tell them apart and both line up. They are
+    compared up to i's first change of bucket, which fixes the shift (the running request's must change there too), so
+    that a later pause of either doesn't count. The running request is the decoding one with the most outputs left; the
+    output it emits this step is the one after those it has kept and has in flight."""
 
-    def __init__(self, trace: Trace, bucket_s: float) -> None:
-        if not trace.clocked():
-            raise ValueError("the trace has no certifier clock (ingress_t and release_t)")
-        self.out = trace.release_buckets(bucket_s)
+    def __init__(self, cert: Certified) -> None:
+        _, self.out = _clocked(cert)
 
     @staticmethod
     def lead(o: Open, n: int, delay: int) -> int:
@@ -1084,19 +1101,19 @@ CONTEXTS = ("plain", "clocked", "egress")
 _TELLS = {(1, 0), (0, 1), (0, 0)}
 
 
-def _coder(trace: Trace, contexts: str, bucket_s: float) -> Callable[[int, int, int, Open], tuple[int, ...]]:
+def _coder(cert: Certified, contexts: str) -> Callable[[int, int, Open], tuple[int, ...]]:
     if contexts not in CONTEXTS:
         raise ValueError(f"contexts {contexts!r}: one of {CONTEXTS}")
-    clock = _Clock(trace, bucket_s) if contexts != "plain" else None
-    egress = _Egress(trace, bucket_s) if contexts == "egress" else None
+    clock = _Clock(cert) if contexts != "plain" else None
+    egress = _Egress(cert) if contexts == "egress" else None
 
-    def context(i: int, k: int, passed: int, o: Open) -> tuple[int, ...]:
+    def context(i: int, passed: int, o: Open) -> tuple[int, ...]:
         if clock is None:
             return (min(passed, 2),)
         if egress is None:
-            return (min(passed, 2),) + clock.context(i, k)
+            return (min(passed, 2),) + clock.context(i, o)
         e = egress.context(i, o)
-        return e if e in _TELLS else e + clock.context(i, k)
+        return e if e in _TELLS else e + clock.context(i, o)
 
     return context
 
@@ -1107,14 +1124,15 @@ def encode(trace: Trace, *, contexts: str = "egress", bucket_s: float = 0.1, win
     first = trace.first_scheduled()
     if any(f < 0 for f in first):
         raise ValueError(f"requests never scheduled: {[trace.ids[i] for i, f in enumerate(first) if f < 0][:8]}")
-    context = _coder(trace, contexts, bucket_s)
-    rw, _ = windows(trace, bucket_s=bucket_s, window_buckets=window_buckets)
+    cert = trace.certified(bucket_s)
+    context = _coder(cert, contexts)
+    rw = cert.windows(window_buckets)
     model, enc, ideal = _KT(), {}, {}
     passed = [0] * len(trace.requests)
 
     def decide(i: int, k: int, o: Open) -> bool:
         bit = k >= first[i]
-        ctx = context(i, k, passed[i], o)
+        ctx = context(i, passed[i], o)
         f0, f1 = model.freqs(ctx)
         w = rw[i]
         enc.setdefault(w, _Encoder()).put(bit, f0, f1)
@@ -1129,16 +1147,17 @@ def encode(trace: Trace, *, contexts: str = "egress", bucket_s: float = 0.1, win
     return Code(contexts, bucket_s, window_buckets, {w: e.finish() for w, e in enc.items()}, ideal)
 
 
-def decode(trace: Trace, code: Code) -> Replay:
-    """Replay from the residual advice: the trace's certified I/O and clock only (its steps are read for the release
-    bucket of each kept output, which the egress certifier saw)."""
-    context = _coder(trace, code.contexts, code.bucket_s)
-    rw, _ = windows(trace, bucket_s=code.bucket_s, window_buckets=code.window_buckets)
+def decode(cert: Certified, code: Code) -> Replay:
+    """Replay from the residual advice and what the verifier holds without it (`Certified`, at the code's bucket)."""
+    if cert.bucket_s != code.bucket_s:
+        raise ValueError(f"the code is in {code.bucket_s} s buckets, the certified record in {cert.bucket_s} s")
+    context = _coder(cert, code.contexts)
+    rw = cert.windows(code.window_buckets)
     model, dec = _KT(), {}
-    passed = [0] * len(trace.requests)
+    passed = [0] * len(cert.requests)
 
     def decide(i: int, k: int, o: Open) -> bool:
-        ctx = context(i, k, passed[i], o)
+        ctx = context(i, passed[i], o)
         f0, f1 = model.freqs(ctx)
         w = rw[i]
         if w not in dec:
@@ -1148,7 +1167,7 @@ def decode(trace: Trace, code: Code) -> Replay:
         passed[i] += 1
         return bit
 
-    return replay(trace.engine, trace.requests, decide=decide)
+    return replay(cert.engine, cert.requests, decide=decide)
 
 
 # --- bits per certifier window ----------------------------------------------------------------------------------------
@@ -1213,7 +1232,8 @@ def table(trace: Trace, *, bucket_s: float = 0.1, window_buckets: int = 600, v0:
     codes = {"adaptive" if c == "plain" else f"adaptive_{c}": encode(trace, contexts=c, bucket_s=bucket_s,
                                                                      window_buckets=window_buckets)
              for c in CONTEXTS if c == "plain" or trace.clocked()}
-    decoded = {name: compare(decode(trace, c).steps, trace.steps).__dict__ for name, c in codes.items()}
+    cert = trace.certified(bucket_s)
+    decoded = {name: compare(decode(cert, c).steps, trace.steps).__dict__ for name, c in codes.items()}
     rw, sw = windows(trace, bucket_s=bucket_s, window_buckets=window_buckets)
     v0w = v0_widths(trace, window_buckets=window_buckets)
     rows = []
