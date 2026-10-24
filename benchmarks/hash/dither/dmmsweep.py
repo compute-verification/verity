@@ -113,6 +113,7 @@ class Blocker:
             if arrived >= self.sms:
                 break
         else:
+            self._launch(self.stop, 1, 0, main, (stop,), (C.c_void_p,))
             raise RuntimeError(f"dmmsweep Blocker: {arrived} of {self.sms} hold CTAs started")
         self.held.add(held)
         try:
