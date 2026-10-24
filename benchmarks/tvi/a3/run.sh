@@ -10,8 +10,18 @@ trap 'exit 143' TERM INT
 cp "$IN"/newskill.py "$IN"/aggregate.py "$S"/
 cd "$S"
 
-PY=/workspace/jobs/venv312/bin/python
-if [ -f /workspace/jobs/tvi/venv/READY ] && [ -x /workspace/jobs/tvi/venv/bin/python ]; then PY=/workspace/jobs/tvi/venv/bin/python; fi
+PY=
+for c in /workspace/jobs/tvi/venv/bin/python /workspace/jobs/venv312/bin/python /workspace/jobs/tvi/venv-A2/bin/python \
+         /workspace/jobs/tvi/venv-r1/bin/python; do
+  if [ -x "$c" ] && "$c" -c 'import torch, transformers, numpy; assert torch.cuda.is_available()' 2>/dev/null; then PY=$c; break; fi
+done
+if [ -z "$PY" ]; then
+  uv venv -q -p 3.12 "$S/venv"
+  uv pip install -q --python "$S/venv/bin/python" torch --index-url https://download.pytorch.org/whl/cu128
+  uv pip install -q --python "$S/venv/bin/python" transformers numpy safetensors
+  PY="$S/venv/bin/python"
+fi
+echo "PY=$PY"
 "$PY" -c 'import torch, transformers; print(torch.__version__, transformers.__version__)'
 if [ -d /workspace/hf/hub ] && [ -w /workspace/hf/hub ]; then export HF_HUB_CACHE=/workspace/hf/hub; else export HF_HOME="$S/hf"; fi
 export TOKENIZERS_PARALLELISM=false PYTHONUNBUFFERED=1 HF_HUB_OFFLINE=1
