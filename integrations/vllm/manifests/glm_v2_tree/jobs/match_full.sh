@@ -9,7 +9,7 @@
 # and runs the check and the cross-rank leg.  When the Match passes, the files it holds (match_cpu.sha256) are put as the set
 # match-cpu and this run is labelled glm_v2.match_run with its vllm.match run, the label the Commit's start waits for; a failed
 # step labels match-cpu failed instead.  FULL=0 runs OWN alone.
-#   research run --on NODE --mem-gb 410 --mem-wait 43200 --timeout 18h --custody-ttl 36h --source . --cwd source --project verity --send LEGS.sha256.gz -- env ROW=... BUILD_RUN=... BUILD_PARTS=RUN:build LEGS_PARTS=RUN:legs-small LEGS=LEGS.sha256.gz OWN="2=RUN:fold-2" RANK_SETS="RUN:ranks-0 RUN:ranks-1 ..." SW=... VERITY_QWORD_MAX_GATES=... VERITY_QWORD_MAX_GATES_ALLOWED=... bash integrations/vllm/manifests/glm_v2_tree/jobs/match_full.sh
+#   research run --on NODE --mem-gb 410 --mem-wait 43200 --timeout 18h --custody-ttl 24h --source . --cwd source --project verity --send LEGS.sha256.gz -- env ROW=... BUILD_RUN=... BUILD_PARTS=RUN:build LEGS_PARTS=RUN:legs-small LEGS=LEGS.sha256.gz OWN="2=RUN:fold-2" RANK_SETS="RUN:ranks-0 RUN:ranks-1 ..." SW=... VERITY_QWORD_MAX_GATES=... VERITY_QWORD_MAX_GATES_ALLOWED=... bash integrations/vllm/manifests/glm_v2_tree/jobs/match_full.sh
 #   research run --on NODE --mem-gb 380 ... -- env ROW=... BUILD_RUN=... BUILD_PARTS=... LEGS_PARTS=... OWN="0=RUN:fold-0 1=RUN:fold-1" FULL=0 SW=... ... bash .../match_full.sh
 # env: ROW, BUILD_RUN, BUILD_PARTS, LEGS_PARTS, [OWN], [FULL=1]; FULL=1: LEGS (a path, else $RESEARCH_RUN_DIR/inputs/LEGS; gzipped
 # or not), RANK_SETS; [SW], [FOLD_WORKERS=1], [FOLD_RANK_WORKERS=1], store_tar.sh's [WAIT_MIN=900], [EVICT_FREE_GB], [FETCH_*];
