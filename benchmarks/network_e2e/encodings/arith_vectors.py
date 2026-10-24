@@ -15,12 +15,15 @@ context, bit) from the book's priors (`kt`) and each window's charge (`charge`).
     python3 arith_vectors.py [LABEL=DIR ...] [--steps] [--circuit] [--out OUT.json] [--fixture PATH]
 
 checks `arith_encode`'s references against code.py on every stream (`check`), and with `--circuit` the Definitions too:
-the bit-checking step along each segment and each window's finish. `--steps` takes the
+the bit-checking step along each segment, the counting step's tally (each window's count is its segment's length, and
+its finish gives v1's charge), and the book's model (`BookKT_v1`) at each bit. `--steps` takes the
 replay's step traces in `tests/fixtures` (`test_v1`'s, at T = 20, so they span windows) and the TRACE-CORPUS fixture's
 fields, and `--fixture PATH` writes them as the vectors the certifier's test reads
 (`verity/core/protocols/certifier/tests/fixtures/arith_encode_vectors.json`). LABEL=DIR are TRACE-CORPUS traces
-(`replay.read_corpus_trace`, the warden's ingress; `derived.load_corpus_trace`). The report has each stream's shape:
-symbols, segment bits and scalings per window, which is what the circuit's cost reads.
+(`replay.read_corpus_trace`; `derived.load_corpus_trace`), each read twice: with the warden's ingress, where the
+arrivals are in release order, and with the client's send standing for the release, as v1's own table reads them,
+where they deviate and v1 sends order entries. The fixtures' arrivals never deviate. The report has each stream's
+shape: symbols, segment bits and scalings per window, which is what the circuit's cost reads.
 """
 from __future__ import annotations
 
@@ -169,18 +172,21 @@ def _chunks(xs: Sequence, n: int = 4096) -> Iterator[Sequence]:
 def check(stream: dict, *, circuit: bool, rng: random.Random | None = None, flips: int = 8) -> dict[str, Any]:
     """The references against code.py on the stream: after each symbol low and high are code.py's, a run is open
     exactly when code.py has pending bits, `used` is code.py's, and the window's finish ends its segment; a sample of
-    single-bit flips, a trailing bit and a dropped bit are refused (`check_window`). Each decision's context is min(run,
-    2) of the decisions before it, a function of the bits. With `circuit`, the Definitions against the references on
-    every step and finish, and on a flipped lookahead and a disabled step at each symbol."""
+    single-bit flips, a trailing bit and a dropped bit are refused (`check_window`). The counting step's tally after each
+    symbol is code.py's interval and the bits consumed, and each window's counting finish gives v1's charge and refuses
+    one bit less. The book's model gives each bit's estimate, and each decision's context is
+    min(run, 2) of the decisions before it. With `circuit`, the Definitions against the references on every step and
+    finish (on a flipped lookahead and a disabled step at each symbol too) and every bit's model."""
     AE = _ae()
     rng = rng or random.Random(0)
     bad: list[str] = []
     n_bits, scal = [], {0: [0], 1: [0]}
     steps: dict[int, list] = {0: [], 1: []}
-    fins = []
+    counts: dict[int, list] = {0: [], 1: []}
+    fins, cfins = [], []
     for w, win in enumerate(stream["windows"]):
         seg = [int(c) for c in win["segment"]]
-        st, pos = AE.fresh(), 0
+        st, t, pos = AE.fresh(), AE.Tally(), 0
         for j, (sym, (lo, hi, pend, used)) in enumerate(zip(win["symbols"], win["states"], strict=True)):
             BIN, s = sym[0], sym[1:]
             look = _look(seg, pos, K)
@@ -188,6 +194,10 @@ def check(stream: dict, *, circuit: bool, rng: random.Random | None = None, flip
             if (nxt.ok, nxt.low, nxt.high, nxt.open, nxt.used) != (1, lo, hi, int(pend > 0), used):
                 bad.append(f"window {w} symbol {j}")
             steps[BIN].append((st, s, look, (nxt, n)))
+            counts[BIN].append((t, 1, s))
+            t = AE.reference_count_step(K, BIN, AE.CW, t, 1, s)
+            if (t.ok, t.low, t.high, t.used, t.bits) != (1, lo, hi, used, pos + n):
+                bad.append(f"window {w} symbol {j}: the tally")
             st, pos = nxt, pos + n
             scal[BIN].append(n)
         tail = _look(seg, pos, 2)
@@ -200,12 +210,20 @@ def check(stream: dict, *, circuit: bool, rng: random.Random | None = None, flip
             cuts.append(seg[:k] + [1 - seg[k]] + seg[k + 1:])
         if any(AE.check_window(K, 0, [general(s) for s in win["symbols"]], c) for c in cuts):
             bad.append(f"window {w}: a flipped or cut segment accepted")
+        c = stream["charge"][w]
+        if AE.reference_count_finish(AE.CW, t, c) != (1, c) or (c and AE.reference_count_finish(AE.CW, t, c - 1)[0]):
+            bad.append(f"window {w}: the counted charge isn't v1's {c}")
+        cfins.extend((t, x) for x in (c, max(c - 1, 0)))
         n_bits.append(len(seg))
-    freqs = [s for win in stream["windows"] for s in win["symbols"] if s[0]]
-    if len(freqs) != len(stream["kt"]):
-        bad.append("the bits aren't the model's")
-    cbad_ctx = run = 0
-    for name, ctx, bit in stream["kt"]:
+    tables = {name: [tuple(p) for p in ps] for name, ps in stream["priors"].items()}
+    freqs = [tuple(s[2:]) for win in stream["windows"] for s in win["symbols"] if s[0]]
+    kt_cases: dict[int, list] = {}
+    kbad = cbad_ctx = run = 0
+    for (name, ctx, bit), f in zip(stream["kt"], freqs, strict=True):
+        nc = len(tables[name])
+        kt_cases.setdefault(nc, []).append((tuple(tables[name]), 1, ctx, bit))
+        ok_, f0, f1, tables[name] = AE.reference_book_kt(nc, tables[name], 1, ctx, bit)
+        kbad += not ok_ or (f0, f1) != f
         if name == "arrived":
             cbad_ctx += ctx != min(run, 2)
             run = 0 if bit else run + 1
@@ -213,8 +231,8 @@ def check(stream: dict, *, circuit: bool, rng: random.Random | None = None, flip
         "windows": len(stream["windows"]), "symbols": sum(len(w["symbols"]) for w in stream["windows"]),
         "bit_symbols": len(freqs), "max_symbols": max((len(w["symbols"]) for w in stream["windows"]), default=0),
         "bits": sum(n_bits), "max_bits": max(n_bits, default=0), "max_scalings_bit": max(scal[1]),
-        "max_scalings_int": max(scal[0]), "charged": sum(stream["charge"]), "reference_mismatches": len(bad),
-        "reference_first": bad[:5], "context_mismatches": cbad_ctx}
+        "max_scalings_int": max(scal[0]), "charged": sum(stream["charge"]),
+        "reference_mismatches": len(bad), "reference_first": bad[:5], "kt_mismatches": kbad, "context_mismatches": cbad_ctx}
     if circuit:
         cbad, n_cases = 0, 0
         for BIN in (0, 1):
@@ -228,10 +246,23 @@ def check(stream: dict, *, circuit: bool, rng: random.Random | None = None, flip
             for at, chunk in zip(range(0, len(cases), 4096), _chunks(cases)):
                 for g, w_ in zip(AE.evaluate_steps(K, BIN, chunk), want[at:at + 4096]):
                     cbad += (g[0].ok != 0) if w_[0].ok == 0 else g != w_
-            n_cases += len(cases)
+            ccases = counts[BIN] + [(t, 0, s) for t, _en, s in counts[BIN]]
+            for chunk in _chunks(ccases):
+                for g, cs in zip(AE.evaluate_counts(K, BIN, AE.CW, chunk), chunk):
+                    w_ = AE.reference_count_step(K, BIN, AE.CW, *cs)
+                    cbad += (g.ok != 0) if w_.ok == 0 else g != w_
+            n_cases += len(cases) + len(ccases)
         got = AE.evaluate_finishes([(st, tail) for st, tail, _ in fins]) if fins else []
         cbad += sum(g != w_ for g, (_s, _t, w_) in zip(got, fins))
-        out.update(circuit_cases=n_cases + len(fins), circuit_mismatches=cbad)
+        got = AE.evaluate_count_finishes(AE.CW, cfins) if cfins else []
+        cbad += sum(g != AE.reference_count_finish(AE.CW, t, c) for g, (t, c) in zip(got, cfins))
+        for nc, cs in kt_cases.items():
+            for chunk in _chunks(cs):
+                for g, c_ in zip(AE.evaluate_book_kt(nc, chunk), chunk):
+                    w_ = AE.reference_book_kt(nc, *c_)
+                    cbad += (g[0] != 0) if w_[0] == 0 else g != w_
+        out.update(circuit_cases=n_cases + len(fins) + len(cfins) + sum(map(len, kt_cases.values())),
+                   circuit_mismatches=cbad)
     return out
 
 
@@ -257,7 +288,9 @@ def sources(corpus: Sequence[str], steps: bool, stops: Sequence[int], T: int) ->
             FIXTURES / "corpus-smallkv", eos_token_id=128009, stop_token_ids=(128001, 128008)))
     for spec in corpus:
         label, d = spec.split("=", 1)
-        yield f"{label} (decisions, T={T})", lambda d=d: decisions(R.read_corpus_trace(d, ingress="warden"), stops, T=T)
+        for ingress in ("warden", "client"):
+            yield f"{label} (decisions, T={T}, {ingress})", lambda d=d, ingress=ingress: decisions(
+                R.read_corpus_trace(d, ingress=ingress), stops, T=T)
         yield f"{label} (fields)", lambda d=d: fields(D.load_corpus_trace(d, eos_token_id=stops[0],
                                                                           stop_token_ids=tuple(stops[1:])))
 
@@ -290,7 +323,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"{name}: nothing still sent", flush=True)
             continue
         r = report["streams"][name] = check(stream, circuit=a.circuit, rng=random.Random(name))
-        ok &= not (r["reference_mismatches"] or r["context_mismatches"] or r.get("circuit_mismatches"))
+        ok &= not (r["reference_mismatches"] or r["kt_mismatches"] or r["context_mismatches"]
+                   or r.get("circuit_mismatches"))
         print(f"{name}: {json.dumps(r)}", flush=True)
         kept.append({"source": name, **stream})
     if a.out:

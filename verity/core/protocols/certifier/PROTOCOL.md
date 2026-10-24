@@ -1454,58 +1454,45 @@ composition below): what the bound counts is the charge, not the committed lengt
 6. `compile_steps(registered, advice, ingress)` (#3504) turns the advice into the Programs, with `ingress` the certified
    bodies by id.
 
-**The encoder in the circuit** (`arith_encode`: `ArithEncodeStep_v1{K, BIN}`, `ArithEncodeFinish_v1` and
-`KTContext_v1{C, NW}`, with `reference_step`, `reference_finish` and `reference_kt` their specs).
-- *The charge is the coded length.* The committed advice is each window's raw decision bits, which the scan reads
-  (item 2), with its order entries and sent shortfalls. The encoder runs `code_v1`'s code forward over the same values,
-  once a window in `code_v1`'s order (`code_v1._window`), from `fresh()`. It counts the bits the window's segment would
-  hold: one per scaling (a resolved bit, or a pending one a later resolution writes) and the termination's two (none
-  when nothing was used, as code.py's `shifts + 2`). The total must be at most c_w.
-  - No codeword is committed and no segment is compared, so nothing reads a segment at a data-dependent cursor.
-  - The charge is the length of the string `encode` would write, which is prefix-free, and `encode` is injective on
-    the values (`decode` inverts it). So at most 2^c value lists, and so at most that many advices, are accepted at a
-    charge of c or less, as "The bound" above has it.
-  - Any refusal clears the coder's `ok`, and the unit fails: a symbol code.py refuses, more than K scalings or a total
-    past c_w. After the update a symbol's interval keeps at least 2^14 values, so K = 18 never refuses one.
-  - `ArithEncodeStep_v1`'s n, the scalings it takes, is that count: a symbol's scalings depend only on the interval,
-    never on the segment. ADV-SPEC's slice (`compile_slice`, #3661) charges this way, running the step against a
-    witness codeword and reading the position after the finish. ENC-CODE's counting form (`ArithCountStep_v1` and
-    `ArithCountFinish_v1{CW, NB}`, #3660) takes a symbol's scalings at once, with no segment, and holds the total to
-    c_w in the finish.
-- *The context and the frequencies are the circuit's, never witness.*
-  - A decision's context comes from the replay's position. Under `code_v1` it is min(run, 2), with run the decisions
-    since the last arrival: a 2-bit counter the circuit carries, which a 1 (an arrival) resets and a 0 raises,
-    saturating.
-  - Its (f0, f1) are the model's estimate for that context, from counts that start at the registered book's priors
-    (public, fit on history before the run) and that each coded decision raises in the circuit. The counts carry
-    across windows.
-  - An integer's (cum, freq, total) come from the book's public bin tables at the value's bin.
-  - The prover supplies none of them. "The bound" counts the strings of one registered code; a context or a frequency
-    of the prover's choosing would pick the code per value and charge any decisions next to nothing.
-  - ADV-SPEC's slice computes both in the circuit: the context from the queue head's passes, and `KTContext_v1`'s
-    counts from zero.
-- *Per decision*, as built here: `ArithEncodeStep_v1{18, 1}` codes (bit, f0, f1) as code.py does, and with BIN = 0 the
-  step codes `code_v1`'s general (cum, freq, total) symbols. `KTContext_v1{3, 24}` is ENC-REPLAY's scaled estimate,
-  which v1 coded with before `code_v1`. `code_v1.KT` halves its counts in place instead, and its circuit is ENC-CODE's
-  `BookKT_v1{C}` (#3660).
-- *Held to the coders* (`benchmarks/network_e2e/encodings/arith_vectors.py`). It runs `code_v1` over advice v1's
-  windows (`v1.residual`: the decisions, the order entries and the sent hits, under a book fit to them at v1's
-  registered caps, `v1.TABLE_CAPS`) and over ENC-DERIVED's still-sent fields, each symbol tagged a bit or an integer's.
-  - After every symbol, low and high are code.py's, a pending run is open exactly when code.py has pending bits, and
-    `used` is code.py's. Each step's n is the segment bits code.py consumed, each window's finish ends at its segment's
-    end, and every flipped or cut segment is refused.
-  - Each bit symbol is one the book's model coded, and each decision's context is min(run, 2) of the decisions before
-    it, a function of the bits.
-  - On ENC-REPLAY's step traces and the TRACE-CORPUS fixture (the certifier's vectors): 0 mismatches. On all 14
-    corpus traces at T = 600, and the 6 of them that send ENC-DERIVED's fields, under v1 before its order entries
-    (#3642's): 0 mismatches (art:ff4b26d8b4f6a796af9a33734c0a47fae8b50e15c2dee26525d51fece681a2c0, #3660's check,
-    which adds its counting form's cases to these).
-- *Cost* (`arith_encode.size`, ANDs, pinned in its circuit-check sidecar).
-  - `ArithEncodeStep_v1{18, 1}` costs 3,244: the interval 1,855 (one 33 × 16-bit product and one division to 32
-    quotient bits), the scalings 1,188 and the segment check 201. `ArithEncodeStep_v1{18, 0}` costs 4,964,
-    `ArithEncodeFinish_v1` 6 and `KTContext_v1{3, 24}` 1,202.
-  - The counting form (#3660) costs 2,580 a decision, the step's 2,243 and `BookKT_v1{3}`'s 337: 2.8% of a
-    `ReplayStep_v1{16,64,16}` step's 92,146.
+**The encoder in the circuit** (`arith_encode`: `ArithCountStep_v1{K, BIN, CW}`, `ArithCountFinish_v1{CW, NB}` and
+`BookKT_v1{C}`, with their references as specs; its docstring has the mechanics).
+- *The charge is the coded length.* The scan reads the committed values (item 2). The encoder runs `code_v1`'s code
+  forward over them, once a window from `Tally()`, and counts the bits the window's segment would hold: each symbol's
+  scalings, taken at once, and the termination's 2 when used. The total must be at most c_w. No codeword is committed
+  and no segment is compared. `encode` is injective on the values and its strings are prefix-free, so at most 2^c value
+  lists are accepted at a charge of c or less ("The bound" above).
+- *A window's run*, in `code_v1._window`'s order: n_arrived = `left`; each decision slot j < D at context min(run, 2),
+  its (f0, f1) from `BookKT_v1{3}`, coded by `ArithCountStep_v1{18, 1, 20}`; n_hits = `hleft` and each shortfall;
+  n_resumes (0 under v1); n_order and each order entry's position gap and rank step; n_lag (0 under v1); then
+  `ArithCountFinish_v1{20, 0}`, since v1 sends no pool header. Slots past a count run with en = 0. A refusal (a symbol
+  code.py refuses, more than K scalings, a count past 2^20, a charge past c_w) fails the unit, and K = 18 never refuses
+  a symbol.
+- *The context and the frequencies are the circuit's, never witness.* The context is a 2-bit run counter carried from
+  the replay's position: an arrival resets it, and a 0 raises it, saturating. (f0, f1) come from counts that start at
+  the registered book's public priors and that each coded decision raises in the circuit, across windows. An integer's
+  (cum, freq, total) come from the book's public bin tables. A context or a frequency of the prover's choosing would
+  pick the code per value and charge any decisions next to nothing. ADV-SPEC's slice (#3661) computes both in the
+  circuit too, at its own model (Open), and charges the position after `ArithEncodeFinish_v1`, which counts the same
+  bits.
+- *Integers.* `code_v1` codes an integer as `code.Binned` does: a bin symbol from the book's table (or the escape and a
+  uniform one), then a uniform offset, each a general (cum, freq, total) that `ArithCountStep_v1{18, 0, 20}` counts.
+  Lowering a value to them isn't built (Open).
+- *Held to the coders* (`benchmarks/network_e2e/encodings/arith_vectors.py`): `code_v1` over v1's windows
+  (`v1.residual`, a book fit at `v1.TABLE_CAPS`) and ENC-DERIVED's still-sent fields. After every symbol the count's
+  interval and `used` are code.py's and its count is the bits consumed. Each window's finish gives v1's charge and
+  refuses one bit less, each bit's estimate is the book's model's at context min(run, 2), and the bit-checking variant
+  refuses every flipped or cut segment. On the 14 corpus traces at T = 600, read with the warden's ingress and with the
+  client's send as the release (order entries sent), and 6 traces' fields: 0 mismatches in 1,103,746 circuit cases
+  (art:903980ba78e15721babf9fd51b65befe7e298f4cc671052604dbad9599166040). The certifier's vectors (ENC-REPLAY's step
+  traces, the TRACE-CORPUS fixture) hold no order entry.
+- *Cost* (ANDs, pinned): a decision 2,580 (the step's 2,243 and `BookKT_v1{3}`'s 337), 2.8% of a
+  `ReplayStep_v1{16,64,16}` step's 92,146; an integer's symbol 3,963; a window's finish 41. A window pays for all its
+  fixed-width slots. The corpus's largest (the art's `shapes.json`): light's, 4,396 decisions, 11.4M; smallkv's, 1,466
+  decisions and 5,686 integer symbols, 26.3M before the integers' lowering; async heavy's with the client's send, 1,000
+  decisions and 1,761 integer symbols, 9.6M.
+- *The bit-checking variant* (`ArithEncodeStep_v1{K, BIN}`, `ArithEncodeFinish_v1`, `KTContext_v1{C, NW}`) is the
+  alternative, where the committed advice is the segments and the encoder's output must equal each, bit for bit. Its
+  decision step costs 3,244, and it needs a reader at a data-dependent cursor, which isn't built.
 
 **The prefix cache in the scan.** `CacheStep_v1` (`cache_step`) is ENC-DERIVED's prefix rules (`Prefixes`) as a Boolean
 Definition: one row's pass over a table of at most N cached units (a unit's U tokens, its parent entry and its owner,
@@ -1623,11 +1610,11 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
 
 **Open.**
 - *The charge's pieces* (composition item 3, "The encoder in the circuit").
-  - ENC-CODE: the counting form and `code_v1`'s model (`ArithCountStep_v1`, `ArithCountFinish_v1` and `BookKT_v1`,
-    #3660). Lowering an integer (the window's counts, each order entry and each shortfall) to its `Binned` symbols in
-    the book's public tables isn't built, so the circuit charges the decisions only.
+  - ENC-CODE: lowering an integer (the window's counts, each order entry's position and rank, and each shortfall) to
+    its `Binned` symbols in the book's public tables, about a bin's mux over the table and a 17-bit uniform range. Not
+    built, so the circuit charges the decisions only.
   - ADV-SPEC's slice codes its asks at ENC-REPLAY's plain contexts with `KTContext_v1` from zero counts, where
-    `code_v1` codes the arrived bits at min(run, 2) with `code_v1.KT` from the book's priors. The plain context,
+    `code_v1` codes the arrived bits at min(run, 2) with `code_v1.KT` (`BookKT_v1`) from the book's priors. The plain context,
     min(passes, 2) with passes the asks so far about the request, is the run except after an arrival taken unasked,
     which resets passes but not the run.
 - *The chain's carry* (ADV-SPEC). `replay_chain`'s load refuses a window that left decisions unread, but A5's
