@@ -6,21 +6,22 @@ Writes `DIR/issuer/instances.jsonl`, one instance per line as `CertifierDevice.I
 key, made by `lms.keygen` from a seed, a certifier session's id, and a sequence of calls to one issuer in that session),
 and `DIR/issuer/python.jsonl`, the same line's results from the checkout's real `certificate.Issuer`. A call is a record (link, window, grid and status), its
 direction, grid parameters and Σ_sync (or none), the parameters digest it is certified under (`parameters_digest` of
-those, or other bytes), the deadline bit, the leaf the host reserves for it (or a refusal), a tamper to check
+those, or other bytes), the deadline bit, the salt the issuer's coins give it (64 bytes, or 63 or 65, which
+`Issuer.certify` refuses), the leaf the host reserves for it (or a refusal), a tamper to check
 `CertifiedRecord.verify` against, and which way, if any, the call was made malformed (`MALFORMED`). The session id is 32
 bytes, or in some instances 31 or 33, which `Issuer.certify` refuses on every call. The issuer's signer is a stand-in
 that starts any session and signs at the call's leaf with `lms.sign_at`, or raises `SignerRefused` where the reservation
 is refused, since the signer's state (`lms.LeafState.start` and `reserve`) is the host's.
 Each call's result is the parameters digest, and either `null` where `Issuer.certify` raises `ValueError` or the
-certified record (`null` when refused): its head's encoding and digest, its certificate's fields, `verify` under the
-key, and `verify` after the tamper; at the end, the issuer's `refused` list.
+certified record (`null` when refused): its head's encoding and digest, its salt, its certificate's fields, `verify`
+under the key, and `verify` after the tamper; at the end, the issuer's `refused` list.
 
 The keys are the deployed scheme's N = 64, W = 1 at height 1 and `TOY_N` at W = 1, 2 and 4, small enough to sign
 interpreted (`Lms.SignDifftest` holds signing itself to `lms.sign_at` at more sets and heights). The records are grids of B-byte frames, left-packed, under random parameters and statuses, and grids
 `record_head` refuses (a row too many or too few, a row too long, a row not left-packed, a frame of the wrong size), a
 window past a u64, a link past 65,535 bytes, parameters bytes not 64 long, and leaves past 2^H. The tampers change the
 certificate's signature (a byte, or its length), link, direction, window or digest, the head's deadline, or the public
-key's identifier or root, or check the certificate in another session; or they change the certificate's link, direction,
+key's identifier or root, or the record's salt, or check the certificate in another session; or they change the certificate's link, direction,
 window or key identifier and sign it again at the same leaf, so that only the checks that it names the head's link-window and the key reject it. The Lean audit runs `CertifierDevice/IssuerDifftestMain.lean` on both files (`runs` in
 `lean-audit.json`, which pins their SHA-256), and `verity/core/protocols/certifier/tests/
 test_network_certifier_issuer_lean_difftest.py` checks that this script still writes them.
@@ -35,7 +36,7 @@ from fractions import Fraction
 from pathlib import Path
 
 import verity.core.protocols.certifier
-from verity.core.protocols.certifier.certificate import (Direction, Issuer, LmsKey, SignerRefused,
+from verity.core.protocols.certifier.certificate import (SALT_BYTES, Direction, Issuer, LmsKey, SignerRefused,
                                                                  parameters_digest)
 from verity.core.protocols.certifier.grid import GridParams, Reason, Record, Status
 from verity.core.protocols.certifier.schedule import SyncSet
@@ -47,9 +48,9 @@ COUNT = 160
 KEYS = [((64, 1, 1, False), 3), ((8, 1, 2, True), 2), ((8, 2, 3, True), 2), ((8, 4, 2, True), 2)]
 RHOS = [Fraction(1), Fraction(1, 2), Fraction(3, 2), Fraction(999, 1000), Fraction(1001, 1000), Fraction(7)]
 LINKS = ["responses", "requests", "", "réponses/λ"]
-TAMPERS = ["signature", "signature-length", "link", "direction", "window", "digest", "deadline", "public-id",
+TAMPERS = ["signature", "signature-length", "link", "direction", "window", "digest", "deadline", "salt", "public-id",
            "public-root", "session", "resign-link", "resign-direction", "resign-window", "resign-key-id"]
-MALFORMED = ["rows", "row", "packing", "frame", "window", "link", "parameters", "leaf"]
+MALFORMED = ["rows", "row", "packing", "frame", "window", "link", "parameters", "salt", "leaf"]
 
 
 class LeafSigner:
@@ -93,7 +94,7 @@ def call(rng: random.Random, height: int) -> dict:
               "status": None if rng.random() < 0.5 else rng.choice(list(Reason)).value}
     c = {"record": record, "direction": direction.value, "params": {"T": p.buckets, "r": p.allocation,
          "B": p.frame_bytes, "tau": p.bucket_ms, "Q": p.queue_capacity}, "sync_set": sync_set, "parameters": None,
-         "deadline": rng.random() < 0.8, "leaf": None if rng.random() < 0.15 else rng.randrange(2 ** height),
+         "deadline": rng.random() < 0.8, "salt": rng.randbytes(SALT_BYTES).hex(), "leaf": None if rng.random() < 0.15 else rng.randrange(2 ** height),
          "tamper": None if rng.random() < 0.3 else [rng.choice(TAMPERS), rng.randrange(1 << 16)], "malformed": None}
     if rng.random() < 0.15:
         bad = c["malformed"] = rng.choice(MALFORMED)
@@ -113,6 +114,8 @@ def call(rng: random.Random, height: int) -> dict:
             record["link"] = "x" * 65536
         elif bad == "parameters":
             c["parameters"] = rng.randbytes(rng.choice([0, 63, 65])).hex()
+        elif bad == "salt":
+            c["salt"] = rng.randbytes(SALT_BYTES + rng.choice([-1, 1])).hex()
         else:
             c["leaf"] = 2 ** height + rng.randrange(3)
     return c
@@ -133,7 +136,7 @@ def record_of(x: dict) -> Record:
 
 def tampered(c, key: LmsKey, private: lms.PrivateKey, q: int, session: bytes, tamper: list) -> bool:
     kind, at = tamper
-    x, h = c.certificate, c.head
+    x, h, salt = c.certificate, c.head, c.salt
     flip = lambda b: b[:at % len(b)] + bytes([b[at % len(b)] ^ 1]) + b[at % len(b) + 1:]
     if kind == "signature":
         x = dataclasses.replace(x, signature=flip(x.signature))
@@ -149,6 +152,8 @@ def tampered(c, key: LmsKey, private: lms.PrivateKey, q: int, session: bytes, ta
         x = dataclasses.replace(x, digest=flip(x.digest))
     elif kind == "deadline":
         h = dataclasses.replace(h, deadline=not h.deadline)
+    elif kind == "salt":
+        salt = flip(salt)
     elif kind.startswith("resign-"):
         x = dataclasses.replace(x, **{
             "link": {"link": x.link + "x"},
@@ -161,7 +166,7 @@ def tampered(c, key: LmsKey, private: lms.PrivateKey, q: int, session: bytes, ta
         key = LmsKey(key.params, flip(key.public[:16]) + key.public[16:])
     else:
         key = LmsKey(key.params, key.public[:16] + flip(key.public[16:]))
-    return dataclasses.replace(c, head=h, certificate=x).verify(key, session)
+    return dataclasses.replace(c, head=h, salt=salt, certificate=x).verify(key, session)
 
 
 def python_results(inst: dict) -> dict:
@@ -171,7 +176,8 @@ def python_results(inst: dict) -> dict:
     key = LmsKey(params, lms.public_key(private))
     signer = LeafSigner(private)
     session = bytes.fromhex(inst["session"])
-    issuer = Issuer(signer, session)
+    salts = iter(bytes.fromhex(c["salt"]) for c in inst["calls"])
+    issuer = Issuer(signer, session, coins=lambda n: next(salts))
     out = []
     for c in inst["calls"]:
         p = GridParams(**dict(zip(["buckets", "allocation", "frame_bytes", "bucket_ms", "queue_capacity"],
@@ -191,7 +197,7 @@ def python_results(inst: dict) -> dict:
             continue
         x = certified.certificate
         out.append({"parameters": parameters.hex(), "certify": {"certified": {
-            "head": [certified.head.encode().hex(), certified.head.digest().hex()],
+            "head": [certified.head.encode().hex(), certified.head.digest().hex()], "salt": certified.salt.hex(),
             "certificate": [x.key_id.hex(), x.link, x.direction.value, x.window, x.digest.hex(), x.signature.hex()],
             "verify": certified.verify(key, session),
             "tampered": None if c["tamper"] is None else tampered(certified, key, private, c["leaf"], session,

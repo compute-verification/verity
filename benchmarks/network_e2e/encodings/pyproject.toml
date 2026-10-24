@@ -1,0 +1,14 @@
+# The advice's encodings (network accounting for arbitrary vLLM usage). `derived.py`: the fields of advice v0 (I1) that
+# cost zero bits, the residual that remains and its bits per certifier window; `sched_trace.py`: step traces from vLLM's
+# own scheduler, which the tests read as fixtures (it needs vLLM). Not a package: the modules load by path (the
+# directory's name shadows the stdlib's `encodings`), and they run here as a suite
+# (`uv run tools/verity/check/suites.py benchmarks/network_e2e/encodings`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# derived.py builds and charges advice v0 with the certifier's I1 (verity.core.protocols.certifier.advice), which reads
+# the package inits on the way.
+inputs = ["verity/__init__.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+          "verity/core/protocols/certifier/__init__.py", "verity/core/protocols/certifier/advice.py"]

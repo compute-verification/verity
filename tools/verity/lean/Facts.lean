@@ -428,27 +428,100 @@ partial def premiseHead (moduleOf : Name → Option Name) (n : Nat) (t : Expr) :
     let b ← whnfR b
     if b.isForall && n > 0 then premiseHead moduleOf (n - 1) b else return head b
 
-/-- The premises a statement takes: the `Prop` hypotheses of each conjunct, also under the statement definitions (a
-`Guarantees` namespace's) its conjuncts apply, unfolded at most `depth` deep, each named by its head after reducible
-unfolding, so a `Premises` abbrev names the assumption it stands for. A conclusion is never unfolded. -/
-partial def premisesOf (env : Environment) (moduleOf : Name → Option Name) (depth : Nat) (e : Expr) : MetaM (Array Json) := do
+/-- The heads (`premiseHead`) of the parts a hypothesis packs in `∧` and `∃`, past its binders: `(∃ x, A x) ∧ B` has
+`A` and `B`. -/
+partial def packedHeads (moduleOf : Name → Option Name) (t : Expr) : MetaM (Array Name) :=
+  forallTelescope t fun _ b => do
+    if b.isAppOfArity ``And 2 then
+      return (← packedHeads moduleOf b.appFn!.appArg!) ++ (← packedHeads moduleOf b.appArg!)
+    if b.isAppOfArity ``Exists 2 then
+      return ← withLocalDeclD `x b.appFn!.appArg! fun x => packedHeads moduleOf (b.appArg!.beta #[x])
+    return (← premiseHead moduleOf 4 b).toArray
+
+/-- `e` with its `let`s inlined, its metadata dropped and its β-redexes reduced: `forallTelescope` stops at each of them,
+and a premise past one would go unrecorded. -/
+def plain (e : Expr) : MetaM Expr := do
+  transform (← zetaReduce e) (pre := fun e => return if let .mdata _ b := e then .visit b else .continue)
+    (post := fun e => return if e.isHeadBetaTarget then .visit e.headBeta else .done e)
+
+/-- The assumptions a premise's type mentions: the constants of an assumptions module that are `Prop`s or predicates,
+wherever they stand in it (`A ∧ B`, `A ↔ B`, `¬ A`, `∃ x, A x`, `id A`), their types unfolded (`A : Pred`). -/
+def mentioned (env : Environment) (moduleOf : Name → Option Name) (t : Expr) : MetaM (Array Name) :=
+  t.getUsedConstants.filterM fun c => do
+    unless ((moduleOf c).map (·.components.contains `Assumptions)).getD false do return false
+    let some ci := env.find? c | return false
+    forallTelescopeReducing ci.type fun _ b => return b.isProp
+
+/-- The assumptions the fields of the structure a binder ranges over mention (`s : {k // A k}`, `g : G` with a field
+`h : A g.k`), at every index of a family (`Fin n → G`), and those of the structures under `meaning` its fields range
+over, transitively. -/
+partial def fieldPremises (env : Environment) (meaning : Array Name) (moduleOf : Name → Option Name) (top : Bool)
+    (t : Expr) : MetaM (Array Name) :=
+  forallTelescope t fun _ cod => do
+    let cod ← whnfR cod
+    let .const s us := cod.getAppFn | return #[]
+    unless top || ((moduleOf s).map (under meaning ·)).getD false do return #[]
+    let some (.inductInfo iv) := env.find? s | return #[]
+    let [ctor] := iv.ctors | return #[]
+    if iv.numIndices != 0 || iv.isRec then return #[]
+    let some (.ctorInfo cv) := env.find? ctor | return #[]
+    let ctorType ← instantiateForall (cv.type.instantiateLevelParams cv.levelParams us)
+      (cod.getAppArgs.extract 0 cv.numParams)
+    forallTelescope ctorType fun fs _ => fs.foldlM (init := #[]) fun out f => do
+      let ft ← inferType f
+      let inner ← if ← isProp ft then pure #[] else fieldPremises env meaning moduleOf false ft
+      return out ++ (← mentioned env moduleOf ft) ++ inner
+
+/-- For `e` applying a `Guarantees` definition or another definition under `meaning` outside an assumptions module,
+whether it is a `Guarantees` one and its value applied to `e`'s arguments. -/
+def unfoldSpec? (env : Environment) (meaning : Array Name) (moduleOf : Name → Option Name) (e : Expr) :
+    Option (Bool × Expr) := do
+  let .const d us := e.getAppFn | none
+  let .defnInfo dv ← env.find? d | none
+  let m ← moduleOf d
+  let statement := d.components.contains `Guarantees
+  guard (statement || (under meaning m && !m.components.contains `Assumptions))
+  return (statement, (dv.value.instantiateLevelParams dv.levelParams us).beta e.getAppArgs)
+
+/-- The premises a statement takes (`plain`): the `Prop` hypotheses of each conjunct, each named by its head after
+reducible unfolding (so a `Premises` abbrev names the assumption it stands for), by the heads of the parts it packs in `∧`
+and `∃` (`packedHeads`) and by the assumptions it mentions, and the assumptions the fields of a structure a binder ranges
+over mention (`fieldPremises`); also those under the statement definitions (a `Guarantees` namespace's) a conclusion
+applies. In each conjunct, disjunct, `if` branch and `∃` body of a conclusion, under any other definition under `meaning`
+a conclusion applies (outside an assumptions module, `unfoldSpec?`), and in each predicate a conclusion passes to a
+constant it doesn't unfold (a `match`'s branches, `List.Pairwise (fun a b => …)`, a recursive definition's step), only the
+assumptions its hypotheses mention (`only`): its other hypotheses (an acceptance event, a target) are what the conclusion
+means, not premises. -/
+partial def premisesOf (env : Environment) (meaning : Array Name) (moduleOf : Name → Option Name) (only : Bool)
+    (e : Expr) : MetaM (Array Json) := do
   let mut out := #[]
   for c in conjuncts e do
     out := out ++ (← forallTelescope c fun xs body => do
       let mut ps := #[]
       for x in xs do
         let t ← inferType x
-        unless ← isProp t do continue
-        let head ← premiseHead moduleOf 4 t
-        if let some h := head then
+        let hs ← if !(← isProp t) then fieldPremises env meaning moduleOf true t
+          else if only then mentioned env moduleOf t
+          else do pure ((← packedHeads moduleOf t) ++ (← mentioned env moduleOf t))
+        for h in hs do
           ps := ps.push <| Json.mkObj [("binder", toJson (← x.fvarId!.getDecl).userName.toString),
             ("head", toJson h.toString), ("module", toJson ((moduleOf h).map toString))]
-      if depth > 0 then
-        if let .const d us := body.getAppFn then
-          if d.components.contains `Guarantees then
-            if let some (.defnInfo dv) := env.find? d then
-              ps := ps ++ (← premisesOf env moduleOf (depth - 1)
-                ((dv.value.instantiateLevelParams dv.levelParams us).beta body.getAppArgs))
+      if body.isAppOfArity ``And 2 || body.isAppOfArity ``Or 2 || body.isAppOfArity ``ite 5 then
+        for b in body.getAppArgs.extract (body.getAppNumArgs - 2) body.getAppNumArgs do
+          ps := ps ++ (← premisesOf env meaning moduleOf true b)
+      else if body.isAppOfArity ``Exists 2 then
+        if let .lam n ty b bi := body.appArg! then
+          ps := ps ++ (← withLocalDecl n bi ty fun y => premisesOf env meaning moduleOf true (b.instantiate1 y))
+      else if let some (statement, v) := unfoldSpec? env meaning moduleOf body then
+        ps := ps ++ (← premisesOf env meaning moduleOf (only || !statement) (← plain v))
+      else
+        for a in body.getAppArgs do
+          if a.isLambda then
+            ps := ps ++ (← lambdaTelescope a fun _ b => do
+              if ← isProp b then premisesOf env meaning moduleOf true b else return #[])
+          else if (unfoldSpec? env meaning moduleOf a).isSome then
+            ps := ps ++ (← forallTelescopeReducing (← inferType a) fun ys t => do
+              if t.isProp then premisesOf env meaning moduleOf true (mkAppN a ys) else return #[])
       return ps)
   return out
 
@@ -500,7 +573,7 @@ def pinInfo (env : Environment) (meaning : Array Name) (axioms : Std.HashMap Nam
   let some ci := env.find? n | return Json.mkObj [("kind", "missing")]
   let moduleOf (c : Name) : Option Name := (env.getModuleIdxFor? c).map fun i => moduleName env i
   let signature := toString (← PrettyPrinter.ppSignature n).fmt
-  let hypotheses ← forallTelescope ci.type fun xs _ => do
+  let hypotheses ← forallTelescope (← plain ci.type) fun xs _ => do
     let mut out := #[]
     for x in xs do
       let t ← inferType x
@@ -522,7 +595,7 @@ def pinInfo (env : Environment) (meaning : Array Name) (axioms : Std.HashMap Nam
     ("at", toJson (ranges[n]?.map fun (d : DeclarationRanges) => #[d.range.pos.line, d.range.pos.column])),
     ("signature", toJson signature), ("axioms", toJson ((axioms.getD n {}).toArray.qsort Name.lt |>.map toString)),
     ("hypotheses", toJson hypotheses), ("shape", ← shapeInfo env meaning moduleOf ci.type),
-    ("premises", ← (do return toJson (← premisesOf env moduleOf 3 ci.type)) <|> pure Json.null),
+    ("premises", ← (do return toJson (← premisesOf env meaning moduleOf false (← plain ci.type))) <|> pure Json.null),
     ("body", ← (do
       let (h, neg) ← bodyHead ci.type
       let (cs, absurd) ← conclusionOf env meaning ci.type

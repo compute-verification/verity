@@ -64,6 +64,7 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
                  "fpx-g1s-co32c-w4a8-nvi5-gptq-lm8-c6", "fpx-a1-e4m3i", "fpx-g1h-e4m3i120-w104",
                  "fpx-g1h-w4a8-nvi9-gptq-lm8-c6"):
         want[name] = ("all", "int8-all", True)
+    want["int8-channel127-v3"] = want["fp8-block"] = ("linears", "int8-linears", False)
     got = {p.stem: spec.load(str(p)) for p in spec.SPECS.glob("*.toml")}
     assert set(got) == set(want)
     for name, (scope, plain, seeded) in want.items():
@@ -236,7 +237,7 @@ def test_round_trip():
 def test_defaults_are_filled_and_typed():
     a = parse('[[linear]]\nstep = "int8"\nweight_top = 63\n[[linear]]\nstep = "int8"\nlayers = [0]\nact = "dither"')
     assert a.linear[0].kw == {"act": "round", "act_top": 127, "weight": "round", "weight_top": 63, "group": 0,
-                              "gptq": False, "density": 1.0, "dither_bits": 1}
+                              "gptq": False, "density": 1.0, "dither_bits": 1, "exact": False}
     assert a.linear[1].layers == frozenset({0})
     s = parse('[[linear]]\nstep = "smooth"\nalpha = 1').linear[0]
     assert s.kw["alpha"] == 1.0 and isinstance(s.kw["alpha"], float)

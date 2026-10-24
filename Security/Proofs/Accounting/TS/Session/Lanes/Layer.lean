@@ -2,6 +2,8 @@ import Proofs.Accounting.TS.Session.Checked.Layer
 import Proofs.Accounting.TS.Session.Held.Layer
 import Proofs.Flock.Recursive.Registrants
 import Flock.KnownRead
+import PouwWindow.OwnPorts
+import PouwWindow.FullDraw
 
 /-!
 # A leaf's proof layer through its 33 linked C-Flock sessions (option A)
@@ -31,8 +33,9 @@ This file states, on words, what the 33 statements check and what one unit's ser
 * `UnitServed`: the leaf's served checks, `Accounting.Served`'s `ProductOf` and `DequantOf` at every cell (`CellOk`,
   with `dq` the Program's dequant on its words, `PouwZyDequant_v2` today) and its receipt the XOR of its lanes' honest
   partials (#3095's order, the tile unit's receipt as `lane_partials` splits it);
-* `RowsAgree`, `LeafColl`: the 33 sessions' registrants' rows (`RowsSession.rdU`, each the commit-time opening its
-  session registers) are one row's bytes wherever two of them read one registered root at one position; or two of the
+* `SameTree`, `RowsAgree`, `LeafColl`: the 33 sessions' registrants' rows (`RowsSession.rdU`, each the commit-time
+  opening its session registers) are one row's bytes wherever two of them read one registered tree (root, leaf count,
+  domain and schema, under any port name) at one position; or two of the
   registrants' records clash (`ReadsX.Clash`: their openings, or hm96's leaves over their rows, are two different
   SHA-512 inputs with one digest, both in hand). Each opening opens its root there (`ReadsX.committed`), so one of the
   two holds (`Accounting.TS.Lanes.rowsAgree_or_leafColl`);
@@ -44,9 +47,11 @@ This file states, on words, what the 33 statements check and what one unit's ser
 * `leafLayer`: the unit's proof layer. Proof `i` of round `w` is accepted where flock-verify `--zk --registered`
   accepts every one of its 33 sessions (`sess x w i (some l)` lane `l`'s, `sess x w i none` the combine's), its
   known-content check (`known x w i k`, the session's registered file's known content), its complete check (the
-  file sets `complete`, `Registered.checkComplete`) and its check that each known port is a known value's row whose
-  every bit the circuit reads or returns (`KnownRead.check`) included, opens the leaf's
-  values committed before σ_w (`Leaf`: its A and B rows with their scales and its z/y record), and its relation is
+  file sets `complete`, `Registered.checkComplete`) and its check that each known port, and each port the file marks
+  `read_in_full` (`full x w i k`), is a row of its words whose every bit the circuit reads or returns
+  (`KnownRead.check`) included, and the leaf verifier's checks of its registered file and of its session's draw
+  (`pouw-leaf-own`: `PouwWindow.Lanes.checkOwn`, and `PouwWindow.Lanes.checkFull`, every unit drawn) pass, opens the
+  leaf's values committed before σ_w (`Leaf`: its A and B rows with their scales and its z/y record), and its relation is
   `UnitServed` at the path's public inputs and receipt, which are no leaves of the round (`ProofLayer`), or `LeafColl`
   or `LeafKnownColl` at the proof's sessions.
 
@@ -156,13 +161,20 @@ noncomputable def portRead (s : RowsSession) (vals : Fin s.Circ.N → Bool) : �
 noncomputable abbrev rsOf (s : RowsSession) :=
   rsShHJS (Reg := s.Reg) s.dj s.y₀ s.ht s.hc s.hscope s.hU s.hpub
 
-/-- **A leaf's sessions' registrants' rows agree at one root and position**: wherever registered reads `p` of unit
-`u`'s registrant in session `k` and `p'` of unit `u'`'s in session `k'` name one registered port and one position,
-the two registrants' rows there are one row's bytes, each at its session's encoding. -/
+/-- **Two registered ports name one tree**: one root, leaf count, domain and leaf schema, all that
+`Flock.Registered.opensLeaf` reads of a port. Two statements' ports of one value (lane `l`'s `partials` and the
+combine's `p<l>`) have different names and one tree. -/
+def SameTree (a b : Flock.Registered.Port) : Prop :=
+  a.root = b.root ∧ a.leaves = b.leaves ∧ a.domain = b.domain ∧ a.schema = b.schema
+
+/-- **A leaf's sessions' registrants' rows agree at one tree and position**: wherever registered reads `p` of unit
+`u`'s registrant in session `k` and `p'` of unit `u'`'s in session `k'` name one registered tree (`SameTree`) and one
+position, the two registrants' rows there are one row's bytes, each at its session's encoding. -/
 def RowsAgree (sess : Option (Fin 32) → RowsSession) : Prop :=
   ∀ (k k' : Option (Fin 32)) (u : Fin (sess k).n) (u' : Fin (sess k').n) (p : (sess k).vb.Pos)
     (p' : (sess k').vb.Pos), ((sess k).rdU u).isRead p → ((sess k').rdU u').isRead p' →
-    ((sess k).rdU u).port p = ((sess k').rdU u').port p' → ((sess k).rdU u).readAt p = ((sess k').rdU u').readAt p' →
+    SameTree (((sess k).rdU u).port p) (((sess k').rdU u').port p') →
+    ((sess k).rdU u).readAt p = ((sess k').rdU u').readAt p' →
     (rsOf (sess k)).enc p (((sess k).rdU u).wv p) = (rsOf (sess k')).enc p' (((sess k').rdU u').wv p')
 
 /-- **Two of a leaf's sessions' registrants' records clash**: some unit's registrant in session `k` and some unit's in
@@ -193,9 +205,17 @@ def LeafKnownColl (sess : Option (Fin 32) → RowsSession) (known : Option (Fin 
 combine's), its known-content check at the session's known content `known x w i k` included
 (`Registered.checkKnownAll`, which `flock-verify` runs on `--registered F`), its complete check
 (`Registered.checkComplete`, which it runs where `F` sets `complete`: every port of the circuit is a port of `own`) and
-its known-read check (`KnownRead.check`, which it runs on every statement at `F`'s known content: each known port is a
-`sha512/row/v2` row of its known rows' words, and a computed row of the unit reads each bit of a known input row, a copy
-returns each bit of a known output row),
+its known-read check (`KnownRead.check`, which it runs on every statement at `F`'s known content, then at each port
+`full x w i k` names, the ports `F` marks `read_in_full`, as one row of its registered row's words
+(`KnownRead.fullRows`): each such port is a `sha512/row/v2` row of those words, and a computed row of the unit reads each
+bit of such an input row, a copy returns each bit of such an output row) and the leaf verifier's check of its file
+(`PouwWindow.Lanes.checkOwn`, which `pouw-leaf-own` runs: the file holds the ports `want x w i k`, the statement's data
+ports at the accepted registration's and produced record's roots) and of its session's draw
+(`PouwWindow.Lanes.checkFull`, which `pouw-leaf-own` runs on the session's record: the draw is `subset` of every unit of
+a non-empty population, the verifier's draw policy for a leaf's statements) and of its file's reads
+(`PouwWindow.Lanes.checkOneRead`, which `pouw-leaf-own` runs too: every port of the file has one read) and of the
+leaf's tile (`PouwWindow.Lanes.Tile.check` at 32 × 32 and `K`, which `pouw-leaf-own` runs first, in `lane?` and
+`combine?`: among others `32 ∣ K` and `K < 2^17`, where the lanes' s8 accumulator binds),
 opens the leaf's values committed before σ_w (`leaf`), and its relation is the unit's served checks (`UnitServed`) at
 the path's public inputs and receipt, or
 two of its sessions' registrants' records clash (`LeafColl`), or a session's known-content tie collides
@@ -203,6 +223,8 @@ two of its sessions' registrants' records clash (`LeafColl`), or a session's kno
 noncomputable def leafLayer {Ω : Type} {S nπ K nw : ℕ} {Pub : Type}
     (sess : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → RowsSession) (out : ∀ x w i k, (sess x w i k).Out)
     (known : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → Known)
+    (full : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → Array String)
+    (want : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → List Flock.Registered.Port)
     (dq : List ℤ → ℤ) (part : Pub → Fin 32 → (Fin 4 → Row K) → (Fin 8 → Row K) → Fin nw → BitVec 32)
     (pub : Paths Ω S → Fin S → Fin nπ → Pub) (receipt : Paths Ω S → Fin S → Fin nπ → Fin nw → BitVec 32)
     (leaf : Paths Ω S → Fin S → Fin nπ → Leaf K)
@@ -210,7 +232,12 @@ noncomputable def leafLayer {Ω : Type} {S nπ K nw : ℕ} {Pub : Type}
   accepted x w i := ∀ k, LiveAcceptsZKR (sess x w i k).I (sess x w i k).own (out x w i k) ∧
     Flock.Registered.checkKnownAll (sess x w i k).own (known x w i k) = .ok () ∧
     Flock.Registered.checkComplete (sess x w i k).c (sess x w i k).own = .ok () ∧
-    Flock.KnownRead.check (sess x w i k).c (known x w i k) = .ok ()
+    Flock.KnownRead.check (sess x w i k).c
+      (known x w i k ++ Flock.KnownRead.fullRows (sess x w i k).own (full x w i k)) = .ok () ∧
+    PouwWindow.Lanes.checkOwn (want x w i k) (sess x w i k).own = .ok () ∧
+    PouwWindow.Lanes.checkFull (out x w i k).2.2.record = .ok () ∧
+    PouwWindow.Lanes.checkOneRead (sess x w i k).own = .ok () ∧
+    PouwWindow.Lanes.Tile.check ⟨32, 32, K⟩ = .ok ()
   opened := leaf
   rel x w i v := UnitServed dq part (pub x w i) (receipt x w i) v ∨ LeafColl (sess x w i) ∨
     LeafKnownColl (sess x w i) (known x w i)
