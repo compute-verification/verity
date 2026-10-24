@@ -138,7 +138,11 @@ $POUW_CHALLENGER_SECRET_FILE and $POUW_CHALLENGER_COMMITMENT), one session a win
 hello's commitment held to HEX) and closed at the arm's stop; without one they are in-process, and the arm's stats say
 ``coins: in-process (not certified)``.
 
-    python sbench.py --out OUT [--arms stock,exact,dither] [--reps 3] [--t 64] [--ops decode] [--gate]
+--bw-passes GIB runs the remote bandwidth audit's passes beside the arms on their GPU once every arm is built, warm and
+gated (`dbw.py`: an idle session, each rep an off block of every arm's ops and an on block inside a session's passes, and
+a tampered session beside each dither arm; summary.json's "bw", per_arm's TPOT the off blocks' alone).
+
+    python sbench.py --out OUT [--arms stock,exact,dither] [--reps 3] [--t 64] [--ops decode] [--gate] [--bw-passes GIB]
 """
 from __future__ import annotations
 
@@ -538,10 +542,12 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                 gen(ps, N2)
             conn.send({"warm": True})
         elif cmd["op"] == "decode":
+            m0 = time.monotonic_ns()
             t1, _ = gen(ps, N1)
+            m1 = time.monotonic_ns()
             t2, outs = gen(ps, N2)
             conn.send({"tpot_b32_ms": round(1e3 * (t2 - t1) / (N2 - N1), 4), "t_n1_s": round(t1, 4), "t_n2_s": round(t2, 4),
-                       "tokens": [list(o.outputs[0].token_ids) for o in outs]})
+                       "spans_ns": [m0, m1, time.monotonic_ns()], "tokens": [list(o.outputs[0].token_ids) for o in outs]})
         elif cmd["op"] == "gate":
             win = getattr(llm, "dither_win", None)
             mod = getattr(llm, "dither_mod", None) or (DF if win is not None else None)
@@ -672,7 +678,17 @@ def main() -> int:
                     help="ARM=F,...: those arms' gpu_memory_utilization (a stock arm's own batch needs KV room for it)")
     ap.add_argument("--time-passed", action="store_true",
                     help="on a failed gate, stop the failed arms and time the rest (the exit is 4 still)")
+    ap.add_argument("--bw-passes", type=float, default=0.0, metavar="GIB",
+                    help="the remote bandwidth audit's passes beside the arms on their GPU, over a store of GIB GiB "
+                         "(`dbw.py`: an idle session, each rep an off block and an on block, a tampered session)")
+    ap.add_argument("--bw-prover-args", action="append", metavar="ARGS",
+                    help="a side of its own a time, its prover's options (leading NAME=VALUE words its environment)")
+    ap.add_argument("--bw-cover", type=float, default=2.0,
+                    help="an on block's session lasts this many times the off block before it, at the idle pass rate")
+    ap.add_argument("--bw-idle-s", type=float, default=3.0, help="the idle session's passes, in seconds")
     a = ap.parse_args()
+    if a.bw_passes and not (os.environ.get("BW_LIB") and os.environ.get("BW_KV")):
+        ap.error("--bw-passes needs BW_LIB and BW_KV: session.so and kv.so (sbench.sh builds both)")
     os.environ["SBENCH_T"] = str(a.t)
     if a.stock_own_batch:
         os.environ[OWN_BATCH_ENV] = "1"
@@ -751,29 +767,83 @@ def main() -> int:
                 return 4
             arms = [x for x in arms if x not in failed]
             rc = 4
-    for r in range(a.reps):
+    bw_tokens: dict = {}
+
+    def block(r: int, phase: str | None = None, side: int | None = None, only: list[str] | None = None) -> dict:
+        """Rep r's ops on every arm (or `only`'s), arm order rotated by r; under --bw-passes its phase (off, on or
+        tamper) and side on each row, an off block's tokens the gate's and the others' kept apart."""
+        these, lo = only or arms, time.monotonic_ns()
         for op in a.ops.split(","):
-            for j in range(len(arms)):
-                arm = arms[(j + r) % len(arms)]
+            for j in range(len(these)):
+                arm = these[(j + r) % len(these)]
                 conns[arm].send({"op": op})
                 res = recv(arm, conns[arm], op)
                 msg = recv(arm, conns[arm], op)
                 toks = res.pop("tokens", None)
                 if toks is not None:
-                    ref_tokens.setdefault((r, arm), toks)
+                    (ref_tokens if phase in (None, "off") else bw_tokens.setdefault(phase, {})).setdefault((r, arm), toks)
                 row = {"rep": r, "op": op, "arm": arm, **res, "stats": msg["stats"], "picks": msg.get("picks")}
+                if phase is not None:
+                    row |= {"bw": phase, "side": side}
                 reps.append(row)
                 print(json.dumps(row), flush=True)
                 with open(out / "reps.jsonl", "a") as f:
                     f.write(json.dumps(row) + "\n")
-        for arm in arms:
-            if (r, arm) in ref_tokens:
-                ref = REF_OF.get(arm, arms[0])
-                gate.setdefault(arm, []).append(None if ref == arm else ref_tokens[(r, arm)] == ref_tokens.get((r, ref)))
-                if ref != arm and (r, ref) in ref_tokens:
-                    vs_ref.setdefault(arm, []).append(token_diff(ref_tokens[(r, arm)], ref_tokens[(r, ref)]))
-                if r > 0:
-                    vs_rep0.setdefault(arm, []).append(token_diff(ref_tokens[(r, arm)], ref_tokens[(0, arm)]))
+        if phase in (None, "off"):
+            for arm in these:
+                if (r, arm) in ref_tokens:
+                    ref = REF_OF.get(arm, arms[0])
+                    gate.setdefault(arm, []).append(None if ref == arm else ref_tokens[(r, arm)] == ref_tokens.get((r, ref)))
+                    if ref != arm and (r, ref) in ref_tokens:
+                        vs_ref.setdefault(arm, []).append(token_diff(ref_tokens[(r, arm)], ref_tokens[(r, ref)]))
+                    if r > 0:
+                        vs_rep0.setdefault(arm, []).append(token_diff(ref_tokens[(r, arm)], ref_tokens[(0, arm)]))
+        return {"rep": r, "phase": phase, "lo": lo, "hi": time.monotonic_ns()}
+
+    bw_sides: list[dict] = []
+    if not a.bw_passes:
+        for r in range(a.reps):
+            block(r)
+    else:
+        import shlex
+        import dbw
+        aff = ",".join(map(str, sorted(os.sched_getaffinity(0))))
+        for i, pargs in enumerate(a.bw_prover_args or [""]):
+            doc = {"i": i, "prover_args": pargs, "plan": dbw.plan(a.reps), "blocks": [], "sessions": {}}
+            bw_sides.append(doc)
+            side = dbw.Side(out / f"bw{i}", plan=doc["plan"], gib=a.bw_passes, py=os.environ.get("BW_PY", sys.executable),
+                            lib=os.environ["BW_LIB"], kv=os.environ["BW_KV"], lean_exe=os.environ.get("BW_LEAN_EXE"),
+                            prover_cpus=os.environ.get("BW_PROVER_CPUS") or aff,
+                            verifier_cpus=os.environ.get("BW_VERIFIER_CPUS"),
+                            side_args=shlex.split(os.environ.get("BW_SIDE_ARGS", "")), prover_args=shlex.split(pargs))
+            try:
+                doc["ready"] = side.expect("ready")
+                print(json.dumps({"bw": i, "ready": {k: v for k, v in doc["ready"].items() if k != "calibration"}}),
+                      flush=True)
+                side.start(0, dbw.paced(a.bw_idle_s, 1.0))
+                doc["sessions"][0] = side.end(0)
+                for r in range(a.reps):
+                    rr = i * a.reps + r
+                    off = block(rr, "off", i)
+                    doc["blocks"].append(off | {"k": None})
+                    side.start(1 + r, dbw.paced((off["hi"] - off["lo"]) / 1e9, a.bw_cover))
+                    doc["blocks"].append(block(rr, "on", i) | {"k": 1 + r})
+                    doc["sessions"][1 + r] = side.end(1 + r)
+                    print(json.dumps({"bw": i, "session": 1 + r, "accepted": doc["sessions"][1 + r]["accepted"],
+                                      "failure": doc["sessions"][1 + r]["failure"]}), flush=True)
+                k, dither = 1 + a.reps, [x for x in arms if x.startswith("dither")] or arms
+                est = sum(x["t_n1_s"] + x["t_n2_s"] for x in reps if x.get("side") == i and x.get("bw") == "off"
+                          and x["rep"] == i * a.reps + a.reps - 1 and x["arm"] in dither and "t_n1_s" in x)
+                side.start(k, dbw.paced(est, a.bw_cover))
+                doc["blocks"].append(block(i * a.reps + a.reps - 1, "tamper", i, only=dither) | {"k": k})
+                doc["sessions"][k] = side.end(k)
+                doc["stopped"] = side.stop()
+            except dbw.SideError as e:
+                doc["error"] = str(e)
+                print(json.dumps({"bw": i, "error": str(e)}), flush=True)
+                side.p.kill()
+                rc = rc or 6
+                break
     for arm in arms:
         conns[arm].send({"op": "stop"})
     # each worker's stop: a -we arm's off-node window served to its end and checked, its session closed
@@ -792,9 +862,10 @@ def main() -> int:
                "saturation": {"requests": SAT_REQS, "tokens": SAT_TOKENS, "max_num_seqs": min(MAX_SEQS, a.t),
                               "max_num_batched_tokens": a.t, "stock_own_batch": a.stock_own_batch,
                               "scheduler_by_arm": {arm: info[arm].get("scheduler") for arm in arms}}, "per_arm": {}}
+    plain = [x for x in reps if x.get("bw") in (None, "off")]
     for arm in arms:
-        tp = [x["tpot_b32_ms"] for x in reps if x["arm"] == arm and x["op"] == "decode"]
-        th = [x["tokens_per_s"] for x in reps if x["arm"] == arm and x["op"] == "sat"]
+        tp = [x["tpot_b32_ms"] for x in plain if x["arm"] == arm and x["op"] == "decode"]
+        th = [x["tokens_per_s"] for x in plain if x["arm"] == arm and x["op"] == "sat"]
         summary["per_arm"][arm] = {"tpot_b32_ms": statistics.median(tp) if tp else None, "tpot_all": tp,
                                    "tokens_per_s": statistics.median(th) if th else None, "tokens_per_s_all": th}
     base = summary["per_arm"][arms[0]]
@@ -807,6 +878,20 @@ def main() -> int:
     summary["gate_failed"] = [x for x in gate_doc if x not in arms]
     summary["stop"] = {arm: {"error": x.get("error"), "close_error": x.get("close_error"), "fill_steps": x.get("fill_steps"),
                              "end_verdict": (x.get("end") or {}).get("verdict")} for arm, x in stops.items()}
+    if a.bw_passes:
+        import dbw
+        bw = dbw.report(reps, bw_sides, arms)
+        bw["tokens"] = {phase: {arm: [{"rep": r, "equal_off": t == ref_tokens.get((r, arm)),
+                                       "requests_equal_ref_off": None if REF_OF.get(arm, arms[0]) == arm else sum(
+                                           x == y for x, y in zip(t, ref_tokens.get((r, REF_OF.get(arm, arms[0])), ())))}
+                                      for (r, x), t in sorted(got.items()) if x == arm] for arm in arms}
+                        for phase, got in bw_tokens.items()}
+        bw["errors"] = {d["i"]: d["error"] for d in bw_sides if "error" in d}
+        bad = bw["errors"] or not all(s["honest_accepted"] and s["tampered_refused"] for s in bw["sides"])
+        if bad:
+            rc = rc or 6
+        summary["bw"] = bw
+        print(json.dumps({"bw": {k: v for k, v in bw.items() if k != "tokens"}}, indent=1), flush=True)
     (out / "summary.json").write_text(json.dumps(summary, indent=1) + "\n")
     print(json.dumps(summary["per_arm"], indent=1), flush=True)
     return rc
