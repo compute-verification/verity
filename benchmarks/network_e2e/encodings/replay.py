@@ -27,8 +27,10 @@ the next step, so neither costs a bit. So the advice is one binary decision per 
 arrived (`decisions`): `gamma_values` sends each request's count of open steps passed over as Elias gamma, and `encode`
 codes the decisions with an adaptive binary arithmetic code inside the replay, one bit string per certifier window. Its
 contexts (`CONTEXTS`) are the request's passes so far, its certified ingress bucket against the release buckets around
-the step (`_Clock`), and its certified egress: admitted now, its outputs would leave in step with a running request's,
-which the release buckets of both show (`_Egress`). `decode` replays from that advice and the certified I/O alone, and
+the step (`_Clock`), and its certified egress: the replay, forked at the open step and run on with the request arriving
+now or a step later and nothing after it, says which of its steps emit its outputs, and an earlier request's output from
+each of those steps says which bucket it left in (`_Egress`). `decode` replays from that advice and the certified I/O
+alone, and
 `table` counts the bits per certifier window against I1 v0's (ADV-SPEC's `bits_by_window`, else `v0_widths`).
 """
 
@@ -37,6 +39,7 @@ from __future__ import annotations
 import json
 import math
 import re
+import copy
 from collections import OrderedDict, deque
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
@@ -143,6 +146,15 @@ class _KV:
         self.req_blocks: dict[int, list[int]] = {}
         self.num_cached: dict[int, int] = {}
         self.owner: list[int | None] = [None] * engine.num_gpu_blocks     # the request that computes a block's KV
+
+    def fork(self) -> _KV:
+        k = object.__new__(_KV)
+        k.B, k.L, k.caching, k.watermark_blocks = self.B, self.L, self.caching, self.watermark_blocks
+        k.free, k.ref, k.block_hash, k.owner = OrderedDict(self.free), list(self.ref), list(self.block_hash), list(self.owner)
+        k.by_hash = {h: OrderedDict(bs) for h, bs in self.by_hash.items()}
+        k.req_blocks = {i: list(bs) for i, bs in self.req_blocks.items()}
+        k.num_cached = dict(self.num_cached)
+        return k
 
     def _pop_hash(self, b: int) -> None:
         h = self.block_hash[b]
@@ -292,6 +304,31 @@ class _R:
         if self._hashes is not None:
             self._extend_hashes()
 
+    def fork(self) -> _R:
+        r = copy.copy(self)
+        r.block_hashes = list(self.block_hashes)
+        return r
+
+
+@dataclass
+class _Pass:
+    """One `schedule()` in progress: its budgets left, its step so far, its rows (request -> tokens, first position) and
+    the requests its waiting loop set aside."""
+
+    token_budget: int
+    input_budget: int
+    step: Step
+    sched: dict[int, int]
+    starts: dict[int, int]
+    skipped_now: deque[_R]
+
+    def fork(self, reqs: Sequence[_R]) -> _Pass:
+        st = self.step
+        return _Pass(self.token_budget, self.input_budget,
+                     Step(rows=list(st.rows), new=list(st.new), resumed=list(st.resumed), preempted=list(st.preempted),
+                          cache_hit=dict(st.cache_hit), sources={k: list(v) for k, v in st.sources.items()}),
+                     dict(self.sched), dict(self.starts), deque(reqs[r.i] for r in self.skipped_now))
+
 
 class _Sched:
     def __init__(self, engine: Engine, requests: Sequence[RequestIO]) -> None:
@@ -303,6 +340,17 @@ class _Sched:
         self.skipped: deque[_R] = deque()
         self.running: list[_R] = []
         self.finished_ids: set[int] = set()
+
+    def fork(self) -> _Sched:
+        """An independent copy (the block-hash interning is shared: it only names contents)."""
+        c = object.__new__(_Sched)
+        c.e, c.kv = self.e, self.kv.fork()
+        c.reqs = [r.fork() for r in self.reqs]
+        c.waiting = deque(c.reqs[r.i] for r in self.waiting)
+        c.skipped = deque(c.reqs[r.i] for r in self.skipped)
+        c.running = [c.reqs[r.i] for r in self.running]
+        c.finished_ids = set(self.finished_ids)
+        return c
 
     def add(self, i: int) -> None:
         self.waiting.append(self.reqs[i])
@@ -344,23 +392,25 @@ class _Sched:
         return self.kv.allocate_slots(r, n, hit, full_sequence_must_fit=e.scheduler_reserve_full_isl,
                                       has_scheduled_reqs=bool(self.running), dry=True)
 
-    def schedule(self, on_open: Callable[[int, int, dict[int, int]], bool] | None = None) -> tuple[Step, dict[int, bool]]:
-        """One `schedule()`. When the waiting loop reaches the queue's end with budget left, `on_open(token_budget,
-        input_budget, scheduled)` (`scheduled`: the step's rows so far, request -> tokens) may append one more request to
-        the waiting queue (returning True), and the loop goes on."""
+    def schedule(self, on_open: Callable[[_Pass], bool] | None = None) -> tuple[Step, dict[int, bool]]:
+        """One `schedule()`. When the waiting loop reaches the queue's end with budget left, `on_open(pass)` may append one
+        more request to the waiting queue (returning True), and the loop goes on."""
+        p = self._running()
+        if not p.step.preempted:
+            self._waiting(p, on_open)
+        return self._close(p)
+
+    def _running(self) -> _Pass:
         e = self.e
-        token_budget = e.max_num_batched_tokens
-        input_budget = e.max_num_batched_tokens
         thr = e.long_prefill_token_threshold
         L = e.max_model_len
-        step = Step(rows=[])
-        sched: dict[int, int] = {}
-        starts: dict[int, int] = {}
+        p = _Pass(e.max_num_batched_tokens, e.max_num_batched_tokens, Step(rows=[]), {}, {}, deque())
+        step, sched, starts = p.step, p.sched, p.starts
 
         idx = 0
-        while idx < len(self.running) and token_budget > 0:
+        while idx < len(self.running) and p.token_budget > 0:
             r = self.running[idx]
-            if input_budget <= 0:
+            if p.input_budget <= 0:
                 break
             if r.placeholders > 0 and r.num_computed + 2 - r.placeholders >= r.P + r.io.max_tokens:
                 idx += 1
@@ -368,7 +418,7 @@ class _Sched:
             n = r.num_tokens + r.placeholders - r.num_computed
             if 0 < thr < n:
                 n = thr
-            n = min(n, token_budget, input_budget)
+            n = min(n, p.token_budget, p.input_budget)
             n = min(n, L - r.num_computed - 1)
             if n == 0:
                 idx += 1
@@ -387,62 +437,68 @@ class _Sched:
                 break
             sched[r.i] = n
             starts[r.i] = r.num_computed
-            token_budget -= n
-            input_budget -= n
+            p.token_budget -= n
+            p.input_budget -= n
             idx += 1
+        return p
 
-        if not step.preempted:
-            skipped_now: deque[_R] = deque()
-            while token_budget > 0:
-                if not (self.waiting or self.skipped):
-                    if on_open is None or not on_open(token_budget, input_budget, sched):
-                        break
-                if input_budget <= 0:
+    def _waiting(self, p: _Pass, on_open: Callable[[_Pass], bool] | None) -> None:
+        e = self.e
+        thr = e.long_prefill_token_threshold
+        step, sched, starts = p.step, p.sched, p.starts
+        while p.token_budget > 0:
+            if not (self.waiting or self.skipped):
+                if on_open is None or not on_open(p):
                     break
-                if len(self.running) >= e.max_num_seqs:
-                    break
-                q = self.skipped if self.skipped else self.waiting
-                r = q[0]
-                if r.stale > 0 and not r.drop_stale:
-                    q.popleft()
-                    skipped_now.appendleft(r)
-                    continue
-                hit = self.kv.hit(r) if r.num_computed == 0 else []
-                num_computed = r.num_computed if r.num_computed else len(hit) * e.block_size
-                budget = min(token_budget, input_budget)
-                n = r.num_tokens - num_computed
-                if 0 < thr < n:
-                    n = thr
-                if not e.enable_chunked_prefill and n > budget:
-                    break
-                n = min(n, budget)
-                assert n > 0
-                if not self.kv.allocate_slots(r, n, hit, full_sequence_must_fit=e.scheduler_reserve_full_isl,
-                                              has_scheduled_reqs=bool(self.running)):
-                    break
+            if p.input_budget <= 0:
+                break
+            if len(self.running) >= e.max_num_seqs:
+                break
+            q = self.skipped if self.skipped else self.waiting
+            r = q[0]
+            if r.stale > 0 and not r.drop_stale:
                 q.popleft()
-                self.running.append(r)
-                (step.new if r.status == _W else step.resumed).append(r.i)
-                if hit:
-                    step.cache_hit[r.i] = len(hit) * e.block_size
-                    runs: list[tuple[int, int]] = []
-                    for b in hit:
-                        o = self.kv.owner[b]
-                        assert o is not None
-                        if runs and runs[-1][0] == o:
-                            runs[-1] = (o, runs[-1][1] + e.block_size)
-                        else:
-                            runs.append((o, e.block_size))
-                    step.sources[r.i] = runs
-                sched[r.i] = n
-                starts[r.i] = num_computed
-                token_budget -= n
-                input_budget -= n
-                r.status = _RUN
-                r.num_computed = num_computed
-            if skipped_now:
-                self.skipped.extendleft(skipped_now)
+                p.skipped_now.appendleft(r)
+                continue
+            hit = self.kv.hit(r) if r.num_computed == 0 else []
+            num_computed = r.num_computed if r.num_computed else len(hit) * e.block_size
+            budget = min(p.token_budget, p.input_budget)
+            n = r.num_tokens - num_computed
+            if 0 < thr < n:
+                n = thr
+            if not e.enable_chunked_prefill and n > budget:
+                break
+            n = min(n, budget)
+            assert n > 0
+            if not self.kv.allocate_slots(r, n, hit, full_sequence_must_fit=e.scheduler_reserve_full_isl,
+                                          has_scheduled_reqs=bool(self.running)):
+                break
+            q.popleft()
+            self.running.append(r)
+            (step.new if r.status == _W else step.resumed).append(r.i)
+            if hit:
+                step.cache_hit[r.i] = len(hit) * e.block_size
+                runs: list[tuple[int, int]] = []
+                for b in hit:
+                    o = self.kv.owner[b]
+                    assert o is not None
+                    if runs and runs[-1][0] == o:
+                        runs[-1] = (o, runs[-1][1] + e.block_size)
+                    else:
+                        runs.append((o, e.block_size))
+                step.sources[r.i] = runs
+            sched[r.i] = n
+            starts[r.i] = num_computed
+            p.token_budget -= n
+            p.input_budget -= n
+            r.status = _RUN
+            r.num_computed = num_computed
+        if p.skipped_now:
+            self.skipped.extendleft(p.skipped_now)
+            p.skipped_now = deque()
 
+    def _close(self, p: _Pass) -> tuple[Step, dict[int, bool]]:
+        e, step, sched, starts = self.e, p.step, p.sched, p.starts
         samples: dict[int, bool] = {}
         for i, n in sched.items():
             r = self.reqs[i]
@@ -519,17 +575,81 @@ class Replay:
     asked: list[list[int]]          # the open steps it was asked about, its admission last
 
 
+Emitted = list[dict[int, int]]     # per executed step, in order: request -> the index of the output it emitted there
+
+
 @dataclass(frozen=True)
 class Open:
     """The scheduler where an open step's waiting loop stands: its state, the step's token budget left and its rows so
-    far (request -> tokens), all read only."""
+    far (request -> tokens), all read only; and `whatif(now, want)`, the engine run on from here on a copy, the request
+    asked about arriving now (or before the next step) and nothing after it, until it has emitted `want` outputs (or
+    finished, or `_WHATIF_STEPS` steps): what each executed step emitted."""
 
     sched: _Sched
     budget: int
     scheduled: dict[int, int]
+    whatif: Callable[[bool, int], Emitted]
 
 
 Decide = Callable[[int, int, Open], bool]
+Queue = deque[tuple[Step, dict[int, bool]]]
+_WHATIF_STEPS = 256
+
+
+def _drive(s: _Sched, queue: Queue, *, top: Callable[[], bool], schedule: Callable[[], tuple[Step, dict[int, bool]]],
+           executed: Callable[[Step, dict[int, bool]], None], resume: tuple[Step, dict[int, bool]] | None = None) -> None:
+    """The engine core's loop (`EngineCore.step`; `step_with_batch_queue` under async scheduling, two steps in flight):
+    `top()` before each schedule (False ends it), `executed` after each step's update; `resume`, a step this iteration
+    has already scheduled."""
+    while True:
+        if resume is None and not top():
+            return
+        if not s.e.async_scheduling:
+            step, samples = resume or schedule()
+            resume = None
+            executed(step, samples)
+            continue
+        if resume is not None or s.has_requests():
+            step, samples = resume or schedule()
+            resume = None
+            queue.appendleft((step, samples))
+            if len(queue) < 2 and (step.rows or s.has_requests()):
+                continue
+        elif not queue:
+            continue
+        step, samples = queue.pop()
+        executed(step, samples)
+
+
+def _whatif(s: _Sched, queue: Queue, p: _Pass, i: int, now: bool, want: int) -> Emitted:
+    c, q = s.fork(), deque(queue)
+    p, r, later = p.fork(c.reqs), c.reqs[i], not now
+    if now:
+        c.add(i)
+    c._waiting(p, None)
+    out: Emitted = []
+    count = 0
+
+    def top() -> bool:
+        nonlocal later
+        if later:
+            c.add(i)
+            later = False
+        return (c.has_requests() or bool(q)) and r.n_out < want and r.status != _F and count < _WHATIF_STEPS
+
+    def schedule() -> tuple[Step, dict[int, bool]]:
+        nonlocal count
+        count += 1
+        return c.schedule(None)
+
+    def executed(step: Step, samples: dict[int, bool]) -> None:
+        before = {j: c.reqs[j].n_out for j, _, _ in step.rows}
+        c.update(step, samples)
+        if step.rows:
+            out.append({j: m for j, m in before.items() if c.reqs[j].n_out > m})
+
+    _drive(c, q, top=top, schedule=schedule, executed=executed, resume=c._close(p))
+    return out
 
 
 def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int] | None = None,
@@ -550,7 +670,7 @@ def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int
     s = _Sched(engine, requests)
     out = Replay(steps=[], finish=[None] * n, admitted=[None] * n, forced=[False] * n, asked=[[] for _ in range(n)])
     nxt = 0
-    queue: deque[tuple[Step, dict[int, bool]]] = deque()
+    queue: Queue = deque()
     limit = max_steps if max_steps is not None else 4 * (sum(r.prompt_len + r.output_len for r in requests) + n) + 64
 
     def add(forced: bool) -> None:
@@ -560,13 +680,30 @@ def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int
         out.forced[nxt] = forced
         nxt += 1
 
-    def on_open(token_budget: int, input_budget: int, scheduled: dict[int, int]) -> bool:
-        if decide is None or nxt >= n or not s.would_admit(nxt, token_budget, input_budget):
+    def on_open(p: _Pass) -> bool:
+        if decide is None or nxt >= n or not s.would_admit(nxt, p.token_budget, p.input_budget):
             return False
         out.asked[nxt].append(len(out.steps))
-        if not decide(nxt, len(out.steps), Open(s, min(token_budget, input_budget), scheduled)):
+        i = nxt
+        o = Open(s, min(p.token_budget, p.input_budget), p.sched, lambda now, want: _whatif(s, queue, p, i, now, want))
+        if not decide(i, len(out.steps), o):
             return False
         add(False)
+        return True
+
+    def top() -> bool:
+        if admit is not None:
+            while nxt < n and admit[nxt] <= len(out.steps):
+                add(s.quiet())
+        elif nxt < n and s.quiet():
+            add(True)
+        if not s.has_requests() and not queue:
+            if nxt >= n:
+                return False
+            raise ValueError(f"request {nxt}: admitted at step {admit[nxt] if admit else None} but the engine is idle before "
+                             f"step {len(out.steps)}, which only its arrival starts")
+        if len(out.steps) > limit:
+            raise RuntimeError(f"no progress after {limit} steps")
         return True
 
     def schedule() -> tuple[Step, dict[int, bool]]:
@@ -575,36 +712,11 @@ def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int
             out.steps.append(step)
         return step, samples
 
-    def finished(ids: list[int]) -> None:
-        for i in ids:
+    def executed(step: Step, samples: dict[int, bool]) -> None:
+        for i in s.update(step, samples):
             out.finish[i] = s.reqs[i].finish
 
-    while True:
-        if admit is not None:
-            while nxt < n and admit[nxt] <= len(out.steps):
-                add(s.quiet())
-        elif nxt < n and s.quiet():
-            add(True)
-        if not s.has_requests() and not queue:
-            if nxt >= n:
-                break
-            raise ValueError(f"request {nxt}: admitted at step {admit[nxt] if admit else None} but the engine is idle before "
-                             f"step {len(out.steps)}, which only its arrival starts")
-        if len(out.steps) > limit:
-            raise RuntimeError(f"no progress after {limit} steps")
-        if not engine.async_scheduling:
-            step, samples = schedule()
-            finished(s.update(step, samples))
-            continue
-        if s.has_requests():
-            step, samples = schedule()
-            queue.appendleft((step, samples))
-            if len(queue) < 2 and (step.rows or s.has_requests()):
-                continue
-        elif not queue:
-            continue
-        step, samples = queue.pop()
-        finished(s.update(step, samples))
+    _drive(s, queue, top=top, schedule=schedule, executed=executed)
     return out
 
 
@@ -942,65 +1054,37 @@ class _Clock:
 
 
 class _Egress:
-    """Request i's certified egress against a running request's, at an open step. Admitted now, i's outputs would leave
-    one per step with the running request's from the one it emits this step on, `lead` steps later when i's prompt
-    needs more than this step's budget left; admitted next step, with that step's lead. So whether i's release buckets
-    line up with the running request's under each (2: nothing to compare) says, at most open steps, whether i arrived
-    now; when both leads put i's first output at the same step, egress can't tell them apart and both line up. They are
-    compared up to i's first change of bucket, which fixes the shift (the running request's must change there too), so
-    that a later pause of either doesn't count. The running request is the decoding one with the most outputs left; the
-    output it emits this step is the one after those it has kept and has in flight."""
+    """Request i's certified egress against the engine run on from the open step (`Open.whatif`), i arriving now or
+    before the next step and nothing after it. Under FCFS that run is the served one for i and every request ahead of
+    it: a later arrival goes behind them in the running order, so takes none of their budget, and is preempted before
+    them. So under the true hypothesis each of i's outputs leaves in the bucket of an earlier request's output from the
+    same step, which the certified egress shows. They are compared up to i's first change of bucket, where the earlier
+    request's must change too (2: no earlier request's output to compare with)."""
 
     def __init__(self, cert: Certified) -> None:
         _, self.out = _clocked(cert)
 
-    @staticmethod
-    def lead(o: Open, n: int, delay: int) -> int:
-        """Steps after this one until a prompt of `n` tokens, admitted `delay` steps from now, is computed: each step the
-        running requests go first in order (a decode one token, a prefill its chunk), then it, until the budget runs
-        out."""
-        s, e = o.sched, o.sched.e
-        thr = e.long_prefill_token_threshold or e.max_num_batched_tokens
-        left = n - (min(n, o.budget, thr) if delay == 0 else 0)
-        work = [j.num_tokens + j.placeholders - j.num_computed - o.scheduled.get(j.i, 0) for j in s.running]
-        steps = 0
-        while left > 0 and steps < 4 * e.max_model_len:
-            steps += 1
-            budget = e.max_num_batched_tokens
-            for k, w in enumerate(work):
-                take = min(w or 1, thr, budget)
-                budget -= take
-                work[k] = max(w - take, 0)
-            if steps >= delay:
-                left -= min(left, thr, budget)
-        return steps
+    def lines_up(self, i: int, em: Emitted, edge: int | None) -> int:
+        a, checked = self.out[i], 0
+        for e in em:
+            t = e.get(i)
+            if t is None:
+                continue
+            ref = min((j for j in e if j < i and e[j] < len(self.out[j])), default=None)
+            if ref is not None:
+                b = self.out[ref][e[ref]]
+                if (b != a[t]) if edge is None or t < edge else (b == a[0]):
+                    return 0
+                checked += 1
+        return 1 if checked else 2
 
     def context(self, i: int, o: Open) -> tuple[int, int]:
-        s, e = o.sched, o.sched.e
-        r = s.reqs[i]
-        n = r.num_tokens - len(s.kv.hit(r)) * e.block_size
-        now, later = self.lead(o, n, 0), self.lead(o, n, 1)
-        best: tuple[int, int] | None = None
-        for j in s.running:
-            if j.num_tokens + j.placeholders - j.num_computed != 1:
-                continue
-            base = j.n_out + j.placeholders
-            if best is None or len(self.out[j.i]) - base > len(self.out[best[0]]) - best[1]:
-                best = (j.i, base)
-        if best is None:
-            return (3, 3)
-        a, (j, base) = self.out[i], best
-        b = self.out[j]
+        a = self.out[i]
+        if not a:
+            return (2, 2)
         edge = next((t for t in range(1, len(a)) if a[t] != a[t - 1]), None)
-
-        def lines_up(d: int) -> int:
-            m = min(len(a) if edge is None else edge, len(b) - base - d)
-            if m <= 0:
-                return 2
-            same = all(a[t] == b[base + d + t] for t in range(m))
-            return int(same and (edge is None or base + d + edge >= len(b) or b[base + d + edge] != a[0]))
-
-        return (lines_up(now), lines_up(later))
+        want = len(a) if edge is None else edge + 1
+        return (self.lines_up(i, o.whatif(True, want), edge), self.lines_up(i, o.whatif(False, want), edge))
 
 
 # --- an adaptive binary arithmetic code for the decisions (Witten, Neal and Cleary's coder, KT estimates per context) --
@@ -1117,8 +1201,8 @@ class Code:
 
 
 #: the adaptive code's contexts: `plain`, the request's passes so far (`min(passed, 2)`); `clocked`, those and its ingress
-#: bucket against the release buckets around the step (`_Clock`); `egress`, its release buckets against a running
-#: request's (`_Egress`), and the clock's where those can't tell
+#: bucket against the release buckets around the step (`_Clock`); `egress`, whether its release buckets line up with
+#: the replay's forks where it arrived now or a step later (`_Egress`), and the clock's where those can't tell
 CONTEXTS = ("plain", "clocked", "egress")
 _TELLS = {(1, 0), (0, 1), (0, 0)}
 

@@ -81,6 +81,33 @@ def test_egress_tells_light_load_arrivals_apart():
 
 
 @pytest.mark.parametrize("name", CASES)
+def test_whatif_is_the_served_run_for_the_request_and_those_ahead(name):
+    """The egress context's premise: forked where a request is admitted, with nothing arriving after it, the replay
+    emits that request's outputs in the steps the served run did, alongside the same outputs of every earlier request."""
+    t = trace(name)
+    first, kept = t.first_scheduled(), t.kept_steps()
+    at: dict[int, dict[int, int]] = {}
+    for j, ks in enumerate(kept):
+        for m, s in enumerate(ks):
+            at.setdefault(s, {})[j] = m
+    checked = 0
+
+    def decide(i, k, o):
+        nonlocal checked
+        if k < first[i]:
+            return False
+        for e in o.whatif(True, t.requests[i].output_len):
+            if i in e:
+                s = kept[i][e[i]]
+                assert {j: m for j, m in e.items() if j <= i} == {j: m for j, m in at[s].items() if j <= i}
+                checked += 1
+        return True
+
+    R.replay(t.engine, t.requests, decide=decide)
+    assert checked
+
+
+@pytest.mark.parametrize("name", CASES)
 def test_kept_outputs_are_the_replays_emissions(name):
     t = trace(name)
     kept = t.kept_steps()
