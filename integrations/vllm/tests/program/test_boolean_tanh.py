@@ -53,10 +53,10 @@ MUX_ANDS = {"gelu_tanh_bf16": ((1 << 16) - 1) * 16, "tanh_rn": ((1 << 27) - 1) *
 BF16_ONE = 0x3F80
 
 TARGETS = [bind(BT.TanhF32Rn), bind(BT.GeluTanhMulBf16), bind(BT.GeluTanhMul, I=8)]
+SLOW_PINS = ("TanhF32Rn_v3", "GeluTanhMulBf16_v4")
 
 
-@pytest.mark.slow
-@pytest.mark.parametrize("target", TARGETS, ids=lambda t: t.id)
+@pytest.mark.parametrize("target", [pytest.param(t, marks=pytest.mark.slow) if t.id in SLOW_PINS else t for t in TARGETS], ids=lambda t: t.id)
 def test_pinned_counts_and_digests(target) -> None:
     ands, xors, nots, digest = PINS[target.id]
     assert BL.is_boolean(target)
@@ -73,6 +73,7 @@ def test_a_read_is_a_small_part_of_its_table_s_multiplexer() -> None:
     assert PINS["GeluTanhMulBf16_v4"][0] * 60 < MUX_ANDS["gelu_tanh_bf16"]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("d", [BT.TanhF32Rn, BT.GeluTanhMulBf16], ids=lambda d: d.name)
 def test_the_ands_are_the_builders_live_ands(d) -> None:
     params = [t for _, t in d.signature(None)[0]]
@@ -82,6 +83,7 @@ def test_the_ands_are_the_builders_live_ands(d) -> None:
     assert d.traced().counts["and"] == C.counts()["ands"] == PINS[bind(d).id][0]
 
 
+@pytest.mark.slow
 def test_the_word_views_and_the_boolean_versions() -> None:
     """Each names its word Definition, is the newest Boolean version of it (`program.boolean.boolean_version`, ahead of
     `boolean_dense`'s band `GeluTanhMulBf16_v2`), and holds no data (`operations.program_data`)."""
@@ -126,6 +128,7 @@ def _act() -> np.ndarray:
     return np.array(T.gelu_tanh_bf16_words(), np.uint32)
 
 
+@pytest.mark.slow
 def test_tanh_is_the_word_definition_at_the_edges_every_exponent_and_random_words() -> None:
     words = _tanh_words(np.random.default_rng(21))
     got, want = _bits(bind(BT.TanhF32Rn), words), np.array([D.tanh_f32_bits(int(w)) for w in words], np.uint64)
@@ -150,6 +153,7 @@ def _pairs(rng) -> tuple[np.ndarray, np.ndarray]:
     return g.astype(np.uint64), u.astype(np.uint64)
 
 
+@pytest.mark.slow
 def test_the_activation_is_the_table_on_every_word() -> None:
     """`gelu_tanh_bf16(g)` at all 65,536 g: `gelu_tanh_bf16`'s words, which hash to its pin. `boolean_dense`'s activation is
     these words too (its `test_the_activation_on_every_word`), and past the activation `GeluTanhMulBf16_v4` and `_v2` are the same
@@ -162,6 +166,7 @@ def test_the_activation_is_the_table_on_every_word() -> None:
     assert hashlib.sha256(got.astype("<u4").tobytes()).hexdigest() == TABLE_SHA256["gelu_tanh_bf16"]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("u", [BF16_ONE, 0x8000, 0x0001, 0x7F7F, 0xFF80, 0x7FC0])
 def test_every_gate_word(u: int) -> None:
     """All 65,536 gate words at an up word: at 1.0 the activation alone, then -0 (which becomes +0), a subnormal, the finite
@@ -170,6 +175,7 @@ def test_every_gate_word(u: int) -> None:
     _agree(bind(BT.GeluTanhMulBf16), g, np.full(g.shape, u, np.uint64))
 
 
+@pytest.mark.slow
 def test_gelu_is_the_word_definition_on_special_random_and_edge_pairs() -> None:
     _agree(bind(BT.GeluTanhMulBf16), *_pairs(np.random.default_rng(23)))
 

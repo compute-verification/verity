@@ -279,13 +279,26 @@ One rule for every construction that serves a checkpoint: Pearl-C4 (`PearlC4.che
 - **The keyed V/O rotation plus the keyed head interleave are adopted inside it, applied after it** (Daniel,
   5:52 PM PDT). The V/O rotation acts on each KV head's v_proj rows and o_proj columns, and the interleave on o_proj's
   heads. They are never applied on an unrotated checkpoint, curated or not.
-- A registration declares its transforms in order, and only the two stacks pass: the rotation alone, or the rotation,
-  V/O and the interleave. V/O without the interleave, the interleave without V/O, and any other order are refused,
-  because the two were measured only together, after the rotation.
+- **The keyed latent rotation is adopted after either** (Daniel's card b50e7597, 24 Oct). Each MLA latent takes a keyed
+  8-block rotation of its own, built as the residual's is (its S unmixed, calibrated blocks): the q latent on q_a's
+  rows, with q_a_layernorm folded into q_b's and the DSA indexer's wq_b's columns; the kv latent on kv_a's first
+  kv_lora_rank rows (the RoPE key's rows are untouched), with kv_a_layernorm folded into kv_b's columns, and so into the
+  W_UK_T and W_UV the absorbed attention derives from kv_b. It is never applied on an unrotated checkpoint.
+- A registration declares its transforms in order, and only four stacks pass: the rotation alone, or the rotation, V/O
+  and the interleave, each optionally followed by the latent rotation. V/O without the interleave, the interleave
+  without V/O, and any other order are refused, because each was measured only so, after the rotation.
 - **A checkpoint that needs γ folded registers only with it**, as Llama-3.1-70B does under Pearl-C4: the cast moves its
   layer 0's update by 158% with the RMSNorm scales unfolded, and by under 4% with them folded. The rotation folds γ, so
   its stacks pass as they are. An unrotated, curated checkpoint declares `gamma-fold` (every RMSNorm scale folded into
   the linears it feeds), and takes no V/O or interleave.
+- **A linear registers only where the stack's rotations reach it** (`check_linear`). The 8-block rotation mixes the
+  residual stream: a linear that reads it takes the rotation on its columns, one that writes it on its rows. MLA's q_b
+  and kv_b (with the absorbed W_UK_T and W_UV) and the DSA indexer's wq_b read a latent behind its own RMSNorm, so only
+  the latent rotation reaches them: under a stack without it they keep the checkpoint's weights, are not registered and
+  earn no credit, though they are still served and bound. A linear off every rotated stream is refused under every
+  rotated stack. On GLM-5.3 at TP8, Pearl-C admits q_b and wq_b, so the latent rotation credits both again; kv_b
+  (k = 512) stays outside Pearl-C's domain (compute-accounting's `glm53_rotation` runs). A curated unrotated checkpoint
+  registers each of its linears.
 - **The keyed transforms are keyed after the weights' root is recorded**, by `rotation_key`:
   `derive(salt, "verity/pouw/rotation-key/v1", {"weights": weights_root}).stream("key", 32)`, over the salt of an epoch
   started from the challenger's salt coin (`Epoch.start`). It refuses any other salt: an `Epoch.unverified` one, a
@@ -825,7 +838,8 @@ useful    U/(α_A·α_B), glue
       forming 64 + 4) and `SM120_PRICES` for sm_120 (8, 2, 40 + 1: each step at its cheapest bit-exact form, as measured
       on the card). `wref`, `credit_of`, `job_cost` and the debit read the scheme's record; the registered schemes are the
       H100's, and sm_120's record goes with sm_120's atom.
-    - Its domain is TT_OUT's: 128 ∣ k (whole promotion groups), and on every row of both operands the noise floor ρ·α ≥ 1
+    - Its domain is TT_OUT's: 128 ∣ k (whole promotion groups), 64 ∣ n with n ≥ 64 (`pearlCDomainDev`, the 64-column
+      tile: a 1 × (n mod 64) edge tile's words can be guessed whole, CMP-77), and on every row of both operands the noise floor ρ·α ≥ 1
       (exact product) and liveness on the exact statistic, at most k/64 entries with x² ≥ 64ρ², where
       ρ² = Σ_{p ≡ 0 (8)} x_p² / ⌈k/8⌉ over the words' values (`live_row`).
     - It shares v0's seed labels (`pearl-c/v0/seed-*`).
@@ -910,6 +924,11 @@ useful    U/(α_A·α_B), glue
     - The tile cap and R1 read the credited rows only. Past the count caps the audit rejects.
     - `volunteer` is an honest prover's remedy for a tile over the cap: it gives up the rows whose removal brings each
       tile under, before the draw coin opens.
+    - A weight whose n is not whole column tiles is served zero-padded to the next whole tile (`pad_weight`; GLM-5.3's
+      lm_head, 19,360 rows a TP8 rank, to 19,392), and the last tile's rows, its real columns with the zero rows, are
+      voluntary (`declare`'s `padded_b`, though the zero rows fail the noise floor). That tile has no credited cell, so
+      no draw lands on it and it opens no exclusion tile: no tile check sees a zero row. The credit is the full tiles'
+      real columns (19,328 of 19,360) at the padded n's cell credit.
   - A cell's draw weight is its row's share of `W_ref` at the kept width, the `W_ref` of the Lean statement the draw
     cites (`draw_wref`). On sm_120 at its cap that is `wrefDevRev1K` at `Prices.sm120Loop` and the honest cast at 8.72
     (`SM120_LOOP_CAST_8P72`), the statement of the served γ and ε. Its ratio to `wref` differs between linears, so a

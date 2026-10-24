@@ -6,10 +6,10 @@ held to the ledger; a challenger key other than the pinned one, a reserve outsid
 for the same window and a challenger whose commitment isn't the open's are each refused before a coin leaves. The
 verifier's own paced sessions, through the gate or serve.py, reserve only the coins they use, so an honest one ends
 complete and a dropper doesn't; and `auditor_line` credits a gate session to the line only when its period committed
-its verifier, it and its period closed complete, the Lean accepted it, the host's pins log its open sealed records
-its pin, a commit on the auditor's first-parent list of main (RT4-INT-40, CMP-74), and the verifier bound the store to
-the model, reporting filler held beside weights held. The peer a gate session's ledger entries must carry is the one
-the run's record names."""
+its verifier, at the commit its host run recorded, on the auditor's first-parent list of main, it and its period closed
+complete, the Lean accepted it, the host's pins log its open sealed records its pin, a commit on that list too
+(RT4-INT-40, CMP-74), and the verifier bound the store to the model, reporting filler held beside weights held. The
+peer a gate session's ledger entries must carry is the one the run's record names."""
 from __future__ import annotations
 
 import hashlib
@@ -53,6 +53,8 @@ PINS = [pin_line("d" * 40, "e" * 40, "2026-10-20T08:00:00Z"), pin_line(PIN, "f" 
 MAIN = ["f" * 40, PIN, "e" * 40, "d" * 40]
 #: the model the store is bound to (`remote_bandwidth.store`'s pin)
 MODEL = {"name": "synthetic-bf16", "checkpoint_sha512": "ab" * 64}
+#: the commit the verifier ran at (`--commit`): main's head
+VERIFIER = MAIN[0]
 
 
 class Host:
@@ -320,17 +322,19 @@ def gate_run(host: Host, out: Path, plan: str, defer_openings: bool,
 
 def analysed(out: Path, host: Host, sessions: list[dict], reg: dict, desc: bytes, *, verdict: str = "lean",
              pins: list[str] | None = PINS, main: list[str] | None = MAIN, bound: dict | None = MODEL,
-             model: dict | None = MODEL, peer: str | None = None, lean: dict | None = None) -> dict:
+             model: dict | None = MODEL, peer: str | None = None, lean: dict | None = None,
+             commit: str = VERIFIER, line_by: al.lv.Lean | None = None) -> dict:
     """`auditor_line`'s analysis of the run, its verifier.json recording a binding of the store to `bound` (none if
     None), the Lean's `hold` answering `lean` (by default bound at the registration's root), the line held to `model`
-    (`--model-pin`'s), and `peer` its --peer (None: the record's)."""
+    (`--model-pin`'s), `peer` its --peer (None: the record's), `commit` the commit its verifier ran at, and each line
+    computed by the Lean verifier `line_by` (None: line.py alone)."""
     held = {"regions": [], "expected_root": reg["payload_root"]} if lean is None else lean
     binding = {} if bound is None else {"binding": {**bound, "payload_root": reg["payload_root"],
                                                     "expected_root": reg["payload_root"], "bound": True, "lean": held}}
     (out / "verifier.json").write_text(json.dumps(
         {"registration": reg, "sessions": [{**s, "verdict": verdict} for s in sessions]} | binding))
     return al.analyse(out, host_bytes=1 << 30, pin=host.pin, period="p-1", heads=[host.host.ledger], desc=desc,
-                      pins=pins, main=main, model=model, peer=peer)
+                      commit=commit, pins=pins, main=main, model=model, peer=peer, lean=line_by)
 
 
 @pytest.mark.parametrize("defer_openings", [True, False])
@@ -340,9 +344,10 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
     committed the descriptor of the verifier that ran them, on a host whose opens seal its pins log, which records the
     host's tree as a commit of main's, its store bound to the model. When the prover defers each window's openings, the
     dropper's are all asked, so both windows and the period close complete: the honest session, once its verdict is
-    the Lean's, is the line, its weights and filler held apart, and the dropper, which the Lean refused, earns none.
-    When it doesn't, the dropper's window and so the period close incomplete, and the line credits zero. A python
-    verdict, a period not yet closed, a verifier the period didn't commit, no pins log (under both *credited*, whose
+    the Lean's, is the line, its weights and filler held apart, and the dropper, which the Lean refused, earns none;
+    the Lean verifier's line (`line_by` lean) is line.py's, the run's whole analysis the same. When it doesn't, the
+    dropper's window and so the period close incomplete, and the line credits zero. A python verdict, a period not yet
+    closed, a verifier the period didn't commit, no pins log (under both *credited*, whose
     `credited_session` reads the pin first, and *pinned*), a store bound to no model or to another, a binding the Lean
     didn't decide bound at the registration's root, and no model to bind it to each credit nothing, with the reason."""
     host.seal(monkeypatch, PINS)
@@ -383,6 +388,12 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
                           for x in ("time", "filler_time"))
         assert (f"| 0 | {t} | yes | yes | yes | yes | yes | credited: weights {shares}, filler {filler} |"
                 in al.table(doc).splitlines())
+        by = al.lv.Lean(al.lv.build(), lambda _: None)
+        try:
+            assert doc["line_by"] == "python" and analysed(out, host, sessions, reg, desc, line_by=by) == {
+                **doc, "line_by": "lean"}
+        finally:
+            by.close()
     else:
         assert zero(doc) == {0: ["not complete"], 1: ["not complete", "not accepted"]}
         assert honest["credit"]["complete"]["reason"] == "period p-1 closed incomplete (1 of its 2 windows incomplete)"
@@ -524,6 +535,37 @@ def test_the_gate_sessions_peer_is_the_one_the_runs_record_names_and_a_record_na
         assert str(e.value) == (f"auditor_line: the run's record names {named} (verifier.json's gate sessions, "
                                 f"{request}'s --challenger-peer): pass --peer NAME, the verifier machine's name in the "
                                 "challenger host's /etc/vy/peers")
+
+
+def test_a_session_earns_credit_only_under_the_commit_its_verifier_ran_at_on_mains_first_parent_line(
+        host, tmp_path, monkeypatch):
+    """An honest session, complete in a period that committed its verifier's descriptor, on a challenger host pinned
+    on main's first-parent line. The line credits it only when the commit its verifier ran at (`--commit`) is on the
+    auditor's first-parent list of main too: a verifier host pinned at a branch commit (pin.sh pins any pushed commit,
+    and a period commits whichever verifier its opener names) earns none, with the fix. A host run's request.json
+    records the commit its verifier ran at (`pinned`), and a --commit other than it is refused."""
+    host.seal(monkeypatch, PINS)
+    out = tmp_path / "run"
+    sessions, reg, desc = gate_run(host, out, "honest", defer_openings=True)
+    rc, closed = host.call(["period-close", "--name", "p-1"])
+    assert rc == 0 and json.loads(closed)["body"]["complete"] is True, closed
+    request, branch = tmp_path / "request.json", "9" * 40
+    for ran in (VERIFIER, branch):
+        request.write_text(json.dumps({"peer": "vy-nebius-2", "pinned": ran}))
+        doc = analysed(out, host, sessions, reg, desc, commit=ran)
+        (s,) = doc["sessions"]
+        assert all(s["credit"][c]["ok"] for c in ("complete", "accepted", "pinned", "bound"))
+        if ran == VERIFIER:
+            assert s["credit"]["ok"] and doc["credit"]["credited_sessions"] == [0]
+            continue
+        why = (f"its verifier ran commit {branch}, which is not on main's first-parent line in the auditor's copy "
+               "(`git rev-list --first-parent origin/main`), so no tree main's check ran on: repin the verifier host "
+               "to a commit on main's first-parent line (vy-verifier-pin) and rerun the window there")
+        assert s["credit"]["credited"] == {"descriptor_sha512": hashlib.sha512(desc).hexdigest(), "period": "p-1",
+                                           "ok": False, "reason": why}
+        assert s["credit"]["zero"] == [f"not credited: {why}"] and doc["credit"]["credited_sessions"] == []
+    with pytest.raises(SystemExit, match=f"ran its verifier at {branch} .*pass --commit {branch}"):
+        analysed(out, host, sessions, reg, desc, commit=VERIFIER)
 
 
 def test_the_clock_rate_beside_the_line_doesnt_read_the_first_coins_round_trip():

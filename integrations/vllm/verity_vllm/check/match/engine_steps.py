@@ -8,6 +8,7 @@ from verity_vllm.check.match import global_match_fast as GMF
 from verity_vllm.check.match.attribution import Attribution
 from verity_vllm.check.match.match_run import MatchRun, NamedCheck
 from verity_vllm.check.match.per_request import RequestFacts, perm_eligible, perm_match
+from verity_vllm.program.sampling_event import GREEDY_SELECTS
 
 
 def vu_population(run: MatchRun, att: Attribution, reqs: RequestFacts) -> dict[int, list[int]]:
@@ -191,7 +192,7 @@ def _segmentation(c: NamedCheck, res: dict, proj: dict, per_req: dict[str, list[
         prev_es = None
         for s_, loc in enumerate(P_.steps):
             ess = sorted({engine_step_of[gl[i]] for i in loc if gl[i] in engine_step_of})
-            has_ts = bool(loc) and P_.inst[loc[-1]]["spec"].startswith("TokenSelect_v1")
+            has_ts = bool(loc) and P_.inst[loc[-1]]["spec"].startswith(GREEDY_SELECTS)
             if len(ess) > 1:
                 seg_bad.append({"request_id": rid, "local_step": s_, "engine_steps": ess, "problem": "the local step spans engine steps"})
             elif ess and prev_es is not None and ess[0] < prev_es:

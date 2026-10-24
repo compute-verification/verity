@@ -22,7 +22,9 @@ hm96-sha512 rows under `verity.ml.commitments.advice`, the tree's domain bound t
 the advice's length go public, as the binding a window's registration carries (`advice_windows.binding`, the window provenance's
 ``binding``, which `serving_rows.after_commit(binding=…)` takes).  Under ``--out``:
 
-    registration.json     public: the binding (the compiler's name and digest, the advice's root and ``total_bits``), and the bits
+    registration.json     public: the binding (the compiler's name and digest, the advice's root and ``total_bits``), the
+                          registered compiler, `advice_windows.Capped` with ℓ (the cap on the advice's length its digest covers)
+                          and the compiler it wraps (``compiler``), and the bits
                           I1 charges each egress window of `--T` buckets (``bits_by_window``)
     private/advice.bin    the prover's: the advice, I1's canonical encoding
     private/advice.json   the same advice, I1's `to_json`
@@ -30,7 +32,12 @@ the advice's length go public, as the binding a window's registration carries (`
     private/report.json   the round trip (`decode(encode(a)) == a`), the run's counts (they describe the advice), and the digests of
                           what it read
 
-    verity-vllm advice RUN [--trace FILE] [--io FILE] [--out DIR] [--T 600] [--tau 0.1] [--compiler-name N --compiler-digest D]
+A `verity-vllm serve-openai` run (its ``advice_trace.jsonl``, the server's scheduler step trace with each Commit window's open and
+close, and its ``requests.jsonl``, whose ``user`` names each request) gets one advice a closed Commit window (`windows_of`), each
+under ``w<k>/`` with its registration naming the window's Commit (run id and run root), listed in ``windows.json``; a window still
+open is left for a later call, and a window the advice refuses is named there.
+
+    verity-vllm advice RUN [--trace FILE] [--io FILE] [--out DIR] [--window K] [--T 600] [--tau 0.1] [--compiler-name N --compiler-digest D] [--cap BITS]
 """
 from __future__ import annotations
 
@@ -50,24 +57,35 @@ from . import advice_windows as AW
 
 SCHEMA = "verity-vllm/advice-report/v3"
 REGISTRATION = "verity-vllm/advice-registration/v1"
+SERVED = "verity-vllm/advice-windows-index/v1"
 COMPILER = "verity_vllm.predict.steps.compile_steps"
+
+
+#: ℓ when the registration names none (`advice_windows.CAP_BITS`, `predict.steps.CAP_BITS`: 1 MiB of advice)
+CAP_BITS = AW.CAP_BITS
 
 
 @dataclass(frozen=True)
 class Compiler:
-    """The registered compiler as the binding names it: ``name`` and ``digest`` (128 hex digits)."""
+    """The compiler the cap wraps (`advice_windows.Capped`): ``name`` and ``digest`` (128 hex digits)."""
     name: str
     digest: str
 
 
-def registered_compiler(name: str = COMPILER, digest: str | None = None) -> Compiler:
-    """The compiler the advice is bound to; without ``digest``, the SHA-512 of `name` and the tree's code identity
+def compiler_digest(name: str, code: str) -> str:
+    """The inner compiler's digest: SHA-512 of its name and its code identity."""
+    return hashlib.sha512(canonical_json({"name": name, "code": code})).hexdigest()
+
+
+def registered_compiler(name: str = COMPILER, digest: str | None = None, cap_bits: int = CAP_BITS) -> AW.Capped:
+    """The compiler the advice is bound to: `advice_windows.Capped` (PROVE-PATH's, whose digest names the inner compiler's and ℓ =
+    ``cap_bits``) over ``name``, whose digest is ``digest``, else `compiler_digest` over `name` and the tree's code identity
     (`source_identity.code_identity`)."""
     if digest is None:
         # TODO: COMPILER's own registered digest once compile_steps lands with one
         from verity_vllm.pipeline import source_identity as SI
-        digest = hashlib.sha512(canonical_json({"name": name, "code": SI.code_identity(SI.TREE)["sha256"]})).hexdigest()
-    return Compiler(name, digest)
+        digest = compiler_digest(name, SI.code_identity(SI.TREE)["sha256"])
+    return AW.Capped(Compiler(name, digest), cap_bits)
 
 
 def finish_of(rid: str, rec: dict[str, Any] | None) -> str:
@@ -274,31 +292,115 @@ def registration(compiler: Any, a: I1.Advice, root: bytes, rows: int, T: int) ->
     """What goes public of the advice: the binding (the compiler, the root of the advice's hiding commitment and its length in
     bits) and the bits I1 charges each egress window of ``T`` buckets.  Nothing of the advice itself."""
     return {"schema": REGISTRATION, "scheme": AW.SCHEME, "binding": AW.binding(compiler, root.hex(), int(I1.total_bits(a))),
+            "compiler": {"name": str(compiler.name), "digest": compiler.digest, "cap_bits": int(compiler.cap_bits),
+                         "inner": {"name": str(compiler.inner.name), "digest": compiler.inner.digest}},
             "rows": rows, "row_bits": AW.ROW_BITS, "T": int(T),
             "bits_by_window": {str(w): int(n) for w, n in sorted(I1.bits_by_window(a, int(T)).items())}}
 
 
 def commit(compiler: Any, a: I1.Advice, T: int = 600, salts: list[bytes] | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
-    """The advice committed: its public registration (`registration`) and its private opening (`advice_windows.opening`)."""
+    """The advice committed: its public registration (`registration`) and its private opening (`advice_windows.opening`).  Advice
+    over the compiler's ℓ (``compiler``: an `advice_windows.Capped`) is refused: the compiler is total only up to it."""
     data = I1.encode(a)
+    cap = int(compiler.cap_bits)
+    if 8 * len(data) > cap:
+        raise ValueError(f"the advice is {8 * len(data)} bits, over the registered cap ℓ = {cap} bits")
     reg = AW.commit_advice(compiler, data, salts)
     return registration(compiler, a, reg.root, len(reg.rows), T), AW.opening(data, reg)
 
 
+def windows_of(recs: list[dict[str, Any]]) -> tuple[dict[int, list[dict[str, Any]]], list[int]]:
+    """A served trace's records by closed Commit window (`StepTrace.window`), each a trace of its own: the header, the arrivals of
+    the requests with rows in the window, its steps renumbered from 0, and their outside finishes; and the windows still open.  A
+    window's steps are those scheduled from its open to its close, wherever async scheduling recorded them; one with none is left
+    out."""
+    opened: dict[int, int] = {}
+    closed: dict[int, int] = {}
+    for r in recs:
+        if r["kind"] == "window":
+            (opened if r["event"] == "open" else closed)[int(r["window"])] = int(r["before_step"])
+    out: dict[int, list[dict[str, Any]]] = {}
+    for w in sorted(closed):
+        lo, hi = opened.get(w, 0), closed[w]
+        steps = sorted((r for r in recs if r["kind"] == "step" and lo <= r["step"] < hi), key=lambda r: r["step"])
+        if not steps:
+            continue
+        ids = {row[0] for st in steps for row in st["rows"]}
+        out[w] = [recs[0], *({**r, "before_step": max(0, r["before_step"] - lo)} for r in recs if r["kind"] == "arrive" and r["request"] in ids),
+                  *({**st, "step": st["step"] - lo} for st in steps),
+                  *({**r, "after_step": r["after_step"] - lo} for r in recs if r["kind"] == "finish" and r["request"] in ids)]
+    return out, sorted(set(opened) - set(closed))
+
+
+def served(recs: list[dict[str, Any]]) -> bool:
+    """Whether a trace is a server's, in Commit windows."""
+    return any(r["kind"] == "window" for r in recs)
+
+
 def write(run: str | Path, out: str | Path | None = None, *, trace: str | Path | None = None, io: str | Path | None = None,
-          T: int = 600, tau: float = 0.1, compiler: Any = None) -> dict[str, Any]:
+          T: int = 600, tau: float = 0.1, compiler: Any = None, window: int | None = None) -> dict[str, Any]:
+    """The run's advice, committed (`write_one`); a `verity-vllm serve-openai` run's, one advice a closed Commit window
+    (`write_served`)."""
     run = Path(run)
-    trace = Path(trace) if trace else run / "step_trace.jsonl"
+    if trace is None:
+        trace = next((p for p in (run / ST.SERVED, run / "step_trace.jsonl") if p.exists()), run / "step_trace.jsonl")
+    trace = Path(trace)
     if io is None:
         io = next((p for p in (run / "requests.jsonl", run / "windows.jsonl") if p.exists()), None)
     recs = ST.load(trace)
-    b = from_trace(recs, io_record(io) if io else None, tau=tau)
+    compiler = compiler if compiler is not None else registered_compiler()
+    out = Path(out) if out else run / "advice"
+    if served(recs):
+        return write_served(run, out, recs, trace, io, T=T, tau=tau, compiler=compiler, window=window)
+    return write_one(run, out, recs, trace, io, io_record(io) if io else None, T=T, tau=tau, compiler=compiler)
+
+
+def write_served(run: Path, out: Path, recs: list[dict[str, Any]], trace: Path, io: str | Path | None, *, T: int, tau: float,
+                 compiler: Any, window: int | None = None) -> dict[str, Any]:
+    """A server's advice, one a closed Commit window (`windows_of`; only ``window`` when given): each under ``out/w<k>/`` as
+    `write_one` writes it, its registration naming the window's Commit (its run id and run root, from windows.jsonl).  A window
+    whose advice is refused (a request it holds only part of, a finish advice v0 can't say) is named in ``refused``, and the
+    others are written.  ``out/windows.json`` (public) lists each window's registration."""
+    if io is None:
+        raise ValueError("a served run's advice needs its Commit record, requests.jsonl")
+    io_all = io_record(io)
+    lines = (run / "windows.jsonl").read_text().splitlines() if (run / "windows.jsonl").exists() else []
+    commits = {int(d["window"]): {"run_id": d.get("run_id"), "run_root": d.get("run_root")}
+               for d in (json.loads(line) for line in lines if line.strip())}
+    per, still_open = windows_of(recs)
+    if window is not None:
+        if window not in per:
+            raise ValueError(f"window {window} is not a closed window with steps (closed: {sorted(per)}; open: {still_open})")
+        per = {window: per[window]}
+    reports: dict[str, Any] = {}
+    refused: dict[str, str] = {}
+    for w, sub in per.items():
+        ids = {r["request"] for r in sub if r["kind"] == "arrive"}
+        try:
+            reports[str(w)] = write_one(run, out / f"w{w}", sub, trace, io, {i: q for i, q in io_all.items() if i in ids}, T=T, tau=tau,
+                                        compiler=compiler, extra={"window": w, "commit": commits.get(w)})
+        except ValueError as e:
+            refused[str(w)] = str(e)
+    index = {"schema": SERVED, "run": str(run), "trace": str(trace), "T": int(T),
+             "windows": {w: {"registration": f"w{w}/registration.json", "root": r["registration"]["binding"]["advice"]["root"],
+                             "bits": r["registration"]["binding"]["advice"]["bits"], "commit": r["registration"]["commit"]}
+                         for w, r in reports.items()},
+             "refused": refused, "open": still_open}
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "windows.json").write_text(json.dumps(index, indent=1) + "\n")
+    return {**index, "reports": reports}
+
+
+def write_one(run: Path, out: Path, recs: list[dict[str, Any]], trace: Path, io: str | Path | None, io_map: dict[str, Any] | None, *,
+              T: int, tau: float, compiler: Any, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+    """One advice from ``recs`` and the Commit record's requests ``io_map``, committed: ``out/registration.json`` (public, with
+    ``extra``) and ``out/private/``."""
+    b = from_trace(recs, io_map, tau=tau)
     a = b.advice
     data = I1.encode(a)
     back = I1.decode(data)
-    compiler = compiler if compiler is not None else registered_compiler()
     public, opened = commit(compiler, a, T)
-    out = Path(out) if out else run / "advice"
+    public.update(extra or {})
     private = out / "private"
     private.mkdir(parents=True, exist_ok=True)
     (out / "registration.json").write_text(json.dumps(public, indent=1) + "\n")
@@ -333,28 +435,43 @@ def write(run: str | Path, out: str | Path | None = None, *, trace: str | Path |
 @dataclass(frozen=True, kw_only=True)
 class Options:
     """Write a served run's advice (I1) from its step trace and Commit record, committed: registration.json public, the advice and
-    its opening under private/; exit 0 iff it round-trips."""
-    run: str = option("run", help="the run directory (step_trace.jsonl, and requests.jsonl or windows.jsonl)")
-    trace: str | None = option("--trace", default=None, help="the step trace (default RUN/step_trace.jsonl)")
+    its opening under private/; a serve-openai run's, one a closed Commit window under w<k>/; exit 0 iff each round-trips."""
+    run: str = option("run", help="the run directory (step_trace.jsonl or a server's advice_trace.jsonl, and requests.jsonl or windows.jsonl)")
+    trace: str | None = option("--trace", default=None, help="the step trace (default RUN/advice_trace.jsonl, else RUN/step_trace.jsonl)")
     io: str | None = option("--io", default=None, help="the Commit record's requests (default RUN/requests.jsonl or RUN/windows.jsonl)")
     out: str | None = option("--out", default=None, help="where registration.json and private/ go (default RUN/advice)")
+    window: int | None = option("--window", type=int, default=None, help="a server's run: only this Commit window (default every closed one)")
     compiler_name: str = option("--compiler-name", default=COMPILER, help="the registered compiler the advice is bound to")
     compiler_digest: str | None = option("--compiler-digest", default=None,
                                          help="its digest, 128 hex digits (default: SHA-512 of the name and the tree's code identity)")
+    cap: int = option("--cap", type=int, default=CAP_BITS,
+                      help="ℓ, the cap on the advice's length in bits the compiler is total up to (PRF-143): the registered compiler is "
+                           "advice_windows.Capped over the one named, whose digest covers ℓ (default 2^23, 1 MiB)")
     T: int = option("--T", type=int, default=600, help="egress buckets per window, for the bits I1 charges each window")
     tau: float = option("--tau", type=float, default=0.1, help="the egress bucket's width in seconds, for each output's release bucket")
 
 
-def main(a: Options) -> int:
-    try:
-        rep = write(a.run, a.out, trace=a.trace, io=a.io, T=a.T, tau=a.tau,
-                    compiler=registered_compiler(a.compiler_name, a.compiler_digest))
-    except ValueError as e:
-        raise UsageError(f"{a.run}: {e}") from e
+def _say(rep: dict[str, Any], where: str = "") -> bool:
     reg = rep["registration"]
     for w, bits in reg["bits_by_window"].items():
-        print(f"[advice] window {w} (buckets {int(w) * reg['T']}-{(int(w) + 1) * reg['T'] - 1}): {bits} bits", flush=True)
+        print(f"[advice]{where} egress window {w} (buckets {int(w) * reg['T']}-{(int(w) + 1) * reg['T'] - 1}): {bits} bits", flush=True)
     bound = reg["binding"]["advice"]
-    print(f"[advice] {bound['bits']} bits at T={reg['T']}, committed as {reg['rows']} hiding rows, root {bound['root'][:16]}…; "
+    print(f"[advice]{where} {bound['bits']} bits at T={reg['T']}, committed as {reg['rows']} hiding rows, root {bound['root'][:16]}…; "
           f"round trip {'equal' if rep['roundtrip'] else 'NOT EQUAL'} ({rep['i1']['module']})", flush=True)
-    return 0 if rep["roundtrip"] else 1
+    return bool(rep["roundtrip"])
+
+
+def main(a: Options) -> int:
+    try:
+        rep = write(a.run, a.out, trace=a.trace, io=a.io, T=a.T, tau=a.tau, window=a.window,
+                    compiler=registered_compiler(a.compiler_name, a.compiler_digest, a.cap))
+    except ValueError as e:
+        raise UsageError(f"{a.run}: {e}") from e
+    if rep.get("schema") != SERVED:
+        return 0 if _say(rep) else 1
+    ok = [_say(r, f" commit window {w}:") for w, r in rep["reports"].items()]
+    for w, why in rep["refused"].items():
+        print(f"[advice] commit window {w}: refused: {why}", flush=True)
+    print(f"[advice] {len(ok)} commit windows committed, {len(rep['refused'])} refused, open {rep['open']}; index "
+          f"{Path(a.out) if a.out else Path(a.run) / 'advice'}/windows.json", flush=True)
+    return 0 if ok and all(ok) else 1
