@@ -71,6 +71,17 @@ def test_the_served_spec_times_both_commits_against_their_own_stock_engines():
     assert spec.eager and isinstance(COMMIT_COMPILED, CompiledCommitArm)
 
 
+def test_the_width_spec_times_only_the_served_commit_against_served_stock_in_blocks():
+    served, width = resolve_spec("llama31-8b-fp8-1gpu-commit-served"), resolve_spec("llama31-8b-fp8-1gpu-commit-served-width")
+    arms = resolve_arms(width.arms, width.arm_modules, width.arm_settings)
+    assert [(a.id, a.control, a.execution) for a in arms] == [
+        ("stock-fp8@compiled", None, "compiled"), ("commit@compiled", "stock-fp8@compiled", "compiled")]
+    settings, served_settings = width.preset.engine_settings, served.preset.engine_settings
+    assert {k: v for k, v in settings.items() if k != "resident_gpu_memory_utilization"} == {
+        k: v for k, v in served_settings.items() if k != "resident_gpu_memory_utilization"}
+    assert 2 * settings["resident_gpu_memory_utilization"] > 1 and width.reps % 2 == 0
+
+
 def test_an_experimental_arms_execution_is_one_of_the_served_executions(monkeypatch):
     mod = ModuleType("fake_exec_arm")
     mod.ARM = SimpleNamespace(id="x", install=lambda target: None, execution="bi-compiled")
