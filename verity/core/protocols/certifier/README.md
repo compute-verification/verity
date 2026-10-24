@@ -38,6 +38,10 @@ A spec-level reference for network accounting's timing channel:
   rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one
   canonical bit string the compiler reads, refused unless it is a schedule vLLM could have run, with its bits charged
   to the earliest egress window that can show each record (`bits`);
+- advice v0's validity (`advice_check`): `AdviceCheck_v1{L}`, the compile unit's first part as a Boolean Definition, 1
+  exactly when the committed bits (at most L) decode to a v0 advice, up to the three refusals of `decode` it defers
+  (unique ids, a source's KV computed there, release order per request); its AND count at each L is `size(L)`. From
+  `verity` it takes the circuits and their evaluator;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
   buckets before;
 - the active warden (`warden`): a relay that knows bytes only, between any client and any server. It forwards each
