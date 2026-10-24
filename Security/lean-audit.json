@@ -7893,6 +7893,36 @@
    "assumptions": [],
    "type_hash": "5677dc78b1098f4956a21084ff940de6f71c34bf2f38bc3f2950cd7abe39ed89"
   },
+  "Pous.SecurityProofs.BackgroundRebuildExcluded": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.BandChainMeets64": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.BandChainMeets64D12": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.BandChainMeets64D5": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.BandChainMeets64Rounds1": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.BandChainMeets64Rounds2": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.BandFamilyContinuousTimeAverage": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.BandGradedMeetsFamily": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.BandMultiMeets14": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.BandMultiMeets14K106": {
+   "owner": "@memory-accounting"
+  },
   "Pous.SecurityProofs.BandMultiMeetsFamily": {
    "owner": "@memory-accounting",
    "signature": ["Pous.SecurityProofs.BandMultiMeetsFamily : Pous.Guarantees.BandMultiMeetsFamily"],
@@ -7917,11 +7947,41 @@
    "assumptions": [],
    "type_hash": "2ef42631519cc28296a31cb00f4dc031c5409f9106924609ee3c628af7ad52e7"
   },
+  "Pous.SecurityProofs.BandPubMeets14": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.BandPubMeets14Global": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.BandPubMeets64": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.BandPubMeetsFamily": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.BandPubMeetsFamilyD1": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.BandPubMeetsFamilyD2": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.ChainDenseMeets111": {
+   "owner": "@memory-accounting"
+  },
   "Pous.SecurityProofs.ChainDenseMeets64": {
    "owner": "@memory-accounting",
    "signature": ["Pous.SecurityProofs.ChainDenseMeets64 : Pous.Guarantees.ChainDenseMeets64"],
    "assumptions": [],
    "type_hash": "f3438832e610286d546e7304364d649d9ccd4406d71b453af26635837203032d"
+  },
+  "Pous.SecurityProofs.ContinuousAudit": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.DenseMeets": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.DenseMeets64": {
+   "owner": "@memory-accounting"
   },
   "Pous.SecurityProofs.P2ErrorSplitB19Uncond": {
    "owner": "@memory-accounting",
@@ -7994,6 +8054,27 @@
    "signature": ["Pous.SecurityProofs.P2SlackFamilyWide : Pous.Guarantees.P2SlackFamilyWide"],
    "assumptions": [],
    "type_hash": "1e9d375b3380a98bb5c4d162a97f159519f4781908aa6e3b8590aa78a0b05341"
+  },
+  "Pous.SecurityProofs.P3ConcreteMeets14GB": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.P3ConcreteMeets64": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.P3ConcreteMeets64D12": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.SecureErasureMeets96GiB": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.SecureErasureMeetsFamily": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.SegMeets14": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.SegTagMeets14": {
+   "owner": "@memory-accounting"
   },
   "Pous.SecurityProofs.StreamedWipe": {
    "owner": "@memory-accounting",
@@ -9719,34 +9800,33 @@
    "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardIngressObsDecodableLe": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
-   "Pous.Guarantees.BackgroundRebuildExcluded": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Pous.Guarantees.BandChainMeets64": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Pous.Guarantees.BandChainMeets64D12": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Pous.Guarantees.BandChainMeets64D5": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Pous.Guarantees.BandChainMeets64Rounds1": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Pous.Guarantees.BandChainMeets64Rounds2": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Pous.Guarantees.BandFamilyContinuousTimeAverage": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Pous.Guarantees.BandGradedMeetsFamily": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Pous.Guarantees.BandMultiMeets14": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Pous.Guarantees.BandMultiMeets14K106": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Pous.Guarantees.BandPubMeets14": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Pous.Guarantees.BandPubMeets14Global": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Pous.Guarantees.BandPubMeets64": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Pous.Guarantees.BandPubMeetsFamily": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Pous.Guarantees.BandPubMeetsFamilyD1": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Pous.Guarantees.BandPubMeetsFamilyD2": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Pous.Guarantees.ChainDenseMeets111": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Pous.Guarantees.ContinuousAudit": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Pous.Guarantees.DenseMeets": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Pous.Guarantees.DenseMeets64": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Pous.Guarantees.M1Meets": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Pous.Guarantees.P3ConcreteMeets14GB": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Pous.Guarantees.P3ConcreteMeets64": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Pous.Guarantees.P3ConcreteMeets64D12": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Pous.Guarantees.SecureErasureMeets96GiB": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Pous.Guarantees.SecureErasureMeetsFamily": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Pous.Guarantees.SegMeets14": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Pous.Guarantees.SegTagMeets14": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
+   "Pous.SecurityProofs.BackgroundRebuildExcluded": "frozen (no-function,hash): an ideal-permutation bound whose precondition, an abort past `auditCap`, neither Lean verdict checks.",
+   "Pous.SecurityProofs.BandChainMeets64": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
+   "Pous.SecurityProofs.BandChainMeets64D12": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
+   "Pous.SecurityProofs.BandChainMeets64D5": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
+   "Pous.SecurityProofs.BandChainMeets64Rounds1": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
+   "Pous.SecurityProofs.BandChainMeets64Rounds2": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
+   "Pous.SecurityProofs.BandFamilyContinuousTimeAverage": "frozen (no-function,hash): over the model's memory challenger in the ideal-permutation model, not `MemoryChallenger.verdict`.",
+   "Pous.SecurityProofs.BandGradedMeetsFamily": "frozen (no-function,hash): a `GradedMeets` in an ideal model, which no Lean function computes.",
+   "Pous.SecurityProofs.BandMultiMeets14": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
+   "Pous.SecurityProofs.BandMultiMeets14K106": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
+   "Pous.SecurityProofs.BandPubMeets14": "frozen (no-function,hash): `PubMeets` with the model's `exactCheck`, not the setup check `PousCheck` runs.",
+   "Pous.SecurityProofs.BandPubMeets14Global": "frozen (no-function,hash): `PubMeets` with the model's `exactCheck`, not the setup check `PousCheck` runs.",
+   "Pous.SecurityProofs.BandPubMeets64": "frozen (no-function,hash): `PubMeets` with the model's `exactCheck`, not the setup check `PousCheck` runs.",
+   "Pous.SecurityProofs.BandPubMeetsFamily": "frozen (no-function,hash): `PubMeets` with the model's `exactCheck`, not the setup check `PousCheck` runs.",
+   "Pous.SecurityProofs.BandPubMeetsFamilyD1": "frozen (no-function,hash): `PubMeets` with the model's `exactCheck`, not the setup check `PousCheck` runs.",
+   "Pous.SecurityProofs.BandPubMeetsFamilyD2": "frozen (no-function,hash): `PubMeets` with the model's `exactCheck`, not the setup check `PousCheck` runs.",
+   "Pous.SecurityProofs.ChainDenseMeets111": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
+   "Pous.SecurityProofs.ContinuousAudit": "frozen (no-function): the guarantee `PROTOCOL.md` and `continuous.py` cite, over the model's memory challenger (`contAccepts`), not `MemoryChallenger.verdict`.",
+   "Pous.SecurityProofs.DenseMeets": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
+   "Pous.SecurityProofs.DenseMeets64": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
+   "Pous.SecurityProofs.P3ConcreteMeets14GB": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
+   "Pous.SecurityProofs.P3ConcreteMeets64": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
+   "Pous.SecurityProofs.P3ConcreteMeets64D12": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
+   "Pous.SecurityProofs.SecureErasureMeets96GiB": "frozen (no-function,hash): an `EraseMeets` in an ideal model, which no Lean function computes.",
+   "Pous.SecurityProofs.SecureErasureMeetsFamily": "frozen (no-function,hash): an `EraseMeets` in an ideal model, which no Lean function computes.",
+   "Pous.SecurityProofs.SegMeets14": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
+   "Pous.SecurityProofs.SegTagMeets14": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
    "Pous.SecurityProofs.BandMultiMeetsFamily": "frozen (no-function,hash): It is about the abstract m1p and chain-band models in the random-oracle model (Security/Definitions/Pous/Game/Oracle.lean:82), not the PoUS setup check's code, and Security/Models/Pous/Guarantees/P2.lean:15-16 says none states that the deployed P2 is secure.",
    "Pous.SecurityProofs.BandMultiMeetsFamilyD0": "frozen (no-function,hash): It is about the abstract m1p and chain-band models in the random-oracle model (Security/Definitions/Pous/Game/Oracle.lean:82), not the PoUS setup check's code, and Security/Models/Pous/Guarantees/P2.lean:15-16 says none states that the deployed P2 is secure.",
    "Pous.SecurityProofs.BandMultiMeetsFamilyD1": "frozen (no-function,hash): It is about the abstract m1p and chain-band models in the random-oracle model (Security/Definitions/Pous/Game/Oracle.lean:82), not the PoUS setup check's code, and Security/Models/Pous/Guarantees/P2.lean:15-16 says none states that the deployed P2 is secure.",
@@ -9981,10 +10061,6 @@
    "Pous.SecurityProofs.P2SlackFamilyWide": "frozen (no-function,hash): It is about the abstract m1p model in the random-oracle model (Security/Definitions/Pous/Game/Oracle.lean:82), not the PoUS setup check's code, and Security/Models/Pous/Guarantees/P2.lean:19-21 says none states that the deployed P2 is secure.",
    "Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure": "frozen (no-function,hash): It relates two statements about P2 in the ring model (Security/Definitions/Pous/P2/Cost.lean, Rounds.lean), not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecure.",
    "Pous.SecurityProofs.P2RingGradedOfRoundSecure": "frozen (no-function,hash): It bounds P2's ring-model audit (Security/Definitions/Pous/P2/Rounds.lean), not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecure.",
-   "Accounting.Guarantees.Remote.Conservation": "unstated: the remote audit's conservation statement, at no location; proved from its routes as hypotheses by Accounting.SecurityProofs.Remote.Conservation, a lemma; not listed until the routes are proved for the runs the actual circuit realizes (note:20261012T1824Z-draft-remote-theorem-spec)",
-   "Accounting.Guarantees.Remote.NodeLevel": "unstated: the remote audit's node-level statement under Identity (statement C); proved from its routes as hypotheses by Accounting.SecurityProofs.Remote.NodeLevel, a lemma; not listed until the routes are proved for the runs the actual circuit realizes (note:20261012T1824Z-draft-remote-theorem-spec)",
-   "Accounting.Guarantees.Remote.NodeLevelJoint": "unstated: the node-level statement's counting form under Identity (Mbw at the node); proved from its routes as hypotheses by Accounting.SecurityProofs.Remote.NodeLevelJoint, a lemma; not listed until the routes are proved for the runs the actual circuit realizes (note:20261012T1824Z-draft-remote-theorem-spec)",
-   "Accounting.Guarantees.Remote.NodeLevelLinks": "unstated: the node-level statement without Identity, with the links charged; proved from its routes as hypotheses by Accounting.SecurityProofs.Remote.NodeLevelLinks, a lemma; not listed until the routes are proved for the runs the actual circuit realizes (note:20261012T1824Z-draft-remote-theorem-spec)",
    "Accounting.SecurityProofs.B2": "frozen (no-function,world-unlisted): It is stated over arbitrary strategies (maps from PoUS's outcomes to Accounting.Actual.Run) causal from every tick (CausalFrom), and takes the challenge ticks read off the run and increasing in it, the location's state, first tick and help fixed by the setup, what reaches it during each window fixed by the help, that window's challenge and its tick, the next tick a function of those and of what the location does, and each challenge's tick taking at most 2^τ values on the runs on time, as hypotheses that are not on the premises list, rather than a function's acceptance.",
    "Accounting.SecurityProofs.B2Audit": "frozen (no-function,world-unlisted): It takes PoUS's sequential audit security (AuditSecureOn) at an arbitrary scheme as a hypothesis, and B2's hypotheses on the strategy (CausalFrom, the challenge ticks read off the run and increasing in it, the setup, ingress and arrival rules (SetupFixed, IngressFixed, ArrivalRule) and the ticks' count, TicksIn), which are not on the premises list; the event it bounds is a strategy's pass with the location's memory bounded, not a Lean function's acceptance.",
    "Accounting.SecurityProofs.B2Determines": "frozen (no-function,world-unlisted): It is stated over arbitrary families of strategies (maps from PoUS's outcomes to Accounting.Actual.Run) causal from every tick and takes B2's hypotheses on them, which are not on the premises list, and concludes the existence of PoUS adversaries (lemma M's Determines), not a Lean function's acceptance.",
