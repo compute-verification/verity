@@ -13,7 +13,8 @@ phase at the algebraic phase's last position:
   quiet round (`roundFree_quiet`), which owes its coins.
 * `roundFree_pcs`: the opening's first round, in the algebraic phase, ends it, at the position the label demands
   (`c.nPiop`).
-* `Fl`, `FInv`: the flags after round `k`, the opening's label at round `A`; or the frame owes nothing, the round refused.
+* `Fl`, `FInv`: the flags after round `k`, the opening's label at round `A`; or the frame owes nothing, the round
+  refused.
 * **`sched_flags`**, **`sched_opened`**: along `schedReqs` from the rep's start where the rep runs on, the frame keeps
   `FInv`; and where it takes the coins of a round at or past the opening's label, it is outside every masked phase, past
   the algebraic phase's opening, before level 0 and the inner proof, at the position `c.nPiop`, owing nothing.
@@ -128,10 +129,12 @@ theorem foldlM_stepAt_rel (c : Cfg) (s₀ : Masker) (hA : s₀.done = false → 
         | bytes b => cases hs; exact rel_refl _
         | one v =>
           simp only [stepAt] at hs
-          exact foldlM_absorb1_rel c _ _ q hs
+          have hq' := foldlM_absorb1_rel c _ _ q hs
+          exact hq'
         | vec vs =>
           simp only [stepAt] at hs
-          exact foldlM_absorb1_rel c _ _ q hs
+          have hq' := foldlM_absorb1_rel c _ _ q hs
+          exact hq'
         | sq k n => cases hs; exact rel_refl _
       exact foldlM_stepAt_rel c s₀ hA fs q r' (rel_trans hr hq) (fun g hg => hp g (List.mem_cons_of_mem _ hg)) h
 
@@ -228,7 +231,8 @@ def Fl (c : Cfg) (A k : ℕ) (s : Masker) : Prop :=
   s.l0 = false ∧ s.doneL0 = false ∧ s.inner = none ∧ (k < A → s.done = false ∧ s.on = true) ∧
     (A ≤ k → s.done = true ∧ s.on = false ∧ s.pos = c.nPiop)
 
-/-- The flags after round `k`, or the frame owes nothing (the round refused), where the rep can run on only to its end. -/
+/-- The flags after round `k`, or the frame owes nothing (the round refused), where the rep can run on only to its
+end. -/
 def FInv (c : Cfg) (A k : ℕ) (s : Masker) : Prop := s.owed = none ∨ (s.owed.isSome = true ∧ Fl c A k s)
 
 theorem fl_congr {c : Cfg} {A k : ℕ} {s s' : Masker} (hF : Fl c A k s) (h1 : s'.l0 = s.l0)
