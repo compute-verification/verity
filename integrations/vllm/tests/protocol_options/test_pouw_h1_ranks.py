@@ -73,7 +73,9 @@ class Executor:
         self.steps += 1
 
     def collective_rpc(self, method, kwargs=None):
-        return [getattr(w, method)(**(kwargs or {})) for w in self.workers]
+        """vLLM's: a worker method by name, or a callable called with each worker first."""
+        return [method(w, **(kwargs or {})) if callable(method) else getattr(w, method)(**(kwargs or {}))
+                for w in self.workers]
 
 
 def _layers():

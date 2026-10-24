@@ -134,14 +134,21 @@ class RankCommit(RankExtension):
     def h1rank_commit(self, cp: Mapping[str, Any] | None = None, **committer: Any) -> dict[str, Any]:
         """The Commit on this rank (`attach`, ``committer`` the committer's keywords, its ``run_id`` named with the rank's
         first linear), its tap a `pouw_h1_ranks.RankTap` naming each of the rank's H1 linears as the window does; returns
-        the committer's name and the module whose input ids it acquires."""
+        the committer's name and the module whose input ids it acquires. A site the rank's source acquires that the
+        window has no name for (a routed expert's included) is refused: under its rank-local name it would meet no call,
+        or another rank's site of the same name."""
         from verity_vllm.protocol_options import pouw
         st = self._h1rank  # type: ignore[attr-defined]
         run: RankRun = st["run"]
         model, layers = self._h1rank_layers()
         names = {name: run.modules[run.lo + int(i)] for i, name in pouw._named(model, layers).items()}
         committer["run_id"] = f"{committer.get('run_id', 'h1')}/rank{run.lo}"
-        com, _src, tap = attach(self._h1rank_engine(model, cp or {}), layers, tap=RankTap(names=names), **committer)
+        com, src, tap = attach(self._h1rank_engine(model, cp or {}), layers, tap=RankTap(names=names), **committer)
+        if unnamed := sorted({*src.modules, *src.experts} - set(names)):
+            com.close()
+            tap.untap()
+            raise ValueError(f"rank [{run.lo}, {run.hi}): the Commit acquires {len(unnamed)} sites the window has no name "
+                             f"for, {unnamed[:4]}")
         st["commit"] = (com, tap)
         return {"lo": run.lo, "committer": com.name, "embed": tap.embed}
 
