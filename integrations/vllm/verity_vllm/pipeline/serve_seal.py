@@ -2,7 +2,7 @@
 
 `committer` builds the server's committer: ``--scheme vllm-v1`` `NativeHostCommitter` (32-byte roots), ``--scheme rows-sha512``
 the declared Commit of record's (`pipeline.commit.make_committer`'s ``native_collect_v2b``: hm96-sha512 rows in frame-v3-sha512
-trees, 64-byte roots) with its acquisition built as the Commit builds it (`pipeline.commit.attach_of_record`) over the bench
+trees, 64-byte roots) with its acquisition built as the Commit builds it (`pipeline.commit_attach.attach_of_record`) over the bench
 row's required manifest (``--required-manifest``): the attention hidden tap (``--hidden-so``), the norm-scale tap
 (``--norm-tap-so``) and the hook sets of the acquisition plan, so its name is the Commit's (``...+hidden_m1+norm_scale+plan``)
 and a part the manifest names that did not attach is refused (`parts_missing`). Then `served_record.SamplerInputsSource` is
@@ -40,7 +40,7 @@ DECLARED_COMMITTER = "native_collect_v2b"
 
 
 def committer_args(opts: Any) -> SimpleNamespace:
-    """What `pipeline.commit.make_committer` and `pipeline.commit.attach_of_record` read of a Commit's options, for
+    """What `pipeline.commit.make_committer` and `pipeline.commit_attach.attach_of_record` read of a Commit's options, for
     `DECLARED_COMMITTER` under ``opts.scheme`` and the bench row's manifest ``opts.required_manifest``."""
     from verity_vllm.acquire.sources.taps import TapSources
 
@@ -107,7 +107,7 @@ def committer(opts: Any, llm: Any) -> Any:
     manifest, hidden_m1 = None, False
     if opts.scheme == "rows-sha512":
         from verity_vllm.engine import vllm_adapter as va
-        from verity_vllm.pipeline import commit as C
+        from verity_vllm.pipeline import commit as C, commit_attach as CA
 
         manifest, args = manifest_of_record(opts), committer_args(opts)
         com = C.make_committer(DECLARED_COMMITTER, eng, args, f"serve-openai:{opts.run_id}")
@@ -120,8 +120,8 @@ def committer(opts: Any, llm: Any) -> Any:
         raise UsageError(f"VERITY_RETAIN={com.retain}: the served record is read back from the values retained on the host")
     if manifest is not None:
         fa = va.observed_flash_attn_version(llm.model)
-        classes, family = C.classes_of_record(manifest, llm.model, fa)
-        att = C.attach_of_record(com, eng, args, manifest, Path(opts.out) / "acquisition", kind=DECLARED_COMMITTER,
+        classes, family = CA.classes_of_record(manifest, llm.model, fa)
+        att = CA.attach_of_record(com, eng, args, manifest, Path(opts.out) / "acquisition", kind=DECLARED_COMMITTER,
                                  required_classes=classes, required_classes_cli=False, hidden_family=family, fa_version=fa)
         if missing := parts_missing(com, manifest, bool(att.hidden_required and family)):
             raise UsageError(f"--scheme rows-sha512: the committer {com.name} lacks {missing}, which the Commit of record attaches for "
