@@ -15,9 +15,10 @@ share their noise, so these restate them for one straight-line program a call ov
 The floors and their luck are the unit floors' summed over the call's units: a call of `mu × nu` units of `ur` rows
 and `uc` columns at `B` segments of `L` is charged at least `κ L · mu nu · ur uc B`, `mu nu` times a unit's
 `κ L ur uc B`, at the parity luck 0.854 and error `2^{−40} + R (δb + δz)`. The constant is unchanged: sharing the
-coins across units costs the floor nothing on this scope, because charging purity across the call's cell-blocks
-already forbids a product to serve two of them. A product shared across two units' cell-blocks is outside the scope,
-and the floors say nothing of a run that forms one (K1 is not claimed there).
+coins across units costs the floor nothing on this scope, because on it no product is two-sided at two cell-blocks
+whose words read it at odd scale, so none counts for two of them, whichever units they belong to. A product two-sided
+at two units' cell-blocks is outside the scope, and the floors say nothing of a run that forms one (K1 is not claimed
+there).
 
 The per-prover forms (`StagedFloorKOneSidedCallPerProver`, `OverlapFloorKOneSidedCallPerProver`) are stated, not
 proved, as the unit ones are; each follows from its unit form (`Proofs.Pouw.RelativeSecurityCall`).
