@@ -286,6 +286,12 @@ One rule for every construction that serves a checkpoint: Pearl-C4 (`PearlC4.che
   layer 0's update by 158% with the RMSNorm scales unfolded, and by under 4% with them folded. The rotation folds γ, so
   its stacks pass as they are. An unrotated, curated checkpoint declares `gamma-fold` (every RMSNorm scale folded into
   the linears it feeds), and takes no V/O or interleave.
+- **The rotation reaches only the residual stream's linears** (`check_linear`). It mixes the residual stream alone: a
+  linear that reads it takes the rotation on its columns, one that writes it on its rows. A linear off the stream keeps
+  the checkpoint's weights, so under a rotated stack it is not registered and earns no credit, though it is still served
+  and bound. Those linears are MLA's q_b and kv_b (with the absorbed W_UK_T and W_UV) and the DSA indexer's wq_b, each
+  behind its latent's own RMSNorm. On GLM-5.3 at TP8, Pearl-C admits q_b and wq_b, and the rotation leaves both
+  uncredited (compute-accounting's `glm53_rotation` run). A curated unrotated checkpoint registers each of its linears.
 - **The keyed transforms are keyed after the weights' root is recorded**, by `rotation_key`:
   `derive(salt, "verity/pouw/rotation-key/v1", {"weights": weights_root}).stream("key", 32)`, over the salt of an epoch
   started from the challenger's salt coin (`Epoch.start`). It refuses any other salt: an `Epoch.unverified` one, a
@@ -907,6 +913,11 @@ useful    U/(α_A·α_B), glue
     - The tile cap and R1 read the credited rows only. Past the count caps the audit rejects.
     - `volunteer` is an honest prover's remedy for a tile over the cap: it gives up the rows whose removal brings each
       tile under, before the draw coin opens.
+    - A weight whose n is not whole column tiles is served zero-padded to the next whole tile (`pad_weight`; GLM-5.3's
+      lm_head, 19,360 rows a TP8 rank, to 19,392), and the last tile's rows, its real columns with the zero rows, are
+      voluntary (`declare`'s `padded_b`, though the zero rows fail the noise floor). That tile has no credited cell, so
+      no draw lands on it and it opens no exclusion tile: no tile check sees a zero row. The credit is the full tiles'
+      real columns (19,328 of 19,360) at the padded n's cell credit.
   - A cell's draw weight is its row's share of `W_ref` at the kept width, the `W_ref` of the Lean statement the draw
     cites (`draw_wref`). On sm_120 at its cap that is `wrefDevRev1K` at `Prices.sm120Loop` and the honest cast at 8.72
     (`SM120_LOOP_CAST_8P72`), the statement of the served γ and ε. Its ratio to `wref` differs between linears, so a

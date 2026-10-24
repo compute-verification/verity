@@ -2,8 +2,9 @@
 
 The keyed 8-block rotation (rung 3) is the rule, keyed after the weights' root is recorded; an unrotated checkpoint
 registers only from the curated list, with γ folded where it needs it (Daniel, 1:36 PM and 5:52 PM PDT on 30 Sep, for
-Pearl-C4; compute-accounting, 8 Oct, for served FP8).  `check_registration` reads what a registration declares, and
-`rotation_key` is the only key its keyed transforms take: one drawn from the epoch's live salt coin (`Epoch.start`).
+Pearl-C4; compute-accounting, 8 Oct, for served FP8).  `check_registration` reads what a registration declares,
+`check_linear` which of its linears the rotation reaches, and `rotation_key` is the only key its keyed transforms take:
+one drawn from the epoch's live salt coin (`Epoch.start`).
 No Lean statement reads a registration.
 """
 
@@ -30,6 +31,11 @@ REGISTRATION_STACKS = ((ROTATION_8,), (ROTATION_8, VO_ROTATION, HEAD_INTERLEAVE)
 #: The stacks of an unrotated checkpoint, which must be curated
 UNROTATED_STACKS = ((), (GAMMA_FOLD,))
 ROTATION_KEY_DOMAIN = "verity/pouw/rotation-key/v1"
+#: Where a linear sits against the residual stream, the one stream the keyed 8-block rotation mixes: it reads it (its
+#: columns take the rotation), writes it (its rows take it), or neither.  MLA's q_b and kv_b and the DSA indexer's wq_b
+#: are off it: each reads a latent behind its own RMSNorm, so the rotation never reaches their weights.
+READS_RESIDUAL, WRITES_RESIDUAL, OFF_RESIDUAL = "reads-residual", "writes-residual", "off-residual"
+RESIDUAL_SIDES = (READS_RESIDUAL, WRITES_RESIDUAL, OFF_RESIDUAL)
 
 
 def check_registration(transforms: Sequence[str], curated: bool = False, needs_gamma_fold: bool = False) -> None:
@@ -58,6 +64,19 @@ def check_registration(transforms: Sequence[str], curated: bool = False, needs_g
                           f"rotation or by {GAMMA_FOLD!r}")
 
 
+def check_linear(transforms: Sequence[str], side: str, curated: bool = False, needs_gamma_fold: bool = False) -> None:
+    """Refuse crediting one linear of a registration: the registration's own rule (`check_registration`), then, under a
+    rotated stack, a linear `side` says is off the residual stream.  The rotation leaves such a linear's weights as the
+    checkpoint has them, unrotated and not curated, so it is not registered and earns no credit; it is still served and
+    bound.  A curated unrotated checkpoint registers each of its linears."""
+    if side not in RESIDUAL_SIDES:
+        raise ValueError(f"side {side!r}: one of {RESIDUAL_SIDES}")
+    check_registration(transforms, curated, needs_gamma_fold)
+    if ROTATION_8 in transforms and side == OFF_RESIDUAL:
+        raise DomainError(f"registration {tuple(transforms)}: a linear off the residual stream (MLA's q_b, kv_b, the DSA "
+                          f"indexer's wq_b) is not reached by {ROTATION_8!r}, so it is unregistered and uncredited")
+
+
 def rotation_key(epoch: Epoch, opening: CoinOpening) -> bytes:
     """The 32-byte key of a registration's keyed transforms:
     ``derive(salt, "verity/pouw/rotation-key/v1", {"weights": weights_root}).stream("key", 32)`` over the salt of an epoch
@@ -75,5 +94,6 @@ def rotation_key(epoch: Epoch, opening: CoinOpening) -> bytes:
     return derive(epoch.salt, ROTATION_KEY_DOMAIN, {"weights": epoch.weights_root}).stream("key", 32)
 
 
-__all__ = ["GAMMA_FOLD", "HEAD_INTERLEAVE", "REGISTRATION_STACKS", "ROTATION_8", "ROTATION_KEY_DOMAIN", "UNROTATED_STACKS",
-           "VO_ROTATION", "check_registration", "rotation_key"]
+__all__ = ["GAMMA_FOLD", "HEAD_INTERLEAVE", "OFF_RESIDUAL", "READS_RESIDUAL", "REGISTRATION_STACKS", "RESIDUAL_SIDES",
+           "ROTATION_8", "ROTATION_KEY_DOMAIN", "UNROTATED_STACKS", "VO_ROTATION", "WRITES_RESIDUAL", "check_linear",
+           "check_registration", "rotation_key"]

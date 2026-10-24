@@ -235,6 +235,43 @@ def test_an_excluded_weight_row_earns_nothing_and_its_tiles_are_accepted():
                                                for v in rejected.audit.verdicts)
 
 
+@pytest.mark.slow
+def test_a_padded_weights_last_tile_is_neither_drawn_nor_credited():
+    """GLM-5.3's lm_head is 19360 rows a TP8 rank, not whole 64-column tiles; padded with zero rows to 19392 it is in
+    Pearl-C's domain.  Its last tile holds real columns and zero rows, and a zero row fails the noise floor, so no tile
+    check may see it (L3's `TileCheck.Accepts` asks `weightOK` of every column): the padded tile's rows are voluntary,
+    which leaves it no credited cell, so no draw lands on it and it opens no exclusion tile.  Here 500 rows padded to
+    504 on 8-column tiles (V-EX's ⌈n/64⌉ cap holds the tile's 8 rows): the credit is the 496 real columns of full tiles,
+    under the real columns' honest credit.  Declaring the zero rows only as voluntary leaves them excluded, and their
+    exclusion tile is the padded one."""
+    s = C.PearlC(k_min=32, tile=(16, 8), forming="v1")
+    rows_a = CV.rows_f32("work-pad", "A", 16, K)
+    real = [r for r in CV.rows_f32("work-pad", "B", 504, K) if CW.row_passes(C.parse_f32_row(r, K))][:500]
+    rows_b, padded = W.pad_weight(real, s.tile[1])
+    assert rows_b[:500] == real and rows_b[500:] == [C.f32_row([0] * K)] * 4 and padded == tuple(range(496, 504))
+    assert W.pad_weight(rows_b, 8) == (rows_b, ())
+    with pytest.raises(DomainError):
+        s.check(Matmul(3, Shape(16, K, 500), 9))
+    with pytest.raises(ValueError):
+        W.pad_weight([real[0], real[1][:8]], 8)
+    work = Workload((Matmul(3, Shape(16, K, 504), 9),))
+    prover = Prover(s, {9: rows_b})
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon", E.COINS)
+    tr = prover.prove(epoch, {3: rows_a})
+    records = CW.declare(s, epoch, {3: rows_a}, {9: rows_b}, SPLITS, padded_b={9: padded})
+    assert records == [W.UnitRecord(work.matmuls[0], 16, K, (), (), (), padded)]
+    assert [t.cols for _, t, w in CW.tickets(s, records) if w == 0] == [padded]
+    key = CW.draw_key(b"coin", b"root", b"records", epoch.salt)
+    assert all(t.cols != padded for _, t in CW.draw(s, records, key, 4096)) and CW.exclusion_tiles(s, records) == []
+    out = CW.audit(s, epoch, prover, tr, SPLITS, records, E.challenger(), 16)
+    assert out.audit.accepted
+    assert out.credit == (1 - s.cap) * CW.cell_credit(s, records[0]) * 16 * 496
+    assert out.credit < (1 - s.cap) * s.credit_of(Shape(16, K, 500))
+    only_voluntary = CW.declare(s, epoch, {3: rows_a}, {9: rows_b}, SPLITS, voluntary_b={9: padded})
+    assert only_voluntary[0].excluded_b == tuple(range(500, 504))
+    assert [t.cols for _, t in CW.exclusion_tiles(s, only_voluntary)] == [padded]
+
+
 def test_r1_is_a_no_op_on_pearl_c():
     """R1, the salted per-row credit rule `check_opened` and `declare` now consult, is Pearl-C4's (its F1′ bound).
     Pearl-C (FP8) brings no hook, so an excluded row that passes the per-row rules still fails its tile, and declaring

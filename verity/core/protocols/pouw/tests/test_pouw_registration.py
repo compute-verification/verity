@@ -65,6 +65,26 @@ def test_served_fp8_folds_gamma_where_the_checkpoint_needs_it():
         s.check_registration((R.GAMMA_FOLD,), needs_gamma_fold=True)
 
 
+def test_under_the_rotation_a_linear_registers_only_where_the_rotation_reaches_it():
+    """GLM-5.3 (compute-accounting's glm53_rotation run): the keyed 8-block rotation mixes only the residual stream, so
+    MLA's q_b and the DSA indexer's wq_b, which Pearl-C admits at TP8, keep the checkpoint's weights and are refused under
+    both rotated stacks.  A curated unrotated checkpoint registers every linear, and the stack's own rule comes first."""
+    for stack in R.REGISTRATION_STACKS:
+        for side in (R.READS_RESIDUAL, R.WRITES_RESIDUAL):
+            R.check_linear(stack, side)
+        with pytest.raises(DomainError, match="off the residual stream .* unregistered and uncredited"):
+            R.check_linear(stack, R.OFF_RESIDUAL)
+    for stack in R.UNROTATED_STACKS:
+        for side in R.RESIDUAL_SIDES:
+            R.check_linear(stack, side, curated=True)
+    with pytest.raises(DomainError, match="curated list"):
+        R.check_linear((), R.READS_RESIDUAL)
+    with pytest.raises(DomainError, match="not an adopted stack"):
+        R.check_linear((R.ROTATION_8, R.GAMMA_FOLD), R.READS_RESIDUAL)
+    with pytest.raises(ValueError, match="one of"):
+        R.check_linear((R.ROTATION_8,), "latent")
+
+
 def _started(seed=E.SEED, roots=ROOTS):
     ch = E.challenger(seed)
     opening = ch.open("salt", weights_root(roots))
