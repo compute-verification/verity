@@ -388,8 +388,9 @@ An advised link is a served link under arbitrary traffic: responses of any lengt
 timed as serving chose, carried across windows. Nothing fixes its egress counts before the run and FIXLEN doesn't hold,
 so N2 takes them from the prover's advice and holds the advice to the certified ingress head. The advice is
 `advised.LinkAdvice`: I1's advice (`advice.Advice`, v0, "Advice v0" below: one per certifier session, after serving,
-public in v0 and charged by `advice.bits`), `received[w]`, the request frames the ingress certifier releases in
-window w, and the tie of its requests to the certified ingress, IoTieRequest's verdict (`advised.IoTieVerdict`).
+public in v0 and charged by `advice.bits`) and `received[w]`, the request frames the ingress certifier releases in
+window w. It carries no tie: the tie of its requests to the certified ingress, IoTieRequest's verdict
+(`advised.IoTieVerdict`), comes only from the verifier's own tie source (`LinkWindows(ties=…)`, `advised.TieSource`).
 Declared with `LinkWindows(advised=AdvisedProfile(windows, request_frames, own))`, whose `request_frames` is the link's public
 framing: entry n − 1 is the ingress frames a request of an n-token prompt takes (CERT-VARLEN's id
 requests, whose frames are a function of the prompt's length alone), for every prompt length the link admits.
@@ -401,16 +402,21 @@ requests, whose frames are a function of the prompt's length alone), for every p
     reads no `id`, `finish`, `kind`, `cache_hit`, `preempted` or `sources` beyond `Advice`'s own validity;
   - `received[w]`, which the unit holds to window w's certified ingress head;
   - the tie: IO-TIE's `IoTieRequest` verdict on each of the link's ingress windows, on the request view computed from
-    this advice (`IoTieVerdict.advice`, its `advised.digest`; `IoTieVerdict.accepted`), that the link's j-th
-    certified request is advice request j and its prompt v0's `prompt_len` ids;
+    this advice, that the link's j-th certified request is advice request j and its prompt v0's `prompt_len` ids. It
+    names the link (`IoTieVerdict.link`), its ingress windows' registrations with the challenger
+    (`IoTieVerdict.registrations`, each one's `registration.digest`), the advice (`IoTieVerdict.advice`, its
+    `advised.digest`) and each window's verdict (`IoTieVerdict.accepted`), and `view` holds the first two to the link
+    and the registrations the verifier's tie source records, so a verdict on another link or ingress record isn't
+    reused;
   - the framing, and each window's declared sync, which must be one of Σ_sync, the set the certified egress head's
     parameters digest binds (outside it the advice is refused).
 - **The ingress ends are derived** (`advised.ends`), not advised: advice request j is the link's j-th request and its
   prompt length is the certified prompt's, which the tie holds (FCFS admission meets the order, since v0's first-row
   order is then the arrival order), so it ends at request frame `ends[j]` = Σ_{i ≤ j} `request_frames[prompt_len_i −
   1]`, and the last end must be Σ `received`, the link's certified request frames. A link without the tie, a verdict
-  on another advice or that doesn't accept every ingress window, a prompt longer than the framing covers, or ends
-  whose last isn't Σ `received`, refuses the advice. No field but v0's says
+  on another link, other ingress registrations or another advice or that doesn't accept every ingress window, a
+  prompt longer than the framing covers, or ends whose last isn't Σ `received`, refuses the advice. No field but
+  v0's says
   where a request ends, so the ends cost nothing beside `advice.bits`.
 - **The window's view** (`advised.view`), computed by the verifier in the clear from the advice, the framing and the
   declared syncs, is the unit's public input:
@@ -438,9 +444,10 @@ requests, whose frames are a function of the prompt's length alone), for every p
   the verdict, the deadline bit and the advice's digest). The view is the unit's ``released``, ``floor`` and
   ``received`` parameters (`ADVICE`), in its public row (``pub``); the heads' counts stay witness.
 - **The verifier of record** is `LinkWindows.verify(…, advice=A)`, which decides on the delivered proof as on any
-  link: it computes `view(A, w)` itself and opens the proof's public row only to its own copy, so a proof made on
-  another advice's view of the window is refused. Without a `LinkAdvice`, or on one `view` refuses, the unit takes
-  no instance and the window is refused. The in-the-clear check (`clear`, the debug comparison) runs `advised_check`:
+  link: it computes `view(A, w)` itself, under the tie from its own tie source alone (`LinkWindows.ties`; no entry
+  point takes one beside the advice), and opens the proof's public row only to its own copy, so a proof made on
+  another advice's view of the window is refused. Without a `LinkAdvice` or a tie source, or on an advice `view`
+  refuses, the unit takes no instance and the window is refused. The in-the-clear check (`clear`, the debug comparison) runs `advised_check`:
   `advised.reference` over the opened heads' counts and `view(A, w)`. Each window reports a third public output,
   `advice`, the SHA-512 of A's canonical
   encoding (`advice.encode`) and `received` (`advised.digest`), so it names the string the compiler reads too.
@@ -467,12 +474,16 @@ requests, whose frames are a function of the prompt's length alone), for every p
 - **The tie is IoTieRequest's verdict, and without it every advised link is refused** (fail closed; owned by
   network-accounting). The certified prompts are witness, so the verifier can't derive the prompt lengths and order on
   the host, and a tie the prover states is no tie: REDTEAM phase 7 showed that one stating the swapped split reopens
-  phase 6's acausal release. So `advised.ends` takes the tie only as IO-TIE's in-proof `IoTieRequest`
-  (`cursor/io-tie-request-061a`, note:network-accounting/20261024T0420Z-report-io-tie): its verdict on every ingress
-  window, for the same advice digest, from proofs the verifier of record verified itself (`advised.IoTieVerdict`).
-  Until IoTieRequest runs in the proof service, nothing builds one, and every advised link is refused, never
-  accepted. The tests stand in for its verdict with its reference in the clear (`tests/advised_traffic.py`, `tied`),
-  as `tests/standin.py` stands in for the proof.
+  phase 6's acausal release. Nor is a verdict the prover delivers: REDTEAM phase 10 (and ci's review) built one for
+  the forged advice's digest, every window accepted, and the verifier of record, which read it off the delivered
+  advice, accepted the swapped split (regressions in `test_network_certifier_advised_phase10.py` and
+  `test_network_certifier_advised_phase6.py`). So the advice carries no tie, and `advised.ends` takes it only as
+  IO-TIE's in-proof `IoTieRequest` (`cursor/io-tie-request-061a`, note:network-accounting/20261024T0420Z-report-io-tie):
+  its verdict on every ingress window of this link's registrations, for the same advice digest, from proofs the
+  verifier of record verified itself, given by the verifier's own tie source (`LinkWindows.ties`). Until IoTieRequest
+  runs in the proof service there is no such source, and every advised link is refused, never accepted. The tests
+  stand in for the source with its reference in the clear (`tests/advised_traffic.py`, `StandInTie`), as
+  `tests/standin.py` stands in for the proof.
 - **Bucket 0 is capped at R_in, which holds the own frame.** The ingress certifier releases min(queue, r_in) frames a
   bucket (`grid.Certifier`) with its own frame queued ahead of bucket 0's arrivals (`active.Bucketer`), and a head
   with a count past its allocation doesn't exist (`certificate.RecordHead`): with R_in request frames arriving in

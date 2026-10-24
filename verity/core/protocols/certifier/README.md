@@ -74,9 +74,10 @@ A spec-level reference for network accounting's timing channel:
   request's end on the ingress link, which `advised.ends` derives from v0's prompt lengths and the link's public
   framing), and each window's ingress total the advice's. Carry-over between windows is the advice's. With the
   advice fixed the counts are determined, so the egress timing carries at most `advice.bits` (`PROTOCOL.md`, "An
-  advised link"). The prompt
-  lengths are tied to the certified ones only by IO-TIE's `IoTieRequest` verdict (`advised.IoTieVerdict`), which
-  isn't in the proof service yet, so every advised link is refused (fail closed).
+  advised link"). The prompt lengths are tied to the certified ones only by IO-TIE's `IoTieRequest` verdict
+  (`advised.IoTieVerdict`, naming the link and its ingress registrations), which the verifier takes from its own tie
+  source (`LinkWindows.ties`), never beside the advice; IoTieRequest isn't in the proof service yet, so there is no
+  source and every advised link is refused (fail closed).
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's
