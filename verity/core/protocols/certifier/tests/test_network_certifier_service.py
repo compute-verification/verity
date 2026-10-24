@@ -432,7 +432,8 @@ def test_a_proof_of_another_circuit_with_the_same_interface_is_refused(tmp_path)
         outs.append(run.decide(draw, opening, program=proved))
     assert reject(outs[0]) and outs[1].accepted
 
-    wide = replace(lw, ingress=GridParams(8, 2, 1))
+    wide = replace(lw, ingress=GridParams(16, 2, 1))
+    assert wide.head_key(1) == (9, 16, 0)
     assert not HC.pinned(HC.gate(*wide.head_key(1))) and HC.gate(*wide.head_key(1)).id.endswith("@unpinned]_v2")
     assert not wide.proved([_finding(wide._partition["program"])])
     with pytest.raises(ValueError, match="no pinned circuit digest"):
