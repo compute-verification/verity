@@ -29,6 +29,9 @@ from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.circuits import codec
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.ops.boolean import gemm as BG
+from verity.ml.circuits.ops.gemm import S8_K_LIMIT
 
 PKG = Path(__file__).resolve().parents[1] / "lean/check/tests"
 for _name, _dir in (("pouw_rounds_cases", PKG), ("pouw_credit_cases", PKG), ("test_circuit_h1window", Path(__file__).parent)):
@@ -66,6 +69,10 @@ OTHER_REGISTRATION = "'s domain is not the one the window's registration gives i
 OTHER_ROOT = "against another root than the one the window registered for"
 OTHER_PERIOD_WEIGHTS = "open signed: a B row's codes or s_w differ from the ones the period registered"
 UNSIGNED = "open signs no weights' root (weights_root, a SHA-512 digest"
+#: a tile at a K its proof doesn't cover (`credit.tile_k`), between its K and its fix
+TILE_K = "is outside the K its proof covers, multiples of 32 below 131072 (the K its GemmAccumulatorS8 binds): "
+SPLIT = ("split its linears' k range into linears of at most K = 131040 each, each padded with zero codes to a "
+         "multiple of 32")
 DRAWN_EXPECT = {
     "coin-form": ("draw", Cr.COIN_FORM), "args-form": ("draw", Cr.DRAW_ARGS), "layout-form": ("layout", Cr.LAYOUT_FORM),
     "named-twice": ("layout", "is named twice"), "unknown-linear": ("layout", "which is no linear of the window"),
@@ -85,7 +92,7 @@ WINDOW_EXPECT = {
     "not-window": ("layout", Cr.NOT_WINDOW), "template": ("layout", "is not h1window's"),
     "tile-ks": ("layout", "h1window binds one template per K"), "body": ("layout", Cr.BODY),
     "layout-form": ("layout", Cr.LAYOUT_FORM), "record-layout": ("layout", "which is no linear of the window"),
-    "alt-layout": ("layout", Cr.BODY),
+    "alt-layout": ("layout", Cr.BODY), "tile-k": ("tile-k", TILE_K),
     "credit-changed": ("draw", Cr.CHANGED), "credit-no-draw": ("draw", Cr.NO_DRAW),
     "credit-forged-ledger": ("coin", "the challenger's session is not trusted"),
     "credit-branch-pin": ("coin", OFF_MAIN),
@@ -110,6 +117,7 @@ WINDOW_EXPECT = {
     "a-zero": ("arow", NOT_COMMITS + "row-table/"), "a-row-off": ("arow", NOT_COMMITS + "row-table/"),
     "ids-off": ("arow", NOT_COMMITS + "input-ids/"), "ids-missing": ("arow", "'s input-ids table "),
     "commit-missing": ("arow", "the Commit record registers "), "commit-twice": ("arow", "the Commit record registers "),
+    "commit-missing-expert": ("arow", f"/k{cases.EXPERT_K} not: the served Commit registers each round's A table"),
     "ids0-outside": ("arow", Cr.IDS_OUTSIDE), "ids0-root-off": ("arow", Cr.IDS_OUTSIDE),
     "ids0-other-session": ("registration", "ids@0" + OTHER_REGISTRATION),
     "a-call-off": ("arow", NOT_COMMITS + "row-table/"), "a-call-missing": ("arow", "rows, not "),
@@ -129,6 +137,7 @@ PERIOD_EXPECT = {
     "other-k": ("window", "so the period earns nothing"),
     "alt-layout": ("circuit", "prove the period's declared circuit"),
     "bad-circuit": ("window", "so the period earns nothing: layout: "),
+    "tile-k": ("window", "so the period earns nothing: tile-k: the window's tile at K = "),
     "never-received": ("window", "so the period earns nothing: rounds: " + NOT_RECEIVED),
     "proof-other-registration": ("window", "so the period earns nothing: registration: drawn unit "),
     "branch-pin": ("circuit", "doesn't count toward it, so the period earns nothing: session s-"),
@@ -139,6 +148,7 @@ PERIOD_EXPECT = {
     "other-model": ("weights", "which is no checkpoint role credit pins: " + Cr.MODEL_FIX),
     "other-sw": ("window", "so the period earns nothing: weights: the window's registered weights' root "),
     "zero-codes": ("window", "so the period earns nothing: weights: the window's registered weights' root "),
+    "stale-pin": ("pin", "past its freshness floor"),
 }
 A_LINK_EXPECT = {
     "untied": UNTIED, "late-rows": UNTIED, "rewritten": UNTIED, "round-root": "`credit.round_root`", "gap": "`credit.cover`",
@@ -378,6 +388,29 @@ def test_the_layout_is_the_committed_circuits():
         assert [(ids[int(s["template"][1:])], s["units"]) for s in Cr.strata(lay)[0]] == h1.P.strata(prog, q)
 
 
+def test_a_tile_at_a_k_its_proof_does_not_cover_refuses():
+    """The tile's proof covers 32 | K and K < 2^17, the K its ``GemmAccumulatorS8`` binds: `credit.layout_of` on the
+    compiled `h1window.program`'s descriptor accepts a tile at K = 64, 4096 or 2^17 − 32, and refuses one at K = 2^17
+    or past or at a K no multiple of 32 (``tile-k``), the why naming the K to pad its linears to or the split. The
+    descriptors are the stand-in tile's (`test_circuit_h1window.unit`), which binds any K, and `credit.strata`, which
+    reads no tile, accepts their layouts."""
+    assert (Cr.TILE_K_STEP, Cr.TILE_K_LIMIT) == (32, S8_K_LIMIT) == (32, 1 << 17)
+    pad = "pad its linears' A and B rows with zero codes to K = {}".format
+    for k, fix in ((64, None), (4096, None), ((1 << 17) - 32, None), (1 << 17, SPLIT), ((1 << 17) + 32, SPLIT),
+                   ((1 << 17) - 22, SPLIT), (48, pad(64)), (100, pad(128)), (4097, pad(4128))):
+        linears, calls = (("q_proj", 32, 16), ("o_proj", k, 8)), (("q_proj", 0), ("o_proj", 0))
+        lay = {"calls": [list(c) for c in calls], "linears": [list(x) for x in linears], "m": 8, "tile": list(h1.TILE)}
+        assert Cr.strata(lay)[1] is None, k
+        got = Cr.layout_of(_compiled(linears, calls, 8))
+        if fix is None:
+            assert got == (lay, None), k
+            bind(BG.GemmAccumulatorS8, K=k, **BG.GEMM_SM120_S8)
+        else:
+            assert got == (None, ("tile-k", f"the window's tile at K = {k} {TILE_K}{fix}")), k
+            with pytest.raises(ValueError, match="refuses this binding"):
+                bind(BG.GemmAccumulatorS8, K=k, **BG.GEMM_SM120_S8)
+
+
 @pytest.mark.parametrize("prefix", ["", "h1/w-3/"])
 def test_the_registered_file_is_h1windows_from_the_descriptor_alone(prefix):
     """`credit.registered_file` builds each call's ``--registered`` file from the committed descriptor alone, and it is
@@ -519,6 +552,26 @@ def test_a_table_the_served_commit_did_not_commit_refuses(seed):
         assert Cr._a_link(d["rounds"], d["entries"]) is None, name
         got, refused = Cr._window_outcomes(*cases.window_args(d))
         assert got is None and refused[0] == "arow" and "(ROOTS1)" in refused[1], (name, refused)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_an_expert_call_whose_rows_the_commit_lacks_refuses(seed):
+    """VLLM-80 (ROOTS1 for MoE): a served MoE window lays out its routed experts' calls as H1 names them
+    (``prefix.expert.projection``), each expert's down at the intermediate width K, which only expert calls have. With
+    every table the Commit's, the window is credited; with the Commit record lacking one round's A table of that K,
+    whose calls are expert calls only, `_arow` refuses the window before any proof is read (``commit-missing-expert``)."""
+    d = cases.window_instance(random.Random(f"moe/{seed}"), lay=cases.expert_layout(random.Random(f"layout/{seed}")))
+    got, refused = Cr._window_outcomes(*cases.window_args(d))
+    assert refused is None and got == [i for i, row in enumerate(d["calls"]) if row[Cr.CREDIT]]
+    d = cases.window_instance(random.Random(f"commit-missing-expert/{seed}"), "commit-missing-expert")
+    lay, steps = Cr.layout_of(bytes.fromhex(d["descriptor"]))[0], len(d["rounds"])
+    names = {e["value"] for e in Cr.commit_of(d["commit"])[0][1]}
+    gone = [(s, cs) for s, k, cs in Cr.step_tables(lay, steps) if Cr.commit_rows(s, k) not in names]
+    assert len(gone) == 1 and all(lay["calls"][c][0].startswith(cases.EXPERTS_PREFIX + ".") and
+                                  lay["calls"][c][0].endswith(".down") for c in gone[0][1]), gone
+    got, refused = Cr._window_outcomes(*cases.window_args(d))
+    assert got is None and refused == ("arow", refused[1]) and refused[1].startswith(
+        f"the Commit record registers {Cr.commit_rows(gone[0][0], cases.EXPERT_K)} not"), refused
 
 
 @pytest.mark.parametrize("seed", SEEDS)
@@ -677,6 +730,29 @@ def test_a_window_whose_session_ran_a_branch_commit_refuses_the_period(seed):
     on_main = {**d, "main": [rc.BRANCH, *d["main"]]}
     got, refused = Cr._period_outcomes(*(on_main[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
     assert refused is None and len(got["windows"]) == len(d["windows"])
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_the_freshness_floor_counts_from_the_open_pin_not_mains_head(seed):
+    """CMP74-FOLLOW: a period's open records the commit it opened under (`credit.committed_pin`) and a freshness floor
+    (`credit.committed_floor`, first-parent commits, default 0 when the open records no floor). A window counts only when
+    its pin is at most the floor behind the open pin on main's line, counted from that pin and never from main's head
+    (`credit._pin_hygiene`): a window past the open pin plus the floor is refused, but a window within it stays credited
+    after main moves on, since nothing reads main's head. The honest period, whose open pin is older than every window,
+    earns."""
+    got, refused = _period("stale-pin", seed)
+    assert got is None and refused[0] == "pin" and "past its freshness floor" in refused[1], refused
+    # fresh at open (MAIN[4] is four first-parent commits behind the open pin MAIN[0], within a floor of four), and still
+    # fresh after main gains five commits, since the floor counts from the open pin and nothing reads main's head.
+    d = cases.period_instance(random.Random(f"floor/{seed}"), period_pin=rc.MAIN[0], pin_floor=4, stale_window=0)
+    assert Cr.committed_pin(d["ledger"], d["name"]) == rc.MAIN[0] and Cr.committed_floor(d["ledger"], d["name"]) == 4
+    assert Cr._period_outcomes(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)[1] is None
+    ahead = [hashlib.sha1(b"ahead %d" % j).hexdigest() for j in range(5)]
+    moved = {**d, "main": [*ahead, *d["main"]]}
+    assert Cr._period_outcomes(*(moved[k] for k in cases.PERIOD_KEYS), rc.lms_verify)[1] is None
+    h = cases.period_instance(random.Random(f"honest/{seed}"))
+    assert Cr.committed_pin(h["ledger"], h["name"]) == rc.MAIN[-1] and Cr.committed_floor(h["ledger"], h["name"]) is None
+    assert Cr._period_outcomes(*(h[k] for k in cases.PERIOD_KEYS), rc.lms_verify)[1] is None
 
 
 def _work(layout: dict) -> int:

@@ -49,9 +49,11 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
 * **The layout is the committed circuit's** (`layout_of`): `window` reads it from the descriptor whose SHA-512 the
   period's open committed, never from the window's evidence. Its program function's record (``TILES``, ``LINEARS``,
   ``CALLS``, ``M``) gives the calls, the linears and the slot, and K's template's parameters ``a_k<K>`` and ``b_k<K>``
-  the tile's R and C. Its root's nodes other than inputs must be, in order, each call's (M/R)·(n/C) instances of K's
-  template, so the record names the units the circuit has. The cost is the descriptor's nodes and the record's calls,
-  never the gates they unroll to.
+  the tile's R and C. Each K of its ``TILES`` is one the tile's proof covers, a multiple of 32 below 2^17
+  (`TILE_K_STEP`, `TILE_K_LIMIT`: the K its ``GemmAccumulatorS8`` binds), else the window is refused (``tile-k``,
+  `tile_k`, its fix the K to pad to). Its root's nodes other than inputs must be, in order, each call's (M/R)·(n/C)
+  instances of K's template, so the record names the units the circuit has. The cost is the descriptor's nodes and the
+  record's calls, never the gates they unroll to.
 * **K is committed, and ε is what it established** (`committed_k`, `established`): K is the proof service's selection,
   committed in the period-open (`K_FIELD`, in the auditor's signed ledger beside the period's circuit and cap) before
   any window's draw. A period whose open commits none is refused, and so is a window with fewer than K units, whose
@@ -203,6 +205,16 @@ MODELS = Path(__file__).parent / "lean/check/models.json"
 PINNED_MODELS = {role: e["checkpoint_sha512"] for role, e in json.loads(MODELS.read_text()).items()}
 MODEL_FIX = ("open the period with the gate's --model, which signs the auditor's registration of a checkpoint credit "
              "pins (models.json)")
+#: the period-open's field holding the commit it opened under (40 lowercase hex on main's first-parent line): every
+#: window of the period must be pinned within the freshness floor (`STALE_FIELD`) of it, counted in first-parent commits
+#: from this pin and never from main's head (`committed_pin`, `_pin_hygiene`, CMP74-FOLLOW). Optional: a period-open that
+#: records none isn't held to it
+PERIOD_PIN_FIELD = "pinned"
+#: the period-open's field holding the freshness floor (a nonnegative integer): a window counts only when its pin is at
+#: most this many first-parent commits behind the period's open pin on main's line (`_pin_hygiene`, measured from that
+#: pin, never from main's head, so main moving on never refuses a window fresh at its open, CMP74-FOLLOW). Optional,
+#: default 0 when the open pins but records no floor; infra sets it generously, about a day of first-parent commits
+STALE_FIELD = "pin_floor"
 K_FORM = f"the draw's K is not a positive integer at most 2^24 (the K its period's open committed as {K_FIELD})"
 #: a window's layout: `circuit.h1window.program`'s arguments
 LAYOUT_KEYS = ("calls", "linears", "m", "tile")
@@ -245,6 +257,10 @@ RECORD = ("TILES", "LINEARS", "CALLS", "M", "PREFIX")
 #: K's template, `h1window.template`, and its parameters after its A and B rows (`h1window.SHARED`)
 TILE_FN = "PouwH1WindowTile_v1"
 SHARED = ("zy", "salt", "position", "roots")
+#: a window's tile is at a K its proof covers, a multiple of `TILE_K_STEP` below `TILE_K_LIMIT`: the K the tile's
+#: `GemmAccumulatorS8` binds (its 32-wide step, and `S8_K_LIMIT`, where an s8 sum can leave s32)
+TILE_K_STEP = 32
+TILE_K_LIMIT = 1 << 17
 _INPUT = re.compile(r"(?:Registered)?Input[1-9][0-9]*_v1")
 DESCRIPTOR_FORM = ("the window's descriptor is not a verity-ir/descriptor/v1 descriptor in canonical JSON (keys sorted, "
                    "compact, ASCII: the bytes program_digest hashes) with its callees, definitions, program function and "
@@ -594,6 +610,17 @@ def no_template(k: int) -> str:
             f"{', '.join(SHARED)}, at the same R × C at every K")
 
 
+def tile_k(k: int) -> str:
+    """Why `layout_of` refuses the window's tile at a K = `k` of at least one that its proof doesn't cover
+    (``tile-k``), with its fix: the K to pad its linears' rows to, or past `TILE_K_LIMIT` the split."""
+    up = (k + TILE_K_STEP - 1) // TILE_K_STEP * TILE_K_STEP
+    fix = (f"pad its linears' A and B rows with zero codes to K = {up}" if up < TILE_K_LIMIT else
+           f"split its linears' k range into linears of at most K = {TILE_K_LIMIT - TILE_K_STEP} each, each padded "
+           f"with zero codes to a multiple of {TILE_K_STEP}")
+    return (f"the window's tile at K = {k} is outside the K its proof covers, multiples of {TILE_K_STEP} below "
+            f"{TILE_K_LIMIT} (the K its GemmAccumulatorS8 binds): {fix}")
+
+
 def _tile(dj: Any, tid: str, k: int) -> tuple[int, int] | None:
     """The R × C of K = `k`'s template `dj` (its definition, under the id `tid`), or None when it is not
     `h1window.template`'s."""
@@ -627,11 +654,13 @@ def _runs(xs: Any) -> list[list]:
 def layout_of(descriptor: Any) -> tuple[dict | None, tuple[str, str] | None]:
     """The layout (``{calls, linears, m, tile}``, `strata`'s) of the H1 window whose circuit's descriptor is
     `descriptor` (its bytes, canonical JSON without annotations, the bytes the period's ``circuit`` is the SHA-512 of),
-    and None; or None and the refusal (``layout``, and why). The calls, linears and slot are its program function's
-    record (`WINDOW_FN`'s ``CALLS``, ``LINEARS`` and ``M``), each K's template (``TILES``) is `h1window.template`'s,
-    whose A and B rows give R and C, and the root's nodes other than inputs are each call's (M/R)·(n/C) instances of
-    its K's template, in the calls' order: a call one instance and a batch its members, as the template query counts
-    units (`Q_template_instances`). Its cost is the descriptor's bytes, never the gates its nodes unroll to."""
+    and None; or None and the refusal (``layout`` or ``tile-k``, and why). The calls, linears and slot are its program
+    function's record (`WINDOW_FN`'s ``CALLS``, ``LINEARS`` and ``M``), each K's template (``TILES``) is
+    `h1window.template`'s, whose A and B rows give R and C, at a K its tile's proof covers (else ``tile-k``, `tile_k`:
+    a multiple of `TILE_K_STEP` below `TILE_K_LIMIT`), and the root's nodes other than inputs are each call's
+    (M/R)·(n/C) instances of its K's template, in the calls' order: a call one instance and a batch its members, as the
+    template query counts units (`Q_template_instances`). Its cost is the descriptor's bytes, never the gates its nodes
+    unroll to."""
     def no(why: str) -> tuple[None, tuple[str, str]]:
         return None, ("layout", why)
 
@@ -663,6 +692,8 @@ def layout_of(descriptor: Any) -> tuple[dict | None, tuple[str, str] | None]:
         got = _tile(defs.get(t["fn"]), t["fn"], k)
         if got is None or rc not in (None, got):
             return no(no_template(k))
+        if k % TILE_K_STEP or k >= TILE_K_LIMIT:
+            return None, ("tile-k", tile_k(k))
         rc = got
     layout = {"calls": vals["CALLS"], "linears": vals["LINEARS"], "m": vals["M"], "tile": list(rc)}
     _ss, why = strata(layout)
@@ -1513,6 +1544,60 @@ def committed_files(ledger: list, name: str) -> tuple[dict | None, tuple[str, st
     return files, None
 
 
+def committed_pin(ledger: list, name: str) -> str | None:
+    """The commit period `name`'s open recorded it opened under (`PERIOD_PIN_FIELD`, a commit string), or None when its
+    open records none: `_period_of` holds every window's session to within the freshness floor of it on main's
+    first-parent line (`_pin_hygiene`).  Optional, so a period-open that records none keeps main's behavior of holding
+    each window only to the pins log and main (`challenger.credited_session`)."""
+    body = next(e["body"] for e in map(json.loads, ledger)
+                if e["kind"] == "period-open" and e["body"]["period"] == name)
+    pin = body.get(PERIOD_PIN_FIELD)
+    return pin if type(pin) is str else None
+
+
+def committed_floor(ledger: list, name: str) -> int | None:
+    """The freshness floor period `name`'s open recorded (`STALE_FIELD`, a nonnegative integer), or None when its open
+    records none: `_period_of` counts no window whose pin is more than this many first-parent commits behind the period's
+    open pin (`committed_pin`), default 0 when the open pins but records no floor.  Optional, like `committed_pin`."""
+    body = next(e["body"] for e in map(json.loads, ledger)
+                if e["kind"] == "period-open" and e["body"]["period"] == name)
+    floor = body.get(STALE_FIELD)
+    return floor if type(floor) is int and floor >= 0 else None
+
+
+def _main_index(main: Any, commit: Any) -> int | None:
+    """`commit`'s position in the verifier's copy of main's first-parent history `main` (newest first, so position 0 is
+    main's head and position p is p commits behind it), or None when `main` doesn't hold it."""
+    return main.index(commit) if isinstance(main, list) and commit in main else None
+
+
+def _pin_hygiene(name: str, i: int, main: Any, pinned: str, period_pin: str | None, floor: int | None
+                 ) -> tuple[str, str] | None:
+    """Why window `i` of period `name`, whose session ran commit `pinned` on main's first-parent line `main`, is too old
+    for the period: its pin more than the period's freshness floor of first-parent commits behind the commit the period's
+    open recorded (`period_pin`, `committed_pin`; `floor`, `committed_floor`, default 0 when the open pins but records no
+    floor), measured from that pin and never from main's head, so main moving on never refuses a window fresh at its open;
+    None when it is recent enough or the open records no pin.  The per-window pin and circuit are
+    `challenger.credited_session`'s; this is the period-level hygiene on top (CMP74-FOLLOW)."""
+    if period_pin is None:
+        return None
+    pos = _main_index(main, pinned)
+    if pos is None:
+        return None
+    base = _main_index(main, period_pin)
+    if base is None:
+        return ("pin", f"period {name}'s open pins commit {period_pin[:16]}..., which is not on main's first-parent "
+                       f"line in the verifier's copy ({PERIOD_PIN_FIELD}): open the period under a commit "
+                       "git rev-list --first-parent origin/main holds")
+    f = floor if floor is not None else 0
+    if pos > base + f:
+        return ("pin", f"window {i} of period {name} is pinned {pos - base} first-parent commit(s) before the commit "
+                       f"its period opened under, past its freshness floor of {f} ({STALE_FIELD}): {pinned[:16]}... is "
+                       f"that far behind {period_pin[:16]}... on main's first-parent line, so the period earns nothing; "
+                       "open every window within the floor of its period's open pin")
+    return None
+
+
 def period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: Any, verify: Ch.Verify,
                   run: Run = PF.verify) -> tuple[dict | None, tuple[str, str] | None]:
     """Period `name`'s credit and None, or None and the refusal: `_period_outcomes`' rules, each window's evidence
@@ -1535,8 +1620,11 @@ def _period_outcomes(key: Any, ledger: Any, pins: Any, main: Any, name: Any, win
     first, then its ``descriptor``, the bytes in hex of the circuit its proofs were verified against, hashing to it,
     `challenger.credited_session`), and each window's evidence (``{window, session, salt, calls, commit, descriptor,
     entries, served, rounds, draw, proofs}``, as `_window_outcomes` reads it, under the same ledger) is credited by it,
-    every step of it, drawn at K over the layout of that same descriptor. A refused window refuses the whole period
-    (``circuit`` or ``window``), so a period earns only when every window in it does."""
+    every step of it, drawn at K over the layout of that same descriptor. Each window's session is also pinned within the
+    period's freshness floor (`committed_floor`, first-parent commits, default 0) of the commit the period's open
+    recorded (`committed_pin`), counted from that pin and never from main's head, both optional and refused with ``pin``;
+    a refused window refuses the whole period (``circuit``, ``pin`` or ``window``), so a period earns only when every
+    window in it does."""
     return _period_of(key, ledger, pins, main, name, windows, verify, None)
 
 
@@ -1554,6 +1642,7 @@ def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: 
         _, why = committed_weights(ledger, name)
     if why is not None:
         return None, why
+    period_pin, floor = committed_pin(ledger, name), committed_floor(ledger, name)
     files = None
     if run is not None:
         files, why = committed_files(ledger, name)
@@ -1565,10 +1654,13 @@ def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: 
         if not (type(w["descriptor"]) is str and _HEX.fullmatch(w["descriptor"])):
             return None, ("circuit", f"window {i} of period {name}: {DESCRIPTOR_HEX}")
         try:
-            Ch.credited_session(ledger, w["window"], k, pins, main, bytes.fromhex(w["descriptor"]), verify)
+            audited = Ch.credited_session(ledger, w["window"], k, pins, main, bytes.fromhex(w["descriptor"]), verify)
         except Ch.CoinError as e:
             return None, ("circuit", f"window {i} of period {name} doesn't count toward it, so the period earns "
                                      f"nothing: {e}")
+        why = _pin_hygiene(name, i, main, audited.pinned, period_pin, floor)
+        if why is not None:
+            return None, why
         proved = ((lambda *_, p=w["proofs"]: (p, None)) if run is None
                   else _runner(w["statements"], files, w["entries"], w["window"], w["salt"], run))
         got, why = _window(key, ledger, pins, main, w["window"], w["session"], w["salt"], w["calls"], w["served"],

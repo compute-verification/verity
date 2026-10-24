@@ -39,7 +39,9 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
 * `layoutOf` is `credit.layout_of`: the window's layout is its committed circuit's, read from the descriptor whose
   SHA-512 the period's open committed: its program function's record (`TILES`, `LINEARS`, `CALLS`, `M`), each K's
   template's A and B rows (R and C), and its root's nodes other than inputs, which must be each call's (M/R)·(n/C)
-  instances of K's template in order. Never a layout the window's evidence hands in.
+  instances of K's template in order. Never a layout the window's evidence hands in. Each K of its `TILES` is one the
+  tile's proof covers, a multiple of 32 below 2^17 (`TILE_K_STEP`, `TILE_K_LIMIT`), else the window is refused
+  (`tile-k`, `tileK`).
 * `Internal.outcome` is `credit._outcome`: every unit `drawn` draws has exactly one proof outcome and it is an accept,
   else the whole window is refused (no partial credit). `window` is `credit.window`: `Internal.credited`, `roundsCheck`
   on the round log's roots and coins, `Internal.aLink` on that log and the window's registered entries, `layoutOf` of
@@ -113,6 +115,8 @@ def CHANGED : String :=
   "root, and never change them after the draw coin"
 def K_FIELD : String := "draw_k"
 def WEIGHTS_FIELD : String := "weights_root"
+def PERIOD_PIN_FIELD : String := "pinned"
+def STALE_FIELD : String := "pin_floor"
 def MAX_K : Nat := 2 ^ 24
 def DELTA : Rat := mkRat 1 (2 ^ 40)
 def K_FORM : String :=
@@ -360,6 +364,10 @@ def WINDOW_FN : String := "PouwH1Window_v3"
 def RECORD : List String := ["TILES", "LINEARS", "CALLS", "M", "PREFIX"]
 def TILE_FN : String := "PouwH1WindowTile_v1"
 def SHARED : List String := ["zy", "salt", "position", "roots"]
+/-- A window's tile is at a K its proof covers, a multiple of `TILE_K_STEP` below `TILE_K_LIMIT`: the K the tile's
+`GemmAccumulatorS8` binds (its 32-wide step, and `S8_K_LIMIT`, where an s8 sum can leave s32). -/
+def TILE_K_STEP : Nat := 32
+def TILE_K_LIMIT : Nat := 2 ^ 17
 def DESCRIPTOR_FORM : String :=
   "the window's descriptor is not a verity-ir/descriptor/v1 descriptor in canonical JSON (keys sorted, compact, " ++
   "ASCII: the bytes program_digest hashes) with its callees, definitions, program function and root"
@@ -376,6 +384,16 @@ def noTemplate (k : Nat) : String :=
   s!"the window's template at K = {k} is not h1window's: a composite {TILE_FN} bound to its UNIT and K = {k}, " ++
   s!"its id {TILE_FN}\{UNIT=…,K={k}}, whose parameters are a_k{k} and b_k{k}, the tile's R and C rows, then " ++
   ", ".intercalate SHARED ++ ", at the same R × C at every K"
+
+/-- `credit.tile_k`: why `layoutOf` refuses the window's tile at a K = `k` of at least one that its proof doesn't cover
+(`tile-k`), with its fix: the K to pad its linears' rows to, or past `TILE_K_LIMIT` the split. -/
+def tileK (k : Nat) : String :=
+  let up := (k + TILE_K_STEP - 1) / TILE_K_STEP * TILE_K_STEP
+  let fix := if up < TILE_K_LIMIT then s!"pad its linears' A and B rows with zero codes to K = {up}"
+    else s!"split its linears' k range into linears of at most K = {TILE_K_LIMIT - TILE_K_STEP} each, each padded " ++
+      s!"with zero codes to a multiple of {TILE_K_STEP}"
+  s!"the window's tile at K = {k} is outside the K its proof covers, multiples of {TILE_K_STEP} below " ++
+    s!"{TILE_K_LIMIT} (the K its GemmAccumulatorS8 binds): {fix}"
 
 /-- `credit._loads`: `text` read as JSON, when it is that value's canonical JSON (`SampledProofs.PyJson.canonical`,
 Python's `canonical_json`), so every reading of it is the same. -/
@@ -419,11 +437,12 @@ def runs (xs : List (String × Nat)) : List (String × Nat) :=
 
 /-- `credit.layout_of`: the layout (`{calls, linears, m, tile}`, `strata`'s) of the H1 window whose circuit's
 descriptor is `descriptor` (its bytes, canonical JSON without annotations, the bytes the period's `circuit` is the
-SHA-512 of), else the refusal (`layout`). The calls, linears and slot are its program function's record (`WINDOW_FN`'s
-`CALLS`, `LINEARS` and `M`), each K's template (`TILES`) is `h1window.template`'s, whose A and B rows give R and C, and
-the root's nodes other than inputs are each call's (M/R)·(n/C) instances of its K's template, in the calls' order: a
-call one instance and a batch its members, as the template query counts units. Its cost is the descriptor's bytes,
-never the gates its nodes unroll to. -/
+SHA-512 of), else the refusal (`layout` or `tile-k`). The calls, linears and slot are its program function's record
+(`WINDOW_FN`'s `CALLS`, `LINEARS` and `M`), each K's template (`TILES`) is `h1window.template`'s, whose A and B rows
+give R and C, at a K its tile's proof covers (else `tile-k`, `tileK`: a multiple of `TILE_K_STEP` below
+`TILE_K_LIMIT`), and the root's nodes other than inputs are each call's (M/R)·(n/C) instances of its K's template, in
+the calls' order: a call one instance and a batch its members, as the template query counts units. Its cost is the
+descriptor's bytes, never the gates its nodes unroll to. -/
 def layoutOf (descriptor : ByteArray) : R Json := do
   let some d := (String.fromUTF8? descriptor).bind loads? | layoutRefuse DESCRIPTOR_FORM
   let defs := get d "definitions"
@@ -452,6 +471,7 @@ def layoutOf (descriptor : ByteArray) : R Json := do
   for (k, tid) in ts do
     let some got := tileOf (get defs tid) tid k | layoutRefuse (noTemplate k)
     if rc.any (· != got) then layoutRefuse (noTemplate k)
+    if k % TILE_K_STEP != 0 || TILE_K_LIMIT ≤ k then throw ("tile-k", tileK k)
     rc := some got
   let some (r, c) := rc | layoutRefuse NOT_WINDOW
   let layout := Json.mkObj [("calls", calls), ("linears", linears), ("m", m),
@@ -1532,6 +1552,58 @@ def committedK (ledger : Json) (name : String) : R Nat := do
         "and cap, before any draw")
   pure k
 
+private def periodBody (ledger : Json) (name : String) : Option Json :=
+  match ledger with
+  | .arr lines => ((lines.filterMap SampledProofs.Challenger.ledgerEntry?).find? fun e =>
+      e.kind == "period-open" && get e.body "period" == Json.str name).map (·.body)
+  | _ => none
+
+/-- `credit.committed_pin`: the commit period `name`'s open recorded it opened under (`PERIOD_PIN_FIELD`, a commit
+string), or `none` when its open records none: `periodCredit` holds every window's session to within the freshness floor
+of it on main's first-parent line (`pinHygiene`). Optional. -/
+def committedPin (ledger : Json) (name : String) : Option String :=
+  (periodBody ledger name).bind fun b => str? (get b PERIOD_PIN_FIELD)
+
+/-- `credit.committed_floor`: the freshness floor period `name`'s open recorded (`STALE_FIELD`, a nonnegative integer),
+or `none` when its open records none: `periodCredit` counts no window whose pin is more than this many first-parent
+commits behind the period's open pin (`committedPin`), default 0 when the open pins but records no floor. Optional. -/
+def committedFloor (ledger : Json) (name : String) : Option Nat :=
+  (periodBody ledger name).bind fun b => nat? (get b STALE_FIELD)
+
+/-- `credit._main_index`: `commit`'s position in the verifier's copy of main's first-parent history `main` (newest
+first, so position 0 is main's head and position p is p commits behind it), or `none` when `main` doesn't hold it. -/
+def mainIndex? (main : Json) (commit : String) : Option Nat :=
+  match main with
+  | .arr cs => cs.findIdx? (· == Json.str commit)
+  | _ => none
+
+/-- `credit._pin_hygiene`: why window `i` of period `name`, whose session ran commit `pinned` on main's first-parent line
+`main`, is too old for the period: its pin more than the period's freshness floor of first-parent commits behind the
+commit the period's open recorded (`periodPin`, `committedPin`; `floor`, `committedFloor`, default 0 when the open pins
+but records no floor), measured from that pin and never from main's head; `none` when it is recent enough or the open
+records no pin. The per-window pin and circuit are `creditedSession`'s; this is the period-level hygiene on top
+(CMP74-FOLLOW). -/
+def pinHygiene (name : String) (i : Nat) (main : Json) (pinned : String) (periodPin : Option String)
+    (floor : Option Nat) : Option (String × String) :=
+  match periodPin with
+  | none => none
+  | some pp =>
+    match mainIndex? main pinned with
+    | none => none
+    | some pos =>
+      match mainIndex? main pp with
+      | none => some ("pin", s!"period {name}'s open pins commit {pp.take 16}..., which is not on main's first-parent " ++
+          s!"line in the verifier's copy ({PERIOD_PIN_FIELD}): open the period under a commit " ++
+          "git rev-list --first-parent origin/main holds")
+      | some base =>
+        let f := floor.getD 0
+        if pos > base + f then
+          some ("pin", s!"window {i} of period {name} is pinned {pos - base} first-parent commit(s) before the commit " ++
+            s!"its period opened under, past its freshness floor of {f} ({STALE_FIELD}): {pinned.take 16}... is " ++
+            s!"that far behind {pp.take 16}... on main's first-parent line, so the period earns nothing; " ++
+            "open every window within the floor of its period's open pin")
+        else none
+
 /-- `credit.period_credit`'s credit: each window's credited calls in the close's order, the committed K, the δ the ε
 is reported at and each window's ε. -/
 structure PeriodCredit where
@@ -1548,8 +1620,11 @@ def PeriodCredit.toJson (c : PeriodCredit) : Json :=
 committed K (`committedK`) and signed the weights' root every window's registered B rows fold to (`committedWeights`),
 each window's session ran a commit the host's pins log `pins` records on the verifier's copy of main's first-parent
 history `main` and the window proves the circuit the period's open committed (`circuit`: the pin first, then its
-descriptor hashing to it, `SampledProofs.Challenger.creditedSession`) and each window is credited (`window`) drawn at K,
-a refused window refusing the period; each window's ε is what its draw of K established (`established`). -/
+descriptor hashing to it, `SampledProofs.Challenger.creditedSession`), each window's session pinned within the period's
+freshness floor (`committedFloor`, first-parent commits, default 0) of the commit the period's open recorded
+(`committedPin`), counted from that pin and never from main's head, both optional and refused with `pin` (`pinHygiene`),
+and each window is credited (`window`) drawn at K, a refused window refusing the period; each window's ε is what its draw
+of K established (`established`). -/
 def periodCredit (key ledger pins main name windows : Json) : R PeriodCredit := do
   let some ws := (match windows with
       | .arr a => if a.all (fun w => keys w == some PERIOD_KEYS) then some a.toList else none
@@ -1561,6 +1636,8 @@ def periodCredit (key ledger pins main name windows : Json) : R PeriodCredit := 
   let nm := (str? name).getD ""
   let bigK ← committedK ledger nm
   discard <| committedWeights ledger nm
+  let periodPin := committedPin ledger nm
+  let floor := committedFloor ledger nm
   let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
   let mut out : List (List Nat) := []
   let mut eps : List (Option Rat) := []
@@ -1569,8 +1646,9 @@ def periodCredit (key ledger pins main name windows : Json) : R PeriodCredit := 
     let some d := (match f "descriptor" with
         | .str s => if isHexBytes s then hex? (.str s) else none
         | _ => none) | throw ("circuit", s!"window {i} of period {nm}: {DESCRIPTOR_HEX}")
-    discard <| (SampledProofs.Challenger.creditedSession ledger (f "window") k pins main d).mapError fun e =>
+    let a ← (SampledProofs.Challenger.creditedSession ledger (f "window") k pins main d).mapError fun e =>
       ("circuit", s!"window {i} of period {nm} doesn't count toward it, so the period earns nothing: {e}")
+    if let some why := pinHygiene nm i main a.pinned periodPin floor then throw why
     let (got, layout) ← (windowLayout key ledger pins main (f "window") (f "session") (f "salt") (f "calls") (f "served")
       (f "commit") (f "rounds") (f "draw") (f "descriptor") (f "entries") (f "proofs") (Lean.toJson bigK)).mapError
       fun (c, why) => ("window", s!"window {i} of period {nm} is refused, so the period earns nothing: {c}: {why}")
