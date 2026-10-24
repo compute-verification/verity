@@ -26,7 +26,9 @@ namespace has no other interface. On real hosts it is only the route of the meas
 **The served plan** (`plan`, `served_plan`). The endpoint is probed with the one request body every session sends,
 straight from the host, `--in-flight` requests at a time after one uncounted round: `/v1/completions`, streamed, a
 prompt of exactly `--prompt-tokens` tokens (`PROMPT` padded with `FILLER` in the endpoint's own tokenizer, `/tokenize`,
-and cut there), exactly `--tokens` tokens out (`min_tokens` and `max_tokens`, `ignore_eos`), temperature 0. F, the
+and cut there), exactly `--tokens` tokens out (`min_tokens` and `max_tokens`, `ignore_eos`), at `--temperature` (0)
+and `--top-p` (1), both always sent, since an endpoint applies its own generation config to a request that omits
+them. F, the
 frames of a response, is that token count, not the endpoint's events: vLLM v1 merges a request's tokens that its API
 server hasn't read yet into one chunk, so with several in flight a response's last two tokens sometimes share one
 event and sometimes don't, though the tokens are the same. vLLM's detokenizer holds back a token whose bytes end
@@ -72,14 +74,52 @@ reads requests from outside).
   too (`served_counts`, the rehearsal's read of the witness, beside the audit's); N2's verdict of record shows only
   accept or reject.
 
+**The varied plan** (`plan --traffic varied`, `varied_plan`) drops every premise of the served plan's on the traffic:
+no fixed response length, no fixed request size, no request-major order, no window that must end idle, no min_tokens
+or ignore_eos. `--requests` requests arrive as a Poisson process at `--rate` a second (`varied_requests`), each sent in
+the middle of the bucket before the one its arrival falls in. Each prompt is a list of the endpoint's token ids, a chat
+turn (a question that the model answers in a word or at length, and filler) cut to a length log-uniform in
+`--prompt-range`, with `max_tokens` uniform in 1 … `--tokens`, a seed of its own, temperature 0 and the model's own
+EOS. Its session is the body's `user`, the request's id, `--name`.j (j its index, five digits), which the shim forwards
+the endpoint, so a run named apart from every other one the endpoint served names each of its requests there as the
+certified I/O does. Each is an id request (`active.id_request`): its sampling
+fields at fixed places, each prompt id in a field of its own, in `active.id_request_frames(prompt length)` link frames,
+a function of its length alone. The proxy opens each request's connection to the shim with the request's ingress
+ordinal (`Proxy(ordinals=True)`), and the shim writes the responses interleaved, in the order the endpoint streams
+them, as id events (`active.id_event`: the ordinal and one sampled token's id, the EOS token included, and no text):
+it adds `UPSTREAM_FIELDS` to each body so that every chunk carries its token ids, as the committing server's do. The
+first `--probes` requests are probed straight to the endpoint at their arrival times
+(`probe_varied`). From them the plan models every frame of every request as ready `delta0_buckets` + ⌊k/ρ0⌋ buckets
+after its release, with ρ0 = (cap − 1)/m at most the slowest probed response's rate over `--margin` (2) and every probed
+token's latency, times `margin` and plus `extra_s` (0.5 s), covered. Its calibration is that model's at cap frames a
+request, so the envelope it declares in every window meets every modelled frame. The run lasts until every modelled
+frame is handed before its last window. N2's profile is `advice`: no egress profile, the counts are N2-ADVICE's to
+derive from the ingress head and the advice, and this check gives no N2 verdict.
+
+**The certified I/O** (`certified_io`, the check on the advice profile), read from the records' frames alone: each
+request's ingress ordinal (its stream on the link), release bucket and id request's fields (`user`, prompt ids,
+`max_tokens`, the sampling fields) from the ingress frames, and its response's token ids from the egress id events
+that name its ordinal, with each frame's canonical position and egress bucket. Accepted when every request is an id
+request whose `user` (the request's id) no other request has, every egress frame is an id event of a request released
+by its bucket, and every response keeps the finish rule: at most `max_tokens` tokens, ending at its first EOS token
+(the plan's `eos_token_ids`) or at `max_tokens`. `extra`'s token after a response's last breaks it. The check writes the I/O to `io.json` for the tie (IO-TIE) and
+N2's advice counts (N2-ADVICE), and compares it with the ids the shim wrote and the requests the plan sent.
+On the advice profile each link-window is registered by its one-stage registration record (its salted root, chained)
+with the check's own receipt, which no proof stream issues since N2 gives no outcome, and its certified records are
+held to the certifier's key and session (`_certified`). The verdict is `accepted` when every window's records are
+certified, the I/O, the audit and the salt accept.
+
 **Subcommands**, all from the repository root or with `benchmarks/network_traces` on the path:
 
     python certifier_serve.py keys --dir KEYDIR [--height 10]
     python certifier_serve.py plan --upstream URL --out DIR [--model NAME] [--requests 400] [--in-flight 4]
+        [--temperature 0] [--top-p 1]
         [--tokens 64] [--response-frames F] [--prompt-tokens 128] [--probes 8] [--delta-buckets D]
-        [--profile planned|served]
+        [--profile planned|served] [--traffic fixed|varied] [--rate 2] [--prompt-range 16:1024] [--seed 0]
+        [--eos-ids ID,...] [--name varied]
     python certifier_serve.py serve --plan PLAN --calibration REPORT --upstream URL --out DIR --link HOST:PORT
-        --reveal HOST:PORT --key KEYDIR --challenger-key PUBLIC.json --session HEX [--start-in 10] [--tamper late|extra]
+        --reveal HOST:PORT --key KEYDIR --challenger-key PUBLIC.json --session HEX [--start-in 10]
+        [--tamper late|extra|drop|token]
     python certifier_serve.py client --plan PLAN --calibration REPORT --deployment DEPLOYMENT.json --out DIR
     python certifier_serve.py check --run DIR --challenger KEYDIR [--expect accepted|refused]
     python certifier_serve.py rehearse (--upstream URL | --vllm MODEL) --out DIR [plan's options] [--strategies S,...]
@@ -93,10 +133,11 @@ reads requests from outside).
   addresses, the origin and the reveal deadline. It takes one link connection, which must come before the origin. Once
   the link has ended it stops the shim, writes the logs and prints `{"served": ...}`, then serves reveals until every
   window's salt is revealed or the last window's reveal deadline has passed. `--tamper` makes the shim an adversary of
-  `active_replay.adversary_plan`: `late` holds one session of window 0 past every sync, which the certifier's own audit
-  faults; `extra` writes one event more at the end of the first session's response, after its padding (F + 1 in all),
-  on time and logged, so the records are complete and only N2's counts against the profile refuse it. The key's
-  directory may not be inside `--out`.
+  `active_replay.adversary_plan`: `late` holds one session of window 0 past every sync (on a varied plan, past every
+  frame written before it is due), which the certifier's own audit faults; `extra` writes one event more at the end of
+  the first session's response, after its padding (F + 1 in all), on time and logged, so the records are complete and
+  only N2's counts against the profile refuse it (on a varied plan, an id event of token 0, which the certified I/O's
+  finish rule refuses). The key's directory may not be inside `--out`.
 - `client` sends the plan's requests on the link as `active_replay.Peer` does, at the deployment's origin, and reads
   the wire to its end (`peer.json`).
 - `check` is the auditor's offline check of a served run (`check`): per link-window, the certifier's audit of the raw
@@ -105,9 +146,14 @@ reads requests from outside).
   challenger's key (window 0's asked twice: the second is refused), then `network_verdict` and the salt audit
   (`active_replay.audit_salt`: the salt frames, and that the shim received each revealed salt). It must run while
   `serve` serves reveals.
-- `rehearse` makes both keys in a scratch directory outside `--out`, plans, and for each of `--strategies` (honest, late, extra)
-  runs `serve` and `client` as processes and `check`; `summary.json` holds each run's verdicts. With `--vllm MODEL` it
-  starts vLLM on this host's GPU first (`active_replay.start_vllm`).
+- `rehearse` makes both keys in a scratch directory outside `--out`, plans, and for each of `--strategies` (honest, late,
+  extra by default, or any of `--tamper`'s) runs `serve` and `client` as processes and `check`; `summary.json` holds
+  each run's verdicts, and it exits 0 when `check` accepts honest and token and refuses the rest. With `--vllm MODEL`
+  it starts vLLM on this host's GPU first (`active_replay.start_vllm`). Besides late and extra, `--tamper drop` leaves
+  out the first event of the first session's response (F − 1), on time and logged, so only N2's counts refuse it, and
+  `--tamper token` writes every token of window 0's responses carrying other bytes (`active_replay.other_token`), so
+  its frame counts are honest's and `check` accepts it: only the I/O tie, which `check` doesn't run, refuses certified
+  tokens that aren't the committed sampled ones.
 
 **Outputs** in a run's directory: `plan.json`, `calibration.json`, `deployment.json`, the proxy's records
 (`requests.records`, `responses.records`, `committed.jsonl`) and `certified.jsonl` (each record's head, the
@@ -128,6 +174,7 @@ import json
 import math
 import multiprocessing
 import os
+import random
 import secrets
 import shutil
 import subprocess
@@ -136,6 +183,8 @@ import tempfile
 import time
 import urllib.parse
 import urllib.request
+from collections import Counter, defaultdict
+from collections.abc import Sequence
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import replace
 from fractions import Fraction
@@ -143,16 +192,19 @@ from pathlib import Path
 
 import active_replay as ar
 from verity.ml.crypto import lms
-from verity.core.protocols.certifier import calibration
-from verity.core.protocols.certifier.active import Events, Proxy, RemoteCertifier, fresh_salt, request_frame_count, \
-    serve_reveals
+from verity.core.protocols.certifier import audit as host_audit, calibration
+from verity.core.protocols.certifier.active import COMPACT_EOS, COMPACT_RECORD, DATA, HEADER, ID_EVENT_BYTES, \
+    Events, Proxy, RemoteCertifier, Requests, compact_record_data, decode_frame, event_body, fresh_salt, \
+    id_event_data, id_request, id_request_fields, request_frame_count, serve_reveals
 from verity.core.protocols.certifier.certificate import Certificate, CertifiedRecord, Direction, Issuer, LmsKey, \
     LmsSigner, RecordHead, parameters_digest
-from verity.core.protocols.certifier.grid import COMPLETE, Reason, Status, occupancy
+from verity.core.protocols.certifier.grid import COMPLETE, Reason, Status, occupancy, row_count
 from verity.core.protocols.certifier.lean_audit import Audit
-from verity.core.protocols.certifier.schedule import ClockSync, expected_grids
+from verity.core.protocols.certifier.schedule import ClockSync, expected_grids, handing_buckets
 from verity.core.protocols.certifier.served import Admission, ServedProfile
 from verity.core.protocols.certifier.service import LinkWindows
+from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.core.protocols.sampled_proofs.service import Registration
 
 HERE = Path(__file__).resolve().parent
 BUCKET_MS, WINDOW_BUCKETS, FRAME_BYTES, QUEUE = 100, 60, 4096, 1 << 16
@@ -164,7 +216,34 @@ REVEAL_MARGIN_S = 300.0
 PROOF_DEADLINE_S = 600.0
 DELTA = 2.0 ** -40
 STRATEGIES = ("honest", "late", "extra")
+TAMPERS = ("late", *ar.LIVE_TAMPERS)
+# `check`'s verdict on each run it expects to accept: honest, and token, whose frames only the I/O tie reads
+ACCEPTED = ("honest", "token")
 PROFILES = ("planned", "served")
+TRAFFIC = ("fixed", "varied")
+#: a varied plan's N2 profile: the egress counts derive from the ingress head and the advice (N2-ADVICE)
+ADVICE = "advice"
+#: a varied plan's first arrival is after this, in window 0's bucket 2 or later
+START_MS = 150.0
+#: a varied prompt is one chat turn in Llama 3's template (the endpoint's tokenizer adds the BOS): a question, which
+#: the model answers in a word or at length, then filler it is told to ignore
+CHAT_HEAD = "<|start_header_id|>user<|end_header_id|>\n\n"
+CHAT_TAIL = "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+QUESTIONS = (
+    "What is the capital of France? Answer with one word, then stop. Ignore the notes after this line.\n\n",
+    "How many legs does a spider have? Answer with a number only. Ignore the notes after this line.\n\n",
+    "Say yes or no: is water wet? Ignore the notes after this line.\n\n",
+    "Write a long story about a lighthouse keeper and a storm. Ignore the notes after this line.\n\n",
+    "List the planets of the solar system with one sentence on each. Ignore the notes after this line.\n\n",
+    "Explain in detail how a bicycle's gears work. Ignore the notes after this line.\n\n",
+)
+VARIED_FILLER = ("Notes: the meeting moved to Thursday, the printer on the third floor is out of toner, the parking lot "
+                 "will be repainted next week, and the cafeteria serves soup on Mondays and Fridays. ")
+#: what the shim and the probe add to each body they send the endpoint, so that each chunk carries its token ids
+UPSTREAM_FIELDS = {"return_token_ids": True}
+CHALLENGER = "certifier-serve-check"
+NO_N2 = ("no verdict on the advice profile: N2 derives the egress counts from the ingress head and the advice "
+         "(N2-ADVICE), which this check doesn't read")
 
 
 # Keys.
@@ -373,11 +452,13 @@ class CertifierProcess:
 
 # The served plan.
 
-def request_body(model: str, tokens: int, prompt: str | list[int] = PROMPT) -> dict:
+def request_body(model: str, tokens: int, prompt: str | list[int] = PROMPT, temperature: float = 0.0,
+                 top_p: float = 1.0) -> dict:
     """The request every session of a served plan sends: exactly `tokens` tokens (`min_tokens` and `max_tokens`, never
-    stopped early), greedy, streamed."""
+    stopped early), streamed, at `temperature` and `top_p` (greedy by default). Both are always sent: an endpoint
+    applies its own generation config to a request that omits them."""
     return {"model": model, "prompt": prompt, "max_tokens": tokens, "min_tokens": tokens, "stream": True,
-            "ignore_eos": True, "temperature": 0}
+            "ignore_eos": True, "temperature": temperature, "top_p": top_p}
 
 
 def _call(url: str, path: str, body: dict | None = None, api_key_env: str | None = None) -> dict:
@@ -569,6 +650,160 @@ def served_profile(plan: dict) -> ServedProfile | None:
     return ServedProfile(o["response_frames"], o["request_frames"], plan["windows"], o["own"])
 
 
+# The varied plan.
+
+def tokenize(url: str, model: str, text: str, api_key_env: str | None = None) -> list[int]:
+    return _call(url, "/tokenize", {"model": model, "prompt": text}, api_key_env)["tokens"]
+
+
+def varied_fields(model: str, q: dict) -> dict:
+    """A varied request's fields (`active.id_request`'s, less its `user`): its prompt's ids, its `max_tokens` and
+    `seed`, greedy (temperature 0, top_p 1), stopped by the model's EOS."""
+    return {"model": model, "prompt": q["prompt"], "max_tokens": q["max_tokens"], "temperature": 0.0, "top_p": 1.0,
+            "seed": q["seed"]}
+
+
+def varied_body(model: str, q: dict) -> dict:
+    """The body the shim forwards the endpoint for a varied request (its id request's, less its `user`), streamed,
+    with no stop strings."""
+    return varied_fields(model, q) | {"stop": [], "stream": True}
+
+
+def varied_requests(url: str, model: str, n: int, *, rate: float = 2.0, prompt_tokens: tuple[int, int] = (16, 1024),
+                    max_tokens: int = 64, seed: int = 0, name: str = "varied",
+                    api_key_env: str | None = None) -> list[dict]:
+    """`n` requests of varied traffic: Poisson arrivals at `rate` a second from `START_MS`; each prompt a chat turn
+    (`CHAT_HEAD`, one of `QUESTIONS`, `VARIED_FILLER` and `CHAT_TAIL`, in the endpoint's tokens, `/tokenize`) cut to a
+    length log-uniform in `prompt_tokens`; `max_tokens` uniform in 1 … `max_tokens`; a u32 `seed` of its own. Its
+    session, the body's `user`, is `name.j` with j its index, five digits."""
+    lo, hi = prompt_tokens
+    if not 1 <= lo <= hi or max_tokens < 1 or rate <= 0:
+        raise ValueError(f"prompts of 1 ≤ {lo} … {hi} tokens, max_tokens ≥ 1 and a positive rate, not {rate}")
+    bos = tokenize(url, model, "", api_key_env)
+    tail = tokenize(url, model, CHAT_TAIL, api_key_env)[len(bos):]
+    filler, k = [], 1
+    while len(filler) < hi:
+        filler, k = tokenize(url, model, VARIED_FILLER * k, api_key_env)[len(bos):], 2 * k
+    heads = [tokenize(url, model, CHAT_HEAD + q, api_key_env) for q in QUESTIONS]
+    rng, seeds, at, out = random.Random(seed), random.Random(f"{seed}/seeds"), START_MS, []
+    for j in range(n):
+        at += rng.expovariate(rate) * 1000
+        length = round(lo * (hi / lo) ** rng.random())
+        prompt = ((heads[rng.randrange(len(heads))] + filler)[:max(0, length - len(tail))] + tail)[:length]
+        out.append({"session": f"{name}.{j:05d}", "at_ms": at, "prompt": prompt,
+                    "max_tokens": rng.randint(1, max_tokens), "seed": seeds.randrange(1 << 32)})
+    return out
+
+
+def probe_varied(url: str, model: str, requests: list[dict], api_key_env: str | None = None, clock=time.monotonic,
+                 sleep=time.sleep) -> dict:
+    """`requests` straight to the endpoint at `url`, each at its arrival time from the first's, with
+    `UPSTREAM_FIELDS`: each response's tokens, the seconds from its send to each token (`token_s`), its finish reason
+    and its last token's id."""
+    headers = {"content-type": "application/json"}
+    if api_key_env:
+        headers["authorization"] = f"Bearer {os.environ[api_key_env]}"
+    t0, base = clock(), min((q["at_ms"] for q in requests), default=0.0)
+
+    def one(q: dict) -> dict:
+        if (wait := t0 + (q["at_ms"] - base) / 1000 - clock()) > 0:
+            sleep(wait)
+        body = json.dumps(varied_body(model, q) | UPSTREAM_FIELDS).encode()
+        request = urllib.request.Request(url.rstrip("/") + ar.LIVE_PATH.decode(), body, headers)
+        sent, ids, token_s, finish, cutter = clock(), [], [], None, Events()
+        with urllib.request.urlopen(request, timeout=300) as response:
+            while data := response.read1(1 << 16):
+                now = clock() - sent
+                for e in cutter.feed(data):
+                    if (got := ar.chunk_tokens(e)) is not None:
+                        ids += got
+                        token_s += [now] * len(got)
+                        chunk = json.loads(e.partition(b"data:")[2])
+                        finish = next((c["finish_reason"] for c in chunk.get("choices") or () if c.get("finish_reason")),
+                                      finish)
+        return {"session": q["session"], "max_tokens": q["max_tokens"], "prompt_tokens": len(q["prompt"]),
+                "tokens": len(ids), "token_s": token_s, "finish": finish, "last": ids[-1] if ids else None}
+
+    with ThreadPoolExecutor(max(1, len(requests))) as pool:
+        responses = list(pool.map(one, requests))
+    return {"url": url, "model": model, "upstream_fields": UPSTREAM_FIELDS, "responses": responses}
+
+
+def varied_plan(probed: dict, requests: list[dict], *, name: str = "varied", seed: int = 0, margin: float = 2.0,
+                extra_s: float = 0.5, eos: Sequence[int] | None = None,
+                compact: int | None = None) -> tuple[dict, dict]:
+    """The calibration report and the plan of a varied run of `requests` (the module docstring's "The varied plan");
+    with `compact` = B, of compact egress records in B-byte cells (the report's `egress_frame_bytes`), ingress
+    unchanged."""
+    if compact is not None and compact < COMPACT_RECORD.size:
+        raise ValueError(f"a compact cell holds a {COMPACT_RECORD.size}-byte record, not {compact} bytes")
+    T, tau = WINDOW_BUCKETS, BUCKET_MS
+    responses = probed["responses"]
+    if not requests or any(r["tokens"] < 1 for r in responses):
+        raise ValueError("a varied plan has requests, and every probed response at least one token")
+    cap = max(q["max_tokens"] for q in requests)
+    rates = [(r["tokens"] - 1) * tau / ((r["token_s"][-1] - r["token_s"][0]) * 1000) for r in responses
+             if r["tokens"] > 1 and r["token_s"][-1] > r["token_s"][0]]
+    m = max(1, math.ceil((cap - 1) * margin / min(rates, default=cap))) if cap > 1 else 1
+    rho = Fraction(max(1, cap - 1), m)
+
+    def lag(k: int) -> int:
+        return (k * rho.denominator) // rho.numerator
+
+    D0 = max([1] + [math.ceil((margin * s + extra_s) * 1000 / tau) - lag(k) for r in responses
+                    for k, s in enumerate(r["token_s"])])
+    names = [q["session"] for q in requests]
+    anchors = [max(2, math.ceil(q["at_ms"] / tau)) for q in requests]
+    sends = [(a - 0.5) * tau for a in anchors]
+    model = probed["model"]
+    frames_in = [request_frame_count(len(id_request(**varied_fields(model, q), user=q["session"],
+                                                    frame_bytes=FRAME_BYTES)), FRAME_BYTES) for q in requests]
+    full = [D0 + lag(k) for k in range(cap)]
+    keys = sorted((a + d, a, j, k) for j, a in enumerate(anchors) for k, d in enumerate(full))
+    report = calibration.calibrate({
+        "bucket_ms": tau, "window_buckets": T, "frame_bytes": FRAME_BYTES, "queue_capacity": QUEUE,
+        "configurations": [{"name": name, "egress": [{"link": EGRESS, "frames": [
+            {"session": names[j], "index": k, "anchor": a, "ready": rd} for rd, a, j, k in keys]}],
+            "ingress": [{"link": INGRESS, "arrival_ms": [t for t, n in zip(sends, frames_in) for _ in range(n)]}]}]})
+    if compact is not None:
+        report["grid"]["egress_frame_bytes"] = compact
+        for link in report["egress"]:
+            link |= {"frame_bytes": compact, "bandwidth_bps": link["allocation"] * compact * 8 / (tau / 1000)}
+    setup = ar.Setup(report)
+    e, i, envelope = setup.egress_params, setup.ingress_params, setup.envelope
+    sessions = [[s, j + 1, full[:q["max_tokens"]]] for j, (s, q) in enumerate(zip(names, requests))]
+    peer = [{"stream": j + 1, "session": s, "frames": n, "trace_ms": q["at_ms"], "enqueue": a, "send_ms": t,
+             "id_request": varied_fields(model, q)}
+            for j, (s, q, n, a, t) in enumerate(zip(names, requests, frames_in, anchors, sends))]
+    frames_total, windows = sum(len(ds) for _, _, ds in sessions), anchors[-1] // T + 2
+    while True:
+        release = ar.model_releases(peer, i, windows, e.bucket_ms, salt=True)
+        frames, ready = ar.model_frames(sessions, release, windows * T)
+        hands = handing_buckets(frames, [envelope] * windows, T)
+        if len(release) == len(peer) and len(frames) == frames_total and max(hands) < (windows - 1) * T:
+            break
+        windows += 1
+    if any(r > h for r, h in zip(ready, hands)):
+        raise DoesntFit(f"the calibration's envelope {envelope} doesn't cover the model's frames")
+    chosen, _, misses = calibration.choose_syncs([(frames, ready)], setup.sync_set, T)
+    eager = ClockSync(min(setup.sync_set.deltas), max(setup.sync_set.rhos))
+    chosen = (list(chosen) + [eager] * windows)[:windows]
+    stops = sorted({r["last"] for r in responses if r["finish"] == "stop"} if eos is None else set(eos))
+    plan = {"name": name, "windows": windows, "sessions": sessions, "requests": peer,
+            "model_release": {str(k): v for k, v in release.items()}, "model_misses": misses,
+            "syncs": [[envelope.delta, str(envelope.rho)]] * windows, "sync_policy": "envelope",
+            "model_syncs": [[s.delta, str(s.rho)] for s in chosen], "live_model": model, "seed": seed,
+            "occupancy": {"kind": ADVICE, "egress": None, "ingress": None}, "request_major": False,
+            "token_ids": True, "upstream_fields": probed["upstream_fields"], "compact": compact,
+            "varied": {"requests": len(requests), "max_tokens": cap, "eos_token_ids": stops,
+                       "prompt_tokens": [min(len(q["prompt"]) for q in requests),
+                                         max(len(q["prompt"]) for q in requests)],
+                       "delta0_buckets": D0, "rho0": str(rho), "margin": margin, "extra_s": extra_s,
+                       "probes": len(responses), "probe_finish": dict(Counter(r["finish"] for r in responses)),
+                       "frames_in": dict(Counter(frames_in))}}
+    return report, plan
+
+
 # The certifier.
 
 class ServedProxy(Proxy):
@@ -632,7 +867,8 @@ async def serve(plan: dict, report: dict, out: Path, *, url: str, upstream: dict
                         [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]], origin=origin, publish=certifier,
                         egress_link=setup.egress_link, ingress_link=setup.ingress_link, salt=fresh_salt,
                         reveal_deadline=deadline, challenger_key=challenger_key, signer=certifier,
-                        served=served_profile(plan))
+                        served=served_profile(plan), ordinals=bool(plan.get("token_ids")),
+                        compact=bool(plan.get("compact")))
     taken, served = loop.create_future(), loop.create_future()
 
     async def on_link(reader, writer) -> None:
@@ -699,6 +935,129 @@ async def client(plan: dict, report: dict, deployment: dict, out: Path, link: tu
 
 # The offline check.
 
+def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
+    """The certified I/O of a varied run, read from the records' frames alone (the module docstring's "The certified
+    I/O"): each request's ingress ordinal (its stream), release and fields (`active.id_request_fields`) from the
+    ingress frames, and its response's token ids and frames (canonical position, egress bucket) from the egress id
+    events that name its ordinal. `accepted` when every request is an id request whose `user` no other request has,
+    every egress frame is an id event of a request released no later than the frame's bucket, and every response keeps
+    the finish rule: at most `max_tokens` tokens, ending at its first EOS (`eos_token_ids`) or at `max_tokens`. On a
+    compact plan each egress frame is a compact cell (`active.compact_record_data`), a stop's id in `output` is
+    `COMPACT_EOS`, and the finish is the records' own: only the last is marked, a stop at any length up to `max_tokens`,
+    `COMPACT_LAST` at `max_tokens` exactly, and no record carries an EOS id, since a stop is only ever `COMPACT_EOS`."""
+    e, i = setup.egress_params, setup.ingress_params
+    compact = bool(plan.get("compact"))
+    marks: dict[int, list] = defaultdict(list)
+    release, _ = ar.ingress_releases(in_records, i, e)
+    data, split = defaultdict(bytes), Requests()
+    for rec in sorted(in_records, key=lambda r: r.window):
+        for row in rec.grid:
+            for slot in row[:row_count(row)]:
+                kind, _, payload = decode_frame(slot)
+                if kind == DATA:
+                    stream, chunk, _ = split.feed(payload)
+                    data[stream] += chunk
+    requests, by_ordinal, violations, users = [], {}, [], {}
+    for stream in sorted(data):
+        fields = id_request_fields(data[stream], i.frame_bytes)
+        if fields is None:
+            violations.append([stream, "a request that isn't an id request"])
+            continue
+        if (first := users.setdefault(fields["user"], stream)) != stream:
+            violations.append([stream, f"a request whose user names request {first} too"])
+        r = by_ordinal[stream] = fields | {"stream": stream, "release": release.get(stream), "output": [],
+                                           "frames": []}
+        requests.append(r)
+    position = 0
+    for rec in sorted(out_records, key=lambda r: r.window):
+        for t, row in enumerate(rec.grid):
+            for slot in row[:row_count(row)]:
+                if compact:
+                    c = compact_record_data(slot)
+                    got = None if c is None else (c[0], COMPACT_EOS if c[2] == "stop" else c[1], c[2])
+                else:
+                    kind, _, payload = decode_frame(slot)
+                    d = id_event_data(payload) if kind == DATA else None
+                    got = None if d is None else (*d, None)
+                r = by_ordinal.get(got[0]) if got is not None else None
+                bucket = rec.window * e.buckets + t
+                if r is None:
+                    violations.append([position, "an egress frame that isn't an id event of a released request"])
+                elif r["release"] is None or bucket < r["release"]:
+                    violations.append([position, "an id event before its request's release"])
+                else:
+                    r["output"].append(got[1])
+                    r["frames"].append([position, bucket])
+                    marks[r["stream"]].append(got[2])
+                position += 1
+    eos, finish = set(plan["varied"]["eos_token_ids"]), Counter()
+    for r in requests:
+        out, m = r["output"], r["max_tokens"]
+        stops = [k for k, t in enumerate(out) if t in eos]
+        ends = marks[r["stream"]]
+        if not out:
+            r["finish"] = "no response"
+        elif len(out) > m:
+            r["finish"] = "longer than max_tokens"
+        elif compact and any(ends[:-1]):
+            r["finish"] = "a token after its finish"
+        elif compact and stops:
+            r["finish"] = "an EOS id in a compact response"
+        elif compact:
+            short = "a length finish short of max_tokens"
+            r["finish"] = {"stop": "eos", "length": "length" if len(out) == m else short, None: "no finish"}[ends[-1]]
+        elif stops and stops[0] != len(out) - 1:
+            r["finish"] = "a token after EOS"
+        else:
+            r["finish"] = "eos" if stops else "length" if len(out) == m else "short of max_tokens without EOS"
+        finish[r["finish"]] += 1
+        if r["finish"] not in ("eos", "length"):
+            violations.append([r["stream"], r["finish"]])
+    return {"accepted": not violations and bool(requests), "requests": len(requests),
+            "tokens": sum(len(r["output"]) for r in requests), "finish": dict(finish), "violations": violations[:20],
+            "records": requests}
+
+
+def _shim_ids(run: Path, compact: bool = False) -> dict[tuple[str, int], list[int]]:
+    """The token ids the shim wrote (`server.events.gz`), in its order, by each event's session and the ordinal it
+    names; its compact records' under `compact`, a stop as `COMPACT_EOS`."""
+    out: dict[tuple[str, int], list[int]] = defaultdict(list)
+    for _, name, _, _, e in sorted(ar.read_events(run / "server.events.gz")):
+        if compact:
+            if (c := compact_record_data(e[-COMPACT_RECORD.size :])) is not None:
+                out[name, c[0]].append(COMPACT_EOS if c[2] == "stop" else c[1])
+        elif (got := id_event_data(event_body(e))) is not None:
+            out[name, got[0]].append(got[1])
+    return dict(out)
+
+
+def egress_bytes(setup: ar.Setup, out_records) -> dict:
+    """Per egress window, the link's bytes (T·r·B, at the constant rate) and its frames' (Σ counts · B), at the run's
+    B and, for the same frames (one a token either way), at an id event's cell (`ID_EVENT_BYTES` and its header in a
+    256-byte frame) and at the rehearsal's id-event frame (`FRAME_BYTES`)."""
+    e = setup.egress_params
+    frames = [sum(occupancy(r.grid)) for r in sorted(out_records, key=lambda r: r.window)]
+    mean = sum(frames) / len(frames) if frames else 0.0
+    sizes = {"run": e.frame_bytes, "id_event_cell": 1 << (HEADER.size + ID_EVENT_BYTES - 1).bit_length(),
+             "id_event_frame": FRAME_BYTES}
+    return {"frame_bytes": e.frame_bytes, "windows": len(frames), "frames_per_window": round(mean, 3),
+            "frames_max": max(frames, default=0),
+            "wire_per_window": {k: e.buckets * e.allocation * b for k, b in sizes.items()},
+            "frames_bytes_per_window": {k: round(mean * b, 1) for k, b in sizes.items()}}
+
+
+def _certified(lw: LinkWindows, opening, syncs: Sequence[ClockSync]) -> bool:
+    """The host audit of one link-window's two certified records under the certifier's key and session, comparing no
+    grid: N2's audit (`LinkWindows.verify`) without its head checks, which need a profile."""
+    w, (egress, ingress) = opening.window, opening.records
+    a = host_audit.Audit()
+    out = a.check_link(lw.link, [egress], (), list(syncs)[:w + 1], lw.sync_set, lw.params, key=lw.key,
+                       session=lw.certifier_session, grid=False)
+    inn = a.check_ingress_link(lw.link, [ingress], w + 1, key=lw.key, params=lw.ingress_params,
+                               session=lw.certifier_session)
+    return len(out) > w and out[w].accepted and inn[w].accepted
+
+
 def _no_coins(n: int) -> bytes:
     raise AssertionError("Selection All draws every link-window and reads no coins")
 
@@ -720,12 +1079,13 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
     windows, key = plan["windows"], read_public(deployment["certifier_key"])
     syncs = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
     profile, served = plan.get("occupancy") or {}, served_profile(plan)
+    advice = profile.get("kind") == ADVICE
     lw = LinkWindows(deployment["links"]["n2"], setup.egress_params, setup.sync_set, key, deployment["run_id"],
                      bytes.fromhex(deployment["session"]), ingress=setup.ingress_params, proof_deadline=proof_deadline,
                      occupancy=(profile.get("egress"), profile.get("ingress")), served=served)
     remote = RemoteCertifier(*deployment["reveal"], key, challenger, deployment["links"]["ingress"],
                              bytes.fromhex(deployment["run_id"]), timeout=timeout)
-    stream = lw.stream(budget=windows, delta=DELTA, challenger="certifier-serve-check", coins=_no_coins, clock=clock)
+    stream = lw.stream(budget=windows, delta=DELTA, challenger=CHALLENGER, coins=_no_coins, clock=clock)
     certified, refused = read_certified(run / "certified.jsonl")
     rows, salts, previous, again = [], {}, None, None
     for w in range(windows):
@@ -736,7 +1096,11 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
             row["n2"] = row["salt"] = "no certified record"
             break
         opening = lw.commit(w, *pair)
-        registration = lw.register(stream, lw.registration(opening, previous))
+        if advice:
+            record = lw.registration(opening, previous)
+            registration = Registration(record, R.receipt(record, CHALLENGER, received=str(w)), R.digest(record), w)
+        else:
+            registration = lw.register(stream, lw.registration(opening, previous))
         previous = registration.digest
         try:
             salts[w] = remote.reveal(w, registration)
@@ -749,6 +1113,11 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
                 again = "revealed again"
             except RuntimeError as err:
                 again = _refusal(err)
+        row["salt_fingerprint"] = ar.fingerprint(salts[w]) if w in salts else None
+        if advice:
+            row["certified"] = _certified(lw, opening, syncs)
+            row["n2"] = NO_N2
+            continue
         if served is not None:
             row["served_counts"] = lw.served_check(opening, syncs)
         draw = stream.select(registration)
@@ -759,17 +1128,29 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
             row["n2"] = f"no verdict: {err}"
             break
         row["n2"] = {"accepted": outcome.accepted, "codes": list(outcome.verdict.codes), "public": dict(outcome.public)}
-        row["salt_fingerprint"] = ar.fingerprint(salts[w]) if w in salts else None
-    try:
-        network = lw.network_verdict(stream, windows)
-    except ValueError as err:
-        network = {"accepted": False, "error": str(err)}
+    if advice:
+        network = {"accepted": None, "windows": windows, "error": NO_N2}
+    else:
+        try:
+            network = lw.network_verdict(stream, windows)
+        except ValueError as err:
+            network = {"accepted": False, "error": str(err)}
     audited = ar.audit_configuration(plan, report, run, audit=audit)
     e, i = setup.egress_params, setup.ingress_params
     in_records = [ar.unpack_record(b, i.frame_bytes) for b in ar.read_blobs(run / "requests.records")]
     out_records = [ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
     server = json.loads((run / "server.json").read_text())
     salt = ar.audit_salt(setup, salts, in_records, out_records, server, windows, audit())
+    io = None
+    if advice:
+        io = certified_io(plan, setup, in_records, out_records)
+        records = io.pop("records")
+        (run / "io.json").write_text(json.dumps({"windows": windows, "requests": records}))
+        shim = _shim_ids(run, bool(plan.get("compact")))
+        io["ids_are_the_shims"] = {(r["user"], r["stream"]): r["output"] for r in records if r["output"]} == shim
+        sent = {q["session"]: q["id_request"] | {"user": q["session"]} for q in plan["requests"]}
+        fields = ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")
+        io["requests_are_the_plans"] = all({k: r[k] for k in fields} == sent.get(r["user"]) for r in records)
     by_window: dict[int, dict] = {}
     for r in audited["rows"]:
         by_window.setdefault(r["window"], {})[r["direction"]] = {"raw": r["raw"], "committed": r["committed"]}
@@ -778,11 +1159,17 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
     audit_ok = bool(audited["rows"]) and all(r["raw"] is None and r["committed"] is None for r in audited["rows"])
     salt_ok = (len(salts) == windows and again is not None and again.startswith("refused")
                and salt["accepted"] and salt["block_received"] and not salt["egress_holds_salt"])
-    accepted = bool(network["accepted"]) and audit_ok and salt_ok
-    return {"verdict": "accepted" if accepted else "refused", "windows": windows,
-            "network_verdict": network, "audit_accepted": audit_ok, "salt_accepted": salt_ok,
-            "salt_again": again, "salt": salt, "profile": profile.get("kind"), "issuer_refused": refused,
-            "rows": rows, "comparisons": audited["comparisons"], "timing": audited["timing"]}
+    if advice:
+        certified_ok = len(rows) == windows and all(r.get("certified") for r in rows)
+        accepted = certified_ok and io["accepted"] and audit_ok and salt_ok
+    else:
+        certified_ok, accepted = None, bool(network["accepted"]) and audit_ok and salt_ok
+    out = {"verdict": "accepted" if accepted else "refused", "windows": windows,
+           "network_verdict": network, "audit_accepted": audit_ok, "salt_accepted": salt_ok,
+           "salt_again": again, "salt": salt, "profile": profile.get("kind"), "issuer_refused": refused,
+           "rows": rows, "comparisons": audited["comparisons"], "timing": audited["timing"],
+           "egress_bytes": egress_bytes(setup, out_records)}
+    return out if not advice else out | {"certified_accepted": certified_ok, "io": io}
 
 
 def table(result: dict) -> str:
@@ -790,13 +1177,19 @@ def table(result: dict) -> str:
     lines = [f"verdict {result['verdict']}: network_verdict {result['network_verdict'].get('accepted')}, audit "
              f"{result['audit_accepted']}, salt {result['salt_accepted']} (window 0 again: {result['salt_again']}), "
              f"N2 on the {result['profile']} profile"]
+    if (io := result.get("io")) is not None:
+        lines.append(f"  certified {result['certified_accepted']}; I/O {io['accepted']}: {io['requests']} requests, "
+                     f"{io['tokens']} tokens, finish {io['finish']}, ids are the shim's {io['ids_are_the_shims']}, "
+                     f"requests are the plan's {io['requests_are_the_plans']}, violations {io['violations'][:3]}")
     for row in result["rows"]:
         a = row.get("audit", {})
         n2 = row.get("n2")
         n2 = ("accept" if n2["accepted"] else f"reject {n2['codes']}") if isinstance(n2, dict) else n2
+        n2 = "none (advice profile)" if n2 == NO_N2 else n2
         counts = f" (served counts {row['served_counts']})" if "served_counts" in row else ""
+        certified = f"; certified {row['certified']}" if "certified" in row else ""
         lines.append(f"  window {row['window']}: audit egress {a.get('egress')} ingress {a.get('ingress')}; "
-                     f"N2 {n2}{counts}; salt {row.get('salt')}")
+                     f"N2 {n2}{counts}{certified}; salt {row.get('salt')}")
     return "\n".join(lines)
 
 
@@ -844,12 +1237,25 @@ def rehearse_one(out: Path, strategy: str, *, url: str, certifier_dir: Path, cha
     return result
 
 
-def plan_of(args, url: str, clock=time.monotonic) -> tuple[dict, dict, dict]:
+def plan_of(args, url: str, clock=time.monotonic, sleep=time.sleep) -> tuple[dict, dict, dict]:
     """(probe, calibration, plan) of the endpoint at `url` (`plan`'s): each request `--tokens` tokens out of a prompt of
-    exactly `--prompt-tokens` tokens (`PROMPT` as text with 0), probed and planned `--in-flight` at a time."""
+    exactly `--prompt-tokens` tokens (`PROMPT` as text with 0), probed and planned `--in-flight` at a time; or, with
+    `--traffic varied`, `--requests` requests of varied traffic (`varied_requests`: `--rate`, `--prompt-range`,
+    `--tokens` the cap, `--seed`, `--name` the users'), the first `--probes` of them probed at their arrival times."""
     model = args.model or served_model(url, args.api_key_env)
+    if getattr(args, "traffic", TRAFFIC[0]) == "varied":
+        lo, _, hi = args.prompt_range.partition(":")
+        name = getattr(args, "name", None) or "varied"
+        requests = varied_requests(url, model, args.requests, rate=args.rate, prompt_tokens=(int(lo), int(hi)),
+                                   max_tokens=args.tokens, seed=args.seed, name=name, api_key_env=args.api_key_env)
+        probed = probe_varied(url, model, requests[:args.probes], args.api_key_env, clock, sleep)
+        eos = [int(t) for t in args.eos_ids.split(",")] if args.eos_ids else None
+        report, plan = varied_plan(probed, requests, seed=args.seed, eos=eos, compact=getattr(args, "compact", None),
+                                   margin=getattr(args, "margin", 2.0))
+        return probed, report, plan
     prompt = prompt_tokens(url, model, args.prompt_tokens, args.api_key_env) if args.prompt_tokens else PROMPT
-    probed = probe(url, request_body(model, args.tokens, prompt), args.probes, args.api_key_env, clock,
+    probed = probe(url, request_body(model, args.tokens, prompt, args.temperature, args.top_p), args.probes,
+                   args.api_key_env, clock,
                    in_flight=args.in_flight, warmup=args.in_flight)
     report, plan = served_plan(probed, args.requests, args.delta_buckets, in_flight=args.in_flight,
                                profile=args.profile, frames=args.response_frames)
@@ -892,21 +1298,23 @@ def rehearse(args) -> int:
 
             record.stop_server(started[0])
     summary = {"upstream": url, "vllm": args.vllm, "model": plan["live_model"], "lms_height": args.height,
-               "served": plan["served"], "windows": plan["windows"], "profile": plan["occupancy"]["kind"],
-               "runs": {s: {k: r[k] for k in ("verdict", "network_verdict", "audit_accepted", "salt_accepted",
-                                              "salt_again", "exit")}
-                        | {"windows": [{k: row.get(k) for k in ("window", "n2", "served_counts", "salt", "audit")}
+               "served": plan.get("served"), "varied": plan.get("varied"), "windows": plan["windows"],
+               "profile": plan["occupancy"]["kind"],
+               "compact": plan.get("compact"),
+               "runs": {s: {k: r.get(k) for k in ("verdict", "network_verdict", "audit_accepted", "salt_accepted",
+                                                  "salt_again", "certified_accepted", "io", "exit", "egress_bytes")}
+                        | {"windows": [{k: row.get(k) for k in ("window", "n2", "served_counts", "certified", "salt",
+                                                                 "audit")}
                                        for row in r["rows"]]}
                         for s, r in results.items()}}
     (out / "summary.json").write_text(json.dumps(summary, indent=1))
-    expected = {"honest": "accepted"}
-    ok = all(r["verdict"] == expected.get(s, "refused") for s, r in results.items())
+    ok = all(r["verdict"] == ("accepted" if s in ACCEPTED else "refused") for s, r in results.items())
     print(f"rehearsal {'as expected' if ok else 'NOT as expected'}: "
           f"{ {s: r['verdict'] for s, r in results.items()} }", flush=True)
     return 0 if ok else 1
 
 
-def main(argv=None) -> int:
+def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="certifier_serve.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
     k = sub.add_parser("keys", help="make or load an LMS key and write its public.json")
@@ -922,12 +1330,15 @@ def main(argv=None) -> int:
         q.add_argument("--api-key-env", help="the environment variable that holds the endpoint's bearer key")
     for q in (p, r):
         q.add_argument("--model", help="the endpoint's model name (default: the one /v1/models lists)")
+        q.add_argument("--temperature", type=float, default=0.0, help="every request's temperature")
+        q.add_argument("--top-p", type=float, default=1.0, help="every request's top_p")
         q.add_argument("--requests", type=int, default=400)
         q.add_argument("--in-flight", type=int, default=4, help="requests sent together, served side by side")
-        q.add_argument("--tokens", type=int, default=64, help="min_tokens and max_tokens of every request (ignore_eos)")
+        q.add_argument("--tokens", type=int, default=64,
+                       help="fixed: min_tokens and max_tokens of every request (ignore_eos); varied: max_tokens' cap")
         q.add_argument("--response-frames", type=int,
-                       help="F, a response's canonical events, padded to (default: --tokens); a token of more than "
-                            "64 bytes is one event per 64")
+                       help="fixed: F, a response's canonical events, padded to (default: --tokens); a token of more "
+                            "than 64 bytes is one event per 64")
         q.add_argument("--prompt-tokens", type=int, default=128,
                        help="the prompt's length in the endpoint's tokens (/tokenize); 0: the text prompt as is")
         q.add_argument("--probes", type=int, default=8)
@@ -936,6 +1347,24 @@ def main(argv=None) -> int:
         q.add_argument("--profile", choices=PROFILES, default=PROFILES[0],
                        help="N2's profile: the planned egress occupancy, or the served profile (NET-54), whose egress "
                             "counts derive from the ingress head's")
+        q.add_argument("--traffic", choices=TRAFFIC, default=TRAFFIC[0],
+                       help="fixed: one body every session (--tokens, --prompt-tokens, --in-flight, --profile); varied: "
+                            "Poisson arrivals of varied prompts, real EOS, events carrying token ids (N2 on the advice "
+                            "profile)")
+        q.add_argument("--rate", type=float, default=2.0, help="varied: arrivals a second")
+        q.add_argument("--prompt-range", default="16:1024", help="varied: LO:HI, the prompts' lengths in tokens")
+        q.add_argument("--name", default="varied",
+                       help="varied: the users' prefix: request j's user, its session, is NAME.j (j five digits)")
+        q.add_argument("--seed", type=int, default=0, help="varied: the traffic's seed")
+        q.add_argument("--eos-ids", help="varied: the model's EOS token ids, comma-separated (default: the last ids "
+                                         "of the probe's responses that stopped)")
+        q.add_argument("--compact", type=int, metavar="B",
+                       help="varied: compact egress records (`active.compact_record`) in cells of B >= 8 bytes, "
+                            "the shim writing each token's record (default: id events in 4096-byte frames); the "
+                            "gate's certifier-rehearse --traffic varied --compact B runs it on the auditor's host")
+        q.add_argument("--margin", type=float, default=2.0,
+                       help="varied: the plan's margin over the probed rates and latencies (an endpoint that slows "
+                            "under load the probes didn't meet needs more)")
     for q in (p, s, c, r):
         q.add_argument("--out", required=True, type=Path)
     for q in (s, c):
@@ -950,8 +1379,9 @@ def main(argv=None) -> int:
     s.add_argument("--reveal-deadline", type=float, help="seconds past a window's end (default: the run's + 300)")
     for q in (s, r):
         q.add_argument("--start-in", type=float, default=10.0, help="the origin, seconds after the proxy is up")
-    s.add_argument("--tamper", choices=STRATEGIES[1:],
-                   help="late: the shim holds a window-0 session past every sync; extra: it writes one event more")
+    s.add_argument("--tamper", choices=TAMPERS,
+                   help="late: the shim holds a window-0 session past every sync; extra: it writes one event more; "
+                        "drop: one fewer; token: window 0's tokens' bytes changed")
     c.add_argument("--deployment", required=True, type=Path)
     c.add_argument("--link", type=_address, help="HOST:PORT of the link, if not the deployment's")
     x.add_argument("--run", required=True, type=Path)
@@ -961,7 +1391,11 @@ def main(argv=None) -> int:
     r.add_argument("--vllm-cpus", help="with --vllm: its CPUs (taskset -c)")
     r.add_argument("--height", type=int, default=HEIGHT, help="the LMS keys' tree height")
     r.add_argument("--strategies", default=",".join(STRATEGIES))
-    args = ap.parse_args(argv)
+    return ap
+
+
+def main(argv=None) -> int:
+    args = parser().parse_args(argv)
 
     if args.command == "keys":
         load_key(args.dir, args.height)
@@ -972,7 +1406,7 @@ def main(argv=None) -> int:
         args.out.mkdir(parents=True, exist_ok=True)
         for name, doc in (("probe.json", probed), ("plan.json", plan), ("calibration.json", report)):
             (args.out / name).write_text(json.dumps(doc, indent=1))
-        print(json.dumps(plan["served"] | {"windows": plan["windows"]}))
+        print(json.dumps((plan.get("served") or plan["varied"]) | {"windows": plan["windows"]}))
         return 0
     if args.command == "serve":
         out = args.out.resolve()

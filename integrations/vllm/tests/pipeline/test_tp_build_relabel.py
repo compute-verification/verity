@@ -90,6 +90,7 @@ def assert_same_files(real: str, relabeled: str) -> None:
             assert a[name] == b[name], name
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("W", [2, 4])
 def test_every_relabeled_rank_writes_the_bytes_its_full_derive_writes(W, tmp_path):
     t = RB.template_rank(W)

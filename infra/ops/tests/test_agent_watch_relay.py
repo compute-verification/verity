@@ -352,8 +352,8 @@ def test_a_failure_the_watch_acted_on_leads_with_its_owner_and_rings_that_inbox(
     relay.once()
     link = f"<https://cursor.com/agents/{co}|{co}>"
     assert relay.posts[:2] == [
-        f"{top} *Agent watch:* verity: proofs ({link}, run run-s) streamed nothing for 30 min since 2026-10-19T10:00:00Z "
-        "while RUNNING (a hung call or a suspended VM); the watch cancelled and continued. New run run-n.",
+        f"{top} *Agent watch:* verity: proofs ({link}, run run-s) streamed nothing for 30 min since 2026-10-19T10:00:00Z, "
+        "its agent not moving either (a hung call or a suspended VM); the watch cancelled and continued. New run run-n.",
         f"{top} *Agent watch:* @proofs's coordinator ({link}, run run-b) sat idle after its run r1 ended (run r1 (lean) on "
         "vy-nebius-2: done rc=0 after 12 min at 2026-10-19T10:30:00Z), with nothing resuming it for 10 min; the watch cancelled "
         "its background wait (run-b) and resumed it with the run's result."]

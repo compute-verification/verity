@@ -127,6 +127,46 @@ theorem checkInRange_ok (kLog nRegions mPts : Nat) :
       simp only [Bool.and_eq_false_iff, decide_eq_false_iff_not]; omega
     simp [this, throw, throwThe, MonadExceptOf.throw]
 
+/-- **Each region's bytes are its free bits, in every block**: the extra claims read block `b`'s bytes as the region's
+`2^|free|` bits (`Stmt.regionValue`), so `setupH` and `setupHidden` refuse a statement whose regions carry bytes of
+another size in any of the `2^nbl` blocks, before any proof is read. One pass over each region's bytes, as each
+`regionValue` makes. -/
+def checkRegionBytes (nbl : Nat) (regions : Array Region) : V Unit :=
+  if regions.all fun reg => Nat.all (2 ^ nbl) fun b _ => (reg.bytes b).size * 8 == 2 ^ reg.free.size then pure ()
+  else throw "a region's bytes are not its free bits in every block: the extra claims read 2^|free| bits per block"
+
+theorem nat_all_iff (n : Nat) (p : Nat → Bool) : (Nat.all n fun b _ => p b) = true ↔ ∀ b < n, p b = true := by
+  induction n with
+  | zero => simp
+  | succ n ih =>
+    rw [Nat.all_succ, Bool.and_eq_true, ih]
+    constructor
+    · intro h b hb
+      rcases Nat.lt_succ_iff_lt_or_eq.1 hb with hb | hb
+      · exact h.1 b hb
+      · exact hb ▸ h.2
+    · intro h
+      exact ⟨fun b hb => h b (Nat.lt_succ_of_lt hb), h n (Nat.lt_succ_self n)⟩
+
+/-- `checkRegionBytes` accepts exactly where every region's bytes are its free bits in every block. -/
+theorem checkRegionBytes_ok (nbl : Nat) (regions : Array Region) :
+    checkRegionBytes nbl regions = .ok () ↔
+      ∀ reg ∈ regions.toList, ∀ b < 2 ^ nbl, (reg.bytes b).size * 8 = 2 ^ reg.free.size := by
+  have hall : (regions.all fun reg => Nat.all (2 ^ nbl) fun b _ => (reg.bytes b).size * 8 == 2 ^ reg.free.size) = true ↔
+      ∀ reg ∈ regions.toList, ∀ b < 2 ^ nbl, (reg.bytes b).size * 8 = 2 ^ reg.free.size := by
+    rw [← Array.all_toList, List.all_eq_true]
+    refine forall_congr' fun reg => imp_congr_right fun _ => ?_
+    rw [nat_all_iff]
+    simp only [beq_iff_eq]
+  unfold checkRegionBytes
+  split
+  · rename_i h
+    simp only [pure, Except.pure, true_iff]
+    exact hall.1 h
+  · rename_i h
+    simp only [throw, throwThe, MonadExceptOf.throw, reduceCtorEq, false_iff]
+    exact fun h' => h (hall.2 h')
+
 /-- The coin source named in `Hello` (§7). -/
 inductive Coins where
   | os

@@ -154,7 +154,7 @@ def DeclaredCircuitRequirement : Prop :=
     7 ≤ n → 0 < P → 0 < N → 0 < E →
     Assumptions.SketchRank 16 128 12 ε →
     Assumptions.KeyBinding T M δ enc →
-    Assumptions.EncodeChainHardness Gates.p1024 3 B E εnum εden →
+    Assumptions.EncodeChainHardness Gates.p1024 3 B E εnum εden → εden ≤ 2 ^ 64 * εnum →
     (∀ s w η j pre, Assumptions.SketchHashBudget (((A.session s).window w η).device j pre) (qr * τ)) →
     Assumptions.CircuitCarriers (fun c y => A.session (steer c y)) (RateSketch.steeredStore enc choose layout) layout
       joined (Xr * τ) L B εnum εden Wc Aud →

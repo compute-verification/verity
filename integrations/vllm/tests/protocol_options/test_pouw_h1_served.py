@@ -106,12 +106,13 @@ def _period(ws, shapes=SHAPES):
 
 
 def _window(key: bytes, seed: int = 0, served_key: bytes | None = None, shapes=SHAPES, blocks=BLOCKS, steps=STEPS,
-            served=1, changed=None, modules=MODULES, tile=TILE, rows=T, no_z=False, ws=None, weights=None, receipts=None):
+            served=1, changed=None, modules=MODULES, tile=TILE, rows=T, no_z=False, ws=None, weights=None, receipts=None,
+            order=None):
     """A window: its first ``served`` steps serve 5 rows each, q and k on one input x, o on another, every step with the
     same weights ``ws`` (`_weights` of ``seed`` by default; step 1's q on ``changed`` when given), each call's z/y records
-    `scaled_mm_zy`'s over its T slots; the later steps are empty. With ``weights`` (`_period`) its ``b/<K>`` are the
-    period's. Returns the run, each linear's weight and scales, and each served call's (a, s_a, z, y) by its index, z its
-    exact product and y its served y."""
+    `scaled_mm_zy`'s over its T slots, its linears called in ``order`` (module order by default); the later steps are
+    empty. With ``weights`` (`_period`) its ``b/<K>`` are the period's. Returns the run, each linear's weight and scales,
+    and each served call's (a, s_a, z, y) by its index, z its exact product and y its served y."""
     rng = np.random.default_rng(seed)
     run = PH.H1Run("t", SALT, modules, shapes, rows, steps, key=bytes([seed + 1]) * 32,
                    served=SV.Served(tile, _unit(tile), blocks, window=served_key or key, weights=weights,
@@ -121,7 +122,8 @@ def _window(key: bytes, seed: int = 0, served_key: bytes | None = None, shapes=S
     for s in range(served):
         x = _codes(rng, SERVED, shapes[0][1])
         inputs = [x, x] + [_codes(rng, SERVED, k) for _n, k in shapes[2:]]
-        for w, (a, (wt, sw)) in enumerate(zip(inputs, ws)):
+        for w in range(len(inputs)) if order is None else order:
+            a, (wt, sw) = inputs[w], ws[w]
             wt = changed if (s, w) == (1, 0) and changed is not None else wt
             n = wt.shape[0]
             s_a = torch.rand(SERVED) + 0.5
@@ -289,7 +291,8 @@ def test_a_calls_statement_reads_its_units_rows_at_its_tables_and_refuses_anothe
         assert {f["ports"][f"a_k{k}_0"]["value"], f["ports"]["zy"]["value"], f["ports"][f"b_k{k}_0"]["value"]} == {
             HW.table(prog, "a", c, STEPS), HW.table(prog, "zy", c), SV.PREFIX + f"b/{k}"}
         at = HW.step_of(prog, c, STEPS)[2]
-        assert f["ports"][f"a_k{k}_0"]["reads"][u0] == at and at == T * served.step_calls(c).index(c)
+        assert f["format"] == G.READS_V1 and all(p[G.READS_FROM] == u0 and len(p["reads"]) == n for p in f["ports"].values())
+        assert f["ports"][f"a_k{k}_0"]["reads"][0] == at and at == T * served.step_calls(c).index(c)
         assert f["ports"][HW.OK_PORT]["value"] == SV.PREFIX + "ok" and SV.PREFIX + "ok" not in served.registered
         for port, p in f["ports"].items():
             if port == HW.OK_PORT:
@@ -300,7 +303,7 @@ def test_a_calls_statement_reads_its_units_rows_at_its_tables_and_refuses_anothe
             if port == HW.PUB_PORT:
                 continue
             key = port if port == "zy" else f"{port.rsplit('_', 1)[0]}[{port.rsplit('_', 1)[1]}]"
-            for u, row in enumerate(p["reads"]):
+            for u, row in enumerate(CC.port_reads(p)):
                 if not u0 <= u < u0 + n:
                     assert row is None
                     continue
@@ -324,7 +327,7 @@ def test_a_tile_of_one_row_or_column_maps_its_lone_read_to_port_0(tile, lone):
     for c, (u0, n) in enumerate(HW.call_units(served.program)):
         k = run.shapes_[c][1]
         assert set(reg.files[c]["ports"]) == {f"{lone}_k{k}_0", "zy", HW.PUB_PORT, HW.OK_PORT} | {f"{other}_k{k}_{i}" for i in range(32)}
-        reads = reg.files[c]["ports"][f"{lone}_k{k}_0"]["reads"]
+        reads = CC.port_reads(reg.files[c]["ports"][f"{lone}_k{k}_0"])
         assert [u for u, r in enumerate(reads) if r is not None] == list(range(u0, u0 + n))
 
 
@@ -616,7 +619,7 @@ def test_each_calls_receipts_are_its_receipt_table_once_its_roots_are_registered
         p, rc = reg.files[c]["ports"][HW.RECEIPT_PORT], served.registered[pre + f"receipt@{c}"]
         assert (p["value"], p["root"], p["leaves"], p["words"], p["domain"], p["row_schema"]) == (
             rc.value, rc.root.hex(), rc.leaves, rc.words, rc.domain.domain_id.hex(), SV.V2)
-        assert [(u, row) for u, row in enumerate(p["reads"]) if row is not None] == [(u0 + t, t) for t in range(n)]
+        assert [(u, row) for u, row in enumerate(CC.port_reads(p)) if row is not None] == [(u0 + t, t) for t in range(n)]
         assert all(G.verify_read(rc.domain, rc.root, t, rc.bcs[t], rc.path(t), SV.V2) for t in range(n))
 
 
@@ -628,8 +631,9 @@ def test_each_calls_public_table_and_the_ok_rows_are_the_ones_credit_builds_and_
     ``--registered`` file is credit's, the verifier-built ok rows (o1) included, every pub row opening credit's root. A table with one row off, under the
     same salts, has another root, which `credit._verified` refuses a session for, and its row opens none of credit's.
     At close the window commits its ok rows (`Served.ok`, o1) at credit's root, in no entry: a window whose entries
-    name them is refused."""
-    run, _ws, _got = _window(W1, receipts=_Receipts())
+    name them is refused. Its linears' K are 32 and 64: credit's layout refuses a tile at a K its proof doesn't cover
+    (``tile-k``, K a multiple of 32)."""
+    run, _ws, _got = _window(W1, receipts=_Receipts(), shapes=[(64, 32), (32, 32), (32, 64)])
     served, pre = run.served, SV.PREFIX
     assert not served.refused and served.tables()[-2 * len(run.calls):-len(run.calls)] == [
         pre + f"pub@{c}" for c in range(len(run.calls))]
@@ -671,6 +675,72 @@ def test_each_calls_public_table_and_the_ok_rows_are_the_ones_credit_builds_and_
     assert [list(row) for row in served.ok.rows] == [list(CC.OK_ROW)] * served.ok.leaves
     assert CR.registered_file(program, lay, shape, 0, {**roots, served.ok.value: [served.ok.root.hex()]}, served.root,
                               served.steps, run._salt.hex())[1][0] == "registration"
+
+
+class _Prepared(_Receipts):
+    """The stand-in with a ``prepare``: each batch it was handed (with the asks made before it), and each ask's
+    arguments, by call."""
+
+    def __init__(self, fail=None):
+        super().__init__()
+        self.batches, self.asked, self.fail = [], {}, fail
+
+    def prepare(self, batch):
+        if self.fail:
+            raise ValueError(self.fail)
+        self.batches.append((len(self.order), batch))
+
+    def __call__(self, call, codes, s_a, w, s_w):
+        self.asked[call.index] = (call, codes, s_a, w, s_w)
+        return super().__call__(call, codes, s_a, w, s_w)
+
+
+def test_a_producer_with_prepare_is_handed_each_steps_calls_of_one_k_before_it_is_asked_them():
+    """A receipt producer with a ``prepare`` is handed each step's calls of one K together before any of them is asked:
+    the same calls with the same arguments, in the order they are then asked, so it may compute them in one launch; each
+    receipt table is still the producer's ask's words. A ``prepare`` that refuses refuses the window, naming the calls."""
+    made = _Prepared()
+    run, _ws, _got = _window(W1, receipts=made)
+    served, at = run.served, 0
+    assert not served.refused and made.batches
+    for asked_before, batch in made.batches:
+        calls = [args[0].index for args in batch]
+        assert asked_before == at and made.order[at:at + len(calls)] == calls == served.step_calls(calls[-1])
+        assert all(x is y for args in batch for x, y in zip(args, made.asked[args[0].index], strict=True))
+        at += len(calls)
+    assert at == len(run.calls)
+    for c in run.calls:
+        rc = served.registered[SV.PREFIX + f"receipt@{c.index}"]
+        assert rc.root.hex() == _tree(rc, [w.tobytes() for w in made[c.index].astype("<u2")], run._key,
+                                      SV.RECEIPT_NONCE + c.index)
+    refused = _window(W1, receipts=_Prepared(fail="no launch"))[0].served.refused
+    assert any(r.startswith("calls [") and r.endswith("]: no launch") for r in refused), refused
+
+
+def test_a_forward_out_of_module_order_lays_out_each_step_table_and_its_receipts_in_call_order():
+    """VLLM-81: GLM-5.3's DSA attention runs a step's linears out of module order. Here each step calls k before q, which
+    share K = 16, then o: each step's A table of K is still its calls' rows in call order, registered at the call that
+    completes it (q's, the last of K to come, not k's, the last in call order), and the producer is handed, then asked,
+    that step's calls of K in call order there, each receipt table after the roots its units' seeds take."""
+    made = _Prepared()
+    run, _ws, got = _window(W1, served=2, receipts=made, order=(1, 0, 2))
+    served, prog = run.served, run.served.program
+    assert not served.refused and run.order_ok and run.static()
+    tables = CR.step_tables({"calls": served.calls, "linears": served.linears, "m": served.m}, STEPS)
+    assert tables == [(0, 16, [0, 1]), (0, 32, [2]), (1, 16, [3, 4]), (1, 32, [5])]
+    for _s, k, cs in tables:
+        ra = served.registered[HW.table(prog, "a", cs[0], STEPS)]
+        rows = [row for c in cs for row in _a_rows(*_served_call(got, c, 0, k)[:2], T, k)]
+        assert ra.root.hex() == _tree(ra, rows, run._key, SV.nonce(cs[0], "a"))
+        assert [c.index for c in run.calls if ra.value in run.tables[c.index]["registered"]] == [cs[0]]
+    assert [[args[0].index for args in batch] for _n, batch in made.batches] == [cs for _s, _k, cs in tables]
+    assert made.order == list(range(len(run.calls)))
+    names = list(served.registered)
+    for c in run.calls:
+        rc = served.registered[SV.PREFIX + f"receipt@{c.index}"]
+        assert names.index(rc.value) > names.index(served.a_table(c.index))
+        assert rc.root.hex() == _tree(rc, [w.tobytes() for w in made[c.index].astype("<u2")], run._key,
+                                      SV.RECEIPT_NONCE + c.index)
 
 
 def test_receipts_off_the_units_receipt_width_are_refused():

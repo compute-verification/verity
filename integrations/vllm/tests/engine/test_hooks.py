@@ -215,6 +215,7 @@ def test_export_shims_restore_torch_and_vllm() -> None:
     assert hooks.live() == live
 
 
+@pytest.mark.slow
 def test_fp8_expert_scales_are_exported_from_their_registered_parameter_owner() -> None:
     """A plain kernel object keeps the original scale object; the shim refreshes it after export swaps the module Parameter."""
     torch = pytest.importorskip("torch")

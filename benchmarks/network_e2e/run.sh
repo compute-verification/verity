@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# network-e2e's runner, `verity bench network_e2e ARGS`, ARGS e2e.py's (README.md has the commands). With --no-prove or
-# --proofs DIR it runs e2e.py alone (N2's network-records is built on first use, with lake on the PATH). Otherwise it
+# network-e2e's runner, `verity bench network_e2e ARGS`, ARGS e2e.py's (README.md has the commands). With --no-prove,
+# --proofs DIR or --traffic varied (whose advice profile n2_zk doesn't prove) it runs e2e.py alone (N2's network-records
+# is built on first use, with lake on the PATH). Otherwise it
 # runs under `research run` on a CPU node: it builds what n2_zk.sh builds (hidden_zk's job.sh, sourced: C-Flock's
 # flock-circuit and the Lean flock-verify, then the firewall's Lean frame, N2's network-records and the sampled-proofs
 # verifier in the tree, so --cwd clone) and runs e2e.py with them, the report in $OUT. From a clone:
@@ -13,7 +14,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 case " $* " in
-  *" --no-prove "* | *" --proofs "*)
+  *" --no-prove "* | *" --proofs "* | *" --traffic varied "*)
     export PATH=$HOME/.elan/bin:$PATH
     exec "${PYTHON:-python3}" benchmarks/network_e2e/e2e.py "$@" ;;
 esac

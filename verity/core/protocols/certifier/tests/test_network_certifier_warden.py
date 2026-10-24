@@ -13,8 +13,9 @@ import pytest
 
 from verity.core.protocols.certifier.active import DATA, HEADER, PAD, VirtualClock, encode_frame
 from verity.core.protocols.certifier.grid import Reason
-from verity.core.protocols.certifier.warden import (END, FAIL, FAILS, KIND_NAMES, REFUSED, Shim, Warden,
-                                                    WardenParams, audit, cell, cells, read_cell)
+from verity.core.protocols.certifier.warden import (END, FAIL, KIND_NAMES, REASONS, REFUSED, Shim, Warden,
+                                                    WardenParams, audit, cell, cells, read_cell, read_reason,
+                                                    reason_frame)
 
 PARAMS = WardenParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, queue=2, window=24, ingress_cells=8,
                       ingress_buckets=6, egress_cells=12)
@@ -148,11 +149,12 @@ def settled(warden: Warden, server: Server) -> bool:
 
 
 async def drive(server: Server, arrivals: dict[int, list[bytes]], *, windows: int = 1, late: dict | None = None,
-                params: WardenParams = PARAMS):
+                params: WardenParams = PARAMS, **hooks):
     """Connect `arrivals[t]` (each a client's raw cell bytes) just before bucket t's tick, let the server answer what is
-    due and the warden read it, then tick, for `windows` windows; `late[t]` puts tick t that many seconds late."""
+    due and the warden read it, then tick, for `windows` windows; `late[t]` puts tick t that many seconds late.
+    `hooks` are the warden's `publish` and `release`."""
     clock = VirtualClock(-TAU / 2)
-    warden = Warden(params, server.connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep)
+    warden = Warden(params, server.connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, **hooks)
     running = asyncio.create_task(warden.run())
     clients: list[Client] = []
     for t in range(windows * params.window):
@@ -175,12 +177,18 @@ def run(answers, arrivals, **kw):
 
 
 def records(warden: Warden):
-    return ([r for r in warden.records if r.link == "requests"], [r for r in warden.records if r.link == "responses"])
+    return tuple([r for r in warden.records if r.link == link] for link in ("requests", "responses", "fails"))
 
 
-def expected_egress(s: int, a: int, n: int, last: int = END) -> list[tuple[int, int]]:
-    """(bucket, kind) of a connection's egress cells: admitted at s, ingress ended at a, n cells after a + D."""
-    kinds = [PAD] * ((a + D - s) * R) + [DATA] * (n - 1) + [last]
+def reasons(warden: Warden) -> list[tuple[int, int, str]]:
+    """(bucket, ordinal, reason) of every frame of the `fails` record."""
+    return [(r.window * PARAMS.window + b, *read_reason(f, B)) for r in records(warden)[2]
+            for b, row in enumerate(r.grid) for f in row if f is not None]
+
+
+def expected_egress(s: int, n: int, last: int = END) -> list[tuple[int, int]]:
+    """(bucket, kind) of a connection's egress cells: admitted at s, n cells from s + D."""
+    kinds = [PAD] * (D * R) + [DATA] * (n - 1) + [last]
     kinds += [PAD] * (-len(kinds) % R)
     return [(s + i // R, k) for i, k in enumerate(kinds)]
 
@@ -190,7 +198,7 @@ def expected_egress(s: int, a: int, n: int, last: int = END) -> list[tuple[int, 
 
 def test_honest_traffic_is_released_exactly_on_schedule_passes_bytes_unchanged_and_is_audited():
     """Four connections, requests of one cell and of several, responses empty, of exactly whole cells and of a part
-    cell: each client's cells are B bytes, r a bucket from its admission, padding until a + D, then its response's
+    cell: each client's cells are B bytes, r a bucket from its admission, padding until s + D, then its response's
     cells in every slot and its END, and padding to the bucket's end; the server got each request and each client each
     response, byte for byte; the audit of the records accepts every window and reads back the same bytes."""
     reqs = [request(10, 1), request(3 * P + 5, 2), request(P, 3), request(1, 4)]
@@ -198,14 +206,14 @@ def test_honest_traffic_is_released_exactly_on_schedule_passes_bytes_unchanged_a
     answers = [[(0, resp), (0, EOF)] for resp in resps]
     warden, clients, server = run(answers, {1: [cells(reqs[0], B)], 2: [cells(reqs[1], B)],
                                             3: [cells(reqs[2], B), cells(reqs[3], B)]}, windows=2)
-    log = {e["ordinal"]: e for e in warden.log}
+    log = {e["ordinal"] - 1: e for e in warden.log}
     assert [server.conns[k].received for k in range(4)] == reqs
     for k, client in enumerate(clients):
         e = log[k]
         shim = client.shim()
         assert (bytes(shim.data), shim.outcome) == (resps[k], "end")
         n = max(1, -(-len(resps[k]) // P))
-        assert [(t, kind) for t, kind, _ in client.cells()] == expected_egress(e["admitted"], e["ingress_end"], n)
+        assert [(t, kind) for t, kind, _ in client.cells()] == expected_egress(e["admitted"], n)
         # nothing is released at admission: the client's cells are read from then on
         assert e["ingress_end"] - e["admitted"] == 1 + (-(-len(reqs[k]) // P) - 1) // R
     # FIFO: 2 takes the first lane to free (1's), 3 the next (0's)
@@ -214,7 +222,7 @@ def test_honest_traffic_is_released_exactly_on_schedule_passes_bytes_unchanged_a
     verdict = audit(PARAMS, *records(warden))
     assert verdict["accepted"], verdict["windows"]
     assert [(c["ordinal"], c["admitted"], c["ingress_end"], c["ended"]) for c in verdict["connections"]] == \
-        [(k, log[k]["admitted"], log[k]["ingress_end"], log[k]["ended"]) for k in range(4)]
+        [(k + 1, log[k]["admitted"], log[k]["ingress_end"], log[k]["ended"]) for k in range(4)]
     assert [c["egress_sha256"] for c in verdict["connections"]] == [hashlib.sha256(r).hexdigest() for r in resps]
     assert [c["ingress_sha256"] for c in verdict["connections"]] == [hashlib.sha256(r).hexdigest() for r in reqs]
     assert verdict["cells"]["egress"] == sum(len(c.cells()) for c in clients)
@@ -224,7 +232,7 @@ def test_the_records_are_the_wire():
     """The egress record's frames are exactly the cells the clients got, in ordinal order a bucket."""
     warden, clients, _ = run([[(0, b"hello"), (0, EOF)], [(0, b"x" * 100), (0, EOF)]],
                              {0: [cells(request(5), B), cells(request(70), B)]})
-    _, egress = records(warden)
+    _, egress, _ = records(warden)
     rows = [f for r in egress for row in r.grid for f in row if f is not None]
     by_bucket = {}
     for k, client in enumerate(clients):
@@ -233,61 +241,81 @@ def test_the_records_are_the_wire():
     assert b"".join(rows) == b"".join(b"".join(by_bucket[t]) for t in sorted(by_bucket))
 
 
+def test_the_rows_released_before_each_publish_are_its_records_grid():
+    """`release` gets each grid's row as it ticks, before the window's `publish`: a publisher in another process
+    rebuilds every record, bucket for bucket, from the rows alone."""
+    events = []
+    run([[(0, b"hello"), (0, EOF)], [(0, b"x" * 100), (0, EOF)]], {0: [cells(request(5), B), cells(request(70), B)]},
+        windows=2, release=lambda link, row: events.append((link, row)), publish=lambda r, grid: events.append(r))
+    pending, published = {}, []
+    for e in events:
+        if isinstance(e, tuple):
+            pending.setdefault(e[0], []).append(e[1])
+        else:
+            assert e.grid == tuple(pending.pop(e.link)), (e.link, e.window)
+            published.append((e.link, e.window))
+    assert published == [(link, w) for w in range(2) for link in ("requests", "responses", "fails")] and not pending
+
+
 # --- fail closed -----------------------------------------------------------------------------------------------------
 
 
 def test_a_late_byte_fails_its_connection_closed_at_its_cell():
     """The server sends two cells' bytes and a part, then the rest far too late: the client gets the two DATA cells,
-    then a FAIL (late) in the slot of the third, padding to the bucket's end, and the connection closes; the late bytes
-    never reach it, and the audit refuses the window, naming the cell."""
+    then a FAIL in the slot of the third, padding to the bucket's end, and the connection closes; the late bytes never
+    reach it, and the audit refuses the window, naming the cell and the reason the `fails` record holds."""
     answer = [(0, b"a" * (2 * P + 7)), (40, b"b" * 100), (40, EOF)]
     warden, (client,), _ = run([answer], {1: [cells(request(5), B)]})
     (e,) = warden.log
     assert (e["failed"], e["failed_at"]) == ("late", 2)
     shim = client.shim()
-    assert (bytes(shim.data), shim.outcome) == (b"a" * (2 * P), "server")
-    assert [(t, k) for t, k, _ in client.cells()] == expected_egress(1, e["ingress_end"], 3, FAIL)
+    assert (bytes(shim.data), shim.outcome) == (b"a" * (2 * P), "fail")
+    assert [(t, k) for t, k, _ in client.cells()] == expected_egress(1, 3, FAIL)
+    assert reasons(warden) == [(e["ended"], 1, "late")]
     verdict = audit(PARAMS, *records(warden))
     assert not verdict["accepted"]
-    assert verdict["windows"][0]["problems"] == ["connection 0 failed closed (server) at egress cell 2"]
-    assert verdict["connections"][0]["failed"] == "server"
+    assert verdict["windows"][0]["problems"] == ["connection 1 failed closed (late) at egress cell 2"]
+    assert verdict["connections"][0]["failed"] == "late"
 
 
 def test_a_server_that_never_answers_fails_at_the_first_egress_slot():
     warden, (client,), _ = run([[]], {0: [cells(request(5), B)]})
     (e,) = warden.log
-    assert (e["failed"], e["failed_at"], e["ended"]) == ("late", 0, e["ingress_end"] + D)
-    assert client.shim().outcome == "server"
+    assert (e["failed"], e["failed_at"], e["ended"]) == ("late", 0, e["admitted"] + D)
+    assert client.shim().outcome == "fail"
 
 
 def test_a_server_failure_shows_only_at_an_egress_slot():
-    """A server whose connection is refused fails the connection at a + D, slot 0, like a server that is late there:
+    """A server whose connection is refused fails the connection at s + D, slot 0, like a server that is late there:
     the server chooses whether and at which egress cell a connection fails, and nothing else: the FAIL cell is the
-    same bytes whatever the server's reason, which only the warden's log keeps."""
+    same bytes whatever the reason, which only the `fails` record holds."""
     server = Server([[]], refuse=(0,))
     warden, (client,), _ = run(server, {0: [cells(request(5), B)]})
     (e,) = warden.log
-    assert (e["failed"], e["failed_at"], e["ended"]) == ("upstream", 0, e["ingress_end"] + D)
-    assert [(t, k) for t, k, _ in client.cells()] == expected_egress(0, e["ingress_end"], 1, FAIL)
-    _, (silent,), _ = run([[]], {0: [cells(request(5), B)]})
-    assert client.writes == silent.writes and client.shim().outcome == "server"
+    assert (e["failed"], e["failed_at"], e["ended"]) == ("upstream", 0, e["admitted"] + D)
+    assert [(t, k) for t, k, _ in client.cells()] == expected_egress(0, 1, FAIL)
+    silent_warden, (silent,), _ = run([[]], {0: [cells(request(5), B)]})
+    assert client.writes == silent.writes and client.shim().outcome == "fail"
+    assert records(warden)[1] == records(silent_warden)[1]
+    assert (reasons(warden), reasons(silent_warden)) == ([(D, 1, "upstream")], [(D, 1, "late")])
 
 
 def test_a_server_slow_to_accept_its_connection_moves_nothing():
     """Ingress is released on schedule whether or not the server's connection has opened, and what was released
-    before it opened is written once it does: a server that accepts late, before a + D, leaves the wire as it was, and
-    one that accepts past a + D fails at egress cell 0."""
+    before it opened is written once it does; egress starts at s + D whenever it opens. A server that accepts late,
+    by its first egress cell's deadline, leaves the wire byte for byte as it was, and one that accepts past it fails
+    at egress cell 0."""
     req, resp = request(3 * P + 5), b"r" * (2 * P + 3)
     wires = []
-    for hold in ({}, {0: 5}):
+    for hold in ({}, {0: 2}, {0: 3}):
         warden, (client,), server = run(Server([[(0, resp), (0, EOF)]], hold=hold), {1: [cells(req, B)]})
         assert server.conns[0].received == req and client.shim().data == resp
         assert (warden.log[0]["admitted"], warden.log[0]["ingress_end"]) == (1, 3)
         wires.append(client.writes)
-    assert wires[0] == wires[1]
-    warden, (client,), _ = run(Server([[(0, resp), (0, EOF)]], hold={0: 3 + D + 1}), {1: [cells(req, B)]})
+    assert wires[0] == wires[1] == wires[2]
+    warden, (client,), _ = run(Server([[(0, resp), (0, EOF)]], hold={0: 1 + D + 1}), {1: [cells(req, B)]})
     assert (warden.log[0]["failed"], warden.log[0]["failed_at"]) == ("late", 0)
-    assert client.shim().outcome == "server"
+    assert client.shim().outcome == "fail"
 
 
 def test_egress_past_its_cells_fails_at_the_last_and_the_rest_never_reaches_the_client():
@@ -305,36 +333,40 @@ def test_a_response_of_the_most_cells_ends():
 
 
 def test_a_client_cell_of_another_kind_or_ingress_past_its_bounds_fails_closed():
+    """Each fails at once, at the next egress slot. With D at least `ingress_buckets`, a client that never ends fails
+    on its ingress bound; with a shorter D it would fail at s + D, its server not having had its request."""
+    params = dataclasses.replace(PARAMS, delay=PARAMS.ingress_buckets)
     bad = cell(DATA, 0, b"a" * P, B) + encode_frame(PAD, 0, b"", B)
     long = cells(b"a" * (PARAMS.ingress_cells * P + 1), B)
     slow = (cell(DATA, 0, b"a" * P, B), False)  # never ends, nor closes
-    warden, clients, server = run([[(0, b"x"), (0, EOF)]] * 3, {0: [bad, long], 1: [slow]})
-    assert sorted((e["ordinal"], e["failed"]) for e in warden.log) == [(0, "malformed"), (1, "ingress"),
-                                                                        (2, "ingress")]
-    assert all(c.shim().outcome in ("malformed", "ingress") for c in clients)
+    warden, clients, server = run([[(0, b"x"), (0, EOF)]] * 3, {0: [bad, long], 1: [slow]}, params=params)
+    assert sorted((e["ordinal"], e["failed"]) for e in warden.log) == [(1, "malformed"), (2, "ingress"),
+                                                                        (3, "ingress")]
+    assert all(c.shim().outcome == "fail" for c in clients)
+    assert sorted((o, why) for _, o, why in reasons(warden)) == [(1, "malformed"), (2, "ingress"), (3, "ingress")]
     assert all(b"x" not in bytes(c.shim().data) for c in clients)
-    slow_log = next(e for e in warden.log if e["ordinal"] == 2)
+    slow_log = next(e for e in warden.log if e["ordinal"] == 3)
     assert slow_log["ended"] - slow_log["admitted"] + 1 == PARAMS.ingress_buckets
 
 
 def test_a_late_tick_faults_both_grids_window_and_the_audit_refuses_it():
     warden, _, _ = run([[(0, b"hi"), (0, EOF)]], {1: [cells(request(5), B)]}, windows=2, late={5: 2 * 0.025})
     statuses = {(r.link, r.window): r.status.reason for r in warden.records}
-    assert statuses == {("requests", 0): Reason.MONITOR_UNAVAILABLE, ("responses", 0): Reason.MONITOR_UNAVAILABLE,
-                        ("requests", 1): None, ("responses", 1): None}
+    assert statuses == {(link, w): Reason.MONITOR_UNAVAILABLE if w == 0 else None
+                        for link in ("requests", "responses", "fails") for w in (0, 1)}
     assert [w["accepted"] for w in audit(PARAMS, *records(warden))["windows"]] == [False, True]
 
 
 def test_the_audit_refuses_a_record_whose_cells_are_not_the_schedules():
     warden, _, _ = run([[(0, b"x" * 200), (0, EOF)]], {0: [cells(request(5), B)]})
-    ingress, egress = records(warden)
+    ingress, egress, fails = records(warden)
     (record,) = egress
     rows = [list(row) for row in record.grid]
     t = next(t for t, row in enumerate(rows) if any(f is not None and f[0] == DATA for f in row))
     rows[t + 1], rows[t] = rows[t], rows[t + 1]  # a bucket's cells a bucket late
     moved = dataclasses.replace(record, grid=tuple(tuple(row) for row in rows))
-    verdict = audit(PARAMS, ingress, [moved])
-    assert not verdict["accepted"] and "egress isn't padding to a + D" in verdict["windows"][0]["problems"][0]
+    verdict = audit(PARAMS, ingress, [moved], fails)
+    assert not verdict["accepted"] and "egress isn't padding to s + D" in verdict["windows"][0]["problems"][0]
 
 
 # --- admission -------------------------------------------------------------------------------------------------------
@@ -358,13 +390,13 @@ def test_over_capacity_queues_fifo_then_refuses():
 # --- the server's timing never reaches the wire ----------------------------------------------------------------------
 
 
-def test_the_wire_is_a_function_of_admission_ingress_end_and_egress_length_alone():
+def test_the_wire_is_a_function_of_admission_and_egress_length_alone():
     """The same request and the same number of egress cells from servers that time and chunk their bytes differently,
     and send different bytes: every client gets the same cells, B bytes each, of the same kinds, in the same buckets.
     Padding and data cells are the same size, so a cell's size says nothing."""
     resp = bytes(range(256)) * 2
     other = b"\0" * (len(resp) - 1) + b"\xff"
-    # 37 bytes three times a bucket from the request's bucket: ahead of the R·P = 110 a bucket drained from a + D
+    # 37 bytes three times a bucket from the request's bucket: ahead of the R·P = 110 a bucket drained from s + D
     trickle = [(i // 111, resp[i:i + 37]) for i in range(0, len(resp), 37)] + [(len(resp) // 111, EOF)]
     burst = [(0, resp[:3]), (D - 1, resp[3:]), (D - 1, EOF)]
     wires = []
@@ -392,13 +424,18 @@ def test_read_cell_refuses_what_the_warden_would_not_make():
     assert read_cell(good, B) == (DATA, 3, b"a" * P)
     end = cell(END, 3, b"a", B)
     for bad in (good[:-1], end[:-1] + b"\x01", cell(DATA, 3, b"a", B), encode_frame(9, 3, b"", B),
-                cell(PAD, 3, b"x", B), cell(FAIL, 3, b"\x63", B), HEADER.pack(END, 3, P + 1) + bytes(B - HEADER.size)):
+                cell(PAD, 3, b"x", B), cell(FAIL, 3, b"\x01", B), reason_frame(3, "late", B),
+                HEADER.pack(END, 3, P + 1) + bytes(B - HEADER.size)):
         with pytest.raises(ValueError):
             read_cell(bad, B)
+    assert all(read_reason(reason_frame(5, why, B), B) == (5, why) for why in REASONS)
+    for bad in (cell(FAIL, 5, b"", B), encode_frame(FAIL, 5, bytes([len(REASONS)]), B), end):
+        with pytest.raises(ValueError):
+            read_reason(bad, B)
 
 
 def test_the_parameters_digest_binds_every_parameter():
     fields = [f.name for f in dataclasses.fields(WardenParams)]
     digests = {PARAMS.digest} | {dataclasses.replace(PARAMS, **{f: getattr(PARAMS, f) + 1}).digest for f in fields}
     assert len(digests) == len(fields) + 1 and all(len(d) == 64 for d in digests)
-    assert set(KIND_NAMES) == {PAD, DATA, END, FAIL, REFUSED} and len(set(FAILS.values())) == len(FAILS)
+    assert set(KIND_NAMES) == {PAD, DATA, END, FAIL, REFUSED} and len(set(REASONS)) == len(REASONS)

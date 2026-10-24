@@ -119,6 +119,7 @@ def _twinned(r) -> set[int]:
     return {m["node"] for m in r.instances if KR.covers(m["_spec"], TW.KERNEL) is None}
 
 
+@pytest.mark.slow
 def test_tier_b_evaluators_agree_and_are_reported(consistent_toy, snapshots):  # noqa: F811
     r, weights, _, toks = consistent_toy
     twinned = _twinned(r)
