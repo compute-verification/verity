@@ -26,7 +26,9 @@ namespace has no other interface. On real hosts it is only the route of the meas
 **The served plan** (`plan`, `served_plan`). The endpoint is probed with the one request body every session sends,
 straight from the host, `--in-flight` requests at a time after one uncounted round: `/v1/completions`, streamed, a
 prompt of exactly `--prompt-tokens` tokens (`PROMPT` padded with `FILLER` in the endpoint's own tokenizer, `/tokenize`,
-and cut there), exactly `--tokens` tokens out (`min_tokens` and `max_tokens`, `ignore_eos`), temperature 0. F, the
+and cut there), exactly `--tokens` tokens out (`min_tokens` and `max_tokens`, `ignore_eos`), at `--temperature` (0)
+and `--top-p` (1), both always sent, since an endpoint applies its own generation config to a request that omits
+them. F, the
 frames of a response, is that token count, not the endpoint's events: vLLM v1 merges a request's tokens that its API
 server hasn't read yet into one chunk, so with several in flight a response's last two tokens sometimes share one
 event and sometimes don't, though the tokens are the same. vLLM's detokenizer holds back a token whose bytes end
@@ -109,6 +111,7 @@ certified, the I/O, the audit and the salt accept.
 
     python certifier_serve.py keys --dir KEYDIR [--height 10]
     python certifier_serve.py plan --upstream URL --out DIR [--model NAME] [--requests 400] [--in-flight 4]
+        [--temperature 0] [--top-p 1]
         [--tokens 64] [--response-frames F] [--prompt-tokens 128] [--probes 8] [--delta-buckets D]
         [--profile planned|served] [--traffic fixed|varied] [--rate 2] [--prompt-range 16:1024] [--seed 0]
         [--eos-ids ID,...]
@@ -445,11 +448,13 @@ class CertifierProcess:
 
 # The served plan.
 
-def request_body(model: str, tokens: int, prompt: str | list[int] = PROMPT) -> dict:
+def request_body(model: str, tokens: int, prompt: str | list[int] = PROMPT, temperature: float = 0.0,
+                 top_p: float = 1.0) -> dict:
     """The request every session of a served plan sends: exactly `tokens` tokens (`min_tokens` and `max_tokens`, never
-    stopped early), greedy, streamed."""
+    stopped early), streamed, at `temperature` and `top_p` (greedy by default). Both are always sent: an endpoint
+    applies its own generation config to a request that omits them."""
     return {"model": model, "prompt": prompt, "max_tokens": tokens, "min_tokens": tokens, "stream": True,
-            "ignore_eos": True, "temperature": 0}
+            "ignore_eos": True, "temperature": temperature, "top_p": top_p}
 
 
 def _call(url: str, path: str, body: dict | None = None, api_key_env: str | None = None) -> dict:
@@ -1195,7 +1200,8 @@ def plan_of(args, url: str, clock=time.monotonic, sleep=time.sleep) -> tuple[dic
         report, plan = varied_plan(probed, requests, seed=args.seed, eos=eos)
         return probed, report, plan
     prompt = prompt_tokens(url, model, args.prompt_tokens, args.api_key_env) if args.prompt_tokens else PROMPT
-    probed = probe(url, request_body(model, args.tokens, prompt), args.probes, args.api_key_env, clock,
+    probed = probe(url, request_body(model, args.tokens, prompt, args.temperature, args.top_p), args.probes,
+                   args.api_key_env, clock,
                    in_flight=args.in_flight, warmup=args.in_flight)
     report, plan = served_plan(probed, args.requests, args.delta_buckets, in_flight=args.in_flight,
                                profile=args.profile, frames=args.response_frames)
@@ -1253,7 +1259,7 @@ def rehearse(args) -> int:
     return 0 if ok else 1
 
 
-def main(argv=None) -> int:
+def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="certifier_serve.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
     k = sub.add_parser("keys", help="make or load an LMS key and write its public.json")
@@ -1269,6 +1275,8 @@ def main(argv=None) -> int:
         q.add_argument("--api-key-env", help="the environment variable that holds the endpoint's bearer key")
     for q in (p, r):
         q.add_argument("--model", help="the endpoint's model name (default: the one /v1/models lists)")
+        q.add_argument("--temperature", type=float, default=0.0, help="every request's temperature")
+        q.add_argument("--top-p", type=float, default=1.0, help="every request's top_p")
         q.add_argument("--requests", type=int, default=400)
         q.add_argument("--in-flight", type=int, default=4, help="requests sent together, served side by side")
         q.add_argument("--tokens", type=int, default=64,
@@ -1319,7 +1327,11 @@ def main(argv=None) -> int:
     r.add_argument("--vllm-cpus", help="with --vllm: its CPUs (taskset -c)")
     r.add_argument("--height", type=int, default=HEIGHT, help="the LMS keys' tree height")
     r.add_argument("--strategies", default=",".join(STRATEGIES))
-    args = ap.parse_args(argv)
+    return ap
+
+
+def main(argv=None) -> int:
+    args = parser().parse_args(argv)
 
     if args.command == "keys":
         load_key(args.dir, args.height)

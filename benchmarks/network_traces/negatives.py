@@ -177,17 +177,18 @@ def frames_edit(src: Path, dst: Path) -> Path:
 
 
 def cell_reads(WR, cells, k: int, row: bytes) -> bool:
-    """Whether `row`, opened at position `k` of the warden's committed `cells` (`warden_rows.Cells`) under that
-    position's salt and path, climbs to their root: the verifier's registered read (`warden_rows.opens`)."""
+    """Whether `row`, opened at position `k` of the warden's committed `cells` (`warden_rows.Cells`, a row a bucket)
+    under that position's salt and path, climbs to their root: the verifier's registered read (`warden_rows.opens`)."""
     return WR.opens(cells.domain, cells.root, k, WR.bc(row, cells.salts[k]), cells.path(k))
 
 
 def warden_frame(run: Path, at: int | None = None) -> dict:
     """`frame` on a warden-serve run's own cells (WARDEN's `warden_rows`: `cells.jsonl`'s registrations and the
-    prover's `cells.salts`): the first egress link-window with a data cell, its registration checked under the warden's
-    key and its rows (`window_rows` of its record) committed under their salts to the registered root; then that
-    cell's byte `at` (its first payload byte by default) changed and opened at its position. The honest cell's read
-    climbs to the signed root and the changed one's doesn't (`WARDEN_READ`)."""
+    prover's `cells.salts`, the rows' salts and the wiring's): the first egress link-window with a data cell, its
+    registration (v2) checked under the warden's key and the schedule, and its record's bucket rows and wiring
+    committed under their salts to the registered head; then byte `at` of that cell (its first payload byte by
+    default) changed in its bucket's row, and the row opened at its position. The honest row's read climbs to the
+    signed root and the changed one's doesn't (`WARDEN_READ`)."""
     try:
         WR, WS = importlib.import_module(WARDEN_ROWS_MODULE), importlib.import_module("warden_serve")
     except ModuleNotFoundError as err:
@@ -200,23 +201,25 @@ def warden_frame(run: Path, at: int | None = None) -> dict:
     params = WS.WardenParams(**dep["params"])
     key, session = cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
     records = {r.window: r for r in WS.read_records(run, params)[WS.EGRESS]}
-    regs = {r["window"]: (r, salts) for d, salts in WS.read_cells(run) if (r := d.get("registration"))
-            and (r["link"], r["direction"]) == (link, direction.value)}
+    regs = {r["window"]: (r, salts, wiring_salt) for d, salts, wiring_salt in WS.read_cells(run)
+            if (r := d.get("registration")) and (r["link"], r["direction"]) == (link, direction.value)}
+    B = params.cell_bytes
     for w in sorted(set(regs) & set(records)):
-        rows = WR.window_rows(records[w], params.grid)
-        k = next((k for k, r in enumerate(rows) if r[0] == DATA), None)
-        if k is None:
+        rows = WR.window_rows(records[w], params)
+        t, j = next(((t, j) for t, r in enumerate(rows) for j in range(len(r) // B) if r[j * B] == DATA), (None, None))
+        if t is None:
             continue
-        reg, salts = regs[w]
-        head, _ = WR.check_registration(reg, key, session, params.grid, params.digest, link, direction, w)
-        cells = WR.Cells.commit(link, direction, w, rows, params.digest, session, salts)
-        if cells.root != head.root:
-            raise ValueError(f"{run}: egress window {w}'s rows under their salts aren't its registered root")
-        bad = bytearray(rows[k])
-        bad[HEADER.size if at is None else at] ^= 1
-        honest, tampered = cell_reads(WR, cells, k, rows[k]), cell_reads(WR, cells, k, bytes(bad))
-        return {"negative": "frame", "window": w, "row": k, "rows": len(rows), "cell_bytes": len(rows[k]),
-                "code": WARDEN_READ, "honest_reads": honest, "tampered_reads": tampered, "ok": honest and not tampered}
+        reg, salts, wiring_salt = regs[w]
+        head, _ = WR.check_registration(reg, key, session, params, link, direction, w)
+        cells = WR.Cells.of(link, direction, records[w], params, session, salts, wiring_salt)
+        if cells.head != head:
+            raise ValueError(f"{run}: egress window {w}'s rows and wiring under their salts aren't its registered head")
+        bad = bytearray(rows[t])
+        bad[j * B + (HEADER.size if at is None else at % B)] ^= 1
+        honest, tampered = cell_reads(WR, cells, t, rows[t]), cell_reads(WR, cells, t, bytes(bad))
+        return {"negative": "frame", "window": w, "row": t, "slot": j, "rows": len(rows), "cell_bytes": B,
+                "row_bytes": len(rows[t]), "code": WARDEN_READ, "honest_reads": honest, "tampered_reads": tampered,
+                "ok": honest and not tampered}
     raise NotApplicable(f"{run}: no registered egress link-window with a data cell")
 
 
