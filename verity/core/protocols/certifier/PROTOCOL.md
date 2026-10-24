@@ -527,7 +527,7 @@ two ties between the advice's requests and the warden's certified ingress record
 - **Each request's prompt_len is its certified ingress record's: checked by the ingress tie, not here.** The advice's
   prompt_len must be the number of prompt fields in the request the warden certified on ingress. This unit reads
   egress only; `IoTieRequest` ("The ingress tie" below) reads the ingress cells. The ids' binding to `c00.input/ids`
-  is the ingress-ids tie's (designed below), reading the Commit's input rows as `IoTiePort` reads its sampled rows.
+  is the ingress-ids tie's (`io_ids`, below), reading the Commit's input rows as `IoTiePort` reads its sampled rows.
 
 **The ingress tie** (`io_request`, `IoTieRequest{B, T, R, OWN}`: the reference and the Boolean Definition, with
 its sidecar). It is one unit per ingress link-window at selection `All`, with one output bit, and it is what N2-ADVICE's
@@ -602,41 +602,63 @@ window. It outputs 1 exactly when:
   tamper the reference does, with a routing that matches the forged counts refused by the entries' indices
   (`test_the_unit_is_its_reference`). REDTEAM's phase-9 cases (`cursor/redteam-phase9-iotiereq-061a`) are
   regressions in `test_network_certifier_io_request_phase9.py`: the carried count's free addend is refused by the
-  chain, and the prompt ids' values stay open until the ingress-ids tie.
-- **Not in it yet: the prompt ids' values** (REDTEAM phase 9 (c), open: the tie counts each request's prompt fields
-  and checks each is a u32, but the ids the user sent are tied to nothing). The ingress-ids tie below closes it. Also
-  not in it: the advice's output_len ≤ max_tokens (an optional check) and one request a user (`certified_io`'s). The
-  ingress head signing each bucket's completed requests would bind the frames only, not prompt_len exactly, which the
-  advice's prefill rows need.
-- **The ingress-ids tie (a design, not built).** It is the ingress analog of `IoTiePort`: a part of IoTieRequest, so
-  the cells are hashed once, that opens the Commit's `c00.input/ids` rows and holds every computation of a prompt
-  position to the id the user sent there.
-  - **What PROVE-PATH must expose** (the Commit side): `c00.input/ids` of every executed step as one
-    `hm96-sha512/row/v2` row a step under a fresh 192-byte salt: the step's input ids, u32be, in the forward's token
-    order (the advice step's rows in batch order, row r's n_r tokens at offset Σ_{r' < r} n_{r'}), zero past to a
-    fixed width (the engine's `max_num_batched_tokens`), in a dense `frame-v3-sha512` tree of the session's steps.
-    Its root is registered before the draw and bound to the run root and to the compiled circuits' `c00.input/ids`
-    values, which the sampled proofs prove from, as the port's sampled rows are (one tree may hold both). The prover
-    keeps each step's salt and path until the tie's outcome of record.
-  - **The map** (public in the named gap, from the advice's steps; at the target under the advice's hiding root):
-    the steps whose rows hold a token of a prompt position whose field is in the window, which are every scheduled
-    prompt token of every admission (a preempted request's recomputation included) and each prefix-cache hit's
-    source token for a cached position (the `sources` run that computed it). For each opened entry and each field
-    slot it gives a class: one class a prompt position, with a cached position in its source's class, so one opened
-    entry serves every request that reads its KV. For a field slot the map also gives (j, i), which the unit holds to
-    the scan's (the requests ended before the cell, and the request's fields before the slot).
-  - **In the unit:** each field's value is its 10 characters as a u32 (`io_tie._digits`' decode) and each entry's its
-    opened row's (`FrameV3Read` under the Commit's root). The prover's Beneš switches sort the members, the field
-    slots and the entries, by class. The unit checks the classes non-decreasing along the sorted order and equal
-    values within a class. A Beneš network is a permutation under any switches, so each class's members are all
-    there, and the switches can only sort. On a link whose every window is accepted, every computation of request
-    q's prompt id i, and every KV read in place of one, is the id the user sent.
-  - **Cost** at REDTEAM's RIN (N = 5,400, B = 4,096, about 2.0 × 10^6 prompt slots): the fields' decode about
-    1.2 × 10^9; at least 245 step rows of 32 KiB opened (8,192 tokens a step) about 3.9 × 10^9; the sort over
-    about 4 × 10^6 members of about 53 bits (2^22 positions) about 4.8 × 10^9: about 1.0 × 10^10 a window, close to
-    the tie's own 1.14 × 10^10. A cheaper split has PROVE-PATH also register the session's prompt stream, the
-    requests' prompt ids in arrival order, and hold every computation and cache hit to it in the Commit's units. The
-    tie would then read the window's stream entries in order with no map, about 7.3 × 10^9.
+  chain, and the prompt ids' values are the ingress-ids tie's (`io_ids`, below).
+- **Not in it: the prompt ids' values** (REDTEAM phase 9 #1: the tie counts each request's prompt fields and checks
+  each is a u32, but the ids the user sent are tied to nothing). The ingress-ids tie below closes it. Also not in it:
+  the advice's output_len ≤ max_tokens (an optional check) and one request a user (`certified_io`'s). The ingress head
+  signing each bucket's completed requests would bind the frames only, not prompt_len exactly, which the advice's
+  prefill rows need.
+- **The ingress-ids tie** (`io_ids`, `IoTieRequestIds{B, T, R, OWN, P, S, DS}`: the reference on a fake upstream
+  Commit and the Boolean Definition, with its sidecar). It is the ingress analog of `IoTiePort`: IoTieRequest's scan,
+  so the cells are hashed once, plus the Commit's `c00.input/ids` rows opened, and every computation of a prompt
+  position, and every prefix-cache read in place of one, held to the id the user sent there. It is meant to replace
+  IoTieRequest as the ingress unit once the Commit side exists.
+  - **What PROVE-PATH must expose** (the Commit side; the fake upstream's layout, `io_ids.commit_rows`):
+    `c00.input/ids` of every executed step as one `hm96-sha512/row/v2` row a step under a fresh 192-byte salt: the
+    step's input ids, u32be, in the forward's token order (the advice step's rows in batch order, row r's n_r tokens
+    at offset Σ_{r' < r} n_{r'}), zero past to a fixed width P (the engine's `max_num_batched_tokens`), in a dense
+    `frame-v3-sha512` tree of the session's steps. Its root and domain are registered before the draw and bound to
+    the run root and to the compiled circuits' `c00.input/ids` values, which the sampled proofs prove from, as the
+    port's sampled rows are (one tree may hold both). The prover keeps each step's salt and path until the tie's
+    outcome of record. The verifier also needs each prefix-cache hit's source (ENC-DERIVED's `sources`), which advice
+    v0's `cache_hit` count doesn't name.
+  - **The map** (`window_map`, public in the named gap from the advice's steps and sources; at the target under the
+    advice's hiding root). The window's prompt fields in scan order are the view's: carry_in.q's from
+    carry_in.fields, each ended request's, then carry_out.q's up to carry_out.fields. Their cells are private (which
+    cells hold request frames is the warden's timing), so the map names fields by ordinal, not by cell. Field f is
+    position p of request q, and its class is its root's: (q, p), or, below q's prefix-cache hit, its source's root
+    at p, so a cached position shares a class with the computation whose KV it reads, and one opened entry serves
+    every request that reads it. `keys[f]` is field f's class, numbered in order of first appearance, then the sink
+    2^CB − 1. The opened steps are every step with a token whose root is a class of the window (every scheduled
+    prompt token, a preempted request's recomputation included), and `ekeys[e]` is opened entry e's class, or the
+    sink. The verifier refuses an advice whose class no step computes, a source that isn't an earlier request, a step
+    past P tokens and more opened steps than S.
+  - **In the unit:** each request cell's slots (`IoTieIdsSlots{B}`) give each slot's value (the u32 its 10 characters
+    spell, at its place in a first frame's or a continuation's reading), whether it is a field (the frame has more
+    fields than its index) and its ordinal (the window's fields before the cell plus its index). The prover's first
+    Beneš network routes record f, (keys[f], f), to field f's slot, and `IoTieIdsKeys` holds each field to the record
+    routed to it, with its ordinal as index and a class other than the sink, and gives every other slot the sink.
+    The second sorts the members, each slot (class, 0, value), each opened entry (class, 1, its id) and the sink past
+    them, and `IoTieIdsChain` checks the classes non-decreasing, one value a class but the sink, and each class
+    starting with a slot. A Beneš network is a permutation under any switches, so every member is in the order and
+    the switches can only sort. On a link whose every window is accepted, every computation of request q's prompt
+    id i, and every KV read in place of one, is the id the user sent. Public: IoTieRequest's, the Commit's root and
+    domain id, the steps, `keys` and `ekeys`. Witness: IoTieRequest's, the opened rows, their salts and paths, and
+    both routings.
+  - **Tests** (`test_network_certifier_io_ids.py`): a link of chunked prefill across windows, a recompute after a
+    preemption and a cache hit from another window's request or the same window's is accepted in every window.
+    Refused: REDTEAM phase 9 #1 (one prompt id substituted in the Commit, which IoTieRequest accepts), a cache hit on
+    another prefix (either kind), and a Commit that differs at a cache source (both windows). The unit is its
+    reference on those and on map and switch tampers (`test_the_unit_is_its_reference`, slow).
+  - **Cost.** `IoTieRequestIds{512, 4, 2, 1, 16, 8, 4}` is 12,924,899 ANDs: IoTieRequest's 4,042,173 (and 3 more in
+    the final AND, over 6 checks), the slots 24,670 a cell, the 8 port rows 8,400,647, the routing 78,336, the keys
+    16,064, the sort 182,784 and the chain 32,202. At REDTEAM's RIN (N = 5,400, B = 4,096, NK = 2.0 × 10^6
+    slots, at least 245 rows of 8,192 ids opened): the slots 1.09 × 10^9 (201,004 a cell), the routing 1.81 × 10^9,
+    the keys 1.5 × 10^8, the sort 4.87 × 10^9 (over 2^22 members of 54 bits), the chain 3.4 × 10^8 and the rows
+    4.22 × 10^9 (1.72 × 10^7 each): about 1.25 × 10^10 a window on IoTieRequest's 1.14 × 10^10. A cheaper split
+    has PROVE-PATH also register the session's prompt stream, the requests' prompt ids in arrival order, and hold
+    every computation and cache hit to it in the Commit's units; the tie would then read the window's stream entries
+    in order with no map or sort.
 - **Cost.** The unit is its parts: `IoTieRequest{512, 4, 2, 1}` is 4,042,173 ANDs, of which the rows are 3,888,916,
   the own frame 4,095, each of the 7 frames 20,924, each step 265 or 267, the routing 700 and the totals and carry-out
   129.
@@ -914,7 +936,7 @@ Definitions above, and their tests:
 
 Still to build: the warden writing and committing cells (`active`), the cells' registration, the port's real layout
 and registration (vllm's Commit), the target's map registration and its range read, the ingress tie's view read
-under the advice's hiding root, and the ingress-ids tie with the Commit's `c00.input/ids` rows it reads.
+under the advice's hiding root, and the real Commit's `c00.input/ids` rows that the ingress-ids tie (`io_ids`) reads.
 
 **Open for proofs.**
 - Hidden-position reads (frame and port) under the one soundness theorem. In v4 every read is at a public position
