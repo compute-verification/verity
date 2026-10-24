@@ -44,10 +44,11 @@ class is protocol structure. So a session proves every window at its engine's cl
 D 32, P 54, K 4, no prefix caching. w212 (requests 308–310, 20 steps, 14 decisions) is padded into it
 (`verity/core/protocols/certifier/tests/fixtures/compile_slice_w212_class.json`: an empty arrival slot, 18 decisions
 past the count with en 0, and 34 idle steps), with the seal's rows in ``srv`` (`served_rows.step_rows`).
-- The unit is 852,357 ANDs, about 97,000 of them ChargeLink_v1{32}. At w212's own statics, which would show its
-  counts, it is 114,805.
+- The unit is 857,866 ANDs. Of them, ChargeLink_v1{32} is 97,159, and 5,509 are its copies of the words it carries
+  from decision to decision (#3887; [charge-chain.md](charge-chain.md)). At w212's own statics, which would show its
+  counts, it is 117,164.
 - Without prefix caching the slice makes no CacheStep_v1 call and ``cache`` is 1. So a made-up cache table can't be
-  expressed at 8eb1's class; the demonstration class (prefix caching, 58,521 ANDs) is where it is refused, by ``cache``
+  expressed at 8eb1's class; the demonstration class (prefix caching, 59,341 ANDs) is where it is refused, by ``cache``
   alone.
 - The circuit is its reference on the honest window and every negative, at both statics
   (`verity/core/protocols/certifier/tests/test_network_certifier_compile_slice_w212.py`). The padding changes no

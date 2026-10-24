@@ -5,13 +5,13 @@ proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify
     python benchmarks/network_traces/compile_slice_zk.py prove --bin flock-circuit --lean flock-verify --out DIR
       [--slice demo|corpus|w212] [--points 1] [--kinds K,...] [--dry]
 
-* **The slice** (``--slice``): ``demo`` (the default), the demonstration class (`compile_slice.demo`, 58,521 ANDs a
+* **The slice** (``--slice``): ``demo`` (the default), the demonstration class (`compile_slice.demo`, 59,341 ANDs a
   unit), whose candidates take real prefix hits; ``corpus``, corpus-smallkv's first seven steps
   (`verity/core/protocols/certifier/tests/fixtures/compile_slice_smallkv.json`, about 7.6M ANDs a unit), which `prove`
   first checks is the corpus's (`replay_vectors.vectors` on corpus-smallkv: the arrivals, the decisions and the
   replay's rows; `cache_vectors`' tokens of each arrival); or ``w212``, window 212 of vLLM's run
   r20261024-141912-8eb1 padded into the run's public engine class, (R, W, A) = (8, 1, 9), Q 4, D 32, P 54, K 4, no
-  prefix caching (`fixtures/compile_slice_w212_class.json`, 852,357 ANDs a unit), with the seal's rows as the served
+  prefix caching (`fixtures/compile_slice_w212_class.json`, 857,866 ANDs a unit), with the seal's rows as the served
   ones (`served_rows.step_rows`), which `prove` first checks is the run's (the window's decisions as its replay asks
   them, `RP.decisions` on `replay_vectors.served_window`).
 * **The charge** is from the session's carry (`charge_chain`) under the registered book (the arith fixture's

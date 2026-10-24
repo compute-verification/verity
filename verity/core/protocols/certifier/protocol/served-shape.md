@@ -40,7 +40,7 @@ the session, 20 steps, decisions `[0]*6 + [1] + [0]*6 + [1]`.
 - Its keys: `R`, `W`, `A`, `IW`, `Q`, `D`, `P`, `K` and `engine` for `CS.statics`; `arrivals`, `decisions` and `steps`
   for `CS.Slice`; `rows`, the replay's step rows; `served`, the seal's runner rows a step, and `ids`, for
   `served_rows.step_rows(S, served[u], ids)`.
-- `CompileSlice_v1` accepts it with the seal's rows in ``srv`` (0x3F; 27 bits from the session's carry), at 114,805
+- `CompileSlice_v1` accepts it with the seal's rows in ``srv`` (0x3F; 27 bits from the session's carry), at 117,164
   ANDs; 8eb1 serves without prefix caching, so the slice makes no cache call and ``cache`` is 1. The circuit is its
   reference on it and on its negatives ([compile-slice.md](compile-slice.md))
   (`verity/core/protocols/certifier/tests/test_network_certifier_compile_slice_w212.py`).
@@ -52,9 +52,11 @@ the session, 20 steps, decisions `[0]*6 + [1] + [0]*6 + [1]`.
   accepts the window with the seal's rows (0x3F), and each negative fails the flags it fails at w212's own
   statics (the same tests, over both fixtures).
 - **The slice of record** (#3886) charges by `ChargeLink_v1{32}` over the committed decisions, its carry committed
-  once a window (`charge_chain`), with no coder and no commit patch. At the class it is 852,357 ANDs, 97,159 of them
-  `ChargeLink_v1{32}`, with nnz_AB 65.3 million, built in 25 s at 3.7 GB. Its circuit is its reference on the window
-  and every negative ([compile-slice.md](compile-slice.md)).
+  once a window (`charge_chain`), with no coder and no commit patch. At the class it is 857,866 ANDs, with nnz_AB 32.8
+  million, built in 20 s at 2.8 GB. Of them, `ChargeLink_v1{32}` is 97,159, and 5,509 are its copies of the words it
+  carries from decision to decision (#3887). Without the copies it was 852,357 ANDs, with nnz_AB 65.3 million, built
+  in 25 s at 3.7 GB. Its circuit is its reference on the window and every negative
+  ([compile-slice.md](compile-slice.md)).
 - `CompileSlice_v1` with its coder (before #3886) couldn't build its circuit at the class. The builder's wires are GF(2)
   forms over committed bits, and the coding carries the coder's state (`low`, `high`, `x`, `used`), the KT counts and
   the code position from ask to ask without committing them, so each ask adds about 19 bits to their forms. The class
@@ -102,12 +104,12 @@ cost with it.
   (256, 1, 35).
 - Async scheduling adds 3–8% to a step, and the walk entries 5–15% more. At R = 256 about half the step is
   compacting the running list (341,241 of the heavy step's 647,330 ANDs).
-- On their own, w212's 20 step units and the load are 61,865 ANDs, about half the slice's 114,805. Most of the rest is
-  the charge, `ChargeLink_v1{14}` (50,760); the served rows' equality is the remainder.
+- On their own, w212's 20 step units and the load are 61,865 ANDs, about half the slice's 117,164. Most of the rest is
+  the charge, `ChargeLink_v1{14}` (50,760, and its 2,359 copies); the served rows' equality is the remainder.
 - `ReplayClose`, once a session, is 8 ANDs at w212's shape and 11 at 8eb1's.
 - Not counted: `CacheStep_v1`'s calls with prefix caching, whose linear table at N = NB − 1 is far past any unit
   (PROTOCOL.md, "Scaling: offline memory checking"), and the charge, which goes with the decisions, not the steps
-  (`ChargeLink_v1{D}`: 97,159 ANDs at D = 32).
+  (`ChargeLink_v1{D}`: 97,159 ANDs and 5,509 copies at D = 32).
 
 **Splitting a window into units.** The slice holds a whole window in one unit, its state rows wires between the steps.
 That works for 8eb1's windows: at its engine class a window's replay is at most 841,628 ANDs. The async heavy window

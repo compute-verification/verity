@@ -169,7 +169,7 @@ def test_the_circuit_is_its_reference(synth):
 
 def test_size(synth, slice_):
     s = CS.size(**synth.st)
-    assert s == {"ands": 58521, "pub_bits": 256, "adv_bits": 16, "cert_bits": 256, "srv_bits": 144, "cin_bits": 96,
+    assert s == {"ands": 59341, "pub_bits": 256, "adv_bits": 16, "cert_bits": 256, "srv_bits": 144, "cin_bits": 96,
                  "cout_bits": 96, "wit_bits": 1568}
     assert CS.row_bits(slice_.S) == {"pub": 256, "adv": 16, "cert": 20512, "srv": 432, "cin": 96, "cout": 96,
                                      "wit": 56928}

@@ -21,7 +21,7 @@ from verity.core.protocols.certifier.tests.test_network_certifier_compile_slice 
 
 FIXTURES = Path(__file__).parent / "fixtures"
 OWN, CLASS = "compile_slice_w212.json", "compile_slice_w212_class.json"
-ANDS = {OWN: 114805, CLASS: 852357}
+ANDS = {OWN: 117164, CLASS: 857866}
 #: the session's carry into window 212 (the module's docstring)
 CARRY = AE.Carry(((58, 50), (58, 0), (392, 48)), 0)
 #: counts fitted to the window, a restart that charges it 25 bits in place of 27
@@ -110,7 +110,7 @@ def test_the_slice_accepts_w212(w212):
 @pytest.mark.parametrize("name", [OWN, CLASS])
 def test_the_circuit_is_its_reference_on_w212(name):
     """The unit's verdict word is the reference's on the honest window and each negative, and its size at w212's shape
-    and at the engine class. About two minutes: it builds and evaluates the 114,805- and 852,357-AND units at the served
+    and at the engine class. About two minutes: it builds and evaluates the 117,164- and 857,866-AND units at the served
     engine's widths (L = 512, NB = 101,626; P = 20 and 54, D = 14 and 32), which the smallkv slice's test doesn't
     reach."""
     x = _load(name)
