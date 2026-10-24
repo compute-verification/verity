@@ -1071,6 +1071,12 @@
    "assumptions": [],
    "type_hash": "c5c91cdf640198af01ce5e2e90ba3ba4e42c21fc97c0610eb0ad09a01671615c"
   },
+  "Properties.NetworkRecords.noGridAcceptsMore": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkRecords.noGridMeans": {
+   "owner": "@network-accounting"
+  },
   "Properties.Pouw.Check.acceptMeans": {
    "owner": "@compute-accounting",
    "signature": ["Properties.Pouw.Check.acceptMeans : Properties.Pouw.Check.AcceptMeans"],
@@ -2132,6 +2138,14 @@
    },
    "Properties.NetworkRecords.answerAcceptMeans": {
     "function": "NetworkCheck.Records.protocol.answer",
+    "outcome": "accept"
+   },
+   "Properties.NetworkRecords.noGridAcceptsMore": {
+    "function": "NetworkCheck.Records.evaluate",
+    "outcome": "accept"
+   },
+   "Properties.NetworkRecords.noGridMeans": {
+    "function": "NetworkCheck.Records.evaluateNoGrid",
     "outcome": "accept"
    },
    "Properties.Pouw.Check.acceptMeans": {
