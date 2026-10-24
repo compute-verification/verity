@@ -1,6 +1,7 @@
 import Models.NetworkCertifier.Guarantees
 import Models.NetworkCertifier.Guarantees.AdviceString
 import Models.NetworkCertifier.Guarantees.AdviceV1
+import Models.NetworkCertifier.Guarantees.WindowCharge
 import Models.NetworkCertifier.Guarantees.Warden
 import Proofs.NetworkCertifier.Lemmas
 import Proofs.NetworkCertifier.Occupancy
@@ -16,6 +17,7 @@ import Proofs.NetworkCertifier.Code
 import Proofs.NetworkCertifier.Accepted
 import Proofs.NetworkCertifier.AdviceString
 import Proofs.NetworkCertifier.AdviceV1
+import Proofs.NetworkCertifier.WindowCharge
 import Proofs.NetworkCertifier.Warden
 
 /-!
@@ -25,7 +27,8 @@ One theorem `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G` per guarantee 
 theorem of the same statement in `Occupancy` (Proposition 2), `Counting` (Theorem 1(b)), `Advice` (Theorem 3),
 `Schedule` (Theorem 3 for the constant-rate Program), `Ingress` (the ingress bound), `PerWindow` (the last two over
 whole windows), `AdviceString` (the leak bound: the advice string's charge), `AdviceV1` (advice v1's charge counts, and
-the leak bound with it), `SampledCharge` (the leak bound under a sampled audit: the faulty units' charge) or `Warden`
+the leak bound with it), `WindowCharge` (advice v1's whole-window charge counts, and the leak bound with it),
+`SampledCharge` (the leak bound under a sampled audit: the faulty units' charge) or `Warden`
 (the warden's channel bound),
 and every lemma behind them. `Sanity` shows every named assumption satisfiable. `Code` proves the certifier's program
 (`certifier_program`, `NetworkCertifier`), which the difftest runs against the Python audit, equal to these definitions.
@@ -124,6 +127,17 @@ theorem EncardDecodableWithinLeCompiledPerWindowV1Counted :
     NetTiming.Guarantees.EncardDecodableWithinLeCompiledPerWindowV1Counted :=
   fun I T ss bk N cc b compilerOf env hpre hdet D =>
     NetTiming.encard_decodableWithin_le_compiled_perWindow_v1Counted I T ss bk N cc b compilerOf env hpre hdet D
+theorem EncardChargedLeWhole : NetTiming.Guarantees.EncardChargedLeWhole := NetTiming.WindowCharge.encard_charged_le
+theorem EncardAccSeqsWithinLeConstantRateV1Whole : NetTiming.Guarantees.EncardAccSeqsWithinLeConstantRateV1Whole :=
+  fun bk N H O b T ss frames op n D m _ hm =>
+    NetTiming.encard_accSeqsWithin_le_constantRate_v1Whole bk N H O b T ss frames op n D m hm
+theorem EncardDecodableWithinLeCompiledV1Whole : NetTiming.Guarantees.EncardDecodableWithinLeCompiledV1Whole :=
+  fun I T ss bk N H O b compilerOf env hpre hdet n D m _ hm =>
+    NetTiming.encard_decodableWithin_le_compiled_v1Whole I T ss bk N H O b compilerOf env hpre hdet n D m hm
+theorem EncardDecodableWithinLeCompiledPerWindowV1Whole :
+    NetTiming.Guarantees.EncardDecodableWithinLeCompiledPerWindowV1Whole :=
+  fun I T ss bk N H O b compilerOf env hpre hdet D =>
+    NetTiming.encard_decodableWithin_le_compiled_perWindow_v1Whole I T ss bk N H O b compilerOf env hpre hdet D
 
 theorem EncardAccSeqsSampledLe : NetTiming.Guarantees.EncardAccSeqsSampledLe := @NetTiming.encard_accSeqsSampled_le
 
