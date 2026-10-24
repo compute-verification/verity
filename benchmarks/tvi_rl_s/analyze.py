@@ -173,7 +173,8 @@ def online(dirs, window=25):
                          "seeds": sorted(rs), "acc_per_seed": [rs[s]["acc"] for s in sorted(rs)],
                          "acc": sum(r["acc"] for r in rs.values()) / len(rs), "acc_ci": list(ci(bs)),
                          "step1": {s: r["first"] for s, r in rs.items()}})
-        out[task] = {"rows": rows, "boot": boot, "window": window}
+        out[task] = {"rows": rows, "boot": boot, "window": window,
+                     "prompts": "/".join(sorted({str(r["prompts"]) for rs in by.values() for r in rs.values()}))}
     return out
 
 
