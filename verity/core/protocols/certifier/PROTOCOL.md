@@ -1081,25 +1081,34 @@ release order.
   2^c strings are charged c bits or fewer. That is LEAK-LEAN's `BitsCount` by `bitsCount_of_prefixFree` (#3533).
   Since `decode` takes only the canonical string, at most that many advices decode at that charge.
 - *v0's per-window parts.* Each window's part is self-delimited, which settles this item of v0's list above.
-- *Measured* (art:192413fc108b9b60b5febd9f53493de5418311c49203be56ee280ec40d140013, run r20261024-102751-533a: 14
-  corpus traces of 1,000 requests, each round-tripping, each trace's book fit on the other 13). The v1 charged, header
-  included, is:
+- *Measured* (art:0f5f23d498a7f042fcf2a638d9a1500afbc916a4498569666957754415428c30, run r20261024-111418-79a9). It
+  covers the 14 corpus traces of 1,000 requests with the client's send standing for the release, and the two warden
+  traces' `.released` views. Every trace round-trips, and each trace's book is fit on the other 15. In bits:
 
-  | traces | v1 now | hits sent (short) | v1 before (decisions only) |
-  |---|---|---|---|
-  | heavy, sync | 120 | 0 | 63 |
-  | heavy, async | 707–716 | 1,010–1,011 (0) | 49–63 |
-  | smallkv, sync | 18,792–23,876 | 7,636–8,241 (2,229–3,119) | 218–1,094 |
-  | smallkv, async | 18,610–23,720 | 7,549–8,367 (2,391–3,066) | 207–241 |
-  | chunked | 2,012–2,090 | 0 | 2,002–2,082 |
-  | medium | 3,326–3,451 | 0 | 3,307–3,425 |
-  | light | 4,658–5,633 | 0 | 4,651–5,569 |
+  | traces | v1 charged | of it the order | order entries (inversions) | ENC-REPLAY's ideal order | v1 at #3642 |
+  |---|---|---|---|---|---|
+  | heavy, sync | 74–623 | 0–549 | 0–47 (0–323) | 5.81–505.82 | 120 |
+  | heavy, async | 1,828–1,887 | 1,166–1,215 | 176–194 (13,732–17,746) | 2,782.56–3,027.07 | 707–716 |
+  | smallkv, sync | 18,765–23,817 | 0 | 0 | 5.81 | 18,792–23,876 |
+  | smallkv, async | 18,598–23,714 | 24 | 1 (1) | 17.77 | 18,610–23,720 |
+  | chunked | 1,980–2,081 | 0–25 | 0–2 (0–2) | 5.81–30.15 | 2,012–2,090 |
+  | medium | 3,299–3,421 | 0 | 0 | 5.81 | 3,326–3,451 |
+  | light | 4,634–5,610 | 0 | 0 | 5.81 | 4,658–5,633 |
+  | warden heavy, release order | 2,387 | 1,599 | 242 (2,970) | 2,193.66 | |
+  | warden smallkv, release order | 23,200 | 33 | 2 (3) | 30.15 | |
 
-  "Before" is art:a01224669c378e350967084bc4fda1e93259095784132a816deb042a77bafacb. At most 12,068 bits fall in one
-  window, and v0 is 6.2–7.5 Mbit. The uniform book charges smallkv 37,525–43,092 bits. Where the bound holds, nothing
-  is sent, and the totals move only by what `code_v1`'s counts cost beyond the length prefixes they replace (sync heavy
-  63 → 120). The smallkv pools fill, and async never derives, so every lookup there is sent.
-  These contexts read no release time: the warden's fixed schedule leaves the engine no timing to read.
+  "v1 at #3642" is art:192413fc108b9b60b5febd9f53493de5418311c49203be56ee280ec40d140013, which took the engine's
+  arrival stamp as the certified order, so it sent none.
+  - On the warden traces the recovered order is the engine's, request for request. Where TRACE-CORPUS counted
+    inversions against the engine's order, the ones v1 sends are the same count: 17,746 without the warden (heavy,
+    the client's send), and 2,970 and 3 behind it.
+  - The order costs less than ENC-REPLAY's ideal code (an adaptive bit a request, and Elias gamma of the rank) where
+    much arrives out of order: 1,166–1,599 bits against 2,194–3,027. Positions skip the in-order arrivals, and the
+    book fits the rank deltas. The uniform book charges the order 1,989–2,757 bits there.
+  - Elsewhere the totals move by the pool header's bits (gone) and the refit books.
+  - At most 12,044 bits fall in one window, and v0 is 6.2–7.5 Mbit. The uniform book charges smallkv 37,525–43,094.
+  - The smallkv pools fill, and async never derives, so every lookup there is sent.
+  - These contexts read no release time: the warden's fixed schedule leaves the engine no timing to read.
 
 **Composition**, all in one ZK proof under the advice's hiding root:
 1. v1's windows: the committed string is at most ℓ bits, and parses into W windows by `code_v1`'s counts.
