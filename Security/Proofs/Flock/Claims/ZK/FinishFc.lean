@@ -133,11 +133,12 @@ theorem replay_fc (st : Setup) (lay : Zk.PadLayout) (cap : Array ByteArray) (par
       (fun _ => ()) <$> Zk.replay st lay
         { cap, params, zerocheck := zp, lincheck := lp, ringSwitches := ss, ligerito := lg } root := by
   unfold Zk.replay
-  simp only [map_bind, map_pure]
+  simp only [map_bind]
   all_goals repeat (refine bind_congr fun _ => ?_)
   all_goals
     split
     all_goals
+      try simp only [map_bind]
       repeat (first
         | exact map_unit_pure _ _
         | refine bind_congr fun _ => ?_)
