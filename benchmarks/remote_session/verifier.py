@@ -245,7 +245,7 @@ def average_line(windows: list[dict]) -> dict:
 
 
 def memory(record: audit.Record, plans, regions, *, hbm_bytes: int, rebuild: audit.Rebuild, chip_bytes: int = 0,
-           credit_post_seed: audit.PostSeedVerdict | None = None) -> dict:
+           credit_post_seed: audit.PostSeedVerdict | None = None, schedule: audit.Scheduled | None = None) -> dict:
     """The node's memory a session's record shows held, against its HBM, in two forms.
 
     Held at every pass (`WORST_PASS`, the worst pass's): each window's passes each read the distinct blocks of their
@@ -261,14 +261,17 @@ def memory(record: audit.Record, plans, regions, *, hbm_bytes: int, rebuild: aud
 
     A registered block counts as the layout labels it (`regions_of`; None, the drivers' stores: the whole store
     filler in HBM), HBM only toward the share; an appended block
-    (index N and up) is KV the session wrote, in HBM, and is credited only on the property's verdict, less the most
-    its carriers hold (`credit_post_seed`, as `audit.ledger`'s μ_carrier).  Weights and KV are each credited on their
+    (index N and up) is KV the session wrote, in HBM, and is credited only on the property's verdict and the session's
+    schedule check (`schedule`, `audit.Session.scheduled`, as `audit.ledger` requires them), less the most its carriers
+    hold (`credit_post_seed`, as `audit.ledger`'s μ_carrier).  Weights and KV are each credited on their
     own: the lost blocks come off each.  The session's line is its worst window's: `credited_bytes`, `share` of
     `hbm_bytes` and `residual` = 1 − share, the HBM it doesn't show used, with ε, the share of the window's held
     basis the losses took, at δ.  ε is this reading's (the floor and rebuilds against held blocks), not a composed
     guarantee's."""
     if credit_post_seed is not None and credit_post_seed.holds is not True:
         raise ValueError("a verdict that the property fails credits nothing after the seed: pass None")
+    if credit_post_seed is not None and (type(schedule) is not audit.Scheduled or not schedule.of(record)):
+        raise ValueError("KV is credited only on this session's schedule check (`audit.Session.scheduled`)")
     if len(plans) != len(record.windows) or any(len(p) != w.passes for p, w in zip(plans, record.windows)):
         raise ValueError("a plan for each pass of each window of the record")
     if rebuild.codec != record.codec:
@@ -368,6 +371,24 @@ def memory_error(ledgers: dict) -> float | None:
         if "error" in ledgers.get(name, {}):
             return ledgers[name]["error"]["horizon"] + 2.0 ** ledgers.get("sketch_failure", {}).get("log2", -math.inf)
     return None
+
+
+def sketch_at(session: dict, registration: dict, outside: int | None = None) -> dict | None:
+    """A session's SketchBound δs from its record (`Verifier.ledgers`' `sketch_failure`) against Q = F·C queries, C the
+    compressions the verifier charged the node over the span and F the outside-compute factor: the record's (1 for one
+    written before F was recorded, which charged the node's alone), or `outside` to read it at another; with the memory
+    line's error there, the horizon's plus δs (`memory_error` at F).  None for a session whose record has no sketch
+    term."""
+    lg = session.get("ledger") or {}
+    sf, inputs = lg.get("sketch_failure"), lg.get("inputs") or {}
+    if not sf or not inputs.get("rows"):
+        return None
+    f = sf.get("outside", 1) if outside is None else outside
+    c = sf["compressions"]
+    d = timing.sketch_failure(c, inputs["passes"], inputs["rows"], blocks=registration["blocks"], outside=f)
+    horizon = next((lg[n]["error"]["horizon"] for n in ("spec", "measured") if "error" in lg.get(n, {})), None)
+    return {"outside": f, "compressions": c, "queries": f * c, "log2": timing.log2(d),
+            "error": None if horizon is None else horizon + float(d)}
 
 
 def node_line(mem: dict, *, host_bytes: int) -> dict:
@@ -487,7 +508,7 @@ def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks
                 "hbm_bytes": float(r.hbm), "hbm_share": float(r.hbm / node_bytes), "filler_bytes": float(r.filler),
                 "filler_share": float(r.filler / node_bytes)}
 
-    return {"groups": groups, "wrong": wrong, "chip_blocks": chip_bytes / b, "burst_blocks": float(burst),
+    return {"groups": groups, "wrong": wrong, "chip_blocks": -(-chip_bytes // b), "burst_blocks": float(burst),
             "node_bytes": node_bytes, "stretches": stretches, "snapshot": worst(AVERAGE), "time": worst(TIME_HELD)}
 
 
@@ -512,23 +533,66 @@ def recorded_rates(session: dict, registration: dict, **node: float) -> line.Rat
                       wire.codec_named(registration["codec"]).encode_squarings, **node)
 
 
+def lean_record(session: dict) -> dict:
+    """The Lean verifier's record of an accepted session in `verifier.json` (its `outcome` request's `record`,
+    `lean_verifier.summary_json`'s form), as the session keeps it (`lean_record`), the Lean's where its verdict is
+    the Lean's (lean or both). A run from before sessions kept it wrote the same record read through
+    `lean_verifier.record_of` (`Pair.record`) as its `record`'s `public` and `profile`, which give back every field
+    but each pass's root's arrival, and its `windows_seen` those stamps: it is read back from them, refused where they
+    don't fit."""
+    if "lean_record" in session:
+        return session["lean_record"]
+    pub, ws, seen = session["record"]["public"], session["record"]["profile"]["windows"], session["windows_seen"]
+    if len(seen) != len(ws) or any(len(x["arrivals_ns"]) != len(w["lengths"]) for w, x in zip(ws, seen)):
+        raise ValueError(f"the session's windows seen are not its record's: {len(seen)} for {len(ws)} windows, or "
+                         "a window's arrivals not one a pass")
+    return {"appended": pub["appended"], "appends": pub["appends"], "blocks": pub["blocks"],
+            "lifetime": pub["lifetime"], "pace": pub["pace"], "registration": pub["registration"],
+            "released": pub["released"],
+            "windows": [{"arrived_ns": list(x["arrivals_ns"]), "deadline_ns": w["deadline_ns"],
+                         "drawn": w["profile"]["drawn"]["receipt"], "heads": w["heads"], "lengths": w["lengths"],
+                         "opened_ns": w["opened_ns"], "post_seed": w["post_seed"], "released_ns": w["released_ns"],
+                         "stale": w["stale"], "steps": w["steps"]} for w, x in zip(ws, seen)]}
+
+
 def recorded_windows(session: dict) -> tuple[list[tuple[int, int]], float]:
     """The pooled bound's inputs (`pooled.bound`) from an accepted session's record in `verifier.json`: each window's
-    receipts and draws, and δ."""
+    receipts and draws, and δ, the ones the line reads off the Lean verifier's record (`lean_record`) and the session."""
     ws = session["record"]["profile"]["windows"]
     return [(sum(w["lengths"]), w["profile"]["drawn"]["receipt"]) for w in ws], ws[0]["profile"]["delta"]
 
 
+def record_seen(mem: dict, seen: list[dict], record: dict, *, block_bytes: int) -> list[line.Seen]:
+    """What the auditor saw of each window beside the Lean verifier's `record` of it (`line.Seen`): its group's times
+    and reads as `paced_groups` reads them, its passes the record's or refused."""
+    gs = paced_groups(mem, seen, block_bytes=block_bytes)
+    if [g.passes for g in gs] != [len(w["lengths"]) for w in record["windows"]]:
+        raise ValueError("the windows seen are not the record's: a group for each of its windows, a pass for each of "
+                         "its passes")
+    return [line.Seen(g.released_ns, g.last_ns, g.least, g.weights, g.hbm, g.host) for g in gs]
+
+
+def recorded_inputs(session: dict, registration: dict, *, host_bytes: int, rates: line.Rates) -> dict:
+    """An accepted paced session's line's inputs in the line's record form (`line.record_inputs_json`, the Lean
+    verifier's `line_record` request reads them): the Lean verifier's record of it (`lean_record`), whose groups'
+    passes, windows and registered blocks the line reads, at the session's `samples` and δ; and what the auditor saw of
+    each window beside it (`record_seen`, on the clock its `windows_seen` read), against its HBM and `host_bytes`, at
+    `rates` (`recorded_rates`). Refused unless the record is of `registration`."""
+    mem, record = session["ledger"]["memory"], lean_record(session)
+    if record["registration"] != registration["digest"]:
+        raise ValueError(f"the Lean's record is of registration {record['registration'][:16]}…, not "
+                         f"{registration['digest'][:16]}…")
+    return line.record_inputs_json(
+        record, samples=session["samples"],
+        seen=record_seen(mem, session["windows_seen"], record, block_bytes=mem["block_bytes"]),
+        per=session["pace"]["groups"], block_bytes=mem["block_bytes"], chip_bytes=mem["chip_bytes"],
+        node_bytes=mem["hbm_bytes"] + host_bytes, delta=session["delta"], rates=rates)
+
+
 def recorded_line(session: dict, registration: dict, *, host_bytes: int, rates: line.Rates) -> line.Line:
-    """An accepted paced session's line in both forms (`line.line`, exact) from its record in `verifier.json`, against
-    its HBM and `host_bytes`, at `rates` (`recorded_rates`); the wrong receipts are the pooled bound of its record's
-    windows (`recorded_windows`)."""
-    mem = session["ledger"]["memory"]
-    windows, delta = recorded_windows(session)
-    return line.line(paced_groups(mem, session["windows_seen"], block_bytes=mem["block_bytes"]),
-                     per=session["pace"]["groups"], blocks=registration["blocks"], block_bytes=mem["block_bytes"],
-                     chip_bytes=mem["chip_bytes"], node_bytes=mem["hbm_bytes"] + host_bytes,
-                     windows=windows, delta=delta, rates=rates)
+    """An accepted paced session's line in both forms (`line.line_of_record`, exact) of its `recorded_inputs`."""
+    return line.line_of_record(**line.of_record_json(recorded_inputs(session, registration, host_bytes=host_bytes,
+                                                                     rates=rates)))
 
 
 class RealClock:
@@ -1358,6 +1422,8 @@ class Verifier:
         if accepted:
             record = session.record()
             out["record"] = {"public": record.public(), "profile": record.profile(), "end_ns": record.end_ns}
+            if session.outcome_json is not None:
+                out["lean_record"] = session.outcome_json["record"]
             out["end_ns"] = record.end_ns
             out["ledger"] = self.ledgers(record, [list(w.arrived_ns) for w in record.windows],
                                          [w.plans for w in session.windows])
@@ -1419,7 +1485,8 @@ class Verifier:
         had two roots.  A reading the ledger refuses carries why, and the session then declares nothing.  With the
         session's plans, `memory` is the node's HBM it shows held by kind (`memory`), KV credited on no verdict yet.
         Each window's bound on wrong receipts is computed once for both readings, exactly, in the check workers when
-        there are some (`checks.Checks.bounds`)."""
+        there are some (`checks.Checks.bounds`).  `inputs` carries the AuditRO slack γ and δ were charged at
+        (`slack_log2`); a record without it was charged 41 bits a pass."""
         cal = self.calibration
         reported = float(cal["read_bytes_per_s"])
         stated = ledger.Node.stated(reported_read_bytes_per_s=reported, disk_bytes_per_s=self.disk_bytes_per_s,
@@ -1439,7 +1506,7 @@ class Verifier:
                           "chip_bytes": stated.chip_bytes, "encode_bytes_per_s": cal["encode_bytes_per_s"],
                           "squarings_per_s": rebuild.squarings_per_s, "rows": record.rows,
                           "span_ns": record.span_ns, "receipts": record.receipts, "passes": record.passes,
-                          "reads_bytes": record.receipts * record.block_bytes,
+                          "slack_log2": audit.SLACK_LOG2, "reads_bytes": record.receipts * record.block_bytes,
                           "post_seed_receipts": sum(sum(w.post_seed) for w in record.windows),
                           "post_seed_credited": False}}
         tiers = cal.get("read_tiers")
@@ -1471,10 +1538,11 @@ class Verifier:
                                            ledger.memory(record, stated)).to_json()
                            if len(readings) == 2 else {"refused": next(out[n]["refused"] for n in ("spec", "measured")
                                                                        if n not in readings)})
-        # RateAuditSketch's term: every compression the node's GPUs could make over the span a guess or a key.
-        compressions = math.ceil(timing.SHA512_PER_S * record.span_ns / 1e9)
-        out["sketch_failure"] = {"compressions": compressions,
-                                 "log2": timing.log2(timing.sketch_failure(compressions, record.passes, record.rows))}
+        # SketchBound's δ: every compression the prover could make over the span a guess or a key, Q = F·C.
+        compressions, outside = ledger.compressions(record, stated), stated.sketch_outside
+        out["sketch_failure"] = {"compressions": compressions, "outside": outside,
+                                 "log2": timing.log2(timing.sketch_failure(compressions, record.passes, record.rows,
+                                                                           blocks=record.blocks, outside=outside))}
         if plans is not None:
             out["memory"] = memory(record, plans, self.regions, hbm_bytes=self.hbm_bytes, rebuild=rebuild,
                                    chip_bytes=timing.CHIP_BYTES)

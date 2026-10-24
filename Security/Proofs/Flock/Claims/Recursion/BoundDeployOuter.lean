@@ -228,7 +228,7 @@ theorem ksBoundRoute_outer (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
             (∀ decI, Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape
               decC shows cmt) ∧
             (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec Flock.Readable.relation) L
-              shape shows chk s) ∧
+              shape shows cmt chk s) ∧
             (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec Flock.Readable.relation) L shape
               shows cmt s) ∧
             Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
@@ -263,7 +263,7 @@ theorem ksBoundRouteCols_outer (rel : _root_.Flock.Readable.Parsed → _root_.Fl
             (∀ decI, Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape
               decC shows cmt) ∧
             (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec Flock.Readable.relation) L
-              shape shows chk s) ∧
+              shape shows cmt chk s) ∧
             (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec Flock.Readable.relation) L shape
               shows cmt s) ∧
             Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
@@ -513,7 +513,7 @@ theorem ksBoundDeployed_intended (b : Brings) (L : Claims.Recursion.VStarB.Layou
           (∀ decI, Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape
             decC shows cmt) ∧
           (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec Flock.Readable.relation) L
-            shape shows chk s) ∧
+            shape shows cmt chk s) ∧
           (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec Flock.Readable.relation) L
             shape shows cmt s) ∧
           Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →

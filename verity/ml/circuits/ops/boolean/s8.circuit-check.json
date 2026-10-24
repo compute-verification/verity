@@ -1,34 +1,44 @@
 {
  "definitions": {
   "BlackwellU8S8ImmaDot32_v2": {
-   "and": 4157
+   "and": 4157,
+   "type": "1dd70ded195d10195c85f117ad928a7469f281227ec5edaa3ea40aae4919e0caba9be8552fefba6b235a5494d8fc275e2a54bedfa0a4d40c0d6d8b11a18d298e"
   },
   "LimbSplit_v2{FORM='byteclamp',N=3,Y=(-65152,65151)}": {
-   "and": 104
+   "and": 104,
+   "type": "6c0dc354b0f0a1e8670acb6f6c60b77ec31c2fcbdb66876280a7284f0acc7a4eb10e964c0a01ef15e9ec7694a37ab3096376f79459117b4ddd8cd5d758212d06"
   },
   "LimbSplit_v2{FORM='bytes',N=3,Y=(-8355711,8355711)}": {
-   "and": 22
+   "and": 22,
+   "type": "7980cde9a11873ea6d3cfde6b8e8261db84bc287f33f858d56e97e7d5716f7100ad6475313f5a214dea33c987843e2bb96c9c164bfac64245595fe98ae81a335"
   },
   "S32ByteCarry_v2": {
-   "and": 31
+   "and": 31,
+   "type": "674cb5cf8d45e307465d428f71969b1dcbd35130ed5eaf802106ef0165152939dc0103c0b47e5bde96792c3092244249bc8f3452544db76d4213cfb43bd0f964"
   },
   "S32ClampRest_v2": {
-   "and": 57
+   "and": 57,
+   "type": "983654da8f6ce87cc51b88fbc01a86fe0889186a855027a20b77fd4c3ac7cad3eea585e52e7df611b142e9c1adc9b8851d43f5a4b0221e03fd5cfb2ce4b37466"
   },
   "S32ClampS8_v2": {
-   "and": 59
+   "and": 59,
+   "type": "321712e1d282f85e0a63365b76e71ae5eeb81bbdb85f5c33ad5562326f0da10ddc1b146aa5f1237cc0adf3dba02678dbf413cf828671818232b2ecd715324e65"
   },
   "S32LowByte_v2": {
-   "and": 0
+   "and": 0,
+   "type": "45aaf7b77a22e8387138d26adcdbbd4ba53f04a0845aaae37796511f20206f3130f7ec064a16336948f1b3939d3177d41b0626261f3780ed3e932c6064b64c2d"
   },
   "S8Dot_v2{K=64,L=32,T0='zero',C=None,DOT=BlackwellS8ImmaDot32_v2,A=(-127,127),B=(-127,127),TAIL=((2,'fresh',(-127,127),(-64,64)),(1,'fresh',(-128,127),(-64,64))),TDOT=BlackwellS8ImmaDot32_v2,NOISE='weight',LIMBS='byteclamp',COMMIT='prefix'}": {
-   "and": 20788
+   "and": 20788,
+   "type": "23699fdfe4699796f5a78be261de7c5bec23286629f451bbf546f16e68774c6db1e55b86b507408d3fd60142c515bd3ff3759ce7fd1bb072b5b19e0e6378919b"
   },
   "S8Dot_v2{K=64,L=64,T0='zero',C=None,DOT=BlackwellS8ImmaDot32_v2,A=(-127,127),B=(-127,127),TAIL=(),TDOT=None,NOISE='none',LIMBS='none',COMMIT='final'}": {
-   "and": 8326
+   "and": 8326,
+   "type": "7557d5613c6ea179808cc74b9ebcfe4de228a2f4e3dab11cb16316c4ae96fc8924cfa3ec766e15b502cc61b1fca4505ced8932abcd1dad0f780e9753e1a50007"
   },
   "S8Matmul_v2{N=3,K=64,L=64,T0='zero',C=None,DOT=BlackwellS8ImmaDot32_v2,A=(-127,127),B=(-127,127),TAIL=(),TDOT=None,NOISE='none',LIMBS='none',COMMIT='final'}": {
-   "and": 24978
+   "and": 24978,
+   "type": "3a1c39db1c75a0e0a3185b57c690f95df4fe92c52e6d8dfe00521b6bff8be4f98cd5fd8cfa905deeb62a6c748f656a2ff43d4229715e8363320c7c3ffce3f471"
   }
  }
 }

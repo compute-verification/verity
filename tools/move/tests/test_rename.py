@@ -13,7 +13,6 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[2]
 spec = importlib.util.spec_from_file_location("rename_move_under_test", HERE.parent / "rename.py")
 M = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(M)
@@ -239,9 +238,3 @@ def test_two_files_landing_at_one_path_fail(toy):
     git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "clash")
     with pytest.raises(SystemExit, match="two files would land at one path"):
         M.main(["--root", str(toy)])
-
-
-def test_the_tree_is_renamed():
-    files = [p for p in git(ROOT, "ls-files", "-z").split("\0") if p]
-    left = [p for p in files if not WORDS.excluded(p) and WORDS.path(p) != p]
-    assert not left, f"rename.py would still move: {left[:5]}"

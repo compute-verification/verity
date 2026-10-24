@@ -44,8 +44,8 @@ step's root the tree over their roots.  The window registers one port for them, 
 (served-domain rule, leaf schema ``ROOTS_SCHEMA``), so no row is committed twice.  Its linked members (``Member.links``) are
 shared-row chunks whose ``x`` table holds the distinct token rows they read, each under its row table row's salt (so the same
 ``b || c``), read by offset; ``row_tables.check_row_tables`` ties them to the step roots.  ``write`` adds ``t<k>-public.bin``
-(every row's ``b || c``) and ``t<k>-private.bin`` (rows, then salts; prover only).  A wired member (``Member.wired``) commits one
-input port as other units' output rows under their salts, which `wiring.check` holds across statements.
+(every row's ``b || c``) and ``t<k>-private.bin`` (rows, then salts; prover only).  A wired member (``Member.wired``) commits
+each wired input port as other units' output rows under their salts, which `wiring.check` holds across statements.
 """
 from __future__ import annotations
 
@@ -254,7 +254,7 @@ class Member:
     schemas: tuple[tuple[str, str], ...] = ()
     link_units: tuple[int, ...] = ()             # a row-table member: per link, how many of its units (consecutive, in order) read it
     links: tuple[tuple[int, int], ...] = ()      # a row-table member: per row of its x table, the window's row table and rank it is
-    wired: tuple[str, str, tuple[int, ...]] | None = None  # (port, out, writers): unit i's port row is unit writers[i]'s out row (`wiring`)
+    wired: tuple[tuple[str, str, tuple[int, ...]], ...] = ()  # per wire (port, out, writers): unit i's port row is unit writers[i]'s out row (`wiring`)
 
     def __post_init__(self) -> None:
         if self.schemas and (sorted(p for p, _ in self.schemas) != sorted(p for p, _ in self.rows + self.outs)
@@ -768,7 +768,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
                         **({"registered": registered_entry(c, m, trees)} if m.links else {}),
                         **({"shared_rows": {**dict(m.tables), **{p: m.n for p, _ in m.out_rows}}} if m.tables else {}),
                         **({"row_links": [list(x) for x in m.links]} if m.links else {}),
-                        **({"wired": {"port": m.wired[0], "out": m.wired[1], "writers": list(m.wired[2])}} if m.wired else {})})
+                        **({"wired": [{"port": p, "out": o, "writers": list(ws)} for p, o, ws in m.wired]} if m.wired else {})})
     tables = []
     for t, tab in enumerate(c.window.row_tables):
         pub = c.table_public(t)

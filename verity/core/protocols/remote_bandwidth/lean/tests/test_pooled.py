@@ -1,8 +1,9 @@
 """`pooled.py`'s pooled bound held to its Lean (`RemoteAudit.Pooled`, served by `remote-audit-difftest`'s `pooled`),
 refusals as outputs so that both sides' reasons are compared word for word: drawn records (one to many windows, ties
 in receipts a draw, windows opened whole, small and large S, δ as a float's exact value or a rational), gate runs
-5–7's records, and each refusal, with malformed inputs rejected by both. `audit.pooled` and the line of record read
-the Python, so the Python is of record here."""
+5–7's records, and each refusal, with malformed inputs rejected by both. The line of record's W is the Lean's (the
+verifier process's `line` computes it, held exactly to `line.py`'s, which reads this), so the Lean is of record here;
+`audit.pooled` (the verifier's diagnostic line and the sampling plan's) reads the Python."""
 
 from __future__ import annotations
 
@@ -25,7 +26,7 @@ drawn s times each), at δ = 2^-40 (`tests/test_pooled.py`)."""
 
 
 def port(inputs=st.nothing(), reference=pooled.run_json) -> D.Port:
-    return D.Port(M.EXE, "pooled", reference, inputs, package=M.PACKAGE, of_record="python", rejects=M.REFUSALS)
+    return D.Port(M.EXE, "pooled", reference, inputs, package=M.PACKAGE, of_record="lean", rejects=M.REFUSALS)
 
 
 server = D.server_fixture(port())

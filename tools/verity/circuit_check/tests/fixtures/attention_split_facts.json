@@ -960,40 +960,52 @@
  },
  "pins": {
   "AttentionHeadSoftcap_v3{T=17,D=16,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=0,TANH=MufuTanh_v2,EX2=MufuEx2Ftz_v2}": {
-   "and": 501142
+   "and": 501142,
+   "type": "0b8c3d2b371532df43df8f30414c4d4af7561fba63fe290835c21a296af56fc04bbf73a34bc71327836778e11fbb3777012a942a71b61b9e9fac5ed7dc5b7168"
   },
   "AttentionSoftcap_v3{T=17,NH=1,KVH=1,D=16,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=0,TANH=MufuTanh_v2,EX2=MufuEx2Ftz_v2}": {
-   "and": 501142
+   "and": 501142,
+   "type": "0b8c3d2b371532df43df8f30414c4d4af7561fba63fe290835c21a296af56fc04bbf73a34bc71327836778e11fbb3777012a942a71b61b9e9fac5ed7dc5b7168"
   },
   "AttnBlockSoftcap_v3{D=16,NVIS=1,FIRST=True,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,CHECK=True,TANH=MufuTanh_v2,EX2=MufuEx2Ftz_v2}": {
-   "and": 38977
+   "and": 38977,
+   "type": "8ef6587ec663871ff96338d9fdbf6b983470cee7c9b4cb998dc9c0e6be40990ab31dcd9186d901db3fe57de24accf8946ddcffd25b775a694aa72e90624c8508"
   },
   "AttnBlockSoftcap_v3{D=16,NVIS=16,FIRST=False,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,CHECK=True,TANH=MufuTanh_v2,EX2=MufuEx2Ftz_v2}": {
-   "and": 439214
+   "and": 439214,
+   "type": "05a8e97d58ef0ef118d2f9438546f39343e572e47c1d0dc09391b2b58e1c5d6c3f0e7cd3d95a3cc1e795dc3ac18b99a7bb9b100624807af645d22e5677f60ac9"
   },
   "DsaTopKShortRow_v2{TOPK=16}": {
-   "and": 469
+   "and": 469,
+   "type": "8790a48daadc23fa42f57a70ee70e74233e7c75b3c951317f923fa2066179fed4695f29209cf1b6268a93864bdf5d8d80a5323ed03791fd6ad154c8e5d5fa982"
   },
   "DsaUe8m0Scale_v2": {
-   "and": 50895
+   "and": 50895,
+   "type": "f8906a882eee69baa27d6e070a21a853a79b6fc4538070f4f56ac5f7fbbe64077946e65a6e02c1060e0cf27e77f0afeb4acc8bc6819408b3c0dca94524e59523"
   },
   "F32CeilFtz_v2": {
-   "and": 315
+   "and": 315,
+   "type": "a2384f4d95cd44f2a4077698a23ba3ad8b65450a63c76be81272159c460a8646ae06b1a57d89c8474dcac25d19b61916dde061555d92c5f2f109e1f4f4157498"
   },
   "Fa3InvSum_v2": {
-   "and": 947
+   "and": 947,
+   "type": "69089fe76484cba1dd1671e3fcb3b48cec76979659f5355751f70e526a48be316687a9d66306c8ad46b2489015fc665278b4e769963243847d78b0e60b863797"
   },
   "I32Sub_v2": {
-   "and": 31
+   "and": 31,
+   "type": "2a9dc0f805e23183140b36eefb60326cbdde54f6ad6dba4ca67e0e27c2bcfb19ee4ada24ef4ef9ac849db56d0a28f3825e8689bb001b960e641f063a84ccb5f7"
   },
   "I32ToF32_v2": {
-   "and": 368
+   "and": 368,
+   "type": "78e2d362b7c6e44e80d36f19ac52657a956cf00187551c712f77c49da550c2b2ad1bc6cbe63c90169369e4a5fed11842fdccb4a3d0d378e715ec1b97bd80a0d7"
   },
   "MoeSharedCombine_v1{H=8,RSF=1072064102}": {
-   "and": 12632
+   "and": 12632,
+   "type": "f22324bc35643d81fd070c4a56c1ac32ffeabd1c522975fef9d21e000f5773836bcf063b18de38959ed8217777fb538a5935034d7e511b35793cdc496e8b1cbf"
   },
   "U32And_v2": {
-   "and": 32
+   "and": 32,
+   "type": "ae78a2985c69006a499b56b8fd32ec4adb0a7ca1e343951731eec15b44560a183c0006a75aa4ef11a8479b21b21344e37a5dd20f0f7631233107c917c0944912"
   }
  },
  "served": {

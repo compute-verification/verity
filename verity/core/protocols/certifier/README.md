@@ -104,10 +104,16 @@ A spec-level reference for network accounting's timing channel:
   bucket s + D + ⌊i/r⌋ from its admission s. A miss fails the connection closed with a `FAIL` cell that carries no
   reason. It records and certifies exactly the cells it sends, and each failure's reason in a third record, `fails`.
   `PROTOCOL.md`'s "The active warden" has its leak bound, and `benchmarks/network_traces/warden_serve.py` runs it;
-- the warden's cells as rows (`warden_rows`): each link-window's cells committed one `hm96-sha512/row/v2` row a cell,
-  padding and empty slots included, under a frame-v3-sha512 root the warden signs with the certifier's signer. The
-  registration is what a proof unit's `--registered` port reads, so the sender's unit opens a cell as its output and
-  the receiver's as its input (`PROTOCOL.md`, "The warden's cells as rows"; `benchmarks/network_traces/warden_zk.py`);
+- the release order on the server's side (`release`): a certifier puts `x-verity-release: N` (N is the request's
+  0-based place in its run's release order) and `x-verity-release-run: ID` on the server's copy of each request it
+  releases, for `serve-openai --admit release-order`. The headers never appear in a cell or record, so nothing
+  certified changes;
+- the warden's cells as rows (`warden_rows`): each link-window's cells committed one `hm96-sha512/row/v2` row a
+  bucket, padding and empty slots included, under a frame-v3-sha512 root the warden signs with the certifier's signer,
+  beside a salted digest of the window's wiring. The registration is what a proof unit's `--registered` port reads, so
+  the sender's unit opens a cell's row as its output and the receiver's as its input, and the verifier places each
+  read, the (connection, cell) the Program's units' wiring pins (`Units`, whose digest the port's value names), with
+  the warden's wiring (`PROTOCOL.md`, "The warden's cells as rows"; `benchmarks/network_traces/warden_zk.py`);
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
   With its salt on (`Proxy(salt=active.fresh_salt)`, off by default), each PoUW window (`pouw_window` certifier
   windows) gets one salt of `salt_bits` bits (512 by default), carried into the block only. The ingress record holds a

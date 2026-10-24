@@ -79,7 +79,9 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
+import r2_population as R2  # noqa: E402
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, memory_map as MM, opening as C3, receipts  # noqa: E402
+from verity.core.protocols.remote_bandwidth import schedule as SC  # noqa: E402
 from verity.core.protocols.remote_bandwidth.receipts import Plan  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
 from verity.ml.circuits import requirement as RQ, requirement_units as RU  # noqa: E402
@@ -1056,11 +1058,20 @@ def main() -> int:
     uncert = uncertified(result, rrec, rs.view, store, req, link, common, members)
     if uncert.get("credit_bytes"):
         link = replace(link, epsilon=min(1.0, uncert["uncertified_bytes"] / uncert["credit_bytes"]), delta=a.delta)
-    ledgers = {"store": audit.ledger(rrec, **common).to_json(),
-               "store+post-seed": audit.ledger(rrec, **common, credit_post_seed=StandInPostSeed()).to_json()}
+    scheduled, schedule_why = None, None
+    try:
+        sched = MM.schedule(rs.header, rs.record, rs.session.appended, [s for w in rrec.windows for s in w.steps])
+        scheduled = rs.session.scheduled(sched)
+    except (MM.MemoryMapError, SC.Refused) as e:
+        schedule_why = str(e)
+    ledgers = {"store": audit.ledger(rrec, **common).to_json()}
+    if scheduled is not None:
+        ledgers["store+post-seed"] = audit.ledger(rrec, **common, credit_post_seed=StandInPostSeed(), schedule=scheduled).to_json()
     if link.holds and mapped:
         ledgers["linked"] = audit.ledger(rrec, **common, requirement=link).to_json()
-        ledgers["linked+post-seed"] = audit.ledger(rrec, **common, requirement=link, credit_post_seed=StandInPostSeed()).to_json()
+        if scheduled is not None:
+            ledgers["linked+post-seed"] = audit.ledger(rrec, **common, requirement=link, credit_post_seed=StandInPostSeed(),
+                                                       schedule=scheduled).to_json()
     whole = common["capacity_bytes_per_s"] * rrec.span_ns / 1e9
     summary["link"] = {"holds": link.holds, "mapped": mapped, "every_map_unit_proved": proved,
                        "appends": None if rrec.appends is None else rrec.appends.hex(),
@@ -1070,6 +1081,7 @@ def main() -> int:
                        "units": units_ok, "session": session_ok, "check3": check3["accepted"], "bridge": br,
                        "epsilon": link.epsilon, "delta": link.delta,
                        "verdicts": [v.accepted for v in rs.verdicts], "uncertified": uncert,
+                       "schedule": {"bits": None if scheduled is None else scheduled.bits, "refused": schedule_why},
                        "circuit_read_bytes": sum(req.read_bits(s) for s in range(req.steps)) // 8,
                        "ledgers": {k: {"gamma": v["gamma"], "timing": v["terms"]["timing"], "linked": v.get("linked"),
                                        "credited_bytes": round((1 - v["terms"]["timing"]) * whole)} for k, v in ledgers.items()}}
@@ -1459,7 +1471,7 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
             a.lean, last, last["n"], sdir, out / "neg-altered-public", dict(rec, leaf_layer=leaf_layer), check, zk=True),
             "member": last["name"], "row": f"instance {last['n'] - 1}, port {last['ports'][-1].name}"}
     # the sampled-proofs registration and draw, as A6 checks them
-    fewer = P.mixed_population_program([(plan_m["defn"], plan_m["n"] - 1), (map_m["defn"], map_m["n"])])
+    fewer = R2.program([(plan_m["defn"], plan_m["n"]), (map_m["defn"], map_m["n"])], mixed=True)
     v = V.check(rec, fewer, query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check(rec, program, query, D.parse_law(f"stratified:{a.k // 2 if a.k > 1 else a.k + 1}"), a0.SCHEME, want,

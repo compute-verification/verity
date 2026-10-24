@@ -79,9 +79,9 @@ def test_request_and_workload_programs_equal_the_traced_build():
     phi = _phi(json.loads((FIX / "smollm2-135m.config.json").read_text()),
                [{"request_id": "u0", "index": 0, "prompt_len": 256, "max_tokens": 32, "arrive_step": 0}])
     r = build_program(phi, "request", LP=256, T=31)
-    assert r.digest == "52e6bb0b37e31ec3bdcc976027f412955be60cdd7bcd1ed4982aee7b4b716681a00323889897a394808aa040994f53a3e210dc603dba9a65751817e1df348f5c"
-    assert r.n_root_nodes == 86738
-    assert S.predict_workload(phi)["digest"] == "345798f4dc27339a239f17acd3232b758b4b242092d87e9c558ea9d02ec202f08b14212f8c68a7e6dbc5413e4f235a7085fcd15a66b021cd51d8e3755e7e2f06"
+    assert r.digest == "7a96a646f3ded690fb6fbf33b1e31318e26570803b588f7560868390b1131d692f103828d10bd2351d1b9ac4bc368c9884531efaae96342bcc6763a27c154bb7"
+    assert r.n_root_nodes == 84698
+    assert S.predict_workload(phi)["digest"] == "096daff1fc02d8c967e8c0582d5bcffcecca9644bf6262b03cdad286c8d071ebba048664f1ac198319dd6a229d840f372e250e374f9cffe7d3d17f184e87b6d2"
 
 
 @pytest.mark.parametrize("model,function,rank,digest", [
@@ -114,6 +114,7 @@ def test_tensor_parallel_rank_workload_equals_the_traced_build():
     assert S.predict_workload(phi)["digest"] == "4cd839563c959eee6f1abaf647bd7d771a842cb8940ed5a92443e85e2ca48cd7f5aecfa1f80d8084c276d3c32a59b1dbf36770a18cb8015ec6ebc8c62cb9c1da"
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("rank", range(8))
 def test_dsa_rank_step_equals_the_record(rank, tmp_path):
     """GLM-5.3 at TP8 on H200 (block FP8, cc 9.0): each rank's step through the DeepSeek sparse-attention decoder (`predict.dsa`)
@@ -124,6 +125,7 @@ def test_dsa_rank_step_equals_the_record(rank, tmp_path):
     assert r.digest == json.loads((MANIFESTS / "records.json").read_text())["rows"][GLM53]["programs"][str(rank)]["step"]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("wrapper,shape,digest", [
     ("step", {"M": 8, "pos0": 8}, "6a8ea56b8f7c3f2a4c557d20dd45b86b9eda749f653f4559ee21327ca3bed830254af606c6aee98b123ccc4cb6172fb2283a96be63867331687fa0f5100e4bd2"),
     ("request", {"LP": 11, "T": 12}, "f22d03019ee5c9324134c394b8628cf3bda5fa89d3e9e04b3fe56faf92e856bc5e05eb057ed2adb327e513dc39fa5c93597bfec0011deab079629e3c974c5bcd"),
@@ -136,18 +138,20 @@ def test_dsa_launch_batch_equals_the_traced_build(wrapper, shape, digest, tmp_pa
     assert r.digest == digest
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("row,wrapper,shape,digest", [
     (GLM53_S1, "step", {"M": 1, "pos0": 8},
      "24fae34c8de54a0808878316398bcb7228e39fb073c2df31ba00cda2e17da379c8b66a147e5faa6cc1f44ce9fd3fbabe17567af138a97f3e01c361e72df05821"),
     (GLM53_S8, "step", {"M": 8, "pos0": 8},
-     "a26c43faa02a1efcdfdbf6ed346afaf2d6552bea975592369da898827fe34399d1c4a4e2ea87cf3806f292204d8c805c0481c4ef948d1d7aad5cadf51df96e01"),
+     "0801afbcf2b8b21823610c8418cfacb82a9f7c0a2cf6641eaa2e362cb0184f33441d467638813027b2e0d7bc152d6bfd05694d0133022ad59e27a4c785cf2776"),
     (GLM53_S8, "request", {"LP": 25, "T": 6},
-     "b632583a7461789d2ceec592e052a45743406dfa29427a640779ef6aab1410573f65ae6073ff810d63e016e70ba4efaf1609220d21195becd2dc21add70fdf62"),
+     "f11311f5b62f788edadc672304f7f6a37cb5355f48d31d8382322cc2f95801ccf3c66abb7cad0a577e27c2a78aa0e4b7641900270f559c661982e68b656819d3"),
 ])
 def test_dsa_stochastic_equals_the_traced_build(row, wrapper, shape, digest, tmp_path):
-    """GLM-5.3's seeded top-p rows (t0.8 p0.95) at rank 0, as the Build traced them: the B1 step at the single request's constant split
-    count (r20261017-224230-de2d), and the B8 step and second request (r20261018-105843-33c0) over the derived `splits` Input, the
-    select after the vocabulary's all-gather.  The second request's launch batch is its realized arrival
+    """GLM-5.3's seeded top-p rows (t0.8 p0.95) at rank 0: the B1 step as the Build traced it (r20261017-224230-de2d), and the B8 step
+    and second request at the same registered split count, the select after the vocabulary's all-gather.  The B8 row's traced Build
+    (r20261018-105843-33c0) read a derived `splits` Input, which serving no longer produces (CIR-87 (1), `engine.topp_pin`); these two
+    digests are the registered-S Programs, until that row is rebuilt.  The second request's launch batch is its realized arrival
     (`engine.arrivals.realized_arrive_steps`): the first request ends at forward 1, so the idle engine prefills it alone at forward 2
     and it decodes alone, not beside the step-13 prefills its declared arrive_step 9 would put it with."""
     r = build_program(_row_phi(row, "GLM53", tmp_path), wrapper, **shape)
@@ -203,7 +207,8 @@ def test_mhc_refuses_outside_its_domain(tmp_path):
 
 @pytest.mark.parametrize("sampling,M,digest", [
     ({**STOCH}, 8, "740d7f22434aa56824d598e4b66f8223c45546ca6e1428639951e5299b7f1968f209b61903452be424a6f407d6d2197658d39073b97bcdf7539c0a923c38ccda"),
-    ({**STOCH, "top_p": 1.0, "splits": 32}, 1, "6529c4fbcbfeecf09393c9e137e3272da8ef54bad1b116c8c0f3f1bb078ef6747e6bc99265b1f3bcfd39d4b5123914a04881ad345361c890bfb387de20a14f49"),
+    pytest.param({**STOCH, "top_p": 1.0, "splits": 32}, 1, "6529c4fbcbfeecf09393c9e137e3272da8ef54bad1b116c8c0f3f1bb078ef6747e6bc99265b1f3bcfd39d4b5123914a04881ad345361c890bfb387de20a14f49",
+                 marks=pytest.mark.slow),
 ])
 def test_stochastic_step_program_equals_the_traced_build(sampling, M, digest):
     """SmolLM2-135M under the seeded top-p policy: a B8 row's step (the split count a `splits` Input, cov-g230) and a B1 row's (the
@@ -216,7 +221,7 @@ def test_sampling_follows_the_builds_policy():
     one = {"sweep": {"sampling": "stoch-t0.8-p0.95", "sampling_params": {"temperature": 0.8, "top_p": 0.95, "top_k": 0}, "sampling_seeds": [7]},
            "requests": [{"prompt_len": 8, "max_tokens": 3, "seed": 7}]}
     assert S.sampling_of(one, _phi(TINY)) == {**STOCH, "splits": 32}
-    assert S.sampling_of({**one, "requests": one["requests"] * 8}, _phi(TINY)) == STOCH
+    assert S.sampling_of({**one, "requests": one["requests"] * 8}, _phi(TINY)) == {**STOCH, "splits": 32}
     assert S.sampling_of({"requests": [{"prompt_len": 8, "max_tokens": 3}]}, _phi(TINY)) == {"kind": "greedy"}
     with pytest.raises(Unexpressible, match="the Build refuses the policy"):
         S.sampling_of({**one, "sweep": {**one["sweep"], "sampling_params": {"temperature": 0.8, "top_p": 0.95, "top_k": 50}}}, _phi(TINY))
@@ -311,31 +316,65 @@ def test_the_record_path_reaches_the_predictor_only_through_a_switched_rows_aot_
     row's AOT Build (`row_tp.TpRow.derive`, under `config_record.aot_of`; `tests/pipeline/test_tp_build_width.py`), and the trace
     that checks it lists the package as a forbidden input."""
     from verity_vllm.program.frontend import inputs_trace
-    pkg = Path(S.__file__).resolve().parents[1]
-    pat = re.compile(r"^\s*(from|import)\s+(verity_vllm\.predict|\.+predict)\b|import_module\([^)]*predict", re.M)
-    hits = [str(p.relative_to(pkg)) for p in pkg.rglob("*.py") if "predict" not in p.relative_to(pkg).parts[:1] and pat.search(p.read_text())]
+    here, name = Path(S.__file__).resolve().parent, S.__name__.rpartition(".")[0]
+    pkg = here.parents[name.count(".") - 1]
+    inside = here.relative_to(pkg).parts
+    pat = re.compile(rf"^\s*(from|import)\s+({re.escape(name)}|\.+{here.name})\b|import_module\([^)]*{here.name}", re.M)
+    outside = [p for p in pkg.rglob("*.py") if p.relative_to(pkg).parts[:len(inside)] != inside]
+    hits = [str(p.relative_to(pkg)) for p in outside if pat.search(p.read_text())]
     assert hits == []
-    runs = [str(p.relative_to(pkg)) for p in pkg.rglob("*.py") if "predict" not in p.relative_to(pkg).parts[:1]
-            and re.search(r"""cli\(\s*["']predict["']""", p.read_text())]
+    runs = [str(p.relative_to(pkg)) for p in outside if re.search(r"""cli\(\s*["']predict["']""", p.read_text())]
     assert runs == ["pipeline/row_tp.py"]
     assert any(m in str(Path(S.__file__).resolve()) for m in inputs_trace._FORBIDDEN_MARKERS)
+
+
+def _portions(monkeypatch, tmp_path, files: tuple[str, ...]):
+    """`verity` as a namespace over portions in a git checkout at tmp_path/repo holding `files`, tracked; returns a function of
+    the portions' names giving the code version over them, in that order.  Git looks for no checkout above tmp_path."""
+    import subprocess
+
+    import verity
+
+    repo = tmp_path / "repo"
+    for rel in files:
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (repo / rel).write_text(f"# {rel}\n")
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path))
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
+
+    def version(*portions: str) -> str:
+        monkeypatch.setattr(verity, "__path__", [str(tmp_path / p / "verity") for p in portions])
+        return S.code_version()
+    return version
 
 
 def test_code_version_is_one_tree_over_a_namespaces_portions(monkeypatch, tmp_path):
     """`verity` as a namespace: the digest is the same over any order of its portions and with a cwd directory that joined it
     without a module, and moves with an edit."""
-    import verity
+    version = _portions(monkeypatch, tmp_path, ("upper/verity/ml/__init__.py", "lower/verity/ir/__init__.py", "lower/verity/ir/defs.py",
+                                                "cwd/verity/primitives/circuits/src/verity/ir/defs.py"))
+    a = version("repo/upper", "repo/lower")
+    assert version("repo/lower", "repo/upper") == version("repo/cwd", "repo/upper", "repo/lower") == a
+    (tmp_path / "repo" / "lower" / "verity" / "ir" / "defs.py").write_text("# edited\n")
+    assert version("repo/upper", "repo/lower") != a
 
-    for rel in ("upper/verity/ml/__init__.py", "lower/verity/ir/__init__.py", "lower/verity/ir/defs.py",
-                "cwd/verity/primitives/circuits/src/verity/ir/defs.py"):
-        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
-        (tmp_path / rel).write_text(f"# {rel}\n")
 
-    def version(*portions: str) -> str:
-        monkeypatch.setattr(verity, "__path__", [str(tmp_path / p / "verity") for p in portions])
-        return S.code_version()
+def test_code_version_reads_tracked_files_only(monkeypatch, tmp_path):
+    """A file written into a package's tree that git doesn't track (what a parallel test, a build or a run leaves there) doesn't
+    move the digest, so two calls agree whatever was written between them; tracking it does.  A portion outside any checkout is
+    refused rather than hashed as it lies on disk."""
+    import subprocess
 
-    a = version("upper", "lower")
-    assert version("lower", "upper") == version("cwd", "upper", "lower") == a
-    (tmp_path / "lower" / "verity" / "ir" / "defs.py").write_text("# edited\n")
-    assert version("upper", "lower") != a
+    version = _portions(monkeypatch, tmp_path, ("pkg/verity/ir/__init__.py", "pkg/verity/ir/defs.py"))
+    a = version("repo/pkg")
+    for stray in ("ir/defs.py.tmp", "ir/__pycache__/defs.cpython-312.pyc", "ir/.lake/build/out.olean", "report.json"):
+        (tmp_path / "repo" / "pkg" / "verity" / stray).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / "repo" / "pkg" / "verity" / stray).write_text("stray\n")
+    assert version("repo/pkg") == a
+    subprocess.run(["git", "-C", str(tmp_path / "repo"), "add", "-f", "pkg/verity/report.json"], check=True)
+    assert version("repo/pkg") != a
+    (tmp_path / "loose" / "verity" / "ir").mkdir(parents=True)
+    (tmp_path / "loose" / "verity" / "ir" / "__init__.py").write_text("")
+    with pytest.raises(RuntimeError, match="not in a git checkout"):
+        version("loose")
