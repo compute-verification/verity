@@ -825,7 +825,8 @@ structure InnerCommits where
 
 def InnerCommits.stream? (ic : InnerCommits) (name : String) : Option InnerStream := ic.streams.find? (·.name == name)
 
-private def hexList (ctx : String) (xs : Array String) : V (Array ByteArray) :=
+/-- Nodes `b ‖ c` in hex, each refused unless 128 bytes. -/
+def hexList (ctx : String) (xs : Array String) : V (Array ByteArray) :=
   xs.mapM fun x => do
     let b ← (unhex x).mapError (s!"rec inner transcript: {ctx}: " ++ ·)
     if b.size != 128 then throw s!"rec inner transcript: {ctx}: a b ‖ c of {b.size} bytes, not 128"
