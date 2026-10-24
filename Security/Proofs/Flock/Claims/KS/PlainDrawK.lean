@@ -29,7 +29,7 @@ namespace Claims.Bridge.PlainDraw
 
 open _root_.Flock FlockDeploy FlockSoundness FlockSoundness.Discharge Claims.Bridge.Custody Claims.Bridge.CustodyPlain
 open FlockSoundness.Discharge.Exec (decodeWithK_id_std)
-open FlockSoundness.Refine (ptsOf shapeOf)
+open FlockSoundness.Refine (ptsOf shapeOf ebind_ok)
 open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
@@ -182,7 +182,7 @@ theorem recordsLiveAtDK_of_checks (keep : Bool → Bool) {s : Ins} {spec : Sessi
   obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj hset)
   obtain ⟨-, lv, hlv, hcus⟩ := checks_ok hc
   obtain ⟨hroot, -, hpts, hrounds⟩ := custody_ok hcus
-  obtain ⟨eroot, epts, esize, estr⟩ := decodeWithK_live keep With.std hdec hlv
+  obtain ⟨eroot, epts, esize, estr⟩ := KS.decodeWithK_live keep With.std hdec hlv
   have hD : liveD spec f.record = lv := by simp [liveD, hlv]
   refine ⟨by simp only [viewOf]; rw [epts, hpts], fun j => ⟨?_, fun r => ?_⟩⟩
   · show sess.rootB[j.val]! = link.1.toArray[j.val]!
