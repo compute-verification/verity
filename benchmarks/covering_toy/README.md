@@ -76,6 +76,10 @@ The table's flags name the section-4 assumption a covering breaks: `P-total` (fe
 
 ## For splitting attacks (C3)
 
+`sweep.build(name)` builds an instance; a sweep's `OUT/<instance>.json` holds every point's best coverings, and
+`sweep.load_cover(G, r["full"], r["k"], r["s"])` turns one back into validated `cover.Block`s (`r["V"]` and `r["M"]`
+cover `G.values` and `M*`: pass those as `targets`).
+
 At word level a value is one gate, so a block holds it whole and locality can't fail: a splitting attack needs a graph
 in which a value is several gates. Build it with `Graph.add` (low and high limbs, or additive shares, with the gadget
 that recombines them where the recipe reads the value); `validate`, the solvers and `bounds` work on any `Graph` whose

@@ -126,6 +126,13 @@ def solve(G: TG.Graph, k: int, s: int | None, targets: list[int] | None, budget:
     }
 
 
+def load_cover(G: TG.Graph, sol: dict, k: int, s: int | None, targets: list[int] | None = None) -> list[CV.Block]:
+    """A stored solution's covering (`sol["cover"]`, as `solve` writes it) as blocks, validated at `(s, k)`."""
+    blocks = [CV.Block(frozenset(c), frozenset(i)) for c, i in sol["cover"]]
+    CV.validate(G, blocks, k, s, targets)
+    return blocks
+
+
 def cw_measured(G: TG.Graph, s: int | None, workers: int, qs: list[int] | None = None) -> dict:
     """`c_w(s) = min_q f(q) / q`, `f(q)` the fewest unregistered inputs completing products of `q` slots. Uses CP-SAT's
     proven lower bound on `f`, so the result is a valid parameter-hardness constant. On sampled `qs`, `f` being
