@@ -66,7 +66,9 @@ OTHER_REGISTRATION = "'s domain is not the one the window's registration gives i
 OTHER_ROOT = "against another root than the one the window registered for"
 OTHER_PERIOD_WEIGHTS = "open signed: a B row's codes or s_w differ from the ones the period registered"
 UNSIGNED = "open signs no weights' root (weights_root, a SHA-512 digest"
-NO_SERVED = "states no served rows m_s at most the window's A slot M = "
+NO_SERVED = "states no served rows m_s at most the period's T = "
+NO_ROWS = "'s open commits no table rows T (rows, a positive integer"
+OTHER_SLOT = "the period's T = "
 OTHER_SERVED = "every dense call of a step serves the step's m_s rows"
 DRAWN_EXPECT = {
     "coin-form": ("draw", Cr.COIN_FORM), "args-form": ("draw", Cr.DRAW_ARGS), "layout-form": ("layout", Cr.LAYOUT_FORM),
@@ -117,6 +119,7 @@ WINDOW_EXPECT = {
     "a-call-off": ("arow", NOT_COMMITS + "row-table/"), "a-call-missing": ("arow", "rows, not "),
     "commit-unbound": ("draw", Cr.DRAW_ROOT), "credit-commit-form": ("commit", Cr.COMMIT_FORM),
     "rows-past": ("manifest", NO_SERVED), "rows-form": ("manifest", NO_SERVED), "rows-other": ("manifest", OTHER_SERVED),
+    "t-other": ("layout", OTHER_SLOT), "t-form": ("layout", Cr.ROWS_FORM),
 }
 PERIOD_EXPECT = {
     "no-close": ("period", "present the ledger after its close"), "incomplete": ("period", "closed incomplete"),
@@ -129,6 +132,8 @@ PERIOD_EXPECT = {
     "other-circuit": ("circuit", "prove the period's declared circuit"),
     "no-circuit": ("circuit", "commits no cap or circuit"), "descriptor-form": ("circuit", Cr.DESCRIPTOR_HEX),
     "no-k": ("budget", NO_K), "k-form": ("budget", NO_K), "k-past-units": ("window", FEWER),
+    "no-rows": ("layout", NO_ROWS), "t-form": ("layout", NO_ROWS),
+    "t-other": ("window", "so the period earns nothing: layout: " + OTHER_SLOT),
     "other-k": ("window", "so the period earns nothing"),
     "alt-layout": ("circuit", "prove the period's declared circuit"),
     "bad-circuit": ("window", "so the period earns nothing: layout: "),
@@ -665,9 +670,10 @@ def test_a_window_proving_another_circuit_refuses_the_period(seed):
     credited; so does a period that committed no circuit."""
     d = cases.period_instance(random.Random(f"other-circuit/{seed}"), "other-circuit")
     big_k, _ = Cr.committed_k(d["ledger"], d["name"])
+    t, _ = Cr.committed_rows(d["ledger"], d["name"])
     for w in d["windows"]:
-        args = (w[k] for k in cases.WINDOW_ARGS[4:-1])
-        assert Cr._window_outcomes(d["key"], d["ledger"], d["pins"], d["main"], *args, big_k, rc.lms_verify)[1] is None
+        args = (w[k] for k in cases.WINDOW_ARGS[4:-2])
+        assert Cr._window_outcomes(d["key"], d["ledger"], d["pins"], d["main"], *args, big_k, t, rc.lms_verify)[1] is None
     got, refused = Cr._period_outcomes(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
     assert got is None and refused[0] == "circuit" and "is not" in refused[1] and "the one period" in refused[1]
     assert "doesn't count toward it, so the period earns nothing" in refused[1]
@@ -783,20 +789,23 @@ def test_an_empty_step_of_a_window_credits_none_of_its_calls():
     assert seen >= 3
 
 
-def test_served_rows_are_one_natural_at_most_m_a_step():
-    """Each call's m_s is its manifest row's ``served``, a natural at most the A slot M, and every dense call of a step
-    (call c at step c // (C/S)) states the same m_s; steps may differ. Else the window is refused (``manifest``)."""
+def test_served_rows_are_one_natural_at_most_t_a_step():
+    """Each call's m_s is its manifest row's ``served``, a natural at most the period's T table rows (whose slot is the
+    A slot M, so T may be below M: a slot row past T is no table's), and every dense call of a step (call c at step
+    c // (C/S)) states the same m_s; steps may differ. Else the window is refused (``manifest``)."""
     lay = {"calls": [["w", 0], ["v", 0], ["w", 1], ["v", 1]], "m": 16}
     rows = lambda *ms: [{Cr.SERVED_ROWS: m} for m in ms]  # noqa: E731
-    assert Cr.served_rows(rows(3, 3, 16, 16), lay, 2) == ([3, 3, 16, 16], None)
-    assert Cr.served_rows(rows(0, 0, 5, 5), lay, 2) == ([0, 0, 5, 5], None)
-    assert Cr.served_rows(rows(3, 4, 16, 16), lay, 2) == (None, ("manifest", Cr.other_served(1, 0, 0, 4, 3)))
-    assert Cr.served_rows(rows(3, 3, 16, 15), lay, 2) == (None, ("manifest", Cr.other_served(3, 2, 1, 15, 16)))
-    assert Cr.served_rows(rows(3, 3, 3, 4), lay, 1) == (None, ("manifest", Cr.other_served(3, 0, 0, 4, 3)))
-    assert Cr.served_rows(rows(17, 17, 3, 3), lay, 2) == (None, ("manifest", Cr.no_served(0, 16)))
+    assert Cr.served_rows(rows(3, 3, 16, 16), lay, 2, 16) == ([3, 3, 16, 16], None)
+    assert Cr.served_rows(rows(0, 0, 5, 5), lay, 2, 16) == ([0, 0, 5, 5], None)
+    assert Cr.served_rows(rows(3, 4, 16, 16), lay, 2, 16) == (None, ("manifest", Cr.other_served(1, 0, 0, 4, 3)))
+    assert Cr.served_rows(rows(3, 3, 16, 15), lay, 2, 16) == (None, ("manifest", Cr.other_served(3, 2, 1, 15, 16)))
+    assert Cr.served_rows(rows(3, 3, 3, 4), lay, 1, 16) == (None, ("manifest", Cr.other_served(3, 0, 0, 4, 3)))
+    assert Cr.served_rows(rows(17, 17, 3, 3), lay, 2, 16) == (None, ("manifest", Cr.no_served(0, 16)))
+    assert Cr.served_rows(rows(12, 12, 3, 3), lay, 2, 12) == ([12, 12, 3, 3], None)
+    assert Cr.served_rows(rows(3, 3, 13, 13), lay, 2, 12) == (None, ("manifest", Cr.no_served(2, 12)))
     for bad in (True, -1, "3", None, [3], 1.0):
-        assert Cr.served_rows(rows(3, bad, 3, 3), lay, 2) == (None, ("manifest", Cr.no_served(1, 16))), bad
-    assert Cr.served_rows([{}, *rows(3, 3, 3)], lay, 2) == (None, ("manifest", Cr.no_served(0, 16)))
+        assert Cr.served_rows(rows(3, bad, 3, 3), lay, 2, 16) == (None, ("manifest", Cr.no_served(1, 16))), bad
+    assert Cr.served_rows([{}, *rows(3, 3, 3)], lay, 2, 16) == (None, ("manifest", Cr.no_served(0, 16)))
     assert OTHER_SERVED in Cr.other_served(1, 0, 0, 4, 3) and NO_SERVED in Cr.no_served(0, 16)
 
 
@@ -1009,6 +1018,7 @@ def test_a_window_on_other_b_rows_than_its_periods_refuses_the_period(seed):
     for name in ("other-sw", "zero-codes"):
         d = cases.period_instance(random.Random(f"{name}/{seed}"), name)
         big_k, _ = Cr.committed_k(d["ledger"], d["name"])
+        t, _ = Cr.committed_rows(d["ledger"], d["name"])
         signed, _ = Cr.committed_weights(d["ledger"], d["name"])
         folds, refused = set(), []
         for w in d["windows"]:
@@ -1020,7 +1030,7 @@ def test_a_window_on_other_b_rows_than_its_periods_refuses_the_period(seed):
             assert why is None, why
             folds.add(got.hex())
             refused.append(Cr._window_outcomes(d["key"], d["ledger"], d["pins"], d["main"],
-                                               *(w[k] for k in cases.WINDOW_ARGS[4:-1]), big_k, rc.lms_verify)[1])
+                                               *(w[k] for k in cases.WINDOW_ARGS[4:-2]), big_k, t, rc.lms_verify)[1])
         assert len(folds) == 2 and signed in folds
         assert sum(r is not None for r in refused) == 1
         assert all(r is None or (r[0] == "weights" and OTHER_PERIOD_WEIGHTS in r[1]) for r in refused), refused
