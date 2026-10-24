@@ -319,15 +319,16 @@ def shares_of(got: dict) -> dict:
 def session_error(session: dict, registration: dict) -> dict:
     """An accepted session's failure probability, the chance its line credits more than the node held: `delta`, the
     pooled bound's δ (`recorded_windows`', the float's exact value as the line reads it), plus `delta_sketch`, δs,
-    `RateAuditSketch`'s for a sketch-sha512 record (`ledger.sketch` exactly: `timing.sketch_failure` of the
-    compressions the verifier charged, `ledger.sketch_failure`'s, over the record's passes and rows; 0 for another
-    receipt kind), and their `total`; each in floats and exact beside them (`exact`), and the total's log2."""
+    `SketchBoundDeployed`'s for a sketch-sha512 record (`ledger.sketch` exactly: `timing.sketch_failure` of the
+    compressions the verifier charged, `ledger.sketch_failure`'s, over the record's passes, rows and store blocks; 0
+    for another receipt kind), and their `total`; each in floats and exact beside them (`exact`), and the total's
+    log2."""
     delta = pooled.number(V.recorded_windows(session)[1])
     sketch = Fraction(0)
     if registration["receipt"] == receipts.SKETCH_SHA512:
         inputs = session["ledger"]["inputs"]
         sketch = timing.sketch_failure(session["ledger"]["sketch_failure"]["compressions"], inputs["passes"],
-                                       inputs["rows"])
+                                       inputs["rows"], blocks=session["record"]["public"]["blocks"])
     exact = {"delta": delta, "delta_sketch": sketch, "total": delta + sketch}
     return {**{k: float(x) for k, x in exact.items()}, "exact": {k: line.text(x) for k, x in exact.items()},
             "log2_total": timing.log2(exact["total"])}

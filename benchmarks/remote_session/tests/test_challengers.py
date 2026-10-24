@@ -586,16 +586,18 @@ def test_the_clock_rate_beside_the_line_doesnt_read_the_first_coins_round_trip()
 
 def test_the_line_records_delta_the_sketchs_delta_and_their_sum_over_its_credited_sessions():
     """Each accepted paced session's error is the pooled bound's δ (its record's float, exactly) plus the sketch's δs
-    (`timing.sketch_failure` of the compressions the verifier charged over the record's passes and rows, and 0 for a
-    block-sha512 record), exactly; the line at each T, and over every T, fails with at most the sum over its credited
-    sessions, and a T that credits none has error 0."""
+    (`timing.sketch_failure` of the compressions the verifier charged over the record's passes, rows and store blocks,
+    as `ledger.sketch` reads it, and 0 for a block-sha512 record), exactly; the line at each T, and over every T, fails
+    with at most the sum over its credited sessions, and a T that credits none has error 0."""
     def session(delta: float, compressions: int) -> dict:
-        return {"record": {"profile": {"windows": [{"lengths": [8], "profile": {"delta": delta,
-                                                                              "drawn": {"receipt": 2}}}]}},
+        return {"record": {"public": {"blocks": 1 << 20},
+                           "profile": {"windows": [{"lengths": [8], "profile": {"delta": delta,
+                                                                                "drawn": {"receipt": 2}}}]}},
                 "ledger": {"inputs": {"passes": 700, "rows": 16}, "sketch_failure": {"compressions": compressions}}}
 
     sketch = {"receipt": al.receipts.SKETCH_SHA512}
-    ds = al.timing.sketch_failure(10 ** 12, 700, 16)
+    ds = al.timing.sketch_failure(10 ** 12, 700, 16, blocks=1 << 20)
+    assert ds > al.timing.sketch_failure(10 ** 12, 700, 16)
     a, b = al.session_error(session(2.0 ** -40, 10 ** 12), sketch), al.session_error(session(2.0 ** -30, 0), sketch)
     total = Fraction(1, 2 ** 40) + ds
     assert a["exact"] == {"delta": "1/1099511627776", "delta_sketch": str(ds), "total": str(total)}
@@ -609,7 +611,7 @@ def test_the_line_records_delta_the_sketchs_delta_and_their_sum_over_its_credite
                 "credit": {"ok": ok, "zero": [] if ok else ["not accepted: the Lean refused it (receipt)"]}}
 
     out, credit = al.credited_line([row(0, "T=1s", True, a), row(1, "T=1s", True, b), row(2, "T=60s", False, a)])
-    both = total + Fraction(1, 2 ** 30) + al.timing.sketch_failure(0, 700, 16)
+    both = total + Fraction(1, 2 ** 30) + al.timing.sketch_failure(0, 700, 16, blocks=1 << 20)
     assert out["T=1s"]["error"] == credit["error"] == {"sessions": [0, 1], "total": float(both), "exact": str(both),
                                                        "log2": al.timing.log2(both)}
     assert out["T=60s"]["error"] == {"sessions": [], "total": 0.0, "exact": "0", "log2": None}
