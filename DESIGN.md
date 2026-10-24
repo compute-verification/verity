@@ -50,8 +50,7 @@ Security/: the definitions, models and proofs of the guarantees (nci among them)
 verity/ml/: Python and CUDA: the provers, and Python that mirrors the Lean
   flock: C-Flock, the proof system
   circuits: evaluation, boolean, Definitions (ops), silicon semantics, targets
-  kernels, commitments, crypto, randomness, private_circuits
-  definitions: the served workloads' kernel Definitions, their Boolean versions and the proof-unit cut
+  kernels, commitments, crypto, randomness, private_circuits, definitions
 ~~~
 
 `tools/` and `infra/` sit outside the layers: `tools/research` runs and records the work and depends on none of them, and
