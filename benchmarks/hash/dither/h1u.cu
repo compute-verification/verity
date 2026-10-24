@@ -2311,6 +2311,18 @@ __global__ void __launch_bounds__(256) h1jr_rows(const UCallR* __restrict__ call
   }
 }
 
+// H1U_JR_CM=1: a call's J10-R units taken column block by column block (its v-th taken, v = cj (M / 32) + ri, is unit
+// ri (N / 32) + cj), so a column block's row blocks run side by side and read its B tile from DRAM once; each unit, its
+// receipt and its slot are the same
+#ifndef H1U_JR_CM
+#define H1U_JR_CM 0
+#endif
+__device__ __forceinline__ u32 jr_unit(u32 v, u32 M, u32 N) {
+  if (!H1U_JR_CM) return v;
+  const u32 nrb = M / 32;
+  return (v % nrb) * (N / 32) + v / nrb;
+}
+
 __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
                                                     const uint8_t* __restrict__ live) {
   __shared__ WarpSmem smem[WARPS];
@@ -2324,12 +2336,13 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj(const UCallR* __re
     else hi = mid;
   }
   const UCallR c = calls[lo];
+  const u32 u = jr_unit(gu - c.u0, M, c.N);
   if (c.md == 3)
-    h1u_unit<3, false, false, false, false, false, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{},
-                                                         gu - c.u0, smem[wp]);
+    h1u_unit<3, false, false, false, false, false, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{}, u,
+                                                         smem[wp]);
   else
-    h1u_unit<2, false, false, false, false, false, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{},
-                                                         gu - c.u0, smem[wp]);
+    h1u_unit<2, false, false, false, false, false, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{}, u,
+                                                         smem[wp]);
 }
 
 // h1umj's unit gu, for h1umj_sm (h1umj keeps its own copy, as h1um does of h1um_one)
@@ -2342,12 +2355,13 @@ __device__ __forceinline__ void h1umj_one(const UCallR* __restrict__ calls, u32 
     else hi = mid;
   }
   const UCallR c = calls[lo];
+  const u32 u = jr_unit(gu - c.u0, M, c.N);
   if (c.md == 3)
-    h1u_unit<3, false, false, false, false, false, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{},
-                                                         gu - c.u0, S);
+    h1u_unit<3, false, false, false, false, false, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{}, u,
+                                                         S);
   else
-    h1u_unit<2, false, false, false, false, false, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{},
-                                                         gu - c.u0, S);
+    h1u_unit<2, false, false, false, false, false, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{}, u,
+                                                         S);
 }
 
 // h1umj on the SMs whose %smid % den < q alone, its warps taking units from *next in turn (h1um_sm's partition)
