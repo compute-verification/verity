@@ -46,11 +46,12 @@ DELTAS = ("1/1099511627776", line.text(Fraction(1e-9)), "1/3", "999/1000")
 
 @st.composite
 def windows(draw, top: int) -> list[list[int]]:
-    """A record's windows, each [U, s] with 1 ≤ s ≤ U ≤ `top`, s small enough that some receipts may be wrong."""
+    """A record's windows, each [U, s] with 1 ≤ s ≤ U ≤ `top`: s small enough that some receipts may be wrong, or
+    every receipt drawn (none can be)."""
     out = []
     for _ in range(draw(st.integers(1, 3))):
         u = draw(st.integers(1, top))
-        out.append([u, draw(st.integers(1, min(u, 30)))])
+        out.append([u, draw(st.one_of(st.integers(1, min(u, 30)), st.just(u)))])
     return out
 
 
