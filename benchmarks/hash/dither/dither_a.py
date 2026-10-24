@@ -410,7 +410,7 @@ class Side:
             # the window's row z tables are never built: under "zy" its z/y leaf tables are, between steps in their
             # place
             zset, build = win.pre["z"], win.c.build
-            win.c.build = lambda st, step, domains=True: None if st is zset else build(st, step, domains)
+            win.c.build = lambda st, step, domains=True, **kw: None if st is zset else build(st, step, domains, **kw)
             win.z = [torch.empty(0, dtype=torch.int32, device=dev) for _ in win.z]
         if z == "zy":
             self.unit_of = [UNIT] * win.L
@@ -449,8 +449,8 @@ class Side:
                 if self.zy1:
                     # a step no capture reads builds the union without the units' y tables
                     full, lite, zbuild = win.pre["z"], win.c.union([self.zyset, self.ysset]), win.c.build
-                    win.c.build = lambda st, step, domains=True: zbuild(lite if st is full and win.cap is None else st,
-                                                                        step, domains)
+                    win.c.build = lambda st, step, domains=True, **kw: zbuild(
+                        lite if st is full and win.cap is None else st, step, domains, **kw)
             win.before_mid.append(self.y_leaves)
         if unit in ("kh",) + KONE:
             if not h1u:
