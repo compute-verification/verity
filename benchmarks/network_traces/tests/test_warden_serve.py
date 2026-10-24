@@ -170,6 +170,9 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
     assert s["wire_bits"]["egress"] == s["cells"]["egress"] * PARAMS.cell_bytes * 8
     assert s["data_bytes"] == {"ingress": sum(map(len, requests)), "egress": sum(map(len, responses))}
     assert "ACCEPTED: 3/3 ended" in ws.table(result)
+    rows = PARAMS.window * PARAMS.lanes * PARAMS.slots
+    assert {k: s["cell_rows"][k] for k in ("registered", "of", "rows")} == {"registered": 2, "of": 2, "rows": [rows]}
+    assert s["cell_rows"]["commit_ms"]["n"] == s["cell_rows"]["sign_ms"]["n"] == 2
 
     def refused(edit) -> list[str]:
         saved = {p: p.read_bytes() for p in out.iterdir()}
@@ -191,7 +194,26 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
         (out / "responses.records").unlink()
         ws.ar.write_blobs(out / "responses.records", ws.ar.pack_record(ws.replace(record, grid=grid)))
 
-    assert "responses window 0 isn't certified" in refused(flip_record)
+    problems = refused(flip_record)
+    assert "responses window 0 isn't certified" in problems and "responses window 0's cells aren't registered" in problems
+
+    def edit_cells(change) -> None:
+        lines = [json.loads(x) for x in (out / "cells.jsonl").read_text().splitlines()]
+        salts = ws.ar.read_blobs(out / "cells.salts")
+        change(lines, salts)
+        (out / "cells.jsonl").write_text("".join(json.dumps(x) + "\n" for x in lines))
+        (out / "cells.salts").unlink()
+        for blob in salts:
+            ws.ar.write_blobs(out / "cells.salts", blob)
+
+    def other_root(lines, salts) -> None:
+        lines[1]["registration"]["root"] = "00" * 64
+
+    def other_salt(lines, salts) -> None:
+        salts[1] = bytes([salts[1][0] ^ 1]) + salts[1][1:]
+
+    for change in (other_root, other_salt):
+        assert "responses window 0's cells aren't registered" in refused(lambda: edit_cells(change))
 
     def forge_reason() -> None:
         (record,) = ws.read_records(out, PARAMS)["fails"]
