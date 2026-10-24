@@ -378,6 +378,9 @@ public in v0 and charged by `advice.bits`) and N2's ingress part, which v0 leave
   view. Its ok bit is 1 when every ingress count is at most R_in and bucket 0's at least OWN; with the OWN own frames
   taken off at bucket 0, the ingress prefix sums are at least `floor` and sum to `received`; and the egress counts are
   `released`. About 105 ANDs a bucket: 63,031 at T = 600, R_in = 1, OWN = 0, and 64,894 at R_in = 4, OWN = 1.
+  Those are over circuit-check's whole-Definition budget (60,000 ANDs), so `check` holds the T = 600 roots to the
+  reference and their pinned digests without lowering them (`--lower-max-ands 70000` lowers them to 62,986 and
+  64,847 with no mismatch); T = 512, R_in = 4, OWN = 1 lowers whole to 55,343 ANDs, which the sidecar pins.
 - **Public** (`PUBLIC_ADVISED`): `PUBLIC_SERVED`'s items but the served sizes, with the advised ones (the link's
   windows and OWN), each window's declared sync, and the advice as a protocol output (`OUTPUTS_ADVISED`: the verdict,
   the deadline bit and the advice's digest). The heads' counts stay witness.
