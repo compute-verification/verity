@@ -628,6 +628,20 @@ __global__ void __launch_bounds__(256) pg_reduce_kernel(const float *__restrict_
   *reinterpret_cast<__nv_bfloat162 *>(out + i + 2) = __floats2bfloat162_rn(a.z * sc, a.w * sc);
 }
 
+// A timing span's mark (step_spans.py, whose `account` is its reference): acc is [the stream's last mark (ns, 0:
+// none), the current kind, then each kind's parts' ns and marks]. One thread, ordered by its stream alone.
+__global__ void pg_span_kernel(unsigned long long *acc, int part, int kind, int parts) {
+  unsigned long long t;
+  asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t));
+  if (kind >= 0) acc[1] = (unsigned long long)kind;
+  if (acc[0]) {
+    unsigned long long *k = acc + 2 + acc[1] * 2 * parts;
+    k[part] += t - acc[0];
+    k[parts + part] += 1;
+  }
+  acc[0] = t;
+}
+
 }  // namespace kv
 
 extern "C" {
@@ -871,6 +885,14 @@ int pg_reduce(const float *part, int nch, int M, int N, const float *xs, int xs_
   const int mn = M * N;
   kv::pg_reduce_kernel<<<(mn / 4 + 255) / 256, 256, 0, s>>>(part, nch, N, mn, xs, xs_rows, ws,
                                                              static_cast<__nv_bfloat16 *>(out));
+  return launched();
+}
+
+// A span mark on s: the time since s's last mark into part `part` (of `parts`) of the current kind, set to `kind`
+// first when kind >= 0 (of `kinds`).
+int pg_span(unsigned long long *acc, int part, int kind, int parts, int kinds, cudaStream_t s) {
+  if (!acc || parts < 1 || part < 0 || part >= parts || kinds < 1 || kind >= kinds) return -1;
+  kv::pg_span_kernel<<<1, 1, 0, s>>>(acc, part, kind, parts);
   return launched();
 }
 }
