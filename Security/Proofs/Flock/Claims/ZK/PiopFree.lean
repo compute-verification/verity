@@ -79,7 +79,6 @@ theorem piopCut_of_phases {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} (
     Claims.ZKServer.Switch.ringSwitchCut_bodies coin n src.sv _ (by rw [hsz']; omega) t₂' l₂' (by rw [hsz']; omega)
   obtain ⟨-, hl₃', -⟩ := ringSwitchCut_sws coin n _ _ (by rw [hsz']; omega) h₃'
   rw [hsz'] at hl₃'
-  refine ⟨_, t₃', l₃', ?_, by omega⟩
   unfold piopCut
   rw [Replay.bind_go h₁']
   try dsimp only
@@ -88,7 +87,7 @@ theorem piopCut_of_phases {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} (
   rw [Replay.bind_go (Flock.Firewall.Finish.rankCheck_pass_go l₂' hrk')]
   try dsimp only
   rw [Replay.bind_go h₃']
-  rfl
+  exact ⟨_, t₃', l₃', rfl, by omega⟩
 
 /-- **A returned cut PIOP ran its four phases and passed its rank check** at the lincheck's rounds. -/
 theorem piopCut_split_rank {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} {lay : Zk.PadLayout} {src : RepSrc}
