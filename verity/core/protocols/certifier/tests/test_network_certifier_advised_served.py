@@ -53,7 +53,7 @@ def _ingress(rin, own=0, late=0):
 
 def _view(adv, sync):
     link = AD.LinkAdvice(adv, (sum(FRAMES),))
-    return AD.view(link, 0, T, R, [sync], SERVED, FRAMING, **held(link))
+    return AD.view(link, 0, T, R, [sync], SERVED, FRAMING, clocks=[sync], **held(link))
 
 
 def _egress(adv):

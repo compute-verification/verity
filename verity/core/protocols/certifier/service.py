@@ -133,7 +133,10 @@ declared syncs, each held to Σ_sync; the heads' counts stay witness. Its public
 verifier of record takes the delivered advice (`verify(advice=…)`) and the tie only from its own tie source
 (`LinkWindows.ties`, `advised.TieSource`: `advised.IoTieVerdict`, IoTieRequest's verdict from proofs it verified,
 naming the link and its ingress registrations), never beside the advice; nothing in this package is a source until
-IoTieRequest runs in the proof service, so every advised link is refused until then. It refuses a window without an
+IoTieRequest runs in the proof service, so every advised link is refused until then. Each window's declared sync must
+be the one the certifier ran it under, which the verifier takes only from its own clock source (`LinkWindows.clocks`,
+`advised.ClockSource`), since a δ below the traffic's loosens the floor (REDTEAM phase 11); without one, every advised
+link is refused too. It refuses a window without an
 advice or one whose view `advised.view` refuses, and reports the advice it read as a third public output, `advice`
 (`advised.digest`); the
 network verdict refuses a window that names another advice than the first accepted window's, so every window's counts
@@ -500,7 +503,9 @@ class LinkWindows:
     link (`served`, FIXLEN) or an advised one (`advised`, arbitrary traffic under the advice) has no egress profile.
     `ties` is no public field but the verifier's own source of an advised link's tie (`advised.TieSource`), the only
     place `_view` takes IoTieRequest's verdict from: None, as nothing in this package is one until IoTieRequest runs
-    in the proof service, refuses every advised link."""
+    in the proof service, refuses every advised link. `clocks` is the same for the syncs the certifier ran the link's
+    windows under (`advised.ClockSource`), which an advised window's declared sync must be: None refuses every
+    advised link."""
 
     link: str
     params: GridParams
@@ -514,6 +519,7 @@ class LinkWindows:
     served: SV.ServedProfile | None = None
     advised: AD.AdvisedProfile | None = None
     ties: AD.TieSource | None = field(default=None, compare=False, repr=False)
+    clocks: AD.ClockSource | None = field(default=None, compare=False, repr=False)
 
     def __post_init__(self) -> None:
         if len(self.occupancy) != 2:
@@ -771,15 +777,16 @@ class LinkWindows:
 
     def _view(self, window: int, syncs: Sequence[ClockSync], advice: Any) -> AD.WindowView | None:
         """On an advised link, the window's view of `advice` (`advised.view`) under the tie from the verifier's own
-        tie source (`ties`), held to this link and the ingress registrations that source records for it; None
-        without a source or an `advised.LinkAdvice`, and where `view` refuses."""
-        if self.advised is None or self.ties is None or type(advice) is not AD.LinkAdvice:
+        tie source (`ties`), held to this link and the ingress registrations that source records for it, and the
+        syncs its own clock source (`clocks`) says the certifier ran the link's windows under; None without either
+        source or an `advised.LinkAdvice`, and where `view` refuses."""
+        if self.advised is None or self.ties is None or self.clocks is None or type(advice) is not AD.LinkAdvice:
             return None
         try:
             tie = self.ties.verdict(self.link, advice, self.advised)
             return AD.view(advice, window, self.params.buckets, self.params.allocation, syncs, self.sync_set,
                            self.advised.request_frames, tie=tie, link_name=self.link,
-                           registrations=self.ties.registrations(self.link))
+                           registrations=self.ties.registrations(self.link), clocks=self.clocks.syncs(self.link))
         except ValueError:
             return None
 
@@ -979,11 +986,11 @@ class LinkWindows:
         """The advised counts' check on the link-window (`advised.reference`, which the tests hold to the circuit): the
         egress head's counts are the advice's releases in the window's buckets (`advised.view`), and the ingress head's
         counts release the request frames that view needs by each bucket, under the declared syncs, and the window's
-        `received`. False without an `advised.LinkAdvice` or a tie source (`ties`), or on an advice `view` refuses: not
-        covering the window, without the tie from that source or not under it, with requests whose ends under the
-        profile's framing aren't the windows' total,
-        releasing more than R frames in a bucket, or releasing a frame in a window with no declared sync or one outside
-        Σ_sync, or before its request."""
+        `received`. False without an `advised.LinkAdvice`, a tie source (`ties`) or a clock source (`clocks`), or on an
+        advice `view` refuses: not covering the window, without the tie from that source or not under it, with requests
+        whose ends under the profile's framing aren't the windows' total, releasing more than R frames in a bucket, or
+        releasing a frame in a window with no declared sync, one outside Σ_sync or other than the clock source's, or
+        before its request."""
         v = self._view(opening.window, syncs, advice)
         if v is None:
             return False
