@@ -738,6 +738,40 @@ def evaluate(st_: dict, cases: Sequence[tuple[State, Inputs]]) -> list[Out]:
     return [decode(S, row) for row in out.reshape(len(cases), -1).tolist()]
 
 
+def _req(r: Req) -> list[int]:
+    return [r.id, r.P, r.O, r.out, r.comp]
+
+
+def to_json(state: State, inp: Inputs, want: Out) -> list:
+    """A difftest vector (a step as the replay ran it) as JSON: sparse inputs, the outputs of an accepted step."""
+    def nz(xs):
+        return [[k, x] for k, x in enumerate(xs) if x]
+
+    assert want.ok and want.state is not None
+    return [[[_req(r) for r in state.running], [_req(r) for r in state.waiting], state.free],
+            [[_req(r)[:3] for r in inp.arrivals], [k for k, b in enumerate(inp.bits) if b], nz(inp.hit), nz(inp.evict), nz(inp.ret)],
+            [[list(r) for r in want.rows], [[_req(r) for r in want.state.running], [_req(r) for r in want.state.waiting],
+                                            want.state.free], want.taken, want.used]]
+
+
+def from_json(st_: dict, v: list) -> tuple[State, Inputs, Out]:
+    (run, wait, free), (arr, ones, hit, evict, ret), (rows, (nrun, nwait, nfree), taken, used) = v
+
+    def dense(pairs, n):
+        out = [0] * n
+        for k, x in pairs:
+            out[k] = x
+        return tuple(out)
+
+    def reqs(xs):
+        return tuple(Req(*x) for x in xs)
+
+    A, W, R = st_["A"], st_["W"], st_["R"]
+    return (State(reqs(run), reqs(wait), free),
+            Inputs(reqs(arr), dense([(k, 1) for k in ones], A), dense(hit, W + A), dense(evict, W + A), dense(ret, R)),
+            Out(True, tuple(tuple(r) for r in rows), State(reqs(nrun), reqs(nwait), nfree), taken, used))
+
+
 # --- cost ------------------------------------------------------------------------------------------------------------------
 
 
@@ -760,5 +794,5 @@ def size(**st_) -> dict[str, int]:
     return out
 
 
-__all__ = ["Inputs", "Out", "ReplayStep", "Req", "STATICS", "State", "arguments", "decode", "empty", "evaluate",
-           "reference", "size", "statics", "unit", "widths"]
+__all__ = ["Inputs", "Out", "ReplayStep", "Req", "STATICS", "State", "arguments", "decode", "empty", "evaluate", "from_json",
+           "reference", "size", "statics", "to_json", "unit", "widths"]

@@ -10,8 +10,9 @@ circuit's state rests on, that a running request holds ⌈computed / B⌉ blocks
     python3 replay_vectors.py TRACE... [--R 16 --W 64 --A 16] [--circuit] [--out OUT.json] [--fixture N]
 
 checks `replay_step.reference` on every step that fits the size class (the rest are counted, out of class), and with
-`--circuit` the Definition on them too; `--fixture N` writes the first N fitting steps of each trace as the vectors the
-certifier's test reads (`verity/core/protocols/certifier/tests/fixtures/replay_step_vectors.json`).
+`--circuit` the Definition on them too; `--fixture N` writes each trace's N consecutive fitting steps with the most
+preemptions, cache hits, admissions and stops (`window`) as the vectors the certifier's test reads
+(`verity/core/protocols/certifier/tests/fixtures/replay_step_vectors.json`).
 """
 from __future__ import annotations
 
@@ -158,35 +159,18 @@ def fits(st: dict, state: RS.State, inp: RS.Inputs, want: RS.Out) -> bool:
             and all(p < R for p, *_ in want.rows) and want.taken < st["A"])
 
 
-def _req(r: RS.Req) -> list[int]:
-    return [r.id, r.P, r.O, r.out, r.comp]
-
-
-def to_json(state: RS.State, inp: RS.Inputs, want: RS.Out) -> list:
-    def nz(xs):
-        return [[k, x] for k, x in enumerate(xs) if x]
-
-    return [[[_req(r) for r in state.running], [_req(r) for r in state.waiting], state.free],
-            [[_req(r)[:3] for r in inp.arrivals], [k for k, b in enumerate(inp.bits) if b], nz(inp.hit), nz(inp.evict), nz(inp.ret)],
-            [[list(r) for r in want.rows], [[_req(r) for r in want.state.running], [_req(r) for r in want.state.waiting],
-                                            want.state.free], want.taken, want.used]]
-
-
-def from_json(st: dict, v: list) -> tuple[RS.State, RS.Inputs, RS.Out]:
-    (run, wait, free), (arr, ones, hit, evict, ret), (rows, (nrun, nwait, nfree), taken, used) = v
-
-    def dense(pairs, n):
-        out = [0] * n
-        for k, x in pairs:
-            out[k] = x
-        return tuple(out)
-
-    A, W, R = st["A"], st["W"], st["R"]
-    reqs = lambda xs: tuple(RS.Req(*x) for x in xs)  # noqa: E731
-    return (RS.State(reqs(run), reqs(wait), free),
-            RS.Inputs(tuple(RS.Req(*a) for a in arr), dense([(k, 1) for k in ones], A), dense(hit, W + A), dense(evict, W + A),
-                      dense(ret, R)),
-            RS.Out(True, tuple(tuple(r) for r in rows), RS.State(reqs(nrun), reqs(nwait), nfree), taken, used))
+def window(cases: Sequence[tuple[RS.State, RS.Inputs, RS.Out]], n: int) -> list:
+    """The n consecutive cases with the most events: a preemption counts 4, a cache hit 2, an admission or a stop 1."""
+    def score(c) -> int:
+        s, i, w = c
+        before = {r.id for r in s.running}
+        return (4 * any(r.id in before for r in w.state.waiting) + 2 * any(i.hit) + (w.taken > 0)
+                + (len(w.state.running) < len(s.running) + w.taken))
+    sc = [score(c) for c in cases]
+    if len(cases) <= n:
+        return list(cases)
+    best = max(range(len(cases) - n + 1), key=lambda k: (sum(sc[k:k + n]), -k))
+    return list(cases[best:best + n])
 
 
 def check(st: dict, cases: Sequence[tuple[RS.State, RS.Inputs, RS.Out]], *, circuit: bool, batch: int = 512) -> dict:
@@ -233,7 +217,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                                       **check(st, ok, circuit=a.circuit)}
         print(f"{name}: {json.dumps(r)}", flush=True)
         if a.fixture:
-            fixture.append({"trace": name, "statics": st, "vectors": [to_json(*v) for v in ok[:a.fixture]]})
+            fixture.append({"trace": name, "statics": st, "vectors": [RS.to_json(*v) for v in window(ok, a.fixture)]})
     if a.out:
         a.out.write_text(json.dumps(fixture if a.fixture else report, separators=(",", ":") if a.fixture else None,
                                     indent=None if a.fixture else 1))
