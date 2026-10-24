@@ -691,12 +691,16 @@ followed by `LEN` bytes, answered `ok N` followed by `N` bytes:
 Where the session loop holds the rep (`own`, by table, rep and the table's level-0 root), an `open`, `inner` or `rep`
 request that is not what it holds is refused (`RepIn.differs`; an opening's extra claims and coins): the draws, the
 passed values, the extra claims and the coins are the loop's own, whatever the host sends.
+With `liveOnly` (the session loop's finish, `serveLoop`), a table comes only as the loop's level 0 (`level0`, never
+`table`), and a rep's proof file is only the one its last `inner` request computed live (`Kept.answers`): a `rep` request
+no such proof answers is refused, never computed afresh from the request.
 Anything else, or a request it refuses, is answered `err WHY` and ends it, with exit code `1`. -/
 def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) (setups : Array Setup)
     (level0Of : ByteArray → IO (Option Level0.Level0))
     (keep : ByteArray → Nat → Array ByteArray → IO Unit := fun _ _ _ => pure ())
     (file : ByteArray → Nat → ByteArray → IO (Option String) := fun _ _ _ => pure none)
-    (own : Nat → Nat → ByteArray → IO (Option (Except String Own)) := fun _ _ _ => pure none) : IO UInt32 := do
+    (own : Nat → Nat → ByteArray → IO (Option (Except String Own)) := fun _ _ _ => pure none)
+    (liveOnly : Bool := false) : IO UInt32 := do
   let refuse := fun (why : String) => do
     ch.write (s!"err {why.replace "\n" " "}\n").toUTF8
     ch.flush
@@ -716,6 +720,8 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
       let (some i, some len) := (i.toNat?, len.toNat?) | return (← refuse s!"a request `{line}`")
       let some st := setups[i]? | return (← refuse s!"table {i} of the session's {setups.size}")
       let b ← ch.readExact len
+      if liveOnly && line.startsWith "table " then
+        return (← refuse s!"finish: table {i}'s level-0 data from the host, where the session loop's finish takes only its own level 0")
       let t : V Tab ← if line.startsWith "table " then pure (tabOf st b) else do
         match ← level0Of b with
         | some l => pure (tabOfLevel0 st l)
@@ -749,7 +755,10 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
         if let some why ← ownWhy own i r t (q.differs lay) then return (← refuse why)
       let pf : V ByteArray := parseRep t s b >>= fun q => match kept.find? (·.answers i r q) with
         | some k => pure (encZk (shapeZk t.st t.sch (claimsOf q.xs).size) k.proof)
-        | none => proofFile t r (spec.domain name r).toUTF8 q
+        | none =>
+          if liveOnly then
+            .error s!"finish: table {i} rep {r}'s proof file is only the one its inner request computed live, and none answers this request"
+          else proofFile t r (spec.domain name r).toUTF8 q
       kept := kept.filter fun k => !(k.i == i && k.r == r)
       match pf with
       | .ok p =>
@@ -845,7 +854,7 @@ def serveLoop (ch : Frame.Chan) (S : Hello.Setup) (specs : Hello.Specs) (l0s : I
       | .ok (spec, sts) =>
         say "ok 0"
         let _ ← serve ch IO.getRandomBytes spec (sts.map Setup.ofCircuit)
-          (fun r => do return ((← l0s.get).slots.find? (·.l0.root == r)).map (·.l0)) keep file own
+          (fun r => do return ((← l0s.get).slots.find? (·.l0.root == r)).map (·.l0)) keep file own true
   | _ => say s!"err a request `{line.trim}`"
 
 end Flock.Firewall.Finish

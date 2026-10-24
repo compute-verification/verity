@@ -29,8 +29,9 @@
 #      checks' Lean findings under the window's open root, which every per-window registered value binds (PRF-127)
 # env: H1_MEM_GB (the job's --mem-gb)  H1_K (4096; a smaller K truncates every row: a smoke)  H1_COLS (each call's first
 #      N weight rows; 0 all)  H1_DRAW (8)  H1_TOKENS (16)  H1_LAYER (0)  H1_HUB (/workspace/hf/hub)
-#      H1_FIREWALL (1)  H1_WIRE (0; 1: the selftest's zk_worker_wire and zk_worker_finish on honest's statement, under the
-#      firewall, after the proofs, ten firewalled sessions, about 26 min at K = 64; a failure fails the job)  H1_ONLY (the plan's tags to prove and check, space-separated: "honest other-window-own" skips the negatives; all)
+#      H1_FIREWALL (1)  H1_WIRE (0; 1: the selftest's zk_worker_wire, zk_worker_finish and zk_worker_level0 on honest's
+#      statement, under the firewall, after the proofs, thirteen firewalled sessions, about 34 min at K = 64; a failure
+#      fails the job)  H1_ONLY (the plan's tags to prove and check, space-separated: "honest other-window-own" skips the negatives; all)
 #      HZ_RUNS (1): sessions a statement, all verified by one Lean process, which reads the circuit once
 #      H1_CONTROLS ("honest output_row_committed_false" below K = 4096, else none)  H1_SERVE_PCT (36) and H1_PROVE_PCT (32):
 #      a session's serve and prove caps, % of H1_MEM_GB (they run side by side, the stager gone; at K = 4096 with 8
@@ -122,13 +123,13 @@ while IFS=$'\t' read -r kind tag D n; do
   log "prove $tag: $(cat "$OUT/$tag/prove.time" 2>/dev/null)"
 done < "$WK/plan.tsv"
 # the wire's controls, under the same firewall: the prover's frames doctored on the wire to the session loop, each dropped
-# or refused, and the host's rep requests to the loop's finish doctored, each refused (flock-circuit's zk_worker_wire and
-# zk_worker_finish, live PROTOCOL.md §10.4)
+# or refused, the host's rep requests to the loop's finish doctored, each refused, and a second level-0 draw for a table,
+# refused (flock-circuit's zk_worker_wire, zk_worker_finish and zk_worker_level0, live PROTOCOL.md §10.4)
 WIRE=ok
 if [ "$FW" = 1 ] && [ "${H1_WIRE:-0}" = 1 ]; then
   HD=$(awk -F'\t' '$1 == "S" && $2 == "honest" {print $3}' "$WK/plan.tsv")
   HN=$(awk -F'\t' '$1 == "S" && $2 == "honest" {print $4}' "$WK/plan.tsv")
-  for c in zk_worker_wire zk_worker_finish; do
+  for c in zk_worker_wire zk_worker_finish zk_worker_level0; do
     FC_FIREWALL_STATEMENT=verity/flock-circuit+seed-injection \
       $TIME "$OUT/honest/selftest-$c.time" bash -c "exec $SBIN selftest --zk --instances $HD/inst.bin \
       --circuit $HD/circuit.txt --draw subset:$HN --only $c" > "$OUT/honest/selftest-$c.out" 2> "$OUT/honest/selftest-$c.err"

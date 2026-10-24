@@ -816,14 +816,15 @@ receives them (`Frames.feedOf`, `Frames.coins`), and the session's `Finish` leav
 place (`place SESSION I R`: `alg N`, `open N` or `own`, by which it ends a failed rep's rounds) and, at the rep's end, the
 values the frame took (`vals SESSION I R`, `ok N` and the words in absorbed order, for its end check), and it passes every
 device round through, unmasked, to the loop (`firewall::Gate`).
-A connection there whose first line is `level0 SESSION M LEN`, followed by a table's `LEN`-byte packed witness, is that
-table's level 0 (`Session.level0`, §10.2) for the live session named `SESSION`: the hex of its coin tree's root, the first
-four words of its `Hello`'s answer (`Level0.nameOf`, `firewall::level0_session`). It is answered `ok N R` and the `N`
-bytes of the extra lanes, the paddings and the salts the loop drew, then its `R`-byte root, or `err WHY`, and a session
-the loop isn't serving is refused. The session's `Commit` leaves only when its roots are its tables', in order, each a
-root the loop drew for that session at its table's statement's `m` (`Level0.commit`; a root drawn at a smaller `m` would
-pad too few positions). Every `Level0` drawn for a session, committed or not, is freed when it ends
-(`Level0.Registry.close`).
+A connection there whose first line is `level0 SESSION TABLE M LEN`, followed by a table's `LEN`-byte packed witness, is
+table `TABLE`'s level 0 (`Session.level0`, §10.2) for the live session named `SESSION`: the hex of its coin tree's root,
+the first four words of its `Hello`'s answer (`Level0.nameOf`, `firewall::level0_session`). It is answered `ok N R` and
+the `N` bytes of the extra lanes, the paddings and the salts the loop drew, then its `R`-byte root, or `err WHY`. A
+session the loop isn't serving is refused, and so is a table the session lacks or a second request for a table: the loop
+draws each table's level 0 once (`Level0.Registry.draw`), so the prover can't draw again until a root suits it. The
+session's `Commit` leaves only when its roots are its tables', in order, root `i` the one the loop drew for that
+session's table `i` at its statement's `m` (`Level0.commit`; a root drawn at a smaller `m` would pad too few positions).
+Every `Level0` drawn for a session, committed or not, is freed when it ends (`Level0.Registry.close`).
 The proofs leave just before `Finish`, the loop's finish's file of each table's rep 0 and rep 1 on the level 0 the
 `Commit` bound (`Session.ownProofs`, kept once a rep, `Frames.Registry.file`), every rep's or none, and only once every
 rep's frame ended not stopped; where one stopped, `Finish`
@@ -890,7 +891,10 @@ each round of its inner proof, which leaves through the rep's frame. Then the fi
 every round's coins (`rep J R LEN`: the rep's draws, the values the firewall passed, the extra claims' points and the
 coins) and computes the rep's whole proof file from them and its own salts: where that request's inputs and coins are
 the ones the `inner` request took, the file encodes the proof that request computed (`Finish.Kept`), which is the same
-proof. That file is the one that leaves; Rust
+proof. The loop's finish serves only that file: it refuses a `rep` request no `inner` request answers, and a `table`
+request (the host's level-0 data), so every file it serves was computed live on the loop's level 0 (`Finish.serve`'s
+`liveOnly`). `flock-firewall finish` alone, the offline cross-check, still computes a file from the `rep` request's
+inputs. That file is the one that leaves; Rust
 computes no opening, inner proof or proof file of a firewalled rep. A rep that a check failed, or whose frame stopped
 it, leaves no proof file, so the finish never gets its `rep` request. The bucket's `t.lean_finish` is the request's wall
 seconds, and `t.zk_inner` the inner proof's.
