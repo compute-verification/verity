@@ -74,6 +74,25 @@ def test_honest_passes_and_each_negative_fails_on_the_advised_counts_alone():
     assert not n2.expected("extra", [["egress/signed", "advised"]] + [[]] * (n2.WINDOWS - 1))
 
 
+def test_a_head_the_prover_changed_fails_its_signed_digest_in_window_0_alone():
+    """The served link's ``tampered`` (`n2_zk.one_count` on the honest records, its certificate the original's), here
+    on the simulated link: window 0's egress head fails its signed digest, the advised counts maybe the count it
+    changed, and no other window fails; `expected` holds tampered to that and no other member to it. The tie the
+    summary names is the stand-in, since the link's ingress isn't IoTieRequest's pinned size class."""
+    sim, _ = _link(n2.T)
+    lw = sim.lw
+    link, pairs, _ = sim.members["honest"]
+    rd = n2.link_windows(lw, link, [n2.Z.one_count(lw, w, p) for w, p in enumerate(pairs)])
+    fails = [n2.failed(x) for x in rd.windows]
+    assert n2.expected("tampered", fails) and "egress/signed" in fails[0], fails
+    assert [x.expect for x in rd.windows] == [0] + [1] * (n2.WINDOWS - 1)
+    assert not n2.expected("tampered", [[]] * n2.WINDOWS)
+    assert not n2.expected("tampered", [["advised"]] + [[]] * (n2.WINDOWS - 1))
+    assert not n2.expected("tampered", [["egress/signed"]] * n2.WINDOWS)
+    assert not n2.expected("moved", fails) and not n2.expected("honest", fails)
+    assert sim.tie["source"] == "stand-in" and tuple(sim.tie["ingress"]) != n2.TIE_PINNED
+
+
 def test_joined_advice_numbers_each_windows_requests_after_the_windows_before_and_releases_by_id():
     """`joined` (the --e2e link's advice from its Commit windows'): the second window's rows and hit sources name its
     requests after the first's, and each kept output is released where the certified frames of its request say."""
