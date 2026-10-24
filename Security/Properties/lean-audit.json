@@ -1542,6 +1542,12 @@
    "assumptions": [],
    "type_hash": "3fa28ce2488ed71727f4bb8023747125b95abe20a9a494fa45e5a29c21b0aada"
   },
+  "Properties.RemoteAudit.chunkedIsWhole": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.chunkedIsWhole : Properties.RemoteAudit.ChunkedIsWhole"],
+   "assumptions": [],
+   "type_hash": "a55b21eea959675213296153cd5512118ada7de5f7ea491ee22a32c7b98c5cdb"
+  },
   "Properties.RemoteAudit.drawIsSubset": {
    "owner": "@memory-accounting",
    "signature": ["Properties.RemoteAudit.drawIsSubset : Properties.RemoteAudit.DrawIsSubset"],
@@ -1578,9 +1584,6 @@
    "assumptions": [],
    "type_hash": "90eed93483409e786c68ecf37861604fbc03d72f97d7d1ed12f66bfe5990779e"
   },
-  "Properties.RemoteAudit.receiptsBelowLimit": {
-   "owner": "@memory-accounting"
-  },
   "Properties.RemoteAudit.passesStepped": {
    "owner": "@memory-accounting",
    "signature": ["Properties.RemoteAudit.passesStepped : Properties.RemoteAudit.PassesStepped"],
@@ -1604,6 +1607,9 @@
    "signature": ["Properties.RemoteAudit.pooledCoversSession : Properties.RemoteAudit.PooledCoversSession"],
    "assumptions": [],
    "type_hash": "c426dc59633ca4f41787f55f427a54e99c5c0909bd08720e02ce311bd3e2055b"
+  },
+  "Properties.RemoteAudit.receiptsBelowLimit": {
+   "owner": "@memory-accounting"
   },
   "Properties.RemoteAudit.recordKeptAfterDraw": {
    "owner": "@memory-accounting",
@@ -2787,6 +2793,10 @@
    "Properties.RemoteAudit.recordKeptAfterDraw": {
     "function": "RemoteAudit.Session.run",
     "outcome": "accept"
+   },
+   "Properties.RemoteAudit.chunkedIsWhole": {
+    "function": "RemoteAudit.checkWindowChunked",
+    "outcome": "none"
    }
   },
   "frozen": {
@@ -2813,12 +2823,12 @@
  },
  "reads": {
   "CertifierDevice.Certifier": {
-   "digest": "a7223a59cdfaeb84288c5aeb28d141a5657664909a3fdc827f6baa079552ce54",
+   "digest": "507644cf13b471a46bc7754eb6f2275154de697f6158e12ff725268e3314acb0",
    "definitions": {
     "CertifierDevice.Certifier": "1ba33eb721cbdae7114754a43739e9cc2ce133bb36a06cdc1dde86077fb7abdb",
     "CertifierDevice.Certifier.closeWindow": "a67a59e92f5932c574f69e8ce657380734f6c0fb0e660f4433511b0183de486f",
     "CertifierDevice.Certifier.doFault": "38ec4e41d63a4f182748d6c2351225c28c43016a03d6261f8a24429165f4da25",
-    "CertifierDevice.Certifier.enqueue": "e8abc28941139ad46e2db23155bb715ecbac409132cd16a18ee56bb7d5ee0f67",
+    "CertifierDevice.Certifier.enqueue": "e627bd692c73c5bce5864f8a4a3cf921514eeab236c4b6a36ef01ff825eec4f0",
     "CertifierDevice.Certifier.fault": "62df009d4ca306f54e787550e42b7d36e26f03c490c29473c53cb0ec06833503",
     "CertifierDevice.Certifier.link": "09e009d61a222daedd8c70de96ff24cfd119cb6ba3bdfafafb39b36d052e380f",
     "CertifierDevice.Certifier.params": "54fe6fceb9099328dd696cabf700df28340c780441b38819521c663b37ad6a6a",
@@ -2850,7 +2860,7 @@
    ]
   },
   "CertifierDevice.Device": {
-   "digest": "c1e27b19d56517bb1272e4d0dff045f7fccd364c5c420ab0f5e518a42de9a93e",
+   "digest": "f656551e1f1a1dcccf9eb172051c1c720f0dae442c91c33a84d968c188be125b",
    "definitions": {
     "CertifierDevice.Action": "b7bd51c7fdc3dfd6c7feeb0955a9e37c93ecbc8b5b7ef309c8c2a9a0c6cb597b",
     "CertifierDevice.Action.casesOn": "b1658dbe8720b6660f95c7d6e7fe97dc12ec2667a0efab798bd8dba407b52273",
@@ -2928,13 +2938,13 @@
     "CertifierDevice.State.bucketIn": "eed39268112d4c4227f8b42c8b83f152721a58ca51d240831035227d391f01b2",
     "CertifierDevice.State.bucketReady": "3f7e7f8d53aa33e6156efff7b5230750e3464cac9e862ae269740d1b00918dd3",
     "CertifierDevice.State.bucketer": "372b4bf869d5fe52272d0333b4a05cb1fda0cecd1d48207f95259cee72959eea",
-    "CertifierDevice.State.checkForwarding": "893652d52b33dfd0323c80087438ce8b5ad675defe2d330c3a96c0f187ce9702",
+    "CertifierDevice.State.checkForwarding": "f54ec8172ebe6422020456df06023b146aa0582a721e7c0f1a2a9a7f4c198f0c",
     "CertifierDevice.State.config": "cd03c47576a6c9f72c23cba09d4cea6b2964a3600713c15d9b481bd5be61c025",
     "CertifierDevice.State.done": "e92279b63fc034e08017bdf2a882e9b98032c45648eafe6d1e5535dc231c046f",
     "CertifierDevice.State.egressEvent": "0b9be4b6caaa56844d4f78663cd527e109cd1507fe116452858abbef068c3f1d",
     "CertifierDevice.State.egressTick": "45f0327126af7b1b2a8e6f0b91cc03032cf64c6cad9f89bb7ac85ab763b2f127",
     "CertifierDevice.State.frames": "3f78d21d17c068c61b9d5e066ce7e7639ef9ec5ae7e2466e9218b2609ac99807",
-    "CertifierDevice.State.ingressTick": "255f58a118f95cd3cb27eab95493f59caabc94cecb23ccf457e4d9156ddc92d8",
+    "CertifierDevice.State.ingressTick": "e069ab8c549a8eba52d79939281edb8bea507568ae75fb6eaed01ae95c7e4385",
     "CertifierDevice.State.isLate": "17586c615d63e8428fe79afa8acdb477d35dd4549371a0471f2dfefc697163d2",
     "CertifierDevice.State.late": "16f25942b597b495a5537048318721ca4577c7b5b3cf3133f1527825bd3c09d3",
     "CertifierDevice.State.linkBuffer": "1d749fb2c70469a7c5fabe0335a82963c6d5ee1925eadf8885858df7932a1be3",
@@ -2969,12 +2979,12 @@
     "CertifierDevice.Stream.out": "9fbdb664bc0c6d70b4765015e8a0ba643c2c35ff88fab48d027ea04c2114d040",
     "CertifierDevice.Stream.phase": "387b60cdbfee55a776c2d868566d6bfcac870001786c3e0419b910b7ccd3d5a1",
     "CertifierDevice.Stream.window": "1949b43dcb023fe582ae7cc6032492ff32610cd71ee3b676e0b0c3d456777983",
-    "CertifierDevice.init": "107f738a16beda7324f39dd65bbf2373010204ad584514f2187a06a4d65ea6f5",
+    "CertifierDevice.init": "4f9b89301cbcad9d570ca86d859522982989e6ee5d7e917dc291c49262b5f2e1",
     "CertifierDevice.instBEqPhase": "89c501e2eba649b5ca8f1eaa10705c98cee4f9786b3be6d95e76d624b56ec711",
     "CertifierDevice.instBEqPhase.beq": "f4f0ca205395150cd72db6329d229ce21c4f10dae6e5d50f2a0243694e9c25df",
     "CertifierDevice.instDecidableEqGridKind": "2778639d9a2a59bc59f485c25ac13dcfe120bba5d7b9b2c262d6d02248cb56b2",
     "CertifierDevice.nsPerMs": "7b3885e44c76b69e5c28eeb4a0a2f683f51f6ac6d3dfdef531422ecd99bb9bac",
-    "CertifierDevice.step": "c9252313a9cab160cd20beeba267de37469bf5db0caac39943152bfb1d1bba71"
+    "CertifierDevice.step": "09e1d4a03681e767047f23f17e817ad5d8414364323d9687ec23a1a7ffe71672"
    },
    "guarantees": [
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
@@ -3149,22 +3159,22 @@
    ]
   },
   "CertifierDevice.Shaper": {
-   "digest": "10960104395b6b43e9baad20b59730868471bd254facb1c73e7527a0374ea51f",
+   "digest": "dce6c503f116694087813828fa60a9ea17acbcb0cc0ef0fbddf2354629308f4b",
    "definitions": {
-    "CertifierDevice.Bucketer": "138eab901f52fad6840124f854b024bd38748e299ac095dd38eeaf687733ac39",
-    "CertifierDevice.Bucketer.admit": "c25d82c3fa32f35df7e88ae0e772276c88d96cde4d87932bfd990929f616189a",
-    "CertifierDevice.Bucketer.arrive": "76a4f27c2a229658da2e30b010e8c02cf827c798b6f204de42275cfd74da19ab",
+    "CertifierDevice.Bucketer": "eda87b727ee5890600f96aaee1a51b14f4c16419801fc39aeb2275c02d8d5bb9",
+    "CertifierDevice.Bucketer.admit": "11b6c8d32ace59698e14db1f631fc209461c39f99227aa11c4cbc9f384532744",
+    "CertifierDevice.Bucketer.arrive": "2cfed2f7aa6967c4ff13484a639276b129c4833f594ad6c62fd4024701561440",
     "CertifierDevice.Bucketer.certifier": "e9e854e61df943fb537a93da9e1c7803b57178fc9bb1cf5031b0c0c19d5a52ce",
     "CertifierDevice.Bucketer.counts": "e7aef8b1b7b2170aa9e5e2c18eccd875a46720edaca2d051e8fca16e16842027",
-    "CertifierDevice.Bucketer.enter": "7de681b2a3ebcfa11ae301823e992ef2ecb1b4e5ac860f51b95c645cc95ba1ba",
+    "CertifierDevice.Bucketer.enter": "37a486e9588b1d6e81fcd41d492926517644b2add5909f99a19bdba87df3649f",
     "CertifierDevice.Bucketer.first": "aa37a387d7c98a19e6162222093c1214e3999d8beb1a665eb28ee40c414337be",
-    "CertifierDevice.Bucketer.follow": "34a30ffb9ca7a91aabf4dccd42b7081dddfa03c57e4b24fedd03d401fa78a29d",
+    "CertifierDevice.Bucketer.follow": "2ea1ac15d864fc82a16700f553b53c9c73620814fee5f4f8e921aec0b754489c",
     "CertifierDevice.Bucketer.own": "7a2d9134a15743060407e4733d32490fdb5a571606549e20663925792bb8a903",
-    "CertifierDevice.Bucketer.ownQueued": "a125c4bc048970ae58b67efa871e09a0ecb99d1ff6c67f6669a7b1b4e4829453",
+    "CertifierDevice.Bucketer.ownNow": "cb7df50097b91e3a5e863395915a0b8c638d134d8cc7b0482619eb308f9428f9",
     "CertifierDevice.Bucketer.served": "f48da669ed507d9f76416edad32e2f242662973c000bc009ae13d6d258f4d441",
     "CertifierDevice.Bucketer.t": "3a42fbdce76119503f22b6d88af5508fbc6b3a7fcb48b289e0a88fc6894a60a6",
-    "CertifierDevice.Bucketer.takeOwn": "a7ee9b3b960c70a8d37182118c807f5bb0dcdfdb83fb01afa9781ddda4bc8f6d",
-    "CertifierDevice.Bucketer.tick": "1aad8ff13d762513dba809c69327aaf62debd8ba89c14c63e1552b109ecc3658",
+    "CertifierDevice.Bucketer.takeOwn": "6f2d5fa5a69362e9a94ad43b9aed4f4ee8ff081cd8b68909947272cc6e14c55f",
+    "CertifierDevice.Bucketer.tick": "ba71c30bafd8cd4d910d2722c7a51b48b742cc33d4951eeb820c9132214d6f43",
     "CertifierDevice.Bucketer.waiting": "40e37e1917ca90466c1738a9e67c17a9f3a6f323b0e4c44a2726abe84c431670",
     "CertifierDevice.Frame": "c0c6148e12ba5b347aab4bc7b152a095e82cae8f862c3c77e6787fe5a833f91b",
     "CertifierDevice.Frame.anchor": "9e77b046a7c21d304e73d483250441d109565d92de88d77b23943aebaa85444b",
@@ -3193,7 +3203,7 @@
     "CertifierDevice.Shaper.syncSet": "4b247b0a0dc11b7266aca681e492480f06e3257236191295f6277ca243dca371",
     "CertifierDevice.Shaper.syncs": "1129756b7a773c4286591a72e982979b52c34a0f4cc5cc32652a7eec228ed584",
     "CertifierDevice.Shaper.t": "d3bd6acc46f4d9cf908db6071ca59e3558d989328ebb0c4849d8e569eb9a1ac0",
-    "CertifierDevice.Shaper.tick": "faa298e465b4392905e9f9ccf6925842afab74568644732e40c3b77e78522e93",
+    "CertifierDevice.Shaper.tick": "d8076cd0c2eabef02128086ea27f5388a0c4a6651527135aaf2edd89dd508aaf",
     "CertifierDevice.Shaper.tick._sparseCasesOn_3": "455bd34b87a4a98c40b07a4ee7bdf1a91dd3b1bfed69b2f7a196566b42662999",
     "CertifierDevice.Shaper.windows": "50a1fdf1ff533a264928bcd66b40c2bac7e4e3ad11060515151228eb2ff8a5ed"
    },
@@ -4706,6 +4716,7 @@
     "Properties.RemoteAudit.acceptOpensDraws",
     "Properties.RemoteAudit.acceptedMinPasses",
     "Properties.RemoteAudit.appendsInOrder",
+    "Properties.RemoteAudit.chunkedIsWhole",
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.passesChained",
@@ -4963,6 +4974,7 @@
     "Properties.RemoteAudit.acceptOpensDraws",
     "Properties.RemoteAudit.acceptedMinPasses",
     "Properties.RemoteAudit.appendsInOrder",
+    "Properties.RemoteAudit.chunkedIsWhole",
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.passesChained",
@@ -5034,6 +5046,7 @@
     "Properties.RemoteAudit.acceptOpensDraws",
     "Properties.RemoteAudit.acceptedMinPasses",
     "Properties.RemoteAudit.appendsInOrder",
+    "Properties.RemoteAudit.chunkedIsWhole",
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.passesChained",
@@ -6599,7 +6612,7 @@
    ]
   },
   "PouwCheck.Credit": {
-   "digest": "d7f6cc706881e9fa1c471c447c9e82d29e1127508b8777f41e48d768911b182e",
+   "digest": "d3385d5a624ca6c5fef2354062a55d5f857b5e7fe83d0f0b828aefedc5ae9784",
    "definitions": {
     "PouwCheck.Credit.DELTA": "7f25f6dfa4468aa37ff60109df9adcb1b985976a25b622ea09d3a6f339df33e1",
     "PouwCheck.Credit.Internal.credited._sparseCasesOn_11": "c761395d7fd9a1aacee6e78fbf660be44df3eb53ad0fda9be3ebfc71d763aa36",
@@ -6611,10 +6624,12 @@
     "PouwCheck.Credit.LAYOUT_KEYS": "0fea3f4d96797533d3a6ecd237921927ec3f0dbedfd70b6e3a0d21e5f86cb752",
     "PouwCheck.Credit.MAX_K": "2a9154d7f728f2d801f02430b30f6dcd8f3531e80d5bb2c1da169c8f35f0cea6",
     "PouwCheck.Credit.callWork": "889bdd65ce27e0c21431d2e8a260ea3ca737d3ba579d1dbe921a658c608ee268",
-    "PouwCheck.Credit.established": "532303a7f8926c65632e1e4d4578afe95bd19ca6a2a92204dc2777a0fef28328",
+    "PouwCheck.Credit.creditedWork.match_1": "5eb3a80be149e9bc1ea896cb18f11a58e19ef3878b7b30db6a905c7645496159",
+    "PouwCheck.Credit.established": "ed6ee67e59ffdb08881fd749bfdb0164a1894c7fcade7f80252afd9bff53011e",
     "PouwCheck.Credit.law": "652c16e7758813e0e4dddd45940ed7a9a92daf8ba15c5315d27fe25182f163ab",
     "PouwCheck.Credit.layoutRefuse": "4a415164f4295a282b8f97dcdb41a093d0fcebc94e4d4b2cdcfd5012294eb2c0",
     "PouwCheck.Credit.listStr": "aadf6d2e3aaa03a76c3cb4a42842ec7351c0f4865dea0a48a4ebf8539472c683",
+    "PouwCheck.Credit.servedWork": "d285aab7ee369f956aa79f6ec075f131d9316a1c024f64c2f05e2ebc261621f7",
     "PouwCheck.Credit.strata": "e2d329d03e95d7da9358ab66cb13176a27836f47336714b9ae853c1fd46f9a87",
     "PouwCheck.Credit.strata._sparseCasesOn_13": "07b66b6c87de5f757f2f0c4a8369b81b9c1a396833b84a70ec80ad4a64355ce6",
     "PouwCheck.Credit.strata._sparseCasesOn_14": "409f0b54512ca9d98b1ca54c52974f3a7b4e829206bfd0aca7adda99b207b24d",
@@ -7911,12 +7926,12 @@
    ]
   },
   "Properties.Pouw.Credit": {
-   "digest": "6eccc729019975ca71045feb3bc8f0f9e3c7d7a56b9a7d1d5cea65e711d2de74",
+   "digest": "1aedaa0e6453c1fdcb9f8beed5d9efd94ae9268e72df335ad636976f309ba0bc",
    "definitions": {
     "Properties.Pouw.Credit.EpsAtSound": "3caafbe985add6486d8909250ef51f8a50b8bcb8a8ac14694f9881c6cd0e1a6b",
-    "Properties.Pouw.Credit.EstablishedSound": "ecbe52e69e9e3754ebaab5f5f746ad6867cd44f5bb3660b419fee03efaddbb74",
+    "Properties.Pouw.Credit.EstablishedSound": "1d815e5771c3fe064a93018caec486eb526d4fda385bdd49ea43b75494b3058f",
     "Properties.Pouw.Credit.WorkDrawMisses": "e6c933f9295cb759719c165f019d895fea0a0ab121b8d17f518e3aaac425761f",
-    "Properties.Pouw.Credit.creditedWork": "f5b5e379542af0a5e40b41c6da62e5c38c185e7f07c4065b7a233032f396c7a9",
+    "Properties.Pouw.Credit.creditedWork": "a22b8f2c576c22410c362913d19a734ee4731a5ec3d907535822c3c160ff9499",
     "Properties.Pouw.Credit.drawnOn": "c780159f9e3c5c48a9a2c6a1d04ffa2e8908e5eb3096d128bdf3cae888d6c512"
    },
    "guarantees": [
@@ -7941,13 +7956,14 @@
    ]
   },
   "Properties.RemoteAudit": {
-   "digest": "ea5878a1b84a13df217f27a9c0c0cfb6552ac4fd61b8efea1679e6aab1759490",
+   "digest": "31fa7f6523d632740d447c4f9f4fbbe7a60f76f58eb06125dd81e2b590f3c387",
    "definitions": {
     "Properties.RemoteAudit.AcceptChecksOpenings": "0bf65e9aef5437ddc1cadafde1c35cb3b71402356b5c1001458d589e75da7505",
     "Properties.RemoteAudit.AcceptOpensDraws": "0f8c70ad6ebf0dd5463cc5001e3a6e8b9b1bea586dc30addfe41469203af1da7",
     "Properties.RemoteAudit.AcceptedMinPasses": "dd1fe87c65ce8035f2ce87849fc200cbbe285a6d14974dc78f6a2dc2687646a9",
     "Properties.RemoteAudit.AppendsInOrder": "014dff31ad314bcb987096ae7d730ce645f061f089922ea292e8ae504030a8bd",
     "Properties.RemoteAudit.ChangedReadsDistinct": "4d349bc09d59cbe19c1a7363239722b9ede9017d1221f3513c45fd918ed8c257",
+    "Properties.RemoteAudit.ChunkedIsWhole": "7bba0ca9052ae3fce19ceba644f14980fc38492973da7594bcb4b462085f5ed6",
     "Properties.RemoteAudit.DrawIsSubset": "3d4a3c6996d19773d00c33844deabed1798001dfec004031c0aab6136bf92e9f",
     "Properties.RemoteAudit.LifetimeCapped": "8aef5477936822360b90e4a360c65023821725b344d83358210716419fa6717c",
     "Properties.RemoteAudit.OpeningPasses": "159cde812ad154b56d78fe42ce1a10ba0ee07fa8b1212f44aca9d62dce9d7a4c",
@@ -7969,6 +7985,7 @@
     "Properties.RemoteAudit.acceptedMinPasses",
     "Properties.RemoteAudit.appendsInOrder",
     "Properties.RemoteAudit.changedReadsDistinct",
+    "Properties.RemoteAudit.chunkedIsWhole",
     "Properties.RemoteAudit.drawIsSubset",
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.passesChained",
@@ -8218,6 +8235,7 @@
     "Properties.RemoteAudit.acceptedMinPasses",
     "Properties.RemoteAudit.appendsInOrder",
     "Properties.RemoteAudit.changedReadsDistinct",
+    "Properties.RemoteAudit.chunkedIsWhole",
     "Properties.RemoteAudit.drawIsSubset",
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
@@ -8276,6 +8294,7 @@
     "Properties.RemoteAudit.acceptOpensDraws",
     "Properties.RemoteAudit.acceptedMinPasses",
     "Properties.RemoteAudit.appendsInOrder",
+    "Properties.RemoteAudit.chunkedIsWhole",
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.passesChained",
@@ -8385,6 +8404,7 @@
     "Properties.RemoteAudit.acceptedMinPasses",
     "Properties.RemoteAudit.appendsInOrder",
     "Properties.RemoteAudit.changedReadsDistinct",
+    "Properties.RemoteAudit.chunkedIsWhole",
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.passesChained",
@@ -8475,6 +8495,7 @@
     "Properties.RemoteAudit.acceptOpensDraws",
     "Properties.RemoteAudit.acceptedMinPasses",
     "Properties.RemoteAudit.appendsInOrder",
+    "Properties.RemoteAudit.chunkedIsWhole",
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.passesChained",
@@ -8601,7 +8622,7 @@
    ]
   },
   "RemoteAudit.Window": {
-   "digest": "886b8628c5efccbf3f113f81b226d8b6fa5db8358815ede801ee8b16a516fc2f",
+   "digest": "522277c786feee291b7d3beefe7d2a19407935ced6e60dee4f542ae4ee50812f",
    "definitions": {
     "RemoteAudit.APPEND_DOMAIN": "a6604c74aef32ccdec542c5fecc103a1660e0ff141fb68613846fb35472b3103",
     "RemoteAudit.Append": "ccd67ec7f7f0426061b78ed18c4d6500de3ff3ad539add283f9f43bf3f3ae9c6",
@@ -8677,6 +8698,7 @@
     "RemoteAudit.checkOpening": "90f6b3b6fe83de7f9190026efe65e1d206787be4e3ef2cd8ab2d5fa3f68198ce",
     "RemoteAudit.checkOpening._sparseCasesOn_3": "ef1137b1eb2bcc7019043983896ecd27181e92a35f69f6eb06b9ec64c95455b1",
     "RemoteAudit.checkWindow": "e591335b9a06c750f734466f88d1d42a08a0ffa1bb119ec72a9c234208203aab",
+    "RemoteAudit.checkWindowChunked": "5c1b54436795d6a53a4eadb6ad262a296bfa89f95e278b3be563b38abc787b58",
     "RemoteAudit.draws": "d3eebb1d4e49fc7e8853fc592c831996bc91a5700d6b44082c84a151c3bed4f2",
     "RemoteAudit.instBEqFailure": "9202ba1c0dcb6226f20016388be3b189ce68236d330a599438f044c587ee537a",
     "RemoteAudit.instBEqFailure.beq": "5a38e17d2dbc38acb0524c70f71ee913f1f63ecb4c1d2489b0e4e0e5ffa192de",
@@ -8701,6 +8723,7 @@
     "Properties.RemoteAudit.acceptOpensDraws",
     "Properties.RemoteAudit.acceptedMinPasses",
     "Properties.RemoteAudit.appendsInOrder",
+    "Properties.RemoteAudit.chunkedIsWhole",
     "Properties.RemoteAudit.drawIsSubset",
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",

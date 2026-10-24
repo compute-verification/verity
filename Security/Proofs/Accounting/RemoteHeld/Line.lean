@@ -10,7 +10,8 @@ import Properties.Proofs.RemoteAudit.Session
 At each outcome where the Lean verifier accepts the record's session (so the trace of record accepts, `ofRecord`), the
 receipts' sketch holds and the trace's wrong receipts are at most the session's pooled bound at the line's `δ`
 (`holdsAnd` of `SketchBound` and `Draw.pooledDraw`, so at most the W the line reads: `LineCoversSession` at the
-record's windows, which are the draw's by `SizesOfRecord` and the line's check of their draws, `wrong_le_line`), every
+record's windows, whose receipts on an accepted record are `recordDraw`'s sizes, `receipts_of_verified`, and the line's
+check of their draws, `wrong_le_line`), every
 stretch of the line read off the record credits what the trace held (`heldAt_of`), its groups one for each of the
 session's windows and its registered blocks the node's (`record_summary`):
 

@@ -21,7 +21,7 @@ over its span, and `max(0, w − lost)` weights bytes a tick, `w` the weights bl
   premise (`Registered`, `Properties.RemoteAudit.Line.Premises`), the probability that the Lean verifier accepts the
   record's session and the line it reads off the Lean verifier's record (`lineOf`: its groups, windows and registered
   blocks the record's) credits a stretch more than the trace held over its span (`Credits`) is at most `δs + (δ + Σ_t
-  k_t / 2^64 + Σ_t adv_t)`, `δ` the one the line reads its pooled bound at (`Node.delta`, a nonnegative rational; the
+  s / 2^64 + Σ_t adv_t)`, `δ` the one the line reads its pooled bound at (`Node.delta`, a nonnegative rational; the
   line computes at none outside `(0, 1)`) and `adv_t` the advantage on `prf t` of window `t`'s distinguisher at that
   `δ` (`Session.distinguisher`). The rates are the node's in the model's units, a tick a nanosecond (`Node.squarings`
   … `Node.chipBlocks`), and the openings are the deployed draw's (`Accounting.Remote.Draw`: `Key.subset` on the first
@@ -115,12 +115,11 @@ def HeldAt {Ω : Type} (T : Trace Ω) (ω : Ω) (node : Node) (r : Record) (form
     Credits T ω (r.groups node) node.per node.blockBytes x
 
 /-- **The memory line of record, link-charged.** On a trace over a session's coins and the record's opening draw at
-its `samples` (`recordDraw`), whose trace of record (`ofRecord`: its verdict the Lean verifier's on the record) meets
-the memory model's premises at the node's rates and the record's groups and the record's code-to-model premise
-(`Registered`), the probability that the Lean
-verifier accepts the record's session and a stretch of the record's link-charged line credits more than the trace
-held over its span is at most `δs + (δ + Σ_t k_t / 2^64 + Σ_t adv_t)`, `δ` the line's and `adv_t` the advantage on
-`prf t` of window `t`'s distinguisher at it. -/
+its `samples` s (`recordDraw`), whose trace of record (`ofRecord`: its verdict the Lean verifier's on the record)
+meets the memory model's premises at the node's rates and the record's groups and the record's code-to-model premise
+(`Registered`), the probability that the Lean verifier accepts the record's session and a stretch of the record's
+link-charged line credits more than the trace held over its span is at most `δs + (δ + Σ_t s / 2^64 + Σ_t adv_t)`,
+`δ` the line's and `adv_t` the advantage on `prf t` of window `t`'s distinguisher at it. -/
 def LineHeld : Prop :=
   ∀ (node : Node) (κ : ℕ) (X : Type) [Fintype X] (prf : Fin node.windows → Pous.Bits κ → Blocks receiptMax)
     (rest : Coins node.windows κ X → Fin node.windows → ℕ → ℕ)
