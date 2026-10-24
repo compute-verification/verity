@@ -253,8 +253,10 @@ KERNEL = r'extern "C" __global__ void (?:__launch_bounds__\([^)]*\) )?(?!__launc
 #: s512_pads.
 H3_LAUNCHED = {"s512_heads", "s512_row_segs", "s512_tile_segs", "s512_folds", "hm_leaves", "s512_frame_leaves", "s512_nodes",
                "s512_tree_small", "s512_seeds"}
-#: hash_decode.cuh's launches at the check (run.py's check_pd): its tables, and each served variant's commitment and tile leaves
-PD_LAUNCHED = {"pd_heads", *(f"pd_{kind}_{v}" for v in RUN.PD_SERVED for kind in ("commit", "tiles"))}
+#: hash_decode.cuh's launches at the check (run.py's check_pd): its tables, each served variant's commitment (whole, and split
+#: into pd_commit's mode 1 and pd_tree) and tile leaves, and its stamp twin's commitment
+PD_LAUNCHED = {"pd_heads", *(f"pd_{kind}_{v}" for v in RUN.PD_SERVED for kind in ("commit", "tree", "tiles")),
+               *(f"pd_commit_{v}" for v in RUN.PD_STAMPED)}
 #: hash_prefill.cuh's launches (run.py's chain "pl", the default past pd)
 PL_LAUNCHED = {f"pl_{kind}_{RUN.PL_VARIANT}" for kind in PL_KINDS}
 
@@ -345,10 +347,14 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: 128 * i[1], 1: 64 * i[1], 2: 64}
     if name == "s512_tree_small":
         return {0: 64 * (2 * i[0] - 1), 1: 64}
-    if name.startswith("pd_commit_"):
+    if name.startswith(("pd_commit_", "pd_tree_")):
         rows, k, _, m = i[:4]
-        return {0: 4 * rows * k, 1: 64 * rows, 2: 64 * (2 * RUN.pow2(rows) - 1), 3: 32 * rows, 4: 32 * rows, 5: 104, 6: 64,
-                7: 32, 8: 128 + 192 * 256 * 64, 9: 16, 10: 32, 11: 32, 12: 32 * m}
+        stamps = {13: 16 * RUN.PD_SLOTS * (rows + 1)} if p[13] else {}
+        tree = {2: 64 * (2 * RUN.pow2(rows) - 1), 5: 104, 6: 64, 10: 32, 11: 32, **stamps}
+        if name.startswith("pd_tree_"):
+            return {**tree, **({12: 32 * m} if p[12] else {})}
+        return {**tree, 0: 4 * rows * k, 1: 64 * rows, 3: 32 * rows, 4: 32 * rows, 7: 32, 8: 128 + 192 * 256 * 64, 9: 16,
+                12: 32 * m}
     if name.startswith("pd_tiles_"):
         return {0: 4 * i[0] * i[1], 1: 4 * i[0] * i[1], 2: 64 * -(-i[0] // 64) * (i[1] // 64)}
     if name.startswith("pl_leaves_"):
@@ -562,8 +568,13 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
         if name == "s512_folds":
             assert ev["block"] == RUN.RS_FOLD_NT and i[1] <= RUN.RS_MAX_SEGS and i[3] <= RUN.RS_MAX_SEGS
         if name.startswith("pd_commit_"):
-            assert g == [i[0], 1, 1] and i[0] <= RUN.PD_MAX_ROWS and i[1] % 256 == 0 and i[1] <= RUN.PD_MAX_K and i[2] == 0
+            assert g == [i[0], 1, 1] and i[0] <= RUN.PD_MAX_ROWS and i[1] % 256 == 0 and i[1] <= RUN.PD_MAX_K and i[2] in (0, 1)
             assert ev["block"] == 32 * (-(-i[1] // 256 // 32) * 2 + 2) and RUN.PD_PAIR_SMEM <= ev["smem"] <= H100_MAX_DYN
+        if name.startswith("pd_tree_"):                     # the padding rows' lines past the real rows, where there are any
+            assert g == [1, 1, 1] and ev["block"] == 128 and 0 < i[0] <= i[3] and i[0] <= RUN.PD_MAX_ROWS, ev
+            assert bool(p[12]) == (i[0] < i[3]) and RUN.PD_PAIR_SMEM <= ev["smem"] <= H100_MAX_DYN, ev
+        if name.startswith(("pd_commit_", "pd_tree_")):
+            assert bool(p[13]) == bool(int(name.rsplit("_", 1)[1]) & RUN.PD_STAMP), ev
         if name.startswith("pl_"):
             half = RUN.PD_PAIR_SMEM // 2
             shape = {"pl_leaves": (-(-i[0] // RUN.PL_ROWS), 128, half), "pl_seed_a": (1, 64, half),

@@ -1,11 +1,14 @@
 """A registered store bound to a pinned model: what a pinned BF16 checkpoint alone fixes, so the verifier recomputes the
-payload root the prover's hello must carry and refuses any other (`Binding`). This is the code that decides a session's
-`bound`, in the tree whose git hash names the verifier a period's circuit commits to (`verity/remote-bandwidth/v0
-verifier tree <tree>`, `sampled_proofs.challenger.credited_session`). The decision from what the files hold is also
-Lean (`lean/RemoteAudit/Store.lean`), held to this by `lean/tests/test_binding.py`: the pin from its file's bytes
-(`pin_of`, `model_pin`), `checkpoint_sha512`, `store_salt`, `expected_root` from the weights blocks' digests, and
-`Binding.hold`. Reading the files (`check`, `tensors`, `weight_digests`) and the arena's layout (`arena`) are Python
-only, and the verifier runs this Python (`README.md`, "Which side is the definition").
+payload root the prover's hello must carry and refuses any other (`Binding`), in the tree whose git hash names the
+verifier a period's circuit commits to (`verity/remote-bandwidth/v0 verifier tree <tree>`,
+`sampled_proofs.challenger.credited_session`). The decision from what the files hold is Lean's
+(`lean/RemoteAudit/Store.lean`), which decides a session's `bound`: the verifier's Lean process takes the pin's bytes
+and the weights blocks' digests at startup (`bind`) and decides each hello (`hold`), `Binding` beside it as the
+reference, a disagreement refusing the hello (`benchmarks/remote_session/verifier.py`). This is held to it by
+`lean/tests/test_binding.py`: the pin from its file's bytes (`pin_of`, `model_pin`), `checkpoint_sha512`, `store_salt`,
+`expected_root` from the weights blocks' digests, and `Binding`'s start and `hold`. Reading the files (`check`,
+`tensors`, `weight_digests`) and the arena's layout (`arena`) are Python only (`README.md`, "Which side is the
+definition").
 
 ~~~text
 pin        the checkpoint's files with their SHA-512s, in the auditor's model registry's shape (`benchmarks/
@@ -21,7 +24,8 @@ store      `engines` arenas of `arena_blocks` each, in GPU order, then `host_blo
            weights blocks labelled (weights, hbm) and its rest (filler, hbm), the host tier (filler, host)
 payload    `audit.payload_tree` over the store, block j salted with store_salt(key, PAYLOAD_LABEL, j) under the
            verifier's key (its payload-key message), so its root follows from the pin, the store's shape and that key
-           (`expected_root`, in worker processes: about an hour of one core at a whole node's 130M blocks)
+           (`expected_root`, in worker processes: at a whole node's 130M blocks 665 s on 11 cores, the Lean's
+           `Store.expectedRoot` 436 s on 11 threads, 23 Oct, `benchmarks/remote_session/binding_bench.py`)
 binding    at startup the pin read, every pinned file held to it, the arena laid out and its weights blocks' digests
            computed; at each hello (`Binding.hold`) the store its size makes and that store's payload root under the
            verifier's key, against the hello's, else Refused with why
@@ -117,13 +121,17 @@ def _pinned(checkpoint) -> str | None:
     return None
 
 
-def read_pin(path: Path, role: str | None = None, *, model: bool = False) -> dict:
-    """`pin_of` on the file at `path` (`model_pin` with `model`)."""
+def pin_bytes(path: Path) -> bytes:
+    """The bytes of the pin file at `path`."""
     try:
-        data = Path(path).read_bytes()
+        return Path(path).read_bytes()
     except OSError as e:
         raise Refused(f"the pin {path} is not readable: {e}") from None
-    return (model_pin if model else pin_of)(data, str(path), role)
+
+
+def read_pin(path: Path, role: str | None = None, *, model: bool = False) -> dict:
+    """`pin_of` on the file at `path` (`model_pin` with `model`)."""
+    return (model_pin if model else pin_of)(pin_bytes(path), str(path), role)
 
 
 def pin_of(data: bytes, path: str, role: str | None = None) -> dict:
@@ -454,15 +462,17 @@ def expected_root(store: Store, node: bytes, key: bytes, digests: Path, workers:
 
 class Binding:
     """The verifier's binding of a registered store to a pinned model (`verifier.py --model`): at startup the pin read
-    (`read_pin`, its name `role`), every pinned file held to it (`check`), the arena laid out (`arena`) and its weights
-    blocks' digests computed (`weight_digests`); at each hello (`hold`), the store the hello's size makes of `engines`
-    arenas of `arena_blocks` and the rest host filler, and its payload root under the verifier's key, against the
-    hello's. `record` is what `verifier.json` keeps of it."""
+    (`model_pin` of its file's bytes, `pin_data`, its name `role`), every pinned file held to it (`check`), the arena
+    laid out (`arena`) and its weights blocks' digests computed (`weight_digests`, the file `digests`); at each hello
+    (`hold`), the store the hello's size makes of `engines` arenas of `arena_blocks` and the rest host filler, and its
+    payload root under the verifier's key, against the hello's. The Lean's binding (`RemoteAudit.Store.bind`, `hold`)
+    takes `pin_data` and `digests`. `record` is what `verifier.json` keeps of it."""
 
     def __init__(self, role: str, directory: Path, pin_path: Path, engines: int, arena_blocks: int, *,
                  workers: int = 1, scratch: Path | None = None, log=print) -> None:
         t0 = time.monotonic()
-        pin = read_pin(pin_path, role, model=True)
+        self.pin_data = pin_bytes(pin_path)
+        pin = model_pin(self.pin_data, str(pin_path), role)
         check(directory, pin, workers)
         self.role, self.pin, self.pin_path, self.directory = role, pin, Path(pin_path), Path(directory)
         self.arena = arena(directory, pin["checkpoint"])
@@ -481,6 +491,7 @@ class Binding:
         """The pinned model's regions (`verifier.regions_of`'s) when the hello's store is its store, its payload root
         `root` the store's under `key`; else Refused with why."""
         A, E = self.arena_blocks, self.engines
+        self.state.update(expected_root=None, bound=False)
         if type(blocks) is not int or blocks < E * A:
             raise Refused(f"the hello's store is {blocks} blocks, fewer than the pinned model's {E} arenas of {A}")
         store = self.store = Store(self.arena, E, A, blocks - E * A)
