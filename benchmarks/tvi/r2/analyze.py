@@ -33,6 +33,7 @@ def load(run_dirs, task="gsm8k"):
             key = (MODELS.get(r["model"], r["model"]), r["method"], r.get("reward", "true"))
             out[key][r.get("seed", 0)] = {
                 "x": np.asarray(r["per_problem"], dtype=float), "run": os.path.basename(rd.rstrip("/")),
+                "f": np.asarray(r["per_problem_formatted"], dtype=float) if r.get("per_problem_formatted") else None,
                 "fmt": r.get("formatted"), "steps": r["steps"], "lr": r.get("lr"), "S_bits": r["S_bits"],
                 "mid": [(e["step"], e["acc"]) for e in r.get("evals", [])],
                 "len": r.get("mean_len") or (r["evals"][-1]["mean_len"] if r.get("evals") else None),
@@ -52,6 +53,14 @@ def boot(fn, arrays, B=10000, seed=0):
     return [float(np.percentile(vals, 2.5)), float(np.percentile(vals, 97.5))]
 
 
+def acc_given_formatted(e):
+    """Accuracy over the problems whose greedy answer is a numeric final \\boxed{}: whether the model can solve them once
+    it answers in the format."""
+    if e["f"] is None or e["f"].sum() == 0:
+        return None
+    return float((e["x"] * e["f"]).sum() / e["f"].sum())
+
+
 def arm_stats(seeds, base):
     x = np.mean(np.stack([e["x"] for e in seeds.values()]), axis=0)
     per_seed = {s: float(e["x"].mean() - base.mean()) for s, e in sorted(seeds.items())}
@@ -63,6 +72,7 @@ def arm_stats(seeds, base):
         "seed_range": [min(per_seed.values()), max(per_seed.values())],
         "per_seed_acc_ci": {s: boot(lambda a, b: a.mean() - b.mean(), [e["x"], base], B=2000) for s, e in sorted(seeds.items())},
         "formatted": {s: e["fmt"] for s, e in sorted(seeds.items())},
+        "acc_given_formatted": {s: acc_given_formatted(e) for s, e in sorted(seeds.items())},
         "mean_len": {s: e["len"] for s, e in sorted(seeds.items())},
         "mid_evals": {s: e["mid"] for s, e in sorted(seeds.items())},
         "runs": sorted({e["run"] for e in seeds.values()}), "steps": sorted({e["steps"] for e in seeds.values()}),
@@ -89,6 +99,7 @@ def main() -> None:
         b = ev[(m, "base", "true")][0]
         base = b["x"]
         row = {"base_acc": float(base.mean()), "base_ci": boot(lambda a: a.mean(), [base]), "base_formatted": b["fmt"],
+               "base_acc_given_formatted": acc_given_formatted(b),
                "base_len": b["len"], "base_run": b["run"], "arms": {}}
         xs = {}
         for (mm, method, reward), seeds in sorted(ev.items()):
@@ -119,14 +130,15 @@ def main() -> None:
                 row[f"true_minus_{ctl}"] = d
         doc["models"][m] = row
         print(f"\n== {m}: base {row['base_acc']:.3f} [{row['base_ci'][0]:.3f}, {row['base_ci'][1]:.3f}]"
-              f" formatted {b['fmt']} len {b['len']} run {b['run']}  (anchor {anchor})")
+              f" formatted {b['fmt']} acc|formatted {row['base_acc_given_formatted']} len {b['len']} run {b['run']}  (anchor {anchor})")
         for k, a in row["arms"].items():
             fr = (f" frac {a['frac_of_full']:.2f} [{a['frac_of_full_ci'][0]:.2f}, {a['frac_of_full_ci'][1]:.2f}]"
                   if "frac_of_full" in a else "")
             sd = f" sd {a['seed_sd']:.3f}" if a["seed_sd"] is not None else ""
             print(f"  {k:18s} acc {a['acc']:.3f} gain {a['gain']:+.3f} [{a['gain_ci'][0]:+.3f}, {a['gain_ci'][1]:+.3f}]{sd}{fr}"
                   f" seeds {json.dumps({s: round(g, 3) for s, g in a['per_seed_gain'].items()})}"
-                  f" fmt {json.dumps({s: round(v, 3) if v is not None else None for s, v in a['formatted'].items()})} runs {a['runs']}")
+                  f" fmt {json.dumps({s: round(v, 3) if v is not None else None for s, v in a['formatted'].items()})}"
+                  f" acc|fmt {json.dumps({s: round(v, 3) if v is not None else None for s, v in a['acc_given_formatted'].items()})} runs {a['runs']}")
         for ctl in ["random", "format"]:
             d = row.get(f"true_minus_{ctl}")
             if d:
