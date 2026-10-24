@@ -267,6 +267,7 @@ def test_listeners_get_the_served_tensors_and_bind_the_calls_roots():
     assert run.calls_root() != before
 
 
+@pytest.mark.slow
 def test_units_are_in_row_block_then_column_block_order():
     """Unit u of a call covers row block u // (N' / 32) and column block u % (N' / 32), so position base + u names a tile."""
     c = PH.compiled(K, 40, 33)

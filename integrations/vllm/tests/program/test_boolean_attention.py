@@ -69,6 +69,7 @@ PINNED = [bind(BAt.AttnBlockV6, D=16, NVIS=5, FIRST=True, BN=16), bind(BAt.AttnB
           bind(BAt.AttnBlockV9, D=16, NVIS=16, FIRST=False, BN=16, DOT=FA3["DOT"], CHECK=False),
           bind(BAt.AttentionHeadV9, T=40, D=16, BN=16, MASKED_FROM=2, **FA3),
           bind(BAt.AttentionV9, T=20, NH=4, KVH=2, D=16, BN=16, MASKED_FROM=1, **FA3)]
+SLOW_PIN = PINNED[5].id
 
 #: one block per mask shape and per state; one and two blocks, a partial last block, BN = 32; GQA with two KV heads; v7 on both
 #: profiles; v8 and v9 with an unguarded block, a head with an unguarded block, and GQA; v16 (v9 with the scale an input) with a
@@ -118,7 +119,7 @@ def _inputs(word, n: int, seed: int) -> list[np.ndarray]:
     return out
 
 
-@pytest.mark.parametrize("target", PINNED, ids=lambda t: t.id)
+@pytest.mark.parametrize("target", [pytest.param(t, marks=pytest.mark.slow) if t.id == SLOW_PIN else t for t in PINNED], ids=lambda t: t.id)
 def test_pinned_counts_and_digests(target) -> None:
     ands, xors, nots, digest = PINS[target.id]
     assert BL.is_boolean(target)

@@ -671,6 +671,7 @@ def test_no_verifier_process_is_left():
 '''
 
 
+@pytest.mark.slow
 def test_a_failing_test_leaves_no_verifier_process(tmp_path):
     """A pytest whose tests fail with the Lean verifier's process live (the verifier's session raising on the test's
     thread, its registration raising on `lockstep`'s verifier thread, which hung the suite while the prover waited on

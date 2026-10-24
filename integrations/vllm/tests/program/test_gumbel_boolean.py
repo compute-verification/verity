@@ -220,6 +220,7 @@ def test_uniform_and_noise_of_a_philox_word() -> None:
     assert not bad.size, f"{bad.size} of {len(w)} words differ, first {[hex(int(w[i])) for i in bad[:5]]}"
 
 
+@pytest.mark.slow
 def test_stream_key_agrees_with_its_word_definition() -> None:
     """Random 64-bit seeds and positions, and each with its halves at the edges."""
     rng = _rng("key")

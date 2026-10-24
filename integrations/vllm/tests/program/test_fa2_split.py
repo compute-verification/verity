@@ -89,7 +89,7 @@ def test_the_split_end_twin_is_the_word() -> None:
     assert (lse[:50] == NEG_INF).all()
 
 
-@pytest.mark.parametrize("NS,D", [(2, 16), (3, 16), (5, 64), (16, 128), pytest.param(33, 128, marks=pytest.mark.slow)])
+@pytest.mark.parametrize("NS,D", [(2, 16), (3, 16), (5, 64), pytest.param(16, 128, marks=pytest.mark.slow), pytest.param(33, 128, marks=pytest.mark.slow)])
 def test_the_combine_twin_is_the_word(NS: int, D: int) -> None:
     """Gaussian lse with empty (-inf, 0) splits planted, rows whose every split is empty, and `_inputs`' words with specials."""
     rng = np.random.default_rng(NS * 7 + D)

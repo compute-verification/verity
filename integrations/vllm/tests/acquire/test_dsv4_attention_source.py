@@ -168,6 +168,7 @@ def runs() -> dict[bool, AttnRun]:
     return out
 
 
+@pytest.mark.slow
 def test_the_source_wraps_every_attention_layer_and_its_globals():
     r = AttnRun()
     home = sys.modules["tests.acquire.dsv4_model"]

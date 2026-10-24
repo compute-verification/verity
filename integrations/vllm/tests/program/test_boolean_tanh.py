@@ -73,6 +73,7 @@ def test_a_read_is_a_small_part_of_its_table_s_multiplexer() -> None:
     assert PINS["GeluTanhMulBf16_v4"][0] * 60 < MUX_ANDS["gelu_tanh_bf16"]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("d", [BT.TanhF32Rn, BT.GeluTanhMulBf16], ids=lambda d: d.name)
 def test_the_ands_are_the_builders_live_ands(d) -> None:
     params = [t for _, t in d.signature(None)[0]]
@@ -82,6 +83,7 @@ def test_the_ands_are_the_builders_live_ands(d) -> None:
     assert d.traced().counts["and"] == C.counts()["ands"] == PINS[bind(d).id][0]
 
 
+@pytest.mark.slow
 def test_the_word_views_and_the_boolean_versions() -> None:
     """Each names its word Definition, is the newest Boolean version of it (`program.boolean.boolean_version`, ahead of
     `boolean_dense`'s band `GeluTanhMulBf16_v2`), and holds no data (`operations.program_data`)."""
@@ -163,7 +165,8 @@ def test_the_activation_is_the_table_on_every_word() -> None:
     assert hashlib.sha256(got.astype("<u4").tobytes()).hexdigest() == TABLE_SHA256["gelu_tanh_bf16"]
 
 
-@pytest.mark.parametrize("u", [BF16_ONE, 0x8000, 0x0001, 0x7F7F, 0xFF80, pytest.param(0x7FC0, marks=pytest.mark.slow)])
+@pytest.mark.slow
+@pytest.mark.parametrize("u", [BF16_ONE, 0x8000, 0x0001, 0x7F7F, 0xFF80, 0x7FC0])
 def test_every_gate_word(u: int) -> None:
     """All 65,536 gate words at an up word: at 1.0 the activation alone, then -0 (which becomes +0), a subnormal, the finite
     maximum, an infinity and a NaN."""

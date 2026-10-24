@@ -298,7 +298,8 @@ AGREEMENT = [bind(BDG.F32LtFtzV2), bind(BDG.Fp8Ue8m0CeilV2), bind(BDG.Fp8GroupSc
              bind(BDG.FlashInferFp8Quant1x128V2, K=256), bind(BDG.DeepGemmFp8LinearV2, K=128, N=2),
              bind(BDG.FlashInferFp8LinearV2, K=128, N=2), bind(BDG.FlashInferFp8LinearV2, K=128, N=1),
              bind(BDG.ScaledMmFp8BlockGroupedV2, H=2, K=64, N=34, G=32)]
-SLOW_AGREEMENT = ("Fp8GroupQuantUe8m0Group_v2{G=32}", "FlashInferFp8Quant1x128Group_v2", "DeepGemmFp8Linear_v2{K=128,N=2}")
+SLOW_AGREEMENT = ("Fp8GroupQuantUe8m0Group_v2{G=32}", "FlashInferFp8Quant1x128Group_v2", "DeepGemmFp8Linear_v2{K=128,N=2}",
+                  "FlashInferFp8Linear_v2{K=128,N=2}")
 
 
 @pytest.mark.parametrize("target", [pytest.param(t, marks=pytest.mark.slow) if t.id in SLOW_AGREEMENT else t for t in AGREEMENT], ids=lambda t: t.id)

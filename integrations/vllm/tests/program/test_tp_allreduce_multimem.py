@@ -248,6 +248,7 @@ def test_pinned_counts_and_digests(target) -> None:
     assert back.gates == prog.gates and codec.program_digest(codec.encode_program(back)) == digest
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("target", [
     bind(BA.AllReduceMultimem, WORLD=4, SIZE=32, TREES=(((0, 1), (2, 3)),) * 2 + (TA.chain(4),) * 2, FTZ=True),
     bind(BA.AllReduceMultimemVector, WORLD=8, TREE=TA.GLM53_H200_TREE, FTZ=False)], ids=lambda t: t.id)
