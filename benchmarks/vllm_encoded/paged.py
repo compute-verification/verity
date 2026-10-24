@@ -52,6 +52,7 @@ class PagedLib(KB.Lib):
         so.pg_rc_gate_pass.argtypes = [v, v, v]
         so.kv_rc_pass.argtypes = [v, v, v]
         so.pg_reduce.argtypes = [v, i, i, i, v, i, v, v, v]
+        so.pg_span.argtypes = [v, i, i, i, i, v]
         a = (ctypes.c_int * 10)()
         so.pg_shape(ctypes.cast(a, ctypes.c_void_p))
         self.shape = dict(zip(("heads", "kv_heads", "head_dim", "hw", "wb", "mt", "part", "mw", "mma", "smem"), a))
