@@ -1,8 +1,9 @@
-"""The served rows' tie (`served_tie.ServedRowsTie_v1`) on the compile slice's corpus-smallkv window: the honest served rows
-against the honest batch's committed positions are accepted, and REDTEAM phase 10's six passes, which the slice accepts
-under their own registered row, are refused against the batch the server ran. Each negative is refused by exactly the
-checks `check` names, in the circuit's verdict; the port's shared read gives back the ids and the positions; and a positions
-chunk is bound by its b‖c to its leaf of the step's tree."""
+"""The served rows' tie (`served_tie.ServedRowsTie_v2`, the routed form) on the compile slice's corpus-smallkv window: the
+honest served rows against the honest batch's committed positions are accepted, and REDTEAM phase 10's six passes, which
+the slice accepts under their own registered row, are refused against the batch the server ran. Each negative is refused
+by exactly the checks `check` names, in the circuit's verdict; the circuit is `reference` under any switches and accepts
+only what `check` accepts; a window's blocks (G < P) are each the whole unit's; the port's shared read gives back the ids
+and the positions; and a positions chunk is bound by its b‖c to its leaf of the step's tree."""
 from __future__ import annotations
 
 import hashlib
@@ -14,7 +15,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.core.protocols.certifier import compile_slice as CS, served_rows as SR, served_tie as ST
+from verity.core.protocols.certifier import compile_slice as CS, io_tie as IT, served_rows as SR, served_tie as ST
 from verity.ml.commitments import hm96
 from verity.ml.commitments.frame_v3 import BitRowLeaf
 from verity.ml.commitments.indexed import RangeIndexedDomain
@@ -139,7 +140,61 @@ def test_the_circuit_is_the_reference_on_random_rows(x):
                 batch[v][1][rng.randrange(len(batch[v][1]))] += 1
         cases.append(ST.case(x.T, _srv(x, [tuple(s) for s in steps]), [tuple(b) for b in batch]))
     assert ST.evaluate(x.st, cases) == [c.verdict for c in cases]
+    assert [ST.reference(x.T, c.rows) for c in cases] == [c.flags for c in cases]
     assert any(c.verdict != ST.ACCEPT for c in cases)
+
+
+def _switched(x, c, rng, flips):
+    rows = dict(c.rows)
+    for _ in range(flips):
+        g = rng.randrange(x.T.G)
+        sw = list(rows[f"sw_{g}"])
+        sw[rng.randrange(ST.widths(x.T).SW)] ^= 1
+        rows[f"sw_{g}"] = sw
+    return replace(c, rows=rows)
+
+
+def test_under_any_switches_the_circuit_is_the_reference_and_accepts_only_the_statement(x):
+    """The honest window, the six passes and the negatives under switches the prover moved: the circuit's verdict is
+    `reference`'s (the routing in integers), and it never accepts a unit `check` refuses."""
+    rng = random.Random(11)
+    base = [x.honest] + [ST.case(x.T, _srv(x, steps(x)), x.batch) for steps, _b, _r in NEGATIVES.values()]
+    cases = [_switched(x, c, rng, f) for c in base for f in (1, 3, 40)]
+    refs = [ST.reference(x.T, c.rows) for c in cases]
+    assert ST.evaluate(x.st, cases) == [ST.verdict(r) for r in refs]
+    for c, r in zip(cases, refs):
+        assert not (ST.verdict(r) == ST.ACCEPT and c.verdict != ST.ACCEPT)
+        assert r["count"] == c.flags["count"]
+    assert any(ST.verdict(r) != ST.ACCEPT for c, r in zip(cases, refs) if c.verdict == ST.ACCEPT)
+
+
+def test_a_run_start_routed_away_is_refused(x):
+    """Step 6's two runs (user-0's decode at 0, user-1's prefill at 1): its records routed to each other's places, then
+    its prefill's record to the place past N. Each is a permutation, so the network takes it, and the scan refuses it."""
+    T, Z = x.T, ST.widths(x.T)
+    f = ST._fields(T, _srv(x, x.rows)[6 * Z.SB:7 * Z.SB])
+    for perm in ([1, 0] + list(range(2, Z.M)), [0, 30] + [i for i in range(1, Z.M) if i != 30]):
+        moved = replace(x.honest, rows={**x.honest.rows, "sw_6": IT.benes(perm) + [0] * (len(x.honest.rows["sw_6"]) - Z.SW)})
+        assert ST.reference(T, moved.rows) == {"count": True, "pos": False}
+        assert ST.evaluate(x.st, [moved]) == [COUNT]
+    assert ST.route(T, f, 30) == x.honest.rows["sw_6"][:Z.SW]
+
+
+def test_a_windows_blocks_are_its_units(x):
+    """G = 1: the window is P units, block j each, the served row whole in each. Every block of the honest window is
+    accepted; the short negative's step 0 refuses block 0 only; a unit naming another block, or none, is refused."""
+    st = {**x.st, "G": 1}
+    S1 = SimpleNamespace(**st)
+    honest = [ST.case(S1, _srv(x, x.rows), x.batch, j) for j in range(x.T.P)]
+    short = [ST.case(S1, _srv(x, NEGATIVES["short"][0](x)), x.batch, j) for j in range(x.T.P)]
+    Z = ST.widths(S1)
+    renamed = replace(honest[2], rows={**honest[2].rows, "pub": ST._bits_int(3, Z.JW) + honest[2].rows["pub"][Z.JW:]})
+    outside = replace(honest[2], rows={**honest[2].rows, "pub": ST._bits_int(7, Z.JW) + honest[2].rows["pub"][Z.JW:]})
+    got = ST.evaluate(st, honest + short + [renamed, outside])
+    assert got[:x.T.P] == [ST.ACCEPT] * x.T.P
+    assert got[x.T.P:2 * x.T.P] == [0] + [ST.ACCEPT] * (x.T.P - 1) == [c.verdict for c in short]
+    assert ST.check(S1, renamed.rows) == {"count": True, "pos": False} and got[-2] == COUNT
+    assert ST.check(S1, outside.rows) == {"count": False, "pos": False} and got[-1] == 0
 
 
 def test_the_shared_read_gives_the_ids_and_positions(x):
@@ -183,5 +238,7 @@ def test_a_positions_chunk_is_bound_by_bc_to_its_leaf(x):
 
 def test_the_unit_size_is_pinned_by_circuit_check(x):
     pins = json.loads((Path(ST.__file__).with_suffix(".circuit-check.json")).read_text())["definitions"]
-    (d, v), = pins.items()
-    assert d.startswith("ServedRowsTie_v1{") and v["and"] == ST.size(**x.st)["ands"]
+    key = "{" + ",".join(f"{k}={x.st[k]}" for k in ST.STATICS) + "}"
+    assert pins[f"ServedRowsTie_v2{key}"]["and"] == ST.size(**x.st)["ands"]
+    step = "{" + ",".join(f"{k}={x.st[k]}" for k in ST.STEP) + "}"
+    assert pins[f"ServedTieStep_v1{step}"]["and"] == ST.step_size(**x.st)["ands"]

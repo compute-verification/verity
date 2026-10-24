@@ -1,4 +1,4 @@
-"""The served rows' tie (`served_tie.ServedRowsTie_v1`) on a sealed served window's real rows.
+"""The served rows' tie (`served_tie.ServedRowsTie_v2`) on a sealed served window's real rows.
 
     python benchmarks/prove_path/served_tie_window.py --serve-run DIR --window K --out DIR
 
@@ -14,9 +14,9 @@
     (`served_rows.register`).
 
   A step's N is its layout's length of the embedding's input (the record's ``ids_name``).
-* **The tie.** `served_tie.check` runs on the window's whole unit (P steps, the idle ones with N = 0). The circuit runs on
-  each executed step as a P = 1 unit, and those verdicts AND to the window unit's, because the unit is P independent steps.
-  The whole unit at the window's class is P times the step's ANDs (``size``).
+* **The tie.** `served_tie.check` runs on the window's whole unit (G = P steps, the idle ones with N = 0). The circuit runs
+  on each executed step as its own block (G = 1, block j the step, the switches the prover's), and those verdicts AND to
+  the whole unit's, because the unit is P independent steps. The whole unit is P steps' ANDs and their AND (``size``).
 * **The cases:**
   - the honest rows;
   - three with one field altered, each registered consistently: a prefill's start one on, a prefill one token short, and
@@ -108,20 +108,6 @@ def bindings(x: SimpleNamespace, S, St) -> tuple[dict, list[SimpleNamespace], di
     return ok, steps, {"embed_equal": embed_equal, "zero_past_N": padded}
 
 
-def unit_rows(St, srv_bits: list[int], steps: list[SimpleNamespace | None]) -> dict:
-    """A unit's rows: N, the served rows, and each step's positions chunks; an idle step N = 0 and zero chunks."""
-    Z, G = ST.widths(St), ST.geometry(St)
-    zero = [0] * (8 * ST.CHUNK)
-    pad = list(steps) + [None] * (St.P - len(steps))
-    out = {"pub": [b for s in pad for b in ST._bits_int(s.N if s else 0, Z.TW)], "srv": list(srv_bits)}
-    for u, s in enumerate(pad):
-        for j in range(G.K):
-            out[f"pos_{u}_{j}"] = ST._bits(s.chunks[G.lo + j]) if s else zero
-    for r, n in ST.rows(St):
-        out[r] = out[r] + [0] * (n - len(out[r]))
-    return out
-
-
 def ids_ok(St, window: list, steps: list[SimpleNamespace], seqs: dict[int, list[int]]) -> bool:
     """IoTieRequest's statement in integers: slot k's tokens [lo, lo + n) carry its request's ids at [start, start + n)."""
     for u, rows in enumerate(window):
@@ -160,18 +146,18 @@ def cases(window: list) -> tuple[dict[str, tuple[list, str]], dict]:
 
 
 def run_cases(S, st: dict, window: list, steps: list[SimpleNamespace], seqs: dict[int, list[int]]) -> SimpleNamespace:
-    """Each case's verdicts: `served_tie.check` on the window's unit, the circuit on every executed step as a P = 1 unit
-    (ANDed, and each step's against its own `check`), and ``ids``."""
-    St, st1 = SimpleNamespace(**st), {**st, "P": 1}
+    """Each case's verdicts: `served_tie.check` on the window's whole unit, the circuit on every executed step as its own
+    block, a G = 1 unit (ANDed, and each step's against its own `check`), and ``ids``."""
+    St, st1 = SimpleNamespace(**{**st, "G": st["P"]}), {**st, "G": 1}
     S1 = SimpleNamespace(**st1)
-    sb = sum(n * w for _f, n, w in ST._step_fields(St))
+    port = [(s.N, s.chunks) for s in steps]
     table, edits = cases(window)
     out, lanes, keys = {}, [], []
     for name, (win, _by) in table.items():
         bits = SR.window_bits(S, win)
-        ref = ST.check(St, unit_rows(St, bits, steps))
-        for u, s in enumerate(steps):
-            r1 = unit_rows(S1, bits[u * sb:(u + 1) * sb], [s])
+        ref = ST.check(St, ST.unit_rows(St, bits, port))
+        for u in range(len(steps)):
+            r1 = ST.unit_rows(S1, bits, port, u)
             f1 = ST.check(S1, r1)
             lanes.append(ST.Case(r1, f1, ST.verdict(f1)))
             keys.append(name)
@@ -197,7 +183,7 @@ def main(argv: list[str] | None = None) -> int:
     x = load(a.serve_run, a.window)
     S = statics_of(x)
     st = ST.statics(S, IB=x.ctx["served_window"]["step_input_port"]["IB"], PB=x.ctx["served_window"]["step_input_port"]["PB"])
-    St, st1 = SimpleNamespace(**st), {**st, "P": 1}
+    St = SimpleNamespace(**st)
     ok, steps, native = bindings(x, S, St)
     (window,) = _session(x.priv)
     window = list(window) + [None] * (len(steps) - len(window))
@@ -206,11 +192,10 @@ def main(argv: list[str] | None = None) -> int:
     run = run_cases(S, st, window, steps, seqs)
     t2 = time.monotonic()
     passed = all(ok.values()) and run.passed
-    size = ST.size(**st1)["ands"]
     result = {"window": a.window, "run_root": x.run.run_root.hex(), "served_rows_root": x.rec["served_rows"]["root"],
               "statics": st, "steps": len(steps), "N": [s.N for s in steps], "bindings": ok, "native": native,
               "edits": run.edits, "cases": run.cases, "verdicts": run.verdicts, "expected": run.expected, "passed": passed,
-              "ands": {"step": size, "window": St.P * size},
+              "ands": {"step": ST.step_size(**st)["ands"], "window": ST.size(**st)["ands"]},
               "seconds": {"open": round(t1 - t0, 1), "cases": round(t2 - t1, 1)}}
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "result.json").write_text(json.dumps(result, indent=1))
