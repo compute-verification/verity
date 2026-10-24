@@ -9,6 +9,16 @@ cp "$IN"/*.py "$IN"/*.json "$S"/
 cd "$S"
 export OMP_NUM_THREADS="${THREADS:-2}" TOKENIZERS_PARALLELISM=false PYTHONUNBUFFERED=1
 PY=/workspace/jobs/venv312/bin/python
+if ! [ -x "$PY" ]; then
+  if [ -f /workspace/jobs/tvi/venv/READY ] && /workspace/jobs/tvi/venv/bin/python -c 'import torch, transformers'; then
+    PY=/workspace/jobs/tvi/venv/bin/python
+  else
+    uv venv -q -p 3.12 "$S/venv"
+    uv pip install -q --python "$S/venv/bin/python" torch==2.13.0 --index-url https://download.pytorch.org/whl/cu129
+    uv pip install -q --python "$S/venv/bin/python" transformers==5.17.0 numpy
+    PY="$S/venv/bin/python"
+  fi
+fi
 export HF_HUB_CACHE=/workspace/hf/hub HF_HUB_OFFLINE=1
 if [ "${CKPT_ROOT:-}" = scratch ]; then export CKPT_ROOT="$S/ckpt"; fi
 if [ -n "${CKPT_ROOT:-}" ]; then
