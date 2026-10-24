@@ -139,6 +139,8 @@ def test_outer_rows_by_mode_and_the_summary(tmp_path: Path) -> None:
     assert s["outer"]["dev"]["prove_s"] == 3.0 and s["outer"]["dev"]["statements"] == 2
     assert s["slowest"]["stage"] == "lean L0"                                             # 61.5 s, the largest median
     assert s["pipeline"]["outer prove (firewall) e2e_s"] == 6.5
+    assert s["pipeline"]["V* staging_s (vstage + vcap steps)"] == 75.0     # the step's wall, not its parallel stages' sum
+    assert s["pipeline"]["Lean step_s"] == 75.0
     assert "outer alg-p0" in s["not_ok"] and "lean alg-p0" in s["not_ok"]
 
 
@@ -180,7 +182,8 @@ def test_a_preempted_statement_says_how_often(tmp_path: Path) -> None:
     (out / "oprove" / "L1-firewall" / "prove.err").write_text("gpu-lease: GPU 1 (GPU-x) held 2m00s\n")
     (out / "preempted.txt").write_text("".join(f"loopback L1-firewall: lease preempted, try {t}\n" for t in (1, 2, 3)))
     l1 = row(RP.read(o), "outer L1")
-    assert l1["ok"] is False and l1["note"].startswith("lease preempted 3x") and l1["extra"]["preempted"] == 3
+    assert l1["ok"] is False and l1["extra"]["preempted"] == 3
+    assert l1["note"] == "lease preempted 3x; no session finished in the lease's 2m00s"
 
 
 def test_markdown_has_one_line_per_row(tmp_path: Path) -> None:
@@ -220,6 +223,25 @@ def test_env_passes_through_and_must_be_key_value(capsys) -> None:
 def test_unknown_step_is_refused() -> None:
     with pytest.raises(SystemExit, match="ostage"):
         RUN.main(["profile", "plan", "--steps", "build,ostage"])
+
+
+def test_merge_takes_a_later_runs_row_for_the_same_step_stage_and_mode(tmp_path: Path, capsys) -> None:
+    a = RP.read(job(tmp_path / "a")) | {"ref": "rA"}
+    o = job(tmp_path / "b")
+    prover_dir(o / "steps" / "oprove" / "r1" / "out" / "oprove" / "L0-dev", (4.0, 4.0, 4.0))
+    b = RP.read(o) | {"ref": "rB"}
+    b["rows"] = [r for r in b["rows"] if r["step"] == "oprove"]
+    m = RP.merge([a, b])
+    l0 = [r for r in m["rows"] if r["stage"] == "outer L0"]
+    assert {(r["extra"]["mode"], r["extra"]["run"], r["wall_s"]["median"]) for r in l0} == {("firewall", "rB", 6.0), ("dev", "rB", 4.0)}
+    assert next(r for r in m["rows"] if r["stage"] == "build")["extra"]["run"] == "rA"
+    assert [r["step"] for r in m["rows"]].index("oprove") > [r["step"] for r in m["rows"]].index("vstage")
+    assert m["summary"]["outer"]["dev"]["prove_s"] == 6.0          # rB's L0 4.0 and alg-p0's 2.0
+    for name, d in (("a.json", a), ("b.json", b)):
+        (tmp_path / name).write_text(json.dumps(d))
+    assert RUN.main(["profile", "table", str(tmp_path / "a.json"), str(tmp_path / "b.json"), "--merge"]) == 0
+    md = capsys.readouterr().out
+    assert " run |" in md and "| rB |" in md and "| rA |" in md
 
 
 def test_table_refuses_another_schema(tmp_path: Path) -> None:

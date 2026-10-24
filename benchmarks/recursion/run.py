@@ -98,30 +98,33 @@ def load(ref: str) -> dict:
         return json.loads(p.read_text())
     if RUN_ID.fullmatch(ref):
         subprocess.run(["research", "fetch", "--all", ref], check=False, capture_output=True)
-        f = Path.home() / ".research" / "runs" / ref / "out" / "profile.json"
-        if f.is_file():
-            doc = json.loads(f.read_text())
-            doc.setdefault("run", ref)
-            return doc
-        raise SystemExit(f"{ref}: no out/profile.json (research fetch --all {ref} found none)")
+        out = Path.home() / ".research" / "runs" / ref / "out"
+        # a job stopped before its end (cancelled, out of time) wrote no profile.json; its steps' records are read as it would
+        doc = json.loads((out / "profile.json").read_text()) if (out / "profile.json").is_file() else (
+            RP.read(out) if (out / "steps").is_dir() else None)
+        if doc is None:
+            raise SystemExit(f"{ref}: neither out/profile.json nor out/steps (research fetch --all {ref} found neither)")
+        doc.setdefault("run", ref)
+        return doc
     raise SystemExit(f"{ref}: neither a profile.json nor a run id")
 
 
 def cmd_table(a) -> int:
-    docs = [load(r) | {"ref": r} for r in a.results]
+    docs = [d | {"ref": d.get("ref") or d.get("run") or r} for r, d in ((r, load(r)) for r in a.results)]
     for d in docs:
         if d.get("schema") != RP.SCHEMA:
             raise SystemExit(f"{d['ref']}: schema {d.get('schema')!r}, not {RP.SCHEMA}")
-    if a.json:
-        print(json.dumps(docs, indent=1))
-    else:
-        for d in docs:
-            print(f"## {d['ref']}\n\n{RP.markdown(d)}")
+    merged = RP.merge(docs) if a.merge else None
+    md = (f"## {', '.join(merged['runs'])}\n\n{RP.markdown(merged)}" if merged
+          else "\n".join(f"## {d['ref']}\n\n{RP.markdown(d)}" for d in docs))
+    print(json.dumps(merged or docs, indent=1) if a.json else md)
     if a.put:
         with tempfile.TemporaryDirectory() as t:
             for d in docs:
                 (Path(t) / f"{Path(d['ref']).stem if Path(d['ref']).is_file() else d['ref']}.json").write_text(json.dumps(d, indent=1))
-            (Path(t) / "table.md").write_text("\n".join(f"## {d['ref']}\n\n{RP.markdown(d)}" for d in docs))
+            if merged:
+                (Path(t) / "merged.json").write_text(json.dumps(merged, indent=1))
+            (Path(t) / "table.md").write_text(md)
             meta = json.dumps({"what": "recursion profile", "results": [d["ref"] for d in docs]})
             p = subprocess.run(["research", "data", "put", "--kind", KIND, "--tree", t, "--preserve", "--json", "--meta", meta],
                                capture_output=True, text=True, check=False)
@@ -154,6 +157,8 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("result"); p.add_argument("--dir", required=True); p.add_argument("--out"); p.add_argument("--md")
     p = sub.add_parser("table"); p.add_argument("results", nargs="+"); p.add_argument("--json", action="store_true")
     p.add_argument("--put", action="store_true")
+    p.add_argument("--merge", action="store_true", help="one table: a later result's row replaces an earlier one's "
+                   "(same step, stage and mode), each row naming its run")
     a = ap.parse_args(argv)
     return {"plan": cmd_plan, "run": cmd_run, "result": cmd_result, "table": cmd_table}[a.cmd](a)
 

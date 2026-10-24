@@ -56,6 +56,12 @@ class Row:
     def to_json(self) -> dict[str, Any]:
         return json.loads(json.dumps(asdict(self)))
 
+    @classmethod
+    def from_json(cls, d: dict[str, Any]) -> "Row":
+        st = {k: Stat(d[k]["median"], d[k]["min"], d[k]["max"], tuple(d[k]["values"])) if d.get(k) else None
+              for k in ("wall_s", "e2e_s")}
+        return cls(**{**{k: v for k, v in d.items() if k in cls.__dataclass_fields__}, **st})
+
 
 def text(p: Path) -> str:
     try:
@@ -183,9 +189,13 @@ def prover_row(d: Path, stage: str, step: str, what: str) -> Row:
     # 85's `again`: "<fn> <name>: lease preempted, try <t>" in the invocation's out/preempted.txt
     preempted = sum(1 for ln in text(d.parent.parent / "preempted.txt").splitlines() if f" {d.name}: lease preempted" in ln)
     if not timed:
-        why = (f"lease preempted {preempted}x, no session finished in any try; " if preempted else "no timed session: ")
-        r.ok, r.note = False, (why + text(d / "prove.err")[-300:].strip().replace("\n", " ")) if d.exists() else "not run"
-        r.extra = {"preempted": preempted}
+        err = text(d / "prove.err")
+        held = re.findall(r"^gpu-lease: GPU .* held (\S+)", err, re.M)
+        stops = [ln for ln in err.splitlines() if ln.startswith(("FIREWALL-REFUSED", "PROVER-STOPPED")) or "panicked" in ln]
+        why = ([f"lease preempted {preempted}x"] if preempted else []) + [
+            f"no session finished in the lease's {held[-1]}" if held else "no session finished (stopped holding its lease)"]
+        r.ok, r.note = False, "; ".join(why + stops[:1])[:300] if d.exists() else "not run"
+        r.extra = {"preempted": preempted, "lease_held": held}
         return r
     r.wall_s = Stat.of(_num(v.get("prove_total_s", v.get("prove_s"))) for v in timed)
     r.e2e_s = Stat.of(v.get("e2e_s") for v in timed)
@@ -248,6 +258,13 @@ def tool_rows(outs: list[Path], step: str, rel: dict[str, tuple[str, str]], verd
     return rows
 
 
+def step_row(outs: list[Path], step: str, what: str) -> Row:
+    """A step's whole wall over its repeats (job.sh's ``time-step.txt`` around each invocation of 85)."""
+    ts = [t for t in (timev(o.parent / "time-step.txt") for o in outs) if t]
+    return Row(f"{step} step", step, what, "cpu", wall_s=Stat.of(t["wall_s"] for t in ts),
+               peak_rss_gb=max((t["peak_rss_gb"] for t in ts if t["peak_rss_gb"] is not None), default=None))
+
+
 def _names(outs: list[Path], sub: str, pattern: str) -> list[str]:
     """The names of the files matching ``pattern`` (``time-(.+).txt``) under ``out/<sub>`` of any repeat, in name order."""
     rx = re.compile(pattern)
@@ -295,8 +312,12 @@ def read(root: Path) -> dict[str, Any]:
             if n not in ("points", "fold", "cap"):
                 rel[f"stage {n}"] = (f"vstage/time-{n}.txt", "rec_vstage stage of the verifier's own values alone (no level, no "
                                      "algebra)" if n == "verifier" else f"rec_vstage stage of V*'s statement {n}")
+        rows.append(step_row(vs, "vstage", "85 STEP=vstage whole (its statements staged JOBS at a time)"))
         rows += tool_rows(vs, "vstage", rel)
-    rows += tool_rows(repeats(root, "vcap"), "vcap", {"stage cap": ("vstage/time-cap.txt", "RecCap at every level")})
+    vc = repeats(root, "vcap")
+    if vc:
+        rows.append(step_row(vc, "vcap", "85 STEP=vcap whole"))
+    rows += tool_rows(vc, "vcap", {"stage cap": ("vstage/time-cap.txt", "RecCap at every level")})
     for o in repeats(root, "oprove")[:1]:
         for d in sorted((p for p in (o / "oprove").glob("*") if p.is_dir()), key=lambda p: p.name):
             mode = next((m for m in ("firewall", "host", "dev") if d.name.endswith("-" + m)), "dev")
@@ -333,9 +354,7 @@ def read(root: Path) -> dict[str, Any]:
             why = [str((lean_verdict(o / "lean" / f"{name}.log") or {}).get("why"))[:200] for o in ln]
             if r.ok is False:
                 r.note = next((w for w in why if w and w != "None"), text(ln[0] / "lean" / f"{name}.log")[-200:].strip())
-        steps = [timev(o.parent / "time-step.txt") for o in ln]
-        rows.append(Row("lean step", "lean", "85 STEP=lean whole (JOBS sessions at once), as an auditor waits", "cpu",
-                        wall_s=Stat.of(t["wall_s"] for t in steps if t)))
+        rows.append(step_row(ln, "lean", "85 STEP=lean whole (JOBS sessions at once), as an auditor waits"))
         rows += lrows
     return {"schema": SCHEMA, "params": params(root), "rows": [r.to_json() for r in rows], "summary": summary(rows),
             "steps": step_status(root)}
@@ -370,18 +389,36 @@ def summary(rows: list[Row]) -> dict[str, Any]:
             m["e2e_s"] += r.e2e_s.median if r.e2e_s else 0.0
             m["proof_bytes"] += r.proof_bytes or 0
             m["statements"] += 1
-    timed = [r for r in rows if r.kind != "setup" and r.wall_s and r.stage != "lean step"]
+    timed = [r for r in rows if r.kind != "setup" and r.wall_s and not r.stage.endswith(" step")]
     slow = max(timed, key=med, default=None)
-    lean_v = sum(med(r) for r in rows if r.step == "lean" and r.stage.startswith("lean ")
-                 and r.stage not in ("lean step", "lean inner", "lean inner-statement"))
+    whole = {r.step: med(r) for r in rows if r.stage == f"{r.step} step" and r.wall_s}
     inner = next((r for r in rows if r.stage == "inner M0"), None)
-    stage_v = sum(med(r) for r in rows if r.step in ("vstage", "vcap"))
     mode = "firewall" if "firewall" in outer else next(iter(outer), None)
-    parts = {"inner M0 e2e_s": inner.e2e_s.median if inner and inner.e2e_s else None, "V* staging_s": stage_v or None,
-             f"outer prove ({mode}) e2e_s": outer[mode]["e2e_s"] if mode else None, "Lean V* verify_s (sum)": lean_v or None}
+    # one recursive session's path, each part as long as an auditor waits for it: the inner session, V*'s staging (the
+    # vstage and vcap steps' whole walls: their stages run in parallel), V*'s statements proved one after another, and
+    # Lean's checks (the lean step's whole wall, the inner session's and statement's checks included)
+    parts = {"inner M0 e2e_s": inner.e2e_s.median if inner and inner.e2e_s else None,
+             "V* staging_s (vstage + vcap steps)": (whole.get("vstage", 0) + whole.get("vcap", 0)) or None,
+             f"outer prove ({mode}) e2e_s": outer[mode]["e2e_s"] if mode else None, "Lean step_s": whole.get("lean")}
     return {"outer": outer, "slowest": {"stage": slow.stage, "step": slow.step, "median_s": med(slow)} if slow else None,
             "pipeline": parts, "pipeline_sum_s": sum(v for v in parts.values() if v) if any(parts.values()) else None,
             "not_ok": [r.stage for r in rows if r.ok is False]}
+
+
+def merge(docs: list[dict[str, Any]]) -> dict[str, Any]:
+    """One profile from several runs' (``ref``: each one's run id or file): a row of a later one replaces an earlier one's
+    with the same step, stage and mode, each row names the run it came from (``extra.run``), and the summary is the
+    merged rows'."""
+    by: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for d in docs:
+        for r in d["rows"]:
+            r = {**r, "extra": {**r.get("extra", {}), "run": d.get("ref") or d.get("run")}}
+            by[(r["step"], r["stage"], r["extra"].get("mode", ""))] = r
+    order = {s: i for i, s in enumerate(("build", "inner", "icheck", "vstage", "vcap", "oprove", "oreplay", "lean"))}
+    rows = sorted(by.values(), key=lambda r: order.get(r["step"], len(order)))
+    return {"schema": SCHEMA, "params": docs[-1].get("params", {}), "runs": [d.get("ref") or d.get("run") for d in docs],
+            "rows": rows, "summary": summary([Row.from_json(r) for r in rows]),
+            "steps": {f"{k} ({d.get('ref') or d.get('run')})": v for d in docs for k, v in d.get("steps", {}).items()}}
 
 
 def _fmt(s: dict[str, Any] | None) -> str:
@@ -405,10 +442,12 @@ def markdown(doc: dict[str, Any]) -> str:
     p = doc.get("params", {})
     lines = [f"Recursion profile: K = {p.get('K')}, N = {p.get('N')}, commit {str(p.get('commit'))[:12]}, "
              f"{p.get('RUNS')} timed sessions after {p.get('WARM')} warm per GPU step, {p.get('REPEAT')} repeats per CPU step. "
-             "Seconds: median [min–max] (n).", "",
-             "| stage | step | what | time s | session e2e s | pace s | peak RSS GB | GPU peak MiB | proof | dominant phase | ok |",
-             "|---|---|---|---|---|---:|---:|---:|---:|---|---|"]
+             "Seconds: median [min–max] (n)." + (f" Runs: {', '.join(map(str, doc['runs']))}." if doc.get("runs") else ""), "",
+             "| stage | step | what | time s | session e2e s | pace s | peak RSS GB | GPU peak MiB | proof | dominant phase | ok |"
+             + (" run |" if doc.get("runs") else ""),
+             "|---|---|---|---|---|---:|---:|---:|---:|---|---|" + ("---|" if doc.get("runs") else "")]
     for r in doc["rows"]:
+        run = f" {r.get('extra', {}).get('run')} |" if doc.get("runs") else ""
         dom = r.get("dominant")
         dom_s = (f"{dom['phase']} {dom['s']:.3g} s" + (f" ({dom['share']:.0%} of {dom.get('of', 'prove_total_s')})"
                                                        if dom.get("share") else "")) if dom else "—"
@@ -419,7 +458,7 @@ def markdown(doc: dict[str, Any]) -> str:
         rss = f"{r['peak_rss_gb']:.3g}" if r.get("peak_rss_gb") is not None else "—"
         gpu = f"{r['gpu_peak_mib']:.0f}" if r.get("gpu_peak_mib") else "—"
         lines.append(f"| {r['stage']} | {r['step']} | {r['what']} | {_fmt(r.get('wall_s'))} | {_fmt(r.get('e2e_s'))} | {pace_s} | {rss} | "
-                     f"{gpu} | {_bytes(r.get('proof_bytes'))} | {dom_s} | {ok}{note} |")
+                     f"{gpu} | {_bytes(r.get('proof_bytes'))} | {dom_s} | {ok}{note} |{run}")
     s = doc["summary"]
     lines += ["", "Outer (V*'s statements, sum of each statement's median): " + "; ".join(
         f"{m}: prove {v['prove_s']:.3g} s, session e2e {v['e2e_s']:.3g} s, proofs {_bytes(int(v['proof_bytes']))} over "
