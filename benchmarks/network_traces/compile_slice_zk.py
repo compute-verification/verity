@@ -3,17 +3,21 @@ one unit, proved by C-Flock `prove --zk` behind the Lean firewall and held by Le
 path (`n2_zk.py`: its stager, firewall and received-pieces scan).
 
     python benchmarks/network_traces/compile_slice_zk.py prove --bin flock-circuit --lean flock-verify --out DIR
-      [--points 1] [--dry]
+      [--points 1] [--kinds K,...] [--dry]
 
 * **The slice** is `verity/core/protocols/certifier/tests/fixtures/compile_slice_smallkv.json`, and `prove` first checks
-  it is the corpus's (`replay_vectors.vectors` on corpus-smallkv: the arrivals, the decisions and the replay's rows).
-* **The statement**: one template of n units, each the slice's rows under fresh salts. Unit 0 is honest; unit 1 has
-  decision 5 flipped in its window row (the advice row stays the registered one); unit 2 declares the charge one below
-  the coded length; unit 3 has arrival 1's prompt one token longer in its ``cert`` row (an arrival not in the certified
-  record); units 4 to 8 are REDTEAM's phase 9 choices (`compile_slice.phase9`: a context, frequencies, a prefix hit, a
-  decision read again, an arrival left in the queue); the rest are honest, enough of them that the statement fits
-  `--zk`'s shape (`stage`). Every ``pub`` digest is the clear recompile's: the replay's rows (the fixture's) under the
-  unit's digest salt.
+  it is the corpus's (`replay_vectors.vectors` on corpus-smallkv: the arrivals, the decisions and the replay's rows;
+  `cache_vectors`' tokens of each arrival).
+* **The statement**: one template of n units, each the slice's rows under fresh salts, one unit a kind (`KINDS`, or
+  `--kinds`' in their order). ``honest``; ``flip``, decision 5 flipped in its window row (the advice row stays the
+  registered one); ``charge``, the charge one below the coded length; ``arrival``, arrival 1's prompt one token longer
+  in its ``cert`` row (an arrival not in the certified record); ``table``, a made-up first cache table (request 1's
+  first block under ROOT), which gives request 1 a 16-token hit at step 6; ``tokens``, request 1's first block made
+  request 0's in its ``cert`` row, the same hit through a consistent table; then REDTEAM's phase 9 choices
+  (`compile_slice.phase9`: a context, frequencies, a prefix hit, a decision read again, an arrival left in the queue).
+  The rest are honest, enough of them that the statement fits `--zk`'s shape (`stage`). Every ``pub`` digest is the
+  clear recompile's (the replay's rows, the fixture's, under the unit's digest salt) but ``table``'s, which is the
+  digest of the schedule it serves (its own rows, the hit taken), so its ``cache`` check alone refuses it.
 * **The bindings**, checked natively by the verifier on the row commitments b‖c the public file holds: each unit's
   ``adv`` row is row i of the advice's hiding registration (`verity.ml.commitments.advice`: its leaf from b‖c, its path
   to the registered root), and its ``cert`` row is the certified record's commitment (a stand-in: one ``cert`` row under
@@ -41,6 +45,7 @@ REPO = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 
 import n2_zk as N2  # noqa: E402
+from verity.core.protocols.certifier import cache_step as CST  # noqa: E402
 from verity.core.protocols.certifier import compile_slice as CS  # noqa: E402
 from verity.core.protocols.certifier import replay_chain as RC  # noqa: E402
 from verity.ml.commitments import advice as ADV  # noqa: E402
@@ -48,10 +53,10 @@ from verity.ml.commitments.frame_v3 import BitRowLeaf  # noqa: E402
 from verity.ml.commitments.rowleaf import bit_row, row_leaf  # noqa: E402
 
 FIXTURE = REPO / "verity/core/protocols/certifier/tests/fixtures/compile_slice_smallkv.json"
-KINDS = ("honest", "flip", "charge", "arrival") + CS.PHASE9
+KINDS = ("honest", "flip", "charge", "arrival", "table", "tokens") + CS.PHASE9
 REFUSED = {"honest": set(), "flip": {"load", "steps", "rows"}, "charge": {"charge"}, "arrival": {"rows"},
-           "context": {"code", "charge"}, "frequency": {"code", "charge"}, "hit": {"steps", "rows"},
-           "reread": {"steps", "rows"}, "untaken": {"steps", "rows"}}
+           "table": {"cache"}, "tokens": {"rows"}, "context": {"code", "charge"}, "frequency": {"code", "charge"},
+           "hit": {"cache", "rows"}, "reread": {"steps", "rows"}, "untaken": {"steps", "rows"}}
 OPENED = ("o0", "pub")
 
 
@@ -62,10 +67,9 @@ def log(msg: str) -> None:
 def load(path: Path = FIXTURE) -> SimpleNamespace:
     fx = json.loads(path.read_text())
     st = CS.statics(fx["R"], fx["W"], fx["A"], fx["engine"], fx["IW"], Q=fx["Q"], D=fx["D"], P=fx["P"], K=fx["K"],
-                    SEG=fx["SEG"])
-    return SimpleNamespace(fx=fx, st=st, S=SimpleNamespace(**st),
-                           sl=CS.Slice(tuple(map(tuple, fx["arrivals"])), tuple(fx["decisions"]), fx["steps"]),
-                           rows=[tuple(map(tuple, r)) for r in fx["rows"]])
+                    SEG=fx["SEG"], CN=fx["CN"], CTW=fx["CTW"], CU=fx["CU"])
+    sl = CS.Slice(tuple(map(tuple, fx["arrivals"])), tuple(fx["decisions"]), fx["steps"], tuple(map(tuple, fx["tokens"])))
+    return SimpleNamespace(fx=fx, st=st, S=SimpleNamespace(**st), sl=sl, rows=[tuple(map(tuple, r)) for r in fx["rows"]])
 
 
 def _corpus(tmp: Path) -> Path:
@@ -93,16 +97,17 @@ def _corpus(tmp: Path) -> Path:
 
 
 def corpus_check(x: SimpleNamespace) -> None:
-    """The fixture is corpus-smallkv's first P steps: its arrivals, the decisions its replay asks and the replay's rows."""
+    """The fixture is corpus-smallkv's first P steps: its arrivals, the decisions its replay asks, the replay's rows and
+    each arrival's tokens (`cache_vectors`' trace, `derived.tokens_of`)."""
     import importlib
     import tempfile
 
     enc = REPO / "benchmarks/network_e2e/encodings"
-    names = ("replay", "replay_vectors")
+    names = ("replay", "replay_vectors", "cache_vectors", "enc_derived")
     saved, path = {k: sys.modules.pop(k) for k in names if k in sys.modules}, list(sys.path)
     sys.path[:0] = [str(enc)]
     try:
-        RP, RV = (importlib.import_module(k) for k in names)
+        RP, RV, CV = (importlib.import_module(k) for k in names[:3])
     finally:
         sys.path[:] = path
         for k in names:
@@ -114,15 +119,19 @@ def corpus_check(x: SimpleNamespace) -> None:
     arrivals = [(i, reqs[i].prompt_len, reqs[i].output_len) for i in range(x.S.K)]
     dec = [b for _s, inp, want in cases[:x.S.P] for b in inp.bits[:want.used]]
     rows = [tuple(map(tuple, c[2].rows)) for c in cases[:x.S.P]]
-    if (arrivals, dec, rows) != (list(x.sl.arrivals), list(x.sl.decisions), x.rows):
+    tr = CV.load(enc / "tests/fixtures/corpus-smallkv")
+    adv, order = CV.D.advice_of(tr)
+    toks = CV.D.tokens_of(CV.D.holdings_of(tr), order, [q.prompt_len for q in adv.requests])
+    tokens = [tuple(toks[i]) for i, _P, _O in arrivals]
+    if (arrivals, dec, rows, tokens) != (list(x.sl.arrivals), list(x.sl.decisions), x.rows, list(x.sl.tokens)):
         raise SystemExit("the fixture isn't corpus-smallkv's first steps")
 
 
-def cases(x: SimpleNamespace, n: int, secret: bytes) -> list[SimpleNamespace]:
+def cases(x: SimpleNamespace, n: int, secret: bytes, kinds: tuple[str, ...] = KINDS) -> list[SimpleNamespace]:
     """The statement's n units (the module's docstring): kind, the unit's rows and the reference's verdict."""
     out, red = [], CS.phase9(x.S, x.sl)
     for i in range(n):
-        kind = KINDS[i] if i < len(KINDS) else "honest"
+        kind = kinds[i] if i < len(kinds) else "honest"
         salt = hashlib.sha512(secret + b"digest salt" + i.to_bytes(4, "big")).digest()[:CS.SALT]
         digest = CS.rows_digest(x.S, x.rows, salt)
         kw = dict(red.get(kind, {}))
@@ -136,6 +145,13 @@ def cases(x: SimpleNamespace, n: int, secret: bytes) -> list[SimpleNamespace]:
             cert = list(x.sl.arrivals)
             cert[1] = (cert[1][0], cert[1][1] + 1, cert[1][2])
             kw["cert"] = cert
+        elif kind == "table":
+            kw["fabricate"] = {0: (CST.Entry(x.S.CN, tuple(x.sl.tokens[1][:x.S.B]), 0),)}
+            digest = None
+        elif kind == "tokens":
+            toks = [list(t) for t in x.sl.tokens]
+            toks[1][:x.S.B] = toks[0][:x.S.B]
+            kw["tokens"] = toks
         c = CS.case(x.S, x.sl, salt, digest=digest, **kw)
         out.append(SimpleNamespace(kind=kind, case=c, salt=salt, words={r: CS.words(c.rows[r]) for r in CS.ROWS}))
     return out
@@ -163,10 +179,10 @@ def stager(M, x: SimpleNamespace, n: int, out: Path) -> SimpleNamespace:
                            program_file=out / "program.json")
 
 
-def population(meta: dict) -> int:
+def population(meta: dict, kinds: tuple[str, ...]) -> int:
     """The fewest units whose statement fits `--zk`'s shape (k_log + nbl ≥ 25, `n2_zk.stage`), at least one unit a kind."""
     b = 25 - meta["k_log"]
-    return len(KINDS) if b <= 3 else max(len(KINDS), meta["vus_per_block"] * ((1 << (b - 1)) + 1))
+    return len(kinds) if b <= 3 else max(len(kinds), meta["vus_per_block"] * ((1 << (b - 1)) + 1))
 
 
 def certified(M, port, words: list[int], salt: bytes) -> bytes:
@@ -313,10 +329,10 @@ def prove(a) -> int:
     x = load()
     corpus_check(x)
     log(f"slice: corpus-smallkv's first {x.S.P} steps, {x.sl.arrivals}, decisions {x.sl.decisions}, the fixture is the corpus's")
-    summary: dict = {"statics": x.st, "size": CS.size(**x.st), "slice": x.fx}
+    summary: dict = {"statics": x.st, "row_bits": CS.row_bits(x.S), "slice": x.fx, "kinds": a.kinds}
     secret = os.urandom(32)
     if a.dry:
-        units = cases(x, len(KINDS), secret)
+        units = cases(x, len(a.kinds), secret, a.kinds)
         summary["reference"] = [{"kind": u.kind, "verdict": u.case.verdict, "flags": u.case.flags} for u in units]
         log(f"dry: {summary['reference']}")
         Path(a.out).mkdir(parents=True, exist_ok=True)
@@ -325,14 +341,14 @@ def prove(a) -> int:
     M = N2._one_stage()
     out = Path(a.out)
     CS.CompileSlice.build = CS._build
-    probe = stager(M, x, len(KINDS), out / "probe")
-    n = population(probe.st.meta)
+    probe = stager(M, x, len(a.kinds), out / "probe")
+    n = population(probe.st.meta, a.kinds)
     log(f"probe: k_log {probe.st.meta['k_log']}, vus_per_block {probe.st.meta['vus_per_block']}, lowered in {probe.lower_s} s; "
         f"{n} units")
-    sg = stager(M, x, n, out / "stager")
+    sg = probe if n == len(a.kinds) else stager(M, x, n, out / "stager")
     summary["stager"] = {"lower_s": sg.lower_s, "k_log": sg.st.meta["k_log"], "vus_per_block": sg.st.meta["vus_per_block"],
                          "pin": sg.st.pin, "rows": {r: b for r, _s, b, _p in sg.rows}, "n": n}
-    units = cases(x, n, secret)
+    units = cases(x, n, secret, a.kinds)
     for u in units:
         if not expected(u.kind, u.case.flags):
             raise SystemExit(f"{u.kind}: the reference's flags {u.case.flags} are not the kind's")
@@ -356,7 +372,7 @@ def prove(a) -> int:
                                                        salts["adv"][i]) for i, u in enumerate(units))
     summary["staged"] = {"n": n, "ands": m["ands"], "unit_nnz": m["unit_nnz"], "stage_s": m["stage_s"], "k_log": m["meta"]["k_log"],
                          "pin": m["pin"], "verdict_words": m["oks"], "adv_bc_is_the_advice_leafs": same}
-    log(f"staged: {n} units, {m['ands']} ANDs a unit, k_log {m['meta']['k_log']}, verdicts {m['oks'][:len(KINDS)]}..., "
+    log(f"staged: {n} units, {m['ands']} ANDs a unit, k_log {m['meta']['k_log']}, verdicts {m['oks'][:len(a.kinds)]}..., "
         f"adv b‖c is advice's: {same}, {m['stage_s']} s")
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
 
@@ -370,7 +386,7 @@ def prove(a) -> int:
     got = [r["verdict"] for r in res.get("units", [])]
     ok = (res["accepted"] and all(res["verdicts"].values()) and got == want and same
           and not res["received"]["verifier_found"] and res["received"]["control"]["holds_all"])
-    log(f"proofs {res['verdicts']}, audit {res['audit']}, first units {[(r['kind'], hex(r['verdict_word']), r['adv_bound'], r['cert_bound'], r['verdict']) for r in res.get('units', [])[:len(KINDS)]]}, "
+    log(f"proofs {res['verdicts']}, audit {res['audit']}, first units {[(r['kind'], hex(r['verdict_word']), r['adv_bound'], r['cert_bound'], r['verdict']) for r in res.get('units', [])[:len(a.kinds)]]}, "
         f"per unit {res['per_unit']}, verifier received {res['received']['verifier_bytes']} bytes, witness pieces found "
         f"there: {res['received']['verifier_found'] or 'none'} (of {len(blobs)}), control {res['received']['control']['blobs_found']}; "
         f"{'as expected' if ok else 'UNEXPECTED'}")
@@ -395,9 +411,14 @@ def main(argv=None) -> int:
     p.add_argument("--port", type=int, default=7781)
     p.add_argument("--delta", type=float, default=2.0 ** -20)
     p.add_argument("--points", default="", help="cost points: the k drawn units of each session, comma-separated")
+    p.add_argument("--kinds", default=",".join(KINDS),
+                   help="the units' kinds in order, comma-separated, honest first (its cert row is the certified record's)")
     p.add_argument("--dry", action="store_true", help="the slice and the reference only: nothing lowered or proved")
     a = ap.parse_args(argv)
     a.points = [int(k) for k in a.points.split(",") if k]
+    a.kinds = tuple(k for k in a.kinds.split(",") if k)
+    if not a.kinds or a.kinds[0] != "honest" or not set(a.kinds) <= set(KINDS):
+        raise SystemExit(f"--kinds: honest first, each of {', '.join(KINDS)}")
     if not a.dry and not (a.bin and a.lean):
         raise SystemExit("prove needs --bin and --lean, or --dry")
     return prove(a)
