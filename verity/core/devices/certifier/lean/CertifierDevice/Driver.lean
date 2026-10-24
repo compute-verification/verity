@@ -12,10 +12,12 @@ each), `publish`, and the signer's leaf state (`reserve`, which `certifyWith` ta
 `run` feeds `step`. Each blocking read runs in a task of its own (the link's, and each stream's once it connects), and
 sends what it read, with the clock's reading, to one channel; so does each connection attempt. The driver takes those
 in order, and when a grid's tick is due (`origin + t·τ`) it ticks it with the clock's reading then and, on egress, the
-link's backlog. It performs each action as the device returns it: a write with `drain` is delivered once the write
-returns. It closes a stream's connection when it takes the read that ends it, as `active.py` closes its writer then, and
-when both grids have run all their ticks it closes the connections still open and the link, as `Proxy.run` does, and
-returns.
+link's backlog; when both are due, ingress first (`active.TICK_ORDER`). It performs each action as the device returns
+it: a write with `drain` is delivered once the write returns, as is each salt frame's write on the salt connection,
+which `connectSalt` opens with `connect`. It closes a stream's connection when it takes the read that ends it, as
+`active.py` closes its writer then, and when both grids have run all their ticks it closes the connections still open
+and the link, as `Proxy.run` does, and returns. With the salt on, it draws every PoUW window's salt from the world's
+coins before its first tick; the device reads one only once its frame is released.
 -/
 
 namespace CertifierDevice

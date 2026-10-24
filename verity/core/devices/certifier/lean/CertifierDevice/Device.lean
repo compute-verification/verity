@@ -43,6 +43,20 @@ proxy event by event:
   (`online.Refused`, which a request released by an ingress tick read before its due time can lead to): the egress
   window that declares it is faulted `monitor-unavailable` at its first tick, as a late tick is, and its sync is the
   choice made on the frames read.
+* **The salt** (`Config.salt`, off by default). At PoUW window p's first ingress tick (its first certifier window of
+  `pouwWindow`) the bucketer enqueues the certifier's own frame, `saltFrame p placeholder`, ahead of that bucket's
+  arrivals, and follows it by its place in the queue. When the ingress certifier releases it, the proxy queues p's salt
+  (`values[p]`, the certifier's coins, drawn outside the device) in that frame in place of the placeholder for a server
+  connection of its own: the first opens it (`connectSalt`, answered `saltConnected` or `saltRefused`, which is
+  `delivery-refused` on ingress), and each frame is written (`writeSalt`) once the one before it is drained
+  (`saltDelivered`). Nothing is read from it. The reveal and its custody are outside the device.
+* **The restart** (`initAt c start position`): a proxy back from maintenance, its first tick of each grid window
+  `start`'s first bucket and the first egress frame it takes the Program's at `position`, carrying nothing from before.
+* **A served link** (`Config.served`, off by default): the bucketer enqueues arrived frames only as whole requests of
+  the profile's F_in frames that the admission rule admits (`Served.admits`) under the window's declared sync; the rest
+  wait, in order, for the next window.
+* **Ticks due together.** `step` takes one tick at a time, so a world whose ticks of both grids fall due at one
+  boundary orders them; the proxy runs the ingress tick first (`active.TICK_ORDER`), as `Driver.run` does.
 
 Events the proxy couldn't be waiting for (a second `connected`, bytes on a stream not open, a `delivered` with no write
 waiting, anything after both grids' last ticks) change nothing. Python's floats and Lean's integers agree away from the
@@ -103,8 +117,8 @@ structure ProverConfig where
   prior : Array Past := #[]
 
 /-- The proxy's salt (`Proxy(salt=…)`): one salt of `bits` bits per PoUW window of `pouwWindow` certifier windows, PoUW
-window p's `values[p]`. They are the certifier's own coins, drawn at p's first certifier window; nothing the device
-outputs reads one before its frame is released. -/
+window p's `values[p]`. They are the certifier's own coins (`active.py` draws p's at p's first ingress tick, the driver
+all of them before its first tick); the device reads p's only once p's salt frame is released. -/
 structure SaltSource where
   values : Array ByteArray
   bits : Nat := 512

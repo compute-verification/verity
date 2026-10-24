@@ -6,8 +6,9 @@ Writes `DIR/difftest/instances.jsonl`, one instance per line as `CertifierDevice
 configuration, a trace of events, the path that made it and, for an honest run, the Program's frames), and
 `DIR/difftest/python.jsonl`, the same line's results from the checkout's real `active.Proxy` driven through the trace:
 every action it took, in order (each link write, server connection, server write with whether it waited for its drain,
-and published record with its grid's parameters), and at the end its declared syncs, its shaper's hand times, its log
-of egress frames read and its two counts. The Lean audit runs `CertifierDevice/DifftestMain.lean` on both files (`runs`
+salt connection and salt write, and published record with its grid's parameters), and at the end its declared syncs, its
+shaper's hand times, its log of egress frames read and its four counts (link frames read, requests released, salts
+released and delivered). The Lean audit runs `CertifierDevice/DifftestMain.lean` on both files (`runs`
 in `lean-audit.json`, which pins their SHA-256), and `verity/core/protocols/certifier/tests/
 test_network_certifier_device_lean_difftest.py` checks that this script still writes them.
 
@@ -15,8 +16,9 @@ test_network_certifier_device_lean_difftest.py` checks that this script still wr
 its `clock` reads the trace's clock, and its `sleep` parks the calling ticker (egress or ingress, told apart by the
 task's coroutine) until the trace's next tick of that grid releases it, whatever the delay; the link is an in-memory
 reader and writer whose backlog the tick event sets; `asyncio.open_connection` is replaced by one that records the
-connection and waits for the trace's `connected` or `refused`; a server connection's reader gives the trace's bytes, and
-its writer records each write and holds a drain until the trace's `delivered`; `asyncio.to_thread` (the proxy's
+connection and waits for the trace's `connected` or `refused` (`salt-connected` or `salt-refused` for the salt's, told
+apart by its task); a server connection's reader gives the trace's bytes, and its writer records each write and holds a
+drain until the trace's `delivered` (`salt-delivered`); `asyncio.to_thread` (the proxy's
 executor shutdown) runs its call inline. After each event the loop runs until no callback is ready (`loop._ready`
 empty, with no timer, socket or thread in play), so each event's effects, and the order of the
 actions its tasks take, are a function of the trace alone. An event the proxy isn't waiting for (bytes on a connection
@@ -44,6 +46,18 @@ chooses each window's sync `lag` buckets before the window (1, T − 1, or betwe
 choice is ready by its tick; each tick that starts a choice wakes late within the slack, after some of its bucket's
 response reads, which the choice has read but mustn't see. Every reading is integer nanoseconds at least `MARGIN` from every grid boundary and every
 boundary plus the slack, where Python's float seconds and Lean's integers could part.
+
+**The modes.** Each path runs under each of `MODES` in turn: plain; the salt (`Proxy(salt=…)`, at 1, 2 or 3 certifier
+windows per PoUW window, salts of 64 to 512 bits, ingress frames of 96 or 128 bytes), its connection opened a little
+after the tick that releases the first salt frame and each salt drained a little after its frame's release; a restart
+(`Proxy(start=…, position=…)`, at a window 1 … W − 1, its first egress frame at position 0, 1, 5 or 17); a served link
+(`Proxy(served=…)`: grids that share T and τ, each request F_in frames and each response F, every response frame ready
+by the smallest δ, under syncs whose start window the admission rule accepts); and the salt with a restart or a served
+link. The online prover's paths are neither restarted nor served. The salt's own paths: its connection refused, which
+faults the ingress window `delivery-refused`, and a salt drained a window late or never (`salt-stall`), which faults
+nothing; a restart's: an event at a position before the restart's (`stale`, malformed). Link garbage includes a salt
+frame read from the link, never the certifier's. The tick that releases each request frame and each salt frame is the
+real `active.Bucketer`'s on the trace's arrivals.
 """
 from __future__ import annotations
 

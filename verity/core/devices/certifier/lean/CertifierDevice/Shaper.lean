@@ -7,7 +7,9 @@ import CertifierDevice.Served
 
 The executable forms of `active.py`'s `Shaper` (the honest shaper and the egress certifier: `schedule.run_shaper`'s
 handing rule, `h(k) = max(eligible(k), h(k−1))` under the declared sync of the frame's anchor's window, then
-`max(h(k), ready(k), last)`) and `Bucketer` (the ingress certifier, each frame enqueued at the bucket it arrived by).
+`max(h(k), ready(k), last)`) and `Bucketer` (the ingress certifier, each frame enqueued at the bucket it arrived by,
+behind the certifier's own salt frame at a window's first bucket, and on a served link only as whole requests its
+admission rule admits).
 -/
 
 namespace CertifierDevice
