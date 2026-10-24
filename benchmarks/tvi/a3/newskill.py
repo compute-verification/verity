@@ -484,6 +484,10 @@ def merge(a):
     print("merged", a.ckpt, "->", a.out)
 
 
+class StaleBasis(RuntimeError):
+    pass
+
+
 def load_state(d, device):
     """Model and trainable state of an adapter checkpoint, as trained (bf16 base, adapter path unmerged)."""
     meta = json.load(open(os.path.join(d, "meta.json")))
@@ -492,7 +496,7 @@ def load_state(d, device):
     if tr["spec"].startswith("xs:") and tr.get("basis") != BASIS:
         f = os.path.join(d, "basis_signs.pt")
         if not os.path.exists(f):
-            raise SystemExit(f"{d}: an xs checkpoint saved before the sign-canonical basis, without basis_signs.pt, so this "
+            raise StaleBasis(f"{d}: an xs checkpoint saved before the sign-canonical basis, without basis_signs.pt, so this "
                              "process can't rebuild the basis its state is in. Use its merged model if meta.json says "
                              "merged, or run `newskill.py basis-signs` over the results of the run that wrote it.")
         signs = torch.load(f)

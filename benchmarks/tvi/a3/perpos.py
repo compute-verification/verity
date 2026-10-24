@@ -75,7 +75,7 @@ def main():
         else:
             try:
                 model, st, _ = ns.load_state(d, "cuda")
-            except SystemExit as e:
+            except ns.StaleBasis as e:
                 if not meta.get("merged"):
                     print(json.dumps({"path": d, "skipped": str(e)}), flush=True)
                     out.append({"path": d, "skipped": str(e)})
