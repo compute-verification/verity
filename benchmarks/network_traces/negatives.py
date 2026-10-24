@@ -655,9 +655,10 @@ def advice_run(path: Path, *, T: int = 50, R: int = 32, frames: int = 1, delta: 
 
 
 def n2(run: Path, clock=time.monotonic) -> dict:
-    """N2's verdict of record on every link-window of the run's `certified.jsonl`, through the proof service's stream
-    as `certifier_serve.check` takes it (Selection All, the Lean audit) without asking the certifier's salts, and the
-    link's network verdict; each refused link-window's codes (`codes`), and their union."""
+    """N2's verdict on every link-window of the run's `certified.jsonl`, through the proof service's stream as
+    `certifier_serve.check` takes it (Selection All, the Lean audit, `unproved_outcome`: nothing is proved, so the
+    verdict reads the opening) without asking the certifier's salts, and the link's network verdict; each refused
+    link-window's codes (`codes`), and their union."""
     lw, plan = link(run)
     syncs = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
     st = lw.stream(budget=plan["windows"], delta=cs.DELTA, challenger="negatives", coins=cs._no_coins, clock=clock)
@@ -672,7 +673,7 @@ def n2(run: Path, clock=time.monotonic) -> dict:
         reg = lw.register(st, lw.registration(opening, previous))
         previous = reg.digest
         draw = st.select(reg)
-        outcome = st.deliver(draw, [lw.session(opening, draw)]) or lw.outcome(st, draw, opening, syncs)
+        outcome = st.deliver(draw, [lw.session(opening, draw)]) or lw.unproved_outcome(st, draw, opening, syncs)
         found = codes(lw, opening, bytes.fromhex(reg.record["roots"][0]["root"]), syncs)
         rows.append({"window": w, "accepted": outcome.accepted, "symbols": list(outcome.verdict.codes),
                      "codes": found if not outcome.accepted else []})
