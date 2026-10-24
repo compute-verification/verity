@@ -22,7 +22,10 @@ stood on; `stubs` lists what is still a stand-in.
   committed is held to ``--advice``'s: the stand-in's codec committed the file's bytes (its SHA-512), v0's commitment is
   hiding, so there only its ``total_bits``. That holds it to the file, not to these runs: the prove path is bound to them
   only when the file is their advice and the Commit it proves is theirs, and only a bound prove path counts in the OK.
-* **The negatives** (`negatives`): NEG's `suite` on the runs, handed the advice's v0 bytes for its advice negatives.
+* **The negatives** (`negatives`): NEG's `suite` on the runs, handed the advice's v0 bytes for its advice negatives and,
+  given each request's sampled ids (``--ids``), the I/O tie's verdict on every negative it reads (IO-TIE's reference on
+  a fake upstream's cells and Commit port of the advice and those ids, under the map the verifier computes from the
+  advice).
 """
 from __future__ import annotations
 
@@ -202,8 +205,9 @@ def prove_path(src: Path, info: dict | None, advice_bound: bool | None = None) -
 
 # --- the negatives ----------------------------------------------------------------------------------------------------
 
-def negatives(runs: dict[str, Path], work: Path, adv, clock) -> dict:
-    """NEG's `suite` on ``runs`` (by strategy), its advice negatives made from ``adv``'s v0 bytes. ``ok`` unless a row
+def negatives(runs: dict[str, Path], work: Path, adv, clock, ids: Path | None = None) -> dict:
+    """NEG's `suite` on ``runs`` (by strategy), its advice negatives made from ``adv``'s v0 bytes, and with ``ids`` (each
+    request's sampled ids, `negatives.read_ids`) the I/O tie's verdict on the negatives it reads. ``ok`` unless a row
     that ran says otherwise: a pending check's row (``ok`` None) or one that didn't run is the report's to list, not a
     failure."""
     path = None
@@ -211,7 +215,7 @@ def negatives(runs: dict[str, Path], work: Path, adv, clock) -> dict:
         work.mkdir(parents=True, exist_ok=True)
         path = work / "advice.bin"
         path.write_bytes(I1.encode(adv))
-    rows = NG.suite(runs, work / "negatives", advice=path, clock=clock)
+    rows = NG.suite(runs, work / "negatives", advice=path, ids=ids, clock=clock)
     return {"ran": True, "format": NG.FORMAT, "rows": rows,
             "ok": all(r.get("ok") is not False for r in rows.values() if r.get("ran"))}
 
@@ -258,6 +262,15 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
         pending = sorted(k for k, x in n["rows"].items() if not x.get("ran") or x.get("ok") is None)
         if pending:
             out.append(f"Negatives pending or not run here: {', '.join(pending)} (each row says what it waits on).")
+        ties = [x["tie"] for x in n["rows"].values() if "tie" in x]
+        if not ties:
+            out.append("I/O tie: no sampled ids given (--ids), so no negative has the tie's verdict.")
+        elif not all(t["ran"] for t in ties):
+            out.append(f"I/O tie: {next(t['why'] for t in ties if not t['ran'])}.")
+        else:
+            out.append("I/O tie: IO-TIE's reference in the clear on a fake upstream's cells and Commit port of the advice "
+                       "and the given ids, not the warden's cells under its root (WARDEN) and vllm's Commit proved in an "
+                       "IoTieWindow unit.")
     where = str(r.get("where") or "")
     if where.startswith("off the prover's node"):
         out.append("Auditor host: the certifier ran on another node than the endpoint's, through an ssh forward, not on "
@@ -321,11 +334,20 @@ def markdown(c: dict) -> list[str]:
         else:
             lines += ["Each tampering, the check that must refuse it and its code; ok: refused by that code (a pending "
                       "check's row, ok —, says what it waits on).", "",
-                      "| negative | family | tampers | code | ran | N2 accepted | refused windows | codes | ok | waits on, "
-                      "or why not run |", "|---|---|---|---|---|---|---|---|---|---|"]
+                      "| negative | family | tampers | code | ran | N2 accepted | refused windows | codes | I/O tie | ok | "
+                      "waits on, or why not run |", "|---|---|---|---|---|---|---|---|---|---|---|"]
             for name, x in n["rows"].items():
                 lines.append(f"| {name} | {x['family']} | {x['tampers']} | `{x['code']}` | {x.get('ran')} | "
                              f"{_cell(x.get('n2_accepted'))} | {_cell(x.get('refused_windows'))} | "
-                             f"{_cell(', '.join(x['codes']) if x.get('codes') else None)} | {_cell(x.get('ok'))} | "
-                             f"{_cell(x.get('why') or ', '.join(x['waits']) or None)} |")
+                             f"{_cell(', '.join(x['codes']) if x.get('codes') else None)} | {_tie(x.get('tie'))} | "
+                             f"{_cell(x.get('ok'))} | {_cell(x.get('why') or ', '.join(x['waits']) or None)} |")
     return lines
+
+
+def _tie(t: dict | None) -> str:
+    """A negative's I/O tie cell: the parts that refused it, ``accepts``, or why it didn't run."""
+    if t is None:
+        return "—"
+    if not t["ran"]:
+        return f"not run: {t['why']}"
+    return ", ".join(f"`{c}`" for c in t["codes"]) or "accepts"

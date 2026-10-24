@@ -8,7 +8,7 @@ still stubbed.
 
     python benchmarks/network_e2e/e2e.py --from SRC [SRC ...] --out DIR (--bin flock-circuit --lean flock-verify |
                                          --proofs N2ZK_DIR | --no-prove) [--advice FILE [--serving-config FILE]]
-                                         [--prove-path DIR] [--no-negatives]
+                                         [--ids FILE] [--prove-path DIR] [--no-negatives]
     python benchmarks/network_e2e/e2e.py (--upstream URL | --vllm MODEL | --endpoint-peer NAME:PORT) --out DIR [...]
                                          [certifier_serve.py rehearse's options]
 
@@ -666,7 +666,8 @@ def markdown(r: dict) -> str:
 def stages_of(runs: dict[str, dict], plan: dict, args, work: Path, clock) -> dict:
     """The chain's stages (`chain`): the advice and its bits per link-window when ``--advice`` gives it (T, the
     certified I/O and the windows from the honest run), the prove path when ``--prove-path`` does, and NEG's negatives
-    on the runs unless ``--no-negatives`` (not on the advice profile: its rows take N2's verdict)."""
+    on the runs unless ``--no-negatives`` (not on the advice profile: its rows take N2's verdict), with the I/O tie's
+    verdict when ``--ids`` gives each request's sampled ids."""
     honest, out, adv = runs[HONEST]["dir"], {}, None
     if args.advice:
         adv, out["advice"] = chain.advice(Path(args.advice))
@@ -684,7 +685,8 @@ def stages_of(runs: dict[str, dict], plan: dict, args, work: Path, clock) -> dic
         out["negatives"] = {"ran": False, "why": "its rows take N2's verdict, which the advice profile has none of "
                                                  "until N2-ADVICE"}
     elif not args.no_negatives:
-        out["negatives"] = chain.negatives({s: r["dir"] for s, r in runs.items()}, work / "chain", adv, clock)
+        out["negatives"] = chain.negatives({s: r["dir"] for s, r in runs.items()}, work / "chain", adv, clock,
+                                           ids=Path(args.ids) if args.ids else None)
         log(f"negatives (NEG's registry): ok {out['negatives']['ok']}")
     return out
 
@@ -788,6 +790,9 @@ def main(argv=None) -> int:
                                                              "fields, or a step trace's config)")
     ap.add_argument("--prove-path", metavar="DIR", help="adopt prove_path.py audit's output (its run.sh's $OUT, or a "
                                                         "tarball of it)")
+    ap.add_argument("--ids", metavar="FILE", help="each request's sampled ids by its advice id (ADVICE-SRC's "
+                                                  "requests.jsonl: user, output_ids), for the I/O tie's verdict on the "
+                                                  "negatives it reads")
     ap.add_argument("--no-negatives", action="store_true", help="skip NEG's registry (negatives.suite)")
     args, rest = ap.parse_known_args(argv)
     if rest and args.sources:

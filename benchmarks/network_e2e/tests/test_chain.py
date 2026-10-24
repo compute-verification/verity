@@ -3,8 +3,8 @@ stand-in's from before v0, upgraded with each kept output released in its step's
 summing to I1's total and the residual's giving back every step from the config alone, and with the certified I/O the
 whole advice (bound), or nothing when the I/O certifies other requests; a prove path's output adopted, held to the given
 advice, with a forged arm that passes only when Lean refused its unit; and the report on certifier-serve's virtual runs with
-every stage (NEG's registry among them), then on a varied rehearsal's advice profile, where N2 gives no verdict and the
-rehearsal's own check is the verdict."""
+every stage (NEG's registry among them, with the I/O tie's verdict given the sampled ids), then on a varied rehearsal's
+advice profile, where N2 gives no verdict and the rehearsal's own check is the verdict."""
 
 from __future__ import annotations
 
@@ -146,7 +146,8 @@ def test_a_prove_paths_output_is_adopted_and_held_to_the_given_advice(tmp_path):
 def _args(src, out, **kw) -> SimpleNamespace:
     return SimpleNamespace(**{"sources": [str(src)], "upstream": None, "vllm": None, "out": str(out), "work": None,
                               "bin": None, "lean": None, "delta": 2.0 ** -20, "no_prove": True, "proofs": None,
-                              "advice": None, "serving_config": None, "prove_path": None, "no_negatives": False, **kw})
+                              "advice": None, "serving_config": None, "prove_path": None, "ids": None,
+                              "no_negatives": False, **kw})
 
 
 @pytest.fixture(scope="module")
@@ -190,6 +191,34 @@ def test_the_report_carries_every_stage_on_the_planned_profile(virtual, tmp_path
                 clock=lambda: 0.0)
     assert r["chain"]["prove_path"]["ok"] is False and r["chain"]["bits"]["config"] is None
     assert "the prove path failed" not in r["why_not"]
+
+
+def test_given_the_sampled_ids_each_negative_the_tie_reads_carries_its_verdict(virtual, tmp_path):
+    """With --advice and --ids, every negative the I/O tie reads carries the tie's verdict, in the report's table and
+    in `stubbed`; a row the tie ran on passes only when the tie refuses it by its part. Without --ids no row has one,
+    and `stubbed` says so. Until IO-TIE lands, each such row says why it didn't run."""
+    NG = chain.NG
+    (tmp_path / "a.json").write_text(json.dumps(I1.to_json(_advice())))
+    (tmp_path / "ids.jsonl").write_text("".join(json.dumps({"user": u, "output_ids": x}) + "\n"
+                                                for u, x in (("q0", [5, 6]), ("q1", [9]))))
+    r = e2e.run(_args(virtual, tmp_path / "out", advice=str(tmp_path / "a.json"), ids=str(tmp_path / "ids.jsonl")), [],
+                clock=lambda: 0.0)
+    rows = r["chain"]["negatives"]["rows"]
+    tied = {k: x["tie"] for k, x in rows.items() if "tie" in x}
+    assert set(tied) == set(NG.TIE_PARTS)
+    md = (tmp_path / "out" / "report.md").read_text()
+    assert "| I/O tie |" in md
+    if NG.io_tie_module() is None:
+        assert all(not t["ran"] and "IO-TIE" in t["why"] for t in tied.values())
+        assert any(x.startswith("I/O tie: no I/O tie yet") for x in r["stubbed"])
+    else:
+        ran = {k: t for k, t in tied.items() if t["ran"]}
+        assert {"frame", "token", "drop", "wrong-token"} <= set(ran) and all(t["ok"] for t in ran.values()), tied
+        assert all(rows[k]["ok"] is True for k in ran)
+        assert f"`{NG.TIE}.content`" in md and any(x.startswith("I/O tie: IO-TIE's reference") for x in r["stubbed"])
+    r = e2e.run(_args(virtual, tmp_path / "out2", advice=str(tmp_path / "a.json")), [], clock=lambda: 0.0)
+    assert all("tie" not in x for x in r["chain"]["negatives"]["rows"].values())
+    assert any(x.startswith("I/O tie: no sampled ids given") for x in r["stubbed"])
 
 
 #: what the check finds of each negative on the advice profile: late's window faulted (the audit's status), extra's and
