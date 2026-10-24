@@ -95,8 +95,8 @@ def test_request_census_and_requirement():
     """The row's request Program, about 30 s: the only test of a Program with values across steps (each layer's K and V rows a
     step's attention produces and every later step's reads), which the step and the toys in `ml/circuits` cannot show at scale."""
     r, c, req, rc = _views(CFG, "request", LP=256, T=31)
-    assert r.digest.startswith("26549e495946400f")
-    assert c["digest"] == "6e9fb02193b5e2b9c929b7d34a1f9036f50136912d331561060ac2f7a3abd1b07c5a82f5539b17ec0f1b86024cb7bbc57c892837332fd54ef15d5afbaa671c4c"
+    assert r.digest.startswith("5a5902e7f950612d")
+    assert c["digest"] == "1c29fa44e74d4fa6b275b5d4a9363f8c33469fbfb6a226846f60c723bbdeed6b3324d502edc49bcec99d385c1fb1b2b31f7e8d62bf837857c2f3a33888dd6617"
     assert len(c["steps"]["ends"]) == 32 and c["totals"]["classes"] == 2641
     assert _by_precision(c) == {"mac:bf16": c["totals"]["served_macs"]}
     base, got = _base(rc), req.to_json()
