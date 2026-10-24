@@ -709,8 +709,10 @@ def basis_signs(a):
 
     A worker process computed its SVDs once (SVD_CACHE), so one merged checkpoint from that process pins the signs of every
     xs checkpoint it wrote up to the merged one's rank: with A = (U S)_r^T and B = V_r as XSLinear stores them, the merged
-    delta gives R_est = A^+ (W_merged - W) B^+T = diag(s) R diag(s). Each checkpoint given signs is re-evaluated on the test
-    strings and keeps them only if it reproduces its recorded score."""
+    delta gives R_est = A^+ (W_merged - W) B^+T = diag(s) R diag(s). Nearly equal singular values can rotate rather than flip
+    a pair of vectors, which spoils only their rows and columns, so a rank-r checkpoint is fitted on the leading r x r block
+    of each merged checkpoint of rank >= r. Each checkpoint given signs is re-evaluated on the test strings and keeps them
+    only if it reproduces its recorded score."""
     from safetensors.torch import load_file
     torch.backends.cuda.matmul.allow_tf32 = True
     tok = AutoTokenizer.from_pretrained(a.model)
@@ -725,51 +727,70 @@ def basis_signs(a):
                 procs.setdefault(r["worker"], {})[os.path.realpath(r[k])] = j["spec"]
     base32 = AutoModelForCausalLM.from_pretrained(a.model, dtype=torch.float32)
     W0 = {n: m.weight.detach() for n, m in target_linears(base32)}
-    report = []
-    for proc, ckpts in sorted(procs.items()):
-        legacy = {d: s for d, s in ckpts.items() if torch.load(os.path.join(d, "trainable.pt")).get("basis") != BASIS}
-        refs = sorted([d for d in legacy if json.load(open(os.path.join(d, "meta.json"))).get("merged")],
-                      key=lambda d: -xs_rank(legacy[d], len(W0)))
-        signs, ref_r, ref_err = {}, 0, None
-        if refs:
-            tr = torch.load(os.path.join(refs[0], "trainable.pt"))
+    fits = {}
+
+    def fit(ref):
+        """{linear: (R_est, R)} of a merged legacy checkpoint, in the sign-canonical basis."""
+        if ref not in fits:
+            tr = torch.load(os.path.join(ref, "trainable.pt"))
             model = load_model(a.model, tr["spec"], "cuda")
             st = State(model, tr["spec"], tr["seed"], "cuda")
             merged = {}
-            for f in glob.glob(os.path.join(refs[0], "*.safetensors")):
+            for f in glob.glob(os.path.join(ref, "*.safetensors")):
                 merged.update(load_file(f))
-            errs = []
+            out = {}
             with torch.no_grad():
                 st.shared.z.copy_(tr["state"]["z"])
                 st.refresh()
                 for n, w in st.wrapped:
                     A, B, R = w.SU.double().T, w.V.double(), w.core().double()
                     D = merged[n + ".weight"].to("cuda").double() - W0[n].to("cuda").double()
-                    Re = torch.linalg.pinv(A) @ D @ torch.linalg.pinv(B).T
-                    M = Re * R
-                    s = torch.sign(M[M.abs().sum(1).argmax()])
-                    s[s == 0] = 1
-                    errs.append(((Re - s[:, None] * s[None, :] * R).norm() / R.norm()).item())
-                    signs[n] = s.float().cpu()
-            ref_r, ref_err = w.r, max(errs)
+                    out[n] = ((torch.linalg.pinv(A) @ D @ torch.linalg.pinv(B).T).cpu(), R.cpu())
             del model, st, merged
             torch.cuda.empty_cache()
+            fits[ref] = out
+        return fits[ref]
+
+    def block_signs(ref, r):
+        signs, err = {}, 0.0
+        for n, (Re, R) in fit(ref).items():
+            Re, R = Re[:r, :r], R[:r, :r]
+            M = Re * R
+            s = torch.sign(M[M.abs().sum(1).argmax()])
+            s[s == 0] = 1
+            err = max(err, ((Re - s[:, None] * s[None, :] * R).norm() / R.norm()).item())
+            signs[n] = s.float()
+        return signs, err
+
+    report = []
+    for proc, ckpts in sorted(procs.items()):
+        legacy = {d: s for d, s in ckpts.items() if torch.load(os.path.join(d, "trainable.pt")).get("basis") != BASIS}
+        refs = sorted([d for d in legacy if json.load(open(os.path.join(d, "meta.json"))).get("merged")],
+                      key=lambda d: -xs_rank(legacy[d], len(W0)))
         for d, spec in sorted(legacy.items()):
             meta = json.load(open(os.path.join(d, "meta.json")))
-            e = {"path": d, "worker": proc, "spec": spec, "ref": refs[0] if refs else None, "ref_rank": ref_r,
-                 "ref_fit_err": ref_err, "recorded_exact": meta["test_exact"], "recorded_pos": meta["test_pos"]}
             r = xs_rank(spec, len(W0))
+            e = {"path": d, "worker": proc, "spec": spec, "rank": r, "ref": None, "ref_fit_err": None,
+                 "recorded_exact": meta["test_exact"], "recorded_pos": meta["test_pos"]}
             f = os.path.join(d, "basis_signs.pt")
             if os.path.exists(f):  # kept only after a matching re-evaluation
                 e["ok"] = e["earlier"] = True
                 report.append(e)
                 continue
-            if not refs or ref_err > 0.05 or r > ref_r:
+            signs = None
+            for ref in [x for x in refs if xs_rank(legacy[x], len(W0)) >= r]:
+                s, err = block_signs(ref, r)
+                if e["ref_fit_err"] is None or err < e["ref_fit_err"]:
+                    e["ref"], e["ref_fit_err"] = ref, err
+                if err <= 0.05:
+                    signs = s
+                    break
+            if signs is None:
                 e["ok"] = False
                 report.append(e)
                 print(json.dumps(e), flush=True)
                 continue
-            torch.save({n: s[:r].clone() for n, s in signs.items()}, f)
+            torch.save({n: s.clone() for n, s in signs.items()}, f)
             model, st, _ = load_state(d, "cuda")
             task = Task(meta["order"], tok, "cuda")
             ex, fr = evaluate(model, st, task, task.plains(512, 800 + meta["order"]), False)
