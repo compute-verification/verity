@@ -190,8 +190,8 @@ values of the proof layer that realizes it, not gates of `Cd`. They take no clas
 over the unit's records only, and no gate of the unit reads another unit's computed word through them. That the 33
 statements, accepted over shared committed values, realize the one unit's checks is that linked realization's to
 prove: BRIDGE2's `Accounting.Guarantees.TS.LeafLanesSound`, from `CheckedSessionSound` at each statement, under its
-premises `LaneComputes` and `CombineComputes` (each statement's circuit computes its Definition at its decoded ports),
-with the leaf and the
+premises `LaneLowers` and `CombineLowers` (each statement's pieces at their lowerings, whose composition computing its
+Definition is proved), with the leaf and the
 receipt the ones the statements' committed rows decode to (the known ports' are checked, and each A, B and partials
 row is one row of one registered tree that every statement reading it reads in full).
 -/
