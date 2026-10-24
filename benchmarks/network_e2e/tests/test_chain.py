@@ -251,7 +251,9 @@ def test_the_report_carries_every_stage_on_the_planned_profile(virtual, tmp_path
     assert c["bits"]["bound"] is None and c["prove_path"]["dir"] == str(tmp_path / "pp.tgz") and c["prove_path"]["ok"]
     rows = c["negatives"]["rows"]
     assert c["negatives"]["ok"] and all(rows[k]["ok"] is True for k in ("late", "extra", "head"))
-    assert rows["advice-length"]["ran"] is False and rows["wrong-token"]["ran"] is False
+    # the stand-in releases its first output in its request's own bucket, which N2-ADVICE's floor accepts at δ = 0
+    assert all(rows[k]["ran"] and rows[k]["ok"] for k in ("advice-length", "advice-missing", "advice-release"))
+    assert rows["advice-length"]["codes"] == ["NetworkAdvisedCounts_v1"] and rows["wrong-token"]["ran"] is False
     md = (out / "report.md").read_text()
     for section in ("## Advice", "## Advice bits per link-window", "## Prove path", "## Negatives (NEG's registry)",
                     "## What's still stubbed"):
