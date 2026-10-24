@@ -16,28 +16,38 @@ sys.path.insert(0, str(HERE))
 import warden_replay as WP  # noqa: E402
 
 
-def _request(i: int, prompt: list[int], streamed: list[int], windows: list[int], finish: str = "length") -> dict:
+def _request(i: int, prompt: list[int], streamed: list[int], windows: list[int], first: int, finish: str = "length") -> dict:
     return {"http_id": f"h{i}", "engine_id": f"e{i}", "user": f"varied.{i:05d}", "prompt_ids": prompt, "streamed_ids": streamed,
             "ingress": {"brought": {"max_tokens": len(streamed), "temperature": 0.0, "user": f"varied.{i:05d}"}},
-            "finish": {"reason": finish, "stop_reason": None}, "windows": windows}
+            "finish": {"reason": finish, "stop_reason": None}, "windows": windows,
+            "rows": [[windows[0], first, 0, len(prompt), 0, len(prompt), "prefill"]]}
 
 
 @pytest.fixture
 def run(tmp_path):
     (tmp_path / "serve.json").write_text(json.dumps({"model": "unsloth/Llama-3.2-1B", "served_model_name": "llama"}))
-    reqs = [_request(0, [1, 2, 3], [7, 8], [4]), _request(1, [9], [5], [5]), _request(2, [4, 4], [6, 6, 6], [4], "stop")]
+    reqs = [_request(0, [1, 2, 3], [7, 8], [4], 3), _request(1, [9], [5], [5], 0), _request(2, [4, 4], [6, 6, 6], [4], 1, "stop")]
     (tmp_path / "requests.jsonl").write_text("".join(json.dumps(q) + "\n" for q in reqs))
+    (tmp_path / "step_trace.jsonl").write_text("".join(json.dumps({"window": w, "step": s, "t_end": 1000.0 + 0.1 * w + 0.025 * s}) + "\n"
+                                                       for w in (4, 5) for s in range(4)))
     return tmp_path
 
 
 def test_the_windows_requests_are_the_bodies_they_brought_with_their_recorded_prompt_ids(run):
-    got = WP.traffic(run, 4, start_s=2.0, gap_s=0.5)
-    assert [t["at"] for t in got] == [2.0, 2.5]
-    assert got[0]["body"] == {"model": "llama", "max_tokens": 2, "temperature": 0.0, "user": "varied.00000", "prompt": [1, 2, 3],
+    """At the times the run recorded, in the order they arrived (requests.jsonl holds them in the order they finished), or evenly
+    spaced in the order recorded."""
+    got = WP.traffic(run, 4, start_s=2.0)
+    assert [t["at"] for t in got] == [2.0, 2.05] and [t["body"]["prompt"] for t in got] == [[4, 4], [1, 2, 3]]
+    assert got[1]["body"] == {"model": "llama", "max_tokens": 2, "temperature": 0.0, "user": "varied.00000", "prompt": [1, 2, 3],
                               "stream": True, "stream_options": {"include_usage": True}}
-    assert got[1]["body"]["prompt"] == [4, 4] and got[1]["body"]["max_tokens"] == 3
+    assert got[0]["body"]["max_tokens"] == 3
+    spaced = WP.traffic(run, 4, start_s=2.0, gap_s=0.5)
+    assert [t["at"] for t in spaced] == [2.0, 2.5] and [t["body"]["prompt"] for t in spaced] == [[1, 2, 3], [4, 4]]
     with pytest.raises(SystemExit, match="no request with rows in window 6"):
         WP.traffic(run, 6)
+    (run / "step_trace.jsonl").write_text(json.dumps({"window": 4, "step": 1, "t_end": 1000.0}) + "\n")
+    with pytest.raises(SystemExit, match="no end for window 4's step 3, request h0's first"):
+        WP.traffic(run, 4)
 
 
 def _exchange(held: dict, body: dict) -> dict:
@@ -62,13 +72,13 @@ def _exchange(held: dict, body: dict) -> dict:
 
 def test_each_request_is_answered_with_the_tokens_the_server_streamed_it(run):
     held = WP.answers(WP.served_requests(run, 4))
-    got = _exchange(held, WP.traffic(run, 4)[1]["body"])
+    got = _exchange(held, WP.traffic(run, 4)[0]["body"])
     assert (got["status"], got["complete"], got["events"], got["finish_reason"]) == (200, True, 4, "stop")
     assert (got["prompt_tokens"], got["completion_tokens"]) == (2, 3)
     ids = [json.loads(line[6:])["choices"][0]["token_ids"] for line in WP.ws.dechunk(got["raw"].partition(b"\r\n\r\n")[2])[0].split(b"\n")
            if line.startswith(b"data: {") and b'"token_ids"' in line]
     assert ids == [[6], [6], [6]] and held[(4, 4)] == []
-    assert _exchange(held, WP.traffic(run, 4)[1]["body"])["status"] == 404
+    assert _exchange(held, WP.traffic(run, 4)[0]["body"])["status"] == 404
     assert _exchange(held, {"prompt": [9]})["status"] == 404
 
 

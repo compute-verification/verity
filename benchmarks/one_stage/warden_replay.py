@@ -5,7 +5,8 @@ responses.
 
 * **The requests** (`traffic`): each request of ``requests.jsonl`` with rows in window K, as a streamed ``/v1/completions`` body:
   the served model (``serve.json``'s ``served_model_name``), what its ingress record says it brought, and its prompt as the
-  token ids the server recorded (``prompt_ids``), ``--gap`` seconds apart from ``--start``.
+  token ids the server recorded (``prompt_ids``), from ``--start`` at the times the run recorded (`arrivals`), or ``--gap``
+  seconds apart.
 * **The responses** (`replay_endpoint`): each request, matched by its prompt's token ids, answered with the ids the server
   streamed it (``streamed_ids``), one server-sent event a token in vLLM's completion form (``token_ids``, no text), its finish
   reason the recorded one, then its usage and ``[DONE]``. serve-openai records token ids, not the HTTP bytes it sent, so the
@@ -14,7 +15,7 @@ responses.
   ``check``), with that traffic and that upstream. ``--out`` holds the warden's files (``deployment.json``, the records,
   ``cells.jsonl``; ``cells.salts`` is witness) and ``check.json``.
 
-    python benchmarks/one_stage/warden_replay.py rehearse --serve-run RUN --serve-window K --out DIR [--gap 1] [--token-ms 20] [schedule]
+    python benchmarks/one_stage/warden_replay.py rehearse --serve-run RUN --serve-window K --out DIR [--gap S] [--token-ms 20] [schedule]
     python benchmarks/one_stage/warden_replay.py endpoint --serve-run RUN --serve-window K --listen HOST:PORT [--token-ms 20]
 
 ``--serve-window`` is the served run's Commit window; ``--window`` is the warden's own, in buckets (`WardenParams`).
@@ -66,10 +67,26 @@ def body_of(q: Mapping[str, Any], model: str) -> dict:
             "stream_options": {"include_usage": True}}
 
 
-def traffic(run: str | Path, window: int, *, start_s: float = 1.0, gap_s: float = 1.0) -> list[dict]:
-    """`warden_serve`'s traffic form, {"at", "body"} a request, of window ``window``'s requests."""
-    model = served_model(run)
-    return [{"at": round(start_s + i * gap_s, 3), "body": body_of(q, model)} for i, q in enumerate(served_requests(run, window))]
+def arrivals(run: str | Path, requests: list[Mapping[str, Any]]) -> list[float]:
+    """Each request's time as the run recorded it, in seconds after the earliest: the end of the engine step its first row ran
+    in (``step_trace.jsonl``'s ``t_end``), since serve-openai records no arrival time."""
+    lines = (Path(run) / "step_trace.jsonl").read_text().splitlines()
+    ends = {(int(d["window"]), int(d["step"])): d.get("t_end") for d in map(json.loads, filter(str.strip, lines))}
+    out = []
+    for q in requests:
+        w, s = (int(x) for x in q["rows"][0][:2])
+        if ends.get((w, s)) is None:
+            raise SystemExit(f"{run}/step_trace.jsonl records no end for window {w}'s step {s}, request {q.get('http_id')}'s first")
+        out.append(float(ends[w, s]))
+    return [t - min(out) for t in out]
+
+
+def traffic(run: str | Path, window: int, *, start_s: float = 1.0, gap_s: float | None = None) -> list[dict]:
+    """`warden_serve`'s traffic form, {"at", "body"} a request, of window ``window``'s requests in the order they arrive: at
+    the times the run recorded (`arrivals`), or ``gap_s`` apart in the order it recorded them."""
+    model, requests = served_model(run), served_requests(run, window)
+    at = arrivals(run, requests) if gap_s is None else [i * gap_s for i in range(len(requests))]
+    return [{"at": round(start_s + t, 3), "body": body_of(q, model)} for t, q in sorted(zip(at, requests), key=lambda tq: tq[0])]
 
 
 def answers(requests: list[Mapping[str, Any]]) -> dict[tuple[int, ...], list[Mapping[str, Any]]]:
@@ -194,7 +211,7 @@ def parser() -> argparse.ArgumentParser:
     e.add_argument("--listen", required=True, type=ws.cs._address, help="HOST:PORT (port 0: any)")
     r.add_argument("--out", required=True, type=Path)
     r.add_argument("--start", type=float, default=1.0, help="the first request's time after the origin, in seconds")
-    r.add_argument("--gap", type=float, default=1.0, help="seconds between requests")
+    r.add_argument("--gap", type=float, help="seconds between requests (default: the times the run recorded, `arrivals`)")
     r.add_argument("--tail", type=float, default=10.0, help="seconds the run lasts past the last request's time")
     r.add_argument("--height", type=int, default=ws.cs.HEIGHT, help="the LMS key's tree height")
     r.add_argument("--start-in", type=float, default=2.0, help="the origin, seconds after the warden is up")
