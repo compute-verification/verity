@@ -39,7 +39,8 @@ theorem piopCut_split {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} {lay 
   obtain ⟨⟨lp', lc⟩, t₂, l₂, h₂, h⟩ := Flock.Firewall.Finish.run_bind_ok h
   try dsimp only at h
   obtain ⟨u, t₂', l₂', hr, h⟩ := Flock.Firewall.Finish.run_bind_ok h
-  obtain ⟨rfl, rfl⟩ := rankCheckP_go hr
+  obtain ⟨ht, hl⟩ := rankCheckP_go hr
+  rw [ht, hl] at h
   try dsimp only at h
   obtain ⟨⟨ss', T', sws'⟩, t₃', l₃', h₃, h⟩ := Flock.Firewall.Finish.run_bind_ok h
   try dsimp only at h
