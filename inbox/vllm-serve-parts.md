@@ -18,3 +18,6 @@ unpadded and the positions sit elsewhere. Make serve-openai's committer write th
 `served_rows.register`; the exact interface is in PROVE-PATH's lane note (network-accounting's lanes, prove-path). Keep the
 declared Commit of record's layout unchanged unless PROVE-PATH's note says both must move; if so, say so in the PR body.
 Also: G-A's prove-path stage PASSED on your sealed w5 (r20261024-141912-8eb1).
+
+## 15:35Z (coordinator)
+#3747's head is now a1e9862964: served-rows @9c90546165 merged in, and PROTOCOL.md set to main's (the served-rows bullet lands with network-accounting's PR). Stack your third PR on a1e9862964 (merge it into your branch). Don't touch verity/core/protocols/certifier/PROTOCOL.md: it conflicts with next until drive rebuilds next on the current main.
