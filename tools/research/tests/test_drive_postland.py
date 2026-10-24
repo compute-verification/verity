@@ -249,3 +249,21 @@ def test_a_deferred_record_from_before_the_post_landing_run_still_finishes_under
     h.tick()
     assert _git(world.origin, "diff", "--stat", base, "main") == "" and any("reverted on `main`" in x for x in h.posts), h.posts
     assert not h.q.load_state()["drive"]["deferred"]
+
+
+def test_a_tick_fetches_a_running_checks_evidence_once_however_often_it_judges_it(world, monkeypatch, tmp_path):
+    """Each fetch is an ssh `research status` per run, and a tick judges a running train before its sync, for the running
+    count, for its train and for the slots (24 Oct: the same runs fetched again seconds later, 5-10 s a batch)."""
+    h = Postland(world, monkeypatch, tmp_path)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.tick()
+    (rid,) = [r for r in h.run_state if not r.startswith("r-post-")]
+    *done, last = [x for x in CHECK_STEPS if x not in DEFER]
+    h.evidence = [_steps_run(tmp_path, rid, dict.fromkeys(done, "passed"))]
+    fetched: list[tuple[str, ...]] = []
+    fetch = h.d.evidence
+    h.d.evidence = lambda repo, ids: fetched.append(tuple(ids)) or fetch(repo, ids)
+    h.tick()
+    assert fetched.count((rid,)) == 1, fetched                          # still running: its `last` step hasn't passed
+    h.tick()
+    assert fetched.count((rid,)) == 2, fetched                          # a new tick reads the store again

@@ -789,9 +789,13 @@ class Driver:
         return Verdict("running", " ".join(ids), f"{why}: running again")
 
     def _passed_but_deferred(self, ids: list[str]) -> str | None:
-        """The running check among ``ids`` whose every step but the deferred ones has passed (or was skipped), none failed."""
+        """The running check among ``ids`` whose every step but the deferred ones has passed (or was skipped), none failed. Its
+        evidence is fetched once a tick (`_ev`, as `_states`): a tick asks it of each running train's verdict five or six times,
+        an ssh `research status` per run each (24 Oct: 5-10 s a batch, the same runs again seconds later)."""
         need = [x for x in CHECK_STEPS if x not in self.defer]
-        for d in self.evidence(self.repo, ids):
+        if (key := " ".join(ids)) not in self._ev:
+            self._ev[key] = self.evidence(self.repo, ids)
+        for d in self._ev[key]:
             got: dict[str, str] = {}
             with contextlib.suppress(OSError):
                 for line in (d / PROGRESS[0]).read_text().splitlines():
