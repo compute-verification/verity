@@ -925,7 +925,10 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     out = _credit(auditor, rec, st, run=_verifier(drawn, seen=seen))
     assert out["manifest"] is None and out["window"] is None, out
     served = [row[CR.SERVED_ROWS] for row in rec["calls"]]
-    assert out["calls"] == out["credit"] == [0] and out["eps"] == str(CR.established(LAYOUT, [0], served, k))
+    eps = CR.established(LAYOUT, [0], served, k)
+    assert out["calls"] == out["credit"] == [0] and out["eps"] == (None if eps is None else str(eps))
+    assert 0 < served[0] < LAYOUT["m"]
+    assert CR.credited_work(LAYOUT, [0], served) == served[0] * LAYOUT["linears"][0][1] * LAYOUT["linears"][0][2]
     (got,) = seen
     assert got["circuit_sha512"] == FILES[f"k{K}"]
     root, digest = auditor.window["root"], _circuit()
