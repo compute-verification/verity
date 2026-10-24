@@ -37,8 +37,8 @@ The compiler is total: it compiles its input or refuses it by name (`Unexpressib
   request's (the KV at a position reads every token up to it), in whole blocks of the engine's block size where the Program reads
   the hit (a resume's run of its own KV is I1's replay's to hold);
 - what v0 doesn't compile: a prefix-cache hit on a stochastic request (the cached stochastic wrapper isn't ported); positions
-  past the model's; sampling other than greedy or seeded top-p at top_p = 1 with top_k 0 (top_p < 1, a named gap until serving
-  pins its split count; min_p, the penalties, logit_bias, min_tokens, n > 1, or a parameter this compiler doesn't know);
+  past the model's; sampling other than greedy or seeded top-p with top_k 0 (min_p, the penalties, logit_bias, min_tokens, n > 1,
+  or a parameter this compiler doesn't know);
 - a request Program with a dead unit (`program.prune`: a node no output reads), whose fix is in the lowering, never the advice;
 - a compilation `predict.batch.check_compiled` refuses (`BatchDependent`): one where a request's outputs could read its
   batch-mates (R3 a derived split count; R2 a request planned differently alone, which keeps a cache hit on another request's KV
@@ -67,7 +67,7 @@ from verity.ml.circuits.defs import bind
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program.prune import dead_units
 from verity_vllm.program.registry import io_shell as IO
-from verity_vllm.program.registry.topp_geometry import splits_for_v1
+from verity_vllm.program.registry.topp_geometry import registered_splits
 
 from .build import Unexpressible, build_program, model_shape
 from .phi import Phi
@@ -186,9 +186,8 @@ def _number(x: Any) -> bool:
 def policy_of(i: int, sampling: Any, default_seed: int, num_sms: int | None) -> tuple[dict, int | None]:
     """Request `i`'s sampling policy as φ.sampling takes it, and its seed Input's value (the body's, else `default_seed`; None when
     greedy), from the parameters its body carries (`SamplingParams` names), refused where its Program wouldn't be the Build's. Top-p
-    takes the constant split count S = SplitsFor_v1(1, num_SMs): at top_p = 1 the mask keeps every lane for every S, and below 1
-    the served S is the batch's (`predict.batch`, R3), so top_p < 1 is a named gap, refused until serving pins S as a registered
-    constant."""
+    takes the registered split count S = registered_splits(num_SMs), the S serving pins every top-p launch to (`engine.topp_pin`),
+    at any top_p."""
     if not isinstance(sampling, Mapping) or any(type(k) is not str for k in sampling):
         raise Unexpressible(f"request {i}: its sampling parameters aren't an object of named values")
     s = dict(sampling)
@@ -202,17 +201,14 @@ def policy_of(i: int, sampling: Any, default_seed: int, num_sms: int | None) -> 
     facts += [f"{k} (a parameter this compiler doesn't know)" for k in sorted(s) if s[k] is not None and k not in (*_INERT, *_FINISH, *_READ)]
     if 0 < t < SAMPLING_EPS:
         facts.append(f"temperature {t!r} (vLLM samples it greedily, the Build's policy is greedy at 0 only)")
-    if t > 0 and p < 1:
-        facts.append(f"top_p {p!r} below 1 (a named gap: there the top-p split count S = SplitsFor_v1(live rows, num_SMs) is the "
-                     f"batch's, until serving pins S as a registered constant)")
     if t > 0 and num_sms is None:
-        facts.append("top-p on a target that declares no num_sms (its constant split count SplitsFor_v1(1, num_SMs))")
+        facts.append("top-p on a target that declares no num_sms (its registered split count registered_splits(num_SMs))")
     if facts:
         raise Unexpressible(f"request {i}: sampling the vocabulary can't express: {'; '.join(facts)}")
     if t == 0:
         return {"kind": "greedy"}, None
     return ({"kind": "stochastic", "temperature": float(t), "top_p": float(p), "top_k": 0, "seeded": True,
-             "splits": splits_for_v1(1, int(num_sms))}, int(default_seed if seed is None else seed))
+             "splits": registered_splits(int(num_sms))}, int(default_seed if seed is None else seed))
 
 
 def advice_of(registered: Registered, advice: Any) -> I1.Advice:

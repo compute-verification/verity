@@ -79,9 +79,9 @@ def test_request_and_workload_programs_equal_the_traced_build():
     phi = _phi(json.loads((FIX / "smollm2-135m.config.json").read_text()),
                [{"request_id": "u0", "index": 0, "prompt_len": 256, "max_tokens": 32, "arrive_step": 0}])
     r = build_program(phi, "request", LP=256, T=31)
-    assert r.digest == "89a02f118ba707619824a7dea5ad427e0340208ad4c3f8a449a85e8eaf1a8782516eff3b97860804ad1a331576b2df7e19ee83dafd2c06c167943de474e12dc0"
+    assert r.digest == "c72b96b9a407e23b35ffb4bcbf2cee6a014eb597389f5483b34dbe20ebaac04101230f43d82b8babf375b0edc06b3123166b78f754f79ffcac6e19c299404fee"
     assert r.n_root_nodes == 84698
-    assert S.predict_workload(phi)["digest"] == "5a6a899c426b9c835ca51b920cfcb734334aba9ceab81098615e017af8a9a3ebb56219d713b82301ca4e04eabc1e1a51dec8025b2182b2e8519bc56cc6bd0570"
+    assert S.predict_workload(phi)["digest"] == "2711625876058fd96315f1acf537e3aeada9ae7daa513a2fcad03f27e88739a9aa9e141c6e89d0e1f2ce3d30e6828d728266d32eed70f25ea0f348426e283c61"
 
 
 @pytest.mark.parametrize("model,function,rank,digest", [
@@ -140,14 +140,15 @@ def test_dsa_launch_batch_equals_the_traced_build(wrapper, shape, digest, tmp_pa
     (GLM53_S1, "step", {"M": 1, "pos0": 8},
      "24fae34c8de54a0808878316398bcb7228e39fb073c2df31ba00cda2e17da379c8b66a147e5faa6cc1f44ce9fd3fbabe17567af138a97f3e01c361e72df05821"),
     (GLM53_S8, "step", {"M": 8, "pos0": 8},
-     "a26c43faa02a1efcdfdbf6ed346afaf2d6552bea975592369da898827fe34399d1c4a4e2ea87cf3806f292204d8c805c0481c4ef948d1d7aad5cadf51df96e01"),
+     "0801afbcf2b8b21823610c8418cfacb82a9f7c0a2cf6641eaa2e362cb0184f33441d467638813027b2e0d7bc152d6bfd05694d0133022ad59e27a4c785cf2776"),
     (GLM53_S8, "request", {"LP": 25, "T": 6},
-     "b632583a7461789d2ceec592e052a45743406dfa29427a640779ef6aab1410573f65ae6073ff810d63e016e70ba4efaf1609220d21195becd2dc21add70fdf62"),
+     "f11311f5b62f788edadc672304f7f6a37cb5355f48d31d8382322cc2f95801ccf3c66abb7cad0a577e27c2a78aa0e4b7641900270f559c661982e68b656819d3"),
 ])
 def test_dsa_stochastic_equals_the_traced_build(row, wrapper, shape, digest, tmp_path):
-    """GLM-5.3's seeded top-p rows (t0.8 p0.95) at rank 0, as the Build traced them: the B1 step at the single request's constant split
-    count (r20261017-224230-de2d), and the B8 step and second request (r20261018-105843-33c0) over the derived `splits` Input, the
-    select after the vocabulary's all-gather.  The second request's launch batch is its realized arrival
+    """GLM-5.3's seeded top-p rows (t0.8 p0.95) at rank 0: the B1 step as the Build traced it (r20261017-224230-de2d), and the B8 step
+    and second request at the same registered split count, the select after the vocabulary's all-gather.  The B8 row's traced Build
+    (r20261018-105843-33c0) read a derived `splits` Input, which serving no longer produces (CIR-87 (1), `engine.topp_pin`); these two
+    digests are the registered-S Programs, until that row is rebuilt.  The second request's launch batch is its realized arrival
     (`engine.arrivals.realized_arrive_steps`): the first request ends at forward 1, so the idle engine prefills it alone at forward 2
     and it decodes alone, not beside the step-13 prefills its declared arrive_step 9 would put it with."""
     r = build_program(_row_phi(row, "GLM53", tmp_path), wrapper, **shape)
@@ -216,7 +217,7 @@ def test_sampling_follows_the_builds_policy():
     one = {"sweep": {"sampling": "stoch-t0.8-p0.95", "sampling_params": {"temperature": 0.8, "top_p": 0.95, "top_k": 0}, "sampling_seeds": [7]},
            "requests": [{"prompt_len": 8, "max_tokens": 3, "seed": 7}]}
     assert S.sampling_of(one, _phi(TINY)) == {**STOCH, "splits": 32}
-    assert S.sampling_of({**one, "requests": one["requests"] * 8}, _phi(TINY)) == STOCH
+    assert S.sampling_of({**one, "requests": one["requests"] * 8}, _phi(TINY)) == {**STOCH, "splits": 32}
     assert S.sampling_of({"requests": [{"prompt_len": 8, "max_tokens": 3}]}, _phi(TINY)) == {"kind": "greedy"}
     with pytest.raises(Unexpressible, match="the Build refuses the policy"):
         S.sampling_of({**one, "sweep": {**one["sweep"], "sampling_params": {"temperature": 0.8, "top_p": 0.95, "top_k": 50}}}, _phi(TINY))

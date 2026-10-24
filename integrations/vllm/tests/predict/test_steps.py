@@ -27,7 +27,7 @@ from verity_vllm.predict.steps import (
     trace_dir,
 )
 from verity_vllm.program.registry import io_shell as IO
-from verity_vllm.program.registry.topp_geometry import splits_for_v1
+from verity_vllm.program.registry.topp_geometry import registered_splits
 
 from verity.core.protocols.certifier import advice as I1
 from verity.ml.circuits.defs import bind
@@ -40,7 +40,7 @@ TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_si
         "max_position_embeddings": 64, "hidden_act": "silu"}
 GREEDY = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "seed": None, "max_tokens": 4}
 STOCH = {"temperature": 0.8, "top_p": 1.0, "top_k": 0, "seed": None, "max_tokens": 3, "min_p": 0.0, "repetition_penalty": 1.0}
-STOCH_POLICY = {"kind": "stochastic", "temperature": 0.8, "top_p": 1.0, "top_k": 0, "seeded": True, "splits": splits_for_v1(1, 188)}
+STOCH_POLICY = {"kind": "stochastic", "temperature": 0.8, "top_p": 1.0, "top_k": 0, "seeded": True, "splits": registered_splits(188)}
 SERVED = "served-model"
 
 
@@ -95,7 +95,7 @@ def test_byte_ingress_compiles_to_the_same_programs_with_a_parse_unit_each():
     parse = bind(IO.IngressPrompt, MODEL=SERVED, LP=8, V=256)
     assert [u.parse for u in wired.requests] == [parse, None, parse]
     assert [u["parse"] for u in json.loads(json.dumps(wired.summary()))["requests"]] == [parse.id, None, parse.id]
-    selects = (f"GumbelTopPTokenSelect_v2{{V=256,S={splits_for_v1(1, reg.phi.target_profile().num_sms)}}}", "TokenSelect_v1{V=256}")
+    selects = (f"GumbelTopPTokenSelect_v2{{V=256,S={registered_splits(reg.phi.target_profile().num_sms)}}}", "TokenSelect_v4{V=256}")
     assert plain.transfer_gates == selects and wired.transfer_gates == tuple(sorted((parse.id, *selects)))
     assert wired.summary()["transfer_gates"] == list(wired.transfer_gates)
 
@@ -137,9 +137,11 @@ def test_a_plan_is_the_compilation_before_its_programs_are_built():
 
 
 def test_the_bodys_seed_is_the_seed_input_and_the_policy_reads_temperature_and_top_p():
-    """Top-p at top_p = 1 takes the constant split count SplitsFor_v1(1, num_SMs) (`predict.batch`'s R3): its keep set is every lane
-    for any S, so the batch's S changes nothing; a greedy body's top_p is never read."""
+    """Top-p takes the registered split count registered_splits(num_SMs) at any top_p, the S serving pins (`engine.topp_pin`), never
+    the batch's; a greedy body's top_p is never read."""
     assert policy_of(0, {**STOCH, "seed": 123}, 7, 188) == (STOCH_POLICY, 123)
+    assert policy_of(0, {**STOCH, "top_p": 0.95}, 7, 188) == ({**STOCH_POLICY, "top_p": 0.95}, 7)
+    assert registered_splits(188) == 32
     assert policy_of(0, {**STOCH, "top_k": -1, "top_p": None}, 7, 188) == (STOCH_POLICY, 7)
     assert policy_of(0, {**GREEDY, "top_p": 0.5, "stop": ["\n"], "ignore_eos": False}, 7, None) == ({"kind": "greedy"}, None)
     with pytest.raises(Unexpressible, match="top-p on a target that declares no num_sms"):
@@ -159,8 +161,6 @@ def test_the_bodys_seed_is_the_seed_input_and_the_policy_reads_temperature_and_t
     ({"top_p": 1.0}, "no temperature"),
     ({**STOCH, "temperature": "0.8"}, "temperature '0.8', top_p 1.0 and seed None aren't"),
     ({**STOCH, "top_p": 0.0}, "top_p 0.0"),
-    ({**STOCH, "top_p": 0.95}, "top_p 0.95 below 1 (a named gap: there the top-p split count S = SplitsFor_v1(live rows, num_SMs) "
-                               "is the batch's, until serving pins S as a registered constant)"),
     ({**STOCH, "seed": -1}, "seed -1"),
     (["temperature"], "aren't an object of named values"),
 ])
@@ -446,10 +446,11 @@ def test_partial_refuses_request_by_request():
 
 
 def test_dead_gates_are_counted_as_circuit_check_counts_them():
-    """The request wrapper drops its dead units, but gates inside live units still reach no sample (the final norm on the prompt rows
-    before the last, the query columns of the last layer's fused qkv on those rows, and the top-p select's at a constant split
-    count, `GumbelTopPTokenSelect_v2{V,S}`), so today's request Programs have dead gates: `dead_gates_of` counts them as circuit-check
-    does and says under which definitions."""
+    """The request wrapper is in the dead-free form (`program.prune.dead_free`: no dead unit, and RMSNormTriton and TokenSelect at
+    their versions without dead gates), but gates inside live units still reach no sample (the query columns of the last layer's
+    fused qkv on the prompt rows before the last, Attention_v5's, and the top-p select's at a constant split count,
+    `GumbelTopPTokenSelect_v2{V,S}`), so today's request Programs have dead gates: `dead_gates_of` counts them as circuit-check does
+    and says under which definitions."""
     from verity.ml.circuits.liveness import dead_gates
     from verity_vllm.program.prune import dead_units
     c = compile_steps(_registered(), *_mixed())
@@ -461,15 +462,16 @@ def test_dead_gates_are_counted_as_circuit_check_counts_them():
         assert (rec["dead_computed"], rec["unread_inputs"]) == (rep.computed, rep.input) and rep.computed > 0 and not dead_units(p.fn.body)
         assert sum(rec["by_definition"].values()) == rep.computed + rep.input
         by = rec["by_definition"]
-        top = "GumbelTopPTokenSelect_v2" if d == c.requests[1].digest else "RMSNormTriton_v1"
+        top = "GumbelTopPTokenSelect_v2" if d == c.requests[1].digest else "Gemm_v2"
         assert next(iter(by)) == top and "Gemm_v2" in by and sum(n for k, n in by.items() if k.startswith("Input")) == rep.input
+        assert not [k for k in by if k.startswith(("RMSNormTriton", "TokenSelect"))]
     assert got["dead_computed"] == sum(r["dead_computed"] for r in got["programs"].values())
 
 
 def test_a_program_with_a_dead_unit_is_refused(monkeypatch):
     """A request Program holding a node no output reads is refused, with the fix (in the lowering, never the advice) in the message."""
     import verity_vllm.predict.build as PB
-    monkeypatch.setattr(PB, "without_dead_units", lambda b: (b, list(range(len(b.nodes)))))
+    monkeypatch.setattr(PB, "dead_free", lambda b: (b, list(range(len(b.nodes)))))
     with pytest.raises(Unexpressible, match=r"request 0's Program [0-9a-f]{16} holds 56 dead units, node 104 \(RoPE_v1\{NHEADS=4,D=16\}\) first, which no "
                                             r"output reads: drop them in the lowering"):
         compile_steps(_registered(), *_mixed())
@@ -507,5 +509,5 @@ def test_a_compiled_request_equals_the_traced_build():
     body = {**GREEDY, "max_tokens": 32, "prompt": [k % cfg["vocab_size"] for k in range(256)]}
     advice, ingress = _session([(256, 32, body, body["prompt"])], [[(0, 0, 256)]] + [[(0, 256 + k, 1)] for k in range(31)])
     c = compile_steps(reg, advice, ingress)
-    assert c.requests[0].digest == ("89a02f118ba707619824a7dea5ad427e0340208ad4c3f8a449a85e8eaf1a8782516eff3b97860804ad1a331576b2df7e19ee83d"
-                                    "afd2c06c167943de474e12dc0")
+    assert c.requests[0].digest == ("c72b96b9a407e23b35ffb4bcbf2cee6a014eb597389f5483b34dbe20ebaac04101230f43d82b8babf375b0edc06b3123166b78f754f79ffcac6e19c29"
+                                    "9404fee")
