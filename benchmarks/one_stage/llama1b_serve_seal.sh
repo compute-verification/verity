@@ -53,7 +53,12 @@ for k in $FIRST $WS; do
   [ -d "$D/windows/w$k" ] || continue
   [ -f "$D/windows/w$k/manifest.json" ] && continue
   "$PY" tools/advice_compile.py "$D" --window "$k" > "$OUT/compile_w$k.log" 2>&1
-  echo "$(date -u +%H:%M:%SZ) w$k compile rc=$?" | tee -a "$OUT/steps.txt"
+  rc=$?
+  if [ "$rc" = 2 ]; then      # compile_steps refused the window's advice: request by request instead, the refusals named
+    "$PY" tools/advice_compile.py "$D" --window "$k" --partial > "$OUT/compile_w${k}_partial.log" 2>&1
+    rc="2, --partial rc=$?"
+  fi
+  echo "$(date -u +%H:%M:%SZ) w$k compile rc=$rc" | tee -a "$OUT/steps.txt"
   "$PY" - "$D" "$k" <<'EOF' | tee -a "$OUT/row_dirs.txt"
 import json, sys
 from pathlib import Path

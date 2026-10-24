@@ -15,7 +15,8 @@ and exits 0 iff every compiled Program equals its trace.  `compile_steps` refusi
 compiled.json and exits 2; `--partial` refuses request by request instead, and compiles the rest.
 
 `--window K` reads a `verity-vllm serve-openai --seal` run instead: window K's advice (`advice/w<K>/private/advice.bin`, its
-registration's ℓ), each request's sampling from its ingress record in `requests.jsonl` (by `user`), and the model, target,
+registration's ℓ), each request's certified body from `requests.jsonl` (by `user`: the sampling fields its ingress record says
+it brought, and its prompt ids), and the model, target,
 execution and default seed from `serve.json`.  The Build dirs go into `--out` itself (default the window's row dir,
 `windows/w<K>/`, beside its sealed `commit/`), as `build_request_*/`, with `manifest.json`: each request's Program digest and
 Build dir, and the registration the advice is bound to.
@@ -30,24 +31,24 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 MANIFEST = "verity-vllm/served-window-programs/v1"
 
 
 def served_inputs(run: Path, window: int) -> tuple[Path, dict, dict, dict]:
-    """A serve-openai window's (advice file, run meta, sampling by user, registration)."""
+    """A serve-openai window's (advice file, run meta, each request's certified body by user, registration): the body is the
+    sampling fields the request brought (its ingress record) with its prompt ids."""
     adv = run / "advice" / f"w{window}"
     reg = json.loads((adv / "registration.json").read_text())
     serve = json.loads((run / "serve.json").read_text())
-    sampling = {}
+    bodies = {}
     for line in (run / "requests.jsonl").read_text().splitlines():
         if line.strip():
             d = json.loads(line)
-            sampling[d.get("user") or d["http_id"]] = dict((d.get("ingress") or {}).get("params") or {})
+            bodies[d.get("user") or d["http_id"]] = {**((d.get("ingress") or {}).get("brought") or {}), "prompt": list(d["prompt_ids"])}
     meta = {"model": serve["model"], "revision": serve["revision"], "target": serve["target"], "execution": serve.get("execution"),
             "default_seed": serve.get("default_seed")}
-    return adv / "private" / "advice.bin", meta, sampling, reg
+    return adv / "private" / "advice.bin", meta, bodies, reg
 
 
 def main() -> int:
@@ -82,17 +83,20 @@ def main() -> int:
 
     reg_doc = None
     if a.window is not None:
-        path, meta, sampling, reg_doc = served_inputs(run, a.window)
-        advice = I1.decode(Path(a.advice or path).read_bytes())
+        path, meta, bodies, reg_doc = served_inputs(run, a.window)
+        data = Path(a.advice or path).read_bytes()
     else:
-        advice = I1.decode(Path(a.advice or run / "advice" / "private" / "advice.bin").read_bytes())
+        data = Path(a.advice or run / "advice" / "private" / "advice.bin").read_bytes()
         meta = json.loads((run / "run.json").read_text())
-        user = {d["request"]: d["user"] for d in map(json.loads, (run / "requests.jsonl").read_text().splitlines()) if d}
-        # TODO: read each request's sampling from the Commit's ingress record (the request's committed ingress values) once
-        # serve-openai records them; the step trace's arrive records stand in tonight
-        sampling = {user[r["request"]]: r["sampling"] for r in ST.load(run / "step_trace.jsonl") if r["kind"] == "arrive"}
-    requests = [SimpleNamespace(id=q.id, prompt_len=q.prompt_len, output_len=q.output_len, finish=q.finish, sampling=sampling[q.id])
-                for q in advice.requests]
+        recs = [d for d in map(json.loads, (run / "requests.jsonl").read_text().splitlines()) if d]
+        user = {d["request"]: d["user"] for d in recs}
+        prompt = {d["user"]: d.get("prompt_ids") or d.get("prompt") for d in recs}
+        # TODO: read each request's body from the Commit's ingress record once advice_run records it; the step trace's arrive
+        # records stand in for its sampling
+        bodies = {user[r["request"]]: {**r["sampling"], "prompt": prompt[user[r["request"]]]}
+                  for r in ST.load(run / "step_trace.jsonl") if r["kind"] == "arrive"}
+    ids = {q.id for q in I1.decode(data).requests}
+    ingress = {k: v for k, v in bodies.items() if k in ids}
     entry = next(c for c in checkpoint_entries() if c["repo"] == meta["model"] and c["revision"] == meta["revision"])
     hf_config = json.loads((Path(entry["local_path"]) / "config.json").read_text())
     phi = Phi(model={"repo": meta["model"], "revision": meta["revision"], "hf_config": hf_config}, target=dict(meta["target"]),
@@ -100,7 +104,7 @@ def main() -> int:
     cap = int(((reg_doc or {}).get("compiler") or {}).get("cap_bits") or CAP_BITS)
     reg = Registered.of(phi, default_seed=int(meta.get("default_seed") or 0), cap_bits=cap)
     try:
-        compiled = compile_steps(reg, SimpleNamespace(requests=requests, steps=advice.steps), partial=a.partial)
+        compiled = compile_steps(reg, data, ingress, partial=a.partial)
     except Unexpressible as e:
         (out / "compiled.json").write_text(json.dumps({"refused": str(e)}, indent=1) + "\n")
         print(f"[advice-compile] compile_steps refuses the advice: {e}", flush=True)
