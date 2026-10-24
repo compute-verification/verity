@@ -4,57 +4,66 @@
 The compile unit replays the scheduler from advice v1 and the certified record, one step unit per engine step, each
 `replay_step.ReplayStep_v1` (ENC-REPLAY's step): the committed queue state, the next A certified arrivals and the next A
 decisions in, the step's rows and the next state out. A window is many steps, so the state passes between units as
-rows of a produced value, each unit reading its own row and the next at public positions. This module is that chain:
-the row (`Shape`, `Row`, `encode`, `decode`), its commitment and reads (`commit_window`, `reads`), the verifier's check
-of how the windows join (`check_chain`), and the two Boolean parts it puts in the units, `ReplayAdvance` beside each
-step and `ReplayLoad` once a window, with `advance` and `load` their specifications.
+rows of produced values, each unit reading its rows at public positions. This module is that chain: the rows (`Shape`,
+`Row`, `Window`, `encode`, `decode`), their commitment and reads (`commit_window`, `reads`), the verifier's check of how
+the windows join (`check_chain`), and the two Boolean parts it puts in the units, `ReplayAdvance` beside each step and
+`ReplayLoad` once a window, with `advance` and `load` their specifications.
 
-**Why the row carries the arrivals and the decisions.** The step reads them from the scan's cursors, which move by
+**Why a window has a row of its own.** The step reads its arrivals and decisions at the scan's cursors, which move by
 its `taken` and `used`, and the cursors are private: a step's position in the certified arrivals or the window's
 decisions is the schedule itself. A registered read is at a position the verifier derives, so no unit can read the
-arrival record at the cursor. The row holds instead the certified arrivals not yet taken (`queue`, at most Q) and the
-window's decisions not yet read (`decisions`, at most D), front first, and the step reads their first A. Each step
-shifts them by what it took, and once a window `ReplayLoad` appends the window's certified arrivals (K slots, the
-warden's) and its decoded decisions, which it reads at public positions. So every read in the chain is at a public
-position, and no gate hashes a row: the Lean verifier checks each read's path (`registered.verify_read`).
+arrival record at the cursor. So each window has one window row, the certified arrivals not yet taken when it starts
+followed by the window's own (`queue`, at most Q) and the window's decoded decisions (`dec`, at most D), and every step
+unit reads it at the same public position. The state row carries the two cursors as private heads (`qh`, `dh`), and
+`ReplayAdvance` checks that the step's A arrivals and A decision bits are the window row's at the heads, with a log
+shifter that computes only the A entries it returns. Once a window `ReplayLoad` writes the window row: the last
+window row past its heads, then the window's certified arrivals (K slots, the warden's) and its decoded decisions,
+which it reads at public positions. So every read in the chain is at a public position, and no gate hashes a row: the
+Lean verifier checks each read's path (`registered.verify_read`).
 
-**The row** (`row_fields`), `Shape.width` bits, each field's elements in turn and each element least significant bit
-first, then zero bits to a whole 16-bit word:
+**The rows**, each field's elements in turn and each element least significant bit first, then zero bits to a whole
+16-bit word. A state row (`row_fields`, `Shape.width` bits) and a window row (`window_fields`, `Shape.window_width`):
 
     state    run_valid R×1 | run_id R×IW | run_P R×LW | run_O R×LW | run_out R×LW | run_comp R×LW
              | wait_valid W×1 | wait_id W×IW | wait_P W×LW | wait_O W×LW | wait_out W×LW | free 1×BW
+    heads    qh 1×QW | dh 1×DW | steps 1×PW
+
     queue    q_valid Q×1 | q_id Q×IW | q_P Q×LW | q_O Q×LW
-    window   dec D×1 | left 1×DW | steps 1×PW
+    dec      dec D×1 | left 1×DW
 
 - `state` is ReplayStep_v1's committed state as its `_in_fields` lay it out, and its next state as its `_out_fields`
   do, bit for bit: R running slots (id, prompt P, certified output length O, outputs so far, tokens computed), W
   waiting slots (a waiting request has computed nothing) and the free block count. A running request holds
   ⌈computed / B⌉ blocks, so the KV pool is the free count, with no count per request.
-- `queue` is the certified arrivals not yet taken, in certified order; the step's `arr_*` are its first A.
-- `dec` is the window's decisions not yet read, the step's `bits` its first A; `left` counts them and `steps` counts the
-  window's executed steps still to come.
+- `qh` and `dh` are how many of the window row's arrivals and decisions the window's steps so far took and read;
+  `steps` counts the window's executed steps still to come.
+- `queue` is the arrivals in certified order, the step's `arr_*` the A at `qh`; `dec` the decisions, the step's `bits`
+  the A at `dh`, and `left` counts them.
 - Widths, from the size class and the public config (`widths`): LW = bitlen(L), BW = bitlen(NB), AC = bitlen(A),
   QW = bitlen(Q), DW = bitlen(D), PW = bitlen(P), bitlen(0) being 1; IW is a request id's.
 - In every row the valid elements of each group are a prefix and the rest are zero bits, as are `dec`'s bits past
-  `left`. `decode` refuses any other row. The circuit needs no such check: the first row is the empty state, and every
+  `left`. `decode` refuses any other row. The circuit needs no such check: the first rows are the empty ones, and every
   later row is a proved unit's output.
 
-**A window's rows** S_0 … S_{P+1} are one produced value (`one_stage.produced`), `VALUE`, in `hm96-sha512/row/v2` bit
-rows; P, the step units a window, is a public cap. Unit 0 is the load: it reads `prev` row 0 and `next` row 1 with
-the window's arrivals, decisions and step count n ≤ P. Unit u ≥ 1 is step u: ReplayStep_v1 on row u's state, queue and
-decisions, with `ReplayAdvance` checking row u + 1, so a row two units read is the one row `produced.shared` holds them
-to. Steps past the window's n are idle (`steps` = 0): the next row is the row, and the unit's rows are dropped
-(`ReplayAdvance`'s `active` = 0).
+**A window** is two produced values (`one_stage.produced`) in `hm96-sha512/row/v2` bit rows: `VALUE`, its state rows
+S_0 … S_{P+1}, and `WINDOW`, the last window's row and its own; P, the step units a window, is a public cap. Unit 0 is
+the load: it reads state rows 0 and 1 and window rows 0 and 1 with the window's arrivals, decisions and step count
+n ≤ P. Unit u ≥ 1 is step u: ReplayStep_v1 on state row u's state with the arrivals and bits `ReplayAdvance` checks
+against window row 1, which also checks state row u + 1, so a row two units read is the one row `produced.shared`
+holds them to. Steps past the window's n are idle (`steps` = 0): the next row is the row, and the unit's rows are
+dropped (`ReplayAdvance`'s `active` = 0).
 
-- **The carry.** Window w's row 0 is window w − 1's row P + 1, committed under the same salt (`commit_window(carry=…)`),
-  so its opening b‖c is the same, and the verifier checks they're equal (`check_chain`). The load refuses a row 0 that
-  left decisions or steps unread, so each window reads exactly its own.
-- **The start.** The session's first row is the empty state (`empty`: nothing held, NB − 1 free blocks, vLLM's block 0
-  being its null block) under the public salt `empty_salt`, so the verifier computes its opening (`empty_opening`).
+- **The carry.** Window w's state row 0 is window w − 1's state row P + 1, and its window row 0 is window w − 1's
+  window row 1, each committed under the same salt (`commit_window(carry=…)`), so its opening b‖c is the same, and the
+  verifier checks they're equal (`check_chain`). The load refuses a state row 0 that left decisions or steps unread, so
+  each window reads exactly its own.
+- **The start.** The session's first rows are the empty state (`empty`: nothing held, NB − 1 free blocks, vLLM's block
+  0 being its null block) and the empty window, each under its public salt (`empty_salts`), so the verifier computes
+  their openings (`empty_openings`).
 
-**Cost** (`size`). Per step: `ReplayAdvance`'s ANDs (the shifts of the queue and the decisions, about 2·width for the
-idle select and the equality), two reads and one row. Per window: P steps, one `ReplayLoad`, P + 2 rows and 2(P + 1)
-reads, each a frame-v3 path of depth ⌈log2(P + 2)⌉ for the verifier.
+**Cost** (`size`). Per step: `ReplayAdvance`'s ANDs (the two fronts, about (Q + A·QW)·(1 + IW + 2·LW) and D + A·DW, and
+about 2·width for the idle select and the equality), three reads and one state row. Per window: P steps, one
+`ReplayLoad`, P + 2 state rows and two window rows, and 3P + 4 reads, each a frame-v3 path of depth ⌈log2(P + 2)⌉ or 1.
 """
 
 from __future__ import annotations
@@ -72,18 +81,19 @@ from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.commitments import hm96
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
-from verity.core.protocols.certifier.head_check import BIT, _part, ands
+from verity.core.protocols.certifier.head_check import BIT, _part
 from verity.core.protocols.sampled_proofs.one_stage import produced
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 VALUE = "replay-state"
+WINDOW = "replay-window"
 WORD_BITS = 16
 STATICS = ("R", "W", "A", "L", "NB", "IW", "Q", "D", "P", "K")
 _INST = hm96.SHA512
 
 
 class MalformedRow(ValueError):
-    """A row that isn't a state's encoding."""
+    """A row that isn't a state's or a window's encoding."""
 
 
 def _bitlen(v: int) -> int:
@@ -118,12 +128,17 @@ class Shape:
 
     @property
     def width(self) -> int:
-        """A row's bits, padded to whole 16-bit words."""
+        """A state row's bits, padded to whole 16-bit words."""
         return width(self)
 
     @property
     def words(self) -> int:
         return self.width // WORD_BITS
+
+    @property
+    def window_width(self) -> int:
+        """A window row's bits, padded to whole 16-bit words."""
+        return window_width(self)
 
 
 def widths(S) -> SimpleNamespace:
@@ -139,31 +154,51 @@ def state_fields(S) -> list[tuple[str, int, int]]:
             ("wait_out", W, Z.LW), ("free", 1, Z.BW)]
 
 
-def queue_fields(S) -> list[tuple[str, int, int]]:
+def _arrivals(prefix: str, n: int, S) -> list[tuple[str, int, int]]:
     Z = widths(S)
-    return [("q_valid", S.Q, 1), ("q_id", S.Q, S.IW), ("q_P", S.Q, Z.LW), ("q_O", S.Q, Z.LW)]
+    return [(f"{prefix}_valid", n, 1), (f"{prefix}_id", n, S.IW), (f"{prefix}_P", n, Z.LW), (f"{prefix}_O", n, Z.LW)]
+
+
+def queue_fields(S) -> list[tuple[str, int, int]]:
+    return _arrivals("q", S.Q, S)
+
+
+def front_fields(S) -> list[tuple[str, int, int]]:
+    """The step's arrivals, ReplayStep_v1's `arr_*`: the window row's A at `qh`."""
+    return _arrivals("arr", S.A, S)
 
 
 def arrival_fields(S) -> list[tuple[str, int, int]]:
     """`ReplayLoad`'s `arrivals`: the window's K certified arrival slots, a valid prefix."""
-    Z = widths(S)
-    return [("a_valid", S.K, 1), ("a_id", S.K, S.IW), ("a_P", S.K, Z.LW), ("a_O", S.K, Z.LW)]
+    return _arrivals("a", S.K, S)
 
 
 def row_fields(S) -> list[tuple[str, int, int]]:
     Z = widths(S)
-    return state_fields(S) + queue_fields(S) + [("dec", S.D, 1), ("left", 1, Z.DW), ("steps", 1, Z.PW)]
+    return state_fields(S) + [("qh", 1, Z.QW), ("dh", 1, Z.DW), ("steps", 1, Z.PW)]
+
+
+def window_fields(S) -> list[tuple[str, int, int]]:
+    return queue_fields(S) + [("dec", S.D, 1), ("left", 1, widths(S).DW)]
 
 
 def _bits_of(fs) -> int:
     return sum(n * w for _, n, w in fs)
 
 
+def _words(bits: int) -> int:
+    return WORD_BITS * -(-bits // WORD_BITS)
+
+
 def width(S) -> int:
-    return WORD_BITS * -(-_bits_of(row_fields(S)) // WORD_BITS)
+    return _words(_bits_of(row_fields(S)))
 
 
-# --- the row ----------------------------------------------------------------------------------------------------------------
+def window_width(S) -> int:
+    return _words(_bits_of(window_fields(S)))
+
+
+# --- the rows ---------------------------------------------------------------------------------------------------------------
 
 Running = tuple[int, int, int, int, int]   # (id, P, O, out, computed)
 Waiting = tuple[int, int, int, int]        # (id, P, O, out)
@@ -172,18 +207,26 @@ Arrival = tuple[int, int, int]             # (id, P, O)
 
 @dataclass(frozen=True)
 class Row:
-    """The scheduler and the window between two units (the module's docstring, "The row")."""
+    """A state row: the scheduler and the window's heads between two units (the module's docstring, "The rows")."""
 
     running: tuple[Running, ...] = ()
     waiting: tuple[Waiting, ...] = ()
     free: int = 0
-    queue: tuple[Arrival, ...] = ()
-    decisions: tuple[int, ...] = ()
+    qh: int = 0
+    dh: int = 0
     steps: int = 0
 
 
+@dataclass(frozen=True)
+class Window:
+    """A window row: the arrivals the window's steps may take, in certified order, and its decisions."""
+
+    queue: tuple[Arrival, ...] = ()
+    decisions: tuple[int, ...] = ()
+
+
 def empty(S) -> Row:
-    """The session's first row: the empty engine, its NB − 1 free blocks."""
+    """The session's first state row: the empty engine, its NB − 1 free blocks."""
     return Row(free=S.NB - 1)
 
 
@@ -194,25 +237,31 @@ def _put(out: list[int], v: int, w: int, name: str) -> None:
     out += [(v >> j) & 1 for j in range(w)]
 
 
+def _group(vals: dict[str, list[int]], prefix: str, names: Sequence[str], items: Sequence[Sequence[int]], n: int) -> None:
+    vals[f"{prefix}_valid"] = [1] * len(items) + [0] * (n - len(items))
+    for k, name in enumerate(names):
+        vals[f"{prefix}_{name}"] = [x[k] for x in items] + [0] * (n - len(items))
+
+
 def _values(row: Row, S) -> dict[str, list[int]]:
-    if len(row.running) > S.R or len(row.waiting) > S.W or len(row.queue) > S.Q or len(row.decisions) > S.D:
+    if len(row.running) > S.R or len(row.waiting) > S.W:
         raise MalformedRow("the row exceeds the size class")
-    if row.steps > S.P or any(b not in (0, 1) for b in row.decisions):
-        raise MalformedRow(f"steps {row.steps} of at most {S.P}; decisions are bits")
+    if row.qh > S.Q or row.dh > S.D or row.steps > S.P:
+        raise MalformedRow(f"heads {row.qh}, {row.dh} of at most {S.Q}, {S.D}; steps {row.steps} of at most {S.P}")
     vals: dict[str, list[int]] = {}
+    _group(vals, "run", ("id", "P", "O", "out", "comp"), row.running, S.R)
+    _group(vals, "wait", ("id", "P", "O", "out"), row.waiting, S.W)
+    vals["free"], vals["qh"], vals["dh"], vals["steps"] = [row.free], [row.qh], [row.dh], [row.steps]
+    return vals
 
-    def group(prefix: str, names: Sequence[str], items: Sequence[Sequence[int]], n: int) -> None:
-        vals[f"{prefix}_valid"] = [1] * len(items) + [0] * (n - len(items))
-        for k, name in enumerate(names):
-            vals[f"{prefix}_{name}"] = [x[k] for x in items] + [0] * (n - len(items))
 
-    group("run", ("id", "P", "O", "out", "comp"), row.running, S.R)
-    group("wait", ("id", "P", "O", "out"), row.waiting, S.W)
-    group("q", ("id", "P", "O"), row.queue, S.Q)
-    vals["free"] = [row.free]
-    vals["dec"] = list(row.decisions) + [0] * (S.D - len(row.decisions))
-    vals["left"] = [len(row.decisions)]
-    vals["steps"] = [row.steps]
+def _window_values(win: Window, S) -> dict[str, list[int]]:
+    if len(win.queue) > S.Q or len(win.decisions) > S.D or any(b not in (0, 1) for b in win.decisions):
+        raise MalformedRow("the window exceeds the size class, or a decision isn't a bit")
+    vals: dict[str, list[int]] = {}
+    _group(vals, "q", ("id", "P", "O"), win.queue, S.Q)
+    vals["dec"] = list(win.decisions) + [0] * (S.D - len(win.decisions))
+    vals["left"] = [len(win.decisions)]
     return vals
 
 
@@ -224,15 +273,38 @@ def _flatten(vals: dict[str, list[int]], fs) -> list[int]:
     return out
 
 
+def _padded(bits: list[int], w: int) -> tuple[int, ...]:
+    return tuple(bits + [0] * (w - len(bits)))
+
+
 def encode(row: Row, S) -> tuple[int, ...]:
-    """The row's `width(S)` bits."""
-    bits = _flatten(_values(row, S), row_fields(S))
-    return tuple(bits + [0] * (width(S) - len(bits)))
+    """The state row's `width(S)` bits."""
+    return _padded(_flatten(_values(row, S), row_fields(S)), width(S))
+
+
+def encode_window(win: Window, S) -> tuple[int, ...]:
+    """The window row's `window_width(S)` bits."""
+    return _padded(_flatten(_window_values(win, S), window_fields(S)), window_width(S))
 
 
 def state_bits(row: Row, S) -> tuple[int, ...]:
     """The row's `state` part: ReplayStep_v1's state input, or its next-state output, as bits."""
     return tuple(_flatten(_values(row, S), state_fields(S)))
+
+
+def front(S, win: Window, row: Row) -> tuple[tuple[Arrival, ...], tuple[int, ...]]:
+    """The step's arrivals and its A decision bits: the window row's at the row's heads (zeros past `left`)."""
+    bits = win.decisions[row.dh:row.dh + S.A]
+    return win.queue[row.qh:row.qh + S.A], tuple(bits) + (0,) * (S.A - len(bits))
+
+
+def front_bits(S, arrivals: Sequence[Arrival]) -> tuple[int, ...]:
+    """The step's arrivals as ReplayStep_v1's `arr_*` fields, flat."""
+    if len(arrivals) > S.A:
+        raise MalformedRow(f"{len(arrivals)} arrivals of at most {S.A}")
+    vals: dict[str, list[int]] = {}
+    _group(vals, "arr", ("id", "P", "O"), arrivals, S.A)
+    return tuple(_flatten(vals, front_fields(S)))
 
 
 def _unflatten(bits: Sequence[int], fs) -> tuple[dict[str, list[int]], int]:
@@ -243,28 +315,42 @@ def _unflatten(bits: Sequence[int], fs) -> tuple[dict[str, list[int]], int]:
     return f, at
 
 
-def decode(bits: Sequence[int], S) -> Row:
-    """The row `bits` encode; `MalformedRow` for any other bits (the module's docstring, "The row")."""
-    if len(bits) != width(S) or any(b not in (0, 1) for b in bits):
-        raise MalformedRow(f"a row is {width(S)} bits")
-    f, at = _unflatten(bits, row_fields(S))
+def _fields_of(bits: Sequence[int], fs, w: int) -> dict[str, list[int]]:
+    if len(bits) != w or any(b not in (0, 1) for b in bits):
+        raise MalformedRow(f"a row is {w} bits")
+    f, at = _unflatten(bits, fs)
     if any(bits[at:]):
         raise MalformedRow("nonzero padding")
+    return f
 
-    def group(prefix: str, names: Sequence[str]) -> tuple[tuple[int, ...], ...]:
-        valid = f[f"{prefix}_valid"]
-        k = sum(valid)
-        if valid != [1] * k + [0] * (len(valid) - k):
-            raise MalformedRow(f"{prefix}: the valid slots aren't a prefix")
-        if any(f[f"{prefix}_{name}"][e] for name in names for e in range(k, len(valid))):
-            raise MalformedRow(f"{prefix}: an empty slot has a bit set")
-        return tuple(tuple(f[f"{prefix}_{name}"][e] for name in names) for e in range(k))
 
+def _items(f: dict[str, list[int]], prefix: str, names: Sequence[str]) -> tuple[tuple[int, ...], ...]:
+    valid = f[f"{prefix}_valid"]
+    k = sum(valid)
+    if valid != [1] * k + [0] * (len(valid) - k):
+        raise MalformedRow(f"{prefix}: the valid slots aren't a prefix")
+    if any(f[f"{prefix}_{name}"][e] for name in names for e in range(k, len(valid))):
+        raise MalformedRow(f"{prefix}: an empty slot has a bit set")
+    return tuple(tuple(f[f"{prefix}_{name}"][e] for name in names) for e in range(k))
+
+
+def decode(bits: Sequence[int], S) -> Row:
+    """The state row `bits` encode; `MalformedRow` for any other bits (the module's docstring, "The rows")."""
+    f = _fields_of(bits, row_fields(S), width(S))
+    qh, dh, steps = f["qh"][0], f["dh"][0], f["steps"][0]
+    if qh > S.Q or dh > S.D or steps > S.P:
+        raise MalformedRow(f"heads {qh}, {dh} of at most {S.Q}, {S.D}; steps {steps} of at most {S.P}")
+    return Row(_items(f, "run", ("id", "P", "O", "out", "comp")), _items(f, "wait", ("id", "P", "O", "out")), f["free"][0],
+               qh, dh, steps)
+
+
+def decode_window(bits: Sequence[int], S) -> Window:
+    """The window row `bits` encode; `MalformedRow` for any other bits."""
+    f = _fields_of(bits, window_fields(S), window_width(S))
     left = f["left"][0]
-    if left > S.D or any(f["dec"][left:]) or f["steps"][0] > S.P:
-        raise MalformedRow(f"left {left} of {S.D} with no decision past it, steps {f['steps'][0]} of {S.P}")
-    return Row(group("run", ("id", "P", "O", "out", "comp")), group("wait", ("id", "P", "O", "out")), f["free"][0],
-               group("q", ("id", "P", "O")), tuple(f["dec"][:left]), f["steps"][0])
+    if left > S.D or any(f["dec"][left:]):
+        raise MalformedRow(f"left {left} of {S.D} with no decision past it")
+    return Window(_items(f, "q", ("id", "P", "O")), tuple(f["dec"][:left]))
 
 
 def row(bits: Sequence[int]) -> tuple[int, ...]:
@@ -280,86 +366,121 @@ def unrow(words: Sequence[int]) -> tuple[int, ...]:
 
 # --- the specification of the units -----------------------------------------------------------------------------------------
 
-def advance(S, cur: Row, ok: bool, stepped: Row, taken: int, used: int) -> Row | None:
-    """The row after step unit u: `cur` when the window's steps are done (idle), else the step's next state (`stepped`'s
-    running, waiting and free), the queue and the decisions past what it took and read, one step fewer; None refuses
-    (the step's ok is 0, it read more decisions than are left, or the window's last step leaves some)."""
+def advance(S, win: Window, cur: Row, ok: bool, stepped: Row, arrivals: Sequence[Arrival], bits: Sequence[int], taken: int,
+            used: int) -> Row | None:
+    """The state row after step unit u: `cur` when the window's steps are done (idle), else the step's next state
+    (`stepped`'s running, waiting and free) with the heads past what it took and read and one step fewer. None refuses:
+    the step's ok is 0, its arrivals or bits aren't the window row's at the heads, it took more than A or than are
+    left, it read more than A or than are left, or the window's last step leaves some unread."""
     if not cur.steps:
         return cur
-    if not ok or used > len(cur.decisions) or (cur.steps == 1 and used != len(cur.decisions)):
+    want_arr, want_bits = front(S, win, cur)
+    dh = cur.dh + used
+    if not ok or tuple(map(tuple, arrivals)) != want_arr or tuple(bits) + (0,) * (S.A - len(bits)) != want_bits:
         return None
-    return Row(stepped.running, stepped.waiting, stepped.free, cur.queue[taken:], cur.decisions[used:], cur.steps - 1)
+    if taken > len(want_arr) or used > S.A or dh > len(win.decisions) or (cur.steps == 1 and dh != len(win.decisions)):
+        return None
+    return Row(stepped.running, stepped.waiting, stepped.free, cur.qh + taken, dh, cur.steps - 1)
 
 
-def load(S, prev: Row, arrivals: Sequence[Arrival], decisions: Sequence[int], steps: int) -> Row | None:
-    """The window's row 1: row 0 (`prev`, the last window's last) with the window's certified arrivals appended to the
-    queue and its decisions and executed step count loaded; None refuses (the last window left decisions or steps, the
-    queue overflows Q, more than D decisions or P steps, or decisions with no step to read them)."""
-    if prev.decisions or prev.steps or len(prev.queue) + len(arrivals) > S.Q or len(arrivals) > S.K:
+def load(S, prev: Row, last: Window, arrivals: Sequence[Arrival], decisions: Sequence[int],
+         steps: int) -> tuple[Row, Window] | None:
+    """The window's state row 1 and window row: state row 0 (`prev`, the last window's last) with its heads reset and
+    the window's executed step count, and the last window's arrivals past `prev`'s head with the window's certified
+    arrivals appended and its decisions. None refuses: the last window left decisions or steps, the queue overflows Q,
+    more than K arrivals, D decisions or P steps, or decisions with no step to read them."""
+    if prev.steps or prev.dh != len(last.decisions):
+        return None
+    rest = last.queue[prev.qh:]
+    if len(arrivals) > S.K or len(rest) + len(arrivals) > S.Q:
         return None
     if len(decisions) > S.D or steps > S.P or (not steps and decisions):
         return None
-    return Row(prev.running, prev.waiting, prev.free, prev.queue + tuple(tuple(a) for a in arrivals), tuple(decisions),
-               steps)
+    return (Row(prev.running, prev.waiting, prev.free, 0, 0, steps),
+            Window(rest + tuple(tuple(a) for a in arrivals), tuple(decisions)))
 
 
 # --- the chain ------------------------------------------------------------------------------------------------------------
 
-def empty_salt(program: str) -> bytes:
-    """The public salt of the session's first row (`registered.supplied_salts`' row 0 of `VALUE`)."""
-    return G.supplied_salts(program, VALUE, 1)[0]
+def empty_salts(program: str) -> tuple[bytes, bytes]:
+    """The public salts of the session's first state row and first window row (`registered.supplied_salts`' row 0 of
+    `VALUE` and of `WINDOW`)."""
+    return G.supplied_salts(program, VALUE, 1)[0], G.supplied_salts(program, WINDOW, 1)[0]
 
 
-def empty_opening(program: str, S) -> bytes:
-    """b‖c of the empty state under `empty_salt`, which the verifier computes."""
-    return _INST.commit_string(_INST.default_key, G.row_digest(row(encode(empty(S), S)), WORD_BITS, SCHEMA),
-                               empty_salt(program))
+def _opening(words: Sequence[int], salt: bytes) -> bytes:
+    return _INST.commit_string(_INST.default_key, G.row_digest(words, WORD_BITS, SCHEMA), salt)
 
 
-def commit_window(program: str, rows: Sequence[Row], S, registration: str, carry: G.Registered | None = None,
-                  salts: Sequence[bytes] | None = None) -> G.Registered:
-    """A window's produced value: its P + 2 rows. `carry`: the previous window's value, whose last row is this window's
-    first, under the same salt; for the session's first window (None), the first row is `empty` under `empty_salt`.
-    `salts`: the other P + 1 rows' (default fresh, `hm96`'s `fresh_salt`)."""
+def empty_openings(program: str, S) -> tuple[bytes, bytes]:
+    """b‖c of the empty state row and the empty window row under `empty_salts`, which the verifier computes."""
+    s, w = empty_salts(program)
+    return _opening(row(encode(empty(S), S)), s), _opening(row(encode_window(Window(), S)), w)
+
+
+@dataclass(frozen=True)
+class Committed:
+    """A window's two produced values: its state rows (`VALUE`) and its window rows (`WINDOW`)."""
+
+    state: G.Registered
+    window: G.Registered
+
+
+def commit_window(program: str, rows: Sequence[Row], window: Window, S, registration: str, carry: Committed | None = None,
+                  salts: Sequence[bytes] | None = None) -> Committed:
+    """A window's produced values: its P + 2 state rows, and the last window's window row with `window`. `carry`: the
+    previous window's, whose last state row and window row are this window's first, under the same salts; for the
+    session's first window (None), the first rows are `empty` and the empty window under `empty_salts`. `salts`: the
+    other P + 1 state rows' and then the window row's (default fresh, `hm96`'s `fresh_salt`)."""
     if len(rows) != S.P + 2:
-        raise ValueError(f"a window is {S.P + 2} rows, not {len(rows)}")
+        raise ValueError(f"a window is {S.P + 2} state rows, not {len(rows)}")
     words = [row(encode(r, S)) for r in rows]
     if carry is None:
         if rows[0] != empty(S):
             raise ValueError("the session's first row is the empty state")
-        first = empty_salt(program)
+        first, last_salt = empty_salts(program)
+        last = row(encode_window(Window(), S))
     else:
-        if carry.rows[-1] != words[0]:
-            raise ValueError("a window starts in the row the previous one ended in")
-        first = carry.salts[-1]
-    rest = list(salts) if salts is not None else [_INST.fresh_salt() for _ in range(S.P + 1)]
-    if len(rest) != S.P + 1:
-        raise ValueError(f"{S.P + 1} salts, one per row after the first")
-    return produced.commit(program, VALUE, words, registration, [first, *rest], WORD_BITS, SCHEMA)
+        if carry.state.rows[-1] != words[0]:
+            raise ValueError("a window starts in the state row the previous one ended in")
+        first, last, last_salt = carry.state.salts[-1], carry.window.rows[-1], carry.window.salts[-1]
+    rest = list(salts) if salts is not None else [_INST.fresh_salt() for _ in range(S.P + 2)]
+    if len(rest) != S.P + 2:
+        raise ValueError(f"{S.P + 2} salts, one per state row after the first and one for the window row")
+    state = produced.commit(program, VALUE, words, registration, [first, *rest[:-1]], WORD_BITS, SCHEMA)
+    win = produced.commit(program, WINDOW, [last, row(encode_window(window, S))], registration, [last_salt, rest[-1]],
+                          WORD_BITS, SCHEMA)
+    return Committed(state, win)
 
 
-def reads(S) -> list[dict[str, int]]:
-    """Each unit's rows of `VALUE`: the load's `prev` row 0 and `next` row 1, step u's `row` u and `next` u + 1."""
-    return [{"prev": 0, "next": 1}] + [{"row": u, "next": u + 1} for u in range(1, S.P + 1)]
+def reads(S) -> list[dict[str, dict[str, int]]]:
+    """Each unit's rows: the load's state rows `prev` 0 and `next` 1 and window rows `last` 0 and `window` 1; step u's
+    state rows `row` u and `next` u + 1 and window row `window` 1."""
+    return ([{VALUE: {"prev": 0, "next": 1}, WINDOW: {"last": 0, "window": 1}}]
+            + [{VALUE: {"row": u, "next": u + 1}, WINDOW: {"window": 1}} for u in range(1, S.P + 1)])
 
 
-def openings(value: G.Registered) -> list[bytes]:
-    """Each row's b‖c, as the produced record's `openings` give them."""
-    return list(value.bcs)
+def openings(value: Committed) -> tuple[list[bytes], list[bytes]]:
+    """Each state row's and window row's b‖c, as the produced record's `openings` give them."""
+    return list(value.state.bcs), list(value.window.bcs)
 
 
-def check_chain(windows: Sequence[Sequence[bytes]], program: str, S) -> str | None:
-    """The verifier's check of a session's windows, given each window's row openings b‖c in order: None, or why not.
-    `C-rows`: a window isn't P + 2 rows; `C-first`: the session doesn't start in the empty state under its public salt;
-    `C-carry`: a window doesn't start with the previous window's last row."""
-    for w, ops in enumerate(windows):
-        if len(ops) != S.P + 2:
-            return f"C-rows: window {w} has {len(ops)} rows, not {S.P + 2}"
-    if windows and bytes(windows[0][0]) != empty_opening(program, S):
-        return "C-first: the session's first row isn't the empty state"
+def check_chain(windows: Sequence[tuple[Sequence[bytes], Sequence[bytes]]], program: str, S) -> str | None:
+    """The verifier's check of a session's windows, given each window's state row and window row openings b‖c in
+    order: None, or why not. `C-rows`: a window isn't P + 2 state rows and 2 window rows; `C-first`: the session
+    doesn't start in the empty rows under their public salts; `C-carry`: a window doesn't start with the previous
+    window's last state row and its window row."""
+    for w, (st, wi) in enumerate(windows):
+        if len(st) != S.P + 2 or len(wi) != 2:
+            return f"C-rows: window {w} has {len(st)} state rows and {len(wi)} window rows, not {S.P + 2} and 2"
+    if windows:
+        st, wi = windows[0]
+        if (bytes(st[0]), bytes(wi[0])) != empty_openings(program, S):
+            return "C-first: the session's first rows aren't the empty state and window"
     for w in range(1, len(windows)):
-        if bytes(windows[w][0]) != bytes(windows[w - 1][-1]):
-            return f"C-carry: window {w}'s first row isn't window {w - 1}'s last"
+        (st, wi), (pst, pwi) = windows[w], windows[w - 1]
+        if bytes(st[0]) != bytes(pst[-1]) or bytes(wi[0]) != bytes(pwi[-1]):
+            return f"C-carry: window {w}'s first rows aren't window {w - 1}'s last"
     return None
 
 
@@ -395,10 +516,6 @@ def _zero(C, a):
     return and_reduce(C, [x.inv() for x in a])
 
 
-def _or(C, a, b):
-    return a ^ b ^ C.AND(a, b)
-
-
 def _shl(C, xs, amt):
     """Entries `xs` moved toward index 0 by `amt` (bits, low first), zero entries shifted in."""
     cur = [list(e) for e in xs]
@@ -417,6 +534,17 @@ def _shr(C, xs, amt):
     return cur
 
 
+def _front(C, xs, amt, n):
+    """xs[amt:amt + n], zero entries past the end: `_shl` with its largest shift first, each stage computing only the
+    entries the later stages read (about len(xs) + n·len(amt) muxes an element bit, in place of len(xs)·len(amt))."""
+    zero = [ZERO] * len(xs[0])
+    cur = [list(e) for e in xs]
+    for j in reversed(range(len(amt))):
+        d = 1 << j
+        cur = [mux(C, amt[j], cur[k + d] if k + d < len(cur) else zero, cur[k]) for k in range(min(n + d - 1, len(cur)))]
+    return (cur + [zero] * n)[:n]
+
+
 def _popcount(C, bits, w):
     out = [ZERO] * w
     for b in bits:
@@ -424,65 +552,76 @@ def _popcount(C, bits, w):
     return out
 
 
-def _build_advance(C, S, ok, cur, stepped, taken, used, nxt):
+def _build_advance(C, S, ok, cur, win, stepped, arr, bits, taken, used, nxt):
     Z, Wd = widths(S), width(S)
-    r = _split(cur, row_fields(S))
-    queue = {name: _shl(C, r[name], taken) for name, _n, _w in queue_fields(S)}
-    dec = _shl(C, r["dec"], used)
-    w = max(Z.DW, Z.AC)
-    left, under = sub(C, _pad(r["left"][0], w), _pad(used, w), w)
-    left = left[:Z.DW]
-    steps = r["steps"][0]
+    r, w = _split(cur, row_fields(S)), _split(win, window_fields(S))
+    qh, dh, steps = r["qh"][0], r["dh"][0], r["steps"][0]
+    fr = {an: _front(C, w[qn], qh, S.A) for (qn, _n, _w), (an, _a, _x) in zip(queue_fields(S), front_fields(S))}
+    fv = [e[0] for e in fr["arr_valid"]]
+    took = [C.AND(_lt(C, const_bits(k, Z.AC), taken), fv[k].inv()).inv() for k in range(S.A)]
+    m = max(Z.DW, Z.AC) + 1
+    dh_new = add(C, _pad(dh, m), _pad(used, m), width=m)
+    left = w["left"][0]
     active, last = or_reduce(C, steps), _eq(C, steps, const_bits(1, Z.PW))
-    step_ok = and_reduce(C, [ok[0], under.inv(), C.AND(last, _zero(C, left).inv()).inv()])
-    stepped_row = _pad(list(stepped) + _flat(queue, queue_fields(S)) + [e[0] for e in dec] + left
+    step_ok = and_reduce(C, [ok[0], _eq(C, _flat(fr, front_fields(S)), arr),
+                             _eq(C, [e[0] for e in _front(C, w["dec"], dh, S.A)], bits),
+                             _lt(C, const_bits(S.A, Z.AC + 1), taken).inv(), *took,
+                             _lt(C, const_bits(S.A, Z.AC + 1), used).inv(), _lt(C, left, dh_new).inv(),
+                             C.AND(last, _eq(C, dh_new, left).inv()).inv()])
+    stepped_row = _pad(list(stepped) + add(C, qh, _pad(taken, Z.QW), width=Z.QW) + dh_new[:Z.DW]
                        + sub(C, steps, const_bits(1, Z.PW), Z.PW)[0], Wd)
     same = _eq(C, mux(C, active, stepped_row, list(cur)), nxt)
     return [[C.AND(C.AND(active, step_ok.inv()).inv(), same)], [active]]
 
 
-def _build_load(C, S, prev, arrivals, decisions, count, steps, nxt):
-    Z, Wd = widths(S), width(S)
-    p, a = _split(prev, row_fields(S)), _split(arrivals, arrival_fields(S))
+def _build_load(C, S, prev, last, arrivals, decisions, count, steps, nxt, window):
+    Z, Wd, Ww = widths(S), width(S), window_width(S)
+    p, lw, a = _split(prev, row_fields(S)), _split(last, window_fields(S)), _split(arrivals, arrival_fields(S))
     av = [e[0] for e in a["a_valid"]]
     prefix = and_reduce(C, [C.AND(av[k + 1], av[k].inv()).inv() for k in range(S.K - 1)])
-    q = _popcount(C, [e[0] for e in p["q_valid"]], Z.QW)
+    rest = {qn: _shl(C, lw[qn], p["qh"][0]) for qn, _n, _w in queue_fields(S)}
+    q = _popcount(C, [e[0] for e in rest["q_valid"]], Z.QW)
     queue = {}
     for (qn, _n, w), (an, _k, _w) in zip(queue_fields(S), arrival_fields(S)):
         moved = _shr(C, a[an] + [[ZERO] * w for _ in range(S.Q)], q)
         if qn == "q_valid":
             overflow = or_reduce(C, [e[0] for e in moved[S.Q:]])
-        queue[qn] = [[x ^ y for x, y in zip(pe, me)] for pe, me in zip(p[qn], moved[:S.Q])]
+        queue[qn] = [[x ^ y for x, y in zip(pe, me)] for pe, me in zip(rest[qn], moved[:S.Q])]
     past = [C.AND(decisions[k], _lt(C, const_bits(k, Z.DW + 1), count).inv()) for k in range(S.D)]
     checks = [prefix, overflow.inv(), _zero(C, past), _lt(C, const_bits(S.D, Z.DW + 1), count).inv(),
               _lt(C, const_bits(S.P, Z.PW + 1), steps).inv(), C.AND(_zero(C, steps), _zero(C, count).inv()).inv(),
-              _zero(C, p["left"][0]), _zero(C, p["steps"][0])]
-    loaded = _pad(_flat(p, state_fields(S)) + _flat(queue, queue_fields(S)) + list(decisions) + list(count) + list(steps),
-                  Wd)
-    return [and_reduce(C, checks + [_eq(C, loaded, nxt)])]
+              _zero(C, p["steps"][0]), _eq(C, p["dh"][0], lw["left"][0])]
+    loaded = _pad(_flat(p, state_fields(S)) + [ZERO] * (Z.QW + Z.DW) + list(steps), Wd)
+    opened = _pad(_flat(queue, queue_fields(S)) + list(decisions) + list(count), Ww)
+    return [and_reduce(C, checks + [_eq(C, loaded, nxt), _eq(C, opened, window)])]
 
 
 def _sig_advance(S):
     Z, Wd = widths(S), width(S)
-    return ((("ok", BIT), ("row", Array(Wd, BIT)), ("stepped", Array(_bits_of(state_fields(S)), BIT)),
-             ("taken", Array(Z.AC, BIT)), ("used", Array(Z.AC, BIT)), ("next", Array(Wd, BIT))), Tuple(BIT, BIT))
+    return ((("ok", BIT), ("row", Array(Wd, BIT)), ("window", Array(window_width(S), BIT)),
+             ("stepped", Array(_bits_of(state_fields(S)), BIT)), ("arr", Array(_bits_of(front_fields(S)), BIT)),
+             ("bits", Array(S.A, BIT)), ("taken", Array(Z.AC, BIT)), ("used", Array(Z.AC, BIT)), ("next", Array(Wd, BIT))),
+            Tuple(BIT, BIT))
 
 
 def _sig_load(S):
-    Z, Wd = widths(S), width(S)
-    return ((("prev", Array(Wd, BIT)), ("arrivals", Array(_bits_of(arrival_fields(S)), BIT)), ("decisions", Array(S.D, BIT)),
-             ("count", Array(Z.DW, BIT)), ("steps", Array(Z.PW, BIT)), ("next", Array(Wd, BIT))), BIT)
+    Z, Wd, Ww = widths(S), width(S), window_width(S)
+    return ((("prev", Array(Wd, BIT)), ("last", Array(Ww, BIT)), ("arrivals", Array(_bits_of(arrival_fields(S)), BIT)),
+             ("decisions", Array(S.D, BIT)), ("count", Array(Z.DW, BIT)), ("steps", Array(Z.PW, BIT)),
+             ("next", Array(Wd, BIT)), ("window", Array(Ww, BIT))), BIT)
 
 
 ReplayAdvance = _part(
     "ReplayAdvance", STATICS, _sig_advance, _build_advance,
-    "the chain beside one replay step: the row it reads becomes the next row it reads, the step's next state with the "
-    "queue and the decisions past what it took and read (ok, and active = 0 for an idle step past the window's last)")
+    "the chain beside one replay step: the step's arrivals and decision bits are the window row's at the state row's "
+    "heads, and the state row it reads becomes the next, the step's next state with the heads past what it took and read "
+    "(ok, and active = 0 for an idle step past the window's last)")
 
 ReplayLoad = _part(
     "ReplayLoad", STATICS, _sig_load, _build_load,
-    "a window's first unit: the last window's last row with the window's certified arrivals appended to the queue and "
-    "its decisions and executed step count loaded, the last window's all read")
+    "a window's first unit: the last window's last state row with its heads reset and the window's executed step count, "
+    "and the window row, the last window's arrivals past its head with the window's certified arrivals appended and its "
+    "decisions, the last window's all read")
 
 
 def advance_unit(S):
@@ -497,30 +636,34 @@ def _statics(S) -> dict[str, int]:
     return {k: getattr(S, k) for k in STATICS}
 
 
-def advance_arguments(S, cur: Row, ok: bool, stepped: Row, taken: int, used: int, nxt: Sequence[int]) -> list[list[int]]:
-    """`ReplayAdvance`'s arguments, each a flat bit list: `nxt` is the next row's bits."""
+def advance_arguments(S, win: Window, cur: Row, ok: bool, stepped: Row, arrivals: Sequence[Arrival], bits: Sequence[int],
+                      taken: int, used: int, nxt: Sequence[int]) -> list[list[int]]:
+    """`ReplayAdvance`'s arguments, each a flat bit list: `arrivals` and `bits` the step's (`front`), `nxt` the next
+    state row's bits."""
     Z = widths(S)
+    if len(bits) > S.A or any(b not in (0, 1) for b in bits):
+        raise MalformedRow(f"at most {S.A} decision bits")
     tb, ub = [], []
     _put(tb, taken, Z.AC, "taken")
     _put(ub, used, Z.AC, "used")
-    return [[int(ok)], list(encode(cur, S)), list(state_bits(stepped, S)), tb, ub, list(nxt)]
+    return [[int(ok)], list(encode(cur, S)), list(encode_window(win, S)), list(state_bits(stepped, S)),
+            list(front_bits(S, arrivals)), list(bits) + [0] * (S.A - len(bits)), tb, ub, list(nxt)]
 
 
-def load_arguments(S, prev: Row, arrivals: Sequence[Arrival], decisions: Sequence[int], count: int, steps: int,
-                   nxt: Sequence[int]) -> list[list[int]]:
-    """`ReplayLoad`'s arguments: `decisions` the D-bit field as given (bits past `count` included), `nxt` the next row's
-    bits."""
+def load_arguments(S, prev: Row, last: Window, arrivals: Sequence[Arrival], decisions: Sequence[int], count: int, steps: int,
+                   nxt: Sequence[int], window: Sequence[int]) -> list[list[int]]:
+    """`ReplayLoad`'s arguments: `decisions` the D-bit field as given (bits past `count` included), `nxt` and `window`
+    the next state row's and the window row's bits."""
     Z = widths(S)
     if len(arrivals) > S.K or len(decisions) > S.D:
         raise ValueError("the arrivals or decisions exceed the size class")
-    vals = {"a_valid": [1] * len(arrivals) + [0] * (S.K - len(arrivals))}
-    for k, name in enumerate(("id", "P", "O")):
-        vals[f"a_{name}"] = [x[k] for x in arrivals] + [0] * (S.K - len(arrivals))
+    vals: dict[str, list[int]] = {}
+    _group(vals, "a", ("id", "P", "O"), arrivals, S.K)
     cb, sb = [], []
     _put(cb, count, Z.DW, "count")
     _put(sb, steps, Z.PW, "steps")
-    return [list(encode(prev, S)), _flatten(vals, arrival_fields(S)), list(decisions) + [0] * (S.D - len(decisions)), cb,
-            sb, list(nxt)]
+    return [list(encode(prev, S)), list(encode_window(last, S)), _flatten(vals, arrival_fields(S)),
+            list(decisions) + [0] * (S.D - len(decisions)), cb, sb, list(nxt), list(window)]
 
 
 def _evaluate(unit, cases: Sequence[list[list[int]]]):
@@ -556,14 +699,16 @@ def size(S) -> dict[str, int]:
     window P of them and one `ReplayLoad`, the rows, the reads and their path depth."""
     key = tuple(getattr(S, k) for k in STATICS)
     step, window = _counted("advance", key), _counted("load", key)
-    return {"width": width(S), "state_bits": _bits_of(state_fields(S)), "queue_bits": _bits_of(queue_fields(S)),
-            "ands_per_step": step, "ands_load": window, "ands_per_window": S.P * step + window,
-            "rows_per_window": S.P + 2, "reads_per_window": 2 * (S.P + 1), "path_depth": (S.P + 1).bit_length(),
-            "record_bytes_per_window": (S.P + 2) * produced.BC_BYTES}
+    return {"width": width(S), "window_width": window_width(S), "state_bits": _bits_of(state_fields(S)),
+            "queue_bits": _bits_of(queue_fields(S)), "ands_per_step": step, "ands_load": window,
+            "ands_per_window": S.P * step + window, "rows_per_window": S.P + 2, "window_rows_per_window": 2,
+            "reads_per_window": 3 * S.P + 4, "path_depth": (S.P + 1).bit_length(),
+            "record_bytes_per_window": (S.P + 4) * produced.BC_BYTES}
 
 
-__all__ = ["Arrival", "MalformedRow", "ReplayAdvance", "ReplayLoad", "Row", "Running", "STATICS", "Shape", "VALUE",
-           "Waiting", "advance", "advance_arguments", "advance_unit", "arrival_fields", "check_chain", "commit_window",
-           "decode", "empty", "empty_opening", "empty_salt", "encode", "evaluate_advance", "evaluate_load", "load",
+__all__ = ["Arrival", "Committed", "MalformedRow", "ReplayAdvance", "ReplayLoad", "Row", "Running", "STATICS", "Shape",
+           "VALUE", "WINDOW", "Waiting", "Window", "advance", "advance_arguments", "advance_unit", "arrival_fields",
+           "check_chain", "commit_window", "decode", "decode_window", "empty", "empty_openings", "empty_salts", "encode",
+           "encode_window", "evaluate_advance", "evaluate_load", "front", "front_bits", "front_fields", "load",
            "load_arguments", "load_unit", "openings", "queue_fields", "reads", "row", "row_fields", "size", "state_bits",
-           "state_fields", "unrow", "widths"]
+           "state_fields", "unrow", "widths", "window_fields", "window_width"]
