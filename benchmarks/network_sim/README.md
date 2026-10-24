@@ -519,10 +519,10 @@ Open items:
   it. One unit per run that derives each descriptor from the opened placement would close this. No claim rests on it
   yet.
 - **hm96 or vllm-v1 (asked of circuits).** The outboxes are hm96 rows, and so are the values they must agree with.
-  Served traffic's values are committed under verity_vllm's vllm-v1 roots (SHA-256, not hiding), whose link to hm96
-  rows is the committer's opening, not a proof (`verity/core/protocols/sampled_proofs/README.md`). N3 on served traffic
-  needs the crossings bound to the commitment the compute proofs read: serving's record in hm96 itself, or a unit that
-  opens the vllm-v1 leaves.
+  Served traffic's values are hm96-sha512 rows by default (rows-sha512). An old record's vllm-v1 roots (SHA-256, not
+  hiding) link to hm96 rows by the committer's opening, not proof (`verity/core/protocols/sampled_proofs/README.md`).
+  N3 needs the crossings bound to the commitment the compute proofs read: serving's record, hm96 by default, or a
+  unit opening vllm-v1's leaves.
 - **Trailing frames.** Here a port that stops short of its declared frames passes. Each window it recorded matches
   its descriptors, and the windows after it record nothing, which passes from public data. In the late run, b2's
   responses are refused only because their record's status says coverage was never established. N2 closes it where

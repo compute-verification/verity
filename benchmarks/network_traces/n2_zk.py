@@ -110,7 +110,8 @@ def link(run: Path) -> tuple[LinkWindows, dict]:
     profile = plan.get("occupancy") or {}
     lw = LinkWindows(dep["links"]["n2"], setup.egress_params, setup.sync_set, cs.read_public(dep["certifier_key"]),
                      dep["run_id"], bytes.fromhex(dep["session"]), ingress=setup.ingress_params,
-                     proof_deadline=cs.PROOF_DEADLINE_S, occupancy=(profile.get("egress"), profile.get("ingress")))
+                     proof_deadline=cs.PROOF_DEADLINE_S, occupancy=(profile.get("egress"), profile.get("ingress")),
+                     served=cs.served_profile(plan))
     return lw, plan
 
 
