@@ -14,17 +14,20 @@ through an opened reader, registered weights for weight slices), committed in M0
   window written into ``O`` as a ``stand-in``: serving's commitment is the record's roots, and these rows are committed afterwards
   from the bundle, so their link to those roots is provenance (``deferred_rows.stand_in``).
 
-The partition file is the verifier's: ``{"templates": [<descriptor id>, ...], "law": "subset:K" | "stratified:K" | {...},
+The partition file is the verifier's: ``{"templates": [<descriptor id>, ...], "law": "subset:K" | "stratified:K" | "work:K" | {...},
 "query"?: "Q_template_instance" | "Q_template_instances", "scope"?: {"op_path_prefix", "steps"}, "chunk_cap"?: {<descriptor id>:
-cap}, "row_tables"?: true, "partition_digest"?}``.  The members are its templates in order, each instance count read off the Build's
+cap}, "row_tables"?: true, "partition_digest"?}``.  A ``work:K`` window draws by the work table `work_table_of` derives from the
+registered compiler's transfer-gate templates (`pipeline.advice_windows`): every unit of those is proved (an All stratum), the rest
+drawn as the stratified law draws it.  The members are its templates in order, each instance count read off the Build's
 Programs; the population program over them (``commit.serving_rows.population_program``: ``TemplatePopulations`` for several
 templates, or for one when the file names ``Q_template_instances``) is the one the verifier builds from the same Programs, and a
 ``partition_digest`` in the file that is not that program's partition is refused, as is any other query (a word partition,
 ``Q_word``, never: with the stratified law it is refused by name, its strata being templates).  ``partition.json`` beside the window
 is the derived file, digest and members included.  ``scope.op_path_prefix`` restricts the population to one module
-(``model.layers.0.``, or a MoE layer's ``moe/L40``), ``scope.steps`` (``[lo, hi)``) to those steps of each request.  A chunked
-template's units (``CHUNKED``: a ``ScaledMmS8Coordinate``, a ``COORDS`` coordinate, a ``COLS`` column block or a ``SLICES``
-slice) are split
+(``model.layers.0.``, or a MoE layer's ``moe/L40``), or to the rows under any of a list of them, ``scope.steps`` (``[lo, hi)``)
+to those steps of each request.  A chunked template's units (``CHUNKED``: a ``ScaledMmS8Coordinate``, a ``COORDS`` coordinate,
+a ``COLS`` column block, a ``SLICES`` slice, a ``KCHUNKS`` K-chunk or a ``SPLITS`` split part or combine; and a row template or
+whole ``PARTS`` part the file's ``chunk_cap`` names, its rows its Definition's own ports, `chunked`) are split
 into consecutive chunks of at most its ``chunk_cap`` (flock-circuit's spec shape, as ``benchmarks/one_stage/a6.py`` computes
 it; ``chunk_caps`` writes the entry), each chunk a member on C-Flock's bit rows (`chunk_rows.unit_rows`) with its public file of global unit indices;
 ``row_tables`` puts the ``ScaledMmS8Coordinate`` chunks in the row-table layout (``with_row_tables``).
@@ -36,11 +39,12 @@ row's Definition is cut into them (``CUT``: its body batches the template's word
 does not compute what the row computes is no match), or when the template's word is the row's Definition at N = 1 (``COORDS``: the
 row is split into its N coordinates), or at a halving of its width (``COLS``: the row is split into column blocks), or when it
 is a part of the row's Definition (``PARTS``: the row is split into Definitions of its own, one member per part), or when it
-is the row's Definition at every axis of a batch 1 (``SLICES``: the row is split into its slices along those axes).  A Boolean
-Program's rows are its word view (`pipeline.build_instances`: each
-row the word Definition its Call's Boolean Definition computes, that Boolean Definition its ``bits``), so a template matches the
-same rows under either IR, and the members, their rows and every committed word are the same; the population program is over the
-template as the partition names it.  The rows commit u16 words: a template's every port is 16-bit elements in its word view (a
+is the row's Definition at every axis of a batch 1 (``SLICES``: the row is split into its slices along those axes), or when it
+is a K-chunk of the row's coordinate (``KCHUNKS``, `kchunk_rows`) or a split part or the combine of the row's Definition
+(``SPLITS``, `split_rows`).  A Boolean Program's rows are its word view (`pipeline.build_instances`: each row the word Definition
+its Call's Boolean Definition computes, that Boolean Definition its ``bits``), so a template matches the same rows under either IR,
+and the members, their rows and every committed word are the same; the population program is over the template as the partition
+names it.  The rows commit u16 words: a template's every port is 16-bit elements in its word view (a
 Boolean element's bit j is bit j of its word, `boolean.elements`), or, for a row or coordinate template, elements of ``PACKED`` widths with each
 port whole u16 words (``Template.packed``): a port's words are then its elements' little-endian bytes, two to a word, which are
 the port's bits in M0's row order (an 8-bit element is half a word, a 32-bit one two words, low half first); refused otherwise.
@@ -59,26 +63,39 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    rows (`with_row_tables`): the ``x`` table the chunk's distinct token rows, each a row of its
                                    row table (one per engine step and op_path), and the ``w`` table its own rows
   ``MoeExpertFp8Gemm(W)_v1{N=1,..}``  every coordinate n of the rows of that Definition at any N (the expert-indexed pair GEMMs,
-                                   and ``FlashInferFp8Linear_v1{K=..,N=1}``, ``COORDS``): ``in<g>`` per argument group, the
-                                   leading ones whole and the last two ``w[:, n, :]`` and ``ws[:, n // G, :]`` of every expert
-                                   (FlashInfer's linear: ``w[n]`` and ``ws[n // 128]``) -> ``out.<member>``, the row's output
-                                   word n (`_read_coord`); packed ports, one index entry per row; chunked (``chunk_cap``),
+                                   ``FlashInferFp8Linear_v1{K=..,N=1}`` and ``ScaledMmFp8BlockSharedScale_v1{K=..,N=1,G=..}``,
+                                   ``COORDS``): ``in<g>`` per argument group (a ``PARTS`` part's, the operands its entry
+                                   names), the leading ones whole and the last two ``w[:, n, :]`` and ``ws[:, n // G, :]`` of
+                                   every expert (FlashInfer's linear and the block-scaled GEMM: ``w[n]`` and ``ws[n // G]``)
+                                   -> ``out.<member>``, the row's output
+                                   word n (`part_rows.read_coord`); packed ports, one index entry per row; chunked (``chunk_cap``),
                                    v2 bit rows (`chunk_rows.unit_rows`) -> ``o0``
+  ``MoeExpertFp8CoordinateChunk_v1{K=k,..}``, ``SparseMlaSplitPart_v1{T=k,..}``, ``SparseMlaCombine_v1{NSPLIT=n,..}``  K-chunks
+                                   (``KCHUNKS``) and split parts and combines (``SPLITS``), laid out by `kchunk_rows`, `split_rows`
+                                   and `chunk_rows.reads`; always chunked, v2 bit rows, one index entry per row
   ``MoeSum_v1{H=w,..}``, ``AllReduceMnnvl_v1{N=w,..}``  every block j of w columns of the rows of that Definition W wide, W / w
                                    a power of two (``COLS``): ``in<g>`` per argument group, each of its rows' columns [jw, jw + w)
                                    in order -> ``out.<member>``, the row's output columns [jw, jw + w); one index entry per row;
                                    chunked (``chunk_cap``), v2 bit rows (`chunk_rows.unit_rows`) -> ``o0``
+  ``AllReduceMultimem_v1{SIZE=w,..}``  likewise along SIZE, for a row whose owners' TREES are one tree and w whole 8-element
+                                   vectors (`cols_refused`); a member of blocks handed another row refuses it
   ``AllReduceResidualMnnvl_v1{N=w,..}``, ``RmsNormMnnvl_v1{..}``  the parts of every ``AllReduceRmsNormMnnvl_v1`` row (``PARTS``):
                                    its all-reduce and residual add in column blocks as ``COLS`` (``in0`` the partials, ``in1``
                                    the residual -> ``out.<member>``, the row's r), its norm whole (``in0`` the row's committed r,
                                    ``in1`` the weight -> ``out.<member>``, the row's normed output); one index entry per row
+  ``Fp8GroupQuantUe8m0_v1{..}``, ``ScaledMmFp8BlockSharedScale_v1{N=1,..}``  the parts of every ``DeepGemmFp8Linear_v1`` row
+                                   (``PARTS``, at G = 128, ``PART_STATICS``): its quantisation whole (``in0`` the row's x ->
+                                   ``out.<member>``, its q and s; packed ports, `part_rows.read_part`), its GEMM in coordinates as
+                                   ``COORDS`` (``in0``, ``in1`` the row's committed q and s, ``in2``, ``in3`` ``w[n]`` and
+                                   ``ws[n // 128]`` -> ``out.<member>``, its y word n); one index entry per row
   ``Gemm_v2{N=1,..}``, ``BatchedGemm_v1{B=1,N=1,..}``, ..  every slice of the rows of that Definition at any extents along its
                                    axes (``SLICES``): ``in<g>`` per argument group, its element along each axis it carries and
                                    whole along the others (a GEMM coordinate: ``x`` whole, ``w[n]``) -> ``out.<member>``, the
                                    row's output element; packed ports, one index entry per row; chunked (``chunk_cap``), v2
                                    bit rows (`chunk_rows.unit_rows`) -> ``o0``
   any row's own Definition         every row of it, the row itself: ``in<g>`` per argument group -> ``out.<member>`` per
-                                   committed member (``vu_export._decompose_row``'s port rule)
+                                   committed member (``vu_export._decompose_row``'s port rule); chunked when the file's
+                                   ``chunk_cap`` names it, v2 bit rows (`chunk_rows.unit_rows`) -> ``o<j>`` per member
 
 so ``RoPEHead_v2{D=..}`` and ``GemmCoordinate_v4{K=..}``, the Boolean versions, are a RoPE head's and a GEMM coordinate's.
 
@@ -105,14 +122,18 @@ from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import serving_rows as CS
 from verity_vllm.pipeline import chunk_rows as CR
+from verity_vllm.pipeline import kchunk_rows as KC
 from verity_vllm.pipeline import slice_rows as SL
+from verity_vllm.pipeline import split_rows as SP
 from verity_vllm.pipeline.chunk_rows import s8_words
-from verity_vllm.pipeline.serving_templates import (COLS, COORDS, CUT, LAYOUTS, PACKED, PART_OF, PARTS, SLICES, Template,  # noqa: F401
-                                                    _bind, part, template, unit_templates)
+from verity_vllm.pipeline.serving_templates import (COLS, COORDS, CUT, LAYOUTS, PACKED, PART_OF, PARTS, SLICES, SPLITS,  # noqa: F401
+                                                    Template, _bind, part, template, unit_templates)
 from verity_vllm.program.compact import runs_from_file_items
 
 #: the layouts whose units are bit rows as C-Flock's `UnitStager` stages them (`chunk_rows`), in chunks of at most a chunk cap
-CHUNKED = ("s8", "coord", "cols", "slice")
+CHUNKED = ("s8", "coord", "cols", "slice", "kchunk", "split")
+#: the chunked layouts read by a module of their own: a row's unit count, and the reader of a member's rows
+READERS = {"slice": (SL.extent, SL.read), "kchunk": (KC.units, KC.read), "split": (SP.units, SP.read)}
 #: the committed signed integer dtypes a narrower packed port reads by value (`_packed`): torch's int64 indices
 BY_VALUE = frozenset(("i64", "int64"))
 PARTITION_FORMAT = "verity-vllm/serving-rows/partition/v1"
@@ -145,18 +166,19 @@ def readers(request: str | None, com: Any, rc: Any, weights: Callable, programs:
 Row = tuple[str, Any, dict, dict]
 
 
-def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope: str | None = None,
+def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope: str | Sequence[str] | None = None,
                 program_dirs: dict[str, str] | None = None,
                 index: Mapping[str, Any] | None = None,
                 steps: Sequence[int] | None = None,
                 reuse: Sequence[ProgramIndex] = ()) -> tuple[list[list[Row]], list[Any], list[int]]:
     """Per template, its rows in order (request, its ProgramIndex, the row, its description), restricted to ``scope`` (an op_path
-    prefix) and ``steps`` (``[lo, hi)`` of the request's steps); each template's Definition; and its instance count.  Rows are
-    matched by the template's word (:func:`template`), so two templates that compute one word Definition are refused.  Fixed by
-    the Build's Programs before serving.  ``index``: the ProgramIndex's ``attention_paths`` and ``tp`` for a rank Program
+    prefix, or a list of them: a row under any) and ``steps`` (``[lo, hi)`` of the request's steps); each template's Definition;
+    and its instance count.  Rows are matched by the template's word (:func:`template`), so two templates that compute one word
+    Definition are refused.  Fixed by the Build's Programs before serving.  ``index``: the ProgramIndex's ``attention_paths`` and ``tp`` for a rank Program
     (`pipeline.tp.serving_rows`); ``reuse``: indexes already built, each taken for the Program it was built from with these
     arguments (`index_of`)."""
     ts = [template(t) for t in tmpls]
+    prefixes = (scope,) if isinstance(scope, str) else tuple(scope or ())
     want: dict[str, int] = {}
     for k, t in enumerate(ts):
         if want.setdefault(t.word, k) != k:
@@ -177,23 +199,25 @@ def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope
             if d is not None:
                 for k, _n in hits:
                     seen[k] = seen[k] or d
-            if d is None or (scope and not d["op_path"].startswith(scope)):
+            if d is None or (prefixes and not d["op_path"].startswith(prefixes)):
                 continue
             if steps is not None and not int(steps[0]) <= int(d["step"]) < int(steps[1]):
                 continue
             ps = [part(ts[k].word, r["spec"]) for k, _ in hits]
-            if len(hits) > 1 and (None in ps or len({p[0] for p in ps}) < len(ps)):
+            chain = {KC.chain(ts[k])[0] if ts[k].layout == "kchunk" else "split" if ts[k].layout == "split" else None for k, _ in hits}
+            if len(hits) > 1 and (None in ps or len({p[0] for p in ps}) < len(ps)) and (None in chain or len(chain) > 1):
                 raise ValueError(f"row {i} ({r['spec']}) holds instances of {[tmpls[k] for k, _ in hits]}: one member reads a row, "
-                                 f"or one member per part of it (PARTS)")
+                                 f"or one member per part of it (PARTS), or one per K-chunk template of one chain (KCHUNKS), or one "
+                                 f"per split part and combine template of it (SPLITS)")
             for k, n in hits:
                 out[k].append((str(rid), pi, r, d))
                 counts[k] += n
     for t, rows, d in zip(tmpls, out, seen, strict=True):
         if not rows:
-            raise LookupError(f"no rows of {t} in the run's Programs" + (f" under {scope}" if scope else "")
+            raise LookupError(f"no rows of {t} in the run's Programs" + (f" under {' or '.join(prefixes)}" if prefixes else "")
                               + (f" at steps {list(steps)}" if steps is not None else "")
                               + (f"; its rows exist outside the scope, e.g. op_path {d['op_path']} at step {d['step']} (scope.op_path_prefix "
-                                 "is the op_path's prefix, the wrapper's module prefix stripped)" if d is not None else ""))
+                                 "is the op_path's prefix, or a list of them, the wrapper's module prefix stripped)" if d is not None else ""))
     return out, [t.fn for t in ts], counts
 
 
@@ -202,12 +226,22 @@ def chunk_caps(tmpls: Sequence[str]) -> dict[str, int]:
     return {t: CR.chunk_cap(template(t)) for t in tmpls if template(t).layout in CHUNKED}
 
 
+def chunked(t: str, caps: Mapping[str, int] | None) -> bool:
+    """Whether template ``t``'s units are chunks on bit rows (`chunk_rows.unit_rows`): a ``CHUNKED`` layout's (a window names the
+    caps), or a row template's or a whole ``PARTS`` part's when ``caps`` names it, its rows staged as the Definition's own ports
+    (no input set read)."""
+    layout = template(t).layout
+    return ((layout in CHUNKED and (layout in ("s8", "kchunk", "split") or caps is not None))
+            or (layout in ("row", "part") and t in (caps or {})))
+
+
 def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[int] | None = None,
             caps: Mapping[str, int] | None = None) -> list[CS.Member]:
     """Each template's ports, instance count and base, read off its first row; ``counts`` (the Definitions' own) must agree.  A
-    chunked template's units (``CHUNKED``) are consecutive chunks of at most its ``caps`` entry, one member each, on its
-    `chunk_rows.unit_rows`; a window always names the caps (`population`).  With no ``caps`` at all (a tool reading one Call's
-    units, ``benchmarks/one_stage/m1_unit.py``), a ``COORDS`` or ``COLS`` template is one member of word rows."""
+    chunked template's units (`chunked`: a ``CHUNKED`` layout's, or a row template's that ``caps`` names) are consecutive chunks of
+    at most its ``caps`` entry, one member each, on its `chunk_rows.unit_rows`; a window always names the caps (`population`).
+    With no ``caps`` at all (a tool reading one Call's units, ``benchmarks/one_stage/m1_unit.py``), a ``COORDS`` or ``COLS``
+    template is one member of word rows."""
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     out, base = [], 0
@@ -217,11 +251,13 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
         if layout == "cols":
             axis = COLS[spec_base(template(t).word)]
             n = sum(int(x[3]["statics"][axis]) // int(spec_statics(template(t).word)[axis]) for x in rs)
-        elif layout == "slice":
-            n = sum(SL.extent(template(t), x[3]["statics"]) for x in rs)
+        elif layout in READERS:
+            n = sum(READERS[layout][0](template(t), x[3]["statics"]) for x in rs)
         elif layout in CHUNKED:
             n = sum(int(x[3]["statics"]["N"]) for x in rs)
-        if layout in CHUNKED and (layout == "s8" or caps is not None):
+        elif layout in ("row", "part"):
+            n = len(rs)
+        if chunked(t, caps):
             cap = (caps or {}).get(t)
             if not isinstance(cap, int) or cap < 1:
                 raise ValueError(f"{t}: no chunk cap; a partition file names each chunked template's flock-circuit chunk cap as "
@@ -229,8 +265,9 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
             if counts is not None and counts[k] != n:
                 raise ValueError(f"{t}: {n} units read off the rows, {counts[k]} in their Definitions")
             in_rows, _outs = CR.unit_rows(template(t))
-            outs = (("o0", 1 if layout == "s8" else sum(template(t).fn.signature()[1].leaf_widths()) // 16),)
-            schemas = tuple((p, s) for p, s, _b, _ps in in_rows) + (("o0", CS.SCHEMA_HM96_SHA512_ROW_V2),)
+            outs = (("o0", 1),) if layout == "s8" else tuple((f"o{j}", -(-sum(f.leaf_widths()) // 16))
+                                                             for j, f in enumerate(CR.fields(template(t))))
+            schemas = tuple((p, s) for p, s, _b, _ps in in_rows) + tuple((p, CS.SCHEMA_HM96_SHA512_ROW_V2) for p, _w in outs)
             out += [CS.Member(t, tuple((p, b // 16) for p, _s, b, _ps in in_rows), outs, min(cap, n - lo), base + lo, name=f"{t}/c{j}",
                               schemas=schemas)
                     for j, lo in enumerate(range(0, n, cap))]
@@ -245,7 +282,7 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
             rx, rw = sum(g["tokens"] for g in groups), sum(g["columns"] for g in groups)
             m = CS.Member(t, (("x", K), ("w", K)), (("y", 1),), sum(g["tokens"] * g["columns"] for g in groups), base,
                           tables=(("x", rx), ("w", rw)))
-        elif layout in ("coord", "cols", "part", "slice"):
+        elif layout in ("coord", "cols", "slice") or (layout == "part" and part(template(t).word, r["spec"]) is not None):
             params, ret = template(t).fn.signature()
             if layout == "part":
                 n = len(rs)
@@ -332,15 +369,39 @@ def law_of(law: str | Mapping[str, Any]) -> dict[str, Any]:
     return DR.parse_law(law) if isinstance(law, str) else dict(law)
 
 
+def work_table_of(law: Mapping[str, Any], counts: Mapping[str, int], transfer_gates: Sequence[str] = ()) -> dict[str, Any] | None:
+    """The verifier's work table (`draw.work_table`) for a window of ``counts`` (template -> its units, in the partition's order)
+    under ``law``: under ``work:K``, each transfer-gate template (the units holding transfer gates, which the registered compiler
+    lists) works 0 with its floor all its units, so its stratum draws every one of them (`draw.work_k`: selection All, never
+    sampled), and every other template works 1 with floor 1, its draw the stratified law's share of K; None for any other law.
+    Refused when the compiler lists transfer gates under another law, when one of its transfer-gate templates is not among the
+    window's (its units would be left out of the proved set), or when every template is one (nothing is drawn: that window's
+    selection is all)."""
+    tg = list(dict.fromkeys(transfer_gates))
+    if law.get("law") != "work":
+        if tg:
+            raise ValueError(f"the compiler lists transfer-gate templates {tg}: every unit of theirs is proved beside the drawn rest, "
+                             f"which is the work law's draw (law work:K), not {dict(law)}")
+        return None
+    if missing := [t for t in tg if t not in counts]:
+        raise ValueError(f"the compiler's transfer-gate template {missing[0]} is not among the partition's templates {list(counts)}: "
+                         "its units would be left out of the proved set")
+    if all(t in tg for t in counts):
+        raise ValueError(f"every template of the window ({list(counts)}) holds transfer gates: nothing is drawn, so its selection is "
+                         "all, not a work law")
+    return {t: {"work": 0, "floor": int(n)} if t in tg else {"work": 1, "floor": 1} for t, n in counts.items()}
+
+
 def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any], run_root: str,
                program_dirs: dict[str, str] | None = None, index: Mapping[str, Any] | None = None,
                arrivals: Mapping[str, int] | None = None, context: str = "",
-               reuse: Sequence[ProgramIndex] = ()) -> tuple[CS.Window, list[list[Row]]]:
+               reuse: Sequence[ProgramIndex] = (), transfer_gates: Sequence[str] = ()) -> tuple[CS.Window, list[list[Row]]]:
     """The verifier's window over the run's Programs (``partition``: the partition file's ``templates``, ``law`` and ``scope``) and
     each template's rows; refused when the file names a ``partition_digest`` that is not the window's, or a ``query`` other than the
     template queries.  ``row_tables: true`` in the file: the ``ScaledMmS8Coordinate`` chunks in the row-table layout
     (`with_row_tables`, its engine steps the requests' ``arrivals`` plus their steps), under ``context`` (hex: the live coin
-    commitment's root serving committed its step roots under).  ``reuse``: `member_rows`'."""
+    commitment's root serving committed its step roots under).  ``reuse``: `member_rows`'.  ``transfer_gates``: the registered
+    compiler's transfer-gate templates, whose units a ``work:K`` window proves every one of (`work_table_of`)."""
     tmpls, law = list(partition["templates"]), law_of(partition["law"])
     q = partition.get("query")
     if q is not None and q not in TEMPLATE_QUERIES:
@@ -351,13 +412,16 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
                          f"({' / '.join(TEMPLATE_QUERIES)}), never a word partition")
     scope = partition.get("scope") or {}
     rows, defs, counts = member_rows(programs, tmpls, scope.get("op_path_prefix"), program_dirs, index, scope.get("steps"), reuse)
-    ms = members(tmpls, rows, counts, partition.get("chunk_cap") or {})
+    ms = SP.wire(KC.wire(members(tmpls, rows, counts, partition.get("chunk_cap") or {}), tmpls, rows), tmpls, rows)
     tables: tuple[CS.RowTable, ...] = ()
     if partition.get("row_tables"):
         ms, tables = with_row_tables(ms, tmpls, rows, arrivals)
     n_of = {t: sum(m.n for m in ms if m.template == t) for t in tmpls}
     program, query = CS.population_program([(fn, n_of[t]) for fn, t in zip(defs, tmpls, strict=True)], several=q == TEMPLATE_QUERIES[1])
-    window = CS.Window(program, query, law, run_root, tuple(ms), tables, context)
+    table = work_table_of(law, n_of, transfer_gates)
+    if table is not None:
+        table = {P.template_id(fn): table[t] for fn, t in zip(defs, tmpls, strict=True)}
+    window = CS.Window(program, query, law, run_root, tuple(ms), tables, context, table)
     want = partition.get("partition_digest")
     if want and want != window.partition_digest:
         raise ValueError(f"the run's population ({', '.join(f'{t} x {n}' for t, n in n_of.items())}) is partition "
@@ -370,7 +434,8 @@ def partition_doc(window: CS.Window, partition: Mapping[str, Any]) -> dict[str, 
     return {"format": PARTITION_FORMAT, "templates": list(dict.fromkeys(m.template for m in window.members)), "law": window.law,
             "query": window.query["name"], "scope": partition.get("scope"), "members": [[m.key, m.n] for m in window.members],
             **({"chunk_cap": partition["chunk_cap"]} if partition.get("chunk_cap") else {}),
-            **({"row_tables": [t.port for t in window.row_tables]} if window.row_tables else {}), "partition": window.partition,
+            **({"row_tables": [t.port for t in window.row_tables]} if window.row_tables else {}),
+            **({"work_table": window.work_table} if window.work_table is not None else {}), "partition": window.partition,
             "partition_digest": window.partition_digest, "population": window.population}
 
 
@@ -382,17 +447,22 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
     from its first row (`members`); each index entry keeps the row's own member names.  A row whose input or output widths
     are not the member's is refused (a packed template's in u16 words).  A ``cols`` member's row is ``W / w`` units, each
     operand and output its rows' columns [jw, jw + w) in order, under one index entry.  A part of the row (``PARTS``) reads the
-    row's argument groups and committed outputs it names, in its order, and returns, and names in its entry, its outputs."""
+    row's argument groups and committed outputs it names, in its order, and returns, and names in its entry, its outputs.  A
+    ``cols`` row whose blocks are not its columns (`cols_refused`) is refused in blocks."""
+    from verity_vllm.pipeline import part_rows as PR
+    from verity_vllm.pipeline.serving_templates import cols_refused
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     tp = template(m.template)
     layout = tp.layout
+    if layout == "part" and tp.packed:
+        return PR.read_part(m, rows, store, weights, arrivals, _slices, _packed)
     if layout == "gemm":
         return _read_gemm(m, rows, store, weights, arrivals)
     if layout == "coord":
-        return _read_coord(m, rows, store, weights, arrivals)
-    if layout == "slice":
-        return SL.read(m, rows, store, weights, arrivals, _slices)
+        return PR.read_coord(m, rows, store, weights, arrivals, _slices, _packed)
+    if layout in READERS:
+        return READERS[layout][1](m, rows, store, weights, arrivals, _slices)
     cols: dict[str, list[np.ndarray]] = {p: [] for p, _ in m.rows + m.outs}
     D = dict(m.rows).get("x", 0)
     entries: list[list[Any]] = []
@@ -425,6 +495,8 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
             if W % w:
                 raise ValueError(f"row {r['i']} ({d['op_path']}): {axis}={W} is no whole number of member {m.key}'s {axis}={w} columns")
             nh = W // w
+            if nh > 1 and (why := cols_refused(tp.word) or cols_refused(r["spec"])) is not None:
+                raise ValueError(f"row {r['i']} ({d['op_path']}): {nh} column blocks of {why}")
             got = [len(a) for a in ops + outs]
             if [g // nh for g in got] != [n for _, n in m.rows + m.outs] or any(g % W for g in got):
                 raise ValueError(f"row {r['i']} ({d['op_path']}): inputs and outputs of {got} words are not {nh} of member {m.key}'s "
@@ -500,75 +572,6 @@ def _read_gemm(m: CS.Member, rows: list[tuple[str, Any, dict, dict]], store: Any
     return data, entries
 
 
-def _read_coord(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
-                arrivals: dict[str, int] | None) -> tuple[dict[str, Any], list[list[Any]]]:
-    """A ``COORDS`` template's units (the ``coord`` layout), row by row, then coordinate: unit (row, n) reads the row's leading
-    operands whole and, for its last two, ``w`` ([E][N][K]) and ``ws`` ([E][cdiv(N, G)][K/G]), ``w[:, n, :]`` and
-    ``ws[:, n // G, :]`` of every expert, which are the template's ``w`` and ``ws`` at N = 1; its output is the row's output
-    word n.  A family whose statics have no E or G takes ``COORDS``' (FlashInfer's linear: one expert, 128-wide blocks).  Every
-    port is its elements' bytes (``Template.packed``).  One index entry per row, the range of its N units.  A weight stack is
-    read once per distinct slice group."""
-    from verity_vllm.query.program_view import spec_base
-
-    tp = template(m.template)
-    bits = tp.packed or (16,) * (len(m.rows) + 1)
-    cols: dict[str, list[np.ndarray]] = {p: [] for p, _ in m.rows + m.outs}
-    (port, _w), = m.outs
-    entries: list[list[Any]] = []
-    stacks: dict[str, np.ndarray] = {}
-
-    def stack(r: dict, pi: Any, rid: str, arrive: int, g: Sequence, b: int, n: int, what: str) -> np.ndarray:
-        key = json.dumps(g)
-        if key not in stacks:
-            parts = [np.asarray(a).reshape(-1) for a in _slices(pi, store, weights, rid, arrive, g)]
-            if any(a.dtype.itemsize * 8 != b for a in parts) or sum(a.size for a in parts) != n:
-                raise ValueError(f"row {r['i']} {what}: {[f'{a.size} {a.dtype}' for a in parts]} elements, not {n} of {b} bits")
-            le = np.concatenate([np.ascontiguousarray(a, dtype=a.dtype.newbyteorder("<")) for a in parts])
-            stacks[key] = le.view(np.uint8 if b == 8 else np.dtype(f"<u{b // 8}"))
-        return stacks[key]
-
-    lo = m.base
-    for rid, pi, r, d in rows:
-        arrive = int((arrivals or {}).get(rid, 0))
-        S = {**COORDS[spec_base(tp.word)], **d["statics"]}
-        E, K, N, G = (int(S[k]) for k in ("E", "K", "N", "G"))
-        NB, KG = -(-N // G), K // G
-        if len(r["args"]) != len(m.rows):
-            raise ValueError(f"row {r['i']} ({d['op_path']}): {len(r['args'])} argument groups, not member {m.key}'s {len(m.rows)} ports")
-        *lead, gw, gs = r["args"]
-        ops = [_packed(_slices(pi, store, weights, rid, arrive, g), b, f"row {r['i']} argument {k}") for k, (g, b) in enumerate(zip(lead, bits))]
-        W = stack(r, pi, rid, arrive, gw, bits[len(lead)], E * N * K, "w").reshape(E, N, K)
-        WS = stack(r, pi, rid, arrive, gs, bits[len(lead) + 1], E * NB * KG, "ws").reshape(E, NB, KG)
-        (member, width, _dt), = d["members"]
-        if int(width) != N:
-            raise ValueError(f"row {r['i']} ({d['op_path']}): member {member} of {width} elements, not its N = {N} coordinates")
-        y, why = store.words(rid, arrive + d["step"], d["op_path"], member, d["row"] * N, (d["row"] + 1) * N)
-        if y is None:
-            raise LookupError(f"row {r['i']} output {member}: {why}")
-        y = _packed([np.asarray(y)], bits[-1], f"row {r['i']} output {member}").reshape(N, -1)
-        wcol = np.ascontiguousarray(W.transpose(1, 0, 2)).reshape(N, -1).view("<u2")
-        scol = np.ascontiguousarray(WS[:, np.arange(N) // G, :].transpose(1, 0, 2)).reshape(N, -1).view("<u2")
-        got = [a.size for a in ops] + [wcol.shape[1], scol.shape[1], y.shape[1]]
-        if got != [w for _, w in m.rows + m.outs]:
-            raise ValueError(f"row {r['i']} ({d['op_path']}): a coordinate's ports of {got} words, not member {m.key}'s "
-                             f"{list(m.rows)} and {list(m.outs)}")
-        for k, a in enumerate(ops):
-            cols[f"in{k}"].append(np.broadcast_to(a.reshape(1, -1), (N, a.size)))
-        cols[f"in{len(ops)}"].append(wcol)
-        cols[f"in{len(ops) + 1}"].append(scol)
-        cols[port].append(y)
-        layer = _LAYER.search(d["op_path"])
-        entries.append([lo, lo + N, rid, arrive + int(d["step"]), int(layer.group(1)) if layer else None, d["op_path"], str(member),
-                        int(d["row"]), int(r["i"])])
-        lo += N
-    if lo - m.base != m.n:
-        raise ValueError(f"{m.key}: its rows hold {lo - m.base} units, not its {m.n} (a chunk is read with its template's others, "
-                         f"`read_all`)")
-    data = {"rows": {p: np.concatenate(cols[p]).astype(np.uint16, copy=False) for p, _ in m.rows},
-            "outs": {p: np.concatenate(cols[p]).astype(np.uint16, copy=False) for p, _ in m.outs}}
-    return data, entries
-
-
 def _as(a: np.ndarray, itemsize: int, n: int, what: str) -> np.ndarray:
     a = np.asarray(a).reshape(-1)
     if a.dtype.itemsize != itemsize or a.size != n:
@@ -641,7 +644,7 @@ def read_all(ms: Sequence[CS.Member], rows: Sequence[list[Row]], store: Any, wei
         layout = template(t).layout
         if layout == "s8":
             out += _read_s8(mine, rs, store, weights, arrivals)
-        elif layout in CHUNKED and mine[0].name:
+        elif mine[0].name:
             out += CR.split(mine, *read(replace(mine[0], n=sum(m.n for m in mine), name=""), rs, store, weights, arrivals))
         else:
             out.append(read(mine[0], rs, store, weights, arrivals))
@@ -715,14 +718,16 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
                  digests: Mapping[str, str] | None = None, committer: dict[str, Any] | None = None,
                  workers: int | None = None, stand_in: Mapping[str, Any] | None = None, tp: Mapping[str, Any] | None = None,
                  index: Mapping[str, Any] | None = None, row_tables: Mapping[str, Any] | None = None,
-                 reuse: Sequence[ProgramIndex] = (), binding: Mapping[str, Any] | None = None) -> dict[str, Any]:
+                 reuse: Sequence[ProgramIndex] = (), binding: Mapping[str, Any] | None = None,
+                 transfer_gates: Sequence[str] = ()) -> dict[str, Any]:
     """Commit the verifier's partition's units of a run whose roots are final and write the window's files into ``out_dir``:
     the registration (core's v1 record, its window the run root ``run_root`` and the provenance: the scheme the values were read
     under (``commitment``: the reader's committer's, rows-sha512 by default or vllm-v1 by name), the research run ``run``, the row, the
     committer and the served Programs' ``digests``), ``partition.json``, the index and M0's bodies.  The window is ``served``;
     with ``stand_in`` (its ``of`` and ``link``), a ``stand-in`` with them in its provenance.  A TP rank's window (`pipeline.tp.
     serving_rows`) gives its run as a string, its world and roots as ``tp``, its ProgramIndex arguments as ``index`` and the index it
-    loaded its Programs with as ``reuse``.  A
+    loaded its Programs with as ``reuse``.  ``transfer_gates`` are the templates the registered compiler lists as holding transfer
+    gates, which the window's law proves whole (`population`).  A
     row-table layout takes the serving loop's ``row_tables``: ``{"context": <hex>, "key": <the run's row key>, "step_roots":
     {engine step: root}}`` (`commit.row_tables.step_roots`), which the window's step roots must be.  It reads the committed values
     and writes only ``out_dir``.  For Programs a registered compiler made from advice, the provenance also carries ``binding``: the
@@ -732,7 +737,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     pf = json.loads(Path(partition_file).read_text())
     rt = row_tables or {}
     window, rows = population(programs, pf, run_root if isinstance(run_root, str) else bytes(run_root).hex(), dirs, index, arrivals,
-                              rt.get("context", ""), reuse)
+                              rt.get("context", ""), reuse, transfer_gates)
     ms = window.members
     store = CommittedStore.of_record(bmap, committed, manifest)
     got = read_all(ms, rows, store, weights, arrivals)

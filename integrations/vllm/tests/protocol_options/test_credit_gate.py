@@ -924,7 +924,11 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     st, seen = [_statement(tmp_path / "c0", 0, len(drawn))], []
     out = _credit(auditor, rec, st, run=_verifier(drawn, seen=seen))
     assert out["manifest"] is None and out["window"] is None, out
-    assert out["calls"] == out["credit"] == [0] and out["eps"] == str(CR.established(LAYOUT, [0], k))
+    served = [row[CR.SERVED_ROWS] for row in rec["calls"]]
+    eps = CR.established(LAYOUT, [0], served, k)
+    assert out["calls"] == out["credit"] == [0] and out["eps"] == (None if eps is None else str(eps))
+    assert 0 < served[0] < LAYOUT["m"]
+    assert CR.credited_work(LAYOUT, [0], served) == served[0] * LAYOUT["linears"][0][1] * LAYOUT["linears"][0][2]
     (got,) = seen
     assert got["circuit_sha512"] == FILES[f"k{K}"]
     root, digest = auditor.window["root"], _circuit()
@@ -940,7 +944,8 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     ledger = PHC.Ledger.load([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path], main=CH.MAIN)
     evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, st, _descriptor())
     got, why = PHC.period_credit(ledger, PERIOD, [evidence], run=_verifier(drawn))
-    assert why is None and got == {"windows": [[0]], "k": k, "delta": str(CR.DELTA), "eps": [out["eps"]]}, why
+    assert why is None and got == {"windows": [[0]], "work": [CR.credited_work(LAYOUT, [0], served)], "k": k,
+                                   "delta": str(CR.DELTA), "eps": [out["eps"]]}, why
     unpinned = PHC.Ledger.load([auditor.ledger.path], auditor.key, main=CH.MAIN)
     assert PHC.period_credit(unpinned, PERIOD, [evidence], run=_verifier(drawn))[1] == (
         "circuit", f"window 0 of period {PERIOD} doesn't count toward it, so the period earns nothing: {LC.NO_PINS}")

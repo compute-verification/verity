@@ -52,6 +52,7 @@
   "Flock.Test.NetAt",
   "Flock.Test.MaskLog",
   "Flock.Test.FrameStep",
+  "Flock.Test.RegionBytes",
   "VStar"
  ],
  "exempt": {

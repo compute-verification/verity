@@ -128,7 +128,7 @@ def credit(d: dict, statements, files=None):
 
 
 def _credited(d: dict) -> list[int]:
-    return [i for i, row in enumerate(d["calls"]) if row[Cr.CREDIT]]
+    return [i for i, row in enumerate(d["calls"]) if row[Cr.CREDIT] and row[Cr.SERVED_ROWS] > 0]
 
 
 @pytest.mark.parametrize("seed", SEEDS)
@@ -253,7 +253,7 @@ def _seeded(d: dict, s: dict, roots: tuple[str, str]) -> dict:
     call's own: every other port credit's."""
     program, lay, shape, reg = _files(d, s)
     pub = reg["ports"][Cr.PUB_PORT]
-    u0, n = pub["reads"].index(0), pub["leaves"]
+    u0, n = pub[Cr.G.READS_FROM], pub["leaves"]
     rows, salts, got = Cr.public_table(program, pub["value"], d["salt"], d["window"]["root"], u0, n, roots)
     return {**reg, "ports": {**reg["ports"], Cr.PUB_PORT: {**pub, "root": got.root.hex(), "known": {
         "rows": rows, "salts": [x.hex() for x in salts]}}}}
@@ -287,7 +287,7 @@ def test_a_units_public_row_is_its_calls_own_salt_position_and_roots(seed, tmp_p
         a, b = (reg["ports"][f"a_k{k}_0"], reg["ports"][f"b_k{k}_0"])
         u0, size = sum(n for n, _w in Cr.call_work(lay)[:c]), Cr.call_work(lay)[c][0]
         assert pub["value"].endswith(f"pub@{c}") and pub["leaves"] == size and pub["words"] == 100
-        assert pub["reads"] == [None] * u0 + list(range(size))
+        assert (pub[Cr.G.READS_FROM], pub["reads"]) == (u0, list(range(size)))
         assert pub["known"]["rows"] == [Cr.CC.public_words(bytes.fromhex(d["salt"]), u0 + t, (
             bytes.fromhex(a["root"]), bytes.fromhex(b["root"]))) for t in range(size)]
         assert pub["known"]["salts"] == [Cr.CC.public_row_salt(d["window"]["root"], u0 + t).hex() for t in range(size)]
@@ -351,7 +351,7 @@ def test_a_units_ok_row_is_the_verifiers_one_word_1(seed, tmp_path, verifier):
         c, ok = s["call"], reg["ports"][Cr.OK_PORT]
         u0, size = sum(n for n, _w in Cr.call_work(lay)[:c]), Cr.call_work(lay)[c][0]
         assert ok["value"] == f"{shape['prefix']}ok" and ok["leaves"] == population and ok["words"] == 1
-        assert ok["reads"] == [None] * u0 + list(range(u0, u0 + size))
+        assert (ok[Cr.G.READS_FROM], ok["reads"]) == (u0, list(range(u0, u0 + size)))
         assert ok["known"] == {"rows": [[1]] * population, "salts": [Cr.CC.ok_salt(w, u).hex() for u in range(population)]}
         assert ok["domain"] == Cr.G.domain(program, ok["value"], 1, population, window=w).domain_id.hex()
     assert credit(d, statements) == (_credited(d), None)
