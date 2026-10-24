@@ -31,12 +31,10 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   deployed shape, below the 100-bit floor and the 2^-128 target under every weight (ASK-73). Route 2C's bound λ₂
   (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`, about 165.8), but
   `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still
-  open: `PartChecksB`, `PartOpensB` (at staged V\* statements) and `DecompB` (`RecDeploy.ksLin2_deployed_full`, at
-  `recTr`, a model of the coin server's record that lists every inner round, and the last round's pieces at the parts
-  that commit the earlier rounds). At the coin server's record read by `recRead`
-  (`RecDeploy.ksLin2_deployed_partAccepts`), `PartOpensB` is proved and `PartChecksB` is no premise of its own
-  (`VStarB.exists_chk_iff`), so what stays open there is `DecompB` at what each part's circuit accepts (`PartAccepts`),
-  the readers' `ReadersTrue`, and `recRead` reading the transcript back (`ReadsBackB`).
+  open. At the coin server's record (`recTr`) read by `recRead` (`RecDeploy.ksLin2_deployed_partAccepts`), `PartOpensB`
+  is proved, `PartChecksB` is no premise of its own (`VStarB.exists_chk_iff`) and `recRead` reads the record back
+  (`readsBack_recTr`), so what stays open there is `DecompB` at what each part's circuit accepts (`PartAccepts`) and
+  the readers' `ReadersTrue`.
   Holo statements are candidate 3's own model, and `BitsLin2` at the dense
   statements follows from it (`bitsLin2On_of_ksLin2On`).
 - **The salts** (Daniel, 9 Oct, decisions 4(a) and 4(c)). C-Flock's prover reads every hm96 leaf salt, 192 bytes a leaf,
