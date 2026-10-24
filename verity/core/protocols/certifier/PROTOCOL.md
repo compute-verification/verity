@@ -404,11 +404,13 @@ vocab[id] in the circuit was set aside: each frame would need a hidden read of t
 choice of up to F − 1 bits a response that no template fixes.
 
 **(b) Decision: every cell, with the advice's map.** The map is a function of the advice: for each cell, the output
-the warden must have released there, or a pad (`window_map`). Advice request i's stream is q = order[i], its arrival
-ordinal (advice v1's order permutation, (c)). Bucket t's outputs, those whose release bucket is w·T + t, fill its
-first cells sorted by (stream, index), the order the warden releases a bucket in, and pads fill the rest. Each
-output's entry in the window's port is e = σ·P + row: σ is its step's place among the window's steps, sorted and
-padded to S. The unit reads the map as 8 bytes a cell (q and e as u32be, a pad's all 0xFF).
+the warden must have released there, or a pad (`window_map`). Advice request i's stream is q = order[i] + 1, its
+ingress ordinal on the wire: order[i] is its arrival order from 0 (advice v1's order permutation, (c)), and the wire
+numbers from 1, as `active.Requests` streams and CERT-VARLEN's compact record carries it (#3650). Bucket t's outputs,
+those whose release bucket is w·T + t, fill its first cells sorted by (stream, index), the order the warden releases
+a bucket in, and pads fill the rest. Each output's entry in the window's port is e = σ·P + row: σ is its step's place
+among the window's steps, sorted and padded to S. The unit reads the map as 8 bytes a cell (q and e as u32be, a pad's
+all 0xFF, which no stream from 1 below 2^32 − 1 is).
 - **The advice is private** (Daniel, 23 Oct, 9:55 PM PDT: it is never published; it enters the circuit builder and is
   proved in zero knowledge). v4 computes the map in the clear from the opened advice v0, as N2-ADVICE's `advised`
   reads it, and takes the map and the steps as public inputs. That is the **named gap**, the one PROVE-PATH's compile
@@ -445,10 +447,10 @@ padded to S. The unit reads the map as 8 bytes a cell (q and e as u32be, a pad's
   found that the engine admits in the API server's body-read order, not in the release order: 2,970 inversions on its
   heavy trace and 3 on smallkv. Advice v0 numbers requests by first row, the engine's admission, so on such a link a
   map whose q is the advice's number refuses honest traffic: 18 of the heavy trace's 19 windows of 16 buckets. So the
-  map puts advice request i on stream order[i], the permutation advice v1 decodes against the certified record (the
-  replay's requests in arrival order, ENC-DERIVED's walk, its misses sent as `order` and charged as advice:
-  TRACE-CORPUS's 2,194 bits on the heavy trace, 30 on smallkv), and `window_map(…, order)` sorts each bucket by
-  (order[i], index). Every window of the heavy trace's honest egress is accepted through it
+  map puts advice request i on stream order[i] + 1, through the permutation advice v1 decodes against the certified
+  record (the replay's requests in arrival order, ENC-DERIVED's walk, its misses sent as `order` and charged as
+  advice: TRACE-CORPUS's 2,194 bits on the heavy trace, 30 on smallkv), and `window_map(…, order)` sorts each bucket
+  by (order[i], index). Every window of the heavy trace's honest egress is accepted through it
   (`test_the_heavy_traces_honest_egress_is_accepted_through_its_order`, on
   `verity/core/protocols/certifier/tests/fixtures/warden-heavy-order.json`), and a permutation other than the
   warden's is refused (`test_a_request_admitted_ahead_of_an_earlier_arrival_is_refused`).
@@ -476,22 +478,23 @@ padded to S. The unit reads the map as 8 bytes a cell (q and e as u32be, a pad's
   One field value is accepted at each cell, so the channel is zero bits. That the advice's finish and output_len
   follow from its ids by the stop rule is the compile unit's (advice v1's `finish`). The map record stays 8 bytes,
   with f in e's top two bits (none 0, `length` 1, `eos` 2), which needs E < 2^30 (2^20 served). A record's ordinal
-  is at least 1, so no record is a pad: with streams numbered from 0, the record carries q + 1, and the unit holds it
-  to order[i] + 1. The unit is the tie's compact form, owner network-accounting (IO-TIE): `IoTieCell`'s parse of the
-  record (ok, data, the ordinal and the field, zero fill after the record) and `IoTieMatch`'s check of the field
-  against f, the routed id and the EOS ids. It is built when #3650 lands; until then the tie reads id-event cells,
-  whose `finish_reason` is the template's null and which carry no finish.
+  is at least 1, so no record is a pad, and it is the map's stream, order[i] + 1. The unit is the tie's compact form,
+  owner network-accounting (IO-TIE): `IoTieCell`'s parse of the record (ok, data, the ordinal and the field, zero
+  fill after the record) and `IoTieMatch`'s check of the field against f, the routed id and the EOS ids. It is built
+  when #3650 lands; until then the tie reads id-event cells, whose `finish_reason` is the template's null and which
+  carry no finish.
 
 **The two ingress ties.** N2-ADVICE derives each request's ingress end from advice v0's prompt lengths. That rests on
 two ties between the advice's requests and the warden's certified ingress record:
 - **Each request's arrival ordinal is order[i]: checked in this unit.** The advice numbers requests in order of first
-  row (`advice` validates it), and the map's q for request i is order[i] ((c)). The warden writes each data cell's
-  stream as its request's arrival ordinal on the link, and the unit holds it to q. Every request has an output
-  (`output_len ≥ 1`), released in one of the session's windows. So on a link whose every egress window is accepted,
-  advice request i is the link's arrival order[i]. An order other than the warden's, or a server that admits a later
-  arrival first under v0's identity, puts outputs on a stream the map doesn't name, and the window refuses
-  (`test_a_request_admitted_ahead_of_an_earlier_arrival_is_refused`). The premise is the warden's numbering: the proxy
-  forwards whole requests, one connection each, in the order the warden numbers them.
+  row (`advice` validates it), and the map's q for request i is order[i] + 1 ((b), (c)). The warden writes each data
+  cell's stream as its request's ingress ordinal on the link, from 1, and the unit holds it to q. Every request has an
+  output (`output_len ≥ 1`), released in one of the session's windows. So on a link whose every egress window is
+  accepted, advice request i is the link's arrival order[i] (from 0; ordinal order[i] + 1 on the wire). An order
+  other than the warden's, or a server that admits a later arrival first under v0's identity, puts outputs on a
+  stream the map doesn't name, and the window refuses
+  (`test_a_request_admitted_ahead_of_an_earlier_arrival_is_refused`). The premise is the warden's numbering: the
+  proxy forwards whole requests, one connection each, in the order the warden numbers them.
 - **Each request's prompt_len is its certified ingress record's: checked by the ingress tie, not here.** The advice's
   prompt_len must be the number of prompt fields in the request the warden certified on ingress. This unit reads
   egress only; `IoTieRequest` ("The ingress tie" below) reads the ingress cells. The ids' binding to `c00.input/ids`
@@ -665,8 +668,8 @@ large hasn't been measured.
 
 **What the map and the port must be.** For the advice's output k = (step, row, request, index), released in the window
 (`release[k] // T = w`):
-- q is order[`request`], its request's arrival ordinal under advice v1's order permutation, which the unit holds to
-  the warden's stream ("The two ingress ties");
+- q is order[`request`] + 1, its request's ingress ordinal on the wire under advice v1's order permutation, which
+  the unit holds to the warden's stream ("The two ingress ties");
 - its cell is in bucket t = `release[k]` − w·T, at its place in the bucket's (q, index) order;
 - e = σ·P + `row`, with σ the place of `step` among the window's steps;
 - the id is port row `step`'s `row`-th id: `runner.sampler/sampled_token_ids` of step `step` at batch row `row`.
@@ -818,9 +821,8 @@ recomputes it. The reference is `io_tie.data_cell`, `pad_cell`, `bucket_rows`, `
     payload follows, `id_event(id)`: `ID_EVENT_HEAD`, the id right-aligned in 10 decimal characters (`%10d`), then
     `,"finish_reason":null}]}\n\n`. Zero fill runs to B.
   - The server writes the payload; the warden writes the header and the fill.
-- **The stream** is q, the request's ingress ordinal on the link counted from 0 over the session: the index of the
-  request in advice v0's `requests` and the map's q. `active.Requests` numbers its streams from 1, so its stream is q +
-  1.
+- **The stream** is the request's ingress ordinal on the link, counted from 1 over the session as `active.Requests`
+  numbers its streams: order[i] + 1 for advice request i (order[i] its arrival order from 0), the map's q.
 - **A bucket's order:** its data cells first, sorted by stream, each stream's cells in their order; then pads to R
   cells.
 - **Row t,** for t in 0 … T − 1, is bucket t's R cells concatenated: R·B bytes, 25,088 at the rehearsal (R = 98) and

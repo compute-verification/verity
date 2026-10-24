@@ -71,7 +71,7 @@ def test_a_variable_length_response_has_its_map():
         p = IT.parse_cell(c)
         if p.data:
             counts[p.stream] = counts.get(p.stream, 0) + 1
-    assert counts == lengths
+    assert counts == {q + 1: n for q, n in lengths.items()}
     tampers = _cell_tampers(inst)
     for bad in (tampers["a dropped output"], tampers["a duplicated cell"]):
         assert not IT.cells_match(BIG, bad, inst.map, inst.port)
@@ -82,7 +82,7 @@ def test_a_buckets_order_carries_nothing():
     the order is a function of which frames the bucket holds, which advice v0's release buckets say and charge."""
     one = IT.Shape(B, 2, 8, P=8, S=8, DS=4)
     inst = commit(one, serve(one, {3: (0, [10, 11]), 8: (4, [12, 13]), 20: (0, [14])}, 14, [5, 0]))
-    assert IT.reference(inst) and [IT.parse_cell(c).stream for c in inst.cells[:5]] == [3, 3, 8, 8, 20]
+    assert IT.reference(inst) and [IT.parse_cell(c).stream for c in inst.cells[:5]] == [4, 4, 9, 9, 21]
     accepted = 0
     for order in itertools.permutations(range(5)):
         cells = [*(inst.cells[k] for k in order), *inst.cells[5:]]

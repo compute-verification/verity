@@ -50,7 +50,8 @@ def serve(shape: IT.Shape, responses: dict[int, tuple[int, list[int]]], seed: in
           arrival: dict[int, int] | None = None, spread: int = 3) -> Served:
     """Request q's outputs j0, j0 + 1, … (`responses[q] = (j0, ids)`) released in window `WINDOW`: interleaved at
     random in each request's order, cut into buckets of random occupancy (or `occupancy`), each bucket released
-    left-packed and sorted by stream, request q's cells on stream `arrival[q]` (its ingress ordinal, q by default).
+    left-packed and sorted by stream, request q's cells on stream `arrival[q]` + 1 (its ingress ordinal on the wire,
+    `arrival[q]` its arrival order from 0, q by default).
     Output j of request q is sampled at step 1 + start_q + j − j0 (start_q below `spread`) in batch row q's rank, and
     each request has an output in the windows before (when j0 > 0) and after; the Commit's other ids are random."""
     rng = random.Random(seed)
@@ -80,7 +81,7 @@ def serve(shape: IT.Shape, responses: dict[int, tuple[int, list[int]]], seed: in
     outputs, release, ids = [], [], {}
     for i, q, k in placed:
         j0, xs = responses[q]
-        cells[i] = IT.data_cell(xs[k], arrival.get(q, q), shape.B)
+        cells[i] = IT.data_cell(xs[k], arrival.get(q, q) + 1, shape.B)
         o = output(q, j0 + k)
         outputs.append(o)
         release.append(WINDOW * shape.T + shape.bucket(i))
@@ -164,21 +165,26 @@ def test_a_cell_parses_to_its_one_reading():
 
 def test_the_map_is_the_windows_outputs_in_the_wardens_order():
     """Window 7 of T = 3 is buckets 21 … 23: bucket 21 releases request 5's output 0 and request 2's output 3, which
-    the warden sorts by stream; bucket 22 request 5's output 1; the outputs at buckets 20 and 24 are other windows'."""
+    the warden sorts by stream, request q's q + 1 on the wire; bucket 22 request 5's output 1; the outputs at buckets
+    20 and 24 are other windows'."""
     sh = IT.Shape(256, 3, 2, P=4, S=3, DS=3)
     outputs = [IT.Output(4, 1, 5, 0), IT.Output(4, 0, 2, 3), IT.Output(5, 1, 5, 1), IT.Output(5, 0, 2, 4), IT.Output(3, 2, 9, 0)]
     cmap, steps = IT.window_map(sh, outputs, [21, 21, 22, 24, 20], 7)
     assert steps == (4, 5, 5)
-    assert cmap == (IT.MapEntry(2, 0), IT.MapEntry(5, 1), IT.MapEntry(5, 5), None, None, None)
-    assert IT.map_bytes(cmap) == IT.MAP.pack(2, 0) + IT.MAP.pack(5, 1) + IT.MAP.pack(5, 5) + b"\xff" * 24
+    assert cmap == (IT.MapEntry(3, 0), IT.MapEntry(6, 1), IT.MapEntry(6, 5), None, None, None)
+    assert IT.map_bytes(cmap) == IT.MAP.pack(3, 0) + IT.MAP.pack(6, 1) + IT.MAP.pack(6, 5) + b"\xff" * 24
     assert IT.window_map(sh, outputs, [0] * 5, 7) == ((None,) * 6, (0, 0, 0))
     order = list(range(10))
     order[2], order[5] = 5, 2
     assert IT.window_map(sh, outputs, [21, 21, 22, 24, 20], 7, order)[0] == (
-        IT.MapEntry(2, 1), IT.MapEntry(5, 0), IT.MapEntry(2, 5), None, None, None)
+        IT.MapEntry(3, 1), IT.MapEntry(6, 0), IT.MapEntry(3, 5), None, None, None)
     for bad in (order[:9], [1, *order[1:]], order[:5] + [10] + order[6:]):
         with pytest.raises(ValueError, match="permutation"):
             IT.window_map(sh, outputs, [21, 21, 22, 24, 20], 7, bad)
+    last = [IT.Output(4, 0, IT.EMPTY - 2, 0)]
+    assert IT.window_map(sh, last, [21], 7)[0][0] == IT.MapEntry(IT.EMPTY - 1, 0)
+    with pytest.raises(ValueError, match="stream from 1 below 2"):
+        IT.window_map(sh, [IT.Output(4, 0, IT.EMPTY - 1, 0)], [21], 7)
     with pytest.raises(ValueError, match="more than R"):
         IT.window_map(sh, outputs, [21, 21, 21, 24, 20], 7)
     with pytest.raises(ValueError, match="more than S"):
@@ -357,11 +363,11 @@ def test_a_request_admitted_ahead_of_an_earlier_arrival_is_refused():
 
 def serve_trace(shape: IT.Shape, trace: dict) -> tuple[dict[int, list[bytes]], list[IT.Output], list[int], list[bytes]]:
     """A recorded link's egress as the warden serves it, from its order permutation (`order[i]`: advice request i's
-    rank in the warden's release order, its stream), admission buckets and output lengths: request i's output k is
-    sampled at step a_i + k, in the batch row of its rank by i among that step's requests, and released at bucket
-    a_i + k + delay, one cell a stream a bucket (r = 1, the response's framing cells left out). Each bucket's cells are
-    its outputs sorted by stream; ids are synthetic. Returns each bucket's data cells, the advice's outputs and release
-    buckets, and the Commit's rows of sampled ids, one a step."""
+    rank in the warden's release order, its stream order[i] + 1), admission buckets and output lengths: request i's
+    output k is sampled at step a_i + k, in the batch row of its rank by i among that step's requests, and released at
+    bucket a_i + k + delay, one cell a stream a bucket (r = 1, the response's framing cells left out). Each bucket's
+    cells are its outputs sorted by stream; ids are synthetic. Returns each bucket's data cells, the advice's outputs
+    and release buckets, and the Commit's rows of sampled ids, one a step."""
     order, admitted, lens, delay = trace["order"], trace["admitted"], trace["output_len"], trace["delay"]
     batches: dict[int, list[tuple[int, int]]] = {}
     for i, (a, n) in enumerate(zip(admitted, lens, strict=True)):
@@ -376,7 +382,7 @@ def serve_trace(shape: IT.Shape, trace: dict) -> tuple[dict[int, list[bytes]], l
             outputs.append(IT.Output(s, row, i, k))
             release.append(s + delay)
             ids[s, row] = token(i, k)
-        buckets[s + delay] = [IT.data_cell(token(i, k), order[i], shape.B)
+        buckets[s + delay] = [IT.data_cell(token(i, k), order[i] + 1, shape.B)
                               for i, k in sorted(batch, key=lambda ik: order[ik[0]])]
     rows = [IT.port_row([ids.get((s, r), 0) for r in range(shape.P)], shape.P) for s in range(1 << shape.DS)]
     return buckets, outputs, release, rows

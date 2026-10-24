@@ -35,7 +35,7 @@ A spec-level reference for network accounting's timing channel:
 - the I/O tie (`io_tie`), a design (`PROTOCOL.md`, "The I/O tie") and its prototype on a fake upstream, in no Spec:
   every cell of an egress link-window is opened, each a pad or the canonical event of one token id on the stream the
   warden set, and each is the output the advice's map names at its place (`window_map`, from the advice's outputs,
-  release buckets and advice v1's order permutation, each request on its arrival ordinal's stream, accepted on
+  release buckets and advice v1's order permutation, each request on its ingress ordinal's stream from 1, accepted on
   TRACE-CORPUS's heavy trace; the verifier computes it in the clear from the opened advice, the named gap, until the
   map is read in the proof under the advice's hiding root), with the id the Commit sampled for it (the port: one
   hiding row of ids a step, opened under the Commit's root). The warden commits each bucket's cells as one hiding
