@@ -25,7 +25,7 @@
 # worktree of it, with this file's gate.sh and checkpoint.sh sent beside. GATE_KEY is the key's path on GATE_ON (default
 # gate.sh's, under that machine's user's ~/.ssh), PROVER_SSH how GATE_ON reaches PROVER_NODE to read its lease (empty:
 # GATE_ON's /etc/vy/peers line), MAXMIN the prover's `gpu-lease --max-min` (a lease that would run into a booked window
-# of the node's waits it out), CHECKPOINT=0 skips step 1 and GATE_MEM=0 reserves no memory for the gate steps.
+# of the node's waits it out), CHECKPOINT=0 skips step 1 and GATE_MEM=0 reserves no memory for the gate steps or whatif.
 # PROVER_RUN names a prover already launched for PERIOD, which step 4 fires against (step 3 launches none). A dry
 # run's ids go to PERIOD.dry.env. --dry-run runs steps 1 and 2
 # (with DRY=1: no request reaches a gate, and GATE_KEY need not exist), prints step 3, and runs step 4 with DRY=1
@@ -114,7 +114,9 @@ if [ "$VERB" = whatif ]; then
   fi
   AUDITOR_ART=${AUDITOR_ART:-$RUN_ART}
   PROVER_ART=${PROVER_ART:-$(art "$prover")} || { echo "no artifact for $prover yet"; exit 3; }
-  launch whatif --on "$WHATIF_ON" --cwd clone --mem-gb 16 --timeout 30m --store-read --wait \
+  WM=(--mem-gb 16)
+  [ "$GATE_MEM" != 0 ] || WM=()
+  launch whatif --on "$WHATIF_ON" --cwd clone "${WM[@]}" --timeout 30m --store-read --wait \
     --env "RUN_ART=$RUN_ART" --env "SUB=${SUB:?}" --env "AUDITOR_ART=$AUDITOR_ART" --env "PROVER_ART=$PROVER_ART" \
     --env "PERIOD=$PERIOD" --env "PIN=$PIN" --env "COMMIT=$COMMIT" -- bash benchmarks/remote_session/gate_whatif.sh
   exit $?
