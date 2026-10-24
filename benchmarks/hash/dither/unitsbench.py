@@ -26,9 +26,10 @@ zero, no 0xA5 left in the receipts (the row workspaces poisoned too), the call s
 receipt_seed, the no-write control refused, one bit of call 0's row workspace moving exactly call 0's units of row block 0
 and one bit of unit 0's seed_c moving unit 0 alone; then the step in one launch pair (step_multi_j10r: the rows once a
 call, then the units) and its rows alone (step_rows_j10r), beside the build's step_multi. --j10r-sm (with --j10r) gates
-kh_units_multi_j10r_sm on every SM, the served launch whose warps take units from a counter (its receipts, seeds and
-control; its row and seed faults through kh_units_multi_j10r's rows and units alone, the same kernels), and times
-step_multi_j10r_sm and sm_over_j10r. --profile-multi skips the
+kh_units_multi_j10r_sm on every SM (on the SMs whose id % D < Q alone under --smq Q/D, as $DITHER_SO_UNITS_SMQ), the
+served launch whose warps take units from a counter (its receipts, seeds and control; its row and seed faults through
+kh_units_multi_j10r's rows and units alone, the same kernels), and times step_multi_j10r_sm and sm_over_j10r.
+--profile-multi skips the
 timing and runs each gated build's step_multi and step_multi_j10r once between torch.cuda.profiler.start and stop.
 
 A build with kh_units_multi_j10rc (h1u.cu's H1U_JRC: each call's column blocks hashed once a call too, into its workspace
@@ -176,12 +177,12 @@ class MultiJ10R:
     units alone (modes 1, 2) stay kh_units_multi_j10r's, the same rows kernel and unit.  rc: kh_units_multi_j10rc,
     each workspace its call's rows and then its columns (kh_j10r_ws_bytes)."""
 
-    def __init__(self, lib: Lib, entries: list, sm: bool = False, rc: bool = False):
+    def __init__(self, lib: Lib, entries: list, sm: bool = False, rc: bool = False, smq: tuple = (1, 1)):
         if int(lib.h.kh_ucallr_bytes()) != UCALLR.itemsize:
             raise RuntimeError(f"kh_units_multi_j10r's UCallR is {int(lib.h.kh_ucallr_bytes())} bytes, not {UCALLR.itemsize}")
         if sm and rc:
             raise ValueError("MultiJ10R: sm (kh_units_multi_j10r_sm) or rc (kh_units_multi_j10rc), not both")
-        self.lib, self.sm, self.rc = lib, sm, rc
+        self.lib, self.sm, self.rc, self.smq = lib, sm, rc, smq
         self.next = torch.zeros(int(lib.h.kh_smc_words()), dtype=torch.int32, device="cuda") if sm else None
         md = [int(lib.h.kh_digits(c.a.shape[1])) for c, _, _ in entries]
         order = sorted(range(len(entries)), key=lambda i: -md[i])
@@ -206,7 +207,7 @@ class MultiJ10R:
         st = torch.cuda.current_stream().cuda_stream
         if self.sm and mode == 0:
             if rc := self.lib.h.kh_units_multi_j10r_sm(self.tab.data_ptr(), self.n, n, self.rows, self.live.data_ptr(),
-                                                       1, 1, self.next.data_ptr(), st):
+                                                       *self.smq, self.next.data_ptr(), st):
                 raise RuntimeError(f"kh_units_multi_j10r_sm rc {rc}")
             return
         f = self.lib.h.kh_units_multi_j10rc if self.rc else self.lib.h.kh_units_multi_j10r
@@ -214,7 +215,7 @@ class MultiJ10R:
             raise RuntimeError(f"{f.__name__} rc {rc}")
 
 
-def j10r_gate(lib: Lib, cs: list, refs: list, sm: bool = False, rc: bool = False) -> dict:
+def j10r_gate(lib: Lib, cs: list, refs: list, sm: bool = False, rc: bool = False, smq: tuple = (1, 1)) -> dict:
     """kh_units_multi_j10r over one layer's calls: each call's live units against refs (j10r_units.call_receipts, every
     word), its dead units zero, under 0xA5 over the receipts and the row workspaces; seeds against seeds.call_seed and
     receipt_seed; the no-write control (zero units) refused; one bit of call 0's row workspace (row 0's first block) moving
@@ -225,7 +226,7 @@ def j10r_gate(lib: Lib, cs: list, refs: list, sm: bool = False, rc: bool = False
     for c in cs:
         c.j10r_seed()
     outs = [torch.empty_like(c.out) for c in cs]
-    mu = MultiJ10R(lib, [(c, c.b, o) for c, o in zip(cs, outs)], sm=sm, rc=rc)
+    mu = MultiJ10R(lib, [(c, c.b, o) for c, o in zip(cs, outs)], sm=sm, rc=rc, smq=smq)
 
     def poison() -> None:
         for o in outs:
@@ -270,8 +271,9 @@ def j10r_gate(lib: Lib, cs: list, refs: list, sm: bool = False, rc: bool = False
     torch.cuda.synchronize()
     s[0, sw] ^= 1
     seed_moved = moved()
-    r = {"calls": len(cs), "units": mu.units, "sm": sm, "bad_words": bad, "dead_bad_words": dead, "poison_left": left,
-         "seed_bad": seed_bad, "control_bad_words": k_bad, "control_refused": k_bad > 0,
+    r = {"calls": len(cs), "units": mu.units, "sm": sm, **({"smq": "/".join(map(str, smq))} if sm else {}),
+         "bad_words": bad, "dead_bad_words": dead, "poison_left": left, "seed_bad": seed_bad, "control_bad_words": k_bad,
+         "control_refused": k_bad > 0,
          "fault_rows_moved": len(row_moved), "fault_rows_want": len(row_want), "fault_rows_conforming": row_moved == row_want,
          "fault_seed": "sigma_R" if rc else "seed_c", "fault_seed_moved": seed_moved[:8],
          "fault_seed_conforming": seed_moved == [(0, 0)]}
@@ -420,6 +422,9 @@ def main() -> int:
     ap.add_argument("--j10r-sm", action="store_true",
                     help="with --j10r: also gate kh_units_multi_j10r_sm on every SM (the served launch, its warps taking "
                          "units from a counter) and time step_multi_j10r_sm")
+    ap.add_argument("--smq", default="1/1", metavar="Q/D",
+                    help="with --j10r-sm: kh_units_multi_j10r_sm on the SMs whose id %% D < Q alone (the served "
+                         "$DITHER_SO_UNITS_SMQ), gated and timed there")
     ap.add_argument("--profile-multi", action="store_true",
                     help="with --multi: skip the timing and run each gated build's step_multi (and step_multi_j10r) "
                          "once between torch.cuda.profiler.start and stop, for ncu --profile-from-start off")
@@ -428,6 +433,10 @@ def main() -> int:
         ap.error("--j10r and --profile-multi run beside step_multi: give --multi too")
     if args.j10r_sm and not args.j10r:
         ap.error("--j10r-sm runs beside step_multi_j10r: give --j10r too")
+    q, _, den = args.smq.partition("/")
+    if not (q.isdigit() and den.isdigit() and 0 < int(q) <= int(den) <= 256):
+        ap.error(f"--smq {args.smq}: give Q/D with 0 < Q <= D <= 256 (h1u.cu's SMQ_DEN_MAX)")
+    smq = (int(q), int(den))
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     doc_path = out / ("units-prof.json" if args.profile else "units.json")
@@ -439,6 +448,7 @@ def main() -> int:
     sms = props.multi_processor_count
     rng = random.Random(0x55A17)
     doc = {"schema": "dither-a/units/v1", "device": clock.name, "sms": sms, "t": args.t, "m": args.m, "libs": paths,
+           **({"smq": args.smq} if args.j10r_sm else {}),
            "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "reference": "served_h1/receipts.py",
            "linears": {}}
     T, M = args.t, args.m
@@ -529,7 +539,7 @@ def main() -> int:
         for nm in names:
             if nm not in j10r_ok or not libs[nm].j10r_sm:
                 continue
-            g = j10r_gate(libs[nm], [calls[x][nm] for x in linears], refs, sm=True)
+            g = j10r_gate(libs[nm], [calls[x][nm] for x in linears], refs, sm=True, smq=smq)
             doc["j10r_sm_gates"][nm] = g
             print(json.dumps({"j10r_sm": nm, "gate": g}), flush=True)
             if g["ok"]:
@@ -605,7 +615,7 @@ def main() -> int:
             outs = [torch.empty_like(calls[name][nm].out) for _ in range(args.layers) for name in ORDER]
             mu = MultiJ10R(libs[nm], [(calls[name][nm], calls[name][nm].b if layer % 2 == 0 else bcopy[name],
                                        outs[ORDER.index(name) + len(ORDER) * layer])
-                                      for layer in range(args.layers) for name in ORDER], sm=True)
+                                      for layer in range(args.layers) for name in ORDER], sm=True, smq=smq)
             keep.append((mu, outs))
             arms[(nm, "step_multi_j10r_sm")] = (lambda mu: lambda i: mu.run())(mu)
         for nm in timed:
