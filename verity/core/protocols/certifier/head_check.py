@@ -355,14 +355,16 @@ def unit(L: int, T: int, counts: bool):
 
 # --- the gate ---------------------------------------------------------------------------------------------------------
 
-#: a gate's id, `Gate[<Definition id>@<its circuit digest>]_v2`
-GATE = re.compile(r"Gate\[(?P<definition>.+)@(?P<digest>[0-9a-f]{128})\]_v2")
+UNPINNED = "unpinned"
+#: a gate's id, `Gate[<Definition id>@<its pinned circuit digest>]_v2`, or `…@unpinned]_v2` for a size class no sidecar
+#: pins
+GATE = re.compile(rf"Gate\[(?P<definition>.+)@(?P<digest>[0-9a-f]{{128}}|{UNPINNED})\]_v2")
 
 
 def circuit_digest(d) -> str:
     """A Definition's circuit digest: core's `program_digest` of its Program, the digest a C-Flock statement names its
     template by (META `program_digests`, `verity_flock.circuit.program_digests`). It encodes every Definition `d`
-    reaches, the commitment gadgets' Boolean bodies included."""
+    reaches, the commitment gadgets' Boolean bodies included, whose tracing takes the head check minutes."""
     return program_digest(Program(d))
 
 
@@ -371,10 +373,10 @@ def _pins(path: Path) -> dict[str, str]:
     return {fid: pin["sha512"] for fid, pin in json.loads(path.read_text()).get("digests", {}).items()}
 
 
-def pinned_digest(d, pins: Path = PINS) -> str:
+def pinned_digest(d, pins: Path = PINS) -> str | None:
     """`d`'s circuit digest as its module's sidecar pins it (``digests``, which circuit-check holds to `circuit_digest`),
-    else, for a size class no sidecar pins, `circuit_digest` itself."""
-    return _pins(pins).get(d.id) or circuit_digest(d)
+    or None for a size class no sidecar pins: read, never computed."""
+    return _pins(pins).get(d.id)
 
 
 def _gate_only(fid: str) -> Callable[..., int]:
@@ -383,13 +385,14 @@ def _gate_only(fid: str) -> Callable[..., int]:
     return evaluate
 
 
-def gate_of(d, digest: str, what: str) -> PrimitiveDefinition:
-    """`d` as one gate that names it and its circuit digest, `Gate[<d.id>@<digest>]_v2`: its signature, the body left to
-    the Definition the digest binds (`expand`)."""
+def gate_of(d, digest: str | None, what: str) -> PrimitiveDefinition:
+    """`d` as one gate that names it and its pinned circuit digest, `Gate[<d.id>@<digest>]_v2`, or, with no pin,
+    `Gate[<d.id>@unpinned]_v2`, which no proof is accepted for (`pinned`): its signature, the body left to the Definition
+    the digest binds (`expand`)."""
     params, ret = d.signature()
-    return PrimitiveDefinition(f"Gate[{d.id}@{digest}]", 2, params, ret, _gate_only(d.id), register=False,
-                               doc=f"{d.id}, {what}, as one gate naming its circuit digest: the Definition is registered "
-                                   "and circuit-checked")
+    return PrimitiveDefinition(f"Gate[{d.id}@{digest or UNPINNED}]", 2, params, ret, _gate_only(d.id), register=False,
+                               doc=f"{d.id}, {what}, as one gate naming its pinned circuit digest: the Definition is "
+                                   "registered and circuit-checked")
 
 
 @lru_cache(maxsize=None)
@@ -397,20 +400,28 @@ def gate(L: int, T: int, counts: bool) -> PrimitiveDefinition:
     """`unit(L, T, counts)` as one gate of N2's proof unit (`service.LinkWindows.unit`), whose id names the Definition and
     its pinned circuit digest (`pinned_digest`): `Gate[NetworkHeadCheck_v2{L=..,T=..,COUNTS=..}@<digest>]_v2`. So the
     unit's Program digest, which the spec's check and each registration bind, binds the head check's circuit, and a
-    proof of another circuit of the same interface names another Program. The Program holds the gate rather than the
-    Definition's body because the commitment gadgets' Boolean bodies (`Hm96Sha512Leaf`, `FrameV3Node`, `FrameV3Leaf`,
-    `Sha512Compress`) encode to about 140 MB, and the proof service encodes the Program on every registration."""
+    proof of another circuit of the same interface names another Program. A size class no sidecar pins names no digest
+    (`@unpinned`), and no proof of its unit is accepted: give it a root in the sidecar's bindings and pin it with
+    `circuit-check --update-pins`. The Program holds the gate rather than the Definition's body because the commitment
+    gadgets' Boolean bodies (`Hm96Sha512Leaf`, `FrameV3Node`, `FrameV3Leaf`, `Sha512Compress`) encode to about 140 MB,
+    and the proof service encodes the Program on every registration."""
     d = unit(L, T, counts)
     return gate_of(d, pinned_digest(d), "N2's head check")
 
 
+def pinned(g: PrimitiveDefinition) -> bool:
+    """Whether gate `g` names a pinned circuit digest (`gate_of`)."""
+    m = GATE.fullmatch(g.id)
+    return m is not None and m["digest"] != UNPINNED
+
+
 def expand(g: PrimitiveDefinition, d):
     """`d`, the Definition a proof's circuit puts where gate `g` stands, once `d` is the one `g` names: its id and its
-    circuit digest (`circuit_digest`) are the gate's. Raises `ValueError` for any other circuit, one of the same
-    interface included."""
+    circuit digest (`circuit_digest`) are the gate's pinned one. Raises `ValueError` for any other circuit, one of the
+    same interface included, and for a gate that names no pinned digest."""
     m = GATE.fullmatch(g.id)
-    if m is None:
-        raise ValueError(f"{g.id} is not a gate that names its Definition's circuit digest")
+    if m is None or m["digest"] == UNPINNED:
+        raise ValueError(f"{g.id} names no pinned circuit digest: pin its Definition's (`circuit-check --update-pins`)")
     if d.id != m["definition"] or d.signature() != g.signature():
         raise ValueError(f"{g.id} stands for {m['definition']}, not {d.id}")
     if (got := circuit_digest(d)) != m["digest"]:
@@ -550,6 +561,6 @@ def size(target, memo: dict | None = None) -> dict:
 
 
 __all__ = ["GATE", "GRID_BYTES", "HEADS", "Instance", "NetworkHeadCheck", "NetworkHeadCounts", "NetworkHeadFields",
-           "NetworkHidingRead", "NetworkRecordDigest", "NetworkRowDigest", "NetworkSignedDigest", "PINS", "Shape", "ands",
-           "arguments", "circuit_digest", "evaluate", "expand", "gate", "gate_of", "grid_bytes", "pinned_digest",
-           "reference", "reference_parts", "size", "unit"]
+           "NetworkHidingRead", "NetworkRecordDigest", "NetworkRowDigest", "NetworkSignedDigest", "PINS", "Shape",
+           "UNPINNED", "ands", "arguments", "circuit_digest", "evaluate", "expand", "gate", "gate_of", "grid_bytes",
+           "pinned", "pinned_digest", "reference", "reference_parts", "size", "unit"]

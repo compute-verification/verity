@@ -53,7 +53,9 @@ Definition's Program (`head_check.circuit_digest`), the one a C-Flock statement 
 `head_check.circuit-check.json` and held to the Definition by circuit-check. So the Program's digest binds the head
 check's circuit, and the spec, the stream and each registration bind to it: a proof of another circuit with the same
 interface names another Program, which the verifier of record refuses (`LinkWindows.proved`), and a proof's circuit
-puts the Definition where its gate stands only once the digest is the gate's (`head_check.expand`).
+puts the Definition where its gate stands only once the digest is the gate's (`head_check.expand`). The digest is read
+from the pin, never computed, since tracing the gadgets takes minutes: a size class no sidecar pins has a gate that
+names none (`@unpinned`), and no proof of its unit is accepted, while its verdict of record in the clear is unchanged.
 
 The count check is the part of the egress grid check that needs no frame's bytes, and the only grid check on ingress.
 It runs on every link-window, as a structural check must. In a proof it is an equality of each head's 32·T count bits
@@ -72,8 +74,8 @@ certifier's salts, and the four leaves' salts. It accepts when
   (`check_link(grid=False)`): the egress record on its status, its signature and the declared syncs, and the ingress
   record on its status and parameters;
 - and, given the findings of a proof of the unit (`proved`, the verifier of record's run over the delivered proof,
-  `proofs.verify`), every one accepts and names this link's registered Program, whose gates name the pinned circuit
-  digests (`LinkWindows.proved`).
+  `proofs.verify`), every gate of the unit names a pinned circuit digest and every session accepts and names this
+  link's registered Program (`LinkWindows.proved`).
 
 N2 compares no grid in the clear and takes no frames, so its claim is counts only: on every link-window the egress
 head's counts are the profile's (and the ingress head's, where that end declares one), which puts the link's timing at
@@ -495,13 +497,21 @@ class LinkWindows:
             raise ValueError("the opening is not the registered link-window's")
         return reg["roots"][0]["root"]
 
+    def gates(self) -> list[PrimitiveDefinition]:
+        """The unit's gates: each end's head check (`head_check.gate`), and on a served link the served counts'
+        (`served.gate`)."""
+        out = [HC.gate(*self.head_key(d)) for d in (0, 1)]
+        return out if self.served is None else out + [SV.gate(*self.served_key())]
+
     def proved(self, findings: Sequence[Finding]) -> bool:
         """Whether `findings`, the verifier of record's run over a delivered proof of the unit (`proofs.verify`), prove
-        this link's unit: one or more sessions, each accepted and naming the link's registered Program (the partition
-        object's `program`), whose gates name the head checks' and the served counts' pinned circuit digests
-        (`head_check.gate`, `served.gate`). A proof of another circuit with the same interface names another Program."""
+        this link's unit: every gate of it names its Definition's pinned circuit digest (`head_check.pinned`), and one or
+        more sessions each accepted and named the link's registered Program (the partition object's `program`), which
+        binds those digests. A proof of another circuit with the same interface names another Program, and a unit with
+        a size class no sidecar pins has no proof."""
         want = self._partition["program"]
-        return bool(findings) and all(f.accepted and f.program == want for f in findings)
+        return all(HC.pinned(g) for g in self.gates()) and bool(findings) \
+            and all(f.accepted and f.program == want for f in findings)
 
     def verify(self, opening: Opening, draw: S.Draw, syncs: Sequence[ClockSync],
                proved: Sequence[Finding] | None = None) -> dict[str, Any]:
