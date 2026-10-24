@@ -9220,11 +9220,104 @@
    "assumptions": [],
    "type_hash": "af54b25464d2114ccc456297143546c6bbdc761a3fed10e98f5dd01e33ad8142"
   },
+  "Verity.SecurityProofs.AdaEqAmpere": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.AmpereStepComplete": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.AmpereStepHw": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.AmpereStepIff": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.AmpereStepSound": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.AmpereUnitBf16": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.AmpereUnitSound": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.AmpereUnitSoundZero": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.Compose": {
+   "owner": "@proofs"
+  },
   "Verity.SecurityProofs.ComposeCone": {
    "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.ComposeCone : Verity.Guarantees.ComposeCone"],
    "assumptions": [],
    "type_hash": "f565132f61eb73cde2ed8d766ee1d4344bfd8d8939ae9d2120bb9790bcd6f6f7"
+  },
+  "Verity.SecurityProofs.ContainsImplements": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.CorrectOfOpening": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.HopperStepComplete": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.HopperStepHw": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.HopperStepIff": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.HopperStepSound": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.HopperUnitBf16": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.HopperUnitSound": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.HopperUnitSoundZero": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.IsZeroGadget": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.PackSoundComplete": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.PrivateFitsOfLocal": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.PrivateOutBitsLe": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.ProbBatchInduced": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.RangeGadget": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.RefineWrong": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.RegisteredMeets": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.SoundAnd": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.SoundBatch": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.SoundBind": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.SoundInterleave": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.SoundMono": {
+   "owner": "@proofs"
   }
  },
  "shape": {
@@ -9760,37 +9853,37 @@
    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore": "frozen (no-function): Its function is tileCheck8 or tileCheck4, a model in Security/Definitions/Pouw/PearlC rather than executable code, so it fits only if top rules that a Definitions-level check is a named function; it would then be restated with ComputesWords opened and the step's w >= 24 as a definition.",
    "Pouw.SecurityProofs.Theorem1": "lemma: leaves the list under the 5:11 PM ruling",
    "Pouw.SecurityProofs.WorkWeightedSampling": "lemma: leaves the list under the 5:11 PM ruling",
-   "Verity.Guarantees.AdaEqAmpere": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.AmpereStepComplete": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.AmpereStepHw": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.AmpereStepIff": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.AmpereStepSound": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.AmpereUnitBf16": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.AmpereUnitSound": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.AmpereUnitSoundZero": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.Compose": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.ContainsImplements": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.CorrectOfOpening": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.HopperStepComplete": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.HopperStepHw": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.HopperStepIff": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.HopperStepSound": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.HopperUnitBf16": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.HopperUnitSound": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.HopperUnitSoundZero": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.IsZeroGadget": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.PackSoundComplete": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.PrivateFitsOfLocal": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.PrivateOutBitsLe": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.ProbBatchInduced": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.RangeGadget": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.RefineWrong": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.RegisteredMeets": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.SoundAnd": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.SoundBatch": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.SoundBind": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.SoundInterleave": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.SoundMono": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
+   "Verity.SecurityProofs.AdaEqAmpere": "lemma: two pipeline constants are equal by computation, which carries the Ampere guarantees to the Ada pipeline; no input and no function.",
+   "Verity.SecurityProofs.AmpereStepComplete": "completeness: the tensor-core step relation (Security/Definitions/Core/TC/Relation.lean) accepts some witness on every input of tc_dot_total's domain, the honest case of the step's soundness (AmpereStepSound).",
+   "Verity.SecurityProofs.AmpereStepHw": "frozen (no-function,world-unlisted): Like AmpereStepSound, it is about the tensor-core step relation, a model rather than a Lean function, and takes the device model (GemmAmpereStep or GemmHopperStep, Models/Core/Assumptions) and the domain StepInputs as hypotheses that are not on the premises list.",
+   "Verity.SecurityProofs.AmpereStepIff": "frozen (no-function): It is about the tensor-core step relation (Security/Definitions/Core/TC/Relation.lean), a model of verity.ml.tc.relation's constraints rather than a Lean function the verifier runs, and takes its domain (StepInputs, or the unit's operand bounds) as a hypothesis that is not on the premises list.",
+   "Verity.SecurityProofs.AmpereStepSound": "frozen (no-function): It is about the tensor-core step relation (Security/Definitions/Core/TC/Relation.lean), a model of verity.ml.tc.relation's constraints rather than a Lean function the verifier runs, and takes its domain (StepInputs, or the unit's operand bounds) as a hypothesis that is not on the premises list.",
+   "Verity.SecurityProofs.AmpereUnitBf16": "frozen (no-function): It is about the tensor-core step relation (Security/Definitions/Core/TC/Relation.lean), a model of verity.ml.tc.relation's constraints rather than a Lean function the verifier runs, and takes its domain (StepInputs, or the unit's operand bounds) as a hypothesis that is not on the premises list.",
+   "Verity.SecurityProofs.AmpereUnitSound": "frozen (no-function): It is about the tensor-core step relation (Security/Definitions/Core/TC/Relation.lean), a model of verity.ml.tc.relation's constraints rather than a Lean function the verifier runs, and takes its domain (StepInputs, or the unit's operand bounds) as a hypothesis that is not on the premises list.",
+   "Verity.SecurityProofs.AmpereUnitSoundZero": "frozen (no-function): It is about the tensor-core step relation (Security/Definitions/Core/TC/Relation.lean), a model of verity.ml.tc.relation's constraints rather than a Lean function the verifier runs, and takes its domain (StepInputs, or the unit's operand bounds) as a hypothesis that is not on the premises list.",
+   "Verity.SecurityProofs.Compose": "frozen (no-function): Like ComposeCone, it is stated over an arbitrary partition and transcript, and takes the anchors' inputs (InputsAgree) and that no unit is wrong as hypotheses, conditions on the run that are not on the premises list, rather than a function's acceptance.",
+   "Verity.SecurityProofs.ContainsImplements": "lemma: a fact of the circuit model (Security/Definitions/Core/Partition.lean, Declaration.lean) over every circuit, partition, transcript or declaration, which Compose and the protocols build on; not a property of a Lean function.",
+   "Verity.SecurityProofs.CorrectOfOpening": "lemma: a fact of the circuit model (Security/Definitions/Core/Partition.lean, Declaration.lean) over every circuit, partition, transcript or declaration, which Compose and the protocols build on; not a property of a Lean function.",
+   "Verity.SecurityProofs.HopperStepComplete": "completeness: the tensor-core step relation (Security/Definitions/Core/TC/Relation.lean) accepts some witness on every input of tc_dot_total's domain, the honest case of the step's soundness (HopperStepSound).",
+   "Verity.SecurityProofs.HopperStepHw": "frozen (no-function,world-unlisted): Like HopperStepSound, it is about the tensor-core step relation, a model rather than a Lean function, and takes the device model (GemmAmpereStep or GemmHopperStep, Models/Core/Assumptions) and the domain StepInputs as hypotheses that are not on the premises list.",
+   "Verity.SecurityProofs.HopperStepIff": "frozen (no-function): It is about the tensor-core step relation (Security/Definitions/Core/TC/Relation.lean), a model of verity.ml.tc.relation's constraints rather than a Lean function the verifier runs, and takes its domain (StepInputs, or the unit's operand bounds) as a hypothesis that is not on the premises list.",
+   "Verity.SecurityProofs.HopperStepSound": "frozen (no-function): It is about the tensor-core step relation (Security/Definitions/Core/TC/Relation.lean), a model of verity.ml.tc.relation's constraints rather than a Lean function the verifier runs, and takes its domain (StepInputs, or the unit's operand bounds) as a hypothesis that is not on the premises list.",
+   "Verity.SecurityProofs.HopperUnitBf16": "frozen (no-function): It is about the tensor-core step relation (Security/Definitions/Core/TC/Relation.lean), a model of verity.ml.tc.relation's constraints rather than a Lean function the verifier runs, and takes its domain (StepInputs, or the unit's operand bounds) as a hypothesis that is not on the premises list.",
+   "Verity.SecurityProofs.HopperUnitSound": "frozen (no-function): It is about the tensor-core step relation (Security/Definitions/Core/TC/Relation.lean), a model of verity.ml.tc.relation's constraints rather than a Lean function the verifier runs, and takes its domain (StepInputs, or the unit's operand bounds) as a hypothesis that is not on the premises list.",
+   "Verity.SecurityProofs.HopperUnitSoundZero": "frozen (no-function): It is about the tensor-core step relation (Security/Definitions/Core/TC/Relation.lean), a model of verity.ml.tc.relation's constraints rather than a Lean function the verifier runs, and takes its domain (StepInputs, or the unit's operand bounds) as a hypothesis that is not on the premises list.",
+   "Verity.SecurityProofs.IsZeroGadget": "lemma: the census gadget's chunk constraints hold exactly on the predicate they encode (Security/Definitions/Core/TC/Gadgets.lean), an iff over the integers about definitions, not a property of a Lean function.",
+   "Verity.SecurityProofs.PackSoundComplete": "frozen (no-function): It is about pack_relation (Security/Definitions/Core/TC/Relation.lean), a model of the boundary's constraints rather than a Lean function, takes Admissible as a hypothesis that is not on the premises list, and conjoins its soundness with its completeness.",
+   "Verity.SecurityProofs.PrivateFitsOfLocal": "lemma: arithmetic over the width rule of a private partition (Security/Definitions/Core/PrivatePartition.lean) for every circuit and partition; RegisteredMeets is what it is for; not a property of a Lean function.",
+   "Verity.SecurityProofs.PrivateOutBitsLe": "lemma: arithmetic over the width rule of a private partition (Security/Definitions/Core/PrivatePartition.lean) for every circuit and partition; RegisteredMeets is what it is for; not a property of a Lean function.",
+   "Verity.SecurityProofs.ProbBatchInduced": "lemma: an algebra rule of Sound over the game model (Security/Definitions/Core/Game.lean), for every game, claim and error, that protocols state their guarantees from; not a property of a Lean function.",
+   "Verity.SecurityProofs.RangeGadget": "lemma: the census gadget's chunk constraints hold exactly on the predicate they encode (Security/Definitions/Core/TC/Gadgets.lean), an iff over the integers about definitions, not a property of a Lean function.",
+   "Verity.SecurityProofs.RefineWrong": "lemma: a fact of the circuit model (Security/Definitions/Core/Partition.lean, Declaration.lean) over every circuit, partition, transcript or declaration, which Compose and the protocols build on; not a property of a Lean function.",
+   "Verity.SecurityProofs.RegisteredMeets": "frozen (no-function,hash): It is stated over any hash H and any two registrations in the advice model (Security/Definitions/Core/Advice.lean), with the format facts Framing.Separated and Rows.Decodes and the first registration (Registered) as hypotheses that are not on the premises list, rather than a function's acceptance; it ends in a collision among the strings the two registrations hash.",
+   "Verity.SecurityProofs.SoundAnd": "lemma: an algebra rule of Sound over the game model (Security/Definitions/Core/Game.lean), for every game, claim and error, that protocols state their guarantees from; not a property of a Lean function.",
+   "Verity.SecurityProofs.SoundBatch": "lemma: an algebra rule of Sound over the game model (Security/Definitions/Core/Game.lean), for every game, claim and error, that protocols state their guarantees from; not a property of a Lean function.",
+   "Verity.SecurityProofs.SoundBind": "lemma: an algebra rule of Sound over the game model (Security/Definitions/Core/Game.lean), for every game, claim and error, that protocols state their guarantees from; not a property of a Lean function.",
+   "Verity.SecurityProofs.SoundInterleave": "lemma: an algebra rule of Sound over the game model (Security/Definitions/Core/Game.lean), for every game, claim and error, that protocols state their guarantees from; not a property of a Lean function.",
+   "Verity.SecurityProofs.SoundMono": "lemma: an algebra rule of Sound over the game model (Security/Definitions/Core/Game.lean), for every game, claim and error, that protocols state their guarantees from; not a property of a Lean function.",
    "NetTiming.SecurityProofs.CardCountsEqLe": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
    "NetTiming.SecurityProofs.CardFree": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
    "NetTiming.SecurityProofs.CardLeftPacked": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
