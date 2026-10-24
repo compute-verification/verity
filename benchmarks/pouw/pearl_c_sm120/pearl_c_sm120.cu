@@ -67,8 +67,8 @@ DEV void hmma(float* d, const uint32_t* a, const uint32_t* b) {
 // rows; a 4-deep cp.async pipeline of 64-byte stages (two atoms each).  G is the promotion period: every 32 G products (G / 2
 // stages) from +0, promoted by one FADD into the FP32 total; G = 0 is one accumulator over all of K (no promotion).  Every
 // output's chain is the same at either tile.  Rows from i[4] on (0: none) are filler, which nothing reads: a warp whose rows
-// are all filler (decode's padding to 64, past m16) skips its products and stores, so the tensor cores, which bound the
-// 64 x 64 tile, do only the real rows' work; those rows of C~, U and y are left as they were.  Modes:
+// are all filler (decode's padding to 64, past m16) skips its products and stores, and no stage or peel loads its rows of A
+// or P_A, so the tile does only the real rows' work; those rows of C~, U and y are left as they were.  Modes:
 //   PLAIN   y = bf16(total sa sb)
 //   CT      stores C~ (FP32)
 //   PEARLC  stores C~, then four k16 BF16 mma of P_A P_B^T into the total, stores U and y = bf16(U ia ib)
@@ -82,20 +82,20 @@ template <int MODE, int TM, int BN> __host__ __device__ constexpr int gemm_smem(
 DEV uint32_t swz64(int r, int c) { return r * 64 + ((c ^ ((r >> 1) & 3)) << 4); }
 DEV uint32_t swz128(int r, int c) { return r * 128 + ((c ^ (r & 7)) << 4); }
 
-// ROWS rows of 64 bytes at g (row stride ld) into s
-template <int ROWS> DEV void stage_rows(uint8_t* s, const uint8_t* g, int ld, int tid) {
+// the first `rows` (at most ROWS) rows of 64 bytes at g (row stride ld) into s
+template <int ROWS> DEV void stage_rows(uint8_t* s, const uint8_t* g, int ld, int tid, int rows = ROWS) {
 #pragma unroll
   for (int j = 0; j < (ROWS * 4 + NT - 1) / NT; j++) {
     const int idx = tid + j * NT, r = idx >> 2, c = idx & 3;
-    if (ROWS * 4 % NT == 0 || idx < ROWS * 4) cp16(s + swz64(r, c), g + (size_t)r * ld + 16 * c);
+    if ((ROWS * 4 % NT == 0 || idx < ROWS * 4) && r < rows) cp16(s + swz64(r, c), g + (size_t)r * ld + 16 * c);
   }
 }
-// ROWS peel rows of 128 bytes at g into s
-template <int ROWS> DEV void peel_rows(uint8_t* s, const uint8_t* g, int tid) {
+// the first `rows` (at most ROWS) peel rows of 128 bytes at g into s
+template <int ROWS> DEV void peel_rows(uint8_t* s, const uint8_t* g, int tid, int rows = ROWS) {
 #pragma unroll
   for (int j = 0; j < ROWS * 8 / NT; j++) {
     const int idx = tid + j * NT, r = idx >> 3, c = idx & 7;
-    cp16(s + swz128(r, c), g + (size_t)r * PEEL_ROW + 16 * c);
+    if (r < rows) cp16(s + swz128(r, c), g + (size_t)r * PEEL_ROW + 16 * c);
   }
 }
 
@@ -145,16 +145,17 @@ template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
     int tm, tn;
     raster(t, tiles_m, tiles_n, group, tm, tn);
     const bool busy = tm * TM + wm * WM < live;
+    const int rows = min(TM, max(0, (live - tm * TM + WM - 1) / WM * WM));   // the busy warps' rows, all a busy warp reads
     const uint8_t* ga = A + (size_t)tm * TM * K;
     const uint8_t* gb = B + (size_t)tn * BN * K;
     if constexpr (PEEL) {
-      peel_rows<TM>(sPA, reinterpret_cast<const uint8_t*>(a.p[5]) + (size_t)tm * TM * PEEL_ROW, tid);
+      peel_rows<TM>(sPA, reinterpret_cast<const uint8_t*>(a.p[5]) + (size_t)tm * TM * PEEL_ROW, tid, rows);
       peel_rows<BN>(sPB, reinterpret_cast<const uint8_t*>(a.p[6]) + (size_t)tn * BN * PEEL_ROW, tid);
     }
 #pragma unroll
     for (int s = 0; s < STAGES - 1; s++) {
       if (s < KB) {
-        stage_rows<TM>(sA + s * A_ST, ga + s * BK, K, tid);
+        stage_rows<TM>(sA + s * A_ST, ga + s * BK, K, tid, rows);
         stage_rows<BN>(sB + s * B_ST, gb + s * BK, K, tid);
       }
       cp_commit();
@@ -173,7 +174,7 @@ template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
       {
         const int nk = kb + STAGES - 1, s = nk % STAGES;
         if (nk < KB) {
-          stage_rows<TM>(sA + s * A_ST, ga + (size_t)nk * BK, K, tid);
+          stage_rows<TM>(sA + s * A_ST, ga + (size_t)nk * BK, K, tid, rows);
           stage_rows<BN>(sB + s * B_ST, gb + (size_t)nk * BK, K, tid);
         }
         cp_commit();

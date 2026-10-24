@@ -8,7 +8,8 @@
 #     --env GPU_LEASE_WHO=<id> [--env GPUS=2,3] [--env ARMS=...] [--env POINT=b8-p512-mixed] [--env NSYS=0] \
 #     --send numabind.py --send pearl_c_sm120.cubin -- bash benchmarks/pouw/pearl_c_vllm/served_step.sh
 # An ARMS entry ID+VAR=VALUE[+VAR=VALUE] runs arm ID with those variables set, in its own directory (ID_VAR_VALUE): A/B
-# rows in one lease, e.g. pouw-pearl-c-whole,pouw-pearl-c-whole+PEARLC_SPLIT=0.
+# rows in one lease, e.g. pouw-pearl-c-whole,pouw-pearl-c-whole+PEARLC_SPLIT=0; @IN@ in a value is the run's inputs, so
+# pouw-pearl-c-whole+PEARLC_CUBIN=@IN@/before.cubin runs another sent cubin.
 # GPUS: the GPUs the lease may take (gpu-lease --on), SPEC (default llama31-8b-1gpu-pearl-c-whole-served), POINT,
 # WARMUPS (2), REPS (3), MAX_MIN (the lease, 20), MEM_GB (the lease's host memory, 16);
 # GPU_LEASE_TIMED=1 for rows taken inside a booked clean window
@@ -74,6 +75,7 @@ grep -q "RTX PRO 6000 Blackwell" "$OUT/identity.csv" && grep -q ", 12.0," "$OUT/
 rc=0
 for entry in ${ARMS//,/ }; do
   arm=${entry%%+*}; SET=(); [ "$arm" = "$entry" ] || IFS=+ read -ra SET <<< "${entry#*+}"
+  SET=("${SET[@]//@IN@/$IN}")
   d=$OUT/${entry//[:@+=]/_}; mkdir -p "$d"; load "$entry"
   RUN=(env "${SET[@]}" "$VENV/bin/python" "$HERE/served_step.py" run --spec "$SPEC" --arm "$arm" --point "$POINT"
        --warmups "${WARMUPS:-2}" --reps "${REPS:-3}" --out "$d")

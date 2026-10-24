@@ -58,7 +58,7 @@ WK_WARPS = 16                # words_k's block: warps per m16 x n8 tile (pearl_c
 SR_ROWS, SR_MAX_K = 256, 32768   # stats_r (a block a row) for at most SR_ROWS rows of k <= SR_MAX_K, else stats_s5
 #: decode's split kernels (words_k, stats_r); PEARLC_SPLIT=0 runs the kernels they replace (words, stats_s5), the same words
 SPLIT = os.environ.get("PEARLC_SPLIT", "1") != "0"
-#: the 64 x 64 GEMMs on the real rows alone (i4 = m_real: a warp of filler rows skips its products and stores);
+#: the 64 x 64 GEMMs on the real rows alone (i4 = m_real: a warp of filler rows skips its products, stores and A's loads);
 #: PEARLC_LIVE=0 runs them over all m rows, the same real rows
 LIVE = os.environ.get("PEARLC_LIVE", "1") != "0"
 VARIANT_G = {"sm120": 4, "sm120-unpromoted": 0}
