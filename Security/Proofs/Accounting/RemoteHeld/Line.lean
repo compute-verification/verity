@@ -6,7 +6,7 @@ import Properties.Proofs.RemoteAudit.Pooled
 /-!
 # The memory line of record, proved (`Properties.RemoteAudit.Line`: `LineHeld`, `LineHeldIdentity`)
 
-At each outcome where the Lean verifier accepts the record's session (so the audit accepts, `VerdictOfRecord`), the
+At each outcome where the Lean verifier accepts the record's session (so the trace of record accepts, `ofRecord`), the
 receipts' sketch holds and the trace's wrong receipts are at most the session's pooled bound at the line's `δ`
 (`holdsAnd` of `SketchBound` and `Draw.pooledDraw`, so at most the W the line reads: `LineCoversSession` at the
 session's windows, `DrawsOfRecord`), every stretch of the record's line credits what the trace held (`heldAt_of`):
@@ -169,12 +169,15 @@ theorem wrong_le_line {n m : ℕ} {k : Fin n → ℕ} {X : Fin n → Type} {D : 
   rw [hD ω ha] at hline
   exact hw.trans (Properties.RemoteAudit.lineCoversSession n m k X D ω node.delta _ _ _ _ _ _ _ l hline)
 
+/-- The node's `δ` is nonnegative, in the reals. -/
+theorem delta_nonneg (node : Node) : (0 : ℝ) ≤ (node.delta : ℝ) := Rat.cast_nonneg.2 node.delta_mem.1.le
+
 /-- **The memory line of record, link-charged** (`LineHeld`), proved. -/
 theorem lineHeld : LineHeld := by
-  intro n m k X _ D T node rec δs hl hsq hd hS hr hp hcov hk hL hR hC hV hN hW hD hδ
-  have hH := holdsAnd hk (Draw.pooledDraw D T (Rat.cast_nonneg.2 hδ) hL hR hC)
-  refine le_trans (Pouw.pr_mono fun ω hω => ⟨hV ω hω.1, fun h => hω.2 ?_⟩) hH
-  have ha := hV ω hω.1
+  intro n m k X _ D T node rec δs hl hsq hd hS hr hp hcov hk hL hR hC hN hW hD
+  have hH := holdsAnd hk (Draw.pooledDraw D (ofRecord T rec) (delta_nonneg node) hL hR hC)
+  refine le_trans (Pouw.pr_mono fun ω hω => ⟨hω.1, fun h => hω.2 ?_⟩) hH
+  have ha : (ofRecord T rec).accepts ω := hω.1
   have hc := charge_units node
   refine heldAt_of 1 (by omega) ?_ hl ?_ ?_ hsq hd hS hr hp hcov hN hW ha h.1 (wrong_le_line hD ha h.2)
   · intro h0
@@ -186,10 +189,10 @@ theorem lineHeld : LineHeld := by
 
 /-- **The memory line of record, time-held, under Identity** (`LineHeldIdentity`), proved. -/
 theorem lineHeldIdentity : LineHeldIdentity := by
-  intro n m k X _ D T node rec δs hI hsq hd hS hr hp hcov hk hL hR hC hV hN hW hD hδ
-  have hH := holdsAnd hk (Draw.pooledDraw D T (Rat.cast_nonneg.2 hδ) hL hR hC)
-  refine le_trans (Pouw.pr_mono fun ω hω => ⟨hV ω hω.1, fun h => hω.2 ?_⟩) hH
-  have ha := hV ω hω.1
+  intro n m k X _ D T node rec δs hI hsq hd hS hr hp hcov hk hL hR hC hN hW hD
+  have hH := holdsAnd hk (Draw.pooledDraw D (ofRecord T rec) (delta_nonneg node) hL hR hC)
+  refine le_trans (Pouw.pr_mono fun ω hω => ⟨hω.1, fun h => hω.2 ?_⟩) hH
+  have ha : (ofRecord T rec).accepts ω := hω.1
   have hc := charge_units node
   exact heldAt_of 0 (by omega) (fun _ => le_rfl) (links_of_identity hI) (by simpa using hc.1) (by simpa using hc.2.1) hsq hd
     hS hr hp hcov hN hW ha h.1 (wrong_le_line hD ha h.2)

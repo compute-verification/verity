@@ -12,13 +12,14 @@ credits it `span · (N − lost)` registered blocks held over its span, and `max
 weights blocks its passes read on average. `LineHeld` is the one statement that this is true of the trace that produced
 the record:
 
-* **LineHeld** (link-charged, `forms[1]`): on any trace and opening draw meeting the memory model's premises (the links'
-  ceiling `Links`, `SquaringCeiling`, `Disks`, `ChipCeiling`, `Routed`, `Paced` at the record's groups `recordPace`,
-  `Covers`, `SketchBound` at `δs`, and the draw's `Live`, `Refused`, `Counted`) and the record's code-to-model premises
-  (`VerdictOfRecord`, `Registered`, `WindowsOfRecord`, `DrawsOfRecord`, `DeltaOfNode`,
-  `Properties.RemoteAudit.Line.Premises`), the probability that the Lean verifier accepts the record's session and the
-  record's line credits a stretch more than the trace held over its span (`Credits`) is at most `δs + δ`, `δ` the one
-  the line reads its pooled bound at (`Node.delta`). The rates are the node's in the model's units, a tick a
+* **LineHeld** (link-charged, `forms[1]`): on any trace and opening draw whose trace of record (`ofRecord`, the trace
+  with the Lean verifier's verdict on the record as its own) meets the memory model's premises (the links' ceiling
+  `Links`, `SquaringCeiling`, `Disks`, `ChipCeiling`, `Routed`, `Paced` at the record's groups `recordPace`, `Covers`,
+  `SketchBound` at `δs`, and the draw's `Live`, `Refused`, `Counted`) and the record's code-to-model premises
+  (`Registered`, `WindowsOfRecord`, `DrawsOfRecord`, `Properties.RemoteAudit.Line.Premises`), the probability that the
+  Lean verifier accepts the record's session and the record's line credits a stretch more than the trace held over its
+  span (`Credits`) is at most `δs + δ`, `δ` the one the line reads its pooled bound at (`Node.delta`, above 0 and below
+  1 as the line requires). The rates are the node's in the model's units, a tick a
   nanosecond (`Node.squarings` … `Node.chipBlocks`), and the openings' law is the model's
   (`Accounting.Remote.Draw.Openings`).
 * **LineHeldIdentity** (time-held, `forms[0]`): the same under Identity, no block coming in over the links.
@@ -104,29 +105,33 @@ def HeldAt {Ω : Type} (T : Trace Ω) (ω : Ω) (node : Node) (r : Record) (form
     Credits T ω r.groups node.per node.blockBytes x
 
 /-- **The memory line of record, link-charged.** On a trace over a session's coins and the session's opening draw,
-meeting the memory model's premises at the node's rates and the record's groups, and the record's code-to-model
-premises, the probability that the Lean verifier accepts the record's session and a stretch of the record's
-link-charged line credits more than the trace held over its span is at most `δs + δ`, the line's `δ`. -/
+whose trace of record (`ofRecord`: its verdict the Lean verifier's on the record) meets the memory model's premises
+at the node's rates and the record's groups and the record's code-to-model premises, the probability that the Lean
+verifier accepts the record's session and a stretch of the record's link-charged line credits more than the trace
+held over its span is at most `δs + δ`, the line's `δ`. -/
 def LineHeld : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (X : Fin n → Type) [∀ t, Fintype (X t)] (D : Session n m k X)
     (T : Trace (Coins n m k X)) (node : Node) (rec : Coins n m k X → Record) (δs : ℝ),
-    Links T node.link node.linkBurst → SquaringCeiling T node.squarings node.encode node.rebuildBurst →
-    Disks T node.disk node.diskBurst → ChipCeiling T node.chipBlocks → Routed T → Paced T (recordPace node rec) →
-    Covers T → SketchBound T δs → Live D → Refused D T → Counted D T →
-    VerdictOfRecord T rec → Registered T node → WindowsOfRecord T node rec → DrawsOfRecord D T rec →
-    DeltaOfNode node →
-    Pouw.pr (fun ω => Verified (rec ω) ∧ ¬ HeldAt T ω node (rec ω) 1) ≤ δs + node.delta
+    Links (ofRecord T rec) node.link node.linkBurst →
+    SquaringCeiling (ofRecord T rec) node.squarings node.encode node.rebuildBurst →
+    Disks (ofRecord T rec) node.disk node.diskBurst → ChipCeiling (ofRecord T rec) node.chipBlocks →
+    Routed (ofRecord T rec) → Paced (ofRecord T rec) (recordPace node rec) → Covers (ofRecord T rec) →
+    SketchBound (ofRecord T rec) δs → Live D → Refused D (ofRecord T rec) → Counted D (ofRecord T rec) →
+    Registered (ofRecord T rec) node → WindowsOfRecord (ofRecord T rec) node rec →
+    DrawsOfRecord D (ofRecord T rec) rec →
+    Pouw.pr (fun ω => Verified (rec ω) ∧ ¬ HeldAt (ofRecord T rec) ω node (rec ω) 1) ≤ δs + node.delta
 
 /-- **The memory line of record, time-held, under Identity.** `LineHeld` for the record's time-held line, with no
 block coming in over the node's boundary links (`Identity`) in place of their ceiling. -/
 def LineHeldIdentity : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (X : Fin n → Type) [∀ t, Fintype (X t)] (D : Session n m k X)
     (T : Trace (Coins n m k X)) (node : Node) (rec : Coins n m k X → Record) (δs : ℝ),
-    Identity T → SquaringCeiling T node.squarings node.encode node.rebuildBurst →
-    Disks T node.disk node.diskBurst → ChipCeiling T node.chipBlocks → Routed T → Paced T (recordPace node rec) →
-    Covers T → SketchBound T δs → Live D → Refused D T → Counted D T →
-    VerdictOfRecord T rec → Registered T node → WindowsOfRecord T node rec → DrawsOfRecord D T rec →
-    DeltaOfNode node →
-    Pouw.pr (fun ω => Verified (rec ω) ∧ ¬ HeldAt T ω node (rec ω) 0) ≤ δs + node.delta
+    Identity (ofRecord T rec) → SquaringCeiling (ofRecord T rec) node.squarings node.encode node.rebuildBurst →
+    Disks (ofRecord T rec) node.disk node.diskBurst → ChipCeiling (ofRecord T rec) node.chipBlocks →
+    Routed (ofRecord T rec) → Paced (ofRecord T rec) (recordPace node rec) → Covers (ofRecord T rec) →
+    SketchBound (ofRecord T rec) δs → Live D → Refused D (ofRecord T rec) → Counted D (ofRecord T rec) →
+    Registered (ofRecord T rec) node → WindowsOfRecord (ofRecord T rec) node rec →
+    DrawsOfRecord D (ofRecord T rec) rec →
+    Pouw.pr (fun ω => Verified (rec ω) ∧ ¬ HeldAt (ofRecord T rec) ω node (rec ω) 0) ≤ δs + node.delta
 
 end Properties.RemoteAudit.Line
