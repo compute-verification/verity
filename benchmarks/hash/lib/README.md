@@ -22,7 +22,8 @@ What it computes:
 - An H1 table's chunk leaves past K = 4096 (SPLITK, `weights.chunks`): `vc_chunk_rows_launch` lays [R, K] codes and their
   [R] scales out as n R leaves, leaf n r + c row r's c-th K/n codes then its scale, which `vc_commit_rows_launch` commits as
   row/v2 rows under the value's `registered.domain` (`vclib.chunk_rows`). At K <= 4096 n = 1 and the leaves are the rows.
-  `conformance.py`'s `case_splitk` holds it to SPLITK's two vectors (`a/14336@0`, `b/6144`) leaf for leaf.
+  `conformance.py`'s `case_splitk` holds it to SPLITK's two vectors (`a/14336@0`, `b/6144`, in
+  `verity/core/protocols/pouw/tests/vectors/splitk_rows.json`) leaf for leaf.
 
 ## The contract
 

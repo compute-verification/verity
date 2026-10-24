@@ -5,9 +5,9 @@ testpaths = ["tests"]
 
 [tool.verity.tests]
 # tests/ imports conformance.py, which imports the references it checks the library against: verity.ml.commitments (hm96,
-# frame-v3-sha512, rowleaf, multiproof), pouw's audit, pearl_c (A's tree, -h3) and weights (SPLITK's chunk leaves),
-# sampled_proofs' Registered.commit (their registration), and commit_gpu's reference.py (the PRF salts); circuits, crypto
-# and randomness are what those import.
+# frame-v3-sha512, rowleaf, multiproof), pouw's audit, pearl_c (A's tree, -h3), SPLITK's vectors and their generator
+# (pouw/tests/splitk_rows_vectors.py: h1zy's chunk leaves under sampled_proofs' Registered.commit), and commit_gpu's
+# reference.py (the PRF salts); circuits, crypto and randomness are what those import.
 inputs = [
   "verity/__init__.py",
   "verity/errors.py",

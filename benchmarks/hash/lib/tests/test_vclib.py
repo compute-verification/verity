@@ -20,7 +20,8 @@ import conformance as cf  # noqa: E402
 import vclib  # noqa: E402
 from verity.ml.commitments import RangeIndexedDomain, hm96  # noqa: E402
 from verity.ml.commitments.merkle import CommitmentDomain, MerkleTree  # noqa: E402
-from verity.ml.commitments.rowleaf import ROLE_X, SCHEMA_HM96_SHA512_ROW, row_bytes, sha512_row_digest, sha512_row_prefix  # noqa: E402
+from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, row_bytes, sha512_row_digest,  # noqa: E402
+                                           sha512_row_prefix, sha512_row_v2_digest)
 
 HEADER = (LIB / "vc.h").read_text()
 SOURCE = (LIB / "vc.cu").read_text()
@@ -179,40 +180,24 @@ def test_parse_openings_refuses_a_buffer_of_another_size():
         vclib.parse_openings(bytes(vclib.OPEN_HEAD), 2, 1)
 
 
-@pytest.mark.parametrize("case", cf.SPLITK, ids=[c["case"] for c in cf.SPLITK])
-def test_the_chunk_leaf_reference_is_splitks_vectors(case):
-    """conformance's reference for case_splitk (weights.chunks and row_words under Registered.commit, credit's reading of
-    a/<K>@<s> and b/<K>) gives SPLITK's pinned domain, root and every leaf's words, row digest and frame leaf."""
-    _rows, reg = cf.splitk_reference(case)
-    words = [bytes(b for w in r for b in (w & 0xFF, w >> 8)) for r in reg.rows]
-    assert (reg.leaves, reg.words) == (case["leaves"], case["words"]) == (
-        cf.Wt.chunks(case["k"]) * case["rows"], cf.Wt.leaf_words(case["k"]))
-    assert reg.domain.domain_id.hex() == case["domain"] and reg.root.hex() == case["root"]
-    assert cf.leaves_digest(hashlib.sha512(w).digest() for w in words) == case["words_sha512"]
-    assert cf.leaves_digest(cf.G.row_digest(r, cf.G.WORD_BITS, cf.G.SCHEMA_V2) for r in reg.rows) == case["row_digest"]
-    assert cf.leaves_digest(reg.levels[0][:reg.leaves]) == case["frame_leaf"]
-
-
-def test_chunk_leaves_cut_each_row_and_repeat_its_scale():
-    k = 12288
-    rows = cf.splitk_rows("layout", k, 3)
-    leaves = cf.chunk_leaves(rows, k)
-    assert cf.Wt.chunks(k) == 3 and len(leaves) == 9 and {len(x) for x in leaves} == {k // 3 + 4}
-    for j, x in enumerate(leaves):
-        r, c = divmod(j, 3)
-        assert x == rows[r][c * 4096:(c + 1) * 4096] + rows[r][k:]
-
-
-@pytest.mark.parametrize("k", [64, 2048, 4096])
-def test_chunk_leaves_up_to_4096_are_the_rows(k):
-    rows = cf.splitk_rows("whole", k, 5)
-    assert cf.chunk_leaves(rows, k) == rows
+@pytest.mark.parametrize("case", cf.SV.CASES, ids=[c[0] for c in cf.SV.CASES])
+def test_splitks_vectors_are_row_v2_over_each_chunk_leafs_bytes(case):
+    """What case_splitk's device commit hashes, `sha512/row/v2` over a chunk leaf's raw K / n + 4 bytes at
+    vclib.chunk_rows' row bits, is each pinned leaf's words_sha512 input and row digest (credit's word-level
+    `registered.row_digest`), so the GPU's roots are SPLITK's at the vectors' leaves and nothing else."""
+    name, _value, k, count, _nonce, _windowed = case
+    v = cf.splitk_vectors()[name]
+    leaves = [leaf for r in cf.SV.rows(name, k, count) for leaf in cf.SV.Z.chunk_leaves(r, k)]
+    spec, _stride = vclib.chunk_rows(bytes(64), k, v["n"])
+    assert len(leaves) == v["leaves"] == len(v["leaf"]) and {8 * len(x) for x in leaves} == {spec.row_bits}
+    assert [hashlib.sha512(x).hexdigest() for x in leaves] == [e["words_sha512"] for e in v["leaf"]]
+    assert [sha512_row_v2_digest(x, spec.row_bits).hex() for x in leaves] == [e["row_digest"] for e in v["leaf"]]
 
 
 def test_chunk_rows_spec_is_row_v2_of_a_chunk_leaf():
-    spec, stride = vclib.chunk_rows(bytes(64), 14336, 4, ("chacha64", bytes(32), cf.WHOLE["nonce"]))
+    spec, stride = vclib.chunk_rows(bytes(64), 14336, 4, ("chacha64", bytes(32), cf.SV.A_NONCE))
     assert (spec.row_bits, stride, spec.schema) == (8 * 3588, 3600, b"hm96-sha512/row/v2")
-    assert spec.salt_source == vclib.SALT_CHACHA64 and spec.salt_nonce == cf.WHOLE["nonce"]
+    assert spec.salt_source == vclib.SALT_CHACHA64 and spec.salt_nonce == cf.SV.A_NONCE
     assert vclib.chunk_rows(bytes(64), 4096, 1)[1] == 4112
 
 
