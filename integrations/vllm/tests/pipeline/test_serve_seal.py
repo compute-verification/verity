@@ -1,4 +1,4 @@
-"""A served window sealed as a deferred Commit's row dir (`serve_commit.seal_window`) and opened as PROVE-PATH opens it
+"""A served window sealed as a deferred Commit's row dir (`serve_seal.seal_window`) and opened as PROVE-PATH opens it
 (`deferred_rows.of_record`), and the registered advice compiler (`advice_windows.Capped`, PROVE-PATH's, with the cap ℓ).  CPU only."""
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import pytest
 
 from verity_vllm.pipeline import advice as ADV
 from verity_vllm.pipeline import serve_commit as sc
+from verity_vllm.pipeline import serve_seal as ss
 
 ROWS = {0: [("runner-a", 0, 3, 0, 3), ("runner-b", 3, 5, 0, 2), ("warmup", 5, 6, 0, 1)], 1: [("runner-a", 0, 1, 3, 3)]}
 NAMES = {"runner-a": "alice", "runner-b": "cmpl-2"}
@@ -20,7 +21,7 @@ def _ledgers() -> dict[str, sc.Ledger]:
 
 def test_a_windows_requests_are_named_by_user_with_their_rows_and_first_step():
     leds = _ledgers()
-    reqs, rows = sc.window_requests(ROWS, NAMES.get, leds.get)
+    reqs, rows = ss.window_requests(ROWS, NAMES.get, leds.get)
     assert [q["request_id"] for q in reqs] == ["alice", "cmpl-2"] and [q["index"] for q in reqs] == [0, 1]
     assert reqs[0] | {"ingress": None} == {"request_id": "alice", "index": 0, "arrive_step": 0, "prompt_token_ids": [1, 2, 3], "max_tokens": 4,
                                            "http_id": "cmpl-1", "engine_id": "e1", "ingress": None}
@@ -36,9 +37,9 @@ def _sealed(tmp_path):
                            commit_scheme=step_rows.NAME)
     com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
     leds = _ledgers()
-    reqs, rows = sc.window_requests(ROWS, NAMES.get, leds.get)
+    reqs, rows = ss.window_requests(ROWS, NAMES.get, leds.get)
     d = tmp_path / "windows" / "w5"
-    s = sc.seal_window(com, rc, d, rec={"window": 5, "run_id": "t/w5", "steps": len(rc.steps), "passed": True}, reqs=reqs,
+    s = ss.seal_window(com, rc, d, rec={"window": 5, "run_id": "t/w5", "steps": len(rc.steps), "passed": True}, reqs=reqs,
                        request_rows=rows, tokens={k: v.streamed for k, v in leds.items()}, sampling={}, label="serve-openai:t",
                        code="c0de", engine_of_record={"vllm": "test"})
     return rc, d, s
