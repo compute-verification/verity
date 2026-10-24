@@ -27,25 +27,29 @@ from verity.core.protocols.sampled_proofs import service as S
 
 import signers
 import standin
-from advised_traffic import (FRAMING, LINK, P, PIN, R, RIN, SYNC_SET, SYNCS, T, WINDOWS, Session, counts,
-                             egress_records, feeds_a_hit, ingress_records, moved, prompts, serve, tied, with_output_len,
-                             without_request)
+from advised_traffic import (FRAMING, LINK, P, PIN, R, RIN, SYNC_SET, SYNCS, T, WINDOWS, Session, StandInTie, counts,
+                             egress_records, feeds_a_hit, held, ingress_records, moved, prompts, serve,
+                             with_output_len, without_request)
 
 SALTS = [tuple(bytes([4 * w + k + 1]) * 192 for k in range(4)) for w in range(WINDOWS)]
 SEEDS = (1, 2, 3, 5, 7, 8)
 
 
-def _view(link, w, syncs=SYNCS):
-    return AD.view(link, w, T, R, syncs, SYNC_SET, FRAMING)
+def _view(link, w, syncs=SYNCS, certified=None):
+    """`advised.view` under the stand-in tie on an ingress that certified the prompts `certified` (by default the
+    advice's own)."""
+    return AD.view(link, w, T, R, syncs, SYNC_SET, FRAMING, **held(link, certified))
 
 
-def check(session: Session, link=None, own=0, egress=None, ingress=None) -> list[bool]:
-    """`advised.reference` on every window's heads' counts and its view of the advice, False where `view` refuses."""
+def check(session: Session, link=None, own=0, egress=None, ingress=None, certified=None) -> list[bool]:
+    """`advised.reference` on every window's heads' counts and its view of the advice, False where `view` refuses,
+    under the tie on the session's certified ingress (or one that certified the prompts `certified`)."""
     link = session.link if link is None else link
+    certified = session.certified if certified is None else certified
     out = []
     for w, (e, i) in enumerate(zip(counts(egress or session.egress), counts(ingress or session.ingress))):
         try:
-            v = _view(link, w)
+            v = _view(link, w, certified=certified)
         except ValueError:
             out.append(False)
             continue
@@ -60,14 +64,17 @@ def lean(monkeypatch):
 
 class Run:
     """An advised link with its certifier's signer and the challenger's stream, on injected coins and clock, each
-    window decided by the verifier of record on a stand-in proof (`standin`), the in-the-clear check beside it."""
+    window decided by the verifier of record on a stand-in proof (`standin`), the in-the-clear check beside it, and the
+    tie from the verifier's own source, `ties` (by default the stand-in on an ingress that certified any advice's
+    prompts; None, as in the package, refuses every window)."""
 
-    def __init__(self, tmp_path, own=0) -> None:
+    def __init__(self, tmp_path, own=0, ties=StandInTie()) -> None:
         self.tmp = tmp_path
         self.signer = signers.signer(tmp_path)
         self.issuer = Issuer(self.signer, signers.SESSION)
         self.lw = LinkWindows(LINK, P, SYNC_SET, self.signer.public_key(), "r-advised-test", signers.SESSION,
-                              ingress=PIN, proof_deadline=60.0, advised=AD.AdvisedProfile(WINDOWS, FRAMING, own))
+                              ingress=PIN, proof_deadline=60.0, advised=AD.AdvisedProfile(WINDOWS, FRAMING, own),
+                              ties=ties)
         self.stream = self.lw.stream(budget=8, delta=2.0 ** -40, challenger="challenger-test",
                                      coins=lambda n: b"\x07" * n, clock=lambda: 0.0)
         self.previous = None
@@ -148,7 +155,7 @@ def test_honest_advised_traffic_is_accepted_in_every_window(tmp_path, own):
         session = serve(seed, own)
         assert check(session, own=own) == [True] * WINDOWS
         (tmp_path / str(seed)).mkdir()
-        assert Run(tmp_path / str(seed), own).link(session) == [True] * WINDOWS
+        assert Run(tmp_path / str(seed), own, StandInTie(session.certified)).link(session) == [True] * WINDOWS
 
 
 def test_the_row_past_a_stop_is_accepted_and_hands_no_frame():
@@ -160,7 +167,7 @@ def test_the_row_past_a_stop_is_accepted_and_hands_no_frame():
                    (ADV.StepAdvice((ADV.Row(0, "prefill", 0, 4),)), ADV.StepAdvice((ADV.Row(0, "decode", 4, 1),)),
                     ADV.StepAdvice((ADV.Row(0, "decode", 5, 1),))), (1, 2))
     assert _past(a) == 1 and len(ADV.outputs(a)) == 2
-    v = _view(tied(AD.LinkAdvice(a, (2,))), 0, [ClockSync(1, 2)])
+    v = _view(AD.LinkAdvice(a, (2,)), 0, [ClockSync(1, 2)])
     ingress = [2] + [0] * (T - 1)
     assert v.released == (0, 1, 1) + (0,) * (T - 3)
     assert AD.reference(T, RIN, 0, ingress, v.released, v.released, v.floor, v.received)
@@ -174,18 +181,18 @@ def test_the_ingress_ends_are_derived_from_v0s_prompt_lengths():
     through the link's framing, request j the link's j-th, and in every session they are the ingress link's own ends
     (each request's last request frame, in arrival order), the last the windows' total. Ends off the windows' total
     (one frame more received) and a prompt past the framing are refused, in every window."""
-    assert [f.name for f in fields(AD.LinkAdvice)] == ["advice", "received", "tie"]
+    assert [f.name for f in fields(AD.LinkAdvice)] == ["advice", "received"]
     for seed in SEEDS:
         session = serve(seed)
-        assert AD.ends(session.link, FRAMING) == session.ends
+        assert AD.ends(session.link, FRAMING, **held(session.link, session.certified)) == session.ends
         assert session.ends[-1] == sum(session.link.received)
     link = session.link
-    more = tied(AD.LinkAdvice(link.advice, link.received[:-1] + (link.received[-1] + 1,)), prompts(link))
+    more = AD.LinkAdvice(link.advice, link.received[:-1] + (link.received[-1] + 1,))
     for w in range(WINDOWS):
         with pytest.raises(ValueError, match="windows receive"):
-            _view(more, w)
+            _view(more, w, certified=session.certified)
         with pytest.raises(ValueError, match="past the link's framing"):
-            AD.view(link, w, T, R, SYNCS, SYNC_SET, FRAMING[:1])
+            AD.view(link, w, T, R, SYNCS, SYNC_SET, FRAMING[:1], **held(link))
 
 
 def _signed_end(counts, own, end):
@@ -213,7 +220,8 @@ def test_the_ingress_ends_are_where_the_signed_counts_put_them(own):
             sizes = [e - p for p, e in zip((0,) + s.ends, s.ends)]
             records, anchor = ingress_records(s.arrive, sizes, own, salt_first=salt_first)
             assert counts(records) == counts(s.ingress)
-            got = [_signed_end([n for row in counts(records) for n in row], own, e) for e in AD.ends(s.link, FRAMING)]
+            got = [_signed_end([n for row in counts(records) for n in row], own, e)
+                   for e in AD.ends(s.link, FRAMING, **held(s.link, s.certified))]
             assert all(g >= a for g, a in zip(got, anchor))
             if salt_first or all(not own or b"s" in r.grid[0] for r in records):
                 assert got == anchor
@@ -230,7 +238,7 @@ def _one_more(link):
     b = next(t for t in range(WINDOWS * T - 1, (WINDOWS - 1) * T + 1, -1) if Counter(a.release)[t] < R)
     more = ADV.Advice(a.requests + (ADV.RequestAdvice("u-extra", 2, 1, "eos"),),
                       a.steps + (ADV.StepAdvice((ADV.Row(len(a.requests), "prefill", 0, 2),)),), a.release + (b,))
-    return tied(AD.LinkAdvice(more, link.received[:-1] + (link.received[-1] + 1,)))
+    return AD.LinkAdvice(more, link.received[:-1] + (link.received[-1] + 1,))
 
 
 def test_every_window_is_held_to_one_advice(tmp_path):
@@ -317,15 +325,17 @@ def test_a_missing_request_is_refused(tmp_path, ingress):
         for j in range(len(a.requests)):
             if feeds_a_hit(a, j):
                 continue
-            assert check(session, without_request(session.link, j, ingress)) == [False] * WINDOWS
-            off = without_request(session.link, j, ingress, certified=False)
-            assert check(session, off) == [False] * WINDOWS if not ingress else not all(check(session, off))
+            off = without_request(session.link, j, ingress)
+            assert check(session, off) == [False] * WINDOWS
+            own = check(session, off, certified=prompts(off))
+            assert own == [False] * WINDOWS if not ingress else not all(own)
             tried += 1
     assert tried > 20
     session = serve(SEEDS[1])
     a = session.link.advice
     j = next(j for j in range(len(a.requests)) if not feeds_a_hit(a, j))
-    assert not all(Run(tmp_path).link(session, without_request(session.link, j, ingress)))
+    run = Run(tmp_path, ties=StandInTie(session.certified))
+    assert run.link(session, without_request(session.link, j, ingress)) == [False] * WINDOWS
 
 
 def test_a_moved_release_bucket_is_refused(tmp_path):
@@ -354,9 +364,10 @@ def test_a_response_released_before_its_request_is_refused(tmp_path):
     first = min(b for o, b in zip(ADV.outputs(a), a.release) if o.request == j)
     sizes = [e - p for p, e in zip((0,) + session.ends, session.ends)]
     late, _ = ingress_records([max(t, first) for t in session.arrive], sizes, 0)
-    link = tied(AD.LinkAdvice(a, tuple(sum(row.count(b"q") for row in r.grid) for r in late)), prompts(session.link))
+    link = AD.LinkAdvice(a, tuple(sum(row.count(b"q") for row in r.grid) for r in late))
     assert counts(late) != counts(session.ingress)
-    assert [list(_view(link, w).released) for w in range(WINDOWS)] == counts(session.egress)
+    assert [list(_view(link, w, certified=session.certified).released) for w in range(WINDOWS)] == \
+        counts(session.egress)
     w = (first - SYNCS[first // T].delta) // T
     assert not check(session, link, ingress=late)[w]
     assert not Run(tmp_path).link(session, link, ingress=late)[w]
@@ -376,9 +387,9 @@ def test_a_release_faster_than_the_declared_rate_is_refused():
         v = _view(link, 0, [sync])
         return AD.reference(T, RIN, 0, ingress, v.released, v.released, v.floor, v.received)
 
-    link = tied(AD.LinkAdvice(a, (1,)))
+    link = AD.LinkAdvice(a, (1,))
     assert accepted(link, ClockSync(1, 4)) and not accepted(link, ClockSync(1, 2))
-    assert accepted(tied(AD.LinkAdvice(replace(a, release=(2, 2, 3)), (1,))), ClockSync(1, 2))
+    assert accepted(AD.LinkAdvice(replace(a, release=(2, 2, 3)), (1,)), ClockSync(1, 2))
 
 
 def test_a_windows_ingress_total_off_is_refused(tmp_path):
@@ -389,7 +400,7 @@ def test_a_windows_ingress_total_off_is_refused(tmp_path):
     w = next(k for k in range(WINDOWS - 1) if got[k])
     got[w] -= 1
     got[w + 1] += 1
-    link = tied(AD.LinkAdvice(session.link.advice, tuple(got)), prompts(session.link))
+    link = AD.LinkAdvice(session.link.advice, tuple(got))
     assert check(session, link)[w:w + 2] == [False, False]
     assert Run(tmp_path).link(session, link)[w:w + 2] == [False, False]
 
@@ -408,17 +419,31 @@ def test_extra_egress_is_refused(tmp_path, where):
     assert not all(Run(tmp_path).link(session, egress=extra))
 
 
+class _Fixed:
+    """A tie source whose record is `registrations` and whose verdict is `tie`, whatever it is asked."""
+
+    def __init__(self, tie, registrations) -> None:
+        self.tie, self.regs = tie, tuple(registrations)
+
+    def registrations(self, link):
+        return self.regs
+
+    def verdict(self, link, advice, profile):
+        return self.tie
+
+
 def test_no_advice_or_a_malformed_one_is_refused(tmp_path):
-    """An advised window with no advice, I1's advice alone, or a `LinkAdvice` without the tie (IoTieRequest's verdict),
-    with a verdict that refuses an ingress window or doesn't cover every one, or with a verdict on another advice, is
-    refused, in the clear and by the verifier of record on the proof; a `received` that isn't u32s, a tie that isn't
-    a verdict (the prompt lengths a prover states), and a verdict that doesn't name an advice digest or isn't bools,
-    can't be built; and every window refuses an advice that releases more than R
-    frames in a bucket (all in the last), a frame before its request could be (the first in bucket 0), or one in a
-    window with no declared sync (the last past the link's), and a declared sync outside Σ_sync in any window the
-    advice releases in, which the floor of an earlier window may read and that window's audit doesn't check."""
+    """An advised window with no advice or I1's advice alone is refused, and so is one without the tie from the
+    verifier's own source, or under a verdict that refuses an ingress window or doesn't cover every one, or names
+    another advice, another link or other ingress registrations than the source's record, in the clear and by the
+    verifier of record on the proof; a `LinkAdvice` takes no tie at all, and a `received` that isn't u32s and a
+    verdict that doesn't name a link, registration digests and an advice digest with one bool a registration can't be
+    built; and every window refuses an advice that releases more than R frames in a bucket (all in the last), a frame
+    before its request could be (the first in bucket 0), or one in a window with no declared sync (the last past the
+    link's), and a declared sync outside Σ_sync in any window the advice releases in, which the floor of an earlier
+    window may read and that window's audit doesn't check."""
     session = serve(SEEDS[0])
-    run = Run(tmp_path)
+    run = Run(tmp_path, ties=StandInTie(session.certified))
     opening = run.lw.commit(0, run.issuer.certify(session.egress[0], Direction.EGRESS, P,
                                                   parameters_digest(P, SYNC_SET)),
                             run.issuer.certify(session.ingress[0], Direction.INGRESS, PIN, parameters_digest(PIN)),
@@ -429,35 +454,45 @@ def test_no_advice_or_a_malformed_one_is_refused(tmp_path):
     got = link.received
     for advice, received in ((ADV.to_json(a), got), (a, (-1,) + got[1:]), (a, got + (1 << 32,)), (a, 4)):
         with pytest.raises(ADV.MalformedAdvice):
-            AD.LinkAdvice(advice, received, link.tie)
-    for tie in (prompts(link), link.tie.accepted):
-        with pytest.raises(ADV.MalformedAdvice, match="IoTieVerdict"):
-            AD.LinkAdvice(a, got, tie)
-    d, every = AD.digest(link), link.tie.accepted
-    for advice, accepted in ((d[:-1], every), (d.upper(), every), (bytes.fromhex(d), every), (d, (1,) * WINDOWS),
-                             (d, "yes")):
+            AD.LinkAdvice(advice, received)
+    tie = held(link, session.certified)
+    good = tie["tie"]
+    with pytest.raises(TypeError):
+        AD.LinkAdvice(a, got, good)
+    d, regs, every = good.advice, good.registrations, good.accepted
+    for name, registrations, advice, accepted in (
+            ("", regs, d, every), (b"x", regs, d, every), (LINK, regs[0], d, every),
+            (LINK, (d[:-1],) * WINDOWS, d, every), (LINK, regs, d.upper(), every), (LINK, regs, bytes.fromhex(d), every), (LINK, regs, d, (1,) * WINDOWS),
+            (LINK, regs, d, "yes"), (LINK, regs, d, every[:-1]), (LINK, regs[:-1], d, every)):
         with pytest.raises(ADV.MalformedAdvice):
-            AD.IoTieVerdict(advice, accepted)
-    untied = AD.LinkAdvice(a, got)
-    refused = AD.LinkAdvice(a, got, AD.IoTieVerdict(d, (True,) * (WINDOWS - 1) + (False,)))
-    short = AD.LinkAdvice(a, got, AD.IoTieVerdict(d, (True,) * (WINDOWS - 1)))
-    other = AD.LinkAdvice(a, got, _one_more(link).tie)
-    for bad, why in ((untied, "without IoTieRequest's verdict"), (refused, "doesn't accept"),
-                     (short, "doesn't accept"), (other, "another advice")):
+            AD.IoTieVerdict(name, registrations, advice, accepted)
+    other_regs = StandInTie(session.certified, "requests-elsewhere").registrations(LINK)
+    bad_ties = [(None, "without IoTieRequest's verdict"),
+                (replace(good, accepted=(True,) * (WINDOWS - 1) + (False,)), "doesn't accept"),
+                (AD.IoTieVerdict(LINK, regs[:-1], d, every[:-1]), "other ingress registrations"),
+                (StandInTie().verdict(LINK, _one_more(link)), "another advice"),
+                (replace(good, link="requests-elsewhere"), "another link"),
+                (replace(good, registrations=other_regs), "other ingress registrations")]
+    for bad, why in bad_ties:
         for w in range(WINDOWS):
             with pytest.raises(ValueError, match=why):
-                _view(bad, w)
-        assert not run.lw.advised_check(opening, SYNCS, bad)
-    for k, bad in enumerate((None, a, untied, refused, other)):
+                AD.view(link, w, T, R, SYNCS, SYNC_SET, FRAMING, **(tie | {"tie": bad}))
+        assert not replace(run.lw, ties=_Fixed(bad, regs)).advised_check(opening, SYNCS, link)
+    assert replace(run.lw, ties=_Fixed(good, regs)).advised_check(opening, SYNCS, link)
+    assert not replace(run.lw, ties=None).advised_check(opening, SYNCS, link)
+    rounds = [(StandInTie(session.certified), None), (StandInTie(session.certified), a), (None, link),
+              (StandInTie(session.certified, "requests-elsewhere"), link),
+              (StandInTie(session.certified, windows=WINDOWS - 1), link)]
+    for k, (ties, bad) in enumerate(rounds):
         (tmp_path / f"run-{k}").mkdir()
-        out = Run(tmp_path / f"run-{k}").round(0, session.egress[0], session.ingress[0], bad)
+        out = Run(tmp_path / f"run-{k}", ties=ties).round(0, session.egress[0], session.ingress[0], bad)
         assert not out.accepted
     over, early, late = (WINDOWS * T - 1,) * len(a.release), (0,) + a.release[1:], a.release[:-1] + (WINDOWS * T,)
     for release, why in ((over, "past the allocation"), (early, "before its request"), (late, "declares no sync")):
-        bad = tied(AD.LinkAdvice(replace(a, release=release), got), prompts(link))
+        bad = AD.LinkAdvice(replace(a, release=release), got)
         for w in range(WINDOWS):
             with pytest.raises(ValueError, match=why):
-                _view(bad, w)
+                _view(bad, w, certified=session.certified)
         assert not run.lw.advised_check(opening, SYNCS, bad)
     windows = sorted({b // T for b in a.release})
     assert windows[-1] > 0

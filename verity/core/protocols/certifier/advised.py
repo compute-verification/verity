@@ -27,15 +27,18 @@ ingress certifier's own frames a window (1 with its salt on, else 0), as `served
   ingress head;
 - the tie (`IoTieVerdict`): IO-TIE's `IoTieRequest` verdict on each of the link's ingress windows for this advice (its
   `digest`), that the link's j-th certified request is advice request j and its prompt v0's `prompt_len` ids, which
-  the verifier of record takes only from IoTieRequest proofs it verified itself;
+  the verifier of record takes only from its own tie source (`TieSource`, `service.LinkWindows.ties`: IoTieRequest
+  proofs it verified itself), never beside the delivered advice, and holds to the link and its ingress windows'
+  registrations, which the verdict names;
 - the link's public framing, `request_frames[n − 1]`, the ingress frames a request of an n-token prompt takes (CERT-
   VARLEN's id requests, whose frames are a function of the prompt's length alone), fixed before the run;
 - each window's declared sync, one of Σ_sync, which the certified egress head's parameters digest binds.
 
 **The ingress ends** (`ends`) are derived, not advised: advice request j is the link's j-th request, and its prompt
 length is the certified prompt's, both of which the tie holds (`ends` refuses a link without IoTieRequest's accepted
-verdict on every ingress window for the same advice digest; FCFS admission meets the order, v0's first-row order
-being the arrival order). So request j ends at request frame
+verdict on every ingress window for the same advice digest, on the link and the ingress registrations the verifier
+holds; FCFS admission meets the order, v0's first-row order being the arrival order). So request j ends at request
+frame
 Σ_{i ≤ j} request_frames[prompt_len_i − 1], and the last request's end must be Σ received, the link's certified
 request frames. No field of the advice but v0's says where a request ends, so the ends cost nothing beside
 `advice.bits`.
@@ -78,10 +81,12 @@ IoTieRequest's verdict for the same advice digest. Without it, a prover who spli
 requests otherwise (a short prompt and a long one swapped) lowers an early request's end, and so the floor, on the
 same certified record: REDTEAM phase 6's case. The certified prompts are witness, so the verifier can't derive the
 tie from them on the host, and a tie the prover states is no tie (REDTEAM phase 7: one stating the swapped split
-reopens phase 6's acausal release). So the tie is only IoTieRequest's verdict, and until IoTieRequest runs in the proof
-service nothing gives the verifier one: every advised link is refused (PROTOCOL.md, fail closed). Neither
-head signs the prompt lengths or the sync a window ran, so the unit itself holds neither to the record: PROTOCOL.md's
-named gap, with its design.
+reopens phase 6's acausal release), nor is a verdict it delivers (REDTEAM phase 10: a verdict built from its own
+advice's digest, every window accepted, reopened it through the verifier of record), so `LinkAdvice` carries none. The
+tie is only IoTieRequest's verdict from the verifier's own tie source, on the link and the ingress registrations it
+holds, so a verdict on another link or ingress record isn't reused; until IoTieRequest runs in the proof service there
+is no such source: every advised link is refused (PROTOCOL.md, fail closed). Neither head signs the prompt lengths or
+the sync a window ran, so the unit itself holds neither to the record: PROTOCOL.md's named gap, with its design.
 
 **Bucket 0** is capped at RIN, which holds the own frame: the ingress certifier releases min(queue, r_in) frames a
 bucket (`grid.Certifier`), its own frame queued ahead of bucket 0's arrivals (`active.Bucketer`), and a head whose
@@ -116,7 +121,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Sequence
+from typing import Any, Protocol, Sequence
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.forms import ONE, add, and_reduce, sub
@@ -164,47 +169,74 @@ def _u32s(value, what: str) -> tuple[int, ...]:
     return tuple(value)
 
 
+def _sha512_hex(x: Any) -> bool:
+    return type(x) is str and len(x) == 128 and not set(x) - set("0123456789abcdef")
+
+
 @dataclass(frozen=True)
 class IoTieVerdict:
     """The tie of an advised link's requests to the certified ingress (the module docstring, "The ingress ends"):
-    IO-TIE's `IoTieRequest` verdict on each of the link's ingress windows, `accepted[w]`, on the request view the
-    verifier computed from the advice whose `digest` is `advice`. An accepted verdict on every window says the link's
-    j-th certified request is advice request j and its prompt is v0's `prompt_len` ids long. The verifier of record
-    builds one only from IoTieRequest proofs it verified itself, never from what the prover delivers, and until
-    IoTieRequest runs in the proof service nothing builds one, so every advised link is refused (PROTOCOL.md, fail
-    closed). Construction refuses (`advice.MalformedAdvice`) an `advice` that isn't an advice digest and verdicts that
-    aren't bools."""
+    IO-TIE's `IoTieRequest` verdict on each of the link's ingress windows, `accepted[w]`, on the link named `link`
+    (`service.LinkWindows.link`), whose ingress windows the challenger registered as `registrations` (each one's
+    `registration.digest`, in window order), on the request view the verifier computed from the advice whose `digest`
+    is `advice`. An accepted verdict on every window says the link's j-th certified request is advice request j and
+    its prompt is v0's `prompt_len` ids long. Only the verifier's own tie source (`TieSource`) gives one, from
+    IoTieRequest proofs it verified itself, and `view` holds it to the link and the registrations the verifier
+    expects, so a verdict on another link or another ingress record isn't this one's. Construction refuses
+    (`advice.MalformedAdvice`) a `link` that isn't a non-empty string, `registrations` and an `advice` that aren't
+    SHA-512 hex digests, and verdicts that aren't one bool a registration."""
 
+    link: str
+    registrations: tuple[str, ...]
     advice: str
     accepted: tuple[bool, ...]
 
     def __post_init__(self) -> None:
-        if type(self.advice) is not str or len(self.advice) != 128 or set(self.advice) - set("0123456789abcdef"):
+        if type(self.link) is not str or not self.link:
+            raise MalformedAdvice("IoTieRequest's verdict names its link, a non-empty string")
+        regs, acc = self.registrations, self.accepted
+        if isinstance(regs, (str, bytes)) or not isinstance(regs, (tuple, list)) or \
+                not all(_sha512_hex(r) for r in regs):
+            raise MalformedAdvice("IoTieRequest's verdict names each ingress window's registration by its "
+                                  "`registration.digest`, 128 hex digits")
+        if not _sha512_hex(self.advice):
             raise MalformedAdvice("IoTieRequest's verdict names its advice by `advised.digest`, 128 hex digits")
-        if isinstance(self.accepted, (str, bytes)) or not all(type(x) is bool for x in self.accepted):
-            raise MalformedAdvice("IoTieRequest's verdict is one bool an ingress window")
-        object.__setattr__(self, "accepted", tuple(self.accepted))
+        if isinstance(acc, (str, bytes)) or not isinstance(acc, (tuple, list)) or \
+                not all(type(x) is bool for x in acc) or len(acc) != len(regs):
+            raise MalformedAdvice("IoTieRequest's verdict is one bool an ingress window's registration")
+        object.__setattr__(self, "registrations", tuple(regs))
+        object.__setattr__(self, "accepted", tuple(acc))
+
+
+class TieSource(Protocol):
+    """The verifier's own source of the tie (`service.LinkWindows.ties`), never what the prover delivers:
+    `registrations(link)` is the verifier's record of the link's ingress windows' registrations with the challenger
+    (each one's `registration.digest`, in window order), and `verdict(link, advice, profile)` IoTieRequest's verdict
+    (`IoTieVerdict`) for `advice` under `profile`, built only from IoTieRequest proofs the verifier verified itself.
+    Nothing in this package is one until IoTieRequest runs in the proof service, so every advised link is refused
+    (PROTOCOL.md, fail closed)."""
+
+    def registrations(self, link: str) -> Sequence[str]: ...
+
+    def verdict(self, link: str, advice: LinkAdvice, profile: AdvisedProfile) -> IoTieVerdict: ...
 
 
 @dataclass(frozen=True)
 class LinkAdvice:
-    """What N2 reads on an advised link beside its public profile and syncs: I1's advice, `received[w]`, window w's
-    request frames, which the unit holds to the certified ingress head, and `tie`, IoTieRequest's verdict on the link
-    for this advice (`IoTieVerdict`), which the verifier of record sets from proofs it verified, and without which
-    `ends` refuses the link (the module docstring). Construction refuses (`advice.MalformedAdvice`) an advice that
-    isn't an `advice.Advice`, a `received` that isn't u32s, and a tie that isn't an `IoTieVerdict` or None."""
+    """What the prover delivers on an advised link beside its public profile and syncs: I1's advice and `received[w]`,
+    window w's request frames, which the unit holds to the certified ingress head. It carries no tie: one delivered
+    beside the advice is the prover's (REDTEAM phase 10: a verdict built from its own advice's digest reopened phase
+    6), so `ends` and `view` take IoTieRequest's verdict apart, from the verifier's own tie source (`TieSource`).
+    Construction refuses (`advice.MalformedAdvice`) an advice that isn't an `advice.Advice` and a `received` that
+    isn't u32s."""
 
     advice: Advice
     received: tuple[int, ...]
-    tie: IoTieVerdict | None = None
 
     def __post_init__(self) -> None:
         if type(self.advice) is not Advice:
             raise MalformedAdvice(f"an advised link's advice is an advice.Advice, not a {type(self.advice).__name__}")
         object.__setattr__(self, "received", _u32s(self.received, "received"))
-        if self.tie is not None and type(self.tie) is not IoTieVerdict:
-            raise MalformedAdvice(f"an advised link's tie is IoTieRequest's verdict (advised.IoTieVerdict), not a "
-                                  f"{type(self.tie).__name__}")
 
 
 @dataclass(frozen=True)
@@ -220,20 +252,34 @@ class WindowView:
 
 # --- the reference ----------------------------------------------------------------------------------------------------
 
-def ends(link: LinkAdvice, request_frames: Sequence[int]) -> tuple[int, ...]:
-    """Each request's end on the ingress link, the request frames up to and including its last (the module docstring,
-    "The ingress ends"): request j, the link's j-th, ends at Σ_{i ≤ j} request_frames[prompt_len_i − 1]. Raises
-    `ValueError` on a link without IoTieRequest's verdict (the tie, `IoTieVerdict`), on a verdict on another advice or
-    that doesn't accept every ingress window, on a prompt longer than the framing covers, and on ends whose last isn't
-    the windows' total."""
-    tie = link.tie
-    if tie is None:
-        raise ValueError("an advised link without IoTieRequest's verdict (the tie, advised.IoTieVerdict) is refused")
+def _held(link: LinkAdvice, tie: Any, link_name: str, registrations: Sequence[str]) -> None:
+    """Raises `ValueError` unless `tie` is IoTieRequest's verdict (`IoTieVerdict`) on the link `link_name`, on the
+    ingress registrations `registrations` the verifier holds for it, for `link`'s advice, accepting every ingress
+    window."""
+    if type(tie) is not IoTieVerdict:
+        raise ValueError("an advised link without IoTieRequest's verdict (the tie, advised.IoTieVerdict) from the "
+                         "verifier's own tie source is refused")
+    if tie.link != link_name:
+        raise ValueError(f"IoTieRequest's verdict is on another link ({tie.link!r:.80}) than {link_name!r:.80}")
+    if tie.registrations != tuple(registrations):
+        raise ValueError("IoTieRequest's verdict is on other ingress registrations than the verifier's record of the "
+                         "link's")
     if tie.advice != digest(link):
         raise ValueError("IoTieRequest's verdict is on another advice than the link's (advised.digest)")
     if len(tie.accepted) != len(link.received) or not all(tie.accepted):
         raise ValueError(f"IoTieRequest's verdict doesn't accept each of the link's {len(link.received)} ingress "
                          f"windows: {list(tie.accepted)!r:.200}")
+
+
+def ends(link: LinkAdvice, request_frames: Sequence[int], *, tie: IoTieVerdict | None, link_name: str,
+         registrations: Sequence[str]) -> tuple[int, ...]:
+    """Each request's end on the ingress link, the request frames up to and including its last (the module docstring,
+    "The ingress ends"): request j, the link's j-th, ends at Σ_{i ≤ j} request_frames[prompt_len_i − 1], under `tie`,
+    IoTieRequest's verdict from the verifier's own tie source (`TieSource`), held to the link `link_name` and the
+    ingress registrations `registrations` the verifier holds for it. Raises `ValueError` without a verdict, on one on
+    another link, other registrations or another advice, or that doesn't accept every ingress window, on a prompt
+    longer than the framing covers, and on ends whose last isn't the windows' total."""
+    _held(link, tie, link_name, registrations)
     out, end = [], 0
     for j, q in enumerate(link.advice.requests):
         if q.prompt_len > len(request_frames):
@@ -266,12 +312,15 @@ def _floor_buckets(link: LinkAdvice, T: int, syncs: Sequence[ClockSync], sync_se
 
 
 def view(link: LinkAdvice, window: int, T: int, R: int, syncs: Sequence[ClockSync], sync_set: SyncSet,
-         request_frames: Sequence[int]) -> WindowView:
+         request_frames: Sequence[int], *, tie: IoTieVerdict | None, link_name: str,
+         registrations: Sequence[str]) -> WindowView:
     """The unit's public inputs for `window` (the module docstring) at T buckets a window and egress allocation R, from
-    the advice, every window's declared sync, Σ_sync and the link's framing (`AdvisedProfile.request_frames`). Raises
-    `ValueError` on an advice that isn't a `LinkAdvice`, a window its `received` doesn't cover, ends `ends` refuses,
-    more than R frames released in a bucket, and a frame released in a window with no declared sync or one outside
-    Σ_sync, or before its request could be."""
+    the advice, every window's declared sync, Σ_sync and the link's framing (`AdvisedProfile.request_frames`), under
+    `tie`, IoTieRequest's verdict from the verifier's own tie source, which `ends` holds to the link `link_name` and
+    its ingress `registrations`. Raises `ValueError` on an advice that isn't a `LinkAdvice`, a window its `received`
+    doesn't cover, ends `ends` refuses (without the tie, or under one on another link, registrations or advice, or
+    not accepting every window), more than R frames released in a bucket, and a frame released in a window with no
+    declared sync or one outside Σ_sync, or before its request could be."""
     if type(link) is not LinkAdvice:
         raise ValueError(f"an advised link's advice is an advised.LinkAdvice, not a {type(link).__name__}")
     if type(sync_set) is not SyncSet:
@@ -280,7 +329,7 @@ def view(link: LinkAdvice, window: int, T: int, R: int, syncs: Sequence[ClockSyn
         raise ValueError("a view has T ≥ 1, R ≥ 1 and a window ≥ 0")
     if window >= len(link.received):
         raise ValueError(f"the advice receives in {len(link.received)} windows, not window {window}")
-    end = ends(link, request_frames)
+    end = ends(link, request_frames, tie=tie, link_name=link_name, registrations=registrations)
     per = Counter(link.advice.release)
     over = sorted(b for b, n in per.items() if n > R)
     if over:
@@ -454,5 +503,5 @@ def size(T: int, RIN: int, OWN: int) -> int:
     return ands(unit(T, RIN, OWN))
 
 
-__all__ = ["AdvisedProfile", "LinkAdvice", "NetworkAdvisedCounts", "PINS", "WindowView", "arguments", "digest", "ends",
-           "evaluate", "gate", "reference", "size", "unit", "view"]
+__all__ = ["AdvisedProfile", "IoTieVerdict", "LinkAdvice", "NetworkAdvisedCounts", "PINS", "TieSource", "WindowView",
+           "arguments", "digest", "ends", "evaluate", "gate", "reference", "size", "unit", "view"]
