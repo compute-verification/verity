@@ -29,7 +29,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import Counter
-from typing import Any, Iterable, Iterator
+from typing import Any, Collection, Iterable, Iterator
 
 from verity_vllm.commit import challenge as CH
 from verity_vllm.query.manifest.bind import HIDDEN_FAMILIES, split_name
@@ -106,11 +106,11 @@ def _numel(shape: Iterable[int]) -> int:
 def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, program_digest: str, *, request_rows: dict[int, list[tuple[str, int, int]]] | None = None,
                       request_id: str = "r0", rank: int = 0, layout_version: str = "chunk-leaf-v1", chunk: int | None = None,
                       weight_registration: dict | None = None, collector: dict | None = None,
-                      binder: Any = None) -> dict[str, Any]:
+                      binder: Any = None, padded: Collection[str] = ()) -> dict[str, Any]:
     """identity -> commitment location, for every committed tensor of every step, from the published layouts + the step roots.
 
-    `request_rows[step]` = [(request_id, row_lo, row_hi)] splits the leading (token/row) dimension of a batched member between the
-    requests of that step (the scheduler's row order, recorded by the engine wrapper); without it the whole member binds `request_id`.
+    `request_rows[step]` = [(request_id, row_lo, row_hi)] splits the leading (token/row) dimension of a batched member between the requests of that step
+    (the scheduler's row order, recorded by the engine wrapper; a `padded` member, the step-input port's, has rows past the step's tokens); else the whole member binds `request_id`.
     A MoE block plane whose rows are not a token multiple binds no request: its entry is request `*` with `refused`, the reason.
     Entries are compact (one per tensor x request); `digest` is over the canonical JSON of the entries -- recorded in the Commit record and
     mixed into the challenge, so the map cannot be chosen after the openings.
@@ -142,7 +142,7 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
                 rows = int(m.shape[0])
                 per_row = numel // max(rows, 1)
                 tokens = max(hi for _r, _lo, hi in rr)
-                if rows == tokens:                                                    # per-token member: the request's token rows
+                if rows == tokens or (m.name in padded and rows >= tokens):           # per-token member: the request's token rows
                     splits = [(rid, 0, (hi - lo) * per_row, lo * per_row) for rid, lo, hi in rr]
                 elif rows == len(rr):                                                 # per-request member (logits, sampled ids): the request's row
                     splits = [(rid, 0, per_row, i * per_row) for i, (rid, _lo, _hi) in enumerate(rr)]
