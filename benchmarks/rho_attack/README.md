@@ -11,7 +11,9 @@ python3 rho_attack.py --inputs inputs/in_hand_rank64.json inputs/in_hand_fullran
 
 writes, per input file, `rho_attack_<input>.json` (every row and curve), `rho_attack_<input>.md` (the table) and
 `rho_attack_<input>_<precision>.png` (the curves). `--configs`, `--workloads sft grpo`, `--curve-points` and `--knobs '{"ranks": [16, 64]}'`
-narrow or change a run. Run a whole grid as a `research run` on a CPU pod.
+narrow or change a run. Run a whole grid as a `research run` on a CPU pod; to spread it over cores, run one process per
+config into its own directory and join their JSON with `--merge A.json B.json ... --out OUT` (the table and figures of
+one input file).
 
 ## Inputs
 

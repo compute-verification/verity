@@ -144,15 +144,34 @@ def test_the_in_hand_inputs_load(name):
     assert "full" in inp.F
 
 
-def test_cli_writes_rows_for_every_label(tmp_path):
-    inputs = HERE / "inputs" / "in_hand_rank64.json"
-    assert ra.main(["--inputs", str(inputs), "--out", str(tmp_path), "--configs", "qwen2.5-1.5b", "--workloads",
-                    "sft", "--curve-points", "3", "--no-plots"]) == 0
-    doc = json.loads((tmp_path / "rho_attack_in_hand_rank64.json").read_text())
-    labels = list(ra.Inputs.load(inputs).F)
+@pytest.fixture(scope="module")
+def cli_run(tmp_path_factory) -> Path:
+    """One search over Qwen2.5-1.5B on the rank-64 inputs: its output JSON."""
+    out = tmp_path_factory.mktemp("cli")
+    assert ra.main(["--inputs", str(HERE / "inputs" / "in_hand_rank64.json"), "--out", str(out), "--configs",
+                    "qwen2.5-1.5b", "--workloads", "sft", "--curve-points", "3", "--no-plots"]) == 0
+    return out / "rho_attack_in_hand_rank64.json"
+
+
+def test_cli_writes_rows_for_every_label(cli_run):
+    doc = json.loads(cli_run.read_text())
+    labels = list(ra.Inputs.load(HERE / "inputs" / "in_hand_rank64.json").F)
     assert len(doc["rows"]) == len(labels) * len(ra.K_GRID) * 2 * 4
     for r in doc["rows"]:
         assert r["bound"]["rho"] >= 1
         if r["attack"] is not None:
             assert math.isfinite(r["attack"]["rho"]) and r["attack"]["rho"] >= 1 - 1e-9
-    assert "| qwen2.5-1.5b |" in (tmp_path / "rho_attack_in_hand_rank64.md").read_text()
+    assert "| qwen2.5-1.5b |" in (cli_run.parent / "rho_attack_in_hand_rank64.md").read_text()
+
+
+def test_merge_joins_per_config_runs(cli_run, tmp_path):
+    pytest.importorskip("matplotlib")
+    doc = json.loads(cli_run.read_text())
+    for item in doc["rows"] + doc["curves"]:
+        item["config"] = "other"
+    other = tmp_path / "other.json"
+    other.write_text(json.dumps(doc))
+    assert ra.main(["--merge", str(cli_run), str(other), "--out", str(tmp_path / "all")]) == 0
+    doc = json.loads((tmp_path / "all" / "rho_attack_in_hand_rank64.json").read_text())
+    assert {r["config"] for r in doc["rows"]} == {"qwen2.5-1.5b", "other"}
+    assert (tmp_path / "all" / "rho_attack_in_hand_rank64_nvfp4_s1.png").stat().st_size > 0

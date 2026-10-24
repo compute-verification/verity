@@ -717,9 +717,23 @@ def summarize(rows: list[dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def merge(paths: list[str], out: Path) -> None:
+    """One table and one figure per precision from the JSON of several runs of one input file (one per config, say)."""
+    docs = [json.loads(Path(p).read_text()) for p in paths]
+    tag = Path(docs[0]["inputs"]).stem
+    rows = [r for d in docs for r in d["rows"]]
+    curves = [cv for d in docs for cv in d["curves"]]
+    doc = {**docs[0], "rows": rows, "curves": curves, "merged_from": paths}
+    (out / f"rho_attack_{tag}.json").write_text(json.dumps(doc, indent=1, default=str))
+    (out / f"rho_attack_{tag}.md").write_text(summarize(rows))
+    for prec in dict.fromkeys(cv["precision"] for cv in curves):
+        plot(curves, out / f"rho_attack_{tag}_{prec}.png", prec)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--inputs", nargs="+", required=True, help="input JSON files (beta per precision, F per S label)")
+    ap.add_argument("--inputs", nargs="+", help="input JSON files (beta per precision, F per S label)")
+    ap.add_argument("--merge", nargs="+", help="instead of a search: merge these output JSONs of one input file")
     ap.add_argument("--out", required=True)
     ap.add_argument("--configs", nargs="*", default=list(configs.CONFIGS))
     ap.add_argument("--workloads", nargs="*", default=["sft", "grpo"])
@@ -730,6 +744,11 @@ def main(argv: list[str] | None = None) -> int:
     kn = Knobs(**json.loads(args.knobs))
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    if args.merge:
+        merge(args.merge, out)
+        return 0
+    if not args.inputs:
+        ap.error("give --inputs (or --merge)")
     for path in args.inputs:
         inputs = Inputs.load(path)
         tag = Path(path).stem
