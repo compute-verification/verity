@@ -12,13 +12,17 @@ own y and records, so the weights stream from DRAM), timed kbench's way (a CUDA 
 A config's gate: y and the records (z and y halves) equal the served config's into 0xA5, twice (a split K's workspace
 and counters zero again), and the last copy's after the timing's replays; the served config's y is int8_exact's
 (`dequantize(int_mm(...))`) bit for bit.  Writes sweep.jsonl and best.json ({"n,k": [m, best, us, served, us,
-scaled_mm us]}, and the step's sum over 32 layers each way: what $DITHER_MM_CFG would take).
+scaled_mm us]}, and the step's sum over 32 layers each way: what $DITHER_MM_CFG would take).  --block Q/D times every
+item with the SMs whose %smid % D < Q held (`Blocker`: the SMs $DITHER_SO_UNITS_SMQ=Q/D gives a step's units, which
+hold them through most of the next forward), so the configs are ranked on the SMs a served forward gets.
 
-    python dmmsweep.py --out OUT [--m 32] [--t 64] [--top 3] [--reps 9]
+    python dmmsweep.py --out OUT [--m 32] [--t 64] [--top 3] [--reps 9] [--block Q/D]
 """
 from __future__ import annotations
 
 import argparse
+import contextlib
+import ctypes as C
 import json
 import sys
 from pathlib import Path
@@ -38,6 +42,83 @@ LAYERS = 32
 UR = UC = 32
 WARPS = (4, 8)
 STAGES = (2, 3, 4, 5)
+HOLD_SRC = r"""
+extern "C" __global__ void hold_sms(volatile int *stop, int *arrived, int *held, int q, int d) {
+    unsigned sm;
+    asm volatile("mov.u32 %0, %%smid;" : "=r"(sm));
+    if ((int)(sm % d) < q) atomicAdd(held, 1);
+    __threadfence();
+    atomicAdd(arrived, 1);
+    if ((int)(sm % d) >= q) return;
+    while (*stop == 0) __nanosleep(2000);
+}
+extern "C" __global__ void set_stop(int *stop) { *stop = 1; __threadfence(); }
+"""
+
+
+class Blocker:
+    """The SMs whose %smid % d < q held while a timed item runs (`item`): one one-thread CTA an SM, each taking the
+    device's largest dynamic shared memory so no GEMM CTA shares its SM, parked until the item's kernels are done (a
+    `set_stop` after them on the serving stream); the others exit at once."""
+
+    def __init__(self, q: int, d: int):
+        from cuda.bindings import driver as cu
+        from cuda.bindings import nvrtc
+        self.cu, self.q, self.d = cu, q, d
+        self.flags = torch.zeros(3, dtype=torch.int32, device="cuda")     # stop, arrived, held
+        major, minor = torch.cuda.get_device_capability()
+        prog = self._ok(nvrtc.nvrtcCreateProgram(HOLD_SRC.encode(), b"hold.cu", 0, [], []))
+        opts = [f"--gpu-architecture=sm_{major}{minor}".encode()]
+        res = nvrtc.nvrtcCompileProgram(prog, len(opts), opts)
+        if res[0] != nvrtc.nvrtcResult.NVRTC_SUCCESS:
+            n = self._ok(nvrtc.nvrtcGetProgramLogSize(prog))
+            buf = b" " * n
+            nvrtc.nvrtcGetProgramLog(prog, buf)
+            raise RuntimeError(f"dmmsweep Blocker: nvrtc {res[0]!r}: {buf.decode(errors='replace')}")
+        cubin = b" " * self._ok(nvrtc.nvrtcGetCUBINSize(prog))
+        self._ok(nvrtc.nvrtcGetCUBIN(prog, cubin))
+        self.mod = self._ok(cu.cuModuleLoadData(cubin))
+        self.hold = self._ok(cu.cuModuleGetFunction(self.mod, b"hold_sms"))
+        self.stop = self._ok(cu.cuModuleGetFunction(self.mod, b"set_stop"))
+        dev = self._ok(cu.cuDeviceGet(torch.cuda.current_device()))
+        self.smem = self._ok(cu.cuDeviceGetAttribute(
+            cu.CUdevice_attribute.CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK_OPTIN, dev))
+        self._ok(cu.cuFuncSetAttribute(self.hold, cu.CUfunction_attribute.CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES,
+                                       self.smem))
+        self.sms = torch.cuda.get_device_properties(torch.cuda.current_device()).multi_processor_count
+        self.side = torch.cuda.Stream()
+        self.held: set[int] = set()     # each item's count of held SMs
+
+    @staticmethod
+    def _ok(res):
+        err, *out = res if isinstance(res, tuple) else (res,)
+        if int(err) != 0:
+            raise RuntimeError(f"dmmsweep Blocker: {err!r}")
+        return out[0] if len(out) == 1 else out
+
+    def _launch(self, fn, grid: int, smem: int, stream, args: tuple, types: tuple) -> None:
+        self._ok(self.cu.cuLaunchKernel(fn, grid, 1, 1, 1, 1, 1, smem, self.cu.CUstream(stream.cuda_stream),
+                                        (args, types), 0))
+
+    @contextlib.contextmanager
+    def item(self):
+        main = torch.cuda.current_stream()
+        stop = self.flags.data_ptr()
+        self.flags.zero_()
+        self.side.wait_stream(main)
+        self._launch(self.hold, self.sms, self.smem, self.side, (stop, stop + 4, stop + 8, self.q, self.d),
+                     (C.c_void_p, C.c_void_p, C.c_void_p, C.c_int, C.c_int))
+        for _ in range(100000):
+            arrived, held = self.flags[1:].tolist()
+            if arrived >= self.sms:
+                break
+        else:
+            raise RuntimeError(f"dmmsweep Blocker: {arrived} of {self.sms} hold CTAs started")
+        self.held.add(held)
+        try:
+            yield
+        finally:
+            self._launch(self.stop, 1, 0, main, (stop,), (C.c_void_p,))
 
 
 def coarse_grid() -> list[X.Cfg]:
@@ -131,7 +212,8 @@ def log(out: Path, rec: dict) -> None:
         f.write(json.dumps(rec) + "\n")
 
 
-def stage(out: Path, shape: Shape, cfgs: list[X.Cfg], reps: int, clock, phase: str, extra: dict | None = None) -> dict:
+def stage(out: Path, shape: Shape, cfgs: list[X.Cfg], reps: int, clock, phase: str, extra: dict | None = None,
+          around=None) -> dict:
     fns, recs = {}, {}
     for cfg in cfgs:
         rec = {"phase": phase, "n": shape.n, "k": shape.k, "m": shape.m, "t": shape.t, "cfg": str(cfg)}
@@ -146,7 +228,7 @@ def stage(out: Path, shape: Shape, cfgs: list[X.Cfg], reps: int, clock, phase: s
     fns.update(extra or {})
     med = {}
     if fns:
-        med, _, _ = kbench.timed(fns, reps, clock, shape.copies)
+        med, _, _ = kbench.timed(fns, reps, clock, shape.copies, around)
         for name, us in med.items():
             if name in recs:
                 kgate.poison(shape.ys[-1], shape.zys[-1])
@@ -180,21 +262,29 @@ def main() -> int:
     ap.add_argument("--top", type=int, default=3)
     ap.add_argument("--reps", type=int, default=9)
     ap.add_argument("--shapes", default=",".join(SHAPES))
+    ap.add_argument("--block", default="", help="Q/D: time with the SMs whose %%smid %% D < Q held (`Blocker`)")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     clock = kbench.nvml()
+    blocker = None
+    if a.block:
+        q, d = (int(x) for x in a.block.split("/"))
+        if not 0 < q < d:
+            ap.error(f"--block {a.block}: Q/D with 0 < Q < D")
+        blocker = Blocker(q, d)
+    around = blocker.item if blocker else None
     table, step = {}, {"served_us": 0.0, "best_us": 0.0, "scaled_mm_us": 0.0}
     for name in a.shapes.split(","):
         n, k = SHAPES[name]
         shape = Shape(n, k, a.m, a.t)
         if shape.served_y_diff:
             raise SystemExit(f"{name}: the served config's y differs from int8_exact's in {shape.served_y_diff} places")
-        med = stage(out, shape, coarse_grid(), 3, clock, "coarse")
+        med = stage(out, shape, coarse_grid(), 3, clock, "coarse", around=around)
         refine = [X.Cfg(*c[:3], w, st, *c[5:]) for c in best(med, a.top) for w in WARPS for st in STAGES]
-        med = stage(out, shape, list(dict.fromkeys(refine)), 3, clock, "refine")
+        med = stage(out, shape, list(dict.fromkeys(refine)), 3, clock, "refine", around=around)
         final = list(dict.fromkeys(best(med, a.top) + [shape.served]))
-        med = stage(out, shape, final, a.reps, clock, "final", {"scaled_mm": shape.scaled_mm()})
+        med = stage(out, shape, final, a.reps, clock, "final", {"scaled_mm": shape.scaled_mm()}, around)
         win = best(med, 1, skip=("scaled_mm",))[0]
         row = [a.m, str(win), med[str(win)], str(shape.served), med.get(str(shape.served)), med.get("scaled_mm")]
         table[f"{n},{k}"] = row
@@ -206,7 +296,9 @@ def main() -> int:
         torch.cuda.empty_cache()
     mm_cfg = "+".join(f"{nk},{mmax_of(*map(int, nk.split(',')), a.m)}={row[1]}" for nk, row in table.items()
                       if row[1] != row[3])
-    doc = {"device": torch.cuda.get_device_name(), "arch": X.arch(), "m": a.m, "t": a.t, "table": table,
+    doc = {"device": torch.cuda.get_device_name(), "arch": X.arch(), "m": a.m, "t": a.t,
+           "block": {"q_d": a.block, "held_sms": sorted(blocker.held), "smem": blocker.smem} if blocker else None,
+           "table": table,
            "step_ms": {key: round(v / 1e3, 4) for key, v in step.items()}, "dither_mm_cfg": mm_cfg}
     (out / "best.json").write_text(json.dumps(doc, indent=1) + "\n")
     print(json.dumps(doc["step_ms"]), doc["dither_mm_cfg"], flush=True)
