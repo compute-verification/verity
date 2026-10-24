@@ -356,7 +356,8 @@ def test_a_lane_is_staged_at_any_k_and_a_combine_from_the_k_whose_partials_compr
 def test_a_leaf_is_staged_only_at_a_positive_k_and_an_r_whose_admit_row_is_whole_16_bit_words():
     """A lane reads the leaf's R admit bits as one row, and C-Flock lowers only a row of whole 16-bit words
     (`class_statement.unit_lowering`), so `lane` and `combine` refuse a leaf of R = 4 or 8, whose lanes the Definitions
-    bind, and take R = 16 and the served 32. Both refuse K = 0, which the Definitions bind too and `leaf_lanes` refuses."""
+    bind, and take R = 16 and the served 32. Both refuse K = 0, which `leaf_lanes` refuses too; the Definitions refuse
+    K = 0 and K = 32 themselves (KS >= 2, as `h1tile`'s scheme asks and the leaf verifier's `Tile.check`)."""
     for r, c in ((4, 16), (8, 8), (8, 16)):
         t = _tile(r=r, c=c, k=384)
         bind(Z.PouwH1LaneZy, TILE=t).signature()
@@ -366,8 +367,11 @@ def test_a_leaf_is_staged_only_at_a_positive_k_and_an_r_whose_admit_row_is_whole
     for r, c in ((16, 8), (16, 16), (32, 32)):
         t = _tile(r=r, c=c, k=384)
         assert Z.lane(t) == bind(Z.PouwH1LaneZy, TILE=t) and Z.combine(t) == bind(Z.PouwH1Combine, TILE=t)
+    for k in (0, 32):
+        for d in (Z.PouwH1LaneZy, Z.PouwH1Combine):
+            with pytest.raises(ValueError, match=f"K = {k} is under 64"):
+                bind(d, TILE=_tile(r=32, c=32, k=k))
     t = _tile(r=32, c=32, k=0)
-    bind(Z.PouwH1LaneZy, TILE=t).signature()
     for stage in (Z.lane, Z.combine):
         with pytest.raises(ValueError, match="K = 0: a leaf's lanes and combine are staged only at a positive K"):
             stage(t)
