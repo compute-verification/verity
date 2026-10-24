@@ -320,17 +320,19 @@ def gate_run(host: Host, out: Path, plan: str, defer_openings: bool,
 
 def analysed(out: Path, host: Host, sessions: list[dict], reg: dict, desc: bytes, *, verdict: str = "lean",
              pins: list[str] | None = PINS, main: list[str] | None = MAIN, bound: dict | None = MODEL,
-             model: dict | None = MODEL, peer: str | None = None, lean: dict | None = None) -> dict:
+             model: dict | None = MODEL, peer: str | None = None, lean: dict | None = None,
+             line_by: al.lv.Lean | None = None) -> dict:
     """`auditor_line`'s analysis of the run, its verifier.json recording a binding of the store to `bound` (none if
     None), the Lean's `hold` answering `lean` (by default bound at the registration's root), the line held to `model`
-    (`--model-pin`'s), and `peer` its --peer (None: the record's)."""
+    (`--model-pin`'s), `peer` its --peer (None: the record's), and each line computed by the Lean verifier `line_by`
+    (None: line.py alone)."""
     held = {"regions": [], "expected_root": reg["payload_root"]} if lean is None else lean
     binding = {} if bound is None else {"binding": {**bound, "payload_root": reg["payload_root"],
                                                     "expected_root": reg["payload_root"], "bound": True, "lean": held}}
     (out / "verifier.json").write_text(json.dumps(
         {"registration": reg, "sessions": [{**s, "verdict": verdict} for s in sessions]} | binding))
     return al.analyse(out, host_bytes=1 << 30, pin=host.pin, period="p-1", heads=[host.host.ledger], desc=desc,
-                      pins=pins, main=main, model=model, peer=peer)
+                      pins=pins, main=main, model=model, peer=peer, lean=line_by)
 
 
 @pytest.mark.parametrize("defer_openings", [True, False])
@@ -340,8 +342,8 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
     committed the descriptor of the verifier that ran them, on a host whose opens seal its pins log, which records the
     host's tree as a commit of main's, its store bound to the model. When the prover defers each window's openings, the
     dropper's are all asked, so both windows and the period close complete: the honest session, once its verdict is
-    the Lean's, is the line, its weights and filler held apart, and the dropper, which the Lean refused, earns none.
-    When it doesn't, the dropper's window and so the period close incomplete, and the line credits zero. A python
+    the Lean's, is the line, its weights and filler held apart, and the dropper, which the Lean refused, earns none;
+    the Lean verifier's line (`line_by` lean) is line.py's, the run's whole analysis the same. When it doesn't, the dropper's window and so the period close incomplete, and the line credits zero. A python
     verdict, a period not yet closed, a verifier the period didn't commit, no pins log (under both *credited*, whose
     `credited_session` reads the pin first, and *pinned*), a store bound to no model or to another, a binding the Lean
     didn't decide bound at the registration's root, and no model to bind it to each credit nothing, with the reason."""
@@ -383,6 +385,12 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
                           for x in ("time", "filler_time"))
         assert (f"| 0 | {t} | yes | yes | yes | yes | yes | credited: weights {shares}, filler {filler} |"
                 in al.table(doc).splitlines())
+        by = al.lv.Lean(al.lv.build(), lambda _: None)
+        try:
+            assert doc["line_by"] == "python" and analysed(out, host, sessions, reg, desc, line_by=by) == {
+                **doc, "line_by": "lean"}
+        finally:
+            by.close()
     else:
         assert zero(doc) == {0: ["not complete"], 1: ["not complete", "not accepted"]}
         assert honest["credit"]["complete"]["reason"] == "period p-1 closed incomplete (1 of its 2 windows incomplete)"
