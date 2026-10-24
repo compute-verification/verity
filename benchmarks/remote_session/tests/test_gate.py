@@ -1,8 +1,7 @@
 """`gate.sh probe`: before a gate run writes anything to either auditor host, it reads vy-challenger-1's key, pins and
 ledger and vy-auditor-1's status, and refuses (exit 3, the reason in probe.json) a key that isn't PIN, a used period, a
 period of the lane still open, a host pinned elsewhere or busy, and a CIRCUIT that isn't COMMIT's. Under DRY=1 nothing
-reaches ssh. `gate.sh fire` with LEASE_BY opens nothing for a prover lease that began after LEASE_BY or still waits 2
-minutes past it. The gates are a stub ssh on PATH; COMMIT is a throwaway repository's one commit."""
+reaches ssh. The gates are a stub ssh on PATH; COMMIT is a throwaway repository's one commit."""
 from __future__ import annotations
 
 import hashlib
@@ -113,7 +112,8 @@ def test_a_dry_probe_sends_nothing(tmp_path, repo):
 
 def fire(tmp_path: Path, status: str, lease_by: str) -> tuple[subprocess.CompletedProcess, list[str]]:
     """gate.sh fire with LEASE_BY against a stub ssh that answers every request with the prover node's `gpu-lease status`
-    STATUS; its result and the calls ssh got."""
+    STATUS; its result and the calls ssh got. Fire opens nothing for a prover lease that began after LEASE_BY or still
+    waits 2 minutes past it."""
     out, bin_ = tmp_path / "out", tmp_path / "bin"
     for d in (out, bin_):
         d.mkdir()
