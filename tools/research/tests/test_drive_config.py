@@ -41,6 +41,7 @@ def driven(monkeypatch) -> list[dict]:
             return ""
 
     monkeypatch.setattr(D, "Driver", Driver)
+    monkeypatch.setattr(Q.Queue, "gc", lambda self: None)              # no tick, so no clone to gc
     return built
 
 

@@ -162,8 +162,9 @@ def auth_env(auth: tuple[str, ...]) -> dict[str, str]:
     return env if pairs else {}
 
 
-#: what train.sh's check.py passes on as `slot.py --rank`: a train's members above `main` (1 for the lowest), 0 for the post-landing
-#: run, so the train that lands next takes a node's next free check slot (CI-110)
+#: what train.sh's check.py passes on as `slot.py --rank`: a train's first-parent depth (`Driver._rank`, the lowest train's the
+#: least), so the train that lands next takes a node's next free check slot (CI-110); the post-landing run has none, so it takes
+#: a slot only where no train waits (top, 24 Oct 04:53Z: trains come first)
 SLOT_RANK = "CHECK_SLOT_RANK"
 #: the per-PR shadow's checks' train.sh: an ordinary job, no `--priority` or rank, behind every priority check and in turn with
 #: lane checks, so it never takes a lane's or a train's slot; and quiet, posting nothing when a launch registers nothing (ci, 21 Oct)
@@ -236,10 +237,21 @@ def touched_launch(repo: Path, commit: str, base: str, auth: tuple[str, ...] = (
                    how: RemoteSuites | None = None) -> tuple[list[str], str]:
     """A train's touched-suites run (`queue.touched_suites` on a node, `RemoteSuites`: `research run --on auto`, outside the check
     slots) of ``commit`` against ``base``, shipped from a temporary worktree of the queue's clone: (its run ids, its output's
-    tail).  It runs as lane ci, with the queue's credentials, and git never prompts."""
+    tail).  It runs as lane ci, with the queue's credentials, and git never prompts.  It ships train.sh's own tree of ``commit``
+    when that is there (`train_tree`): a second checkout took 80-100 s more of each launch on the control pod (24 Oct)."""
     how = how or RemoteSuites(env={**auth_env(auth), "RESEARCH_LANE": "ci"})
-    t = touched_suites(repo, commit, base, how)
+    t = touched_suites(repo, commit, base, how, wt=train_tree(commit))
     return t.ids, (t.tail or "; ".join(t.notes))[-600:]
+
+
+def train_tree(commit: str) -> Path | None:
+    """train.sh's worktree of ``commit`` (`train-SHA` under `TRAIN_TREES`, else TMPDIR), while it is there and at ``commit``: it
+    stays until the check launched from it ends."""
+    tree = Path(os.environ.get("TRAIN_TREES") or tempfile.gettempdir()) / f"train-{commit[:12]}"
+    if not (tree / ".git").exists():
+        return None
+    head = _git(tree, "rev-parse", "HEAD", check=False)
+    return tree if head.returncode == 0 and head.stdout.strip() == commit else None
 
 
 #: what a running check has written of its steps and suites so far (check.py's `STEPS_LOG`, suites.py's `failing_path` of each
@@ -613,8 +625,9 @@ class Driver:
         self.regenerate_locks = regenerate_locks
         #: steps a train lands without (Daniel through top, 17 Oct; CI-30): the post-landing run checks them on `main`
         #: (`postland`), and one that fails reverts the PR it implicates, else every landing since the last verified tip (none
-        #: when no landing touches what failed).  The Lean check's steps are never deferred.
-        defer = {x for x in defer if not x.startswith("lean")}
+        #: when no landing touches what failed).  The Lean check's steps are never deferred; lean-suites, the pytest suites that use
+        #: its build, may be (Daniel, 11 Oct: a part whose cold run is over ~10 min; lean-suites takes 28-65 min, top 24 Oct 04:46Z).
+        defer = {x for x in defer if not x.startswith("lean") or x == "lean-suites"}
         self.defer = frozenset(defer | ({"flock-rust-tests"} if "circuit-check" in defer else set()))  # it runs after it
         #: the post-landing run of the deferred steps on `main`'s tip (`postland`): `train.sh COMMIT MACHINE --deferred STEPS`; an
         #: injected `launch` launches it too
@@ -776,9 +789,13 @@ class Driver:
         return Verdict("running", " ".join(ids), f"{why}: running again")
 
     def _passed_but_deferred(self, ids: list[str]) -> str | None:
-        """The running check among ``ids`` whose every step but the deferred ones has passed (or was skipped), none failed."""
+        """The running check among ``ids`` whose every step but the deferred ones has passed (or was skipped), none failed. Its
+        evidence is fetched once a tick (`_ev`, as `_states`): a tick asks it of each running train's verdict five or six times,
+        an ssh `research status` per run each (24 Oct: 5-10 s a batch, the same runs again seconds later)."""
         need = [x for x in CHECK_STEPS if x not in self.defer]
-        for d in self.evidence(self.repo, ids):
+        if (key := " ".join(ids)) not in self._ev:
+            self._ev[key] = self.evidence(self.repo, ids)
+        for d in self._ev[key]:
             got: dict[str, str] = {}
             with contextlib.suppress(OSError):
                 for line in (d / PROGRESS[0]).read_text().splitlines():
@@ -1052,7 +1069,7 @@ class Driver:
         if self.dry_run or q.shadow:
             q.log(f"research queue drive: would launch train.sh {main[:12]} {self.on} --deferred {steps}")
             return
-        with slot_rank(0):
+        with slot_rank(None):
             ids, tail = self.launch_postland(self.repo, main, self.on, steps)
         if not ids:
             self.refuse(drive, f"launch:postland:{main}", f"train.sh {main[:12]} {self.on} --deferred {steps} registered no run: {tail}")
@@ -1644,9 +1661,12 @@ class Driver:
         self._record(drive, m, agreement, started)
         return started[0], started[1]
 
-    def _rank(self, commit: str, chain: list | None = None) -> int | None:
-        """``commit``'s train's rank for the slot queue (`SLOT_RANK`): its members above `main`."""
-        return next((i + 1 for i, x in enumerate(self.q.chain() if chain is None else chain) if x.commit == commit), None)
+    def _rank(self, commit: str) -> int | None:
+        """``commit``'s train's rank for the slot queue (`SLOT_RANK`): its depth on the first-parent line `main` moves along, so a
+        rank keeps its order with ranks sent after `main` moved (24 Oct: d836's check, ranked 17 by its members above `main` at
+        01:17Z, waited 3 h behind higher trains ranked 15 after the 01:38Z landing)."""
+        depth = _out(self.repo, "rev-list", "--count", "--first-parent", commit)
+        return int(depth) if depth.isdigit() else None
 
     def _start(self, m: Member, main: str, agreement: bool, rank: int | None) -> tuple[list[str], str, list[str] | None, str]:
         """Launch ``m``'s check and, with pytest deferred, the suites its change reaches once the check registered: (the check's
@@ -2189,9 +2209,10 @@ class Driver:
         stop = next((k for k, x in enumerate(members) if x.commit in settling), len(members))
         passed_now = False                                  # a check whose verdict came in since the land step at the start
         todo: list[tuple[int, Member, str, bool]] = []          # (its place in `what`, the train's tip, its PRs, agreement)
-        # the top tip keeps a check of its own, ranked first in the slot queues: one pass of it lands all of `next`, while the
-        # trains below it still land what they can (23 Oct 19:20Z: the five checks were nested prefixes of the bottom 15 of 50,
-        # cut at their cold-circuit-check boundaries, and nothing checked the 35 above them)
+        # the top tip keeps a check of its own, ranked in the slot queues right after the lowest train: one pass of it lands all
+        # of `next`, while the trains below it still land what they can (23 Oct 19:20Z: the five checks were nested prefixes of
+        # the bottom 15 of 50, cut at their cold-circuit-check boundaries, and nothing checked the 35 above them); the lowest
+        # still takes the first free slot (top, 24 Oct 04:44Z)
         top = trains[-1] if len(trains) > 1 and trains[-1] <= stop and self.max_running > 2 else None
         reserve = top is not None and self.verdict(members[top].commit, main, drive).state == "none"
         waited = False
@@ -2231,9 +2252,9 @@ class Driver:
             todo.append((len(what), m, prs, agreement))
             what.append("")
             running += 1
-        chain = q.chain() if todo else []
-        started = _each(lambda t: self._start(t[1], main, t[3], 1 if top is not None and t[1] is members[top] else
-                                              self._rank(t[1].commit, chain)), todo, LAUNCH_JOBS)
+        floor = self._rank(members[trains[0]].commit) if top is not None and todo else None
+        started = _each(lambda t: self._start(t[1], main, t[3], floor + 1 if floor is not None and t[1] is members[top] else
+                                              self._rank(t[1].commit)), todo, LAUNCH_JOBS)
         for (k, m, prs, agreement), (ids, tail, *rest) in zip(todo, started):
             self._record(drive, m, agreement, (ids, tail, *rest))
             if not ids:

@@ -247,6 +247,31 @@ def test_the_queues_clone_merges_lean_audit_records_with_the_record_driver(world
     assert set(merged["guarantees"]) == {"T", "A", "B"}
 
 
+def test_the_queues_clone_never_starts_a_gc_of_its_own_and_drive_gcs_it_once_its_tick_is_done(world, monkeypatch):
+    """24 Oct: a `git gc --auto` that train.sh's fetch started in the clone mid-tick ran `git prune` for 10 min, and each launch's
+    checkout beside it took 80-100 s instead of 14.  Git starts none in the clone; `Queue.gc` runs one at git's thresholds."""
+    import hashlib
+
+    from research import queue as Q
+
+    world.gh.put(1, world.change({"a.txt": "a1\n"}))
+    q = world.queue()
+    q.sync()
+    assert _git(q.workdir, "config", "--get", "gc.auto") == "0" and _git(q.workdir, "config", "--get", "maintenance.auto") == "false"
+    # loose objects in objects/17, the directory `gc --auto` counts, each kept by a ref
+    blobs = [b for b in (f"loose {i}\n" for i in range(5000)) if hashlib.sha1(f"blob {len(b)}\0{b}".encode()).hexdigest()[:2] == "17"]
+    for i, b in enumerate(blobs[:3]):
+        sha = subprocess.run(["git", "hash-object", "-w", "--stdin"], cwd=q.workdir, input=b, capture_output=True, text=True,
+                             check=True).stdout.strip()
+        _git(q.workdir, "update-ref", f"refs/test/{i}", sha)
+    loose = q.workdir / ".git" / "objects" / "17"
+    _git(q.workdir, "gc", "--auto")                                           # what a fetch or a merge starts
+    assert len(list(loose.iterdir())) >= 3
+    monkeypatch.setattr(Q, "GC_AUTO", 256)                                    # more than one loose object in objects/17
+    q.gc()
+    assert not loose.exists() or not any(loose.iterdir())
+
+
 def test_a_conflicting_pr_is_left_out_with_the_queued_pr_that_touched_the_file_and_no_note_is_written(world, monkeypatch):
     """13 Oct: a sync on @lean's VM wrote conflict handoffs for ci's and circuits' PRs into @lean's notes clone, where they
     waited for @lean's next notes push; drive tells each conflict in the merge thread (`Driver.refuse`)."""

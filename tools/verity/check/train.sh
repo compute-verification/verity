@@ -28,12 +28,17 @@
 # checks), and `TRAIN_QUIET=1` posts nothing when a launch registers no run: drive's per-PR shadow sets both, so it never takes
 # a slot ahead of a lane's or a train's check, or rings anyone (`research queue drive --per-pr-shadow`).
 #
+# COMMIT's worktree is `train-SHA` under `TRAIN_TREES` (default TMPDIR): drive puts it on local disk, since a checkout on the
+# control pod's network volume took 80-100 s (24 Oct). A tree is needed only until its runs launch and drive has shipped it for
+# the train's touched suites: each launch removes the trees no process works in that were launched over 10 min ago, moved aside
+# at once and deleted in the background (none was removed on the volume, and 238 were left there, 24 Oct).
+#
 # Run it where the parent store key is (the Cursor secrets), from a Verity checkout with `machines.d` for MACHINE. It refuses a
 # temporary credential, which cannot mint the run's custody key, a shell that skips the store-backed tests, a COMMIT that is
 # empty (its tree is its base's: BASE, or else where it leaves origin/main, or its parent for a commit on main) or that origin
 # doesn't hold, and a BASE that isn't an ancestor of COMMIT.
 set -euo pipefail
-[ $# -ge 2 ] || { sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+[ $# -ge 2 ] || { sed -n '2,39p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 commit=$1 machine=$2; shift 2
 pass=() against= deferred=
 while [ $# -gt 0 ]; do
@@ -87,12 +92,29 @@ else
 fi
 [ -z "$base" ] || [ "$(git -C "$root" rev-parse "$sha^{tree}")" != "$(git -C "$root" rev-parse "$base^{tree}")" ] \
   || die "${sha:0:12} is empty (its tree is its base ${base:0:12}'s): nothing to check"
-tree="${TMPDIR:-/tmp}/train-${sha:0:12}"
+mkdir -p "${TRAIN_TREES:-${TMPDIR:-/tmp}}"
+trees=$(cd "${TRAIN_TREES:-${TMPDIR:-/tmp}}" && pwd -P)       # resolved, as /proc/PID/cwd is
+tree="$trees/train-${sha:0:12}"
+declare -A busy=()
+while IFS= read -r c; do
+  case $c in "$trees"/train-*) c=${c#"$trees"/}; busy[${c%%/*}]=1 ;; esac
+done < <(find /proc/[0-9]*/cwd -maxdepth 0 -printf '%l\n' 2>/dev/null)
+gone=
+for t in "$trees"/train-*/; do
+  t=${t%/} n=${t##*/}
+  [ -d "$t" ] && [ "$t" != "$tree" ] && [ -z "${busy[$n]:-}" ] || continue
+  [ -z "$(find "$t.log" -maxdepth 0 -mmin -10 2>/dev/null)" ] || continue    # drive ships it for the touched suites next
+  mv "$t" "$trees/.gone-$n-$$" 2>/dev/null && gone=1
+done
+if [ -n "$gone" ]; then
+  git -C "$root" worktree prune
+  setsid nohup rm -rf "$trees"/.gone-* > /dev/null 2>&1 < /dev/null 9>&- &
+fi
 git -C "$root" worktree remove --force "$tree" 2>/dev/null || true
 git -C "$root" worktree add -q --detach "$tree" "$sha" 2>>"$why" || die "git worktree add $tree failed"
-exec 9>&-
 log="$tree.log"
-cd "$tree"
+cd "$tree"                                                     # before the lock goes: another launch's sweep sees it worked in
+exec 9>&-
 echo "train: ${sha:0:12} on $machine; log $log"
 # `research run` stays attached to the run until it ends; the run doesn't need it (custody publishes from the machine)
 if [ -z "$against" ]; then

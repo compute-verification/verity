@@ -1482,6 +1482,49 @@ def test_train_sh_against_keeps_the_quick_tiers_bounds_and_lean_build():
     assert "uv run --locked --all-packages --extra torch-cpu python tools/verity/check/suites.py" == " ".join(queue.QUICK_TIER[:-1])
 
 
+def test_train_sh_checks_out_under_train_trees_and_removes_the_trees_no_process_works_in(tmp_path):
+    """24 Oct: 238 trees of ended checks were left on the control pod's network volume (~95 GB), each one a worktree every
+    `git gc` of the clone reads.  A launch removes every tree no process works in that was launched over 10 min ago, and keeps
+    one a process still works in or one just launched (drive ships it for the touched suites next); its own goes under
+    `TRAIN_TREES`, which drive puts on local disk."""
+    import os
+    import subprocess
+
+    git, train, argv = _train_repo(tmp_path)
+    trees = tmp_path / "trees"
+    shas = []
+    for n in range(4):
+        (tmp_path / "repo" / "a").write_text(f"{n}\n")
+        git("commit", "-q", "-am", f"change {n}")
+        git("push", "-q", "origin", "HEAD:main")
+        shas.append(git("rev-parse", "HEAD"))
+    running, ended, fresh, new = (trees / f"train-{s[:12]}" for s in shas)
+
+    def launch(sha):
+        (tmp_path / "launched").unlink(missing_ok=True)
+        p = train(sha, "vy-x", TRAIN_TREES=str(trees))
+        assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
+
+    def launched_long_ago(tree):
+        os.utime(f"{tree}.log", (0, 0))
+
+    launch(shas[0])
+    launched_long_ago(running)
+    check = subprocess.Popen(["cat"], cwd=running, stdin=subprocess.PIPE)                # a process still at work in its tree
+    try:
+        launch(shas[1])
+        launched_long_ago(ended)
+        launch(shas[2])
+        assert running.is_dir() and fresh.is_dir() and not ended.exists() and not list(tmp_path.glob("train-*"))
+        launch(shas[3])
+        assert running.is_dir() and fresh.is_dir() and new.is_dir()
+        listed = git("worktree", "list", "--porcelain")
+        assert str(ended) not in listed and all(str(t) in listed for t in (running, fresh, new))
+    finally:
+        check.stdin.close()
+        check.wait()
+
+
 def test_train_sh_stops_a_launcher_that_launched_nothing_in_the_wait(tmp_path):
     """18 Oct: train.sh gave up on a check.py still gathering verdicts after its wait, and check.py launched its runs later. Drive
     had no ids for them, so nothing cancelled them, and one held a check slot 3 h on a tree no longer on `next`."""
