@@ -54,17 +54,19 @@ research run --project verity --on vy-nebius-cpu-2 --source . --cwd clone --mem-
 ~~~
 
 `--case registered-node` checks the node Program that `verity-vllm predict node` registered, as registered.
-- **Inputs.** Its descriptor, sent as `glm53-b1-node.descriptor.json.gz`. From `predict node-registration`'s `--out`:
-  `trusted.json`, `provenance.json` and `registration.json`, sent as `glm53-b1-node.<file>`.
-- **Before any check**, it holds the descriptor to its registration:
+- **Inputs.** Its descriptor, sent as `glm53-b1-node.descriptor.json.gz`. Its registration, from `predict
+  node-registration`'s `--out`: `trusted.json`, `provenance.json` and `registration.json`, sent as
+  `glm53-b1-node.<file>`. Without the registration, only the `--policy` checks run.
+- **Before any check**, it holds the descriptor to what it should be:
   - its SHA-512 is `--node-digest`;
-  - it is the program of the record that the trusted input names as the run's own;
-  - there is one provenance entry per θ node, each citing the log's first record.
+  - θ is its root's `RegisteredInput` nodes, and its `annotations.theta` where it has them;
+  - given the registration, it is the program of the record that the trusted input names as the run's own, and
+    there is one provenance entry per θ node, each citing the log's first record.
 - **The IU.** One IU holds every root node that isn't an input, which is the whole node's session (the demo's
   division).
 - **The checks**, in the order they start (`NODE_POINTS`):
-  - the check of record (`nci-check INSTANCE TRUSTED`, `NciCheck.Baseline`), at A: the policy check, then θ's
-    provenance against the registration log;
+  - given the registration, the check of record (`nci-check INSTANCE TRUSTED`, `NciCheck.Baseline`), at A: the
+    policy check, then θ's provenance against the registration log;
   - `--policy` at A (Γ = 2^44, α = 2^-25);
   - at C (α = 2^-28) with Γ = 2^44 and with Γ = 2^52;
   - at A's four neighbours.

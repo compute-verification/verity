@@ -4,8 +4,8 @@ express (README.md).
 
   measure --rank PATH ... --pins PINS --out DIR [--case NAME ...] [--gamma G] [--alpha NUM/DEN] [--jobs N]
           [--scratch DIR] [--exe PATH] [--check-mem-gb G]
-  measure --case registered-node --node PATH --node-digest HEX --node-trusted PATH --node-provenance PATH
-          [--node-registration PATH] [--node-points POINT ...] --out DIR [...]
+  measure --case registered-node --node PATH --node-digest HEX [--node-trusted PATH --node-provenance PATH
+          [--node-registration PATH]] [--node-points POINT ...] --out DIR [...]
 
 `--rank` names each rank's workload descriptor (`build/rank<r>/build_workload/descriptor.json.gz` of the Build), in rank
 order, and `--pins` the Build's meta (`rank_workload_digests`), which each must match. `--check-mem-gb` caps each
@@ -22,13 +22,15 @@ order, and `--pins` the Build's meta (`rank_workload_digests`), which each must 
               reading the other ranks' partials where it read its `peers_*` inputs (the TP exchange inside the node),
               the weights registered and θ: one IU, the node's session, at (Γ, α) and at its neighbours (α/2, 2α, Γ/2, 2Γ)
   registered-node
-              the node Program `verity-vllm predict node` registered (`--node`), held to its registration before any
-              check: its SHA-512 is `--node-digest` and the program of the record `--node-trusted` cites as the run's
-              own (`run`, the digest of its log's first record), and `--node-provenance` has one entry per θ node. One
-              IU, every root node that isn't an input (the whole node's session), θ the descriptor's
-              (`annotations["theta"]`). `--policy` at A (`GAMMA`, `ALPHA`), its neighbours and C (`ALPHA_C` at `GAMMA`
-              and `GAMMA_C`); the check of record (`nci-check INSTANCE TRUSTED`, `NciCheck.Baseline`: the policy check,
-              then θ's provenance against the registration log) at A. `--node-points` picks some of `NODE_POINTS`
+              the node Program `verity-vllm predict node` registered (`--node`), whose SHA-512 must be
+              `--node-digest`. One IU, every root node that isn't an input (the whole node's session), θ its
+              `RegisteredInput` root nodes (the descriptor's `annotations["theta"]` too, where it has them). `--policy`
+              at A (`GAMMA`, `ALPHA`), its neighbours and C (`ALPHA_C` at `GAMMA` and `GAMMA_C`). Given its
+              registration, the node is held to it before any check (it is the program of the record `--node-trusted`
+              cites as the run's own, `run`, and `--node-provenance` has one entry per θ node, each citing the log's
+              first record), and the check of record runs too, at A (`nci-check INSTANCE TRUSTED`,
+              `NciCheck.Baseline`: the policy check, then θ's provenance against the registration log).
+              `--node-points` picks some of `NODE_POINTS`
 
 A finer division of a whole session (per engine step, per layer, per Call) is not checked: `NciCheck.Desc` holds every
 read of a root node as pieces of gates, and on GLM-5.3 a Call's output is mostly one piece per leaf (the 6,144 outputs of
@@ -595,39 +597,46 @@ def slices(runs: Runs, scratch: Path, src: Source, body: dict, ref) -> None:
 
 
 def node_instances(args, scratch: Path) -> tuple[list[tuple], dict]:
-    """The registered node's instances, one per `--node-points` point, once its descriptor is held to its registration
-    (`registered-node`); run in a process of its own, as the decoded descriptor is tens of GB."""
+    """The registered node's instances, one per `--node-points` point, once its descriptor is its digest and, given its
+    registration, held to it (`registered-node`); run in a process of its own, as the decoded descriptor is tens of GB."""
     from verity.core.protocols.sampled_proofs.one_stage import registration as REG
 
     desc, ann = load(Path(args.node))
     text, size = described(desc)
-    trusted = json.loads(Path(args.node_trusted).read_text())
-    provenance = json.loads(Path(args.node_provenance).read_text())
-    theta = list(ann.get("theta") or [])
-    digests = [REG.digest(rec) for rec in trusted["log"]]
-    own = trusted["log"][digests.index(trusted["run"])] if trusted["run"] in digests else None
+    names = [desc["callees"][nd["fn"]] for nd in desc["definitions"][desc["root"]]["body"]["nodes"]]
+    del desc
+    theta = [k for k, n in enumerate(names) if n.startswith("RegisteredInput")]
+    owner = ["input" if INPUT.match(n) else 0 for n in names]
     wrong = []
     if size["sha512"] != args.node_digest:
         wrong.append(f"its SHA-512 is {size['sha512'][:16]}, not --node-digest {args.node_digest[:16]}")
-    if own is None:
-        wrong.append(f"the trusted input's run {trusted['run'][:16]} is the digest of no record of its log")
-    elif own["program"] != size["sha512"]:
-        wrong.append(f"the run's record registers program {own['program'][:16]}, not this one")
-    if not theta or len(provenance) != len(theta):
-        wrong.append(f"{len(provenance)} provenance entries for {len(theta)} θ nodes")
-    elif any(p.get("registration") != digests[0] for p in provenance):
-        wrong.append("a provenance entry cites a record other than the log's first")
-    if args.node_registration:
-        reg = json.loads(Path(args.node_registration).read_text())
-        if (reg["program_digest"], reg["record_digest"]) != (size["sha512"], trusted["run"]):
-            wrong.append("the registration's summary names another program or record")
+    if not theta:
+        wrong.append("its root has no RegisteredInput node")
+    if "theta" in ann and list(ann["theta"]) != theta:
+        wrong.append(f"its annotations' θ ({len(ann['theta'])} nodes) isn't its RegisteredInput root nodes ({len(theta)})")
+    provenance = own = trusted = None
+    if args.node_trusted:
+        trusted = json.loads(Path(args.node_trusted).read_text())
+        provenance = json.loads(Path(args.node_provenance).read_text())
+        digests = [REG.digest(rec) for rec in trusted["log"]]
+        own = trusted["log"][digests.index(trusted["run"])] if trusted["run"] in digests else None
+        if own is None:
+            wrong.append(f"the trusted input's run {trusted['run'][:16]} is the digest of no record of its log")
+        elif own["program"] != size["sha512"]:
+            wrong.append(f"the run's record registers program {own['program'][:16]}, not this one")
+        if len(provenance) != len(theta):
+            wrong.append(f"{len(provenance)} provenance entries for {len(theta)} θ nodes")
+        elif any(p.get("registration") != digests[0] for p in provenance):
+            wrong.append("a provenance entry cites a record other than the log's first")
+        if args.node_registration:
+            reg = json.loads(Path(args.node_registration).read_text())
+            if (reg["program_digest"], reg["record_digest"]) != (size["sha512"], trusted["run"]):
+                wrong.append("the registration's summary names another program or record")
     if wrong:
-        raise ValueError("the node is not its registration's: " + "; ".join(wrong))
-    nodes = desc["definitions"][desc["root"]]["body"]["nodes"]
-    owner = ["input" if INPUT.match(desc["callees"][nd["fn"]]) else 0 for nd in nodes]
-    info = {"root_calls": owner.count(0), "record": trusted["run"], "window": own["window"], "theta_nodes": len(theta),
-            **size}
-    del desc, nodes
+        raise ValueError("the node is not the one named, or not its registration's: " + "; ".join(wrong))
+    info = {"root_calls": owner.count(0), "theta_nodes": len(theta), **size}
+    if own is not None:
+        info |= {"record": trusted["run"], "window": own["window"]}
     ptext = json.dumps(text)
     del text
     made = []
@@ -651,8 +660,16 @@ def registered_node(runs: Runs, scratch: Path) -> dict:
 
 
 def measure(args) -> int:
-    if "registered-node" in args.case and not (args.node and args.node_digest and args.node_trusted and args.node_provenance):
-        raise SystemExit("registered-node: give --node, --node-digest, --node-trusted and --node-provenance")
+    if "registered-node" in args.case:
+        if not (args.node and args.node_digest):
+            raise SystemExit("registered-node: give --node and --node-digest")
+        if bool(args.node_trusted) != bool(args.node_provenance):
+            raise SystemExit("registered-node: give both --node-trusted and --node-provenance (the registration), or neither")
+        record = {t for t, (_, _, full) in NODE_POINTS.items() if full}
+        args.node_points = args.node_points or [t for t in NODE_POINTS if args.node_trusted or t not in record]
+        if not args.node_trusted and record & set(args.node_points):
+            raise SystemExit("registered-node: the check of record (--node-points full) needs the registration: give "
+                             "--node-trusted and --node-provenance")
     runs = Runs(args)
     t0 = time.perf_counter()
     meta: dict = {}
@@ -738,7 +755,7 @@ def main(argv: list[str] | None = None) -> int:
     m.add_argument("--node-trusted")
     m.add_argument("--node-provenance")
     m.add_argument("--node-registration")
-    m.add_argument("--node-points", nargs="+", choices=tuple(NODE_POINTS), default=list(NODE_POINTS))
+    m.add_argument("--node-points", nargs="+", choices=tuple(NODE_POINTS), default=None)
     args = ap.parse_args(argv)
     args.case = args.case or ["registered", "rank", "slice", "node"]
     return measure(args)

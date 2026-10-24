@@ -18,8 +18,10 @@ if [ -e "$IN/glm53-b1-pins.json" ]; then
   a+=(--pins "$IN/glm53-b1-pins.json" --rank "$IN"/glm53-b1-rank{0..7}.descriptor.json.gz)
 fi
 if [ -e "$IN/glm53-b1-node.descriptor.json.gz" ]; then
-  a+=(--node "$IN/glm53-b1-node.descriptor.json.gz" --node-trusted "$IN/glm53-b1-node.trusted.json"
-      --node-provenance "$IN/glm53-b1-node.provenance.json" --node-registration "$IN/glm53-b1-node.registration.json")
+  a+=(--node "$IN/glm53-b1-node.descriptor.json.gz")
+  for f in trusted provenance registration; do
+    if [ -e "$IN/glm53-b1-node.$f.json" ]; then a+=(--node-$f "$IN/glm53-b1-node.$f.json"); fi
+  done
 fi
 uv sync -q --all-packages --extra torch-cpu
 (cd verity/core/protocols/network/nci/lean && lake build nci-check) > "$O/build.log" 2>&1 || { tail -40 "$O/build.log" >&2; exit 1; }
