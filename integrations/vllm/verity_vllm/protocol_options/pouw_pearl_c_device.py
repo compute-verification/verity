@@ -42,9 +42,12 @@ torch's current stream, in the device's primary context:
   must not be able to pass as a repeat.  `omit` drops named steps, for the negative control.
 
 The per-call host work is kept small (the decode profile, research store ``internal/pouw/rtx-pro/pouw-mvp-decode-profile.md``):
-the keys by native SHA-512 (`_Keys`, byte for byte `call_keys`), their upload through a pinned ring (`_Uploads`), the records'
-screen as one fused kernel (`screen_into`, Triton; `screen` where Triton can't run), A's roots copied into a pass buffer,
-and the stream read from torch's raw accessor.
+the keys by native SHA-512 (`_Keys`, byte for byte `call_keys`), their upload through a pinned ring (`_Uploads`), and after a
+call's first step a device-to-device copy from the key table (`_KeyTable`); the records' screen as one fused kernel
+(`screen_into`, Triton, its compiled kernel launched directly after the first launch; `screen` where Triton can't run); A's
+roots copied into a pass buffer by one driver copy; a shape's filler rows zeroed only where an earlier call wrote them; and
+the stream read from torch's raw accessor.  The key table and the filler rows' bookkeeping hold only while no call has run
+under graphs (`eager_only`): a captured forward's replays write a shape's rows and keys without this host seeing them.
 
 The schedule (`verity.core.protocols.pouw.serving.Schedule`, by name from `SCHEDULES`; the decode plan's step 2,
 bc-b139c29c's) places each call's step groups (`STEP_GROUPS`) on lanes.  Under ``deferred``, the measured one, the call's tile
@@ -89,6 +92,7 @@ from .pouw_pearl_c_graphs import GRAPH_ROWS, SLOT_BYTES, GraphCalls, _Graph
 from .pouw_pearl_c_host import (
     _bytes,
     _Keys,
+    _KeyTable,
     _Lane,
     _put,
     _stream,
@@ -97,6 +101,7 @@ from .pouw_pearl_c_host import (
     _write,
     _zeros,
     call_keys,  # noqa: F401 - kept importable here, as the tests read it
+    memmove,
     write_manifest,
 )
 from .pouw_pearl_c_kernel import (
@@ -228,6 +233,7 @@ class _Shape:
     turn: int = 0
     size: dict = field(default_factory=dict)   # the pipeline's buffer sizes at this shape
     count: Any = None              # pd_commit's counter (`run.Pipeline`'s pd_count): 16 zero bytes, never poisoned
+    dirty: int = 0                 # xa's rows an eager call may have left nonzero (`PearlCDeviceRun.eager_only`)
 
 
 @dataclass
@@ -355,6 +361,11 @@ class PearlCDeviceRun(GraphCalls):
         self.flag_buf = _zeros(2 * flag_rows, self.device).view(flag_rows, 2)
         self.tree_hash = hash_format(scheme).tree_hash
         self.keys, self.uploads = _Keys(kernel.fixture, salt, self.tree_hash), _Uploads(self.device)
+        self.copy = kernel.dev.copy_async if self.device.type == "cuda" else memmove
+        self.key_table = _KeyTable(self.keys, self.uploads, self.device, self.copy)
+        #: no call has run under graphs yet, so no captured forward replays writes this host doesn't see: until one does, each
+        #: shape's filler rows are zeroed only where an earlier call wrote (`_Shape.dirty`), and keys come from the key table
+        self.eager_only = True
         self.fused_screen = self.device.type == "cuda"
         self.weights = {w: self._weight_side(w, t) for w, t in weights.items()}
         if self.graphs:
@@ -566,8 +577,11 @@ class PearlCDeviceRun(GraphCalls):
                                f"{len(self.flag_buf)} screened rows); end it and begin another")
         self.join_before(sh)
         sh.xa[:m].copy_(x2)
-        if m16 > m:
-            sh.xa[m:m16].zero_()
+        self.eager_only = self.eager_only and not self.graphs
+        filled = sh.dirty if self.eager_only else m16
+        if filled > m:
+            sh.xa[m:filled].zero_()
+        sh.dirty = m
         pipe, steps, side = self._pipe(w, sh)
         raw = self.stream()
         cuda = self.device.type == "cuda"
@@ -583,7 +597,9 @@ class PearlCDeviceRun(GraphCalls):
             j = sh.turn % len(sh.sets)
             sh.turn += 1
             pipe.b.update({x: t.data_ptr() for x, t in sh.sets[j].items()})
-        if self.hashing:
+        if self.hashing and self.eager_only:
+            self.key_table.put(sh.keys, w, self.roots[w], index, m16, raw, caller if self.uploads.cuda else None)
+        elif self.hashing:
             self.uploads.put(sh.keys, self.keys(self.roots[w], index, m16), caller if self.uploads.cuda else None)
         if cuda and main is not None:               # the main lane starts after the caller's x, y and keys
             main.event.record(caller)
@@ -624,7 +640,8 @@ class PearlCDeviceRun(GraphCalls):
         if self.hashing:
             size = pipe.size["tree_a"]
             if not scattered:
-                self.roots_buf[self.nb * index:self.nb * (index + 1)].copy_(sh.b["tree_a"][size - self.nb:size])
+                self.copy(self.roots_buf.data_ptr() + self.nb * index, sh.b["tree_a"].data_ptr() + size - self.nb, self.nb,
+                          self.stream())
             flags = self.flag_buf[cur.flag_rows:cur.flag_rows + m]
             if not screened:
                 screen_into(flags, sh.xa[:m] if rows is None else rows, sh.b["alpha_a"], sh.b["aux_a"], self.fused_screen)

@@ -64,12 +64,41 @@ def screen_into(out: Any, x: Any, alpha: Any, aux: Any, fused: bool) -> None:
     rows, k = x.shape
     if fused:
         from .pouw_pearl_c_triton import screen as kernel
-        kernel[(rows,)](x, alpha.view(torch.float32), aux.view(torch.float32), out, k, len(range(0, k, C.S5_STRIDE)), P.SIGMA_MIN,
-                        BAND, BLOCK=SCATTER_BLOCK)
+        launch(kernel, rows, (x, alpha.view(torch.float32), aux.view(torch.float32), out, k, len(range(0, k, C.S5_STRIDE)),
+                              P.SIGMA_MIN, BAND), SCATTER_BLOCK)
     else:
         fails, unsure = screen(x, alpha, aux)
         out[:, 0].copy_(fails)
         out[:, 1].copy_(unsure)
+
+
+#: each kernel `launch` compiled, by everything Triton specializes it on: its launcher, function and packed metadata
+_COMPILED: dict[tuple, tuple] = {}
+
+
+def launch(kernel: Any, rows: int, args: tuple, block: int) -> None:
+    """``kernel[(rows,)](*args, BLOCK=block)``.  The first launch at each specialization is Triton's own; later ones call the
+    kernel it compiled directly, skipping Triton's per-call binding, cache lookup and hook checks (about 40 µs of host time a
+    call).  The key holds what Triton's kernel cache keys on here: the current device, its debug and instrumentation knobs,
+    each tensor's dtype and 16-byte alignment, and every scalar's value (a superset of the integers' specialization).  With
+    any launch hook, pre-run hook or stage inspection set, and off the GPU (Triton's interpreter), every launch is Triton's own."""
+    import torch
+    if not args[0].is_cuda:
+        kernel[(rows,)](*args, BLOCK=block)
+        return
+    from triton import knobs
+    rt = knobs.runtime
+    device = torch.cuda.current_device()
+    key = (kernel, device, block, rt.debug, knobs.compilation.instrumentation_mode,
+           *((a.dtype, a.data_ptr() % 16 == 0) if isinstance(a, torch.Tensor) else (type(a), a) for a in args))
+    hit = _COMPILED.get(key)
+    if hit is None or kernel.pre_run_hooks or rt.launch_enter_hook or rt.launch_exit_hook or rt.add_stages_inspection_hook:
+        compiled = kernel[(rows,)](*args, BLOCK=block)
+        if compiled is not None:
+            _COMPILED[key] = (compiled.run, compiled.function, compiled.packed_metadata)
+        return
+    run, function, metadata = hit
+    run(rows, 1, 1, torch._C._cuda_getCurrentRawStream(device), function, metadata, None, None, None, *args, block)
 
 
 def excluded(fails: Any, unsure: Any, x: Any) -> tuple[int, ...]:

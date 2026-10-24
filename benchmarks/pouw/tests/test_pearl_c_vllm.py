@@ -1746,6 +1746,55 @@ def test_the_upload_ring_writes_each_slot_as_given_through_its_wraparound():
     assert ring.i == 11 % 4
 
 
+def test_the_key_table_copies_each_calls_keys_from_its_first_upload_and_uploads_past_it():
+    keys = PPD._Keys(F, bytes(range(32)), HM96)
+    copies = []
+
+    def copy(dst, src, n, raw):
+        copies.append(raw)
+        ctypes.memmove(dst, src, n)
+    table = PPD._KeyTable(keys, PPD._Uploads(torch.device("cpu"), slots=4), torch.device("cpu"), copy, slots=2)
+    dst, root = torch.zeros(176, dtype=torch.uint8), bytes(range(64))
+    for w, index, m16, raw in ((0, 0, 16, 5), (0, 0, 16, 5), (1, 3, 32, 5), (0, 0, 16, 6), (2, 1, 16, 5), (1, 3, 32, 5)):
+        dst.fill_(0xA5)
+        table.put(dst, w, root, index, m16, raw, None)
+        assert PPD._bytes(dst[:168]) == PPD.call_keys(F, keys.salt, root, index, m16, HM96)
+    assert copies == [5, 5, 5, 5] and len(table.at) == 2          # stream 6 and the third key uploaded, no copy
+
+
+def test_eager_calls_leave_every_filler_row_zero_as_m_moves_within_a_shape(device_run):
+    make, _, weights, *_ = device_run
+    run = make()
+    for m in (20, 31, 17, 32, 25, 18):
+        x = torch.randn(m, 1024).to(torch.bfloat16)
+        run.gemm(0, x, weights[0], None)
+        sh = run.shapes[(32, 256, 1024)]
+        assert sh.dirty == m and bool((sh.xa[m:] == 0).all()) and torch.equal(sh.xa[:m], x.float())
+    with torch.inference_mode():
+        sh.xa[18:30] = 3.0                                         # a replay's rows, which this host doesn't see
+    run.eager_only = False
+    run.gemm(0, torch.randn(17, 1024).to(torch.bfloat16), weights[0], None)
+    assert bool((sh.xa[17:] == 0).all())
+
+
+def test_each_calls_a_root_lands_in_the_pass_buffer_and_the_second_steps_keys_come_from_the_table(device_run):
+    make, _, weights, roots, salt = device_run
+    run = make()
+    for step in range(2):
+        for i, w in enumerate((0, 1, 0)):
+            sh = run._shape(16, weights[w].shape[0], 1024)
+            tree = sh.b["tree_a"]
+            with torch.inference_mode():                           # A's tree, which the device would write
+                tree.copy_((torch.arange(len(tree)) * 7 + 3 * i + step).to(torch.uint8))
+            run.gemm(w, torch.randn(8, 1024).to(torch.bfloat16), weights[w], None)
+            size = run.pipes[(w, 16, frozenset(), True, "serial", False)][0].size["tree_a"]
+            assert PPD._bytes(run.roots_buf[64 * i:64 * (i + 1)]) == PPD._bytes(tree[size - 64:size])
+            assert PPD._bytes(sh.keys[:168]) == PPD.call_keys(F, salt, roots[w], i, 16, run.tree_hash)
+        run.end_pass()
+        run.key_table.keys = None                                  # the second step hashes nothing
+    assert len(run.key_table.at) == 3
+
+
 def test_the_host_path_commits_what_the_reference_path_commits(device_run, tmp_path):
     """The same calls through native keys and through `call_keys` itself (the pure path): the same keys uploaded for every
     call, the same launches, and the same retained manifest (records, roots, commitment)."""
