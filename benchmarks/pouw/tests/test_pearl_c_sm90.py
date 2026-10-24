@@ -63,9 +63,9 @@ def gemms(macro: str = "GEMM") -> list[tuple[str, str, int, int, int]]:
 
 def tile_smem(tm: int, bn: int) -> int:
     """Tile<TM, BN>::SMEM: the stages from a 1,024-aligned base, STAGES = min(CAP, SMEM_BUDGET / STAGE) (CAP: the 64-row
-    tiles' D_STAGES, PC_D_STAGES by default, else MAX_STAGES), and a barrier pair of 16 bytes a stage."""
+    tiles' MAX_STAGES_64, else MAX_STAGES), and a barrier pair of 16 bytes a stage."""
     stage = (tm + bn) * const("BK")
-    cap = int(re.search(r"#define PC_D_STAGES (\d+)", SOURCE).group(1)) if tm == 64 else const("MAX_STAGES")
+    cap = const("MAX_STAGES_64") if tm == 64 else const("MAX_STAGES")
     stages = min(cap, 200 * 1024 // stage)
     return 1024 + stages * stage + 16 * stages
 
@@ -74,7 +74,7 @@ def test_gemms_fit_h100_shared_memory_and_are_the_runners():
     """Every GEMM fits the H100's 227 KB at its tile, the runner gives each its tile and block (a consumer warpgroup per 64
     rows, then the producer), the gate knows each one at its N, and the peel's tail stage is exactly one stage."""
     assert "SMEM = 1024 + STAGES * STAGE + 16 * STAGES" in SOURCE and "STAGE = (TM + BN) * BK" in SOURCE
-    assert "CAP = NWG == 1 ? D_STAGES : MAX_STAGES" in SOURCE
+    assert "CAP = NWG == 1 ? MAX_STAGES_64 : MAX_STAGES" in SOURCE
     assert "SMEM_BUDGET = 200 * 1024" in SOURCE and const("PEEL_ROW") == const("BK") == RUN.PEEL_ROW == 128
     names = {n for n, *_ in gemms()}
     assert names == {f"{g}{t}" for g in ("gemm_plain", "gemm_fast", "gemm_ct", "gemm_pearlc", "gemm_pearlc_s")

@@ -179,28 +179,18 @@ template <int NA> DEV void acc_fence(float* d) {
 // (int32); a tile's B and P_B rows are its expert's, rows e N + tn BN of the experts' stacked B side, and its columns' scales
 // cs + e N.  C~, U and y are A's rows by N, as without it.  i4 (live, 0 for all M): rows from live on are filler, whose
 // C~, U and y are not stored (their products are still computed, as a wgmma tile's 64 rows are one instruction's).  On
-// 64-row tiles with G = 4, D_DEPTH windows' atoms are issued, each into its own set of accumulators, before the first of
-// them is waited on, so their MMAs run while the earlier ones' sums are added; the same sums go into the total in the same
-// order.
+// 64-row tiles with G = 4, each window's atoms are issued, into a second set of accumulators, before the window before it
+// is waited on, so its MMAs run while that one's sum is added; the same sums go into the total in the same order.
 // WIN (G = 4): a CTA a tile's window kb, its sum from +0 stored to slab kb of p2 (K / 128 slabs of M x N FP32), which
 // pa_w adds up as the other modes' total does.
 enum { M_PLAIN, M_CT, M_PEARLC, M_PEARLC_S, M_WIN };
-constexpr int BK = 128, PEEL_ROW = 128, SMEM_BUDGET = 200 * 1024, MAX_STAGES = 8;
-// the 64-row tiles' overlap: D_DEPTH windows issued together (2 or 4) and at most D_STAGES stages; a build may pass others
-// (-DPC_D_DEPTH, -DPC_D_STAGES)
-#ifndef PC_D_DEPTH
-#define PC_D_DEPTH 4
-#endif
-#ifndef PC_D_STAGES
-#define PC_D_STAGES 12
-#endif
-constexpr int D_DEPTH = PC_D_DEPTH, D_STAGES = PC_D_STAGES;
-static_assert(D_DEPTH == 2 || D_DEPTH == 4, "two or four windows at a time");
+// a 64-row tile (one consumer warpgroup) keeps up to MAX_STAGES_64 stages in flight, the others MAX_STAGES
+constexpr int BK = 128, PEEL_ROW = 128, SMEM_BUDGET = 200 * 1024, MAX_STAGES = 8, MAX_STAGES_64 = 12;
 struct Maps { uint8_t a[128], b[128], pa[128], pb[128]; };
 
 template <int TM, int BN> struct Tile {
   static_assert((TM == 64 || TM == 128) && (BN == 32 || BN == 64 || BN == 128), "64 or 128 rows by 32, 64 or 128 columns");
-  static constexpr int NWG = TM / 64, NT = 128 * (NWG + 1), CAP = NWG == 1 ? D_STAGES : MAX_STAGES;
+  static constexpr int NWG = TM / 64, NT = 128 * (NWG + 1), CAP = NWG == 1 ? MAX_STAGES_64 : MAX_STAGES;
   static constexpr uint32_t A_BYTES = TM * BK, STAGE = (TM + BN) * BK;
   static constexpr int STAGES = SMEM_BUDGET / STAGE < CAP ? SMEM_BUDGET / STAGE : CAP;
   // the stages from a 1,024-byte-aligned base (SWIZZLE_128B's period), then full[s] and empty[s]
@@ -331,11 +321,10 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
 #pragma unroll
       for (int i = 0; i < NA; i++) total[i] = d[i];
     } else if constexpr (NWG == 1) {
-      // D_DEPTH windows (4: into d, e, f, g; then 2 at a time for the rest) issued together, each one's sum added while the
-      // later ones' atoms run; each window's sum still goes into the total alone, in ascending k.  K / 128 is even (K is a
-      // multiple of 256).  No wgmma is in flight across a loop's back edge or issued or waited on in a branch, either of
-      // which ptxas serializes (C7514, C7518)
-      float e[NA], f[NA], g[NA];
+      // windows kb (into d) and kb + 1 (into e) issued together, d's sum added while e's atoms run; each window's sum still
+      // goes into the total alone, in ascending k.  K / 128 is even (K is a multiple of 256).  No wgmma is in flight across
+      // the loop's back edge or issued or waited on in a branch, either of which ptxas serializes (C7514, C7518)
+      float e[NA];
       const auto issue = [&](float* acc) {
         mbar_wait_warp(bars + 8 * s, ph);
         const uint32_t a0 = base + s * T::STAGE + wg * 64 * BK, b0 = base + s * T::STAGE + T::A_BYTES;
@@ -358,28 +347,7 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
       if (KB % 2) __trap();
 #pragma unroll
       for (int i = 0; i < NA; i++) total[i] = 0.0f;
-      int kb = 0;
-      if constexpr (D_DEPTH == 4) {
-        for (; kb + 4 <= KB; kb += 4) {
-          const int sd = s;
-          issue(d);
-          const int se = s;
-          issue(e);
-          const int sf = s;
-          issue(f);
-          const int sg = s;
-          issue(g);
-          WG_WAIT(3);
-          take(d, sd);
-          WG_WAIT(2);
-          take(e, se);
-          WG_WAIT(1);
-          take(f, sf);
-          WG_WAIT(0);
-          take(g, sg);
-        }
-      }
-      for (; kb < KB; kb += 2) {
+      for (int kb = 0; kb < KB; kb += 2) {
         const int sd = s;
         issue(d);
         const int se = s;
