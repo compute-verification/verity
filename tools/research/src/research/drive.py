@@ -162,8 +162,8 @@ def auth_env(auth: tuple[str, ...]) -> dict[str, str]:
     return env if pairs else {}
 
 
-#: what train.sh's check.py passes on as `slot.py --rank`: a train's members above `main` (1 for the lowest), 0 for the post-landing
-#: run, so the train that lands next takes a node's next free check slot (CI-110)
+#: what train.sh's check.py passes on as `slot.py --rank`: a train's first-parent depth (`Driver._rank`, the lowest train's the
+#: least), 0 for the post-landing run, so the train that lands next takes a node's next free check slot (CI-110)
 SLOT_RANK = "CHECK_SLOT_RANK"
 #: the per-PR shadow's checks' train.sh: an ordinary job, no `--priority` or rank, behind every priority check and in turn with
 #: lane checks, so it never takes a lane's or a train's slot; and quiet, posting nothing when a launch registers nothing (ci, 21 Oct)
@@ -1644,9 +1644,12 @@ class Driver:
         self._record(drive, m, agreement, started)
         return started[0], started[1]
 
-    def _rank(self, commit: str, chain: list | None = None) -> int | None:
-        """``commit``'s train's rank for the slot queue (`SLOT_RANK`): its members above `main`."""
-        return next((i + 1 for i, x in enumerate(self.q.chain() if chain is None else chain) if x.commit == commit), None)
+    def _rank(self, commit: str) -> int | None:
+        """``commit``'s train's rank for the slot queue (`SLOT_RANK`): its depth on the first-parent line `main` moves along, so a
+        rank keeps its order with ranks sent after `main` moved (24 Oct: d836's check, ranked 17 by its members above `main` at
+        01:17Z, waited 3 h behind higher trains ranked 15 after the 01:38Z landing)."""
+        depth = _out(self.repo, "rev-list", "--count", "--first-parent", commit)
+        return int(depth) if depth.isdigit() else None
 
     def _start(self, m: Member, main: str, agreement: bool, rank: int | None) -> tuple[list[str], str, list[str] | None, str]:
         """Launch ``m``'s check and, with pytest deferred, the suites its change reaches once the check registered: (the check's
@@ -2189,9 +2192,10 @@ class Driver:
         stop = next((k for k, x in enumerate(members) if x.commit in settling), len(members))
         passed_now = False                                  # a check whose verdict came in since the land step at the start
         todo: list[tuple[int, Member, str, bool]] = []          # (its place in `what`, the train's tip, its PRs, agreement)
-        # the top tip keeps a check of its own, ranked first in the slot queues: one pass of it lands all of `next`, while the
-        # trains below it still land what they can (23 Oct 19:20Z: the five checks were nested prefixes of the bottom 15 of 50,
-        # cut at their cold-circuit-check boundaries, and nothing checked the 35 above them)
+        # the top tip keeps a check of its own, ranked in the slot queues right after the lowest train: one pass of it lands all
+        # of `next`, while the trains below it still land what they can (23 Oct 19:20Z: the five checks were nested prefixes of
+        # the bottom 15 of 50, cut at their cold-circuit-check boundaries, and nothing checked the 35 above them); the lowest
+        # still takes the first free slot (top, 24 Oct 04:44Z)
         top = trains[-1] if len(trains) > 1 and trains[-1] <= stop and self.max_running > 2 else None
         reserve = top is not None and self.verdict(members[top].commit, main, drive).state == "none"
         waited = False
@@ -2231,9 +2235,9 @@ class Driver:
             todo.append((len(what), m, prs, agreement))
             what.append("")
             running += 1
-        chain = q.chain() if todo else []
-        started = _each(lambda t: self._start(t[1], main, t[3], 1 if top is not None and t[1] is members[top] else
-                                              self._rank(t[1].commit, chain)), todo, LAUNCH_JOBS)
+        floor = self._rank(members[trains[0]].commit) if top is not None and todo else None
+        started = _each(lambda t: self._start(t[1], main, t[3], floor + 1 if floor is not None and t[1] is members[top] else
+                                              self._rank(t[1].commit)), todo, LAUNCH_JOBS)
         for (k, m, prs, agreement), (ids, tail, *rest) in zip(todo, started):
             self._record(drive, m, agreement, (ids, tail, *rest))
             if not ids:

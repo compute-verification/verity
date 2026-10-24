@@ -32,7 +32,7 @@ lock is not in the line: it takes that slot whenever it frees.
 `python3 tools/verity/check/slot.py --priority -- CMD...`: the lander's train checks (`train.sh`). A priority waiter's ticket sorts
 before every lane waiter's, so it takes the next slot that frees ahead of the lanes' checks already waiting; it never stops a
 running check, and priority waiters keep their own arrival order. Merges unblock everyone (root, 2 Oct). With `--rank N`
-(drive's train checks: the train's members above `main`, so 1 for the lowest train and 0 for the post-landing run), priority
+(drive's train checks: the train's first-parent depth, so the lowest train's is the least, and 0 for the post-landing run), priority
 waiters go by rank, then arrival: the train that lands next takes the next slot, ahead of trains above it that came first (19 Oct
 19:12Z: a lowest train's resent check waited an hour behind them; CI-110). A priority waiter without a rank goes after the ranked.
 
