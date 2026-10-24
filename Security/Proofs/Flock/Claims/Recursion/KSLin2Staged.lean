@@ -172,7 +172,7 @@ theorem ksLin2_steps_parts (nextE : Msg → List Msg → List Coin → Claims.OC
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
         (∀ decI, Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape) ∧
         (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
-          L shape (showsPart untr b) chk s) ∧
+          L shape (showsPart untr b) (cmtTr untr) chk s) ∧
         (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart untr b) (cmtTr untr) s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
