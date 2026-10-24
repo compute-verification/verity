@@ -58,6 +58,10 @@
 #      REC_CIRCUIT_CACHE=$FLOCK_WORK/rec-circuits (V*'s circuit texts kept per shape, rec_circuits.py; empty: none kept)
 #      GPU_MAX_MIN=10 GPU_MEM_GB=32 (each prove's lease)  GPU_PREEMPTIBLE=1 (empty: not preemptible)  GPU_TRIES=3
 #      GPU_LEASE= (the lease command; default the queue's for this node)
+#      GPU_ON= (the GPUs a lease may take, gpu-lease --on: a NUMA node's, beside the job's taskset)
+#      SHIP=1 (build: the binaries also into out/ship, each named by its cache key, for a node that builds nothing)
+#      PREBUILT=DIR (another node's out/ship, e.g. research run --send's inputs/: each binary copied into its cache, and a
+#              step that would build one refuses instead)
 #      WARM_FROM=/workspace/jobs/proofs-vllm-moe/flock-gpu-link (a checkout whose cargo target starts the build warm)
 #      MODES=dev  REPLAY=1  CONTROLS= (oprove)  LOOPBACK_DRAW=all (a --zk loopback's draw: every unit; none: no draw)
 #      GPU=1 (0: the CPU prover end to end: built GPU=0, no CUDA, no lease, prove without --gpu; for a small K and N)
@@ -126,6 +130,17 @@ LSHA=$(cd verity/core/service/flock && find . -name .lake -prune -o -type f -pri
 LEAN_BIN=$L/lean-$LSHA/flock-verify
 # the Lean frame a firewalled prover (MODES=firewall) releases through, built beside flock-verify
 export FC_FIREWALL_LEAN=$L/lean-$LSHA/flock-firewall
+FSHA=$( (echo $LSHA; cat verity/ml/flock/tests/lean/InnerFold.lean) | sha256sum | cut -c1-16)
+FOLD_BIN=$L/fold-$FSHA/inner-fold
+# the ship's name for each binary: its cache key in the name, so a node takes only the one its own sources key
+SHIPS="$B:flock-circuit-$KEY-g$GPU-sm$SM $LEAN_BIN:flock-verify-$LSHA $FC_FIREWALL_LEAN:flock-firewall-$LSHA $FOLD_BIN:inner-fold-$FSHA"
+if [ -n "${PREBUILT:-}" ]; then
+  for s in $SHIPS; do
+    f=$PREBUILT/${s#*:}; [ -x ${s%%:*} ] || [ ! -f $f ] || { mkdir -p $(dirname ${s%%:*}) && cp $f ${s%%:*}.$$ && chmod +x ${s%%:*}.$$ && mv ${s%%:*}.$$ ${s%%:*}; }
+  done
+fi
+# no_build WHAT: refuse a build under PREBUILT (the node builds nothing)
+no_build() { [ -z "${PREBUILT:-}" ] || { echo "REFUSED: PREBUILT=$PREBUILT has no $1 for these sources (out/ship of a SHIP=1 build at this commit)"; exit 2; }; }
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $W/py/bin/python ] || { $UV venv -q --python 3.12 $W/py && $UV pip install -q --python $W/py/bin/python numpy blake3; } || exit 1
@@ -159,7 +174,7 @@ on_gpu() {
   : > $d/prove.err
   if [ $GPU = 0 ]; then "$@" 2> $d/prove.err; return $?; fi
   gpu_mib $d & local s=$!
-  "${LEASE[@]}" 1 --wait --max-min ${GPU_MAX_MIN:-10} --mem-gb ${GPU_MEM_GB:-32} ${pre:+--preemptible} -- "$@" 2> $d/prove.err
+  "${LEASE[@]}" 1 --wait ${GPU_ON:+--on $GPU_ON} --max-min ${GPU_MAX_MIN:-10} --mem-gb ${GPU_MEM_GB:-32} ${pre:+--preemptible} -- "$@" 2> $d/prove.err
   local rc=$?
   kill $s; wait $s 2>/dev/null
   return $rc
@@ -398,6 +413,8 @@ EOF
 }
 
 lean_build() {
+  [ -x $LEAN_BIN ] && [ -x $FC_FIREWALL_LEAN ] && return 0
+  no_build "flock-verify-$LSHA or flock-firewall-$LSHA"
   (
     export PATH=$HOME/.elan/bin:$PATH
     command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
@@ -406,6 +423,22 @@ lean_build() {
       rm -rf $L/lean-src && mkdir -p $L/lean-src && cp -r verity/core/service/flock/. $L/lean-src/ \
         && (cd $L/lean-src && lake build flock-verify flock-firewall) && mkdir -p $L/lean-$LSHA \
         && cp $L/lean-src/.lake/build/bin/flock-verify $L/lean-src/.lake/build/bin/flock-firewall $L/lean-$LSHA/
+    fi
+  )
+}
+
+# fold_build: InnerFold.lean as an executable (vstage's fold points and comb), keyed by its sources and the Lean package's
+fold_build() {
+  [ -x $FOLD_BIN ] && return 0
+  no_build inner-fold-$FSHA
+  (
+    export PATH=$HOME/.elan/bin:$PATH
+    command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
+    exec 9>$L/fold.lock; flock 9
+    if [ ! -x $FOLD_BIN ]; then
+      C=$L/fold-src; rm -rf $C && mkdir -p $C && cp -r verity/core/service/flock/. $C/ && cp verity/ml/flock/tests/lean/InnerFold.lean $C/ \
+        && printf '\n[[lean_exe]]\nname = "inner-fold"\nroot = "InnerFold"\n' >> $C/lakefile.toml \
+        && (cd $C && lake build inner-fold) && mkdir -p $L/fold-$FSHA && cp $C/.lake/build/bin/inner-fold $FOLD_BIN
     fi
   )
 }
@@ -454,6 +487,7 @@ build)
   fi
   SPID=$!
   if [ ! -x $B ]; then
+    no_build flock-circuit-$KEY-g$GPU-sm$SM
     exec 8>$W/build.lock; flock 8
     if [ ! -x $B ]; then
       [ -d $F ] || { [ -d ${WARM_FROM:-/workspace/jobs/proofs-vllm-moe/flock-gpu-link}/flock ] && cp -a ${WARM_FROM:-/workspace/jobs/proofs-vllm-moe/flock-gpu-link} $FW/flock-gpu-link; }
@@ -470,6 +504,11 @@ build)
   wait $LP; echo "lean build exit $?"
   [ -x $LEAN_BIN ] && sha256sum $LEAN_BIN > $O/lean.sha
   tail -5 $O/build-lean.log
+  if [ "${SHIP:-0}" = 1 ]; then
+    fold_build > $O/build-fold.log 2>&1 || { tail -30 $O/build-fold.log; exit 1; }
+    mkdir -p $O/ship && for s in $SHIPS; do cp ${s%%:*} $O/ship/${s#*:} || exit 1; done
+    (cd $O/ship && sha256sum *) | tee $O/ship.sha256
+  fi
   ;;
 inner)
   D=$DD/stage; [ -f $D/inst-$N.bin ] && [ -x $B ] || { echo "run STEP=build first"; exit 1; }
@@ -585,18 +624,7 @@ vstage)
   # and every level, JOBS at once
   INNER=${INNER:-$DD/inner/s$((NS - 1))}
   [ -f $INNER/public.json ] && [ -f $INNER/private.json ] || { echo "INNER=$INNER: no public.json and private.json (run STEP=inner first)"; exit 1; }
-  FSHA=$( (echo $LSHA; cat verity/ml/flock/tests/lean/InnerFold.lean) | sha256sum | cut -c1-16)
-  FOLD_BIN=$L/fold-$FSHA/inner-fold
-  (
-    export PATH=$HOME/.elan/bin:$PATH
-    command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
-    exec 9>$L/fold.lock; flock 9
-    if [ ! -x $FOLD_BIN ]; then
-      C=$L/fold-src; rm -rf $C && mkdir -p $C && cp -r verity/core/service/flock/. $C/ && cp verity/ml/flock/tests/lean/InnerFold.lean $C/ \
-        && printf '\n[[lean_exe]]\nname = "inner-fold"\nroot = "InnerFold"\n' >> $C/lakefile.toml \
-        && (cd $C && lake build inner-fold) && mkdir -p $L/fold-$FSHA && cp $C/.lake/build/bin/inner-fold $FOLD_BIN
-    fi
-  ) > $O/build-fold.log 2>&1 || { tail -30 $O/build-fold.log; exit 1; }
+  fold_build > $O/build-fold.log 2>&1 || { tail -30 $O/build-fold.log; exit 1; }
   mkdir -p $O/vstage
   inner_partition || exit 1
   cp $DD/stage/partition.json $DD/stage/program.json $O/vstage/
