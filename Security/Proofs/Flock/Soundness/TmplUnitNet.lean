@@ -1,4 +1,5 @@
 import Proofs.Flock.Soundness.TmplValueUnit
+import Proofs.Flock.Soundness.ExecCircuit
 import Flock.HmRow
 
 /-!
@@ -6,10 +7,11 @@ import Flock.HmRow
 
 A templated statement's circuit is `HmOut.parseTmpl`'s: its template read as a unit (`TmplUnit.read`), whose committed
 net `tu.net` is `HmRow.parse`'s first net, named `unit`, where a flat file's `CIRCUIT unit` section is, then
-`HmOut.checkRows`, with the unit carried on the circuit (`parseTmpl_cases`). That net is `Tmpl.unrollAt`'s:
+`HmOut.checkRows`, with the unit carried on the circuit (`parseTmpl_cases`); what that parse accepted is `ParseFacts`
+with the unit net exempt from `Built` (`parseTmpl_facts`, `ParseFactsPre`). That net is `Tmpl.unrollAt`'s:
 `Tmpl.unroll`'s logical net, its rows moved to `posMap`'s positions (`unroll_of_unrollAt`). So column values that
-satisfy the committed net satisfy, through `posMap`, the audit's `Rows` of the logical net, the rows `unit_eval` reads, and are
-zero off `posMap`'s image (`TmplUnit.rowsSat`). With the constant at 1, at every copy of a computing Definition placed
+satisfy the committed net satisfy, through `posMap`, the audit's `Rows` of the logical net, the rows `unit_eval` reads,
+and are zero off `posMap`'s image (`TmplUnit.rowsSat`). With the constant at 1, at every copy of a computing Definition placed
 under one of the root's calls past the input rows, they carry its spec on its bound inputs (`TmplUnit.computes`, the
 committed net's `unit_computes`). No verifier path reads this file.
 -/
@@ -43,6 +45,22 @@ theorem parseTmpl_cases {tags : Flock.Tags} {bytes : ByteArray} {tables : List (
       simp only [pure, Except.pure, Except.ok.injEq] at h
       exact ⟨tu, c₀, hc₀, hu, Bool.eq_false_iff.mpr hb, h.symm⟩
   · cases h
+
+/-- **What a templated file's parse accepted**: `ParseFactsPre` at the read unit's committed net, which is the circuit's
+first net, its unit: every other net is `Built` or a lookup slot, as a flat file's are. -/
+theorem parseTmpl_facts {tags : Flock.Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
+    (h : HmOut.parseTmpl tags bytes tables = .ok c) :
+    ∃ (tu : TmplUnit) (c₀ : Flock.Circuit), ParseFactsPre tags #[("unit", tu.net)] c₀ ∧ HmOut.checkRows c₀ = .ok () ∧
+      c = { c₀ with tmpl := some tu } ∧ c₀.unitNet = 0 ∧ c₀.nets.getD 0 default = ("unit", tu.net) := by
+  obtain ⟨tu, c₀, hp, hck, -, he⟩ := parseTmpl_cases h
+  obtain ⟨P, ⟨more, hm, -⟩, hu, -, -⟩ := parse_factsPre_nets hp
+  have hm' : c₀.nets.toList = ("unit", tu.net) :: more := hm
+  have h0 : c₀.nets.findIdx? (·.1 == "unit") = some 0 := by
+    rw [← Array.toArray_toList (xs := c₀.nets), List.findIdx?_toArray, hm']
+    simp [List.findIdx?_cons]
+  refine ⟨tu, c₀, P, hck, he, (Option.some.inj (hu.symm.trans h0)), ?_⟩
+  rw [Array.getD_eq_getD_getElem?, ← Array.getElem?_toList, hm']
+  rfl
 
 /-- **The committed net is the logical net moved**: `Tmpl.unrollAt` and `Tmpl.unroll` read the same rows, and
 `Net.ofRowsAt`'s net is at `posMap` the net `Net.ofRows` builds from them, `Tmpl.unroll`'s. -/
