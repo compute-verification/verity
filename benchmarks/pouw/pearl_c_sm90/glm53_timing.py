@@ -19,8 +19,9 @@ Arms, each one linear's call on a BF16 x of M rows:
 - ``cutlass``: the same quant (FP32 scales) and vLLM's CUTLASS block-scaled ``cutlass_scaled_mm``;
 - ``triton``: the same quant and vLLM's Triton block-scaled matmul;
 - ``deepgemm-graph``, ``cutlass-graph``, ``triton-graph``: each stock arm that builds, its call (quant and GEMM) captured as
-  one CUDA graph and replayed (`capture_stock`), as vLLM's decode graphs run it, so its launch overhead is off the host;
-  ``slowdowns_graphed`` gives each pearlc arm over the fastest of these, and a call torch can't capture is recorded.
+  one CUDA graph and replayed (`capture_stock`), as vLLM's decode graphs run it, so its launch overhead is off the host,
+  and held, its output poisoned before a replay, to the eager arm's bound (`replay_error`); ``slowdowns_graphed`` gives
+  each pearlc arm over the fastest of these, and a call torch can't capture, or whose replay misses x·Wᵀ, is recorded.
 
 A stock arm that can't be built (not importable, refused, or outside 0.08 rel RMS of x·Wᵀ) is recorded with its error and
 left out.  Each rep times every arm once, in an order rotated each rep, each sample `INNER` calls back to back between CUDA
@@ -234,8 +235,8 @@ def replay_whole(run, graph, calls):
 
 def capture_stock(forward):
     """A stock arm's forward as vLLM's decode graphs run the stock GEMMs: after a warm-up (autotuning, JIT), one CUDA graph's
-    replay, or the forward itself when torch can't capture it.  Returns (f, whether captured, the error); f is None when the
-    warm-up fails."""
+    replay (which returns the forward's output, the graph's to write), or the forward itself when torch can't capture it.
+    Returns (f, whether captured, the error); f is None when the warm-up fails."""
     import torch
     try:
         forward()
@@ -246,12 +247,27 @@ def capture_stock(forward):
         graph, stream = torch.cuda.CUDAGraph(), torch.cuda.Stream()
         stream.wait_stream(torch.cuda.current_stream())
         with torch.cuda.graph(graph, stream=stream):
-            forward()
+            out = forward()
         torch.cuda.synchronize()
-        return graph.replay, True, None
+
+        def replay():
+            graph.replay()
+            return out
+        return replay, True, None
     except Exception as e:  # noqa: BLE001 - recorded, the arm run eagerly
         torch.cuda.synchronize()
         return forward, False, f"{type(e).__name__}: {e}"[:400]
+
+
+def replay_error(replay, ref) -> str | None:
+    """Why a captured stock arm (`capture_stock`'s replay) doesn't compute `ref` (FP32), or None: its output poisoned with
+    NaN, one replay, then held to `ERR` as `stock_arms` holds the eager arms."""
+    import torch
+    replay().fill_(float("nan"))
+    y = replay()
+    torch.cuda.synchronize()
+    err = float(((y.float() - ref).pow(2).sum() / ref.pow(2).sum()).sqrt())
+    return None if err < ERR else f"replay's rel RMS {err:.4f} against x·Wᵀ"
 
 
 def same_bits(a, b) -> bool:
@@ -416,7 +432,8 @@ def main(argv: list[str] | None = None) -> int:
             graphed, graph_errors = {}, {}
             for nm, f in arms.items():
                 g, captured, err = capture_stock(lambda f=f, x=x: f(x))
-                if captured:
+                err = replay_error(g, x.float() @ W.float().T) if captured else err
+                if captured and err is None:
                     graphed[f"{nm}-graph"] = g
                 else:
                     graph_errors[f"{nm}-graph"] = err

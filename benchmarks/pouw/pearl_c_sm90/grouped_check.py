@@ -59,7 +59,9 @@ def stock_arms(Ws: list, dense: list, counts, x) -> tuple[dict, dict]:
       (padding rows -1 in the expert index), x permuted in and y out in the call;
     * ``deepgemm-masked``: DeepGEMM's m-grouped masked FP8 GEMM (expert e's first counts[e] of M_max rows; decode's EP form);
     * ``deepgemm-loop``, ``cutlass-loop``, ``triton-loop``: each expert's dense arm (`dense`, `glm53_timing.stock_arms`' of
-      each weight), an expert at a time."""
+      each weight), an expert at a time;
+    * ``NAME-graph``: each of those that builds captured as one CUDA graph (`glm53_timing.capture_stock`, as vLLM's decode
+      graphs run the EP call), held to the same bound with its output poisoned before a replay (`glm53_timing.replay_error`)."""
     import glm53_timing as T
     import torch
     arms, errors = {}, {}
@@ -147,6 +149,13 @@ def stock_arms(Ws: list, dense: list, counts, x) -> tuple[dict, dict]:
             arms[name] = f
         except Exception as e:  # noqa: BLE001 - recorded, the arm left out
             errors[name] = f"{type(e).__name__}: {e}"[:400]
+    for name, f in list(arms.items()):
+        g, captured, err = T.capture_stock(f)
+        err = T.replay_error(g, ref) if captured else err
+        if captured and err is None:
+            arms[f"{name}-graph"] = g
+        else:
+            errors[f"{name}-graph"] = err
     return arms, errors
 
 
@@ -200,18 +209,22 @@ def check_shape(a, n: int, k: int) -> dict:
                 samples[nm].append(T.timed(f, before, after, join=j))
         run.end_pass(schedule="serial")
         med = {nm: statistics.median(v) for nm, v in samples.items()}
-        best = min(stock, key=med.get) if stock else None
+        eager = [nm for nm in stock if not nm.endswith("-graph")]
+        best = min(eager, key=med.get) if eager else None
+        gbest = min((nm for nm in stock if nm.endswith("-graph")), key=med.get, default=None)
         out[pat] = {"counts": list(counts), "units": len(us), "tiles": sum(u.tiles for u in us), "y_equal": same_y,
                     "manifests_differ": differ, "transcript_roots": {nm: ends[nm]["transcript_root"] for nm in pearls},
                     "ms": med, "runs": samples, "stock_errors": errors, "fastest_stock": best,
-                    "speedup": {nm: med["dense"] / med[nm] for nm in grouped_arms},
-                    "slowdowns": {nm: med[nm] / med[best] for nm in pearls} if best else None}
+                    "fastest_stock_graphed": gbest, "speedup": {nm: med["dense"] / med[nm] for nm in grouped_arms},
+                    "slowdowns": {nm: med[nm] / med[best] for nm in pearls} if best else None,
+                    "slowdowns_graphed": {nm: med[nm] / med[gbest] for nm in pearls} if gbest else None}
         print(f"{n}x{k} {pat}: {len(us)} units; " + "; ".join(
             f"{nm} y {'equal' if same_y[nm] else 'DIFFERS'}, manifests "
             f"{'equal' if not differ[nm] else 'differ in ' + ', '.join(differ[nm])}" for nm in grouped_arms), flush=True)
         print(f"{n}x{k} {pat}: " + ", ".join(f"{nm} {v:.3f} ms" for nm, v in med.items())
-              + (f"; slowdown over {best}: " + ", ".join(f"{nm} {v:.2f}x" for nm, v in out[pat]["slowdowns"].items())
-                 if best else "; no stock arm") + (f"; stock errors: {errors}" if errors else ""), flush=True)
+              + "".join(f"; slowdown over {b}: " + ", ".join(f"{nm} {med[nm] / med[b]:.2f}x" for nm in pearls)
+                        for b in (best, gbest) if b)
+              + ("" if best else "; no stock arm") + (f"; stock errors: {errors}" if errors else ""), flush=True)
     (d / "capture.json").write_text(json.dumps({"scheme": a.scheme, "shape": [n, k], "passes": passes}, indent=1) + "\n")
     out["ok"] = all(all(out[p]["y_equal"].values()) and not any(out[p]["manifests_differ"].values()) for p in COUNTS)
     run.finish()
