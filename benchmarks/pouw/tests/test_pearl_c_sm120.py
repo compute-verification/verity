@@ -163,7 +163,7 @@ def test_kernel_constants_match_the_reference():
     promoted = {g for _, _, _, _, g, *_ in gemms() if g}
     assert promoted == {SM120.g} and SM120.window % const("BK_D") == SM120.window % const("BK") == 0
     assert SM120_UNPROMOTED.g is None
-    assert const("WK_G") == SM120.g and const("WK_WARPS") == RUN.WK_WARPS and const("SR_MAX_K") == RUN.SR_MAX_K
+    assert const("WK_G") == SM120.g and const("WK_WARPS") == RUN.WK_WARPS and const("WK_CL") == RUN.WK_CL and const("SR_MAX_K") == RUN.SR_MAX_K
     assert RUN.SR_ROWS >= RUN.BM_D
 
 
@@ -272,7 +272,7 @@ def test_fixture_agrees_with_the_scheme(small_fixture):
 
 # ---- the dry run ---------------------------------------------------------------------------------------------------
 
-KERNEL = r'extern "C" __global__ void (?:__launch_bounds__\([^)]*\) )?(\w+)\('
+KERNEL = r'extern "C" __global__ void (?:__cluster_dims__\([^)]*\) )?(?:__launch_bounds__\([^)]*\) )?(\w+)\('
 #: the -h3 kernels (hash_h3.cuh, hash_fast.cuh) the pipeline launches at the dry run's shapes, every count a power of two:
 #: no pads; the row digests and tile leaves by hash_fast.cuh's kernels (run.py's default, PEARLC_SHA=fast)
 H3_LAUNCHED = {"s512_heads", "s512_row_segs", "s512_tile_segs", "s512_folds", "hm_leaves", "s512_frame_leaves", "s512_nodes",
@@ -397,7 +397,7 @@ def threads(name: str, i: list[int]) -> int:
     return {"lines": lambda: i[2], "stats_s5": lambda: 32 * i[0], "eprime": lambda: i[0], "pa": lambda: 64 * i[0],
             "pb": lambda: 32 * i[0], "gen_f32": lambda: i[0] * i[1], "diff_words": lambda: i[0],
             "words": lambda: i[0] // 16 * (i[1] // 8) * 32, "words_u": lambda: i[0] // 16 * (i[1] // 8) * 32,
-            "words_k": lambda: i[0] // 16 * (i[1] // 8) * 32 * RUN.WK_WARPS, "stats_r": lambda: 256 * i[0],
+            "words_k": lambda: i[0] // 16 * (i[1] // 8) * RUN.WK_CL * 32 * RUN.WK_WARPS, "stats_r": lambda: 256 * i[0],
             "s512_rows": lambda: i[0], "s512_seeds": lambda: i[0], "s512_tile_leaves": lambda: -(-i[0] // 64) * (i[1] // 64),
             "s512_row_segs": lambda: i[0] * (i[1] // 256), "s512_tile_segs": lambda: tile_segs(i), "s512_folds": lambda: i[0],
             "s512_heads": lambda: segs,
@@ -600,7 +600,7 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
         if name in ("words", "words_u"):
             assert g[0] == i[0] // 16 and ev["block"] == 128
         if name == "words_k":
-            assert g[0] == i[0] // 16 * (i[1] // 8) and ev["block"] == 32 * RUN.WK_WARPS and i[2] % 128 == 0
+            assert g[0] == i[0] // 16 * (i[1] // 8) * RUN.WK_CL and ev["block"] == 32 * RUN.WK_WARPS and i[2] % 128 == 0
         if name == "stats_r":
             assert g[0] == i[0] <= RUN.SR_ROWS and ev["block"] == 256 and i[1] <= RUN.SR_MAX_K and i[1] % 256 == 0
         if name == "s512_rows":

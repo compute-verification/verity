@@ -475,55 +475,84 @@ template <int G> DEV void words_body(const Args& a) {
 }
 extern "C" __global__ void __launch_bounds__(128) words(const Args a) { words_body<4>(a); }
 extern "C" __global__ void __launch_bounds__(128) words_u(const Args a) { words_body<0>(a); }
-// words' chain split along K, for decode's few rows (where words has M / 16 blocks): a block of WK_WARPS warps per m16 x n8
-// output tile.  A promotion window's sum (G atoms from +0) depends on no other window, so the warps share out the windows,
-// WK_CHUNK at a time, each window's sum into shared memory (lane l's four words at window w, 128 w + 4 l), and then a thread
-// a word folds the chunk into its FP32 total in window order, from +0: words' chain, word for word.  Two windows a warp
-// are in flight at once.  p0 A (M x K), p1 B (N x K), p2 out (M x N FP32); i0 M, i1 N, i2 K (multiples of 16, 8 and 32 G);
-// grid (M / 16) (N / 8)
-constexpr int WK_WARPS = 16, WK_CHUNK = 64, WK_G = 4;
-extern "C" __global__ void __launch_bounds__(32 * WK_WARPS) words_k(const Args a) {
-  constexpr int G = WK_G;
+// the cluster's barrier, every thread of every block; its memory clobber keeps loads and stores on their side of it
+DEV void cluster_sync() {
+  asm volatile("barrier.cluster.arrive.release.aligned;\n\tbarrier.cluster.wait.acquire.aligned;" ::: "memory");
+}
+DEV int cluster_rank() { uint32_t r; asm volatile("mov.u32 %0, %%cluster_ctarank;" : "=r"(r)); return (int)r; }
+// p, in this block's shared memory, at the same place in block `rank` of the cluster (a generic address)
+DEV const float* in_rank(const float* p, int rank) {
+  uint64_t d;
+  asm volatile("mapa.u64 %0, %1, %2;" : "=l"(d) : "l"(p), "r"(rank));
+  return reinterpret_cast<const float*>(d);
+}
+// words' chain split along K, for decode's few rows (where words has M / 16 blocks): a cluster of WK_CL blocks of WK_WARPS
+// warps per m16 x n8 output tile (one block's warps wait on its own load issue, each ld32 touching 8 rows).  A promotion
+// window's sum (G atoms from +0) depends on no other window, so the warps share out the windows, WK_CL WK_CHUNK at a time,
+// block r the chunk's windows r, r + WK_CL, ..., each window's sum into its block's shared memory (lane l's four words at
+// window w0 + WK_CL i + r, 128 i + 4 l), and then a thread of block 0 a word folds the chunk, from every block's shared
+// memory, into its FP32 total in window order, from +0: words' chain, word for word.  Two windows a warp are in flight at
+// once.  p0 A (M x K), p1 B (N x K), p2 out (M x N FP32); i0 M, i1 N, i2 K (multiples of 16, 8 and 32 G); grid
+// (M / 16) (N / 8) WK_CL
+constexpr int WK_WARPS = 16, WK_CL = 4, WK_CHUNK = 64, WK_G = 4;
+extern "C" __global__ void __cluster_dims__(WK_CL, 1, 1) __launch_bounds__(32 * WK_WARPS) words_k(const Args a) {
+  constexpr int G = WK_G, CL = WK_CL;
   __shared__ float4 part[WK_CHUNK * 32];
-  const int M = a.i[0], N = a.i[1], K = a.i[2], tn = N / 8, tid = threadIdx.x, warp = tid / 32, lane = tid % 32;
-  const int g = lane / 4, q = lane % 4, W = K / (32 * G);
-  if (blockIdx.x >= M / 16 * tn) return;
-  const int r0 = blockIdx.x / tn * 16, c0 = blockIdx.x % tn * 8;
+  const int N = a.i[1], K = a.i[2], tn = N / 8, tid = threadIdx.x, warp = tid / 32, lane = tid % 32;
+  const int g = lane / 4, q = lane % 4, W = K / (32 * G), tile = blockIdx.x / CL, rank = cluster_rank();
+  const int r0 = tile / tn * 16, c0 = tile % tn * 8;
   const uint8_t* A0 = reinterpret_cast<const uint8_t*>(a.p[0]) + (size_t)(r0 + g) * K + 4 * q;
   const uint8_t* A1 = A0 + (size_t)8 * K;
   const uint8_t* B0 = reinterpret_cast<const uint8_t*>(a.p[1]) + (size_t)(c0 + g) * K + 4 * q;
-  const float* fold = reinterpret_cast<const float*>(part) + tid;
+  const float* fold[CL];
+#pragma unroll
+  for (int r = 0; r < CL; r++) fold[r] = in_rank(reinterpret_cast<const float*>(part), r) + tid;
   float total = 0.0f;
-  for (int w0 = 0; w0 < W; w0 += WK_CHUNK) {
-    const int nw = min(WK_CHUNK, W - w0);
-    for (int i = warp; i < nw; i += 2 * WK_WARPS) {
+  for (int w0 = 0; w0 < W; w0 += CL * WK_CHUNK) {
+    const int nw = min(CL * WK_CHUNK, W - w0), mine = (nw - rank + CL - 1) / CL;
+    for (int i = warp; i < mine; i += 2 * WK_WARPS) {
       uint32_t fa[2][G][4], fb[2][G][2];
 #pragma unroll
       for (int h = 0; h < 2; h++) {
-        const int kk = 32 * G * (w0 + min(i + h * WK_WARPS, nw - 1));
+        if (i + h * WK_WARPS < mine) {
+          const int kk = 32 * G * (w0 + CL * (i + h * WK_WARPS) + rank);
 #pragma unroll
-        for (int d = 0; d < G; d++) {
-          const int k = kk + 32 * d;
-          fa[h][d][0] = ld32(A0 + k); fa[h][d][1] = ld32(A1 + k); fa[h][d][2] = ld32(A0 + k + 16); fa[h][d][3] = ld32(A1 + k + 16);
-          fb[h][d][0] = ld32(B0 + k); fb[h][d][1] = ld32(B0 + k + 16);
+          for (int d = 0; d < G; d++) {
+            const int k = kk + 32 * d;
+            fa[h][d][0] = ld32(A0 + k); fa[h][d][1] = ld32(A1 + k); fa[h][d][2] = ld32(A0 + k + 16); fa[h][d][3] = ld32(A1 + k + 16);
+            fb[h][d][0] = ld32(B0 + k); fb[h][d][1] = ld32(B0 + k + 16);
+          }
         }
       }
 #pragma unroll
       for (int h = 0; h < 2; h++) {
-        float acc[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+        if (i + h * WK_WARPS < mine) {
+          float acc[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 #pragma unroll
-        for (int d = 0; d < G; d++) qmma(acc, fa[h][d], fb[h][d]);
-        if (i + h * WK_WARPS < nw) part[32 * (i + h * WK_WARPS) + lane] = make_float4(acc[0], acc[1], acc[2], acc[3]);
+          for (int d = 0; d < G; d++) qmma(acc, fa[h][d], fb[h][d]);
+          part[32 * (i + h * WK_WARPS) + lane] = make_float4(acc[0], acc[1], acc[2], acc[3]);
+        }
       }
     }
-    __syncthreads();
-    if (tid < 128) {
-#pragma unroll 8
-      for (int j = 0; j < nw; j++) total = __fadd_rn(total, fold[128 * j]);
+    cluster_sync();
+    if (rank == 0 && tid < 128) {
+      // window w0 + j is block j % CL's (j / CL); the loads clamped to the chunk, so that they can all be in flight
+      for (int j = 0; j < nw; j += 4 * CL) {
+        float v[4][CL];
+#pragma unroll
+        for (int u = 0; u < 4; u++)
+#pragma unroll
+          for (int r = 0; r < CL; r++) v[u][r] = fold[r][128 * min(j / CL + u, WK_CHUNK - 1)];
+#pragma unroll
+        for (int u = 0; u < 4; u++)
+#pragma unroll
+          for (int r = 0; r < CL; r++)
+            if (j + CL * u + r < nw) total = __fadd_rn(total, v[u][r]);
+      }
     }
-    __syncthreads();
+    cluster_sync();
   }
-  if (tid >= 128) return;
+  if (rank != 0 || tid >= 128) return;
   const int l = tid / 4, e = tid % 4;   // lane l's word e: rows g, g + 8 by e / 2, columns 2 q, 2 q + 1 by e % 2
   reinterpret_cast<float*>(a.p[2])[(size_t)(r0 + l / 4 + 8 * (e >> 1)) * N + c0 + 2 * (l % 4) + (e & 1)] = total;
 }

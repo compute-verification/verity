@@ -55,7 +55,7 @@ SM_COUNT, MAX_DYN, CC_MAJOR, CC_MINOR, MAX_SHARED_OPTIN, SHARED_SIZE = 16, 8, 75
 NORM_256, NORM_16 = 0x4600, 0x4400      # bf16(32 x the line norm): E's lines, and F's under v1
 NT, BM, BM_D, RASTER = 256, 128, 64, 8
 ML_NT = 384                  # mainloop_sm120.cuh's block: a TMA producer warpgroup and 8 consumer warps
-WK_WARPS = 16                # words_k's block: warps per m16 x n8 tile (pearl_c_sm120.cu)
+WK_WARPS, WK_CL = 16, 4      # words_k's block (warps) and cluster (blocks) per m16 x n8 tile (pearl_c_sm120.cu)
 SR_ROWS, SR_MAX_K = 256, 32768   # stats_r (a block a row) for at most SR_ROWS rows of k <= SR_MAX_K, else stats_s5
 #: decode's split kernels (words_k, stats_r); PEARLC_SPLIT=0 runs the kernels they replace (words, stats_s5), the same words
 SPLIT = os.environ.get("PEARLC_SPLIT", "1") != "0"
@@ -668,11 +668,13 @@ class Pipeline:
 
     def words(self, a: str, b: str, M: int, out: str, warps: bool = False) -> None:
         """The FP32 words of an (M x K) by (32 x K) product: on 128 x 32 CTA tiles, or with `warps` (decode's few rows) on
-        words_k, a block of WK_WARPS warps a m16 x n8 tile, K split among them (unpromoted, on `words_u`, a warp a tile)."""
+        words_k, a cluster of WK_CL blocks of WK_WARPS warps a m16 x n8 tile, K split among them (unpromoted, on `words_u`,
+        a warp a tile)."""
         if M % BM == 0 and not warps:
             self.gemm("gemm_words" + self.suffix, a, b, M, 32, out=(out,))
         elif self.g and SPLIT:
-            self.dev.launch("words_k", M // 16 * 4, 32 * WK_WARPS, p=(self.b[a], self.b[b], self.b[out]), i=(M, 32, self.k))
+            self.dev.launch("words_k", M // 16 * 4 * WK_CL, 32 * WK_WARPS, p=(self.b[a], self.b[b], self.b[out]),
+                            i=(M, 32, self.k))
         else:
             self.dev.launch("words" + self.suffix, M // 16, 128, p=(self.b[a], self.b[b], self.b[out]), i=(M, 32, self.k))
 
