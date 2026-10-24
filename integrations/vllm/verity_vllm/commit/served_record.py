@@ -194,7 +194,7 @@ class RequestRecord:
         self.end = row.start + row.n
         self.rows.append([window, step, row.lo, row.hi, row.start, row.prefill_len, row.kind])
 
-    def check(self, prompt_ids: Sequence[int], streamed_ids: Sequence[int], *, seed: int | None = None,
+    def check(self, prompt_ids: Sequence[int], streamed_ids: Sequence[int], *, seed: int | None,
               prefix_sources: Mapping[str, RequestRecord] | None = None, finish: Mapping[str, Any] | None = None,
               decode: Callable[[Sequence[int]], str] | None = None) -> dict[str, Any]:
         """The record against what was served (the module docstring); ``seed`` the seed the request carried into the
@@ -311,7 +311,7 @@ class Record:
         self.windows.append(rec)
         return rec
 
-    def check(self, request: str, prompt_ids: Sequence[int], streamed_ids: Sequence[int], *, seed: int | None = None,
+    def check(self, request: str, prompt_ids: Sequence[int], streamed_ids: Sequence[int], *, seed: int | None,
               finish: Mapping[str, Any] | None = None, decode: Callable[[Sequence[int]], str] | None = None) -> dict[str, Any]:
         rec = self.requests.get(request)
         if rec is None:

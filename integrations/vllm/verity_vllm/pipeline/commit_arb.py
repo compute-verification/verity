@@ -1,6 +1,6 @@
 """`verity-vllm commit-arb`: the served Commit under arbitrary traffic, its records held to the streamed I/O.
 
-    verity-vllm commit-arb --out DIR --model REPO --revision SHA [--precision int8_exact|verity_int8|pin]
+    VERITY_RETAIN=host verity-vllm commit-arb --out DIR --model REPO --revision SHA [--precision int8_exact|verity_int8|pin]
         [--requests 32] [--seed 0] [--prompt-range 16:1024] [--tokens 64] [--rate 0.5]
         [--max-num-seqs 8] [--max-num-batched-tokens 2048] [--no-chunked-prefill] [--kv-cache-mb N] [--window-steps 64]
 
@@ -26,12 +26,11 @@ readback passed.
 from __future__ import annotations
 
 import json
-import os
-import random
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.commit.challenge import stream
 from verity_vllm.config import UsageError, option
 
 PRECISIONS = ("int8_exact", "verity_int8", "pin")
@@ -74,6 +73,7 @@ class Options:
     kv_cache_mb: int = option("--kv-cache-mb", type=int, default=0, help="the KV cache's size (0: vLLM's sizing); small preempts")
     gpu_memory_utilization: float = option("--gpu-memory-utilization", type=float, default=0.55)
     window_steps: int = option("--window-steps", type=int, default=64, help="committed steps a Commit window holds at most")
+    run_id: str = option("--run-id", env="RESEARCH_RUN_ID", default="local", help="the committer's run id (default $RESEARCH_RUN_ID)")
 
 
 def prompt_range(text: str) -> tuple[int, int]:
@@ -112,7 +112,7 @@ def traffic(encode: Any, n: int, *, seed: int, prompt_tokens: tuple[int, int], m
     while len(filler) < hi:
         filler, k = encode(VARIED_FILLER * k)[len(bos):], 2 * k
     heads = [encode(head + q) for q in QUESTIONS]
-    rng, at, out = random.Random(seed), 0.0, []
+    rng, at, out = stream(seed), 0.0, []
     for j in range(n):
         at += rng.expovariate(rate)
         length = round(lo * (hi / lo) ** rng.random())
@@ -150,10 +150,9 @@ def build(opts: Options) -> tuple[Any, Any]:
     """The engine (`verity_vllm.LLM`) and its committer, as serve-openai builds them, with the sampler's inputs bound."""
     from types import SimpleNamespace
 
-    from verity_vllm.engine import env as engine_env
+    from verity_vllm.engine.engine_profile import apply_env
 
-    engine_env.apply_engine(os.environ.get("HF_HOME") or "/workspace/hf")
-    os.environ["VERITY_RETAIN"] = "host"
+    apply_env()
     if opts.precision != "pin":
         from verity_vllm.engine import int8_ranks
         int8_ranks.register(("linears", "attention") if opts.precision == "int8_exact" else ("linears",))
@@ -171,7 +170,10 @@ def build(opts: Options) -> tuple[Any, Any]:
                           cp={"repo": llm.pin.model, "revision": llm.pin.revision})
     from verity_vllm.commit.served_record import SamplerInputsSource
 
-    com = NativeHostCommitter(eng, run_id=f"commit-arb:{os.environ.get('RESEARCH_RUN_ID', 'local')}", arena_bytes=None)
+    com = NativeHostCommitter(eng, run_id=f"commit-arb:{opts.run_id}", arena_bytes=None)
+    if com.retain != "host":
+        raise UsageError(f"VERITY_RETAIN={com.retain}: the records are read back from the values retained on the host "
+                         "(export VERITY_RETAIN=host)")
     com.attach_source(SamplerInputsSource(com))
     tokens = int(opts.max_num_batched_tokens)
     com.arena_sizing_record = com.size_arena({"batch": opts.max_num_seqs, "max_prompt": tokens, "max_new": 1,
@@ -321,7 +323,7 @@ def main(opts: Options) -> int:
     cfg = scheduler_config(llm.vllm.llm_engine)
     (out / "run.json").write_text(json.dumps({"options": {k: getattr(opts, k) for k in opts.__dataclass_fields__},
                                               "engine": llm.engine_record, "scheduler": cfg, "arena": com.arena_sizing_record,
-                                              "committer": com.name, "run_id": os.environ.get("RESEARCH_RUN_ID")}, indent=1, default=str))
+                                              "committer": com.name, "run_id": opts.run_id}, indent=1, default=str))
     try:
         summary = run(llm, com, reqs, out, opts.window_steps)
     finally:
