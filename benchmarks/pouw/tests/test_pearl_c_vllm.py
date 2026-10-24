@@ -2001,6 +2001,66 @@ def test_the_deferred_schedule_commits_what_the_serial_one_commits(device_run, t
     assert got["deferred"] == got["serial"]
 
 
+def test_a_late_end_commits_what_an_end_commits_once_the_next_end_settles_it(device_run, tmp_path):
+    """`end`'s ``late``: the commitment it returns (``details["passes"]``' too) has the pass's counts and none of what the
+    device writes until the next pass's end (or `settle`) fills it in, and then every pass and ``commits`` are a serial
+    run's ending each pass at once, byte for byte; the executor's passes end late with ``late_ends``.  A retained pass, and
+    a schedule with a side lane, end at once."""
+    make, _, weights, *_ = device_run
+    rng = np.random.default_rng(41)
+    x = lambda m: torch.from_numpy(bf16_words(rng, m, 1024).view(np.float32).copy()).to(torch.bfloat16)  # noqa: E731
+    passes = [[(0, x(32)), (1, x(16))], [(1, x(32)), (0, x(20)), (0, x(32))], [(0, x(16))]]
+    got = {}
+    for late in (False, True):
+        run = make()
+        ends = []
+        for calls in passes:
+            run.begin()
+            for w, a in calls:
+                run.gemm(w, a, weights[w], None)
+            ends.append(run.end(late=late))
+            assert ends[-1] is run.details["passes"][-1] and ends[-1]["units"] == len(calls)
+            assert ("transcript_root" in ends[-1]) is not late and all("transcript_root" in e for e in ends[:-1])
+        run.settle()
+        assert run._late is None and ends == run.details["passes"]
+        got[late] = ([dict(e) for e in ends], dict(run.commits))
+    assert got[True] == got[False] and got[False][0][0]["screened_rows"] == 48
+    run = make()
+    run.late_ends = True
+    spec = types.SimpleNamespace(hashing=True, retain=None, run_id=None, schedule="serial", controls=())
+    p = PPD.PearlCExecutor(run).begin(spec)
+    for w, a in passes[0]:
+        p.call(types.SimpleNamespace(weight_id=w), a, weights[w], None)
+    assert "transcript_root" not in p.end() and run._late is not None
+    run.settle()
+    assert run.details["passes"] == [got[False][0][0]]
+    for retain, schedule in ((str(tmp_path / "kept"), "serial"), (None, "deferred")):
+        run = make(schedule=schedule)
+        run.begin(retain=retain, run=RUN)
+        run.gemm(0, passes[0][0][1], weights[0], None)
+        assert "transcript_root" in run.end(late=True) and run._late is None
+
+
+def test_work_on_another_stream_than_a_late_ends_copies_waits_for_them(monkeypatch):
+    """A call, a forward replayed whole or a poison after a late end (`_after_late`) on another stream than the end's
+    copies makes that stream wait for their event; on the copies' stream, inside a capture, or off the GPU, nothing waits."""
+    waits = []
+    stream = types.SimpleNamespace(wait_event=waits.append)
+    run = types.SimpleNamespace(_late=PPD._Late({}, PPD._Pass(None), 0, (), "copies", 5, None), torch_stream=lambda raw: stream)
+    for raw, capturing, waited in ((6, False, ["copies"]), (5, False, []), (6, True, [])):
+        waits.clear()
+        run.stream = lambda raw=raw: raw
+        monkeypatch.setattr(PPD, "_capturing", lambda capturing=capturing: capturing)
+        PPD.PearlCDeviceRun._after_late(run)
+        assert waits == waited
+    waits.clear()
+    monkeypatch.setattr(PPD, "_capturing", lambda: False)
+    run._late.event = None
+    run.stream = lambda: 6
+    PPD.PearlCDeviceRun._after_late(run)
+    assert waits == []
+
+
 # ---- the hashing format, from the one table --------------------------------------------------------------------------
 
 def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
