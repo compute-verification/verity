@@ -423,6 +423,7 @@ theorem sched_binding {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : 
   rw [FlockComplete.LigLock.l0BodyAt_zero, ht', empty_toList, List.nil_append] at hk2
   refine ⟨T, ?_, hcnt⟩
   rw [sched_entry hdrop (by omega)]
-  simpa only [Claims.toMsg, openBind] using hk2
+  unfold Claims.toMsg at hk2
+  rw [hk2, openBind]
 
 end Claims.ZKServer.Bind
