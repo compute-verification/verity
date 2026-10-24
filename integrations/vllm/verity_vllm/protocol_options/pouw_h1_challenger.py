@@ -591,8 +591,8 @@ def credit_reason(record: Mapping[str, Any], directory: str | Path, heads: Seque
     challenger's, every A table the tree its round root commits, each K's ``b/<K>`` the weights its period's open
     signed (``weights``), the units the draw coin draws at K, each verified from its statement's proof files, and the
     window's registration, each drawn session opening its A and its K's ``b/<K>``); ``k``; ``drawn``, the units core
-    draws (`drawn_of`); ``calls``, the credited calls; ``eps``, what the draw established at δ
-    (`credit.established`); and ``credit``, the calls only when every refusal is None. A period's credit is
+    draws (`drawn_of`); ``calls``, the credited calls (a call whose step served no rows is none); ``eps``, what the
+    draw established at δ over their served rows' work (`credit.established`); and ``credit``, the calls only when every refusal is None. A period's credit is
     `period_credit`'s."""
     out: dict[str, Any] = {"manifest": manifest_reason(record), "window": None, "calls": None, "k": k, "drawn": None,
                            "eps": None}
@@ -621,7 +621,7 @@ def credit_reason(record: Mapping[str, Any], directory: str | Path, heads: Seque
         out["window"] = why
     ok = out["manifest"] is None and out["window"] is None
     if ok:
-        e = CR.established(_layout(descriptor)[0], out["calls"], out["k"])
+        e = CR.established(_layout(descriptor)[0], out["calls"], [row[CR.SERVED_ROWS] for row in ev["calls"]], out["k"])
         out["eps"] = None if e is None else str(e)
     out["credit"] = out["calls"] if ok else None
     return out
@@ -658,7 +658,7 @@ def period_credit(ledger: Ledger, period: str, windows: Sequence[Mapping[str, An
     in its order, the close complete, its open's ``draw_k``, circuit files and weights' root committed, and every window
     credited at that K, its ``b/<K>`` the period's weights, each window's session run from a commit the ledger's pins
     log records on its `main` (core's `challenger.credited_session`, ``circuit``), and each drawn unit verified from its
-    statement's proof files by `run` (default credit's verifier of record). The credit is ``{windows, k, delta,
+    statement's proof files by `run` (default credit's verifier of record). The credit is ``{windows, work, k, delta,
     eps}``."""
     return CR.period_credit(ledger.key.to_json(), list(ledger.lines), _listed(ledger.pins), _listed(ledger.main),
                             period, [dict(w) for w in windows], verify, **({} if run is None else {"run": run}))
