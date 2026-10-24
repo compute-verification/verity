@@ -60,7 +60,7 @@ theorem pr_blocks_le {N m ρ h ks G : ℕ}
   refine Rate.pr_le_of_fiber _ _ fun Os => (pr_mono fun D hD => ?_).trans (hB Os)
   have hdata : Data.ofParts (fun u => (e.symm (D, Os)).1 u.1 u.2) (e.symm (D, Os)).2.1 = D := by
     funext p
-    rcases p with p | p <;> first | rfl | simp [e, eD, Data.ofParts]
+    rcases p with p | p <;> rfl
   change B (Data.ofParts (fun u => (e.symm (D, Os)).1 u.1 u.2) (e.symm (D, Os)).2.1) (e.symm (D, Os)).2.2 at hD
   rw [hdata] at hD
   exact hD
