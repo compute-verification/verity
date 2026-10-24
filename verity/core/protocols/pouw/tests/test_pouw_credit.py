@@ -210,7 +210,7 @@ def test_every_mutation_is_aimed():
     assert set(CREDIT_EXPECT) == set(cases.CREDIT_NAMES)
     assert set(DRAWN_EXPECT) == set(cases.DRAWN_NAMES) - {"budget"}
     assert set(OUTCOME_EXPECT) == set(cases.OUTCOME_NAMES)
-    assert set(WINDOW_EXPECT) == set(cases.WINDOW_NAMES)
+    assert set(WINDOW_EXPECT) == set(cases.WINDOW_NAMES) - {"j10r"}
     assert set(PERIOD_EXPECT) == set(cases.PERIOD_NAMES)
     assert set(A_LINK_EXPECT) == set(cases.A_LINK_NAMES)
     assert set(WEIGHTS_EXPECT) == set(cases.WEIGHTS_NAMES) - {"layout-form"}
@@ -346,6 +346,16 @@ def _window(name: str, seed: int):
     return Cr._window_outcomes(*cases.window_args(cases.window_instance(random.Random(f"{name}/{seed}"), name)))
 
 
+@pytest.mark.parametrize("seed", SEEDS)
+def test_an_honest_j10r_window_credits_its_bits(seed):
+    """A window over J10-R units (``j10r``, its templates' parameters ending in `credit.SHARED_J10R`) is credited as
+    today's is: its layout and strata are the same, and only its public rows differ."""
+    d = cases.window_instance(random.Random(f"j10r/{seed}"), "j10r")
+    assert all(t["j10r"] for t in Cr.shape_of(bytes.fromhex(d["descriptor"]))["tiles"].values())
+    got, refused = Cr._window_outcomes(*cases.window_args(d))
+    assert refused is None and got == _served(d)
+
+
 def _period(name: str, seed: int):
     d = cases.period_instance(random.Random(f"{name}/{seed}"), name)
     return Cr._period_outcomes(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
@@ -396,10 +406,10 @@ def test_the_strata_are_the_compiled_programs():
         assert all(s["floor"] == 1 for s in ss)
 
 
-def _compiled(linears, calls, m, prefix: str = "") -> bytes:
-    """The descriptor bytes of the compiled `h1window.program` over the test tile, as the period's ``circuit`` hashes
-    them (`codec.program_digest`'s)."""
-    desc = codec.encode_program(h1.HW.program(linears, calls, m, h1.TILE, prefix=prefix, unit=h1.unit))
+def _compiled(linears, calls, m, prefix: str = "", unit=h1.unit) -> bytes:
+    """The descriptor bytes of the compiled `h1window.program` over the test tile (`unit`'s), as the period's
+    ``circuit`` hashes them (`codec.program_digest`'s)."""
+    desc = codec.encode_program(h1.HW.program(linears, calls, m, h1.TILE, prefix=prefix, unit=unit))
     return codec.canonical_json({k: v for k, v in desc.items() if k != "annotations"})
 
 
@@ -444,21 +454,22 @@ def test_a_tile_at_a_k_its_proof_does_not_cover_refuses():
                 bind(BG.GemmAccumulatorS8, K=k, **BG.GEMM_SM120_S8)
 
 
-@pytest.mark.parametrize("prefix", ["", "h1/w-3/"])
-def test_the_registered_file_is_h1windows_from_the_descriptor_alone(prefix):
+@pytest.mark.parametrize("prefix,unit", [("", h1.unit), ("h1/w-3/", h1.unit), ("h1/w-3/", h1.unit_j10r)])
+def test_the_registered_file_is_h1windows_from_the_descriptor_alone(prefix, unit):
     """`credit.registered_file` builds each call's ``--registered`` file from the committed descriptor alone, and it is
     `h1window.table_reads_file`'s over the compiled Program (its ports `window_ports`', its domains binding the window's
-    open root but the weights', its A rows in its step's A table of its K), byte for byte, at each step count that
-    divides the calls; and `credit.partition_of` is the Program's partition object under
-    `h1window.query`."""
+    open root but the weights', its A rows in its step's A table of its K, and a J10-R window's public rows its units'
+    call and blocks), byte for byte, at each step count that divides the calls; and `credit.partition_of` is the
+    Program's partition object under `h1window.query`."""
     window, salt = "ef" * 64, "5a" * 64
     for linears, calls, m in COMPILED:
-        raw = _compiled(linears, calls, m, prefix)
-        prog = h1.HW.program(linears, calls, m, h1.TILE, prefix=prefix, unit=h1.unit)
+        raw = _compiled(linears, calls, m, prefix, unit)
+        prog = h1.HW.program(linears, calls, m, h1.TILE, prefix=prefix, unit=unit)
         digest = h1.P.program_digest(prog)
         assert digest == hashlib.sha512(raw).hexdigest()
         lay, _ = Cr.layout_of(raw)
         shape = Cr.shape_of(raw)
+        assert all(t["j10r"] == (unit is h1.unit_j10r) for t in shape["tiles"].values())
         assert Cr.partition_of(digest, shape) == {"format": Cr.PARTITION_FORMAT, "program": digest,
                                                   "query": h1.HW.query(prog)}
         tp = h1.P.evaluate(prog, h1.HW.query(prog))
@@ -473,6 +484,7 @@ def test_the_registered_file_is_h1windows_from_the_descriptor_alone(prefix):
                                               steps, salt)
             assert refused is None
             assert json.dumps(got) == json.dumps(want), (linears, calls, m, steps, call)
+            assert got["ports"][Cr.PUB_PORT]["words"] == (112 if unit is h1.unit_j10r else 100)
             rc = h1.HW.table(prog, h1.HW.RECEIPTS, call)
             receipted = {**roots, rc: hashlib.sha512(rc.encode()).hexdigest()}
             want = h1.HW.table_reads_file(prog, tp, call, receipted, ports=h1.HW.window_ports(prog), window=window,

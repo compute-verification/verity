@@ -295,6 +295,8 @@ def registered_file(case: dict) -> dict:
         program, shape = hashlib.sha512(raw).hexdigest(), Cr.shape_of(raw)
         got, refused = Cr.registered_file(program, lay, shape, case["call"], case["roots"], case["window"],
                                           case["steps"], case["salt"])
+        if refused is None and all(t["j10r"] for t in shape["tiles"].values()):
+            CREDITED["registered-file accept j10r"] += 1
     _counted(refused, "registered-file")
     return {"refused": list(refused)} if refused is not None else {"file": got,
                                                                    "partition": Cr.partition_of(program, shape)}
@@ -356,7 +358,7 @@ def test_credit(pass_server):
     print(f"pouw-check-difftest credit: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
           f"{dict(sorted(CREDITED.items()))}")
     assert {"credit accept", "drawn accept", "outcome accept", "window accept", "period accept",
-            "a-link accept", "weights accept", "registered-file accept"} <= set(CREDITED)
+            "a-link accept", "weights accept", "registered-file accept", "registered-file accept j10r"} <= set(CREDITED)
     for part in ("credit draw: the draw root over the manifest", "credit draw: the window's draw root is not",
                  "credit draw: the challenger's session closed with no draw coin", "credit credit: manifest row # has no",
                  "credit credit: call # is credited with no z", "credit coin: the draw coin: ",
@@ -439,6 +441,7 @@ def test_credit(pass_server):
                  "a-link a-link: registered receipt table ", "registered-file registration: the window registers ",
                  "'s template returns no receipt of whole #-bit words", "'s seed reads the roots of ",
                  "its units' ok rows, which are the verifier's own",
+                 "registered-file layout: the window's template at K = # is not h#window's",
                  "window live: the window registers h#/w#/slots@# not", "window live: the window registers h#/w#/requests@# not",
                  "rows of # #-bit words its live unit reads",
                  "window live: the window's live evidence is not {descriptor, proofs}",

@@ -589,14 +589,17 @@ def _template_id(k: int, unit: dict) -> str:
     return f"{Cr.TILE_FN}{{UNIT={_canon(unit)},K={k}}}"
 
 
-def _template(k: int, r: int, c: int, unit: dict, receipt: object = None) -> dict:
+def _template(k: int, r: int, c: int, unit: dict, receipt: object = None, j10r: bool = False) -> dict:
     """K's template as `h1window.template` encodes it: a composite over the tile unit `unit`, its A and B rows
-    ``a_k<K>`` and ``b_k<K>``, then the unit's z/y record ``zy``, the salt, its position and the roots; returning
-    ``{receipt, ok}`` with ``receipt`` the type `receipt` when one is given, else a word."""
+    ``a_k<K>`` and ``b_k<K>``, then the unit's z/y record ``zy``, the salt, its position and the roots (and, `j10r`, a
+    J10-R unit's call and blocks); returning ``{receipt, ok}`` with ``receipt`` the type `receipt` when one is given,
+    else a word."""
     word = ["Value", 16]
     params = [[f"a_k{k}", ["Array", r, ["Array", 2, word]]], [f"b_k{k}", ["Array", c, ["Array", 2, word]]],
               ["zy", ["Array", 3 * r * c, word]], ["salt", ["Array", 4, word]], ["position", word],
               ["roots", ["Array", 2, ["Array", 4, word]]]]
+    if j10r:
+        params += [["call", ["Array", 4, word]], ["blocks", ["Array", 2, ["Array", 4, word]]]]
     ret = word if receipt is None else ["Record", [["receipt", receipt], ["ok", ["Value", 1]]]]
     return {"form": "composite", "id": Cr.TILE_FN, "bindings": {"K": k, "UNIT": unit},
             "body": {"params": params, "ret_type": ret, "nodes": [{"form": "call", "fn": 0, "args": [], "out": 0}],
@@ -609,17 +612,17 @@ def record(tiles: list, lay: dict, prefix: str = "") -> str:
     return Cr.WINDOW_FN + "{" + ",".join(f"{k}={_canon(vals[k])}" for k in Cr.RECORD) + "}"
 
 
-def window_desc(rng: random.Random, lay: dict, prefix: str = "", receipt: object = None) -> dict:
+def window_desc(rng: random.Random, lay: dict, prefix: str = "", receipt: object = None, j10r: bool = False) -> dict:
     """A served window's circuit as `h1window.program(linears, calls, m, tile)` encodes it (`codec.encode_program`), as
     far as `credit.layout_of` reads it: its program function's record, each K's template, and the root's input batches,
     then each call's (m/R)·(n/C) tiles, each a call of K's template or, at random, a run of them one batch; each
-    template returning a receipt of type `receipt` (`_template`) when one is given."""
+    template returning a receipt of type `receipt` (`_template`) when one is given, and over J10-R units when `j10r`."""
     (r, c), ks = lay["tile"], sorted({k for _name, k, _n in lay["linears"]})
-    units = {k: {"fn": f"H1Tile_v1{{K={k},R={r},C={c}}}"} for k in ks}
+    units = {k: {"fn": f"H1Tile_v{5 if j10r else 1}{{K={k},R={r},C={c}}}"} for k in ks}
     tids = {k: _template_id(k, units[k]) for k in ks}
     callees = ["Input16_v1", *(u["fn"] for u in units.values()), *tids.values()]
     defs = {u["fn"]: {"form": "primitive", "id": u["fn"], "params": [], "ret": ["Value", 16]} for u in units.values()}
-    defs |= {tids[k]: _template(k, r, c, units[k], receipt) for k in ks}
+    defs |= {tids[k]: _template(k, r, c, units[k], receipt, j10r) for k in ks}
     defs["Input16_v1"] = {"form": "primitive", "id": "Input16_v1", "params": [], "ret": ["Value", 16]}
     nodes = [{"form": "batch", "fn": 0, "args": [], "out": 0, "axes": [], "n": rng.randint(1, 64)}
              for _ in range(2 * len(ks) + 3)]
@@ -644,9 +647,27 @@ def desc_bytes(desc: dict) -> bytes:
     return _canon(desc).encode()
 
 
-def descriptor(rng: random.Random, lay: dict, prefix: str = "", receipt: object = None) -> str:
+def descriptor(rng: random.Random, lay: dict, prefix: str = "", receipt: object = None, j10r: bool = False) -> str:
     """`window_desc`'s bytes in hex, as a window's evidence carries them."""
-    return desc_bytes(window_desc(rng, lay, prefix, receipt)).hex()
+    return desc_bytes(window_desc(rng, lay, prefix, receipt, j10r)).hex()
+
+
+def j10r_misformed(rng: random.Random, lay: dict, prefix: str = "") -> str:
+    """A J10-R window's descriptor (`descriptor`'s, ``j10r``) whose template at some K is in no one form: its ``call``
+    or ``blocks`` dropped, the two swapped, or (a window of two K) that K's template today's while the other's is
+    J10-R's; in hex."""
+    desc = window_desc(rng, lay, prefix, j10r=True)
+    tiles = json.loads(dict(Cr._record(desc["program_fn"]))["TILES"])
+    _k, tid = rng.choice(tiles)
+    params = desc["definitions"][tid["fn"]]["body"]["params"]
+    how = rng.choice(["drop", "swap", *(["mixed"] if len(tiles) > 1 else [])])
+    if how == "drop":
+        del params[rng.choice([-1, -2])]
+    elif how == "swap":
+        params[-2:] = params[-2:][::-1]
+    else:
+        del params[-2:]
+    return desc_bytes(desc).hex()
 
 
 def _alt_layout(rng: random.Random, lay: dict) -> dict:
@@ -1227,7 +1248,8 @@ def _mutate_live(rng: random.Random, d: dict, name: str) -> None:
 
 def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", leaf: int = rc.RECORD_LEAF,
                   lay: dict | None = None, desc: str | None = None, prefix: str | None = None,
-                  weights: list[dict] | None = None, t: int | None = None) -> tuple[dict, rc.Session]:
+                  weights: list[dict] | None = None, t: int | None = None,
+                  j10r: bool = False) -> tuple[dict, rc.Session]:
     """An honest served window (`honest_credit`) of the circuit `desc` (`descriptor` of its layout `lay`, a random one
     when None), its weights `weights` (`weights_of` when None, its open root over them, ``d["weights"]``), a K it can be
     drawn at, its period's table rows T `t` (``rows``, `table_rows` when None) and each step's served rows at most T,
@@ -1239,10 +1261,11 @@ def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", le
     `TWO_CALLS`), and its Commit record registers each of them (`commit_record`); under `AROW_NAMES`
     one of them is not the Commit's. ``layout`` is the layout, which the verifier
     reads from the descriptor. Its values are named `prefix` (a random ``h1/w-<n>/`` when None) and their roles, and so
-    are its circuit's parameters (``PREFIX``) when `desc` is None, as a served path names them."""
+    are its circuit's parameters (``PREFIX``) when `desc` is None, as a served path names them, over J10-R units when
+    `j10r`."""
     lay = layout(rng) if lay is None else lay
     prefix = f"h1/w-{rng.randrange(100)}/" if prefix is None else prefix
-    desc = descriptor(rng, lay, prefix) if desc is None else desc
+    desc = descriptor(rng, lay, prefix, j10r=j10r) if desc is None else desc
     program = hashlib.sha512(bytes.fromhex(desc)).hexdigest()
     weights = weights_of(rng, lay, program, prefix) if weights is None else weights
     other = {"other-registration": rng.choice(["window", "program"]), "a-call-unbound": "unbound"}.get(name)
@@ -1264,7 +1287,8 @@ def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", le
 
 
 def window_instance(rng: random.Random, name: str = "honest", lay: dict | None = None) -> dict:
-    """One `window` case: an honest window (of layout `lay` when given), then mutation `name`."""
+    """One `window` case: an honest window (of layout `lay` when given), then mutation `name` (``j10r``: an honest window
+    over J10-R units, each call of at least two row tiles)."""
     credit = name.removeprefix("credit-")
 
     def call_ks(lay: dict) -> list[int]:
@@ -1285,10 +1309,13 @@ def window_instance(rng: random.Random, name: str = "honest", lay: dict | None =
             lay = layout(rng)
     elif name == "commit-missing-expert":
         lay = expert_layout(rng)
-    d, s = honest_window(rng, credit, lay=lay)
+    elif name == "j10r":
+        lay = layout(rng)
+        lay["m"] = 2 * lay["tile"][0]
+    d, s = honest_window(rng, credit, lay=lay, j10r=name == "j10r")
     signed: dict | None = {}
     match name:
-        case "honest":
+        case "honest" | "j10r":
             pass
         case _ if (name in AROW_NAMES or name in IDS0_NAMES or name in REQ0_NAMES or name in ROWS_NAMES
                    or name in LIVE_TABLE_NAMES):
@@ -1422,7 +1449,7 @@ WINDOW_NAMES = ["manifest-count", "chosen", "failed", "missing", "descriptor-hex
                 "credit-changed", "credit-no-draw", "credit-forged-ledger", "credit-branch-pin", "k-form", "k-past-units",
                 "never-received", "round-coin", "a-untied", "no-a", *REGISTRATION_NAMES, *WINDOW_WEIGHTS_NAMES,
                 *AROW_NAMES, *IDS0_NAMES, *REQ0_NAMES, "commit-unbound", "credit-commit-form", *ROWS_NAMES, "t-other",
-                "t-form", *LIVE_NAMES]
+                "t-form", *LIVE_NAMES, "j10r"]
 WINDOW_KEYS = ("key", "ledger", "pins", "main", *Cr.PROVED_KEYS, "k", "rows")
 #: `credit.window`'s arguments, in order
 WINDOW_ARGS = ("key", "ledger", "pins", "main", "window", "session", "salt", "calls", "served", "commit", "rounds",
@@ -1629,8 +1656,11 @@ def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
     call's values out, ``twice`` registers one twice, ``receipt-twice`` registers the receipt table twice and
     ``receipt-width`` gives the templates a receipt of no whole 16-bit words, or none, ``pub-roots`` registers the
     call's A table or ``b/<K>``, whose roots its units' public rows hold, at a root that is no SHA-512 digest, and
-    ``ok-registered`` registers the window's ok rows ``<prefix>ok``, which are the verifier's own."""
+    ``ok-registered`` registers the window's ok rows ``<prefix>ok``, which are the verifier's own. Its templates are
+    J10-R's at random (always under ``j10r``), whose public rows the verifier derives each unit's call and blocks for,
+    and ``j10r-form`` gives a J10-R window a template in no one form (`j10r_misformed`)."""
     lay = layout(rng)
+    j10r = name == "j10r" or (name == "honest" and rng.random() < 0.5)
     prefix = rng.choice(["", f"h1/w-{rng.randrange(100)}/"])
     call = rng.randrange(len(lay["calls"]))
     steps = rng.choice([s for s in (1, 2, 3) if len(lay["calls"]) % s == 0])
@@ -1650,8 +1680,11 @@ def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
             roots[f"{prefix}a/{k}@{st}"] = [_hex(rng)]
     v = rng.choice(vals[:3])
     match name:
-        case "honest":
+        case "honest" | "j10r":
             pass
+        case "j10r-form":
+            return {"descriptor": j10r_misformed(rng, lay, prefix), "call": call, "roots": roots, "window": _hex(rng),
+                    "steps": steps, "salt": _hex(rng)}
         case "missing":
             if rng.random() < 0.5:
                 del roots[v]
@@ -1671,11 +1704,12 @@ def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
                                   ["Value", 16 * rng.randint(0, 4) + rng.randint(1, 15)], ["Array", 3, ["Value", "16"]]])
         case _:
             raise ValueError(name)
-    return {"descriptor": descriptor(rng, lay, prefix, receipt), "call": call, "roots": roots, "window": _hex(rng),
+    return {"descriptor": descriptor(rng, lay, prefix, receipt, j10r), "call": call, "roots": roots, "window": _hex(rng),
             "steps": steps, "salt": _hex(rng)}
 
 
-REGISTERED_FILE_NAMES = ["missing", "twice", "receipt-twice", "receipt-width", "pub-roots", "ok-registered"]
+REGISTERED_FILE_NAMES = ["missing", "twice", "receipt-twice", "receipt-width", "pub-roots", "ok-registered", "j10r",
+                         "j10r-form"]
 
 
 def _tree(rng: random.Random, count: int, dom: CommitmentDomain | None = None) -> tuple[str, list[tuple[bytes, ...]]]:
