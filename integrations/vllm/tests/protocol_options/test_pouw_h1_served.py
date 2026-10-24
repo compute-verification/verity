@@ -635,8 +635,9 @@ def test_each_calls_public_table_and_the_ok_rows_are_the_ones_credit_builds_and_
     ``--registered`` file is credit's, the verifier-built ok rows (o1) included, every pub row opening credit's root. A table with one row off, under the
     same salts, has another root, which `credit._verified` refuses a session for, and its row opens none of credit's.
     At close the window commits its ok rows (`Served.ok`, o1) at credit's root, in no entry: a window whose entries
-    name them is refused."""
-    run, _ws, _got = _window(W1, receipts=_Receipts())
+    name them is refused. Its linears' K are 32 and 64: credit's layout refuses a tile at a K its proof doesn't cover
+    (``tile-k``, K a multiple of 32)."""
+    run, _ws, _got = _window(W1, receipts=_Receipts(), shapes=[(64, 32), (32, 32), (32, 64)])
     served, pre = run.served, SV.PREFIX
     assert not served.refused and served.tables()[-2 * len(run.calls):-len(run.calls)] == [
         pre + f"pub@{c}" for c in range(len(run.calls))]

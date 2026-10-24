@@ -23,16 +23,16 @@ def s8_words(K: int) -> int:
 
 def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tuple[str, tuple[int, ...]]]]:
     """Chunked template ``tp``'s rows as `UnitStager` stages them, ``(in_rows, out_rows)``: a ``ScaledMmS8Coordinate``'s A6 rows,
-    ``x`` (the token's s8 codes then its f32 scale, row-seg) and ``w`` (``W[c, :]`` then ``sw[c]``, v2); a ``COORDS``
-    coordinate's, a ``COLS`` column block's or a ``SLICES`` slice's ``in<g>``, one v2 row per parameter (its port); then the one
-    v2 output row ``o0``."""
+    ``x``     (the token's s8 codes then its f32 scale, row-seg) and ``w`` (``W[c, :]`` then ``sw[c]``, v2); a ``COORDS``
+    coordinate's, a ``COLS`` column block's, a ``SLICES`` slice's or a ``KCHUNKS`` K-chunk's ``in<g>``, one v2 row per parameter
+    (its port); then the one v2 output row ``o0``."""
     from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
     from verity_vllm.query.program_view import spec_statics
 
     if tp.layout == "s8":
         bits = 16 * s8_words(int(spec_statics(tp.id)["K"]))
         return [("x", SEG, bits, ["x", "sx"]), ("w", V2, bits, ["wrow", "sw"])], [(V2, (0,))]
-    if tp.layout in ("coord", "cols", "slice"):
+    if tp.layout in ("coord", "cols", "slice", "kchunk"):
         params, _ret = tp.fn.signature()
         return [(f"in{g}", V2, sum(ty.leaf_widths()), [nm]) for g, (nm, ty) in enumerate(params)], [(V2, (0,))]
     raise ValueError(f"{tp.id}: its layout {tp.layout!r} is not a chunked one")
