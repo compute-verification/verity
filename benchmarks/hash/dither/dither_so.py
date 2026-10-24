@@ -152,6 +152,13 @@ SPILLS = {"azy": "A rows and scales, and the z/y records (live rows; the rest ar
 SPILL_CHUNK = 2 << 30                   # pinned host bytes a chunk of the spill's pool
 SPILL_MAX_ENV = "DITHER_SPILL_MAX_GB"   # the pool's bound, past which a window's spill refuses (default SPILL_MAX_GB)
 SPILL_MAX_GB = 128
+# "1": a step's GEMMs and y commits write a row past m's z/y records only where an earlier step left something else
+# (a live row, a captured step's poison, a control's unwritten records, a new window): the same bytes in every record,
+# without the dead rows' ~350 MB of stores a step at m = 32 of T = 64 (`dead_from`, S[2], dither_a._rows_written)
+DEAD_ONCE_ENV = "DITHER_DEAD_ONCE"
+# "1": a step's inputs written from pinned host memory without a wait (`_put`): the serving stream orders them after
+# step s - 1's trees, lm_head and sampler, so the host launches forward s while the sampler runs
+PUT_ASYNC_ENV = "DITHER_SO_PUT_ASYNC"
 # "1": a capture's copies go to host memory, not the device (a prefill capture at T = 2048 is ~30 GB); `DA.check` moves
 # each call's tensors to the device as it reads them
 CAP_HOST_ENV = "DITHER_SO_CAP_HOST"
@@ -217,6 +224,11 @@ class SoWindow(DO.Window):
         if self.a_step and (self.a_once or self.overlap):
             raise RuntimeError(f"{DO.A_STEP_ENV}=1 serves -aom/-aomn without -ov (its A tables after the forward, on "
                                f"the serving stream)")
+        self.dead_once = os.environ.get(DEAD_ONCE_ENV) == "1"
+        if self.dead_once and self.overlap:
+            raise RuntimeError(f"{DEAD_ONCE_ENV}=1 serves an -so arm without -ov")
+        self.clean_from: int | None = None
+        self.put_async = os.environ.get(PUT_ASYNC_ENV) == "1"
         super().__init__(*args, **kwargs)
         if self.a_step:
             self._a_step_set()
@@ -242,6 +254,12 @@ class SoWindow(DO.Window):
         o = self.pre["mid"].level_off[0]
         self.a_leaves = self.pre["mid"].level[o:o + 8 * self.L].view(self.L, 8)
 
+    def _put(self, dst: torch.Tensor, src: torch.Tensor) -> None:
+        if self.put_async:
+            dst.copy_(src.pin_memory(), non_blocking=True)
+        else:
+            super()._put(dst, src)
+
     def a_step_build(self) -> None:
         """On the current stream, after the forward: the step's K tables and each call's a-step leaf."""
         self.c.build(self.pre["ak"], self.stepv[0:1])
@@ -257,6 +275,7 @@ class SoWindow(DO.Window):
         from verity.core.protocols.pouw.circuit import h1tile as HT
         t0 = time.perf_counter()
         self.HT = HT
+        self.clean_from = None
         at = CO.session()
         if at is not None and self.k >= 0:
             raise RuntimeError(f"dither-a-so: session {at.id} served this process's one off-node window, which ended at "
@@ -542,6 +561,16 @@ class SoWindow(DO.Window):
             out += sd.zy + sd.ysv + [sd.zyset.level, sd.ysset.level, sd.yuset.level]
         return out
 
+    def dead_from(self, m: int) -> int:
+        """Under DEAD_ONCE_ENV the row from which every row already holds a row past m's z/y records (T after a capture,
+        a control's no-write step or a window's start), and from the next step on m, or T after a step that writes
+        none; else 0, every row past m written."""
+        if not self.dead_once:
+            return 0
+        c = self.t if self.cap is not None or self.clean_from is None else self.clean_from
+        self.clean_from = self.t if self.flags & DO.F_NW_TILES else m
+        return c
+
     def before(self, m: int) -> None:
         self.t_b0 = time.perf_counter()
         if not self.open:
@@ -706,6 +735,10 @@ class SoWindow(DO.Window):
               "coin_late_ms": 1e3 * t_late}
         if units_wait is not None:
             ph["units_wait_ms"] = units_wait
+            ph["units_gpu_ms"] = sd.ev_u[p][0].elapsed_time(sd.ev_u[p][1])
+            q = sd.prev_of.get(p)
+            if q is not None:
+                ph["units_idle_ms"] = sd.ev_u[q][1].elapsed_time(sd.ev_u[p][0])
         self.phases.append({**ph, **self.host_ms()})
         self.round_log.append({"s": s, "m": m, "root": root.hex()[:32]})
         self.s += 1
@@ -803,7 +836,9 @@ class SoWindow(DO.Window):
                      "coins_back": len(pipe.openings), "rounds_sent": len(sent),
                      # the challenger's log holds these round roots in this order (its published session's record)
                      "roots_sha512": hashlib.sha512(b"".join(sent)).hexdigest(),
-                     "window_end": self.end_stats(), "serving_stream_priority": torch.cuda.current_stream().priority,
+                     "window_end": self.end_stats(),
+                     "dead_once": self.dead_once, "put_async": self.put_async,
+                     "serving_stream_priority": torch.cuda.current_stream().priority,
                      "units_stream_priority": DA.SIDE[0].side.priority if DA.SIDE else None}
         if ov is not None:
             doc["so"]["overlap"] = {"order": OV_ORDER, "ring": ov.R, "rounds_built": ov.sent_upto + 1,
@@ -886,6 +921,11 @@ class SoSide(DA.Side):
         self.rroots = [torch.zeros(8 * L, dtype=torch.int64, device=dev) for _ in range(D)]
         self.ready = [torch.cuda.Event() for _ in range(D)]
         self.udone = [torch.cuda.Event() for _ in range(D)]
+        # each slot's units on the units stream (start, end), and the slot dispatched before it: the step's
+        # units_gpu_ms and the stream's units_idle_ms before them, read once round j + D - 1 has waited for them
+        self.ev_u = [(torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)) for _ in range(D)]
+        self.prev_of: dict[int, int | None] = {}
+        self.last_p: int | None = None
         self.tables = [win.r.plan([Call(self.ring_slot[p][w], win.wt[w], win.offs[w], self.ring_aroots[p].data_ptr() + 64 * w,
                                         self.ring_live[p], root_b=win.bset.roots.data_ptr() + 64 * w) for w in range(L)],
                                   seeds=win.plan.seeds, out=win.plan.out) for p in range(D)]
@@ -1065,6 +1105,7 @@ class SoSide(DA.Side):
         self.salt_host[p].copy_(torch.from_numpy(words(salt)))
         with torch.cuda.stream(st):
             st.wait_event(self.ready[p])
+            self.ev_u[p][0].record(st)
             self.ring_salt[p].copy_(self.salt_host[p], non_blocking=True)
             if g is not None:
                 for x in (self.stage, win.plan.out, win.plan.seeds, win.rset.level):
@@ -1091,7 +1132,9 @@ class SoSide(DA.Side):
             if g is not None:
                 g["receipts"], g["r_roots"] = keep(win.plan.out), keep(win.rset.roots)
                 g["units_graph"] = graph
+            self.ev_u[p][1].record(st)
             self.udone[p].record(st)
+        self.prev_of[p], self.last_p = self.last_p, p
         self.dispatched[j] = p
         self.unit_steps += 1
 
