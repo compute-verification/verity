@@ -269,52 +269,82 @@ def check_point_environment(spec: ResolvedSpec, environ: Mapping[str, str]) -> N
                          "launch points with `verity-bench run SPEC`, which forwards them")
 
 
-def research_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Path) -> list[str]:
+#: a slot-only node's GPU pool (its /etc/vy/runs-via-slot, which refuses a queued point): a point sent there with `--on`
+#: waits in the pool's line for a slot's cores, then takes its GPUs from gpu-lease, as the pool's slots file says
+GPU_SLOTS = "/workspace/research/locks/gpu/slots"
+GPU_LEASE = "/workspace/pouw/infra/bin/gpu-lease"
+#: a point's host memory, the 1-GPU queue kind's
+POINT_MEM_GB = 64
+#: how long a preemptible lease is safe: a point sent with `--on` leases its GPUs for at most this long
+LEASE_MAX_MIN = 40
+#: how long a point sent with `--on` waits for a slot before it exits NOT_STARTED without running
+SLOT_WAIT_S = 3600
+
+
+def research_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Path, on: str | None = None,
+                     by: str = "verity-bench") -> list[str]:
+    """The point as one queued research run, or with `on` as a run on that node through its GPU slot pool
+    (`GPU_SLOTS`) under gpu-lease: the form a node behind slots takes (vy-nebius-2 since 24 Oct 11:50Z), which the
+    queue's own placement can't give, since its job's cores aren't the pool's."""
+
     spec = plan.spec
-    command = [
-        "research", "run",
-        "--queue",
-        "--kind", queue_kind(spec.preset.gpu_count),
-        # A guest's GPU job must be; a stopped point reruns whole when requeued, and resume skips only passing points.
-        "--preemptible",
+    common = [
         "--source", str(root),
         "--project", "verity",
         "--campaign", "vllm-bench",
-        "--gpus", str(spec.preset.gpu_count),
-        "--gpu-model", spec.preset.gpu_id,
-        "--disk-gb", str(POINT_DISK_GB),
         "--cwd", "source",
         "--require-result",
         "--tool", "verity_bench.tool:VLLM_BENCH_POINT",
     ]
-    if spec.admission.max_minutes is not None:
-        command += ["--max-min", str(spec.admission.max_minutes)]
+    if on is None:
+        command = [
+            "research", "run",
+            "--queue",
+            "--kind", queue_kind(spec.preset.gpu_count),
+            # A guest's GPU job must be; a stopped point reruns whole when requeued, and resume skips only passing points.
+            "--preemptible",
+            "--gpus", str(spec.preset.gpu_count),
+            "--gpu-model", spec.preset.gpu_id,
+            "--disk-gb", str(POINT_DISK_GB),
+            *common,
+        ]
+        if spec.admission.max_minutes is not None:
+            command += ["--max-min", str(spec.admission.max_minutes)]
+    else:
+        minutes = min(spec.admission.max_minutes or LEASE_MAX_MIN, LEASE_MAX_MIN)
+        command = ["research", "run", "--on", on, "--mem-gb", str(POINT_MEM_GB),
+                   "--timeout", str(SLOT_WAIT_S + 60 * minutes + 600), *common]
     if os.environ.get("VERITY_BENCH_VENV"):
         command += ["--env", f"VERITY_BENCH_VENV={os.environ['VERITY_BENCH_VENV']}"]
     for name, setting in point_environment(spec).items():
         command += ["--env", f"{name}={setting}"]
-    command += [
-        "--",
+    workload = [
         "bash", "benchmarks/harness/run_point.sh",
         "--spec", _relative_spec(source, root),
         "--point", item.point.id,
         "--identity", item.identity,
     ]
-    return command
+    if on is not None:
+        workload = ["env", f"CHECK_SLOTS={GPU_SLOTS}", "python3", "tools/verity/check/slot.py", "--by", by,
+                    "--wait-max", str(SLOT_WAIT_S), "--run-max", str(60 * minutes + 300), "--",
+                    GPU_LEASE, str(spec.preset.gpu_count), "--wait", "--max-min", str(minutes),
+                    "--mem-gb", str(POINT_MEM_GB), "--preemptible", "--", *workload]
+    return [*command, "--", *workload]
 
 
 def _execute(command: Sequence[str], root: Path) -> int:
     return subprocess.run(command, cwd=root, check=False).returncode
 
 
-def dispatch(plan: Plan, source: str | Path, *, root: Path | None = None, execute: Executor = _execute) -> int:
-    """Launch one recorded research run for each incomplete point."""
+def dispatch(plan: Plan, source: str | Path, *, root: Path | None = None, execute: Executor = _execute,
+             on: str | None = None, by: str = "verity-bench") -> int:
+    """Launch one recorded research run for each incomplete point: queued, or with `on` on that node's GPU slot pool."""
 
     root = root or repository_root()
     for item in plan.points:
         if item.passing_run is not None:
             continue
-        rc = execute(research_command(plan, source, item, root), root)
+        rc = execute(research_command(plan, source, item, root, on=on, by=by), root)
         if rc:
             return rc
     return 0

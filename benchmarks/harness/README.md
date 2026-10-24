@@ -10,7 +10,7 @@ those like any other caller. This file is the harness's contract: how a point is
 
 ~~~text
 verity-bench plan SPEC       # expand a spec; each point's identity and its passing run, if any
-verity-bench run SPEC        # one recorded `research run --queue` per point without a passing run
+verity-bench run SPEC        # one recorded `research run --queue` per point without a passing run (--on NODE: on NODE's GPU slots)
 verity-bench check SPEC      # exit 0 only when every point has a passing run, here or on the store's remote
 verity-bench compare A B     # accept two results only when their identities agree (--allow PATH to permit one)
 verity-bench table R1 R2...  # one table from one spec's per-point results, only when their identities agree
@@ -169,7 +169,9 @@ same way, allowing only `config.point_identity`.
 count in `infra/cluster/kinds/benchmarks.toml` (`vllm-bench-1gpu`, `vllm-bench-8gpu`). The job runs
 `benchmarks/harness/run_point.sh`, which uses the node's pinned-vLLM environment (`benchmarks/harness/env.sh`, which a
 benchmark's own launcher sources too): `$WORK/venv312` from the integration's `pod_bootstrap.sh`, or `VERITY_BENCH_VENV`,
-which the dispatcher forwards. `benchmarks` is on its path, so a spec names an experimental arm's module from there
+which the dispatcher forwards. A node behind check slots (`/etc/vy/runs-via-slot`, vy-nebius-2 since 24 Oct) refuses a
+queued point, so `run --on NODE` sends each point there as `research run --on NODE` through the node's GPU slot pool
+(`jobs.GPU_SLOTS`), its GPUs from gpu-lease for at most 40 minutes. `benchmarks` is on its path, so a spec names an experimental arm's module from there
 (`served_commit.arm:SERVED_COMMIT`). A point's identity hashes the resolved spec,
 the commit, `uv.lock`, the vLLM pin and the point. The tool declaration (`verity_bench.tool:VLLM_BENCH_POINT`) records it
 as the run's key param, and `plan`, `check` and `run` skip a point whose identity already has a passing run: validation
