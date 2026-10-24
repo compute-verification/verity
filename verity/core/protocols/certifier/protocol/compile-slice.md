@@ -16,6 +16,11 @@ window, what binds the charge's inputs, and the slice's proof of record on a ser
   the last window left unread, and `ReplayAdvance` reads the window row's in turn. So the scan reads them in commit
   order and only consumes them, and `ReplayClose` refuses a session that leaves one unread.
 - A decision a window commits but its steps don't read is charged in that window and read in a later one.
+- A forced admission (an arrival into a quiet engine, taken unasked) is no decision, so it takes no slot. ``run``, the
+  charge's context, counts decisions only, as `code_v1`'s does, and the admission doesn't reset it as it resets the
+  scan's ``pc``. Each of 8eb1's 339 windows opens with one. Over them the chain is `code_v1`'s charge on every window,
+  5,500 bits; charged as a 1, the forced admissions would change 330 windows' charges
+  (`benchmarks/network_e2e/encodings/tests/test_served_window.py`).
 - The slice has no coder state, codeword or context counter: ChargeLink_v1 reads its contexts and estimates from ``cin``
   and the committed decisions. Its counts other than the decisions are coded as 0 (`arith_encode.ZERO_COUNTS`, the
   still-sent fields' stand-in).
