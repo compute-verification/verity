@@ -782,9 +782,8 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                          "host": doc["host"], "window": doc["public"],
                          "layout_static": c.get("layout_static"), "same_tokens": c["same_tokens"],
                          "roots1": c.get("roots1"), "core": c.get("core"), "negatives": negs,
-                         "committer": c.get("committer"), "receipts": c.get("receipts"),
+                         "committer": c.get("committer"), "coins": coins_summary(doc, bool(a.challenger)), "receipts": c.get("receipts"),
                          "credit": {k: (c.get("credit") or {}).get(k) for k in ("ok", "lines", "units", "s")},
-                         "coins": coins_summary(doc, bool(a.challenger)),
                          "ok": bool(c["ok"] and (c.get("core") or {}).get("tied")
                                     and all(v["refused"] for v in negs.values())
                                     and len(negs) == len(negatives_of(layers)) * a.negatives

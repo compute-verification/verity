@@ -703,3 +703,22 @@ def test_the_harness_takes_commit_with_the_challenger_only_with_a_session_a_wind
     with pytest.raises(SystemExit):
         G.main(["--out", str(tmp_path), "--at", "t", "--by", "b", "--workload", "fill", "--served", *argv])
     assert why in capsys.readouterr().err
+
+
+def test_credit_reads_round_zero_under_the_gate_session_the_window_was_served_in(tmp_path, monkeypatch):
+    """`pouw_h1_gpu.py --credit` on a challenger window: round 0's input-ids and request tables bind the gate's reserved
+    session, so the stand-in's registration step (`pouw_h1_credit.check`) reads them under that session, never under the
+    in-process one (`LOCAL_SESSION`), which gives them another domain."""
+    from tests.protocol_options import pouw_h1_credit as PC
+    from tests.protocol_options import pouw_h1_gpu as G
+    from verity_vllm.protocol_options import pouw_h1_served as SV
+    gate = _Gate(tmp_path, monkeypatch)
+    sessions = G.window_sessions(gate, "vy-nebius-1", STEPS)
+    _record, run, _tap = _window(tmp_path, monkeypatch, None, coins=_live(gate, sessions, "commit"), key=None)
+    w = PC.of_run(run, run.served)
+    assert w.session == sessions.held["commit"]["session"]
+    first = [e for e in w.entries if CR.ids_step(e["value"]) == 0 or CR.is_requests(e["value"])]
+    assert first
+    for e in first:
+        assert e["domain"] == CR.domain_of(w.program, w.window, e, w.session)
+        assert e["domain"] != CR.domain_of(w.program, w.window, e, SV.LOCAL_SESSION)
