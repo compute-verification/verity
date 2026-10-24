@@ -95,9 +95,11 @@ class Window:
     call table for the seeds and receipts; the `h1o` table and step struct; the epoch salt."""
     group_slots = False     # `slot_groups` and `scale_all` (dither_so's ring copies a step's slots from them)
     a_step = False          # A_STEP_ENV's tables (dither_so sets it, with group_slots)
+    h2d_pinned = False      # `before`'s inputs through pinned buffers, without a host wait (`_h2d`)
 
     def __init__(self, t: int, key: bytes, h1c_path: str, h1o_path: str, gate: bool, dev):
         self.t, self.key, self.dev = t, key, dev
+        self.pins: dict[int, torch.Tensor] = {}
         self.L = L = len(REG)
         if sorted(REG) != list(range(L)):
             raise RuntimeError(f"linears registered: {sorted(REG)}")
@@ -316,6 +318,19 @@ class Window:
         for x in ts:
             x.view(torch.uint8).fill_(DF.POISON)
 
+    def _h2d(self, dst: torch.Tensor, src: torch.Tensor) -> None:
+        """dst from the host tensor src on the current stream; under `h2d_pinned` (dither_so's $DITHER_SO_ROOT_LAG=2)
+        through dst's own pinned buffer without a host wait, its last copy out (the engine waited on the forward after
+        it)."""
+        if not self.h2d_pinned:
+            dst.copy_(src)
+            return
+        buf = self.pins.get(dst.data_ptr())
+        if buf is None:
+            buf = self.pins[dst.data_ptr()] = torch.empty(src.shape, dtype=src.dtype).pin_memory()
+        buf.copy_(src)
+        dst.copy_(buf, non_blocking=True)
+
     def phase(self, name: str | None) -> None:
         """Under DITHER_NSYS=prof, close the open phase's NVTX range and open PHASE_RANGE/NAME's (stepprof.py gives each
         kernel the phase its launch was in)."""
@@ -369,8 +384,8 @@ class Window:
         self.t_before = time.perf_counter()
 
     def _put(self, dst: torch.Tensor, src: torch.Tensor) -> None:
-        """A step input from the host into `dst`, on the current stream."""
-        dst.copy_(src)
+        """A step input from the host into `dst`, on the current stream (`_h2d`)."""
+        self._h2d(dst, src)
 
     def cap_sync(self) -> None:
         """A captured step's wait, after its poison and inputs, before its forward."""
