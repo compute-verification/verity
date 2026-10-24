@@ -175,7 +175,7 @@ def main() -> int:
     out = Path(os.environ.get("OUT", "out")) / "forge-after"
     out.mkdir(parents=True, exist_ok=True)
     dd = a.work / "data" / a.tag
-    inner = sorted((dd / "inner").glob("s*"), key=lambda p: int(p.name[1:]))[-1]
+    inner = sorted((dd / "inner").glob("s[0-9]*"), key=lambda p: int(p.name[1:]))[-1]
     (n,) = [p.name[4:-4] for p in (dd / "stage").glob("pub-*.bin")]
     inner_flags = ["--rec-inner-circuit", str(dd / "stage/circuit.txt"), "--rec-inner-public", str(dd / f"stage/pub-{n}.bin"),
                    "--rec-inner-partition", str(dd / "stage/partition.json"), "--rec-inner-statement",
