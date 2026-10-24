@@ -29,6 +29,7 @@ import Models.NetworkCertifier.Assumptions.AdviceString
 import Models.NetworkCertifier.Guarantees.AdviceString
 import Models.Flock.Guarantees
 import Models.Accounting.Guarantees
+import Models.Accounting.Assumptions.FpMma
 import Models.Hash.Guarantees
 
 /-! Each component's named assumptions and guarantee statements. -/
