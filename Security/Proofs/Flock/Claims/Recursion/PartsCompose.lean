@@ -588,12 +588,6 @@ theorem bdDeployed_next (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
     (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
     (bdDeployed rel nextE colsE wE join rowIn final w).DE.V.next = nextE := rfl
 
-theorem bdDeployed_ans_fun (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
-    (nextE : Msg → List Msg → List Coin → Claims.OC Out)
-    (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
-    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
-    (bdDeployed rel nextE colsE wE join rowIn final w).ans = FlockDeploy.Coin.bytes := rfl
-
 /-- **The split at the deployment**: at an element-level verifier whose steps answer a coin as the deployed plain
 verifier's do (`hcoin`), every step before the last is proved from two checks, the statement's setup and the opened
 round's tag, and the last from the verdict's split `LS`. -/
@@ -614,7 +608,7 @@ noncomputable def deploySplit (H : Msg → Msg) (rel : _root_.Flock.Readable.Par
       exact List.mem_range.1 hj
     show StepOk H (bdDeployed rel nextE colsE wE join rowIn final w) x ms cs j
     unfold StepOk
-    rw [bdDeployed_next, bdDeployed_ans_fun]
+    rw [bdDeployed_next, bdDeployed_ans]
     by_cases hl : j + 1 < ms.length
     · rw [ite_eq_left hl]
       obtain ⟨⟨s, spec, sts⟩, hsp⟩ := Option.isSome_iff_exists.1 (h .setup (List.mem_cons_self ..))
@@ -780,28 +774,28 @@ the parts' lowering facts**: `ksLin2_deployed_partAccepts` with `DecompB` at `Pa
 (`decompB_partAccepts_of_parts`). At a split `S` of the element-level verifier's acceptance (proved by its
 construction), an inventory `own` and per-part predicates `PC`, what it takes in `DecompB`'s place: at each part, its
 circuit accepting implies `PC` (`hlow`, the lowering facts); `own` gives each check to a part whose `PC` implies it
-(`OwnedBy`) or to the statement, which fixes it (`StmtFixes`). Then the readers' `ReadersTrue` and `recRead` reading the
-coin server's transcript back (`ReadsBackB`). This bounds no number by itself: those premises are open. -/
-theorem ksLin2_deployed_composed (b : Brings)
+(`OwnedBy`) or to the statement, which fixes it (`StmtFixes`). The readers' `ReadersTrue` and `recRead` reading the
+coin server's transcript `recTr aux nOf hd recRest` back (`ReadsBackB`) are `ksLin2_deployed_partAccepts`' own. This
+bounds no number by itself: those premises are open. -/
+theorem ksLin2_deployed_composed (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
+    (hd : Msg → _root_.Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (rest : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
+    let bR : Brings := { b with tr := recTr aux nOf hd recRest }
     let L := layoutBTops (finOpen rest)
     let Bd := bdDeployed _root_.Flock.Readable.relation (FlockDeploy.V false).next
       (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE join rowInDeployed final w
-    let D := recBound _root_.Flock.Readable.relation b L Bd.IVStar
-    let bL : Brings := { b with rd := L.readers }
+    let D := recBound _root_.Flock.Readable.relation bR L Bd.IVStar
     ∀ {Q : Type} (S : ElemSplit FlockDeploy.sha512 Bd Q) (own : Msg → IVCheck Q → Option ℕ)
       (PC : ℕ → Msg → (ℕ → Coin) → List Msg → Prop),
-    ReadsBackB FlockDeploy.sha512 Bd.IVStar bL (fun _ => True) recRead →
     (∀ s x c ms, PartAccepts FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation) L
-      Claims.Recursion.Form.Dense (showsPart recRead b) (cmtTr recRead) s x c ms → PC s x c ms) →
+      Claims.Recursion.Form.Dense (showsPart recRead bR) (cmtTr recRead) s x c ms → PC s x c ms) →
     OwnedBy FlockDeploy.sha512 D Bd Claims.Recursion.Form.Dense S own PC →
     StmtFixes FlockDeploy.sha512 D Bd L Claims.Recursion.Form.Dense S own →
-    ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation b L) Bd
+    Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
-  intro L Bd D bL Q S own PC hrb hlow hown hfix hRT
-  refine ksLin2_deployed_partAccepts b rest wE join final w hrb (fun shape hsh => ?_) hRT
+  intro bR L Bd D Q S own PC hlow hown hfix
+  refine ksLin2_deployed_partAccepts b aux nOf hd recRest rest wE join final w (fun shape hsh => ?_)
   obtain rfl := List.mem_singleton.1 hsh
   exact decompB_partAccepts_of_parts _ _ _ _ _ _ _ _ S own PC hlow hown hfix
 
@@ -809,26 +803,25 @@ theorem ksLin2_deployed_composed (b : Brings)
 from the parts' lowering facts**: `bitsLin2_deployed_partAccepts` with `DecompB` at `PartAccepts` from the composition.
 It reads `StrictBirthday` and `ExpectedCR`, the named SHA-512 collision assumptions, and `ksLin2_deployed_composed`'s open
 premises: a bound on a number under named premises, not a proved security level. -/
-theorem bitsLin2_deployed_composed (b : Brings)
+theorem bitsLin2_deployed_composed (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
+    (hd : Msg → _root_.Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (rest : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
+    let bR : Brings := { b with tr := recTr aux nOf hd recRest }
     let L := layoutBTops (finOpen rest)
     let Bd := bdDeployed _root_.Flock.Readable.relation (FlockDeploy.V false).next
       (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE join rowInDeployed final w
-    let D := recBound _root_.Flock.Readable.relation b L Bd.IVStar
-    let bL : Brings := { b with rd := L.readers }
+    let D := recBound _root_.Flock.Readable.relation bR L Bd.IVStar
     ∀ {Q : Type} (S : ElemSplit FlockDeploy.sha512 Bd Q) (own : Msg → IVCheck Q → Option ℕ)
       (PC : ℕ → Msg → (ℕ → Coin) → List Msg → Prop),
-    ReadsBackB FlockDeploy.sha512 Bd.IVStar bL (fun _ => True) recRead →
     (∀ s x c ms, PartAccepts FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation) L
-      Claims.Recursion.Form.Dense (showsPart recRead b) (cmtTr recRead) s x c ms → PC s x c ms) →
+      Claims.Recursion.Form.Dense (showsPart recRead bR) (cmtTr recRead) s x c ms → PC s x c ms) →
     OwnedBy FlockDeploy.sha512 D Bd Claims.Recursion.Form.Dense S own PC →
     StmtFixes FlockDeploy.sha512 D Bd L Claims.Recursion.Form.Dense S own →
-    ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    Claims.Recursion.BitsLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation b L) Bd
+    Claims.Recursion.BitsLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
-  intro L Bd D bL Q S own PC hrb hlow hown hfix hRT
-  refine bitsLin2_deployed_partAccepts b rest wE join final w hrb (fun shape hsh => ?_) hRT
+  intro bR L Bd D Q S own PC hlow hown hfix
+  refine bitsLin2_deployed_partAccepts b aux nOf hd recRest rest wE join final w (fun shape hsh => ?_)
   obtain rfl := List.mem_singleton.1 hsh
   exact decompB_partAccepts_of_parts _ _ _ _ _ _ _ _ S own PC hlow hown hfix
 
